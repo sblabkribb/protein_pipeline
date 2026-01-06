@@ -1,0 +1,8 @@
+- [ ] Wire MCP tool wrappers for RunPod endpoints (MMseqs2, ProteinMPNN) with config for endpoint id/API key; expose tasks (`search`, `cluster`, `taxonomy`, `design`) and binary payload helpers (FASTA/PDB base64).
+- [ ] Define shared pipeline state schema (target FASTA/PDB, masks per conservation tier 30/50/70, ligand mask, design batches, soluprot scores, AF2 models, novelty hits) plus temp file layout.
+- [ ] Build LangGraph (or equivalent orchestrator) with nodes: ingest request → MMseqs2 search/A3M → conservation mask (30/50/70%) → ligand-6Å mask merge → ProteinMPNN (soluble) design → soluprot filter ≥0.5 → AlphaFold2 predict → MMseqs2 novelty search; include resumable checkpoints per node.
+- [ ] Add router/prompting layer so natural-language intents map to: full pipeline, stop-after-{msa,design,af2}, or rerun-with-new-model; surface knobs (thresholds, chains, ligand filtering toggle, num designs, AF2 model preset).
+- [ ] Implement ligand proximity masker (exclude residues within 6 Å of non-water ligands/hetero atoms) using Biopython/MDAnalysis; integrate with conservation mask before ProteinMPNN.
+- [ ] Provide soluprot client (batch HTTP; rate-limit/backoff) and AlphaFold2 launcher (local or queued job) with caching keyed by sequence hash + constraints.
+- [ ] Add result packaging: JSON summary (per tier), FASTA of designs kept, A3M/TSV from MMseqs2, soluprot table, AF2 metrics (pLDDT/PAE), novelty TSV; write to `outputs/<run_id>/`.
+- [ ] Create e2e dry-run harness with fixtures/mocks (small FASTA/PDB) to validate graph transitions and data handoff; unit-test mask merge and filter thresholds.

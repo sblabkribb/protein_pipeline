@@ -1,0 +1,33 @@
+# --- Requested exclusions (repo root) ---
+/alphafold2/
+/mmseqs-runpod/
+/ProteinMPNN-runpod/
+
+# --- Pipeline outputs ---
+/outputs/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyd
+.Python
+.venv/
+venv/
+ENV/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Env / secrets ---
+.env
+.env.*
+*.pem
+*.key
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
