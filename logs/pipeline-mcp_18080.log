@@ -1,3 +1,7 @@
 nohup: ignoring input
 listening: http://0.0.0.0:18080
 210.218.220.84 - - [06/Jan/2026 14:45:22] "GET /healthz HTTP/1.1" 200 -
+listening: http://0.0.0.0:18080
+127.0.0.1 - - [06/Jan/2026 15:17:28] "GET /healthz HTTP/1.1" 200 -
+127.0.0.1 - - [06/Jan/2026 15:17:28] "POST /tools/list HTTP/1.1" 200 -
+210.218.220.84 - - [06/Jan/2026 15:24:32] "GET / HTTP/1.1" 404 -
