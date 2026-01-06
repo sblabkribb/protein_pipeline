@@ -179,19 +179,39 @@ class PipelineRunner:
                 if samples:
                     if request.dry_run:
                         scores = {s.id: (0.6 if (i % 2 == 0) else 0.4) for i, s in enumerate(samples)}
+                        soluprot_scores = scores
+                        passed = [
+                            s for s in samples if float(scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
+                        ]
+                        passed_ids = [s.id for s in passed]
+                        write_json(
+                            tier_dir / "soluprot.json",
+                            {"scores": scores, "cutoff": request.soluprot_cutoff},
+                        )
                     else:
                         if self.soluprot is None:
-                            raise RuntimeError("SoluProt is required for this pipeline; set SOLUPROT_URL")
-                        scores = self.soluprot.score(samples)
-                    soluprot_scores = scores
-                    passed = [
-                        s for s in samples if float(scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
-                    ]
-                    passed_ids = [s.id for s in passed]
-                    write_json(
-                        tier_dir / "soluprot.json",
-                        {"scores": scores, "cutoff": request.soluprot_cutoff},
-                    )
+                            passed = samples
+                            passed_ids = [s.id for s in passed]
+                            write_json(
+                                tier_dir / "soluprot.json",
+                                {
+                                    "skipped": True,
+                                    "reason": "SOLUPROT_URL not set",
+                                    "cutoff": request.soluprot_cutoff,
+                                },
+                            )
+                        else:
+                            scores = self.soluprot.score(samples)
+                            soluprot_scores = scores
+                            passed = [
+                                s for s in samples if float(scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
+                            ]
+                            passed_ids = [s.id for s in passed]
+                            write_json(
+                                tier_dir / "soluprot.json",
+                                {"scores": scores, "cutoff": request.soluprot_cutoff},
+                            )
+
                     _write_text(
                         tier_dir / "designs_filtered.fasta",
                         to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in passed]),
