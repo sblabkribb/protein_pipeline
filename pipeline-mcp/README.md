@@ -20,6 +20,20 @@ NCP CPU 서버에서 동작하는 파이프라인 오케스트레이터(MCP 스�
 ### Local
 - `PIPELINE_OUTPUT_ROOT` (기본: `outputs`)
 
+## 권장: `.env`로 시크릿 관리
+```bash
+cd /opt/protein_pipeline/pipeline-mcp
+cat > .env <<'EOF'
+RUNPOD_API_KEY=...
+MMSEQS_ENDPOINT_ID=...
+PROTEINMPNN_ENDPOINT_ID=...
+ALPHAFOLD2_ENDPOINT_ID=...
+SOLUPROT_URL=http://127.0.0.1:18081/score
+PIPELINE_OUTPUT_ROOT=/opt/protein_pipeline/outputs
+EOF
+chmod 600 .env
+```
+
 ## 로컬 실행(HTTP)
 ```bash
 PYTHONPATH=pipeline-mcp/src \
@@ -46,6 +60,66 @@ docker run --rm -p 8000:8000 \
 
 `tools/call`에서 `name="pipeline.run"`으로 실행합니다.
 
+⚠️ `target_fasta`/`target_pdb`는 “파일 경로”가 아니라 “파일 내용(text)”을 JSON에 넣습니다.
+
+추가 옵션:
+- `run_id`: 지정 시 해당 ID로 결과 폴더를 생성/재사용합니다(단계별 디버깅/재실행에 유용).
+- `stop_after="msa"` 또는 `dry_run=true`인 경우 `target_pdb` 없이도 실행 가능합니다.
+- `force=true`: 기존 산출물이 있어도 해당 단계부터 다시 실행합니다.
+
 기본 필터:
 - SoluProt: `soluprot_cutoff=0.5`
 - AlphaFold2: `af2_plddt_cutoff=85`, `af2_top_k=20`
+
+## 단계별 실행(run_id로 이어서 실행)
+`pipeline.run`은 기본적으로 동기(blocking)입니다. MMseqs/AF2는 오래 걸릴 수 있으니, 아래처럼 `stop_after`로 잘라서 같은 `run_id`로 이어서 실행하는 방식을 권장합니다.
+
+```bash
+SERVER=http://<SERVER_IP>:18080
+RUN_ID=intein_test_001
+```
+
+### 1) MSA만 실행(MMseqs2)
+`stop_after="msa"`인 경우 `target_pdb` 없이도 실행됩니다.
+
+```bash
+jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta \
+  '{name:"pipeline.run", arguments:{run_id:$run_id, target_fasta:$fasta, stop_after:"msa", mmseqs_target_db:"uniref90", mmseqs_max_seqs:3000}}' \
+| curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' -d @- | jq .
+```
+
+### 2) design까지(ProteinMPNN)
+```bash
+jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta --rawfile pdb ./target.pdb \
+  '{name:"pipeline.run", arguments:{run_id:$run_id, target_fasta:$fasta, target_pdb:$pdb, stop_after:"design", conservation_tiers:[0.3,0.5,0.7], num_seq_per_tier:16}}' \
+| curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' -d @- | jq .
+```
+
+### 3) soluprot까지
+```bash
+jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta --rawfile pdb ./target.pdb \
+  '{name:"pipeline.run", arguments:{run_id:$run_id, target_fasta:$fasta, target_pdb:$pdb, stop_after:"soluprot", soluprot_cutoff:0.5}}' \
+| curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' -d @- | jq .
+```
+
+### 4) af2까지
+```bash
+jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta --rawfile pdb ./target.pdb \
+  '{name:"pipeline.run", arguments:{run_id:$run_id, target_fasta:$fasta, target_pdb:$pdb, stop_after:"af2", af2_plddt_cutoff:85, af2_top_k:20}}' \
+| curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' -d @- | jq .
+```
+
+### 진행상태 확인(폴링)
+```bash
+curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg run_id "$RUN_ID" '{name:\"pipeline.status\", arguments:{run_id:$run_id}}')" | jq .
+```
+
+## 산출물 위치
+기본적으로 `PIPELINE_OUTPUT_ROOT/<run_id>/`에 저장됩니다.
+- `request.json`, `status.json`, `summary.json`
+- `msa/result.tsv`, `msa/result.a3m`
+- `conservation.json`, `ligand_mask.json`
+- `tiers/<tier>/fixed_positions.json`, `tiers/<tier>/designs.fasta`, `tiers/<tier>/proteinmpnn.json`
+- `tiers/<tier>/soluprot.json`, `tiers/<tier>/designs_filtered.fasta`
+- `tiers/<tier>/af2_scores.json`, `tiers/<tier>/af2_selected.fasta`, `tiers/<tier>/af2/<seq_id>/*`

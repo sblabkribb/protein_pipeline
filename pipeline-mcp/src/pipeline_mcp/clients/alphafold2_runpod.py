@@ -6,6 +6,7 @@ import io
 import json
 import tarfile
 from typing import Any
+from collections.abc import Callable
 
 from .runpod import RunPodClient
 from ..models import SequenceRecord
@@ -87,6 +88,7 @@ class AlphaFold2RunPodClient:
         db_preset: str = "full_dbs",
         max_template_date: str = "2020-05-14",
         extra_flags: str | None = None,
+        on_job_id: Callable[[str, str], None] | None = None,
     ) -> dict[str, Any]:
         results: dict[str, Any] = {}
         for seq in sequences:
@@ -99,7 +101,11 @@ class AlphaFold2RunPodClient:
             if extra_flags:
                 payload["alphafold_extra_flags"] = str(extra_flags)
 
-            job = self.runpod.run_and_wait(self.endpoint_id, payload)
+            _, job = self.runpod.run_and_wait_with_job_id(
+                self.endpoint_id,
+                payload,
+                on_job_id=(lambda job_id, seq_id=seq.id: on_job_id(seq_id, job_id)) if on_job_id else None,
+            )
             if job.get("status") not in {"COMPLETED", "COMPLETED_WITH_ERRORS"}:
                 raise RuntimeError(f"AlphaFold2 RunPod job not completed: {job}")
 
@@ -136,4 +142,3 @@ class AlphaFold2RunPodClient:
                 "files": output.get("files"),
             }
         return results
-

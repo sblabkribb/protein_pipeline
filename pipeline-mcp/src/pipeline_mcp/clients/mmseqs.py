@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+from collections.abc import Callable
 
 from .runpod import RunPodClient
 
@@ -23,6 +24,7 @@ class MMseqsClient:
         a3m_max_return_bytes: int = 5 * 1024 * 1024,
         a3m_format_mode: int = 6,
         max_seqs: int | None = None,
+        on_job_id: Callable[[str], None] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "task": "search",
@@ -39,7 +41,7 @@ class MMseqsClient:
         if max_seqs is not None:
             payload["max_seqs"] = int(max_seqs)
 
-        result = self.runpod.run_and_wait(self.endpoint_id, payload)
+        _, result = self.runpod.run_and_wait_with_job_id(self.endpoint_id, payload, on_job_id=on_job_id)
         if result.get("status") != "COMPLETED":
             raise RuntimeError(f"MMseqs RunPod job not completed: {result}")
         output = result.get("output")
@@ -48,4 +50,3 @@ class MMseqsClient:
         if output.get("error"):
             raise RuntimeError(f"MMseqs error: {output.get('error')}")
         return output
-

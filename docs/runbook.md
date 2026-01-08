@@ -40,6 +40,7 @@ set -a; source .env; set +a
 PYTHONPATH=src nohup python3 -m pipeline_mcp.http_server --host 0.0.0.0 --port "$PORT" \
   > "/opt/protein_pipeline/logs/pipeline-mcp_${PORT}.log" 2>&1 & \
   echo $! > "/opt/protein_pipeline/logs/pipeline-mcp_${PORT}.pid"
+disown || true
 ```
 
 헬스체크:
@@ -60,6 +61,25 @@ rm -f /opt/protein_pipeline/logs/pipeline-mcp_18080.pid
 ```bash
 jq -n --rawfile fasta ./target.fasta --rawfile pdb ./target.pdb \
   '{name:"pipeline.run", arguments:{target_fasta:$fasta, target_pdb:$pdb, stop_after:"design"}}' \
+| curl -sS -X POST http://<SERVER_IP>:18080/tools/call -H 'Content-Type: application/json' -d @- | jq .
+```
+
+### MSA만 테스트(= RunPod MMseqs2 연동 확인)
+`stop_after="msa"`인 경우 `target_pdb` 없이도 실행됩니다.
+
+```bash
+jq -n --rawfile fasta ./target.fasta \
+  '{name:"pipeline.run", arguments:{target_fasta:$fasta, stop_after:"msa", mmseqs_max_seqs:50}}' \
+| curl -sS -X POST http://<SERVER_IP>:18080/tools/call -H 'Content-Type: application/json' -d @- | jq .
+```
+
+### run_id 지정(재실행/폴링에 유용)
+`run_id`를 지정하면 같은 폴더를 재사용하며(`force=false` 기본) 단계별로 `stop_after`를 바꿔 재실행할 수 있습니다.
+
+```bash
+RUN_ID=test_intein_001
+jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta --rawfile pdb ./target.pdb \
+  '{name:"pipeline.run", arguments:{run_id:$run_id, target_fasta:$fasta, target_pdb:$pdb, stop_after:"design"}}' \
 | curl -sS -X POST http://<SERVER_IP>:18080/tools/call -H 'Content-Type: application/json' -d @- | jq .
 ```
 
@@ -94,6 +114,7 @@ PORT=18081
 PYTHONPATH=src nohup python3 -m pipeline_mcp.soluprot_server --host 127.0.0.1 --port "$PORT" \
   > "/opt/protein_pipeline/logs/soluprot_${PORT}.log" 2>&1 & \
   echo $! > "/opt/protein_pipeline/logs/soluprot_${PORT}.pid"
+disown || true
 
 curl -sS http://127.0.0.1:18081/healthz; echo
 curl -sS -X POST http://127.0.0.1:18081/score -H 'Content-Type: application/json' \

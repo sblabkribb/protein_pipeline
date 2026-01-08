@@ -19,6 +19,20 @@ def new_run_id(prefix: str = "run") -> str:
     return f"{safe_prefix}_{ts}_{rand}"
 
 
+def normalize_run_id(run_id: str) -> str:
+    candidate = str(run_id or "").strip()
+    if not candidate:
+        raise ValueError("run_id is empty")
+    if len(candidate) > 128:
+        raise ValueError("run_id is too long (max 128 chars)")
+    if candidate in {".", ".."}:
+        raise ValueError("run_id is invalid")
+    safe = _SAFE_NAME_RE.sub("_", candidate).strip("._-")
+    if safe != candidate or not safe:
+        raise ValueError("run_id contains invalid characters; allowed: [a-zA-Z0-9_.-]")
+    return candidate
+
+
 def ensure_dir(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path
@@ -85,4 +99,3 @@ def load_status(output_root: str, run_id: str) -> dict[str, object] | None:
     if isinstance(data, dict):
         return data
     return None
-

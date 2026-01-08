@@ -8,6 +8,7 @@ from .models import PipelineRequest
 from .pipeline import PipelineRunner
 from .router import request_from_prompt
 from .storage import list_runs
+from .storage import normalize_run_id
 from .storage import load_status
 
 
@@ -84,11 +85,15 @@ def _as_float(value: object | None, default: float) -> float:
 
 def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
     target_fasta = str(args.get("target_fasta") or "")
-    target_pdb = str(args.get("target_pdb") or "")
     if not target_fasta:
         raise ValueError("target_fasta is required")
-    if not target_pdb:
-        raise ValueError("target_pdb is required (ProteinMPNN + ligand masking)")
+
+    stop_after = (str(args.get("stop_after")).strip().lower() if args.get("stop_after") else None)
+    dry_run = _as_bool(args.get("dry_run"), False)
+
+    target_pdb = str(args.get("target_pdb") or "")
+    if not target_pdb and not (dry_run or stop_after == "msa"):
+        raise ValueError("target_pdb is required unless stop_after='msa' or dry_run=true")
 
     design_chains = _as_list_of_str(args.get("design_chains"))
     conservation_tiers = _as_list_of_float(args.get("conservation_tiers"))
@@ -118,9 +123,9 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
         mmseqs_threads=_as_int(args.get("mmseqs_threads"), 4),
         mmseqs_use_gpu=_as_bool(args.get("mmseqs_use_gpu"), True),
         novelty_target_db=str(args.get("novelty_target_db") or "uniref90"),
-        stop_after=(str(args.get("stop_after")).strip().lower() if args.get("stop_after") else None),
+        stop_after=stop_after,
         force=_as_bool(args.get("force"), False),
-        dry_run=_as_bool(args.get("dry_run"), False),
+        dry_run=dry_run,
     )
 
 
@@ -155,11 +160,12 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "mmseqs_threads": {"type": "integer"},
                     "mmseqs_use_gpu": {"type": "boolean"},
                     "novelty_target_db": {"type": "string"},
+                    "run_id": {"type": "string"},
                     "stop_after": {"type": "string"},
                     "force": {"type": "boolean"},
                     "dry_run": {"type": "boolean"},
                 },
-                "required": ["target_fasta", "target_pdb"],
+                "required": ["target_fasta"],
             },
         },
         {
@@ -171,8 +177,9 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "prompt": {"type": "string"},
                     "target_fasta": {"type": "string"},
                     "target_pdb": {"type": "string"},
+                    "run_id": {"type": "string"},
                 },
-                "required": ["prompt", "target_fasta", "target_pdb"],
+                "required": ["prompt", "target_fasta"],
             },
         },
         {
@@ -204,16 +211,20 @@ class ToolDispatcher:
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if name == "pipeline.run":
+            run_id = arguments.get("run_id")
             req = pipeline_request_from_args(arguments)
-            res = self.runner.run(req)
+            res = self.runner.run(req, run_id=normalize_run_id(str(run_id)) if run_id is not None else None)
             return {"run_id": res.run_id, "output_dir": res.output_dir, "summary": asdict(res)}
 
         if name == "pipeline.run_from_prompt":
+            run_id = arguments.get("run_id")
             prompt = str(arguments.get("prompt") or "")
             target_fasta = str(arguments.get("target_fasta") or "")
             target_pdb = str(arguments.get("target_pdb") or "")
             req = request_from_prompt(prompt=prompt, target_fasta=target_fasta, target_pdb=target_pdb)
-            res = self.runner.run(req)
+            if not req.target_pdb and req.stop_after != "msa":
+                raise ValueError("target_pdb is required unless stop_after='msa'")
+            res = self.runner.run(req, run_id=normalize_run_id(str(run_id)) if run_id is not None else None)
             return {"routed_request": asdict(req), "run_id": res.run_id, "output_dir": res.output_dir, "summary": asdict(res)}
 
         if name == "pipeline.status":

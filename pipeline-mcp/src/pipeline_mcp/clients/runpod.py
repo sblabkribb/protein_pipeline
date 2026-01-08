@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import os
 import time
 from typing import Any
+from collections.abc import Callable
 
 import requests
 
@@ -62,13 +63,24 @@ class RunPodClient:
         return data
 
     def run_and_wait(self, endpoint_id: str, input_payload: dict[str, Any]) -> dict[str, Any]:
+        return self.run_and_wait_with_job_id(endpoint_id, input_payload)[1]
+
+    def run_and_wait_with_job_id(
+        self,
+        endpoint_id: str,
+        input_payload: dict[str, Any],
+        *,
+        on_job_id: Callable[[str], None] | None = None,
+    ) -> tuple[str, dict[str, Any]]:
         job_id = self.run(endpoint_id, input_payload)
+        if on_job_id is not None:
+            on_job_id(job_id)
         start = time.monotonic()
         while True:
             data = self.status(endpoint_id, job_id)
             status = data.get("status") or data.get("state")
             if status in {"COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED", "CANCELLED", "TIMED_OUT"}:
-                return data
+                return job_id, data
             elapsed = time.monotonic() - start
             if elapsed > 60 * 60 * 6:
                 raise TimeoutError(f"RunPod job timeout (>6h): endpoint={endpoint_id} job_id={job_id}")
