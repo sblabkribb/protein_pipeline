@@ -81,6 +81,58 @@ def _post_json(url: str, payload: dict[str, Any], *, timeout_s: float) -> dict[s
     return data
 
 
+def _remote_status(base_url: str, *, run_id: str, timeout_s: float) -> dict[str, Any] | None:
+    data = _post_json(
+        f"{base_url}/tools/call",
+        {"name": "pipeline.status", "arguments": {"run_id": run_id}},
+        timeout_s=timeout_s,
+    )
+    if not data.get("ok", False):
+        return None
+    result = data.get("result")
+    if not isinstance(result, dict):
+        return None
+    if not result.get("found"):
+        return None
+    status = result.get("status")
+    if not isinstance(status, dict):
+        return None
+    return status
+
+
+def _maybe_block_duplicate_run(
+    base_url: str,
+    *,
+    tool_name: str,
+    arguments: dict[str, Any],
+    timeout_s: float,
+) -> dict[str, Any] | None:
+    if tool_name not in {"pipeline.run", "pipeline.run_from_prompt"}:
+        return None
+
+    run_id_raw = arguments.get("run_id")
+    if run_id_raw is None:
+        return None
+    run_id = str(run_id_raw).strip()
+    if not run_id:
+        return None
+
+    status = _remote_status(base_url, run_id=run_id, timeout_s=min(timeout_s, 30.0))
+    if status is None:
+        return None
+
+    state = str(status.get("state") or "").strip().lower()
+    if state != "running":
+        return None
+
+    return {
+        "run_id": run_id,
+        "already_running": True,
+        "status": status,
+        "message": "Run is already running. Poll with pipeline.status; avoid re-calling pipeline.run to prevent duplicate jobs.",
+    }
+
+
 def main(argv: list[str] | None = None) -> None:
     pipeline_mcp_dir = Path(__file__).resolve().parents[1]
     _load_dotenv(pipeline_mcp_dir / ".env")
@@ -130,6 +182,17 @@ def main(argv: list[str] | None = None) -> None:
                 arguments = params.get("arguments") or {}
                 if not isinstance(name, str) or not isinstance(arguments, dict):
                     raise ValueError("Invalid tools/call params")
+
+                blocked = _maybe_block_duplicate_run(
+                    base_url,
+                    tool_name=name,
+                    arguments=arguments,
+                    timeout_s=timeout_s,
+                )
+                if blocked is not None:
+                    resp = {"jsonrpc": "2.0", "id": msg_id, "result": _result_text(blocked)}
+                    _write_message(resp)
+                    continue
 
                 data = _post_json(
                     f"{base_url}/tools/call",
