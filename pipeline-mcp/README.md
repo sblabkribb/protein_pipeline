@@ -119,30 +119,37 @@ curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' \
 Copilot/Codex의 MCP 기능은 “stdio(JSON-RPC)” 서버를 실행해 붙는 방식이 가장 안정적입니다. 이 레포에는 stdio MCP 서버가 포함되어 있습니다:
 
 ```bash
-cd /opt/protein_pipeline/pipeline-mcp
-set -a && source .env && set +a
-PYTHONPATH=src python3 -m pipeline_mcp.mcp_stdio_server
+# repo root에서 (권장: 크로스플랫폼, `.env` 자동 로드)
+python pipeline-mcp/scripts/mcp_stdio_server.py
+
+# 또는 pipeline-mcp/ 폴더에서
+python scripts/mcp_stdio_server.py
 ```
+
+TIP: `pipeline-mcp/scripts/mcp_stdio_server.py`는 `pipeline-mcp/.env`를 자동 로드하고 `PYTHONPATH`도 내부에서 설정합니다.
+
+(처음 1회) 의존성: `python -m pip install -r pipeline-mcp/requirements.txt`
 
 ⚠️ `pipeline.run`은 동기(blocking)라서 MMseqs/AF2가 오래 걸릴 수 있습니다. Copilot/Codex에서도 `stop_after` + `run_id`로 단계별 실행을 권장합니다.
 
 ### VS Code (Copilot Chat)
 VS Code를 NCP 서버에 Remote SSH로 붙여서(서버에서 명령 실행) 설정하는 방식을 권장합니다.
 
-`.vscode/mcp.json` 예시:
+`.vscode/mcp.json` 예시(워크스페이스 루트 기준 경로):
 ```json
 {
   "servers": {
     "protein-pipeline": {
-      "command": "bash",
-      "args": [
-        "-lc",
-        "cd /opt/protein_pipeline/pipeline-mcp && set -a && source .env && set +a && PYTHONPATH=src python3 -m pipeline_mcp.mcp_stdio_server"
-      ]
+      "command": "python",
+      "args": ["pipeline-mcp/scripts/mcp_stdio_server.py"]
     }
   }
 }
 ```
+
+리눅스 Remote SSH 환경에서 `python`이 없거나 `python3`만 있는 경우 `command`를 `python3`로 바꾸세요.
+
+워크스페이스를 repo root가 아니라 `pipeline-mcp/` 폴더로 열었다면 `args`를 `["scripts/mcp_stdio_server.py"]`로 바꾸세요.
 
 Copilot Chat에서 사용 예:
 - “`pipeline.run`을 `run_id=intein_test_001`, `stop_after=msa`로 실행해줘.”
@@ -151,9 +158,11 @@ Copilot Chat에서 사용 예:
 ### Codex CLI
 Codex에 MCP 서버를 등록:
 ```bash
-codex mcp add protein-pipeline -- bash -lc 'cd /opt/protein_pipeline/pipeline-mcp && set -a && source .env && set +a && PYTHONPATH=src python3 -m pipeline_mcp.mcp_stdio_server'
+codex mcp add protein-pipeline -- python <ABS_PATH_TO_REPO>/pipeline-mcp/scripts/mcp_stdio_server.py
 codex mcp list
 ```
+
+주의: Codex CLI는 상대경로를 쓰면 실행 위치에 따라 실패할 수 있어, 스크립트 경로는 절대경로를 권장합니다.
 
 ## 산출물 위치
 기본적으로 `PIPELINE_OUTPUT_ROOT/<run_id>/`에 저장됩니다.
