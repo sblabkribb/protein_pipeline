@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass
 from typing import Any
+from collections.abc import Callable
 
 from .runpod import RunPodClient
 from ..models import SequenceRecord
@@ -31,6 +32,7 @@ class ProteinMPNNClient:
         sampling_temp: float = 0.1,
         seed: int = 0,
         backbone_noise: float = 0.0,
+        on_job_id: Callable[[str], None] | None = None,
     ) -> tuple[SequenceRecord, list[SequenceRecord], dict[str, Any]]:
         payload: dict[str, Any] = {
             "pdb_base64": _b64encode_text(pdb_text),
@@ -49,7 +51,7 @@ class ProteinMPNNClient:
         if fixed_positions is not None:
             payload["fixed_positions"] = fixed_positions
 
-        result = self.runpod.run_and_wait(self.endpoint_id, payload)
+        _, result = self.runpod.run_and_wait_with_job_id(self.endpoint_id, payload, on_job_id=on_job_id)
         if result.get("status") != "COMPLETED":
             raise RuntimeError(f"ProteinMPNN RunPod job not completed: {result}")
         output = result.get("output")
@@ -84,4 +86,3 @@ class ProteinMPNNClient:
             )
 
         return native_rec, sample_recs, output
-

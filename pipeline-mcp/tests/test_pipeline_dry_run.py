@@ -38,6 +38,15 @@ class TestPipelineDryRun(unittest.TestCase):
                 self.assertTrue((tier_dir / "af2_scores.json").exists())
                 self.assertTrue((tier_dir / "af2_selected.fasta").exists())
 
+    def test_pipeline_dry_run_generates_dummy_pdb_when_missing(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            req = PipelineRequest(target_fasta=fasta, target_pdb="", dry_run=True, num_seq_per_tier=2, conservation_tiers=[0.3])
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            self.assertTrue((out / "ligand_mask.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

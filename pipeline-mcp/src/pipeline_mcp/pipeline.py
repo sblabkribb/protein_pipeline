@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import re
 from typing import Any
+from collections.abc import Callable
 
 from .bio.a3m import compute_conservation
 from .bio.a3m import decode_a3m_gz_b64
@@ -58,6 +59,50 @@ def _safe_id(value: str) -> str:
     return safe[:128] or "id"
 
 
+def _dummy_backbone_pdb(sequence: str, *, chain_id: str = "A") -> str:
+    aa3 = {
+        "A": "ALA",
+        "C": "CYS",
+        "D": "ASP",
+        "E": "GLU",
+        "F": "PHE",
+        "G": "GLY",
+        "H": "HIS",
+        "I": "ILE",
+        "K": "LYS",
+        "L": "LEU",
+        "M": "MET",
+        "N": "ASN",
+        "P": "PRO",
+        "Q": "GLN",
+        "R": "ARG",
+        "S": "SER",
+        "T": "THR",
+        "V": "VAL",
+        "W": "TRP",
+        "Y": "TYR",
+    }
+    lines: list[str] = []
+    serial = 1
+    for i, aa in enumerate(sequence, start=1):
+        resname = aa3.get((aa or "A").upper(), "ALA")
+        base = (i - 1) * 3.8
+        atoms = [
+            ("N", base + 0.0, 0.0, 0.0, "N"),
+            ("CA", base + 1.45, 0.0, 0.0, "C"),
+            ("C", base + 2.90, 0.0, 0.0, "C"),
+            ("O", base + 3.30, 0.50, 0.0, "O"),
+        ]
+        for atom_name, x, y, z, element in atoms:
+            lines.append(
+                f"ATOM  {serial:5d} {atom_name:>4s} {resname:>3s} {chain_id}{i:4d}    "
+                f"{x:8.3f}{y:8.3f}{z:8.3f}  1.00 20.00           {element:>2s}"
+            )
+            serial += 1
+    lines.append("END")
+    return "\n".join(lines) + "\n"
+
+
 @dataclass(frozen=True)
 class PipelineRunner:
     output_root: str
@@ -86,9 +131,20 @@ class PipelineRunner:
 
             target_records = parse_fasta(request.target_fasta)
             target_query_fasta = to_fasta([target_records[0]])
+            target_pdb_text = request.target_pdb
+            if request.dry_run and not target_pdb_text:
+                target_pdb_text = _dummy_backbone_pdb(target_records[0].sequence, chain_id="A")
 
             set_status(paths, stage="mmseqs_msa", state="running")
-            msa_tsv_text, a3m_text = self._get_msa(target_query_fasta, msa_dir, request)
+            msa_tsv_text, a3m_text = self._get_msa(
+                target_query_fasta,
+                msa_dir,
+                request,
+                on_job_id=lambda job_id: (
+                    write_json(msa_dir / "runpod_job.json", {"job_id": job_id}),
+                    set_status(paths, stage="mmseqs_msa", state="running", detail=f"runpod_job_id={job_id}"),
+                ),
+            )
             msa_tsv_path = str(msa_dir / "result.tsv")
             msa_a3m_path = str(msa_dir / "result.a3m")
 
@@ -126,10 +182,10 @@ class PipelineRunner:
             set_status(paths, stage="conservation", state="completed")
 
             set_status(paths, stage="ligand_mask", state="running")
-            pdb_chains = list(residues_by_chain(request.target_pdb, only_atom_records=True).keys())
+            pdb_chains = list(residues_by_chain(target_pdb_text, only_atom_records=True).keys())
             design_chains = request.design_chains or pdb_chains or None
             ligand_mask = ligand_proximity_mask(
-                request.target_pdb,
+                target_pdb_text,
                 chains=design_chains,
                 distance_angstrom=request.ligand_mask_distance,
                 ligand_resnames=request.ligand_resnames,
@@ -155,9 +211,14 @@ class PipelineRunner:
                 native, samples = self._run_proteinmpnn(
                     tier_dir,
                     request,
+                    pdb_text=target_pdb_text,
                     tier_str=tier_str,
                     design_chains=design_chains,
                     fixed_positions_by_chain=fixed_positions_by_chain,
+                    on_job_id=lambda job_id, stage=f"proteinmpnn_{tier_str}", dir_=tier_dir: (
+                        write_json(dir_ / "runpod_job.json", {"job_id": job_id}),
+                        set_status(paths, stage=stage, state="running", detail=f"runpod_job_id={job_id}"),
+                    ),
                 )
                 set_status(paths, stage=f"proteinmpnn_{tier_str}", state="completed")
 
@@ -176,7 +237,42 @@ class PipelineRunner:
                 passed = samples
                 soluprot_scores: dict[str, float] | None = None
                 passed_ids: list[str] | None = None
-                if samples:
+                soluprot_path = tier_dir / "soluprot.json"
+                if samples and soluprot_path.exists() and not request.force:
+                    try:
+                        payload = json.loads(soluprot_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        payload = None
+                    if isinstance(payload, dict):
+                        cached_scores = payload.get("scores")
+                        if isinstance(cached_scores, dict):
+                            soluprot_scores = {
+                                str(k): float(v) for k, v in cached_scores.items() if isinstance(v, (int, float))
+                            }
+                            passed = [
+                                s
+                                for s in samples
+                                if float(soluprot_scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
+                            ]
+                            passed_ids = [s.id for s in passed]
+                            write_json(
+                                soluprot_path,
+                                {
+                                    "scores": soluprot_scores,
+                                    "cutoff": request.soluprot_cutoff,
+                                    "passed_ids": passed_ids,
+                                    "cached": True,
+                                },
+                            )
+                        elif payload.get("skipped") is True:
+                            passed = samples
+                            passed_ids = [s.id for s in passed]
+                        if passed:
+                            _write_text(
+                                tier_dir / "designs_filtered.fasta",
+                                to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in passed]),
+                            )
+                elif samples:
                     if request.dry_run:
                         scores = {s.id: (0.6 if (i % 2 == 0) else 0.4) for i, s in enumerate(samples)}
                         soluprot_scores = scores
@@ -185,19 +281,20 @@ class PipelineRunner:
                         ]
                         passed_ids = [s.id for s in passed]
                         write_json(
-                            tier_dir / "soluprot.json",
-                            {"scores": scores, "cutoff": request.soluprot_cutoff},
+                            soluprot_path,
+                            {"scores": scores, "cutoff": request.soluprot_cutoff, "passed_ids": passed_ids},
                         )
                     else:
                         if self.soluprot is None:
                             passed = samples
                             passed_ids = [s.id for s in passed]
                             write_json(
-                                tier_dir / "soluprot.json",
+                                soluprot_path,
                                 {
                                     "skipped": True,
                                     "reason": "SOLUPROT_URL not set",
                                     "cutoff": request.soluprot_cutoff,
+                                    "passed_ids": passed_ids,
                                 },
                             )
                         else:
@@ -208,8 +305,8 @@ class PipelineRunner:
                             ]
                             passed_ids = [s.id for s in passed]
                             write_json(
-                                tier_dir / "soluprot.json",
-                                {"scores": scores, "cutoff": request.soluprot_cutoff},
+                                soluprot_path,
+                                {"scores": scores, "cutoff": request.soluprot_cutoff, "passed_ids": passed_ids},
                             )
 
                     _write_text(
@@ -236,78 +333,158 @@ class PipelineRunner:
                 if passed:
                     set_status(paths, stage=f"af2_{tier_str}", state="running")
                     af2_dir = _ensure_dir(tier_dir / "af2")
-                    if request.dry_run:
-                        # Deterministic fake pLDDT scores for tests.
-                        af2_result = {
-                            s.id: {
-                                "best_plddt": (90.0 if (i % 2 == 0) else 80.0),
-                                "best_model": None,
-                                "ranking_debug": {},
-                                "ranked_0_pdb": None,
+                    af2_scores_path = tier_dir / "af2_scores.json"
+                    af2_selected_path = tier_dir / "af2_selected.fasta"
+                    af2_used_cache = False
+                    if af2_scores_path.exists() and af2_selected_path.exists() and not request.force:
+                        try:
+                            cached = json.loads(af2_scores_path.read_text(encoding="utf-8"))
+                        except Exception:
+                            cached = None
+                        cached_scores = cached.get("scores") if isinstance(cached, dict) else None
+                        cached_model_preset = cached.get("model_preset") if isinstance(cached, dict) else None
+                        cached_db_preset = cached.get("db_preset") if isinstance(cached, dict) else None
+                        cached_max_template_date = cached.get("max_template_date") if isinstance(cached, dict) else None
+                        if (
+                            isinstance(cached_scores, dict)
+                            and (cached_model_preset in {None, request.af2_model_preset})
+                            and (cached_db_preset in {None, request.af2_db_preset})
+                            and (cached_max_template_date in {None, request.af2_max_template_date})
+                        ):
+                            af2_scores = {
+                                str(k): float(v) for k, v in cached_scores.items() if isinstance(v, (int, float))
                             }
-                            for i, s in enumerate(passed)
-                        }
-                    else:
-                        if self.af2 is None:
-                            raise RuntimeError("AlphaFold2 is required for this pipeline; set ALPHAFOLD2_ENDPOINT_ID (RunPod) or AF2_URL")
-                        af2_result = self.af2.predict(
-                            passed,
-                            model_preset=request.af2_model_preset,
-                            db_preset=request.af2_db_preset,
-                            max_template_date=request.af2_max_template_date,
-                            extra_flags=request.af2_extra_flags,
+                            selected_pairs = [
+                                (seq_id, score)
+                                for seq_id, score in af2_scores.items()
+                                if score >= float(request.af2_plddt_cutoff)
+                            ]
+                            selected_pairs.sort(key=lambda t: t[1], reverse=True)
+                            af2_selected_ids = [seq_id for seq_id, _ in selected_pairs[: int(request.af2_top_k)]]
+                            selected_records = [s for s in passed if af2_selected_ids and s.id in set(af2_selected_ids)]
+                            _write_text(
+                                af2_selected_path,
+                                to_fasta(
+                                    [FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in selected_records]
+                                ),
+                            )
+                            write_json(
+                                af2_scores_path,
+                                {
+                                    "scores": af2_scores,
+                                    "cutoff": request.af2_plddt_cutoff,
+                                    "top_k": request.af2_top_k,
+                                    "selected_ids": af2_selected_ids,
+                                    "model_preset": request.af2_model_preset,
+                                    "db_preset": request.af2_db_preset,
+                                    "max_template_date": request.af2_max_template_date,
+                                    "cached": True,
+                                },
+                            )
+                            set_status(paths, stage=f"af2_{tier_str}", state="completed", detail="cached")
+                            af2_result = None
+                            af2_used_cache = True
+                        else:
+                            # Cache exists but config differs; fall back to recompute unless force=false but cache invalid.
+                            pass
+                    if not af2_used_cache:
+                        if request.dry_run:
+                            # Deterministic fake pLDDT scores for tests.
+                            af2_result = {
+                                s.id: {
+                                    "best_plddt": (90.0 if (i % 2 == 0) else 80.0),
+                                    "best_model": None,
+                                    "ranking_debug": {},
+                                    "ranked_0_pdb": None,
+                                }
+                                for i, s in enumerate(passed)
+                            }
+                        else:
+                            if self.af2 is None:
+                                raise RuntimeError("AlphaFold2 is required for this pipeline; set ALPHAFOLD2_ENDPOINT_ID (RunPod) or AF2_URL")
+                            jobs_path = af2_dir / "runpod_jobs.json"
+                            jobs: dict[str, str] = {}
+
+                            def _on_af2_job_id(seq_id: str, job_id: str) -> None:
+                                jobs[seq_id] = job_id
+                                write_json(jobs_path, {"jobs": dict(jobs)})
+                                set_status(
+                                    paths,
+                                    stage=f"af2_{tier_str}",
+                                    state="running",
+                                    detail=f"runpod_job_id={job_id} seq_id={seq_id}",
+                                )
+
+                            try:
+                                af2_result = self.af2.predict(
+                                    passed,
+                                    model_preset=request.af2_model_preset,
+                                    db_preset=request.af2_db_preset,
+                                    max_template_date=request.af2_max_template_date,
+                                    extra_flags=request.af2_extra_flags,
+                                    on_job_id=_on_af2_job_id,
+                                )
+                            except TypeError:
+                                af2_result = self.af2.predict(
+                                    passed,
+                                    model_preset=request.af2_model_preset,
+                                    db_preset=request.af2_db_preset,
+                                    max_template_date=request.af2_max_template_date,
+                                    extra_flags=request.af2_extra_flags,
+                                )
+
+                        af2_scores: dict[str, float] = {}
+                        for seq in passed:
+                            rec = (af2_result or {}).get(seq.id, {}) if isinstance(af2_result, dict) else {}
+                            if not isinstance(rec, dict):
+                                continue
+                            score = rec.get("best_plddt")
+                            if isinstance(score, (int, float)):
+                                af2_scores[seq.id] = float(score)
+
+                            seq_dir = _ensure_dir(af2_dir / _safe_id(seq.id))
+                            if isinstance(rec.get("ranking_debug"), dict):
+                                write_json(seq_dir / "ranking_debug.json", rec["ranking_debug"])
+                            ranked0 = rec.get("ranked_0_pdb")
+                            if isinstance(ranked0, str) and ranked0.strip():
+                                _write_text(seq_dir / "ranked_0.pdb", ranked0)
+                            write_json(
+                                seq_dir / "metrics.json",
+                                {
+                                    "best_plddt": af2_scores.get(seq.id),
+                                    "best_model": rec.get("best_model"),
+                                    "archive_name": rec.get("archive_name"),
+                                },
+                            )
+
+                        selected_pairs = [
+                            (seq_id, score)
+                            for seq_id, score in af2_scores.items()
+                            if score >= float(request.af2_plddt_cutoff)
+                        ]
+                        selected_pairs.sort(key=lambda t: t[1], reverse=True)
+                        af2_selected_ids = [seq_id for seq_id, _ in selected_pairs[: int(request.af2_top_k)]]
+
+                        selected_records = [s for s in passed if s.id in set(af2_selected_ids)]
+                        _write_text(
+                            af2_selected_path,
+                            to_fasta(
+                                [FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in selected_records]
+                            ),
                         )
-
-                    af2_scores: dict[str, float] = {}
-                    for seq in passed:
-                        rec = (af2_result or {}).get(seq.id, {}) if isinstance(af2_result, dict) else {}
-                        if not isinstance(rec, dict):
-                            continue
-                        score = rec.get("best_plddt")
-                        if isinstance(score, (int, float)):
-                            af2_scores[seq.id] = float(score)
-
-                        seq_dir = _ensure_dir(af2_dir / _safe_id(seq.id))
-                        if isinstance(rec.get("ranking_debug"), dict):
-                            write_json(seq_dir / "ranking_debug.json", rec["ranking_debug"])
-                        ranked0 = rec.get("ranked_0_pdb")
-                        if isinstance(ranked0, str) and ranked0.strip():
-                            _write_text(seq_dir / "ranked_0.pdb", ranked0)
                         write_json(
-                            seq_dir / "metrics.json",
+                            af2_scores_path,
                             {
-                                "best_plddt": af2_scores.get(seq.id),
-                                "best_model": rec.get("best_model"),
-                                "archive_name": rec.get("archive_name"),
+                                "scores": af2_scores,
+                                "cutoff": request.af2_plddt_cutoff,
+                                "top_k": request.af2_top_k,
+                                "selected_ids": af2_selected_ids,
+                                "model_preset": request.af2_model_preset,
+                                "db_preset": request.af2_db_preset,
+                                "max_template_date": request.af2_max_template_date,
                             },
                         )
-
-                    selected_pairs = [
-                        (seq_id, score)
-                        for seq_id, score in af2_scores.items()
-                        if score >= float(request.af2_plddt_cutoff)
-                    ]
-                    selected_pairs.sort(key=lambda t: t[1], reverse=True)
-                    af2_selected_ids = [seq_id for seq_id, _ in selected_pairs[: int(request.af2_top_k)]]
-
-                    selected_records = [s for s in passed if s.id in set(af2_selected_ids)]
-                    _write_text(
-                        tier_dir / "af2_selected.fasta",
-                        to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in selected_records]),
-                    )
-                    write_json(
-                        tier_dir / "af2_scores.json",
-                        {
-                            "scores": af2_scores,
-                            "cutoff": request.af2_plddt_cutoff,
-                            "top_k": request.af2_top_k,
-                            "selected_ids": af2_selected_ids,
-                            "model_preset": request.af2_model_preset,
-                            "db_preset": request.af2_db_preset,
-                            "max_template_date": request.af2_max_template_date,
-                        },
-                    )
-                    set_status(paths, stage=f"af2_{tier_str}", state="completed")
+                        set_status(paths, stage=f"af2_{tier_str}", state="completed")
 
                 if request.stop_after == "af2":
                     tier_results.append(
@@ -392,6 +569,8 @@ class PipelineRunner:
         target_query_fasta: str,
         msa_dir: Path,
         request: PipelineRequest,
+        *,
+        on_job_id: Callable[[str], None] | None = None,
     ) -> tuple[str, str]:
         tsv_path = msa_dir / "result.tsv"
         a3m_path = msa_dir / "result.a3m"
@@ -424,6 +603,7 @@ class PipelineRunner:
             include_taxonomy=False,
             return_a3m=True,
             max_seqs=request.mmseqs_max_seqs,
+            on_job_id=on_job_id,
         )
         tsv = str(out.get("tsv") or "")
         a3m_b64 = out.get("a3m_gz_b64")
@@ -439,9 +619,11 @@ class PipelineRunner:
         tier_dir: Path,
         request: PipelineRequest,
         *,
+        pdb_text: str,
         tier_str: str,
         design_chains: list[str] | None,
         fixed_positions_by_chain: dict[str, list[int]],
+        on_job_id: Callable[[str], None] | None = None,
     ) -> tuple[SequenceRecord | None, list[SequenceRecord]]:
         out_json = tier_dir / "proteinmpnn.json"
         out_fasta = tier_dir / "designs.fasta"
@@ -483,7 +665,7 @@ class PipelineRunner:
             raise RuntimeError("ProteinMPNN client is not configured")
 
         native, samples, raw = self.proteinmpnn.design(
-            pdb_text=request.target_pdb,
+            pdb_text=pdb_text,
             pdb_name="input",
             pdb_path_chains=design_chains or None,
             fixed_positions=fixed_positions_by_chain,
@@ -493,6 +675,7 @@ class PipelineRunner:
             batch_size=request.batch_size,
             sampling_temp=request.sampling_temp,
             seed=request.seed,
+            on_job_id=on_job_id,
         )
         _write_text(out_fasta, to_fasta([FastaRecord(header=native.header or native.id, sequence=native.sequence)] + [FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in samples]))
         write_json(
