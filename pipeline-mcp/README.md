@@ -132,6 +132,13 @@ TIP: `pipeline-mcp/scripts/mcp_stdio_server.py`는 `pipeline-mcp/.env`를 자동
 
 ⚠️ `pipeline.run`은 동기(blocking)라서 MMseqs/AF2가 오래 걸릴 수 있습니다. Copilot/Codex에서도 `stop_after` + `run_id`로 단계별 실행을 권장합니다.
 
+### 이미 실행 중인 HTTP 서버에 붙이기(프록시)
+NCP 등에 `pipeline_mcp.http_server`를 띄워두고(예: `http://<SERVER_IP>:18080`) 로컬에서 MCP로 붙고 싶다면, stdio MCP 프록시를 사용하세요:
+
+```bash
+python pipeline-mcp/scripts/mcp_http_proxy_server.py --base-url http://<SERVER_IP>:18080
+```
+
 ### VS Code (Copilot Chat)
 VS Code를 NCP 서버에 Remote SSH로 붙여서(서버에서 명령 실행) 설정하는 방식을 권장합니다.
 
@@ -147,6 +154,9 @@ VS Code를 NCP 서버에 Remote SSH로 붙여서(서버에서 명령 실행) 설
 }
 ```
 
+이미 실행 중인 HTTP 서버에 붙일 땐 `args`를 아래로 교체하세요:
+`["pipeline-mcp/scripts/mcp_http_proxy_server.py", "--base-url", "http://<SERVER_IP>:18080"]`
+
 리눅스 Remote SSH 환경에서 `python`이 없거나 `python3`만 있는 경우 `command`를 `python3`로 바꾸세요.
 
 워크스페이스를 repo root가 아니라 `pipeline-mcp/` 폴더로 열었다면 `args`를 `["scripts/mcp_stdio_server.py"]`로 바꾸세요.
@@ -159,6 +169,7 @@ Copilot Chat에서 사용 예:
 Codex에 MCP 서버를 등록:
 ```bash
 codex mcp add protein-pipeline -- python <ABS_PATH_TO_REPO>/pipeline-mcp/scripts/mcp_stdio_server.py
+# (HTTP 프록시) codex mcp add protein-pipeline -- python <ABS_PATH_TO_REPO>/pipeline-mcp/scripts/mcp_http_proxy_server.py --base-url http://<SERVER_IP>:18080
 codex mcp list
 ```
 
