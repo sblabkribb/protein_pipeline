@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from dataclasses import dataclass
 import json
+import os
 from pathlib import Path
 import re
 from typing import Any
@@ -30,6 +31,10 @@ from .storage import write_json
 
 
 _SAFE_ID_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
+
+
+def _env_true(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def _tier_key(tier: float) -> str:
@@ -101,6 +106,120 @@ def _dummy_backbone_pdb(sequence: str, *, chain_id: str = "A") -> str:
             serial += 1
     lines.append("END")
     return "\n".join(lines) + "\n"
+
+
+def _validate_proteinmpnn_fixed_positions(
+    *,
+    pdb_text: str,
+    design_chains: list[str] | None,
+    fixed_positions_by_chain: dict[str, list[int]],
+    native: SequenceRecord | None,
+    samples: list[SequenceRecord],
+) -> dict[str, Any]:
+    fixed_total = sum(len(v) for v in fixed_positions_by_chain.values())
+    if fixed_total <= 0:
+        return {"ok": True, "fixed_positions_total": 0, "samples_checked": len(samples), "errors": []}
+
+    residues = residues_by_chain(pdb_text, only_atom_records=True)
+    chain_order = sorted(design_chains) if design_chains else sorted(residues.keys())
+    missing_chains = [c for c in chain_order if c not in residues]
+    chain_lengths: dict[str, int] = {c: len(residues[c]) for c in chain_order if c in residues}
+    total_len = sum(chain_lengths.get(c, 0) for c in chain_order)
+
+    errors: list[str] = []
+    if missing_chains:
+        errors.append(f"Chains missing in PDB ATOM records: {missing_chains}")
+    if native is None or not native.sequence:
+        errors.append("ProteinMPNN did not return a native sequence")
+    elif total_len > 0 and len(native.sequence) != total_len:
+        errors.append(f"Native sequence length mismatch: native={len(native.sequence)} vs pdb_sum={total_len}")
+
+    if native is None:
+        native_seq = ""
+    else:
+        native_seq = native.sequence
+    for s in samples:
+        if s.sequence and native_seq and len(s.sequence) != len(native_seq):
+            errors.append(f"Sample length mismatch: id={s.id} sample={len(s.sequence)} native={len(native_seq)}")
+
+    max_mismatches_per_chain = 25
+    sample_summaries: list[dict[str, Any]] = []
+    ok = not errors
+    for s in samples:
+        mismatch_count = 0
+        mismatches_by_chain: dict[str, list[dict[str, Any]]] = {}
+        out_of_range: dict[str, list[int]] = {}
+
+        offset = 0
+        for chain_id in chain_order:
+            chain_len = chain_lengths.get(chain_id, 0)
+            native_chain = native_seq[offset : offset + chain_len]
+            sample_chain = s.sequence[offset : offset + chain_len]
+            offset += chain_len
+
+            fixed = fixed_positions_by_chain.get(chain_id) or []
+            if not fixed or chain_len <= 0:
+                continue
+
+            chain_mismatches: list[dict[str, Any]] = []
+            chain_out_of_range: list[int] = []
+            for pos in fixed:
+                idx = int(pos) - 1
+                if idx < 0 or idx >= chain_len:
+                    chain_out_of_range.append(int(pos))
+                    continue
+                expected = native_chain[idx]
+                actual = sample_chain[idx] if idx < len(sample_chain) else ""
+                if expected != actual:
+                    mismatch_count += 1
+                    if len(chain_mismatches) < max_mismatches_per_chain:
+                        chain_mismatches.append(
+                            {"pos": int(pos), "expected": expected, "actual": actual},
+                        )
+            if chain_mismatches:
+                mismatches_by_chain[chain_id] = chain_mismatches
+            if chain_out_of_range:
+                out_of_range[chain_id] = sorted(set(chain_out_of_range))
+
+        if mismatch_count > 0 or out_of_range:
+            ok = False
+
+        sample_summaries.append(
+            {
+                "id": s.id,
+                "mismatch_count": mismatch_count,
+                "mismatches_by_chain": mismatches_by_chain,
+                "out_of_range_positions_by_chain": out_of_range,
+            }
+        )
+
+    return {
+        "ok": ok,
+        "errors": errors,
+        "fixed_positions_total": fixed_total,
+        "chain_order": chain_order,
+        "chain_lengths": chain_lengths,
+        "samples_checked": len(samples),
+        "samples": sample_summaries,
+    }
+
+
+def _normalize_fixed_positions_by_chain(value: Any) -> dict[str, list[int]] | None:
+    if not isinstance(value, dict):
+        return None
+    out: dict[str, list[int]] = {}
+    for k, v in value.items():
+        if not isinstance(v, list):
+            return None
+        positions: list[int] = []
+        for item in v:
+            try:
+                pos = int(item)
+            except Exception:
+                return None
+            positions.append(pos)
+        out[str(k)] = sorted(set(positions))
+    return out
 
 
 @dataclass(frozen=True)
@@ -627,28 +746,75 @@ class PipelineRunner:
     ) -> tuple[SequenceRecord | None, list[SequenceRecord]]:
         out_json = tier_dir / "proteinmpnn.json"
         out_fasta = tier_dir / "designs.fasta"
+        out_fixed_positions_check = tier_dir / "fixed_positions_check.json"
 
         if out_json.exists() and out_fasta.exists() and not request.force:
-            payload = json.loads(out_json.read_text(encoding="utf-8"))
+            try:
+                payload = json.loads(out_json.read_text(encoding="utf-8"))
+            except Exception:
+                payload = {}
             native = payload.get("native")
             samples = payload.get("samples")
-            native_rec = None
-            if isinstance(native, dict) and native.get("sequence"):
-                native_rec = SequenceRecord(id=str(native.get("id") or "native"), sequence=str(native["sequence"]), header=str(native.get("header") or "native"))
-            sample_recs: list[SequenceRecord] = []
-            if isinstance(samples, list):
-                for s in samples:
-                    if not isinstance(s, dict) or not s.get("sequence"):
-                        continue
-                    sample_recs.append(
-                        SequenceRecord(
-                            id=str(s.get("id") or s.get("header") or "sample"),
-                            sequence=str(s["sequence"]),
-                            header=str(s.get("header") or s.get("id") or "sample"),
-                            meta={},
+            cached_fixed_positions = _normalize_fixed_positions_by_chain(payload.get("fixed_positions"))
+
+            expected_fixed_positions = {k: sorted(set(int(x) for x in v)) for k, v in fixed_positions_by_chain.items()}
+            expected_request = {
+                "pdb_path_chains": sorted(design_chains) if design_chains else None,
+                "use_soluble_model": True,
+                "model_name": "v_48_020",
+                "num_seq_per_target": int(request.num_seq_per_tier),
+                "batch_size": int(request.batch_size),
+                "sampling_temp": float(request.sampling_temp),
+                "seed": int(request.seed),
+                "backbone_noise": 0.0,
+            }
+            cached_request = payload.get("request")
+
+            if cached_fixed_positions is None or cached_fixed_positions != expected_fixed_positions:
+                pass
+            elif not isinstance(cached_request, dict) or cached_request != expected_request:
+                pass
+            else:
+                native_rec = None
+                if isinstance(native, dict) and native.get("sequence"):
+                    native_rec = SequenceRecord(id=str(native.get("id") or "native"), sequence=str(native["sequence"]), header=str(native.get("header") or "native"))
+                sample_recs: list[SequenceRecord] = []
+                if isinstance(samples, list):
+                    for s in samples:
+                        if not isinstance(s, dict) or not s.get("sequence"):
+                            continue
+                        sample_recs.append(
+                            SequenceRecord(
+                                id=str(s.get("id") or s.get("header") or "sample"),
+                                sequence=str(s["sequence"]),
+                                header=str(s.get("header") or s.get("id") or "sample"),
+                                meta={},
+                            )
                         )
+                if request.dry_run:
+                    write_json(
+                        out_fixed_positions_check,
+                        {
+                            "ok": True,
+                            "skipped": True,
+                            "reason": "dry_run",
+                            "fixed_positions_total": sum(len(v) for v in expected_fixed_positions.values()),
+                        },
                     )
-            return native_rec, sample_recs
+                elif not _env_true("PIPELINE_SKIP_FIXED_POSITIONS_CHECK"):
+                    check = _validate_proteinmpnn_fixed_positions(
+                        pdb_text=pdb_text,
+                        design_chains=design_chains,
+                        fixed_positions_by_chain=cached_fixed_positions,
+                        native=native_rec,
+                        samples=sample_recs,
+                    )
+                    write_json(out_fixed_positions_check, check)
+                    if not bool(check.get("ok")):
+                        raise RuntimeError(
+                            f"ProteinMPNN output violates fixed_positions (cached) for tier={tier_str}; see {out_fixed_positions_check}"
+                        )
+                return native_rec, sample_recs
 
         if request.dry_run:
             query = parse_fasta(request.target_fasta)[0].sequence
@@ -658,7 +824,33 @@ class PipelineRunner:
             ]
             native = SequenceRecord(id="native", header="native", sequence=query)
             _write_text(out_fasta, to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in [native, *samples]]))
-            write_json(out_json, {"native": native.__dict__, "samples": [s.__dict__ for s in samples], "fixed_positions": fixed_positions_by_chain})
+            write_json(
+                out_json,
+                {
+                    "request": {
+                        "pdb_path_chains": sorted(design_chains) if design_chains else None,
+                        "use_soluble_model": True,
+                        "model_name": "v_48_020",
+                        "num_seq_per_target": int(request.num_seq_per_tier),
+                        "batch_size": int(request.batch_size),
+                        "sampling_temp": float(request.sampling_temp),
+                        "seed": int(request.seed),
+                        "backbone_noise": 0.0,
+                    },
+                    "native": native.__dict__,
+                    "samples": [s.__dict__ for s in samples],
+                    "fixed_positions": fixed_positions_by_chain,
+                },
+            )
+            write_json(
+                out_fixed_positions_check,
+                {
+                    "ok": True,
+                    "skipped": True,
+                    "reason": "dry_run",
+                    "fixed_positions_total": sum(len(v) for v in fixed_positions_by_chain.values()),
+                },
+            )
             return native, samples
 
         if self.proteinmpnn is None:
@@ -681,10 +873,31 @@ class PipelineRunner:
         write_json(
             out_json,
             {
+                "request": {
+                    "pdb_path_chains": sorted(design_chains) if design_chains else None,
+                    "use_soluble_model": True,
+                    "model_name": "v_48_020",
+                    "num_seq_per_target": int(request.num_seq_per_tier),
+                    "batch_size": int(request.batch_size),
+                    "sampling_temp": float(request.sampling_temp),
+                    "seed": int(request.seed),
+                    "backbone_noise": 0.0,
+                },
                 "native": native.__dict__,
                 "samples": [s.__dict__ for s in samples],
                 "fixed_positions": fixed_positions_by_chain,
                 "raw": _safe_json(raw),
             },
         )
+        if not _env_true("PIPELINE_SKIP_FIXED_POSITIONS_CHECK"):
+            check = _validate_proteinmpnn_fixed_positions(
+                pdb_text=pdb_text,
+                design_chains=design_chains,
+                fixed_positions_by_chain=fixed_positions_by_chain,
+                native=native,
+                samples=samples,
+            )
+            write_json(out_fixed_positions_check, check)
+            if not bool(check.get("ok")):
+                raise RuntimeError(f"ProteinMPNN output violates fixed_positions for tier={tier_str}; see {out_fixed_positions_check}")
         return native, samples

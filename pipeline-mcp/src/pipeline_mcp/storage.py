@@ -47,6 +47,12 @@ def read_json(path: Path) -> object:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def append_jsonl(path: Path, data: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8", newline="\n") as f:
+        f.write(json.dumps(data, ensure_ascii=False) + "\n")
+
+
 @dataclass(frozen=True)
 class RunPaths:
     run_id: str
@@ -64,6 +70,10 @@ class RunPaths:
     def status_json(self) -> Path:
         return self.root / "status.json"
 
+    @property
+    def events_jsonl(self) -> Path:
+        return self.root / "events.jsonl"
+
 
 def init_run(output_root: str, run_id: str) -> RunPaths:
     root = ensure_dir(Path(output_root).resolve() / run_id)
@@ -80,6 +90,7 @@ def set_status(paths: RunPaths, *, stage: str, state: str, detail: str | None = 
     if detail:
         payload["detail"] = detail
     write_json(paths.status_json, payload)
+    append_jsonl(paths.events_jsonl, {"kind": "status", **payload})
 
 
 def list_runs(output_root: str, *, limit: int = 50) -> list[str]:

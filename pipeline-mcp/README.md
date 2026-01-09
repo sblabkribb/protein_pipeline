@@ -177,9 +177,13 @@ codex mcp list
 
 ## 산출물 위치
 기본적으로 `PIPELINE_OUTPUT_ROOT/<run_id>/`에 저장됩니다.
-- `request.json`, `status.json`, `summary.json`
+- `request.json`, `status.json`, `events.jsonl`, `summary.json`
 - `msa/result.tsv`, `msa/result.a3m`
 - `conservation.json`, `ligand_mask.json`
-- `tiers/<tier>/fixed_positions.json`, `tiers/<tier>/designs.fasta`, `tiers/<tier>/proteinmpnn.json`
+- `tiers/<tier>/fixed_positions.json`, `tiers/<tier>/fixed_positions_check.json`, `tiers/<tier>/designs.fasta`, `tiers/<tier>/proteinmpnn.json`
 - `tiers/<tier>/soluprot.json`, `tiers/<tier>/designs_filtered.fasta`
 - `tiers/<tier>/af2_scores.json`, `tiers/<tier>/af2_selected.fasta`, `tiers/<tier>/af2/<seq_id>/*`
+
+### ProteinMPNN fixed_positions check
+- 기본적으로 `tiers/<tier>/fixed_positions_check.json`를 저장하고, fixed_positions 위반이 감지되면 run을 실패 처리합니다.
+- 필요 시 `PIPELINE_SKIP_FIXED_POSITIONS_CHECK=1` 로 비활성화할 수 있습니다.
