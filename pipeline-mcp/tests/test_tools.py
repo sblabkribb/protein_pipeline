@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 import json
+from pathlib import Path
 
 from pipeline_mcp.pipeline import PipelineRunner
 from pipeline_mcp.tools import ToolDispatcher
@@ -50,7 +51,7 @@ class TestTools(unittest.TestCase):
                 "pipeline.run",
                 {"target_fasta": fasta, "target_pdb": pdb, "dry_run": True, "run_id": "my_test_run"},
             )
-            self.assertTrue(str(out.get("output_dir") or "").endswith("/my_test_run"))
+            self.assertEqual(Path(str(out.get("output_dir") or "")).name, "my_test_run")
 
 
 if __name__ == "__main__":
