@@ -85,19 +85,17 @@ def _as_float(value: object | None, default: float) -> float:
 
 def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
     target_fasta = str(args.get("target_fasta") or "")
-    if not target_fasta:
-        raise ValueError("target_fasta is required")
+    target_pdb = str(args.get("target_pdb") or "")
+    if not target_fasta.strip() and not target_pdb.strip():
+        raise ValueError("One of target_fasta or target_pdb is required")
 
     stop_after = (str(args.get("stop_after")).strip().lower() if args.get("stop_after") else None)
     dry_run = _as_bool(args.get("dry_run"), False)
 
-    target_pdb = str(args.get("target_pdb") or "")
-    if not target_pdb and not (dry_run or stop_after == "msa"):
-        raise ValueError("target_pdb is required unless stop_after='msa' or dry_run=true")
-
     design_chains = _as_list_of_str(args.get("design_chains"))
     conservation_tiers = _as_list_of_float(args.get("conservation_tiers"))
     ligand_resnames = _as_list_of_str(args.get("ligand_resnames"))
+    af2_sequence_ids = _as_list_of_str(args.get("af2_sequence_ids"))
 
     return PipelineRequest(
         target_fasta=target_fasta,
@@ -118,6 +116,7 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
         af2_extra_flags=(str(args.get("af2_extra_flags")) if args.get("af2_extra_flags") else None),
         af2_plddt_cutoff=_as_float(args.get("af2_plddt_cutoff"), 85.0),
         af2_top_k=_as_int(args.get("af2_top_k"), 20),
+        af2_sequence_ids=af2_sequence_ids,
         mmseqs_target_db=str(args.get("mmseqs_target_db") or "uniref90"),
         mmseqs_max_seqs=_as_int(args.get("mmseqs_max_seqs"), 3000),
         mmseqs_threads=_as_int(args.get("mmseqs_threads"), 4),
@@ -155,6 +154,7 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "af2_extra_flags": {"type": "string"},
                     "af2_plddt_cutoff": {"type": "number"},
                     "af2_top_k": {"type": "integer"},
+                    "af2_sequence_ids": {"type": "array", "items": {"type": "string"}},
                     "mmseqs_target_db": {"type": "string"},
                     "mmseqs_max_seqs": {"type": "integer"},
                     "mmseqs_threads": {"type": "integer"},
@@ -165,7 +165,7 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "force": {"type": "boolean"},
                     "dry_run": {"type": "boolean"},
                 },
-                "required": ["target_fasta"],
+                "anyOf": [{"required": ["target_fasta"]}, {"required": ["target_pdb"]}],
             },
         },
         {
@@ -179,7 +179,8 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "target_pdb": {"type": "string"},
                     "run_id": {"type": "string"},
                 },
-                "required": ["prompt", "target_fasta"],
+                "required": ["prompt"],
+                "anyOf": [{"required": ["target_fasta"]}, {"required": ["target_pdb"]}],
             },
         },
         {
@@ -221,9 +222,9 @@ class ToolDispatcher:
             prompt = str(arguments.get("prompt") or "")
             target_fasta = str(arguments.get("target_fasta") or "")
             target_pdb = str(arguments.get("target_pdb") or "")
+            if not target_fasta.strip() and not target_pdb.strip():
+                raise ValueError("One of target_fasta or target_pdb is required")
             req = request_from_prompt(prompt=prompt, target_fasta=target_fasta, target_pdb=target_pdb)
-            if not req.target_pdb and req.stop_after != "msa":
-                raise ValueError("target_pdb is required unless stop_after='msa'")
             res = self.runner.run(req, run_id=normalize_run_id(str(run_id)) if run_id is not None else None)
             return {"routed_request": asdict(req), "run_id": res.run_id, "output_dir": res.output_dir, "summary": asdict(res)}
 

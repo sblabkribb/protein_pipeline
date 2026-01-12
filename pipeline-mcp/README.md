@@ -64,7 +64,10 @@ docker run --rm -p 8000:8000 \
 
 추가 옵션:
 - `run_id`: 지정 시 해당 ID로 결과 폴더를 생성/재사용합니다(단계별 디버깅/재실행에 유용).
-- `stop_after="msa"` 또는 `dry_run=true`인 경우 `target_pdb` 없이도 실행 가능합니다.
+- 입력은 `target_fasta` 또는 `target_pdb` 중 하나만 있어도 됩니다.
+  - `target_pdb`만 주면, `ATOM` record에서 서열을 추출해 `MMseqs2`/보존도 계산에 사용합니다.
+  - `target_pdb`가 없고 `stop_after!="msa"`면, `AlphaFold2`로 target 구조(`target.pdb`)를 먼저 만든 뒤 파이프라인을 실행합니다(필요: `ALPHAFOLD2_ENDPOINT_ID` 또는 `AF2_URL`).
+- `af2_sequence_ids=["1"]`: AF2를 특정 design id들만 실행(전체 AF2가 너무 오래 걸릴 때 유용).
 - `force=true`: 기존 산출물이 있어도 해당 단계부터 다시 실행합니다.
 
 기본 필터:
@@ -92,6 +95,13 @@ jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta \
 ```bash
 jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta --rawfile pdb ./target.pdb \
   '{name:"pipeline.run", arguments:{run_id:$run_id, target_fasta:$fasta, target_pdb:$pdb, stop_after:"design", conservation_tiers:[0.3,0.5,0.7], num_seq_per_tier:16}}' \
+| curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' -d @- | jq .
+```
+
+(PDB만 있는 경우)
+```bash
+jq -n --arg run_id "$RUN_ID" --rawfile pdb ./target.pdb \
+  '{name:"pipeline.run", arguments:{run_id:$run_id, target_pdb:$pdb, stop_after:"design", conservation_tiers:[0.3,0.5,0.7], num_seq_per_tier:16}}' \
 | curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' -d @- | jq .
 ```
 
@@ -178,6 +188,7 @@ codex mcp list
 ## 산출물 위치
 기본적으로 `PIPELINE_OUTPUT_ROOT/<run_id>/`에 저장됩니다.
 - `request.json`, `status.json`, `events.jsonl`, `summary.json`
+- `target.fasta`, `target.pdb`
 - `msa/result.tsv`, `msa/result.a3m`
 - `conservation.json`, `ligand_mask.json`
 - `tiers/<tier>/fixed_positions.json`, `tiers/<tier>/fixed_positions_check.json`, `tiers/<tier>/designs.fasta`, `tiers/<tier>/proteinmpnn.json`
