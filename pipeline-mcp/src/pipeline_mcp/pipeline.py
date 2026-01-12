@@ -34,6 +34,24 @@ from .storage import write_json
 _SAFE_ID_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
 
 
+def _load_jobs_map(path: Path) -> dict[str, str]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    jobs = payload.get("jobs") if isinstance(payload, dict) else None
+    if not isinstance(jobs, dict):
+        return {}
+    out: dict[str, str] = {}
+    for k, v in jobs.items():
+        if not isinstance(v, str) or not v.strip():
+            continue
+        out[str(k)] = str(v).strip()
+    return out
+
+
 def _env_true(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "y", "on"}
 
@@ -63,6 +81,33 @@ def _safe_json(obj: object) -> object:
 def _safe_id(value: str) -> str:
     safe = _SAFE_ID_RE.sub("_", value).strip("._-")
     return safe[:128] or "id"
+
+
+def _is_monomer_preset(preset: str) -> bool:
+    return str(preset or "").strip().lower().startswith("monomer")
+
+
+def _first_chain_sequence(seq: str) -> str:
+    seq = str(seq or "").strip()
+    if "/" in seq:
+        return seq.split("/", 1)[0]
+    return seq
+
+
+def _monomerize_records(records: list[SequenceRecord], model_preset: str) -> list[SequenceRecord]:
+    if not records or not _is_monomer_preset(model_preset):
+        return records
+    out: list[SequenceRecord] = []
+    for rec in records:
+        out.append(
+            SequenceRecord(
+                id=rec.id,
+                header=rec.header,
+                sequence=_first_chain_sequence(rec.sequence),
+                meta=rec.meta,
+            )
+        )
+    return out
 
 
 def _dummy_backbone_pdb(sequence: str, *, chain_id: str = "A") -> str:
@@ -117,12 +162,15 @@ def _validate_proteinmpnn_fixed_positions(
     native: SequenceRecord | None,
     samples: list[SequenceRecord],
 ) -> dict[str, Any]:
+    def _clean_sequence(seq: str) -> str:
+        return "".join(ch for ch in seq if ch.isalpha()).upper()
+
     fixed_total = sum(len(v) for v in fixed_positions_by_chain.values())
     if fixed_total <= 0:
         return {"ok": True, "fixed_positions_total": 0, "samples_checked": len(samples), "errors": []}
 
     residues = residues_by_chain(pdb_text, only_atom_records=True)
-    chain_order = sorted(design_chains) if design_chains else sorted(residues.keys())
+    chain_order = list(design_chains) if design_chains else list(residues.keys())
     missing_chains = [c for c in chain_order if c not in residues]
     chain_lengths: dict[str, int] = {c: len(residues[c]) for c in chain_order if c in residues}
     total_len = sum(chain_lengths.get(c, 0) for c in chain_order)
@@ -132,21 +180,28 @@ def _validate_proteinmpnn_fixed_positions(
         errors.append(f"Chains missing in PDB ATOM records: {missing_chains}")
     if native is None or not native.sequence:
         errors.append("ProteinMPNN did not return a native sequence")
-    elif total_len > 0 and len(native.sequence) != total_len:
-        errors.append(f"Native sequence length mismatch: native={len(native.sequence)} vs pdb_sum={total_len}")
+    else:
+        native_raw = str(native.sequence or "")
+        native_seq = _clean_sequence(native_raw)
+        if total_len > 0 and len(native_seq) != total_len:
+            errors.append(f"Native sequence length mismatch: native={len(native_seq)} vs pdb_sum={total_len}")
 
     if native is None:
+        native_raw = ""
         native_seq = ""
     else:
-        native_seq = native.sequence
+        native_raw = str(native.sequence or "")
+        native_seq = _clean_sequence(native_raw)
     for s in samples:
-        if s.sequence and native_seq and len(s.sequence) != len(native_seq):
-            errors.append(f"Sample length mismatch: id={s.id} sample={len(s.sequence)} native={len(native_seq)}")
+        sample_seq = _clean_sequence(str(s.sequence or ""))
+        if sample_seq and native_seq and len(sample_seq) != len(native_seq):
+            errors.append(f"Sample length mismatch: id={s.id} sample={len(sample_seq)} native={len(native_seq)}")
 
     max_mismatches_per_chain = 25
     sample_summaries: list[dict[str, Any]] = []
     ok = not errors
     for s in samples:
+        sample_seq = _clean_sequence(str(s.sequence or ""))
         mismatch_count = 0
         mismatches_by_chain: dict[str, list[dict[str, Any]]] = {}
         out_of_range: dict[str, list[int]] = {}
@@ -155,7 +210,7 @@ def _validate_proteinmpnn_fixed_positions(
         for chain_id in chain_order:
             chain_len = chain_lengths.get(chain_id, 0)
             native_chain = native_seq[offset : offset + chain_len]
-            sample_chain = s.sequence[offset : offset + chain_len]
+            sample_chain = sample_seq[offset : offset + chain_len]
             offset += chain_len
 
             fixed = fixed_positions_by_chain.get(chain_id) or []
@@ -200,6 +255,8 @@ def _validate_proteinmpnn_fixed_positions(
         "fixed_positions_total": fixed_total,
         "chain_order": chain_order,
         "chain_lengths": chain_lengths,
+        "native_original_length": len(native_raw),
+        "native_clean_length": len(native_seq),
         "samples_checked": len(samples),
         "samples": sample_summaries,
     }
@@ -463,11 +520,6 @@ class PipelineRunner:
                         elif payload.get("skipped") is True:
                             passed = samples
                             passed_ids = [s.id for s in passed]
-                        if passed:
-                            _write_text(
-                                tier_dir / "designs_filtered.fasta",
-                                to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in passed]),
-                            )
                 elif samples:
                     if request.dry_run:
                         scores = {s.id: (0.6 if (i % 2 == 0) else 0.4) for i, s in enumerate(samples)}
@@ -494,7 +546,8 @@ class PipelineRunner:
                                 },
                             )
                         else:
-                            scores = self.soluprot.score(samples)
+                            soluprot_input = _monomerize_records(samples, request.af2_model_preset)
+                            scores = self.soluprot.score(soluprot_input)
                             soluprot_scores = scores
                             passed = [
                                 s for s in samples if float(scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
@@ -505,6 +558,8 @@ class PipelineRunner:
                                 {"scores": scores, "cutoff": request.soluprot_cutoff, "passed_ids": passed_ids},
                             )
 
+                passed = _monomerize_records(passed, request.af2_model_preset)
+                if samples:
                     _write_text(
                         tier_dir / "designs_filtered.fasta",
                         to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in passed]),
@@ -587,7 +642,7 @@ class PipelineRunner:
                                     "AlphaFold2 is required for this pipeline; set ALPHAFOLD2_ENDPOINT_ID (RunPod) or AF2_URL"
                                 )
                             jobs_path = af2_dir / "runpod_jobs.json"
-                            jobs: dict[str, str] = {}
+                            jobs: dict[str, str] = _load_jobs_map(jobs_path)
 
                             def _on_af2_job_id(seq_id: str, job_id: str) -> None:
                                 jobs[seq_id] = job_id
@@ -607,15 +662,26 @@ class PipelineRunner:
                                     max_template_date=request.af2_max_template_date,
                                     extra_flags=request.af2_extra_flags,
                                     on_job_id=_on_af2_job_id,
+                                    resume_job_ids=jobs,
                                 )
                             except TypeError:
-                                af2_result = self.af2.predict(
-                                    to_predict,
-                                    model_preset=request.af2_model_preset,
-                                    db_preset=request.af2_db_preset,
-                                    max_template_date=request.af2_max_template_date,
-                                    extra_flags=request.af2_extra_flags,
-                                )
+                                try:
+                                    af2_result = self.af2.predict(
+                                        to_predict,
+                                        model_preset=request.af2_model_preset,
+                                        db_preset=request.af2_db_preset,
+                                        max_template_date=request.af2_max_template_date,
+                                        extra_flags=request.af2_extra_flags,
+                                        on_job_id=_on_af2_job_id,
+                                    )
+                                except TypeError:
+                                    af2_result = self.af2.predict(
+                                        to_predict,
+                                        model_preset=request.af2_model_preset,
+                                        db_preset=request.af2_db_preset,
+                                        max_template_date=request.af2_max_template_date,
+                                        extra_flags=request.af2_extra_flags,
+                                    )
 
                         for seq in to_predict:
                             rec = (af2_result or {}).get(seq.id, {}) if isinstance(af2_result, dict) else {}

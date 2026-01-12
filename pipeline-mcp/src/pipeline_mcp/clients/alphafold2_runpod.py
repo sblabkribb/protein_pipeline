@@ -13,6 +13,18 @@ from ..models import SequenceRecord
 
 
 def _archive_entries(output: dict[str, Any]) -> list[dict[str, str]]:
+    status = output.get("status")
+    if isinstance(status, str) and status.lower() in {"error", "failed"}:
+        message = output.get("message")
+        details = output.get("details")
+        parts: list[str] = []
+        if isinstance(message, str) and message.strip():
+            parts.append(message.strip())
+        if isinstance(details, str) and details.strip():
+            parts.append(details.strip())
+        extra = "\n\n".join(parts) if parts else repr(output)
+        raise RuntimeError(f"AlphaFold2 endpoint reported an error:\n{extra}")
+
     archives = output.get("archives")
     if isinstance(archives, list) and archives:
         out: list[dict[str, str]] = []
@@ -89,6 +101,7 @@ class AlphaFold2RunPodClient:
         max_template_date: str = "2020-05-14",
         extra_flags: str | None = None,
         on_job_id: Callable[[str, str], None] | None = None,
+        resume_job_ids: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         results: dict[str, Any] = {}
         for seq in sequences:
@@ -101,11 +114,18 @@ class AlphaFold2RunPodClient:
             if extra_flags:
                 payload["alphafold_extra_flags"] = str(extra_flags)
 
-            _, job = self.runpod.run_and_wait_with_job_id(
-                self.endpoint_id,
-                payload,
-                on_job_id=(lambda job_id, seq_id=seq.id: on_job_id(seq_id, job_id)) if on_job_id else None,
-            )
+            existing_job_id = (resume_job_ids or {}).get(seq.id) if resume_job_ids else None
+            if isinstance(existing_job_id, str) and existing_job_id.strip():
+                job_id = existing_job_id.strip()
+                if on_job_id is not None:
+                    on_job_id(seq.id, job_id)
+                job = self.runpod.wait(self.endpoint_id, job_id)
+            else:
+                _, job = self.runpod.run_and_wait_with_job_id(
+                    self.endpoint_id,
+                    payload,
+                    on_job_id=(lambda job_id, seq_id=seq.id: on_job_id(seq_id, job_id)) if on_job_id else None,
+                )
             if job.get("status") not in {"COMPLETED", "COMPLETED_WITH_ERRORS"}:
                 raise RuntimeError(f"AlphaFold2 RunPod job not completed: {job}")
 
