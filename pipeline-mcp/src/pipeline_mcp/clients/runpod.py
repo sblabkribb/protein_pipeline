@@ -62,6 +62,18 @@ class RunPodClient:
             raise RuntimeError(f"Unexpected RunPod status response: {data!r}")
         return data
 
+    def wait(self, endpoint_id: str, job_id: str) -> dict[str, Any]:
+        start = time.monotonic()
+        while True:
+            data = self.status(endpoint_id, job_id)
+            status = data.get("status") or data.get("state")
+            if status in {"COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED", "CANCELLED", "TIMED_OUT"}:
+                return data
+            elapsed = time.monotonic() - start
+            if elapsed > 60 * 60 * 6:
+                raise TimeoutError(f"RunPod job timeout (>6h): endpoint={endpoint_id} job_id={job_id}")
+            time.sleep(self.poll_interval_s)
+
     def run_and_wait(self, endpoint_id: str, input_payload: dict[str, Any]) -> dict[str, Any]:
         return self.run_and_wait_with_job_id(endpoint_id, input_payload)[1]
 
@@ -75,13 +87,5 @@ class RunPodClient:
         job_id = self.run(endpoint_id, input_payload)
         if on_job_id is not None:
             on_job_id(job_id)
-        start = time.monotonic()
-        while True:
-            data = self.status(endpoint_id, job_id)
-            status = data.get("status") or data.get("state")
-            if status in {"COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED", "CANCELLED", "TIMED_OUT"}:
-                return job_id, data
-            elapsed = time.monotonic() - start
-            if elapsed > 60 * 60 * 6:
-                raise TimeoutError(f"RunPod job timeout (>6h): endpoint={endpoint_id} job_id={job_id}")
-            time.sleep(self.poll_interval_s)
+        data = self.wait(endpoint_id, job_id)
+        return job_id, data
