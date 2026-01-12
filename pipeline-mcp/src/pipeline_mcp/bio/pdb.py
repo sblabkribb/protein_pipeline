@@ -5,6 +5,39 @@ import math
 
 
 _WATER_RESNAMES = {"HOH", "WAT", "H2O"}
+_AA3_TO_AA1: dict[str, str] = {
+    "ALA": "A",
+    "ARG": "R",
+    "ASN": "N",
+    "ASP": "D",
+    "CYS": "C",
+    "GLN": "Q",
+    "GLU": "E",
+    "GLY": "G",
+    "HIS": "H",
+    "ILE": "I",
+    "LEU": "L",
+    "LYS": "K",
+    "MET": "M",
+    "PHE": "F",
+    "PRO": "P",
+    "SER": "S",
+    "THR": "T",
+    "TRP": "W",
+    "TYR": "Y",
+    "VAL": "V",
+    # Common variants / modified residues
+    "MSE": "M",  # selenomethionine
+    "SEC": "U",  # selenocysteine
+    "PYL": "O",  # pyrrolysine
+    "HSD": "H",
+    "HSE": "H",
+    "HSP": "H",
+    "CYX": "C",
+    "ASX": "B",
+    "GLX": "Z",
+    "UNK": "X",
+}
 
 
 @dataclass(frozen=True)
@@ -135,6 +168,25 @@ def residues_by_chain(pdb_text: str, *, only_atom_records: bool = True) -> dict[
     return residues
 
 
+def sequence_by_chain(
+    pdb_text: str,
+    *,
+    chains: list[str] | None = None,
+    unknown: str = "X",
+) -> dict[str, str]:
+    residues = residues_by_chain(pdb_text, only_atom_records=True)
+    chain_set = set(chains) if chains is not None else None
+
+    out: dict[str, str] = {}
+    for chain_id, res_list in residues.items():
+        if chain_set is not None and chain_id not in chain_set:
+            continue
+        seq = "".join(_AA3_TO_AA1.get(res.resname.upper(), unknown) for res in res_list)
+        if seq:
+            out[chain_id] = seq
+    return out
+
+
 def _is_heavy(atom: Atom) -> bool:
     return atom.element not in {"H", "D"}
 
@@ -189,4 +241,3 @@ def ligand_proximity_mask(
         if hits:
             mask[chain_id] = hits
     return mask
-

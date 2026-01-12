@@ -48,5 +48,4 @@ def route_prompt(prompt: str) -> dict[str, object]:
 def request_from_prompt(*, prompt: str, target_fasta: str, target_pdb: str) -> PipelineRequest:
     routed = route_prompt(prompt)
     kwargs = dict(routed)
-    return PipelineRequest(target_fasta=target_fasta, target_pdb=target_pdb, **kwargs)  # type: ignore[arg-type]
-
+    return PipelineRequest(target_fasta=target_fasta or "", target_pdb=target_pdb or "", **kwargs)  # type: ignore[arg-type]

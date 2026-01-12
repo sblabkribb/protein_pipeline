@@ -37,6 +37,7 @@ class PipelineRequest:
     af2_extra_flags: str | None = None
     af2_plddt_cutoff: float = 85.0
     af2_top_k: int = 20
+    af2_sequence_ids: list[str] | None = None
 
     mmseqs_target_db: str = "uniref90"
     mmseqs_max_seqs: int = 3000
