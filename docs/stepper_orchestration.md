@@ -148,3 +148,8 @@ jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta \
 | curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' -d @-
 ```
 
+---
+
+## 6) RunPod 내부 실행 커맨드(로컬 재현용)
+- `docs/runpod_model_execution.md` 참고
+

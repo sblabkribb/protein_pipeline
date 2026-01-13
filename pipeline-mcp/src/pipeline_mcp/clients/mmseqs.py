@@ -22,7 +22,7 @@ class MMseqsClient:
         include_taxonomy: bool = False,
         return_a3m: bool = False,
         a3m_max_return_bytes: int = 5 * 1024 * 1024,
-        a3m_format_mode: int = 6,
+        a3m_format_mode: int = 1,
         max_seqs: int | None = None,
         on_job_id: Callable[[str], None] | None = None,
     ) -> dict[str, Any]:
