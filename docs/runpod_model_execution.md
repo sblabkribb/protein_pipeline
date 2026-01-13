@@ -51,11 +51,14 @@ mmseqs search <query_db_or_pad> <target_db_or_pad> <work_dir>/result_db <tmp_dir
   --threads <threads> --gpu <0|1> [--max-seqs <max_seqs>]
 
 # (5) result_db → TSV 텍스트 변환 (이게 result.tsv의 정체)
-mmseqs convertalis <work_dir>/query_db <target_db_prefix> <work_dir>/result_db <work_dir>/result.tsv \
+# NOTE: convertalis는 반드시 (4)에서 search에 사용한 query/target DB와 동일한 DB를 써야 합니다.
+#       (GPU 사용 시 padded DB가 내부 ID/순서를 바꿀 수 있어, unpadded DB로 변환하면 target ID/서열이 뒤틀릴 수 있습니다.)
+mmseqs convertalis <query_db_or_pad> <target_db_or_pad> <work_dir>/result_db <work_dir>/result.tsv \
   --format-output "query,target,evalue,pident,alnlen" --threads <threads>
 
 # (6) (MSA가 필요할 때만) A3M 생성
-mmseqs result2msa <work_dir>/query_db <target_db_prefix> <work_dir>/result_db <work_dir>/result.a3m \
+# NOTE: result2msa도 (4)에서 search에 사용한 query/target DB와 동일한 DB를 써야 합니다.
+mmseqs result2msa <query_db_or_pad> <target_db_or_pad> <work_dir>/result_db <work_dir>/result.a3m \
   --threads <threads> --msa-format-mode 1
 ```
 
@@ -65,6 +68,7 @@ mmseqs result2msa <work_dir>/query_db <target_db_prefix> <work_dir>/result_db <w
 
 - 기본 컬럼: `query,target,evalue,pident,alnlen` (5개)
 - 그래서 기대한 TSV 포맷(예: 더 많은 필드/원하는 columns)과 다르게 보일 수 있습니다.
+- (중요) GPU 모드에서 `result.tsv`의 `target`을 UniRef/UniProt에서 찾아보면 전혀 다른 단백질로 보이거나, BLAST에서 “no significant similarity”가 뜨는 경우가 있습니다. 이 경우는 대개 **(4)에서 padded DB로 search를 해놓고 (5)/(6)에서 unpadded DB로 convertalis/result2msa를 돌려서 DB 내부 ID 매핑이 어긋난 상황**입니다. 해결: convertalis/result2msa 입력 DB를 search와 동일하게 맞추거나(권장), 임시로 `use_gpu=false`로 재실행하세요.
 
 ### 1.4 `target.db`가 안 보이는 이유(정상일 수 있음)
 
