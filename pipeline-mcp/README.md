@@ -84,6 +84,65 @@ docker run --rm -p 8000:8000 \
 - SoluProt: `soluprot_cutoff=0.5`
 - AlphaFold2: `af2_plddt_cutoff=85`, `af2_top_k=20`
 
+## 알고리즘(보존도/ligand-mask/fixed_positions)
+
+### 1) MSA(A3M) 정규화
+- MMseqs2 결과 A3M에서 **첫 레코드가 query**입니다.
+- A3M의 insertion 표기(소문자 `a-z`)는 제거(`strip`)한 뒤 계산합니다.
+- 길이가 query와 다른 hit(정렬 길이 불일치)는 보존도/품질 계산에서 제외합니다.
+- gap(`-`/`.`)은 해당 위치 통계에서 제외합니다.
+
+### 2) 보존도 점수(conservation score)
+각 position `i`에 대해 hit들이 제공한 **비-gap 아미노산 빈도 중 최대값**을 보존도로 사용합니다.
+
+- `totals[i] = (# of hit residues at i; gap 제외)`
+- `counts[i][AA] = (# of that AA at i)`
+- `score[i] = max_AA counts[i][AA] / totals[i]` (값 범위: `0.0~1.0`)
+
+이 점수는 `conservation.json`에 `scores`로 저장됩니다.
+
+### 3) 30/50/70 tier가 의미하는 것(conservation_tiers)
+`conservation_tiers=[0.3, 0.5, 0.7]`는 **“고정할 residue 비율(quantile)”** 또는 **“고정할 최소 보존도(threshold)”**로 해석됩니다.
+
+- `conservation_mode="quantile"`(기본): 길이 `L`인 서열에서 `k=floor(L*tier)`개를 **보존도 점수 상위부터** 고정합니다(동점이면 position 번호가 작은 쪽 우선).
+  - 예: `L=221`, `tier=0.3` → `k=66`개 고정
+- `conservation_mode="threshold"`: `score[i] >= tier`인 position을 모두 고정합니다(이때 `tier`는 “비율”이 아니라 “빈도 임계값” 의미).
+
+> 실행 로그/산출물에서 `tiers/30`, `tiers/50`, `tiers/70`는 각각 `0.3`, `0.5`, `0.7` tier를 의미합니다.  
+> tier는 보통 **30→50→70 순서로 진행**되며, 중간 실패/중단(stop_after)에 따라 `tiers/30`만 존재할 수도 있습니다.
+
+### 4) ligand 6Å mask는 어떻게 “제외(고정)”되나? (ligand_mask_distance)
+파이프라인의 ligand mask는 PDB에서 ligand로 간주되는 원자들 주변(`ligand_mask_distance`, 기본 `6.0Å`)의 residue를 찾아 **ProteinMPNN에서 변이 대상에서 제외(=fixed)**합니다.
+
+- ligand 원자 수집:
+  - `HETATM` 레코드만 사용
+  - 물(`HOH/WAT/H2O`)은 제외
+  - 수소/중수소(`H/D`)는 제외(heavy atom만 사용)
+  - 옵션 `ligand_resnames=["ACE", ...]`를 주면 해당 resname만 ligand로 사용(미지정 시 “물 제외 모든 HETATM”)
+- residue 판정:
+  - 각 residue의 heavy atom과 ligand heavy atom의 거리 중 **하나라도** `<= 6Å`이면 해당 residue를 mask에 포함
+- 주의(번호 체계):
+  - `ligand_mask.json`/`fixed_positions.json`에 기록되는 position은 **PDB의 resseq가 아니라 “체인 내 1-based index(ATOM 레코드 기준 순서)”**입니다.
+
+또한 현재 구현은 **`HETATM`만 ligand로 인식**합니다. 따라서 PDB에 결합 파트너(예: peptide substrate)가 `ATOM` 체인으로 들어있다면(1LVM의 chain C/D처럼) 그 체인은 ligand mask 대상이 아닙니다.
+
+### 5) tier별 fixed_positions 생성(보존도 + ligand mask)
+각 tier에서 최종적으로 ProteinMPNN에 전달되는 `fixed_positions.json`은 아래를 합집합으로 만듭니다.
+
+- `conservation.json`에서 선택된 tier별 고정 position(FASTA 기준)
+- `ligand_mask.json`에서 선택된 위치(체인 index 기준)
+
+FASTA와 PDB가 둘 다 제공된 경우, 보존도 position은 **FASTA(query)→PDB 체인 서열 정렬을 통해 체인 index로 매핑**한 뒤 합칩니다(`query_pdb_alignment.json` 참고).
+
+### Active-site fixed list vs (ligand mask + 보존도)의 차이
+논문에서 말하는 “active-site residue list 고정”과 본 파이프라인의 “ligand mask + 보존도 고정”은 목적과 근거가 다릅니다.
+
+- **Active-site fixed list(논문 방식)**: 사람이 지정한 기능성 residue(촉매/결합/특이성 관련)를 고정합니다. MSA나 ligand 존재 여부와 무관하게 “기능 유지”를 강하게 보장합니다.
+- **보존도 fixed(파이프라인)**: MSA에서 **서열적으로 가장 보존된 위치**를 고정합니다. 구조 안정성에 중요한 residue가 잡히는 경향은 있지만, 기능성(active site)이 반드시 포함된다는 보장은 없습니다.
+- **Ligand mask fixed(파이프라인)**: 구조에서 ligand(=HETATM) 주변을 고정합니다. 결합 상태가 PDB에 어떻게 들어있느냐에 영향을 크게 받습니다(위의 HETATM/ATOM 차이 포함).
+
+즉, 논문처럼 “active-site + 30/50/70% 보존도”를 재현하려면, (1) 동일한 번호 체계/서열 범위를 맞추고(예: tag 포함 여부), (2) active-site 고정 리스트를 별도로 병합해야 합니다. 현재 `pipeline.run` API는 active-site 리스트를 직접 입력받아 자동 병합하는 옵션은 제공하지 않습니다.
+
 ## 단계별 실행(run_id로 이어서 실행)
 `pipeline.run`은 기본적으로 동기(blocking)입니다. MMseqs/AF2는 오래 걸릴 수 있으니, 아래처럼 `stop_after`로 잘라서 같은 `run_id`로 이어서 실행하는 방식을 권장합니다.
 
