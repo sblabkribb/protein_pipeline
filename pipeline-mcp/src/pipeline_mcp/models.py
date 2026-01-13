@@ -31,7 +31,7 @@ class PipelineRequest:
 
     soluprot_cutoff: float = 0.5
 
-    af2_model_preset: str = "monomer"
+    af2_model_preset: str = "auto"  # auto | monomer | multimer (and variants)
     af2_db_preset: str = "full_dbs"
     af2_max_template_date: str = "2020-05-14"
     af2_extra_flags: str | None = None
@@ -45,6 +45,12 @@ class PipelineRequest:
     mmseqs_use_gpu: bool = True
 
     novelty_target_db: str = "uniref90"
+
+    msa_min_coverage: float = 0.0
+    msa_min_identity: float = 0.0
+
+    query_pdb_min_identity: float = 0.9
+    query_pdb_policy: str = "error"  # error | warn | ignore
 
     stop_after: str | None = None  # msa | design | soluprot | af2 | novelty
     force: bool = False
@@ -69,6 +75,7 @@ class PipelineResult:
     run_id: str
     output_dir: str
     msa_a3m_path: str | None
+    msa_filtered_a3m_path: str | None
     msa_tsv_path: str | None
     conservation_path: str | None
     ligand_mask_path: str | None

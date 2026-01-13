@@ -92,6 +92,11 @@ curl -sS -X POST http://<SERVER_IP>:18080/tools/call -H 'Content-Type: applicati
 
 결과물은 서버 내부의 `PIPELINE_OUTPUT_ROOT/<run_id>/`에 저장됩니다.
 
+## 단계별 오케스트레이션(= protein-pipeline-stepper 방식)
+Codex 스킬 `protein-pipeline-stepper`는 `pipeline.status`로 상태를 게이트한 뒤 `pipeline.run(stop_after=...)`를 단계별로 호출해 중복 job을 방지합니다.
+
+- 재현 가능한 curl 명령어/폴링 루프/디버깅 포인트: `docs/stepper_orchestration.md`
+
 ## SoluProt 서버(선택)
 SoluProt은 점수만 계산해 필터링하므로 RunPod가 필수는 아닙니다. 이 서버(NCP)에 HTTP로 띄우고 `SOLUPROT_URL`만 설정하면 됩니다.
 

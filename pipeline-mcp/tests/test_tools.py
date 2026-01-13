@@ -12,6 +12,14 @@ class TestTools(unittest.TestCase):
         fasta = ">q1\nACDEFGHIK\n"
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU A   4       3.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  PHE A   5       4.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  GLY A   6       5.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      7  CA  HIS A   7       6.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      8  CA  ILE A   8       7.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      9  CA  LYS A   9       8.000   0.000   0.000  1.00 20.00           C\n"
             "END\n"
         )
         with tempfile.TemporaryDirectory() as tmp:
@@ -42,6 +50,14 @@ class TestTools(unittest.TestCase):
         fasta = ">q1\nACDEFGHIK\n"
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU A   4       3.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  PHE A   5       4.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  GLY A   6       5.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      7  CA  HIS A   7       6.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      8  CA  ILE A   8       7.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      9  CA  LYS A   9       8.000   0.000   0.000  1.00 20.00           C\n"
             "END\n"
         )
         with tempfile.TemporaryDirectory() as tmp:
