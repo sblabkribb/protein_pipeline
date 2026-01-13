@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,7 +12,14 @@ class TestPipelineDryRun(unittest.TestCase):
         fasta = ">q1\nACDEFGHIK\n"
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
-            "ATOM      2  CA  ALA A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU A   4       3.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  PHE A   5       4.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  GLY A   6       5.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      7  CA  HIS A   7       6.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      8  CA  ILE A   8       7.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      9  CA  LYS A   9       8.000   0.000   0.000  1.00 20.00           C\n"
             "END\n"
         )
 
@@ -25,8 +33,10 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertTrue((out / "status.json").exists())
             self.assertTrue((out / "events.jsonl").exists())
             self.assertTrue((out / "msa" / "result.a3m").exists())
+            self.assertTrue((out / "msa" / "quality.json").exists())
             self.assertTrue((out / "conservation.json").exists())
             self.assertTrue((out / "ligand_mask.json").exists())
+            self.assertTrue((out / "query_pdb_alignment.json").exists())
 
             self.assertEqual(len(res.tiers), 2)
             for tier_result in res.tiers:
@@ -63,6 +73,34 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertTrue((out / "target.fasta").exists())
             self.assertTrue((out / "target.pdb").exists())
             self.assertTrue((out / "msa" / "result.a3m").exists())
+
+    def test_chain_strategy_forces_single_chain_in_monomer_mode(self) -> None:
+        fasta = ">q1\nACD\n"
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU B   1       0.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  PHE B   2       1.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  GLY B   3       2.000   1.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            req = PipelineRequest(
+                target_fasta=fasta,
+                target_pdb=pdb,
+                design_chains=["A", "B"],
+                af2_model_preset="monomer",
+                dry_run=True,
+                num_seq_per_tier=2,
+                conservation_tiers=[0.3],
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            payload = json.loads((out / "tiers" / "30" / "proteinmpnn.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["request"]["pdb_path_chains"], ["A"])
 
 
 if __name__ == "__main__":

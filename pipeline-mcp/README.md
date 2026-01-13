@@ -68,7 +68,17 @@ docker run --rm -p 8000:8000 \
   - `target_pdb`만 주면, `ATOM` record에서 서열을 추출해 `MMseqs2`/보존도 계산에 사용합니다.
   - `target_pdb`가 없고 `stop_after!="msa"`면, `AlphaFold2`로 target 구조(`target.pdb`)를 먼저 만든 뒤 파이프라인을 실행합니다(필요: `ALPHAFOLD2_ENDPOINT_ID` 또는 `AF2_URL`).
 - `af2_sequence_ids=["1"]`: AF2를 특정 design id들만 실행(전체 AF2가 너무 오래 걸릴 때 유용).
+- `af2_model_preset="auto"`(기본): chain 개수(=design_chains)로 `monomer`/`multimer`를 자동 선택합니다. multi-chain design(`A/B/...`)은 AF2 입력을 multi-FASTA로 변환해 `/` 파싱 에러를 방지합니다.
+  - `monomer` preset에서는 chain 전략을 일관되게 유지하기 위해 `design_chains`를 첫 체인 1개로 강제합니다(`chain_strategy.json`에 기록).
+  - (고급) 멀티체인 서열을 monomer로 평가하면서 첫 체인만 쓰고 싶다면 `PIPELINE_AF2_MONOMER_FIRST_CHAIN=1`을 설정하세요(기본은 사전 차단).
 - `force=true`: 기존 산출물이 있어도 해당 단계부터 다시 실행합니다.
+- MSA 품질/필터:
+  - `msa_min_coverage`: hit 서열의 non-gap coverage(0~1) 최소값. 설정 시 `msa/result.filtered.a3m`를 만들고 이후 보존도 계산은 filtered MSA를 사용합니다.
+  - `msa_min_identity`: hit 서열의 query 일치율(0~1, matches/query_len) 최소값.
+  - `msa/quality.json`에는 fragment 비율(coverage)과 depth(Neff 유사 지표)가 함께 저장되며, 너무 낮으면 `warnings`로 안내합니다.
+- FASTA↔PDB 일치성 체크:
+  - `query_pdb_min_identity`(기본 0.9): PDB chain이 query와 얼마나 일치해야 하는지 (matches/query_len).
+  - `query_pdb_policy`(기본 `error`): `error|warn|ignore`. 결과는 `query_pdb_alignment.json`에 저장됩니다.
 
 기본 필터:
 - SoluProt: `soluprot_cutoff=0.5`
@@ -189,8 +199,11 @@ codex mcp list
 기본적으로 `PIPELINE_OUTPUT_ROOT/<run_id>/`에 저장됩니다.
 - `request.json`, `status.json`, `events.jsonl`, `summary.json`
 - `target.fasta`, `target.pdb`
+- `chain_strategy.json`
 - `msa/result.tsv`, `msa/result.a3m`
+- `msa/quality.json`, `msa/result.filtered.a3m`(옵션)
 - `conservation.json`, `ligand_mask.json`
+- `query_pdb_alignment.json`
 - `tiers/<tier>/fixed_positions.json`, `tiers/<tier>/fixed_positions_check.json`, `tiers/<tier>/designs.fasta`, `tiers/<tier>/proteinmpnn.json`
 - `tiers/<tier>/soluprot.json`, `tiers/<tier>/designs_filtered.fasta`
 - `tiers/<tier>/af2_scores.json`, `tiers/<tier>/af2_selected.fasta`, `tiers/<tier>/af2/<seq_id>/*`

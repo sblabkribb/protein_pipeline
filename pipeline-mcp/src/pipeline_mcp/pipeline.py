@@ -11,9 +11,12 @@ from collections.abc import Callable
 
 from .bio.a3m import compute_conservation
 from .bio.a3m import decode_a3m_gz_b64
+from .bio.a3m import filter_a3m
+from .bio.a3m import msa_quality
 from .bio.fasta import FastaRecord
 from .bio.fasta import parse_fasta
 from .bio.fasta import to_fasta
+from .bio.alignment import global_alignment_mapping
 from .bio.pdb import ligand_proximity_mask
 from .bio.pdb import residues_by_chain
 from .bio.pdb import sequence_by_chain
@@ -32,6 +35,15 @@ from .storage import write_json
 
 
 _SAFE_ID_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
+_AF2_ALLOWED_AA = set("ACDEFGHIKLMNPQRSTVWYX")
+
+
+def _format_set(values: set[str], *, limit: int = 12) -> str:
+    items = sorted(values)
+    if len(items) <= limit:
+        return "{" + ", ".join(repr(x) for x in items) + "}"
+    head = items[:limit]
+    return "{" + ", ".join(repr(x) for x in head) + f", ... (+{len(items) - limit})" + "}"
 
 
 def _load_jobs_map(path: Path) -> dict[str, str]:
@@ -85,6 +97,129 @@ def _safe_id(value: str) -> str:
 
 def _is_monomer_preset(preset: str) -> bool:
     return str(preset or "").strip().lower().startswith("monomer")
+
+
+def _is_multimer_preset(preset: str) -> bool:
+    return str(preset or "").strip().lower().startswith("multimer")
+
+
+def _resolve_af2_model_preset(requested: str, *, chain_count: int) -> str:
+    preset = str(requested or "").strip()
+    if not preset or preset.lower() == "auto":
+        return "multimer" if int(chain_count) > 1 else "monomer"
+    if _is_monomer_preset(preset):
+        return preset
+    if _is_multimer_preset(preset):
+        return preset
+    return preset
+
+
+def _split_multichain_sequence(seq: str) -> list[str]:
+    seq = str(seq or "").strip()
+    if not seq:
+        return []
+    parts = [p.strip() for p in seq.split("/") if p.strip()]
+    return parts if len(parts) > 1 else [seq]
+
+
+def _clean_protein_sequence(seq: str) -> str:
+    return "".join(ch for ch in str(seq or "").upper() if ch.isalpha())
+
+
+def _validate_af2_chain_sequences(
+    seq: str,
+    *,
+    model_preset: str,
+    chain_ids: list[str] | None,
+) -> list[str]:
+    raw = re.sub(r"\s+", "", str(seq or ""))
+    if not raw:
+        raise ValueError("AF2 input validation failed: empty sequence")
+
+    parts = raw.split("/") if "/" in raw else [raw]
+    if any(p == "" for p in parts):
+        raise ValueError(
+            "AF2 input validation failed: invalid chain delimiter '/': empty chain detected. "
+            "Fix: use 'SEQ_A/SEQ_B' (no leading/trailing '//')."
+        )
+
+    invalid_chars: set[str] = set()
+    invalid_examples: list[str] = []
+    chains: list[str] = []
+    for chain_idx, part in enumerate(parts, start=1):
+        out_chars: list[str] = []
+        for pos, ch in enumerate(part, start=1):
+            if not ch.isalpha():
+                invalid_chars.add(ch)
+                if len(invalid_examples) < 6:
+                    invalid_examples.append(f"chain{chain_idx}:pos{pos}={ch!r}")
+                continue
+            up = ch.upper()
+            if up not in _AF2_ALLOWED_AA:
+                invalid_chars.add(up)
+                if len(invalid_examples) < 6:
+                    invalid_examples.append(f"chain{chain_idx}:pos{pos}={ch!r}")
+                continue
+            out_chars.append(up)
+        chains.append("".join(out_chars))
+
+    if invalid_chars:
+        allowed = "".join(sorted(_AF2_ALLOWED_AA))
+        ex = ", ".join(invalid_examples) if invalid_examples else "n/a"
+        raise ValueError(
+            "AF2 input validation failed: sequence contains non-standard characters. "
+            f"invalid={_format_set(invalid_chars)} examples=[{ex}]. "
+            f"Allowed amino acids: {allowed}. "
+            "Fix: replace ambiguous/modified residues with 'X' (or a canonical AA), and remove non-letter symbols. "
+            "If this is a multimer, keep chains separated as 'SEQ_A/SEQ_B' and use af2_model_preset='multimer'."
+        )
+
+    preset = str(model_preset or "").strip().lower() or "monomer"
+    if preset.startswith("monomer") and len(chains) > 1 and not _env_true("PIPELINE_AF2_MONOMER_FIRST_CHAIN"):
+        used_ids = (chain_ids or [])[: min(2, len(chain_ids or []))]
+        raise ValueError(
+            "AF2 input validation failed: monomer preset cannot accept multi-chain sequence separated by '/'. "
+            f"found_chains={len(chains)} chain_ids={used_ids or None}. "
+            "Fix: (1) run as multimer: set af2_model_preset='multimer' and design_chains=['A','B',...], "
+            "or (2) run as monomer on a single chain: set design_chains=['A'] so ProteinMPNN/ligand mask/fixed positions "
+            "are computed for one chain consistently. "
+            "If you really want to evaluate only the first chain in monomer mode, set PIPELINE_AF2_MONOMER_FIRST_CHAIN=1."
+        )
+
+    if preset.startswith("multimer") and chain_ids is not None and len(chain_ids) > 1 and len(chains) != len(chain_ids):
+        raise ValueError(
+            "AF2 input validation failed: multimer preset expects the number of chains to match design_chains. "
+            f"design_chains={chain_ids} found_chains={len(chains)}. "
+            "Fix: ensure ProteinMPNN outputs chains in 'A/B/...' order matching design_chains, "
+            "or set af2_model_preset='monomer' and design_chains=['A']."
+        )
+
+    if preset.startswith("monomer") and len(chains) > 1:
+        chains = [chains[0]]
+
+    return chains
+
+
+def _prepare_af2_sequence(seq: str, *, model_preset: str, chain_ids: list[str] | None) -> str:
+    preset = str(model_preset or "").strip() or "monomer"
+    chains = _validate_af2_chain_sequences(seq, model_preset=preset, chain_ids=chain_ids)
+    if not chains:
+        raise ValueError("AF2 input validation failed: empty sequence after validation")
+
+    if _is_monomer_preset(preset):
+        return chains[0]
+
+    if not _is_multimer_preset(preset):
+        return chains[0]
+
+    out = chains[0]
+    for idx, chain_seq in enumerate(chains[1:], start=1):
+        label = None
+        if chain_ids and idx < len(chain_ids):
+            label = str(chain_ids[idx]).strip() or None
+        label = label or f"chain_{idx+1}"
+        out += f"\n>{label}\n{chain_seq}"
+    return out
 
 
 def _first_chain_sequence(seq: str) -> str:
@@ -152,6 +287,13 @@ def _dummy_backbone_pdb(sequence: str, *, chain_id: str = "A") -> str:
             serial += 1
     lines.append("END")
     return "\n".join(lines) + "\n"
+
+
+def _normalize_policy(value: str) -> str:
+    policy = str(value or "").strip().lower() or "error"
+    if policy not in {"error", "warn", "ignore"}:
+        raise ValueError("query_pdb_policy must be one of: error | warn | ignore")
+    return policy
 
 
 def _validate_proteinmpnn_fixed_positions(
@@ -297,6 +439,7 @@ class PipelineRunner:
         errors: list[str] = []
 
         msa_a3m_path = None
+        msa_filtered_a3m_path = None
         msa_tsv_path = None
         conservation_path = None
         ligand_mask_path = None
@@ -346,12 +489,38 @@ class PipelineRunner:
             msa_tsv_path = str(msa_dir / "result.tsv")
             msa_a3m_path = str(msa_dir / "result.a3m")
 
+            filtered_a3m_text = a3m_text
+            quality = msa_quality(a3m_text)
+            if float(request.msa_min_coverage) > 0.0 or float(request.msa_min_identity) > 0.0:
+                filtered_a3m_text, filter_report = filter_a3m(
+                    a3m_text,
+                    min_coverage=request.msa_min_coverage,
+                    min_identity=request.msa_min_identity,
+                )
+                msa_filtered_a3m_path = str(msa_dir / "result.filtered.a3m")
+                _write_text(Path(msa_filtered_a3m_path), filtered_a3m_text)
+                quality["filter"] = filter_report
+                quality["after_filter"] = msa_quality(filtered_a3m_text)
+            write_json(msa_dir / "quality.json", quality)
+            msa_warns: list[str] = []
+            if isinstance(quality.get("warnings"), list):
+                msa_warns.extend(str(w) for w in quality["warnings"])
+            after = quality.get("after_filter")
+            if isinstance(after, dict) and isinstance(after.get("warnings"), list):
+                msa_warns.extend(f"after_filter:{w}" for w in after["warnings"])
+            set_status(
+                paths,
+                stage="mmseqs_msa",
+                state="completed",
+                detail=("; ".join(msa_warns)[:500] if msa_warns else None),
+            )
+
             if request.stop_after == "msa":
-                set_status(paths, stage="mmseqs_msa", state="completed")
                 result = PipelineResult(
                     run_id=run_id,
                     output_dir=str(paths.root),
                     msa_a3m_path=msa_a3m_path,
+                    msa_filtered_a3m_path=msa_filtered_a3m_path,
                     msa_tsv_path=msa_tsv_path,
                     conservation_path=None,
                     ligand_mask_path=None,
@@ -364,7 +533,7 @@ class PipelineRunner:
 
             set_status(paths, stage="conservation", state="running")
             conservation = compute_conservation(
-                a3m_text,
+                filtered_a3m_text,
                 tiers=request.conservation_tiers,
                 mode=request.conservation_mode,
             )
@@ -398,11 +567,30 @@ class PipelineRunner:
                         set_status(paths, stage="af2_target", state="running", detail=f"runpod_job_id={job_id}")
 
                     target_seq = target_record.sequence
-                    target_seqrec = SequenceRecord(id="target", sequence=target_seq, header=target_record.header, meta={})
+                    target_seqrec = SequenceRecord(
+                        id="target",
+                        sequence=target_seq,
+                        header=target_record.header,
+                        meta={},
+                    )
+                    target_af2_preset = _resolve_af2_model_preset(
+                        request.af2_model_preset,
+                        chain_count=len(_split_multichain_sequence(target_seq)),
+                    )
+                    target_af2_input = SequenceRecord(
+                        id="target",
+                        header=target_seqrec.header,
+                        sequence=_prepare_af2_sequence(
+                            target_seqrec.sequence,
+                            model_preset=target_af2_preset,
+                            chain_ids=None,
+                        ),
+                        meta=target_seqrec.meta,
+                    )
                     try:
                         af2_out = self.af2.predict(
-                            [target_seqrec],
-                            model_preset=request.af2_model_preset,
+                            [target_af2_input],
+                            model_preset=target_af2_preset,
                             db_preset=request.af2_db_preset,
                             max_template_date=request.af2_max_template_date,
                             extra_flags=request.af2_extra_flags,
@@ -410,8 +598,8 @@ class PipelineRunner:
                         )
                     except TypeError:
                         af2_out = self.af2.predict(
-                            [target_seqrec],
-                            model_preset=request.af2_model_preset,
+                            [target_af2_input],
+                            model_preset=target_af2_preset,
                             db_preset=request.af2_db_preset,
                             max_template_date=request.af2_max_template_date,
                             extra_flags=request.af2_extra_flags,
@@ -436,7 +624,124 @@ class PipelineRunner:
 
             set_status(paths, stage="ligand_mask", state="running")
             pdb_chains = list(residues_by_chain(target_pdb_text, only_atom_records=True).keys())
-            design_chains = request.design_chains or pdb_chains or None
+            requested_chains = request.design_chains or pdb_chains or None
+            af2_model_preset = _resolve_af2_model_preset(
+                request.af2_model_preset,
+                chain_count=len(requested_chains or []),
+            )
+            chain_note = None
+            if requested_chains and _is_monomer_preset(af2_model_preset):
+                if len(requested_chains) > 1:
+                    chain_note = f"monomer preset: using first chain only ({requested_chains[0]})"
+                design_chains = [requested_chains[0]]
+            else:
+                design_chains = requested_chains
+
+            write_json(
+                paths.root / "chain_strategy.json",
+                {
+                    "af2_model_preset": af2_model_preset,
+                    "pdb_chains": pdb_chains,
+                    "requested_design_chains": request.design_chains,
+                    "design_chains_used": design_chains,
+                    "note": chain_note,
+                },
+            )
+            set_status(
+                paths,
+                stage="chain_strategy",
+                state="completed",
+                detail=(chain_note[:500] if chain_note else None),
+            )
+
+            set_status(paths, stage="query_pdb_check", state="running")
+            query_seq = _clean_protein_sequence(target_record.sequence)
+            pdb_seq_by_chain = sequence_by_chain(target_pdb_text, chains=design_chains)
+            policy = _normalize_policy(request.query_pdb_policy)
+            min_identity = float(request.query_pdb_min_identity)
+
+            query_to_pdb_map_by_chain: dict[str, list[int | None]] = {}
+            query_pdb_report: dict[str, object] = {
+                "policy": policy,
+                "min_query_identity": min_identity,
+                "query_len": len(query_seq),
+                "chains": {},
+            }
+            problems: list[str] = []
+            warnings: list[str] = []
+            both_provided = bool(str(request.target_fasta or "").strip()) and bool(str(request.target_pdb or "").strip())
+
+            for chain_id in design_chains or sorted(pdb_seq_by_chain.keys()):
+                chain_seq_raw = pdb_seq_by_chain.get(chain_id, "")
+                chain_seq = _clean_protein_sequence(chain_seq_raw)
+                if not chain_seq:
+                    problems.append(f"chain {chain_id}: empty sequence extracted from target_pdb")
+                    continue
+
+                aln = global_alignment_mapping(query_seq, chain_seq)
+                query_to_pdb_map_by_chain[chain_id] = aln.mapping_query_to_target
+
+                ok = aln.query_identity >= min_identity
+                exact_match = (
+                    aln.query_len == aln.target_len
+                    and aln.matches == aln.query_len
+                    and aln.gaps_in_query == 0
+                    and aln.gaps_in_target == 0
+                )
+                query_pdb_report["chains"][chain_id] = {
+                    "query_len": aln.query_len,
+                    "pdb_len": aln.target_len,
+                    "aligned_pairs": aln.aligned_pairs,
+                    "matches": aln.matches,
+                    "mismatches": aln.mismatches,
+                    "gaps_in_query": aln.gaps_in_query,
+                    "gaps_in_pdb": aln.gaps_in_target,
+                    "pairwise_identity": aln.pairwise_identity,
+                    "query_identity": aln.query_identity,
+                    "coverage_query": aln.coverage_query,
+                    "coverage_pdb": aln.coverage_target,
+                    "ok": ok,
+                    "exact_match": exact_match,
+                }
+
+                if not ok:
+                    problems.append(
+                        f"chain {chain_id}: query_identity={aln.query_identity:.3f} < {min_identity:.3f} "
+                        f"(query_len={aln.query_len} pdb_len={aln.target_len})"
+                    )
+                elif both_provided and not exact_match:
+                    warnings.append(
+                        f"chain {chain_id}: FASTA vs PDB not exact match "
+                        f"(mismatches={aln.mismatches} gaps_query={aln.gaps_in_query} gaps_pdb={aln.gaps_in_target} "
+                        f"query_len={aln.query_len} pdb_len={aln.target_len})"
+                    )
+
+            if warnings:
+                query_pdb_report["warnings"] = warnings
+            write_json(paths.root / "query_pdb_alignment.json", query_pdb_report)
+            if problems and policy == "error":
+                raise ValueError(
+                    "target_fasta/target_pdb mismatch (query_pdb_check failed): "
+                    + "; ".join(problems)
+                    + ". Fix: make sure target_fasta matches the selected PDB chain(s) "
+                    "(design_chains), or omit target_fasta to derive the query from target_pdb, "
+                    "or relax with query_pdb_policy='warn'/'ignore' and/or query_pdb_min_identity. "
+                    "See query_pdb_alignment.json for details."
+                )
+
+            detail_parts: list[str] = []
+            if problems and policy == "warn":
+                detail_parts.append("; ".join(problems))
+            if warnings and policy != "ignore":
+                detail_parts.append("; ".join(warnings))
+
+            set_status(
+                paths,
+                stage="query_pdb_check",
+                state="completed",
+                detail=(" | ".join(detail_parts)[:500] if detail_parts else None),
+            )
+
             ligand_mask = ligand_proximity_mask(
                 target_pdb_text,
                 chains=design_chains,
@@ -454,7 +759,18 @@ class PipelineRunner:
                 tier_fixed = conservation.fixed_positions_by_tier.get(tier, [])
                 fixed_positions_by_chain: dict[str, list[int]] = {}
                 for chain_id in design_chains or list(ligand_mask.keys()) or ["A"]:
-                    chain_fixed = set(tier_fixed)
+                    mapped: list[int] = []
+                    mapping = query_to_pdb_map_by_chain.get(chain_id)
+                    if mapping:
+                        for pos in tier_fixed:
+                            if 1 <= int(pos) <= len(mapping):
+                                mapped_pos = mapping[int(pos) - 1]
+                                if mapped_pos is not None:
+                                    mapped.append(int(mapped_pos))
+                    else:
+                        mapped = [int(pos) for pos in tier_fixed]
+
+                    chain_fixed = set(mapped)
                     chain_fixed.update(ligand_mask.get(chain_id, []))
                     fixed_positions_by_chain[chain_id] = sorted(chain_fixed)
 
@@ -546,8 +862,53 @@ class PipelineRunner:
                                 },
                             )
                         else:
-                            soluprot_input = _monomerize_records(samples, request.af2_model_preset)
-                            scores = self.soluprot.score(soluprot_input)
+                            chain_scores: dict[str, dict[str, float]] = {}
+                            child_records: list[SequenceRecord] = []
+                            child_to_parent: dict[str, tuple[str, str]] = {}
+
+                            for s in samples:
+                                chain_seqs = _split_multichain_sequence(s.sequence)
+                                if len(chain_seqs) <= 1:
+                                    cid = str(s.id)
+                                    child_to_parent[cid] = (str(s.id), "")
+                                    child_records.append(
+                                        SequenceRecord(
+                                            id=cid,
+                                            header=s.header,
+                                            sequence=_clean_protein_sequence(chain_seqs[0]),
+                                            meta={},
+                                        )
+                                    )
+                                    continue
+
+                                for idx, chain_seq in enumerate(chain_seqs):
+                                    label = (
+                                        str(design_chains[idx]).strip()
+                                        if (design_chains is not None and idx < len(design_chains))
+                                        else f"chain_{idx+1}"
+                                    )
+                                    cid = f"{s.id}:{label}"
+                                    child_to_parent[cid] = (str(s.id), label)
+                                    child_records.append(
+                                        SequenceRecord(
+                                            id=cid,
+                                            header=f"{s.header or s.id}|{label}",
+                                            sequence=_clean_protein_sequence(chain_seq),
+                                            meta={},
+                                        )
+                                    )
+
+                            scores_by_child = self.soluprot.score(child_records)
+                            for child_id, score in scores_by_child.items():
+                                parent_id, label = child_to_parent.get(child_id, (str(child_id), ""))
+                                chain_scores.setdefault(parent_id, {})[label or "chain_1"] = float(score)
+
+                            scores: dict[str, float] = {}
+                            for s in samples:
+                                parent_id = str(s.id)
+                                per_chain = chain_scores.get(parent_id) or {}
+                                scores[parent_id] = min(per_chain.values()) if per_chain else 0.0
+
                             soluprot_scores = scores
                             passed = [
                                 s for s in samples if float(scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
@@ -555,10 +916,15 @@ class PipelineRunner:
                             passed_ids = [s.id for s in passed]
                             write_json(
                                 soluprot_path,
-                                {"scores": scores, "cutoff": request.soluprot_cutoff, "passed_ids": passed_ids},
+                                {
+                                    "scores": scores,
+                                    "scores_by_chain": chain_scores,
+                                    "cutoff": request.soluprot_cutoff,
+                                    "passed_ids": passed_ids,
+                                },
                             )
 
-                passed = _monomerize_records(passed, request.af2_model_preset)
+                passed = _monomerize_records(passed, af2_model_preset)
                 if samples:
                     _write_text(
                         tier_dir / "designs_filtered.fasta",
@@ -596,6 +962,7 @@ class PipelineRunner:
                     af2_dir = _ensure_dir(tier_dir / "af2")
                     af2_scores_path = tier_dir / "af2_scores.json"
                     af2_selected_path = tier_dir / "af2_selected.fasta"
+
                     cached_scores: dict[str, float] = {}
                     cached_ok = False
                     if af2_scores_path.exists() and not request.force:
@@ -609,7 +976,7 @@ class PipelineRunner:
                         cached_max_template_date = cached.get("max_template_date") if isinstance(cached, dict) else None
                         if (
                             isinstance(cached_scores_raw, dict)
-                            and (cached_model_preset in {None, request.af2_model_preset})
+                            and (cached_model_preset in {None, af2_model_preset})
                             and (cached_db_preset in {None, request.af2_db_preset})
                             and (cached_max_template_date in {None, request.af2_max_template_date})
                         ):
@@ -641,6 +1008,21 @@ class PipelineRunner:
                                 raise RuntimeError(
                                     "AlphaFold2 is required for this pipeline; set ALPHAFOLD2_ENDPOINT_ID (RunPod) or AF2_URL"
                                 )
+
+                            af2_inputs = [
+                                SequenceRecord(
+                                    id=s.id,
+                                    header=s.header,
+                                    sequence=_prepare_af2_sequence(
+                                        s.sequence,
+                                        model_preset=af2_model_preset,
+                                        chain_ids=design_chains,
+                                    ),
+                                    meta=s.meta,
+                                )
+                                for s in to_predict
+                            ]
+
                             jobs_path = af2_dir / "runpod_jobs.json"
                             jobs: dict[str, str] = _load_jobs_map(jobs_path)
 
@@ -656,8 +1038,8 @@ class PipelineRunner:
 
                             try:
                                 af2_result = self.af2.predict(
-                                    to_predict,
-                                    model_preset=request.af2_model_preset,
+                                    af2_inputs,
+                                    model_preset=af2_model_preset,
                                     db_preset=request.af2_db_preset,
                                     max_template_date=request.af2_max_template_date,
                                     extra_flags=request.af2_extra_flags,
@@ -667,8 +1049,8 @@ class PipelineRunner:
                             except TypeError:
                                 try:
                                     af2_result = self.af2.predict(
-                                        to_predict,
-                                        model_preset=request.af2_model_preset,
+                                        af2_inputs,
+                                        model_preset=af2_model_preset,
                                         db_preset=request.af2_db_preset,
                                         max_template_date=request.af2_max_template_date,
                                         extra_flags=request.af2_extra_flags,
@@ -676,8 +1058,8 @@ class PipelineRunner:
                                     )
                                 except TypeError:
                                     af2_result = self.af2.predict(
-                                        to_predict,
-                                        model_preset=request.af2_model_preset,
+                                        af2_inputs,
+                                        model_preset=af2_model_preset,
                                         db_preset=request.af2_db_preset,
                                         max_template_date=request.af2_max_template_date,
                                         extra_flags=request.af2_extra_flags,
@@ -728,7 +1110,7 @@ class PipelineRunner:
                             "cutoff": request.af2_plddt_cutoff,
                             "top_k": request.af2_top_k,
                             "selected_ids": af2_selected_ids,
-                            "model_preset": request.af2_model_preset,
+                            "model_preset": af2_model_preset,
                             "db_preset": request.af2_db_preset,
                             "max_template_date": request.af2_max_template_date,
                             "cached": (not to_predict and cached_ok and not request.force),
@@ -794,6 +1176,7 @@ class PipelineRunner:
                 run_id=run_id,
                 output_dir=str(paths.root),
                 msa_a3m_path=msa_a3m_path,
+                msa_filtered_a3m_path=msa_filtered_a3m_path,
                 msa_tsv_path=msa_tsv_path,
                 conservation_path=conservation_path,
                 ligand_mask_path=ligand_mask_path,
@@ -810,6 +1193,7 @@ class PipelineRunner:
                 run_id=run_id,
                 output_dir=str(paths.root),
                 msa_a3m_path=msa_a3m_path,
+                msa_filtered_a3m_path=msa_filtered_a3m_path,
                 msa_tsv_path=msa_tsv_path,
                 conservation_path=conservation_path,
                 ligand_mask_path=ligand_mask_path,
