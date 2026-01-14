@@ -64,8 +64,24 @@ class RunPodClient:
 
     def wait(self, endpoint_id: str, job_id: str) -> dict[str, Any]:
         start = time.monotonic()
+        transient_failures = 0
         while True:
-            data = self.status(endpoint_id, job_id)
+            try:
+                data = self.status(endpoint_id, job_id)
+                transient_failures = 0
+            except requests.HTTPError as exc:
+                status_code = exc.response.status_code if exc.response is not None else None
+                if status_code in {429, 500, 502, 503, 504}:
+                    transient_failures += 1
+                    delay = min(self.poll_interval_s * (2**min(transient_failures, 6)), 60.0)
+                    time.sleep(delay)
+                    continue
+                raise
+            except (requests.Timeout, requests.ConnectionError, ValueError):
+                transient_failures += 1
+                delay = min(self.poll_interval_s * (2**min(transient_failures, 6)), 60.0)
+                time.sleep(delay)
+                continue
             status = data.get("status") or data.get("state")
             if status in {"COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED", "CANCELLED", "TIMED_OUT"}:
                 return data

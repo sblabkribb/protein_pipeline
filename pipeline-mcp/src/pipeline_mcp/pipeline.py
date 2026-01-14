@@ -482,7 +482,16 @@ class PipelineRunner:
                 msa_dir,
                 request,
                 on_job_id=lambda job_id: (
-                    write_json(msa_dir / "runpod_job.json", {"job_id": job_id}),
+                    write_json(
+                        msa_dir / "runpod_job.json",
+                        {
+                            "job_id": job_id,
+                            "target_db": request.mmseqs_target_db,
+                            "max_seqs": request.mmseqs_max_seqs,
+                            "threads": request.mmseqs_threads,
+                            "use_gpu": request.mmseqs_use_gpu,
+                        },
+                    ),
                     set_status(paths, stage="mmseqs_msa", state="running", detail=f"runpod_job_id={job_id}"),
                 ),
             )
@@ -1213,6 +1222,7 @@ class PipelineRunner:
     ) -> tuple[str, str]:
         tsv_path = msa_dir / "result.tsv"
         a3m_path = msa_dir / "result.a3m"
+        runpod_job_path = msa_dir / "runpod_job.json"
 
         if tsv_path.exists() and a3m_path.exists() and not request.force:
             return tsv_path.read_text(encoding="utf-8"), a3m_path.read_text(encoding="utf-8")
@@ -1233,6 +1243,38 @@ class PipelineRunner:
 
         if self.mmseqs is None:
             raise RuntimeError("MMseqs client is not configured")
+
+        if runpod_job_path.exists() and not request.force:
+            try:
+                meta = json.loads(runpod_job_path.read_text(encoding="utf-8"))
+            except Exception:
+                meta = {}
+            job_id = meta.get("job_id")
+            if isinstance(job_id, str) and job_id.strip():
+                same_request = True
+                if isinstance(meta, dict):
+                    expected = {
+                        "target_db": request.mmseqs_target_db,
+                        "max_seqs": request.mmseqs_max_seqs,
+                        "threads": request.mmseqs_threads,
+                        "use_gpu": request.mmseqs_use_gpu,
+                    }
+                    for k, v in expected.items():
+                        if k in meta and meta.get(k) != v:
+                            same_request = False
+                            break
+                if same_request:
+                    if on_job_id is not None:
+                        on_job_id(job_id)
+                    out = self.mmseqs.wait_job(job_id.strip())
+                    tsv = str(out.get("tsv") or "")
+                    a3m_b64 = out.get("a3m_gz_b64")
+                    if not a3m_b64:
+                        raise RuntimeError("MMseqs search did not return A3M (a3m_gz_b64 is empty)")
+                    a3m = decode_a3m_gz_b64(str(a3m_b64))
+                    _write_text(tsv_path, tsv)
+                    _write_text(a3m_path, a3m)
+                    return tsv, a3m
 
         out = self.mmseqs.search(
             query_fasta=target_query_fasta,
