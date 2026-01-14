@@ -96,6 +96,15 @@ docker run --rm -p 8000:8000 \
 - A3M의 insertion 표기(소문자 `a-z`)는 제거(`strip`)한 뒤 계산합니다.
 - 길이가 query와 다른 hit(정렬 길이 불일치)는 보존도/품질 계산에서 제외합니다.
 - gap(`-`/`.`)은 해당 위치 통계에서 제외합니다.
+- 산출물:
+  - `msa/runpod_job.json`: RunPod `job_id` 및 요청 파라미터(재시도/재개용)
+  - `msa/result.tsv`: MMseqs hit 요약
+  - `msa/result.a3m`: MSA(A3M)
+- 실행 중에는 `msa/runpod_job.json`만 존재할 수 있습니다. `result.tsv`/`result.a3m`은 RunPod job이 `COMPLETED`로 끝난 뒤에 생성됩니다.
+- 재실행(resume):
+  - 같은 `run_id`로 `force=false` 재실행 시, `msa/runpod_job.json`이 있고 파라미터(`mmseqs_target_db`, `mmseqs_max_seqs`, `mmseqs_threads`, `mmseqs_use_gpu`)가 동일하면 **새 RunPod job을 만들지 않고 기존 `job_id`를 재사용**해 완료까지 대기합니다.
+  - 파라미터를 바꿔 재실행하려면 `force=true` 또는 새 `run_id` 사용을 권장합니다.
+- RunPod status API가 일시적으로 `429/502/503/504`를 반환하더라도, pipeline은 backoff 재시도로 복구를 시도합니다.
 
 ### 2) 보존도 점수(conservation score)
 각 position `i`에 대해 hit들이 제공한 **비-gap 아미노산 빈도 중 최대값**을 보존도로 사용합니다.
