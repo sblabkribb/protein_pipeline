@@ -205,6 +205,41 @@ curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' \
   -d "$(jq -n --arg run_id "$RUN_ID" '{name:\"pipeline.status\", arguments:{run_id:$run_id}}')" | jq .
 ```
 
+### Windows PowerShell에서 `/tools/call` 호출하기(HTTP 400 방지)
+PowerShell에서 `ConvertTo-Json`을 2번 하거나, `-Body`에 JSON이 아닌 문자열이 섞이면 서버가 **“JSON object”**로 못 읽어서 HTTP 400이 납니다.
+
+- `-Body`에는 **JSON 문자열만** 넣고,
+- 출력 prettify는 `Invoke-RestMethod` 뒤에 `| ConvertTo-Json -Depth 50`로 하세요.
+- `Get-Content -Raw` 결과는 `[string]`으로 캐스팅해서 JSON에 넣는 것을 권장합니다.
+- (curl로 `-d @file`을 쓰는 경우) Windows PowerShell 5.1의 `Set-Content -Encoding utf8`는 BOM(UTF-8 with BOM)이 붙을 수 있어 JSON 파싱 에러가 날 수 있습니다. 이런 경우 `[IO.File]::WriteAllText($path, $json, [Text.UTF8Encoding]::new($false))`로 **no-BOM** UTF-8로 쓰세요.
+
+예시: status
+```powershell
+$server='http://<SERVER_IP>:18080/tools/call'
+$run_id='intein_test_001'
+$body=@{name='pipeline.status'; arguments=@{run_id=$run_id}} | ConvertTo-Json -Depth 10
+Invoke-RestMethod -Uri $server -Method Post -ContentType 'application/json' -Body $body | ConvertTo-Json -Depth 50
+```
+
+예시: MSA만 실행(CPU 강제)
+```powershell
+$server='http://<SERVER_IP>:18080/tools/call'
+$run_id='intein_msa_001'
+$fasta=[string](Get-Content -Raw -Encoding utf8 'C:\path\to\target.fasta')
+
+$body=@{name='pipeline.run'; arguments=@{
+  run_id=$run_id
+  target_fasta=$fasta
+  stop_after='msa'
+  mmseqs_target_db='uniref90'
+  mmseqs_max_seqs=300
+  mmseqs_threads=8
+  mmseqs_use_gpu=$false
+}} | ConvertTo-Json -Depth 10
+
+Invoke-RestMethod -Uri $server -Method Post -ContentType 'application/json' -Body $body | ConvertTo-Json -Depth 50
+```
+
 ## MCP 사용(VS Code Copilot / Codex CLI)
 Copilot/Codex의 MCP 기능은 “stdio(JSON-RPC)” 서버를 실행해 붙는 방식이 가장 안정적입니다. 이 레포에는 stdio MCP 서버가 포함되어 있습니다:
 
