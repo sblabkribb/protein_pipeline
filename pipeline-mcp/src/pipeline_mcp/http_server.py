@@ -13,6 +13,9 @@ _DISPATCHER: ToolDispatcher | None = None
 
 
 class Handler(BaseHTTPRequestHandler):
+    _MAX_BODY_BYTES = 50 * 1024 * 1024
+    _MAX_CHUNK_LINE_BYTES = 1024
+
     @property
     def dispatcher(self) -> ToolDispatcher:
         if _DISPATCHER is None:
@@ -27,9 +30,62 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _read_chunked(self) -> bytes:
+        body = bytearray()
+        while True:
+            line = self.rfile.readline(self._MAX_CHUNK_LINE_BYTES + 2)
+            if not line:
+                raise ValueError("Unexpected EOF while reading chunked request body")
+            if len(line) > self._MAX_CHUNK_LINE_BYTES + 1 and not line.endswith(b"\n"):
+                raise ValueError("Chunk size line too long")
+
+            size_token = line.strip().split(b";", 1)[0].strip()
+            try:
+                chunk_size = int(size_token, 16)
+            except ValueError as exc:
+                raise ValueError("Invalid chunk size") from exc
+
+            if chunk_size == 0:
+                while True:
+                    trailer = self.rfile.readline(self._MAX_CHUNK_LINE_BYTES + 2)
+                    if not trailer or trailer in (b"\r\n", b"\n"):
+                        break
+                break
+
+            if len(body) + chunk_size > self._MAX_BODY_BYTES:
+                raise ValueError("Request body too large")
+
+            chunk = self.rfile.read(chunk_size)
+            if len(chunk) != chunk_size:
+                raise ValueError("Unexpected EOF while reading chunk data")
+            body.extend(chunk)
+
+            terminator = self.rfile.readline(2)
+            if terminator not in (b"\r\n", b"\n"):
+                raise ValueError("Invalid chunk terminator")
+
+        return bytes(body)
+
+    def _read_body(self) -> bytes:
+        transfer_encoding = str(self.headers.get("Transfer-Encoding") or "").lower()
+        if "chunked" in transfer_encoding:
+            return self._read_chunked()
+
+        length_raw = self.headers.get("Content-Length")
+        if not length_raw:
+            return b""
+        try:
+            length = int(length_raw)
+        except ValueError as exc:
+            raise ValueError("Invalid Content-Length header") from exc
+        if length < 0:
+            raise ValueError("Invalid Content-Length header")
+        if length > self._MAX_BODY_BYTES:
+            raise ValueError("Request body too large")
+        return self.rfile.read(length) if length else b""
+
     def _read_json(self) -> dict[str, Any]:
-        length = int(self.headers.get("Content-Length") or "0")
-        raw = self.rfile.read(length) if length > 0 else b"{}"
+        raw = self._read_body() or b"{}"
         data = json.loads(raw.decode("utf-8", errors="replace"))
         if not isinstance(data, dict):
             raise ValueError("JSON body must be an object")
@@ -57,6 +113,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             self._json(404, {"error": "not found"})
         except Exception as exc:
+            self.log_error("error handling %s: %s", self.path, exc)
             self._json(400, {"ok": False, "error": str(exc)})
 
 

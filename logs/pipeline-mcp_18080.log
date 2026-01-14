@@ -1,1 +1,47 @@
 listening: http://0.0.0.0:18080
+210.218.220.84 - - [14/Jan/2026 10:11:08] "POST /tools/call HTTP/1.1" 400 -
+210.218.220.84 - - [14/Jan/2026 10:11:54] "POST /tools/call HTTP/1.1" 400 -
+210.218.220.84 - - [14/Jan/2026 10:12:08] "POST /tools/call HTTP/1.1" 400 -
+210.218.220.84 - - [14/Jan/2026 10:12:20] "POST /tools/call HTTP/1.1" 400 -
+210.218.220.84 - - [14/Jan/2026 10:12:30] "POST /tools/call HTTP/1.1" 400 -
+127.0.0.1 - - [14/Jan/2026 10:12:38] "GET /healthz HTTP/1.1" 200 -
+127.0.0.1 - - [14/Jan/2026 10:12:42] "POST /tools/list HTTP/1.1" 200 -
+210.218.220.84 - - [14/Jan/2026 10:12:43] "POST /tools/call HTTP/1.1" 400 -
+210.218.220.84 - - [14/Jan/2026 10:13:51] "GET /healthz HTTP/1.1" 200 -
+210.218.220.84 - - [14/Jan/2026 10:13:51] "POST /tools/call HTTP/1.1" 400 -
+----------------------------------------
+Exception occurred during processing of request from ('210.218.220.84', 51933)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 404, in handle_one_request
+    self.raw_requestline = self.rfile.readline(65537)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/socket.py", line 707, in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+210.218.220.84 - - [14/Jan/2026 10:14:13] "GET / HTTP/1.1" 404 -
+210.218.220.84 - - [14/Jan/2026 10:14:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [14/Jan/2026 10:15:56] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [14/Jan/2026 10:21:10] "POST /tools/call HTTP/1.1" 200 -
+127.0.0.1 - - [14/Jan/2026 10:22:46] "GET /healthz HTTP/1.1" 200 -
+135.222.40.18 - - [14/Jan/2026 10:42:57] code 400, message Bad request syntax ('MGLNDD_211.188.62.53_18080')
+135.222.40.18 - - [14/Jan/2026 10:42:57] "MGLNDD_211.188.62.53_18080" 400 -
+127.0.0.1 - - [14/Jan/2026 10:56:05] "POST /tools/call HTTP/1.1" 200 -
+139.59.145.68 - - [14/Jan/2026 11:01:20] "GET / HTTP/1.1" 404 -
+104.197.69.115 - - [14/Jan/2026 11:01:41] "GET / HTTP/1.1" 404 -
+127.0.0.1 - - [14/Jan/2026 11:02:23] "GET /healthz HTTP/1.1" 200 -
+127.0.0.1 - - [14/Jan/2026 11:04:12] "GET /healthz HTTP/1.1" 200 -
+127.0.0.1 - - [14/Jan/2026 11:04:39] "POST /tools/call HTTP/1.1" 200 -
+45.133.172.15 - - [14/Jan/2026 11:07:18] "GET / HTTP/1.1" 404 -
+listening: http://0.0.0.0:18080
+127.0.0.1 - - [14/Jan/2026 11:09:06] "GET /healthz HTTP/1.1" 200 -
+127.0.0.1 - - [14/Jan/2026 11:09:06] "POST /tools/list HTTP/1.1" 200 -
