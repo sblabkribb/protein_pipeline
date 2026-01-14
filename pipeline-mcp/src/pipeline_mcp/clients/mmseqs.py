@@ -33,7 +33,11 @@ class MMseqsClient:
         include_taxonomy: bool = False,
         return_a3m: bool = False,
         a3m_max_return_bytes: int = 5 * 1024 * 1024,
-        a3m_format_mode: int = 1,
+        # NOTE: Many deployments use *indexed* persistent MMseqs DBs on network volumes.
+        # MMseqs2 cannot emit CA3M (`--msa-format-mode 1`) from an indexed target DB:
+        #   "Cannot use result2msa with indexed target database for CA3M output"
+        # Use standard A3M (`--msa-format-mode 0`) by default for compatibility.
+        a3m_format_mode: int = 0,
         max_seqs: int | None = None,
         on_job_id: Callable[[str], None] | None = None,
     ) -> dict[str, Any]:
