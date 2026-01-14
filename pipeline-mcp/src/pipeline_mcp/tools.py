@@ -120,7 +120,7 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
         mmseqs_target_db=str(args.get("mmseqs_target_db") or "uniref90"),
         mmseqs_max_seqs=_as_int(args.get("mmseqs_max_seqs"), 3000),
         mmseqs_threads=_as_int(args.get("mmseqs_threads"), 4),
-        mmseqs_use_gpu=_as_bool(args.get("mmseqs_use_gpu"), True),
+        mmseqs_use_gpu=_as_bool(args.get("mmseqs_use_gpu"), False),
         novelty_target_db=str(args.get("novelty_target_db") or "uniref90"),
         msa_min_coverage=_as_float(args.get("msa_min_coverage"), 0.0),
         msa_min_identity=_as_float(args.get("msa_min_identity"), 0.0),

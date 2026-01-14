@@ -76,6 +76,11 @@ docker run --rm -p 8000:8000 \
   - `msa_min_coverage`: hit 서열의 non-gap coverage(0~1) 최소값. 설정 시 `msa/result.filtered.a3m`를 만들고 이후 보존도 계산은 filtered MSA를 사용합니다.
   - `msa_min_identity`: hit 서열의 query 일치율(0~1, matches/query_len) 최소값.
   - `msa/quality.json`에는 fragment 비율(coverage)과 depth(Neff 유사 지표)가 함께 저장되며, 너무 낮으면 `warnings`로 안내합니다.
+- MMseqs2 실행(GPU/CPU):
+  - `mmseqs_use_gpu=true|false`(기본은 `false`): GPU 사용 여부.
+  - `pipeline-mcp`는 RunPod endpoint를 `MMSEQS_ENDPOINT_ID` 하나만 사용하며, GPU/CPU는 payload의 `mmseqs_use_gpu`로 분기합니다. 따라서 RunPod의 `Execution timeout`을 바꿨다면 **해당 endpoint**에 적용됐는지 확인하세요(다른 endpoint 설정을 바꿔도 영향 없음).
+  - (주의) RunPod Serverless에서 CPU-only(`mmseqs_use_gpu=false`) + 대형 DB(`uniref90`)는 실행 시간이 길어 job timeout이 날 수 있습니다(필요 시 `mmseqs_max_seqs`를 줄이거나 더 작은 DB/전용 pod를 사용).
+  - (주의) GPU 모드에서 “TSV의 UniRef ID가 엉뚱한 단백질로 보이는데 pident는 매우 높다” 같은 현상이 있으면 GPU padded DB에서 `convertalis/result2msa`를 잘못된 DB prefix로 돌려 **ID 매핑이 어긋난** 경우가 흔합니다. 이 경우 (1) `mmseqs_use_gpu=false`로 검증하거나, (2) `mmseqs-runpod` 이미지가 padded DB를 일관되게 사용하도록 업데이트되어 있는지 확인하세요(`mmseqs-runpod/README.md` 참고).
 - FASTA↔PDB 일치성 체크:
   - `query_pdb_min_identity`(기본 0.9): PDB chain이 query와 얼마나 일치해야 하는지 (matches/query_len).
   - `query_pdb_policy`(기본 `error`): `error|warn|ignore`. 결과는 `query_pdb_alignment.json`에 저장됩니다.
@@ -142,6 +147,12 @@ FASTA와 PDB가 둘 다 제공된 경우, 보존도 position은 **FASTA(query)�
 - **Ligand mask fixed(파이프라인)**: 구조에서 ligand(=HETATM) 주변을 고정합니다. 결합 상태가 PDB에 어떻게 들어있느냐에 영향을 크게 받습니다(위의 HETATM/ATOM 차이 포함).
 
 즉, 논문처럼 “active-site + 30/50/70% 보존도”를 재현하려면, (1) 동일한 번호 체계/서열 범위를 맞추고(예: tag 포함 여부), (2) active-site 고정 리스트를 별도로 병합해야 합니다. 현재 `pipeline.run` API는 active-site 리스트를 직접 입력받아 자동 병합하는 옵션은 제공하지 않습니다.
+
+#### 각 방식의 장단점(요약)
+- **Active-site 리스트 고정**: 기능 핵심 잔기를 사람이 지정해 강하게 보호(재현성/해석 용이)하지만, 번호 체계(태그/삽입코드/체인) 정합이 필요하고 “리스트 밖”의 중요한 잔기(구조 안정/원거리 네트워크)를 놓칠 수 있습니다.
+- **Ligand 6Å mask 고정**: PDB 구조 기반으로 결합부 주변을 자동 보호(자동화/구조-기반)하지만, `HETATM`에 의존하며(리간드가 `ATOM` 체인으로 들어오면 미검출), 6Å는 휴리스틱이라 결합부가 과소/과대 고정될 수 있습니다.
+- **MSA 보존도 tier 고정(quantile 0.3/0.5/0.7)**: 데이터(진화적 제약)에 기반해 구조/기능에 중요한 위치를 넓게 보호(자동화/확장성)하지만, MSA 품질에 민감하며(잘못된 MSA면 fixed_positions도 왜곡), 고정 비율이 커질수록 설계 자유도가 줄어듭니다.
+- **현재 파이프라인의 병합 방식**: tier별 고정보존 잔기와 ligand 6Å mask를 **합집합**으로 `fixed_positions.json`에 기록하고, ProteinMPNN은 이 위치들을 “변이 금지(=native 고정)”로 처리합니다.
 
 ## 단계별 실행(run_id로 이어서 실행)
 `pipeline.run`은 기본적으로 동기(blocking)입니다. MMseqs/AF2는 오래 걸릴 수 있으니, 아래처럼 `stop_after`로 잘라서 같은 `run_id`로 이어서 실행하는 방식을 권장합니다.
