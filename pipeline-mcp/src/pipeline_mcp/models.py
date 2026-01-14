@@ -42,7 +42,7 @@ class PipelineRequest:
     mmseqs_target_db: str = "uniref90"
     mmseqs_max_seqs: int = 3000
     mmseqs_threads: int = 4
-    mmseqs_use_gpu: bool = True
+    mmseqs_use_gpu: bool = False
 
     novelty_target_db: str = "uniref90"
 
