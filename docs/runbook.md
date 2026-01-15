@@ -45,8 +45,14 @@ disown || true
 
 헬스체크:
 ```bash
+# (서버 내부에서 확인)
 curl -sS http://127.0.0.1:18080/healthz; echo
 curl -sS -X POST http://127.0.0.1:18080/tools/list -H 'Content-Type: application/json' -d '{}' ; echo
+
+# (원격에서 확인: 서버 IP/도메인으로 접근)
+SERVER=http://<SERVER_IP>:18080
+curl -sS "$SERVER/healthz"; echo
+curl -sS -X POST "$SERVER/tools/list" -H 'Content-Type: application/json' -d '{}' ; echo
 ```
 
 중지:
