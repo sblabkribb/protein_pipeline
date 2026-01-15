@@ -24,7 +24,8 @@
 ### 공통 준비
 
 ```bash
-SERVER=http://127.0.0.1:18080
+# 로컬이면 127.0.0.1, 원격이면 서버 IP/도메인 사용
+SERVER=http://<SERVER_IP>:18080
 RUN_ID=your_run_id_here
 ```
 
