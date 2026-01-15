@@ -2,14 +2,61 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import asdict
+from dataclasses import replace
+import os
+import time
 from typing import Any
 
 from .models import PipelineRequest
 from .pipeline import PipelineRunner
 from .router import request_from_prompt
 from .storage import list_runs
+from .storage import new_run_id
 from .storage import normalize_run_id
 from .storage import load_status
+
+
+def _env_true(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _as_text(value: object | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value).decode("utf-8", errors="replace")
+    if isinstance(value, dict):
+        for key in ("value", "text", "content", "data"):
+            if key in value:
+                return _as_text(value.get(key))
+    if isinstance(value, list):
+        if all(isinstance(v, str) for v in value):
+            return "\n".join(value)
+        if all(isinstance(v, (bytes, bytearray)) for v in value):
+            return b"\n".join(bytes(v) for v in value).decode("utf-8", errors="replace")
+    return str(value)
 
 
 def _as_list_of_str(value: object | None) -> list[str] | None:
@@ -83,9 +130,75 @@ def _as_float(value: object | None, default: float) -> float:
     return default
 
 
+@dataclass(frozen=True)
+class AutoRetryConfig:
+    enabled: bool
+    max_attempts: int
+    backoff_s: float
+
+
+def _auto_retry_config(args: dict[str, Any]) -> AutoRetryConfig:
+    enabled = _as_bool(args.get("auto_retry"), _env_true("PIPELINE_AUTO_RETRY"))
+    max_attempts = _as_int(args.get("auto_retry_max"), _env_int("PIPELINE_AUTO_RETRY_MAX", 2))
+    backoff_s = _as_float(args.get("auto_retry_backoff_s"), _env_float("PIPELINE_AUTO_RETRY_BACKOFF_S", 10.0))
+    if not enabled:
+        return AutoRetryConfig(enabled=False, max_attempts=1, backoff_s=0.0)
+    return AutoRetryConfig(enabled=True, max_attempts=max(1, max_attempts), backoff_s=max(0.0, backoff_s))
+
+
+def _retry_request(request: PipelineRequest, error: str) -> tuple[PipelineRequest, str] | None:
+    msg = error.lower()
+
+    if "persistent db" in msg and "not found" in msg:
+        if request.mmseqs_target_db.lower() != "uniref90":
+            return (
+                replace(request, mmseqs_target_db="uniref90", force=True),
+                "fallback mmseqs_target_db=uniref90",
+            )
+
+    if "unable to extract protein sequence from target_pdb" in msg and request.design_chains:
+        return (replace(request, design_chains=None, force=True), "retry without design_chains")
+
+    if "timed out" in msg or "timeout" in msg or "timed_out" in msg:
+        if request.mmseqs_max_seqs > 100:
+            new_max = max(50, int(request.mmseqs_max_seqs / 2))
+            return (
+                replace(request, mmseqs_max_seqs=new_max, force=True),
+                f"reduce mmseqs_max_seqs to {new_max}",
+            )
+
+    if "runpod job not completed" in msg or "mmseqs error" in msg or "a3m" in msg:
+        return (replace(request, force=True), "retry runpod job")
+
+    return None
+
+
+def _run_with_auto_retry(
+    runner: PipelineRunner,
+    request: PipelineRequest,
+    *,
+    run_id: str | None,
+    retry: AutoRetryConfig,
+) -> PipelineResult:
+    attempt = 1
+    while True:
+        try:
+            return runner.run(request, run_id=run_id)
+        except Exception as exc:
+            if not retry.enabled or attempt >= retry.max_attempts:
+                raise
+            decision = _retry_request(request, str(exc))
+            if decision is None:
+                raise
+            request, _ = decision
+            if retry.backoff_s > 0:
+                time.sleep(retry.backoff_s)
+            attempt += 1
+
+
 def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
-    target_fasta = str(args.get("target_fasta") or "")
-    target_pdb = str(args.get("target_pdb") or "")
+    target_fasta = _as_text(args.get("target_fasta"))
+    target_pdb = _as_text(args.get("target_pdb"))
     if not target_fasta.strip() and not target_pdb.strip():
         raise ValueError("One of target_fasta or target_pdb is required")
 
@@ -172,6 +285,9 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "stop_after": {"type": "string"},
                     "force": {"type": "boolean"},
                     "dry_run": {"type": "boolean"},
+                    "auto_retry": {"type": "boolean"},
+                    "auto_retry_max": {"type": "integer"},
+                    "auto_retry_backoff_s": {"type": "number"},
                 },
                 "anyOf": [{"required": ["target_fasta"]}, {"required": ["target_pdb"]}],
             },
@@ -186,6 +302,9 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "target_fasta": {"type": "string"},
                     "target_pdb": {"type": "string"},
                     "run_id": {"type": "string"},
+                    "auto_retry": {"type": "boolean"},
+                    "auto_retry_max": {"type": "integer"},
+                    "auto_retry_backoff_s": {"type": "number"},
                 },
                 "required": ["prompt"],
                 "anyOf": [{"required": ["target_fasta"]}, {"required": ["target_pdb"]}],
@@ -222,18 +341,26 @@ class ToolDispatcher:
         if name == "pipeline.run":
             run_id = arguments.get("run_id")
             req = pipeline_request_from_args(arguments)
-            res = self.runner.run(req, run_id=normalize_run_id(str(run_id)) if run_id is not None else None)
+            retry = _auto_retry_config(arguments)
+            normalized_run_id = normalize_run_id(str(run_id)) if run_id is not None else None
+            if retry.enabled and normalized_run_id is None:
+                normalized_run_id = new_run_id("pipeline")
+            res = _run_with_auto_retry(self.runner, req, run_id=normalized_run_id, retry=retry)
             return {"run_id": res.run_id, "output_dir": res.output_dir, "summary": asdict(res)}
 
         if name == "pipeline.run_from_prompt":
             run_id = arguments.get("run_id")
+            retry = _auto_retry_config(arguments)
             prompt = str(arguments.get("prompt") or "")
-            target_fasta = str(arguments.get("target_fasta") or "")
-            target_pdb = str(arguments.get("target_pdb") or "")
+            target_fasta = _as_text(arguments.get("target_fasta"))
+            target_pdb = _as_text(arguments.get("target_pdb"))
             if not target_fasta.strip() and not target_pdb.strip():
                 raise ValueError("One of target_fasta or target_pdb is required")
             req = request_from_prompt(prompt=prompt, target_fasta=target_fasta, target_pdb=target_pdb)
-            res = self.runner.run(req, run_id=normalize_run_id(str(run_id)) if run_id is not None else None)
+            normalized_run_id = normalize_run_id(str(run_id)) if run_id is not None else None
+            if retry.enabled and normalized_run_id is None:
+                normalized_run_id = new_run_id("pipeline")
+            res = _run_with_auto_retry(self.runner, req, run_id=normalized_run_id, retry=retry)
             return {"routed_request": asdict(req), "run_id": res.run_id, "output_dir": res.output_dir, "summary": asdict(res)}
 
         if name == "pipeline.status":

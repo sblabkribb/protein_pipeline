@@ -1,16 +1,90 @@
-listening: http://0.0.0.0:18080
-210.218.220.84 - - [14/Jan/2026 10:11:08] "POST /tools/call HTTP/1.1" 400 -
-210.218.220.84 - - [14/Jan/2026 10:11:54] "POST /tools/call HTTP/1.1" 400 -
-210.218.220.84 - - [14/Jan/2026 10:12:08] "POST /tools/call HTTP/1.1" 400 -
-210.218.220.84 - - [14/Jan/2026 10:12:20] "POST /tools/call HTTP/1.1" 400 -
-210.218.220.84 - - [14/Jan/2026 10:12:30] "POST /tools/call HTTP/1.1" 400 -
-127.0.0.1 - - [14/Jan/2026 10:12:38] "GET /healthz HTTP/1.1" 200 -
-127.0.0.1 - - [14/Jan/2026 10:12:42] "POST /tools/list HTTP/1.1" 200 -
-210.218.220.84 - - [14/Jan/2026 10:12:43] "POST /tools/call HTTP/1.1" 400 -
-210.218.220.84 - - [14/Jan/2026 10:13:51] "GET /healthz HTTP/1.1" 200 -
-210.218.220.84 - - [14/Jan/2026 10:13:51] "POST /tools/call HTTP/1.1" 400 -
+127.0.0.1 - - [15/Jan/2026 15:50:23] "GET /healthz HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 15:55:49] "GET /healthz HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 15:56:00] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:09:34] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:10:01] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:10:31] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:11:01] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:11:31] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:12:01] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:12:32] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:13:02] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:13:32] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:14:02] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:14:32] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:15:02] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:15:32] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:16:02] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:16:32] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:17:02] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:17:32] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:18:02] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:18:32] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:19:02] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:19:32] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:24:42] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:30:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:30:50] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:31:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:31:50] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:32:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:32:50] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:33:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:33:51] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:34:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:34:51] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:35:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:35:51] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:36:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:36:51] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:37:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:37:51] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:38:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:38:51] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:39:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:39:51] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:52:15] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:52:47] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:53:47] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:54:47] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:55:47] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:56:47] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:57:47] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:58:47] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 16:59:47] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 17:00:47] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 17:01:47] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 17:05:38] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 17:05:57] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 17:11:48] error handling /tools/call: MMseqs RunPod job not completed: {'delayTime': 949597, 'error': 'job timed out after 1 retries', 'executionTime': 918716, 'id': '6cea9cac-268a-4d33-bc01-9d7c71328458-e1', 'retries': 1, 'status': 'FAILED', 'workerId': 'tcgfqx0vfit4ws'}
+210.218.220.84 - - [15/Jan/2026 17:11:48] "POST /tools/call HTTP/1.1" 400 -
 ----------------------------------------
-Exception occurred during processing of request from ('210.218.220.84', 51933)
+Exception occurred during processing of request from ('210.218.220.84', 58500)
+Traceback (most recent call last):
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 111, in do_POST
+    out = self.dispatcher.call_tool(name, arguments)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/tools.py", line 348, in call_tool
+    res = _run_with_auto_retry(self.runner, req, run_id=normalized_run_id, retry=retry)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/tools.py", line 186, in _run_with_auto_retry
+    return runner.run(request, run_id=run_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/pipeline.py", line 480, in run
+    msa_tsv_text, a3m_text = self._get_msa(
+                             ^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/pipeline.py", line 1279, in _get_msa
+    out = self.mmseqs.search(
+          ^^^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/clients/mmseqs.py", line 56, in search
+    return self.wait_job(job_id)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/clients/mmseqs.py", line 18, in wait_job
+    raise RuntimeError(f"MMseqs RunPod job not completed: {result}")
+RuntimeError: MMseqs RunPod job not completed: {'delayTime': 949597, 'error': 'job timed out after 1 retries', 'executionTime': 918716, 'id': '6cea9cac-268a-4d33-bc01-9d7c71328458-e1', 'retries': 1, 'status': 'FAILED', 'workerId': 'tcgfqx0vfit4ws'}
+
+During handling of the above exception, another exception occurred:
+
 Traceback (most recent call last):
   File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
     self.finish_request(request, client_address)
@@ -20,28 +94,23 @@ Traceback (most recent call last):
     self.handle()
   File "/usr/lib/python3.12/http/server.py", line 436, in handle
     self.handle_one_request()
-  File "/usr/lib/python3.12/http/server.py", line 404, in handle_one_request
-    self.raw_requestline = self.rfile.readline(65537)
-                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/lib/python3.12/socket.py", line 707, in readinto
-    return self._sock.recv_into(b)
-           ^^^^^^^^^^^^^^^^^^^^^^^
-ConnectionResetError: [Errno 104] Connection reset by peer
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 117, in do_POST
+    self._json(400, {"ok": False, "error": str(exc)})
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 30, in _json
+    self.end_headers()
+  File "/usr/lib/python3.12/http/server.py", line 538, in end_headers
+    self.flush_headers()
+  File "/usr/lib/python3.12/http/server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+BrokenPipeError: [Errno 32] Broken pipe
 ----------------------------------------
-210.218.220.84 - - [14/Jan/2026 10:14:13] "GET / HTTP/1.1" 404 -
-210.218.220.84 - - [14/Jan/2026 10:14:49] "POST /tools/call HTTP/1.1" 200 -
-210.218.220.84 - - [14/Jan/2026 10:15:56] "POST /tools/call HTTP/1.1" 200 -
-210.218.220.84 - - [14/Jan/2026 10:21:10] "POST /tools/call HTTP/1.1" 200 -
-127.0.0.1 - - [14/Jan/2026 10:22:46] "GET /healthz HTTP/1.1" 200 -
-135.222.40.18 - - [14/Jan/2026 10:42:57] code 400, message Bad request syntax ('MGLNDD_211.188.62.53_18080')
-135.222.40.18 - - [14/Jan/2026 10:42:57] "MGLNDD_211.188.62.53_18080" 400 -
-127.0.0.1 - - [14/Jan/2026 10:56:05] "POST /tools/call HTTP/1.1" 200 -
-139.59.145.68 - - [14/Jan/2026 11:01:20] "GET / HTTP/1.1" 404 -
-104.197.69.115 - - [14/Jan/2026 11:01:41] "GET / HTTP/1.1" 404 -
-127.0.0.1 - - [14/Jan/2026 11:02:23] "GET /healthz HTTP/1.1" 200 -
-127.0.0.1 - - [14/Jan/2026 11:04:12] "GET /healthz HTTP/1.1" 200 -
-127.0.0.1 - - [14/Jan/2026 11:04:39] "POST /tools/call HTTP/1.1" 200 -
-45.133.172.15 - - [14/Jan/2026 11:07:18] "GET / HTTP/1.1" 404 -
-listening: http://0.0.0.0:18080
-127.0.0.1 - - [14/Jan/2026 11:09:06] "GET /healthz HTTP/1.1" 200 -
-127.0.0.1 - - [14/Jan/2026 11:09:06] "POST /tools/list HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 17:15:03] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 17:20:32] "GET /healthz HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 17:39:34] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 17:45:45] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 17:50:44] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [15/Jan/2026 17:51:00] "POST /tools/call HTTP/1.1" 200 -
