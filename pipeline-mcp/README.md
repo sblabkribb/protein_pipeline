@@ -12,6 +12,7 @@ NCP CPU 서버에서 동작하는 파이프라인 오케스트레이터(MCP 스�
 - `PROTEINMPNN_ENDPOINT_ID` (필수)
 - `ALPHAFOLD2_ENDPOINT_ID` (선택, 설정 시 RunPod AF2 사용)
 - TLS 옵션(선택): `RUNPOD_CA_BUNDLE`, `RUNPOD_SKIP_VERIFY=1`
+- (선택) `PIPELINE_MMSEQS_USE_GPU=1`: 요청에 `mmseqs_use_gpu`를 명시하지 않으면 기본값을 GPU로 설정
 
 ### Optional services
 - `SOLUPROT_URL` (선택, 미설정 시 filtering 단계 skip)
@@ -28,6 +29,7 @@ RUNPOD_API_KEY=...
 MMSEQS_ENDPOINT_ID=...
 PROTEINMPNN_ENDPOINT_ID=...
 ALPHAFOLD2_ENDPOINT_ID=...
+PIPELINE_MMSEQS_USE_GPU=1
 SOLUPROT_URL=http://127.0.0.1:18081/score
 PIPELINE_OUTPUT_ROOT=/opt/protein_pipeline/outputs
 EOF
