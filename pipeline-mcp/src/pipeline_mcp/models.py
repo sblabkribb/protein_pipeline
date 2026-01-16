@@ -1,6 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import os
+
+
+def _env_true(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 @dataclass(frozen=True)
@@ -42,7 +47,7 @@ class PipelineRequest:
     mmseqs_target_db: str = "uniref90"
     mmseqs_max_seqs: int = 3000
     mmseqs_threads: int = 4
-    mmseqs_use_gpu: bool = False
+    mmseqs_use_gpu: bool = field(default_factory=lambda: _env_true("PIPELINE_MMSEQS_USE_GPU") or _env_true("MMSEQS_USE_GPU"))
 
     novelty_target_db: str = "uniref90"
 
