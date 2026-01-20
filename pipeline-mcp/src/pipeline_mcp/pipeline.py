@@ -1033,7 +1033,7 @@ class PipelineRunner:
                             ]
 
                             jobs_path = af2_dir / "runpod_jobs.json"
-                            jobs: dict[str, str] = _load_jobs_map(jobs_path)
+                            jobs: dict[str, str] = {} if request.force else _load_jobs_map(jobs_path)
 
                             def _on_af2_job_id(seq_id: str, job_id: str) -> None:
                                 jobs[seq_id] = job_id
