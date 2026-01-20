@@ -2,9 +2,17 @@
 /alphafold2/
 /mmseqs-runpod/
 /ProteinMPNN-runpod/
-
+/colabfold-runpod/
 # --- Pipeline outputs ---
 /outputs/
+
+# --- Local scratch / artifacts ---
+/tmp/
+/pipeline-mcp/tests/_tmp/
+/pytest-cache-files-*/
+/pipeline-mcp/pytest-cache-files-*/
+/*.pdb
+ja3c10941_si_001.pdf
 
 # --- Python ---
 __pycache__/

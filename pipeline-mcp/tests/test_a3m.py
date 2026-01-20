@@ -1,6 +1,7 @@
 import unittest
 
 from pipeline_mcp.bio.a3m import compute_conservation
+from pipeline_mcp.bio.a3m import conservation_scores
 from pipeline_mcp.bio.a3m import filter_a3m
 from pipeline_mcp.bio.a3m import msa_quality
 
@@ -56,6 +57,27 @@ AC--
         self.assertIn(">hit1", filtered)
         self.assertNotIn(">hit2", filtered)
         self.assertNotIn(">hit3", filtered)
+
+    def test_weighted_conservation_changes_threshold_fixed_positions(self) -> None:
+        a3m = """>query
+ACDE
+>hit1
+ACDE
+>hit2
+ACDE
+>hit3
+ACKE
+"""
+        scores_unweighted = conservation_scores(a3m)
+        self.assertAlmostEqual(scores_unweighted[2], 2.0 / 3.0, places=6)
+
+        scores_weighted = conservation_scores(a3m, weights=[0.5, 0.5, 1.0])
+        self.assertAlmostEqual(scores_weighted[2], 0.5, places=6)
+
+        cons_unweighted = compute_conservation(a3m, tiers=[0.6], mode="threshold")
+        cons_weighted = compute_conservation(a3m, tiers=[0.6], mode="threshold", weights=[0.5, 0.5, 1.0])
+        self.assertEqual(cons_unweighted.fixed_positions_by_tier[0.6], [1, 2, 3, 4])
+        self.assertEqual(cons_weighted.fixed_positions_by_tier[0.6], [1, 2, 4])
 
 
 if __name__ == "__main__":

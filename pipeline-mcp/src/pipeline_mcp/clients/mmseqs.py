@@ -58,3 +58,35 @@ class MMseqsClient:
 
         job_id, _ = self.runpod.run_and_wait_with_job_id(self.endpoint_id, payload, on_job_id=on_job_id)
         return self.wait_job(job_id)
+
+    def cluster(
+        self,
+        *,
+        sequences_fasta: str,
+        threads: int = 4,
+        cluster_method: str = "linclust",
+        min_seq_id: float | None = None,
+        coverage: float | None = None,
+        cov_mode: int | None = None,
+        kmer_per_seq: int | None = None,
+        return_representatives: bool = False,
+        on_job_id: Callable[[str], None] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "task": "cluster",
+            "sequences_fasta": sequences_fasta,
+            "threads": int(threads),
+            "cluster_method": str(cluster_method or "linclust"),
+            "return_representatives": bool(return_representatives),
+        }
+        if min_seq_id is not None:
+            payload["min_seq_id"] = float(min_seq_id)
+        if coverage is not None:
+            payload["coverage"] = float(coverage)
+        if cov_mode is not None:
+            payload["cov_mode"] = int(cov_mode)
+        if kmer_per_seq is not None:
+            payload["kmer_per_seq"] = int(kmer_per_seq)
+
+        job_id, _ = self.runpod.run_and_wait_with_job_id(self.endpoint_id, payload, on_job_id=on_job_id)
+        return self.wait_job(job_id)

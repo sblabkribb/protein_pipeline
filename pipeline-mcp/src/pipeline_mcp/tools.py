@@ -208,6 +208,7 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
     design_chains = _as_list_of_str(args.get("design_chains"))
     conservation_tiers = _as_list_of_float(args.get("conservation_tiers"))
     ligand_resnames = _as_list_of_str(args.get("ligand_resnames"))
+    ligand_atom_chains = _as_list_of_str(args.get("ligand_atom_chains"))
     af2_sequence_ids = _as_list_of_str(args.get("af2_sequence_ids"))
 
     return PipelineRequest(
@@ -216,8 +217,29 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
         design_chains=design_chains,
         conservation_tiers=conservation_tiers or [0.3, 0.5, 0.7],
         conservation_mode=str(args.get("conservation_mode") or "quantile"),
+        conservation_weighting=str(args.get("conservation_weighting") or "none"),
+        conservation_cluster_method=str(args.get("conservation_cluster_method") or "linclust"),
+        conservation_cluster_min_seq_id=_as_float(args.get("conservation_cluster_min_seq_id"), 0.9),
+        conservation_cluster_coverage=(
+            _as_float(args.get("conservation_cluster_coverage"), 0.0)
+            if str(args.get("conservation_cluster_coverage") or "").strip()
+            else None
+        ),
+        conservation_cluster_cov_mode=(
+            _as_int(args.get("conservation_cluster_cov_mode"), 0)
+            if str(args.get("conservation_cluster_cov_mode") or "").strip()
+            else None
+        ),
+        conservation_cluster_kmer_per_seq=(
+            _as_int(args.get("conservation_cluster_kmer_per_seq"), 0)
+            if str(args.get("conservation_cluster_kmer_per_seq") or "").strip()
+            else None
+        ),
         ligand_mask_distance=_as_float(args.get("ligand_mask_distance"), 6.0),
         ligand_resnames=ligand_resnames,
+        ligand_atom_chains=ligand_atom_chains,
+        pdb_strip_nonpositive_resseq=_as_bool(args.get("pdb_strip_nonpositive_resseq"), False),
+        pdb_renumber_resseq_from_1=_as_bool(args.get("pdb_renumber_resseq_from_1"), False),
         num_seq_per_tier=_as_int(args.get("num_seq_per_tier"), 16),
         batch_size=_as_int(args.get("batch_size"), 1),
         sampling_temp=_as_float(args.get("sampling_temp"), 0.1),
@@ -261,8 +283,17 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "design_chains": {"type": "array", "items": {"type": "string"}},
                     "conservation_tiers": {"type": "array", "items": {"type": "number"}},
                     "conservation_mode": {"type": "string", "enum": ["quantile", "threshold"]},
+                    "conservation_weighting": {"type": "string"},
+                    "conservation_cluster_method": {"type": "string"},
+                    "conservation_cluster_min_seq_id": {"type": "number"},
+                    "conservation_cluster_coverage": {"type": "number"},
+                    "conservation_cluster_cov_mode": {"type": "integer"},
+                    "conservation_cluster_kmer_per_seq": {"type": "integer"},
                     "ligand_mask_distance": {"type": "number"},
                     "ligand_resnames": {"type": "array", "items": {"type": "string"}},
+                    "ligand_atom_chains": {"type": "array", "items": {"type": "string"}},
+                    "pdb_strip_nonpositive_resseq": {"type": "boolean"},
+                    "pdb_renumber_resseq_from_1": {"type": "boolean"},
                     "num_seq_per_tier": {"type": "integer"},
                     "batch_size": {"type": "integer"},
                     "sampling_temp": {"type": "number"},

@@ -6,3 +6,6 @@
 - [ ] Provide soluprot client (batch HTTP; rate-limit/backoff) and AlphaFold2 launcher (local or queued job) with caching keyed by sequence hash + constraints.
 - [ ] Add result packaging: JSON summary (per tier), FASTA of designs kept, A3M/TSV from MMseqs2, soluprot table, AF2 metrics (pLDDT/PAE), novelty TSV; write to `outputs/<run_id>/`.
 - [ ] Create e2e dry-run harness with fixtures/mocks (small FASTA/PDB) to validate graph transitions and data handoff; unit-test mask merge and filter thresholds.
+- [ ] Add optional ATOM-chain proximity masking (PyMOL-style: `byres (design_chain within 6Å of substrate_chains)`), so substrates/cofactors modeled as `ATOM` (e.g., 1LVM chain C/D peptide) can be protected like ligands.
+- [ ] Add PDB preprocessing for literature parity: strip tag-like residues (e.g., `resseq<=0`), optionally renumber residues from 1, and emit mapping between original PDB numbering and pipeline 1-based indices.
+- [ ] Add conservation sequence reweighting options (paper parity): compute weighted conservation (e.g., MMseqs2 linclust-based cluster weights) and expose knobs; add unit tests for weighted vs unweighted fixed-position tiers.
