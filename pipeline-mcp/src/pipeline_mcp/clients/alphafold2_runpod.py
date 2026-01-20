@@ -8,6 +8,8 @@ import tarfile
 from typing import Any
 from collections.abc import Callable
 
+import requests
+
 from .runpod import RunPodClient
 from ..models import SequenceRecord
 
@@ -119,7 +121,18 @@ class AlphaFold2RunPodClient:
                 job_id = existing_job_id.strip()
                 if on_job_id is not None:
                     on_job_id(seq.id, job_id)
-                job = self.runpod.wait(self.endpoint_id, job_id)
+                try:
+                    job = self.runpod.wait(self.endpoint_id, job_id)
+                except requests.HTTPError as exc:
+                    status_code = exc.response.status_code if exc.response is not None else None
+                    if status_code == 404:
+                        _, job = self.runpod.run_and_wait_with_job_id(
+                            self.endpoint_id,
+                            payload,
+                            on_job_id=(lambda job_id, seq_id=seq.id: on_job_id(seq_id, job_id)) if on_job_id else None,
+                        )
+                    else:
+                        raise
             else:
                 _, job = self.runpod.run_and_wait_with_job_id(
                     self.endpoint_id,
