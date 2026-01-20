@@ -25,9 +25,19 @@ class PipelineRequest:
 
     conservation_tiers: list[float] = field(default_factory=lambda: [0.3, 0.5, 0.7])
     conservation_mode: str = "quantile"  # quantile | threshold
+    conservation_weighting: str = "none"  # none | mmseqs_cluster
+    conservation_cluster_method: str = "linclust"
+    conservation_cluster_min_seq_id: float = 0.9
+    conservation_cluster_coverage: float | None = None
+    conservation_cluster_cov_mode: int | None = None
+    conservation_cluster_kmer_per_seq: int | None = None
 
     ligand_mask_distance: float = 6.0
     ligand_resnames: list[str] | None = None
+    ligand_atom_chains: list[str] | None = None
+
+    pdb_strip_nonpositive_resseq: bool = False
+    pdb_renumber_resseq_from_1: bool = False
 
     num_seq_per_tier: int = 16
     batch_size: int = 1

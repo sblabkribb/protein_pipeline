@@ -197,19 +197,30 @@ def ligand_proximity_mask(
     chains: list[str] | None = None,
     distance_angstrom: float = 6.0,
     ligand_resnames: list[str] | None = None,
+    ligand_atom_chains: list[str] | None = None,
 ) -> dict[str, list[int]]:
     ligand_set = {name.strip().upper() for name in ligand_resnames or [] if name.strip()} or None
+    atom_chain_set = {c.strip() for c in (ligand_atom_chains or []) if str(c).strip()} or None
+    masked_chain_set = set(chains) if chains is not None else set()
 
     ligand_atoms: list[Atom] = []
     for atom in iter_atoms(pdb_text):
-        if atom.record != "HETATM":
+        if atom.record == "HETATM":
+            if atom.resname.upper() in _WATER_RESNAMES:
+                continue
+            if ligand_set is not None and atom.resname.upper() not in ligand_set:
+                continue
+            if _is_heavy(atom):
+                ligand_atoms.append(atom)
             continue
-        if atom.resname.upper() in _WATER_RESNAMES:
-            continue
-        if ligand_set is not None and atom.resname.upper() not in ligand_set:
-            continue
-        if _is_heavy(atom):
-            ligand_atoms.append(atom)
+
+        if atom.record == "ATOM" and atom_chain_set is not None:
+            if atom.chain_id not in atom_chain_set:
+                continue
+            if atom.chain_id in masked_chain_set:
+                continue
+            if _is_heavy(atom):
+                ligand_atoms.append(atom)
 
     if not ligand_atoms:
         return {chain: [] for chain in (chains or [])} if chains else {}
@@ -241,3 +252,90 @@ def ligand_proximity_mask(
         if hits:
             mask[chain_id] = hits
     return mask
+
+
+def _rewrite_pdb_resseq_icode(raw: str, *, resseq: int, icode: str) -> str:
+    line = raw.rstrip("\n")
+    if len(line) < 27:
+        line = line.ljust(27)
+    res_field = f"{int(resseq):4d}"
+    icode_field = (str(icode or " ")[:1] or " ")
+    return f"{line[:22]}{res_field}{icode_field}{line[27:]}"
+
+
+def preprocess_pdb(
+    pdb_text: str,
+    *,
+    chains: list[str] | None = None,
+    strip_nonpositive_resseq: bool = False,
+    renumber_resseq_from_1: bool = False,
+) -> tuple[str, dict[str, list[dict[str, object]]]]:
+    chain_set = set(chains) if chains is not None else None
+
+    renumber_map: dict[str, dict[tuple[int, str], int]] = {}
+    next_renum: dict[str, int] = {}
+    residue_index: dict[str, int] = {}
+    last_resseq: dict[str, int] = {}
+
+    mapping: dict[str, list[dict[str, object]]] = {}
+    seen_residue: set[tuple[str, int, str]] = set()
+
+    out_lines: list[str] = []
+
+    for raw in pdb_text.splitlines():
+        rec = raw[:6].strip().upper()
+        if rec not in {"ATOM", "HETATM", "TER"}:
+            out_lines.append(raw)
+            continue
+
+        chain_id = raw[21:22].strip() or "_"
+        if chain_set is not None and chain_id not in chain_set:
+            out_lines.append(raw)
+            continue
+
+        resseq = _parse_int(raw[22:26])
+        icode = raw[26:27].strip()
+
+        if strip_nonpositive_resseq and rec in {"ATOM", "HETATM"} and int(resseq) <= 0:
+            continue
+
+        if rec == "TER":
+            if renumber_resseq_from_1 and chain_id in last_resseq:
+                out_lines.append(_rewrite_pdb_resseq_icode(raw, resseq=last_resseq[chain_id], icode=" "))
+            else:
+                out_lines.append(raw)
+            continue
+
+        key = (int(resseq), str(icode))
+        new_resseq = int(resseq)
+        new_icode = str(icode)
+        if renumber_resseq_from_1:
+            per_chain = renumber_map.setdefault(chain_id, {})
+            if key not in per_chain:
+                per_chain[key] = int(next_renum.get(chain_id, 1))
+                next_renum[chain_id] = per_chain[key] + 1
+            new_resseq = per_chain[key]
+            new_icode = " "
+
+        residue_key = (chain_id, int(resseq), str(icode))
+        if residue_key not in seen_residue:
+            seen_residue.add(residue_key)
+            idx = int(residue_index.get(chain_id, 0)) + 1
+            residue_index[chain_id] = idx
+            mapping.setdefault(chain_id, []).append(
+                {
+                    "index": idx,
+                    "original_resseq": int(resseq),
+                    "original_icode": str(icode or ""),
+                    "processed_resseq": int(new_resseq),
+                    "processed_icode": str(new_icode or "").strip(),
+                }
+            )
+
+        last_resseq[chain_id] = int(new_resseq)
+        if renumber_resseq_from_1:
+            out_lines.append(_rewrite_pdb_resseq_icode(raw, resseq=new_resseq, icode=new_icode))
+        else:
+            out_lines.append(raw)
+
+    return ("\n".join(out_lines) + ("\n" if pdb_text.endswith("\n") else "")), mapping

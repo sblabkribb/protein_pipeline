@@ -1,10 +1,20 @@
-import tempfile
 import unittest
 import json
+import uuid
+from contextlib import contextmanager
 from pathlib import Path
 
 from pipeline_mcp.pipeline import PipelineRunner
 from pipeline_mcp.tools import ToolDispatcher
+
+
+@contextmanager
+def _tmpdir():
+    base = Path(__file__).resolve().parent / "_tmp"
+    base.mkdir(parents=True, exist_ok=True)
+    path = base / f"run_{uuid.uuid4().hex}"
+    path.mkdir(parents=True, exist_ok=True)
+    yield str(path)
 
 
 class TestTools(unittest.TestCase):
@@ -22,7 +32,7 @@ class TestTools(unittest.TestCase):
             "ATOM      9  CA  LYS A   9       8.000   0.000   0.000  1.00 20.00           C\n"
             "END\n"
         )
-        with tempfile.TemporaryDirectory() as tmp:
+        with _tmpdir() as tmp:
             runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
             dispatcher = ToolDispatcher(runner)
             out = dispatcher.call_tool(
@@ -35,7 +45,7 @@ class TestTools(unittest.TestCase):
 
     def test_pipeline_run_tool_dry_run_without_pdb(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
-        with tempfile.TemporaryDirectory() as tmp:
+        with _tmpdir() as tmp:
             runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
             dispatcher = ToolDispatcher(runner)
             out = dispatcher.call_tool(
@@ -60,7 +70,7 @@ class TestTools(unittest.TestCase):
             "ATOM      9  CA  LYS A   9       8.000   0.000   0.000  1.00 20.00           C\n"
             "END\n"
         )
-        with tempfile.TemporaryDirectory() as tmp:
+        with _tmpdir() as tmp:
             runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
             dispatcher = ToolDispatcher(runner)
             out = dispatcher.call_tool(

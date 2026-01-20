@@ -13,11 +13,14 @@ from .bio.a3m import compute_conservation
 from .bio.a3m import decode_a3m_gz_b64
 from .bio.a3m import filter_a3m
 from .bio.a3m import msa_quality
+from .bio.a3m import strip_insertions
+from .bio.a3m import weights_from_mmseqs_cluster_tsv
 from .bio.fasta import FastaRecord
 from .bio.fasta import parse_fasta
 from .bio.fasta import to_fasta
 from .bio.alignment import global_alignment_mapping
 from .bio.pdb import ligand_proximity_mask
+from .bio.pdb import preprocess_pdb
 from .bio.pdb import residues_by_chain
 from .bio.pdb import sequence_by_chain
 from .clients.mmseqs import MMseqsClient
@@ -450,6 +453,28 @@ class PipelineRunner:
             tiers_dir = _ensure_dir(paths.root / "tiers")
 
             target_pdb_text = str(request.target_pdb or "")
+            if target_pdb_text.strip() and (
+                bool(request.pdb_strip_nonpositive_resseq) or bool(request.pdb_renumber_resseq_from_1)
+            ):
+                set_status(paths, stage="pdb_preprocess", state="running")
+                original_pdb_text = target_pdb_text
+                target_pdb_text, numbering = preprocess_pdb(
+                    original_pdb_text,
+                    chains=request.design_chains,
+                    strip_nonpositive_resseq=bool(request.pdb_strip_nonpositive_resseq),
+                    renumber_resseq_from_1=bool(request.pdb_renumber_resseq_from_1),
+                )
+                _write_text(paths.root / "target.original.pdb", original_pdb_text)
+                write_json(
+                    paths.root / "pdb_numbering.json",
+                    {
+                        "chains": request.design_chains,
+                        "strip_nonpositive_resseq": bool(request.pdb_strip_nonpositive_resseq),
+                        "renumber_resseq_from_1": bool(request.pdb_renumber_resseq_from_1),
+                        "mapping": numbering,
+                    },
+                )
+                set_status(paths, stage="pdb_preprocess", state="completed")
 
             if str(request.target_fasta or "").strip():
                 target_record = parse_fasta(request.target_fasta)[0]
@@ -541,10 +566,87 @@ class PipelineRunner:
                 return result
 
             set_status(paths, stage="conservation", state="running")
+            conservation_weights: list[float] | None = None
+            weighting = str(getattr(request, "conservation_weighting", "none") or "none").strip().lower()
+            if weighting not in {"none", "mmseqs_cluster"}:
+                raise ValueError("conservation_weighting must be one of: none, mmseqs_cluster")
+            if weighting == "mmseqs_cluster":
+                if request.dry_run:
+                    write_json(
+                        msa_dir / "sequence_weights.json",
+                        {"method": "mmseqs_cluster", "skipped": True, "reason": "dry_run"},
+                    )
+                else:
+                    if self.mmseqs is None:
+                        raise RuntimeError("MMseqs client is required for conservation_weighting='mmseqs_cluster'")
+                    raw_records = parse_fasta(filtered_a3m_text)
+                    hit_ids: list[str] = []
+                    fasta_parts: list[str] = []
+                    for idx, rec in enumerate(raw_records[1:], start=1):
+                        hit_id = f"h{idx:06d}"
+                        hit_ids.append(hit_id)
+                        ungapped = "".join(ch for ch in strip_insertions(rec.sequence) if ch.isalpha()).upper()
+                        if not ungapped:
+                            continue
+                        fasta_parts.append(f">{hit_id}\n{ungapped}\n")
+                    sequences_fasta = "".join(fasta_parts)
+                    if not sequences_fasta.strip() or not hit_ids:
+                        conservation_weights = [1.0 for _ in hit_ids]
+                        write_json(
+                            msa_dir / "sequence_weights.json",
+                            {
+                                "method": "mmseqs_cluster",
+                                "skipped": True,
+                                "reason": "no_sequences",
+                                "hit_count": len(hit_ids),
+                                "id_scheme": "h{index:06d} (A3M hit order)",
+                                "weights": list(conservation_weights),
+                            },
+                        )
+                        sequences_fasta = ""
+                    if not sequences_fasta.strip():
+                        cluster_out = {}
+                    else:
+                        cluster_out = self.mmseqs.cluster(
+                            sequences_fasta=sequences_fasta,
+                            threads=int(request.mmseqs_threads),
+                            cluster_method=str(request.conservation_cluster_method or "linclust"),
+                            min_seq_id=float(request.conservation_cluster_min_seq_id),
+                            coverage=request.conservation_cluster_coverage,
+                            cov_mode=request.conservation_cluster_cov_mode,
+                            kmer_per_seq=request.conservation_cluster_kmer_per_seq,
+                        )
+                    if sequences_fasta.strip():
+                        cluster_tsv = str(cluster_out.get("cluster_tsv") or "")
+                        _write_text(msa_dir / "cluster.tsv", cluster_tsv)
+                        weights_by_id = weights_from_mmseqs_cluster_tsv(cluster_tsv)
+                        conservation_weights = [float(weights_by_id.get(hit_id, 1.0)) for hit_id in hit_ids]
+                        write_json(
+                            msa_dir / "sequence_weights.json",
+                            {
+                                "method": "mmseqs_cluster",
+                                "cluster_method": str(request.conservation_cluster_method or "linclust"),
+                                "min_seq_id": float(request.conservation_cluster_min_seq_id),
+                                "coverage": request.conservation_cluster_coverage,
+                                "cov_mode": request.conservation_cluster_cov_mode,
+                                "kmer_per_seq": request.conservation_cluster_kmer_per_seq,
+                                "hit_count": len(hit_ids),
+                                "id_scheme": "h{index:06d} (A3M hit order)",
+                                "weights": list(conservation_weights),
+                                "weight_stats": {
+                                    "min": min(conservation_weights) if conservation_weights else None,
+                                    "max": max(conservation_weights) if conservation_weights else None,
+                                    "mean": (sum(conservation_weights) / len(conservation_weights))
+                                    if conservation_weights
+                                    else None,
+                                },
+                            },
+                        )
             conservation = compute_conservation(
                 filtered_a3m_text,
                 tiers=request.conservation_tiers,
                 mode=request.conservation_mode,
+                weights=conservation_weights,
             )
             conservation_payload = {
                 "query_length": conservation.query_length,
@@ -552,6 +654,7 @@ class PipelineRunner:
                 "fixed_positions_by_tier": conservation.fixed_positions_by_tier,
                 "mode": request.conservation_mode,
                 "tiers": request.conservation_tiers,
+                "weighting": weighting,
             }
             conservation_path = str(paths.root / "conservation.json")
             write_json(Path(conservation_path), conservation_payload)
@@ -756,6 +859,7 @@ class PipelineRunner:
                 chains=design_chains,
                 distance_angstrom=request.ligand_mask_distance,
                 ligand_resnames=request.ligand_resnames,
+                ligand_atom_chains=request.ligand_atom_chains,
             )
             ligand_mask_path = str(paths.root / "ligand_mask.json")
             write_json(Path(ligand_mask_path), ligand_mask)

@@ -34,17 +34,22 @@ def _normalize_records(a3m_text: str) -> list[FastaRecord]:
     return normalized
 
 
-def conservation_scores(a3m_text: str) -> list[float]:
+def conservation_scores(a3m_text: str, *, weights: list[float] | None = None) -> list[float]:
     records = _normalize_records(a3m_text)
     query = records[0].sequence
     L = len(query)
     if L <= 0:
         raise ValueError("A3M query sequence is empty")
 
-    counts: list[dict[str, int]] = [dict() for _ in range(L)]
-    totals: list[int] = [0 for _ in range(L)]
+    counts: list[dict[str, float]] = [dict() for _ in range(L)]
+    totals: list[float] = [0.0 for _ in range(L)]
 
-    for rec in records[1:]:
+    hits = records[1:]
+    hit_weights: list[float] = [1.0 for _ in hits] if weights is None else [float(x) for x in weights]
+    if len(hit_weights) != len(hits):
+        raise ValueError(f"Expected weights for {len(hits)} hits, got {len(hit_weights)}")
+
+    for rec, w in zip(hits, hit_weights, strict=False):
         seq = rec.sequence
         if len(seq) != L:
             continue
@@ -54,16 +59,16 @@ def conservation_scores(a3m_text: str) -> list[float]:
             up = ch.upper()
             if not up.isalpha():
                 continue
-            totals[i] += 1
-            counts[i][up] = counts[i].get(up, 0) + 1
+            totals[i] += float(w)
+            counts[i][up] = counts[i].get(up, 0.0) + float(w)
 
     scores: list[float] = []
     for i in range(L):
-        if totals[i] <= 0:
+        if float(totals[i]) <= 0.0:
             scores.append(0.0)
             continue
-        max_count = max(counts[i].values(), default=0)
-        scores.append(max_count / totals[i])
+        max_count = max(counts[i].values(), default=0.0)
+        scores.append(float(max_count) / float(totals[i]))
     return scores
 
 
@@ -105,10 +110,11 @@ def compute_conservation(
     *,
     tiers: list[float],
     mode: str = "quantile",
+    weights: list[float] | None = None,
 ) -> Conservation:
     records = _normalize_records(a3m_text)
     query_len = len(records[0].sequence)
-    scores = conservation_scores(a3m_text)
+    scores = conservation_scores(a3m_text, weights=weights)
     fixed_by_tier = fixed_positions(scores, tiers, mode=mode)
     return Conservation(query_length=query_len, scores=scores, fixed_positions_by_tier=fixed_by_tier)
 
@@ -279,3 +285,33 @@ def filter_a3m(
             "dropped_length_mismatch": dropped_length_mismatch,
         },
     )
+
+
+def weights_from_mmseqs_cluster_tsv(cluster_tsv: str) -> dict[str, float]:
+    clusters: dict[str, set[str]] = {}
+    for raw in str(cluster_tsv or "").splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        rep = parts[0].strip()
+        member = parts[1].strip()
+        if not rep or not member:
+            continue
+        members = clusters.setdefault(rep, set())
+        members.add(member)
+
+    weights: dict[str, float] = {}
+    for rep, members in clusters.items():
+        members.add(rep)
+        size = len(members)
+        if size <= 0:
+            continue
+        w = 1.0 / float(size)
+        for member in members:
+            prev = weights.get(member)
+            if prev is None or w < prev:
+                weights[member] = w
+    return weights
