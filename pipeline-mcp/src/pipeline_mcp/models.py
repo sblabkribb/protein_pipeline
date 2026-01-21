@@ -23,6 +23,11 @@ class PipelineRequest:
 
     design_chains: list[str] | None = None
 
+    # Extra fixed positions to union into each tier (1-based, query/FASTA numbering).
+    # If both target_fasta and target_pdb are provided, positions are mapped to the PDB chain indices
+    # via the query→PDB alignment written to query_pdb_alignment.json.
+    fixed_positions_extra: dict[str, list[int]] | None = None
+
     conservation_tiers: list[float] = field(default_factory=lambda: [0.3, 0.5, 0.7])
     conservation_mode: str = "quantile"  # quantile | threshold
     conservation_weighting: str = "none"  # none | mmseqs_cluster

@@ -37,7 +37,14 @@ class TestTools(unittest.TestCase):
             dispatcher = ToolDispatcher(runner)
             out = dispatcher.call_tool(
                 "pipeline.run",
-                {"target_fasta": fasta, "target_pdb": pdb, "dry_run": True, "num_seq_per_tier": 2, "conservation_tiers": [0.3]},
+                {
+                    "target_fasta": fasta,
+                    "target_pdb": pdb,
+                    "dry_run": True,
+                    "num_seq_per_tier": 2,
+                    "conservation_tiers": [0.3],
+                    "fixed_positions_extra": {"A": [9]},
+                },
             )
             self.assertIn("run_id", out)
             self.assertIn("output_dir", out)

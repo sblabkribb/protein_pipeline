@@ -92,6 +92,31 @@ def _as_list_of_float(value: object | None) -> list[float] | None:
     return None
 
 
+def _as_fixed_positions_extra(value: object | None) -> dict[str, list[int]] | None:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        if not value:
+            return None
+        positions = sorted({int(str(item).strip()) for item in value if item is not None})
+        positions = [pos for pos in positions if pos > 0]
+        return {"*": positions} if positions else None
+    if not isinstance(value, dict):
+        raise ValueError("fixed_positions_extra must be an object (e.g. {'A':[1,2,3]})")
+
+    out: dict[str, list[int]] = {}
+    for raw_chain, raw_positions in value.items():
+        chain = str(raw_chain)
+        if raw_positions is None:
+            continue
+        positions_raw = raw_positions if isinstance(raw_positions, list) else [raw_positions]
+        positions = sorted({int(str(item).strip()) for item in positions_raw if item is not None})
+        positions = [pos for pos in positions if pos > 0]
+        if positions:
+            out[chain] = positions
+    return out or None
+
+
 def _as_bool(value: object | None, default: bool) -> bool:
     if value is None:
         return default
@@ -206,6 +231,7 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
     dry_run = _as_bool(args.get("dry_run"), False)
 
     design_chains = _as_list_of_str(args.get("design_chains"))
+    fixed_positions_extra = _as_fixed_positions_extra(args.get("fixed_positions_extra"))
     conservation_tiers = _as_list_of_float(args.get("conservation_tiers"))
     ligand_resnames = _as_list_of_str(args.get("ligand_resnames"))
     ligand_atom_chains = _as_list_of_str(args.get("ligand_atom_chains"))
@@ -215,6 +241,7 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
         target_fasta=target_fasta,
         target_pdb=target_pdb,
         design_chains=design_chains,
+        fixed_positions_extra=fixed_positions_extra,
         conservation_tiers=conservation_tiers or [0.3, 0.5, 0.7],
         conservation_mode=str(args.get("conservation_mode") or "quantile"),
         conservation_weighting=str(args.get("conservation_weighting") or "none"),
@@ -281,6 +308,11 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "target_fasta": {"type": "string"},
                     "target_pdb": {"type": "string"},
                     "design_chains": {"type": "array", "items": {"type": "string"}},
+                    "fixed_positions_extra": {
+                        "type": "object",
+                        "additionalProperties": {"type": "array", "items": {"type": "integer"}},
+                        "description": "Extra fixed positions per chain (1-based, query/FASTA numbering). Use '*' to apply to all chains.",
+                    },
                     "conservation_tiers": {"type": "array", "items": {"type": "number"}},
                     "conservation_mode": {"type": "string", "enum": ["quantile", "threshold"]},
                     "conservation_weighting": {"type": "string"},

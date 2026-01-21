@@ -93,6 +93,12 @@ def _safe_json(obj: object) -> object:
         return str(obj)
 
 
+class PipelineInputRequired(ValueError):
+    def __init__(self, *, stage: str, message: str) -> None:
+        super().__init__(message)
+        self.stage = stage
+
+
 def _safe_id(value: str) -> str:
     safe = _SAFE_ID_RE.sub("_", value).strip("._-")
     return safe[:128] or "id"
@@ -453,6 +459,7 @@ class PipelineRunner:
             tiers_dir = _ensure_dir(paths.root / "tiers")
 
             target_pdb_text = str(request.target_pdb or "")
+            had_target_pdb_input = bool(target_pdb_text.strip())
             if target_pdb_text.strip() and (
                 bool(request.pdb_strip_nonpositive_resseq) or bool(request.pdb_renumber_resseq_from_1)
             ):
@@ -495,6 +502,32 @@ class PipelineRunner:
 
             target_query_fasta = to_fasta([target_record])
             _write_text(paths.root / "target.fasta", target_query_fasta)
+
+            has_fixed_positions_extra = False
+            if isinstance(request.fixed_positions_extra, dict):
+                for positions in request.fixed_positions_extra.values():
+                    if isinstance(positions, list) and positions:
+                        has_fixed_positions_extra = True
+                        break
+
+            if (
+                (not had_target_pdb_input)
+                and (not request.dry_run)
+                and (request.stop_after != "msa")
+                and (not has_fixed_positions_extra)
+                and (not (request.ligand_atom_chains or []))
+            ):
+                raise PipelineInputRequired(
+                    stage="needs_fixed_positions_extra",
+                    message=(
+                        "Sequence-only input (target_pdb is empty): please provide active-site residues via "
+                        "fixed_positions_extra (1-based query/FASTA numbering). Example: "
+                        "fixed_positions_extra={'A':[10,25,42]} (monomer) or fixed_positions_extra={'*':[...]} "
+                        "(apply to all chains). "
+                        "Alternative: provide a target_pdb that contains ligand/substrate coordinates and configure "
+                        "ligand masking (ligand_resnames or ligand_atom_chains)."
+                    ),
+                )
 
             if request.dry_run and not target_pdb_text.strip():
                 target_pdb_text = _dummy_backbone_pdb(target_record.sequence, chain_id="A")
@@ -871,6 +904,7 @@ class PipelineRunner:
 
                 tier_fixed = conservation.fixed_positions_by_tier.get(tier, [])
                 fixed_positions_by_chain: dict[str, list[int]] = {}
+                extra_fixed = request.fixed_positions_extra or {}
                 for chain_id in design_chains or list(ligand_mask.keys()) or ["A"]:
                     mapped: list[int] = []
                     mapping = query_to_pdb_map_by_chain.get(chain_id)
@@ -884,6 +918,25 @@ class PipelineRunner:
                         mapped = [int(pos) for pos in tier_fixed]
 
                     chain_fixed = set(mapped)
+                    if isinstance(extra_fixed, dict):
+                        raw_extra: list[object] = []
+                        per_chain = extra_fixed.get(chain_id)
+                        if isinstance(per_chain, list):
+                            raw_extra.extend(per_chain)
+                        all_chains = extra_fixed.get("*")
+                        if isinstance(all_chains, list):
+                            raw_extra.extend(all_chains)
+                        if raw_extra:
+                            extra_mapped: list[int] = []
+                            if mapping:
+                                for pos in raw_extra:
+                                    if 1 <= int(pos) <= len(mapping):
+                                        mapped_pos = mapping[int(pos) - 1]
+                                        if mapped_pos is not None:
+                                            extra_mapped.append(int(mapped_pos))
+                            else:
+                                extra_mapped = [int(pos) for pos in raw_extra]
+                            chain_fixed.update(extra_mapped)
                     chain_fixed.update(ligand_mask.get(chain_id, []))
                     fixed_positions_by_chain[chain_id] = sorted(chain_fixed)
 
@@ -1299,6 +1352,22 @@ class PipelineRunner:
             write_json(paths.summary_json, asdict(result))
             set_status(paths, stage="done", state="completed")
             return result
+        except PipelineInputRequired as exc:
+            errors.append(str(exc))
+            set_status(paths, stage=exc.stage, state="failed", detail=str(exc))
+            result = PipelineResult(
+                run_id=run_id,
+                output_dir=str(paths.root),
+                msa_a3m_path=msa_a3m_path,
+                msa_filtered_a3m_path=msa_filtered_a3m_path,
+                msa_tsv_path=msa_tsv_path,
+                conservation_path=conservation_path,
+                ligand_mask_path=ligand_mask_path,
+                tiers=tier_results,
+                errors=errors,
+            )
+            write_json(paths.summary_json, asdict(result))
+            raise
         except Exception as exc:
             errors.append(str(exc))
             set_status(paths, stage="error", state="failed", detail=str(exc))
