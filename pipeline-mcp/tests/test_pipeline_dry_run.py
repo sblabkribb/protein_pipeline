@@ -141,6 +141,53 @@ class TestPipelineDryRun(unittest.TestCase):
             out = Path(res.output_dir)
             self.assertTrue((out / "conservation.json").exists())
 
+    def test_pipeline_includes_fixed_positions_extra(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU A   4       3.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  PHE A   5       4.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  GLY A   6       5.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      7  CA  HIS A   7       6.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      8  CA  ILE A   8       7.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      9  CA  LYS A   9       8.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            req = PipelineRequest(
+                target_fasta=fasta,
+                target_pdb=pdb,
+                dry_run=True,
+                num_seq_per_tier=2,
+                conservation_tiers=[0.3],
+                fixed_positions_extra={"A": [9]},
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            fixed = json.loads((out / "tiers" / "30" / "fixed_positions.json").read_text(encoding="utf-8"))
+            self.assertIn(9, fixed.get("A", []))
+
+    def test_pipeline_requires_fixed_positions_extra_for_sequence_only(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            req = PipelineRequest(
+                target_fasta=fasta,
+                target_pdb="",
+                dry_run=False,
+                conservation_tiers=[0.3],
+            )
+            run_id = "sequence_only_requires_fixed_positions_extra"
+            with self.assertRaises(Exception) as ctx:
+                runner.run(req, run_id=run_id)
+            self.assertIn("fixed_positions_extra", str(ctx.exception))
+            status = json.loads((Path(tmp) / run_id / "status.json").read_text(encoding="utf-8"))
+            self.assertEqual(status.get("stage"), "needs_fixed_positions_extra")
+            self.assertEqual(status.get("state"), "failed")
+
     def test_chain_strategy_forces_single_chain_in_monomer_mode(self) -> None:
         fasta = ">q1\nACD\n"
         pdb = (
