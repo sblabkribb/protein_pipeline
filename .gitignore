@@ -13,6 +13,9 @@
 /pipeline-mcp/pytest-cache-files-*/
 /*.pdb
 ja3c10941_si_001.pdf
+/af2_wt_*_job.json
+/result.a3m
+/result.tsv
 
 # --- Python ---
 __pycache__/
