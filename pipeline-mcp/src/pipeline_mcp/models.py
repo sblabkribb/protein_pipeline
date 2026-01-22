@@ -83,6 +83,9 @@ class TierResult:
     fixed_positions: dict[str, list[int]]
     proteinmpnn_native: SequenceRecord | None
     proteinmpnn_samples: list[SequenceRecord]
+    mutation_report_path: str | None = None
+    mutations_by_position_tsv: str | None = None
+    mutations_by_sequence_tsv: str | None = None
     soluprot_scores: dict[str, float] | None = None
     passed_ids: list[str] | None = None
     af2: dict[str, object] | None = None
