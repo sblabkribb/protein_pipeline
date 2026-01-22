@@ -30,6 +30,7 @@ from .models import PipelineRequest
 from .models import PipelineResult
 from .models import SequenceRecord
 from .models import TierResult
+from .mutation_report import write_mutation_reports
 from .storage import RunPaths
 from .storage import init_run
 from .storage import new_run_id
@@ -957,6 +958,17 @@ class PipelineRunner:
                 )
                 set_status(paths, stage=f"proteinmpnn_{tier_str}", state="completed")
 
+                mutation_paths = write_mutation_reports(
+                    tier_dir,
+                    native=native,
+                    samples=samples,
+                    fixed_positions_by_chain=fixed_positions_by_chain,
+                    design_chains=design_chains,
+                )
+                mutation_report_path = mutation_paths.get("mutation_report_path")
+                mutations_by_position_tsv = mutation_paths.get("mutations_by_position_tsv")
+                mutations_by_sequence_tsv = mutation_paths.get("mutations_by_sequence_tsv")
+
                 if request.stop_after == "design":
                     tier_results.append(
                         TierResult(
@@ -964,6 +976,9 @@ class PipelineRunner:
                             fixed_positions=fixed_positions_by_chain,
                             proteinmpnn_native=native,
                             proteinmpnn_samples=samples,
+                            mutation_report_path=mutation_report_path,
+                            mutations_by_position_tsv=mutations_by_position_tsv,
+                            mutations_by_sequence_tsv=mutations_by_sequence_tsv,
                         )
                     )
                     continue
@@ -1105,6 +1120,9 @@ class PipelineRunner:
                             fixed_positions=fixed_positions_by_chain,
                             proteinmpnn_native=native,
                             proteinmpnn_samples=samples,
+                            mutation_report_path=mutation_report_path,
+                            mutations_by_position_tsv=mutations_by_position_tsv,
+                            mutations_by_sequence_tsv=mutations_by_sequence_tsv,
                             soluprot_scores=soluprot_scores,
                             passed_ids=passed_ids,
                         )
@@ -1296,6 +1314,9 @@ class PipelineRunner:
                             fixed_positions=fixed_positions_by_chain,
                             proteinmpnn_native=native,
                             proteinmpnn_samples=samples,
+                            mutation_report_path=mutation_report_path,
+                            mutations_by_position_tsv=mutations_by_position_tsv,
+                            mutations_by_sequence_tsv=mutations_by_sequence_tsv,
                             soluprot_scores=soluprot_scores,
                             passed_ids=passed_ids,
                             af2=af2_result,
@@ -1330,6 +1351,9 @@ class PipelineRunner:
                         fixed_positions=fixed_positions_by_chain,
                         proteinmpnn_native=native,
                         proteinmpnn_samples=samples,
+                        mutation_report_path=mutation_report_path,
+                        mutations_by_position_tsv=mutations_by_position_tsv,
+                        mutations_by_sequence_tsv=mutations_by_sequence_tsv,
                         soluprot_scores=soluprot_scores,
                         passed_ids=passed_ids,
                         af2=af2_result,
