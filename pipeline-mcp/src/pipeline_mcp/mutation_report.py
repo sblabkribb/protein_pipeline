@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+import html
 from pathlib import Path
 from typing import Any
 
@@ -104,6 +105,114 @@ def _percentiles(values: list[int]) -> dict[str, float | None]:
     }
 
 
+def _fmt(x: float) -> str:
+    return f"{x:.2f}"
+
+
+def _write_mutations_by_position_svg(
+    out_path: Path,
+    *,
+    positions_payload: dict[str, list[dict[str, Any]]],
+    chain_order: list[str],
+) -> None:
+    width = 1200
+    panel_h = 260
+    margin_left = 60
+    margin_right = 20
+    margin_top = 30
+    margin_bottom = 40
+
+    chains = [c for c in chain_order if c in positions_payload]
+    if not chains:
+        return
+
+    height = panel_h * len(chains)
+    parts: list[str] = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        "<style>",
+        ".axis{stroke:#333;stroke-width:1}",
+        ".grid{stroke:#ddd;stroke-width:1;shape-rendering:crispEdges}",
+        ".label{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;fill:#111;font-size:12px}",
+        ".title{font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;fill:#111;font-size:14px;font-weight:600}",
+        "</style>",
+        '<rect x="0" y="0" width="100%" height="100%" fill="white"/>',
+    ]
+
+    plot_w = width - margin_left - margin_right
+    plot_h = panel_h - margin_top - margin_bottom
+
+    for idx, chain_id in enumerate(chains):
+        rows = positions_payload.get(chain_id) or []
+        if not rows:
+            continue
+        y0 = idx * panel_h
+        x0 = margin_left
+        y_top = y0 + margin_top
+        y_bottom = y0 + panel_h - margin_bottom
+
+        L = len(rows)
+        denom = max(1, L - 1)
+
+        parts.append(f'<text x="{x0}" y="{y0 + 18}" class="title">chain {html.escape(chain_id)}</text>')
+        parts.append(f'<line x1="{x0}" y1="{y_top}" x2="{x0}" y2="{y_bottom}" class="axis" />')
+        parts.append(
+            f'<line x1="{x0}" y1="{y_bottom}" x2="{x0 + plot_w}" y2="{y_bottom}" class="axis" />'
+        )
+
+        for frac in [0.0, 0.25, 0.5, 0.75, 1.0]:
+            y = y_top + (1.0 - frac) * plot_h
+            parts.append(f'<line x1="{x0}" y1="{_fmt(y)}" x2="{x0 + plot_w}" y2="{_fmt(y)}" class="grid" />')
+            parts.append(
+                f'<text x="{x0 - 8}" y="{_fmt(y + 4)}" text-anchor="end" class="label">{frac:.2f}</text>'
+            )
+
+        if L >= 200:
+            step = 50
+        elif L >= 100:
+            step = 20
+        else:
+            step = 10
+        ticks = sorted(set([1, L] + [p for p in range(1, L + 1) if p % step == 0]))
+        for p in ticks:
+            x = x0 + (p - 1) * (plot_w / denom)
+            parts.append(f'<line x1="{_fmt(x)}" y1="{y_bottom}" x2="{_fmt(x)}" y2="{y_bottom + 5}" class="axis" />')
+            parts.append(
+                f'<text x="{_fmt(x)}" y="{y_bottom + 18}" text-anchor="middle" class="label">{p}</text>'
+            )
+
+        d: list[str] = []
+        fixed_points: list[tuple[float, float, int, float]] = []
+        for row in rows:
+            pos = int(row.get("pos") or 0)
+            mutated_fraction = float(row.get("mutated_fraction") or 0.0)
+            is_fixed = bool(row.get("fixed"))
+            if not pos:
+                continue
+            x = x0 + (pos - 1) * (plot_w / denom)
+            y = y_top + (1.0 - max(0.0, min(1.0, mutated_fraction))) * plot_h
+            d.append(("M" if not d else "L") + f"{_fmt(x)},{_fmt(y)}")
+            if is_fixed:
+                fixed_points.append((x, y, pos, mutated_fraction))
+
+        parts.append(f'<path d="{" ".join(d)}" fill="none" stroke="#1f77b4" stroke-width="1.5" />')
+
+        for x, y, pos, mutated_fraction in fixed_points:
+            title = html.escape(f"{chain_id}:{pos} mutated_fraction={mutated_fraction:.3f}")
+            parts.append(
+                f'<circle cx="{_fmt(x)}" cy="{_fmt(y)}" r="3" fill="#d62728" stroke="white" stroke-width="0.8"><title>{title}</title></circle>'
+            )
+
+        parts.append(f'<text x="{x0}" y="{y0 + panel_h - 10}" class="label">pos →</text>')
+        center_y = y0 + (panel_h / 2.0)
+        parts.append(
+            f'<text x="14" y="{_fmt(center_y)}" class="label" transform="rotate(-90 14,{_fmt(center_y)})">mutated_fraction</text>'
+        )
+
+    parts.append("</svg>\n")
+    out_path.write_text("\n".join(parts), encoding="utf-8")
+
+
 def write_mutation_reports(
     tier_dir: Path,
     *,
@@ -124,6 +233,7 @@ def write_mutation_reports(
     json_path = tier_dir / "mutation_report.json"
     by_pos_tsv = tier_dir / "mutations_by_position.tsv"
     by_seq_tsv = tier_dir / "mutations_by_sequence.tsv"
+    by_pos_svg = tier_dir / "mutations_by_position.svg"
 
     native_parts = _split_multichain(native.sequence)
     sample_parts_all = [_split_multichain(s.sequence) for s in samples]
@@ -225,8 +335,11 @@ def write_mutation_reports(
         seq_lines.append(f"{row['id']}\t{row['num_mutations']}\t{row['mutations']}")
     by_seq_tsv.write_text("\n".join(seq_lines) + "\n", encoding="utf-8")
 
+    _write_mutations_by_position_svg(by_pos_svg, positions_payload=positions_payload, chain_order=chain_order)
+
     return {
         "mutation_report_path": str(json_path),
         "mutations_by_position_tsv": str(by_pos_tsv),
         "mutations_by_sequence_tsv": str(by_seq_tsv),
+        "mutations_by_position_svg": str(by_pos_svg),
     }

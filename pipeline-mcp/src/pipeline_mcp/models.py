@@ -85,6 +85,7 @@ class TierResult:
     proteinmpnn_samples: list[SequenceRecord]
     mutation_report_path: str | None = None
     mutations_by_position_tsv: str | None = None
+    mutations_by_position_svg: str | None = None
     mutations_by_sequence_tsv: str | None = None
     soluprot_scores: dict[str, float] | None = None
     passed_ids: list[str] | None = None

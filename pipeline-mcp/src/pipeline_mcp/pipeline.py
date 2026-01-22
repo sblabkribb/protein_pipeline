@@ -967,6 +967,7 @@ class PipelineRunner:
                 )
                 mutation_report_path = mutation_paths.get("mutation_report_path")
                 mutations_by_position_tsv = mutation_paths.get("mutations_by_position_tsv")
+                mutations_by_position_svg = mutation_paths.get("mutations_by_position_svg")
                 mutations_by_sequence_tsv = mutation_paths.get("mutations_by_sequence_tsv")
 
                 if request.stop_after == "design":
@@ -978,6 +979,7 @@ class PipelineRunner:
                             proteinmpnn_samples=samples,
                             mutation_report_path=mutation_report_path,
                             mutations_by_position_tsv=mutations_by_position_tsv,
+                            mutations_by_position_svg=mutations_by_position_svg,
                             mutations_by_sequence_tsv=mutations_by_sequence_tsv,
                         )
                     )
@@ -1122,6 +1124,7 @@ class PipelineRunner:
                             proteinmpnn_samples=samples,
                             mutation_report_path=mutation_report_path,
                             mutations_by_position_tsv=mutations_by_position_tsv,
+                            mutations_by_position_svg=mutations_by_position_svg,
                             mutations_by_sequence_tsv=mutations_by_sequence_tsv,
                             soluprot_scores=soluprot_scores,
                             passed_ids=passed_ids,
@@ -1316,6 +1319,7 @@ class PipelineRunner:
                             proteinmpnn_samples=samples,
                             mutation_report_path=mutation_report_path,
                             mutations_by_position_tsv=mutations_by_position_tsv,
+                            mutations_by_position_svg=mutations_by_position_svg,
                             mutations_by_sequence_tsv=mutations_by_sequence_tsv,
                             soluprot_scores=soluprot_scores,
                             passed_ids=passed_ids,
@@ -1353,6 +1357,7 @@ class PipelineRunner:
                         proteinmpnn_samples=samples,
                         mutation_report_path=mutation_report_path,
                         mutations_by_position_tsv=mutations_by_position_tsv,
+                        mutations_by_position_svg=mutations_by_position_svg,
                         mutations_by_sequence_tsv=mutations_by_sequence_tsv,
                         soluprot_scores=soluprot_scores,
                         passed_ids=passed_ids,
