@@ -339,3 +339,168 @@ def preprocess_pdb(
             out_lines.append(raw)
 
     return ("\n".join(out_lines) + ("\n" if pdb_text.endswith("\n") else "")), mapping
+
+
+def _ca_coords_by_chain(pdb_text: str, *, chains: list[str] | None = None) -> dict[str, dict[int, tuple[float, float, float]]]:
+    residues = residues_by_chain(pdb_text, only_atom_records=True)
+    chain_set = set(chains) if chains is not None else None
+    out: dict[str, dict[int, tuple[float, float, float]]] = {}
+    for chain_id, res_list in residues.items():
+        if chain_set is not None and chain_id not in chain_set:
+            continue
+        coords: dict[int, tuple[float, float, float]] = {}
+        for res in res_list:
+            ca = None
+            for atom in res.atoms:
+                if atom.atom_name.strip().upper() == "CA":
+                    ca = (atom.x, atom.y, atom.z)
+                    break
+            if ca is not None:
+                coords[res.index] = ca
+        if coords:
+            out[chain_id] = coords
+    return out
+
+
+def _match_ca_coords(
+    ref_coords: dict[str, dict[int, tuple[float, float, float]]],
+    mob_coords: dict[str, dict[int, tuple[float, float, float]]],
+    *,
+    chains: list[str] | None = None,
+) -> tuple[list[tuple[float, float, float]], list[tuple[float, float, float]]]:
+    chain_order = chains or sorted(set(ref_coords) & set(mob_coords))
+    ref: list[tuple[float, float, float]] = []
+    mob: list[tuple[float, float, float]] = []
+    for chain_id in chain_order:
+        ref_chain = ref_coords.get(chain_id) or {}
+        mob_chain = mob_coords.get(chain_id) or {}
+        if not ref_chain or not mob_chain:
+            continue
+        for idx in sorted(set(ref_chain) & set(mob_chain)):
+            ref.append(ref_chain[idx])
+            mob.append(mob_chain[idx])
+    return ref, mob
+
+
+def _centroid(coords: list[tuple[float, float, float]]) -> tuple[float, float, float]:
+    if not coords:
+        return (0.0, 0.0, 0.0)
+    inv = 1.0 / float(len(coords))
+    sx = sum(p[0] for p in coords)
+    sy = sum(p[1] for p in coords)
+    sz = sum(p[2] for p in coords)
+    return (sx * inv, sy * inv, sz * inv)
+
+
+def _center_coords(
+    coords: list[tuple[float, float, float]],
+    center: tuple[float, float, float],
+) -> list[tuple[float, float, float]]:
+    cx, cy, cz = center
+    return [(x - cx, y - cy, z - cz) for (x, y, z) in coords]
+
+
+def _covariance_matrix(
+    mob: list[tuple[float, float, float]],
+    ref: list[tuple[float, float, float]],
+) -> list[list[float]]:
+    sxx = syy = szz = sxy = sxz = syx = syz = szx = szy = 0.0
+    for (mx, my, mz), (rx, ry, rz) in zip(mob, ref):
+        sxx += mx * rx
+        sxy += mx * ry
+        sxz += mx * rz
+        syx += my * rx
+        syy += my * ry
+        syz += my * rz
+        szx += mz * rx
+        szy += mz * ry
+        szz += mz * rz
+    return [
+        [sxx, sxy, sxz],
+        [syx, syy, syz],
+        [szx, szy, szz],
+    ]
+
+
+def _quat_from_covariance(cov: list[list[float]]) -> tuple[float, float, float, float] | None:
+    sxx, sxy, sxz = cov[0]
+    syx, syy, syz = cov[1]
+    szx, szy, szz = cov[2]
+    n = [
+        [sxx + syy + szz, syz - szy, szx - sxz, sxy - syx],
+        [syz - szy, sxx - syy - szz, sxy + syx, szx + sxz],
+        [szx - sxz, sxy + syx, -sxx + syy - szz, syz + szy],
+        [sxy - syx, szx + sxz, syz + szy, -sxx - syy + szz],
+    ]
+    v = [1.0, 0.0, 0.0, 0.0]
+    for _ in range(32):
+        w0 = n[0][0] * v[0] + n[0][1] * v[1] + n[0][2] * v[2] + n[0][3] * v[3]
+        w1 = n[1][0] * v[0] + n[1][1] * v[1] + n[1][2] * v[2] + n[1][3] * v[3]
+        w2 = n[2][0] * v[0] + n[2][1] * v[1] + n[2][2] * v[2] + n[2][3] * v[3]
+        w3 = n[3][0] * v[0] + n[3][1] * v[1] + n[3][2] * v[2] + n[3][3] * v[3]
+        norm = math.sqrt(w0 * w0 + w1 * w1 + w2 * w2 + w3 * w3)
+        if norm <= 0.0:
+            return None
+        v = [w0 / norm, w1 / norm, w2 / norm, w3 / norm]
+    return (v[0], v[1], v[2], v[3])
+
+
+def _rotation_from_quat(q: tuple[float, float, float, float]) -> list[list[float]]:
+    w, x, y, z = q
+    ww = w * w
+    xx = x * x
+    yy = y * y
+    zz = z * z
+    wx = w * x
+    wy = w * y
+    wz = w * z
+    xy = x * y
+    xz = x * z
+    yz = y * z
+    return [
+        [ww + xx - yy - zz, 2.0 * (xy - wz), 2.0 * (xz + wy)],
+        [2.0 * (xy + wz), ww - xx + yy - zz, 2.0 * (yz - wx)],
+        [2.0 * (xz - wy), 2.0 * (yz + wx), ww - xx - yy + zz],
+    ]
+
+
+def _apply_rotation(
+    vec: tuple[float, float, float],
+    rot: list[list[float]],
+) -> tuple[float, float, float]:
+    x, y, z = vec
+    return (
+        rot[0][0] * x + rot[0][1] * y + rot[0][2] * z,
+        rot[1][0] * x + rot[1][1] * y + rot[1][2] * z,
+        rot[2][0] * x + rot[2][1] * y + rot[2][2] * z,
+    )
+
+
+def ca_rmsd(
+    pdb_ref: str,
+    pdb_mobile: str,
+    *,
+    chains: list[str] | None = None,
+) -> float | None:
+    ref_coords = _ca_coords_by_chain(pdb_ref, chains=chains)
+    mob_coords = _ca_coords_by_chain(pdb_mobile, chains=chains)
+    ref, mob = _match_ca_coords(ref_coords, mob_coords, chains=chains)
+    if len(ref) < 3 or len(mob) < 3:
+        return None
+    ref_center = _centroid(ref)
+    mob_center = _centroid(mob)
+    ref_c = _center_coords(ref, ref_center)
+    mob_c = _center_coords(mob, mob_center)
+    cov = _covariance_matrix(mob_c, ref_c)
+    quat = _quat_from_covariance(cov)
+    if quat is None:
+        return None
+    rot = _rotation_from_quat(quat)
+    total = 0.0
+    for r, m in zip(ref_c, mob_c):
+        mx, my, mz = _apply_rotation(m, rot)
+        dx = r[0] - mx
+        dy = r[1] - my
+        dz = r[2] - mz
+        total += dx * dx + dy * dy + dz * dz
+    return math.sqrt(total / float(len(ref_c)))

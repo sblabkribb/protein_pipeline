@@ -56,6 +56,7 @@ class PipelineRequest:
     af2_max_template_date: str = "2020-05-14"
     af2_extra_flags: str | None = None
     af2_plddt_cutoff: float = 85.0
+    af2_rmsd_cutoff: float = 2.0
     af2_top_k: int = 20
     af2_sequence_ids: list[str] | None = None
 

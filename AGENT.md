@@ -12,7 +12,7 @@
 - **ProteinMPNN (RunPod)**: requires PDB (plain or base64). Use `use_soluble_model=true`; pass chain mask and fixed positions (see masking step).
 - **SoluProt**: batch HTTP client; return probability per sequence. Keep only `score >= 0.5`.
 - **AlphaFold2**: local/remote runner; accept FASTA; return `pLDDT`, `PTM`, `PAE`. Cache by sequence hash + template settings.
-- **AlphaFold2 (RunPod)**: 결과 archive에서 `ranking_debug.json`을 파싱해 평균 `pLDDT`를 추출하고, `pLDDT>=85` + 상위 `20`개만 다음 단계로 전달.
+- **AlphaFold2 (RunPod)**: 결과 archive에서 `ranking_debug.json`을 파싱해 평균 `pLDDT`를 추출하고, `pLDDT>=85` + `RMSD<=2.0Å` + 상위 `20`개만 다음 단계로 전달.
 - All tool calls should stream logs where possible and capture raw JSON/TSV artifacts in the run folder.
 
 # Pipeline (default)
@@ -22,7 +22,7 @@
 4) **Mask merge**: for each conservation tier, allowed-to-mutate set = residues not in tier mask AND not in ligand mask. Emit per-tier residue lists for ProteinMPNN (`fixed_residues`).
 5) **ProteinMPNN (soluble)**: run once per tier; inputs: PDB, `pdb_path_chains`, `use_soluble_model=true`, `num_seq_per_target`/`batch_size`, `sampling_temp`, `seed`, `fixed_positions` from mask. Save JSON + FASTA.
 6) **SoluProt filter**: score all sequences; drop `<0.5`. Annotate surviving FASTA/JSON with `soluprot_score`.
-7) **AlphaFold2**: surviving sequences에 대해 AF2 실행 → `pLDDT>=85`만 통과 → `pLDDT` 내림차순 상위 20개만 유지.
+7) **AlphaFold2**: surviving sequences에 대해 AF2 실행 → `pLDDT>=85` + `RMSD<=2.0Å` 통과 → `pLDDT` 내림차순 상위 20개만 유지.
 8) **Novelty search**: (선택) AF2 통과(top 20) 서열만 MMseqs2 `search`로 novelty 체크.
 9) **Summarize**: produce `summary.json` per run with per-tier counts, thresholds used, file pointers, and any failures. Return paths in agent reply.
 

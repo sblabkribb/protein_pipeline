@@ -68,7 +68,7 @@ jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta --rawfile pdb ./targ
 
 ```bash
 jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta --rawfile pdb ./target.pdb \
-  '{name:"pipeline.run", arguments:{run_id:$run_id, target_fasta:$fasta, target_pdb:$pdb, stop_after:"af2", af2_plddt_cutoff:85, af2_top_k:20}}' \
+  '{name:"pipeline.run", arguments:{run_id:$run_id, target_fasta:$fasta, target_pdb:$pdb, stop_after:"af2", af2_plddt_cutoff:85, af2_rmsd_cutoff:2.0, af2_top_k:20}}' \
 | curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' -d @-
 ```
 
@@ -153,4 +153,3 @@ jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta \
 
 ## 6) RunPod 내부 실행 커맨드(로컬 재현용)
 - `docs/runpod_model_execution.md` 참고
-
