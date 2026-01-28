@@ -19,6 +19,7 @@ from .bio.fasta import FastaRecord
 from .bio.fasta import parse_fasta
 from .bio.fasta import to_fasta
 from .bio.alignment import global_alignment_mapping
+from .bio.pdb import ca_rmsd
 from .bio.pdb import ligand_proximity_mask
 from .bio.pdb import preprocess_pdb
 from .bio.pdb import residues_by_chain
@@ -1276,10 +1277,57 @@ class PipelineRunner:
                             )
 
                     candidate_scores = {seq_id: cached_scores[seq_id] for seq_id in candidate_ids if seq_id in cached_scores}
+                    rmsd_scores: dict[str, float] = {}
+                    rmsd_missing: list[str] = []
+                    rmsd_cutoff = float(request.af2_rmsd_cutoff)
+                    if rmsd_cutoff <= 0.0:
+                        rmsd_cutoff = None
+                    if rmsd_cutoff is not None:
+                        for seq_id in candidate_ids:
+                            rmsd = None
+                            seq_dir = _ensure_dir(af2_dir / _safe_id(seq_id))
+                            metrics_path = seq_dir / "metrics.json"
+                            metrics_payload: dict[str, object] | None = None
+                            if metrics_path.exists():
+                                try:
+                                    metrics_payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+                                except Exception:
+                                    metrics_payload = None
+                            if isinstance(metrics_payload, dict):
+                                raw = metrics_payload.get("rmsd_ca")
+                                if isinstance(raw, (int, float)):
+                                    rmsd = float(raw)
+                            if rmsd is None:
+                                pdb_text = None
+                                rec = (af2_result or {}).get(seq_id) if isinstance(af2_result, dict) else None
+                                if isinstance(rec, dict):
+                                    for key in ("ranked_0_pdb", "pdb", "pdb_text"):
+                                        val = rec.get(key)
+                                        if isinstance(val, str) and val.strip():
+                                            pdb_text = val
+                                            break
+                                if not pdb_text:
+                                    pdb_path = seq_dir / "ranked_0.pdb"
+                                    if pdb_path.exists():
+                                        pdb_text = pdb_path.read_text(encoding="utf-8")
+                                if pdb_text and target_pdb_text.strip():
+                                    rmsd_val = ca_rmsd(target_pdb_text, pdb_text, chains=design_chains)
+                                    if isinstance(rmsd_val, (int, float)):
+                                        rmsd = float(rmsd_val)
+                            if rmsd is None:
+                                rmsd_missing.append(seq_id)
+                                continue
+                            rmsd_scores[seq_id] = rmsd
+                            payload = metrics_payload if isinstance(metrics_payload, dict) else {}
+                            if "best_plddt" not in payload and seq_id in cached_scores:
+                                payload["best_plddt"] = cached_scores[seq_id]
+                            payload["rmsd_ca"] = rmsd
+                            write_json(metrics_path, payload)
                     selected_pairs = [
                         (seq_id, score)
                         for seq_id, score in candidate_scores.items()
                         if score >= float(request.af2_plddt_cutoff)
+                        and (rmsd_cutoff is None or (seq_id in rmsd_scores and rmsd_scores[seq_id] <= rmsd_cutoff))
                     ]
                     selected_pairs.sort(key=lambda t: t[1], reverse=True)
                     af2_selected_ids = [seq_id for seq_id, _ in selected_pairs[: int(request.af2_top_k)]]
@@ -1293,8 +1341,11 @@ class PipelineRunner:
                         af2_scores_path,
                         {
                             "scores": cached_scores,
+                            "rmsd_scores": rmsd_scores,
                             "candidate_ids": candidate_ids,
                             "cutoff": request.af2_plddt_cutoff,
+                            "rmsd_cutoff": request.af2_rmsd_cutoff,
+                            "rmsd_missing_ids": rmsd_missing,
                             "top_k": request.af2_top_k,
                             "selected_ids": af2_selected_ids,
                             "model_preset": af2_model_preset,

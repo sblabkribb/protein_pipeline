@@ -114,3 +114,1133 @@ BrokenPipeError: [Errno 32] Broken pipe
 210.218.220.84 - - [15/Jan/2026 17:45:45] "POST /tools/call HTTP/1.1" 200 -
 210.218.220.84 - - [15/Jan/2026 17:50:44] "POST /tools/call HTTP/1.1" 200 -
 210.218.220.84 - - [15/Jan/2026 17:51:00] "POST /tools/call HTTP/1.1" 200 -
+listening: http://0.0.0.0:18080
+127.0.0.1 - - [20/Jan/2026 11:21:10] "GET /healthz HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:22:51] "GET /healthz HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:28:31] "GET /tools/list HTTP/1.1" 404 -
+210.218.220.84 - - [20/Jan/2026 11:28:47] "POST /tools/list HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:29:29] "POST /tools/list HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:29:49] "POST /tools/list HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:34:45] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:34:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:34:58] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:35:03] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:35:08] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:35:13] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:35:18] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:35:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:35:28] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:35:33] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:35:38] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:35:43] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:35:48] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:36:43] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:36:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:37:03] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:37:13] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:37:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:37:33] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:37:43] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:37:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:38:03] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:38:13] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:38:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:38:33] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:38:43] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:38:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:39:03] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:39:13] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:39:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:39:33] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:39:43] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:39:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:40:03] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:40:13] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:40:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:40:33] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:40:43] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:40:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:41:03] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:41:13] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:41:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:41:33] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:41:43] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:41:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:42:03] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:42:14] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:42:24] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:42:34] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 11:56:41] error handling /tools/call: AlphaFold2 endpoint reported an error:\x0aRuntimeError: colabfold_batch not found. Set COLABFOLD_BATCH=/path/to/colabfold_batch or LOCALCOLABFOLD_BIN_DIR=/path/to/conda/bin, and make sure the persistent volume is mounted inside the worker.
+210.218.220.84 - - [20/Jan/2026 11:56:41] "POST /tools/call HTTP/1.1" 400 -
+----------------------------------------
+Exception occurred during processing of request from ('210.218.220.84', 65077)
+Traceback (most recent call last):
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 111, in do_POST
+    out = self.dispatcher.call_tool(name, arguments)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/tools.py", line 382, in call_tool
+    res = _run_with_auto_retry(self.runner, req, run_id=normalized_run_id, retry=retry)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/tools.py", line 186, in _run_with_auto_retry
+    return runner.run(request, run_id=run_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/pipeline.py", line 1153, in run
+    af2_result = self.af2.predict(
+                 ^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/clients/alphafold2_runpod.py", line 149, in predict
+    entries = _archive_entries(output)
+              ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/clients/alphafold2_runpod.py", line 28, in _archive_entries
+    raise RuntimeError(f"AlphaFold2 endpoint reported an error:\n{extra}")
+RuntimeError: AlphaFold2 endpoint reported an error:
+RuntimeError: colabfold_batch not found. Set COLABFOLD_BATCH=/path/to/colabfold_batch or LOCALCOLABFOLD_BIN_DIR=/path/to/conda/bin, and make sure the persistent volume is mounted inside the worker.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 117, in do_POST
+    self._json(400, {"ok": False, "error": str(exc)})
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 30, in _json
+    self.end_headers()
+  File "/usr/lib/python3.12/http/server.py", line 538, in end_headers
+    self.flush_headers()
+  File "/usr/lib/python3.12/http/server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+BrokenPipeError: [Errno 32] Broken pipe
+----------------------------------------
+210.218.220.84 - - [20/Jan/2026 12:02:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 13:18:04] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 13:18:07] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 13:18:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 13:18:26] error handling /tools/call: AlphaFold2 endpoint reported an error:\x0aFileNotFoundError: [Errno 2] No such file or directory: '/runpod-volume/localcolabfold/colabfold-conda/bin/colabfold_batch'
+210.218.220.84 - - [20/Jan/2026 13:18:26] "POST /tools/call HTTP/1.1" 400 -
+210.218.220.84 - - [20/Jan/2026 13:18:47] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 13:49:51] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 13:50:04] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 13:50:12] error handling /tools/call: AlphaFold2 endpoint reported an error:\x0aFileNotFoundError: [Errno 2] No such file or directory: '/runpod-volume/localcolabfold/colabfold-conda/bin/colabfold_batch'
+210.218.220.84 - - [20/Jan/2026 13:50:12] "POST /tools/call HTTP/1.1" 400 -
+210.218.220.84 - - [20/Jan/2026 13:50:31] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 13:57:00] "GET /healthz HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 13:57:06] "GET /tools/list HTTP/1.1" 404 -
+210.218.220.84 - - [20/Jan/2026 13:57:26] "POST /tools/list HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 13:58:17] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:04:14] error handling /tools/call: AlphaFold2 endpoint reported an error:\x0aFileNotFoundError: [Errno 2] No such file or directory: '/runpod-volume/localcolabfold/colabfold-conda/bin/colabfold_batch'
+210.218.220.84 - - [20/Jan/2026 14:04:14] "POST /tools/call HTTP/1.1" 400 -
+210.218.220.84 - - [20/Jan/2026 14:04:43] error handling /tools/call: AlphaFold2 endpoint reported an error:\x0aFileNotFoundError: [Errno 2] No such file or directory: '/runpod-volume/localcolabfold/colabfold-conda/bin/colabfold_batch'
+210.218.220.84 - - [20/Jan/2026 14:04:43] "POST /tools/call HTTP/1.1" 400 -
+210.218.220.84 - - [20/Jan/2026 14:23:58] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:26:21] error handling /tools/call: AlphaFold2 endpoint reported an error:\x0aRuntimeError: Command failed (exit=1): /runpod-volume/localcolabfold/colabfold-conda/bin/colabfold_batch --num-recycle 1 --num-models 1 /tmp/colabfold_38b4ce4d-ab3a-4872-8c53-1d32000c138d-e2_aitan7hj/input.fasta /tmp/colabfold_38b4ce4d-ab3a-4872-8c53-1d32000c138d-e2_aitan7hj/out\x0aLast logs:\x0a2026-01-20 05:26:19,111 Running colabfold 1.5.5 (83ee93d262a99ad62d6f0897c5ddd37eb918d385)\x0a\x0aWARNING: You are welcome to use the default MSA server, however keep in mind that it's a\x0alimited shared resource only capable of processing a few thousand MSAs per day. Please\x0asubmit jobs only from a single IP address. We reserve the right to limit access to the\x0aserver case-by-case when usage exceeds fair use. If you require more MSAs: You can \x0aprecompute all MSAs with `colabfold_search` or host your own API and pass it to `--host-url`\x0a\x0aTraceback (most recent call last):\x0a  File "/workspace/localcolabfold/colabfold-conda/lib/python3.10/site-packages/colabfold/batch.py", line 1128, in run\x0a    from tpu_info import device\x0aModuleNotFoundError: No module named 'tpu_info'\x0a\x0aDuring handling of the above exception, another exception occurred:\x0a\x0aTraceback (most recent call last):\x0a  File "/workspace/localcolabfold/colabfold-conda/lib/python3.10/site-packages/jax/_src/xla_bridge.py", line 915, in backends\x0a    backend = _init_backend(platform)\x0a  File "/workspace/localcolabfold/colabfold-conda/lib/python3.10/site-packages/jax/_src/xla_bridge.py", line 1001, in _init_backend\x0a    backend = registration.factory()\x0a  File "/workspace/localcolabfold/colabfold-conda/lib/python3.10/site-packages/jax/_src/xla_bridge.py", line 693, in factory\x0a    return xla_client.make_c_api_client(plugin_name, updated_options, None)\x0a  File "/workspace/localcolabfold/colabfold-conda/lib/python3.10/site-packages/jaxlib/xla_client.py", line 207, in make_c_api_client\x0a    return _xla.get_c_api_client(plugin_name, options, distributed_client)\x0ajaxlib.xla_extension.XlaRuntimeError: FAILED_PRECONDITION: No visible GPU devices.\x0a\x0aDuring handling of the above exception, another exception occurred:\x0a\x0aTraceback (most recent call last):\x0a  File "/runpod-volume/localcolabfold/colabfold-conda/bin/colabfold_batch", line 7, in <module>\x0a    sys.exit(main())\x0a  File "/workspace/localcolabfold/colabfold-conda/lib/python3.10/site-packages/colabfold/batch.py", line 2069, in main\x0a    run(\x0a  File "/workspace/localcolabfold/colabfold-conda/lib/python3.10/site-packages/colabfold/batch.py", line 1135, in run\x0a    if local_devices()[0].platform == 'cpu':\x0a  File "/workspace/localcolabfold/colabfold-conda/lib/python3.10/site-packages/jax/_src/xla_bridge.py", line 1173, in local_devices\x0a    process_index = get_backend(backend).process_index()\x0a  File "/workspace/localcolabfold/colabfold-conda/lib/python3.10/site-packages/jax/_src/xla_bridge.py", line 1049, in get_backend\x0a    return _get_backend_uncached(platform)\x0a  File "/workspace/localcolabfold/colabfold-conda/lib/python3.10/site-packages/jax/_src/xla_bridge.py", line 1028, in _get_backend_uncached\x0a    bs = backends()\x0a  File "/workspace/localcolabfold/colabfold-conda/lib/python3.10/site-packages/jax/_src/xla_bridge.py", line 931, in backends\x0a    raise RuntimeError(err_msg)\x0aRuntimeError: Unable to initialize backend 'cuda': FAILED_PRECONDITION: No visible GPU devices. (you may need to uninstall the failing plugin package, or set JAX_PLATFORMS=cpu to skip this backend.)
+210.218.220.84 - - [20/Jan/2026 14:26:21] "POST /tools/call HTTP/1.1" 400 -
+210.218.220.84 - - [20/Jan/2026 14:27:04] "POST /tools/call HTTP/1.1" 200 -
+listening: http://0.0.0.0:18080
+listening: http://0.0.0.0:18080
+210.218.220.84 - - [20/Jan/2026 14:39:34] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:40:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:41:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:42:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:43:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:44:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:45:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:46:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:47:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:47:58] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:48:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:49:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:50:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:51:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:52:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:53:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:54:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:55:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:56:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:57:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:58:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 14:59:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:00:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:01:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:02:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:03:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:04:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:05:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:06:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:07:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:08:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:09:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:10:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:11:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:12:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:13:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:14:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:15:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:16:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:17:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:18:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:19:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:20:08] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:20:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:21:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:22:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:23:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:24:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:25:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:25:30] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:26:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:27:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:28:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:29:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:29:26] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:30:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:31:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:32:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:33:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:34:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:34:47] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:35:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:36:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:37:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:38:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:39:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:40:09] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:40:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:41:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:42:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:43:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:44:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:45:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:45:30] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:46:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:47:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:48:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:49:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:50:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:50:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:51:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:52:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:53:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:54:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:55:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:56:08] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:56:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:57:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:58:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 15:59:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:00:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:01:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:01:28] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:02:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:03:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:04:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:05:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:06:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:06:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:07:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:08:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:09:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:10:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:11:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:12:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:13:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:14:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:15:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:16:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:17:13] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:17:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:18:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:19:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:20:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:21:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:22:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:23:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:24:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:25:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:26:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:27:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:28:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:29:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:30:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:31:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:32:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:33:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:34:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:35:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:36:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:37:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:38:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:39:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:40:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:41:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:42:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:43:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:44:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:45:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:46:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:47:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:48:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:49:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:50:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:51:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:52:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:53:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:54:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:55:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:56:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:57:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:58:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 16:59:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:00:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:01:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:02:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:03:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:04:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:05:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:06:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:07:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:08:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:09:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:10:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:11:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:12:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:13:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:14:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:15:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:16:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:17:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:18:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:19:23] "POST /tools/call HTTP/1.1" 200 -
+185.247.137.142 - - [20/Jan/2026 17:20:01] code 400, message Bad request syntax ('\\x01!\\x01\\x01\\x01\\x01\\x01\\x01')
+185.247.137.142 - - [20/Jan/2026 17:20:01] "\x01!\x01\x01\x01\x01\x01\x01" 400 -
+87.236.176.129 - - [20/Jan/2026 17:20:17] "GET / HTTP/1.1" 404 -
+210.218.220.84 - - [20/Jan/2026 17:20:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:21:23] "POST /tools/call HTTP/1.1" 200 -
+20.169.106.149 - - [20/Jan/2026 17:22:14] code 400, message Bad request syntax ('MGLNDD_211.188.62.53_18080')
+20.169.106.149 - - [20/Jan/2026 17:22:14] "MGLNDD_211.188.62.53_18080" 400 -
+210.218.220.84 - - [20/Jan/2026 17:22:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:23:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:24:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:25:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:26:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:27:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:28:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:29:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:30:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:31:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:32:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:33:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:34:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:35:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:36:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:36:54] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:36:54] error handling /tools/call: [Errno 32] Broken pipe
+210.218.220.84 - - [20/Jan/2026 17:36:54] "POST /tools/call HTTP/1.1" 400 -
+----------------------------------------
+Exception occurred during processing of request from ('210.218.220.84', 62099)
+Traceback (most recent call last):
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 112, in do_POST
+    self._json(200, {"ok": True, "result": out})
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 30, in _json
+    self.end_headers()
+  File "/usr/lib/python3.12/http/server.py", line 538, in end_headers
+    self.flush_headers()
+  File "/usr/lib/python3.12/http/server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+BrokenPipeError: [Errno 32] Broken pipe
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 117, in do_POST
+    self._json(400, {"ok": False, "error": str(exc)})
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 30, in _json
+    self.end_headers()
+  File "/usr/lib/python3.12/http/server.py", line 538, in end_headers
+    self.flush_headers()
+  File "/usr/lib/python3.12/http/server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+BrokenPipeError: [Errno 32] Broken pipe
+----------------------------------------
+210.218.220.84 - - [20/Jan/2026 17:37:23] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:40:36] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 17:59:01] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 18:01:02] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [20/Jan/2026 18:01:57] error handling /tools/call: MMseqs RunPod job not completed: {'delayTime': 8769, 'executionTime': 48058, 'id': 'bdc77283-15f7-4761-93ec-b64d1e52c2f4-e1', 'status': 'CANCELLED', 'workerId': 'v2lmlidchnt345'}
+210.218.220.84 - - [20/Jan/2026 18:01:57] "POST /tools/call HTTP/1.1" 400 -
+210.218.220.84 - - [20/Jan/2026 18:02:10] "POST /tools/call HTTP/1.1" 200 -
+205.210.31.92 - - [20/Jan/2026 22:39:12] code 400, message Bad request version ('\\x10')
+205.210.31.92 - - [20/Jan/2026 22:39:12] "\x01!\x01\x01\x01\x01\x01\x01â\x00\x00\x00\x00\x00\x00\x00\x01é\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x08\x09node_data\x0c\x10" 400 -
+88.214.25.121 - - [20/Jan/2026 23:04:23] code 400, message Bad HTTP/0.9 request type ('\\x03\\x00\\x00/*à\\x00\\x00\\x00\\x00\\x00Cookie:')
+88.214.25.121 - - [20/Jan/2026 23:04:23] "\x03\x00\x00/*à\x00\x00\x00\x00\x00Cookie: mstshash=Administr" 400 -
+206.168.34.199 - - [21/Jan/2026 10:11:29] code 400, message Bad request syntax ('\\x16\\x03\\x01\\x00î\\x01\\x00\\x00ê\\x03\\x03\\x7fmZ¥nÅ¥dâÆ"vL}\\x1a¹`K"\\x17aZ\\x9c,R\\x99\\x98\\x9d\\x10OÆ')
+206.168.34.199 - - [21/Jan/2026 10:11:29] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03\x7fmZ¥nÅ¥dâÆ"vL}\x1a¹`K"\x17aZ\x9c,R\x99\x98\x9d\x10OÆ" 400 -
+206.168.34.199 - - [21/Jan/2026 10:11:34] "GET / HTTP/1.1" 404 -
+206.168.34.199 - - [21/Jan/2026 10:11:35] code 505, message Invalid HTTP version (2.0)
+206.168.34.199 - - [21/Jan/2026 10:11:35] "PRI * HTTP/2.0" 505 -
+206.168.34.199 - - [21/Jan/2026 10:12:01] code 400, message Bad request version ('À\\x14À')
+206.168.34.199 - - [21/Jan/2026 10:12:01] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03¦%\x19\x8bN\x0cm\x86b¥\x87­Apßa+\x98\x83<\x94´È#B38e!\x17óé \x89ü«R\x91\x09&\x8aµ|ázïåÉU<S(¡ÅkÊ_\x83²Eh\x87mW¯\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+206.168.34.199 - - [21/Jan/2026 10:12:03] "GET /robots.txt HTTP/1.1" 404 -
+193.32.162.211 - - [21/Jan/2026 10:17:36] code 400, message Bad request version ('À\\x14À')
+193.32.162.211 - - [21/Jan/2026 10:17:36] "\x16\x03\x01\x00{\x01\x00\x00w\x03\x03mÍû\x13­³ä#ú\x0d)\x06Â"äH\x11#S\x15`]æu\x12&÷F®\x12KJ\x00\x00\x1aÀ/À+À\x11À\x07À\x13À\x09À\x14À" 400 -
+205.210.31.15 - - [21/Jan/2026 10:44:37] code 400, message Bad request version ('\\x10')
+205.210.31.15 - - [21/Jan/2026 10:44:37] "\x01!\x01\x01\x01\x01\x01\x01â\x00\x00\x00\x00\x00\x00\x00\x01é\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x08\x09node_data\x0c\x10" 400 -
+210.218.220.84 - - [21/Jan/2026 13:24:05] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 13:25:06] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 13:26:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 13:28:48] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 14:11:46] "POST /tools/call HTTP/1.1" 200 -
+listening: http://0.0.0.0:18080
+210.218.220.84 - - [21/Jan/2026 14:36:11] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 14:47:37] "GET /healthz HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 14:47:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:05:45] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:08:47] error handling /tools/call: Empty FASTA sequence for header: 'tP4H\\\\nMLTPTELKQYREAGYLLIEDGLGPREVDCLRRAAAALYAQDSPDRTLEKDGRTVRAVHGCHRRDPVCRDLVRHPRLLGPAMQILSGDVYVHQFKINAKAPMTGDVWPWHQDYIFWAREDGMDRPHVVNVAVLLDEATHLNGPLLFVPGTHELGLIDVERRAPAGDGDAQWLPQLSADLDYAIDADLLARLTAGRGIESATGPAGSILLFDSRIVHGSGTNMSPHPRGVVLVTYNRTDNALPAQAAPRPEFLAARDATPLVPLPAGFALAQPV\\\\n'
+210.218.220.84 - - [21/Jan/2026 15:08:47] "POST /tools/call HTTP/1.1" 400 -
+210.218.220.84 - - [21/Jan/2026 15:10:57] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:11:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:12:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:13:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:14:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:15:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:16:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:17:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:18:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:19:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:20:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:21:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:22:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:23:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:24:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:25:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:26:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:27:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:28:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:29:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:30:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:31:46] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:32:25] "POST /tools/call HTTP/1.1" 200 -
+172.236.228.38 - - [21/Jan/2026 15:34:33] "GET / HTTP/1.1" 404 -
+210.218.220.84 - - [21/Jan/2026 15:35:19] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:37:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:39:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:41:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:43:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:45:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:47:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:49:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:51:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:53:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:55:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:57:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 15:59:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:01:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:03:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:06:15] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:08:15] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:10:15] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:12:15] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:14:15] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:16:15] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:18:15] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:20:16] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:22:16] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:24:16] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:26:16] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:28:16] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:30:16] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:32:16] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:34:16] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:36:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:38:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:40:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:42:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:44:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:46:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:48:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:50:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:52:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:54:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:56:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 16:58:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:00:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:02:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:04:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:06:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:07:52] error handling /tools/call: MMseqs RunPod job not completed: {'delayTime': 1762359, 'error': 'job timed out after 1 retries', 'executionTime': 1766694, 'id': 'e1de371d-dc74-48bd-ade5-f37af7e2a5cf-e2', 'retries': 1, 'status': 'FAILED', 'workerId': 'pme04vxf8bhy9m'}
+210.218.220.84 - - [21/Jan/2026 17:07:52] "POST /tools/call HTTP/1.1" 400 -
+----------------------------------------
+Exception occurred during processing of request from ('210.218.220.84', 53870)
+Traceback (most recent call last):
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 111, in do_POST
+    out = self.dispatcher.call_tool(name, arguments)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/tools.py", line 414, in call_tool
+    res = _run_with_auto_retry(self.runner, req, run_id=normalized_run_id, retry=retry)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/tools.py", line 211, in _run_with_auto_retry
+    return runner.run(request, run_id=run_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/pipeline.py", line 538, in run
+    msa_tsv_text, a3m_text = self._get_msa(
+                             ^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/pipeline.py", line 1452, in _get_msa
+    out = self.mmseqs.search(
+          ^^^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/clients/mmseqs.py", line 60, in search
+    return self.wait_job(job_id)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/clients/mmseqs.py", line 18, in wait_job
+    raise RuntimeError(f"MMseqs RunPod job not completed: {result}")
+RuntimeError: MMseqs RunPod job not completed: {'delayTime': 1762359, 'error': 'job timed out after 1 retries', 'executionTime': 1766694, 'id': 'e1de371d-dc74-48bd-ade5-f37af7e2a5cf-e2', 'retries': 1, 'status': 'FAILED', 'workerId': 'pme04vxf8bhy9m'}
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 117, in do_POST
+    self._json(400, {"ok": False, "error": str(exc)})
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 30, in _json
+    self.end_headers()
+  File "/usr/lib/python3.12/http/server.py", line 538, in end_headers
+    self.flush_headers()
+  File "/usr/lib/python3.12/http/server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+210.218.220.84 - - [21/Jan/2026 17:08:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:09:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:12:00] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:12:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:13:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:14:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:15:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:16:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:17:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:18:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:19:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:20:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:21:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:22:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:23:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:24:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:25:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:26:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:27:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:28:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:29:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:30:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:31:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:32:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:33:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:34:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:35:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:36:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:37:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:38:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:39:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:40:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:41:22] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:42:36] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:43:01] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:48:01] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:51:55] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:51:55] error handling /tools/call: [Errno 104] Connection reset by peer
+210.218.220.84 - - [21/Jan/2026 17:51:55] "POST /tools/call HTTP/1.1" 400 -
+----------------------------------------
+Exception occurred during processing of request from ('210.218.220.84', 51199)
+Traceback (most recent call last):
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 112, in do_POST
+    self._json(200, {"ok": True, "result": out})
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 30, in _json
+    self.end_headers()
+  File "/usr/lib/python3.12/http/server.py", line 538, in end_headers
+    self.flush_headers()
+  File "/usr/lib/python3.12/http/server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 117, in do_POST
+    self._json(400, {"ok": False, "error": str(exc)})
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 30, in _json
+    self.end_headers()
+  File "/usr/lib/python3.12/http/server.py", line 538, in end_headers
+    self.flush_headers()
+  File "/usr/lib/python3.12/http/server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+BrokenPipeError: [Errno 32] Broken pipe
+----------------------------------------
+210.218.220.84 - - [21/Jan/2026 17:53:01] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:55:55] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:56:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 17:58:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:00:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:02:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:04:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:06:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:08:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:10:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:12:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:14:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:16:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:18:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:20:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:22:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:24:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:26:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:28:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:30:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:32:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:34:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:36:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:38:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:40:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:42:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:44:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:46:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:48:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:50:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:52:20] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:54:21] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 18:57:30] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:02:30] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:02:36] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:02:36] error handling /tools/call: [Errno 104] Connection reset by peer
+210.218.220.84 - - [21/Jan/2026 19:02:36] "POST /tools/call HTTP/1.1" 400 -
+----------------------------------------
+Exception occurred during processing of request from ('210.218.220.84', 58589)
+Traceback (most recent call last):
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 112, in do_POST
+    self._json(200, {"ok": True, "result": out})
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 30, in _json
+    self.end_headers()
+  File "/usr/lib/python3.12/http/server.py", line 538, in end_headers
+    self.flush_headers()
+  File "/usr/lib/python3.12/http/server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 117, in do_POST
+    self._json(400, {"ok": False, "error": str(exc)})
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 30, in _json
+    self.end_headers()
+  File "/usr/lib/python3.12/http/server.py", line 538, in end_headers
+    self.flush_headers()
+  File "/usr/lib/python3.12/http/server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+BrokenPipeError: [Errno 32] Broken pipe
+----------------------------------------
+210.218.220.84 - - [21/Jan/2026 19:07:30] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:09:05] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:10:29] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:12:38] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:12:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:14:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:16:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:18:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:20:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:22:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:24:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:26:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:28:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:30:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:32:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:34:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:36:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:38:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:40:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:42:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:44:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:46:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:48:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:50:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:52:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:54:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:56:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 19:58:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:00:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:02:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:04:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:06:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:08:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:10:53] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:13:33] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:18:33] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:23:33] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:28:33] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:33:34] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:38:34] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:43:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:48:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:53:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 20:58:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 21:03:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 21:08:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 21:13:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 21:18:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 21:23:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 21:28:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 21:33:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 21:38:49] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 21:44:28] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 21:54:28] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 22:04:28] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 22:14:28] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 22:24:29] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 22:34:29] "POST /tools/call HTTP/1.1" 200 -
+147.185.132.73 - - [21/Jan/2026 22:39:22] code 400, message Bad request version ('\\x10')
+147.185.132.73 - - [21/Jan/2026 22:39:22] "\x01!\x01\x01\x01\x01\x01\x01â\x00\x00\x00\x00\x00\x00\x00\x01é\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x08\x09node_data\x0c\x10" 400 -
+210.218.220.84 - - [21/Jan/2026 22:44:29] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 22:54:29] "POST /tools/call HTTP/1.1" 200 -
+199.45.154.136 - - [21/Jan/2026 22:59:48] code 400, message Bad request version ('\\x04')
+199.45.154.136 - - [21/Jan/2026 22:59:48] "\x01!\x01\x01\x01\x01\x01\x013\x00\x00\x00\x00\x00\x00\x00\x01ë\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x04\x09node_data\x0c\x04" 400 -
+----------------------------------------
+Exception occurred during processing of request from ('199.45.154.136', 19960)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 404, in handle_one_request
+    self.raw_requestline = self.rfile.readline(65537)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/socket.py", line 707, in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+199.45.154.136 - - [21/Jan/2026 23:00:00] code 400, message Bad request syntax ('\\x16\\x03\\x01\\x00î\\x01\\x00\\x00ê\\x03\\x03Áâîe7kMÀ\\x8e\\x9e^ïWm\\x140~#!\\x91µ)\\x137\\x8d8!\\x10úÓQ')
+199.45.154.136 - - [21/Jan/2026 23:00:00] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03Áâîe7kMÀ\x8e\x9e^ïWm\x140~#!\x91µ)\x137\x8d8!\x10úÓQ" 400 -
+199.45.154.136 - - [21/Jan/2026 23:00:05] "GET / HTTP/1.1" 404 -
+199.45.154.136 - - [21/Jan/2026 23:00:10] code 400, message Bad request version ('À\\x14À')
+199.45.154.136 - - [21/Jan/2026 23:00:10] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03¨RX^(\x1dÀ\x1cCµ#G\x1a\x90H^À\x14v1\x9a+Ë\x91wvÜþu\x8c5\x8a >Ø;o¤\x14©\x84¤¢ï¶Ý\x89êuU\x96åÖu2YÜa·GìgJE\x13\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+199.45.154.136 - - [21/Jan/2026 23:00:13] "GET / HTTP/1.1" 404 -
+199.45.154.136 - - [21/Jan/2026 23:00:17] code 505, message Invalid HTTP version (2.0)
+199.45.154.136 - - [21/Jan/2026 23:00:17] "PRI * HTTP/2.0" 505 -
+199.45.154.136 - - [21/Jan/2026 23:00:29] code 400, message Bad request version ('À\\x14À')
+199.45.154.136 - - [21/Jan/2026 23:00:29] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03?P\x85´Ä#\x99ÅàòìJ\x19\x83\x98´¦­}V ñ(v\x06@[ìû@¶á Á(â\x8a/C¶²\x93C\x85ê&\x9c\x12µ\x85\x97ÛB{TL·P#º7P\x89ý\x8a\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+199.45.154.136 - - [21/Jan/2026 23:00:30] "GET /sitemap.xml HTTP/1.1" 404 -
+210.218.220.84 - - [21/Jan/2026 23:04:29] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 23:07:35] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 23:07:35] error handling /tools/call: [Errno 104] Connection reset by peer
+210.218.220.84 - - [21/Jan/2026 23:07:35] "POST /tools/call HTTP/1.1" 400 -
+----------------------------------------
+Exception occurred during processing of request from ('210.218.220.84', 50518)
+Traceback (most recent call last):
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 112, in do_POST
+    self._json(200, {"ok": True, "result": out})
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 30, in _json
+    self.end_headers()
+  File "/usr/lib/python3.12/http/server.py", line 538, in end_headers
+    self.flush_headers()
+  File "/usr/lib/python3.12/http/server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+ConnectionResetError: [Errno 104] Connection reset by peer
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 424, in handle_one_request
+    method()
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 117, in do_POST
+    self._json(400, {"ok": False, "error": str(exc)})
+  File "/opt/protein_pipeline/pipeline-mcp/src/pipeline_mcp/http_server.py", line 30, in _json
+    self.end_headers()
+  File "/usr/lib/python3.12/http/server.py", line 538, in end_headers
+    self.flush_headers()
+  File "/usr/lib/python3.12/http/server.py", line 542, in flush_headers
+    self.wfile.write(b"".join(self._headers_buffer))
+  File "/usr/lib/python3.12/socketserver.py", line 840, in write
+    self._sock.sendall(b)
+BrokenPipeError: [Errno 32] Broken pipe
+----------------------------------------
+210.218.220.84 - - [21/Jan/2026 23:14:29] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [21/Jan/2026 23:15:11] "POST /tools/call HTTP/1.1" 200 -
+212.73.148.27 - - [22/Jan/2026 11:48:57] "GET / HTTP/1.1" 404 -
+66.132.159.249 - - [22/Jan/2026 12:04:57] code 400, message Bad request version ('\\x04')
+66.132.159.249 - - [22/Jan/2026 12:04:57] "\x01!\x01\x01\x01\x01\x01\x013\x00\x00\x00\x00\x00\x00\x00\x01ë\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x04\x09node_data\x0c\x04" 400 -
+----------------------------------------
+Exception occurred during processing of request from ('66.132.159.249', 64148)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 404, in handle_one_request
+    self.raw_requestline = self.rfile.readline(65537)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/socket.py", line 707, in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+66.132.159.249 - - [22/Jan/2026 12:05:03] code 400, message Bad request version ('À\\x14À')
+66.132.159.249 - - [22/Jan/2026 12:05:03] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03\x90$Ìüõf\\\x02>¿ú\x0es¿Í\x16é{\x10Á(\\Iî%\x06ÏïñªëÉ \x8e@d\x8e 4¼\x16\x88½út\x16©-tÍ\x93\x14\x9b@æï¾\x12\x07mÉ>ØÀ«\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+66.132.159.249 - - [22/Jan/2026 12:05:06] "GET / HTTP/1.1" 404 -
+66.132.159.249 - - [22/Jan/2026 12:05:10] code 400, message Bad request version ('À\\x14À')
+66.132.159.249 - - [22/Jan/2026 12:05:10] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03ÌN®\x11nç\x910¶\x0fr´_\x8b\x1b4\x9c8A\x0d\x9b1}¦\x07æ\x91¡¶xÞß g\x90k\x00ÍíN!\x01tþ3ÏMÝ³òÄÑóÃ/ÿe¶\x8d\x0cÍþn\x17j\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+66.132.159.249 - - [22/Jan/2026 12:05:10] "GET / HTTP/1.1" 404 -
+66.132.159.249 - - [22/Jan/2026 12:05:11] code 505, message Invalid HTTP version (2.0)
+66.132.159.249 - - [22/Jan/2026 12:05:11] "PRI * HTTP/2.0" 505 -
+66.132.159.249 - - [22/Jan/2026 12:05:14] code 400, message Bad request syntax ('\\x16\\x03\\x01\\x00î\\x01\\x00\\x00ê\\x03\\x03cûØ\\x84.\\x19äº;\\x01RaI\\x94óO')
+66.132.159.249 - - [22/Jan/2026 12:05:14] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03cûØ\x84.\x19äº;\x01RaI\x94óO" 400 -
+66.132.159.249 - - [22/Jan/2026 12:05:14] "GET /.well-known/security.txt HTTP/1.1" 404 -
+20.51.244.147 - - [22/Jan/2026 12:31:34] code 400, message Bad request syntax ('MGLNDD_211.188.62.53_18080')
+20.51.244.147 - - [22/Jan/2026 12:31:34] "MGLNDD_211.188.62.53_18080" 400 -
+210.218.220.84 - - [22/Jan/2026 13:42:42] "GET /healthz HTTP/1.1" 200 -
+210.218.220.84 - - [22/Jan/2026 13:42:51] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [22/Jan/2026 13:47:01] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [22/Jan/2026 13:51:59] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [22/Jan/2026 13:52:52] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [22/Jan/2026 13:54:38] "POST /tools/call HTTP/1.1" 200 -
+listening: http://0.0.0.0:18080
+210.218.220.84 - - [22/Jan/2026 15:46:50] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [22/Jan/2026 15:49:42] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [22/Jan/2026 15:49:59] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [22/Jan/2026 15:50:48] "POST /tools/call HTTP/1.1" 200 -
+listening: http://0.0.0.0:18080
+210.218.220.84 - - [22/Jan/2026 16:30:47] "POST /tools/call HTTP/1.1" 200 -
+210.218.220.84 - - [22/Jan/2026 16:43:32] "POST /tools/call HTTP/1.1" 200 -
+205.210.31.175 - - [22/Jan/2026 22:37:09] code 400, message Bad request version ('\\x10')
+205.210.31.175 - - [22/Jan/2026 22:37:09] "\x01!\x01\x01\x01\x01\x01\x01â\x00\x00\x00\x00\x00\x00\x00\x01é\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x08\x09node_data\x0c\x10" 400 -
+167.94.138.196 - - [23/Jan/2026 00:03:13] code 400, message Bad request version ('À\\x14À')
+167.94.138.196 - - [23/Jan/2026 00:03:13] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03,\x13Ð¶k\x8f\x11Saý\x17&\x02jè2Ùå,\x167¸_\x81é{&\x7f\x91¹pË Q¥\x92}Í\x14ghøýGñZ\x15]JØ\x15\x81\x1f\x1b@"3ìà\x1b\x0d+\x01¦\x01\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+167.94.138.196 - - [23/Jan/2026 00:03:15] "GET / HTTP/1.1" 404 -
+167.94.138.196 - - [23/Jan/2026 00:03:17] code 505, message Invalid HTTP version (2.0)
+167.94.138.196 - - [23/Jan/2026 00:03:17] "PRI * HTTP/2.0" 505 -
+167.94.138.196 - - [23/Jan/2026 00:04:06] code 400, message Bad request version ('À\\x14À')
+167.94.138.196 - - [23/Jan/2026 00:04:06] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03Ò¥ë8&2¯b .Vve¾v\x0c\x19\x0c\x14\x94+Ê§lTpròàèG«  º~`\x15Þ\x9b\x85h\x09\x0bz\x0ccäg\x08\x1belë¸]\x94ª\x8fÆJ\x86¦ !\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+167.94.138.196 - - [23/Jan/2026 00:04:10] "GET /login HTTP/1.1" 404 -
+66.132.159.241 - - [23/Jan/2026 00:54:09] code 400, message Bad request version ('\\x04')
+66.132.159.241 - - [23/Jan/2026 00:54:09] "\x01!\x01\x01\x01\x01\x01\x013\x00\x00\x00\x00\x00\x00\x00\x01ë\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x04\x09node_data\x0c\x04" 400 -
+----------------------------------------
+Exception occurred during processing of request from ('66.132.159.241', 34976)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 404, in handle_one_request
+    self.raw_requestline = self.rfile.readline(65537)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/socket.py", line 707, in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+66.132.159.241 - - [23/Jan/2026 00:54:16] code 400, message Bad request syntax ('\\x16\\x03\\x01\\x00î\\x01\\x00\\x00ê\\x03\\x03Ç}\\x1a0Ú?\\x80ð\\x92õU·õâ\\x82\\x9e³ür9¬¨`I(÷"')
+66.132.159.241 - - [23/Jan/2026 00:54:16] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03Ç}\x1a0Ú?\x80ð\x92õU·õâ\x82\x9e³ür9¬¨`I(÷"" 400 -
+66.132.159.241 - - [23/Jan/2026 00:54:19] "GET / HTTP/1.1" 404 -
+66.132.159.241 - - [23/Jan/2026 00:54:23] code 400, message Bad request version ('À\\x14À')
+66.132.159.241 - - [23/Jan/2026 00:54:23] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03«\x0dÝÖr«\x13ìñ¬X\x87ùc\x9f/n\x01*\x0d\x8aÖ\x08óá\x87\\\x88Õ\x83;\x19 \x19À\x9c\x9dÉB\x9d¶¬·ü\x04\x11©¾\x90îMý\x98@Ï\x0dt¥\x0ct'\x1aæ\x19ü\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+66.132.159.241 - - [23/Jan/2026 00:54:23] "GET / HTTP/1.1" 404 -
+66.132.159.241 - - [23/Jan/2026 00:54:23] code 505, message Invalid HTTP version (2.0)
+66.132.159.241 - - [23/Jan/2026 00:54:23] "PRI * HTTP/2.0" 505 -
+66.132.159.241 - - [23/Jan/2026 00:54:27] code 400, message Bad request version ('À\\x14À')
+66.132.159.241 - - [23/Jan/2026 00:54:27] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03\x1e[kKo\x97/éeAù\x01tÚp\x01[\x83¤g²åZ¾z ûJÜ\x93®\\ Ä>í!\x11\x130;\x82ï\x9awL±2\x87P¡\x12Ý\x83)"©Ñ¶|<$\x8f\x06\x19\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+66.132.159.241 - - [23/Jan/2026 00:54:27] "GET /wiki HTTP/1.1" 404 -
+135.237.122.155 - - [23/Jan/2026 10:04:58] code 400, message Bad request syntax ('MGLNDD_211.188.62.53_18080')
+135.237.122.155 - - [23/Jan/2026 10:04:58] "MGLNDD_211.188.62.53_18080" 400 -
+198.235.24.27 - - [23/Jan/2026 22:43:04] code 400, message Bad request version ('\\x10')
+198.235.24.27 - - [23/Jan/2026 22:43:04] "\x01!\x01\x01\x01\x01\x01\x01â\x00\x00\x00\x00\x00\x00\x00\x01é\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x08\x09node_data\x0c\x10" 400 -
+91.231.89.139 - - [24/Jan/2026 00:07:58] code 400, message Bad request version ('À#À¬À®À+À')
+91.231.89.139 - - [24/Jan/2026 00:07:58] "\x16\x03\x03\x01¦\x01\x00\x01¢\x03\x03Íª.\x80\x01Ü®­\x96"(\x13\x8e*\x98\x90ÿ\x88ª\x84"ßp¿\x12\x0e\x1f©F£¹e \x9d\x9f\x0d*,î02 Ø<qóÜ1>à("·Q¤\x0d\x01\x14®Ô\x07ó\x9fÃº\x00\x8a\x00\x16\x003\x00gÀ\x9eÀ¢\x00\x9e\x009\x00kÀ\x9fÀ£\x00\x9f\x00E\x00¾\x00\x88\x00Ä\x00\x9aÀ\x08À\x09À#À¬À®À+À" 400 -
+91.231.89.142 - - [24/Jan/2026 00:08:01] "GET / HTTP/1.1" 404 -
+91.231.89.208 - - [24/Jan/2026 00:10:24] "GET /favicon.ico HTTP/1.1" 404 -
+167.94.138.49 - - [24/Jan/2026 00:25:47] code 400, message Bad request version ('\\x04')
+167.94.138.49 - - [24/Jan/2026 00:25:47] "\x01!\x01\x01\x01\x01\x01\x013\x00\x00\x00\x00\x00\x00\x00\x01ë\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x04\x09node_data\x0c\x04" 400 -
+167.94.138.49 - - [24/Jan/2026 00:25:55] code 400, message Bad request version ('À\\x14À')
+167.94.138.49 - - [24/Jan/2026 00:25:55] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03*ÉÀ\x10§ú¬\x1a®\x89\x97ÄâaÓQ,7ýµÓÖõ3%\x9fX\x8c\x96\x0c^Ç ô\x0dØ%Qÿ\x17±ª\x80Ï3ãµ¹\x08$_í¹ÊåÚ\x02á\x96ÀhS8°ª\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+167.94.138.49 - - [24/Jan/2026 00:26:00] "GET / HTTP/1.1" 404 -
+167.94.138.49 - - [24/Jan/2026 00:26:07] code 400, message Bad request version ('À\\x14À')
+167.94.138.49 - - [24/Jan/2026 00:26:07] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03\x94*T_TüÉWØ\\EÜ \x85\x94\x87=ý\x9föÌ#×¢ijYG\x838\x96$ Æ\x97\x100x3:ÏÆR\x14ø\x09Önú,1É\x19óÌSS¿º\x04v\x86\x0dìx\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+167.94.138.49 - - [24/Jan/2026 00:26:12] "GET / HTTP/1.1" 404 -
+167.94.138.49 - - [24/Jan/2026 00:26:15] code 505, message Invalid HTTP version (2.0)
+167.94.138.49 - - [24/Jan/2026 00:26:15] "PRI * HTTP/2.0" 505 -
+167.94.138.49 - - [24/Jan/2026 00:26:23] code 400, message Bad request version ('\\x92CE\\x92éáP@[á5ûyQÇ!Èp')
+167.94.138.49 - - [24/Jan/2026 00:26:23] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03ÐlW9\x19\x86\x96Ü«\x1dê«j \x11£4\x01ç¼vè2\x05î\x8bÙ\x9f­ÁØ/ \x92CE\x92éáP@[á5ûyQÇ!Èp" 400 -
+167.94.138.49 - - [24/Jan/2026 00:26:25] "GET /robots.txt HTTP/1.1" 404 -
+162.142.125.119 - - [24/Jan/2026 00:57:40] code 400, message Bad request version ('À\\x14À')
+162.142.125.119 - - [24/Jan/2026 00:57:40] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03[¥ãL\x99#\x8d\x15û\x86RT\x89\x8aÄ\x9b\x15ÿõ³\x89\x1cäÖ×-\x9b6¹´Á¯ \x05n¶·#h·GÒ´\x18}=«/\x1eZÞ\x04jü\x04\x82ì`H8\x0eºÈª\x85\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+162.142.125.119 - - [24/Jan/2026 00:57:44] "GET / HTTP/1.1" 404 -
+162.142.125.119 - - [24/Jan/2026 00:57:47] code 505, message Invalid HTTP version (2.0)
+162.142.125.119 - - [24/Jan/2026 00:57:47] "PRI * HTTP/2.0" 505 -
+162.142.125.119 - - [24/Jan/2026 01:02:37] code 400, message Bad request syntax ('\\x16\\x03\\x01\\x00î\\x01\\x00\\x00ê\\x03\\x03N¹z8!pû§q\\x9f¡çhÌ±^8KÌ<[1µ\\xad`¾')
+162.142.125.119 - - [24/Jan/2026 01:02:37] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03N¹z8!pû§q\x9f¡çhÌ±^8KÌ<[1µ­`¾" 400 -
+162.142.125.119 - - [24/Jan/2026 01:02:38] "GET /.well-known/security.txt HTTP/1.1" 404 -
+185.247.137.136 - - [24/Jan/2026 04:41:33] code 400, message Bad request syntax ('\\x01!\\x01\\x01\\x01\\x01\\x01\\x01')
+185.247.137.136 - - [24/Jan/2026 04:41:33] "\x01!\x01\x01\x01\x01\x01\x01" 400 -
+185.247.137.122 - - [24/Jan/2026 04:41:48] "GET / HTTP/1.1" 404 -
+205.210.31.219 - - [24/Jan/2026 10:36:33] code 400, message Bad request version ('\\x10')
+205.210.31.219 - - [24/Jan/2026 10:36:33] "\x01!\x01\x01\x01\x01\x01\x01â\x00\x00\x00\x00\x00\x00\x00\x01é\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x08\x09node_data\x0c\x10" 400 -
+205.210.31.253 - - [24/Jan/2026 11:06:29] code 400, message Bad request version ('\\x10')
+205.210.31.253 - - [24/Jan/2026 11:06:29] "\x01!\x01\x01\x01\x01\x01\x01â\x00\x00\x00\x00\x00\x00\x00\x01é\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x08\x09node_data\x0c\x10" 400 -
+172.236.228.245 - - [24/Jan/2026 13:43:14] code 400, message Bad request syntax ('\\x16\\x03\\x01\\x01')
+172.236.228.245 - - [24/Jan/2026 13:43:14] "\x16\x03\x01\x01" 400 -
+172.236.228.245 - - [24/Jan/2026 13:43:14] code 400, message Bad request syntax ('\\x16\\x03\\x01\\x01')
+172.236.228.245 - - [24/Jan/2026 13:43:14] "\x16\x03\x01\x01" 400 -
+----------------------------------------
+Exception occurred during processing of request from ('45.79.207.111', 56606)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 404, in handle_one_request
+    self.raw_requestline = self.rfile.readline(65537)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/socket.py", line 707, in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+45.79.207.111 - - [24/Jan/2026 14:32:50] "GET / HTTP/1.1" 404 -
+45.79.181.251 - - [24/Jan/2026 14:33:03] "GET / HTTP/1.1" 404 -
+167.94.138.195 - - [25/Jan/2026 02:00:14] code 400, message Bad request syntax ("\\x16\\x03\\x01\\x00î\\x01\\x00\\x00ê\\x03\\x03\\x0f/\\x12S\\x1búµÃ¼'¼ÖÏJv(")
+167.94.138.195 - - [25/Jan/2026 02:00:14] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03\x0f/\x12S\x1búµÃ¼'¼ÖÏJv(" 400 -
+167.94.138.195 - - [25/Jan/2026 02:00:16] "GET / HTTP/1.1" 404 -
+167.94.138.195 - - [25/Jan/2026 02:00:19] code 505, message Invalid HTTP version (2.0)
+167.94.138.195 - - [25/Jan/2026 02:00:19] "PRI * HTTP/2.0" 505 -
+167.94.138.195 - - [25/Jan/2026 02:00:30] code 400, message Bad request version ('À\\x14À')
+167.94.138.195 - - [25/Jan/2026 02:00:30] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03òm\x15ÎK0\x1b\x86»\x93Lè\x9axÒ\x1cT\x10\x12\x09k\x91\x0fA\x8c\x82\x0fq\x89o\x12þ UcÌ0G\x94D·í\x91\x00K|ÝÂûê³Ïþ\x9f\x09D\x9a3(\x92wv\x836¼\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+167.94.138.195 - - [25/Jan/2026 02:00:32] "GET /sitemap.xml HTTP/1.1" 404 -
+35.203.210.93 - - [25/Jan/2026 05:58:36] code 400, message Bad request version ('À\\x13À')
+35.203.210.93 - - [25/Jan/2026 05:58:36] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x030Ç,:Æü\x1aï\x7f·º\x95ÂshÖú\x98ÓZV­"ãoÊù\x83\x098ôk  úçÏ>sCó½\x07\x99Gq{\x9aîce\x04½êËÿ©\x9c¼\x18çbFm?\x00&À+À/À,À0Ì©Ì¨À\x09À\x13À" 400 -
+35.203.210.93 - - [25/Jan/2026 05:58:37] code 400, message Bad HTTP/0.9 request type ("\\x16\\x03\\x01\\x00Ê\\x01\\x00\\x00Æ\\x03\\x03½\\x97\\x92ìóÕÞ¥{\\x18TXµ´çê-\\x19«â¦Ñ.ó£þ%mo\\x11\\x9b´\\x00\\x00hÌ\\x14Ì\\x13À/À+À0À,À\\x11À\\x07À'À#À\\x13À")
+35.203.210.93 - - [25/Jan/2026 05:58:37] "\x16\x03\x01\x00Ê\x01\x00\x00Æ\x03\x03½\x97\x92ìóÕÞ¥{\x18TXµ´çê-\x19«â¦Ñ.ó£þ%mo\x11\x9b´\x00\x00hÌ\x14Ì\x13À/À+À0À,À\x11À\x07À'À#À\x13À\x09À(À$À\x14À" 400 -
+167.99.118.13 - - [25/Jan/2026 09:18:58] "GET / HTTP/1.1" 404 -
+205.210.31.30 - - [25/Jan/2026 10:43:30] code 400, message Bad request version ('\\x10')
+205.210.31.30 - - [25/Jan/2026 10:43:30] "\x01!\x01\x01\x01\x01\x01\x01â\x00\x00\x00\x00\x00\x00\x00\x01é\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x08\x09node_data\x0c\x10" 400 -
+198.235.24.199 - - [25/Jan/2026 11:30:17] "GET / HTTP/1.1" 404 -
+172.236.228.111 - - [25/Jan/2026 13:45:58] code 400, message Bad request syntax ('\\x16\\x03\\x01\\x01')
+172.236.228.111 - - [25/Jan/2026 13:45:58] "\x16\x03\x01\x01" 400 -
+172.236.228.111 - - [25/Jan/2026 13:46:01] code 400, message Bad request syntax ('\\x16\\x03\\x01\\x01')
+172.236.228.111 - - [25/Jan/2026 13:46:01] "\x16\x03\x01\x01" 400 -
+147.185.132.222 - - [25/Jan/2026 22:43:04] code 400, message Bad request version ('\\x10')
+147.185.132.222 - - [25/Jan/2026 22:43:04] "\x01!\x01\x01\x01\x01\x01\x01â\x00\x00\x00\x00\x00\x00\x00\x01é\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x08\x09node_data\x0c\x10" 400 -
+85.217.140.17 - - [26/Jan/2026 00:58:00] "GET / HTTP/1.1" 404 -
+66.132.153.128 - - [26/Jan/2026 03:01:40] code 400, message Bad request version ('À\\x14À')
+66.132.153.128 - - [26/Jan/2026 03:01:40] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03)ÑZãhG4®±bJ\x15'¬ÆÄÿlpRµ+\x9a±\x16:ø¼öÐ\x8b\x89 \x0fO£ç¼¯ý¦\x1e6$H_ë\x06ASVý\x82Õa\x98ºo-^\x850´\x87\x80\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+66.132.153.128 - - [26/Jan/2026 03:01:40] "GET / HTTP/1.1" 404 -
+66.132.153.128 - - [26/Jan/2026 03:01:41] code 505, message Invalid HTTP version (2.0)
+66.132.153.128 - - [26/Jan/2026 03:01:41] "PRI * HTTP/2.0" 505 -
+66.132.153.128 - - [26/Jan/2026 03:01:53] code 400, message Bad request version ('À\\x14À')
+66.132.153.128 - - [26/Jan/2026 03:01:53] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03\x90{³\x0dw÷å¬é\x0d\x84æ\x07³ÿq\x87\x91(\x188\x08fÁ\x8dÝ\x13\x0eÐ\x93\x8e) jÌ{\x1eâ\x14×\x80\x94ÓrÉ|3\x1aÃDÅ\x0e[Ñ*I\x17ki(+d\x82\x12 \x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+66.132.153.128 - - [26/Jan/2026 03:01:54] "GET /security.txt HTTP/1.1" 404 -
+listening: http://0.0.0.0:18080
+127.0.0.1 - - [26/Jan/2026 11:26:50] "GET /healthz HTTP/1.1" 200 -
+127.0.0.1 - - [26/Jan/2026 11:27:20] "POST /tools/call HTTP/1.1" 200 -
+150.183.19.77 - - [26/Jan/2026 13:04:02] "GET / HTTP/1.1" 404 -
+150.183.19.77 - - [26/Jan/2026 13:04:02] "GET /favicon.ico HTTP/1.1" 404 -
+150.183.19.77 - - [26/Jan/2026 13:04:09] "GET /tool. HTTP/1.1" 404 -
+150.183.19.77 - - [26/Jan/2026 13:04:11] "GET /tools HTTP/1.1" 404 -
+150.183.19.77 - - [26/Jan/2026 13:04:14] "GET /tools/call HTTP/1.1" 404 -
+150.183.19.77 - - [26/Jan/2026 13:06:56] "GET / HTTP/1.1" 404 -
+88.214.25.124 - - [26/Jan/2026 15:35:20] code 400, message Bad HTTP/0.9 request type ('\\x03\\x00\\x00/*à\\x00\\x00\\x00\\x00\\x00Cookie:')
+88.214.25.124 - - [26/Jan/2026 15:35:20] "\x03\x00\x00/*à\x00\x00\x00\x00\x00Cookie: mstshash=Administr" 400 -
+198.235.24.114 - - [26/Jan/2026 17:30:22] "GET / HTTP/1.1" 404 -
+66.132.159.253 - - [26/Jan/2026 17:42:05] code 400, message Bad request version ('\\x04')
+66.132.159.253 - - [26/Jan/2026 17:42:05] "\x01!\x01\x01\x01\x01\x01\x013\x00\x00\x00\x00\x00\x00\x00\x01ë\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x04\x09node_data\x0c\x04" 400 -
+----------------------------------------
+Exception occurred during processing of request from ('66.132.159.253', 38398)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 404, in handle_one_request
+    self.raw_requestline = self.rfile.readline(65537)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/socket.py", line 707, in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+66.132.159.253 - - [26/Jan/2026 17:42:12] code 400, message Bad request syntax ('\\x16\\x03\\x01\\x00î\\x01\\x00\\x00ê\\x03\\x03«¿\\x10sv\\x97Ê')
+66.132.159.253 - - [26/Jan/2026 17:42:12] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03«¿\x10sv\x97Ê" 400 -
+66.132.159.253 - - [26/Jan/2026 17:42:15] "GET / HTTP/1.1" 404 -
+66.132.159.253 - - [26/Jan/2026 17:42:18] code 400, message Bad request version ('smù\\x9dð\\x95ìkÁq¡Ã®¼A')
+66.132.159.253 - - [26/Jan/2026 17:42:18] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03c\x8fý\x9e\x03ÂW_#\x96e\x00¦(Ð*#\x8b¢.\x0fHáÆ×õ\x187V\x99"ª Ï\x09smù\x9dð\x95ìkÁq¡Ã®¼A" 400 -
+66.132.159.253 - - [26/Jan/2026 17:42:19] "GET / HTTP/1.1" 404 -
+66.132.159.253 - - [26/Jan/2026 17:42:19] code 505, message Invalid HTTP version (2.0)
+66.132.159.253 - - [26/Jan/2026 17:42:19] "PRI * HTTP/2.0" 505 -
+66.132.159.253 - - [26/Jan/2026 17:42:22] code 400, message Bad request version ('À\\x14À')
+66.132.159.253 - - [26/Jan/2026 17:42:22] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03µf\x82X=\x01Pß2ä7\x0b3\x92n \x98tô\x04\x06g\x02q\x87ÓM\x19gg!â y\x14l¿§5+¤â(\x8d]7¸\x9fåÄ\x8bzó§`0Í/\x9fÜIS÷\x99Î\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+66.132.159.253 - - [26/Jan/2026 17:42:23] "GET /robots.txt HTTP/1.1" 404 -
+162.142.125.37 - - [27/Jan/2026 04:12:13] code 400, message Bad request version ('À\\x14À')
+162.142.125.37 - - [27/Jan/2026 04:12:13] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03S³g*%<\x8c\x7f¶ê\x85t\x95ú\x83©\x12c\x1dc1qaÙ\x09N\x8a§<\x92'  å^ÊãZl\x88-\x13Æ\x09\x0b5ø"o\x80\x11n$ÎE\x0f'\x89\x15?ºÛ6\x81\x97\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+162.142.125.37 - - [27/Jan/2026 04:12:16] "GET / HTTP/1.1" 404 -
+162.142.125.37 - - [27/Jan/2026 04:12:19] code 505, message Invalid HTTP version (2.0)
+162.142.125.37 - - [27/Jan/2026 04:12:19] "PRI * HTTP/2.0" 505 -
+162.142.125.37 - - [27/Jan/2026 04:12:34] code 400, message Bad request version ('À\\x14À')
+162.142.125.37 - - [27/Jan/2026 04:12:34] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03Éð\x86w¶\x1e¹ïúõ\x13\x03Úÿ²îW\x1aP\x894g\x05\x95\x8cã³ÙÖ@EÛ \x14t\x1c\x10®n \x9a{\x88^ëCH{\x10×U3$|·¿Ò#]ôÈ1\x17Â\x1e\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+162.142.125.37 - - [27/Jan/2026 04:12:38] "GET /.well-known/security.txt HTTP/1.1" 404 -
+18.236.210.228 - - [27/Jan/2026 09:23:00] "GET / HTTP/1.1" 404 -
+185.247.137.52 - - [27/Jan/2026 09:28:45] code 400, message Bad request syntax ('\\x01!\\x01\\x01\\x01\\x01\\x01\\x01')
+185.247.137.52 - - [27/Jan/2026 09:28:45] "\x01!\x01\x01\x01\x01\x01\x01" 400 -
+87.236.176.45 - - [27/Jan/2026 09:29:00] "GET / HTTP/1.1" 404 -
+205.210.31.6 - - [27/Jan/2026 10:40:47] code 400, message Bad request version ('\\x10')
+205.210.31.6 - - [27/Jan/2026 10:40:47] "\x01!\x01\x01\x01\x01\x01\x01â\x00\x00\x00\x00\x00\x00\x00\x01é\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x08\x09node_data\x0c\x10" 400 -
+162.142.125.39 - - [27/Jan/2026 19:35:50] code 400, message Bad request version ('\\x04')
+162.142.125.39 - - [27/Jan/2026 19:35:50] "\x01!\x01\x01\x01\x01\x01\x013\x00\x00\x00\x00\x00\x00\x00\x01ë\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x04\x09node_data\x0c\x04" 400 -
+----------------------------------------
+Exception occurred during processing of request from ('162.142.125.39', 31040)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 404, in handle_one_request
+    self.raw_requestline = self.rfile.readline(65537)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/socket.py", line 707, in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+162.142.125.39 - - [27/Jan/2026 19:36:05] "GET / HTTP/1.1" 404 -
+162.142.125.39 - - [27/Jan/2026 19:36:16] code 400, message Bad request version ('À\\x14À')
+162.142.125.39 - - [27/Jan/2026 19:36:16] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03ä°¹\x11\x0f*\x921\x8dplö\x1c\x05@ðcÓywq\x8f3\x8d{æ\x18,öÞ\x1aþ ;èhÖ\x8cZÖ°W\x92\x18ty#;hÜ\x13\x87þÍ\x84%/ë\x16¢\x83½{æC\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+162.142.125.39 - - [27/Jan/2026 19:36:20] "GET / HTTP/1.1" 404 -
+162.142.125.39 - - [27/Jan/2026 19:36:23] code 505, message Invalid HTTP version (2.0)
+162.142.125.39 - - [27/Jan/2026 19:36:23] "PRI * HTTP/2.0" 505 -
+162.142.125.39 - - [27/Jan/2026 19:36:54] "GET /robots.txt HTTP/1.1" 404 -
+141.11.213.161 - - [27/Jan/2026 19:53:57] "GET / HTTP/1.1" 404 -
+205.210.31.75 - - [27/Jan/2026 22:38:31] code 400, message Bad request version ('\\x10')
+205.210.31.75 - - [27/Jan/2026 22:38:31] "\x01!\x01\x01\x01\x01\x01\x01â\x00\x00\x00\x00\x00\x00\x00\x01é\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x08\x09node_data\x0c\x10" 400 -
+66.132.159.245 - - [27/Jan/2026 23:40:01] code 400, message Bad request version ('\\x04')
+66.132.159.245 - - [27/Jan/2026 23:40:01] "\x01!\x01\x01\x01\x01\x01\x013\x00\x00\x00\x00\x00\x00\x00\x01ë\x03\x00\x00\x00\x00\x00\x00\x01\x00\x00\x00\x01\x00\x00\x00\x01\x11\x01\x01\x01\x01\x02\x01\x01\x04\x09node_data\x0c\x04" 400 -
+----------------------------------------
+Exception occurred during processing of request from ('66.132.159.245', 34962)
+Traceback (most recent call last):
+  File "/usr/lib/python3.12/socketserver.py", line 692, in process_request_thread
+    self.finish_request(request, client_address)
+  File "/usr/lib/python3.12/socketserver.py", line 362, in finish_request
+    self.RequestHandlerClass(request, client_address, self)
+  File "/usr/lib/python3.12/socketserver.py", line 761, in __init__
+    self.handle()
+  File "/usr/lib/python3.12/http/server.py", line 436, in handle
+    self.handle_one_request()
+  File "/usr/lib/python3.12/http/server.py", line 404, in handle_one_request
+    self.raw_requestline = self.rfile.readline(65537)
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/socket.py", line 707, in readinto
+    return self._sock.recv_into(b)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+ConnectionResetError: [Errno 104] Connection reset by peer
+----------------------------------------
+66.132.159.245 - - [27/Jan/2026 23:40:07] code 400, message Bad request version ('À\\x14À')
+66.132.159.245 - - [27/Jan/2026 23:40:07] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03àx\x1d¬½·õ¶«u3fã¢´vHÿ\x07ô!¹J]\x8d¤I¤N\x8am= \x80`¬'vÖU¼lZ\x125`érð\x95ÚÒy¯IÝ\x01!w°4\x9bÄâ?\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+66.132.159.245 - - [27/Jan/2026 23:40:11] "GET / HTTP/1.1" 404 -
+66.132.159.245 - - [27/Jan/2026 23:40:14] code 400, message Bad request version ('À\\x14À')
+66.132.159.245 - - [27/Jan/2026 23:40:14] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03\x827\x15Xw1µ; Å\x9c#·'¼ð\x98çùÀéô\x07Ñè\x88À?Õ-\x90\x04 QÿÔò\x8b.ºy­ÿ#\x174)\x10\x8f¡|º\x16i7Uw\x12\x05ä\x02\x8c\x9aj­\x00&Ì¨Ì©À/À0À+À,À\x13À\x09À\x14À" 400 -
+66.132.159.245 - - [27/Jan/2026 23:40:14] "GET / HTTP/1.1" 404 -
+66.132.159.245 - - [27/Jan/2026 23:40:15] code 505, message Invalid HTTP version (2.0)
+66.132.159.245 - - [27/Jan/2026 23:40:15] "PRI * HTTP/2.0" 505 -
+66.132.159.245 - - [27/Jan/2026 23:40:18] code 400, message Bad HTTP/0.9 request type ('\\x16\\x03\\x01\\x00î\\x01\\x00\\x00ê\\x03\\x03=É)C\\x84j\\x89Uñë\\x17M')
+66.132.159.245 - - [27/Jan/2026 23:40:18] "\x16\x03\x01\x00î\x01\x00\x00ê\x03\x03=É)C\x84j\x89Uñë\x17M WÅ\x06'\x153ù§ù\x9dAñ" 400 -
+66.132.159.245 - - [27/Jan/2026 23:40:18] "GET /security.txt HTTP/1.1" 404 -
+45.142.154.89 - - [28/Jan/2026 05:26:47] "GET / HTTP/1.1" 404 -
+45.142.154.89 - - [28/Jan/2026 05:26:48] "GET / HTTP/1.1" 404 -
+45.142.154.89 - - [28/Jan/2026 05:26:48] "GET /favicon.ico HTTP/1.1" 404 -

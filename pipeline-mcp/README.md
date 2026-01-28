@@ -89,7 +89,7 @@ docker run --rm -p 8000:8000 \
 
 기본 필터:
 - SoluProt: `soluprot_cutoff=0.5`
-- AlphaFold2: `af2_plddt_cutoff=85`, `af2_top_k=20`
+- AlphaFold2: `af2_plddt_cutoff=85`, `af2_rmsd_cutoff=2.0`, `af2_top_k=20`
 
 ## 알고리즘(보존도/ligand-mask/fixed_positions)
 
@@ -206,7 +206,7 @@ jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta --rawfile pdb ./targ
 ### 4) af2까지
 ```bash
 jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta --rawfile pdb ./target.pdb \
-  '{name:"pipeline.run", arguments:{run_id:$run_id, target_fasta:$fasta, target_pdb:$pdb, stop_after:"af2", af2_plddt_cutoff:85, af2_top_k:20}}' \
+  '{name:"pipeline.run", arguments:{run_id:$run_id, target_fasta:$fasta, target_pdb:$pdb, stop_after:"af2", af2_plddt_cutoff:85, af2_rmsd_cutoff:2.0, af2_top_k:20}}' \
 | curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' -d @- | jq .
 ```
 
