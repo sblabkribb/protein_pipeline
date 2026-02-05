@@ -38,6 +38,8 @@ class RFD3RunPodClient:
         payload["select_index"] = int(select_index)
         if max_return_designs is not None:
             payload["max_return_designs"] = int(max_return_designs)
+        payload["return_pdb"] = True
+        payload["return_selected_json"] = False
 
         _, result = self.runpod.run_and_wait_with_job_id(self.endpoint_id, payload, on_job_id=on_job_id)
         if result.get("status") != "COMPLETED":
