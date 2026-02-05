@@ -164,3 +164,31 @@ python /opt/ProteinMPNN/protein_mpnn_run.py \
 - AF2: `outputs/<run_id>/tiers/<tier>/af2/runpod_jobs.json`
 
 특히 `mmseqs-runpod`는 로그에 `$ mmseqs ...` 형태로 커맨드를 그대로 출력하도록 구현되어 있어(`mmseqs-runpod/handler.py`의 `_run()`), job 로그만 보면 실행 커맨드를 1:1로 확인할 수 있습니다.
+
+---
+
+## 5) RFD3 (Foundry) -> `rfd3-runpod`
+
+RFDiffusion3 (RFD3) RunPod Serverless endpoint 실행 방식.
+
+### 5.1 입력(payload)
+
+- `inputs` (dict) 또는 `inputs_text` (JSON/YAML string) — 둘 중 하나 필수
+- `input_files` (dict filename->content)
+- `cli_args` (str)
+- `env` (dict)
+- `select_index` (int, 0-based)
+- `max_return_designs` (int)
+
+### 5.2 컨테이너 실행
+
+```bash
+rfd3 design inputs=<inputs.json|inputs.yaml> out_dir=<work_dir>/out [cli_args...]
+```
+
+### 5.3 출력
+
+- `designs`: `{id, json_name, cif_gz_name, score?}` list
+- `selected`: `{id, json, json_name, cif_gz_name, cif_gz_base64, pdb}`
+
+RFD3 결과 `.cif.gz`는 `gemmi`로 PDB로 변환되어 `selected.pdb`로 전달됩니다.

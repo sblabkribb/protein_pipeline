@@ -59,6 +59,35 @@ def _as_text(value: object | None) -> str:
     return str(value)
 
 
+def _as_dict(value: object | None, *, name: str) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError(f"{name} must be an object")
+    return value
+
+
+def _as_dict_str(value: object | None, *, name: str) -> dict[str, str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError(f"{name} must be an object")
+    out: dict[str, str] = {}
+    for k, v in value.items():
+        if v is None:
+            continue
+        out[str(k)] = _as_text(v)
+    return out or None
+
+
+def _as_str_or_list(value: object | None) -> str | list[str] | None:
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return [str(v) for v in value if v is not None]
+    return str(value)
+
+
 def _as_list_of_str(value: object | None) -> list[str] | None:
     if value is None:
         return None
@@ -224,8 +253,20 @@ def _run_with_auto_retry(
 def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
     target_fasta = _as_text(args.get("target_fasta"))
     target_pdb = _as_text(args.get("target_pdb"))
-    if not target_fasta.strip() and not target_pdb.strip():
-        raise ValueError("One of target_fasta or target_pdb is required")
+    rfd3_inputs = _as_dict(args.get("rfd3_inputs"), name="rfd3_inputs")
+    rfd3_inputs_text = _as_text(args.get("rfd3_inputs_text")).strip() or None
+    rfd3_contig = _as_str_or_list(args.get("rfd3_contig"))
+    rfd3_input_files = _as_dict_str(args.get("rfd3_input_files"), name="rfd3_input_files")
+    rfd3_input_pdb = _as_text(args.get("rfd3_input_pdb")).strip() or None
+    rfd3_ligand = _as_str_or_list(args.get("rfd3_ligand"))
+    rfd3_select_unfixed_sequence = _as_text(args.get("rfd3_select_unfixed_sequence")).strip() or None
+    rfd3_cli_args = _as_text(args.get("rfd3_cli_args")).strip() or None
+    rfd3_env = _as_dict_str(args.get("rfd3_env"), name="rfd3_env")
+    rfd3_design_index = _as_int(args.get("rfd3_design_index"), 0)
+
+    has_rfd3 = bool(rfd3_inputs_text or rfd3_inputs or rfd3_contig or rfd3_input_files)
+    if not target_fasta.strip() and not target_pdb.strip() and not has_rfd3:
+        raise ValueError("One of target_fasta or target_pdb or rfd3 inputs is required")
 
     stop_after = (str(args.get("stop_after")).strip().lower() if args.get("stop_after") else None)
     dry_run = _as_bool(args.get("dry_run"), False)
@@ -240,6 +281,17 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
     return PipelineRequest(
         target_fasta=target_fasta,
         target_pdb=target_pdb,
+        rfd3_inputs=rfd3_inputs,
+        rfd3_inputs_text=rfd3_inputs_text,
+        rfd3_input_files=rfd3_input_files,
+        rfd3_input_pdb=rfd3_input_pdb,
+        rfd3_spec_name=str(args.get("rfd3_spec_name") or "spec-1"),
+        rfd3_contig=rfd3_contig,
+        rfd3_ligand=rfd3_ligand,
+        rfd3_select_unfixed_sequence=rfd3_select_unfixed_sequence,
+        rfd3_cli_args=rfd3_cli_args,
+        rfd3_env=rfd3_env,
+        rfd3_design_index=rfd3_design_index,
         design_chains=design_chains,
         fixed_positions_extra=fixed_positions_extra,
         conservation_tiers=conservation_tiers or [0.3, 0.5, 0.7],
@@ -308,6 +360,20 @@ def tool_definitions() -> list[dict[str, Any]]:
                 "properties": {
                     "target_fasta": {"type": "string"},
                     "target_pdb": {"type": "string"},
+                    "rfd3_inputs": {"type": "object"},
+                    "rfd3_inputs_text": {"type": "string"},
+                    "rfd3_input_files": {
+                        "type": "object",
+                        "additionalProperties": {"type": "string"},
+                    },
+                    "rfd3_input_pdb": {"type": "string"},
+                    "rfd3_spec_name": {"type": "string"},
+                    "rfd3_contig": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+                    "rfd3_ligand": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+                    "rfd3_select_unfixed_sequence": {"type": "string"},
+                    "rfd3_cli_args": {"type": "string"},
+                    "rfd3_env": {"type": "object", "additionalProperties": {"type": "string"}},
+                    "rfd3_design_index": {"type": "integer"},
                     "design_chains": {"type": "array", "items": {"type": "string"}},
                     "fixed_positions_extra": {
                         "type": "object",
@@ -357,7 +423,13 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "auto_retry_max": {"type": "integer"},
                     "auto_retry_backoff_s": {"type": "number"},
                 },
-                "anyOf": [{"required": ["target_fasta"]}, {"required": ["target_pdb"]}],
+                "anyOf": [
+                    {"required": ["target_fasta"]},
+                    {"required": ["target_pdb"]},
+                    {"required": ["rfd3_inputs"]},
+                    {"required": ["rfd3_inputs_text"]},
+                    {"required": ["rfd3_contig"]},
+                ],
             },
         },
         {

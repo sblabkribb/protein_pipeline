@@ -4,6 +4,7 @@ from .clients.alphafold2 import AlphaFold2Client
 from .clients.alphafold2_runpod import AlphaFold2RunPodClient
 from .clients.mmseqs import MMseqsClient
 from .clients.proteinmpnn import ProteinMPNNClient
+from .clients.rfd3_runpod import RFD3RunPodClient
 from .clients.runpod import RunPodClient
 from .clients.soluprot import SoluProtClient
 from .config import load_config
@@ -27,10 +28,15 @@ def build_runner() -> PipelineRunner:
     elif cfg.services.af2_url:
         af2 = AlphaFold2Client(url=cfg.services.af2_url)
 
+    rfd3 = None
+    if cfg.runpod.rfd3_endpoint_id:
+        rfd3 = RFD3RunPodClient(runpod=runpod, endpoint_id=cfg.runpod.rfd3_endpoint_id)
+
     return PipelineRunner(
         output_root=cfg.output_root,
         mmseqs=mmseqs,
         proteinmpnn=proteinmpnn,
         soluprot=soluprot,
         af2=af2,
+        rfd3=rfd3,
     )

@@ -3,6 +3,7 @@ __all__ = [
     "alphafold2_runpod",
     "mmseqs",
     "proteinmpnn",
+    "rfd3_runpod",
     "runpod",
     "soluprot",
 ]

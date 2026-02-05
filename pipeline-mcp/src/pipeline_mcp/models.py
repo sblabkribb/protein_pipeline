@@ -21,6 +21,18 @@ class PipelineRequest:
     target_fasta: str
     target_pdb: str
 
+    rfd3_inputs: dict[str, object] | None = None
+    rfd3_inputs_text: str | None = None
+    rfd3_input_files: dict[str, str] | None = None
+    rfd3_input_pdb: str | None = None
+    rfd3_spec_name: str = "spec-1"
+    rfd3_contig: str | list[str] | None = None
+    rfd3_ligand: str | list[str] | None = None
+    rfd3_select_unfixed_sequence: str | None = None
+    rfd3_cli_args: str | None = None
+    rfd3_env: dict[str, str] | None = None
+    rfd3_design_index: int = 0
+
     design_chains: list[str] | None = None
 
     # Extra fixed positions to union into each tier (1-based, query/FASTA numbering).
