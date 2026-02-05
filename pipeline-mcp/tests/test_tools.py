@@ -86,6 +86,28 @@ class TestTools(unittest.TestCase):
             )
             self.assertEqual(Path(str(out.get("output_dir") or "")).name, "my_test_run")
 
+    def test_pipeline_run_tool_accepts_rfd3_inputs(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.run",
+                {
+                    "rfd3_contig": "A:1-2",
+                    "rfd3_input_pdb": pdb,
+                    "dry_run": True,
+                    "num_seq_per_tier": 1,
+                    "conservation_tiers": [0.3],
+                },
+            )
+            self.assertIn("run_id", out)
+            self.assertIn("output_dir", out)
+
 
 if __name__ == "__main__":
     unittest.main()

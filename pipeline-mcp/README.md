@@ -11,6 +11,7 @@ NCP CPU 서버에서 동작하는 파이프라인 오케스트레이터(MCP 스�
 - `MMSEQS_ENDPOINT_ID` (필수)
 - `PROTEINMPNN_ENDPOINT_ID` (필수)
 - `ALPHAFOLD2_ENDPOINT_ID` (선택, 설정 시 RunPod AF2 사용)
+- `RFD3_ENDPOINT_ID` (optional, RFDiffusion3 RunPod endpoint)
 - TLS 옵션(선택): `RUNPOD_CA_BUNDLE`, `RUNPOD_SKIP_VERIFY=1`
 - (선택) `PIPELINE_MMSEQS_USE_GPU=1`: 요청에 `mmseqs_use_gpu`를 명시하지 않으면 기본값을 GPU로 설정
 
@@ -29,6 +30,7 @@ RUNPOD_API_KEY=...
 MMSEQS_ENDPOINT_ID=...
 PROTEINMPNN_ENDPOINT_ID=...
 ALPHAFOLD2_ENDPOINT_ID=...
+RFD3_ENDPOINT_ID=...
 PIPELINE_MMSEQS_USE_GPU=1
 SOLUPROT_URL=http://127.0.0.1:18081/score
 PIPELINE_OUTPUT_ROOT=/opt/protein_pipeline/outputs
@@ -327,3 +329,9 @@ codex mcp list
 ### ProteinMPNN fixed_positions check
 - 기본적으로 `tiers/<tier>/fixed_positions_check.json`를 저장하고, fixed_positions 위반이 감지되면 run을 실패 처리합니다.
 - 필요 시 `PIPELINE_SKIP_FIXED_POSITIONS_CHECK=1` 로 비활성화할 수 있습니다.
+
+## RFD3 pre-stage
+
+- Set `RFD3_ENDPOINT_ID` to enable the RFDiffusion3 RunPod endpoint.
+- Trigger RFD3 by passing one of: `rfd3_inputs`, `rfd3_inputs_text`, or `rfd3_contig` (with `rfd3_input_pdb`).
+- Output artifacts are written under `outputs/<run_id>/rfd3/` and the selected PDB becomes `target_pdb`.

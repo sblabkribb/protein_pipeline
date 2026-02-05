@@ -3,6 +3,10 @@
 /mmseqs-runpod/
 /ProteinMPNN-runpod/
 /colabfold-runpod/
+/esm-runpod/
+/simplefold-runpod/
+/rfd3-runpod/
+
 # --- Pipeline outputs ---
 /outputs/
 

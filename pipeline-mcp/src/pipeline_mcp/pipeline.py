@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from dataclasses import dataclass
+import base64
 import json
 import os
 from pathlib import Path
@@ -104,6 +105,43 @@ class PipelineInputRequired(ValueError):
 def _safe_id(value: str) -> str:
     safe = _SAFE_ID_RE.sub("_", value).strip("._-")
     return safe[:128] or "id"
+
+
+def _rfd3_active(request: PipelineRequest) -> bool:
+    return bool(
+        (request.rfd3_inputs_text or "").strip()
+        or request.rfd3_inputs
+        or request.rfd3_contig
+        or request.rfd3_input_files
+    )
+
+
+def _rfd3_input_files(request: PipelineRequest) -> dict[str, str]:
+    files: dict[str, str] = {}
+    if isinstance(request.rfd3_input_files, dict):
+        for key, value in request.rfd3_input_files.items():
+            if value is None:
+                continue
+            files[str(key)] = str(value)
+    if request.rfd3_input_pdb and "input.pdb" not in files:
+        files["input.pdb"] = str(request.rfd3_input_pdb)
+    return files
+
+
+def _rfd3_simple_inputs(request: PipelineRequest, *, input_files: dict[str, str]) -> dict[str, object]:
+    spec: dict[str, object] = {}
+    if request.rfd3_input_pdb or "input.pdb" in input_files:
+        spec["input"] = "input.pdb"
+    if request.rfd3_contig is not None:
+        spec["contig"] = request.rfd3_contig
+    if request.rfd3_ligand is not None:
+        spec["ligand"] = request.rfd3_ligand
+    if request.rfd3_select_unfixed_sequence is not None:
+        spec["select_unfixed_sequence"] = request.rfd3_select_unfixed_sequence
+    if not spec:
+        raise ValueError("RFD3 simple inputs require contig/ligand/input")
+    spec_name = str(request.rfd3_spec_name or "spec-1").strip() or "spec-1"
+    return {spec_name: spec}
 
 
 def _is_monomer_preset(preset: str) -> bool:
@@ -440,6 +478,7 @@ class PipelineRunner:
     proteinmpnn: ProteinMPNNClient | None = None
     soluprot: SoluProtClient | None = None
     af2: Any | None = None
+    rfd3: Any | None = None
 
     def run(self, request: PipelineRequest, *, run_id: str | None = None) -> PipelineResult:
         run_id = run_id or new_run_id("pipeline")
@@ -462,6 +501,108 @@ class PipelineRunner:
 
             target_pdb_text = str(request.target_pdb or "")
             had_target_pdb_input = bool(target_pdb_text.strip())
+            prefer_pdb_sequence = False
+
+            if _rfd3_active(request):
+                rfd3_dir = _ensure_dir(paths.root / "rfd3")
+                set_status(paths, stage="rfd3", state="running")
+
+                rfd3_files = _rfd3_input_files(request)
+                inputs_text = str(request.rfd3_inputs_text or "").strip() or None
+                inputs_obj = request.rfd3_inputs if isinstance(request.rfd3_inputs, dict) else None
+                if inputs_text is None and inputs_obj is None:
+                    inputs_obj = _rfd3_simple_inputs(request, input_files=rfd3_files)
+
+                if inputs_text is None and inputs_obj is None:
+                    raise ValueError("RFD3 inputs are required (inputs_text/inputs/contig)")
+
+                inputs_payload = inputs_obj
+                if inputs_payload is None and inputs_text:
+                    try:
+                        inputs_payload = json.loads(inputs_text)
+                    except Exception:
+                        inputs_payload = {"raw_text": inputs_text}
+                if inputs_payload is not None:
+                    write_json(rfd3_dir / "inputs.json", inputs_payload)
+
+                if rfd3_files:
+                    files_dir = _ensure_dir(rfd3_dir / "input_files")
+                    for raw_name, content in rfd3_files.items():
+                        name = str(raw_name).replace("\\", "/")
+                        rel = Path(name)
+                        if rel.is_absolute() or ".." in rel.parts:
+                            rel = Path(rel.name)
+                        dest = files_dir / rel
+                        dest.parent.mkdir(parents=True, exist_ok=True)
+                        dest.write_text(str(content), encoding="utf-8")
+
+                if request.dry_run:
+                    if request.rfd3_input_pdb:
+                        target_pdb_text = str(request.rfd3_input_pdb)
+                    else:
+                        target_pdb_text = _dummy_backbone_pdb("A" * 60, chain_id="A")
+                    _write_text(rfd3_dir / "selected.pdb", target_pdb_text)
+                    write_json(rfd3_dir / "selected.json", {"id": "dry_run", "source": "dummy"})
+                    write_json(rfd3_dir / "designs.json", [])
+                    set_status(paths, stage="rfd3", state="completed", detail="dry_run")
+                else:
+                    if self.rfd3 is None:
+                        raise RuntimeError("RFD3 endpoint is not configured (set RFD3_ENDPOINT_ID)")
+
+                    def _on_rfd3_job_id(job_id: str) -> None:
+                        write_json(rfd3_dir / "runpod_job.json", {"job_id": job_id})
+                        set_status(paths, stage="rfd3", state="running", detail=f"runpod_job_id={job_id}")
+
+                    rfd3_out = self.rfd3.design(
+                        inputs=inputs_obj,
+                        inputs_text=inputs_text,
+                        input_files=rfd3_files or None,
+                        cli_args=request.rfd3_cli_args,
+                        env=request.rfd3_env,
+                        select_index=int(request.rfd3_design_index or 0),
+                        on_job_id=_on_rfd3_job_id,
+                    )
+                    write_json(rfd3_dir / "designs.json", rfd3_out.get("designs") or [])
+
+                    selected = rfd3_out.get("selected")
+                    if not isinstance(selected, dict):
+                        raise RuntimeError(f"RFD3 output missing selected design: {rfd3_out}")
+                    pdb_text = str(selected.get("pdb") or "")
+                    if not pdb_text.strip():
+                        raise RuntimeError("RFD3 selected design did not include PDB text")
+                    target_pdb_text = pdb_text
+                    _write_text(rfd3_dir / "selected.pdb", target_pdb_text)
+
+                    selected_meta = {k: v for k, v in selected.items() if k not in {"pdb", "cif_gz_base64"}}
+                    write_json(rfd3_dir / "selected.json", selected_meta)
+                    cif_b64 = selected.get("cif_gz_base64")
+                    if isinstance(cif_b64, str) and cif_b64.strip():
+                        try:
+                            cif_bytes = base64.b64decode(cif_b64)
+                            (rfd3_dir / "selected.cif.gz").write_bytes(cif_bytes)
+                        except Exception:
+                            pass
+                    set_status(paths, stage="rfd3", state="completed")
+
+                prefer_pdb_sequence = True
+                had_target_pdb_input = bool(target_pdb_text.strip())
+
+                if request.stop_after == "rfd3":
+                    result = PipelineResult(
+                        run_id=run_id,
+                        output_dir=str(paths.root),
+                        msa_a3m_path=None,
+                        msa_filtered_a3m_path=None,
+                        msa_tsv_path=None,
+                        conservation_path=None,
+                        ligand_mask_path=None,
+                        tiers=[],
+                        errors=[],
+                    )
+                    write_json(paths.summary_json, asdict(result))
+                    set_status(paths, stage="done", state="completed")
+                    return result
+
             if target_pdb_text.strip() and (
                 bool(request.pdb_strip_nonpositive_resseq) or bool(request.pdb_renumber_resseq_from_1)
             ):
@@ -485,7 +626,7 @@ class PipelineRunner:
                 )
                 set_status(paths, stage="pdb_preprocess", state="completed")
 
-            if str(request.target_fasta or "").strip():
+            if str(request.target_fasta or "").strip() and not prefer_pdb_sequence:
                 target_record = parse_fasta(request.target_fasta)[0]
             else:
                 if not target_pdb_text.strip():
