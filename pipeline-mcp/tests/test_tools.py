@@ -108,6 +108,48 @@ class TestTools(unittest.TestCase):
             self.assertIn("run_id", out)
             self.assertIn("output_dir", out)
 
+    def test_pipeline_artifact_tools(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU A   4       3.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  PHE A   5       4.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  GLY A   6       5.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      7  CA  HIS A   7       6.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      8  CA  ILE A   8       7.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      9  CA  LYS A   9       8.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.run",
+                {
+                    "target_fasta": fasta,
+                    "target_pdb": pdb,
+                    "dry_run": True,
+                    "num_seq_per_tier": 1,
+                    "conservation_tiers": [0.3],
+                },
+            )
+            run_id = str(out.get("run_id") or "")
+            self.assertTrue(run_id)
+
+            listing = dispatcher.call_tool("pipeline.list_artifacts", {"run_id": run_id, "limit": 200})
+            artifacts = listing.get("artifacts") or []
+            paths = {str(a.get("path")) for a in artifacts if isinstance(a, dict)}
+            self.assertIn("request.json", paths)
+
+            read_out = dispatcher.call_tool(
+                "pipeline.read_artifact",
+                {"run_id": run_id, "path": "request.json", "max_bytes": 64},
+            )
+            self.assertIn("text", read_out)
+            self.assertLessEqual(int(read_out.get("read_bytes") or 0), 64)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,10 +21,13 @@ from .bio.fasta import parse_fasta
 from .bio.fasta import to_fasta
 from .bio.alignment import global_alignment_mapping
 from .bio.pdb import ca_rmsd
+from .bio.pdb import ligand_atoms_present
 from .bio.pdb import ligand_proximity_mask
 from .bio.pdb import preprocess_pdb
 from .bio.pdb import residues_by_chain
 from .bio.pdb import sequence_by_chain
+from .bio.sdf import append_ligand_pdb
+from .bio.sdf import sdf_to_pdb
 from .clients.mmseqs import MMseqsClient
 from .clients.proteinmpnn import ProteinMPNNClient
 from .clients.soluprot import SoluProtClient
@@ -142,6 +145,61 @@ def _rfd3_simple_inputs(request: PipelineRequest, *, input_files: dict[str, str]
         raise ValueError("RFD3 simple inputs require contig/ligand/input")
     spec_name = str(request.rfd3_spec_name or "spec-1").strip() or "spec-1"
     return {spec_name: spec}
+
+
+def _parse_json_dict(text: str) -> dict[str, Any] | None:
+    raw = str(text or "").strip()
+    if not raw:
+        return None
+    try:
+        obj = json.loads(raw)
+    except Exception:
+        return None
+    if isinstance(obj, dict):
+        return obj
+    return None
+
+
+def _inject_rfd3_partial_t(inputs: dict[str, Any] | None, partial_t: float | int) -> dict[str, Any] | None:
+    if inputs is None:
+        return None
+    if float(partial_t) <= 0:
+        return inputs
+    for spec in inputs.values():
+        if not isinstance(spec, dict):
+            continue
+        if "partial_t" in spec:
+            continue
+        spec["partial_t"] = float(partial_t)
+    return inputs
+
+
+def _rfd3_cli_has_arg(cli_args: str | None, key: str) -> bool:
+    if not cli_args:
+        return False
+    pattern = rf"(?:^|\\s)--?{re.escape(key)}(?:=|\\s)"
+    return re.search(pattern, str(cli_args)) is not None
+
+
+def _inject_rfd3_cli_defaults(cli_args: str | None, *, max_designs: int) -> str | None:
+    args = str(cli_args or "").strip()
+    additions: list[str] = []
+    if max_designs > 0 and not _rfd3_cli_has_arg(args, "diffusion_batch_size"):
+        additions.append(f"diffusion_batch_size={max_designs}")
+    if not _rfd3_cli_has_arg(args, "n_batches"):
+        additions.append("n_batches=1")
+    if not additions:
+        return cli_args
+    if args:
+        return f"{args} {' '.join(additions)}".strip()
+    return " ".join(additions)
+
+
+def _diffdock_requested(request: PipelineRequest) -> bool:
+    return bool(
+        (str(request.diffdock_ligand_smiles or "").strip())
+        or (str(request.diffdock_ligand_sdf or "").strip())
+    )
 
 
 def _is_monomer_preset(preset: str) -> bool:
@@ -338,6 +396,20 @@ def _dummy_backbone_pdb(sequence: str, *, chain_id: str = "A") -> str:
     return "\n".join(lines) + "\n"
 
 
+def _target_record_from_pdb(pdb_text: str, *, design_chains: list[str] | None) -> FastaRecord:
+    extracted = sequence_by_chain(pdb_text, chains=design_chains)
+    if not extracted:
+        raise ValueError("Unable to extract protein sequence from target_pdb ATOM records")
+    if design_chains:
+        chain_id = design_chains[0]
+        seq = extracted.get(chain_id)
+        if not seq:
+            chain_id, seq = next(iter(extracted.items()))
+    else:
+        chain_id, seq = next(iter(extracted.items()))
+    return FastaRecord(header=f"pdb_chain_{chain_id}", sequence=seq)
+
+
 def _normalize_policy(value: str) -> str:
     policy = str(value or "").strip().lower() or "error"
     if policy not in {"error", "warn", "ignore"}:
@@ -479,6 +551,7 @@ class PipelineRunner:
     soluprot: SoluProtClient | None = None
     af2: Any | None = None
     rfd3: Any | None = None
+    diffdock: Any | None = None
 
     def run(self, request: PipelineRequest, *, run_id: str | None = None) -> PipelineResult:
         run_id = run_id or new_run_id("pipeline")
@@ -501,27 +574,265 @@ class PipelineRunner:
 
             target_pdb_text = str(request.target_pdb or "")
             had_target_pdb_input = bool(target_pdb_text.strip())
-            prefer_pdb_sequence = False
+            rfd3_files = _rfd3_input_files(request) if _rfd3_active(request) else {}
+            rfd3_backbones: list[dict[str, Any]] | None = None
+            rfd3_selected_id: str | None = None
+            target_record: FastaRecord | None = None
+            msa_defer = False
+
+            if str(request.target_fasta or "").strip():
+                target_record = parse_fasta(request.target_fasta)[0]
+            else:
+                msa_source_pdb_text = ""
+                if target_pdb_text.strip():
+                    msa_source_pdb_text = target_pdb_text
+                elif request.rfd3_input_pdb:
+                    msa_source_pdb_text = str(request.rfd3_input_pdb)
+                elif rfd3_files and "input.pdb" in rfd3_files:
+                    msa_source_pdb_text = str(rfd3_files.get("input.pdb") or "")
+                if msa_source_pdb_text.strip() and (
+                    bool(request.pdb_strip_nonpositive_resseq) or bool(request.pdb_renumber_resseq_from_1)
+                ):
+                    msa_source_pdb_text, _ = preprocess_pdb(
+                        msa_source_pdb_text,
+                        chains=request.design_chains,
+                        strip_nonpositive_resseq=bool(request.pdb_strip_nonpositive_resseq),
+                        renumber_resseq_from_1=bool(request.pdb_renumber_resseq_from_1),
+                    )
+                if msa_source_pdb_text.strip():
+                    target_record = _target_record_from_pdb(
+                        msa_source_pdb_text,
+                        design_chains=request.design_chains,
+                    )
+                elif _rfd3_active(request):
+                    msa_defer = True
+                else:
+                    raise ValueError("One of target_fasta or target_pdb is required")
+
+            def _run_msa(target_record: FastaRecord) -> str:
+                nonlocal msa_tsv_path, msa_a3m_path, msa_filtered_a3m_path
+
+                target_query_fasta = to_fasta([target_record])
+                _write_text(paths.root / "target.fasta", target_query_fasta)
+
+                set_status(paths, stage="mmseqs_msa", state="running")
+                msa_tsv_text, a3m_text = self._get_msa(
+                    target_query_fasta,
+                    msa_dir,
+                    request,
+                    on_job_id=lambda job_id: (
+                        write_json(
+                            msa_dir / "runpod_job.json",
+                            {
+                                "job_id": job_id,
+                                "target_db": request.mmseqs_target_db,
+                                "max_seqs": request.mmseqs_max_seqs,
+                                "threads": request.mmseqs_threads,
+                                "use_gpu": request.mmseqs_use_gpu,
+                            },
+                        ),
+                        set_status(paths, stage="mmseqs_msa", state="running", detail=f"runpod_job_id={job_id}"),
+                    ),
+                )
+                msa_tsv_path = str(msa_dir / "result.tsv")
+                msa_a3m_path = str(msa_dir / "result.a3m")
+
+                filtered_a3m_text = a3m_text
+                quality = msa_quality(a3m_text)
+                if float(request.msa_min_coverage) > 0.0 or float(request.msa_min_identity) > 0.0:
+                    filtered_a3m_text, filter_report = filter_a3m(
+                        a3m_text,
+                        min_coverage=request.msa_min_coverage,
+                        min_identity=request.msa_min_identity,
+                    )
+                    msa_filtered_a3m_path = str(msa_dir / "result.filtered.a3m")
+                    _write_text(Path(msa_filtered_a3m_path), filtered_a3m_text)
+                    quality["filter"] = filter_report
+                    quality["after_filter"] = msa_quality(filtered_a3m_text)
+                write_json(msa_dir / "quality.json", quality)
+                msa_warns: list[str] = []
+                if isinstance(quality.get("warnings"), list):
+                    msa_warns.extend(str(w) for w in quality["warnings"])
+                after = quality.get("after_filter")
+                if isinstance(after, dict) and isinstance(after.get("warnings"), list):
+                    msa_warns.extend(f"after_filter:{w}" for w in after["warnings"])
+                set_status(
+                    paths,
+                    stage="mmseqs_msa",
+                    state="completed",
+                    detail=("; ".join(msa_warns)[:500] if msa_warns else None),
+                )
+                return filtered_a3m_text
+
+            def _run_conservation(filtered_a3m_text: str):
+                nonlocal conservation_path
+                set_status(paths, stage="conservation", state="running")
+                conservation_weights: list[float] | None = None
+                weighting = str(getattr(request, "conservation_weighting", "none") or "none").strip().lower()
+                if weighting not in {"none", "mmseqs_cluster"}:
+                    raise ValueError("conservation_weighting must be one of: none, mmseqs_cluster")
+                if weighting == "mmseqs_cluster":
+                    if request.dry_run:
+                        write_json(
+                            msa_dir / "sequence_weights.json",
+                            {"method": "mmseqs_cluster", "skipped": True, "reason": "dry_run"},
+                        )
+                    else:
+                        if self.mmseqs is None:
+                            raise RuntimeError("MMseqs client is required for conservation_weighting='mmseqs_cluster'")
+                        raw_records = parse_fasta(filtered_a3m_text)
+                        hit_ids: list[str] = []
+                        fasta_parts: list[str] = []
+                        for idx, rec in enumerate(raw_records[1:], start=1):
+                            hit_id = f"h{idx:06d}"
+                            hit_ids.append(hit_id)
+                            ungapped = "".join(ch for ch in strip_insertions(rec.sequence) if ch.isalpha()).upper()
+                            if not ungapped:
+                                continue
+                            fasta_parts.append(f">{hit_id}\n{ungapped}\n")
+                        sequences_fasta = "".join(fasta_parts)
+                        if not sequences_fasta.strip() or not hit_ids:
+                            conservation_weights = [1.0 for _ in hit_ids]
+                            write_json(
+                                msa_dir / "sequence_weights.json",
+                                {
+                                    "method": "mmseqs_cluster",
+                                    "skipped": True,
+                                    "reason": "no_sequences",
+                                    "hit_count": len(hit_ids),
+                                    "id_scheme": "h{index:06d} (A3M hit order)",
+                                    "weights": list(conservation_weights),
+                                },
+                            )
+                            sequences_fasta = ""
+                        if not sequences_fasta.strip():
+                            cluster_out = {}
+                        else:
+                            cluster_out = self.mmseqs.cluster(
+                                sequences_fasta=sequences_fasta,
+                                threads=int(request.mmseqs_threads),
+                                cluster_method=str(request.conservation_cluster_method or "linclust"),
+                                min_seq_id=float(request.conservation_cluster_min_seq_id),
+                                coverage=request.conservation_cluster_coverage,
+                                cov_mode=request.conservation_cluster_cov_mode,
+                                kmer_per_seq=request.conservation_cluster_kmer_per_seq,
+                            )
+                        if sequences_fasta.strip():
+                            cluster_tsv = str(cluster_out.get("cluster_tsv") or "")
+                            _write_text(msa_dir / "cluster.tsv", cluster_tsv)
+                            weights_by_id = weights_from_mmseqs_cluster_tsv(cluster_tsv)
+                            conservation_weights = [float(weights_by_id.get(hit_id, 1.0)) for hit_id in hit_ids]
+                            write_json(
+                                msa_dir / "sequence_weights.json",
+                                {
+                                    "method": "mmseqs_cluster",
+                                    "cluster_method": str(request.conservation_cluster_method or "linclust"),
+                                    "min_seq_id": float(request.conservation_cluster_min_seq_id),
+                                    "coverage": request.conservation_cluster_coverage,
+                                    "cov_mode": request.conservation_cluster_cov_mode,
+                                    "kmer_per_seq": request.conservation_cluster_kmer_per_seq,
+                                    "hit_count": len(hit_ids),
+                                    "id_scheme": "h{index:06d} (A3M hit order)",
+                                    "weights": list(conservation_weights),
+                                    "weight_stats": {
+                                        "min": min(conservation_weights) if conservation_weights else None,
+                                        "max": max(conservation_weights) if conservation_weights else None,
+                                        "mean": (sum(conservation_weights) / len(conservation_weights))
+                                        if conservation_weights
+                                        else None,
+                                    },
+                                },
+                            )
+                conservation = compute_conservation(
+                    filtered_a3m_text,
+                    tiers=request.conservation_tiers,
+                    mode=request.conservation_mode,
+                    weights=conservation_weights,
+                )
+                conservation_payload = {
+                    "query_length": conservation.query_length,
+                    "scores": conservation.scores,
+                    "fixed_positions_by_tier": conservation.fixed_positions_by_tier,
+                    "mode": request.conservation_mode,
+                    "tiers": request.conservation_tiers,
+                    "weighting": weighting,
+                }
+                conservation_path = str(paths.root / "conservation.json")
+                write_json(Path(conservation_path), conservation_payload)
+                set_status(paths, stage="conservation", state="completed")
+                return conservation
+
+            has_fixed_positions_extra = False
+            if isinstance(request.fixed_positions_extra, dict):
+                for positions in request.fixed_positions_extra.values():
+                    if isinstance(positions, list) and positions:
+                        has_fixed_positions_extra = True
+                        break
+
+            if (
+                (not had_target_pdb_input)
+                and (not request.dry_run)
+                and (request.stop_after != "msa")
+                and (not has_fixed_positions_extra)
+                and (not (request.ligand_atom_chains or []))
+                and (not _rfd3_active(request))
+            ):
+                raise PipelineInputRequired(
+                    stage="needs_fixed_positions_extra",
+                    message=(
+                        "Sequence-only input (target_pdb is empty): please provide active-site residues via "
+                        "fixed_positions_extra (1-based query/FASTA numbering). Example: "
+                        "fixed_positions_extra={'A':[10,25,42]} (monomer) or fixed_positions_extra={'*':[...]} "
+                        "(apply to all chains). "
+                        "Alternative: provide a target_pdb that contains ligand/substrate coordinates and configure "
+                        "ligand masking (ligand_resnames or ligand_atom_chains)."
+                    ),
+                )
+
+            conservation = None
+            if not msa_defer:
+                if target_record is None:
+                    raise ValueError("target_record is required for MSA")
+                filtered_a3m_text = _run_msa(target_record)
+                if request.stop_after == "msa":
+                    result = PipelineResult(
+                        run_id=run_id,
+                        output_dir=str(paths.root),
+                        msa_a3m_path=msa_a3m_path,
+                        msa_filtered_a3m_path=msa_filtered_a3m_path,
+                        msa_tsv_path=msa_tsv_path,
+                        conservation_path=None,
+                        ligand_mask_path=None,
+                        tiers=[],
+                        errors=[],
+                    )
+                    write_json(paths.summary_json, asdict(result))
+                    set_status(paths, stage="done", state="completed")
+                    return result
+                conservation = _run_conservation(filtered_a3m_text)
 
             if _rfd3_active(request):
                 rfd3_dir = _ensure_dir(paths.root / "rfd3")
                 set_status(paths, stage="rfd3", state="running")
 
-                rfd3_files = _rfd3_input_files(request)
                 inputs_text = str(request.rfd3_inputs_text or "").strip() or None
                 inputs_obj = request.rfd3_inputs if isinstance(request.rfd3_inputs, dict) else None
                 if inputs_text is None and inputs_obj is None:
                     inputs_obj = _rfd3_simple_inputs(request, input_files=rfd3_files)
+                if inputs_text is not None and inputs_obj is None:
+                    parsed = _parse_json_dict(inputs_text)
+                    if parsed is not None:
+                        inputs_obj = parsed
+                        inputs_text = None
+                inputs_obj = _inject_rfd3_partial_t(inputs_obj, request.rfd3_partial_t)
 
                 if inputs_text is None and inputs_obj is None:
                     raise ValueError("RFD3 inputs are required (inputs_text/inputs/contig)")
 
                 inputs_payload = inputs_obj
                 if inputs_payload is None and inputs_text:
-                    try:
-                        inputs_payload = json.loads(inputs_text)
-                    except Exception:
-                        inputs_payload = {"raw_text": inputs_text}
+                    parsed_payload = _parse_json_dict(inputs_text)
+                    inputs_payload = parsed_payload if parsed_payload is not None else {"raw_text": inputs_text}
                 if inputs_payload is not None:
                     write_json(rfd3_dir / "inputs.json", inputs_payload)
 
@@ -541,9 +852,15 @@ class PipelineRunner:
                         target_pdb_text = str(request.rfd3_input_pdb)
                     else:
                         target_pdb_text = _dummy_backbone_pdb("A" * 60, chain_id="A")
+                    rfd3_selected_id = "dry_run"
                     _write_text(rfd3_dir / "selected.pdb", target_pdb_text)
                     write_json(rfd3_dir / "selected.json", {"id": "dry_run", "source": "dummy"})
                     write_json(rfd3_dir / "designs.json", [])
+                    if bool(request.rfd3_use_ensemble) or int(request.rfd3_max_return_designs or 1) > 1:
+                        rfd3_backbones = [
+                            {"id": f"design_{i}", "pdb_text": target_pdb_text}
+                            for i in range(int(request.rfd3_max_return_designs or 1))
+                        ]
                     set_status(paths, stage="rfd3", state="completed", detail="dry_run")
                 else:
                     if self.rfd3 is None:
@@ -553,13 +870,18 @@ class PipelineRunner:
                         write_json(rfd3_dir / "runpod_job.json", {"job_id": job_id})
                         set_status(paths, stage="rfd3", state="running", detail=f"runpod_job_id={job_id}")
 
+                    max_designs = max(1, int(request.rfd3_max_return_designs or 1))
+                    use_ensemble = bool(request.rfd3_use_ensemble) or max_designs > 1
+                    cli_args = _inject_rfd3_cli_defaults(request.rfd3_cli_args, max_designs=max_designs)
                     rfd3_out = self.rfd3.design(
                         inputs=inputs_obj,
                         inputs_text=inputs_text,
                         input_files=rfd3_files or None,
-                        cli_args=request.rfd3_cli_args,
+                        cli_args=cli_args,
                         env=request.rfd3_env,
                         select_index=int(request.rfd3_design_index or 0),
+                        max_return_designs=max_designs,
+                        return_designs_pdb=use_ensemble,
                         on_job_id=_on_rfd3_job_id,
                     )
                     write_json(rfd3_dir / "designs.json", rfd3_out.get("designs") or [])
@@ -567,6 +889,7 @@ class PipelineRunner:
                     selected = rfd3_out.get("selected")
                     if not isinstance(selected, dict):
                         raise RuntimeError(f"RFD3 output missing selected design: {rfd3_out}")
+                    rfd3_selected_id = str(selected.get("id") or "selected")
                     pdb_text = str(selected.get("pdb") or "")
                     if not pdb_text.strip():
                         raise RuntimeError("RFD3 selected design did not include PDB text")
@@ -582,19 +905,50 @@ class PipelineRunner:
                             (rfd3_dir / "selected.cif.gz").write_bytes(cif_bytes)
                         except Exception:
                             pass
+                    if use_ensemble:
+                        designs = rfd3_out.get("designs")
+                        if isinstance(designs, list):
+                            ensemble: list[dict[str, Any]] = []
+                            for d in designs:
+                                if not isinstance(d, dict):
+                                    continue
+                                raw_id = str(d.get("id") or "").strip() or None
+                                pdb_text = str(d.get("pdb") or "")
+                                if not pdb_text.strip() or raw_id is None:
+                                    continue
+                                ensemble.append(
+                                    {
+                                        "id": raw_id,
+                                        "pdb_text": pdb_text,
+                                        "score": d.get("score"),
+                                    }
+                                )
+                            if ensemble:
+                                if not any(b.get("id") == rfd3_selected_id for b in ensemble):
+                                    ensemble.insert(
+                                        0,
+                                        {
+                                            "id": rfd3_selected_id,
+                                            "pdb_text": target_pdb_text,
+                                            "score": selected.get("score"),
+                                        },
+                                    )
+                                rfd3_backbones = ensemble
+                    if rfd3_backbones:
+                        designs_dir = _ensure_dir(rfd3_dir / "designs")
+                        for b in rfd3_backbones:
+                            bb_id = _safe_id(str(b.get("id") or "design"))
+                            _write_text(designs_dir / f"{bb_id}.pdb", str(b.get("pdb_text") or ""))
                     set_status(paths, stage="rfd3", state="completed")
-
-                prefer_pdb_sequence = True
-                had_target_pdb_input = bool(target_pdb_text.strip())
 
                 if request.stop_after == "rfd3":
                     result = PipelineResult(
                         run_id=run_id,
                         output_dir=str(paths.root),
-                        msa_a3m_path=None,
-                        msa_filtered_a3m_path=None,
-                        msa_tsv_path=None,
-                        conservation_path=None,
+                        msa_a3m_path=msa_a3m_path,
+                        msa_filtered_a3m_path=msa_filtered_a3m_path,
+                        msa_tsv_path=msa_tsv_path,
+                        conservation_path=conservation_path,
                         ligand_mask_path=None,
                         tiers=[],
                         errors=[],
@@ -603,238 +957,10 @@ class PipelineRunner:
                     set_status(paths, stage="done", state="completed")
                     return result
 
-            if target_pdb_text.strip() and (
-                bool(request.pdb_strip_nonpositive_resseq) or bool(request.pdb_renumber_resseq_from_1)
-            ):
-                set_status(paths, stage="pdb_preprocess", state="running")
-                original_pdb_text = target_pdb_text
-                target_pdb_text, numbering = preprocess_pdb(
-                    original_pdb_text,
-                    chains=request.design_chains,
-                    strip_nonpositive_resseq=bool(request.pdb_strip_nonpositive_resseq),
-                    renumber_resseq_from_1=bool(request.pdb_renumber_resseq_from_1),
-                )
-                _write_text(paths.root / "target.original.pdb", original_pdb_text)
-                write_json(
-                    paths.root / "pdb_numbering.json",
-                    {
-                        "chains": request.design_chains,
-                        "strip_nonpositive_resseq": bool(request.pdb_strip_nonpositive_resseq),
-                        "renumber_resseq_from_1": bool(request.pdb_renumber_resseq_from_1),
-                        "mapping": numbering,
-                    },
-                )
-                set_status(paths, stage="pdb_preprocess", state="completed")
-
-            if str(request.target_fasta or "").strip() and not prefer_pdb_sequence:
-                target_record = parse_fasta(request.target_fasta)[0]
-            else:
-                if not target_pdb_text.strip():
-                    raise ValueError("One of target_fasta or target_pdb is required")
-                extracted = sequence_by_chain(target_pdb_text, chains=request.design_chains)
-                if not extracted:
-                    raise ValueError("Unable to extract protein sequence from target_pdb ATOM records")
-                if request.design_chains:
-                    chain_id = request.design_chains[0]
-                    seq = extracted.get(chain_id)
-                    if not seq:
-                        chain_id, seq = next(iter(extracted.items()))
-                else:
-                    chain_id, seq = next(iter(extracted.items()))
-                target_record = FastaRecord(header=f"pdb_chain_{chain_id}", sequence=seq)
-
-            target_query_fasta = to_fasta([target_record])
-            _write_text(paths.root / "target.fasta", target_query_fasta)
-
-            has_fixed_positions_extra = False
-            if isinstance(request.fixed_positions_extra, dict):
-                for positions in request.fixed_positions_extra.values():
-                    if isinstance(positions, list) and positions:
-                        has_fixed_positions_extra = True
-                        break
-
-            if (
-                (not had_target_pdb_input)
-                and (not request.dry_run)
-                and (request.stop_after != "msa")
-                and (not has_fixed_positions_extra)
-                and (not (request.ligand_atom_chains or []))
-            ):
-                raise PipelineInputRequired(
-                    stage="needs_fixed_positions_extra",
-                    message=(
-                        "Sequence-only input (target_pdb is empty): please provide active-site residues via "
-                        "fixed_positions_extra (1-based query/FASTA numbering). Example: "
-                        "fixed_positions_extra={'A':[10,25,42]} (monomer) or fixed_positions_extra={'*':[...]} "
-                        "(apply to all chains). "
-                        "Alternative: provide a target_pdb that contains ligand/substrate coordinates and configure "
-                        "ligand masking (ligand_resnames or ligand_atom_chains)."
-                    ),
-                )
-
             if request.dry_run and not target_pdb_text.strip():
+                if target_record is None:
+                    raise ValueError("target_record is required for dry_run")
                 target_pdb_text = _dummy_backbone_pdb(target_record.sequence, chain_id="A")
-            if target_pdb_text.strip():
-                _write_text(paths.root / "target.pdb", target_pdb_text)
-
-            set_status(paths, stage="mmseqs_msa", state="running")
-            msa_tsv_text, a3m_text = self._get_msa(
-                target_query_fasta,
-                msa_dir,
-                request,
-                on_job_id=lambda job_id: (
-                    write_json(
-                        msa_dir / "runpod_job.json",
-                        {
-                            "job_id": job_id,
-                            "target_db": request.mmseqs_target_db,
-                            "max_seqs": request.mmseqs_max_seqs,
-                            "threads": request.mmseqs_threads,
-                            "use_gpu": request.mmseqs_use_gpu,
-                        },
-                    ),
-                    set_status(paths, stage="mmseqs_msa", state="running", detail=f"runpod_job_id={job_id}"),
-                ),
-            )
-            msa_tsv_path = str(msa_dir / "result.tsv")
-            msa_a3m_path = str(msa_dir / "result.a3m")
-
-            filtered_a3m_text = a3m_text
-            quality = msa_quality(a3m_text)
-            if float(request.msa_min_coverage) > 0.0 or float(request.msa_min_identity) > 0.0:
-                filtered_a3m_text, filter_report = filter_a3m(
-                    a3m_text,
-                    min_coverage=request.msa_min_coverage,
-                    min_identity=request.msa_min_identity,
-                )
-                msa_filtered_a3m_path = str(msa_dir / "result.filtered.a3m")
-                _write_text(Path(msa_filtered_a3m_path), filtered_a3m_text)
-                quality["filter"] = filter_report
-                quality["after_filter"] = msa_quality(filtered_a3m_text)
-            write_json(msa_dir / "quality.json", quality)
-            msa_warns: list[str] = []
-            if isinstance(quality.get("warnings"), list):
-                msa_warns.extend(str(w) for w in quality["warnings"])
-            after = quality.get("after_filter")
-            if isinstance(after, dict) and isinstance(after.get("warnings"), list):
-                msa_warns.extend(f"after_filter:{w}" for w in after["warnings"])
-            set_status(
-                paths,
-                stage="mmseqs_msa",
-                state="completed",
-                detail=("; ".join(msa_warns)[:500] if msa_warns else None),
-            )
-
-            if request.stop_after == "msa":
-                result = PipelineResult(
-                    run_id=run_id,
-                    output_dir=str(paths.root),
-                    msa_a3m_path=msa_a3m_path,
-                    msa_filtered_a3m_path=msa_filtered_a3m_path,
-                    msa_tsv_path=msa_tsv_path,
-                    conservation_path=None,
-                    ligand_mask_path=None,
-                    tiers=[],
-                    errors=[],
-                )
-                write_json(paths.summary_json, asdict(result))
-                set_status(paths, stage="done", state="completed")
-                return result
-
-            set_status(paths, stage="conservation", state="running")
-            conservation_weights: list[float] | None = None
-            weighting = str(getattr(request, "conservation_weighting", "none") or "none").strip().lower()
-            if weighting not in {"none", "mmseqs_cluster"}:
-                raise ValueError("conservation_weighting must be one of: none, mmseqs_cluster")
-            if weighting == "mmseqs_cluster":
-                if request.dry_run:
-                    write_json(
-                        msa_dir / "sequence_weights.json",
-                        {"method": "mmseqs_cluster", "skipped": True, "reason": "dry_run"},
-                    )
-                else:
-                    if self.mmseqs is None:
-                        raise RuntimeError("MMseqs client is required for conservation_weighting='mmseqs_cluster'")
-                    raw_records = parse_fasta(filtered_a3m_text)
-                    hit_ids: list[str] = []
-                    fasta_parts: list[str] = []
-                    for idx, rec in enumerate(raw_records[1:], start=1):
-                        hit_id = f"h{idx:06d}"
-                        hit_ids.append(hit_id)
-                        ungapped = "".join(ch for ch in strip_insertions(rec.sequence) if ch.isalpha()).upper()
-                        if not ungapped:
-                            continue
-                        fasta_parts.append(f">{hit_id}\n{ungapped}\n")
-                    sequences_fasta = "".join(fasta_parts)
-                    if not sequences_fasta.strip() or not hit_ids:
-                        conservation_weights = [1.0 for _ in hit_ids]
-                        write_json(
-                            msa_dir / "sequence_weights.json",
-                            {
-                                "method": "mmseqs_cluster",
-                                "skipped": True,
-                                "reason": "no_sequences",
-                                "hit_count": len(hit_ids),
-                                "id_scheme": "h{index:06d} (A3M hit order)",
-                                "weights": list(conservation_weights),
-                            },
-                        )
-                        sequences_fasta = ""
-                    if not sequences_fasta.strip():
-                        cluster_out = {}
-                    else:
-                        cluster_out = self.mmseqs.cluster(
-                            sequences_fasta=sequences_fasta,
-                            threads=int(request.mmseqs_threads),
-                            cluster_method=str(request.conservation_cluster_method or "linclust"),
-                            min_seq_id=float(request.conservation_cluster_min_seq_id),
-                            coverage=request.conservation_cluster_coverage,
-                            cov_mode=request.conservation_cluster_cov_mode,
-                            kmer_per_seq=request.conservation_cluster_kmer_per_seq,
-                        )
-                    if sequences_fasta.strip():
-                        cluster_tsv = str(cluster_out.get("cluster_tsv") or "")
-                        _write_text(msa_dir / "cluster.tsv", cluster_tsv)
-                        weights_by_id = weights_from_mmseqs_cluster_tsv(cluster_tsv)
-                        conservation_weights = [float(weights_by_id.get(hit_id, 1.0)) for hit_id in hit_ids]
-                        write_json(
-                            msa_dir / "sequence_weights.json",
-                            {
-                                "method": "mmseqs_cluster",
-                                "cluster_method": str(request.conservation_cluster_method or "linclust"),
-                                "min_seq_id": float(request.conservation_cluster_min_seq_id),
-                                "coverage": request.conservation_cluster_coverage,
-                                "cov_mode": request.conservation_cluster_cov_mode,
-                                "kmer_per_seq": request.conservation_cluster_kmer_per_seq,
-                                "hit_count": len(hit_ids),
-                                "id_scheme": "h{index:06d} (A3M hit order)",
-                                "weights": list(conservation_weights),
-                                "weight_stats": {
-                                    "min": min(conservation_weights) if conservation_weights else None,
-                                    "max": max(conservation_weights) if conservation_weights else None,
-                                    "mean": (sum(conservation_weights) / len(conservation_weights))
-                                    if conservation_weights
-                                    else None,
-                                },
-                            },
-                        )
-            conservation = compute_conservation(
-                filtered_a3m_text,
-                tiers=request.conservation_tiers,
-                mode=request.conservation_mode,
-                weights=conservation_weights,
-            )
-            conservation_payload = {
-                "query_length": conservation.query_length,
-                "scores": conservation.scores,
-                "fixed_positions_by_tier": conservation.fixed_positions_by_tier,
-                "mode": request.conservation_mode,
-                "tiers": request.conservation_tiers,
-                "weighting": weighting,
-            }
-            conservation_path = str(paths.root / "conservation.json")
-            write_json(Path(conservation_path), conservation_payload)
-            set_status(paths, stage="conservation", state="completed")
 
             if not target_pdb_text.strip():
                 set_status(paths, stage="af2_target", state="running")
@@ -847,6 +973,8 @@ class PipelineRunner:
                         raise RuntimeError(
                             "target_pdb is missing; provide target_pdb or configure AlphaFold2 (ALPHAFOLD2_ENDPOINT_ID or AF2_URL)"
                         )
+                    if target_record is None:
+                        raise ValueError("target_fasta is required to predict target_pdb via AlphaFold2")
 
                     jobs_path = paths.root / "af2_target_runpod_job.json"
 
@@ -910,7 +1038,119 @@ class PipelineRunner:
                     )
                     set_status(paths, stage="af2_target", state="completed")
 
+            if msa_defer:
+                if target_record is None:
+                    target_record = _target_record_from_pdb(target_pdb_text, design_chains=request.design_chains)
+                filtered_a3m_text = _run_msa(target_record)
+                if request.stop_after == "msa":
+                    result = PipelineResult(
+                        run_id=run_id,
+                        output_dir=str(paths.root),
+                        msa_a3m_path=msa_a3m_path,
+                        msa_filtered_a3m_path=msa_filtered_a3m_path,
+                        msa_tsv_path=msa_tsv_path,
+                        conservation_path=None,
+                        ligand_mask_path=None,
+                        tiers=[],
+                        errors=[],
+                    )
+                    write_json(paths.summary_json, asdict(result))
+                    set_status(paths, stage="done", state="completed")
+                    return result
+                conservation = _run_conservation(filtered_a3m_text)
+
+            if conservation is None:
+                raise ValueError("conservation is required before ligand masking")
+
             set_status(paths, stage="ligand_mask", state="running")
+
+            backbones: list[dict[str, Any]] = []
+            if rfd3_backbones:
+                backbones = list(rfd3_backbones)
+            else:
+                backbones = [{"id": (rfd3_selected_id or "target"), "pdb_text": target_pdb_text}]
+
+            if rfd3_selected_id:
+                for idx, b in enumerate(backbones):
+                    if str(b.get("id") or "") == str(rfd3_selected_id):
+                        if idx != 0:
+                            backbones.insert(0, backbones.pop(idx))
+                        break
+
+            if backbones and (
+                bool(request.pdb_strip_nonpositive_resseq) or bool(request.pdb_renumber_resseq_from_1)
+            ):
+                set_status(paths, stage="pdb_preprocess", state="running")
+                backbones_dir = _ensure_dir(paths.root / "backbones")
+                for idx, b in enumerate(backbones):
+                    original = str(b.get("pdb_text") or "")
+                    if not original.strip():
+                        continue
+                    processed, numbering = preprocess_pdb(
+                        original,
+                        chains=request.design_chains,
+                        strip_nonpositive_resseq=bool(request.pdb_strip_nonpositive_resseq),
+                        renumber_resseq_from_1=bool(request.pdb_renumber_resseq_from_1),
+                    )
+                    b["pdb_text"] = processed
+                    bb_id = _safe_id(str(b.get("id") or f"backbone_{idx}")) or f"backbone_{idx}"
+                    bb_dir = _ensure_dir(backbones_dir / bb_id)
+                    _write_text(bb_dir / "target.original.pdb", original)
+                    write_json(
+                        bb_dir / "pdb_numbering.json",
+                        {
+                            "chains": request.design_chains,
+                            "strip_nonpositive_resseq": bool(request.pdb_strip_nonpositive_resseq),
+                            "renumber_resseq_from_1": bool(request.pdb_renumber_resseq_from_1),
+                            "mapping": numbering,
+                        },
+                    )
+                    if idx == 0:
+                        _write_text(paths.root / "target.original.pdb", original)
+                        write_json(
+                            paths.root / "pdb_numbering.json",
+                            {
+                                "chains": request.design_chains,
+                                "strip_nonpositive_resseq": bool(request.pdb_strip_nonpositive_resseq),
+                                "renumber_resseq_from_1": bool(request.pdb_renumber_resseq_from_1),
+                                "mapping": numbering,
+                            },
+                        )
+                set_status(paths, stage="pdb_preprocess", state="completed")
+
+            if backbones:
+                target_pdb_text = str(backbones[0].get("pdb_text") or "")
+            if target_pdb_text.strip():
+                _write_text(paths.root / "target.pdb", target_pdb_text)
+
+            backbones_dir = _ensure_dir(paths.root / "backbones")
+            backbone_contexts: list[dict[str, Any]] = []
+            backbone_entries: list[dict[str, Any]] = []
+            for idx, b in enumerate(backbones):
+                raw_id = str(b.get("id") or f"backbone_{idx}")
+                dir_id = _safe_id(raw_id) or f"backbone_{idx}"
+                bb_dir = _ensure_dir(backbones_dir / dir_id)
+                pdb_text = str(b.get("pdb_text") or "")
+                if pdb_text.strip():
+                    _write_text(bb_dir / "target.pdb", pdb_text)
+                ctx = {
+                    "id": raw_id,
+                    "dir": bb_dir,
+                    "pdb_text": pdb_text,
+                    "score": b.get("score"),
+                }
+                backbone_contexts.append(ctx)
+                backbone_entries.append(
+                    {
+                        "id": raw_id,
+                        "dir": str(bb_dir),
+                        "pdb_path": str(bb_dir / "target.pdb"),
+                        "score": b.get("score"),
+                        "primary": idx == 0,
+                    }
+                )
+            write_json(paths.root / "backbones.json", {"backbones": backbone_entries})
+
             pdb_chains = list(residues_by_chain(target_pdb_text, only_atom_records=True).keys())
             requested_chains = request.design_chains or pdb_chains or None
             af2_model_preset = _resolve_af2_model_preset(
@@ -944,173 +1184,327 @@ class PipelineRunner:
 
             set_status(paths, stage="query_pdb_check", state="running")
             query_seq = _clean_protein_sequence(target_record.sequence)
-            pdb_seq_by_chain = sequence_by_chain(target_pdb_text, chains=design_chains)
             policy = _normalize_policy(request.query_pdb_policy)
             min_identity = float(request.query_pdb_min_identity)
-
-            query_to_pdb_map_by_chain: dict[str, list[int | None]] = {}
-            query_pdb_report: dict[str, object] = {
-                "policy": policy,
-                "min_query_identity": min_identity,
-                "query_len": len(query_seq),
-                "chains": {},
-            }
-            problems: list[str] = []
-            warnings: list[str] = []
             both_provided = bool(str(request.target_fasta or "").strip()) and bool(str(request.target_pdb or "").strip())
 
-            for chain_id in design_chains or sorted(pdb_seq_by_chain.keys()):
-                chain_seq_raw = pdb_seq_by_chain.get(chain_id, "")
-                chain_seq = _clean_protein_sequence(chain_seq_raw)
-                if not chain_seq:
-                    problems.append(f"chain {chain_id}: empty sequence extracted from target_pdb")
-                    continue
-
-                aln = global_alignment_mapping(query_seq, chain_seq)
-                query_to_pdb_map_by_chain[chain_id] = aln.mapping_query_to_target
-
-                ok = aln.query_identity >= min_identity
-                exact_match = (
-                    aln.query_len == aln.target_len
-                    and aln.matches == aln.query_len
-                    and aln.gaps_in_query == 0
-                    and aln.gaps_in_target == 0
-                )
-                query_pdb_report["chains"][chain_id] = {
-                    "query_len": aln.query_len,
-                    "pdb_len": aln.target_len,
-                    "aligned_pairs": aln.aligned_pairs,
-                    "matches": aln.matches,
-                    "mismatches": aln.mismatches,
-                    "gaps_in_query": aln.gaps_in_query,
-                    "gaps_in_pdb": aln.gaps_in_target,
-                    "pairwise_identity": aln.pairwise_identity,
-                    "query_identity": aln.query_identity,
-                    "coverage_query": aln.coverage_query,
-                    "coverage_pdb": aln.coverage_target,
-                    "ok": ok,
-                    "exact_match": exact_match,
+            query_warnings: list[str] = []
+            for ctx in backbone_contexts:
+                pdb_seq_by_chain = sequence_by_chain(ctx["pdb_text"], chains=design_chains)
+                query_to_pdb_map_by_chain: dict[str, list[int | None]] = {}
+                query_pdb_report: dict[str, object] = {
+                    "policy": policy,
+                    "min_query_identity": min_identity,
+                    "query_len": len(query_seq),
+                    "backbone_id": ctx["id"],
+                    "chains": {},
                 }
+                problems: list[str] = []
+                warnings: list[str] = []
 
-                if not ok:
-                    problems.append(
-                        f"chain {chain_id}: query_identity={aln.query_identity:.3f} < {min_identity:.3f} "
-                        f"(query_len={aln.query_len} pdb_len={aln.target_len})"
+                for chain_id in design_chains or sorted(pdb_seq_by_chain.keys()):
+                    chain_seq_raw = pdb_seq_by_chain.get(chain_id, "")
+                    chain_seq = _clean_protein_sequence(chain_seq_raw)
+                    if not chain_seq:
+                        problems.append(f"chain {chain_id}: empty sequence extracted from target_pdb")
+                        continue
+
+                    aln = global_alignment_mapping(query_seq, chain_seq)
+                    query_to_pdb_map_by_chain[chain_id] = aln.mapping_query_to_target
+
+                    ok = aln.query_identity >= min_identity
+                    exact_match = (
+                        aln.query_len == aln.target_len
+                        and aln.matches == aln.query_len
+                        and aln.gaps_in_query == 0
+                        and aln.gaps_in_target == 0
                     )
-                elif both_provided and not exact_match:
-                    warnings.append(
-                        f"chain {chain_id}: FASTA vs PDB not exact match "
-                        f"(mismatches={aln.mismatches} gaps_query={aln.gaps_in_query} gaps_pdb={aln.gaps_in_target} "
-                        f"query_len={aln.query_len} pdb_len={aln.target_len})"
+                    query_pdb_report["chains"][chain_id] = {
+                        "query_len": aln.query_len,
+                        "pdb_len": aln.target_len,
+                        "aligned_pairs": aln.aligned_pairs,
+                        "matches": aln.matches,
+                        "mismatches": aln.mismatches,
+                        "gaps_in_query": aln.gaps_in_query,
+                        "gaps_in_pdb": aln.gaps_in_target,
+                        "pairwise_identity": aln.pairwise_identity,
+                        "query_identity": aln.query_identity,
+                        "coverage_query": aln.coverage_query,
+                        "coverage_pdb": aln.coverage_target,
+                        "ok": ok,
+                        "exact_match": exact_match,
+                    }
+
+                    if not ok:
+                        problems.append(
+                            f"chain {chain_id}: query_identity={aln.query_identity:.3f} < {min_identity:.3f} "
+                            f"(query_len={aln.query_len} pdb_len={aln.target_len})"
+                        )
+                    elif both_provided and not exact_match:
+                        warnings.append(
+                            f"chain {chain_id}: FASTA vs PDB not exact match "
+                            f"(mismatches={aln.mismatches} gaps_query={aln.gaps_in_query} gaps_pdb={aln.gaps_in_target} "
+                            f"query_len={aln.query_len} pdb_len={aln.target_len})"
+                        )
+
+                if warnings:
+                    query_pdb_report["warnings"] = warnings
+                write_json(ctx["dir"] / "query_pdb_alignment.json", query_pdb_report)
+                if ctx is backbone_contexts[0]:
+                    write_json(paths.root / "query_pdb_alignment.json", query_pdb_report)
+
+                if problems and policy == "error":
+                    raise ValueError(
+                        "target_fasta/target_pdb mismatch (query_pdb_check failed): "
+                        + f"backbone={ctx['id']} "
+                        + "; ".join(problems)
+                        + ". Fix: make sure target_fasta matches the selected PDB chain(s) "
+                        "(design_chains), or omit target_fasta to derive the query from target_pdb, "
+                        "or relax with query_pdb_policy='warn'/'ignore' and/or query_pdb_min_identity. "
+                        "See query_pdb_alignment.json for details."
                     )
 
-            if warnings:
-                query_pdb_report["warnings"] = warnings
-            write_json(paths.root / "query_pdb_alignment.json", query_pdb_report)
-            if problems and policy == "error":
-                raise ValueError(
-                    "target_fasta/target_pdb mismatch (query_pdb_check failed): "
-                    + "; ".join(problems)
-                    + ". Fix: make sure target_fasta matches the selected PDB chain(s) "
-                    "(design_chains), or omit target_fasta to derive the query from target_pdb, "
-                    "or relax with query_pdb_policy='warn'/'ignore' and/or query_pdb_min_identity. "
-                    "See query_pdb_alignment.json for details."
-                )
+                if problems and policy == "warn":
+                    query_warnings.append(f"{ctx['id']}:" + "; ".join(problems))
+                if warnings and policy != "ignore":
+                    query_warnings.append(f"{ctx['id']}:" + "; ".join(warnings))
 
-            detail_parts: list[str] = []
-            if problems and policy == "warn":
-                detail_parts.append("; ".join(problems))
-            if warnings and policy != "ignore":
-                detail_parts.append("; ".join(warnings))
+                ctx["mapping"] = query_to_pdb_map_by_chain
 
             set_status(
                 paths,
                 stage="query_pdb_check",
                 state="completed",
-                detail=(" | ".join(detail_parts)[:500] if detail_parts else None),
+                detail=(" | ".join(query_warnings)[:500] if query_warnings else None),
             )
 
-            ligand_mask = ligand_proximity_mask(
-                target_pdb_text,
-                chains=design_chains,
-                distance_angstrom=request.ligand_mask_distance,
-                ligand_resnames=request.ligand_resnames,
-                ligand_atom_chains=request.ligand_atom_chains,
-            )
-            ligand_mask_path = str(paths.root / "ligand_mask.json")
-            write_json(Path(ligand_mask_path), ligand_mask)
+            for ctx in backbone_contexts:
+                ctx["ligand_mask_pdb_text"] = ctx["pdb_text"]
+
+            if _diffdock_requested(request):
+                diffdock_root = _ensure_dir(paths.root / "diffdock")
+                for idx, ctx in enumerate(backbone_contexts):
+                    has_ligand = ligand_atoms_present(
+                        ctx["pdb_text"],
+                        chains=design_chains,
+                        ligand_resnames=request.ligand_resnames,
+                        ligand_atom_chains=request.ligand_atom_chains,
+                    )
+                    if has_ligand:
+                        continue
+                    if request.dry_run:
+                        continue
+                    if self.diffdock is None:
+                        raise RuntimeError("DiffDock endpoint is not configured (set DIFFDOCK_ENDPOINT_ID)")
+
+                    raw_id = str(ctx.get("id") or f"backbone_{idx}")
+                    dir_id = _safe_id(raw_id) or f"backbone_{idx}"
+                    diffdock_dir = _ensure_dir(diffdock_root / dir_id)
+                    set_status(paths, stage="diffdock", state="running", detail=f"backbone={raw_id}")
+
+                    _write_text(diffdock_dir / "protein.pdb", ctx["pdb_text"])
+                    if request.diffdock_ligand_sdf:
+                        _write_text(diffdock_dir / "ligand.sdf", request.diffdock_ligand_sdf)
+                    elif request.diffdock_ligand_smiles:
+                        _write_text(diffdock_dir / "ligand.smiles", request.diffdock_ligand_smiles)
+
+                    def _on_diffdock_job(job_id: str) -> None:
+                        write_json(diffdock_dir / "runpod_job.json", {"job_id": job_id})
+                        set_status(paths, stage="diffdock", state="running", detail=f"runpod_job_id={job_id}")
+
+                    diffdock_out = self.diffdock.dock(
+                        protein_pdb=ctx["pdb_text"],
+                        ligand_smiles=request.diffdock_ligand_smiles,
+                        ligand_sdf=request.diffdock_ligand_sdf,
+                        complex_name=dir_id or "complex",
+                        config=request.diffdock_config,
+                        extra_args=request.diffdock_extra_args,
+                        cuda_visible_devices=request.diffdock_cuda_visible_devices,
+                        on_job_id=_on_diffdock_job,
+                    )
+                    output_payload = diffdock_out.get("output") or {}
+                    write_json(diffdock_dir / "output.json", _safe_json(output_payload))
+                    zip_bytes = diffdock_out.get("zip_bytes")
+                    if isinstance(zip_bytes, (bytes, bytearray)):
+                        (diffdock_dir / "out_dir.zip").write_bytes(bytes(zip_bytes))
+                    sdf_text = str(diffdock_out.get("sdf_text") or "")
+                    if not sdf_text.strip():
+                        raise RuntimeError("DiffDock output missing rank1.sdf text")
+                    _write_text(diffdock_dir / "rank1.sdf", sdf_text)
+
+                    ligand_pdb = sdf_to_pdb(sdf_text)
+                    _write_text(diffdock_dir / "ligand.pdb", ligand_pdb)
+                    complex_pdb = append_ligand_pdb(ctx["pdb_text"], ligand_pdb)
+                    _write_text(diffdock_dir / "complex.pdb", complex_pdb)
+                    if idx == 0:
+                        _write_text(diffdock_root / "complex.pdb", complex_pdb)
+                        _write_text(diffdock_root / "ligand.pdb", ligand_pdb)
+                        _write_text(diffdock_root / "rank1.sdf", sdf_text)
+                    ctx["ligand_mask_pdb_text"] = complex_pdb
+                    set_status(paths, stage="diffdock", state="completed", detail=f"backbone={raw_id}")
+
+            for ctx in backbone_contexts:
+                ligand_mask = ligand_proximity_mask(
+                    ctx.get("ligand_mask_pdb_text") or ctx["pdb_text"],
+                    chains=design_chains,
+                    distance_angstrom=request.ligand_mask_distance,
+                    ligand_resnames=request.ligand_resnames,
+                    ligand_atom_chains=request.ligand_atom_chains,
+                )
+                ctx["ligand_mask"] = ligand_mask
+                write_json(ctx["dir"] / "ligand_mask.json", ligand_mask)
+                if ctx is backbone_contexts[0]:
+                    ligand_mask_path = str(paths.root / "ligand_mask.json")
+                    write_json(Path(ligand_mask_path), ligand_mask)
             set_status(paths, stage="ligand_mask", state="completed")
 
+            multi_backbone = len(backbone_contexts) > 1
+
+            def _tag_samples(samples: list[SequenceRecord], backbone_id: str) -> list[SequenceRecord]:
+                tagged: list[SequenceRecord] = []
+                for s in samples:
+                    raw_id = str(s.id)
+                    new_id = f"{backbone_id}:{raw_id}"
+                    header = s.header or raw_id
+                    new_header = f"{header}|backbone={backbone_id}"
+                    meta = dict(s.meta) if isinstance(s.meta, dict) else {}
+                    meta.setdefault("backbone_id", backbone_id)
+                    meta.setdefault("source_id", raw_id)
+                    tagged.append(
+                        SequenceRecord(
+                            id=new_id,
+                            header=new_header,
+                            sequence=s.sequence,
+                            meta=meta,
+                        )
+                    )
+                return tagged
+
             for tier in request.conservation_tiers:
+
                 tier_str = _tier_key(tier)
                 tier_dir = _ensure_dir(tiers_dir / tier_str)
 
                 tier_fixed = conservation.fixed_positions_by_tier.get(tier, [])
-                fixed_positions_by_chain: dict[str, list[int]] = {}
-                extra_fixed = request.fixed_positions_extra or {}
-                for chain_id in design_chains or list(ligand_mask.keys()) or ["A"]:
-                    mapped: list[int] = []
-                    mapping = query_to_pdb_map_by_chain.get(chain_id)
-                    if mapping:
-                        for pos in tier_fixed:
-                            if 1 <= int(pos) <= len(mapping):
-                                mapped_pos = mapping[int(pos) - 1]
-                                if mapped_pos is not None:
-                                    mapped.append(int(mapped_pos))
-                    else:
-                        mapped = [int(pos) for pos in tier_fixed]
-
-                    chain_fixed = set(mapped)
-                    if isinstance(extra_fixed, dict):
-                        raw_extra: list[object] = []
-                        per_chain = extra_fixed.get(chain_id)
-                        if isinstance(per_chain, list):
-                            raw_extra.extend(per_chain)
-                        all_chains = extra_fixed.get("*")
-                        if isinstance(all_chains, list):
-                            raw_extra.extend(all_chains)
-                        if raw_extra:
-                            extra_mapped: list[int] = []
-                            if mapping:
-                                for pos in raw_extra:
-                                    if 1 <= int(pos) <= len(mapping):
-                                        mapped_pos = mapping[int(pos) - 1]
-                                        if mapped_pos is not None:
-                                            extra_mapped.append(int(mapped_pos))
-                            else:
-                                extra_mapped = [int(pos) for pos in raw_extra]
-                            chain_fixed.update(extra_mapped)
-                    chain_fixed.update(ligand_mask.get(chain_id, []))
-                    fixed_positions_by_chain[chain_id] = sorted(chain_fixed)
-
-                write_json(tier_dir / "fixed_positions.json", fixed_positions_by_chain)
+                tier_samples: list[SequenceRecord] = []
+                backbone_meta: list[dict[str, Any]] = []
+                primary_fixed: dict[str, list[int]] | None = None
+                primary_native: SequenceRecord | None = None
+                mutation_report_path = None
+                mutations_by_position_tsv = None
+                mutations_by_position_svg = None
+                mutations_by_sequence_tsv = None
 
                 set_status(paths, stage=f"proteinmpnn_{tier_str}", state="running")
-                native, samples = self._run_proteinmpnn(
-                    tier_dir,
-                    request,
-                    pdb_text=target_pdb_text,
-                    tier_str=tier_str,
-                    design_chains=design_chains,
-                    fixed_positions_by_chain=fixed_positions_by_chain,
-                    on_job_id=lambda job_id, stage=f"proteinmpnn_{tier_str}", dir_=tier_dir: (
-                        write_json(dir_ / "runpod_job.json", {"job_id": job_id}),
-                        set_status(paths, stage=stage, state="running", detail=f"runpod_job_id={job_id}"),
-                    ),
-                )
+
+                for idx, ctx in enumerate(backbone_contexts):
+                    bb_tier_dir = tier_dir if not multi_backbone else _ensure_dir(ctx["dir"] / "tiers" / tier_str)
+                    mapping_by_chain = ctx.get("mapping") or {}
+                    ligand_mask = ctx.get("ligand_mask") or {}
+                    fixed_positions_by_chain: dict[str, list[int]] = {}
+                    extra_fixed = request.fixed_positions_extra or {}
+                    for chain_id in design_chains or list(ligand_mask.keys()) or ["A"]:
+                        mapped: list[int] = []
+                        mapping = mapping_by_chain.get(chain_id)
+                        if mapping:
+                            for pos in tier_fixed:
+                                if 1 <= int(pos) <= len(mapping):
+                                    mapped_pos = mapping[int(pos) - 1]
+                                    if mapped_pos is not None:
+                                        mapped.append(int(mapped_pos))
+                        else:
+                            mapped = [int(pos) for pos in tier_fixed]
+
+                        chain_fixed = set(mapped)
+                        if isinstance(extra_fixed, dict):
+                            raw_extra: list[object] = []
+                            per_chain = extra_fixed.get(chain_id)
+                            if isinstance(per_chain, list):
+                                raw_extra.extend(per_chain)
+                            all_chains = extra_fixed.get("*")
+                            if isinstance(all_chains, list):
+                                raw_extra.extend(all_chains)
+                            if raw_extra:
+                                extra_mapped: list[int] = []
+                                if mapping:
+                                    for pos in raw_extra:
+                                        if 1 <= int(pos) <= len(mapping):
+                                            mapped_pos = mapping[int(pos) - 1]
+                                            if mapped_pos is not None:
+                                                extra_mapped.append(int(mapped_pos))
+                                else:
+                                    extra_mapped = [int(pos) for pos in raw_extra]
+                                chain_fixed.update(extra_mapped)
+                        chain_fixed.update(ligand_mask.get(chain_id, []))
+                        fixed_positions_by_chain[chain_id] = sorted(chain_fixed)
+
+                    write_json(bb_tier_dir / "fixed_positions.json", fixed_positions_by_chain)
+                    if multi_backbone and idx == 0:
+                        write_json(tier_dir / "fixed_positions.json", fixed_positions_by_chain)
+
+                    native, samples = self._run_proteinmpnn(
+                        bb_tier_dir,
+                        request,
+                        pdb_text=ctx["pdb_text"],
+                        tier_str=tier_str,
+                        design_chains=design_chains,
+                        fixed_positions_by_chain=fixed_positions_by_chain,
+                        on_job_id=lambda job_id, stage=f"proteinmpnn_{tier_str}", dir_=bb_tier_dir, bb_id=ctx["id"]: (
+                            write_json(dir_ / "runpod_job.json", {"job_id": job_id}),
+                            set_status(paths, stage=stage, state="running", detail=f"runpod_job_id={job_id} backbone={bb_id}"),
+                        ),
+                    )
+
+                    if not multi_backbone:
+                        mutation_paths = write_mutation_reports(
+                            tier_dir,
+                            native=native,
+                            samples=samples,
+                            fixed_positions_by_chain=fixed_positions_by_chain,
+                            design_chains=design_chains,
+                        )
+                        mutation_report_path = mutation_paths.get("mutation_report_path")
+                        mutations_by_position_tsv = mutation_paths.get("mutations_by_position_tsv")
+                        mutations_by_position_svg = mutation_paths.get("mutations_by_position_svg")
+                        mutations_by_sequence_tsv = mutation_paths.get("mutations_by_sequence_tsv")
+                    else:
+                        mutation_paths = write_mutation_reports(
+                            bb_tier_dir,
+                            native=native,
+                            samples=samples,
+                            fixed_positions_by_chain=fixed_positions_by_chain,
+                            design_chains=design_chains,
+                        )
+                        backbone_meta.append(
+                            {
+                                "id": ctx["id"],
+                                "dir": str(bb_tier_dir),
+                                "proteinmpnn_json": str(bb_tier_dir / "proteinmpnn.json"),
+                                "fixed_positions_json": str(bb_tier_dir / "fixed_positions.json"),
+                                "mutation_report_path": mutation_paths.get("mutation_report_path"),
+                            }
+                        )
+
+                    tier_samples.extend(_tag_samples(samples, ctx["id"]))
+
+                    if idx == 0:
+                        primary_fixed = fixed_positions_by_chain
+                        primary_native = native
+
                 set_status(paths, stage=f"proteinmpnn_{tier_str}", state="completed")
 
-                mutation_paths = write_mutation_reports(
-                    tier_dir,
-                    native=native,
-                    samples=samples,
-                    fixed_positions_by_chain=fixed_positions_by_chain,
-                    design_chains=design_chains,
-                )
-                mutation_report_path = mutation_paths.get("mutation_report_path")
-                mutations_by_position_tsv = mutation_paths.get("mutations_by_position_tsv")
-                mutations_by_position_svg = mutation_paths.get("mutations_by_position_svg")
-                mutations_by_sequence_tsv = mutation_paths.get("mutations_by_sequence_tsv")
+                samples = tier_samples
+                fixed_positions_by_chain = primary_fixed or {}
+                native = primary_native if not multi_backbone else None
+
+                if multi_backbone:
+                    if samples:
+                        _write_text(
+                            tier_dir / "designs.fasta",
+                            to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in samples]),
+                        )
+                    if backbone_meta:
+                        write_json(tier_dir / "proteinmpnn_backbones.json", {"backbones": backbone_meta})
 
                 if request.stop_after == "design":
                     tier_results.append(

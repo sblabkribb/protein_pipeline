@@ -32,6 +32,15 @@ class PipelineRequest:
     rfd3_cli_args: str | None = None
     rfd3_env: dict[str, str] | None = None
     rfd3_design_index: int = 0
+    rfd3_use_ensemble: bool = False
+    rfd3_max_return_designs: int = 50
+    rfd3_partial_t: int = 20
+
+    diffdock_ligand_smiles: str | None = None
+    diffdock_ligand_sdf: str | None = None
+    diffdock_config: str = "default_inference_args.yaml"
+    diffdock_extra_args: str | None = None
+    diffdock_cuda_visible_devices: str | None = None
 
     design_chains: list[str] | None = None
 

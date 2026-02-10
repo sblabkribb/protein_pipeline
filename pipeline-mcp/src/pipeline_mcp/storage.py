@@ -110,3 +110,124 @@ def load_status(output_root: str, run_id: str) -> dict[str, object] | None:
     if isinstance(data, dict):
         return data
     return None
+
+
+def _safe_relpath(path: str) -> Path:
+    raw = str(path or "").replace("\\", "/")
+    rel = Path(raw)
+    if rel.is_absolute() or ".." in rel.parts:
+        raise ValueError("path must be a relative path without '..'")
+    return rel
+
+
+def resolve_run_path(output_root: str, run_id: str, rel_path: str | None = None) -> Path:
+    run_id = normalize_run_id(run_id)
+    root = Path(output_root).resolve() / run_id
+    if rel_path is None or str(rel_path).strip() == "":
+        return root
+    return root / _safe_relpath(rel_path)
+
+
+def list_artifacts(
+    output_root: str,
+    run_id: str,
+    *,
+    prefix: str | None = None,
+    max_depth: int = 4,
+    limit: int = 200,
+) -> list[dict[str, object]]:
+    root = resolve_run_path(output_root, run_id)
+    base = resolve_run_path(output_root, run_id, prefix) if prefix else root
+    if not base.exists():
+        return []
+
+    results: list[dict[str, object]] = []
+    root = root.resolve()
+    base = base.resolve()
+    max_depth = max(0, int(max_depth))
+    limit = max(0, int(limit))
+
+    if base.is_file():
+        rel = base.resolve().relative_to(root)
+        stat = base.stat()
+        return [
+            {
+                "path": str(rel).replace("\\", "/"),
+                "type": "file",
+                "size": int(stat.st_size),
+                "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(stat.st_mtime)),
+            }
+        ]
+
+    for dirpath, dirnames, filenames in os.walk(base):
+        rel_dir = Path(dirpath).resolve().relative_to(base)
+        depth = len(rel_dir.parts)
+        if depth >= max_depth:
+            dirnames[:] = []
+        dirnames.sort()
+        filenames.sort()
+
+        for name in dirnames:
+            if limit and len(results) >= limit:
+                return results
+            path = Path(dirpath) / name
+            rel = path.resolve().relative_to(root)
+            stat = path.stat()
+            results.append(
+                {
+                    "path": str(rel).replace("\\", "/"),
+                    "type": "dir",
+                    "size": int(stat.st_size),
+                    "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(stat.st_mtime)),
+                }
+            )
+        for name in filenames:
+            if limit and len(results) >= limit:
+                return results
+            path = Path(dirpath) / name
+            rel = path.resolve().relative_to(root)
+            stat = path.stat()
+            results.append(
+                {
+                    "path": str(rel).replace("\\", "/"),
+                    "type": "file",
+                    "size": int(stat.st_size),
+                    "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(stat.st_mtime)),
+                }
+            )
+        if limit and len(results) >= limit:
+            return results
+
+    return results
+
+
+def read_artifact(
+    output_root: str,
+    run_id: str,
+    *,
+    path: str,
+    max_bytes: int = 2_000_000,
+    offset: int = 0,
+) -> tuple[bytes, dict[str, object]]:
+    target = resolve_run_path(output_root, run_id, path)
+    if not target.exists():
+        raise ValueError("artifact not found")
+    if not target.is_file():
+        raise ValueError("artifact is not a file")
+    size = target.stat().st_size
+    offset = max(0, int(offset))
+    max_bytes = max(0, int(max_bytes))
+    with target.open("rb") as f:
+        if offset:
+            f.seek(offset)
+        data = f.read(max_bytes if max_bytes > 0 else None)
+    read_bytes = len(data)
+    truncated = (offset + read_bytes) < size
+    meta = {
+        "path": str(Path(path).as_posix()),
+        "size": int(size),
+        "offset": int(offset),
+        "read_bytes": int(read_bytes),
+        "truncated": bool(truncated),
+    }
+    return data, meta

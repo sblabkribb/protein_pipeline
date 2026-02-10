@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import asdict
 from dataclasses import replace
+import base64
 import os
 import time
 from typing import Any
@@ -14,6 +15,8 @@ from .storage import list_runs
 from .storage import new_run_id
 from .storage import normalize_run_id
 from .storage import load_status
+from .storage import list_artifacts
+from .storage import read_artifact
 
 
 def _env_true(name: str) -> bool:
@@ -263,6 +266,15 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
     rfd3_cli_args = _as_text(args.get("rfd3_cli_args")).strip() or None
     rfd3_env = _as_dict_str(args.get("rfd3_env"), name="rfd3_env")
     rfd3_design_index = _as_int(args.get("rfd3_design_index"), 0)
+    rfd3_use_ensemble = _as_bool(args.get("rfd3_use_ensemble"), False)
+    rfd3_max_return_designs = _as_int(args.get("rfd3_max_return_designs"), 50)
+    rfd3_partial_t = _as_int(args.get("rfd3_partial_t"), 20)
+
+    diffdock_ligand_smiles = _as_text(args.get("diffdock_ligand_smiles")).strip() or None
+    diffdock_ligand_sdf = _as_text(args.get("diffdock_ligand_sdf")).strip() or None
+    diffdock_config = str(args.get("diffdock_config") or "default_inference_args.yaml")
+    diffdock_extra_args = _as_text(args.get("diffdock_extra_args")).strip() or None
+    diffdock_cuda_visible_devices = _as_text(args.get("diffdock_cuda_visible_devices")).strip() or None
 
     has_rfd3 = bool(rfd3_inputs_text or rfd3_inputs or rfd3_contig or rfd3_input_files)
     if not target_fasta.strip() and not target_pdb.strip() and not has_rfd3:
@@ -292,6 +304,14 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
         rfd3_cli_args=rfd3_cli_args,
         rfd3_env=rfd3_env,
         rfd3_design_index=rfd3_design_index,
+        rfd3_use_ensemble=rfd3_use_ensemble,
+        rfd3_max_return_designs=max(1, int(rfd3_max_return_designs)),
+        rfd3_partial_t=int(rfd3_partial_t),
+        diffdock_ligand_smiles=diffdock_ligand_smiles,
+        diffdock_ligand_sdf=diffdock_ligand_sdf,
+        diffdock_config=diffdock_config,
+        diffdock_extra_args=diffdock_extra_args,
+        diffdock_cuda_visible_devices=diffdock_cuda_visible_devices,
         design_chains=design_chains,
         fixed_positions_extra=fixed_positions_extra,
         conservation_tiers=conservation_tiers or [0.3, 0.5, 0.7],
@@ -374,6 +394,14 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "rfd3_cli_args": {"type": "string"},
                     "rfd3_env": {"type": "object", "additionalProperties": {"type": "string"}},
                     "rfd3_design_index": {"type": "integer"},
+                    "rfd3_use_ensemble": {"type": "boolean"},
+                    "rfd3_max_return_designs": {"type": "integer"},
+                    "rfd3_partial_t": {"type": "integer"},
+                    "diffdock_ligand_smiles": {"type": "string"},
+                    "diffdock_ligand_sdf": {"type": "string"},
+                    "diffdock_config": {"type": "string"},
+                    "diffdock_extra_args": {"type": "string"},
+                    "diffdock_cuda_visible_devices": {"type": "string"},
                     "design_chains": {"type": "array", "items": {"type": "string"}},
                     "fixed_positions_extra": {
                         "type": "object",
@@ -467,6 +495,36 @@ def tool_definitions() -> list[dict[str, Any]]:
                 "properties": {"limit": {"type": "integer"}},
             },
         },
+        {
+            "name": "pipeline.list_artifacts",
+            "description": "List artifact paths under a run_id.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "prefix": {"type": "string"},
+                    "max_depth": {"type": "integer"},
+                    "limit": {"type": "integer"},
+                },
+                "required": ["run_id"],
+            },
+        },
+        {
+            "name": "pipeline.read_artifact",
+            "description": "Read an artifact file under a run_id.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "path": {"type": "string"},
+                    "max_bytes": {"type": "integer"},
+                    "offset": {"type": "integer"},
+                    "encoding": {"type": "string"},
+                    "base64": {"type": "boolean"},
+                },
+                "required": ["run_id", "path"],
+            },
+        },
     ]
 
 
@@ -515,5 +573,46 @@ class ToolDispatcher:
         if name == "pipeline.list_runs":
             limit = arguments.get("limit")
             return {"runs": list_runs(self.runner.output_root, limit=int(limit) if limit is not None else 50)}
+
+        if name == "pipeline.list_artifacts":
+            run_id = str(arguments.get("run_id") or "")
+            if not run_id:
+                raise ValueError("run_id is required")
+            prefix = arguments.get("prefix")
+            max_depth = _as_int(arguments.get("max_depth"), 4)
+            limit = _as_int(arguments.get("limit"), 200)
+            artifacts = list_artifacts(
+                self.runner.output_root,
+                run_id,
+                prefix=str(prefix) if prefix is not None else None,
+                max_depth=max_depth,
+                limit=limit,
+            )
+            return {"run_id": run_id, "artifacts": artifacts}
+
+        if name == "pipeline.read_artifact":
+            run_id = str(arguments.get("run_id") or "")
+            path = str(arguments.get("path") or "")
+            if not run_id:
+                raise ValueError("run_id is required")
+            if not path:
+                raise ValueError("path is required")
+            max_bytes = _as_int(arguments.get("max_bytes"), 2_000_000)
+            offset = _as_int(arguments.get("offset"), 0)
+            encoding = str(arguments.get("encoding") or "utf-8")
+            as_base64 = _as_bool(arguments.get("base64"), False)
+            data, meta = read_artifact(
+                self.runner.output_root,
+                run_id,
+                path=path,
+                max_bytes=max_bytes,
+                offset=offset,
+            )
+            if as_base64:
+                meta["base64"] = base64.b64encode(data).decode("ascii")
+                return {"run_id": run_id, **meta}
+            meta["encoding"] = encoding
+            meta["text"] = data.decode(encoding, errors="replace")
+            return {"run_id": run_id, **meta}
 
         raise ValueError(f"Unknown tool: {name}")
