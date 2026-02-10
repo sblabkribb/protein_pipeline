@@ -191,6 +191,37 @@ def _is_heavy(atom: Atom) -> bool:
     return atom.element not in {"H", "D"}
 
 
+def ligand_atoms_present(
+    pdb_text: str,
+    *,
+    chains: list[str] | None = None,
+    ligand_resnames: list[str] | None = None,
+    ligand_atom_chains: list[str] | None = None,
+) -> bool:
+    ligand_set = {name.strip().upper() for name in ligand_resnames or [] if name.strip()} or None
+    atom_chain_set = {c.strip() for c in (ligand_atom_chains or []) if str(c).strip()} or None
+    masked_chain_set = set(chains) if chains is not None else set()
+
+    for atom in iter_atoms(pdb_text):
+        if atom.record == "HETATM":
+            if atom.resname.upper() in _WATER_RESNAMES:
+                continue
+            if ligand_set is not None and atom.resname.upper() not in ligand_set:
+                continue
+            if _is_heavy(atom):
+                return True
+            continue
+
+        if atom.record == "ATOM" and atom_chain_set is not None:
+            if atom.chain_id not in atom_chain_set:
+                continue
+            if atom.chain_id in masked_chain_set:
+                continue
+            if _is_heavy(atom):
+                return True
+    return False
+
+
 def ligand_proximity_mask(
     pdb_text: str,
     *,

@@ -12,6 +12,7 @@ NCP CPU 서버에서 동작하는 파이프라인 오케스트레이터(MCP 스�
 - `PROTEINMPNN_ENDPOINT_ID` (필수)
 - `ALPHAFOLD2_ENDPOINT_ID` (선택, 설정 시 RunPod AF2 사용)
 - `RFD3_ENDPOINT_ID` (optional, RFDiffusion3 RunPod endpoint)
+- `DIFFDOCK_ENDPOINT_ID` (optional, DiffDock RunPod endpoint)
 - TLS 옵션(선택): `RUNPOD_CA_BUNDLE`, `RUNPOD_SKIP_VERIFY=1`
 - (선택) `PIPELINE_MMSEQS_USE_GPU=1`: 요청에 `mmseqs_use_gpu`를 명시하지 않으면 기본값을 GPU로 설정
 
@@ -31,6 +32,7 @@ MMSEQS_ENDPOINT_ID=...
 PROTEINMPNN_ENDPOINT_ID=...
 ALPHAFOLD2_ENDPOINT_ID=...
 RFD3_ENDPOINT_ID=...
+DIFFDOCK_ENDPOINT_ID=...
 PIPELINE_MMSEQS_USE_GPU=1
 SOLUPROT_URL=http://127.0.0.1:18081/score
 PIPELINE_OUTPUT_ROOT=/opt/protein_pipeline/outputs
@@ -63,6 +65,7 @@ docker run --rm -p 8000:8000 \
 - `POST /tools/call`
 
 `tools/call`에서 `name="pipeline.run"`으로 실행합니다.
+(pipeline.list_artifacts, pipeline.read_artifact로 run 산출물 목록/내용을 조회할 수 있음)
 
 ⚠️ `target_fasta`/`target_pdb`는 “파일 경로”가 아니라 “파일 내용(text)”을 JSON에 넣습니다.
 
@@ -218,6 +221,15 @@ curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' \
   -d "$(jq -n --arg run_id "$RUN_ID" '{name:\"pipeline.status\", arguments:{run_id:$run_id}}')" | jq .
 ```
 
+### artifacts ?? (list/read)
+```bash
+curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg run_id "$RUN_ID" '{name:\"pipeline.list_artifacts\", arguments:{run_id:$run_id, prefix:\"rfd3\"}}')" | jq .
+
+curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' \
+  -d "$(jq -n --arg run_id "$RUN_ID" '{name:\"pipeline.read_artifact\", arguments:{run_id:$run_id, path:\"rfd3/inputs.json\", max_bytes:200000}}')" | jq .
+```
+
 ### Windows PowerShell에서 `/tools/call` 호출하기(HTTP 400 방지)
 PowerShell에서 `ConvertTo-Json`을 2번 하거나, `-Body`에 JSON이 아닌 문자열이 섞이면 서버가 **“JSON object”**로 못 읽어서 HTTP 400이 납니다.
 
@@ -335,3 +347,11 @@ codex mcp list
 - Set `RFD3_ENDPOINT_ID` to enable the RFDiffusion3 RunPod endpoint.
 - Trigger RFD3 by passing one of: `rfd3_inputs`, `rfd3_inputs_text`, or `rfd3_contig` (with `rfd3_input_pdb`).
 - Output artifacts are written under `outputs/<run_id>/rfd3/` and the selected PDB becomes `target_pdb`.
+- `rfd3_partial_t` 기본값은 `20`이며, inputs spec에 `partial_t`가 없을 때만 자동 주입됩니다(`<=0`이면 주입 안 함).
+- `rfd3_max_return_designs` 기본값은 `50`이며, `rfd3_cli_args`에 `diffusion_batch_size`/`n_batches`가 없으면
+  `diffusion_batch_size=<rfd3_max_return_designs> n_batches=1`을 자동 추가합니다.
+
+## DiffDock (optional)
+- `diffdock_ligand_smiles` ?? `diffdock_ligand_sdf`? ????, ?? PDB? ligand ??? ?? ?? ?????.
+- DiffDock ??? `rank1.sdf`? ??? ligand mask ??? complex PDB? ????? (ProteinMPNN/AF2 ?? PDB? ???? ??).
+- ??: `outputs/<run_id>/diffdock/` ??? `rank1.sdf`, `ligand.pdb`, `complex.pdb`, `out_dir.zip` ?? ?????.

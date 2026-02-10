@@ -35,7 +35,17 @@ def route_prompt(prompt: str) -> dict[str, object]:
         except Exception:
             num = None
 
+    partial_t = None
+    m = re.search(r"(?:diffuser\.partial[_\s-]*t|partial[_\s-]*t)\s*[:=]?\s*(\d+)", p)
+    if m:
+        try:
+            partial_t = int(m.group(1))
+        except Exception:
+            partial_t = None
+
     out: dict[str, object] = {}
+    if partial_t is not None:
+        out["rfd3_partial_t"] = partial_t
     if stop_after:
         out["stop_after"] = stop_after
     if tiers:

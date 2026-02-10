@@ -22,6 +22,7 @@ class RFD3RunPodClient:
         env: dict[str, str] | None = None,
         select_index: int = 0,
         max_return_designs: int | None = None,
+        return_designs_pdb: bool = False,
         on_job_id: Callable[[str], None] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {}
@@ -38,6 +39,7 @@ class RFD3RunPodClient:
         payload["select_index"] = int(select_index)
         if max_return_designs is not None:
             payload["max_return_designs"] = int(max_return_designs)
+        payload["return_designs_pdb"] = bool(return_designs_pdb)
         payload["return_pdb"] = True
         payload["return_selected_json"] = False
 
