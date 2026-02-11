@@ -131,16 +131,53 @@ def _rfd3_input_files(request: PipelineRequest) -> dict[str, str]:
     return files
 
 
+def _normalize_rfd3_contig_str(value: str) -> str:
+    raw = str(value or "")
+    if ":" not in raw:
+        return raw
+    return re.sub(r"([A-Za-z])\s*:\s*([0-9])", r"\1\2", raw)
+
+
+def _normalize_rfd3_contig_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _normalize_rfd3_contig_str(value)
+    if isinstance(value, list):
+        return [
+            _normalize_rfd3_contig_str(item) if isinstance(item, str) else item
+            for item in value
+        ]
+    return value
+
+
+def _normalize_rfd3_inputs(inputs: dict[str, Any] | None) -> dict[str, Any] | None:
+    if inputs is None:
+        return None
+    normalized: dict[str, Any] = {}
+    for key, spec in inputs.items():
+        if isinstance(spec, dict):
+            spec_out = dict(spec)
+            if "contig" in spec_out:
+                spec_out["contig"] = _normalize_rfd3_contig_value(spec_out.get("contig"))
+            if "select_unfixed_sequence" in spec_out:
+                spec_out["select_unfixed_sequence"] = _normalize_rfd3_contig_value(
+                    spec_out.get("select_unfixed_sequence")
+                )
+            normalized[key] = spec_out
+        else:
+            normalized[key] = spec
+    return normalized
+
+
 def _rfd3_simple_inputs(request: PipelineRequest, *, input_files: dict[str, str]) -> dict[str, object]:
     spec: dict[str, object] = {}
     if request.rfd3_input_pdb or "input.pdb" in input_files:
         spec["input"] = "input.pdb"
     if request.rfd3_contig is not None:
-        spec["contig"] = request.rfd3_contig
+        spec["contig"] = _normalize_rfd3_contig_value(request.rfd3_contig)
     if request.rfd3_ligand is not None:
         spec["ligand"] = request.rfd3_ligand
     if request.rfd3_select_unfixed_sequence is not None:
-        spec["select_unfixed_sequence"] = request.rfd3_select_unfixed_sequence
+        spec["select_unfixed_sequence"] = _normalize_rfd3_contig_value(request.rfd3_select_unfixed_sequence)
     if not spec:
         raise ValueError("RFD3 simple inputs require contig/ligand/input")
     spec_name = str(request.rfd3_spec_name or "spec-1").strip() or "spec-1"
@@ -824,6 +861,7 @@ class PipelineRunner:
                     if parsed is not None:
                         inputs_obj = parsed
                         inputs_text = None
+                inputs_obj = _normalize_rfd3_inputs(inputs_obj)
                 inputs_obj = _inject_rfd3_partial_t(inputs_obj, request.rfd3_partial_t)
 
                 if inputs_text is None and inputs_obj is None:

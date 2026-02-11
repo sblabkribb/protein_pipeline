@@ -11,6 +11,7 @@ from typing import Any
 from .models import PipelineRequest
 from .pipeline import PipelineRunner
 from .router import request_from_prompt
+from .router import plan_from_prompt
 from .storage import list_runs
 from .storage import new_run_id
 from .storage import normalize_run_id
@@ -461,6 +462,23 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.plan_from_prompt",
+            "description": "Route a natural-language prompt and return missing inputs/questions without running.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "prompt": {"type": "string"},
+                    "target_fasta": {"type": "string"},
+                    "target_pdb": {"type": "string"},
+                    "rfd3_input_pdb": {"type": "string"},
+                    "rfd3_contig": {"type": "string"},
+                    "diffdock_ligand_smiles": {"type": "string"},
+                    "diffdock_ligand_sdf": {"type": "string"},
+                },
+                "required": ["prompt"],
+            },
+        },
+        {
             "name": "pipeline.run_from_prompt",
             "description": "Route a natural-language prompt to a pipeline request and run it.",
             "inputSchema": {
@@ -545,6 +563,24 @@ class ToolDispatcher:
                 normalized_run_id = new_run_id("pipeline")
             res = _run_with_auto_retry(self.runner, req, run_id=normalized_run_id, retry=retry)
             return {"run_id": res.run_id, "output_dir": res.output_dir, "summary": asdict(res)}
+
+        if name == "pipeline.plan_from_prompt":
+            prompt = str(arguments.get("prompt") or "")
+            target_fasta = _as_text(arguments.get("target_fasta"))
+            target_pdb = _as_text(arguments.get("target_pdb"))
+            rfd3_input_pdb = _as_text(arguments.get("rfd3_input_pdb"))
+            rfd3_contig = str(arguments.get("rfd3_contig") or "").strip() or None
+            diffdock_ligand_smiles = _as_text(arguments.get("diffdock_ligand_smiles"))
+            diffdock_ligand_sdf = _as_text(arguments.get("diffdock_ligand_sdf"))
+            return plan_from_prompt(
+                prompt=prompt,
+                target_fasta=target_fasta,
+                target_pdb=target_pdb,
+                rfd3_input_pdb=rfd3_input_pdb,
+                rfd3_contig=rfd3_contig,
+                diffdock_ligand_smiles=diffdock_ligand_smiles,
+                diffdock_ligand_sdf=diffdock_ligand_sdf,
+            )
 
         if name == "pipeline.run_from_prompt":
             run_id = arguments.get("run_id")

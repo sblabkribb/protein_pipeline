@@ -157,7 +157,7 @@ class TestPipelineDryRun(unittest.TestCase):
                 target_fasta="",
                 target_pdb="",
                 dry_run=True,
-                rfd3_contig="A:1-2",
+                rfd3_contig="A1-2",
                 rfd3_input_pdb=pdb,
                 num_seq_per_tier=1,
                 conservation_tiers=[0.3],
@@ -179,9 +179,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 target_fasta="",
                 target_pdb="",
                 dry_run=True,
-                rfd3_contig="A:1-2",
+                rfd3_contig="A1-2",
                 rfd3_ligand="LIG",
-                rfd3_select_unfixed_sequence="A:1-2",
+                rfd3_select_unfixed_sequence="A1-2",
                 rfd3_input_pdb=pdb,
                 num_seq_per_tier=1,
                 conservation_tiers=[0.3],
@@ -191,9 +191,9 @@ class TestPipelineDryRun(unittest.TestCase):
             inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("input"), "input.pdb")
-            self.assertEqual(spec.get("contig"), "A:1-2")
+            self.assertEqual(spec.get("contig"), "A1-2")
             self.assertEqual(spec.get("ligand"), "LIG")
-            self.assertEqual(spec.get("select_unfixed_sequence"), "A:1-2")
+            self.assertEqual(spec.get("select_unfixed_sequence"), "A1-2")
 
     def test_pipeline_rfd3_partial_t_default_injected(self) -> None:
         pdb = (
@@ -207,7 +207,7 @@ class TestPipelineDryRun(unittest.TestCase):
                 target_fasta="",
                 target_pdb="",
                 dry_run=True,
-                rfd3_contig="A:1-2",
+                rfd3_contig="A1-2",
                 rfd3_input_pdb=pdb,
                 num_seq_per_tier=1,
                 conservation_tiers=[0.3],
@@ -230,7 +230,7 @@ class TestPipelineDryRun(unittest.TestCase):
                 target_fasta="",
                 target_pdb="",
                 dry_run=True,
-                rfd3_inputs={"spec-1": {"input": "input.pdb", "contig": "A:1-2", "partial_t": 5}},
+                rfd3_inputs={"spec-1": {"input": "input.pdb", "contig": "A1-2", "partial_t": 5}},
                 rfd3_input_pdb=pdb,
                 num_seq_per_tier=1,
                 conservation_tiers=[0.3],
