@@ -59,10 +59,15 @@ docker run --rm -p 8000:8000 \
   pipeline-mcp:cpu
 ```
 
+
+- Usage guide: see `docs/USAGE.md` (examples, screenshots).
 ## API (간단 HTTP)
 - `GET /healthz`
 - `POST /tools/list`
 - `POST /tools/call`
+
+- `pipeline.plan_from_prompt`: Parse a prompt and return missing inputs/questions (no execution).
+- `pipeline.run_from_prompt`: Parse a prompt and run immediately (target_pdb/target_fasta required).
 
 `tools/call`에서 `name="pipeline.run"`으로 실행합니다.
 (pipeline.list_artifacts, pipeline.read_artifact로 run 산출물 목록/내용을 조회할 수 있음)
@@ -346,6 +351,7 @@ codex mcp list
 
 - Set `RFD3_ENDPOINT_ID` to enable the RFDiffusion3 RunPod endpoint.
 - Trigger RFD3 by passing one of: `rfd3_inputs`, `rfd3_inputs_text`, or `rfd3_contig` (with `rfd3_input_pdb`).
+- `rfd3_contig` format: `A1-229` (no colon). `A:1-229` is normalized for compatibility but prefer no colon.
 - Output artifacts are written under `outputs/<run_id>/rfd3/` and the selected PDB becomes `target_pdb`.
 - `rfd3_partial_t` 기본값은 `20`이며, inputs spec에 `partial_t`가 없을 때만 자동 주입됩니다(`<=0`이면 주입 안 함).
 - `rfd3_max_return_designs` 기본값은 `50`이며, `rfd3_cli_args`에 `diffusion_batch_size`/`n_batches`가 없으면
@@ -355,3 +361,16 @@ codex mcp list
 - `diffdock_ligand_smiles` ?? `diffdock_ligand_sdf`? ????, ?? PDB? ligand ??? ?? ?? ?????.
 - DiffDock ??? `rank1.sdf`? ??? ligand mask ??? complex PDB? ????? (ProteinMPNN/AF2 ?? PDB? ???? ??).
 - ??: `outputs/<run_id>/diffdock/` ??? `rank1.sdf`, `ligand.pdb`, `complex.pdb`, `out_dir.zip` ?? ?????.
+
+## NCP ??/???? (??)
+- Docker ??? ???: `docker build -t pipeline-mcp:cpu ./pipeline-mcp`
+- ????? ??: `docker tag` + `docker push`
+- NCP?? ????/??? ???
+- ? ?? ??: `POST /tools/list`? `pipeline.plan_from_prompt`? ???? ??
+
+## Codex Skills (??)
+- ? ????? `skills/protein-pipeline-stepper/SKILL.md`? ???? ????.
+- ??: `$CODEX_HOME/skills/protein-pipeline-stepper/SKILL.md`? ?????, ?? ?? ????? ?????.
+
+## ????/?? ??
+- ?? ??? README?, ?? ????? `docs/USAGE.md` + `docs/screenshots/`? ???? ?? ?????.

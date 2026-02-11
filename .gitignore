@@ -7,7 +7,6 @@
 /simplefold-runpod/
 /rfd3-runpod/
 /diffdock_runpod/
-/diffdock_runpod/
 
 # --- Pipeline outputs ---
 /outputs/
@@ -17,11 +16,21 @@
 /pipeline-mcp/tests/_tmp/
 /pytest-cache-files-*/
 /pipeline-mcp/pytest-cache-files-*/
-/*.pdb
-ja3c10941_si_001.pdf
+*.pdb
+*.pdb.gz
+*.cif
+*.cif.gz
+*.sdf
+*.mol
+*.mol2
+*.smiles
+*.smi
+*.fasta
+*.fa
+*.a3m
+*.tsv
+*.pdf
 /af2_wt_*_job.json
-/result.a3m
-/result.tsv
 
 # --- Python ---
 __pycache__/

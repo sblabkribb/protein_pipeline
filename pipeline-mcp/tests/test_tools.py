@@ -98,7 +98,7 @@ class TestTools(unittest.TestCase):
             out = dispatcher.call_tool(
                 "pipeline.run",
                 {
-                    "rfd3_contig": "A:1-2",
+                    "rfd3_contig": "A1-2",
                     "rfd3_input_pdb": pdb,
                     "dry_run": True,
                     "num_seq_per_tier": 1,
@@ -151,5 +151,36 @@ class TestTools(unittest.TestCase):
             self.assertLessEqual(int(read_out.get("read_bytes") or 0), 64)
 
 
+
+
+    def test_pipeline_plan_from_prompt_missing_target(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.plan_from_prompt",
+                {"prompt": "run design with rfd3 diffusion"},
+            )
+            missing = out.get("missing") or []
+            self.assertIn("target_input", missing)
+
+    def test_pipeline_plan_from_prompt_parses_contig(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.plan_from_prompt",
+                {
+                    "prompt": "rfd3 contig A1-2 design",
+                    "target_pdb": pdb,
+                },
+            )
+            routed = out.get("routed_request") or {}
+            self.assertEqual(routed.get("rfd3_contig"), "A1-2")
 if __name__ == "__main__":
     unittest.main()
