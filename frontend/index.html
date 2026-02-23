@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>K-Biofoundry | Protein Pipeline Console</title>
-    <link rel="stylesheet" href="./styles.css?v=20260213b" />
+    <link rel="stylesheet" href="./styles.css?v=20260223e" />
   </head>
   <body>
     <div class="bg-orb orb-a" aria-hidden="true"></div>
@@ -47,8 +47,8 @@
         <div id="chatArea" class="chat-area hidden">
           <div class="chat-header">
             <div>
-              <h2>Interactive Planning</h2>
-              <p>Send a prompt, answer the questions, and launch the run.</p>
+              <h2>Run Setup</h2>
+              <p>Select what to run, attach inputs, and launch the job.</p>
             </div>
             <div class="user-badge" id="userBadge"></div>
           </div>
@@ -60,10 +60,10 @@
               <textarea
                 id="promptInput"
                 rows="3"
-                placeholder="Describe the design goal, constraints, and where to stop."
+                placeholder="Optional notes for this run (no prompt required)."
               ></textarea>
               <div class="composer-actions">
-                <button id="planBtn" class="primary">Request Plan</button>
+                <button id="planBtn" class="primary">Reset Inputs</button>
                 <button id="clearBtn" class="ghost">Clear</button>
               </div>
             </div>
@@ -72,7 +72,7 @@
           <div id="questionStack" class="question-stack"></div>
 
           <div class="run-actions">
-            <button id="runBtn" class="primary" disabled>Run Pipeline</button>
+            <button id="runBtn" class="primary" disabled>Run</button>
             <div id="runHint" class="hint">Complete required inputs to enable execution.</div>
           </div>
 
@@ -135,6 +135,12 @@
               <span class="label">Updated</span>
               <span id="runUpdatedValue" class="value">-</span>
             </div>
+            <div class="status-subtitle">Scoring</div>
+            <div class="score-row score-row-compact">
+              <div class="score-pill" id="runScoreValue">Score: -</div>
+              <div class="score-pill" id="runEvidenceValue">Evidence: -</div>
+              <div class="score-pill" id="runRecommendationValue">Recommendation: -</div>
+            </div>
             <div class="status-actions">
               <button id="pollBtn" class="ghost">Poll Now</button>
               <label class="toggle">
@@ -161,6 +167,107 @@
         </div>
 
         <div class="side-section">
+          <h3>Feedback</h3>
+          <div class="status-card feedback-card">
+            <div class="form-row">
+              <span class="label">Rating</span>
+              <div id="feedbackRating" class="choice-group"></div>
+            </div>
+            <div class="form-row">
+              <span class="label">Reasons</span>
+              <div id="feedbackReasons" class="choice-group"></div>
+            </div>
+            <div class="form-row">
+              <label>
+                Artifact (optional)
+                <select id="feedbackArtifact"></select>
+              </label>
+              <label>
+                Stage (optional)
+                <select id="feedbackStage"></select>
+              </label>
+            </div>
+            <label>
+              Comment
+              <textarea id="feedbackComment" rows="3" placeholder="Short context or interpretation"></textarea>
+            </label>
+            <button id="submitFeedback" class="primary">Submit Feedback</button>
+            <div class="form-row export-actions">
+              <button id="exportFeedbackCsv" class="ghost">Export CSV</button>
+              <button id="exportFeedbackTsv" class="ghost">Export TSV</button>
+            </div>
+            <div id="feedbackStatus" class="hint"></div>
+            <div class="status-subtitle">Recent Feedback</div>
+            <div id="feedbackList" class="run-list"></div>
+          </div>
+        </div>
+
+        <div class="side-section">
+          <h3>Experiment</h3>
+          <div class="status-card feedback-card">
+            <div class="form-row">
+              <label>
+                Assay Type
+                <select id="experimentAssay"></select>
+              </label>
+              <label>
+                Result
+                <select id="experimentResult"></select>
+              </label>
+            </div>
+            <div class="form-row">
+              <label>
+                Sample ID (optional)
+                <input id="experimentSampleId" type="text" placeholder="e.g. seq_001" />
+              </label>
+              <label>
+                Artifact (optional)
+                <select id="experimentArtifact"></select>
+              </label>
+            </div>
+            <label>
+              Metrics (JSON, optional)
+              <textarea id="experimentMetrics" rows="3" placeholder='{"kd_nM": 12.5, "t50_C": 48}'></textarea>
+            </label>
+            <label>
+              Conditions / Notes
+              <textarea id="experimentConditions" rows="3" placeholder="Buffer, temperature, assay details"></textarea>
+            </label>
+            <button id="submitExperiment" class="primary">Submit Experiment</button>
+            <div class="form-row export-actions">
+              <button id="exportExperimentCsv" class="ghost">Export CSV</button>
+              <button id="exportExperimentTsv" class="ghost">Export TSV</button>
+            </div>
+            <div id="experimentStatus" class="hint"></div>
+            <div class="status-subtitle">Recent Experiments</div>
+            <div id="experimentList" class="run-list"></div>
+          </div>
+        </div>
+
+        <div class="side-section">
+          <h3>Report</h3>
+          <div class="status-card feedback-card">
+            <div class="score-row">
+              <div class="score-pill" id="reportScoreValue">Score: -</div>
+              <div class="score-pill" id="reportEvidenceValue">Evidence: -</div>
+              <div class="score-pill" id="reportRecommendationValue">Recommendation: -</div>
+            </div>
+            <label>
+              Report (Markdown)
+              <textarea id="reportContent" rows="6" placeholder="Generate or edit the report"></textarea>
+            </label>
+            <div class="form-row report-actions">
+              <button id="loadReport" class="ghost">Load</button>
+              <button id="generateReport" class="ghost">Generate</button>
+              <button id="saveReport" class="primary">Save</button>
+            </div>
+            <div id="reportStatus" class="hint"></div>
+            <div class="status-subtitle">Artifact Links</div>
+            <div id="reportArtifactLinks" class="report-links"></div>
+          </div>
+        </div>
+
+        <div class="side-section">
           <h3>Artifact Preview</h3>
           <div id="artifactPreview" class="artifact-preview">
             <div class="placeholder">Select an artifact to preview it here.</div>
@@ -170,6 +277,6 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260213b"></script>
+    <script type="module" src="./app.js?v=20260223e"></script>
   </body>
 </html>

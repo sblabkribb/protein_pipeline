@@ -53,6 +53,23 @@ def append_jsonl(path: Path, data: object) -> None:
         f.write(json.dumps(data, ensure_ascii=False) + "\n")
 
 
+def read_jsonl(path: Path, *, limit: int | None = None) -> list[object]:
+    if not path.exists():
+        return []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if limit is not None:
+        lines = lines[-int(limit) :] if limit > 0 else []
+    out: list[object] = []
+    for raw in lines:
+        if not raw.strip():
+            continue
+        try:
+            out.append(json.loads(raw))
+        except Exception:
+            continue
+    return out
+
+
 @dataclass(frozen=True)
 class RunPaths:
     run_id: str
@@ -126,6 +143,39 @@ def resolve_run_path(output_root: str, run_id: str, rel_path: str | None = None)
     if rel_path is None or str(rel_path).strip() == "":
         return root
     return root / _safe_relpath(rel_path)
+
+
+def run_exists(output_root: str, run_id: str) -> bool:
+    root = resolve_run_path(output_root, run_id)
+    return root.exists()
+
+
+def append_run_event(output_root: str, run_id: str, *, filename: str, payload: dict[str, object]) -> dict[str, object]:
+    root = resolve_run_path(output_root, run_id)
+    if not root.exists():
+        raise ValueError("run_id not found")
+    path = root / filename
+    append_jsonl(path, payload)
+    return payload
+
+
+def list_run_events(
+    output_root: str,
+    run_id: str,
+    *,
+    filename: str,
+    limit: int | None = None,
+) -> list[dict[str, object]]:
+    root = resolve_run_path(output_root, run_id)
+    if not root.exists():
+        raise ValueError("run_id not found")
+    path = root / filename
+    items = read_jsonl(path, limit=limit)
+    out: list[dict[str, object]] = []
+    for item in items:
+        if isinstance(item, dict):
+            out.append(item)
+    return out
 
 
 def list_artifacts(

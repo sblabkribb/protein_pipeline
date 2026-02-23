@@ -4,20 +4,45 @@ from dataclasses import dataclass
 from dataclasses import asdict
 from dataclasses import replace
 import base64
+import json
 import os
 import time
+import uuid
 from typing import Any
 
+from .bio.fasta import FastaRecord
+from .bio.fasta import parse_fasta
+from .bio.sdf import append_ligand_pdb
+from .bio.sdf import sdf_to_pdb
 from .models import PipelineRequest
+from .models import SequenceRecord
 from .pipeline import PipelineRunner
+from .pipeline import _dummy_backbone_pdb
+from .pipeline import _prepare_af2_sequence
+from .pipeline import _resolve_af2_model_preset
+from .pipeline import _safe_id
+from .pipeline import _safe_json
+from .pipeline import _split_multichain_sequence
+from .pipeline import _target_record_from_pdb
+from .pipeline import _write_text
 from .router import request_from_prompt
 from .router import plan_from_prompt
+from .storage import ensure_dir
+from .storage import init_run
+from .storage import list_run_events
 from .storage import list_runs
 from .storage import new_run_id
 from .storage import normalize_run_id
 from .storage import load_status
 from .storage import list_artifacts
 from .storage import read_artifact
+from .storage import append_run_event
+from .storage import read_json
+from .storage import resolve_run_path
+from .report_scoring import compute_score
+from .report_scoring import scoring_config
+from .storage import set_status
+from .storage import write_json
 
 
 def _env_true(name: str) -> bool:
@@ -188,6 +213,91 @@ def _as_float(value: object | None, default: float) -> float:
     return default
 
 
+def _now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _as_reason_list(value: object | None) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(v).strip() for v in value if str(v).strip()]
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return []
+        parts = [p.strip() for p in raw.replace("\n", ",").split(",")]
+        return [p for p in parts if p]
+    return [str(value).strip()]
+
+
+def _as_metrics(value: object | None) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return {str(k): v for k, v in value.items()}
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+        except Exception as exc:
+            raise ValueError("metrics must be a JSON object") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError("metrics must be a JSON object")
+        return {str(k): v for k, v in parsed.items()}
+    return None
+
+
+def _normalize_user(value: object | None) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        out: dict[str, object] = {}
+        for key in ("id", "username", "role", "email", "org"):
+            if key in value and value[key] is not None:
+                out[key] = value[key]
+        if out:
+            return out
+    if isinstance(value, str) and value.strip():
+        return {"username": value.strip()}
+    return None
+
+
+def _parse_fasta_or_sequence(text: str) -> list[FastaRecord]:
+    raw = str(text or "").strip()
+    if not raw:
+        raise ValueError("target_fasta is required")
+    if raw.lstrip().startswith(">"):
+        return parse_fasta(raw)
+    seq = "".join(ch for ch in raw.split())
+    if not seq:
+        raise ValueError("target_fasta is empty")
+    return [FastaRecord(header="sequence", sequence=seq)]
+
+
+def _af2_records_from_inputs(
+    *,
+    target_fasta: str,
+    target_pdb: str,
+    model_preset: str,
+) -> tuple[list[SequenceRecord], str]:
+    if target_fasta.strip():
+        fasta_records = _parse_fasta_or_sequence(target_fasta)
+    elif target_pdb.strip():
+        fasta_records = [_target_record_from_pdb(target_pdb, design_chains=None)]
+    else:
+        raise ValueError("One of target_fasta or target_pdb is required")
+
+    chain_counts = [len(_split_multichain_sequence(rec.sequence)) for rec in fasta_records]
+    max_chains = max(chain_counts) if chain_counts else 1
+    resolved_preset = _resolve_af2_model_preset(model_preset, chain_count=max_chains)
+
+    seq_records: list[SequenceRecord] = []
+    for rec in fasta_records:
+        prepared = _prepare_af2_sequence(rec.sequence, model_preset=resolved_preset, chain_ids=None)
+        seq_records.append(SequenceRecord(id=rec.id, sequence=prepared, header=rec.header, meta={}))
+    return seq_records, resolved_preset
+
+
 @dataclass(frozen=True)
 class AutoRetryConfig:
     enabled: bool
@@ -252,6 +362,600 @@ def _run_with_auto_retry(
             if retry.backoff_s > 0:
                 time.sleep(retry.backoff_s)
             attempt += 1
+
+
+def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = arguments.get("run_id")
+    target_fasta = _as_text(arguments.get("target_fasta"))
+    target_pdb = _as_text(arguments.get("target_pdb"))
+    dry_run = _as_bool(arguments.get("dry_run"), False)
+
+    requested_preset = str(arguments.get("af2_model_preset") or "auto")
+    db_preset = str(arguments.get("af2_db_preset") or "full_dbs")
+    max_template_date = str(arguments.get("af2_max_template_date") or "2020-05-14")
+    extra_flags = (str(arguments.get("af2_extra_flags")) if arguments.get("af2_extra_flags") else None)
+
+    normalized_run_id = normalize_run_id(str(run_id)) if run_id is not None else new_run_id("af2")
+    paths = init_run(runner.output_root, normalized_run_id)
+    set_status(paths, stage="af2", state="running")
+
+    request_payload = {
+        "target_fasta": target_fasta,
+        "target_pdb": target_pdb,
+        "af2_model_preset": requested_preset,
+        "af2_db_preset": db_preset,
+        "af2_max_template_date": max_template_date,
+        "af2_extra_flags": extra_flags,
+        "dry_run": dry_run,
+    }
+    write_json(paths.request_json, _safe_json(request_payload))
+
+    af2_dir = ensure_dir(paths.root / "af2")
+    jobs: dict[str, str] = {}
+
+    def _on_job_id(seq_id: str, job_id: str) -> None:
+        jobs[seq_id] = job_id
+        write_json(af2_dir / "runpod_jobs.json", {"jobs": dict(jobs)})
+        set_status(paths, stage="af2", state="running", detail=f"runpod_job_id={job_id} seq_id={seq_id}")
+
+    try:
+        seq_records, resolved_preset = _af2_records_from_inputs(
+            target_fasta=target_fasta,
+            target_pdb=target_pdb,
+            model_preset=requested_preset,
+        )
+
+        if dry_run:
+            def _first_chain(seq: str) -> str:
+                raw = str(seq or "").strip()
+                if "\n>" in raw:
+                    raw = raw.split("\n>", 1)[0]
+                if "/" in raw:
+                    raw = raw.split("/", 1)[0]
+                cleaned = "".join(ch for ch in raw if ch.isalpha())
+                return cleaned or "A"
+
+            results = {}
+            for rec in seq_records:
+                seq = _first_chain(rec.sequence)
+                results[rec.id] = {
+                    "best_plddt": 90.0,
+                    "best_model": None,
+                    "ranking_debug": {},
+                    "ranked_0_pdb": _dummy_backbone_pdb(seq, chain_id="A"),
+                }
+        else:
+            if runner.af2 is None:
+                raise RuntimeError("AlphaFold2 is not configured (set ALPHAFOLD2_ENDPOINT_ID or AF2_URL)")
+            try:
+                results = runner.af2.predict(
+                    seq_records,
+                    model_preset=resolved_preset,
+                    db_preset=db_preset,
+                    max_template_date=max_template_date,
+                    extra_flags=extra_flags,
+                    on_job_id=_on_job_id,
+                )
+            except TypeError:
+                results = runner.af2.predict(
+                    seq_records,
+                    model_preset=resolved_preset,
+                    db_preset=db_preset,
+                    max_template_date=max_template_date,
+                    extra_flags=extra_flags,
+                )
+
+        if not isinstance(results, dict):
+            raise RuntimeError(f"AlphaFold2 output invalid: {type(results).__name__}")
+
+        summary_results: dict[str, dict[str, Any]] = {}
+        for rec in seq_records:
+            payload = results.get(rec.id)
+            if not isinstance(payload, dict):
+                raise RuntimeError(f"AlphaFold2 output missing record for {rec.id}")
+
+            ranked0 = payload.get("ranked_0_pdb") or payload.get("pdb") or payload.get("pdb_text")
+            if not isinstance(ranked0, str) or not ranked0.strip():
+                raise RuntimeError(f"AlphaFold2 output missing ranked_0.pdb for {rec.id}")
+
+            seq_dir = ensure_dir(af2_dir / _safe_id(rec.id))
+            _write_text(seq_dir / "ranked_0.pdb", ranked0)
+            if isinstance(payload.get("ranking_debug"), dict):
+                write_json(seq_dir / "ranking_debug.json", payload["ranking_debug"])
+            write_json(
+                seq_dir / "metrics.json",
+                {
+                    "best_plddt": payload.get("best_plddt"),
+                    "best_model": payload.get("best_model"),
+                    "archive_name": payload.get("archive_name"),
+                },
+            )
+            summary_results[rec.id] = {
+                "best_plddt": payload.get("best_plddt"),
+                "best_model": payload.get("best_model"),
+            }
+
+        write_json(af2_dir / "results.json", _safe_json(results))
+        summary = {
+            "run_id": normalized_run_id,
+            "output_dir": str(paths.root),
+            "af2": summary_results,
+            "af2_model_preset": resolved_preset,
+        }
+        write_json(paths.summary_json, _safe_json(summary))
+        set_status(paths, stage="done", state="completed")
+        return {"run_id": normalized_run_id, "output_dir": str(paths.root), "summary": summary}
+    except Exception as exc:
+        set_status(paths, stage="error", state="failed", detail=str(exc))
+        error_summary = {
+            "run_id": normalized_run_id,
+            "output_dir": str(paths.root),
+            "errors": [str(exc)],
+        }
+        write_json(paths.summary_json, _safe_json(error_summary))
+        raise
+
+
+def _run_diffdock(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = arguments.get("run_id")
+    protein_pdb = _as_text(arguments.get("protein_pdb")) or _as_text(arguments.get("target_pdb"))
+    ligand_smiles = _as_text(arguments.get("diffdock_ligand_smiles")) or _as_text(arguments.get("ligand_smiles"))
+    ligand_sdf = _as_text(arguments.get("diffdock_ligand_sdf")) or _as_text(arguments.get("ligand_sdf"))
+    complex_name = str(arguments.get("complex_name") or "complex")
+    diffdock_config = str(arguments.get("diffdock_config") or "default_inference_args.yaml")
+    diffdock_extra_args = _as_text(arguments.get("diffdock_extra_args")).strip() or None
+    diffdock_cuda_visible_devices = _as_text(arguments.get("diffdock_cuda_visible_devices")).strip() or None
+    dry_run = _as_bool(arguments.get("dry_run"), False)
+
+    if not protein_pdb.strip():
+        raise ValueError("protein_pdb is required")
+    if not (ligand_smiles.strip() or ligand_sdf.strip()):
+        raise ValueError("diffdock_ligand_smiles or diffdock_ligand_sdf is required")
+
+    normalized_run_id = normalize_run_id(str(run_id)) if run_id is not None else new_run_id("diffdock")
+    paths = init_run(runner.output_root, normalized_run_id)
+    set_status(paths, stage="diffdock", state="running")
+
+    request_payload = {
+        "protein_pdb": protein_pdb,
+        "diffdock_ligand_smiles": ligand_smiles or None,
+        "diffdock_ligand_sdf": ligand_sdf or None,
+        "complex_name": complex_name,
+        "diffdock_config": diffdock_config,
+        "diffdock_extra_args": diffdock_extra_args,
+        "diffdock_cuda_visible_devices": diffdock_cuda_visible_devices,
+        "dry_run": dry_run,
+    }
+    write_json(paths.request_json, _safe_json(request_payload))
+
+    diffdock_dir = ensure_dir(paths.root / "diffdock")
+    _write_text(diffdock_dir / "protein.pdb", protein_pdb)
+    if ligand_sdf.strip():
+        _write_text(diffdock_dir / "ligand.sdf", ligand_sdf)
+    else:
+        _write_text(diffdock_dir / "ligand.smiles", ligand_smiles)
+
+    def _on_job_id(job_id: str) -> None:
+        write_json(diffdock_dir / "runpod_job.json", {"job_id": job_id})
+        set_status(paths, stage="diffdock", state="running", detail=f"runpod_job_id={job_id}")
+
+    try:
+        if dry_run:
+            output_payload = {"dry_run": True}
+            sdf_text = ligand_sdf if ligand_sdf.strip() else ""
+        else:
+            if runner.diffdock is None:
+                raise RuntimeError("DiffDock endpoint is not configured (set DIFFDOCK_ENDPOINT_ID)")
+            diffdock_out = runner.diffdock.dock(
+                protein_pdb=protein_pdb,
+                ligand_smiles=ligand_smiles or None,
+                ligand_sdf=ligand_sdf or None,
+                complex_name=complex_name,
+                config=diffdock_config,
+                extra_args=diffdock_extra_args,
+                cuda_visible_devices=diffdock_cuda_visible_devices,
+                on_job_id=_on_job_id,
+            )
+            output_payload = diffdock_out.get("output") or {}
+            zip_bytes = diffdock_out.get("zip_bytes")
+            if isinstance(zip_bytes, (bytes, bytearray)):
+                (diffdock_dir / "out_dir.zip").write_bytes(bytes(zip_bytes))
+            sdf_text = str(diffdock_out.get("sdf_text") or "")
+
+        write_json(diffdock_dir / "output.json", _safe_json(output_payload))
+        if sdf_text.strip():
+            _write_text(diffdock_dir / "rank1.sdf", sdf_text)
+            ligand_pdb = sdf_to_pdb(sdf_text)
+            _write_text(diffdock_dir / "ligand.pdb", ligand_pdb)
+            complex_pdb = append_ligand_pdb(protein_pdb, ligand_pdb)
+            _write_text(diffdock_dir / "complex.pdb", complex_pdb)
+
+        summary = {
+            "run_id": normalized_run_id,
+            "output_dir": str(paths.root),
+            "diffdock_dir": str(diffdock_dir),
+        }
+        write_json(paths.summary_json, _safe_json(summary))
+        set_status(paths, stage="done", state="completed")
+        return {"run_id": normalized_run_id, "output_dir": str(paths.root), "summary": summary}
+    except Exception as exc:
+        set_status(paths, stage="error", state="failed", detail=str(exc))
+        error_summary = {
+            "run_id": normalized_run_id,
+            "output_dir": str(paths.root),
+            "errors": [str(exc)],
+        }
+        write_json(paths.summary_json, _safe_json(error_summary))
+        raise
+
+
+def _submit_feedback(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(arguments.get("run_id") or "").strip()
+    if not run_id:
+        raise ValueError("run_id is required")
+
+    rating = str(arguments.get("rating") or "").strip().lower()
+    if rating not in {"good", "bad"}:
+        raise ValueError("rating must be 'good' or 'bad'")
+
+    reasons = _as_reason_list(arguments.get("reasons"))
+    comment = _as_text(arguments.get("comment")).strip() or None
+    artifact_path = _as_text(arguments.get("artifact_path")).strip() or None
+    stage = _as_text(arguments.get("stage")).strip().lower() or None
+    metrics = _as_metrics(arguments.get("metrics"))
+    user = _normalize_user(arguments.get("user"))
+
+    entry: dict[str, object] = {
+        "id": uuid.uuid4().hex,
+        "run_id": run_id,
+        "rating": rating,
+        "reasons": reasons,
+        "comment": comment,
+        "artifact_path": artifact_path,
+        "stage": stage,
+        "metrics": metrics,
+        "user": user,
+        "created_at": _now_iso(),
+    }
+    return append_run_event(runner.output_root, run_id, filename="feedback.jsonl", payload=entry)
+
+
+def _list_feedback(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(arguments.get("run_id") or "").strip()
+    if not run_id:
+        raise ValueError("run_id is required")
+    limit = _as_int(arguments.get("limit"), 50)
+    items = list_run_events(runner.output_root, run_id, filename="feedback.jsonl", limit=limit)
+    return {"run_id": run_id, "items": items}
+
+
+def _submit_experiment(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(arguments.get("run_id") or "").strip()
+    if not run_id:
+        raise ValueError("run_id is required")
+
+    assay_type = str(arguments.get("assay_type") or "unspecified").strip()
+    result = str(arguments.get("result") or "").strip().lower()
+    if result not in {"success", "fail", "inconclusive"}:
+        raise ValueError("result must be one of: success, fail, inconclusive")
+
+    metrics = _as_metrics(arguments.get("metrics"))
+    conditions = _as_text(arguments.get("conditions")).strip() or None
+    sample_id = _as_text(arguments.get("sample_id")).strip() or None
+    artifact_path = _as_text(arguments.get("artifact_path")).strip() or None
+    note = _as_text(arguments.get("note")).strip() or None
+    user = _normalize_user(arguments.get("user"))
+
+    entry: dict[str, object] = {
+        "id": uuid.uuid4().hex,
+        "run_id": run_id,
+        "assay_type": assay_type,
+        "result": result,
+        "metrics": metrics,
+        "conditions": conditions,
+        "sample_id": sample_id,
+        "artifact_path": artifact_path,
+        "note": note,
+        "user": user,
+        "created_at": _now_iso(),
+    }
+    return append_run_event(runner.output_root, run_id, filename="experiments.jsonl", payload=entry)
+
+
+def _list_experiments(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(arguments.get("run_id") or "").strip()
+    if not run_id:
+        raise ValueError("run_id is required")
+    limit = _as_int(arguments.get("limit"), 50)
+    items = list_run_events(runner.output_root, run_id, filename="experiments.jsonl", limit=limit)
+    return {"run_id": run_id, "items": items}
+
+
+def _load_report_text(output_root: str, run_id: str) -> str | None:
+    root = resolve_run_path(output_root, run_id)
+    if not root.exists():
+        raise ValueError("run_id not found")
+    report_path = root / "report.md"
+    if not report_path.exists():
+        return None
+    return report_path.read_text(encoding="utf-8")
+
+
+def _save_report_text(output_root: str, run_id: str, content: str) -> None:
+    root = resolve_run_path(output_root, run_id)
+    if not root.exists():
+        raise ValueError("run_id not found")
+    report_path = root / "report.md"
+    report_path.write_text(content, encoding="utf-8")
+
+
+def _summarize_feedback(items: list[dict[str, object]]) -> dict[str, object]:
+    counts = {"good": 0, "bad": 0}
+    for item in items:
+        rating = str(item.get("rating") or "").lower()
+        if rating in counts:
+            counts[rating] += 1
+    return counts
+
+
+def _summarize_experiments(items: list[dict[str, object]]) -> dict[str, object]:
+    counts = {"success": 0, "fail": 0, "inconclusive": 0}
+    for item in items:
+        result = str(item.get("result") or "").lower()
+        if result in counts:
+            counts[result] += 1
+    return counts
+
+
+def _score_payload(
+    feedback_counts: dict[str, object],
+    experiment_counts: dict[str, object],
+) -> dict[str, object]:
+    return compute_score(feedback_counts, experiment_counts)
+
+
+def _build_report_text(
+    *,
+    run_id: str,
+    request: dict[str, object] | None,
+    summary: dict[str, object] | None,
+    status: dict[str, object] | None,
+    feedback_items: list[dict[str, object]],
+    experiment_items: list[dict[str, object]],
+) -> str:
+    lines: list[str] = []
+    lines.append(f"# Run Report: {run_id}")
+    lines.append("")
+
+    if status:
+        lines.append("## Status")
+        lines.append(f"- Stage: {status.get('stage') or '-'}")
+        lines.append(f"- State: {status.get('state') or '-'}")
+        lines.append(f"- Updated: {status.get('updated_at') or '-'}")
+        lines.append("")
+
+    if request:
+        lines.append("## Inputs")
+        target_pdb = bool(str(request.get("target_pdb") or "").strip())
+        target_fasta = bool(str(request.get("target_fasta") or "").strip())
+        lines.append(f"- target_pdb: {'yes' if target_pdb else 'no'}")
+        lines.append(f"- target_fasta: {'yes' if target_fasta else 'no'}")
+        if request.get("stop_after"):
+            lines.append(f"- stop_after: {request.get('stop_after')}")
+        if request.get("design_chains"):
+            lines.append(f"- design_chains: {request.get('design_chains')}")
+        if request.get("rfd3_contig"):
+            lines.append(f"- rfd3_contig: {request.get('rfd3_contig')}")
+        if request.get("rfd3_input_pdb"):
+            lines.append("- rfd3_input_pdb: provided")
+        if request.get("diffdock_ligand_smiles") or request.get("diffdock_ligand_sdf"):
+            lines.append("- diffdock_ligand: provided")
+        if request.get("af2_model_preset"):
+            lines.append(f"- af2_model_preset: {request.get('af2_model_preset')}")
+        if request.get("mmseqs_target_db"):
+            lines.append(f"- mmseqs_target_db: {request.get('mmseqs_target_db')}")
+        lines.append("")
+
+    if summary:
+        errors = summary.get("errors")
+        lines.append("## Summary")
+        if isinstance(errors, list) and errors:
+            lines.append("- Errors:")
+            for err in errors[:5]:
+                lines.append(f"  - {err}")
+        tiers = summary.get("tiers")
+        if isinstance(tiers, list) and tiers:
+            lines.append(f"- Tiers: {len(tiers)}")
+            for tier in tiers:
+                if not isinstance(tier, dict):
+                    continue
+                tier_val = tier.get("tier")
+                samples = tier.get("proteinmpnn_samples") or []
+                passed = tier.get("passed_ids") or []
+                selected = tier.get("af2_selected_ids") or []
+                lines.append(
+                    f"  - Tier {tier_val}: designs={len(samples)} passed={len(passed)} af2_selected={len(selected)}"
+                )
+        if summary.get("msa_a3m_path"):
+            lines.append(f"- msa_a3m_path: {summary.get('msa_a3m_path')}")
+        if summary.get("conservation_path"):
+            lines.append(f"- conservation_path: {summary.get('conservation_path')}")
+        if summary.get("ligand_mask_path"):
+            lines.append(f"- ligand_mask_path: {summary.get('ligand_mask_path')}")
+        lines.append("")
+
+    feedback_counts = _summarize_feedback(feedback_items)
+    experiment_counts = _summarize_experiments(experiment_items)
+    score_payload = _score_payload(feedback_counts, experiment_counts)
+    score = int(score_payload.get("score") or 0)
+    evidence = str(score_payload.get("evidence") or "low")
+    recommendation = str(score_payload.get("recommendation") or "needs_review")
+    if feedback_items:
+        lines.append("## Feedback")
+        lines.append(f"- Good: {feedback_counts['good']}")
+        lines.append(f"- Bad: {feedback_counts['bad']}")
+        for item in feedback_items[:5]:
+            rating = item.get("rating") or "-"
+            reasons = item.get("reasons") or []
+            comment = item.get("comment") or ""
+            stamp = item.get("created_at") or ""
+            reason_text = ", ".join(str(r) for r in reasons) if isinstance(reasons, list) else str(reasons)
+            line = f"- [{rating}] {reason_text}"
+            if comment:
+                line += f" — {comment}"
+            if stamp:
+                line += f" ({stamp})"
+            lines.append(line)
+        lines.append("")
+
+    if experiment_items:
+        lines.append("## Experiments")
+        lines.append(f"- Success: {experiment_counts['success']}")
+        lines.append(f"- Fail: {experiment_counts['fail']}")
+        lines.append(f"- Inconclusive: {experiment_counts['inconclusive']}")
+        for item in experiment_items[:5]:
+            assay = item.get("assay_type") or "-"
+            result = item.get("result") or "-"
+            metrics = item.get("metrics") or {}
+            metrics_text = ""
+            if isinstance(metrics, dict) and metrics:
+                metrics_text = ", ".join(f"{k}={v}" for k, v in metrics.items())
+            stamp = item.get("created_at") or ""
+            line = f"- [{result}] {assay}"
+            if metrics_text:
+                line += f" ({metrics_text})"
+            if stamp:
+                line += f" ({stamp})"
+            lines.append(line)
+        lines.append("")
+
+    lines.append("## Score")
+    lines.append(f"- Score: {score}/100")
+    lines.append(f"- Evidence: {evidence}")
+    lines.append(f"- Recommendation: {recommendation}")
+    lines.append("")
+
+    lines.append("## Next Actions")
+    if recommendation == "promote":
+        lines.append("- Prioritize for downstream validation or scale-up.")
+    elif recommendation == "promising":
+        lines.append("- Consider additional experiments or parameter refinements.")
+    elif recommendation == "needs_review":
+        lines.append("- Review model outputs, constraints, and consider re-running key stages.")
+    else:
+        lines.append("- Deprioritize or revisit target/constraints before re-running.")
+    lines.append("")
+
+    if len(lines) <= 2:
+        lines.append("No report data available yet.")
+    return "\n".join(lines).strip() + "\n"
+
+
+def _generate_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(arguments.get("run_id") or "").strip()
+    if not run_id:
+        raise ValueError("run_id is required")
+
+    root = resolve_run_path(runner.output_root, run_id)
+    if not root.exists():
+        raise ValueError("run_id not found")
+    summary = None
+    summary_path = root / "summary.json"
+    if summary_path.exists():
+        raw = read_json(summary_path)
+        if isinstance(raw, dict):
+            summary = raw
+    request = None
+    request_path = root / "request.json"
+    if request_path.exists():
+        raw = read_json(request_path)
+        if isinstance(raw, dict):
+            request = raw
+
+    status = load_status(runner.output_root, run_id)
+    feedback_items = list_run_events(runner.output_root, run_id, filename="feedback.jsonl", limit=50)
+    experiment_items = list_run_events(runner.output_root, run_id, filename="experiments.jsonl", limit=50)
+    feedback_counts = _summarize_feedback(feedback_items)
+    experiment_counts = _summarize_experiments(experiment_items)
+    score_payload = _score_payload(feedback_counts, experiment_counts)
+    score = int(score_payload.get("score") or 0)
+    evidence = str(score_payload.get("evidence") or "low")
+    recommendation = str(score_payload.get("recommendation") or "needs_review")
+    report_text = _build_report_text(
+        run_id=run_id,
+        request=request,
+        summary=summary,
+        status=status,
+        feedback_items=feedback_items,
+        experiment_items=experiment_items,
+    )
+    _save_report_text(runner.output_root, run_id, report_text)
+    entry: dict[str, object] = {
+        "id": uuid.uuid4().hex,
+        "run_id": run_id,
+        "source": "generated",
+        "content": report_text,
+        "score": score,
+        "evidence": evidence,
+        "recommendation": recommendation,
+        "scoring_config": score_payload.get("scoring_config") or scoring_config(),
+        "created_at": _now_iso(),
+    }
+    append_run_event(runner.output_root, run_id, filename="report_revisions.jsonl", payload=entry)
+    return {
+        "run_id": run_id,
+        "report": report_text,
+        "score": score,
+        "evidence": evidence,
+        "recommendation": recommendation,
+    }
+
+
+def _save_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(arguments.get("run_id") or "").strip()
+    if not run_id:
+        raise ValueError("run_id is required")
+    content = _as_text(arguments.get("content")).strip()
+    if not content:
+        raise ValueError("content is required")
+
+    user = _normalize_user(arguments.get("user"))
+    source = str(arguments.get("source") or "user").strip()
+    _save_report_text(runner.output_root, run_id, content)
+    entry: dict[str, object] = {
+        "id": uuid.uuid4().hex,
+        "run_id": run_id,
+        "source": source,
+        "content": content,
+        "user": user,
+        "created_at": _now_iso(),
+    }
+    append_run_event(runner.output_root, run_id, filename="report_revisions.jsonl", payload=entry)
+    return {"run_id": run_id, "report": content}
+
+
+def _get_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(arguments.get("run_id") or "").strip()
+    if not run_id:
+        raise ValueError("run_id is required")
+    report_text = _load_report_text(runner.output_root, run_id)
+    revisions = list_run_events(runner.output_root, run_id, filename="report_revisions.jsonl", limit=1)
+    latest = revisions[-1] if revisions else None
+    out = {"run_id": run_id, "report": report_text or "", "latest_revision": latest}
+    if isinstance(latest, dict):
+        for key in ("score", "evidence", "recommendation"):
+            if key in latest:
+                out[key] = latest.get(key)
+    if "score" not in out:
+        feedback_items = list_run_events(runner.output_root, run_id, filename="feedback.jsonl", limit=50)
+        experiment_items = list_run_events(runner.output_root, run_id, filename="experiments.jsonl", limit=50)
+        feedback_counts = _summarize_feedback(feedback_items)
+        experiment_counts = _summarize_experiments(experiment_items)
+        score_payload = _score_payload(feedback_counts, experiment_counts)
+        out["score"] = score_payload.get("score")
+        out["evidence"] = score_payload.get("evidence")
+        out["recommendation"] = score_payload.get("recommendation")
+    return out
 
 
 def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
@@ -462,6 +1166,133 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.af2_predict",
+            "description": "Run AlphaFold2 on input FASTA/sequence (standalone).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "target_fasta": {"type": "string"},
+                    "target_pdb": {"type": "string"},
+                    "af2_model_preset": {"type": "string"},
+                    "af2_db_preset": {"type": "string"},
+                    "af2_max_template_date": {"type": "string"},
+                    "af2_extra_flags": {"type": "string"},
+                    "run_id": {"type": "string"},
+                    "dry_run": {"type": "boolean"},
+                },
+                "anyOf": [{"required": ["target_fasta"]}, {"required": ["target_pdb"]}],
+            },
+        },
+        {
+            "name": "pipeline.diffdock",
+            "description": "Run DiffDock on a protein PDB and ligand (standalone).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "protein_pdb": {"type": "string"},
+                    "target_pdb": {"type": "string"},
+                    "diffdock_ligand_smiles": {"type": "string"},
+                    "diffdock_ligand_sdf": {"type": "string"},
+                    "ligand_smiles": {"type": "string"},
+                    "ligand_sdf": {"type": "string"},
+                    "complex_name": {"type": "string"},
+                    "diffdock_config": {"type": "string"},
+                    "diffdock_extra_args": {"type": "string"},
+                    "diffdock_cuda_visible_devices": {"type": "string"},
+                    "run_id": {"type": "string"},
+                    "dry_run": {"type": "boolean"},
+                },
+                "anyOf": [{"required": ["protein_pdb"]}, {"required": ["target_pdb"]}],
+            },
+        },
+        {
+            "name": "pipeline.submit_feedback",
+            "description": "Submit a feedback rating (good/bad) for a run or artifact.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "rating": {"type": "string", "enum": ["good", "bad"]},
+                    "reasons": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "string"}]},
+                    "comment": {"type": "string"},
+                    "artifact_path": {"type": "string"},
+                    "stage": {"type": "string"},
+                    "metrics": {"type": "object"},
+                    "user": {"type": "object"},
+                },
+                "required": ["run_id", "rating"],
+            },
+        },
+        {
+            "name": "pipeline.list_feedback",
+            "description": "List feedback entries for a run.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"run_id": {"type": "string"}, "limit": {"type": "integer"}},
+                "required": ["run_id"],
+            },
+        },
+        {
+            "name": "pipeline.submit_experiment",
+            "description": "Submit an experimental result for a run.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "assay_type": {"type": "string"},
+                    "result": {"type": "string", "enum": ["success", "fail", "inconclusive"]},
+                    "metrics": {"type": "object"},
+                    "conditions": {"type": "string"},
+                    "sample_id": {"type": "string"},
+                    "artifact_path": {"type": "string"},
+                    "note": {"type": "string"},
+                    "user": {"type": "object"},
+                },
+                "required": ["run_id", "result"],
+            },
+        },
+        {
+            "name": "pipeline.list_experiments",
+            "description": "List experimental results for a run.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"run_id": {"type": "string"}, "limit": {"type": "integer"}},
+                "required": ["run_id"],
+            },
+        },
+        {
+            "name": "pipeline.generate_report",
+            "description": "Generate a markdown report for a run from artifacts, feedback, and experiments.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"run_id": {"type": "string"}},
+                "required": ["run_id"],
+            },
+        },
+        {
+            "name": "pipeline.save_report",
+            "description": "Save a report revision for a run.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "content": {"type": "string"},
+                    "source": {"type": "string"},
+                    "user": {"type": "object"},
+                },
+                "required": ["run_id", "content"],
+            },
+        },
+        {
+            "name": "pipeline.get_report",
+            "description": "Get the latest report for a run.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"run_id": {"type": "string"}},
+                "required": ["run_id"],
+            },
+        },
+        {
             "name": "pipeline.plan_from_prompt",
             "description": "Route a natural-language prompt and return missing inputs/questions without running.",
             "inputSchema": {
@@ -563,6 +1394,33 @@ class ToolDispatcher:
                 normalized_run_id = new_run_id("pipeline")
             res = _run_with_auto_retry(self.runner, req, run_id=normalized_run_id, retry=retry)
             return {"run_id": res.run_id, "output_dir": res.output_dir, "summary": asdict(res)}
+
+        if name == "pipeline.af2_predict":
+            return _run_af2_predict(self.runner, arguments)
+
+        if name == "pipeline.diffdock":
+            return _run_diffdock(self.runner, arguments)
+
+        if name == "pipeline.submit_feedback":
+            return _submit_feedback(self.runner, arguments)
+
+        if name == "pipeline.list_feedback":
+            return _list_feedback(self.runner, arguments)
+
+        if name == "pipeline.submit_experiment":
+            return _submit_experiment(self.runner, arguments)
+
+        if name == "pipeline.list_experiments":
+            return _list_experiments(self.runner, arguments)
+
+        if name == "pipeline.generate_report":
+            return _generate_report(self.runner, arguments)
+
+        if name == "pipeline.save_report":
+            return _save_report(self.runner, arguments)
+
+        if name == "pipeline.get_report":
+            return _get_report(self.runner, arguments)
 
         if name == "pipeline.plan_from_prompt":
             prompt = str(arguments.get("prompt") or "")

@@ -226,7 +226,19 @@ class Handler(BaseHTTPRequestHandler):
                 arguments = body.get("arguments") or {}
                 if not isinstance(name, str) or not isinstance(arguments, dict):
                     raise ValueError("Expected {name: str, arguments: object}")
-                if name in {"pipeline.status", "pipeline.list_artifacts", "pipeline.read_artifact"}:
+                run_scoped_tools = {
+                    "pipeline.status",
+                    "pipeline.list_artifacts",
+                    "pipeline.read_artifact",
+                    "pipeline.submit_feedback",
+                    "pipeline.list_feedback",
+                    "pipeline.submit_experiment",
+                    "pipeline.list_experiments",
+                    "pipeline.generate_report",
+                    "pipeline.save_report",
+                    "pipeline.get_report",
+                }
+                if name in run_scoped_tools:
                     run_id = str(arguments.get("run_id") or "")
                     if run_id:
                         self._enforce_run_access(user, run_id)
@@ -237,6 +249,18 @@ class Handler(BaseHTTPRequestHandler):
                         self._enforce_run_access(user, str(run_id))
                     else:
                         arguments["run_id"] = new_run_id(prefix)
+                if name in {
+                    "pipeline.submit_feedback",
+                    "pipeline.submit_experiment",
+                    "pipeline.save_report",
+                } and user is not None:
+                    arguments.setdefault(
+                        "user",
+                        {
+                            "username": str(user.get("username") or ""),
+                            "role": str(user.get("role") or ""),
+                        },
+                    )
                 out = self.dispatcher.call_tool(name, arguments)
                 if name == "pipeline.list_runs" and user is not None and not self._is_admin(user):
                     prefix = safe_run_prefix(str(user.get("username") or "user")) + "_"
