@@ -142,3 +142,14 @@ rm -f /opt/protein_pipeline/logs/soluprot_18081.pid
 `pipeline-mcp`는 기본적으로 인증이 없습니다. `0.0.0.0:18080`을 외부에 공개하면 누구나 `/tools/call`로 실행(과금/리소스 사용)할 수 있습니다.
 - 가능하면 `--host 127.0.0.1`로 실행하고 SSH 터널/리버스 프록시(인증)로만 접근
 - 또는 방화벽으로 접근 IP 제한
+
+## UI + Nginx (Docker)
+프론트엔드를 5173/443에 고정으로 올리고 `/api/`를 pipeline-mcp로 프록시합니다.
+
+```bash
+cd /opt/protein_pipeline/deploy/nginx
+# TLS certs: certs/fullchain.pem + certs/privkey.pem
+docker compose -f docker-compose.frontend.yml up -d
+```
+
+프론트엔드에서 API 베이스는 기본적으로 `/api`를 사용합니다.
