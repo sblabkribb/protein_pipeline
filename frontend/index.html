@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>K-Biofoundry | Protein Pipeline Console</title>
+    <link rel="stylesheet" href="./styles.css?v=20260213b" />
+  </head>
+  <body>
+    <div class="bg-orb orb-a" aria-hidden="true"></div>
+    <div class="bg-orb orb-b" aria-hidden="true"></div>
+    <div class="bg-grid" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">KBF</div>
+        <div class="brand-text">
+          <div class="brand-title">K-Biofoundry</div>
+          <div class="brand-subtitle">Protein Pipeline Console</div>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button id="settingsBtn" class="ghost">Settings</button>
+        <button id="logoutBtn" class="ghost">Logout</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel panel-chat">
+        <div id="loginGate" class="login-gate">
+          <div class="login-card">
+            <h1>Enter the Lab</h1>
+            <p>Identify yourself to separate runs and keep artifacts organized.</p>
+            <label>
+              Username
+              <input id="loginUsername" type="text" placeholder="e.g. hana.kim" />
+            </label>
+            <label>
+              Password
+              <input id="loginPassword" type="password" placeholder="••••••••" />
+            </label>
+            <button id="loginBtn" class="primary">Access Console</button>
+            <div id="loginError" class="hint"></div>
+          </div>
+        </div>
+
+        <div id="chatArea" class="chat-area hidden">
+          <div class="chat-header">
+            <div>
+              <h2>Interactive Planning</h2>
+              <p>Send a prompt, answer the questions, and launch the run.</p>
+            </div>
+            <div class="user-badge" id="userBadge"></div>
+          </div>
+
+          <div id="messages" class="messages"></div>
+
+          <div class="composer">
+            <div class="composer-row">
+              <textarea
+                id="promptInput"
+                rows="3"
+                placeholder="Describe the design goal, constraints, and where to stop."
+              ></textarea>
+              <div class="composer-actions">
+                <button id="planBtn" class="primary">Request Plan</button>
+                <button id="clearBtn" class="ghost">Clear</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="questionStack" class="question-stack"></div>
+
+          <div class="run-actions">
+            <button id="runBtn" class="primary" disabled>Run Pipeline</button>
+            <div id="runHint" class="hint">Complete required inputs to enable execution.</div>
+          </div>
+
+          <div id="settingsPanel" class="settings-panel hidden">
+            <div class="settings-card">
+              <h4>API Settings</h4>
+              <div class="settings-fixed">
+                <div class="settings-label">MCP HTTP Base URL</div>
+                <div id="apiBaseValue" class="settings-value"></div>
+                <div class="hint">This value is fixed by the server configuration.</div>
+              </div>
+              <div class="settings-actions">
+                <button id="healthCheck" class="ghost">Health Check</button>
+              </div>
+              <div id="healthStatus" class="hint"></div>
+              <div id="adminPanel" class="admin-panel hidden">
+                <h4>Admin: Create User</h4>
+                <label>
+                  New Username
+                  <input id="adminUsername" type="text" placeholder="new.user" />
+                </label>
+                <label>
+                  New Password
+                  <input id="adminPassword" type="password" placeholder="min 8 chars" />
+                </label>
+                <label>
+                  Role
+                  <select id="adminRole">
+                    <option value="user">User</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </label>
+                <div class="settings-actions">
+                  <button id="adminCreateUser" class="primary">Create User</button>
+                </div>
+                <div id="adminStatus" class="hint"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel panel-side">
+        <div class="side-section">
+          <h3>Run Monitor</h3>
+          <div class="status-card">
+            <div class="status-row">
+              <span class="label">Run ID</span>
+              <span id="runIdValue" class="value">-</span>
+            </div>
+            <div class="status-row">
+              <span class="label">Stage</span>
+              <span id="runStageValue" class="value">-</span>
+            </div>
+            <div class="status-row">
+              <span class="label">State</span>
+              <span id="runStateValue" class="value">-</span>
+            </div>
+            <div class="status-row">
+              <span class="label">Updated</span>
+              <span id="runUpdatedValue" class="value">-</span>
+            </div>
+            <div class="status-actions">
+              <button id="pollBtn" class="ghost">Poll Now</button>
+              <label class="toggle">
+                <input id="autoPoll" type="checkbox" checked />
+                <span>Auto Poll</span>
+              </label>
+            </div>
+            <div class="status-subtitle">Recent Runs</div>
+            <div id="runList" class="run-list"></div>
+            <label id="adminRunsToggle" class="toggle hidden">
+              <input id="showAllRuns" type="checkbox" />
+              <span>Show all runs (admin)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="side-section">
+          <h3>Artifacts</h3>
+          <div class="artifact-controls">
+            <input id="artifactFilter" type="text" placeholder="Filter by name or stage" />
+            <button id="refreshArtifacts" class="ghost">Refresh</button>
+          </div>
+          <div id="artifactList" class="artifact-list"></div>
+        </div>
+
+        <div class="side-section">
+          <h3>Artifact Preview</h3>
+          <div id="artifactPreview" class="artifact-preview">
+            <div class="placeholder">Select an artifact to preview it here.</div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
+    <script type="module" src="./app.js?v=20260213b"></script>
+  </body>
+</html>

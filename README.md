@@ -32,6 +32,23 @@ Use `pipeline.list_artifacts` / `pipeline.read_artifact` to fetch results remote
 3) Restart the NCP service/container
 4) Verify: `POST /tools/list` includes `pipeline.plan_from_prompt`
 
+## UI (frontend)
+- Static UI under `frontend/` (no build). Run locally:
+  - `cd frontend`
+  - `python3 -m http.server 5173`
+  - Open `http://127.0.0.1:5173`
+
+## Auth + CORS (optional)
+- Enable auth: `PIPELINE_AUTH_ENABLED=1`
+- Admin bootstrap: `PIPELINE_ADMIN_USERNAME` + `PIPELINE_ADMIN_PASSWORD`
+- User store (default): `${PIPELINE_OUTPUT_ROOT}/.auth/users.json`
+- Token TTL: `PIPELINE_AUTH_TOKEN_TTL_S` (default 86400s)
+- CORS: `PIPELINE_CORS_ORIGINS` (comma-separated, `*` default)
+- MCP proxy auth: `PIPELINE_AUTH_TOKEN` or `PIPELINE_AUTH_USERNAME` + `PIPELINE_AUTH_PASSWORD`
+
+## Nginx (Docker) for UI
+See `deploy/nginx/README.md` for running a static UI on 5173/443 with `/api` proxy.
+
 ## Docs
 - Usage guide + screenshots: `docs/USAGE.md`
 - MCP skill: `skills/protein-pipeline-stepper/SKILL.md`

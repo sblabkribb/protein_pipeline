@@ -10,6 +10,44 @@ from typing import Any
 import requests
 
 
+_AUTH_TOKEN: str | None = None
+
+
+def _get_auth_token(base_url: str, *, timeout_s: float) -> str | None:
+    global _AUTH_TOKEN
+    if _AUTH_TOKEN:
+        return _AUTH_TOKEN
+
+    token = os.environ.get("PIPELINE_AUTH_TOKEN", "").strip()
+    if token:
+        _AUTH_TOKEN = token
+        return token
+
+    username = os.environ.get("PIPELINE_AUTH_USERNAME", "").strip()
+    password = os.environ.get("PIPELINE_AUTH_PASSWORD", "").strip()
+    if not username or not password:
+        return None
+
+    payload = {"username": username, "password": password}
+    r = requests.post(f"{base_url}/auth/login", json=payload, timeout=timeout_s)
+    r.raise_for_status()
+    data = r.json()
+    if not isinstance(data, dict) or not data.get("ok"):
+        raise RuntimeError("Auth login failed")
+    token = str(data.get("token") or "")
+    if not token:
+        raise RuntimeError("Auth token missing")
+    _AUTH_TOKEN = token
+    return token
+
+
+def _auth_headers(base_url: str, *, timeout_s: float) -> dict[str, str]:
+    token = _get_auth_token(base_url, timeout_s=timeout_s)
+    if not token:
+        return {}
+    return {"Authorization": f"Bearer {token}"}
+
+
 def _load_dotenv(path: Path) -> None:
     if not path.exists():
         return
@@ -73,7 +111,9 @@ def _error(err: Exception) -> dict[str, Any]:
 
 
 def _post_json(url: str, payload: dict[str, Any], *, timeout_s: float) -> dict[str, Any]:
-    r = requests.post(url, json=payload, timeout=timeout_s)
+    base_url = url.split("/tools/", 1)[0]
+    headers = _auth_headers(base_url, timeout_s=timeout_s)
+    r = requests.post(url, json=payload, headers=headers, timeout=timeout_s)
     r.raise_for_status()
     data = r.json()
     if not isinstance(data, dict):
