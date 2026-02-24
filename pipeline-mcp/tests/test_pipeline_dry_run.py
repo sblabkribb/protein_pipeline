@@ -117,6 +117,30 @@ class TestPipelineDryRun(unittest.TestCase):
             processed_pdb = (out / "target.pdb").read_text(encoding="utf-8")
             self.assertNotIn("  -1", processed_pdb)
 
+    def test_pipeline_rfd3_auto_strips_nonpositive_resseq(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A  -1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   1       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            req = PipelineRequest(
+                target_fasta="",
+                target_pdb="",
+                rfd3_input_pdb=pdb,
+                rfd3_contig="A1-2",
+                dry_run=True,
+                num_seq_per_tier=2,
+                conservation_tiers=[0.3],
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            input_pdb = (out / "rfd3" / "input_files" / "input.pdb").read_text(encoding="utf-8")
+            selected_pdb = (out / "rfd3" / "selected.pdb").read_text(encoding="utf-8")
+            self.assertNotIn("  -1", input_pdb)
+            self.assertNotIn("  -1", selected_pdb)
+
     def test_pipeline_dry_run_accepts_conservation_weighting_flag(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         pdb = (

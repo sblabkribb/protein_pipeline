@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import time
 import uuid
+import shutil
 
 
 _SAFE_NAME_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
@@ -117,6 +118,14 @@ def list_runs(output_root: str, *, limit: int = 50) -> list[str]:
     runs = [p.name for p in root.iterdir() if p.is_dir()]
     runs.sort(reverse=True)
     return runs[: max(0, int(limit))]
+
+
+def delete_run(output_root: str, run_id: str) -> dict[str, object]:
+    root = resolve_run_path(output_root, run_id)
+    if not root.exists():
+        return {"run_id": run_id, "found": False, "deleted": False}
+    shutil.rmtree(root)
+    return {"run_id": run_id, "found": True, "deleted": True}
 
 
 def load_status(output_root: str, run_id: str) -> dict[str, object] | None:
