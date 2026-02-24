@@ -36,6 +36,7 @@ from .storage import normalize_run_id
 from .storage import load_status
 from .storage import list_artifacts
 from .storage import read_artifact
+from .storage import delete_run
 from .storage import append_run_event
 from .storage import read_json
 from .storage import resolve_run_path
@@ -589,6 +590,17 @@ def _run_diffdock(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
         raise
 
 
+def _delete_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(arguments.get("run_id") or "")
+    if not run_id:
+        raise ValueError("run_id is required")
+    force = _as_bool(arguments.get("force"), False)
+    status = load_status(runner.output_root, run_id)
+    if status is not None and str(status.get("state") or "").lower() == "running" and not force:
+        raise ValueError("run is still running; stop it or set force=true to delete anyway")
+    return delete_run(runner.output_root, run_id)
+
+
 def _submit_feedback(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
     run_id = str(arguments.get("run_id") or "").strip()
     if not run_id:
@@ -1042,7 +1054,7 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
         ligand_mask_distance=_as_float(args.get("ligand_mask_distance"), 6.0),
         ligand_resnames=ligand_resnames,
         ligand_atom_chains=ligand_atom_chains,
-        pdb_strip_nonpositive_resseq=_as_bool(args.get("pdb_strip_nonpositive_resseq"), False),
+        pdb_strip_nonpositive_resseq=_as_bool(args.get("pdb_strip_nonpositive_resseq"), True),
         pdb_renumber_resseq_from_1=_as_bool(args.get("pdb_renumber_resseq_from_1"), False),
         num_seq_per_tier=_as_int(args.get("num_seq_per_tier"), 16),
         batch_size=_as_int(args.get("batch_size"), 1),
@@ -1345,6 +1357,15 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.delete_run",
+            "description": "Delete a run directory and all artifacts under run_id.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"run_id": {"type": "string"}, "force": {"type": "boolean"}},
+                "required": ["run_id"],
+            },
+        },
+        {
             "name": "pipeline.list_artifacts",
             "description": "List artifact paths under a run_id.",
             "inputSchema": {
@@ -1467,6 +1488,9 @@ class ToolDispatcher:
         if name == "pipeline.list_runs":
             limit = arguments.get("limit")
             return {"runs": list_runs(self.runner.output_root, limit=int(limit) if limit is not None else 50)}
+
+        if name == "pipeline.delete_run":
+            return _delete_run_tool(self.runner, arguments)
 
         if name == "pipeline.list_artifacts":
             run_id = str(arguments.get("run_id") or "")

@@ -62,7 +62,7 @@ class PipelineRequest:
     ligand_resnames: list[str] | None = None
     ligand_atom_chains: list[str] | None = None
 
-    pdb_strip_nonpositive_resseq: bool = False
+    pdb_strip_nonpositive_resseq: bool = True
     pdb_renumber_resseq_from_1: bool = False
 
     num_seq_per_tier: int = 16

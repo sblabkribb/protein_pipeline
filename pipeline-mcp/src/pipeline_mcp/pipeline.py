@@ -580,6 +580,42 @@ def _normalize_fixed_positions_by_chain(value: Any) -> dict[str, list[int]] | No
     return out
 
 
+def _has_nonpositive_resseq(pdb_text: str) -> bool:
+    for raw in pdb_text.splitlines():
+        if not raw:
+            continue
+        rec = raw[:6].strip().upper()
+        if rec not in {"ATOM", "HETATM"}:
+            continue
+        try:
+            resseq = int(raw[22:26].strip())
+        except Exception:
+            continue
+        if resseq <= 0:
+            return True
+    return False
+
+
+def _preprocess_pdb_text(
+    pdb_text: str,
+    *,
+    chains: list[str] | None,
+    strip_nonpositive_resseq: bool,
+    renumber_resseq_from_1: bool,
+) -> str:
+    if not pdb_text.strip():
+        return pdb_text
+    if not (strip_nonpositive_resseq or renumber_resseq_from_1):
+        return pdb_text
+    processed, _ = preprocess_pdb(
+        pdb_text,
+        chains=chains,
+        strip_nonpositive_resseq=strip_nonpositive_resseq,
+        renumber_resseq_from_1=renumber_resseq_from_1,
+    )
+    return processed
+
+
 @dataclass(frozen=True)
 class PipelineRunner:
     output_root: str
@@ -612,6 +648,44 @@ class PipelineRunner:
             target_pdb_text = str(request.target_pdb or "")
             had_target_pdb_input = bool(target_pdb_text.strip())
             rfd3_files = _rfd3_input_files(request) if _rfd3_active(request) else {}
+            rfd3_input_pdb_text = str(request.rfd3_input_pdb or "")
+            effective_strip_nonpositive = bool(request.pdb_strip_nonpositive_resseq)
+            effective_renumber = bool(request.pdb_renumber_resseq_from_1)
+            auto_strip_nonpositive = False
+
+            if _rfd3_active(request) and not effective_strip_nonpositive and not effective_renumber:
+                candidates: list[str] = []
+                if rfd3_input_pdb_text.strip():
+                    candidates.append(rfd3_input_pdb_text)
+                if rfd3_files:
+                    for content in rfd3_files.values():
+                        if content is None:
+                            continue
+                        candidates.append(str(content))
+                if any(_has_nonpositive_resseq(text) for text in candidates):
+                    effective_strip_nonpositive = True
+                    auto_strip_nonpositive = True
+
+            if rfd3_files and (effective_strip_nonpositive or effective_renumber):
+                processed_files: dict[str, str] = {}
+                for name, content in rfd3_files.items():
+                    text = str(content or "")
+                    processed_files[name] = _preprocess_pdb_text(
+                        text,
+                        chains=request.design_chains,
+                        strip_nonpositive_resseq=effective_strip_nonpositive,
+                        renumber_resseq_from_1=effective_renumber,
+                    )
+                rfd3_files = processed_files
+                if "input.pdb" in rfd3_files:
+                    rfd3_input_pdb_text = str(rfd3_files.get("input.pdb") or "")
+            elif rfd3_input_pdb_text.strip() and (effective_strip_nonpositive or effective_renumber):
+                rfd3_input_pdb_text = _preprocess_pdb_text(
+                    rfd3_input_pdb_text,
+                    chains=request.design_chains,
+                    strip_nonpositive_resseq=effective_strip_nonpositive,
+                    renumber_resseq_from_1=effective_renumber,
+                )
             rfd3_backbones: list[dict[str, Any]] | None = None
             rfd3_selected_id: str | None = None
             target_record: FastaRecord | None = None
@@ -623,18 +697,18 @@ class PipelineRunner:
                 msa_source_pdb_text = ""
                 if target_pdb_text.strip():
                     msa_source_pdb_text = target_pdb_text
-                elif request.rfd3_input_pdb:
-                    msa_source_pdb_text = str(request.rfd3_input_pdb)
+                elif rfd3_input_pdb_text.strip():
+                    msa_source_pdb_text = rfd3_input_pdb_text
                 elif rfd3_files and "input.pdb" in rfd3_files:
                     msa_source_pdb_text = str(rfd3_files.get("input.pdb") or "")
                 if msa_source_pdb_text.strip() and (
-                    bool(request.pdb_strip_nonpositive_resseq) or bool(request.pdb_renumber_resseq_from_1)
+                    effective_strip_nonpositive or effective_renumber
                 ):
                     msa_source_pdb_text, _ = preprocess_pdb(
                         msa_source_pdb_text,
                         chains=request.design_chains,
-                        strip_nonpositive_resseq=bool(request.pdb_strip_nonpositive_resseq),
-                        renumber_resseq_from_1=bool(request.pdb_renumber_resseq_from_1),
+                        strip_nonpositive_resseq=effective_strip_nonpositive,
+                        renumber_resseq_from_1=effective_renumber,
                     )
                 if msa_source_pdb_text.strip():
                     target_record = _target_record_from_pdb(
@@ -850,7 +924,8 @@ class PipelineRunner:
 
             if _rfd3_active(request):
                 rfd3_dir = _ensure_dir(paths.root / "rfd3")
-                set_status(paths, stage="rfd3", state="running")
+                rfd3_detail = "auto_strip_nonpositive_resseq" if auto_strip_nonpositive else None
+                set_status(paths, stage="rfd3", state="running", detail=rfd3_detail)
 
                 inputs_text = str(request.rfd3_inputs_text or "").strip() or None
                 inputs_obj = request.rfd3_inputs if isinstance(request.rfd3_inputs, dict) else None
@@ -886,8 +961,10 @@ class PipelineRunner:
                         dest.write_text(str(content), encoding="utf-8")
 
                 if request.dry_run:
-                    if request.rfd3_input_pdb:
-                        target_pdb_text = str(request.rfd3_input_pdb)
+                    if rfd3_input_pdb_text.strip():
+                        target_pdb_text = rfd3_input_pdb_text
+                    elif rfd3_files and "input.pdb" in rfd3_files:
+                        target_pdb_text = str(rfd3_files.get("input.pdb") or "")
                     else:
                         target_pdb_text = _dummy_backbone_pdb("A" * 60, chain_id="A")
                     rfd3_selected_id = "dry_run"
@@ -1115,9 +1192,7 @@ class PipelineRunner:
                             backbones.insert(0, backbones.pop(idx))
                         break
 
-            if backbones and (
-                bool(request.pdb_strip_nonpositive_resseq) or bool(request.pdb_renumber_resseq_from_1)
-            ):
+            if backbones and (effective_strip_nonpositive or effective_renumber):
                 set_status(paths, stage="pdb_preprocess", state="running")
                 backbones_dir = _ensure_dir(paths.root / "backbones")
                 for idx, b in enumerate(backbones):
@@ -1127,8 +1202,8 @@ class PipelineRunner:
                     processed, numbering = preprocess_pdb(
                         original,
                         chains=request.design_chains,
-                        strip_nonpositive_resseq=bool(request.pdb_strip_nonpositive_resseq),
-                        renumber_resseq_from_1=bool(request.pdb_renumber_resseq_from_1),
+                        strip_nonpositive_resseq=effective_strip_nonpositive,
+                        renumber_resseq_from_1=effective_renumber,
                     )
                     b["pdb_text"] = processed
                     bb_id = _safe_id(str(b.get("id") or f"backbone_{idx}")) or f"backbone_{idx}"
@@ -1138,8 +1213,8 @@ class PipelineRunner:
                         bb_dir / "pdb_numbering.json",
                         {
                             "chains": request.design_chains,
-                            "strip_nonpositive_resseq": bool(request.pdb_strip_nonpositive_resseq),
-                            "renumber_resseq_from_1": bool(request.pdb_renumber_resseq_from_1),
+                            "strip_nonpositive_resseq": effective_strip_nonpositive,
+                            "renumber_resseq_from_1": effective_renumber,
                             "mapping": numbering,
                         },
                     )
@@ -1149,8 +1224,8 @@ class PipelineRunner:
                             paths.root / "pdb_numbering.json",
                             {
                                 "chains": request.design_chains,
-                                "strip_nonpositive_resseq": bool(request.pdb_strip_nonpositive_resseq),
-                                "renumber_resseq_from_1": bool(request.pdb_renumber_resseq_from_1),
+                                "strip_nonpositive_resseq": effective_strip_nonpositive,
+                                "renumber_resseq_from_1": effective_renumber,
                                 "mapping": numbering,
                             },
                         )
