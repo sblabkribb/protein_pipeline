@@ -5,11 +5,14 @@ from dataclasses import dataclass
 import base64
 import json
 import os
+import time
 from pathlib import Path
 import re
 from typing import Any
 from collections.abc import Callable
 
+from .agent_panel import emit_agent_panel_event
+from .agent_panel import write_agent_panel_report
 from .bio.a3m import compute_conservation
 from .bio.a3m import decode_a3m_gz_b64
 from .bio.a3m import filter_a3m
@@ -641,6 +644,51 @@ class PipelineRunner:
         ligand_mask_path = None
         tier_results: list[TierResult] = []
 
+        def _emit_panel(stage: str, *, detail: str | None = None, error: str | None = None, recovery: dict[str, object] | None = None) -> None:
+            if not request.agent_panel_enabled:
+                return
+            emit_agent_panel_event(
+                output_root=self.output_root,
+                run_id=run_id,
+                stage=stage,
+                detail=detail,
+                error=error,
+                recovery=recovery,
+            )
+
+        def _recover_stage(
+            stage: str,
+            fn: Callable[[], Any],
+            *,
+            fallback: Callable[[Exception], Any] | None = None,
+            recovery_actions: list[str] | None = None,
+        ) -> tuple[Any, bool, str | None, dict[str, object] | None]:
+            try:
+                return fn(), False, None, None
+            except PipelineInputRequired:
+                raise
+            except Exception as exc:
+                msg = f"{stage} failed: {exc}"
+                errors.append(msg)
+                if not request.auto_recover or fallback is None:
+                    _emit_panel(stage, error=msg, recovery={"attempted": False})
+                    raise
+                recovery_payload: dict[str, object] = {
+                    "attempted": True,
+                    "error": msg,
+                    "actions": recovery_actions or [],
+                }
+                try:
+                    result = fallback(exc)
+                except Exception as fb_exc:
+                    fb_msg = f"{stage} recovery failed: {fb_exc}"
+                    errors.append(fb_msg)
+                    recovery_payload["failed"] = True
+                    recovery_payload["fallback_error"] = fb_msg
+                    _emit_panel(stage, error=msg, recovery=recovery_payload)
+                    raise
+                return result, True, msg, recovery_payload
+
         try:
             msa_dir = _ensure_dir(paths.root / "msa")
             tiers_dir = _ensure_dir(paths.root / "tiers")
@@ -873,6 +921,66 @@ class PipelineRunner:
                 set_status(paths, stage="conservation", state="completed")
                 return conservation
 
+            def _fallback_msa(target_record: FastaRecord, *, reason: str) -> str:
+                nonlocal msa_tsv_path, msa_a3m_path, msa_filtered_a3m_path
+                target_query_fasta = to_fasta([target_record])
+                _write_text(paths.root / "target.fasta", target_query_fasta)
+
+                query = target_record.sequence
+                a3m = to_fasta(
+                    [
+                        FastaRecord(header="query", sequence=query),
+                        FastaRecord(header="fallback_hit1", sequence=query),
+                    ]
+                )
+                tsv = ""
+                _write_text(msa_dir / "result.tsv", tsv)
+                _write_text(msa_dir / "result.a3m", a3m)
+                msa_tsv_path = str(msa_dir / "result.tsv")
+                msa_a3m_path = str(msa_dir / "result.a3m")
+
+                filtered_a3m_text = a3m
+                quality = msa_quality(a3m)
+                quality["recovery"] = {"reason": reason, "fallback": True}
+                if float(request.msa_min_coverage) > 0.0 or float(request.msa_min_identity) > 0.0:
+                    filtered_a3m_text, filter_report = filter_a3m(
+                        a3m,
+                        min_coverage=request.msa_min_coverage,
+                        min_identity=request.msa_min_identity,
+                    )
+                    msa_filtered_a3m_path = str(msa_dir / "result.filtered.a3m")
+                    _write_text(Path(msa_filtered_a3m_path), filtered_a3m_text)
+                    quality["filter"] = filter_report
+                    quality["after_filter"] = msa_quality(filtered_a3m_text)
+                write_json(msa_dir / "quality.json", quality)
+                set_status(paths, stage="mmseqs_msa", state="completed", detail="recovered")
+                return filtered_a3m_text
+
+            def _fallback_conservation(filtered_a3m_text: str, *, reason: str):
+                nonlocal conservation_path
+                fallback_a3m = filtered_a3m_text.strip()
+                if not fallback_a3m and target_record is not None:
+                    fallback_a3m = to_fasta([target_record])
+                conservation = compute_conservation(
+                    fallback_a3m,
+                    tiers=request.conservation_tiers,
+                    mode=request.conservation_mode,
+                    weights=None,
+                )
+                conservation_payload = {
+                    "query_length": conservation.query_length,
+                    "scores": conservation.scores,
+                    "fixed_positions_by_tier": conservation.fixed_positions_by_tier,
+                    "mode": request.conservation_mode,
+                    "tiers": request.conservation_tiers,
+                    "weighting": "none",
+                    "recovery": {"reason": reason, "fallback": True},
+                }
+                conservation_path = str(paths.root / "conservation.json")
+                write_json(Path(conservation_path), conservation_payload)
+                set_status(paths, stage="conservation", state="completed", detail="recovered")
+                return conservation
+
             has_fixed_positions_extra = False
             if isinstance(request.fixed_positions_extra, dict):
                 for positions in request.fixed_positions_extra.values():
@@ -904,7 +1012,13 @@ class PipelineRunner:
             if not msa_defer:
                 if target_record is None:
                     raise ValueError("target_record is required for MSA")
-                filtered_a3m_text = _run_msa(target_record)
+                filtered_a3m_text, msa_recovered, msa_error, msa_recovery = _recover_stage(
+                    "mmseqs_msa",
+                    lambda: _run_msa(target_record),
+                    fallback=lambda exc: _fallback_msa(target_record, reason=str(exc)),
+                    recovery_actions=["Used fallback MSA (query-only)"],
+                )
+                _emit_panel("mmseqs_msa", detail=("recovered" if msa_recovered else None), error=msa_error, recovery=msa_recovery)
                 if request.stop_after == "msa":
                     result = PipelineResult(
                         run_id=run_id,
@@ -915,146 +1029,185 @@ class PipelineRunner:
                         conservation_path=None,
                         ligand_mask_path=None,
                         tiers=[],
-                        errors=[],
+                        errors=errors,
                     )
                     write_json(paths.summary_json, asdict(result))
                     set_status(paths, stage="done", state="completed")
                     return result
-                conservation = _run_conservation(filtered_a3m_text)
+                conservation, cons_recovered, cons_error, cons_recovery = _recover_stage(
+                    "conservation",
+                    lambda: _run_conservation(filtered_a3m_text),
+                    fallback=lambda exc: _fallback_conservation(filtered_a3m_text, reason=str(exc)),
+                    recovery_actions=["Used fallback conservation (no weighting)"],
+                )
+                _emit_panel("conservation", detail=("recovered" if cons_recovered else None), error=cons_error, recovery=cons_recovery)
 
             if _rfd3_active(request):
-                rfd3_dir = _ensure_dir(paths.root / "rfd3")
-                rfd3_detail = "auto_strip_nonpositive_resseq" if auto_strip_nonpositive else None
-                set_status(paths, stage="rfd3", state="running", detail=rfd3_detail)
+                def _run_rfd3() -> None:
+                    nonlocal target_pdb_text, rfd3_backbones, rfd3_selected_id, rfd3_input_pdb_text
+                    rfd3_dir = _ensure_dir(paths.root / "rfd3")
+                    rfd3_detail = "auto_strip_nonpositive_resseq" if auto_strip_nonpositive else None
+                    set_status(paths, stage="rfd3", state="running", detail=rfd3_detail)
 
-                inputs_text = str(request.rfd3_inputs_text or "").strip() or None
-                inputs_obj = request.rfd3_inputs if isinstance(request.rfd3_inputs, dict) else None
-                if inputs_text is None and inputs_obj is None:
-                    inputs_obj = _rfd3_simple_inputs(request, input_files=rfd3_files)
-                if inputs_text is not None and inputs_obj is None:
-                    parsed = _parse_json_dict(inputs_text)
-                    if parsed is not None:
-                        inputs_obj = parsed
-                        inputs_text = None
-                inputs_obj = _normalize_rfd3_inputs(inputs_obj)
-                inputs_obj = _inject_rfd3_partial_t(inputs_obj, request.rfd3_partial_t)
+                    inputs_text = str(request.rfd3_inputs_text or "").strip() or None
+                    inputs_obj = request.rfd3_inputs if isinstance(request.rfd3_inputs, dict) else None
+                    if inputs_text is None and inputs_obj is None:
+                        inputs_obj = _rfd3_simple_inputs(request, input_files=rfd3_files)
+                    if inputs_text is not None and inputs_obj is None:
+                        parsed = _parse_json_dict(inputs_text)
+                        if parsed is not None:
+                            inputs_obj = parsed
+                            inputs_text = None
+                    inputs_obj = _normalize_rfd3_inputs(inputs_obj)
+                    inputs_obj = _inject_rfd3_partial_t(inputs_obj, request.rfd3_partial_t)
 
-                if inputs_text is None and inputs_obj is None:
-                    raise ValueError("RFD3 inputs are required (inputs_text/inputs/contig)")
+                    if inputs_text is None and inputs_obj is None:
+                        raise ValueError("RFD3 inputs are required (inputs_text/inputs/contig)")
 
-                inputs_payload = inputs_obj
-                if inputs_payload is None and inputs_text:
-                    parsed_payload = _parse_json_dict(inputs_text)
-                    inputs_payload = parsed_payload if parsed_payload is not None else {"raw_text": inputs_text}
-                if inputs_payload is not None:
-                    write_json(rfd3_dir / "inputs.json", inputs_payload)
+                    inputs_payload = inputs_obj
+                    if inputs_payload is None and inputs_text:
+                        parsed_payload = _parse_json_dict(inputs_text)
+                        inputs_payload = parsed_payload if parsed_payload is not None else {"raw_text": inputs_text}
+                    if inputs_payload is not None:
+                        write_json(rfd3_dir / "inputs.json", inputs_payload)
 
-                if rfd3_files:
-                    files_dir = _ensure_dir(rfd3_dir / "input_files")
-                    for raw_name, content in rfd3_files.items():
-                        name = str(raw_name).replace("\\", "/")
-                        rel = Path(name)
-                        if rel.is_absolute() or ".." in rel.parts:
-                            rel = Path(rel.name)
-                        dest = files_dir / rel
-                        dest.parent.mkdir(parents=True, exist_ok=True)
-                        dest.write_text(str(content), encoding="utf-8")
+                    if rfd3_files:
+                        files_dir = _ensure_dir(rfd3_dir / "input_files")
+                        for raw_name, content in rfd3_files.items():
+                            name = str(raw_name).replace("\\", "/")
+                            rel = Path(name)
+                            if rel.is_absolute() or ".." in rel.parts:
+                                rel = Path(rel.name)
+                            dest = files_dir / rel
+                            dest.parent.mkdir(parents=True, exist_ok=True)
+                            dest.write_text(str(content), encoding="utf-8")
 
-                if request.dry_run:
-                    if rfd3_input_pdb_text.strip():
-                        target_pdb_text = rfd3_input_pdb_text
-                    elif rfd3_files and "input.pdb" in rfd3_files:
-                        target_pdb_text = str(rfd3_files.get("input.pdb") or "")
+                    if request.dry_run:
+                        if rfd3_input_pdb_text.strip():
+                            target_pdb_text = rfd3_input_pdb_text
+                        elif rfd3_files and "input.pdb" in rfd3_files:
+                            target_pdb_text = str(rfd3_files.get("input.pdb") or "")
+                        else:
+                            target_pdb_text = _dummy_backbone_pdb("A" * 60, chain_id="A")
+                        rfd3_selected_id = "dry_run"
+                        _write_text(rfd3_dir / "selected.pdb", target_pdb_text)
+                        write_json(rfd3_dir / "selected.json", {"id": "dry_run", "source": "dummy"})
+                        write_json(rfd3_dir / "designs.json", [])
+                        if bool(request.rfd3_use_ensemble) or int(request.rfd3_max_return_designs or 1) > 1:
+                            rfd3_backbones = [
+                                {"id": f"design_{i}", "pdb_text": target_pdb_text}
+                                for i in range(int(request.rfd3_max_return_designs or 1))
+                            ]
+                        set_status(paths, stage="rfd3", state="completed", detail="dry_run")
                     else:
-                        target_pdb_text = _dummy_backbone_pdb("A" * 60, chain_id="A")
-                    rfd3_selected_id = "dry_run"
-                    _write_text(rfd3_dir / "selected.pdb", target_pdb_text)
-                    write_json(rfd3_dir / "selected.json", {"id": "dry_run", "source": "dummy"})
-                    write_json(rfd3_dir / "designs.json", [])
-                    if bool(request.rfd3_use_ensemble) or int(request.rfd3_max_return_designs or 1) > 1:
-                        rfd3_backbones = [
-                            {"id": f"design_{i}", "pdb_text": target_pdb_text}
-                            for i in range(int(request.rfd3_max_return_designs or 1))
-                        ]
-                    set_status(paths, stage="rfd3", state="completed", detail="dry_run")
-                else:
-                    if self.rfd3 is None:
-                        raise RuntimeError("RFD3 endpoint is not configured (set RFD3_ENDPOINT_ID)")
+                        if self.rfd3 is None:
+                            raise RuntimeError("RFD3 endpoint is not configured (set RFD3_ENDPOINT_ID)")
 
-                    def _on_rfd3_job_id(job_id: str) -> None:
-                        write_json(rfd3_dir / "runpod_job.json", {"job_id": job_id})
-                        set_status(paths, stage="rfd3", state="running", detail=f"runpod_job_id={job_id}")
+                        def _on_rfd3_job_id(job_id: str) -> None:
+                            write_json(rfd3_dir / "runpod_job.json", {"job_id": job_id})
+                            set_status(paths, stage="rfd3", state="running", detail=f"runpod_job_id={job_id}")
 
-                    max_designs = max(1, int(request.rfd3_max_return_designs or 1))
-                    use_ensemble = bool(request.rfd3_use_ensemble) or max_designs > 1
-                    cli_args = _inject_rfd3_cli_defaults(request.rfd3_cli_args, max_designs=max_designs)
-                    rfd3_out = self.rfd3.design(
-                        inputs=inputs_obj,
-                        inputs_text=inputs_text,
-                        input_files=rfd3_files or None,
-                        cli_args=cli_args,
-                        env=request.rfd3_env,
-                        select_index=int(request.rfd3_design_index or 0),
-                        max_return_designs=max_designs,
-                        return_designs_pdb=use_ensemble,
-                        on_job_id=_on_rfd3_job_id,
-                    )
-                    write_json(rfd3_dir / "designs.json", rfd3_out.get("designs") or [])
+                        max_designs = max(1, int(request.rfd3_max_return_designs or 1))
+                        use_ensemble = bool(request.rfd3_use_ensemble) or max_designs > 1
+                        cli_args = _inject_rfd3_cli_defaults(request.rfd3_cli_args, max_designs=max_designs)
+                        rfd3_out = self.rfd3.design(
+                            inputs=inputs_obj,
+                            inputs_text=inputs_text,
+                            input_files=rfd3_files or None,
+                            cli_args=cli_args,
+                            env=request.rfd3_env,
+                            select_index=int(request.rfd3_design_index or 0),
+                            max_return_designs=max_designs,
+                            return_designs_pdb=use_ensemble,
+                            on_job_id=_on_rfd3_job_id,
+                        )
+                        write_json(rfd3_dir / "designs.json", rfd3_out.get("designs") or [])
 
-                    selected = rfd3_out.get("selected")
-                    if not isinstance(selected, dict):
-                        raise RuntimeError(f"RFD3 output missing selected design: {rfd3_out}")
-                    rfd3_selected_id = str(selected.get("id") or "selected")
-                    pdb_text = str(selected.get("pdb") or "")
-                    if not pdb_text.strip():
-                        raise RuntimeError("RFD3 selected design did not include PDB text")
-                    target_pdb_text = pdb_text
-                    _write_text(rfd3_dir / "selected.pdb", target_pdb_text)
+                        selected = rfd3_out.get("selected")
+                        if not isinstance(selected, dict):
+                            raise RuntimeError(f"RFD3 output missing selected design: {rfd3_out}")
+                        rfd3_selected_id = str(selected.get("id") or "selected")
+                        pdb_text = str(selected.get("pdb") or "")
+                        if not pdb_text.strip():
+                            raise RuntimeError("RFD3 selected design did not include PDB text")
+                        target_pdb_text = pdb_text
+                        _write_text(rfd3_dir / "selected.pdb", target_pdb_text)
 
-                    selected_meta = {k: v for k, v in selected.items() if k not in {"pdb", "cif_gz_base64"}}
-                    write_json(rfd3_dir / "selected.json", selected_meta)
-                    cif_b64 = selected.get("cif_gz_base64")
-                    if isinstance(cif_b64, str) and cif_b64.strip():
-                        try:
-                            cif_bytes = base64.b64decode(cif_b64)
-                            (rfd3_dir / "selected.cif.gz").write_bytes(cif_bytes)
-                        except Exception:
-                            pass
-                    if use_ensemble:
-                        designs = rfd3_out.get("designs")
-                        if isinstance(designs, list):
-                            ensemble: list[dict[str, Any]] = []
-                            for d in designs:
-                                if not isinstance(d, dict):
-                                    continue
-                                raw_id = str(d.get("id") or "").strip() or None
-                                pdb_text = str(d.get("pdb") or "")
-                                if not pdb_text.strip() or raw_id is None:
-                                    continue
-                                ensemble.append(
-                                    {
-                                        "id": raw_id,
-                                        "pdb_text": pdb_text,
-                                        "score": d.get("score"),
-                                    }
-                                )
-                            if ensemble:
-                                if not any(b.get("id") == rfd3_selected_id for b in ensemble):
-                                    ensemble.insert(
-                                        0,
+                        selected_meta = {k: v for k, v in selected.items() if k not in {"pdb", "cif_gz_base64"}}
+                        write_json(rfd3_dir / "selected.json", selected_meta)
+                        cif_b64 = selected.get("cif_gz_base64")
+                        if isinstance(cif_b64, str) and cif_b64.strip():
+                            try:
+                                cif_bytes = base64.b64decode(cif_b64)
+                                (rfd3_dir / "selected.cif.gz").write_bytes(cif_bytes)
+                            except Exception:
+                                pass
+                        if use_ensemble:
+                            designs = rfd3_out.get("designs")
+                            if isinstance(designs, list):
+                                ensemble: list[dict[str, Any]] = []
+                                for d in designs:
+                                    if not isinstance(d, dict):
+                                        continue
+                                    raw_id = str(d.get("id") or "").strip() or None
+                                    pdb_text = str(d.get("pdb") or "")
+                                    if not pdb_text.strip() or raw_id is None:
+                                        continue
+                                    ensemble.append(
                                         {
-                                            "id": rfd3_selected_id,
-                                            "pdb_text": target_pdb_text,
-                                            "score": selected.get("score"),
-                                        },
+                                            "id": raw_id,
+                                            "pdb_text": pdb_text,
+                                            "score": d.get("score"),
+                                        }
                                     )
-                                rfd3_backbones = ensemble
-                    if rfd3_backbones:
-                        designs_dir = _ensure_dir(rfd3_dir / "designs")
-                        for b in rfd3_backbones:
-                            bb_id = _safe_id(str(b.get("id") or "design"))
-                            _write_text(designs_dir / f"{bb_id}.pdb", str(b.get("pdb_text") or ""))
-                    set_status(paths, stage="rfd3", state="completed")
+                                if ensemble:
+                                    if not any(b.get("id") == rfd3_selected_id for b in ensemble):
+                                        ensemble.insert(
+                                            0,
+                                            {
+                                                "id": rfd3_selected_id,
+                                                "pdb_text": target_pdb_text,
+                                                "score": selected.get("score"),
+                                            },
+                                        )
+                                    rfd3_backbones = ensemble
+                        if rfd3_backbones:
+                            designs_dir = _ensure_dir(rfd3_dir / "designs")
+                            for b in rfd3_backbones:
+                                bb_id = _safe_id(str(b.get("id") or "design"))
+                                _write_text(designs_dir / f"{bb_id}.pdb", str(b.get("pdb_text") or ""))
+                        set_status(paths, stage="rfd3", state="completed")
+
+                def _fallback_rfd3(exc: Exception) -> None:
+                    nonlocal target_pdb_text, rfd3_backbones, rfd3_selected_id, rfd3_input_pdb_text
+                    rfd3_dir = _ensure_dir(paths.root / "rfd3")
+                    write_json(
+                        rfd3_dir / "recovery.json",
+                        {"error": str(exc), "recovered_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())},
+                    )
+                    rfd3_backbones = None
+                    rfd3_selected_id = "recovered"
+                    if not target_pdb_text.strip():
+                        if rfd3_input_pdb_text.strip():
+                            target_pdb_text = rfd3_input_pdb_text
+                        elif rfd3_files and "input.pdb" in rfd3_files:
+                            target_pdb_text = str(rfd3_files.get("input.pdb") or "")
+                        elif target_record is not None:
+                            target_pdb_text = _dummy_backbone_pdb(target_record.sequence, chain_id="A")
+                        else:
+                            target_pdb_text = _dummy_backbone_pdb("A" * 60, chain_id="A")
+                    if target_pdb_text.strip():
+                        _write_text(rfd3_dir / "selected.pdb", target_pdb_text)
+                        write_json(rfd3_dir / "selected.json", {"id": "recovered", "source": "fallback"})
+                    set_status(paths, stage="rfd3", state="completed", detail="recovered")
+
+                _, rfd3_recovered, rfd3_error, rfd3_recovery = _recover_stage(
+                    "rfd3",
+                    _run_rfd3,
+                    fallback=_fallback_rfd3,
+                    recovery_actions=["Used fallback backbone (no RFD3)"],
+                )
+                _emit_panel("rfd3", detail=("recovered" if rfd3_recovered else None), error=rfd3_error, recovery=rfd3_recovery)
 
                 if request.stop_after == "rfd3":
                     result = PipelineResult(
@@ -1066,7 +1219,7 @@ class PipelineRunner:
                         conservation_path=conservation_path,
                         ligand_mask_path=None,
                         tiers=[],
-                        errors=[],
+                        errors=errors,
                     )
                     write_json(paths.summary_json, asdict(result))
                     set_status(paths, stage="done", state="completed")
@@ -1078,12 +1231,15 @@ class PipelineRunner:
                 target_pdb_text = _dummy_backbone_pdb(target_record.sequence, chain_id="A")
 
             if not target_pdb_text.strip():
-                set_status(paths, stage="af2_target", state="running")
-                target_pdb_path = paths.root / "target.pdb"
-                if target_pdb_path.exists() and not request.force:
-                    target_pdb_text = target_pdb_path.read_text(encoding="utf-8")
-                    set_status(paths, stage="af2_target", state="completed", detail="cached")
-                else:
+                def _run_af2_target() -> None:
+                    nonlocal target_pdb_text
+                    set_status(paths, stage="af2_target", state="running")
+                    target_pdb_path = paths.root / "target.pdb"
+                    if target_pdb_path.exists() and not request.force:
+                        target_pdb_text = target_pdb_path.read_text(encoding="utf-8")
+                        set_status(paths, stage="af2_target", state="completed", detail="cached")
+                        return
+
                     if self.af2 is None:
                         raise RuntimeError(
                             "target_pdb is missing; provide target_pdb or configure AlphaFold2 (ALPHAFOLD2_ENDPOINT_ID or AF2_URL)"
@@ -1153,10 +1309,37 @@ class PipelineRunner:
                     )
                     set_status(paths, stage="af2_target", state="completed")
 
+                def _fallback_af2_target(exc: Exception) -> None:
+                    nonlocal target_pdb_text
+                    if target_record is not None:
+                        target_pdb_text = _dummy_backbone_pdb(target_record.sequence, chain_id="A")
+                    else:
+                        target_pdb_text = _dummy_backbone_pdb("A" * 60, chain_id="A")
+                    _write_text(paths.root / "target.pdb", target_pdb_text)
+                    write_json(
+                        paths.root / "af2_target_recovery.json",
+                        {"error": str(exc), "recovered_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())},
+                    )
+                    set_status(paths, stage="af2_target", state="completed", detail="recovered")
+
+                _, af2t_recovered, af2t_error, af2t_recovery = _recover_stage(
+                    "af2_target",
+                    _run_af2_target,
+                    fallback=_fallback_af2_target,
+                    recovery_actions=["Used dummy backbone for target structure"],
+                )
+                _emit_panel("af2_target", detail=("recovered" if af2t_recovered else None), error=af2t_error, recovery=af2t_recovery)
+
             if msa_defer:
                 if target_record is None:
                     target_record = _target_record_from_pdb(target_pdb_text, design_chains=request.design_chains)
-                filtered_a3m_text = _run_msa(target_record)
+                filtered_a3m_text, msa_recovered, msa_error, msa_recovery = _recover_stage(
+                    "mmseqs_msa",
+                    lambda: _run_msa(target_record),
+                    fallback=lambda exc: _fallback_msa(target_record, reason=str(exc)),
+                    recovery_actions=["Used fallback MSA (query-only)"],
+                )
+                _emit_panel("mmseqs_msa", detail=("recovered" if msa_recovered else None), error=msa_error, recovery=msa_recovery)
                 if request.stop_after == "msa":
                     result = PipelineResult(
                         run_id=run_id,
@@ -1167,12 +1350,18 @@ class PipelineRunner:
                         conservation_path=None,
                         ligand_mask_path=None,
                         tiers=[],
-                        errors=[],
+                        errors=errors,
                     )
                     write_json(paths.summary_json, asdict(result))
                     set_status(paths, stage="done", state="completed")
                     return result
-                conservation = _run_conservation(filtered_a3m_text)
+                conservation, cons_recovered, cons_error, cons_recovery = _recover_stage(
+                    "conservation",
+                    lambda: _run_conservation(filtered_a3m_text),
+                    fallback=lambda exc: _fallback_conservation(filtered_a3m_text, reason=str(exc)),
+                    recovery_actions=["Used fallback conservation (no weighting)"],
+                )
+                _emit_panel("conservation", detail=("recovered" if cons_recovered else None), error=cons_error, recovery=cons_recovery)
 
             if conservation is None:
                 raise ValueError("conservation is required before ligand masking")
@@ -1193,35 +1382,25 @@ class PipelineRunner:
                         break
 
             if backbones and (effective_strip_nonpositive or effective_renumber):
-                set_status(paths, stage="pdb_preprocess", state="running")
-                backbones_dir = _ensure_dir(paths.root / "backbones")
-                for idx, b in enumerate(backbones):
-                    original = str(b.get("pdb_text") or "")
-                    if not original.strip():
-                        continue
-                    processed, numbering = preprocess_pdb(
-                        original,
-                        chains=request.design_chains,
-                        strip_nonpositive_resseq=effective_strip_nonpositive,
-                        renumber_resseq_from_1=effective_renumber,
-                    )
-                    b["pdb_text"] = processed
-                    bb_id = _safe_id(str(b.get("id") or f"backbone_{idx}")) or f"backbone_{idx}"
-                    bb_dir = _ensure_dir(backbones_dir / bb_id)
-                    _write_text(bb_dir / "target.original.pdb", original)
-                    write_json(
-                        bb_dir / "pdb_numbering.json",
-                        {
-                            "chains": request.design_chains,
-                            "strip_nonpositive_resseq": effective_strip_nonpositive,
-                            "renumber_resseq_from_1": effective_renumber,
-                            "mapping": numbering,
-                        },
-                    )
-                    if idx == 0:
-                        _write_text(paths.root / "target.original.pdb", original)
+                def _run_preprocess() -> None:
+                    set_status(paths, stage="pdb_preprocess", state="running")
+                    backbones_dir = _ensure_dir(paths.root / "backbones")
+                    for idx, b in enumerate(backbones):
+                        original = str(b.get("pdb_text") or "")
+                        if not original.strip():
+                            continue
+                        processed, numbering = preprocess_pdb(
+                            original,
+                            chains=request.design_chains,
+                            strip_nonpositive_resseq=effective_strip_nonpositive,
+                            renumber_resseq_from_1=effective_renumber,
+                        )
+                        b["pdb_text"] = processed
+                        bb_id = _safe_id(str(b.get("id") or f"backbone_{idx}")) or f"backbone_{idx}"
+                        bb_dir = _ensure_dir(backbones_dir / bb_id)
+                        _write_text(bb_dir / "target.original.pdb", original)
                         write_json(
-                            paths.root / "pdb_numbering.json",
+                            bb_dir / "pdb_numbering.json",
                             {
                                 "chains": request.design_chains,
                                 "strip_nonpositive_resseq": effective_strip_nonpositive,
@@ -1229,7 +1408,33 @@ class PipelineRunner:
                                 "mapping": numbering,
                             },
                         )
-                set_status(paths, stage="pdb_preprocess", state="completed")
+                        if idx == 0:
+                            _write_text(paths.root / "target.original.pdb", original)
+                            write_json(
+                                paths.root / "pdb_numbering.json",
+                                {
+                                    "chains": request.design_chains,
+                                    "strip_nonpositive_resseq": effective_strip_nonpositive,
+                                    "renumber_resseq_from_1": effective_renumber,
+                                    "mapping": numbering,
+                                },
+                            )
+                    set_status(paths, stage="pdb_preprocess", state="completed")
+
+                def _fallback_preprocess(exc: Exception) -> None:
+                    write_json(
+                        paths.root / "pdb_preprocess_recovery.json",
+                        {"error": str(exc), "recovered_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())},
+                    )
+                    set_status(paths, stage="pdb_preprocess", state="completed", detail="recovered")
+
+                _, prep_recovered, prep_error, prep_recovery = _recover_stage(
+                    "pdb_preprocess",
+                    _run_preprocess,
+                    fallback=_fallback_preprocess,
+                    recovery_actions=["Skipped PDB preprocessing"],
+                )
+                _emit_panel("pdb_preprocess", detail=("recovered" if prep_recovered else None), error=prep_error, recovery=prep_recovery)
 
             if backbones:
                 target_pdb_text = str(backbones[0].get("pdb_text") or "")
@@ -1266,17 +1471,41 @@ class PipelineRunner:
 
             pdb_chains = list(residues_by_chain(target_pdb_text, only_atom_records=True).keys())
             requested_chains = request.design_chains or pdb_chains or None
+            auto_design_chains: list[str] | None = None
+            auto_chain_note: str | None = None
+            if request.design_chains is None and not str(request.target_fasta or "").strip():
+                query_seq = _clean_protein_sequence(target_record.sequence) if target_record else ""
+                if query_seq and pdb_chains:
+                    seq_by_chain = sequence_by_chain(target_pdb_text, chains=pdb_chains)
+                    best_chain = None
+                    best_score: tuple[float, int, int] | None = None
+                    for chain_id, chain_seq in seq_by_chain.items():
+                        clean_seq = _clean_protein_sequence(chain_seq)
+                        if not clean_seq:
+                            continue
+                        aln = global_alignment_mapping(query_seq, clean_seq)
+                        score = (float(aln.query_identity), int(aln.matches), int(aln.target_len))
+                        if best_score is None or score > best_score:
+                            best_score = score
+                            best_chain = chain_id
+                    if best_chain:
+                        requested_chains = [best_chain]
+                        auto_design_chains = list(requested_chains)
+                        auto_chain_note = f"auto_design_chains={best_chain} (target_fasta empty)"
             af2_model_preset = _resolve_af2_model_preset(
                 request.af2_model_preset,
                 chain_count=len(requested_chains or []),
             )
-            chain_note = None
+            chain_notes: list[str] = []
             if requested_chains and _is_monomer_preset(af2_model_preset):
                 if len(requested_chains) > 1:
-                    chain_note = f"monomer preset: using first chain only ({requested_chains[0]})"
+                    chain_notes.append(f"monomer preset: using first chain only ({requested_chains[0]})")
                 design_chains = [requested_chains[0]]
             else:
                 design_chains = requested_chains
+            if auto_chain_note:
+                chain_notes.insert(0, auto_chain_note)
+            chain_note = " | ".join(chain_notes) if chain_notes else None
 
             write_json(
                 paths.root / "chain_strategy.json",
@@ -1284,6 +1513,7 @@ class PipelineRunner:
                     "af2_model_preset": af2_model_preset,
                     "pdb_chains": pdb_chains,
                     "requested_design_chains": request.design_chains,
+                    "auto_selected_design_chains": auto_design_chains,
                     "design_chains_used": design_chains,
                     "note": chain_note,
                 },
@@ -1302,6 +1532,7 @@ class PipelineRunner:
             both_provided = bool(str(request.target_fasta or "").strip()) and bool(str(request.target_pdb or "").strip())
 
             query_warnings: list[str] = []
+            query_pdb_error: str | None = None
             for ctx in backbone_contexts:
                 pdb_seq_by_chain = sequence_by_chain(ctx["pdb_text"], chains=design_chains)
                 query_to_pdb_map_by_chain: dict[str, list[int | None]] = {}
@@ -1367,7 +1598,7 @@ class PipelineRunner:
                     write_json(paths.root / "query_pdb_alignment.json", query_pdb_report)
 
                 if problems and policy == "error":
-                    raise ValueError(
+                    msg = (
                         "target_fasta/target_pdb mismatch (query_pdb_check failed): "
                         + f"backbone={ctx['id']} "
                         + "; ".join(problems)
@@ -1376,6 +1607,12 @@ class PipelineRunner:
                         "or relax with query_pdb_policy='warn'/'ignore' and/or query_pdb_min_identity. "
                         "See query_pdb_alignment.json for details."
                     )
+                    if request.auto_recover:
+                        query_pdb_error = msg
+                        errors.append(msg)
+                        query_warnings.append(f"{ctx['id']}:" + "; ".join(problems))
+                    else:
+                        raise ValueError(msg)
 
                 if problems and policy == "warn":
                     query_warnings.append(f"{ctx['id']}:" + "; ".join(problems))
@@ -1384,92 +1621,145 @@ class PipelineRunner:
 
                 ctx["mapping"] = query_to_pdb_map_by_chain
 
+            query_pdb_detail = (" | ".join(query_warnings)[:500] if query_warnings else None)
+            if query_pdb_error:
+                query_pdb_detail = f"recovered: {query_pdb_detail}" if query_pdb_detail else "recovered"
             set_status(
                 paths,
                 stage="query_pdb_check",
                 state="completed",
-                detail=(" | ".join(query_warnings)[:500] if query_warnings else None),
+                detail=query_pdb_detail,
             )
+            if query_pdb_error:
+                _emit_panel(
+                    "query_pdb_check",
+                    detail="recovered",
+                    error=query_pdb_error,
+                    recovery={"attempted": True, "actions": ["Continued despite query/PDB mismatch"]},
+                )
+            else:
+                _emit_panel("query_pdb_check")
 
             for ctx in backbone_contexts:
                 ctx["ligand_mask_pdb_text"] = ctx["pdb_text"]
 
             if _diffdock_requested(request):
-                diffdock_root = _ensure_dir(paths.root / "diffdock")
-                for idx, ctx in enumerate(backbone_contexts):
-                    has_ligand = ligand_atoms_present(
-                        ctx["pdb_text"],
+                def _run_diffdock() -> None:
+                    diffdock_root = _ensure_dir(paths.root / "diffdock")
+                    for idx, ctx in enumerate(backbone_contexts):
+                        has_ligand = ligand_atoms_present(
+                            ctx["pdb_text"],
+                            chains=design_chains,
+                            ligand_resnames=request.ligand_resnames,
+                            ligand_atom_chains=request.ligand_atom_chains,
+                        )
+                        if has_ligand:
+                            continue
+                        if request.dry_run:
+                            continue
+                        if self.diffdock is None:
+                            raise RuntimeError("DiffDock endpoint is not configured (set DIFFDOCK_ENDPOINT_ID)")
+
+                        raw_id = str(ctx.get("id") or f"backbone_{idx}")
+                        dir_id = _safe_id(raw_id) or f"backbone_{idx}"
+                        diffdock_dir = _ensure_dir(diffdock_root / dir_id)
+                        set_status(paths, stage="diffdock", state="running", detail=f"backbone={raw_id}")
+
+                        _write_text(diffdock_dir / "protein.pdb", ctx["pdb_text"])
+                        if request.diffdock_ligand_sdf:
+                            _write_text(diffdock_dir / "ligand.sdf", request.diffdock_ligand_sdf)
+                        elif request.diffdock_ligand_smiles:
+                            _write_text(diffdock_dir / "ligand.smiles", request.diffdock_ligand_smiles)
+
+                        def _on_diffdock_job(job_id: str) -> None:
+                            write_json(diffdock_dir / "runpod_job.json", {"job_id": job_id})
+                            set_status(paths, stage="diffdock", state="running", detail=f"runpod_job_id={job_id}")
+
+                        diffdock_out = self.diffdock.dock(
+                            protein_pdb=ctx["pdb_text"],
+                            ligand_smiles=request.diffdock_ligand_smiles,
+                            ligand_sdf=request.diffdock_ligand_sdf,
+                            complex_name=dir_id or "complex",
+                            config=request.diffdock_config,
+                            extra_args=request.diffdock_extra_args,
+                            cuda_visible_devices=request.diffdock_cuda_visible_devices,
+                            on_job_id=_on_diffdock_job,
+                        )
+                        output_payload = diffdock_out.get("output") or {}
+                        write_json(diffdock_dir / "output.json", _safe_json(output_payload))
+                        zip_bytes = diffdock_out.get("zip_bytes")
+                        if isinstance(zip_bytes, (bytes, bytearray)):
+                            (diffdock_dir / "out_dir.zip").write_bytes(bytes(zip_bytes))
+                        sdf_text = str(diffdock_out.get("sdf_text") or "")
+                        if not sdf_text.strip():
+                            raise RuntimeError("DiffDock output missing rank1.sdf text")
+                        _write_text(diffdock_dir / "rank1.sdf", sdf_text)
+
+                        ligand_pdb = sdf_to_pdb(sdf_text)
+                        _write_text(diffdock_dir / "ligand.pdb", ligand_pdb)
+                        complex_pdb = append_ligand_pdb(ctx["pdb_text"], ligand_pdb)
+                        _write_text(diffdock_dir / "complex.pdb", complex_pdb)
+                        if idx == 0:
+                            _write_text(diffdock_root / "complex.pdb", complex_pdb)
+                            _write_text(diffdock_root / "ligand.pdb", ligand_pdb)
+                            _write_text(diffdock_root / "rank1.sdf", sdf_text)
+                        ctx["ligand_mask_pdb_text"] = complex_pdb
+                        set_status(paths, stage="diffdock", state="completed", detail=f"backbone={raw_id}")
+
+                def _fallback_diffdock(exc: Exception) -> None:
+                    write_json(
+                        paths.root / "diffdock_recovery.json",
+                        {"error": str(exc), "recovered_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())},
+                    )
+                    set_status(paths, stage="diffdock", state="completed", detail="recovered")
+
+                _, diff_recovered, diff_error, diff_recovery = _recover_stage(
+                    "diffdock",
+                    _run_diffdock,
+                    fallback=_fallback_diffdock,
+                    recovery_actions=["Skipped DiffDock and kept original complex"],
+                )
+                _emit_panel("diffdock", detail=("recovered" if diff_recovered else None), error=diff_error, recovery=diff_recovery)
+
+            def _run_ligand_mask() -> None:
+                nonlocal ligand_mask_path
+                for ctx in backbone_contexts:
+                    ligand_mask = ligand_proximity_mask(
+                        ctx.get("ligand_mask_pdb_text") or ctx["pdb_text"],
                         chains=design_chains,
+                        distance_angstrom=request.ligand_mask_distance,
                         ligand_resnames=request.ligand_resnames,
                         ligand_atom_chains=request.ligand_atom_chains,
                     )
-                    if has_ligand:
-                        continue
-                    if request.dry_run:
-                        continue
-                    if self.diffdock is None:
-                        raise RuntimeError("DiffDock endpoint is not configured (set DIFFDOCK_ENDPOINT_ID)")
+                    ctx["ligand_mask"] = ligand_mask
+                    write_json(ctx["dir"] / "ligand_mask.json", ligand_mask)
+                    if ctx is backbone_contexts[0]:
+                        ligand_mask_path = str(paths.root / "ligand_mask.json")
+                        write_json(Path(ligand_mask_path), ligand_mask)
+                set_status(paths, stage="ligand_mask", state="completed")
 
-                    raw_id = str(ctx.get("id") or f"backbone_{idx}")
-                    dir_id = _safe_id(raw_id) or f"backbone_{idx}"
-                    diffdock_dir = _ensure_dir(diffdock_root / dir_id)
-                    set_status(paths, stage="diffdock", state="running", detail=f"backbone={raw_id}")
-
-                    _write_text(diffdock_dir / "protein.pdb", ctx["pdb_text"])
-                    if request.diffdock_ligand_sdf:
-                        _write_text(diffdock_dir / "ligand.sdf", request.diffdock_ligand_sdf)
-                    elif request.diffdock_ligand_smiles:
-                        _write_text(diffdock_dir / "ligand.smiles", request.diffdock_ligand_smiles)
-
-                    def _on_diffdock_job(job_id: str) -> None:
-                        write_json(diffdock_dir / "runpod_job.json", {"job_id": job_id})
-                        set_status(paths, stage="diffdock", state="running", detail=f"runpod_job_id={job_id}")
-
-                    diffdock_out = self.diffdock.dock(
-                        protein_pdb=ctx["pdb_text"],
-                        ligand_smiles=request.diffdock_ligand_smiles,
-                        ligand_sdf=request.diffdock_ligand_sdf,
-                        complex_name=dir_id or "complex",
-                        config=request.diffdock_config,
-                        extra_args=request.diffdock_extra_args,
-                        cuda_visible_devices=request.diffdock_cuda_visible_devices,
-                        on_job_id=_on_diffdock_job,
-                    )
-                    output_payload = diffdock_out.get("output") or {}
-                    write_json(diffdock_dir / "output.json", _safe_json(output_payload))
-                    zip_bytes = diffdock_out.get("zip_bytes")
-                    if isinstance(zip_bytes, (bytes, bytearray)):
-                        (diffdock_dir / "out_dir.zip").write_bytes(bytes(zip_bytes))
-                    sdf_text = str(diffdock_out.get("sdf_text") or "")
-                    if not sdf_text.strip():
-                        raise RuntimeError("DiffDock output missing rank1.sdf text")
-                    _write_text(diffdock_dir / "rank1.sdf", sdf_text)
-
-                    ligand_pdb = sdf_to_pdb(sdf_text)
-                    _write_text(diffdock_dir / "ligand.pdb", ligand_pdb)
-                    complex_pdb = append_ligand_pdb(ctx["pdb_text"], ligand_pdb)
-                    _write_text(diffdock_dir / "complex.pdb", complex_pdb)
-                    if idx == 0:
-                        _write_text(diffdock_root / "complex.pdb", complex_pdb)
-                        _write_text(diffdock_root / "ligand.pdb", ligand_pdb)
-                        _write_text(diffdock_root / "rank1.sdf", sdf_text)
-                    ctx["ligand_mask_pdb_text"] = complex_pdb
-                    set_status(paths, stage="diffdock", state="completed", detail=f"backbone={raw_id}")
-
-            for ctx in backbone_contexts:
-                ligand_mask = ligand_proximity_mask(
-                    ctx.get("ligand_mask_pdb_text") or ctx["pdb_text"],
-                    chains=design_chains,
-                    distance_angstrom=request.ligand_mask_distance,
-                    ligand_resnames=request.ligand_resnames,
-                    ligand_atom_chains=request.ligand_atom_chains,
+            def _fallback_ligand_mask(exc: Exception) -> None:
+                nonlocal ligand_mask_path
+                empty_mask: dict[str, list[int]] = {}
+                for ctx in backbone_contexts:
+                    ctx["ligand_mask"] = empty_mask
+                    write_json(ctx["dir"] / "ligand_mask.json", empty_mask)
+                    if ctx is backbone_contexts[0]:
+                        ligand_mask_path = str(paths.root / "ligand_mask.json")
+                        write_json(Path(ligand_mask_path), empty_mask)
+                write_json(
+                    paths.root / "ligand_mask_recovery.json",
+                    {"error": str(exc), "recovered_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())},
                 )
-                ctx["ligand_mask"] = ligand_mask
-                write_json(ctx["dir"] / "ligand_mask.json", ligand_mask)
-                if ctx is backbone_contexts[0]:
-                    ligand_mask_path = str(paths.root / "ligand_mask.json")
-                    write_json(Path(ligand_mask_path), ligand_mask)
-            set_status(paths, stage="ligand_mask", state="completed")
+                set_status(paths, stage="ligand_mask", state="completed", detail="recovered")
+
+            _, lm_recovered, lm_error, lm_recovery = _recover_stage(
+                "ligand_mask",
+                _run_ligand_mask,
+                fallback=_fallback_ligand_mask,
+                recovery_actions=["Used empty ligand mask"],
+            )
+            _emit_panel("ligand_mask", detail=("recovered" if lm_recovered else None), error=lm_error, recovery=lm_recovery)
 
             multi_backbone = len(backbone_contexts) > 1
 
@@ -1493,6 +1783,54 @@ class PipelineRunner:
                     )
                 return tagged
 
+            def _fallback_proteinmpnn(
+                *,
+                tier_dir: Path,
+                pdb_text: str,
+                fixed_positions_by_chain: dict[str, list[int]],
+                reason: str,
+            ) -> tuple[SequenceRecord | None, list[SequenceRecord]]:
+                seq = ""
+                if target_record is not None and target_record.sequence:
+                    seq = target_record.sequence
+                if not seq:
+                    seqs = sequence_by_chain(pdb_text, chains=design_chains)
+                    if design_chains:
+                        seq = seqs.get(design_chains[0], "")
+                    if not seq and seqs:
+                        seq = next(iter(seqs.values()))
+                if not seq:
+                    seq = "A" * 60
+                native = SequenceRecord(id="native", sequence=seq, header="native")
+                samples = [
+                    SequenceRecord(id=f"fallback_{i+1:03d}", sequence=seq, header=f"fallback_{i+1:03d}")
+                    for i in range(max(1, int(request.num_seq_per_tier)))
+                ]
+                write_json(
+                    tier_dir / "proteinmpnn.json",
+                    {
+                        "native": {"id": native.id, "sequence": native.sequence, "header": native.header},
+                        "samples": [
+                            {"id": s.id, "sequence": s.sequence, "header": s.header} for s in samples
+                        ],
+                        "fixed_positions": fixed_positions_by_chain,
+                        "request": {
+                            "recovered": True,
+                            "reason": reason,
+                            "num_seq_per_target": int(request.num_seq_per_tier),
+                        },
+                    },
+                )
+                _write_text(
+                    tier_dir / "designs.fasta",
+                    to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in samples]),
+                )
+                write_json(
+                    tier_dir / "fixed_positions_check.json",
+                    {"ok": False, "skipped": True, "reason": "recovered"},
+                )
+                return native, samples
+
             for tier in request.conservation_tiers:
 
                 tier_str = _tier_key(tier)
@@ -1509,6 +1847,9 @@ class PipelineRunner:
                 mutations_by_sequence_tsv = None
 
                 set_status(paths, stage=f"proteinmpnn_{tier_str}", state="running")
+                mpnn_any_recovered = False
+                mpnn_error: str | None = None
+                mpnn_recovery: dict[str, object] | None = None
 
                 for idx, ctx in enumerate(backbone_contexts):
                     bb_tier_dir = tier_dir if not multi_backbone else _ensure_dir(ctx["dir"] / "tiers" / tier_str)
@@ -1555,18 +1896,39 @@ class PipelineRunner:
                     if multi_backbone and idx == 0:
                         write_json(tier_dir / "fixed_positions.json", fixed_positions_by_chain)
 
-                    native, samples = self._run_proteinmpnn(
-                        bb_tier_dir,
-                        request,
-                        pdb_text=ctx["pdb_text"],
-                        tier_str=tier_str,
-                        design_chains=design_chains,
-                        fixed_positions_by_chain=fixed_positions_by_chain,
-                        on_job_id=lambda job_id, stage=f"proteinmpnn_{tier_str}", dir_=bb_tier_dir, bb_id=ctx["id"]: (
-                            write_json(dir_ / "runpod_job.json", {"job_id": job_id}),
-                            set_status(paths, stage=stage, state="running", detail=f"runpod_job_id={job_id} backbone={bb_id}"),
+                    (native, samples), mpnn_recovered, mpnn_err, mpnn_rec = _recover_stage(
+                        f"proteinmpnn_{tier_str}",
+                        lambda dir_=bb_tier_dir, ctx_=ctx, fixed_=fixed_positions_by_chain: self._run_proteinmpnn(
+                            dir_,
+                            request,
+                            pdb_text=ctx_["pdb_text"],
+                            tier_str=tier_str,
+                            design_chains=design_chains,
+                            fixed_positions_by_chain=fixed_,
+                            on_job_id=lambda job_id, stage=f"proteinmpnn_{tier_str}", dir_=dir_, bb_id=ctx_["id"]: (
+                                write_json(dir_ / "runpod_job.json", {"job_id": job_id}),
+                                set_status(
+                                    paths,
+                                    stage=stage,
+                                    state="running",
+                                    detail=f"runpod_job_id={job_id} backbone={bb_id}",
+                                ),
+                            ),
                         ),
+                        fallback=lambda exc, dir_=bb_tier_dir, ctx_=ctx, fixed_=fixed_positions_by_chain: _fallback_proteinmpnn(
+                            tier_dir=dir_,
+                            pdb_text=ctx_["pdb_text"],
+                            fixed_positions_by_chain=fixed_,
+                            reason=str(exc),
+                        ),
+                        recovery_actions=["Used fallback sequences for ProteinMPNN"],
                     )
+                    if mpnn_recovered:
+                        mpnn_any_recovered = True
+                    if mpnn_err and mpnn_error is None:
+                        mpnn_error = mpnn_err
+                    if mpnn_rec and mpnn_recovery is None:
+                        mpnn_recovery = mpnn_rec
 
                     if not multi_backbone:
                         mutation_paths = write_mutation_reports(
@@ -1605,6 +1967,12 @@ class PipelineRunner:
                         primary_native = native
 
                 set_status(paths, stage=f"proteinmpnn_{tier_str}", state="completed")
+                _emit_panel(
+                    f"proteinmpnn_{tier_str}",
+                    detail=("recovered" if mpnn_any_recovered else None),
+                    error=mpnn_error,
+                    recovery=mpnn_recovery,
+                )
 
                 samples = tier_samples
                 fixed_positions_by_chain = primary_fixed or {}
@@ -1639,108 +2007,42 @@ class PipelineRunner:
                 soluprot_scores: dict[str, float] | None = None
                 passed_ids: list[str] | None = None
                 soluprot_path = tier_dir / "soluprot.json"
-                if samples and soluprot_path.exists() and not request.force:
-                    try:
-                        payload = json.loads(soluprot_path.read_text(encoding="utf-8"))
-                    except Exception:
-                        payload = None
-                    if isinstance(payload, dict):
-                        cached_scores = payload.get("scores")
-                        if isinstance(cached_scores, dict):
-                            soluprot_scores = {
-                                str(k): float(v) for k, v in cached_scores.items() if isinstance(v, (int, float))
-                            }
-                            passed = [
-                                s
-                                for s in samples
-                                if float(soluprot_scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
-                            ]
-                            passed_ids = [s.id for s in passed]
-                            write_json(
-                                soluprot_path,
-                                {
-                                    "scores": soluprot_scores,
-                                    "cutoff": request.soluprot_cutoff,
-                                    "passed_ids": passed_ids,
-                                    "cached": True,
-                                },
-                            )
-                        elif payload.get("skipped") is True:
-                            passed = samples
-                            passed_ids = [s.id for s in passed]
-                elif samples:
-                    if request.dry_run:
-                        scores = {s.id: (0.6 if (i % 2 == 0) else 0.4) for i, s in enumerate(samples)}
-                        soluprot_scores = scores
-                        passed = [
-                            s for s in samples if float(scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
-                        ]
-                        passed_ids = [s.id for s in passed]
-                        write_json(
-                            soluprot_path,
-                            {"scores": scores, "cutoff": request.soluprot_cutoff, "passed_ids": passed_ids},
-                        )
-                    else:
-                        if self.soluprot is None:
-                            passed = samples
-                            passed_ids = [s.id for s in passed]
-                            write_json(
-                                soluprot_path,
-                                {
-                                    "skipped": True,
-                                    "reason": "SOLUPROT_URL not set",
-                                    "cutoff": request.soluprot_cutoff,
-                                    "passed_ids": passed_ids,
-                                },
-                            )
-                        else:
-                            chain_scores: dict[str, dict[str, float]] = {}
-                            child_records: list[SequenceRecord] = []
-                            child_to_parent: dict[str, tuple[str, str]] = {}
-
-                            for s in samples:
-                                chain_seqs = _split_multichain_sequence(s.sequence)
-                                if len(chain_seqs) <= 1:
-                                    cid = str(s.id)
-                                    child_to_parent[cid] = (str(s.id), "")
-                                    child_records.append(
-                                        SequenceRecord(
-                                            id=cid,
-                                            header=s.header,
-                                            sequence=_clean_protein_sequence(chain_seqs[0]),
-                                            meta={},
-                                        )
-                                    )
-                                    continue
-
-                                for idx, chain_seq in enumerate(chain_seqs):
-                                    label = (
-                                        str(design_chains[idx]).strip()
-                                        if (design_chains is not None and idx < len(design_chains))
-                                        else f"chain_{idx+1}"
-                                    )
-                                    cid = f"{s.id}:{label}"
-                                    child_to_parent[cid] = (str(s.id), label)
-                                    child_records.append(
-                                        SequenceRecord(
-                                            id=cid,
-                                            header=f"{s.header or s.id}|{label}",
-                                            sequence=_clean_protein_sequence(chain_seq),
-                                            meta={},
-                                        )
-                                    )
-
-                            scores_by_child = self.soluprot.score(child_records)
-                            for child_id, score in scores_by_child.items():
-                                parent_id, label = child_to_parent.get(child_id, (str(child_id), ""))
-                                chain_scores.setdefault(parent_id, {})[label or "chain_1"] = float(score)
-
-                            scores: dict[str, float] = {}
-                            for s in samples:
-                                parent_id = str(s.id)
-                                per_chain = chain_scores.get(parent_id) or {}
-                                scores[parent_id] = min(per_chain.values()) if per_chain else 0.0
-
+                sol_recovered = False
+                sol_error: str | None = None
+                sol_recovery: dict[str, object] | None = None
+                try:
+                    if samples and soluprot_path.exists() and not request.force:
+                        try:
+                            payload = json.loads(soluprot_path.read_text(encoding="utf-8"))
+                        except Exception:
+                            payload = None
+                        if isinstance(payload, dict):
+                            cached_scores = payload.get("scores")
+                            if isinstance(cached_scores, dict):
+                                soluprot_scores = {
+                                    str(k): float(v) for k, v in cached_scores.items() if isinstance(v, (int, float))
+                                }
+                                passed = [
+                                    s
+                                    for s in samples
+                                    if float(soluprot_scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
+                                ]
+                                passed_ids = [s.id for s in passed]
+                                write_json(
+                                    soluprot_path,
+                                    {
+                                        "scores": soluprot_scores,
+                                        "cutoff": request.soluprot_cutoff,
+                                        "passed_ids": passed_ids,
+                                        "cached": True,
+                                    },
+                                )
+                            elif payload.get("skipped") is True:
+                                passed = samples
+                                passed_ids = [s.id for s in passed]
+                    elif samples:
+                        if request.dry_run:
+                            scores = {s.id: (0.6 if (i % 2 == 0) else 0.4) for i, s in enumerate(samples)}
                             soluprot_scores = scores
                             passed = [
                                 s for s in samples if float(scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
@@ -1748,13 +2050,103 @@ class PipelineRunner:
                             passed_ids = [s.id for s in passed]
                             write_json(
                                 soluprot_path,
-                                {
-                                    "scores": scores,
-                                    "scores_by_chain": chain_scores,
-                                    "cutoff": request.soluprot_cutoff,
-                                    "passed_ids": passed_ids,
-                                },
+                                {"scores": scores, "cutoff": request.soluprot_cutoff, "passed_ids": passed_ids},
                             )
+                        else:
+                            if self.soluprot is None:
+                                passed = samples
+                                passed_ids = [s.id for s in passed]
+                                write_json(
+                                    soluprot_path,
+                                    {
+                                        "skipped": True,
+                                        "reason": "SOLUPROT_URL not set",
+                                        "cutoff": request.soluprot_cutoff,
+                                        "passed_ids": passed_ids,
+                                    },
+                                )
+                            else:
+                                chain_scores: dict[str, dict[str, float]] = {}
+                                child_records: list[SequenceRecord] = []
+                                child_to_parent: dict[str, tuple[str, str]] = {}
+
+                                for s in samples:
+                                    chain_seqs = _split_multichain_sequence(s.sequence)
+                                    if len(chain_seqs) <= 1:
+                                        cid = str(s.id)
+                                        child_to_parent[cid] = (str(s.id), "")
+                                        child_records.append(
+                                            SequenceRecord(
+                                                id=cid,
+                                                header=s.header,
+                                                sequence=_clean_protein_sequence(chain_seqs[0]),
+                                                meta={},
+                                            )
+                                        )
+                                        continue
+
+                                    for idx, chain_seq in enumerate(chain_seqs):
+                                        label = (
+                                            str(design_chains[idx]).strip()
+                                            if (design_chains is not None and idx < len(design_chains))
+                                            else f"chain_{idx+1}"
+                                        )
+                                        cid = f"{s.id}:{label}"
+                                        child_to_parent[cid] = (str(s.id), label)
+                                        child_records.append(
+                                            SequenceRecord(
+                                                id=cid,
+                                                header=f"{s.header or s.id}|{label}",
+                                                sequence=_clean_protein_sequence(chain_seq),
+                                                meta={},
+                                            )
+                                        )
+
+                                scores_by_child = self.soluprot.score(child_records)
+                                for child_id, score in scores_by_child.items():
+                                    parent_id, label = child_to_parent.get(child_id, (str(child_id), ""))
+                                    chain_scores.setdefault(parent_id, {})[label or "chain_1"] = float(score)
+
+                                scores: dict[str, float] = {}
+                                for s in samples:
+                                    parent_id = str(s.id)
+                                    per_chain = chain_scores.get(parent_id) or {}
+                                    scores[parent_id] = min(per_chain.values()) if per_chain else 0.0
+
+                                soluprot_scores = scores
+                                passed = [
+                                    s for s in samples if float(scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
+                                ]
+                                passed_ids = [s.id for s in passed]
+                                write_json(
+                                    soluprot_path,
+                                    {
+                                        "scores": scores,
+                                        "scores_by_chain": chain_scores,
+                                        "cutoff": request.soluprot_cutoff,
+                                        "passed_ids": passed_ids,
+                                    },
+                                )
+                except Exception as exc:
+                    sol_error = f"soluprot_{tier_str} failed: {exc}"
+                    errors.append(sol_error)
+                    if not request.auto_recover:
+                        raise
+                    sol_recovered = True
+                    sol_recovery = {"attempted": True, "error": sol_error, "actions": ["Skipped SoluProt filter"]}
+                    soluprot_scores = {s.id: 1.0 for s in samples}
+                    passed = samples
+                    passed_ids = [s.id for s in passed]
+                    write_json(
+                        soluprot_path,
+                        {
+                            "scores": soluprot_scores,
+                            "cutoff": request.soluprot_cutoff,
+                            "passed_ids": passed_ids,
+                            "recovered": True,
+                            "error": sol_error,
+                        },
+                    )
 
                 passed = _monomerize_records(passed, af2_model_preset)
                 if samples:
@@ -1762,7 +2154,13 @@ class PipelineRunner:
                         tier_dir / "designs_filtered.fasta",
                         to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in passed]),
                     )
-                set_status(paths, stage=f"soluprot_{tier_str}", state="completed")
+                set_status(paths, stage=f"soluprot_{tier_str}", state="completed", detail=("recovered" if sol_recovered else None))
+                _emit_panel(
+                    f"soluprot_{tier_str}",
+                    detail=("recovered" if sol_recovered else None),
+                    error=sol_error,
+                    recovery=sol_recovery,
+                )
 
                 if request.stop_after == "soluprot":
                     tier_results.append(
@@ -1798,91 +2196,83 @@ class PipelineRunner:
                     af2_dir = _ensure_dir(tier_dir / "af2")
                     af2_scores_path = tier_dir / "af2_scores.json"
                     af2_selected_path = tier_dir / "af2_selected.fasta"
-
-                    cached_scores: dict[str, float] = {}
-                    cached_ok = False
-                    if af2_scores_path.exists() and not request.force:
-                        try:
-                            cached = json.loads(af2_scores_path.read_text(encoding="utf-8"))
-                        except Exception:
-                            cached = None
-                        cached_scores_raw = cached.get("scores") if isinstance(cached, dict) else None
-                        cached_model_preset = cached.get("model_preset") if isinstance(cached, dict) else None
-                        cached_db_preset = cached.get("db_preset") if isinstance(cached, dict) else None
-                        cached_max_template_date = cached.get("max_template_date") if isinstance(cached, dict) else None
-                        if (
-                            isinstance(cached_scores_raw, dict)
-                            and (cached_model_preset in {None, af2_model_preset})
-                            and (cached_db_preset in {None, request.af2_db_preset})
-                            and (cached_max_template_date in {None, request.af2_max_template_date})
-                        ):
-                            cached_scores = {
-                                str(k): float(v) for k, v in cached_scores_raw.items() if isinstance(v, (int, float))
-                            }
-                            cached_ok = True
-
-                    candidate_ids = [s.id for s in af2_candidates]
-                    to_predict = (
-                        list(af2_candidates)
-                        if request.force or not cached_ok
-                        else [s for s in af2_candidates if s.id not in cached_scores]
-                    )
-
-                    if to_predict:
-                        if request.dry_run:
-                            af2_result = {
-                                s.id: {
-                                    "best_plddt": (90.0 if (i % 2 == 0) else 80.0),
-                                    "best_model": None,
-                                    "ranking_debug": {},
-                                    "ranked_0_pdb": None,
-                                }
-                                for i, s in enumerate(to_predict)
-                            }
-                        else:
-                            if self.af2 is None:
-                                raise RuntimeError(
-                                    "AlphaFold2 is required for this pipeline; set ALPHAFOLD2_ENDPOINT_ID (RunPod) or AF2_URL"
-                                )
-
-                            af2_inputs = [
-                                SequenceRecord(
-                                    id=s.id,
-                                    header=s.header,
-                                    sequence=_prepare_af2_sequence(
-                                        s.sequence,
-                                        model_preset=af2_model_preset,
-                                        chain_ids=design_chains,
-                                    ),
-                                    meta=s.meta,
-                                )
-                                for s in to_predict
-                            ]
-
-                            jobs_path = af2_dir / "runpod_jobs.json"
-                            jobs: dict[str, str] = {} if request.force else _load_jobs_map(jobs_path)
-
-                            def _on_af2_job_id(seq_id: str, job_id: str) -> None:
-                                jobs[seq_id] = job_id
-                                write_json(jobs_path, {"jobs": dict(jobs)})
-                                set_status(
-                                    paths,
-                                    stage=f"af2_{tier_str}",
-                                    state="running",
-                                    detail=f"runpod_job_id={job_id} seq_id={seq_id}",
-                                )
-
+                    af2_recovered = False
+                    af2_error: str | None = None
+                    af2_recovery: dict[str, object] | None = None
+                    try:
+                        cached_scores: dict[str, float] = {}
+                        cached_ok = False
+                        if af2_scores_path.exists() and not request.force:
                             try:
-                                af2_result = self.af2.predict(
-                                    af2_inputs,
-                                    model_preset=af2_model_preset,
-                                    db_preset=request.af2_db_preset,
-                                    max_template_date=request.af2_max_template_date,
-                                    extra_flags=request.af2_extra_flags,
-                                    on_job_id=_on_af2_job_id,
-                                    resume_job_ids=jobs,
-                                )
-                            except TypeError:
+                                cached = json.loads(af2_scores_path.read_text(encoding="utf-8"))
+                            except Exception:
+                                cached = None
+                            cached_scores_raw = cached.get("scores") if isinstance(cached, dict) else None
+                            cached_model_preset = cached.get("model_preset") if isinstance(cached, dict) else None
+                            cached_db_preset = cached.get("db_preset") if isinstance(cached, dict) else None
+                            cached_max_template_date = cached.get("max_template_date") if isinstance(cached, dict) else None
+                            if (
+                                isinstance(cached_scores_raw, dict)
+                                and (cached_model_preset in {None, af2_model_preset})
+                                and (cached_db_preset in {None, request.af2_db_preset})
+                                and (cached_max_template_date in {None, request.af2_max_template_date})
+                            ):
+                                cached_scores = {
+                                    str(k): float(v) for k, v in cached_scores_raw.items() if isinstance(v, (int, float))
+                                }
+                                cached_ok = True
+
+                        candidate_ids = [s.id for s in af2_candidates]
+                        to_predict = (
+                            list(af2_candidates)
+                            if request.force or not cached_ok
+                            else [s for s in af2_candidates if s.id not in cached_scores]
+                        )
+
+                        if to_predict:
+                            if request.dry_run:
+                                af2_result = {
+                                    s.id: {
+                                        "best_plddt": (90.0 if (i % 2 == 0) else 80.0),
+                                        "best_model": None,
+                                        "ranking_debug": {},
+                                        "ranked_0_pdb": None,
+                                    }
+                                    for i, s in enumerate(to_predict)
+                                }
+                            else:
+                                if self.af2 is None:
+                                    raise RuntimeError(
+                                        "AlphaFold2 is required for this pipeline; set ALPHAFOLD2_ENDPOINT_ID (RunPod) or AF2_URL"
+                                    )
+
+                                af2_inputs = [
+                                    SequenceRecord(
+                                        id=s.id,
+                                        header=s.header,
+                                        sequence=_prepare_af2_sequence(
+                                            s.sequence,
+                                            model_preset=af2_model_preset,
+                                            chain_ids=design_chains,
+                                        ),
+                                        meta=s.meta,
+                                    )
+                                    for s in to_predict
+                                ]
+
+                                jobs_path = af2_dir / "runpod_jobs.json"
+                                jobs: dict[str, str] = {} if request.force else _load_jobs_map(jobs_path)
+
+                                def _on_af2_job_id(seq_id: str, job_id: str) -> None:
+                                    jobs[seq_id] = job_id
+                                    write_json(jobs_path, {"jobs": dict(jobs)})
+                                    set_status(
+                                        paths,
+                                        stage=f"af2_{tier_str}",
+                                        state="running",
+                                        detail=f"runpod_job_id={job_id} seq_id={seq_id}",
+                                    )
+
                                 try:
                                     af2_result = self.af2.predict(
                                         af2_inputs,
@@ -1891,122 +2281,177 @@ class PipelineRunner:
                                         max_template_date=request.af2_max_template_date,
                                         extra_flags=request.af2_extra_flags,
                                         on_job_id=_on_af2_job_id,
+                                        resume_job_ids=jobs,
                                     )
                                 except TypeError:
-                                    af2_result = self.af2.predict(
-                                        af2_inputs,
-                                        model_preset=af2_model_preset,
-                                        db_preset=request.af2_db_preset,
-                                        max_template_date=request.af2_max_template_date,
-                                        extra_flags=request.af2_extra_flags,
-                                    )
+                                    try:
+                                        af2_result = self.af2.predict(
+                                            af2_inputs,
+                                            model_preset=af2_model_preset,
+                                            db_preset=request.af2_db_preset,
+                                            max_template_date=request.af2_max_template_date,
+                                            extra_flags=request.af2_extra_flags,
+                                            on_job_id=_on_af2_job_id,
+                                        )
+                                    except TypeError:
+                                        af2_result = self.af2.predict(
+                                            af2_inputs,
+                                            model_preset=af2_model_preset,
+                                            db_preset=request.af2_db_preset,
+                                            max_template_date=request.af2_max_template_date,
+                                            extra_flags=request.af2_extra_flags,
+                                        )
 
-                        for seq in to_predict:
-                            rec = (af2_result or {}).get(seq.id, {}) if isinstance(af2_result, dict) else {}
-                            if not isinstance(rec, dict):
-                                continue
-                            score = rec.get("best_plddt")
-                            if isinstance(score, (int, float)):
-                                cached_scores[seq.id] = float(score)
+                            for seq in to_predict:
+                                rec = (af2_result or {}).get(seq.id, {}) if isinstance(af2_result, dict) else {}
+                                if not isinstance(rec, dict):
+                                    continue
+                                score = rec.get("best_plddt")
+                                if isinstance(score, (int, float)):
+                                    cached_scores[seq.id] = float(score)
 
-                            seq_dir = _ensure_dir(af2_dir / _safe_id(seq.id))
-                            if isinstance(rec.get("ranking_debug"), dict):
-                                write_json(seq_dir / "ranking_debug.json", rec["ranking_debug"])
-                            ranked0 = rec.get("ranked_0_pdb")
-                            if isinstance(ranked0, str) and ranked0.strip():
-                                _write_text(seq_dir / "ranked_0.pdb", ranked0)
-                            write_json(
-                                seq_dir / "metrics.json",
-                                {
-                                    "best_plddt": cached_scores.get(seq.id),
-                                    "best_model": rec.get("best_model"),
-                                    "archive_name": rec.get("archive_name"),
-                                },
-                            )
+                                seq_dir = _ensure_dir(af2_dir / _safe_id(seq.id))
+                                if isinstance(rec.get("ranking_debug"), dict):
+                                    write_json(seq_dir / "ranking_debug.json", rec["ranking_debug"])
+                                ranked0 = rec.get("ranked_0_pdb")
+                                if isinstance(ranked0, str) and ranked0.strip():
+                                    _write_text(seq_dir / "ranked_0.pdb", ranked0)
+                                write_json(
+                                    seq_dir / "metrics.json",
+                                    {
+                                        "best_plddt": cached_scores.get(seq.id),
+                                        "best_model": rec.get("best_model"),
+                                        "archive_name": rec.get("archive_name"),
+                                    },
+                                )
 
-                    candidate_scores = {seq_id: cached_scores[seq_id] for seq_id in candidate_ids if seq_id in cached_scores}
-                    rmsd_scores: dict[str, float] = {}
-                    rmsd_missing: list[str] = []
-                    rmsd_cutoff = float(request.af2_rmsd_cutoff)
-                    if rmsd_cutoff <= 0.0:
-                        rmsd_cutoff = None
-                    if rmsd_cutoff is not None:
-                        for seq_id in candidate_ids:
-                            rmsd = None
-                            seq_dir = _ensure_dir(af2_dir / _safe_id(seq_id))
-                            metrics_path = seq_dir / "metrics.json"
-                            metrics_payload: dict[str, object] | None = None
-                            if metrics_path.exists():
-                                try:
-                                    metrics_payload = json.loads(metrics_path.read_text(encoding="utf-8"))
-                                except Exception:
-                                    metrics_payload = None
-                            if isinstance(metrics_payload, dict):
-                                raw = metrics_payload.get("rmsd_ca")
-                                if isinstance(raw, (int, float)):
-                                    rmsd = float(raw)
-                            if rmsd is None:
-                                pdb_text = None
-                                rec = (af2_result or {}).get(seq_id) if isinstance(af2_result, dict) else None
-                                if isinstance(rec, dict):
-                                    for key in ("ranked_0_pdb", "pdb", "pdb_text"):
-                                        val = rec.get(key)
-                                        if isinstance(val, str) and val.strip():
-                                            pdb_text = val
-                                            break
-                                if not pdb_text:
-                                    pdb_path = seq_dir / "ranked_0.pdb"
-                                    if pdb_path.exists():
-                                        pdb_text = pdb_path.read_text(encoding="utf-8")
-                                if pdb_text and target_pdb_text.strip():
-                                    rmsd_val = ca_rmsd(target_pdb_text, pdb_text, chains=design_chains)
-                                    if isinstance(rmsd_val, (int, float)):
-                                        rmsd = float(rmsd_val)
-                            if rmsd is None:
-                                rmsd_missing.append(seq_id)
-                                continue
-                            rmsd_scores[seq_id] = rmsd
-                            payload = metrics_payload if isinstance(metrics_payload, dict) else {}
-                            if "best_plddt" not in payload and seq_id in cached_scores:
-                                payload["best_plddt"] = cached_scores[seq_id]
-                            payload["rmsd_ca"] = rmsd
-                            write_json(metrics_path, payload)
-                    selected_pairs = [
-                        (seq_id, score)
-                        for seq_id, score in candidate_scores.items()
-                        if score >= float(request.af2_plddt_cutoff)
-                        and (rmsd_cutoff is None or (seq_id in rmsd_scores and rmsd_scores[seq_id] <= rmsd_cutoff))
-                    ]
-                    selected_pairs.sort(key=lambda t: t[1], reverse=True)
-                    af2_selected_ids = [seq_id for seq_id, _ in selected_pairs[: int(request.af2_top_k)]]
+                        candidate_scores = {seq_id: cached_scores[seq_id] for seq_id in candidate_ids if seq_id in cached_scores}
+                        rmsd_scores: dict[str, float] = {}
+                        rmsd_missing: list[str] = []
+                        rmsd_cutoff = float(request.af2_rmsd_cutoff)
+                        if rmsd_cutoff <= 0.0:
+                            rmsd_cutoff = None
+                        if rmsd_cutoff is not None:
+                            for seq_id in candidate_ids:
+                                rmsd = None
+                                seq_dir = _ensure_dir(af2_dir / _safe_id(seq_id))
+                                metrics_path = seq_dir / "metrics.json"
+                                metrics_payload: dict[str, object] | None = None
+                                if metrics_path.exists():
+                                    try:
+                                        metrics_payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+                                    except Exception:
+                                        metrics_payload = None
+                                if isinstance(metrics_payload, dict):
+                                    raw = metrics_payload.get("rmsd_ca")
+                                    if isinstance(raw, (int, float)):
+                                        rmsd = float(raw)
+                                if rmsd is None:
+                                    pdb_text = None
+                                    rec = (af2_result or {}).get(seq_id) if isinstance(af2_result, dict) else None
+                                    if isinstance(rec, dict):
+                                        for key in ("ranked_0_pdb", "pdb", "pdb_text"):
+                                            val = rec.get(key)
+                                            if isinstance(val, str) and val.strip():
+                                                pdb_text = val
+                                                break
+                                    if not pdb_text:
+                                        pdb_path = seq_dir / "ranked_0.pdb"
+                                        if pdb_path.exists():
+                                            pdb_text = pdb_path.read_text(encoding="utf-8")
+                                    if pdb_text and target_pdb_text.strip():
+                                        rmsd_val = ca_rmsd(target_pdb_text, pdb_text, chains=design_chains)
+                                        if isinstance(rmsd_val, (int, float)):
+                                            rmsd = float(rmsd_val)
+                                if rmsd is None:
+                                    rmsd_missing.append(seq_id)
+                                    continue
+                                rmsd_scores[seq_id] = rmsd
+                                payload = metrics_payload if isinstance(metrics_payload, dict) else {}
+                                if "best_plddt" not in payload and seq_id in cached_scores:
+                                    payload["best_plddt"] = cached_scores[seq_id]
+                                payload["rmsd_ca"] = rmsd
+                                write_json(metrics_path, payload)
+                        selected_pairs = [
+                            (seq_id, score)
+                            for seq_id, score in candidate_scores.items()
+                            if score >= float(request.af2_plddt_cutoff)
+                            and (rmsd_cutoff is None or (seq_id in rmsd_scores and rmsd_scores[seq_id] <= rmsd_cutoff))
+                        ]
+                        selected_pairs.sort(key=lambda t: t[1], reverse=True)
+                        af2_selected_ids = [seq_id for seq_id, _ in selected_pairs[: int(request.af2_top_k)]]
 
-                    selected_records = [s for s in af2_candidates if s.id in set(af2_selected_ids)]
-                    _write_text(
-                        af2_selected_path,
-                        to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in selected_records]),
-                    )
-                    write_json(
-                        af2_scores_path,
-                        {
-                            "scores": cached_scores,
-                            "rmsd_scores": rmsd_scores,
-                            "candidate_ids": candidate_ids,
-                            "cutoff": request.af2_plddt_cutoff,
-                            "rmsd_cutoff": request.af2_rmsd_cutoff,
-                            "rmsd_missing_ids": rmsd_missing,
-                            "top_k": request.af2_top_k,
-                            "selected_ids": af2_selected_ids,
-                            "model_preset": af2_model_preset,
-                            "db_preset": request.af2_db_preset,
-                            "max_template_date": request.af2_max_template_date,
-                            "cached": (not to_predict and cached_ok and not request.force),
-                        },
-                    )
-                    set_status(
-                        paths,
-                        stage=f"af2_{tier_str}",
-                        state="completed",
-                        detail="cached" if (not to_predict and cached_ok and not request.force) else None,
+                        selected_records = [s for s in af2_candidates if s.id in set(af2_selected_ids)]
+                        _write_text(
+                            af2_selected_path,
+                            to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in selected_records]),
+                        )
+                        write_json(
+                            af2_scores_path,
+                            {
+                                "scores": cached_scores,
+                                "rmsd_scores": rmsd_scores,
+                                "candidate_ids": candidate_ids,
+                                "cutoff": request.af2_plddt_cutoff,
+                                "rmsd_cutoff": request.af2_rmsd_cutoff,
+                                "rmsd_missing_ids": rmsd_missing,
+                                "top_k": request.af2_top_k,
+                                "selected_ids": af2_selected_ids,
+                                "model_preset": af2_model_preset,
+                                "db_preset": request.af2_db_preset,
+                                "max_template_date": request.af2_max_template_date,
+                                "cached": (not to_predict and cached_ok and not request.force),
+                            },
+                        )
+                        set_status(
+                            paths,
+                            stage=f"af2_{tier_str}",
+                            state="completed",
+                            detail="cached" if (not to_predict and cached_ok and not request.force) else None,
+                        )
+                    except Exception as exc:
+                        af2_error = f"af2_{tier_str} failed: {exc}"
+                        errors.append(af2_error)
+                        if not request.auto_recover:
+                            raise
+                        af2_recovered = True
+                        af2_recovery = {
+                            "attempted": True,
+                            "error": af2_error,
+                            "actions": ["Selected candidates without AF2 scoring"],
+                        }
+                        candidate_ids = [s.id for s in af2_candidates]
+                        af2_selected_ids = candidate_ids[: int(request.af2_top_k)]
+                        selected_records = [s for s in af2_candidates if s.id in set(af2_selected_ids)]
+                        fallback_scores = {seq_id: 0.0 for seq_id in candidate_ids}
+                        _write_text(
+                            af2_selected_path,
+                            to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in selected_records]),
+                        )
+                        write_json(
+                            af2_scores_path,
+                            {
+                                "scores": fallback_scores,
+                                "rmsd_scores": {},
+                                "candidate_ids": candidate_ids,
+                                "cutoff": request.af2_plddt_cutoff,
+                                "rmsd_cutoff": request.af2_rmsd_cutoff,
+                                "rmsd_missing_ids": list(candidate_ids),
+                                "top_k": request.af2_top_k,
+                                "selected_ids": af2_selected_ids,
+                                "model_preset": af2_model_preset,
+                                "db_preset": request.af2_db_preset,
+                                "max_template_date": request.af2_max_template_date,
+                                "recovered": True,
+                                "error": af2_error,
+                            },
+                        )
+                        set_status(paths, stage=f"af2_{tier_str}", state="completed", detail="recovered")
+                    _emit_panel(
+                        f"af2_{tier_str}",
+                        detail=("recovered" if af2_recovered else None),
+                        error=af2_error,
+                        recovery=af2_recovery,
                     )
 
                 if request.stop_after == "af2":
@@ -2030,23 +2475,49 @@ class PipelineRunner:
 
                 novelty_tsv = None
                 novelty_candidates = [s for s in passed if af2_selected_ids and s.id in set(af2_selected_ids)]
-                if self.mmseqs is not None and novelty_candidates:
-                    set_status(paths, stage=f"novelty_{tier_str}", state="running")
-                    query_fasta = to_fasta(
-                        [FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in novelty_candidates]
+                if novelty_candidates:
+                    novelty_recovered = False
+                    novelty_error: str | None = None
+                    novelty_recovery: dict[str, object] | None = None
+                    try:
+                        if self.mmseqs is None:
+                            raise RuntimeError("MMseqs client is not configured")
+                        set_status(paths, stage=f"novelty_{tier_str}", state="running")
+                        query_fasta = to_fasta(
+                            [FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in novelty_candidates]
+                        )
+                        novelty_out = self.mmseqs.search(
+                            query_fasta=query_fasta,
+                            target_db=request.novelty_target_db,
+                            threads=request.mmseqs_threads,
+                            use_gpu=request.mmseqs_use_gpu,
+                            include_taxonomy=False,
+                            return_a3m=False,
+                            max_seqs=min(300, request.mmseqs_max_seqs),
+                        )
+                        novelty_tsv = str(novelty_out.get("tsv") or "")
+                        _write_text(tier_dir / "novelty.tsv", novelty_tsv)
+                        set_status(paths, stage=f"novelty_{tier_str}", state="completed")
+                    except Exception as exc:
+                        novelty_error = f"novelty_{tier_str} failed: {exc}"
+                        errors.append(novelty_error)
+                        if not request.auto_recover:
+                            raise
+                        novelty_recovered = True
+                        novelty_recovery = {
+                            "attempted": True,
+                            "error": novelty_error,
+                            "actions": ["Skipped novelty search"],
+                        }
+                        novelty_tsv = ""
+                        _write_text(tier_dir / "novelty.tsv", novelty_tsv)
+                        set_status(paths, stage=f"novelty_{tier_str}", state="completed", detail="recovered")
+                    _emit_panel(
+                        f"novelty_{tier_str}",
+                        detail=("recovered" if novelty_recovered else None),
+                        error=novelty_error,
+                        recovery=novelty_recovery,
                     )
-                    novelty_out = self.mmseqs.search(
-                        query_fasta=query_fasta,
-                        target_db=request.novelty_target_db,
-                        threads=request.mmseqs_threads,
-                        use_gpu=request.mmseqs_use_gpu,
-                        include_taxonomy=False,
-                        return_a3m=False,
-                        max_seqs=min(300, request.mmseqs_max_seqs),
-                    )
-                    novelty_tsv = str(novelty_out.get("tsv") or "")
-                    _write_text(tier_dir / "novelty.tsv", novelty_tsv)
-                    set_status(paths, stage=f"novelty_{tier_str}", state="completed")
 
                 tier_results.append(
                     TierResult(
@@ -2078,6 +2549,11 @@ class PipelineRunner:
                 errors=errors,
             )
             write_json(paths.summary_json, asdict(result))
+            if request.agent_panel_enabled:
+                try:
+                    write_agent_panel_report(self.output_root, run_id)
+                except Exception:
+                    pass
             set_status(paths, stage="done", state="completed")
             return result
         except PipelineInputRequired as exc:
@@ -2095,6 +2571,11 @@ class PipelineRunner:
                 errors=errors,
             )
             write_json(paths.summary_json, asdict(result))
+            if request.agent_panel_enabled:
+                try:
+                    write_agent_panel_report(self.output_root, run_id)
+                except Exception:
+                    pass
             raise
         except Exception as exc:
             errors.append(str(exc))
@@ -2111,6 +2592,11 @@ class PipelineRunner:
                 errors=errors,
             )
             write_json(paths.summary_json, asdict(result))
+            if request.agent_panel_enabled:
+                try:
+                    write_agent_panel_report(self.output_root, run_id)
+                except Exception:
+                    pass
             raise
 
     def _get_msa(

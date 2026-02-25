@@ -71,6 +71,9 @@ const state = {
   artifacts: [],
   runs: [],
   lastScore: null,
+  reportModalText: "",
+  reportModalMode: "rendered",
+  reportModalFilename: "report.md",
 };
 
 if (state.apiBase && state.apiBase !== normalizeApiBase(savedApiBase)) {
@@ -91,6 +94,7 @@ const el = {
   userBadge: document.getElementById("userBadge"),
   messages: document.getElementById("messages"),
   promptInput: document.getElementById("promptInput"),
+  checkBtn: document.getElementById("checkBtn"),
   planBtn: document.getElementById("planBtn"),
   clearBtn: document.getElementById("clearBtn"),
   questionStack: document.getElementById("questionStack"),
@@ -111,6 +115,17 @@ const el = {
   artifactFilter: document.getElementById("artifactFilter"),
   refreshArtifacts: document.getElementById("refreshArtifacts"),
   artifactPreview: document.getElementById("artifactPreview"),
+  agentPanelList: document.getElementById("agentPanelList"),
+  agentPanelStatus: document.getElementById("agentPanelStatus"),
+  viewRunReport: document.getElementById("viewRunReport"),
+  viewAgentReport: document.getElementById("viewAgentReport"),
+  reportModal: document.getElementById("reportModal"),
+  reportModalTitle: document.getElementById("reportModalTitle"),
+  reportModalContent: document.getElementById("reportModalContent"),
+  reportModalToggle: document.getElementById("reportModalToggle"),
+  reportModalDownload: document.getElementById("reportModalDownload"),
+  reportModalClose: document.getElementById("reportModalClose"),
+  refreshAgentPanel: document.getElementById("refreshAgentPanel"),
   feedbackRating: document.getElementById("feedbackRating"),
   feedbackReasons: document.getElementById("feedbackReasons"),
   feedbackArtifact: document.getElementById("feedbackArtifact"),
@@ -180,12 +195,24 @@ const I18N = {
     "login.submit": "Access Console",
     "setup.title": "Run Setup",
     "setup.desc": "Choose a workflow, attach inputs, and launch the job.",
-    "setup.prompt.placeholder": "Optional notes for this run (no prompt required).",
+    "setup.prompt.placeholder": "Optional notes or questions for this run.",
+    "setup.check": "Check Setup",
     "setup.reset": "Reset Inputs",
     "setup.clear": "Clear Log",
     "setup.hint": "Complete required inputs to enable execution.",
     "setup.runStatus.empty": "Run status: -",
     "setup.runStatus.line": "Run status: {id} · {stage} / {state} · {updated}",
+    "preflight.title": "Setup check",
+    "preflight.ok": "No blocking issues found.",
+    "preflight.blocked": "Fix the issues below before running.",
+    "preflight.errors": "Errors",
+    "preflight.warnings": "Warnings",
+    "preflight.required": "Required inputs",
+    "preflight.questions": "Questions",
+    "preflight.detected": "Detected",
+    "preflight.routed": "Prompt routing",
+    "preflight.failed": "Preflight failed: {error}",
+    "preflight.unavailable": "Setup check is not available for {mode}.",
     "monitor.title": "Run Monitor",
     "monitor.desc": "Track live status, scores, and recent runs.",
     "monitor.runId": "Run ID",
@@ -198,6 +225,20 @@ const I18N = {
     "monitor.recentRuns": "Recent Runs",
     "monitor.refreshRuns": "Refresh",
     "monitor.showAll": "Show all runs (admin)",
+    "agent.title": "Agent Panel",
+    "agent.desc": "Stage-by-stage expert consensus and recovery notes.",
+    "agent.refresh": "Refresh",
+    "agent.viewReport": "View Report",
+    "agent.viewAgentReport": "View Agent Report",
+    "agent.report.loading": "Loading report...",
+    "agent.report.missing": "No report available yet.",
+    "agent.report.failed": "Failed to load report: {error}",
+    "report.modal.download": "Download",
+    "report.modal.toggleRendered": "Rendered",
+    "report.modal.toggleRaw": "Raw",
+    "agent.loading": "Loading agent panel...",
+    "agent.empty": "No agent events yet.",
+    "agent.failed": "Agent panel load failed: {error}",
     "artifacts.title": "Artifacts",
     "artifacts.desc": "Filter outputs and open previews.",
     "artifacts.filter.placeholder": "Filter by name or stage",
@@ -315,6 +356,8 @@ const I18N = {
     "attachment.diffdock.skip": "Skip",
     "choice.allChains": "All chains",
     "choice.chainNote": "Upload a target PDB to enable chain selection.",
+    "choice.chainDefaultNote": "Tip: with no target FASTA, the pipeline defaults to the primary chain. Select chains explicitly for multi-chain designs or to avoid short-chain mismatches.",
+    "choice.contigNone": "None (skip RFD3)",
     "choice.contigNote": "Upload a PDB to suggest rfd3_contig options.",
     "choice.contigPositiveOnly": "Contig suggestions use protein residues (ATOM and common amino-acid HETATM) with positive numbering only.",
     "choice.stripNonpositive.on": "Strip (recommended)",
@@ -365,10 +408,15 @@ const I18N = {
     "feedback.rating.good": "Good",
     "feedback.rating.bad": "Bad",
     "feedback.reason.low_plddt": "Low pLDDT",
+    "feedback.reason.high_plddt": "High pLDDT",
     "feedback.reason.high_rmsd": "High RMSD",
+    "feedback.reason.low_rmsd": "Low RMSD",
     "feedback.reason.binding_poor": "Binding Poor",
+    "feedback.reason.binding_good": "Binding Good",
     "feedback.reason.low_novelty": "Low Novelty",
+    "feedback.reason.high_novelty": "High Novelty",
     "feedback.reason.unstable": "Unstable",
+    "feedback.reason.stable": "Stable",
     "feedback.reason.other": "Other",
     "feedback.stage.auto": "Auto",
     "feedback.stage.msa": "MSA",
@@ -438,12 +486,24 @@ const I18N = {
     "login.submit": "콘솔 접속",
     "setup.title": "실행 설정",
     "setup.desc": "워크플로를 선택하고 입력을 첨부해 실행하세요.",
-    "setup.prompt.placeholder": "선택: 실행 메모를 남기세요 (프롬프트 불필요).",
+    "setup.prompt.placeholder": "선택: 실행 메모/질문을 남기세요.",
+    "setup.check": "설정 점검",
     "setup.reset": "입력 초기화",
     "setup.clear": "로그 지우기",
     "setup.hint": "필수 입력을 완료하면 실행할 수 있습니다.",
     "setup.runStatus.empty": "실행 상태: -",
     "setup.runStatus.line": "실행 상태: {id} · {stage} / {state} · {updated}",
+    "preflight.title": "설정 점검",
+    "preflight.ok": "실행을 막는 문제는 없습니다.",
+    "preflight.blocked": "아래 문제를 해결해야 실행할 수 있습니다.",
+    "preflight.errors": "오류",
+    "preflight.warnings": "경고",
+    "preflight.required": "추가 입력 필요",
+    "preflight.questions": "질문",
+    "preflight.detected": "감지된 사항",
+    "preflight.routed": "프롬프트 라우팅",
+    "preflight.failed": "점검 실패: {error}",
+    "preflight.unavailable": "{mode} 모드에서는 설정 점검이 제공되지 않습니다.",
     "monitor.title": "실행 모니터",
     "monitor.desc": "상태, 점수, 최근 실행을 확인합니다.",
     "monitor.runId": "실행 ID",
@@ -456,6 +516,20 @@ const I18N = {
     "monitor.recentRuns": "최근 실행",
     "monitor.refreshRuns": "새로고침",
     "monitor.showAll": "모든 실행 보기 (관리자)",
+    "agent.title": "에이전트 패널",
+    "agent.desc": "단계별 전문가 합의와 복구 기록을 확인합니다.",
+    "agent.refresh": "새로고침",
+    "agent.viewReport": "리포트 보기",
+    "agent.viewAgentReport": "에이전트 리포트",
+    "agent.report.loading": "리포트를 불러오는 중...",
+    "agent.report.missing": "아직 리포트가 없습니다.",
+    "agent.report.failed": "리포트 로드 실패: {error}",
+    "report.modal.download": "다운로드",
+    "report.modal.toggleRendered": "렌더링",
+    "report.modal.toggleRaw": "원문",
+    "agent.loading": "에이전트 패널 불러오는 중...",
+    "agent.empty": "아직 에이전트 이벤트가 없습니다.",
+    "agent.failed": "에이전트 패널 로드 실패: {error}",
     "artifacts.title": "아티팩트",
     "artifacts.desc": "출력을 필터하고 미리보기를 열 수 있습니다.",
     "artifacts.filter.placeholder": "이름 또는 단계로 필터",
@@ -573,6 +647,8 @@ const I18N = {
     "attachment.diffdock.skip": "건너뜀",
     "choice.allChains": "전체 체인",
     "choice.chainNote": "타깃 PDB를 업로드하면 체인 선택이 활성화됩니다.",
+    "choice.chainDefaultNote": "팁: target FASTA가 없으면 기본적으로 주 체인만 사용합니다. 멀티체인 설계나 짧은 체인 불일치 방지를 위해 체인을 명시적으로 선택하세요.",
+    "choice.contigNone": "선택 안함 (RFD3 사용 안함)",
     "choice.contigNote": "PDB를 업로드하면 rfd3_contig 옵션이 제안됩니다.",
     "choice.contigPositiveOnly": "컨티그 제안은 단백질 잔기(ATOM 및 일부 아미노산 HETATM) 중 양수 번호만 사용합니다.",
     "choice.stripNonpositive.on": "제거 (권장)",
@@ -623,10 +699,15 @@ const I18N = {
     "feedback.rating.good": "좋음",
     "feedback.rating.bad": "나쁨",
     "feedback.reason.low_plddt": "pLDDT 낮음",
+    "feedback.reason.high_plddt": "pLDDT 높음",
     "feedback.reason.high_rmsd": "RMSD 높음",
+    "feedback.reason.low_rmsd": "RMSD 낮음",
     "feedback.reason.binding_poor": "결합 낮음",
+    "feedback.reason.binding_good": "결합 우수",
     "feedback.reason.low_novelty": "신규성 낮음",
+    "feedback.reason.high_novelty": "신규성 높음",
     "feedback.reason.unstable": "불안정",
+    "feedback.reason.stable": "안정적",
     "feedback.reason.other": "기타",
     "feedback.stage.auto": "자동",
     "feedback.stage.msa": "MSA",
@@ -723,14 +804,24 @@ const RUN_MODE_OPTIONS = [
   { labelKey: "runmode.diffdock", value: "diffdock" },
 ];
 
-const FEEDBACK_REASONS = [
-  { labelKey: "feedback.reason.low_plddt", value: "low_plddt" },
-  { labelKey: "feedback.reason.high_rmsd", value: "high_rmsd" },
-  { labelKey: "feedback.reason.binding_poor", value: "binding_poor" },
-  { labelKey: "feedback.reason.low_novelty", value: "low_novelty" },
-  { labelKey: "feedback.reason.unstable", value: "unstable" },
-  { labelKey: "feedback.reason.other", value: "other" },
-];
+const FEEDBACK_REASONS_BY_RATING = {
+  good: [
+    { labelKey: "feedback.reason.high_plddt", value: "high_plddt" },
+    { labelKey: "feedback.reason.low_rmsd", value: "low_rmsd" },
+    { labelKey: "feedback.reason.binding_good", value: "binding_good" },
+    { labelKey: "feedback.reason.high_novelty", value: "high_novelty" },
+    { labelKey: "feedback.reason.stable", value: "stable" },
+    { labelKey: "feedback.reason.other", value: "other" },
+  ],
+  bad: [
+    { labelKey: "feedback.reason.low_plddt", value: "low_plddt" },
+    { labelKey: "feedback.reason.high_rmsd", value: "high_rmsd" },
+    { labelKey: "feedback.reason.binding_poor", value: "binding_poor" },
+    { labelKey: "feedback.reason.low_novelty", value: "low_novelty" },
+    { labelKey: "feedback.reason.unstable", value: "unstable" },
+    { labelKey: "feedback.reason.other", value: "other" },
+  ],
+};
 
 const FEEDBACK_STAGES = [
   { labelKey: "feedback.stage.auto", value: "" },
@@ -765,10 +856,15 @@ const FEEDBACK_RATING_KEYS = {
 
 const FEEDBACK_REASON_KEYS = {
   low_plddt: "feedback.reason.low_plddt",
+  high_plddt: "feedback.reason.high_plddt",
   high_rmsd: "feedback.reason.high_rmsd",
+  low_rmsd: "feedback.reason.low_rmsd",
   binding_poor: "feedback.reason.binding_poor",
+  binding_good: "feedback.reason.binding_good",
   low_novelty: "feedback.reason.low_novelty",
+  high_novelty: "feedback.reason.high_novelty",
   unstable: "feedback.reason.unstable",
+  stable: "feedback.reason.stable",
   other: "feedback.reason.other",
 };
 
@@ -831,6 +927,51 @@ function setMessage(text, role = "ai") {
   div.textContent = text;
   el.messages.appendChild(div);
   el.messages.scrollTop = el.messages.scrollHeight;
+}
+
+function openReportModal(title, content, filename) {
+  if (!el.reportModal) return;
+  state.reportModalText = String(content || "");
+  state.reportModalMode = "rendered";
+  state.reportModalFilename = filename || "report.md";
+  if (el.reportModalTitle) el.reportModalTitle.textContent = title || "Report";
+  if (el.reportModalToggle) el.reportModalToggle.textContent = t("report.modal.toggleRendered");
+  if (el.reportModalContent) {
+    el.reportModalContent.innerHTML = renderMarkdown(state.reportModalText);
+  }
+  el.reportModal.classList.remove("hidden");
+}
+
+function closeReportModal() {
+  if (!el.reportModal) return;
+  el.reportModal.classList.add("hidden");
+}
+
+function toggleReportModalMode() {
+  if (!el.reportModalContent) return;
+  if (state.reportModalMode === "rendered") {
+    state.reportModalMode = "raw";
+    el.reportModalContent.textContent = state.reportModalText || "";
+    if (el.reportModalToggle) el.reportModalToggle.textContent = t("report.modal.toggleRaw");
+  } else {
+    state.reportModalMode = "rendered";
+    el.reportModalContent.innerHTML = renderMarkdown(state.reportModalText || "");
+    if (el.reportModalToggle) el.reportModalToggle.textContent = t("report.modal.toggleRendered");
+  }
+}
+
+function downloadReportModal() {
+  const text = state.reportModalText || "";
+  const name = state.reportModalFilename || "report.md";
+  const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function setUserBadge() {
@@ -1264,7 +1405,14 @@ function renderFeedbackControls() {
     }
   );
 
-  renderToggleButtons(el.feedbackReasons, FEEDBACK_REASONS, state.feedbackReasons, (value) => {
+  const reasonsForRating =
+    FEEDBACK_REASONS_BY_RATING[state.feedbackRating] || FEEDBACK_REASONS_BY_RATING.bad;
+  const allowed = new Set(reasonsForRating.map((item) => item.value));
+  if (Array.isArray(state.feedbackReasons)) {
+    state.feedbackReasons = state.feedbackReasons.filter((reason) => allowed.has(reason));
+  }
+
+  renderToggleButtons(el.feedbackReasons, reasonsForRating, state.feedbackReasons, (value) => {
     const next = new Set(state.feedbackReasons);
     if (next.has(value)) {
       next.delete(value);
@@ -1340,6 +1488,7 @@ function setCurrentRunId(runId) {
   state.lastStatusKey = "";
   el.runIdValue.textContent = runId || "-";
   updateInlineStatus(null, runId);
+  refreshAgentPanel();
   refreshFeedback();
   refreshExperiments();
   loadReport();
@@ -1354,6 +1503,7 @@ function ensureAutoPoll() {
   state.pollTimer = window.setInterval(() => {
     if (state.currentRunId) {
       pollStatus(state.currentRunId);
+      refreshAgentPanel();
     }
   }, 5000);
 }
@@ -1671,7 +1821,12 @@ function renderQuestions(questions) {
 
       card.appendChild(group);
 
-      if (!chains.length) {
+      if (chains.length) {
+        const note = document.createElement("div");
+        note.className = "choice-note";
+        note.textContent = t("choice.chainDefaultNote");
+        card.appendChild(note);
+      } else {
         const note = document.createElement("div");
         note.className = "choice-note";
         note.textContent = t("choice.chainNote");
@@ -1700,8 +1855,10 @@ function renderQuestions(questions) {
     }
 
     if (q.id === "rfd3_contig") {
+      const rfd3Active =
+        state.runMode === "rfd3" || !isAnswerMissing(state.answers.rfd3_input_pdb);
       const routedDefault = state.plan?.routed_request?.rfd3_contig;
-      if (!state.answers.rfd3_contig && routedDefault) {
+      if (rfd3Active && !state.answers.rfd3_contig && routedDefault) {
         state.answers.rfd3_contig = routedDefault;
       }
       const ranges = state.chainRanges || {};
@@ -1710,9 +1867,13 @@ function renderQuestions(questions) {
         value: `${chain}${range.min}-${range.max}`,
       }));
       if (contigs.length) {
-        const current = state.answers.rfd3_contig || contigs[0].value;
-        state.answers.rfd3_contig = current;
-        renderChoiceButtons(card, contigs, current, (value) => {
+        let current = state.answers.rfd3_contig;
+        if (!current && rfd3Active) {
+          current = contigs[0].value;
+          state.answers.rfd3_contig = current;
+        }
+        const options = [{ labelKey: "choice.contigNone", value: "" }, ...contigs];
+        renderChoiceButtons(card, options, current || "", (value) => {
           state.answers.rfd3_contig = value;
           updateRunEligibility(questions);
         });
@@ -1882,6 +2043,9 @@ function renderQuestions(questions) {
         if (q.id === "target_input" || q.id === "rfd3_input_pdb") {
           state.chainRanges = null;
         }
+        if (q.id === "rfd3_input_pdb" && state.runMode === "pipeline") {
+          state.answers.rfd3_contig = "";
+        }
         updateRunEligibility(questions);
       });
 
@@ -1977,6 +2141,9 @@ function buildAnswerPayload(mode = state.runMode) {
   if (answers.run_mode) {
     delete answers.run_mode;
   }
+  if (mode === "pipeline" && isAnswerMissing(answers.rfd3_input_pdb)) {
+    delete answers.rfd3_contig;
+  }
   if (Array.isArray(answers.design_chains) && answers.design_chains.length === 0) {
     delete answers.design_chains;
   }
@@ -2025,6 +2192,126 @@ function filterAnswersForMode(mode, answers) {
   return filtered;
 }
 
+function buildRoutedForMode(mode) {
+  if (mode === "rfd3") return { stop_after: "rfd3" };
+  if (mode === "msa") return { stop_after: "msa" };
+  if (mode === "design") return { stop_after: "design" };
+  if (mode === "soluprot") return { stop_after: "soluprot" };
+  if (mode === "af2") return { stop_after: "af2" };
+  return state.plan?.routed_request || {};
+}
+
+function _formatList(label, items) {
+  if (!items || items.length === 0) return null;
+  const lines = [label + ":"];
+  items.forEach((item) => {
+    lines.push(`- ${item}`);
+  });
+  return lines.join("\n");
+}
+
+function _formatDetected(label, detected) {
+  if (!detected || typeof detected !== "object") return null;
+  const entries = Object.entries(detected).map(
+    ([key, value]) => `${key}=${JSON.stringify(value)}`
+  );
+  return _formatList(label, entries);
+}
+
+async function runPreflight({ announce = true } = {}) {
+  const prompt = el.promptInput.value.trim();
+  const mode = state.runMode || "pipeline";
+  const preflightModes = new Set(["pipeline", "rfd3", "msa", "design", "soluprot"]);
+  if (!preflightModes.has(mode)) {
+    if (announce) {
+      setMessage(t("preflight.unavailable", { mode: t(`mode.${mode}`) || mode }), "ai");
+    }
+    return { ok: false, preflight: null, plan: null };
+  }
+  const rawAnswers = buildAnswerPayload(mode);
+  const answers = filterAnswersForMode(mode, rawAnswers);
+  const routed = buildRoutedForMode(mode);
+  const args = buildRunArguments({
+    prompt,
+    routed,
+    answers,
+    runId: "",
+  });
+  delete args.run_id;
+
+  if (announce && prompt) {
+    setMessage(prompt, "user");
+  }
+
+  let preflight = null;
+  let plan = null;
+  try {
+    preflight = await apiCall("pipeline.preflight", args);
+  } catch (err) {
+    if (announce) {
+      setMessage(t("preflight.failed", { error: err.message }), "ai");
+    }
+    return { ok: false, preflight: null, plan: null };
+  }
+
+  if (prompt) {
+    try {
+      plan = await apiCall("pipeline.plan_from_prompt", {
+        prompt,
+        target_fasta: answers.target_fasta || "",
+        target_pdb: answers.target_pdb || "",
+        rfd3_input_pdb: answers.rfd3_input_pdb || "",
+        rfd3_contig: answers.rfd3_contig || "",
+        diffdock_ligand_smiles: answers.diffdock_ligand_smiles || "",
+        diffdock_ligand_sdf: answers.diffdock_ligand_sdf || "",
+      });
+    } catch (err) {
+      if (announce) {
+        setMessage(t("preflight.failed", { error: err.message }), "ai");
+      }
+    }
+  }
+
+  if (announce && preflight) {
+    const lines = [];
+    lines.push(t("preflight.title") + ": " + (preflight.ok ? t("preflight.ok") : t("preflight.blocked")));
+
+    const required = (preflight.required_inputs || []).map((item) => {
+      if (!item || !item.message) return String(item.id || "required_input");
+      const suffix = item.id ? ` (${item.id})` : "";
+      return `${item.message}${suffix}`;
+    });
+    const requiredBlock = _formatList(t("preflight.required"), required);
+    const errorBlock = _formatList(t("preflight.errors"), preflight.errors || []);
+    const warnBlock = _formatList(t("preflight.warnings"), preflight.warnings || []);
+    const detectBlock = _formatDetected(t("preflight.detected"), preflight.detected);
+
+    if (requiredBlock) lines.push(requiredBlock);
+    if (errorBlock) lines.push(errorBlock);
+    if (warnBlock) lines.push(warnBlock);
+    if (detectBlock) lines.push(detectBlock);
+
+    if (plan) {
+      const routedPairs = Object.entries(plan.routed_request || {}).map(
+        ([key, value]) => `${key}=${JSON.stringify(value)}`
+      );
+      const routedBlock = _formatList(t("preflight.routed"), routedPairs);
+      if (routedBlock) lines.push(routedBlock);
+
+      const questions = (plan.questions || []).map((q) => {
+        if (!q || !q.question) return null;
+        return q.required ? `${q.question} (required)` : q.question;
+      }).filter(Boolean);
+      const qBlock = _formatList(t("preflight.questions"), questions);
+      if (qBlock) lines.push(qBlock);
+    }
+
+    setMessage(lines.join("\n"), "ai");
+  }
+
+  return { ok: Boolean(preflight && preflight.ok), preflight, plan };
+}
+
 async function runPipeline() {
   if (!state.plan) return;
   const prompt = el.promptInput.value.trim();
@@ -2035,6 +2322,13 @@ async function runPipeline() {
   const answers = filterAnswersForMode(mode, rawAnswers);
   let args = {};
   let toolName = "pipeline.run";
+
+  if (["pipeline", "rfd3", "msa", "design", "soluprot"].includes(mode)) {
+    const pre = await runPreflight({ announce: true });
+    if (!pre.ok) {
+      return;
+    }
+  }
 
   if (mode === "pipeline") {
     args = buildRunArguments({
@@ -2284,6 +2578,120 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;");
 }
 
+function renderMarkdown(text) {
+  const raw = String(text || "").replace(/\r\n?/g, "\n");
+  const parts = [];
+  const fenceRe = /```([a-zA-Z0-9_-]+)?\n([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match;
+  while ((match = fenceRe.exec(raw))) {
+    if (match.index > lastIndex) {
+      parts.push({ type: "text", content: raw.slice(lastIndex, match.index) });
+    }
+    parts.push({ type: "code", lang: match[1] || "", content: match[2] || "" });
+    lastIndex = fenceRe.lastIndex;
+  }
+  if (lastIndex < raw.length) {
+    parts.push({ type: "text", content: raw.slice(lastIndex) });
+  }
+
+  const html = [];
+  parts.forEach((part) => {
+    if (part.type === "code") {
+      const code = escapeHtml(part.content);
+      html.push(`<pre><code class="lang-${escapeHtml(part.lang)}">${code}</code></pre>`);
+      return;
+    }
+
+    const lines = String(part.content || "").split("\n");
+    let inUl = false;
+    let inOl = false;
+    let inPara = false;
+
+    const closeLists = () => {
+      if (inUl) {
+        html.push("</ul>");
+        inUl = false;
+      }
+      if (inOl) {
+        html.push("</ol>");
+        inOl = false;
+      }
+    };
+
+    const closePara = () => {
+      if (inPara) {
+        html.push("</p>");
+        inPara = false;
+      }
+    };
+
+    const formatInline = (line) => {
+      let out = escapeHtml(line);
+      out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+      out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      out = out.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+      return out;
+    };
+
+    lines.forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        closeLists();
+        closePara();
+        return;
+      }
+
+      const heading = trimmed.match(/^(#{1,3})\s+(.*)$/);
+      if (heading) {
+        closeLists();
+        closePara();
+        const level = heading[1].length;
+        html.push(`<h${level}>${formatInline(heading[2])}</h${level}>`);
+        return;
+      }
+
+      const olMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
+      if (olMatch) {
+        closePara();
+        if (!inOl) {
+          closeLists();
+          html.push("<ol>");
+          inOl = true;
+        }
+        html.push(`<li>${formatInline(olMatch[2])}</li>`);
+        return;
+      }
+
+      const ulMatch = trimmed.match(/^[-*]\s+(.*)$/);
+      if (ulMatch) {
+        closePara();
+        if (!inUl) {
+          closeLists();
+          html.push("<ul>");
+          inUl = true;
+        }
+        html.push(`<li>${formatInline(ulMatch[1])}</li>`);
+        return;
+      }
+
+      closeLists();
+      if (!inPara) {
+        html.push("<p>");
+        inPara = true;
+        html.push(formatInline(trimmed));
+      } else {
+        html.push("<br />" + formatInline(trimmed));
+      }
+    });
+
+    closeLists();
+    closePara();
+  });
+
+  return html.join("\n");
+}
+
 async function refreshArtifacts() {
   if (!state.currentRunId) return;
   try {
@@ -2298,6 +2706,128 @@ async function refreshArtifacts() {
     updateReportArtifactLinks(el.reportContent ? el.reportContent.value : "");
   } catch (err) {
     setMessage(t("artifact.error", { error: err.message }), "ai");
+  }
+}
+
+function renderAgentPanel(items) {
+  if (!el.agentPanelList) return;
+  const events = Array.isArray(items) ? items : [];
+  if (!events.length) {
+    el.agentPanelList.innerHTML = `<div class="placeholder">${t("agent.empty")}</div>`;
+    return;
+  }
+  el.agentPanelList.innerHTML = "";
+  events.forEach((item) => {
+    const stage = escapeHtml(item?.stage || "-");
+    const created = escapeHtml(item?.created_at || "");
+    const consensus = item?.consensus || {};
+    const decisionRaw = String(consensus?.decision || "unknown").toLowerCase();
+    const decision = escapeHtml(decisionRaw);
+    const decisionClass = `decision-${decisionRaw.replace(/[^a-z0-9_-]+/g, "") || "unknown"}`;
+    const confidence =
+      typeof consensus?.confidence === "number" ? consensus.confidence.toFixed(2) : "-";
+    const rationale = escapeHtml(consensus?.rationale || "");
+    const error = escapeHtml(item?.error || "");
+    const actions = Array.isArray(consensus?.actions) ? consensus.actions : [];
+    const actionText = actions.length ? escapeHtml(actions.join("; ")) : "";
+    const interpretations = Array.isArray(consensus?.interpretations) ? consensus.interpretations : [];
+    const interpretationText = interpretations.length ? escapeHtml(interpretations.join("; ")) : "";
+    const agents = Array.isArray(item?.agents) ? item.agents : [];
+    const agentBadges = agents
+      .map((agent) => {
+        const name = escapeHtml(agent?.name || "agent");
+        const status = String(agent?.status || "info").toLowerCase();
+        const statusClass = `status-${status.replace(/[^a-z0-9_-]+/g, "") || "info"}`;
+        return `<span class="agent-badge ${statusClass}">${name}:${status}</span>`;
+      })
+      .join("");
+    const agentDetails = agents
+      .map((agent) => `${agent?.name || "agent"}: ${agent?.summary || ""}`)
+      .filter((text) => String(text).trim())
+      .map((text) => escapeHtml(text))
+      .join(" · ");
+
+    const div = document.createElement("div");
+    div.className = "agent-event";
+    div.innerHTML = `
+      <div class="agent-meta">
+        <span class="agent-stage">${stage}</span>
+        <span class="agent-decision ${decisionClass}">${decision}</span>
+        <span class="agent-badge">${confidence}</span>
+        <span class="agent-details">${created}</span>
+      </div>
+      <div class="agent-badges">${agentBadges}</div>
+      ${agentDetails ? `<div class="agent-details">${agentDetails}</div>` : ""}
+      ${rationale ? `<div class="agent-details">rationale: ${rationale}</div>` : ""}
+      ${error ? `<div class="agent-details">error: ${error}</div>` : ""}
+      ${actionText ? `<div class="agent-details">actions: ${actionText}</div>` : ""}
+      ${interpretationText ? `<div class="agent-details">interpretation: ${interpretationText}</div>` : ""}
+    `;
+    el.agentPanelList.appendChild(div);
+  });
+}
+
+async function refreshAgentPanel() {
+  if (!el.agentPanelList) return;
+  if (!state.currentRunId) {
+    el.agentPanelList.innerHTML = `<div class="placeholder">${t("agent.empty")}</div>`;
+    if (el.agentPanelStatus) el.agentPanelStatus.textContent = "";
+    return;
+  }
+  if (el.agentPanelStatus) el.agentPanelStatus.textContent = t("agent.loading");
+  try {
+    const result = await apiCall("pipeline.list_agent_events", {
+      run_id: state.currentRunId,
+      limit: 50,
+    });
+    renderAgentPanel(result.items || []);
+    if (el.agentPanelStatus) el.agentPanelStatus.textContent = "";
+  } catch (err) {
+    if (el.agentPanelStatus) {
+      el.agentPanelStatus.textContent = t("agent.failed", { error: err.message });
+    }
+  }
+}
+
+async function loadRunReportModal() {
+  if (!state.currentRunId) {
+    setMessage(t("agent.report.missing"), "ai");
+    return;
+  }
+  openReportModal(t("agent.viewReport"), t("agent.report.loading"));
+  try {
+    const result = await apiCall("pipeline.get_report", { run_id: state.currentRunId });
+    const text = result?.report || "";
+    if (!text.trim()) {
+      openReportModal(t("agent.viewReport"), t("agent.report.missing"));
+      return;
+    }
+    openReportModal(t("agent.viewReport"), text, "report.md");
+  } catch (err) {
+    openReportModal(t("agent.viewReport"), t("agent.report.failed", { error: err.message }));
+  }
+}
+
+async function loadAgentReportModal() {
+  if (!state.currentRunId) {
+    setMessage(t("agent.report.missing"), "ai");
+    return;
+  }
+  openReportModal(t("agent.viewAgentReport"), t("agent.report.loading"));
+  try {
+    const result = await apiCall("pipeline.read_artifact", {
+      run_id: state.currentRunId,
+      path: "agent_panel_report.md",
+      max_bytes: 2_000_000,
+    });
+    const text = result?.text || "";
+    if (!text.trim()) {
+      openReportModal(t("agent.viewAgentReport"), t("agent.report.missing"));
+      return;
+    }
+    openReportModal(t("agent.viewAgentReport"), text, "agent_panel_report.md");
+  } catch (err) {
+    openReportModal(t("agent.viewAgentReport"), t("agent.report.failed", { error: err.message }));
   }
 }
 
@@ -2817,6 +3347,12 @@ el.logoutBtn.addEventListener("click", () => {
 
 el.planBtn.addEventListener("click", resetInputs);
 
+if (el.checkBtn) {
+  el.checkBtn.addEventListener("click", () => {
+    runPreflight({ announce: true });
+  });
+}
+
 el.clearBtn.addEventListener("click", () => {
   el.promptInput.value = "";
   el.messages.innerHTML = "";
@@ -2825,15 +3361,30 @@ el.clearBtn.addEventListener("click", () => {
 
 el.runBtn.addEventListener("click", runPipeline);
 
+if (el.viewRunReport) {
+  el.viewRunReport.addEventListener("click", loadRunReportModal);
+}
+
+if (el.viewAgentReport) {
+  el.viewAgentReport.addEventListener("click", loadAgentReportModal);
+}
+
 el.pollBtn.addEventListener("click", () => {
   if (state.currentRunId) {
     pollStatus(state.currentRunId);
+    refreshAgentPanel();
   }
 });
 
 if (el.refreshRunsBtn) {
   el.refreshRunsBtn.addEventListener("click", () => {
     refreshRuns();
+  });
+}
+
+if (el.refreshAgentPanel) {
+  el.refreshAgentPanel.addEventListener("click", () => {
+    refreshAgentPanel();
   });
 }
 
@@ -2892,6 +3443,26 @@ if (el.helpPanel) {
       el.helpPanel.classList.add("hidden");
     }
   });
+}
+
+if (el.reportModalClose) {
+  el.reportModalClose.addEventListener("click", closeReportModal);
+}
+
+if (el.reportModal) {
+  el.reportModal.addEventListener("click", (event) => {
+    if (event.target === el.reportModal) {
+      closeReportModal();
+    }
+  });
+}
+
+if (el.reportModalToggle) {
+  el.reportModalToggle.addEventListener("click", toggleReportModalMode);
+}
+
+if (el.reportModalDownload) {
+  el.reportModalDownload.addEventListener("click", downloadReportModal);
 }
 
 if (el.adminBtn && el.adminPanel) {

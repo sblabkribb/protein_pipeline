@@ -47,6 +47,8 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertTrue((out / "conservation.json").exists())
             self.assertTrue((out / "ligand_mask.json").exists())
             self.assertTrue((out / "query_pdb_alignment.json").exists())
+            self.assertTrue((out / "agent_panel.jsonl").exists())
+            self.assertTrue((out / "agent_panel_report.md").exists())
 
             self.assertEqual(len(res.tiers), 2)
             for tier_result in res.tiers:
@@ -87,6 +89,22 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertTrue((out / "target.fasta").exists())
             self.assertTrue((out / "target.pdb").exists())
             self.assertTrue((out / "msa" / "result.a3m").exists())
+
+    def test_pipeline_auto_recover_msa_without_mmseqs(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            req = PipelineRequest(
+                target_fasta=fasta,
+                target_pdb="",
+                dry_run=False,
+                stop_after="msa",
+                auto_recover=True,
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            self.assertTrue((out / "msa" / "result.a3m").exists())
+            self.assertTrue((out / "agent_panel.jsonl").exists())
 
     def test_pipeline_pdb_preprocess_strips_nonpositive_resseq(self) -> None:
         pdb = (
