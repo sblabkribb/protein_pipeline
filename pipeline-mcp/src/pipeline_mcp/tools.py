@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import asdict
 from dataclasses import replace
+import copy
 import base64
 import json
 import os
@@ -25,6 +26,7 @@ from .pipeline import _safe_json
 from .pipeline import _split_multichain_sequence
 from .pipeline import _target_record_from_pdb
 from .pipeline import _write_text
+from .preflight import preflight_request
 from .router import request_from_prompt
 from .router import plan_from_prompt
 from .storage import ensure_dir
@@ -683,6 +685,15 @@ def _list_experiments(runner: PipelineRunner, arguments: dict[str, Any]) -> dict
     return {"run_id": run_id, "items": items}
 
 
+def _list_agent_events(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(arguments.get("run_id") or "").strip()
+    if not run_id:
+        raise ValueError("run_id is required")
+    limit = _as_int(arguments.get("limit"), 50)
+    items = list_run_events(runner.output_root, run_id, filename="agent_panel.jsonl", limit=limit)
+    return {"run_id": run_id, "items": items}
+
+
 def _load_report_text(output_root: str, run_id: str) -> str | None:
     root = resolve_run_path(output_root, run_id)
     if not root.exists():
@@ -734,6 +745,7 @@ def _build_report_text(
     status: dict[str, object] | None,
     feedback_items: list[dict[str, object]],
     experiment_items: list[dict[str, object]],
+    agent_items: list[dict[str, object]],
 ) -> str:
     lines: list[str] = []
     lines.append(f"# Run Report: {run_id}")
@@ -794,6 +806,57 @@ def _build_report_text(
             lines.append(f"- conservation_path: {summary.get('conservation_path')}")
         if summary.get("ligand_mask_path"):
             lines.append(f"- ligand_mask_path: {summary.get('ligand_mask_path')}")
+        lines.append("")
+
+    if agent_items:
+        lines.append("## Agent Panel")
+        for item in agent_items[-10:]:
+            stage = item.get("stage") or "-"
+            consensus = item.get("consensus") if isinstance(item.get("consensus"), dict) else {}
+            decision = consensus.get("decision") or "-"
+            confidence = consensus.get("confidence")
+            error = item.get("error")
+            line = f"- {stage}: decision={decision}"
+            if isinstance(confidence, (int, float)):
+                line += f" (confidence={confidence:.2f})"
+            if error:
+                line += f" · error={error}"
+            lines.append(line)
+            actions = consensus.get("actions") if isinstance(consensus, dict) else None
+            if isinstance(actions, list) and actions:
+                lines.append(f"  - actions: {'; '.join(str(a) for a in actions)}")
+            interpretations = consensus.get("interpretations") if isinstance(consensus, dict) else None
+            if isinstance(interpretations, list) and interpretations:
+                lines.append(f"  - interpretation: {'; '.join(str(a) for a in interpretations)}")
+        lines.append("")
+
+        lines.append("## Stage Interpretations")
+        latest_by_stage: dict[str, dict[str, object]] = {}
+        for item in agent_items:
+            stage = str(item.get("stage") or "")
+            if stage:
+                latest_by_stage[stage] = item
+        for stage, item in latest_by_stage.items():
+            lines.append(f"- {stage}")
+            consensus = item.get("consensus") if isinstance(item.get("consensus"), dict) else {}
+            interpretations = consensus.get("interpretations") if isinstance(consensus, dict) else []
+            if isinstance(interpretations, list) and interpretations:
+                for text in interpretations:
+                    lines.append(f"  - {text}")
+                continue
+            agents = item.get("agents") if isinstance(item.get("agents"), list) else []
+            fallback: list[str] = []
+            for agent in agents:
+                if not isinstance(agent, dict):
+                    continue
+                interp = agent.get("interpretation") if isinstance(agent.get("interpretation"), list) else None
+                if isinstance(interp, list):
+                    fallback.extend([str(x) for x in interp if x])
+            if fallback:
+                for text in fallback:
+                    lines.append(f"  - {text}")
+            else:
+                lines.append("  - No additional interpretation.")
         lines.append("")
 
     feedback_counts = _summarize_feedback(feedback_items)
@@ -887,6 +950,7 @@ def _generate_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
     status = load_status(runner.output_root, run_id)
     feedback_items = list_run_events(runner.output_root, run_id, filename="feedback.jsonl", limit=50)
     experiment_items = list_run_events(runner.output_root, run_id, filename="experiments.jsonl", limit=50)
+    agent_items = list_run_events(runner.output_root, run_id, filename="agent_panel.jsonl", limit=50)
     feedback_counts = _summarize_feedback(feedback_items)
     experiment_counts = _summarize_experiments(experiment_items)
     score_payload = _score_payload(feedback_counts, experiment_counts)
@@ -900,6 +964,7 @@ def _generate_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
         status=status,
         feedback_items=feedback_items,
         experiment_items=experiment_items,
+        agent_items=agent_items,
     )
     _save_report_text(runner.output_root, run_id, report_text)
     entry: dict[str, object] = {
@@ -999,6 +1064,8 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
 
     stop_after = (str(args.get("stop_after")).strip().lower() if args.get("stop_after") else None)
     dry_run = _as_bool(args.get("dry_run"), False)
+    agent_panel_enabled = _as_bool(args.get("agent_panel_enabled"), True)
+    auto_recover = _as_bool(args.get("auto_recover"), True)
 
     design_chains = _as_list_of_str(args.get("design_chains"))
     fixed_positions_extra = _as_fixed_positions_extra(args.get("fixed_positions_extra"))
@@ -1084,98 +1151,112 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
         stop_after=stop_after,
         force=_as_bool(args.get("force"), False),
         dry_run=dry_run,
+        agent_panel_enabled=agent_panel_enabled,
+        auto_recover=auto_recover,
     )
 
 
+def _pipeline_run_schema() -> dict[str, Any]:
+    return {
+        "type": "object",
+        "properties": {
+            "target_fasta": {"type": "string"},
+            "target_pdb": {"type": "string"},
+            "rfd3_inputs": {"type": "object"},
+            "rfd3_inputs_text": {"type": "string"},
+            "rfd3_input_files": {
+                "type": "object",
+                "additionalProperties": {"type": "string"},
+            },
+            "rfd3_input_pdb": {"type": "string"},
+            "rfd3_spec_name": {"type": "string"},
+            "rfd3_contig": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+            "rfd3_ligand": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+            "rfd3_select_unfixed_sequence": {"type": "string"},
+            "rfd3_cli_args": {"type": "string"},
+            "rfd3_env": {"type": "object", "additionalProperties": {"type": "string"}},
+            "rfd3_design_index": {"type": "integer"},
+            "rfd3_use_ensemble": {"type": "boolean"},
+            "rfd3_max_return_designs": {"type": "integer"},
+            "rfd3_partial_t": {"type": "integer"},
+            "diffdock_ligand_smiles": {"type": "string"},
+            "diffdock_ligand_sdf": {"type": "string"},
+            "diffdock_config": {"type": "string"},
+            "diffdock_extra_args": {"type": "string"},
+            "diffdock_cuda_visible_devices": {"type": "string"},
+            "design_chains": {"type": "array", "items": {"type": "string"}},
+            "fixed_positions_extra": {
+                "type": "object",
+                "additionalProperties": {"type": "array", "items": {"type": "integer"}},
+                "description": "Extra fixed positions per chain (1-based, query/FASTA numbering). Use '*' to apply to all chains.",
+            },
+            "conservation_tiers": {"type": "array", "items": {"type": "number"}},
+            "conservation_mode": {"type": "string", "enum": ["quantile", "threshold"]},
+            "conservation_weighting": {"type": "string"},
+            "conservation_cluster_method": {"type": "string"},
+            "conservation_cluster_min_seq_id": {"type": "number"},
+            "conservation_cluster_coverage": {"type": "number"},
+            "conservation_cluster_cov_mode": {"type": "integer"},
+            "conservation_cluster_kmer_per_seq": {"type": "integer"},
+            "ligand_mask_distance": {"type": "number"},
+            "ligand_resnames": {"type": "array", "items": {"type": "string"}},
+            "ligand_atom_chains": {"type": "array", "items": {"type": "string"}},
+            "pdb_strip_nonpositive_resseq": {"type": "boolean"},
+            "pdb_renumber_resseq_from_1": {"type": "boolean"},
+            "num_seq_per_tier": {"type": "integer"},
+            "batch_size": {"type": "integer"},
+            "sampling_temp": {"type": "number"},
+            "seed": {"type": "integer"},
+            "soluprot_cutoff": {"type": "number"},
+            "af2_model_preset": {"type": "string"},
+            "af2_db_preset": {"type": "string"},
+            "af2_max_template_date": {"type": "string"},
+            "af2_extra_flags": {"type": "string"},
+            "af2_plddt_cutoff": {"type": "number"},
+            "af2_rmsd_cutoff": {"type": "number"},
+            "af2_top_k": {"type": "integer"},
+            "af2_sequence_ids": {"type": "array", "items": {"type": "string"}},
+            "mmseqs_target_db": {"type": "string"},
+            "mmseqs_max_seqs": {"type": "integer"},
+            "mmseqs_threads": {"type": "integer"},
+            "mmseqs_use_gpu": {"type": "boolean"},
+            "novelty_target_db": {"type": "string"},
+            "msa_min_coverage": {"type": "number"},
+            "msa_min_identity": {"type": "number"},
+            "query_pdb_min_identity": {"type": "number"},
+            "query_pdb_policy": {"type": "string", "enum": ["error", "warn", "ignore"]},
+            "run_id": {"type": "string"},
+            "stop_after": {"type": "string"},
+            "force": {"type": "boolean"},
+            "dry_run": {"type": "boolean"},
+            "agent_panel_enabled": {"type": "boolean"},
+            "auto_recover": {"type": "boolean"},
+            "auto_retry": {"type": "boolean"},
+            "auto_retry_max": {"type": "integer"},
+            "auto_retry_backoff_s": {"type": "number"},
+        },
+        "anyOf": [
+            {"required": ["target_fasta"]},
+            {"required": ["target_pdb"]},
+            {"required": ["rfd3_inputs"]},
+            {"required": ["rfd3_inputs_text"]},
+            {"required": ["rfd3_contig"]},
+        ],
+    }
+
+
 def tool_definitions() -> list[dict[str, Any]]:
+    run_schema = _pipeline_run_schema()
     return [
         {
             "name": "pipeline.run",
             "description": "Run the full protein design pipeline (MMseqs2→mask→ProteinMPNN→SoluProt→AF2→novelty).",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "target_fasta": {"type": "string"},
-                    "target_pdb": {"type": "string"},
-                    "rfd3_inputs": {"type": "object"},
-                    "rfd3_inputs_text": {"type": "string"},
-                    "rfd3_input_files": {
-                        "type": "object",
-                        "additionalProperties": {"type": "string"},
-                    },
-                    "rfd3_input_pdb": {"type": "string"},
-                    "rfd3_spec_name": {"type": "string"},
-                    "rfd3_contig": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
-                    "rfd3_ligand": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
-                    "rfd3_select_unfixed_sequence": {"type": "string"},
-                    "rfd3_cli_args": {"type": "string"},
-                    "rfd3_env": {"type": "object", "additionalProperties": {"type": "string"}},
-                    "rfd3_design_index": {"type": "integer"},
-                    "rfd3_use_ensemble": {"type": "boolean"},
-                    "rfd3_max_return_designs": {"type": "integer"},
-                    "rfd3_partial_t": {"type": "integer"},
-                    "diffdock_ligand_smiles": {"type": "string"},
-                    "diffdock_ligand_sdf": {"type": "string"},
-                    "diffdock_config": {"type": "string"},
-                    "diffdock_extra_args": {"type": "string"},
-                    "diffdock_cuda_visible_devices": {"type": "string"},
-                    "design_chains": {"type": "array", "items": {"type": "string"}},
-                    "fixed_positions_extra": {
-                        "type": "object",
-                        "additionalProperties": {"type": "array", "items": {"type": "integer"}},
-                        "description": "Extra fixed positions per chain (1-based, query/FASTA numbering). Use '*' to apply to all chains.",
-                    },
-                    "conservation_tiers": {"type": "array", "items": {"type": "number"}},
-                    "conservation_mode": {"type": "string", "enum": ["quantile", "threshold"]},
-                    "conservation_weighting": {"type": "string"},
-                    "conservation_cluster_method": {"type": "string"},
-                    "conservation_cluster_min_seq_id": {"type": "number"},
-                    "conservation_cluster_coverage": {"type": "number"},
-                    "conservation_cluster_cov_mode": {"type": "integer"},
-                    "conservation_cluster_kmer_per_seq": {"type": "integer"},
-                    "ligand_mask_distance": {"type": "number"},
-                    "ligand_resnames": {"type": "array", "items": {"type": "string"}},
-                    "ligand_atom_chains": {"type": "array", "items": {"type": "string"}},
-                    "pdb_strip_nonpositive_resseq": {"type": "boolean"},
-                    "pdb_renumber_resseq_from_1": {"type": "boolean"},
-                    "num_seq_per_tier": {"type": "integer"},
-                    "batch_size": {"type": "integer"},
-                    "sampling_temp": {"type": "number"},
-                    "seed": {"type": "integer"},
-                    "soluprot_cutoff": {"type": "number"},
-                    "af2_model_preset": {"type": "string"},
-                    "af2_db_preset": {"type": "string"},
-                    "af2_max_template_date": {"type": "string"},
-                    "af2_extra_flags": {"type": "string"},
-                    "af2_plddt_cutoff": {"type": "number"},
-                    "af2_rmsd_cutoff": {"type": "number"},
-                    "af2_top_k": {"type": "integer"},
-                    "af2_sequence_ids": {"type": "array", "items": {"type": "string"}},
-                    "mmseqs_target_db": {"type": "string"},
-                    "mmseqs_max_seqs": {"type": "integer"},
-                    "mmseqs_threads": {"type": "integer"},
-                    "mmseqs_use_gpu": {"type": "boolean"},
-                    "novelty_target_db": {"type": "string"},
-                    "msa_min_coverage": {"type": "number"},
-                    "msa_min_identity": {"type": "number"},
-                    "query_pdb_min_identity": {"type": "number"},
-                    "query_pdb_policy": {"type": "string", "enum": ["error", "warn", "ignore"]},
-                    "run_id": {"type": "string"},
-                    "stop_after": {"type": "string"},
-                    "force": {"type": "boolean"},
-                    "dry_run": {"type": "boolean"},
-                    "auto_retry": {"type": "boolean"},
-                    "auto_retry_max": {"type": "integer"},
-                    "auto_retry_backoff_s": {"type": "number"},
-                },
-                "anyOf": [
-                    {"required": ["target_fasta"]},
-                    {"required": ["target_pdb"]},
-                    {"required": ["rfd3_inputs"]},
-                    {"required": ["rfd3_inputs_text"]},
-                    {"required": ["rfd3_contig"]},
-                ],
-            },
+            "inputSchema": run_schema,
+        },
+        {
+            "name": "pipeline.preflight",
+            "description": "Validate inputs and configuration without running the pipeline.",
+            "inputSchema": copy.deepcopy(run_schema),
         },
         {
             "name": "pipeline.af2_predict",
@@ -1273,6 +1354,15 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.list_agent_events",
+            "description": "List agent panel events for a run.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"run_id": {"type": "string"}, "limit": {"type": "integer"}},
+                "required": ["run_id"],
+            },
+        },
+        {
             "name": "pipeline.generate_report",
             "description": "Generate a markdown report for a run from artifacts, feedback, and experiments.",
             "inputSchema": {
@@ -1331,6 +1421,8 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "target_fasta": {"type": "string"},
                     "target_pdb": {"type": "string"},
                     "run_id": {"type": "string"},
+                    "agent_panel_enabled": {"type": "boolean"},
+                    "auto_recover": {"type": "boolean"},
                     "auto_retry": {"type": "boolean"},
                     "auto_retry_max": {"type": "integer"},
                     "auto_retry_backoff_s": {"type": "number"},
@@ -1416,6 +1508,10 @@ class ToolDispatcher:
             res = _run_with_auto_retry(self.runner, req, run_id=normalized_run_id, retry=retry)
             return {"run_id": res.run_id, "output_dir": res.output_dir, "summary": asdict(res)}
 
+        if name == "pipeline.preflight":
+            req = pipeline_request_from_args(arguments)
+            return preflight_request(req, self.runner)
+
         if name == "pipeline.af2_predict":
             return _run_af2_predict(self.runner, arguments)
 
@@ -1433,6 +1529,9 @@ class ToolDispatcher:
 
         if name == "pipeline.list_experiments":
             return _list_experiments(self.runner, arguments)
+
+        if name == "pipeline.list_agent_events":
+            return _list_agent_events(self.runner, arguments)
 
         if name == "pipeline.generate_report":
             return _generate_report(self.runner, arguments)
@@ -1470,6 +1569,9 @@ class ToolDispatcher:
             if not target_fasta.strip() and not target_pdb.strip():
                 raise ValueError("One of target_fasta or target_pdb is required")
             req = request_from_prompt(prompt=prompt, target_fasta=target_fasta, target_pdb=target_pdb)
+            agent_panel_enabled = _as_bool(arguments.get("agent_panel_enabled"), req.agent_panel_enabled)
+            auto_recover = _as_bool(arguments.get("auto_recover"), req.auto_recover)
+            req = replace(req, agent_panel_enabled=agent_panel_enabled, auto_recover=auto_recover)
             normalized_run_id = normalize_run_id(str(run_id)) if run_id is not None else None
             if retry.enabled and normalized_run_id is None:
                 normalized_run_id = new_run_id("pipeline")

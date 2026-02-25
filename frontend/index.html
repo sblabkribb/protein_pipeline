@@ -126,6 +126,7 @@
                     data-i18n-placeholder="setup.prompt.placeholder"
                   ></textarea>
                   <div class="composer-actions">
+                    <button id="checkBtn" class="ghost" data-i18n="setup.check">Check Setup</button>
                     <button id="planBtn" class="ghost" data-i18n="setup.reset">Reset Inputs</button>
                     <button id="clearBtn" class="ghost" data-i18n="setup.clear">Clear Log</button>
                   </div>
@@ -229,6 +230,24 @@
                   Select an artifact to preview it here.
                 </div>
               </div>
+            </div>
+
+            <div class="panel panel-block span-2">
+              <div class="panel-header">
+                <h3 data-i18n="agent.title">Agent Panel</h3>
+                <p data-i18n="agent.desc">Stage-by-stage expert consensus and recovery notes.</p>
+              </div>
+              <div class="agent-controls">
+                <button id="refreshAgentPanel" class="ghost" data-i18n="agent.refresh">Refresh</button>
+                <button id="viewRunReport" class="ghost" data-i18n="agent.viewReport">
+                  View Report
+                </button>
+                <button id="viewAgentReport" class="ghost" data-i18n="agent.viewAgentReport">
+                  View Agent Report
+                </button>
+                <span id="agentPanelStatus" class="agent-status"></span>
+              </div>
+              <div id="agentPanelList" class="agent-panel-list"></div>
             </div>
           </div>
         </section>
@@ -409,6 +428,24 @@
           <button id="healthCheck" class="ghost" data-i18n="settings.health">Health Check</button>
         </div>
         <div id="healthStatus" class="hint"></div>
+      </div>
+    </div>
+
+    <div id="reportModal" class="overlay hidden" role="dialog" aria-modal="true">
+      <div class="overlay-card report-card">
+        <div class="overlay-header">
+          <h4 id="reportModalTitle">Report</h4>
+          <div class="modal-actions">
+            <button id="reportModalToggle" class="ghost" data-i18n="report.modal.toggleRendered">
+              Rendered
+            </button>
+            <button id="reportModalDownload" class="ghost" data-i18n="report.modal.download">
+              Download
+            </button>
+            <button id="reportModalClose" class="ghost" data-i18n="common.close">Close</button>
+          </div>
+        </div>
+        <div id="reportModalContent" class="report-modal-content"></div>
       </div>
     </div>
 

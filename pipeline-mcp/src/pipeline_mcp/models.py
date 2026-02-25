@@ -97,6 +97,8 @@ class PipelineRequest:
     stop_after: str | None = None  # msa | design | soluprot | af2 | novelty
     force: bool = False
     dry_run: bool = False
+    agent_panel_enabled: bool = True
+    auto_recover: bool = True
 
 
 @dataclass(frozen=True)
