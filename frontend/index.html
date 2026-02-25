@@ -242,6 +242,9 @@
                 <button id="viewRunReport" class="ghost" data-i18n="agent.viewReport">
                   View Report
                 </button>
+                <button id="viewRunReportKo" class="ghost" data-i18n="agent.viewReportKo">
+                  View Report (KO)
+                </button>
                 <button id="viewAgentReport" class="ghost" data-i18n="agent.viewAgentReport">
                   View Agent Report
                 </button>
@@ -402,6 +405,34 @@
                   <button id="saveReport" class="primary" data-i18n="report.save">Save</button>
                 </div>
                 <div id="reportStatus" class="hint"></div>
+                <div class="panel-divider"></div>
+                <div class="panel-header small">
+                  <h3 data-i18n="report.review.title">Report Review</h3>
+                  <p data-i18n="report.review.desc">Rate the report and provide reasons.</p>
+                </div>
+                <div class="report-review">
+                  <div class="form-row">
+                    <span class="label" data-i18n="report.review.rating">Rating</span>
+                    <div id="reportReviewRating" class="choice-group"></div>
+                  </div>
+                  <div class="form-row">
+                    <span class="label" data-i18n="report.review.reasons">Reasons</span>
+                    <div id="reportReviewReasons" class="choice-group"></div>
+                  </div>
+                  <label>
+                    <span data-i18n="report.review.comment">Comment</span>
+                    <textarea
+                      id="reportReviewComment"
+                      rows="2"
+                      placeholder="Optional notes"
+                      data-i18n-placeholder="report.review.comment.placeholder"
+                    ></textarea>
+                  </label>
+                  <button id="submitReportReview" class="primary" data-i18n="report.review.submit">
+                    Submit Review
+                  </button>
+                  <div id="reportReviewStatus" class="hint"></div>
+                </div>
                 <div class="status-subtitle" data-i18n="report.links">Artifact Links</div>
                 <div id="reportArtifactLinks" class="report-links"></div>
               </div>
