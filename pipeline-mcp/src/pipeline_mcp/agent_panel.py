@@ -105,6 +105,28 @@ def _summarize_conservation(run_root: Path) -> tuple[str, str, dict[str, object]
     return status, summary, {"fixed_positions": totals, "query_length": query_len}
 
 
+def _summarize_mask_consensus(run_root: Path) -> tuple[str, str, dict[str, object]]:
+    payload = _load_json(run_root / "mask_consensus.json")
+    if not payload:
+        return "info", "Mask consensus not available yet.", {}
+    consensus = payload.get("consensus") if isinstance(payload, dict) else None
+    fixed_by_tier = {}
+    if isinstance(consensus, dict):
+        fixed_by_tier = consensus.get("fixed_positions_by_tier") or {}
+    totals: dict[str, int] = {}
+    if isinstance(fixed_by_tier, dict):
+        for tier_key, per_chain in fixed_by_tier.items():
+            count = 0
+            if isinstance(per_chain, dict):
+                for positions in per_chain.values():
+                    if isinstance(positions, list):
+                        count += len(positions)
+            totals[str(tier_key)] = count
+    status = "ok" if totals else "info"
+    summary = f"Mask consensus fixed positions per tier: {totals if totals else 'none'}"
+    return status, summary, {"fixed_positions": fixed_by_tier, "counts": totals}
+
+
 def _summarize_ligand_mask(run_root: Path) -> tuple[str, str, dict[str, object]]:
     payload = _load_json(run_root / "ligand_mask.json")
     if not payload:
@@ -294,6 +316,9 @@ def _agent_protein(stage: str, run_root: Path, tier: str | None) -> dict[str, ob
     elif stage == "conservation":
         status, summary, metrics = _summarize_conservation(run_root)
         interpretation = _interpret_conservation(metrics)
+    elif stage == "mask_consensus":
+        status, summary, metrics = _summarize_mask_consensus(run_root)
+        interpretation = []
     else:
         base, _ = _stage_parts(stage)
         if base == "proteinmpnn":

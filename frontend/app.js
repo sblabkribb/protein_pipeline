@@ -62,6 +62,8 @@ const state = {
   runMode: "pipeline",
   feedbackRating: "good",
   feedbackReasons: [],
+  reportReviewRating: "good",
+  reportReviewReasons: [],
   answers: {},
   currentRunId: null,
   pollTimer: null,
@@ -126,6 +128,7 @@ const el = {
   reportModalDownload: document.getElementById("reportModalDownload"),
   reportModalClose: document.getElementById("reportModalClose"),
   refreshAgentPanel: document.getElementById("refreshAgentPanel"),
+  viewRunReportKo: document.getElementById("viewRunReportKo"),
   feedbackRating: document.getElementById("feedbackRating"),
   feedbackReasons: document.getElementById("feedbackReasons"),
   feedbackArtifact: document.getElementById("feedbackArtifact"),
@@ -156,6 +159,11 @@ const el = {
   saveReport: document.getElementById("saveReport"),
   reportStatus: document.getElementById("reportStatus"),
   reportArtifactLinks: document.getElementById("reportArtifactLinks"),
+  reportReviewRating: document.getElementById("reportReviewRating"),
+  reportReviewReasons: document.getElementById("reportReviewReasons"),
+  reportReviewComment: document.getElementById("reportReviewComment"),
+  submitReportReview: document.getElementById("submitReportReview"),
+  reportReviewStatus: document.getElementById("reportReviewStatus"),
   settingsBtn: document.getElementById("settingsBtn"),
   settingsPanel: document.getElementById("settingsPanel"),
   settingsClose: document.getElementById("settingsClose"),
@@ -229,10 +237,17 @@ const I18N = {
     "agent.desc": "Stage-by-stage expert consensus and recovery notes.",
     "agent.refresh": "Refresh",
     "agent.viewReport": "View Report",
+    "agent.viewReportKo": "View Report (KO)",
     "agent.viewAgentReport": "View Agent Report",
     "agent.report.loading": "Loading report...",
     "agent.report.missing": "No report available yet.",
     "agent.report.failed": "Failed to load report: {error}",
+    "agent.feedback.good": "Good",
+    "agent.feedback.bad": "Bad",
+    "agent.feedback.note": "Note (optional)",
+    "agent.feedback.saving": "Saving...",
+    "agent.feedback.saved": "Saved.",
+    "agent.feedback.failed": "Failed: {error}",
     "report.modal.download": "Download",
     "report.modal.toggleRendered": "Rendered",
     "report.modal.toggleRaw": "Raw",
@@ -281,6 +296,22 @@ const I18N = {
     "report.generate": "Generate",
     "report.save": "Save",
     "report.links": "Artifact Links",
+    "report.review.title": "Report Review",
+    "report.review.desc": "Rate the report and provide reasons.",
+    "report.review.rating": "Rating",
+    "report.review.reasons": "Reasons",
+    "report.review.comment": "Comment",
+    "report.review.comment.placeholder": "Optional notes",
+    "report.review.submit": "Submit Review",
+    "report.review.saved": "Report review saved.",
+    "report.review.failed": "Review failed: {error}",
+    "report.review.reason.clear": "Clear summary",
+    "report.review.reason.actionable": "Actionable guidance",
+    "report.review.reason.complete": "Complete coverage",
+    "report.review.reason.missing_metrics": "Missing key metrics",
+    "report.review.reason.inaccurate": "Inaccurate content",
+    "report.review.reason.confusing": "Hard to follow",
+    "report.review.reason.other": "Other",
     "settings.title": "Settings",
     "settings.baseLabel": "MCP HTTP Base URL",
     "settings.baseHint": "This value is fixed by the server configuration.",
@@ -330,6 +361,10 @@ const I18N = {
     "question.stopAfter.help": "Where to stop? (msa/design/soluprot/af2/novelty)",
     "question.designChains.label": "Design Chains",
     "question.designChains.help": "Which chains to design? (default: all)",
+    "question.wtCompare.label": "WT Compare",
+    "question.wtCompare.help": "Compute WT baseline (SoluProt/AF2) and compare in report.",
+    "question.maskConsensusApply.label": "Apply Mask Consensus",
+    "question.maskConsensusApply.help": "Apply expert mask consensus to ProteinMPNN (optional).",
     "question.stripNonpositive.label": "Strip non-positive residues",
     "question.stripNonpositive.help": "Remove residues with resseq <= 0 before RFD3 and downstream steps.",
     "question.rfd3InputPdb.label": "RFD3 Input PDB",
@@ -362,6 +397,10 @@ const I18N = {
     "choice.contigPositiveOnly": "Contig suggestions use protein residues (ATOM and common amino-acid HETATM) with positive numbering only.",
     "choice.stripNonpositive.on": "Strip (recommended)",
     "choice.stripNonpositive.off": "Keep as-is",
+    "choice.wtCompare.on": "Enable WT compare",
+    "choice.wtCompare.off": "Disable WT compare",
+    "choice.maskConsensusApply.on": "Apply consensus",
+    "choice.maskConsensusApply.off": "Do not apply",
     "hint.none": "No missing inputs. You can run now.",
     "hint.ready": "All required inputs captured.",
     "hint.missing": "Missing required inputs.",
@@ -524,6 +563,13 @@ const I18N = {
     "agent.report.loading": "리포트를 불러오는 중...",
     "agent.report.missing": "아직 리포트가 없습니다.",
     "agent.report.failed": "리포트 로드 실패: {error}",
+    "agent.viewReportKo": "리포트 보기 (KO)",
+    "agent.feedback.good": "좋음",
+    "agent.feedback.bad": "나쁨",
+    "agent.feedback.note": "메모 (선택)",
+    "agent.feedback.saving": "저장 중...",
+    "agent.feedback.saved": "저장됨",
+    "agent.feedback.failed": "저장 실패: {error}",
     "report.modal.download": "다운로드",
     "report.modal.toggleRendered": "렌더링",
     "report.modal.toggleRaw": "원문",
@@ -572,6 +618,22 @@ const I18N = {
     "report.generate": "생성",
     "report.save": "저장",
     "report.links": "아티팩트 링크",
+    "report.review.title": "리포트 평가",
+    "report.review.desc": "리포트를 평가하고 이유를 입력하세요.",
+    "report.review.rating": "평가",
+    "report.review.reasons": "이유",
+    "report.review.comment": "코멘트",
+    "report.review.comment.placeholder": "선택 사항",
+    "report.review.submit": "평가 저장",
+    "report.review.saved": "리포트 평가를 저장했습니다.",
+    "report.review.failed": "평가 실패: {error}",
+    "report.review.reason.clear": "요약이 명확함",
+    "report.review.reason.actionable": "실행 가능한 가이드",
+    "report.review.reason.complete": "내용이 충실함",
+    "report.review.reason.missing_metrics": "핵심 지표 누락",
+    "report.review.reason.inaccurate": "내용 부정확",
+    "report.review.reason.confusing": "이해하기 어려움",
+    "report.review.reason.other": "기타",
     "settings.title": "설정",
     "settings.baseLabel": "MCP HTTP 기본 URL",
     "settings.baseHint": "이 값은 서버 설정으로 고정됩니다.",
@@ -621,6 +683,10 @@ const I18N = {
     "question.stopAfter.help": "어디까지 실행할까요? (msa/design/soluprot/af2/novelty)",
     "question.designChains.label": "디자인 체인",
     "question.designChains.help": "디자인할 체인을 선택하세요. (기본: 전체)",
+    "question.wtCompare.label": "WT 비교",
+    "question.wtCompare.help": "WT 기준(SoluProt/AF2)을 계산해 리포트에 비교합니다.",
+    "question.maskConsensusApply.label": "합의 마스킹 적용",
+    "question.maskConsensusApply.help": "전문가 합의 마스킹을 ProteinMPNN에 적용합니다.",
     "question.stripNonpositive.label": "음수 잔기 제거",
     "question.stripNonpositive.help": "RFD3 및 이후 단계 전에 resseq <= 0 잔기를 제거합니다.",
     "question.rfd3InputPdb.label": "RFD3 입력 PDB",
@@ -653,6 +719,10 @@ const I18N = {
     "choice.contigPositiveOnly": "컨티그 제안은 단백질 잔기(ATOM 및 일부 아미노산 HETATM) 중 양수 번호만 사용합니다.",
     "choice.stripNonpositive.on": "제거 (권장)",
     "choice.stripNonpositive.off": "그대로 유지",
+    "choice.wtCompare.on": "WT 비교 사용",
+    "choice.wtCompare.off": "WT 비교 사용 안 함",
+    "choice.maskConsensusApply.on": "합의 적용",
+    "choice.maskConsensusApply.off": "적용 안 함",
     "hint.none": "누락된 입력이 없습니다. 지금 실행할 수 있습니다.",
     "hint.ready": "필수 입력이 모두 완료되었습니다.",
     "hint.missing": "필수 입력이 누락되었습니다.",
@@ -820,6 +890,21 @@ const FEEDBACK_REASONS_BY_RATING = {
     { labelKey: "feedback.reason.low_novelty", value: "low_novelty" },
     { labelKey: "feedback.reason.unstable", value: "unstable" },
     { labelKey: "feedback.reason.other", value: "other" },
+  ],
+};
+
+const REPORT_REVIEW_REASONS_BY_RATING = {
+  good: [
+    { labelKey: "report.review.reason.clear", value: "report_clear" },
+    { labelKey: "report.review.reason.actionable", value: "report_actionable" },
+    { labelKey: "report.review.reason.complete", value: "report_complete" },
+    { labelKey: "report.review.reason.other", value: "report_other" },
+  ],
+  bad: [
+    { labelKey: "report.review.reason.missing_metrics", value: "report_missing_metrics" },
+    { labelKey: "report.review.reason.inaccurate", value: "report_inaccurate" },
+    { labelKey: "report.review.reason.confusing", value: "report_confusing" },
+    { labelKey: "report.review.reason.other", value: "report_other" },
   ],
 };
 
@@ -1014,6 +1099,7 @@ function setLanguage(lang) {
   renderQuestions(state.plan?.questions || []);
   updateRunEligibility(state.plan?.questions || []);
   renderFeedbackControls();
+  renderReportReviewControls();
   refillSelect(el.feedbackStage, FEEDBACK_STAGES, { includeEmpty: false });
   refillSelect(el.experimentAssay, EXPERIMENT_ASSAYS, { includeEmpty: false });
   refillSelect(el.experimentResult, EXPERIMENT_RESULTS, { includeEmpty: false });
@@ -1140,6 +1226,20 @@ function buildManualPlan(mode) {
         questionKey: "question.stripNonpositive.help",
         required: false,
         default: true,
+      },
+      {
+        id: "wt_compare",
+        labelKey: "question.wtCompare.label",
+        questionKey: "question.wtCompare.help",
+        required: false,
+        default: false,
+      },
+      {
+        id: "mask_consensus_apply",
+        labelKey: "question.maskConsensusApply.label",
+        questionKey: "question.maskConsensusApply.help",
+        required: false,
+        default: false,
       },
       {
         id: "rfd3_input_pdb",
@@ -1423,6 +1523,38 @@ function renderFeedbackControls() {
   });
 }
 
+function renderReportReviewControls() {
+  if (!el.reportReviewRating || !el.reportReviewReasons) return;
+  renderSingleButtons(
+    el.reportReviewRating,
+    [
+      { labelKey: "feedback.rating.good", value: "good" },
+      { labelKey: "feedback.rating.bad", value: "bad" },
+    ],
+    state.reportReviewRating,
+    (value) => {
+      state.reportReviewRating = value;
+    }
+  );
+
+  const reasonsForRating =
+    REPORT_REVIEW_REASONS_BY_RATING[state.reportReviewRating] || REPORT_REVIEW_REASONS_BY_RATING.bad;
+  const allowed = new Set(reasonsForRating.map((item) => item.value));
+  if (Array.isArray(state.reportReviewReasons)) {
+    state.reportReviewReasons = state.reportReviewReasons.filter((reason) => allowed.has(reason));
+  }
+
+  renderToggleButtons(el.reportReviewReasons, reasonsForRating, state.reportReviewReasons, (value) => {
+    const next = new Set(state.reportReviewReasons);
+    if (next.has(value)) {
+      next.delete(value);
+    } else {
+      next.add(value);
+    }
+    state.reportReviewReasons = Array.from(next);
+  });
+}
+
 function refreshArtifactSelects() {
   const options = [
     { labelKey: "common.none", value: "" },
@@ -1438,6 +1570,7 @@ function refreshArtifactSelects() {
 
 function initFeedbackUI() {
   renderFeedbackControls();
+  renderReportReviewControls();
   fillSelect(el.feedbackStage, FEEDBACK_STAGES, { includeEmpty: false });
   fillSelect(el.experimentAssay, EXPERIMENT_ASSAYS, { includeEmpty: false });
   fillSelect(el.experimentResult, EXPERIMENT_RESULTS, { includeEmpty: false });
@@ -1724,6 +1857,8 @@ function renderQuestions(questions) {
     "design_chains",
     "rfd3_contig",
     "pdb_strip_nonpositive_resseq",
+    "wt_compare",
+    "mask_consensus_apply",
   ]);
 
   const isFileQuestion = (q) => q && fileQuestionIds.has(q.id);
@@ -1849,6 +1984,46 @@ function renderQuestions(questions) {
         current,
         (value) => {
           state.answers.pdb_strip_nonpositive_resseq = value;
+          updateRunEligibility(questions);
+        }
+      );
+    }
+
+    if (q.id === "wt_compare") {
+      let current = state.answers.wt_compare;
+      if (typeof current !== "boolean") {
+        current = q.default !== undefined ? Boolean(q.default) : false;
+        state.answers.wt_compare = current;
+      }
+      renderChoiceButtons(
+        card,
+        [
+          { labelKey: "choice.wtCompare.on", value: true },
+          { labelKey: "choice.wtCompare.off", value: false },
+        ],
+        current,
+        (value) => {
+          state.answers.wt_compare = value;
+          updateRunEligibility(questions);
+        }
+      );
+    }
+
+    if (q.id === "mask_consensus_apply") {
+      let current = state.answers.mask_consensus_apply;
+      if (typeof current !== "boolean") {
+        current = q.default !== undefined ? Boolean(q.default) : false;
+        state.answers.mask_consensus_apply = current;
+      }
+      renderChoiceButtons(
+        card,
+        [
+          { labelKey: "choice.maskConsensusApply.on", value: true },
+          { labelKey: "choice.maskConsensusApply.off", value: false },
+        ],
+        current,
+        (value) => {
+          state.answers.mask_consensus_apply = value;
           updateRunEligibility(questions);
         }
       );
@@ -2173,6 +2348,8 @@ function filterAnswersForMode(mode, answers) {
       "diffdock_ligand_sdf",
       "design_chains",
       "pdb_strip_nonpositive_resseq",
+      "wt_compare",
+      "mask_consensus_apply",
       "stop_after",
     ],
     rfd3: ["rfd3_input_pdb", "rfd3_contig", "pdb_strip_nonpositive_resseq"],
@@ -2762,7 +2939,43 @@ function renderAgentPanel(items) {
       ${error ? `<div class="agent-details">error: ${error}</div>` : ""}
       ${actionText ? `<div class="agent-details">actions: ${actionText}</div>` : ""}
       ${interpretationText ? `<div class="agent-details">interpretation: ${interpretationText}</div>` : ""}
+      <div class="agent-actions">
+        <input class="agent-note" type="text" placeholder="${escapeHtml(t("agent.feedback.note"))}" />
+        <button class="ghost agent-rate" data-rating="good">${t("agent.feedback.good")}</button>
+        <button class="ghost agent-rate" data-rating="bad">${t("agent.feedback.bad")}</button>
+        <span class="agent-feedback-status"></span>
+      </div>
     `;
+    const noteInput = div.querySelector(".agent-note");
+    const statusEl = div.querySelector(".agent-feedback-status");
+    const buttons = div.querySelectorAll(".agent-rate");
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!state.currentRunId) {
+          if (statusEl) statusEl.textContent = t("export.selectRun");
+          return;
+        }
+        const rating = btn.dataset.rating || "good";
+        if (statusEl) statusEl.textContent = t("agent.feedback.saving");
+        try {
+          await apiCall("pipeline.submit_feedback", {
+            run_id: state.currentRunId,
+            rating,
+            reasons: ["agent_panel"],
+            comment: noteInput ? noteInput.value.trim() : "",
+            stage: item?.stage || "",
+          });
+          if (noteInput) noteInput.value = "";
+          if (statusEl) statusEl.textContent = t("agent.feedback.saved");
+          await refreshFeedback();
+          await loadReport();
+        } catch (err) {
+          if (statusEl) {
+            statusEl.textContent = t("agent.feedback.failed", { error: err.message });
+          }
+        }
+      });
+    });
     el.agentPanelList.appendChild(div);
   });
 }
@@ -2789,22 +3002,34 @@ async function refreshAgentPanel() {
   }
 }
 
-async function loadRunReportModal() {
+async function loadRunReportModal({ lang } = {}) {
   if (!state.currentRunId) {
     setMessage(t("agent.report.missing"), "ai");
     return;
   }
-  openReportModal(t("agent.viewReport"), t("agent.report.loading"));
+  const title = lang === "ko" ? t("agent.viewReportKo") : t("agent.viewReport");
+  const filename = lang === "ko" ? "report_ko.md" : "report.md";
+  openReportModal(title, t("agent.report.loading"));
   try {
-    const result = await apiCall("pipeline.get_report", { run_id: state.currentRunId });
-    const text = result?.report || "";
+    let text = "";
+    if (lang === "ko") {
+      const result = await apiCall("pipeline.read_artifact", {
+        run_id: state.currentRunId,
+        path: "report_ko.md",
+        max_bytes: 2_000_000,
+      });
+      text = result?.text || "";
+    } else {
+      const result = await apiCall("pipeline.get_report", { run_id: state.currentRunId });
+      text = result?.report || "";
+    }
     if (!text.trim()) {
-      openReportModal(t("agent.viewReport"), t("agent.report.missing"));
+      openReportModal(title, t("agent.report.missing"));
       return;
     }
-    openReportModal(t("agent.viewReport"), text, "report.md");
+    openReportModal(title, text, filename);
   } catch (err) {
-    openReportModal(t("agent.viewReport"), t("agent.report.failed", { error: err.message }));
+    openReportModal(title, t("agent.report.failed", { error: err.message }));
   }
 }
 
@@ -3029,6 +3254,34 @@ async function submitFeedback() {
   } catch (err) {
     if (el.feedbackStatus) {
       el.feedbackStatus.textContent = t("feedback.failed", { error: err.message });
+    }
+  }
+}
+
+async function submitReportReview() {
+  if (!state.currentRunId) {
+    if (el.reportReviewStatus) el.reportReviewStatus.textContent = t("export.selectRun");
+    return;
+  }
+  const payload = {
+    run_id: state.currentRunId,
+    rating: state.reportReviewRating || "good",
+    reasons: state.reportReviewReasons || [],
+    comment: el.reportReviewComment ? el.reportReviewComment.value.trim() : "",
+    stage: "report",
+    artifact_path: "report.md",
+  };
+  try {
+    await apiCall("pipeline.submit_feedback", payload);
+    if (el.reportReviewStatus) el.reportReviewStatus.textContent = t("report.review.saved");
+    if (el.reportReviewComment) el.reportReviewComment.value = "";
+    state.reportReviewReasons = [];
+    renderReportReviewControls();
+    await refreshFeedback();
+    await loadReport();
+  } catch (err) {
+    if (el.reportReviewStatus) {
+      el.reportReviewStatus.textContent = t("report.review.failed", { error: err.message });
     }
   }
 }
@@ -3365,6 +3618,10 @@ if (el.viewRunReport) {
   el.viewRunReport.addEventListener("click", loadRunReportModal);
 }
 
+if (el.viewRunReportKo) {
+  el.viewRunReportKo.addEventListener("click", () => loadRunReportModal({ lang: "ko" }));
+}
+
 if (el.viewAgentReport) {
   el.viewAgentReport.addEventListener("click", loadAgentReportModal);
 }
@@ -3495,6 +3752,10 @@ if (el.showAllRuns) {
 
 if (el.submitFeedback) {
   el.submitFeedback.addEventListener("click", submitFeedback);
+}
+
+if (el.submitReportReview) {
+  el.submitReportReview.addEventListener("click", submitReportReview);
 }
 
 if (el.exportFeedbackCsv) {

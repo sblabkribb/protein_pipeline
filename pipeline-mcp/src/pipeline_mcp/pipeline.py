@@ -1640,6 +1640,176 @@ class PipelineRunner:
             else:
                 _emit_panel("query_pdb_check")
 
+            def _compute_wt_baseline() -> None:
+                if not request.wt_compare:
+                    return
+                wt_root = _ensure_dir(paths.root / "wt")
+                metrics_path = wt_root / "metrics.json"
+
+                def _load_json_file(path: Path) -> dict[str, object] | None:
+                    if not path.exists():
+                        return None
+                    try:
+                        raw = json.loads(path.read_text(encoding="utf-8"))
+                    except Exception:
+                        return None
+                    return raw if isinstance(raw, dict) else None
+
+                if metrics_path.exists() and not request.force:
+                    return
+
+                seq_source = "target_fasta" if str(request.target_fasta or "").strip() else "target_pdb"
+                wt_seq = target_record.sequence if target_record else ""
+                if not wt_seq and target_pdb_text.strip():
+                    try:
+                        tmp = _target_record_from_pdb(target_pdb_text, design_chains=design_chains)
+                        wt_seq = tmp.sequence
+                        seq_source = "target_pdb"
+                    except Exception:
+                        pass
+
+                payload: dict[str, object] = {
+                    "enabled": True,
+                    "sequence_source": seq_source,
+                    "sequence_length": len(_clean_protein_sequence(wt_seq)) if wt_seq else 0,
+                }
+
+                sol_path = wt_root / "soluprot.json"
+                sol_payload = _load_json_file(sol_path) if sol_path.exists() and not request.force else None
+                if sol_payload is None:
+                    try:
+                        if not wt_seq:
+                            sol_payload = {"skipped": True, "reason": "WT sequence unavailable"}
+                        elif self.soluprot is None:
+                            sol_payload = {"skipped": True, "reason": "SOLUPROT_URL not set"}
+                        else:
+                            chain_seqs = _split_multichain_sequence(wt_seq)
+                            child_records: list[SequenceRecord] = []
+                            child_to_parent: dict[str, tuple[str, str]] = {}
+                            if len(chain_seqs) <= 1:
+                                cid = "wt"
+                                child_to_parent[cid] = ("wt", "")
+                                child_records.append(
+                                    SequenceRecord(
+                                        id=cid,
+                                        header="wt",
+                                        sequence=_clean_protein_sequence(chain_seqs[0]),
+                                        meta={},
+                                    )
+                                )
+                            else:
+                                for idx, chain_seq in enumerate(chain_seqs):
+                                    label = (
+                                        str(design_chains[idx]).strip()
+                                        if (design_chains is not None and idx < len(design_chains))
+                                        else f"chain_{idx+1}"
+                                    )
+                                    cid = f"wt:{label}"
+                                    child_to_parent[cid] = ("wt", label)
+                                    child_records.append(
+                                        SequenceRecord(
+                                            id=cid,
+                                            header=f"wt|{label}",
+                                            sequence=_clean_protein_sequence(chain_seq),
+                                            meta={},
+                                        )
+                                    )
+                            scores_by_child = self.soluprot.score(child_records)
+                            chain_scores: dict[str, dict[str, float]] = {}
+                            for child_id, score in scores_by_child.items():
+                                parent_id, label = child_to_parent.get(child_id, ("wt", ""))
+                                chain_scores.setdefault(parent_id, {})[label or "chain_1"] = float(score)
+                            per_chain = chain_scores.get("wt") or {}
+                            score = min(per_chain.values()) if per_chain else 0.0
+                            sol_payload = {
+                                "score": float(score),
+                                "scores_by_chain": per_chain,
+                                "cutoff": float(request.soluprot_cutoff),
+                                "passed": float(score) >= float(request.soluprot_cutoff),
+                            }
+                    except Exception as exc:
+                        sol_payload = {"skipped": True, "error": str(exc)}
+                    write_json(sol_path, sol_payload)
+                payload["soluprot"] = sol_payload or {"skipped": True}
+
+                af2_root = _ensure_dir(wt_root / "af2")
+                af2_metrics_path = af2_root / "metrics.json"
+                af2_payload = _load_json_file(af2_metrics_path) if af2_metrics_path.exists() and not request.force else None
+                if af2_payload is None:
+                    try:
+                        if not wt_seq:
+                            af2_payload = {"skipped": True, "reason": "WT sequence unavailable"}
+                        elif self.af2 is None:
+                            af2_payload = {"skipped": True, "reason": "ALPHAFOLD2 not configured"}
+                        else:
+                            af2_model_preset = _resolve_af2_model_preset(
+                                request.af2_model_preset,
+                                chain_count=len(design_chains or _split_multichain_sequence(wt_seq)),
+                            )
+                            seq_in = _prepare_af2_sequence(
+                                wt_seq,
+                                model_preset=af2_model_preset,
+                                chain_ids=design_chains,
+                            )
+                            seqrec = SequenceRecord(
+                                id="wt",
+                                header=(target_record.header if target_record else "wt"),
+                                sequence=seq_in,
+                                meta={},
+                            )
+
+                            def _on_wt_job_id(seq_id: str, job_id: str) -> None:
+                                write_json(af2_root / "runpod_job.json", {"seq_id": seq_id, "job_id": job_id})
+
+                            try:
+                                af2_out = self.af2.predict(
+                                    [seqrec],
+                                    model_preset=af2_model_preset,
+                                    db_preset=request.af2_db_preset,
+                                    max_template_date=request.af2_max_template_date,
+                                    extra_flags=request.af2_extra_flags,
+                                    on_job_id=_on_wt_job_id,
+                                )
+                            except TypeError:
+                                af2_out = self.af2.predict(
+                                    [seqrec],
+                                    model_preset=af2_model_preset,
+                                    db_preset=request.af2_db_preset,
+                                    max_template_date=request.af2_max_template_date,
+                                    extra_flags=request.af2_extra_flags,
+                                )
+
+                            rec = af2_out.get("wt") if isinstance(af2_out, dict) else None
+                            if not isinstance(rec, dict):
+                                raise RuntimeError("AlphaFold2 did not return WT metrics")
+                            ranked0 = rec.get("ranked_0_pdb") or rec.get("pdb") or rec.get("pdb_text")
+                            if isinstance(ranked0, str) and ranked0.strip():
+                                _write_text(af2_root / "ranked_0.pdb", ranked0)
+                            if isinstance(rec.get("ranking_debug"), dict):
+                                write_json(af2_root / "ranking_debug.json", rec["ranking_debug"])
+                            best_plddt = rec.get("best_plddt")
+                            rmsd_val = None
+                            if isinstance(ranked0, str) and ranked0.strip() and target_pdb_text.strip():
+                                try:
+                                    rmsd_val = ca_rmsd(target_pdb_text, ranked0, chains=design_chains)
+                                except Exception:
+                                    rmsd_val = None
+                            af2_payload = {
+                                "best_plddt": best_plddt,
+                                "rmsd_ca": rmsd_val,
+                                "model_preset": af2_model_preset,
+                                "db_preset": request.af2_db_preset,
+                                "max_template_date": request.af2_max_template_date,
+                            }
+                    except Exception as exc:
+                        af2_payload = {"skipped": True, "error": str(exc)}
+                    write_json(af2_metrics_path, af2_payload)
+                payload["af2"] = af2_payload or {"skipped": True}
+
+                write_json(metrics_path, payload)
+
+            _compute_wt_baseline()
+
             for ctx in backbone_contexts:
                 ctx["ligand_mask_pdb_text"] = ctx["pdb_text"]
 
@@ -1761,6 +1931,286 @@ class PipelineRunner:
             )
             _emit_panel("ligand_mask", detail=("recovered" if lm_recovered else None), error=lm_error, recovery=lm_recovery)
 
+            def _run_mask_consensus() -> None:
+                set_status(paths, stage="mask_consensus", state="running")
+                primary_ctx = backbone_contexts[0] if backbone_contexts else None
+                mapping_by_chain = (primary_ctx.get("mapping") if primary_ctx else {}) or {}
+                ligand_mask_by_chain = (primary_ctx.get("ligand_mask") if primary_ctx else {}) or {}
+
+                msa_quality_path = paths.root / "msa" / "quality.json"
+                msa_quality: dict[str, object] | None = None
+                if msa_quality_path.exists():
+                    try:
+                        msa_quality = json.loads(msa_quality_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        msa_quality = None
+                coverage_p50 = None
+                usable_hits = None
+                if isinstance(msa_quality, dict):
+                    usable_hits = msa_quality.get("usable_hits")
+                    coverage = msa_quality.get("coverage")
+                    if isinstance(coverage, dict):
+                        coverage_p50 = coverage.get("p50")
+                msa_depth_low = False
+                if isinstance(usable_hits, (int, float)) and float(usable_hits) < 100:
+                    msa_depth_low = True
+                if isinstance(coverage_p50, (int, float)) and float(coverage_p50) < 0.5:
+                    msa_depth_low = True
+
+                query_report_path = paths.root / "query_pdb_alignment.json"
+                query_report: dict[str, object] | None = None
+                if query_report_path.exists():
+                    try:
+                        query_report = json.loads(query_report_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        query_report = None
+                query_identity_min = None
+                if isinstance(query_report, dict):
+                    chains = query_report.get("chains")
+                    if isinstance(chains, dict) and chains:
+                        vals = []
+                        for chain_payload in chains.values():
+                            if isinstance(chain_payload, dict):
+                                qi = chain_payload.get("query_identity")
+                                if isinstance(qi, (int, float)):
+                                    vals.append(float(qi))
+                        if vals:
+                            query_identity_min = min(vals)
+                query_identity_low = isinstance(query_identity_min, (int, float)) and query_identity_min < 0.9
+
+                scores = list(conservation.scores or [])
+                query_len = int(conservation.query_length or len(scores) or 0)
+
+                def _top_positions(frac: float) -> list[int]:
+                    if not scores or query_len <= 0:
+                        return []
+                    k = max(1, int(round(query_len * float(frac))))
+                    ranked = sorted(range(query_len), key=lambda i: scores[i], reverse=True)[:k]
+                    return sorted([i + 1 for i in ranked])
+
+                def _positions_by_score(min_score: float) -> list[int]:
+                    if not scores:
+                        return []
+                    out: list[int] = []
+                    for idx, score in enumerate(scores, start=1):
+                        try:
+                            if float(score) >= float(min_score):
+                                out.append(int(idx))
+                        except Exception:
+                            continue
+                    return out
+
+                chains = design_chains or list(ligand_mask_by_chain.keys()) or list(mapping_by_chain.keys()) or ["A"]
+
+                def _map_positions(positions: list[int], chain_id: str) -> list[int]:
+                    mapping = mapping_by_chain.get(chain_id)
+                    if not mapping:
+                        return sorted(set(int(p) for p in positions))
+                    mapped: list[int] = []
+                    for pos in positions:
+                        if 1 <= int(pos) <= len(mapping):
+                            mapped_pos = mapping[int(pos) - 1]
+                            if mapped_pos is not None:
+                                mapped.append(int(mapped_pos))
+                    return sorted(set(mapped))
+
+                experts: list[dict[str, object]] = []
+                tier_payloads_query: dict[str, dict[str, list[int]]] = {}
+                tier_payloads_chain: dict[str, dict[str, dict[str, list[int]]]] = {}
+
+                ligand_mask_query_positions: set[int] = set()
+                for chain_id, mapping in mapping_by_chain.items():
+                    if not mapping:
+                        continue
+                    chain_mask = set(int(p) for p in (ligand_mask_by_chain.get(chain_id, []) or []) if isinstance(p, (int, float)))
+                    if not chain_mask:
+                        continue
+                    for qpos, pdb_pos in enumerate(mapping, start=1):
+                        if pdb_pos is None:
+                            continue
+                        if int(pdb_pos) in chain_mask:
+                            ligand_mask_query_positions.add(int(qpos))
+
+                for tier in request.conservation_tiers:
+                    tier_key = _tier_key(tier)
+                    base_fixed = conservation.fixed_positions_by_tier.get(tier, []) or []
+
+                    bio_extra = _top_positions(0.1) if msa_depth_low else []
+                    bio_positions = sorted(set(base_fixed) | set(bio_extra))
+
+                    struct_positions = sorted(ligand_mask_query_positions)
+                    if not struct_positions:
+                        struct_positions = _top_positions(0.05)
+
+                    eng_positions = _positions_by_score(0.8)
+
+                    syn_frac = 0.15 if msa_depth_low else 0.05
+                    syn_positions = _top_positions(syn_frac)
+
+                    exp_frac = 0.15 if query_identity_low else 0.05
+                    exp_positions = _top_positions(exp_frac)
+
+                    tier_payloads_query[tier_key] = {
+                        "bioinformatics": bio_positions,
+                        "structural": struct_positions,
+                        "protein_engineering": eng_positions,
+                        "synthetic_biology": syn_positions,
+                        "experimental": exp_positions,
+                    }
+
+                    tier_payloads_chain[tier_key] = {
+                        "bioinformatics": {chain: _map_positions(bio_positions, chain) for chain in chains},
+                        "structural": {chain: _map_positions(struct_positions, chain) for chain in chains},
+                        "protein_engineering": {chain: _map_positions(eng_positions, chain) for chain in chains},
+                        "synthetic_biology": {chain: _map_positions(syn_positions, chain) for chain in chains},
+                        "experimental": {chain: _map_positions(exp_positions, chain) for chain in chains},
+                    }
+
+                experts = [
+                    {
+                        "name": "bioinformatics",
+                        "focus": "Conservation-driven masks, adjusted by MSA depth.",
+                        "notes": "Added top 10% conserved positions when MSA depth is low." if msa_depth_low else "Used tier conservation positions.",
+                    },
+                    {
+                        "name": "structural",
+                        "focus": "Ligand proximity masking to protect binding site geometry.",
+                        "notes": "Used ligand proximity mask; fallback to top 5% conservation if no ligand residues.",
+                    },
+                    {
+                        "name": "protein_engineering",
+                        "focus": "High-conservation positions (>=0.8) to preserve stability motifs.",
+                        "notes": "Thresholded conservation scores at 0.8.",
+                    },
+                    {
+                        "name": "synthetic_biology",
+                        "focus": "Conservative masking when MSA depth/coverage is low.",
+                        "notes": f"Top {int((0.15 if msa_depth_low else 0.05) * 100)}% conserved positions.",
+                    },
+                    {
+                        "name": "experimental",
+                        "focus": "Additional masking if query-PDB identity is low.",
+                        "notes": f"Top {int((0.15 if query_identity_low else 0.05) * 100)}% conserved positions.",
+                    },
+                ]
+
+                consensus_threshold = 3
+                consensus_query_by_tier: dict[str, list[int]] = {}
+                consensus_by_tier: dict[str, dict[str, list[int]]] = {}
+                votes_by_tier: dict[str, dict[str, dict[str, int]]] = {}
+
+                for tier_key, expert_votes in tier_payloads_query.items():
+                    counts: dict[str, int] = {}
+                    for _expert_name, positions in expert_votes.items():
+                        for pos in positions or []:
+                            key = str(pos)
+                            counts[key] = counts.get(key, 0) + 1
+                    for pos in ligand_mask_query_positions:
+                        key = str(pos)
+                        counts[key] = max(counts.get(key, 0), consensus_threshold)
+                    consensus_positions = [int(p) for p, c in counts.items() if int(c) >= consensus_threshold]
+                    consensus_query_by_tier[tier_key] = sorted(set(consensus_positions))
+
+                for tier_key, query_positions in consensus_query_by_tier.items():
+                    consensus_by_tier[tier_key] = {chain: _map_positions(query_positions, chain) for chain in chains}
+                    votes_by_tier[tier_key] = {}
+                    for chain in chains:
+                        chain_counts: dict[str, int] = {}
+                        for _expert_name, per_chain in tier_payloads_chain.get(tier_key, {}).items():
+                            chain_positions = per_chain.get(chain) if isinstance(per_chain, dict) else []
+                            for pos in chain_positions or []:
+                                key = str(pos)
+                                chain_counts[key] = chain_counts.get(key, 0) + 1
+                        for pos in ligand_mask_by_chain.get(chain, []) or []:
+                            key = str(pos)
+                            chain_counts[key] = max(chain_counts.get(key, 0), consensus_threshold)
+                        votes_by_tier[tier_key][chain] = chain_counts
+
+                consensus_payload = {
+                    "threshold": consensus_threshold,
+                    "fixed_positions_query_by_tier": consensus_query_by_tier,
+                    "fixed_positions_by_tier": consensus_by_tier,
+                    "votes": votes_by_tier,
+                }
+
+                notes = [
+                    "Consensus uses majority vote across experts (>=3).",
+                    "Ligand proximity mask positions are always retained.",
+                ]
+                if request.mask_consensus_apply:
+                    notes.append("Consensus output will be applied to ProteinMPNN in this run.")
+                else:
+                    notes.append("Consensus output is advisory and not applied to ProteinMPNN in this run.")
+
+                output_payload = {
+                    "run_id": run_id,
+                    "experts": experts,
+                    "inputs": {
+                        "msa_quality_path": str(msa_quality_path) if msa_quality_path.exists() else None,
+                        "conservation_path": conservation_path,
+                        "ligand_mask_path": ligand_mask_path,
+                        "query_pdb_alignment_path": str(query_report_path) if query_report_path.exists() else None,
+                    },
+                    "signals": {
+                        "msa_depth_low": msa_depth_low,
+                        "query_identity_min": query_identity_min,
+                    },
+                    "expert_votes_query": tier_payloads_query,
+                    "expert_votes": tier_payloads_chain,
+                    "consensus": consensus_payload,
+                    "notes": notes,
+                }
+
+                write_json(paths.root / "mask_consensus.json", output_payload)
+                for tier_key, positions in consensus_by_tier.items():
+                    tier_dir = _ensure_dir(tiers_dir / tier_key)
+                    write_json(tier_dir / "fixed_positions_consensus.json", positions)
+
+                set_status(paths, stage="mask_consensus", state="completed")
+
+            def _fallback_mask_consensus(exc: Exception) -> None:
+                write_json(
+                    paths.root / "mask_consensus.json",
+                    {
+                        "run_id": run_id,
+                        "error": str(exc),
+                        "notes": ["Mask consensus failed; no recommendations produced."],
+                    },
+                )
+                set_status(paths, stage="mask_consensus", state="completed", detail="recovered")
+
+            _, mc_recovered, mc_error, mc_recovery = _recover_stage(
+                "mask_consensus",
+                _run_mask_consensus,
+                fallback=_fallback_mask_consensus,
+                recovery_actions=["Skipped mask consensus"],
+            )
+            _emit_panel("mask_consensus", detail=("recovered" if mc_recovered else None), error=mc_error, recovery=mc_recovery)
+
+            consensus_query_by_tier: dict[str, list[int]] = {}
+            if request.mask_consensus_apply:
+                mc_path = paths.root / "mask_consensus.json"
+                if mc_path.exists():
+                    try:
+                        mc_payload = json.loads(mc_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        mc_payload = None
+                    if isinstance(mc_payload, dict):
+                        consensus = mc_payload.get("consensus")
+                        if isinstance(consensus, dict):
+                            fixed_query = consensus.get("fixed_positions_query_by_tier")
+                            if isinstance(fixed_query, dict):
+                                for tier_key, positions in fixed_query.items():
+                                    if not isinstance(positions, list):
+                                        continue
+                                    cleaned: list[int] = []
+                                    for pos in positions:
+                                        try:
+                                            cleaned.append(int(pos))
+                                        except Exception:
+                                            continue
+                                    consensus_query_by_tier[str(tier_key)] = sorted(set(cleaned))
+
             multi_backbone = len(backbone_contexts) > 1
 
             def _tag_samples(samples: list[SequenceRecord], backbone_id: str) -> list[SequenceRecord]:
@@ -1836,7 +2286,9 @@ class PipelineRunner:
                 tier_str = _tier_key(tier)
                 tier_dir = _ensure_dir(tiers_dir / tier_str)
 
-                tier_fixed = conservation.fixed_positions_by_tier.get(tier, [])
+                tier_fixed = conservation.fixed_positions_by_tier.get(tier, []) or []
+                if request.mask_consensus_apply and consensus_query_by_tier:
+                    tier_fixed = consensus_query_by_tier.get(tier_str, tier_fixed)
                 tier_samples: list[SequenceRecord] = []
                 backbone_meta: list[dict[str, Any]] = []
                 primary_fixed: dict[str, list[int]] | None = None

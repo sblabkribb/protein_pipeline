@@ -9,6 +9,7 @@ import json
 import os
 import time
 import uuid
+from pathlib import Path
 from typing import Any
 
 from .bio.fasta import FastaRecord
@@ -25,6 +26,7 @@ from .pipeline import _safe_id
 from .pipeline import _safe_json
 from .pipeline import _split_multichain_sequence
 from .pipeline import _target_record_from_pdb
+from .pipeline import _tier_key
 from .pipeline import _write_text
 from .preflight import preflight_request
 from .router import request_from_prompt
@@ -712,6 +714,14 @@ def _save_report_text(output_root: str, run_id: str, content: str) -> None:
     report_path.write_text(content, encoding="utf-8")
 
 
+def _save_report_text_ko(output_root: str, run_id: str, content: str) -> None:
+    root = resolve_run_path(output_root, run_id)
+    if not root.exists():
+        raise ValueError("run_id not found")
+    report_path = root / "report_ko.md"
+    report_path.write_text(content, encoding="utf-8")
+
+
 def _summarize_feedback(items: list[dict[str, object]]) -> dict[str, object]:
     counts = {"good": 0, "bad": 0}
     for item in items:
@@ -730,6 +740,81 @@ def _summarize_experiments(items: list[dict[str, object]]) -> dict[str, object]:
     return counts
 
 
+def _median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    nums = sorted(values)
+    mid = len(nums) // 2
+    if len(nums) % 2 == 1:
+        return float(nums[mid])
+    return float(nums[mid - 1] + nums[mid]) / 2.0
+
+
+def _load_json_file(path: Path) -> dict[str, object] | None:
+    if not path.exists():
+        return None
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return raw if isinstance(raw, dict) else None
+
+
+def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -> dict[str, object]:
+    out = {
+        "soluprot_scores": [],
+        "soluprot_total": 0,
+        "soluprot_passed": 0,
+        "af2_selected_plddt": [],
+        "af2_selected_rmsd": [],
+        "af2_selected_total": 0,
+    }
+    if not summary:
+        return out
+    tiers = summary.get("tiers")
+    if not isinstance(tiers, list):
+        return out
+    for tier in tiers:
+        if not isinstance(tier, dict):
+            continue
+        tier_val = tier.get("tier")
+        if tier_val is None:
+            continue
+        try:
+            tier_key = _tier_key(float(tier_val))
+        except Exception:
+            continue
+        tier_dir = run_root / "tiers" / tier_key
+
+        sol = _load_json_file(tier_dir / "soluprot.json")
+        if isinstance(sol, dict):
+            scores = sol.get("scores")
+            passed_ids = sol.get("passed_ids") if isinstance(sol.get("passed_ids"), list) else []
+            if isinstance(scores, dict):
+                values = [float(v) for v in scores.values() if isinstance(v, (int, float))]
+                out["soluprot_scores"].extend(values)
+                out["soluprot_total"] += len(values)
+            out["soluprot_passed"] += len(passed_ids)
+
+        af2 = _load_json_file(tier_dir / "af2_scores.json")
+        if isinstance(af2, dict):
+            scores = af2.get("scores") if isinstance(af2.get("scores"), dict) else {}
+            rmsd_scores = af2.get("rmsd_scores") if isinstance(af2.get("rmsd_scores"), dict) else {}
+            selected_ids = af2.get("selected_ids") if isinstance(af2.get("selected_ids"), list) else []
+            if selected_ids:
+                out["af2_selected_total"] += len(selected_ids)
+                for seq_id in selected_ids:
+                    if seq_id in scores and isinstance(scores.get(seq_id), (int, float)):
+                        out["af2_selected_plddt"].append(float(scores.get(seq_id)))
+                    if seq_id in rmsd_scores and isinstance(rmsd_scores.get(seq_id), (int, float)):
+                        out["af2_selected_rmsd"].append(float(rmsd_scores.get(seq_id)))
+    return out
+
+
+def _load_wt_metrics(run_root: Path) -> dict[str, object] | None:
+    return _load_json_file(run_root / "wt" / "metrics.json")
+
+
 def _score_payload(
     feedback_counts: dict[str, object],
     experiment_counts: dict[str, object],
@@ -740,6 +825,7 @@ def _score_payload(
 def _build_report_text(
     *,
     run_id: str,
+    run_root: Path,
     request: dict[str, object] | None,
     summary: dict[str, object] | None,
     status: dict[str, object] | None,
@@ -778,6 +864,12 @@ def _build_report_text(
             lines.append(f"- af2_model_preset: {request.get('af2_model_preset')}")
         if request.get("mmseqs_target_db"):
             lines.append(f"- mmseqs_target_db: {request.get('mmseqs_target_db')}")
+        if "wt_compare" in request:
+            lines.append(f"- wt_compare: {'yes' if request.get('wt_compare') else 'no'}")
+        if "mask_consensus_apply" in request:
+            lines.append(
+                f"- mask_consensus_apply: {'yes' if request.get('mask_consensus_apply') else 'no'}"
+            )
         lines.append("")
 
     if summary:
@@ -806,6 +898,84 @@ def _build_report_text(
             lines.append(f"- conservation_path: {summary.get('conservation_path')}")
         if summary.get("ligand_mask_path"):
             lines.append(f"- ligand_mask_path: {summary.get('ligand_mask_path')}")
+        lines.append("")
+
+    wt_metrics = _load_wt_metrics(run_root)
+    design_metrics = _collect_design_metrics(run_root, summary)
+    if wt_metrics or (request and request.get("wt_compare")):
+        lines.append("## WT Comparison")
+        enabled = bool(request.get("wt_compare")) if request else False
+        lines.append(f"- Enabled: {'yes' if enabled else 'no'}")
+
+        wt_sol = wt_metrics.get("soluprot") if isinstance(wt_metrics, dict) else None
+        wt_af2 = wt_metrics.get("af2") if isinstance(wt_metrics, dict) else None
+
+        if isinstance(wt_sol, dict) and not wt_sol.get("skipped"):
+            score = wt_sol.get("score")
+            cutoff = wt_sol.get("cutoff")
+            passed = wt_sol.get("passed")
+            if isinstance(score, (int, float)):
+                score_text = f"{float(score):.3f}"
+            else:
+                score_text = "-"
+            lines.append(
+                f"- WT SoluProt: score={score_text} cutoff={cutoff} passed={'yes' if passed else 'no'}"
+            )
+        elif isinstance(wt_sol, dict):
+            reason = wt_sol.get("reason") or wt_sol.get("error") or "skipped"
+            lines.append(f"- WT SoluProt: skipped ({reason})")
+
+        sol_scores = design_metrics.get("soluprot_scores") or []
+        sol_total = int(design_metrics.get("soluprot_total") or 0)
+        sol_passed = int(design_metrics.get("soluprot_passed") or 0)
+        if sol_scores and sol_total:
+            sol_median = _median([float(x) for x in sol_scores if isinstance(x, (int, float))])
+            pass_rate = (sol_passed / sol_total) if sol_total else 0.0
+            lines.append(
+                f"- Designs SoluProt: median={sol_median:.3f} pass_rate={pass_rate:.1%} ({sol_passed}/{sol_total})"
+            )
+            if isinstance(wt_sol, dict) and isinstance(wt_sol.get("score"), (int, float)):
+                delta = float(sol_median) - float(wt_sol.get("score"))
+                lines.append(f"- ΔSoluProt (median - WT): {delta:+.3f}")
+        elif sol_total == 0:
+            lines.append("- Designs SoluProt: not available")
+
+        if isinstance(wt_af2, dict) and not wt_af2.get("skipped"):
+            wt_plddt = wt_af2.get("best_plddt")
+            wt_rmsd = wt_af2.get("rmsd_ca")
+            plddt_text = f"{float(wt_plddt):.1f}" if isinstance(wt_plddt, (int, float)) else "-"
+            rmsd_text = f"{float(wt_rmsd):.2f}" if isinstance(wt_rmsd, (int, float)) else "-"
+            lines.append(f"- WT AF2: pLDDT={plddt_text} RMSD={rmsd_text}")
+        elif isinstance(wt_af2, dict):
+            reason = wt_af2.get("reason") or wt_af2.get("error") or "skipped"
+            lines.append(f"- WT AF2: skipped ({reason})")
+
+        plddt_vals = design_metrics.get("af2_selected_plddt") or []
+        rmsd_vals = design_metrics.get("af2_selected_rmsd") or []
+        selected_total = int(design_metrics.get("af2_selected_total") or 0)
+        if plddt_vals:
+            plddt_median = _median([float(x) for x in plddt_vals if isinstance(x, (int, float))])
+            plddt_max = max(plddt_vals) if plddt_vals else None
+            lines.append(
+                f"- Designs AF2 pLDDT: median={plddt_median:.1f} max={float(plddt_max):.1f} (n={selected_total})"
+            )
+            if isinstance(wt_af2, dict) and isinstance(wt_af2.get("best_plddt"), (int, float)):
+                delta = float(plddt_median) - float(wt_af2.get("best_plddt"))
+                lines.append(f"- ΔpLDDT (median - WT): {delta:+.1f}")
+        else:
+            lines.append("- Designs AF2 pLDDT: not available")
+
+        if rmsd_vals:
+            rmsd_median = _median([float(x) for x in rmsd_vals if isinstance(x, (int, float))])
+            rmsd_min = min(rmsd_vals) if rmsd_vals else None
+            lines.append(
+                f"- Designs RMSD: median={rmsd_median:.2f} min={float(rmsd_min):.2f} (lower is better)"
+            )
+            if isinstance(wt_af2, dict) and isinstance(wt_af2.get("rmsd_ca"), (int, float)):
+                delta = float(rmsd_median) - float(wt_af2.get("rmsd_ca"))
+                lines.append(f"- ΔRMSD (median - WT): {delta:+.2f} (lower is better)")
+        else:
+            lines.append("- Designs RMSD: not available")
         lines.append("")
 
     if agent_items:
@@ -926,6 +1096,276 @@ def _build_report_text(
     return "\n".join(lines).strip() + "\n"
 
 
+def _build_report_text_ko(
+    *,
+    run_id: str,
+    run_root: Path,
+    request: dict[str, object] | None,
+    summary: dict[str, object] | None,
+    status: dict[str, object] | None,
+    feedback_items: list[dict[str, object]],
+    experiment_items: list[dict[str, object]],
+    agent_items: list[dict[str, object]],
+) -> str:
+    lines: list[str] = []
+    lines.append(f"# 실행 리포트: {run_id}")
+    lines.append("")
+
+    if status:
+        lines.append("## 상태")
+        lines.append(f"- 단계: {status.get('stage') or '-'}")
+        lines.append(f"- 상태: {status.get('state') or '-'}")
+        lines.append(f"- 업데이트: {status.get('updated_at') or '-'}")
+        lines.append("")
+
+    if request:
+        lines.append("## 입력")
+        target_pdb = bool(str(request.get("target_pdb") or "").strip())
+        target_fasta = bool(str(request.get("target_fasta") or "").strip())
+        lines.append(f"- target_pdb: {'yes' if target_pdb else 'no'}")
+        lines.append(f"- target_fasta: {'yes' if target_fasta else 'no'}")
+        if request.get("stop_after"):
+            lines.append(f"- stop_after: {request.get('stop_after')}")
+        if request.get("design_chains"):
+            lines.append(f"- design_chains: {request.get('design_chains')}")
+        if request.get("rfd3_contig"):
+            lines.append(f"- rfd3_contig: {request.get('rfd3_contig')}")
+        if request.get("rfd3_input_pdb"):
+            lines.append("- rfd3_input_pdb: provided")
+        if request.get("diffdock_ligand_smiles") or request.get("diffdock_ligand_sdf"):
+            lines.append("- diffdock_ligand: provided")
+        if request.get("af2_model_preset"):
+            lines.append(f"- af2_model_preset: {request.get('af2_model_preset')}")
+        if request.get("mmseqs_target_db"):
+            lines.append(f"- mmseqs_target_db: {request.get('mmseqs_target_db')}")
+        if "wt_compare" in request:
+            lines.append(f"- wt_compare: {'yes' if request.get('wt_compare') else 'no'}")
+        if "mask_consensus_apply" in request:
+            lines.append(
+                f"- mask_consensus_apply: {'yes' if request.get('mask_consensus_apply') else 'no'}"
+            )
+        lines.append("")
+
+    if summary:
+        errors = summary.get("errors")
+        lines.append("## 요약")
+        if isinstance(errors, list) and errors:
+            lines.append("- 오류:")
+            for err in errors[:5]:
+                lines.append(f"  - {err}")
+        tiers = summary.get("tiers")
+        if isinstance(tiers, list) and tiers:
+            lines.append(f"- 티어 수: {len(tiers)}")
+            for tier in tiers:
+                if not isinstance(tier, dict):
+                    continue
+                tier_val = tier.get("tier")
+                samples = tier.get("proteinmpnn_samples") or []
+                passed = tier.get("passed_ids") or []
+                selected = tier.get("af2_selected_ids") or []
+                lines.append(
+                    f"  - 티어 {tier_val}: designs={len(samples)} passed={len(passed)} af2_selected={len(selected)}"
+                )
+        if summary.get("msa_a3m_path"):
+            lines.append(f"- msa_a3m_path: {summary.get('msa_a3m_path')}")
+        if summary.get("conservation_path"):
+            lines.append(f"- conservation_path: {summary.get('conservation_path')}")
+        if summary.get("ligand_mask_path"):
+            lines.append(f"- ligand_mask_path: {summary.get('ligand_mask_path')}")
+        lines.append("")
+
+    wt_metrics = _load_wt_metrics(run_root)
+    design_metrics = _collect_design_metrics(run_root, summary)
+    if wt_metrics or (request and request.get("wt_compare")):
+        lines.append("## WT 비교")
+        enabled = bool(request.get("wt_compare")) if request else False
+        lines.append(f"- 사용 여부: {'yes' if enabled else 'no'}")
+
+        wt_sol = wt_metrics.get("soluprot") if isinstance(wt_metrics, dict) else None
+        wt_af2 = wt_metrics.get("af2") if isinstance(wt_metrics, dict) else None
+
+        if isinstance(wt_sol, dict) and not wt_sol.get("skipped"):
+            score = wt_sol.get("score")
+            cutoff = wt_sol.get("cutoff")
+            passed = wt_sol.get("passed")
+            score_text = f"{float(score):.3f}" if isinstance(score, (int, float)) else "-"
+            lines.append(
+                f"- WT SoluProt: score={score_text} cutoff={cutoff} passed={'yes' if passed else 'no'}"
+            )
+        elif isinstance(wt_sol, dict):
+            reason = wt_sol.get("reason") or wt_sol.get("error") or "skipped"
+            lines.append(f"- WT SoluProt: skipped ({reason})")
+
+        sol_scores = design_metrics.get("soluprot_scores") or []
+        sol_total = int(design_metrics.get("soluprot_total") or 0)
+        sol_passed = int(design_metrics.get("soluprot_passed") or 0)
+        if sol_scores and sol_total:
+            sol_median = _median([float(x) for x in sol_scores if isinstance(x, (int, float))])
+            pass_rate = (sol_passed / sol_total) if sol_total else 0.0
+            lines.append(
+                f"- Designs SoluProt: median={sol_median:.3f} pass_rate={pass_rate:.1%} ({sol_passed}/{sol_total})"
+            )
+            if isinstance(wt_sol, dict) and isinstance(wt_sol.get("score"), (int, float)):
+                delta = float(sol_median) - float(wt_sol.get("score"))
+                lines.append(f"- ΔSoluProt (median - WT): {delta:+.3f}")
+        elif sol_total == 0:
+            lines.append("- Designs SoluProt: not available")
+
+        if isinstance(wt_af2, dict) and not wt_af2.get("skipped"):
+            wt_plddt = wt_af2.get("best_plddt")
+            wt_rmsd = wt_af2.get("rmsd_ca")
+            plddt_text = f"{float(wt_plddt):.1f}" if isinstance(wt_plddt, (int, float)) else "-"
+            rmsd_text = f"{float(wt_rmsd):.2f}" if isinstance(wt_rmsd, (int, float)) else "-"
+            lines.append(f"- WT AF2: pLDDT={plddt_text} RMSD={rmsd_text}")
+        elif isinstance(wt_af2, dict):
+            reason = wt_af2.get("reason") or wt_af2.get("error") or "skipped"
+            lines.append(f"- WT AF2: skipped ({reason})")
+
+        plddt_vals = design_metrics.get("af2_selected_plddt") or []
+        rmsd_vals = design_metrics.get("af2_selected_rmsd") or []
+        selected_total = int(design_metrics.get("af2_selected_total") or 0)
+        if plddt_vals:
+            plddt_median = _median([float(x) for x in plddt_vals if isinstance(x, (int, float))])
+            plddt_max = max(plddt_vals) if plddt_vals else None
+            lines.append(
+                f"- Designs AF2 pLDDT: median={plddt_median:.1f} max={float(plddt_max):.1f} (n={selected_total})"
+            )
+            if isinstance(wt_af2, dict) and isinstance(wt_af2.get("best_plddt"), (int, float)):
+                delta = float(plddt_median) - float(wt_af2.get("best_plddt"))
+                lines.append(f"- ΔpLDDT (median - WT): {delta:+.1f}")
+        else:
+            lines.append("- Designs AF2 pLDDT: not available")
+
+        if rmsd_vals:
+            rmsd_median = _median([float(x) for x in rmsd_vals if isinstance(x, (int, float))])
+            rmsd_min = min(rmsd_vals) if rmsd_vals else None
+            lines.append(
+                f"- Designs RMSD: median={rmsd_median:.2f} min={float(rmsd_min):.2f} (lower is better)"
+            )
+            if isinstance(wt_af2, dict) and isinstance(wt_af2.get("rmsd_ca"), (int, float)):
+                delta = float(rmsd_median) - float(wt_af2.get("rmsd_ca"))
+                lines.append(f"- ΔRMSD (median - WT): {delta:+.2f} (lower is better)")
+        else:
+            lines.append("- Designs RMSD: not available")
+        lines.append("")
+
+    if agent_items:
+        lines.append("## 에이전트 패널")
+        for item in agent_items[-10:]:
+            stage = item.get("stage") or "-"
+            consensus = item.get("consensus") if isinstance(item.get("consensus"), dict) else {}
+            decision = consensus.get("decision") or "-"
+            confidence = consensus.get("confidence")
+            error = item.get("error")
+            line = f"- {stage}: 결정={decision}"
+            if isinstance(confidence, (int, float)):
+                line += f" (confidence={confidence:.2f})"
+            if error:
+                line += f" · error={error}"
+            lines.append(line)
+            actions = consensus.get("actions") if isinstance(consensus, dict) else None
+            if isinstance(actions, list) and actions:
+                lines.append(f"  - actions: {'; '.join(str(a) for a in actions)}")
+            interpretations = consensus.get("interpretations") if isinstance(consensus, dict) else None
+            if isinstance(interpretations, list) and interpretations:
+                lines.append(f"  - interpretation: {'; '.join(str(a) for a in interpretations)}")
+        lines.append("")
+
+        lines.append("## 단계 해석")
+        latest_by_stage: dict[str, dict[str, object]] = {}
+        for item in agent_items:
+            stage = str(item.get("stage") or "")
+            if stage:
+                latest_by_stage[stage] = item
+        for stage, item in latest_by_stage.items():
+            lines.append(f"- {stage}")
+            consensus = item.get("consensus") if isinstance(item.get("consensus"), dict) else {}
+            interpretations = consensus.get("interpretations") if isinstance(consensus.get("interpretations"), list) else []
+            if isinstance(interpretations, list) and interpretations:
+                for text in interpretations:
+                    lines.append(f"  - {text}")
+                continue
+            agents = item.get("agents") if isinstance(item.get("agents"), list) else []
+            fallback: list[str] = []
+            for agent in agents:
+                if not isinstance(agent, dict):
+                    continue
+                interp = agent.get("interpretation") if isinstance(agent.get("interpretation"), list) else None
+                if isinstance(interp, list):
+                    fallback.extend([str(x) for x in interp if x])
+            if fallback:
+                for text in fallback:
+                    lines.append(f"  - {text}")
+            else:
+                lines.append("  - 추가 해석 없음.")
+        lines.append("")
+
+    feedback_counts = _summarize_feedback(feedback_items)
+    experiment_counts = _summarize_experiments(experiment_items)
+    score_payload = _score_payload(feedback_counts, experiment_counts)
+    score = int(score_payload.get("score") or 0)
+    evidence = str(score_payload.get("evidence") or "low")
+    recommendation = str(score_payload.get("recommendation") or "needs_review")
+    if feedback_items:
+        lines.append("## 피드백")
+        lines.append(f"- Good: {feedback_counts['good']}")
+        lines.append(f"- Bad: {feedback_counts['bad']}")
+        for item in feedback_items[:5]:
+            rating = item.get("rating") or "-"
+            reasons = item.get("reasons") or []
+            comment = item.get("comment") or ""
+            stamp = item.get("created_at") or ""
+            reason_text = ", ".join(str(r) for r in reasons) if isinstance(reasons, list) else str(reasons)
+            line = f"- [{rating}] {reason_text}"
+            if comment:
+                line += f" — {comment}"
+            if stamp:
+                line += f" ({stamp})"
+            lines.append(line)
+        lines.append("")
+
+    if experiment_items:
+        lines.append("## 실험")
+        lines.append(f"- Success: {experiment_counts['success']}")
+        lines.append(f"- Fail: {experiment_counts['fail']}")
+        lines.append(f"- Inconclusive: {experiment_counts['inconclusive']}")
+        for item in experiment_items[:5]:
+            assay = item.get("assay_type") or "-"
+            result = item.get("result") or "-"
+            metrics = item.get("metrics") or {}
+            metrics_text = ""
+            if isinstance(metrics, dict) and metrics:
+                metrics_text = ", ".join(f"{k}={v}" for k, v in metrics.items())
+            stamp = item.get("created_at") or ""
+            line = f"- [{result}] {assay}"
+            if metrics_text:
+                line += f" ({metrics_text})"
+            if stamp:
+                line += f" ({stamp})"
+            lines.append(line)
+        lines.append("")
+
+    lines.append("## 점수")
+    lines.append(f"- Score: {score}/100")
+    lines.append(f"- Evidence: {evidence}")
+    lines.append(f"- Recommendation: {recommendation}")
+    lines.append("")
+
+    lines.append("## 다음 권장 조치")
+    if recommendation == "promote":
+        lines.append("- 후속 검증 또는 스케일업을 우선 진행하세요.")
+    elif recommendation == "promising":
+        lines.append("- 추가 실험 또는 파라미터 조정을 고려하세요.")
+    elif recommendation == "needs_review":
+        lines.append("- 결과, 제약, 주요 단계 재실행 여부를 검토하세요.")
+    else:
+        lines.append("- 타깃/제약을 재검토한 뒤 재실행을 권장합니다.")
+    lines.append("")
+
+    if len(lines) <= 2:
+        lines.append("리포트 데이터가 아직 없습니다.")
+    return "\n".join(lines).strip() + "\n"
+
 def _generate_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
     run_id = str(arguments.get("run_id") or "").strip()
     if not run_id:
@@ -959,6 +1399,17 @@ def _generate_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
     recommendation = str(score_payload.get("recommendation") or "needs_review")
     report_text = _build_report_text(
         run_id=run_id,
+        run_root=root,
+        request=request,
+        summary=summary,
+        status=status,
+        feedback_items=feedback_items,
+        experiment_items=experiment_items,
+        agent_items=agent_items,
+    )
+    report_text_ko = _build_report_text_ko(
+        run_id=run_id,
+        run_root=root,
         request=request,
         summary=summary,
         status=status,
@@ -967,11 +1418,13 @@ def _generate_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
         agent_items=agent_items,
     )
     _save_report_text(runner.output_root, run_id, report_text)
+    _save_report_text_ko(runner.output_root, run_id, report_text_ko)
     entry: dict[str, object] = {
         "id": uuid.uuid4().hex,
         "run_id": run_id,
         "source": "generated",
         "content": report_text,
+        "content_ko": report_text_ko,
         "score": score,
         "evidence": evidence,
         "recommendation": recommendation,
@@ -982,6 +1435,7 @@ def _generate_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
     return {
         "run_id": run_id,
         "report": report_text,
+        "report_ko": report_text_ko,
         "score": score,
         "evidence": evidence,
         "recommendation": recommendation,
@@ -1016,9 +1470,22 @@ def _get_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, 
     if not run_id:
         raise ValueError("run_id is required")
     report_text = _load_report_text(runner.output_root, run_id)
+    root = resolve_run_path(runner.output_root, run_id)
+    report_ko = ""
+    report_ko_path = root / "report_ko.md"
+    if report_ko_path.exists():
+        try:
+            report_ko = report_ko_path.read_text(encoding="utf-8")
+        except Exception:
+            report_ko = ""
     revisions = list_run_events(runner.output_root, run_id, filename="report_revisions.jsonl", limit=1)
     latest = revisions[-1] if revisions else None
-    out = {"run_id": run_id, "report": report_text or "", "latest_revision": latest}
+    out = {
+        "run_id": run_id,
+        "report": report_text or "",
+        "report_ko": report_ko or "",
+        "latest_revision": latest,
+    }
     if isinstance(latest, dict):
         for key in ("score", "evidence", "recommendation"):
             if key in latest:
@@ -1066,6 +1533,8 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
     dry_run = _as_bool(args.get("dry_run"), False)
     agent_panel_enabled = _as_bool(args.get("agent_panel_enabled"), True)
     auto_recover = _as_bool(args.get("auto_recover"), True)
+    wt_compare = _as_bool(args.get("wt_compare"), False)
+    mask_consensus_apply = _as_bool(args.get("mask_consensus_apply"), False)
 
     design_chains = _as_list_of_str(args.get("design_chains"))
     fixed_positions_extra = _as_fixed_positions_extra(args.get("fixed_positions_extra"))
@@ -1153,6 +1622,8 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
         dry_run=dry_run,
         agent_panel_enabled=agent_panel_enabled,
         auto_recover=auto_recover,
+        wt_compare=wt_compare,
+        mask_consensus_apply=mask_consensus_apply,
     )
 
 
@@ -1231,6 +1702,8 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "dry_run": {"type": "boolean"},
             "agent_panel_enabled": {"type": "boolean"},
             "auto_recover": {"type": "boolean"},
+            "wt_compare": {"type": "boolean"},
+            "mask_consensus_apply": {"type": "boolean"},
             "auto_retry": {"type": "boolean"},
             "auto_retry_max": {"type": "integer"},
             "auto_retry_backoff_s": {"type": "number"},
