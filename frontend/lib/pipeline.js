@@ -26,13 +26,20 @@ export function createRunId(prefix, now = new Date()) {
 
 export function stageFromPath(path) {
   const p = String(path || "").toLowerCase();
-  if (p.includes("msa") || p.includes("a3m") || p.includes("mmseq")) return "msa";
-  if (p.includes("design") || p.includes("mpnn")) return "design";
-  if (p.includes("soluprot")) return "soluprot";
-  if (p.includes("af2") || p.includes("alphafold")) return "af2";
-  if (p.includes("novel")) return "novelty";
+  if (p.includes("mask_consensus")) return "mask_consensus";
+  if (p.includes("ligand_mask")) return "ligand_mask";
+  if (p.includes("conservation")) return "conservation";
+  if (p.includes("pdb_preprocess")) return "pdb_preprocess";
+  if (p.includes("query_pdb")) return "query_pdb_check";
+  if (p.includes("agent_panel")) return "agent";
+  if (p.includes("/wt/") || p.startsWith("wt/") || p.includes("wt/")) return "wt";
   if (p.includes("rfd3")) return "rfd3";
   if (p.includes("diffdock") || p.includes("ligand")) return "diffdock";
+  if (p.includes("af2") || p.includes("alphafold")) return "af2";
+  if (p.includes("soluprot")) return "soluprot";
+  if (p.includes("design") || p.includes("mpnn")) return "design";
+  if (p.includes("msa") || p.includes("a3m") || p.includes("mmseq")) return "msa";
+  if (p.includes("novel")) return "novelty";
   return "misc";
 }
 

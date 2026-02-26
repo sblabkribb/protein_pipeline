@@ -447,6 +447,10 @@ def emit_agent_panel_event(
     run_root = resolve_run_path(output_root, run_id)
     safe_stage = _safe_stage(stage)
     write_json(run_root / "agent_panel" / f"{safe_stage}.json", event)
+    try:
+        write_agent_panel_report(output_root, run_id)
+    except Exception:
+        pass
     return event
 
 
@@ -556,9 +560,67 @@ def build_agent_panel_report(events: list[dict[str, object]], *, run_id: str) ->
     return "\n".join(lines).strip() + "\n"
 
 
+def build_agent_panel_report_ko(events: list[dict[str, object]], *, run_id: str) -> str:
+    lines: list[str] = []
+    lines.append(f"# 에이전트 패널 리포트: {run_id}")
+    lines.append("")
+    if not events:
+        lines.append("에이전트 패널 이벤트가 아직 없습니다.")
+        return "\n".join(lines).strip() + "\n"
+
+    lines.append("## 타임라인")
+    for item in events:
+        stage = str(item.get("stage") or "-")
+        created_at = str(item.get("created_at") or "-")
+        consensus = item.get("consensus") if isinstance(item.get("consensus"), dict) else {}
+        agents = item.get("agents") if isinstance(item.get("agents"), list) else []
+        decision = str(consensus.get("decision") or "-")
+        confidence = consensus.get("confidence")
+        rationale = str(consensus.get("rationale") or "")
+        error = item.get("error")
+        line = f"- {created_at} · {stage} · 결정={decision}"
+        if isinstance(confidence, (int, float)):
+            line += f" (신뢰도={confidence:.2f})"
+        if error:
+            line += f" · 오류={error}"
+        lines.append(line)
+        if rationale:
+            lines.append(f"  - 근거: {rationale}")
+        actions = consensus.get("actions") if isinstance(consensus, dict) else None
+        if isinstance(actions, list) and actions:
+            lines.append("  - 조치: " + "; ".join(str(a) for a in actions))
+        interpretations = _derive_consensus_interpretations(stage, agents, consensus)
+        if interpretations:
+            lines.append("  - 해석: " + "; ".join(str(a) for a in interpretations))
+
+    lines.append("")
+    lines.append("## 최신 신호")
+    latest_by_stage: dict[str, dict[str, object]] = {}
+    for item in events:
+        stage = str(item.get("stage") or "")
+        if stage:
+            latest_by_stage[stage] = item
+    for stage, item in latest_by_stage.items():
+        lines.append(f"- {stage}")
+        agents = item.get("agents") if isinstance(item.get("agents"), list) else []
+        for agent in agents:
+            if not isinstance(agent, dict):
+                continue
+            name = agent.get("name") or "agent"
+            status = agent.get("status") or "info"
+            summary = agent.get("summary") or ""
+            lines.append(f"  - {name} [{status}]: {summary}")
+            interp = _derive_agent_interpretations(stage, agent)
+            if interp:
+                lines.append("    - 해석: " + "; ".join(str(x) for x in interp))
+    return "\n".join(lines).strip() + "\n"
+
+
 def write_agent_panel_report(output_root: str, run_id: str, *, limit: int = 200) -> str:
     run_root = resolve_run_path(output_root, run_id)
     events = _load_jsonl(run_root / "agent_panel.jsonl", limit=limit)
     report = build_agent_panel_report(events, run_id=run_id)
     (run_root / "agent_panel_report.md").write_text(report, encoding="utf-8")
+    report_ko = build_agent_panel_report_ko(events, run_id=run_id)
+    (run_root / "agent_panel_report_ko.md").write_text(report_ko, encoding="utf-8")
     return report

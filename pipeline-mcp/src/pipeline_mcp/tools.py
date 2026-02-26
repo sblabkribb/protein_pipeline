@@ -33,6 +33,7 @@ from .router import request_from_prompt
 from .router import plan_from_prompt
 from .storage import ensure_dir
 from .storage import init_run
+from .storage import RunPaths
 from .storage import list_run_events
 from .storage import list_runs
 from .storage import new_run_id
@@ -605,6 +606,83 @@ def _delete_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
     return delete_run(runner.output_root, run_id)
 
 
+def _cancel_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(arguments.get("run_id") or "")
+    if not run_id:
+        raise ValueError("run_id is required")
+    root = resolve_run_path(runner.output_root, run_id)
+    if not root.exists():
+        return {"run_id": run_id, "found": False, "cancelled": 0, "jobs": []}
+
+    jobs = _collect_runpod_jobs(root)
+    client_map = {
+        "mmseqs": runner.mmseqs,
+        "proteinmpnn": runner.proteinmpnn,
+        "rfd3": runner.rfd3,
+        "diffdock": runner.diffdock,
+        "af2": runner.af2,
+    }
+    seen: set[tuple[str, str]] = set()
+    results: list[dict[str, object]] = []
+    errors: list[str] = []
+    cancelled = 0
+
+    for job in jobs:
+        kind = str(job.get("kind") or "unknown")
+        job_id = str(job.get("job_id") or "")
+        if not job_id:
+            continue
+        key = (kind, job_id)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        cancel_info = _client_cancel_info(client_map.get(kind))
+        if cancel_info is None:
+            results.append(
+                {
+                    "kind": kind,
+                    "job_id": job_id,
+                    "status": "skipped",
+                    "reason": "endpoint_not_configured",
+                }
+            )
+            continue
+        runpod, endpoint_id = cancel_info
+        try:
+            resp = runpod.cancel(endpoint_id, job_id)
+            status = None
+            if isinstance(resp, dict):
+                status = resp.get("status") or resp.get("state")
+            results.append(
+                {
+                    "kind": kind,
+                    "job_id": job_id,
+                    "endpoint_id": endpoint_id,
+                    "status": status or "cancel_requested",
+                }
+            )
+            cancelled += 1
+        except Exception as exc:
+            msg = f"{kind}:{job_id}: {exc}"
+            errors.append(msg)
+            results.append({"kind": kind, "job_id": job_id, "error": str(exc)})
+
+    status = load_status(runner.output_root, run_id)
+    stage = str(status.get("stage") or "cancel") if isinstance(status, dict) else "cancel"
+    paths = RunPaths(run_id=run_id, root=root)
+    detail = f"cancelled_jobs={cancelled}" if cancelled else "cancel_requested"
+    set_status(paths, stage=stage, state="cancelled", detail=detail)
+
+    return {
+        "run_id": run_id,
+        "found": True,
+        "cancelled": cancelled,
+        "errors": errors,
+        "jobs": results,
+    }
+
+
 def _submit_feedback(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
     run_id = str(arguments.get("run_id") or "").strip()
     if not run_id:
@@ -815,11 +893,227 @@ def _load_wt_metrics(run_root: Path) -> dict[str, object] | None:
     return _load_json_file(run_root / "wt" / "metrics.json")
 
 
+def _load_mask_consensus(run_root: Path) -> dict[str, object] | None:
+    return _load_json_file(run_root / "mask_consensus.json")
+
+
+def _normalize_positions(raw: object) -> list[int]:
+    if not isinstance(raw, list):
+        return []
+    out: list[int] = []
+    for pos in raw:
+        try:
+            out.append(int(pos))
+        except Exception:
+            continue
+    return sorted(set(out))
+
+
+def _normalize_chain_positions(raw: object) -> dict[str, list[int]]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, list[int]] = {}
+    for chain, positions in raw.items():
+        cleaned = _normalize_positions(positions)
+        if cleaned:
+            out[str(chain)] = cleaned
+    return out
+
+
+def _format_positions_preview(positions: list[int], *, limit: int = 8) -> str:
+    if not positions:
+        return "none"
+    preview = ", ".join(str(p) for p in positions[:limit])
+    if len(positions) > limit:
+        preview += f", ...(+{len(positions) - limit})"
+    return preview
+
+
+def _format_chain_counts(positions_by_chain: dict[str, list[int]]) -> str:
+    if not positions_by_chain:
+        return "none"
+    parts = [f"{chain}={len(pos)}" for chain, pos in sorted(positions_by_chain.items())]
+    return ", ".join(parts) if parts else "none"
+
+
+def _sort_tier_keys(keys: list[str]) -> list[str]:
+    def _key(val: str) -> tuple[int, float | str]:
+        try:
+            return (0, float(val))
+        except Exception:
+            return (1, str(val))
+
+    return sorted({str(k) for k in keys if str(k).strip()}, key=_key)
+
+
+def _extract_runpod_job_ids(payload: dict[str, object]) -> list[str]:
+    job_ids: list[str] = []
+    job_id = payload.get("job_id")
+    if isinstance(job_id, str) and job_id.strip():
+        job_ids.append(job_id.strip())
+    jobs = payload.get("jobs")
+    if isinstance(jobs, dict):
+        for val in jobs.values():
+            if isinstance(val, str) and val.strip():
+                job_ids.append(val.strip())
+    return job_ids
+
+
+def _collect_runpod_jobs(run_root: Path) -> list[dict[str, str]]:
+    jobs: list[dict[str, str]] = []
+    af2_target = run_root / "af2_target_runpod_job.json"
+    if af2_target.exists():
+        payload = _load_json_file(af2_target)
+        if isinstance(payload, dict):
+            for job_id in _extract_runpod_job_ids(payload):
+                jobs.append({"kind": "af2", "job_id": job_id, "path": str(af2_target)})
+
+    for path in run_root.rglob("runpod_job.json"):
+        rel = path.relative_to(run_root)
+        parts = rel.parts
+        kind = "unknown"
+        if "af2" in parts:
+            kind = "af2"
+        elif parts and parts[0] == "msa":
+            kind = "mmseqs"
+        elif parts and parts[0] == "rfd3":
+            kind = "rfd3"
+        elif parts and parts[0] == "diffdock":
+            kind = "diffdock"
+        elif "tiers" in parts:
+            kind = "proteinmpnn"
+        payload = _load_json_file(path)
+        if isinstance(payload, dict):
+            for job_id in _extract_runpod_job_ids(payload):
+                jobs.append({"kind": kind, "job_id": job_id, "path": str(path)})
+
+    for path in run_root.rglob("runpod_jobs.json"):
+        rel = path.relative_to(run_root)
+        parts = rel.parts
+        kind = "af2" if "af2" in parts else "unknown"
+        payload = _load_json_file(path)
+        if isinstance(payload, dict):
+            for job_id in _extract_runpod_job_ids(payload):
+                jobs.append({"kind": kind, "job_id": job_id, "path": str(path)})
+
+    return jobs
+
+
+def _client_cancel_info(client: object | None) -> tuple[object, str] | None:
+    if client is None:
+        return None
+    runpod = getattr(client, "runpod", None)
+    endpoint_id = getattr(client, "endpoint_id", None)
+    if runpod is None or endpoint_id is None:
+        return None
+    if not hasattr(runpod, "cancel"):
+        return None
+    endpoint = str(endpoint_id).strip()
+    if not endpoint:
+        return None
+    return runpod, endpoint
+
+
 def _score_payload(
     feedback_counts: dict[str, object],
     experiment_counts: dict[str, object],
 ) -> dict[str, object]:
     return compute_score(feedback_counts, experiment_counts)
+
+
+def _mask_consensus_report_lines(
+    *,
+    run_root: Path,
+    request: dict[str, object] | None,
+    lang: str = "en",
+) -> list[str]:
+    payload = _load_mask_consensus(run_root)
+    enabled = bool(request.get("mask_consensus_apply")) if request else False
+    if payload is None and not enabled:
+        return []
+
+    is_ko = str(lang).lower().startswith("ko")
+    none_label = "없음" if is_ko else "none"
+    lines: list[str] = []
+    lines.append("## 마스킹 합의" if is_ko else "## Mask Consensus")
+    lines.append(f"- ProteinMPNN 적용 여부: {'yes' if enabled else 'no'}" if is_ko else f"- Applied to ProteinMPNN: {'yes' if enabled else 'no'}")
+
+    if payload is None:
+        lines.append("- 마스킹 합의 데이터가 아직 없습니다." if is_ko else "- Mask consensus data not available yet.")
+        lines.append("")
+        return lines
+
+    consensus = payload.get("consensus") if isinstance(payload, dict) else None
+    if not isinstance(consensus, dict):
+        lines.append("- 마스킹 합의 데이터가 올바르지 않습니다." if is_ko else "- Mask consensus data invalid.")
+        lines.append("")
+        return lines
+
+    threshold = consensus.get("threshold")
+    if threshold is not None:
+        label = "합의 기준(표)" if is_ko else "Vote threshold"
+        lines.append(f"- {label}: {threshold}")
+
+    notes = payload.get("notes") if isinstance(payload.get("notes"), list) else []
+    for note in notes:
+        if not isinstance(note, str) or not note.strip():
+            continue
+        label = "참고" if is_ko else "Note"
+        lines.append(f"- {label}: {note.strip()}")
+
+    fixed_query = consensus.get("fixed_positions_query_by_tier") if isinstance(consensus.get("fixed_positions_query_by_tier"), dict) else {}
+    fixed_by_tier = consensus.get("fixed_positions_by_tier") if isinstance(consensus.get("fixed_positions_by_tier"), dict) else {}
+
+    tier_keys = _sort_tier_keys(list(fixed_query.keys()) + list(fixed_by_tier.keys()))
+    if not tier_keys:
+        lines.append("- 티어별 합의: 없음" if is_ko else "- Per-tier consensus: none")
+        lines.append("")
+        return lines
+
+    lines.append("- 티어별 합의:" if is_ko else "- Per-tier consensus:")
+    for tier_key in tier_keys:
+        query_positions = _normalize_positions(fixed_query.get(tier_key))
+        chain_positions = _normalize_chain_positions(fixed_by_tier.get(tier_key))
+        applied_positions: dict[str, list[int]] = {}
+        if enabled:
+            applied_payload = _load_json_file(run_root / "tiers" / str(tier_key) / "fixed_positions.json")
+            applied_positions = _normalize_chain_positions(applied_payload)
+
+        segments: list[str] = []
+        if query_positions:
+            preview = _format_positions_preview(query_positions)
+            if preview == "none":
+                preview = none_label
+            if is_ko:
+                segments.append(f"query 고정={len(query_positions)} ({preview})")
+            else:
+                segments.append(f"query_fixed={len(query_positions)} ({preview})")
+        else:
+            segments.append("query 고정=0" if is_ko else "query_fixed=0")
+
+        if chain_positions:
+            chain_counts = _format_chain_counts(chain_positions)
+            if chain_counts == "none":
+                chain_counts = none_label
+            if is_ko:
+                segments.append(f"체인 합의={chain_counts}")
+            else:
+                segments.append(f"consensus_chain={chain_counts}")
+
+        if enabled and applied_positions:
+            applied_counts = _format_chain_counts(applied_positions)
+            if applied_counts == "none":
+                applied_counts = none_label
+            if is_ko:
+                segments.append(f"적용 고정(ProteinMPNN)={applied_counts}")
+            else:
+                segments.append(f"applied_fixed={applied_counts}")
+
+        if not segments:
+            segments.append("데이터 없음" if is_ko else "no data")
+        lines.append(f"  - Tier {tier_key}: " + "; ".join(segments))
+    lines.append("")
+    return lines
 
 
 def _build_report_text(
@@ -899,6 +1193,8 @@ def _build_report_text(
         if summary.get("ligand_mask_path"):
             lines.append(f"- ligand_mask_path: {summary.get('ligand_mask_path')}")
         lines.append("")
+
+    lines.extend(_mask_consensus_report_lines(run_root=run_root, request=request, lang="en"))
 
     wt_metrics = _load_wt_metrics(run_root)
     design_metrics = _collect_design_metrics(run_root, summary)
@@ -1173,6 +1469,8 @@ def _build_report_text_ko(
         if summary.get("ligand_mask_path"):
             lines.append(f"- ligand_mask_path: {summary.get('ligand_mask_path')}")
         lines.append("")
+
+    lines.extend(_mask_consensus_report_lines(run_root=run_root, request=request, lang="ko"))
 
     wt_metrics = _load_wt_metrics(run_root)
     design_metrics = _collect_design_metrics(run_root, summary)
@@ -1533,7 +1831,7 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
     dry_run = _as_bool(args.get("dry_run"), False)
     agent_panel_enabled = _as_bool(args.get("agent_panel_enabled"), True)
     auto_recover = _as_bool(args.get("auto_recover"), True)
-    wt_compare = _as_bool(args.get("wt_compare"), False)
+    wt_compare = _as_bool(args.get("wt_compare"), True)
     mask_consensus_apply = _as_bool(args.get("mask_consensus_apply"), False)
 
     design_chains = _as_list_of_str(args.get("design_chains"))
@@ -1931,6 +2229,15 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.cancel_run",
+            "description": "Cancel in-flight RunPod jobs for a run_id and mark the run as cancelled.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"run_id": {"type": "string"}},
+                "required": ["run_id"],
+            },
+        },
+        {
             "name": "pipeline.list_artifacts",
             "description": "List artifact paths under a run_id.",
             "inputSchema": {
@@ -2066,6 +2373,9 @@ class ToolDispatcher:
 
         if name == "pipeline.delete_run":
             return _delete_run_tool(self.runner, arguments)
+
+        if name == "pipeline.cancel_run":
+            return _cancel_run_tool(self.runner, arguments)
 
         if name == "pipeline.list_artifacts":
             run_id = str(arguments.get("run_id") or "")
