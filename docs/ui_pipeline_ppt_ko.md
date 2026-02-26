@@ -11,7 +11,7 @@
 4. Setup 탭 상세: 모드 선택, 입력 첨부, Preflight/Plan, Run 실행
 5. Monitor 탭 상세: 상태 카드, 아티팩트, 에이전트 패널
 6. Analyze 탭 상세: 피드백, 실험, 리포트
-7. 파이프라인 전체 흐름: MSA → Conservation → (RFD3) → Ligand Mask → ProteinMPNN → SoluProt → AF2 → Novelty
+7. 파이프라인 전체 흐름: MSA → Conservation → (RFD3) → Ligand Mask → Mask Consensus → ProteinMPNN → SoluProt → AF2 → Novelty
 8. 단계별 입력/출력 (1): MSA/Conservation
 9. 단계별 입력/출력 (2): RFD3/AF2 Target/Preprocess/Query-PDB
 10. 단계별 입력/출력 (3): Ligand Mask/ProteinMPNN
@@ -55,19 +55,22 @@
 **2.4 Monitor 탭**
 - Run Monitor 카드: `run_id`, `stage`, `state`, `updated`, `score/evidence/recommendation` 표시.
 - Auto Poll: `pipeline.status` 자동 호출.
+- Stop Run: `pipeline.cancel_run` 호출로 RunPod 작업 취소 요청(실제 cancel).
 - Recent Runs: 사용자별 최근 run 목록. Admin은 전체 run 토글 가능.
 - Artifacts 패널: `pipeline.list_artifacts`로 목록 갱신, 경로 필터 제공.
 - Artifact Preview: PDB/SDF는 3Dmol로 렌더링, 이미지 파일은 base64 미리보기, 텍스트 파일은 프리뷰, 바이너리는 미리보기 제한.
-- Agent Panel: `pipeline.list_agent_events` 결과를 단계별로 표시, Run Report/Agent Report 모달로 확인.
+- Agent Panel: `pipeline.list_agent_events` 결과를 단계별로 표시, Good/Bad 평가 및 메모 기록 가능.
+- Report/Agent Report 모달: 언어 설정에 따라 한글/영문 리포트 표시.
 - Report 모달: Markdown 렌더/원문 토글, 다운로드 제공.
 
 **2.5 Analyze 탭**
 - Feedback: 등급(`good`/`bad`), 이유, 단계, 아티팩트, 코멘트 입력. 저장/조회/CSV·TSV 내보내기.
 - Experiment: assay/result, sample id, artifact, metrics(JSON), conditions 입력. 저장/조회/CSV·TSV 내보내기.
 - Report: `pipeline.generate_report`, `pipeline.get_report`, `pipeline.save_report` 연동. 리포트 텍스트와 연동된 아티팩트 링크 제공.
+- Report Review: 리포트 품질 평가 및 이유 기록.
 
 **2.6 Settings/Help/Admin**
-- Settings: API base URL 확인, Health Check(`GET /healthz`).
+- Settings: API base URL 확인, Report Language 설정(자동/영문/국문), Health Check(`GET /healthz`).
 - Help: Setup/Monitor/Analyze 사용 가이드.
 - Admin: 사용자 생성.
 
@@ -86,6 +89,7 @@
 | 단일 AF2 | `pipeline.af2_predict` | AF2만 실행 |
 | DiffDock | `pipeline.diffdock` | docking 전용 |
 | 상태 조회 | `pipeline.status` | stage/state/updated |
+| 실행 취소 | `pipeline.cancel_run` | RunPod 작업 취소 요청 |
 | 최근 run | `pipeline.list_runs` | 사용자 prefix 필터 |
 | 아티팩트 목록 | `pipeline.list_artifacts` | 파일/디렉토리 |
 | 아티팩트 읽기 | `pipeline.read_artifact` | 텍스트/base64 |
@@ -116,13 +120,14 @@
 | RFD3 | `rfd3_input_pdb`, `rfd3_contig`, `rfd3_inputs*`, `rfd3_cli_args`, `rfd3_partial_t`, `rfd3_max_return_designs` | 백본 생성 옵션 |
 | DiffDock | `diffdock_ligand_smiles`, `diffdock_ligand_sdf`, `diffdock_config`, `diffdock_extra_args` | 도킹 옵션 |
 | Design | `design_chains`, `fixed_positions_extra`, `conservation_tiers` | 설계 대상/고정 위치 |
+| Mask Consensus | `mask_consensus_apply` | 전문가 패널 합의 마스킹 적용 여부 |
 | Mask | `ligand_mask_distance`, `ligand_resnames`, `ligand_atom_chains` | 리간드 마스킹 |
 | ProteinMPNN | `num_seq_per_tier`, `batch_size`, `sampling_temp`, `seed` | 샘플링 |
 | SoluProt | `soluprot_cutoff` | 컷오프 |
 | AF2 | `af2_model_preset`, `af2_db_preset`, `af2_max_template_date`, `af2_plddt_cutoff`, `af2_rmsd_cutoff`, `af2_top_k` | 예측/선정 기준 |
 | MSA | `mmseqs_target_db`, `mmseqs_max_seqs`, `mmseqs_threads`, `mmseqs_use_gpu` | MSA 옵션 |
 | Novelty | `novelty_target_db` | 서치 대상 DB |
-| 제어 | `stop_after`, `force`, `dry_run`, `auto_recover`, `agent_panel_enabled` | 실행 제어 |
+| 제어 | `stop_after`, `force`, `dry_run`, `auto_recover`, `agent_panel_enabled`, `wt_compare` | 실행 제어/WT 비교 |
 
 ---
 
@@ -182,36 +187,44 @@
 - 입력: `ligand_mask_distance`, `ligand_resnames`, `ligand_atom_chains`.
 - 출력: `ligand_mask.json`, `backbones/<id>/ligand_mask.json`.
 
-**6.10 ProteinMPNN (tier별)**
+**6.10 Mask Consensus (tier별)**
+- 목적: 전문가 패널 합의를 통해 고정 위치 추천(마스킹 개선).
+- 입력: MSA 품질, 보존도(`conservation.json`), ligand mask(`ligand_mask.json`), query-PDB 정합성.
+- 출력: `mask_consensus.json`, `tiers/<tier>/fixed_positions_consensus.json`.
+- `mask_consensus_apply=true`인 경우 ProteinMPNN 고정 위치로 적용.
+
+**6.11 ProteinMPNN (tier별)**
 - 목적: 서열 디자인 생성.
 - 입력: PDB, 고정 위치(`fixed_positions.json`), `num_seq_per_tier`, `sampling_temp`, `seed`.
 - 출력: `tiers/<tier>/proteinmpnn.json`, `tiers/<tier>/designs.fasta`, `tiers/<tier>/fixed_positions.json`, `tiers/<tier>/fixed_positions_check.json`, `tiers/<tier>/mutation_report.json`, `tiers/<tier>/mutations_by_position.tsv`, `tiers/<tier>/mutations_by_position.svg`, `tiers/<tier>/mutations_by_sequence.tsv`, `tiers/<tier>/runpod_job.json`.
 - RFD3 앙상블의 경우 `backbones/<id>/tiers/<tier>/`에 분산 저장.
 - `tiers/<tier>/proteinmpnn_backbones.json`에 backbone별 메타 요약 저장.
 
-**6.11 SoluProt (tier별)**
+**6.12 SoluProt (tier별)**
 - 목적: 용해도 필터링.
 - 입력: `soluprot_cutoff`.
 - 출력: `tiers/<tier>/soluprot.json` (score/chain score/통과 id), `tiers/<tier>/designs_filtered.fasta`.
 
-**6.12 AlphaFold2 (tier별)**
+**6.13 AlphaFold2 (tier별)**
 - 목적: 구조 예측 및 선정.
 - 입력: `af2_model_preset`, `af2_db_preset`, `af2_max_template_date`, `af2_plddt_cutoff`, `af2_rmsd_cutoff`, `af2_top_k`.
 - 출력: `tiers/<tier>/af2_scores.json` (scores, RMSD, selected_ids), `tiers/<tier>/af2_selected.fasta`, `tiers/<tier>/af2/runpod_jobs.json`, `tiers/<tier>/af2/<seq_id>/ranked_0.pdb`, `metrics.json`, `ranking_debug.json`.
 - RMSD는 target PDB와 CA RMSD로 계산되며 `metrics.json`에 기록.
 
-**6.13 Novelty Search (tier별)**
+**6.14 Novelty Search (tier별)**
 - 목적: AF2 통과 서열에 대한 novelty 확인.
 - 입력: `novelty_target_db`, `mmseqs_max_seqs`.
 - 출력: `tiers/<tier>/novelty.tsv`.
 
-**6.14 Summary/Report**
+**6.15 Summary/Report**
 - 목적: run 요약 및 점수/추천 제공.
-- 출력: `summary.json` (Tier별 결과 요약), `report.md`, `report_revisions.jsonl`.
+- 출력: `summary.json` (Tier별 결과 요약), `report.md`, `report_ko.md`, `report_revisions.jsonl`.
+- WT 비교(`wt_compare=true`): pLDDT/RMSD/SoluProt WT vs 디자인 비교 값 포함.
+- Mask Consensus 상세: per-tier 합의 마스킹 상세 포함.
 
-**6.15 Agent Panel**
+**6.16 Agent Panel**
 - 목적: 단계별 신호 해석 및 합의.
-- 출력: `agent_panel.jsonl`, `agent_panel_report.md`, `agent_panel/<stage>.json`.
+- 출력: `agent_panel.jsonl`, `agent_panel_report.md`, `agent_panel_report_ko.md`, `agent_panel/<stage>.json`.
 
 ---
 
@@ -224,12 +237,15 @@
 - `msa/` (result.a3m, result.tsv, quality.json)
 - `conservation.json`
 - `ligand_mask.json`
+- `mask_consensus.json`
 - `chain_strategy.json`
 - `query_pdb_alignment.json`
 - `tiers/<tier>/` (proteinmpnn, soluprot, af2, novelty)
+- `tiers/<tier>/fixed_positions_consensus.json`
+- `wt/` (soluprot.json, af2/metrics.json, metrics.json)
 - `summary.json`
-- `report.md`, `report_revisions.jsonl`
-- `agent_panel.jsonl`, `agent_panel_report.md`
+- `report.md`, `report_ko.md`, `report_revisions.jsonl`
+- `agent_panel.jsonl`, `agent_panel_report.md`, `agent_panel_report_ko.md`
 
 ---
 

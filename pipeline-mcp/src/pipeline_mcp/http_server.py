@@ -231,6 +231,7 @@ class Handler(BaseHTTPRequestHandler):
                     "pipeline.list_artifacts",
                     "pipeline.read_artifact",
                     "pipeline.delete_run",
+                    "pipeline.cancel_run",
                     "pipeline.submit_feedback",
                     "pipeline.list_feedback",
                     "pipeline.submit_experiment",

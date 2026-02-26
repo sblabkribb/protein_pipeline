@@ -62,6 +62,20 @@ class RunPodClient:
             raise RuntimeError(f"Unexpected RunPod status response: {data!r}")
         return data
 
+    def cancel(self, endpoint_id: str, job_id: str) -> dict[str, Any]:
+        url = f"https://api.runpod.ai/v2/{endpoint_id}/cancel/{job_id}"
+        r = requests.post(
+            url,
+            headers=self._headers(),
+            timeout=self.timeout_s,
+            verify=requests_verify_arg(ca_bundle=self.ca_bundle, skip_verify=self.skip_verify),
+        )
+        r.raise_for_status()
+        data = r.json()
+        if not isinstance(data, dict):
+            raise RuntimeError(f"Unexpected RunPod cancel response: {data!r}")
+        return data
+
     def wait(self, endpoint_id: str, job_id: str) -> dict[str, Any]:
         start = time.monotonic()
         transient_failures = 0

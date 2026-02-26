@@ -25,6 +25,8 @@ const savedApiBase = localStorage.getItem("kbf.apiBase") || "";
 
 const LANG_KEY = "kbf.lang";
 const LANG_OPTIONS = ["en", "ko"];
+const REPORT_LANG_KEY = "kbf.reportLang";
+const REPORT_LANG_OPTIONS = ["auto", "en", "ko"];
 
 function loadLang() {
   const saved = localStorage.getItem(LANG_KEY);
@@ -32,6 +34,34 @@ function loadLang() {
   const browser = String(navigator.language || "").toLowerCase();
   if (browser.startsWith("ko")) return "ko";
   return "en";
+}
+
+function loadReportLang() {
+  const saved = localStorage.getItem(REPORT_LANG_KEY);
+  if (REPORT_LANG_OPTIONS.includes(saved)) return saved;
+  return "auto";
+}
+
+function normalizeReportLang(value) {
+  return REPORT_LANG_OPTIONS.includes(value) ? value : "auto";
+}
+
+function resolveReportLang(value) {
+  const pref = normalizeReportLang(value || state.reportLang);
+  return pref === "auto" ? state.lang : pref;
+}
+
+function updateReportLangSelect() {
+  if (el.reportLangSelect) {
+    el.reportLangSelect.value = normalizeReportLang(state.reportLang);
+  }
+}
+
+function setReportLang(value) {
+  const next = normalizeReportLang(value);
+  state.reportLang = next;
+  localStorage.setItem(REPORT_LANG_KEY, next);
+  updateReportLangSelect();
 }
 
 function normalizeApiBase(value) {
@@ -58,6 +88,7 @@ const state = {
   user: loadUser(),
   token: localStorage.getItem("kbf.token") || "",
   lang: loadLang(),
+  reportLang: loadReportLang(),
   plan: null,
   runMode: "pipeline",
   feedbackRating: "good",
@@ -71,6 +102,11 @@ const state = {
   answerMeta: {},
   chainRanges: null,
   artifacts: [],
+  artifactFilters: {
+    stage: "all",
+    tier: "all",
+    type: "all",
+  },
   runs: [],
   lastScore: null,
   reportModalText: "",
@@ -111,10 +147,14 @@ const el = {
   runEvidenceValue: document.getElementById("runEvidenceValue"),
   runRecommendationValue: document.getElementById("runRecommendationValue"),
   pollBtn: document.getElementById("pollBtn"),
+  cancelRunBtn: document.getElementById("cancelRunBtn"),
   autoPoll: document.getElementById("autoPoll"),
   refreshRunsBtn: document.getElementById("refreshRunsBtn"),
   artifactList: document.getElementById("artifactList"),
   artifactFilter: document.getElementById("artifactFilter"),
+  artifactStageFilter: document.getElementById("artifactStageFilter"),
+  artifactTierFilter: document.getElementById("artifactTierFilter"),
+  artifactTypeFilter: document.getElementById("artifactTypeFilter"),
   refreshArtifacts: document.getElementById("refreshArtifacts"),
   artifactPreview: document.getElementById("artifactPreview"),
   agentPanelList: document.getElementById("agentPanelList"),
@@ -128,7 +168,6 @@ const el = {
   reportModalDownload: document.getElementById("reportModalDownload"),
   reportModalClose: document.getElementById("reportModalClose"),
   refreshAgentPanel: document.getElementById("refreshAgentPanel"),
-  viewRunReportKo: document.getElementById("viewRunReportKo"),
   feedbackRating: document.getElementById("feedbackRating"),
   feedbackReasons: document.getElementById("feedbackReasons"),
   feedbackArtifact: document.getElementById("feedbackArtifact"),
@@ -168,6 +207,7 @@ const el = {
   settingsPanel: document.getElementById("settingsPanel"),
   settingsClose: document.getElementById("settingsClose"),
   apiBaseValue: document.getElementById("apiBaseValue"),
+  reportLangSelect: document.getElementById("reportLangSelect"),
   healthCheck: document.getElementById("healthCheck"),
   healthStatus: document.getElementById("healthStatus"),
   runList: document.getElementById("runList"),
@@ -229,6 +269,10 @@ const I18N = {
     "monitor.updated": "Updated",
     "monitor.scoring": "Scoring",
     "monitor.poll": "Poll Now",
+    "monitor.stop": "Stop Run",
+    "monitor.stopConfirm": "Cancel run {id}? This will request RunPod cancellation.",
+    "monitor.stopSuccess": "Cancel requested for {id} (jobs: {count}).",
+    "monitor.stopFailed": "Cancel failed: {error}",
     "monitor.autoPoll": "Auto Poll",
     "monitor.recentRuns": "Recent Runs",
     "monitor.refreshRuns": "Refresh",
@@ -237,7 +281,6 @@ const I18N = {
     "agent.desc": "Stage-by-stage expert consensus and recovery notes.",
     "agent.refresh": "Refresh",
     "agent.viewReport": "View Report",
-    "agent.viewReportKo": "View Report (KO)",
     "agent.viewAgentReport": "View Agent Report",
     "agent.report.loading": "Loading report...",
     "agent.report.missing": "No report available yet.",
@@ -258,6 +301,12 @@ const I18N = {
     "artifacts.desc": "Filter outputs and open previews.",
     "artifacts.filter.placeholder": "Filter by name or stage",
     "artifacts.refresh": "Refresh",
+    "artifacts.filter.allStages": "All stages",
+    "artifacts.filter.allTiers": "All tiers",
+    "artifacts.filter.allTypes": "All types",
+    "artifacts.filter.stage": "Stage",
+    "artifacts.filter.tier": "Tier",
+    "artifacts.filter.type": "Type",
     "artifacts.preview.title": "Artifact Preview",
     "artifacts.preview.desc": "3D structures, images, or text extracts.",
     "artifacts.preview.placeholder": "Select an artifact to preview it here.",
@@ -315,6 +364,11 @@ const I18N = {
     "settings.title": "Settings",
     "settings.baseLabel": "MCP HTTP Base URL",
     "settings.baseHint": "This value is fixed by the server configuration.",
+    "settings.reportLang.label": "Report Language",
+    "settings.reportLang.auto": "Follow UI",
+    "settings.reportLang.en": "English",
+    "settings.reportLang.ko": "Korean",
+    "settings.reportLang.hint": "Applies to run reports and agent reports.",
     "settings.health": "Health Check",
     "role.admin": "Admin",
     "role.user": "User",
@@ -551,6 +605,10 @@ const I18N = {
     "monitor.updated": "업데이트",
     "monitor.scoring": "점수",
     "monitor.poll": "지금 조회",
+    "monitor.stop": "정지",
+    "monitor.stopConfirm": "{id} 실행을 취소할까요? RunPod 작업 취소가 요청됩니다.",
+    "monitor.stopSuccess": "{id} 실행 취소 요청 완료 (jobs: {count}).",
+    "monitor.stopFailed": "취소 실패: {error}",
     "monitor.autoPoll": "자동 조회",
     "monitor.recentRuns": "최근 실행",
     "monitor.refreshRuns": "새로고침",
@@ -563,7 +621,6 @@ const I18N = {
     "agent.report.loading": "리포트를 불러오는 중...",
     "agent.report.missing": "아직 리포트가 없습니다.",
     "agent.report.failed": "리포트 로드 실패: {error}",
-    "agent.viewReportKo": "리포트 보기 (KO)",
     "agent.feedback.good": "좋음",
     "agent.feedback.bad": "나쁨",
     "agent.feedback.note": "메모 (선택)",
@@ -580,6 +637,12 @@ const I18N = {
     "artifacts.desc": "출력을 필터하고 미리보기를 열 수 있습니다.",
     "artifacts.filter.placeholder": "이름 또는 단계로 필터",
     "artifacts.refresh": "새로고침",
+    "artifacts.filter.allStages": "전체 단계",
+    "artifacts.filter.allTiers": "전체 티어",
+    "artifacts.filter.allTypes": "전체 형식",
+    "artifacts.filter.stage": "단계",
+    "artifacts.filter.tier": "티어",
+    "artifacts.filter.type": "형식",
     "artifacts.preview.title": "아티팩트 미리보기",
     "artifacts.preview.desc": "3D 구조, 이미지, 텍스트 미리보기.",
     "artifacts.preview.placeholder": "아티팩트를 선택하면 여기서 미리보기를 볼 수 있습니다.",
@@ -637,6 +700,11 @@ const I18N = {
     "settings.title": "설정",
     "settings.baseLabel": "MCP HTTP 기본 URL",
     "settings.baseHint": "이 값은 서버 설정으로 고정됩니다.",
+    "settings.reportLang.label": "리포트 언어",
+    "settings.reportLang.auto": "UI 언어 따라감",
+    "settings.reportLang.en": "영어",
+    "settings.reportLang.ko": "한국어",
+    "settings.reportLang.hint": "실행 리포트와 에이전트 리포트에 적용됩니다.",
     "settings.health": "헬스 체크",
     "role.admin": "관리자",
     "role.user": "사용자",
@@ -980,6 +1048,43 @@ const EXPERIMENT_RESULT_KEYS = {
 };
 
 const EXPORT_LIMIT = 2000;
+const ARTIFACT_STAGE_ORDER = [
+  "msa",
+  "conservation",
+  "rfd3",
+  "af2_target",
+  "pdb_preprocess",
+  "query_pdb_check",
+  "diffdock",
+  "ligand_mask",
+  "mask_consensus",
+  "design",
+  "soluprot",
+  "af2",
+  "novelty",
+  "wt",
+  "agent",
+  "misc",
+];
+
+const STAGE_LABELS = {
+  msa: { en: "MSA", ko: "MSA" },
+  conservation: { en: "Conservation", ko: "보존도" },
+  rfd3: { en: "RFD3", ko: "RFD3" },
+  af2_target: { en: "AF2 Target", ko: "AF2 타깃" },
+  pdb_preprocess: { en: "PDB Preprocess", ko: "PDB 전처리" },
+  query_pdb_check: { en: "Query/PDB Check", ko: "Query/PDB 검증" },
+  diffdock: { en: "DiffDock", ko: "DiffDock" },
+  ligand_mask: { en: "Ligand Mask", ko: "리간드 마스킹" },
+  mask_consensus: { en: "Mask Consensus", ko: "마스킹 합의" },
+  design: { en: "ProteinMPNN", ko: "ProteinMPNN" },
+  soluprot: { en: "SoluProt", ko: "SoluProt" },
+  af2: { en: "AlphaFold2", ko: "AlphaFold2" },
+  novelty: { en: "Novelty", ko: "Novelty" },
+  wt: { en: "WT Compare", ko: "WT 비교" },
+  agent: { en: "Agent Panel", ko: "에이전트 패널" },
+  misc: { en: "Misc", ko: "기타" },
+};
 
 function loadUser() {
   const raw = localStorage.getItem("kbf.user");
@@ -1059,6 +1164,11 @@ function downloadReportModal() {
   URL.revokeObjectURL(url);
 }
 
+function isHttp400Error(err) {
+  const msg = String(err?.message || "");
+  return msg.includes("HTTP 400");
+}
+
 function setUserBadge() {
   if (!state.user) return;
   const base = state.user.username || "user";
@@ -1104,10 +1214,12 @@ function setLanguage(lang) {
   refillSelect(el.experimentAssay, EXPERIMENT_ASSAYS, { includeEmpty: false });
   refillSelect(el.experimentResult, EXPERIMENT_RESULTS, { includeEmpty: false });
   refreshArtifactSelects();
+  renderArtifactFilters(state.artifacts);
   renderArtifacts(state.artifacts);
   if (state.runs) renderRuns(state.runs);
   updateReportArtifactLinks(el.reportContent ? el.reportContent.value : "");
   updateReportScore(state.lastScore || {});
+  updateReportLangSelect();
 }
 
 function initLanguage() {
@@ -1121,6 +1233,7 @@ function initLanguage() {
   updateLangButtons();
   applyI18n();
   updateReportScore(state.lastScore || {});
+  updateReportLangSelect();
 }
 
 function normalizeTab(value) {
@@ -1232,7 +1345,7 @@ function buildManualPlan(mode) {
         labelKey: "question.wtCompare.label",
         questionKey: "question.wtCompare.help",
         required: false,
-        default: false,
+        default: true,
       },
       {
         id: "mask_consensus_apply",
@@ -2595,27 +2708,92 @@ async function pollStatus(runId) {
   }
 }
 
+async function cancelCurrentRun() {
+  const runId = state.currentRunId;
+  if (!runId) {
+    setMessage(t("export.selectRun"), "ai");
+    return;
+  }
+  const ok = window.confirm(t("monitor.stopConfirm", { id: runId }));
+  if (!ok) return;
+  try {
+    const result = await apiCall("pipeline.cancel_run", { run_id: runId });
+    const count = Number(result.cancelled || 0);
+    setMessage(t("monitor.stopSuccess", { id: runId, count }), "ai");
+    await pollStatus(runId);
+  } catch (err) {
+    setMessage(t("monitor.stopFailed", { error: err.message }), "ai");
+  }
+}
+
 function renderArtifacts(list) {
   const filter = el.artifactFilter.value.trim().toLowerCase();
   el.artifactList.innerHTML = "";
+  const stageFilter = state.artifactFilters.stage || "all";
+  const tierFilter = state.artifactFilters.tier || "all";
+  const typeFilter = state.artifactFilters.type || "all";
   const filtered = list.filter((item) => {
-    if (!filter) return true;
-    return String(item.path).toLowerCase().includes(filter);
+    const path = String(item.path || "");
+    if (filter && !path.toLowerCase().includes(filter)) return false;
+    const stage = stageFromPath(path);
+    if (stageFilter !== "all" && stage !== stageFilter) return false;
+    const tier = tierFromPath(path);
+    if (tierFilter !== "all" && String(tier || "") !== String(tierFilter)) return false;
+    const type = artifactTypeFromItem(item);
+    if (typeFilter !== "all" && String(type || "") !== String(typeFilter)) return false;
+    return true;
   });
   if (!filtered.length) {
     el.artifactList.innerHTML = `<div class="placeholder">${t("artifact.none")}</div>`;
     return;
   }
+  const groups = new Map();
   filtered.forEach((item) => {
-    const div = document.createElement("div");
-    div.className = "artifact-item";
     const stage = stageFromPath(item.path);
-    div.innerHTML = `
-      <span>${item.path}</span>
-      <span class=\"stage-tag\">${stage}</span>
+    if (!groups.has(stage)) groups.set(stage, []);
+    groups.get(stage).push(item);
+  });
+  const orderedStages = ARTIFACT_STAGE_ORDER.filter((stage) => groups.has(stage));
+  const extraStages = Array.from(groups.keys()).filter((s) => !orderedStages.includes(s)).sort();
+  const stageList = [...orderedStages, ...extraStages];
+
+  stageList.forEach((stage) => {
+    const items = groups.get(stage) || [];
+    items.sort((a, b) => String(a.path || "").localeCompare(String(b.path || "")));
+    const group = document.createElement("div");
+    group.className = "artifact-group";
+    const header = document.createElement("div");
+    header.className = "artifact-group-header";
+    header.innerHTML = `
+      <span class="artifact-group-title">${formatStageLabel(stage)}</span>
+      <span class="artifact-group-count">${items.length}</span>
     `;
-    div.addEventListener("click", () => previewArtifact(item));
-    el.artifactList.appendChild(div);
+    const listEl = document.createElement("div");
+    listEl.className = "artifact-group-list";
+    items.forEach((item) => {
+      const div = document.createElement("div");
+      div.className = "artifact-item";
+      const tier = tierFromPath(item.path);
+      const type = artifactTypeFromItem(item);
+      const tierLabel = t("artifacts.filter.tier");
+      const tags = [];
+      tags.push(`<span class="stage-tag">${formatStageLabel(stage)}</span>`);
+      if (tier) {
+        tags.push(`<span class="stage-tag tier-tag">${tierLabel} ${tier}</span>`);
+      }
+      if (type) {
+        tags.push(`<span class="stage-tag type-tag">${String(type).toUpperCase()}</span>`);
+      }
+      div.innerHTML = `
+        <span>${item.path}</span>
+        <span class="artifact-meta">${tags.join("")}</span>
+      `;
+      div.addEventListener("click", () => previewArtifact(item));
+      listEl.appendChild(div);
+    });
+    group.appendChild(header);
+    group.appendChild(listEl);
+    el.artifactList.appendChild(group);
   });
 }
 
@@ -2878,6 +3056,7 @@ async function refreshArtifacts() {
       limit: 300,
     });
     state.artifacts = result.artifacts || [];
+    renderArtifactFilters(state.artifacts);
     renderArtifacts(state.artifacts);
     refreshArtifactSelects();
     updateReportArtifactLinks(el.reportContent ? el.reportContent.value : "");
@@ -3007,20 +3186,20 @@ async function loadRunReportModal({ lang } = {}) {
     setMessage(t("agent.report.missing"), "ai");
     return;
   }
-  const title = lang === "ko" ? t("agent.viewReportKo") : t("agent.viewReport");
-  const filename = lang === "ko" ? "report_ko.md" : "report.md";
+  const resolvedLang = resolveReportLang(lang);
+  const isKo = resolvedLang === "ko";
+  const title = t("agent.viewReport");
+  const filename = isKo ? "report_ko.md" : "report.md";
   openReportModal(title, t("agent.report.loading"));
   try {
+    const result = await apiCall("pipeline.get_report", { run_id: state.currentRunId });
     let text = "";
-    if (lang === "ko") {
-      const result = await apiCall("pipeline.read_artifact", {
-        run_id: state.currentRunId,
-        path: "report_ko.md",
-        max_bytes: 2_000_000,
-      });
-      text = result?.text || "";
+    if (isKo) {
+      text = result?.report_ko || "";
+      if (!text.trim()) {
+        text = result?.report || "";
+      }
     } else {
-      const result = await apiCall("pipeline.get_report", { run_id: state.currentRunId });
       text = result?.report || "";
     }
     if (!text.trim()) {
@@ -3029,6 +3208,10 @@ async function loadRunReportModal({ lang } = {}) {
     }
     openReportModal(title, text, filename);
   } catch (err) {
+    if (isHttp400Error(err)) {
+      openReportModal(title, t("agent.report.missing"));
+      return;
+    }
     openReportModal(title, t("agent.report.failed", { error: err.message }));
   }
 }
@@ -3038,22 +3221,176 @@ async function loadAgentReportModal() {
     setMessage(t("agent.report.missing"), "ai");
     return;
   }
+  const isKo = resolveReportLang() === "ko";
+  const filename = isKo ? "agent_panel_report_ko.md" : "agent_panel_report.md";
   openReportModal(t("agent.viewAgentReport"), t("agent.report.loading"));
   try {
     const result = await apiCall("pipeline.read_artifact", {
       run_id: state.currentRunId,
-      path: "agent_panel_report.md",
+      path: filename,
       max_bytes: 2_000_000,
     });
     const text = result?.text || "";
     if (!text.trim()) {
+      if (isKo) {
+        const fallback = await apiCall("pipeline.read_artifact", {
+          run_id: state.currentRunId,
+          path: "agent_panel_report.md",
+          max_bytes: 2_000_000,
+        });
+        const fallbackText = fallback?.text || "";
+        if (fallbackText.trim()) {
+          openReportModal(t("agent.viewAgentReport"), fallbackText, "agent_panel_report.md");
+          return;
+        }
+      }
       openReportModal(t("agent.viewAgentReport"), t("agent.report.missing"));
       return;
     }
-    openReportModal(t("agent.viewAgentReport"), text, "agent_panel_report.md");
+    openReportModal(t("agent.viewAgentReport"), text, filename);
   } catch (err) {
+    if (isKo) {
+      try {
+        const fallback = await apiCall("pipeline.read_artifact", {
+          run_id: state.currentRunId,
+          path: "agent_panel_report.md",
+          max_bytes: 2_000_000,
+        });
+        const fallbackText = fallback?.text || "";
+        if (fallbackText.trim()) {
+          openReportModal(t("agent.viewAgentReport"), fallbackText, "agent_panel_report.md");
+          return;
+        }
+        if (isHttp400Error(err)) {
+          openReportModal(t("agent.viewAgentReport"), t("agent.report.missing"));
+          return;
+        }
+      } catch (fallbackErr) {
+        if (isHttp400Error(err) || isHttp400Error(fallbackErr)) {
+          openReportModal(t("agent.viewAgentReport"), t("agent.report.missing"));
+          return;
+        }
+        openReportModal(
+          t("agent.viewAgentReport"),
+          t("agent.report.failed", { error: fallbackErr.message })
+        );
+        return;
+      }
+    }
+    if (isHttp400Error(err)) {
+      openReportModal(t("agent.viewAgentReport"), t("agent.report.missing"));
+      return;
+    }
     openReportModal(t("agent.viewAgentReport"), t("agent.report.failed", { error: err.message }));
   }
+}
+
+function formatStageLabel(stage) {
+  const entry = STAGE_LABELS[stage];
+  if (entry) {
+    const lang = state.lang || "en";
+    return entry[lang] || entry.en || stage;
+  }
+  return stage;
+}
+
+function tierFromPath(path) {
+  const match = String(path || "").match(/\/tiers\/([^/]+)/i);
+  return match ? match[1] : null;
+}
+
+function artifactTypeFromItem(item) {
+  if (item?.type === "dir") return "dir";
+  const match = String(item?.path || "").match(/\.([^.\/]+)$/);
+  if (match) return match[1].toLowerCase();
+  return "file";
+}
+
+function renderArtifactFilters(items) {
+  if (!el.artifactStageFilter || !el.artifactTierFilter || !el.artifactTypeFilter) return;
+  const stageSet = new Set();
+  const tierSet = new Set();
+  const typeSet = new Set();
+  (items || []).forEach((item) => {
+    const stage = stageFromPath(item.path);
+    if (stage) stageSet.add(stage);
+    const tier = tierFromPath(item.path);
+    if (tier) tierSet.add(tier);
+    const type = artifactTypeFromItem(item);
+    if (type) typeSet.add(type);
+  });
+
+  const stageOrder = ARTIFACT_STAGE_ORDER.filter((stage) => stageSet.has(stage));
+  const extraStages = Array.from(stageSet).filter((s) => !stageOrder.includes(s)).sort();
+  const stages = [...stageOrder, ...extraStages];
+  const tiers = Array.from(tierSet).sort((a, b) => {
+    const na = Number(a);
+    const nb = Number(b);
+    if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+    return String(a).localeCompare(String(b));
+  });
+  const types = Array.from(typeSet).sort();
+
+  const setOptions = (selectEl, options, allLabel, current) => {
+    selectEl.innerHTML = "";
+    const allOption = document.createElement("option");
+    allOption.value = "all";
+    allOption.textContent = allLabel;
+    selectEl.appendChild(allOption);
+    options.forEach((opt) => {
+      const option = document.createElement("option");
+      option.value = opt;
+      option.textContent = opt;
+      selectEl.appendChild(option);
+    });
+    if (!options.includes(current)) {
+      selectEl.value = "all";
+      return "all";
+    }
+    selectEl.value = current;
+    return current;
+  };
+
+  const stageOptions = stages.map((stage) => ({ value: stage, label: formatStageLabel(stage) }));
+  const setStageOptions = (selectEl, options, allLabel, current) => {
+    selectEl.innerHTML = "";
+    const allOption = document.createElement("option");
+    allOption.value = "all";
+    allOption.textContent = allLabel;
+    selectEl.appendChild(allOption);
+    options.forEach((opt) => {
+      const option = document.createElement("option");
+      option.value = opt.value;
+      option.textContent = opt.label;
+      selectEl.appendChild(option);
+    });
+    const values = options.map((opt) => opt.value);
+    if (!values.includes(current)) {
+      selectEl.value = "all";
+      return "all";
+    }
+    selectEl.value = current;
+    return current;
+  };
+
+  state.artifactFilters.stage = setStageOptions(
+    el.artifactStageFilter,
+    stageOptions,
+    t("artifacts.filter.allStages"),
+    state.artifactFilters.stage
+  );
+  state.artifactFilters.tier = setOptions(
+    el.artifactTierFilter,
+    tiers,
+    t("artifacts.filter.allTiers"),
+    state.artifactFilters.tier
+  );
+  state.artifactFilters.type = setOptions(
+    el.artifactTypeFilter,
+    types,
+    t("artifacts.filter.allTypes"),
+    state.artifactFilters.type
+  );
 }
 
 function parseMetricsInput(text) {
@@ -3618,10 +3955,6 @@ if (el.viewRunReport) {
   el.viewRunReport.addEventListener("click", loadRunReportModal);
 }
 
-if (el.viewRunReportKo) {
-  el.viewRunReportKo.addEventListener("click", () => loadRunReportModal({ lang: "ko" }));
-}
-
 if (el.viewAgentReport) {
   el.viewAgentReport.addEventListener("click", loadAgentReportModal);
 }
@@ -3632,6 +3965,12 @@ el.pollBtn.addEventListener("click", () => {
     refreshAgentPanel();
   }
 });
+
+if (el.cancelRunBtn) {
+  el.cancelRunBtn.addEventListener("click", () => {
+    cancelCurrentRun();
+  });
+}
 
 if (el.refreshRunsBtn) {
   el.refreshRunsBtn.addEventListener("click", () => {
@@ -3655,18 +3994,46 @@ el.artifactFilter.addEventListener("input", () => {
   renderArtifacts(state.artifacts);
 });
 
+if (el.artifactStageFilter) {
+  el.artifactStageFilter.addEventListener("change", () => {
+    state.artifactFilters.stage = el.artifactStageFilter.value || "all";
+    renderArtifacts(state.artifacts);
+  });
+}
+
+if (el.artifactTierFilter) {
+  el.artifactTierFilter.addEventListener("change", () => {
+    state.artifactFilters.tier = el.artifactTierFilter.value || "all";
+    renderArtifacts(state.artifacts);
+  });
+}
+
+if (el.artifactTypeFilter) {
+  el.artifactTypeFilter.addEventListener("change", () => {
+    state.artifactFilters.type = el.artifactTypeFilter.value || "all";
+    renderArtifacts(state.artifacts);
+  });
+}
+
 if (el.settingsBtn && el.settingsPanel) {
   el.settingsBtn.addEventListener("click", () => {
     el.settingsPanel.classList.remove("hidden");
     if (el.apiBaseValue) {
       el.apiBaseValue.textContent = state.apiBase;
     }
+    updateReportLangSelect();
   });
 }
 
 if (el.settingsClose && el.settingsPanel) {
   el.settingsClose.addEventListener("click", () => {
     el.settingsPanel.classList.add("hidden");
+  });
+}
+
+if (el.reportLangSelect) {
+  el.reportLangSelect.addEventListener("change", () => {
+    setReportLang(el.reportLangSelect.value);
   });
 }
 

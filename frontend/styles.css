@@ -832,6 +832,17 @@ textarea:focus-visible {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status-actions #cancelRunBtn {
+  border-color: rgba(224, 122, 95, 0.5);
+  color: var(--coral);
+}
+
+.status-actions #cancelRunBtn:hover {
+  background: rgba(224, 122, 95, 0.1);
 }
 
 .status-subtitle {
@@ -1042,15 +1053,51 @@ textarea:focus-visible {
 .artifact-controls {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.artifact-controls .artifact-select {
+  min-width: 140px;
 }
 
 .artifact-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   max-height: 280px;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+.artifact-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.artifact-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-soft);
+  padding: 0 6px;
+}
+
+.artifact-group-title {
+  font-weight: 600;
+}
+
+.artifact-group-count {
+  font-variant-numeric: tabular-nums;
+}
+
+.artifact-group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .artifact-item {
@@ -1075,6 +1122,23 @@ textarea:focus-visible {
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 11px;
+}
+
+.artifact-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.tier-tag {
+  background: rgba(244, 185, 74, 0.2);
+  color: #7a4b00;
+}
+
+.type-tag {
+  background: rgba(16, 42, 45, 0.08);
+  color: var(--ink-soft);
 }
 
 .artifact-preview {
@@ -1156,6 +1220,13 @@ textarea:focus-visible {
 }
 
 .settings-fixed {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-section {
+  margin-top: 14px;
   display: flex;
   flex-direction: column;
   gap: 6px;

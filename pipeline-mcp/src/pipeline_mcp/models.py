@@ -99,7 +99,7 @@ class PipelineRequest:
     dry_run: bool = False
     agent_panel_enabled: bool = True
     auto_recover: bool = True
-    wt_compare: bool = False
+    wt_compare: bool = True
     mask_consensus_apply: bool = False
 
 

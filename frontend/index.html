@@ -186,6 +186,7 @@
                 </div>
                 <div class="status-actions">
                   <button id="pollBtn" class="ghost" data-i18n="monitor.poll">Poll Now</button>
+                  <button id="cancelRunBtn" class="ghost" data-i18n="monitor.stop">Stop Run</button>
                   <label class="toggle">
                     <input id="autoPoll" type="checkbox" checked />
                     <span data-i18n="monitor.autoPoll">Auto Poll</span>
@@ -217,6 +218,9 @@
                   placeholder="Filter by name or stage"
                   data-i18n-placeholder="artifacts.filter.placeholder"
                 />
+                <select id="artifactStageFilter" class="artifact-select"></select>
+                <select id="artifactTierFilter" class="artifact-select"></select>
+                <select id="artifactTypeFilter" class="artifact-select"></select>
                 <button id="refreshArtifacts" class="ghost" data-i18n="artifacts.refresh">Refresh</button>
               </div>
               <div id="artifactList" class="artifact-list"></div>
@@ -241,9 +245,6 @@
                 <button id="refreshAgentPanel" class="ghost" data-i18n="agent.refresh">Refresh</button>
                 <button id="viewRunReport" class="ghost" data-i18n="agent.viewReport">
                   View Report
-                </button>
-                <button id="viewRunReportKo" class="ghost" data-i18n="agent.viewReportKo">
-                  View Report (KO)
                 </button>
                 <button id="viewAgentReport" class="ghost" data-i18n="agent.viewAgentReport">
                   View Agent Report
@@ -453,6 +454,19 @@
           <div id="apiBaseValue" class="settings-value"></div>
           <div class="hint" data-i18n="settings.baseHint">
             This value is fixed by the server configuration.
+          </div>
+        </div>
+        <div class="settings-section">
+          <label>
+            <span data-i18n="settings.reportLang.label">Report Language</span>
+            <select id="reportLangSelect">
+              <option value="auto" data-i18n="settings.reportLang.auto">Follow UI</option>
+              <option value="en" data-i18n="settings.reportLang.en">English</option>
+              <option value="ko" data-i18n="settings.reportLang.ko">Korean</option>
+            </select>
+          </label>
+          <div class="hint" data-i18n="settings.reportLang.hint">
+            Applies to run reports and agent reports.
           </div>
         </div>
         <div class="settings-actions">
