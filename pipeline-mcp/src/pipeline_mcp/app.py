@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from .clients.alphafold2 import AlphaFold2Client
 from .clients.alphafold2_runpod import AlphaFold2RunPodClient
+from .clients.bioemu_runpod import BioEmuRunPodClient
 from .clients.diffdock_runpod import DiffDockRunPodClient
 from .clients.mmseqs import MMseqsClient
 from .clients.proteinmpnn import ProteinMPNNClient
@@ -33,6 +34,10 @@ def build_runner() -> PipelineRunner:
     if cfg.runpod.rfd3_endpoint_id:
         rfd3 = RFD3RunPodClient(runpod=runpod, endpoint_id=cfg.runpod.rfd3_endpoint_id)
 
+    bioemu = None
+    if cfg.runpod.bioemu_endpoint_id:
+        bioemu = BioEmuRunPodClient(runpod=runpod, endpoint_id=cfg.runpod.bioemu_endpoint_id)
+
     diffdock = None
     if cfg.runpod.diffdock_endpoint_id:
         diffdock = DiffDockRunPodClient(runpod=runpod, endpoint_id=cfg.runpod.diffdock_endpoint_id)
@@ -44,5 +49,6 @@ def build_runner() -> PipelineRunner:
         soluprot=soluprot,
         af2=af2,
         rfd3=rfd3,
+        bioemu=bioemu,
         diffdock=diffdock,
     )

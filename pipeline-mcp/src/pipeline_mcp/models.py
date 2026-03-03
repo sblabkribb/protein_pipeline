@@ -36,6 +36,16 @@ class PipelineRequest:
     rfd3_max_return_designs: int = 50
     rfd3_partial_t: int = 20
 
+    bioemu_use: bool = False
+    bioemu_sequence: str | None = None
+    bioemu_num_samples: int = 50
+    bioemu_batch_size_100: int | None = None
+    bioemu_model_name: str = "bioemu-v1.1"
+    bioemu_filter_samples: bool = True
+    bioemu_base_seed: int | None = None
+    bioemu_max_return_structures: int = 50
+    bioemu_env: dict[str, str] | None = None
+
     diffdock_ligand_smiles: str | None = None
     diffdock_ligand_sdf: str | None = None
     diffdock_config: str = "default_inference_args.yaml"
@@ -94,7 +104,7 @@ class PipelineRequest:
     query_pdb_min_identity: float = 0.9
     query_pdb_policy: str = "error"  # error | warn | ignore
 
-    stop_after: str | None = None  # msa | design | soluprot | af2 | novelty
+    stop_after: str | None = None  # rfd3 | bioemu | msa | design | soluprot | af2 | novelty
     force: bool = False
     dry_run: bool = False
 

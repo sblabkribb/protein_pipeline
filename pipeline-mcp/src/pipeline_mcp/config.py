@@ -10,6 +10,7 @@ class RunPodConfig:
     mmseqs_endpoint_id: str
     proteinmpnn_endpoint_id: str
     alphafold2_endpoint_id: str | None
+    bioemu_endpoint_id: str | None
     diffdock_endpoint_id: str | None
     rfd3_endpoint_id: str | None
     ca_bundle: str | None
@@ -52,6 +53,7 @@ def load_config() -> AppConfig:
         or os.environ.get("ALPHAFOLD2_RUNPOD_ENDPOINT_ID", "").strip()
         or None
     )
+    bioemu_endpoint_id = os.environ.get("BIOEMU_ENDPOINT_ID", "").strip() or None
     diffdock_endpoint_id = os.environ.get("DIFFDOCK_ENDPOINT_ID", "").strip() or None
     rfd3_endpoint_id = os.environ.get("RFD3_ENDPOINT_ID", "").strip() or None
 
@@ -69,6 +71,7 @@ def load_config() -> AppConfig:
             mmseqs_endpoint_id=mmseqs_endpoint_id,
             proteinmpnn_endpoint_id=proteinmpnn_endpoint_id,
             alphafold2_endpoint_id=alphafold2_endpoint_id,
+            bioemu_endpoint_id=bioemu_endpoint_id,
             diffdock_endpoint_id=diffdock_endpoint_id,
             rfd3_endpoint_id=rfd3_endpoint_id,
             ca_bundle=ca_bundle,

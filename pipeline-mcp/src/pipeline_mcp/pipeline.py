@@ -239,6 +239,10 @@ def _diffdock_requested(request: PipelineRequest) -> bool:
     )
 
 
+def _bioemu_active(request: PipelineRequest) -> bool:
+    return bool(request.bioemu_use)
+
+
 def _is_monomer_preset(preset: str) -> bool:
     return str(preset or "").strip().lower().startswith("monomer")
 
@@ -588,6 +592,7 @@ class PipelineRunner:
     soluprot: SoluProtClient | None = None
     af2: Any | None = None
     rfd3: Any | None = None
+    bioemu: Any | None = None
     diffdock: Any | None = None
 
     def run(self, request: PipelineRequest, *, run_id: str | None = None) -> PipelineResult:
@@ -614,6 +619,7 @@ class PipelineRunner:
             rfd3_files = _rfd3_input_files(request) if _rfd3_active(request) else {}
             rfd3_backbones: list[dict[str, Any]] | None = None
             rfd3_selected_id: str | None = None
+            bioemu_backbones: list[dict[str, Any]] | None = None
             target_record: FastaRecord | None = None
             msa_defer = False
 
@@ -896,7 +902,7 @@ class PipelineRunner:
                     write_json(rfd3_dir / "designs.json", [])
                     if bool(request.rfd3_use_ensemble) or int(request.rfd3_max_return_designs or 1) > 1:
                         rfd3_backbones = [
-                            {"id": f"design_{i}", "pdb_text": target_pdb_text}
+                            {"id": f"design_{i}", "pdb_text": target_pdb_text, "source": "rfd3"}
                             for i in range(int(request.rfd3_max_return_designs or 1))
                         ]
                     set_status(paths, stage="rfd3", state="completed", detail="dry_run")
@@ -959,6 +965,7 @@ class PipelineRunner:
                                         "id": raw_id,
                                         "pdb_text": pdb_text,
                                         "score": d.get("score"),
+                                        "source": "rfd3",
                                     }
                                 )
                             if ensemble:
@@ -969,6 +976,7 @@ class PipelineRunner:
                                             "id": rfd3_selected_id,
                                             "pdb_text": target_pdb_text,
                                             "score": selected.get("score"),
+                                            "source": "rfd3",
                                         },
                                     )
                                 rfd3_backbones = ensemble
@@ -980,6 +988,169 @@ class PipelineRunner:
                     set_status(paths, stage="rfd3", state="completed")
 
                 if request.stop_after == "rfd3":
+                    result = PipelineResult(
+                        run_id=run_id,
+                        output_dir=str(paths.root),
+                        msa_a3m_path=msa_a3m_path,
+                        msa_filtered_a3m_path=msa_filtered_a3m_path,
+                        msa_tsv_path=msa_tsv_path,
+                        conservation_path=conservation_path,
+                        ligand_mask_path=None,
+                        tiers=[],
+                        errors=[],
+                    )
+                    write_json(paths.summary_json, asdict(result))
+                    set_status(paths, stage="done", state="completed")
+                    return result
+
+            if _bioemu_active(request):
+                bioemu_dir = _ensure_dir(paths.root / "bioemu")
+                set_status(paths, stage="bioemu", state="running")
+
+                bioemu_sequence = _clean_protein_sequence(str(request.bioemu_sequence or ""))
+                if not bioemu_sequence:
+                    if target_record is not None:
+                        bioemu_sequence = _clean_protein_sequence(target_record.sequence)
+                    elif target_pdb_text.strip():
+                        extracted = sequence_by_chain(target_pdb_text, chains=request.design_chains)
+                        if extracted:
+                            chain_order = sorted(request.design_chains) if request.design_chains else sorted(extracted.keys())
+                            merged = "".join(extracted.get(chain_id, "") for chain_id in chain_order)
+                            bioemu_sequence = _clean_protein_sequence(merged)
+                if not bioemu_sequence:
+                    raise ValueError(
+                        "BioEmu requires a protein sequence. Provide bioemu_sequence, target_fasta, or a target_pdb with ATOM records."
+                    )
+
+                write_json(
+                    bioemu_dir / "request.json",
+                    {
+                        "sequence": bioemu_sequence,
+                        "num_samples": int(max(1, request.bioemu_num_samples)),
+                        "batch_size_100": (
+                            int(request.bioemu_batch_size_100) if request.bioemu_batch_size_100 is not None else None
+                        ),
+                        "model_name": str(request.bioemu_model_name or "bioemu-v1.1"),
+                        "filter_samples": bool(request.bioemu_filter_samples),
+                        "base_seed": (int(request.bioemu_base_seed) if request.bioemu_base_seed is not None else None),
+                        "max_return_structures": int(max(1, request.bioemu_max_return_structures)),
+                        "env": (dict(request.bioemu_env) if isinstance(request.bioemu_env, dict) else None),
+                    },
+                )
+
+                if request.dry_run:
+                    sample_count = min(
+                        int(max(1, request.bioemu_num_samples)),
+                        int(max(1, request.bioemu_max_return_structures)),
+                    )
+                    base_pdb = target_pdb_text if target_pdb_text.strip() else _dummy_backbone_pdb(bioemu_sequence, chain_id="A")
+                    bioemu_backbones = [
+                        {
+                            "id": f"bioemu_{i:03d}",
+                            "pdb_text": base_pdb,
+                            "source": "bioemu",
+                            "frame_index": i,
+                        }
+                        for i in range(sample_count)
+                    ]
+                    designs_dir = _ensure_dir(bioemu_dir / "designs")
+                    sample_entries: list[dict[str, object]] = []
+                    for entry in bioemu_backbones:
+                        bb_id = _safe_id(str(entry.get("id") or "bioemu"))
+                        _write_text(designs_dir / f"{bb_id}.pdb", str(entry.get("pdb_text") or ""))
+                        sample_entries.append(
+                            {
+                                "id": str(entry.get("id") or ""),
+                                "frame_index": entry.get("frame_index"),
+                                "source": "dry_run",
+                            }
+                        )
+                    write_json(bioemu_dir / "sample_pdbs.json", {"samples": sample_entries})
+                    set_status(paths, stage="bioemu", state="completed", detail=f"dry_run structures={len(bioemu_backbones)}")
+                else:
+                    if self.bioemu is None:
+                        raise RuntimeError("BioEmu endpoint is not configured (set BIOEMU_ENDPOINT_ID)")
+
+                    def _on_bioemu_job_id(job_id: str) -> None:
+                        write_json(
+                            bioemu_dir / "runpod_job.json",
+                            {
+                                "job_id": job_id,
+                                "num_samples": int(max(1, request.bioemu_num_samples)),
+                                "max_return_structures": int(max(1, request.bioemu_max_return_structures)),
+                            },
+                        )
+                        set_status(paths, stage="bioemu", state="running", detail=f"runpod_job_id={job_id}")
+
+                    bioemu_out = self.bioemu.sample(
+                        sequence=bioemu_sequence,
+                        num_samples=max(1, int(request.bioemu_num_samples)),
+                        batch_size_100=(
+                            int(request.bioemu_batch_size_100) if request.bioemu_batch_size_100 is not None else None
+                        ),
+                        model_name=str(request.bioemu_model_name or "bioemu-v1.1"),
+                        filter_samples=bool(request.bioemu_filter_samples),
+                        base_seed=(int(request.bioemu_base_seed) if request.bioemu_base_seed is not None else None),
+                        env=(dict(request.bioemu_env) if isinstance(request.bioemu_env, dict) else None),
+                        return_pdb=True,
+                        return_sample_pdbs=True,
+                        max_return_sample_pdbs=max(1, int(request.bioemu_max_return_structures)),
+                        on_job_id=_on_bioemu_job_id,
+                    )
+                    write_json(bioemu_dir / "output.json", _safe_json(bioemu_out))
+
+                    parsed_samples: list[dict[str, Any]] = []
+                    raw_samples = bioemu_out.get("sample_pdbs")
+                    if isinstance(raw_samples, list):
+                        for i, sample in enumerate(raw_samples):
+                            if not isinstance(sample, dict):
+                                continue
+                            sample_id = str(sample.get("id") or f"bioemu_{i:03d}")
+                            pdb_text = str(sample.get("pdb") or sample.get("pdb_text") or "")
+                            if not pdb_text.strip():
+                                continue
+                            parsed_samples.append(
+                                {
+                                    "id": sample_id,
+                                    "pdb_text": pdb_text,
+                                    "source": "bioemu",
+                                    "frame_index": sample.get("frame_index"),
+                                }
+                            )
+
+                    if not parsed_samples:
+                        topology_pdb = str(bioemu_out.get("topology_pdb") or "")
+                        if topology_pdb.strip():
+                            parsed_samples.append(
+                                {
+                                    "id": "bioemu_topology",
+                                    "pdb_text": topology_pdb,
+                                    "source": "bioemu",
+                                    "frame_index": None,
+                                }
+                            )
+
+                    if not parsed_samples:
+                        raise RuntimeError("BioEmu output missing sample_pdbs/topology_pdb")
+
+                    limit = max(1, int(request.bioemu_max_return_structures))
+                    bioemu_backbones = parsed_samples[:limit]
+
+                    designs_dir = _ensure_dir(bioemu_dir / "designs")
+                    sample_entries = []
+                    for sample in bioemu_backbones:
+                        bb_id = _safe_id(str(sample.get("id") or "bioemu"))
+                        _write_text(designs_dir / f"{bb_id}.pdb", str(sample.get("pdb_text") or ""))
+                        sample_entries.append(
+                            {
+                                "id": str(sample.get("id") or ""),
+                                "frame_index": sample.get("frame_index"),
+                            }
+                        )
+                    write_json(bioemu_dir / "sample_pdbs.json", {"samples": sample_entries})
+                    set_status(paths, stage="bioemu", state="completed", detail=f"structures={len(bioemu_backbones)}")
+
+                if request.stop_after == "bioemu":
                     result = PipelineResult(
                         run_id=run_id,
                         output_dir=str(paths.root),
@@ -1104,9 +1275,32 @@ class PipelineRunner:
 
             backbones: list[dict[str, Any]] = []
             if rfd3_backbones:
-                backbones = list(rfd3_backbones)
-            else:
-                backbones = [{"id": (rfd3_selected_id or "target"), "pdb_text": target_pdb_text}]
+                backbones.extend(
+                    {
+                        **dict(item),
+                        "source": str(item.get("source") or "rfd3"),
+                    }
+                    for item in rfd3_backbones
+                    if isinstance(item, dict)
+                )
+            elif target_pdb_text.strip():
+                backbones.append(
+                    {
+                        "id": (rfd3_selected_id or "target"),
+                        "pdb_text": target_pdb_text,
+                        "source": ("rfd3" if rfd3_selected_id else "target"),
+                    }
+                )
+
+            if bioemu_backbones:
+                backbones.extend(
+                    {
+                        **dict(item),
+                        "source": str(item.get("source") or "bioemu"),
+                    }
+                    for item in bioemu_backbones
+                    if isinstance(item, dict)
+                )
 
             if rfd3_selected_id:
                 for idx, b in enumerate(backbones):
@@ -1176,6 +1370,7 @@ class PipelineRunner:
                     "dir": bb_dir,
                     "pdb_text": pdb_text,
                     "score": b.get("score"),
+                    "source": str(b.get("source") or "unknown"),
                 }
                 backbone_contexts.append(ctx)
                 backbone_entries.append(
@@ -1184,6 +1379,7 @@ class PipelineRunner:
                         "dir": str(bb_dir),
                         "pdb_path": str(bb_dir / "target.pdb"),
                         "score": b.get("score"),
+                        "source": str(b.get("source") or "unknown"),
                         "primary": idx == 0,
                     }
                 )
@@ -1398,16 +1594,22 @@ class PipelineRunner:
 
             multi_backbone = len(backbone_contexts) > 1
 
-            def _tag_samples(samples: list[SequenceRecord], backbone_id: str) -> list[SequenceRecord]:
+            def _tag_samples(
+                samples: list[SequenceRecord],
+                backbone_id: str,
+                *,
+                backbone_source: str,
+            ) -> list[SequenceRecord]:
                 tagged: list[SequenceRecord] = []
                 for s in samples:
                     raw_id = str(s.id)
                     new_id = f"{backbone_id}:{raw_id}"
                     header = s.header or raw_id
-                    new_header = f"{header}|backbone={backbone_id}"
+                    new_header = f"{header}|backbone={backbone_id}|source={backbone_source}"
                     meta = dict(s.meta) if isinstance(s.meta, dict) else {}
                     meta.setdefault("backbone_id", backbone_id)
                     meta.setdefault("source_id", raw_id)
+                    meta.setdefault("backbone_source", backbone_source)
                     tagged.append(
                         SequenceRecord(
                             id=new_id,
@@ -1516,6 +1718,7 @@ class PipelineRunner:
                         backbone_meta.append(
                             {
                                 "id": ctx["id"],
+                                "source": str(ctx.get("source") or "unknown"),
                                 "dir": str(bb_tier_dir),
                                 "proteinmpnn_json": str(bb_tier_dir / "proteinmpnn.json"),
                                 "fixed_positions_json": str(bb_tier_dir / "fixed_positions.json"),
@@ -1523,7 +1726,13 @@ class PipelineRunner:
                             }
                         )
 
-                    tier_samples.extend(_tag_samples(samples, ctx["id"]))
+                    tier_samples.extend(
+                        _tag_samples(
+                            samples,
+                            ctx["id"],
+                            backbone_source=str(ctx.get("source") or "unknown"),
+                        )
+                    )
 
                     if idx == 0:
                         primary_fixed = fixed_positions_by_chain

@@ -23,6 +23,17 @@
 - `pipeline.run_from_prompt`
   - target_pdb/target_fasta가 이미 준비된 경우 바로 실행합니다.
 
+## RFD3 + BioEmu 동시 백본 생성 예시
+- 목표: `RFD3 50개 + BioEmu 50개` 백본을 ProteinMPNN 입력으로 사용
+- `pipeline.run` 주요 인자:
+  - `rfd3_contig`, `rfd3_input_pdb`
+  - `rfd3_use_ensemble=true`, `rfd3_max_return_designs=50`
+  - `bioemu_use=true`, `bioemu_num_samples=50`, `bioemu_max_return_structures=50`
+  - `num_seq_per_tier`, `conservation_tiers`
+- 필요 환경 변수:
+  - `RFD3_ENDPOINT_ID`
+  - `BIOEMU_ENDPOINT_ID`
+
 ## 산출물 확인
 - `pipeline.list_artifacts`로 파일 목록
 - `pipeline.read_artifact`로 파일 내용 조회
