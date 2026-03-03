@@ -115,6 +115,68 @@ class TestTools(unittest.TestCase):
             ids = {str(item.get("id")) for item in required if isinstance(item, dict)}
             self.assertIn("target_input", ids)
 
+    def test_pipeline_preflight_bioemu_stop_requires_bioemu_use(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.preflight",
+                {
+                    "target_fasta": ">q1\nACDEFGHIK\n",
+                    "stop_after": "bioemu",
+                },
+            )
+            self.assertFalse(bool(out.get("ok")))
+            errors = [str(x) for x in (out.get("errors") or [])]
+            self.assertTrue(any("bioemu_use" in e for e in errors))
+
+    def test_pipeline_preflight_rfd3_stop_requires_rfd3_inputs(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.preflight",
+                {
+                    "target_fasta": ">q1\nACDEFGHIK\n",
+                    "stop_after": "rfd3",
+                },
+            )
+            self.assertFalse(bool(out.get("ok")))
+            errors = [str(x) for x in (out.get("errors") or [])]
+            self.assertTrue(any("stop_after='rfd3'" in e for e in errors))
+
+    def test_pipeline_preflight_accepts_sequence_only_bioemu(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.preflight",
+                {
+                    "bioemu_use": True,
+                    "bioemu_sequence": "ACDEFGHIK",
+                    "stop_after": "bioemu",
+                },
+            )
+            self.assertTrue(bool(out.get("ok")))
+            required = out.get("required_inputs") or []
+            ids = {str(item.get("id")) for item in required if isinstance(item, dict)}
+            self.assertNotIn("target_input", ids)
+            self.assertNotIn("fixed_positions_extra", ids)
+
+    def test_pipeline_run_rfd3_stop_requires_rfd3_inputs(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            with self.assertRaisesRegex(ValueError, "stop_after='rfd3' requires rfd3 inputs"):
+                dispatcher.call_tool(
+                    "pipeline.run",
+                    {
+                        "target_fasta": ">q1\nACDEFGHIK\n",
+                        "stop_after": "rfd3",
+                        "dry_run": True,
+                    },
+                )
+
     def test_auto_retry_does_not_retry_cancelled_error(self) -> None:
         req = PipelineRequest(target_fasta=">q1\nACDE\n", target_pdb="", dry_run=False)
 
@@ -172,6 +234,30 @@ class TestTools(unittest.TestCase):
         self.assertEqual(req.bioemu_max_return_structures, 12)
         self.assertEqual(req.bioemu_base_seed, 7)
         self.assertEqual(req.bioemu_env, {"BIOEMU_COLABFOLD_DIR": "/runpod-volume/bioemu/colabfold"})
+
+    def test_pipeline_run_bioemu_stop_dry_run_without_target_pdb(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, bioemu=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.run",
+                {
+                    "target_fasta": fasta,
+                    "bioemu_use": True,
+                    "stop_after": "bioemu",
+                    "bioemu_num_samples": 2,
+                    "bioemu_max_return_structures": 2,
+                    "dry_run": True,
+                },
+            )
+            run_id = str(out.get("run_id") or "")
+            self.assertTrue(run_id)
+
+            listing = dispatcher.call_tool("pipeline.list_artifacts", {"run_id": run_id, "limit": 200})
+            artifacts = listing.get("artifacts") or []
+            paths = {str(a.get("path")) for a in artifacts if isinstance(a, dict)}
+            self.assertIn("bioemu/sample_pdbs.json", paths)
 
     def test_pipeline_af2_predict_dry_run(self) -> None:
         fasta = ">s1\nACDEFGHIK\n"
@@ -316,5 +402,16 @@ class TestTools(unittest.TestCase):
             )
             routed = out.get("routed_request") or {}
             self.assertEqual(routed.get("rfd3_contig"), "A1-2")
+
+    def test_pipeline_plan_from_prompt_enables_bioemu(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.plan_from_prompt",
+                {"prompt": "run bioemu backbone sampling"},
+            )
+            routed = out.get("routed_request") or {}
+            self.assertTrue(bool(routed.get("bioemu_use")))
 if __name__ == "__main__":
     unittest.main()

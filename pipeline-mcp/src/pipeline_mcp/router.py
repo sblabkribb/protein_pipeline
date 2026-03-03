@@ -37,6 +37,7 @@ _PROMPT_BOOL_KEYS = {
     "mmseqs_use_gpu",
     "rfd3_use_ensemble",
     "surface_only",
+    "bioemu_use",
 }
 _PROMPT_INT_KEYS = {
     "num_seq_per_tier",
@@ -48,6 +49,10 @@ _PROMPT_INT_KEYS = {
     "rfd3_design_index",
     "rfd3_max_return_designs",
     "rfd3_partial_t",
+    "bioemu_num_samples",
+    "bioemu_batch_size_100",
+    "bioemu_base_seed",
+    "bioemu_max_return_structures",
     "conservation_cluster_cov_mode",
     "conservation_cluster_kmer_per_seq",
 }
@@ -80,6 +85,7 @@ _PROMPT_DICT_KEYS = {
     "rfd3_env",
     "rfd3_inputs",
     "rfd3_input_files",
+    "bioemu_env",
 }
 
 _PROMPT_ALLOWED_KEYS = (
@@ -96,6 +102,8 @@ _PROMPT_ALLOWED_KEYS = (
         "rfd3_spec_name",
         "rfd3_select_unfixed_sequence",
         "rfd3_cli_args",
+        "bioemu_sequence",
+        "bioemu_model_name",
         "diffdock_ligand_smiles",
         "diffdock_ligand_sdf",
         "diffdock_config",
@@ -252,6 +260,10 @@ def route_prompt_with_errors(prompt: str) -> tuple[dict[str, object], list[str]]
     if any(w in p for w in _STOP_WORDS):
         if "msa" in p or "mmseqs" in p:
             stop_after = "msa"
+        elif "rfd3" in p or "rfdiff" in p or "diffusion" in p:
+            stop_after = "rfd3"
+        elif "bioemu" in p:
+            stop_after = "bioemu"
         elif "design" in p or "proteinmpnn" in p:
             stop_after = "design"
         elif "soluprot" in p:
@@ -392,6 +404,7 @@ def plan_from_prompt(
             routed["rfd3_contig"] = _normalize_contig(m.group(1))
 
     wants_rfd3 = bool(re.search(r"rfd3|rfdiff|diffusion", p))
+    wants_bioemu = bool(re.search(r"bioemu", p))
     wants_diffdock = bool(re.search(r"diffdock|ligand|substrate", p))
 
     has_target = bool(str(target_fasta or "").strip() or str(target_pdb or "").strip())
@@ -432,6 +445,9 @@ def plan_from_prompt(
                 }
             )
 
+    if wants_bioemu and "bioemu_use" not in routed:
+        routed["bioemu_use"] = True
+
     if wants_diffdock and not has_diffdock_ligand:
         missing.append("diffdock_ligand")
         questions.append(
@@ -444,13 +460,13 @@ def plan_from_prompt(
 
     if "stop_after" not in routed:
         questions.append(
-            {
-                "id": "stop_after",
-                "question": "Where to stop? (msa/design/soluprot/af2/novelty)",
-                "required": False,
-                "default": "design",
-            }
-        )
+                {
+                    "id": "stop_after",
+                    "question": "Where to stop? (msa/rfd3/bioemu/design/soluprot/af2/novelty)",
+                    "required": False,
+                    "default": "design",
+                }
+            )
 
     if "design" in p and "design_chains" not in routed and has_target:
         questions.append(

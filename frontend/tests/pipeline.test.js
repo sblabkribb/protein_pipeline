@@ -30,6 +30,7 @@ test("stageFromPath inference", () => {
   assert.equal(stageFromPath("msa/a3m.gz"), "msa");
   assert.equal(stageFromPath("designs/seqs.fasta"), "design");
   assert.equal(stageFromPath("af2/ranking_debug.json"), "af2");
+  assert.equal(stageFromPath("bioemu/sample_pdbs.json"), "bioemu");
 });
 
 test("buildRunArguments merges routed and answers", () => {

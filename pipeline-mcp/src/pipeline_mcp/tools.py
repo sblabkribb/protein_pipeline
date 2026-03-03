@@ -1869,7 +1869,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     diffdock_extra_args = _as_text(args.get("diffdock_extra_args")).strip() or None
     diffdock_cuda_visible_devices = _as_text(args.get("diffdock_cuda_visible_devices")).strip() or None
 
-    has_rfd3 = bool(rfd3_inputs_text or rfd3_inputs or rfd3_contig or rfd3_input_files)
+    has_rfd3 = bool(rfd3_inputs_text or rfd3_inputs or rfd3_input_pdb or rfd3_contig or rfd3_input_files)
     if strict_target and not target_fasta.strip() and not target_pdb.strip() and not has_rfd3:
         raise ValueError("One of target_fasta or target_pdb or rfd3 inputs is required")
 
@@ -2013,6 +2013,15 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "rfd3_use_ensemble": {"type": "boolean"},
             "rfd3_max_return_designs": {"type": "integer"},
             "rfd3_partial_t": {"type": "integer"},
+            "bioemu_use": {"type": "boolean"},
+            "bioemu_sequence": {"type": "string"},
+            "bioemu_num_samples": {"type": "integer"},
+            "bioemu_batch_size_100": {"type": "integer"},
+            "bioemu_model_name": {"type": "string"},
+            "bioemu_filter_samples": {"type": "boolean"},
+            "bioemu_base_seed": {"type": "integer"},
+            "bioemu_max_return_structures": {"type": "integer"},
+            "bioemu_env": {"type": "object", "additionalProperties": {"type": "string"}},
             "diffdock_ligand_smiles": {"type": "string"},
             "diffdock_ligand_sdf": {"type": "string"},
             "diffdock_config": {"type": "string"},
@@ -2079,6 +2088,7 @@ def _pipeline_run_schema() -> dict[str, Any]:
         "anyOf": [
             {"required": ["target_fasta"]},
             {"required": ["target_pdb"]},
+            {"required": ["bioemu_sequence"]},
             {"required": ["rfd3_inputs"]},
             {"required": ["rfd3_inputs_text"]},
             {"required": ["rfd3_contig"]},
