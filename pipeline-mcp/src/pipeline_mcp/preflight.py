@@ -10,6 +10,7 @@ from .bio.pdb import sequence_by_chain
 from .models import PipelineRequest
 from .pipeline import PipelineRunner
 from .pipeline import _clean_protein_sequence
+from .pipeline import _bioemu_active
 from .pipeline import _diffdock_requested
 from .pipeline import _resolve_af2_model_preset
 from .pipeline import _rfd3_active
@@ -17,7 +18,7 @@ from .pipeline import _split_multichain_sequence
 from .pipeline import _validate_af2_chain_sequences
 
 
-_STAGE_ORDER = ["msa", "rfd3", "design", "soluprot", "af2", "novelty"]
+_STAGE_ORDER = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"]
 
 
 def _needs_stage(stop_after: str | None, stage: str) -> bool:
@@ -55,9 +56,17 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner) -> dict[
     target_pdb = str(request.target_pdb or "").strip()
     has_target = bool(target_fasta or target_pdb)
     rfd3_active = _rfd3_active(request)
+    bioemu_active = _bioemu_active(request)
     diffdock_requested = _diffdock_requested(request)
+    bioemu_sequence = _clean_protein_sequence(str(request.bioemu_sequence or ""))
+    has_bioemu_sequence = bool(bioemu_sequence)
 
-    if not has_target and not rfd3_active:
+    if stop_after == "bioemu" and not bioemu_active:
+        errors.append("stop_after='bioemu' requires bioemu_use=true.")
+    if stop_after == "rfd3" and not rfd3_active:
+        errors.append("stop_after='rfd3' requires rfd3 inputs (for example rfd3_input_pdb + rfd3_contig).")
+
+    if not has_target and not rfd3_active and not has_bioemu_sequence:
         errors.append("One of target_fasta or target_pdb (or rfd3 inputs) is required.")
         required_inputs.append(
             {
@@ -111,10 +120,16 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner) -> dict[
         except Exception as exc:
             warnings.append(f"ligand mask check failed: {exc}")
 
+    stops_before_design = (
+        stop_after == "msa"
+        or (stop_after == "rfd3" and rfd3_active)
+        or (stop_after == "bioemu" and bioemu_active)
+    )
+
     if (
         (not target_pdb)
         and (not request.dry_run)
-        and (stop_after != "msa")
+        and (not stops_before_design)
         and (not _has_fixed_positions_extra(request))
         and (not (request.ligand_atom_chains or []))
         and (not rfd3_active)
@@ -165,6 +180,9 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner) -> dict[
 
     if rfd3_active and runner.rfd3 is None:
         _warn_or_error("RFD3 requested but endpoint is not configured (set RFD3_ENDPOINT_ID).")
+
+    if _needs_stage(stop_after, "bioemu") and bioemu_active and runner.bioemu is None:
+        _warn_or_error("BioEmu requested but endpoint is not configured (set BIOEMU_ENDPOINT_ID).")
 
     if diffdock_requested and runner.diffdock is None:
         _warn_or_error("DiffDock requested but endpoint is not configured (set DIFFDOCK_ENDPOINT_ID).")

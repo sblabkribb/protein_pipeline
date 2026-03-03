@@ -35,6 +35,7 @@ export function stageFromPath(path) {
   if (p.includes("agent_panel")) return "agent";
   if (p.includes("/wt/") || p.startsWith("wt/") || p.includes("wt/")) return "wt";
   if (p.includes("rfd3")) return "rfd3";
+  if (p.includes("bioemu")) return "bioemu";
   if (p.includes("diffdock") || p.includes("ligand")) return "diffdock";
   if (p.includes("af2") || p.includes("alphafold")) return "af2";
   if (p.includes("soluprot")) return "soluprot";

@@ -127,6 +127,7 @@ def _rfd3_active(request: PipelineRequest) -> bool:
     return bool(
         (request.rfd3_inputs_text or "").strip()
         or request.rfd3_inputs
+        or (request.rfd3_input_pdb or "").strip()
         or request.rfd3_contig
         or request.rfd3_input_files
     )
@@ -722,6 +723,17 @@ class PipelineRunner:
 
         try:
             _ensure_not_cancelled(stage="init")
+            normalized_stop_after = str(request.stop_after or "").strip().lower()
+            if normalized_stop_after == "rfd3" and not _rfd3_active(request):
+                raise PipelineInputRequired(
+                    stage="rfd3",
+                    message="stop_after='rfd3' requires rfd3 inputs (for example rfd3_input_pdb + rfd3_contig).",
+                )
+            if normalized_stop_after == "bioemu" and not _bioemu_active(request):
+                raise PipelineInputRequired(
+                    stage="bioemu",
+                    message="stop_after='bioemu' requires bioemu_use=true.",
+                )
             msa_dir = _ensure_dir(paths.root / "msa")
             tiers_dir = _ensure_dir(paths.root / "tiers")
 
@@ -1020,11 +1032,16 @@ class PipelineRunner:
                     if isinstance(positions, list) and positions:
                         has_fixed_positions_extra = True
                         break
+            stops_before_design = (
+                normalized_stop_after == "msa"
+                or (normalized_stop_after == "rfd3" and _rfd3_active(request))
+                or (normalized_stop_after == "bioemu" and _bioemu_active(request))
+            )
 
             if (
                 (not had_target_pdb_input)
                 and (not request.dry_run)
-                and (request.stop_after != "msa")
+                and (not stops_before_design)
                 and (not has_fixed_positions_extra)
                 and (not (request.ligand_atom_chains or []))
                 and (not _rfd3_active(request))
@@ -1418,6 +1435,7 @@ class PipelineRunner:
                         msa_tsv_path=msa_tsv_path,
                         conservation_path=conservation_path,
                         ligand_mask_path=None,
+                        surface_mask_path=None,
                         tiers=[],
                         errors=[],
                     )

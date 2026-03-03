@@ -114,6 +114,8 @@ const state = {
   reportModalText: "",
   reportModalMode: "rendered",
   reportModalFilename: "report.md",
+  showBioemuCountOptions: false,
+  showRfd3CountOptions: false,
 };
 
 if (state.apiBase && state.apiBase !== normalizeApiBase(savedApiBase)) {
@@ -414,13 +416,21 @@ const I18N = {
     "question.targetInput.label": "Target Input",
     "question.targetInput.help": "Provide target_pdb or target_fasta (raw text).",
     "question.stopAfter.label": "Stop After",
-    "question.stopAfter.help": "Where to stop? (msa/design/soluprot/af2/novelty)",
+    "question.stopAfter.help": "Where to stop? (msa/rfd3/bioemu/design/soluprot/af2/novelty)",
     "question.designChains.label": "Design Chains",
     "question.designChains.help": "Which chains to design? (default: all)",
     "question.wtCompare.label": "WT Compare",
     "question.wtCompare.help": "Compute WT baseline (SoluProt/AF2) and compare in report.",
     "question.maskConsensusApply.label": "Apply Mask Consensus",
     "question.maskConsensusApply.help": "Apply expert mask consensus to ProteinMPNN (optional).",
+    "question.bioemuUse.label": "Enable BioEmu",
+    "question.bioemuUse.help": "Run the BioEmu backbone sampling stage.",
+    "question.bioemuNumSamples.label": "BioEmu Samples",
+    "question.bioemuNumSamples.help": "Number of BioEmu samples to generate.",
+    "question.bioemuMaxReturn.label": "BioEmu Return Count",
+    "question.bioemuMaxReturn.help": "Maximum number of BioEmu structures to keep.",
+    "question.rfd3MaxReturn.label": "RFD3 Return Count",
+    "question.rfd3MaxReturn.help": "Maximum number of RFD3 backbone designs to keep.",
     "question.confirmRun.label": "Confirm Run",
     "question.confirmRun.help": "Review the parsed settings and confirm to enable execution.",
     "question.fixedPositionsExtra.label": "Fixed Positions (Extra)",
@@ -461,6 +471,16 @@ const I18N = {
     "choice.wtCompare.off": "Disable WT compare",
     "choice.maskConsensusApply.on": "Apply consensus",
     "choice.maskConsensusApply.off": "Do not apply",
+    "choice.bioemuUse.on": "Enable BioEmu",
+    "choice.bioemuUse.off": "Disable BioEmu",
+    "advanced.bioemuCounts.title": "BioEmu Count Options",
+    "advanced.bioemuCounts.help": "These values are optional and hidden by default.",
+    "advanced.bioemuCounts.show": "Show BioEmu Count Options",
+    "advanced.bioemuCounts.hide": "Hide BioEmu Count Options",
+    "advanced.rfd3Counts.title": "RFD3 Count Options",
+    "advanced.rfd3Counts.help": "These values are optional and hidden by default.",
+    "advanced.rfd3Counts.show": "Show RFD3 Count Options",
+    "advanced.rfd3Counts.hide": "Hide RFD3 Count Options",
     "choice.confirmRun.yes": "Yes, run",
     "choice.confirmRun.no": "Review first",
     "hint.none": "No missing inputs. You can run now.",
@@ -470,6 +490,7 @@ const I18N = {
     "run.reset": "Inputs reset. Reconfirm selections and attachments.",
     "runmode.pipeline": "Full Pipeline",
     "runmode.rfd3": "RFD3 (Backbone)",
+    "runmode.bioemu": "BioEmu (Backbone)",
     "runmode.msa": "MSA (MMseqs2)",
     "runmode.design": "ProteinMPNN",
     "runmode.soluprot": "SoluProt",
@@ -477,11 +498,14 @@ const I18N = {
     "runmode.diffdock": "DiffDock",
     "stop.full": "Full (Novelty)",
     "stage.msa": "MSA",
+    "stage.rfd3": "RFD3",
+    "stage.bioemu": "BioEmu",
     "stage.design": "Design",
     "stage.soluprot": "SoluProt",
     "stage.af2": "AlphaFold2",
     "run.label.pipeline": "Run Pipeline",
     "run.label.rfd3": "Run RFD3",
+    "run.label.bioemu": "Run BioEmu",
     "run.label.msa": "Run MSA",
     "run.label.design": "Run ProteinMPNN",
     "run.label.soluprot": "Run SoluProt",
@@ -489,6 +513,7 @@ const I18N = {
     "run.label.diffdock": "Run DiffDock",
     "mode.pipeline": "pipeline",
     "mode.rfd3": "RFD3",
+    "mode.bioemu": "BioEmu",
     "mode.msa": "MSA",
     "mode.design": "ProteinMPNN",
     "mode.soluprot": "SoluProt",
@@ -759,13 +784,21 @@ const I18N = {
     "question.targetInput.label": "타깃 입력",
     "question.targetInput.help": "target_pdb 또는 target_fasta 원문을 입력하세요.",
     "question.stopAfter.label": "중단 단계",
-    "question.stopAfter.help": "어디까지 실행할까요? (msa/design/soluprot/af2/novelty)",
+    "question.stopAfter.help": "어디까지 실행할까요? (msa/rfd3/bioemu/design/soluprot/af2/novelty)",
     "question.designChains.label": "디자인 체인",
     "question.designChains.help": "디자인할 체인을 선택하세요. (기본: 전체)",
     "question.wtCompare.label": "WT 비교",
     "question.wtCompare.help": "WT 기준(SoluProt/AF2)을 계산해 리포트에 비교합니다.",
     "question.maskConsensusApply.label": "합의 마스킹 적용",
     "question.maskConsensusApply.help": "전문가 합의 마스킹을 ProteinMPNN에 적용합니다.",
+    "question.bioemuUse.label": "BioEmu 사용",
+    "question.bioemuUse.help": "BioEmu backbone 샘플링 단계를 실행합니다.",
+    "question.bioemuNumSamples.label": "BioEmu 샘플 수",
+    "question.bioemuNumSamples.help": "생성할 BioEmu 샘플 개수입니다.",
+    "question.bioemuMaxReturn.label": "BioEmu 반환 개수",
+    "question.bioemuMaxReturn.help": "보존할 BioEmu 구조 최대 개수입니다.",
+    "question.rfd3MaxReturn.label": "RFD3 반환 개수",
+    "question.rfd3MaxReturn.help": "보존할 RFD3 백본 디자인 최대 개수입니다.",
     "question.confirmRun.label": "실행 확인",
     "question.confirmRun.help": "해석된 설정을 확인한 뒤 실행을 승인하세요.",
     "question.fixedPositionsExtra.label": "고정 위치 추가",
@@ -806,6 +839,16 @@ const I18N = {
     "choice.wtCompare.off": "WT 비교 사용 안 함",
     "choice.maskConsensusApply.on": "합의 적용",
     "choice.maskConsensusApply.off": "적용 안 함",
+    "choice.bioemuUse.on": "BioEmu 사용",
+    "choice.bioemuUse.off": "BioEmu 사용 안 함",
+    "advanced.bioemuCounts.title": "BioEmu 개수 옵션",
+    "advanced.bioemuCounts.help": "선택 입력이며 기본으로 숨김입니다.",
+    "advanced.bioemuCounts.show": "BioEmu 개수 옵션 보기",
+    "advanced.bioemuCounts.hide": "BioEmu 개수 옵션 숨기기",
+    "advanced.rfd3Counts.title": "RFD3 개수 옵션",
+    "advanced.rfd3Counts.help": "선택 입력이며 기본으로 숨김입니다.",
+    "advanced.rfd3Counts.show": "RFD3 개수 옵션 보기",
+    "advanced.rfd3Counts.hide": "RFD3 개수 옵션 숨기기",
     "choice.confirmRun.yes": "예, 실행",
     "choice.confirmRun.no": "검토 후",
     "hint.none": "누락된 입력이 없습니다. 지금 실행할 수 있습니다.",
@@ -815,6 +858,7 @@ const I18N = {
     "run.reset": "입력을 초기화했습니다. 선택과 첨부를 다시 확인하세요.",
     "runmode.pipeline": "전체 파이프라인",
     "runmode.rfd3": "RFD3 (Backbone)",
+    "runmode.bioemu": "BioEmu (Backbone)",
     "runmode.msa": "MSA (MMseqs2)",
     "runmode.design": "ProteinMPNN",
     "runmode.soluprot": "SoluProt",
@@ -822,11 +866,14 @@ const I18N = {
     "runmode.diffdock": "DiffDock",
     "stop.full": "전체 (Novelty)",
     "stage.msa": "MSA",
+    "stage.rfd3": "RFD3",
+    "stage.bioemu": "BioEmu",
     "stage.design": "디자인",
     "stage.soluprot": "SoluProt",
     "stage.af2": "AlphaFold2",
     "run.label.pipeline": "파이프라인 실행",
     "run.label.rfd3": "RFD3 실행",
+    "run.label.bioemu": "BioEmu 실행",
     "run.label.msa": "MSA 실행",
     "run.label.design": "ProteinMPNN 실행",
     "run.label.soluprot": "SoluProt 실행",
@@ -834,6 +881,7 @@ const I18N = {
     "run.label.diffdock": "DiffDock 실행",
     "mode.pipeline": "파이프라인",
     "mode.rfd3": "RFD3",
+    "mode.bioemu": "BioEmu",
     "mode.msa": "MSA",
     "mode.design": "ProteinMPNN",
     "mode.soluprot": "SoluProt",
@@ -955,6 +1003,7 @@ let langInitialized = false;
 const RUN_MODE_OPTIONS = [
   { labelKey: "runmode.pipeline", value: "pipeline" },
   { labelKey: "runmode.rfd3", value: "rfd3" },
+  { labelKey: "runmode.bioemu", value: "bioemu" },
   { labelKey: "runmode.msa", value: "msa" },
   { labelKey: "runmode.design", value: "design" },
   { labelKey: "runmode.soluprot", value: "soluprot" },
@@ -992,6 +1041,22 @@ const QUESTION_PRESETS = {
   mask_consensus_apply: {
     labelKey: "question.maskConsensusApply.label",
     questionKey: "question.maskConsensusApply.help",
+  },
+  bioemu_use: {
+    labelKey: "question.bioemuUse.label",
+    questionKey: "question.bioemuUse.help",
+  },
+  bioemu_num_samples: {
+    labelKey: "question.bioemuNumSamples.label",
+    questionKey: "question.bioemuNumSamples.help",
+  },
+  bioemu_max_return_structures: {
+    labelKey: "question.bioemuMaxReturn.label",
+    questionKey: "question.bioemuMaxReturn.help",
+  },
+  rfd3_max_return_designs: {
+    labelKey: "question.rfd3MaxReturn.label",
+    questionKey: "question.rfd3MaxReturn.help",
   },
   rfd3_input_pdb: {
     labelKey: "question.rfd3InputPdb.label",
@@ -1036,6 +1101,7 @@ const ANSWER_BOOL_KEYS = new Set([
   "pdb_renumber_resseq_from_1",
   "mmseqs_use_gpu",
   "rfd3_use_ensemble",
+  "bioemu_use",
   "confirm_run",
 ]);
 
@@ -1049,6 +1115,8 @@ const ANSWER_INT_KEYS = new Set([
   "rfd3_design_index",
   "rfd3_max_return_designs",
   "rfd3_partial_t",
+  "bioemu_num_samples",
+  "bioemu_max_return_structures",
   "conservation_cluster_cov_mode",
   "conservation_cluster_kmer_per_seq",
 ]);
@@ -1195,6 +1263,7 @@ const ARTIFACT_STAGE_ORDER = [
   "msa",
   "conservation",
   "rfd3",
+  "bioemu",
   "af2_target",
   "pdb_preprocess",
   "query_pdb_check",
@@ -1215,6 +1284,7 @@ const STAGE_LABELS = {
   msa: { en: "MSA", ko: "MSA" },
   conservation: { en: "Conservation", ko: "보존도" },
   rfd3: { en: "RFD3", ko: "RFD3" },
+  bioemu: { en: "BioEmu", ko: "BioEmu" },
   af2_target: { en: "AF2 Target", ko: "AF2 타깃" },
   pdb_preprocess: { en: "PDB Preprocess", ko: "PDB 전처리" },
   query_pdb_check: { en: "Query/PDB Check", ko: "Query/PDB 검증" },
@@ -1473,6 +1543,27 @@ function buildManualPlan(mode) {
         default: "novelty",
       },
       {
+        id: "bioemu_use",
+        labelKey: "question.bioemuUse.label",
+        questionKey: "question.bioemuUse.help",
+        required: false,
+        default: true,
+      },
+      {
+        id: "bioemu_num_samples",
+        labelKey: "question.bioemuNumSamples.label",
+        questionKey: "question.bioemuNumSamples.help",
+        required: false,
+        default: 50,
+      },
+      {
+        id: "bioemu_max_return_structures",
+        labelKey: "question.bioemuMaxReturn.label",
+        questionKey: "question.bioemuMaxReturn.help",
+        required: false,
+        default: 50,
+      },
+      {
         id: "design_chains",
         labelKey: "question.designChains.label",
         questionKey: "question.designChains.help",
@@ -1512,6 +1603,13 @@ function buildManualPlan(mode) {
         required: false,
       },
       {
+        id: "rfd3_max_return_designs",
+        labelKey: "question.rfd3MaxReturn.label",
+        questionKey: "question.rfd3MaxReturn.help",
+        required: false,
+        default: 50,
+      },
+      {
         id: "diffdock_ligand",
         labelKey: "question.diffdockLigand.label",
         questionKey: "question.diffdockLigand.help",
@@ -1535,11 +1633,50 @@ function buildManualPlan(mode) {
         required: true,
       },
       {
+        id: "rfd3_max_return_designs",
+        labelKey: "question.rfd3MaxReturn.label",
+        questionKey: "question.rfd3MaxReturn.help",
+        required: false,
+        default: 50,
+      },
+      {
         id: "pdb_strip_nonpositive_resseq",
         labelKey: "question.stripNonpositive.label",
         questionKey: "question.stripNonpositive.help",
         required: false,
         default: true,
+      }
+    );
+  }
+
+  if (mode === "bioemu") {
+    questions.push(
+      {
+        id: "target_input",
+        labelKey: "question.targetInput.label",
+        questionKey: "question.targetInput.help",
+        required: true,
+      },
+      {
+        id: "bioemu_use",
+        labelKey: "question.bioemuUse.label",
+        questionKey: "question.bioemuUse.help",
+        required: false,
+        default: true,
+      },
+      {
+        id: "bioemu_num_samples",
+        labelKey: "question.bioemuNumSamples.label",
+        questionKey: "question.bioemuNumSamples.help",
+        required: false,
+        default: 50,
+      },
+      {
+        id: "bioemu_max_return_structures",
+        labelKey: "question.bioemuMaxReturn.label",
+        questionKey: "question.bioemuMaxReturn.help",
+        required: false,
+        default: 50,
       }
     );
   }
@@ -1644,6 +1781,7 @@ function updateRunLabel() {
   const labels = {
     pipeline: "run.label.pipeline",
     rfd3: "run.label.rfd3",
+    bioemu: "run.label.bioemu",
     msa: "run.label.msa",
     design: "run.label.design",
     soluprot: "run.label.soluprot",
@@ -1657,6 +1795,8 @@ function updateRunLabel() {
 function setRunMode(mode, { render = true } = {}) {
   const normalized = RUN_MODE_OPTIONS.find((opt) => opt.value === mode)?.value || "pipeline";
   state.runMode = normalized;
+  state.showBioemuCountOptions = false;
+  state.showRfd3CountOptions = false;
   if (normalized === "diffdock") {
     state.answers.diffdock_use = "use";
   }
@@ -2274,6 +2414,7 @@ function renderQuestions(questions) {
     "pdb_strip_nonpositive_resseq",
     "wt_compare",
     "mask_consensus_apply",
+    "bioemu_use",
     "confirm_run",
   ]);
 
@@ -2324,6 +2465,8 @@ function renderQuestions(questions) {
         card,
         [
           { labelKey: "stage.msa", value: "msa" },
+          { labelKey: "stage.rfd3", value: "rfd3" },
+          { labelKey: "stage.bioemu", value: "bioemu" },
           { labelKey: "stage.design", value: "design" },
           { labelKey: "stage.soluprot", value: "soluprot" },
           { labelKey: "stage.af2", value: "af2" },
@@ -2332,6 +2475,9 @@ function renderQuestions(questions) {
         current,
         (value) => {
           state.answers.stop_after = value;
+          if (value === "bioemu") {
+            state.answers.bioemu_use = true;
+          }
           updateRunEligibility(normalizedQuestions);
         }
       );
@@ -2468,6 +2614,31 @@ function renderQuestions(questions) {
       );
     }
 
+    if (q.id === "bioemu_use") {
+      let current = state.answers.bioemu_use;
+      if (typeof current !== "boolean") {
+        const routedDefault = state.plan?.routed_request?.bioemu_use;
+        if (typeof routedDefault === "boolean") {
+          current = routedDefault;
+        } else {
+          current = q.default !== undefined ? Boolean(q.default) : false;
+        }
+        state.answers.bioemu_use = current;
+      }
+      renderChoiceButtons(
+        card,
+        [
+          { labelKey: "choice.bioemuUse.on", value: true },
+          { labelKey: "choice.bioemuUse.off", value: false },
+        ],
+        current,
+        (value) => {
+          state.answers.bioemu_use = value;
+          updateRunEligibility(normalizedQuestions);
+        }
+      );
+    }
+
     if (q.id === "confirm_run") {
       let current = state.answers.confirm_run;
       if (typeof current !== "boolean") {
@@ -2526,7 +2697,76 @@ function renderQuestions(questions) {
     el.questionStack.appendChild(card);
   });
 
+  const bioemuCountQuestionIds = new Set(["bioemu_num_samples", "bioemu_max_return_structures"]);
+  const rfd3CountQuestionIds = new Set(["rfd3_max_return_designs"]);
+  const bioemuCountRelevant =
+    state.runMode === "bioemu" || state.answers.bioemu_use === true || state.answers.stop_after === "bioemu";
+  const rfd3CountRelevant =
+    state.runMode === "rfd3" || state.answers.stop_after === "rfd3" || !isAnswerMissing(state.answers.rfd3_input_pdb);
+  if (!bioemuCountRelevant) state.showBioemuCountOptions = false;
+  if (!rfd3CountRelevant) state.showRfd3CountOptions = false;
+
+  const appendCountToggleCard = ({ titleKey, helpKey, showKey, hideKey, enabled, onToggle }) => {
+    const card = document.createElement("div");
+    card.className = "question-card";
+
+    const title = document.createElement("div");
+    title.className = "question-title";
+    title.textContent = t(titleKey);
+
+    const help = document.createElement("div");
+    help.className = "question-help";
+    help.textContent = t(helpKey);
+
+    const toggleBtn = document.createElement("button");
+    toggleBtn.type = "button";
+    toggleBtn.className = "ghost";
+    toggleBtn.textContent = enabled ? t(hideKey) : t(showKey);
+    toggleBtn.addEventListener("click", () => {
+      onToggle(!enabled);
+      renderQuestions(state.plan?.questions || []);
+    });
+
+    card.appendChild(title);
+    card.appendChild(help);
+    card.appendChild(toggleBtn);
+    el.questionStack.appendChild(card);
+  };
+
+  const hasBioemuCountQuestions =
+    bioemuCountRelevant && textQuestions.some((q) => bioemuCountQuestionIds.has(q.id));
+  if (hasBioemuCountQuestions) {
+    appendCountToggleCard({
+      titleKey: "advanced.bioemuCounts.title",
+      helpKey: "advanced.bioemuCounts.help",
+      showKey: "advanced.bioemuCounts.show",
+      hideKey: "advanced.bioemuCounts.hide",
+      enabled: state.showBioemuCountOptions,
+      onToggle: (next) => {
+        state.showBioemuCountOptions = Boolean(next);
+      },
+    });
+  }
+
+  const hasRfd3CountQuestions =
+    rfd3CountRelevant && textQuestions.some((q) => rfd3CountQuestionIds.has(q.id));
+  if (hasRfd3CountQuestions) {
+    appendCountToggleCard({
+      titleKey: "advanced.rfd3Counts.title",
+      helpKey: "advanced.rfd3Counts.help",
+      showKey: "advanced.rfd3Counts.show",
+      hideKey: "advanced.rfd3Counts.hide",
+      enabled: state.showRfd3CountOptions,
+      onToggle: (next) => {
+        state.showRfd3CountOptions = Boolean(next);
+      },
+    });
+  }
+
   textQuestions.forEach((q) => {
+    if (bioemuCountQuestionIds.has(q.id) && (!bioemuCountRelevant || !state.showBioemuCountOptions)) return;
+    if (rfd3CountQuestionIds.has(q.id) && (!rfd3CountRelevant || !state.showRfd3CountOptions)) return;
+
     const card = document.createElement("div");
     card.className = "question-card" + (q.required ? " required" : "");
 
@@ -2791,6 +3031,13 @@ function updateRunEligibility(questions) {
     } else {
       requiredIds.delete("diffdock_ligand");
     }
+    if (state.answers.stop_after === "bioemu") {
+      requiredIds.add("bioemu_use");
+    }
+    if (state.answers.stop_after === "rfd3") {
+      requiredIds.add("rfd3_input_pdb");
+      requiredIds.add("rfd3_contig");
+    }
   }
 
   if (state.runMode === "rfd3") {
@@ -2820,8 +3067,14 @@ function updateRunEligibility(questions) {
     requiredIds.add("diffdock_ligand");
   }
 
+  if (state.runMode === "bioemu") {
+    requiredIds.add("target_input");
+    requiredIds.add("bioemu_use");
+  }
+
   const missing = Array.from(requiredIds).filter((id) => {
     if (id === "confirm_run") return state.answers.confirm_run !== true;
+    if (id === "bioemu_use") return state.answers.bioemu_use !== true;
     return isAnswerMissing(state.answers[id]);
   });
   const runBusy = state.runSubmitting || String(state.currentRunState || "").toLowerCase() === "running";
@@ -2879,15 +3132,26 @@ function filterAnswersForMode(mode, answers) {
       "target_pdb",
       "rfd3_input_pdb",
       "rfd3_contig",
+      "rfd3_max_return_designs",
       "diffdock_ligand_smiles",
       "diffdock_ligand_sdf",
       "design_chains",
       "pdb_strip_nonpositive_resseq",
       "wt_compare",
       "mask_consensus_apply",
+      "bioemu_use",
+      "bioemu_num_samples",
+      "bioemu_max_return_structures",
       "stop_after",
     ],
-    rfd3: ["rfd3_input_pdb", "rfd3_contig", "pdb_strip_nonpositive_resseq"],
+    bioemu: [
+      "target_fasta",
+      "target_pdb",
+      "bioemu_use",
+      "bioemu_num_samples",
+      "bioemu_max_return_structures",
+    ],
+    rfd3: ["rfd3_input_pdb", "rfd3_contig", "rfd3_max_return_designs", "pdb_strip_nonpositive_resseq"],
     msa: ["target_fasta", "target_pdb", "pdb_strip_nonpositive_resseq"],
     design: ["target_fasta", "target_pdb", "design_chains", "pdb_strip_nonpositive_resseq"],
     soluprot: ["target_fasta", "target_pdb", "design_chains", "pdb_strip_nonpositive_resseq"],
@@ -2906,6 +3170,7 @@ function filterAnswersForMode(mode, answers) {
 
 function buildRoutedForMode(mode) {
   if (mode === "rfd3") return { stop_after: "rfd3" };
+  if (mode === "bioemu") return { stop_after: "bioemu", bioemu_use: true };
   if (mode === "msa") return { stop_after: "msa" };
   if (mode === "design") return { stop_after: "design" };
   if (mode === "soluprot") return { stop_after: "soluprot" };
@@ -2973,7 +3238,7 @@ function buildPromptPlan(plan, preflight, prompt) {
 async function runPreflight({ announce = true } = {}) {
   const prompt = el.promptInput.value.trim();
   const mode = state.runMode || "pipeline";
-  const preflightModes = new Set(["pipeline", "rfd3", "msa", "design", "soluprot"]);
+  const preflightModes = new Set(["pipeline", "rfd3", "bioemu", "msa", "design", "soluprot"]);
   if (!preflightModes.has(mode)) {
     if (announce) {
       setMessage(t("preflight.unavailable", { mode: t(`mode.${mode}`) || mode }), "ai");
@@ -3097,7 +3362,7 @@ async function runPipeline() {
   let args = {};
   let toolName = "pipeline.run";
 
-  if (["pipeline", "rfd3", "msa", "design", "soluprot"].includes(mode)) {
+  if (["pipeline", "rfd3", "bioemu", "msa", "design", "soluprot"].includes(mode)) {
     const pre = await runPreflight({ announce: true });
     if (!pre.ok) {
       return;
@@ -3109,7 +3374,7 @@ async function runPipeline() {
     return;
   }
 
-  if (["pipeline", "rfd3", "msa", "design", "soluprot"].includes(mode)) {
+  if (["pipeline", "rfd3", "bioemu", "msa", "design", "soluprot"].includes(mode)) {
     args = buildRunArguments({
       prompt,
       routed: mergeRoutedWithMode(mode, state.plan?.routed_request || {}),
