@@ -1,13 +1,17 @@
 # protein_pipeline
 
-MCP-enabled protein design pipeline with optional RFD3 (RFDiffusion3) and DiffDock stages.
+MCP-enabled protein design pipeline with optional RFD3 (RFDiffusion3), BioEmu, and DiffDock stages.
 
 ## What it does
-- Optional backbone generation with RFD3
+- Optional backbone generation with RFD3 and/or BioEmu
 - MSA + conservation
 - Optional DiffDock for ligand placement (mask only)
 - ProteinMPNN design (tiers)
 - Optional SoluProt / AlphaFold2 / novelty search
+
+## RunPod endpoint env vars
+- Required: `RUNPOD_API_KEY`, `MMSEQS_ENDPOINT_ID`, `PROTEINMPNN_ENDPOINT_ID`
+- Optional: `RFD3_ENDPOINT_ID`, `BIOEMU_ENDPOINT_ID`, `DIFFDOCK_ENDPOINT_ID`, `ALPHAFOLD2_ENDPOINT_ID`
 
 ## MCP tools
 - `pipeline.plan_from_prompt`: Parse a natural-language prompt and return missing inputs/questions (no execution)

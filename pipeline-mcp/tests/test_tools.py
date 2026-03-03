@@ -6,6 +6,7 @@ from pathlib import Path
 
 from pipeline_mcp.pipeline import PipelineRunner
 from pipeline_mcp.tools import ToolDispatcher
+from pipeline_mcp.tools import pipeline_request_from_args
 
 
 @contextmanager
@@ -107,6 +108,25 @@ class TestTools(unittest.TestCase):
             )
             self.assertIn("run_id", out)
             self.assertIn("output_dir", out)
+
+    def test_pipeline_request_parses_bioemu_args(self) -> None:
+        req = pipeline_request_from_args(
+            {
+                "target_fasta": ">q1\nACDEFGHIK\n",
+                "bioemu_use": True,
+                "bioemu_num_samples": 25,
+                "bioemu_model_name": "bioemu-v1.1",
+                "bioemu_max_return_structures": 12,
+                "bioemu_base_seed": 7,
+                "bioemu_env": {"BIOEMU_COLABFOLD_DIR": "/runpod-volume/bioemu/colabfold"},
+            }
+        )
+        self.assertTrue(req.bioemu_use)
+        self.assertEqual(req.bioemu_num_samples, 25)
+        self.assertEqual(req.bioemu_model_name, "bioemu-v1.1")
+        self.assertEqual(req.bioemu_max_return_structures, 12)
+        self.assertEqual(req.bioemu_base_seed, 7)
+        self.assertEqual(req.bioemu_env, {"BIOEMU_COLABFOLD_DIR": "/runpod-volume/bioemu/colabfold"})
 
     def test_pipeline_artifact_tools(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"

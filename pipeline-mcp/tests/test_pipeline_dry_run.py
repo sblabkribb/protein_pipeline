@@ -241,6 +241,36 @@ class TestPipelineDryRun(unittest.TestCase):
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("partial_t"), 5)
 
+    def test_pipeline_dry_run_merges_rfd3_and_bioemu_backbones(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            req = PipelineRequest(
+                target_fasta="",
+                target_pdb="",
+                dry_run=True,
+                rfd3_contig="A1-2",
+                rfd3_input_pdb=pdb,
+                rfd3_use_ensemble=True,
+                rfd3_max_return_designs=2,
+                bioemu_use=True,
+                bioemu_num_samples=3,
+                bioemu_max_return_structures=3,
+                num_seq_per_tier=1,
+                conservation_tiers=[0.3],
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            payload = json.loads((out / "backbones.json").read_text(encoding="utf-8"))
+            backbones = payload.get("backbones") or []
+            sources = [str(item.get("source") or "") for item in backbones if isinstance(item, dict)]
+            self.assertEqual(sources.count("rfd3"), 2)
+            self.assertEqual(sources.count("bioemu"), 3)
+
     def test_pipeline_includes_fixed_positions_extra(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         pdb = (
