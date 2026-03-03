@@ -19,6 +19,17 @@
   - diffdock_ligand_smiles 또는 diffdock_ligand_sdf
   - stop_after
 
+### 프롬프트 고급 파라미터 (key=value)
+- 프롬프트에 `key=value` 형태로 파라미터를 직접 지정할 수 있습니다.
+- 예시:
+  - `soluprot_cutoff=0.6`
+  - `mask_consensus_apply=true`
+  - `af2_plddt_cutoff=85`
+  - `surface_only=true`
+  - `pi_max=6`
+  - `design_chains=A,B`
+  - `fixed_positions_extra={"A":[10,25],"B":[3,5]}`
+
 ## 빠른 실행 (대화형 질문 생략)
 - `pipeline.run_from_prompt`
   - target_pdb/target_fasta가 이미 준비된 경우 바로 실행합니다.
@@ -33,6 +44,46 @@
 - 필요 환경 변수:
   - `RFD3_ENDPOINT_ID`
   - `BIOEMU_ENDPOINT_ID`
+
+## 단일 도구 실행
+- `pipeline.af2_predict`
+  - FASTA/sequence 또는 target_pdb로 AlphaFold2만 실행합니다.
+- `pipeline.diffdock`
+  - protein_pdb + ligand(SMILES/SDF)로 DiffDock만 실행합니다.
+
+## 피드백/실험/리포트
+- `pipeline.submit_feedback` / `pipeline.list_feedback`
+- `pipeline.submit_experiment` / `pipeline.list_experiments`
+- `pipeline.generate_report` / `pipeline.save_report` / `pipeline.get_report`
+
+### 리포트 점수 환경변수
+- `PIPELINE_REPORT_BASE_SCORE` (기본 50)
+- `PIPELINE_REPORT_FEEDBACK_WEIGHT` (기본 20)
+- `PIPELINE_REPORT_EXPERIMENT_WEIGHT` (기본 30)
+- `PIPELINE_REPORT_MIN_SCORE` / `PIPELINE_REPORT_MAX_SCORE` (기본 0 / 100)
+- `PIPELINE_REPORT_EVIDENCE_MEDIUM_FEEDBACK` (기본 2)
+- `PIPELINE_REPORT_EVIDENCE_HIGH_FEEDBACK` (기본 6)
+- `PIPELINE_REPORT_EVIDENCE_MEDIUM_EXPERIMENT` (기본 1)
+- `PIPELINE_REPORT_EVIDENCE_HIGH_EXPERIMENT` (기본 3)
+- `PIPELINE_REPORT_PROMOTE_SCORE` (기본 75)
+- `PIPELINE_REPORT_PROMISING_SCORE` (기본 60)
+- `PIPELINE_REPORT_REVIEW_SCORE` (기본 40)
+- `PIPELINE_REPORT_PROMOTE_REQUIRE_EVIDENCE` (기본 true)
+- 커스텀 스코어러:
+  - `PIPELINE_REPORT_SCORER` = 모듈 경로 또는 `/abs/path/to/scorer.py`
+  - `PIPELINE_REPORT_SCORER_FN` = 함수명 (기본 `score_report`)
+
+예시 (`/opt/protein_pipeline/custom_scorer.py`):
+```python
+def score_report(feedback_counts, experiment_counts, config):
+    score = 70
+    return {
+        "score": score,
+        "evidence": "medium",
+        "recommendation": "promising",
+        "scoring_config": config,
+    }
+```
 
 ## 산출물 확인
 - `pipeline.list_artifacts`로 파일 목록

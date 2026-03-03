@@ -47,6 +47,8 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertTrue((out / "conservation.json").exists())
             self.assertTrue((out / "ligand_mask.json").exists())
             self.assertTrue((out / "query_pdb_alignment.json").exists())
+            self.assertTrue((out / "agent_panel.jsonl").exists())
+            self.assertTrue((out / "agent_panel_report.md").exists())
 
             self.assertEqual(len(res.tiers), 2)
             for tier_result in res.tiers:
@@ -63,6 +65,32 @@ class TestPipelineDryRun(unittest.TestCase):
                 self.assertTrue((tier_dir / "designs_filtered.fasta").exists())
                 self.assertTrue((tier_dir / "af2_scores.json").exists())
                 self.assertTrue((tier_dir / "af2_selected.fasta").exists())
+
+    def test_surface_and_pi_filters(self) -> None:
+        fasta = ">q1\nDDDDDDDD\n"
+        pdb = (
+            "ATOM      1  CA  ASP A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  ASP A   2       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       4.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  ASP A   4       6.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  ASP A   5       8.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  ASP A   6      10.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            req = PipelineRequest(
+                target_fasta=fasta,
+                target_pdb=pdb,
+                dry_run=True,
+                conservation_tiers=[0.3],
+                surface_only=True,
+                pi_max=6.0,
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            self.assertTrue((out / "surface_mask.json").exists())
+            self.assertTrue((out / "tiers" / "30" / "pi_scores.json").exists())
 
     def test_pipeline_dry_run_generates_dummy_pdb_when_missing(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
@@ -87,6 +115,22 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertTrue((out / "target.fasta").exists())
             self.assertTrue((out / "target.pdb").exists())
             self.assertTrue((out / "msa" / "result.a3m").exists())
+
+    def test_pipeline_auto_recover_msa_without_mmseqs(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            req = PipelineRequest(
+                target_fasta=fasta,
+                target_pdb="",
+                dry_run=False,
+                stop_after="msa",
+                auto_recover=True,
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            self.assertTrue((out / "msa" / "result.a3m").exists())
+            self.assertTrue((out / "agent_panel.jsonl").exists())
 
     def test_pipeline_pdb_preprocess_strips_nonpositive_resseq(self) -> None:
         pdb = (
@@ -116,6 +160,30 @@ class TestPipelineDryRun(unittest.TestCase):
 
             processed_pdb = (out / "target.pdb").read_text(encoding="utf-8")
             self.assertNotIn("  -1", processed_pdb)
+
+    def test_pipeline_rfd3_auto_strips_nonpositive_resseq(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A  -1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   1       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            req = PipelineRequest(
+                target_fasta="",
+                target_pdb="",
+                rfd3_input_pdb=pdb,
+                rfd3_contig="A1-2",
+                dry_run=True,
+                num_seq_per_tier=2,
+                conservation_tiers=[0.3],
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            input_pdb = (out / "rfd3" / "input_files" / "input.pdb").read_text(encoding="utf-8")
+            selected_pdb = (out / "rfd3" / "selected.pdb").read_text(encoding="utf-8")
+            self.assertNotIn("  -1", input_pdb)
+            self.assertNotIn("  -1", selected_pdb)
 
     def test_pipeline_dry_run_accepts_conservation_weighting_flag(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
