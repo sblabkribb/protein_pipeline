@@ -29,6 +29,8 @@ from .bio.pdb import ligand_proximity_mask
 from .bio.pdb import preprocess_pdb
 from .bio.pdb import residues_by_chain
 from .bio.pdb import sequence_by_chain
+from .bio.pdb import surface_positions_by_chain
+from .bio.sequence import filter_records_by_pi
 from .bio.sdf import append_ligand_pdb
 from .bio.sdf import sdf_to_pdb
 from .clients.mmseqs import MMseqsClient
@@ -40,7 +42,9 @@ from .models import SequenceRecord
 from .models import TierResult
 from .mutation_report import write_mutation_reports
 from .storage import RunPaths
+from .storage import clear_cancel_requested
 from .storage import init_run
+from .storage import is_cancel_requested
 from .storage import new_run_id
 from .storage import set_status
 from .storage import write_json
@@ -105,6 +109,12 @@ def _safe_json(obj: object) -> object:
 class PipelineInputRequired(ValueError):
     def __init__(self, *, stage: str, message: str) -> None:
         super().__init__(message)
+        self.stage = stage
+
+
+class PipelineCancelled(RuntimeError):
+    def __init__(self, *, stage: str, message: str | None = None) -> None:
+        super().__init__(message or "run cancellation requested")
         self.stage = stage
 
 
@@ -631,6 +641,8 @@ class PipelineRunner:
 
     def run(self, request: PipelineRequest, *, run_id: str | None = None) -> PipelineResult:
         run_id = run_id or new_run_id("pipeline")
+        # A fresh run attempt for the same run_id should clear stale cancellation intent.
+        clear_cancel_requested(self.output_root, run_id)
         paths = init_run(self.output_root, run_id)
         set_status(paths, stage="init", state="running")
 
@@ -642,7 +654,16 @@ class PipelineRunner:
         msa_tsv_path = None
         conservation_path = None
         ligand_mask_path = None
+        surface_mask_path = None
         tier_results: list[TierResult] = []
+
+        def _is_cancel_error(exc: Exception) -> bool:
+            msg = str(exc).strip().lower()
+            return bool(msg) and any(token in msg for token in ("cancelled", "canceled", "cancel requested"))
+
+        def _ensure_not_cancelled(stage: str) -> None:
+            if is_cancel_requested(self.output_root, run_id):
+                raise PipelineCancelled(stage=stage, message=f"run cancellation requested (stage={stage})")
 
         def _emit_panel(stage: str, *, detail: str | None = None, error: str | None = None, recovery: dict[str, object] | None = None) -> None:
             if not request.agent_panel_enabled:
@@ -663,11 +684,16 @@ class PipelineRunner:
             fallback: Callable[[Exception], Any] | None = None,
             recovery_actions: list[str] | None = None,
         ) -> tuple[Any, bool, str | None, dict[str, object] | None]:
+            _ensure_not_cancelled(stage)
             try:
                 return fn(), False, None, None
             except PipelineInputRequired:
                 raise
+            except PipelineCancelled:
+                raise
             except Exception as exc:
+                if is_cancel_requested(self.output_root, run_id) or _is_cancel_error(exc):
+                    raise PipelineCancelled(stage=stage, message=f"run cancelled while {stage}: {exc}") from exc
                 msg = f"{stage} failed: {exc}"
                 errors.append(msg)
                 if not request.auto_recover or fallback is None:
@@ -690,6 +716,7 @@ class PipelineRunner:
                 return result, True, msg, recovery_payload
 
         try:
+            _ensure_not_cancelled(stage="init")
             msa_dir = _ensure_dir(paths.root / "msa")
             tiers_dir = _ensure_dir(paths.root / "tiers")
 
@@ -1028,6 +1055,7 @@ class PipelineRunner:
                         msa_tsv_path=msa_tsv_path,
                         conservation_path=None,
                         ligand_mask_path=None,
+                        surface_mask_path=None,
                         tiers=[],
                         errors=errors,
                     )
@@ -1218,6 +1246,7 @@ class PipelineRunner:
                         msa_tsv_path=msa_tsv_path,
                         conservation_path=conservation_path,
                         ligand_mask_path=None,
+                        surface_mask_path=None,
                         tiers=[],
                         errors=errors,
                     )
@@ -1349,6 +1378,7 @@ class PipelineRunner:
                         msa_tsv_path=msa_tsv_path,
                         conservation_path=None,
                         ligand_mask_path=None,
+                        surface_mask_path=None,
                         tiers=[],
                         errors=errors,
                     )
@@ -1931,6 +1961,53 @@ class PipelineRunner:
             )
             _emit_panel("ligand_mask", detail=("recovered" if lm_recovered else None), error=lm_error, recovery=lm_recovery)
 
+            if request.surface_only:
+                set_status(paths, stage="surface_mask", state="running")
+
+                def _run_surface_mask() -> None:
+                    nonlocal surface_mask_path
+                    for ctx in backbone_contexts:
+                        surface_mask, surface_sasa = surface_positions_by_chain(
+                            ctx["pdb_text"],
+                            chains=design_chains,
+                            min_rel=request.surface_min_rel,
+                            min_abs=request.surface_min_abs,
+                        )
+                        ctx["surface_mask"] = surface_mask
+                        write_json(ctx["dir"] / "surface_mask.json", surface_mask)
+                        write_json(ctx["dir"] / "surface_sasa.json", surface_sasa)
+                        if ctx is backbone_contexts[0]:
+                            surface_mask_path = str(paths.root / "surface_mask.json")
+                            write_json(Path(surface_mask_path), surface_mask)
+                            write_json(paths.root / "surface_sasa.json", surface_sasa)
+                    set_status(paths, stage="surface_mask", state="completed")
+
+                def _fallback_surface_mask(exc: Exception) -> None:
+                    nonlocal surface_mask_path
+                    empty_mask: dict[str, list[int]] = {}
+                    for ctx in backbone_contexts:
+                        ctx["surface_mask"] = None
+                        write_json(ctx["dir"] / "surface_mask.json", empty_mask)
+                        if ctx is backbone_contexts[0]:
+                            surface_mask_path = str(paths.root / "surface_mask.json")
+                            write_json(Path(surface_mask_path), empty_mask)
+                    write_json(
+                        paths.root / "surface_mask_recovery.json",
+                        {"error": str(exc), "recovered_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())},
+                    )
+                    set_status(paths, stage="surface_mask", state="completed", detail="recovered")
+
+                _, sm_recovered, sm_error, sm_recovery = _recover_stage(
+                    "surface_mask",
+                    _run_surface_mask,
+                    fallback=_fallback_surface_mask,
+                    recovery_actions=["Used empty surface mask"],
+                )
+                _emit_panel("surface_mask", detail=("recovered" if sm_recovered else None), error=sm_error, recovery=sm_recovery)
+            else:
+                for ctx in backbone_contexts:
+                    ctx["surface_mask"] = {}
+
             def _run_mask_consensus() -> None:
                 set_status(paths, stage="mask_consensus", state="running")
                 primary_ctx = backbone_contexts[0] if backbone_contexts else None
@@ -2284,6 +2361,7 @@ class PipelineRunner:
             for tier in request.conservation_tiers:
 
                 tier_str = _tier_key(tier)
+                _ensure_not_cancelled(stage=f"proteinmpnn_{tier_str}")
                 tier_dir = _ensure_dir(tiers_dir / tier_str)
 
                 tier_fixed = conservation.fixed_positions_by_tier.get(tier, []) or []
@@ -2304,9 +2382,12 @@ class PipelineRunner:
                 mpnn_recovery: dict[str, object] | None = None
 
                 for idx, ctx in enumerate(backbone_contexts):
+                    _ensure_not_cancelled(stage=f"proteinmpnn_{tier_str}")
                     bb_tier_dir = tier_dir if not multi_backbone else _ensure_dir(ctx["dir"] / "tiers" / tier_str)
                     mapping_by_chain = ctx.get("mapping") or {}
                     ligand_mask = ctx.get("ligand_mask") or {}
+                    surface_mask = ctx.get("surface_mask")
+                    residues_by_chain_map = residues_by_chain(ctx["pdb_text"], only_atom_records=True)
                     fixed_positions_by_chain: dict[str, list[int]] = {}
                     extra_fixed = request.fixed_positions_extra or {}
                     for chain_id in design_chains or list(ligand_mask.keys()) or ["A"]:
@@ -2342,6 +2423,17 @@ class PipelineRunner:
                                     extra_mapped = [int(pos) for pos in raw_extra]
                                 chain_fixed.update(extra_mapped)
                         chain_fixed.update(ligand_mask.get(chain_id, []))
+
+                        if request.surface_only and isinstance(surface_mask, dict):
+                            surface_positions = set(
+                                int(p)
+                                for p in (surface_mask.get(chain_id, []) or [])
+                                if isinstance(p, (int, float))
+                            )
+                            all_positions = {res.index for res in residues_by_chain_map.get(chain_id, [])}
+                            if all_positions:
+                                non_surface = sorted(all_positions - surface_positions)
+                                chain_fixed.update(non_surface)
                         fixed_positions_by_chain[chain_id] = sorted(chain_fixed)
 
                     write_json(bb_tier_dir / "fixed_positions.json", fixed_positions_by_chain)
@@ -2430,6 +2522,29 @@ class PipelineRunner:
                 fixed_positions_by_chain = primary_fixed or {}
                 native = primary_native if not multi_backbone else None
 
+                pi_scores: dict[str, float] | None = None
+                pi_passed = samples
+                if request.pi_min is not None or request.pi_max is not None:
+                    pi_passed, pi_scores = filter_records_by_pi(
+                        samples,
+                        pi_min=request.pi_min,
+                        pi_max=request.pi_max,
+                    )
+                    write_json(
+                        tier_dir / "pi_scores.json",
+                        {
+                            "scores": pi_scores,
+                            "pi_min": request.pi_min,
+                            "pi_max": request.pi_max,
+                            "passed_ids": [s.id for s in pi_passed],
+                        },
+                    )
+                    if samples:
+                        _write_text(
+                            tier_dir / "designs_pi_filtered.fasta",
+                            to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in pi_passed]),
+                        )
+
                 if multi_backbone:
                     if samples:
                         _write_text(
@@ -2455,7 +2570,8 @@ class PipelineRunner:
                     continue
 
                 set_status(paths, stage=f"soluprot_{tier_str}", state="running")
-                passed = samples
+                soluprot_inputs = pi_passed
+                passed = soluprot_inputs
                 soluprot_scores: dict[str, float] | None = None
                 passed_ids: list[str] | None = None
                 soluprot_path = tier_dir / "soluprot.json"
@@ -2463,7 +2579,19 @@ class PipelineRunner:
                 sol_error: str | None = None
                 sol_recovery: dict[str, object] | None = None
                 try:
-                    if samples and soluprot_path.exists() and not request.force:
+                    if not soluprot_inputs:
+                        passed = []
+                        passed_ids = []
+                        write_json(
+                            soluprot_path,
+                            {
+                                "skipped": True,
+                                "reason": "pi filter removed all sequences",
+                                "cutoff": request.soluprot_cutoff,
+                                "passed_ids": passed_ids,
+                            },
+                        )
+                    elif soluprot_inputs and soluprot_path.exists() and not request.force:
                         try:
                             payload = json.loads(soluprot_path.read_text(encoding="utf-8"))
                         except Exception:
@@ -2476,7 +2604,7 @@ class PipelineRunner:
                                 }
                                 passed = [
                                     s
-                                    for s in samples
+                                    for s in soluprot_inputs
                                     if float(soluprot_scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
                                 ]
                                 passed_ids = [s.id for s in passed]
@@ -2490,14 +2618,19 @@ class PipelineRunner:
                                     },
                                 )
                             elif payload.get("skipped") is True:
-                                passed = samples
+                                passed = soluprot_inputs
                                 passed_ids = [s.id for s in passed]
-                    elif samples:
+                    elif soluprot_inputs:
                         if request.dry_run:
-                            scores = {s.id: (0.6 if (i % 2 == 0) else 0.4) for i, s in enumerate(samples)}
+                            scores = {
+                                s.id: (0.6 if (i % 2 == 0) else 0.4)
+                                for i, s in enumerate(soluprot_inputs)
+                            }
                             soluprot_scores = scores
                             passed = [
-                                s for s in samples if float(scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
+                                s
+                                for s in soluprot_inputs
+                                if float(scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
                             ]
                             passed_ids = [s.id for s in passed]
                             write_json(
@@ -2506,7 +2639,7 @@ class PipelineRunner:
                             )
                         else:
                             if self.soluprot is None:
-                                passed = samples
+                                passed = soluprot_inputs
                                 passed_ids = [s.id for s in passed]
                                 write_json(
                                     soluprot_path,
@@ -2522,7 +2655,7 @@ class PipelineRunner:
                                 child_records: list[SequenceRecord] = []
                                 child_to_parent: dict[str, tuple[str, str]] = {}
 
-                                for s in samples:
+                                for s in soluprot_inputs:
                                     chain_seqs = _split_multichain_sequence(s.sequence)
                                     if len(chain_seqs) <= 1:
                                         cid = str(s.id)
@@ -2560,14 +2693,16 @@ class PipelineRunner:
                                     chain_scores.setdefault(parent_id, {})[label or "chain_1"] = float(score)
 
                                 scores: dict[str, float] = {}
-                                for s in samples:
+                                for s in soluprot_inputs:
                                     parent_id = str(s.id)
                                     per_chain = chain_scores.get(parent_id) or {}
                                     scores[parent_id] = min(per_chain.values()) if per_chain else 0.0
 
                                 soluprot_scores = scores
                                 passed = [
-                                    s for s in samples if float(scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
+                                    s
+                                    for s in soluprot_inputs
+                                    if float(scores.get(s.id, 0.0)) >= float(request.soluprot_cutoff)
                                 ]
                                 passed_ids = [s.id for s in passed]
                                 write_json(
@@ -2586,8 +2721,8 @@ class PipelineRunner:
                         raise
                     sol_recovered = True
                     sol_recovery = {"attempted": True, "error": sol_error, "actions": ["Skipped SoluProt filter"]}
-                    soluprot_scores = {s.id: 1.0 for s in samples}
-                    passed = samples
+                    soluprot_scores = {s.id: 1.0 for s in soluprot_inputs}
+                    passed = soluprot_inputs
                     passed_ids = [s.id for s in passed]
                     write_json(
                         soluprot_path,
@@ -2644,6 +2779,7 @@ class PipelineRunner:
                             raise ValueError(f"af2_sequence_ids not found in SoluProt-passed designs for tier={tier_str}: {missing}")
                         af2_candidates = [s for s in passed if s.id in wanted_set]
                 if af2_candidates:
+                    _ensure_not_cancelled(stage=f"af2_{tier_str}")
                     set_status(paths, stage=f"af2_{tier_str}", state="running")
                     af2_dir = _ensure_dir(tier_dir / "af2")
                     af2_scores_path = tier_dir / "af2_scores.json"
@@ -2862,6 +2998,8 @@ class PipelineRunner:
                             detail="cached" if (not to_predict and cached_ok and not request.force) else None,
                         )
                     except Exception as exc:
+                        if is_cancel_requested(self.output_root, run_id) or _is_cancel_error(exc):
+                            raise PipelineCancelled(stage=f"af2_{tier_str}", message=f"run cancelled while af2_{tier_str}: {exc}") from exc
                         af2_error = f"af2_{tier_str} failed: {exc}"
                         errors.append(af2_error)
                         if not request.auto_recover:
@@ -2928,6 +3066,7 @@ class PipelineRunner:
                 novelty_tsv = None
                 novelty_candidates = [s for s in passed if af2_selected_ids and s.id in set(af2_selected_ids)]
                 if novelty_candidates:
+                    _ensure_not_cancelled(stage=f"novelty_{tier_str}")
                     novelty_recovered = False
                     novelty_error: str | None = None
                     novelty_recovery: dict[str, object] | None = None
@@ -2951,6 +3090,8 @@ class PipelineRunner:
                         _write_text(tier_dir / "novelty.tsv", novelty_tsv)
                         set_status(paths, stage=f"novelty_{tier_str}", state="completed")
                     except Exception as exc:
+                        if is_cancel_requested(self.output_root, run_id) or _is_cancel_error(exc):
+                            raise PipelineCancelled(stage=f"novelty_{tier_str}", message=f"run cancelled while novelty_{tier_str}: {exc}") from exc
                         novelty_error = f"novelty_{tier_str} failed: {exc}"
                         errors.append(novelty_error)
                         if not request.auto_recover:
@@ -2989,6 +3130,7 @@ class PipelineRunner:
                     )
                 )
 
+            _ensure_not_cancelled(stage="done")
             result = PipelineResult(
                 run_id=run_id,
                 output_dir=str(paths.root),
@@ -2997,6 +3139,7 @@ class PipelineRunner:
                 msa_tsv_path=msa_tsv_path,
                 conservation_path=conservation_path,
                 ligand_mask_path=ligand_mask_path,
+                surface_mask_path=surface_mask_path,
                 tiers=tier_results,
                 errors=errors,
             )
@@ -3008,6 +3151,28 @@ class PipelineRunner:
                     pass
             set_status(paths, stage="done", state="completed")
             return result
+        except PipelineCancelled as exc:
+            errors.append(str(exc))
+            set_status(paths, stage=exc.stage, state="cancelled", detail=str(exc))
+            result = PipelineResult(
+                run_id=run_id,
+                output_dir=str(paths.root),
+                msa_a3m_path=msa_a3m_path,
+                msa_filtered_a3m_path=msa_filtered_a3m_path,
+                msa_tsv_path=msa_tsv_path,
+                conservation_path=conservation_path,
+                ligand_mask_path=ligand_mask_path,
+                surface_mask_path=surface_mask_path,
+                tiers=tier_results,
+                errors=errors,
+            )
+            write_json(paths.summary_json, asdict(result))
+            if request.agent_panel_enabled:
+                try:
+                    write_agent_panel_report(self.output_root, run_id)
+                except Exception:
+                    pass
+            raise
         except PipelineInputRequired as exc:
             errors.append(str(exc))
             set_status(paths, stage=exc.stage, state="failed", detail=str(exc))
@@ -3019,6 +3184,7 @@ class PipelineRunner:
                 msa_tsv_path=msa_tsv_path,
                 conservation_path=conservation_path,
                 ligand_mask_path=ligand_mask_path,
+                surface_mask_path=surface_mask_path,
                 tiers=tier_results,
                 errors=errors,
             )
@@ -3040,6 +3206,7 @@ class PipelineRunner:
                 msa_tsv_path=msa_tsv_path,
                 conservation_path=conservation_path,
                 ligand_mask_path=ligand_mask_path,
+                surface_mask_path=surface_mask_path,
                 tiers=tier_results,
                 errors=errors,
             )

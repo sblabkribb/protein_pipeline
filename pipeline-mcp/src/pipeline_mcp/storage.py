@@ -98,6 +98,34 @@ def init_run(output_root: str, run_id: str) -> RunPaths:
     return RunPaths(run_id=run_id, root=root)
 
 
+def _cancel_request_path(output_root: str, run_id: str) -> Path:
+    return resolve_run_path(output_root, run_id) / "cancel.requested.json"
+
+
+def mark_cancel_requested(output_root: str, run_id: str, *, reason: str | None = None) -> None:
+    path = _cancel_request_path(output_root, run_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload: dict[str, object] = {
+        "run_id": run_id,
+        "requested_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+    }
+    if reason:
+        payload["reason"] = reason
+    write_json(path, payload)
+
+
+def clear_cancel_requested(output_root: str, run_id: str) -> None:
+    path = _cancel_request_path(output_root, run_id)
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+
+
+def is_cancel_requested(output_root: str, run_id: str) -> bool:
+    return _cancel_request_path(output_root, run_id).exists()
+
+
 def set_status(paths: RunPaths, *, stage: str, state: str, detail: str | None = None) -> None:
     payload: dict[str, object] = {
         "run_id": paths.run_id,

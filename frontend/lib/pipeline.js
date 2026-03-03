@@ -27,6 +27,7 @@ export function createRunId(prefix, now = new Date()) {
 export function stageFromPath(path) {
   const p = String(path || "").toLowerCase();
   if (p.includes("mask_consensus")) return "mask_consensus";
+  if (p.includes("surface_mask")) return "surface_mask";
   if (p.includes("ligand_mask")) return "ligand_mask";
   if (p.includes("conservation")) return "conservation";
   if (p.includes("pdb_preprocess")) return "pdb_preprocess";

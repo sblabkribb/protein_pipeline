@@ -19,6 +19,7 @@ from .bio.sdf import sdf_to_pdb
 from .models import PipelineRequest
 from .models import SequenceRecord
 from .pipeline import PipelineRunner
+from .pipeline import PipelineCancelled
 from .pipeline import _dummy_backbone_pdb
 from .pipeline import _prepare_af2_sequence
 from .pipeline import _resolve_af2_model_preset
@@ -45,6 +46,7 @@ from .storage import delete_run
 from .storage import append_run_event
 from .storage import read_json
 from .storage import resolve_run_path
+from .storage import mark_cancel_requested
 from .report_scoring import compute_score
 from .report_scoring import scoring_config
 from .storage import set_status
@@ -322,6 +324,8 @@ def _auto_retry_config(args: dict[str, Any]) -> AutoRetryConfig:
 
 def _retry_request(request: PipelineRequest, error: str) -> tuple[PipelineRequest, str] | None:
     msg = error.lower()
+    if "cancelled" in msg or "canceled" in msg or "cancel requested" in msg:
+        return None
 
     if "persistent db" in msg and "not found" in msg:
         if request.mmseqs_target_db.lower() != "uniref90":
@@ -358,6 +362,8 @@ def _run_with_auto_retry(
     while True:
         try:
             return runner.run(request, run_id=run_id)
+        except PipelineCancelled:
+            raise
         except Exception as exc:
             if not retry.enabled or attempt >= retry.max_attempts:
                 raise
@@ -613,6 +619,8 @@ def _cancel_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
     root = resolve_run_path(runner.output_root, run_id)
     if not root.exists():
         return {"run_id": run_id, "found": False, "cancelled": 0, "jobs": []}
+
+    mark_cancel_requested(runner.output_root, run_id, reason="pipeline.cancel_run")
 
     jobs = _collect_runpod_jobs(root)
     client_map = {
@@ -1800,7 +1808,7 @@ def _get_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, 
     return out
 
 
-def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
+def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = True) -> PipelineRequest:
     target_fasta = _as_text(args.get("target_fasta"))
     target_pdb = _as_text(args.get("target_pdb"))
     rfd3_inputs = _as_dict(args.get("rfd3_inputs"), name="rfd3_inputs")
@@ -1824,7 +1832,7 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
     diffdock_cuda_visible_devices = _as_text(args.get("diffdock_cuda_visible_devices")).strip() or None
 
     has_rfd3 = bool(rfd3_inputs_text or rfd3_inputs or rfd3_contig or rfd3_input_files)
-    if not target_fasta.strip() and not target_pdb.strip() and not has_rfd3:
+    if strict_target and not target_fasta.strip() and not target_pdb.strip() and not has_rfd3:
         raise ValueError("One of target_fasta or target_pdb or rfd3 inputs is required")
 
     stop_after = (str(args.get("stop_after")).strip().lower() if args.get("stop_after") else None)
@@ -1840,6 +1848,11 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
     ligand_resnames = _as_list_of_str(args.get("ligand_resnames"))
     ligand_atom_chains = _as_list_of_str(args.get("ligand_atom_chains"))
     af2_sequence_ids = _as_list_of_str(args.get("af2_sequence_ids"))
+    surface_only = _as_bool(args.get("surface_only"), False)
+    surface_min_rel = _as_float(args.get("surface_min_rel"), 0.2)
+    surface_min_abs = _as_float(args.get("surface_min_abs"), 10.0)
+    pi_min = _as_float(args.get("pi_min"), 0.0) if str(args.get("pi_min") or "").strip() else None
+    pi_max = _as_float(args.get("pi_max"), 0.0) if str(args.get("pi_max") or "").strip() else None
 
     return PipelineRequest(
         target_fasta=target_fasta,
@@ -1888,6 +1901,9 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
         ligand_mask_distance=_as_float(args.get("ligand_mask_distance"), 6.0),
         ligand_resnames=ligand_resnames,
         ligand_atom_chains=ligand_atom_chains,
+        surface_only=surface_only,
+        surface_min_rel=surface_min_rel,
+        surface_min_abs=surface_min_abs,
         pdb_strip_nonpositive_resseq=_as_bool(args.get("pdb_strip_nonpositive_resseq"), True),
         pdb_renumber_resseq_from_1=_as_bool(args.get("pdb_renumber_resseq_from_1"), False),
         num_seq_per_tier=_as_int(args.get("num_seq_per_tier"), 16),
@@ -1895,6 +1911,8 @@ def pipeline_request_from_args(args: dict[str, Any]) -> PipelineRequest:
         sampling_temp=_as_float(args.get("sampling_temp"), 0.1),
         seed=_as_int(args.get("seed"), 0),
         soluprot_cutoff=_as_float(args.get("soluprot_cutoff"), 0.5),
+        pi_min=pi_min,
+        pi_max=pi_max,
         af2_model_preset=str(args.get("af2_model_preset") or "auto"),
         af2_db_preset=str(args.get("af2_db_preset") or "full_dbs"),
         af2_max_template_date=str(args.get("af2_max_template_date") or "2020-05-14"),
@@ -1970,6 +1988,9 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "ligand_mask_distance": {"type": "number"},
             "ligand_resnames": {"type": "array", "items": {"type": "string"}},
             "ligand_atom_chains": {"type": "array", "items": {"type": "string"}},
+            "surface_only": {"type": "boolean"},
+            "surface_min_rel": {"type": "number"},
+            "surface_min_abs": {"type": "number"},
             "pdb_strip_nonpositive_resseq": {"type": "boolean"},
             "pdb_renumber_resseq_from_1": {"type": "boolean"},
             "num_seq_per_tier": {"type": "integer"},
@@ -1977,6 +1998,8 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "sampling_temp": {"type": "number"},
             "seed": {"type": "integer"},
             "soluprot_cutoff": {"type": "number"},
+            "pi_min": {"type": "number"},
+            "pi_max": {"type": "number"},
             "af2_model_preset": {"type": "string"},
             "af2_db_preset": {"type": "string"},
             "af2_max_template_date": {"type": "string"},
@@ -2283,13 +2306,19 @@ class ToolDispatcher:
             req = pipeline_request_from_args(arguments)
             retry = _auto_retry_config(arguments)
             normalized_run_id = normalize_run_id(str(run_id)) if run_id is not None else None
+            if normalized_run_id is not None:
+                status = load_status(self.runner.output_root, normalized_run_id)
+                if isinstance(status, dict) and str(status.get("state") or "").lower() == "running":
+                    raise ValueError(
+                        f"run_id={normalized_run_id} is already running; use pipeline.status or pipeline.cancel_run first"
+                    )
             if retry.enabled and normalized_run_id is None:
                 normalized_run_id = new_run_id("pipeline")
             res = _run_with_auto_retry(self.runner, req, run_id=normalized_run_id, retry=retry)
             return {"run_id": res.run_id, "output_dir": res.output_dir, "summary": asdict(res)}
 
         if name == "pipeline.preflight":
-            req = pipeline_request_from_args(arguments)
+            req = pipeline_request_from_args(arguments, strict_target=False)
             return preflight_request(req, self.runner)
 
         if name == "pipeline.af2_predict":
@@ -2353,6 +2382,12 @@ class ToolDispatcher:
             auto_recover = _as_bool(arguments.get("auto_recover"), req.auto_recover)
             req = replace(req, agent_panel_enabled=agent_panel_enabled, auto_recover=auto_recover)
             normalized_run_id = normalize_run_id(str(run_id)) if run_id is not None else None
+            if normalized_run_id is not None:
+                status = load_status(self.runner.output_root, normalized_run_id)
+                if isinstance(status, dict) and str(status.get("state") or "").lower() == "running":
+                    raise ValueError(
+                        f"run_id={normalized_run_id} is already running; use pipeline.status or pipeline.cancel_run first"
+                    )
             if retry.enabled and normalized_run_id is None:
                 normalized_run_id = new_run_id("pipeline")
             res = _run_with_auto_retry(self.runner, req, run_id=normalized_run_id, retry=retry)

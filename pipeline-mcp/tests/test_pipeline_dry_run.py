@@ -66,6 +66,32 @@ class TestPipelineDryRun(unittest.TestCase):
                 self.assertTrue((tier_dir / "af2_scores.json").exists())
                 self.assertTrue((tier_dir / "af2_selected.fasta").exists())
 
+    def test_surface_and_pi_filters(self) -> None:
+        fasta = ">q1\nDDDDDDDD\n"
+        pdb = (
+            "ATOM      1  CA  ASP A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  ASP A   2       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       4.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  ASP A   4       6.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  ASP A   5       8.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  ASP A   6      10.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            req = PipelineRequest(
+                target_fasta=fasta,
+                target_pdb=pdb,
+                dry_run=True,
+                conservation_tiers=[0.3],
+                surface_only=True,
+                pi_max=6.0,
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            self.assertTrue((out / "surface_mask.json").exists())
+            self.assertTrue((out / "tiers" / "30" / "pi_scores.json").exists())
+
     def test_pipeline_dry_run_generates_dummy_pdb_when_missing(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         with _tmpdir() as tmp:
