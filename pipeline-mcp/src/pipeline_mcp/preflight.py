@@ -158,6 +158,11 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner) -> dict[
     if request.wt_compare and runner.af2 is None:
         warnings.append("WT compare requested but AlphaFold2 is not configured.")
 
+    if request.surface_only and (not target_pdb) and runner.af2 is None and (not rfd3_active):
+        _warn_or_error(
+            "surface_only requested but target_pdb is missing and AlphaFold2 is not configured."
+        )
+
     if rfd3_active and runner.rfd3 is None:
         _warn_or_error("RFD3 requested but endpoint is not configured (set RFD3_ENDPOINT_ID).")
 

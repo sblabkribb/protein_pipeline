@@ -19,6 +19,17 @@
   - diffdock_ligand_smiles 또는 diffdock_ligand_sdf
   - stop_after
 
+### 프롬프트 고급 파라미터 (key=value)
+- 프롬프트에 `key=value` 형태로 파라미터를 직접 지정할 수 있습니다.
+- 예시:
+  - `soluprot_cutoff=0.6`
+  - `mask_consensus_apply=true`
+  - `af2_plddt_cutoff=85`
+  - `surface_only=true`
+  - `pi_max=6`
+  - `design_chains=A,B`
+  - `fixed_positions_extra={"A":[10,25],"B":[3,5]}`
+
 ## 빠른 실행 (대화형 질문 생략)
 - `pipeline.run_from_prompt`
   - target_pdb/target_fasta가 이미 준비된 경우 바로 실행합니다.

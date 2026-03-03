@@ -482,6 +482,12 @@ textarea:focus-visible {
   margin-bottom: 12px;
 }
 
+.question-error {
+  font-size: 12px;
+  color: #b0413e;
+  margin-top: 8px;
+}
+
 .input-row {
   display: grid;
   gap: 12px;

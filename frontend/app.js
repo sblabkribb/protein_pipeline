@@ -97,6 +97,8 @@ const state = {
   reportReviewReasons: [],
   answers: {},
   currentRunId: null,
+  currentRunState: "",
+  runSubmitting: false,
   pollTimer: null,
   lastStatusKey: "",
   answerMeta: {},
@@ -243,7 +245,7 @@ const I18N = {
     "login.submit": "Access Console",
     "setup.title": "Run Setup",
     "setup.desc": "Choose a workflow, attach inputs, and launch the job.",
-    "setup.prompt.placeholder": "Optional notes or questions for this run.",
+    "setup.prompt.placeholder": "Prompt or notes (key=value supported).",
     "setup.check": "Check Setup",
     "setup.reset": "Reset Inputs",
     "setup.clear": "Clear Log",
@@ -419,6 +421,10 @@ const I18N = {
     "question.wtCompare.help": "Compute WT baseline (SoluProt/AF2) and compare in report.",
     "question.maskConsensusApply.label": "Apply Mask Consensus",
     "question.maskConsensusApply.help": "Apply expert mask consensus to ProteinMPNN (optional).",
+    "question.confirmRun.label": "Confirm Run",
+    "question.confirmRun.help": "Review the parsed settings and confirm to enable execution.",
+    "question.fixedPositionsExtra.label": "Fixed Positions (Extra)",
+    "question.fixedPositionsExtra.help": "Provide fixed_positions_extra as JSON, e.g. {\"A\":[10,25]} or [10,25].",
     "question.stripNonpositive.label": "Strip non-positive residues",
     "question.stripNonpositive.help": "Remove residues with resseq <= 0 before RFD3 and downstream steps.",
     "question.rfd3InputPdb.label": "RFD3 Input PDB",
@@ -455,9 +461,12 @@ const I18N = {
     "choice.wtCompare.off": "Disable WT compare",
     "choice.maskConsensusApply.on": "Apply consensus",
     "choice.maskConsensusApply.off": "Do not apply",
+    "choice.confirmRun.yes": "Yes, run",
+    "choice.confirmRun.no": "Review first",
     "hint.none": "No missing inputs. You can run now.",
     "hint.ready": "All required inputs captured.",
     "hint.missing": "Missing required inputs.",
+    "hint.running": "A run is already in progress.",
     "run.reset": "Inputs reset. Reconfirm selections and attachments.",
     "runmode.pipeline": "Full Pipeline",
     "runmode.rfd3": "RFD3 (Backbone)",
@@ -488,6 +497,8 @@ const I18N = {
     "run.launching": "Launching {mode} run {id}...",
     "run.started": "Run started: {id}",
     "run.failed": "Run failed: {error}",
+    "run.alreadyRunning": "A run is already in progress. Stop it or wait for completion.",
+    "run.confirmRequired": "Confirm the prompt plan before running.",
     "status.line": "Status: {stage} / {state}",
     "status.error": "Status error: {error}",
     "artifact.none": "No artifacts.",
@@ -579,7 +590,7 @@ const I18N = {
     "login.submit": "콘솔 접속",
     "setup.title": "실행 설정",
     "setup.desc": "워크플로를 선택하고 입력을 첨부해 실행하세요.",
-    "setup.prompt.placeholder": "선택: 실행 메모/질문을 남기세요.",
+    "setup.prompt.placeholder": "프롬프트/메모 입력 (key=value 지원).",
     "setup.check": "설정 점검",
     "setup.reset": "입력 초기화",
     "setup.clear": "로그 지우기",
@@ -755,6 +766,10 @@ const I18N = {
     "question.wtCompare.help": "WT 기준(SoluProt/AF2)을 계산해 리포트에 비교합니다.",
     "question.maskConsensusApply.label": "합의 마스킹 적용",
     "question.maskConsensusApply.help": "전문가 합의 마스킹을 ProteinMPNN에 적용합니다.",
+    "question.confirmRun.label": "실행 확인",
+    "question.confirmRun.help": "해석된 설정을 확인한 뒤 실행을 승인하세요.",
+    "question.fixedPositionsExtra.label": "고정 위치 추가",
+    "question.fixedPositionsExtra.help": "fixed_positions_extra를 JSON으로 입력하세요. 예: {\"A\":[10,25]} 또는 [10,25]",
     "question.stripNonpositive.label": "음수 잔기 제거",
     "question.stripNonpositive.help": "RFD3 및 이후 단계 전에 resseq <= 0 잔기를 제거합니다.",
     "question.rfd3InputPdb.label": "RFD3 입력 PDB",
@@ -791,9 +806,12 @@ const I18N = {
     "choice.wtCompare.off": "WT 비교 사용 안 함",
     "choice.maskConsensusApply.on": "합의 적용",
     "choice.maskConsensusApply.off": "적용 안 함",
+    "choice.confirmRun.yes": "예, 실행",
+    "choice.confirmRun.no": "검토 후",
     "hint.none": "누락된 입력이 없습니다. 지금 실행할 수 있습니다.",
     "hint.ready": "필수 입력이 모두 완료되었습니다.",
     "hint.missing": "필수 입력이 누락되었습니다.",
+    "hint.running": "이미 실행 중인 작업이 있습니다.",
     "run.reset": "입력을 초기화했습니다. 선택과 첨부를 다시 확인하세요.",
     "runmode.pipeline": "전체 파이프라인",
     "runmode.rfd3": "RFD3 (Backbone)",
@@ -824,6 +842,8 @@ const I18N = {
     "run.launching": "{mode} 실행 {id} 시작...",
     "run.started": "실행 시작: {id}",
     "run.failed": "실행 실패: {error}",
+    "run.alreadyRunning": "이미 실행 중인 작업이 있습니다. 완료를 기다리거나 정지하세요.",
+    "run.confirmRequired": "실행 전에 확인을 완료하세요.",
     "status.line": "상태: {stage} / {state}",
     "status.error": "상태 오류: {error}",
     "artifact.none": "아티팩트가 없습니다.",
@@ -942,6 +962,129 @@ const RUN_MODE_OPTIONS = [
   { labelKey: "runmode.diffdock", value: "diffdock" },
 ];
 
+const QUESTION_PRESETS = {
+  run_mode: {
+    labelKey: "question.runMode.label",
+    questionKey: "question.runMode.help",
+    required: true,
+  },
+  target_input: {
+    labelKey: "question.targetInput.label",
+    questionKey: "question.targetInput.help",
+    required: true,
+  },
+  stop_after: {
+    labelKey: "question.stopAfter.label",
+    questionKey: "question.stopAfter.help",
+  },
+  design_chains: {
+    labelKey: "question.designChains.label",
+    questionKey: "question.designChains.help",
+  },
+  pdb_strip_nonpositive_resseq: {
+    labelKey: "question.stripNonpositive.label",
+    questionKey: "question.stripNonpositive.help",
+  },
+  wt_compare: {
+    labelKey: "question.wtCompare.label",
+    questionKey: "question.wtCompare.help",
+  },
+  mask_consensus_apply: {
+    labelKey: "question.maskConsensusApply.label",
+    questionKey: "question.maskConsensusApply.help",
+  },
+  rfd3_input_pdb: {
+    labelKey: "question.rfd3InputPdb.label",
+    questionKey: "question.rfd3InputPdb.help",
+  },
+  rfd3_contig: {
+    labelKey: "question.rfd3Contig.label",
+    questionKey: "question.rfd3Contig.help",
+  },
+  diffdock_ligand: {
+    labelKey: "question.diffdockLigand.label",
+    questionKey: "question.diffdockLigand.help",
+  },
+  target_fasta: {
+    labelKey: "question.targetFasta.label",
+    questionKey: "question.targetFasta.help",
+  },
+  target_pdb: {
+    labelKey: "question.targetInput.label",
+    questionKey: "question.targetInput.help",
+  },
+  fixed_positions_extra: {
+    labelKey: "question.fixedPositionsExtra.label",
+    questionKey: "question.fixedPositionsExtra.help",
+    placeholder: "A:1,2,3;B:4,5 or {\"A\":[1,2,3]}",
+  },
+  confirm_run: {
+    labelKey: "question.confirmRun.label",
+    questionKey: "question.confirmRun.help",
+    required: true,
+  },
+};
+
+const ANSWER_BOOL_KEYS = new Set([
+  "dry_run",
+  "force",
+  "agent_panel_enabled",
+  "auto_recover",
+  "wt_compare",
+  "mask_consensus_apply",
+  "pdb_strip_nonpositive_resseq",
+  "pdb_renumber_resseq_from_1",
+  "mmseqs_use_gpu",
+  "rfd3_use_ensemble",
+  "confirm_run",
+]);
+
+const ANSWER_INT_KEYS = new Set([
+  "num_seq_per_tier",
+  "batch_size",
+  "seed",
+  "af2_top_k",
+  "mmseqs_max_seqs",
+  "mmseqs_threads",
+  "rfd3_design_index",
+  "rfd3_max_return_designs",
+  "rfd3_partial_t",
+  "conservation_cluster_cov_mode",
+  "conservation_cluster_kmer_per_seq",
+]);
+
+const ANSWER_FLOAT_KEYS = new Set([
+  "sampling_temp",
+  "soluprot_cutoff",
+  "af2_plddt_cutoff",
+  "af2_rmsd_cutoff",
+  "ligand_mask_distance",
+  "msa_min_coverage",
+  "msa_min_identity",
+  "query_pdb_min_identity",
+  "conservation_cluster_min_seq_id",
+  "conservation_cluster_coverage",
+]);
+
+const ANSWER_LIST_KEYS = new Set([
+  "design_chains",
+  "ligand_resnames",
+  "ligand_atom_chains",
+  "af2_sequence_ids",
+  "rfd3_ligand",
+]);
+
+const ANSWER_FLOAT_LIST_KEYS = new Set(["conservation_tiers"]);
+
+const ANSWER_JSON_KEYS = new Set([
+  "fixed_positions_extra",
+  "rfd3_env",
+  "rfd3_inputs",
+  "rfd3_input_files",
+]);
+
+const ANSWER_TEXTAREA_KEYS = new Set(["rfd3_cli_args", "diffdock_extra_args", "af2_extra_flags"]);
+
 const FEEDBACK_REASONS_BY_RATING = {
   good: [
     { labelKey: "feedback.reason.high_plddt", value: "high_plddt" },
@@ -1057,6 +1200,7 @@ const ARTIFACT_STAGE_ORDER = [
   "query_pdb_check",
   "diffdock",
   "ligand_mask",
+  "surface_mask",
   "mask_consensus",
   "design",
   "soluprot",
@@ -1076,6 +1220,7 @@ const STAGE_LABELS = {
   query_pdb_check: { en: "Query/PDB Check", ko: "Query/PDB 검증" },
   diffdock: { en: "DiffDock", ko: "DiffDock" },
   ligand_mask: { en: "Ligand Mask", ko: "리간드 마스킹" },
+  surface_mask: { en: "Surface Mask", ko: "표면 마스킹" },
   mask_consensus: { en: "Mask Consensus", ko: "마스킹 합의" },
   design: { en: "ProteinMPNN", ko: "ProteinMPNN" },
   soluprot: { en: "SoluProt", ko: "SoluProt" },
@@ -1707,7 +1852,9 @@ function updateRunInfo(status) {
   el.runStageValue.textContent = status.stage || "-";
   el.runStateValue.textContent = status.state || "-";
   el.runUpdatedValue.textContent = status.updated_at || "-";
+  state.currentRunState = String(status.state || "").toLowerCase();
   updateInlineStatus(status);
+  updateRunEligibility(state.plan?.questions || []);
 }
 
 function updateInlineStatus(status, runId = state.currentRunId) {
@@ -1731,9 +1878,11 @@ function updateInlineStatus(status, runId = state.currentRunId) {
 
 function setCurrentRunId(runId) {
   state.currentRunId = runId;
+  state.currentRunState = "";
   state.lastStatusKey = "";
   el.runIdValue.textContent = runId || "-";
   updateInlineStatus(null, runId);
+  updateRunEligibility(state.plan?.questions || []);
   refreshAgentPanel();
   refreshFeedback();
   refreshExperiments();
@@ -1771,10 +1920,14 @@ async function apiCall(name, args) {
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ name, arguments: args || {} }),
   });
+  const payload = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new Error(`HTTP ${res.status}`);
+    const msg = payload && typeof payload.error === "string" ? payload.error : `HTTP ${res.status}`;
+    throw new Error(msg);
   }
-  const payload = await res.json();
+  if (!payload || typeof payload !== "object") {
+    throw new Error(t("error.api"));
+  }
   if (!payload.ok) {
     throw new Error(payload.error || t("error.api"));
   }
@@ -1927,6 +2080,151 @@ function isAnswerMissing(value) {
   return String(value).trim() === "";
 }
 
+function normalizeQuestion(q) {
+  if (!q || !q.id) return q;
+  const preset = QUESTION_PRESETS[q.id];
+  if (!preset) return q;
+  const merged = { ...preset, ...q };
+  if (merged.required === undefined) merged.required = Boolean(preset.required);
+  return merged;
+}
+
+function formatAnswerValue(value) {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+function splitAnswerList(raw) {
+  return String(raw || "")
+    .split(/[,\s]+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function parseFixedPositionsExtra(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return { value: "", error: "" };
+  if (text.startsWith("{") || text.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed === "object") {
+        return { value: parsed, error: "" };
+      }
+      return { value: "", error: "fixed_positions_extra must be JSON object/list." };
+    } catch (err) {
+      return { value: "", error: "fixed_positions_extra JSON parse failed." };
+    }
+  }
+
+  if (text.includes(":")) {
+    const out = {};
+    const segments = text.split(/[;\n]+/).map((seg) => seg.trim()).filter(Boolean);
+    segments.forEach((seg) => {
+      if (!seg.includes(":")) return;
+      const parts = seg.split(":");
+      const chain = (parts.shift() || "").trim();
+      if (!chain) return;
+      const nums = splitAnswerList(parts.join(":"))
+        .map((v) => Number.parseInt(v, 10))
+        .filter((v) => Number.isFinite(v) && v > 0);
+      if (nums.length) out[chain] = nums;
+    });
+    if (Object.keys(out).length) return { value: out, error: "" };
+    return { value: "", error: "fixed_positions_extra chain list is empty." };
+  }
+
+  const nums = splitAnswerList(text)
+    .map((v) => Number.parseInt(v, 10))
+    .filter((v) => Number.isFinite(v) && v > 0);
+  if (nums.length) return { value: nums, error: "" };
+  return { value: "", error: "fixed_positions_extra expects numbers or JSON." };
+}
+
+function parseAnswerValue(id, raw) {
+  const text = String(raw ?? "").trim();
+  if (!text) return { value: "", error: "" };
+
+  if (ANSWER_JSON_KEYS.has(id)) {
+    if (id === "fixed_positions_extra") {
+      return parseFixedPositionsExtra(text);
+    }
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed === "object") return { value: parsed, error: "" };
+      return { value: "", error: `${id} must be a JSON object.` };
+    } catch (err) {
+      return { value: "", error: `${id} JSON parse failed.` };
+    }
+  }
+
+  if (ANSWER_BOOL_KEYS.has(id)) {
+    const v = text.toLowerCase();
+    if (["1", "true", "yes", "y", "on"].includes(v)) return { value: true, error: "" };
+    if (["0", "false", "no", "n", "off"].includes(v)) return { value: false, error: "" };
+    return { value: "", error: `${id} expects true/false.` };
+  }
+
+  if (ANSWER_INT_KEYS.has(id)) {
+    const n = Number.parseInt(text, 10);
+    if (Number.isFinite(n)) return { value: n, error: "" };
+    return { value: "", error: `${id} expects an integer.` };
+  }
+
+  if (ANSWER_FLOAT_KEYS.has(id)) {
+    const n = Number.parseFloat(text);
+    if (Number.isFinite(n)) return { value: n, error: "" };
+    return { value: "", error: `${id} expects a number.` };
+  }
+
+  if (ANSWER_FLOAT_LIST_KEYS.has(id)) {
+    let items = [];
+    if (text.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          items = parsed.map((v) => Number.parseFloat(v)).filter((v) => Number.isFinite(v));
+        }
+      } catch (err) {
+        return { value: "", error: `${id} JSON parse failed.` };
+      }
+    } else {
+      items = splitAnswerList(text)
+        .map((v) => Number.parseFloat(v))
+        .filter((v) => Number.isFinite(v));
+    }
+    if (items.length) return { value: items, error: "" };
+    return { value: "", error: `${id} expects a list of numbers.` };
+  }
+
+  if (ANSWER_LIST_KEYS.has(id)) {
+    let items = [];
+    if (text.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed)) {
+          items = parsed.map((v) => String(v)).filter((v) => v.length > 0);
+        }
+      } catch (err) {
+        return { value: "", error: `${id} JSON parse failed.` };
+      }
+    } else {
+      items = splitAnswerList(text);
+    }
+    if (items.length) return { value: items, error: "" };
+    return { value: "", error: `${id} expects a list.` };
+  }
+
+  return { value: text, error: "" };
+}
+
 function renderChoiceButtons(container, options, currentValue, onSelect, { multi = false } = {}) {
   const group = document.createElement("div");
   group.className = "choice-group";
@@ -1956,6 +2254,10 @@ function renderQuestions(questions) {
     return;
   }
 
+  const normalizedQuestions = (questions || [])
+    .map((q) => normalizeQuestion(q))
+    .filter(Boolean);
+
   const fileQuestionIds = new Set([
     "target_input",
     "target_pdb",
@@ -1972,18 +2274,22 @@ function renderQuestions(questions) {
     "pdb_strip_nonpositive_resseq",
     "wt_compare",
     "mask_consensus_apply",
+    "confirm_run",
   ]);
 
   const isFileQuestion = (q) => q && fileQuestionIds.has(q.id);
   const isChoiceQuestion = (q) => q && choiceQuestionIds.has(q.id);
   const fileQuestions = [];
   const choiceQuestions = [];
+  const textQuestions = [];
 
-  questions.forEach((q) => {
+  normalizedQuestions.forEach((q) => {
     if (isFileQuestion(q)) {
       fileQuestions.push(q);
     } else if (isChoiceQuestion(q)) {
       choiceQuestions.push(q);
+    } else {
+      textQuestions.push(q);
     }
   });
 
@@ -2006,7 +2312,7 @@ function renderQuestions(questions) {
       const current = state.runMode || q.default || "pipeline";
       renderChoiceButtons(card, RUN_MODE_OPTIONS, current, (value) => {
         setRunMode(value, { render: false });
-        updateRunEligibility(questions);
+        updateRunEligibility(normalizedQuestions);
       });
     }
 
@@ -2026,14 +2332,19 @@ function renderQuestions(questions) {
         current,
         (value) => {
           state.answers.stop_after = value;
-          updateRunEligibility(questions);
+          updateRunEligibility(normalizedQuestions);
         }
       );
     }
 
     if (q.id === "design_chains") {
       const chains = state.chainRanges ? Object.keys(state.chainRanges) : [];
-      const current = Array.isArray(state.answers.design_chains) ? state.answers.design_chains : [];
+      let current = Array.isArray(state.answers.design_chains) ? state.answers.design_chains : [];
+      const routedDefault = state.plan?.routed_request?.design_chains;
+      if (!current.length && Array.isArray(routedDefault) && routedDefault.length) {
+        current = routedDefault;
+        state.answers.design_chains = current;
+      }
       const group = document.createElement("div");
       group.className = "choice-group";
 
@@ -2043,7 +2354,7 @@ function renderQuestions(questions) {
       allBtn.textContent = t("choice.allChains");
       allBtn.addEventListener("click", () => {
         state.answers.design_chains = [];
-        updateRunEligibility(questions);
+        updateRunEligibility(normalizedQuestions);
         renderQuestions(state.plan?.questions || []);
       });
       group.appendChild(allBtn);
@@ -2061,7 +2372,7 @@ function renderQuestions(questions) {
             next.add(chain);
           }
           state.answers.design_chains = Array.from(next);
-          updateRunEligibility(questions);
+          updateRunEligibility(normalizedQuestions);
           renderQuestions(state.plan?.questions || []);
         });
         group.appendChild(btn);
@@ -2085,7 +2396,12 @@ function renderQuestions(questions) {
     if (q.id === "pdb_strip_nonpositive_resseq") {
       let current = state.answers.pdb_strip_nonpositive_resseq;
       if (typeof current !== "boolean") {
-        current = q.default !== undefined ? Boolean(q.default) : true;
+        const routedDefault = state.plan?.routed_request?.pdb_strip_nonpositive_resseq;
+        if (typeof routedDefault === "boolean") {
+          current = routedDefault;
+        } else {
+          current = q.default !== undefined ? Boolean(q.default) : true;
+        }
         state.answers.pdb_strip_nonpositive_resseq = current;
       }
       renderChoiceButtons(
@@ -2097,7 +2413,7 @@ function renderQuestions(questions) {
         current,
         (value) => {
           state.answers.pdb_strip_nonpositive_resseq = value;
-          updateRunEligibility(questions);
+          updateRunEligibility(normalizedQuestions);
         }
       );
     }
@@ -2105,7 +2421,12 @@ function renderQuestions(questions) {
     if (q.id === "wt_compare") {
       let current = state.answers.wt_compare;
       if (typeof current !== "boolean") {
-        current = q.default !== undefined ? Boolean(q.default) : false;
+        const routedDefault = state.plan?.routed_request?.wt_compare;
+        if (typeof routedDefault === "boolean") {
+          current = routedDefault;
+        } else {
+          current = q.default !== undefined ? Boolean(q.default) : false;
+        }
         state.answers.wt_compare = current;
       }
       renderChoiceButtons(
@@ -2117,7 +2438,7 @@ function renderQuestions(questions) {
         current,
         (value) => {
           state.answers.wt_compare = value;
-          updateRunEligibility(questions);
+          updateRunEligibility(normalizedQuestions);
         }
       );
     }
@@ -2125,7 +2446,12 @@ function renderQuestions(questions) {
     if (q.id === "mask_consensus_apply") {
       let current = state.answers.mask_consensus_apply;
       if (typeof current !== "boolean") {
-        current = q.default !== undefined ? Boolean(q.default) : false;
+        const routedDefault = state.plan?.routed_request?.mask_consensus_apply;
+        if (typeof routedDefault === "boolean") {
+          current = routedDefault;
+        } else {
+          current = q.default !== undefined ? Boolean(q.default) : false;
+        }
         state.answers.mask_consensus_apply = current;
       }
       renderChoiceButtons(
@@ -2137,7 +2463,27 @@ function renderQuestions(questions) {
         current,
         (value) => {
           state.answers.mask_consensus_apply = value;
-          updateRunEligibility(questions);
+          updateRunEligibility(normalizedQuestions);
+        }
+      );
+    }
+
+    if (q.id === "confirm_run") {
+      let current = state.answers.confirm_run;
+      if (typeof current !== "boolean") {
+        current = false;
+        state.answers.confirm_run = current;
+      }
+      renderChoiceButtons(
+        card,
+        [
+          { labelKey: "choice.confirmRun.no", value: false },
+          { labelKey: "choice.confirmRun.yes", value: true },
+        ],
+        current,
+        (value) => {
+          state.answers.confirm_run = value;
+          updateRunEligibility(normalizedQuestions);
         }
       );
     }
@@ -2163,7 +2509,7 @@ function renderQuestions(questions) {
         const options = [{ labelKey: "choice.contigNone", value: "" }, ...contigs];
         renderChoiceButtons(card, options, current || "", (value) => {
           state.answers.rfd3_contig = value;
-          updateRunEligibility(questions);
+          updateRunEligibility(normalizedQuestions);
         });
         const note = document.createElement("div");
         note.className = "choice-note";
@@ -2177,6 +2523,74 @@ function renderQuestions(questions) {
       }
     }
 
+    el.questionStack.appendChild(card);
+  });
+
+  textQuestions.forEach((q) => {
+    const card = document.createElement("div");
+    card.className = "question-card" + (q.required ? " required" : "");
+
+    const title = document.createElement("div");
+    title.className = "question-title";
+    title.textContent = q.labelKey ? t(q.labelKey) : q.label || q.id || "input";
+
+    const help = document.createElement("div");
+    help.className = "question-help";
+    help.textContent = q.questionKey ? t(q.questionKey) : q.question || "";
+
+    const inputWrap = document.createElement("div");
+    inputWrap.className = "input-row";
+    const multiline = Boolean(q.multiline) || ANSWER_TEXTAREA_KEYS.has(q.id);
+
+    const input = multiline ? document.createElement("textarea") : document.createElement("input");
+    if (!multiline) {
+      input.type = ANSWER_INT_KEYS.has(q.id) || ANSWER_FLOAT_KEYS.has(q.id) ? "number" : "text";
+      if (ANSWER_FLOAT_KEYS.has(q.id)) input.step = "0.01";
+      if (ANSWER_INT_KEYS.has(q.id)) input.step = "1";
+    }
+    if (multiline) {
+      input.rows = 3;
+    }
+    if (q.placeholder) {
+      input.placeholder = q.placeholder;
+    }
+
+    if (state.answers[q.id] === undefined && q.default !== undefined) {
+      state.answers[q.id] = q.default;
+    }
+    input.value = formatAnswerValue(state.answers[q.id]);
+
+    const errorEl = document.createElement("div");
+    errorEl.className = "question-error";
+    const existingError = (state.answerMeta[q.id] || {}).error;
+    if (existingError) {
+      errorEl.textContent = existingError;
+      errorEl.style.display = "block";
+    } else {
+      errorEl.style.display = "none";
+    }
+
+    input.addEventListener("input", () => {
+      const parsed = parseAnswerValue(q.id, input.value);
+      if (parsed.error) {
+        state.answers[q.id] = "";
+        state.answerMeta[q.id] = { ...state.answerMeta[q.id], error: parsed.error, raw: input.value };
+        errorEl.textContent = parsed.error;
+        errorEl.style.display = "block";
+      } else {
+        state.answers[q.id] = parsed.value;
+        state.answerMeta[q.id] = { ...state.answerMeta[q.id], error: "", raw: input.value };
+        errorEl.textContent = "";
+        errorEl.style.display = "none";
+      }
+      updateRunEligibility(normalizedQuestions);
+    });
+
+    inputWrap.appendChild(input);
+    card.appendChild(title);
+    card.appendChild(help);
+    card.appendChild(inputWrap);
+    card.appendChild(errorEl);
     el.questionStack.appendChild(card);
   });
 
@@ -2265,7 +2679,7 @@ function renderQuestions(questions) {
             fileName.textContent = t("attachment.none");
             meta.textContent = t("attachment.none");
           }
-          updateRunEligibility(questions);
+          updateRunEligibility(normalizedQuestions);
         };
 
         useBtn.addEventListener("click", () => setMode("use"));
@@ -2290,7 +2704,7 @@ function renderQuestions(questions) {
           state.answerMeta[q.id] = {};
           fileName.textContent = t("attachment.none");
           meta.textContent = t("attachment.none");
-          updateRunEligibility(questions);
+          updateRunEligibility(normalizedQuestions);
           return;
         }
         try {
@@ -2319,7 +2733,7 @@ function renderQuestions(questions) {
           fileName.textContent = t("attachment.none");
           meta.textContent = t("attachment.failed", { error: err.message });
         }
-        updateRunEligibility(questions);
+        updateRunEligibility(normalizedQuestions);
       });
 
       clearBtn.addEventListener("click", () => {
@@ -2334,7 +2748,7 @@ function renderQuestions(questions) {
         if (q.id === "rfd3_input_pdb" && state.runMode === "pipeline") {
           state.answers.rfd3_contig = "";
         }
-        updateRunEligibility(questions);
+        updateRunEligibility(normalizedQuestions);
       });
 
       controls.appendChild(selectBtn);
@@ -2355,13 +2769,14 @@ function renderQuestions(questions) {
     el.questionStack.appendChild(card);
   }
 
-  updateRunEligibility(questions);
+  updateRunEligibility(normalizedQuestions);
 }
 
 function updateRunEligibility(questions) {
   const requiredIds = new Set(
     (questions || [])
-      .filter((q) => q.required && q.id !== "run_mode")
+      .map((q) => normalizeQuestion(q))
+      .filter((q) => q && q.required && q.id !== "run_mode")
       .map((q) => q.id)
   );
 
@@ -2405,13 +2820,17 @@ function updateRunEligibility(questions) {
     requiredIds.add("diffdock_ligand");
   }
 
-  const missing = Array.from(requiredIds).filter((id) => isAnswerMissing(state.answers[id]));
-  if (missing.length === 0) {
+  const missing = Array.from(requiredIds).filter((id) => {
+    if (id === "confirm_run") return state.answers.confirm_run !== true;
+    return isAnswerMissing(state.answers[id]);
+  });
+  const runBusy = state.runSubmitting || String(state.currentRunState || "").toLowerCase() === "running";
+  if (missing.length === 0 && !runBusy) {
     el.runBtn.disabled = false;
     el.runHint.textContent = t("hint.ready");
   } else {
     el.runBtn.disabled = true;
-    el.runHint.textContent = t("hint.missing");
+    el.runHint.textContent = runBusy ? t("hint.running") : t("hint.missing");
   }
 }
 
@@ -2428,6 +2847,9 @@ function buildAnswerPayload(mode = state.runMode) {
   delete answers.target_input;
   if (answers.run_mode) {
     delete answers.run_mode;
+  }
+  if (answers.confirm_run !== undefined) {
+    delete answers.confirm_run;
   }
   if (mode === "pipeline" && isAnswerMissing(answers.rfd3_input_pdb)) {
     delete answers.rfd3_contig;
@@ -2488,7 +2910,16 @@ function buildRoutedForMode(mode) {
   if (mode === "design") return { stop_after: "design" };
   if (mode === "soluprot") return { stop_after: "soluprot" };
   if (mode === "af2") return { stop_after: "af2" };
-  return state.plan?.routed_request || {};
+  return {};
+}
+
+function mergeRoutedWithMode(mode, routed) {
+  const base = buildRoutedForMode(mode);
+  const merged = { ...base, ...(routed || {}) };
+  if (mode && mode !== "pipeline" && base.stop_after) {
+    merged.stop_after = base.stop_after;
+  }
+  return merged;
 }
 
 function _formatList(label, items) {
@@ -2508,6 +2939,37 @@ function _formatDetected(label, detected) {
   return _formatList(label, entries);
 }
 
+function buildPromptPlan(plan, preflight, prompt) {
+  const questions = [];
+  const seen = new Set();
+  const addQuestion = (q) => {
+    const normalized = normalizeQuestion(q);
+    if (!normalized || !normalized.id) return;
+    if (seen.has(normalized.id)) return;
+    questions.push(normalized);
+    seen.add(normalized.id);
+  };
+
+  (plan?.questions || []).forEach(addQuestion);
+  (preflight?.required_inputs || []).forEach((item) => {
+    addQuestion({
+      id: item?.id || "required_input",
+      question: item?.message || "",
+      required: item?.required !== false,
+    });
+  });
+
+  addQuestion({ id: "confirm_run", required: true });
+
+  return {
+    routed_request: plan?.routed_request || {},
+    questions,
+    source: "prompt",
+    allow_unfiltered_answers: true,
+    prompt: prompt || "",
+  };
+}
+
 async function runPreflight({ announce = true } = {}) {
   const prompt = el.promptInput.value.trim();
   const mode = state.runMode || "pipeline";
@@ -2519,15 +2981,7 @@ async function runPreflight({ announce = true } = {}) {
     return { ok: false, preflight: null, plan: null };
   }
   const rawAnswers = buildAnswerPayload(mode);
-  const answers = filterAnswersForMode(mode, rawAnswers);
-  const routed = buildRoutedForMode(mode);
-  const args = buildRunArguments({
-    prompt,
-    routed,
-    answers,
-    runId: "",
-  });
-  delete args.run_id;
+  const answers = prompt ? rawAnswers : filterAnswersForMode(mode, rawAnswers);
 
   if (announce && prompt) {
     setMessage(prompt, "user");
@@ -2535,15 +2989,6 @@ async function runPreflight({ announce = true } = {}) {
 
   let preflight = null;
   let plan = null;
-  try {
-    preflight = await apiCall("pipeline.preflight", args);
-  } catch (err) {
-    if (announce) {
-      setMessage(t("preflight.failed", { error: err.message }), "ai");
-    }
-    return { ok: false, preflight: null, plan: null };
-  }
-
   if (prompt) {
     try {
       plan = await apiCall("pipeline.plan_from_prompt", {
@@ -2562,6 +3007,37 @@ async function runPreflight({ announce = true } = {}) {
     }
   }
 
+  const routed = mergeRoutedWithMode(mode, plan?.routed_request || {});
+  const args = buildRunArguments({
+    prompt,
+    routed,
+    answers,
+    runId: "",
+  });
+  delete args.run_id;
+
+  try {
+    preflight = await apiCall("pipeline.preflight", args);
+  } catch (err) {
+    if (announce) {
+      setMessage(t("preflight.failed", { error: err.message }), "ai");
+    }
+    return { ok: false, preflight: null, plan: null };
+  }
+
+  if (prompt && plan) {
+    const promptKey = prompt.trim();
+    const samePrompt = state.plan?.source === "prompt" && state.plan?.prompt === promptKey;
+    state.plan = buildPromptPlan(plan, preflight, promptKey);
+    if (!samePrompt) {
+      state.answers.confirm_run = false;
+    }
+    renderQuestions(state.plan.questions || []);
+  } else if (!prompt && state.plan?.source === "prompt") {
+    state.plan = buildManualPlan(mode);
+    renderQuestions(state.plan.questions || []);
+  }
+
   if (announce && preflight) {
     const lines = [];
     lines.push(t("preflight.title") + ": " + (preflight.ok ? t("preflight.ok") : t("preflight.blocked")));
@@ -2573,7 +3049,11 @@ async function runPreflight({ announce = true } = {}) {
     });
     const requiredBlock = _formatList(t("preflight.required"), required);
     const errorBlock = _formatList(t("preflight.errors"), preflight.errors || []);
-    const warnBlock = _formatList(t("preflight.warnings"), preflight.warnings || []);
+    const planWarnings = (plan?.errors || []).map((err) => `prompt: ${err}`);
+    const warnBlock = _formatList(t("preflight.warnings"), [
+      ...(preflight.warnings || []),
+      ...planWarnings,
+    ]);
     const detectBlock = _formatDetected(t("preflight.detected"), preflight.detected);
 
     if (requiredBlock) lines.push(requiredBlock);
@@ -2603,13 +3083,17 @@ async function runPreflight({ announce = true } = {}) {
 }
 
 async function runPipeline() {
+  if (state.runSubmitting || String(state.currentRunState || "").toLowerCase() === "running") {
+    setMessage(t("run.alreadyRunning"), "ai");
+    return;
+  }
   if (!state.plan) return;
   const prompt = el.promptInput.value.trim();
   const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
   const runId = createRunId(prefix);
   const mode = state.runMode || "pipeline";
   const rawAnswers = buildAnswerPayload(mode);
-  const answers = filterAnswersForMode(mode, rawAnswers);
+  const answers = state.plan?.allow_unfiltered_answers ? rawAnswers : filterAnswersForMode(mode, rawAnswers);
   let args = {};
   let toolName = "pipeline.run";
 
@@ -2620,38 +3104,15 @@ async function runPipeline() {
     }
   }
 
-  if (mode === "pipeline") {
+  if (state.plan?.source === "prompt" && state.answers.confirm_run !== true) {
+    setMessage(t("run.confirmRequired"), "ai");
+    return;
+  }
+
+  if (["pipeline", "rfd3", "msa", "design", "soluprot"].includes(mode)) {
     args = buildRunArguments({
       prompt,
-      routed: state.plan.routed_request || {},
-      answers,
-      runId,
-    });
-  } else if (mode === "rfd3") {
-    args = buildRunArguments({
-      prompt,
-      routed: { stop_after: "rfd3" },
-      answers,
-      runId,
-    });
-  } else if (mode === "msa") {
-    args = buildRunArguments({
-      prompt,
-      routed: { stop_after: "msa" },
-      answers,
-      runId,
-    });
-  } else if (mode === "design") {
-    args = buildRunArguments({
-      prompt,
-      routed: { stop_after: "design" },
-      answers,
-      runId,
-    });
-  } else if (mode === "soluprot") {
-    args = buildRunArguments({
-      prompt,
-      routed: { stop_after: "soluprot" },
+      routed: mergeRoutedWithMode(mode, state.plan?.routed_request || {}),
       answers,
       runId,
     });
@@ -2675,6 +3136,9 @@ async function runPipeline() {
   const modeLabel = t(`mode.${mode}`) || mode;
   setMessage(t("run.launching", { mode: modeLabel, id: runId }), "ai");
   setCurrentRunId(runId);
+  state.currentRunState = "running";
+  state.runSubmitting = true;
+  updateRunEligibility(state.plan?.questions || []);
 
   try {
     const result = await apiCall(toolName, args);
@@ -2684,7 +3148,11 @@ async function runPipeline() {
     ensureAutoPoll();
     await pollStatus(result.run_id);
   } catch (err) {
+    state.currentRunState = "failed";
     setMessage(t("run.failed", { error: err.message }), "ai");
+  } finally {
+    state.runSubmitting = false;
+    updateRunEligibility(state.plan?.questions || []);
   }
 }
 
@@ -2704,6 +3172,8 @@ async function pollStatus(runId) {
       setMessage(t("status.line", { stage, state: stateText }), "ai");
     }
   } catch (err) {
+    state.currentRunState = "";
+    updateRunEligibility(state.plan?.questions || []);
     setMessage(t("status.error", { error: err.message }), "ai");
   }
 }

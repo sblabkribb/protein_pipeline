@@ -61,6 +61,9 @@ class PipelineRequest:
     ligand_mask_distance: float = 6.0
     ligand_resnames: list[str] | None = None
     ligand_atom_chains: list[str] | None = None
+    surface_only: bool = False
+    surface_min_rel: float = 0.2
+    surface_min_abs: float = 10.0
 
     pdb_strip_nonpositive_resseq: bool = True
     pdb_renumber_resseq_from_1: bool = False
@@ -71,6 +74,8 @@ class PipelineRequest:
     seed: int = 0
 
     soluprot_cutoff: float = 0.5
+    pi_min: float | None = None
+    pi_max: float | None = None
 
     af2_model_preset: str = "auto"  # auto | monomer | multimer (and variants)
     af2_db_preset: str = "full_dbs"
@@ -129,5 +134,6 @@ class PipelineResult:
     msa_tsv_path: str | None
     conservation_path: str | None
     ligand_mask_path: str | None
+    surface_mask_path: str | None
     tiers: list[TierResult]
     errors: list[str] = field(default_factory=list)

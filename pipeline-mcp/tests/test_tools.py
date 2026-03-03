@@ -4,8 +4,13 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
+from pipeline_mcp.models import PipelineRequest
 from pipeline_mcp.pipeline import PipelineRunner
+from pipeline_mcp.storage import init_run
+from pipeline_mcp.storage import set_status
 from pipeline_mcp.tools import ToolDispatcher
+from pipeline_mcp.tools import AutoRetryConfig
+from pipeline_mcp.tools import _run_with_auto_retry
 
 
 @contextmanager
@@ -85,6 +90,46 @@ class TestTools(unittest.TestCase):
                 {"target_fasta": fasta, "target_pdb": pdb, "dry_run": True, "run_id": "my_test_run"},
             )
             self.assertEqual(Path(str(out.get("output_dir") or "")).name, "my_test_run")
+
+    def test_pipeline_run_rejects_running_run_id(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            paths = init_run(tmp, "busy_run")
+            set_status(paths, stage="init", state="running")
+            with self.assertRaisesRegex(ValueError, "already running"):
+                dispatcher.call_tool(
+                    "pipeline.run",
+                    {"target_fasta": fasta, "dry_run": True, "run_id": "busy_run"},
+                )
+
+    def test_pipeline_preflight_without_target_returns_required_inputs(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool("pipeline.preflight", {})
+            self.assertFalse(bool(out.get("ok")))
+            required = out.get("required_inputs") or []
+            ids = {str(item.get("id")) for item in required if isinstance(item, dict)}
+            self.assertIn("target_input", ids)
+
+    def test_auto_retry_does_not_retry_cancelled_error(self) -> None:
+        req = PipelineRequest(target_fasta=">q1\nACDE\n", target_pdb="", dry_run=False)
+
+        class _StubRunner:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def run(self, request: PipelineRequest, *, run_id: str | None = None):  # type: ignore[no-untyped-def]
+                self.calls += 1
+                raise RuntimeError("MMseqs RunPod job not completed: {'status': 'CANCELLED'}")
+
+        stub = _StubRunner()
+        retry = AutoRetryConfig(enabled=True, max_attempts=3, backoff_s=0.0)
+        with self.assertRaisesRegex(RuntimeError, "CANCELLED"):
+            _run_with_auto_retry(stub, req, run_id="cancel_case", retry=retry)  # type: ignore[arg-type]
+        self.assertEqual(stub.calls, 1)
 
     def test_pipeline_run_tool_accepts_rfd3_inputs(self) -> None:
         pdb = (
