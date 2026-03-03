@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>K-Biofoundry | Protein Pipeline Console</title>
+    <link rel="stylesheet" href="./styles.css?v=20260223e" />
+  </head>
+  <body>
+    <div class="bg-orb orb-a" aria-hidden="true"></div>
+    <div class="bg-orb orb-b" aria-hidden="true"></div>
+    <div class="bg-grid" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">KBF</div>
+        <div class="brand-text">
+          <div class="brand-title">K-Biofoundry</div>
+          <div class="brand-subtitle" data-i18n="brand.subtitle">Protein Pipeline Console</div>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button class="lang-btn" data-lang="ko">KO</button>
+          <button class="lang-btn" data-lang="en">EN</button>
+        </div>
+        <button id="helpBtn" class="ghost" data-i18n="action.help">Usage</button>
+        <button id="adminBtn" class="ghost hidden" data-i18n="action.admin">Admin</button>
+        <button id="settingsBtn" class="ghost" data-i18n="action.settings">Settings</button>
+        <button id="logoutBtn" class="ghost" data-i18n="action.logout">Logout</button>
+      </div>
+    </header>
+
+    <main class="layout">
+      <div id="loginGate" class="login-gate">
+        <div class="login-card">
+          <h1 data-i18n="login.title">Enter the Lab</h1>
+          <p data-i18n="login.desc">
+            Identify yourself to separate runs and keep artifacts organized.
+          </p>
+          <label>
+            <span data-i18n="login.username">Username</span>
+            <input
+              id="loginUsername"
+              type="text"
+              placeholder="e.g. hana.kim"
+              data-i18n-placeholder="login.username.placeholder"
+            />
+          </label>
+          <label>
+            <span data-i18n="login.password">Password</span>
+            <input
+              id="loginPassword"
+              type="password"
+              placeholder="••••••••"
+              data-i18n-placeholder="login.password.placeholder"
+            />
+          </label>
+          <button id="loginBtn" class="primary" data-i18n="login.submit">Access Console</button>
+          <div id="loginError" class="hint"></div>
+        </div>
+      </div>
+
+      <div id="appShell" class="app-shell hidden">
+        <nav class="tabbar" role="tablist" aria-label="Console modes">
+          <button
+            id="tabBtnSetup"
+            class="tab-btn active"
+            role="tab"
+            aria-selected="true"
+            aria-controls="tab-setup"
+            data-tab="setup"
+            data-i18n="tabs.setup"
+          >
+            Setup
+          </button>
+          <button
+            id="tabBtnMonitor"
+            class="tab-btn"
+            role="tab"
+            aria-selected="false"
+            aria-controls="tab-monitor"
+            data-tab="monitor"
+            data-i18n="tabs.monitor"
+          >
+            Monitor
+          </button>
+          <button
+            id="tabBtnAnalyze"
+            class="tab-btn"
+            role="tab"
+            aria-selected="false"
+            aria-controls="tab-analyze"
+            data-tab="analyze"
+            data-i18n="tabs.analyze"
+          >
+            Analyze
+          </button>
+        </nav>
+
+        <section
+          id="tab-setup"
+          class="tab-panel active"
+          data-tab="setup"
+          role="tabpanel"
+          aria-labelledby="tabBtnSetup"
+        >
+          <div class="panel panel-chat">
+            <div id="chatArea" class="chat-area">
+              <div class="chat-header">
+                <div>
+                  <h2 data-i18n="setup.title">Run Setup</h2>
+                  <p data-i18n="setup.desc">Choose a workflow, attach inputs, and launch the job.</p>
+                </div>
+                <div class="user-badge" id="userBadge"></div>
+              </div>
+
+              <div id="messages" class="messages"></div>
+
+              <div class="composer">
+                <div class="composer-row">
+                  <textarea
+                    id="promptInput"
+                    rows="3"
+                    placeholder="Optional notes for this run (no prompt required)."
+                    data-i18n-placeholder="setup.prompt.placeholder"
+                  ></textarea>
+                  <div class="composer-actions">
+                    <button id="checkBtn" class="ghost" data-i18n="setup.check">Check Setup</button>
+                    <button id="planBtn" class="ghost" data-i18n="setup.reset">Reset Inputs</button>
+                    <button id="clearBtn" class="ghost" data-i18n="setup.clear">Clear Log</button>
+                  </div>
+                </div>
+              </div>
+
+              <div id="questionStack" class="question-stack"></div>
+
+              <div class="run-actions">
+                <button id="runBtn" class="primary" disabled>Run</button>
+                <div id="runHint" class="hint" data-i18n="setup.hint">
+                  Complete required inputs to enable execution.
+                </div>
+              </div>
+              <div id="runInlineStatus" class="run-inline-status" data-i18n="setup.runStatus.empty">
+                Run status: -
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section
+          id="tab-monitor"
+          class="tab-panel"
+          data-tab="monitor"
+          role="tabpanel"
+          aria-labelledby="tabBtnMonitor"
+        >
+          <div class="tab-grid monitor-grid">
+            <div class="panel panel-block">
+              <div class="panel-header">
+                <h3 data-i18n="monitor.title">Run Monitor</h3>
+                <p data-i18n="monitor.desc">Track live status, scores, and recent runs.</p>
+              </div>
+              <div class="status-card">
+                <div class="status-row">
+                  <span class="label" data-i18n="monitor.runId">Run ID</span>
+                  <span id="runIdValue" class="value">-</span>
+                </div>
+                <div class="status-row">
+                  <span class="label" data-i18n="monitor.stage">Stage</span>
+                  <span id="runStageValue" class="value">-</span>
+                </div>
+                <div class="status-row">
+                  <span class="label" data-i18n="monitor.state">State</span>
+                  <span id="runStateValue" class="value">-</span>
+                </div>
+                <div class="status-row">
+                  <span class="label" data-i18n="monitor.updated">Updated</span>
+                  <span id="runUpdatedValue" class="value">-</span>
+                </div>
+                <div class="status-subtitle" data-i18n="monitor.scoring">Scoring</div>
+                <div class="score-row score-row-compact">
+                  <div class="score-pill" id="runScoreValue">Score: -</div>
+                  <div class="score-pill" id="runEvidenceValue">Evidence: -</div>
+                  <div class="score-pill" id="runRecommendationValue">Recommendation: -</div>
+                </div>
+                <div class="status-actions">
+                  <button id="pollBtn" class="ghost" data-i18n="monitor.poll">Poll Now</button>
+                  <button id="cancelRunBtn" class="ghost" data-i18n="monitor.stop">Stop Run</button>
+                  <label class="toggle">
+                    <input id="autoPoll" type="checkbox" checked />
+                    <span data-i18n="monitor.autoPoll">Auto Poll</span>
+                  </label>
+                </div>
+                <div class="status-subtitle run-subtitle">
+                  <span data-i18n="monitor.recentRuns">Recent Runs</span>
+                  <button id="refreshRunsBtn" class="ghost" data-i18n="monitor.refreshRuns">
+                    Refresh
+                  </button>
+                </div>
+                <div id="runList" class="run-list"></div>
+                <label id="adminRunsToggle" class="toggle hidden">
+                  <input id="showAllRuns" type="checkbox" />
+                  <span data-i18n="monitor.showAll">Show all runs (admin)</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="panel panel-block">
+              <div class="panel-header">
+                <h3 data-i18n="artifacts.title">Artifacts</h3>
+                <p data-i18n="artifacts.desc">Filter outputs and open previews.</p>
+              </div>
+              <div class="artifact-controls">
+                <input
+                  id="artifactFilter"
+                  type="text"
+                  placeholder="Filter by name or stage"
+                  data-i18n-placeholder="artifacts.filter.placeholder"
+                />
+                <select id="artifactStageFilter" class="artifact-select"></select>
+                <select id="artifactTierFilter" class="artifact-select"></select>
+                <select id="artifactTypeFilter" class="artifact-select"></select>
+                <button id="refreshArtifacts" class="ghost" data-i18n="artifacts.refresh">Refresh</button>
+              </div>
+              <div id="artifactList" class="artifact-list"></div>
+              <div class="panel-divider"></div>
+              <div class="panel-header small">
+                <h3 data-i18n="artifacts.preview.title">Artifact Preview</h3>
+                <p data-i18n="artifacts.preview.desc">3D structures, images, or text extracts.</p>
+              </div>
+              <div id="artifactPreview" class="artifact-preview">
+                <div class="placeholder" data-i18n="artifacts.preview.placeholder">
+                  Select an artifact to preview it here.
+                </div>
+              </div>
+            </div>
+
+            <div class="panel panel-block span-2">
+              <div class="panel-header">
+                <h3 data-i18n="agent.title">Agent Panel</h3>
+                <p data-i18n="agent.desc">Stage-by-stage expert consensus and recovery notes.</p>
+              </div>
+              <div class="agent-controls">
+                <button id="refreshAgentPanel" class="ghost" data-i18n="agent.refresh">Refresh</button>
+                <button id="viewRunReport" class="ghost" data-i18n="agent.viewReport">
+                  View Report
+                </button>
+                <button id="viewAgentReport" class="ghost" data-i18n="agent.viewAgentReport">
+                  View Agent Report
+                </button>
+                <span id="agentPanelStatus" class="agent-status"></span>
+              </div>
+              <div id="agentPanelList" class="agent-panel-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section
+          id="tab-analyze"
+          class="tab-panel"
+          data-tab="analyze"
+          role="tabpanel"
+          aria-labelledby="tabBtnAnalyze"
+        >
+          <div class="tab-grid analyze-grid">
+            <div class="panel panel-block">
+              <div class="panel-header">
+                <h3 data-i18n="feedback.title">Feedback</h3>
+                <p data-i18n="feedback.desc">Capture expert reviews and ratings.</p>
+              </div>
+              <div class="status-card feedback-card">
+                <div class="form-row">
+                  <span class="label" data-i18n="feedback.rating">Rating</span>
+                  <div id="feedbackRating" class="choice-group"></div>
+                </div>
+                <div class="form-row">
+                  <span class="label" data-i18n="feedback.reasons">Reasons</span>
+                  <div id="feedbackReasons" class="choice-group"></div>
+                </div>
+                <div class="form-row">
+                  <label>
+                    <span data-i18n="feedback.artifact">Artifact (optional)</span>
+                    <select id="feedbackArtifact"></select>
+                  </label>
+                  <label>
+                    <span data-i18n="feedback.stage">Stage (optional)</span>
+                    <select id="feedbackStage"></select>
+                  </label>
+                </div>
+                <label>
+                  <span data-i18n="feedback.comment">Comment</span>
+                  <textarea
+                    id="feedbackComment"
+                    rows="3"
+                    placeholder="Short context or interpretation"
+                    data-i18n-placeholder="feedback.comment.placeholder"
+                  ></textarea>
+                </label>
+                <button id="submitFeedback" class="primary" data-i18n="feedback.submit">
+                  Submit Feedback
+                </button>
+                <div class="form-row export-actions">
+                  <button id="exportFeedbackCsv" class="ghost" data-i18n="feedback.exportCsv">
+                    Export CSV
+                  </button>
+                  <button id="exportFeedbackTsv" class="ghost" data-i18n="feedback.exportTsv">
+                    Export TSV
+                  </button>
+                </div>
+                <div id="feedbackStatus" class="hint"></div>
+                <div class="status-subtitle" data-i18n="feedback.recent">Recent Feedback</div>
+                <div id="feedbackList" class="run-list"></div>
+              </div>
+            </div>
+
+            <div class="panel panel-block">
+              <div class="panel-header">
+                <h3 data-i18n="experiment.title">Experiment</h3>
+                <p data-i18n="experiment.desc">Log wet-lab outcomes and metrics.</p>
+              </div>
+              <div class="status-card feedback-card">
+                <div class="form-row">
+                  <label>
+                    <span data-i18n="experiment.assay">Assay Type</span>
+                    <select id="experimentAssay"></select>
+                  </label>
+                  <label>
+                    <span data-i18n="experiment.result">Result</span>
+                    <select id="experimentResult"></select>
+                  </label>
+                </div>
+                <div class="form-row">
+                  <label>
+                    <span data-i18n="experiment.sample">Sample ID (optional)</span>
+                    <input
+                      id="experimentSampleId"
+                      type="text"
+                      placeholder="e.g. seq_001"
+                      data-i18n-placeholder="experiment.sample.placeholder"
+                    />
+                  </label>
+                  <label>
+                    <span data-i18n="experiment.artifact">Artifact (optional)</span>
+                    <select id="experimentArtifact"></select>
+                  </label>
+                </div>
+                <label>
+                  <span data-i18n="experiment.metrics">Metrics (JSON, optional)</span>
+                  <textarea
+                    id="experimentMetrics"
+                    rows="3"
+                    placeholder='{"kd_nM": 12.5, "t50_C": 48}'
+                    data-i18n-placeholder="experiment.metrics.placeholder"
+                  ></textarea>
+                </label>
+                <label>
+                  <span data-i18n="experiment.conditions">Conditions / Notes</span>
+                  <textarea
+                    id="experimentConditions"
+                    rows="3"
+                    placeholder="Buffer, temperature, assay details"
+                    data-i18n-placeholder="experiment.conditions.placeholder"
+                  ></textarea>
+                </label>
+                <button id="submitExperiment" class="primary" data-i18n="experiment.submit">
+                  Submit Experiment
+                </button>
+                <div class="form-row export-actions">
+                  <button id="exportExperimentCsv" class="ghost" data-i18n="experiment.exportCsv">
+                    Export CSV
+                  </button>
+                  <button id="exportExperimentTsv" class="ghost" data-i18n="experiment.exportTsv">
+                    Export TSV
+                  </button>
+                </div>
+                <div id="experimentStatus" class="hint"></div>
+                <div class="status-subtitle" data-i18n="experiment.recent">Recent Experiments</div>
+                <div id="experimentList" class="run-list"></div>
+              </div>
+            </div>
+
+            <div class="panel panel-block span-2">
+              <div class="panel-header">
+                <h3 data-i18n="report.title">Report</h3>
+                <p data-i18n="report.desc">Generate a consolidated run summary.</p>
+              </div>
+              <div class="status-card feedback-card">
+                <div class="score-row">
+                  <div class="score-pill" id="reportScoreValue">Score: -</div>
+                  <div class="score-pill" id="reportEvidenceValue">Evidence: -</div>
+                  <div class="score-pill" id="reportRecommendationValue">Recommendation: -</div>
+                </div>
+                <label>
+                  <span data-i18n="report.label">Report (Markdown)</span>
+                  <textarea
+                    id="reportContent"
+                    rows="6"
+                    placeholder="Generate or edit the report"
+                    data-i18n-placeholder="report.placeholder"
+                  ></textarea>
+                </label>
+                <div class="form-row report-actions">
+                  <button id="loadReport" class="ghost" data-i18n="report.load">Load</button>
+                  <button id="generateReport" class="ghost" data-i18n="report.generate">Generate</button>
+                  <button id="saveReport" class="primary" data-i18n="report.save">Save</button>
+                </div>
+                <div id="reportStatus" class="hint"></div>
+                <div class="panel-divider"></div>
+                <div class="panel-header small">
+                  <h3 data-i18n="report.review.title">Report Review</h3>
+                  <p data-i18n="report.review.desc">Rate the report and provide reasons.</p>
+                </div>
+                <div class="report-review">
+                  <div class="form-row">
+                    <span class="label" data-i18n="report.review.rating">Rating</span>
+                    <div id="reportReviewRating" class="choice-group"></div>
+                  </div>
+                  <div class="form-row">
+                    <span class="label" data-i18n="report.review.reasons">Reasons</span>
+                    <div id="reportReviewReasons" class="choice-group"></div>
+                  </div>
+                  <label>
+                    <span data-i18n="report.review.comment">Comment</span>
+                    <textarea
+                      id="reportReviewComment"
+                      rows="2"
+                      placeholder="Optional notes"
+                      data-i18n-placeholder="report.review.comment.placeholder"
+                    ></textarea>
+                  </label>
+                  <button id="submitReportReview" class="primary" data-i18n="report.review.submit">
+                    Submit Review
+                  </button>
+                  <div id="reportReviewStatus" class="hint"></div>
+                </div>
+                <div class="status-subtitle" data-i18n="report.links">Artifact Links</div>
+                <div id="reportArtifactLinks" class="report-links"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <div id="settingsPanel" class="overlay hidden" role="dialog" aria-modal="true">
+      <div class="overlay-card settings-card">
+        <div class="overlay-header">
+          <h4 data-i18n="settings.title">Settings</h4>
+          <button id="settingsClose" class="ghost" data-i18n="common.close">Close</button>
+        </div>
+        <div class="settings-fixed">
+          <div class="settings-label" data-i18n="settings.baseLabel">MCP HTTP Base URL</div>
+          <div id="apiBaseValue" class="settings-value"></div>
+          <div class="hint" data-i18n="settings.baseHint">
+            This value is fixed by the server configuration.
+          </div>
+        </div>
+        <div class="settings-section">
+          <label>
+            <span data-i18n="settings.reportLang.label">Report Language</span>
+            <select id="reportLangSelect">
+              <option value="auto" data-i18n="settings.reportLang.auto">Follow UI</option>
+              <option value="en" data-i18n="settings.reportLang.en">English</option>
+              <option value="ko" data-i18n="settings.reportLang.ko">Korean</option>
+            </select>
+          </label>
+          <div class="hint" data-i18n="settings.reportLang.hint">
+            Applies to run reports and agent reports.
+          </div>
+        </div>
+        <div class="settings-actions">
+          <button id="healthCheck" class="ghost" data-i18n="settings.health">Health Check</button>
+        </div>
+        <div id="healthStatus" class="hint"></div>
+      </div>
+    </div>
+
+    <div id="reportModal" class="overlay hidden" role="dialog" aria-modal="true">
+      <div class="overlay-card report-card">
+        <div class="overlay-header">
+          <h4 id="reportModalTitle">Report</h4>
+          <div class="modal-actions">
+            <button id="reportModalToggle" class="ghost" data-i18n="report.modal.toggleRendered">
+              Rendered
+            </button>
+            <button id="reportModalDownload" class="ghost" data-i18n="report.modal.download">
+              Download
+            </button>
+            <button id="reportModalClose" class="ghost" data-i18n="common.close">Close</button>
+          </div>
+        </div>
+        <div id="reportModalContent" class="report-modal-content"></div>
+      </div>
+    </div>
+
+    <div id="adminPanel" class="overlay hidden" role="dialog" aria-modal="true">
+      <div class="overlay-card admin-card">
+        <div class="overlay-header">
+          <h4 data-i18n="admin.title">Admin: Create User</h4>
+          <button id="adminClose" class="ghost" data-i18n="common.close">Close</button>
+        </div>
+        <label>
+          <span data-i18n="admin.username">New Username</span>
+          <input
+            id="adminUsername"
+            type="text"
+            placeholder="new.user"
+            data-i18n-placeholder="admin.username.placeholder"
+          />
+        </label>
+        <label>
+          <span data-i18n="admin.password">New Password</span>
+          <input
+            id="adminPassword"
+            type="password"
+            placeholder="min 8 chars"
+            data-i18n-placeholder="admin.password.placeholder"
+          />
+        </label>
+        <label>
+          <span data-i18n="admin.role">Role</span>
+          <select id="adminRole">
+            <option value="user" data-i18n="admin.role.user">User</option>
+            <option value="admin" data-i18n="admin.role.admin">Admin</option>
+          </select>
+        </label>
+        <div class="settings-actions">
+          <button id="adminCreateUser" class="primary" data-i18n="admin.create">Create User</button>
+        </div>
+        <div id="adminStatus" class="hint"></div>
+      </div>
+    </div>
+
+    <div id="helpPanel" class="overlay hidden" role="dialog" aria-modal="true">
+      <div class="overlay-card help-card">
+        <div class="overlay-header">
+          <h4 data-i18n="help.title">Usage Guide</h4>
+          <button id="helpClose" class="ghost" data-i18n="common.close">Close</button>
+        </div>
+        <div class="help-body">
+          <div class="help-section">
+            <h5 data-i18n="help.quick.title">Quick Start</h5>
+            <ul>
+              <li data-i18n="help.quick.step1">Setup: choose mode, attach inputs, and run.</li>
+              <li data-i18n="help.quick.step2">Monitor: watch status and review artifacts.</li>
+              <li data-i18n="help.quick.step3">Analyze: record feedback, experiments, and reports.</li>
+            </ul>
+          </div>
+          <div class="help-section">
+            <h5 data-i18n="help.setup.title">Setup Tips</h5>
+            <ul>
+              <li data-i18n="help.setup.step1">Use Run Mode to select pipeline or specific tools.</li>
+              <li data-i18n="help.setup.step2">
+                Attach required files; missing inputs keep Run disabled.
+              </li>
+            </ul>
+          </div>
+          <div class="help-section">
+            <h5 data-i18n="help.monitor.title">Monitoring</h5>
+            <ul>
+              <li data-i18n="help.monitor.step1">Select a recent run to load status and artifacts.</li>
+              <li data-i18n="help.monitor.step2">Use Auto Poll for live updates.</li>
+            </ul>
+          </div>
+          <div class="help-section">
+            <h5 data-i18n="help.analyze.title">Analysis</h5>
+            <ul>
+              <li data-i18n="help.analyze.step1">Feedback captures subjective evaluation.</li>
+              <li data-i18n="help.analyze.step2">Experiments log wet-lab outcomes.</li>
+              <li data-i18n="help.analyze.step3">Reports consolidate results and link artifacts.</li>
+            </ul>
+          </div>
+          <div class="help-section">
+            <h5 data-i18n="help.admin.title">Admin</h5>
+            <ul>
+              <li data-i18n="help.admin.step1">Admins can create users from the Admin button.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
+    <script type="module" src="./app.js?v=20260223e"></script>
+  </body>
+</html>

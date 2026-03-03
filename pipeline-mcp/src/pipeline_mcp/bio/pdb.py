@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 import math
 
 
@@ -535,3 +536,184 @@ def ca_rmsd(
         dz = r[2] - mz
         total += dx * dx + dy * dy + dz * dz
     return math.sqrt(total / float(len(ref_c)))
+
+
+_VDW_RADII = {
+    "H": 1.2,
+    "C": 1.7,
+    "N": 1.55,
+    "O": 1.52,
+    "S": 1.8,
+    "P": 1.8,
+    "SE": 1.9,
+    "FE": 1.8,
+    "ZN": 1.39,
+    "MG": 1.73,
+    "CA": 1.94,
+}
+
+# Max ASA values (Tien et al., 2013) in Å^2
+_RES_MAX_ASA = {
+    "A": 121.0,
+    "R": 265.0,
+    "N": 187.0,
+    "D": 187.0,
+    "C": 148.0,
+    "Q": 214.0,
+    "E": 214.0,
+    "G": 97.0,
+    "H": 216.0,
+    "I": 195.0,
+    "L": 191.0,
+    "K": 230.0,
+    "M": 203.0,
+    "F": 228.0,
+    "P": 154.0,
+    "S": 143.0,
+    "T": 163.0,
+    "W": 264.0,
+    "Y": 255.0,
+    "V": 165.0,
+}
+
+
+def _vdw_radius(element: str) -> float:
+    key = (element or "").strip().upper()
+    if not key:
+        return 1.7
+    if key in _VDW_RADII:
+        return _VDW_RADII[key]
+    if len(key) > 1 and key[:1] in _VDW_RADII:
+        return _VDW_RADII[key[:1]]
+    return 1.7
+
+
+@lru_cache(maxsize=8)
+def _unit_sphere_points(count: int) -> list[tuple[float, float, float]]:
+    points: list[tuple[float, float, float]] = []
+    n = max(1, int(count))
+    offset = 2.0 / float(n)
+    inc = math.pi * (3.0 - math.sqrt(5.0))
+    for i in range(n):
+        y = (i * offset) - 1.0 + (offset / 2.0)
+        r = math.sqrt(max(0.0, 1.0 - y * y))
+        phi = i * inc
+        x = math.cos(phi) * r
+        z = math.sin(phi) * r
+        points.append((x, y, z))
+    return points
+
+
+def residue_sasa_by_chain(
+    pdb_text: str,
+    *,
+    chains: list[str] | None = None,
+    probe_radius: float = 1.4,
+    points_per_atom: int = 60,
+) -> dict[str, dict[int, dict[str, float | str]]]:
+    residues = residues_by_chain(pdb_text, only_atom_records=True)
+    if chains is not None:
+        residues = {k: v for k, v in residues.items() if k in set(chains)}
+
+    atoms: list[tuple[float, float, float, float, str, int, str]] = []
+    for chain_id, res_list in residues.items():
+        for res in res_list:
+            for atom in res.atoms:
+                if not _is_heavy(atom):
+                    continue
+                radius = _vdw_radius(atom.element)
+                atoms.append((atom.x, atom.y, atom.z, radius, chain_id, res.index, res.resname))
+
+    if not atoms:
+        return {}
+
+    cell_size = 4.0 + float(probe_radius)
+    grid: dict[tuple[int, int, int], list[int]] = {}
+    for idx, (x, y, z, _r, _c, _i, _rn) in enumerate(atoms):
+        cell = (int(x // cell_size), int(y // cell_size), int(z // cell_size))
+        grid.setdefault(cell, []).append(idx)
+
+    points = _unit_sphere_points(points_per_atom)
+    residue_sasa: dict[str, dict[int, dict[str, float | str]]] = {}
+
+    for idx, (x, y, z, radius, chain_id, res_idx, resname) in enumerate(atoms):
+        cell = (int(x // cell_size), int(y // cell_size), int(z // cell_size))
+        neighbors: list[tuple[float, float, float, float]] = []
+        ri = radius + probe_radius
+        ri2 = ri * ri
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for dz in (-1, 0, 1):
+                    for j in grid.get((cell[0] + dx, cell[1] + dy, cell[2] + dz), []):
+                        if j == idx:
+                            continue
+                        xj, yj, zj, rj, *_ = atoms[j]
+                        rj_probe = rj + probe_radius
+                        # prune far neighbors
+                        max_d = ri + rj_probe
+                        dxj = x - xj
+                        dyj = y - yj
+                        dzj = z - zj
+                        if (dxj * dxj + dyj * dyj + dzj * dzj) <= max_d * max_d:
+                            neighbors.append((xj, yj, zj, rj_probe))
+
+        accessible = 0
+        for px, py, pz in points:
+            sx = x + px * ri
+            sy = y + py * ri
+            sz = z + pz * ri
+            occluded = False
+            for xj, yj, zj, rj_probe in neighbors:
+                dxj = sx - xj
+                dyj = sy - yj
+                dzj = sz - zj
+                if (dxj * dxj + dyj * dyj + dzj * dzj) < (rj_probe * rj_probe):
+                    occluded = True
+                    break
+            if not occluded:
+                accessible += 1
+
+        sasa = (accessible / float(len(points))) * (4.0 * math.pi * ri2)
+        chain_payload = residue_sasa.setdefault(chain_id, {})
+        entry = chain_payload.get(res_idx)
+        if not isinstance(entry, dict):
+            entry = {"resname": resname, "sasa": 0.0}
+            chain_payload[res_idx] = entry
+        entry["sasa"] = float(entry.get("sasa") or 0.0) + sasa
+
+    return residue_sasa
+
+
+def surface_positions_by_chain(
+    pdb_text: str,
+    *,
+    chains: list[str] | None = None,
+    probe_radius: float = 1.4,
+    points_per_atom: int = 60,
+    min_rel: float = 0.2,
+    min_abs: float = 10.0,
+) -> tuple[dict[str, list[int]], dict[str, dict[int, dict[str, float | str]]]]:
+    sasa_by_chain = residue_sasa_by_chain(
+        pdb_text,
+        chains=chains,
+        probe_radius=probe_radius,
+        points_per_atom=points_per_atom,
+    )
+    surface: dict[str, list[int]] = {}
+    for chain_id, residues in sasa_by_chain.items():
+        surface_positions: list[int] = []
+        for res_idx, payload in residues.items():
+            resname = str(payload.get("resname") or "").upper()
+            aa = _AA3_TO_AA1.get(resname, "X")
+            max_asa = _RES_MAX_ASA.get(aa)
+            sasa_val = float(payload.get("sasa") or 0.0)
+            rel = sasa_val / max_asa if max_asa else None
+            payload["rel_sasa"] = float(rel) if rel is not None else None
+            if rel is not None:
+                if rel >= float(min_rel) or sasa_val >= float(min_abs):
+                    surface_positions.append(int(res_idx))
+            elif sasa_val >= float(min_abs):
+                surface_positions.append(int(res_idx))
+        if surface_positions:
+            surface[chain_id] = sorted(set(surface_positions))
+    return surface, sasa_by_chain

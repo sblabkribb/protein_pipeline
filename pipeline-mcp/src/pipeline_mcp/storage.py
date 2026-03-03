@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import time
 import uuid
+import shutil
 
 
 _SAFE_NAME_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
@@ -53,6 +54,23 @@ def append_jsonl(path: Path, data: object) -> None:
         f.write(json.dumps(data, ensure_ascii=False) + "\n")
 
 
+def read_jsonl(path: Path, *, limit: int | None = None) -> list[object]:
+    if not path.exists():
+        return []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    if limit is not None:
+        lines = lines[-int(limit) :] if limit > 0 else []
+    out: list[object] = []
+    for raw in lines:
+        if not raw.strip():
+            continue
+        try:
+            out.append(json.loads(raw))
+        except Exception:
+            continue
+    return out
+
+
 @dataclass(frozen=True)
 class RunPaths:
     run_id: str
@@ -80,6 +98,34 @@ def init_run(output_root: str, run_id: str) -> RunPaths:
     return RunPaths(run_id=run_id, root=root)
 
 
+def _cancel_request_path(output_root: str, run_id: str) -> Path:
+    return resolve_run_path(output_root, run_id) / "cancel.requested.json"
+
+
+def mark_cancel_requested(output_root: str, run_id: str, *, reason: str | None = None) -> None:
+    path = _cancel_request_path(output_root, run_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload: dict[str, object] = {
+        "run_id": run_id,
+        "requested_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+    }
+    if reason:
+        payload["reason"] = reason
+    write_json(path, payload)
+
+
+def clear_cancel_requested(output_root: str, run_id: str) -> None:
+    path = _cancel_request_path(output_root, run_id)
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+
+
+def is_cancel_requested(output_root: str, run_id: str) -> bool:
+    return _cancel_request_path(output_root, run_id).exists()
+
+
 def set_status(paths: RunPaths, *, stage: str, state: str, detail: str | None = None) -> None:
     payload: dict[str, object] = {
         "run_id": paths.run_id,
@@ -100,6 +146,14 @@ def list_runs(output_root: str, *, limit: int = 50) -> list[str]:
     runs = [p.name for p in root.iterdir() if p.is_dir()]
     runs.sort(reverse=True)
     return runs[: max(0, int(limit))]
+
+
+def delete_run(output_root: str, run_id: str) -> dict[str, object]:
+    root = resolve_run_path(output_root, run_id)
+    if not root.exists():
+        return {"run_id": run_id, "found": False, "deleted": False}
+    shutil.rmtree(root)
+    return {"run_id": run_id, "found": True, "deleted": True}
 
 
 def load_status(output_root: str, run_id: str) -> dict[str, object] | None:
@@ -126,6 +180,39 @@ def resolve_run_path(output_root: str, run_id: str, rel_path: str | None = None)
     if rel_path is None or str(rel_path).strip() == "":
         return root
     return root / _safe_relpath(rel_path)
+
+
+def run_exists(output_root: str, run_id: str) -> bool:
+    root = resolve_run_path(output_root, run_id)
+    return root.exists()
+
+
+def append_run_event(output_root: str, run_id: str, *, filename: str, payload: dict[str, object]) -> dict[str, object]:
+    root = resolve_run_path(output_root, run_id)
+    if not root.exists():
+        raise ValueError("run_id not found")
+    path = root / filename
+    append_jsonl(path, payload)
+    return payload
+
+
+def list_run_events(
+    output_root: str,
+    run_id: str,
+    *,
+    filename: str,
+    limit: int | None = None,
+) -> list[dict[str, object]]:
+    root = resolve_run_path(output_root, run_id)
+    if not root.exists():
+        raise ValueError("run_id not found")
+    path = root / filename
+    items = read_jsonl(path, limit=limit)
+    out: list[dict[str, object]] = []
+    for item in items:
+        if isinstance(item, dict):
+            out.append(item)
+    return out
 
 
 def list_artifacts(

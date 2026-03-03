@@ -4,8 +4,13 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
+from pipeline_mcp.models import PipelineRequest
 from pipeline_mcp.pipeline import PipelineRunner
+from pipeline_mcp.storage import init_run
+from pipeline_mcp.storage import set_status
 from pipeline_mcp.tools import ToolDispatcher
+from pipeline_mcp.tools import AutoRetryConfig
+from pipeline_mcp.tools import _run_with_auto_retry
 from pipeline_mcp.tools import pipeline_request_from_args
 
 
@@ -87,6 +92,46 @@ class TestTools(unittest.TestCase):
             )
             self.assertEqual(Path(str(out.get("output_dir") or "")).name, "my_test_run")
 
+    def test_pipeline_run_rejects_running_run_id(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            paths = init_run(tmp, "busy_run")
+            set_status(paths, stage="init", state="running")
+            with self.assertRaisesRegex(ValueError, "already running"):
+                dispatcher.call_tool(
+                    "pipeline.run",
+                    {"target_fasta": fasta, "dry_run": True, "run_id": "busy_run"},
+                )
+
+    def test_pipeline_preflight_without_target_returns_required_inputs(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool("pipeline.preflight", {})
+            self.assertFalse(bool(out.get("ok")))
+            required = out.get("required_inputs") or []
+            ids = {str(item.get("id")) for item in required if isinstance(item, dict)}
+            self.assertIn("target_input", ids)
+
+    def test_auto_retry_does_not_retry_cancelled_error(self) -> None:
+        req = PipelineRequest(target_fasta=">q1\nACDE\n", target_pdb="", dry_run=False)
+
+        class _StubRunner:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def run(self, request: PipelineRequest, *, run_id: str | None = None):  # type: ignore[no-untyped-def]
+                self.calls += 1
+                raise RuntimeError("MMseqs RunPod job not completed: {'status': 'CANCELLED'}")
+
+        stub = _StubRunner()
+        retry = AutoRetryConfig(enabled=True, max_attempts=3, backoff_s=0.0)
+        with self.assertRaisesRegex(RuntimeError, "CANCELLED"):
+            _run_with_auto_retry(stub, req, run_id="cancel_case", retry=retry)  # type: ignore[arg-type]
+        self.assertEqual(stub.calls, 1)
+
     def test_pipeline_run_tool_accepts_rfd3_inputs(self) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
@@ -127,6 +172,75 @@ class TestTools(unittest.TestCase):
         self.assertEqual(req.bioemu_max_return_structures, 12)
         self.assertEqual(req.bioemu_base_seed, 7)
         self.assertEqual(req.bioemu_env, {"BIOEMU_COLABFOLD_DIR": "/runpod-volume/bioemu/colabfold"})
+
+    def test_pipeline_af2_predict_dry_run(self) -> None:
+        fasta = ">s1\nACDEFGHIK\n"
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.af2_predict",
+                {"target_fasta": fasta, "dry_run": True},
+            )
+            run_id = str(out.get("run_id") or "")
+            self.assertTrue(run_id)
+
+            listing = dispatcher.call_tool("pipeline.list_artifacts", {"run_id": run_id, "limit": 200})
+            artifacts = listing.get("artifacts") or []
+            paths = {str(a.get("path")) for a in artifacts if isinstance(a, dict)}
+            self.assertIn("af2/s1/ranked_0.pdb", paths)
+
+    def test_pipeline_diffdock_dry_run(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.diffdock",
+                {"protein_pdb": pdb, "ligand_smiles": "CCO", "dry_run": True},
+            )
+            run_id = str(out.get("run_id") or "")
+            self.assertTrue(run_id)
+
+            listing = dispatcher.call_tool("pipeline.list_artifacts", {"run_id": run_id, "limit": 200})
+            artifacts = listing.get("artifacts") or []
+            paths = {str(a.get("path")) for a in artifacts if isinstance(a, dict)}
+            self.assertIn("diffdock/output.json", paths)
+
+    def test_pipeline_feedback_and_report(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.run",
+                {"target_fasta": fasta, "dry_run": True, "num_seq_per_tier": 1, "conservation_tiers": [0.3]},
+            )
+            run_id = str(out.get("run_id") or "")
+            self.assertTrue(run_id)
+
+            dispatcher.call_tool(
+                "pipeline.submit_feedback",
+                {"run_id": run_id, "rating": "good", "reasons": ["low_novelty"], "comment": "ok"},
+            )
+            feedback = dispatcher.call_tool("pipeline.list_feedback", {"run_id": run_id, "limit": 5})
+            items = feedback.get("items") or []
+            self.assertTrue(items)
+
+            dispatcher.call_tool(
+                "pipeline.submit_experiment",
+                {"run_id": run_id, "result": "success", "assay_type": "binding"},
+            )
+            experiments = dispatcher.call_tool("pipeline.list_experiments", {"run_id": run_id, "limit": 5})
+            self.assertTrue(experiments.get("items"))
+
+            report = dispatcher.call_tool("pipeline.generate_report", {"run_id": run_id})
+            self.assertIn("report", report)
+            self.assertIn("Score", str(report.get("report")))
 
     def test_pipeline_artifact_tools(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
