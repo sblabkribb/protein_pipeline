@@ -306,6 +306,14 @@
                 <p data-i18n="artifacts.preview.desc">3D structures, images, or text extracts.</p>
               </div>
               <div class="artifact-compare-controls">
+                <select id="artifactCompareMode" class="artifact-select">
+                  <option value="structure" data-i18n="artifacts.preview.compare.mode.structure">
+                    Structure Diff
+                  </option>
+                  <option value="sequence" data-i18n="artifacts.preview.compare.mode.sequence">
+                    Sequence Diff
+                  </option>
+                </select>
                 <select id="artifactCompareLeft" class="artifact-select"></select>
                 <select id="artifactCompareRight" class="artifact-select"></select>
                 <button id="artifactCompareRun" class="ghost" data-i18n="artifacts.preview.compare.run">
@@ -333,6 +341,13 @@
                 </div>
               </div>
               <div class="comparison-actions">
+                <button
+                  id="artifactComparisonDetails"
+                  class="ghost hidden"
+                  data-i18n="artifacts.compare.viewDetails"
+                >
+                  View Details
+                </button>
                 <button
                   id="artifactGenerateReport"
                   class="ghost hidden"

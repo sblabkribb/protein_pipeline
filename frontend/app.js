@@ -128,6 +128,7 @@ const state = {
   monitorNeedsReport: false,
   artifactCompareLeftPath: "",
   artifactCompareRightPath: "",
+  artifactCompareMode: "structure",
   runs: [],
   runModeById: {},
   progressByRunId: {},
@@ -217,10 +218,12 @@ const el = {
   artifactTypeFilter: document.getElementById("artifactTypeFilter"),
   refreshArtifacts: document.getElementById("refreshArtifacts"),
   artifactComparisonSummary: document.getElementById("artifactComparisonSummary"),
+  artifactCompareMode: document.getElementById("artifactCompareMode"),
   artifactCompareLeft: document.getElementById("artifactCompareLeft"),
   artifactCompareRight: document.getElementById("artifactCompareRight"),
   artifactCompareRun: document.getElementById("artifactCompareRun"),
   artifactCompareClear: document.getElementById("artifactCompareClear"),
+  artifactComparisonDetails: document.getElementById("artifactComparisonDetails"),
   artifactGenerateReport: document.getElementById("artifactGenerateReport"),
   artifactPreview: document.getElementById("artifactPreview"),
   agentPanelList: document.getElementById("agentPanelList"),
@@ -430,8 +433,15 @@ const I18N = {
       "WT-vs-design and RFD3-vs-BioEmu metrics from generated report artifacts.",
     "artifacts.compare.placeholder": "Generate report to load comparison metrics.",
     "artifacts.compare.noData": "Comparison data is not available for this run.",
+    "artifacts.compare.viewDetails": "View Details",
+    "artifacts.compare.detailsTitle": "Comparison Details",
     "artifacts.compare.generateReport": "Generate Report",
     "artifacts.compare.wt": "WT vs Design",
+    "artifacts.compare.funnel": "Selection Funnel",
+    "artifacts.compare.funnelBackbone": "Backbones",
+    "artifacts.compare.funnelSoluprot": "SoluProt pass",
+    "artifacts.compare.funnelAf2": "AF2 pass",
+    "artifacts.compare.funnelRetain": "Backbone retention",
     "artifacts.compare.source": "RFD3 vs BioEmu",
     "artifacts.compare.metric": "Metric",
     "artifacts.compare.wtValue": "WT",
@@ -441,18 +451,26 @@ const I18N = {
     "artifacts.compare.sourceName": "Source",
     "artifacts.compare.backbones": "Backbones",
     "artifacts.compare.passRate": "SoluProt pass",
+    "artifacts.compare.soluprotMedian": "Median SoluProt",
     "artifacts.compare.af2Selected": "AF2 selected",
     "artifacts.compare.plddtMedian": "Median pLDDT",
     "artifacts.compare.rmsdMedian": "Median RMSD",
     "artifacts.preview.title": "Artifact Preview",
     "artifacts.preview.desc": "3D structures, images, or text extracts.",
     "artifacts.preview.placeholder": "Select an artifact to preview it here.",
+    "artifacts.preview.compare.mode.structure": "Structure Diff",
+    "artifacts.preview.compare.mode.sequence": "Sequence Diff",
     "artifacts.preview.compare.left": "WT/Reference 3D",
     "artifacts.preview.compare.right": "Design 3D",
     "artifacts.preview.compare.run": "Compare 3D",
     "artifacts.preview.compare.clear": "Clear",
     "artifacts.preview.compare.missing": "Select both left and right 3D artifacts first.",
     "artifacts.preview.compare.failed": "3D comparison failed: {error}",
+    "artifacts.preview.compare.diffLegendStructure":
+      "Structure diff after CA alignment: <=1.5A gray, 1.5-3.0A yellow, >3.0A red, gaps WT blue / Design orange",
+    "artifacts.preview.compare.diffLegendSequence":
+      "Sequence diff on residue identity: WT-only/WT-mutated blue, Design-only/Design-mutated orange, same residue gray",
+    "artifacts.preview.compare.diffNone": "No residue-level differences detected.",
     "feedback.title": "Feedback",
     "feedback.desc": "Capture expert reviews and ratings.",
     "feedback.rating": "Rating",
@@ -886,8 +904,15 @@ const I18N = {
     "artifacts.compare.desc": "리포트에서 생성된 WT 비교와 RFD3/BioEmu 비교 지표를 보여줍니다.",
     "artifacts.compare.placeholder": "리포트를 생성하면 비교 지표를 불러올 수 있습니다.",
     "artifacts.compare.noData": "이 실행에는 비교 데이터가 없습니다.",
+    "artifacts.compare.viewDetails": "상세 보기",
+    "artifacts.compare.detailsTitle": "비교 상세",
     "artifacts.compare.generateReport": "리포트 생성",
     "artifacts.compare.wt": "WT 대비 Design",
+    "artifacts.compare.funnel": "선발 Funnel",
+    "artifacts.compare.funnelBackbone": "백본 수",
+    "artifacts.compare.funnelSoluprot": "SoluProt 통과",
+    "artifacts.compare.funnelAf2": "AF2 통과",
+    "artifacts.compare.funnelRetain": "백본 대비 유지율",
     "artifacts.compare.source": "RFD3 대비 BioEmu",
     "artifacts.compare.metric": "지표",
     "artifacts.compare.wtValue": "WT",
@@ -897,18 +922,26 @@ const I18N = {
     "artifacts.compare.sourceName": "소스",
     "artifacts.compare.backbones": "백본 수",
     "artifacts.compare.passRate": "SoluProt 통과",
+    "artifacts.compare.soluprotMedian": "SoluProt 중앙값",
     "artifacts.compare.af2Selected": "AF2 선발",
     "artifacts.compare.plddtMedian": "pLDDT 중앙값",
     "artifacts.compare.rmsdMedian": "RMSD 중앙값",
     "artifacts.preview.title": "아티팩트 미리보기",
     "artifacts.preview.desc": "3D 구조, 이미지, 텍스트 미리보기.",
     "artifacts.preview.placeholder": "아티팩트를 선택하면 여기서 미리보기를 볼 수 있습니다.",
+    "artifacts.preview.compare.mode.structure": "구조 차이",
+    "artifacts.preview.compare.mode.sequence": "서열 차이",
     "artifacts.preview.compare.left": "WT/기준 3D",
     "artifacts.preview.compare.right": "Design 3D",
     "artifacts.preview.compare.run": "3D 비교",
     "artifacts.preview.compare.clear": "초기화",
     "artifacts.preview.compare.missing": "좌/우 3D 아티팩트를 모두 선택하세요.",
     "artifacts.preview.compare.failed": "3D 비교 실패: {error}",
+    "artifacts.preview.compare.diffLegendStructure":
+      "CA 정렬 후 구조 차이: <=1.5A 회색, 1.5-3.0A 노랑, >3.0A 빨강, gap WT 파랑 / Design 주황",
+    "artifacts.preview.compare.diffLegendSequence":
+      "잔기 동일성 기준 차이: WT 쪽 불일치 파랑, Design 쪽 불일치 주황, 동일 잔기 회색",
+    "artifacts.preview.compare.diffNone": "잔기 기준 차이가 감지되지 않았습니다.",
     "feedback.title": "피드백",
     "feedback.desc": "전문가 평가와 등급을 기록합니다.",
     "feedback.rating": "평가",
@@ -5235,6 +5268,11 @@ function formatMetricValue(value, digits = 2, signed = false) {
   return text;
 }
 
+function formatPercentValue(value, digits = 1) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return `${(value * 100).toFixed(digits)}%`;
+}
+
 function localizedYesNo(value) {
   const isKo = (state.lang || "en") === "ko";
   return value ? (isKo ? "예" : "yes") : isKo ? "아니오" : "no";
@@ -5252,6 +5290,46 @@ function formatPassRate(sourceBucket) {
   if (total <= 0) return "-";
   const rate = (passed / total) * 100.0;
   return `${passed}/${total} (${rate.toFixed(1)}%)`;
+}
+
+function comparisonSummaryHasData(summary) {
+  if (!summary || typeof summary !== "object") return false;
+  const wt = summary?.wt_vs_design && typeof summary.wt_vs_design === "object" ? summary.wt_vs_design : {};
+  const source =
+    summary?.source_compare && typeof summary.source_compare === "object" ? summary.source_compare : {};
+  const funnelOverall =
+    summary?.funnel && typeof summary.funnel === "object" && summary.funnel.overall
+      ? summary.funnel.overall
+      : null;
+  const wtKeys = ["soluprot", "plddt", "rmsd"];
+  const hasWt = wtKeys.some((key) => {
+    const metric = wt[key];
+    return (
+      metric &&
+      typeof metric === "object" &&
+      ((typeof metric.wt === "number" && Number.isFinite(metric.wt)) ||
+        (typeof metric.design_median === "number" && Number.isFinite(metric.design_median))
+    ));
+  });
+  if (hasWt) return true;
+  const hasSource = ["rfd3", "bioemu", "other"].some((key) => {
+    const bucket = source[key];
+    if (!bucket || typeof bucket !== "object") return false;
+    return (
+      Number(bucket.backbone_count || 0) > 0 ||
+      Number(bucket.soluprot_total || 0) > 0 ||
+      Number(bucket.af2_selected_total || 0) > 0
+    );
+  });
+  if (hasSource) return true;
+  if (funnelOverall && typeof funnelOverall === "object") {
+    return (
+      Number(funnelOverall.backbone_count || 0) > 0 ||
+      Number(funnelOverall.soluprot_total || 0) > 0 ||
+      Number(funnelOverall.af2_candidate_total || 0) > 0
+    );
+  }
+  return false;
 }
 
 function parseNumberOrNull(raw) {
@@ -5373,6 +5451,7 @@ function parseComparisonSummaryFromReportText(reportText) {
       soluprot_total: pass.total,
       soluprot_passed: pass.passed,
       soluprot_pass_rate: pass.passRate,
+      soluprot_median: parseNumberOrNull(rowMatch[4]),
       af2_selected_total: af2Count,
       plddt_median: parseNumberOrNull(rowMatch[6]),
       rmsd_median: parseNumberOrNull(rowMatch[7]),
@@ -5381,6 +5460,119 @@ function parseComparisonSummaryFromReportText(reportText) {
   }
 
   return hasAny ? summary : null;
+}
+
+function buildComparisonDetailMarkdown(summary, runId) {
+  const lines = [];
+  lines.push(`# ${t("artifacts.compare.detailsTitle")}: ${runId || "-"}`);
+  lines.push("");
+
+  const wt = summary?.wt_vs_design && typeof summary.wt_vs_design === "object" ? summary.wt_vs_design : {};
+  const funnel =
+    summary?.funnel && typeof summary.funnel === "object" ? summary.funnel : { overall: {}, by_source: {} };
+  const source =
+    summary?.source_compare && typeof summary.source_compare === "object" ? summary.source_compare : {};
+  const tierRows = Array.isArray(summary?.tier_compare) ? summary.tier_compare : [];
+  const distributions =
+    summary?.distributions && typeof summary.distributions === "object" ? summary.distributions : {};
+  const diversity = summary?.diversity && typeof summary.diversity === "object" ? summary.diversity : {};
+
+  lines.push("## WT vs Design");
+  const wtRows = [
+    { key: "soluprot", label: "SoluProt", digits: 3 },
+    { key: "plddt", label: "pLDDT", digits: 1 },
+    { key: "rmsd", label: "RMSD", digits: 2 },
+  ];
+  lines.push("| Metric | WT | Design median | Delta |");
+  lines.push("|---|---:|---:|---:|");
+  wtRows.forEach((row) => {
+    const metric = wt[row.key] && typeof wt[row.key] === "object" ? wt[row.key] : {};
+    lines.push(
+      `| ${row.label} | ${formatMetricValue(metric.wt, row.digits)} | ${formatMetricValue(metric.design_median, row.digits)} | ${formatMetricValue(metric.delta_design_minus_wt, row.digits, true)} |`
+    );
+  });
+  lines.push("");
+
+  const overall = funnel?.overall && typeof funnel.overall === "object" ? funnel.overall : {};
+  lines.push("## Funnel");
+  lines.push(
+    `- ${t("artifacts.compare.funnelBackbone")}: ${Number(overall.backbone_count || 0)}`
+  );
+  lines.push(
+    `- ${t("artifacts.compare.funnelSoluprot")}: ${Number(overall.soluprot_passed || 0)}/${Number(overall.soluprot_total || 0)} (${formatPercentValue(overall.soluprot_pass_rate)})`
+  );
+  lines.push(
+    `- ${t("artifacts.compare.funnelAf2")}: ${Number(overall.af2_selected_total || 0)}/${Number(overall.af2_candidate_total || 0)} (${formatPercentValue(overall.af2_pass_rate)})`
+  );
+  lines.push(
+    `- ${t("artifacts.compare.funnelRetain")}: SoluProt=${formatPercentValue(overall.retention_backbone_to_soluprot_passed)}, AF2=${formatPercentValue(overall.retention_backbone_to_af2_selected)}`
+  );
+  lines.push("");
+
+  lines.push("## Source Compare");
+  lines.push("| Source | Backbones | SoluProt pass | Median SoluProt | AF2 pass | Median pLDDT | Median RMSD |");
+  lines.push("|---|---:|---:|---:|---:|---:|---:|");
+  ["rfd3", "bioemu", "other"].forEach((key) => {
+    const bucket = source[key] && typeof source[key] === "object" ? source[key] : null;
+    if (!bucket) return;
+    lines.push(
+      `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${formatMetricValue(bucket.plddt_median, 1)} | ${formatMetricValue(bucket.rmsd_median, 2)} |`
+    );
+  });
+  lines.push("");
+
+  if (tierRows.length) {
+    lines.push("## Tier Compare");
+    lines.push("| Tier | Designs | SoluProt pass | AF2 pass | Median pLDDT | Median RMSD |");
+    lines.push("|---:|---:|---:|---:|---:|---:|");
+    tierRows.forEach((row) => {
+      if (!row || typeof row !== "object") return;
+      lines.push(
+        `| ${formatMetricValue(row.tier, 2)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${formatMetricValue(row.plddt_median, 1)} | ${formatMetricValue(row.rmsd_median, 2)} |`
+      );
+    });
+    lines.push("");
+  }
+
+  lines.push("## Distribution");
+  lines.push("| Metric | n | P10 | P25 | Median | P75 | P90 | IQR |");
+  lines.push("|---|---:|---:|---:|---:|---:|---:|---:|");
+  [
+    ["SoluProt", distributions.soluprot],
+    ["pLDDT", distributions.plddt],
+    ["RMSD", distributions.rmsd],
+  ].forEach(([name, stat]) => {
+    const metric = stat && typeof stat === "object" ? stat : {};
+    lines.push(
+      `| ${name} | ${Number(metric.count || 0)} | ${formatMetricValue(metric.p10, 3)} | ${formatMetricValue(metric.p25, 3)} | ${formatMetricValue(metric.median, 3)} | ${formatMetricValue(metric.p75, 3)} | ${formatMetricValue(metric.p90, 3)} | ${formatMetricValue(metric.iqr, 3)} |`
+    );
+  });
+  lines.push("");
+
+  const wtIdentity = diversity?.wt_identity && typeof diversity.wt_identity === "object" ? diversity.wt_identity : {};
+  const pairwise =
+    diversity?.design_pairwise_identity && typeof diversity.design_pairwise_identity === "object"
+      ? diversity.design_pairwise_identity
+      : {};
+  lines.push("## Sequence Diversity");
+  lines.push(`- Unique design sequences: ${Number(diversity?.design_unique_sequences || 0)}`);
+  lines.push(
+    `- WT identity median: ${formatPercentValue(wtIdentity.median)} (best=${formatPercentValue(wtIdentity.best)}, worst=${formatPercentValue(wtIdentity.worst)}, n=${Number(wtIdentity.count || 0)})`
+  );
+  lines.push(
+    `- Design pairwise identity median: ${formatPercentValue(pairwise.median)} (pairs=${Number(pairwise.evaluated_pairs || 0)}, sequences=${Number(pairwise.sequence_count || 0)}${pairwise.truncated ? ", truncated" : ""})`
+  );
+  lines.push("");
+
+  return lines.join("\n");
+}
+
+function openComparisonDetailModal() {
+  const summary = state.artifactComparison;
+  const runId = String(state.currentRunId || "").trim();
+  if (!runId || !summary || typeof summary !== "object") return;
+  const markdown = buildComparisonDetailMarkdown(summary, runId);
+  openReportModal(t("artifacts.compare.detailsTitle"), markdown, `comparison_${runId}.md`);
 }
 
 function renderArtifactComparisonSummary(summary) {
@@ -5395,6 +5587,10 @@ function renderArtifactComparisonSummary(summary) {
   const wt = summary?.wt_vs_design && typeof summary.wt_vs_design === "object" ? summary.wt_vs_design : {};
   const source =
     summary?.source_compare && typeof summary.source_compare === "object" ? summary.source_compare : {};
+  const funnelOverall =
+    summary?.funnel && typeof summary.funnel === "object" && summary.funnel.overall
+      ? summary.funnel.overall
+      : {};
   const wtEnabled = Boolean(summary?.wt_compare_enabled);
 
   const wtRows = [
@@ -5419,8 +5615,12 @@ function renderArtifactComparisonSummary(summary) {
     const af2 = Number(bucket.af2_selected_total || 0);
     return backbone > 0 || solTotal > 0 || af2 > 0;
   });
+  const hasFunnel =
+    Number(funnelOverall?.backbone_count || 0) > 0 ||
+    Number(funnelOverall?.soluprot_total || 0) > 0 ||
+    Number(funnelOverall?.af2_candidate_total || 0) > 0;
 
-  if (!wtHasData && sourceRows.length === 0) {
+  if (!wtHasData && sourceRows.length === 0 && !hasFunnel) {
     el.artifactComparisonSummary.innerHTML = `<div class="placeholder">${t(
       "artifacts.compare.noData"
     )}</div>`;
@@ -5449,6 +5649,7 @@ function renderArtifactComparisonSummary(summary) {
       const bucket = source[key] && typeof source[key] === "object" ? source[key] : {};
       const backbone = String(Number(bucket.backbone_count || 0));
       const passText = formatPassRate(bucket);
+      const solMedian = formatMetricValue(bucket.soluprot_median, 3, false);
       const af2 = String(Number(bucket.af2_selected_total || 0));
       const plddt = formatMetricValue(bucket.plddt_median, 1, false);
       const rmsd = formatMetricValue(bucket.rmsd_median, 2, false);
@@ -5457,6 +5658,7 @@ function renderArtifactComparisonSummary(summary) {
           <th>${escapeHtml(sourceLabel(key))}</th>
           <td>${escapeHtml(backbone)}</td>
           <td>${escapeHtml(passText)}</td>
+          <td>${escapeHtml(solMedian)}</td>
           <td>${escapeHtml(af2)}</td>
           <td>${escapeHtml(plddt)}</td>
           <td>${escapeHtml(rmsd)}</td>
@@ -5466,7 +5668,30 @@ function renderArtifactComparisonSummary(summary) {
     .join("");
 
   const wtNote = t("artifacts.compare.wtEnabled", { enabled: localizedYesNo(wtEnabled) });
+  const funnelBackbones = Number(funnelOverall?.backbone_count || 0);
+  const funnelSolTxt = `${Number(funnelOverall?.soluprot_passed || 0)}/${Number(
+    funnelOverall?.soluprot_total || 0
+  )} (${formatPercentValue(funnelOverall?.soluprot_pass_rate)})`;
+  const funnelAf2Txt = `${Number(funnelOverall?.af2_selected_total || 0)}/${Number(
+    funnelOverall?.af2_candidate_total || 0
+  )} (${formatPercentValue(funnelOverall?.af2_pass_rate)})`;
+  const funnelRetainTxt = `SoluProt ${formatPercentValue(
+    funnelOverall?.retention_backbone_to_soluprot_passed
+  )}, AF2 ${formatPercentValue(funnelOverall?.retention_backbone_to_af2_selected)}`;
   el.artifactComparisonSummary.innerHTML = `
+    ${
+      hasFunnel
+        ? `<div class="comparison-card">
+      <h4>${escapeHtml(t("artifacts.compare.funnel"))}</h4>
+      <div class="comparison-kpis">
+        <div><span>${escapeHtml(t("artifacts.compare.funnelBackbone"))}</span><strong>${escapeHtml(String(funnelBackbones))}</strong></div>
+        <div><span>${escapeHtml(t("artifacts.compare.funnelSoluprot"))}</span><strong>${escapeHtml(funnelSolTxt)}</strong></div>
+        <div><span>${escapeHtml(t("artifacts.compare.funnelAf2"))}</span><strong>${escapeHtml(funnelAf2Txt)}</strong></div>
+        <div><span>${escapeHtml(t("artifacts.compare.funnelRetain"))}</span><strong>${escapeHtml(funnelRetainTxt)}</strong></div>
+      </div>
+    </div>`
+        : ""
+    }
     ${
       wtHasData
         ? `<div class="comparison-card">
@@ -5496,6 +5721,7 @@ function renderArtifactComparisonSummary(summary) {
             <th>${escapeHtml(t("artifacts.compare.sourceName"))}</th>
             <th>${escapeHtml(t("artifacts.compare.backbones"))}</th>
             <th>${escapeHtml(t("artifacts.compare.passRate"))}</th>
+            <th>${escapeHtml(t("artifacts.compare.soluprotMedian"))}</th>
             <th>${escapeHtml(t("artifacts.compare.af2Selected"))}</th>
             <th>${escapeHtml(t("artifacts.compare.plddtMedian"))}</th>
             <th>${escapeHtml(t("artifacts.compare.rmsdMedian"))}</th>
@@ -5510,11 +5736,18 @@ function renderArtifactComparisonSummary(summary) {
 }
 
 function updateMonitorReportActions() {
-  if (!el.artifactGenerateReport) return;
   const hasRun = Boolean(String(state.currentRunId || "").trim());
-  const shouldShow = hasRun && Boolean(state.monitorNeedsReport);
-  el.artifactGenerateReport.classList.toggle("hidden", !shouldShow);
-  el.artifactGenerateReport.disabled = !hasRun;
+  const shouldShowGenerate = hasRun && Boolean(state.monitorNeedsReport);
+  if (el.artifactGenerateReport) {
+    el.artifactGenerateReport.classList.toggle("hidden", !shouldShowGenerate);
+    el.artifactGenerateReport.disabled = !hasRun;
+  }
+  const hasSummary = comparisonSummaryHasData(state.artifactComparison);
+  if (el.artifactComparisonDetails) {
+    const shouldShowDetails = hasRun && hasSummary;
+    el.artifactComparisonDetails.classList.toggle("hidden", !shouldShowDetails);
+    el.artifactComparisonDetails.disabled = !shouldShowDetails;
+  }
 }
 
 async function refreshArtifactComparisonSummary() {
@@ -5598,7 +5831,312 @@ function apply3dStyle(viewer, format) {
   }
 }
 
-function render3dComparison(left, right) {
+function parsePdbResidueMap(pdbText) {
+  const out = new Map();
+  const lines = String(pdbText || "").split(/\r?\n/);
+  lines.forEach((line) => {
+    if (!/^ATOM/.test(line)) return;
+    const atomName = line.slice(12, 16).trim();
+    const resn = line.slice(17, 20).trim();
+    const chainRaw = line.slice(21, 22).trim().toUpperCase();
+    const chain = chainRaw || "";
+    const chainKey = chain || "_";
+    const resiRaw = line.slice(22, 26).trim();
+    const resi = Number(resiRaw);
+    if (!Number.isFinite(resi)) return;
+    const key = `${chainKey}:${resi}`;
+    const prev = out.get(key);
+    if (!prev) {
+      out.set(key, { chain, resi, resn, hasCA: atomName === "CA" });
+      return;
+    }
+    if (atomName === "CA") prev.hasCA = true;
+  });
+  return out;
+}
+
+function computePdbSequenceDiff(leftPdbText, rightPdbText) {
+  const leftMap = parsePdbResidueMap(leftPdbText);
+  const rightMap = parsePdbResidueMap(rightPdbText);
+  const leftDiffByChain = {};
+  const rightDiffByChain = {};
+  const add = (bucket, chain, resi) => {
+    if (!bucket[chain]) bucket[chain] = new Set();
+    bucket[chain].add(Number(resi));
+  };
+  const allKeys = new Set([...leftMap.keys(), ...rightMap.keys()]);
+  allKeys.forEach((key) => {
+    const left = leftMap.get(key);
+    const right = rightMap.get(key);
+    if (left && right) {
+      if (String(left.resn || "") !== String(right.resn || "")) {
+        add(leftDiffByChain, left.chain, left.resi);
+        add(rightDiffByChain, right.chain, right.resi);
+      }
+      return;
+    }
+    if (left) add(leftDiffByChain, left.chain, left.resi);
+    if (right) add(rightDiffByChain, right.chain, right.resi);
+  });
+  const toObject = (bucket) => {
+    const obj = {};
+    Object.entries(bucket).forEach(([chain, values]) => {
+      const residues = Array.from(values || []).filter((v) => Number.isFinite(v));
+      if (!residues.length) return;
+      residues.sort((a, b) => a - b);
+      obj[chain] = residues;
+    });
+    return obj;
+  };
+  const leftResidues = toObject(leftDiffByChain);
+  const rightResidues = toObject(rightDiffByChain);
+  const totalCount = Object.values(leftResidues).reduce((acc, items) => acc + items.length, 0);
+  return { leftResidues, rightResidues, totalCount };
+}
+
+function parsePdbCAResidueMap(pdbText) {
+  const out = new Map();
+  const lines = String(pdbText || "").split(/\r?\n/);
+  lines.forEach((line) => {
+    if (!/^ATOM/.test(line)) return;
+    const atomName = line.slice(12, 16).trim();
+    if (atomName !== "CA") return;
+    const resn = line.slice(17, 20).trim();
+    const chainRaw = line.slice(21, 22).trim().toUpperCase();
+    const chain = chainRaw || "";
+    const chainKey = chain || "_";
+    const resiRaw = line.slice(22, 26).trim();
+    const xRaw = line.slice(30, 38).trim();
+    const yRaw = line.slice(38, 46).trim();
+    const zRaw = line.slice(46, 54).trim();
+    const resi = Number(resiRaw);
+    const x = Number(xRaw);
+    const y = Number(yRaw);
+    const z = Number(zRaw);
+    if (!Number.isFinite(resi) || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return;
+    const key = `${chainKey}:${resi}`;
+    out.set(key, { chain, resi, resn, coord: [x, y, z] });
+  });
+  return out;
+}
+
+function centroid3(points) {
+  if (!Array.isArray(points) || !points.length) return [0, 0, 0];
+  let sx = 0;
+  let sy = 0;
+  let sz = 0;
+  points.forEach((p) => {
+    sx += Number(p[0] || 0);
+    sy += Number(p[1] || 0);
+    sz += Number(p[2] || 0);
+  });
+  const n = points.length;
+  return [sx / n, sy / n, sz / n];
+}
+
+function buildBestFitTransform(movingPoints, fixedPoints) {
+  if (!Array.isArray(movingPoints) || !Array.isArray(fixedPoints)) return null;
+  if (movingPoints.length !== fixedPoints.length || movingPoints.length < 3) return null;
+  const cP = centroid3(movingPoints);
+  const cQ = centroid3(fixedPoints);
+  let Sxx = 0;
+  let Sxy = 0;
+  let Sxz = 0;
+  let Syx = 0;
+  let Syy = 0;
+  let Syz = 0;
+  let Szx = 0;
+  let Szy = 0;
+  let Szz = 0;
+  for (let i = 0; i < movingPoints.length; i += 1) {
+    const px = Number(movingPoints[i][0] || 0) - cP[0];
+    const py = Number(movingPoints[i][1] || 0) - cP[1];
+    const pz = Number(movingPoints[i][2] || 0) - cP[2];
+    const qx = Number(fixedPoints[i][0] || 0) - cQ[0];
+    const qy = Number(fixedPoints[i][1] || 0) - cQ[1];
+    const qz = Number(fixedPoints[i][2] || 0) - cQ[2];
+    Sxx += px * qx;
+    Sxy += px * qy;
+    Sxz += px * qz;
+    Syx += py * qx;
+    Syy += py * qy;
+    Syz += py * qz;
+    Szx += pz * qx;
+    Szy += pz * qy;
+    Szz += pz * qz;
+  }
+  const N = [
+    [Sxx + Syy + Szz, Syz - Szy, Szx - Sxz, Sxy - Syx],
+    [Syz - Szy, Sxx - Syy - Szz, Sxy + Syx, Szx + Sxz],
+    [Szx - Sxz, Sxy + Syx, -Sxx + Syy - Szz, Syz + Szy],
+    [Sxy - Syx, Szx + Sxz, Syz + Szy, -Sxx - Syy + Szz],
+  ];
+  let q = [1, 0, 0, 0];
+  for (let iter = 0; iter < 40; iter += 1) {
+    const n0 = N[0][0] * q[0] + N[0][1] * q[1] + N[0][2] * q[2] + N[0][3] * q[3];
+    const n1 = N[1][0] * q[0] + N[1][1] * q[1] + N[1][2] * q[2] + N[1][3] * q[3];
+    const n2 = N[2][0] * q[0] + N[2][1] * q[1] + N[2][2] * q[2] + N[2][3] * q[3];
+    const n3 = N[3][0] * q[0] + N[3][1] * q[1] + N[3][2] * q[2] + N[3][3] * q[3];
+    const norm = Math.hypot(n0, n1, n2, n3);
+    if (!Number.isFinite(norm) || norm <= 1e-12) return null;
+    q = [n0 / norm, n1 / norm, n2 / norm, n3 / norm];
+  }
+  const [w, x, y, z] = q;
+  const r00 = 1 - 2 * (y * y + z * z);
+  const r01 = 2 * (x * y - z * w);
+  const r02 = 2 * (x * z + y * w);
+  const r10 = 2 * (x * y + z * w);
+  const r11 = 1 - 2 * (x * x + z * z);
+  const r12 = 2 * (y * z - x * w);
+  const r20 = 2 * (x * z - y * w);
+  const r21 = 2 * (y * z + x * w);
+  const r22 = 1 - 2 * (x * x + y * y);
+  const t0 = cQ[0] - (r00 * cP[0] + r01 * cP[1] + r02 * cP[2]);
+  const t1 = cQ[1] - (r10 * cP[0] + r11 * cP[1] + r12 * cP[2]);
+  const t2 = cQ[2] - (r20 * cP[0] + r21 * cP[1] + r22 * cP[2]);
+  return {
+    R: [
+      [r00, r01, r02],
+      [r10, r11, r12],
+      [r20, r21, r22],
+    ],
+    t: [t0, t1, t2],
+  };
+}
+
+function applyTransformToCoord(coord, transform) {
+  if (!transform || !Array.isArray(coord) || coord.length < 3) return null;
+  const x = Number(coord[0] || 0);
+  const y = Number(coord[1] || 0);
+  const z = Number(coord[2] || 0);
+  const R = transform.R;
+  const t = transform.t;
+  return [
+    R[0][0] * x + R[0][1] * y + R[0][2] * z + t[0],
+    R[1][0] * x + R[1][1] * y + R[1][2] * z + t[1],
+    R[2][0] * x + R[2][1] * y + R[2][2] * z + t[2],
+  ];
+}
+
+function formatPdbCoord(value) {
+  const num = Number(value || 0);
+  if (!Number.isFinite(num)) return "   0.000";
+  const text = num.toFixed(3);
+  return text.length >= 8 ? text.slice(-8) : text.padStart(8, " ");
+}
+
+function applyTransformToPdbText(pdbText, transform) {
+  if (!transform) return String(pdbText || "");
+  const lines = String(pdbText || "").split(/\r?\n/);
+  return lines
+    .map((line) => {
+      if (!/^(ATOM  |HETATM)/.test(line)) return line;
+      const x = Number(line.slice(30, 38).trim());
+      const y = Number(line.slice(38, 46).trim());
+      const z = Number(line.slice(46, 54).trim());
+      if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return line;
+      const moved = applyTransformToCoord([x, y, z], transform);
+      if (!moved) return line;
+      const base = line.length < 54 ? line.padEnd(54, " ") : line;
+      return `${base.slice(0, 30)}${formatPdbCoord(moved[0])}${formatPdbCoord(moved[1])}${formatPdbCoord(
+        moved[2]
+      )}${base.slice(54)}`;
+    })
+    .join("\n");
+}
+
+function percentileValue(values, q) {
+  if (!Array.isArray(values) || !values.length) return null;
+  const nums = values.filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  if (!nums.length) return null;
+  if (nums.length === 1) return nums[0];
+  const qq = Math.min(1, Math.max(0, Number(q || 0)));
+  const idx = qq * (nums.length - 1);
+  const lo = Math.floor(idx);
+  const hi = Math.min(lo + 1, nums.length - 1);
+  if (lo === hi) return nums[lo];
+  const frac = idx - lo;
+  return nums[lo] * (1 - frac) + nums[hi] * frac;
+}
+
+function computePdbStructuralDiff(leftPdbText, rightPdbText) {
+  const leftMap = parsePdbCAResidueMap(leftPdbText);
+  const rightMap = parsePdbCAResidueMap(rightPdbText);
+  const leftKeys = Array.from(leftMap.keys());
+  const rightKeys = new Set(rightMap.keys());
+  const commonKeys = leftKeys.filter((key) => rightKeys.has(key));
+  if (commonKeys.length < 3) {
+    return { ok: false, reason: "not_enough_common_ca", commonCount: commonKeys.length };
+  }
+  const moving = commonKeys.map((key) => rightMap.get(key)?.coord || [0, 0, 0]);
+  const fixed = commonKeys.map((key) => leftMap.get(key)?.coord || [0, 0, 0]);
+  const transform = buildBestFitTransform(moving, fixed);
+  if (!transform) {
+    return { ok: false, reason: "alignment_failed", commonCount: commonKeys.length };
+  }
+  const add = (bucket, chain, resi) => {
+    if (!bucket[chain]) bucket[chain] = [];
+    bucket[chain].push(Number(resi));
+  };
+  const midResidues = {};
+  const highResidues = {};
+  const leftOnlyResidues = {};
+  const rightOnlyResidues = {};
+  const distances = [];
+  let sse = 0;
+  commonKeys.forEach((key) => {
+    const left = leftMap.get(key);
+    const right = rightMap.get(key);
+    if (!left || !right) return;
+    const moved = applyTransformToCoord(right.coord, transform);
+    if (!moved) return;
+    const dx = moved[0] - left.coord[0];
+    const dy = moved[1] - left.coord[1];
+    const dz = moved[2] - left.coord[2];
+    const dist = Math.hypot(dx, dy, dz);
+    distances.push(dist);
+    sse += dist * dist;
+    if (dist > 3.0) add(highResidues, left.chain || "_", left.resi);
+    else if (dist > 1.5) add(midResidues, left.chain || "_", left.resi);
+  });
+  leftMap.forEach((value, key) => {
+    if (!rightMap.has(key)) add(leftOnlyResidues, value.chain || "_", value.resi);
+  });
+  rightMap.forEach((value, key) => {
+    if (!leftMap.has(key)) add(rightOnlyResidues, value.chain || "_", value.resi);
+  });
+  return {
+    ok: true,
+    transform,
+    commonCount: commonKeys.length,
+    rmsd: distances.length ? Math.sqrt(sse / distances.length) : null,
+    medianDistance: percentileValue(distances, 0.5),
+    p90Distance: percentileValue(distances, 0.9),
+    midResidues,
+    highResidues,
+    leftOnlyResidues,
+    rightOnlyResidues,
+  };
+}
+
+function applyDiffResidueStyle(viewer, residueByChain, color) {
+  if (!viewer || !residueByChain || typeof residueByChain !== "object") return;
+  Object.entries(residueByChain).forEach(([chain, residues]) => {
+    if (!Array.isArray(residues) || !residues.length) return;
+    const unique = Array.from(new Set(residues.map((v) => Number(v)).filter((v) => Number.isFinite(v)))).sort(
+      (a, b) => a - b
+    );
+    unique.forEach((resi) => {
+      const selector = chain === "_" || chain === "" ? { resi } : { chain, resi };
+      viewer.setStyle(selector, {
+        cartoon: { color },
+        stick: { radius: 0.16, color },
+      });
+    });
+  });
+}
+
+function render3dComparison(left, right, mode = "structure") {
   if (!window.$3Dmol) {
     el.artifactPreview.innerHTML = `<div class="placeholder">${t(
       "artifact.preview.unavailable"
@@ -5609,6 +6147,12 @@ function render3dComparison(left, right) {
   wrap.className = "viewer3d-compare";
   el.artifactPreview.innerHTML = "";
   el.artifactPreview.appendChild(wrap);
+  const panes = [];
+  const usePdbPair = left.format === "pdb" && right.format === "pdb" && left.text && right.text;
+  const compareMode = mode === "sequence" ? "sequence" : "structure";
+  const structureDiff = usePdbPair && compareMode === "structure" ? computePdbStructuralDiff(left.text, right.text) : null;
+  const rightTextForView =
+    structureDiff && structureDiff.ok ? applyTransformToPdbText(right.text, structureDiff.transform) : right.text;
   const buildPane = (path, text, format) => {
     const pane = document.createElement("div");
     pane.className = "viewer3d-pane";
@@ -5622,15 +6166,62 @@ function render3dComparison(left, right) {
     wrap.appendChild(pane);
     const viewer = window.$3Dmol.createViewer(body, { backgroundColor: "white" });
     viewer.addModel(text, format);
-    apply3dStyle(viewer, format);
+    if (format === "pdb") {
+      viewer.setStyle({}, { cartoon: { color: "#cfd5dc" } });
+    } else {
+      apply3dStyle(viewer, format);
+    }
     viewer.zoomTo();
     viewer.render();
     if (typeof viewer.resize === "function") {
       viewer.resize();
     }
+    panes.push({ viewer, format, text, path });
   };
   buildPane(left.path, left.text, left.format);
-  buildPane(right.path, right.text, right.format);
+  buildPane(right.path, rightTextForView, right.format);
+
+  if (
+    panes.length === 2 &&
+    panes[0].format === "pdb" &&
+    panes[1].format === "pdb" &&
+    panes[0].text &&
+    panes[1].text
+  ) {
+    if (compareMode === "structure" && structureDiff && structureDiff.ok) {
+      applyDiffResidueStyle(panes[0].viewer, structureDiff.midResidues, "#e6a700");
+      applyDiffResidueStyle(panes[1].viewer, structureDiff.midResidues, "#e6a700");
+      applyDiffResidueStyle(panes[0].viewer, structureDiff.highResidues, "#d62728");
+      applyDiffResidueStyle(panes[1].viewer, structureDiff.highResidues, "#d62728");
+      applyDiffResidueStyle(panes[0].viewer, structureDiff.leftOnlyResidues, "#1f77b4");
+      applyDiffResidueStyle(panes[1].viewer, structureDiff.rightOnlyResidues, "#ff7f0e");
+    } else {
+      const seqDiff = computePdbSequenceDiff(left.text, right.text);
+      if (seqDiff.totalCount > 0) {
+        applyDiffResidueStyle(panes[0].viewer, seqDiff.leftResidues, "#1f77b4");
+        applyDiffResidueStyle(panes[1].viewer, seqDiff.rightResidues, "#ff7f0e");
+      }
+    }
+    panes.forEach((pane) => {
+      pane.viewer.render();
+    });
+    const legend = document.createElement("div");
+    legend.className = "viewer3d-diff-note";
+    if (compareMode === "structure" && structureDiff && structureDiff.ok) {
+      const rmsdText = formatMetricValue(structureDiff.rmsd, 2, false);
+      const p90Text = formatMetricValue(structureDiff.p90Distance, 2, false);
+      legend.textContent = `${t("artifacts.preview.compare.diffLegendStructure")} · RMSD=${rmsdText}A, P90=${p90Text}A, n=${Number(
+        structureDiff.commonCount || 0
+      )}`;
+    } else {
+      const seqDiff = computePdbSequenceDiff(left.text, right.text);
+      legend.textContent =
+        seqDiff.totalCount > 0
+          ? `${t("artifacts.preview.compare.diffLegendSequence")} (${seqDiff.totalCount})`
+          : t("artifacts.preview.compare.diffNone");
+    }
+    el.artifactPreview.appendChild(legend);
+  }
 }
 
 function chooseDefaultComparePaths(structureItems) {
@@ -5645,17 +6236,23 @@ function chooseDefaultComparePaths(structureItems) {
   }
 
   if (!state.artifactCompareRightPath) {
-    const designItem = structureItems.find((item) => {
-      const path = String(item?.path || "");
-      if (!path || path === state.artifactCompareLeftPath) return false;
-      const meta = artifactMetaForPath(path);
-      if (meta.tier) return true;
-      if (meta.stage === "af2" && !/(?:^|\/)wt(?:\/|$)/i.test(path)) return true;
-      return false;
-    });
-    if (designItem) {
-      state.artifactCompareRightPath = String(designItem.path || "");
-    }
+    const candidates = structureItems.filter(
+      (item) => String(item?.path || "") && String(item?.path || "") !== state.artifactCompareLeftPath
+    );
+    const pick = (predicate) => candidates.find((item) => predicate(String(item?.path || ""), artifactMetaForPath(item?.path)));
+    const designItem =
+      pick(
+        (path, meta) =>
+          Boolean(meta?.tier) &&
+          meta?.stage === "af2" &&
+          /\/ranked_\d+\.pdb$/i.test(path) &&
+          !/(?:^|\/)recovered[_/]/i.test(path)
+      ) ||
+      pick((path, meta) => Boolean(meta?.tier) && meta?.stage === "af2" && /\/ranked_\d+\.pdb$/i.test(path)) ||
+      pick((path, meta) => meta?.stage === "af2" && !/(?:^|\/)wt(?:\/|$)/i.test(path)) ||
+      pick((_path, meta) => Boolean(meta?.tier)) ||
+      candidates[0];
+    state.artifactCompareRightPath = String(designItem?.path || "");
   }
 
   if (state.artifactCompareRightPath === state.artifactCompareLeftPath) {
@@ -5666,6 +6263,10 @@ function chooseDefaultComparePaths(structureItems) {
 
 function renderArtifactCompareSelects() {
   if (!el.artifactCompareLeft || !el.artifactCompareRight) return;
+  if (el.artifactCompareMode) {
+    const mode = state.artifactCompareMode === "sequence" ? "sequence" : "structure";
+    el.artifactCompareMode.value = mode;
+  }
   const structureItems = (state.artifacts || [])
     .filter((item) => isStructureArtifactItem(item))
     .sort((a, b) => String(a.path || "").localeCompare(String(b.path || "")));
@@ -5732,7 +6333,8 @@ async function compareSelected3dArtifacts() {
         path: rightPath,
         text: String(rightResult?.text || ""),
         format: /\.sdf$/i.test(rightPath) ? "sdf" : "pdb",
-      }
+      },
+      state.artifactCompareMode
     );
   } catch (err) {
     el.artifactPreview.innerHTML = `<div class="placeholder">${t("artifacts.preview.compare.failed", {
@@ -5777,6 +6379,7 @@ function renderMarkdown(text) {
     let inUl = false;
     let inOl = false;
     let inPara = false;
+    let inTable = false;
 
     const closeLists = () => {
       if (inUl) {
@@ -5796,6 +6399,13 @@ function renderMarkdown(text) {
       }
     };
 
+    const closeTable = () => {
+      if (inTable) {
+        html.push("</tbody></table>");
+        inTable = false;
+      }
+    };
+
     const formatInline = (line) => {
       let out = escapeHtml(line);
       out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
@@ -5804,13 +6414,73 @@ function renderMarkdown(text) {
       return out;
     };
 
-    lines.forEach((line) => {
+    const isTableLine = (line) => /^\s*\|.*\|\s*$/.test(String(line || ""));
+    const splitCells = (line) =>
+      String(line || "")
+        .trim()
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .split("|")
+        .map((cell) => String(cell).trim());
+    const isSeparatorLine = (line) => {
+      if (!isTableLine(line)) return false;
+      const cells = splitCells(line);
+      if (!cells.length) return false;
+      return cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+    };
+    const alignOf = (cell) => {
+      const token = String(cell || "").trim();
+      if (/^:-+:$/.test(token)) return "center";
+      if (/^-+:$/.test(token)) return "right";
+      return "left";
+    };
+    const cellHtml = (value, align) => `<td style="text-align:${align}">${formatInline(value)}</td>`;
+    const headHtml = (value, align) => `<th style="text-align:${align}">${formatInline(value)}</th>`;
+
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i];
       const trimmed = line.trim();
       if (!trimmed) {
+        closeTable();
         closeLists();
         closePara();
-        return;
+        continue;
       }
+
+      if (isTableLine(line) && i + 1 < lines.length && isSeparatorLine(lines[i + 1])) {
+        closeLists();
+        closePara();
+        closeTable();
+
+        const headerCells = splitCells(line);
+        const sepCells = splitCells(lines[i + 1]);
+        const aligns = headerCells.map((_value, idx) => alignOf(sepCells[idx] || "---"));
+        html.push('<table class="md-table"><thead><tr>');
+        headerCells.forEach((cell, idx) => {
+          html.push(headHtml(cell, aligns[idx] || "left"));
+        });
+        html.push("</tr></thead><tbody>");
+        inTable = true;
+        i += 1;
+
+        while (i + 1 < lines.length && isTableLine(lines[i + 1])) {
+          const rowLine = lines[i + 1];
+          if (isSeparatorLine(rowLine)) {
+            i += 1;
+            continue;
+          }
+          const rowCells = splitCells(rowLine);
+          html.push("<tr>");
+          for (let col = 0; col < Math.max(headerCells.length, rowCells.length); col += 1) {
+            html.push(cellHtml(rowCells[col] || "", aligns[col] || "left"));
+          }
+          html.push("</tr>");
+          i += 1;
+        }
+        continue;
+      }
+
+      closeTable();
 
       const heading = trimmed.match(/^(#{1,3})\s+(.*)$/);
       if (heading) {
@@ -5818,7 +6488,7 @@ function renderMarkdown(text) {
         closePara();
         const level = heading[1].length;
         html.push(`<h${level}>${formatInline(heading[2])}</h${level}>`);
-        return;
+        continue;
       }
 
       const olMatch = trimmed.match(/^(\d+)\.\s+(.*)$/);
@@ -5830,7 +6500,7 @@ function renderMarkdown(text) {
           inOl = true;
         }
         html.push(`<li>${formatInline(olMatch[2])}</li>`);
-        return;
+        continue;
       }
 
       const ulMatch = trimmed.match(/^[-*]\s+(.*)$/);
@@ -5842,7 +6512,7 @@ function renderMarkdown(text) {
           inUl = true;
         }
         html.push(`<li>${formatInline(ulMatch[1])}</li>`);
-        return;
+        continue;
       }
 
       closeLists();
@@ -5853,8 +6523,9 @@ function renderMarkdown(text) {
       } else {
         html.push("<br />" + formatInline(trimmed));
       }
-    });
+    }
 
+    closeTable();
     closeLists();
     closePara();
   });
@@ -6975,6 +7646,13 @@ if (el.artifactCompareLeft) {
   });
 }
 
+if (el.artifactCompareMode) {
+  el.artifactCompareMode.addEventListener("change", () => {
+    const mode = String(el.artifactCompareMode.value || "structure").trim().toLowerCase();
+    state.artifactCompareMode = mode === "sequence" ? "sequence" : "structure";
+  });
+}
+
 if (el.artifactCompareRight) {
   el.artifactCompareRight.addEventListener("change", () => {
     state.artifactCompareRightPath = String(el.artifactCompareRight.value || "");
@@ -7000,6 +7678,12 @@ if (el.artifactGenerateReport) {
   el.artifactGenerateReport.addEventListener("click", async () => {
     if (!state.currentRunId) return;
     await generateReport();
+  });
+}
+
+if (el.artifactComparisonDetails) {
+  el.artifactComparisonDetails.addEventListener("click", () => {
+    openComparisonDetailModal();
   });
 }
 
