@@ -18,6 +18,8 @@ _PROMPT_KEY_ALIASES = {
     "rmsd": "af2_rmsd_cutoff",
     "topk": "af2_top_k",
     "top_k": "af2_top_k",
+    "af2_n": "af2_max_candidates_per_tier",
+    "af2_per_tier": "af2_max_candidates_per_tier",
     "temp": "sampling_temp",
     "temperature": "sampling_temp",
     "mask_consensus": "mask_consensus_apply",
@@ -38,12 +40,14 @@ _PROMPT_BOOL_KEYS = {
     "rfd3_use_ensemble",
     "surface_only",
     "bioemu_use",
+    "ligand_mask_use_original_target",
 }
 _PROMPT_INT_KEYS = {
     "num_seq_per_tier",
     "batch_size",
     "seed",
     "af2_top_k",
+    "af2_max_candidates_per_tier",
     "mmseqs_max_seqs",
     "mmseqs_threads",
     "rfd3_design_index",
@@ -467,6 +471,16 @@ def plan_from_prompt(
                     "default": "design",
                 }
             )
+
+    if "af2_max_candidates_per_tier" not in routed:
+        questions.append(
+            {
+                "id": "af2_max_candidates_per_tier",
+                "question": "AF2 per tier candidate count (top SoluProt score first, 0=all).",
+                "required": False,
+                "default": 8,
+            }
+        )
 
     if "design" in p and "design_chains" not in routed and has_target:
         questions.append(

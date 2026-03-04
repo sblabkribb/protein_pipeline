@@ -110,7 +110,13 @@ const state = {
     type: "all",
   },
   runs: [],
+  runModeById: {},
+  progressByRunId: {},
+  timingByRunId: {},
+  feedbackCount: 0,
+  experimentCount: 0,
   lastScore: null,
+  lastRunStatus: null,
   reportModalText: "",
   reportModalMode: "rendered",
   reportModalFilename: "report.md",
@@ -135,18 +141,46 @@ const el = {
   chatArea: document.getElementById("chatArea"),
   userBadge: document.getElementById("userBadge"),
   messages: document.getElementById("messages"),
+  monitorMessages: document.getElementById("monitorMessages"),
   promptInput: document.getElementById("promptInput"),
   checkBtn: document.getElementById("checkBtn"),
   planBtn: document.getElementById("planBtn"),
   clearBtn: document.getElementById("clearBtn"),
   questionStack: document.getElementById("questionStack"),
+  questionInputStack: document.getElementById("questionInputStack"),
+  questionConfigStack: document.getElementById("questionConfigStack"),
+  setupRunSelector: document.getElementById("setupRunSelector"),
+  setupContextStageValue: document.getElementById("setupContextStageValue"),
+  setupContextStateValue: document.getElementById("setupContextStateValue"),
   runBtn: document.getElementById("runBtn"),
   runHint: document.getElementById("runHint"),
   runInlineStatus: document.getElementById("runInlineStatus"),
+  setupRunIdValue: document.getElementById("setupRunIdValue"),
+  setupRunStageValue: document.getElementById("setupRunStageValue"),
+  setupRunStateValue: document.getElementById("setupRunStateValue"),
+  setupRunUpdatedValue: document.getElementById("setupRunUpdatedValue"),
+  setupRunEtaValue: document.getElementById("setupRunEtaValue"),
+  setupPollBtn: document.getElementById("setupPollBtn"),
+  setupMonitorTabBtn: document.getElementById("setupMonitorTabBtn"),
+  setupErrorDetails: document.getElementById("setupErrorDetails"),
+  setupErrorSummary: document.getElementById("setupErrorSummary"),
+  setupErrorRaw: document.getElementById("setupErrorRaw"),
   runIdValue: document.getElementById("runIdValue"),
+  runSelector: document.getElementById("runSelector"),
   runStageValue: document.getElementById("runStageValue"),
   runStateValue: document.getElementById("runStateValue"),
   runUpdatedValue: document.getElementById("runUpdatedValue"),
+  analyzeRunSelector: document.getElementById("analyzeRunSelector"),
+  analyzeContextStageValue: document.getElementById("analyzeContextStageValue"),
+  analyzeContextStateValue: document.getElementById("analyzeContextStateValue"),
+  runDetailValue: document.getElementById("runDetailValue"),
+  runErrorDetails: document.getElementById("runErrorDetails"),
+  runErrorSummary: document.getElementById("runErrorSummary"),
+  runErrorRaw: document.getElementById("runErrorRaw"),
+  runProgressLabel: document.getElementById("runProgressLabel"),
+  runProgressPercent: document.getElementById("runProgressPercent"),
+  runProgressFill: document.getElementById("runProgressFill"),
+  runProgressStages: document.getElementById("runProgressStages"),
   runScoreValue: document.getElementById("runScoreValue"),
   runEvidenceValue: document.getElementById("runEvidenceValue"),
   runRecommendationValue: document.getElementById("runRecommendationValue"),
@@ -154,6 +188,8 @@ const el = {
   cancelRunBtn: document.getElementById("cancelRunBtn"),
   autoPoll: document.getElementById("autoPoll"),
   refreshRunsBtn: document.getElementById("refreshRunsBtn"),
+  clearMonitorMessages: document.getElementById("clearMonitorMessages"),
+  clearMonitorMessagesMonitor: document.getElementById("clearMonitorMessagesMonitor"),
   artifactList: document.getElementById("artifactList"),
   artifactFilter: document.getElementById("artifactFilter"),
   artifactStageFilter: document.getElementById("artifactStageFilter"),
@@ -207,6 +243,9 @@ const el = {
   reportReviewComment: document.getElementById("reportReviewComment"),
   submitReportReview: document.getElementById("submitReportReview"),
   reportReviewStatus: document.getElementById("reportReviewStatus"),
+  analyzeFeedbackCount: document.getElementById("analyzeFeedbackCount"),
+  analyzeExperimentCount: document.getElementById("analyzeExperimentCount"),
+  analyzeRecommendationValue: document.getElementById("analyzeRecommendationValue"),
   settingsBtn: document.getElementById("settingsBtn"),
   settingsPanel: document.getElementById("settingsPanel"),
   settingsClose: document.getElementById("settingsClose"),
@@ -238,6 +277,9 @@ const I18N = {
     "tabs.setup": "Setup",
     "tabs.monitor": "Monitor",
     "tabs.analyze": "Analyze",
+    "analyze.kpi.feedback": "Feedback",
+    "analyze.kpi.experiment": "Experiments",
+    "analyze.kpi.recommendation": "Recommendation",
     "login.title": "Enter the Lab",
     "login.desc": "Identify yourself to separate runs and keep artifacts organized.",
     "login.username": "Username",
@@ -247,10 +289,19 @@ const I18N = {
     "login.submit": "Access Console",
     "setup.title": "Run Setup",
     "setup.desc": "Choose a workflow, attach inputs, and launch the job.",
+    "setup.section.input": "Input",
+    "setup.section.inputDesc": "Attach required files and add optional context notes.",
+    "setup.section.execution": "Execution Settings",
+    "setup.section.executionDesc": "Select run mode and configure stage options.",
+    "setup.section.monitor": "Monitoring",
+    "setup.section.monitorDesc": "Keep progress and errors visible while preparing a run.",
+    "setup.section.log": "Activity Log",
+    "setup.section.logDesc": "Preflight and run messages appear here.",
+    "setup.openMonitor": "Open Monitor",
     "setup.prompt.placeholder": "Prompt or notes (key=value supported).",
     "setup.check": "Check Setup",
     "setup.reset": "Reset Inputs",
-    "setup.clear": "Clear Log",
+    "setup.clear": "Clear Note",
     "setup.hint": "Complete required inputs to enable execution.",
     "setup.runStatus.empty": "Run status: -",
     "setup.runStatus.line": "Run status: {id} · {stage} / {state} · {updated}",
@@ -268,9 +319,17 @@ const I18N = {
     "monitor.title": "Run Monitor",
     "monitor.desc": "Track live status, scores, and recent runs.",
     "monitor.runId": "Run ID",
+    "monitor.selectRun": "Select run",
     "monitor.stage": "Stage",
     "monitor.state": "State",
     "monitor.updated": "Updated",
+    "monitor.eta": "ETA",
+    "monitor.detail": "Detail",
+    "monitor.progress": "Progress",
+    "monitor.progress.backbone": "Backbone",
+    "monitor.progress.wt": "WT Baseline",
+    "monitor.progress.masking": "Masking",
+    "monitor.progress.done": "Done",
     "monitor.scoring": "Scoring",
     "monitor.poll": "Poll Now",
     "monitor.stop": "Stop Run",
@@ -281,6 +340,8 @@ const I18N = {
     "monitor.recentRuns": "Recent Runs",
     "monitor.refreshRuns": "Refresh",
     "monitor.showAll": "Show all runs (admin)",
+    "monitor.activity": "Activity Log",
+    "monitor.clearLog": "Clear",
     "agent.title": "Agent Panel",
     "agent.desc": "Stage-by-stage expert consensus and recovery notes.",
     "agent.refresh": "Refresh",
@@ -429,12 +490,17 @@ const I18N = {
     "question.bioemuNumSamples.help": "Number of BioEmu samples to generate.",
     "question.bioemuMaxReturn.label": "BioEmu Return Count",
     "question.bioemuMaxReturn.help": "Maximum number of BioEmu structures to keep.",
+    "question.af2MaxCandidatesPerTier.label": "AF2 per Tier (Top N)",
+    "question.af2MaxCandidatesPerTier.help":
+      "Run AF2 only for top N SoluProt-passed designs per tier (ranked by SoluProt score, 0 = all).",
     "question.rfd3MaxReturn.label": "RFD3 Return Count",
     "question.rfd3MaxReturn.help": "Maximum number of RFD3 backbone designs to keep.",
     "question.confirmRun.label": "Confirm Run",
     "question.confirmRun.help": "Review the parsed settings and confirm to enable execution.",
     "question.fixedPositionsExtra.label": "Fixed Positions (Extra)",
-    "question.fixedPositionsExtra.help": "Provide fixed_positions_extra as JSON, e.g. {\"A\":[10,25]} or [10,25].",
+    "question.fixedPositionsExtra.help": "Optional hard constraints before design. Use JSON ({\"A\":[6,10],\"*\":[120]}) or shorthand (A:6,10;*:120).",
+    "question.ligandMaskOriginal.label": "Preserve Original Ligand Mask",
+    "question.ligandMaskOriginal.help": "Project ligand-contact residues from original target_pdb/rfd3_input_pdb onto current backbones.",
     "question.stripNonpositive.label": "Strip non-positive residues",
     "question.stripNonpositive.help": "Remove residues with resseq <= 0 before RFD3 and downstream steps.",
     "question.rfd3InputPdb.label": "RFD3 Input PDB",
@@ -471,6 +537,8 @@ const I18N = {
     "choice.wtCompare.off": "Disable WT compare",
     "choice.maskConsensusApply.on": "Apply consensus",
     "choice.maskConsensusApply.off": "Do not apply",
+    "choice.ligandMaskOriginal.on": "Preserve original mask",
+    "choice.ligandMaskOriginal.off": "Use backbone-only mask",
     "choice.bioemuUse.on": "Enable BioEmu",
     "choice.bioemuUse.off": "Disable BioEmu",
     "advanced.bioemuCounts.title": "BioEmu Count Options",
@@ -525,6 +593,8 @@ const I18N = {
     "run.alreadyRunning": "A run is already in progress. Stop it or wait for completion.",
     "run.confirmRequired": "Confirm the prompt plan before running.",
     "status.line": "Status: {stage} / {state}",
+    "status.notFound":
+      "Status unavailable for {id}. status.json may be missing while an external/resumed job is still running.",
     "status.error": "Status error: {error}",
     "artifact.none": "No artifacts.",
     "artifact.error": "Artifact error: {error}",
@@ -606,6 +676,9 @@ const I18N = {
     "tabs.setup": "설정",
     "tabs.monitor": "모니터",
     "tabs.analyze": "분석",
+    "analyze.kpi.feedback": "피드백",
+    "analyze.kpi.experiment": "실험",
+    "analyze.kpi.recommendation": "권고",
     "login.title": "랩 입장",
     "login.desc": "실행을 구분하고 아티팩트를 정리하기 위해 계정을 확인합니다.",
     "login.username": "사용자명",
@@ -615,10 +688,19 @@ const I18N = {
     "login.submit": "콘솔 접속",
     "setup.title": "실행 설정",
     "setup.desc": "워크플로를 선택하고 입력을 첨부해 실행하세요.",
+    "setup.section.input": "입력",
+    "setup.section.inputDesc": "필수 파일을 첨부하고 선택적으로 메모를 남기세요.",
+    "setup.section.execution": "실행 설정",
+    "setup.section.executionDesc": "실행 모드와 단계 옵션을 설정하세요.",
+    "setup.section.monitor": "모니터링",
+    "setup.section.monitorDesc": "실행 준비 중에도 진행률과 오류를 바로 확인합니다.",
+    "setup.section.log": "활동 로그",
+    "setup.section.logDesc": "사전 점검 및 실행 메시지를 확인합니다.",
+    "setup.openMonitor": "모니터 열기",
     "setup.prompt.placeholder": "프롬프트/메모 입력 (key=value 지원).",
     "setup.check": "설정 점검",
     "setup.reset": "입력 초기화",
-    "setup.clear": "로그 지우기",
+    "setup.clear": "메모 지우기",
     "setup.hint": "필수 입력을 완료하면 실행할 수 있습니다.",
     "setup.runStatus.empty": "실행 상태: -",
     "setup.runStatus.line": "실행 상태: {id} · {stage} / {state} · {updated}",
@@ -636,9 +718,17 @@ const I18N = {
     "monitor.title": "실행 모니터",
     "monitor.desc": "상태, 점수, 최근 실행을 확인합니다.",
     "monitor.runId": "실행 ID",
+    "monitor.selectRun": "실행 선택",
     "monitor.stage": "단계",
     "monitor.state": "상태",
     "monitor.updated": "업데이트",
+    "monitor.eta": "예상 남은 시간",
+    "monitor.detail": "세부",
+    "monitor.progress": "진행률",
+    "monitor.progress.backbone": "백본",
+    "monitor.progress.wt": "WT 기준선",
+    "monitor.progress.masking": "마스킹",
+    "monitor.progress.done": "완료",
     "monitor.scoring": "점수",
     "monitor.poll": "지금 조회",
     "monitor.stop": "정지",
@@ -649,6 +739,8 @@ const I18N = {
     "monitor.recentRuns": "최근 실행",
     "monitor.refreshRuns": "새로고침",
     "monitor.showAll": "모든 실행 보기 (관리자)",
+    "monitor.activity": "활동 로그",
+    "monitor.clearLog": "지우기",
     "agent.title": "에이전트 패널",
     "agent.desc": "단계별 전문가 합의와 복구 기록을 확인합니다.",
     "agent.refresh": "새로고침",
@@ -797,12 +889,17 @@ const I18N = {
     "question.bioemuNumSamples.help": "생성할 BioEmu 샘플 개수입니다.",
     "question.bioemuMaxReturn.label": "BioEmu 반환 개수",
     "question.bioemuMaxReturn.help": "보존할 BioEmu 구조 최대 개수입니다.",
+    "question.af2MaxCandidatesPerTier.label": "AF2 티어당 실행 개수 (상위 N개)",
+    "question.af2MaxCandidatesPerTier.help":
+      "티어별 SoluProt 통과 서열 중 상위 N개(점수 순)만 AF2를 실행합니다. 0이면 전체 실행.",
     "question.rfd3MaxReturn.label": "RFD3 반환 개수",
     "question.rfd3MaxReturn.help": "보존할 RFD3 백본 디자인 최대 개수입니다.",
     "question.confirmRun.label": "실행 확인",
     "question.confirmRun.help": "해석된 설정을 확인한 뒤 실행을 승인하세요.",
     "question.fixedPositionsExtra.label": "고정 위치 추가",
-    "question.fixedPositionsExtra.help": "fixed_positions_extra를 JSON으로 입력하세요. 예: {\"A\":[10,25]} 또는 [10,25]",
+    "question.fixedPositionsExtra.help": "디자인 전 반드시 보존할 위치입니다(선택). JSON({\"A\":[6,10],\"*\":[120]}) 또는 단축표기(A:6,10;*:120) 사용.",
+    "question.ligandMaskOriginal.label": "원본 리간드 마스크 보존",
+    "question.ligandMaskOriginal.help": "원본 target_pdb/rfd3_input_pdb의 리간드 접촉 잔기를 현재 백본에 투영해 보존합니다.",
     "question.stripNonpositive.label": "음수 잔기 제거",
     "question.stripNonpositive.help": "RFD3 및 이후 단계 전에 resseq <= 0 잔기를 제거합니다.",
     "question.rfd3InputPdb.label": "RFD3 입력 PDB",
@@ -839,6 +936,8 @@ const I18N = {
     "choice.wtCompare.off": "WT 비교 사용 안 함",
     "choice.maskConsensusApply.on": "합의 적용",
     "choice.maskConsensusApply.off": "적용 안 함",
+    "choice.ligandMaskOriginal.on": "원본 마스크 보존",
+    "choice.ligandMaskOriginal.off": "현재 백본 기준만 사용",
     "choice.bioemuUse.on": "BioEmu 사용",
     "choice.bioemuUse.off": "BioEmu 사용 안 함",
     "advanced.bioemuCounts.title": "BioEmu 개수 옵션",
@@ -893,6 +992,8 @@ const I18N = {
     "run.alreadyRunning": "이미 실행 중인 작업이 있습니다. 완료를 기다리거나 정지하세요.",
     "run.confirmRequired": "실행 전에 확인을 완료하세요.",
     "status.line": "상태: {stage} / {state}",
+    "status.notFound":
+      "{id} 실행 상태를 찾지 못했습니다. 외부/재개 실행이면 status.json 없이 동작 중일 수 있습니다.",
     "status.error": "상태 오류: {error}",
     "artifact.none": "아티팩트가 없습니다.",
     "artifact.error": "아티팩트 오류: {error}",
@@ -1054,6 +1155,10 @@ const QUESTION_PRESETS = {
     labelKey: "question.bioemuMaxReturn.label",
     questionKey: "question.bioemuMaxReturn.help",
   },
+  af2_max_candidates_per_tier: {
+    labelKey: "question.af2MaxCandidatesPerTier.label",
+    questionKey: "question.af2MaxCandidatesPerTier.help",
+  },
   rfd3_max_return_designs: {
     labelKey: "question.rfd3MaxReturn.label",
     questionKey: "question.rfd3MaxReturn.help",
@@ -1081,12 +1186,18 @@ const QUESTION_PRESETS = {
   fixed_positions_extra: {
     labelKey: "question.fixedPositionsExtra.label",
     questionKey: "question.fixedPositionsExtra.help",
-    placeholder: "A:1,2,3;B:4,5 or {\"A\":[1,2,3]}",
+    placeholder: "A:6,10;*:120 or {\"A\":[6,10],\"*\":[120]}",
+    multiline: true,
+  },
+  ligand_mask_use_original_target: {
+    labelKey: "question.ligandMaskOriginal.label",
+    questionKey: "question.ligandMaskOriginal.help",
   },
   confirm_run: {
     labelKey: "question.confirmRun.label",
     questionKey: "question.confirmRun.help",
     required: true,
+    default: true,
   },
 };
 
@@ -1097,6 +1208,7 @@ const ANSWER_BOOL_KEYS = new Set([
   "auto_recover",
   "wt_compare",
   "mask_consensus_apply",
+  "ligand_mask_use_original_target",
   "pdb_strip_nonpositive_resseq",
   "pdb_renumber_resseq_from_1",
   "mmseqs_use_gpu",
@@ -1117,6 +1229,7 @@ const ANSWER_INT_KEYS = new Set([
   "rfd3_partial_t",
   "bioemu_num_samples",
   "bioemu_max_return_structures",
+  "af2_max_candidates_per_tier",
   "conservation_cluster_cov_mode",
   "conservation_cluster_kmer_per_seq",
 ]);
@@ -1297,9 +1410,25 @@ const STAGE_LABELS = {
   af2: { en: "AlphaFold2", ko: "AlphaFold2" },
   novelty: { en: "Novelty", ko: "Novelty" },
   wt: { en: "WT Compare", ko: "WT 비교" },
+  wt_baseline: { en: "WT Baseline", ko: "WT 기준선" },
+  wt_soluprot: { en: "WT SoluProt", ko: "WT SoluProt" },
+  wt_af2: { en: "WT AF2", ko: "WT AF2" },
   agent: { en: "Agent Panel", ko: "에이전트 패널" },
   misc: { en: "Misc", ko: "기타" },
 };
+
+const PROGRESS_PLANS = {
+  pipeline: ["msa", "conservation", "backbone", "wt", "masking", "design", "soluprot", "af2", "novelty", "done"],
+  design: ["msa", "conservation", "backbone", "masking", "design", "done"],
+  soluprot: ["msa", "conservation", "backbone", "masking", "design", "soluprot", "done"],
+  rfd3: ["msa", "conservation", "rfd3", "done"],
+  bioemu: ["msa", "conservation", "bioemu", "done"],
+  msa: ["msa", "done"],
+  af2: ["af2", "done"],
+  diffdock: ["diffdock", "done"],
+};
+
+const TERMINAL_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
 
 function loadUser() {
   const raw = localStorage.getItem("kbf.user");
@@ -1326,12 +1455,26 @@ function clearSession() {
   state.token = "";
 }
 
-function setMessage(text, role = "ai") {
+function appendMessage(container, text, role = "ai") {
+  if (!container) return;
   const div = document.createElement("div");
   div.className = `message ${role}`;
   div.textContent = text;
-  el.messages.appendChild(div);
-  el.messages.scrollTop = el.messages.scrollHeight;
+  container.appendChild(div);
+  while (container.childElementCount > 120) {
+    container.removeChild(container.firstElementChild);
+  }
+  container.scrollTop = container.scrollHeight;
+}
+
+function clearMessagePanels() {
+  if (el.messages) el.messages.innerHTML = "";
+  if (el.monitorMessages) el.monitorMessages.innerHTML = "";
+}
+
+function setMessage(text, role = "ai") {
+  appendMessage(el.messages, text, role);
+  appendMessage(el.monitorMessages, text, role);
 }
 
 function openReportModal(title, content, filename) {
@@ -1434,7 +1577,11 @@ function setLanguage(lang) {
   if (state.runs) renderRuns(state.runs);
   updateReportArtifactLinks(el.reportContent ? el.reportContent.value : "");
   updateReportScore(state.lastScore || {});
+  updateAnalyzeSummary();
   updateReportLangSelect();
+  if (state.lastRunStatus) {
+    updateRunInfo(state.lastRunStatus);
+  }
 }
 
 function initLanguage() {
@@ -1448,6 +1595,7 @@ function initLanguage() {
   updateLangButtons();
   applyI18n();
   updateReportScore(state.lastScore || {});
+  updateAnalyzeSummary();
   updateReportLangSelect();
 }
 
@@ -1564,6 +1712,13 @@ function buildManualPlan(mode) {
         default: 50,
       },
       {
+        id: "af2_max_candidates_per_tier",
+        labelKey: "question.af2MaxCandidatesPerTier.label",
+        questionKey: "question.af2MaxCandidatesPerTier.help",
+        required: false,
+        default: 8,
+      },
+      {
         id: "design_chains",
         labelKey: "question.designChains.label",
         questionKey: "question.designChains.help",
@@ -1589,6 +1744,19 @@ function buildManualPlan(mode) {
         questionKey: "question.maskConsensusApply.help",
         required: false,
         default: false,
+      },
+      {
+        id: "ligand_mask_use_original_target",
+        labelKey: "question.ligandMaskOriginal.label",
+        questionKey: "question.ligandMaskOriginal.help",
+        required: false,
+        default: true,
+      },
+      {
+        id: "fixed_positions_extra",
+        labelKey: "question.fixedPositionsExtra.label",
+        questionKey: "question.fixedPositionsExtra.help",
+        required: false,
       },
       {
         id: "rfd3_input_pdb",
@@ -1719,6 +1887,27 @@ function buildManualPlan(mode) {
         questionKey: "question.stripNonpositive.help",
         required: false,
         default: true,
+      },
+      {
+        id: "bioemu_use",
+        labelKey: "question.bioemuUse.label",
+        questionKey: "question.bioemuUse.help",
+        required: false,
+        default: true,
+      },
+      {
+        id: "bioemu_num_samples",
+        labelKey: "question.bioemuNumSamples.label",
+        questionKey: "question.bioemuNumSamples.help",
+        required: false,
+        default: 50,
+      },
+      {
+        id: "bioemu_max_return_structures",
+        labelKey: "question.bioemuMaxReturn.label",
+        questionKey: "question.bioemuMaxReturn.help",
+        required: false,
+        default: 50,
       }
     );
   }
@@ -1743,6 +1932,27 @@ function buildManualPlan(mode) {
         questionKey: "question.stripNonpositive.help",
         required: false,
         default: true,
+      },
+      {
+        id: "bioemu_use",
+        labelKey: "question.bioemuUse.label",
+        questionKey: "question.bioemuUse.help",
+        required: false,
+        default: true,
+      },
+      {
+        id: "bioemu_num_samples",
+        labelKey: "question.bioemuNumSamples.label",
+        questionKey: "question.bioemuNumSamples.help",
+        required: false,
+        default: 50,
+      },
+      {
+        id: "bioemu_max_return_structures",
+        labelKey: "question.bioemuMaxReturn.label",
+        questionKey: "question.bioemuMaxReturn.help",
+        required: false,
+        default: 50,
       }
     );
   }
@@ -1987,11 +2197,295 @@ function initFeedbackUI() {
   }
 }
 
+function inferRunModeFromRequestPayload(payload) {
+  if (!payload || typeof payload !== "object") return "";
+
+  const stopAfter = String(payload.stop_after || "")
+    .trim()
+    .toLowerCase();
+  if (stopAfter === "msa") return "msa";
+  if (stopAfter === "rfd3") return "rfd3";
+  if (stopAfter === "bioemu") return "bioemu";
+  if (stopAfter === "design") return "design";
+  if (stopAfter === "soluprot") return "soluprot";
+  if (stopAfter === "af2") return "af2";
+  if (stopAfter === "novelty") return "pipeline";
+
+  const isDiffdockRequest =
+    "protein_pdb" in payload ||
+    "diffdock_ligand_smiles" in payload ||
+    "diffdock_ligand_sdf" in payload;
+  if (isDiffdockRequest) return "diffdock";
+
+  const isPipelineRequest =
+    "num_seq_per_tier" in payload ||
+    "mmseqs_target_db" in payload ||
+    "novelty_target_db" in payload ||
+    "rfd3_max_return_designs" in payload;
+  if (isPipelineRequest) return "pipeline";
+
+  const isAf2Request = "af2_model_preset" in payload && "af2_db_preset" in payload;
+  if (isAf2Request) return "af2";
+
+  return "";
+}
+
+async function ensureRunModeForRunId(runId, status) {
+  if (!runId) return "pipeline";
+  const mapped = state.runModeById[runId];
+  if (mapped && PROGRESS_PLANS[mapped]) return mapped;
+
+  try {
+    const req = await apiCall("pipeline.read_artifact", {
+      run_id: runId,
+      path: "request.json",
+      max_bytes: 512000,
+    });
+    const text = typeof req?.text === "string" ? req.text : "";
+    if (text.trim()) {
+      const payload = JSON.parse(text);
+      const inferred = inferRunModeFromRequestPayload(payload);
+      if (inferred && PROGRESS_PLANS[inferred]) {
+        state.runModeById[runId] = inferred;
+        return inferred;
+      }
+    }
+  } catch (err) {
+    // Ignore mode inference failures and keep fallback below.
+  }
+
+  const rawStage = String(status?.stage || "")
+    .trim()
+    .toLowerCase();
+  if (rawStage === "af2") {
+    state.runModeById[runId] = "af2";
+    return "af2";
+  }
+  if (rawStage === "diffdock") {
+    state.runModeById[runId] = "diffdock";
+    return "diffdock";
+  }
+
+  state.runModeById[runId] = "pipeline";
+  return "pipeline";
+}
+
+function progressModeForStatus(status) {
+  const embedded = String(status?._mode || "")
+    .trim()
+    .toLowerCase();
+  if (embedded && PROGRESS_PLANS[embedded]) return embedded;
+
+  const runId = state.currentRunId || "";
+  const mapped = runId ? state.runModeById[runId] : "";
+  if (mapped && PROGRESS_PLANS[mapped]) return mapped;
+
+  const rawStage = String(status?.stage || "").trim().toLowerCase();
+  if (rawStage === "af2") return "af2";
+  if (rawStage === "diffdock") return "diffdock";
+  return "pipeline";
+}
+
+function mapStageToProgressStep(stage, mode) {
+  const raw = String(stage || "").trim().toLowerCase();
+  if (!raw) return null;
+  if (raw === "done") return "done";
+  if (raw === "mmseqs_msa") return "msa";
+  if (raw === "conservation") return "conservation";
+  if (raw === "wt_baseline" || raw === "wt_soluprot" || raw === "wt_af2") return "wt";
+  if (raw === "rfd3") return mode === "rfd3" ? "rfd3" : "backbone";
+  if (raw === "bioemu") return mode === "bioemu" ? "bioemu" : "backbone";
+  if (raw === "af2_target" || raw === "pdb_preprocess" || raw === "query_pdb_check") return "backbone";
+  if (raw === "diffdock") return mode === "diffdock" ? "diffdock" : "masking";
+  if (raw === "ligand_mask" || raw === "surface_mask" || raw === "mask_consensus") return "masking";
+  if (raw === "design" || raw.startsWith("proteinmpnn_")) return "design";
+  if (raw === "soluprot" || raw.startsWith("soluprot_")) return "soluprot";
+  if (raw === "af2" || raw.startsWith("af2_")) return "af2";
+  if (raw === "novelty" || raw.startsWith("novelty_")) return "novelty";
+  return null;
+}
+
+function progressStepLabel(step) {
+  if (step === "backbone") return t("monitor.progress.backbone");
+  if (step === "wt") return t("monitor.progress.wt");
+  if (step === "masking") return t("monitor.progress.masking");
+  if (step === "done") return t("monitor.progress.done");
+  return formatStageLabel(step);
+}
+
+function parseStatusTimestamp(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return NaN;
+  const normalized = raw.includes("T") ? raw : raw.replace(" ", "T");
+  const withZone = /[zZ]|[+\-]\d{2}:\d{2}$/.test(normalized) ? normalized : `${normalized}Z`;
+  return Date.parse(withZone);
+}
+
+function formatEtaMs(ms) {
+  if (!Number.isFinite(ms) || ms <= 0) return "0m";
+  const totalSec = Math.max(1, Math.round(ms / 1000));
+  if (totalSec < 60) return "<1m";
+  const min = Math.floor(totalSec / 60);
+  const hr = Math.floor(min / 60);
+  if (hr > 0) return `${hr}h ${min % 60}m`;
+  return `${min}m`;
+}
+
+function estimateRunEta(status, percentRounded) {
+  const runId = String(state.currentRunId || "");
+  const runState = String(status?.state || "").trim().toLowerCase();
+  if (!runId) return "-";
+  if (runState === "completed" || runState === "done") return "0m";
+  if (runState === "failed" || runState === "cancelled" || runState === "error" || runState === "timed_out") {
+    return "failed";
+  }
+  const updatedTs = parseStatusTimestamp(status?.updated_at);
+  if (!Number.isFinite(updatedTs) || !Number.isFinite(percentRounded) || percentRounded <= 0 || percentRounded >= 100) {
+    return "-";
+  }
+  const timing = (state.timingByRunId[runId] = state.timingByRunId[runId] || {});
+  if (!Number.isFinite(timing.startedAt)) {
+    timing.startedAt = updatedTs;
+  }
+  const elapsed = Math.max(0, updatedTs - timing.startedAt);
+  if (elapsed < 5000) return "-";
+  const remaining = (elapsed * (100 - percentRounded)) / Math.max(1, percentRounded);
+  return formatEtaMs(remaining);
+}
+
+function setStateBadge(node, runState) {
+  if (!node) return;
+  node.classList.add("state-badge");
+  node.dataset.state = String(runState || "").toLowerCase();
+}
+
+function updateMonitorErrorCards(status) {
+  const runState = String(status?.state || "").toLowerCase();
+  const detailText = String(status?.detail || "").trim();
+  const shouldShow = runState === "failed" || runState === "error" || /^error[:\s]/i.test(detailText);
+  const summary = detailText ? detailText.split("\n")[0].slice(0, 220) : "Error";
+
+  const cards = [
+    {
+      root: el.runErrorDetails,
+      summary: el.runErrorSummary,
+      raw: el.runErrorRaw,
+    },
+    {
+      root: el.setupErrorDetails,
+      summary: el.setupErrorSummary,
+      raw: el.setupErrorRaw,
+    },
+  ];
+
+  cards.forEach((card) => {
+    if (!card.root) return;
+    card.root.classList.toggle("hidden", !shouldShow);
+    if (shouldShow) {
+      if (card.summary) card.summary.textContent = summary || "Error";
+      if (card.raw) card.raw.textContent = detailText || summary;
+    } else {
+      if (card.raw) card.raw.textContent = "";
+    }
+  });
+}
+
+function renderRunProgress(status) {
+  if (!el.runProgressFill || !el.runProgressPercent || !el.runProgressLabel || !el.runProgressStages) return;
+
+  const mode = progressModeForStatus(status);
+  const steps = PROGRESS_PLANS[mode] || PROGRESS_PLANS.pipeline;
+  const runState = String(status?.state || "").trim().toLowerCase();
+  const currentStep = mapStageToProgressStep(status?.stage, mode);
+
+  const runId = state.currentRunId || "";
+  const cached = runId ? state.progressByRunId[runId] : null;
+  let stepIndex = currentStep ? steps.indexOf(currentStep) : -1;
+  if (stepIndex < 0 && cached && cached.mode === mode && Number.isFinite(cached.index)) {
+    stepIndex = cached.index;
+  }
+  if (stepIndex < 0) stepIndex = 0;
+
+  let percent = 0;
+  if (currentStep === "done") {
+    percent = 100;
+    stepIndex = steps.length - 1;
+  } else {
+    const base = Math.max(0, stepIndex);
+    const offset =
+      runState === "running" ? 0.45 : runState === "completed" ? 1.0 : runState === "failed" ? 0.2 : 0.1;
+    percent = ((base + offset) / Math.max(1, steps.length)) * 100;
+    if (TERMINAL_RUN_STATES.has(runState) && runState !== "completed") {
+      percent = Math.max(percent, ((base + 0.75) / Math.max(1, steps.length)) * 100);
+    }
+    percent = Math.max(1, Math.min(99, percent));
+  }
+
+  const rounded = Math.max(0, Math.min(100, Math.round(percent)));
+  el.runProgressFill.style.width = `${rounded}%`;
+  el.runProgressPercent.textContent = `${rounded}%`;
+  el.runProgressLabel.textContent = progressStepLabel(steps[Math.min(stepIndex, steps.length - 1)]);
+
+  el.runProgressStages.innerHTML = steps
+    .map((step, index) => {
+      let cls = "";
+      if (index < stepIndex) cls = "done";
+      else if (index === stepIndex) cls = runState === "failed" || runState === "error" ? "failed" : "current";
+      return `<span class="progress-stage ${cls}">${escapeHtml(progressStepLabel(step))}</span>`;
+    })
+    .join("");
+
+  if (runId) {
+    state.progressByRunId[runId] = { mode, index: stepIndex, percent: rounded };
+  }
+  return rounded;
+}
+
+function resetRunProgress() {
+  if (el.runDetailValue) el.runDetailValue.textContent = "-";
+  if (el.runProgressFill) el.runProgressFill.style.width = "0%";
+  if (el.runProgressPercent) el.runProgressPercent.textContent = "0%";
+  if (el.runProgressLabel) el.runProgressLabel.textContent = "-";
+  if (el.runProgressStages) el.runProgressStages.innerHTML = "";
+}
+
 function updateRunInfo(status) {
   if (!status) return;
   el.runStageValue.textContent = status.stage || "-";
   el.runStateValue.textContent = status.state || "-";
   el.runUpdatedValue.textContent = status.updated_at || "-";
+  if (el.runDetailValue) {
+    const detailText = status.detail !== undefined && status.detail !== null ? String(status.detail) : "";
+    el.runDetailValue.textContent = detailText.trim() ? detailText : "-";
+  }
+  const runState = String(status.state || "").toLowerCase();
+  setStateBadge(el.runStateValue, runState);
+
+  state.lastRunStatus = status;
+  const percent = renderRunProgress(status);
+  const etaText = estimateRunEta(status, percent);
+
+  if (el.setupContextStageValue) el.setupContextStageValue.textContent = status.stage || "-";
+  if (el.setupContextStateValue) {
+    el.setupContextStateValue.textContent = status.state || "-";
+    setStateBadge(el.setupContextStateValue, runState);
+  }
+  if (el.analyzeContextStageValue) el.analyzeContextStageValue.textContent = status.stage || "-";
+  if (el.analyzeContextStateValue) {
+    el.analyzeContextStateValue.textContent = status.state || "-";
+    setStateBadge(el.analyzeContextStateValue, runState);
+  }
+
+  if (el.setupRunIdValue) el.setupRunIdValue.textContent = state.currentRunId || "-";
+  if (el.setupRunStageValue) el.setupRunStageValue.textContent = status.stage || "-";
+  if (el.setupRunStateValue) {
+    el.setupRunStateValue.textContent = status.state || "-";
+    setStateBadge(el.setupRunStateValue, runState);
+  }
+  if (el.setupRunUpdatedValue) el.setupRunUpdatedValue.textContent = status.updated_at || "-";
+  if (el.setupRunEtaValue) el.setupRunEtaValue.textContent = etaText;
+
+  updateMonitorErrorCards(status);
   state.currentRunState = String(status.state || "").toLowerCase();
   updateInlineStatus(status);
   updateRunEligibility(state.plan?.questions || []);
@@ -2019,10 +2513,39 @@ function updateInlineStatus(status, runId = state.currentRunId) {
 function setCurrentRunId(runId) {
   state.currentRunId = runId;
   state.currentRunState = "";
+  state.lastRunStatus = null;
   state.lastStatusKey = "";
+  state.feedbackCount = 0;
+  state.experimentCount = 0;
+  if (runId && !state.timingByRunId[runId]) state.timingByRunId[runId] = {};
   el.runIdValue.textContent = runId || "-";
+  el.runStageValue.textContent = "-";
+  el.runStateValue.textContent = "-";
+  el.runUpdatedValue.textContent = "-";
+  if (el.setupContextStageValue) el.setupContextStageValue.textContent = "-";
+  if (el.setupContextStateValue) {
+    el.setupContextStateValue.textContent = "-";
+    setStateBadge(el.setupContextStateValue, "");
+  }
+  if (el.analyzeContextStageValue) el.analyzeContextStageValue.textContent = "-";
+  if (el.analyzeContextStateValue) {
+    el.analyzeContextStateValue.textContent = "-";
+    setStateBadge(el.analyzeContextStateValue, "");
+  }
+  if (el.setupRunIdValue) el.setupRunIdValue.textContent = runId || "-";
+  if (el.setupRunStageValue) el.setupRunStageValue.textContent = "-";
+  if (el.setupRunStateValue) {
+    el.setupRunStateValue.textContent = "-";
+    setStateBadge(el.setupRunStateValue, "");
+  }
+  if (el.setupRunUpdatedValue) el.setupRunUpdatedValue.textContent = "-";
+  if (el.setupRunEtaValue) el.setupRunEtaValue.textContent = "-";
+  updateMonitorErrorCards(null);
+  updateAnalyzeSummary();
+  resetRunProgress();
   updateInlineStatus(null, runId);
   updateRunEligibility(state.plan?.questions || []);
+  if (state.runs) renderRuns(state.runs);
   refreshAgentPanel();
   refreshFeedback();
   refreshExperiments();
@@ -2387,7 +2910,19 @@ function renderChoiceButtons(container, options, currentValue, onSelect, { multi
 }
 
 function renderQuestions(questions) {
-  el.questionStack.innerHTML = "";
+  const inputStack = el.questionInputStack || el.questionStack;
+  const configStack = el.questionConfigStack || el.questionStack;
+  const stacks = new Set([el.questionStack, el.questionInputStack, el.questionConfigStack].filter(Boolean));
+  stacks.forEach((node) => {
+    node.innerHTML = "";
+  });
+  const appendInputCard = (card) => {
+    if (inputStack) inputStack.appendChild(card);
+  };
+  const appendConfigCard = (card) => {
+    if (configStack) configStack.appendChild(card);
+  };
+
   if (!questions.length) {
     el.runBtn.disabled = false;
     el.runHint.textContent = t("hint.none");
@@ -2414,6 +2949,7 @@ function renderQuestions(questions) {
     "pdb_strip_nonpositive_resseq",
     "wt_compare",
     "mask_consensus_apply",
+    "ligand_mask_use_original_target",
     "bioemu_use",
     "confirm_run",
   ]);
@@ -2614,6 +3150,31 @@ function renderQuestions(questions) {
       );
     }
 
+    if (q.id === "ligand_mask_use_original_target") {
+      let current = state.answers.ligand_mask_use_original_target;
+      if (typeof current !== "boolean") {
+        const routedDefault = state.plan?.routed_request?.ligand_mask_use_original_target;
+        if (typeof routedDefault === "boolean") {
+          current = routedDefault;
+        } else {
+          current = q.default !== undefined ? Boolean(q.default) : true;
+        }
+        state.answers.ligand_mask_use_original_target = current;
+      }
+      renderChoiceButtons(
+        card,
+        [
+          { labelKey: "choice.ligandMaskOriginal.on", value: true },
+          { labelKey: "choice.ligandMaskOriginal.off", value: false },
+        ],
+        current,
+        (value) => {
+          state.answers.ligand_mask_use_original_target = value;
+          updateRunEligibility(normalizedQuestions);
+        }
+      );
+    }
+
     if (q.id === "bioemu_use") {
       let current = state.answers.bioemu_use;
       if (typeof current !== "boolean") {
@@ -2642,7 +3203,7 @@ function renderQuestions(questions) {
     if (q.id === "confirm_run") {
       let current = state.answers.confirm_run;
       if (typeof current !== "boolean") {
-        current = false;
+        current = q.default !== undefined ? Boolean(q.default) : true;
         state.answers.confirm_run = current;
       }
       renderChoiceButtons(
@@ -2694,7 +3255,7 @@ function renderQuestions(questions) {
       }
     }
 
-    el.questionStack.appendChild(card);
+    appendConfigCard(card);
   });
 
   const bioemuCountQuestionIds = new Set(["bioemu_num_samples", "bioemu_max_return_structures"]);
@@ -2706,7 +3267,15 @@ function renderQuestions(questions) {
   if (!bioemuCountRelevant) state.showBioemuCountOptions = false;
   if (!rfd3CountRelevant) state.showRfd3CountOptions = false;
 
-  const appendCountToggleCard = ({ titleKey, helpKey, showKey, hideKey, enabled, onToggle }) => {
+  const appendCountToggleCard = ({
+    titleKey,
+    helpKey,
+    showKey,
+    hideKey,
+    enabled,
+    onToggle,
+    summaryText = "",
+  }) => {
     const card = document.createElement("div");
     card.className = "question-card";
 
@@ -2717,6 +3286,10 @@ function renderQuestions(questions) {
     const help = document.createElement("div");
     help.className = "question-help";
     help.textContent = t(helpKey);
+
+    const summary = document.createElement("div");
+    summary.className = "question-summary";
+    summary.textContent = summaryText;
 
     const toggleBtn = document.createElement("button");
     toggleBtn.type = "button";
@@ -2729,8 +3302,9 @@ function renderQuestions(questions) {
 
     card.appendChild(title);
     card.appendChild(help);
+    card.appendChild(summary);
     card.appendChild(toggleBtn);
-    el.questionStack.appendChild(card);
+    appendConfigCard(card);
   };
 
   const hasBioemuCountQuestions =
@@ -2742,10 +3316,16 @@ function renderQuestions(questions) {
       showKey: "advanced.bioemuCounts.show",
       hideKey: "advanced.bioemuCounts.hide",
       enabled: state.showBioemuCountOptions,
+      summaryText: `samples=${state.answers.bioemu_num_samples ?? 50}, keep=${state.answers.bioemu_max_return_structures ?? 50}`,
       onToggle: (next) => {
         state.showBioemuCountOptions = Boolean(next);
       },
     });
+    if (state.showBioemuCountOptions) {
+      textQuestions
+        .filter((q) => bioemuCountQuestionIds.has(q.id))
+        .forEach((q) => appendTextQuestionCard(q));
+    }
   }
 
   const hasRfd3CountQuestions =
@@ -2757,16 +3337,19 @@ function renderQuestions(questions) {
       showKey: "advanced.rfd3Counts.show",
       hideKey: "advanced.rfd3Counts.hide",
       enabled: state.showRfd3CountOptions,
+      summaryText: `keep=${state.answers.rfd3_max_return_designs ?? 50}`,
       onToggle: (next) => {
         state.showRfd3CountOptions = Boolean(next);
       },
     });
+    if (state.showRfd3CountOptions) {
+      textQuestions
+        .filter((q) => rfd3CountQuestionIds.has(q.id))
+        .forEach((q) => appendTextQuestionCard(q));
+    }
   }
 
-  textQuestions.forEach((q) => {
-    if (bioemuCountQuestionIds.has(q.id) && (!bioemuCountRelevant || !state.showBioemuCountOptions)) return;
-    if (rfd3CountQuestionIds.has(q.id) && (!rfd3CountRelevant || !state.showRfd3CountOptions)) return;
-
+  function appendTextQuestionCard(q) {
     const card = document.createElement("div");
     card.className = "question-card" + (q.required ? " required" : "");
 
@@ -2831,7 +3414,13 @@ function renderQuestions(questions) {
     card.appendChild(help);
     card.appendChild(inputWrap);
     card.appendChild(errorEl);
-    el.questionStack.appendChild(card);
+    appendConfigCard(card);
+  }
+
+  const hiddenCountQuestionIds = new Set([...bioemuCountQuestionIds, ...rfd3CountQuestionIds]);
+  textQuestions.forEach((q) => {
+    if (hiddenCountQuestionIds.has(q.id)) return;
+    appendTextQuestionCard(q);
   });
 
   if (fileQuestions.length) {
@@ -3006,7 +3595,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(list);
-    el.questionStack.appendChild(card);
+    appendInputCard(card);
   }
 
   updateRunEligibility(normalizedQuestions);
@@ -3136,12 +3725,15 @@ function filterAnswersForMode(mode, answers) {
       "diffdock_ligand_smiles",
       "diffdock_ligand_sdf",
       "design_chains",
+      "fixed_positions_extra",
       "pdb_strip_nonpositive_resseq",
       "wt_compare",
       "mask_consensus_apply",
+      "ligand_mask_use_original_target",
       "bioemu_use",
       "bioemu_num_samples",
       "bioemu_max_return_structures",
+      "af2_max_candidates_per_tier",
       "stop_after",
     ],
     bioemu: [
@@ -3153,8 +3745,24 @@ function filterAnswersForMode(mode, answers) {
     ],
     rfd3: ["rfd3_input_pdb", "rfd3_contig", "rfd3_max_return_designs", "pdb_strip_nonpositive_resseq"],
     msa: ["target_fasta", "target_pdb", "pdb_strip_nonpositive_resseq"],
-    design: ["target_fasta", "target_pdb", "design_chains", "pdb_strip_nonpositive_resseq"],
-    soluprot: ["target_fasta", "target_pdb", "design_chains", "pdb_strip_nonpositive_resseq"],
+    design: [
+      "target_fasta",
+      "target_pdb",
+      "design_chains",
+      "pdb_strip_nonpositive_resseq",
+      "bioemu_use",
+      "bioemu_num_samples",
+      "bioemu_max_return_structures",
+    ],
+    soluprot: [
+      "target_fasta",
+      "target_pdb",
+      "design_chains",
+      "pdb_strip_nonpositive_resseq",
+      "bioemu_use",
+      "bioemu_num_samples",
+      "bioemu_max_return_structures",
+    ],
     af2: ["target_fasta", "target_pdb"],
     diffdock: ["target_pdb", "diffdock_ligand_smiles", "diffdock_ligand_sdf"],
   }[mode || "pipeline"] || [];
@@ -3172,8 +3780,8 @@ function buildRoutedForMode(mode) {
   if (mode === "rfd3") return { stop_after: "rfd3" };
   if (mode === "bioemu") return { stop_after: "bioemu", bioemu_use: true };
   if (mode === "msa") return { stop_after: "msa" };
-  if (mode === "design") return { stop_after: "design" };
-  if (mode === "soluprot") return { stop_after: "soluprot" };
+  if (mode === "design") return { stop_after: "design", bioemu_use: true };
+  if (mode === "soluprot") return { stop_after: "soluprot", bioemu_use: true };
   if (mode === "af2") return { stop_after: "af2" };
   return {};
 }
@@ -3224,7 +3832,7 @@ function buildPromptPlan(plan, preflight, prompt) {
     });
   });
 
-  addQuestion({ id: "confirm_run", required: true });
+  addQuestion({ id: "confirm_run", required: true, default: true });
 
   return {
     routed_request: plan?.routed_request || {},
@@ -3295,7 +3903,7 @@ async function runPreflight({ announce = true } = {}) {
     const samePrompt = state.plan?.source === "prompt" && state.plan?.prompt === promptKey;
     state.plan = buildPromptPlan(plan, preflight, promptKey);
     if (!samePrompt) {
-      state.answers.confirm_run = false;
+      state.answers.confirm_run = true;
     }
     renderQuestions(state.plan.questions || []);
   } else if (!prompt && state.plan?.source === "prompt") {
@@ -3357,6 +3965,7 @@ async function runPipeline() {
   const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
   const runId = createRunId(prefix);
   const mode = state.runMode || "pipeline";
+  state.runModeById[runId] = mode;
   const rawAnswers = buildAnswerPayload(mode);
   const answers = state.plan?.allow_unfiltered_answers ? rawAnswers : filterAnswersForMode(mode, rawAnswers);
   let args = {};
@@ -3407,6 +4016,7 @@ async function runPipeline() {
 
   try {
     const result = await apiCall(toolName, args);
+    state.runModeById[result.run_id] = mode;
     setMessage(t("run.started", { id: result.run_id }), "ai");
     setCurrentRunId(result.run_id);
     await refreshRuns();
@@ -3421,14 +4031,111 @@ async function runPipeline() {
   }
 }
 
+function parseFallbackStatusFromEvents(eventsText, runId) {
+  const raw = String(eventsText || "");
+  if (!raw.trim()) return null;
+  const lines = raw.split(/\r?\n/).filter((line) => line.trim());
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    try {
+      const item = JSON.parse(lines[i]);
+      if (!item || typeof item !== "object") continue;
+      if (String(item.kind || "").toLowerCase() !== "status") continue;
+      const stage = String(item.stage || "").trim() || "init";
+      const stateText = String(item.state || "").trim() || "running";
+      const updatedAt = String(item.updated_at || "").trim() || "-";
+      const detailText =
+        item.detail !== undefined && item.detail !== null ? String(item.detail).trim() : "events fallback";
+      return {
+        run_id: String(item.run_id || runId || "").trim() || String(runId || ""),
+        stage,
+        state: stateText,
+        updated_at: updatedAt,
+        detail: detailText || "events fallback",
+      };
+    } catch (err) {
+      continue;
+    }
+  }
+  return null;
+}
+
+function parseFallbackStatusFromRunpodJobs(jobsText, runId) {
+  const raw = String(jobsText || "").trim();
+  if (!raw) return null;
+  let payload = null;
+  try {
+    payload = JSON.parse(raw);
+  } catch (err) {
+    return null;
+  }
+  if (!payload || typeof payload !== "object") return null;
+  const jobs = payload.jobs;
+  if (!jobs || typeof jobs !== "object") return null;
+  const keys = Object.keys(jobs).filter((key) => String(key || "").trim());
+  if (!keys.length) return null;
+  const firstKey = keys[0];
+  const inferredStage = String(firstKey).split(":")[0] || "runpod";
+  return {
+    run_id: String(runId || ""),
+    stage: inferredStage,
+    state: "running",
+    updated_at: "-",
+    detail: `runpod_jobs=${keys.length} (status.json missing)`,
+  };
+}
+
+async function loadFallbackRunStatus(runId) {
+  try {
+    const events = await apiCall("pipeline.read_artifact", {
+      run_id: runId,
+      path: "events.jsonl",
+      max_bytes: 512000,
+    });
+    const fallback = parseFallbackStatusFromEvents(events?.text, runId);
+    if (fallback) return fallback;
+  } catch (err) {
+    // ignore missing events
+  }
+  try {
+    const jobs = await apiCall("pipeline.read_artifact", {
+      run_id: runId,
+      path: "runpod_jobs.json",
+      max_bytes: 256000,
+    });
+    const fallback = parseFallbackStatusFromRunpodJobs(jobs?.text, runId);
+    if (fallback) return fallback;
+  } catch (err) {
+    // ignore missing runpod_jobs
+  }
+  return null;
+}
+
 async function pollStatus(runId) {
   try {
     const result = await apiCall("pipeline.status", { run_id: runId });
     if (!result.found) {
-      updateRunInfo({ stage: "-", state: "not found", updated_at: "-" });
+      const fallbackStatus = await loadFallbackRunStatus(runId);
+      if (fallbackStatus) {
+        updateRunInfo(fallbackStatus);
+        const stage = fallbackStatus.stage || "-";
+        const stateText = fallbackStatus.state || "-";
+        const key = `${stage}|${stateText}`;
+        if (key !== state.lastStatusKey) {
+          state.lastStatusKey = key;
+          setMessage(t("status.line", { stage, state: stateText }), "ai");
+        }
+      } else {
+        updateRunInfo({ stage: "-", state: "not found", updated_at: "-" });
+        const key = `not_found|${runId}`;
+        if (key !== state.lastStatusKey) {
+          state.lastStatusKey = key;
+          setMessage(t("status.notFound", { id: runId }), "ai");
+        }
+      }
       return;
     }
-    updateRunInfo(result.status);
+    const mode = await ensureRunModeForRunId(runId, result.status);
+    updateRunInfo({ ...(result.status || {}), _mode: mode });
     const stage = result.status?.stage || "-";
     const stateText = result.status?.state || "-";
     const key = `${stage}|${stateText}`;
@@ -4363,15 +5070,17 @@ async function refreshFeedback() {
   try {
     const result = await apiCall("pipeline.list_feedback", {
       run_id: state.currentRunId,
-      limit: 5,
+      limit: 100,
     });
     const items = result.items || [];
+    state.feedbackCount = items.length;
+    updateAnalyzeSummary();
     if (!items.length) {
       el.feedbackList.innerHTML = `<div class="placeholder">${t("feedback.none")}</div>`;
       return;
     }
     el.feedbackList.innerHTML = "";
-    items.forEach((item) => {
+    items.slice(0, 5).forEach((item) => {
       const div = document.createElement("div");
       div.className = "run-item";
       const rating = labelFromMap(item.rating, FEEDBACK_RATING_KEYS);
@@ -4390,6 +5099,8 @@ async function refreshFeedback() {
   } catch (err) {
     const msg = String(err.message || "");
     if (msg.includes("run_id not found")) {
+      state.feedbackCount = 0;
+      updateAnalyzeSummary();
       el.feedbackList.innerHTML = `<div class="placeholder">${t("feedback.none")}</div>`;
     } else {
       el.feedbackList.innerHTML = `<div class="placeholder">${t("feedback.loadFailed", {
@@ -4438,15 +5149,17 @@ async function refreshExperiments() {
   try {
     const result = await apiCall("pipeline.list_experiments", {
       run_id: state.currentRunId,
-      limit: 5,
+      limit: 100,
     });
     const items = result.items || [];
+    state.experimentCount = items.length;
+    updateAnalyzeSummary();
     if (!items.length) {
       el.experimentList.innerHTML = `<div class="placeholder">${t("experiment.none")}</div>`;
       return;
     }
     el.experimentList.innerHTML = "";
-    items.forEach((item) => {
+    items.slice(0, 5).forEach((item) => {
       const div = document.createElement("div");
       div.className = "run-item";
       const resultLabel = labelFromMap(item.result, EXPERIMENT_RESULT_KEYS);
@@ -4457,6 +5170,8 @@ async function refreshExperiments() {
   } catch (err) {
     const msg = String(err.message || "");
     if (msg.includes("run_id not found")) {
+      state.experimentCount = 0;
+      updateAnalyzeSummary();
       el.experimentList.innerHTML = `<div class="placeholder">${t("experiment.none")}</div>`;
     } else {
       el.experimentList.innerHTML = `<div class="placeholder">${t("experiment.loadFailed", {
@@ -4483,6 +5198,19 @@ function updateRunScore(result) {
   el.runRecommendationValue.textContent = `${t("common.recommendation")}: ${recommendation}`;
 }
 
+function updateAnalyzeSummary() {
+  if (el.analyzeFeedbackCount) {
+    el.analyzeFeedbackCount.textContent = String(Math.max(0, Number(state.feedbackCount || 0)));
+  }
+  if (el.analyzeExperimentCount) {
+    el.analyzeExperimentCount.textContent = String(Math.max(0, Number(state.experimentCount || 0)));
+  }
+  if (el.analyzeRecommendationValue) {
+    const recommendation = state.lastScore?.recommendation || "-";
+    el.analyzeRecommendationValue.textContent = String(recommendation);
+  }
+}
+
 function updateReportScore(result) {
   if (!el.reportScoreValue || !el.reportEvidenceValue || !el.reportRecommendationValue) return;
   const { score, evidence, recommendation } = formatScoreValues(result);
@@ -4491,6 +5219,7 @@ function updateReportScore(result) {
   el.reportEvidenceValue.textContent = `${t("common.evidence")}: ${evidence}`;
   el.reportRecommendationValue.textContent = `${t("common.recommendation")}: ${recommendation}`;
   updateRunScore(result);
+  updateAnalyzeSummary();
 }
 
 async function loadReport() {
@@ -4563,7 +5292,34 @@ async function refreshRuns() {
   }
 }
 
+function syncRunSelector(runs = []) {
+  const current = String(state.currentRunId || "").trim();
+  const ordered = [];
+  if (current) ordered.push(current);
+  (runs || []).forEach((item) => {
+    const runId = String(item || "").trim();
+    if (!runId || ordered.includes(runId)) return;
+    ordered.push(runId);
+  });
+  [el.runSelector, el.setupRunSelector, el.analyzeRunSelector].forEach((selectorEl) => {
+    if (!selectorEl) return;
+    selectorEl.innerHTML = "";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = t("monitor.selectRun");
+    selectorEl.appendChild(placeholder);
+    ordered.forEach((runId) => {
+      const opt = document.createElement("option");
+      opt.value = runId;
+      opt.textContent = runId;
+      selectorEl.appendChild(opt);
+    });
+    selectorEl.value = current && ordered.includes(current) ? current : "";
+  });
+}
+
 function renderRuns(runs) {
+  syncRunSelector(runs);
   el.runList.innerHTML = "";
   if (!runs.length) {
     el.runList.innerHTML = `<div class="placeholder">${t("runs.none")}</div>`;
@@ -4572,6 +5328,9 @@ function renderRuns(runs) {
   runs.forEach((runId) => {
     const div = document.createElement("div");
     div.className = "run-item";
+    if (runId === state.currentRunId) {
+      div.classList.add("active");
+    }
     const label = document.createElement("span");
     label.textContent = runId;
     const actions = document.createElement("div");
@@ -4589,6 +5348,8 @@ function renderRuns(runs) {
       if (!ok) return;
       try {
         await apiCall("pipeline.delete_run", { run_id: runId });
+        delete state.runModeById[runId];
+        delete state.progressByRunId[runId];
         if (state.currentRunId === runId) {
           setCurrentRunId("");
           state.artifacts = [];
@@ -4680,9 +5441,19 @@ if (el.checkBtn) {
 
 el.clearBtn.addEventListener("click", () => {
   el.promptInput.value = "";
-  el.messages.innerHTML = "";
-  resetPlan();
 });
+
+if (el.clearMonitorMessages) {
+  el.clearMonitorMessages.addEventListener("click", () => {
+    clearMessagePanels();
+  });
+}
+
+if (el.clearMonitorMessagesMonitor) {
+  el.clearMonitorMessagesMonitor.addEventListener("click", () => {
+    clearMessagePanels();
+  });
+}
 
 el.runBtn.addEventListener("click", runPipeline);
 
@@ -4701,6 +5472,21 @@ el.pollBtn.addEventListener("click", () => {
   }
 });
 
+if (el.setupPollBtn) {
+  el.setupPollBtn.addEventListener("click", () => {
+    if (state.currentRunId) {
+      pollStatus(state.currentRunId);
+      refreshAgentPanel();
+    }
+  });
+}
+
+if (el.setupMonitorTabBtn) {
+  el.setupMonitorTabBtn.addEventListener("click", () => {
+    setActiveTab("monitor");
+  });
+}
+
 if (el.cancelRunBtn) {
   el.cancelRunBtn.addEventListener("click", () => {
     cancelCurrentRun();
@@ -4710,6 +5496,34 @@ if (el.cancelRunBtn) {
 if (el.refreshRunsBtn) {
   el.refreshRunsBtn.addEventListener("click", () => {
     refreshRuns();
+  });
+}
+
+async function handleRunSelectorChange(nextRunId) {
+  const runId = String(nextRunId || "").trim();
+  if (!runId || runId === state.currentRunId) return;
+  setCurrentRunId(runId);
+  await pollStatus(runId);
+  await refreshArtifacts();
+  await refreshAgentPanel();
+  ensureAutoPoll();
+}
+
+if (el.runSelector) {
+  el.runSelector.addEventListener("change", async () => {
+    await handleRunSelectorChange(el.runSelector.value);
+  });
+}
+
+if (el.setupRunSelector) {
+  el.setupRunSelector.addEventListener("change", async () => {
+    await handleRunSelectorChange(el.setupRunSelector.value);
+  });
+}
+
+if (el.analyzeRunSelector) {
+  el.analyzeRunSelector.addEventListener("change", async () => {
+    await handleRunSelectorChange(el.analyzeRunSelector.value);
   });
 }
 
@@ -4907,4 +5721,5 @@ if (state.user && state.token) {
 }
 
 initFeedbackUI();
+updateAnalyzeSummary();
 ensureAutoPoll();

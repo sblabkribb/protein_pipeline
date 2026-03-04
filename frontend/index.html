@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>K-Biofoundry | Protein Pipeline Console</title>
-    <link rel="stylesheet" href="./styles.css?v=20260223e" />
+    <link rel="stylesheet" href="./styles.css?v=20260303_refactor1" />
   </head>
   <body>
     <div class="bg-orb orb-a" aria-hidden="true"></div>
@@ -105,7 +105,7 @@
           role="tabpanel"
           aria-labelledby="tabBtnSetup"
         >
-          <div class="panel panel-chat">
+          <div class="panel panel-chat setup-shell">
             <div id="chatArea" class="chat-area">
               <div class="chat-header">
                 <div>
@@ -114,36 +114,77 @@
                 </div>
                 <div class="user-badge" id="userBadge"></div>
               </div>
+              <div class="tab-run-context">
+                <label class="run-context-select">
+                  <span data-i18n="monitor.runId">Run ID</span>
+                  <select id="setupRunSelector" class="run-selector">
+                    <option value="" data-i18n="monitor.selectRun">Select run</option>
+                  </select>
+                </label>
+                <div class="run-context-meta">
+                  <span class="run-context-item">
+                    <span class="label" data-i18n="monitor.stage">Stage</span>
+                    <span id="setupContextStageValue" class="value">-</span>
+                  </span>
+                  <span class="run-context-item">
+                    <span class="label" data-i18n="monitor.state">State</span>
+                    <span id="setupContextStateValue" class="value state-badge">-</span>
+                  </span>
+                </div>
+              </div>
 
-              <div id="messages" class="messages"></div>
-
-              <div class="composer">
-                <div class="composer-row">
-                  <textarea
-                    id="promptInput"
-                    rows="3"
-                    placeholder="Optional notes for this run (no prompt required)."
-                    data-i18n-placeholder="setup.prompt.placeholder"
-                  ></textarea>
-                  <div class="composer-actions">
-                    <button id="checkBtn" class="ghost" data-i18n="setup.check">Check Setup</button>
-                    <button id="planBtn" class="ghost" data-i18n="setup.reset">Reset Inputs</button>
-                    <button id="clearBtn" class="ghost" data-i18n="setup.clear">Clear Log</button>
+              <div class="setup-ux-grid">
+                <section class="setup-lane">
+                  <div class="setup-section-title">
+                    <h3 data-i18n="setup.section.input">Input</h3>
+                    <p data-i18n="setup.section.inputDesc">Attach required files and enter optional notes.</p>
                   </div>
-                </div>
+
+                  <div class="composer">
+                    <div class="composer-row">
+                      <textarea
+                        id="promptInput"
+                        rows="3"
+                        placeholder="Optional notes for this run (no prompt required)."
+                        data-i18n-placeholder="setup.prompt.placeholder"
+                      ></textarea>
+                      <div class="composer-actions">
+                        <button id="checkBtn" class="ghost" data-i18n="setup.check">Check Setup</button>
+                        <button id="planBtn" class="ghost" data-i18n="setup.reset">Reset Inputs</button>
+                        <button id="clearBtn" class="ghost" data-i18n="setup.clear">Clear Note</button>
+                      </div>
+                    </div>
+                    <div class="status-subtitle run-subtitle">
+                      <span data-i18n="setup.section.log">Activity Log</span>
+                      <button id="clearMonitorMessages" class="ghost" data-i18n="monitor.clearLog">Clear</button>
+                    </div>
+                    <div id="messages" class="messages monitor-messages"></div>
+                  </div>
+
+                  <div id="questionInputStack" class="question-stack section-stack"></div>
+                </section>
+
+                <section class="setup-lane setup-lane-execution">
+                  <div class="setup-section-title">
+                    <h3 data-i18n="setup.section.execution">Execution Settings</h3>
+                    <p data-i18n="setup.section.executionDesc">
+                      Select run mode and configure pipeline options.
+                    </p>
+                  </div>
+                  <div id="questionConfigStack" class="question-stack section-stack"></div>
+                  <div class="run-actions">
+                    <button id="runBtn" class="primary" disabled>Run</button>
+                    <div id="runHint" class="hint" data-i18n="setup.hint">
+                      Complete required inputs to enable execution.
+                    </div>
+                  </div>
+                  <div id="runInlineStatus" class="run-inline-status" data-i18n="setup.runStatus.empty">
+                    Run status: -
+                  </div>
+                </section>
               </div>
 
-              <div id="questionStack" class="question-stack"></div>
-
-              <div class="run-actions">
-                <button id="runBtn" class="primary" disabled>Run</button>
-                <div id="runHint" class="hint" data-i18n="setup.hint">
-                  Complete required inputs to enable execution.
-                </div>
-              </div>
-              <div id="runInlineStatus" class="run-inline-status" data-i18n="setup.runStatus.empty">
-                Run status: -
-              </div>
+              <div id="questionStack" class="question-stack hidden"></div>
             </div>
           </div>
         </section>
@@ -162,9 +203,14 @@
                 <p data-i18n="monitor.desc">Track live status, scores, and recent runs.</p>
               </div>
               <div class="status-card">
-                <div class="status-row">
+                <div class="status-row status-row-run-select">
                   <span class="label" data-i18n="monitor.runId">Run ID</span>
-                  <span id="runIdValue" class="value">-</span>
+                  <div class="run-id-select-wrap">
+                    <span id="runIdValue" class="value">-</span>
+                    <select id="runSelector" class="run-selector">
+                      <option value="" data-i18n="monitor.selectRun">Select run</option>
+                    </select>
+                  </div>
                 </div>
                 <div class="status-row">
                   <span class="label" data-i18n="monitor.stage">Stage</span>
@@ -177,6 +223,25 @@
                 <div class="status-row">
                   <span class="label" data-i18n="monitor.updated">Updated</span>
                   <span id="runUpdatedValue" class="value">-</span>
+                </div>
+                <div class="status-row status-detail-row">
+                  <span class="label" data-i18n="monitor.detail">Detail</span>
+                  <span id="runDetailValue" class="value status-detail-value">-</span>
+                </div>
+                <details id="runErrorDetails" class="error-details hidden">
+                  <summary id="runErrorSummary">Error summary</summary>
+                  <pre id="runErrorRaw"></pre>
+                </details>
+                <div class="status-subtitle" data-i18n="monitor.progress">Progress</div>
+                <div class="progress-wrap">
+                  <div class="progress-meta">
+                    <span id="runProgressLabel" class="progress-label">-</span>
+                    <span id="runProgressPercent" class="progress-percent">0%</span>
+                  </div>
+                  <div class="progress-bar">
+                    <div id="runProgressFill" class="progress-fill"></div>
+                  </div>
+                  <div id="runProgressStages" class="progress-stages"></div>
                 </div>
                 <div class="status-subtitle" data-i18n="monitor.scoring">Scoring</div>
                 <div class="score-row score-row-compact">
@@ -203,6 +268,17 @@
                   <input id="showAllRuns" type="checkbox" />
                   <span data-i18n="monitor.showAll">Show all runs (admin)</span>
                 </label>
+                <div class="status-subtitle run-subtitle">
+                  <span data-i18n="monitor.activity">Activity Log</span>
+                  <button
+                    id="clearMonitorMessagesMonitor"
+                    class="ghost"
+                    data-i18n="monitor.clearLog"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <div id="monitorMessages" class="messages monitor-messages"></div>
               </div>
             </div>
 
@@ -263,6 +339,38 @@
           role="tabpanel"
           aria-labelledby="tabBtnAnalyze"
         >
+          <div class="tab-run-context">
+            <label class="run-context-select">
+              <span data-i18n="monitor.runId">Run ID</span>
+              <select id="analyzeRunSelector" class="run-selector">
+                <option value="" data-i18n="monitor.selectRun">Select run</option>
+              </select>
+            </label>
+            <div class="run-context-meta">
+              <span class="run-context-item">
+                <span class="label" data-i18n="monitor.stage">Stage</span>
+                <span id="analyzeContextStageValue" class="value">-</span>
+              </span>
+              <span class="run-context-item">
+                <span class="label" data-i18n="monitor.state">State</span>
+                <span id="analyzeContextStateValue" class="value state-badge">-</span>
+              </span>
+            </div>
+          </div>
+          <div class="analyze-summary">
+            <div class="analyze-kpi">
+              <span class="kpi-label" data-i18n="analyze.kpi.feedback">Feedback</span>
+              <strong id="analyzeFeedbackCount" class="kpi-value">0</strong>
+            </div>
+            <div class="analyze-kpi">
+              <span class="kpi-label" data-i18n="analyze.kpi.experiment">Experiments</span>
+              <strong id="analyzeExperimentCount" class="kpi-value">0</strong>
+            </div>
+            <div class="analyze-kpi">
+              <span class="kpi-label" data-i18n="analyze.kpi.recommendation">Recommendation</span>
+              <strong id="analyzeRecommendationValue" class="kpi-value">-</strong>
+            </div>
+          </div>
           <div class="tab-grid analyze-grid">
             <div class="panel panel-block">
               <div class="panel-header">
@@ -582,6 +690,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260223e"></script>
+    <script type="module" src="./app.js?v=20260303_refactor1"></script>
   </body>
 </html>
