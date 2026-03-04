@@ -856,6 +856,159 @@ def _median(values: list[float]) -> float | None:
     return float(nums[mid - 1] + nums[mid]) / 2.0
 
 
+def _percentile_from_sorted(nums: list[float], q: float) -> float | None:
+    if not nums:
+        return None
+    if len(nums) == 1:
+        return float(nums[0])
+    qq = min(1.0, max(0.0, float(q)))
+    idx = (len(nums) - 1) * qq
+    lo = int(idx)
+    hi = min(lo + 1, len(nums) - 1)
+    if lo == hi:
+        return float(nums[lo])
+    frac = idx - lo
+    return float(nums[lo] * (1.0 - frac) + nums[hi] * frac)
+
+
+def _distribution_stats(values: list[float]) -> dict[str, float | int | None]:
+    nums = sorted(float(v) for v in values if isinstance(v, (int, float)))
+    if not nums:
+        return {
+            "count": 0,
+            "median": None,
+            "p10": None,
+            "p25": None,
+            "p75": None,
+            "p90": None,
+            "iqr": None,
+        }
+    p25 = _percentile_from_sorted(nums, 0.25)
+    p75 = _percentile_from_sorted(nums, 0.75)
+    iqr = float(p75 - p25) if p25 is not None and p75 is not None else None
+    return {
+        "count": len(nums),
+        "median": _median(nums),
+        "p10": _percentile_from_sorted(nums, 0.10),
+        "p25": p25,
+        "p75": p75,
+        "p90": _percentile_from_sorted(nums, 0.90),
+        "iqr": iqr,
+    }
+
+
+def _safe_ratio(numerator: int, denominator: int) -> float | None:
+    if denominator <= 0:
+        return None
+    return float(numerator) / float(denominator)
+
+
+def _normalize_sequence(raw: object) -> str:
+    text = str(raw or "").strip().upper()
+    if not text:
+        return ""
+    return re.sub(r"[^A-Z]", "", text)
+
+
+def _sequence_identity(seq_a: str, seq_b: str) -> float | None:
+    a = _normalize_sequence(seq_a)
+    b = _normalize_sequence(seq_b)
+    if not a or not b:
+        return None
+    span = min(len(a), len(b))
+    if span <= 0:
+        return None
+    matches = 0
+    for i in range(span):
+        if a[i] == b[i]:
+            matches += 1
+    # Penalize insertions/deletions by normalizing by max length.
+    return float(matches) / float(max(len(a), len(b)))
+
+
+def _extract_primary_target_sequence(request: dict[str, object] | None) -> str | None:
+    if not isinstance(request, dict):
+        return None
+    fasta_text = str(request.get("target_fasta") or "").strip()
+    if not fasta_text:
+        return None
+    try:
+        records = parse_fasta(fasta_text)
+    except Exception:
+        return None
+    if not records:
+        return None
+    seq = _normalize_sequence(records[0].sequence)
+    return seq or None
+
+
+def _collect_design_sequences(summary: dict[str, object] | None) -> list[str]:
+    if not isinstance(summary, dict):
+        return []
+    tiers = summary.get("tiers")
+    if not isinstance(tiers, list):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for tier in tiers:
+        if not isinstance(tier, dict):
+            continue
+        samples = tier.get("proteinmpnn_samples")
+        if not isinstance(samples, list):
+            continue
+        for sample in samples:
+            if not isinstance(sample, dict):
+                continue
+            seq = _normalize_sequence(sample.get("sequence"))
+            if not seq or seq in seen:
+                continue
+            seen.add(seq)
+            out.append(seq)
+    return out
+
+
+def _build_diversity_summary(
+    *,
+    request: dict[str, object] | None,
+    summary: dict[str, object] | None,
+) -> dict[str, object]:
+    wt_seq = _extract_primary_target_sequence(request)
+    design_seqs = _collect_design_sequences(summary)
+
+    wt_id_values: list[float] = []
+    if wt_seq:
+        for seq in design_seqs:
+            ident = _sequence_identity(wt_seq, seq)
+            if ident is not None:
+                wt_id_values.append(float(ident))
+
+    max_pairwise_sequences = 300
+    pairwise_input = design_seqs[:max_pairwise_sequences]
+    pairwise_values: list[float] = []
+    for i in range(len(pairwise_input)):
+        left = pairwise_input[i]
+        for j in range(i + 1, len(pairwise_input)):
+            right = pairwise_input[j]
+            ident = _sequence_identity(left, right)
+            if ident is not None:
+                pairwise_values.append(float(ident))
+
+    wt_stats = _distribution_stats(wt_id_values)
+    pairwise_stats = _distribution_stats(pairwise_values)
+    wt_stats["best"] = max(wt_id_values) if wt_id_values else None
+    wt_stats["worst"] = min(wt_id_values) if wt_id_values else None
+    return {
+        "design_unique_sequences": len(design_seqs),
+        "wt_identity": wt_stats,
+        "design_pairwise_identity": {
+            **pairwise_stats,
+            "sequence_count": len(pairwise_input),
+            "truncated": len(design_seqs) > max_pairwise_sequences,
+            "evaluated_pairs": len(pairwise_values),
+        },
+    }
+
+
 def _load_json_file(path: Path) -> dict[str, object] | None:
     if not path.exists():
         return None
@@ -871,6 +1024,7 @@ def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -
         "soluprot_scores": [],
         "soluprot_total": 0,
         "soluprot_passed": 0,
+        "af2_candidate_total": 0,
         "af2_selected_plddt": [],
         "af2_selected_rmsd": [],
         "af2_selected_total": 0,
@@ -906,6 +1060,13 @@ def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -
         if isinstance(af2, dict):
             scores = af2.get("scores") if isinstance(af2.get("scores"), dict) else {}
             rmsd_scores = af2.get("rmsd_scores") if isinstance(af2.get("rmsd_scores"), dict) else {}
+            candidate_ids = af2.get("candidate_ids") if isinstance(af2.get("candidate_ids"), list) else []
+            candidate_total = len(candidate_ids)
+            if candidate_total <= 0 and isinstance(af2.get("candidate_count_after_budget"), int):
+                candidate_total = int(af2.get("candidate_count_after_budget") or 0)
+            if candidate_total <= 0:
+                candidate_total = len(scores)
+            out["af2_candidate_total"] += max(0, candidate_total)
             selected_ids = af2.get("selected_ids") if isinstance(af2.get("selected_ids"), list) else []
             if selected_ids:
                 out["af2_selected_total"] += len(selected_ids)
@@ -932,6 +1093,7 @@ def _source_metrics_bucket() -> dict[str, object]:
         "soluprot_scores": [],
         "soluprot_total": 0,
         "soluprot_passed": 0,
+        "af2_candidate_total": 0,
         "af2_selected_plddt": [],
         "af2_selected_rmsd": [],
         "af2_selected_total": 0,
@@ -1029,6 +1191,11 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
         if isinstance(af2, dict):
             scores = af2.get("scores") if isinstance(af2.get("scores"), dict) else {}
             rmsd_scores = af2.get("rmsd_scores") if isinstance(af2.get("rmsd_scores"), dict) else {}
+            candidate_ids = af2.get("candidate_ids") if isinstance(af2.get("candidate_ids"), list) else []
+            for seq_id in candidate_ids:
+                source = _source_for_sequence_id(str(seq_id), lookup)
+                bucket = out[source]
+                bucket["af2_candidate_total"] = int(bucket.get("af2_candidate_total") or 0) + 1
             selected_ids = af2.get("selected_ids") if isinstance(af2.get("selected_ids"), list) else []
             for seq_id in selected_ids:
                 source = _source_for_sequence_id(str(seq_id), lookup)
@@ -1046,6 +1213,93 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
                         cast_rmsd.append(float(raw_rmsd))
 
     return out
+
+
+def _collect_tier_compare_metrics(
+    run_root: Path,
+    summary: dict[str, object] | None,
+) -> list[dict[str, object]]:
+    if not isinstance(summary, dict):
+        return []
+    tiers = summary.get("tiers")
+    if not isinstance(tiers, list):
+        return []
+    rows: list[dict[str, object]] = []
+    for tier in tiers:
+        if not isinstance(tier, dict):
+            continue
+        tier_val = tier.get("tier")
+        if tier_val is None:
+            continue
+        try:
+            tier_num = float(tier_val)
+            tier_key = _tier_key(tier_num)
+        except Exception:
+            continue
+        tier_dir = run_root / "tiers" / tier_key
+
+        samples = tier.get("proteinmpnn_samples") if isinstance(tier.get("proteinmpnn_samples"), list) else []
+        designs_total = len(samples)
+        source_counts = {"rfd3": 0, "bioemu": 0, "other": 0}
+        for sample in samples:
+            if not isinstance(sample, dict):
+                continue
+            meta = sample.get("meta") if isinstance(sample.get("meta"), dict) else {}
+            source = _normalize_backbone_source(meta.get("backbone_source"))
+            if source not in source_counts:
+                source = "other"
+            source_counts[source] = int(source_counts.get(source) or 0) + 1
+
+        sol = _load_json_file(tier_dir / "soluprot.json")
+        sol_total = 0
+        sol_passed = 0
+        if isinstance(sol, dict):
+            scores = sol.get("scores") if isinstance(sol.get("scores"), dict) else {}
+            sol_total = len([1 for v in scores.values() if isinstance(v, (int, float))])
+            passed_ids = sol.get("passed_ids") if isinstance(sol.get("passed_ids"), list) else []
+            sol_passed = len(passed_ids)
+
+        af2 = _load_json_file(tier_dir / "af2_scores.json")
+        af2_candidate_total = 0
+        af2_selected_total = 0
+        selected_plddt: list[float] = []
+        selected_rmsd: list[float] = []
+        if isinstance(af2, dict):
+            scores = af2.get("scores") if isinstance(af2.get("scores"), dict) else {}
+            rmsd_scores = af2.get("rmsd_scores") if isinstance(af2.get("rmsd_scores"), dict) else {}
+            candidate_ids = af2.get("candidate_ids") if isinstance(af2.get("candidate_ids"), list) else []
+            af2_candidate_total = len(candidate_ids)
+            if af2_candidate_total <= 0 and isinstance(af2.get("candidate_count_after_budget"), int):
+                af2_candidate_total = int(af2.get("candidate_count_after_budget") or 0)
+            if af2_candidate_total <= 0:
+                af2_candidate_total = len(scores)
+            selected_ids = af2.get("selected_ids") if isinstance(af2.get("selected_ids"), list) else []
+            af2_selected_total = len(selected_ids)
+            for seq_id in selected_ids:
+                raw_plddt = scores.get(seq_id)
+                raw_rmsd = rmsd_scores.get(seq_id)
+                if isinstance(raw_plddt, (int, float)):
+                    selected_plddt.append(float(raw_plddt))
+                if isinstance(raw_rmsd, (int, float)):
+                    selected_rmsd.append(float(raw_rmsd))
+
+        rows.append(
+            {
+                "tier": tier_num,
+                "design_total": designs_total,
+                "source_counts": source_counts,
+                "soluprot_total": sol_total,
+                "soluprot_passed": sol_passed,
+                "soluprot_pass_rate": _safe_ratio(sol_passed, sol_total),
+                "af2_candidate_total": af2_candidate_total,
+                "af2_selected_total": af2_selected_total,
+                "af2_pass_rate": _safe_ratio(af2_selected_total, af2_candidate_total),
+                "plddt_median": _median(selected_plddt),
+                "rmsd_median": _median(selected_rmsd),
+            }
+        )
+    rows.sort(key=lambda item: float(item.get("tier") or 0.0))
+    return rows
 
 
 def _as_float_or_none(value: object) -> float | None:
@@ -1069,6 +1323,8 @@ def _build_comparison_summary(
     wt_metrics = _load_wt_metrics(run_root)
     design_metrics = _collect_design_metrics(run_root, summary)
     source_metrics = _collect_source_metrics(run_root, summary)
+    tier_compare = _collect_tier_compare_metrics(run_root, summary)
+    diversity = _build_diversity_summary(request=request, summary=summary)
 
     wt_enabled = bool(request.get("wt_compare")) if isinstance(request, dict) else False
     wt_sol_score: float | None = None
@@ -1089,6 +1345,8 @@ def _build_comparison_summary(
     design_sol_median = _median(sol_scores) if sol_scores else None
     sol_total = int(design_metrics.get("soluprot_total") or 0)
     sol_passed = int(design_metrics.get("soluprot_passed") or 0)
+    af2_candidate_total = int(design_metrics.get("af2_candidate_total") or 0)
+    af2_selected_total = int(design_metrics.get("af2_selected_total") or 0)
 
     plddt_raw = (
         design_metrics.get("af2_selected_plddt")
@@ -1119,17 +1377,18 @@ def _build_comparison_summary(
             "wt": wt_plddt,
             "design_median": design_plddt_median,
             "delta_design_minus_wt": _metric_delta(design_plddt_median, wt_plddt),
-            "design_total": int(design_metrics.get("af2_selected_total") or 0),
+            "design_total": af2_selected_total,
         },
         "rmsd": {
             "wt": wt_rmsd,
             "design_median": design_rmsd_median,
             "delta_design_minus_wt": _metric_delta(design_rmsd_median, wt_rmsd),
-            "design_total": int(design_metrics.get("af2_selected_total") or 0),
+            "design_total": af2_selected_total,
         },
     }
 
     source_compare: dict[str, dict[str, object]] = {}
+    funnel_by_source: dict[str, dict[str, object]] = {}
     for source_key in ("rfd3", "bioemu", "other"):
         bucket = source_metrics.get(source_key)
         if not isinstance(bucket, dict):
@@ -1145,15 +1404,20 @@ def _build_comparison_summary(
         )
         sol_total_src = int(bucket.get("soluprot_total") or 0)
         sol_passed_src = int(bucket.get("soluprot_passed") or 0)
+        af2_candidates_src = int(bucket.get("af2_candidate_total") or 0)
+        af2_selected_src = int(bucket.get("af2_selected_total") or 0)
+        backbone_src = int(bucket.get("backbone_count") or 0)
         source_compare[source_key] = {
-            "backbone_count": int(bucket.get("backbone_count") or 0),
+            "backbone_count": backbone_src,
             "soluprot_total": sol_total_src,
             "soluprot_passed": sol_passed_src,
-            "soluprot_pass_rate": (float(sol_passed_src) / float(sol_total_src)) if sol_total_src > 0 else None,
+            "soluprot_pass_rate": _safe_ratio(sol_passed_src, sol_total_src),
             "soluprot_median": _median(
                 [float(v) for v in source_sol_scores if isinstance(v, (int, float))]
             ),
-            "af2_selected_total": int(bucket.get("af2_selected_total") or 0),
+            "af2_candidate_total": af2_candidates_src,
+            "af2_selected_total": af2_selected_src,
+            "af2_pass_rate": _safe_ratio(af2_selected_src, af2_candidates_src),
             "plddt_median": _median(
                 [float(v) for v in source_plddt_values if isinstance(v, (int, float))]
             ),
@@ -1161,13 +1425,55 @@ def _build_comparison_summary(
                 [float(v) for v in source_rmsd_values if isinstance(v, (int, float))]
             ),
         }
+        funnel_by_source[source_key] = {
+            "backbone_count": backbone_src,
+            "soluprot_total": sol_total_src,
+            "soluprot_passed": sol_passed_src,
+            "soluprot_pass_rate": _safe_ratio(sol_passed_src, sol_total_src),
+            "af2_candidate_total": af2_candidates_src,
+            "af2_selected_total": af2_selected_src,
+            "af2_pass_rate": _safe_ratio(af2_selected_src, af2_candidates_src),
+            "retention_backbone_to_soluprot_passed": _safe_ratio(sol_passed_src, backbone_src),
+            "retention_backbone_to_af2_selected": _safe_ratio(af2_selected_src, backbone_src),
+        }
+
+    backbone_total = 0
+    for source_key in ("rfd3", "bioemu", "other"):
+        bucket = source_metrics.get(source_key)
+        if isinstance(bucket, dict):
+            backbone_total += int(bucket.get("backbone_count") or 0)
+
+    funnel = {
+        "overall": {
+            "backbone_count": backbone_total,
+            "soluprot_total": sol_total,
+            "soluprot_passed": sol_passed,
+            "soluprot_pass_rate": _safe_ratio(sol_passed, sol_total),
+            "af2_candidate_total": af2_candidate_total,
+            "af2_selected_total": af2_selected_total,
+            "af2_pass_rate": _safe_ratio(af2_selected_total, af2_candidate_total),
+            "retention_backbone_to_soluprot_passed": _safe_ratio(sol_passed, backbone_total),
+            "retention_backbone_to_af2_selected": _safe_ratio(af2_selected_total, backbone_total),
+        },
+        "by_source": funnel_by_source,
+    }
+
+    distributions = {
+        "soluprot": _distribution_stats(sol_scores),
+        "plddt": _distribution_stats(plddt_values),
+        "rmsd": _distribution_stats(rmsd_values),
+    }
 
     return {
-        "version": 1,
+        "version": 2,
         "generated_at": _now_iso(),
         "wt_compare_enabled": wt_enabled,
         "wt_vs_design": wt_vs_design,
         "source_compare": source_compare,
+        "funnel": funnel,
+        "tier_compare": tier_compare,
+        "distributions": distributions,
+        "diversity": diversity,
     }
 
 
@@ -1540,6 +1846,126 @@ def _append_source_comparison_lines(
     lines.append("")
 
 
+def _append_extended_comparison_lines(
+    lines: list[str],
+    *,
+    comparison_summary: dict[str, object] | None,
+    lang: str = "en",
+) -> None:
+    if not isinstance(comparison_summary, dict):
+        return
+    is_ko = str(lang).lower().startswith("ko")
+    funnel = comparison_summary.get("funnel") if isinstance(comparison_summary.get("funnel"), dict) else {}
+    overall = funnel.get("overall") if isinstance(funnel.get("overall"), dict) else {}
+    by_source = funnel.get("by_source") if isinstance(funnel.get("by_source"), dict) else {}
+    tier_rows = comparison_summary.get("tier_compare") if isinstance(comparison_summary.get("tier_compare"), list) else []
+    distributions = (
+        comparison_summary.get("distributions") if isinstance(comparison_summary.get("distributions"), dict) else {}
+    )
+    diversity = comparison_summary.get("diversity") if isinstance(comparison_summary.get("diversity"), dict) else {}
+    if not overall and not tier_rows and not distributions and not diversity:
+        return
+
+    def _pct(value: object) -> str:
+        return f"{float(value):.1%}" if isinstance(value, (int, float)) else "-"
+
+    lines.append("## 확장 비교 하이라이트" if is_ko else "## Extended Comparison Highlights")
+
+    backbones = int(overall.get("backbone_count") or 0)
+    sol_passed = int(overall.get("soluprot_passed") or 0)
+    sol_total = int(overall.get("soluprot_total") or 0)
+    af2_selected = int(overall.get("af2_selected_total") or 0)
+    af2_candidates = int(overall.get("af2_candidate_total") or 0)
+    if backbones > 0 or sol_total > 0 or af2_candidates > 0:
+        lines.append(
+            (
+                f"- Funnel: backbone={backbones} → SoluProt={sol_passed}/{sol_total} ({_pct(overall.get('soluprot_pass_rate'))})"
+                f" → AF2={af2_selected}/{af2_candidates} ({_pct(overall.get('af2_pass_rate'))})"
+            )
+        )
+        lines.append(
+            (
+                f"- Retention from backbone: SoluProt={_pct(overall.get('retention_backbone_to_soluprot_passed'))}, "
+                f"AF2={_pct(overall.get('retention_backbone_to_af2_selected'))}"
+            )
+        )
+
+    rows: list[tuple[str, dict[str, object]]] = []
+    for key in ("rfd3", "bioemu", "other"):
+        bucket = by_source.get(key) if isinstance(by_source, dict) else None
+        if isinstance(bucket, dict):
+            rows.append((key, bucket))
+    if rows:
+        lines.append("- Source funnel:" if not is_ko else "- 소스별 Funnel:")
+        lines.append("| Source | Backbones | SoluProt pass | AF2 pass |")
+        lines.append("|---|---:|---:|---:|")
+        for source, bucket in rows:
+            source_name = "RFD3" if source == "rfd3" else "BioEmu" if source == "bioemu" else ("기타" if is_ko else "Other")
+            sol_txt = f"{int(bucket.get('soluprot_passed') or 0)}/{int(bucket.get('soluprot_total') or 0)} ({_pct(bucket.get('soluprot_pass_rate'))})"
+            af2_txt = f"{int(bucket.get('af2_selected_total') or 0)}/{int(bucket.get('af2_candidate_total') or 0)} ({_pct(bucket.get('af2_pass_rate'))})"
+            lines.append(f"| {source_name} | {int(bucket.get('backbone_count') or 0)} | {sol_txt} | {af2_txt} |")
+
+    if tier_rows:
+        lines.append("- Tier summary:" if not is_ko else "- 티어별 요약:")
+        lines.append("| Tier | Designs | SoluProt pass | AF2 pass | Median pLDDT | Median RMSD |")
+        lines.append("|---:|---:|---:|---:|---:|---:|")
+        for row in tier_rows:
+            if not isinstance(row, dict):
+                continue
+            tier = row.get("tier")
+            tier_text = f"{float(tier):.2f}" if isinstance(tier, (int, float)) else "-"
+            sol_txt = f"{int(row.get('soluprot_passed') or 0)}/{int(row.get('soluprot_total') or 0)} ({_pct(row.get('soluprot_pass_rate'))})"
+            af2_txt = f"{int(row.get('af2_selected_total') or 0)}/{int(row.get('af2_candidate_total') or 0)} ({_pct(row.get('af2_pass_rate'))})"
+            plddt = row.get("plddt_median")
+            rmsd = row.get("rmsd_median")
+            plddt_txt = f"{float(plddt):.1f}" if isinstance(plddt, (int, float)) else "-"
+            rmsd_txt = f"{float(rmsd):.2f}" if isinstance(rmsd, (int, float)) else "-"
+            lines.append(
+                f"| {tier_text} | {int(row.get('design_total') or 0)} | {sol_txt} | {af2_txt} | {plddt_txt} | {rmsd_txt} |"
+            )
+
+    def _dist_line(name: str, metric: object) -> str | None:
+        if not isinstance(metric, dict):
+            return None
+        return (
+            f"- {name}: n={int(metric.get('count') or 0)} "
+            f"P10/P50/P90="
+            f"{(f'{float(metric.get('p10')):.3f}' if isinstance(metric.get('p10'), (int, float)) else '-')}/"
+            f"{(f'{float(metric.get('median')):.3f}' if isinstance(metric.get('median'), (int, float)) else '-')}/"
+            f"{(f'{float(metric.get('p90')):.3f}' if isinstance(metric.get('p90'), (int, float)) else '-')}"
+        )
+
+    dist_lines = [
+        _dist_line("SoluProt", distributions.get("soluprot")),
+        _dist_line("pLDDT", distributions.get("plddt")),
+        _dist_line("RMSD", distributions.get("rmsd")),
+    ]
+    dist_lines = [line for line in dist_lines if line]
+    if dist_lines:
+        lines.append("- Distribution snapshot:" if not is_ko else "- 분포 요약:")
+        lines.extend(dist_lines)
+
+    wt_identity = diversity.get("wt_identity") if isinstance(diversity.get("wt_identity"), dict) else {}
+    pairwise = (
+        diversity.get("design_pairwise_identity")
+        if isinstance(diversity.get("design_pairwise_identity"), dict)
+        else {}
+    )
+    if wt_identity or pairwise:
+        lines.append("- Sequence diversity:" if not is_ko else "- 서열 다양성:")
+        if wt_identity:
+            lines.append(
+                f"  - WT identity median={_pct(wt_identity.get('median'))} "
+                f"(best={_pct(wt_identity.get('best'))}, worst={_pct(wt_identity.get('worst'))}, n={int(wt_identity.get('count') or 0)})"
+            )
+        if pairwise:
+            lines.append(
+                f"  - Design pairwise identity median={_pct(pairwise.get('median'))} "
+                f"(pairs={int(pairwise.get('evaluated_pairs') or 0)})"
+            )
+    lines.append("")
+
+
 def _build_report_text(
     *,
     run_id: str,
@@ -1628,6 +2054,7 @@ def _build_report_text(
     wt_metrics = _load_wt_metrics(run_root)
     design_metrics = _collect_design_metrics(run_root, summary)
     source_metrics = _collect_source_metrics(run_root, summary)
+    comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
     if wt_metrics or (request and request.get("wt_compare")):
         lines.append("## WT Comparison")
         enabled = bool(request.get("wt_compare")) if request else False
@@ -1732,6 +2159,7 @@ def _build_report_text(
         lines.append("")
 
     _append_source_comparison_lines(lines, source_metrics=source_metrics, lang="en")
+    _append_extended_comparison_lines(lines, comparison_summary=comparison_summary, lang="en")
 
     if agent_items:
         lines.append("## Agent Panel")
@@ -1939,6 +2367,7 @@ def _build_report_text_ko(
     wt_metrics = _load_wt_metrics(run_root)
     design_metrics = _collect_design_metrics(run_root, summary)
     source_metrics = _collect_source_metrics(run_root, summary)
+    comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
     if wt_metrics or (request and request.get("wt_compare")):
         lines.append("## WT 비교")
         enabled = bool(request.get("wt_compare")) if request else False
@@ -2043,6 +2472,7 @@ def _build_report_text_ko(
         lines.append("")
 
     _append_source_comparison_lines(lines, source_metrics=source_metrics, lang="ko")
+    _append_extended_comparison_lines(lines, comparison_summary=comparison_summary, lang="ko")
 
     if agent_items:
         lines.append("## 에이전트 패널")

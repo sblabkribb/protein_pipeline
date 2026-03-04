@@ -1023,6 +1023,26 @@ textarea:focus-visible {
   line-height: 1.5;
 }
 
+.report-modal-content table.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 10px 0;
+  font-size: 12px;
+  white-space: normal;
+}
+
+.report-modal-content table.md-table th,
+.report-modal-content table.md-table td {
+  border: 1px solid rgba(16, 42, 45, 0.12);
+  padding: 6px 8px;
+  vertical-align: top;
+}
+
+.report-modal-content table.md-table thead th {
+  background: rgba(15, 107, 111, 0.08);
+  font-weight: 600;
+}
+
 .help-body {
   display: flex;
   flex-direction: column;
@@ -1520,9 +1540,30 @@ textarea:focus-visible {
   margin-top: 6px;
 }
 
+.comparison-kpis {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.comparison-kpis div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  border-bottom: 1px dashed rgba(16, 42, 45, 0.12);
+  padding-bottom: 4px;
+}
+
+.comparison-kpis span {
+  color: var(--ink-soft);
+}
+
 .comparison-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .artifact-list {
@@ -1664,6 +1705,12 @@ textarea:focus-visible {
   height: 220px;
   position: relative;
   overflow: hidden;
+}
+
+.viewer3d-diff-note {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--ink-soft);
 }
 
 .preview-image {

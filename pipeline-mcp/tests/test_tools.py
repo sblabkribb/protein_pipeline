@@ -341,6 +341,10 @@ class TestTools(unittest.TestCase):
             comparison_summary = report.get("comparison_summary") or {}
             self.assertIn("wt_vs_design", comparison_summary)
             self.assertIn("source_compare", comparison_summary)
+            self.assertIn("funnel", comparison_summary)
+            self.assertIn("tier_compare", comparison_summary)
+            self.assertIn("distributions", comparison_summary)
+            self.assertIn("diversity", comparison_summary)
 
             listing = dispatcher.call_tool("pipeline.list_artifacts", {"run_id": run_id, "limit": 200})
             artifacts = listing.get("artifacts") or []
@@ -410,6 +414,8 @@ class TestTools(unittest.TestCase):
             comparison_summary = report_payload.get("comparison_summary") or {}
             self.assertIn("wt_vs_design", comparison_summary)
             self.assertIn("source_compare", comparison_summary)
+            self.assertIn("funnel", comparison_summary)
+            self.assertIn("tier_compare", comparison_summary)
 
 
 
