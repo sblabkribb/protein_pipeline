@@ -1192,6 +1192,11 @@ def _build_report_text(
             lines.append(
                 f"- mask_consensus_apply: {'yes' if request.get('mask_consensus_apply') else 'no'}"
             )
+        if "ligand_mask_use_original_target" in request:
+            lines.append(
+                "- ligand_mask_use_original_target: "
+                + ("yes" if request.get("ligand_mask_use_original_target") else "no")
+            )
         lines.append("")
 
     if summary:
@@ -1467,6 +1472,11 @@ def _build_report_text_ko(
         if "mask_consensus_apply" in request:
             lines.append(
                 f"- mask_consensus_apply: {'yes' if request.get('mask_consensus_apply') else 'no'}"
+            )
+        if "ligand_mask_use_original_target" in request:
+            lines.append(
+                "- ligand_mask_use_original_target: "
+                + ("yes" if request.get("ligand_mask_use_original_target") else "no")
             )
         lines.append("")
 
@@ -1887,10 +1897,16 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     ligand_atom_chains = _as_list_of_str(args.get("ligand_atom_chains"))
     af2_sequence_ids = _as_list_of_str(args.get("af2_sequence_ids"))
     surface_only = _as_bool(args.get("surface_only"), False)
+    ligand_mask_use_original_target = _as_bool(args.get("ligand_mask_use_original_target"), True)
     surface_min_rel = _as_float(args.get("surface_min_rel"), 0.2)
     surface_min_abs = _as_float(args.get("surface_min_abs"), 10.0)
     pi_min = _as_float(args.get("pi_min"), 0.0) if str(args.get("pi_min") or "").strip() else None
     pi_max = _as_float(args.get("pi_max"), 0.0) if str(args.get("pi_max") or "").strip() else None
+    af2_max_candidates_per_tier = (
+        _as_int(args.get("af2_max_candidates_per_tier"), 0)
+        if str(args.get("af2_max_candidates_per_tier") or "").strip()
+        else 0
+    )
 
     return PipelineRequest(
         target_fasta=target_fasta,
@@ -1948,6 +1964,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         ligand_mask_distance=_as_float(args.get("ligand_mask_distance"), 6.0),
         ligand_resnames=ligand_resnames,
         ligand_atom_chains=ligand_atom_chains,
+        ligand_mask_use_original_target=ligand_mask_use_original_target,
         surface_only=surface_only,
         surface_min_rel=surface_min_rel,
         surface_min_abs=surface_min_abs,
@@ -1966,6 +1983,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         af2_extra_flags=(str(args.get("af2_extra_flags")) if args.get("af2_extra_flags") else None),
         af2_plddt_cutoff=_as_float(args.get("af2_plddt_cutoff"), 85.0),
         af2_rmsd_cutoff=_as_float(args.get("af2_rmsd_cutoff"), 2.0),
+        af2_max_candidates_per_tier=max(0, int(af2_max_candidates_per_tier)),
         af2_top_k=_as_int(args.get("af2_top_k"), 20),
         af2_sequence_ids=af2_sequence_ids,
         mmseqs_target_db=str(args.get("mmseqs_target_db") or "uniref90"),
@@ -2044,6 +2062,7 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "ligand_mask_distance": {"type": "number"},
             "ligand_resnames": {"type": "array", "items": {"type": "string"}},
             "ligand_atom_chains": {"type": "array", "items": {"type": "string"}},
+            "ligand_mask_use_original_target": {"type": "boolean"},
             "surface_only": {"type": "boolean"},
             "surface_min_rel": {"type": "number"},
             "surface_min_abs": {"type": "number"},
@@ -2062,6 +2081,7 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "af2_extra_flags": {"type": "string"},
             "af2_plddt_cutoff": {"type": "number"},
             "af2_rmsd_cutoff": {"type": "number"},
+            "af2_max_candidates_per_tier": {"type": "integer"},
             "af2_top_k": {"type": "integer"},
             "af2_sequence_ids": {"type": "array", "items": {"type": "string"}},
             "mmseqs_target_db": {"type": "string"},

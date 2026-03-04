@@ -225,7 +225,9 @@ class TestTools(unittest.TestCase):
                 "bioemu_model_name": "bioemu-v1.1",
                 "bioemu_max_return_structures": 12,
                 "bioemu_base_seed": 7,
+                "af2_max_candidates_per_tier": 5,
                 "bioemu_env": {"BIOEMU_COLABFOLD_DIR": "/runpod-volume/bioemu/colabfold"},
+                "ligand_mask_use_original_target": False,
             }
         )
         self.assertTrue(req.bioemu_use)
@@ -233,7 +235,13 @@ class TestTools(unittest.TestCase):
         self.assertEqual(req.bioemu_model_name, "bioemu-v1.1")
         self.assertEqual(req.bioemu_max_return_structures, 12)
         self.assertEqual(req.bioemu_base_seed, 7)
+        self.assertEqual(req.af2_max_candidates_per_tier, 5)
         self.assertEqual(req.bioemu_env, {"BIOEMU_COLABFOLD_DIR": "/runpod-volume/bioemu/colabfold"})
+        self.assertFalse(req.ligand_mask_use_original_target)
+
+    def test_pipeline_request_defaults_original_ligand_mask_on(self) -> None:
+        req = pipeline_request_from_args({"target_fasta": ">q1\nACDEFGHIK\n"})
+        self.assertTrue(req.ligand_mask_use_original_target)
 
     def test_pipeline_run_bioemu_stop_dry_run_without_target_pdb(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"

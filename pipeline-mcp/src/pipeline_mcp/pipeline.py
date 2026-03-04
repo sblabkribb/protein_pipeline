@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from dataclasses import dataclass
 import base64
+import hashlib
 import json
 import os
 import time
@@ -104,6 +105,21 @@ def _safe_json(obj: object) -> object:
         return obj
     except Exception:
         return str(obj)
+
+
+def _stable_payload_hash(payload: Any) -> str:
+    try:
+        text = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    except Exception:
+        text = json.dumps(_safe_json(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _runpod_meta_matches(meta: dict[str, Any], expected: dict[str, Any]) -> bool:
+    for key, value in expected.items():
+        if key in meta and meta.get(key) != value:
+            return False
+    return True
 
 
 class PipelineInputRequired(ValueError):
@@ -286,6 +302,52 @@ def _split_multichain_sequence(seq: str) -> list[str]:
 
 def _clean_protein_sequence(seq: str) -> str:
     return "".join(ch for ch in str(seq or "").upper() if ch.isalpha())
+
+
+def _map_reference_ligand_mask_to_query(
+    *,
+    query_seq: str,
+    reference_pdb_text: str,
+    design_chains: list[str] | None,
+    ligand_mask_distance: float,
+    ligand_resnames: list[str] | None,
+    ligand_atom_chains: list[str] | None,
+) -> tuple[dict[str, list[int]], dict[str, list[int]]]:
+    query_clean = _clean_protein_sequence(query_seq)
+    reference_text = str(reference_pdb_text or "")
+    if not query_clean or not reference_text.strip():
+        return {}, {}
+
+    reference_mask = ligand_proximity_mask(
+        reference_text,
+        chains=design_chains,
+        distance_angstrom=ligand_mask_distance,
+        ligand_resnames=ligand_resnames,
+        ligand_atom_chains=ligand_atom_chains,
+    )
+    if not reference_mask:
+        return {}, {}
+
+    seq_by_chain = sequence_by_chain(reference_text, chains=design_chains)
+    query_positions_by_chain: dict[str, list[int]] = {}
+    for chain_id, raw_positions in reference_mask.items():
+        chain_seq = _clean_protein_sequence(seq_by_chain.get(chain_id, ""))
+        if not chain_seq:
+            continue
+        aln = global_alignment_mapping(query_clean, chain_seq)
+        ligand_positions = {int(pos) for pos in (raw_positions or []) if isinstance(pos, (int, float))}
+        if not ligand_positions:
+            continue
+        mapped_query_positions: list[int] = []
+        for query_pos, ref_pos in enumerate(aln.mapping_query_to_target, start=1):
+            if ref_pos is None:
+                continue
+            if int(ref_pos) in ligand_positions:
+                mapped_query_positions.append(int(query_pos))
+        if mapped_query_positions:
+            query_positions_by_chain[chain_id] = sorted(set(mapped_query_positions))
+
+    return reference_mask, query_positions_by_chain
 
 
 def _validate_af2_chain_sequences(
@@ -737,10 +799,12 @@ class PipelineRunner:
             msa_dir = _ensure_dir(paths.root / "msa")
             tiers_dir = _ensure_dir(paths.root / "tiers")
 
-            target_pdb_text = str(request.target_pdb or "")
+            target_pdb_input_text = str(request.target_pdb or "")
+            target_pdb_text = target_pdb_input_text
             had_target_pdb_input = bool(target_pdb_text.strip())
             rfd3_files = _rfd3_input_files(request) if _rfd3_active(request) else {}
             rfd3_input_pdb_text = str(request.rfd3_input_pdb or "")
+            rfd3_reference_pdb_text = str(rfd3_files.get("input.pdb") or rfd3_input_pdb_text)
             effective_strip_nonpositive = bool(request.pdb_strip_nonpositive_resseq)
             effective_renumber = bool(request.pdb_renumber_resseq_from_1)
             auto_strip_nonpositive = False
@@ -1154,24 +1218,85 @@ class PipelineRunner:
                         if self.rfd3 is None:
                             raise RuntimeError("RFD3 endpoint is not configured (set RFD3_ENDPOINT_ID)")
 
-                        def _on_rfd3_job_id(job_id: str) -> None:
-                            write_json(rfd3_dir / "runpod_job.json", {"job_id": job_id})
-                            set_status(paths, stage="rfd3", state="running", detail=f"runpod_job_id={job_id}")
-
+                        runpod_job_path = rfd3_dir / "runpod_job.json"
                         max_designs = max(1, int(request.rfd3_max_return_designs or 1))
                         use_ensemble = bool(request.rfd3_use_ensemble) or max_designs > 1
                         cli_args = _inject_rfd3_cli_defaults(request.rfd3_cli_args, max_designs=max_designs)
-                        rfd3_out = self.rfd3.design(
-                            inputs=inputs_obj,
-                            inputs_text=inputs_text,
-                            input_files=rfd3_files or None,
-                            cli_args=cli_args,
-                            env=request.rfd3_env,
-                            select_index=int(request.rfd3_design_index or 0),
-                            max_return_designs=max_designs,
-                            return_designs_pdb=use_ensemble,
-                            on_job_id=_on_rfd3_job_id,
+                        select_index = int(request.rfd3_design_index or 0)
+                        rfd3_request_hash = _stable_payload_hash(
+                            {
+                                "inputs": inputs_obj,
+                                "inputs_text": inputs_text,
+                                "input_files": rfd3_files or None,
+                                "cli_args": cli_args or None,
+                                "env": request.rfd3_env if isinstance(request.rfd3_env, dict) else None,
+                                "select_index": select_index,
+                                "max_return_designs": max_designs,
+                                "return_designs_pdb": use_ensemble,
+                            }
                         )
+                        resume_job_id: str | None = None
+                        if runpod_job_path.exists() and not request.force:
+                            try:
+                                meta = json.loads(runpod_job_path.read_text(encoding="utf-8"))
+                            except Exception:
+                                meta = {}
+                            job_id = str(meta.get("job_id") or "").strip() if isinstance(meta, dict) else ""
+                            if job_id and isinstance(meta, dict):
+                                same_request = _runpod_meta_matches(
+                                    meta,
+                                    {
+                                        "request_hash": rfd3_request_hash,
+                                        "select_index": select_index,
+                                        "max_return_designs": max_designs,
+                                        "return_designs_pdb": use_ensemble,
+                                        "cli_args": cli_args,
+                                    },
+                                )
+                                if same_request:
+                                    resume_job_id = job_id
+
+                        def _on_rfd3_job_id(job_id: str) -> None:
+                            write_json(
+                                runpod_job_path,
+                                {
+                                    "job_id": job_id,
+                                    "request_hash": rfd3_request_hash,
+                                    "select_index": select_index,
+                                    "max_return_designs": max_designs,
+                                    "return_designs_pdb": use_ensemble,
+                                    "cli_args": cli_args,
+                                },
+                            )
+                            set_status(paths, stage="rfd3", state="running", detail=f"runpod_job_id={job_id}")
+
+                        try:
+                            rfd3_out = self.rfd3.design(
+                                inputs=inputs_obj,
+                                inputs_text=inputs_text,
+                                input_files=rfd3_files or None,
+                                cli_args=cli_args,
+                                env=request.rfd3_env,
+                                select_index=select_index,
+                                max_return_designs=max_designs,
+                                return_designs_pdb=use_ensemble,
+                                resume_job_id=resume_job_id,
+                                on_job_id=_on_rfd3_job_id,
+                            )
+                        except TypeError as exc:
+                            if "resume_job_id" not in str(exc):
+                                raise
+                            rfd3_out = self.rfd3.design(
+                                inputs=inputs_obj,
+                                inputs_text=inputs_text,
+                                input_files=rfd3_files or None,
+                                cli_args=cli_args,
+                                env=request.rfd3_env,
+                                select_index=select_index,
+                                max_return_designs=max_designs,
+                                return_designs_pdb=use_ensemble,
+                                on_job_id=_on_rfd3_job_id,
+                            )
                         write_json(rfd3_dir / "designs.json", rfd3_out.get("designs") or [])
 
                         selected = rfd3_out.get("selected")
@@ -1298,27 +1423,32 @@ class PipelineRunner:
                         "BioEmu requires a protein sequence. Provide bioemu_sequence, target_fasta, or a target_pdb with ATOM records."
                     )
 
+                bioemu_num_samples = int(max(1, request.bioemu_num_samples))
+                bioemu_batch_size_100 = (
+                    int(request.bioemu_batch_size_100) if request.bioemu_batch_size_100 is not None else None
+                )
+                bioemu_model_name = str(request.bioemu_model_name or "bioemu-v1.1")
+                bioemu_filter_samples = bool(request.bioemu_filter_samples)
+                bioemu_base_seed = int(request.bioemu_base_seed) if request.bioemu_base_seed is not None else None
+                bioemu_max_return_structures = int(max(1, request.bioemu_max_return_structures))
+                bioemu_env = dict(request.bioemu_env) if isinstance(request.bioemu_env, dict) else None
+
                 write_json(
                     bioemu_dir / "request.json",
                     {
                         "sequence": bioemu_sequence,
-                        "num_samples": int(max(1, request.bioemu_num_samples)),
-                        "batch_size_100": (
-                            int(request.bioemu_batch_size_100) if request.bioemu_batch_size_100 is not None else None
-                        ),
-                        "model_name": str(request.bioemu_model_name or "bioemu-v1.1"),
-                        "filter_samples": bool(request.bioemu_filter_samples),
-                        "base_seed": (int(request.bioemu_base_seed) if request.bioemu_base_seed is not None else None),
-                        "max_return_structures": int(max(1, request.bioemu_max_return_structures)),
-                        "env": (dict(request.bioemu_env) if isinstance(request.bioemu_env, dict) else None),
+                        "num_samples": bioemu_num_samples,
+                        "batch_size_100": bioemu_batch_size_100,
+                        "model_name": bioemu_model_name,
+                        "filter_samples": bioemu_filter_samples,
+                        "base_seed": bioemu_base_seed,
+                        "max_return_structures": bioemu_max_return_structures,
+                        "env": bioemu_env,
                     },
                 )
 
                 if request.dry_run:
-                    sample_count = min(
-                        int(max(1, request.bioemu_num_samples)),
-                        int(max(1, request.bioemu_max_return_structures)),
-                    )
+                    sample_count = min(bioemu_num_samples, bioemu_max_return_structures)
                     base_pdb = target_pdb_text if target_pdb_text.strip() else _dummy_backbone_pdb(bioemu_sequence, chain_id="A")
                     bioemu_backbones = [
                         {
@@ -1347,32 +1477,91 @@ class PipelineRunner:
                     if self.bioemu is None:
                         raise RuntimeError("BioEmu endpoint is not configured (set BIOEMU_ENDPOINT_ID)")
 
+                    runpod_job_path = bioemu_dir / "runpod_job.json"
+                    bioemu_request_hash = _stable_payload_hash(
+                        {
+                            "sequence": bioemu_sequence,
+                            "num_samples": bioemu_num_samples,
+                            "batch_size_100": bioemu_batch_size_100,
+                            "model_name": bioemu_model_name,
+                            "filter_samples": bioemu_filter_samples,
+                            "base_seed": bioemu_base_seed,
+                            "max_return_sample_pdbs": bioemu_max_return_structures,
+                            "env": bioemu_env,
+                            "return_pdb": True,
+                            "return_sample_pdbs": True,
+                        }
+                    )
+                    resume_job_id: str | None = None
+                    if runpod_job_path.exists() and not request.force:
+                        try:
+                            meta = json.loads(runpod_job_path.read_text(encoding="utf-8"))
+                        except Exception:
+                            meta = {}
+                        job_id = str(meta.get("job_id") or "").strip() if isinstance(meta, dict) else ""
+                        if job_id and isinstance(meta, dict):
+                            same_request = _runpod_meta_matches(
+                                meta,
+                                {
+                                    "request_hash": bioemu_request_hash,
+                                    "num_samples": bioemu_num_samples,
+                                    "batch_size_100": bioemu_batch_size_100,
+                                    "model_name": bioemu_model_name,
+                                    "filter_samples": bioemu_filter_samples,
+                                    "base_seed": bioemu_base_seed,
+                                    "max_return_structures": bioemu_max_return_structures,
+                                },
+                            )
+                            if same_request:
+                                resume_job_id = job_id
+
                     def _on_bioemu_job_id(job_id: str) -> None:
                         write_json(
-                            bioemu_dir / "runpod_job.json",
+                            runpod_job_path,
                             {
                                 "job_id": job_id,
-                                "num_samples": int(max(1, request.bioemu_num_samples)),
-                                "max_return_structures": int(max(1, request.bioemu_max_return_structures)),
+                                "request_hash": bioemu_request_hash,
+                                "num_samples": bioemu_num_samples,
+                                "batch_size_100": bioemu_batch_size_100,
+                                "model_name": bioemu_model_name,
+                                "filter_samples": bioemu_filter_samples,
+                                "base_seed": bioemu_base_seed,
+                                "max_return_structures": bioemu_max_return_structures,
                             },
                         )
                         set_status(paths, stage="bioemu", state="running", detail=f"runpod_job_id={job_id}")
 
-                    bioemu_out = self.bioemu.sample(
-                        sequence=bioemu_sequence,
-                        num_samples=max(1, int(request.bioemu_num_samples)),
-                        batch_size_100=(
-                            int(request.bioemu_batch_size_100) if request.bioemu_batch_size_100 is not None else None
-                        ),
-                        model_name=str(request.bioemu_model_name or "bioemu-v1.1"),
-                        filter_samples=bool(request.bioemu_filter_samples),
-                        base_seed=(int(request.bioemu_base_seed) if request.bioemu_base_seed is not None else None),
-                        env=(dict(request.bioemu_env) if isinstance(request.bioemu_env, dict) else None),
-                        return_pdb=True,
-                        return_sample_pdbs=True,
-                        max_return_sample_pdbs=max(1, int(request.bioemu_max_return_structures)),
-                        on_job_id=_on_bioemu_job_id,
-                    )
+                    try:
+                        bioemu_out = self.bioemu.sample(
+                            sequence=bioemu_sequence,
+                            num_samples=bioemu_num_samples,
+                            batch_size_100=bioemu_batch_size_100,
+                            model_name=bioemu_model_name,
+                            filter_samples=bioemu_filter_samples,
+                            base_seed=bioemu_base_seed,
+                            env=bioemu_env,
+                            return_pdb=True,
+                            return_sample_pdbs=True,
+                            max_return_sample_pdbs=bioemu_max_return_structures,
+                            resume_job_id=resume_job_id,
+                            on_job_id=_on_bioemu_job_id,
+                        )
+                    except TypeError as exc:
+                        if "resume_job_id" not in str(exc):
+                            raise
+                        bioemu_out = self.bioemu.sample(
+                            sequence=bioemu_sequence,
+                            num_samples=bioemu_num_samples,
+                            batch_size_100=bioemu_batch_size_100,
+                            model_name=bioemu_model_name,
+                            filter_samples=bioemu_filter_samples,
+                            base_seed=bioemu_base_seed,
+                            env=bioemu_env,
+                            return_pdb=True,
+                            return_sample_pdbs=True,
+                            max_return_sample_pdbs=bioemu_max_return_structures,
+                            on_job_id=_on_bioemu_job_id,
+                        )
                     write_json(bioemu_dir / "output.json", _safe_json(bioemu_out))
 
                     parsed_samples: list[dict[str, Any]] = []
@@ -1409,7 +1598,7 @@ class PipelineRunner:
                     if not parsed_samples:
                         raise RuntimeError("BioEmu output missing sample_pdbs/topology_pdb")
 
-                    limit = max(1, int(request.bioemu_max_return_structures))
+                    limit = bioemu_max_return_structures
                     bioemu_backbones = parsed_samples[:limit]
 
                     designs_dir = _ensure_dir(bioemu_dir / "designs")
@@ -1774,6 +1963,9 @@ class PipelineRunner:
             policy = _normalize_policy(request.query_pdb_policy)
             min_identity = float(request.query_pdb_min_identity)
             both_provided = bool(str(request.target_fasta or "").strip()) and bool(str(request.target_pdb or "").strip())
+            original_ligand_mask_by_chain: dict[str, list[int]] = {}
+            original_ligand_mask_query_by_chain: dict[str, list[int]] = {}
+            original_ligand_mask_source: str | None = None
 
             query_warnings: list[str] = []
             query_pdb_error: str | None = None
@@ -1884,11 +2076,44 @@ class PipelineRunner:
             else:
                 _emit_panel("query_pdb_check")
 
+            if bool(request.ligand_mask_use_original_target):
+                reference_pdb_text = ""
+                if target_pdb_input_text.strip():
+                    reference_pdb_text = target_pdb_input_text
+                    original_ligand_mask_source = "target_pdb"
+                elif rfd3_reference_pdb_text.strip():
+                    reference_pdb_text = rfd3_reference_pdb_text
+                    original_ligand_mask_source = "rfd3_input_pdb"
+                if reference_pdb_text.strip():
+                    (
+                        original_ligand_mask_by_chain,
+                        original_ligand_mask_query_by_chain,
+                    ) = _map_reference_ligand_mask_to_query(
+                        query_seq=query_seq,
+                        reference_pdb_text=reference_pdb_text,
+                        design_chains=design_chains,
+                        ligand_mask_distance=request.ligand_mask_distance,
+                        ligand_resnames=request.ligand_resnames,
+                        ligand_atom_chains=request.ligand_atom_chains,
+                    )
+
+            write_json(
+                paths.root / "ligand_mask_original_target.json",
+                {
+                    "enabled": bool(request.ligand_mask_use_original_target),
+                    "source": original_ligand_mask_source,
+                    "ligand_mask_by_chain": original_ligand_mask_by_chain,
+                    "query_positions_by_chain": original_ligand_mask_query_by_chain,
+                    "query_positions_total": sum(len(v) for v in original_ligand_mask_query_by_chain.values()),
+                },
+            )
+
             def _compute_wt_baseline() -> None:
                 if not request.wt_compare:
                     return
                 wt_root = _ensure_dir(paths.root / "wt")
                 metrics_path = wt_root / "metrics.json"
+                set_status(paths, stage="wt_baseline", state="running")
 
                 def _load_json_file(path: Path) -> dict[str, object] | None:
                     if not path.exists():
@@ -1900,6 +2125,7 @@ class PipelineRunner:
                     return raw if isinstance(raw, dict) else None
 
                 if metrics_path.exists() and not request.force:
+                    set_status(paths, stage="wt_baseline", state="completed", detail="cached")
                     return
 
                 seq_source = "target_fasta" if str(request.target_fasta or "").strip() else "target_pdb"
@@ -1920,6 +2146,8 @@ class PipelineRunner:
 
                 sol_path = wt_root / "soluprot.json"
                 sol_payload = _load_json_file(sol_path) if sol_path.exists() and not request.force else None
+                sol_cached = sol_payload is not None
+                set_status(paths, stage="wt_soluprot", state="running", detail=("cached" if sol_cached else None))
                 if sol_payload is None:
                     try:
                         if not wt_seq:
@@ -1975,10 +2203,15 @@ class PipelineRunner:
                         sol_payload = {"skipped": True, "error": str(exc)}
                     write_json(sol_path, sol_payload)
                 payload["soluprot"] = sol_payload or {"skipped": True}
+                sol_detail = "cached" if sol_cached else ("skipped" if bool((sol_payload or {}).get("skipped")) else None)
+                set_status(paths, stage="wt_soluprot", state="completed", detail=sol_detail)
 
                 af2_root = _ensure_dir(wt_root / "af2")
                 af2_metrics_path = af2_root / "metrics.json"
+                af2_job_path = af2_root / "runpod_job.json"
                 af2_payload = _load_json_file(af2_metrics_path) if af2_metrics_path.exists() and not request.force else None
+                af2_cached = af2_payload is not None
+                set_status(paths, stage="wt_af2", state="running", detail=("cached" if af2_cached else None))
                 if af2_payload is None:
                     try:
                         if not wt_seq:
@@ -2001,9 +2234,21 @@ class PipelineRunner:
                                 sequence=seq_in,
                                 meta={},
                             )
+                            resume_job_ids: dict[str, str] | None = None
+                            if af2_job_path.exists():
+                                try:
+                                    job_payload = json.loads(af2_job_path.read_text(encoding="utf-8"))
+                                except Exception:
+                                    job_payload = None
+                                if isinstance(job_payload, dict):
+                                    existing_job_id = str(job_payload.get("job_id") or "").strip()
+                                    existing_seq_id = str(job_payload.get("seq_id") or "wt").strip() or "wt"
+                                    if existing_job_id:
+                                        resume_job_ids = {existing_seq_id: existing_job_id}
 
                             def _on_wt_job_id(seq_id: str, job_id: str) -> None:
-                                write_json(af2_root / "runpod_job.json", {"seq_id": seq_id, "job_id": job_id})
+                                write_json(af2_job_path, {"seq_id": seq_id, "job_id": job_id})
+                                set_status(paths, stage="wt_af2", state="running", detail=f"runpod_job_id={job_id} seq_id={seq_id}")
 
                             try:
                                 af2_out = self.af2.predict(
@@ -2012,6 +2257,7 @@ class PipelineRunner:
                                     db_preset=request.af2_db_preset,
                                     max_template_date=request.af2_max_template_date,
                                     extra_flags=request.af2_extra_flags,
+                                    resume_job_ids=resume_job_ids,
                                     on_job_id=_on_wt_job_id,
                                 )
                             except TypeError:
@@ -2049,8 +2295,11 @@ class PipelineRunner:
                         af2_payload = {"skipped": True, "error": str(exc)}
                     write_json(af2_metrics_path, af2_payload)
                 payload["af2"] = af2_payload or {"skipped": True}
+                af2_detail = "cached" if af2_cached else ("skipped" if bool((af2_payload or {}).get("skipped")) else None)
+                set_status(paths, stage="wt_af2", state="completed", detail=af2_detail)
 
                 write_json(metrics_path, payload)
+                set_status(paths, stage="wt_baseline", state="completed")
 
             _compute_wt_baseline()
 
@@ -2291,7 +2540,13 @@ class PipelineRunner:
                             continue
                     return out
 
-                chains = design_chains or list(ligand_mask_by_chain.keys()) or list(mapping_by_chain.keys()) or ["A"]
+                chains = (
+                    design_chains
+                    or list(ligand_mask_by_chain.keys())
+                    or list(original_ligand_mask_query_by_chain.keys())
+                    or list(mapping_by_chain.keys())
+                    or ["A"]
+                )
 
                 def _map_positions(positions: list[int], chain_id: str) -> list[int]:
                     mapping = mapping_by_chain.get(chain_id)
@@ -2305,6 +2560,19 @@ class PipelineRunner:
                                 mapped.append(int(mapped_pos))
                     return sorted(set(mapped))
 
+                effective_ligand_mask_by_chain: dict[str, list[int]] = {}
+                for chain_id in chains:
+                    chain_positions = set(
+                        int(p)
+                        for p in (ligand_mask_by_chain.get(chain_id, []) or [])
+                        if isinstance(p, (int, float))
+                    )
+                    if bool(request.ligand_mask_use_original_target):
+                        query_positions = original_ligand_mask_query_by_chain.get(chain_id, []) or []
+                        mapped_positions = _map_positions(query_positions, chain_id)
+                        chain_positions.update(int(p) for p in mapped_positions)
+                    effective_ligand_mask_by_chain[chain_id] = sorted(chain_positions)
+
                 experts: list[dict[str, object]] = []
                 tier_payloads_query: dict[str, dict[str, list[int]]] = {}
                 tier_payloads_chain: dict[str, dict[str, dict[str, list[int]]]] = {}
@@ -2313,7 +2581,11 @@ class PipelineRunner:
                 for chain_id, mapping in mapping_by_chain.items():
                     if not mapping:
                         continue
-                    chain_mask = set(int(p) for p in (ligand_mask_by_chain.get(chain_id, []) or []) if isinstance(p, (int, float)))
+                    chain_mask = set(
+                        int(p)
+                        for p in (effective_ligand_mask_by_chain.get(chain_id, []) or [])
+                        if isinstance(p, (int, float))
+                    )
                     if not chain_mask:
                         continue
                     for qpos, pdb_pos in enumerate(mapping, start=1):
@@ -2412,7 +2684,7 @@ class PipelineRunner:
                             for pos in chain_positions or []:
                                 key = str(pos)
                                 chain_counts[key] = chain_counts.get(key, 0) + 1
-                        for pos in ligand_mask_by_chain.get(chain, []) or []:
+                        for pos in effective_ligand_mask_by_chain.get(chain, []) or []:
                             key = str(pos)
                             chain_counts[key] = max(chain_counts.get(key, 0), consensus_threshold)
                         votes_by_tier[tier_key][chain] = chain_counts
@@ -2428,6 +2700,8 @@ class PipelineRunner:
                     "Consensus uses majority vote across experts (>=3).",
                     "Ligand proximity mask positions are always retained.",
                 ]
+                if bool(request.ligand_mask_use_original_target):
+                    notes.append("Original target ligand mask was projected onto the active backbone when available.")
                 if request.mask_consensus_apply:
                     notes.append("Consensus output will be applied to ProteinMPNN in this run.")
                 else:
@@ -2440,6 +2714,7 @@ class PipelineRunner:
                         "msa_quality_path": str(msa_quality_path) if msa_quality_path.exists() else None,
                         "conservation_path": conservation_path,
                         "ligand_mask_path": ligand_mask_path,
+                        "ligand_mask_original_target_path": str(paths.root / "ligand_mask_original_target.json"),
                         "query_pdb_alignment_path": str(query_report_path) if query_report_path.exists() else None,
                     },
                     "signals": {
@@ -2643,6 +2918,18 @@ class PipelineRunner:
                                     extra_mapped = [int(pos) for pos in raw_extra]
                                 chain_fixed.update(extra_mapped)
                         chain_fixed.update(ligand_mask.get(chain_id, []))
+                        if bool(request.ligand_mask_use_original_target):
+                            projected: list[int] = []
+                            reference_query_positions = original_ligand_mask_query_by_chain.get(chain_id, []) or []
+                            if reference_query_positions and mapping:
+                                for pos in reference_query_positions:
+                                    if 1 <= int(pos) <= len(mapping):
+                                        mapped_pos = mapping[int(pos) - 1]
+                                        if mapped_pos is not None:
+                                            projected.append(int(mapped_pos))
+                            elif not mapping:
+                                projected.extend(int(pos) for pos in (original_ligand_mask_by_chain.get(chain_id, []) or []))
+                            chain_fixed.update(projected)
 
                         if request.surface_only and isinstance(surface_mask, dict):
                             surface_positions = set(
@@ -2996,6 +3283,7 @@ class PipelineRunner:
                 af2_result = None
                 af2_selected_ids: list[str] | None = None
                 af2_candidates = passed
+                af2_budget_applied = False
                 if request.af2_sequence_ids:
                     wanted = [str(x).strip() for x in request.af2_sequence_ids if str(x).strip()]
                     if wanted:
@@ -3005,6 +3293,24 @@ class PipelineRunner:
                         if missing:
                             raise ValueError(f"af2_sequence_ids not found in SoluProt-passed designs for tier={tier_str}: {missing}")
                         af2_candidates = [s for s in passed if s.id in wanted_set]
+                af2_candidates_before_budget = len(af2_candidates)
+                if not request.af2_sequence_ids:
+                    max_candidates = max(0, int(getattr(request, "af2_max_candidates_per_tier", 0) or 0))
+                    if max_candidates > 0 and len(af2_candidates) > max_candidates:
+                        order_by_id = {s.id: i for i, s in enumerate(af2_candidates)}
+
+                        def _soluprot_score_for_candidate(rec: SequenceRecord) -> float:
+                            if isinstance(soluprot_scores, dict):
+                                raw = soluprot_scores.get(rec.id)
+                                if isinstance(raw, (int, float)):
+                                    return float(raw)
+                            return float("-inf")
+
+                        af2_candidates = sorted(
+                            af2_candidates,
+                            key=lambda rec: (-_soluprot_score_for_candidate(rec), order_by_id.get(rec.id, 10**9)),
+                        )[:max_candidates]
+                        af2_budget_applied = True
                 if af2_candidates:
                     _ensure_not_cancelled(stage=f"af2_{tier_str}")
                     set_status(paths, stage=f"af2_{tier_str}", state="running")
@@ -3207,6 +3513,10 @@ class PipelineRunner:
                                 "scores": cached_scores,
                                 "rmsd_scores": rmsd_scores,
                                 "candidate_ids": candidate_ids,
+                                "candidate_count_before_budget": af2_candidates_before_budget,
+                                "candidate_count_after_budget": len(candidate_ids),
+                                "candidate_budget_applied": af2_budget_applied,
+                                "max_candidates_per_tier": int(getattr(request, "af2_max_candidates_per_tier", 0) or 0),
                                 "cutoff": request.af2_plddt_cutoff,
                                 "rmsd_cutoff": request.af2_rmsd_cutoff,
                                 "rmsd_missing_ids": rmsd_missing,
@@ -3251,6 +3561,10 @@ class PipelineRunner:
                                 "scores": fallback_scores,
                                 "rmsd_scores": {},
                                 "candidate_ids": candidate_ids,
+                                "candidate_count_before_budget": af2_candidates_before_budget,
+                                "candidate_count_after_budget": len(candidate_ids),
+                                "candidate_budget_applied": af2_budget_applied,
+                                "max_candidates_per_tier": int(getattr(request, "af2_max_candidates_per_tier", 0) or 0),
                                 "cutoff": request.af2_plddt_cutoff,
                                 "rmsd_cutoff": request.af2_rmsd_cutoff,
                                 "rmsd_missing_ids": list(candidate_ids),

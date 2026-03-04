@@ -368,6 +368,43 @@ class TestPipelineDryRun(unittest.TestCase):
             fixed = json.loads((out / "tiers" / "30" / "fixed_positions.json").read_text(encoding="utf-8"))
             self.assertIn(9, fixed.get("A", []))
 
+    def test_pipeline_projects_original_ligand_mask_to_rfd3_backbone(self) -> None:
+        target_pdb_with_ligand = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       4.000   0.000   0.000  1.00 20.00           C\n"
+            "HETATM    4  C1  LIG Z   1       2.200   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        rfd3_input_pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       2.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       4.000   1.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            req = PipelineRequest(
+                target_fasta=">q1\nACD\n",
+                target_pdb=target_pdb_with_ligand,
+                rfd3_input_pdb=rfd3_input_pdb,
+                rfd3_contig="A1-3",
+                ligand_mask_use_original_target=True,
+                dry_run=True,
+                num_seq_per_tier=1,
+                conservation_tiers=[0.3],
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            projected = json.loads((out / "ligand_mask_original_target.json").read_text(encoding="utf-8"))
+            query_by_chain = projected.get("query_positions_by_chain") or {}
+            projected_positions = query_by_chain.get("A") or []
+            self.assertTrue(projected_positions)
+
+            fixed = json.loads((out / "tiers" / "30" / "fixed_positions.json").read_text(encoding="utf-8"))
+            fixed_a = set(fixed.get("A") or [])
+            self.assertTrue(set(int(p) for p in projected_positions).issubset(fixed_a))
+
     def test_pipeline_requires_fixed_positions_extra_for_sequence_only(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         with _tmpdir() as tmp:
@@ -385,6 +422,40 @@ class TestPipelineDryRun(unittest.TestCase):
             status = json.loads((Path(tmp) / run_id / "status.json").read_text(encoding="utf-8"))
             self.assertEqual(status.get("stage"), "needs_fixed_positions_extra")
             self.assertEqual(status.get("state"), "failed")
+
+    def test_pipeline_limits_af2_candidates_per_tier_by_soluprot_rank(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU A   4       3.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  PHE A   5       4.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  GLY A   6       5.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      7  CA  HIS A   7       6.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      8  CA  ILE A   8       7.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      9  CA  LYS A   9       8.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            req = PipelineRequest(
+                target_fasta=fasta,
+                target_pdb=pdb,
+                dry_run=True,
+                num_seq_per_tier=6,
+                conservation_tiers=[0.3],
+                soluprot_cutoff=0.0,
+                af2_max_candidates_per_tier=1,
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            af2_scores = json.loads((out / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8"))
+            candidate_ids = af2_scores.get("candidate_ids") or []
+            self.assertEqual(len(candidate_ids), 1)
+            self.assertTrue(bool(af2_scores.get("candidate_budget_applied")))
+            self.assertEqual(int(af2_scores.get("max_candidates_per_tier") or 0), 1)
+            self.assertGreater(int(af2_scores.get("candidate_count_before_budget") or 0), 1)
 
     def test_chain_strategy_forces_single_chain_in_monomer_mode(self) -> None:
         fasta = ">q1\nACD\n"

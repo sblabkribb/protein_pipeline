@@ -71,6 +71,7 @@ class PipelineRequest:
     ligand_mask_distance: float = 6.0
     ligand_resnames: list[str] | None = None
     ligand_atom_chains: list[str] | None = None
+    ligand_mask_use_original_target: bool = True
     surface_only: bool = False
     surface_min_rel: float = 0.2
     surface_min_abs: float = 10.0
@@ -93,6 +94,8 @@ class PipelineRequest:
     af2_extra_flags: str | None = None
     af2_plddt_cutoff: float = 85.0
     af2_rmsd_cutoff: float = 2.0
+    # Limit AF2 predictions per tier using top SoluProt-scored candidates (<=0 means no limit).
+    af2_max_candidates_per_tier: int = 0
     af2_top_k: int = 20
     af2_sequence_ids: list[str] | None = None
 
