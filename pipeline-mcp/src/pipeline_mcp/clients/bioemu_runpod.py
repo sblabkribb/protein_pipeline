@@ -18,7 +18,7 @@ class BioEmuRunPodClient:
         self,
         *,
         sequence: str,
-        num_samples: int = 50,
+        num_samples: int = 10,
         batch_size_100: int | None = None,
         model_name: str = "bioemu-v1.1",
         filter_samples: bool = True,
@@ -26,7 +26,7 @@ class BioEmuRunPodClient:
         env: dict[str, str] | None = None,
         return_pdb: bool = True,
         return_sample_pdbs: bool = True,
-        max_return_sample_pdbs: int = 50,
+        max_return_sample_pdbs: int = 10,
         resume_job_id: str | None = None,
         on_job_id: Callable[[str], None] | None = None,
     ) -> dict[str, Any]:

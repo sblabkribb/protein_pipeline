@@ -334,7 +334,18 @@ class TestTools(unittest.TestCase):
 
             report = dispatcher.call_tool("pipeline.generate_report", {"run_id": run_id})
             self.assertIn("report", report)
-            self.assertIn("Score", str(report.get("report")))
+            report_text = str(report.get("report"))
+            self.assertIn("Score", report_text)
+            self.assertIn("WT Comparison", report_text)
+            self.assertIn("Backbone Source Comparison", report_text)
+            comparison_summary = report.get("comparison_summary") or {}
+            self.assertIn("wt_vs_design", comparison_summary)
+            self.assertIn("source_compare", comparison_summary)
+
+            listing = dispatcher.call_tool("pipeline.list_artifacts", {"run_id": run_id, "limit": 200})
+            artifacts = listing.get("artifacts") or []
+            paths = {str(a.get("path")) for a in artifacts if isinstance(a, dict)}
+            self.assertIn("comparisons.json", paths)
 
     def test_pipeline_artifact_tools(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
@@ -377,6 +388,28 @@ class TestTools(unittest.TestCase):
             )
             self.assertIn("text", read_out)
             self.assertLessEqual(int(read_out.get("read_bytes") or 0), 64)
+
+    def test_get_report_includes_comparison_summary_even_without_prebuilt_artifact(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.run",
+                {"target_fasta": fasta, "dry_run": True, "num_seq_per_tier": 1, "conservation_tiers": [0.3]},
+            )
+            run_id = str(out.get("run_id") or "")
+            self.assertTrue(run_id)
+
+            dispatcher.call_tool("pipeline.generate_report", {"run_id": run_id})
+            comp_path = Path(tmp) / run_id / "comparisons.json"
+            if comp_path.exists():
+                comp_path.unlink()
+
+            report_payload = dispatcher.call_tool("pipeline.get_report", {"run_id": run_id})
+            comparison_summary = report_payload.get("comparison_summary") or {}
+            self.assertIn("wt_vs_design", comparison_summary)
+            self.assertIn("source_compare", comparison_summary)
 
 
 
@@ -421,5 +454,22 @@ class TestTools(unittest.TestCase):
             )
             routed = out.get("routed_request") or {}
             self.assertTrue(bool(routed.get("bioemu_use")))
+
+    def test_pipeline_plan_from_prompt_defaults_af2_and_num_seq_questions(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.plan_from_prompt",
+                {"prompt": "run full pipeline"},
+            )
+            questions = out.get("questions") or []
+            by_id = {
+                str(item.get("id")): item
+                for item in questions
+                if isinstance(item, dict) and str(item.get("id") or "").strip()
+            }
+            self.assertEqual((by_id.get("af2_max_candidates_per_tier") or {}).get("default"), 0)
+            self.assertEqual((by_id.get("num_seq_per_tier") or {}).get("default"), 2)
 if __name__ == "__main__":
     unittest.main()
