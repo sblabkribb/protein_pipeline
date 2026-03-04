@@ -126,9 +126,23 @@ const state = {
   artifactComparison: null,
   artifactComparisonRunId: "",
   monitorNeedsReport: false,
+  monitorCompleteness: null,
+  analyzeArtifactPath: "",
   artifactCompareLeftPath: "",
   artifactCompareRightPath: "",
   artifactCompareMode: "structure",
+  runCompareBaselineId: "",
+  runCompareResult: null,
+  hitListResult: null,
+  hitListRows: [],
+  hitListCutoff: 0,
+  hitListLimit: 120,
+  hitListWeights: {
+    soluprot: 0.4,
+    plddt: 0.3,
+    rmsd: 0.2,
+    novelty: 0.1,
+  },
   runs: [],
   runModeById: {},
   progressByRunId: {},
@@ -205,6 +219,7 @@ const el = {
   runScoreValue: document.getElementById("runScoreValue"),
   runEvidenceValue: document.getElementById("runEvidenceValue"),
   runRecommendationValue: document.getElementById("runRecommendationValue"),
+  monitorCompletenessBadges: document.getElementById("monitorCompletenessBadges"),
   pollBtn: document.getElementById("pollBtn"),
   cancelRunBtn: document.getElementById("cancelRunBtn"),
   autoPoll: document.getElementById("autoPoll"),
@@ -217,6 +232,11 @@ const el = {
   artifactTierFilter: document.getElementById("artifactTierFilter"),
   artifactTypeFilter: document.getElementById("artifactTypeFilter"),
   refreshArtifacts: document.getElementById("refreshArtifacts"),
+  monitorArtifactPreview: document.getElementById("monitorArtifactPreview"),
+  compareStudioPreview: document.getElementById("compareStudioPreview"),
+  analyzeArtifactSelect: document.getElementById("analyzeArtifactSelect"),
+  analyzeArtifactOpen: document.getElementById("analyzeArtifactOpen"),
+  analyzeArtifactPreview: document.getElementById("analyzeArtifactPreview"),
   artifactComparisonSummary: document.getElementById("artifactComparisonSummary"),
   artifactCompareMode: document.getElementById("artifactCompareMode"),
   artifactCompareLeft: document.getElementById("artifactCompareLeft"),
@@ -225,7 +245,6 @@ const el = {
   artifactCompareClear: document.getElementById("artifactCompareClear"),
   artifactComparisonDetails: document.getElementById("artifactComparisonDetails"),
   artifactGenerateReport: document.getElementById("artifactGenerateReport"),
-  artifactPreview: document.getElementById("artifactPreview"),
   agentPanelList: document.getElementById("agentPanelList"),
   agentPanelStatus: document.getElementById("agentPanelStatus"),
   viewRunReport: document.getElementById("viewRunReport"),
@@ -264,6 +283,8 @@ const el = {
   reportRecommendationValue: document.getElementById("reportRecommendationValue"),
   loadReport: document.getElementById("loadReport"),
   generateReport: document.getElementById("generateReport"),
+  viewReportRendered: document.getElementById("viewReportRendered"),
+  exportRunPackage: document.getElementById("exportRunPackage"),
   saveReport: document.getElementById("saveReport"),
   reportStatus: document.getElementById("reportStatus"),
   reportArtifactLinks: document.getElementById("reportArtifactLinks"),
@@ -275,6 +296,21 @@ const el = {
   analyzeFeedbackCount: document.getElementById("analyzeFeedbackCount"),
   analyzeExperimentCount: document.getElementById("analyzeExperimentCount"),
   analyzeRecommendationValue: document.getElementById("analyzeRecommendationValue"),
+  runCompareBaseline: document.getElementById("runCompareBaseline"),
+  runCompareRefresh: document.getElementById("runCompareRefresh"),
+  runCompareDetails: document.getElementById("runCompareDetails"),
+  runCompareSummary: document.getElementById("runCompareSummary"),
+  hitListCutoff: document.getElementById("hitListCutoff"),
+  hitListCutoffValue: document.getElementById("hitListCutoffValue"),
+  hitListLimit: document.getElementById("hitListLimit"),
+  hitWeightSoluprot: document.getElementById("hitWeightSoluprot"),
+  hitWeightPlddt: document.getElementById("hitWeightPlddt"),
+  hitWeightRmsd: document.getElementById("hitWeightRmsd"),
+  hitWeightNovelty: document.getElementById("hitWeightNovelty"),
+  hitListRefresh: document.getElementById("hitListRefresh"),
+  hitListDetails: document.getElementById("hitListDetails"),
+  hitListSummary: document.getElementById("hitListSummary"),
+  hitListTable: document.getElementById("hitListTable"),
   settingsBtn: document.getElementById("settingsBtn"),
   settingsPanel: document.getElementById("settingsPanel"),
   settingsClose: document.getElementById("settingsClose"),
@@ -387,6 +423,17 @@ const I18N = {
     "monitor.progress.masking": "Masking",
     "monitor.progress.done": "Done",
     "monitor.scoring": "Scoring",
+    "monitor.completeness": "Data Completeness",
+    "monitor.completeness.placeholder": "Select a run to show data completeness.",
+    "monitor.completeness.badge.rfd3Ready": "RFD3 ready",
+    "monitor.completeness.badge.rfd3Missing": "RFD3 missing",
+    "monitor.completeness.badge.bioemuReady": "BioEmu ready",
+    "monitor.completeness.badge.bioemuMissing": "BioEmu missing",
+    "monitor.completeness.badge.bioemuOnly": "BioEmu only",
+    "monitor.completeness.badge.wtOn": "WT compare on",
+    "monitor.completeness.badge.wtOff": "WT compare off",
+    "monitor.completeness.badge.af2None": "AF2 selected none",
+    "monitor.completeness.badge.af2Some": "AF2 selected {count}",
     "monitor.poll": "Poll Now",
     "monitor.stop": "Stop Run",
     "monitor.stopConfirm": "Cancel run {id}? This will request RunPod cancellation.",
@@ -419,7 +466,11 @@ const I18N = {
     "agent.empty": "No agent events yet.",
     "agent.failed": "Agent panel load failed: {error}",
     "artifacts.title": "Artifacts",
-    "artifacts.desc": "Filter outputs and open previews.",
+    "artifacts.desc": "Filter outputs from the run.",
+    "artifacts.monitorHint.title": "Compare moved to Analyze",
+    "artifacts.monitorHint.desc":
+      "Use the Analyze tab for 3D structure compare and report-based comparison summary.",
+    "artifacts.monitorHint.action": "Open Analyze",
     "artifacts.filter.placeholder": "Filter by name or stage",
     "artifacts.refresh": "Refresh",
     "artifacts.filter.allStages": "All stages",
@@ -504,6 +555,8 @@ const I18N = {
     "report.placeholder": "Generate or edit the report",
     "report.load": "Load",
     "report.generate": "Generate",
+    "report.viewRendered": "Rendered View",
+    "report.exportPackage": "Export Package",
     "report.save": "Save",
     "report.links": "Artifact Links",
     "report.review.title": "Report Review",
@@ -554,9 +607,9 @@ const I18N = {
     "help.monitor.step1": "Select a recent run to load status and artifacts.",
     "help.monitor.step2": "Use Auto Poll for live updates.",
     "help.analyze.title": "Analysis",
-    "help.analyze.step1": "Feedback captures subjective evaluation.",
-    "help.analyze.step2": "Experiments log wet-lab outcomes.",
-    "help.analyze.step3": "Reports consolidate results and link artifacts.",
+    "help.analyze.step1": "Start with Compare Studio, Run-to-Run, and Hit List for quick triage.",
+    "help.analyze.step2": "Review 3D structure diffs and WT/RFD3/BioEmu comparison summaries.",
+    "help.analyze.step3": "Then log feedback/experiments and finalize reports.",
     "help.admin.title": "Admin",
     "help.admin.step1": "Admins can create users from the Admin button.",
     "common.close": "Close",
@@ -758,6 +811,46 @@ const I18N = {
     "report.saved": "Report saved.",
     "report.saveFailed": "Save failed: {error}",
     "report.empty": "Report content is empty.",
+    "analyze.compareStudio.title": "Structure Compare Studio",
+    "analyze.compareStudio.desc":
+      "Run 3D/sequence diff and review WT/RFD3/BioEmu comparison in one place.",
+    "analyze.runCompare.title": "Run-to-Run Compare",
+    "analyze.runCompare.desc":
+      "Compare pLDDT, RMSD, SoluProt, and pass-rate deltas against a baseline run.",
+    "analyze.runCompare.baseline": "Baseline Run",
+    "analyze.runCompare.refresh": "Compare",
+    "analyze.runCompare.details": "View Details",
+    "analyze.runCompare.placeholder": "Select a baseline run to load run-to-run deltas.",
+    "analyze.runCompare.sameRun": "Baseline run must be different from current run.",
+    "analyze.runCompare.failed": "Run comparison failed: {error}",
+    "analyze.runCompare.detailsTitle": "Run Comparison Details",
+    "analyze.hitList.title": "Hit List",
+    "analyze.hitList.desc": "Weighted ranking of final candidates with cutoff filtering.",
+    "analyze.hitList.cutoff": "Score Cutoff",
+    "analyze.hitList.limit": "Rows",
+    "analyze.hitList.weight.soluprot": "SoluProt W",
+    "analyze.hitList.weight.plddt": "pLDDT W",
+    "analyze.hitList.weight.rmsd": "RMSD W",
+    "analyze.hitList.weight.novelty": "Novelty W",
+    "analyze.hitList.refresh": "Refresh",
+    "analyze.hitList.details": "View Details",
+    "analyze.hitList.placeholder": "Load a run to build the hit list.",
+    "analyze.hitList.failed": "Hit list load failed: {error}",
+    "analyze.hitList.detailsTitle": "Hit List Details",
+    "analyze.hitList.summary":
+      "Showing {shown}/{filtered} candidates (total {total}), median score {score}.",
+    "analyze.hitList.empty": "No candidates matched the cutoff.",
+    "analyze.files.title": "Artifact File Viewer",
+    "analyze.files.desc": "Preview PDB/FASTA/CSV and text artifacts in Analyze.",
+    "analyze.files.select": "Artifact File",
+    "analyze.files.open": "Open",
+    "analyze.files.placeholder": "Select an artifact file to preview it in Analyze.",
+    "analyze.files.none": "No file artifacts are available for this run.",
+    "residue.linked.title": "Residue-linked view",
+    "residue.linked.help": "Click a residue chip or row to highlight it on both structures.",
+    "residue.linked.empty": "No residue-level metric was produced for this comparison.",
+    "residue.linked.selected": "Selected: chain {chain} residue {resi} ({left}->{right}) dist={dist}A",
+    "residue.linked.selectedNone": "Selected: none",
     "metrics.parseError": "Failed to parse metrics: {error}",
     "metrics.objectRequired": "metrics must be a JSON object",
     "auth.required": "Username and password required.",
@@ -859,6 +952,17 @@ const I18N = {
     "monitor.progress.masking": "마스킹",
     "monitor.progress.done": "완료",
     "monitor.scoring": "점수",
+    "monitor.completeness": "데이터 완전성",
+    "monitor.completeness.placeholder": "실행을 선택하면 데이터 완전성을 표시합니다.",
+    "monitor.completeness.badge.rfd3Ready": "RFD3 준비됨",
+    "monitor.completeness.badge.rfd3Missing": "RFD3 없음",
+    "monitor.completeness.badge.bioemuReady": "BioEmu 준비됨",
+    "monitor.completeness.badge.bioemuMissing": "BioEmu 없음",
+    "monitor.completeness.badge.bioemuOnly": "BioEmu 전용",
+    "monitor.completeness.badge.wtOn": "WT 비교 사용",
+    "monitor.completeness.badge.wtOff": "WT 비교 꺼짐",
+    "monitor.completeness.badge.af2None": "AF2 선발 없음",
+    "monitor.completeness.badge.af2Some": "AF2 선발 {count}",
     "monitor.poll": "지금 조회",
     "monitor.stop": "정지",
     "monitor.stopConfirm": "{id} 실행을 취소할까요? RunPod 작업 취소가 요청됩니다.",
@@ -891,7 +995,11 @@ const I18N = {
     "agent.empty": "아직 에이전트 이벤트가 없습니다.",
     "agent.failed": "에이전트 패널 로드 실패: {error}",
     "artifacts.title": "아티팩트",
-    "artifacts.desc": "출력을 필터하고 미리보기를 열 수 있습니다.",
+    "artifacts.desc": "실행 결과 아티팩트를 필터링합니다.",
+    "artifacts.monitorHint.title": "비교 기능은 Analyze 탭으로 이동",
+    "artifacts.monitorHint.desc":
+      "3D 구조 비교와 리포트 기반 비교 요약은 Analyze 탭에서 확인할 수 있습니다.",
+    "artifacts.monitorHint.action": "Analyze 열기",
     "artifacts.filter.placeholder": "이름 또는 단계로 필터",
     "artifacts.refresh": "새로고침",
     "artifacts.filter.allStages": "전체 단계",
@@ -975,6 +1083,8 @@ const I18N = {
     "report.placeholder": "리포트를 생성하거나 편집하세요",
     "report.load": "불러오기",
     "report.generate": "생성",
+    "report.viewRendered": "렌더링 보기",
+    "report.exportPackage": "결과 패키지",
     "report.save": "저장",
     "report.links": "아티팩트 링크",
     "report.review.title": "리포트 평가",
@@ -1025,9 +1135,9 @@ const I18N = {
     "help.monitor.step1": "최근 실행을 선택하면 상태와 아티팩트가 로드됩니다.",
     "help.monitor.step2": "자동 조회를 사용하면 실시간으로 갱신됩니다.",
     "help.analyze.title": "분석",
-    "help.analyze.step1": "Feedback은 주관적 평가를 기록합니다.",
-    "help.analyze.step2": "Experiments에 습식 결과를 기록합니다.",
-    "help.analyze.step3": "Reports는 결과를 정리하고 아티팩트를 연결합니다.",
+    "help.analyze.step1": "Compare Studio, Run-to-Run, Hit List로 먼저 정량 선별을 진행합니다.",
+    "help.analyze.step2": "3D 구조 차이와 WT/RFD3/BioEmu 비교 요약을 확인합니다.",
+    "help.analyze.step3": "그다음 피드백/실험을 기록하고 리포트를 마무리합니다.",
     "help.admin.title": "관리자",
     "help.admin.step1": "관리자는 Admin 버튼에서 사용자를 생성할 수 있습니다.",
     "common.close": "닫기",
@@ -1229,6 +1339,46 @@ const I18N = {
     "report.saved": "리포트를 저장했습니다.",
     "report.saveFailed": "저장 실패: {error}",
     "report.empty": "리포트 내용이 비어 있습니다.",
+    "analyze.compareStudio.title": "구조 비교 스튜디오",
+    "analyze.compareStudio.desc":
+      "3D/서열 비교와 WT/RFD3/BioEmu 비교 요약을 한 화면에서 확인합니다.",
+    "analyze.runCompare.title": "Run-to-Run 비교",
+    "analyze.runCompare.desc":
+      "기준 실행 대비 pLDDT, RMSD, SoluProt, 통과율 변화를 비교합니다.",
+    "analyze.runCompare.baseline": "기준 실행",
+    "analyze.runCompare.refresh": "비교",
+    "analyze.runCompare.details": "상세 보기",
+    "analyze.runCompare.placeholder": "기준 실행을 선택하면 run 간 차이를 표시합니다.",
+    "analyze.runCompare.sameRun": "기준 실행은 현재 실행과 달라야 합니다.",
+    "analyze.runCompare.failed": "Run 비교 로드 실패: {error}",
+    "analyze.runCompare.detailsTitle": "Run 비교 상세",
+    "analyze.hitList.title": "Hit List",
+    "analyze.hitList.desc": "가중합 점수 기반 최종 후보 랭킹과 컷오프 필터링.",
+    "analyze.hitList.cutoff": "점수 컷오프",
+    "analyze.hitList.limit": "행 수",
+    "analyze.hitList.weight.soluprot": "SoluProt 가중치",
+    "analyze.hitList.weight.plddt": "pLDDT 가중치",
+    "analyze.hitList.weight.rmsd": "RMSD 가중치",
+    "analyze.hitList.weight.novelty": "Novelty 가중치",
+    "analyze.hitList.refresh": "새로고침",
+    "analyze.hitList.details": "상세 보기",
+    "analyze.hitList.placeholder": "실행을 선택하면 Hit List를 생성합니다.",
+    "analyze.hitList.failed": "Hit List 로드 실패: {error}",
+    "analyze.hitList.detailsTitle": "Hit List 상세",
+    "analyze.hitList.summary":
+      "{shown}/{filtered}개 표시 (전체 {total}), 중앙 점수 {score}",
+    "analyze.hitList.empty": "컷오프 조건을 만족하는 후보가 없습니다.",
+    "analyze.files.title": "아티팩트 파일 뷰어",
+    "analyze.files.desc": "Analyze에서 PDB/FASTA/CSV 및 텍스트 아티팩트를 미리보기합니다.",
+    "analyze.files.select": "아티팩트 파일",
+    "analyze.files.open": "열기",
+    "analyze.files.placeholder": "아티팩트 파일을 선택하면 Analyze에서 미리보기합니다.",
+    "analyze.files.none": "이 실행에서 미리볼 파일 아티팩트가 없습니다.",
+    "residue.linked.title": "Residue 연동 뷰",
+    "residue.linked.help": "잔기 칩/행을 클릭하면 양쪽 구조에서 해당 잔기를 강조합니다.",
+    "residue.linked.empty": "이 비교에서 잔기 단위 지표를 계산하지 못했습니다.",
+    "residue.linked.selected": "선택: chain {chain} residue {resi} ({left}->{right}) dist={dist}A",
+    "residue.linked.selectedNone": "선택: 없음",
     "metrics.parseError": "지표 파싱 실패: {error}",
     "metrics.objectRequired": "metrics는 JSON 객체여야 합니다",
     "auth.required": "사용자명과 비밀번호가 필요합니다.",
@@ -1761,10 +1911,14 @@ function setLanguage(lang) {
   refillSelect(el.experimentResult, EXPERIMENT_RESULTS, { includeEmpty: false });
   refreshArtifactSelects();
   renderArtifactComparisonSummary(state.artifactComparison);
+  renderMonitorCompleteness(state.artifactComparison, state.hitListResult?.completeness || null);
   updateMonitorReportActions();
   renderArtifactFilters(state.artifacts);
   renderArtifacts(state.artifacts);
   if (state.runs) renderRuns(state.runs);
+  populateRunCompareBaselineOptions();
+  renderRunCompareSummary(state.runCompareResult);
+  renderHitList();
   updateReportArtifactLinks(el.reportContent ? el.reportContent.value : "");
   updateReportScore(state.lastScore || {});
   updateAnalyzeSummary();
@@ -2735,8 +2889,13 @@ function setCurrentRunId(runId) {
   state.artifactComparison = null;
   state.artifactComparisonRunId = "";
   state.monitorNeedsReport = false;
+  state.monitorCompleteness = null;
+  state.analyzeArtifactPath = "";
   state.artifactCompareLeftPath = "";
   state.artifactCompareRightPath = "";
+  state.runCompareResult = null;
+  state.hitListResult = null;
+  state.hitListRows = [];
   if (runId && !state.timingByRunId[runId]) state.timingByRunId[runId] = {};
   el.runIdValue.textContent = runId || "-";
   el.runStageValue.textContent = "-";
@@ -2769,6 +2928,15 @@ function setCurrentRunId(runId) {
   renderArtifacts(state.artifacts);
   refreshArtifactSelects();
   renderArtifactComparisonSummary(null);
+  renderMonitorCompleteness(null, null);
+  renderRunCompareSummary(null);
+  renderHitList();
+  populateRunCompareBaselineOptions();
+  updateHitCutoffLabel();
+  setHitWeightInputValues();
+  setFilePreviewPlaceholder("monitor");
+  setFilePreviewPlaceholder("analyze", "analyze.files.placeholder");
+  setComparePreviewPlaceholder("artifacts.preview.placeholder");
   updateMonitorReportActions();
   if (state.runs) renderRuns(state.runs);
   refreshAgentPanel();
@@ -5055,6 +5223,7 @@ async function cancelCurrentRun() {
 function renderArtifacts(list) {
   const filter = el.artifactFilter.value.trim().toLowerCase();
   el.artifactList.innerHTML = "";
+  populateAnalyzeArtifactSelect();
   const stageFilter = state.artifactFilters.stage || "all";
   const tierFilter = state.artifactFilters.tier || "all";
   const typeFilter = state.artifactFilters.type || "all";
@@ -5116,7 +5285,7 @@ function renderArtifacts(list) {
         <span>${item.path}</span>
         <span class="artifact-meta">${tags.join("")}</span>
       `;
-      div.addEventListener("click", () => previewArtifact(item));
+      div.addEventListener("click", () => previewArtifact(item, { target: "monitor" }));
       listEl.appendChild(div);
     });
     group.appendChild(header);
@@ -5125,10 +5294,74 @@ function renderArtifacts(list) {
   });
 }
 
-async function previewArtifact(item) {
+function populateAnalyzeArtifactSelect() {
+  if (!el.analyzeArtifactSelect) return;
+  const files = (state.artifacts || [])
+    .filter((item) => item && item.type === "file")
+    .sort((a, b) => String(a.path || "").localeCompare(String(b.path || "")));
+  el.analyzeArtifactSelect.innerHTML = "";
+  if (!files.length) {
+    const emptyOpt = document.createElement("option");
+    emptyOpt.value = "";
+    emptyOpt.textContent = t("analyze.files.none");
+    el.analyzeArtifactSelect.appendChild(emptyOpt);
+    el.analyzeArtifactSelect.disabled = true;
+    state.analyzeArtifactPath = "";
+    setFilePreviewPlaceholder("analyze", "analyze.files.none");
+    return;
+  }
+  el.analyzeArtifactSelect.disabled = false;
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = t("analyze.files.select");
+  el.analyzeArtifactSelect.appendChild(placeholder);
+  files.forEach((item) => {
+    const path = String(item.path || "");
+    const meta = artifactMetaForPath(path);
+    const option = document.createElement("option");
+    option.value = path;
+    option.textContent = `${formatStageLabel(meta.stage)} · ${path}`;
+    el.analyzeArtifactSelect.appendChild(option);
+  });
+  const values = new Set(files.map((item) => String(item.path || "")));
+  const selected = values.has(String(state.analyzeArtifactPath || ""))
+    ? String(state.analyzeArtifactPath || "")
+    : "";
+  state.analyzeArtifactPath = selected;
+  el.analyzeArtifactSelect.value = selected;
+}
+
+function resolveFilePreviewElement(target = "monitor") {
+  if (target === "analyze") {
+    return el.analyzeArtifactPreview || el.monitorArtifactPreview || null;
+  }
+  return el.monitorArtifactPreview || el.analyzeArtifactPreview || null;
+}
+
+function setFilePreviewPlaceholder(target = "monitor", key = "artifacts.preview.placeholder", params = {}) {
+  const previewEl = resolveFilePreviewElement(target);
+  if (!previewEl) return;
+  previewEl.innerHTML = `<div class="placeholder">${t(key, params)}</div>`;
+}
+
+function syncAnalyzeArtifactSelection(path) {
+  const next = String(path || "").trim();
+  state.analyzeArtifactPath = next;
+  if (!el.analyzeArtifactSelect) return;
+  const values = new Set(Array.from(el.analyzeArtifactSelect.options).map((opt) => String(opt.value || "")));
+  if (values.has(next)) {
+    el.analyzeArtifactSelect.value = next;
+  }
+}
+
+async function previewArtifact(item, options = {}) {
   if (!state.currentRunId) return;
   if (item.type !== "file") return;
-  const path = item.path;
+  const target = options?.target === "analyze" ? "analyze" : "monitor";
+  const previewEl = resolveFilePreviewElement(target);
+  if (!previewEl) return;
+  const path = String(item.path || "");
+  syncAnalyzeArtifactSelection(path);
 
   if (isStructurePath(path)) {
     try {
@@ -5138,7 +5371,7 @@ async function previewArtifact(item) {
         max_bytes: 500000,
       });
       const format = /\.sdf$/i.test(path) ? "sdf" : "pdb";
-      render3dModel(result.text || "", format);
+      render3dModel(result.text || "", format, previewEl);
       if (!state.artifactCompareLeftPath) {
         state.artifactCompareLeftPath = path;
       } else if (!state.artifactCompareRightPath && state.artifactCompareLeftPath !== path) {
@@ -5146,9 +5379,7 @@ async function previewArtifact(item) {
       }
       renderArtifactCompareSelects();
     } catch (err) {
-      el.artifactPreview.innerHTML = `<div class="placeholder">${t("artifact.preview.failed", {
-        error: err.message,
-      })}</div>`;
+      setFilePreviewPlaceholder(target, "artifact.preview.failed", { error: err.message });
     }
     return;
   }
@@ -5165,20 +5396,16 @@ async function previewArtifact(item) {
       const img = new Image();
       img.src = `data:image/${ext};base64,${result.base64}`;
       img.className = "preview-image";
-      el.artifactPreview.innerHTML = "";
-      el.artifactPreview.appendChild(img);
+      previewEl.innerHTML = "";
+      previewEl.appendChild(img);
     } catch (err) {
-      el.artifactPreview.innerHTML = `<div class="placeholder">${t("artifact.preview.failed", {
-        error: err.message,
-      })}</div>`;
+      setFilePreviewPlaceholder(target, "artifact.preview.failed", { error: err.message });
     }
     return;
   }
 
   if (isBinaryPath(path)) {
-    el.artifactPreview.innerHTML = `<div class="placeholder">${t("artifact.preview.binary", {
-      path,
-    })}</div>`;
+    setFilePreviewPlaceholder(target, "artifact.preview.binary", { path });
     return;
   }
 
@@ -5189,12 +5416,31 @@ async function previewArtifact(item) {
       max_bytes: 200000,
     });
     const text = result.text || "";
-    el.artifactPreview.innerHTML = `<pre>${escapeHtml(text)}</pre>`;
+    previewEl.innerHTML = `<pre>${escapeHtml(text)}</pre>`;
   } catch (err) {
-    el.artifactPreview.innerHTML = `<div class="placeholder">${t("artifact.preview.failed", {
-      error: err.message,
-    })}</div>`;
+    setFilePreviewPlaceholder(target, "artifact.preview.failed", { error: err.message });
   }
+}
+
+function artifactItemByPath(path) {
+  const target = String(path || "").trim();
+  if (!target) return null;
+  const artifacts = Array.isArray(state.artifacts) ? state.artifacts : [];
+  return artifacts.find((item) => String(item?.path || "") === target && item?.type === "file") || null;
+}
+
+async function previewAnalyzeSelectedArtifact() {
+  const path = String(state.analyzeArtifactPath || el.analyzeArtifactSelect?.value || "").trim();
+  if (!path) {
+    setFilePreviewPlaceholder("analyze", "analyze.files.placeholder");
+    return;
+  }
+  const item = artifactItemByPath(path);
+  if (!item) {
+    setFilePreviewPlaceholder("analyze", "artifact.preview.binary", { path });
+    return;
+  }
+  await previewArtifact(item, { target: "analyze" });
 }
 
 function updateReportArtifactLinks(text) {
@@ -5234,22 +5480,23 @@ function updateReportArtifactLinks(text) {
     link.innerHTML = `<span>${item.path}</span><span class=\"stage-tag\">${escapeHtml(
       formatStageLabel(stage)
     )}</span>`;
-    link.addEventListener("click", () => previewArtifact(item));
+    link.addEventListener("click", () => previewArtifact(item, { target: "analyze" }));
     el.reportArtifactLinks.appendChild(link);
   });
 }
 
-function render3dModel(text, format) {
+function render3dModel(text, format, previewEl) {
+  if (!previewEl) return;
   if (!window.$3Dmol) {
-    el.artifactPreview.innerHTML = `<div class="placeholder">${t(
+    previewEl.innerHTML = `<div class="placeholder">${t(
       "artifact.preview.unavailable"
     )}</div>`;
     return;
   }
   const container = document.createElement("div");
   container.className = "viewer3d";
-  el.artifactPreview.innerHTML = "";
-  el.artifactPreview.appendChild(container);
+  previewEl.innerHTML = "";
+  previewEl.appendChild(container);
   const viewer = window.$3Dmol.createViewer(container, { backgroundColor: "white" });
   viewer.addModel(text, format);
   if (format === "sdf") {
@@ -5735,6 +5982,76 @@ function renderArtifactComparisonSummary(summary) {
   `;
 }
 
+function buildCompletenessBadges(summary, fallbackCompleteness = null) {
+  const source =
+    summary?.source_compare && typeof summary.source_compare === "object" ? summary.source_compare : {};
+  const funnel =
+    summary?.funnel && typeof summary.funnel === "object" && summary.funnel.overall
+      ? summary.funnel.overall
+      : {};
+  const fallback = fallbackCompleteness && typeof fallbackCompleteness === "object" ? fallbackCompleteness : {};
+
+  const rfd3Backbones = Number(source?.rfd3?.backbone_count || 0);
+  const bioemuBackbones = Number(source?.bioemu?.backbone_count || 0);
+  const hasRfd3 = rfd3Backbones > 0 || Boolean(fallback.has_rfd3);
+  const hasBioemu = bioemuBackbones > 0 || Boolean(fallback.has_bioemu);
+  const wtEnabled =
+    typeof summary?.wt_compare_enabled === "boolean"
+      ? Boolean(summary.wt_compare_enabled)
+      : Boolean(fallback.wt_compare_enabled);
+  const af2Selected = Number(funnel?.af2_selected_total || fallback.af2_selected || 0);
+
+  const badges = [];
+  badges.push({
+    level: hasRfd3 ? "good" : "bad",
+    text: t(hasRfd3 ? "monitor.completeness.badge.rfd3Ready" : "monitor.completeness.badge.rfd3Missing"),
+  });
+  badges.push({
+    level: hasBioemu ? "good" : "warn",
+    text: t(hasBioemu ? "monitor.completeness.badge.bioemuReady" : "monitor.completeness.badge.bioemuMissing"),
+  });
+  if (hasBioemu && !hasRfd3) {
+    badges.push({ level: "warn", text: t("monitor.completeness.badge.bioemuOnly") });
+  }
+  badges.push({
+    level: wtEnabled ? "good" : "warn",
+    text: t(wtEnabled ? "monitor.completeness.badge.wtOn" : "monitor.completeness.badge.wtOff"),
+  });
+  badges.push({
+    level: af2Selected > 0 ? "good" : "warn",
+    text:
+      af2Selected > 0
+        ? t("monitor.completeness.badge.af2Some", { count: af2Selected })
+        : t("monitor.completeness.badge.af2None"),
+  });
+  return badges;
+}
+
+function renderMonitorCompleteness(summary = state.artifactComparison, fallback = null) {
+  if (!el.monitorCompletenessBadges) return;
+  if (!summary && !fallback) {
+    el.monitorCompletenessBadges.innerHTML = `<span class="placeholder">${t(
+      "monitor.completeness.placeholder"
+    )}</span>`;
+    return;
+  }
+  const badges = buildCompletenessBadges(summary || {}, fallback || state.hitListResult?.completeness || null);
+  if (!badges.length) {
+    el.monitorCompletenessBadges.innerHTML = `<span class="placeholder">${t(
+      "monitor.completeness.placeholder"
+    )}</span>`;
+    return;
+  }
+  el.monitorCompletenessBadges.innerHTML = badges
+    .map(
+      (item) =>
+        `<span class="completeness-badge ${escapeHtml(String(item.level || "warn"))}">${escapeHtml(
+          String(item.text || "")
+        )}</span>`
+    )
+    .join("");
+}
+
 function updateMonitorReportActions() {
   const hasRun = Boolean(String(state.currentRunId || "").trim());
   const shouldShowGenerate = hasRun && Boolean(state.monitorNeedsReport);
@@ -5758,6 +6075,7 @@ async function refreshArtifactComparisonSummary() {
     state.artifactComparisonRunId = "";
     state.monitorNeedsReport = false;
     renderArtifactComparisonSummary(null);
+    renderMonitorCompleteness(null, null);
     updateMonitorReportActions();
     return;
   }
@@ -5774,6 +6092,7 @@ async function refreshArtifactComparisonSummary() {
     state.artifactComparisonRunId = runId;
     state.monitorNeedsReport = false;
     renderArtifactComparisonSummary(state.artifactComparison);
+    renderMonitorCompleteness(state.artifactComparison, null);
     updateMonitorReportActions();
   } catch (_err) {
     if (String(state.currentRunId || "").trim() !== runId) return;
@@ -5793,6 +6112,7 @@ async function refreshArtifactComparisonSummary() {
         state.artifactComparisonRunId = runId;
         state.monitorNeedsReport = false;
         renderArtifactComparisonSummary(resolved);
+        renderMonitorCompleteness(resolved, null);
       } else {
         const hasReport = Boolean(
           String(reportPayload?.report || "").trim() || String(reportPayload?.report_ko || "").trim()
@@ -5807,8 +6127,18 @@ async function refreshArtifactComparisonSummary() {
             wt_vs_design: {},
             source_compare: {},
           });
+          renderMonitorCompleteness(
+            {
+              version: 1,
+              wt_compare_enabled: false,
+              wt_vs_design: {},
+              source_compare: {},
+            },
+            null
+          );
         } else {
           renderArtifactComparisonSummary(null);
+          renderMonitorCompleteness(null, null);
         }
       }
       updateMonitorReportActions();
@@ -5818,6 +6148,7 @@ async function refreshArtifactComparisonSummary() {
       state.artifactComparisonRunId = runId;
       state.monitorNeedsReport = true;
       renderArtifactComparisonSummary(null);
+      renderMonitorCompleteness(null, null);
       updateMonitorReportActions();
     }
   }
@@ -6083,6 +6414,7 @@ function computePdbStructuralDiff(leftPdbText, rightPdbText) {
   const leftOnlyResidues = {};
   const rightOnlyResidues = {};
   const distances = [];
+  const residueMetrics = [];
   let sse = 0;
   commonKeys.forEach((key) => {
     const left = leftMap.get(key);
@@ -6096,6 +6428,14 @@ function computePdbStructuralDiff(leftPdbText, rightPdbText) {
     const dist = Math.hypot(dx, dy, dz);
     distances.push(dist);
     sse += dist * dist;
+    residueMetrics.push({
+      key,
+      chain: left.chain || "_",
+      resi: left.resi,
+      leftResn: left.resn || "",
+      rightResn: right.resn || "",
+      distance: dist,
+    });
     if (dist > 3.0) add(highResidues, left.chain || "_", left.resi);
     else if (dist > 1.5) add(midResidues, left.chain || "_", left.resi);
   });
@@ -6116,6 +6456,7 @@ function computePdbStructuralDiff(leftPdbText, rightPdbText) {
     highResidues,
     leftOnlyResidues,
     rightOnlyResidues,
+    residueMetrics: residueMetrics.sort((a, b) => Number(b.distance || 0) - Number(a.distance || 0)),
   };
 }
 
@@ -6136,21 +6477,188 @@ function applyDiffResidueStyle(viewer, residueByChain, color) {
   });
 }
 
+function applyPdbBaseStyle(viewer) {
+  viewer.setStyle({}, { cartoon: { color: "#cfd5dc" } });
+}
+
+function applyComparisonStyles(panes, compareMode, structureDiff, seqDiff, selectedResidue = null) {
+  if (!Array.isArray(panes) || panes.length < 2) return;
+  panes.forEach((pane) => {
+    if (pane?.format === "pdb") {
+      applyPdbBaseStyle(pane.viewer);
+    }
+  });
+  if (compareMode === "structure" && structureDiff && structureDiff.ok) {
+    applyDiffResidueStyle(panes[0].viewer, structureDiff.midResidues, "#e6a700");
+    applyDiffResidueStyle(panes[1].viewer, structureDiff.midResidues, "#e6a700");
+    applyDiffResidueStyle(panes[0].viewer, structureDiff.highResidues, "#d62728");
+    applyDiffResidueStyle(panes[1].viewer, structureDiff.highResidues, "#d62728");
+    applyDiffResidueStyle(panes[0].viewer, structureDiff.leftOnlyResidues, "#1f77b4");
+    applyDiffResidueStyle(panes[1].viewer, structureDiff.rightOnlyResidues, "#ff7f0e");
+  } else if (seqDiff && seqDiff.totalCount > 0) {
+    applyDiffResidueStyle(panes[0].viewer, seqDiff.leftResidues, "#1f77b4");
+    applyDiffResidueStyle(panes[1].viewer, seqDiff.rightResidues, "#ff7f0e");
+  }
+  if (selectedResidue && typeof selectedResidue === "object") {
+    const chain = String(selectedResidue.chain || "_");
+    const resi = Number(selectedResidue.resi);
+    if (Number.isFinite(resi)) {
+      const selector = chain === "_" || chain === "" ? { resi } : { chain, resi };
+      panes.forEach((pane) => {
+        pane.viewer.setStyle(selector, { cartoon: { color: "#0b6f7b" }, stick: { radius: 0.24, color: "#0b6f7b" } });
+      });
+    }
+  }
+  panes.forEach((pane) => {
+    pane.viewer.render();
+  });
+}
+
+function renderResidueLinkedView(structureDiff, onSelect) {
+  if (!structureDiff || !structureDiff.ok) return null;
+  const metrics = Array.isArray(structureDiff.residueMetrics) ? structureDiff.residueMetrics : [];
+  if (!metrics.length) return null;
+  const topForTable = metrics.slice(0, 60);
+  const topForStrip = metrics
+    .slice()
+    .sort((a, b) => String(a.key || "").localeCompare(String(b.key || "")))
+    .slice(0, 220);
+
+  const root = document.createElement("div");
+  root.className = "residue-linked";
+  const title = document.createElement("div");
+  title.className = "residue-linked-header";
+  title.innerHTML = `<strong>${escapeHtml(t("residue.linked.title"))}</strong><span>${escapeHtml(
+    t("residue.linked.help")
+  )}</span>`;
+  const selectedInfo = document.createElement("div");
+  selectedInfo.className = "hint";
+  selectedInfo.textContent = t("residue.linked.selectedNone");
+  const strip = document.createElement("div");
+  strip.className = "residue-strip";
+  topForStrip.forEach((item) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = `residue-chip ${
+      Number(item.distance) > 3 ? "high" : Number(item.distance) > 1.5 ? "mid" : "low"
+    }`;
+    chip.dataset.chain = String(item.chain || "_");
+    chip.dataset.resi = String(item.resi || "");
+    chip.dataset.left = String(item.leftResn || "");
+    chip.dataset.right = String(item.rightResn || "");
+    chip.dataset.dist = String(item.distance || "");
+    chip.textContent = `${item.chain || "_"}:${item.resi}`;
+    strip.appendChild(chip);
+  });
+
+  const tableWrap = document.createElement("div");
+  tableWrap.className = "residue-table-wrap";
+  tableWrap.innerHTML = `
+    <table class="residue-table">
+      <thead>
+        <tr><th>Residue</th><th>WT</th><th>Design</th><th class="num">d(A)</th></tr>
+      </thead>
+      <tbody>
+        ${topForTable
+          .map(
+            (item) => `<tr data-chain="${escapeHtml(String(item.chain || "_"))}" data-resi="${escapeHtml(
+              String(item.resi || "")
+            )}" data-left="${escapeHtml(String(item.leftResn || ""))}" data-right="${escapeHtml(
+              String(item.rightResn || "")
+            )}" data-dist="${escapeHtml(String(item.distance || ""))}">
+            <td>${escapeHtml(`${item.chain || "_"}:${item.resi}`)}</td>
+            <td>${escapeHtml(String(item.leftResn || ""))}</td>
+            <td>${escapeHtml(String(item.rightResn || ""))}</td>
+            <td class="num">${escapeHtml(formatMetricValue(item.distance, 2, false))}</td>
+          </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+  `;
+
+  const updateSelection = (chain, resi, leftResn, rightResn, distance) => {
+    const chainText = String(chain || "_");
+    const resiNum = Number(resi);
+    if (!Number.isFinite(resiNum)) return;
+    strip.querySelectorAll(".residue-chip").forEach((node) => {
+      const match = node.dataset.chain === chainText && Number(node.dataset.resi) === resiNum;
+      node.classList.toggle("selected", match);
+    });
+    tableWrap.querySelectorAll("tbody tr").forEach((node) => {
+      const match = node.dataset.chain === chainText && Number(node.dataset.resi) === resiNum;
+      node.classList.toggle("selected", match);
+    });
+    selectedInfo.textContent = t("residue.linked.selected", {
+      chain: chainText,
+      resi: resiNum,
+      left: leftResn || "-",
+      right: rightResn || "-",
+      dist: formatMetricValue(distance, 2, false),
+    });
+    if (typeof onSelect === "function") {
+      onSelect({ chain: chainText, resi: resiNum });
+    }
+  };
+
+  strip.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const chip = target ? target.closest(".residue-chip") : null;
+    if (!chip) return;
+    updateSelection(chip.dataset.chain, chip.dataset.resi, chip.dataset.left, chip.dataset.right, chip.dataset.dist);
+  });
+  strip.addEventListener("mouseover", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const chip = target ? target.closest(".residue-chip") : null;
+    if (!chip) return;
+    updateSelection(chip.dataset.chain, chip.dataset.resi, chip.dataset.left, chip.dataset.right, chip.dataset.dist);
+  });
+  tableWrap.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const row = target ? target.closest("tr[data-chain][data-resi]") : null;
+    if (!row) return;
+    updateSelection(row.dataset.chain, row.dataset.resi, row.dataset.left, row.dataset.right, row.dataset.dist);
+  });
+  tableWrap.addEventListener("mouseover", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const row = target ? target.closest("tr[data-chain][data-resi]") : null;
+    if (!row) return;
+    updateSelection(row.dataset.chain, row.dataset.resi, row.dataset.left, row.dataset.right, row.dataset.dist);
+  });
+
+  root.appendChild(title);
+  root.appendChild(selectedInfo);
+  root.appendChild(strip);
+  root.appendChild(tableWrap);
+  return root;
+}
+
+function getComparePreviewElement() {
+  return el.compareStudioPreview || null;
+}
+
+function setComparePreviewPlaceholder(key, params = {}) {
+  const previewEl = getComparePreviewElement();
+  if (!previewEl) return;
+  previewEl.innerHTML = `<div class="placeholder">${t(key, params)}</div>`;
+}
+
 function render3dComparison(left, right, mode = "structure") {
+  const previewEl = getComparePreviewElement();
+  if (!previewEl) return;
   if (!window.$3Dmol) {
-    el.artifactPreview.innerHTML = `<div class="placeholder">${t(
-      "artifact.preview.unavailable"
-    )}</div>`;
+    setComparePreviewPlaceholder("artifact.preview.unavailable");
     return;
   }
   const wrap = document.createElement("div");
   wrap.className = "viewer3d-compare";
-  el.artifactPreview.innerHTML = "";
-  el.artifactPreview.appendChild(wrap);
+  previewEl.innerHTML = "";
+  previewEl.appendChild(wrap);
   const panes = [];
   const usePdbPair = left.format === "pdb" && right.format === "pdb" && left.text && right.text;
   const compareMode = mode === "sequence" ? "sequence" : "structure";
   const structureDiff = usePdbPair && compareMode === "structure" ? computePdbStructuralDiff(left.text, right.text) : null;
+  const seqDiff = usePdbPair ? computePdbSequenceDiff(left.text, right.text) : null;
   const rightTextForView =
     structureDiff && structureDiff.ok ? applyTransformToPdbText(right.text, structureDiff.transform) : right.text;
   const buildPane = (path, text, format) => {
@@ -6188,23 +6696,8 @@ function render3dComparison(left, right, mode = "structure") {
     panes[0].text &&
     panes[1].text
   ) {
-    if (compareMode === "structure" && structureDiff && structureDiff.ok) {
-      applyDiffResidueStyle(panes[0].viewer, structureDiff.midResidues, "#e6a700");
-      applyDiffResidueStyle(panes[1].viewer, structureDiff.midResidues, "#e6a700");
-      applyDiffResidueStyle(panes[0].viewer, structureDiff.highResidues, "#d62728");
-      applyDiffResidueStyle(panes[1].viewer, structureDiff.highResidues, "#d62728");
-      applyDiffResidueStyle(panes[0].viewer, structureDiff.leftOnlyResidues, "#1f77b4");
-      applyDiffResidueStyle(panes[1].viewer, structureDiff.rightOnlyResidues, "#ff7f0e");
-    } else {
-      const seqDiff = computePdbSequenceDiff(left.text, right.text);
-      if (seqDiff.totalCount > 0) {
-        applyDiffResidueStyle(panes[0].viewer, seqDiff.leftResidues, "#1f77b4");
-        applyDiffResidueStyle(panes[1].viewer, seqDiff.rightResidues, "#ff7f0e");
-      }
-    }
-    panes.forEach((pane) => {
-      pane.viewer.render();
-    });
+    let selectedResidue = null;
+    applyComparisonStyles(panes, compareMode, structureDiff, seqDiff, selectedResidue);
     const legend = document.createElement("div");
     legend.className = "viewer3d-diff-note";
     if (compareMode === "structure" && structureDiff && structureDiff.ok) {
@@ -6216,11 +6709,25 @@ function render3dComparison(left, right, mode = "structure") {
     } else {
       const seqDiff = computePdbSequenceDiff(left.text, right.text);
       legend.textContent =
-        seqDiff.totalCount > 0
+        seqDiff && seqDiff.totalCount > 0
           ? `${t("artifacts.preview.compare.diffLegendSequence")} (${seqDiff.totalCount})`
           : t("artifacts.preview.compare.diffNone");
     }
-    el.artifactPreview.appendChild(legend);
+    previewEl.appendChild(legend);
+    if (compareMode === "structure" && structureDiff && structureDiff.ok) {
+      const linked = renderResidueLinkedView(structureDiff, (selection) => {
+        selectedResidue = selection;
+        applyComparisonStyles(panes, compareMode, structureDiff, seqDiff, selectedResidue);
+      });
+      if (linked) {
+        previewEl.appendChild(linked);
+      } else {
+        const empty = document.createElement("div");
+        empty.className = "placeholder";
+        empty.textContent = t("residue.linked.empty");
+        previewEl.appendChild(empty);
+      }
+    }
   }
 }
 
@@ -6305,9 +6812,7 @@ async function compareSelected3dArtifacts() {
   const leftPath = String(state.artifactCompareLeftPath || "").trim();
   const rightPath = String(state.artifactCompareRightPath || "").trim();
   if (!leftPath || !rightPath) {
-    el.artifactPreview.innerHTML = `<div class="placeholder">${t(
-      "artifacts.preview.compare.missing"
-    )}</div>`;
+    setComparePreviewPlaceholder("artifacts.preview.compare.missing");
     return;
   }
   try {
@@ -6337,9 +6842,9 @@ async function compareSelected3dArtifacts() {
       state.artifactCompareMode
     );
   } catch (err) {
-    el.artifactPreview.innerHTML = `<div class="placeholder">${t("artifacts.preview.compare.failed", {
+    setComparePreviewPlaceholder("artifacts.preview.compare.failed", {
       error: err.message,
-    })}</div>`;
+    });
   }
 }
 
@@ -6548,6 +7053,9 @@ async function refreshArtifacts() {
     refreshArtifactSelects();
     void refreshArtifactComparisonSummary();
     updateReportArtifactLinks(el.reportContent ? el.reportContent.value : "");
+    if (state.analyzeArtifactPath) {
+      void previewAnalyzeSelectedArtifact();
+    }
   } catch (err) {
     setMessage(t("artifact.error", { error: err.message }), "ai");
   }
@@ -7294,13 +7802,412 @@ function updateReportScore(result) {
   updateAnalyzeSummary();
 }
 
+function setHitWeightInputValues() {
+  if (el.hitWeightSoluprot) el.hitWeightSoluprot.value = String(state.hitListWeights.soluprot ?? 0.4);
+  if (el.hitWeightPlddt) el.hitWeightPlddt.value = String(state.hitListWeights.plddt ?? 0.3);
+  if (el.hitWeightRmsd) el.hitWeightRmsd.value = String(state.hitListWeights.rmsd ?? 0.2);
+  if (el.hitWeightNovelty) el.hitWeightNovelty.value = String(state.hitListWeights.novelty ?? 0.1);
+}
+
+function readHitWeightsFromInputs() {
+  const parse = (inputEl, fallback) => {
+    const value = Number(inputEl?.value ?? fallback);
+    return Number.isFinite(value) && value >= 0 ? value : fallback;
+  };
+  const next = {
+    soluprot: parse(el.hitWeightSoluprot, state.hitListWeights.soluprot ?? 0.4),
+    plddt: parse(el.hitWeightPlddt, state.hitListWeights.plddt ?? 0.3),
+    rmsd: parse(el.hitWeightRmsd, state.hitListWeights.rmsd ?? 0.2),
+    novelty: parse(el.hitWeightNovelty, state.hitListWeights.novelty ?? 0.1),
+  };
+  const sum = next.soluprot + next.plddt + next.rmsd + next.novelty;
+  if (sum <= 0) {
+    return { soluprot: 0.4, plddt: 0.3, rmsd: 0.2, novelty: 0.1 };
+  }
+  return next;
+}
+
+function updateHitCutoffLabel() {
+  if (el.hitListCutoffValue) {
+    el.hitListCutoffValue.textContent = String(Math.max(0, Math.min(100, Number(state.hitListCutoff || 0))).toFixed(0));
+  }
+}
+
+function populateRunCompareBaselineOptions() {
+  if (!el.runCompareBaseline) return;
+  const current = String(state.currentRunId || "").trim();
+  const runIds = (state.runs || []).map((item) => String(item || "").trim()).filter(Boolean);
+  const options = runIds.filter((item) => item && item !== current);
+  el.runCompareBaseline.innerHTML = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = t("monitor.selectRun");
+  el.runCompareBaseline.appendChild(placeholder);
+  options.forEach((runId) => {
+    const opt = document.createElement("option");
+    opt.value = runId;
+    opt.textContent = runId;
+    el.runCompareBaseline.appendChild(opt);
+  });
+  if (state.runCompareBaselineId && options.includes(state.runCompareBaselineId)) {
+    el.runCompareBaseline.value = state.runCompareBaselineId;
+  } else {
+    state.runCompareBaselineId = options[0] || "";
+    el.runCompareBaseline.value = state.runCompareBaselineId;
+  }
+}
+
+function renderRunCompareSummary(result) {
+  if (!el.runCompareSummary) return;
+  if (!result || typeof result !== "object") {
+    el.runCompareSummary.innerHTML = `<div class="placeholder">${t("analyze.runCompare.placeholder")}</div>`;
+    if (el.runCompareDetails) {
+      el.runCompareDetails.classList.add("hidden");
+      el.runCompareDetails.disabled = true;
+    }
+    return;
+  }
+  const current = result.current && typeof result.current === "object" ? result.current : {};
+  const baseline = result.baseline && typeof result.baseline === "object" ? result.baseline : {};
+  const delta = result.delta && typeof result.delta === "object" ? result.delta : {};
+  const rows = [
+    { key: "soluprot_median", label: "SoluProt", digits: 3, percent: false },
+    { key: "plddt_median", label: "pLDDT", digits: 1, percent: false },
+    { key: "rmsd_median", label: "RMSD", digits: 2, percent: false },
+    { key: "soluprot_pass_rate", label: "SoluProt pass", digits: 1, percent: true },
+    { key: "af2_pass_rate", label: "AF2 pass", digits: 1, percent: true },
+  ];
+  const format = (value, digits, isPercent, signed = false) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+    const scaled = isPercent ? value * 100.0 : value;
+    const text = scaled.toFixed(digits);
+    if (signed && scaled > 0) return `+${text}${isPercent ? "%" : ""}`;
+    return `${text}${isPercent ? "%" : ""}`;
+  };
+  const body = rows
+    .map(
+      (row) => `<tr>
+      <th>${escapeHtml(row.label)}</th>
+      <td>${escapeHtml(format(current[row.key], row.digits, row.percent, false))}</td>
+      <td>${escapeHtml(format(baseline[row.key], row.digits, row.percent, false))}</td>
+      <td>${escapeHtml(format(delta[row.key], row.digits, row.percent, true))}</td>
+    </tr>`
+    )
+    .join("");
+  el.runCompareSummary.innerHTML = `
+    <div class="comparison-card">
+      <h4>${escapeHtml(`${result.run_id || "-"} vs ${result.baseline_run_id || "-"}`)}</h4>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>${escapeHtml(t("artifacts.compare.metric"))}</th>
+            <th>${escapeHtml(result.run_id || "-")}</th>
+            <th>${escapeHtml(result.baseline_run_id || "-")}</th>
+            <th>${escapeHtml(t("artifacts.compare.delta"))}</th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+  `;
+  if (el.runCompareDetails) {
+    el.runCompareDetails.classList.remove("hidden");
+    el.runCompareDetails.disabled = false;
+  }
+}
+
+function buildRunCompareDetailsMarkdown(result) {
+  const lines = [];
+  lines.push(`# ${t("analyze.runCompare.detailsTitle")}`);
+  lines.push("");
+  lines.push(`- Run: ${result?.run_id || "-"}`);
+  lines.push(`- Baseline: ${result?.baseline_run_id || "-"}`);
+  lines.push("");
+  lines.push("| Metric | Current | Baseline | Delta |");
+  lines.push("|---|---:|---:|---:|");
+  const rows = [
+    ["SoluProt median", "soluprot_median", 3, false],
+    ["pLDDT median", "plddt_median", 1, false],
+    ["RMSD median", "rmsd_median", 2, false],
+    ["SoluProt pass rate", "soluprot_pass_rate", 1, true],
+    ["AF2 pass rate", "af2_pass_rate", 1, true],
+    ["Backbone count", "backbone_count", 0, false],
+  ];
+  const format = (value, digits, percent, signed = false) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+    const scaled = percent ? value * 100.0 : value;
+    const text = scaled.toFixed(digits);
+    if (signed && scaled > 0) return `+${text}${percent ? "%" : ""}`;
+    return `${text}${percent ? "%" : ""}`;
+  };
+  rows.forEach(([label, key, digits, percent]) => {
+    lines.push(
+      `| ${label} | ${format(result?.current?.[key], digits, percent)} | ${format(result?.baseline?.[key], digits, percent)} | ${format(result?.delta?.[key], digits, percent, true)} |`
+    );
+  });
+  lines.push("");
+  const currentCompleteness = result?.completeness?.current || {};
+  lines.push("## Completeness");
+  lines.push(`- RFD3: ${currentCompleteness.has_rfd3 ? "yes" : "no"}`);
+  lines.push(`- BioEmu: ${currentCompleteness.has_bioemu ? "yes" : "no"}`);
+  lines.push(`- WT compare: ${currentCompleteness.wt_compare_enabled ? "yes" : "no"}`);
+  lines.push(`- AF2 selected: ${Number(currentCompleteness.af2_selected || 0)}`);
+  lines.push("");
+  return lines.join("\n");
+}
+
+async function refreshRunCompare() {
+  if (!state.currentRunId) {
+    state.runCompareResult = null;
+    renderRunCompareSummary(null);
+    return;
+  }
+  const baseline = String(state.runCompareBaselineId || "").trim();
+  if (!baseline || baseline === state.currentRunId) {
+    state.runCompareResult = null;
+    if (baseline === state.currentRunId) {
+      if (el.runCompareSummary) {
+        el.runCompareSummary.innerHTML = `<div class="placeholder">${t("analyze.runCompare.sameRun")}</div>`;
+      }
+    } else {
+      renderRunCompareSummary(null);
+    }
+    return;
+  }
+  try {
+    const result = await apiCall("pipeline.compare_runs", {
+      run_id: state.currentRunId,
+      baseline_run_id: baseline,
+    });
+    if (String(state.currentRunId || "").trim() !== String(result?.run_id || "").trim()) return;
+    state.runCompareResult = result;
+    renderRunCompareSummary(result);
+  } catch (err) {
+    state.runCompareResult = null;
+    if (el.runCompareSummary) {
+      el.runCompareSummary.innerHTML = `<div class="placeholder">${t("analyze.runCompare.failed", {
+        error: err.message,
+      })}</div>`;
+    }
+    if (el.runCompareDetails) {
+      el.runCompareDetails.classList.add("hidden");
+      el.runCompareDetails.disabled = true;
+    }
+  }
+}
+
+function renderHitList() {
+  if (!el.hitListTable) return;
+  if (!state.currentRunId) {
+    if (el.hitListSummary) el.hitListSummary.innerHTML = "";
+    el.hitListTable.innerHTML = `<div class="placeholder">${t("analyze.hitList.placeholder")}</div>`;
+    if (el.hitListDetails) {
+      el.hitListDetails.classList.add("hidden");
+      el.hitListDetails.disabled = true;
+    }
+    return;
+  }
+  const rows = Array.isArray(state.hitListRows) ? state.hitListRows : [];
+  const cutoff = Math.max(0, Math.min(100, Number(state.hitListCutoff || 0)));
+  const filtered = rows.filter(
+    (row) =>
+      (typeof row?.score === "number" && Number.isFinite(row.score) && row.score >= cutoff) ||
+      (row?.score === null && cutoff <= 0)
+  );
+  const limit = Math.max(10, Math.min(500, Number(state.hitListLimit || 120)));
+  state.hitListLimit = limit;
+  const shown = filtered.slice(0, limit);
+  if (el.hitListSummary) {
+    el.hitListSummary.innerHTML = `<div class="score-pill">${escapeHtml(
+      t("analyze.hitList.summary", {
+        shown: shown.length,
+        filtered: filtered.length,
+        total: rows.length,
+        score: formatMetricValue(state.hitListResult?.stats?.score_median, 1, false),
+      })
+    )}</div>`;
+  }
+  if (!shown.length) {
+    el.hitListTable.innerHTML = `<div class="placeholder">${t("analyze.hitList.empty")}</div>`;
+    if (el.hitListDetails) {
+      el.hitListDetails.classList.add("hidden");
+      el.hitListDetails.disabled = true;
+    }
+    return;
+  }
+  const body = shown
+    .map((row) => {
+      const classNames = [
+        row.af2_selected ? "hit-list-row-pass" : "",
+        row.plddt == null ? "hit-list-row-missing" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      return `<tr class="${classNames}">
+        <td class="num">${escapeHtml(String(row.rank || "-"))}</td>
+        <td>${escapeHtml(String(row.seq_id || "-"))}</td>
+        <td>${escapeHtml(String(row.source || "-"))}</td>
+        <td class="num">${escapeHtml(formatMetricValue(row.tier, 2, false))}</td>
+        <td class="num">${escapeHtml(formatMetricValue(row.score, 1, false))}</td>
+        <td class="num">${escapeHtml(formatMetricValue(row.soluprot, 3, false))}</td>
+        <td class="num">${escapeHtml(formatMetricValue(row.plddt, 1, false))}</td>
+        <td class="num">${escapeHtml(formatMetricValue(row.rmsd, 2, false))}</td>
+        <td>${escapeHtml(localizedYesNo(Boolean(row.af2_selected)))}</td>
+      </tr>`;
+    })
+    .join("");
+  el.hitListTable.innerHTML = `
+    <table class="hit-list-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>seq_id</th>
+          <th>source</th>
+          <th>tier</th>
+          <th>score</th>
+          <th>SoluProt</th>
+          <th>pLDDT</th>
+          <th>RMSD</th>
+          <th>AF2 selected</th>
+        </tr>
+      </thead>
+      <tbody>${body}</tbody>
+    </table>
+  `;
+  if (el.hitListDetails) {
+    el.hitListDetails.classList.remove("hidden");
+    el.hitListDetails.disabled = false;
+  }
+}
+
+function buildHitListDetailsMarkdown() {
+  const rows = Array.isArray(state.hitListRows) ? state.hitListRows : [];
+  const cutoff = Math.max(0, Math.min(100, Number(state.hitListCutoff || 0)));
+  const filtered = rows.filter(
+    (row) =>
+      (typeof row?.score === "number" && Number.isFinite(row.score) && row.score >= cutoff) ||
+      (row?.score === null && cutoff <= 0)
+  );
+  const maxRows = Math.min(filtered.length, 200);
+  const lines = [];
+  lines.push(`# ${t("analyze.hitList.detailsTitle")}`);
+  lines.push("");
+  lines.push(`- Run: ${state.currentRunId || "-"}`);
+  lines.push(`- Cutoff: ${cutoff}`);
+  lines.push(`- Rows: ${maxRows}/${filtered.length}`);
+  lines.push("");
+  lines.push("| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | AF2 selected |");
+  lines.push("|---:|---|---|---:|---:|---:|---:|---:|---|");
+  filtered.slice(0, maxRows).forEach((row) => {
+    lines.push(
+      `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatMetricValue(row.tier, 2)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${row.af2_selected ? "yes" : "no"} |`
+    );
+  });
+  lines.push("");
+  return lines.join("\n");
+}
+
+async function refreshHitList() {
+  if (!state.currentRunId) {
+    state.hitListResult = null;
+    state.hitListRows = [];
+    renderHitList();
+    return;
+  }
+  state.hitListWeights = readHitWeightsFromInputs();
+  setHitWeightInputValues();
+  try {
+    const result = await apiCall("pipeline.get_hit_list", {
+      run_id: state.currentRunId,
+      limit: 500,
+      min_score: 0,
+      weights: state.hitListWeights,
+    });
+    if (String(state.currentRunId || "").trim() !== String(result?.run_id || "").trim()) return;
+    state.hitListResult = result;
+    state.hitListRows = Array.isArray(result?.rows) ? result.rows : [];
+    renderHitList();
+    if (!state.artifactComparison) {
+      renderMonitorCompleteness(null, result?.completeness || null);
+    }
+  } catch (err) {
+    state.hitListResult = null;
+    state.hitListRows = [];
+    if (el.hitListTable) {
+      el.hitListTable.innerHTML = `<div class="placeholder">${t("analyze.hitList.failed", {
+        error: err.message,
+      })}</div>`;
+    }
+    if (el.hitListDetails) {
+      el.hitListDetails.classList.add("hidden");
+      el.hitListDetails.disabled = true;
+    }
+  }
+}
+
+function base64ToBlob(base64Text, contentType = "application/octet-stream") {
+  const binary = atob(String(base64Text || ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: contentType });
+}
+
+async function exportRunPackage() {
+  if (!state.currentRunId) {
+    if (el.reportStatus) el.reportStatus.textContent = t("export.selectRun");
+    return;
+  }
+  if (el.reportStatus) el.reportStatus.textContent = t("export.exporting");
+  try {
+    const packageInfo = await apiCall("pipeline.export_results_package", {
+      run_id: state.currentRunId,
+      include_top_n: 10,
+      weights: state.hitListWeights,
+    });
+    const packagePath = String(packageInfo?.path || "").trim();
+    if (!packagePath) throw new Error("package path missing");
+    const read = await apiCall("pipeline.read_artifact", {
+      run_id: state.currentRunId,
+      path: packagePath,
+      max_bytes: Math.max(2_000_000, Number(packageInfo?.size_bytes || 0) + 1024),
+      base64: true,
+    });
+    const blob = base64ToBlob(read?.base64 || "", "application/zip");
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = packagePath.split("/").pop() || `${state.currentRunId}_results.zip`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    if (el.reportStatus) {
+      el.reportStatus.textContent = `Exported ${link.download} (${Number(packageInfo?.size_bytes || 0)} bytes)`;
+    }
+    await refreshArtifacts();
+  } catch (err) {
+    if (el.reportStatus) {
+      el.reportStatus.textContent = t("export.failed", { error: err.message });
+    }
+  }
+}
+
+function selectReportBody(payload) {
+  const preferred = resolveReportLang();
+  const primary = preferred === "ko" ? payload?.report_ko : payload?.report;
+  const fallback = preferred === "ko" ? payload?.report : payload?.report_ko;
+  return String(primary || fallback || "");
+}
+
 async function loadReport() {
   if (!state.currentRunId || !el.reportContent) return;
   try {
     const result = await apiCall("pipeline.get_report", { run_id: state.currentRunId });
-    el.reportContent.value = result.report || "";
+    el.reportContent.value = selectReportBody(result);
     updateReportScore(result);
-    updateReportArtifactLinks(result.report || "");
+    updateReportArtifactLinks(el.reportContent.value);
     void refreshArtifactComparisonSummary();
     if (el.reportStatus) el.reportStatus.textContent = t("report.loaded");
   } catch (err) {
@@ -7320,9 +8227,9 @@ async function generateReport() {
   if (!state.currentRunId || !el.reportContent) return;
   try {
     const result = await apiCall("pipeline.generate_report", { run_id: state.currentRunId });
-    el.reportContent.value = result.report || "";
+    el.reportContent.value = selectReportBody(result);
     updateReportScore(result);
-    updateReportArtifactLinks(result.report || "");
+    updateReportArtifactLinks(el.reportContent.value);
     await refreshArtifacts();
     void refreshArtifactComparisonSummary();
     if (el.reportStatus) el.reportStatus.textContent = t("report.generated");
@@ -7331,6 +8238,21 @@ async function generateReport() {
       el.reportStatus.textContent = t("report.generateFailed", { error: err.message });
     }
   }
+}
+
+async function openRenderedReport() {
+  if (!state.currentRunId || !el.reportContent) return;
+  let text = String(el.reportContent.value || "").trim();
+  if (!text) {
+    await loadReport();
+    text = String(el.reportContent.value || "").trim();
+  }
+  if (!text) {
+    if (el.reportStatus) el.reportStatus.textContent = t("report.notAvailable");
+    return;
+  }
+  const isKo = resolveReportLang() === "ko";
+  openReportModal(t("report.title"), text, isKo ? "report_ko.md" : "report.md");
 }
 
 async function saveReport() {
@@ -7362,6 +8284,7 @@ async function refreshRuns() {
     }
     state.runs = runs;
     renderRuns(runs);
+    populateRunCompareBaselineOptions();
   } catch (err) {
     // ignore errors here
   }
@@ -7429,11 +8352,9 @@ function renderRuns(runs) {
           setCurrentRunId("");
           state.artifacts = [];
           renderArtifacts([]);
-          if (el.artifactPreview) {
-            el.artifactPreview.innerHTML = `<div class="placeholder">${t(
-              "artifacts.preview.placeholder"
-            )}</div>`;
-          }
+          setFilePreviewPlaceholder("monitor");
+          setFilePreviewPlaceholder("analyze", "analyze.files.placeholder");
+          setComparePreviewPlaceholder("artifacts.preview.placeholder");
         }
         setMessage(t("runs.deleteSuccess", { id: runId }), "ai");
         await refreshRuns();
@@ -7449,6 +8370,8 @@ function renderRuns(runs) {
       setCurrentRunId(runId);
       await pollStatus(runId);
       await refreshArtifacts();
+      await refreshRunCompare();
+      await refreshHitList();
       ensureAutoPoll();
     });
     el.runList.appendChild(div);
@@ -7582,6 +8505,8 @@ async function handleRunSelectorChange(nextRunId) {
   await pollStatus(runId);
   await refreshArtifacts();
   await refreshAgentPanel();
+  await refreshRunCompare();
+  await refreshHitList();
   ensureAutoPoll();
 }
 
@@ -7600,6 +8525,27 @@ if (el.setupRunSelector) {
 if (el.analyzeRunSelector) {
   el.analyzeRunSelector.addEventListener("change", async () => {
     await handleRunSelectorChange(el.analyzeRunSelector.value);
+  });
+}
+
+if (el.runCompareBaseline) {
+  el.runCompareBaseline.addEventListener("change", () => {
+    state.runCompareBaselineId = String(el.runCompareBaseline.value || "").trim();
+  });
+}
+
+if (el.runCompareRefresh) {
+  el.runCompareRefresh.addEventListener("click", () => {
+    refreshRunCompare();
+  });
+}
+
+if (el.runCompareDetails) {
+  el.runCompareDetails.addEventListener("click", () => {
+    if (!state.runCompareResult) return;
+    const markdown = buildRunCompareDetailsMarkdown(state.runCompareResult);
+    const runId = state.runCompareResult.run_id || state.currentRunId || "run";
+    openReportModal(t("analyze.runCompare.detailsTitle"), markdown, `run_compare_${runId}.md`);
   });
 }
 
@@ -7640,6 +8586,20 @@ if (el.artifactTypeFilter) {
   });
 }
 
+if (el.analyzeArtifactSelect) {
+  el.analyzeArtifactSelect.addEventListener("change", () => {
+    state.analyzeArtifactPath = String(el.analyzeArtifactSelect.value || "").trim();
+    void previewAnalyzeSelectedArtifact();
+  });
+}
+
+if (el.analyzeArtifactOpen) {
+  el.analyzeArtifactOpen.addEventListener("click", () => {
+    state.analyzeArtifactPath = String(el.analyzeArtifactSelect?.value || state.analyzeArtifactPath || "").trim();
+    void previewAnalyzeSelectedArtifact();
+  });
+}
+
 if (el.artifactCompareLeft) {
   el.artifactCompareLeft.addEventListener("change", () => {
     state.artifactCompareLeftPath = String(el.artifactCompareLeft.value || "");
@@ -7670,7 +8630,7 @@ if (el.artifactCompareClear) {
     state.artifactCompareLeftPath = "";
     state.artifactCompareRightPath = "";
     renderArtifactCompareSelects();
-    el.artifactPreview.innerHTML = `<div class="placeholder">${t("artifacts.preview.placeholder")}</div>`;
+    setComparePreviewPlaceholder("artifacts.preview.placeholder");
   });
 }
 
@@ -7825,8 +8785,59 @@ if (el.generateReport) {
   el.generateReport.addEventListener("click", generateReport);
 }
 
+if (el.viewReportRendered) {
+  el.viewReportRendered.addEventListener("click", openRenderedReport);
+}
+
 if (el.saveReport) {
   el.saveReport.addEventListener("click", saveReport);
+}
+
+if (el.exportRunPackage) {
+  el.exportRunPackage.addEventListener("click", exportRunPackage);
+}
+
+if (el.hitListCutoff) {
+  el.hitListCutoff.addEventListener("input", () => {
+    state.hitListCutoff = Math.max(0, Math.min(100, Number(el.hitListCutoff.value || 0)));
+    updateHitCutoffLabel();
+    renderHitList();
+  });
+}
+
+if (el.hitListLimit) {
+  el.hitListLimit.addEventListener("change", () => {
+    const value = Number(el.hitListLimit.value || state.hitListLimit || 120);
+    state.hitListLimit = Math.max(10, Math.min(500, Number.isFinite(value) ? value : 120));
+    el.hitListLimit.value = String(state.hitListLimit);
+    renderHitList();
+  });
+}
+
+[
+  el.hitWeightSoluprot,
+  el.hitWeightPlddt,
+  el.hitWeightRmsd,
+  el.hitWeightNovelty,
+].forEach((inputEl) => {
+  if (!inputEl) return;
+  inputEl.addEventListener("change", () => {
+    state.hitListWeights = readHitWeightsFromInputs();
+    setHitWeightInputValues();
+  });
+});
+
+if (el.hitListRefresh) {
+  el.hitListRefresh.addEventListener("click", () => {
+    refreshHitList();
+  });
+}
+
+if (el.hitListDetails) {
+  el.hitListDetails.addEventListener("click", () => {
+    const markdown = buildHitListDetailsMarkdown();
+    openReportModal(t("analyze.hitList.detailsTitle"), markdown, `hit_list_${state.currentRunId || "run"}.md`);
+  });
 }
 
 if (el.reportContent) {
@@ -7844,5 +8855,23 @@ if (state.user && state.token) {
 }
 
 initFeedbackUI();
+if (el.hitListCutoff) {
+  state.hitListCutoff = Math.max(0, Math.min(100, Number(el.hitListCutoff.value || 0)));
+}
+if (el.hitListLimit) {
+  const limit = Number(el.hitListLimit.value || state.hitListLimit || 120);
+  state.hitListLimit = Math.max(10, Math.min(500, Number.isFinite(limit) ? limit : 120));
+  el.hitListLimit.value = String(state.hitListLimit);
+}
+setHitWeightInputValues();
+updateHitCutoffLabel();
+populateRunCompareBaselineOptions();
+renderRunCompareSummary(null);
+renderHitList();
+renderMonitorCompleteness(null, null);
 updateAnalyzeSummary();
+populateAnalyzeArtifactSelect();
+setFilePreviewPlaceholder("monitor");
+setFilePreviewPlaceholder("analyze", "analyze.files.placeholder");
+setComparePreviewPlaceholder("artifacts.preview.placeholder");
 ensureAutoPoll();

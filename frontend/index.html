@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>K-Biofoundry | Protein Pipeline Console</title>
-    <link rel="stylesheet" href="./styles.css?v=20260303_refactor1" />
+    <link rel="stylesheet" href="./styles.css?v=20260304_analyze_layout2" />
   </head>
   <body>
     <div class="bg-orb orb-a" aria-hidden="true"></div>
@@ -249,6 +249,12 @@
                   <div class="score-pill" id="runEvidenceValue">Evidence: -</div>
                   <div class="score-pill" id="runRecommendationValue">Recommendation: -</div>
                 </div>
+                <div class="status-subtitle" data-i18n="monitor.completeness">Data Completeness</div>
+                <div id="monitorCompletenessBadges" class="completeness-badges">
+                  <span class="placeholder" data-i18n="monitor.completeness.placeholder">
+                    Select a run to show data completeness.
+                  </span>
+                </div>
                 <div class="status-actions">
                   <button id="pollBtn" class="ghost" data-i18n="monitor.poll">Poll Now</button>
                   <button id="cancelRunBtn" class="ghost" data-i18n="monitor.stop">Stop Run</button>
@@ -285,7 +291,7 @@
             <div class="panel panel-block">
               <div class="panel-header">
                 <h3 data-i18n="artifacts.title">Artifacts</h3>
-                <p data-i18n="artifacts.desc">Filter outputs and open previews.</p>
+                <p data-i18n="artifacts.desc">Filter outputs from the run.</p>
               </div>
               <div class="artifact-controls">
                 <input
@@ -305,56 +311,10 @@
                 <h3 data-i18n="artifacts.preview.title">Artifact Preview</h3>
                 <p data-i18n="artifacts.preview.desc">3D structures, images, or text extracts.</p>
               </div>
-              <div class="artifact-compare-controls">
-                <select id="artifactCompareMode" class="artifact-select">
-                  <option value="structure" data-i18n="artifacts.preview.compare.mode.structure">
-                    Structure Diff
-                  </option>
-                  <option value="sequence" data-i18n="artifacts.preview.compare.mode.sequence">
-                    Sequence Diff
-                  </option>
-                </select>
-                <select id="artifactCompareLeft" class="artifact-select"></select>
-                <select id="artifactCompareRight" class="artifact-select"></select>
-                <button id="artifactCompareRun" class="ghost" data-i18n="artifacts.preview.compare.run">
-                  Compare 3D
-                </button>
-                <button id="artifactCompareClear" class="ghost" data-i18n="artifacts.preview.compare.clear">
-                  Clear
-                </button>
-              </div>
-              <div id="artifactPreview" class="artifact-preview">
+              <div id="monitorArtifactPreview" class="artifact-preview">
                 <div class="placeholder" data-i18n="artifacts.preview.placeholder">
                   Select an artifact to preview it here.
                 </div>
-              </div>
-              <div class="panel-divider"></div>
-              <div class="panel-header small">
-                <h3 data-i18n="artifacts.compare.title">Comparison Summary</h3>
-                <p data-i18n="artifacts.compare.desc">
-                  WT comparison and RFD3/BioEmu summary from generated report artifacts.
-                </p>
-              </div>
-              <div id="artifactComparisonSummary" class="comparison-summary">
-                <div class="placeholder" data-i18n="artifacts.compare.placeholder">
-                  Generate report to load comparison metrics.
-                </div>
-              </div>
-              <div class="comparison-actions">
-                <button
-                  id="artifactComparisonDetails"
-                  class="ghost hidden"
-                  data-i18n="artifacts.compare.viewDetails"
-                >
-                  View Details
-                </button>
-                <button
-                  id="artifactGenerateReport"
-                  class="ghost hidden"
-                  data-i18n="artifacts.compare.generateReport"
-                >
-                  Generate Report
-                </button>
               </div>
             </div>
 
@@ -418,7 +378,99 @@
             </div>
           </div>
           <div class="tab-grid analyze-grid">
-            <div class="panel panel-block">
+            <div class="span-2 compare-studio-mount">
+              <div id="compareStudioPanel" class="panel panel-block analyze-compare">
+              <div class="panel-header">
+                <h3 data-i18n="analyze.compareStudio.title">Structure Compare Studio</h3>
+                <p data-i18n="analyze.compareStudio.desc">
+                  Run 3D/sequence diff and review WT/RFD3/BioEmu comparison in one place.
+                </p>
+              </div>
+              <div class="status-card feedback-card compare-studio-card">
+                <div class="artifact-compare-controls">
+                  <select id="artifactCompareMode" class="artifact-select">
+                    <option value="structure" data-i18n="artifacts.preview.compare.mode.structure">
+                      Structure Diff
+                    </option>
+                    <option value="sequence" data-i18n="artifacts.preview.compare.mode.sequence">
+                      Sequence Diff
+                    </option>
+                  </select>
+                  <select id="artifactCompareLeft" class="artifact-select"></select>
+                  <select id="artifactCompareRight" class="artifact-select"></select>
+                  <button id="artifactCompareRun" class="ghost" data-i18n="artifacts.preview.compare.run">
+                    Compare 3D
+                  </button>
+                  <button id="artifactCompareClear" class="ghost" data-i18n="artifacts.preview.compare.clear">
+                    Clear
+                  </button>
+                </div>
+                <div class="compare-studio-grid">
+                  <div class="compare-studio-column">
+                    <div class="status-subtitle" data-i18n="artifacts.preview.title">Artifact Preview</div>
+                    <div id="compareStudioPreview" class="artifact-preview">
+                      <div class="placeholder" data-i18n="artifacts.preview.placeholder">
+                        Select an artifact to preview it here.
+                      </div>
+                    </div>
+                  </div>
+                  <div class="compare-studio-column">
+                    <div class="status-subtitle" data-i18n="artifacts.compare.title">Comparison Summary</div>
+                    <div id="artifactComparisonSummary" class="comparison-summary">
+                      <div class="placeholder" data-i18n="artifacts.compare.placeholder">
+                        Generate report to load comparison metrics.
+                      </div>
+                    </div>
+                    <div class="comparison-actions">
+                      <button
+                        id="artifactComparisonDetails"
+                        class="ghost hidden"
+                        data-i18n="artifacts.compare.viewDetails"
+                      >
+                        View Details
+                      </button>
+                      <button
+                        id="artifactGenerateReport"
+                        class="ghost hidden"
+                        data-i18n="artifacts.compare.generateReport"
+                      >
+                        Generate Report
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            </div>
+
+            <div class="panel panel-block span-2 analyze-file-preview">
+              <div class="panel-header">
+                <h3 data-i18n="analyze.files.title">Artifact File Viewer</h3>
+                <p data-i18n="analyze.files.desc">
+                  Open PDB/FASTA/CSV and text outputs directly inside Analyze.
+                </p>
+              </div>
+              <div class="status-card feedback-card">
+                <div class="form-row">
+                  <label>
+                    <span data-i18n="analyze.files.select">Artifact File</span>
+                    <select id="analyzeArtifactSelect"></select>
+                  </label>
+                  <div class="run-compare-actions">
+                    <button id="analyzeArtifactOpen" class="ghost" data-i18n="analyze.files.open">
+                      Open
+                    </button>
+                  </div>
+                </div>
+                <div id="analyzeArtifactPreview" class="artifact-preview">
+                  <div class="placeholder" data-i18n="analyze.files.placeholder">
+                    Select an artifact file to preview it in Analyze.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel panel-block analyze-feedback">
               <div class="panel-header">
                 <h3 data-i18n="feedback.title">Feedback</h3>
                 <p data-i18n="feedback.desc">Capture expert reviews and ratings.</p>
@@ -468,7 +520,7 @@
               </div>
             </div>
 
-            <div class="panel panel-block">
+            <div class="panel panel-block analyze-experiment">
               <div class="panel-header">
                 <h3 data-i18n="experiment.title">Experiment</h3>
                 <p data-i18n="experiment.desc">Log wet-lab outcomes and metrics.</p>
@@ -534,7 +586,7 @@
               </div>
             </div>
 
-            <div class="panel panel-block span-2">
+            <div class="panel panel-block span-2 analyze-report">
               <div class="panel-header">
                 <h3 data-i18n="report.title">Report</h3>
                 <p data-i18n="report.desc">Generate a consolidated run summary.</p>
@@ -557,6 +609,12 @@
                 <div class="form-row report-actions">
                   <button id="loadReport" class="ghost" data-i18n="report.load">Load</button>
                   <button id="generateReport" class="ghost" data-i18n="report.generate">Generate</button>
+                  <button id="viewReportRendered" class="ghost" data-i18n="report.viewRendered">
+                    Rendered View
+                  </button>
+                  <button id="exportRunPackage" class="ghost" data-i18n="report.exportPackage">
+                    Export Package
+                  </button>
                   <button id="saveReport" class="primary" data-i18n="report.save">Save</button>
                 </div>
                 <div id="reportStatus" class="hint"></div>
@@ -590,6 +648,90 @@
                 </div>
                 <div class="status-subtitle" data-i18n="report.links">Artifact Links</div>
                 <div id="reportArtifactLinks" class="report-links"></div>
+              </div>
+            </div>
+
+            <div class="panel panel-block span-2 analyze-runcompare">
+              <div class="panel-header">
+                <h3 data-i18n="analyze.runCompare.title">Run-to-Run Compare</h3>
+                <p data-i18n="analyze.runCompare.desc">
+                  Compare pLDDT, RMSD, SoluProt, and pass-rate deltas versus another run.
+                </p>
+              </div>
+              <div class="status-card feedback-card">
+                <div class="form-row run-compare-controls">
+                  <label>
+                    <span data-i18n="analyze.runCompare.baseline">Baseline Run</span>
+                    <select id="runCompareBaseline"></select>
+                  </label>
+                  <div class="run-compare-actions">
+                    <button id="runCompareRefresh" class="ghost" data-i18n="analyze.runCompare.refresh">
+                      Compare
+                    </button>
+                    <button id="runCompareDetails" class="ghost hidden" data-i18n="analyze.runCompare.details">
+                      View Details
+                    </button>
+                  </div>
+                </div>
+                <div id="runCompareSummary" class="comparison-summary">
+                  <div class="placeholder" data-i18n="analyze.runCompare.placeholder">
+                    Select a baseline run to load run-to-run deltas.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel panel-block span-2 analyze-hitlist">
+              <div class="panel-header">
+                <h3 data-i18n="analyze.hitList.title">Hit List</h3>
+                <p data-i18n="analyze.hitList.desc">
+                  Weighted ranking of final candidates with score cutoff filtering.
+                </p>
+              </div>
+              <div class="status-card feedback-card">
+                <div class="hit-list-controls">
+                  <label>
+                    <span data-i18n="analyze.hitList.cutoff">Score Cutoff</span>
+                    <input id="hitListCutoff" type="range" min="0" max="100" step="1" value="0" />
+                    <span id="hitListCutoffValue" class="hint-inline">0</span>
+                  </label>
+                  <label>
+                    <span data-i18n="analyze.hitList.limit">Rows</span>
+                    <input id="hitListLimit" type="number" min="10" max="500" step="10" value="120" />
+                  </label>
+                  <div class="hit-list-weights">
+                    <label>
+                      <span data-i18n="analyze.hitList.weight.soluprot">SoluProt W</span>
+                      <input id="hitWeightSoluprot" type="number" step="0.05" min="0" value="0.4" />
+                    </label>
+                    <label>
+                      <span data-i18n="analyze.hitList.weight.plddt">pLDDT W</span>
+                      <input id="hitWeightPlddt" type="number" step="0.05" min="0" value="0.3" />
+                    </label>
+                    <label>
+                      <span data-i18n="analyze.hitList.weight.rmsd">RMSD W</span>
+                      <input id="hitWeightRmsd" type="number" step="0.05" min="0" value="0.2" />
+                    </label>
+                    <label>
+                      <span data-i18n="analyze.hitList.weight.novelty">Novelty W</span>
+                      <input id="hitWeightNovelty" type="number" step="0.05" min="0" value="0.1" />
+                    </label>
+                  </div>
+                  <div class="hit-list-actions">
+                    <button id="hitListRefresh" class="ghost" data-i18n="analyze.hitList.refresh">
+                      Refresh
+                    </button>
+                    <button id="hitListDetails" class="ghost hidden" data-i18n="analyze.hitList.details">
+                      View Details
+                    </button>
+                  </div>
+                </div>
+                <div id="hitListSummary" class="score-row score-row-compact"></div>
+                <div id="hitListTable" class="hit-list-table-wrap">
+                  <div class="placeholder" data-i18n="analyze.hitList.placeholder">
+                    Load a run to build the hit list.
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -736,6 +878,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260303_refactor1"></script>
+    <script type="module" src="./app.js?v=20260304_analyze_layout3"></script>
   </body>
 </html>

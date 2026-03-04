@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import time
 import uuid
+import zipfile
 from typing import Any
 
 from .bio.fasta import FastaRecord
@@ -1433,8 +1434,14 @@ def _build_comparison_summary(
             "af2_candidate_total": af2_candidates_src,
             "af2_selected_total": af2_selected_src,
             "af2_pass_rate": _safe_ratio(af2_selected_src, af2_candidates_src),
-            "retention_backbone_to_soluprot_passed": _safe_ratio(sol_passed_src, backbone_src),
-            "retention_backbone_to_af2_selected": _safe_ratio(af2_selected_src, backbone_src),
+            "retention_backbone_to_soluprot_passed": _safe_ratio(
+                min(sol_passed_src, backbone_src),
+                backbone_src,
+            ),
+            "retention_backbone_to_af2_selected": _safe_ratio(
+                min(af2_selected_src, backbone_src),
+                backbone_src,
+            ),
         }
 
     backbone_total = 0
@@ -1452,8 +1459,14 @@ def _build_comparison_summary(
             "af2_candidate_total": af2_candidate_total,
             "af2_selected_total": af2_selected_total,
             "af2_pass_rate": _safe_ratio(af2_selected_total, af2_candidate_total),
-            "retention_backbone_to_soluprot_passed": _safe_ratio(sol_passed, backbone_total),
-            "retention_backbone_to_af2_selected": _safe_ratio(af2_selected_total, backbone_total),
+            "retention_backbone_to_soluprot_passed": _safe_ratio(
+                min(sol_passed, backbone_total),
+                backbone_total,
+            ),
+            "retention_backbone_to_af2_selected": _safe_ratio(
+                min(af2_selected_total, backbone_total),
+                backbone_total,
+            ),
         },
         "by_source": funnel_by_source,
     }
@@ -1966,6 +1979,223 @@ def _append_extended_comparison_lines(
     lines.append("")
 
 
+def _compact_error_message(err: object, *, max_chars: int = 220) -> str:
+    text = _as_text(err).replace("\r", "\n").strip()
+    if not text:
+        return "-"
+    first_line = ""
+    for raw_line in text.split("\n"):
+        candidate = raw_line.strip()
+        if candidate:
+            first_line = candidate
+            break
+    if not first_line:
+        first_line = text
+    first_line = re.sub(r"\s+", " ", first_line).strip()
+    if len(first_line) > max_chars:
+        return first_line[: max(1, max_chars - 1)].rstrip() + "…"
+    return first_line
+
+
+def _format_ratio(value: object) -> str:
+    if isinstance(value, (int, float)):
+        return f"{float(value) * 100.0:.1f}%"
+    return "-"
+
+
+def _format_metric(value: object, digits: int) -> str:
+    if isinstance(value, (int, float)):
+        return f"{float(value):.{digits}f}"
+    return "-"
+
+
+def _append_report_snapshot_lines(
+    lines: list[str],
+    *,
+    comparison_summary: dict[str, object] | None,
+    lang: str = "en",
+) -> None:
+    if not isinstance(comparison_summary, dict):
+        return
+    is_ko = str(lang).lower().startswith("ko")
+    funnel = comparison_summary.get("funnel") if isinstance(comparison_summary.get("funnel"), dict) else {}
+    overall = funnel.get("overall") if isinstance(funnel.get("overall"), dict) else {}
+    distributions = (
+        comparison_summary.get("distributions") if isinstance(comparison_summary.get("distributions"), dict) else {}
+    )
+    wt_vs_design = (
+        comparison_summary.get("wt_vs_design") if isinstance(comparison_summary.get("wt_vs_design"), dict) else {}
+    )
+    if not overall and not distributions and not wt_vs_design:
+        return
+
+    completeness = _completeness_flags(comparison_summary)
+    lines.append("## 핵심 요약" if is_ko else "## Executive Snapshot")
+    lines.append(
+        (
+            f"- 백본={int(overall.get('backbone_count') or 0)}"
+            f", SoluProt 점수 대상={int(overall.get('soluprot_total') or 0)}"
+        )
+        if is_ko
+        else (
+            f"- Backbones={int(overall.get('backbone_count') or 0)}, "
+            f"SoluProt-scored designs={int(overall.get('soluprot_total') or 0)}"
+        )
+    )
+    lines.append(
+        (
+            f"- SoluProt 통과={int(overall.get('soluprot_passed') or 0)}/"
+            f"{int(overall.get('soluprot_total') or 0)} ({_format_ratio(overall.get('soluprot_pass_rate'))})"
+        )
+        if is_ko
+        else (
+            f"- SoluProt pass={int(overall.get('soluprot_passed') or 0)}/"
+            f"{int(overall.get('soluprot_total') or 0)} ({_format_ratio(overall.get('soluprot_pass_rate'))})"
+        )
+    )
+    lines.append(
+        (
+            f"- AF2 선발={int(overall.get('af2_selected_total') or 0)}/"
+            f"{int(overall.get('af2_candidate_total') or 0)} ({_format_ratio(overall.get('af2_pass_rate'))})"
+        )
+        if is_ko
+        else (
+            f"- AF2 selected={int(overall.get('af2_selected_total') or 0)}/"
+            f"{int(overall.get('af2_candidate_total') or 0)} ({_format_ratio(overall.get('af2_pass_rate'))})"
+        )
+    )
+    sol_dist = distributions.get("soluprot") if isinstance(distributions.get("soluprot"), dict) else {}
+    plddt_dist = distributions.get("plddt") if isinstance(distributions.get("plddt"), dict) else {}
+    rmsd_dist = distributions.get("rmsd") if isinstance(distributions.get("rmsd"), dict) else {}
+    lines.append(
+        (
+            "- 중앙값: "
+            f"SoluProt={_format_metric(sol_dist.get('median'), 3)}, "
+            f"pLDDT={_format_metric(plddt_dist.get('median'), 1)}, "
+            f"RMSD={_format_metric(rmsd_dist.get('median'), 2)}"
+        )
+        if is_ko
+        else (
+            "- Medians: "
+            f"SoluProt={_format_metric(sol_dist.get('median'), 3)}, "
+            f"pLDDT={_format_metric(plddt_dist.get('median'), 1)}, "
+            f"RMSD={_format_metric(rmsd_dist.get('median'), 2)}"
+        )
+    )
+    sol_delta = (
+        wt_vs_design.get("soluprot", {}).get("delta_design_minus_wt")
+        if isinstance(wt_vs_design.get("soluprot"), dict)
+        else None
+    )
+    plddt_delta = (
+        wt_vs_design.get("plddt", {}).get("delta_design_minus_wt")
+        if isinstance(wt_vs_design.get("plddt"), dict)
+        else None
+    )
+    rmsd_delta = (
+        wt_vs_design.get("rmsd", {}).get("delta_design_minus_wt")
+        if isinstance(wt_vs_design.get("rmsd"), dict)
+        else None
+    )
+    if any(isinstance(v, (int, float)) for v in [sol_delta, plddt_delta, rmsd_delta]):
+        sol_text = f"{float(sol_delta):+.3f}" if isinstance(sol_delta, (int, float)) else "-"
+        plddt_text = f"{float(plddt_delta):+.1f}" if isinstance(plddt_delta, (int, float)) else "-"
+        rmsd_text = f"{float(rmsd_delta):+.2f}" if isinstance(rmsd_delta, (int, float)) else "-"
+        lines.append(
+            (
+                f"- WT 대비 Δ: SoluProt={sol_text}, pLDDT={plddt_text}, RMSD={rmsd_text}"
+            )
+            if is_ko
+            else (
+                f"- Δ vs WT: SoluProt={sol_text}, pLDDT={plddt_text}, RMSD={rmsd_text}"
+            )
+        )
+    lines.append(
+        (
+            f"- 데이터 완전성: RFD3={'yes' if completeness.get('has_rfd3') else 'no'}, "
+            f"BioEmu={'yes' if completeness.get('has_bioemu') else 'no'}, "
+            f"WT compare={'on' if completeness.get('wt_compare_enabled') else 'off'}, "
+            f"AF2 selected={int(completeness.get('af2_selected') or 0)}"
+        )
+        if is_ko
+        else (
+            f"- Data completeness: RFD3={'yes' if completeness.get('has_rfd3') else 'no'}, "
+            f"BioEmu={'yes' if completeness.get('has_bioemu') else 'no'}, "
+            f"WT compare={'on' if completeness.get('wt_compare_enabled') else 'off'}, "
+            f"AF2 selected={int(completeness.get('af2_selected') or 0)}"
+        )
+    )
+    lines.append("")
+
+
+def _append_top_hit_lines(
+    lines: list[str],
+    *,
+    run_root: Path,
+    request: dict[str, object] | None,
+    summary: dict[str, object] | None,
+    lang: str = "en",
+    top_n: int = 10,
+) -> None:
+    is_ko = str(lang).lower().startswith("ko")
+    rows = _build_hit_list_rows(
+        run_root=run_root,
+        request=request,
+        summary=summary,
+        weights={"soluprot": 0.4, "plddt": 0.3, "rmsd": 0.2, "novelty": 0.1},
+        rmsd_ref=5.0,
+    )
+    lines.append("## 주요 후보 (Hit List)" if is_ko else "## Top Candidate Hit List")
+    if not rows:
+        lines.append("- 후보 점수 데이터를 계산할 수 없습니다." if is_ko else "- Candidate ranking data is not available.")
+        lines.append("")
+        return
+    stats = _hit_list_stats(rows)
+    lines.append(
+        (
+            f"- 총 {len(rows)}개 후보, 점수 중앙값={_format_metric(stats.get('score_median'), 1)}"
+        )
+        if is_ko
+        else (
+            f"- {len(rows)} candidates ranked, median score={_format_metric(stats.get('score_median'), 1)}"
+        )
+    )
+    lines.append("| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | AF2 selected |")
+    lines.append("|---:|---|---|---:|---:|---:|---:|---:|---|")
+    for row in rows[: max(1, int(top_n))]:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    str(row.get("rank") or "-"),
+                    str(row.get("seq_id") or "-"),
+                    str(row.get("source") or "-"),
+                    _format_metric(row.get("tier"), 2),
+                    _format_metric(row.get("score"), 1),
+                    _format_metric(row.get("soluprot"), 3),
+                    _format_metric(row.get("plddt"), 1),
+                    _format_metric(row.get("rmsd"), 2),
+                    "yes" if bool(row.get("af2_selected")) else "no",
+                ]
+            )
+            + " |"
+        )
+    best = rows[0] if rows else None
+    if isinstance(best, dict):
+        lines.append(
+            (
+                f"- 최고 후보: {best.get('seq_id') or '-'} "
+                f"(score={_format_metric(best.get('score'), 1)}, tier={_format_metric(best.get('tier'), 2)})"
+            )
+            if is_ko
+            else (
+                f"- Top candidate: {best.get('seq_id') or '-'} "
+                f"(score={_format_metric(best.get('score'), 1)}, tier={_format_metric(best.get('tier'), 2)})"
+            )
+        )
+    lines.append("")
+
+
 def _build_report_text(
     *,
     run_id: str,
@@ -2027,7 +2257,9 @@ def _build_report_text(
         if isinstance(errors, list) and errors:
             lines.append("- Errors:")
             for err in errors[:5]:
-                lines.append(f"  - {err}")
+                lines.append(f"  - {_compact_error_message(err)}")
+            if len(errors) > 5:
+                lines.append(f"  - ... (+{len(errors) - 5} more)")
         tiers = summary.get("tiers")
         if isinstance(tiers, list) and tiers:
             lines.append(f"- Tiers: {len(tiers)}")
@@ -2055,6 +2287,7 @@ def _build_report_text(
     design_metrics = _collect_design_metrics(run_root, summary)
     source_metrics = _collect_source_metrics(run_root, summary)
     comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
+    _append_report_snapshot_lines(lines, comparison_summary=comparison_summary, lang="en")
     if wt_metrics or (request and request.get("wt_compare")):
         lines.append("## WT Comparison")
         enabled = bool(request.get("wt_compare")) if request else False
@@ -2160,6 +2393,7 @@ def _build_report_text(
 
     _append_source_comparison_lines(lines, source_metrics=source_metrics, lang="en")
     _append_extended_comparison_lines(lines, comparison_summary=comparison_summary, lang="en")
+    _append_top_hit_lines(lines, run_root=run_root, request=request, summary=summary, lang="en", top_n=10)
 
     if agent_items:
         lines.append("## Agent Panel")
@@ -2340,7 +2574,9 @@ def _build_report_text_ko(
         if isinstance(errors, list) and errors:
             lines.append("- 오류:")
             for err in errors[:5]:
-                lines.append(f"  - {err}")
+                lines.append(f"  - {_compact_error_message(err)}")
+            if len(errors) > 5:
+                lines.append(f"  - ... (+{len(errors) - 5} more)")
         tiers = summary.get("tiers")
         if isinstance(tiers, list) and tiers:
             lines.append(f"- 티어 수: {len(tiers)}")
@@ -2368,6 +2604,7 @@ def _build_report_text_ko(
     design_metrics = _collect_design_metrics(run_root, summary)
     source_metrics = _collect_source_metrics(run_root, summary)
     comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
+    _append_report_snapshot_lines(lines, comparison_summary=comparison_summary, lang="ko")
     if wt_metrics or (request and request.get("wt_compare")):
         lines.append("## WT 비교")
         enabled = bool(request.get("wt_compare")) if request else False
@@ -2473,6 +2710,7 @@ def _build_report_text_ko(
 
     _append_source_comparison_lines(lines, source_metrics=source_metrics, lang="ko")
     _append_extended_comparison_lines(lines, comparison_summary=comparison_summary, lang="ko")
+    _append_top_hit_lines(lines, run_root=run_root, request=request, summary=summary, lang="ko", top_n=10)
 
     if agent_items:
         lines.append("## 에이전트 패널")
@@ -2746,6 +2984,501 @@ def _get_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, 
         summary=summary_payload,
     )
     return out
+
+
+def _load_run_request_summary(run_root: Path) -> tuple[dict[str, object] | None, dict[str, object] | None]:
+    request = _load_json_file(run_root / "request.json")
+    summary = _load_json_file(run_root / "summary.json")
+    return request, summary
+
+
+def _to_float_or_none(value: object) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _comparison_snapshot(comparison: dict[str, object] | None) -> dict[str, float | None]:
+    if not isinstance(comparison, dict):
+        return {
+            "soluprot_median": None,
+            "plddt_median": None,
+            "rmsd_median": None,
+            "soluprot_pass_rate": None,
+            "af2_pass_rate": None,
+            "backbone_count": None,
+        }
+    wt = comparison.get("wt_vs_design") if isinstance(comparison.get("wt_vs_design"), dict) else {}
+    funnel = comparison.get("funnel") if isinstance(comparison.get("funnel"), dict) else {}
+    overall = funnel.get("overall") if isinstance(funnel.get("overall"), dict) else {}
+    sol = wt.get("soluprot") if isinstance(wt.get("soluprot"), dict) else {}
+    plddt = wt.get("plddt") if isinstance(wt.get("plddt"), dict) else {}
+    rmsd = wt.get("rmsd") if isinstance(wt.get("rmsd"), dict) else {}
+    return {
+        "soluprot_median": _to_float_or_none(sol.get("design_median")),
+        "plddt_median": _to_float_or_none(plddt.get("design_median")),
+        "rmsd_median": _to_float_or_none(rmsd.get("design_median")),
+        "soluprot_pass_rate": _to_float_or_none(overall.get("soluprot_pass_rate")),
+        "af2_pass_rate": _to_float_or_none(overall.get("af2_pass_rate")),
+        "backbone_count": _to_float_or_none(overall.get("backbone_count")),
+    }
+
+
+def _compute_comparison_delta(
+    current: dict[str, float | None], baseline: dict[str, float | None]
+) -> dict[str, float | None]:
+    out: dict[str, float | None] = {}
+    for key, value in current.items():
+        base = baseline.get(key)
+        if value is None or base is None:
+            out[key] = None
+            continue
+        out[key] = float(value - base)
+    return out
+
+
+def _completeness_flags(comparison: dict[str, object] | None) -> dict[str, object]:
+    source = (
+        comparison.get("source_compare")
+        if isinstance(comparison, dict) and isinstance(comparison.get("source_compare"), dict)
+        else {}
+    )
+    funnel = (
+        comparison.get("funnel") if isinstance(comparison, dict) and isinstance(comparison.get("funnel"), dict) else {}
+    )
+    overall = funnel.get("overall") if isinstance(funnel.get("overall"), dict) else {}
+    rfd3 = source.get("rfd3") if isinstance(source.get("rfd3"), dict) else {}
+    bioemu = source.get("bioemu") if isinstance(source.get("bioemu"), dict) else {}
+    has_rfd3 = int(rfd3.get("backbone_count") or 0) > 0
+    has_bioemu = int(bioemu.get("backbone_count") or 0) > 0
+    return {
+        "has_rfd3": has_rfd3,
+        "has_bioemu": has_bioemu,
+        "bioemu_only": has_bioemu and not has_rfd3,
+        "rfd3_missing": not has_rfd3,
+        "bioemu_missing": not has_bioemu,
+        "wt_compare_enabled": bool(comparison.get("wt_compare_enabled")) if isinstance(comparison, dict) else False,
+        "af2_candidates": int(overall.get("af2_candidate_total") or 0),
+        "af2_selected": int(overall.get("af2_selected_total") or 0),
+    }
+
+
+def _pick_baseline_run_id(output_root: str, run_id: str) -> str | None:
+    runs = list_runs(output_root, limit=200)
+    for item in runs:
+        rid = str(item or "").strip()
+        if not rid or rid == run_id:
+            continue
+        return rid
+    return None
+
+
+def _compare_runs(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(arguments.get("run_id") or "").strip()
+    if not run_id:
+        raise ValueError("run_id is required")
+    baseline_run_id = str(arguments.get("baseline_run_id") or "").strip() or None
+    if baseline_run_id is None:
+        baseline_run_id = _pick_baseline_run_id(runner.output_root, run_id)
+    if not baseline_run_id:
+        raise ValueError("baseline_run_id is required when no prior run exists")
+
+    current_root = resolve_run_path(runner.output_root, run_id)
+    baseline_root = resolve_run_path(runner.output_root, baseline_run_id)
+    if not current_root.exists():
+        raise ValueError("run_id not found")
+    if not baseline_root.exists():
+        raise ValueError("baseline_run_id not found")
+
+    current_request, current_summary = _load_run_request_summary(current_root)
+    baseline_request, baseline_summary = _load_run_request_summary(baseline_root)
+    current_comparison = _build_comparison_summary(
+        run_root=current_root,
+        request=current_request,
+        summary=current_summary,
+    )
+    baseline_comparison = _build_comparison_summary(
+        run_root=baseline_root,
+        request=baseline_request,
+        summary=baseline_summary,
+    )
+    current_metrics = _comparison_snapshot(current_comparison)
+    baseline_metrics = _comparison_snapshot(baseline_comparison)
+    delta_metrics = _compute_comparison_delta(current_metrics, baseline_metrics)
+    return {
+        "run_id": run_id,
+        "baseline_run_id": baseline_run_id,
+        "current": current_metrics,
+        "baseline": baseline_metrics,
+        "delta": delta_metrics,
+        "completeness": {
+            "current": _completeness_flags(current_comparison),
+            "baseline": _completeness_flags(baseline_comparison),
+        },
+    }
+
+
+def _normalize_hit_weights(raw: object | None) -> dict[str, float]:
+    defaults = {"soluprot": 0.4, "plddt": 0.3, "rmsd": 0.2, "novelty": 0.1}
+    if not isinstance(raw, dict):
+        return defaults
+    out: dict[str, float] = {}
+    for key in defaults:
+        value = raw.get(key)
+        if isinstance(value, (int, float)):
+            out[key] = max(0.0, float(value))
+        else:
+            out[key] = defaults[key]
+    if sum(out.values()) <= 0.0:
+        return defaults
+    return out
+
+
+def _clamp01(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
+
+def _build_hit_list_rows(
+    *,
+    run_root: Path,
+    request: dict[str, object] | None,
+    summary: dict[str, object] | None,
+    weights: dict[str, float],
+    rmsd_ref: float,
+) -> list[dict[str, object]]:
+    if not isinstance(summary, dict):
+        return []
+    tiers = summary.get("tiers")
+    if not isinstance(tiers, list):
+        return []
+    target_sequence = _extract_primary_target_sequence(request)
+    total_weight = float(sum(max(0.0, float(w)) for w in weights.values()))
+    rows: list[dict[str, object]] = []
+
+    for tier in tiers:
+        if not isinstance(tier, dict):
+            continue
+        raw_tier = tier.get("tier")
+        if raw_tier is None:
+            continue
+        try:
+            tier_num = float(raw_tier)
+        except Exception:
+            continue
+        tier_key = _tier_key(tier_num)
+        tier_dir = run_root / "tiers" / tier_key
+        samples = tier.get("proteinmpnn_samples") if isinstance(tier.get("proteinmpnn_samples"), list) else []
+
+        sol_scores: dict[str, float] = {}
+        passed_ids: set[str] = set()
+        sol = _load_json_file(tier_dir / "soluprot.json")
+        if isinstance(sol, dict):
+            raw_scores = sol.get("scores")
+            if isinstance(raw_scores, dict):
+                for seq_id, raw_score in raw_scores.items():
+                    if isinstance(raw_score, (int, float)):
+                        sol_scores[str(seq_id)] = float(raw_score)
+            raw_passed = sol.get("passed_ids")
+            if isinstance(raw_passed, list):
+                passed_ids = {str(x) for x in raw_passed if str(x).strip()}
+
+        af2_scores: dict[str, float] = {}
+        af2_rmsd: dict[str, float] = {}
+        af2_selected: set[str] = set()
+        af2_candidates: set[str] = set()
+        af2 = _load_json_file(tier_dir / "af2_scores.json")
+        if isinstance(af2, dict):
+            raw_af2_scores = af2.get("scores")
+            if isinstance(raw_af2_scores, dict):
+                for seq_id, raw_score in raw_af2_scores.items():
+                    if isinstance(raw_score, (int, float)):
+                        af2_scores[str(seq_id)] = float(raw_score)
+            raw_rmsd = af2.get("rmsd_scores")
+            if isinstance(raw_rmsd, dict):
+                for seq_id, raw_score in raw_rmsd.items():
+                    if isinstance(raw_score, (int, float)):
+                        af2_rmsd[str(seq_id)] = float(raw_score)
+            raw_selected = af2.get("selected_ids")
+            if isinstance(raw_selected, list):
+                af2_selected = {str(x) for x in raw_selected if str(x).strip()}
+            raw_candidates = af2.get("candidate_ids")
+            if isinstance(raw_candidates, list):
+                af2_candidates = {str(x) for x in raw_candidates if str(x).strip()}
+
+        for sample in samples:
+            if not isinstance(sample, dict):
+                continue
+            seq_id = str(sample.get("id") or "").strip()
+            if not seq_id:
+                continue
+            sequence = _normalize_sequence(sample.get("sequence"))
+            meta = sample.get("meta") if isinstance(sample.get("meta"), dict) else {}
+            source = _normalize_backbone_source(meta.get("backbone_source") if isinstance(meta, dict) else None)
+            soluprot = sol_scores.get(seq_id)
+            plddt = af2_scores.get(seq_id)
+            rmsd = af2_rmsd.get(seq_id)
+            wt_identity = _sequence_identity(target_sequence or "", sequence) if target_sequence else None
+            novelty = (1.0 - wt_identity) if wt_identity is not None else None
+
+            component_scores: dict[str, float] = {}
+            if soluprot is not None:
+                component_scores["soluprot"] = _clamp01(soluprot)
+            if plddt is not None:
+                component_scores["plddt"] = _clamp01(plddt / 100.0)
+            if rmsd is not None:
+                component_scores["rmsd"] = 1.0 - _clamp01(rmsd / max(1e-6, float(rmsd_ref)))
+            if novelty is not None:
+                component_scores["novelty"] = _clamp01(novelty)
+
+            used_weight = 0.0
+            weighted_sum = 0.0
+            for key, weight in weights.items():
+                score = component_scores.get(key)
+                if score is None:
+                    continue
+                ww = max(0.0, float(weight))
+                if ww <= 0.0:
+                    continue
+                used_weight += ww
+                weighted_sum += ww * score
+            score_norm = (weighted_sum / used_weight) if used_weight > 0 else None
+            coverage = (used_weight / total_weight) if total_weight > 0 else 0.0
+            composite_score = (score_norm * 100.0 * coverage) if score_norm is not None else None
+
+            ranked_path = tier_dir / "af2" / _safe_id(seq_id) / "ranked_0.pdb"
+            ranked_rel = (
+                f"tiers/{tier_key}/af2/{_safe_id(seq_id)}/ranked_0.pdb" if ranked_path.exists() else None
+            )
+            rows.append(
+                {
+                    "seq_id": seq_id,
+                    "tier": tier_num,
+                    "source": source,
+                    "sequence": sequence,
+                    "soluprot": soluprot,
+                    "plddt": plddt,
+                    "rmsd": rmsd,
+                    "wt_identity": wt_identity,
+                    "novelty": novelty,
+                    "soluprot_passed": seq_id in passed_ids,
+                    "af2_candidate": seq_id in af2_candidates or seq_id in af2_scores,
+                    "af2_selected": seq_id in af2_selected,
+                    "component_scores": component_scores,
+                    "score_norm": score_norm,
+                    "score": composite_score,
+                    "coverage": coverage,
+                    "af2_ranked_pdb_path": ranked_rel,
+                }
+            )
+
+    rows.sort(
+        key=lambda row: (
+            row.get("score") is not None,
+            float(row.get("score") or 0.0),
+            float(row.get("plddt") or 0.0),
+            -float(row.get("rmsd") or 0.0),
+            float(row.get("soluprot") or 0.0),
+        ),
+        reverse=True,
+    )
+    for idx, row in enumerate(rows, start=1):
+        row["rank"] = idx
+    return rows
+
+
+def _hit_list_stats(rows: list[dict[str, object]]) -> dict[str, object]:
+    score_values = [float(row["score"]) for row in rows if isinstance(row.get("score"), (int, float))]
+    plddt_values = [float(row["plddt"]) for row in rows if isinstance(row.get("plddt"), (int, float))]
+    rmsd_values = [float(row["rmsd"]) for row in rows if isinstance(row.get("rmsd"), (int, float))]
+    sol_values = [float(row["soluprot"]) for row in rows if isinstance(row.get("soluprot"), (int, float))]
+    return {
+        "count": len(rows),
+        "score_median": _median(score_values),
+        "score_p90": _percentile_from_sorted(sorted(score_values), 0.90) if score_values else None,
+        "plddt_median": _median(plddt_values),
+        "rmsd_median": _median(rmsd_values),
+        "soluprot_median": _median(sol_values),
+    }
+
+
+def _get_hit_list(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(arguments.get("run_id") or "").strip()
+    if not run_id:
+        raise ValueError("run_id is required")
+    root = resolve_run_path(runner.output_root, run_id)
+    if not root.exists():
+        raise ValueError("run_id not found")
+    limit = max(1, _as_int(arguments.get("limit"), 120))
+    min_score = _as_float(arguments.get("min_score"), 0.0)
+    rmsd_ref = max(0.1, _as_float(arguments.get("rmsd_ref"), 5.0))
+    request, summary = _load_run_request_summary(root)
+    comparison_summary = _build_comparison_summary(run_root=root, request=request, summary=summary)
+    weights = _normalize_hit_weights(arguments.get("weights"))
+    rows = _build_hit_list_rows(
+        run_root=root,
+        request=request,
+        summary=summary,
+        weights=weights,
+        rmsd_ref=rmsd_ref,
+    )
+    filtered = [
+        row
+        for row in rows
+        if (row.get("score") is None and min_score <= 0.0)
+        or (isinstance(row.get("score"), (int, float)) and float(row.get("score")) >= float(min_score))
+    ]
+    sliced = filtered[:limit]
+    return {
+        "run_id": run_id,
+        "generated_at": _now_iso(),
+        "weights": weights,
+        "min_score": float(min_score),
+        "rmsd_ref": float(rmsd_ref),
+        "total_rows": len(rows),
+        "filtered_rows": len(filtered),
+        "rows": sliced,
+        "stats": _hit_list_stats(filtered),
+        "completeness": _completeness_flags(comparison_summary),
+    }
+
+
+def _csv_escape(value: object) -> str:
+    text = str(value if value is not None else "")
+    if any(ch in text for ch in [",", "\"", "\n", "\r"]):
+        return "\"" + text.replace("\"", "\"\"") + "\""
+    return text
+
+
+def _to_json_bytes(payload: object) -> bytes:
+    return (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+
+
+def _export_results_package(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(arguments.get("run_id") or "").strip()
+    if not run_id:
+        raise ValueError("run_id is required")
+    run_root = resolve_run_path(runner.output_root, run_id)
+    if not run_root.exists():
+        raise ValueError("run_id not found")
+
+    include_top_n = max(1, min(200, _as_int(arguments.get("include_top_n"), 10)))
+    weights = _normalize_hit_weights(arguments.get("weights"))
+    request, summary = _load_run_request_summary(run_root)
+    comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
+    hit_rows = _build_hit_list_rows(
+        run_root=run_root,
+        request=request,
+        summary=summary,
+        weights=weights,
+        rmsd_ref=max(0.1, _as_float(arguments.get("rmsd_ref"), 5.0)),
+    )
+    top_rows = hit_rows[:include_top_n]
+
+    export_dir = ensure_dir(run_root / "exports")
+    stamp = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
+    zip_name = f"result_package_{stamp}.zip"
+    zip_path = export_dir / zip_name
+    if zip_path.exists():
+        zip_name = f"result_package_{stamp}_{uuid.uuid4().hex[:8]}.zip"
+        zip_path = export_dir / zip_name
+
+    included: list[str] = []
+
+    def _write_file_if_exists(zf: zipfile.ZipFile, rel_path: str, arcname: str | None = None) -> None:
+        src = run_root / rel_path
+        if not src.exists() or not src.is_file():
+            return
+        name = arcname or rel_path
+        zf.write(src, arcname=name)
+        included.append(name)
+
+    with zipfile.ZipFile(zip_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for rel in [
+            "report.md",
+            "report_ko.md",
+            "comparisons.json",
+            "summary.json",
+            "request.json",
+            "status.json",
+            "backbones.json",
+            "wt/metrics.json",
+            "wt/af2/metrics.json",
+            "wt/af2/ranked_0.pdb",
+        ]:
+            _write_file_if_exists(zf, rel)
+        if "comparisons.json" not in included:
+            zf.writestr("comparisons.json", _to_json_bytes(comparison_summary))
+            included.append("comparisons.json")
+
+        tiers_root = run_root / "tiers"
+        if tiers_root.exists() and tiers_root.is_dir():
+            for tier_dir in sorted([p for p in tiers_root.iterdir() if p.is_dir()], key=lambda p: p.name):
+                tier_name = tier_dir.name
+                for name in ["soluprot.json", "af2_scores.json", "novelty.tsv"]:
+                    rel = f"tiers/{tier_name}/{name}"
+                    _write_file_if_exists(zf, rel)
+
+        zf.writestr("tables/hit_list_full.json", _to_json_bytes({"rows": hit_rows, "weights": weights}))
+        included.append("tables/hit_list_full.json")
+        zf.writestr("tables/hit_list_top.json", _to_json_bytes({"rows": top_rows, "weights": weights}))
+        included.append("tables/hit_list_top.json")
+
+        csv_header = [
+            "rank",
+            "seq_id",
+            "tier",
+            "source",
+            "score",
+            "soluprot",
+            "plddt",
+            "rmsd",
+            "wt_identity",
+            "novelty",
+            "soluprot_passed",
+            "af2_selected",
+            "af2_ranked_pdb_path",
+        ]
+        csv_lines = [",".join(csv_header)]
+        for row in top_rows:
+            csv_lines.append(
+                ",".join(
+                    _csv_escape(
+                        row.get(key if key != "af2_ranked_pdb_path" else "af2_ranked_pdb_path")
+                    )
+                    for key in csv_header
+                )
+            )
+        csv_payload = ("\n".join(csv_lines) + "\n").encode("utf-8")
+        zf.writestr("tables/hit_list_top.csv", csv_payload)
+        included.append("tables/hit_list_top.csv")
+
+        for row in top_rows:
+            pdb_rel = row.get("af2_ranked_pdb_path")
+            if not isinstance(pdb_rel, str) or not pdb_rel.strip():
+                continue
+            _write_file_if_exists(zf, pdb_rel)
+
+        manifest = {
+            "run_id": run_id,
+            "generated_at": _now_iso(),
+            "weights": weights,
+            "include_top_n": include_top_n,
+            "included_count": len(included),
+            "included_files": included,
+            "completeness": _completeness_flags(comparison_summary),
+        }
+        zf.writestr("manifest.json", _to_json_bytes(manifest))
+        included.append("manifest.json")
+
+    rel_path = f"exports/{zip_name}"
+    return {
+        "run_id": run_id,
+        "path": rel_path,
+        "size_bytes": zip_path.stat().st_size,
+        "included_count": len(included),
+        "include_top_n": include_top_n,
+        "weights": weights,
+    }
 
 
 def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = True) -> PipelineRequest:
@@ -3176,6 +3909,63 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.compare_runs",
+            "description": "Compare key run metrics against a baseline run.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "baseline_run_id": {"type": "string"},
+                },
+                "required": ["run_id"],
+            },
+        },
+        {
+            "name": "pipeline.get_hit_list",
+            "description": "Build and rank final candidates using weighted scoring.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "limit": {"type": "integer"},
+                    "min_score": {"type": "number"},
+                    "rmsd_ref": {"type": "number"},
+                    "weights": {
+                        "type": "object",
+                        "properties": {
+                            "soluprot": {"type": "number"},
+                            "plddt": {"type": "number"},
+                            "rmsd": {"type": "number"},
+                            "novelty": {"type": "number"},
+                        },
+                    },
+                },
+                "required": ["run_id"],
+            },
+        },
+        {
+            "name": "pipeline.export_results_package",
+            "description": "Create a zip package with reports, tables, JSON, and top PDB artifacts.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "include_top_n": {"type": "integer"},
+                    "rmsd_ref": {"type": "number"},
+                    "weights": {
+                        "type": "object",
+                        "properties": {
+                            "soluprot": {"type": "number"},
+                            "plddt": {"type": "number"},
+                            "rmsd": {"type": "number"},
+                            "novelty": {"type": "number"},
+                        },
+                    },
+                },
+                "required": ["run_id"],
+            },
+        },
+        {
             "name": "pipeline.run_af2",
             "description": "Run AlphaFold2 on provided FASTA (no full pipeline).",
             "inputSchema": {
@@ -3401,6 +4191,15 @@ class ToolDispatcher:
 
         if name == "pipeline.get_report":
             return _get_report(self.runner, arguments)
+
+        if name == "pipeline.compare_runs":
+            return _compare_runs(self.runner, arguments)
+
+        if name == "pipeline.get_hit_list":
+            return _get_hit_list(self.runner, arguments)
+
+        if name == "pipeline.export_results_package":
+            return _export_results_package(self.runner, arguments)
 
         if name == "pipeline.plan_from_prompt":
             prompt = str(arguments.get("prompt") or "")
