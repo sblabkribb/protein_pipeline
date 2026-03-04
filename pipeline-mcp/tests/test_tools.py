@@ -417,6 +417,54 @@ class TestTools(unittest.TestCase):
             self.assertIn("funnel", comparison_summary)
             self.assertIn("tier_compare", comparison_summary)
 
+    def test_compare_runs_hit_list_and_export_package_tools(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out1 = dispatcher.call_tool(
+                "pipeline.run",
+                {"target_fasta": fasta, "dry_run": True, "num_seq_per_tier": 1, "conservation_tiers": [0.3]},
+            )
+            run1 = str(out1.get("run_id") or "")
+            self.assertTrue(run1)
+            out2 = dispatcher.call_tool(
+                "pipeline.run",
+                {"target_fasta": fasta, "dry_run": True, "num_seq_per_tier": 1, "conservation_tiers": [0.3]},
+            )
+            run2 = str(out2.get("run_id") or "")
+            self.assertTrue(run2)
+
+            compare = dispatcher.call_tool(
+                "pipeline.compare_runs",
+                {"run_id": run2, "baseline_run_id": run1},
+            )
+            self.assertEqual(compare.get("run_id"), run2)
+            self.assertEqual(compare.get("baseline_run_id"), run1)
+            self.assertIn("delta", compare)
+
+            hit_list = dispatcher.call_tool(
+                "pipeline.get_hit_list",
+                {"run_id": run2, "limit": 50, "min_score": 0.0},
+            )
+            self.assertEqual(hit_list.get("run_id"), run2)
+            self.assertIn("rows", hit_list)
+            self.assertIsInstance(hit_list.get("rows"), list)
+
+            dispatcher.call_tool("pipeline.generate_report", {"run_id": run2})
+            package = dispatcher.call_tool(
+                "pipeline.export_results_package",
+                {"run_id": run2, "include_top_n": 5},
+            )
+            path = str(package.get("path") or "")
+            self.assertTrue(path.endswith(".zip"))
+            self.assertTrue(path.startswith("exports/"))
+
+            listing = dispatcher.call_tool("pipeline.list_artifacts", {"run_id": run2, "limit": 500})
+            artifacts = listing.get("artifacts") or []
+            paths = {str(a.get("path")) for a in artifacts if isinstance(a, dict)}
+            self.assertIn(path, paths)
+
 
 
 
