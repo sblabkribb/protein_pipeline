@@ -1,4 +1,5 @@
 import {
+  artifactMetaFromPath,
   buildRunArguments,
   buildUserPrefix,
   createRunId,
@@ -83,6 +84,18 @@ function resolveApiBase() {
   return normalized;
 }
 
+function createSetupResiduePickerState() {
+  return {
+    pdbText: "",
+    sourceLabel: "",
+    sourceKey: "",
+    selection: {},
+    residueOrderByChain: {},
+    notice: "",
+    runningAf2: false,
+  };
+}
+
 const state = {
   apiBase: resolveApiBase(),
   user: loadUser(),
@@ -104,11 +117,17 @@ const state = {
   answerMeta: {},
   chainRanges: null,
   artifacts: [],
+  artifactMetaByPath: {},
   artifactFilters: {
     stage: "all",
     tier: "all",
     type: "all",
   },
+  artifactComparison: null,
+  artifactComparisonRunId: "",
+  monitorNeedsReport: false,
+  artifactCompareLeftPath: "",
+  artifactCompareRightPath: "",
   runs: [],
   runModeById: {},
   progressByRunId: {},
@@ -122,6 +141,7 @@ const state = {
   reportModalFilename: "report.md",
   showBioemuCountOptions: false,
   showRfd3CountOptions: false,
+  setupResiduePicker: createSetupResiduePickerState(),
 };
 
 if (state.apiBase && state.apiBase !== normalizeApiBase(savedApiBase)) {
@@ -196,6 +216,12 @@ const el = {
   artifactTierFilter: document.getElementById("artifactTierFilter"),
   artifactTypeFilter: document.getElementById("artifactTypeFilter"),
   refreshArtifacts: document.getElementById("refreshArtifacts"),
+  artifactComparisonSummary: document.getElementById("artifactComparisonSummary"),
+  artifactCompareLeft: document.getElementById("artifactCompareLeft"),
+  artifactCompareRight: document.getElementById("artifactCompareRight"),
+  artifactCompareRun: document.getElementById("artifactCompareRun"),
+  artifactCompareClear: document.getElementById("artifactCompareClear"),
+  artifactGenerateReport: document.getElementById("artifactGenerateReport"),
   artifactPreview: document.getElementById("artifactPreview"),
   agentPanelList: document.getElementById("agentPanelList"),
   agentPanelStatus: document.getElementById("agentPanelStatus"),
@@ -305,6 +331,33 @@ const I18N = {
     "setup.hint": "Complete required inputs to enable execution.",
     "setup.runStatus.empty": "Run status: -",
     "setup.runStatus.line": "Run status: {id} · {stage} / {state} · {updated}",
+    "setup.residuePicker.title": "Residue Picker (Optional)",
+    "setup.residuePicker.help":
+      "Select residues from a structure and append them to fixed_positions_extra. If target_pdb is missing, run once to create target.pdb (AF2 target), then load it from the selected run.",
+    "setup.residuePicker.source": "Structure source: {source}",
+    "setup.residuePicker.source.none": "none",
+    "setup.residuePicker.loadTargetInput": "Load target_input PDB",
+    "setup.residuePicker.loadRfd3Input": "Load rfd3_input_pdb",
+    "setup.residuePicker.loadRunTarget": "Load selected run target.pdb",
+    "setup.residuePicker.runAf2": "Run AF2 from FASTA",
+    "setup.residuePicker.runAf2Running": "Running AF2 to generate a target structure...",
+    "setup.residuePicker.runAf2NeedsFasta": "Attach a FASTA/sequence in target_input first.",
+    "setup.residuePicker.runAf2NoResult": "AF2 completed but ranked_0.pdb was not found.",
+    "setup.residuePicker.runAf2Loaded": "AF2 structure loaded from {run}:{path}",
+    "setup.residuePicker.runAf2Failed": "AF2 run failed: {error}",
+    "setup.residuePicker.viewerPlaceholder": "Load a structure to start residue picking.",
+    "setup.residuePicker.viewerUnavailable": "3D viewer unavailable.",
+    "setup.residuePicker.selection.none": "No residues selected.",
+    "setup.residuePicker.selection.summary": "Selected residues: {summary}",
+    "setup.residuePicker.apply": "Apply to fixed_positions_extra",
+    "setup.residuePicker.clearSelection": "Clear selection",
+    "setup.residuePicker.note":
+      "Applied values use sequence-order indices per chain (query position space) for ProteinMPNN constraints.",
+    "setup.residuePicker.applied": "Applied {count} residue positions to fixed_positions_extra.",
+    "setup.residuePicker.loadFailed": "Failed to load structure: {error}",
+    "setup.residuePicker.noRun": "Select a run first.",
+    "setup.residuePicker.noSelection": "Select at least one residue.",
+    "setup.residuePicker.noPdb": "No PDB text available from this source.",
     "preflight.title": "Setup check",
     "preflight.ok": "No blocking issues found.",
     "preflight.blocked": "Fix the issues below before running.",
@@ -372,9 +425,34 @@ const I18N = {
     "artifacts.filter.stage": "Stage",
     "artifacts.filter.tier": "Tier",
     "artifacts.filter.type": "Type",
+    "artifacts.compare.title": "Comparison Summary",
+    "artifacts.compare.desc":
+      "WT-vs-design and RFD3-vs-BioEmu metrics from generated report artifacts.",
+    "artifacts.compare.placeholder": "Generate report to load comparison metrics.",
+    "artifacts.compare.noData": "Comparison data is not available for this run.",
+    "artifacts.compare.generateReport": "Generate Report",
+    "artifacts.compare.wt": "WT vs Design",
+    "artifacts.compare.source": "RFD3 vs BioEmu",
+    "artifacts.compare.metric": "Metric",
+    "artifacts.compare.wtValue": "WT",
+    "artifacts.compare.designMedian": "Design median",
+    "artifacts.compare.delta": "Delta",
+    "artifacts.compare.wtEnabled": "WT compare enabled: {enabled}",
+    "artifacts.compare.sourceName": "Source",
+    "artifacts.compare.backbones": "Backbones",
+    "artifacts.compare.passRate": "SoluProt pass",
+    "artifacts.compare.af2Selected": "AF2 selected",
+    "artifacts.compare.plddtMedian": "Median pLDDT",
+    "artifacts.compare.rmsdMedian": "Median RMSD",
     "artifacts.preview.title": "Artifact Preview",
     "artifacts.preview.desc": "3D structures, images, or text extracts.",
     "artifacts.preview.placeholder": "Select an artifact to preview it here.",
+    "artifacts.preview.compare.left": "WT/Reference 3D",
+    "artifacts.preview.compare.right": "Design 3D",
+    "artifacts.preview.compare.run": "Compare 3D",
+    "artifacts.preview.compare.clear": "Clear",
+    "artifacts.preview.compare.missing": "Select both left and right 3D artifacts first.",
+    "artifacts.preview.compare.failed": "3D comparison failed: {error}",
     "feedback.title": "Feedback",
     "feedback.desc": "Capture expert reviews and ratings.",
     "feedback.rating": "Rating",
@@ -490,9 +568,15 @@ const I18N = {
     "question.bioemuNumSamples.help": "Number of BioEmu samples to generate.",
     "question.bioemuMaxReturn.label": "BioEmu Return Count",
     "question.bioemuMaxReturn.help": "Maximum number of BioEmu structures to keep.",
+    "question.numSeqPerTier.label": "ProteinMPNN per Tier",
+    "question.numSeqPerTier.help": "Number of ProteinMPNN sequences to generate for each tier and backbone.",
     "question.af2MaxCandidatesPerTier.label": "AF2 per Tier (Top N)",
     "question.af2MaxCandidatesPerTier.help":
       "Run AF2 only for top N SoluProt-passed designs per tier (ranked by SoluProt score, 0 = all).",
+    "question.af2PlddtCutoff.label": "AF2 pLDDT Cutoff",
+    "question.af2PlddtCutoff.help": "Minimum pLDDT threshold for AF2 pass filtering (default: 85).",
+    "question.af2RmsdCutoff.label": "AF2 RMSD Cutoff",
+    "question.af2RmsdCutoff.help": "Maximum RMSD threshold (angstrom) for AF2 pass filtering (default: 2.0).",
     "question.rfd3MaxReturn.label": "RFD3 Return Count",
     "question.rfd3MaxReturn.help": "Maximum number of RFD3 backbone designs to keep.",
     "question.confirmRun.label": "Confirm Run",
@@ -704,6 +788,33 @@ const I18N = {
     "setup.hint": "필수 입력을 완료하면 실행할 수 있습니다.",
     "setup.runStatus.empty": "실행 상태: -",
     "setup.runStatus.line": "실행 상태: {id} · {stage} / {state} · {updated}",
+    "setup.residuePicker.title": "잔기 선택기 (선택)",
+    "setup.residuePicker.help":
+      "구조에서 잔기를 선택해 fixed_positions_extra에 추가합니다. target_pdb가 없으면 먼저 1회 실행해 target.pdb(AF2 target)를 만든 뒤, 선택한 run에서 불러오세요.",
+    "setup.residuePicker.source": "구조 소스: {source}",
+    "setup.residuePicker.source.none": "없음",
+    "setup.residuePicker.loadTargetInput": "target_input PDB 불러오기",
+    "setup.residuePicker.loadRfd3Input": "rfd3_input_pdb 불러오기",
+    "setup.residuePicker.loadRunTarget": "선택 run의 target.pdb 불러오기",
+    "setup.residuePicker.runAf2": "FASTA로 AF2 실행",
+    "setup.residuePicker.runAf2Running": "target 구조 생성을 위해 AF2를 실행 중입니다...",
+    "setup.residuePicker.runAf2NeedsFasta": "먼저 target_input에 FASTA/서열을 첨부하세요.",
+    "setup.residuePicker.runAf2NoResult": "AF2는 완료됐지만 ranked_0.pdb를 찾지 못했습니다.",
+    "setup.residuePicker.runAf2Loaded": "{run}:{path} 에서 AF2 구조를 불러왔습니다.",
+    "setup.residuePicker.runAf2Failed": "AF2 실행 실패: {error}",
+    "setup.residuePicker.viewerPlaceholder": "잔기 선택을 시작하려면 구조를 불러오세요.",
+    "setup.residuePicker.viewerUnavailable": "3D 뷰어를 사용할 수 없습니다.",
+    "setup.residuePicker.selection.none": "선택된 잔기가 없습니다.",
+    "setup.residuePicker.selection.summary": "선택 잔기: {summary}",
+    "setup.residuePicker.apply": "fixed_positions_extra에 반영",
+    "setup.residuePicker.clearSelection": "선택 초기화",
+    "setup.residuePicker.note":
+      "반영 값은 체인별 서열 순서 인덱스(query position) 기준으로 저장되어 ProteinMPNN 제약에 사용됩니다.",
+    "setup.residuePicker.applied": "{count}개 위치를 fixed_positions_extra에 반영했습니다.",
+    "setup.residuePicker.loadFailed": "구조 로드 실패: {error}",
+    "setup.residuePicker.noRun": "먼저 run을 선택하세요.",
+    "setup.residuePicker.noSelection": "최소 1개 잔기를 선택하세요.",
+    "setup.residuePicker.noPdb": "이 소스에서 사용할 PDB 텍스트가 없습니다.",
     "preflight.title": "설정 점검",
     "preflight.ok": "실행을 막는 문제는 없습니다.",
     "preflight.blocked": "아래 문제를 해결해야 실행할 수 있습니다.",
@@ -771,9 +882,33 @@ const I18N = {
     "artifacts.filter.stage": "단계",
     "artifacts.filter.tier": "티어",
     "artifacts.filter.type": "형식",
+    "artifacts.compare.title": "비교 요약",
+    "artifacts.compare.desc": "리포트에서 생성된 WT 비교와 RFD3/BioEmu 비교 지표를 보여줍니다.",
+    "artifacts.compare.placeholder": "리포트를 생성하면 비교 지표를 불러올 수 있습니다.",
+    "artifacts.compare.noData": "이 실행에는 비교 데이터가 없습니다.",
+    "artifacts.compare.generateReport": "리포트 생성",
+    "artifacts.compare.wt": "WT 대비 Design",
+    "artifacts.compare.source": "RFD3 대비 BioEmu",
+    "artifacts.compare.metric": "지표",
+    "artifacts.compare.wtValue": "WT",
+    "artifacts.compare.designMedian": "Design 중앙값",
+    "artifacts.compare.delta": "차이",
+    "artifacts.compare.wtEnabled": "WT 비교 사용: {enabled}",
+    "artifacts.compare.sourceName": "소스",
+    "artifacts.compare.backbones": "백본 수",
+    "artifacts.compare.passRate": "SoluProt 통과",
+    "artifacts.compare.af2Selected": "AF2 선발",
+    "artifacts.compare.plddtMedian": "pLDDT 중앙값",
+    "artifacts.compare.rmsdMedian": "RMSD 중앙값",
     "artifacts.preview.title": "아티팩트 미리보기",
     "artifacts.preview.desc": "3D 구조, 이미지, 텍스트 미리보기.",
     "artifacts.preview.placeholder": "아티팩트를 선택하면 여기서 미리보기를 볼 수 있습니다.",
+    "artifacts.preview.compare.left": "WT/기준 3D",
+    "artifacts.preview.compare.right": "Design 3D",
+    "artifacts.preview.compare.run": "3D 비교",
+    "artifacts.preview.compare.clear": "초기화",
+    "artifacts.preview.compare.missing": "좌/우 3D 아티팩트를 모두 선택하세요.",
+    "artifacts.preview.compare.failed": "3D 비교 실패: {error}",
     "feedback.title": "피드백",
     "feedback.desc": "전문가 평가와 등급을 기록합니다.",
     "feedback.rating": "평가",
@@ -889,9 +1024,15 @@ const I18N = {
     "question.bioemuNumSamples.help": "생성할 BioEmu 샘플 개수입니다.",
     "question.bioemuMaxReturn.label": "BioEmu 반환 개수",
     "question.bioemuMaxReturn.help": "보존할 BioEmu 구조 최대 개수입니다.",
+    "question.numSeqPerTier.label": "티어당 ProteinMPNN 개수",
+    "question.numSeqPerTier.help": "각 티어/백본마다 생성할 ProteinMPNN 서열 개수입니다.",
     "question.af2MaxCandidatesPerTier.label": "AF2 티어당 실행 개수 (상위 N개)",
     "question.af2MaxCandidatesPerTier.help":
       "티어별 SoluProt 통과 서열 중 상위 N개(점수 순)만 AF2를 실행합니다. 0이면 전체 실행.",
+    "question.af2PlddtCutoff.label": "AF2 pLDDT 컷오프",
+    "question.af2PlddtCutoff.help": "AF2 통과 필터링에 사용할 최소 pLDDT 임계값입니다. (기본값: 85)",
+    "question.af2RmsdCutoff.label": "AF2 RMSD 컷오프",
+    "question.af2RmsdCutoff.help": "AF2 통과 필터링에 사용할 최대 RMSD 임계값(Å)입니다. (기본값: 2.0)",
     "question.rfd3MaxReturn.label": "RFD3 반환 개수",
     "question.rfd3MaxReturn.help": "보존할 RFD3 백본 디자인 최대 개수입니다.",
     "question.confirmRun.label": "실행 확인",
@@ -1155,9 +1296,23 @@ const QUESTION_PRESETS = {
     labelKey: "question.bioemuMaxReturn.label",
     questionKey: "question.bioemuMaxReturn.help",
   },
+  num_seq_per_tier: {
+    labelKey: "question.numSeqPerTier.label",
+    questionKey: "question.numSeqPerTier.help",
+  },
   af2_max_candidates_per_tier: {
     labelKey: "question.af2MaxCandidatesPerTier.label",
     questionKey: "question.af2MaxCandidatesPerTier.help",
+  },
+  af2_plddt_cutoff: {
+    labelKey: "question.af2PlddtCutoff.label",
+    questionKey: "question.af2PlddtCutoff.help",
+    default: 85,
+  },
+  af2_rmsd_cutoff: {
+    labelKey: "question.af2RmsdCutoff.label",
+    questionKey: "question.af2RmsdCutoff.help",
+    default: 2.0,
   },
   rfd3_max_return_designs: {
     labelKey: "question.rfd3MaxReturn.label",
@@ -1572,6 +1727,8 @@ function setLanguage(lang) {
   refillSelect(el.experimentAssay, EXPERIMENT_ASSAYS, { includeEmpty: false });
   refillSelect(el.experimentResult, EXPERIMENT_RESULTS, { includeEmpty: false });
   refreshArtifactSelects();
+  renderArtifactComparisonSummary(state.artifactComparison);
+  updateMonitorReportActions();
   renderArtifactFilters(state.artifacts);
   renderArtifacts(state.artifacts);
   if (state.runs) renderRuns(state.runs);
@@ -1702,21 +1859,42 @@ function buildManualPlan(mode) {
         labelKey: "question.bioemuNumSamples.label",
         questionKey: "question.bioemuNumSamples.help",
         required: false,
-        default: 50,
+        default: 10,
       },
       {
         id: "bioemu_max_return_structures",
         labelKey: "question.bioemuMaxReturn.label",
         questionKey: "question.bioemuMaxReturn.help",
         required: false,
-        default: 50,
+        default: 10,
       },
       {
         id: "af2_max_candidates_per_tier",
         labelKey: "question.af2MaxCandidatesPerTier.label",
         questionKey: "question.af2MaxCandidatesPerTier.help",
         required: false,
-        default: 8,
+        default: 0,
+      },
+      {
+        id: "af2_plddt_cutoff",
+        labelKey: "question.af2PlddtCutoff.label",
+        questionKey: "question.af2PlddtCutoff.help",
+        required: false,
+        default: 85.0,
+      },
+      {
+        id: "af2_rmsd_cutoff",
+        labelKey: "question.af2RmsdCutoff.label",
+        questionKey: "question.af2RmsdCutoff.help",
+        required: false,
+        default: 2.0,
+      },
+      {
+        id: "num_seq_per_tier",
+        labelKey: "question.numSeqPerTier.label",
+        questionKey: "question.numSeqPerTier.help",
+        required: false,
+        default: 2,
       },
       {
         id: "design_chains",
@@ -1775,7 +1953,7 @@ function buildManualPlan(mode) {
         labelKey: "question.rfd3MaxReturn.label",
         questionKey: "question.rfd3MaxReturn.help",
         required: false,
-        default: 50,
+        default: 10,
       },
       {
         id: "diffdock_ligand",
@@ -1805,7 +1983,7 @@ function buildManualPlan(mode) {
         labelKey: "question.rfd3MaxReturn.label",
         questionKey: "question.rfd3MaxReturn.help",
         required: false,
-        default: 50,
+        default: 10,
       },
       {
         id: "pdb_strip_nonpositive_resseq",
@@ -1837,14 +2015,14 @@ function buildManualPlan(mode) {
         labelKey: "question.bioemuNumSamples.label",
         questionKey: "question.bioemuNumSamples.help",
         required: false,
-        default: 50,
+        default: 10,
       },
       {
         id: "bioemu_max_return_structures",
         labelKey: "question.bioemuMaxReturn.label",
         questionKey: "question.bioemuMaxReturn.help",
         required: false,
-        default: 50,
+        default: 10,
       }
     );
   }
@@ -1900,14 +2078,14 @@ function buildManualPlan(mode) {
         labelKey: "question.bioemuNumSamples.label",
         questionKey: "question.bioemuNumSamples.help",
         required: false,
-        default: 50,
+        default: 10,
       },
       {
         id: "bioemu_max_return_structures",
         labelKey: "question.bioemuMaxReturn.label",
         questionKey: "question.bioemuMaxReturn.help",
         required: false,
-        default: 50,
+        default: 10,
       }
     );
   }
@@ -1945,14 +2123,14 @@ function buildManualPlan(mode) {
         labelKey: "question.bioemuNumSamples.label",
         questionKey: "question.bioemuNumSamples.help",
         required: false,
-        default: 50,
+        default: 10,
       },
       {
         id: "bioemu_max_return_structures",
         labelKey: "question.bioemuMaxReturn.label",
         questionKey: "question.bioemuMaxReturn.help",
         required: false,
-        default: 50,
+        default: 10,
       }
     );
   }
@@ -2030,6 +2208,7 @@ function resetPlan({ keepMode = true } = {}) {
   state.answers = {};
   state.answerMeta = {};
   state.chainRanges = null;
+  resetSetupResiduePicker();
   const nextMode = keepMode ? state.runMode : "pipeline";
   setRunMode(nextMode);
 }
@@ -2174,6 +2353,7 @@ function refreshArtifactSelects() {
   if (el.experimentArtifact) {
     fillSelect(el.experimentArtifact, options);
   }
+  renderArtifactCompareSelects();
 }
 
 function initFeedbackUI() {
@@ -2517,6 +2697,13 @@ function setCurrentRunId(runId) {
   state.lastStatusKey = "";
   state.feedbackCount = 0;
   state.experimentCount = 0;
+  state.artifacts = [];
+  state.artifactMetaByPath = {};
+  state.artifactComparison = null;
+  state.artifactComparisonRunId = "";
+  state.monitorNeedsReport = false;
+  state.artifactCompareLeftPath = "";
+  state.artifactCompareRightPath = "";
   if (runId && !state.timingByRunId[runId]) state.timingByRunId[runId] = {};
   el.runIdValue.textContent = runId || "-";
   el.runStageValue.textContent = "-";
@@ -2545,6 +2732,11 @@ function setCurrentRunId(runId) {
   resetRunProgress();
   updateInlineStatus(null, runId);
   updateRunEligibility(state.plan?.questions || []);
+  renderArtifactFilters(state.artifacts);
+  renderArtifacts(state.artifacts);
+  refreshArtifactSelects();
+  renderArtifactComparisonSummary(null);
+  updateMonitorReportActions();
   if (state.runs) renderRuns(state.runs);
   refreshAgentPanel();
   refreshFeedback();
@@ -2662,56 +2854,66 @@ function resetInputs() {
   setMessage(t("run.reset"), "ai");
 }
 
+const PROTEIN_RESNAMES = new Set([
+  "ALA",
+  "ARG",
+  "ASN",
+  "ASP",
+  "CYS",
+  "GLN",
+  "GLU",
+  "GLY",
+  "HIS",
+  "ILE",
+  "LEU",
+  "LYS",
+  "MET",
+  "PHE",
+  "PRO",
+  "SER",
+  "THR",
+  "TRP",
+  "TYR",
+  "VAL",
+  "ASX",
+  "GLX",
+  "XLE",
+  "UNK",
+  "MSE",
+  "SEC",
+  "PYL",
+  "SEP",
+  "TPO",
+  "PTR",
+  "HYP",
+  "HID",
+  "HIE",
+  "HIP",
+  "CYX",
+]);
+
+function normalizeChainId(chainId) {
+  const clean = String(chainId || "").trim();
+  return clean || "_";
+}
+
+function denormalizeChainId(chainId) {
+  return String(chainId || "") === "_" ? "" : String(chainId || "");
+}
+
+function isProteinAtomLine(line) {
+  if (line.startsWith("ATOM")) return true;
+  if (!line.startsWith("HETATM")) return false;
+  const resname = line.slice(17, 20).trim().toUpperCase();
+  return PROTEIN_RESNAMES.has(resname);
+}
+
 function parsePdbChainRanges(pdbText) {
-  const proteinResnames = new Set([
-    "ALA",
-    "ARG",
-    "ASN",
-    "ASP",
-    "CYS",
-    "GLN",
-    "GLU",
-    "GLY",
-    "HIS",
-    "ILE",
-    "LEU",
-    "LYS",
-    "MET",
-    "PHE",
-    "PRO",
-    "SER",
-    "THR",
-    "TRP",
-    "TYR",
-    "VAL",
-    "ASX",
-    "GLX",
-    "XLE",
-    "UNK",
-    "MSE",
-    "SEC",
-    "PYL",
-    "SEP",
-    "TPO",
-    "PTR",
-    "HYP",
-    "HID",
-    "HIE",
-    "HIP",
-    "CYX",
-  ]);
   const ranges = {};
   const lines = String(pdbText || "").split(/\r?\n/);
   for (const line of lines) {
-    if (line.startsWith("ATOM")) {
-      // ok
-    } else if (line.startsWith("HETATM")) {
-      const resname = line.slice(17, 20).trim().toUpperCase();
-      if (!proteinResnames.has(resname)) continue;
-    } else {
-      continue;
-    }
-    const chainId = (line[21] || "").trim() || "_";
+    if (!isProteinAtomLine(line)) continue;
+    const chainId = normalizeChainId(line[21] || "");
     const resSeq = parseInt(line.slice(22, 26).trim(), 10);
     if (!Number.isFinite(resSeq)) continue;
     const entry = ranges[chainId] || { min: resSeq, max: resSeq, minPos: null, maxPos: null };
@@ -2730,6 +2932,178 @@ function parsePdbChainRanges(pdbText) {
     }
   });
   return Object.keys(normalized).length ? normalized : null;
+}
+
+function parsePdbResidueOrderByChain(pdbText) {
+  const orderByChain = {};
+  const seenByChain = {};
+  const lines = String(pdbText || "").split(/\r?\n/);
+  for (const line of lines) {
+    if (!isProteinAtomLine(line)) continue;
+    const chainId = normalizeChainId(line[21] || "");
+    const resSeq = parseInt(line.slice(22, 26).trim(), 10);
+    if (!Number.isFinite(resSeq) || resSeq <= 0) continue;
+    if (!seenByChain[chainId]) seenByChain[chainId] = new Set();
+    const seen = seenByChain[chainId];
+    if (seen.has(resSeq)) continue;
+    seen.add(resSeq);
+    if (!orderByChain[chainId]) orderByChain[chainId] = [];
+    orderByChain[chainId].push(resSeq);
+  }
+  return orderByChain;
+}
+
+function normalizeResidueSelectionMap(raw) {
+  const out = {};
+  if (!raw || typeof raw !== "object") return out;
+  Object.entries(raw).forEach(([chain, values]) => {
+    const nums = (Array.isArray(values) ? values : [values])
+      .map((v) => Number.parseInt(v, 10))
+      .filter((v) => Number.isFinite(v) && v > 0);
+    if (nums.length) {
+      out[normalizeChainId(chain)] = Array.from(new Set(nums)).sort((a, b) => a - b);
+    }
+  });
+  return out;
+}
+
+function countSelectedResidues(selectionMap) {
+  return Object.values(selectionMap || {}).reduce(
+    (acc, list) => acc + (Array.isArray(list) ? list.length : 0),
+    0
+  );
+}
+
+function selectionSummaryText(selectionMap) {
+  const parts = [];
+  Object.entries(selectionMap || {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([chain, values]) => {
+      if (!Array.isArray(values) || values.length === 0) return;
+      const preview = values.slice(0, 8).join(",");
+      const suffix = values.length > 8 ? `,+${values.length - 8}` : "";
+      parts.push(`${chain}:${preview}${suffix}`);
+    });
+  return parts.join("; ");
+}
+
+function filterSelectionByResidueOrder(selectionMap, orderByChain) {
+  const normalized = normalizeResidueSelectionMap(selectionMap);
+  const filtered = {};
+  Object.entries(normalized).forEach(([chain, values]) => {
+    const allowed = new Set((orderByChain && orderByChain[chain]) || []);
+    const kept = values.filter((v) => allowed.has(v));
+    if (kept.length) filtered[chain] = kept;
+  });
+  return filtered;
+}
+
+function resetSetupResiduePicker() {
+  state.setupResiduePicker = createSetupResiduePickerState();
+}
+
+function setSetupResiduePickerStructure(pdbText, { sourceLabel = "", sourceKey = "" } = {}) {
+  const text = String(pdbText || "").trim();
+  if (!text) return false;
+  const residueOrderByChain = parsePdbResidueOrderByChain(text);
+  if (!Object.keys(residueOrderByChain).length) return false;
+  const nextSelection = filterSelectionByResidueOrder(state.setupResiduePicker.selection, residueOrderByChain);
+  state.setupResiduePicker = {
+    pdbText: text,
+    sourceLabel,
+    sourceKey,
+    selection: nextSelection,
+    residueOrderByChain,
+    notice: "",
+    runningAf2: false,
+  };
+  return true;
+}
+
+function normalizeFixedPositionsValue(raw) {
+  if (raw === null || raw === undefined || raw === "") return {};
+  let parsed = raw;
+  if (typeof raw === "string") {
+    const out = parseFixedPositionsExtra(raw);
+    if (out.error) return {};
+    parsed = out.value;
+  }
+  if (Array.isArray(parsed)) {
+    const nums = parsed
+      .map((v) => Number.parseInt(v, 10))
+      .filter((v) => Number.isFinite(v) && v > 0);
+    return nums.length ? { "*": Array.from(new Set(nums)).sort((a, b) => a - b) } : {};
+  }
+  if (!parsed || typeof parsed !== "object") return {};
+  const out = {};
+  Object.entries(parsed).forEach(([chain, values]) => {
+    const nums = (Array.isArray(values) ? values : [values])
+      .map((v) => Number.parseInt(v, 10))
+      .filter((v) => Number.isFinite(v) && v > 0);
+    if (nums.length) out[String(chain)] = Array.from(new Set(nums)).sort((a, b) => a - b);
+  });
+  return out;
+}
+
+function mergeFixedPositionsMap(baseMap, addMap) {
+  const merged = normalizeFixedPositionsValue(baseMap);
+  Object.entries(normalizeFixedPositionsValue(addMap)).forEach(([chain, values]) => {
+    const next = new Set((merged[chain] || []).map((v) => Number.parseInt(v, 10)));
+    values.forEach((v) => next.add(v));
+    const sorted = Array.from(next).filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+    if (sorted.length) merged[chain] = sorted;
+  });
+  return merged;
+}
+
+function selectedResiduesToQueryPositions(selectionMap, residueOrderByChain) {
+  const out = {};
+  Object.entries(normalizeResidueSelectionMap(selectionMap)).forEach(([chain, values]) => {
+    const order = Array.isArray(residueOrderByChain?.[chain]) ? residueOrderByChain[chain] : [];
+    if (!order.length) return;
+    const orderIndex = new Map(order.map((resi, idx) => [resi, idx + 1]));
+    const mapped = values
+      .map((resi) => orderIndex.get(resi))
+      .filter((idx) => Number.isFinite(idx) && idx > 0);
+    if (mapped.length) {
+      out[chain] = Array.from(new Set(mapped)).sort((a, b) => a - b);
+    }
+  });
+  return out;
+}
+
+function getTargetInputPdbText() {
+  const explicit = String(state.answers.target_pdb || "").trim();
+  if (explicit) return explicit;
+  const text = String(state.answers.target_input || "").trim();
+  if (!text) return "";
+  return detectTargetKey(text) === "target_pdb" ? text : "";
+}
+
+function getTargetInputFastaText() {
+  const explicit = String(state.answers.target_fasta || "").trim();
+  if (explicit) return explicit;
+  const text = String(state.answers.target_input || "").trim();
+  if (!text) return "";
+  return detectTargetKey(text) === "target_fasta" ? text : "";
+}
+
+function getRfd3InputPdbText() {
+  return String(state.answers.rfd3_input_pdb || "").trim();
+}
+
+function refreshChainRangesFromAnswers() {
+  const rfd3Text = getRfd3InputPdbText();
+  if (rfd3Text) {
+    updateChainRangesFromText(rfd3Text);
+    return;
+  }
+  const targetPdbText = getTargetInputPdbText();
+  if (targetPdbText) {
+    updateChainRangesFromText(targetPdbText);
+    return;
+  }
+  state.chainRanges = null;
 }
 
 function updateChainRangesFromText(text) {
@@ -2843,8 +3217,14 @@ function parseAnswerValue(id, raw) {
 
   if (ANSWER_FLOAT_KEYS.has(id)) {
     const n = Number.parseFloat(text);
-    if (Number.isFinite(n)) return { value: n, error: "" };
-    return { value: "", error: `${id} expects a number.` };
+    if (!Number.isFinite(n)) return { value: "", error: `${id} expects a number.` };
+    if (id === "af2_plddt_cutoff" && (n < 0 || n > 100)) {
+      return { value: "", error: "af2_plddt_cutoff must be between 0 and 100." };
+    }
+    if (id === "af2_rmsd_cutoff" && n <= 0) {
+      return { value: "", error: "af2_rmsd_cutoff must be greater than 0." };
+    }
+    return { value: n, error: "" };
   }
 
   if (ANSWER_FLOAT_LIST_KEYS.has(id)) {
@@ -3316,7 +3696,7 @@ function renderQuestions(questions) {
       showKey: "advanced.bioemuCounts.show",
       hideKey: "advanced.bioemuCounts.hide",
       enabled: state.showBioemuCountOptions,
-      summaryText: `samples=${state.answers.bioemu_num_samples ?? 50}, keep=${state.answers.bioemu_max_return_structures ?? 50}`,
+      summaryText: `samples=${state.answers.bioemu_num_samples ?? 10}, keep=${state.answers.bioemu_max_return_structures ?? 10}`,
       onToggle: (next) => {
         state.showBioemuCountOptions = Boolean(next);
       },
@@ -3337,7 +3717,7 @@ function renderQuestions(questions) {
       showKey: "advanced.rfd3Counts.show",
       hideKey: "advanced.rfd3Counts.hide",
       enabled: state.showRfd3CountOptions,
-      summaryText: `keep=${state.answers.rfd3_max_return_designs ?? 50}`,
+      summaryText: `keep=${state.answers.rfd3_max_return_designs ?? 10}`,
       onToggle: (next) => {
         state.showRfd3CountOptions = Boolean(next);
       },
@@ -3370,6 +3750,14 @@ function renderQuestions(questions) {
       input.type = ANSWER_INT_KEYS.has(q.id) || ANSWER_FLOAT_KEYS.has(q.id) ? "number" : "text";
       if (ANSWER_FLOAT_KEYS.has(q.id)) input.step = "0.01";
       if (ANSWER_INT_KEYS.has(q.id)) input.step = "1";
+      if (q.id === "af2_plddt_cutoff") {
+        input.min = "0";
+        input.max = "100";
+        input.step = "0.1";
+      } else if (q.id === "af2_rmsd_cutoff") {
+        input.min = "0.01";
+        input.step = "0.01";
+      }
     }
     if (multiline) {
       input.rows = 3;
@@ -3531,8 +3919,34 @@ function renderQuestions(questions) {
         if (!file) {
           state.answers[q.id] = "";
           state.answerMeta[q.id] = {};
+          if (q.id === "target_input") {
+            state.answers.target_fasta = "";
+            state.answers.target_pdb = "";
+            state.answerMeta.target_pdb = {};
+          }
           fileName.textContent = t("attachment.none");
           meta.textContent = t("attachment.none");
+          let rerender = false;
+          if (q.id === "target_input") {
+            if (state.setupResiduePicker.sourceKey === "target_input") {
+              resetSetupResiduePicker();
+            }
+            refreshChainRangesFromAnswers();
+            rerender = true;
+          }
+          if (q.id === "rfd3_input_pdb") {
+            if (state.setupResiduePicker.sourceKey === "rfd3_input_pdb") {
+              resetSetupResiduePicker();
+            }
+            if (state.runMode === "pipeline") {
+              state.answers.rfd3_contig = "";
+            }
+            refreshChainRangesFromAnswers();
+            rerender = true;
+          }
+          if (rerender) {
+            renderQuestions(state.plan?.questions || []);
+          }
           updateRunEligibility(normalizedQuestions);
           return;
         }
@@ -3543,24 +3957,73 @@ function renderQuestions(questions) {
           const kb = Math.max(1, Math.round(file.size / 1024));
           fileName.textContent = file.name;
           meta.textContent = t("attachment.attached", { name: file.name, kb });
+          let rerender = false;
           if (q.id === "target_input") {
             const key = detectTargetKey(text);
+            state.answers.target_fasta = "";
+            state.answers.target_pdb = "";
+            state.answerMeta.target_pdb = {};
             if (key === "target_pdb") {
-              updateChainRangesFromText(text);
-            } else {
-              state.chainRanges = null;
+              state.answers.target_pdb = text;
+              state.answerMeta.target_pdb = { fileName: file.name };
+              const loaded = setSetupResiduePickerStructure(text, {
+                sourceLabel: t("setup.residuePicker.loadTargetInput"),
+                sourceKey: "target_input",
+              });
+              if (!loaded && state.setupResiduePicker.sourceKey === "target_input") {
+                resetSetupResiduePicker();
+              }
+            } else if (key === "target_fasta") {
+              state.answers.target_fasta = text;
+            } else if (state.setupResiduePicker.sourceKey === "target_input") {
+              resetSetupResiduePicker();
             }
-            renderQuestions(state.plan?.questions || []);
+            refreshChainRangesFromAnswers();
+            rerender = true;
           }
           if (q.id === "rfd3_input_pdb") {
-            updateChainRangesFromText(text);
+            const loaded = setSetupResiduePickerStructure(text, {
+              sourceLabel: t("setup.residuePicker.loadRfd3Input"),
+              sourceKey: "rfd3_input_pdb",
+            });
+            if (!loaded && state.setupResiduePicker.sourceKey === "rfd3_input_pdb") {
+              resetSetupResiduePicker();
+            }
+            refreshChainRangesFromAnswers();
+            rerender = true;
+          }
+          if (rerender) {
             renderQuestions(state.plan?.questions || []);
           }
         } catch (err) {
           state.answers[q.id] = "";
           state.answerMeta[q.id] = {};
+          if (q.id === "target_input") {
+            state.answers.target_fasta = "";
+            state.answers.target_pdb = "";
+            state.answerMeta.target_pdb = {};
+          }
           fileName.textContent = t("attachment.none");
           meta.textContent = t("attachment.failed", { error: err.message });
+          let rerender = false;
+          if (q.id === "target_input" && state.setupResiduePicker.sourceKey === "target_input") {
+            resetSetupResiduePicker();
+            rerender = true;
+          }
+          if (q.id === "rfd3_input_pdb" && state.setupResiduePicker.sourceKey === "rfd3_input_pdb") {
+            resetSetupResiduePicker();
+            if (state.runMode === "pipeline") {
+              state.answers.rfd3_contig = "";
+            }
+            rerender = true;
+          }
+          if (q.id === "target_input" || q.id === "rfd3_input_pdb") {
+            refreshChainRangesFromAnswers();
+            rerender = true;
+          }
+          if (rerender) {
+            renderQuestions(state.plan?.questions || []);
+          }
         }
         updateRunEligibility(normalizedQuestions);
       });
@@ -3569,13 +4032,33 @@ function renderQuestions(questions) {
         fileInput.value = "";
         state.answers[q.id] = "";
         state.answerMeta[q.id] = {};
+        if (q.id === "target_input") {
+          state.answers.target_fasta = "";
+          state.answers.target_pdb = "";
+          state.answerMeta.target_pdb = {};
+        }
         fileName.textContent = t("attachment.none");
         meta.textContent = t("attachment.none");
-        if (q.id === "target_input" || q.id === "rfd3_input_pdb") {
-          state.chainRanges = null;
+        let rerender = false;
+        if (q.id === "target_input") {
+          if (state.setupResiduePicker.sourceKey === "target_input") {
+            resetSetupResiduePicker();
+          }
+          refreshChainRangesFromAnswers();
+          rerender = true;
+        }
+        if (q.id === "rfd3_input_pdb") {
+          if (state.setupResiduePicker.sourceKey === "rfd3_input_pdb") {
+            resetSetupResiduePicker();
+          }
+          refreshChainRangesFromAnswers();
+          rerender = true;
         }
         if (q.id === "rfd3_input_pdb" && state.runMode === "pipeline") {
           state.answers.rfd3_contig = "";
+        }
+        if (rerender) {
+          renderQuestions(state.plan?.questions || []);
         }
         updateRunEligibility(normalizedQuestions);
       });
@@ -3595,6 +4078,371 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(list);
+    appendInputCard(card);
+  }
+
+  const showResiduePicker =
+    state.runMode === "pipeline" && normalizedQuestions.some((q) => q.id === "fixed_positions_extra");
+  if (showResiduePicker) {
+    const card = document.createElement("div");
+    card.className = "question-card setup-residue-picker";
+
+    const title = document.createElement("div");
+    title.className = "question-title";
+    title.textContent = t("setup.residuePicker.title");
+
+    const help = document.createElement("div");
+    help.className = "question-help";
+    help.textContent = t("setup.residuePicker.help");
+
+    const source = document.createElement("div");
+    source.className = "question-summary";
+    source.textContent = t("setup.residuePicker.source", {
+      source: state.setupResiduePicker.sourceLabel || t("setup.residuePicker.source.none"),
+    });
+
+    const controls = document.createElement("div");
+    controls.className = "setup-residue-picker-controls";
+
+    const loadTargetBtn = document.createElement("button");
+    loadTargetBtn.type = "button";
+    loadTargetBtn.className = "ghost";
+    loadTargetBtn.textContent = t("setup.residuePicker.loadTargetInput");
+
+    const loadRfd3Btn = document.createElement("button");
+    loadRfd3Btn.type = "button";
+    loadRfd3Btn.className = "ghost";
+    loadRfd3Btn.textContent = t("setup.residuePicker.loadRfd3Input");
+
+    const loadRunBtn = document.createElement("button");
+    loadRunBtn.type = "button";
+    loadRunBtn.className = "ghost";
+    loadRunBtn.textContent = t("setup.residuePicker.loadRunTarget");
+
+    const runAf2Btn = document.createElement("button");
+    runAf2Btn.type = "button";
+    runAf2Btn.className = "ghost";
+    runAf2Btn.textContent = t("setup.residuePicker.runAf2");
+
+    const targetPdbText = getTargetInputPdbText();
+    const targetFastaText = getTargetInputFastaText();
+    const rfd3PdbText = getRfd3InputPdbText();
+    const pickerBusy = Boolean(state.setupResiduePicker.runningAf2);
+    const selectedRunIdForPicker = String(el.setupRunSelector?.value || state.currentRunId || "").trim();
+    loadTargetBtn.disabled = pickerBusy || !targetPdbText;
+    loadRfd3Btn.disabled = pickerBusy || !rfd3PdbText;
+    loadRunBtn.disabled = pickerBusy || !selectedRunIdForPicker;
+    runAf2Btn.disabled = pickerBusy || !targetFastaText;
+
+    const loadStructureFromText = (pdbText, sourceLabel, sourceKey) => {
+      const text = String(pdbText || "").trim();
+      if (!text) {
+        state.setupResiduePicker.notice = t("setup.residuePicker.noPdb");
+        renderQuestions(state.plan?.questions || []);
+        return;
+      }
+      const loaded = setSetupResiduePickerStructure(text, { sourceLabel, sourceKey });
+      if (!loaded) {
+        state.setupResiduePicker.notice = t("setup.residuePicker.noPdb");
+      } else {
+        state.setupResiduePicker.notice = "";
+      }
+      renderQuestions(state.plan?.questions || []);
+    };
+
+    loadTargetBtn.addEventListener("click", () => {
+      loadStructureFromText(targetPdbText, t("setup.residuePicker.loadTargetInput"), "target_input");
+    });
+    loadRfd3Btn.addEventListener("click", () => {
+      loadStructureFromText(rfd3PdbText, t("setup.residuePicker.loadRfd3Input"), "rfd3_input_pdb");
+    });
+    loadRunBtn.addEventListener("click", async () => {
+      const runId = String(el.setupRunSelector?.value || state.currentRunId || "").trim();
+      if (!runId) {
+        state.setupResiduePicker.notice = t("setup.residuePicker.noRun");
+        renderQuestions(state.plan?.questions || []);
+        return;
+      }
+      try {
+        const result = await apiCall("pipeline.read_artifact", {
+          run_id: runId,
+          path: "target.pdb",
+          max_bytes: 2_000_000,
+        });
+        const text = String(result?.text || "").trim();
+        if (!text) {
+          state.setupResiduePicker.notice = t("setup.residuePicker.noPdb");
+          renderQuestions(state.plan?.questions || []);
+          return;
+        }
+        const label = `${runId}:target.pdb`;
+        const loaded = setSetupResiduePickerStructure(text, {
+          sourceLabel: label,
+          sourceKey: `run_target:${runId}`,
+        });
+        if (!loaded) {
+          state.setupResiduePicker.notice = t("setup.residuePicker.noPdb");
+        } else {
+          state.setupResiduePicker.notice = "";
+        }
+      } catch (err) {
+        state.setupResiduePicker.notice = t("setup.residuePicker.loadFailed", { error: err.message });
+      }
+      renderQuestions(state.plan?.questions || []);
+    });
+
+    runAf2Btn.addEventListener("click", async () => {
+      const fastaText = String(getTargetInputFastaText() || "").trim();
+      if (!fastaText) {
+        state.setupResiduePicker.notice = t("setup.residuePicker.runAf2NeedsFasta");
+        renderQuestions(state.plan?.questions || []);
+        return;
+      }
+
+      const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
+      const runId = createRunId(`${prefix}_picker_af2`);
+      state.setupResiduePicker.runningAf2 = true;
+      state.setupResiduePicker.notice = t("setup.residuePicker.runAf2Running");
+      renderQuestions(state.plan?.questions || []);
+
+      try {
+        const result = await apiCall("pipeline.af2_predict", {
+          run_id: runId,
+          target_fasta: fastaText,
+        });
+        const outRunId = String(result?.run_id || runId);
+        const candidates = [];
+        const summaryAf2 = result?.summary?.af2;
+        if (summaryAf2 && typeof summaryAf2 === "object") {
+          Object.keys(summaryAf2).forEach((seqId) => {
+            const clean = String(seqId || "").trim();
+            if (!clean) return;
+            candidates.push(`af2/${clean}/ranked_0.pdb`);
+          });
+        }
+        try {
+          const listed = await apiCall("pipeline.list_artifacts", {
+            run_id: outRunId,
+            max_depth: 5,
+            limit: 300,
+          });
+          const listedPaths = Array.isArray(listed?.artifacts)
+            ? listed.artifacts
+                .map((item) => String(item?.path || ""))
+                .filter((path) => /\/ranked_0\.pdb$/i.test(path))
+                .sort()
+            : [];
+          listedPaths.forEach((path) => candidates.push(path));
+        } catch {
+          // best-effort candidate discovery
+        }
+        candidates.push("af2/target/ranked_0.pdb");
+        candidates.push("af2/sequence/ranked_0.pdb");
+
+        const tried = new Set();
+        let selectedPath = "";
+        let selectedPdb = "";
+        for (const path of candidates) {
+          const normalizedPath = String(path || "").trim();
+          if (!normalizedPath || tried.has(normalizedPath)) continue;
+          tried.add(normalizedPath);
+          try {
+            const artifact = await apiCall("pipeline.read_artifact", {
+              run_id: outRunId,
+              path: normalizedPath,
+              max_bytes: 2_000_000,
+            });
+            const text = String(artifact?.text || "").trim();
+            if (!text) continue;
+            selectedPath = normalizedPath;
+            selectedPdb = text;
+            break;
+          } catch {
+            continue;
+          }
+        }
+
+        if (!selectedPdb) {
+          throw new Error(t("setup.residuePicker.runAf2NoResult"));
+        }
+
+        state.answers.target_fasta = fastaText;
+        state.answers.target_pdb = selectedPdb;
+        state.answerMeta.target_pdb = { fileName: `${outRunId}:${selectedPath}` };
+        refreshChainRangesFromAnswers();
+        const loaded = setSetupResiduePickerStructure(selectedPdb, {
+          sourceLabel: `${outRunId}:${selectedPath}`,
+          sourceKey: `af2_picker:${outRunId}`,
+        });
+        state.setupResiduePicker.notice = loaded
+          ? t("setup.residuePicker.runAf2Loaded", { run: outRunId, path: selectedPath })
+          : t("setup.residuePicker.noPdb");
+        await refreshRuns();
+      } catch (err) {
+        state.setupResiduePicker.notice = t("setup.residuePicker.runAf2Failed", { error: err.message });
+      } finally {
+        state.setupResiduePicker.runningAf2 = false;
+        renderQuestions(state.plan?.questions || []);
+      }
+    });
+
+    controls.appendChild(runAf2Btn);
+    controls.appendChild(loadTargetBtn);
+    controls.appendChild(loadRfd3Btn);
+    controls.appendChild(loadRunBtn);
+
+    const viewerWrap = document.createElement("div");
+    viewerWrap.className = "setup-residue-picker-view";
+
+    const selectionText = document.createElement("div");
+    selectionText.className = "question-summary";
+
+    const notice = document.createElement("div");
+    notice.className = "question-summary setup-residue-picker-notice";
+    if (state.setupResiduePicker.notice) {
+      notice.textContent = state.setupResiduePicker.notice;
+    } else {
+      notice.textContent = "";
+    }
+
+    const updateSelectionSummary = () => {
+      const normalized = normalizeResidueSelectionMap(state.setupResiduePicker.selection);
+      state.setupResiduePicker.selection = normalized;
+      const summary = selectionSummaryText(normalized);
+      if (summary) {
+        selectionText.textContent = t("setup.residuePicker.selection.summary", { summary });
+      } else {
+        selectionText.textContent = t("setup.residuePicker.selection.none");
+      }
+    };
+    updateSelectionSummary();
+
+    if (!state.setupResiduePicker.pdbText) {
+      const placeholder = document.createElement("div");
+      placeholder.className = "placeholder";
+      placeholder.textContent = t("setup.residuePicker.viewerPlaceholder");
+      viewerWrap.appendChild(placeholder);
+    } else if (!window.$3Dmol) {
+      const placeholder = document.createElement("div");
+      placeholder.className = "placeholder";
+      placeholder.textContent = t("setup.residuePicker.viewerUnavailable");
+      viewerWrap.appendChild(placeholder);
+    } else {
+      const viewerEl = document.createElement("div");
+      viewerEl.className = "viewer3d setup-residue-picker-viewer";
+      viewerWrap.appendChild(viewerEl);
+
+      const viewer = window.$3Dmol.createViewer(viewerEl, { backgroundColor: "white" });
+      viewer.addModel(state.setupResiduePicker.pdbText, "pdb");
+      const residueSetByChain = {};
+      Object.entries(state.setupResiduePicker.residueOrderByChain || {}).forEach(([chain, values]) => {
+        residueSetByChain[chain] = new Set(values);
+      });
+
+      const redrawViewer = () => {
+        viewer.setStyle({}, { cartoon: { color: "spectrum" } });
+        Object.entries(normalizeResidueSelectionMap(state.setupResiduePicker.selection)).forEach(
+          ([chain, values]) => {
+            values.forEach((resi) => {
+              const selector = { resi };
+              const chainId = denormalizeChainId(chain);
+              if (chainId) selector.chain = chainId;
+              viewer.setStyle(selector, {
+                cartoon: { color: "#d9480f" },
+                stick: { radius: 0.2, color: "#d9480f" },
+              });
+            });
+          }
+        );
+        viewer.render();
+      };
+
+      viewer.setClickable({}, true, (atom) => {
+        const chain = normalizeChainId(atom?.chain || "");
+        const resi = Number.parseInt(atom?.resi, 10);
+        if (!Number.isFinite(resi) || resi <= 0) return;
+        const allowed = residueSetByChain[chain];
+        if (!allowed || !allowed.has(resi)) return;
+
+        const next = normalizeResidueSelectionMap(state.setupResiduePicker.selection);
+        const chainSet = new Set(next[chain] || []);
+        if (chainSet.has(resi)) {
+          chainSet.delete(resi);
+        } else {
+          chainSet.add(resi);
+        }
+        const sorted = Array.from(chainSet).sort((a, b) => a - b);
+        if (sorted.length) {
+          next[chain] = sorted;
+        } else {
+          delete next[chain];
+        }
+        state.setupResiduePicker.selection = next;
+        state.setupResiduePicker.notice = "";
+        notice.textContent = "";
+        updateSelectionSummary();
+        redrawViewer();
+      });
+
+      viewer.zoomTo();
+      redrawViewer();
+    }
+
+    const actionRow = document.createElement("div");
+    actionRow.className = "setup-residue-picker-controls";
+
+    const applyBtn = document.createElement("button");
+    applyBtn.type = "button";
+    applyBtn.className = "primary";
+    applyBtn.textContent = t("setup.residuePicker.apply");
+    applyBtn.addEventListener("click", () => {
+      const mappedSelection = selectedResiduesToQueryPositions(
+        state.setupResiduePicker.selection,
+        state.setupResiduePicker.residueOrderByChain
+      );
+      const selectedCount = countSelectedResidues(mappedSelection);
+      if (!selectedCount) {
+        state.setupResiduePicker.notice = t("setup.residuePicker.noSelection");
+        renderQuestions(state.plan?.questions || []);
+        return;
+      }
+      const merged = mergeFixedPositionsMap(state.answers.fixed_positions_extra, mappedSelection);
+      state.answers.fixed_positions_extra = merged;
+      state.answerMeta.fixed_positions_extra = {
+        ...(state.answerMeta.fixed_positions_extra || {}),
+        error: "",
+        raw: JSON.stringify(merged),
+      };
+      state.setupResiduePicker.notice = t("setup.residuePicker.applied", { count: selectedCount });
+      renderQuestions(state.plan?.questions || []);
+    });
+
+    const clearSelectionBtn = document.createElement("button");
+    clearSelectionBtn.type = "button";
+    clearSelectionBtn.className = "ghost";
+    clearSelectionBtn.textContent = t("setup.residuePicker.clearSelection");
+    clearSelectionBtn.addEventListener("click", () => {
+      state.setupResiduePicker.selection = {};
+      state.setupResiduePicker.notice = "";
+      renderQuestions(state.plan?.questions || []);
+    });
+
+    actionRow.appendChild(applyBtn);
+    actionRow.appendChild(clearSelectionBtn);
+
+    const note = document.createElement("div");
+    note.className = "question-summary";
+    note.textContent = t("setup.residuePicker.note");
+
+    card.appendChild(title);
+    card.appendChild(help);
+    card.appendChild(source);
+    card.appendChild(controls);
+    card.appendChild(viewerWrap);
+    card.appendChild(selectionText);
+    card.appendChild(actionRow);
+    card.appendChild(note);
+    card.appendChild(notice);
     appendInputCard(card);
   }
 
@@ -3734,6 +4582,9 @@ function filterAnswersForMode(mode, answers) {
       "bioemu_num_samples",
       "bioemu_max_return_structures",
       "af2_max_candidates_per_tier",
+      "af2_plddt_cutoff",
+      "af2_rmsd_cutoff",
+      "num_seq_per_tier",
       "stop_after",
     ],
     bioemu: [
@@ -4177,9 +5028,10 @@ function renderArtifacts(list) {
   const filtered = list.filter((item) => {
     const path = String(item.path || "");
     if (filter && !path.toLowerCase().includes(filter)) return false;
-    const stage = stageFromPath(path);
+    const meta = artifactMetaForPath(path);
+    const stage = meta.stage;
     if (stageFilter !== "all" && stage !== stageFilter) return false;
-    const tier = tierFromPath(path);
+    const tier = meta.tier;
     if (tierFilter !== "all" && String(tier || "") !== String(tierFilter)) return false;
     const type = artifactTypeFromItem(item);
     if (typeFilter !== "all" && String(type || "") !== String(typeFilter)) return false;
@@ -4191,7 +5043,7 @@ function renderArtifacts(list) {
   }
   const groups = new Map();
   filtered.forEach((item) => {
-    const stage = stageFromPath(item.path);
+    const stage = artifactMetaForPath(item.path).stage;
     if (!groups.has(stage)) groups.set(stage, []);
     groups.get(stage).push(item);
   });
@@ -4215,11 +5067,12 @@ function renderArtifacts(list) {
     items.forEach((item) => {
       const div = document.createElement("div");
       div.className = "artifact-item";
-      const tier = tierFromPath(item.path);
+      const meta = artifactMetaForPath(item.path);
+      const tier = meta.tier;
       const type = artifactTypeFromItem(item);
       const tierLabel = t("artifacts.filter.tier");
       const tags = [];
-      tags.push(`<span class="stage-tag">${formatStageLabel(stage)}</span>`);
+      tags.push(`<span class="stage-tag">${formatStageLabel(meta.stage)}</span>`);
       if (tier) {
         tags.push(`<span class="stage-tag tier-tag">${tierLabel} ${tier}</span>`);
       }
@@ -4244,7 +5097,7 @@ async function previewArtifact(item) {
   if (item.type !== "file") return;
   const path = item.path;
 
-  if (/\.pdb$/i.test(path) || /\.sdf$/i.test(path)) {
+  if (isStructurePath(path)) {
     try {
       const result = await apiCall("pipeline.read_artifact", {
         run_id: state.currentRunId,
@@ -4253,6 +5106,12 @@ async function previewArtifact(item) {
       });
       const format = /\.sdf$/i.test(path) ? "sdf" : "pdb";
       render3dModel(result.text || "", format);
+      if (!state.artifactCompareLeftPath) {
+        state.artifactCompareLeftPath = path;
+      } else if (!state.artifactCompareRightPath && state.artifactCompareLeftPath !== path) {
+        state.artifactCompareRightPath = path;
+      }
+      renderArtifactCompareSelects();
     } catch (err) {
       el.artifactPreview.innerHTML = `<div class="placeholder">${t("artifact.preview.failed", {
         error: err.message,
@@ -4335,11 +5194,12 @@ function updateReportArtifactLinks(text) {
   matches.sort((a, b) => String(a.path).localeCompare(String(b.path)));
   el.reportArtifactLinks.innerHTML = "";
   matches.forEach((item) => {
+    const stage = artifactMetaForPath(item.path).stage;
     const link = document.createElement("button");
     link.type = "button";
     link.className = "report-link";
-    link.innerHTML = `<span>${item.path}</span><span class=\"stage-tag\">${stageFromPath(
-      item.path
+    link.innerHTML = `<span>${item.path}</span><span class=\"stage-tag\">${escapeHtml(
+      formatStageLabel(stage)
     )}</span>`;
     link.addEventListener("click", () => previewArtifact(item));
     el.reportArtifactLinks.appendChild(link);
@@ -4366,6 +5226,519 @@ function render3dModel(text, format) {
   }
   viewer.zoomTo();
   viewer.render();
+}
+
+function formatMetricValue(value, digits = 2, signed = false) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  const text = value.toFixed(digits);
+  if (signed && value > 0) return `+${text}`;
+  return text;
+}
+
+function localizedYesNo(value) {
+  const isKo = (state.lang || "en") === "ko";
+  return value ? (isKo ? "예" : "yes") : isKo ? "아니오" : "no";
+}
+
+function sourceLabel(source) {
+  if (source === "rfd3") return "RFD3";
+  if (source === "bioemu") return "BioEmu";
+  return (state.lang || "en") === "ko" ? "기타" : "Other";
+}
+
+function formatPassRate(sourceBucket) {
+  const total = Number(sourceBucket?.soluprot_total || 0);
+  const passed = Number(sourceBucket?.soluprot_passed || 0);
+  if (total <= 0) return "-";
+  const rate = (passed / total) * 100.0;
+  return `${passed}/${total} (${rate.toFixed(1)}%)`;
+}
+
+function parseNumberOrNull(raw) {
+  if (raw === null || raw === undefined) return null;
+  const text = String(raw).trim();
+  if (!text || text === "-") return null;
+  const matched = text.match(/[+-]?\d+(?:\.\d+)?/);
+  if (!matched) return null;
+  const num = Number(matched[0]);
+  return Number.isFinite(num) ? num : null;
+}
+
+function parsePassStat(raw) {
+  const text = String(raw || "");
+  const matched = text.match(/(\d+)\s*\/\s*(\d+)/);
+  if (!matched) return { passed: 0, total: 0, passRate: null };
+  const passed = Number(matched[1] || 0);
+  const total = Number(matched[2] || 0);
+  return {
+    passed,
+    total,
+    passRate: total > 0 ? passed / total : null,
+  };
+}
+
+function parseComparisonSummaryFromReportText(reportText) {
+  const text = String(reportText || "");
+  if (!text.trim()) return null;
+  const summary = {
+    version: 1,
+    generated_at: null,
+    wt_compare_enabled: false,
+    wt_vs_design: {
+      soluprot: {},
+      plddt: {},
+      rmsd: {},
+    },
+    source_compare: {},
+  };
+  let hasAny = false;
+
+  const enabledMatch = text.match(/(?:- Enabled:|- 사용 여부:)\s*(yes|no)/i);
+  if (enabledMatch) {
+    summary.wt_compare_enabled = String(enabledMatch[1] || "").toLowerCase() === "yes";
+    hasAny = true;
+  }
+
+  const wtSolMatch = text.match(/WT SoluProt:\s*score=([+-]?\d+(?:\.\d+)?)/i);
+  if (wtSolMatch) {
+    summary.wt_vs_design.soluprot.wt = parseNumberOrNull(wtSolMatch[1]);
+    hasAny = true;
+  }
+  const designSolMatch = text.match(
+    /Designs SoluProt:\s*median=([+-]?\d+(?:\.\d+)?).*?\((\d+)\s*\/\s*(\d+)\)/i
+  );
+  if (designSolMatch) {
+    const median = parseNumberOrNull(designSolMatch[1]);
+    const passed = Number(designSolMatch[2] || 0);
+    const total = Number(designSolMatch[3] || 0);
+    summary.wt_vs_design.soluprot.design_median = median;
+    summary.wt_vs_design.soluprot.design_passed = passed;
+    summary.wt_vs_design.soluprot.design_total = total;
+    summary.wt_vs_design.soluprot.design_pass_rate = total > 0 ? passed / total : null;
+    hasAny = true;
+  }
+  const deltaSolMatch = text.match(/ΔSoluProt\s*\(median\s*-\s*WT\):\s*([+-]?\d+(?:\.\d+)?)/i);
+  if (deltaSolMatch) {
+    summary.wt_vs_design.soluprot.delta_design_minus_wt = parseNumberOrNull(deltaSolMatch[1]);
+    hasAny = true;
+  }
+
+  const wtAf2Match = text.match(
+    /WT AF2:\s*pLDDT=([+-]?\d+(?:\.\d+)?|-)\s+RMSD=([+-]?\d+(?:\.\d+)?|-)/i
+  );
+  if (wtAf2Match) {
+    summary.wt_vs_design.plddt.wt = parseNumberOrNull(wtAf2Match[1]);
+    summary.wt_vs_design.rmsd.wt = parseNumberOrNull(wtAf2Match[2]);
+    hasAny = true;
+  }
+
+  const designPlddtMatch = text.match(/Designs AF2 pLDDT:\s*median=([+-]?\d+(?:\.\d+)?).*?\(n=(\d+)\)/i);
+  if (designPlddtMatch) {
+    summary.wt_vs_design.plddt.design_median = parseNumberOrNull(designPlddtMatch[1]);
+    summary.wt_vs_design.plddt.design_total = Number(designPlddtMatch[2] || 0);
+    hasAny = true;
+  }
+  const deltaPlddtMatch = text.match(/ΔpLDDT\s*\(median\s*-\s*WT\):\s*([+-]?\d+(?:\.\d+)?)/i);
+  if (deltaPlddtMatch) {
+    summary.wt_vs_design.plddt.delta_design_minus_wt = parseNumberOrNull(deltaPlddtMatch[1]);
+    hasAny = true;
+  }
+
+  const designRmsdMatch = text.match(/Designs RMSD:\s*median=([+-]?\d+(?:\.\d+)?).*?\)/i);
+  if (designRmsdMatch) {
+    summary.wt_vs_design.rmsd.design_median = parseNumberOrNull(designRmsdMatch[1]);
+    const selectedN = text.match(/Designs AF2 pLDDT:.*?\(n=(\d+)\)/i);
+    if (selectedN) {
+      summary.wt_vs_design.rmsd.design_total = Number(selectedN[1] || 0);
+    }
+    hasAny = true;
+  }
+  const deltaRmsdMatch = text.match(/ΔRMSD\s*\(median\s*-\s*WT\):\s*([+-]?\d+(?:\.\d+)?)/i);
+  if (deltaRmsdMatch) {
+    summary.wt_vs_design.rmsd.delta_design_minus_wt = parseNumberOrNull(deltaRmsdMatch[1]);
+    hasAny = true;
+  }
+
+  const rowRegex =
+    /^\|\s*(RFD3|BioEmu|Other|기타)\s*\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|/gim;
+  let rowMatch = null;
+  while ((rowMatch = rowRegex.exec(text))) {
+    const sourceLabelRaw = String(rowMatch[1] || "").trim().toLowerCase();
+    const key = sourceLabelRaw === "rfd3" ? "rfd3" : sourceLabelRaw === "bioemu" ? "bioemu" : "other";
+    const backboneCount = Number(parseNumberOrNull(rowMatch[2]) || 0);
+    const pass = parsePassStat(rowMatch[3]);
+    const af2Count = Number(parseNumberOrNull(rowMatch[5]) || 0);
+    summary.source_compare[key] = {
+      backbone_count: backboneCount,
+      soluprot_total: pass.total,
+      soluprot_passed: pass.passed,
+      soluprot_pass_rate: pass.passRate,
+      af2_selected_total: af2Count,
+      plddt_median: parseNumberOrNull(rowMatch[6]),
+      rmsd_median: parseNumberOrNull(rowMatch[7]),
+    };
+    hasAny = true;
+  }
+
+  return hasAny ? summary : null;
+}
+
+function renderArtifactComparisonSummary(summary) {
+  if (!el.artifactComparisonSummary) return;
+  if (!summary || typeof summary !== "object") {
+    el.artifactComparisonSummary.innerHTML = `<div class="placeholder">${t(
+      "artifacts.compare.placeholder"
+    )}</div>`;
+    return;
+  }
+
+  const wt = summary?.wt_vs_design && typeof summary.wt_vs_design === "object" ? summary.wt_vs_design : {};
+  const source =
+    summary?.source_compare && typeof summary.source_compare === "object" ? summary.source_compare : {};
+  const wtEnabled = Boolean(summary?.wt_compare_enabled);
+
+  const wtRows = [
+    { key: "soluprot", label: "SoluProt", digits: 3 },
+    { key: "plddt", label: "pLDDT", digits: 1 },
+    { key: "rmsd", label: "RMSD", digits: 2 },
+  ];
+  const wtHasData = wtRows.some((row) => {
+    const metric = wt[row.key] || {};
+    return (
+      (typeof metric?.wt === "number" && Number.isFinite(metric.wt)) ||
+      (typeof metric?.design_median === "number" && Number.isFinite(metric.design_median))
+    );
+  });
+
+  const sourceOrder = ["rfd3", "bioemu", "other"];
+  const sourceRows = sourceOrder.filter((key) => {
+    const bucket = source[key];
+    if (!bucket || typeof bucket !== "object") return false;
+    const backbone = Number(bucket.backbone_count || 0);
+    const solTotal = Number(bucket.soluprot_total || 0);
+    const af2 = Number(bucket.af2_selected_total || 0);
+    return backbone > 0 || solTotal > 0 || af2 > 0;
+  });
+
+  if (!wtHasData && sourceRows.length === 0) {
+    el.artifactComparisonSummary.innerHTML = `<div class="placeholder">${t(
+      "artifacts.compare.noData"
+    )}</div>`;
+    return;
+  }
+
+  const wtTableRows = wtRows
+    .map((row) => {
+      const metric = wt[row.key] && typeof wt[row.key] === "object" ? wt[row.key] : {};
+      const wtText = formatMetricValue(metric.wt, row.digits, false);
+      const designText = formatMetricValue(metric.design_median, row.digits, false);
+      const deltaText = formatMetricValue(metric.delta_design_minus_wt, row.digits, true);
+      return `
+        <tr>
+          <th>${escapeHtml(row.label)}</th>
+          <td>${escapeHtml(wtText)}</td>
+          <td>${escapeHtml(designText)}</td>
+          <td>${escapeHtml(deltaText)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const sourceTableRows = sourceRows
+    .map((key) => {
+      const bucket = source[key] && typeof source[key] === "object" ? source[key] : {};
+      const backbone = String(Number(bucket.backbone_count || 0));
+      const passText = formatPassRate(bucket);
+      const af2 = String(Number(bucket.af2_selected_total || 0));
+      const plddt = formatMetricValue(bucket.plddt_median, 1, false);
+      const rmsd = formatMetricValue(bucket.rmsd_median, 2, false);
+      return `
+        <tr>
+          <th>${escapeHtml(sourceLabel(key))}</th>
+          <td>${escapeHtml(backbone)}</td>
+          <td>${escapeHtml(passText)}</td>
+          <td>${escapeHtml(af2)}</td>
+          <td>${escapeHtml(plddt)}</td>
+          <td>${escapeHtml(rmsd)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const wtNote = t("artifacts.compare.wtEnabled", { enabled: localizedYesNo(wtEnabled) });
+  el.artifactComparisonSummary.innerHTML = `
+    ${
+      wtHasData
+        ? `<div class="comparison-card">
+      <h4>${escapeHtml(t("artifacts.compare.wt"))}</h4>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>${escapeHtml(t("artifacts.compare.metric"))}</th>
+            <th>${escapeHtml(t("artifacts.compare.wtValue"))}</th>
+            <th>${escapeHtml(t("artifacts.compare.designMedian"))}</th>
+            <th>${escapeHtml(t("artifacts.compare.delta"))}</th>
+          </tr>
+        </thead>
+        <tbody>${wtTableRows}</tbody>
+      </table>
+      <div class="comparison-note">${escapeHtml(wtNote)}</div>
+    </div>`
+        : ""
+    }
+    ${
+      sourceRows.length
+        ? `<div class="comparison-card">
+      <h4>${escapeHtml(t("artifacts.compare.source"))}</h4>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>${escapeHtml(t("artifacts.compare.sourceName"))}</th>
+            <th>${escapeHtml(t("artifacts.compare.backbones"))}</th>
+            <th>${escapeHtml(t("artifacts.compare.passRate"))}</th>
+            <th>${escapeHtml(t("artifacts.compare.af2Selected"))}</th>
+            <th>${escapeHtml(t("artifacts.compare.plddtMedian"))}</th>
+            <th>${escapeHtml(t("artifacts.compare.rmsdMedian"))}</th>
+          </tr>
+        </thead>
+        <tbody>${sourceTableRows}</tbody>
+      </table>
+    </div>`
+        : ""
+    }
+  `;
+}
+
+function updateMonitorReportActions() {
+  if (!el.artifactGenerateReport) return;
+  const hasRun = Boolean(String(state.currentRunId || "").trim());
+  const shouldShow = hasRun && Boolean(state.monitorNeedsReport);
+  el.artifactGenerateReport.classList.toggle("hidden", !shouldShow);
+  el.artifactGenerateReport.disabled = !hasRun;
+}
+
+async function refreshArtifactComparisonSummary() {
+  if (!el.artifactComparisonSummary) return;
+  const runId = String(state.currentRunId || "").trim();
+  if (!runId) {
+    state.artifactComparison = null;
+    state.artifactComparisonRunId = "";
+    state.monitorNeedsReport = false;
+    renderArtifactComparisonSummary(null);
+    updateMonitorReportActions();
+    return;
+  }
+  try {
+    const result = await apiCall("pipeline.read_artifact", {
+      run_id: runId,
+      path: "comparisons.json",
+      max_bytes: 512000,
+    });
+    const text = String(result?.text || "").trim();
+    const parsed = text ? JSON.parse(text) : null;
+    if (String(state.currentRunId || "").trim() !== runId) return;
+    state.artifactComparison = parsed && typeof parsed === "object" ? parsed : null;
+    state.artifactComparisonRunId = runId;
+    state.monitorNeedsReport = false;
+    renderArtifactComparisonSummary(state.artifactComparison);
+    updateMonitorReportActions();
+  } catch (_err) {
+    if (String(state.currentRunId || "").trim() !== runId) return;
+    try {
+      const reportPayload = await apiCall("pipeline.get_report", { run_id: runId });
+      if (String(state.currentRunId || "").trim() !== runId) return;
+      const summaryFromApi =
+        reportPayload?.comparison_summary && typeof reportPayload.comparison_summary === "object"
+          ? reportPayload.comparison_summary
+          : null;
+      const summaryFromText = parseComparisonSummaryFromReportText(
+        reportPayload?.report || reportPayload?.report_ko || ""
+      );
+      const resolved = summaryFromApi || summaryFromText;
+      if (resolved) {
+        state.artifactComparison = resolved;
+        state.artifactComparisonRunId = runId;
+        state.monitorNeedsReport = false;
+        renderArtifactComparisonSummary(resolved);
+      } else {
+        const hasReport = Boolean(
+          String(reportPayload?.report || "").trim() || String(reportPayload?.report_ko || "").trim()
+        );
+        state.artifactComparison = null;
+        state.artifactComparisonRunId = runId;
+        state.monitorNeedsReport = !hasReport;
+        if (hasReport) {
+          renderArtifactComparisonSummary({
+            version: 1,
+            wt_compare_enabled: false,
+            wt_vs_design: {},
+            source_compare: {},
+          });
+        } else {
+          renderArtifactComparisonSummary(null);
+        }
+      }
+      updateMonitorReportActions();
+    } catch (_reportErr) {
+      if (String(state.currentRunId || "").trim() !== runId) return;
+      state.artifactComparison = null;
+      state.artifactComparisonRunId = runId;
+      state.monitorNeedsReport = true;
+      renderArtifactComparisonSummary(null);
+      updateMonitorReportActions();
+    }
+  }
+}
+
+function apply3dStyle(viewer, format) {
+  if (format === "sdf") {
+    viewer.setStyle({}, { stick: { radius: 0.15 } });
+  } else {
+    viewer.setStyle({}, { cartoon: { color: "spectrum" } });
+  }
+}
+
+function render3dComparison(left, right) {
+  if (!window.$3Dmol) {
+    el.artifactPreview.innerHTML = `<div class="placeholder">${t(
+      "artifact.preview.unavailable"
+    )}</div>`;
+    return;
+  }
+  const wrap = document.createElement("div");
+  wrap.className = "viewer3d-compare";
+  el.artifactPreview.innerHTML = "";
+  el.artifactPreview.appendChild(wrap);
+  const buildPane = (path, text, format) => {
+    const pane = document.createElement("div");
+    pane.className = "viewer3d-pane";
+    const header = document.createElement("div");
+    header.className = "viewer3d-pane-header";
+    header.textContent = path;
+    const body = document.createElement("div");
+    body.className = "viewer3d-pane-body";
+    pane.appendChild(header);
+    pane.appendChild(body);
+    wrap.appendChild(pane);
+    const viewer = window.$3Dmol.createViewer(body, { backgroundColor: "white" });
+    viewer.addModel(text, format);
+    apply3dStyle(viewer, format);
+    viewer.zoomTo();
+    viewer.render();
+    if (typeof viewer.resize === "function") {
+      viewer.resize();
+    }
+  };
+  buildPane(left.path, left.text, left.format);
+  buildPane(right.path, right.text, right.format);
+}
+
+function chooseDefaultComparePaths(structureItems) {
+  const paths = new Set(structureItems.map((item) => String(item?.path || "")));
+  if (!paths.has(state.artifactCompareLeftPath)) state.artifactCompareLeftPath = "";
+  if (!paths.has(state.artifactCompareRightPath)) state.artifactCompareRightPath = "";
+
+  if (!state.artifactCompareLeftPath) {
+    const wtItem = structureItems.find((item) => artifactMetaForPath(item.path).stage === "wt");
+    const targetItem = structureItems.find((item) => artifactMetaForPath(item.path).stage === "af2_target");
+    state.artifactCompareLeftPath = String(wtItem?.path || targetItem?.path || structureItems[0]?.path || "");
+  }
+
+  if (!state.artifactCompareRightPath) {
+    const designItem = structureItems.find((item) => {
+      const path = String(item?.path || "");
+      if (!path || path === state.artifactCompareLeftPath) return false;
+      const meta = artifactMetaForPath(path);
+      if (meta.tier) return true;
+      if (meta.stage === "af2" && !/(?:^|\/)wt(?:\/|$)/i.test(path)) return true;
+      return false;
+    });
+    if (designItem) {
+      state.artifactCompareRightPath = String(designItem.path || "");
+    }
+  }
+
+  if (state.artifactCompareRightPath === state.artifactCompareLeftPath) {
+    const fallback = structureItems.find((item) => String(item?.path || "") !== state.artifactCompareLeftPath);
+    state.artifactCompareRightPath = String(fallback?.path || "");
+  }
+}
+
+function renderArtifactCompareSelects() {
+  if (!el.artifactCompareLeft || !el.artifactCompareRight) return;
+  const structureItems = (state.artifacts || [])
+    .filter((item) => isStructureArtifactItem(item))
+    .sort((a, b) => String(a.path || "").localeCompare(String(b.path || "")));
+
+  chooseDefaultComparePaths(structureItems);
+  const fill = (selectEl, placeholderKey) => {
+    selectEl.innerHTML = "";
+    const first = document.createElement("option");
+    first.value = "";
+    first.textContent = t(placeholderKey);
+    selectEl.appendChild(first);
+    structureItems.forEach((item) => {
+      const path = String(item.path || "");
+      const meta = artifactMetaForPath(path);
+      const opt = document.createElement("option");
+      opt.value = path;
+      opt.textContent = `${formatStageLabel(meta.stage)} · ${path}`;
+      selectEl.appendChild(opt);
+    });
+  };
+  fill(el.artifactCompareLeft, "artifacts.preview.compare.left");
+  fill(el.artifactCompareRight, "artifacts.preview.compare.right");
+
+  const leftPaths = new Set(structureItems.map((item) => String(item.path || "")));
+  const rightPaths = leftPaths;
+  el.artifactCompareLeft.value = leftPaths.has(state.artifactCompareLeftPath)
+    ? state.artifactCompareLeftPath
+    : "";
+  el.artifactCompareRight.value = rightPaths.has(state.artifactCompareRightPath)
+    ? state.artifactCompareRightPath
+    : "";
+}
+
+async function compareSelected3dArtifacts() {
+  if (!state.currentRunId) return;
+  const leftPath = String(state.artifactCompareLeftPath || "").trim();
+  const rightPath = String(state.artifactCompareRightPath || "").trim();
+  if (!leftPath || !rightPath) {
+    el.artifactPreview.innerHTML = `<div class="placeholder">${t(
+      "artifacts.preview.compare.missing"
+    )}</div>`;
+    return;
+  }
+  try {
+    const [leftResult, rightResult] = await Promise.all([
+      apiCall("pipeline.read_artifact", {
+        run_id: state.currentRunId,
+        path: leftPath,
+        max_bytes: 500000,
+      }),
+      apiCall("pipeline.read_artifact", {
+        run_id: state.currentRunId,
+        path: rightPath,
+        max_bytes: 500000,
+      }),
+    ]);
+    render3dComparison(
+      {
+        path: leftPath,
+        text: String(leftResult?.text || ""),
+        format: /\.sdf$/i.test(leftPath) ? "sdf" : "pdb",
+      },
+      {
+        path: rightPath,
+        text: String(rightResult?.text || ""),
+        format: /\.sdf$/i.test(rightPath) ? "sdf" : "pdb",
+      }
+    );
+  } catch (err) {
+    el.artifactPreview.innerHTML = `<div class="placeholder">${t("artifacts.preview.compare.failed", {
+      error: err.message,
+    })}</div>`;
+  }
 }
 
 function escapeHtml(text) {
@@ -4498,9 +5871,11 @@ async function refreshArtifacts() {
       limit: 300,
     });
     state.artifacts = result.artifacts || [];
+    rebuildArtifactMetaIndex(state.artifacts);
     renderArtifactFilters(state.artifacts);
     renderArtifacts(state.artifacts);
     refreshArtifactSelects();
+    void refreshArtifactComparisonSummary();
     updateReportArtifactLinks(el.reportContent ? el.reportContent.value : "");
   } catch (err) {
     setMessage(t("artifact.error", { error: err.message }), "ai");
@@ -4736,9 +6111,34 @@ function formatStageLabel(stage) {
   return stage;
 }
 
+function rebuildArtifactMetaIndex(items) {
+  const index = {};
+  (items || []).forEach((item) => {
+    const path = String(item?.path || "");
+    if (!path) return;
+    index[path] = artifactMetaFromPath(path);
+  });
+  state.artifactMetaByPath = index;
+}
+
+function artifactMetaForPath(path) {
+  const key = String(path || "");
+  if (!key) return artifactMetaFromPath(key);
+  const cached = state.artifactMetaByPath ? state.artifactMetaByPath[key] : null;
+  if (cached) return cached;
+  return artifactMetaFromPath(key);
+}
+
 function tierFromPath(path) {
-  const match = String(path || "").match(/\/tiers\/([^/]+)/i);
-  return match ? match[1] : null;
+  return artifactMetaForPath(path).tier;
+}
+
+function isStructurePath(path) {
+  return /\.(pdb|sdf)$/i.test(String(path || ""));
+}
+
+function isStructureArtifactItem(item) {
+  return item?.type === "file" && isStructurePath(item?.path);
 }
 
 function artifactTypeFromItem(item) {
@@ -4754,9 +6154,10 @@ function renderArtifactFilters(items) {
   const tierSet = new Set();
   const typeSet = new Set();
   (items || []).forEach((item) => {
-    const stage = stageFromPath(item.path);
+    const meta = artifactMetaForPath(item.path);
+    const stage = meta.stage;
     if (stage) stageSet.add(stage);
-    const tier = tierFromPath(item.path);
+    const tier = meta.tier;
     if (tier) tierSet.add(tier);
     const type = artifactTypeFromItem(item);
     if (type) typeSet.add(type);
@@ -5229,6 +6630,7 @@ async function loadReport() {
     el.reportContent.value = result.report || "";
     updateReportScore(result);
     updateReportArtifactLinks(result.report || "");
+    void refreshArtifactComparisonSummary();
     if (el.reportStatus) el.reportStatus.textContent = t("report.loaded");
   } catch (err) {
     const msg = String(err.message || "");
@@ -5250,6 +6652,8 @@ async function generateReport() {
     el.reportContent.value = result.report || "";
     updateReportScore(result);
     updateReportArtifactLinks(result.report || "");
+    await refreshArtifacts();
+    void refreshArtifactComparisonSummary();
     if (el.reportStatus) el.reportStatus.textContent = t("report.generated");
   } catch (err) {
     if (el.reportStatus) {
@@ -5503,6 +6907,7 @@ async function handleRunSelectorChange(nextRunId) {
   const runId = String(nextRunId || "").trim();
   if (!runId || runId === state.currentRunId) return;
   setCurrentRunId(runId);
+  renderQuestions(state.plan?.questions || []);
   await pollStatus(runId);
   await refreshArtifacts();
   await refreshAgentPanel();
@@ -5561,6 +6966,40 @@ if (el.artifactTypeFilter) {
   el.artifactTypeFilter.addEventListener("change", () => {
     state.artifactFilters.type = el.artifactTypeFilter.value || "all";
     renderArtifacts(state.artifacts);
+  });
+}
+
+if (el.artifactCompareLeft) {
+  el.artifactCompareLeft.addEventListener("change", () => {
+    state.artifactCompareLeftPath = String(el.artifactCompareLeft.value || "");
+  });
+}
+
+if (el.artifactCompareRight) {
+  el.artifactCompareRight.addEventListener("change", () => {
+    state.artifactCompareRightPath = String(el.artifactCompareRight.value || "");
+  });
+}
+
+if (el.artifactCompareRun) {
+  el.artifactCompareRun.addEventListener("click", () => {
+    compareSelected3dArtifacts();
+  });
+}
+
+if (el.artifactCompareClear) {
+  el.artifactCompareClear.addEventListener("click", () => {
+    state.artifactCompareLeftPath = "";
+    state.artifactCompareRightPath = "";
+    renderArtifactCompareSelects();
+    el.artifactPreview.innerHTML = `<div class="placeholder">${t("artifacts.preview.placeholder")}</div>`;
+  });
+}
+
+if (el.artifactGenerateReport) {
+  el.artifactGenerateReport.addEventListener("click", async () => {
+    if (!state.currentRunId) return;
+    await generateReport();
   });
 }
 

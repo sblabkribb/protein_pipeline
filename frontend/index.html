@@ -305,10 +305,41 @@
                 <h3 data-i18n="artifacts.preview.title">Artifact Preview</h3>
                 <p data-i18n="artifacts.preview.desc">3D structures, images, or text extracts.</p>
               </div>
+              <div class="artifact-compare-controls">
+                <select id="artifactCompareLeft" class="artifact-select"></select>
+                <select id="artifactCompareRight" class="artifact-select"></select>
+                <button id="artifactCompareRun" class="ghost" data-i18n="artifacts.preview.compare.run">
+                  Compare 3D
+                </button>
+                <button id="artifactCompareClear" class="ghost" data-i18n="artifacts.preview.compare.clear">
+                  Clear
+                </button>
+              </div>
               <div id="artifactPreview" class="artifact-preview">
                 <div class="placeholder" data-i18n="artifacts.preview.placeholder">
                   Select an artifact to preview it here.
                 </div>
+              </div>
+              <div class="panel-divider"></div>
+              <div class="panel-header small">
+                <h3 data-i18n="artifacts.compare.title">Comparison Summary</h3>
+                <p data-i18n="artifacts.compare.desc">
+                  WT comparison and RFD3/BioEmu summary from generated report artifacts.
+                </p>
+              </div>
+              <div id="artifactComparisonSummary" class="comparison-summary">
+                <div class="placeholder" data-i18n="artifacts.compare.placeholder">
+                  Generate report to load comparison metrics.
+                </div>
+              </div>
+              <div class="comparison-actions">
+                <button
+                  id="artifactGenerateReport"
+                  class="ghost hidden"
+                  data-i18n="artifacts.compare.generateReport"
+                >
+                  Generate Report
+                </button>
               </div>
             </div>
 

@@ -478,7 +478,17 @@ def plan_from_prompt(
                 "id": "af2_max_candidates_per_tier",
                 "question": "AF2 per tier candidate count (top SoluProt score first, 0=all).",
                 "required": False,
-                "default": 8,
+                "default": 0,
+            }
+        )
+
+    if "num_seq_per_tier" not in routed:
+        questions.append(
+            {
+                "id": "num_seq_per_tier",
+                "question": "ProteinMPNN sequences per tier per backbone.",
+                "required": False,
+                "default": 2,
             }
         )
 

@@ -33,17 +33,17 @@ class PipelineRequest:
     rfd3_env: dict[str, str] | None = None
     rfd3_design_index: int = 0
     rfd3_use_ensemble: bool = False
-    rfd3_max_return_designs: int = 50
+    rfd3_max_return_designs: int = 10
     rfd3_partial_t: int = 20
 
     bioemu_use: bool = False
     bioemu_sequence: str | None = None
-    bioemu_num_samples: int = 50
+    bioemu_num_samples: int = 10
     bioemu_batch_size_100: int | None = None
     bioemu_model_name: str = "bioemu-v1.1"
     bioemu_filter_samples: bool = True
     bioemu_base_seed: int | None = None
-    bioemu_max_return_structures: int = 50
+    bioemu_max_return_structures: int = 10
     bioemu_env: dict[str, str] | None = None
 
     diffdock_ligand_smiles: str | None = None
@@ -79,7 +79,7 @@ class PipelineRequest:
     pdb_strip_nonpositive_resseq: bool = True
     pdb_renumber_resseq_from_1: bool = False
 
-    num_seq_per_tier: int = 16
+    num_seq_per_tier: int = 2
     batch_size: int = 1
     sampling_temp: float = 0.1
     seed: int = 0
