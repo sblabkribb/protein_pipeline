@@ -8021,7 +8021,12 @@ function normalizeArtifactMarkdownPath(target) {
   const raw = String(target || "").trim();
   if (!raw) return "";
   const stripped = raw.split("#", 1)[0].split("?", 1)[0];
-  return stripped.replace(/^\.\/+/, "").replace(/^\/+/, "");
+  const normalized = stripped.replace(/^\.\/+/, "").replace(/^\/+/, "");
+  try {
+    return decodeURIComponent(normalized);
+  } catch (_err) {
+    return normalized;
+  }
 }
 
 function imageMimeTypeFromPath(path) {
@@ -8033,6 +8038,102 @@ function imageMimeTypeFromPath(path) {
   if (ext === "gif") return "image/gif";
   if (ext === "webp") return "image/webp";
   return "application/octet-stream";
+}
+
+const TRANSPARENT_PIXEL_DATA_URI = "data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=";
+
+function utf8ToBase64(text) {
+  const bytes = new TextEncoder().encode(String(text || ""));
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function reportChartSvgForPath(path) {
+  const key = String(path || "")
+    .trim()
+    .split("/")
+    .pop()
+    .toLowerCase();
+  const rows = filteredHitListRows({ applyLimit: false });
+  if (!rows.length) return "";
+  if (key === "plddt_rmsd.svg") {
+    return normalizeSvgAttachmentText(buildPlddtRmsdScatter(rows)?.svg || "");
+  }
+  if (key === "score_hist.svg") {
+    return normalizeSvgAttachmentText(buildScoreHistogram(rows)?.svg || "");
+  }
+  if (key === "tier_pass.svg") {
+    return normalizeSvgAttachmentText(buildTierPassRateChart(rows)?.svg || "");
+  }
+  return "";
+}
+
+async function reportCompareSvgForPath(path, runId) {
+  const key = String(path || "")
+    .trim()
+    .split("/")
+    .pop()
+    .toLowerCase();
+  const wantsStructure = key === "structure_diff.svg";
+  const wantsSequence = key === "sequence_diff.svg";
+  if (!wantsStructure && !wantsSequence) return "";
+  const compare = selectReportComparePaths();
+  const leftPath = String(compare?.leftPath || "").trim();
+  const rightPath = String(compare?.rightPath || "").trim();
+  if (!leftPath || !rightPath) return "";
+  if (!/\.pdb$/i.test(leftPath) || !/\.pdb$/i.test(rightPath)) return "";
+  try {
+    const [leftResult, rightResult] = await Promise.all([
+      apiCall("pipeline.read_artifact", { run_id: runId, path: leftPath, max_bytes: 800000 }),
+      apiCall("pipeline.read_artifact", { run_id: runId, path: rightPath, max_bytes: 800000 }),
+    ]);
+    const leftText = String(leftResult?.text || "");
+    const rightText = String(rightResult?.text || "");
+    if (!leftText.trim() || !rightText.trim()) return "";
+    if (wantsStructure) {
+      return normalizeSvgAttachmentText(
+        buildStructureDiffSvg(computePdbStructuralDiff(leftText, rightText), leftPath, rightPath)
+      );
+    }
+    return normalizeSvgAttachmentText(
+      buildSequenceDiffSvg(computePdbSequenceDiff(leftText, rightText), leftPath, rightPath)
+    );
+  } catch (_err) {
+    return "";
+  }
+}
+
+async function resolveReportModalImageBase64(runId, artifactPath, cacheKey) {
+  let base64 = String(state.reportModalImageCache[cacheKey] || "");
+  if (base64) return base64;
+  try {
+    const result = await apiCall("pipeline.read_artifact", {
+      run_id: runId,
+      path: artifactPath,
+      base64: true,
+      max_bytes: 4000000,
+    });
+    base64 = String(result?.base64 || "");
+  } catch (_err) {
+    base64 = "";
+  }
+  if (!base64 && /^report_assets\/.+\.svg$/i.test(artifactPath)) {
+    let svgText = reportChartSvgForPath(artifactPath);
+    if (!svgText) {
+      svgText = await reportCompareSvgForPath(artifactPath, runId);
+    }
+    if (svgText) {
+      base64 = utf8ToBase64(svgText);
+    }
+  }
+  if (base64) {
+    state.reportModalImageCache[cacheKey] = base64;
+  }
+  return base64;
 }
 
 async function hydrateReportModalArtifactImages() {
@@ -8050,20 +8151,16 @@ async function hydrateReportModalArtifactImages() {
       const artifactPath = normalizeArtifactMarkdownPath(img.dataset.artifactPath || "");
       if (!artifactPath) return;
       const cacheKey = `${runId}::${artifactPath}`;
-      let base64 = String(state.reportModalImageCache[cacheKey] || "");
-      if (!base64) {
-        const result = await apiCall("pipeline.read_artifact", {
-          run_id: runId,
-          path: artifactPath,
-          base64: true,
-          max_bytes: 4000000,
-        });
-        base64 = String(result?.base64 || "");
-        if (!base64) return;
-        state.reportModalImageCache[cacheKey] = base64;
-      }
+      const base64 = await resolveReportModalImageBase64(runId, artifactPath, cacheKey);
       if (token !== state.reportModalRenderToken) return;
+      if (!base64) {
+        img.src = TRANSPARENT_PIXEL_DATA_URI;
+        img.classList.add("report-image-missing");
+        img.title = `missing artifact: ${artifactPath}`;
+        return;
+      }
       img.src = `data:${imageMimeTypeFromPath(artifactPath)};base64,${base64}`;
+      img.classList.remove("report-image-missing");
       img.removeAttribute("data-artifact-path");
     })
   ).catch(() => null);
@@ -8144,9 +8241,9 @@ function renderMarkdown(text) {
           );
         } else {
           imageTokens.push(
-            `<img data-artifact-path="${escapeAttr(normalizedTarget)}" alt="${escapeAttr(
-              alt
-            )}" loading="lazy" />`
+            `<img src="${TRANSPARENT_PIXEL_DATA_URI}" data-artifact-path="${escapeAttr(
+              normalizedTarget
+            )}" alt="${escapeAttr(alt)}" loading="lazy" />`
           );
         }
         return token;
