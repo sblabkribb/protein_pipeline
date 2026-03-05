@@ -155,6 +155,14 @@ export function buildRunArguments({ prompt, routed, answers, runId }) {
     ...routed,
     ...mergeRunInputs(answers),
   };
+  const stopAfter = String(args.stop_after || "")
+    .trim()
+    .toLowerCase();
+  if (stopAfter === "novelty") {
+    args.novelty_enabled = true;
+  } else if (args.novelty_enabled === true && !stopAfter) {
+    args.stop_after = "novelty";
+  }
   delete args.questions;
   delete args.missing;
   return args;

@@ -913,6 +913,76 @@ def _save_report_text_ko(output_root: str, run_id: str, content: str) -> None:
     report_path.write_text(content, encoding="utf-8")
 
 
+def _save_report_attachments(
+    output_root: str,
+    run_id: str,
+    attachments: object | None,
+) -> list[dict[str, object]]:
+    if attachments is None:
+        return []
+    if not isinstance(attachments, list):
+        raise ValueError("attachments must be an array")
+
+    root = resolve_run_path(output_root, run_id)
+    if not root.exists():
+        raise ValueError("run_id not found")
+
+    total_bytes = 0
+    max_total_bytes = 8_000_000
+    max_file_bytes = 2_000_000
+    saved: list[dict[str, object]] = []
+
+    for idx, item in enumerate(attachments):
+        if not isinstance(item, dict):
+            raise ValueError(f"attachments[{idx}] must be an object")
+
+        raw_path = str(item.get("path") or "").strip().replace("\\", "/")
+        if not raw_path:
+            raise ValueError(f"attachments[{idx}].path is required")
+        rel_path = raw_path.lstrip("/")
+        if rel_path.startswith("./"):
+            rel_path = rel_path[2:]
+        if not rel_path:
+            raise ValueError(f"attachments[{idx}].path is invalid")
+        if not rel_path.startswith("report_assets/"):
+            raise ValueError(f"attachments[{idx}].path must start with 'report_assets/'")
+
+        text_value = item.get("text")
+        base64_value = item.get("base64")
+        if text_value is None and base64_value is None:
+            raise ValueError(f"attachments[{idx}] requires text or base64")
+
+        data: bytes
+        if base64_value is not None:
+            try:
+                data = base64.b64decode(str(base64_value), validate=True)
+            except Exception as exc:
+                raise ValueError(f"attachments[{idx}].base64 is invalid") from exc
+        else:
+            data = _as_text(text_value).encode("utf-8")
+
+        if len(data) > max_file_bytes:
+            raise ValueError(f"attachments[{idx}] is too large (max {max_file_bytes} bytes)")
+        total_bytes += len(data)
+        if total_bytes > max_total_bytes:
+            raise ValueError(f"attachments total size exceeds {max_total_bytes} bytes")
+
+        path = resolve_run_path(output_root, run_id, rel_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+
+        saved_item: dict[str, object] = {
+            "path": rel_path,
+            "size_bytes": len(data),
+        }
+        content_type = str(item.get("content_type") or "").strip()
+        if content_type:
+            saved_item["content_type"] = content_type
+        saved.append(saved_item)
+
+    return saved
+
+
 def _summarize_feedback(items: list[dict[str, object]]) -> dict[str, object]:
     counts = {"good": 0, "bad": 0}
     for item in items:
@@ -3022,6 +3092,7 @@ def _save_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str,
     user = _normalize_user(arguments.get("user"))
     source = str(arguments.get("source") or "user").strip()
     _save_report_text(runner.output_root, run_id, content)
+    saved_attachments = _save_report_attachments(runner.output_root, run_id, arguments.get("attachments"))
     entry: dict[str, object] = {
         "id": uuid.uuid4().hex,
         "run_id": run_id,
@@ -3030,8 +3101,13 @@ def _save_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str,
         "user": user,
         "created_at": _now_iso(),
     }
+    if saved_attachments:
+        entry["attachments"] = saved_attachments
     append_run_event(runner.output_root, run_id, filename="report_revisions.jsonl", payload=entry)
-    return {"run_id": run_id, "report": content}
+    out: dict[str, object] = {"run_id": run_id, "report": content}
+    if saved_attachments:
+        out["attachments"] = saved_attachments
+    return out
 
 
 def _get_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -3645,6 +3721,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     af2_provider = _as_af2_provider(args.get("af2_provider"), "colabfold")
     surface_only = _as_bool(args.get("surface_only"), False)
     ligand_mask_use_original_target = _as_bool(args.get("ligand_mask_use_original_target"), True)
+    novelty_enabled = _as_bool(args.get("novelty_enabled"), False)
     surface_min_rel = _as_float(args.get("surface_min_rel"), 0.2)
     surface_min_abs = _as_float(args.get("surface_min_abs"), 10.0)
     pi_min = _as_float(args.get("pi_min"), 0.0) if str(args.get("pi_min") or "").strip() else None
@@ -3741,6 +3818,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
             args.get("mmseqs_use_gpu"),
             _env_true("PIPELINE_MMSEQS_USE_GPU") or _env_true("MMSEQS_USE_GPU"),
         ),
+        novelty_enabled=novelty_enabled,
         novelty_target_db=str(args.get("novelty_target_db") or "uniref90"),
         msa_min_coverage=_as_float(args.get("msa_min_coverage"), 0.0),
         msa_min_identity=_as_float(args.get("msa_min_identity"), 0.0),
@@ -3837,6 +3915,7 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "mmseqs_max_seqs": {"type": "integer"},
             "mmseqs_threads": {"type": "integer"},
             "mmseqs_use_gpu": {"type": "boolean"},
+            "novelty_enabled": {"type": "boolean"},
             "novelty_target_db": {"type": "string"},
             "msa_min_coverage": {"type": "number"},
             "msa_min_identity": {"type": "number"},
@@ -3870,7 +3949,7 @@ def tool_definitions() -> list[dict[str, Any]]:
     return [
         {
             "name": "pipeline.run",
-            "description": "Run the full protein design pipeline (MMseqs2→mask→ProteinMPNN→SoluProt→ColabFold/AF2→novelty).",
+            "description": "Run the full protein design pipeline (MMseqs2→mask→ProteinMPNN→SoluProt→ColabFold/AF2→optional novelty).",
             "inputSchema": run_schema,
         },
         {
@@ -4002,6 +4081,19 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "content": {"type": "string"},
                     "source": {"type": "string"},
                     "user": {"type": "object"},
+                    "attachments": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "path": {"type": "string"},
+                                "text": {"type": "string"},
+                                "base64": {"type": "string"},
+                                "content_type": {"type": "string"},
+                            },
+                            "required": ["path"],
+                        },
+                    },
                 },
                 "required": ["run_id", "content"],
             },

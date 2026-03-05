@@ -1,3 +1,5 @@
+import base64
+import gzip
 import json
 import unittest
 import uuid
@@ -308,6 +310,207 @@ class TestPipelineDryRun(unittest.TestCase):
             inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("partial_t"), 5)
+
+    def test_pipeline_rfd3_reuses_cached_selected_on_rerun(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+
+        class _MMseqsStub:
+            def search(self, query_fasta, **kwargs):  # type: ignore[no-untyped-def]
+                _ = kwargs
+                _ = query_fasta
+                a3m = ">query\nAG\n>hit1\nAG\n"
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                return {"tsv": "", "a3m_gz_b64": a3m_b64}
+
+        class _RFD3Stub:
+            def __init__(self, selected_pdb: str) -> None:
+                self.selected_pdb = selected_pdb
+                self.calls = 0
+
+            def design(self, **kwargs):  # type: ignore[no-untyped-def]
+                self.calls += 1
+                on_job_id = kwargs.get("on_job_id")
+                if callable(on_job_id):
+                    on_job_id(f"rfd3_job_{self.calls}")
+                return {
+                    "selected": {"id": "rfd3_design_1", "pdb": self.selected_pdb},
+                    "designs": [{"id": "rfd3_design_1", "pdb": self.selected_pdb}],
+                }
+
+        with _tmpdir() as tmp:
+            rfd3 = _RFD3Stub(pdb)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=_MMseqsStub(),
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=rfd3,
+            )
+            req = PipelineRequest(
+                target_fasta=">q1\nAG\n",
+                target_pdb=pdb,
+                dry_run=False,
+                stop_after="rfd3",
+                rfd3_input_pdb=pdb,
+                rfd3_contig="A1-2",
+                conservation_tiers=[0.3],
+                num_seq_per_tier=1,
+            )
+
+            run_id = "resume_rfd3_cache"
+            runner.run(req, run_id=run_id)
+            run_root = Path(tmp) / run_id
+            runpod_job_path = run_root / "rfd3" / "runpod_job.json"
+            runpod_meta = json.loads(runpod_job_path.read_text(encoding="utf-8"))
+            runpod_meta["job_id"] = "cancelled_job"
+            runpod_job_path.write_text(json.dumps(runpod_meta), encoding="utf-8")
+
+            runner.run(req, run_id=run_id)
+
+            self.assertEqual(rfd3.calls, 1)
+            events = [
+                json.loads(line)
+                for line in (run_root / "events.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            rfd3_completed = [e for e in events if e.get("stage") == "rfd3" and e.get("state") == "completed"]
+            self.assertTrue(rfd3_completed)
+            self.assertEqual(rfd3_completed[-1].get("detail"), "cached")
+
+    def test_pipeline_bioemu_reuses_cached_outputs_on_rerun(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+
+        class _MMseqsStub:
+            def search(self, query_fasta, **kwargs):  # type: ignore[no-untyped-def]
+                _ = kwargs
+                _ = query_fasta
+                a3m = ">query\nAG\n>hit1\nAG\n"
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                return {"tsv": "", "a3m_gz_b64": a3m_b64}
+
+        class _BioEmuStub:
+            def __init__(self, sample_pdb: str) -> None:
+                self.sample_pdb = sample_pdb
+                self.calls = 0
+
+            def sample(self, **kwargs):  # type: ignore[no-untyped-def]
+                self.calls += 1
+                on_job_id = kwargs.get("on_job_id")
+                if callable(on_job_id):
+                    on_job_id(f"bioemu_job_{self.calls}")
+                return {
+                    "sample_pdbs": [{"id": "bioemu_topology", "pdb": self.sample_pdb, "frame_index": 0}],
+                    "topology_pdb": self.sample_pdb,
+                }
+
+        with _tmpdir() as tmp:
+            bioemu = _BioEmuStub(pdb)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=_MMseqsStub(),
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                bioemu=bioemu,
+            )
+            req = PipelineRequest(
+                target_fasta=">q1\nAG\n",
+                target_pdb=pdb,
+                dry_run=False,
+                stop_after="bioemu",
+                bioemu_use=True,
+                bioemu_num_samples=2,
+                bioemu_max_return_structures=1,
+                conservation_tiers=[0.3],
+                num_seq_per_tier=1,
+            )
+
+            run_id = "resume_bioemu_cache"
+            runner.run(req, run_id=run_id)
+            run_root = Path(tmp) / run_id
+            runpod_job_path = run_root / "bioemu" / "runpod_job.json"
+            runpod_meta = json.loads(runpod_job_path.read_text(encoding="utf-8"))
+            runpod_meta["job_id"] = "cancelled_job"
+            runpod_job_path.write_text(json.dumps(runpod_meta), encoding="utf-8")
+
+            runner.run(req, run_id=run_id)
+
+            self.assertEqual(bioemu.calls, 1)
+            events = [
+                json.loads(line)
+                for line in (run_root / "events.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            bioemu_completed = [e for e in events if e.get("stage") == "bioemu" and e.get("state") == "completed"]
+            self.assertTrue(bioemu_completed)
+            self.assertIn("cached", str(bioemu_completed[-1].get("detail") or ""))
+
+    def test_pipeline_novelty_reuses_cached_outputs_on_rerun(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU A   4       3.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  PHE A   5       4.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  GLY A   6       5.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      7  CA  HIS A   7       6.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      8  CA  ILE A   8       7.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      9  CA  LYS A   9       8.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+
+        class _MMseqsStub:
+            def __init__(self) -> None:
+                self.novelty_calls = 0
+
+            def search(self, query_fasta, **kwargs):  # type: ignore[no-untyped-def]
+                _ = query_fasta
+                if bool(kwargs.get("return_a3m")):
+                    a3m = ">query\nACDEFGHIK\n>hit1\nACDEFGHIK\n"
+                    a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                    return {"tsv": "", "a3m_gz_b64": a3m_b64}
+                self.novelty_calls += 1
+                return {"tsv": "q1\thit1\t99.0\n"}
+
+        with _tmpdir() as tmp:
+            mmseqs = _MMseqsStub()
+            runner = PipelineRunner(output_root=tmp, mmseqs=mmseqs, proteinmpnn=None, soluprot=None, af2=None)
+            req = PipelineRequest(
+                target_fasta=fasta,
+                target_pdb=pdb,
+                dry_run=True,
+                novelty_enabled=True,
+                conservation_tiers=[0.3],
+                num_seq_per_tier=2,
+                soluprot_cutoff=0.0,
+                af2_plddt_cutoff=0.0,
+                af2_rmsd_cutoff=0.0,
+            )
+
+            run_id = "resume_novelty_cache"
+            runner.run(req, run_id=run_id)
+            runner.run(req, run_id=run_id)
+
+            self.assertEqual(mmseqs.novelty_calls, 1)
+            run_root = Path(tmp) / run_id
+            events = [
+                json.loads(line)
+                for line in (run_root / "events.jsonl").read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            novelty_completed = [e for e in events if e.get("stage") == "novelty_30" and e.get("state") == "completed"]
+            self.assertTrue(novelty_completed)
+            self.assertEqual(novelty_completed[-1].get("detail"), "cached")
 
     def test_pipeline_dry_run_merges_rfd3_and_bioemu_backbones(self) -> None:
         pdb = (

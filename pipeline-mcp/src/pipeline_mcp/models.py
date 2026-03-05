@@ -105,6 +105,7 @@ class PipelineRequest:
     mmseqs_threads: int = 4
     mmseqs_use_gpu: bool = field(default_factory=lambda: _env_true("PIPELINE_MMSEQS_USE_GPU") or _env_true("MMSEQS_USE_GPU"))
 
+    novelty_enabled: bool = False
     novelty_target_db: str = "uniref90"
 
     msa_min_coverage: float = 0.0

@@ -817,6 +817,7 @@ class PipelineRunner:
         try:
             _ensure_not_cancelled(stage="init")
             normalized_stop_after = str(request.stop_after or "").strip().lower()
+            novelty_enabled = bool(getattr(request, "novelty_enabled", False) or normalized_stop_after == "novelty")
             if normalized_stop_after == "rfd3" and not _rfd3_active(request):
                 raise PipelineInputRequired(
                     stage="rfd3",
@@ -1250,6 +1251,10 @@ class PipelineRunner:
                             raise RuntimeError("RFD3 endpoint is not configured (set RFD3_ENDPOINT_ID)")
 
                         runpod_job_path = rfd3_dir / "runpod_job.json"
+                        selected_pdb_path = rfd3_dir / "selected.pdb"
+                        selected_json_path = rfd3_dir / "selected.json"
+                        designs_json_path = rfd3_dir / "designs.json"
+                        cache_meta_path = rfd3_dir / "cache_meta.json"
                         max_designs = max(1, int(request.rfd3_max_return_designs or 1))
                         use_ensemble = bool(request.rfd3_use_ensemble) or max_designs > 1
                         cli_args = _inject_rfd3_cli_defaults(request.rfd3_cli_args, max_designs=max_designs)
@@ -1266,6 +1271,96 @@ class PipelineRunner:
                                 "return_designs_pdb": use_ensemble,
                             }
                         )
+
+                        def _load_cached_rfd3_outputs() -> bool:
+                            nonlocal target_pdb_text, rfd3_backbones, rfd3_selected_id
+                            if request.force or not selected_pdb_path.exists():
+                                return False
+                            try:
+                                cached_pdb_text = selected_pdb_path.read_text(encoding="utf-8")
+                            except Exception:
+                                return False
+                            if not cached_pdb_text.strip():
+                                return False
+
+                            selected_meta: dict[str, Any] = {}
+                            if selected_json_path.exists():
+                                try:
+                                    selected_raw = json.loads(selected_json_path.read_text(encoding="utf-8"))
+                                except Exception:
+                                    selected_raw = None
+                                if isinstance(selected_raw, dict):
+                                    selected_meta = selected_raw
+                            selected_source = str(selected_meta.get("source") or "").strip().lower()
+                            if selected_source in {"fallback", "dummy"}:
+                                return False
+
+                            cached_hash = ""
+                            if cache_meta_path.exists():
+                                try:
+                                    cache_meta = json.loads(cache_meta_path.read_text(encoding="utf-8"))
+                                except Exception:
+                                    cache_meta = None
+                                if isinstance(cache_meta, dict):
+                                    cached_hash = str(cache_meta.get("request_hash") or "").strip()
+                            if not cached_hash and runpod_job_path.exists():
+                                try:
+                                    job_meta = json.loads(runpod_job_path.read_text(encoding="utf-8"))
+                                except Exception:
+                                    job_meta = None
+                                if isinstance(job_meta, dict):
+                                    cached_hash = str(job_meta.get("request_hash") or "").strip()
+                            if cached_hash and cached_hash != rfd3_request_hash:
+                                return False
+
+                            target_pdb_text = cached_pdb_text
+                            rfd3_selected_id = str(selected_meta.get("id") or "cached")
+                            rfd3_backbones = None
+                            if use_ensemble and designs_json_path.exists():
+                                try:
+                                    cached_designs = json.loads(designs_json_path.read_text(encoding="utf-8"))
+                                except Exception:
+                                    cached_designs = None
+                                if isinstance(cached_designs, list):
+                                    ensemble: list[dict[str, Any]] = []
+                                    for d in cached_designs:
+                                        if not isinstance(d, dict):
+                                            continue
+                                        raw_id = str(d.get("id") or "").strip()
+                                        pdb_text = str(d.get("pdb") or "")
+                                        if not raw_id or not pdb_text.strip():
+                                            continue
+                                        ensemble.append(
+                                            {
+                                                "id": raw_id,
+                                                "pdb_text": pdb_text,
+                                                "score": d.get("score"),
+                                                "source": "rfd3",
+                                            }
+                                        )
+                                    if ensemble:
+                                        if not any(str(b.get("id")) == rfd3_selected_id for b in ensemble):
+                                            ensemble.insert(
+                                                0,
+                                                {
+                                                    "id": rfd3_selected_id,
+                                                    "pdb_text": target_pdb_text,
+                                                    "score": selected_meta.get("score"),
+                                                    "source": "rfd3",
+                                                },
+                                            )
+                                        rfd3_backbones = ensemble
+                            set_status(paths, stage="rfd3", state="completed", detail="cached")
+                            return True
+
+                        if _load_cached_rfd3_outputs():
+                            if rfd3_backbones:
+                                designs_dir = _ensure_dir(rfd3_dir / "designs")
+                                for b in rfd3_backbones:
+                                    bb_id = _safe_id(str(b.get("id") or "design"))
+                                    _write_text(designs_dir / f"{bb_id}.pdb", str(b.get("pdb_text") or ""))
+                            return
+
                         resume_job_id: str | None = None
                         if runpod_job_path.exists() and not request.force:
                             try:
@@ -1341,7 +1436,20 @@ class PipelineRunner:
                         _write_text(rfd3_dir / "selected.pdb", target_pdb_text)
 
                         selected_meta = {k: v for k, v in selected.items() if k not in {"pdb", "cif_gz_base64"}}
-                        write_json(rfd3_dir / "selected.json", selected_meta)
+                        selected_meta.setdefault("source", "rfd3")
+                        selected_meta["request_hash"] = rfd3_request_hash
+                        write_json(selected_json_path, selected_meta)
+                        write_json(
+                            cache_meta_path,
+                            {
+                                "request_hash": rfd3_request_hash,
+                                "select_index": select_index,
+                                "max_return_designs": max_designs,
+                                "return_designs_pdb": use_ensemble,
+                                "cli_args": cli_args,
+                                "source": "rfd3",
+                            },
+                        )
                         cif_b64 = selected.get("cif_gz_base64")
                         if isinstance(cif_b64, str) and cif_b64.strip():
                             try:
@@ -1509,6 +1617,9 @@ class PipelineRunner:
                         raise RuntimeError("BioEmu endpoint is not configured (set BIOEMU_ENDPOINT_ID)")
 
                     runpod_job_path = bioemu_dir / "runpod_job.json"
+                    output_path = bioemu_dir / "output.json"
+                    sample_pdbs_path = bioemu_dir / "sample_pdbs.json"
+                    designs_dir = bioemu_dir / "designs"
                     bioemu_request_hash = _stable_payload_hash(
                         {
                             "sequence": bioemu_sequence,
@@ -1523,17 +1634,140 @@ class PipelineRunner:
                             "return_sample_pdbs": True,
                         }
                     )
-                    resume_job_id: str | None = None
-                    if runpod_job_path.exists() and not request.force:
-                        try:
-                            meta = json.loads(runpod_job_path.read_text(encoding="utf-8"))
-                        except Exception:
-                            meta = {}
-                        job_id = str(meta.get("job_id") or "").strip() if isinstance(meta, dict) else ""
-                        if job_id and isinstance(meta, dict):
-                            same_request = _runpod_meta_matches(
-                                meta,
+
+                    def _load_cached_bioemu_outputs() -> bool:
+                        nonlocal bioemu_backbones
+                        if request.force:
+                            return False
+                        if not sample_pdbs_path.exists() and not output_path.exists():
+                            return False
+
+                        cached_hash = ""
+                        if runpod_job_path.exists():
+                            try:
+                                meta = json.loads(runpod_job_path.read_text(encoding="utf-8"))
+                            except Exception:
+                                meta = None
+                            if isinstance(meta, dict):
+                                cached_hash = str(meta.get("request_hash") or "").strip()
+                        if cached_hash and cached_hash != bioemu_request_hash:
+                            return False
+
+                        parsed_samples: list[dict[str, Any]] = []
+                        if sample_pdbs_path.exists():
+                            try:
+                                sample_meta = json.loads(sample_pdbs_path.read_text(encoding="utf-8"))
+                            except Exception:
+                                sample_meta = None
+                            entries = sample_meta.get("samples") if isinstance(sample_meta, dict) else None
+                            if isinstance(entries, list):
+                                for i, entry in enumerate(entries):
+                                    if not isinstance(entry, dict):
+                                        continue
+                                    sample_id = str(entry.get("id") or f"bioemu_{i:03d}")
+                                    pdb_path = designs_dir / f"{_safe_id(sample_id)}.pdb"
+                                    if not pdb_path.exists():
+                                        continue
+                                    try:
+                                        pdb_text = pdb_path.read_text(encoding="utf-8")
+                                    except Exception:
+                                        continue
+                                    if not pdb_text.strip():
+                                        continue
+                                    parsed_samples.append(
+                                        {
+                                            "id": sample_id,
+                                            "pdb_text": pdb_text,
+                                            "source": "bioemu",
+                                            "frame_index": entry.get("frame_index"),
+                                        }
+                                    )
+
+                        if not parsed_samples and output_path.exists():
+                            try:
+                                output_payload = json.loads(output_path.read_text(encoding="utf-8"))
+                            except Exception:
+                                output_payload = None
+                            raw_samples = output_payload.get("sample_pdbs") if isinstance(output_payload, dict) else None
+                            if isinstance(raw_samples, list):
+                                for i, sample in enumerate(raw_samples):
+                                    if not isinstance(sample, dict):
+                                        continue
+                                    sample_id = str(sample.get("id") or f"bioemu_{i:03d}")
+                                    pdb_text = str(sample.get("pdb") or sample.get("pdb_text") or "")
+                                    if not pdb_text.strip():
+                                        continue
+                                    parsed_samples.append(
+                                        {
+                                            "id": sample_id,
+                                            "pdb_text": pdb_text,
+                                            "source": "bioemu",
+                                            "frame_index": sample.get("frame_index"),
+                                        }
+                                    )
+                            if not parsed_samples:
+                                topology_pdb = str(output_payload.get("topology_pdb") or "") if isinstance(output_payload, dict) else ""
+                                if topology_pdb.strip():
+                                    parsed_samples.append(
+                                        {
+                                            "id": "bioemu_topology",
+                                            "pdb_text": topology_pdb,
+                                            "source": "bioemu",
+                                            "frame_index": None,
+                                        }
+                                    )
+
+                        if not parsed_samples:
+                            return False
+
+                        bioemu_backbones = parsed_samples[: bioemu_max_return_structures]
+                        write_json(
+                            sample_pdbs_path,
+                            {
+                                "samples": [
+                                    {"id": str(item.get("id") or ""), "frame_index": item.get("frame_index")}
+                                    for item in bioemu_backbones
+                                ]
+                            },
+                        )
+                        out_designs_dir = _ensure_dir(designs_dir)
+                        for sample in bioemu_backbones:
+                            bb_id = _safe_id(str(sample.get("id") or "bioemu"))
+                            _write_text(out_designs_dir / f"{bb_id}.pdb", str(sample.get("pdb_text") or ""))
+                        set_status(paths, stage="bioemu", state="completed", detail=f"cached structures={len(bioemu_backbones)}")
+                        return True
+
+                    if _load_cached_bioemu_outputs():
+                        pass
+                    else:
+                        resume_job_id: str | None = None
+                        if runpod_job_path.exists() and not request.force:
+                            try:
+                                meta = json.loads(runpod_job_path.read_text(encoding="utf-8"))
+                            except Exception:
+                                meta = {}
+                            job_id = str(meta.get("job_id") or "").strip() if isinstance(meta, dict) else ""
+                            if job_id and isinstance(meta, dict):
+                                same_request = _runpod_meta_matches(
+                                    meta,
+                                    {
+                                        "request_hash": bioemu_request_hash,
+                                        "num_samples": bioemu_num_samples,
+                                        "batch_size_100": bioemu_batch_size_100,
+                                        "model_name": bioemu_model_name,
+                                        "filter_samples": bioemu_filter_samples,
+                                        "base_seed": bioemu_base_seed,
+                                        "max_return_structures": bioemu_max_return_structures,
+                                    },
+                                )
+                                if same_request:
+                                    resume_job_id = job_id
+
+                        def _on_bioemu_job_id(job_id: str) -> None:
+                            write_json(
+                                runpod_job_path,
                                 {
+                                    "job_id": job_id,
                                     "request_hash": bioemu_request_hash,
                                     "num_samples": bioemu_num_samples,
                                     "batch_size_100": bioemu_batch_size_100,
@@ -1543,108 +1777,91 @@ class PipelineRunner:
                                     "max_return_structures": bioemu_max_return_structures,
                                 },
                             )
-                            if same_request:
-                                resume_job_id = job_id
+                            set_status(paths, stage="bioemu", state="running", detail=f"runpod_job_id={job_id}")
 
-                    def _on_bioemu_job_id(job_id: str) -> None:
-                        write_json(
-                            runpod_job_path,
-                            {
-                                "job_id": job_id,
-                                "request_hash": bioemu_request_hash,
-                                "num_samples": bioemu_num_samples,
-                                "batch_size_100": bioemu_batch_size_100,
-                                "model_name": bioemu_model_name,
-                                "filter_samples": bioemu_filter_samples,
-                                "base_seed": bioemu_base_seed,
-                                "max_return_structures": bioemu_max_return_structures,
-                            },
-                        )
-                        set_status(paths, stage="bioemu", state="running", detail=f"runpod_job_id={job_id}")
+                        try:
+                            bioemu_out = self.bioemu.sample(
+                                sequence=bioemu_sequence,
+                                num_samples=bioemu_num_samples,
+                                batch_size_100=bioemu_batch_size_100,
+                                model_name=bioemu_model_name,
+                                filter_samples=bioemu_filter_samples,
+                                base_seed=bioemu_base_seed,
+                                env=bioemu_env,
+                                return_pdb=True,
+                                return_sample_pdbs=True,
+                                max_return_sample_pdbs=bioemu_max_return_structures,
+                                resume_job_id=resume_job_id,
+                                on_job_id=_on_bioemu_job_id,
+                            )
+                        except TypeError as exc:
+                            if "resume_job_id" not in str(exc):
+                                raise
+                            bioemu_out = self.bioemu.sample(
+                                sequence=bioemu_sequence,
+                                num_samples=bioemu_num_samples,
+                                batch_size_100=bioemu_batch_size_100,
+                                model_name=bioemu_model_name,
+                                filter_samples=bioemu_filter_samples,
+                                base_seed=bioemu_base_seed,
+                                env=bioemu_env,
+                                return_pdb=True,
+                                return_sample_pdbs=True,
+                                max_return_sample_pdbs=bioemu_max_return_structures,
+                                on_job_id=_on_bioemu_job_id,
+                            )
+                        write_json(output_path, _safe_json(bioemu_out))
 
-                    try:
-                        bioemu_out = self.bioemu.sample(
-                            sequence=bioemu_sequence,
-                            num_samples=bioemu_num_samples,
-                            batch_size_100=bioemu_batch_size_100,
-                            model_name=bioemu_model_name,
-                            filter_samples=bioemu_filter_samples,
-                            base_seed=bioemu_base_seed,
-                            env=bioemu_env,
-                            return_pdb=True,
-                            return_sample_pdbs=True,
-                            max_return_sample_pdbs=bioemu_max_return_structures,
-                            resume_job_id=resume_job_id,
-                            on_job_id=_on_bioemu_job_id,
-                        )
-                    except TypeError as exc:
-                        if "resume_job_id" not in str(exc):
-                            raise
-                        bioemu_out = self.bioemu.sample(
-                            sequence=bioemu_sequence,
-                            num_samples=bioemu_num_samples,
-                            batch_size_100=bioemu_batch_size_100,
-                            model_name=bioemu_model_name,
-                            filter_samples=bioemu_filter_samples,
-                            base_seed=bioemu_base_seed,
-                            env=bioemu_env,
-                            return_pdb=True,
-                            return_sample_pdbs=True,
-                            max_return_sample_pdbs=bioemu_max_return_structures,
-                            on_job_id=_on_bioemu_job_id,
-                        )
-                    write_json(bioemu_dir / "output.json", _safe_json(bioemu_out))
+                        parsed_samples: list[dict[str, Any]] = []
+                        raw_samples = bioemu_out.get("sample_pdbs")
+                        if isinstance(raw_samples, list):
+                            for i, sample in enumerate(raw_samples):
+                                if not isinstance(sample, dict):
+                                    continue
+                                sample_id = str(sample.get("id") or f"bioemu_{i:03d}")
+                                pdb_text = str(sample.get("pdb") or sample.get("pdb_text") or "")
+                                if not pdb_text.strip():
+                                    continue
+                                parsed_samples.append(
+                                    {
+                                        "id": sample_id,
+                                        "pdb_text": pdb_text,
+                                        "source": "bioemu",
+                                        "frame_index": sample.get("frame_index"),
+                                    }
+                                )
 
-                    parsed_samples: list[dict[str, Any]] = []
-                    raw_samples = bioemu_out.get("sample_pdbs")
-                    if isinstance(raw_samples, list):
-                        for i, sample in enumerate(raw_samples):
-                            if not isinstance(sample, dict):
-                                continue
-                            sample_id = str(sample.get("id") or f"bioemu_{i:03d}")
-                            pdb_text = str(sample.get("pdb") or sample.get("pdb_text") or "")
-                            if not pdb_text.strip():
-                                continue
-                            parsed_samples.append(
+                        if not parsed_samples:
+                            topology_pdb = str(bioemu_out.get("topology_pdb") or "")
+                            if topology_pdb.strip():
+                                parsed_samples.append(
+                                    {
+                                        "id": "bioemu_topology",
+                                        "pdb_text": topology_pdb,
+                                        "source": "bioemu",
+                                        "frame_index": None,
+                                    }
+                                )
+
+                        if not parsed_samples:
+                            raise RuntimeError("BioEmu output missing sample_pdbs/topology_pdb")
+
+                        limit = bioemu_max_return_structures
+                        bioemu_backbones = parsed_samples[:limit]
+
+                        out_designs_dir = _ensure_dir(designs_dir)
+                        sample_entries = []
+                        for sample in bioemu_backbones:
+                            bb_id = _safe_id(str(sample.get("id") or "bioemu"))
+                            _write_text(out_designs_dir / f"{bb_id}.pdb", str(sample.get("pdb_text") or ""))
+                            sample_entries.append(
                                 {
-                                    "id": sample_id,
-                                    "pdb_text": pdb_text,
-                                    "source": "bioemu",
+                                    "id": str(sample.get("id") or ""),
                                     "frame_index": sample.get("frame_index"),
                                 }
                             )
-
-                    if not parsed_samples:
-                        topology_pdb = str(bioemu_out.get("topology_pdb") or "")
-                        if topology_pdb.strip():
-                            parsed_samples.append(
-                                {
-                                    "id": "bioemu_topology",
-                                    "pdb_text": topology_pdb,
-                                    "source": "bioemu",
-                                    "frame_index": None,
-                                }
-                            )
-
-                    if not parsed_samples:
-                        raise RuntimeError("BioEmu output missing sample_pdbs/topology_pdb")
-
-                    limit = bioemu_max_return_structures
-                    bioemu_backbones = parsed_samples[:limit]
-
-                    designs_dir = _ensure_dir(bioemu_dir / "designs")
-                    sample_entries = []
-                    for sample in bioemu_backbones:
-                        bb_id = _safe_id(str(sample.get("id") or "bioemu"))
-                        _write_text(designs_dir / f"{bb_id}.pdb", str(sample.get("pdb_text") or ""))
-                        sample_entries.append(
-                            {
-                                "id": str(sample.get("id") or ""),
-                                "frame_index": sample.get("frame_index"),
-                            }
-                        )
-                    write_json(bioemu_dir / "sample_pdbs.json", {"samples": sample_entries})
-                    set_status(paths, stage="bioemu", state="completed", detail=f"structures={len(bioemu_backbones)}")
+                        write_json(sample_pdbs_path, {"samples": sample_entries})
+                        set_status(paths, stage="bioemu", state="completed", detail=f"structures={len(bioemu_backbones)}")
 
                 if request.stop_after == "bioemu":
                     result = PipelineResult(
@@ -3643,7 +3860,7 @@ class PipelineRunner:
                         recovery=af2_recovery,
                     )
 
-                if request.stop_after == "af2":
+                if normalized_stop_after == "af2" or not novelty_enabled:
                     tier_results.append(
                         TierResult(
                             tier=tier,
@@ -3670,24 +3887,90 @@ class PipelineRunner:
                     novelty_error: str | None = None
                     novelty_recovery: dict[str, object] | None = None
                     try:
-                        if self.mmseqs is None:
-                            raise RuntimeError("MMseqs client is not configured")
                         set_status(paths, stage=f"novelty_{tier_str}", state="running")
-                        query_fasta = to_fasta(
-                            [FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in novelty_candidates]
+                        novelty_tsv_path = tier_dir / "novelty.tsv"
+                        novelty_meta_path = tier_dir / "novelty.json"
+                        novelty_max_seqs = min(300, request.mmseqs_max_seqs)
+                        novelty_request_hash = _stable_payload_hash(
+                            {
+                                "target_db": request.novelty_target_db,
+                                "threads": request.mmseqs_threads,
+                                "use_gpu": request.mmseqs_use_gpu,
+                                "max_seqs": novelty_max_seqs,
+                                "candidates": [
+                                    {"id": str(s.id), "sequence": str(s.sequence)}
+                                    for s in novelty_candidates
+                                ],
+                            }
                         )
-                        novelty_out = self.mmseqs.search(
-                            query_fasta=query_fasta,
-                            target_db=request.novelty_target_db,
-                            threads=request.mmseqs_threads,
-                            use_gpu=request.mmseqs_use_gpu,
-                            include_taxonomy=False,
-                            return_a3m=False,
-                            max_seqs=min(300, request.mmseqs_max_seqs),
-                        )
-                        novelty_tsv = str(novelty_out.get("tsv") or "")
-                        _write_text(tier_dir / "novelty.tsv", novelty_tsv)
-                        set_status(paths, stage=f"novelty_{tier_str}", state="completed")
+                        novelty_meta_exists = novelty_meta_path.exists()
+                        if novelty_tsv_path.exists() and not request.force:
+                            try:
+                                cached_tsv = novelty_tsv_path.read_text(encoding="utf-8")
+                            except Exception:
+                                cached_tsv = None
+                            if cached_tsv is not None:
+                                cached_ok = True
+                                if novelty_meta_exists:
+                                    try:
+                                        cached_meta = json.loads(novelty_meta_path.read_text(encoding="utf-8"))
+                                    except Exception:
+                                        cached_meta = None
+                                    if not isinstance(cached_meta, dict):
+                                        cached_ok = False
+                                    else:
+                                        cached_hash = str(cached_meta.get("request_hash") or "").strip()
+                                        if cached_hash and cached_hash != novelty_request_hash:
+                                            cached_ok = False
+                                if cached_ok:
+                                    novelty_tsv = cached_tsv
+                                    write_json(
+                                        novelty_meta_path,
+                                        {
+                                            "request_hash": novelty_request_hash,
+                                            "target_db": request.novelty_target_db,
+                                            "threads": request.mmseqs_threads,
+                                            "use_gpu": request.mmseqs_use_gpu,
+                                            "max_seqs": novelty_max_seqs,
+                                            "candidate_ids": [str(s.id) for s in novelty_candidates],
+                                            "cached": True,
+                                            "legacy_without_meta": (not novelty_meta_exists),
+                                        },
+                                    )
+                                    set_status(paths, stage=f"novelty_{tier_str}", state="completed", detail="cached")
+                                else:
+                                    novelty_tsv = None
+
+                        if novelty_tsv is None:
+                            if self.mmseqs is None:
+                                raise RuntimeError("MMseqs client is not configured")
+                            query_fasta = to_fasta(
+                                [FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in novelty_candidates]
+                            )
+                            novelty_out = self.mmseqs.search(
+                                query_fasta=query_fasta,
+                                target_db=request.novelty_target_db,
+                                threads=request.mmseqs_threads,
+                                use_gpu=request.mmseqs_use_gpu,
+                                include_taxonomy=False,
+                                return_a3m=False,
+                                max_seqs=novelty_max_seqs,
+                            )
+                            novelty_tsv = str(novelty_out.get("tsv") or "")
+                            _write_text(novelty_tsv_path, novelty_tsv)
+                            write_json(
+                                novelty_meta_path,
+                                {
+                                    "request_hash": novelty_request_hash,
+                                    "target_db": request.novelty_target_db,
+                                    "threads": request.mmseqs_threads,
+                                    "use_gpu": request.mmseqs_use_gpu,
+                                    "max_seqs": novelty_max_seqs,
+                                    "candidate_ids": [str(s.id) for s in novelty_candidates],
+                                    "cached": False,
+                                },
+                            )
+                            set_status(paths, stage=f"novelty_{tier_str}", state="completed")
                     except Exception as exc:
                         if is_cancel_requested(self.output_root, run_id) or _is_cancel_error(exc):
                             raise PipelineCancelled(stage=f"novelty_{tier_str}", message=f"run cancelled while novelty_{tier_str}: {exc}") from exc
@@ -3703,6 +3986,22 @@ class PipelineRunner:
                         }
                         novelty_tsv = ""
                         _write_text(tier_dir / "novelty.tsv", novelty_tsv)
+                        write_json(
+                            tier_dir / "novelty.json",
+                            {
+                                "request_hash": _stable_payload_hash(
+                                    {
+                                        "target_db": request.novelty_target_db,
+                                        "threads": request.mmseqs_threads,
+                                        "use_gpu": request.mmseqs_use_gpu,
+                                        "max_seqs": min(300, request.mmseqs_max_seqs),
+                                        "candidate_ids": [str(s.id) for s in novelty_candidates],
+                                    }
+                                ),
+                                "recovered": True,
+                                "error": novelty_error,
+                            },
+                        )
                         set_status(paths, stage=f"novelty_{tier_str}", state="completed", detail="recovered")
                     _emit_panel(
                         f"novelty_{tier_str}",

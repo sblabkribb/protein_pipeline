@@ -155,6 +155,7 @@ const state = {
   runModeById: {},
   af2ProviderByRunId: {},
   progressByRunId: {},
+  progressContextByRunId: {},
   timingByRunId: {},
   feedbackCount: 0,
   experimentCount: 0,
@@ -163,6 +164,8 @@ const state = {
   reportModalText: "",
   reportModalMode: "rendered",
   reportModalFilename: "report.md",
+  reportModalRenderToken: 0,
+  reportModalImageCache: {},
   copilotHistory: [],
   showBioemuCountOptions: false,
   showRfd3CountOptions: false,
@@ -609,6 +612,15 @@ const I18N = {
     "report.chart.desc": "Render one selected chart from current hit-list data.",
     "report.chart.select": "Chart Type",
     "report.chart.placeholder": "Load hit list to show report charts.",
+    "report.chart.sectionTitle": "Candidate Charts (SVG Attachments)",
+    "report.chart.sectionEmpty": "Chart data is not available yet.",
+    "report.compare.sectionTitle": "Structure/Sequence Difference (SVG Attachments)",
+    "report.compare.sectionEmpty": "Not enough PDB artifacts for automatic structure/sequence diff.",
+    "report.compare.left": "Reference",
+    "report.compare.right": "Candidate",
+    "report.hitList.title": "Hit List",
+    "report.hitList.empty": "Hit list data is not available yet.",
+    "report.hitList.summary": "Rows: {shown}/{total} (cutoff >= {cutoff})",
     "report.review.title": "Report Review",
     "report.review.desc": "Rate the report and provide reasons.",
     "report.review.rating": "Rating",
@@ -698,6 +710,8 @@ const I18N = {
     "question.af2PlddtCutoff.help": "Minimum pLDDT threshold for {af2Provider} pass filtering (default: 85).",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD Cutoff",
     "question.af2RmsdCutoff.help": "Maximum RMSD threshold (angstrom) for {af2Provider} pass filtering (default: 2.0).",
+    "question.noveltyEnabled.label": "Novelty Search",
+    "question.noveltyEnabled.help": "Run final MMseqs2 novelty search for AF2-selected sequences.",
     "question.af2Provider.label": "Structure Predictor",
     "question.af2Provider.help": "Choose structure prediction provider.",
     "question.rfd3MaxReturn.label": "RFD3 Return Count",
@@ -748,6 +762,8 @@ const I18N = {
     "choice.ligandMaskOriginal.off": "Use backbone-only mask",
     "choice.bioemuUse.on": "Enable BioEmu",
     "choice.bioemuUse.off": "Disable BioEmu",
+    "choice.novelty.on": "Enable novelty",
+    "choice.novelty.off": "Disable novelty",
     "choice.af2Provider.colabfold": "ColabFold (default)",
     "choice.af2Provider.af2": "AlphaFold2",
     "advanced.bioemuCounts.title": "BioEmu Count Options",
@@ -1183,6 +1199,15 @@ const I18N = {
     "report.chart.desc": "현재 Hit List 데이터에서 선택한 차트 1개를 렌더링합니다.",
     "report.chart.select": "차트 유형",
     "report.chart.placeholder": "Hit List를 불러오면 리포트 차트를 표시합니다.",
+    "report.chart.sectionTitle": "후보 차트 (SVG 첨부)",
+    "report.chart.sectionEmpty": "아직 차트 데이터를 만들 수 없습니다.",
+    "report.compare.sectionTitle": "구조/서열 차이 (SVG 첨부)",
+    "report.compare.sectionEmpty": "자동 구조/서열 차이를 만들 수 있는 PDB 아티팩트가 부족합니다.",
+    "report.compare.left": "기준",
+    "report.compare.right": "후보",
+    "report.hitList.title": "Hit List",
+    "report.hitList.empty": "아직 Hit List 데이터가 없습니다.",
+    "report.hitList.summary": "행: {shown}/{total} (컷오프 >= {cutoff})",
     "report.review.title": "리포트 평가",
     "report.review.desc": "리포트를 평가하고 이유를 입력하세요.",
     "report.review.rating": "평가",
@@ -1272,6 +1297,8 @@ const I18N = {
     "question.af2PlddtCutoff.help": "{af2Provider} 통과 필터링에 사용할 최소 pLDDT 임계값입니다. (기본값: 85)",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD 컷오프",
     "question.af2RmsdCutoff.help": "{af2Provider} 통과 필터링에 사용할 최대 RMSD 임계값(Å)입니다. (기본값: 2.0)",
+    "question.noveltyEnabled.label": "Novelty 검색",
+    "question.noveltyEnabled.help": "AF2 선택 서열에 대해 마지막 MMseqs2 novelty 검색을 실행합니다.",
     "question.af2Provider.label": "구조 예측기",
     "question.af2Provider.help": "구조 예측 provider를 선택하세요.",
     "question.rfd3MaxReturn.label": "RFD3 반환 개수",
@@ -1322,6 +1349,8 @@ const I18N = {
     "choice.ligandMaskOriginal.off": "현재 백본 기준만 사용",
     "choice.bioemuUse.on": "BioEmu 사용",
     "choice.bioemuUse.off": "BioEmu 사용 안 함",
+    "choice.novelty.on": "Novelty 사용",
+    "choice.novelty.off": "Novelty 사용 안 함",
     "choice.af2Provider.colabfold": "ColabFold (기본)",
     "choice.af2Provider.af2": "AlphaFold2",
     "advanced.bioemuCounts.title": "BioEmu 개수 옵션",
@@ -1726,6 +1755,11 @@ const QUESTION_PRESETS = {
     questionKey: "question.af2RmsdCutoff.help",
     default: 2.0,
   },
+  novelty_enabled: {
+    labelKey: "question.noveltyEnabled.label",
+    questionKey: "question.noveltyEnabled.help",
+    default: false,
+  },
   af2_provider: {
     labelKey: "question.af2Provider.label",
     questionKey: "question.af2Provider.help",
@@ -1786,6 +1820,7 @@ const ANSWER_BOOL_KEYS = new Set([
   "mmseqs_use_gpu",
   "rfd3_use_ensemble",
   "bioemu_use",
+  "novelty_enabled",
   "confirm_run",
 ]);
 
@@ -2445,20 +2480,7 @@ function isRunReportFilename(filename) {
 }
 
 function renderReportModalContent() {
-  const base = renderMarkdown(state.reportModalText || "");
-  if (!isRunReportFilename(state.reportModalFilename) || !String(state.currentRunId || "").trim()) {
-    return base;
-  }
-  const rows = filteredHitListRows({ applyLimit: false });
-  if (!rows.length) return base;
-  const payload = selectedChartPayload(rows);
-  if (!payload) return base;
-  return `${base}
-<h3>${escapeHtml(t("report.chart.title"))}</h3>
-<div class="chart-explorer chart-explorer-report">
-  <div class="chart-canvas chart-canvas-report">${payload.svg}</div>
-  <p class="chart-caption">${escapeHtml(payload.caption)}</p>
-</div>`;
+  return renderMarkdown(state.reportModalText || "");
 }
 
 function openReportModal(title, content, filename) {
@@ -2470,6 +2492,7 @@ function openReportModal(title, content, filename) {
   if (el.reportModalToggle) el.reportModalToggle.textContent = t("report.modal.toggleRendered");
   if (el.reportModalContent) {
     el.reportModalContent.innerHTML = renderReportModalContent();
+    void hydrateReportModalArtifactImages();
   }
   el.reportModal.classList.remove("hidden");
 }
@@ -2488,6 +2511,7 @@ function toggleReportModalMode() {
   } else {
     state.reportModalMode = "rendered";
     el.reportModalContent.innerHTML = renderReportModalContent();
+    void hydrateReportModalArtifactImages();
     if (el.reportModalToggle) el.reportModalToggle.textContent = t("report.modal.toggleRendered");
   }
 }
@@ -2575,6 +2599,7 @@ function setLanguage(lang) {
   if (el.reportModal && el.reportModalContent && !el.reportModal.classList.contains("hidden")) {
     if (state.reportModalMode === "rendered") {
       el.reportModalContent.innerHTML = renderReportModalContent();
+      void hydrateReportModalArtifactImages();
     }
   }
 }
@@ -2684,7 +2709,14 @@ function buildManualPlan(mode) {
         labelKey: "question.stopAfter.label",
         questionKey: "question.stopAfter.help",
         required: false,
-        default: "novelty",
+        default: "af2",
+      },
+      {
+        id: "novelty_enabled",
+        labelKey: "question.noveltyEnabled.label",
+        questionKey: "question.noveltyEnabled.help",
+        required: false,
+        default: false,
       },
       {
         id: "bioemu_use",
@@ -3266,10 +3298,43 @@ function inferRunModeFromRequestPayload(payload) {
   return "";
 }
 
+function normalizeTierKeyValue(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const asNum = Number(raw);
+  if (!Number.isFinite(asNum)) return raw;
+  if (Math.abs(asNum) <= 1.0) {
+    return String(Math.round(asNum * 100));
+  }
+  return String(Math.round(asNum));
+}
+
+function buildProgressContextFromRequestPayload(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const rawTiers = Array.isArray(payload.conservation_tiers) ? payload.conservation_tiers : [0.3, 0.5, 0.7];
+  const tierKeys = Array.from(
+    new Set(
+      rawTiers
+        .map((item) => normalizeTierKeyValue(item))
+        .filter((item) => String(item || "").trim())
+    )
+  );
+  const stopAfter = String(payload.stop_after || "")
+    .trim()
+    .toLowerCase();
+  const noveltyEnabled = Boolean(payload.novelty_enabled) || stopAfter === "novelty";
+  return {
+    tierKeys,
+    noveltyEnabled,
+    stopAfter,
+  };
+}
+
 async function ensureRunModeForRunId(runId, status) {
   if (!runId) return "pipeline";
   const mapped = state.runModeById[runId];
-  if (mapped && PROGRESS_PLANS[mapped]) return mapped;
+  const context = state.progressContextByRunId[runId];
+  if (mapped && PROGRESS_PLANS[mapped] && (mapped !== "pipeline" || context)) return mapped;
 
   try {
     const req = await apiCall("pipeline.read_artifact", {
@@ -3285,6 +3350,10 @@ async function ensureRunModeForRunId(runId, status) {
         if (shouldRefreshAf2Labels) {
           refreshAf2ProviderLabels();
         }
+      }
+      const progressContext = buildProgressContextFromRequestPayload(payload);
+      if (progressContext) {
+        state.progressContextByRunId[runId] = progressContext;
       }
       const inferred = inferRunModeFromRequestPayload(payload);
       if (inferred && PROGRESS_PLANS[inferred]) {
@@ -3345,6 +3414,65 @@ function mapStageToProgressStep(stage, mode) {
   if (raw === "af2" || raw.startsWith("af2_")) return "af2";
   if (raw === "novelty" || raw.startsWith("novelty_")) return "novelty";
   return null;
+}
+
+function parseTierStage(stage) {
+  const raw = String(stage || "").trim().toLowerCase();
+  const match = raw.match(/^(proteinmpnn|soluprot|af2|novelty)_([0-9]+(?:\.[0-9]+)?)$/);
+  if (!match) return null;
+  const base = match[1];
+  const tierKey = normalizeTierKeyValue(match[2]);
+  if (!tierKey) return null;
+  if (base === "proteinmpnn") return { step: "design", tierKey };
+  return { step: base, tierKey };
+}
+
+function computePipelineTierAwareProgress(status, runState, offset, cached) {
+  const runId = String(state.currentRunId || "");
+  if (!runId) return null;
+  const ctx = state.progressContextByRunId[runId];
+  if (!ctx || !Array.isArray(ctx.tierKeys) || ctx.tierKeys.length === 0) return null;
+
+  const preSteps = ["msa", "conservation", "backbone", "wt", "masking"];
+  const tierSteps = ctx.noveltyEnabled ? ["design", "soluprot", "af2", "novelty"] : ["design", "soluprot", "af2"];
+  const totalUnits = preSteps.length + ctx.tierKeys.length * tierSteps.length + 1;
+  const currentStep = mapStageToProgressStep(status?.stage, "pipeline");
+  const parsedTierStage = parseTierStage(status?.stage);
+  if (!currentStep) return null;
+  if (String(currentStep) === "done") {
+    return {
+      percent: 100,
+      label: progressStepLabel("done"),
+    };
+  }
+
+  let unitIndex = null;
+  let label = progressStepLabel(currentStep);
+  if (preSteps.includes(currentStep)) {
+    unitIndex = preSteps.indexOf(currentStep);
+  } else if (tierSteps.includes(currentStep)) {
+    let tierIndex = parsedTierStage ? ctx.tierKeys.indexOf(parsedTierStage.tierKey) : -1;
+    if (tierIndex < 0 && cached && Number.isFinite(cached.tierIndex)) {
+      tierIndex = Math.max(0, Math.min(ctx.tierKeys.length - 1, Number(cached.tierIndex)));
+    }
+    if (tierIndex < 0) tierIndex = 0;
+    const subIndex = Math.max(0, tierSteps.indexOf(currentStep));
+    unitIndex = preSteps.length + tierIndex * tierSteps.length + subIndex;
+    label = `${t("artifacts.filter.tier")} ${tierIndex + 1}/${ctx.tierKeys.length} · ${progressStepLabel(currentStep)}`;
+  } else {
+    return null;
+  }
+
+  let percent = ((unitIndex + offset) / Math.max(1, totalUnits)) * 100;
+  if (TERMINAL_RUN_STATES.has(runState) && runState !== "completed") {
+    percent = Math.max(percent, ((unitIndex + 0.75) / Math.max(1, totalUnits)) * 100);
+  }
+  percent = Math.max(1, Math.min(99, percent));
+  return {
+    percent,
+    label,
+    tierIndex: parsedTierStage ? ctx.tierKeys.indexOf(parsedTierStage.tierKey) : null,
+  };
 }
 
 function progressStepLabel(step) {
@@ -3465,11 +3593,17 @@ function renderRunProgress(status) {
   if (!el.runProgressFill || !el.runProgressPercent || !el.runProgressLabel || !el.runProgressStages) return;
 
   const mode = progressModeForStatus(status);
-  const steps = PROGRESS_PLANS[mode] || PROGRESS_PLANS.pipeline;
+  const runId = String(state.currentRunId || "");
+  let steps = PROGRESS_PLANS[mode] || PROGRESS_PLANS.pipeline;
+  if (mode === "pipeline") {
+    const ctx = state.progressContextByRunId[runId];
+    if (ctx && ctx.noveltyEnabled === false) {
+      steps = steps.filter((step) => step !== "novelty");
+    }
+  }
   const runState = String(status?.state || "").trim().toLowerCase();
   const currentStep = mapStageToProgressStep(status?.stage, mode);
 
-  const runId = state.currentRunId || "";
   const cached = runId ? state.progressByRunId[runId] : null;
   let stepIndex = currentStep ? steps.indexOf(currentStep) : -1;
   if (stepIndex < 0 && cached && cached.mode === mode && Number.isFinite(cached.index)) {
@@ -3478,6 +3612,8 @@ function renderRunProgress(status) {
   if (stepIndex < 0) stepIndex = 0;
 
   let percent = 0;
+  let labelOverride = "";
+  let tierIndexForCache = null;
   if (currentStep === "done") {
     percent = 100;
     stepIndex = steps.length - 1;
@@ -3485,17 +3621,26 @@ function renderRunProgress(status) {
     const base = Math.max(0, stepIndex);
     const offset =
       runState === "running" ? 0.45 : runState === "completed" ? 1.0 : runState === "failed" ? 0.2 : 0.1;
-    percent = ((base + offset) / Math.max(1, steps.length)) * 100;
-    if (TERMINAL_RUN_STATES.has(runState) && runState !== "completed") {
-      percent = Math.max(percent, ((base + 0.75) / Math.max(1, steps.length)) * 100);
+    const tierAware = mode === "pipeline" ? computePipelineTierAwareProgress(status, runState, offset, cached) : null;
+    if (tierAware && Number.isFinite(tierAware.percent)) {
+      percent = Number(tierAware.percent);
+      labelOverride = String(tierAware.label || "");
+      if (Number.isFinite(tierAware.tierIndex) && Number(tierAware.tierIndex) >= 0) {
+        tierIndexForCache = Number(tierAware.tierIndex);
+      }
+    } else {
+      percent = ((base + offset) / Math.max(1, steps.length)) * 100;
+      if (TERMINAL_RUN_STATES.has(runState) && runState !== "completed") {
+        percent = Math.max(percent, ((base + 0.75) / Math.max(1, steps.length)) * 100);
+      }
+      percent = Math.max(1, Math.min(99, percent));
     }
-    percent = Math.max(1, Math.min(99, percent));
   }
 
   const rounded = Math.max(0, Math.min(100, Math.round(percent)));
   el.runProgressFill.style.width = `${rounded}%`;
   el.runProgressPercent.textContent = `${rounded}%`;
-  el.runProgressLabel.textContent = progressStepLabel(steps[Math.min(stepIndex, steps.length - 1)]);
+  el.runProgressLabel.textContent = labelOverride || progressStepLabel(steps[Math.min(stepIndex, steps.length - 1)]);
 
   el.runProgressStages.innerHTML = steps
     .map((step, index) => {
@@ -3507,7 +3652,9 @@ function renderRunProgress(status) {
     .join("");
 
   if (runId) {
-    state.progressByRunId[runId] = { mode, index: stepIndex, percent: rounded };
+    const payload = { mode, index: stepIndex, percent: rounded };
+    if (tierIndexForCache !== null) payload.tierIndex = tierIndexForCache;
+    state.progressByRunId[runId] = payload;
   }
   return rounded;
 }
@@ -4242,6 +4389,7 @@ function renderQuestions(questions) {
     "mask_consensus_apply",
     "ligand_mask_use_original_target",
     "bioemu_use",
+    "novelty_enabled",
     "af2_provider",
     "confirm_run",
   ]);
@@ -4287,7 +4435,7 @@ function renderQuestions(questions) {
 
     if (q.id === "stop_after") {
       const routedDefault = state.plan?.routed_request?.stop_after;
-      const current = state.answers.stop_after || routedDefault || q.default || "design";
+      const current = state.answers.stop_after || routedDefault || q.default || "af2";
       state.answers.stop_after = current;
       renderChoiceButtons(
         card,
@@ -4305,6 +4453,9 @@ function renderQuestions(questions) {
           state.answers.stop_after = value;
           if (value === "bioemu") {
             state.answers.bioemu_use = true;
+          }
+          if (value === "novelty") {
+            state.answers.novelty_enabled = true;
           }
           updateRunEligibility(normalizedQuestions);
         }
@@ -4508,6 +4659,37 @@ function renderQuestions(questions) {
         current,
         (value) => {
           state.answers.bioemu_use = value;
+          updateRunEligibility(normalizedQuestions);
+        }
+      );
+    }
+
+    if (q.id === "novelty_enabled") {
+      let current = state.answers.novelty_enabled;
+      if (typeof current !== "boolean") {
+        const routedDefault = state.plan?.routed_request?.novelty_enabled;
+        if (typeof routedDefault === "boolean") {
+          current = routedDefault;
+        } else {
+          current = q.default !== undefined ? Boolean(q.default) : false;
+        }
+        state.answers.novelty_enabled = current;
+      }
+      renderChoiceButtons(
+        card,
+        [
+          { labelKey: "choice.novelty.on", value: true },
+          { labelKey: "choice.novelty.off", value: false },
+        ],
+        current,
+        (value) => {
+          state.answers.novelty_enabled = value;
+          if (value && String(state.answers.stop_after || "").trim().toLowerCase() === "af2") {
+            state.answers.stop_after = "novelty";
+          }
+          if (!value && String(state.answers.stop_after || "").trim().toLowerCase() === "novelty") {
+            state.answers.stop_after = "af2";
+          }
           updateRunEligibility(normalizedQuestions);
         }
       );
@@ -5540,6 +5722,7 @@ function filterAnswersForMode(mode, answers) {
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
       "af2_provider",
+      "novelty_enabled",
       "num_seq_per_tier",
       "stop_after",
     ],
@@ -5818,6 +6001,10 @@ async function runPipeline() {
   if (Object.prototype.hasOwnProperty.call(args, "af2_provider")) {
     setAf2ProviderForRun(runId, args.af2_provider);
   }
+  if (toolName === "pipeline.run") {
+    const progressContext = buildProgressContextFromRequestPayload(args);
+    if (progressContext) state.progressContextByRunId[runId] = progressContext;
+  }
 
   const modeLabel = t(`mode.${mode}`) || mode;
   setMessage(t("run.launching", { mode: modeLabel, id: runId }), "ai");
@@ -6059,6 +6246,10 @@ async function resumeCurrentRun() {
   const inferredMode = inferRunModeFromRequestPayload(payload);
   if (inferredMode && PROGRESS_PLANS[inferredMode]) {
     state.runModeById[runId] = inferredMode;
+  }
+  const resumeProgressContext = buildProgressContextFromRequestPayload(args);
+  if (resumeProgressContext) {
+    state.progressContextByRunId[runId] = resumeProgressContext;
   }
 
   let resumeToolName = "pipeline.run";
@@ -7802,6 +7993,82 @@ function escapeHtml(text) {
     .replace(/>/g, "&gt;");
 }
 
+function escapeAttr(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function normalizeMarkdownTarget(raw) {
+  const text = String(raw || "").trim();
+  if (!text) return "";
+  const wrapped = text.match(/^<(.+)>$/);
+  return wrapped ? String(wrapped[1] || "").trim() : text;
+}
+
+function isSafeMarkdownTarget(target) {
+  return !/^(?:javascript|vbscript|file):/i.test(String(target || "").trim());
+}
+
+function isExternalMarkdownTarget(target) {
+  return /^(?:https?:|data:|blob:)/i.test(String(target || "").trim());
+}
+
+function normalizeArtifactMarkdownPath(target) {
+  const raw = String(target || "").trim();
+  if (!raw) return "";
+  const stripped = raw.split("#", 1)[0].split("?", 1)[0];
+  return stripped.replace(/^\.\/+/, "").replace(/^\/+/, "");
+}
+
+function imageMimeTypeFromPath(path) {
+  const clean = String(path || "").split("#", 1)[0].split("?", 1)[0];
+  const ext = clean.includes(".") ? clean.split(".").pop().toLowerCase() : "";
+  if (ext === "svg") return "image/svg+xml";
+  if (ext === "png") return "image/png";
+  if (ext === "jpg" || ext === "jpeg") return "image/jpeg";
+  if (ext === "gif") return "image/gif";
+  if (ext === "webp") return "image/webp";
+  return "application/octet-stream";
+}
+
+async function hydrateReportModalArtifactImages() {
+  if (!el.reportModalContent) return;
+  if (state.reportModalMode !== "rendered") return;
+  const runId = String(state.currentRunId || "").trim();
+  if (!runId) return;
+  const pending = Array.from(el.reportModalContent.querySelectorAll("img[data-artifact-path]"));
+  if (!pending.length) return;
+
+  state.reportModalRenderToken += 1;
+  const token = state.reportModalRenderToken;
+  await Promise.all(
+    pending.map(async (img) => {
+      const artifactPath = normalizeArtifactMarkdownPath(img.dataset.artifactPath || "");
+      if (!artifactPath) return;
+      const cacheKey = `${runId}::${artifactPath}`;
+      let base64 = String(state.reportModalImageCache[cacheKey] || "");
+      if (!base64) {
+        const result = await apiCall("pipeline.read_artifact", {
+          run_id: runId,
+          path: artifactPath,
+          base64: true,
+          max_bytes: 4000000,
+        });
+        base64 = String(result?.base64 || "");
+        if (!base64) return;
+        state.reportModalImageCache[cacheKey] = base64;
+      }
+      if (token !== state.reportModalRenderToken) return;
+      img.src = `data:${imageMimeTypeFromPath(artifactPath)};base64,${base64}`;
+      img.removeAttribute("data-artifact-path");
+    })
+  ).catch(() => null);
+}
+
 function renderMarkdown(text) {
   const raw = String(text || "").replace(/\r\n?/g, "\n");
   const parts = [];
@@ -7860,9 +8127,38 @@ function renderMarkdown(text) {
 
     const formatInline = (line) => {
       let out = escapeHtml(line);
-      out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+      const codeTokens = [];
+      out = out.replace(/`([^`]+)`/g, (_match, code) => {
+        const token = `@@CODE_${codeTokens.length}@@`;
+        codeTokens.push(`<code>${code}</code>`);
+        return token;
+      });
+      const imageTokens = [];
+      out = out.replace(/!\[([^\]]*)\]\((\S+?)(?:\s+"[^"]*")?\)/g, (_match, alt, target) => {
+        const normalizedTarget = normalizeMarkdownTarget(target);
+        if (!normalizedTarget || !isSafeMarkdownTarget(normalizedTarget)) return _match;
+        const token = `@@IMG_${imageTokens.length}@@`;
+        if (isExternalMarkdownTarget(normalizedTarget)) {
+          imageTokens.push(
+            `<img src="${escapeAttr(normalizedTarget)}" alt="${escapeAttr(alt)}" loading="lazy" />`
+          );
+        } else {
+          imageTokens.push(
+            `<img data-artifact-path="${escapeAttr(normalizedTarget)}" alt="${escapeAttr(
+              alt
+            )}" loading="lazy" />`
+          );
+        }
+        return token;
+      });
       out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
       out = out.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+      imageTokens.forEach((html, idx) => {
+        out = out.replace(`@@IMG_${idx}@@`, html);
+      });
+      codeTokens.forEach((html, idx) => {
+        out = out.replace(`@@CODE_${idx}@@`, html);
+      });
       return out;
     };
 
@@ -7896,6 +8192,10 @@ function renderMarkdown(text) {
         closeTable();
         closeLists();
         closePara();
+        continue;
+      }
+
+      if (/^<!--[\s\S]*-->$/.test(trimmed)) {
         continue;
       }
 
@@ -8976,6 +9276,7 @@ function setChartView(value) {
   if (el.reportModal && el.reportModalContent && !el.reportModal.classList.contains("hidden")) {
     if (state.reportModalMode === "rendered") {
       el.reportModalContent.innerHTML = renderReportModalContent();
+      void hydrateReportModalArtifactImages();
     }
   }
 }
@@ -9350,6 +9651,7 @@ function renderCandidateCharts() {
   if (el.reportModal && el.reportModalContent && !el.reportModal.classList.contains("hidden")) {
     if (state.reportModalMode === "rendered" && isRunReportFilename(state.reportModalFilename)) {
       el.reportModalContent.innerHTML = renderReportModalContent();
+      void hydrateReportModalArtifactImages();
     }
   }
 }
@@ -9552,16 +9854,376 @@ async function exportRunPackage() {
   }
 }
 
+const REPORT_HITLIST_START = "<!-- KBF_HITLIST_START -->";
+const REPORT_HITLIST_END = "<!-- KBF_HITLIST_END -->";
+const REPORT_CHARTS_START = "<!-- KBF_CHARTS_START -->";
+const REPORT_CHARTS_END = "<!-- KBF_CHARTS_END -->";
+const REPORT_COMPARE_START = "<!-- KBF_COMPARE_START -->";
+const REPORT_COMPARE_END = "<!-- KBF_COMPARE_END -->";
+
+function stripReportHitListSection(text) {
+  const raw = String(text || "");
+  const start = raw.indexOf(REPORT_HITLIST_START);
+  if (start < 0) return raw;
+  const end = raw.indexOf(REPORT_HITLIST_END, start);
+  if (end < 0) return raw.slice(0, start).trimEnd();
+  return `${raw.slice(0, start)}${raw.slice(end + REPORT_HITLIST_END.length)}`.trimEnd();
+}
+
+function stripReportChartSection(text) {
+  const raw = String(text || "");
+  const start = raw.indexOf(REPORT_CHARTS_START);
+  if (start < 0) return raw;
+  const end = raw.indexOf(REPORT_CHARTS_END, start);
+  if (end < 0) return raw.slice(0, start).trimEnd();
+  return `${raw.slice(0, start)}${raw.slice(end + REPORT_CHARTS_END.length)}`.trimEnd();
+}
+
+function stripReportCompareSection(text) {
+  const raw = String(text || "");
+  const start = raw.indexOf(REPORT_COMPARE_START);
+  if (start < 0) return raw;
+  const end = raw.indexOf(REPORT_COMPARE_END, start);
+  if (end < 0) return raw.slice(0, start).trimEnd();
+  return `${raw.slice(0, start)}${raw.slice(end + REPORT_COMPARE_END.length)}`.trimEnd();
+}
+
+function normalizeSvgAttachmentText(svgText) {
+  const raw = String(svgText || "").trim();
+  if (!raw || !/^<svg\b/i.test(raw)) return "";
+  let normalized = raw;
+  if (!/\bxmlns=/.test(normalized)) {
+    normalized = normalized.replace(/^<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg"');
+  }
+  return `${normalized}\n`;
+}
+
+function buildReportChartSection() {
+  const rows = filteredHitListRows({ applyLimit: false });
+  const lines = [];
+  const attachments = [];
+  lines.push(`## ${t("report.chart.sectionTitle")}`);
+  lines.push("");
+  if (!rows.length) {
+    lines.push(`- ${t("report.chart.sectionEmpty")}`);
+    lines.push("");
+    return { markdown: lines.join("\n"), attachments };
+  }
+
+  const chartDefs = [
+    {
+      id: "plddt_rmsd",
+      title: t("analyze.chart.option.plddtRmsd"),
+      build: buildPlddtRmsdScatter,
+    },
+    {
+      id: "score_hist",
+      title: t("analyze.chart.option.scoreHist"),
+      build: buildScoreHistogram,
+    },
+    {
+      id: "tier_pass",
+      title: t("analyze.chart.option.tierPass"),
+      build: buildTierPassRateChart,
+    },
+  ];
+
+  chartDefs.forEach((chart) => {
+    const payload = chart.build(rows);
+    if (!payload || !String(payload.svg || "").trim()) return;
+    const path = `report_assets/${chart.id}.svg`;
+    const svgText = normalizeSvgAttachmentText(payload.svg);
+    if (!svgText) return;
+    attachments.push({
+      path,
+      text: svgText,
+      content_type: "image/svg+xml",
+    });
+    lines.push(`### ${chart.title}`);
+    lines.push(`![${chart.title}](${path})`);
+    if (payload.caption) {
+      lines.push(`- ${payload.caption}`);
+    }
+    lines.push("");
+  });
+
+  if (!attachments.length) {
+    lines.push(`- ${t("report.chart.sectionEmpty")}`);
+    lines.push("");
+  }
+  return { markdown: lines.join("\n"), attachments };
+}
+
+function selectReportComparePaths() {
+  const structureItems = (state.artifacts || []).filter((item) => isStructureArtifactItem(item));
+  if (!structureItems.length) return { leftPath: "", rightPath: "" };
+  chooseDefaultComparePaths(structureItems);
+  let leftPath = String(state.artifactCompareLeftPath || "").trim();
+  let rightPath = String(state.artifactCompareRightPath || "").trim();
+  if (!rightPath) {
+    const hitRows = filteredHitListRows({ applyLimit: false });
+    const fromHit = hitRows.find((row) => String(row?.af2_ranked_pdb_path || "").trim());
+    if (fromHit) rightPath = String(fromHit.af2_ranked_pdb_path || "").trim();
+  }
+  if (!leftPath || leftPath === rightPath) {
+    const target = structureItems.find((item) => String(item?.path || "").toLowerCase() === "target.pdb");
+    if (target) leftPath = String(target.path || "");
+  }
+  if (leftPath === rightPath) {
+    const alt = structureItems.find((item) => String(item?.path || "") !== leftPath);
+    rightPath = String(alt?.path || "");
+  }
+  return { leftPath, rightPath };
+}
+
+function buildStructureDiffSvg(structureDiff, leftPath, rightPath) {
+  if (!structureDiff || !structureDiff.ok) return "";
+  const metrics = Array.isArray(structureDiff.residueMetrics) ? structureDiff.residueMetrics.slice(0, 28) : [];
+  if (!metrics.length) return "";
+  const width = 780;
+  const left = 178;
+  const right = 24;
+  const top = 72;
+  const rowH = 18;
+  const plotW = width - left - right;
+  const height = top + metrics.length * rowH + 34;
+  const maxDist = Math.max(
+    0.1,
+    ...metrics.map((item) => {
+      const raw = Number(item?.distance);
+      return Number.isFinite(raw) ? raw : 0;
+    })
+  );
+  const bars = metrics
+    .map((item, idx) => {
+      const chain = String(item?.chain || "_");
+      const resi = Number(item?.resi);
+      const label = `${chain}:${Number.isFinite(resi) ? resi : "-"}`;
+      const dist = Number(item?.distance);
+      const safeDist = Number.isFinite(dist) ? dist : 0;
+      const ratio = Math.max(0, Math.min(1, safeDist / maxDist));
+      const y = top + idx * rowH;
+      const barW = ratio * plotW;
+      const color = safeDist > 3 ? "#d62728" : safeDist > 1.5 ? "#e6a700" : "#2f7f84";
+      return [
+        `<text x="${left - 8}" y="${(y + 12).toFixed(1)}" text-anchor="end" fill="#38575b" font-size="11">${svgSafe(label)}</text>`,
+        `<rect x="${left}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="12" fill="${color}" fill-opacity="0.86"><title>${svgSafe(
+          `${label} d=${safeDist.toFixed(2)}A`
+        )}</title></rect>`,
+        `<text x="${(left + barW + 6).toFixed(1)}" y="${(y + 11.5).toFixed(1)}" fill="#38575b" font-size="10">${svgSafe(
+          safeDist.toFixed(2)
+        )}</text>`,
+      ].join("");
+    })
+    .join("");
+  const summary = `RMSD=${chartTickText(structureDiff.rmsd, 2)}A, P90=${chartTickText(
+    structureDiff.p90Distance,
+    2
+  )}A, n=${Number(structureDiff.commonCount || 0)}`;
+  return `<svg class="chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${svgSafe(
+    "Structure difference"
+  )}">
+    <rect x="0" y="0" width="${width}" height="${height}" fill="rgba(255,255,255,0.98)" />
+    <text x="18" y="24" fill="#16393d" font-size="14" font-weight="600">${svgSafe("Structure Difference (CA)")}</text>
+    <text x="18" y="42" fill="#3d5a5f" font-size="11">${svgSafe(`Reference: ${leftPath}`)}</text>
+    <text x="18" y="56" fill="#3d5a5f" font-size="11">${svgSafe(`Candidate: ${rightPath}`)}</text>
+    <text x="${left}" y="24" fill="#16393d" font-size="11">${svgSafe(summary)}</text>
+    <line x1="${left}" y1="${top - 8}" x2="${(left + plotW).toFixed(1)}" y2="${top - 8}" stroke="rgba(22,57,61,0.25)" />
+    <text x="${left}" y="${top - 12}" fill="#3d5a5f" font-size="10">0</text>
+    <text x="${(left + plotW).toFixed(1)}" y="${top - 12}" text-anchor="end" fill="#3d5a5f" font-size="10">${svgSafe(
+      maxDist.toFixed(2)
+    )}</text>
+    ${bars}
+  </svg>`;
+}
+
+function buildSequenceDiffSvg(seqDiff, leftPath, rightPath) {
+  if (!seqDiff) return "";
+  const leftResidues = seqDiff.leftResidues && typeof seqDiff.leftResidues === "object" ? seqDiff.leftResidues : {};
+  const rightResidues = seqDiff.rightResidues && typeof seqDiff.rightResidues === "object" ? seqDiff.rightResidues : {};
+  const chains = Array.from(new Set([...Object.keys(leftResidues), ...Object.keys(rightResidues)])).sort();
+  const width = 720;
+  const height = Math.max(180, 120 + chains.length * 24);
+  const left = 132;
+  const right = 24;
+  const top = 72;
+  const plotW = width - left - right;
+  const countFor = (bucket, chain) => (Array.isArray(bucket?.[chain]) ? bucket[chain].length : 0);
+  const maxCount = Math.max(1, ...chains.map((chain) => Math.max(countFor(leftResidues, chain), countFor(rightResidues, chain))));
+  const rows = chains
+    .map((chain, idx) => {
+      const leftCount = countFor(leftResidues, chain);
+      const rightCount = countFor(rightResidues, chain);
+      const y = top + idx * 24;
+      const leftW = (leftCount / maxCount) * (plotW / 2 - 12);
+      const rightW = (rightCount / maxCount) * (plotW / 2 - 12);
+      const mid = left + plotW / 2;
+      return [
+        `<text x="${left - 10}" y="${(y + 12).toFixed(1)}" text-anchor="end" fill="#38575b" font-size="11">${svgSafe(
+          chain || "_"
+        )}</text>`,
+        `<rect x="${(mid - leftW).toFixed(1)}" y="${y.toFixed(1)}" width="${leftW.toFixed(1)}" height="10" fill="#1f77b4" fill-opacity="0.86"></rect>`,
+        `<rect x="${mid.toFixed(1)}" y="${y.toFixed(1)}" width="${rightW.toFixed(1)}" height="10" fill="#ff7f0e" fill-opacity="0.86"></rect>`,
+        `<text x="${(mid - leftW - 4).toFixed(1)}" y="${(y + 9.8).toFixed(1)}" text-anchor="end" fill="#38575b" font-size="10">${leftCount}</text>`,
+        `<text x="${(mid + rightW + 4).toFixed(1)}" y="${(y + 9.8).toFixed(1)}" fill="#38575b" font-size="10">${rightCount}</text>`,
+      ].join("");
+    })
+    .join("");
+  const total = Number(seqDiff.totalCount || 0);
+  return `<svg class="chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${svgSafe(
+    "Sequence difference"
+  )}">
+    <rect x="0" y="0" width="${width}" height="${height}" fill="rgba(255,255,255,0.98)" />
+    <text x="18" y="24" fill="#16393d" font-size="14" font-weight="600">${svgSafe("Sequence Difference (by chain)")}</text>
+    <text x="18" y="42" fill="#3d5a5f" font-size="11">${svgSafe(`Reference: ${leftPath}`)}</text>
+    <text x="18" y="56" fill="#3d5a5f" font-size="11">${svgSafe(`Candidate: ${rightPath}`)}</text>
+    <text x="${left}" y="24" fill="#16393d" font-size="11">${svgSafe(`Differing residues: ${total}`)}</text>
+    <line x1="${(left + plotW / 2).toFixed(1)}" y1="${(top - 12).toFixed(1)}" x2="${(left + plotW / 2).toFixed(
+      1
+    )}" y2="${(height - 24).toFixed(1)}" stroke="rgba(22,57,61,0.2)" />
+    <text x="${(left + plotW / 2 - 8).toFixed(1)}" y="${top - 18}" text-anchor="end" fill="#1f77b4" font-size="10">${svgSafe(
+      "Reference"
+    )}</text>
+    <text x="${(left + plotW / 2 + 8).toFixed(1)}" y="${top - 18}" fill="#ff7f0e" font-size="10">${svgSafe("Candidate")}</text>
+    ${rows}
+  </svg>`;
+}
+
+function buildReportCompareSection() {
+  const lines = [];
+  const { leftPath, rightPath } = selectReportComparePaths();
+  lines.push(`## ${t("report.compare.sectionTitle")}`);
+  lines.push("");
+  if (!leftPath || !rightPath) {
+    lines.push(`- ${t("report.compare.sectionEmpty")}`);
+    lines.push("");
+    return { markdown: lines.join("\n"), leftPath: "", rightPath: "" };
+  }
+  lines.push(`- ${t("report.compare.left")}: \`${leftPath}\``);
+  lines.push(`- ${t("report.compare.right")}: \`${rightPath}\``);
+  lines.push("");
+  lines.push("### Structure Difference (CA)");
+  lines.push("![Structure Difference](report_assets/structure_diff.svg)");
+  lines.push("");
+  lines.push("### Sequence Difference");
+  lines.push("![Sequence Difference](report_assets/sequence_diff.svg)");
+  lines.push("");
+  return { markdown: lines.join("\n"), leftPath, rightPath };
+}
+
+async function buildReportCompareAttachments(compareSection) {
+  const runId = String(state.currentRunId || "").trim();
+  const leftPath = String(compareSection?.leftPath || "").trim();
+  const rightPath = String(compareSection?.rightPath || "").trim();
+  if (!runId || !leftPath || !rightPath) return [];
+  if (!/\.pdb$/i.test(leftPath) || !/\.pdb$/i.test(rightPath)) return [];
+  try {
+    const [leftResult, rightResult] = await Promise.all([
+      apiCall("pipeline.read_artifact", { run_id: runId, path: leftPath, max_bytes: 800000 }),
+      apiCall("pipeline.read_artifact", { run_id: runId, path: rightPath, max_bytes: 800000 }),
+    ]);
+    const leftText = String(leftResult?.text || "");
+    const rightText = String(rightResult?.text || "");
+    if (!leftText.trim() || !rightText.trim()) return [];
+    const attachments = [];
+    const structureSvg = normalizeSvgAttachmentText(buildStructureDiffSvg(computePdbStructuralDiff(leftText, rightText), leftPath, rightPath));
+    if (structureSvg) {
+      attachments.push({
+        path: "report_assets/structure_diff.svg",
+        text: structureSvg,
+        content_type: "image/svg+xml",
+      });
+    }
+    const sequenceSvg = normalizeSvgAttachmentText(buildSequenceDiffSvg(computePdbSequenceDiff(leftText, rightText), leftPath, rightPath));
+    if (sequenceSvg) {
+      attachments.push({
+        path: "report_assets/sequence_diff.svg",
+        text: sequenceSvg,
+        content_type: "image/svg+xml",
+      });
+    }
+    return attachments;
+  } catch (_err) {
+    return [];
+  }
+}
+
+function buildReportHitListSection() {
+  const rows = filteredHitListRows({ applyLimit: false });
+  const cutoff = Math.max(0, Math.min(100, Number(state.hitListCutoff || 0)));
+  const maxRows = Math.min(rows.length, Math.max(20, Math.min(200, Number(state.hitListLimit || 120))));
+  const lines = [];
+  lines.push(`## ${t("report.hitList.title")}`);
+  lines.push("");
+  if (!rows.length) {
+    lines.push(`- ${t("report.hitList.empty")}`);
+    lines.push("");
+    return lines.join("\n");
+  }
+  lines.push(
+    `- ${t("report.hitList.summary", {
+      shown: maxRows,
+      total: rows.length,
+      cutoff: cutoff.toFixed(0),
+    })}`
+  );
+  lines.push("");
+  lines.push(
+    `| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+  );
+  lines.push("|---:|---|---|---:|---:|---:|---:|---:|---|");
+  rows.slice(0, maxRows).forEach((row) => {
+    lines.push(
+      `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatMetricValue(row.tier, 2)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${row.af2_selected ? "yes" : "no"} |`
+    );
+  });
+  lines.push("");
+  return lines.join("\n");
+}
+
+function mergeReportWithGeneratedSections(text) {
+  const withoutHit = stripReportHitListSection(text);
+  const withoutChart = stripReportChartSection(withoutHit);
+  const base = stripReportCompareSection(withoutChart);
+  const hitListSection = buildReportHitListSection();
+  const chartSection = buildReportChartSection();
+  const compareSection = buildReportCompareSection();
+
+  const sections = [];
+  if (String(chartSection.markdown || "").trim()) {
+    sections.push(`${REPORT_CHARTS_START}\n${chartSection.markdown}\n${REPORT_CHARTS_END}`);
+  }
+  if (String(compareSection.markdown || "").trim()) {
+    sections.push(`${REPORT_COMPARE_START}\n${compareSection.markdown}\n${REPORT_COMPARE_END}`);
+  }
+  if (String(hitListSection || "").trim()) {
+    sections.push(`${REPORT_HITLIST_START}\n${hitListSection}\n${REPORT_HITLIST_END}`);
+  }
+
+  const trimmed = String(base || "").trimEnd();
+  const suffix = sections.join("\n\n");
+  const content = suffix ? `${trimmed}${trimmed ? "\n\n" : ""}${suffix}\n` : `${trimmed}\n`;
+  return {
+    content,
+    attachments: Array.isArray(chartSection.attachments) ? chartSection.attachments : [],
+    compare: compareSection,
+  };
+}
+
 function selectReportBody(payload) {
   const preferred = resolveReportLang();
   const primary = preferred === "ko" ? payload?.report_ko : payload?.report;
   const fallback = preferred === "ko" ? payload?.report : payload?.report_ko;
-  return String(primary || fallback || "");
+  const body = String(primary || fallback || "");
+  return mergeReportWithGeneratedSections(body).content;
 }
 
 async function loadReport() {
   if (!state.currentRunId || !el.reportContent) return;
   try {
+    if (!Array.isArray(state.hitListRows) || state.hitListRows.length === 0) {
+      await refreshHitList();
+    }
     const result = await apiCall("pipeline.get_report", { run_id: state.currentRunId });
     el.reportContent.value = selectReportBody(result);
     updateReportScore(result);
@@ -9584,6 +10246,9 @@ async function loadReport() {
 async function generateReport() {
   if (!state.currentRunId || !el.reportContent) return;
   try {
+    if (!Array.isArray(state.hitListRows) || state.hitListRows.length === 0) {
+      await refreshHitList();
+    }
     const result = await apiCall("pipeline.generate_report", { run_id: state.currentRunId });
     el.reportContent.value = selectReportBody(result);
     updateReportScore(result);
@@ -9615,13 +10280,28 @@ async function openRenderedReport() {
 
 async function saveReport() {
   if (!state.currentRunId || !el.reportContent) return;
-  const content = el.reportContent.value.trim();
+  if (!Array.isArray(state.artifacts) || state.artifacts.length === 0) {
+    await refreshArtifacts();
+  }
+  const merged = mergeReportWithGeneratedSections(el.reportContent.value || "");
+  const content = String(merged.content || "").trim();
   if (!content) {
     if (el.reportStatus) el.reportStatus.textContent = t("report.empty");
     return;
   }
   try {
-    await apiCall("pipeline.save_report", { run_id: state.currentRunId, content });
+    const compareAttachments = await buildReportCompareAttachments(merged.compare);
+    const attachments = [
+      ...(Array.isArray(merged.attachments) ? merged.attachments : []),
+      ...(Array.isArray(compareAttachments) ? compareAttachments : []),
+    ];
+    await apiCall("pipeline.save_report", {
+      run_id: state.currentRunId,
+      content,
+      attachments,
+    });
+    el.reportContent.value = String(merged.content || content);
+    await refreshArtifacts();
     if (el.reportStatus) el.reportStatus.textContent = t("report.saved");
     updateReportArtifactLinks(content);
   } catch (err) {
@@ -9707,6 +10387,7 @@ function renderRuns(runs) {
         delete state.runModeById[runId];
         delete state.af2ProviderByRunId[runId];
         delete state.progressByRunId[runId];
+        delete state.progressContextByRunId[runId];
         if (state.currentRunId === runId) {
           setCurrentRunId("");
           state.artifacts = [];
