@@ -88,12 +88,12 @@ export function artifactMetaFromPath(path) {
     stage = "bioemu";
   } else if (matchPath(normalized, /(?:^|\/)diffdock(?:\/|$)/)) {
     stage = "diffdock";
-  } else if (matchPath(normalized, /(?:^|\/)(?:af2|alphafold2?|alphafold)(?:\/|$)/)) {
+  } else if (matchPath(normalized, /(?:^|\/)(?:af2|alphafold2?|alphafold|colabfold)(?:\/|$)/)) {
     stage = "af2";
   } else if (matchPath(normalized, /(?:^|\/)soluprot(?:\/|$)/) || normalized.includes("soluprot")) {
     stage = "soluprot";
   } else if (
-    matchPath(normalized, /(?:^|\/)(?:design|proteinmpnn|mpnn)(?:\/|$)/) ||
+    matchPath(normalized, /(?:^|\/)(?:designs?|proteinmpnn|mpnn)(?:\/|$)/) ||
     normalized.includes("proteinmpnn")
   ) {
     stage = "design";

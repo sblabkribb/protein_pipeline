@@ -24,6 +24,10 @@ def build_runner() -> PipelineRunner:
     proteinmpnn = ProteinMPNNClient(runpod=runpod, endpoint_id=cfg.runpod.proteinmpnn_endpoint_id)
 
     soluprot = SoluProtClient(url=cfg.services.soluprot_url) if cfg.services.soluprot_url else None
+    colabfold = None
+    if cfg.runpod.colabfold_endpoint_id:
+        colabfold = AlphaFold2RunPodClient(runpod=runpod, endpoint_id=cfg.runpod.colabfold_endpoint_id)
+
     af2 = None
     if cfg.runpod.alphafold2_endpoint_id:
         af2 = AlphaFold2RunPodClient(runpod=runpod, endpoint_id=cfg.runpod.alphafold2_endpoint_id)
@@ -47,6 +51,7 @@ def build_runner() -> PipelineRunner:
         mmseqs=mmseqs,
         proteinmpnn=proteinmpnn,
         soluprot=soluprot,
+        colabfold=colabfold,
         af2=af2,
         rfd3=rfd3,
         bioemu=bioemu,

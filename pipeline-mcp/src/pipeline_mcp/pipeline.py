@@ -53,6 +53,8 @@ from .storage import write_json
 
 _SAFE_ID_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
 _AF2_ALLOWED_AA = set("ACDEFGHIKLMNPQRSTVWYX")
+_AF2_PROVIDER_COLABFOLD = "colabfold"
+_AF2_PROVIDER_AF2 = "af2"
 
 
 def _format_set(values: set[str], *, limit: int = 12) -> str:
@@ -290,6 +292,25 @@ def _resolve_af2_model_preset(requested: str, *, chain_count: int) -> str:
     if _is_multimer_preset(preset):
         return preset
     return preset
+
+
+def _normalize_af2_provider(value: object | None) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {"af2", "alphafold", "alphafold2"}:
+        return _AF2_PROVIDER_AF2
+    if raw in {"colabfold", "cf"}:
+        return _AF2_PROVIDER_COLABFOLD
+    return _AF2_PROVIDER_COLABFOLD
+
+
+def _af2_provider_display_name(provider: str) -> str:
+    return "ColabFold" if provider == _AF2_PROVIDER_COLABFOLD else "AlphaFold2"
+
+
+def _af2_provider_config_hint(provider: str) -> str:
+    if provider == _AF2_PROVIDER_COLABFOLD:
+        return "set COLABFOLD_ENDPOINT_ID"
+    return "set ALPHAFOLD2_ENDPOINT_ID (RunPod) or AF2_URL"
 
 
 def _split_multichain_sequence(seq: str) -> list[str]:
@@ -702,6 +723,7 @@ class PipelineRunner:
     mmseqs: MMseqsClient | None = None
     proteinmpnn: ProteinMPNNClient | None = None
     soluprot: SoluProtClient | None = None
+    colabfold: Any | None = None
     af2: Any | None = None
     rfd3: Any | None = None
     bioemu: Any | None = None
@@ -716,6 +738,15 @@ class PipelineRunner:
 
         write_json(paths.request_json, asdict(request))
         errors: list[str] = []
+        af2_provider = _normalize_af2_provider(getattr(request, "af2_provider", None))
+        af2_client = self.colabfold if af2_provider == _AF2_PROVIDER_COLABFOLD else self.af2
+        if af2_client is None and af2_provider == _AF2_PROVIDER_COLABFOLD and self.af2 is not None:
+            # Backward-compatible fallback for older deployments that only configured AF2.
+            af2_provider = _AF2_PROVIDER_AF2
+            af2_client = self.af2
+        af2_provider_label = _af2_provider_display_name(af2_provider)
+        af2_provider_hint = _af2_provider_config_hint(af2_provider)
+        af2_endpoint_id = str(getattr(af2_client, "endpoint_id", "") or "").strip() if af2_client is not None else ""
 
         msa_a3m_path = None
         msa_filtered_a3m_path = None
@@ -1647,17 +1678,24 @@ class PipelineRunner:
                         set_status(paths, stage="af2_target", state="completed", detail="cached")
                         return
 
-                    if self.af2 is None:
+                    if af2_client is None:
                         raise RuntimeError(
-                            "target_pdb is missing; provide target_pdb or configure AlphaFold2 (ALPHAFOLD2_ENDPOINT_ID or AF2_URL)"
+                            f"target_pdb is missing; provide target_pdb or configure {af2_provider_label} ({af2_provider_hint})"
                         )
                     if target_record is None:
-                        raise ValueError("target_fasta is required to predict target_pdb via AlphaFold2")
+                        raise ValueError(f"target_fasta is required to predict target_pdb via {af2_provider_label}")
 
                     jobs_path = paths.root / "af2_target_runpod_job.json"
 
                     def _on_target_job_id(seq_id: str, job_id: str) -> None:
-                        write_json(jobs_path, {"seq_id": seq_id, "job_id": job_id})
+                        payload: dict[str, object] = {
+                            "seq_id": seq_id,
+                            "job_id": job_id,
+                            "provider": af2_provider,
+                        }
+                        if af2_endpoint_id:
+                            payload["endpoint_id"] = af2_endpoint_id
+                        write_json(jobs_path, payload)
                         set_status(paths, stage="af2_target", state="running", detail=f"runpod_job_id={job_id}")
 
                     target_seq = target_record.sequence
@@ -1682,7 +1720,7 @@ class PipelineRunner:
                         meta=target_seqrec.meta,
                     )
                     try:
-                        af2_out = self.af2.predict(
+                        af2_out = af2_client.predict(
                             [target_af2_input],
                             model_preset=target_af2_preset,
                             db_preset=request.af2_db_preset,
@@ -1691,7 +1729,7 @@ class PipelineRunner:
                             on_job_id=_on_target_job_id,
                         )
                     except TypeError:
-                        af2_out = self.af2.predict(
+                        af2_out = af2_client.predict(
                             [target_af2_input],
                             model_preset=target_af2_preset,
                             db_preset=request.af2_db_preset,
@@ -1701,10 +1739,10 @@ class PipelineRunner:
 
                     rec = af2_out.get("target") if isinstance(af2_out, dict) else None
                     if not isinstance(rec, dict):
-                        raise RuntimeError(f"AlphaFold2 did not return a record for target: {type(rec).__name__}")
+                        raise RuntimeError(f"{af2_provider_label} did not return a record for target: {type(rec).__name__}")
                     ranked0 = rec.get("ranked_0_pdb") or rec.get("pdb") or rec.get("pdb_text")
                     if not isinstance(ranked0, str) or not ranked0.strip():
-                        raise RuntimeError("AlphaFold2 did not return ranked_0_pdb for target sequence")
+                        raise RuntimeError(f"{af2_provider_label} did not return ranked_0_pdb for target sequence")
 
                     target_pdb_text = ranked0
                     _write_text(target_pdb_path, target_pdb_text)
@@ -1712,7 +1750,11 @@ class PipelineRunner:
                         write_json(paths.root / "af2_target_ranking_debug.json", rec["ranking_debug"])
                     write_json(
                         paths.root / "af2_target_metrics.json",
-                        {"best_plddt": rec.get("best_plddt"), "best_model": rec.get("best_model")},
+                        {
+                            "best_plddt": rec.get("best_plddt"),
+                            "best_model": rec.get("best_model"),
+                            "provider": af2_provider,
+                        },
                     )
                     set_status(paths, stage="af2_target", state="completed")
 
@@ -2216,8 +2258,8 @@ class PipelineRunner:
                     try:
                         if not wt_seq:
                             af2_payload = {"skipped": True, "reason": "WT sequence unavailable"}
-                        elif self.af2 is None:
-                            af2_payload = {"skipped": True, "reason": "ALPHAFOLD2 not configured"}
+                        elif af2_client is None:
+                            af2_payload = {"skipped": True, "reason": f"{af2_provider_label} not configured"}
                         else:
                             af2_model_preset = _resolve_af2_model_preset(
                                 request.af2_model_preset,
@@ -2247,11 +2289,18 @@ class PipelineRunner:
                                         resume_job_ids = {existing_seq_id: existing_job_id}
 
                             def _on_wt_job_id(seq_id: str, job_id: str) -> None:
-                                write_json(af2_job_path, {"seq_id": seq_id, "job_id": job_id})
+                                payload: dict[str, object] = {
+                                    "seq_id": seq_id,
+                                    "job_id": job_id,
+                                    "provider": af2_provider,
+                                }
+                                if af2_endpoint_id:
+                                    payload["endpoint_id"] = af2_endpoint_id
+                                write_json(af2_job_path, payload)
                                 set_status(paths, stage="wt_af2", state="running", detail=f"runpod_job_id={job_id} seq_id={seq_id}")
 
                             try:
-                                af2_out = self.af2.predict(
+                                af2_out = af2_client.predict(
                                     [seqrec],
                                     model_preset=af2_model_preset,
                                     db_preset=request.af2_db_preset,
@@ -2261,7 +2310,7 @@ class PipelineRunner:
                                     on_job_id=_on_wt_job_id,
                                 )
                             except TypeError:
-                                af2_out = self.af2.predict(
+                                af2_out = af2_client.predict(
                                     [seqrec],
                                     model_preset=af2_model_preset,
                                     db_preset=request.af2_db_preset,
@@ -2271,7 +2320,7 @@ class PipelineRunner:
 
                             rec = af2_out.get("wt") if isinstance(af2_out, dict) else None
                             if not isinstance(rec, dict):
-                                raise RuntimeError("AlphaFold2 did not return WT metrics")
+                                raise RuntimeError(f"{af2_provider_label} did not return WT metrics")
                             ranked0 = rec.get("ranked_0_pdb") or rec.get("pdb") or rec.get("pdb_text")
                             if isinstance(ranked0, str) and ranked0.strip():
                                 _write_text(af2_root / "ranked_0.pdb", ranked0)
@@ -2290,6 +2339,7 @@ class PipelineRunner:
                                 "model_preset": af2_model_preset,
                                 "db_preset": request.af2_db_preset,
                                 "max_template_date": request.af2_max_template_date,
+                                "provider": af2_provider,
                             }
                     except Exception as exc:
                         af2_payload = {"skipped": True, "error": str(exc)}
@@ -3332,11 +3382,13 @@ class PipelineRunner:
                             cached_model_preset = cached.get("model_preset") if isinstance(cached, dict) else None
                             cached_db_preset = cached.get("db_preset") if isinstance(cached, dict) else None
                             cached_max_template_date = cached.get("max_template_date") if isinstance(cached, dict) else None
+                            cached_provider = cached.get("provider") if isinstance(cached, dict) else None
                             if (
                                 isinstance(cached_scores_raw, dict)
                                 and (cached_model_preset in {None, af2_model_preset})
                                 and (cached_db_preset in {None, request.af2_db_preset})
                                 and (cached_max_template_date in {None, request.af2_max_template_date})
+                                and (cached_provider in {None, af2_provider})
                             ):
                                 cached_scores = {
                                     str(k): float(v) for k, v in cached_scores_raw.items() if isinstance(v, (int, float))
@@ -3362,9 +3414,9 @@ class PipelineRunner:
                                     for i, s in enumerate(to_predict)
                                 }
                             else:
-                                if self.af2 is None:
+                                if af2_client is None:
                                     raise RuntimeError(
-                                        "AlphaFold2 is required for this pipeline; set ALPHAFOLD2_ENDPOINT_ID (RunPod) or AF2_URL"
+                                        f"{af2_provider_label} is required for this pipeline; {af2_provider_hint}"
                                     )
 
                                 af2_inputs = [
@@ -3386,7 +3438,10 @@ class PipelineRunner:
 
                                 def _on_af2_job_id(seq_id: str, job_id: str) -> None:
                                     jobs[seq_id] = job_id
-                                    write_json(jobs_path, {"jobs": dict(jobs)})
+                                    payload: dict[str, object] = {"jobs": dict(jobs), "provider": af2_provider}
+                                    if af2_endpoint_id:
+                                        payload["endpoint_id"] = af2_endpoint_id
+                                    write_json(jobs_path, payload)
                                     set_status(
                                         paths,
                                         stage=f"af2_{tier_str}",
@@ -3395,7 +3450,7 @@ class PipelineRunner:
                                     )
 
                                 try:
-                                    af2_result = self.af2.predict(
+                                    af2_result = af2_client.predict(
                                         af2_inputs,
                                         model_preset=af2_model_preset,
                                         db_preset=request.af2_db_preset,
@@ -3406,7 +3461,7 @@ class PipelineRunner:
                                     )
                                 except TypeError:
                                     try:
-                                        af2_result = self.af2.predict(
+                                        af2_result = af2_client.predict(
                                             af2_inputs,
                                             model_preset=af2_model_preset,
                                             db_preset=request.af2_db_preset,
@@ -3415,7 +3470,7 @@ class PipelineRunner:
                                             on_job_id=_on_af2_job_id,
                                         )
                                     except TypeError:
-                                        af2_result = self.af2.predict(
+                                        af2_result = af2_client.predict(
                                             af2_inputs,
                                             model_preset=af2_model_preset,
                                             db_preset=request.af2_db_preset,
@@ -3443,6 +3498,7 @@ class PipelineRunner:
                                         "best_plddt": cached_scores.get(seq.id),
                                         "best_model": rec.get("best_model"),
                                         "archive_name": rec.get("archive_name"),
+                                        "provider": af2_provider,
                                     },
                                 )
 
@@ -3525,6 +3581,7 @@ class PipelineRunner:
                                 "model_preset": af2_model_preset,
                                 "db_preset": request.af2_db_preset,
                                 "max_template_date": request.af2_max_template_date,
+                                "provider": af2_provider,
                                 "cached": (not to_predict and cached_ok and not request.force),
                             },
                         )
@@ -3545,7 +3602,7 @@ class PipelineRunner:
                         af2_recovery = {
                             "attempted": True,
                             "error": af2_error,
-                            "actions": ["Selected candidates without AF2 scoring"],
+                            "actions": [f"Selected candidates without {af2_provider_label} scoring"],
                         }
                         candidate_ids = [s.id for s in af2_candidates]
                         af2_selected_ids = candidate_ids[: int(request.af2_top_k)]
@@ -3573,6 +3630,7 @@ class PipelineRunner:
                                 "model_preset": af2_model_preset,
                                 "db_preset": request.af2_db_preset,
                                 "max_template_date": request.af2_max_template_date,
+                                "provider": af2_provider,
                                 "recovered": True,
                                 "error": af2_error,
                             },

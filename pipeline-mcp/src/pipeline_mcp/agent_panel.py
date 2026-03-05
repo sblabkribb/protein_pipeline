@@ -172,16 +172,16 @@ def _summarize_soluprot(run_root: Path, tier: str | None) -> tuple[str, str, dic
 
 def _summarize_af2(run_root: Path, tier: str | None) -> tuple[str, str, dict[str, object]]:
     if not tier:
-        return "info", "AF2 tier not specified.", {}
+        return "info", "ColabFold tier not specified.", {}
     payload = _load_json(run_root / "tiers" / str(tier) / "af2_scores.json")
     if not payload:
-        return "info", "AF2 scores not available yet.", {}
+        return "info", "ColabFold scores not available yet.", {}
     scores = payload.get("scores") if isinstance(payload.get("scores"), dict) else {}
     selected = payload.get("selected_ids") if isinstance(payload.get("selected_ids"), list) else []
     selected_scores = [scores.get(seq_id) for seq_id in selected if isinstance(scores.get(seq_id), (int, float))]
     avg_plddt = (sum(selected_scores) / len(selected_scores)) if selected_scores else None
     status = "warn" if not selected else "ok"
-    summary = f"AF2 selected {len(selected)} designs"
+    summary = f"ColabFold selected {len(selected)} designs"
     if avg_plddt is not None:
         summary += f", avg pLDDT={avg_plddt:.1f}"
     return status, summary, {"selected": len(selected), "avg_plddt": avg_plddt}
@@ -276,7 +276,7 @@ def _interpret_af2(metrics: dict[str, object]) -> list[str]:
     selected = metrics.get("selected")
     avg_plddt = metrics.get("avg_plddt")
     if isinstance(selected, int) and selected == 0:
-        out.append("No AF2-selected designs; consider lowering pLDDT/RMSD cutoffs or adjusting design.")
+        out.append("No ColabFold-selected designs; consider lowering pLDDT/RMSD cutoffs or adjusting design.")
     if isinstance(avg_plddt, (int, float)) and float(avg_plddt) < 75.0:
         out.append("Average pLDDT is low; structures may be unreliable.")
     return out
@@ -299,7 +299,7 @@ def _agent_structure(stage: str, run_root: Path, tier: str | None) -> dict[str, 
         status = "ok" if exists else "warn"
         summary = "Target structure available." if exists else "Target structure missing."
         metrics = {"target_pdb": bool(exists)}
-        interpretation = [] if exists else ["Target structure missing; ensure target_pdb or AF2 target prediction."]
+        interpretation = [] if exists else ["Target structure missing; ensure target_pdb or ColabFold target prediction."]
     elif base == "af2":
         status, summary, metrics = _summarize_af2(run_root, tier)
         interpretation = _interpret_af2(metrics)
@@ -466,7 +466,7 @@ def _derive_agent_interpretations(stage: str, agent: dict[str, object]) -> list[
             return _interpret_rfd3(metrics)
         if stage == "af2_target":
             if metrics.get("target_pdb") is False:
-                return ["Target structure missing; ensure target_pdb or AF2 target prediction."]
+                return ["Target structure missing; ensure target_pdb or ColabFold target prediction."]
             return []
         if base == "af2":
             return _interpret_af2(metrics)

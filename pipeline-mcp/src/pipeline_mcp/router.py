@@ -20,6 +20,8 @@ _PROMPT_KEY_ALIASES = {
     "top_k": "af2_top_k",
     "af2_n": "af2_max_candidates_per_tier",
     "af2_per_tier": "af2_max_candidates_per_tier",
+    "fold_provider": "af2_provider",
+    "structure_provider": "af2_provider",
     "temp": "sampling_temp",
     "temperature": "sampling_temp",
     "mask_consensus": "mask_consensus_apply",
@@ -120,6 +122,7 @@ _PROMPT_ALLOWED_KEYS = (
         "af2_db_preset",
         "af2_max_template_date",
         "af2_extra_flags",
+        "af2_provider",
         "mmseqs_target_db",
         "novelty_target_db",
         "query_pdb_policy",
@@ -272,7 +275,7 @@ def route_prompt_with_errors(prompt: str) -> tuple[dict[str, object], list[str]]
             stop_after = "design"
         elif "soluprot" in p:
             stop_after = "soluprot"
-        elif "af2" in p or "alphafold" in p:
+        elif "af2" in p or "alphafold" in p or "colabfold" in p:
             stop_after = "af2"
         elif "novel" in p or "search" in p or "검색" in p:
             stop_after = "novelty"
@@ -476,9 +479,18 @@ def plan_from_prompt(
         questions.append(
             {
                 "id": "af2_max_candidates_per_tier",
-                "question": "AF2 per tier candidate count (top SoluProt score first, 0=all).",
+                "question": "ColabFold per tier candidate count (top SoluProt score first, 0=all).",
                 "required": False,
                 "default": 0,
+            }
+        )
+    if "af2_provider" not in routed:
+        questions.append(
+            {
+                "id": "af2_provider",
+                "question": "Structure prediction provider? (colabfold/af2)",
+                "required": False,
+                "default": "colabfold",
             }
         )
 

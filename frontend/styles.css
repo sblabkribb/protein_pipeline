@@ -295,6 +295,13 @@ body {
   gap: 24px;
 }
 
+.tab-content-shell {
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 4px 10px 12px;
+}
+
 .monitor-grid {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
 }
@@ -326,7 +333,7 @@ body {
 }
 
 .analyze-file-preview {
-  order: 2;
+  order: 6;
 }
 
 .analyze-runcompare {
@@ -342,11 +349,11 @@ body {
 }
 
 .analyze-feedback {
-  order: 6;
+  order: 7;
 }
 
 .analyze-experiment {
-  order: 7;
+  order: 8;
 }
 
 .span-2 {
@@ -941,6 +948,160 @@ textarea:focus-visible {
 .hint {
   font-size: 13px;
   color: var(--ink-soft);
+}
+
+.copilot-drawer {
+  position: fixed;
+  bottom: 92px;
+  right: 24px;
+  width: min(400px, calc(100vw - 36px));
+  max-height: min(68vh, 640px);
+  background: #fff;
+  border: 1px solid rgba(16, 42, 45, 0.14);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px var(--shadow-strong);
+  z-index: 24;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+
+.copilot-drawer.hidden {
+  display: none;
+}
+
+.copilot-fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 25;
+  border-radius: 999px;
+  padding: 11px 18px;
+  min-height: 46px;
+  border: 1px solid rgba(16, 42, 45, 0.18);
+  box-shadow: 0 14px 34px rgba(12, 30, 33, 0.24);
+}
+
+.copilot-fab::after {
+  content: "";
+  position: absolute;
+  right: 14px;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  border-right: 1px solid rgba(16, 42, 45, 0.18);
+  border-bottom: 1px solid rgba(16, 42, 45, 0.18);
+  transform: rotate(45deg);
+}
+
+.copilot-fab.hidden {
+  display: none;
+}
+
+.copilot-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.copilot-header h4 {
+  margin: 0;
+  font-family: "Spectral", serif;
+  font-size: 18px;
+}
+
+.copilot-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.copilot-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.copilot-context {
+  border: 1px solid rgba(16, 42, 45, 0.1);
+  border-radius: 10px;
+  background: #fbfefe;
+  padding: 8px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow: auto;
+}
+
+.copilot-context-row {
+  display: flex;
+  gap: 8px;
+}
+
+.copilot-context-row strong {
+  min-width: 84px;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.copilot-quick {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.copilot-quick .ghost {
+  font-size: 12px;
+  padding: 5px 9px;
+}
+
+.copilot-messages {
+  border: 1px solid rgba(16, 42, 45, 0.1);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 150px;
+  max-height: 240px;
+  overflow: auto;
+}
+
+.copilot-bubble {
+  border-radius: 10px;
+  padding: 7px 9px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.copilot-bubble.user {
+  background: rgba(15, 107, 111, 0.1);
+  border: 1px solid rgba(15, 107, 111, 0.2);
+  align-self: flex-end;
+}
+
+.copilot-bubble.ai {
+  background: rgba(244, 185, 74, 0.14);
+  border: 1px solid rgba(244, 185, 74, 0.35);
+  align-self: flex-start;
+}
+
+.copilot-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.copilot-input-row input {
+  flex: 1;
+  min-width: 0;
 }
 
 .overlay {
@@ -1683,6 +1844,63 @@ textarea:focus-visible {
   flex-wrap: wrap;
 }
 
+.chart-explorer {
+  border: 1px solid rgba(16, 42, 45, 0.1);
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chart-explorer-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chart-explorer-head > label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 260px;
+}
+
+.chart-canvas {
+  min-height: 320px;
+  border-radius: 10px;
+  border: 1px dashed rgba(16, 42, 45, 0.22);
+  background: linear-gradient(180deg, rgba(249, 253, 254, 0.95), rgba(255, 255, 255, 0.95));
+  padding: 8px;
+  overflow: auto;
+}
+
+.chart-canvas-report {
+  min-height: 300px;
+}
+
+.chart-canvas .placeholder {
+  min-height: 240px;
+}
+
+.chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.chart-caption {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.chart-explorer-report {
+  margin-top: 2px;
+}
+
 .hit-list-table-wrap {
   max-height: 360px;
   overflow: auto;
@@ -2123,6 +2341,15 @@ textarea:focus-visible {
     grid-template-columns: 1fr 1fr;
   }
 
+  .chart-explorer-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .chart-explorer-head > label {
+    min-width: 0;
+  }
+
   .compare-studio-grid {
     grid-template-columns: 1fr;
   }
@@ -2155,6 +2382,10 @@ textarea:focus-visible {
 
   .tabbar {
     width: 100%;
+  }
+
+  .tab-content-shell {
+    padding: 2px 0 8px;
   }
 
   .panel {
@@ -2198,5 +2429,20 @@ textarea:focus-visible {
   .artifact-compare-controls .artifact-select {
     min-width: 0;
     width: 100%;
+  }
+
+  .copilot-drawer {
+    right: 10px;
+    bottom: 78px;
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 146px);
+    padding: 10px;
+  }
+
+  .copilot-fab {
+    right: 10px;
+    bottom: 12px;
+    min-height: 42px;
+    padding: 9px 14px;
   }
 }
