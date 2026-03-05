@@ -23,6 +23,7 @@ from .models import SequenceRecord
 from .pipeline import PipelineRunner
 from .pipeline import PipelineCancelled
 from .pipeline import _dummy_backbone_pdb
+from .pipeline import _normalize_af2_provider
 from .pipeline import _prepare_af2_sequence
 from .pipeline import _resolve_af2_model_preset
 from .pipeline import _split_multichain_sequence
@@ -242,6 +243,17 @@ def _as_float(value: object | None, default: float) -> float:
     return default
 
 
+def _as_af2_provider(value: object | None, default: str = "colabfold") -> str:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        raw = str(default or "colabfold").strip().lower()
+    if raw in {"colabfold", "cf"}:
+        return "colabfold"
+    if raw in {"af2", "alphafold", "alphafold2"}:
+        return "af2"
+    raise ValueError("af2_provider must be one of: colabfold, af2")
+
+
 def _now_iso() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
@@ -327,6 +339,24 @@ def _af2_records_from_inputs(
     return seq_records, resolved_preset
 
 
+def _af2_provider_label(provider: str) -> str:
+    return "ColabFold" if provider == "colabfold" else "AlphaFold2"
+
+
+def _select_af2_client(runner: PipelineRunner, provider: str) -> tuple[object | None, str]:
+    requested = _normalize_af2_provider(provider)
+    if requested == "colabfold":
+        if runner.colabfold is not None:
+            return runner.colabfold, "colabfold"
+        if runner.af2 is not None:
+            # Backward-compatible fallback for older deployments without ColabFold endpoint.
+            return runner.af2, "af2"
+        return None, "colabfold"
+    if runner.af2 is not None:
+        return runner.af2, "af2"
+    return None, "af2"
+
+
 @dataclass(frozen=True)
 class AutoRetryConfig:
     enabled: bool
@@ -402,6 +432,9 @@ def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
     target_fasta = _as_text(arguments.get("target_fasta"))
     target_pdb = _as_text(arguments.get("target_pdb"))
     dry_run = _as_bool(arguments.get("dry_run"), False)
+    requested_provider = _as_af2_provider(arguments.get("af2_provider"), "colabfold")
+    af2_client, effective_provider = _select_af2_client(runner, requested_provider)
+    provider_label = _af2_provider_label(effective_provider)
 
     requested_preset = str(arguments.get("af2_model_preset") or "auto")
     db_preset = str(arguments.get("af2_db_preset") or "full_dbs")
@@ -419,6 +452,8 @@ def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
         "af2_db_preset": db_preset,
         "af2_max_template_date": max_template_date,
         "af2_extra_flags": extra_flags,
+        "af2_provider": requested_provider,
+        "af2_provider_effective": effective_provider,
         "dry_run": dry_run,
     }
     write_json(paths.request_json, _safe_json(request_payload))
@@ -458,10 +493,13 @@ def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
                     "ranked_0_pdb": _dummy_backbone_pdb(seq, chain_id="A"),
                 }
         else:
-            if runner.af2 is None:
-                raise RuntimeError("AlphaFold2 is not configured (set ALPHAFOLD2_ENDPOINT_ID or AF2_URL)")
+            if af2_client is None:
+                raise RuntimeError(
+                    "ColabFold/AlphaFold2 is not configured. "
+                    "Set COLABFOLD_ENDPOINT_ID (default provider) or ALPHAFOLD2_ENDPOINT_ID/AF2_URL."
+                )
             try:
-                results = runner.af2.predict(
+                results = af2_client.predict(
                     seq_records,
                     model_preset=resolved_preset,
                     db_preset=db_preset,
@@ -470,7 +508,7 @@ def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
                     on_job_id=_on_job_id,
                 )
             except TypeError:
-                results = runner.af2.predict(
+                results = af2_client.predict(
                     seq_records,
                     model_preset=resolved_preset,
                     db_preset=db_preset,
@@ -479,17 +517,17 @@ def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
                 )
 
         if not isinstance(results, dict):
-            raise RuntimeError(f"AlphaFold2 output invalid: {type(results).__name__}")
+            raise RuntimeError(f"{provider_label} output invalid: {type(results).__name__}")
 
         summary_results: dict[str, dict[str, Any]] = {}
         for rec in seq_records:
             payload = results.get(rec.id)
             if not isinstance(payload, dict):
-                raise RuntimeError(f"AlphaFold2 output missing record for {rec.id}")
+                raise RuntimeError(f"{provider_label} output missing record for {rec.id}")
 
             ranked0 = payload.get("ranked_0_pdb") or payload.get("pdb") or payload.get("pdb_text")
             if not isinstance(ranked0, str) or not ranked0.strip():
-                raise RuntimeError(f"AlphaFold2 output missing ranked_0.pdb for {rec.id}")
+                raise RuntimeError(f"{provider_label} output missing ranked_0.pdb for {rec.id}")
 
             seq_dir = ensure_dir(af2_dir / _safe_id(rec.id))
             _write_text(seq_dir / "ranked_0.pdb", ranked0)
@@ -501,6 +539,7 @@ def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
                     "best_plddt": payload.get("best_plddt"),
                     "best_model": payload.get("best_model"),
                     "archive_name": payload.get("archive_name"),
+                    "provider": effective_provider,
                 },
             )
             summary_results[rec.id] = {
@@ -514,6 +553,8 @@ def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
             "output_dir": str(paths.root),
             "af2": summary_results,
             "af2_model_preset": resolved_preset,
+            "af2_provider": effective_provider,
+            "af2_provider_requested": requested_provider,
         }
         write_json(paths.summary_json, _safe_json(summary))
         set_status(paths, stage="done", state="completed")
@@ -644,12 +685,19 @@ def _cancel_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
     mark_cancel_requested(runner.output_root, run_id, reason="pipeline.cancel_run")
 
     jobs = _collect_runpod_jobs(root)
+    af2_clients = [client for client in (runner.colabfold, runner.af2) if client is not None]
+    af2_runpod = None
+    for client in af2_clients:
+        info = _client_cancel_info(client)
+        if info is not None:
+            af2_runpod = info[0]
+            break
     client_map = {
-        "mmseqs": runner.mmseqs,
-        "proteinmpnn": runner.proteinmpnn,
-        "rfd3": runner.rfd3,
-        "diffdock": runner.diffdock,
-        "af2": runner.af2,
+        "mmseqs": [runner.mmseqs],
+        "proteinmpnn": [runner.proteinmpnn],
+        "rfd3": [runner.rfd3],
+        "diffdock": [runner.diffdock],
+        "af2": af2_clients,
     }
     seen: set[tuple[str, str]] = set()
     results: list[dict[str, object]] = []
@@ -666,8 +714,31 @@ def _cancel_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
             continue
         seen.add(key)
 
-        cancel_info = _client_cancel_info(client_map.get(kind))
-        if cancel_info is None:
+        explicit_endpoint_id = str(job.get("endpoint_id") or "").strip()
+        if explicit_endpoint_id and af2_runpod is not None and kind == "af2":
+            try:
+                resp = af2_runpod.cancel(explicit_endpoint_id, job_id)
+                status = None
+                if isinstance(resp, dict):
+                    status = resp.get("status") or resp.get("state")
+                results.append(
+                    {
+                        "kind": kind,
+                        "job_id": job_id,
+                        "endpoint_id": explicit_endpoint_id,
+                        "status": status or "cancel_requested",
+                    }
+                )
+                cancelled += 1
+                continue
+            except Exception as exc:
+                msg = f"{kind}:{job_id}: {exc}"
+                errors.append(msg)
+                results.append({"kind": kind, "job_id": job_id, "endpoint_id": explicit_endpoint_id, "error": str(exc)})
+                continue
+
+        clients = [client for client in client_map.get(kind, []) if client is not None]
+        if not clients:
             results.append(
                 {
                     "kind": kind,
@@ -677,25 +748,38 @@ def _cancel_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
                 }
             )
             continue
-        runpod, endpoint_id = cancel_info
-        try:
-            resp = runpod.cancel(endpoint_id, job_id)
-            status = None
-            if isinstance(resp, dict):
-                status = resp.get("status") or resp.get("state")
-            results.append(
-                {
-                    "kind": kind,
-                    "job_id": job_id,
-                    "endpoint_id": endpoint_id,
-                    "status": status or "cancel_requested",
-                }
-            )
-            cancelled += 1
-        except Exception as exc:
-            msg = f"{kind}:{job_id}: {exc}"
+
+        attempt_errors: list[str] = []
+        cancelled_this_job = False
+        for client in clients:
+            cancel_info = _client_cancel_info(client)
+            if cancel_info is None:
+                continue
+            runpod, endpoint_id = cancel_info
+            try:
+                resp = runpod.cancel(endpoint_id, job_id)
+                status = None
+                if isinstance(resp, dict):
+                    status = resp.get("status") or resp.get("state")
+                results.append(
+                    {
+                        "kind": kind,
+                        "job_id": job_id,
+                        "endpoint_id": endpoint_id,
+                        "status": status or "cancel_requested",
+                    }
+                )
+                cancelled += 1
+                cancelled_this_job = True
+                break
+            except Exception as exc:
+                attempt_errors.append(f"{endpoint_id}: {exc}")
+
+        if not cancelled_this_job:
+            reason = "; ".join(attempt_errors) if attempt_errors else "endpoint_not_configured"
+            msg = f"{kind}:{job_id}: {reason}"
             errors.append(msg)
-            results.append({"kind": kind, "job_id": job_id, "error": str(exc)})
+            results.append({"kind": kind, "job_id": job_id, "error": reason})
 
     status = load_status(runner.output_root, run_id)
     stage = str(status.get("stage") or "cancel") if isinstance(status, dict) else "cancel"
@@ -1569,14 +1653,25 @@ def _extract_runpod_job_ids(payload: dict[str, object]) -> list[str]:
     return job_ids
 
 
+def _extract_runpod_endpoint_id(payload: dict[str, object]) -> str | None:
+    raw = payload.get("endpoint_id")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return None
+
+
 def _collect_runpod_jobs(run_root: Path) -> list[dict[str, str]]:
     jobs: list[dict[str, str]] = []
     af2_target = run_root / "af2_target_runpod_job.json"
     if af2_target.exists():
         payload = _load_json_file(af2_target)
         if isinstance(payload, dict):
+            endpoint_id = _extract_runpod_endpoint_id(payload)
             for job_id in _extract_runpod_job_ids(payload):
-                jobs.append({"kind": "af2", "job_id": job_id, "path": str(af2_target)})
+                entry = {"kind": "af2", "job_id": job_id, "path": str(af2_target)}
+                if endpoint_id:
+                    entry["endpoint_id"] = endpoint_id
+                jobs.append(entry)
 
     for path in run_root.rglob("runpod_job.json"):
         rel = path.relative_to(run_root)
@@ -1594,8 +1689,12 @@ def _collect_runpod_jobs(run_root: Path) -> list[dict[str, str]]:
             kind = "proteinmpnn"
         payload = _load_json_file(path)
         if isinstance(payload, dict):
+            endpoint_id = _extract_runpod_endpoint_id(payload)
             for job_id in _extract_runpod_job_ids(payload):
-                jobs.append({"kind": kind, "job_id": job_id, "path": str(path)})
+                entry = {"kind": kind, "job_id": job_id, "path": str(path)}
+                if endpoint_id:
+                    entry["endpoint_id"] = endpoint_id
+                jobs.append(entry)
 
     for path in run_root.rglob("runpod_jobs.json"):
         rel = path.relative_to(run_root)
@@ -1603,8 +1702,12 @@ def _collect_runpod_jobs(run_root: Path) -> list[dict[str, str]]:
         kind = "af2" if "af2" in parts else "unknown"
         payload = _load_json_file(path)
         if isinstance(payload, dict):
+            endpoint_id = _extract_runpod_endpoint_id(payload)
             for job_id in _extract_runpod_job_ids(payload):
-                jobs.append({"kind": kind, "job_id": job_id, "path": str(path)})
+                entry = {"kind": kind, "job_id": job_id, "path": str(path)}
+                if endpoint_id:
+                    entry["endpoint_id"] = endpoint_id
+                jobs.append(entry)
 
     return jobs
 
@@ -1825,7 +1928,7 @@ def _append_source_comparison_lines(
         return
 
     lines.append("## 백본 소스 비교 (RFD3 vs BioEmu)" if is_ko else "## Backbone Source Comparison (RFD3 vs BioEmu)")
-    lines.append("| Source | Backbones | SoluProt pass | Median SoluProt | AF2 selected | Median pLDDT | Median RMSD |")
+    lines.append("| Source | Backbones | SoluProt pass | Median SoluProt | ColabFold selected | Median pLDDT | Median RMSD |")
     lines.append("|---|---:|---:|---:|---:|---:|---:|")
     for source, _bucket, backbone_count, sol_total, sol_passed, af2_selected_total, sol_med, plddt_med, rmsd_med in rows:
         pass_rate = (sol_passed / sol_total) if sol_total else None
@@ -1853,7 +1956,7 @@ def _append_source_comparison_lines(
         lines.append(f"  - BioEmu {_ascii_bar(bioemu_rate, max_value=1.0)} {bioemu_rate:.1%}")
     if rfd3_af2 > 0 or bioemu_af2 > 0:
         max_af2 = float(max(rfd3_af2, bioemu_af2, 1))
-        lines.append("- AF2 선발 개수 바:" if is_ko else "- AF2 selected-count bars:")
+        lines.append("- ColabFold 선발 개수 바:" if is_ko else "- ColabFold selected-count bars:")
         lines.append(f"  - RFD3 {_ascii_bar(float(rfd3_af2), max_value=max_af2)} {rfd3_af2}")
         lines.append(f"  - BioEmu {_ascii_bar(float(bioemu_af2), max_value=max_af2)} {bioemu_af2}")
     lines.append("")
@@ -1893,13 +1996,13 @@ def _append_extended_comparison_lines(
         lines.append(
             (
                 f"- Funnel: backbone={backbones} → SoluProt={sol_passed}/{sol_total} ({_pct(overall.get('soluprot_pass_rate'))})"
-                f" → AF2={af2_selected}/{af2_candidates} ({_pct(overall.get('af2_pass_rate'))})"
+                f" → ColabFold={af2_selected}/{af2_candidates} ({_pct(overall.get('af2_pass_rate'))})"
             )
         )
         lines.append(
             (
                 f"- Retention from backbone: SoluProt={_pct(overall.get('retention_backbone_to_soluprot_passed'))}, "
-                f"AF2={_pct(overall.get('retention_backbone_to_af2_selected'))}"
+                f"ColabFold={_pct(overall.get('retention_backbone_to_af2_selected'))}"
             )
         )
 
@@ -1910,7 +2013,7 @@ def _append_extended_comparison_lines(
             rows.append((key, bucket))
     if rows:
         lines.append("- Source funnel:" if not is_ko else "- 소스별 Funnel:")
-        lines.append("| Source | Backbones | SoluProt pass | AF2 pass |")
+        lines.append("| Source | Backbones | SoluProt pass | ColabFold pass |")
         lines.append("|---|---:|---:|---:|")
         for source, bucket in rows:
             source_name = "RFD3" if source == "rfd3" else "BioEmu" if source == "bioemu" else ("기타" if is_ko else "Other")
@@ -1920,7 +2023,7 @@ def _append_extended_comparison_lines(
 
     if tier_rows:
         lines.append("- Tier summary:" if not is_ko else "- 티어별 요약:")
-        lines.append("| Tier | Designs | SoluProt pass | AF2 pass | Median pLDDT | Median RMSD |")
+        lines.append("| Tier | Designs | SoluProt pass | ColabFold pass | Median pLDDT | Median RMSD |")
         lines.append("|---:|---:|---:|---:|---:|---:|")
         for row in tier_rows:
             if not isinstance(row, dict):
@@ -2055,12 +2158,12 @@ def _append_report_snapshot_lines(
     )
     lines.append(
         (
-            f"- AF2 선발={int(overall.get('af2_selected_total') or 0)}/"
+            f"- ColabFold 선발={int(overall.get('af2_selected_total') or 0)}/"
             f"{int(overall.get('af2_candidate_total') or 0)} ({_format_ratio(overall.get('af2_pass_rate'))})"
         )
         if is_ko
         else (
-            f"- AF2 selected={int(overall.get('af2_selected_total') or 0)}/"
+            f"- ColabFold selected={int(overall.get('af2_selected_total') or 0)}/"
             f"{int(overall.get('af2_candidate_total') or 0)} ({_format_ratio(overall.get('af2_pass_rate'))})"
         )
     )
@@ -2115,14 +2218,14 @@ def _append_report_snapshot_lines(
             f"- 데이터 완전성: RFD3={'yes' if completeness.get('has_rfd3') else 'no'}, "
             f"BioEmu={'yes' if completeness.get('has_bioemu') else 'no'}, "
             f"WT compare={'on' if completeness.get('wt_compare_enabled') else 'off'}, "
-            f"AF2 selected={int(completeness.get('af2_selected') or 0)}"
+            f"ColabFold selected={int(completeness.get('af2_selected') or 0)}"
         )
         if is_ko
         else (
             f"- Data completeness: RFD3={'yes' if completeness.get('has_rfd3') else 'no'}, "
             f"BioEmu={'yes' if completeness.get('has_bioemu') else 'no'}, "
             f"WT compare={'on' if completeness.get('wt_compare_enabled') else 'off'}, "
-            f"AF2 selected={int(completeness.get('af2_selected') or 0)}"
+            f"ColabFold selected={int(completeness.get('af2_selected') or 0)}"
         )
     )
     lines.append("")
@@ -2160,7 +2263,7 @@ def _append_top_hit_lines(
             f"- {len(rows)} candidates ranked, median score={_format_metric(stats.get('score_median'), 1)}"
         )
     )
-    lines.append("| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | AF2 selected |")
+    lines.append("| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | ColabFold selected |")
     lines.append("|---:|---|---|---:|---:|---:|---:|---:|---|")
     for row in rows[: max(1, int(top_n))]:
         lines.append(
@@ -2344,10 +2447,10 @@ def _build_report_text(
                 wt_rmsd_val = float(wt_rmsd)
             plddt_text = f"{float(wt_plddt):.1f}" if isinstance(wt_plddt, (int, float)) else "-"
             rmsd_text = f"{float(wt_rmsd):.2f}" if isinstance(wt_rmsd, (int, float)) else "-"
-            lines.append(f"- WT AF2: pLDDT={plddt_text} RMSD={rmsd_text}")
+            lines.append(f"- WT ColabFold: pLDDT={plddt_text} RMSD={rmsd_text}")
         elif isinstance(wt_af2, dict):
             reason = wt_af2.get("reason") or wt_af2.get("error") or "skipped"
-            lines.append(f"- WT AF2: skipped ({reason})")
+            lines.append(f"- WT ColabFold: skipped ({reason})")
 
         plddt_vals = design_metrics.get("af2_selected_plddt") or []
         rmsd_vals = design_metrics.get("af2_selected_rmsd") or []
@@ -2358,13 +2461,13 @@ def _build_report_text(
                 design_plddt_median = float(plddt_median)
             plddt_max = max(plddt_vals) if plddt_vals else None
             lines.append(
-                f"- Designs AF2 pLDDT: median={plddt_median:.1f} max={float(plddt_max):.1f} (n={selected_total})"
+                f"- Designs ColabFold pLDDT: median={plddt_median:.1f} max={float(plddt_max):.1f} (n={selected_total})"
             )
             if isinstance(wt_af2, dict) and isinstance(wt_af2.get("best_plddt"), (int, float)):
                 delta = float(plddt_median) - float(wt_af2.get("best_plddt"))
                 lines.append(f"- ΔpLDDT (median - WT): {delta:+.1f}")
         else:
-            lines.append("- Designs AF2 pLDDT: not available")
+            lines.append("- Designs ColabFold pLDDT: not available")
 
         if rmsd_vals:
             rmsd_median = _median([float(x) for x in rmsd_vals if isinstance(x, (int, float))])
@@ -2661,10 +2764,10 @@ def _build_report_text_ko(
                 wt_rmsd_val = float(wt_rmsd)
             plddt_text = f"{float(wt_plddt):.1f}" if isinstance(wt_plddt, (int, float)) else "-"
             rmsd_text = f"{float(wt_rmsd):.2f}" if isinstance(wt_rmsd, (int, float)) else "-"
-            lines.append(f"- WT AF2: pLDDT={plddt_text} RMSD={rmsd_text}")
+            lines.append(f"- WT ColabFold: pLDDT={plddt_text} RMSD={rmsd_text}")
         elif isinstance(wt_af2, dict):
             reason = wt_af2.get("reason") or wt_af2.get("error") or "skipped"
-            lines.append(f"- WT AF2: skipped ({reason})")
+            lines.append(f"- WT ColabFold: skipped ({reason})")
 
         plddt_vals = design_metrics.get("af2_selected_plddt") or []
         rmsd_vals = design_metrics.get("af2_selected_rmsd") or []
@@ -2675,13 +2778,13 @@ def _build_report_text_ko(
                 design_plddt_median = float(plddt_median)
             plddt_max = max(plddt_vals) if plddt_vals else None
             lines.append(
-                f"- Designs AF2 pLDDT: median={plddt_median:.1f} max={float(plddt_max):.1f} (n={selected_total})"
+                f"- Designs ColabFold pLDDT: median={plddt_median:.1f} max={float(plddt_max):.1f} (n={selected_total})"
             )
             if isinstance(wt_af2, dict) and isinstance(wt_af2.get("best_plddt"), (int, float)):
                 delta = float(plddt_median) - float(wt_af2.get("best_plddt"))
                 lines.append(f"- ΔpLDDT (median - WT): {delta:+.1f}")
         else:
-            lines.append("- Designs AF2 pLDDT: not available")
+            lines.append("- Designs ColabFold pLDDT: not available")
 
         if rmsd_vals:
             rmsd_median = _median([float(x) for x in rmsd_vals if isinstance(x, (int, float))])
@@ -3539,6 +3642,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     ligand_resnames = _as_list_of_str(args.get("ligand_resnames"))
     ligand_atom_chains = _as_list_of_str(args.get("ligand_atom_chains"))
     af2_sequence_ids = _as_list_of_str(args.get("af2_sequence_ids"))
+    af2_provider = _as_af2_provider(args.get("af2_provider"), "colabfold")
     surface_only = _as_bool(args.get("surface_only"), False)
     ligand_mask_use_original_target = _as_bool(args.get("ligand_mask_use_original_target"), True)
     surface_min_rel = _as_float(args.get("surface_min_rel"), 0.2)
@@ -3624,6 +3728,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         af2_db_preset=str(args.get("af2_db_preset") or "full_dbs"),
         af2_max_template_date=str(args.get("af2_max_template_date") or "2020-05-14"),
         af2_extra_flags=(str(args.get("af2_extra_flags")) if args.get("af2_extra_flags") else None),
+        af2_provider=af2_provider,
         af2_plddt_cutoff=_as_float(args.get("af2_plddt_cutoff"), 85.0),
         af2_rmsd_cutoff=_as_float(args.get("af2_rmsd_cutoff"), 2.0),
         af2_max_candidates_per_tier=max(0, int(af2_max_candidates_per_tier)),
@@ -3722,6 +3827,7 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "af2_db_preset": {"type": "string"},
             "af2_max_template_date": {"type": "string"},
             "af2_extra_flags": {"type": "string"},
+            "af2_provider": {"type": "string", "enum": ["colabfold", "af2"]},
             "af2_plddt_cutoff": {"type": "number"},
             "af2_rmsd_cutoff": {"type": "number"},
             "af2_max_candidates_per_tier": {"type": "integer"},
@@ -3764,7 +3870,7 @@ def tool_definitions() -> list[dict[str, Any]]:
     return [
         {
             "name": "pipeline.run",
-            "description": "Run the full protein design pipeline (MMseqs2→mask→ProteinMPNN→SoluProt→AF2→novelty).",
+            "description": "Run the full protein design pipeline (MMseqs2→mask→ProteinMPNN→SoluProt→ColabFold/AF2→novelty).",
             "inputSchema": run_schema,
         },
         {
@@ -3774,7 +3880,7 @@ def tool_definitions() -> list[dict[str, Any]]:
         },
         {
             "name": "pipeline.af2_predict",
-            "description": "Run AlphaFold2 on input FASTA/sequence (standalone).",
+            "description": "Run ColabFold/AlphaFold2 on input FASTA/sequence (standalone).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3784,6 +3890,7 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "af2_db_preset": {"type": "string"},
                     "af2_max_template_date": {"type": "string"},
                     "af2_extra_flags": {"type": "string"},
+                    "af2_provider": {"type": "string", "enum": ["colabfold", "af2"]},
                     "run_id": {"type": "string"},
                     "dry_run": {"type": "boolean"},
                 },
@@ -3967,7 +4074,7 @@ def tool_definitions() -> list[dict[str, Any]]:
         },
         {
             "name": "pipeline.run_af2",
-            "description": "Run AlphaFold2 on provided FASTA (no full pipeline).",
+            "description": "Run ColabFold/AlphaFold2 on provided FASTA (no full pipeline).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -3984,6 +4091,7 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "af2_db_preset": {"type": "string"},
                     "af2_max_template_date": {"type": "string"},
                     "af2_extra_flags": {"type": "string"},
+                    "af2_provider": {"type": "string", "enum": ["colabfold", "af2"]},
                     "af2_chain_ids": {"type": "array", "items": {"type": "string"}},
                     "run_id": {"type": "string"},
                     "force": {"type": "boolean"},

@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>K-Biofoundry | Protein Pipeline Console</title>
-    <link rel="stylesheet" href="./styles.css?v=20260304_analyze_layout2" />
+    <link rel="stylesheet" href="./styles.css?v=20260305_analyze_charts1" />
   </head>
   <body>
     <div class="bg-orb orb-a" aria-hidden="true"></div>
@@ -24,6 +24,7 @@
           <button class="lang-btn" data-lang="ko">KO</button>
           <button class="lang-btn" data-lang="en">EN</button>
         </div>
+        <button id="copilotOpenBtn" class="ghost" data-i18n="copilot.open">Copilot</button>
         <button id="helpBtn" class="ghost" data-i18n="action.help">Usage</button>
         <button id="adminBtn" class="ghost hidden" data-i18n="action.admin">Admin</button>
         <button id="settingsBtn" class="ghost" data-i18n="action.settings">Settings</button>
@@ -196,7 +197,8 @@
           role="tabpanel"
           aria-labelledby="tabBtnMonitor"
         >
-          <div class="tab-grid monitor-grid">
+          <div class="tab-content-shell">
+            <div class="tab-grid monitor-grid">
             <div class="panel panel-block">
               <div class="panel-header">
                 <h3 data-i18n="monitor.title">Run Monitor</h3>
@@ -258,6 +260,7 @@
                 <div class="status-actions">
                   <button id="pollBtn" class="ghost" data-i18n="monitor.poll">Poll Now</button>
                   <button id="cancelRunBtn" class="ghost" data-i18n="monitor.stop">Stop Run</button>
+                  <button id="resumeRunBtn" class="ghost" data-i18n="monitor.resume">Resume Run</button>
                   <label class="toggle">
                     <input id="autoPoll" type="checkbox" checked />
                     <span data-i18n="monitor.autoPoll">Auto Poll</span>
@@ -335,6 +338,7 @@
               </div>
               <div id="agentPanelList" class="agent-panel-list"></div>
             </div>
+            </div>
           </div>
         </section>
 
@@ -345,7 +349,8 @@
           role="tabpanel"
           aria-labelledby="tabBtnAnalyze"
         >
-          <div class="tab-run-context">
+          <div class="tab-content-shell">
+            <div class="tab-run-context">
             <label class="run-context-select">
               <span data-i18n="monitor.runId">Run ID</span>
               <select id="analyzeRunSelector" class="run-selector">
@@ -362,8 +367,8 @@
                 <span id="analyzeContextStateValue" class="value state-badge">-</span>
               </span>
             </div>
-          </div>
-          <div class="analyze-summary">
+            </div>
+            <div class="analyze-summary">
             <div class="analyze-kpi">
               <span class="kpi-label" data-i18n="analyze.kpi.feedback">Feedback</span>
               <strong id="analyzeFeedbackCount" class="kpi-value">0</strong>
@@ -376,8 +381,8 @@
               <span class="kpi-label" data-i18n="analyze.kpi.recommendation">Recommendation</span>
               <strong id="analyzeRecommendationValue" class="kpi-value">-</strong>
             </div>
-          </div>
-          <div class="tab-grid analyze-grid">
+            </div>
+            <div class="tab-grid analyze-grid">
             <div class="span-2 compare-studio-mount">
               <div id="compareStudioPanel" class="panel panel-block analyze-compare">
               <div class="panel-header">
@@ -451,16 +456,25 @@
                 </p>
               </div>
               <div class="status-card feedback-card">
-                <div class="form-row">
-                  <label>
-                    <span data-i18n="analyze.files.select">Artifact File</span>
-                    <select id="analyzeArtifactSelect"></select>
-                  </label>
-                  <div class="run-compare-actions">
-                    <button id="analyzeArtifactOpen" class="ghost" data-i18n="analyze.files.open">
-                      Open
-                    </button>
-                  </div>
+                <div class="artifact-controls">
+                  <input
+                    id="analyzeArtifactFilter"
+                    type="text"
+                    placeholder="Filter by name or stage"
+                    data-i18n-placeholder="artifacts.filter.placeholder"
+                  />
+                  <select id="analyzeArtifactStageFilter" class="artifact-select"></select>
+                  <select id="analyzeArtifactTierFilter" class="artifact-select"></select>
+                  <select id="analyzeArtifactTypeFilter" class="artifact-select"></select>
+                  <button id="analyzeRefreshArtifacts" class="ghost" data-i18n="artifacts.refresh">
+                    Refresh
+                  </button>
+                </div>
+                <div id="analyzeArtifactList" class="artifact-list"></div>
+                <div class="panel-divider"></div>
+                <div class="panel-header small">
+                  <h3 data-i18n="artifacts.preview.title">Artifact Preview</h3>
+                  <p data-i18n="artifacts.preview.desc">3D structures, images, or text extracts.</p>
                 </div>
                 <div id="analyzeArtifactPreview" class="artifact-preview">
                   <div class="placeholder" data-i18n="analyze.files.placeholder">
@@ -620,6 +634,37 @@
                 <div id="reportStatus" class="hint"></div>
                 <div class="panel-divider"></div>
                 <div class="panel-header small">
+                  <h3 data-i18n="report.chart.title">Report Charts</h3>
+                  <p data-i18n="report.chart.desc">
+                    Select one chart view for pLDDT/RMSD and candidate quality.
+                  </p>
+                </div>
+                <div class="chart-explorer chart-explorer-report">
+                  <div class="chart-explorer-head">
+                    <label>
+                      <span data-i18n="report.chart.select">Chart Type</span>
+                      <select id="reportChartType" class="artifact-select">
+                        <option value="plddt_rmsd" data-i18n="analyze.chart.option.plddtRmsd">
+                          Scatter: pLDDT vs RMSD
+                        </option>
+                        <option value="score_hist" data-i18n="analyze.chart.option.scoreHist">
+                          Histogram: Hit Score
+                        </option>
+                        <option value="tier_pass" data-i18n="analyze.chart.option.tierPass">
+                          Tier AF2 Pass Rate
+                        </option>
+                      </select>
+                    </label>
+                  </div>
+                  <div id="reportChartCanvas" class="chart-canvas chart-canvas-report">
+                    <div class="placeholder" data-i18n="report.chart.placeholder">
+                      Load hit list to show report charts.
+                    </div>
+                  </div>
+                  <div id="reportChartCaption" class="hint"></div>
+                </div>
+                <div class="panel-divider"></div>
+                <div class="panel-header small">
                   <h3 data-i18n="report.review.title">Report Review</h3>
                   <p data-i18n="report.review.desc">Rate the report and provide reasons.</p>
                 </div>
@@ -727,12 +772,37 @@
                   </div>
                 </div>
                 <div id="hitListSummary" class="score-row score-row-compact"></div>
+                <div class="chart-explorer">
+                  <div class="chart-explorer-head">
+                    <label>
+                      <span data-i18n="analyze.chart.select">Chart</span>
+                      <select id="analyzeChartType" class="artifact-select">
+                        <option value="plddt_rmsd" data-i18n="analyze.chart.option.plddtRmsd">
+                          Scatter: pLDDT vs RMSD
+                        </option>
+                        <option value="score_hist" data-i18n="analyze.chart.option.scoreHist">
+                          Histogram: Hit Score
+                        </option>
+                        <option value="tier_pass" data-i18n="analyze.chart.option.tierPass">
+                          Tier AF2 Pass Rate
+                        </option>
+                      </select>
+                    </label>
+                  </div>
+                  <div id="analyzeChartCanvas" class="chart-canvas">
+                    <div class="placeholder" data-i18n="analyze.chart.placeholder">
+                      Run hit list to render candidate charts.
+                    </div>
+                  </div>
+                  <div id="analyzeChartCaption" class="hint"></div>
+                </div>
                 <div id="hitListTable" class="hit-list-table-wrap">
                   <div class="placeholder" data-i18n="analyze.hitList.placeholder">
                     Load a run to build the hit list.
                   </div>
                 </div>
               </div>
+            </div>
             </div>
           </div>
         </section>
@@ -877,7 +947,43 @@
       </div>
     </div>
 
+    <div id="copilotDrawer" class="copilot-drawer hidden" role="dialog" aria-modal="false">
+      <div class="copilot-header">
+        <div>
+          <h4 data-i18n="copilot.title">Context Copilot</h4>
+          <p data-i18n="copilot.desc">Ask about usage, interpretation, and next actions for current run.</p>
+        </div>
+        <button id="copilotCloseBtn" class="ghost" data-i18n="common.close">Close</button>
+      </div>
+      <div class="copilot-section">
+        <div class="status-subtitle" data-i18n="copilot.context.title">Current Context</div>
+        <div id="copilotContext" class="copilot-context">
+          <div class="placeholder" data-i18n="copilot.context.empty">Select a run to load context.</div>
+        </div>
+      </div>
+      <div class="copilot-section">
+        <div class="status-subtitle" data-i18n="copilot.quick.title">Quick Prompts</div>
+        <div class="copilot-quick">
+          <button id="copilotQuickUsage" class="ghost" data-i18n="copilot.quick.usage">How to use this page?</button>
+          <button id="copilotQuickInterpret" class="ghost" data-i18n="copilot.quick.interpret">Interpret current metrics</button>
+          <button id="copilotQuickNext" class="ghost" data-i18n="copilot.quick.next">What should I do next?</button>
+          <button id="copilotQuickResume" class="ghost" data-i18n="copilot.quick.resume">How does resume work?</button>
+        </div>
+      </div>
+      <div id="copilotMessages" class="copilot-messages"></div>
+      <div class="copilot-input-row">
+        <input
+          id="copilotInput"
+          type="text"
+          placeholder="Ask about current run or this UI"
+          data-i18n-placeholder="copilot.input.placeholder"
+        />
+        <button id="copilotSendBtn" class="primary" data-i18n="copilot.send">Send</button>
+      </div>
+    </div>
+    <button id="copilotFabBtn" class="primary copilot-fab" data-i18n="copilot.open">Copilot</button>
+
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260304_analyze_layout3"></script>
+    <script type="module" src="./app.js?v=20260305_stage_label_provider1"></script>
   </body>
 </html>

@@ -12,6 +12,7 @@ from .pipeline import PipelineRunner
 from .pipeline import _clean_protein_sequence
 from .pipeline import _bioemu_active
 from .pipeline import _diffdock_requested
+from .pipeline import _normalize_af2_provider
 from .pipeline import _resolve_af2_model_preset
 from .pipeline import _rfd3_active
 from .pipeline import _split_multichain_sequence
@@ -58,6 +59,15 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner) -> dict[
     rfd3_active = _rfd3_active(request)
     bioemu_active = _bioemu_active(request)
     diffdock_requested = _diffdock_requested(request)
+    af2_provider = _normalize_af2_provider(getattr(request, "af2_provider", None))
+    af2_client = runner.colabfold if af2_provider == "colabfold" else runner.af2
+    if af2_client is None and af2_provider == "colabfold" and runner.af2 is not None:
+        # Backward-compatible fallback for older deployments that only configured AF2.
+        af2_provider = "af2"
+        af2_client = runner.af2
+        warnings.append("af2_provider='colabfold' requested but ColabFold is not configured; using AlphaFold2 fallback.")
+    af2_provider_label = "ColabFold" if af2_provider == "colabfold" else "AlphaFold2"
+    detected["af2_provider"] = af2_provider
     bioemu_sequence = _clean_protein_sequence(str(request.bioemu_sequence or ""))
     has_bioemu_sequence = bool(bioemu_sequence)
 
@@ -164,18 +174,18 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner) -> dict[
     if _needs_stage(stop_after, "soluprot") and runner.soluprot is None:
         warnings.append("SoluProt service not configured; solubility filtering will be skipped.")
 
-    if _needs_stage(stop_after, "af2") and runner.af2 is None:
-        _warn_or_error("AlphaFold2 not configured; AF2 scoring will be skipped if auto_recover is enabled.")
+    if _needs_stage(stop_after, "af2") and af2_client is None:
+        _warn_or_error(f"{af2_provider_label} not configured; AF2 scoring will be skipped if auto_recover is enabled.")
 
     if request.wt_compare and runner.soluprot is None:
         warnings.append("WT compare requested but SoluProt service is not configured.")
 
-    if request.wt_compare and runner.af2 is None:
-        warnings.append("WT compare requested but AlphaFold2 is not configured.")
+    if request.wt_compare and af2_client is None:
+        warnings.append(f"WT compare requested but {af2_provider_label} is not configured.")
 
-    if request.surface_only and (not target_pdb) and runner.af2 is None and (not rfd3_active):
+    if request.surface_only and (not target_pdb) and af2_client is None and (not rfd3_active):
         _warn_or_error(
-            "surface_only requested but target_pdb is missing and AlphaFold2 is not configured."
+            f"surface_only requested but target_pdb is missing and {af2_provider_label} is not configured."
         )
 
     if rfd3_active and runner.rfd3 is None:

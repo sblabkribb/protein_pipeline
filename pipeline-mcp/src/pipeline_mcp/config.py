@@ -9,6 +9,7 @@ class RunPodConfig:
     api_key: str
     mmseqs_endpoint_id: str
     proteinmpnn_endpoint_id: str
+    colabfold_endpoint_id: str | None
     alphafold2_endpoint_id: str | None
     bioemu_endpoint_id: str | None
     diffdock_endpoint_id: str | None
@@ -47,6 +48,12 @@ def load_config() -> AppConfig:
     if not proteinmpnn_endpoint_id:
         raise RuntimeError("PROTEINMPNN_ENDPOINT_ID is required")
 
+    colabfold_endpoint_id = (
+        os.environ.get("COLABFOLD_ENDPOINT_ID", "").strip()
+        or os.environ.get("COLABFOLD_RUNPOD_ENDPOINT_ID", "").strip()
+        or None
+    )
+
     alphafold2_endpoint_id = (
         os.environ.get("ALPHAFOLD2_ENDPOINT_ID", "").strip()
         or os.environ.get("AF2_ENDPOINT_ID", "").strip()
@@ -70,6 +77,7 @@ def load_config() -> AppConfig:
             api_key=api_key,
             mmseqs_endpoint_id=mmseqs_endpoint_id,
             proteinmpnn_endpoint_id=proteinmpnn_endpoint_id,
+            colabfold_endpoint_id=colabfold_endpoint_id,
             alphafold2_endpoint_id=alphafold2_endpoint_id,
             bioemu_endpoint_id=bioemu_endpoint_id,
             diffdock_endpoint_id=diffdock_endpoint_id,

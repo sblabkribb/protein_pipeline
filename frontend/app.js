@@ -96,6 +96,14 @@ function createSetupResiduePickerState() {
   };
 }
 
+function createArtifactFilterState() {
+  return {
+    stage: "all",
+    tier: "all",
+    type: "all",
+  };
+}
+
 const state = {
   apiBase: resolveApiBase(),
   user: loadUser(),
@@ -118,10 +126,9 @@ const state = {
   chainRanges: null,
   artifacts: [],
   artifactMetaByPath: {},
-  artifactFilters: {
-    stage: "all",
-    tier: "all",
-    type: "all",
+  artifactFiltersByView: {
+    monitor: createArtifactFilterState(),
+    analyze: createArtifactFilterState(),
   },
   artifactComparison: null,
   artifactComparisonRunId: "",
@@ -137,6 +144,7 @@ const state = {
   hitListRows: [],
   hitListCutoff: 0,
   hitListLimit: 120,
+  chartView: "plddt_rmsd",
   hitListWeights: {
     soluprot: 0.4,
     plddt: 0.3,
@@ -145,6 +153,7 @@ const state = {
   },
   runs: [],
   runModeById: {},
+  af2ProviderByRunId: {},
   progressByRunId: {},
   timingByRunId: {},
   feedbackCount: 0,
@@ -154,6 +163,7 @@ const state = {
   reportModalText: "",
   reportModalMode: "rendered",
   reportModalFilename: "report.md",
+  copilotHistory: [],
   showBioemuCountOptions: false,
   showRfd3CountOptions: false,
   setupResiduePicker: createSetupResiduePickerState(),
@@ -173,6 +183,8 @@ const el = {
   logoutBtn: document.getElementById("logoutBtn"),
   adminBtn: document.getElementById("adminBtn"),
   helpBtn: document.getElementById("helpBtn"),
+  copilotOpenBtn: document.getElementById("copilotOpenBtn"),
+  copilotFabBtn: document.getElementById("copilotFabBtn"),
   chatArea: document.getElementById("chatArea"),
   userBadge: document.getElementById("userBadge"),
   messages: document.getElementById("messages"),
@@ -222,6 +234,7 @@ const el = {
   monitorCompletenessBadges: document.getElementById("monitorCompletenessBadges"),
   pollBtn: document.getElementById("pollBtn"),
   cancelRunBtn: document.getElementById("cancelRunBtn"),
+  resumeRunBtn: document.getElementById("resumeRunBtn"),
   autoPoll: document.getElementById("autoPoll"),
   refreshRunsBtn: document.getElementById("refreshRunsBtn"),
   clearMonitorMessages: document.getElementById("clearMonitorMessages"),
@@ -234,8 +247,12 @@ const el = {
   refreshArtifacts: document.getElementById("refreshArtifacts"),
   monitorArtifactPreview: document.getElementById("monitorArtifactPreview"),
   compareStudioPreview: document.getElementById("compareStudioPreview"),
-  analyzeArtifactSelect: document.getElementById("analyzeArtifactSelect"),
-  analyzeArtifactOpen: document.getElementById("analyzeArtifactOpen"),
+  analyzeArtifactList: document.getElementById("analyzeArtifactList"),
+  analyzeArtifactFilter: document.getElementById("analyzeArtifactFilter"),
+  analyzeArtifactStageFilter: document.getElementById("analyzeArtifactStageFilter"),
+  analyzeArtifactTierFilter: document.getElementById("analyzeArtifactTierFilter"),
+  analyzeArtifactTypeFilter: document.getElementById("analyzeArtifactTypeFilter"),
+  analyzeRefreshArtifacts: document.getElementById("analyzeRefreshArtifacts"),
   analyzeArtifactPreview: document.getElementById("analyzeArtifactPreview"),
   artifactComparisonSummary: document.getElementById("artifactComparisonSummary"),
   artifactCompareMode: document.getElementById("artifactCompareMode"),
@@ -311,6 +328,12 @@ const el = {
   hitListDetails: document.getElementById("hitListDetails"),
   hitListSummary: document.getElementById("hitListSummary"),
   hitListTable: document.getElementById("hitListTable"),
+  analyzeChartType: document.getElementById("analyzeChartType"),
+  analyzeChartCanvas: document.getElementById("analyzeChartCanvas"),
+  analyzeChartCaption: document.getElementById("analyzeChartCaption"),
+  reportChartType: document.getElementById("reportChartType"),
+  reportChartCanvas: document.getElementById("reportChartCanvas"),
+  reportChartCaption: document.getElementById("reportChartCaption"),
   settingsBtn: document.getElementById("settingsBtn"),
   settingsPanel: document.getElementById("settingsPanel"),
   settingsClose: document.getElementById("settingsClose"),
@@ -323,6 +346,16 @@ const el = {
   adminClose: document.getElementById("adminClose"),
   helpPanel: document.getElementById("helpPanel"),
   helpClose: document.getElementById("helpClose"),
+  copilotDrawer: document.getElementById("copilotDrawer"),
+  copilotCloseBtn: document.getElementById("copilotCloseBtn"),
+  copilotContext: document.getElementById("copilotContext"),
+  copilotMessages: document.getElementById("copilotMessages"),
+  copilotInput: document.getElementById("copilotInput"),
+  copilotSendBtn: document.getElementById("copilotSendBtn"),
+  copilotQuickUsage: document.getElementById("copilotQuickUsage"),
+  copilotQuickInterpret: document.getElementById("copilotQuickInterpret"),
+  copilotQuickNext: document.getElementById("copilotQuickNext"),
+  copilotQuickResume: document.getElementById("copilotQuickResume"),
   adminUsername: document.getElementById("adminUsername"),
   adminPassword: document.getElementById("adminPassword"),
   adminRole: document.getElementById("adminRole"),
@@ -342,6 +375,18 @@ const I18N = {
     "tabs.setup": "Setup",
     "tabs.monitor": "Monitor",
     "tabs.analyze": "Analyze",
+    "copilot.open": "Copilot",
+    "copilot.title": "Context Copilot",
+    "copilot.desc": "Usage + interpretation helper using current run/screen data.",
+    "copilot.context.title": "Current Context",
+    "copilot.context.empty": "Select a run to load context.",
+    "copilot.quick.title": "Quick Prompts",
+    "copilot.quick.usage": "How to use this page?",
+    "copilot.quick.interpret": "Interpret current metrics",
+    "copilot.quick.next": "What should I do next?",
+    "copilot.quick.resume": "How does resume work?",
+    "copilot.input.placeholder": "Ask about current run or this UI",
+    "copilot.send": "Send",
     "analyze.kpi.feedback": "Feedback",
     "analyze.kpi.experiment": "Experiments",
     "analyze.kpi.recommendation": "Recommendation",
@@ -372,18 +417,18 @@ const I18N = {
     "setup.runStatus.line": "Run status: {id} · {stage} / {state} · {updated}",
     "setup.residuePicker.title": "Residue Picker (Optional)",
     "setup.residuePicker.help":
-      "Select residues from a structure and append them to fixed_positions_extra. If target_pdb is missing, run once to create target.pdb (AF2 target), then load it from the selected run.",
+      "Select residues from a structure and append them to fixed_positions_extra. If target_pdb is missing, run once to create target.pdb ({af2Provider} target), then load it from the selected run.",
     "setup.residuePicker.source": "Structure source: {source}",
     "setup.residuePicker.source.none": "none",
     "setup.residuePicker.loadTargetInput": "Load target_input PDB",
     "setup.residuePicker.loadRfd3Input": "Load rfd3_input_pdb",
     "setup.residuePicker.loadRunTarget": "Load selected run target.pdb",
-    "setup.residuePicker.runAf2": "Run AF2 from FASTA",
-    "setup.residuePicker.runAf2Running": "Running AF2 to generate a target structure...",
+    "setup.residuePicker.runAf2": "Run {af2Provider} from FASTA",
+    "setup.residuePicker.runAf2Running": "Running {af2Provider} to generate a target structure...",
     "setup.residuePicker.runAf2NeedsFasta": "Attach a FASTA/sequence in target_input first.",
-    "setup.residuePicker.runAf2NoResult": "AF2 completed but ranked_0.pdb was not found.",
-    "setup.residuePicker.runAf2Loaded": "AF2 structure loaded from {run}:{path}",
-    "setup.residuePicker.runAf2Failed": "AF2 run failed: {error}",
+    "setup.residuePicker.runAf2NoResult": "{af2Provider} completed but ranked_0.pdb was not found.",
+    "setup.residuePicker.runAf2Loaded": "{af2Provider} structure loaded from {run}:{path}",
+    "setup.residuePicker.runAf2Failed": "{af2Provider} run failed: {error}",
     "setup.residuePicker.viewerPlaceholder": "Load a structure to start residue picking.",
     "setup.residuePicker.viewerUnavailable": "3D viewer unavailable.",
     "setup.residuePicker.selection.none": "No residues selected.",
@@ -432,10 +477,11 @@ const I18N = {
     "monitor.completeness.badge.bioemuOnly": "BioEmu only",
     "monitor.completeness.badge.wtOn": "WT compare on",
     "monitor.completeness.badge.wtOff": "WT compare off",
-    "monitor.completeness.badge.af2None": "AF2 selected none",
-    "monitor.completeness.badge.af2Some": "AF2 selected {count}",
+    "monitor.completeness.badge.af2None": "{af2Provider} selected none",
+    "monitor.completeness.badge.af2Some": "{af2Provider} selected {count}",
     "monitor.poll": "Poll Now",
     "monitor.stop": "Stop Run",
+    "monitor.resume": "Resume Run",
     "monitor.stopConfirm": "Cancel run {id}? This will request RunPod cancellation.",
     "monitor.stopSuccess": "Cancel requested for {id} (jobs: {count}).",
     "monitor.stopFailed": "Cancel failed: {error}",
@@ -491,7 +537,7 @@ const I18N = {
     "artifacts.compare.funnel": "Selection Funnel",
     "artifacts.compare.funnelBackbone": "Backbones",
     "artifacts.compare.funnelSoluprot": "SoluProt pass",
-    "artifacts.compare.funnelAf2": "AF2 pass",
+    "artifacts.compare.funnelAf2": "{af2Provider} pass",
     "artifacts.compare.funnelRetain": "Backbone retention",
     "artifacts.compare.source": "RFD3 vs BioEmu",
     "artifacts.compare.metric": "Metric",
@@ -503,7 +549,7 @@ const I18N = {
     "artifacts.compare.backbones": "Backbones",
     "artifacts.compare.passRate": "SoluProt pass",
     "artifacts.compare.soluprotMedian": "Median SoluProt",
-    "artifacts.compare.af2Selected": "AF2 selected",
+    "artifacts.compare.af2Selected": "{af2Provider} selected",
     "artifacts.compare.plddtMedian": "Median pLDDT",
     "artifacts.compare.rmsdMedian": "Median RMSD",
     "artifacts.preview.title": "Artifact Preview",
@@ -559,6 +605,10 @@ const I18N = {
     "report.exportPackage": "Export Package",
     "report.save": "Save",
     "report.links": "Artifact Links",
+    "report.chart.title": "Report Charts",
+    "report.chart.desc": "Render one selected chart from current hit-list data.",
+    "report.chart.select": "Chart Type",
+    "report.chart.placeholder": "Load hit list to show report charts.",
     "report.review.title": "Report Review",
     "report.review.desc": "Rate the report and provide reasons.",
     "report.review.rating": "Rating",
@@ -630,7 +680,7 @@ const I18N = {
     "question.designChains.label": "Design Chains",
     "question.designChains.help": "Which chains to design? (default: all)",
     "question.wtCompare.label": "WT Compare",
-    "question.wtCompare.help": "Compute WT baseline (SoluProt/AF2) and compare in report.",
+    "question.wtCompare.help": "Compute WT baseline (SoluProt/{af2Provider}) and compare in report.",
     "question.maskConsensusApply.label": "Apply Mask Consensus",
     "question.maskConsensusApply.help": "Apply expert mask consensus to ProteinMPNN (optional).",
     "question.bioemuUse.label": "Enable BioEmu",
@@ -641,13 +691,15 @@ const I18N = {
     "question.bioemuMaxReturn.help": "Maximum number of BioEmu structures to keep.",
     "question.numSeqPerTier.label": "ProteinMPNN per Tier",
     "question.numSeqPerTier.help": "Number of ProteinMPNN sequences to generate for each tier and backbone.",
-    "question.af2MaxCandidatesPerTier.label": "AF2 per Tier (Top N)",
+    "question.af2MaxCandidatesPerTier.label": "{af2Provider} per Tier (Top N)",
     "question.af2MaxCandidatesPerTier.help":
-      "Run AF2 only for top N SoluProt-passed designs per tier (ranked by SoluProt score, 0 = all).",
-    "question.af2PlddtCutoff.label": "AF2 pLDDT Cutoff",
-    "question.af2PlddtCutoff.help": "Minimum pLDDT threshold for AF2 pass filtering (default: 85).",
-    "question.af2RmsdCutoff.label": "AF2 RMSD Cutoff",
-    "question.af2RmsdCutoff.help": "Maximum RMSD threshold (angstrom) for AF2 pass filtering (default: 2.0).",
+      "Run {af2Provider} only for top N SoluProt-passed designs per tier (ranked by SoluProt score, 0 = all).",
+    "question.af2PlddtCutoff.label": "{af2Provider} pLDDT Cutoff",
+    "question.af2PlddtCutoff.help": "Minimum pLDDT threshold for {af2Provider} pass filtering (default: 85).",
+    "question.af2RmsdCutoff.label": "{af2Provider} RMSD Cutoff",
+    "question.af2RmsdCutoff.help": "Maximum RMSD threshold (angstrom) for {af2Provider} pass filtering (default: 2.0).",
+    "question.af2Provider.label": "Structure Predictor",
+    "question.af2Provider.help": "Choose structure prediction provider.",
     "question.rfd3MaxReturn.label": "RFD3 Return Count",
     "question.rfd3MaxReturn.help": "Maximum number of RFD3 backbone designs to keep.",
     "question.confirmRun.label": "Confirm Run",
@@ -665,7 +717,7 @@ const I18N = {
     "question.diffdockLigand.label": "DiffDock Ligand",
     "question.diffdockLigand.help": "Provide diffdock_ligand_smiles or diffdock_ligand_sdf.",
     "question.targetFasta.label": "Target FASTA",
-    "question.targetFasta.help": "Provide target FASTA or sequence for AlphaFold2.",
+    "question.targetFasta.help": "Provide target FASTA or sequence for {af2ProviderPair}.",
     "question.proteinPdb.label": "Protein PDB",
     "question.proteinPdb.help": "Provide protein PDB text for DiffDock.",
     "question.ligandInput.label": "Ligand Input",
@@ -696,6 +748,8 @@ const I18N = {
     "choice.ligandMaskOriginal.off": "Use backbone-only mask",
     "choice.bioemuUse.on": "Enable BioEmu",
     "choice.bioemuUse.off": "Disable BioEmu",
+    "choice.af2Provider.colabfold": "ColabFold (default)",
+    "choice.af2Provider.af2": "AlphaFold2",
     "advanced.bioemuCounts.title": "BioEmu Count Options",
     "advanced.bioemuCounts.help": "These values are optional and hidden by default.",
     "advanced.bioemuCounts.show": "Show BioEmu Count Options",
@@ -717,7 +771,7 @@ const I18N = {
     "runmode.msa": "MSA (MMseqs2)",
     "runmode.design": "ProteinMPNN",
     "runmode.soluprot": "SoluProt",
-    "runmode.af2": "AlphaFold2",
+    "runmode.af2": "{af2Provider}",
     "runmode.diffdock": "DiffDock",
     "stop.full": "Full (Novelty)",
     "stage.msa": "MSA",
@@ -725,14 +779,14 @@ const I18N = {
     "stage.bioemu": "BioEmu",
     "stage.design": "Design",
     "stage.soluprot": "SoluProt",
-    "stage.af2": "AlphaFold2",
+    "stage.af2": "{af2Provider}",
     "run.label.pipeline": "Run Pipeline",
     "run.label.rfd3": "Run RFD3",
     "run.label.bioemu": "Run BioEmu",
     "run.label.msa": "Run MSA",
     "run.label.design": "Run ProteinMPNN",
     "run.label.soluprot": "Run SoluProt",
-    "run.label.af2": "Run AlphaFold2",
+    "run.label.af2": "Run {af2Provider}",
     "run.label.diffdock": "Run DiffDock",
     "mode.pipeline": "pipeline",
     "mode.rfd3": "RFD3",
@@ -740,11 +794,18 @@ const I18N = {
     "mode.msa": "MSA",
     "mode.design": "ProteinMPNN",
     "mode.soluprot": "SoluProt",
-    "mode.af2": "AlphaFold2",
+    "mode.af2": "{af2Provider}",
     "mode.diffdock": "DiffDock",
     "run.launching": "Launching {mode} run {id}...",
     "run.started": "Run started: {id}",
     "run.failed": "Run failed: {error}",
+    "run.resume.loading": "Loading request.json for {id}...",
+    "run.resume.running": "Run is already in progress.",
+    "run.resume.noRequest": "request.json was not found for this run.",
+    "run.resume.badRequest": "request.json is invalid.",
+    "run.resume.starting": "Resuming run {id} from saved request...",
+    "run.resume.started": "Resume requested: {id}",
+    "run.resume.failed": "Resume failed: {error}",
     "run.alreadyRunning": "A run is already in progress. Stop it or wait for completion.",
     "run.confirmRequired": "Confirm the prompt plan before running.",
     "status.line": "Status: {stage} / {state}",
@@ -776,7 +837,7 @@ const I18N = {
     "feedback.stage.msa": "MSA",
     "feedback.stage.design": "Design",
     "feedback.stage.soluprot": "SoluProt",
-    "feedback.stage.af2": "AlphaFold2",
+    "feedback.stage.af2": "{af2Provider}",
     "feedback.stage.novelty": "Novelty",
     "feedback.stage.rfd3": "RFD3",
     "feedback.stage.diffdock": "DiffDock",
@@ -840,6 +901,24 @@ const I18N = {
     "analyze.hitList.summary":
       "Showing {shown}/{filtered} candidates (total {total}), median score {score}.",
     "analyze.hitList.empty": "No candidates matched the cutoff.",
+    "analyze.chart.select": "Chart",
+    "analyze.chart.placeholder": "Run hit list to render candidate charts.",
+    "analyze.chart.noData": "No numeric data for the selected chart in current filters.",
+    "analyze.chart.option.plddtRmsd": "Scatter: pLDDT vs RMSD",
+    "analyze.chart.option.scoreHist": "Histogram: Hit Score",
+    "analyze.chart.option.tierPass": "Tier AF2 Pass Rate",
+    "analyze.chart.axis.plddt": "pLDDT",
+    "analyze.chart.axis.rmsd": "RMSD (A)",
+    "analyze.chart.axis.score": "Hit Score",
+    "analyze.chart.axis.passRate": "Pass Rate (%)",
+    "analyze.chart.axis.count": "Count",
+    "analyze.chart.axis.tier": "Tier",
+    "analyze.chart.legend.selected": "{af2Provider} selected",
+    "analyze.chart.legend.unselected": "Not selected",
+    "analyze.chart.caption.rows": "Rows={rows} (cutoff >= {cutoff})",
+    "analyze.chart.caption.scatter": "Points={points}, selected={selected}",
+    "analyze.chart.caption.hist": "Values={values}, bins={bins}",
+    "analyze.chart.caption.tier": "Tiers={tiers}, rows={rows}",
     "analyze.files.title": "Artifact File Viewer",
     "analyze.files.desc": "Preview PDB/FASTA/CSV and text artifacts in Analyze.",
     "analyze.files.select": "Artifact File",
@@ -871,6 +950,18 @@ const I18N = {
     "tabs.setup": "설정",
     "tabs.monitor": "모니터",
     "tabs.analyze": "분석",
+    "copilot.open": "Copilot",
+    "copilot.title": "Context Copilot",
+    "copilot.desc": "현재 run/화면 데이터를 바탕으로 사용법과 해석을 도와줍니다.",
+    "copilot.context.title": "현재 컨텍스트",
+    "copilot.context.empty": "run을 선택하면 컨텍스트를 표시합니다.",
+    "copilot.quick.title": "빠른 질문",
+    "copilot.quick.usage": "이 화면 사용법",
+    "copilot.quick.interpret": "현재 지표 해석",
+    "copilot.quick.next": "다음에 뭘 할까?",
+    "copilot.quick.resume": "재시작은 어떻게 해?",
+    "copilot.input.placeholder": "현재 run 또는 화면 사용법을 질문하세요",
+    "copilot.send": "보내기",
     "analyze.kpi.feedback": "피드백",
     "analyze.kpi.experiment": "실험",
     "analyze.kpi.recommendation": "권고",
@@ -901,18 +992,18 @@ const I18N = {
     "setup.runStatus.line": "실행 상태: {id} · {stage} / {state} · {updated}",
     "setup.residuePicker.title": "잔기 선택기 (선택)",
     "setup.residuePicker.help":
-      "구조에서 잔기를 선택해 fixed_positions_extra에 추가합니다. target_pdb가 없으면 먼저 1회 실행해 target.pdb(AF2 target)를 만든 뒤, 선택한 run에서 불러오세요.",
+      "구조에서 잔기를 선택해 fixed_positions_extra에 추가합니다. target_pdb가 없으면 먼저 1회 실행해 target.pdb({af2Provider} target)를 만든 뒤, 선택한 run에서 불러오세요.",
     "setup.residuePicker.source": "구조 소스: {source}",
     "setup.residuePicker.source.none": "없음",
     "setup.residuePicker.loadTargetInput": "target_input PDB 불러오기",
     "setup.residuePicker.loadRfd3Input": "rfd3_input_pdb 불러오기",
     "setup.residuePicker.loadRunTarget": "선택 run의 target.pdb 불러오기",
-    "setup.residuePicker.runAf2": "FASTA로 AF2 실행",
-    "setup.residuePicker.runAf2Running": "target 구조 생성을 위해 AF2를 실행 중입니다...",
+    "setup.residuePicker.runAf2": "FASTA로 {af2Provider} 실행",
+    "setup.residuePicker.runAf2Running": "target 구조 생성을 위해 {af2Provider}를 실행 중입니다...",
     "setup.residuePicker.runAf2NeedsFasta": "먼저 target_input에 FASTA/서열을 첨부하세요.",
-    "setup.residuePicker.runAf2NoResult": "AF2는 완료됐지만 ranked_0.pdb를 찾지 못했습니다.",
-    "setup.residuePicker.runAf2Loaded": "{run}:{path} 에서 AF2 구조를 불러왔습니다.",
-    "setup.residuePicker.runAf2Failed": "AF2 실행 실패: {error}",
+    "setup.residuePicker.runAf2NoResult": "{af2Provider}는 완료됐지만 ranked_0.pdb를 찾지 못했습니다.",
+    "setup.residuePicker.runAf2Loaded": "{run}:{path} 에서 {af2Provider} 구조를 불러왔습니다.",
+    "setup.residuePicker.runAf2Failed": "{af2Provider} 실행 실패: {error}",
     "setup.residuePicker.viewerPlaceholder": "잔기 선택을 시작하려면 구조를 불러오세요.",
     "setup.residuePicker.viewerUnavailable": "3D 뷰어를 사용할 수 없습니다.",
     "setup.residuePicker.selection.none": "선택된 잔기가 없습니다.",
@@ -961,10 +1052,11 @@ const I18N = {
     "monitor.completeness.badge.bioemuOnly": "BioEmu 전용",
     "monitor.completeness.badge.wtOn": "WT 비교 사용",
     "monitor.completeness.badge.wtOff": "WT 비교 꺼짐",
-    "monitor.completeness.badge.af2None": "AF2 선발 없음",
-    "monitor.completeness.badge.af2Some": "AF2 선발 {count}",
+    "monitor.completeness.badge.af2None": "{af2Provider} 선발 없음",
+    "monitor.completeness.badge.af2Some": "{af2Provider} 선발 {count}",
     "monitor.poll": "지금 조회",
     "monitor.stop": "정지",
+    "monitor.resume": "재시작",
     "monitor.stopConfirm": "{id} 실행을 취소할까요? RunPod 작업 취소가 요청됩니다.",
     "monitor.stopSuccess": "{id} 실행 취소 요청 완료 (jobs: {count}).",
     "monitor.stopFailed": "취소 실패: {error}",
@@ -1019,7 +1111,7 @@ const I18N = {
     "artifacts.compare.funnel": "선발 Funnel",
     "artifacts.compare.funnelBackbone": "백본 수",
     "artifacts.compare.funnelSoluprot": "SoluProt 통과",
-    "artifacts.compare.funnelAf2": "AF2 통과",
+    "artifacts.compare.funnelAf2": "{af2Provider} 통과",
     "artifacts.compare.funnelRetain": "백본 대비 유지율",
     "artifacts.compare.source": "RFD3 대비 BioEmu",
     "artifacts.compare.metric": "지표",
@@ -1031,7 +1123,7 @@ const I18N = {
     "artifacts.compare.backbones": "백본 수",
     "artifacts.compare.passRate": "SoluProt 통과",
     "artifacts.compare.soluprotMedian": "SoluProt 중앙값",
-    "artifacts.compare.af2Selected": "AF2 선발",
+    "artifacts.compare.af2Selected": "{af2Provider} 선발",
     "artifacts.compare.plddtMedian": "pLDDT 중앙값",
     "artifacts.compare.rmsdMedian": "RMSD 중앙값",
     "artifacts.preview.title": "아티팩트 미리보기",
@@ -1087,6 +1179,10 @@ const I18N = {
     "report.exportPackage": "결과 패키지",
     "report.save": "저장",
     "report.links": "아티팩트 링크",
+    "report.chart.title": "리포트 차트",
+    "report.chart.desc": "현재 Hit List 데이터에서 선택한 차트 1개를 렌더링합니다.",
+    "report.chart.select": "차트 유형",
+    "report.chart.placeholder": "Hit List를 불러오면 리포트 차트를 표시합니다.",
     "report.review.title": "리포트 평가",
     "report.review.desc": "리포트를 평가하고 이유를 입력하세요.",
     "report.review.rating": "평가",
@@ -1158,7 +1254,7 @@ const I18N = {
     "question.designChains.label": "디자인 체인",
     "question.designChains.help": "디자인할 체인을 선택하세요. (기본: 전체)",
     "question.wtCompare.label": "WT 비교",
-    "question.wtCompare.help": "WT 기준(SoluProt/AF2)을 계산해 리포트에 비교합니다.",
+    "question.wtCompare.help": "WT 기준(SoluProt/{af2Provider})을 계산해 리포트에 비교합니다.",
     "question.maskConsensusApply.label": "합의 마스킹 적용",
     "question.maskConsensusApply.help": "전문가 합의 마스킹을 ProteinMPNN에 적용합니다.",
     "question.bioemuUse.label": "BioEmu 사용",
@@ -1169,13 +1265,15 @@ const I18N = {
     "question.bioemuMaxReturn.help": "보존할 BioEmu 구조 최대 개수입니다.",
     "question.numSeqPerTier.label": "티어당 ProteinMPNN 개수",
     "question.numSeqPerTier.help": "각 티어/백본마다 생성할 ProteinMPNN 서열 개수입니다.",
-    "question.af2MaxCandidatesPerTier.label": "AF2 티어당 실행 개수 (상위 N개)",
+    "question.af2MaxCandidatesPerTier.label": "{af2Provider} 티어당 실행 개수 (상위 N개)",
     "question.af2MaxCandidatesPerTier.help":
-      "티어별 SoluProt 통과 서열 중 상위 N개(점수 순)만 AF2를 실행합니다. 0이면 전체 실행.",
-    "question.af2PlddtCutoff.label": "AF2 pLDDT 컷오프",
-    "question.af2PlddtCutoff.help": "AF2 통과 필터링에 사용할 최소 pLDDT 임계값입니다. (기본값: 85)",
-    "question.af2RmsdCutoff.label": "AF2 RMSD 컷오프",
-    "question.af2RmsdCutoff.help": "AF2 통과 필터링에 사용할 최대 RMSD 임계값(Å)입니다. (기본값: 2.0)",
+      "티어별 SoluProt 통과 서열 중 상위 N개(점수 순)만 {af2Provider}를 실행합니다. 0이면 전체 실행.",
+    "question.af2PlddtCutoff.label": "{af2Provider} pLDDT 컷오프",
+    "question.af2PlddtCutoff.help": "{af2Provider} 통과 필터링에 사용할 최소 pLDDT 임계값입니다. (기본값: 85)",
+    "question.af2RmsdCutoff.label": "{af2Provider} RMSD 컷오프",
+    "question.af2RmsdCutoff.help": "{af2Provider} 통과 필터링에 사용할 최대 RMSD 임계값(Å)입니다. (기본값: 2.0)",
+    "question.af2Provider.label": "구조 예측기",
+    "question.af2Provider.help": "구조 예측 provider를 선택하세요.",
     "question.rfd3MaxReturn.label": "RFD3 반환 개수",
     "question.rfd3MaxReturn.help": "보존할 RFD3 백본 디자인 최대 개수입니다.",
     "question.confirmRun.label": "실행 확인",
@@ -1193,7 +1291,7 @@ const I18N = {
     "question.diffdockLigand.label": "DiffDock 리간드",
     "question.diffdockLigand.help": "diffdock_ligand_smiles 또는 diffdock_ligand_sdf를 입력하세요.",
     "question.targetFasta.label": "타깃 FASTA",
-    "question.targetFasta.help": "AlphaFold2용 FASTA 또는 서열을 입력하세요.",
+    "question.targetFasta.help": "{af2ProviderPair}용 FASTA 또는 서열을 입력하세요.",
     "question.proteinPdb.label": "단백질 PDB",
     "question.proteinPdb.help": "DiffDock용 단백질 PDB 원문을 입력하세요.",
     "question.ligandInput.label": "리간드 입력",
@@ -1224,6 +1322,8 @@ const I18N = {
     "choice.ligandMaskOriginal.off": "현재 백본 기준만 사용",
     "choice.bioemuUse.on": "BioEmu 사용",
     "choice.bioemuUse.off": "BioEmu 사용 안 함",
+    "choice.af2Provider.colabfold": "ColabFold (기본)",
+    "choice.af2Provider.af2": "AlphaFold2",
     "advanced.bioemuCounts.title": "BioEmu 개수 옵션",
     "advanced.bioemuCounts.help": "선택 입력이며 기본으로 숨김입니다.",
     "advanced.bioemuCounts.show": "BioEmu 개수 옵션 보기",
@@ -1245,7 +1345,7 @@ const I18N = {
     "runmode.msa": "MSA (MMseqs2)",
     "runmode.design": "ProteinMPNN",
     "runmode.soluprot": "SoluProt",
-    "runmode.af2": "AlphaFold2",
+    "runmode.af2": "{af2Provider}",
     "runmode.diffdock": "DiffDock",
     "stop.full": "전체 (Novelty)",
     "stage.msa": "MSA",
@@ -1253,14 +1353,14 @@ const I18N = {
     "stage.bioemu": "BioEmu",
     "stage.design": "디자인",
     "stage.soluprot": "SoluProt",
-    "stage.af2": "AlphaFold2",
+    "stage.af2": "{af2Provider}",
     "run.label.pipeline": "파이프라인 실행",
     "run.label.rfd3": "RFD3 실행",
     "run.label.bioemu": "BioEmu 실행",
     "run.label.msa": "MSA 실행",
     "run.label.design": "ProteinMPNN 실행",
     "run.label.soluprot": "SoluProt 실행",
-    "run.label.af2": "AlphaFold2 실행",
+    "run.label.af2": "{af2Provider} 실행",
     "run.label.diffdock": "DiffDock 실행",
     "mode.pipeline": "파이프라인",
     "mode.rfd3": "RFD3",
@@ -1268,11 +1368,18 @@ const I18N = {
     "mode.msa": "MSA",
     "mode.design": "ProteinMPNN",
     "mode.soluprot": "SoluProt",
-    "mode.af2": "AlphaFold2",
+    "mode.af2": "{af2Provider}",
     "mode.diffdock": "DiffDock",
     "run.launching": "{mode} 실행 {id} 시작...",
     "run.started": "실행 시작: {id}",
     "run.failed": "실행 실패: {error}",
+    "run.resume.loading": "{id}의 request.json을 불러오는 중...",
+    "run.resume.running": "이미 실행 중입니다.",
+    "run.resume.noRequest": "이 run의 request.json을 찾지 못했습니다.",
+    "run.resume.badRequest": "request.json 형식이 올바르지 않습니다.",
+    "run.resume.starting": "저장된 요청으로 {id} run 재시작 중...",
+    "run.resume.started": "재시작 요청 완료: {id}",
+    "run.resume.failed": "재시작 실패: {error}",
     "run.alreadyRunning": "이미 실행 중인 작업이 있습니다. 완료를 기다리거나 정지하세요.",
     "run.confirmRequired": "실행 전에 확인을 완료하세요.",
     "status.line": "상태: {stage} / {state}",
@@ -1304,7 +1411,7 @@ const I18N = {
     "feedback.stage.msa": "MSA",
     "feedback.stage.design": "Design",
     "feedback.stage.soluprot": "SoluProt",
-    "feedback.stage.af2": "AlphaFold2",
+    "feedback.stage.af2": "{af2Provider}",
     "feedback.stage.novelty": "Novelty",
     "feedback.stage.rfd3": "RFD3",
     "feedback.stage.diffdock": "DiffDock",
@@ -1368,6 +1475,24 @@ const I18N = {
     "analyze.hitList.summary":
       "{shown}/{filtered}개 표시 (전체 {total}), 중앙 점수 {score}",
     "analyze.hitList.empty": "컷오프 조건을 만족하는 후보가 없습니다.",
+    "analyze.chart.select": "차트",
+    "analyze.chart.placeholder": "Hit List를 실행하면 후보 차트를 표시합니다.",
+    "analyze.chart.noData": "현재 필터에서 선택한 차트를 그릴 수 있는 수치 데이터가 없습니다.",
+    "analyze.chart.option.plddtRmsd": "분산: pLDDT vs RMSD",
+    "analyze.chart.option.scoreHist": "히스토그램: Hit 점수",
+    "analyze.chart.option.tierPass": "티어별 AF2 통과율",
+    "analyze.chart.axis.plddt": "pLDDT",
+    "analyze.chart.axis.rmsd": "RMSD (A)",
+    "analyze.chart.axis.score": "Hit 점수",
+    "analyze.chart.axis.passRate": "통과율 (%)",
+    "analyze.chart.axis.count": "개수",
+    "analyze.chart.axis.tier": "티어",
+    "analyze.chart.legend.selected": "{af2Provider} 선발",
+    "analyze.chart.legend.unselected": "미선발",
+    "analyze.chart.caption.rows": "행={rows} (컷오프 >= {cutoff})",
+    "analyze.chart.caption.scatter": "포인트={points}, 선발={selected}",
+    "analyze.chart.caption.hist": "값={values}, 구간={bins}",
+    "analyze.chart.caption.tier": "티어={tiers}, 행={rows}",
     "analyze.files.title": "아티팩트 파일 뷰어",
     "analyze.files.desc": "Analyze에서 PDB/FASTA/CSV 및 텍스트 아티팩트를 미리보기합니다.",
     "analyze.files.select": "아티팩트 파일",
@@ -1392,13 +1517,116 @@ const I18N = {
   },
 };
 
+function parseAf2Provider(value) {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (raw === "af2" || raw === "alphafold" || raw === "alphafold2") {
+    return "af2";
+  }
+  if (raw === "colabfold") {
+    return "colabfold";
+  }
+  return "";
+}
+
+function normalizeAf2Provider(value) {
+  return parseAf2Provider(value) || "colabfold";
+}
+
+function af2ProviderForRun(runId) {
+  const key = String(runId || "").trim();
+  if (!key) return "";
+  const raw = state.af2ProviderByRunId ? state.af2ProviderByRunId[key] : "";
+  if (!raw) return "";
+  return normalizeAf2Provider(raw);
+}
+
+function activeAf2Provider(runId = state.currentRunId) {
+  if (state.answers && state.answers.af2_provider !== undefined) {
+    return normalizeAf2Provider(state.answers.af2_provider);
+  }
+  const fromRun = af2ProviderForRun(runId);
+  if (fromRun) return fromRun;
+  return "colabfold";
+}
+
+function currentRunAf2Provider(runId = state.currentRunId) {
+  const fromRun = af2ProviderForRun(runId);
+  if (fromRun) return fromRun;
+  if (String(runId || "").trim()) return "";
+  return activeAf2Provider(runId);
+}
+
+function af2ProviderName(provider = activeAf2Provider(), lang = state.lang) {
+  const parsed = parseAf2Provider(provider);
+  if (parsed === "af2") return "AlphaFold2";
+  if (parsed === "colabfold") return "ColabFold";
+  return "AF2";
+}
+
+function af2ProviderTargetLabel(provider = activeAf2Provider(), lang = state.lang) {
+  const name = af2ProviderName(provider, lang);
+  return lang === "ko" ? `${name} 타깃` : `${name} Target`;
+}
+
+function af2ProviderWtLabel(provider = activeAf2Provider(), lang = state.lang) {
+  const name = af2ProviderName(provider, lang);
+  return `WT ${name}`;
+}
+
+function af2ProviderPassLabel(provider = activeAf2Provider(), lang = state.lang) {
+  const name = af2ProviderName(provider, lang);
+  return lang === "ko" ? `${name} 통과` : `${name} pass`;
+}
+
+function af2ProviderSelectedLabel(provider = activeAf2Provider(), lang = state.lang) {
+  const name = af2ProviderName(provider, lang);
+  return lang === "ko" ? `${name} 선발` : `${name} selected`;
+}
+
+function af2ProviderTemplateParams(provider = activeAf2Provider()) {
+  const normalized = normalizeAf2Provider(provider);
+  return {
+    af2Provider: af2ProviderName(normalized, state.lang),
+    af2ProviderPair: normalized === "af2" ? "AlphaFold2/ColabFold" : "ColabFold/AlphaFold2",
+  };
+}
+
+function setAf2ProviderForRun(runId, provider) {
+  const key = String(runId || "").trim();
+  if (!key) return false;
+  const normalized = normalizeAf2Provider(provider);
+  if (!state.af2ProviderByRunId) state.af2ProviderByRunId = {};
+  if (state.af2ProviderByRunId[key] === normalized) return false;
+  state.af2ProviderByRunId[key] = normalized;
+  return String(state.currentRunId || "").trim() === key;
+}
+
+function refreshAf2ProviderLabels({ rerenderQuestions = false } = {}) {
+  updateRunLabel();
+  if (rerenderQuestions) {
+    renderQuestions(state.plan?.questions || []);
+    updateRunEligibility(state.plan?.questions || []);
+  }
+  renderAllArtifactViews(state.artifacts);
+  refreshArtifactSelects();
+  renderArtifactComparisonSummary(state.artifactComparison);
+  renderMonitorCompleteness(state.artifactComparison, state.hitListResult?.completeness || null);
+  renderRunCompareSummary(state.runCompareResult);
+  renderHitList();
+  updateReportArtifactLinks(el.reportContent ? el.reportContent.value : "");
+}
+
 function t(key, params = {}) {
   const table = I18N[state.lang] || I18N.en;
   const fallback = I18N.en[key] || key;
   const template = table[key] || fallback;
+  const defaults = af2ProviderTemplateParams();
+  const merged = { ...defaults, ...(params || {}) };
   return String(template).replace(/\{(\w+)\}/g, (_, k) => {
-    if (params[k] === undefined || params[k] === null) return "";
-    return String(params[k]);
+    if (merged[k] === undefined || merged[k] === null) return "";
+    return String(merged[k]);
   });
 }
 
@@ -1424,6 +1652,7 @@ const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
 const langButtons = Array.from(document.querySelectorAll(".lang-btn"));
 let tabsInitialized = false;
 let langInitialized = false;
+let copilotInitialized = false;
 
 const RUN_MODE_OPTIONS = [
   { labelKey: "runmode.pipeline", value: "pipeline" },
@@ -1496,6 +1725,11 @@ const QUESTION_PRESETS = {
     labelKey: "question.af2RmsdCutoff.label",
     questionKey: "question.af2RmsdCutoff.help",
     default: 2.0,
+  },
+  af2_provider: {
+    labelKey: "question.af2Provider.label",
+    questionKey: "question.af2Provider.help",
+    default: "colabfold",
   },
   rfd3_max_return_designs: {
     labelKey: "question.rfd3MaxReturn.label",
@@ -1736,7 +1970,7 @@ const STAGE_LABELS = {
   conservation: { en: "Conservation", ko: "보존도" },
   rfd3: { en: "RFD3", ko: "RFD3" },
   bioemu: { en: "BioEmu", ko: "BioEmu" },
-  af2_target: { en: "AF2 Target", ko: "AF2 타깃" },
+  af2_target: { en: "ColabFold Target", ko: "ColabFold 타깃" },
   pdb_preprocess: { en: "PDB Preprocess", ko: "PDB 전처리" },
   query_pdb_check: { en: "Query/PDB Check", ko: "Query/PDB 검증" },
   diffdock: { en: "DiffDock", ko: "DiffDock" },
@@ -1745,12 +1979,12 @@ const STAGE_LABELS = {
   mask_consensus: { en: "Mask Consensus", ko: "마스킹 합의" },
   design: { en: "ProteinMPNN", ko: "ProteinMPNN" },
   soluprot: { en: "SoluProt", ko: "SoluProt" },
-  af2: { en: "AlphaFold2", ko: "AlphaFold2" },
+  af2: { en: "ColabFold", ko: "ColabFold" },
   novelty: { en: "Novelty", ko: "Novelty" },
   wt: { en: "WT Compare", ko: "WT 비교" },
   wt_baseline: { en: "WT Baseline", ko: "WT 기준선" },
   wt_soluprot: { en: "WT SoluProt", ko: "WT SoluProt" },
-  wt_af2: { en: "WT AF2", ko: "WT AF2" },
+  wt_af2: { en: "WT ColabFold", ko: "WT ColabFold" },
   agent: { en: "Agent Panel", ko: "에이전트 패널" },
   misc: { en: "Misc", ko: "기타" },
 };
@@ -1767,6 +2001,7 @@ const PROGRESS_PLANS = {
 };
 
 const TERMINAL_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
+const CHART_VIEW_OPTIONS = new Set(["plddt_rmsd", "score_hist", "tier_pass"]);
 
 function loadUser() {
   const raw = localStorage.getItem("kbf.user");
@@ -1815,6 +2050,417 @@ function setMessage(text, role = "ai") {
   appendMessage(el.monitorMessages, text, role);
 }
 
+function copilotIsKorean() {
+  return (state.lang || "en") === "ko";
+}
+
+function activeTabId() {
+  const active = Array.isArray(tabPanels)
+    ? tabPanels.find((panel) => panel.classList.contains("active"))
+    : null;
+  const tab = active?.dataset?.tab || localStorage.getItem(TAB_KEY) || "setup";
+  return normalizeTab(tab);
+}
+
+function chartViewLabel() {
+  const view = normalizeChartView(state.chartView);
+  if (view === "score_hist") return t("analyze.chart.option.scoreHist");
+  if (view === "tier_pass") return t("analyze.chart.option.tierPass");
+  return t("analyze.chart.option.plddtRmsd");
+}
+
+function copilotSnapshot() {
+  const runId = String(state.currentRunId || "").trim();
+  const status = state.lastRunStatus && typeof state.lastRunStatus === "object" ? state.lastRunStatus : {};
+  const stage = String(status?.stage || "-");
+  const runState = String(status?.state || state.currentRunState || "-");
+  const provider = af2ProviderName(currentRunAf2Provider(runId || state.currentRunId));
+  const rows = filteredHitListRows({ applyLimit: false });
+  const topRow = rows.length ? rows[0] : null;
+  const funnel =
+    state.artifactComparison &&
+    typeof state.artifactComparison === "object" &&
+    state.artifactComparison.funnel &&
+    typeof state.artifactComparison.funnel === "object"
+      ? state.artifactComparison.funnel.overall || null
+      : null;
+  return {
+    tab: activeTabId(),
+    runId,
+    stage,
+    runState,
+    provider,
+    rows,
+    topRow,
+    funnel,
+    recommendation: state.lastScore?.recommendation || "-",
+  };
+}
+
+function copilotContextRows(snapshot = copilotSnapshot()) {
+  const isKo = copilotIsKorean();
+  const rows = [];
+  rows.push({
+    label: isKo ? "현재 탭" : "Active Tab",
+    value: t(`tabs.${snapshot.tab}`),
+  });
+  if (!snapshot.runId) {
+    rows.push({
+      label: "Run",
+      value: isKo ? "선택되지 않음" : "Not selected",
+    });
+    return rows;
+  }
+  rows.push({ label: "Run", value: snapshot.runId });
+  rows.push({
+    label: isKo ? "상태" : "Status",
+    value: `${formatStageLabel(snapshot.stage)} / ${snapshot.runState || "-"}`,
+  });
+  rows.push({
+    label: isKo ? "구조 예측기" : "Structure Predictor",
+    value: snapshot.provider,
+  });
+  rows.push({
+    label: "Hit List",
+    value: `${snapshot.rows.length}`,
+  });
+  if (snapshot.topRow) {
+    rows.push({
+      label: isKo ? "Top 후보" : "Top Candidate",
+      value: `${snapshot.topRow.seq_id || "-"} · score ${formatMetricValue(snapshot.topRow.score, 1)} · pLDDT ${formatMetricValue(
+        snapshot.topRow.plddt,
+        1
+      )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}`,
+    });
+  }
+  if (snapshot.funnel && Number(snapshot.funnel.af2_candidate_total || 0) > 0) {
+    rows.push({
+      label: isKo ? "AF2 통과" : "AF2 Pass",
+      value: `${Number(snapshot.funnel.af2_selected_total || 0)}/${Number(snapshot.funnel.af2_candidate_total || 0)} (${formatPercentValue(
+        snapshot.funnel.af2_pass_rate
+      )})`,
+    });
+  }
+  if (snapshot.recommendation && snapshot.recommendation !== "-") {
+    rows.push({
+      label: isKo ? "추천" : "Recommendation",
+      value: String(snapshot.recommendation),
+    });
+  }
+  return rows;
+}
+
+function renderCopilotContext() {
+  if (!el.copilotContext) return;
+  const rows = copilotContextRows(copilotSnapshot());
+  if (!rows.length) {
+    el.copilotContext.innerHTML = `<div class="placeholder">${t("copilot.context.empty")}</div>`;
+    return;
+  }
+  el.copilotContext.innerHTML = rows
+    .map(
+      (row) => `
+      <div class="copilot-context-row">
+        <strong>${escapeHtml(row.label || "")}</strong>
+        <span>${escapeHtml(row.value || "-")}</span>
+      </div>
+    `
+    )
+    .join("");
+}
+
+function copilotIntentFromPrompt(prompt, intentHint = "") {
+  const hinted = String(intentHint || "")
+    .trim()
+    .toLowerCase();
+  if (["usage", "interpret", "next", "resume"].includes(hinted)) return hinted;
+  const q = String(prompt || "").trim().toLowerCase();
+  if (!q) return "general";
+  if (/(resume|restart|recover|이어|재시작|다시 시작)/i.test(q)) return "resume";
+  if (/(interpret|해석|지표|점수|plddt|rmsd|score|metric)/i.test(q)) return "interpret";
+  if (/(next|다음|뭘|무엇|action|step)/i.test(q)) return "next";
+  if (/(usage|how to|사용법|어떻게|guide|도움)/i.test(q)) return "usage";
+  return "general";
+}
+
+function copilotUsageReply(snapshot = copilotSnapshot()) {
+  const isKo = copilotIsKorean();
+  if (snapshot.tab === "setup") {
+    return isKo
+      ? "Setup에서는 실행 모드를 고르고 필수 입력을 채우면 Run 버튼이 활성화됩니다.\n중간 단계에서 멈추려면 `중간 단계`를 지정하고 실행하세요."
+      : "In Setup, choose a run mode and fill required inputs until Run is enabled.\nUse `stop_after` if you want to stop at an intermediate stage.";
+  }
+  if (snapshot.tab === "monitor") {
+    return isKo
+      ? "Monitor에서는 run을 선택해 상태/아티팩트를 확인합니다.\n실행이 끊겼다면 `재시작` 버튼으로 request.json 기반 이어하기를 할 수 있습니다."
+      : "In Monitor, select a run to inspect status and artifacts.\nIf execution was interrupted, use `Resume Run` to continue from saved request.json.";
+  }
+  return isKo
+    ? "Analyze에서는 Hit List를 새로고침하고 차트를 전환해 후보를 해석합니다.\n구조 비교 스튜디오와 리포트에서 최종 비교/정리를 진행하세요."
+    : "In Analyze, refresh the Hit List and switch chart views to interpret candidates.\nUse compare studio and report to finalize review.";
+}
+
+function copilotInterpretReply(snapshot = copilotSnapshot()) {
+  const isKo = copilotIsKorean();
+  if (!snapshot.runId) {
+    return isKo
+      ? "해석할 run이 없습니다. 먼저 Monitor/Analyze에서 run을 선택해 주세요."
+      : "No run is selected to interpret. Select a run in Monitor/Analyze first.";
+  }
+  const lines = [];
+  lines.push(
+    isKo
+      ? `Run ${snapshot.runId}: ${formatStageLabel(snapshot.stage)} / ${snapshot.runState || "-"}`
+      : `Run ${snapshot.runId}: ${formatStageLabel(snapshot.stage)} / ${snapshot.runState || "-"}`
+  );
+  if (snapshot.topRow) {
+    lines.push(
+      isKo
+        ? `Top 후보 ${snapshot.topRow.seq_id || "-"}: score ${formatMetricValue(snapshot.topRow.score, 1)}, pLDDT ${formatMetricValue(
+            snapshot.topRow.plddt,
+            1
+          )}, RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}`
+        : `Top candidate ${snapshot.topRow.seq_id || "-"}: score ${formatMetricValue(snapshot.topRow.score, 1)}, pLDDT ${formatMetricValue(
+            snapshot.topRow.plddt,
+            1
+          )}, RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}`
+    );
+  } else {
+    lines.push(isKo ? "Hit List 데이터가 아직 없습니다." : "Hit List metrics are not available yet.");
+  }
+  if (snapshot.funnel && Number(snapshot.funnel.af2_candidate_total || 0) > 0) {
+    lines.push(
+      isKo
+        ? `${snapshot.provider} 통과율: ${Number(snapshot.funnel.af2_selected_total || 0)}/${Number(
+            snapshot.funnel.af2_candidate_total || 0
+          )} (${formatPercentValue(snapshot.funnel.af2_pass_rate)})`
+        : `${snapshot.provider} pass rate: ${Number(snapshot.funnel.af2_selected_total || 0)}/${Number(
+            snapshot.funnel.af2_candidate_total || 0
+          )} (${formatPercentValue(snapshot.funnel.af2_pass_rate)})`
+    );
+  }
+  if (snapshot.recommendation && snapshot.recommendation !== "-") {
+    lines.push(
+      isKo ? `현재 추천: ${snapshot.recommendation}` : `Current recommendation: ${snapshot.recommendation}`
+    );
+  }
+  return lines.join("\n");
+}
+
+function copilotNextReply(snapshot = copilotSnapshot()) {
+  const isKo = copilotIsKorean();
+  const stateText = String(snapshot.runState || "")
+    .trim()
+    .toLowerCase();
+  if (!snapshot.runId) {
+    return isKo
+      ? "1) Setup에서 입력을 채워 Run을 시작하세요.\n2) 실행 후 Monitor에서 상태를 확인하세요."
+      : "1) Fill inputs in Setup and launch Run.\n2) Then track progress in Monitor.";
+  }
+  if (stateText === "running") {
+    return isKo
+      ? "지금은 실행 중입니다. Monitor에서 Auto Poll을 켜고 완료 후 Analyze에서 Hit List를 확인하세요."
+      : "Run is in progress. Keep Auto Poll on in Monitor, then check Hit List in Analyze after completion.";
+  }
+  if (stateText === "failed" || stateText === "error" || stateText === "cancelled") {
+    return isKo
+      ? "중단된 run입니다. Monitor의 `재시작`으로 이어서 실행을 시도하고, 실패 원인은 에러 상세에서 확인하세요."
+      : "This run is interrupted. Use `Resume Run` in Monitor, then inspect error details if it fails again.";
+  }
+  if (!snapshot.rows.length) {
+    return isKo
+      ? "다음 단계: Analyze에서 Hit List를 새로고침하고 차트를 확인하세요."
+      : "Next: refresh Hit List in Analyze and inspect charts.";
+  }
+  return isKo
+    ? `다음 단계: Analyze에서 차트(${chartViewLabel()})로 후보를 보고, 구조 비교 스튜디오와 리포트를 업데이트하세요.`
+    : `Next: review candidates with chart (${chartViewLabel()}), then update compare studio and report.`;
+}
+
+function copilotResumeReply(snapshot = copilotSnapshot()) {
+  const isKo = copilotIsKorean();
+  if (!snapshot.runId) {
+    return isKo
+      ? "재시작하려면 먼저 run을 선택하세요."
+      : "Select a run first to resume it.";
+  }
+  const stateText = String(snapshot.runState || "")
+    .trim()
+    .toLowerCase();
+  if (stateText === "running") {
+    return isKo
+      ? "현재 run은 이미 실행 중입니다. 별도 재시작이 필요 없습니다."
+      : "This run is already running. No resume action is needed.";
+  }
+  return isKo
+    ? "`재시작` 버튼은 해당 run의 request.json을 읽어 같은 run_id로 다시 실행합니다.\n이미 생성된 산출물은 `force=false`로 최대한 재사용하며, 누락 단계부터 이어집니다."
+    : "`Resume Run` reads request.json and relaunches with the same run_id.\nWith `force=false`, existing artifacts are reused and missing steps continue.";
+}
+
+function generateCopilotReply(prompt, intentHint = "") {
+  const intent = copilotIntentFromPrompt(prompt, intentHint);
+  const snapshot = copilotSnapshot();
+  if (intent === "usage") return copilotUsageReply(snapshot);
+  if (intent === "interpret") return copilotInterpretReply(snapshot);
+  if (intent === "next") return copilotNextReply(snapshot);
+  if (intent === "resume") return copilotResumeReply(snapshot);
+  return `${copilotInterpretReply(snapshot)}\n\n${copilotNextReply(snapshot)}`;
+}
+
+function renderCopilotMessages() {
+  if (!el.copilotMessages) return;
+  const history = Array.isArray(state.copilotHistory) ? state.copilotHistory : [];
+  el.copilotMessages.innerHTML = "";
+  history.forEach((item) => {
+    const role = item?.role === "user" ? "user" : "ai";
+    const bubble = document.createElement("div");
+    bubble.className = `copilot-bubble ${role}`;
+    bubble.innerHTML = escapeHtml(item?.text || "").replace(/\n/g, "<br />");
+    el.copilotMessages.appendChild(bubble);
+  });
+  el.copilotMessages.scrollTop = el.copilotMessages.scrollHeight;
+}
+
+function addCopilotHistory(role, text) {
+  if (!Array.isArray(state.copilotHistory)) state.copilotHistory = [];
+  state.copilotHistory.push({
+    role: role === "user" ? "user" : "ai",
+    text: String(text || "").trim(),
+    ts: Date.now(),
+  });
+  if (state.copilotHistory.length > 80) {
+    state.copilotHistory = state.copilotHistory.slice(-80);
+  }
+  renderCopilotMessages();
+}
+
+function submitCopilotPrompt(rawPrompt, intentHint = "") {
+  const prompt = String(rawPrompt || "").trim();
+  if (!prompt) return;
+  addCopilotHistory("user", prompt);
+  const reply = generateCopilotReply(prompt, intentHint);
+  addCopilotHistory("ai", reply);
+  renderCopilotContext();
+}
+
+function ensureCopilotWelcome() {
+  if (Array.isArray(state.copilotHistory) && state.copilotHistory.length) return;
+  const intro = copilotIsKorean()
+    ? "현재 탭/런 데이터를 읽어서 사용법, 지표 해석, 다음 액션을 제안합니다."
+    : "I read the current tab/run data and help with usage, metric interpretation, and next actions.";
+  addCopilotHistory("ai", intro);
+}
+
+function setCopilotDrawerOpen(open) {
+  if (!el.copilotDrawer) return;
+  const shouldOpen = Boolean(open);
+  el.copilotDrawer.classList.toggle("hidden", !shouldOpen);
+  el.copilotDrawer.setAttribute("aria-hidden", shouldOpen ? "false" : "true");
+  if (el.copilotFabBtn) {
+    el.copilotFabBtn.classList.toggle("hidden", shouldOpen);
+  }
+  if (!shouldOpen) return;
+  ensureCopilotWelcome();
+  renderCopilotContext();
+  renderCopilotMessages();
+  if (el.copilotInput) {
+    el.copilotInput.focus();
+  }
+}
+
+function initCopilot() {
+  renderCopilotContext();
+  renderCopilotMessages();
+  if (copilotInitialized) return;
+  if (el.copilotOpenBtn) {
+    el.copilotOpenBtn.addEventListener("click", () => setCopilotDrawerOpen(true));
+  }
+  if (el.copilotFabBtn) {
+    el.copilotFabBtn.addEventListener("click", () => setCopilotDrawerOpen(true));
+  }
+  if (el.copilotCloseBtn) {
+    el.copilotCloseBtn.addEventListener("click", () => setCopilotDrawerOpen(false));
+  }
+  if (el.copilotDrawer) {
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        setCopilotDrawerOpen(false);
+      }
+    });
+    document.addEventListener("click", (event) => {
+      const drawerOpen = !el.copilotDrawer.classList.contains("hidden");
+      if (!drawerOpen) return;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (el.copilotDrawer.contains(target)) return;
+      if (el.copilotOpenBtn && el.copilotOpenBtn.contains(target)) return;
+      if (el.copilotFabBtn && el.copilotFabBtn.contains(target)) return;
+      setCopilotDrawerOpen(false);
+    });
+  }
+  if (el.copilotSendBtn) {
+    el.copilotSendBtn.addEventListener("click", () => {
+      submitCopilotPrompt(el.copilotInput?.value || "");
+      if (el.copilotInput) el.copilotInput.value = "";
+    });
+  }
+  if (el.copilotInput) {
+    el.copilotInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      submitCopilotPrompt(el.copilotInput.value || "");
+      el.copilotInput.value = "";
+    });
+  }
+  if (el.copilotQuickUsage) {
+    el.copilotQuickUsage.addEventListener("click", () => {
+      submitCopilotPrompt(t("copilot.quick.usage"), "usage");
+    });
+  }
+  if (el.copilotQuickInterpret) {
+    el.copilotQuickInterpret.addEventListener("click", () => {
+      submitCopilotPrompt(t("copilot.quick.interpret"), "interpret");
+    });
+  }
+  if (el.copilotQuickNext) {
+    el.copilotQuickNext.addEventListener("click", () => {
+      submitCopilotPrompt(t("copilot.quick.next"), "next");
+    });
+  }
+  if (el.copilotQuickResume) {
+    el.copilotQuickResume.addEventListener("click", () => {
+      submitCopilotPrompt(t("copilot.quick.resume"), "resume");
+    });
+  }
+  setCopilotDrawerOpen(false);
+  copilotInitialized = true;
+}
+
+function isRunReportFilename(filename) {
+  const name = String(filename || "")
+    .trim()
+    .toLowerCase();
+  if (!name) return false;
+  return name === "report.md" || name === "report_ko.md" || /(?:^|\/)report(?:_ko)?\.md$/.test(name);
+}
+
+function renderReportModalContent() {
+  const base = renderMarkdown(state.reportModalText || "");
+  if (!isRunReportFilename(state.reportModalFilename) || !String(state.currentRunId || "").trim()) {
+    return base;
+  }
+  const rows = filteredHitListRows({ applyLimit: false });
+  if (!rows.length) return base;
+  const payload = selectedChartPayload(rows);
+  if (!payload) return base;
+  return `${base}
+<h3>${escapeHtml(t("report.chart.title"))}</h3>
+<div class="chart-explorer chart-explorer-report">
+  <div class="chart-canvas chart-canvas-report">${payload.svg}</div>
+  <p class="chart-caption">${escapeHtml(payload.caption)}</p>
+</div>`;
+}
+
 function openReportModal(title, content, filename) {
   if (!el.reportModal) return;
   state.reportModalText = String(content || "");
@@ -1823,7 +2469,7 @@ function openReportModal(title, content, filename) {
   if (el.reportModalTitle) el.reportModalTitle.textContent = title || "Report";
   if (el.reportModalToggle) el.reportModalToggle.textContent = t("report.modal.toggleRendered");
   if (el.reportModalContent) {
-    el.reportModalContent.innerHTML = renderMarkdown(state.reportModalText);
+    el.reportModalContent.innerHTML = renderReportModalContent();
   }
   el.reportModal.classList.remove("hidden");
 }
@@ -1841,7 +2487,7 @@ function toggleReportModalMode() {
     if (el.reportModalToggle) el.reportModalToggle.textContent = t("report.modal.toggleRaw");
   } else {
     state.reportModalMode = "rendered";
-    el.reportModalContent.innerHTML = renderMarkdown(state.reportModalText || "");
+    el.reportModalContent.innerHTML = renderReportModalContent();
     if (el.reportModalToggle) el.reportModalToggle.textContent = t("report.modal.toggleRendered");
   }
 }
@@ -1913,8 +2559,7 @@ function setLanguage(lang) {
   renderArtifactComparisonSummary(state.artifactComparison);
   renderMonitorCompleteness(state.artifactComparison, state.hitListResult?.completeness || null);
   updateMonitorReportActions();
-  renderArtifactFilters(state.artifacts);
-  renderArtifacts(state.artifacts);
+  renderAllArtifactViews(state.artifacts);
   if (state.runs) renderRuns(state.runs);
   populateRunCompareBaselineOptions();
   renderRunCompareSummary(state.runCompareResult);
@@ -1923,8 +2568,14 @@ function setLanguage(lang) {
   updateReportScore(state.lastScore || {});
   updateAnalyzeSummary();
   updateReportLangSelect();
+  renderCopilotContext();
   if (state.lastRunStatus) {
     updateRunInfo(state.lastRunStatus);
+  }
+  if (el.reportModal && el.reportModalContent && !el.reportModal.classList.contains("hidden")) {
+    if (state.reportModalMode === "rendered") {
+      el.reportModalContent.innerHTML = renderReportModalContent();
+    }
   }
 }
 
@@ -1962,6 +2613,7 @@ function setActiveTab(value) {
     panel.setAttribute("aria-hidden", isActive ? "false" : "true");
   });
   localStorage.setItem(TAB_KEY, next);
+  renderCopilotContext();
 }
 
 function initTabs() {
@@ -2075,6 +2727,13 @@ function buildManualPlan(mode) {
         questionKey: "question.af2RmsdCutoff.help",
         required: false,
         default: 2.0,
+      },
+      {
+        id: "af2_provider",
+        labelKey: "question.af2Provider.label",
+        questionKey: "question.af2Provider.help",
+        required: false,
+        default: "colabfold",
       },
       {
         id: "num_seq_per_tier",
@@ -2323,12 +2982,21 @@ function buildManualPlan(mode) {
   }
 
   if (mode === "af2") {
-    questions.push({
-      id: "target_input",
-      labelKey: "question.targetFasta.label",
-      questionKey: "question.targetFasta.help",
-      required: true,
-    });
+    questions.push(
+      {
+        id: "target_input",
+        labelKey: "question.targetFasta.label",
+        questionKey: "question.targetFasta.help",
+        required: true,
+      },
+      {
+        id: "af2_provider",
+        labelKey: "question.af2Provider.label",
+        questionKey: "question.af2Provider.help",
+        required: false,
+        default: "colabfold",
+      }
+    );
   }
 
   if (mode === "diffdock") {
@@ -2591,7 +3259,8 @@ function inferRunModeFromRequestPayload(payload) {
     "rfd3_max_return_designs" in payload;
   if (isPipelineRequest) return "pipeline";
 
-  const isAf2Request = "af2_model_preset" in payload && "af2_db_preset" in payload;
+  const isAf2Request =
+    ("af2_model_preset" in payload && "af2_db_preset" in payload) || "af2_provider" in payload;
   if (isAf2Request) return "af2";
 
   return "";
@@ -2606,11 +3275,17 @@ async function ensureRunModeForRunId(runId, status) {
     const req = await apiCall("pipeline.read_artifact", {
       run_id: runId,
       path: "request.json",
-      max_bytes: 512000,
+      max_bytes: 2_500_000,
     });
     const text = typeof req?.text === "string" ? req.text : "";
     if (text.trim()) {
       const payload = JSON.parse(text);
+      if (payload && typeof payload === "object" && Object.prototype.hasOwnProperty.call(payload, "af2_provider")) {
+        const shouldRefreshAf2Labels = setAf2ProviderForRun(runId, payload.af2_provider);
+        if (shouldRefreshAf2Labels) {
+          refreshAf2ProviderLabels();
+        }
+      }
       const inferred = inferRunModeFromRequestPayload(payload);
       if (inferred && PROGRESS_PLANS[inferred]) {
         state.runModeById[runId] = inferred;
@@ -2678,6 +3353,35 @@ function progressStepLabel(step) {
   if (step === "masking") return t("monitor.progress.masking");
   if (step === "done") return t("monitor.progress.done");
   return formatStageLabel(step);
+}
+
+function formatStatusStage(stage) {
+  const raw = String(stage || "").trim();
+  if (!raw) return "-";
+  const lower = raw.toLowerCase();
+
+  const tierMatch = lower.match(/^(proteinmpnn|soluprot|af2|novelty)_([0-9]+(?:\.[0-9]+)?)$/);
+  if (tierMatch) {
+    const key = tierMatch[1];
+    const tier = tierMatch[2];
+    const tierLabel = t("artifacts.filter.tier");
+    if (key === "proteinmpnn") {
+      return `${formatStageLabel("design")} · ${tierLabel} ${tier}`;
+    }
+    if (key === "soluprot") {
+      return `${formatStageLabel("soluprot")} · ${tierLabel} ${tier}`;
+    }
+    if (key === "af2") {
+      return `${formatStageLabel("af2")} · ${tierLabel} ${tier}`;
+    }
+    if (key === "novelty") {
+      return `${formatStageLabel("novelty")} · ${tierLabel} ${tier}`;
+    }
+  }
+
+  const normalized = formatStageLabel(lower);
+  if (normalized && normalized !== lower) return normalized;
+  return raw;
 }
 
 function parseStatusTimestamp(value) {
@@ -2818,7 +3522,9 @@ function resetRunProgress() {
 
 function updateRunInfo(status) {
   if (!status) return;
-  el.runStageValue.textContent = status.stage || "-";
+  const rawStage = String(status.stage || "").trim();
+  const stageDisplay = formatStatusStage(rawStage);
+  el.runStageValue.textContent = stageDisplay || "-";
   el.runStateValue.textContent = status.state || "-";
   el.runUpdatedValue.textContent = status.updated_at || "-";
   if (el.runDetailValue) {
@@ -2832,19 +3538,19 @@ function updateRunInfo(status) {
   const percent = renderRunProgress(status);
   const etaText = estimateRunEta(status, percent);
 
-  if (el.setupContextStageValue) el.setupContextStageValue.textContent = status.stage || "-";
+  if (el.setupContextStageValue) el.setupContextStageValue.textContent = stageDisplay || "-";
   if (el.setupContextStateValue) {
     el.setupContextStateValue.textContent = status.state || "-";
     setStateBadge(el.setupContextStateValue, runState);
   }
-  if (el.analyzeContextStageValue) el.analyzeContextStageValue.textContent = status.stage || "-";
+  if (el.analyzeContextStageValue) el.analyzeContextStageValue.textContent = stageDisplay || "-";
   if (el.analyzeContextStateValue) {
     el.analyzeContextStateValue.textContent = status.state || "-";
     setStateBadge(el.analyzeContextStateValue, runState);
   }
 
   if (el.setupRunIdValue) el.setupRunIdValue.textContent = state.currentRunId || "-";
-  if (el.setupRunStageValue) el.setupRunStageValue.textContent = status.stage || "-";
+  if (el.setupRunStageValue) el.setupRunStageValue.textContent = stageDisplay || "-";
   if (el.setupRunStateValue) {
     el.setupRunStateValue.textContent = status.state || "-";
     setStateBadge(el.setupRunStateValue, runState);
@@ -2856,6 +3562,8 @@ function updateRunInfo(status) {
   state.currentRunState = String(status.state || "").toLowerCase();
   updateInlineStatus(status);
   updateRunEligibility(state.plan?.questions || []);
+  updateMonitorActionButtons();
+  renderCopilotContext();
 }
 
 function updateInlineStatus(status, runId = state.currentRunId) {
@@ -2919,13 +3627,14 @@ function setCurrentRunId(runId) {
   }
   if (el.setupRunUpdatedValue) el.setupRunUpdatedValue.textContent = "-";
   if (el.setupRunEtaValue) el.setupRunEtaValue.textContent = "-";
+  updateRunLabel();
   updateMonitorErrorCards(null);
   updateAnalyzeSummary();
   resetRunProgress();
   updateInlineStatus(null, runId);
   updateRunEligibility(state.plan?.questions || []);
-  renderArtifactFilters(state.artifacts);
-  renderArtifacts(state.artifacts);
+  updateMonitorActionButtons();
+  renderAllArtifactViews(state.artifacts);
   refreshArtifactSelects();
   renderArtifactComparisonSummary(null);
   renderMonitorCompleteness(null, null);
@@ -2938,6 +3647,7 @@ function setCurrentRunId(runId) {
   setFilePreviewPlaceholder("analyze", "analyze.files.placeholder");
   setComparePreviewPlaceholder("artifacts.preview.placeholder");
   updateMonitorReportActions();
+  renderCopilotContext();
   if (state.runs) renderRuns(state.runs);
   refreshAgentPanel();
   refreshFeedback();
@@ -3532,6 +4242,7 @@ function renderQuestions(questions) {
     "mask_consensus_apply",
     "ligand_mask_use_original_target",
     "bioemu_use",
+    "af2_provider",
     "confirm_run",
   ]);
 
@@ -3595,6 +4306,27 @@ function renderQuestions(questions) {
           if (value === "bioemu") {
             state.answers.bioemu_use = true;
           }
+          updateRunEligibility(normalizedQuestions);
+        }
+      );
+    }
+
+    if (q.id === "af2_provider") {
+      const routedDefault = state.plan?.routed_request?.af2_provider;
+      const current = String(state.answers.af2_provider || routedDefault || q.default || "colabfold")
+        .trim()
+        .toLowerCase();
+      state.answers.af2_provider = normalizeAf2Provider(current);
+      renderChoiceButtons(
+        card,
+        [
+          { labelKey: "choice.af2Provider.colabfold", value: "colabfold" },
+          { labelKey: "choice.af2Provider.af2", value: "af2" },
+        ],
+        state.answers.af2_provider,
+        (value) => {
+          state.answers.af2_provider = normalizeAf2Provider(value);
+          refreshAf2ProviderLabels();
           updateRunEligibility(normalizedQuestions);
         }
       );
@@ -4410,6 +5142,7 @@ function renderQuestions(questions) {
         const result = await apiCall("pipeline.af2_predict", {
           run_id: runId,
           target_fasta: fastaText,
+          af2_provider: normalizeAf2Provider(state.answers.af2_provider || "colabfold"),
         });
         const outRunId = String(result?.run_id || runId);
         const candidates = [];
@@ -4725,6 +5458,27 @@ function updateRunEligibility(questions) {
   }
 }
 
+function currentRunStateText() {
+  const statusState = String(state.lastRunStatus?.state || "")
+    .trim()
+    .toLowerCase();
+  if (statusState) return statusState;
+  return String(state.currentRunState || "")
+    .trim()
+    .toLowerCase();
+}
+
+function updateMonitorActionButtons() {
+  const hasRun = Boolean(String(state.currentRunId || "").trim());
+  const running = currentRunStateText() === "running";
+  if (el.cancelRunBtn) {
+    el.cancelRunBtn.disabled = !hasRun || !running;
+  }
+  if (el.resumeRunBtn) {
+    el.resumeRunBtn.disabled = !hasRun || running || Boolean(state.runSubmitting);
+  }
+}
+
 function buildAnswerPayload(mode = state.runMode) {
   const answers = { ...state.answers };
   if (answers.target_input && !answers.target_pdb && !answers.target_fasta) {
@@ -4785,6 +5539,7 @@ function filterAnswersForMode(mode, answers) {
       "af2_max_candidates_per_tier",
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
+      "af2_provider",
       "num_seq_per_tier",
       "stop_after",
     ],
@@ -4815,7 +5570,7 @@ function filterAnswersForMode(mode, answers) {
       "bioemu_num_samples",
       "bioemu_max_return_structures",
     ],
-    af2: ["target_fasta", "target_pdb"],
+    af2: ["target_fasta", "target_pdb", "af2_provider"],
     diffdock: ["target_pdb", "diffdock_ligand_smiles", "diffdock_ligand_sdf"],
   }[mode || "pipeline"] || [];
 
@@ -5048,6 +5803,7 @@ async function runPipeline() {
       run_id: runId,
       target_fasta: answers.target_fasta || "",
       target_pdb: answers.target_pdb || "",
+      af2_provider: normalizeAf2Provider(answers.af2_provider || "colabfold"),
     };
   } else if (mode === "diffdock") {
     toolName = "pipeline.diffdock";
@@ -5059,16 +5815,24 @@ async function runPipeline() {
     };
   }
 
+  if (Object.prototype.hasOwnProperty.call(args, "af2_provider")) {
+    setAf2ProviderForRun(runId, args.af2_provider);
+  }
+
   const modeLabel = t(`mode.${mode}`) || mode;
   setMessage(t("run.launching", { mode: modeLabel, id: runId }), "ai");
   setCurrentRunId(runId);
   state.currentRunState = "running";
   state.runSubmitting = true;
   updateRunEligibility(state.plan?.questions || []);
+  updateMonitorActionButtons();
 
   try {
     const result = await apiCall(toolName, args);
     state.runModeById[result.run_id] = mode;
+    if (state.af2ProviderByRunId && state.af2ProviderByRunId[runId]) {
+      setAf2ProviderForRun(result.run_id, state.af2ProviderByRunId[runId]);
+    }
     setMessage(t("run.started", { id: result.run_id }), "ai");
     setCurrentRunId(result.run_id);
     await refreshRuns();
@@ -5080,6 +5844,7 @@ async function runPipeline() {
   } finally {
     state.runSubmitting = false;
     updateRunEligibility(state.plan?.questions || []);
+    updateMonitorActionButtons();
   }
 }
 
@@ -5169,9 +5934,10 @@ async function pollStatus(runId) {
       const fallbackStatus = await loadFallbackRunStatus(runId);
       if (fallbackStatus) {
         updateRunInfo(fallbackStatus);
-        const stage = fallbackStatus.stage || "-";
+        const stageRaw = fallbackStatus.stage || "-";
+        const stage = formatStatusStage(stageRaw);
         const stateText = fallbackStatus.state || "-";
-        const key = `${stage}|${stateText}`;
+        const key = `${stageRaw}|${stateText}`;
         if (key !== state.lastStatusKey) {
           state.lastStatusKey = key;
           setMessage(t("status.line", { stage, state: stateText }), "ai");
@@ -5188,9 +5954,10 @@ async function pollStatus(runId) {
     }
     const mode = await ensureRunModeForRunId(runId, result.status);
     updateRunInfo({ ...(result.status || {}), _mode: mode });
-    const stage = result.status?.stage || "-";
+    const stageRaw = result.status?.stage || "-";
+    const stage = formatStatusStage(stageRaw);
     const stateText = result.status?.state || "-";
-    const key = `${stage}|${stateText}`;
+    const key = `${stageRaw}|${stateText}`;
     if (key !== state.lastStatusKey) {
       state.lastStatusKey = key;
       setMessage(t("status.line", { stage, state: stateText }), "ai");
@@ -5198,6 +5965,8 @@ async function pollStatus(runId) {
   } catch (err) {
     state.currentRunState = "";
     updateRunEligibility(state.plan?.questions || []);
+    updateMonitorActionButtons();
+    renderCopilotContext();
     setMessage(t("status.error", { error: err.message }), "ai");
   }
 }
@@ -5220,16 +5989,224 @@ async function cancelCurrentRun() {
   }
 }
 
-function renderArtifacts(list) {
-  const filter = el.artifactFilter.value.trim().toLowerCase();
-  el.artifactList.innerHTML = "";
-  populateAnalyzeArtifactSelect();
-  const stageFilter = state.artifactFilters.stage || "all";
-  const tierFilter = state.artifactFilters.tier || "all";
-  const typeFilter = state.artifactFilters.type || "all";
-  const filtered = list.filter((item) => {
-    const path = String(item.path || "");
-    if (filter && !path.toLowerCase().includes(filter)) return false;
+async function resumeCurrentRun() {
+  const runId = String(state.currentRunId || "").trim();
+  if (!runId) {
+    setMessage(t("export.selectRun"), "ai");
+    return;
+  }
+  if (state.runSubmitting) {
+    setMessage(t("run.alreadyRunning"), "ai");
+    return;
+  }
+
+  try {
+    const latest = await apiCall("pipeline.status", { run_id: runId });
+    const isRunning = Boolean(
+      latest?.found && String(latest?.status?.state || "").trim().toLowerCase() === "running"
+    );
+    if (isRunning) {
+      setMessage(t("run.resume.running"), "ai");
+      state.currentRunState = "running";
+      updateMonitorActionButtons();
+      return;
+    }
+  } catch (_err) {
+    // Ignore transient status check failures and continue with request.json recovery.
+  }
+
+  setMessage(t("run.resume.loading", { id: runId }), "ai");
+  let payload = null;
+  try {
+    const read = await apiCall("pipeline.read_artifact", {
+      run_id: runId,
+      path: "request.json",
+      max_bytes: 2_000_000,
+    });
+    const raw = String(read?.text || "").trim();
+    if (!raw) {
+      setMessage(t("run.resume.noRequest"), "ai");
+      return;
+    }
+    payload = JSON.parse(raw);
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      setMessage(t("run.resume.badRequest"), "ai");
+      return;
+    }
+  } catch (err) {
+    const msg = String(err?.message || "");
+    if (msg.includes("HTTP 400") || /not\s*found/i.test(msg)) {
+      setMessage(t("run.resume.noRequest"), "ai");
+      return;
+    }
+    if (/json/i.test(msg) || /unexpected token/i.test(msg)) {
+      setMessage(t("run.resume.badRequest"), "ai");
+      return;
+    }
+    setMessage(t("run.resume.failed", { error: err.message }), "ai");
+    return;
+  }
+
+  const args = { ...payload, run_id: runId, force: false };
+  if (!Object.prototype.hasOwnProperty.call(args, "auto_recover")) {
+    args.auto_recover = true;
+  }
+  if (Object.prototype.hasOwnProperty.call(args, "af2_provider")) {
+    const shouldRefresh = setAf2ProviderForRun(runId, args.af2_provider);
+    if (shouldRefresh) refreshAf2ProviderLabels();
+  }
+
+  const inferredMode = inferRunModeFromRequestPayload(payload);
+  if (inferredMode && PROGRESS_PLANS[inferredMode]) {
+    state.runModeById[runId] = inferredMode;
+  }
+
+  let resumeToolName = "pipeline.run";
+  let resumeArgs = args;
+  const isPipelineShapedRequest =
+    Object.prototype.hasOwnProperty.call(payload, "num_seq_per_tier") ||
+    Object.prototype.hasOwnProperty.call(payload, "novelty_target_db") ||
+    Object.prototype.hasOwnProperty.call(payload, "rfd3_max_return_designs");
+  if (inferredMode === "af2" && !isPipelineShapedRequest) {
+    resumeToolName = "pipeline.af2_predict";
+    resumeArgs = {
+      run_id: runId,
+      target_fasta: String(payload.target_fasta || ""),
+      target_pdb: String(payload.target_pdb || ""),
+      af2_provider: normalizeAf2Provider(payload.af2_provider || "colabfold"),
+      af2_model_preset: String(payload.af2_model_preset || "auto"),
+      af2_db_preset: String(payload.af2_db_preset || "full_dbs"),
+      af2_max_template_date: String(payload.af2_max_template_date || "2020-05-14"),
+      af2_extra_flags: payload.af2_extra_flags || undefined,
+      dry_run: Boolean(payload.dry_run),
+    };
+  } else if (inferredMode === "diffdock") {
+    resumeToolName = "pipeline.diffdock";
+    resumeArgs = {
+      run_id: runId,
+      protein_pdb: String(payload.protein_pdb || payload.target_pdb || ""),
+      diffdock_ligand_smiles: String(payload.diffdock_ligand_smiles || ""),
+      diffdock_ligand_sdf: String(payload.diffdock_ligand_sdf || ""),
+      diffdock_config: String(payload.diffdock_config || "default_inference_args.yaml"),
+      diffdock_extra_args: payload.diffdock_extra_args || undefined,
+      diffdock_cuda_visible_devices: payload.diffdock_cuda_visible_devices || undefined,
+      dry_run: Boolean(payload.dry_run),
+    };
+  }
+
+  setMessage(t("run.resume.starting", { id: runId }), "ai");
+  state.runSubmitting = true;
+  state.currentRunState = "running";
+  updateRunEligibility(state.plan?.questions || []);
+  updateMonitorActionButtons();
+
+  try {
+    const result = await apiCall(resumeToolName, resumeArgs);
+    const resumedRunId = String(result?.run_id || runId).trim() || runId;
+    if (inferredMode && PROGRESS_PLANS[inferredMode]) {
+      state.runModeById[resumedRunId] = inferredMode;
+    }
+    if (Object.prototype.hasOwnProperty.call(args, "af2_provider")) {
+      setAf2ProviderForRun(resumedRunId, args.af2_provider);
+    }
+    setMessage(t("run.resume.started", { id: resumedRunId }), "ai");
+    setCurrentRunId(resumedRunId);
+    await refreshRuns();
+    ensureAutoPoll();
+    await pollStatus(resumedRunId);
+    await refreshArtifacts();
+    await refreshRunCompare();
+    await refreshHitList();
+  } catch (err) {
+    state.currentRunState = "failed";
+    setMessage(t("run.resume.failed", { error: err.message }), "ai");
+  } finally {
+    state.runSubmitting = false;
+    updateRunEligibility(state.plan?.questions || []);
+    updateMonitorActionButtons();
+  }
+}
+
+function getArtifactViewConfig(view = "monitor") {
+  if (view === "analyze") {
+    return {
+      listEl: el.analyzeArtifactList,
+      filterInputEl: el.analyzeArtifactFilter,
+      stageFilterEl: el.analyzeArtifactStageFilter,
+      tierFilterEl: el.analyzeArtifactTierFilter,
+      typeFilterEl: el.analyzeArtifactTypeFilter,
+      previewTarget: "analyze",
+    };
+  }
+  return {
+    listEl: el.artifactList,
+    filterInputEl: el.artifactFilter,
+    stageFilterEl: el.artifactStageFilter,
+    tierFilterEl: el.artifactTierFilter,
+    typeFilterEl: el.artifactTypeFilter,
+    previewTarget: "monitor",
+  };
+}
+
+function artifactFiltersForView(view = "monitor") {
+  if (!state.artifactFiltersByView || typeof state.artifactFiltersByView !== "object") {
+    state.artifactFiltersByView = {};
+  }
+  if (!state.artifactFiltersByView[view]) {
+    state.artifactFiltersByView[view] = createArtifactFilterState();
+  }
+  return state.artifactFiltersByView[view];
+}
+
+function renderAllArtifactViews(items = state.artifacts) {
+  renderArtifactFilters(items, "monitor");
+  renderArtifacts(items, "monitor");
+  renderArtifactFilters(items, "analyze");
+  renderArtifacts(items, "analyze");
+}
+
+function bindArtifactFilterControls(view = "monitor") {
+  const { filterInputEl, stageFilterEl, tierFilterEl, typeFilterEl } = getArtifactViewConfig(view);
+  if (filterInputEl) {
+    filterInputEl.addEventListener("input", () => {
+      renderArtifacts(state.artifacts, view);
+    });
+  }
+  if (stageFilterEl) {
+    stageFilterEl.addEventListener("change", () => {
+      artifactFiltersForView(view).stage = stageFilterEl.value || "all";
+      renderArtifacts(state.artifacts, view);
+    });
+  }
+  if (tierFilterEl) {
+    tierFilterEl.addEventListener("change", () => {
+      artifactFiltersForView(view).tier = tierFilterEl.value || "all";
+      renderArtifacts(state.artifacts, view);
+    });
+  }
+  if (typeFilterEl) {
+    typeFilterEl.addEventListener("change", () => {
+      artifactFiltersForView(view).type = typeFilterEl.value || "all";
+      renderArtifacts(state.artifacts, view);
+    });
+  }
+}
+
+function renderArtifacts(list, view = "monitor") {
+  const { listEl, filterInputEl, previewTarget } = getArtifactViewConfig(view);
+  if (!listEl) return;
+  const filters = artifactFiltersForView(view);
+  const query = String(filterInputEl?.value || "")
+    .trim()
+    .toLowerCase();
+  const stageFilter = filters.stage || "all";
+  const tierFilter = filters.tier || "all";
+  const typeFilter = filters.type || "all";
+
+  listEl.innerHTML = "";
+  const filtered = (list || []).filter((item) => {
+    const path = String(item?.path || "");
+    if (query && !path.toLowerCase().includes(query)) return false;
     const meta = artifactMetaForPath(path);
     const stage = meta.stage;
     if (stageFilter !== "all" && stage !== stageFilter) return false;
@@ -5239,10 +6216,12 @@ function renderArtifacts(list) {
     if (typeFilter !== "all" && String(type || "") !== String(typeFilter)) return false;
     return true;
   });
+
   if (!filtered.length) {
-    el.artifactList.innerHTML = `<div class="placeholder">${t("artifact.none")}</div>`;
+    listEl.innerHTML = `<div class="placeholder">${t("artifact.none")}</div>`;
     return;
   }
+
   const groups = new Map();
   filtered.forEach((item) => {
     const stage = artifactMetaForPath(item.path).stage;
@@ -5264,8 +6243,8 @@ function renderArtifacts(list) {
       <span class="artifact-group-title">${formatStageLabel(stage)}</span>
       <span class="artifact-group-count">${items.length}</span>
     `;
-    const listEl = document.createElement("div");
-    listEl.className = "artifact-group-list";
+    const groupList = document.createElement("div");
+    groupList.className = "artifact-group-list";
     items.forEach((item) => {
       const div = document.createElement("div");
       div.className = "artifact-item";
@@ -5285,50 +6264,13 @@ function renderArtifacts(list) {
         <span>${item.path}</span>
         <span class="artifact-meta">${tags.join("")}</span>
       `;
-      div.addEventListener("click", () => previewArtifact(item, { target: "monitor" }));
-      listEl.appendChild(div);
+      div.addEventListener("click", () => previewArtifact(item, { target: previewTarget }));
+      groupList.appendChild(div);
     });
     group.appendChild(header);
-    group.appendChild(listEl);
-    el.artifactList.appendChild(group);
+    group.appendChild(groupList);
+    listEl.appendChild(group);
   });
-}
-
-function populateAnalyzeArtifactSelect() {
-  if (!el.analyzeArtifactSelect) return;
-  const files = (state.artifacts || [])
-    .filter((item) => item && item.type === "file")
-    .sort((a, b) => String(a.path || "").localeCompare(String(b.path || "")));
-  el.analyzeArtifactSelect.innerHTML = "";
-  if (!files.length) {
-    const emptyOpt = document.createElement("option");
-    emptyOpt.value = "";
-    emptyOpt.textContent = t("analyze.files.none");
-    el.analyzeArtifactSelect.appendChild(emptyOpt);
-    el.analyzeArtifactSelect.disabled = true;
-    state.analyzeArtifactPath = "";
-    setFilePreviewPlaceholder("analyze", "analyze.files.none");
-    return;
-  }
-  el.analyzeArtifactSelect.disabled = false;
-  const placeholder = document.createElement("option");
-  placeholder.value = "";
-  placeholder.textContent = t("analyze.files.select");
-  el.analyzeArtifactSelect.appendChild(placeholder);
-  files.forEach((item) => {
-    const path = String(item.path || "");
-    const meta = artifactMetaForPath(path);
-    const option = document.createElement("option");
-    option.value = path;
-    option.textContent = `${formatStageLabel(meta.stage)} · ${path}`;
-    el.analyzeArtifactSelect.appendChild(option);
-  });
-  const values = new Set(files.map((item) => String(item.path || "")));
-  const selected = values.has(String(state.analyzeArtifactPath || ""))
-    ? String(state.analyzeArtifactPath || "")
-    : "";
-  state.analyzeArtifactPath = selected;
-  el.analyzeArtifactSelect.value = selected;
 }
 
 function resolveFilePreviewElement(target = "monitor") {
@@ -5345,13 +6287,7 @@ function setFilePreviewPlaceholder(target = "monitor", key = "artifacts.preview.
 }
 
 function syncAnalyzeArtifactSelection(path) {
-  const next = String(path || "").trim();
-  state.analyzeArtifactPath = next;
-  if (!el.analyzeArtifactSelect) return;
-  const values = new Set(Array.from(el.analyzeArtifactSelect.options).map((opt) => String(opt.value || "")));
-  if (values.has(next)) {
-    el.analyzeArtifactSelect.value = next;
-  }
+  state.analyzeArtifactPath = String(path || "").trim();
 }
 
 async function previewArtifact(item, options = {}) {
@@ -5430,7 +6366,7 @@ function artifactItemByPath(path) {
 }
 
 async function previewAnalyzeSelectedArtifact() {
-  const path = String(state.analyzeArtifactPath || el.analyzeArtifactSelect?.value || "").trim();
+  const path = String(state.analyzeArtifactPath || "").trim();
   if (!path) {
     setFilePreviewPlaceholder("analyze", "analyze.files.placeholder");
     return;
@@ -5649,7 +6585,7 @@ function parseComparisonSummaryFromReportText(reportText) {
   }
 
   const wtAf2Match = text.match(
-    /WT AF2:\s*pLDDT=([+-]?\d+(?:\.\d+)?|-)\s+RMSD=([+-]?\d+(?:\.\d+)?|-)/i
+    /WT (?:AF2|AlphaFold2|ColabFold):\s*pLDDT=([+-]?\d+(?:\.\d+)?|-)\s+RMSD=([+-]?\d+(?:\.\d+)?|-)/i
   );
   if (wtAf2Match) {
     summary.wt_vs_design.plddt.wt = parseNumberOrNull(wtAf2Match[1]);
@@ -5657,7 +6593,9 @@ function parseComparisonSummaryFromReportText(reportText) {
     hasAny = true;
   }
 
-  const designPlddtMatch = text.match(/Designs AF2 pLDDT:\s*median=([+-]?\d+(?:\.\d+)?).*?\(n=(\d+)\)/i);
+  const designPlddtMatch = text.match(
+    /Designs (?:AF2|AlphaFold2|ColabFold) pLDDT:\s*median=([+-]?\d+(?:\.\d+)?).*?\(n=(\d+)\)/i
+  );
   if (designPlddtMatch) {
     summary.wt_vs_design.plddt.design_median = parseNumberOrNull(designPlddtMatch[1]);
     summary.wt_vs_design.plddt.design_total = Number(designPlddtMatch[2] || 0);
@@ -5672,7 +6610,7 @@ function parseComparisonSummaryFromReportText(reportText) {
   const designRmsdMatch = text.match(/Designs RMSD:\s*median=([+-]?\d+(?:\.\d+)?).*?\)/i);
   if (designRmsdMatch) {
     summary.wt_vs_design.rmsd.design_median = parseNumberOrNull(designRmsdMatch[1]);
-    const selectedN = text.match(/Designs AF2 pLDDT:.*?\(n=(\d+)\)/i);
+    const selectedN = text.match(/Designs (?:AF2|AlphaFold2|ColabFold) pLDDT:.*?\(n=(\d+)\)/i);
     if (selectedN) {
       summary.wt_vs_design.rmsd.design_total = Number(selectedN[1] || 0);
     }
@@ -5723,6 +6661,7 @@ function buildComparisonDetailMarkdown(summary, runId) {
   const distributions =
     summary?.distributions && typeof summary.distributions === "object" ? summary.distributions : {};
   const diversity = summary?.diversity && typeof summary.diversity === "object" ? summary.diversity : {};
+  const af2Provider = currentRunAf2Provider(runId);
 
   lines.push("## WT vs Design");
   const wtRows = [
@@ -5749,15 +6688,17 @@ function buildComparisonDetailMarkdown(summary, runId) {
     `- ${t("artifacts.compare.funnelSoluprot")}: ${Number(overall.soluprot_passed || 0)}/${Number(overall.soluprot_total || 0)} (${formatPercentValue(overall.soluprot_pass_rate)})`
   );
   lines.push(
-    `- ${t("artifacts.compare.funnelAf2")}: ${Number(overall.af2_selected_total || 0)}/${Number(overall.af2_candidate_total || 0)} (${formatPercentValue(overall.af2_pass_rate)})`
+    `- ${t("artifacts.compare.funnelAf2", { af2Provider: af2ProviderName(af2Provider) })}: ${Number(overall.af2_selected_total || 0)}/${Number(overall.af2_candidate_total || 0)} (${formatPercentValue(overall.af2_pass_rate)})`
   );
   lines.push(
-    `- ${t("artifacts.compare.funnelRetain")}: SoluProt=${formatPercentValue(overall.retention_backbone_to_soluprot_passed)}, AF2=${formatPercentValue(overall.retention_backbone_to_af2_selected)}`
+    `- ${t("artifacts.compare.funnelRetain")}: SoluProt=${formatPercentValue(overall.retention_backbone_to_soluprot_passed)}, ${af2ProviderName(af2Provider)}=${formatPercentValue(overall.retention_backbone_to_af2_selected)}`
   );
   lines.push("");
 
   lines.push("## Source Compare");
-  lines.push("| Source | Backbones | SoluProt pass | Median SoluProt | AF2 pass | Median pLDDT | Median RMSD |");
+  lines.push(
+    `| Source | Backbones | SoluProt pass | Median SoluProt | ${af2ProviderPassLabel(af2Provider)} | Median pLDDT | Median RMSD |`
+  );
   lines.push("|---|---:|---:|---:|---:|---:|---:|");
   ["rfd3", "bioemu", "other"].forEach((key) => {
     const bucket = source[key] && typeof source[key] === "object" ? source[key] : null;
@@ -5770,7 +6711,7 @@ function buildComparisonDetailMarkdown(summary, runId) {
 
   if (tierRows.length) {
     lines.push("## Tier Compare");
-    lines.push("| Tier | Designs | SoluProt pass | AF2 pass | Median pLDDT | Median RMSD |");
+    lines.push(`| Tier | Designs | SoluProt pass | ${af2ProviderPassLabel(af2Provider)} | Median pLDDT | Median RMSD |`);
     lines.push("|---:|---:|---:|---:|---:|---:|");
     tierRows.forEach((row) => {
       if (!row || typeof row !== "object") return;
@@ -5828,6 +6769,7 @@ function renderArtifactComparisonSummary(summary) {
     el.artifactComparisonSummary.innerHTML = `<div class="placeholder">${t(
       "artifacts.compare.placeholder"
     )}</div>`;
+    renderCopilotContext();
     return;
   }
 
@@ -5839,6 +6781,7 @@ function renderArtifactComparisonSummary(summary) {
       ? summary.funnel.overall
       : {};
   const wtEnabled = Boolean(summary?.wt_compare_enabled);
+  const af2Provider = currentRunAf2Provider();
 
   const wtRows = [
     { key: "soluprot", label: "SoluProt", digits: 3 },
@@ -5871,6 +6814,7 @@ function renderArtifactComparisonSummary(summary) {
     el.artifactComparisonSummary.innerHTML = `<div class="placeholder">${t(
       "artifacts.compare.noData"
     )}</div>`;
+    renderCopilotContext();
     return;
   }
 
@@ -5924,7 +6868,7 @@ function renderArtifactComparisonSummary(summary) {
   )} (${formatPercentValue(funnelOverall?.af2_pass_rate)})`;
   const funnelRetainTxt = `SoluProt ${formatPercentValue(
     funnelOverall?.retention_backbone_to_soluprot_passed
-  )}, AF2 ${formatPercentValue(funnelOverall?.retention_backbone_to_af2_selected)}`;
+  )}, ${af2ProviderName(af2Provider)} ${formatPercentValue(funnelOverall?.retention_backbone_to_af2_selected)}`;
   el.artifactComparisonSummary.innerHTML = `
     ${
       hasFunnel
@@ -5933,7 +6877,7 @@ function renderArtifactComparisonSummary(summary) {
       <div class="comparison-kpis">
         <div><span>${escapeHtml(t("artifacts.compare.funnelBackbone"))}</span><strong>${escapeHtml(String(funnelBackbones))}</strong></div>
         <div><span>${escapeHtml(t("artifacts.compare.funnelSoluprot"))}</span><strong>${escapeHtml(funnelSolTxt)}</strong></div>
-        <div><span>${escapeHtml(t("artifacts.compare.funnelAf2"))}</span><strong>${escapeHtml(funnelAf2Txt)}</strong></div>
+        <div><span>${escapeHtml(t("artifacts.compare.funnelAf2", { af2Provider: af2ProviderName(af2Provider) }))}</span><strong>${escapeHtml(funnelAf2Txt)}</strong></div>
         <div><span>${escapeHtml(t("artifacts.compare.funnelRetain"))}</span><strong>${escapeHtml(funnelRetainTxt)}</strong></div>
       </div>
     </div>`
@@ -5969,7 +6913,7 @@ function renderArtifactComparisonSummary(summary) {
             <th>${escapeHtml(t("artifacts.compare.backbones"))}</th>
             <th>${escapeHtml(t("artifacts.compare.passRate"))}</th>
             <th>${escapeHtml(t("artifacts.compare.soluprotMedian"))}</th>
-            <th>${escapeHtml(t("artifacts.compare.af2Selected"))}</th>
+            <th>${escapeHtml(t("artifacts.compare.af2Selected", { af2Provider: af2ProviderName(af2Provider) }))}</th>
             <th>${escapeHtml(t("artifacts.compare.plddtMedian"))}</th>
             <th>${escapeHtml(t("artifacts.compare.rmsdMedian"))}</th>
           </tr>
@@ -5980,6 +6924,7 @@ function renderArtifactComparisonSummary(summary) {
         : ""
     }
   `;
+  renderCopilotContext();
 }
 
 function buildCompletenessBadges(summary, fallbackCompleteness = null) {
@@ -6000,6 +6945,8 @@ function buildCompletenessBadges(summary, fallbackCompleteness = null) {
       ? Boolean(summary.wt_compare_enabled)
       : Boolean(fallback.wt_compare_enabled);
   const af2Selected = Number(funnel?.af2_selected_total || fallback.af2_selected || 0);
+  const af2Provider = currentRunAf2Provider();
+  const af2ProviderText = af2ProviderName(af2Provider);
 
   const badges = [];
   badges.push({
@@ -6021,8 +6968,8 @@ function buildCompletenessBadges(summary, fallbackCompleteness = null) {
     level: af2Selected > 0 ? "good" : "warn",
     text:
       af2Selected > 0
-        ? t("monitor.completeness.badge.af2Some", { count: af2Selected })
-        : t("monitor.completeness.badge.af2None"),
+        ? t("monitor.completeness.badge.af2Some", { count: af2Selected, af2Provider: af2ProviderText })
+        : t("monitor.completeness.badge.af2None", { af2Provider: af2ProviderText }),
   });
   return badges;
 }
@@ -7048,8 +7995,7 @@ async function refreshArtifacts() {
     });
     state.artifacts = result.artifacts || [];
     rebuildArtifactMetaIndex(state.artifacts);
-    renderArtifactFilters(state.artifacts);
-    renderArtifacts(state.artifacts);
+    renderAllArtifactViews(state.artifacts);
     refreshArtifactSelects();
     void refreshArtifactComparisonSummary();
     updateReportArtifactLinks(el.reportContent ? el.reportContent.value : "");
@@ -7282,6 +8228,16 @@ async function loadAgentReportModal() {
 }
 
 function formatStageLabel(stage) {
+  const dynamicProvider = currentRunAf2Provider();
+  if (stage === "af2") {
+    return af2ProviderName(dynamicProvider, state.lang || "en");
+  }
+  if (stage === "af2_target") {
+    return af2ProviderTargetLabel(dynamicProvider, state.lang || "en");
+  }
+  if (stage === "wt_af2") {
+    return af2ProviderWtLabel(dynamicProvider, state.lang || "en");
+  }
   const entry = STAGE_LABELS[stage];
   if (entry) {
     const lang = state.lang || "en";
@@ -7327,8 +8283,10 @@ function artifactTypeFromItem(item) {
   return "file";
 }
 
-function renderArtifactFilters(items) {
-  if (!el.artifactStageFilter || !el.artifactTierFilter || !el.artifactTypeFilter) return;
+function renderArtifactFilters(items, view = "monitor") {
+  const { stageFilterEl, tierFilterEl, typeFilterEl } = getArtifactViewConfig(view);
+  if (!stageFilterEl || !tierFilterEl || !typeFilterEl) return;
+  const filters = artifactFiltersForView(view);
   const stageSet = new Set();
   const tierSet = new Set();
   const typeSet = new Set();
@@ -7395,23 +8353,23 @@ function renderArtifactFilters(items) {
     return current;
   };
 
-  state.artifactFilters.stage = setStageOptions(
-    el.artifactStageFilter,
+  filters.stage = setStageOptions(
+    stageFilterEl,
     stageOptions,
     t("artifacts.filter.allStages"),
-    state.artifactFilters.stage
+    filters.stage
   );
-  state.artifactFilters.tier = setOptions(
-    el.artifactTierFilter,
+  filters.tier = setOptions(
+    tierFilterEl,
     tiers,
     t("artifacts.filter.allTiers"),
-    state.artifactFilters.tier
+    filters.tier
   );
-  state.artifactFilters.type = setOptions(
-    el.artifactTypeFilter,
+  filters.type = setOptions(
+    typeFilterEl,
     types,
     t("artifacts.filter.allTypes"),
-    state.artifactFilters.type
+    filters.type
   );
 }
 
@@ -7875,7 +8833,7 @@ function renderRunCompareSummary(result) {
     { key: "plddt_median", label: "pLDDT", digits: 1, percent: false },
     { key: "rmsd_median", label: "RMSD", digits: 2, percent: false },
     { key: "soluprot_pass_rate", label: "SoluProt pass", digits: 1, percent: true },
-    { key: "af2_pass_rate", label: "AF2 pass", digits: 1, percent: true },
+    { key: "af2_pass_rate", label: af2ProviderPassLabel(currentRunAf2Provider()), digits: 1, percent: true },
   ];
   const format = (value, digits, isPercent, signed = false) => {
     if (typeof value !== "number" || !Number.isFinite(value)) return "-";
@@ -7930,7 +8888,7 @@ function buildRunCompareDetailsMarkdown(result) {
     ["pLDDT median", "plddt_median", 1, false],
     ["RMSD median", "rmsd_median", 2, false],
     ["SoluProt pass rate", "soluprot_pass_rate", 1, true],
-    ["AF2 pass rate", "af2_pass_rate", 1, true],
+    [`${af2ProviderPassLabel(currentRunAf2Provider())} rate`, "af2_pass_rate", 1, true],
     ["Backbone count", "backbone_count", 0, false],
   ];
   const format = (value, digits, percent, signed = false) => {
@@ -7951,7 +8909,7 @@ function buildRunCompareDetailsMarkdown(result) {
   lines.push(`- RFD3: ${currentCompleteness.has_rfd3 ? "yes" : "no"}`);
   lines.push(`- BioEmu: ${currentCompleteness.has_bioemu ? "yes" : "no"}`);
   lines.push(`- WT compare: ${currentCompleteness.wt_compare_enabled ? "yes" : "no"}`);
-  lines.push(`- AF2 selected: ${Number(currentCompleteness.af2_selected || 0)}`);
+  lines.push(`- ${af2ProviderSelectedLabel(currentRunAf2Provider())}: ${Number(currentCompleteness.af2_selected || 0)}`);
   lines.push("");
   return lines.join("\n");
 }
@@ -7996,6 +8954,406 @@ async function refreshRunCompare() {
   }
 }
 
+function normalizeChartView(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (CHART_VIEW_OPTIONS.has(raw)) return raw;
+  return "plddt_rmsd";
+}
+
+function syncChartSelectors() {
+  const next = normalizeChartView(state.chartView);
+  state.chartView = next;
+  if (el.analyzeChartType && el.analyzeChartType.value !== next) el.analyzeChartType.value = next;
+  if (el.reportChartType && el.reportChartType.value !== next) el.reportChartType.value = next;
+}
+
+function setChartView(value) {
+  const next = normalizeChartView(value);
+  if (state.chartView === next) return;
+  state.chartView = next;
+  syncChartSelectors();
+  renderCandidateCharts();
+  if (el.reportModal && el.reportModalContent && !el.reportModal.classList.contains("hidden")) {
+    if (state.reportModalMode === "rendered") {
+      el.reportModalContent.innerHTML = renderReportModalContent();
+    }
+  }
+}
+
+function filteredHitListRows({ applyLimit = false } = {}) {
+  const rows = Array.isArray(state.hitListRows) ? state.hitListRows : [];
+  const cutoff = Math.max(0, Math.min(100, Number(state.hitListCutoff || 0)));
+  const filtered = rows.filter((row) => {
+    const score = Number(row?.score);
+    if (Number.isFinite(score) && score >= cutoff) return true;
+    return row?.score === null && cutoff <= 0;
+  });
+  if (!applyLimit) return filtered;
+  const limit = Math.max(10, Math.min(500, Number(state.hitListLimit || 120)));
+  return filtered.slice(0, limit);
+}
+
+function chartCanvasForTarget(target) {
+  return target === "report" ? el.reportChartCanvas : el.analyzeChartCanvas;
+}
+
+function chartCaptionForTarget(target) {
+  return target === "report" ? el.reportChartCaption : el.analyzeChartCaption;
+}
+
+function setChartPlaceholder(target, key) {
+  const canvas = chartCanvasForTarget(target);
+  const caption = chartCaptionForTarget(target);
+  if (!canvas) return;
+  canvas.innerHTML = `<div class="placeholder">${escapeHtml(t(key))}</div>`;
+  if (caption) caption.textContent = "";
+}
+
+function finiteNumber(value) {
+  const num = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function extentWithPadding(values, { padRatio = 0.06, minPad = 1 } = {}) {
+  if (!Array.isArray(values) || !values.length) return { min: 0, max: 1 };
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return { min: 0, max: 1 };
+  const span = Math.max(max - min, 0);
+  const pad = Math.max(span * padRatio, minPad);
+  if (span <= 0) return { min: min - pad, max: max + pad };
+  return { min: min - pad, max: max + pad };
+}
+
+function svgSafe(text) {
+  return escapeHtml(String(text || ""));
+}
+
+function chartTickText(value, digits = 1) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "-";
+  return value.toFixed(digits);
+}
+
+function buildPlddtRmsdScatter(rows) {
+  const points = (rows || [])
+    .map((row) => ({
+      x: finiteNumber(row?.plddt),
+      y: finiteNumber(row?.rmsd),
+      selected: Boolean(row?.af2_selected),
+      seqId: String(row?.seq_id || "-"),
+      source: String(row?.source || "-"),
+    }))
+    .filter((row) => row.x !== null && row.y !== null);
+  if (!points.length) return null;
+
+  const width = 760;
+  const height = 340;
+  const left = 56;
+  const right = 20;
+  const top = 20;
+  const bottom = 50;
+  const plotW = width - left - right;
+  const plotH = height - top - bottom;
+  const xExtent = extentWithPadding(points.map((p) => p.x), { padRatio: 0.05, minPad: 0.5 });
+  const yExtent = extentWithPadding(points.map((p) => p.y), { padRatio: 0.08, minPad: 0.2 });
+  const xMap = (v) => left + ((v - xExtent.min) / Math.max(xExtent.max - xExtent.min, 1e-6)) * plotW;
+  const yMap = (v) => top + plotH - ((v - yExtent.min) / Math.max(yExtent.max - yExtent.min, 1e-6)) * plotH;
+
+  const ticks = 5;
+  const gridLines = [];
+  for (let i = 0; i <= ticks; i += 1) {
+    const rx = i / ticks;
+    const x = left + plotW * rx;
+    const xValue = xExtent.min + (xExtent.max - xExtent.min) * rx;
+    gridLines.push(
+      `<line x1="${x.toFixed(2)}" y1="${top}" x2="${x.toFixed(2)}" y2="${(top + plotH).toFixed(2)}" stroke="rgba(16,42,45,0.12)" />`
+    );
+    gridLines.push(
+      `<text x="${x.toFixed(2)}" y="${(top + plotH + 18).toFixed(2)}" text-anchor="middle" fill="#4f6365" font-size="11">${svgSafe(chartTickText(xValue, 1))}</text>`
+    );
+  }
+  for (let i = 0; i <= ticks; i += 1) {
+    const ry = i / ticks;
+    const y = top + plotH * ry;
+    const yValue = yExtent.max - (yExtent.max - yExtent.min) * ry;
+    gridLines.push(
+      `<line x1="${left}" y1="${y.toFixed(2)}" x2="${(left + plotW).toFixed(2)}" y2="${y.toFixed(2)}" stroke="rgba(16,42,45,0.12)" />`
+    );
+    gridLines.push(
+      `<text x="${(left - 8).toFixed(2)}" y="${(y + 4).toFixed(2)}" text-anchor="end" fill="#4f6365" font-size="11">${svgSafe(chartTickText(yValue, 2))}</text>`
+    );
+  }
+
+  const selectedColor = "#0f6b6f";
+  const unselectedColor = "#d97757";
+  const marks = points
+    .map((p) => {
+      const cx = xMap(p.x).toFixed(2);
+      const cy = yMap(p.y).toFixed(2);
+      const fill = p.selected ? selectedColor : unselectedColor;
+      const label = `${p.seqId} | ${p.source} | pLDDT=${chartTickText(p.x, 1)} | RMSD=${chartTickText(p.y, 2)}`;
+      return `<circle cx="${cx}" cy="${cy}" r="3.8" fill="${fill}" fill-opacity="0.8"><title>${svgSafe(label)}</title></circle>`;
+    })
+    .join("");
+
+  const selectedCount = points.filter((p) => p.selected).length;
+  const caption = `${t("analyze.chart.caption.rows", {
+    rows: rows.length,
+    cutoff: Math.max(0, Math.min(100, Number(state.hitListCutoff || 0))).toFixed(0),
+  })} · ${t("analyze.chart.caption.scatter", { points: points.length, selected: selectedCount })}`;
+  const legendSelected = t("analyze.chart.legend.selected", { af2Provider: af2ProviderName(currentRunAf2Provider()) });
+  const legendUnselected = t("analyze.chart.legend.unselected");
+
+  return {
+    caption,
+    svg: `<svg class="chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${svgSafe(
+      t("analyze.chart.option.plddtRmsd")
+    )}">
+      <rect x="0" y="0" width="${width}" height="${height}" fill="rgba(255,255,255,0.98)" />
+      ${gridLines.join("")}
+      <rect x="${left}" y="${top}" width="${plotW}" height="${plotH}" fill="none" stroke="rgba(16,42,45,0.2)" />
+      ${marks}
+      <text x="${(left + plotW / 2).toFixed(2)}" y="${(height - 10).toFixed(2)}" text-anchor="middle" fill="#213c3f" font-size="12">${svgSafe(
+        t("analyze.chart.axis.plddt")
+      )}</text>
+      <text x="14" y="${(top + plotH / 2).toFixed(2)}" text-anchor="middle" fill="#213c3f" font-size="12" transform="rotate(-90 14 ${(top + plotH / 2).toFixed(2)})">${svgSafe(
+        t("analyze.chart.axis.rmsd")
+      )}</text>
+      <circle cx="${(left + 8).toFixed(2)}" cy="14" r="4" fill="${selectedColor}" />
+      <text x="${(left + 16).toFixed(2)}" y="18" fill="#213c3f" font-size="11">${svgSafe(legendSelected)}</text>
+      <circle cx="${(left + 170).toFixed(2)}" cy="14" r="4" fill="${unselectedColor}" />
+      <text x="${(left + 178).toFixed(2)}" y="18" fill="#213c3f" font-size="11">${svgSafe(legendUnselected)}</text>
+    </svg>`,
+  };
+}
+
+function buildScoreHistogram(rows) {
+  const values = (rows || []).map((row) => finiteNumber(row?.score)).filter((v) => v !== null);
+  if (!values.length) return null;
+
+  const width = 760;
+  const height = 320;
+  const left = 52;
+  const right = 20;
+  const top = 20;
+  const bottom = 50;
+  const plotW = width - left - right;
+  const plotH = height - top - bottom;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = Math.max(max - min, 1e-6);
+  const binCount = Math.max(6, Math.min(16, Math.round(Math.sqrt(values.length))));
+  const counts = Array.from({ length: binCount }, () => 0);
+  values.forEach((value) => {
+    const ratio = (value - min) / span;
+    const idx = Math.min(binCount - 1, Math.max(0, Math.floor(ratio * binCount)));
+    counts[idx] += 1;
+  });
+  const maxCount = Math.max(...counts, 1);
+  const barW = plotW / binCount;
+
+  const bars = counts
+    .map((count, i) => {
+      const h = (count / maxCount) * plotH;
+      const x = left + i * barW + 1.5;
+      const y = top + plotH - h;
+      const binStart = min + (span * i) / binCount;
+      const binEnd = min + (span * (i + 1)) / binCount;
+      const label = `${chartTickText(binStart, 1)}-${chartTickText(binEnd, 1)}: ${count}`;
+      return `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${Math.max(barW - 3, 1).toFixed(
+        2
+      )}" height="${Math.max(h, 0).toFixed(2)}" fill="#0f6b6f" fill-opacity="0.8"><title>${svgSafe(
+        label
+      )}</title></rect>`;
+    })
+    .join("");
+
+  const yTicks = [];
+  for (let i = 0; i <= 4; i += 1) {
+    const ratio = i / 4;
+    const y = top + plotH - plotH * ratio;
+    const value = Math.round(maxCount * ratio);
+    yTicks.push(
+      `<line x1="${left}" y1="${y.toFixed(2)}" x2="${(left + plotW).toFixed(2)}" y2="${y.toFixed(
+        2
+      )}" stroke="rgba(16,42,45,0.12)" />`
+    );
+    yTicks.push(
+      `<text x="${(left - 8).toFixed(2)}" y="${(y + 4).toFixed(2)}" text-anchor="end" fill="#4f6365" font-size="11">${value}</text>`
+    );
+  }
+
+  const xTicks = [];
+  for (let i = 0; i <= 5; i += 1) {
+    const ratio = i / 5;
+    const x = left + plotW * ratio;
+    const value = min + span * ratio;
+    xTicks.push(
+      `<text x="${x.toFixed(2)}" y="${(top + plotH + 18).toFixed(2)}" text-anchor="middle" fill="#4f6365" font-size="11">${svgSafe(
+        chartTickText(value, 1)
+      )}</text>`
+    );
+  }
+
+  const caption = `${t("analyze.chart.caption.rows", {
+    rows: rows.length,
+    cutoff: Math.max(0, Math.min(100, Number(state.hitListCutoff || 0))).toFixed(0),
+  })} · ${t("analyze.chart.caption.hist", { values: values.length, bins: binCount })}`;
+
+  return {
+    caption,
+    svg: `<svg class="chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${svgSafe(
+      t("analyze.chart.option.scoreHist")
+    )}">
+      <rect x="0" y="0" width="${width}" height="${height}" fill="rgba(255,255,255,0.98)" />
+      ${yTicks.join("")}
+      <rect x="${left}" y="${top}" width="${plotW}" height="${plotH}" fill="none" stroke="rgba(16,42,45,0.2)" />
+      ${bars}
+      ${xTicks.join("")}
+      <text x="${(left + plotW / 2).toFixed(2)}" y="${(height - 10).toFixed(2)}" text-anchor="middle" fill="#213c3f" font-size="12">${svgSafe(
+        t("analyze.chart.axis.score")
+      )}</text>
+      <text x="14" y="${(top + plotH / 2).toFixed(2)}" text-anchor="middle" fill="#213c3f" font-size="12" transform="rotate(-90 14 ${(top + plotH / 2).toFixed(2)})">${svgSafe(
+        t("analyze.chart.axis.count")
+      )}</text>
+    </svg>`,
+  };
+}
+
+function buildTierPassRateChart(rows) {
+  const buckets = new Map();
+  (rows || []).forEach((row) => {
+    const tierNum = finiteNumber(row?.tier);
+    if (tierNum === null) return;
+    const key = tierNum.toFixed(2);
+    if (!buckets.has(key)) buckets.set(key, { tier: tierNum, total: 0, selected: 0 });
+    const bucket = buckets.get(key);
+    bucket.total += 1;
+    if (row?.af2_selected) bucket.selected += 1;
+  });
+  const list = Array.from(buckets.values()).sort((a, b) => a.tier - b.tier);
+  if (!list.length) return null;
+
+  const width = 760;
+  const height = 320;
+  const left = 52;
+  const right = 20;
+  const top = 20;
+  const bottom = 56;
+  const plotW = width - left - right;
+  const plotH = height - top - bottom;
+  const barW = plotW / list.length;
+
+  const bars = list
+    .map((bucket, i) => {
+      const rate = bucket.total > 0 ? (bucket.selected / bucket.total) * 100 : 0;
+      const h = (rate / 100) * plotH;
+      const x = left + i * barW + 8;
+      const y = top + plotH - h;
+      const label = `${bucket.selected}/${bucket.total} (${chartTickText(rate, 1)}%)`;
+      return `
+        <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${Math.max(barW - 16, 8).toFixed(
+          2
+        )}" height="${Math.max(h, 0).toFixed(2)}" fill="#0f6b6f" fill-opacity="0.82"><title>${svgSafe(
+        label
+      )}</title></rect>
+        <text x="${(x + Math.max(barW - 16, 8) / 2).toFixed(2)}" y="${(top + plotH + 18).toFixed(
+          2
+        )}" text-anchor="middle" fill="#4f6365" font-size="11">${svgSafe(chartTickText(
+        bucket.tier,
+        2
+      ))}</text>
+        <text x="${(x + Math.max(barW - 16, 8) / 2).toFixed(2)}" y="${Math.max(y - 6, top + 10).toFixed(
+          2
+        )}" text-anchor="middle" fill="#213c3f" font-size="10">${svgSafe(
+        `${bucket.selected}/${bucket.total}`
+      )}</text>
+      `;
+    })
+    .join("");
+
+  const yTicks = [];
+  for (let i = 0; i <= 5; i += 1) {
+    const value = i * 20;
+    const y = top + plotH - (value / 100) * plotH;
+    yTicks.push(
+      `<line x1="${left}" y1="${y.toFixed(2)}" x2="${(left + plotW).toFixed(2)}" y2="${y.toFixed(
+        2
+      )}" stroke="rgba(16,42,45,0.12)" />`
+    );
+    yTicks.push(
+      `<text x="${(left - 8).toFixed(2)}" y="${(y + 4).toFixed(2)}" text-anchor="end" fill="#4f6365" font-size="11">${value}</text>`
+    );
+  }
+
+  const caption = `${t("analyze.chart.caption.rows", {
+    rows: rows.length,
+    cutoff: Math.max(0, Math.min(100, Number(state.hitListCutoff || 0))).toFixed(0),
+  })} · ${t("analyze.chart.caption.tier", { tiers: list.length, rows: rows.length })}`;
+
+  return {
+    caption,
+    svg: `<svg class="chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${svgSafe(
+      t("analyze.chart.option.tierPass")
+    )}">
+      <rect x="0" y="0" width="${width}" height="${height}" fill="rgba(255,255,255,0.98)" />
+      ${yTicks.join("")}
+      <rect x="${left}" y="${top}" width="${plotW}" height="${plotH}" fill="none" stroke="rgba(16,42,45,0.2)" />
+      ${bars}
+      <text x="${(left + plotW / 2).toFixed(2)}" y="${(height - 10).toFixed(2)}" text-anchor="middle" fill="#213c3f" font-size="12">${svgSafe(
+        t("analyze.chart.axis.tier")
+      )}</text>
+      <text x="14" y="${(top + plotH / 2).toFixed(2)}" text-anchor="middle" fill="#213c3f" font-size="12" transform="rotate(-90 14 ${(top + plotH / 2).toFixed(2)})">${svgSafe(
+        t("analyze.chart.axis.passRate")
+      )}</text>
+    </svg>`,
+  };
+}
+
+function selectedChartPayload(rows) {
+  const view = normalizeChartView(state.chartView);
+  if (view === "plddt_rmsd") return buildPlddtRmsdScatter(rows);
+  if (view === "score_hist") return buildScoreHistogram(rows);
+  if (view === "tier_pass") return buildTierPassRateChart(rows);
+  return null;
+}
+
+function renderCandidateChart(target = "analyze") {
+  const canvas = chartCanvasForTarget(target);
+  const captionEl = chartCaptionForTarget(target);
+  if (!canvas) return;
+  if (!state.currentRunId) {
+    setChartPlaceholder(target, target === "report" ? "report.chart.placeholder" : "analyze.chart.placeholder");
+    return;
+  }
+  const rows = filteredHitListRows({ applyLimit: false });
+  if (!rows.length) {
+    setChartPlaceholder(target, "analyze.hitList.empty");
+    return;
+  }
+
+  const payload = selectedChartPayload(rows);
+  if (!payload) {
+    setChartPlaceholder(target, "analyze.chart.noData");
+    return;
+  }
+  canvas.innerHTML = payload.svg;
+  if (captionEl) {
+    captionEl.innerHTML = `<p class="chart-caption">${escapeHtml(payload.caption)}</p>`;
+  }
+}
+
+function renderCandidateCharts() {
+  syncChartSelectors();
+  renderCandidateChart("analyze");
+  renderCandidateChart("report");
+  if (el.reportModal && el.reportModalContent && !el.reportModal.classList.contains("hidden")) {
+    if (state.reportModalMode === "rendered" && isRunReportFilename(state.reportModalFilename)) {
+      el.reportModalContent.innerHTML = renderReportModalContent();
+    }
+  }
+}
+
 function renderHitList() {
   if (!el.hitListTable) return;
   if (!state.currentRunId) {
@@ -8005,15 +9363,13 @@ function renderHitList() {
       el.hitListDetails.classList.add("hidden");
       el.hitListDetails.disabled = true;
     }
+    renderCandidateCharts();
+    renderCopilotContext();
     return;
   }
   const rows = Array.isArray(state.hitListRows) ? state.hitListRows : [];
   const cutoff = Math.max(0, Math.min(100, Number(state.hitListCutoff || 0)));
-  const filtered = rows.filter(
-    (row) =>
-      (typeof row?.score === "number" && Number.isFinite(row.score) && row.score >= cutoff) ||
-      (row?.score === null && cutoff <= 0)
-  );
+  const filtered = filteredHitListRows({ applyLimit: false });
   const limit = Math.max(10, Math.min(500, Number(state.hitListLimit || 120)));
   state.hitListLimit = limit;
   const shown = filtered.slice(0, limit);
@@ -8033,6 +9389,8 @@ function renderHitList() {
       el.hitListDetails.classList.add("hidden");
       el.hitListDetails.disabled = true;
     }
+    renderCandidateCharts();
+    renderCopilotContext();
     return;
   }
   const body = shown
@@ -8068,7 +9426,7 @@ function renderHitList() {
           <th>SoluProt</th>
           <th>pLDDT</th>
           <th>RMSD</th>
-          <th>AF2 selected</th>
+          <th>${escapeHtml(af2ProviderSelectedLabel(currentRunAf2Provider()))}</th>
         </tr>
       </thead>
       <tbody>${body}</tbody>
@@ -8078,16 +9436,13 @@ function renderHitList() {
     el.hitListDetails.classList.remove("hidden");
     el.hitListDetails.disabled = false;
   }
+  renderCandidateCharts();
+  renderCopilotContext();
 }
 
 function buildHitListDetailsMarkdown() {
-  const rows = Array.isArray(state.hitListRows) ? state.hitListRows : [];
   const cutoff = Math.max(0, Math.min(100, Number(state.hitListCutoff || 0)));
-  const filtered = rows.filter(
-    (row) =>
-      (typeof row?.score === "number" && Number.isFinite(row.score) && row.score >= cutoff) ||
-      (row?.score === null && cutoff <= 0)
-  );
+  const filtered = filteredHitListRows({ applyLimit: false });
   const maxRows = Math.min(filtered.length, 200);
   const lines = [];
   lines.push(`# ${t("analyze.hitList.detailsTitle")}`);
@@ -8096,7 +9451,9 @@ function buildHitListDetailsMarkdown() {
   lines.push(`- Cutoff: ${cutoff}`);
   lines.push(`- Rows: ${maxRows}/${filtered.length}`);
   lines.push("");
-  lines.push("| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | AF2 selected |");
+  lines.push(
+    `| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+  );
   lines.push("|---:|---|---|---:|---:|---:|---:|---:|---|");
   filtered.slice(0, maxRows).forEach((row) => {
     lines.push(
@@ -8142,6 +9499,7 @@ async function refreshHitList() {
       el.hitListDetails.classList.add("hidden");
       el.hitListDetails.disabled = true;
     }
+    renderCandidateCharts();
   }
 }
 
@@ -8347,11 +9705,12 @@ function renderRuns(runs) {
       try {
         await apiCall("pipeline.delete_run", { run_id: runId });
         delete state.runModeById[runId];
+        delete state.af2ProviderByRunId[runId];
         delete state.progressByRunId[runId];
         if (state.currentRunId === runId) {
           setCurrentRunId("");
           state.artifacts = [];
-          renderArtifacts([]);
+          renderAllArtifactViews([]);
           setFilePreviewPlaceholder("monitor");
           setFilePreviewPlaceholder("analyze", "analyze.files.placeholder");
           setComparePreviewPlaceholder("artifacts.preview.placeholder");
@@ -8491,6 +9850,12 @@ if (el.cancelRunBtn) {
   });
 }
 
+if (el.resumeRunBtn) {
+  el.resumeRunBtn.addEventListener("click", () => {
+    resumeCurrentRun();
+  });
+}
+
 if (el.refreshRunsBtn) {
   el.refreshRunsBtn.addEventListener("click", () => {
     refreshRuns();
@@ -8559,46 +9924,14 @@ el.autoPoll.addEventListener("change", () => {
   ensureAutoPoll();
 });
 
-el.refreshArtifacts.addEventListener("click", refreshArtifacts);
-
-el.artifactFilter.addEventListener("input", () => {
-  renderArtifacts(state.artifacts);
-});
-
-if (el.artifactStageFilter) {
-  el.artifactStageFilter.addEventListener("change", () => {
-    state.artifactFilters.stage = el.artifactStageFilter.value || "all";
-    renderArtifacts(state.artifacts);
-  });
+if (el.refreshArtifacts) {
+  el.refreshArtifacts.addEventListener("click", refreshArtifacts);
 }
-
-if (el.artifactTierFilter) {
-  el.artifactTierFilter.addEventListener("change", () => {
-    state.artifactFilters.tier = el.artifactTierFilter.value || "all";
-    renderArtifacts(state.artifacts);
-  });
+if (el.analyzeRefreshArtifacts) {
+  el.analyzeRefreshArtifacts.addEventListener("click", refreshArtifacts);
 }
-
-if (el.artifactTypeFilter) {
-  el.artifactTypeFilter.addEventListener("change", () => {
-    state.artifactFilters.type = el.artifactTypeFilter.value || "all";
-    renderArtifacts(state.artifacts);
-  });
-}
-
-if (el.analyzeArtifactSelect) {
-  el.analyzeArtifactSelect.addEventListener("change", () => {
-    state.analyzeArtifactPath = String(el.analyzeArtifactSelect.value || "").trim();
-    void previewAnalyzeSelectedArtifact();
-  });
-}
-
-if (el.analyzeArtifactOpen) {
-  el.analyzeArtifactOpen.addEventListener("click", () => {
-    state.analyzeArtifactPath = String(el.analyzeArtifactSelect?.value || state.analyzeArtifactPath || "").trim();
-    void previewAnalyzeSelectedArtifact();
-  });
-}
+bindArtifactFilterControls("monitor");
+bindArtifactFilterControls("analyze");
 
 if (el.artifactCompareLeft) {
   el.artifactCompareLeft.addEventListener("change", () => {
@@ -8840,6 +10173,18 @@ if (el.hitListDetails) {
   });
 }
 
+if (el.analyzeChartType) {
+  el.analyzeChartType.addEventListener("change", () => {
+    setChartView(el.analyzeChartType.value);
+  });
+}
+
+if (el.reportChartType) {
+  el.reportChartType.addEventListener("change", () => {
+    setChartView(el.reportChartType.value);
+  });
+}
+
 if (el.reportContent) {
   el.reportContent.addEventListener("input", () => {
     updateReportArtifactLinks(el.reportContent.value);
@@ -8847,6 +10192,7 @@ if (el.reportContent) {
 }
 
 initLanguage();
+initCopilot();
 
 if (state.user && state.token) {
   loadSession();
@@ -8866,12 +10212,15 @@ if (el.hitListLimit) {
 setHitWeightInputValues();
 updateHitCutoffLabel();
 populateRunCompareBaselineOptions();
+syncChartSelectors();
 renderRunCompareSummary(null);
 renderHitList();
 renderMonitorCompleteness(null, null);
 updateAnalyzeSummary();
-populateAnalyzeArtifactSelect();
+renderAllArtifactViews(state.artifacts);
 setFilePreviewPlaceholder("monitor");
 setFilePreviewPlaceholder("analyze", "analyze.files.placeholder");
 setComparePreviewPlaceholder("artifacts.preview.placeholder");
+updateMonitorActionButtons();
+renderCopilotContext();
 ensureAutoPoll();
