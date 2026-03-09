@@ -69,6 +69,35 @@ class TestTools(unittest.TestCase):
             self.assertIn("output_dir", out)
             json.dumps(out)
 
+    def test_pipeline_run_novelty_stage_wt_based_without_mmseqs_client(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.run",
+                {
+                    "target_fasta": fasta,
+                    "dry_run": True,
+                    "stop_after": "novelty",
+                    "novelty_enabled": True,
+                    "num_seq_per_tier": 1,
+                    "conservation_tiers": [0.3],
+                    "soluprot_cutoff": 0.0,
+                    "af2_plddt_cutoff": 0.0,
+                    "af2_rmsd_cutoff": 999.0,
+                },
+            )
+            run_id = str(out.get("run_id") or "")
+            self.assertTrue(run_id)
+
+            status = dispatcher.call_tool("pipeline.read_artifact", {"run_id": run_id, "path": "status.json"})
+            status_text = str(status.get("text") or "")
+            self.assertIn('"state": "completed"', status_text)
+            summary = dispatcher.call_tool("pipeline.read_artifact", {"run_id": run_id, "path": "summary.json"})
+            summary_text = str(summary.get("text") or "")
+            self.assertNotIn("MMseqs client is not configured", summary_text)
+
     def test_pipeline_run_tool_respects_run_id(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         pdb = (
@@ -91,6 +120,41 @@ class TestTools(unittest.TestCase):
                 {"target_fasta": fasta, "target_pdb": pdb, "dry_run": True, "run_id": "my_test_run"},
             )
             self.assertEqual(Path(str(out.get("output_dir") or "")).name, "my_test_run")
+
+    def test_pipeline_list_artifacts_keeps_root_input_snapshot_but_hides_internal_original_pdb(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A  -1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   1       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.run",
+                {
+                    "target_fasta": "",
+                    "target_pdb": pdb,
+                    "dry_run": True,
+                    "num_seq_per_tier": 1,
+                    "conservation_tiers": [0.3],
+                    "pdb_strip_nonpositive_resseq": True,
+                    "pdb_renumber_resseq_from_1": True,
+                },
+            )
+            output_dir = Path(str(out.get("output_dir") or ""))
+            self.assertTrue((output_dir / "target.original.pdb").exists())
+            internal_original = output_dir / "backbones" / "demo" / "target.original.pdb"
+            internal_original.parent.mkdir(parents=True, exist_ok=True)
+            internal_original.write_text("END\n", encoding="utf-8")
+            listed = dispatcher.call_tool(
+                "pipeline.list_artifacts",
+                {"run_id": output_dir.name, "max_depth": 3, "limit": 200},
+            )
+            paths = {str(item.get("path") or "") for item in (listed.get("artifacts") or []) if isinstance(item, dict)}
+            self.assertIn("target.pdb", paths)
+            self.assertIn("target.original.pdb", paths)
+            self.assertNotIn("backbones/demo/target.original.pdb", paths)
 
     def test_pipeline_run_rejects_running_run_id(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
@@ -243,6 +307,48 @@ class TestTools(unittest.TestCase):
         req = pipeline_request_from_args({"target_fasta": ">q1\nACDEFGHIK\n"})
         self.assertTrue(req.ligand_mask_use_original_target)
 
+    def test_pipeline_request_defaults_wt_diff_enabled(self) -> None:
+        req = pipeline_request_from_args({"target_fasta": ">q1\nACDEFGHIK\n"})
+        self.assertTrue(req.novelty_enabled)
+
+    def test_pipeline_request_normalizes_wt_diff_stage_alias(self) -> None:
+        req = pipeline_request_from_args(
+            {
+                "target_fasta": ">q1\nACDEFGHIK\n",
+                "start_from": "wt_diff",
+                "stop_after": "wt_diff",
+            }
+        )
+        self.assertEqual(req.start_from, "novelty")
+        self.assertEqual(req.stop_after, "novelty")
+
+    def test_pipeline_request_parses_start_from(self) -> None:
+        req = pipeline_request_from_args(
+            {
+                "target_fasta": ">q1\nACDEFGHIK\n",
+                "start_from": "SoLuPrOt",
+                "stop_after": "novelty",
+            }
+        )
+        self.assertEqual(req.start_from, "soluprot")
+        self.assertEqual(req.stop_after, "novelty")
+
+    def test_pipeline_preflight_rejects_start_from_after_stop_after(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.preflight",
+                {
+                    "target_fasta": ">q1\nACDEFGHIK\n",
+                    "start_from": "af2",
+                    "stop_after": "msa",
+                },
+            )
+            self.assertFalse(bool(out.get("ok")))
+            errors = [str(x) for x in (out.get("errors") or [])]
+            self.assertTrue(any("start_from" in e and "stop_after" in e for e in errors))
+
     def test_pipeline_run_bioemu_stop_dry_run_without_target_pdb(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         with _tmpdir() as tmp:
@@ -345,6 +451,20 @@ class TestTools(unittest.TestCase):
             self.assertIn("tier_compare", comparison_summary)
             self.assertIn("distributions", comparison_summary)
             self.assertIn("diversity", comparison_summary)
+            source_compare = comparison_summary.get("source_compare") or {}
+            if isinstance(source_compare, dict):
+                for bucket in source_compare.values():
+                    if not isinstance(bucket, dict):
+                        continue
+                    self.assertIn("plddt_median", bucket)
+                    self.assertIn("rmsd_median", bucket)
+            tier_compare = comparison_summary.get("tier_compare") or []
+            if isinstance(tier_compare, list):
+                for row in tier_compare:
+                    if not isinstance(row, dict):
+                        continue
+                    self.assertIn("plddt_median", row)
+                    self.assertIn("rmsd_median", row)
 
             listing = dispatcher.call_tool("pipeline.list_artifacts", {"run_id": run_id, "limit": 200})
             artifacts = listing.get("artifacts") or []
@@ -416,6 +536,13 @@ class TestTools(unittest.TestCase):
             self.assertIn("source_compare", comparison_summary)
             self.assertIn("funnel", comparison_summary)
             self.assertIn("tier_compare", comparison_summary)
+            source_compare = comparison_summary.get("source_compare") or {}
+            if isinstance(source_compare, dict):
+                for bucket in source_compare.values():
+                    if not isinstance(bucket, dict):
+                        continue
+                    self.assertIn("plddt_median", bucket)
+                    self.assertIn("rmsd_median", bucket)
 
     def test_compare_runs_hit_list_and_export_package_tools(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
@@ -468,6 +595,95 @@ class TestTools(unittest.TestCase):
 
 
 
+    def test_get_hit_list_uses_target_pdb_for_wt_difference_metrics(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU A   4       3.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.run",
+                {"target_pdb": pdb, "dry_run": True, "num_seq_per_tier": 1, "conservation_tiers": [0.3]},
+            )
+            run_id = str(out.get("run_id") or "")
+            self.assertTrue(run_id)
+
+            hit_list = dispatcher.call_tool(
+                "pipeline.get_hit_list",
+                {"run_id": run_id, "limit": 50, "min_score": 0.0},
+            )
+            rows = hit_list.get("rows") or []
+            self.assertTrue(rows)
+            top = rows[0] if isinstance(rows[0], dict) else {}
+            self.assertIn("wt_diff_count", top)
+            self.assertIn("wt_compare_len", top)
+            self.assertIn("wt_diff_pct", top)
+            self.assertIsInstance(top.get("wt_compare_len"), (int, float))
+            self.assertGreater(float(top.get("wt_compare_len") or 0), 0.0)
+            self.assertIsInstance(top.get("novelty"), (int, float))
+            self.assertIsInstance(top.get("wt_diff_ratio"), (int, float))
+            self.assertAlmostEqual(
+                float(top.get("novelty") or 0.0),
+                float(top.get("wt_diff_ratio") or 0.0),
+                places=6,
+            )
+
+    def test_get_hit_list_prefers_saved_design_chains_for_wt_difference_metrics(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  ALA A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ALA A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  ALA A   4       3.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  CYS B   1       0.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  CYS B   2       1.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      7  CA  CYS B   3       2.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      8  CA  CYS B   4       3.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      9  CA  CYS B   5       4.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM     10  CA  CYS B   6       5.000   1.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.run",
+                {"target_pdb": pdb, "dry_run": True, "num_seq_per_tier": 1, "conservation_tiers": [0.3]},
+            )
+            run_id = str(out.get("run_id") or "")
+            run_dir = Path(str(out.get("output_dir") or ""))
+            self.assertTrue(run_id)
+            self.assertTrue(run_dir.exists())
+
+            saved_chain_payload = {
+                "design_chains_used": ["B"],
+                "requested_design_chains": None,
+                "available_chains": ["A", "B"],
+            }
+            (run_dir / "query_pdb_alignment.json").write_text(
+                json.dumps(saved_chain_payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            (run_dir / "chain_strategy.json").write_text(
+                json.dumps(saved_chain_payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+
+            hit_list = dispatcher.call_tool(
+                "pipeline.get_hit_list",
+                {"run_id": run_id, "limit": 50, "min_score": 0.0},
+            )
+            rows = hit_list.get("rows") or []
+            self.assertTrue(rows)
+            top = rows[0] if isinstance(rows[0], dict) else {}
+            self.assertEqual(int(top.get("wt_compare_len") or 0), 6)
+            self.assertEqual(int(top.get("wt_diff_count") or 0), 6)
+            self.assertAlmostEqual(float(top.get("wt_diff_pct") or 0.0), 100.0, places=6)
+
     def test_pipeline_plan_from_prompt_missing_target(self) -> None:
         with _tmpdir() as tmp:
             runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
@@ -509,7 +725,7 @@ class TestTools(unittest.TestCase):
             routed = out.get("routed_request") or {}
             self.assertTrue(bool(routed.get("bioemu_use")))
 
-    def test_pipeline_plan_from_prompt_defaults_af2_and_num_seq_questions(self) -> None:
+    def test_pipeline_plan_from_prompt_defaults_wt_diff_and_num_seq_questions(self) -> None:
         with _tmpdir() as tmp:
             runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
             dispatcher = ToolDispatcher(runner)
@@ -523,6 +739,7 @@ class TestTools(unittest.TestCase):
                 for item in questions
                 if isinstance(item, dict) and str(item.get("id") or "").strip()
             }
+            self.assertEqual((by_id.get("stop_after") or {}).get("default"), "novelty")
             self.assertEqual((by_id.get("af2_max_candidates_per_tier") or {}).get("default"), 0)
             self.assertEqual((by_id.get("num_seq_per_tier") or {}).get("default"), 2)
 if __name__ == "__main__":

@@ -114,7 +114,8 @@ class PipelineRequest:
     query_pdb_min_identity: float = 0.9
     query_pdb_policy: str = "error"  # error | warn | ignore
 
-    stop_after: str | None = None  # rfd3 | bioemu | msa | design | soluprot | af2 | novelty
+    start_from: str | None = None  # msa | rfd3 | bioemu | design | soluprot | af2 | novelty (wt_diff alias)
+    stop_after: str | None = None  # rfd3 | bioemu | msa | design | soluprot | af2 | novelty (wt_diff alias)
     force: bool = False
     dry_run: bool = False
     agent_panel_enabled: bool = True

@@ -13,6 +13,13 @@ import shutil
 _SAFE_NAME_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
 
 
+def _is_user_visible_artifact_path(path: str | Path) -> bool:
+    normalized = str(path or "").replace("\\", "/").strip("/")
+    if normalized == "target.original.pdb":
+        return True
+    return not normalized.endswith(".original.pdb")
+
+
 def new_run_id(prefix: str = "run") -> str:
     ts = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
     rand = uuid.uuid4().hex[:8]
@@ -236,6 +243,8 @@ def list_artifacts(
 
     if base.is_file():
         rel = base.resolve().relative_to(root)
+        if not _is_user_visible_artifact_path(rel):
+            return []
         stat = base.stat()
         return [
             {
@@ -252,6 +261,12 @@ def list_artifacts(
         if depth >= max_depth:
             dirnames[:] = []
         dirnames.sort()
+        visible_filenames: list[str] = []
+        for name in filenames:
+            rel = (Path(dirpath).resolve() / name).resolve().relative_to(root)
+            if _is_user_visible_artifact_path(rel):
+                visible_filenames.append(name)
+        filenames[:] = visible_filenames
         filenames.sort()
 
         for name in dirnames:

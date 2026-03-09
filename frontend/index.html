@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>K-Biofoundry | Protein Pipeline Console</title>
-    <link rel="stylesheet" href="./styles.css?v=20260305_analyze_charts1" />
+    <link rel="stylesheet" href="./styles.css?v=20260309_compare_input_fix" />
   </head>
   <body>
     <div class="bg-orb orb-a" aria-hidden="true"></div>
@@ -172,6 +172,14 @@
                       Select run mode and configure pipeline options.
                     </p>
                   </div>
+                  <div id="setupStepper" class="setup-stepper hidden">
+                    <div id="setupStepMeta" class="setup-step-meta"></div>
+                    <div id="setupStepDots" class="setup-step-dots"></div>
+                    <div class="setup-step-actions">
+                      <button id="setupStepPrev" class="ghost" type="button"></button>
+                      <button id="setupStepNext" class="ghost" type="button"></button>
+                    </div>
+                  </div>
                   <div id="questionConfigStack" class="question-stack section-stack"></div>
                   <div class="run-actions">
                     <button id="runBtn" class="primary" disabled>Run</button>
@@ -257,6 +265,7 @@
                     Select a run to show data completeness.
                   </span>
                 </div>
+                <div id="workflowReviewPanel" class="workflow-review hidden"></div>
                 <div class="status-actions">
                   <button id="pollBtn" class="ghost" data-i18n="monitor.poll">Poll Now</button>
                   <button id="cancelRunBtn" class="ghost" data-i18n="monitor.stop">Stop Run</button>
@@ -403,6 +412,9 @@
                   </select>
                   <select id="artifactCompareLeft" class="artifact-select"></select>
                   <select id="artifactCompareRight" class="artifact-select"></select>
+                  <button id="artifactCompareSwap" class="ghost" data-i18n="artifacts.preview.compare.swap">
+                    Swap
+                  </button>
                   <button id="artifactCompareRun" class="ghost" data-i18n="artifacts.preview.compare.run">
                     Compare 3D
                   </button>
@@ -410,6 +422,8 @@
                     Clear
                   </button>
                 </div>
+                <div id="artifactCompareRefs" class="compare-reference-strip"></div>
+                <div id="artifactComparePresets" class="compare-preset-strip"></div>
                 <div class="compare-studio-grid">
                   <div class="compare-studio-column">
                     <div class="status-subtitle" data-i18n="artifacts.preview.title">Artifact Preview</div>
@@ -726,10 +740,9 @@
                       <span data-i18n="analyze.hitList.weight.rmsd">RMSD W</span>
                       <input id="hitWeightRmsd" type="number" step="0.05" min="0" value="0.2" />
                     </label>
-                    <label>
-                      <span data-i18n="analyze.hitList.weight.novelty">Novelty W</span>
-                      <input id="hitWeightNovelty" type="number" step="0.05" min="0" value="0.1" />
-                    </label>
+                  </div>
+                  <div class="hit-list-note" data-i18n="analyze.hitList.identityInfo">
+                    Identity is shown as percent and does not affect ranking/filtering.
                   </div>
                   <div class="hit-list-actions">
                     <button id="hitListRefresh" class="ghost" data-i18n="analyze.hitList.refresh">
@@ -916,30 +929,55 @@
       </div>
     </div>
 
+    <div id="copilotBackdrop" class="copilot-backdrop hidden" aria-hidden="true"></div>
     <div id="copilotDrawer" class="copilot-drawer hidden" role="dialog" aria-modal="false">
       <div class="copilot-header">
         <div>
           <h4 data-i18n="copilot.title">Context Copilot</h4>
           <p data-i18n="copilot.desc">Ask about usage, interpretation, and next actions for current run.</p>
         </div>
-        <button id="copilotCloseBtn" class="ghost" data-i18n="common.close">Close</button>
-      </div>
-      <div class="copilot-section">
-        <div class="status-subtitle" data-i18n="copilot.context.title">Current Context</div>
-        <div id="copilotContext" class="copilot-context">
-          <div class="placeholder" data-i18n="copilot.context.empty">Select a run to load context.</div>
+        <div class="copilot-header-actions">
+          <button id="copilotClearBtn" class="ghost" data-i18n="copilot.clear">Clear</button>
+          <button id="copilotCloseBtn" class="ghost" data-i18n="common.close">Close</button>
         </div>
       </div>
-      <div class="copilot-section">
-        <div class="status-subtitle" data-i18n="copilot.quick.title">Quick Prompts</div>
-        <div class="copilot-quick">
-          <button id="copilotQuickUsage" class="ghost" data-i18n="copilot.quick.usage">How to use this page?</button>
-          <button id="copilotQuickInterpret" class="ghost" data-i18n="copilot.quick.interpret">Interpret current metrics</button>
-          <button id="copilotQuickNext" class="ghost" data-i18n="copilot.quick.next">What should I do next?</button>
-          <button id="copilotQuickResume" class="ghost" data-i18n="copilot.quick.resume">How does resume work?</button>
+      <div class="copilot-body">
+        <div class="copilot-section">
+          <div class="status-subtitle" data-i18n="copilot.summary.title">Live Snapshot</div>
+          <div id="copilotSummary" class="copilot-summary">
+            <div class="placeholder" data-i18n="copilot.summary.empty">Open a run to build the live snapshot.</div>
+          </div>
+        </div>
+        <div class="copilot-section copilot-section-grid">
+          <div class="copilot-panel">
+            <div class="status-subtitle" data-i18n="copilot.context.title">Current Context</div>
+            <div id="copilotContext" class="copilot-context">
+              <div class="placeholder" data-i18n="copilot.context.empty">Select a run to load context.</div>
+            </div>
+          </div>
+          <div class="copilot-panel">
+            <div class="status-subtitle" data-i18n="copilot.actions.title">Suggested Actions</div>
+            <div id="copilotActions" class="copilot-actions">
+              <div class="placeholder" data-i18n="copilot.actions.empty">Select a run to unlock in-place actions.</div>
+            </div>
+          </div>
+        </div>
+        <div class="copilot-section copilot-panel">
+          <div class="status-subtitle" data-i18n="copilot.quick.title">Quick Prompts</div>
+          <div class="copilot-quick">
+            <button id="copilotQuickUsage" class="ghost" data-i18n="copilot.quick.usage">How to use this page?</button>
+            <button id="copilotQuickInterpret" class="ghost" data-i18n="copilot.quick.interpret">Interpret current metrics</button>
+            <button id="copilotQuickSummary" class="ghost" data-i18n="copilot.quick.summary">Summarize this run</button>
+            <button id="copilotQuickCompare" class="ghost" data-i18n="copilot.quick.compare">Explain compare state</button>
+            <button id="copilotQuickNext" class="ghost" data-i18n="copilot.quick.next">What should I do next?</button>
+            <button id="copilotQuickResume" class="ghost" data-i18n="copilot.quick.resume">How does resume work?</button>
+          </div>
+        </div>
+        <div class="copilot-section copilot-panel copilot-chat-panel">
+          <div class="status-subtitle" data-i18n="copilot.conversation.title">Conversation</div>
+          <div id="copilotMessages" class="copilot-messages"></div>
         </div>
       </div>
-      <div id="copilotMessages" class="copilot-messages"></div>
       <div class="copilot-input-row">
         <input
           id="copilotInput"
@@ -953,6 +991,6 @@
     <button id="copilotFabBtn" class="primary copilot-fab" data-i18n="copilot.open">Copilot</button>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260305_novelty_tierdiff1"></script>
+    <script type="module" src="./app.js?v=20260309_compare_audit_fix"></script>
   </body>
 </html>

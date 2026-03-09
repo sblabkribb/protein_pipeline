@@ -97,6 +97,15 @@ def _as_text(value: object | None) -> str:
     return str(value)
 
 
+def _canonical_pipeline_stage_arg(value: object | None) -> str | None:
+    raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if not raw:
+        return None
+    if raw in {"wt_diff", "wtdiff"}:
+        return "novelty"
+    return raw
+
+
 _SAFE_ID_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
 
 
@@ -1066,34 +1075,93 @@ def _normalize_sequence(raw: object) -> str:
 
 
 def _sequence_identity(seq_a: str, seq_b: str) -> float | None:
-    a = _normalize_sequence(seq_a)
-    b = _normalize_sequence(seq_b)
-    if not a or not b:
+    stats = _sequence_difference_stats(seq_a, seq_b)
+    if not isinstance(stats, dict):
         return None
-    span = min(len(a), len(b))
-    if span <= 0:
+    ident = stats.get("identity")
+    return float(ident) if isinstance(ident, (int, float)) else None
+
+
+def _sequence_difference_stats(wt_seq: str, design_seq: str) -> dict[str, object] | None:
+    wt = _normalize_sequence(wt_seq)
+    design = _normalize_sequence(design_seq)
+    if not wt or not design:
         return None
+    compare_len = max(len(wt), len(design))
+    if compare_len <= 0:
+        return None
+    span = min(len(wt), len(design))
     matches = 0
     for i in range(span):
-        if a[i] == b[i]:
+        if wt[i] == design[i]:
             matches += 1
-    # Penalize insertions/deletions by normalizing by max length.
-    return float(matches) / float(max(len(a), len(b)))
+    diff_count = max(0, compare_len - matches)
+    identity = float(matches) / float(compare_len)
+    diff_ratio = float(diff_count) / float(compare_len)
+    return {
+        "wt_length": len(wt),
+        "design_length": len(design),
+        "compare_length": compare_len,
+        "match_count": matches,
+        "difference_count": diff_count,
+        "difference_ratio": diff_ratio,
+        "difference_pct": diff_ratio * 100.0,
+        "identity": identity,
+        "identity_pct": identity * 100.0,
+    }
 
 
-def _extract_primary_target_sequence(request: dict[str, object] | None) -> str | None:
+def _extract_design_chains_from_payload(payload: dict[str, object] | None) -> list[str]:
+    if not isinstance(payload, dict):
+        return []
+    for key in ("design_chains_used", "auto_selected_design_chains", "design_chains", "requested_design_chains"):
+        chains = _as_list_of_str(payload.get(key))
+        if chains:
+            return chains
+    return []
+
+
+def _load_primary_design_chains(run_root: Path | None) -> list[str]:
+    if run_root is None:
+        return []
+    for rel_path in ("query_pdb_alignment.json", "chain_strategy.json"):
+        payload = _load_json_file(run_root / rel_path)
+        if not isinstance(payload, dict):
+            continue
+        chains = _extract_design_chains_from_payload(payload)
+        if chains:
+            return chains
+    return []
+
+
+def _extract_primary_target_sequence(
+    request: dict[str, object] | None,
+    *,
+    run_root: Path | None = None,
+) -> str | None:
     if not isinstance(request, dict):
         return None
-    fasta_text = str(request.get("target_fasta") or "").strip()
-    if not fasta_text:
+    fasta_text = _as_text(request.get("target_fasta")).strip()
+    if fasta_text:
+        try:
+            records = _parse_fasta_or_sequence(fasta_text)
+        except Exception:
+            records = []
+        for rec in records:
+            seq = _normalize_sequence(rec.sequence)
+            if seq:
+                return seq
+    target_pdb = _as_text(request.get("target_pdb")).strip()
+    if not target_pdb:
         return None
+    design_chains = _load_primary_design_chains(run_root)
+    if not design_chains:
+        design_chains = _as_list_of_str(request.get("design_chains"))
     try:
-        records = parse_fasta(fasta_text)
+        rec = _target_record_from_pdb(target_pdb, design_chains=design_chains or None)
     except Exception:
         return None
-    if not records:
-        return None
-    seq = _normalize_sequence(records[0].sequence)
+    seq = _normalize_sequence(rec.sequence)
     return seq or None
 
 
@@ -1180,6 +1248,8 @@ def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -
         "soluprot_total": 0,
         "soluprot_passed": 0,
         "af2_candidate_total": 0,
+        "af2_plddt": [],
+        "af2_rmsd": [],
         "af2_selected_plddt": [],
         "af2_selected_rmsd": [],
         "af2_selected_total": 0,
@@ -1222,6 +1292,12 @@ def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -
             if candidate_total <= 0:
                 candidate_total = len(scores)
             out["af2_candidate_total"] += max(0, candidate_total)
+            candidate_metric_ids = candidate_ids if candidate_ids else list(scores.keys())
+            for seq_id in candidate_metric_ids:
+                if seq_id in scores and isinstance(scores.get(seq_id), (int, float)):
+                    out["af2_plddt"].append(float(scores.get(seq_id)))
+                if seq_id in rmsd_scores and isinstance(rmsd_scores.get(seq_id), (int, float)):
+                    out["af2_rmsd"].append(float(rmsd_scores.get(seq_id)))
             selected_ids = af2.get("selected_ids") if isinstance(af2.get("selected_ids"), list) else []
             if selected_ids:
                 out["af2_selected_total"] += len(selected_ids)
@@ -1249,6 +1325,8 @@ def _source_metrics_bucket() -> dict[str, object]:
         "soluprot_total": 0,
         "soluprot_passed": 0,
         "af2_candidate_total": 0,
+        "af2_candidate_plddt": [],
+        "af2_candidate_rmsd": [],
         "af2_selected_plddt": [],
         "af2_selected_rmsd": [],
         "af2_selected_total": 0,
@@ -1347,10 +1425,21 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
             scores = af2.get("scores") if isinstance(af2.get("scores"), dict) else {}
             rmsd_scores = af2.get("rmsd_scores") if isinstance(af2.get("rmsd_scores"), dict) else {}
             candidate_ids = af2.get("candidate_ids") if isinstance(af2.get("candidate_ids"), list) else []
-            for seq_id in candidate_ids:
+            candidate_metric_ids = candidate_ids if candidate_ids else list(scores.keys())
+            for seq_id in candidate_metric_ids:
                 source = _source_for_sequence_id(str(seq_id), lookup)
                 bucket = out[source]
                 bucket["af2_candidate_total"] = int(bucket.get("af2_candidate_total") or 0) + 1
+                raw_plddt = scores.get(seq_id)
+                if isinstance(raw_plddt, (int, float)):
+                    cast_plddt = bucket.get("af2_candidate_plddt")
+                    if isinstance(cast_plddt, list):
+                        cast_plddt.append(float(raw_plddt))
+                raw_rmsd = rmsd_scores.get(seq_id)
+                if isinstance(raw_rmsd, (int, float)):
+                    cast_rmsd = bucket.get("af2_candidate_rmsd")
+                    if isinstance(cast_rmsd, list):
+                        cast_rmsd.append(float(raw_rmsd))
             selected_ids = af2.get("selected_ids") if isinstance(af2.get("selected_ids"), list) else []
             for seq_id in selected_ids:
                 source = _source_for_sequence_id(str(seq_id), lookup)
@@ -1417,8 +1506,8 @@ def _collect_tier_compare_metrics(
         af2 = _load_json_file(tier_dir / "af2_scores.json")
         af2_candidate_total = 0
         af2_selected_total = 0
-        selected_plddt: list[float] = []
-        selected_rmsd: list[float] = []
+        candidate_plddt: list[float] = []
+        candidate_rmsd: list[float] = []
         if isinstance(af2, dict):
             scores = af2.get("scores") if isinstance(af2.get("scores"), dict) else {}
             rmsd_scores = af2.get("rmsd_scores") if isinstance(af2.get("rmsd_scores"), dict) else {}
@@ -1428,15 +1517,16 @@ def _collect_tier_compare_metrics(
                 af2_candidate_total = int(af2.get("candidate_count_after_budget") or 0)
             if af2_candidate_total <= 0:
                 af2_candidate_total = len(scores)
-            selected_ids = af2.get("selected_ids") if isinstance(af2.get("selected_ids"), list) else []
-            af2_selected_total = len(selected_ids)
-            for seq_id in selected_ids:
+            candidate_metric_ids = candidate_ids if candidate_ids else list(scores.keys())
+            for seq_id in candidate_metric_ids:
                 raw_plddt = scores.get(seq_id)
                 raw_rmsd = rmsd_scores.get(seq_id)
                 if isinstance(raw_plddt, (int, float)):
-                    selected_plddt.append(float(raw_plddt))
+                    candidate_plddt.append(float(raw_plddt))
                 if isinstance(raw_rmsd, (int, float)):
-                    selected_rmsd.append(float(raw_rmsd))
+                    candidate_rmsd.append(float(raw_rmsd))
+            selected_ids = af2.get("selected_ids") if isinstance(af2.get("selected_ids"), list) else []
+            af2_selected_total = len(selected_ids)
 
         rows.append(
             {
@@ -1449,8 +1539,8 @@ def _collect_tier_compare_metrics(
                 "af2_candidate_total": af2_candidate_total,
                 "af2_selected_total": af2_selected_total,
                 "af2_pass_rate": _safe_ratio(af2_selected_total, af2_candidate_total),
-                "plddt_median": _median(selected_plddt),
-                "rmsd_median": _median(selected_rmsd),
+                "plddt_median": _median(candidate_plddt),
+                "rmsd_median": _median(candidate_rmsd),
             }
         )
     rows.sort(key=lambda item: float(item.get("tier") or 0.0))
@@ -1504,16 +1594,16 @@ def _build_comparison_summary(
     af2_selected_total = int(design_metrics.get("af2_selected_total") or 0)
 
     plddt_raw = (
-        design_metrics.get("af2_selected_plddt")
-        if isinstance(design_metrics.get("af2_selected_plddt"), list)
+        design_metrics.get("af2_plddt")
+        if isinstance(design_metrics.get("af2_plddt"), list)
         else []
     )
     plddt_values = [float(v) for v in plddt_raw if isinstance(v, (int, float))]
     design_plddt_median = _median(plddt_values) if plddt_values else None
 
     rmsd_raw = (
-        design_metrics.get("af2_selected_rmsd")
-        if isinstance(design_metrics.get("af2_selected_rmsd"), list)
+        design_metrics.get("af2_rmsd")
+        if isinstance(design_metrics.get("af2_rmsd"), list)
         else []
     )
     rmsd_values = [float(v) for v in rmsd_raw if isinstance(v, (int, float))]
@@ -1532,13 +1622,13 @@ def _build_comparison_summary(
             "wt": wt_plddt,
             "design_median": design_plddt_median,
             "delta_design_minus_wt": _metric_delta(design_plddt_median, wt_plddt),
-            "design_total": af2_selected_total,
+            "design_total": af2_candidate_total,
         },
         "rmsd": {
             "wt": wt_rmsd,
             "design_median": design_rmsd_median,
             "delta_design_minus_wt": _metric_delta(design_rmsd_median, wt_rmsd),
-            "design_total": af2_selected_total,
+            "design_total": af2_candidate_total,
         },
     }
 
@@ -1552,10 +1642,10 @@ def _build_comparison_summary(
             bucket.get("soluprot_scores") if isinstance(bucket.get("soluprot_scores"), list) else []
         )
         source_plddt_values = (
-            bucket.get("af2_selected_plddt") if isinstance(bucket.get("af2_selected_plddt"), list) else []
+            bucket.get("af2_candidate_plddt") if isinstance(bucket.get("af2_candidate_plddt"), list) else []
         )
         source_rmsd_values = (
-            bucket.get("af2_selected_rmsd") if isinstance(bucket.get("af2_selected_rmsd"), list) else []
+            bucket.get("af2_candidate_rmsd") if isinstance(bucket.get("af2_candidate_rmsd"), list) else []
         )
         sol_total_src = int(bucket.get("soluprot_total") or 0)
         sol_passed_src = int(bucket.get("soluprot_passed") or 0)
@@ -1632,7 +1722,7 @@ def _build_comparison_summary(
     }
 
     return {
-        "version": 2,
+        "version": 3,
         "generated_at": _now_iso(),
         "wt_compare_enabled": wt_enabled,
         "wt_vs_design": wt_vs_design,
@@ -1956,7 +2046,20 @@ def _append_source_comparison_lines(
         "other": ("기타" if is_ko else "Other"),
     }
     ordered_sources = ["rfd3", "bioemu", "other"]
-    rows: list[tuple[str, dict[str, object], int, int, int, int, float | None, float | None, float | None]] = []
+    rows: list[
+        tuple[
+            str,
+            dict[str, object],
+            int,
+            int,
+            int,
+            int,
+            int,
+            float | None,
+            float | None,
+            float | None,
+        ]
+    ] = []
     for source in ordered_sources:
         bucket = source_metrics.get(source)
         if not isinstance(bucket, dict):
@@ -1964,16 +2067,18 @@ def _append_source_comparison_lines(
         backbone_count = int(bucket.get("backbone_count") or 0)
         sol_total = int(bucket.get("soluprot_total") or 0)
         sol_passed = int(bucket.get("soluprot_passed") or 0)
+        af2_candidate_total = int(bucket.get("af2_candidate_total") or 0)
         af2_selected_total = int(bucket.get("af2_selected_total") or 0)
         sol_scores = bucket.get("soluprot_scores") if isinstance(bucket.get("soluprot_scores"), list) else []
         plddt_vals = (
-            bucket.get("af2_selected_plddt") if isinstance(bucket.get("af2_selected_plddt"), list) else []
+            bucket.get("af2_candidate_plddt") if isinstance(bucket.get("af2_candidate_plddt"), list) else []
         )
-        rmsd_vals = bucket.get("af2_selected_rmsd") if isinstance(bucket.get("af2_selected_rmsd"), list) else []
+        rmsd_vals = bucket.get("af2_candidate_rmsd") if isinstance(bucket.get("af2_candidate_rmsd"), list) else []
         if (
             backbone_count <= 0
             and sol_total <= 0
             and sol_passed <= 0
+            and af2_candidate_total <= 0
             and af2_selected_total <= 0
             and not sol_scores
             and not plddt_vals
@@ -1987,6 +2092,7 @@ def _append_source_comparison_lines(
                 backbone_count,
                 sol_total,
                 sol_passed,
+                af2_candidate_total,
                 af2_selected_total,
                 _median([float(x) for x in sol_scores if isinstance(x, (int, float))]) if sol_scores else None,
                 _median([float(x) for x in plddt_vals if isinstance(x, (int, float))]) if plddt_vals else None,
@@ -1998,16 +2104,30 @@ def _append_source_comparison_lines(
         return
 
     lines.append("## 백본 소스 비교 (RFD3 vs BioEmu)" if is_ko else "## Backbone Source Comparison (RFD3 vs BioEmu)")
-    lines.append("| Source | Backbones | SoluProt pass | Median SoluProt | ColabFold selected | Median pLDDT | Median RMSD |")
+    lines.append(
+        "| Source | Backbones | SoluProt pass | Median SoluProt | ColabFold selected/candidates | Median pLDDT | Median RMSD |"
+    )
     lines.append("|---|---:|---:|---:|---:|---:|---:|")
-    for source, _bucket, backbone_count, sol_total, sol_passed, af2_selected_total, sol_med, plddt_med, rmsd_med in rows:
+    for (
+        source,
+        _bucket,
+        backbone_count,
+        sol_total,
+        sol_passed,
+        af2_candidate_total,
+        af2_selected_total,
+        sol_med,
+        plddt_med,
+        rmsd_med,
+    ) in rows:
         pass_rate = (sol_passed / sol_total) if sol_total else None
         pass_text = f"{sol_passed}/{sol_total} ({pass_rate:.1%})" if pass_rate is not None else "-"
         sol_text = f"{sol_med:.3f}" if sol_med is not None else "-"
         plddt_text = f"{plddt_med:.1f}" if plddt_med is not None else "-"
         rmsd_text = f"{rmsd_med:.2f}" if rmsd_med is not None else "-"
+        af2_text = f"{af2_selected_total}/{af2_candidate_total}" if af2_candidate_total > 0 else str(af2_selected_total)
         lines.append(
-            f"| {source_names.get(source, source)} | {backbone_count} | {pass_text} | {sol_text} | {af2_selected_total} | {plddt_text} | {rmsd_text} |"
+            f"| {source_names.get(source, source)} | {backbone_count} | {pass_text} | {sol_text} | {af2_text} | {plddt_text} | {rmsd_text} |"
         )
 
     rfd3_bucket = source_metrics.get("rfd3") if isinstance(source_metrics.get("rfd3"), dict) else {}
@@ -2093,7 +2213,9 @@ def _append_extended_comparison_lines(
 
     if tier_rows:
         lines.append("- Tier summary:" if not is_ko else "- 티어별 요약:")
-        lines.append("| Tier | Designs | SoluProt pass | ColabFold pass | Median pLDDT | Median RMSD |")
+        lines.append(
+            "| Tier | Designs | SoluProt pass | ColabFold pass | Median pLDDT | Median RMSD |"
+        )
         lines.append("|---:|---:|---:|---:|---:|---:|")
         for row in tier_rows:
             if not isinstance(row, dict):
@@ -2180,6 +2302,26 @@ def _format_metric(value: object, digits: int) -> str:
     if isinstance(value, (int, float)):
         return f"{float(value):.{digits}f}"
     return "-"
+
+
+def _format_wt_difference(value: object) -> str:
+    if not isinstance(value, dict):
+        return "-"
+    diff_count = value.get("wt_diff_count")
+    compare_len = value.get("wt_compare_len")
+    diff_pct = value.get("wt_diff_pct")
+    if not isinstance(diff_count, (int, float)) or not isinstance(compare_len, (int, float)) or float(compare_len) <= 0:
+        return "-"
+    if isinstance(diff_pct, (int, float)):
+        return f"{int(diff_count)}/{int(compare_len)} ({float(diff_pct):.1f}%)"
+    return f"{int(diff_count)}/{int(compare_len)}"
+
+
+def _display_pipeline_stage(value: object | None) -> str:
+    raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if raw in {"novelty", "wt_diff", "wtdiff"}:
+        return "WT Diff"
+    return str(value or "")
 
 
 def _append_report_snapshot_lines(
@@ -2315,7 +2457,7 @@ def _append_top_hit_lines(
         run_root=run_root,
         request=request,
         summary=summary,
-        weights={"soluprot": 0.4, "plddt": 0.3, "rmsd": 0.2, "novelty": 0.1},
+        weights={"soluprot": 0.4, "plddt": 0.3, "rmsd": 0.2, "novelty": 0.0},
         rmsd_ref=5.0,
     )
     lines.append("## 주요 후보 (Hit List)" if is_ko else "## Top Candidate Hit List")
@@ -2333,8 +2475,8 @@ def _append_top_hit_lines(
             f"- {len(rows)} candidates ranked, median score={_format_metric(stats.get('score_median'), 1)}"
         )
     )
-    lines.append("| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | ColabFold selected |")
-    lines.append("|---:|---|---|---:|---:|---:|---:|---:|---|")
+    lines.append("| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | WT Diff (n/len, %) | ColabFold selected |")
+    lines.append("|---:|---|---|---:|---:|---:|---:|---:|---:|---|")
     for row in rows[: max(1, int(top_n))]:
         lines.append(
             "| "
@@ -2348,6 +2490,7 @@ def _append_top_hit_lines(
                     _format_metric(row.get("soluprot"), 3),
                     _format_metric(row.get("plddt"), 1),
                     _format_metric(row.get("rmsd"), 2),
+                    _format_wt_difference(row),
                     "yes" if bool(row.get("af2_selected")) else "no",
                 ]
             )
@@ -2397,8 +2540,10 @@ def _build_report_text(
         target_fasta = bool(str(request.get("target_fasta") or "").strip())
         lines.append(f"- target_pdb: {'yes' if target_pdb else 'no'}")
         lines.append(f"- target_fasta: {'yes' if target_fasta else 'no'}")
+        if request.get("start_from"):
+            lines.append(f"- start_from: {_display_pipeline_stage(request.get('start_from'))}")
         if request.get("stop_after"):
-            lines.append(f"- stop_after: {request.get('stop_after')}")
+            lines.append(f"- stop_after: {_display_pipeline_stage(request.get('stop_after'))}")
         if request.get("design_chains"):
             lines.append(f"- design_chains: {request.get('design_chains')}")
         if request.get("rfd3_contig"):
@@ -2522,16 +2667,16 @@ def _build_report_text(
             reason = wt_af2.get("reason") or wt_af2.get("error") or "skipped"
             lines.append(f"- WT ColabFold: skipped ({reason})")
 
-        plddt_vals = design_metrics.get("af2_selected_plddt") or []
-        rmsd_vals = design_metrics.get("af2_selected_rmsd") or []
-        selected_total = int(design_metrics.get("af2_selected_total") or 0)
+        plddt_vals = design_metrics.get("af2_plddt") or []
+        rmsd_vals = design_metrics.get("af2_rmsd") or []
+        af2_total = int(design_metrics.get("af2_candidate_total") or 0)
         if plddt_vals:
             plddt_median = _median([float(x) for x in plddt_vals if isinstance(x, (int, float))])
             if plddt_median is not None:
                 design_plddt_median = float(plddt_median)
             plddt_max = max(plddt_vals) if plddt_vals else None
             lines.append(
-                f"- Designs ColabFold pLDDT: median={plddt_median:.1f} max={float(plddt_max):.1f} (n={selected_total})"
+                f"- Designs ColabFold pLDDT: median={plddt_median:.1f} max={float(plddt_max):.1f} (n={af2_total})"
             )
             if isinstance(wt_af2, dict) and isinstance(wt_af2.get("best_plddt"), (int, float)):
                 delta = float(plddt_median) - float(wt_af2.get("best_plddt"))
@@ -2714,8 +2859,10 @@ def _build_report_text_ko(
         target_fasta = bool(str(request.get("target_fasta") or "").strip())
         lines.append(f"- target_pdb: {'yes' if target_pdb else 'no'}")
         lines.append(f"- target_fasta: {'yes' if target_fasta else 'no'}")
+        if request.get("start_from"):
+            lines.append(f"- start_from: {_display_pipeline_stage(request.get('start_from'))}")
         if request.get("stop_after"):
-            lines.append(f"- stop_after: {request.get('stop_after')}")
+            lines.append(f"- stop_after: {_display_pipeline_stage(request.get('stop_after'))}")
         if request.get("design_chains"):
             lines.append(f"- design_chains: {request.get('design_chains')}")
         if request.get("rfd3_contig"):
@@ -2839,16 +2986,16 @@ def _build_report_text_ko(
             reason = wt_af2.get("reason") or wt_af2.get("error") or "skipped"
             lines.append(f"- WT ColabFold: skipped ({reason})")
 
-        plddt_vals = design_metrics.get("af2_selected_plddt") or []
-        rmsd_vals = design_metrics.get("af2_selected_rmsd") or []
-        selected_total = int(design_metrics.get("af2_selected_total") or 0)
+        plddt_vals = design_metrics.get("af2_plddt") or []
+        rmsd_vals = design_metrics.get("af2_rmsd") or []
+        af2_total = int(design_metrics.get("af2_candidate_total") or 0)
         if plddt_vals:
             plddt_median = _median([float(x) for x in plddt_vals if isinstance(x, (int, float))])
             if plddt_median is not None:
                 design_plddt_median = float(plddt_median)
             plddt_max = max(plddt_vals) if plddt_vals else None
             lines.append(
-                f"- Designs ColabFold pLDDT: median={plddt_median:.1f} max={float(plddt_max):.1f} (n={selected_total})"
+                f"- Designs ColabFold pLDDT: median={plddt_median:.1f} max={float(plddt_max):.1f} (n={af2_total})"
             )
             if isinstance(wt_af2, dict) and isinstance(wt_af2.get("best_plddt"), (int, float)):
                 delta = float(plddt_median) - float(wt_af2.get("best_plddt"))
@@ -3298,7 +3445,7 @@ def _compare_runs(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
 
 
 def _normalize_hit_weights(raw: object | None) -> dict[str, float]:
-    defaults = {"soluprot": 0.4, "plddt": 0.3, "rmsd": 0.2, "novelty": 0.1}
+    defaults = {"soluprot": 0.4, "plddt": 0.3, "rmsd": 0.2, "novelty": 0.0}
     if not isinstance(raw, dict):
         return defaults
     out: dict[str, float] = {}
@@ -3310,6 +3457,11 @@ def _normalize_hit_weights(raw: object | None) -> dict[str, float]:
             out[key] = defaults[key]
     if sum(out.values()) <= 0.0:
         return defaults
+    scored_sum = out.get("soluprot", 0.0) + out.get("plddt", 0.0) + out.get("rmsd", 0.0)
+    if scored_sum <= 0.0:
+        out["soluprot"] = defaults["soluprot"]
+        out["plddt"] = defaults["plddt"]
+        out["rmsd"] = defaults["rmsd"]
     return out
 
 
@@ -3330,8 +3482,9 @@ def _build_hit_list_rows(
     tiers = summary.get("tiers")
     if not isinstance(tiers, list):
         return []
-    target_sequence = _extract_primary_target_sequence(request)
-    total_weight = float(sum(max(0.0, float(w)) for w in weights.values()))
+    target_sequence = _extract_primary_target_sequence(request, run_root=run_root)
+    scored_weight_keys = ("soluprot", "plddt", "rmsd")
+    total_weight = float(sum(max(0.0, float(weights.get(key, 0.0))) for key in scored_weight_keys))
     rows: list[dict[str, object]] = []
 
     for tier in tiers:
@@ -3396,8 +3549,14 @@ def _build_hit_list_rows(
             soluprot = sol_scores.get(seq_id)
             plddt = af2_scores.get(seq_id)
             rmsd = af2_rmsd.get(seq_id)
-            wt_identity = _sequence_identity(target_sequence or "", sequence) if target_sequence else None
-            novelty = (1.0 - wt_identity) if wt_identity is not None else None
+            wt_compare = _sequence_difference_stats(target_sequence or "", sequence) if target_sequence else None
+            wt_identity = wt_compare.get("identity") if isinstance(wt_compare, dict) else None
+            wt_identity_pct = wt_compare.get("identity_pct") if isinstance(wt_compare, dict) else None
+            wt_diff_count = wt_compare.get("difference_count") if isinstance(wt_compare, dict) else None
+            wt_compare_len = wt_compare.get("compare_length") if isinstance(wt_compare, dict) else None
+            wt_diff_ratio = wt_compare.get("difference_ratio") if isinstance(wt_compare, dict) else None
+            wt_diff_pct = wt_compare.get("difference_pct") if isinstance(wt_compare, dict) else None
+            novelty = wt_diff_ratio if isinstance(wt_diff_ratio, (int, float)) else None
 
             component_scores: dict[str, float] = {}
             if soluprot is not None:
@@ -3411,7 +3570,8 @@ def _build_hit_list_rows(
 
             used_weight = 0.0
             weighted_sum = 0.0
-            for key, weight in weights.items():
+            for key in scored_weight_keys:
+                weight = weights.get(key)
                 score = component_scores.get(key)
                 if score is None:
                     continue
@@ -3438,6 +3598,11 @@ def _build_hit_list_rows(
                     "plddt": plddt,
                     "rmsd": rmsd,
                     "wt_identity": wt_identity,
+                    "wt_identity_pct": wt_identity_pct,
+                    "wt_diff_count": wt_diff_count,
+                    "wt_compare_len": wt_compare_len,
+                    "wt_diff_ratio": wt_diff_ratio,
+                    "wt_diff_pct": wt_diff_pct,
                     "novelty": novelty,
                     "soluprot_passed": seq_id in passed_ids,
                     "af2_candidate": seq_id in af2_candidates or seq_id in af2_scores,
@@ -3612,6 +3777,11 @@ def _export_results_package(runner: PipelineRunner, arguments: dict[str, Any]) -
             "plddt",
             "rmsd",
             "wt_identity",
+            "wt_identity_pct",
+            "wt_diff_count",
+            "wt_compare_len",
+            "wt_diff_ratio",
+            "wt_diff_pct",
             "novelty",
             "soluprot_passed",
             "af2_selected",
@@ -3705,7 +3875,8 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     if strict_target and not target_fasta.strip() and not target_pdb.strip() and not has_rfd3:
         raise ValueError("One of target_fasta or target_pdb or rfd3 inputs is required")
 
-    stop_after = (str(args.get("stop_after")).strip().lower() if args.get("stop_after") else None)
+    start_from = _canonical_pipeline_stage_arg(args.get("start_from"))
+    stop_after = _canonical_pipeline_stage_arg(args.get("stop_after"))
     dry_run = _as_bool(args.get("dry_run"), False)
     agent_panel_enabled = _as_bool(args.get("agent_panel_enabled"), True)
     auto_recover = _as_bool(args.get("auto_recover"), True)
@@ -3721,7 +3892,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     af2_provider = _as_af2_provider(args.get("af2_provider"), "colabfold")
     surface_only = _as_bool(args.get("surface_only"), False)
     ligand_mask_use_original_target = _as_bool(args.get("ligand_mask_use_original_target"), True)
-    novelty_enabled = _as_bool(args.get("novelty_enabled"), False)
+    novelty_enabled = _as_bool(args.get("novelty_enabled"), True)
     surface_min_rel = _as_float(args.get("surface_min_rel"), 0.2)
     surface_min_abs = _as_float(args.get("surface_min_abs"), 10.0)
     pi_min = _as_float(args.get("pi_min"), 0.0) if str(args.get("pi_min") or "").strip() else None
@@ -3824,6 +3995,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         msa_min_identity=_as_float(args.get("msa_min_identity"), 0.0),
         query_pdb_min_identity=_as_float(args.get("query_pdb_min_identity"), 0.9),
         query_pdb_policy=str(args.get("query_pdb_policy") or "error"),
+        start_from=start_from,
         stop_after=stop_after,
         force=_as_bool(args.get("force"), False),
         dry_run=dry_run,
@@ -3922,6 +4094,7 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "query_pdb_min_identity": {"type": "number"},
             "query_pdb_policy": {"type": "string", "enum": ["error", "warn", "ignore"]},
             "run_id": {"type": "string"},
+            "start_from": {"type": "string"},
             "stop_after": {"type": "string"},
             "force": {"type": "boolean"},
             "dry_run": {"type": "boolean"},
@@ -3949,7 +4122,7 @@ def tool_definitions() -> list[dict[str, Any]]:
     return [
         {
             "name": "pipeline.run",
-            "description": "Run the full protein design pipeline (MMseqs2→mask→ProteinMPNN→SoluProt→ColabFold/AF2→optional novelty).",
+            "description": "Run the full protein design pipeline (MMseqs2→mask→ProteinMPNN→SoluProt→ColabFold/AF2→optional WT Diff).",
             "inputSchema": run_schema,
         },
         {
