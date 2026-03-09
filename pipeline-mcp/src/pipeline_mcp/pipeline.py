@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import copy
+from dataclasses import MISSING
 from dataclasses import asdict
 from dataclasses import dataclass
+from dataclasses import fields
 import base64
 import hashlib
 import json
@@ -57,6 +60,90 @@ _AF2_ALLOWED_AA = set("ACDEFGHIKLMNPQRSTVWYX")
 _AF2_PROVIDER_COLABFOLD = "colabfold"
 _AF2_PROVIDER_AF2 = "af2"
 _PIPELINE_STAGE_ORDER = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"]
+_SUMMARY_ARTIFACTS = (
+    "summary.json",
+    "comparisons.json",
+    "report.md",
+    "report_ko.md",
+    "agent_panel_report.md",
+    "agent_panel_report_ko.md",
+    "agent_panel.jsonl",
+)
+_PARTIAL_RERUN_IGNORED_FIELDS = {"start_from", "stop_after", "force", "auto_recover", "agent_panel_enabled"}
+_PARTIAL_RERUN_DESIGN_FIELDS = {
+    "target_fasta",
+    "target_pdb",
+    "rfd3_inputs",
+    "rfd3_inputs_text",
+    "rfd3_input_files",
+    "rfd3_input_pdb",
+    "rfd3_spec_name",
+    "rfd3_contig",
+    "rfd3_ligand",
+    "rfd3_select_unfixed_sequence",
+    "rfd3_cli_args",
+    "rfd3_env",
+    "rfd3_design_index",
+    "rfd3_use_ensemble",
+    "rfd3_max_return_designs",
+    "rfd3_partial_t",
+    "bioemu_use",
+    "bioemu_sequence",
+    "bioemu_num_samples",
+    "bioemu_batch_size_100",
+    "bioemu_model_name",
+    "bioemu_filter_samples",
+    "bioemu_base_seed",
+    "bioemu_max_return_structures",
+    "bioemu_env",
+    "design_chains",
+    "fixed_positions_extra",
+    "conservation_tiers",
+    "conservation_mode",
+    "conservation_weighting",
+    "conservation_cluster_method",
+    "conservation_cluster_min_seq_id",
+    "conservation_cluster_coverage",
+    "conservation_cluster_cov_mode",
+    "conservation_cluster_kmer_per_seq",
+    "ligand_mask_distance",
+    "ligand_resnames",
+    "ligand_atom_chains",
+    "ligand_mask_use_original_target",
+    "surface_only",
+    "surface_min_rel",
+    "surface_min_abs",
+    "pdb_strip_nonpositive_resseq",
+    "pdb_renumber_resseq_from_1",
+    "num_seq_per_tier",
+    "batch_size",
+    "sampling_temp",
+    "seed",
+    "mmseqs_target_db",
+    "mmseqs_max_seqs",
+    "mmseqs_threads",
+    "mmseqs_use_gpu",
+    "msa_min_coverage",
+    "msa_min_identity",
+    "query_pdb_min_identity",
+    "query_pdb_policy",
+    "mask_consensus_apply",
+    "dry_run",
+}
+_PARTIAL_RERUN_SOLUPROT_FIELDS = {"soluprot_cutoff", "pi_min", "pi_max"}
+_PARTIAL_RERUN_AF2_FIELDS = {
+    "af2_model_preset",
+    "af2_db_preset",
+    "af2_max_template_date",
+    "af2_extra_flags",
+    "af2_provider",
+    "af2_plddt_cutoff",
+    "af2_rmsd_cutoff",
+    "af2_max_candidates_per_tier",
+    "af2_top_k",
+    "af2_sequence_ids",
+}
+_PARTIAL_RERUN_NOVELTY_FIELDS = {"novelty_enabled", "novelty_target_db", "wt_compare"}
 
 
 def _normalize_pipeline_stage(value: object | None) -> str | None:
@@ -144,7 +231,7 @@ def _clear_stage_outputs_from(root: Path, *, start_from: str) -> list[str]:
             removed.append(f"{rel_path}{suffix}")
 
     # These are regenerated from current run outputs and should not be stale across partial reruns.
-    for rel in ("summary.json", "comparisons.json", "report.md", "report.ko.md", "agent_panel_report.md", "agent_panel.jsonl"):
+    for rel in _SUMMARY_ARTIFACTS:
         _remove(rel)
 
     if start_from == "msa":
@@ -183,6 +270,7 @@ def _clear_stage_outputs_from(root: Path, *, start_from: str) -> list[str]:
             "ligand_mask.json",
             "surface_mask.json",
             "mask_consensus.json",
+            "wt",
             "diffdock",
             "tiers",
             "target.pdb",
@@ -203,12 +291,14 @@ def _clear_stage_outputs_from(root: Path, *, start_from: str) -> list[str]:
             "ligand_mask.json",
             "surface_mask.json",
             "mask_consensus.json",
+            "wt",
             "diffdock",
             "tiers",
         ):
             _remove(rel)
         return removed
 
+    _remove("wt")
     removed.extend(_clear_tier_outputs_from_stage(root, start_from=start_from))
     return removed
 
@@ -271,6 +361,73 @@ def _stable_payload_hash(payload: Any) -> str:
     except Exception:
         text = json.dumps(_safe_json(payload), sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(str(text).encode("utf-8")).hexdigest()
+
+
+def _normalize_request_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _normalize_request_value(item) for key, item in sorted(value.items(), key=lambda kv: str(kv[0]))}
+    if isinstance(value, list):
+        return [_normalize_request_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_normalize_request_value(item) for item in value]
+    return value
+
+
+def _default_request_field_value(field_info: Any) -> Any:
+    if field_info.default is not MISSING:
+        return copy.deepcopy(field_info.default)
+    if field_info.default_factory is not MISSING:  # type: ignore[comparison-overlap]
+        return field_info.default_factory()
+    return None
+
+
+def _normalize_request_payload(payload: dict[str, Any] | PipelineRequest) -> dict[str, Any]:
+    raw = asdict(payload) if isinstance(payload, PipelineRequest) else dict(payload or {})
+    normalized: dict[str, Any] = {}
+    for field_info in fields(PipelineRequest):
+        key = field_info.name
+        value = raw.get(key, _default_request_field_value(field_info))
+        if key in {"start_from", "stop_after"}:
+            value = _normalize_pipeline_stage(value)
+        elif key == "af2_provider":
+            value = _normalize_af2_provider(value)
+        normalized[key] = _normalize_request_value(value)
+    return normalized
+
+
+def _changed_request_fields(saved_payload: dict[str, Any], current_payload: dict[str, Any]) -> set[str]:
+    changed: set[str] = set()
+    for field_info in fields(PipelineRequest):
+        key = field_info.name
+        if key in _PARTIAL_RERUN_IGNORED_FIELDS:
+            continue
+        if saved_payload.get(key) != current_payload.get(key):
+            changed.add(key)
+    return changed
+
+
+def _minimum_safe_partial_rerun_stage(
+    saved_payload: dict[str, Any], current_payload: dict[str, Any]
+) -> tuple[str | None, list[str]]:
+    changed = _changed_request_fields(saved_payload, current_payload)
+    if not changed:
+        return None, []
+
+    for stage_name, stage_keys in (
+        ("design", _PARTIAL_RERUN_DESIGN_FIELDS),
+        ("soluprot", _PARTIAL_RERUN_SOLUPROT_FIELDS),
+        ("af2", _PARTIAL_RERUN_AF2_FIELDS),
+        ("novelty", _PARTIAL_RERUN_NOVELTY_FIELDS),
+    ):
+        matched = sorted(changed & stage_keys)
+        if matched:
+            return stage_name, matched
+
+    return "design", sorted(changed)
 
 
 def _runpod_meta_matches(meta: dict[str, Any], expected: dict[str, Any]) -> bool:
@@ -1173,7 +1330,7 @@ class PipelineRunner:
         paths = init_run(self.output_root, run_id)
         set_status(paths, stage="init", state="running")
 
-        write_json(paths.request_json, asdict(request))
+        current_request_payload = _normalize_request_payload(request)
         errors: list[str] = []
         af2_provider = _normalize_af2_provider(getattr(request, "af2_provider", None))
         af2_client = self.colabfold if af2_provider == _AF2_PROVIDER_COLABFOLD else self.af2
@@ -1302,6 +1459,46 @@ class PipelineRunner:
                     message="start_from='bioemu' requires bioemu_use=true.",
                 )
 
+            if normalized_start_from not in {None, "msa"}:
+                if not paths.request_json.exists():
+                    raise PipelineInputRequired(
+                        stage="init",
+                        message=(
+                            f"start_from={normalized_start_from!r} requires an existing run with request.json. "
+                            "Use start_from='msa' for a new run_id."
+                        ),
+                    )
+                try:
+                    saved_request_payload = _normalize_request_payload(
+                        json.loads(paths.request_json.read_text(encoding="utf-8"))
+                    )
+                except Exception as exc:
+                    raise PipelineInputRequired(
+                        stage="init",
+                        message=(
+                            f"Cannot safely continue run {run_id!r}: failed to read saved request.json ({exc}). "
+                            "Use start_from='msa' or a new run_id."
+                        ),
+                    ) from exc
+                minimum_stage, changed_fields = _minimum_safe_partial_rerun_stage(
+                    saved_request_payload,
+                    current_request_payload,
+                )
+                if minimum_stage is not None and _stage_index(normalized_start_from) > _stage_index(minimum_stage):
+                    changed_list = ", ".join(changed_fields[:8])
+                    if len(changed_fields) > 8:
+                        changed_list = f"{changed_list}, ... (+{len(changed_fields) - 8})"
+                    raise PipelineInputRequired(
+                        stage="init",
+                        message=(
+                            f"Unsafe partial rerun for run {run_id!r}: changed request fields ({changed_list}) "
+                            f"require start_from={minimum_stage!r} or earlier. Use a new run_id if you want to keep "
+                            "the previous outputs."
+                        ),
+                    )
+
+            write_json(paths.request_json, current_request_payload)
+
             if normalized_start_from is not None:
                 cleared = _clear_stage_outputs_from(paths.root, start_from=normalized_start_from)
                 detail = f"start_from={normalized_start_from}"
@@ -1394,6 +1591,15 @@ class PipelineRunner:
                 nonlocal msa_tsv_path, msa_a3m_path, msa_filtered_a3m_path
 
                 target_query_fasta = to_fasta([target_record])
+                msa_request_hash = _stable_payload_hash(
+                    {
+                        "target_query_fasta": target_query_fasta,
+                        "target_db": request.mmseqs_target_db,
+                        "max_seqs": request.mmseqs_max_seqs,
+                        "threads": request.mmseqs_threads,
+                        "use_gpu": request.mmseqs_use_gpu,
+                    }
+                )
                 _write_text(paths.root / "target.fasta", target_query_fasta)
 
                 set_status(paths, stage="mmseqs_msa", state="running")
@@ -1406,6 +1612,7 @@ class PipelineRunner:
                             msa_dir / "runpod_job.json",
                             {
                                 "job_id": job_id,
+                                "request_hash": msa_request_hash,
                                 "target_db": request.mmseqs_target_db,
                                 "max_seqs": request.mmseqs_max_seqs,
                                 "threads": request.mmseqs_threads,
@@ -1450,6 +1657,19 @@ class PipelineRunner:
                 set_status(paths, stage="conservation", state="running")
                 conservation_weights: list[float] | None = None
                 weighting = str(getattr(request, "conservation_weighting", "none") or "none").strip().lower()
+                conservation_request_hash = _stable_payload_hash(
+                    {
+                        "filtered_a3m_sha256": _sha256_text(filtered_a3m_text),
+                        "tiers": request.conservation_tiers,
+                        "mode": request.conservation_mode,
+                        "weighting": weighting,
+                        "cluster_method": request.conservation_cluster_method,
+                        "cluster_min_seq_id": request.conservation_cluster_min_seq_id,
+                        "cluster_coverage": request.conservation_cluster_coverage,
+                        "cluster_cov_mode": request.conservation_cluster_cov_mode,
+                        "cluster_kmer_per_seq": request.conservation_cluster_kmer_per_seq,
+                    }
+                )
                 if weighting not in {"none", "mmseqs_cluster"}:
                     raise ValueError("conservation_weighting must be one of: none, mmseqs_cluster")
                 if weighting == "mmseqs_cluster":
@@ -1537,6 +1757,8 @@ class PipelineRunner:
                     "mode": request.conservation_mode,
                     "tiers": request.conservation_tiers,
                     "weighting": weighting,
+                    "request_hash": conservation_request_hash,
+                    "filtered_a3m_sha256": _sha256_text(filtered_a3m_text),
                 }
                 conservation_path = str(paths.root / "conservation.json")
                 write_json(Path(conservation_path), conservation_payload)
@@ -1546,6 +1768,15 @@ class PipelineRunner:
             def _fallback_msa(target_record: FastaRecord, *, reason: str) -> str:
                 nonlocal msa_tsv_path, msa_a3m_path, msa_filtered_a3m_path
                 target_query_fasta = to_fasta([target_record])
+                msa_request_hash = _stable_payload_hash(
+                    {
+                        "target_query_fasta": target_query_fasta,
+                        "target_db": request.mmseqs_target_db,
+                        "max_seqs": request.mmseqs_max_seqs,
+                        "threads": request.mmseqs_threads,
+                        "use_gpu": request.mmseqs_use_gpu,
+                    }
+                )
                 _write_text(paths.root / "target.fasta", target_query_fasta)
 
                 query = target_record.sequence
@@ -1558,6 +1789,16 @@ class PipelineRunner:
                 tsv = ""
                 _write_text(msa_dir / "result.tsv", tsv)
                 _write_text(msa_dir / "result.a3m", a3m)
+                write_json(
+                    msa_dir / "request_meta.json",
+                    {
+                        "request_hash": msa_request_hash,
+                        "query_sha256": _sha256_text(target_query_fasta),
+                        "query_length": len(query),
+                        "cached": False,
+                        "recovered": True,
+                    },
+                )
                 msa_tsv_path = str(msa_dir / "result.tsv")
                 msa_a3m_path = str(msa_dir / "result.a3m")
 
@@ -1583,6 +1824,14 @@ class PipelineRunner:
                 fallback_a3m = filtered_a3m_text.strip()
                 if not fallback_a3m and target_record is not None:
                     fallback_a3m = to_fasta([target_record])
+                conservation_request_hash = _stable_payload_hash(
+                    {
+                        "filtered_a3m_sha256": _sha256_text(fallback_a3m),
+                        "tiers": request.conservation_tiers,
+                        "mode": request.conservation_mode,
+                        "weighting": "none",
+                    }
+                )
                 conservation = compute_conservation(
                     fallback_a3m,
                     tiers=request.conservation_tiers,
@@ -1596,6 +1845,8 @@ class PipelineRunner:
                     "mode": request.conservation_mode,
                     "tiers": request.conservation_tiers,
                     "weighting": "none",
+                    "request_hash": conservation_request_hash,
+                    "filtered_a3m_sha256": _sha256_text(fallback_a3m),
                     "recovery": {"reason": reason, "fallback": True},
                 }
                 conservation_path = str(paths.root / "conservation.json")
@@ -4690,10 +4941,31 @@ class PipelineRunner:
     ) -> tuple[str, str]:
         tsv_path = msa_dir / "result.tsv"
         a3m_path = msa_dir / "result.a3m"
+        meta_path = msa_dir / "request_meta.json"
         runpod_job_path = msa_dir / "runpod_job.json"
+        msa_request_hash = _stable_payload_hash(
+            {
+                "target_query_fasta": target_query_fasta,
+                "target_db": request.mmseqs_target_db,
+                "max_seqs": request.mmseqs_max_seqs,
+                "threads": request.mmseqs_threads,
+                "use_gpu": request.mmseqs_use_gpu,
+            }
+        )
 
         if tsv_path.exists() and a3m_path.exists() and not request.force:
-            return tsv_path.read_text(encoding="utf-8"), a3m_path.read_text(encoding="utf-8")
+            if meta_path.exists():
+                try:
+                    cached_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                except Exception:
+                    cached_meta = None
+                cached_hash = str(cached_meta.get("request_hash") or "").strip() if isinstance(cached_meta, dict) else ""
+                if cached_hash and cached_hash != msa_request_hash:
+                    pass
+                elif cached_hash:
+                    return tsv_path.read_text(encoding="utf-8"), a3m_path.read_text(encoding="utf-8")
+            else:
+                return tsv_path.read_text(encoding="utf-8"), a3m_path.read_text(encoding="utf-8")
 
         if request.dry_run:
             tsv = ""
@@ -4707,6 +4979,16 @@ class PipelineRunner:
             )
             _write_text(tsv_path, tsv)
             _write_text(a3m_path, a3m)
+            write_json(
+                meta_path,
+                {
+                    "request_hash": msa_request_hash,
+                    "query_sha256": _sha256_text(target_query_fasta),
+                    "query_length": len(query),
+                    "cached": False,
+                    "dry_run": True,
+                },
+            )
             return tsv, a3m
 
         if self.mmseqs is None:
@@ -4721,6 +5003,9 @@ class PipelineRunner:
             if isinstance(job_id, str) and job_id.strip():
                 same_request = True
                 if isinstance(meta, dict):
+                    cached_hash = str(meta.get("request_hash") or "").strip()
+                    if cached_hash and cached_hash != msa_request_hash:
+                        same_request = False
                     expected = {
                         "target_db": request.mmseqs_target_db,
                         "max_seqs": request.mmseqs_max_seqs,
@@ -4742,6 +5027,15 @@ class PipelineRunner:
                     a3m = decode_a3m_gz_b64(str(a3m_b64))
                     _write_text(tsv_path, tsv)
                     _write_text(a3m_path, a3m)
+                    write_json(
+                        meta_path,
+                        {
+                            "request_hash": msa_request_hash,
+                            "query_sha256": _sha256_text(target_query_fasta),
+                            "query_length": len(parse_fasta(target_query_fasta)[0].sequence),
+                            "cached": False,
+                        },
+                    )
                     return tsv, a3m
 
         out = self.mmseqs.search(
@@ -4761,6 +5055,15 @@ class PipelineRunner:
         a3m = decode_a3m_gz_b64(str(a3m_b64))
         _write_text(tsv_path, tsv)
         _write_text(a3m_path, a3m)
+        write_json(
+            meta_path,
+            {
+                "request_hash": msa_request_hash,
+                "query_sha256": _sha256_text(target_query_fasta),
+                "query_length": len(parse_fasta(target_query_fasta)[0].sequence),
+                "cached": False,
+            },
+        )
         return tsv, a3m
 
     def _run_proteinmpnn(
@@ -4777,6 +5080,32 @@ class PipelineRunner:
         out_json = tier_dir / "proteinmpnn.json"
         out_fasta = tier_dir / "designs.fasta"
         out_fixed_positions_check = tier_dir / "fixed_positions_check.json"
+        expected_fixed_positions = {k: sorted(set(int(x) for x in v)) for k, v in fixed_positions_by_chain.items()}
+        expected_request = {
+            "pdb_path_chains": sorted(design_chains) if design_chains else None,
+            "use_soluble_model": True,
+            "model_name": "v_48_020",
+            "num_seq_per_target": int(request.num_seq_per_tier),
+            "batch_size": int(request.batch_size),
+            "sampling_temp": float(request.sampling_temp),
+            "seed": int(request.seed),
+            "backbone_noise": 0.0,
+        }
+        expected_input_hash = _stable_payload_hash(
+            {
+                "pdb_sha256": _sha256_text(pdb_text),
+                "target_fasta_sha256": _sha256_text(str(request.target_fasta or "")),
+                "design_chains": sorted(design_chains) if design_chains else None,
+                "fixed_positions": expected_fixed_positions,
+                "dry_run": bool(request.dry_run),
+            }
+        )
+        expected_request_hash = _stable_payload_hash(
+            {
+                "request": expected_request,
+                "input_hash": expected_input_hash,
+            }
+        )
 
         if out_json.exists() and out_fasta.exists() and not request.force:
             try:
@@ -4786,21 +5115,57 @@ class PipelineRunner:
             native = payload.get("native")
             samples = payload.get("samples")
             cached_fixed_positions = _normalize_fixed_positions_by_chain(payload.get("fixed_positions"))
-
-            expected_fixed_positions = {k: sorted(set(int(x) for x in v)) for k, v in fixed_positions_by_chain.items()}
-            expected_request = {
-                "pdb_path_chains": sorted(design_chains) if design_chains else None,
-                "use_soluble_model": True,
-                "model_name": "v_48_020",
-                "num_seq_per_target": int(request.num_seq_per_tier),
-                "batch_size": int(request.batch_size),
-                "sampling_temp": float(request.sampling_temp),
-                "seed": int(request.seed),
-                "backbone_noise": 0.0,
-            }
             cached_request = payload.get("request")
+            cached_request_hash = str(payload.get("request_hash") or "").strip()
+            cached_input_hash = str(payload.get("input_hash") or "").strip()
 
             if cached_fixed_positions is None or cached_fixed_positions != expected_fixed_positions:
+                pass
+            elif cached_request_hash:
+                if cached_request_hash != expected_request_hash:
+                    pass
+                else:
+                    native_rec = None
+                    if isinstance(native, dict) and native.get("sequence"):
+                        native_rec = SequenceRecord(id=str(native.get("id") or "native"), sequence=str(native["sequence"]), header=str(native.get("header") or "native"))
+                    sample_recs: list[SequenceRecord] = []
+                    if isinstance(samples, list):
+                        for s in samples:
+                            if not isinstance(s, dict) or not s.get("sequence"):
+                                continue
+                            sample_recs.append(
+                                SequenceRecord(
+                                    id=str(s.get("id") or s.get("header") or "sample"),
+                                    sequence=str(s["sequence"]),
+                                    header=str(s.get("header") or s.get("id") or "sample"),
+                                    meta={},
+                                )
+                            )
+                    if request.dry_run:
+                        write_json(
+                            out_fixed_positions_check,
+                            {
+                                "ok": True,
+                                "skipped": True,
+                                "reason": "dry_run",
+                                "fixed_positions_total": sum(len(v) for v in expected_fixed_positions.values()),
+                            },
+                        )
+                    elif not _env_true("PIPELINE_SKIP_FIXED_POSITIONS_CHECK"):
+                        check = _validate_proteinmpnn_fixed_positions(
+                            pdb_text=pdb_text,
+                            design_chains=design_chains,
+                            fixed_positions_by_chain=cached_fixed_positions,
+                            native=native_rec,
+                            samples=sample_recs,
+                        )
+                        write_json(out_fixed_positions_check, check)
+                        if not bool(check.get("ok")):
+                            raise RuntimeError(
+                                f"ProteinMPNN output violates fixed_positions (cached) for tier={tier_str}; see {out_fixed_positions_check}"
+                            )
+                    return native_rec, sample_recs
+            elif cached_input_hash and cached_input_hash != expected_input_hash:
                 pass
             elif not isinstance(cached_request, dict) or cached_request != expected_request:
                 pass
@@ -4865,18 +5230,13 @@ class PipelineRunner:
                 out_json,
                 {
                     "request": {
-                        "pdb_path_chains": sorted(design_chains) if design_chains else None,
-                        "use_soluble_model": True,
-                        "model_name": "v_48_020",
-                        "num_seq_per_target": int(request.num_seq_per_tier),
-                        "batch_size": int(request.batch_size),
-                        "sampling_temp": float(request.sampling_temp),
-                        "seed": int(request.seed),
-                        "backbone_noise": 0.0,
+                        **expected_request,
                     },
+                    "request_hash": expected_request_hash,
+                    "input_hash": expected_input_hash,
                     "native": native.__dict__,
                     "samples": [s.__dict__ for s in samples],
-                    "fixed_positions": fixed_positions_by_chain,
+                    "fixed_positions": expected_fixed_positions,
                 },
             )
             write_json(
@@ -4911,18 +5271,13 @@ class PipelineRunner:
             out_json,
             {
                 "request": {
-                    "pdb_path_chains": sorted(design_chains) if design_chains else None,
-                    "use_soluble_model": True,
-                    "model_name": "v_48_020",
-                    "num_seq_per_target": int(request.num_seq_per_tier),
-                    "batch_size": int(request.batch_size),
-                    "sampling_temp": float(request.sampling_temp),
-                    "seed": int(request.seed),
-                    "backbone_noise": 0.0,
+                    **expected_request,
                 },
+                "request_hash": expected_request_hash,
+                "input_hash": expected_input_hash,
                 "native": native.__dict__,
                 "samples": [s.__dict__ for s in samples],
-                "fixed_positions": fixed_positions_by_chain,
+                "fixed_positions": expected_fixed_positions,
                 "raw": _safe_json(raw),
             },
         )
