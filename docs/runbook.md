@@ -80,12 +80,31 @@ jq -n --rawfile fasta ./target.fasta \
 ```
 
 ### run_id 지정(재실행/폴링에 유용)
-`run_id`를 지정하면 같은 폴더를 재사용하며(`force=false` 기본) 단계별로 `stop_after`를 바꿔 재실행할 수 있습니다.
+`run_id`를 지정하면 같은 폴더를 재사용할 수 있지만, 현재 기준으로는 “같은 request를 뒤 단계까지 이어서 실행”할 때만 같은 `run_id` 재사용을 권장합니다.
+
+- 안전한 경우:
+  - 같은 `target_fasta`/`target_pdb`
+  - 같은 backbone 입력(RFD3/BioEmu 관련 설정 포함)
+  - 같은 `design_chains`/`fixed_positions_extra`
+  - orchestration 목적의 변경만 있음 (`stop_after`, `start_from`, 일부 downstream 설정)
+- 안전하지 않은 경우:
+  - target/chain/backbone 입력을 바꿨는데 late stage만 다시 돌리는 경우
+  - 이때는 새 `run_id`를 쓰거나 `start_from="msa"`로 다시 시작해야 합니다.
+- backend는 unsafe partial rerun을 거부하며, UI도 기본값을 새 run fork로 둡니다.
 
 ```bash
 RUN_ID=test_intein_001
 jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta --rawfile pdb ./target.pdb \
   '{name:"pipeline.run", arguments:{run_id:$run_id, target_fasta:$fasta, target_pdb:$pdb, stop_after:"design"}}' \
+| curl -sS -X POST http://<SERVER_IP>:18080/tools/call -H 'Content-Type: application/json' -d @- | jq .
+```
+
+예를 들어 같은 request로 AF2 이후만 다시 돌리고 싶다면 `start_from`을 명시해 같은 run을 이어갈 수 있습니다.
+
+```bash
+RUN_ID=test_intein_001
+jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta --rawfile pdb ./target.pdb \
+  '{name:"pipeline.run", arguments:{run_id:$run_id, target_fasta:$fasta, target_pdb:$pdb, start_from:"af2", stop_after:"novelty"}}' \
 | curl -sS -X POST http://<SERVER_IP>:18080/tools/call -H 'Content-Type: application/json' -d @- | jq .
 ```
 
@@ -96,7 +115,7 @@ curl -sS -X POST http://<SERVER_IP>:18080/tools/call -H 'Content-Type: applicati
   -d "$(jq -n --arg run_id "$RUN_ID" '{name:"pipeline.status", arguments:{run_id:$run_id}}')" | jq .
 ```
 
-결과물은 서버 내부의 `PIPELINE_OUTPUT_ROOT/<run_id>/`에 저장됩니다.
+결과물은 서버 내부의 `PIPELINE_OUTPUT_ROOT/<run_id>/`에 저장됩니다. 비교/분석용 요약은 `summary.json`, `comparisons.json`, `report.md`, `report_ko.md` 등을 보면 됩니다.
 
 ## 단계별 오케스트레이션(= protein-pipeline-stepper 방식)
 Codex 스킬 `protein-pipeline-stepper`는 `pipeline.status`로 상태를 게이트한 뒤 `pipeline.run(stop_after=...)`를 단계별로 호출해 중복 job을 방지합니다.

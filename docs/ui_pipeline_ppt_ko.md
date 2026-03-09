@@ -9,8 +9,8 @@
 2. 전체 아키텍처 한 장 요약: UI ↔ MCP API ↔ 파이프라인 런너 ↔ 외부 모델/서비스
 3. UI 구조 개요: 로그인, Setup/Monitor/Analyze 탭
 4. Setup 탭 상세: 모드 선택, 입력 첨부, Preflight/Plan, Run 실행
-5. Monitor 탭 상세: 상태 카드, 아티팩트, 에이전트 패널
-6. Analyze 탭 상세: 피드백, 실험, 리포트
+5. Monitor 탭 상세: 상태 카드, 아티팩트, 에이전트 패널, Workflow Review Gate
+6. Analyze 탭 상세: Compare Studio, Run-to-Run Compare, Hit List, 피드백/실험/리포트
 7. 파이프라인 전체 흐름: MSA → Conservation → (RFD3) → Ligand Mask → Mask Consensus → ProteinMPNN → SoluProt → AF2 → Novelty
 8. 단계별 입력/출력 (1): MSA/Conservation
 9. 단계별 입력/출력 (2): RFD3/AF2 Target/Preprocess/Query-PDB
@@ -35,11 +35,13 @@
 
 **2.3 Setup 탭 (Run Setup)**
 - 목적: 실행 모드 선택 → 입력 첨부 → Preflight → Run 실행.
-- Run Mode 선택: `pipeline`, `rfd3`, `msa`, `design`, `soluprot`, `af2`, `diffdock`.
+- Run Mode 선택: `pipeline`, `workflow`, `rfd3`, `bioemu`, `msa`, `design`, `soluprot`, `af2`, `diffdock`.
 - 입력 첨부: 파일 업로드 (FASTA/PDB/ligand 등). 업로드 시 파일 내용이 API에 직접 전송.
-- 선택 옵션: `stop_after`, `design_chains`, `pdb_strip_nonpositive_resseq`, `rfd3_contig` 등.
+- 선택 옵션: `start_from`, `stop_after`, `design_chains`, `pdb_strip_nonpositive_resseq`, `rfd3_contig` 등.
 - Run 버튼: 필수 입력이 모두 채워질 때만 활성화.
 - Check Setup 버튼: Preflight 실행(파이프라인/일부 모드에서만 제공).
+- 기존 run 선택 시 `request.json`을 폼으로 불러올 수 있으며, 기본 동작은 새 run fork입니다.
+- partial rerun은 `start_from > msa`인 경우에만 의미가 있으며 `Continue same run`을 명시적으로 켜야 합니다.
 - Reset Inputs: 입력값 초기화.
 - Clear Log: 대화 로그 초기화.
 
@@ -49,8 +51,9 @@
 - PDB 업로드 시 체인 범위를 파싱하여 `design_chains`/`rfd3_contig` 후보를 자동 생성.
 - Pipeline 모드에서 `diffdock_ligand`는 토글로 사용/스킵 선택 가능.
 - 스킵 시 ligand 입력은 필수 아님.
-- Preflight는 `pipeline`, `rfd3`, `msa`, `design`, `soluprot` 모드에서만 제공.
+- Preflight는 `pipeline`, `workflow`, `rfd3`, `bioemu`, `msa`, `design`, `soluprot` 모드에서 제공.
 - `af2`, `diffdock` 모드는 Preflight 없이 직접 실행.
+- backend는 request diff와 stage별 request hash를 사용해 unsafe partial rerun을 차단합니다.
 
 **2.4 Monitor 탭**
 - Run Monitor 카드: `run_id`, `stage`, `state`, `updated`, `score/evidence/recommendation` 표시.
@@ -60,10 +63,15 @@
 - Artifacts 패널: `pipeline.list_artifacts`로 목록 갱신, 경로 필터 제공.
 - Artifact Preview: PDB/SDF는 3Dmol로 렌더링, 이미지 파일은 base64 미리보기, 텍스트 파일은 프리뷰, 바이너리는 미리보기 제한.
 - Agent Panel: `pipeline.list_agent_events` 결과를 단계별로 표시, Good/Bad 평가 및 메모 기록 가능.
+- Workflow Studio 실행 시 checkpoint review gate가 Monitor에 나타나며, 다음 단계로 continue 또는 특정 stage까지 rerun을 제어합니다.
 - Report/Agent Report 모달: 언어 설정에 따라 한글/영문 리포트 표시.
 - Report 모달: Markdown 렌더/원문 토글, 다운로드 제공.
 
 **2.5 Analyze 탭**
+- Compare Studio: 3D structure diff / sequence diff, tier-only Quick Compare(`WT vs RFD3`, `WT vs BioEmu`, `RFD3 vs BioEmu`), 접힌 기준선 strip, residue-linked view 제공.
+- Comparison Summary: `Funnel`, `WT vs Design`, `RFD3 vs BioEmu`, `Tier Compare`, `Distribution`, `Sequence Diversity`를 카드 형태로 바로 표시.
+- Run-to-Run Compare: 현재 run과 baseline run의 SoluProt/pLDDT/RMSD/pass-rate 차이를 비교.
+- Hit List: weighted score 기반 최종 후보 랭킹, 가중치 조정, 상세 markdown/export 지원.
 - Feedback: 등급(`good`/`bad`), 이유, 단계, 아티팩트, 코멘트 입력. 저장/조회/CSV·TSV 내보내기.
 - Experiment: assay/result, sample id, artifact, metrics(JSON), conditions 입력. 저장/조회/CSV·TSV 내보내기.
 - Report: `pipeline.generate_report`, `pipeline.get_report`, `pipeline.save_report` 연동. 리포트 텍스트와 연동된 아티팩트 링크 제공.
@@ -94,6 +102,9 @@
 | 아티팩트 목록 | `pipeline.list_artifacts` | 파일/디렉토리 |
 | 아티팩트 읽기 | `pipeline.read_artifact` | 텍스트/base64 |
 | 에이전트 이벤트 | `pipeline.list_agent_events` | 단계별 판단 |
+| Run 비교 | `pipeline.compare_runs` | baseline run 대비 델타 |
+| Hit List | `pipeline.get_hit_list` | weighted ranking |
+| 결과 패키지 | `pipeline.export_results_package` | 보고서/표/JSON/PDB 묶음 |
 | 리포트 | `pipeline.get_report`, `pipeline.generate_report`, `pipeline.save_report` | Markdown |
 | 피드백 | `pipeline.submit_feedback`, `pipeline.list_feedback` | 품질 평가 |
 | 실험 | `pipeline.submit_experiment`, `pipeline.list_experiments` | wet-lab 결과 |
@@ -118,6 +129,7 @@
 | --- | --- | --- |
 | 기본 입력 | `target_fasta`, `target_pdb` | FASTA/PDB 텍스트 |
 | RFD3 | `rfd3_input_pdb`, `rfd3_contig`, `rfd3_inputs*`, `rfd3_cli_args`, `rfd3_partial_t`, `rfd3_max_return_designs` | 백본 생성 옵션 |
+| BioEmu | `bioemu_use`, `bioemu_num_samples`, `bioemu_max_return_structures`, `bioemu_sequence` | BioEmu 샘플링 옵션 |
 | DiffDock | `diffdock_ligand_smiles`, `diffdock_ligand_sdf`, `diffdock_config`, `diffdock_extra_args` | 도킹 옵션 |
 | Design | `design_chains`, `fixed_positions_extra`, `conservation_tiers` | 설계 대상/고정 위치 |
 | Mask Consensus | `mask_consensus_apply` | 전문가 패널 합의 마스킹 적용 여부 |
@@ -127,7 +139,7 @@
 | AF2 | `af2_model_preset`, `af2_db_preset`, `af2_max_template_date`, `af2_plddt_cutoff`, `af2_rmsd_cutoff`, `af2_top_k` | 예측/선정 기준 |
 | MSA | `mmseqs_target_db`, `mmseqs_max_seqs`, `mmseqs_threads`, `mmseqs_use_gpu` | MSA 옵션 |
 | Novelty | `novelty_target_db` | 서치 대상 DB |
-| 제어 | `stop_after`, `force`, `dry_run`, `auto_recover`, `agent_panel_enabled`, `wt_compare` | 실행 제어/WT 비교 |
+| 제어 | `start_from`, `stop_after`, `force`, `dry_run`, `auto_recover`, `agent_panel_enabled`, `wt_compare` | 실행 제어/partial rerun/WT 비교 |
 
 ---
 
@@ -218,7 +230,7 @@
 
 **6.15 Summary/Report**
 - 목적: run 요약 및 점수/추천 제공.
-- 출력: `summary.json` (Tier별 결과 요약), `report.md`, `report_ko.md`, `report_revisions.jsonl`.
+- 출력: `summary.json` (Tier별 결과 요약), `comparisons.json` (Analyze 비교 요약), `report.md`, `report_ko.md`, `report_revisions.jsonl`.
 - WT 비교(`wt_compare=true`): pLDDT/RMSD/SoluProt WT vs 디자인 비교 값 포함.
 - Mask Consensus 상세: per-tier 합의 마스킹 상세 포함.
 
@@ -243,7 +255,7 @@
 - `tiers/<tier>/` (proteinmpnn, soluprot, af2, novelty)
 - `tiers/<tier>/fixed_positions_consensus.json`
 - `wt/` (soluprot.json, af2/metrics.json, metrics.json)
-- `summary.json`
+- `summary.json`, `comparisons.json`
 - `report.md`, `report_ko.md`, `report_revisions.jsonl`
 - `agent_panel.jsonl`, `agent_panel_report.md`, `agent_panel_report_ko.md`
 

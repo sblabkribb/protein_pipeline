@@ -15,7 +15,14 @@
 1. `pipeline.status(run_id)`로 현재 상태 확인
 2. 이미 `state=running`이면 `pipeline.run`을 다시 호출하지 않고 `pipeline.status`만 폴링
 3. `state!=running`이면 원하는 단계까지 `pipeline.run(stop_after=...)` 호출
-4. 같은 `run_id`를 단계 간 **반드시 재사용** (캐시/아티팩트 재사용)
+4. 같은 `run_id` 재사용은 **같은 request를 단계적으로 확장할 때만** 수행
+
+즉, stepper가 기대하는 `run_id` 재사용은 아래처럼 request 본문이 사실상 동일할 때입니다.
+- 동일한 target FASTA/PDB
+- 동일한 backbone 입력과 설계 대상 체인
+- orchestration 목적의 변경만 있음 (`stop_after`, 필요 시 `start_from`)
+
+target/backbone/chain/fixed-position 같은 upstream 입력이 바뀌면 새 `run_id`를 쓰거나 `start_from="msa"`로 다시 시작해야 합니다. 현재 backend는 unsafe partial rerun을 거부합니다.
 
 ---
 
@@ -95,6 +102,18 @@ while true; do
 done
 ```
 
+### (H) 같은 request로 late stage만 다시 돌리는 예시
+
+아래는 같은 run의 upstream 산출물을 유지한 채 AF2 이후만 다시 돌리는 경우입니다.
+
+```bash
+jq -n --arg run_id "$RUN_ID" --rawfile fasta ./target.fasta --rawfile pdb ./target.pdb \
+  '{name:"pipeline.run", arguments:{run_id:$run_id, target_fasta:$fasta, target_pdb:$pdb, start_from:"af2", stop_after:"novelty"}}' \
+| curl -sS -X POST "$SERVER/tools/call" -H 'Content-Type: application/json' -d @-
+```
+
+이 호출은 같은 request를 유지할 때만 사용하세요. upstream 입력이 바뀌었다면 새 `run_id`가 맞습니다.
+
 ---
 
 ## 3) “어디서 실행되는지” 코드로 확인하기
@@ -125,6 +144,7 @@ done
 `PIPELINE_OUTPUT_ROOT/<run_id>/` 아래를 봅니다.
 - 진행상태: `status.json`, 타임라인: `events.jsonl`
 - 체인 전략 기록: `chain_strategy.json`
+- 비교/요약: `summary.json`, `comparisons.json`
 - MSA: `msa/result.a3m`, `msa/quality.json`, `msa/runpod_job.json`
 - 고정/리간드/정렬: `conservation.json`, `ligand_mask.json`, `query_pdb_alignment.json`
 - ProteinMPNN: `tiers/<tier>/proteinmpnn.json`, `tiers/<tier>/designs.fasta`, `tiers/<tier>/runpod_job.json`

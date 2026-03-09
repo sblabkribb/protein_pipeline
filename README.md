@@ -1,89 +1,146 @@
 # protein_pipeline
 
-MCP-enabled protein design pipeline with optional RFD3 (RFDiffusion3), BioEmu, and DiffDock stages.
+MCP-enabled protein design pipeline and static console UI for staged protein design runs.
 
-## What it does
+## Highlights
+- Pipeline and Workflow Studio execution modes in the frontend
 - Optional backbone generation with RFD3 and/or BioEmu
-- MSA + conservation
-- Optional DiffDock for ligand placement (mask only)
-- ProteinMPNN design (tiers)
-- Optional SoluProt / AlphaFold2 / novelty search
+- MSA, conservation, ligand mask/mask consensus, ProteinMPNN tier design, SoluProt, AF2/ColabFold, and novelty/WT-diff stages
+- Analyze tab with Compare Studio, Run-to-Run Compare, weighted Hit List, report generation, and export packaging
+- Safe partial reruns: the UI defaults to forking a new `run_id`, and the backend rejects unsafe late-stage reruns when upstream inputs changed
 
-## RunPod endpoint env vars
-- Required: `RUNPOD_API_KEY`, `MMSEQS_ENDPOINT_ID`, `PROTEINMPNN_ENDPOINT_ID`
-- Optional: `RFD3_ENDPOINT_ID`, `BIOEMU_ENDPOINT_ID`, `DIFFDOCK_ENDPOINT_ID`, `ALPHAFOLD2_ENDPOINT_ID`
+## Core stage order
+`msa -> rfd3 -> bioemu -> design -> soluprot -> af2 -> novelty`
 
-## MCP tools
-- `pipeline.plan_from_prompt`: Parse a natural-language prompt and return missing inputs/questions (no execution)
-- `pipeline.run_from_prompt`: Parse a prompt and run immediately (requires target_pdb/target_fasta)
-- `pipeline.run`: Run with explicit parameters
-- `pipeline.af2_predict`: Run AlphaFold2 on FASTA/sequence (standalone)
-- `pipeline.diffdock`: Run DiffDock on protein PDB + ligand (standalone)
-- `pipeline.submit_feedback`: Store a good/bad rating with metadata
-- `pipeline.list_feedback`: List feedback entries
-- `pipeline.submit_experiment`: Store experimental results
-- `pipeline.list_experiments`: List experimental results
-- `pipeline.generate_report`: Build a markdown report from stored data
-- `pipeline.save_report`: Save a report revision
-- `pipeline.get_report`: Fetch latest report
-- `pipeline.status`: Get run status
-- `pipeline.list_artifacts`: List run artifacts
-- `pipeline.read_artifact`: Read an artifact safely
+The full pipeline also writes conservation, masking, WT comparison, report, and agent-panel artifacts around those core stages.
 
-## Recommended flow
-1) Call `pipeline.plan_from_prompt`
-2) Ask the returned questions (if any)
-3) Call `pipeline.run` with the completed inputs
+## Frontend overview
+- `Setup`: choose a mode, attach inputs, run preflight, and launch a run
+- `Workflow Studio`: checkpoint-based pipeline execution with checkpoint review in Monitor
+- `Monitor`: status, artifacts, report actions, agent panel, workflow review gate
+- `Analyze`: Compare Studio, comparison summary, run-to-run compare, hit list, candidate charts, feedback, experiments, and report review
 
-## Artifacts
-Outputs are written under `PIPELINE_OUTPUT_ROOT/<run_id>/` on the execution host.
-Use `pipeline.list_artifacts` / `pipeline.read_artifact` to fetch results remotely.
+Compare Studio currently uses:
+- tier-only quick compare presets: `WT vs RFD3`, `WT vs BioEmu`, `RFD3 vs BioEmu`
+- collapsed baseline references (`Input Structure`, `Working Backbone`, `WT ColabFold`)
+- inline comparison summary cards for funnel, WT-vs-design, source compare, tier compare, distributions, and sequence diversity
 
-## Deploy (NCP summary)
-1) Build image: `docker build -t pipeline-mcp:cpu ./pipeline-mcp`
-2) Push image: `docker tag` + `docker push`
-3) Restart the NCP service/container
-4) Verify: `POST /tools/list` includes `pipeline.plan_from_prompt`
+## Safe rerun model
+- Default behavior is to create a new `run_id`
+- Reusing an existing `run_id` is intended only for partial reruns in `pipeline` or `workflow` mode
+- In the UI, you must select a run, load its `request.json`, and explicitly enable `Continue same run`
+- Reusing the same `run_id` overwrites downstream artifacts from the chosen `start_from`
+- If upstream inputs changed, such as target FASTA/PDB, backbone source settings, design chains, or fixed positions, use a new `run_id` or restart from `msa`
+- Backend request-diff guards and stage-specific request hashes prevent stale-cache reuse for unsafe partial reruns
 
-## UI (frontend)
-- Static UI under `frontend/` (no build). Run locally:
-  - `cd frontend`
-  - `python3 -m http.server 5173`
-  - Open `http://127.0.0.1:5173`
+## Required environment variables
+Required:
+- `RUNPOD_API_KEY`
+- `MMSEQS_ENDPOINT_ID`
+- `PROTEINMPNN_ENDPOINT_ID`
 
-## Auth + CORS (optional)
-- Enable auth: `PIPELINE_AUTH_ENABLED=1`
-- Admin bootstrap: `PIPELINE_ADMIN_USERNAME` + `PIPELINE_ADMIN_PASSWORD`
-- User store (default): `${PIPELINE_OUTPUT_ROOT}/.auth/users.json`
-- Token TTL: `PIPELINE_AUTH_TOKEN_TTL_S` (default 86400s)
-- CORS: `PIPELINE_CORS_ORIGINS` (comma-separated, `*` default)
-- MCP proxy auth: `PIPELINE_AUTH_TOKEN` or `PIPELINE_AUTH_USERNAME` + `PIPELINE_AUTH_PASSWORD`
+Common optional:
+- `RFD3_ENDPOINT_ID`
+- `BIOEMU_ENDPOINT_ID`
+- `DIFFDOCK_ENDPOINT_ID`
+- `ALPHAFOLD2_ENDPOINT_ID`
+- `AF2_URL`
+- `SOLUPROT_URL`
+- `PIPELINE_OUTPUT_ROOT`
 
-## Report scoring (optional)
-- `PIPELINE_REPORT_BASE_SCORE` (default 50)
-- `PIPELINE_REPORT_FEEDBACK_WEIGHT` (default 20)
-- `PIPELINE_REPORT_EXPERIMENT_WEIGHT` (default 30)
-- `PIPELINE_REPORT_MIN_SCORE` / `PIPELINE_REPORT_MAX_SCORE` (default 0 / 100)
-- `PIPELINE_REPORT_EVIDENCE_MEDIUM_FEEDBACK` (default 2)
-- `PIPELINE_REPORT_EVIDENCE_HIGH_FEEDBACK` (default 6)
-- `PIPELINE_REPORT_EVIDENCE_MEDIUM_EXPERIMENT` (default 1)
-- `PIPELINE_REPORT_EVIDENCE_HIGH_EXPERIMENT` (default 3)
-- `PIPELINE_REPORT_PROMOTE_SCORE` (default 75)
-- `PIPELINE_REPORT_PROMISING_SCORE` (default 60)
-- `PIPELINE_REPORT_REVIEW_SCORE` (default 40)
-- `PIPELINE_REPORT_PROMOTE_REQUIRE_EVIDENCE` (default true)
-- Custom scorer (hot-swap):
-  - `PIPELINE_REPORT_SCORER` = Python module path or `/abs/path/to/scorer.py`
-  - `PIPELINE_REPORT_SCORER_FN` = function name (default `score_report`)
+## Core MCP tools
+Execution:
+- `pipeline.run`
+- `pipeline.preflight`
+- `pipeline.plan_from_prompt`
+- `pipeline.run_from_prompt`
+- `pipeline.af2_predict`
+- `pipeline.run_af2`
+- `pipeline.diffdock`
+- `pipeline.run_diffdock`
 
-## Nginx (Docker) for UI
-See `deploy/nginx/README.md` for running a static UI on 5173/443 with `/api` proxy.
+Analysis and reporting:
+- `pipeline.compare_runs`
+- `pipeline.get_hit_list`
+- `pipeline.export_results_package`
+- `pipeline.generate_report`
+- `pipeline.get_report`
+- `pipeline.save_report`
+
+Inspection and operations:
+- `pipeline.status`
+- `pipeline.list_runs`
+- `pipeline.list_artifacts`
+- `pipeline.read_artifact`
+- `pipeline.list_agent_events`
+- `pipeline.cancel_run`
+- `pipeline.delete_run`
+
+Review data:
+- `pipeline.submit_feedback`
+- `pipeline.list_feedback`
+- `pipeline.submit_experiment`
+- `pipeline.list_experiments`
+
+## Recommended execution flow
+1. Call `pipeline.plan_from_prompt` or fill Setup in the UI.
+2. Run `pipeline.preflight` for pipeline/workflow-style runs.
+3. Launch `pipeline.run`.
+4. Monitor with `pipeline.status` and artifact/report views.
+5. Use Analyze for Compare Studio, run-to-run comparison, hit list, and exports.
+
+## Key output files
+Outputs are written under `PIPELINE_OUTPUT_ROOT/<run_id>/`.
+
+Common top-level artifacts:
+- `request.json`
+- `status.json`
+- `events.jsonl`
+- `summary.json`
+- `comparisons.json`
+- `report.md`
+- `report_ko.md`
+- `agent_panel_report.md`
+- `agent_panel_report_ko.md`
+
+Stage outputs are written under subdirectories such as:
+- `msa/`
+- `backbones/`
+- `rfd3/`
+- `bioemu/`
+- `tiers/<tier>/`
+- `wt/`
+- `agent_panel/`
+
+Use `pipeline.list_artifacts` and `pipeline.read_artifact` to inspect outputs remotely.
+
+## Frontend local run
+The frontend is static and does not require a build step.
+
+```bash
+cd /opt/protein_pipeline/frontend
+python3 -m http.server 5173
+```
+
+Open `http://127.0.0.1:5173`.
+
+## Auth and CORS
+- `PIPELINE_AUTH_ENABLED=1`
+- `PIPELINE_ADMIN_USERNAME`
+- `PIPELINE_ADMIN_PASSWORD`
+- `PIPELINE_AUTH_TOKEN_TTL_S`
+- `PIPELINE_CORS_ORIGINS`
+- `PIPELINE_AUTH_TOKEN` or `PIPELINE_AUTH_USERNAME` + `PIPELINE_AUTH_PASSWORD`
 
 ## Docs
-- Usage guide + screenshots: `docs/USAGE.md`
-- MCP skill: `skills/protein-pipeline-stepper/SKILL.md`
+- `docs/USAGE.md`: UI and API usage guide
+- `docs/runbook.md`: operator runbook
+- `docs/stepper_orchestration.md`: stepwise orchestration and safe `run_id` reuse
+- `docs/runpod_model_execution.md`: RunPod execution model details
+- `docs/ui_pipeline_ppt_ko.md`: Korean UI/pipeline slide notes
 
 ## Repo structure
-- `pipeline-mcp/`: MCP server implementation
-- `docs/`: usage and screenshots
-- `skills/`: Codex skill files for guided execution
+- `frontend/`: static console UI
+- `pipeline-mcp/`: MCP server, tools, pipeline runner, and reporting
+- `docs/`: user/operator documentation
+- `deploy/`: deployment assets
