@@ -257,6 +257,7 @@ const state = {
   artifactCompareLeftPath: "",
   artifactCompareRightPath: "",
   artifactCompareMode: "structure",
+  compareRefsExpanded: false,
   compareTargetSequenceByRunId: {},
   compareInputPdbTextByRunId: {},
   compareWorkingPdbTextByRunId: {},
@@ -773,11 +774,23 @@ const I18N = {
     "artifacts.compare.wtEnabled": "WT compare enabled: {enabled}",
     "artifacts.compare.sourceName": "Source",
     "artifacts.compare.backbones": "Backbones",
+    "artifacts.compare.designCount": "Designs",
     "artifacts.compare.passRate": "SoluProt pass",
     "artifacts.compare.soluprotMedian": "Median SoluProt",
     "artifacts.compare.af2Selected": "{af2Provider} selected",
     "artifacts.compare.plddtMedian": "Median pLDDT",
     "artifacts.compare.rmsdMedian": "Median RMSD",
+    "artifacts.compare.tier": "Tier Compare",
+    "artifacts.compare.distribution": "Distribution",
+    "artifacts.compare.sequenceDiversity": "Sequence Diversity",
+    "artifacts.compare.uniqueSequences": "Unique design sequences",
+    "artifacts.compare.wtIdentityMedian": "WT identity median",
+    "artifacts.compare.designPairwiseMedian": "Design pairwise identity median",
+    "artifacts.compare.best": "best",
+    "artifacts.compare.worst": "worst",
+    "artifacts.compare.pairs": "pairs",
+    "artifacts.compare.sequences": "sequences",
+    "artifacts.compare.truncated": "truncated",
     "artifacts.preview.title": "Artifact Preview",
     "artifacts.preview.desc": "3D structures, images, or text extracts.",
     "artifacts.preview.placeholder": "Select an artifact to preview it here.",
@@ -791,6 +804,7 @@ const I18N = {
     "artifacts.preview.compare.missing": "Select both left and right 3D artifacts first.",
     "artifacts.preview.compare.failed": "3D comparison failed: {error}",
     "artifacts.preview.compare.refs.title": "Resolved Baselines",
+    "artifacts.preview.compare.refs.summary": "Resolved Baselines ({count}/{total})",
     "artifacts.preview.compare.refs.input": "Input Structure",
     "artifacts.preview.compare.refs.working": "Working Backbone",
     "artifacts.preview.compare.refs.wt": "WT ColabFold",
@@ -1562,11 +1576,23 @@ const I18N = {
     "artifacts.compare.wtEnabled": "WT 비교 사용: {enabled}",
     "artifacts.compare.sourceName": "소스",
     "artifacts.compare.backbones": "백본 수",
+    "artifacts.compare.designCount": "디자인 수",
     "artifacts.compare.passRate": "SoluProt 통과",
     "artifacts.compare.soluprotMedian": "SoluProt 중앙값",
     "artifacts.compare.af2Selected": "{af2Provider} 선발",
     "artifacts.compare.plddtMedian": "pLDDT 중앙값",
     "artifacts.compare.rmsdMedian": "RMSD 중앙값",
+    "artifacts.compare.tier": "티어 비교",
+    "artifacts.compare.distribution": "분포",
+    "artifacts.compare.sequenceDiversity": "서열 다양성",
+    "artifacts.compare.uniqueSequences": "고유 디자인 서열 수",
+    "artifacts.compare.wtIdentityMedian": "WT 일치도 중앙값",
+    "artifacts.compare.designPairwiseMedian": "디자인 pairwise 일치도 중앙값",
+    "artifacts.compare.best": "최대",
+    "artifacts.compare.worst": "최소",
+    "artifacts.compare.pairs": "쌍",
+    "artifacts.compare.sequences": "서열",
+    "artifacts.compare.truncated": "절단",
     "artifacts.preview.title": "아티팩트 미리보기",
     "artifacts.preview.desc": "3D 구조, 이미지, 텍스트 미리보기.",
     "artifacts.preview.placeholder": "아티팩트를 선택하면 여기서 미리보기를 볼 수 있습니다.",
@@ -1580,6 +1606,7 @@ const I18N = {
     "artifacts.preview.compare.missing": "좌/우 3D 아티팩트를 모두 선택하세요.",
     "artifacts.preview.compare.failed": "3D 비교 실패: {error}",
     "artifacts.preview.compare.refs.title": "기준선",
+    "artifacts.preview.compare.refs.summary": "기준선 ({count}/{total})",
     "artifacts.preview.compare.refs.input": "입력 구조",
     "artifacts.preview.compare.refs.working": "작업 백본",
     "artifacts.preview.compare.refs.wt": "WT ColabFold",
@@ -9131,6 +9158,67 @@ function formatPassRate(sourceBucket) {
   return `${passed}/${total} (${rate.toFixed(1)}%)`;
 }
 
+function comparisonTierRows(summary) {
+  const rows = Array.isArray(summary?.tier_compare) ? summary.tier_compare : [];
+  return rows
+    .filter((row) => {
+      if (!row || typeof row !== "object") return false;
+      return (
+        Number(row.design_total || 0) > 0 ||
+        Number(row.soluprot_total || 0) > 0 ||
+        Number(row.af2_candidate_total || 0) > 0 ||
+        Number(row.af2_selected_total || 0) > 0 ||
+        finiteNumber(row.plddt_median) !== null ||
+        finiteNumber(row.rmsd_median) !== null
+      );
+    })
+    .slice()
+    .sort((left, right) => {
+      const leftTier = finiteNumber(left?.tier);
+      const rightTier = finiteNumber(right?.tier);
+      if (leftTier !== null && rightTier !== null && leftTier !== rightTier) return leftTier - rightTier;
+      if (leftTier !== null && rightTier === null) return -1;
+      if (leftTier === null && rightTier !== null) return 1;
+      return 0;
+    });
+}
+
+function comparisonDistributionEntries(summary) {
+  const distributions =
+    summary?.distributions && typeof summary.distributions === "object" ? summary.distributions : {};
+  return [
+    ["SoluProt", distributions.soluprot],
+    ["pLDDT", distributions.plddt],
+    ["RMSD", distributions.rmsd],
+  ].filter(([, metric]) => Number(metric?.count || 0) > 0);
+}
+
+function comparisonDiversitySummary(summary) {
+  const diversity = summary?.diversity && typeof summary.diversity === "object" ? summary.diversity : {};
+  const wtIdentity =
+    diversity?.wt_identity && typeof diversity.wt_identity === "object" ? diversity.wt_identity : {};
+  const pairwise =
+    diversity?.design_pairwise_identity && typeof diversity.design_pairwise_identity === "object"
+      ? diversity.design_pairwise_identity
+      : {};
+  const uniqueSequences = Number(diversity?.design_unique_sequences || 0);
+  const hasWtIdentity =
+    Number(wtIdentity.count || 0) > 0 ||
+    finiteNumber(wtIdentity.median) !== null ||
+    finiteNumber(wtIdentity.best) !== null ||
+    finiteNumber(wtIdentity.worst) !== null;
+  const hasPairwise =
+    Number(pairwise.evaluated_pairs || 0) > 0 ||
+    Number(pairwise.sequence_count || 0) > 0 ||
+    finiteNumber(pairwise.median) !== null;
+  return {
+    uniqueSequences,
+    wtIdentity,
+    pairwise,
+    hasAny: uniqueSequences > 0 || hasWtIdentity || hasPairwise,
+  };
+}
+
 function comparisonSummaryHasData(summary) {
   if (!summary || typeof summary !== "object") return false;
   const wt = summary?.wt_vs_design && typeof summary.wt_vs_design === "object" ? summary.wt_vs_design : {};
@@ -9163,13 +9251,17 @@ function comparisonSummaryHasData(summary) {
   });
   if (hasSource) return true;
   if (funnelOverall && typeof funnelOverall === "object") {
-    return (
+    if (
       Number(funnelOverall.backbone_count || 0) > 0 ||
       Number(funnelOverall.soluprot_total || 0) > 0 ||
       Number(funnelOverall.af2_candidate_total || 0) > 0
-    );
+    ) {
+      return true;
+    }
   }
-  return false;
+  if (comparisonTierRows(summary).length) return true;
+  if (comparisonDistributionEntries(summary).length) return true;
+  return comparisonDiversitySummary(summary).hasAny;
 }
 
 function parseNumberOrNull(raw) {
@@ -9502,6 +9594,9 @@ function renderArtifactComparisonSummary(summary) {
       : {};
   const wtEnabled = Boolean(summary?.wt_compare_enabled);
   const af2Provider = currentRunAf2Provider();
+  const tierRows = comparisonTierRows(summary);
+  const distributionRows = comparisonDistributionEntries(summary);
+  const diversity = comparisonDiversitySummary(summary);
 
   const wtRows = [
     { key: "soluprot", label: "SoluProt", digits: 3 },
@@ -9530,7 +9625,7 @@ function renderArtifactComparisonSummary(summary) {
     Number(funnelOverall?.soluprot_total || 0) > 0 ||
     Number(funnelOverall?.af2_candidate_total || 0) > 0;
 
-  if (!wtHasData && sourceRows.length === 0 && !hasFunnel) {
+  if (!wtHasData && sourceRows.length === 0 && !hasFunnel && tierRows.length === 0 && distributionRows.length === 0 && !diversity.hasAny) {
     el.artifactComparisonSummary.innerHTML = `<div class="placeholder">${t(
       "artifacts.compare.noData"
     )}</div>`;
@@ -9588,6 +9683,14 @@ function renderArtifactComparisonSummary(summary) {
     })
     .join("");
 
+  const formatAf2SelectionStat = (row) => {
+    const selected = Number(row?.af2_selected_total || 0);
+    const total = Number(row?.af2_candidate_total || 0);
+    if (selected <= 0 && total <= 0) return "-";
+    if (total <= 0) return String(selected);
+    return `${selected}/${total} (${formatPercentValue(row?.af2_pass_rate)})`;
+  };
+
   const wtNote = t("artifacts.compare.wtEnabled", { enabled: localizedYesNo(wtEnabled) });
   const funnelBackbones = Number(funnelOverall?.backbone_count || 0);
   const funnelSolTxt = `${Number(funnelOverall?.soluprot_passed || 0)}/${Number(
@@ -9599,6 +9702,74 @@ function renderArtifactComparisonSummary(summary) {
   const funnelRetainTxt = `SoluProt ${formatPercentValue(
     funnelOverall?.retention_backbone_to_soluprot_passed
   )}, ${af2ProviderName(af2Provider)} ${formatPercentValue(funnelOverall?.retention_backbone_to_af2_selected)}`;
+  const tierTableRows = tierRows
+    .map((row) => {
+      const tierText = formatMetricValue(finiteNumber(row?.tier), 2, false);
+      return `
+        <tr>
+          <td>${escapeHtml(tierText)}</td>
+          <td>${escapeHtml(String(Number(row?.design_total || 0)))}</td>
+          <td>${escapeHtml(formatPassRate(row))}</td>
+          <td>${escapeHtml(formatAf2SelectionStat(row))}</td>
+          <td>${escapeHtml(formatMetricValue(finiteNumber(row?.plddt_median), 1, false))}</td>
+          <td>${escapeHtml(formatMetricValue(finiteNumber(row?.rmsd_median), 2, false))}</td>
+        </tr>
+      `;
+    })
+    .join("");
+  const distributionTableRows = distributionRows
+    .map(([name, metric]) => {
+      const bucket = metric && typeof metric === "object" ? metric : {};
+      return `
+        <tr>
+          <th>${escapeHtml(name)}</th>
+          <td>${escapeHtml(String(Number(bucket.count || 0)))}</td>
+          <td>${escapeHtml(formatMetricValue(finiteNumber(bucket.p10), 3, false))}</td>
+          <td>${escapeHtml(formatMetricValue(finiteNumber(bucket.p25), 3, false))}</td>
+          <td>${escapeHtml(formatMetricValue(finiteNumber(bucket.median), 3, false))}</td>
+          <td>${escapeHtml(formatMetricValue(finiteNumber(bucket.p75), 3, false))}</td>
+          <td>${escapeHtml(formatMetricValue(finiteNumber(bucket.p90), 3, false))}</td>
+          <td>${escapeHtml(formatMetricValue(finiteNumber(bucket.iqr), 3, false))}</td>
+        </tr>
+      `;
+    })
+    .join("");
+  const diversityLines = [];
+  if (diversity.uniqueSequences > 0) {
+    diversityLines.push({
+      label: t("artifacts.compare.uniqueSequences"),
+      value: String(diversity.uniqueSequences),
+    });
+  }
+  if (
+    Number(diversity.wtIdentity?.count || 0) > 0 ||
+    finiteNumber(diversity.wtIdentity?.median) !== null ||
+    finiteNumber(diversity.wtIdentity?.best) !== null ||
+    finiteNumber(diversity.wtIdentity?.worst) !== null
+  ) {
+    diversityLines.push({
+      label: t("artifacts.compare.wtIdentityMedian"),
+      value: `${formatPercentValue(diversity.wtIdentity?.median)} (${t("artifacts.compare.best")}=${formatPercentValue(
+        diversity.wtIdentity?.best
+      )}, ${t("artifacts.compare.worst")}=${formatPercentValue(diversity.wtIdentity?.worst)}, n=${Number(
+        diversity.wtIdentity?.count || 0
+      )})`,
+    });
+  }
+  if (
+    Number(diversity.pairwise?.evaluated_pairs || 0) > 0 ||
+    Number(diversity.pairwise?.sequence_count || 0) > 0 ||
+    finiteNumber(diversity.pairwise?.median) !== null
+  ) {
+    diversityLines.push({
+      label: t("artifacts.compare.designPairwiseMedian"),
+      value: `${formatPercentValue(diversity.pairwise?.median)} (${t("artifacts.compare.pairs")}=${Number(
+        diversity.pairwise?.evaluated_pairs || 0
+      )}, ${t("artifacts.compare.sequences")}=${Number(diversity.pairwise?.sequence_count || 0)}${
+        diversity.pairwise?.truncated ? `, ${t("artifacts.compare.truncated")}` : ""
+      })`,
+    });
+  }
   el.artifactComparisonSummary.innerHTML = `
     ${
       hasFunnel
@@ -9650,6 +9821,63 @@ function renderArtifactComparisonSummary(summary) {
         </thead>
         <tbody>${sourceTableRows}</tbody>
       </table>
+    </div>`
+        : ""
+    }
+    ${
+      tierRows.length
+        ? `<div class="comparison-card">
+      <h4>${escapeHtml(t("artifacts.compare.tier"))}</h4>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>${escapeHtml(t("artifacts.filter.tier"))}</th>
+            <th>${escapeHtml(t("artifacts.compare.designCount"))}</th>
+            <th>${escapeHtml(t("artifacts.compare.passRate"))}</th>
+            <th>${escapeHtml(t("artifacts.compare.af2Selected", { af2Provider: af2ProviderName(af2Provider) }))}</th>
+            <th>${escapeHtml(t("artifacts.compare.plddtMedian"))}</th>
+            <th>${escapeHtml(t("artifacts.compare.rmsdMedian"))}</th>
+          </tr>
+        </thead>
+        <tbody>${tierTableRows}</tbody>
+      </table>
+    </div>`
+        : ""
+    }
+    ${
+      distributionRows.length
+        ? `<div class="comparison-card">
+      <h4>${escapeHtml(t("artifacts.compare.distribution"))}</h4>
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>${escapeHtml(t("artifacts.compare.metric"))}</th>
+            <th>n</th>
+            <th>P10</th>
+            <th>P25</th>
+            <th>Median</th>
+            <th>P75</th>
+            <th>P90</th>
+            <th>IQR</th>
+          </tr>
+        </thead>
+        <tbody>${distributionTableRows}</tbody>
+      </table>
+    </div>`
+        : ""
+    }
+    ${
+      diversityLines.length
+        ? `<div class="comparison-card">
+      <h4>${escapeHtml(t("artifacts.compare.sequenceDiversity"))}</h4>
+      <div class="comparison-kpis">
+        ${diversityLines
+          .map(
+            (line) =>
+              `<div><span>${escapeHtml(line.label)}</span><strong>${escapeHtml(String(line.value || "-"))}</strong></div>`
+          )
+          .join("")}
+      </div>
     </div>`
         : ""
     }
@@ -10216,9 +10444,8 @@ function updateMonitorReportActions() {
   }
   const hasSummary = comparisonSummaryHasData(state.artifactComparison);
   if (el.artifactComparisonDetails) {
-    const shouldShowDetails = hasRun && hasSummary;
-    el.artifactComparisonDetails.classList.toggle("hidden", !shouldShowDetails);
-    el.artifactComparisonDetails.disabled = !shouldShowDetails;
+    el.artifactComparisonDetails.classList.add("hidden");
+    el.artifactComparisonDetails.disabled = !hasRun || !hasSummary;
   }
 }
 
@@ -11916,23 +12143,34 @@ function renderCompareReferenceStrip(structureItems) {
     { key: "working", label: t("artifacts.preview.compare.refs.working"), item: refs.working },
     { key: "wt", label: t("artifacts.preview.compare.refs.wt"), item: refs.wt },
   ];
+  const availableCount = rows.filter((row) => row.item).length;
   el.artifactCompareRefs.innerHTML = `
-    <div class="compare-strip-title">${escapeHtml(t("artifacts.preview.compare.refs.title"))}</div>
-    <div class="compare-reference-list">
-      ${rows
-        .map((row) => {
-          const value = row.item ? displayArtifactPath(row.item.path) : t("artifacts.preview.compare.refs.missing");
-          const missing = !row.item ? " is-missing" : "";
-          return `
-            <div class="compare-reference-chip${missing}">
-              <span class="compare-reference-label">${escapeHtml(row.label)}</span>
-              <strong class="compare-reference-value">${escapeHtml(value)}</strong>
-            </div>
-          `;
-        })
-        .join("")}
-    </div>
+    <details class="compare-reference-disclosure"${state.compareRefsExpanded ? " open" : ""}>
+      <summary class="compare-reference-summary">${escapeHtml(
+        t("artifacts.preview.compare.refs.summary", { count: availableCount, total: rows.length })
+      )}</summary>
+      <div class="compare-reference-list">
+        ${rows
+          .map((row) => {
+            const value = row.item ? displayArtifactPath(row.item.path) : t("artifacts.preview.compare.refs.missing");
+            const missing = !row.item ? " is-missing" : "";
+            return `
+              <div class="compare-reference-chip${missing}">
+                <span class="compare-reference-label">${escapeHtml(row.label)}</span>
+                <strong class="compare-reference-value">${escapeHtml(value)}</strong>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    </details>
   `;
+  const disclosure = el.artifactCompareRefs.querySelector(".compare-reference-disclosure");
+  if (disclosure instanceof HTMLDetailsElement) {
+    disclosure.addEventListener("toggle", () => {
+      state.compareRefsExpanded = disclosure.open;
+    });
+  }
 }
 
 function renderComparePresetStrip(structureItems) {
