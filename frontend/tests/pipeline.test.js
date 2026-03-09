@@ -1,12 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  coerceFiniteMetricValue,
   extractDesignChainsFromPayload,
   filterPdbTextByChains,
   selectResidueStripMetrics,
 } from "../lib/compare.js";
 import {
   artifactMetaFromPath,
+  buildSetupDraftFromRequest,
   buildRunArguments,
   buildUserPrefix,
   createRunId,
@@ -16,6 +18,7 @@ import {
   filterRunsByPrefix,
   inferRequestRunMode,
   sanitizeName,
+  shouldReuseSelectedRun,
   stageFromPath,
 } from "../lib/pipeline.js";
 
@@ -135,6 +138,13 @@ test("selectResidueStripMetrics falls back to top metrics when all diffs are low
   );
 });
 
+test("coerceFiniteMetricValue parses residue distances from dataset strings", () => {
+  assert.equal(coerceFiniteMetricValue("7.44"), 7.44);
+  assert.equal(coerceFiniteMetricValue(3.4), 3.4);
+  assert.equal(coerceFiniteMetricValue(""), null);
+  assert.equal(coerceFiniteMetricValue("-"), null);
+});
+
 test("displayArtifactPath aliases legacy rfd3 ids", () => {
   assert.equal(
     displayArtifactPath("backbones/inputs_spec-1_0_model_0/target.pdb"),
@@ -214,6 +224,68 @@ test("buildRunArguments omits start_from when it is msa", () => {
   });
   assert.equal(args.stop_after, "af2");
   assert.equal(args.start_from, undefined);
+});
+
+test("shouldReuseSelectedRun requires explicit continue toggle and partial stage", () => {
+  assert.equal(
+    shouldReuseSelectedRun({
+      mode: "pipeline",
+      startFrom: "af2",
+      continueInSelectedRun: true,
+      selectedRunId: "run-1",
+    }),
+    true
+  );
+  assert.equal(
+    shouldReuseSelectedRun({
+      mode: "pipeline",
+      startFrom: "msa",
+      continueInSelectedRun: true,
+      selectedRunId: "run-1",
+    }),
+    false
+  );
+  assert.equal(
+    shouldReuseSelectedRun({
+      mode: "pipeline",
+      startFrom: "af2",
+      continueInSelectedRun: false,
+      selectedRunId: "run-1",
+    }),
+    false
+  );
+});
+
+test("buildSetupDraftFromRequest prepares file answers and metadata", () => {
+  const draft = buildSetupDraftFromRequest({
+    target_pdb: "ATOM      1  N",
+    target_fasta: ">q1\nACDE",
+    rfd3_input_pdb: "ATOM      1  CA",
+    start_from: "AF2",
+    stop_after: "novelty",
+    design_chains: ["A"],
+  });
+  assert.equal(draft.mode, "pipeline");
+  assert.equal(draft.answers.target_input, "ATOM      1  N");
+  assert.equal(draft.answers.target_pdb, "ATOM      1  N");
+  assert.equal(draft.answers.target_fasta, ">q1\nACDE");
+  assert.equal(draft.answers.rfd3_input_pdb, "ATOM      1  CA");
+  assert.equal(draft.answers.start_from, "af2");
+  assert.equal(draft.answers.stop_after, "novelty");
+  assert.deepEqual(draft.answers.design_chains, ["A"]);
+  assert.equal(draft.answerMeta.target_input.fileName, "request.json:target_pdb");
+  assert.equal(draft.answerMeta.rfd3_input_pdb.fileName, "request.json:rfd3_input_pdb");
+});
+
+test("buildSetupDraftFromRequest maps diffdock ligand metadata", () => {
+  const draft = buildSetupDraftFromRequest({
+    target_pdb: "ATOM      1  N",
+    diffdock_ligand_smiles: "CCO",
+  });
+  assert.equal(draft.mode, "diffdock");
+  assert.equal(draft.answers.diffdock_ligand, "CCO");
+  assert.equal(draft.answers.diffdock_use, "use");
+  assert.equal(draft.answerMeta.diffdock_ligand.fileName, "request.json:diffdock_ligand.smiles");
 });
 
 test("inferRequestRunMode keeps pipeline runs with stop_after af2 in pipeline mode", () => {

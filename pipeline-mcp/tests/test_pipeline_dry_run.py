@@ -9,8 +9,10 @@ from pathlib import Path
 from pipeline_mcp.bio.pdb import residues_by_chain
 from pipeline_mcp.bio.pdb import sequence_by_chain
 from pipeline_mcp.models import PipelineRequest
+from pipeline_mcp.pipeline import _clear_stage_outputs_from
 from pipeline_mcp.pipeline import _preprocess_pdb_text
 from pipeline_mcp.pipeline import _resolve_backbone_preprocess_options
+from pipeline_mcp.pipeline import PipelineInputRequired
 from pipeline_mcp.pipeline import PipelineRunner
 
 
@@ -797,6 +799,109 @@ class TestPipelineDryRun(unittest.TestCase):
             out = Path(res.output_dir)
             payload = json.loads((out / "tiers" / "30" / "proteinmpnn.json").read_text(encoding="utf-8"))
             self.assertEqual(payload["request"]["pdb_path_chains"], ["A"])
+
+    def test_pipeline_rejects_unsafe_partial_rerun_when_design_inputs_change(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            run_id = "partial_rerun_guard"
+            initial = PipelineRequest(
+                target_fasta=">q1\nACDEFGHIK\n",
+                target_pdb="",
+                dry_run=True,
+                stop_after="af2",
+                conservation_tiers=[0.3],
+            )
+            runner.run(initial, run_id=run_id)
+
+            rerun = PipelineRequest(
+                target_fasta=">q1\nYYYYYYYYY\n",
+                target_pdb="",
+                dry_run=True,
+                start_from="af2",
+                stop_after="af2",
+                conservation_tiers=[0.3],
+            )
+            with self.assertRaises(PipelineInputRequired) as ctx:
+                runner.run(rerun, run_id=run_id)
+            self.assertIn("target_fasta", str(ctx.exception))
+            self.assertIn("start_from='design'", str(ctx.exception))
+
+    def test_pipeline_design_boundary_rerun_refreshes_design_and_msa_fingerprints(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            run_id = "partial_rerun_design"
+            initial = PipelineRequest(
+                target_fasta=">q1\nACDEFGHIK\n",
+                target_pdb="",
+                dry_run=True,
+                stop_after="design",
+                conservation_tiers=[0.3],
+            )
+            runner.run(initial, run_id=run_id)
+
+            rerun = PipelineRequest(
+                target_fasta=">q1\nYYYYYYYYY\n",
+                target_pdb="",
+                dry_run=True,
+                start_from="design",
+                stop_after="design",
+                conservation_tiers=[0.3],
+            )
+            res = runner.run(rerun, run_id=run_id)
+            out = Path(res.output_dir)
+
+            designs_fasta = (out / "tiers" / "30" / "designs.fasta").read_text(encoding="utf-8")
+            self.assertIn("YYYYYYYYY", designs_fasta)
+            self.assertNotIn("ACDEFGHIK", designs_fasta)
+
+            msa_meta = json.loads((out / "msa" / "request_meta.json").read_text(encoding="utf-8"))
+            self.assertTrue(str(msa_meta.get("request_hash") or "").strip())
+
+            proteinmpnn_payload = json.loads((out / "tiers" / "30" / "proteinmpnn.json").read_text(encoding="utf-8"))
+            self.assertTrue(str(proteinmpnn_payload.get("request_hash") or "").strip())
+            self.assertTrue(str(proteinmpnn_payload.get("input_hash") or "").strip())
+
+    def test_pipeline_af2_partial_rerun_allows_af2_only_changes(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            run_id = "partial_rerun_af2"
+            initial = PipelineRequest(
+                target_fasta=">q1\nACDEFGHIK\n",
+                target_pdb="",
+                dry_run=True,
+                stop_after="af2",
+                conservation_tiers=[0.3],
+                af2_plddt_cutoff=85.0,
+            )
+            runner.run(initial, run_id=run_id)
+
+            rerun = PipelineRequest(
+                target_fasta=">q1\nACDEFGHIK\n",
+                target_pdb="",
+                dry_run=True,
+                start_from="af2",
+                stop_after="af2",
+                conservation_tiers=[0.3],
+                af2_plddt_cutoff=70.0,
+            )
+            res = runner.run(rerun, run_id=run_id)
+            request_payload = json.loads((Path(res.output_dir) / "request.json").read_text(encoding="utf-8"))
+            self.assertEqual(float(request_payload.get("af2_plddt_cutoff") or 0.0), 70.0)
+
+    def test_clear_stage_outputs_removes_korean_reports_and_wt(self) -> None:
+        with _tmpdir() as tmp:
+            root = Path(tmp) / "cleanup_case"
+            root.mkdir(parents=True, exist_ok=True)
+            (root / "report_ko.md").write_text("ko", encoding="utf-8")
+            (root / "agent_panel_report_ko.md").write_text("agent-ko", encoding="utf-8")
+            (root / "wt").mkdir(parents=True, exist_ok=True)
+            removed = _clear_stage_outputs_from(root, start_from="af2")
+            self.assertFalse((root / "report_ko.md").exists())
+            self.assertFalse((root / "agent_panel_report_ko.md").exists())
+            self.assertFalse((root / "wt").exists())
+            self.assertIn("report_ko.md", removed)
+            self.assertIn("agent_panel_report_ko.md", removed)
+            self.assertIn("wt", removed)
 
 
 if __name__ == "__main__":

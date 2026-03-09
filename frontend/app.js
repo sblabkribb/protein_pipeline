@@ -1,5 +1,6 @@
 import {
   artifactMetaFromPath,
+  buildSetupDraftFromRequest,
   buildRunArguments,
   buildUserPrefix,
   createRunId,
@@ -10,9 +11,15 @@ import {
   isBinaryPath,
   isImagePath,
   sanitizeName,
+  shouldReuseSelectedRun,
   stageFromPath,
 } from "./lib/pipeline.js";
-import { extractDesignChainsFromPayload, filterPdbTextByChains, selectResidueStripMetrics } from "./lib/compare.js";
+import {
+  coerceFiniteMetricValue,
+  extractDesignChainsFromPayload,
+  filterPdbTextByChains,
+  selectResidueStripMetrics,
+} from "./lib/compare.js";
 
 const defaultApiBase = (() => {
   const origin = window.location.origin;
@@ -288,6 +295,7 @@ const state = {
   reportModalImageCache: {},
   copilotHistory: [],
   setupResiduePicker: createSetupResiduePickerState(),
+  setupContinueRun: false,
   setupStepIndex: 0,
   autoAnalyzePendingByRunId: {},
   workflowDesigner: createWorkflowDesignerState(),
@@ -335,6 +343,9 @@ const el = {
   setupStepPrev: document.getElementById("setupStepPrev"),
   setupStepNext: document.getElementById("setupStepNext"),
   setupRunSelector: document.getElementById("setupRunSelector"),
+  setupLoadRunRequest: document.getElementById("setupLoadRunRequest"),
+  setupContinueRun: document.getElementById("setupContinueRun"),
+  setupRunReuseHint: document.getElementById("setupRunReuseHint"),
   setupContextStageValue: document.getElementById("setupContextStageValue"),
   setupContextStateValue: document.getElementById("setupContextStateValue"),
   runBtn: document.getElementById("runBtn"),
@@ -590,6 +601,15 @@ const I18N = {
     "setup.check": "Check Setup",
     "setup.reset": "Reset Inputs",
     "setup.clear": "Clear Note",
+    "setup.loadRequest": "Load Request",
+    "setup.loadRequest.loaded":
+      "Loaded request.json from {id}. New runs fork by default; enable Continue same run only for partial reruns.",
+    "setup.loadRequest.failed": "Failed to load request.json: {error}",
+    "setup.continueRun": "Continue same run",
+    "setup.runReuse.default": "Default: launch a new run ID. Partial reruns require an existing run.",
+    "setup.runReuse.selectRun": "Select a run, load its request, then enable Continue same run for start_from > MSA.",
+    "setup.runReuse.partial":
+      "Partial rerun target: {id}. Continue same run will reuse this run ID and overwrite downstream outputs.",
     "setup.hint": "Complete required inputs to enable execution.",
     "setup.runStatus.empty": "Run status: -",
     "setup.runStatus.line": "Run status: {id} · {stage} / {state} · {updated}",
@@ -1054,6 +1074,7 @@ const I18N = {
     "hint.none": "No missing inputs. You can run now.",
     "hint.ready": "All required inputs captured.",
     "hint.missing": "Missing required inputs.",
+    "hint.partialRun": "Partial reruns need a selected run and Continue same run enabled.",
     "hint.nextStep": "Move to the final step to launch the run.",
     "hint.running": "A run is already in progress.",
     "run.reset": "Inputs reset. Reconfirm selections and attachments.",
@@ -1370,6 +1391,15 @@ const I18N = {
     "setup.check": "설정 점검",
     "setup.reset": "입력 초기화",
     "setup.clear": "메모 지우기",
+    "setup.loadRequest": "요청 불러오기",
+    "setup.loadRequest.loaded":
+      "{id}의 request.json을 불러왔습니다. 기본 실행은 새 run으로 fork되며, partial rerun일 때만 Continue same run을 켜세요.",
+    "setup.loadRequest.failed": "request.json 불러오기 실패: {error}",
+    "setup.continueRun": "같은 run 이어서 실행",
+    "setup.runReuse.default": "기본값은 새 run ID 실행입니다. partial rerun은 기존 run이 필요합니다.",
+    "setup.runReuse.selectRun": "run을 선택해 request를 불러온 뒤, start_from > MSA인 경우 Continue same run을 켜세요.",
+    "setup.runReuse.partial":
+      "partial rerun 대상: {id}. Continue same run을 켜면 이 run ID를 재사용하고 downstream 출력을 덮어씁니다.",
     "setup.hint": "필수 입력을 완료하면 실행할 수 있습니다.",
     "setup.runStatus.empty": "실행 상태: -",
     "setup.runStatus.line": "실행 상태: {id} · {stage} / {state} · {updated}",
@@ -1833,6 +1863,7 @@ const I18N = {
     "hint.none": "누락된 입력이 없습니다. 지금 실행할 수 있습니다.",
     "hint.ready": "필수 입력이 모두 완료되었습니다.",
     "hint.missing": "필수 입력이 누락되었습니다.",
+    "hint.partialRun": "partial rerun은 run 선택과 Continue same run 활성화가 필요합니다.",
     "hint.nextStep": "마지막 단계로 이동하면 실행할 수 있습니다.",
     "hint.running": "이미 실행 중인 작업이 있습니다.",
     "run.reset": "입력을 초기화했습니다. 선택과 첨부를 다시 확인하세요.",
@@ -4368,6 +4399,9 @@ function setRunMode(mode, { render = true } = {}) {
   const normalized = RUN_MODE_OPTIONS.find((opt) => opt.value === mode)?.value || "pipeline";
   state.runMode = normalized;
   state.setupStepIndex = 0;
+  if (normalized !== "pipeline" && normalized !== "workflow") {
+    state.setupContinueRun = false;
+  }
   if (normalized === "workflow") {
     state.workflowDesigner = createWorkflowDesignerState();
   }
@@ -4376,6 +4410,7 @@ function setRunMode(mode, { render = true } = {}) {
   }
   state.plan = buildManualPlan(normalized);
   updateRunLabel();
+  syncSetupRunReuseControls();
   if (render) {
     renderQuestions(state.plan.questions || []);
   }
@@ -4394,6 +4429,7 @@ function resetPlan({ keepMode = true } = {}) {
   state.answers = {};
   state.answerMeta = {};
   state.chainRanges = null;
+  state.setupContinueRun = false;
   resetSetupResiduePicker();
   const nextMode = keepMode ? state.runMode : "pipeline";
   setRunMode(nextMode);
@@ -7626,6 +7662,7 @@ function updateRunEligibility(questions) {
   if (state.runMode === "pipeline") {
     syncStartStopStages();
   }
+  syncSetupRunReuseControls();
 
   const requiredIds = new Set(
     (questions || [])
@@ -7699,15 +7736,24 @@ function updateRunEligibility(questions) {
     if (id === "bioemu_use") return state.answers.bioemu_use !== true;
     return isAnswerMissing(state.answers[id]);
   });
+  const partialRerunBlocked =
+    isSetupPartialRerunRequested() && !shouldReuseSelectedRun({
+      mode: state.runMode,
+      startFrom: state.answers.start_from,
+      continueInSelectedRun: state.setupContinueRun,
+      selectedRunId: selectedSetupRunId(),
+    });
   const runBusy = state.runSubmitting || String(state.currentRunState || "").toLowerCase() === "running";
   const wizardBlocked = setupWizardEnabled(questions) && !isSetupWizardFinalStep();
-  if (missing.length === 0 && !runBusy && !wizardBlocked) {
+  if (missing.length === 0 && !runBusy && !wizardBlocked && !partialRerunBlocked) {
     el.runBtn.disabled = false;
     el.runHint.textContent = t("hint.ready");
   } else {
     el.runBtn.disabled = true;
     if (runBusy) {
       el.runHint.textContent = t("hint.running");
+    } else if (partialRerunBlocked) {
+      el.runHint.textContent = t("hint.partialRun");
     } else if (wizardBlocked) {
       el.runHint.textContent = t("hint.nextStep");
     } else {
@@ -8081,10 +8127,24 @@ async function runPipeline() {
   const answers = state.plan?.allow_unfiltered_answers ? rawAnswers : filterAnswersForMode(mode, rawAnswers);
   const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
   const requestedStartFrom = normalizePipelineStage(answers.start_from, "");
-  const canReuseRunId =
-    (mode === "pipeline" || mode === "workflow") && requestedStartFrom && requestedStartFrom !== "msa";
   const selectedRunId = String(el.setupRunSelector?.value || state.currentRunId || "").trim();
-  const runId = canReuseRunId && selectedRunId ? selectedRunId : createRunId(prefix);
+  const reuseSelectedRun = shouldReuseSelectedRun({
+    mode,
+    startFrom: requestedStartFrom,
+    continueInSelectedRun: state.setupContinueRun,
+    selectedRunId,
+  });
+  if (
+    (mode === "pipeline" || mode === "workflow") &&
+    requestedStartFrom &&
+    requestedStartFrom !== "msa" &&
+    !reuseSelectedRun
+  ) {
+    setMessage(t("hint.partialRun"), "ai");
+    updateRunEligibility(state.plan?.questions || []);
+    return;
+  }
+  const runId = reuseSelectedRun ? selectedRunId : createRunId(prefix);
   state.runModeById[runId] = mode;
   let args = {};
   let toolName = "pipeline.run";
@@ -9684,6 +9744,95 @@ async function readRunRequestPayload(runId) {
     throw new Error(t("run.resume.badRequest"));
   }
   return payload;
+}
+
+function selectedSetupRunId() {
+  return String(el.setupRunSelector?.value || state.currentRunId || "").trim();
+}
+
+function isSetupPartialRerunRequested(mode = state.runMode, answers = state.answers) {
+  const normalizedMode = String(mode || "").trim().toLowerCase();
+  if (normalizedMode !== "pipeline" && normalizedMode !== "workflow") {
+    return false;
+  }
+  const workflowStart =
+    normalizedMode === "workflow" ? buildWorkflowPlanFromDesigner().start : "";
+  const startFrom = normalizePipelineStage(answers?.start_from || workflowStart, "");
+  return Boolean(startFrom && startFrom !== "msa");
+}
+
+function syncSetupRunReuseControls() {
+  const runId = selectedSetupRunId();
+  const partialRerun = isSetupPartialRerunRequested();
+  const canContinue = Boolean(runId && partialRerun);
+  if (!canContinue) {
+    state.setupContinueRun = false;
+  }
+  if (el.setupContinueRun) {
+    el.setupContinueRun.checked = Boolean(state.setupContinueRun);
+    el.setupContinueRun.disabled = !canContinue;
+  }
+  if (el.setupLoadRunRequest) {
+    el.setupLoadRunRequest.disabled = !runId;
+  }
+  if (el.setupRunReuseHint) {
+    let key = "setup.runReuse.default";
+    if (partialRerun && !runId) {
+      key = "setup.runReuse.selectRun";
+    } else if (partialRerun && runId) {
+      key = "setup.runReuse.partial";
+    }
+    el.setupRunReuseHint.textContent = t(key, { id: runId });
+  }
+}
+
+async function loadSetupRequestIntoForm(runId, { announce = true } = {}) {
+  const key = String(runId || selectedSetupRunId()).trim();
+  if (!key) {
+    syncSetupRunReuseControls();
+    return false;
+  }
+  try {
+    const payload = await readRunRequestPayload(key);
+    const draft = buildSetupDraftFromRequest(payload);
+    const nextMode = draft.mode || state.runMode || "pipeline";
+    state.answers = {};
+    state.answerMeta = {};
+    state.chainRanges = null;
+    state.setupContinueRun = false;
+    resetSetupResiduePicker();
+    setRunMode(nextMode, { render: false });
+    state.answers = draft.answers;
+    state.answerMeta = draft.answerMeta;
+    refreshChainRangesFromAnswers();
+
+    const targetPdbText = String(state.answers.target_pdb || "").trim();
+    const rfd3InputText = String(state.answers.rfd3_input_pdb || "").trim();
+    if (targetPdbText) {
+      setSetupResiduePickerStructure(targetPdbText, {
+        sourceLabel: t("setup.residuePicker.loadTargetInput"),
+        sourceKey: "target_input",
+      });
+    } else if (rfd3InputText) {
+      setSetupResiduePickerStructure(rfd3InputText, {
+        sourceLabel: t("setup.residuePicker.loadRfd3Input"),
+        sourceKey: "rfd3_input_pdb",
+      });
+    }
+
+    renderQuestions(state.plan?.questions || []);
+    syncSetupRunReuseControls();
+    if (announce) {
+      setMessage(t("setup.loadRequest.loaded", { id: key }), "ai");
+    }
+    return true;
+  } catch (err) {
+    syncSetupRunReuseControls();
+    if (announce) {
+      setMessage(t("setup.loadRequest.failed", { error: err.message }), "ai");
+    }
+    return false;
+  }
 }
 
 function renderWorkflowReviewPanel(status = state.lastRunStatus) {
@@ -11471,16 +11620,17 @@ function renderResidueLinkedView(structureDiff, onSelect) {
   const strip = document.createElement("div");
   strip.className = "residue-strip";
   topForStrip.forEach((item) => {
+    const distance = coerceFiniteMetricValue(item.distance);
     const chip = document.createElement("button");
     chip.type = "button";
     chip.className = `residue-chip ${
-      Number(item.distance) > 3 ? "high" : Number(item.distance) > 1.5 ? "mid" : "low"
+      distance !== null && distance > 3 ? "high" : distance !== null && distance > 1.5 ? "mid" : "low"
     }`;
     chip.dataset.chain = String(item.chain || "_");
     chip.dataset.resi = String(item.resi || "");
     chip.dataset.left = String(item.leftResn || "");
     chip.dataset.right = String(item.rightResn || "");
-    chip.dataset.dist = String(item.distance || "");
+    chip.dataset.dist = distance === null ? "" : String(distance);
     chip.textContent = `${item.chain || "_"}:${item.resi}`;
     strip.appendChild(chip);
   });
@@ -11494,18 +11644,19 @@ function renderResidueLinkedView(structureDiff, onSelect) {
       </thead>
       <tbody>
         ${topForTable
-          .map(
-            (item) => `<tr data-chain="${escapeHtml(String(item.chain || "_"))}" data-resi="${escapeHtml(
+          .map((item) => {
+            const distance = coerceFiniteMetricValue(item.distance);
+            return `<tr data-chain="${escapeHtml(String(item.chain || "_"))}" data-resi="${escapeHtml(
               String(item.resi || "")
             )}" data-left="${escapeHtml(String(item.leftResn || ""))}" data-right="${escapeHtml(
               String(item.rightResn || "")
-            )}" data-dist="${escapeHtml(String(item.distance || ""))}">
+            )}" data-dist="${escapeHtml(distance === null ? "" : String(distance))}">
             <td>${escapeHtml(`${item.chain || "_"}:${item.resi}`)}</td>
             <td>${escapeHtml(String(item.leftResn || ""))}</td>
             <td>${escapeHtml(String(item.rightResn || ""))}</td>
-            <td class="num">${escapeHtml(formatMetricValue(item.distance, 2, false))}</td>
-          </tr>`
-          )
+            <td class="num">${escapeHtml(formatMetricValue(distance, 2, false))}</td>
+          </tr>`;
+          })
           .join("")}
       </tbody>
     </table>
@@ -11515,6 +11666,7 @@ function renderResidueLinkedView(structureDiff, onSelect) {
     const chainText = String(chain || "_");
     const resiNum = Number(resi);
     if (!Number.isFinite(resiNum)) return;
+    const distanceValue = coerceFiniteMetricValue(distance);
     strip.querySelectorAll(".residue-chip").forEach((node) => {
       const match = node.dataset.chain === chainText && Number(node.dataset.resi) === resiNum;
       node.classList.toggle("selected", match);
@@ -11528,7 +11680,7 @@ function renderResidueLinkedView(structureDiff, onSelect) {
       resi: resiNum,
       left: leftResn || "-",
       right: rightResn || "-",
-      dist: formatMetricValue(distance, 2, false),
+      dist: formatMetricValue(distanceValue, 2, false),
     });
     if (typeof onSelect === "function") {
       onSelect({ chain: chainText, resi: resiNum });
@@ -11690,8 +11842,7 @@ function findTierScopedCompareCandidatePath(structureItems, sourceKey, tierKey) 
   return String(artifact?.path || "").trim();
 }
 
-function comparePresetVariantLabel(kind, tier = "") {
-  if (kind === "base") return t("artifacts.preview.compare.meta.backbone");
+function comparePresetVariantLabel(tier = "") {
   return formatCompareTierLabel(tier);
 }
 
@@ -11700,7 +11851,7 @@ function buildComparePresetGroups(structureItems) {
   const tierKeys = compareTierKeysForRun(state.currentRunId);
   const groups = [];
 
-  const addGroup = (id, labelKey, baseLeftItem, baseRightItem, tierResolver) => {
+  const addGroup = (id, labelKey, tierResolver) => {
     const variants = [];
     const seen = new Set();
     const pushVariant = (variantId, variantLabel, leftPathRaw, rightPathRaw) => {
@@ -11718,19 +11869,12 @@ function buildComparePresetGroups(structureItems) {
       });
     };
 
-    pushVariant(
-      `${id}__base`,
-      comparePresetVariantLabel("base"),
-      baseLeftItem?.path,
-      baseRightItem?.path
-    );
-
     tierKeys.forEach((tierKey) => {
       const resolved = typeof tierResolver === "function" ? tierResolver(tierKey) : null;
       if (!resolved || typeof resolved !== "object") return;
       pushVariant(
         `${id}__tier_${tierKey}`,
-        comparePresetVariantLabel("tier", tierKey),
+        comparePresetVariantLabel(tierKey),
         resolved.leftPath,
         resolved.rightPath
       );
@@ -11744,19 +11888,17 @@ function buildComparePresetGroups(structureItems) {
     });
   };
 
-  addGroup("wt_vs_rfd3", "artifacts.preview.compare.preset.wtVsRfd3", refs.wt, refs.rfd3Backbone, (tierKey) => ({
+  addGroup("wt_vs_rfd3", "artifacts.preview.compare.preset.wtVsRfd3", (tierKey) => ({
     leftPath: refs.wt?.path,
     rightPath: findTierScopedCompareCandidatePath(structureItems, "rfd3", tierKey),
   }));
-  addGroup("wt_vs_bioemu", "artifacts.preview.compare.preset.wtVsBioemu", refs.wt, refs.bioemuBackbone, (tierKey) => ({
+  addGroup("wt_vs_bioemu", "artifacts.preview.compare.preset.wtVsBioemu", (tierKey) => ({
     leftPath: refs.wt?.path,
     rightPath: findTierScopedCompareCandidatePath(structureItems, "bioemu", tierKey),
   }));
   addGroup(
     "rfd3_vs_bioemu",
     "artifacts.preview.compare.preset.rfd3VsBioemu",
-    refs.rfd3Backbone,
-    refs.bioemuBackbone,
     (tierKey) => ({
       leftPath: findTierScopedCompareCandidatePath(structureItems, "rfd3", tierKey),
       rightPath: findTierScopedCompareCandidatePath(structureItems, "bioemu", tierKey),
@@ -14608,6 +14750,7 @@ function syncRunSelector(runs = []) {
     });
     selectorEl.value = current && ordered.includes(current) ? current : "";
   });
+  syncSetupRunReuseControls();
 }
 
 function renderRuns(runs) {
@@ -14816,16 +14959,27 @@ if (el.refreshRunsBtn) {
   });
 }
 
-async function handleRunSelectorChange(nextRunId) {
+async function handleRunSelectorChange(nextRunId, { loadSetupRequest = false } = {}) {
   const runId = String(nextRunId || "").trim();
-  if (!runId || runId === state.currentRunId) return;
-  setCurrentRunId(runId);
-  renderQuestions(state.plan?.questions || []);
-  await pollStatus(runId);
-  await refreshArtifacts();
-  await refreshAgentPanel();
-  await refreshRunCompare();
-  await refreshHitList();
+  if (!runId) {
+    syncSetupRunReuseControls();
+    return;
+  }
+  const changed = runId !== state.currentRunId;
+  if (changed) {
+    setCurrentRunId(runId);
+    renderQuestions(state.plan?.questions || []);
+    await pollStatus(runId);
+    await refreshArtifacts();
+    await refreshAgentPanel();
+    await refreshRunCompare();
+    await refreshHitList();
+  }
+  if (loadSetupRequest) {
+    await loadSetupRequestIntoForm(runId);
+  } else {
+    syncSetupRunReuseControls();
+  }
   ensureAutoPoll();
 }
 
@@ -14837,7 +14991,21 @@ if (el.runSelector) {
 
 if (el.setupRunSelector) {
   el.setupRunSelector.addEventListener("change", async () => {
-    await handleRunSelectorChange(el.setupRunSelector.value);
+    await handleRunSelectorChange(el.setupRunSelector.value, { loadSetupRequest: true });
+  });
+}
+
+if (el.setupLoadRunRequest) {
+  el.setupLoadRunRequest.addEventListener("click", async () => {
+    await loadSetupRequestIntoForm(selectedSetupRunId());
+  });
+}
+
+if (el.setupContinueRun) {
+  el.setupContinueRun.addEventListener("change", () => {
+    state.setupContinueRun = Boolean(el.setupContinueRun.checked);
+    syncSetupRunReuseControls();
+    updateRunEligibility(state.plan?.questions || []);
   });
 }
 

@@ -297,6 +297,95 @@ export function buildRunArguments({ prompt, routed, answers, runId }) {
   return args;
 }
 
+function cloneSetupValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => cloneSetupValue(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, cloneSetupValue(item)])
+    );
+  }
+  return value;
+}
+
+export function shouldReuseSelectedRun({ mode, startFrom, continueInSelectedRun, selectedRunId }) {
+  const normalizedMode = String(mode || "").trim().toLowerCase();
+  const normalizedStart = normalizeStage(startFrom);
+  return Boolean(
+    continueInSelectedRun &&
+      String(selectedRunId || "").trim() &&
+      (normalizedMode === "pipeline" || normalizedMode === "workflow") &&
+      normalizedStart &&
+      normalizedStart !== "msa"
+  );
+}
+
+export function buildSetupDraftFromRequest(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return { mode: "", answers: {}, answerMeta: {} };
+  }
+
+  const mode = inferRequestRunMode(payload) || "pipeline";
+  const answers = {};
+  const answerMeta = {};
+  const skipKeys = new Set(["target_fasta", "target_pdb", "diffdock_ligand_sdf", "diffdock_ligand_smiles"]);
+
+  Object.entries(payload).forEach(([key, value]) => {
+    if (skipKeys.has(key)) return;
+    if (value === undefined || value === null) return;
+    if (typeof value === "string" && value.trim() === "") return;
+    answers[key] = cloneSetupValue(value);
+  });
+
+  const targetPdb = String(payload.target_pdb || "");
+  const targetFasta = String(payload.target_fasta || "");
+  if (targetPdb.trim()) {
+    answers.target_input = targetPdb;
+    answers.target_pdb = targetPdb;
+    if (targetFasta.trim()) answers.target_fasta = targetFasta;
+    answerMeta.target_input = { fileName: "request.json:target_pdb" };
+    answerMeta.target_pdb = { fileName: "request.json:target_pdb" };
+  } else if (targetFasta.trim()) {
+    answers.target_input = targetFasta;
+    answers.target_fasta = targetFasta;
+    answerMeta.target_input = { fileName: "request.json:target_fasta" };
+  }
+
+  const rfd3Input = String(payload.rfd3_input_pdb || "");
+  if (rfd3Input.trim()) {
+    answers.rfd3_input_pdb = rfd3Input;
+    answerMeta.rfd3_input_pdb = { fileName: "request.json:rfd3_input_pdb" };
+  }
+
+  const ligandSdf = String(payload.diffdock_ligand_sdf || "");
+  const ligandSmiles = String(payload.diffdock_ligand_smiles || "");
+  if (ligandSdf.trim()) {
+    answers.diffdock_ligand = ligandSdf;
+    answerMeta.diffdock_ligand = { fileName: "request.json:diffdock_ligand.sdf" };
+  } else if (ligandSmiles.trim()) {
+    answers.diffdock_ligand = ligandSmiles;
+    answerMeta.diffdock_ligand = { fileName: "request.json:diffdock_ligand.smiles" };
+  }
+
+  if (mode === "pipeline") {
+    answers.diffdock_use = answers.diffdock_ligand ? "use" : "skip";
+  } else if (mode === "diffdock" && answers.diffdock_ligand) {
+    answers.diffdock_use = "use";
+  }
+
+  const normalizedStart = normalizeStage(answers.start_from);
+  if (normalizedStart) {
+    answers.start_from = normalizedStart;
+  }
+  const normalizedStop = normalizeStage(answers.stop_after);
+  if (normalizedStop) {
+    answers.stop_after = normalizedStop;
+  }
+
+  return { mode, answers, answerMeta };
+}
+
 export function inferRequestRunMode(payload) {
   if (!payload || typeof payload !== "object") return "";
 

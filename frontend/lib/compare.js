@@ -33,6 +33,13 @@ export function normalizeDesignChains(values) {
   return out;
 }
 
+export function coerceFiniteMetricValue(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && !value.trim()) return null;
+  const num = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
 export function extractDesignChainsFromPayload(payload) {
   if (!payload || typeof payload !== "object") return [];
   const candidates = [

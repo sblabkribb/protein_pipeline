@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>K-Biofoundry | Protein Pipeline Console</title>
-    <link rel="stylesheet" href="./styles.css?v=20260309_compare_input_fix" />
+    <link rel="stylesheet" href="./styles.css?v=20260309_residue_dist_fix" />
   </head>
   <body>
     <div class="bg-orb orb-a" aria-hidden="true"></div>
@@ -122,6 +122,20 @@
                     <option value="" data-i18n="monitor.selectRun">Select run</option>
                   </select>
                 </label>
+                <div class="setup-run-reuse">
+                  <div class="setup-run-reuse-actions">
+                    <button id="setupLoadRunRequest" class="ghost" type="button" data-i18n="setup.loadRequest">
+                      Load Request
+                    </button>
+                    <label class="toggle setup-run-toggle">
+                      <input id="setupContinueRun" type="checkbox" />
+                      <span data-i18n="setup.continueRun">Continue same run</span>
+                    </label>
+                  </div>
+                  <div id="setupRunReuseHint" class="run-context-hint" data-i18n="setup.runReuse.default">
+                    Default: launch a new run ID. Partial reruns require an existing run.
+                  </div>
+                </div>
                 <div class="run-context-meta">
                   <span class="run-context-item">
                     <span class="label" data-i18n="monitor.stage">Stage</span>
@@ -991,6 +1005,6 @@
     <button id="copilotFabBtn" class="primary copilot-fab" data-i18n="copilot.open">Copilot</button>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260309_compare_audit_fix"></script>
+    <script type="module" src="./app.js?v=20260309_quick_compare_tier_only"></script>
   </body>
 </html>
