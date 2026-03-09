@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 import os
+import shutil
 import time
 from pathlib import Path
 import re
@@ -55,6 +56,161 @@ _SAFE_ID_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
 _AF2_ALLOWED_AA = set("ACDEFGHIKLMNPQRSTVWYX")
 _AF2_PROVIDER_COLABFOLD = "colabfold"
 _AF2_PROVIDER_AF2 = "af2"
+_PIPELINE_STAGE_ORDER = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"]
+
+
+def _normalize_pipeline_stage(value: object | None) -> str | None:
+    raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if raw in {"wt_diff", "wtdiff"}:
+        raw = "novelty"
+    if not raw:
+        return None
+    if raw not in _PIPELINE_STAGE_ORDER:
+        return None
+    return raw
+
+
+def _stage_index(stage: str) -> int:
+    return _PIPELINE_STAGE_ORDER.index(stage)
+
+
+def _remove_path_if_exists(path: Path) -> bool:
+    if not path.exists():
+        return False
+    if path.is_dir():
+        shutil.rmtree(path, ignore_errors=True)
+        return True
+    try:
+        path.unlink()
+        return True
+    except FileNotFoundError:
+        return False
+
+
+def _clear_tier_outputs_from_stage(root: Path, *, start_from: str) -> list[str]:
+    removed: list[str] = []
+    tiers_dir = root / "tiers"
+    if not tiers_dir.exists():
+        return removed
+
+    if start_from == "design":
+        if _remove_path_if_exists(tiers_dir):
+            removed.append("tiers/")
+        return removed
+
+    for tier_dir in sorted(tiers_dir.iterdir()):
+        if not tier_dir.is_dir():
+            continue
+        rel_prefix = f"tiers/{tier_dir.name}"
+
+        def _remove(rel_name: str) -> None:
+            path = tier_dir / rel_name
+            if _remove_path_if_exists(path):
+                suffix = "/" if path.is_dir() else ""
+                removed.append(f"{rel_prefix}/{rel_name}{suffix}")
+
+        if start_from == "soluprot":
+            _remove("soluprot.json")
+            _remove("designs_filtered.fasta")
+            _remove("af2")
+            _remove("af2_scores.json")
+            _remove("af2_selected.fasta")
+            _remove("novelty.tsv")
+            _remove("novelty.json")
+            continue
+
+        if start_from == "af2":
+            _remove("af2")
+            _remove("af2_scores.json")
+            _remove("af2_selected.fasta")
+            _remove("novelty.tsv")
+            _remove("novelty.json")
+            continue
+
+        if start_from == "novelty":
+            _remove("novelty.tsv")
+            _remove("novelty.json")
+
+    return removed
+
+
+def _clear_stage_outputs_from(root: Path, *, start_from: str) -> list[str]:
+    removed: list[str] = []
+
+    def _remove(rel_path: str) -> None:
+        path = root / rel_path
+        if _remove_path_if_exists(path):
+            suffix = "/" if path.is_dir() else ""
+            removed.append(f"{rel_path}{suffix}")
+
+    # These are regenerated from current run outputs and should not be stale across partial reruns.
+    for rel in ("summary.json", "comparisons.json", "report.md", "report.ko.md", "agent_panel_report.md", "agent_panel.jsonl"):
+        _remove(rel)
+
+    if start_from == "msa":
+        for rel in (
+            "msa",
+            "conservation.json",
+            "rfd3",
+            "bioemu",
+            "backbones",
+            "backbones.json",
+            "chain_strategy.json",
+            "query_pdb_alignment.json",
+            "query_pdb_check.json",
+            "ligand_mask.json",
+            "surface_mask.json",
+            "mask_consensus.json",
+            "wt",
+            "diffdock",
+            "tiers",
+            "target.pdb",
+            "target.original.pdb",
+            "af2_target_runpod_job.json",
+        ):
+            _remove(rel)
+        return removed
+
+    if start_from == "rfd3":
+        for rel in (
+            "rfd3",
+            "bioemu",
+            "backbones",
+            "backbones.json",
+            "chain_strategy.json",
+            "query_pdb_alignment.json",
+            "query_pdb_check.json",
+            "ligand_mask.json",
+            "surface_mask.json",
+            "mask_consensus.json",
+            "diffdock",
+            "tiers",
+            "target.pdb",
+            "target.original.pdb",
+            "af2_target_runpod_job.json",
+        ):
+            _remove(rel)
+        return removed
+
+    if start_from == "bioemu":
+        for rel in (
+            "bioemu",
+            "backbones",
+            "backbones.json",
+            "chain_strategy.json",
+            "query_pdb_alignment.json",
+            "query_pdb_check.json",
+            "ligand_mask.json",
+            "surface_mask.json",
+            "mask_consensus.json",
+            "diffdock",
+            "tiers",
+        ):
+            _remove(rel)
+        return removed
+
+    removed.extend(_clear_tier_outputs_from_stage(root, start_from=start_from))
+    return removed
 
 
 def _format_set(values: set[str], *, limit: int = 12) -> str:
@@ -139,6 +295,66 @@ class PipelineCancelled(RuntimeError):
 def _safe_id(value: str) -> str:
     safe = _SAFE_ID_RE.sub("_", value).strip("._-")
     return safe[:128] or "id"
+
+
+def _canonicalize_rfd3_design_id(value: object | None) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    safe = _safe_id(raw)
+    low = safe.lower()
+    if low.startswith("rfd3"):
+        return safe
+    if low.startswith("inputs_"):
+        tail = safe[len("inputs_") :].lstrip("._-")
+        return f"rfd3_{tail}" if tail else "rfd3"
+    if low.startswith("inputs-"):
+        tail = safe[len("inputs-") :].lstrip("._-")
+        return f"rfd3_{tail}" if tail else "rfd3"
+    if low in {"selected", "cached", "recovered", "dry_run"}:
+        return f"rfd3_{low}"
+    return f"rfd3_{safe}"
+
+
+def _canonicalize_rfd3_output_name(value: object | None) -> str:
+    raw = str(value or "").strip()
+    if not raw or "/" in raw or "\\" in raw:
+        return raw
+    for suffix in (".cif.gz", ".json", ".pdb", ".cif"):
+        if raw.lower().endswith(suffix):
+            stem = raw[: -len(suffix)]
+            return f"{_canonicalize_rfd3_design_id(stem)}{raw[-len(suffix):]}"
+    return _canonicalize_rfd3_design_id(raw)
+
+
+def _canonicalize_rfd3_design_record(record: dict[str, Any]) -> dict[str, Any]:
+    item = dict(record)
+    raw_id = str(item.get("id") or "").strip()
+    canonical_id = _canonicalize_rfd3_design_id(raw_id)
+    if canonical_id:
+        item["id"] = canonical_id
+        if raw_id and raw_id != canonical_id:
+            item.setdefault("upstream_id", raw_id)
+    for key in ("cif_gz_name", "json_name", "pdb_name"):
+        raw_name = str(item.get(key) or "").strip()
+        if not raw_name:
+            continue
+        canonical_name = _canonicalize_rfd3_output_name(raw_name)
+        if canonical_name and canonical_name != raw_name:
+            item.setdefault(f"upstream_{key}", raw_name)
+            item[key] = canonical_name
+    return item
+
+
+def _canonicalize_rfd3_design_list(items: object) -> list[dict[str, Any]]:
+    if not isinstance(items, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        out.append(_canonicalize_rfd3_design_record(item))
+    return out
 
 
 def _rfd3_active(request: PipelineRequest) -> bool:
@@ -323,6 +539,35 @@ def _split_multichain_sequence(seq: str) -> list[str]:
 
 def _clean_protein_sequence(seq: str) -> str:
     return "".join(ch for ch in str(seq or "").upper() if ch.isalpha())
+
+
+def _sequence_difference_stats(reference_seq: str, query_seq: str) -> dict[str, float | int] | None:
+    reference = _clean_protein_sequence(reference_seq)
+    query = _clean_protein_sequence(query_seq)
+    if not reference or not query:
+        return None
+    compare_len = max(len(reference), len(query))
+    if compare_len <= 0:
+        return None
+    span = min(len(reference), len(query))
+    matches = 0
+    for i in range(span):
+        if reference[i] == query[i]:
+            matches += 1
+    diff_count = max(0, compare_len - matches)
+    identity = float(matches) / float(compare_len)
+    diff_ratio = float(diff_count) / float(compare_len)
+    return {
+        "wt_length": len(reference),
+        "design_length": len(query),
+        "compare_len": compare_len,
+        "match_count": matches,
+        "diff_count": diff_count,
+        "identity": identity,
+        "identity_pct": identity * 100.0,
+        "diff_ratio": diff_ratio,
+        "diff_pct": diff_ratio * 100.0,
+    }
 
 
 def _map_reference_ligand_mask_to_query(
@@ -548,6 +793,89 @@ def _target_record_from_pdb(pdb_text: str, *, design_chains: list[str] | None) -
     return FastaRecord(header=f"pdb_chain_{chain_id}", sequence=seq)
 
 
+def _resolve_backbone_design_chains(
+    *,
+    pdb_text: str,
+    preferred_chains: list[str] | None,
+    query_seq: str = "",
+) -> tuple[list[str], str | None]:
+    residues = residues_by_chain(pdb_text, only_atom_records=True)
+    available = list(residues.keys())
+    preferred = [str(c).strip() for c in (preferred_chains or []) if str(c).strip()]
+    if not available:
+        return preferred, None
+    if not preferred:
+        return available, None
+
+    matched = [c for c in preferred if c in available]
+    if matched:
+        return matched, None
+
+    query_clean = _clean_protein_sequence(query_seq)
+    if len(preferred) == 1 and query_clean:
+        seq_by_chain = sequence_by_chain(pdb_text, chains=available)
+        best_chain = None
+        best_score: tuple[float, int, int] | None = None
+        for chain_id, chain_seq in seq_by_chain.items():
+            clean_seq = _clean_protein_sequence(chain_seq)
+            if not clean_seq:
+                continue
+            aln = global_alignment_mapping(query_clean, clean_seq)
+            score = (float(aln.query_identity), int(aln.matches), int(aln.target_len))
+            if best_score is None or score > best_score:
+                best_score = score
+                best_chain = chain_id
+        if best_chain:
+            return [best_chain], (
+                f"requested_chains={preferred} missing; "
+                f"auto_selected_chain={best_chain} by query alignment"
+            )
+
+    if len(preferred) == 1:
+        fallback = available[0]
+        return [fallback], f"requested_chains={preferred} missing; fallback_chain={fallback}"
+
+    limit = min(len(preferred), len(available))
+    fallback = available[:limit] if limit > 0 else available
+    return fallback, f"requested_chains={preferred} missing; fallback_chains={fallback}"
+
+
+def _fallback_chain_positions(
+    values_by_chain: dict[str, list[int]],
+    chain_id: str,
+    *,
+    include_wildcard: bool = False,
+) -> list[int]:
+    def _coerce(values: object) -> list[int]:
+        if not isinstance(values, list):
+            return []
+        out: list[int] = []
+        for item in values:
+            try:
+                out.append(int(item))
+            except Exception:
+                continue
+        return out
+
+    direct = values_by_chain.get(chain_id)
+    direct_vals = _coerce(direct)
+    if direct_vals:
+        return direct_vals
+    if include_wildcard:
+        wildcard_vals = _coerce(values_by_chain.get("*"))
+        if wildcard_vals:
+            return wildcard_vals
+    explicit = [
+        _coerce(vals)
+        for key, vals in values_by_chain.items()
+        if key != "*"
+    ]
+    explicit = [vals for vals in explicit if vals]
+    if len(explicit) == 1:
+        return explicit[0]
+    return []
+
+
 def _normalize_policy(value: str) -> str:
     policy = str(value or "").strip().lower() or "error"
     if policy not in {"error", "warn", "ignore"}:
@@ -697,6 +1025,60 @@ def _has_nonpositive_resseq(pdb_text: str) -> bool:
     return False
 
 
+def _has_negative_resseq(pdb_text: str) -> bool:
+    for raw in pdb_text.splitlines():
+        if not raw:
+            continue
+        rec = raw[:6].strip().upper()
+        if rec not in {"ATOM", "HETATM"}:
+            continue
+        try:
+            resseq = int(raw[22:26].strip())
+        except Exception:
+            continue
+        if resseq < 0:
+            return True
+    return False
+
+
+def _has_zero_resseq(pdb_text: str) -> bool:
+    for raw in pdb_text.splitlines():
+        if not raw:
+            continue
+        rec = raw[:6].strip().upper()
+        if rec not in {"ATOM", "HETATM"}:
+            continue
+        try:
+            resseq = int(raw[22:26].strip())
+        except Exception:
+            continue
+        if resseq == 0:
+            return True
+    return False
+
+
+def _resolve_backbone_preprocess_options(
+    *,
+    pdb_text: str,
+    source: object | None,
+    strip_nonpositive_resseq: bool,
+    renumber_resseq_from_1: bool,
+) -> tuple[bool, bool, str | None]:
+    use_strip_nonpositive = bool(strip_nonpositive_resseq)
+    use_renumber = bool(renumber_resseq_from_1)
+    source_key = str(source or "").strip().lower()
+    detail = None
+
+    # BioEmu topology PDBs can start at residue 0. Stripping non-positive residue
+    # indices would drop the N-terminal residue and shift every downstream position.
+    if source_key.startswith("bioemu") and _has_zero_resseq(pdb_text) and not _has_negative_resseq(pdb_text):
+        use_strip_nonpositive = False
+        use_renumber = True
+        detail = "bioemu_zero_resseq_renumbered_from_1"
+
+    return use_strip_nonpositive, use_renumber, detail
+
+
 def _preprocess_pdb_text(
     pdb_text: str,
     *,
@@ -715,6 +1097,61 @@ def _preprocess_pdb_text(
         renumber_resseq_from_1=renumber_resseq_from_1,
     )
     return processed
+
+
+def _sync_processed_source_pdb_artifacts(
+    *,
+    run_root: Path,
+    backbone_id: str,
+    backbone_safe_id: str,
+    source: object | None,
+    processed_pdb_text: str,
+    rfd3_selected_id: str | None = None,
+) -> None:
+    source_key = str(source or "").strip().lower()
+    if not processed_pdb_text.strip():
+        return
+
+    if source_key.startswith("bioemu"):
+        bioemu_dir = run_root / "bioemu"
+        designs_dir = _ensure_dir(bioemu_dir / "designs")
+        _write_text(designs_dir / f"{backbone_safe_id}.pdb", processed_pdb_text)
+
+        output_path = bioemu_dir / "output.json"
+        if output_path.exists():
+            try:
+                output_payload = json.loads(output_path.read_text(encoding="utf-8"))
+            except Exception:
+                output_payload = None
+            changed = False
+            if isinstance(output_payload, dict):
+                sample_pdbs = output_payload.get("sample_pdbs")
+                if isinstance(sample_pdbs, list):
+                    for sample in sample_pdbs:
+                        if not isinstance(sample, dict):
+                            continue
+                        sample_id = str(sample.get("id") or "").strip()
+                        if sample_id != backbone_id:
+                            continue
+                        if "pdb" in sample and str(sample.get("pdb") or "") != processed_pdb_text:
+                            sample["pdb"] = processed_pdb_text
+                            changed = True
+                        elif "pdb_text" in sample and str(sample.get("pdb_text") or "") != processed_pdb_text:
+                            sample["pdb_text"] = processed_pdb_text
+                            changed = True
+                if backbone_id == "bioemu_topology" and str(output_payload.get("topology_pdb") or "") != processed_pdb_text:
+                    output_payload["topology_pdb"] = processed_pdb_text
+                    changed = True
+            if changed:
+                write_json(output_path, _safe_json(output_payload))
+        return
+
+    if source_key.startswith("rfd3"):
+        rfd3_dir = run_root / "rfd3"
+        designs_dir = _ensure_dir(rfd3_dir / "designs")
+        _write_text(designs_dir / f"{backbone_safe_id}.pdb", processed_pdb_text)
+        if backbone_id == str(rfd3_selected_id or "").strip():
+            _write_text(rfd3_dir / "selected.pdb", processed_pdb_text)
 
 
 @dataclass(frozen=True)
@@ -817,6 +1254,32 @@ class PipelineRunner:
         try:
             _ensure_not_cancelled(stage="init")
             normalized_stop_after = str(request.stop_after or "").strip().lower()
+            raw_start_from = str(getattr(request, "start_from", "") or "").strip().lower()
+            normalized_start_from = _normalize_pipeline_stage(raw_start_from)
+            if raw_start_from and normalized_start_from is None:
+                raise PipelineInputRequired(
+                    stage="init",
+                    message=(
+                        "start_from must be one of: "
+                        + ", ".join(_PIPELINE_STAGE_ORDER[:-1] + ["wt_diff"])
+                    ),
+                )
+
+            normalized_stop_stage = _normalize_pipeline_stage(normalized_stop_after)
+            normalized_stop_after = normalized_stop_stage or normalized_stop_after
+            if (
+                normalized_start_from is not None
+                and normalized_stop_stage is not None
+                and _stage_index(normalized_start_from) > _stage_index(normalized_stop_stage)
+            ):
+                raise PipelineInputRequired(
+                    stage="init",
+                    message=(
+                        f"start_from={normalized_start_from!r} must be earlier than or equal to "
+                        f"stop_after={normalized_stop_stage!r}."
+                    ),
+                )
+
             novelty_enabled = bool(getattr(request, "novelty_enabled", False) or normalized_stop_after == "novelty")
             if normalized_stop_after == "rfd3" and not _rfd3_active(request):
                 raise PipelineInputRequired(
@@ -828,6 +1291,24 @@ class PipelineRunner:
                     stage="bioemu",
                     message="stop_after='bioemu' requires bioemu_use=true.",
                 )
+            if normalized_start_from == "rfd3" and not _rfd3_active(request):
+                raise PipelineInputRequired(
+                    stage="rfd3",
+                    message="start_from='rfd3' requires rfd3 inputs (for example rfd3_input_pdb + rfd3_contig).",
+                )
+            if normalized_start_from == "bioemu" and not _bioemu_active(request):
+                raise PipelineInputRequired(
+                    stage="bioemu",
+                    message="start_from='bioemu' requires bioemu_use=true.",
+                )
+
+            if normalized_start_from is not None:
+                cleared = _clear_stage_outputs_from(paths.root, start_from=normalized_start_from)
+                detail = f"start_from={normalized_start_from}"
+                if cleared:
+                    detail = f"{detail}; cleared={len(cleared)}"
+                set_status(paths, stage="init", state="running", detail=detail)
+
             msa_dir = _ensure_dir(paths.root / "msa")
             tiers_dir = _ensure_dir(paths.root / "tiers")
 
@@ -1230,19 +1711,24 @@ class PipelineRunner:
                             dest.write_text(str(content), encoding="utf-8")
 
                     if request.dry_run:
+                        use_ensemble = bool(request.rfd3_use_ensemble) or int(request.rfd3_max_return_designs or 1) > 1
                         if rfd3_input_pdb_text.strip():
                             target_pdb_text = rfd3_input_pdb_text
                         elif rfd3_files and "input.pdb" in rfd3_files:
                             target_pdb_text = str(rfd3_files.get("input.pdb") or "")
                         else:
                             target_pdb_text = _dummy_backbone_pdb("A" * 60, chain_id="A")
-                        rfd3_selected_id = "dry_run"
+                        rfd3_selected_id = _canonicalize_rfd3_design_id("design_0" if use_ensemble else "dry_run")
                         _write_text(rfd3_dir / "selected.pdb", target_pdb_text)
-                        write_json(rfd3_dir / "selected.json", {"id": "dry_run", "source": "dummy"})
+                        write_json(rfd3_dir / "selected.json", {"id": rfd3_selected_id, "source": "dummy"})
                         write_json(rfd3_dir / "designs.json", [])
-                        if bool(request.rfd3_use_ensemble) or int(request.rfd3_max_return_designs or 1) > 1:
+                        if use_ensemble:
                             rfd3_backbones = [
-                                {"id": f"design_{i}", "pdb_text": target_pdb_text, "source": "rfd3"}
+                                {
+                                    "id": _canonicalize_rfd3_design_id(f"design_{i}"),
+                                    "pdb_text": target_pdb_text,
+                                    "source": "rfd3",
+                                }
                                 for i in range(int(request.rfd3_max_return_designs or 1))
                             ]
                         set_status(paths, stage="rfd3", state="completed", detail="dry_run")
@@ -1290,7 +1776,9 @@ class PipelineRunner:
                                 except Exception:
                                     selected_raw = None
                                 if isinstance(selected_raw, dict):
-                                    selected_meta = selected_raw
+                                    selected_meta = _canonicalize_rfd3_design_record(selected_raw)
+                                    if selected_meta != selected_raw:
+                                        write_json(selected_json_path, selected_meta)
                             selected_source = str(selected_meta.get("source") or "").strip().lower()
                             if selected_source in {"fallback", "dummy"}:
                                 return False
@@ -1314,18 +1802,19 @@ class PipelineRunner:
                                 return False
 
                             target_pdb_text = cached_pdb_text
-                            rfd3_selected_id = str(selected_meta.get("id") or "cached")
+                            rfd3_selected_id = _canonicalize_rfd3_design_id(selected_meta.get("id") or "cached")
                             rfd3_backbones = None
                             if use_ensemble and designs_json_path.exists():
                                 try:
-                                    cached_designs = json.loads(designs_json_path.read_text(encoding="utf-8"))
+                                    cached_designs_raw = json.loads(designs_json_path.read_text(encoding="utf-8"))
                                 except Exception:
-                                    cached_designs = None
-                                if isinstance(cached_designs, list):
+                                    cached_designs_raw = None
+                                if isinstance(cached_designs_raw, list):
+                                    cached_designs = _canonicalize_rfd3_design_list(cached_designs_raw)
+                                    if cached_designs != cached_designs_raw:
+                                        write_json(designs_json_path, cached_designs)
                                     ensemble: list[dict[str, Any]] = []
                                     for d in cached_designs:
-                                        if not isinstance(d, dict):
-                                            continue
                                         raw_id = str(d.get("id") or "").strip()
                                         pdb_text = str(d.get("pdb") or "")
                                         if not raw_id or not pdb_text.strip():
@@ -1423,12 +1912,14 @@ class PipelineRunner:
                                 return_designs_pdb=use_ensemble,
                                 on_job_id=_on_rfd3_job_id,
                             )
-                        write_json(rfd3_dir / "designs.json", rfd3_out.get("designs") or [])
+                        canonical_designs = _canonicalize_rfd3_design_list(rfd3_out.get("designs"))
+                        write_json(rfd3_dir / "designs.json", canonical_designs)
 
                         selected = rfd3_out.get("selected")
                         if not isinstance(selected, dict):
                             raise RuntimeError(f"RFD3 output missing selected design: {rfd3_out}")
-                        rfd3_selected_id = str(selected.get("id") or "selected")
+                        selected = _canonicalize_rfd3_design_record(selected)
+                        rfd3_selected_id = str(selected.get("id") or _canonicalize_rfd3_design_id("selected"))
                         pdb_text = str(selected.get("pdb") or "")
                         if not pdb_text.strip():
                             raise RuntimeError("RFD3 selected design did not include PDB text")
@@ -1458,12 +1949,9 @@ class PipelineRunner:
                             except Exception:
                                 pass
                         if use_ensemble:
-                            designs = rfd3_out.get("designs")
-                            if isinstance(designs, list):
+                            if canonical_designs:
                                 ensemble: list[dict[str, Any]] = []
-                                for d in designs:
-                                    if not isinstance(d, dict):
-                                        continue
+                                for d in canonical_designs:
                                     raw_id = str(d.get("id") or "").strip() or None
                                     pdb_text = str(d.get("pdb") or "")
                                     if not pdb_text.strip() or raw_id is None:
@@ -1503,7 +1991,7 @@ class PipelineRunner:
                         {"error": str(exc), "recovered_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())},
                     )
                     rfd3_backbones = None
-                    rfd3_selected_id = "recovered"
+                    rfd3_selected_id = _canonicalize_rfd3_design_id("recovered")
                     if not target_pdb_text.strip():
                         if rfd3_input_pdb_text.strip():
                             target_pdb_text = rfd3_input_pdb_text
@@ -1515,7 +2003,7 @@ class PipelineRunner:
                             target_pdb_text = _dummy_backbone_pdb("A" * 60, chain_id="A")
                     if target_pdb_text.strip():
                         _write_text(rfd3_dir / "selected.pdb", target_pdb_text)
-                        write_json(rfd3_dir / "selected.json", {"id": "recovered", "source": "fallback"})
+                        write_json(rfd3_dir / "selected.json", {"id": rfd3_selected_id, "source": "fallback"})
                     set_status(paths, stage="rfd3", state="completed", detail="recovered")
 
                 _, rfd3_recovered, rfd3_error, rfd3_recovery = _recover_stage(
@@ -2075,41 +2563,61 @@ class PipelineRunner:
                 def _run_preprocess() -> None:
                     set_status(paths, stage="pdb_preprocess", state="running")
                     backbones_dir = _ensure_dir(paths.root / "backbones")
+                    preprocess_notes: list[str] = []
                     for idx, b in enumerate(backbones):
                         original = str(b.get("pdb_text") or "")
                         if not original.strip():
                             continue
-                        processed, numbering = preprocess_pdb(
-                            original,
-                            chains=request.design_chains,
+                        bb_strip_nonpositive, bb_renumber, bb_detail = _resolve_backbone_preprocess_options(
+                            pdb_text=original,
+                            source=b.get("source"),
                             strip_nonpositive_resseq=effective_strip_nonpositive,
                             renumber_resseq_from_1=effective_renumber,
                         )
+                        processed, numbering = preprocess_pdb(
+                            original,
+                            chains=request.design_chains,
+                            strip_nonpositive_resseq=bb_strip_nonpositive,
+                            renumber_resseq_from_1=bb_renumber,
+                        )
                         b["pdb_text"] = processed
                         bb_id = _safe_id(str(b.get("id") or f"backbone_{idx}")) or f"backbone_{idx}"
+                        _sync_processed_source_pdb_artifacts(
+                            run_root=paths.root,
+                            backbone_id=str(b.get("id") or ""),
+                            backbone_safe_id=bb_id,
+                            source=b.get("source"),
+                            processed_pdb_text=processed,
+                            rfd3_selected_id=rfd3_selected_id,
+                        )
                         bb_dir = _ensure_dir(backbones_dir / bb_id)
                         _write_text(bb_dir / "target.original.pdb", original)
+                        numbering_payload = {
+                            "chains": request.design_chains,
+                            "strip_nonpositive_resseq": bb_strip_nonpositive,
+                            "renumber_resseq_from_1": bb_renumber,
+                            "mapping": numbering,
+                            "source": str(b.get("source") or "unknown"),
+                        }
+                        if bb_detail:
+                            numbering_payload["detail"] = bb_detail
+                            preprocess_notes.append(f"{bb_id}:{bb_detail}")
                         write_json(
                             bb_dir / "pdb_numbering.json",
-                            {
-                                "chains": request.design_chains,
-                                "strip_nonpositive_resseq": effective_strip_nonpositive,
-                                "renumber_resseq_from_1": effective_renumber,
-                                "mapping": numbering,
-                            },
+                            numbering_payload,
                         )
                         if idx == 0:
                             _write_text(paths.root / "target.original.pdb", original)
                             write_json(
                                 paths.root / "pdb_numbering.json",
-                                {
-                                    "chains": request.design_chains,
-                                    "strip_nonpositive_resseq": effective_strip_nonpositive,
-                                    "renumber_resseq_from_1": effective_renumber,
-                                    "mapping": numbering,
-                                },
+                                numbering_payload,
                             )
-                    set_status(paths, stage="pdb_preprocess", state="completed")
+                    set_status(
+                        paths,
+                        stage="pdb_preprocess",
+                        state="completed",
+                        detail=("; ".join(preprocess_notes)[:500] if preprocess_notes else None),
+                    )
 
                 def _fallback_preprocess(exc: Exception) -> None:
                     write_json(
@@ -2229,19 +2737,32 @@ class PipelineRunner:
             query_warnings: list[str] = []
             query_pdb_error: str | None = None
             for ctx in backbone_contexts:
-                pdb_seq_by_chain = sequence_by_chain(ctx["pdb_text"], chains=design_chains)
+                ctx_design_chains, ctx_chain_note = _resolve_backbone_design_chains(
+                    pdb_text=ctx["pdb_text"],
+                    preferred_chains=design_chains,
+                    query_seq=query_seq,
+                )
+                ctx_available_chains = list(residues_by_chain(ctx["pdb_text"], only_atom_records=True).keys())
+                ctx["available_chains"] = ctx_available_chains
+                ctx["design_chains"] = list(ctx_design_chains)
+
+                pdb_seq_by_chain = sequence_by_chain(ctx["pdb_text"], chains=(ctx_design_chains or None))
                 query_to_pdb_map_by_chain: dict[str, list[int | None]] = {}
                 query_pdb_report: dict[str, object] = {
                     "policy": policy,
                     "min_query_identity": min_identity,
                     "query_len": len(query_seq),
                     "backbone_id": ctx["id"],
+                    "requested_design_chains": design_chains,
+                    "available_chains": ctx_available_chains,
+                    "design_chains_used": ctx_design_chains,
+                    "design_chain_note": ctx_chain_note,
                     "chains": {},
                 }
                 problems: list[str] = []
                 warnings: list[str] = []
 
-                for chain_id in design_chains or sorted(pdb_seq_by_chain.keys()):
+                for chain_id in ctx_design_chains or sorted(pdb_seq_by_chain.keys()):
                     chain_seq_raw = pdb_seq_by_chain.get(chain_id, "")
                     chain_seq = _clean_protein_sequence(chain_seq_raw)
                     if not chain_seq:
@@ -2313,6 +2834,8 @@ class PipelineRunner:
                     query_warnings.append(f"{ctx['id']}:" + "; ".join(problems))
                 if warnings and policy != "ignore":
                     query_warnings.append(f"{ctx['id']}:" + "; ".join(warnings))
+                if ctx_chain_note:
+                    query_warnings.append(f"{ctx['id']}:{ctx_chain_note}")
 
                 ctx["mapping"] = query_to_pdb_map_by_chain
 
@@ -2577,9 +3100,12 @@ class PipelineRunner:
                 def _run_diffdock() -> None:
                     diffdock_root = _ensure_dir(paths.root / "diffdock")
                     for idx, ctx in enumerate(backbone_contexts):
+                        ctx_design_chains = (
+                            ctx.get("design_chains") if isinstance(ctx.get("design_chains"), list) else design_chains
+                        )
                         has_ligand = ligand_atoms_present(
                             ctx["pdb_text"],
-                            chains=design_chains,
+                            chains=ctx_design_chains,
                             ligand_resnames=request.ligand_resnames,
                             ligand_atom_chains=request.ligand_atom_chains,
                         )
@@ -2654,9 +3180,10 @@ class PipelineRunner:
             def _run_ligand_mask() -> None:
                 nonlocal ligand_mask_path
                 for ctx in backbone_contexts:
+                    ctx_design_chains = ctx.get("design_chains") if isinstance(ctx.get("design_chains"), list) else None
                     ligand_mask = ligand_proximity_mask(
                         ctx.get("ligand_mask_pdb_text") or ctx["pdb_text"],
-                        chains=design_chains,
+                        chains=ctx_design_chains,
                         distance_angstrom=request.ligand_mask_distance,
                         ligand_resnames=request.ligand_resnames,
                         ligand_atom_chains=request.ligand_atom_chains,
@@ -2697,9 +3224,12 @@ class PipelineRunner:
                 def _run_surface_mask() -> None:
                     nonlocal surface_mask_path
                     for ctx in backbone_contexts:
+                        ctx_design_chains = (
+                            ctx.get("design_chains") if isinstance(ctx.get("design_chains"), list) else None
+                        )
                         surface_mask, surface_sasa = surface_positions_by_chain(
                             ctx["pdb_text"],
-                            chains=design_chains,
+                            chains=ctx_design_chains,
                             min_rel=request.surface_min_rel,
                             min_abs=request.surface_min_abs,
                         )
@@ -2743,6 +3273,11 @@ class PipelineRunner:
                 primary_ctx = backbone_contexts[0] if backbone_contexts else None
                 mapping_by_chain = (primary_ctx.get("mapping") if primary_ctx else {}) or {}
                 ligand_mask_by_chain = (primary_ctx.get("ligand_mask") if primary_ctx else {}) or {}
+                primary_design_chains = (
+                    list(primary_ctx.get("design_chains"))
+                    if primary_ctx and isinstance(primary_ctx.get("design_chains"), list)
+                    else None
+                )
 
                 msa_quality_path = paths.root / "msa" / "quality.json"
                 msa_quality: dict[str, object] | None = None
@@ -2808,7 +3343,7 @@ class PipelineRunner:
                     return out
 
                 chains = (
-                    design_chains
+                    primary_design_chains
                     or list(ligand_mask_by_chain.keys())
                     or list(original_ligand_mask_query_by_chain.keys())
                     or list(mapping_by_chain.keys())
@@ -2831,11 +3366,14 @@ class PipelineRunner:
                 for chain_id in chains:
                     chain_positions = set(
                         int(p)
-                        for p in (ligand_mask_by_chain.get(chain_id, []) or [])
+                        for p in (_fallback_chain_positions(ligand_mask_by_chain, chain_id) or [])
                         if isinstance(p, (int, float))
                     )
                     if bool(request.ligand_mask_use_original_target):
-                        query_positions = original_ligand_mask_query_by_chain.get(chain_id, []) or []
+                        query_positions = _fallback_chain_positions(
+                            original_ligand_mask_query_by_chain,
+                            chain_id,
+                        )
                         mapped_positions = _map_positions(query_positions, chain_id)
                         chain_positions.update(int(p) for p in mapped_positions)
                     effective_ligand_mask_by_chain[chain_id] = sorted(chain_positions)
@@ -3076,6 +3614,7 @@ class PipelineRunner:
                 *,
                 tier_dir: Path,
                 pdb_text: str,
+                design_chains_local: list[str] | None,
                 fixed_positions_by_chain: dict[str, list[int]],
                 reason: str,
             ) -> tuple[SequenceRecord | None, list[SequenceRecord]]:
@@ -3083,9 +3622,9 @@ class PipelineRunner:
                 if target_record is not None and target_record.sequence:
                     seq = target_record.sequence
                 if not seq:
-                    seqs = sequence_by_chain(pdb_text, chains=design_chains)
-                    if design_chains:
-                        seq = seqs.get(design_chains[0], "")
+                    seqs = sequence_by_chain(pdb_text, chains=design_chains_local)
+                    if design_chains_local:
+                        seq = seqs.get(design_chains_local[0], "")
                     if not seq and seqs:
                         seq = next(iter(seqs.values()))
                 if not seq:
@@ -3150,9 +3689,14 @@ class PipelineRunner:
                     ligand_mask = ctx.get("ligand_mask") or {}
                     surface_mask = ctx.get("surface_mask")
                     residues_by_chain_map = residues_by_chain(ctx["pdb_text"], only_atom_records=True)
+                    ctx_design_chains = (
+                        list(ctx.get("design_chains")) if isinstance(ctx.get("design_chains"), list) else []
+                    )
+                    if not ctx_design_chains:
+                        ctx_design_chains = list(residues_by_chain_map.keys()) or list(ligand_mask.keys()) or ["A"]
                     fixed_positions_by_chain: dict[str, list[int]] = {}
                     extra_fixed = request.fixed_positions_extra or {}
-                    for chain_id in design_chains or list(ligand_mask.keys()) or ["A"]:
+                    for chain_id in ctx_design_chains:
                         mapped: list[int] = []
                         mapping = mapping_by_chain.get(chain_id)
                         if mapping:
@@ -3170,6 +3714,8 @@ class PipelineRunner:
                             per_chain = extra_fixed.get(chain_id)
                             if isinstance(per_chain, list):
                                 raw_extra.extend(per_chain)
+                            elif len(ctx_design_chains) == 1:
+                                raw_extra.extend(_fallback_chain_positions(extra_fixed, chain_id))
                             all_chains = extra_fixed.get("*")
                             if isinstance(all_chains, list):
                                 raw_extra.extend(all_chains)
@@ -3184,10 +3730,13 @@ class PipelineRunner:
                                 else:
                                     extra_mapped = [int(pos) for pos in raw_extra]
                                 chain_fixed.update(extra_mapped)
-                        chain_fixed.update(ligand_mask.get(chain_id, []))
+                        chain_fixed.update(_fallback_chain_positions(ligand_mask, chain_id))
                         if bool(request.ligand_mask_use_original_target):
                             projected: list[int] = []
-                            reference_query_positions = original_ligand_mask_query_by_chain.get(chain_id, []) or []
+                            reference_query_positions = _fallback_chain_positions(
+                                original_ligand_mask_query_by_chain,
+                                chain_id,
+                            )
                             if reference_query_positions and mapping:
                                 for pos in reference_query_positions:
                                     if 1 <= int(pos) <= len(mapping):
@@ -3195,7 +3744,7 @@ class PipelineRunner:
                                         if mapped_pos is not None:
                                             projected.append(int(mapped_pos))
                             elif not mapping:
-                                projected.extend(int(pos) for pos in (original_ligand_mask_by_chain.get(chain_id, []) or []))
+                                projected.extend(_fallback_chain_positions(original_ligand_mask_by_chain, chain_id))
                             chain_fixed.update(projected)
 
                         if request.surface_only and isinstance(surface_mask, dict):
@@ -3216,12 +3765,12 @@ class PipelineRunner:
 
                     (native, samples), mpnn_recovered, mpnn_err, mpnn_rec = _recover_stage(
                         f"proteinmpnn_{tier_str}",
-                        lambda dir_=bb_tier_dir, ctx_=ctx, fixed_=fixed_positions_by_chain: self._run_proteinmpnn(
+                        lambda dir_=bb_tier_dir, ctx_=ctx, fixed_=fixed_positions_by_chain, chains_=ctx_design_chains: self._run_proteinmpnn(
                             dir_,
                             request,
                             pdb_text=ctx_["pdb_text"],
                             tier_str=tier_str,
-                            design_chains=design_chains,
+                            design_chains=chains_,
                             fixed_positions_by_chain=fixed_,
                             on_job_id=lambda job_id, stage=f"proteinmpnn_{tier_str}", dir_=dir_, bb_id=ctx_["id"]: (
                                 write_json(dir_ / "runpod_job.json", {"job_id": job_id}),
@@ -3233,9 +3782,10 @@ class PipelineRunner:
                                 ),
                             ),
                         ),
-                        fallback=lambda exc, dir_=bb_tier_dir, ctx_=ctx, fixed_=fixed_positions_by_chain: _fallback_proteinmpnn(
+                        fallback=lambda exc, dir_=bb_tier_dir, ctx_=ctx, fixed_=fixed_positions_by_chain, chains_=ctx_design_chains: _fallback_proteinmpnn(
                             tier_dir=dir_,
                             pdb_text=ctx_["pdb_text"],
+                            design_chains_local=chains_,
                             fixed_positions_by_chain=fixed_,
                             reason=str(exc),
                         ),
@@ -3254,7 +3804,7 @@ class PipelineRunner:
                             native=native,
                             samples=samples,
                             fixed_positions_by_chain=fixed_positions_by_chain,
-                            design_chains=design_chains,
+                            design_chains=ctx_design_chains,
                         )
                         mutation_report_path = mutation_paths.get("mutation_report_path")
                         mutations_by_position_tsv = mutation_paths.get("mutations_by_position_tsv")
@@ -3266,7 +3816,7 @@ class PipelineRunner:
                             native=native,
                             samples=samples,
                             fixed_positions_by_chain=fixed_positions_by_chain,
-                            design_chains=design_chains,
+                            design_chains=ctx_design_chains,
                         )
                         backbone_meta.append(
                             {
@@ -3890,13 +4440,13 @@ class PipelineRunner:
                         set_status(paths, stage=f"novelty_{tier_str}", state="running")
                         novelty_tsv_path = tier_dir / "novelty.tsv"
                         novelty_meta_path = tier_dir / "novelty.json"
-                        novelty_max_seqs = min(300, request.mmseqs_max_seqs)
+                        wt_sequence = _clean_protein_sequence(target_record.sequence if target_record is not None else "")
+                        if not wt_sequence:
+                            raise RuntimeError("WT target sequence is not available for WT Diff comparison")
                         novelty_request_hash = _stable_payload_hash(
                             {
-                                "target_db": request.novelty_target_db,
-                                "threads": request.mmseqs_threads,
-                                "use_gpu": request.mmseqs_use_gpu,
-                                "max_seqs": novelty_max_seqs,
+                                "mode": "wt_sequence_diff",
+                                "wt_sequence": wt_sequence,
                                 "candidates": [
                                     {"id": str(s.id), "sequence": str(s.sequence)}
                                     for s in novelty_candidates
@@ -3928,10 +4478,8 @@ class PipelineRunner:
                                         novelty_meta_path,
                                         {
                                             "request_hash": novelty_request_hash,
-                                            "target_db": request.novelty_target_db,
-                                            "threads": request.mmseqs_threads,
-                                            "use_gpu": request.mmseqs_use_gpu,
-                                            "max_seqs": novelty_max_seqs,
+                                            "mode": "wt_sequence_diff",
+                                            "wt_length": len(wt_sequence),
                                             "candidate_ids": [str(s.id) for s in novelty_candidates],
                                             "cached": True,
                                             "legacy_without_meta": (not novelty_meta_exists),
@@ -3942,30 +4490,48 @@ class PipelineRunner:
                                     novelty_tsv = None
 
                         if novelty_tsv is None:
-                            if self.mmseqs is None:
-                                raise RuntimeError("MMseqs client is not configured")
-                            query_fasta = to_fasta(
-                                [FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in novelty_candidates]
-                            )
-                            novelty_out = self.mmseqs.search(
-                                query_fasta=query_fasta,
-                                target_db=request.novelty_target_db,
-                                threads=request.mmseqs_threads,
-                                use_gpu=request.mmseqs_use_gpu,
-                                include_taxonomy=False,
-                                return_a3m=False,
-                                max_seqs=novelty_max_seqs,
-                            )
-                            novelty_tsv = str(novelty_out.get("tsv") or "")
+                            tsv_lines = [
+                                "\t".join(
+                                    [
+                                        "query_id",
+                                        "wt_identity",
+                                        "wt_identity_pct",
+                                        "wt_diff_ratio",
+                                        "wt_diff_pct",
+                                        "wt_diff_count",
+                                        "compare_len",
+                                        "wt_length",
+                                        "design_length",
+                                    ]
+                                )
+                            ]
+                            for sample in novelty_candidates:
+                                stats = _sequence_difference_stats(wt_sequence, sample.sequence)
+                                if not isinstance(stats, dict):
+                                    continue
+                                tsv_lines.append(
+                                    "\t".join(
+                                        [
+                                            str(sample.id),
+                                            f"{float(stats.get('identity') or 0.0):.6f}",
+                                            f"{float(stats.get('identity_pct') or 0.0):.3f}",
+                                            f"{float(stats.get('diff_ratio') or 0.0):.6f}",
+                                            f"{float(stats.get('diff_pct') or 0.0):.3f}",
+                                            str(int(stats.get("diff_count") or 0)),
+                                            str(int(stats.get("compare_len") or 0)),
+                                            str(int(stats.get("wt_length") or 0)),
+                                            str(int(stats.get("design_length") or 0)),
+                                        ]
+                                    )
+                                )
+                            novelty_tsv = "\n".join(tsv_lines) + "\n"
                             _write_text(novelty_tsv_path, novelty_tsv)
                             write_json(
                                 novelty_meta_path,
                                 {
                                     "request_hash": novelty_request_hash,
-                                    "target_db": request.novelty_target_db,
-                                    "threads": request.mmseqs_threads,
-                                    "use_gpu": request.mmseqs_use_gpu,
-                                    "max_seqs": novelty_max_seqs,
+                                    "mode": "wt_sequence_diff",
+                                    "wt_length": len(wt_sequence),
                                     "candidate_ids": [str(s.id) for s in novelty_candidates],
                                     "cached": False,
                                 },
@@ -3982,7 +4548,7 @@ class PipelineRunner:
                         novelty_recovery = {
                             "attempted": True,
                             "error": novelty_error,
-                            "actions": ["Skipped novelty search"],
+                            "actions": ["Skipped WT Diff comparison"],
                         }
                         novelty_tsv = ""
                         _write_text(tier_dir / "novelty.tsv", novelty_tsv)
@@ -3991,13 +4557,11 @@ class PipelineRunner:
                             {
                                 "request_hash": _stable_payload_hash(
                                     {
-                                        "target_db": request.novelty_target_db,
-                                        "threads": request.mmseqs_threads,
-                                        "use_gpu": request.mmseqs_use_gpu,
-                                        "max_seqs": min(300, request.mmseqs_max_seqs),
+                                        "mode": "wt_sequence_diff",
                                         "candidate_ids": [str(s.id) for s in novelty_candidates],
                                     }
                                 ),
+                                "mode": "wt_sequence_diff",
                                 "recovered": True,
                                 "error": novelty_error,
                             },

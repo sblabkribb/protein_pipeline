@@ -1,11 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  extractDesignChainsFromPayload,
+  filterPdbTextByChains,
+  selectResidueStripMetrics,
+} from "../lib/compare.js";
+import {
+  artifactMetaFromPath,
   buildRunArguments,
   buildUserPrefix,
   createRunId,
   detectTargetKey,
+  displayArtifactPath,
+  displayRfd3Id,
   filterRunsByPrefix,
+  inferRequestRunMode,
   sanitizeName,
   stageFromPath,
 } from "../lib/pipeline.js";
@@ -31,6 +40,108 @@ test("stageFromPath inference", () => {
   assert.equal(stageFromPath("designs/seqs.fasta"), "design");
   assert.equal(stageFromPath("af2/ranking_debug.json"), "af2");
   assert.equal(stageFromPath("bioemu/sample_pdbs.json"), "bioemu");
+  assert.equal(stageFromPath("backbones/bioemu_topology/target.pdb"), "bioemu");
+  assert.equal(stageFromPath("backbones/inputs_spec-1_0_model_0/target.pdb"), "rfd3");
+  assert.equal(stageFromPath("backbones/rfd3_spec-1_0_model_0/target.pdb"), "rfd3");
+});
+
+test("artifactMetaFromPath infers backbone ids and sources", () => {
+  const rfd3Ranked = artifactMetaFromPath("tiers/30/af2/inputs_spec-1_0_model_0_2/ranked_0.pdb");
+  assert.equal(rfd3Ranked.tier, "30");
+  assert.equal(rfd3Ranked.backboneId, "inputs_spec-1_0_model_0");
+  assert.equal(rfd3Ranked.backboneSource, "rfd3");
+
+  const bioemuRanked = artifactMetaFromPath("tiers/50/af2/bioemu_topology_1/ranked_0.pdb");
+  assert.equal(bioemuRanked.tier, "50");
+  assert.equal(bioemuRanked.backboneId, "bioemu_topology");
+  assert.equal(bioemuRanked.backboneSource, "bioemu");
+
+  const stageDesign = artifactMetaFromPath("rfd3/designs/inputs_spec-1_0_model_0.pdb");
+  assert.equal(stageDesign.backboneId, "inputs_spec-1_0_model_0");
+  assert.equal(stageDesign.backboneSource, "rfd3");
+});
+
+test("artifactMetaFromPath classifies compare references and source outputs", () => {
+  const inputRef = artifactMetaFromPath("target.original.pdb");
+  assert.equal(inputRef.stage, "input_reference");
+  assert.equal(inputRef.compareRole, "input_reference");
+  assert.equal(inputRef.compareGroup, "references");
+
+  const working = artifactMetaFromPath("target.pdb");
+  assert.equal(working.stage, "working_backbone");
+  assert.equal(working.compareRole, "working_backbone");
+  assert.equal(working.compareGroup, "references");
+
+  const wt = artifactMetaFromPath("wt/af2/ranked_0.pdb");
+  assert.equal(wt.stage, "wt_af2");
+  assert.equal(wt.compareRole, "wt_colabfold");
+  assert.equal(wt.compareGroup, "references");
+
+  const bioemuBackbone = artifactMetaFromPath("backbones/bioemu_topology/target.pdb");
+  assert.equal(bioemuBackbone.compareRole, "backbone_snapshot");
+  assert.equal(bioemuBackbone.compareGroup, "backbones");
+
+  const sourceOutput = artifactMetaFromPath("bioemu/designs/bioemu_topology.pdb");
+  assert.equal(sourceOutput.compareRole, "source_output");
+  assert.equal(sourceOutput.compareGroup, "source_outputs");
+});
+
+test("extractDesignChainsFromPayload prefers resolved design chains", () => {
+  const chains = extractDesignChainsFromPayload({
+    requested_design_chains: ["A", "B"],
+    design_chains_used: ["B"],
+  });
+  assert.deepEqual(chains, ["B"]);
+});
+
+test("filterPdbTextByChains removes non-design chains", () => {
+  const pdb = [
+    "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C",
+    "ATOM      2  CA  GLY B   1       1.000   0.000   0.000  1.00 20.00           C",
+    "HETATM    3  C1  LIG B   2       2.000   0.000   0.000  1.00 20.00           C",
+    "END",
+    "",
+  ].join("\n");
+  const filtered = filterPdbTextByChains(pdb, ["A"]);
+  assert.match(filtered, /ALA A/);
+  assert.doesNotMatch(filtered, /GLY B/);
+  assert.doesNotMatch(filtered, /LIG B/);
+});
+
+test("selectResidueStripMetrics keeps meaningful residues in numeric order", () => {
+  const selected = selectResidueStripMetrics([
+    { key: "A:100", chain: "A", resi: 100, distance: 4.1 },
+    { key: "A:98", chain: "A", resi: 98, distance: 7.0 },
+    { key: "A:102", chain: "A", resi: 102, distance: 0.8 },
+    { key: "A:101", chain: "A", resi: 101, distance: 2.5 },
+  ]);
+  assert.deepEqual(
+    selected.map((item) => item.resi),
+    [98, 100, 101]
+  );
+});
+
+test("selectResidueStripMetrics falls back to top metrics when all diffs are low", () => {
+  const selected = selectResidueStripMetrics(
+    [
+      { key: "A:10", chain: "A", resi: 10, distance: 0.9 },
+      { key: "A:2", chain: "A", resi: 2, distance: 0.8 },
+    ],
+    { fallbackCount: 2 }
+  );
+  assert.deepEqual(
+    selected.map((item) => item.resi),
+    [2, 10]
+  );
+});
+
+test("displayArtifactPath aliases legacy rfd3 ids", () => {
+  assert.equal(
+    displayArtifactPath("backbones/inputs_spec-1_0_model_0/target.pdb"),
+    "backbones/rfd3_spec-1_0_model_0/target.pdb"
+  );
+  assert.equal(displayRfd3Id("inputs_spec-1_0_model_0:1"), "rfd3_spec-1_0_model_0:1");
+  assert.equal(displayArtifactPath("rfd3/inputs.json"), "rfd3/inputs.json");
 });
 
 test("buildRunArguments merges routed and answers", () => {
@@ -44,6 +155,112 @@ test("buildRunArguments merges routed and answers", () => {
   assert.equal(args.stop_after, "design");
   assert.equal(args.target_pdb, "PDB");
   assert.equal(args.run_id, "run1");
+});
+
+test("buildRunArguments normalizes start/stop stage range", () => {
+  const args = buildRunArguments({
+    prompt: "",
+    routed: { stop_after: "msa" },
+    answers: { start_from: "AF2" },
+    runId: "run2",
+  });
+  assert.equal(args.start_from, "af2");
+  assert.equal(args.stop_after, "af2");
+});
+
+test("buildRunArguments keeps false/zero values from answers", () => {
+  const args = buildRunArguments({
+    prompt: "",
+    routed: {},
+    answers: {
+      bioemu_use: false,
+      af2_max_candidates_per_tier: 0,
+      af2_provider: "af2",
+    },
+    runId: "run3",
+  });
+  assert.equal(args.bioemu_use, false);
+  assert.equal(args.af2_max_candidates_per_tier, 0);
+  assert.equal(args.af2_provider, "af2");
+});
+
+test("buildRunArguments maps novelty_enabled to stop_after novelty", () => {
+  const args = buildRunArguments({
+    prompt: "",
+    routed: {},
+    answers: { novelty_enabled: true },
+    runId: "run4",
+  });
+  assert.equal(args.novelty_enabled, true);
+  assert.equal(args.stop_after, "novelty");
+});
+
+test("buildRunArguments normalizes wt_diff alias to novelty", () => {
+  const args = buildRunArguments({
+    prompt: "",
+    routed: { stop_after: "wt_diff" },
+    answers: {},
+    runId: "run4b",
+  });
+  assert.equal(args.stop_after, "novelty");
+});
+
+test("buildRunArguments omits start_from when it is msa", () => {
+  const args = buildRunArguments({
+    prompt: "",
+    routed: { stop_after: "af2" },
+    answers: { start_from: "msa" },
+    runId: "run5",
+  });
+  assert.equal(args.stop_after, "af2");
+  assert.equal(args.start_from, undefined);
+});
+
+test("inferRequestRunMode keeps pipeline runs with stop_after af2 in pipeline mode", () => {
+  const mode = inferRequestRunMode({
+    stop_after: "af2",
+    af2_provider: "colabfold",
+    protein_pdb: null,
+    num_seq_per_tier: 2,
+    rfd3_max_return_designs: 10,
+    mmseqs_target_db: "uniref90",
+    wt_compare: true,
+  });
+  assert.equal(mode, "pipeline");
+});
+
+test("inferRequestRunMode ignores empty diffdock placeholders", () => {
+  const mode = inferRequestRunMode({
+    stop_after: "af2",
+    protein_pdb: null,
+    diffdock_ligand_smiles: "",
+    diffdock_ligand_sdf: null,
+    af2_provider: "colabfold",
+    num_seq_per_tier: 2,
+    rfd3_max_return_designs: 10,
+  });
+  assert.equal(mode, "pipeline");
+});
+
+test("inferRequestRunMode keeps af2-only requests in af2 mode", () => {
+  const mode = inferRequestRunMode({
+    stop_after: "af2",
+    target_fasta: ">x\nAAAA",
+    af2_provider: "colabfold",
+    af2_model_preset: "auto",
+    af2_db_preset: "full_dbs",
+  });
+  assert.equal(mode, "af2");
+});
+
+test("inferRequestRunMode preserves design-only mode for non-pipeline requests", () => {
+  const mode = inferRequestRunMode({
+    stop_after: "design",
+    target_pdb: "ATOM      1  N",
+    batch_size: 1,
+    sampling_temp: 0.1,
+  });
+  assert.equal(mode, "design");
 });
 
 test("filterRunsByPrefix", () => {

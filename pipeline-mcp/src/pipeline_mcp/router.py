@@ -27,6 +27,10 @@ _PROMPT_KEY_ALIASES = {
     "mask_consensus": "mask_consensus_apply",
     "surface": "surface_only",
     "surface_only": "surface_only",
+    "wt_diff_enabled": "novelty_enabled",
+    "wtdiff_enabled": "novelty_enabled",
+    "wt_diff_target_db": "novelty_target_db",
+    "wtdiff_target_db": "novelty_target_db",
 }
 
 _PROMPT_BOOL_KEYS = {
@@ -103,6 +107,7 @@ _PROMPT_ALLOWED_KEYS = (
     | _PROMPT_DICT_KEYS
     | {
         "stop_after",
+        "start_from",
         "rfd3_contig",
         "rfd3_input_pdb",
         "rfd3_spec_name",
@@ -277,7 +282,7 @@ def route_prompt_with_errors(prompt: str) -> tuple[dict[str, object], list[str]]
             stop_after = "soluprot"
         elif "af2" in p or "alphafold" in p or "colabfold" in p:
             stop_after = "af2"
-        elif "novel" in p or "search" in p or "검색" in p:
+        elif "novel" in p or "search" in p or "검색" in p or "wt diff" in p or "wt_diff" in p or "wt 차이" in p:
             stop_after = "novelty"
 
     tiers = None
@@ -469,11 +474,20 @@ def plan_from_prompt(
         questions.append(
                 {
                     "id": "stop_after",
-                    "question": "Where to stop? (msa/rfd3/bioemu/design/soluprot/af2/novelty)",
+                    "question": "Where to stop? (msa/rfd3/bioemu/design/soluprot/af2/wt_diff)",
                     "required": False,
-                    "default": "design",
+                    "default": "novelty",
                 }
             )
+    if "start_from" not in routed:
+        questions.append(
+            {
+                "id": "start_from",
+                "question": "Where to start? (msa/rfd3/bioemu/design/soluprot/af2/wt_diff)",
+                "required": False,
+                "default": "msa",
+            }
+        )
 
     if "af2_max_candidates_per_tier" not in routed:
         questions.append(

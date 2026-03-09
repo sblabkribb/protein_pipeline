@@ -22,15 +22,29 @@ from .pipeline import _validate_af2_chain_sequences
 _STAGE_ORDER = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"]
 
 
-def _needs_stage(stop_after: str | None, stage: str) -> bool:
-    if stop_after is None:
+def _normalize_stage(value: str | None) -> str | None:
+    raw = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    if raw in {"wt_diff", "wtdiff"}:
+        raw = "novelty"
+    if not raw:
+        return None
+    if raw not in _STAGE_ORDER:
+        return None
+    return raw
+
+
+def _needs_stage(start_from: str | None, stop_after: str | None, stage: str) -> bool:
+    normalized_stage = _normalize_stage(stage)
+    if normalized_stage is None:
         return True
-    stop = str(stop_after or "").strip().lower()
-    if stop not in _STAGE_ORDER:
-        return True
-    if stage not in _STAGE_ORDER:
-        return True
-    return _STAGE_ORDER.index(stage) <= _STAGE_ORDER.index(stop)
+    start = _normalize_stage(start_from)
+    stop = _normalize_stage(stop_after)
+    stage_index = _STAGE_ORDER.index(normalized_stage)
+    if start is not None and stage_index < _STAGE_ORDER.index(start):
+        return False
+    if stop is not None and stage_index > _STAGE_ORDER.index(stop):
+        return False
+    return True
 
 
 def _has_fixed_positions_extra(request: PipelineRequest) -> bool:
@@ -48,10 +62,25 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner) -> dict[
     required_inputs: list[dict[str, object]] = []
     detected: dict[str, object] = {}
 
-    stop_after = str(request.stop_after or "").strip().lower() or None
-    if stop_after is not None and stop_after not in _STAGE_ORDER:
-        warnings.append(f"Unknown stop_after={stop_after!r}; defaulting to full pipeline.")
-        stop_after = None
+    start_from_raw = str(getattr(request, "start_from", "") or "").strip().lower() or None
+    start_from = _normalize_stage(start_from_raw)
+    if start_from_raw is not None and start_from is None:
+        errors.append(
+            f"Unknown start_from={start_from_raw!r}; expected one of {_STAGE_ORDER[:-1] + ['wt_diff']}."
+        )
+
+    stop_after_raw = str(request.stop_after or "").strip().lower() or None
+    stop_after = _normalize_stage(stop_after_raw)
+    if stop_after_raw is not None and stop_after is None:
+        warnings.append(
+            f"Unknown stop_after={stop_after_raw!r}; expected one of {_STAGE_ORDER[:-1] + ['wt_diff']}; defaulting to full pipeline."
+        )
+
+    if start_from is not None and stop_after is not None:
+        if _STAGE_ORDER.index(start_from) > _STAGE_ORDER.index(stop_after):
+            errors.append(
+                f"start_from={start_from!r} must be earlier than or equal to stop_after={stop_after!r}."
+            )
 
     target_fasta = str(request.target_fasta or "").strip()
     target_pdb = str(request.target_pdb or "").strip()
@@ -131,7 +160,8 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner) -> dict[
             warnings.append(f"ligand mask check failed: {exc}")
 
     stops_before_design = (
-        stop_after == "msa"
+        start_from in {"design", "soluprot", "af2", "novelty"}
+        or stop_after == "msa"
         or (stop_after == "rfd3" and rfd3_active)
         or (stop_after == "bioemu" and bioemu_active)
     )
@@ -165,16 +195,16 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner) -> dict[
         else:
             errors.append(msg)
 
-    if _needs_stage(stop_after, "msa") and runner.mmseqs is None:
+    if _needs_stage(start_from, stop_after, "msa") and runner.mmseqs is None:
         _warn_or_error("MMseqs client not configured; MSA will fall back to query-only if auto_recover is enabled.")
 
-    if _needs_stage(stop_after, "design") and runner.proteinmpnn is None:
+    if _needs_stage(start_from, stop_after, "design") and runner.proteinmpnn is None:
         _warn_or_error("ProteinMPNN client not configured; design will fall back to dummy sequences if auto_recover is enabled.")
 
-    if _needs_stage(stop_after, "soluprot") and runner.soluprot is None:
+    if _needs_stage(start_from, stop_after, "soluprot") and runner.soluprot is None:
         warnings.append("SoluProt service not configured; solubility filtering will be skipped.")
 
-    if _needs_stage(stop_after, "af2") and af2_client is None:
+    if _needs_stage(start_from, stop_after, "af2") and af2_client is None:
         _warn_or_error(f"{af2_provider_label} not configured; AF2 scoring will be skipped if auto_recover is enabled.")
 
     if request.wt_compare and runner.soluprot is None:
@@ -191,14 +221,14 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner) -> dict[
     if rfd3_active and runner.rfd3 is None:
         _warn_or_error("RFD3 requested but endpoint is not configured (set RFD3_ENDPOINT_ID).")
 
-    if _needs_stage(stop_after, "bioemu") and bioemu_active and runner.bioemu is None:
+    if _needs_stage(start_from, stop_after, "bioemu") and bioemu_active and runner.bioemu is None:
         _warn_or_error("BioEmu requested but endpoint is not configured (set BIOEMU_ENDPOINT_ID).")
 
     if diffdock_requested and runner.diffdock is None:
         _warn_or_error("DiffDock requested but endpoint is not configured (set DIFFDOCK_ENDPOINT_ID).")
 
     # AF2 input validation (only if AF2 stage is needed and sequence is available).
-    if _needs_stage(stop_after, "af2"):
+    if _needs_stage(start_from, stop_after, "af2"):
         seq_for_af2 = ""
         if query_seq:
             seq_for_af2 = query_seq

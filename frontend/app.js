@@ -4,12 +4,15 @@ import {
   buildUserPrefix,
   createRunId,
   detectTargetKey,
+  displayArtifactPath,
   filterRunsByPrefix,
+  inferRequestRunMode,
   isBinaryPath,
   isImagePath,
   sanitizeName,
   stageFromPath,
 } from "./lib/pipeline.js";
+import { extractDesignChainsFromPayload, filterPdbTextByChains, selectResidueStripMetrics } from "./lib/compare.js";
 
 const defaultApiBase = (() => {
   const origin = window.location.origin;
@@ -28,6 +31,8 @@ const LANG_KEY = "kbf.lang";
 const LANG_OPTIONS = ["en", "ko"];
 const REPORT_LANG_KEY = "kbf.reportLang";
 const REPORT_LANG_OPTIONS = ["auto", "en", "ko"];
+const WORKFLOW_PLAN_STORAGE_KEY = "kbf.workflowPlans";
+const DEFAULT_WORKFLOW_STAGES = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"];
 
 function loadLang() {
   const saved = localStorage.getItem(LANG_KEY);
@@ -104,6 +109,110 @@ function createArtifactFilterState() {
   };
 }
 
+function normalizeWorkflowStageList(value) {
+  const source = Array.isArray(value) ? value : DEFAULT_WORKFLOW_STAGES;
+  const out = [];
+  source.forEach((item) => {
+    const stage = String(item || "")
+      .trim()
+      .toLowerCase();
+    if (!DEFAULT_WORKFLOW_STAGES.includes(stage)) return;
+    if (!out.includes(stage)) out.push(stage);
+  });
+  if (!out.length) return ["msa", "design", "soluprot", "af2"];
+  return out;
+}
+
+function workflowCheckpointCandidates(nodes) {
+  const orderedNodes = normalizeWorkflowStageList(nodes);
+  if (orderedNodes.length <= 1) return [];
+  return orderedNodes.slice(0, -1);
+}
+
+function normalizeWorkflowCheckpointList(value, nodes, { ensureDefault = false } = {}) {
+  const candidates = workflowCheckpointCandidates(nodes);
+  const source = Array.isArray(value) ? value : value ? [value] : [];
+  const out = [];
+  source.forEach((item) => {
+    const stage = String(item || "")
+      .trim()
+      .toLowerCase();
+    if (!candidates.includes(stage)) return;
+    if (!out.includes(stage)) out.push(stage);
+  });
+  if (!out.length && ensureDefault && candidates.length) {
+    out.push(candidates[candidates.length - 1]);
+  }
+  return out;
+}
+
+function createWorkflowDesignerState() {
+  const nodes = normalizeWorkflowStageList(DEFAULT_WORKFLOW_STAGES);
+  return {
+    nodes,
+    checkpointEnabled: false,
+    checkpointStages: [],
+    graphEnabled: true,
+    mmseqLoopEnabled: true,
+    flowPulse: 0,
+  };
+}
+
+function loadWorkflowPlansByRunId() {
+  const raw = localStorage.getItem(WORKFLOW_PLAN_STORAGE_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out = {};
+    Object.entries(parsed).forEach(([runId, item]) => {
+      const key = String(runId || "").trim();
+      if (!key) return;
+      const payload = item && typeof item === "object" && !Array.isArray(item) ? item : {};
+      const nodes = normalizeWorkflowStageList(payload.nodes);
+      const checkpointEnabled = Boolean(payload.checkpointEnabled);
+      const legacyCheckpointStage = String(payload.checkpointStage || "")
+        .trim()
+        .toLowerCase();
+      const checkpointStages = checkpointEnabled
+        ? normalizeWorkflowCheckpointList(
+            [
+              ...(Array.isArray(payload.checkpointStages) ? payload.checkpointStages : []),
+              legacyCheckpointStage,
+            ],
+            nodes
+          )
+        : [];
+      let checkpointIndex = Number(payload.checkpointIndex);
+      if (!Number.isFinite(checkpointIndex)) {
+        if (Object.prototype.hasOwnProperty.call(payload, "checkpointConsumed")) {
+          checkpointIndex = payload.checkpointConsumed ? checkpointStages.length : 0;
+        } else if (legacyCheckpointStage) {
+          const legacyIndex = checkpointStages.indexOf(legacyCheckpointStage);
+          checkpointIndex = legacyIndex >= 0 ? legacyIndex : 0;
+        } else {
+          checkpointIndex = 0;
+        }
+      }
+      checkpointIndex = Math.max(0, Math.min(checkpointStages.length, Math.trunc(checkpointIndex)));
+      out[key] = {
+        nodes,
+        finalStopAfter: String(payload.finalStopAfter || nodes[nodes.length - 1] || "novelty")
+          .trim()
+          .toLowerCase(),
+        checkpointEnabled: checkpointStages.length > 0,
+        checkpointStages,
+        checkpointIndex,
+        graphEnabled: payload.graphEnabled !== false,
+        mmseqLoopEnabled: payload.mmseqLoopEnabled !== false,
+      };
+    });
+    return out;
+  } catch (_err) {
+    return {};
+  }
+}
+
 const state = {
   apiBase: resolveApiBase(),
   user: loadUser(),
@@ -121,10 +230,13 @@ const state = {
   currentRunState: "",
   runSubmitting: false,
   pollTimer: null,
+  pollCyclePromise: null,
   lastStatusKey: "",
   answerMeta: {},
   chainRanges: null,
   artifacts: [],
+  artifactRefreshAtByRunId: {},
+  artifactRefreshStatusKeyByRunId: {},
   artifactMetaByPath: {},
   artifactFiltersByView: {
     monitor: createArtifactFilterState(),
@@ -138,6 +250,14 @@ const state = {
   artifactCompareLeftPath: "",
   artifactCompareRightPath: "",
   artifactCompareMode: "structure",
+  compareTargetSequenceByRunId: {},
+  compareInputPdbTextByRunId: {},
+  compareWorkingPdbTextByRunId: {},
+  compareWtPdbTextByRunId: {},
+  compareWtMetricsByRunId: {},
+  compareDesignChainsByKey: {},
+  compareFixedCountByKey: {},
+  compareAf2ScoresByKey: {},
   runCompareBaselineId: "",
   runCompareResult: null,
   hitListResult: null,
@@ -149,7 +269,7 @@ const state = {
     soluprot: 0.4,
     plddt: 0.3,
     rmsd: 0.2,
-    novelty: 0.1,
+    novelty: 0,
   },
   runs: [],
   runModeById: {},
@@ -167,13 +287,23 @@ const state = {
   reportModalRenderToken: 0,
   reportModalImageCache: {},
   copilotHistory: [],
-  showBioemuCountOptions: false,
-  showRfd3CountOptions: false,
   setupResiduePicker: createSetupResiduePickerState(),
+  setupStepIndex: 0,
+  autoAnalyzePendingByRunId: {},
+  workflowDesigner: createWorkflowDesignerState(),
+  workflowPlansByRunId: loadWorkflowPlansByRunId(),
 };
 
 if (state.apiBase && state.apiBase !== normalizeApiBase(savedApiBase)) {
   localStorage.setItem("kbf.apiBase", state.apiBase);
+}
+
+function persistWorkflowPlans() {
+  try {
+    localStorage.setItem(WORKFLOW_PLAN_STORAGE_KEY, JSON.stringify(state.workflowPlansByRunId || {}));
+  } catch (_err) {
+    // Ignore localStorage quota/transient errors.
+  }
 }
 
 const el = {
@@ -199,6 +329,11 @@ const el = {
   questionStack: document.getElementById("questionStack"),
   questionInputStack: document.getElementById("questionInputStack"),
   questionConfigStack: document.getElementById("questionConfigStack"),
+  setupStepper: document.getElementById("setupStepper"),
+  setupStepMeta: document.getElementById("setupStepMeta"),
+  setupStepDots: document.getElementById("setupStepDots"),
+  setupStepPrev: document.getElementById("setupStepPrev"),
+  setupStepNext: document.getElementById("setupStepNext"),
   setupRunSelector: document.getElementById("setupRunSelector"),
   setupContextStageValue: document.getElementById("setupContextStageValue"),
   setupContextStateValue: document.getElementById("setupContextStateValue"),
@@ -235,6 +370,7 @@ const el = {
   runEvidenceValue: document.getElementById("runEvidenceValue"),
   runRecommendationValue: document.getElementById("runRecommendationValue"),
   monitorCompletenessBadges: document.getElementById("monitorCompletenessBadges"),
+  workflowReviewPanel: document.getElementById("workflowReviewPanel"),
   pollBtn: document.getElementById("pollBtn"),
   cancelRunBtn: document.getElementById("cancelRunBtn"),
   resumeRunBtn: document.getElementById("resumeRunBtn"),
@@ -261,8 +397,11 @@ const el = {
   artifactCompareMode: document.getElementById("artifactCompareMode"),
   artifactCompareLeft: document.getElementById("artifactCompareLeft"),
   artifactCompareRight: document.getElementById("artifactCompareRight"),
+  artifactCompareSwap: document.getElementById("artifactCompareSwap"),
   artifactCompareRun: document.getElementById("artifactCompareRun"),
   artifactCompareClear: document.getElementById("artifactCompareClear"),
+  artifactCompareRefs: document.getElementById("artifactCompareRefs"),
+  artifactComparePresets: document.getElementById("artifactComparePresets"),
   artifactComparisonDetails: document.getElementById("artifactComparisonDetails"),
   artifactGenerateReport: document.getElementById("artifactGenerateReport"),
   agentPanelList: document.getElementById("agentPanelList"),
@@ -349,14 +488,20 @@ const el = {
   adminClose: document.getElementById("adminClose"),
   helpPanel: document.getElementById("helpPanel"),
   helpClose: document.getElementById("helpClose"),
+  copilotBackdrop: document.getElementById("copilotBackdrop"),
   copilotDrawer: document.getElementById("copilotDrawer"),
   copilotCloseBtn: document.getElementById("copilotCloseBtn"),
+  copilotClearBtn: document.getElementById("copilotClearBtn"),
+  copilotSummary: document.getElementById("copilotSummary"),
   copilotContext: document.getElementById("copilotContext"),
+  copilotActions: document.getElementById("copilotActions"),
   copilotMessages: document.getElementById("copilotMessages"),
   copilotInput: document.getElementById("copilotInput"),
   copilotSendBtn: document.getElementById("copilotSendBtn"),
   copilotQuickUsage: document.getElementById("copilotQuickUsage"),
   copilotQuickInterpret: document.getElementById("copilotQuickInterpret"),
+  copilotQuickSummary: document.getElementById("copilotQuickSummary"),
+  copilotQuickCompare: document.getElementById("copilotQuickCompare"),
   copilotQuickNext: document.getElementById("copilotQuickNext"),
   copilotQuickResume: document.getElementById("copilotQuickResume"),
   adminUsername: document.getElementById("adminUsername"),
@@ -386,8 +531,38 @@ const I18N = {
     "copilot.quick.title": "Quick Prompts",
     "copilot.quick.usage": "How to use this page?",
     "copilot.quick.interpret": "Interpret current metrics",
+    "copilot.quick.summary": "Summarize this run",
+    "copilot.quick.compare": "Explain compare state",
     "copilot.quick.next": "What should I do next?",
     "copilot.quick.resume": "How does resume work?",
+    "copilot.summary.title": "Live Snapshot",
+    "copilot.summary.empty": "Open a run to build the live snapshot.",
+    "copilot.actions.title": "Suggested Actions",
+    "copilot.actions.empty": "Select a run to unlock in-place actions.",
+    "copilot.conversation.title": "Conversation",
+    "copilot.clear": "Clear",
+    "copilot.role.user": "You",
+    "copilot.role.ai": "Copilot",
+    "copilot.action.openSetup": "Open Setup",
+    "copilot.action.openSetup.desc": "Fill inputs and launch a new run.",
+    "copilot.action.openMonitor": "Open Monitor",
+    "copilot.action.openMonitor.desc": "Check state, errors, and artifact progress.",
+    "copilot.action.openAnalyze": "Open Analyze",
+    "copilot.action.openAnalyze.desc": "Review hit list, charts, and compare studio.",
+    "copilot.action.poll": "Poll Now",
+    "copilot.action.poll.desc": "Refresh the current run status immediately.",
+    "copilot.action.refreshArtifacts": "Refresh Artifacts",
+    "copilot.action.refreshArtifacts.desc": "Reload file outputs and preview choices.",
+    "copilot.action.refreshHitList": "Refresh Hit List",
+    "copilot.action.refreshHitList.desc": "Rebuild candidate ranking for this run.",
+    "copilot.action.generateReport": "Generate Report",
+    "copilot.action.generateReport.desc": "Refresh comparison summary and report assets.",
+    "copilot.action.resume": "Resume Run",
+    "copilot.action.resume.desc": "Continue an interrupted run from saved request.",
+    "copilot.action.compare3d": "Run Compare 3D",
+    "copilot.action.compare3d.desc": "Render the selected left/right structures now.",
+    "copilot.action.completed": "{action} completed.",
+    "copilot.action.failed": "{action} failed: {error}",
     "copilot.input.placeholder": "Ask about current run or this UI",
     "copilot.send": "Send",
     "analyze.kpi.feedback": "Feedback",
@@ -482,6 +657,34 @@ const I18N = {
     "monitor.completeness.badge.wtOff": "WT compare off",
     "monitor.completeness.badge.af2None": "{af2Provider} selected none",
     "monitor.completeness.badge.af2Some": "{af2Provider} selected {count}",
+    "monitor.workflow.title": "Workflow Review Gate",
+    "monitor.workflow.waiting": "Running until checkpoint: {stage}",
+    "monitor.workflow.ready": "Checkpoint reached at {stage}. Review graph and choose next action.",
+    "monitor.workflow.completed": "Workflow completed to final stage: {stage}",
+    "monitor.workflow.chart.empty": "No artifact count yet. Refresh artifacts after checkpoint.",
+    "monitor.workflow.checkpoints": "Checkpoints: {stages}",
+    "monitor.workflow.nextStage": "Next stage: {stage}",
+    "monitor.workflow.finalStage": "Final stage: {stage}",
+    "monitor.workflow.continue": "Continue to Next Stage",
+    "monitor.workflow.continueStarted": "Continuing workflow from {start} to {stop} for {id}...",
+    "monitor.workflow.continueFailed": "Workflow continue failed: {error}",
+    "monitor.workflow.rerunLabel": "Rerun Target Stage",
+    "monitor.workflow.rerunAction": "Rerun to Stage",
+    "monitor.workflow.rerunConfirm":
+      "Rerun a new run from MSA to {stage} based on run {id}? This creates a separate comparison run.",
+    "monitor.workflow.rerunStarted": "Stage rerun started: {id} ({start} -> {stop})",
+    "monitor.workflow.rerunFailed": "Stage rerun failed: {error}",
+    "monitor.workflow.resultsTitle": "Checkpoint Results",
+    "monitor.workflow.resultsHint": "{count} artifacts generated so far. Click an item to preview.",
+    "monitor.workflow.resultsEmpty": "No result artifacts yet.",
+    "monitor.workflow.resultsUnknown": "Unknown",
+    "monitor.workflow.resultsDisabled": "Checkpoint result panel is disabled in setup.",
+    "monitor.workflow.mmseq": "Rerun MMseqs",
+    "monitor.workflow.mmseqConfirm":
+      "Run MMseqs rerun from stage MSA for run {id}? A new run will be created for comparison.",
+    "monitor.workflow.mmseqStarted": "MMseqs rerun started: {id}",
+    "monitor.workflow.mmseqFailed": "MMseqs rerun failed: {error}",
+    "monitor.workflow.openAnalyze": "Open Analyze",
     "monitor.poll": "Poll Now",
     "monitor.stop": "Stop Run",
     "monitor.resume": "Resume Run",
@@ -560,17 +763,80 @@ const I18N = {
     "artifacts.preview.placeholder": "Select an artifact to preview it here.",
     "artifacts.preview.compare.mode.structure": "Structure Diff",
     "artifacts.preview.compare.mode.sequence": "Sequence Diff",
-    "artifacts.preview.compare.left": "WT/Reference 3D",
-    "artifacts.preview.compare.right": "Design 3D",
+    "artifacts.preview.compare.left": "Reference 3D",
+    "artifacts.preview.compare.right": "Candidate 3D",
     "artifacts.preview.compare.run": "Compare 3D",
+    "artifacts.preview.compare.swap": "Swap",
     "artifacts.preview.compare.clear": "Clear",
     "artifacts.preview.compare.missing": "Select both left and right 3D artifacts first.",
     "artifacts.preview.compare.failed": "3D comparison failed: {error}",
+    "artifacts.preview.compare.refs.title": "Resolved Baselines",
+    "artifacts.preview.compare.refs.input": "Input Structure",
+    "artifacts.preview.compare.refs.working": "Working Backbone",
+    "artifacts.preview.compare.refs.wt": "WT ColabFold",
+    "artifacts.preview.compare.refs.missing": "Not available",
+    "artifacts.preview.compare.preset.title": "Quick Compare",
+    "artifacts.preview.compare.preset.inputVsWt": "Input vs WT",
+    "artifacts.preview.compare.preset.inputVsWorking": "Input vs Working",
+    "artifacts.preview.compare.preset.inputVsRfd3": "Input vs RFD3",
+    "artifacts.preview.compare.preset.inputVsBioemu": "Input vs BioEmu",
+    "artifacts.preview.compare.preset.wtVsRfd3": "WT vs RFD3",
+    "artifacts.preview.compare.preset.wtVsBioemu": "WT vs BioEmu",
+    "artifacts.preview.compare.preset.rfd3VsBioemu": "RFD3 vs BioEmu",
+    "artifacts.preview.compare.group.references": "References",
+    "artifacts.preview.compare.group.backbones": "Backbone Snapshots",
+    "artifacts.preview.compare.group.af2": "{af2Provider} Candidates",
+    "artifacts.preview.compare.group.source": "Source Outputs",
+    "artifacts.preview.compare.group.other": "Other Structures",
+    "artifacts.preview.compare.sequenceTitle": "Sequence (FASTA)",
+    "artifacts.preview.compare.sequenceLeft": "Reference",
+    "artifacts.preview.compare.sequenceRight": "Candidate",
+    "artifacts.preview.compare.sequenceEmpty": "No sequence extracted from this structure.",
     "artifacts.preview.compare.diffLegendStructure":
       "Structure diff after CA alignment: <=1.5A gray, 1.5-3.0A yellow, >3.0A red, gaps WT blue / Design orange",
     "artifacts.preview.compare.diffLegendSequence":
       "Sequence diff on residue identity: WT-only/WT-mutated blue, Design-only/Design-mutated orange, same residue gray",
     "artifacts.preview.compare.diffNone": "No residue-level differences detected.",
+    "artifacts.preview.compare.meta.title": "Compare Context",
+    "artifacts.preview.compare.meta.left": "Reference",
+    "artifacts.preview.compare.meta.right": "Candidate",
+    "artifacts.preview.compare.meta.role": "Role",
+    "artifacts.preview.compare.meta.source": "Source",
+    "artifacts.preview.compare.meta.provenance": "Provenance",
+    "artifacts.preview.compare.meta.tier": "Tier",
+    "artifacts.preview.compare.meta.backbone": "Backbone",
+    "artifacts.preview.compare.meta.chains": "Chains",
+    "artifacts.preview.compare.meta.fixedCount": "Fixed Count",
+    "artifacts.preview.compare.meta.wtDiff": "WT Seq Diff",
+    "artifacts.preview.compare.meta.inputStructRmsd": "Input RMSD",
+    "artifacts.preview.compare.meta.wtStructRmsd": "WT CF RMSD",
+    "artifacts.preview.compare.meta.workingStructRmsd": "Working RMSD",
+    "artifacts.preview.compare.meta.commonCa": "Common CA",
+    "artifacts.preview.compare.meta.predScope": "{af2Provider} Scope",
+    "artifacts.preview.compare.meta.predScopeExact": "Exact candidate",
+    "artifacts.preview.compare.meta.predScopeWt": "WT reference",
+    "artifacts.preview.compare.meta.predScopeTier": "Tier summary",
+    "artifacts.preview.compare.meta.predScopeBackbone": "Backbone summary",
+    "artifacts.preview.compare.meta.predScopePre": "Pre-{af2Provider}",
+    "artifacts.preview.compare.meta.predSelected": "{af2Provider} Selected",
+    "artifacts.preview.compare.meta.predPlddt": "{af2Provider} pLDDT",
+    "artifacts.preview.compare.meta.predRmsd": "{af2Provider} RMSD",
+    "artifacts.preview.compare.meta.path": "Path",
+    "artifacts.preview.compare.role.input_reference": "Input Structure",
+    "artifacts.preview.compare.role.working_backbone": "Working Backbone",
+    "artifacts.preview.compare.role.wt_colabfold": "WT ColabFold",
+    "artifacts.preview.compare.role.backbone_snapshot": "Backbone Snapshot",
+    "artifacts.preview.compare.role.af2_candidate": "{af2Provider} Candidate",
+    "artifacts.preview.compare.role.source_output": "Source Output",
+    "artifacts.preview.compare.role.structure_artifact": "Structure Artifact",
+    "artifacts.preview.compare.provenance.input": "Original run input snapshot",
+    "artifacts.preview.compare.provenance.inputRfd3": "Original run input snapshot (RFD3-derived)",
+    "artifacts.preview.compare.provenance.working": "Primary backbone copy used for downstream stages",
+    "artifacts.preview.compare.provenance.wt": "WT sequence predicted by {af2Provider}",
+    "artifacts.preview.compare.provenance.backbone": "{source} backbone snapshot",
+    "artifacts.preview.compare.provenance.candidate": "Tier {tier} candidate predicted by {af2Provider}",
+    "artifacts.preview.compare.provenance.source": "{source} source-stage output",
+    "artifacts.preview.compare.provenance.other": "Structure artifact",
     "feedback.title": "Feedback",
     "feedback.desc": "Capture expert reviews and ratings.",
     "feedback.rating": "Rating",
@@ -685,10 +951,13 @@ const I18N = {
     "runs.deleteSuccess": "Deleted run: {id}",
     "question.runMode.label": "Run Mode",
     "question.runMode.help": "Choose what to run.",
+    "question.runMode.detail": "Each mode changes required input, runtime, and output depth.",
     "question.targetInput.label": "Target Input",
     "question.targetInput.help": "Provide target_pdb or target_fasta (raw text).",
+    "question.startFrom.label": "Start From",
+    "question.startFrom.help": "Where to start? Reuses cached outputs before this stage when available.",
     "question.stopAfter.label": "Stop After",
-    "question.stopAfter.help": "Where to stop? (msa/rfd3/bioemu/design/soluprot/af2/novelty)",
+    "question.stopAfter.help": "Where to stop? (msa/rfd3/bioemu/design/soluprot/af2/wt_diff)",
     "question.designChains.label": "Design Chains",
     "question.designChains.help": "Which chains to design? (default: all)",
     "question.wtCompare.label": "WT Compare",
@@ -710,8 +979,8 @@ const I18N = {
     "question.af2PlddtCutoff.help": "Minimum pLDDT threshold for {af2Provider} pass filtering (default: 85).",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD Cutoff",
     "question.af2RmsdCutoff.help": "Maximum RMSD threshold (angstrom) for {af2Provider} pass filtering (default: 2.0).",
-    "question.noveltyEnabled.label": "Novelty Search",
-    "question.noveltyEnabled.help": "Run final MMseqs2 novelty search for AF2-selected sequences.",
+    "question.noveltyEnabled.label": "WT Diff",
+    "question.noveltyEnabled.help": "Run the final WT Diff comparison for AF2-selected sequences.",
     "question.af2Provider.label": "Structure Predictor",
     "question.af2Provider.help": "Choose structure prediction provider.",
     "question.rfd3MaxReturn.label": "RFD3 Return Count",
@@ -762,8 +1031,8 @@ const I18N = {
     "choice.ligandMaskOriginal.off": "Use backbone-only mask",
     "choice.bioemuUse.on": "Enable BioEmu",
     "choice.bioemuUse.off": "Disable BioEmu",
-    "choice.novelty.on": "Enable novelty",
-    "choice.novelty.off": "Disable novelty",
+    "choice.novelty.on": "Enable WT Diff",
+    "choice.novelty.off": "Disable WT Diff",
     "choice.af2Provider.colabfold": "ColabFold (default)",
     "choice.af2Provider.af2": "AlphaFold2",
     "advanced.bioemuCounts.title": "BioEmu Count Options",
@@ -776,12 +1045,61 @@ const I18N = {
     "advanced.rfd3Counts.hide": "Hide RFD3 Count Options",
     "choice.confirmRun.yes": "Yes, run",
     "choice.confirmRun.no": "Review first",
+    "setup.wizard.scope": "Scope",
+    "setup.wizard.input": "Input",
+    "setup.wizard.options": "Options",
+    "setup.wizard.stepMeta": "Step {current}/{total}: {label}",
+    "setup.wizard.prev": "Previous",
+    "setup.wizard.next": "Next",
     "hint.none": "No missing inputs. You can run now.",
     "hint.ready": "All required inputs captured.",
     "hint.missing": "Missing required inputs.",
+    "hint.nextStep": "Move to the final step to launch the run.",
     "hint.running": "A run is already in progress.",
     "run.reset": "Inputs reset. Reconfirm selections and attachments.",
+    "setup.options.title": "Core Option Board",
+    "setup.options.help": "Review key execution options in one board.",
+    "setup.parameters.title": "Compact Parameter Board",
+    "setup.parameters.help":
+      "Tune key numeric settings in one place. BioEmu and RFD3 counts stay visible in Pipeline and Workflow modes.",
+    "setup.parameters.inactive": "Inactive in current context",
+    "setup.workflow.title": "Workflow Studio",
+    "setup.workflow.help":
+      "Build a staged execution flow. Select stages, place checkpoints, and continue after reviewing intermediate results.",
+    "setup.workflow.palette": "Stage Palette",
+    "setup.workflow.paletteHelp": "Choose only the stages you need. Hover a stage to see its role.",
+    "setup.workflow.canvas": "Flow Canvas",
+    "setup.workflow.canvasHelp": "Selected stages appear in execution order. Click a node to toggle checkpoints.",
+    "setup.workflow.stageGuide": "Stage Guide",
+    "setup.workflow.stageGuideHint": "Hover or focus a stage to view details.",
+    "setup.workflow.stageGuideLabel": "Selected Stage",
+    "setup.workflow.controls": "Run Controls",
+    "setup.workflow.summaryTitle": "Plan Snapshot",
+    "setup.workflow.stageDesc.msa": "Find homologous sequences and assemble the MSA baseline.",
+    "setup.workflow.stageDesc.rfd3": "Generate backbone candidates from the prepared scaffold input.",
+    "setup.workflow.stageDesc.bioemu": "Sample structural conformations with BioEmu for diversity.",
+    "setup.workflow.stageDesc.design": "Design candidate amino-acid sequences from backbone context.",
+    "setup.workflow.stageDesc.soluprot": "Score and filter candidates by solubility tendency.",
+    "setup.workflow.stageDesc.af2": "Predict structures and quality metrics with {af2Provider}.",
+    "setup.workflow.stageDesc.novelty": "Compare against the WT sequence and calculate WT Diff.",
+    "setup.workflow.summary": "Execution Plan",
+    "setup.workflow.empty": "Click a stage button to add nodes.",
+    "setup.workflow.nodeHint": "Click nodes to toggle checkpoints (multi-select). Use x to remove a stage.",
+    "setup.workflow.checkpoint": "Pause at checkpoint",
+    "setup.workflow.showResults": "Show checkpoint results",
+    "setup.workflow.showGraph": "Show graph at checkpoint",
+    "setup.workflow.mmseqLoop": "Allow stage rerun from review panel",
+    "setup.workflow.orderLocked":
+      "Stage order is fixed by pipeline dependencies. Reordering is technically possible but not recommended for stable execution.",
+    "setup.workflow.removeNode": "Remove stage",
+    "setup.workflow.badge.checkpoint": "Checkpoint",
+    "setup.workflow.badge.final": "Final",
+    "setup.workflow.plan": "Run {start} -> {stop} (final {final})",
+    "setup.workflow.planNoCheckpoint": "Run {start} -> {final}",
+    "setup.workflow.checkpoints": "Checkpoints: {stages}",
+    "setup.workflow.checkpoints.none": "Checkpoints: none (run continuously)",
     "runmode.pipeline": "Full Pipeline",
+    "runmode.workflow": "Workflow Studio",
     "runmode.rfd3": "RFD3 (Backbone)",
     "runmode.bioemu": "BioEmu (Backbone)",
     "runmode.msa": "MSA (MMseqs2)",
@@ -789,7 +1107,18 @@ const I18N = {
     "runmode.soluprot": "SoluProt",
     "runmode.af2": "{af2Provider}",
     "runmode.diffdock": "DiffDock",
-    "stop.full": "Full (Novelty)",
+    "setup.modeGuide.title": "Mode Guide",
+    "setup.modeGuide.pipeline": "Run the end-to-end pipeline through the final WT Diff stage.",
+    "setup.modeGuide.workflow":
+      "Run by checkpointed stage blocks and decide continue/rerun actions from the monitor panel.",
+    "setup.modeGuide.rfd3": "Run only RFD3 backbone generation.",
+    "setup.modeGuide.bioemu": "Run only BioEmu backbone sampling.",
+    "setup.modeGuide.msa": "Run only MSA/MMseqs retrieval and cache preparation.",
+    "setup.modeGuide.design": "Run only sequence design (ProteinMPNN).",
+    "setup.modeGuide.soluprot": "Run only solubility scoring.",
+    "setup.modeGuide.af2": "Run only structure prediction with {af2Provider}.",
+    "setup.modeGuide.diffdock": "Run only protein-ligand docking.",
+    "stop.full": "Full (WT Diff)",
     "stage.msa": "MSA",
     "stage.rfd3": "RFD3",
     "stage.bioemu": "BioEmu",
@@ -797,6 +1126,7 @@ const I18N = {
     "stage.soluprot": "SoluProt",
     "stage.af2": "{af2Provider}",
     "run.label.pipeline": "Run Pipeline",
+    "run.label.workflow": "Run Workflow",
     "run.label.rfd3": "Run RFD3",
     "run.label.bioemu": "Run BioEmu",
     "run.label.msa": "Run MSA",
@@ -805,6 +1135,7 @@ const I18N = {
     "run.label.af2": "Run {af2Provider}",
     "run.label.diffdock": "Run DiffDock",
     "mode.pipeline": "pipeline",
+    "mode.workflow": "workflow",
     "mode.rfd3": "RFD3",
     "mode.bioemu": "BioEmu",
     "mode.msa": "MSA",
@@ -844,8 +1175,8 @@ const I18N = {
     "feedback.reason.low_rmsd": "Low RMSD",
     "feedback.reason.binding_poor": "Binding Poor",
     "feedback.reason.binding_good": "Binding Good",
-    "feedback.reason.low_novelty": "Low Novelty",
-    "feedback.reason.high_novelty": "High Novelty",
+    "feedback.reason.low_novelty": "Low WT Diff",
+    "feedback.reason.high_novelty": "High WT Diff",
     "feedback.reason.unstable": "Unstable",
     "feedback.reason.stable": "Stable",
     "feedback.reason.other": "Other",
@@ -854,7 +1185,7 @@ const I18N = {
     "feedback.stage.design": "Design",
     "feedback.stage.soluprot": "SoluProt",
     "feedback.stage.af2": "{af2Provider}",
-    "feedback.stage.novelty": "Novelty",
+    "feedback.stage.novelty": "WT Diff",
     "feedback.stage.rfd3": "RFD3",
     "feedback.stage.diffdock": "DiffDock",
     "feedback.stage.other": "Other",
@@ -908,7 +1239,10 @@ const I18N = {
     "analyze.hitList.weight.soluprot": "SoluProt W",
     "analyze.hitList.weight.plddt": "pLDDT W",
     "analyze.hitList.weight.rmsd": "RMSD W",
-    "analyze.hitList.weight.novelty": "Novelty W",
+    "analyze.hitList.weight.novelty": "WT Diff W (off)",
+    "analyze.hitList.identity": "WT Diff (n/len, %)",
+    "analyze.hitList.identityInfo":
+      "WT difference is shown as count/length and percent and does not affect ranking/filtering.",
     "analyze.hitList.refresh": "Refresh",
     "analyze.hitList.details": "View Details",
     "analyze.hitList.placeholder": "Load a run to build the hit list.",
@@ -920,7 +1254,7 @@ const I18N = {
     "analyze.chart.select": "Chart",
     "analyze.chart.placeholder": "Run hit list to render candidate charts.",
     "analyze.chart.noData": "No numeric data for the selected chart in current filters.",
-    "analyze.chart.option.plddtRmsd": "Scatter: pLDDT vs RMSD",
+    "analyze.chart.option.plddtRmsd": "Scatter: pLDDT vs RMSD vs WT",
     "analyze.chart.option.scoreHist": "Histogram: Hit Score",
     "analyze.chart.option.tierPass": "Tier AF2 Pass Rate",
     "analyze.chart.axis.plddt": "pLDDT",
@@ -931,8 +1265,11 @@ const I18N = {
     "analyze.chart.axis.tier": "Tier",
     "analyze.chart.legend.selected": "{af2Provider} selected",
     "analyze.chart.legend.unselected": "Not selected",
+    "analyze.chart.legend.wt": "WT",
     "analyze.chart.caption.rows": "Rows={rows} (cutoff >= {cutoff})",
     "analyze.chart.caption.scatter": "Points={points}, selected={selected}",
+    "analyze.chart.caption.scatterPoints": "Points={points}",
+    "analyze.chart.caption.scatterWithWt": "Points={points}, selected={selected}, WT={wt}",
     "analyze.chart.caption.hist": "Values={values}, bins={bins}",
     "analyze.chart.caption.tier": "Tiers={tiers}, rows={rows}",
     "analyze.files.title": "Artifact File Viewer",
@@ -974,8 +1311,38 @@ const I18N = {
     "copilot.quick.title": "빠른 질문",
     "copilot.quick.usage": "이 화면 사용법",
     "copilot.quick.interpret": "현재 지표 해석",
+    "copilot.quick.summary": "현재 run 요약",
+    "copilot.quick.compare": "비교 상태 설명",
     "copilot.quick.next": "다음에 뭘 할까?",
     "copilot.quick.resume": "재시작은 어떻게 해?",
+    "copilot.summary.title": "라이브 스냅샷",
+    "copilot.summary.empty": "run을 열면 현재 상태 스냅샷을 구성합니다.",
+    "copilot.actions.title": "추천 액션",
+    "copilot.actions.empty": "run을 선택하면 바로 실행 가능한 액션이 표시됩니다.",
+    "copilot.conversation.title": "대화",
+    "copilot.clear": "지우기",
+    "copilot.role.user": "사용자",
+    "copilot.role.ai": "Copilot",
+    "copilot.action.openSetup": "Setup 열기",
+    "copilot.action.openSetup.desc": "입력을 채우고 새 run을 시작합니다.",
+    "copilot.action.openMonitor": "Monitor 열기",
+    "copilot.action.openMonitor.desc": "상태, 에러, 아티팩트 진행을 확인합니다.",
+    "copilot.action.openAnalyze": "Analyze 열기",
+    "copilot.action.openAnalyze.desc": "Hit List, 차트, 비교 스튜디오를 검토합니다.",
+    "copilot.action.poll": "지금 조회",
+    "copilot.action.poll.desc": "현재 run 상태를 즉시 새로고칩니다.",
+    "copilot.action.refreshArtifacts": "아티팩트 새로고침",
+    "copilot.action.refreshArtifacts.desc": "파일 산출물과 미리보기 선택지를 다시 불러옵니다.",
+    "copilot.action.refreshHitList": "Hit List 새로고침",
+    "copilot.action.refreshHitList.desc": "현재 run 후보 랭킹을 다시 계산합니다.",
+    "copilot.action.generateReport": "리포트 생성",
+    "copilot.action.generateReport.desc": "비교 요약과 리포트 산출물을 새로 만듭니다.",
+    "copilot.action.resume": "Run 재시작",
+    "copilot.action.resume.desc": "중단된 run을 저장된 request 기준으로 이어갑니다.",
+    "copilot.action.compare3d": "3D 비교 실행",
+    "copilot.action.compare3d.desc": "선택한 좌/우 구조를 바로 렌더링합니다.",
+    "copilot.action.completed": "{action} 완료.",
+    "copilot.action.failed": "{action} 실패: {error}",
     "copilot.input.placeholder": "현재 run 또는 화면 사용법을 질문하세요",
     "copilot.send": "보내기",
     "analyze.kpi.feedback": "피드백",
@@ -1070,6 +1437,34 @@ const I18N = {
     "monitor.completeness.badge.wtOff": "WT 비교 꺼짐",
     "monitor.completeness.badge.af2None": "{af2Provider} 선발 없음",
     "monitor.completeness.badge.af2Some": "{af2Provider} 선발 {count}",
+    "monitor.workflow.title": "워크플로우 검토 게이트",
+    "monitor.workflow.waiting": "체크포인트까지 실행 중: {stage}",
+    "monitor.workflow.ready": "{stage} 체크포인트에 도달했습니다. 그래프를 확인하고 다음 동작을 선택하세요.",
+    "monitor.workflow.completed": "워크플로우가 최종 단계까지 완료되었습니다: {stage}",
+    "monitor.workflow.chart.empty": "아티팩트 카운트가 아직 없습니다. 체크포인트 이후 아티팩트를 새로고침하세요.",
+    "monitor.workflow.checkpoints": "체크포인트: {stages}",
+    "monitor.workflow.nextStage": "다음 단계: {stage}",
+    "monitor.workflow.finalStage": "최종 단계: {stage}",
+    "monitor.workflow.continue": "다음 단계로 계속",
+    "monitor.workflow.continueStarted": "{id} run을 {start} -> {stop} 로 계속 실행합니다...",
+    "monitor.workflow.continueFailed": "워크플로우 이어서 실행 실패: {error}",
+    "monitor.workflow.rerunLabel": "재실행 대상 단계",
+    "monitor.workflow.rerunAction": "해당 단계까지 재실행",
+    "monitor.workflow.rerunConfirm":
+      "{id} run 기준으로 MSA부터 {stage}까지 새 run을 재실행할까요? 비교용 별도 run이 생성됩니다.",
+    "monitor.workflow.rerunStarted": "단계 재실행 시작: {id} ({start} -> {stop})",
+    "monitor.workflow.rerunFailed": "단계 재실행 실패: {error}",
+    "monitor.workflow.resultsTitle": "체크포인트 결과",
+    "monitor.workflow.resultsHint": "현재까지 생성된 아티팩트 {count}개입니다. 항목을 클릭하면 미리보기가 열립니다.",
+    "monitor.workflow.resultsEmpty": "아직 결과 아티팩트가 없습니다.",
+    "monitor.workflow.resultsUnknown": "미분류",
+    "monitor.workflow.resultsDisabled": "설정에서 체크포인트 결과 패널 표시를 꺼둔 상태입니다.",
+    "monitor.workflow.mmseq": "MMseqs 재실행",
+    "monitor.workflow.mmseqConfirm":
+      "{id} run 기준으로 MSA 단계에서 MMseqs를 다시 실행할까요? 비교를 위해 새 run이 생성됩니다.",
+    "monitor.workflow.mmseqStarted": "MMseqs 재실행 시작: {id}",
+    "monitor.workflow.mmseqFailed": "MMseqs 재실행 실패: {error}",
+    "monitor.workflow.openAnalyze": "분석 탭 열기",
     "monitor.poll": "지금 조회",
     "monitor.stop": "정지",
     "monitor.resume": "재시작",
@@ -1147,17 +1542,80 @@ const I18N = {
     "artifacts.preview.placeholder": "아티팩트를 선택하면 여기서 미리보기를 볼 수 있습니다.",
     "artifacts.preview.compare.mode.structure": "구조 차이",
     "artifacts.preview.compare.mode.sequence": "서열 차이",
-    "artifacts.preview.compare.left": "WT/기준 3D",
-    "artifacts.preview.compare.right": "Design 3D",
+    "artifacts.preview.compare.left": "기준 3D",
+    "artifacts.preview.compare.right": "후보 3D",
     "artifacts.preview.compare.run": "3D 비교",
+    "artifacts.preview.compare.swap": "좌우 전환",
     "artifacts.preview.compare.clear": "초기화",
     "artifacts.preview.compare.missing": "좌/우 3D 아티팩트를 모두 선택하세요.",
     "artifacts.preview.compare.failed": "3D 비교 실패: {error}",
+    "artifacts.preview.compare.refs.title": "기준선",
+    "artifacts.preview.compare.refs.input": "입력 구조",
+    "artifacts.preview.compare.refs.working": "작업 백본",
+    "artifacts.preview.compare.refs.wt": "WT ColabFold",
+    "artifacts.preview.compare.refs.missing": "없음",
+    "artifacts.preview.compare.preset.title": "빠른 비교",
+    "artifacts.preview.compare.preset.inputVsWt": "입력 vs WT",
+    "artifacts.preview.compare.preset.inputVsWorking": "입력 vs 작업",
+    "artifacts.preview.compare.preset.inputVsRfd3": "입력 vs RFD3",
+    "artifacts.preview.compare.preset.inputVsBioemu": "입력 vs BioEmu",
+    "artifacts.preview.compare.preset.wtVsRfd3": "WT vs RFD3",
+    "artifacts.preview.compare.preset.wtVsBioemu": "WT vs BioEmu",
+    "artifacts.preview.compare.preset.rfd3VsBioemu": "RFD3 vs BioEmu",
+    "artifacts.preview.compare.group.references": "기준 구조",
+    "artifacts.preview.compare.group.backbones": "백본 스냅샷",
+    "artifacts.preview.compare.group.af2": "{af2Provider} 후보",
+    "artifacts.preview.compare.group.source": "소스 출력",
+    "artifacts.preview.compare.group.other": "기타 구조",
+    "artifacts.preview.compare.sequenceTitle": "서열 (FASTA)",
+    "artifacts.preview.compare.sequenceLeft": "기준",
+    "artifacts.preview.compare.sequenceRight": "후보",
+    "artifacts.preview.compare.sequenceEmpty": "해당 구조에서 서열을 추출하지 못했습니다.",
     "artifacts.preview.compare.diffLegendStructure":
       "CA 정렬 후 구조 차이: <=1.5A 회색, 1.5-3.0A 노랑, >3.0A 빨강, gap WT 파랑 / Design 주황",
     "artifacts.preview.compare.diffLegendSequence":
       "잔기 동일성 기준 차이: WT 쪽 불일치 파랑, Design 쪽 불일치 주황, 동일 잔기 회색",
     "artifacts.preview.compare.diffNone": "잔기 기준 차이가 감지되지 않았습니다.",
+    "artifacts.preview.compare.meta.title": "비교 컨텍스트",
+    "artifacts.preview.compare.meta.left": "기준",
+    "artifacts.preview.compare.meta.right": "후보",
+    "artifacts.preview.compare.meta.role": "역할",
+    "artifacts.preview.compare.meta.source": "소스",
+    "artifacts.preview.compare.meta.provenance": "계보",
+    "artifacts.preview.compare.meta.tier": "티어",
+    "artifacts.preview.compare.meta.backbone": "백본",
+    "artifacts.preview.compare.meta.chains": "체인",
+    "artifacts.preview.compare.meta.fixedCount": "고정 잔기 수",
+    "artifacts.preview.compare.meta.wtDiff": "WT 서열 차이",
+    "artifacts.preview.compare.meta.inputStructRmsd": "입력 구조 RMSD",
+    "artifacts.preview.compare.meta.wtStructRmsd": "WT CF RMSD",
+    "artifacts.preview.compare.meta.workingStructRmsd": "작업 백본 RMSD",
+    "artifacts.preview.compare.meta.commonCa": "공통 CA",
+    "artifacts.preview.compare.meta.predScope": "{af2Provider} 범위",
+    "artifacts.preview.compare.meta.predScopeExact": "정확 후보",
+    "artifacts.preview.compare.meta.predScopeWt": "WT 기준",
+    "artifacts.preview.compare.meta.predScopeTier": "티어 요약",
+    "artifacts.preview.compare.meta.predScopeBackbone": "백본 요약",
+    "artifacts.preview.compare.meta.predScopePre": "{af2Provider} 전",
+    "artifacts.preview.compare.meta.predSelected": "{af2Provider} 선발",
+    "artifacts.preview.compare.meta.predPlddt": "{af2Provider} pLDDT",
+    "artifacts.preview.compare.meta.predRmsd": "{af2Provider} RMSD",
+    "artifacts.preview.compare.meta.path": "경로",
+    "artifacts.preview.compare.role.input_reference": "입력 구조",
+    "artifacts.preview.compare.role.working_backbone": "작업 백본",
+    "artifacts.preview.compare.role.wt_colabfold": "WT ColabFold",
+    "artifacts.preview.compare.role.backbone_snapshot": "백본 스냅샷",
+    "artifacts.preview.compare.role.af2_candidate": "{af2Provider} 후보",
+    "artifacts.preview.compare.role.source_output": "소스 출력",
+    "artifacts.preview.compare.role.structure_artifact": "구조 아티팩트",
+    "artifacts.preview.compare.provenance.input": "원래 실행 입력 구조 스냅샷",
+    "artifacts.preview.compare.provenance.inputRfd3": "원래 실행 입력 구조 스냅샷 (RFD3 유래)",
+    "artifacts.preview.compare.provenance.working": "downstream 단계에 사용된 primary 백본 복사본",
+    "artifacts.preview.compare.provenance.wt": "WT 서열을 {af2Provider}로 예측한 구조",
+    "artifacts.preview.compare.provenance.backbone": "{source} 백본 스냅샷",
+    "artifacts.preview.compare.provenance.candidate": "티어 {tier} 후보 ({af2Provider})",
+    "artifacts.preview.compare.provenance.source": "{source} 소스 단계 출력",
+    "artifacts.preview.compare.provenance.other": "구조 아티팩트",
     "feedback.title": "피드백",
     "feedback.desc": "전문가 평가와 등급을 기록합니다.",
     "feedback.rating": "평가",
@@ -1272,10 +1730,13 @@ const I18N = {
     "runs.deleteSuccess": "실행 삭제됨: {id}",
     "question.runMode.label": "실행 모드",
     "question.runMode.help": "실행할 항목을 선택하세요.",
+    "question.runMode.detail": "모드에 따라 필요한 입력, 실행 시간, 출력 깊이가 달라집니다.",
     "question.targetInput.label": "타깃 입력",
     "question.targetInput.help": "target_pdb 또는 target_fasta 원문을 입력하세요.",
+    "question.startFrom.label": "시작 단계",
+    "question.startFrom.help": "어디부터 실행할까요? 가능하면 이전 단계 캐시를 재사용합니다.",
     "question.stopAfter.label": "중단 단계",
-    "question.stopAfter.help": "어디까지 실행할까요? (msa/rfd3/bioemu/design/soluprot/af2/novelty)",
+    "question.stopAfter.help": "어디까지 실행할까요? (msa/rfd3/bioemu/design/soluprot/af2/wt_diff)",
     "question.designChains.label": "디자인 체인",
     "question.designChains.help": "디자인할 체인을 선택하세요. (기본: 전체)",
     "question.wtCompare.label": "WT 비교",
@@ -1297,8 +1758,8 @@ const I18N = {
     "question.af2PlddtCutoff.help": "{af2Provider} 통과 필터링에 사용할 최소 pLDDT 임계값입니다. (기본값: 85)",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD 컷오프",
     "question.af2RmsdCutoff.help": "{af2Provider} 통과 필터링에 사용할 최대 RMSD 임계값(Å)입니다. (기본값: 2.0)",
-    "question.noveltyEnabled.label": "Novelty 검색",
-    "question.noveltyEnabled.help": "AF2 선택 서열에 대해 마지막 MMseqs2 novelty 검색을 실행합니다.",
+    "question.noveltyEnabled.label": "WT Diff",
+    "question.noveltyEnabled.help": "AF2 선택 서열에 대해 마지막 WT Diff 비교를 실행합니다.",
     "question.af2Provider.label": "구조 예측기",
     "question.af2Provider.help": "구조 예측 provider를 선택하세요.",
     "question.rfd3MaxReturn.label": "RFD3 반환 개수",
@@ -1349,8 +1810,8 @@ const I18N = {
     "choice.ligandMaskOriginal.off": "현재 백본 기준만 사용",
     "choice.bioemuUse.on": "BioEmu 사용",
     "choice.bioemuUse.off": "BioEmu 사용 안 함",
-    "choice.novelty.on": "Novelty 사용",
-    "choice.novelty.off": "Novelty 사용 안 함",
+    "choice.novelty.on": "WT Diff 사용",
+    "choice.novelty.off": "WT Diff 사용 안 함",
     "choice.af2Provider.colabfold": "ColabFold (기본)",
     "choice.af2Provider.af2": "AlphaFold2",
     "advanced.bioemuCounts.title": "BioEmu 개수 옵션",
@@ -1363,12 +1824,61 @@ const I18N = {
     "advanced.rfd3Counts.hide": "RFD3 개수 옵션 숨기기",
     "choice.confirmRun.yes": "예, 실행",
     "choice.confirmRun.no": "검토 후",
+    "setup.wizard.scope": "범위 설정",
+    "setup.wizard.input": "입력",
+    "setup.wizard.options": "옵션",
+    "setup.wizard.stepMeta": "{current}/{total} 단계: {label}",
+    "setup.wizard.prev": "이전",
+    "setup.wizard.next": "다음",
     "hint.none": "누락된 입력이 없습니다. 지금 실행할 수 있습니다.",
     "hint.ready": "필수 입력이 모두 완료되었습니다.",
     "hint.missing": "필수 입력이 누락되었습니다.",
+    "hint.nextStep": "마지막 단계로 이동하면 실행할 수 있습니다.",
     "hint.running": "이미 실행 중인 작업이 있습니다.",
     "run.reset": "입력을 초기화했습니다. 선택과 첨부를 다시 확인하세요.",
+    "setup.options.title": "핵심 옵션 보드",
+    "setup.options.help": "주요 실행 옵션을 한 보드에서 한 번에 확인하고 조정합니다.",
+    "setup.parameters.title": "핵심 파라미터 보드",
+    "setup.parameters.help":
+      "주요 숫자 파라미터를 한 카드에서 조정합니다. Pipeline/Workflow 모드에서는 BioEmu/RFD3 개수 설정을 항상 표시합니다.",
+    "setup.parameters.inactive": "현재 조건에서 비활성",
+    "setup.workflow.title": "Workflow Studio",
+    "setup.workflow.help":
+      "단계 실행 흐름을 구성합니다. 필요한 단계를 고르고 체크포인트를 지정한 뒤, 중간 결과를 확인하고 이어서 실행하세요.",
+    "setup.workflow.palette": "단계 팔레트",
+    "setup.workflow.paletteHelp": "필요한 단계만 선택하세요. 단계에 마우스를 올리면 역할 설명이 표시됩니다.",
+    "setup.workflow.canvas": "플로우 캔버스",
+    "setup.workflow.canvasHelp": "선택한 단계가 실행 순서대로 표시됩니다. 노드를 클릭해 체크포인트를 토글하세요.",
+    "setup.workflow.stageGuide": "단계 가이드",
+    "setup.workflow.stageGuideHint": "단계에 마우스를 올리거나 포커스하면 설명이 표시됩니다.",
+    "setup.workflow.stageGuideLabel": "선택 단계",
+    "setup.workflow.controls": "실행 제어",
+    "setup.workflow.summaryTitle": "실행 요약",
+    "setup.workflow.stageDesc.msa": "상동 서열을 탐색해 MSA 기반 데이터를 구성합니다.",
+    "setup.workflow.stageDesc.rfd3": "준비된 스캐폴드 입력을 바탕으로 백본 후보를 생성합니다.",
+    "setup.workflow.stageDesc.bioemu": "BioEmu로 구조 샘플을 생성해 다양성을 확보합니다.",
+    "setup.workflow.stageDesc.design": "백본 문맥을 기준으로 후보 아미노산 서열을 설계합니다.",
+    "setup.workflow.stageDesc.soluprot": "용해도 경향 점수로 후보를 평가하고 필터링합니다.",
+    "setup.workflow.stageDesc.af2": "{af2Provider}로 구조와 품질 지표를 예측합니다.",
+    "setup.workflow.stageDesc.novelty": "WT 서열과 비교해 WT Diff를 계산합니다.",
+    "setup.workflow.summary": "실행 계획",
+    "setup.workflow.empty": "단계 버튼을 눌러 노드를 추가하세요.",
+    "setup.workflow.nodeHint": "노드를 클릭해 체크포인트를 다중 선택하고, x 버튼으로 단계를 제거할 수 있습니다.",
+    "setup.workflow.checkpoint": "체크포인트에서 일시 정지",
+    "setup.workflow.showResults": "체크포인트 결과 표시",
+    "setup.workflow.showGraph": "체크포인트에서 그래프 표시",
+    "setup.workflow.mmseqLoop": "검토 패널에서 단계 재실행 허용",
+    "setup.workflow.orderLocked":
+      "단계 순서는 파이프라인 의존성 때문에 고정됩니다. 기술적으로 변경은 가능하지만 안정적인 실행을 위해 권장하지 않습니다.",
+    "setup.workflow.removeNode": "단계 제거",
+    "setup.workflow.badge.checkpoint": "체크포인트",
+    "setup.workflow.badge.final": "최종",
+    "setup.workflow.plan": "{start} -> {stop} 실행 (최종 {final})",
+    "setup.workflow.planNoCheckpoint": "{start} -> {final} 실행",
+    "setup.workflow.checkpoints": "체크포인트: {stages}",
+    "setup.workflow.checkpoints.none": "체크포인트 없음 (중단 없이 연속 실행)",
     "runmode.pipeline": "전체 파이프라인",
+    "runmode.workflow": "Workflow Studio",
     "runmode.rfd3": "RFD3 (Backbone)",
     "runmode.bioemu": "BioEmu (Backbone)",
     "runmode.msa": "MSA (MMseqs2)",
@@ -1376,7 +1886,17 @@ const I18N = {
     "runmode.soluprot": "SoluProt",
     "runmode.af2": "{af2Provider}",
     "runmode.diffdock": "DiffDock",
-    "stop.full": "전체 (Novelty)",
+    "setup.modeGuide.title": "모드 가이드",
+    "setup.modeGuide.pipeline": "마지막 WT Diff 단계까지 전체 파이프라인을 한 번에 실행합니다.",
+    "setup.modeGuide.workflow": "체크포인트 단위로 실행하고 모니터에서 이어서/재실행을 결정합니다.",
+    "setup.modeGuide.rfd3": "RFD3 백본 생성만 실행합니다.",
+    "setup.modeGuide.bioemu": "BioEmu 백본 샘플링만 실행합니다.",
+    "setup.modeGuide.msa": "MSA/MMseqs 탐색과 캐시 준비만 실행합니다.",
+    "setup.modeGuide.design": "서열 설계(ProteinMPNN)만 실행합니다.",
+    "setup.modeGuide.soluprot": "용해도 점수 평가만 실행합니다.",
+    "setup.modeGuide.af2": "{af2Provider} 구조 예측만 실행합니다.",
+    "setup.modeGuide.diffdock": "단백질-리간드 도킹만 실행합니다.",
+    "stop.full": "전체 (WT Diff)",
     "stage.msa": "MSA",
     "stage.rfd3": "RFD3",
     "stage.bioemu": "BioEmu",
@@ -1384,6 +1904,7 @@ const I18N = {
     "stage.soluprot": "SoluProt",
     "stage.af2": "{af2Provider}",
     "run.label.pipeline": "파이프라인 실행",
+    "run.label.workflow": "워크플로우 실행",
     "run.label.rfd3": "RFD3 실행",
     "run.label.bioemu": "BioEmu 실행",
     "run.label.msa": "MSA 실행",
@@ -1392,6 +1913,7 @@ const I18N = {
     "run.label.af2": "{af2Provider} 실행",
     "run.label.diffdock": "DiffDock 실행",
     "mode.pipeline": "파이프라인",
+    "mode.workflow": "워크플로우",
     "mode.rfd3": "RFD3",
     "mode.bioemu": "BioEmu",
     "mode.msa": "MSA",
@@ -1431,8 +1953,8 @@ const I18N = {
     "feedback.reason.low_rmsd": "RMSD 낮음",
     "feedback.reason.binding_poor": "결합 낮음",
     "feedback.reason.binding_good": "결합 우수",
-    "feedback.reason.low_novelty": "신규성 낮음",
-    "feedback.reason.high_novelty": "신규성 높음",
+    "feedback.reason.low_novelty": "WT 차이 낮음",
+    "feedback.reason.high_novelty": "WT 차이 높음",
     "feedback.reason.unstable": "불안정",
     "feedback.reason.stable": "안정적",
     "feedback.reason.other": "기타",
@@ -1441,7 +1963,7 @@ const I18N = {
     "feedback.stage.design": "Design",
     "feedback.stage.soluprot": "SoluProt",
     "feedback.stage.af2": "{af2Provider}",
-    "feedback.stage.novelty": "Novelty",
+    "feedback.stage.novelty": "WT Diff",
     "feedback.stage.rfd3": "RFD3",
     "feedback.stage.diffdock": "DiffDock",
     "feedback.stage.other": "기타",
@@ -1495,7 +2017,9 @@ const I18N = {
     "analyze.hitList.weight.soluprot": "SoluProt 가중치",
     "analyze.hitList.weight.plddt": "pLDDT 가중치",
     "analyze.hitList.weight.rmsd": "RMSD 가중치",
-    "analyze.hitList.weight.novelty": "Novelty 가중치",
+    "analyze.hitList.weight.novelty": "WT Diff 가중치 (비활성)",
+    "analyze.hitList.identity": "WT 차이 (개수/길이, %)",
+    "analyze.hitList.identityInfo": "WT 대비 차이(개수/길이, 퍼센트)로 표시되며 랭킹/필터에는 반영되지 않습니다.",
     "analyze.hitList.refresh": "새로고침",
     "analyze.hitList.details": "상세 보기",
     "analyze.hitList.placeholder": "실행을 선택하면 Hit List를 생성합니다.",
@@ -1507,7 +2031,7 @@ const I18N = {
     "analyze.chart.select": "차트",
     "analyze.chart.placeholder": "Hit List를 실행하면 후보 차트를 표시합니다.",
     "analyze.chart.noData": "현재 필터에서 선택한 차트를 그릴 수 있는 수치 데이터가 없습니다.",
-    "analyze.chart.option.plddtRmsd": "분산: pLDDT vs RMSD",
+    "analyze.chart.option.plddtRmsd": "분산: pLDDT vs RMSD vs WT",
     "analyze.chart.option.scoreHist": "히스토그램: Hit 점수",
     "analyze.chart.option.tierPass": "티어별 AF2 통과율",
     "analyze.chart.axis.plddt": "pLDDT",
@@ -1518,8 +2042,11 @@ const I18N = {
     "analyze.chart.axis.tier": "티어",
     "analyze.chart.legend.selected": "{af2Provider} 선발",
     "analyze.chart.legend.unselected": "미선발",
+    "analyze.chart.legend.wt": "WT",
     "analyze.chart.caption.rows": "행={rows} (컷오프 >= {cutoff})",
     "analyze.chart.caption.scatter": "포인트={points}, 선발={selected}",
+    "analyze.chart.caption.scatterPoints": "포인트={points}",
+    "analyze.chart.caption.scatterWithWt": "포인트={points}, 선발={selected}, WT={wt}",
     "analyze.chart.caption.hist": "값={values}, 구간={bins}",
     "analyze.chart.caption.tier": "티어={tiers}, 행={rows}",
     "analyze.files.title": "아티팩트 파일 뷰어",
@@ -1634,6 +2161,7 @@ function setAf2ProviderForRun(runId, provider) {
 
 function refreshAf2ProviderLabels({ rerenderQuestions = false } = {}) {
   updateRunLabel();
+  applyI18n();
   if (rerenderQuestions) {
     renderQuestions(state.plan?.questions || []);
     updateRunEligibility(state.plan?.questions || []);
@@ -1685,6 +2213,7 @@ let copilotInitialized = false;
 
 const RUN_MODE_OPTIONS = [
   { labelKey: "runmode.pipeline", value: "pipeline" },
+  { labelKey: "runmode.workflow", value: "workflow" },
   { labelKey: "runmode.rfd3", value: "rfd3" },
   { labelKey: "runmode.bioemu", value: "bioemu" },
   { labelKey: "runmode.msa", value: "msa" },
@@ -1693,6 +2222,299 @@ const RUN_MODE_OPTIONS = [
   { labelKey: "runmode.af2", value: "af2" },
   { labelKey: "runmode.diffdock", value: "diffdock" },
 ];
+
+const PIPELINE_STAGE_ORDER = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"];
+const SETUP_WIZARD_STEPS = [
+  { id: "scope", labelKey: "setup.wizard.scope" },
+  { id: "input", labelKey: "setup.wizard.input" },
+  { id: "options", labelKey: "setup.wizard.options" },
+];
+const ENABLE_SETUP_WIZARD = false;
+
+function normalizePipelineStage(value, fallback = "") {
+  let raw = String(value || "")
+    .trim()
+    .toLowerCase();
+  raw = raw.replace(/[\s-]+/g, "_");
+  if (raw === "wt_diff" || raw === "wtdiff") raw = "novelty";
+  if (PIPELINE_STAGE_ORDER.includes(raw)) return raw;
+  return fallback;
+}
+
+function syncStartStopStages() {
+  const start = normalizePipelineStage(state.answers.start_from, "");
+  const stop = normalizePipelineStage(state.answers.stop_after, "");
+  if (!start || !stop) return;
+  if (PIPELINE_STAGE_ORDER.indexOf(start) > PIPELINE_STAGE_ORDER.indexOf(stop)) {
+    state.answers.stop_after = start;
+  }
+}
+
+function normalizeWorkflowNodesForState(value) {
+  const source = Array.isArray(value) ? value : state.workflowDesigner?.nodes;
+  const list = [];
+  (source || []).forEach((item) => {
+    const stage = normalizePipelineStage(item, "");
+    if (!stage) return;
+    if (!list.includes(stage)) list.push(stage);
+  });
+  if (!list.length) return ["msa", "design", "soluprot", "af2"];
+  return list;
+}
+
+function nextPipelineStage(stage) {
+  const normalized = normalizePipelineStage(stage, "");
+  if (!normalized) return "";
+  const idx = PIPELINE_STAGE_ORDER.indexOf(normalized);
+  if (idx < 0 || idx + 1 >= PIPELINE_STAGE_ORDER.length) return "";
+  return PIPELINE_STAGE_ORDER[idx + 1];
+}
+
+function buildWorkflowPlanFromDesigner() {
+  const nodes = normalizeWorkflowNodesForState(state.workflowDesigner?.nodes);
+  const start = nodes[0] || "msa";
+  const finalStop = nodes[nodes.length - 1] || "novelty";
+  const checkpointEnabled = Boolean(state.workflowDesigner?.checkpointEnabled);
+  const checkpointStages = checkpointEnabled
+    ? normalizeWorkflowCheckpointList(state.workflowDesigner?.checkpointStages, nodes)
+    : [];
+  const nextCheckpointStage = checkpointStages[0] || "";
+  const stopAfter = nextCheckpointStage || finalStop;
+  const noveltyEnabled = finalStop === "novelty";
+  const bioemuUse = nodes.includes("bioemu");
+  const continueFrom = nextCheckpointStage ? nextPipelineStage(nextCheckpointStage) : "";
+  return {
+    nodes,
+    start,
+    stopAfter,
+    finalStop,
+    checkpointEnabled: checkpointStages.length > 0,
+    checkpointStages,
+    checkpointIndex: 0,
+    nextCheckpointStage,
+    continueFrom,
+    noveltyEnabled,
+    bioemuUse,
+    graphEnabled: state.workflowDesigner?.graphEnabled !== false,
+    mmseqLoopEnabled: state.workflowDesigner?.mmseqLoopEnabled !== false,
+  };
+}
+
+function pipelineStageSlice(start, stop) {
+  const normalizedStart = normalizePipelineStage(start, "msa") || "msa";
+  const normalizedStop = normalizePipelineStage(stop, normalizedStart) || normalizedStart;
+  const startIdx = PIPELINE_STAGE_ORDER.indexOf(normalizedStart);
+  const stopIdx = PIPELINE_STAGE_ORDER.indexOf(normalizedStop);
+  if (startIdx < 0 || stopIdx < 0) return ["msa", "design", "soluprot", "af2"];
+  const from = Math.min(startIdx, stopIdx);
+  const to = Math.max(startIdx, stopIdx);
+  return PIPELINE_STAGE_ORDER.slice(from, to + 1);
+}
+
+function workflowPlanForRunId(runId) {
+  const key = String(runId || "").trim();
+  if (!key) return null;
+  const saved = state.workflowPlansByRunId?.[key];
+  if (saved && typeof saved === "object") {
+    const nodes = normalizeWorkflowNodesForState(saved.nodes);
+    const finalStopAfter = normalizePipelineStage(saved.finalStopAfter, nodes[nodes.length - 1] || "novelty");
+    const checkpointEnabled = Boolean(saved.checkpointEnabled);
+    const legacyCheckpointStage = normalizePipelineStage(saved.checkpointStage, "");
+    const checkpointStages = checkpointEnabled
+      ? normalizeWorkflowCheckpointList(
+          [
+            ...(Array.isArray(saved.checkpointStages) ? saved.checkpointStages : []),
+            legacyCheckpointStage,
+          ],
+          nodes
+        )
+      : [];
+    let checkpointIndex = Number(saved.checkpointIndex);
+    if (!Number.isFinite(checkpointIndex)) {
+      if (Object.prototype.hasOwnProperty.call(saved, "checkpointConsumed")) {
+        checkpointIndex = saved.checkpointConsumed ? checkpointStages.length : 0;
+      } else if (legacyCheckpointStage) {
+        const legacyIndex = checkpointStages.indexOf(legacyCheckpointStage);
+        checkpointIndex = legacyIndex >= 0 ? legacyIndex : 0;
+      } else {
+        checkpointIndex = 0;
+      }
+    }
+    checkpointIndex = Math.max(0, Math.min(checkpointStages.length, Math.trunc(checkpointIndex)));
+    const nextCheckpointStage = checkpointStages[checkpointIndex] || "";
+    return {
+      nodes,
+      finalStopAfter,
+      checkpointEnabled: checkpointStages.length > 0,
+      checkpointStages,
+      checkpointIndex,
+      nextCheckpointStage,
+      continueFrom: nextCheckpointStage ? nextPipelineStage(nextCheckpointStage) : "",
+      graphEnabled: saved.graphEnabled !== false,
+      mmseqLoopEnabled: saved.mmseqLoopEnabled !== false,
+      checkpointConsumed: checkpointIndex >= checkpointStages.length,
+    };
+  }
+  if (state.runModeById?.[key] !== "workflow") return null;
+  const ctx = state.progressContextByRunId?.[key];
+  if (!ctx || typeof ctx !== "object") return null;
+  const nodes = pipelineStageSlice(ctx.startFrom || "msa", ctx.stopAfter || "novelty");
+  const finalStopAfter = normalizePipelineStage(ctx.stopAfter, nodes[nodes.length - 1] || "novelty");
+  return {
+    nodes,
+    finalStopAfter,
+    checkpointEnabled: false,
+    checkpointStages: [],
+    checkpointIndex: 0,
+    nextCheckpointStage: "",
+    continueFrom: "",
+    graphEnabled: true,
+    mmseqLoopEnabled: false,
+    checkpointConsumed: true,
+  };
+}
+
+function workflowArtifactCountsForNodes(nodes) {
+  const counts = {};
+  (nodes || []).forEach((stage) => {
+    counts[stage] = 0;
+  });
+  const artifacts = Array.isArray(state.artifacts) ? state.artifacts : [];
+  artifacts.forEach((item) => {
+    const stage = artifactMetaForPath(item?.path || "").stage;
+    if (Object.prototype.hasOwnProperty.call(counts, stage)) {
+      counts[stage] += 1;
+    }
+  });
+  return counts;
+}
+
+function workflowArtifactGroupsForReview() {
+  const artifacts = Array.isArray(state.artifacts) ? state.artifacts : [];
+  const files = artifacts.filter((item) => item && item.type === "file" && String(item.path || "").trim());
+  const groups = new Map();
+  files.forEach((item) => {
+    const stage = artifactMetaForPath(item.path).stage || "misc";
+    if (!groups.has(stage)) groups.set(stage, []);
+    groups.get(stage).push(item);
+  });
+  const orderedStages = ARTIFACT_STAGE_ORDER.filter((stage) => groups.has(stage));
+  const extraStages = Array.from(groups.keys())
+    .filter((stage) => !orderedStages.includes(stage))
+    .sort();
+  const stageOrder = [...orderedStages, ...extraStages];
+  return stageOrder.map((stage) => ({
+    stage,
+    items: (groups.get(stage) || []).sort((a, b) => String(a.path || "").localeCompare(String(b.path || ""))),
+  }));
+}
+
+function workflowCountsSvg(nodes, counts) {
+  const stages = Array.isArray(nodes) ? nodes : [];
+  if (!stages.length) return "";
+  const values = stages.map((stage) => Number(counts?.[stage] || 0));
+  const maxValue = Math.max(1, ...values);
+  const width = Math.max(320, stages.length * 72);
+  const height = 160;
+  const bottom = 128;
+  const barWidth = 34;
+  const gap = (width - 40) / Math.max(1, stages.length);
+  const bars = stages
+    .map((stage, idx) => {
+      const value = Number(counts?.[stage] || 0);
+      const h = Math.round((value / maxValue) * 82);
+      const x = Math.round(24 + idx * gap);
+      const y = bottom - h;
+      const stageLabel = stage === "novelty" ? t("stop.full") : formatStageLabel(stage);
+      return `
+        <g class="workflow-mini-bar">
+          <rect x="${x}" y="${y}" width="${barWidth}" height="${h}" rx="6" />
+          <text x="${x + barWidth / 2}" y="${Math.max(16, y - 6)}" text-anchor="middle">${value}</text>
+          <text x="${x + barWidth / 2}" y="${bottom + 16}" text-anchor="middle">${escapeHtml(stageLabel)}</text>
+        </g>
+      `;
+    })
+    .join("");
+  return `
+    <svg viewBox="0 0 ${width} ${height}" role="img" aria-label="workflow-stage-counts">
+      <line x1="12" y1="${bottom}" x2="${width - 10}" y2="${bottom}" />
+      ${bars}
+    </svg>
+  `;
+}
+
+function setupWizardEnabled(questions) {
+  return ENABLE_SETUP_WIZARD && state.runMode === "pipeline" && Array.isArray(questions) && questions.length > 0;
+}
+
+function questionSetupStepId(questionId) {
+  if (questionId === "run_mode" || questionId === "start_from" || questionId === "stop_after") {
+    return "scope";
+  }
+  if (
+    questionId === "target_input" ||
+    questionId === "target_pdb" ||
+    questionId === "target_fasta" ||
+    questionId === "rfd3_input_pdb" ||
+    questionId === "rfd3_contig" ||
+    questionId === "diffdock_ligand"
+  ) {
+    return "input";
+  }
+  return "options";
+}
+
+function isSetupWizardFinalStep() {
+  const lastIndex = SETUP_WIZARD_STEPS.length - 1;
+  return Number(state.setupStepIndex || 0) >= lastIndex;
+}
+
+function renderSetupWizard(questions) {
+  const enabled = setupWizardEnabled(questions);
+  if (!el.setupStepper || !el.setupStepMeta || !el.setupStepDots || !el.setupStepPrev || !el.setupStepNext) {
+    return questions;
+  }
+  if (!enabled) {
+    state.setupStepIndex = 0;
+    el.setupStepper.classList.add("hidden");
+    return questions;
+  }
+
+  const maxStep = SETUP_WIZARD_STEPS.length - 1;
+  const currentStep = Math.max(0, Math.min(maxStep, Number(state.setupStepIndex || 0)));
+  state.setupStepIndex = currentStep;
+  const activeStepId = SETUP_WIZARD_STEPS[currentStep].id;
+
+  el.setupStepper.classList.remove("hidden");
+  const label = t(SETUP_WIZARD_STEPS[currentStep].labelKey);
+  el.setupStepMeta.textContent = t("setup.wizard.stepMeta", {
+    current: currentStep + 1,
+    total: SETUP_WIZARD_STEPS.length,
+    label,
+  });
+
+  el.setupStepDots.innerHTML = SETUP_WIZARD_STEPS.map((step, index) => {
+    const cls = index === currentStep ? "setup-step-dot active" : "setup-step-dot";
+    return `<button type="button" class="${cls}" data-step-index="${index}">${escapeHtml(
+      t(step.labelKey)
+    )}</button>`;
+  }).join("");
+  Array.from(el.setupStepDots.querySelectorAll("[data-step-index]")).forEach((node) => {
+    node.addEventListener("click", () => {
+      const nextIndex = Number.parseInt(String(node.getAttribute("data-step-index") || "0"), 10);
+      if (!Number.isFinite(nextIndex)) return;
+      state.setupStepIndex = Math.max(0, Math.min(maxStep, nextIndex));
+      renderQuestions(state.plan?.questions || []);
+    });
+  });
+
+  el.setupStepPrev.textContent = t("setup.wizard.prev");
+  el.setupStepNext.textContent = t("setup.wizard.next");
+  el.setupStepPrev.disabled = currentStep <= 0;
+  el.setupStepNext.disabled = currentStep >= maxStep;
+
+  return (questions || []).filter((q) => questionSetupStepId(q.id) === activeStepId);
+}
 
 const QUESTION_PRESETS = {
   run_mode: {
@@ -1705,9 +2527,15 @@ const QUESTION_PRESETS = {
     questionKey: "question.targetInput.help",
     required: true,
   },
+  start_from: {
+    labelKey: "question.startFrom.label",
+    questionKey: "question.startFrom.help",
+    default: "msa",
+  },
   stop_after: {
     labelKey: "question.stopAfter.label",
     questionKey: "question.stopAfter.help",
+    default: "novelty",
   },
   design_chains: {
     labelKey: "question.designChains.label",
@@ -1758,7 +2586,7 @@ const QUESTION_PRESETS = {
   novelty_enabled: {
     labelKey: "question.noveltyEnabled.label",
     questionKey: "question.noveltyEnabled.help",
-    default: false,
+    default: true,
   },
   af2_provider: {
     labelKey: "question.af2Provider.label",
@@ -1984,6 +2812,9 @@ const ARTIFACT_STAGE_ORDER = [
   "conservation",
   "rfd3",
   "bioemu",
+  "input_reference",
+  "working_backbone",
+  "wt_af2",
   "af2_target",
   "pdb_preprocess",
   "query_pdb_check",
@@ -2005,6 +2836,8 @@ const STAGE_LABELS = {
   conservation: { en: "Conservation", ko: "보존도" },
   rfd3: { en: "RFD3", ko: "RFD3" },
   bioemu: { en: "BioEmu", ko: "BioEmu" },
+  input_reference: { en: "Input Structure", ko: "입력 구조" },
+  working_backbone: { en: "Working Backbone", ko: "작업 백본" },
   af2_target: { en: "ColabFold Target", ko: "ColabFold 타깃" },
   pdb_preprocess: { en: "PDB Preprocess", ko: "PDB 전처리" },
   query_pdb_check: { en: "Query/PDB Check", ko: "Query/PDB 검증" },
@@ -2015,7 +2848,7 @@ const STAGE_LABELS = {
   design: { en: "ProteinMPNN", ko: "ProteinMPNN" },
   soluprot: { en: "SoluProt", ko: "SoluProt" },
   af2: { en: "ColabFold", ko: "ColabFold" },
-  novelty: { en: "Novelty", ko: "Novelty" },
+  novelty: { en: "WT Diff", ko: "WT Diff" },
   wt: { en: "WT Compare", ko: "WT 비교" },
   wt_baseline: { en: "WT Baseline", ko: "WT 기준선" },
   wt_soluprot: { en: "WT SoluProt", ko: "WT SoluProt" },
@@ -2026,6 +2859,7 @@ const STAGE_LABELS = {
 
 const PROGRESS_PLANS = {
   pipeline: ["msa", "conservation", "backbone", "wt", "masking", "design", "soluprot", "af2", "novelty", "done"],
+  workflow: ["msa", "conservation", "backbone", "wt", "masking", "design", "soluprot", "af2", "novelty", "done"],
   design: ["msa", "conservation", "backbone", "masking", "design", "done"],
   soluprot: ["msa", "conservation", "backbone", "masking", "design", "soluprot", "done"],
   rfd3: ["msa", "conservation", "rfd3", "done"],
@@ -2104,21 +2938,53 @@ function chartViewLabel() {
   return t("analyze.chart.option.plddtRmsd");
 }
 
+function copilotShortArtifactLabel(path) {
+  const display = displayArtifactPath(path);
+  if (!display) return "";
+  const parts = display.split("/").filter(Boolean);
+  if (parts.length <= 2) return display;
+  return parts.slice(-2).join("/");
+}
+
+function copilotCompareSnapshot() {
+  const isKo = copilotIsKorean();
+  const leftPath = String(state.artifactCompareLeftPath || "").trim();
+  const rightPath = String(state.artifactCompareRightPath || "").trim();
+  const mode = state.artifactCompareMode === "sequence" ? "sequence" : "structure";
+  const leftMeta = leftPath ? artifactMetaForPath(leftPath) : null;
+  const rightMeta = rightPath ? artifactMetaForPath(rightPath) : null;
+  return {
+    leftPath,
+    rightPath,
+    mode,
+    modeLabel: isKo ? (mode === "sequence" ? "서열 모드" : "구조 모드") : mode === "sequence" ? "Sequence mode" : "Structure mode",
+    leftMeta,
+    rightMeta,
+    leftLabel: leftPath ? buildArtifactCompareOptionLabel(leftPath, leftMeta) : "",
+    rightLabel: rightPath ? buildArtifactCompareOptionLabel(rightPath, rightMeta) : "",
+    ready: Boolean(leftPath && rightPath),
+  };
+}
+
 function copilotSnapshot() {
   const runId = String(state.currentRunId || "").trim();
   const status = state.lastRunStatus && typeof state.lastRunStatus === "object" ? state.lastRunStatus : {};
   const stage = String(status?.stage || "-");
   const runState = String(status?.state || state.currentRunState || "-");
-  const provider = af2ProviderName(currentRunAf2Provider(runId || state.currentRunId));
-  const rows = filteredHitListRows({ applyLimit: false });
-  const topRow = rows.length ? rows[0] : null;
-  const funnel =
+  const comparisonSummary =
+    runId &&
+    String(state.artifactComparisonRunId || "").trim() === runId &&
     state.artifactComparison &&
-    typeof state.artifactComparison === "object" &&
-    state.artifactComparison.funnel &&
-    typeof state.artifactComparison.funnel === "object"
-      ? state.artifactComparison.funnel.overall || null
+    typeof state.artifactComparison === "object"
+      ? state.artifactComparison
       : null;
+  const funnel =
+    comparisonSummary?.funnel && typeof comparisonSummary.funnel === "object"
+      ? comparisonSummary.funnel.overall || null
+      : null;
+  const provider = af2ProviderName(currentRunAf2Provider(runId), state.lang || "en");
+  const rows = runId ? filteredHitListRows({ applyLimit: false }) : [];
+  const topRow = rows.length ? rows[0] : null;
   return {
     tab: activeTabId(),
     runId,
@@ -2129,7 +2995,176 @@ function copilotSnapshot() {
     topRow,
     funnel,
     recommendation: state.lastScore?.recommendation || "-",
+    artifactCount: runId ? (Array.isArray(state.artifacts) ? state.artifacts.length : 0) : 0,
+    chartLabel: chartViewLabel(),
+    compare: copilotCompareSnapshot(),
   };
+}
+
+function copilotStatusLabel(snapshot = copilotSnapshot()) {
+  return `${formatStageLabel(snapshot.stage)} / ${snapshot.runState || "-"}`;
+}
+
+function copilotCompareStateText(compare = copilotCompareSnapshot()) {
+  const isKo = copilotIsKorean();
+  if (compare.ready) {
+    return `${copilotShortArtifactLabel(compare.leftPath)} vs ${copilotShortArtifactLabel(compare.rightPath)} · ${compare.modeLabel}`;
+  }
+  if (compare.leftPath || compare.rightPath) {
+    return isKo ? "좌/우 구조를 모두 선택해야 합니다." : "Select both left and right structures.";
+  }
+  return isKo ? "비교 대상 선택 전" : "Waiting for structure selection.";
+}
+
+function copilotCompareMetaText(meta) {
+  if (!meta || typeof meta !== "object") return "-";
+  const parts = [];
+  const source = sourceLabel(compareSourceKeyFromMeta(meta));
+  if (source) parts.push(source);
+  if (meta?.tier) parts.push(formatCompareTierLabel(meta.tier));
+  if (meta?.backboneId) parts.push(displayArtifactPath(meta.backboneId));
+  return parts.length ? parts.join(" · ") : "-";
+}
+
+function copilotSummaryCards(snapshot = copilotSnapshot()) {
+  const isKo = copilotIsKorean();
+  const cards = [];
+  const pushCard = (label, value, meta, tone = "teal") => {
+    cards.push({
+      label,
+      value,
+      meta,
+      tone: ["teal", "amber", "rose"].includes(tone) ? tone : "teal",
+    });
+  };
+
+  if (!snapshot.runId) {
+    pushCard(isKo ? "탭" : "Tab", t(`tabs.${snapshot.tab}`), isKo ? "현재 작업 화면" : "Current workspace", "teal");
+    pushCard("Run", isKo ? "선택 안됨" : "Not selected", isKo ? "Monitor 또는 Analyze에서 run을 선택하세요." : "Select a run in Monitor or Analyze.", "amber");
+    pushCard(isKo ? "비교" : "Compare", snapshot.compare.ready ? `${copilotShortArtifactLabel(snapshot.compare.leftPath)} vs ${copilotShortArtifactLabel(snapshot.compare.rightPath)}` : isKo ? "선택 필요" : "Selection needed", copilotCompareStateText(snapshot.compare), "amber");
+    pushCard(isKo ? "Next" : "Next", isKo ? "Setup 또는 Monitor 열기" : "Open Setup or Monitor", isKo ? "새 run을 시작하거나 기존 run 상태를 불러오세요." : "Create a new run or load an existing run.", "rose");
+    return cards;
+  }
+
+  const passMeta =
+    snapshot.funnel && Number(snapshot.funnel.af2_candidate_total || 0) > 0
+      ? `${snapshot.provider} ${isKo ? "통과" : "pass"} ${Number(snapshot.funnel.af2_selected_total || 0)}/${Number(
+          snapshot.funnel.af2_candidate_total || 0
+        )}`
+      : isKo
+        ? "실행 진행 추적 중"
+        : "Tracking execution state";
+  const topValue = snapshot.topRow ? String(snapshot.topRow.seq_id || "-") : isKo ? "Hit List 대기" : "Hit List pending";
+  const topMeta = snapshot.topRow
+    ? `score ${formatMetricValue(snapshot.topRow.score, 1)} · pLDDT ${formatMetricValue(snapshot.topRow.plddt, 1)} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)} · WT ${formatWtDifference(snapshot.topRow)}`
+    : `${snapshot.rows.length} ${isKo ? "행" : "rows"} · ${snapshot.chartLabel}`;
+  const compareValue = snapshot.compare.ready
+    ? `${copilotShortArtifactLabel(snapshot.compare.leftPath)} vs ${copilotShortArtifactLabel(snapshot.compare.rightPath)}`
+    : isKo
+      ? "선택 필요"
+      : "Selection needed";
+  const compareMeta = snapshot.compare.ready
+    ? `${snapshot.compare.modeLabel} · ${copilotCompareMetaText(snapshot.compare.leftMeta)} -> ${copilotCompareMetaText(snapshot.compare.rightMeta)}`
+    : copilotCompareStateText(snapshot.compare);
+
+  pushCard(
+    "Run",
+    snapshot.runId,
+    `${t(`tabs.${snapshot.tab}`)} · ${snapshot.provider}${snapshot.artifactCount ? ` · ${snapshot.artifactCount} ${isKo ? "산출물" : "artifacts"}` : ""}`,
+    "teal"
+  );
+  pushCard(isKo ? "실행" : "Execution", copilotStatusLabel(snapshot), snapshot.recommendation && snapshot.recommendation !== "-" ? `${passMeta} · ${isKo ? "추천" : "Recommendation"}: ${snapshot.recommendation}` : passMeta, ["failed", "error", "cancelled"].includes(String(snapshot.runState || "").toLowerCase()) ? "rose" : String(snapshot.runState || "").toLowerCase() === "running" ? "amber" : "teal");
+  pushCard(isKo ? "Top 후보" : "Top Candidate", topValue, topMeta, "teal");
+  pushCard(isKo ? "비교" : "Compare", compareValue, compareMeta, snapshot.compare.ready ? "amber" : "rose");
+  return cards;
+}
+
+function copilotSuggestedActionIds(snapshot = copilotSnapshot()) {
+  const ids = [];
+  const push = (id) => {
+    if (!id || ids.includes(id)) return;
+    ids.push(id);
+  };
+  const stateText = String(snapshot.runState || "")
+    .trim()
+    .toLowerCase();
+
+  if (!snapshot.runId) {
+    push("openSetup");
+    push("openMonitor");
+    push("openAnalyze");
+    return ids.slice(0, 5);
+  }
+
+  if (stateText === "failed" || stateText === "error" || stateText === "cancelled") {
+    push("openMonitor");
+    push("resume");
+    push("refreshArtifacts");
+    push("openAnalyze");
+    if (snapshot.rows.length) push("refreshHitList");
+    if (snapshot.compare.ready) push("compare3d");
+    return ids.slice(0, 6);
+  }
+
+  if (stateText === "running") {
+    push("openMonitor");
+    push("poll");
+    push("refreshArtifacts");
+    push("openAnalyze");
+    if (snapshot.compare.ready) push("compare3d");
+    return ids.slice(0, 6);
+  }
+
+  push("openAnalyze");
+  push("refreshHitList");
+  if (snapshot.compare.ready) push("compare3d");
+  if (snapshot.rows.length) push("generateReport");
+  push("refreshArtifacts");
+  push("openMonitor");
+  return ids.slice(0, 6);
+}
+
+function renderCopilotSummary() {
+  if (!el.copilotSummary) return;
+  const cards = copilotSummaryCards(copilotSnapshot());
+  if (!cards.length) {
+    el.copilotSummary.innerHTML = `<div class="placeholder">${t("copilot.summary.empty")}</div>`;
+    return;
+  }
+  el.copilotSummary.innerHTML = cards
+    .map(
+      (card) => `
+      <div class="copilot-summary-card tone-${escapeAttr(card.tone || "teal")}">
+        <div class="copilot-summary-label">${escapeHtml(card.label || "")}</div>
+        <div class="copilot-summary-value">${escapeHtml(card.value || "-")}</div>
+        <div class="copilot-summary-meta">${escapeHtml(card.meta || "-")}</div>
+      </div>
+    `
+    )
+    .join("");
+}
+
+function renderCopilotActions() {
+  if (!el.copilotActions) return;
+  const actionIds = copilotSuggestedActionIds(copilotSnapshot());
+  if (!actionIds.length) {
+    el.copilotActions.innerHTML = `<div class="placeholder">${t("copilot.actions.empty")}</div>`;
+    return;
+  }
+  el.copilotActions.innerHTML = "";
+  actionIds.forEach((actionId) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "copilot-action-btn";
+    button.innerHTML = `
+      <span class="copilot-action-title">${escapeHtml(t(`copilot.action.${actionId}`))}</span>
+      <span class="copilot-action-desc">${escapeHtml(t(`copilot.action.${actionId}.desc`))}</span>
+    `;
+    button.addEventListener("click", () => {
+      void handleCopilotAction(actionId);
+    });
+    el.copilotActions.appendChild(button);
+  });
 }
 
 function copilotContextRows(snapshot = copilotSnapshot()) {
@@ -2139,21 +3174,28 @@ function copilotContextRows(snapshot = copilotSnapshot()) {
     label: isKo ? "현재 탭" : "Active Tab",
     value: t(`tabs.${snapshot.tab}`),
   });
+  rows.push({
+    label: "Run",
+    value: snapshot.runId || (isKo ? "선택되지 않음" : "Not selected"),
+  });
+  rows.push({
+    label: isKo ? "비교" : "Compare",
+    value: copilotCompareStateText(snapshot.compare),
+  });
   if (!snapshot.runId) {
-    rows.push({
-      label: "Run",
-      value: isKo ? "선택되지 않음" : "Not selected",
-    });
     return rows;
   }
-  rows.push({ label: "Run", value: snapshot.runId });
   rows.push({
     label: isKo ? "상태" : "Status",
-    value: `${formatStageLabel(snapshot.stage)} / ${snapshot.runState || "-"}`,
+    value: copilotStatusLabel(snapshot),
   });
   rows.push({
     label: isKo ? "구조 예측기" : "Structure Predictor",
     value: snapshot.provider,
+  });
+  rows.push({
+    label: isKo ? "아티팩트" : "Artifacts",
+    value: String(snapshot.artifactCount || 0),
   });
   rows.push({
     label: "Hit List",
@@ -2186,6 +3228,8 @@ function copilotContextRows(snapshot = copilotSnapshot()) {
 }
 
 function renderCopilotContext() {
+  renderCopilotSummary();
+  renderCopilotActions();
   if (!el.copilotContext) return;
   const rows = copilotContextRows(copilotSnapshot());
   if (!rows.length) {
@@ -2208,10 +3252,12 @@ function copilotIntentFromPrompt(prompt, intentHint = "") {
   const hinted = String(intentHint || "")
     .trim()
     .toLowerCase();
-  if (["usage", "interpret", "next", "resume"].includes(hinted)) return hinted;
+  if (["usage", "interpret", "summary", "compare", "next", "resume"].includes(hinted)) return hinted;
   const q = String(prompt || "").trim().toLowerCase();
   if (!q) return "general";
   if (/(resume|restart|recover|이어|재시작|다시 시작)/i.test(q)) return "resume";
+  if (/(summary|summar|요약|정리)/i.test(q)) return "summary";
+  if (/(compare|comparison|studio|left|right|비교|컨텍스트|context)/i.test(q)) return "compare";
   if (/(interpret|해석|지표|점수|plddt|rmsd|score|metric)/i.test(q)) return "interpret";
   if (/(next|다음|뭘|무엇|action|step)/i.test(q)) return "next";
   if (/(usage|how to|사용법|어떻게|guide|도움)/i.test(q)) return "usage";
@@ -2222,43 +3268,39 @@ function copilotUsageReply(snapshot = copilotSnapshot()) {
   const isKo = copilotIsKorean();
   if (snapshot.tab === "setup") {
     return isKo
-      ? "Setup에서는 실행 모드를 고르고 필수 입력을 채우면 Run 버튼이 활성화됩니다.\n중간 단계에서 멈추려면 `중간 단계`를 지정하고 실행하세요."
-      : "In Setup, choose a run mode and fill required inputs until Run is enabled.\nUse `stop_after` if you want to stop at an intermediate stage.";
+      ? "Setup에서는 Scope/Input/Options를 채우면 Run 버튼이 활성화됩니다.\n구간 실행이 필요하면 시작 단계와 중단 단계를 함께 지정하세요."
+      : "In Setup, fill Scope/Input/Options until Run is enabled.\nFor partial runs, set both `start_from` and `stop_after`.";
   }
   if (snapshot.tab === "monitor") {
     return isKo
-      ? "Monitor에서는 run을 선택해 상태/아티팩트를 확인합니다.\n실행이 끊겼다면 `재시작` 버튼으로 request.json 기반 이어하기를 할 수 있습니다."
-      : "In Monitor, select a run to inspect status and artifacts.\nIf execution was interrupted, use `Resume Run` to continue from saved request.json.";
+      ? "Monitor에서는 run 상태, 아티팩트, 워크플로 체크포인트를 확인합니다.\n중단된 run은 `Run 재시작`, 파일 산출물은 `아티팩트 새로고침`으로 바로 이어갈 수 있습니다."
+      : "In Monitor, inspect run state, artifacts, and workflow checkpoints.\nUse `Resume Run` for interrupted runs and `Refresh Artifacts` to reload outputs.";
   }
   return isKo
-    ? "Analyze에서는 Hit List를 새로고침하고 차트를 전환해 후보를 해석합니다.\n구조 비교 스튜디오와 리포트에서 최종 비교/정리를 진행하세요."
-    : "In Analyze, refresh the Hit List and switch chart views to interpret candidates.\nUse compare studio and report to finalize review.";
+    ? "Analyze에서는 Hit List, 차트, Compare Studio를 함께 봐야 합니다.\n추천 액션에서 `Hit List 새로고침`, `3D 비교 실행`, `리포트 생성`을 바로 실행할 수 있습니다."
+    : "In Analyze, review Hit List, charts, and Compare Studio together.\nUse Suggested Actions to refresh the Hit List, run Compare 3D, or generate the report.";
 }
 
 function copilotInterpretReply(snapshot = copilotSnapshot()) {
   const isKo = copilotIsKorean();
   if (!snapshot.runId) {
     return isKo
-      ? "해석할 run이 없습니다. 먼저 Monitor/Analyze에서 run을 선택해 주세요."
-      : "No run is selected to interpret. Select a run in Monitor/Analyze first.";
+      ? "해석할 run이 없습니다. 먼저 Monitor나 Analyze에서 run을 선택하세요."
+      : "No run is selected to interpret. Select a run in Monitor or Analyze first.";
   }
   const lines = [];
-  lines.push(
-    isKo
-      ? `Run ${snapshot.runId}: ${formatStageLabel(snapshot.stage)} / ${snapshot.runState || "-"}`
-      : `Run ${snapshot.runId}: ${formatStageLabel(snapshot.stage)} / ${snapshot.runState || "-"}`
-  );
+  lines.push(`Run ${snapshot.runId}: ${copilotStatusLabel(snapshot)} · ${snapshot.provider}`);
   if (snapshot.topRow) {
     lines.push(
       isKo
         ? `Top 후보 ${snapshot.topRow.seq_id || "-"}: score ${formatMetricValue(snapshot.topRow.score, 1)}, pLDDT ${formatMetricValue(
             snapshot.topRow.plddt,
             1
-          )}, RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}`
+          )}, RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}, WT ${formatWtDifference(snapshot.topRow)}`
         : `Top candidate ${snapshot.topRow.seq_id || "-"}: score ${formatMetricValue(snapshot.topRow.score, 1)}, pLDDT ${formatMetricValue(
             snapshot.topRow.plddt,
             1
-          )}, RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}`
+          )}, RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}, WT ${formatWtDifference(snapshot.topRow)}`
     );
   } else {
     lines.push(isKo ? "Hit List 데이터가 아직 없습니다." : "Hit List metrics are not available yet.");
@@ -2274,12 +3316,82 @@ function copilotInterpretReply(snapshot = copilotSnapshot()) {
           )} (${formatPercentValue(snapshot.funnel.af2_pass_rate)})`
     );
   }
+  lines.push(`${isKo ? "비교 상태" : "Compare state"}: ${copilotCompareStateText(snapshot.compare)}`);
   if (snapshot.recommendation && snapshot.recommendation !== "-") {
-    lines.push(
-      isKo ? `현재 추천: ${snapshot.recommendation}` : `Current recommendation: ${snapshot.recommendation}`
-    );
+    lines.push(isKo ? `현재 추천: ${snapshot.recommendation}` : `Current recommendation: ${snapshot.recommendation}`);
   }
   return lines.join("\n");
+}
+
+function copilotSummaryReply(snapshot = copilotSnapshot()) {
+  const isKo = copilotIsKorean();
+  if (!snapshot.runId) {
+    return isKo
+      ? "현재 선택된 run이 없습니다.\nMonitor 또는 Analyze에서 run을 선택하면 상태, Top 후보, 비교 준비 상태를 바로 요약합니다."
+      : "No run is currently selected.\nSelect a run in Monitor or Analyze to summarize status, top candidates, and compare readiness.";
+  }
+  const lines = [];
+  lines.push(`Run ${snapshot.runId}`);
+  lines.push(`${isKo ? "상태" : "Status"}: ${copilotStatusLabel(snapshot)} · ${snapshot.provider}`);
+  lines.push(`${isKo ? "아티팩트" : "Artifacts"}: ${snapshot.artifactCount}`);
+  lines.push(`${isKo ? "비교" : "Compare"}: ${copilotCompareStateText(snapshot.compare)}`);
+  if (snapshot.topRow) {
+    lines.push(
+      isKo
+        ? `Top 후보: ${snapshot.topRow.seq_id || "-"} · score ${formatMetricValue(snapshot.topRow.score, 1)} · pLDDT ${formatMetricValue(
+            snapshot.topRow.plddt,
+            1
+          )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}`
+        : `Top candidate: ${snapshot.topRow.seq_id || "-"} · score ${formatMetricValue(snapshot.topRow.score, 1)} · pLDDT ${formatMetricValue(
+            snapshot.topRow.plddt,
+            1
+          )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}`
+    );
+  } else {
+    lines.push(isKo ? "Hit List는 아직 비어 있습니다." : "The Hit List is still empty.");
+  }
+  if (snapshot.funnel && Number(snapshot.funnel.af2_candidate_total || 0) > 0) {
+    lines.push(
+      `${snapshot.provider} ${isKo ? "통과" : "pass"}: ${Number(snapshot.funnel.af2_selected_total || 0)}/${Number(
+        snapshot.funnel.af2_candidate_total || 0
+      )} (${formatPercentValue(snapshot.funnel.af2_pass_rate)})`
+    );
+  }
+  if (snapshot.recommendation && snapshot.recommendation !== "-") {
+    lines.push(isKo ? `추천: ${snapshot.recommendation}` : `Recommendation: ${snapshot.recommendation}`);
+  }
+  return lines.join("\n");
+}
+
+function copilotCompareReply(snapshot = copilotSnapshot()) {
+  const isKo = copilotIsKorean();
+  if (!snapshot.runId) {
+    return isKo
+      ? "비교할 run이 없습니다. 먼저 run을 선택하세요."
+      : "No run is selected for comparison. Select a run first.";
+  }
+  if (!snapshot.compare.leftPath && !snapshot.compare.rightPath) {
+    return isKo
+      ? "Compare Studio에서 좌/우 구조를 아직 선택하지 않았습니다.\nAnalyze 탭에서 reference와 candidate를 고른 뒤 `3D 비교 실행`을 누르세요."
+      : "No left/right structures are selected in Compare Studio.\nPick a reference and candidate in Analyze, then run `Compare 3D`.";
+  }
+  if (!snapshot.compare.ready) {
+    return isKo
+      ? "지금은 한쪽만 선택된 상태입니다. Compare Studio에서 좌/우 구조를 모두 고르면 바로 비교할 수 있습니다."
+      : "Only one side is selected right now. Choose both left and right structures in Compare Studio to compare.";
+  }
+  return [
+    `${isKo ? "모드" : "Mode"}: ${snapshot.compare.modeLabel}`,
+    `${isKo ? "기준 구조" : "Reference"}: ${copilotShortArtifactLabel(snapshot.compare.leftPath)} (${copilotCompareMetaText(
+      snapshot.compare.leftMeta
+    )})`,
+    `${isKo ? "후보 구조" : "Candidate"}: ${copilotShortArtifactLabel(snapshot.compare.rightPath)} (${copilotCompareMetaText(
+      snapshot.compare.rightMeta
+    )})`,
+    isKo
+      ? "추천 액션의 `3D 비교 실행`으로 현재 선택 쌍을 바로 다시 렌더링할 수 있습니다."
+      : "Use the `Run Compare 3D` action to render the current pair immediately.",
+  ].join("\n");
 }
 
 function copilotNextReply(snapshot = copilotSnapshot()) {
@@ -2289,35 +3401,38 @@ function copilotNextReply(snapshot = copilotSnapshot()) {
     .toLowerCase();
   if (!snapshot.runId) {
     return isKo
-      ? "1) Setup에서 입력을 채워 Run을 시작하세요.\n2) 실행 후 Monitor에서 상태를 확인하세요."
-      : "1) Fill inputs in Setup and launch Run.\n2) Then track progress in Monitor.";
+      ? "1) Setup에서 입력을 채워 run을 시작하세요.\n2) Monitor에서 기존 run을 선택해 상태와 산출물을 확인하세요."
+      : "1) Fill inputs in Setup and launch a run.\n2) Select an existing run in Monitor to inspect state and outputs.";
   }
   if (stateText === "running") {
     return isKo
-      ? "지금은 실행 중입니다. Monitor에서 Auto Poll을 켜고 완료 후 Analyze에서 Hit List를 확인하세요."
-      : "Run is in progress. Keep Auto Poll on in Monitor, then check Hit List in Analyze after completion.";
+      ? "지금은 실행 중입니다. Monitor에서 `지금 조회` 또는 Auto Poll로 상태를 갱신하고, 완료 후 Analyze로 넘어가세요."
+      : "The run is still in progress. Refresh status in Monitor with `Poll Now` or Auto Poll, then move to Analyze after completion.";
   }
   if (stateText === "failed" || stateText === "error" || stateText === "cancelled") {
     return isKo
-      ? "중단된 run입니다. Monitor의 `재시작`으로 이어서 실행을 시도하고, 실패 원인은 에러 상세에서 확인하세요."
-      : "This run is interrupted. Use `Resume Run` in Monitor, then inspect error details if it fails again.";
+      ? "중단된 run입니다. Monitor의 `Run 재시작`으로 이어서 실행을 시도하고, 필요하면 `아티팩트 새로고침`으로 산출물을 다시 읽으세요."
+      : "This run is interrupted. Use `Resume Run` in Monitor, then `Refresh Artifacts` if you need to reload outputs.";
   }
   if (!snapshot.rows.length) {
     return isKo
-      ? "다음 단계: Analyze에서 Hit List를 새로고침하고 차트를 확인하세요."
-      : "Next: refresh Hit List in Analyze and inspect charts.";
+      ? "다음 단계: Analyze에서 Hit List를 새로고침하고, Compare Studio에 reference/candidate를 선택하세요."
+      : "Next: refresh the Hit List in Analyze, then choose reference/candidate structures in Compare Studio.";
+  }
+  if (!snapshot.compare.ready) {
+    return isKo
+      ? "다음 단계: Compare Studio에서 좌/우 구조를 고르고 `3D 비교 실행`을 누르세요. 그 다음 리포트를 갱신하면 됩니다."
+      : "Next: choose left/right structures in Compare Studio and run `Compare 3D`. After that, refresh the report.";
   }
   return isKo
-    ? `다음 단계: Analyze에서 차트(${chartViewLabel()})로 후보를 보고, 구조 비교 스튜디오와 리포트를 업데이트하세요.`
-    : `Next: review candidates with chart (${chartViewLabel()}), then update compare studio and report.`;
+    ? `다음 단계: Compare Studio를 실행한 뒤 리포트를 갱신하세요. 후보 해석은 차트(${snapshot.chartLabel})와 Hit List를 함께 보면서 진행하면 됩니다.`
+    : `Next: run Compare Studio, then refresh the report. Interpret candidates with both the chart (${snapshot.chartLabel}) and the Hit List.`;
 }
 
 function copilotResumeReply(snapshot = copilotSnapshot()) {
   const isKo = copilotIsKorean();
   if (!snapshot.runId) {
-    return isKo
-      ? "재시작하려면 먼저 run을 선택하세요."
-      : "Select a run first to resume it.";
+    return isKo ? "재시작하려면 먼저 run을 선택하세요." : "Select a run first to resume it.";
   }
   const stateText = String(snapshot.runState || "")
     .trim()
@@ -2328,8 +3443,8 @@ function copilotResumeReply(snapshot = copilotSnapshot()) {
       : "This run is already running. No resume action is needed.";
   }
   return isKo
-    ? "`재시작` 버튼은 해당 run의 request.json을 읽어 같은 run_id로 다시 실행합니다.\n이미 생성된 산출물은 `force=false`로 최대한 재사용하며, 누락 단계부터 이어집니다."
-    : "`Resume Run` reads request.json and relaunches with the same run_id.\nWith `force=false`, existing artifacts are reused and missing steps continue.";
+    ? "`Run 재시작`은 이 run의 request.json을 읽어 같은 run_id로 다시 실행합니다.\n기존 산출물은 `force=false`로 최대한 재사용하고, 누락 단계부터 이어집니다."
+    : "`Resume Run` reads request.json and relaunches with the same run_id.\nWith `force=false`, existing artifacts are reused and missing stages continue.";
 }
 
 function generateCopilotReply(prompt, intentHint = "") {
@@ -2337,9 +3452,11 @@ function generateCopilotReply(prompt, intentHint = "") {
   const snapshot = copilotSnapshot();
   if (intent === "usage") return copilotUsageReply(snapshot);
   if (intent === "interpret") return copilotInterpretReply(snapshot);
+  if (intent === "summary") return copilotSummaryReply(snapshot);
+  if (intent === "compare") return copilotCompareReply(snapshot);
   if (intent === "next") return copilotNextReply(snapshot);
   if (intent === "resume") return copilotResumeReply(snapshot);
-  return `${copilotInterpretReply(snapshot)}\n\n${copilotNextReply(snapshot)}`;
+  return `${copilotSummaryReply(snapshot)}\n\n${copilotNextReply(snapshot)}`;
 }
 
 function renderCopilotMessages() {
@@ -2348,10 +3465,17 @@ function renderCopilotMessages() {
   el.copilotMessages.innerHTML = "";
   history.forEach((item) => {
     const role = item?.role === "user" ? "user" : "ai";
+    const wrap = document.createElement("div");
+    wrap.className = `copilot-message ${role}`;
+    const meta = document.createElement("div");
+    meta.className = "copilot-message-meta";
+    meta.textContent = role === "user" ? t("copilot.role.user") : t("copilot.role.ai");
     const bubble = document.createElement("div");
-    bubble.className = `copilot-bubble ${role}`;
+    bubble.className = "copilot-bubble";
     bubble.innerHTML = escapeHtml(item?.text || "").replace(/\n/g, "<br />");
-    el.copilotMessages.appendChild(bubble);
+    wrap.appendChild(meta);
+    wrap.appendChild(bubble);
+    el.copilotMessages.appendChild(wrap);
   });
   el.copilotMessages.scrollTop = el.copilotMessages.scrollHeight;
 }
@@ -2373,17 +3497,68 @@ function submitCopilotPrompt(rawPrompt, intentHint = "") {
   const prompt = String(rawPrompt || "").trim();
   if (!prompt) return;
   addCopilotHistory("user", prompt);
-  const reply = generateCopilotReply(prompt, intentHint);
-  addCopilotHistory("ai", reply);
+  addCopilotHistory("ai", generateCopilotReply(prompt, intentHint));
   renderCopilotContext();
+}
+
+function clearCopilotHistory() {
+  state.copilotHistory = [];
+  renderCopilotMessages();
+  ensureCopilotWelcome();
 }
 
 function ensureCopilotWelcome() {
   if (Array.isArray(state.copilotHistory) && state.copilotHistory.length) return;
   const intro = copilotIsKorean()
-    ? "현재 탭/런 데이터를 읽어서 사용법, 지표 해석, 다음 액션을 제안합니다."
-    : "I read the current tab/run data and help with usage, metric interpretation, and next actions.";
+    ? "현재 탭과 run 데이터를 요약하고, 바로 실행 가능한 액션을 추천합니다."
+    : "I summarize the current tab/run state and recommend actions you can run immediately.";
   addCopilotHistory("ai", intro);
+}
+
+async function handleCopilotAction(actionId) {
+  const label = t(`copilot.action.${actionId}`) || actionId;
+  const announce = !["openSetup", "openMonitor", "openAnalyze"].includes(actionId);
+  try {
+    if (actionId === "openSetup") {
+      setActiveTab("setup");
+    } else if (actionId === "openMonitor") {
+      setActiveTab("monitor");
+    } else if (actionId === "openAnalyze") {
+      setActiveTab("analyze");
+    } else if (actionId === "poll") {
+      if (!state.currentRunId) throw new Error(copilotIsKorean() ? "run이 선택되지 않았습니다." : "No run selected.");
+      setActiveTab("monitor");
+      await pollStatus(state.currentRunId);
+    } else if (actionId === "refreshArtifacts") {
+      if (!state.currentRunId) throw new Error(copilotIsKorean() ? "run이 선택되지 않았습니다." : "No run selected.");
+      await refreshArtifacts();
+    } else if (actionId === "refreshHitList") {
+      if (!state.currentRunId) throw new Error(copilotIsKorean() ? "run이 선택되지 않았습니다." : "No run selected.");
+      setActiveTab("analyze");
+      await refreshHitList();
+    } else if (actionId === "generateReport") {
+      if (!state.currentRunId) throw new Error(copilotIsKorean() ? "run이 선택되지 않았습니다." : "No run selected.");
+      setActiveTab("report");
+      await generateReport();
+    } else if (actionId === "resume") {
+      if (!state.currentRunId) throw new Error(copilotIsKorean() ? "run이 선택되지 않았습니다." : "No run selected.");
+      setActiveTab("monitor");
+      await resumeCurrentRun();
+    } else if (actionId === "compare3d") {
+      if (!state.currentRunId) throw new Error(copilotIsKorean() ? "run이 선택되지 않았습니다." : "No run selected.");
+      if (!state.artifactCompareLeftPath || !state.artifactCompareRightPath) {
+        throw new Error(copilotIsKorean() ? "좌/우 구조를 모두 선택하세요." : "Select both left and right structures.");
+      }
+      setActiveTab("analyze");
+      await compareSelected3dArtifacts();
+    } else {
+      return;
+    }
+    renderCopilotContext();
+    if (announce) addCopilotHistory("ai", t("copilot.action.completed", { action: label }));
+  } catch (err) {
+    addCopilotHistory("ai", t("copilot.action.failed", { action: label, error: err.message || String(err) }));
+  }
 }
 
 function setCopilotDrawerOpen(open) {
@@ -2391,6 +3566,10 @@ function setCopilotDrawerOpen(open) {
   const shouldOpen = Boolean(open);
   el.copilotDrawer.classList.toggle("hidden", !shouldOpen);
   el.copilotDrawer.setAttribute("aria-hidden", shouldOpen ? "false" : "true");
+  if (el.copilotBackdrop) {
+    el.copilotBackdrop.classList.toggle("hidden", !shouldOpen);
+    el.copilotBackdrop.setAttribute("aria-hidden", shouldOpen ? "false" : "true");
+  }
   if (el.copilotFabBtn) {
     el.copilotFabBtn.classList.toggle("hidden", shouldOpen);
   }
@@ -2398,9 +3577,7 @@ function setCopilotDrawerOpen(open) {
   ensureCopilotWelcome();
   renderCopilotContext();
   renderCopilotMessages();
-  if (el.copilotInput) {
-    el.copilotInput.focus();
-  }
+  if (el.copilotInput) el.copilotInput.focus();
 }
 
 function initCopilot() {
@@ -2416,23 +3593,15 @@ function initCopilot() {
   if (el.copilotCloseBtn) {
     el.copilotCloseBtn.addEventListener("click", () => setCopilotDrawerOpen(false));
   }
-  if (el.copilotDrawer) {
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        setCopilotDrawerOpen(false);
-      }
-    });
-    document.addEventListener("click", (event) => {
-      const drawerOpen = !el.copilotDrawer.classList.contains("hidden");
-      if (!drawerOpen) return;
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (el.copilotDrawer.contains(target)) return;
-      if (el.copilotOpenBtn && el.copilotOpenBtn.contains(target)) return;
-      if (el.copilotFabBtn && el.copilotFabBtn.contains(target)) return;
-      setCopilotDrawerOpen(false);
-    });
+  if (el.copilotBackdrop) {
+    el.copilotBackdrop.addEventListener("click", () => setCopilotDrawerOpen(false));
   }
+  if (el.copilotClearBtn) {
+    el.copilotClearBtn.addEventListener("click", () => clearCopilotHistory());
+  }
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") setCopilotDrawerOpen(false);
+  });
   if (el.copilotSendBtn) {
     el.copilotSendBtn.addEventListener("click", () => {
       submitCopilotPrompt(el.copilotInput?.value || "");
@@ -2448,24 +3617,22 @@ function initCopilot() {
     });
   }
   if (el.copilotQuickUsage) {
-    el.copilotQuickUsage.addEventListener("click", () => {
-      submitCopilotPrompt(t("copilot.quick.usage"), "usage");
-    });
+    el.copilotQuickUsage.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.usage"), "usage"));
   }
   if (el.copilotQuickInterpret) {
-    el.copilotQuickInterpret.addEventListener("click", () => {
-      submitCopilotPrompt(t("copilot.quick.interpret"), "interpret");
-    });
+    el.copilotQuickInterpret.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.interpret"), "interpret"));
+  }
+  if (el.copilotQuickSummary) {
+    el.copilotQuickSummary.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.summary"), "summary"));
+  }
+  if (el.copilotQuickCompare) {
+    el.copilotQuickCompare.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.compare"), "compare"));
   }
   if (el.copilotQuickNext) {
-    el.copilotQuickNext.addEventListener("click", () => {
-      submitCopilotPrompt(t("copilot.quick.next"), "next");
-    });
+    el.copilotQuickNext.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.next"), "next"));
   }
   if (el.copilotQuickResume) {
-    el.copilotQuickResume.addEventListener("click", () => {
-      submitCopilotPrompt(t("copilot.quick.resume"), "resume");
-    });
+    el.copilotQuickResume.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.resume"), "resume"));
   }
   setCopilotDrawerOpen(false);
   copilotInitialized = true;
@@ -2639,6 +3806,9 @@ function setActiveTab(value) {
   });
   localStorage.setItem(TAB_KEY, next);
   renderCopilotContext();
+  if (next === "monitor" && el.autoPoll?.checked && state.currentRunId) {
+    void pollCurrentRun({ includeArtifacts: "auto" });
+  }
 }
 
 function initTabs() {
@@ -2705,18 +3875,25 @@ function buildManualPlan(mode) {
         required: true,
       },
       {
+        id: "start_from",
+        labelKey: "question.startFrom.label",
+        questionKey: "question.startFrom.help",
+        required: false,
+        default: "msa",
+      },
+      {
         id: "stop_after",
         labelKey: "question.stopAfter.label",
         questionKey: "question.stopAfter.help",
         required: false,
-        default: "af2",
+        default: "novelty",
       },
       {
         id: "novelty_enabled",
         labelKey: "question.noveltyEnabled.label",
         questionKey: "question.noveltyEnabled.help",
         required: false,
-        default: false,
+        default: true,
       },
       {
         id: "bioemu_use",
@@ -2838,6 +4015,125 @@ function buildManualPlan(mode) {
         labelKey: "question.diffdockLigand.label",
         questionKey: "question.diffdockLigand.help",
         required: false,
+      }
+    );
+  }
+
+  if (mode === "workflow") {
+    questions.push(
+      {
+        id: "target_input",
+        labelKey: "question.targetInput.label",
+        questionKey: "question.targetInput.help",
+        required: true,
+      },
+      {
+        id: "af2_provider",
+        labelKey: "question.af2Provider.label",
+        questionKey: "question.af2Provider.help",
+        required: false,
+        default: "colabfold",
+      },
+      {
+        id: "num_seq_per_tier",
+        labelKey: "question.numSeqPerTier.label",
+        questionKey: "question.numSeqPerTier.help",
+        required: false,
+        default: 2,
+      },
+      {
+        id: "af2_max_candidates_per_tier",
+        labelKey: "question.af2MaxCandidatesPerTier.label",
+        questionKey: "question.af2MaxCandidatesPerTier.help",
+        required: false,
+        default: 0,
+      },
+      {
+        id: "af2_plddt_cutoff",
+        labelKey: "question.af2PlddtCutoff.label",
+        questionKey: "question.af2PlddtCutoff.help",
+        required: false,
+        default: 85.0,
+      },
+      {
+        id: "af2_rmsd_cutoff",
+        labelKey: "question.af2RmsdCutoff.label",
+        questionKey: "question.af2RmsdCutoff.help",
+        required: false,
+        default: 2.0,
+      },
+      {
+        id: "design_chains",
+        labelKey: "question.designChains.label",
+        questionKey: "question.designChains.help",
+        required: false,
+      },
+      {
+        id: "pdb_strip_nonpositive_resseq",
+        labelKey: "question.stripNonpositive.label",
+        questionKey: "question.stripNonpositive.help",
+        required: false,
+        default: true,
+      },
+      {
+        id: "wt_compare",
+        labelKey: "question.wtCompare.label",
+        questionKey: "question.wtCompare.help",
+        required: false,
+        default: true,
+      },
+      {
+        id: "mask_consensus_apply",
+        labelKey: "question.maskConsensusApply.label",
+        questionKey: "question.maskConsensusApply.help",
+        required: false,
+        default: false,
+      },
+      {
+        id: "ligand_mask_use_original_target",
+        labelKey: "question.ligandMaskOriginal.label",
+        questionKey: "question.ligandMaskOriginal.help",
+        required: false,
+        default: true,
+      },
+      {
+        id: "fixed_positions_extra",
+        labelKey: "question.fixedPositionsExtra.label",
+        questionKey: "question.fixedPositionsExtra.help",
+        required: false,
+      },
+      {
+        id: "rfd3_input_pdb",
+        labelKey: "question.rfd3InputPdb.label",
+        questionKey: "question.rfd3InputPdb.help",
+        required: false,
+      },
+      {
+        id: "rfd3_contig",
+        labelKey: "question.rfd3Contig.label",
+        questionKey: "question.rfd3Contig.help",
+        required: false,
+      },
+      {
+        id: "rfd3_max_return_designs",
+        labelKey: "question.rfd3MaxReturn.label",
+        questionKey: "question.rfd3MaxReturn.help",
+        required: false,
+        default: 10,
+      },
+      {
+        id: "bioemu_num_samples",
+        labelKey: "question.bioemuNumSamples.label",
+        questionKey: "question.bioemuNumSamples.help",
+        required: false,
+        default: 10,
+      },
+      {
+        id: "bioemu_max_return_structures",
+        labelKey: "question.bioemuMaxReturn.label",
+        questionKey: "question.bioemuMaxReturn.help",
+        required: false,
+        default: 10,
       }
     );
   }
@@ -3055,6 +4351,7 @@ function updateRunLabel() {
   if (!el.runBtn) return;
   const labels = {
     pipeline: "run.label.pipeline",
+    workflow: "run.label.workflow",
     rfd3: "run.label.rfd3",
     bioemu: "run.label.bioemu",
     msa: "run.label.msa",
@@ -3070,8 +4367,10 @@ function updateRunLabel() {
 function setRunMode(mode, { render = true } = {}) {
   const normalized = RUN_MODE_OPTIONS.find((opt) => opt.value === mode)?.value || "pipeline";
   state.runMode = normalized;
-  state.showBioemuCountOptions = false;
-  state.showRfd3CountOptions = false;
+  state.setupStepIndex = 0;
+  if (normalized === "workflow") {
+    state.workflowDesigner = createWorkflowDesignerState();
+  }
   if (normalized === "diffdock") {
     state.answers.diffdock_use = "use";
   }
@@ -3232,7 +4531,7 @@ function renderReportReviewControls() {
 function refreshArtifactSelects() {
   const options = [
     { labelKey: "common.none", value: "" },
-    ...state.artifacts.map((item) => ({ label: item.path, value: item.path })),
+    ...state.artifacts.map((item) => ({ label: displayArtifactPath(item.path), value: item.path })),
   ];
   if (el.feedbackArtifact) {
     fillSelect(el.feedbackArtifact, options);
@@ -3265,37 +4564,7 @@ function initFeedbackUI() {
 }
 
 function inferRunModeFromRequestPayload(payload) {
-  if (!payload || typeof payload !== "object") return "";
-
-  const stopAfter = String(payload.stop_after || "")
-    .trim()
-    .toLowerCase();
-  if (stopAfter === "msa") return "msa";
-  if (stopAfter === "rfd3") return "rfd3";
-  if (stopAfter === "bioemu") return "bioemu";
-  if (stopAfter === "design") return "design";
-  if (stopAfter === "soluprot") return "soluprot";
-  if (stopAfter === "af2") return "af2";
-  if (stopAfter === "novelty") return "pipeline";
-
-  const isDiffdockRequest =
-    "protein_pdb" in payload ||
-    "diffdock_ligand_smiles" in payload ||
-    "diffdock_ligand_sdf" in payload;
-  if (isDiffdockRequest) return "diffdock";
-
-  const isPipelineRequest =
-    "num_seq_per_tier" in payload ||
-    "mmseqs_target_db" in payload ||
-    "novelty_target_db" in payload ||
-    "rfd3_max_return_designs" in payload;
-  if (isPipelineRequest) return "pipeline";
-
-  const isAf2Request =
-    ("af2_model_preset" in payload && "af2_db_preset" in payload) || "af2_provider" in payload;
-  if (isAf2Request) return "af2";
-
-  return "";
+  return inferRequestRunMode(payload);
 }
 
 function normalizeTierKeyValue(value) {
@@ -3322,16 +4591,39 @@ function buildProgressContextFromRequestPayload(payload) {
   const stopAfter = String(payload.stop_after || "")
     .trim()
     .toLowerCase();
+  const startFrom = normalizePipelineStage(payload.start_from, "msa") || "msa";
   const noveltyEnabled = Boolean(payload.novelty_enabled) || stopAfter === "novelty";
   return {
     tierKeys,
     noveltyEnabled,
     stopAfter,
+    startFrom,
   };
 }
 
 async function ensureRunModeForRunId(runId, status) {
   if (!runId) return "pipeline";
+  if (state.workflowPlansByRunId && state.workflowPlansByRunId[runId]) {
+    if (!state.progressContextByRunId[runId]) {
+      try {
+        const req = await apiCall("pipeline.read_artifact", {
+          run_id: runId,
+          path: "request.json",
+          max_bytes: 2_500_000,
+        });
+        const text = typeof req?.text === "string" ? req.text : "";
+        if (text.trim()) {
+          const payload = JSON.parse(text);
+          const progressContext = buildProgressContextFromRequestPayload(payload);
+          if (progressContext) state.progressContextByRunId[runId] = progressContext;
+        }
+      } catch (_err) {
+        // Keep workflow mode even if request.json cannot be loaded.
+      }
+    }
+    state.runModeById[runId] = "workflow";
+    return "workflow";
+  }
   const mapped = state.runModeById[runId];
   const context = state.progressContextByRunId[runId];
   if (mapped && PROGRESS_PLANS[mapped] && (mapped !== "pipeline" || context)) return mapped;
@@ -3348,7 +4640,7 @@ async function ensureRunModeForRunId(runId, status) {
       if (payload && typeof payload === "object" && Object.prototype.hasOwnProperty.call(payload, "af2_provider")) {
         const shouldRefreshAf2Labels = setAf2ProviderForRun(runId, payload.af2_provider);
         if (shouldRefreshAf2Labels) {
-          refreshAf2ProviderLabels();
+          refreshAf2ProviderLabels({ rerenderQuestions: true });
         }
       }
       const progressContext = buildProgressContextFromRequestPayload(payload);
@@ -3595,7 +4887,7 @@ function renderRunProgress(status) {
   const mode = progressModeForStatus(status);
   const runId = String(state.currentRunId || "");
   let steps = PROGRESS_PLANS[mode] || PROGRESS_PLANS.pipeline;
-  if (mode === "pipeline") {
+  if (mode === "pipeline" || mode === "workflow") {
     const ctx = state.progressContextByRunId[runId];
     if (ctx && ctx.noveltyEnabled === false) {
       steps = steps.filter((step) => step !== "novelty");
@@ -3621,7 +4913,10 @@ function renderRunProgress(status) {
     const base = Math.max(0, stepIndex);
     const offset =
       runState === "running" ? 0.45 : runState === "completed" ? 1.0 : runState === "failed" ? 0.2 : 0.1;
-    const tierAware = mode === "pipeline" ? computePipelineTierAwareProgress(status, runState, offset, cached) : null;
+    const tierAware =
+      mode === "pipeline" || mode === "workflow"
+        ? computePipelineTierAwareProgress(status, runState, offset, cached)
+        : null;
     if (tierAware && Number.isFinite(tierAware.percent)) {
       percent = Number(tierAware.percent);
       labelOverride = String(tierAware.label || "");
@@ -3707,9 +5002,30 @@ function updateRunInfo(status) {
 
   updateMonitorErrorCards(status);
   state.currentRunState = String(status.state || "").toLowerCase();
+  const statusRunId = String(status.run_id || state.currentRunId || "").trim();
+  const completed = state.currentRunState === "completed" || state.currentRunState === "done";
+  if (statusRunId && completed && state.autoAnalyzePendingByRunId[statusRunId]) {
+    const workflowPlan = workflowPlanForRunId(statusRunId);
+    const workflowStop = normalizePipelineStage(state.progressContextByRunId?.[statusRunId]?.stopAfter, "");
+    const checkpointTarget = normalizePipelineStage(workflowPlan?.nextCheckpointStage || "", "");
+    const waitingCheckpoint =
+      workflowPlan &&
+      workflowPlan.checkpointEnabled &&
+      checkpointTarget &&
+      workflowStop === checkpointTarget &&
+      normalizePipelineStage(workflowPlan.finalStopAfter, "") !== workflowStop;
+    state.autoAnalyzePendingByRunId[statusRunId] = false;
+    if (!waitingCheckpoint) {
+      setActiveTab("analyze");
+    }
+  }
+  if (statusRunId && (state.currentRunState === "failed" || state.currentRunState === "cancelled")) {
+    state.autoAnalyzePendingByRunId[statusRunId] = false;
+  }
   updateInlineStatus(status);
   updateRunEligibility(state.plan?.questions || []);
   updateMonitorActionButtons();
+  renderWorkflowReviewPanel(status);
   renderCopilotContext();
 }
 
@@ -3794,6 +5110,7 @@ function setCurrentRunId(runId) {
   setFilePreviewPlaceholder("analyze", "analyze.files.placeholder");
   setComparePreviewPlaceholder("artifacts.preview.placeholder");
   updateMonitorReportActions();
+  renderWorkflowReviewPanel(null);
   renderCopilotContext();
   if (state.runs) renderRuns(state.runs);
   refreshAgentPanel();
@@ -3809,11 +5126,9 @@ function ensureAutoPoll() {
   }
   if (state.pollTimer) return;
   state.pollTimer = window.setInterval(() => {
-    if (state.currentRunId) {
-      pollStatus(state.currentRunId);
-      refreshAgentPanel();
-    }
+    void pollCurrentRun({ includeArtifacts: "auto" });
   }, 5000);
+  void pollCurrentRun({ includeArtifacts: "auto" });
 }
 
 function stopPolling() {
@@ -3821,6 +5136,70 @@ function stopPolling() {
     window.clearInterval(state.pollTimer);
     state.pollTimer = null;
   }
+}
+
+function artifactRefreshStatusKeyForRun(runId = state.currentRunId) {
+  const key = String(runId || "").trim();
+  if (!key) return "";
+  const status =
+    state.lastRunStatus &&
+    typeof state.lastRunStatus === "object" &&
+    String(state.lastRunStatus.run_id || "").trim() === key
+      ? state.lastRunStatus
+      : null;
+  const stage = String(status?.stage || "-").trim() || "-";
+  const runState = String(status?.state || state.currentRunState || "-").trim() || "-";
+  const updated = String(status?.updated_at || "-").trim() || "-";
+  return `${key}|${stage}|${runState}|${updated}`;
+}
+
+function markArtifactsRefreshed(runId = state.currentRunId) {
+  const key = String(runId || "").trim();
+  if (!key) return;
+  state.artifactRefreshAtByRunId[key] = Date.now();
+  state.artifactRefreshStatusKeyByRunId[key] = artifactRefreshStatusKeyForRun(key);
+}
+
+function isTerminalRunState(stateText = currentRunStateText()) {
+  const normalized = String(stateText || "")
+    .trim()
+    .toLowerCase();
+  return ["completed", "done", "failed", "error", "cancelled", "canceled", "stopped"].includes(normalized);
+}
+
+function shouldAutoRefreshArtifacts(runId = state.currentRunId) {
+  const key = String(runId || "").trim();
+  if (!key) return false;
+  if (activeTabId() !== "monitor") return false;
+  if (!Array.isArray(state.artifacts) || state.artifacts.length === 0) return true;
+  const currentStatusKey = artifactRefreshStatusKeyForRun(key);
+  const previousStatusKey = String(state.artifactRefreshStatusKeyByRunId?.[key] || "");
+  if (currentStatusKey && currentStatusKey !== previousStatusKey) return true;
+  const lastRefreshAt = Number(state.artifactRefreshAtByRunId?.[key] || 0);
+  if (!isTerminalRunState() && Date.now() - lastRefreshAt >= 15000) return true;
+  return false;
+}
+
+async function pollCurrentRun({ includeArtifacts = "auto" } = {}) {
+  const runId = String(state.currentRunId || "").trim();
+  if (!runId) return;
+  if (state.pollCyclePromise) return state.pollCyclePromise;
+  state.pollCyclePromise = (async () => {
+    await pollStatus(runId);
+    await refreshAgentPanel();
+    const shouldRefresh =
+      includeArtifacts === true || (includeArtifacts === "auto" && shouldAutoRefreshArtifacts(runId));
+    if (shouldRefresh) {
+      await refreshArtifacts({ runId });
+    }
+  })()
+    .catch((err) => {
+      setMessage(t("status.error", { error: err.message }), "ai");
+    })
+    .finally(() => {
+      state.pollCyclePromise = null;
+    });
+  return state.pollCyclePromise;
 }
 
 function authHeaders() {
@@ -4326,9 +5705,10 @@ function parseAnswerValue(id, raw) {
   return { value: text, error: "" };
 }
 
-function renderChoiceButtons(container, options, currentValue, onSelect, { multi = false } = {}) {
+function renderChoiceButtons(container, options, currentValue, onSelect, { multi = false, rerender = true } = {}) {
   const group = document.createElement("div");
   group.className = "choice-group";
+  const buttons = [];
   options.forEach((opt) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -4340,9 +5720,19 @@ function renderChoiceButtons(container, options, currentValue, onSelect, { multi
     btn.textContent = labelFor(opt);
     btn.addEventListener("click", () => {
       onSelect(opt.value);
+      if (!rerender) {
+        if (multi) {
+          btn.classList.toggle("selected");
+        } else {
+          buttons.forEach((node) => node.classList.remove("selected"));
+          btn.classList.add("selected");
+        }
+        return;
+      }
       renderQuestions(state.plan?.questions || []);
     });
     group.appendChild(btn);
+    buttons.push(btn);
   });
   container.appendChild(group);
 }
@@ -4350,6 +5740,9 @@ function renderChoiceButtons(container, options, currentValue, onSelect, { multi
 function renderQuestions(questions) {
   const inputStack = el.questionInputStack || el.questionStack;
   const configStack = el.questionConfigStack || el.questionStack;
+  if (configStack) {
+    configStack.classList.toggle("workflow-layout", state.runMode === "workflow");
+  }
   const stacks = new Set([el.questionStack, el.questionInputStack, el.questionConfigStack].filter(Boolean));
   stacks.forEach((node) => {
     node.innerHTML = "";
@@ -4362,6 +5755,7 @@ function renderQuestions(questions) {
   };
 
   if (!questions.length) {
+    if (el.setupStepper) el.setupStepper.classList.add("hidden");
     el.runBtn.disabled = false;
     el.runHint.textContent = t("hint.none");
     return;
@@ -4370,6 +5764,13 @@ function renderQuestions(questions) {
   const normalizedQuestions = (questions || [])
     .map((q) => normalizeQuestion(q))
     .filter(Boolean);
+  const visibleQuestions = renderSetupWizard(normalizedQuestions);
+  if (state.runMode === "pipeline") {
+    if (!normalizePipelineStage(state.answers.start_from, "")) {
+      state.answers.start_from = "msa";
+    }
+    syncStartStopStages();
+  }
 
   const fileQuestionIds = new Set([
     "target_input",
@@ -4381,6 +5782,7 @@ function renderQuestions(questions) {
 
   const choiceQuestionIds = new Set([
     "run_mode",
+    "start_from",
     "stop_after",
     "design_chains",
     "rfd3_contig",
@@ -4400,7 +5802,7 @@ function renderQuestions(questions) {
   const choiceQuestions = [];
   const textQuestions = [];
 
-  normalizedQuestions.forEach((q) => {
+  visibleQuestions.forEach((q) => {
     if (isFileQuestion(q)) {
       fileQuestions.push(q);
     } else if (isChoiceQuestion(q)) {
@@ -4410,9 +5812,37 @@ function renderQuestions(questions) {
     }
   });
 
+  const compactChoiceQuestionIds = new Set([
+    "novelty_enabled",
+    "bioemu_use",
+    "af2_provider",
+    "design_chains",
+    "pdb_strip_nonpositive_resseq",
+    "wt_compare",
+    "mask_consensus_apply",
+    "ligand_mask_use_original_target",
+  ]);
+
+  const buildQuestionCardClass = (q, extraClasses = []) => {
+    const classes = ["question-card"];
+    const rawId = String(q?.id || "").trim();
+    if (rawId) {
+      const safeId = rawId.replace(/[^a-z0-9_-]+/gi, "-");
+      if (safeId) classes.push(`question-${safeId}`);
+    }
+    if (q?.required) classes.push("required");
+    if (Array.isArray(extraClasses)) {
+      extraClasses.forEach((name) => {
+        if (name) classes.push(name);
+      });
+    }
+    return classes.join(" ");
+  };
+
   choiceQuestions.forEach((q) => {
+    if (compactChoiceQuestionIds.has(q.id)) return;
     const card = document.createElement("div");
-    card.className = "question-card" + (q.required ? " required" : "");
+    card.className = buildQuestionCardClass(q, q.id === "run_mode" ? ["run-mode-card"] : []);
 
     const title = document.createElement("div");
     title.className = "question-title";
@@ -4431,11 +5861,68 @@ function renderQuestions(questions) {
         setRunMode(value, { render: false });
         updateRunEligibility(normalizedQuestions);
       });
+      const detail = document.createElement("div");
+      detail.className = "question-summary";
+      detail.textContent = t("question.runMode.detail");
+      card.appendChild(detail);
+      const modeGuide = document.createElement("div");
+      modeGuide.className = "mode-guide";
+      const modeGuideTitle = document.createElement("div");
+      modeGuideTitle.className = "mode-guide-title";
+      modeGuideTitle.textContent = t("setup.modeGuide.title");
+      modeGuide.appendChild(modeGuideTitle);
+      const selectedOpt =
+        RUN_MODE_OPTIONS.find((opt) => String(opt.value || "").trim() === current) || RUN_MODE_OPTIONS[0];
+      if (selectedOpt) {
+        const mode = String(selectedOpt.value || "").trim();
+        const item = document.createElement("div");
+        item.className = "mode-guide-item selected";
+        const label = document.createElement("div");
+        label.className = "mode-guide-label";
+        label.textContent = labelFor(selectedOpt);
+        const desc = document.createElement("div");
+        desc.className = "mode-guide-desc";
+        desc.textContent = t(`setup.modeGuide.${mode}`);
+        item.appendChild(label);
+        item.appendChild(desc);
+        modeGuide.appendChild(item);
+      }
+      card.appendChild(modeGuide);
+    }
+
+    if (q.id === "start_from") {
+      const routedDefault = state.plan?.routed_request?.start_from;
+      const current = normalizePipelineStage(
+        state.answers.start_from || routedDefault || q.default || "msa",
+        "msa"
+      );
+      state.answers.start_from = current;
+      renderChoiceButtons(
+        card,
+        [
+          { labelKey: "stage.msa", value: "msa" },
+          { labelKey: "stage.rfd3", value: "rfd3" },
+          { labelKey: "stage.bioemu", value: "bioemu" },
+          { labelKey: "stage.design", value: "design" },
+          { labelKey: "stage.soluprot", value: "soluprot" },
+          { labelKey: "stage.af2", value: "af2" },
+          { labelKey: "stop.full", value: "novelty" },
+        ],
+        current,
+        (value) => {
+          state.answers.start_from = normalizePipelineStage(value, "msa");
+          syncStartStopStages();
+          updateRunEligibility(normalizedQuestions);
+        }
+      );
     }
 
     if (q.id === "stop_after") {
       const routedDefault = state.plan?.routed_request?.stop_after;
-      const current = state.answers.stop_after || routedDefault || q.default || "af2";
+      const current = normalizePipelineStage(
+        state.answers.stop_after || routedDefault || q.default || "novelty",
+        "novelty"
+      );
       state.answers.stop_after = current;
       renderChoiceButtons(
         card,
@@ -4450,13 +5937,13 @@ function renderQuestions(questions) {
         ],
         current,
         (value) => {
-          state.answers.stop_after = value;
-          if (value === "bioemu") {
+          const selectedStop = normalizePipelineStage(value, "novelty");
+          state.answers.stop_after = selectedStop;
+          syncStartStopStages();
+          if (selectedStop === "bioemu") {
             state.answers.bioemu_use = true;
           }
-          if (value === "novelty") {
-            state.answers.novelty_enabled = true;
-          }
+          state.answers.novelty_enabled = selectedStop === "novelty";
           updateRunEligibility(normalizedQuestions);
         }
       );
@@ -4477,7 +5964,7 @@ function renderQuestions(questions) {
         state.answers.af2_provider,
         (value) => {
           state.answers.af2_provider = normalizeAf2Provider(value);
-          refreshAf2ProviderLabels();
+          refreshAf2ProviderLabels({ rerenderQuestions: true });
           updateRunEligibility(normalizedQuestions);
         }
       );
@@ -4571,7 +6058,7 @@ function renderQuestions(questions) {
         if (typeof routedDefault === "boolean") {
           current = routedDefault;
         } else {
-          current = q.default !== undefined ? Boolean(q.default) : false;
+          current = q.default !== undefined ? Boolean(q.default) : true;
         }
         state.answers.wt_compare = current;
       }
@@ -4596,7 +6083,7 @@ function renderQuestions(questions) {
         if (typeof routedDefault === "boolean") {
           current = routedDefault;
         } else {
-          current = q.default !== undefined ? Boolean(q.default) : false;
+          current = q.default !== undefined ? Boolean(q.default) : true;
         }
         state.answers.mask_consensus_apply = current;
       }
@@ -4684,12 +6171,12 @@ function renderQuestions(questions) {
         current,
         (value) => {
           state.answers.novelty_enabled = value;
-          if (value && String(state.answers.stop_after || "").trim().toLowerCase() === "af2") {
+          if (value) {
             state.answers.stop_after = "novelty";
-          }
-          if (!value && String(state.answers.stop_after || "").trim().toLowerCase() === "novelty") {
+          } else if (String(state.answers.stop_after || "").trim().toLowerCase() === "novelty") {
             state.answers.stop_after = "af2";
           }
+          syncStartStopStages();
           updateRunEligibility(normalizedQuestions);
         }
       );
@@ -4753,100 +6240,669 @@ function renderQuestions(questions) {
     appendConfigCard(card);
   });
 
-  const bioemuCountQuestionIds = new Set(["bioemu_num_samples", "bioemu_max_return_structures"]);
-  const rfd3CountQuestionIds = new Set(["rfd3_max_return_designs"]);
-  const bioemuCountRelevant =
-    state.runMode === "bioemu" || state.answers.bioemu_use === true || state.answers.stop_after === "bioemu";
-  const rfd3CountRelevant =
-    state.runMode === "rfd3" || state.answers.stop_after === "rfd3" || !isAnswerMissing(state.answers.rfd3_input_pdb);
-  if (!bioemuCountRelevant) state.showBioemuCountOptions = false;
-  if (!rfd3CountRelevant) state.showRfd3CountOptions = false;
+  const appendCompactOptionBoard = () => {
+    const optionQuestions = choiceQuestions.filter((q) => compactChoiceQuestionIds.has(q.id));
+    if (!optionQuestions.length) return;
+    const questionById = new Map(optionQuestions.map((q) => [q.id, q]));
 
-  const appendCountToggleCard = ({
-    titleKey,
-    helpKey,
-    showKey,
-    hideKey,
-    enabled,
-    onToggle,
-    summaryText = "",
-  }) => {
+    const ensureBooleanAnswer = (q, fallback = false) => {
+      if (!q) return fallback;
+      let current = state.answers[q.id];
+      if (typeof current !== "boolean") {
+        const routedDefault = state.plan?.routed_request?.[q.id];
+        if (typeof routedDefault === "boolean") {
+          current = routedDefault;
+        } else if (q.default !== undefined) {
+          current = Boolean(q.default);
+        } else {
+          current = fallback;
+        }
+        state.answers[q.id] = current;
+      }
+      return Boolean(current);
+    };
+
     const card = document.createElement("div");
-    card.className = "question-card";
+    card.className = "question-card parameter-board option-board";
 
     const title = document.createElement("div");
     title.className = "question-title";
-    title.textContent = t(titleKey);
+    title.textContent = t("setup.options.title");
 
     const help = document.createElement("div");
     help.className = "question-help";
-    help.textContent = t(helpKey);
+    help.textContent = t("setup.options.help");
 
-    const summary = document.createElement("div");
-    summary.className = "question-summary";
-    summary.textContent = summaryText;
+    const grid = document.createElement("div");
+    grid.className = "parameter-board-grid option-board-grid";
 
-    const toggleBtn = document.createElement("button");
-    toggleBtn.type = "button";
-    toggleBtn.className = "ghost";
-    toggleBtn.textContent = enabled ? t(hideKey) : t(showKey);
-    toggleBtn.addEventListener("click", () => {
-      onToggle(!enabled);
-      renderQuestions(state.plan?.questions || []);
+    const appendOptionField = (q, buildControls) => {
+      if (!q) return;
+      const field = document.createElement("div");
+      field.className = "parameter-field option-field" + (q.required ? " required" : "");
+
+      const label = document.createElement("div");
+      label.className = "parameter-label";
+      label.textContent = q.labelKey ? t(q.labelKey) : q.label || q.id || "option";
+
+      const desc = document.createElement("div");
+      desc.className = "parameter-help";
+      desc.textContent = q.questionKey ? t(q.questionKey) : q.question || "";
+
+      field.appendChild(label);
+      field.appendChild(desc);
+      buildControls(field, q);
+      grid.appendChild(field);
+    };
+
+    const renderBooleanField = ({
+      id,
+      fallback,
+      onLabelKey,
+      offLabelKey,
+      onChange,
+      rerender = false,
+    }) => {
+      const q = questionById.get(id);
+      if (!q) return;
+      const current = ensureBooleanAnswer(q, fallback);
+      appendOptionField(q, (field) => {
+        renderChoiceButtons(
+          field,
+          [
+            { labelKey: onLabelKey, value: true },
+            { labelKey: offLabelKey, value: false },
+          ],
+          current,
+          (value) => {
+            state.answers[id] = value;
+            if (onChange) onChange(value);
+            updateRunEligibility(normalizedQuestions);
+          },
+          { rerender }
+        );
+      });
+    };
+
+    renderBooleanField({
+      id: "novelty_enabled",
+      fallback: true,
+      onLabelKey: "choice.novelty.on",
+      offLabelKey: "choice.novelty.off",
+      onChange: (value) => {
+        if (value) {
+          state.answers.stop_after = "novelty";
+        } else if (String(state.answers.stop_after || "").trim().toLowerCase() === "novelty") {
+          state.answers.stop_after = "af2";
+        }
+        syncStartStopStages();
+      },
+      rerender: false,
+    });
+
+    renderBooleanField({
+      id: "bioemu_use",
+      fallback: false,
+      onLabelKey: "choice.bioemuUse.on",
+      offLabelKey: "choice.bioemuUse.off",
+      rerender: false,
+    });
+
+    const af2Question = questionById.get("af2_provider");
+    if (af2Question) {
+      const routedDefault = state.plan?.routed_request?.af2_provider;
+      const current = String(state.answers.af2_provider || routedDefault || af2Question.default || "colabfold")
+        .trim()
+        .toLowerCase();
+      state.answers.af2_provider = normalizeAf2Provider(current);
+      appendOptionField(af2Question, (field) => {
+        renderChoiceButtons(
+          field,
+          [
+            { labelKey: "choice.af2Provider.colabfold", value: "colabfold" },
+            { labelKey: "choice.af2Provider.af2", value: "af2" },
+          ],
+          state.answers.af2_provider,
+          (value) => {
+            state.answers.af2_provider = normalizeAf2Provider(value);
+            refreshAf2ProviderLabels({ rerenderQuestions: true });
+            updateRunEligibility(normalizedQuestions);
+          },
+          { rerender: false }
+        );
+      });
+    }
+
+    const designChainsQuestion = questionById.get("design_chains");
+    if (designChainsQuestion) {
+      appendOptionField(designChainsQuestion, (field) => {
+        const chains = state.chainRanges ? Object.keys(state.chainRanges) : [];
+        let current = Array.isArray(state.answers.design_chains) ? state.answers.design_chains : [];
+        const routedDefault = state.plan?.routed_request?.design_chains;
+        if (!current.length && Array.isArray(routedDefault) && routedDefault.length) {
+          current = routedDefault;
+          state.answers.design_chains = current;
+        }
+
+        const group = document.createElement("div");
+        group.className = "choice-group";
+
+        const allBtn = document.createElement("button");
+        allBtn.type = "button";
+        allBtn.className = "choice-btn" + (current.length === 0 ? " selected" : "");
+        allBtn.textContent = t("choice.allChains");
+        allBtn.addEventListener("click", () => {
+          state.answers.design_chains = [];
+          updateRunEligibility(normalizedQuestions);
+          renderQuestions(state.plan?.questions || []);
+        });
+        group.appendChild(allBtn);
+
+        chains.forEach((chain) => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "choice-btn" + (current.includes(chain) ? " selected" : "");
+          btn.textContent = chain;
+          btn.addEventListener("click", () => {
+            const next = new Set(current);
+            if (next.has(chain)) {
+              next.delete(chain);
+            } else {
+              next.add(chain);
+            }
+            state.answers.design_chains = Array.from(next);
+            updateRunEligibility(normalizedQuestions);
+            renderQuestions(state.plan?.questions || []);
+          });
+          group.appendChild(btn);
+        });
+        field.appendChild(group);
+
+        const note = document.createElement("div");
+        note.className = "choice-note";
+        note.textContent = chains.length ? t("choice.chainDefaultNote") : t("choice.chainNote");
+        field.appendChild(note);
+      });
+    }
+
+    renderBooleanField({
+      id: "pdb_strip_nonpositive_resseq",
+      fallback: true,
+      onLabelKey: "choice.stripNonpositive.on",
+      offLabelKey: "choice.stripNonpositive.off",
+      rerender: false,
+    });
+
+    renderBooleanField({
+      id: "wt_compare",
+      fallback: false,
+      onLabelKey: "choice.wtCompare.on",
+      offLabelKey: "choice.wtCompare.off",
+      rerender: false,
+    });
+
+    renderBooleanField({
+      id: "mask_consensus_apply",
+      fallback: false,
+      onLabelKey: "choice.maskConsensusApply.on",
+      offLabelKey: "choice.maskConsensusApply.off",
+      rerender: false,
+    });
+
+    renderBooleanField({
+      id: "ligand_mask_use_original_target",
+      fallback: true,
+      onLabelKey: "choice.ligandMaskOriginal.on",
+      offLabelKey: "choice.ligandMaskOriginal.off",
+      rerender: false,
     });
 
     card.appendChild(title);
     card.appendChild(help);
-    card.appendChild(summary);
-    card.appendChild(toggleBtn);
+    card.appendChild(grid);
     appendConfigCard(card);
   };
 
-  const hasBioemuCountQuestions =
-    bioemuCountRelevant && textQuestions.some((q) => bioemuCountQuestionIds.has(q.id));
-  if (hasBioemuCountQuestions) {
-    appendCountToggleCard({
-      titleKey: "advanced.bioemuCounts.title",
-      helpKey: "advanced.bioemuCounts.help",
-      showKey: "advanced.bioemuCounts.show",
-      hideKey: "advanced.bioemuCounts.hide",
-      enabled: state.showBioemuCountOptions,
-      summaryText: `samples=${state.answers.bioemu_num_samples ?? 10}, keep=${state.answers.bioemu_max_return_structures ?? 10}`,
-      onToggle: (next) => {
-        state.showBioemuCountOptions = Boolean(next);
-      },
+  appendCompactOptionBoard();
+
+  const bioemuCountQuestionIds = new Set(["bioemu_num_samples", "bioemu_max_return_structures"]);
+  const rfd3CountQuestionIds = new Set(["rfd3_max_return_designs"]);
+  const compactParameterQuestionIds = new Set([
+    "bioemu_num_samples",
+    "bioemu_max_return_structures",
+    "rfd3_max_return_designs",
+    "num_seq_per_tier",
+    "af2_max_candidates_per_tier",
+    "af2_plddt_cutoff",
+    "af2_rmsd_cutoff",
+  ]);
+  const bioemuCountRelevant =
+    state.runMode === "pipeline" ||
+    state.runMode === "workflow" ||
+    state.runMode === "bioemu" ||
+    state.answers.bioemu_use === true ||
+    state.answers.stop_after === "bioemu";
+  const rfd3CountRelevant =
+    state.runMode === "pipeline" ||
+    state.runMode === "workflow" ||
+    state.runMode === "rfd3" ||
+    state.answers.stop_after === "rfd3" ||
+    !isAnswerMissing(state.answers.rfd3_input_pdb);
+
+  const compactQuestions = textQuestions.filter((q) => compactParameterQuestionIds.has(q.id));
+
+  const appendCompactParameterBoard = (questionsForBoard) => {
+    if (!questionsForBoard.length) return;
+    const card = document.createElement("div");
+    card.className = "question-card parameter-board";
+
+    const title = document.createElement("div");
+    title.className = "question-title";
+    title.textContent = t("setup.parameters.title");
+
+    const help = document.createElement("div");
+    help.className = "question-help";
+    help.textContent = t("setup.parameters.help");
+
+    const grid = document.createElement("div");
+    grid.className = "parameter-board-grid";
+
+    questionsForBoard.forEach((q) => {
+      const field = document.createElement("label");
+      field.className = "parameter-field" + (q.required ? " required" : "");
+      const inactive =
+        (bioemuCountQuestionIds.has(q.id) && !bioemuCountRelevant) ||
+        (rfd3CountQuestionIds.has(q.id) && !rfd3CountRelevant);
+      if (inactive) field.classList.add("inactive");
+
+      const fieldLabel = document.createElement("span");
+      fieldLabel.className = "parameter-label";
+      fieldLabel.textContent = q.labelKey ? t(q.labelKey) : q.label || q.id || "input";
+
+      const fieldHelp = document.createElement("span");
+      fieldHelp.className = "parameter-help";
+      fieldHelp.textContent = q.questionKey ? t(q.questionKey) : q.question || "";
+
+      const input = document.createElement("input");
+      input.type = ANSWER_INT_KEYS.has(q.id) || ANSWER_FLOAT_KEYS.has(q.id) ? "number" : "text";
+      if (ANSWER_FLOAT_KEYS.has(q.id)) input.step = "0.01";
+      if (ANSWER_INT_KEYS.has(q.id)) input.step = "1";
+      if (q.id === "af2_plddt_cutoff") {
+        input.min = "0";
+        input.max = "100";
+        input.step = "0.1";
+      } else if (q.id === "af2_rmsd_cutoff") {
+        input.min = "0.01";
+        input.step = "0.01";
+      }
+      if (q.placeholder) {
+        input.placeholder = q.placeholder;
+      }
+      input.disabled = inactive;
+      if (state.answers[q.id] === undefined && q.default !== undefined) {
+        state.answers[q.id] = q.default;
+      }
+      input.value = formatAnswerValue(state.answers[q.id]);
+
+      const errorEl = document.createElement("span");
+      errorEl.className = "parameter-error";
+      const existingError = (state.answerMeta[q.id] || {}).error;
+      if (existingError) {
+        errorEl.textContent = existingError;
+      } else {
+        errorEl.textContent = "";
+      }
+
+      input.addEventListener("input", () => {
+        const parsed = parseAnswerValue(q.id, input.value);
+        if (parsed.error) {
+          state.answers[q.id] = "";
+          state.answerMeta[q.id] = { ...state.answerMeta[q.id], error: parsed.error, raw: input.value };
+          errorEl.textContent = parsed.error;
+        } else {
+          state.answers[q.id] = parsed.value;
+          state.answerMeta[q.id] = { ...state.answerMeta[q.id], error: "", raw: input.value };
+          errorEl.textContent = "";
+        }
+        updateRunEligibility(normalizedQuestions);
+      });
+
+      field.appendChild(fieldLabel);
+      field.appendChild(fieldHelp);
+      field.appendChild(input);
+      if (inactive) {
+        const inactiveHint = document.createElement("span");
+        inactiveHint.className = "parameter-help inactive";
+        inactiveHint.textContent = t("setup.parameters.inactive");
+        field.appendChild(inactiveHint);
+      }
+      field.appendChild(errorEl);
+      grid.appendChild(field);
     });
-    if (state.showBioemuCountOptions) {
-      textQuestions
-        .filter((q) => bioemuCountQuestionIds.has(q.id))
-        .forEach((q) => appendTextQuestionCard(q));
+
+    card.appendChild(title);
+    card.appendChild(help);
+    card.appendChild(grid);
+    appendConfigCard(card);
+  };
+
+  appendCompactParameterBoard(compactQuestions);
+
+  function appendWorkflowDesignerCard() {
+    if (state.runMode !== "workflow") return;
+    const stageChoices = PIPELINE_STAGE_ORDER.map((stage) => ({
+      stage,
+      label:
+        stage === "novelty"
+          ? t("stop.full")
+          : stage === "af2"
+            ? t("stage.af2")
+            : t(`stage.${stage}`),
+      desc: t(`setup.workflow.stageDesc.${stage}`),
+    }));
+    const stageChoiceMap = new Map(stageChoices.map((item) => [item.stage, item]));
+    const stageLabelFor = (stage) => stageChoiceMap.get(stage)?.label || formatStageLabel(stage);
+    const stageDescFor = (stage) => stageChoiceMap.get(stage)?.desc || t("setup.workflow.stageGuideHint");
+    const applyNodeSet = (nextSet) => {
+      const ordered = PIPELINE_STAGE_ORDER.filter((stage) => nextSet.has(stage));
+      if (!ordered.length) return;
+      state.workflowDesigner.nodes = ordered;
+      const normalizedCheckpoints = normalizeWorkflowCheckpointList(
+        state.workflowDesigner.checkpointStages,
+        ordered
+      );
+      state.workflowDesigner.checkpointStages = normalizedCheckpoints;
+      if (!normalizedCheckpoints.length) {
+        state.workflowDesigner.checkpointEnabled = false;
+      }
+      state.workflowDesigner.flowPulse = Number(state.workflowDesigner.flowPulse || 0) + 1;
+      renderQuestions(state.plan?.questions || []);
+    };
+
+    const card = document.createElement("div");
+    card.className = "question-card workflow-designer";
+
+    const title = document.createElement("div");
+    title.className = "question-title";
+    title.textContent = t("setup.workflow.title");
+
+    const help = document.createElement("div");
+    help.className = "question-help";
+    help.textContent = t("setup.workflow.help");
+
+    const layout = document.createElement("div");
+    layout.className = "workflow-designer-layout";
+
+    const mainCol = document.createElement("div");
+    mainCol.className = "workflow-designer-main";
+
+    const sideCol = document.createElement("div");
+    sideCol.className = "workflow-designer-side";
+
+    const guideBlock = document.createElement("section");
+    guideBlock.className = "workflow-block";
+    const guideTitle = document.createElement("div");
+    guideTitle.className = "workflow-section-label";
+    guideTitle.textContent = t("setup.workflow.stageGuide");
+    const guideHint = document.createElement("div");
+    guideHint.className = "workflow-block-help";
+    guideHint.textContent = t("setup.workflow.stageGuideHint");
+    const guideLabel = document.createElement("div");
+    guideLabel.className = "workflow-stage-guide-label";
+    const guideDesc = document.createElement("div");
+    guideDesc.className = "workflow-stage-guide-desc";
+    guideBlock.appendChild(guideTitle);
+    guideBlock.appendChild(guideHint);
+    guideBlock.appendChild(guideLabel);
+    guideBlock.appendChild(guideDesc);
+
+    const updateGuide = (stage) => {
+      const item = stageChoiceMap.get(stage) || stageChoices[0] || null;
+      if (!item) {
+        guideLabel.textContent = t("setup.workflow.stageGuideHint");
+        guideDesc.textContent = "";
+        return;
+      }
+      guideLabel.textContent = `${t("setup.workflow.stageGuideLabel")}: ${item.label}`;
+      guideDesc.textContent = stageDescFor(item.stage);
+    };
+
+    const paletteBlock = document.createElement("section");
+    paletteBlock.className = "workflow-block";
+    const paletteTitle = document.createElement("div");
+    paletteTitle.className = "workflow-section-label";
+    paletteTitle.textContent = t("setup.workflow.palette");
+    const paletteHelp = document.createElement("div");
+    paletteHelp.className = "workflow-block-help";
+    paletteHelp.textContent = t("setup.workflow.paletteHelp");
+    paletteBlock.appendChild(paletteTitle);
+    paletteBlock.appendChild(paletteHelp);
+
+    const palette = document.createElement("div");
+    palette.className = "choice-group workflow-palette";
+    const selected = new Set(normalizeWorkflowNodesForState(state.workflowDesigner.nodes));
+    stageChoices.forEach((item) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "choice-btn workflow-palette-btn";
+      if (selected.has(item.stage)) btn.classList.add("selected");
+      btn.textContent = item.label;
+      btn.title = stageDescFor(item.stage);
+      btn.addEventListener("mouseenter", () => {
+        updateGuide(item.stage);
+      });
+      btn.addEventListener("focus", () => {
+        updateGuide(item.stage);
+      });
+      btn.addEventListener("click", () => {
+        const nextSet = new Set(selected);
+        if (nextSet.has(item.stage)) {
+          nextSet.delete(item.stage);
+        } else {
+          nextSet.add(item.stage);
+        }
+        applyNodeSet(nextSet);
+      });
+      palette.appendChild(btn);
+    });
+    paletteBlock.appendChild(palette);
+
+    const canvasBlock = document.createElement("section");
+    canvasBlock.className = "workflow-block";
+    const canvasTitle = document.createElement("div");
+    canvasTitle.className = "workflow-section-label";
+    canvasTitle.textContent = t("setup.workflow.canvas");
+    const canvasHelp = document.createElement("div");
+    canvasHelp.className = "workflow-block-help";
+    canvasHelp.textContent = t("setup.workflow.canvasHelp");
+    canvasBlock.appendChild(canvasTitle);
+    canvasBlock.appendChild(canvasHelp);
+
+    const canvas = document.createElement("div");
+    canvas.className = "workflow-canvas";
+    const nodes = normalizeWorkflowNodesForState(state.workflowDesigner.nodes);
+    const checkpointStages = normalizeWorkflowCheckpointList(
+      state.workflowDesigner.checkpointStages,
+      nodes
+    );
+    if (!nodes.length) {
+      canvas.innerHTML = `<div class="placeholder">${escapeHtml(t("setup.workflow.empty"))}</div>`;
+    } else {
+      nodes.forEach((stage, idx) => {
+        const node = document.createElement("div");
+        node.className = "workflow-node";
+        node.tabIndex = 0;
+        node.setAttribute("role", "button");
+        node.style.animationDelay = `${Math.min(idx, 8) * 60}ms`;
+        node.dataset.stage = stage;
+        const isCheckpoint =
+          Boolean(state.workflowDesigner.checkpointEnabled) && checkpointStages.includes(stage);
+        const isFinal = idx === nodes.length - 1;
+        if (isCheckpoint) node.classList.add("checkpoint");
+        if (isFinal) node.classList.add("final-node");
+        const stageLabel = stageLabelFor(stage);
+        node.title = stageDescFor(stage);
+        node.innerHTML = `
+          <span class="workflow-node-title">${escapeHtml(stageLabel)}</span>
+          <span class="workflow-node-badges">
+            ${isCheckpoint ? `<span class="workflow-node-badge">${escapeHtml(t("setup.workflow.badge.checkpoint"))}</span>` : ""}
+            ${isFinal ? `<span class="workflow-node-badge final">${escapeHtml(t("setup.workflow.badge.final"))}</span>` : ""}
+          </span>
+        `;
+        const toggleCheckpoint = () => {
+          const candidateStages = workflowCheckpointCandidates(nodes);
+          if (!candidateStages.includes(stage)) return;
+          const next = new Set(checkpointStages);
+          if (next.has(stage)) {
+            next.delete(stage);
+          } else {
+            next.add(stage);
+          }
+          const nextCheckpoints = normalizeWorkflowCheckpointList(Array.from(next), nodes);
+          state.workflowDesigner.checkpointStages = nextCheckpoints;
+          state.workflowDesigner.checkpointEnabled = nextCheckpoints.length > 0;
+          renderQuestions(state.plan?.questions || []);
+        };
+        node.addEventListener("click", () => {
+          toggleCheckpoint();
+        });
+        node.addEventListener("mouseenter", () => {
+          updateGuide(stage);
+        });
+        node.addEventListener("focus", () => {
+          updateGuide(stage);
+        });
+        node.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          toggleCheckpoint();
+        });
+        const removeBtn = document.createElement("button");
+        removeBtn.type = "button";
+        removeBtn.className = "workflow-node-remove";
+        removeBtn.textContent = "x";
+        removeBtn.title = t("setup.workflow.removeNode");
+        removeBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const nextSet = new Set(nodes);
+          nextSet.delete(stage);
+          applyNodeSet(nextSet);
+        });
+        node.appendChild(removeBtn);
+        canvas.appendChild(node);
+        if (idx < nodes.length - 1) {
+          const edge = document.createElement("span");
+          edge.className = "workflow-edge";
+          edge.textContent = "->";
+          canvas.appendChild(edge);
+        }
+      });
     }
+    canvasBlock.appendChild(canvas);
+
+    const hint = document.createElement("div");
+    hint.className = "workflow-block-help";
+    hint.textContent = t("setup.workflow.nodeHint");
+    const orderHint = document.createElement("div");
+    orderHint.className = "workflow-block-help";
+    orderHint.textContent = t("setup.workflow.orderLocked");
+    canvasBlock.appendChild(hint);
+    canvasBlock.appendChild(orderHint);
+
+    const controlsBlock = document.createElement("section");
+    controlsBlock.className = "workflow-block";
+    const controlsTitle = document.createElement("div");
+    controlsTitle.className = "workflow-section-label";
+    controlsTitle.textContent = t("setup.workflow.controls");
+    controlsBlock.appendChild(controlsTitle);
+    const toggleWrap = document.createElement("div");
+    toggleWrap.className = "workflow-toggle-wrap";
+    const makeToggle = (labelKey, checked, onChange) => {
+      const row = document.createElement("label");
+      row.className = "toggle workflow-toggle";
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = Boolean(checked);
+      input.addEventListener("change", () => {
+        onChange(Boolean(input.checked));
+        renderQuestions(state.plan?.questions || []);
+      });
+      const span = document.createElement("span");
+      span.textContent = t(labelKey);
+      row.appendChild(input);
+      row.appendChild(span);
+      return row;
+    };
+    toggleWrap.appendChild(
+      makeToggle("setup.workflow.checkpoint", state.workflowDesigner.checkpointEnabled, (next) => {
+        state.workflowDesigner.checkpointEnabled = next;
+        if (!next) {
+          state.workflowDesigner.checkpointStages = [];
+        }
+      })
+    );
+    toggleWrap.appendChild(
+      makeToggle("setup.workflow.showResults", state.workflowDesigner.graphEnabled !== false, (next) => {
+        state.workflowDesigner.graphEnabled = next;
+      })
+    );
+    toggleWrap.appendChild(
+      makeToggle("setup.workflow.mmseqLoop", state.workflowDesigner.mmseqLoopEnabled !== false, (next) => {
+        state.workflowDesigner.mmseqLoopEnabled = next;
+      })
+    );
+    controlsBlock.appendChild(toggleWrap);
+
+    const plan = buildWorkflowPlanFromDesigner();
+    const summaryBlock = document.createElement("section");
+    summaryBlock.className = "workflow-block";
+    const summaryTitle = document.createElement("div");
+    summaryTitle.className = "workflow-section-label";
+    summaryTitle.textContent = t("setup.workflow.summaryTitle");
+    const summary = document.createElement("div");
+    summary.className = "question-summary";
+    summary.textContent = plan.checkpointEnabled
+      ? t("setup.workflow.plan", {
+          start: formatStageLabel(plan.start),
+          stop: formatStageLabel(plan.stopAfter),
+          final: formatStageLabel(plan.finalStop),
+        })
+      : t("setup.workflow.planNoCheckpoint", {
+          start: formatStageLabel(plan.start),
+          final: formatStageLabel(plan.finalStop),
+        });
+    const checkpointSummary = document.createElement("div");
+    checkpointSummary.className = "question-summary";
+    checkpointSummary.textContent = plan.checkpointStages.length
+      ? t("setup.workflow.checkpoints", {
+          stages: plan.checkpointStages.map((stage) => formatStageLabel(stage)).join(" -> "),
+        })
+      : t("setup.workflow.checkpoints.none");
+    summaryBlock.appendChild(summaryTitle);
+    summaryBlock.appendChild(summary);
+    summaryBlock.appendChild(checkpointSummary);
+
+    mainCol.appendChild(paletteBlock);
+    mainCol.appendChild(canvasBlock);
+    sideCol.appendChild(guideBlock);
+    sideCol.appendChild(controlsBlock);
+    sideCol.appendChild(summaryBlock);
+
+    layout.appendChild(mainCol);
+    layout.appendChild(sideCol);
+
+    card.appendChild(title);
+    card.appendChild(help);
+    card.appendChild(layout);
+    updateGuide(nodes[0] || stageChoices[0]?.stage || "");
+    appendConfigCard(card);
   }
 
-  const hasRfd3CountQuestions =
-    rfd3CountRelevant && textQuestions.some((q) => rfd3CountQuestionIds.has(q.id));
-  if (hasRfd3CountQuestions) {
-    appendCountToggleCard({
-      titleKey: "advanced.rfd3Counts.title",
-      helpKey: "advanced.rfd3Counts.help",
-      showKey: "advanced.rfd3Counts.show",
-      hideKey: "advanced.rfd3Counts.hide",
-      enabled: state.showRfd3CountOptions,
-      summaryText: `keep=${state.answers.rfd3_max_return_designs ?? 10}`,
-      onToggle: (next) => {
-        state.showRfd3CountOptions = Boolean(next);
-      },
-    });
-    if (state.showRfd3CountOptions) {
-      textQuestions
-        .filter((q) => rfd3CountQuestionIds.has(q.id))
-        .forEach((q) => appendTextQuestionCard(q));
-    }
-  }
+  appendWorkflowDesignerCard();
 
   function appendTextQuestionCard(q) {
     const card = document.createElement("div");
-    card.className = "question-card" + (q.required ? " required" : "");
+    card.className = buildQuestionCardClass(q);
 
     const title = document.createElement("div");
     title.className = "question-title";
@@ -4920,9 +6976,9 @@ function renderQuestions(questions) {
     appendConfigCard(card);
   }
 
-  const hiddenCountQuestionIds = new Set([...bioemuCountQuestionIds, ...rfd3CountQuestionIds]);
+  const hiddenTextQuestionIds = new Set(compactQuestions.map((q) => q.id));
   textQuestions.forEach((q) => {
-    if (hiddenCountQuestionIds.has(q.id)) return;
+    if (hiddenTextQuestionIds.has(q.id)) return;
     appendTextQuestionCard(q);
   });
 
@@ -5053,7 +7109,7 @@ function renderQuestions(questions) {
             if (state.setupResiduePicker.sourceKey === "rfd3_input_pdb") {
               resetSetupResiduePicker();
             }
-            if (state.runMode === "pipeline") {
+            if (state.runMode === "pipeline" || state.runMode === "workflow") {
               state.answers.rfd3_contig = "";
             }
             refreshChainRangesFromAnswers();
@@ -5127,7 +7183,7 @@ function renderQuestions(questions) {
           }
           if (q.id === "rfd3_input_pdb" && state.setupResiduePicker.sourceKey === "rfd3_input_pdb") {
             resetSetupResiduePicker();
-            if (state.runMode === "pipeline") {
+            if (state.runMode === "pipeline" || state.runMode === "workflow") {
               state.answers.rfd3_contig = "";
             }
             rerender = true;
@@ -5169,7 +7225,7 @@ function renderQuestions(questions) {
           refreshChainRangesFromAnswers();
           rerender = true;
         }
-        if (q.id === "rfd3_input_pdb" && state.runMode === "pipeline") {
+        if (q.id === "rfd3_input_pdb" && (state.runMode === "pipeline" || state.runMode === "workflow")) {
           state.answers.rfd3_contig = "";
         }
         if (rerender) {
@@ -5197,7 +7253,8 @@ function renderQuestions(questions) {
   }
 
   const showResiduePicker =
-    state.runMode === "pipeline" && normalizedQuestions.some((q) => q.id === "fixed_positions_extra");
+    (state.runMode === "pipeline" || state.runMode === "workflow") &&
+    normalizedQuestions.some((q) => q.id === "fixed_positions_extra");
   if (showResiduePicker) {
     const card = document.createElement("div");
     card.className = "question-card setup-residue-picker";
@@ -5566,6 +7623,10 @@ function renderQuestions(questions) {
 }
 
 function updateRunEligibility(questions) {
+  if (state.runMode === "pipeline") {
+    syncStartStopStages();
+  }
+
   const requiredIds = new Set(
     (questions || [])
       .map((q) => normalizeQuestion(q))
@@ -5625,18 +7686,33 @@ function updateRunEligibility(questions) {
     requiredIds.add("bioemu_use");
   }
 
+  if (state.runMode === "workflow") {
+    requiredIds.add("target_input");
+    requiredIds.add("__workflow_nodes__");
+  }
+
   const missing = Array.from(requiredIds).filter((id) => {
+    if (id === "__workflow_nodes__") {
+      return normalizeWorkflowNodesForState(state.workflowDesigner?.nodes).length === 0;
+    }
     if (id === "confirm_run") return state.answers.confirm_run !== true;
     if (id === "bioemu_use") return state.answers.bioemu_use !== true;
     return isAnswerMissing(state.answers[id]);
   });
   const runBusy = state.runSubmitting || String(state.currentRunState || "").toLowerCase() === "running";
-  if (missing.length === 0 && !runBusy) {
+  const wizardBlocked = setupWizardEnabled(questions) && !isSetupWizardFinalStep();
+  if (missing.length === 0 && !runBusy && !wizardBlocked) {
     el.runBtn.disabled = false;
     el.runHint.textContent = t("hint.ready");
   } else {
     el.runBtn.disabled = true;
-    el.runHint.textContent = runBusy ? t("hint.running") : t("hint.missing");
+    if (runBusy) {
+      el.runHint.textContent = t("hint.running");
+    } else if (wizardBlocked) {
+      el.runHint.textContent = t("hint.nextStep");
+    } else {
+      el.runHint.textContent = t("hint.missing");
+    }
   }
 }
 
@@ -5678,7 +7754,7 @@ function buildAnswerPayload(mode = state.runMode) {
   if (answers.confirm_run !== undefined) {
     delete answers.confirm_run;
   }
-  if (mode === "pipeline" && isAnswerMissing(answers.rfd3_input_pdb)) {
+  if ((mode === "pipeline" || mode === "workflow") && isAnswerMissing(answers.rfd3_input_pdb)) {
     delete answers.rfd3_contig;
   }
   if (Array.isArray(answers.design_chains) && answers.design_chains.length === 0) {
@@ -5724,6 +7800,31 @@ function filterAnswersForMode(mode, answers) {
       "af2_provider",
       "novelty_enabled",
       "num_seq_per_tier",
+      "start_from",
+      "stop_after",
+    ],
+    workflow: [
+      "target_fasta",
+      "target_pdb",
+      "rfd3_input_pdb",
+      "rfd3_contig",
+      "rfd3_max_return_designs",
+      "design_chains",
+      "fixed_positions_extra",
+      "pdb_strip_nonpositive_resseq",
+      "wt_compare",
+      "mask_consensus_apply",
+      "ligand_mask_use_original_target",
+      "bioemu_num_samples",
+      "bioemu_max_return_structures",
+      "af2_max_candidates_per_tier",
+      "af2_plddt_cutoff",
+      "af2_rmsd_cutoff",
+      "af2_provider",
+      "num_seq_per_tier",
+      "bioemu_use",
+      "novelty_enabled",
+      "start_from",
       "stop_after",
     ],
     bioemu: [
@@ -5767,6 +7868,7 @@ function filterAnswersForMode(mode, answers) {
 }
 
 function buildRoutedForMode(mode) {
+  if (mode === "pipeline") return { stop_after: "novelty", novelty_enabled: true };
   if (mode === "rfd3") return { stop_after: "rfd3" };
   if (mode === "bioemu") return { stop_after: "bioemu", bioemu_use: true };
   if (mode === "msa") return { stop_after: "msa" };
@@ -5783,6 +7885,16 @@ function mergeRoutedWithMode(mode, routed) {
     merged.stop_after = base.stop_after;
   }
   return merged;
+}
+
+function withWorkflowDerivedAnswers(baseAnswers) {
+  const answers = { ...(baseAnswers || {}) };
+  const workflow = buildWorkflowPlanFromDesigner();
+  answers.start_from = workflow.start;
+  answers.stop_after = workflow.stopAfter;
+  answers.novelty_enabled = workflow.noveltyEnabled && workflow.stopAfter === "novelty";
+  answers.bioemu_use = workflow.bioemuUse;
+  return { answers, workflow };
 }
 
 function _formatList(label, items) {
@@ -5836,14 +7948,18 @@ function buildPromptPlan(plan, preflight, prompt) {
 async function runPreflight({ announce = true } = {}) {
   const prompt = el.promptInput.value.trim();
   const mode = state.runMode || "pipeline";
-  const preflightModes = new Set(["pipeline", "rfd3", "bioemu", "msa", "design", "soluprot"]);
+  const effectiveMode = mode === "workflow" ? "pipeline" : mode;
+  const preflightModes = new Set(["pipeline", "workflow", "rfd3", "bioemu", "msa", "design", "soluprot"]);
   if (!preflightModes.has(mode)) {
     if (announce) {
       setMessage(t("preflight.unavailable", { mode: t(`mode.${mode}`) || mode }), "ai");
     }
     return { ok: false, preflight: null, plan: null };
   }
-  const rawAnswers = buildAnswerPayload(mode);
+  let rawAnswers = buildAnswerPayload(mode);
+  if (mode === "workflow") {
+    rawAnswers = withWorkflowDerivedAnswers(rawAnswers).answers;
+  }
   const answers = prompt ? rawAnswers : filterAnswersForMode(mode, rawAnswers);
 
   if (announce && prompt) {
@@ -5870,7 +7986,7 @@ async function runPreflight({ announce = true } = {}) {
     }
   }
 
-  const routed = mergeRoutedWithMode(mode, plan?.routed_request || {});
+  const routed = mergeRoutedWithMode(effectiveMode, plan?.routed_request || {});
   const args = buildRunArguments({
     prompt,
     routed,
@@ -5892,6 +8008,7 @@ async function runPreflight({ announce = true } = {}) {
     const promptKey = prompt.trim();
     const samePrompt = state.plan?.source === "prompt" && state.plan?.prompt === promptKey;
     state.plan = buildPromptPlan(plan, preflight, promptKey);
+    state.setupStepIndex = 0;
     if (!samePrompt) {
       state.answers.confirm_run = true;
     }
@@ -5952,16 +8069,27 @@ async function runPipeline() {
   }
   if (!state.plan) return;
   const prompt = el.promptInput.value.trim();
-  const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
-  const runId = createRunId(prefix);
   const mode = state.runMode || "pipeline";
-  state.runModeById[runId] = mode;
-  const rawAnswers = buildAnswerPayload(mode);
+  const effectiveMode = mode === "workflow" ? "pipeline" : mode;
+  let rawAnswers = buildAnswerPayload(mode);
+  let workflowPlan = null;
+  if (mode === "workflow") {
+    const derived = withWorkflowDerivedAnswers(rawAnswers);
+    rawAnswers = derived.answers;
+    workflowPlan = derived.workflow;
+  }
   const answers = state.plan?.allow_unfiltered_answers ? rawAnswers : filterAnswersForMode(mode, rawAnswers);
+  const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
+  const requestedStartFrom = normalizePipelineStage(answers.start_from, "");
+  const canReuseRunId =
+    (mode === "pipeline" || mode === "workflow") && requestedStartFrom && requestedStartFrom !== "msa";
+  const selectedRunId = String(el.setupRunSelector?.value || state.currentRunId || "").trim();
+  const runId = canReuseRunId && selectedRunId ? selectedRunId : createRunId(prefix);
+  state.runModeById[runId] = mode;
   let args = {};
   let toolName = "pipeline.run";
 
-  if (["pipeline", "rfd3", "bioemu", "msa", "design", "soluprot"].includes(mode)) {
+  if (["pipeline", "workflow", "rfd3", "bioemu", "msa", "design", "soluprot"].includes(mode)) {
     const pre = await runPreflight({ announce: true });
     if (!pre.ok) {
       return;
@@ -5973,10 +8101,10 @@ async function runPipeline() {
     return;
   }
 
-  if (["pipeline", "rfd3", "bioemu", "msa", "design", "soluprot"].includes(mode)) {
+  if (["pipeline", "workflow", "rfd3", "bioemu", "msa", "design", "soluprot"].includes(mode)) {
     args = buildRunArguments({
       prompt,
-      routed: mergeRoutedWithMode(mode, state.plan?.routed_request || {}),
+      routed: mergeRoutedWithMode(effectiveMode, state.plan?.routed_request || {}),
       answers,
       runId,
     });
@@ -6005,18 +8133,48 @@ async function runPipeline() {
     const progressContext = buildProgressContextFromRequestPayload(args);
     if (progressContext) state.progressContextByRunId[runId] = progressContext;
   }
+  if (mode === "workflow" && workflowPlan) {
+    state.workflowPlansByRunId[runId] = {
+      nodes: workflowPlan.nodes,
+      finalStopAfter: workflowPlan.finalStop,
+      checkpointEnabled: workflowPlan.checkpointEnabled,
+      checkpointStages: workflowPlan.checkpointStages,
+      checkpointIndex: workflowPlan.checkpointIndex,
+      graphEnabled: workflowPlan.graphEnabled,
+      mmseqLoopEnabled: workflowPlan.mmseqLoopEnabled,
+    };
+    persistWorkflowPlans();
+  }
 
   const modeLabel = t(`mode.${mode}`) || mode;
   setMessage(t("run.launching", { mode: modeLabel, id: runId }), "ai");
   setCurrentRunId(runId);
+  state.autoAnalyzePendingByRunId[runId] = true;
   state.currentRunState = "running";
   state.runSubmitting = true;
   updateRunEligibility(state.plan?.questions || []);
   updateMonitorActionButtons();
+  setActiveTab("monitor");
 
   try {
     const result = await apiCall(toolName, args);
     state.runModeById[result.run_id] = mode;
+    state.autoAnalyzePendingByRunId[result.run_id] = true;
+    if (toolName === "pipeline.run" && state.progressContextByRunId[runId] && runId !== result.run_id) {
+      state.progressContextByRunId[result.run_id] = state.progressContextByRunId[runId];
+    }
+    if (mode === "workflow" && workflowPlan) {
+      state.workflowPlansByRunId[result.run_id] = {
+        nodes: workflowPlan.nodes,
+        finalStopAfter: workflowPlan.finalStop,
+        checkpointEnabled: workflowPlan.checkpointEnabled,
+        checkpointStages: workflowPlan.checkpointStages,
+        checkpointIndex: workflowPlan.checkpointIndex,
+        graphEnabled: workflowPlan.graphEnabled,
+        mmseqLoopEnabled: workflowPlan.mmseqLoopEnabled,
+      };
+      persistWorkflowPlans();
+    }
     if (state.af2ProviderByRunId && state.af2ProviderByRunId[runId]) {
       setAf2ProviderForRun(result.run_id, state.af2ProviderByRunId[runId]);
     }
@@ -6027,6 +8185,7 @@ async function runPipeline() {
     await pollStatus(result.run_id);
   } catch (err) {
     state.currentRunState = "failed";
+    state.autoAnalyzePendingByRunId[runId] = false;
     setMessage(t("run.failed", { error: err.message }), "ai");
   } finally {
     state.runSubmitting = false;
@@ -6240,7 +8399,7 @@ async function resumeCurrentRun() {
   }
   if (Object.prototype.hasOwnProperty.call(args, "af2_provider")) {
     const shouldRefresh = setAf2ProviderForRun(runId, args.af2_provider);
-    if (shouldRefresh) refreshAf2ProviderLabels();
+    if (shouldRefresh) refreshAf2ProviderLabels({ rerenderQuestions: true });
   }
 
   const inferredMode = inferRunModeFromRequestPayload(payload);
@@ -6288,12 +8447,15 @@ async function resumeCurrentRun() {
   setMessage(t("run.resume.starting", { id: runId }), "ai");
   state.runSubmitting = true;
   state.currentRunState = "running";
+  state.autoAnalyzePendingByRunId[runId] = true;
   updateRunEligibility(state.plan?.questions || []);
   updateMonitorActionButtons();
+  setActiveTab("monitor");
 
   try {
     const result = await apiCall(resumeToolName, resumeArgs);
     const resumedRunId = String(result?.run_id || runId).trim() || runId;
+    state.autoAnalyzePendingByRunId[resumedRunId] = true;
     if (inferredMode && PROGRESS_PLANS[inferredMode]) {
       state.runModeById[resumedRunId] = inferredMode;
     }
@@ -6310,6 +8472,7 @@ async function resumeCurrentRun() {
     await refreshHitList();
   } catch (err) {
     state.currentRunState = "failed";
+    state.autoAnalyzePendingByRunId[runId] = false;
     setMessage(t("run.resume.failed", { error: err.message }), "ai");
   } finally {
     state.runSubmitting = false;
@@ -6451,8 +8614,9 @@ function renderArtifacts(list, view = "monitor") {
       if (type) {
         tags.push(`<span class="stage-tag type-tag">${String(type).toUpperCase()}</span>`);
       }
+      const displayPath = escapeHtml(displayArtifactPath(item.path));
       div.innerHTML = `
-        <span>${item.path}</span>
+        <span>${displayPath}</span>
         <span class="artifact-meta">${tags.join("")}</span>
       `;
       div.addEventListener("click", () => previewArtifact(item, { target: previewTarget }));
@@ -6604,7 +8768,7 @@ function updateReportArtifactLinks(text) {
     const link = document.createElement("button");
     link.type = "button";
     link.className = "report-link";
-    link.innerHTML = `<span>${item.path}</span><span class=\"stage-tag\">${escapeHtml(
+    link.innerHTML = `<span>${escapeHtml(displayArtifactPath(item.path))}</span><span class=\"stage-tag\">${escapeHtml(
       formatStageLabel(stage)
     )}</span>`;
     link.addEventListener("click", () => previewArtifact(item, { target: "analyze" }));
@@ -6647,15 +8811,256 @@ function formatPercentValue(value, digits = 1) {
   return `${(value * 100).toFixed(digits)}%`;
 }
 
+function formatWtDifference(row) {
+  const diffCount = Number(row?.wt_diff_count);
+  const compareLen = Number(row?.wt_compare_len);
+  let diffPct = Number(row?.wt_diff_pct);
+  if (!Number.isFinite(diffPct)) {
+    const diffRatio = Number(row?.wt_diff_ratio);
+    if (Number.isFinite(diffRatio)) diffPct = diffRatio * 100;
+  }
+  if (!Number.isFinite(diffPct)) {
+    const novelty = Number(row?.novelty);
+    if (Number.isFinite(novelty)) diffPct = novelty * 100;
+  }
+  if (!Number.isFinite(diffPct)) {
+    const identityPct =
+      Number.isFinite(Number(row?.wt_identity_pct))
+        ? Number(row.wt_identity_pct)
+        : Number.isFinite(Number(row?.wt_identity))
+          ? Number(row.wt_identity) * 100
+          : null;
+    if (Number.isFinite(identityPct)) diffPct = 100 - Number(identityPct);
+  }
+  const pctText = Number.isFinite(diffPct) ? `${Number(diffPct).toFixed(1)}%` : null;
+  if (Number.isFinite(diffCount) && Number.isFinite(compareLen) && compareLen > 0) {
+    if (pctText) return `${Math.max(0, Math.round(diffCount))}/${Math.round(compareLen)} (${pctText})`;
+    return `${Math.max(0, Math.round(diffCount))}/${Math.round(compareLen)}`;
+  }
+  return pctText || "-";
+}
+
 function localizedYesNo(value) {
   const isKo = (state.lang || "en") === "ko";
   return value ? (isKo ? "예" : "yes") : isKo ? "아니오" : "no";
 }
 
 function sourceLabel(source) {
+  if (source === "wt") return "WT";
+  if (source === "input") return t("artifacts.preview.compare.refs.input");
+  if (source === "working") return t("artifacts.preview.compare.refs.working");
   if (source === "rfd3") return "RFD3";
   if (source === "bioemu") return "BioEmu";
   return (state.lang || "en") === "ko" ? "기타" : "Other";
+}
+
+function normalizeSourceKey(source) {
+  const raw = String(source || "")
+    .trim()
+    .toLowerCase();
+  if (raw === "rfd3") return "rfd3";
+  if (raw === "bioemu" || raw === "biomu") return "bioemu";
+  if (raw === "wt" || raw === "wildtype") return "wt";
+  if (raw === "input" || raw === "reference") return "input";
+  if (raw === "working" || raw === "backbone") return "working";
+  return "other";
+}
+
+function compareArtifactRoleKey(meta) {
+  const raw = String(meta?.compareRole || "")
+    .trim()
+    .toLowerCase();
+  if (
+    [
+      "input_reference",
+      "working_backbone",
+      "wt_colabfold",
+      "backbone_snapshot",
+      "af2_candidate",
+      "source_output",
+      "backbone_input_snapshot",
+    ].includes(raw)
+  ) {
+    return raw;
+  }
+  return "structure_artifact";
+}
+
+function compareSourceKeyFromMeta(meta) {
+  const role = compareArtifactRoleKey(meta);
+  if (role === "wt_colabfold") return "wt";
+  if (role === "input_reference") return "input";
+  if (role === "working_backbone") return "working";
+  const stage = String(meta?.stage || "")
+    .trim()
+    .toLowerCase();
+  if (stage === "wt" || stage === "wt_af2") return "wt";
+  const backboneSource = normalizeSourceKey(meta?.backboneSource);
+  if (backboneSource !== "other") return backboneSource;
+  const source = normalizeSourceKey(meta?.source);
+  if (source !== "other") return source;
+  if (stage === "rfd3") return "rfd3";
+  if (stage === "bioemu") return "bioemu";
+  return "other";
+}
+
+function formatCompareTierLabel(tier) {
+  const text = String(tier || "").trim();
+  if (!text) return "-";
+  const num = Number(text);
+  const normalized =
+    Number.isFinite(num) && num > 1 ? (num / 100).toFixed(2) : Number.isFinite(num) ? num.toFixed(2) : text;
+  return (state.lang || "en") === "ko" ? `티어 ${normalized}` : `Tier ${normalized}`;
+}
+
+function normalizeCompareTierKey(value) {
+  const text = String(value ?? "")
+    .trim();
+  if (!text) return "";
+  const num = Number(text);
+  if (!Number.isFinite(num)) return text;
+  return num > 1 ? String(Math.round(num)) : String(Math.round(num * 100));
+}
+
+function compareArtifactGroupKey(meta) {
+  const raw = String(meta?.compareGroup || "")
+    .trim()
+    .toLowerCase();
+  if (["references", "backbones", "af2_candidates", "source_outputs", "internal"].includes(raw)) {
+    return raw;
+  }
+  return "other";
+}
+
+function compareArtifactGroupLabel(groupKey, provider = "") {
+  const af2Provider = af2ProviderName(provider || currentRunAf2Provider(), state.lang || "en");
+  if (groupKey === "references") return t("artifacts.preview.compare.group.references");
+  if (groupKey === "backbones") return t("artifacts.preview.compare.group.backbones");
+  if (groupKey === "af2_candidates") return t("artifacts.preview.compare.group.af2", { af2Provider });
+  if (groupKey === "source_outputs") return t("artifacts.preview.compare.group.source");
+  return t("artifacts.preview.compare.group.other");
+}
+
+function compareArtifactRoleLabel(meta, provider = "") {
+  const role = compareArtifactRoleKey(meta);
+  const af2Provider = af2ProviderName(provider || currentRunAf2Provider(), state.lang || "en");
+  if (role === "af2_candidate") return t("artifacts.preview.compare.role.af2_candidate", { af2Provider });
+  const key =
+    role === "backbone_input_snapshot" ? "structure_artifact" : role || "structure_artifact";
+  return t(`artifacts.preview.compare.role.${key}`);
+}
+
+function shouldHideFromCompareStudio(item) {
+  const path = String(item?.path || "");
+  const meta = artifactMetaForPath(path);
+  const normalized = String(meta?.normalizedPath || "").trim();
+  if (compareArtifactGroupKey(meta) === "internal") return true;
+  if (normalized === "rfd3/selected.pdb") return true;
+  return false;
+}
+
+function compareSourceOrder(sourceKey) {
+  if (sourceKey === "input") return 0;
+  if (sourceKey === "working") return 1;
+  if (sourceKey === "wt") return 2;
+  if (sourceKey === "rfd3") return 3;
+  if (sourceKey === "bioemu") return 4;
+  return 9;
+}
+
+function compareRoleOrder(roleKey) {
+  if (roleKey === "input_reference") return 0;
+  if (roleKey === "working_backbone") return 1;
+  if (roleKey === "wt_colabfold") return 2;
+  if (roleKey === "backbone_snapshot") return 3;
+  if (roleKey === "af2_candidate") return 4;
+  if (roleKey === "source_output") return 5;
+  return 9;
+}
+
+function compareGroupOrder(groupKey) {
+  if (groupKey === "references") return 0;
+  if (groupKey === "backbones") return 1;
+  if (groupKey === "af2_candidates") return 2;
+  if (groupKey === "source_outputs") return 3;
+  return 9;
+}
+
+function compareStructureItemSort(left, right) {
+  const leftPath = String(left?.path || "");
+  const rightPath = String(right?.path || "");
+  const leftMeta = artifactMetaForPath(leftPath);
+  const rightMeta = artifactMetaForPath(rightPath);
+  const groupDelta =
+    compareGroupOrder(compareArtifactGroupKey(leftMeta)) - compareGroupOrder(compareArtifactGroupKey(rightMeta));
+  if (groupDelta !== 0) return groupDelta;
+  const roleDelta = compareRoleOrder(compareArtifactRoleKey(leftMeta)) - compareRoleOrder(compareArtifactRoleKey(rightMeta));
+  if (roleDelta !== 0) return roleDelta;
+  const sourceDelta =
+    compareSourceOrder(compareSourceKeyFromMeta(leftMeta)) - compareSourceOrder(compareSourceKeyFromMeta(rightMeta));
+  if (sourceDelta !== 0) return sourceDelta;
+  const leftTier = Number(leftMeta?.tier);
+  const rightTier = Number(rightMeta?.tier);
+  if (Number.isFinite(leftTier) && Number.isFinite(rightTier) && leftTier !== rightTier) return leftTier - rightTier;
+  return leftPath.localeCompare(rightPath);
+}
+
+function collectCompareStructureItems(items = state.artifacts) {
+  return (Array.isArray(items) ? items : [])
+    .filter((item) => isStructureArtifactItem(item))
+    .filter((item) => !shouldHideFromCompareStudio(item))
+    .sort(compareStructureItemSort);
+}
+
+function findCompareItem(structureItems, predicate) {
+  return (Array.isArray(structureItems) ? structureItems : []).find((item) => predicate(item, artifactMetaForPath(item?.path)));
+}
+
+function resolveCompareReferenceItems(structureItems) {
+  const items = Array.isArray(structureItems) ? structureItems : [];
+  const input = findCompareItem(items, (_item, meta) => compareArtifactRoleKey(meta) === "input_reference");
+  const working = findCompareItem(items, (_item, meta) => compareArtifactRoleKey(meta) === "working_backbone");
+  const wt = findCompareItem(items, (_item, meta) => compareArtifactRoleKey(meta) === "wt_colabfold");
+  const rfd3Backbone =
+    findCompareItem(
+      items,
+      (_item, meta) =>
+        compareArtifactRoleKey(meta) === "backbone_snapshot" && compareSourceKeyFromMeta(meta) === "rfd3"
+    ) ||
+    findCompareItem(
+      items,
+      (_item, meta) => compareArtifactRoleKey(meta) === "source_output" && compareSourceKeyFromMeta(meta) === "rfd3"
+    );
+  const bioemuBackbone =
+    findCompareItem(
+      items,
+      (_item, meta) =>
+        compareArtifactRoleKey(meta) === "backbone_snapshot" && compareSourceKeyFromMeta(meta) === "bioemu"
+    ) ||
+    findCompareItem(
+      items,
+      (_item, meta) => compareArtifactRoleKey(meta) === "source_output" && compareSourceKeyFromMeta(meta) === "bioemu"
+    );
+  return {
+    input,
+    working,
+    wt,
+    rfd3Backbone,
+    bioemuBackbone,
+  };
+}
+
+function buildArtifactCompareOptionLabel(path, meta = artifactMetaForPath(path)) {
+  const parts = [compareArtifactRoleLabel(meta)];
+  const sourceKey = compareSourceKeyFromMeta(meta);
+  const roleKey = compareArtifactRoleKey(meta);
+  const addSource = sourceKey !== "other" && !["input", "working", "wt"].includes(sourceKey);
+  if (addSource) parts.push(sourceLabel(sourceKey));
+  if (meta?.tier) parts.push(formatCompareTierLabel(meta.tier));
+  if (meta?.backboneId && ["backbone_snapshot", "af2_candidate", "source_output"].includes(roleKey)) {
+    parts.push(displayArtifactPath(meta.backboneId));
+  }
+  return `${parts.join(" · ")} · ${displayArtifactPath(path)}`;
 }
 
 function formatPassRate(sourceBucket) {
@@ -6692,6 +9097,7 @@ function comparisonSummaryHasData(summary) {
     return (
       Number(bucket.backbone_count || 0) > 0 ||
       Number(bucket.soluprot_total || 0) > 0 ||
+      Number(bucket.af2_candidate_total || 0) > 0 ||
       Number(bucket.af2_selected_total || 0) > 0
     );
   });
@@ -6727,6 +9133,55 @@ function parsePassStat(raw) {
     total,
     passRate: total > 0 ? passed / total : null,
   };
+}
+
+function medianFallbackBySource(rows = state.hitListRows) {
+  const buckets = {
+    rfd3: { plddt: [], rmsd: [] },
+    bioemu: { plddt: [], rmsd: [] },
+    other: { plddt: [], rmsd: [] },
+  };
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const key = normalizeSourceKey(row?.source);
+    if (!Object.prototype.hasOwnProperty.call(buckets, key)) return;
+    const plddt = finiteNumber(row?.plddt);
+    const rmsd = finiteNumber(row?.rmsd);
+    if (plddt !== null) buckets[key].plddt.push(plddt);
+    if (rmsd !== null) buckets[key].rmsd.push(rmsd);
+  });
+  const out = {};
+  ["rfd3", "bioemu", "other"].forEach((key) => {
+    out[key] = {
+      plddt_median: buckets[key].plddt.length ? percentileValue(buckets[key].plddt, 0.5) : null,
+      rmsd_median: buckets[key].rmsd.length ? percentileValue(buckets[key].rmsd, 0.5) : null,
+    };
+  });
+  return out;
+}
+
+function comparisonSummaryNeedsMedianBackfill(summary) {
+  if (!summary || typeof summary !== "object") return false;
+  const version = Number(summary.version || 0);
+  if (Number.isFinite(version) && version >= 3) return false;
+  const source = summary.source_compare && typeof summary.source_compare === "object" ? summary.source_compare : {};
+  const sourceRows = Object.values(source).filter((row) => row && typeof row === "object");
+  if (
+    sourceRows.some(
+      (row) =>
+        Number(row.af2_candidate_total || 0) > 0 &&
+        (finiteNumber(row.plddt_median) === null || finiteNumber(row.rmsd_median) === null)
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function comparisonSummaryFromReportPayload(payload) {
+  const summaryFromApi =
+    payload?.comparison_summary && typeof payload.comparison_summary === "object" ? payload.comparison_summary : null;
+  if (summaryFromApi) return summaryFromApi;
+  return parseComparisonSummaryFromReportText(payload?.report || payload?.report_ko || "");
 }
 
 function parseComparisonSummaryFromReportText(reportText) {
@@ -6813,27 +9268,35 @@ function parseComparisonSummaryFromReportText(reportText) {
     hasAny = true;
   }
 
-  const rowRegex =
-    /^\|\s*(RFD3|BioEmu|Other|기타)\s*\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|\s*([^|]+)\|/gim;
-  let rowMatch = null;
-  while ((rowMatch = rowRegex.exec(text))) {
-    const sourceLabelRaw = String(rowMatch[1] || "").trim().toLowerCase();
+  const rows = text.split(/\r?\n/);
+  rows.forEach((line) => {
+    const trimmed = String(line || "").trim();
+    if (!trimmed.startsWith("|")) return;
+    const parts = trimmed
+      .split("|")
+      .slice(1, -1)
+      .map((item) => String(item || "").trim());
+    if (parts.length < 7) return;
+    const sourceLabelRaw = String(parts[0] || "").trim().toLowerCase();
+    if (!["rfd3", "bioemu", "other", "기타"].includes(sourceLabelRaw)) return;
     const key = sourceLabelRaw === "rfd3" ? "rfd3" : sourceLabelRaw === "bioemu" ? "bioemu" : "other";
-    const backboneCount = Number(parseNumberOrNull(rowMatch[2]) || 0);
-    const pass = parsePassStat(rowMatch[3]);
-    const af2Count = Number(parseNumberOrNull(rowMatch[5]) || 0);
+    const backboneCount = Number(parseNumberOrNull(parts[1]) || 0);
+    const pass = parsePassStat(parts[2]);
+    const af2Stat = parsePassStat(parts[4]);
+    const af2Count = af2Stat.passed > 0 || af2Stat.total > 0 ? af2Stat.passed : Number(parseNumberOrNull(parts[4]) || 0);
     summary.source_compare[key] = {
       backbone_count: backboneCount,
       soluprot_total: pass.total,
       soluprot_passed: pass.passed,
       soluprot_pass_rate: pass.passRate,
-      soluprot_median: parseNumberOrNull(rowMatch[4]),
+      soluprot_median: parseNumberOrNull(parts[3]),
       af2_selected_total: af2Count,
-      plddt_median: parseNumberOrNull(rowMatch[6]),
-      rmsd_median: parseNumberOrNull(rowMatch[7]),
+      af2_candidate_total: af2Stat.total > 0 ? af2Stat.total : null,
+      plddt_median: parseNumberOrNull(parts[5]),
+      rmsd_median: parseNumberOrNull(parts[6]),
     };
     hasAny = true;
-  }
+  });
 
   return hasAny ? summary : null;
 }
@@ -6891,18 +9354,24 @@ function buildComparisonDetailMarkdown(summary, runId) {
     `| Source | Backbones | SoluProt pass | Median SoluProt | ${af2ProviderPassLabel(af2Provider)} | Median pLDDT | Median RMSD |`
   );
   lines.push("|---|---:|---:|---:|---:|---:|---:|");
+  const metricFallback = medianFallbackBySource();
   ["rfd3", "bioemu", "other"].forEach((key) => {
     const bucket = source[key] && typeof source[key] === "object" ? source[key] : null;
     if (!bucket) return;
+    const fallback = metricFallback[key] && typeof metricFallback[key] === "object" ? metricFallback[key] : {};
+    const plddtMedian = finiteNumber(bucket.plddt_median) ?? finiteNumber(fallback.plddt_median);
+    const rmsdMedian = finiteNumber(bucket.rmsd_median) ?? finiteNumber(fallback.rmsd_median);
     lines.push(
-      `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${formatMetricValue(bucket.plddt_median, 1)} | ${formatMetricValue(bucket.rmsd_median, 2)} |`
+      `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${formatMetricValue(plddtMedian, 1)} | ${formatMetricValue(rmsdMedian, 2)} |`
     );
   });
   lines.push("");
 
   if (tierRows.length) {
     lines.push("## Tier Compare");
-    lines.push(`| Tier | Designs | SoluProt pass | ${af2ProviderPassLabel(af2Provider)} | Median pLDDT | Median RMSD |`);
+    lines.push(
+      `| Tier | Designs | SoluProt pass | ${af2ProviderPassLabel(af2Provider)} | Median pLDDT | Median RMSD |`
+    );
     lines.push("|---:|---:|---:|---:|---:|---:|");
     tierRows.forEach((row) => {
       if (!row || typeof row !== "object") return;
@@ -7026,15 +9495,25 @@ function renderArtifactComparisonSummary(summary) {
     })
     .join("");
 
+  const metricFallback = medianFallbackBySource();
   const sourceTableRows = sourceRows
     .map((key) => {
       const bucket = source[key] && typeof source[key] === "object" ? source[key] : {};
+      const fallback = metricFallback[key] && typeof metricFallback[key] === "object" ? metricFallback[key] : {};
       const backbone = String(Number(bucket.backbone_count || 0));
       const passText = formatPassRate(bucket);
       const solMedian = formatMetricValue(bucket.soluprot_median, 3, false);
       const af2 = String(Number(bucket.af2_selected_total || 0));
-      const plddt = formatMetricValue(bucket.plddt_median, 1, false);
-      const rmsd = formatMetricValue(bucket.rmsd_median, 2, false);
+      const plddt = formatMetricValue(
+        finiteNumber(bucket.plddt_median) ?? finiteNumber(fallback.plddt_median),
+        1,
+        false
+      );
+      const rmsd = formatMetricValue(
+        finiteNumber(bucket.rmsd_median) ?? finiteNumber(fallback.rmsd_median),
+        2,
+        false
+      );
       return `
         <tr>
           <th>${escapeHtml(sourceLabel(key))}</th>
@@ -7190,6 +9669,395 @@ function renderMonitorCompleteness(summary = state.artifactComparison, fallback 
     .join("");
 }
 
+async function readRunRequestPayload(runId) {
+  const read = await apiCall("pipeline.read_artifact", {
+    run_id: runId,
+    path: "request.json",
+    max_bytes: 2_000_000,
+  });
+  const raw = String(read?.text || "").trim();
+  if (!raw) {
+    throw new Error(t("run.resume.noRequest"));
+  }
+  const payload = JSON.parse(raw);
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error(t("run.resume.badRequest"));
+  }
+  return payload;
+}
+
+function renderWorkflowReviewPanel(status = state.lastRunStatus) {
+  if (!el.workflowReviewPanel) return;
+  const runId = String(state.currentRunId || "").trim();
+  if (!runId) {
+    el.workflowReviewPanel.classList.add("hidden");
+    el.workflowReviewPanel.innerHTML = "";
+    return;
+  }
+  const plan = workflowPlanForRunId(runId);
+  if (!plan) {
+    el.workflowReviewPanel.classList.add("hidden");
+    el.workflowReviewPanel.innerHTML = "";
+    return;
+  }
+
+  const runState = String(status?.state || state.currentRunState || "").trim().toLowerCase();
+  const ctx = state.progressContextByRunId?.[runId] || {};
+  const requestedStop = normalizePipelineStage(ctx.stopAfter || "", plan.finalStopAfter);
+  const checkpointTarget = normalizePipelineStage(plan.nextCheckpointStage || "", "");
+  const waitingForCheckpointRun =
+    Boolean(checkpointTarget) &&
+    normalizePipelineStage(requestedStop, "") === checkpointTarget &&
+    normalizePipelineStage(plan.finalStopAfter, "") !== checkpointTarget;
+  const canContinue =
+    waitingForCheckpointRun &&
+    (runState === "completed" || runState === "done") &&
+    Boolean(plan.continueFrom);
+  const finalReached =
+    (runState === "completed" || runState === "done") &&
+    (!waitingForCheckpointRun || normalizePipelineStage(requestedStop, "") === normalizePipelineStage(plan.finalStopAfter, ""));
+
+  let statusLine = "";
+  if (canContinue) {
+    statusLine = t("monitor.workflow.ready", { stage: formatStageLabel(checkpointTarget) });
+  } else if (finalReached) {
+    statusLine = t("monitor.workflow.completed", { stage: formatStageLabel(plan.finalStopAfter) });
+  } else if (waitingForCheckpointRun) {
+    statusLine = t("monitor.workflow.waiting", { stage: formatStageLabel(checkpointTarget) });
+  } else {
+    statusLine = t("monitor.workflow.waiting", {
+      stage: formatStageLabel(normalizePipelineStage(requestedStop || plan.finalStopAfter, "novelty")),
+    });
+  }
+
+  const counts = workflowArtifactCountsForNodes(plan.nodes);
+  const countValues = Object.values(counts);
+  const hasCounts = countValues.some((value) => Number(value || 0) > 0);
+  const chartSvg = hasCounts ? workflowCountsSvg(plan.nodes, counts) : "";
+  const showCheckpointResults = plan.graphEnabled !== false;
+  const checkpointLine = plan.checkpointStages.length
+    ? `<div class="workflow-review-meta">${escapeHtml(
+        t("monitor.workflow.checkpoints", {
+          stages: plan.checkpointStages.map((stage) => formatStageLabel(stage)).join(" -> "),
+        })
+      )}</div>`
+    : "";
+  const nextStageLine = plan.continueFrom
+    ? `<div class="workflow-review-meta">${escapeHtml(
+        t("monitor.workflow.nextStage", { stage: formatStageLabel(plan.continueFrom) })
+      )}</div>`
+    : "";
+  const finalStageLine = `<div class="workflow-review-meta">${escapeHtml(
+    t("monitor.workflow.finalStage", { stage: formatStageLabel(plan.finalStopAfter) })
+  )}</div>`;
+  const rerunStageSet = new Set(["msa", ...(Array.isArray(plan.nodes) ? plan.nodes : [])]);
+  const rerunStages = PIPELINE_STAGE_ORDER.filter((stage) => rerunStageSet.has(stage));
+  const defaultRerunStage =
+    checkpointTarget && rerunStages.includes(checkpointTarget)
+      ? checkpointTarget
+      : rerunStages[0] || "msa";
+  const rerunControls =
+    canContinue && plan.mmseqLoopEnabled
+      ? `
+      <label class="workflow-rerun-wrap">
+        <span>${escapeHtml(t("monitor.workflow.rerunLabel"))}</span>
+        <select data-workflow-rerun-stage>
+          ${rerunStages
+            .map(
+              (stage) =>
+                `<option value="${escapeAttr(stage)}"${stage === defaultRerunStage ? " selected" : ""}>${escapeHtml(
+                  formatStageLabel(stage)
+                )}</option>`
+            )
+            .join("")}
+        </select>
+      </label>
+    `
+      : "";
+  const artifactGroups = workflowArtifactGroupsForReview();
+  const artifactCount = artifactGroups.reduce((total, group) => total + (group?.items?.length || 0), 0);
+  const resultsBody = artifactGroups.length
+    ? artifactGroups
+        .map((group) => {
+          const stageLabel = group?.stage ? formatStageLabel(group.stage) : t("monitor.workflow.resultsUnknown");
+          const items = Array.isArray(group?.items) ? group.items : [];
+          const itemsHtml = items
+            .map((item) => {
+              const path = String(item?.path || "");
+              const meta = artifactMetaForPath(path);
+              const tier = meta.tier;
+              const type = artifactTypeFromItem(item);
+              const tierLabel = t("artifacts.filter.tier");
+              const tags = [];
+              if (tier) {
+                tags.push(`<span class="stage-tag tier-tag">${escapeHtml(`${tierLabel} ${tier}`)}</span>`);
+              }
+              if (type) {
+                tags.push(`<span class="stage-tag type-tag">${escapeHtml(String(type).toUpperCase())}</span>`);
+              }
+              const tagsHtml = tags.length ? `<span class="workflow-result-meta">${tags.join("")}</span>` : "";
+              return `
+                <button type="button" class="workflow-result-item" data-workflow-artifact-path="${escapeAttr(path)}">
+                  <span class="workflow-result-path">${escapeHtml(path)}</span>
+                  ${tagsHtml}
+                </button>
+              `;
+            })
+            .join("");
+          return `
+            <section class="workflow-result-group">
+              <div class="workflow-result-group-head">
+                <span>${escapeHtml(stageLabel || t("monitor.workflow.resultsUnknown"))}</span>
+                <span>${items.length}</span>
+              </div>
+              <div class="workflow-result-group-list">${itemsHtml}</div>
+            </section>
+          `;
+        })
+        .join("")
+    : `<div class="placeholder">${escapeHtml(t("monitor.workflow.resultsEmpty"))}</div>`;
+  const resultsSection = showCheckpointResults
+    ? `
+      <div class="workflow-mini-chart">
+        ${
+          chartSvg
+            ? chartSvg
+            : `<div class="placeholder">${escapeHtml(t("monitor.workflow.chart.empty"))}</div>`
+        }
+      </div>
+      <section class="workflow-results">
+        <div class="workflow-results-head">
+          <strong>${escapeHtml(t("monitor.workflow.resultsTitle"))}</strong>
+          <span class="workflow-results-count">${artifactCount}</span>
+        </div>
+        <div class="workflow-results-hint">${escapeHtml(t("monitor.workflow.resultsHint", { count: artifactCount }))}</div>
+        <div class="workflow-results-list">${resultsBody}</div>
+      </section>
+    `
+    : `<div class="workflow-review-meta">${escapeHtml(t("monitor.workflow.resultsDisabled"))}</div>`;
+
+  el.workflowReviewPanel.classList.remove("hidden");
+  el.workflowReviewPanel.innerHTML = `
+    <div class="workflow-review-head">
+      <strong>${escapeHtml(t("monitor.workflow.title"))}</strong>
+      <span class="workflow-review-state">${escapeHtml(statusLine)}</span>
+    </div>
+    ${checkpointLine}
+    ${nextStageLine}
+    ${finalStageLine}
+    ${resultsSection}
+    <div class="workflow-review-actions">
+      ${
+        canContinue
+          ? `<button type="button" class="ghost" data-workflow-action="continue" data-run-id="${escapeAttr(
+              runId
+            )}">${escapeHtml(t("monitor.workflow.continue"))}</button>`
+          : ""
+      }
+      ${rerunControls}
+      ${
+        canContinue && plan.mmseqLoopEnabled
+          ? `<button type="button" class="ghost" data-workflow-action="rerun-stage" data-run-id="${escapeAttr(
+              runId
+            )}">${escapeHtml(t("monitor.workflow.rerunAction"))}</button>`
+          : ""
+      }
+      <button type="button" class="ghost" data-workflow-action="analyze">${escapeHtml(
+        t("monitor.workflow.openAnalyze")
+      )}</button>
+    </div>
+  `;
+
+  Array.from(el.workflowReviewPanel.querySelectorAll("[data-workflow-action]")).forEach((btn) => {
+    const action = String(btn.getAttribute("data-workflow-action") || "").trim().toLowerCase();
+    const actionRunId = String(btn.getAttribute("data-run-id") || runId).trim();
+    btn.addEventListener("click", async () => {
+      if (action === "continue") {
+        await continueWorkflowRun(actionRunId);
+        return;
+      }
+      if (action === "rerun-stage") {
+        const select = el.workflowReviewPanel.querySelector("[data-workflow-rerun-stage]");
+        const rerunStage = normalizePipelineStage(select?.value || "", "msa") || "msa";
+        await rerunWorkflowStage(actionRunId, rerunStage);
+        return;
+      }
+      if (action === "mmseq") {
+        await rerunWorkflowMmseq(actionRunId);
+        return;
+      }
+      if (action === "analyze") {
+        setActiveTab("analyze");
+      }
+    });
+  });
+  Array.from(el.workflowReviewPanel.querySelectorAll("[data-workflow-artifact-path]")).forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const path = String(btn.getAttribute("data-workflow-artifact-path") || "").trim();
+      if (!path) return;
+      const artifact = (Array.isArray(state.artifacts) ? state.artifacts : []).find(
+        (item) => item && item.type === "file" && String(item.path || "") === path
+      );
+      if (!artifact) return;
+      await previewArtifact(artifact, { target: "monitor" });
+    });
+  });
+}
+
+async function continueWorkflowRun(runId) {
+  const key = String(runId || "").trim();
+  if (!key) return;
+  const plan = workflowPlanForRunId(key);
+  if (!plan || !plan.continueFrom) return;
+  const start = normalizePipelineStage(plan.continueFrom, "");
+  const nextCheckpoint = normalizePipelineStage(plan.checkpointStages?.[plan.checkpointIndex + 1], "");
+  const stop = normalizePipelineStage(nextCheckpoint || plan.finalStopAfter, "");
+  if (!start || !stop) return;
+  if (PIPELINE_STAGE_ORDER.indexOf(start) > PIPELINE_STAGE_ORDER.indexOf(stop)) return;
+
+  state.runSubmitting = true;
+  state.currentRunState = "running";
+  state.autoAnalyzePendingByRunId[key] = true;
+  updateRunEligibility(state.plan?.questions || []);
+  updateMonitorActionButtons();
+  setMessage(
+    t("monitor.workflow.continueStarted", {
+      start: formatStageLabel(start),
+      stop: formatStageLabel(stop),
+      id: key,
+    }),
+    "ai"
+  );
+  try {
+    const payload = await readRunRequestPayload(key);
+    const args = {
+      ...payload,
+      run_id: key,
+      start_from: start,
+      stop_after: stop,
+      novelty_enabled: stop === "novelty",
+      force: false,
+      auto_recover: true,
+    };
+    const progressContext = buildProgressContextFromRequestPayload(args);
+    if (progressContext) state.progressContextByRunId[key] = progressContext;
+    const result = await apiCall("pipeline.run", args);
+    const resumedRunId = String(result?.run_id || key).trim() || key;
+    if (state.progressContextByRunId[key] && resumedRunId !== key) {
+      state.progressContextByRunId[resumedRunId] = state.progressContextByRunId[key];
+    }
+    state.runModeById[resumedRunId] = "workflow";
+    state.autoAnalyzePendingByRunId[resumedRunId] = true;
+    const nextCheckpointIndex = Math.max(
+      0,
+      Math.min((plan.checkpointStages || []).length, Number(plan.checkpointIndex || 0) + 1)
+    );
+    state.workflowPlansByRunId[resumedRunId] = {
+      nodes: plan.nodes,
+      finalStopAfter: plan.finalStopAfter,
+      checkpointEnabled: plan.checkpointEnabled,
+      checkpointStages: plan.checkpointStages,
+      checkpointIndex: nextCheckpointIndex,
+      graphEnabled: plan.graphEnabled,
+      mmseqLoopEnabled: plan.mmseqLoopEnabled,
+    };
+    persistWorkflowPlans();
+    setCurrentRunId(resumedRunId);
+    setActiveTab("monitor");
+    await refreshRuns();
+    ensureAutoPoll();
+    await pollStatus(resumedRunId);
+    await refreshArtifacts();
+  } catch (err) {
+    state.currentRunState = "failed";
+    state.autoAnalyzePendingByRunId[key] = false;
+    setMessage(t("monitor.workflow.continueFailed", { error: err.message }), "ai");
+  } finally {
+    state.runSubmitting = false;
+    updateRunEligibility(state.plan?.questions || []);
+    updateMonitorActionButtons();
+  }
+}
+
+async function rerunWorkflowStage(runId, targetStage = "msa") {
+  const key = String(runId || "").trim();
+  if (!key) return;
+  const plan = workflowPlanForRunId(key);
+  const rerunStageSet = new Set(["msa", ...(Array.isArray(plan?.nodes) ? plan.nodes : [])]);
+  const availableStages = PIPELINE_STAGE_ORDER.filter((stage) => rerunStageSet.has(stage));
+  const requestedStage = normalizePipelineStage(targetStage, "msa") || "msa";
+  const stage = availableStages.includes(requestedStage)
+    ? requestedStage
+    : availableStages[0] || "msa";
+  const ok = window.confirm(
+    t("monitor.workflow.rerunConfirm", {
+      id: key,
+      stage: formatStageLabel(stage),
+    })
+  );
+  if (!ok) return;
+  const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
+  const newRunId = createRunId(prefix);
+
+  state.runSubmitting = true;
+  state.currentRunState = "running";
+  updateRunEligibility(state.plan?.questions || []);
+  updateMonitorActionButtons();
+  try {
+    const payload = await readRunRequestPayload(key);
+    const args = {
+      ...payload,
+      run_id: newRunId,
+      start_from: "msa",
+      stop_after: stage,
+      novelty_enabled: stage === "novelty",
+      force: false,
+      auto_recover: true,
+    };
+    const result = await apiCall("pipeline.run", args);
+    const launchedRunId = String(result?.run_id || newRunId).trim() || newRunId;
+    const progressContext = buildProgressContextFromRequestPayload(args);
+    if (progressContext) {
+      state.progressContextByRunId[launchedRunId] = progressContext;
+    }
+    const stageModeMap = {
+      msa: "msa",
+      rfd3: "rfd3",
+      bioemu: "bioemu",
+      design: "design",
+      soluprot: "soluprot",
+      af2: "af2",
+      novelty: "pipeline",
+    };
+    state.runModeById[launchedRunId] = stageModeMap[stage] || "pipeline";
+    state.autoAnalyzePendingByRunId[launchedRunId] = false;
+    setMessage(
+      t("monitor.workflow.rerunStarted", {
+        id: launchedRunId,
+        start: formatStageLabel("msa"),
+        stop: formatStageLabel(stage),
+      }),
+      "ai"
+    );
+    setCurrentRunId(launchedRunId);
+    setActiveTab("monitor");
+    await refreshRuns();
+    ensureAutoPoll();
+    await pollStatus(launchedRunId);
+  } catch (err) {
+    state.currentRunState = "failed";
+    setMessage(t("monitor.workflow.rerunFailed", { error: err.message }), "ai");
+  } finally {
+    state.runSubmitting = false;
+    updateRunEligibility(state.plan?.questions || []);
+    updateMonitorActionButtons();
+  }
+}
+
+async function rerunWorkflowMmseq(runId) {
+  await rerunWorkflowStage(runId, "msa");
+}
+
 function updateMonitorReportActions() {
   const hasRun = Boolean(String(state.currentRunId || "").trim());
   const shouldShowGenerate = hasRun && Boolean(state.monitorNeedsReport);
@@ -7214,6 +10082,7 @@ async function refreshArtifactComparisonSummary() {
     state.monitorNeedsReport = false;
     renderArtifactComparisonSummary(null);
     renderMonitorCompleteness(null, null);
+    renderCandidateCharts();
     updateMonitorReportActions();
     return;
   }
@@ -7226,31 +10095,37 @@ async function refreshArtifactComparisonSummary() {
     const text = String(result?.text || "").trim();
     const parsed = text ? JSON.parse(text) : null;
     if (String(state.currentRunId || "").trim() !== runId) return;
-    state.artifactComparison = parsed && typeof parsed === "object" ? parsed : null;
+    let resolved = parsed && typeof parsed === "object" ? parsed : null;
+    if (comparisonSummaryNeedsMedianBackfill(resolved)) {
+      try {
+        const reportPayload = await apiCall("pipeline.get_report", { run_id: runId });
+        if (String(state.currentRunId || "").trim() !== runId) return;
+        const reportSummary = comparisonSummaryFromReportPayload(reportPayload);
+        if (reportSummary) resolved = reportSummary;
+      } catch (_reportRefreshErr) {
+        // keep comparisons.json if report fetch fails
+      }
+    }
+    state.artifactComparison = resolved;
     state.artifactComparisonRunId = runId;
     state.monitorNeedsReport = false;
     renderArtifactComparisonSummary(state.artifactComparison);
     renderMonitorCompleteness(state.artifactComparison, null);
+    renderCandidateCharts();
     updateMonitorReportActions();
   } catch (_err) {
     if (String(state.currentRunId || "").trim() !== runId) return;
     try {
       const reportPayload = await apiCall("pipeline.get_report", { run_id: runId });
       if (String(state.currentRunId || "").trim() !== runId) return;
-      const summaryFromApi =
-        reportPayload?.comparison_summary && typeof reportPayload.comparison_summary === "object"
-          ? reportPayload.comparison_summary
-          : null;
-      const summaryFromText = parseComparisonSummaryFromReportText(
-        reportPayload?.report || reportPayload?.report_ko || ""
-      );
-      const resolved = summaryFromApi || summaryFromText;
+      const resolved = comparisonSummaryFromReportPayload(reportPayload);
       if (resolved) {
         state.artifactComparison = resolved;
         state.artifactComparisonRunId = runId;
         state.monitorNeedsReport = false;
         renderArtifactComparisonSummary(resolved);
         renderMonitorCompleteness(resolved, null);
+        renderCandidateCharts();
       } else {
         const hasReport = Boolean(
           String(reportPayload?.report || "").trim() || String(reportPayload?.report_ko || "").trim()
@@ -7274,9 +10149,11 @@ async function refreshArtifactComparisonSummary() {
             },
             null
           );
+          renderCandidateCharts();
         } else {
           renderArtifactComparisonSummary(null);
           renderMonitorCompleteness(null, null);
+          renderCandidateCharts();
         }
       }
       updateMonitorReportActions();
@@ -7287,6 +10164,7 @@ async function refreshArtifactComparisonSummary() {
       state.monitorNeedsReport = true;
       renderArtifactComparisonSummary(null);
       renderMonitorCompleteness(null, null);
+      renderCandidateCharts();
       updateMonitorReportActions();
     }
   }
@@ -7322,6 +10200,923 @@ function parsePdbResidueMap(pdbText) {
     if (atomName === "CA") prev.hasCA = true;
   });
   return out;
+}
+
+const PDB_AA3_TO_AA1 = {
+  ALA: "A",
+  ARG: "R",
+  ASN: "N",
+  ASP: "D",
+  CYS: "C",
+  GLN: "Q",
+  GLU: "E",
+  GLY: "G",
+  HIS: "H",
+  ILE: "I",
+  LEU: "L",
+  LYS: "K",
+  MET: "M",
+  PHE: "F",
+  PRO: "P",
+  SER: "S",
+  THR: "T",
+  TRP: "W",
+  TYR: "Y",
+  VAL: "V",
+  MSE: "M",
+  SEC: "U",
+  PYL: "O",
+  ASX: "B",
+  GLX: "Z",
+  XLE: "J",
+  UNK: "X",
+};
+
+function parsePdbSequenceByChain(pdbText) {
+  const residuesByChain = {};
+  const seen = new Set();
+  const lines = String(pdbText || "").split(/\r?\n/);
+  lines.forEach((line) => {
+    if (!/^ATOM/.test(line)) return;
+    const chainRaw = line.slice(21, 22).trim().toUpperCase();
+    const chain = chainRaw || "_";
+    const resi = Number(line.slice(22, 26).trim());
+    if (!Number.isFinite(resi)) return;
+    const key = `${chain}:${resi}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const resn = line.slice(17, 20).trim().toUpperCase();
+    const aa = PDB_AA3_TO_AA1[resn] || "X";
+    if (!residuesByChain[chain]) residuesByChain[chain] = [];
+    residuesByChain[chain].push(aa);
+  });
+  const out = {};
+  Object.entries(residuesByChain).forEach(([chain, chars]) => {
+    const seq = Array.isArray(chars) ? chars.join("") : "";
+    if (!seq) return;
+    out[chain] = seq;
+  });
+  return out;
+}
+
+function wrapSequenceForFasta(seq, width = 80) {
+  const text = String(seq || "");
+  if (!text) return "";
+  const out = [];
+  for (let i = 0; i < text.length; i += width) {
+    out.push(text.slice(i, i + width));
+  }
+  return out.join("\n");
+}
+
+function buildFastaFromChainMap(sequenceByChain, labelPrefix) {
+  const entries = Object.entries(sequenceByChain || {});
+  if (!entries.length) return t("artifacts.preview.compare.sequenceEmpty");
+  return entries
+    .map(([chain, seq]) => `>${labelPrefix}|chain=${chain}\n${wrapSequenceForFasta(seq, 80)}`)
+    .join("\n");
+}
+
+function formatPdbChainSummary(sequenceByChain) {
+  const entries = Object.entries(sequenceByChain || {})
+    .filter(([, seq]) => String(seq || "").trim())
+    .sort(([left], [right]) => String(left || "").localeCompare(String(right || "")));
+  if (!entries.length) return "-";
+  return entries
+    .map(([chain, seq]) => `${chain || "_"}(${String(seq || "").length})`)
+    .join(", ");
+}
+
+function flattenSequenceByChain(sequenceByChain) {
+  return Object.entries(sequenceByChain || {})
+    .sort(([left], [right]) => String(left || "").localeCompare(String(right || "")))
+    .map(([, seq]) => String(seq || ""))
+    .join("");
+}
+
+function normalizeSequenceText(value) {
+  return String(value || "")
+    .replace(/[^A-Za-z]/g, "")
+    .toUpperCase();
+}
+
+function parsePrimaryFastaSequence(fastaText) {
+  return String(fastaText || "")
+    .split(/\r?\n/)
+    .map((line) => String(line || "").trim())
+    .filter((line) => line && !line.startsWith(">"))
+    .join("")
+    .replace(/\s+/g, "")
+    .toUpperCase();
+}
+
+function computeSequenceDifferenceStats(referenceSeq, candidateSeq) {
+  const left = normalizeSequenceText(referenceSeq);
+  const right = normalizeSequenceText(candidateSeq);
+  const compareLen = Math.max(left.length, right.length);
+  if (!compareLen) return null;
+  let diffCount = 0;
+  for (let idx = 0; idx < compareLen; idx += 1) {
+    const a = left[idx] || "-";
+    const b = right[idx] || "-";
+    if (a !== b) diffCount += 1;
+  }
+  return {
+    wt_diff_count: diffCount,
+    wt_compare_len: compareLen,
+    wt_diff_pct: (diffCount / compareLen) * 100.0,
+  };
+}
+
+function pickComparableSequence(sequenceByChain, targetSequence = "") {
+  const normalizedTarget = normalizeSequenceText(targetSequence);
+  const chains = Object.entries(sequenceByChain || {})
+    .sort(([left], [right]) => String(left || "").localeCompare(String(right || "")))
+    .map(([, seq]) => normalizeSequenceText(seq))
+    .filter(Boolean);
+  if (!chains.length) return "";
+  const candidates = Array.from(new Set([...chains, chains.join("")])).filter(Boolean);
+  if (!normalizedTarget) return candidates[0] || "";
+  let best = candidates[0] || "";
+  let bestDiff = Number.POSITIVE_INFINITY;
+  let bestLenGap = Number.POSITIVE_INFINITY;
+  candidates.forEach((seq) => {
+    const stats = computeSequenceDifferenceStats(normalizedTarget, seq);
+    const diffCount = Number(stats?.wt_diff_count);
+    const lenGap = Math.abs(seq.length - normalizedTarget.length);
+    if (
+      diffCount < bestDiff ||
+      (diffCount === bestDiff && lenGap < bestLenGap) ||
+      (diffCount === bestDiff && lenGap === bestLenGap && seq.length < best.length)
+    ) {
+      best = seq;
+      bestDiff = diffCount;
+      bestLenGap = lenGap;
+    }
+  });
+  return best;
+}
+
+function countFixedPositions(payload) {
+  if (Array.isArray(payload)) {
+    return payload.filter((value) => Number.isFinite(Number(value))).length;
+  }
+  if (!payload || typeof payload !== "object") return null;
+  let count = 0;
+  Object.values(payload).forEach((values) => {
+    if (!Array.isArray(values)) return;
+    count += values.filter((value) => Number.isFinite(Number(value))).length;
+  });
+  return count;
+}
+
+function buildCompareFixedPositionPaths(meta) {
+  const tier = String(meta?.tier || "").trim();
+  const backboneId = String(meta?.backboneId || "").trim();
+  if (!tier) return [];
+  const paths = [];
+  if (backboneId) {
+    paths.push(`backbones/${backboneId}/tiers/${tier}/fixed_positions.json`);
+  }
+  paths.push(`tiers/${tier}/fixed_positions.json`);
+  return Array.from(new Set(paths));
+}
+
+function compareDesignChainCacheKey(runId, path, meta = artifactMetaForPath(path)) {
+  const runKey = String(runId || "").trim();
+  const normalizedPath = String(meta?.normalizedPath || path || "").trim();
+  return `${runKey}::${normalizedPath}`;
+}
+
+function buildCompareDesignChainPaths(path, meta = artifactMetaForPath(path)) {
+  const role = compareArtifactRoleKey(meta);
+  const backboneId = String(meta?.backboneId || "").trim();
+  const paths = [];
+  if (backboneId && ["backbone_snapshot", "source_output", "af2_candidate"].includes(role)) {
+    paths.push(`backbones/${backboneId}/query_pdb_alignment.json`);
+    paths.push(`backbones/${backboneId}/chain_strategy.json`);
+  }
+  paths.push("query_pdb_alignment.json");
+  paths.push("chain_strategy.json");
+  return Array.from(new Set(paths.filter(Boolean)));
+}
+
+async function readCompareDesignChains(runId, path, meta = artifactMetaForPath(path)) {
+  const runKey = String(runId || "").trim();
+  if (!runKey) return null;
+  const cacheKey = compareDesignChainCacheKey(runKey, path, meta);
+  if (Object.prototype.hasOwnProperty.call(state.compareDesignChainsByKey, cacheKey)) {
+    return state.compareDesignChainsByKey[cacheKey];
+  }
+  const candidatePaths = buildCompareDesignChainPaths(path, meta);
+  for (const candidatePath of candidatePaths) {
+    try {
+      const result = await apiCall("pipeline.read_artifact", {
+        run_id: runKey,
+        path: candidatePath,
+        max_bytes: 200000,
+      });
+      const parsed = JSON.parse(String(result?.text || "{}"));
+      const chains = extractDesignChainsFromPayload(parsed);
+      if (chains.length) {
+        state.compareDesignChainsByKey[cacheKey] = chains;
+        return chains;
+      }
+    } catch (_err) {
+      // Try the next known chain-strategy location.
+    }
+  }
+  state.compareDesignChainsByKey[cacheKey] = null;
+  return null;
+}
+
+async function normalizeComparePdbTextForArtifact(runId, path, pdbText, meta = artifactMetaForPath(path)) {
+  const source = String(pdbText || "");
+  if (!/\.pdb$/i.test(String(path || "")) || !source.trim()) return source;
+  const chains = await readCompareDesignChains(runId, path, meta);
+  if (!Array.isArray(chains) || !chains.length) return source;
+  const filtered = filterPdbTextByChains(source, chains);
+  return filtered.trim() ? filtered : source;
+}
+
+async function readCompareTargetSequence(runId) {
+  const key = String(runId || "").trim();
+  if (!key) return "";
+  if (Object.prototype.hasOwnProperty.call(state.compareTargetSequenceByRunId, key)) {
+    return String(state.compareTargetSequenceByRunId[key] || "");
+  }
+  try {
+    const result = await apiCall("pipeline.read_artifact", {
+      run_id: key,
+      path: "target.fasta",
+      max_bytes: 200000,
+    });
+    const sequence = parsePrimaryFastaSequence(result?.text || "");
+    if (sequence) {
+      state.compareTargetSequenceByRunId[key] = sequence;
+      return sequence;
+    }
+    const inputPdbText = await readCompareInputPdbText(key);
+    const sequenceByChain = parsePdbSequenceByChain(inputPdbText || "");
+    const fallback = pickComparableSequence(sequenceByChain, "") || flattenSequenceByChain(sequenceByChain);
+    state.compareTargetSequenceByRunId[key] = fallback;
+    return fallback;
+  } catch (_err) {
+    const inputPdbText = await readCompareInputPdbText(key);
+    const sequenceByChain = parsePdbSequenceByChain(inputPdbText || "");
+    const fallback = pickComparableSequence(sequenceByChain, "") || flattenSequenceByChain(sequenceByChain);
+    state.compareTargetSequenceByRunId[key] = fallback;
+    return fallback;
+  }
+}
+
+async function readCompareInputPdbText(runId) {
+  const key = String(runId || "").trim();
+  if (!key) return "";
+  if (Object.prototype.hasOwnProperty.call(state.compareInputPdbTextByRunId, key)) {
+    return String(state.compareInputPdbTextByRunId[key] || "");
+  }
+  const candidatePaths = ["target.original.pdb", "target.pdb"];
+  for (const path of candidatePaths) {
+    try {
+      const result = await apiCall("pipeline.read_artifact", {
+        run_id: key,
+        path,
+        max_bytes: 800000,
+      });
+      const text = String(result?.text || "");
+      if (text.trim()) {
+        const normalized = await normalizeComparePdbTextForArtifact(key, path, text);
+        state.compareInputPdbTextByRunId[key] = normalized;
+        return normalized;
+      }
+    } catch (_err) {
+      // Try the next known input reference path.
+    }
+  }
+  state.compareInputPdbTextByRunId[key] = "";
+  return "";
+}
+
+async function readCompareWorkingPdbText(runId) {
+  const key = String(runId || "").trim();
+  if (!key) return "";
+  if (Object.prototype.hasOwnProperty.call(state.compareWorkingPdbTextByRunId, key)) {
+    return String(state.compareWorkingPdbTextByRunId[key] || "");
+  }
+  try {
+    const result = await apiCall("pipeline.read_artifact", {
+      run_id: key,
+      path: "target.pdb",
+      max_bytes: 800000,
+    });
+    const text = await normalizeComparePdbTextForArtifact(key, "target.pdb", String(result?.text || ""));
+    state.compareWorkingPdbTextByRunId[key] = text;
+    return text;
+  } catch (_err) {
+    state.compareWorkingPdbTextByRunId[key] = "";
+    return "";
+  }
+}
+
+async function readCompareWtPdbText(runId) {
+  const key = String(runId || "").trim();
+  if (!key) return "";
+  if (Object.prototype.hasOwnProperty.call(state.compareWtPdbTextByRunId, key)) {
+    return String(state.compareWtPdbTextByRunId[key] || "");
+  }
+  try {
+    const result = await apiCall("pipeline.read_artifact", {
+      run_id: key,
+      path: "wt/af2/ranked_0.pdb",
+      max_bytes: 800000,
+    });
+    const text = await normalizeComparePdbTextForArtifact(key, "wt/af2/ranked_0.pdb", String(result?.text || ""));
+    state.compareWtPdbTextByRunId[key] = text;
+    return text;
+  } catch (_err) {
+    state.compareWtPdbTextByRunId[key] = "";
+    return "";
+  }
+}
+
+async function readCompareWtMetrics(runId) {
+  const key = String(runId || "").trim();
+  if (!key) return null;
+  if (Object.prototype.hasOwnProperty.call(state.compareWtMetricsByRunId, key)) {
+    return state.compareWtMetricsByRunId[key];
+  }
+  try {
+    const result = await apiCall("pipeline.read_artifact", {
+      run_id: key,
+      path: "wt/metrics.json",
+      max_bytes: 200000,
+    });
+    const parsed = JSON.parse(String(result?.text || "{}"));
+    state.compareWtMetricsByRunId[key] = parsed;
+    return parsed;
+  } catch (_err) {
+    state.compareWtMetricsByRunId[key] = null;
+    return null;
+  }
+}
+
+async function readCompareFixedCount(runId, meta) {
+  const runKey = String(runId || "").trim();
+  const tier = String(meta?.tier || "").trim();
+  const backboneId = String(meta?.backboneId || "").trim();
+  if (!runKey || !tier) return null;
+  const cacheKey = `${runKey}::${backboneId}::${tier}`;
+  if (Object.prototype.hasOwnProperty.call(state.compareFixedCountByKey, cacheKey)) {
+    return state.compareFixedCountByKey[cacheKey];
+  }
+  const paths = buildCompareFixedPositionPaths(meta);
+  for (const path of paths) {
+    try {
+      const result = await apiCall("pipeline.read_artifact", {
+        run_id: runKey,
+        path,
+        max_bytes: 200000,
+      });
+      const parsed = JSON.parse(String(result?.text || "{}"));
+      const count = countFixedPositions(parsed);
+      if (Number.isFinite(count)) {
+        state.compareFixedCountByKey[cacheKey] = count;
+        return count;
+      }
+    } catch (_err) {
+      // Try the next known fixed-position location.
+    }
+  }
+  state.compareFixedCountByKey[cacheKey] = null;
+  return null;
+}
+
+async function readCompareAf2Scores(runId, tier) {
+  const runKey = String(runId || "").trim();
+  const tierKey = String(tier || "").trim();
+  if (!runKey || !tierKey) return null;
+  const cacheKey = `${runKey}::${tierKey}`;
+  if (Object.prototype.hasOwnProperty.call(state.compareAf2ScoresByKey, cacheKey)) {
+    return state.compareAf2ScoresByKey[cacheKey];
+  }
+  try {
+    const result = await apiCall("pipeline.read_artifact", {
+      run_id: runKey,
+      path: `tiers/${tierKey}/af2_scores.json`,
+      max_bytes: 200000,
+    });
+    const parsed = JSON.parse(String(result?.text || "{}"));
+    state.compareAf2ScoresByKey[cacheKey] = parsed;
+    return parsed;
+  } catch (_err) {
+    state.compareAf2ScoresByKey[cacheKey] = null;
+    return null;
+  }
+}
+
+function compareTierKeysForRun(runId) {
+  const currentRun = String(runId || "").trim();
+  if (!currentRun) return [];
+  const tiers = new Set();
+  (Array.isArray(state.artifacts) ? state.artifacts : []).forEach((item) => {
+    const path = String(item?.path || "").trim();
+    if (!path) return;
+    const meta = artifactMetaForPath(path);
+    if (meta?.tier) tiers.add(String(meta.tier));
+  });
+  if (!tiers.size) {
+    (Array.isArray(state.hitListRows) ? state.hitListRows : []).forEach((row) => {
+      const tier = normalizeCompareTierKey(row?.tier);
+      if (tier) tiers.add(tier);
+    });
+  }
+  if (!tiers.size) {
+    const tierCompare = Array.isArray(state.artifactComparison?.tier_compare) ? state.artifactComparison.tier_compare : [];
+    tierCompare.forEach((row) => {
+      const tier = normalizeCompareTierKey(row?.tier);
+      if (tier) tiers.add(tier);
+    });
+  }
+  return Array.from(tiers).sort((a, b) => {
+    const na = Number(a);
+    const nb = Number(b);
+    if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+    return String(a).localeCompare(String(b));
+  });
+}
+
+function normalizeCompareBackboneId(value) {
+  return displayArtifactPath(String(value || ""))
+    .trim()
+    .toLowerCase();
+}
+
+function backboneIdFromCandidateId(candidateId) {
+  const text = String(candidateId || "").trim();
+  if (!text) return "";
+  const idx = text.lastIndexOf(":");
+  return idx >= 0 ? text.slice(0, idx) : text;
+}
+
+function collectAf2BackboneMetrics(af2Summary, backboneId) {
+  const targetKey = normalizeCompareBackboneId(backboneId);
+  if (!targetKey || !af2Summary || typeof af2Summary !== "object") {
+    return { candidateCount: 0, selectedCount: 0, plddts: [], rmsds: [], provider: "" };
+  }
+  const candidateIds = Array.from(
+    new Set([
+      ...Object.keys(af2Summary?.scores || {}),
+      ...Object.keys(af2Summary?.rmsd_scores || {}),
+      ...(Array.isArray(af2Summary?.candidate_ids) ? af2Summary.candidate_ids : []),
+      ...(Array.isArray(af2Summary?.selected_ids) ? af2Summary.selected_ids : []),
+    ])
+  ).filter((candidateId) => normalizeCompareBackboneId(backboneIdFromCandidateId(candidateId)) === targetKey);
+  const selectedCount = (Array.isArray(af2Summary?.selected_ids) ? af2Summary.selected_ids : []).filter(
+    (candidateId) => normalizeCompareBackboneId(backboneIdFromCandidateId(candidateId)) === targetKey
+  ).length;
+  const plddts = candidateIds
+    .map((candidateId) => finiteNumber(af2Summary?.scores?.[candidateId]))
+    .filter((value) => value !== null);
+  const rmsds = candidateIds
+    .map((candidateId) => finiteNumber(af2Summary?.rmsd_scores?.[candidateId]))
+    .filter((value) => value !== null);
+  return {
+    candidateCount: candidateIds.length,
+    selectedCount,
+    plddts,
+    rmsds,
+    provider: String(af2Summary?.provider || "").trim(),
+  };
+}
+
+function summarizeAf2BackboneMetrics(items) {
+  const metrics = Array.isArray(items) ? items : [];
+  const plddts = [];
+  const rmsds = [];
+  let candidateCount = 0;
+  let selectedCount = 0;
+  let provider = "";
+  metrics.forEach((item) => {
+    if (!item || typeof item !== "object") return;
+    candidateCount += Math.max(0, Number(item.candidateCount || 0));
+    selectedCount += Math.max(0, Number(item.selectedCount || 0));
+    if (Array.isArray(item.plddts)) plddts.push(...item.plddts);
+    if (Array.isArray(item.rmsds)) rmsds.push(...item.rmsds);
+    if (!provider && item.provider) provider = String(item.provider);
+  });
+  if (!candidateCount && !plddts.length && !rmsds.length) return null;
+  return {
+    candidateCount,
+    selectedCount,
+    plddtMedian: plddts.length ? percentileValue(plddts, 0.5) : null,
+    rmsdMedian: rmsds.length ? percentileValue(rmsds, 0.5) : null,
+    provider,
+  };
+}
+
+async function readCompareAf2BackboneSummary(runId, backboneId, tier = "") {
+  const runKey = String(runId || "").trim();
+  const tierKey = String(tier || "").trim();
+  const normalizedBackbone = String(backboneId || "").trim();
+  if (!runKey || !normalizedBackbone) return null;
+  const tiers = tierKey ? [tierKey] : compareTierKeysForRun(runKey);
+  if (!tiers.length) return null;
+  const summaries = await Promise.all(tiers.map((item) => readCompareAf2Scores(runKey, item)));
+  return summarizeAf2BackboneMetrics(summaries.map((item) => collectAf2BackboneMetrics(item, normalizedBackbone)));
+}
+
+function af2PredictionScopeLabel(scope, provider = "") {
+  const af2Provider = af2ProviderName(provider || currentRunAf2Provider(), state.lang || "en");
+  if (scope === "exact") return t("artifacts.preview.compare.meta.predScopeExact", { af2Provider });
+  if (scope === "wt") return t("artifacts.preview.compare.meta.predScopeWt", { af2Provider });
+  if (scope === "tier") return t("artifacts.preview.compare.meta.predScopeTier", { af2Provider });
+  if (scope === "backbone") return t("artifacts.preview.compare.meta.predScopeBackbone", { af2Provider });
+  return t("artifacts.preview.compare.meta.predScopePre", { af2Provider });
+}
+
+function formatCompareAf2Selection(selectedCount, candidateCount) {
+  const selected = Math.max(0, Number(selectedCount || 0));
+  const total = Math.max(0, Number(candidateCount || 0));
+  if (!total) return "-";
+  const pct = formatPercentValue(selected / total);
+  return pct === "-" ? `${selected}/${total}` : `${selected}/${total} (${pct})`;
+}
+
+function af2CandidateFolderFromPath(path) {
+  const normalized = artifactMetaForPath(path).normalizedPath || "";
+  const match = normalized.match(/(?:^|\/)tiers\/[^/]+\/af2\/([^/]+)\/[^/]+\.pdb$/);
+  return match ? String(match[1] || "") : "";
+}
+
+function canonicalAf2CandidateSlug(value) {
+  return displayArtifactPath(String(value || ""))
+    .trim()
+    .toLowerCase()
+    .replace(/:/g, "_");
+}
+
+function resolveAf2CandidateId(af2Summary, path) {
+  const folder = af2CandidateFolderFromPath(path);
+  if (!folder || !af2Summary || typeof af2Summary !== "object") return "";
+  const folderKey = canonicalAf2CandidateSlug(folder);
+  const candidates = new Set([
+    ...Object.keys(af2Summary?.scores || {}),
+    ...Object.keys(af2Summary?.rmsd_scores || {}),
+    ...(Array.isArray(af2Summary?.selected_ids) ? af2Summary.selected_ids : []),
+    ...(Array.isArray(af2Summary?.candidate_ids) ? af2Summary.candidate_ids : []),
+  ]);
+  for (const candidateId of candidates) {
+    if (canonicalAf2CandidateSlug(candidateId) === folderKey) return String(candidateId || "");
+  }
+  return folder.includes("_") ? folder.replace(/_([^_]+)$/u, ":$1") : "";
+}
+
+function isCompareWtReference(meta, rawPath) {
+  return compareArtifactRoleKey(meta) === "wt_colabfold";
+}
+
+function isRfd3DerivedPdbText(pdbText) {
+  const head = String(pdbText || "")
+    .split(/\r?\n/)
+    .slice(0, 5)
+    .join(" ")
+    .toUpperCase();
+  return /(INPUTS_SPEC|RFD3|RFDIFFUSION|RF_DIFFUSION)/.test(head);
+}
+
+function buildCompareProvenanceText(meta, { provider = "", inputPdbText = "" } = {}) {
+  const role = compareArtifactRoleKey(meta);
+  const af2Provider = af2ProviderName(provider || currentRunAf2Provider(), state.lang || "en");
+  const source = sourceLabel(compareSourceKeyFromMeta(meta));
+  if (role === "input_reference") {
+    return isRfd3DerivedPdbText(inputPdbText)
+      ? t("artifacts.preview.compare.provenance.inputRfd3")
+      : t("artifacts.preview.compare.provenance.input");
+  }
+  if (role === "working_backbone") {
+    return t("artifacts.preview.compare.provenance.working");
+  }
+  if (role === "wt_colabfold") {
+    return t("artifacts.preview.compare.provenance.wt", { af2Provider });
+  }
+  if (role === "backbone_snapshot") {
+    return t("artifacts.preview.compare.provenance.backbone", { source });
+  }
+  if (role === "af2_candidate") {
+    return t("artifacts.preview.compare.provenance.candidate", {
+      tier: String(meta?.tier || "-"),
+      af2Provider,
+    });
+  }
+  if (role === "source_output") {
+    return t("artifacts.preview.compare.provenance.source", { source });
+  }
+  return t("artifacts.preview.compare.provenance.other");
+}
+
+async function buildComparePredictionMeta(runId, meta, rawPath, af2Summary = null) {
+  const currentProvider = currentRunAf2Provider(runId);
+  if (isCompareWtReference(meta, rawPath)) {
+    const wtMetrics = await readCompareWtMetrics(runId);
+    const wtAf2 = wtMetrics?.af2 && typeof wtMetrics.af2 === "object" ? wtMetrics.af2 : {};
+    const provider = String(wtAf2?.provider || currentProvider || "").trim();
+    const plddt = finiteNumber(wtAf2?.best_plddt);
+    const rmsd = finiteNumber(wtAf2?.rmsd_ca);
+    if (plddt !== null || rmsd !== null) {
+      return {
+        provider,
+        scope: af2PredictionScopeLabel("wt", provider),
+        selectedLabel: "WT",
+        plddtLabel: plddt !== null ? formatMetricValue(plddt, 2, false) : "-",
+        rmsdLabel: rmsd !== null ? `${formatMetricValue(rmsd, 2, false)}A` : "-",
+        exact: true,
+      };
+    }
+  }
+
+  const tierKey = String(meta?.tier || "").trim();
+  const backboneId = String(meta?.backboneId || "").trim();
+  const tierSummary = af2Summary || (tierKey ? await readCompareAf2Scores(runId, tierKey) : null);
+  const tierProvider = String(tierSummary?.provider || currentProvider || "").trim();
+  const candidateId = resolveAf2CandidateId(tierSummary, rawPath);
+  if (candidateId) {
+    const selected =
+      Array.isArray(tierSummary?.selected_ids) && tierSummary.selected_ids.includes(candidateId)
+        ? localizedYesNo(true)
+        : Array.isArray(tierSummary?.selected_ids)
+          ? localizedYesNo(false)
+          : "-";
+    const exactPlddt = finiteNumber(tierSummary?.scores?.[candidateId]);
+    const exactRmsd = finiteNumber(tierSummary?.rmsd_scores?.[candidateId]);
+    if (selected !== "-" || exactPlddt !== null || exactRmsd !== null) {
+      return {
+        provider: tierProvider,
+        scope: af2PredictionScopeLabel("exact", tierProvider),
+        selectedLabel: selected,
+        plddtLabel: exactPlddt !== null ? formatMetricValue(exactPlddt, 2, false) : "-",
+        rmsdLabel: exactRmsd !== null ? `${formatMetricValue(exactRmsd, 2, false)}A` : "-",
+        exact: true,
+      };
+    }
+  }
+
+  if (tierKey && backboneId) {
+    const summary = summarizeAf2BackboneMetrics([collectAf2BackboneMetrics(tierSummary, backboneId)]);
+    if (summary?.candidateCount) {
+      const provider = String(summary.provider || tierProvider || currentProvider || "").trim();
+      return {
+        provider,
+        scope: af2PredictionScopeLabel("tier", provider),
+        selectedLabel: formatCompareAf2Selection(summary.selectedCount, summary.candidateCount),
+        plddtLabel:
+          summary.plddtMedian !== null ? formatMetricValue(summary.plddtMedian, 2, false) : "-",
+        rmsdLabel:
+          summary.rmsdMedian !== null ? `${formatMetricValue(summary.rmsdMedian, 2, false)}A` : "-",
+        exact: false,
+      };
+    }
+  }
+
+  if (backboneId) {
+    const summary = await readCompareAf2BackboneSummary(runId, backboneId);
+    if (summary?.candidateCount) {
+      const provider = String(summary.provider || tierProvider || currentProvider || "").trim();
+      return {
+        provider,
+        scope: af2PredictionScopeLabel("backbone", provider),
+        selectedLabel: formatCompareAf2Selection(summary.selectedCount, summary.candidateCount),
+        plddtLabel:
+          summary.plddtMedian !== null ? formatMetricValue(summary.plddtMedian, 2, false) : "-",
+        rmsdLabel:
+          summary.rmsdMedian !== null ? `${formatMetricValue(summary.rmsdMedian, 2, false)}A` : "-",
+        exact: false,
+      };
+    }
+  }
+
+  const provider = String(tierProvider || currentProvider || "").trim();
+  const pending = af2PredictionScopeLabel("pre", provider);
+  return {
+    provider,
+    scope: pending,
+    selectedLabel: pending,
+    plddtLabel: pending,
+    rmsdLabel: pending,
+    exact: false,
+  };
+}
+
+async function buildComparePreviewCardData(
+  runId,
+  path,
+  text,
+  { targetSequence = "", inputPdbText = "", workingPdbText = "", wtPdbText = "" } = {}
+) {
+  const rawPath = String(path || "");
+  const meta = artifactMetaForPath(rawPath);
+  const isPdb = /\.pdb$/i.test(rawPath);
+  const sequenceByChain = isPdb ? parsePdbSequenceByChain(text) : {};
+  const candidateSequence = isPdb ? pickComparableSequence(sequenceByChain, targetSequence) : "";
+  const wtDiff = targetSequence && candidateSequence ? computeSequenceDifferenceStats(targetSequence, candidateSequence) : null;
+  const [fixedCount, af2Summary] = await Promise.all([
+    isPdb ? readCompareFixedCount(runId, meta) : Promise.resolve(null),
+    meta?.tier ? readCompareAf2Scores(runId, meta.tier) : Promise.resolve(null),
+  ]);
+  const inputStructureDiff =
+    isPdb && inputPdbText ? computePdbStructuralDiff(inputPdbText, String(text || "")) : null;
+  const wtStructureDiff = isPdb && wtPdbText ? computePdbStructuralDiff(wtPdbText, String(text || "")) : null;
+  const workingStructureDiff =
+    isPdb && workingPdbText ? computePdbStructuralDiff(workingPdbText, String(text || "")) : null;
+  const predictionMeta = isPdb ? await buildComparePredictionMeta(runId, meta, rawPath, af2Summary) : null;
+  const af2ProviderRaw = String(predictionMeta?.provider || currentRunAf2Provider(runId) || "").trim();
+  const roleLabel = compareArtifactRoleLabel(meta, af2ProviderRaw);
+  return {
+    descriptor: buildArtifactCompareOptionLabel(rawPath, meta),
+    role: roleLabel,
+    source: sourceLabel(compareSourceKeyFromMeta(meta)),
+    provenance: buildCompareProvenanceText(meta, {
+      provider: af2ProviderRaw,
+      inputPdbText,
+    }),
+    tier: meta?.tier ? formatCompareTierLabel(meta.tier) : "-",
+    backbone: meta?.backboneId ? displayArtifactPath(meta.backboneId) : "-",
+    chains: isPdb ? formatPdbChainSummary(sequenceByChain) : "-",
+    fixedCount: Number.isFinite(fixedCount) ? String(fixedCount) : "-",
+    wtDiff: wtDiff ? formatWtDifference(wtDiff) : "-",
+    inputStructRmsd:
+      inputStructureDiff && inputStructureDiff.ok
+        ? `${formatMetricValue(inputStructureDiff.rmsd, 2, false)}A`
+        : "-",
+    wtStructRmsd:
+      wtStructureDiff && wtStructureDiff.ok ? `${formatMetricValue(wtStructureDiff.rmsd, 2, false)}A` : "-",
+    workingStructRmsd:
+      workingStructureDiff && workingStructureDiff.ok
+        ? `${formatMetricValue(workingStructureDiff.rmsd, 2, false)}A`
+        : "-",
+    commonCa:
+      inputStructureDiff && inputStructureDiff.ok
+        ? String(Number(inputStructureDiff.commonCount || 0))
+        : wtStructureDiff && wtStructureDiff.ok
+          ? String(Number(wtStructureDiff.commonCount || 0))
+          : workingStructureDiff && workingStructureDiff.ok
+            ? String(Number(workingStructureDiff.commonCount || 0))
+            : "-",
+    af2Scope: String(predictionMeta?.scope || "-"),
+    af2Selected: String(predictionMeta?.selectedLabel || "-"),
+    af2Plddt: String(predictionMeta?.plddtLabel || "-"),
+    af2Rmsd: String(predictionMeta?.rmsdLabel || "-"),
+    af2ProviderLabel: af2ProviderName(af2ProviderRaw || currentRunAf2Provider(runId), state.lang || "en"),
+    path: displayArtifactPath(rawPath),
+  };
+}
+
+function renderCompareMetadataPanel(leftMeta, rightMeta) {
+  const panel = document.createElement("div");
+  panel.className = "compare-meta-panel";
+  panel.innerHTML = `<div class="compare-meta-title">${escapeHtml(t("artifacts.preview.compare.meta.title"))}</div>`;
+  const grid = document.createElement("div");
+  grid.className = "compare-meta-grid";
+  const af2Provider =
+    String(leftMeta?.af2ProviderLabel || "").trim() ||
+    String(rightMeta?.af2ProviderLabel || "").trim() ||
+    af2ProviderName(currentRunAf2Provider(), state.lang || "en");
+  const cards = [
+    { title: t("artifacts.preview.compare.meta.left"), data: leftMeta },
+    { title: t("artifacts.preview.compare.meta.right"), data: rightMeta },
+  ];
+  cards.forEach((entry) => {
+    const data = entry.data || {};
+    const card = document.createElement("div");
+    card.className = "compare-meta-card";
+    card.innerHTML = `
+      <div class="compare-meta-card-title">${escapeHtml(entry.title)}</div>
+      <div class="compare-meta-card-subtitle">${escapeHtml(String(data.descriptor || "-"))}</div>
+      <div class="compare-meta-list">
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.role"))}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.role || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.source"))}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.source || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.provenance"))}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.provenance || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.tier"))}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.tier || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.backbone"))}</span>
+          <strong class="compare-meta-value compare-meta-mono">${escapeHtml(String(data.backbone || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.chains"))}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.chains || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.fixedCount"))}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.fixedCount || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.wtDiff"))}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.wtDiff || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.inputStructRmsd"))}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.inputStructRmsd || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.wtStructRmsd"))}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.wtStructRmsd || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.workingStructRmsd"))}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.workingStructRmsd || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.commonCa"))}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.commonCa || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(
+            t("artifacts.preview.compare.meta.predScope", { af2Provider })
+          )}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.af2Scope || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(
+            t("artifacts.preview.compare.meta.predSelected", { af2Provider })
+          )}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.af2Selected || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(
+            t("artifacts.preview.compare.meta.predPlddt", { af2Provider })
+          )}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.af2Plddt || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(
+            t("artifacts.preview.compare.meta.predRmsd", { af2Provider })
+          )}</span>
+          <strong class="compare-meta-value">${escapeHtml(String(data.af2Rmsd || "-"))}</strong>
+        </div>
+        <div class="compare-meta-item">
+          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.path"))}</span>
+          <strong class="compare-meta-value compare-meta-mono">${escapeHtml(String(data.path || "-"))}</strong>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+  panel.appendChild(grid);
+  return panel;
+}
+
+function renderComparisonSequencePanel(left, right) {
+  const leftMap = parsePdbSequenceByChain(left?.text || "");
+  const rightMap = parsePdbSequenceByChain(right?.text || "");
+  const panel = document.createElement("div");
+  panel.className = "compare-seq-panel";
+  panel.innerHTML = `<div class="compare-seq-title">${escapeHtml(t("artifacts.preview.compare.sequenceTitle"))}</div>`;
+
+  const grid = document.createElement("div");
+  grid.className = "compare-seq-grid";
+
+  const leftBox = document.createElement("div");
+  leftBox.className = "compare-seq-box";
+  const leftLabel = document.createElement("div");
+  leftLabel.className = "compare-seq-label";
+  leftLabel.textContent = `${t("artifacts.preview.compare.sequenceLeft")} · ${displayArtifactPath(
+    String(left?.path || "-")
+  )}`;
+  const leftPre = document.createElement("pre");
+  leftPre.className = "compare-seq-fasta";
+  leftPre.textContent = buildFastaFromChainMap(leftMap, "left");
+  leftBox.appendChild(leftLabel);
+  leftBox.appendChild(leftPre);
+
+  const rightBox = document.createElement("div");
+  rightBox.className = "compare-seq-box";
+  const rightLabel = document.createElement("div");
+  rightLabel.className = "compare-seq-label";
+  rightLabel.textContent = `${t("artifacts.preview.compare.sequenceRight")} · ${displayArtifactPath(
+    String(right?.path || "-")
+  )}`;
+  const rightPre = document.createElement("pre");
+  rightPre.className = "compare-seq-fasta";
+  rightPre.textContent = buildFastaFromChainMap(rightMap, "right");
+  rightBox.appendChild(rightLabel);
+  rightBox.appendChild(rightPre);
+
+  grid.appendChild(leftBox);
+  grid.appendChild(rightBox);
+  panel.appendChild(grid);
+  return panel;
 }
 
 function computePdbSequenceDiff(leftPdbText, rightPdbText) {
@@ -7657,10 +11452,11 @@ function renderResidueLinkedView(structureDiff, onSelect) {
   const metrics = Array.isArray(structureDiff.residueMetrics) ? structureDiff.residueMetrics : [];
   if (!metrics.length) return null;
   const topForTable = metrics.slice(0, 60);
-  const topForStrip = metrics
-    .slice()
-    .sort((a, b) => String(a.key || "").localeCompare(String(b.key || "")))
-    .slice(0, 220);
+  const topForStrip = selectResidueStripMetrics(metrics, {
+    midThreshold: 1.5,
+    maxCount: 220,
+    fallbackCount: 60,
+  });
 
   const root = document.createElement("div");
   root.className = "residue-linked";
@@ -7781,16 +11577,19 @@ function setComparePreviewPlaceholder(key, params = {}) {
   previewEl.innerHTML = `<div class="placeholder">${t(key, params)}</div>`;
 }
 
-function render3dComparison(left, right, mode = "structure") {
+function render3dComparison(left, right, mode = "structure", compareMeta = null) {
   const previewEl = getComparePreviewElement();
   if (!previewEl) return;
   if (!window.$3Dmol) {
     setComparePreviewPlaceholder("artifact.preview.unavailable");
     return;
   }
+  previewEl.innerHTML = "";
+  if (compareMeta && (compareMeta.left || compareMeta.right)) {
+    previewEl.appendChild(renderCompareMetadataPanel(compareMeta.left, compareMeta.right));
+  }
   const wrap = document.createElement("div");
   wrap.className = "viewer3d-compare";
-  previewEl.innerHTML = "";
   previewEl.appendChild(wrap);
   const panes = [];
   const usePdbPair = left.format === "pdb" && right.format === "pdb" && left.text && right.text;
@@ -7804,7 +11603,7 @@ function render3dComparison(left, right, mode = "structure") {
     pane.className = "viewer3d-pane";
     const header = document.createElement("div");
     header.className = "viewer3d-pane-header";
-    header.textContent = path;
+    header.textContent = displayArtifactPath(path);
     const body = document.createElement("div");
     body.className = "viewer3d-pane-body";
     pane.appendChild(header);
@@ -7852,6 +11651,7 @@ function render3dComparison(left, right, mode = "structure") {
           : t("artifacts.preview.compare.diffNone");
     }
     previewEl.appendChild(legend);
+    previewEl.appendChild(renderComparisonSequencePanel(left, right));
     if (compareMode === "structure" && structureDiff && structureDiff.ok) {
       const linked = renderResidueLinkedView(structureDiff, (selection) => {
         selectedResidue = selection;
@@ -7869,35 +11669,275 @@ function render3dComparison(left, right, mode = "structure") {
   }
 }
 
+function findTierScopedCompareCandidatePath(structureItems, sourceKey, tierKey) {
+  const wantedSource = normalizeSourceKey(sourceKey);
+  const wantedTier = normalizeCompareTierKey(tierKey);
+  if (!wantedSource || !wantedTier) return "";
+
+  const hitRow = (Array.isArray(state.hitListRows) ? state.hitListRows : []).find((row) => {
+    if (!row || normalizeSourceKey(row?.source) !== wantedSource) return false;
+    if (normalizeCompareTierKey(row?.tier) !== wantedTier) return false;
+    return String(row?.af2_ranked_pdb_path || "").trim().length > 0;
+  });
+  const hitPath = String(hitRow?.af2_ranked_pdb_path || "").trim();
+  if (hitPath) return hitPath;
+
+  const artifact = findCompareItem(structureItems, (_item, meta) => {
+    if (compareArtifactRoleKey(meta) !== "af2_candidate") return false;
+    if (compareSourceKeyFromMeta(meta) !== wantedSource) return false;
+    return normalizeCompareTierKey(meta?.tier) === wantedTier;
+  });
+  return String(artifact?.path || "").trim();
+}
+
+function comparePresetVariantLabel(kind, tier = "") {
+  if (kind === "base") return t("artifacts.preview.compare.meta.backbone");
+  return formatCompareTierLabel(tier);
+}
+
+function buildComparePresetGroups(structureItems) {
+  const refs = resolveCompareReferenceItems(structureItems);
+  const tierKeys = compareTierKeysForRun(state.currentRunId);
+  const groups = [];
+
+  const addGroup = (id, labelKey, baseLeftItem, baseRightItem, tierResolver) => {
+    const variants = [];
+    const seen = new Set();
+    const pushVariant = (variantId, variantLabel, leftPathRaw, rightPathRaw) => {
+      const leftPath = String(leftPathRaw || "").trim();
+      const rightPath = String(rightPathRaw || "").trim();
+      if (!leftPath || !rightPath || leftPath === rightPath) return;
+      const key = `${leftPath}::${rightPath}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      variants.push({
+        id: variantId,
+        label: variantLabel,
+        leftPath,
+        rightPath,
+      });
+    };
+
+    pushVariant(
+      `${id}__base`,
+      comparePresetVariantLabel("base"),
+      baseLeftItem?.path,
+      baseRightItem?.path
+    );
+
+    tierKeys.forEach((tierKey) => {
+      const resolved = typeof tierResolver === "function" ? tierResolver(tierKey) : null;
+      if (!resolved || typeof resolved !== "object") return;
+      pushVariant(
+        `${id}__tier_${tierKey}`,
+        comparePresetVariantLabel("tier", tierKey),
+        resolved.leftPath,
+        resolved.rightPath
+      );
+    });
+
+    if (!variants.length) return;
+    groups.push({
+      id,
+      label: t(labelKey),
+      variants,
+    });
+  };
+
+  addGroup("wt_vs_rfd3", "artifacts.preview.compare.preset.wtVsRfd3", refs.wt, refs.rfd3Backbone, (tierKey) => ({
+    leftPath: refs.wt?.path,
+    rightPath: findTierScopedCompareCandidatePath(structureItems, "rfd3", tierKey),
+  }));
+  addGroup("wt_vs_bioemu", "artifacts.preview.compare.preset.wtVsBioemu", refs.wt, refs.bioemuBackbone, (tierKey) => ({
+    leftPath: refs.wt?.path,
+    rightPath: findTierScopedCompareCandidatePath(structureItems, "bioemu", tierKey),
+  }));
+  addGroup(
+    "rfd3_vs_bioemu",
+    "artifacts.preview.compare.preset.rfd3VsBioemu",
+    refs.rfd3Backbone,
+    refs.bioemuBackbone,
+    (tierKey) => ({
+      leftPath: findTierScopedCompareCandidatePath(structureItems, "rfd3", tierKey),
+      rightPath: findTierScopedCompareCandidatePath(structureItems, "bioemu", tierKey),
+    })
+  );
+
+  return groups;
+}
+
+function renderCompareReferenceStrip(structureItems) {
+  if (!el.artifactCompareRefs) return;
+  const refs = resolveCompareReferenceItems(structureItems);
+  const rows = [
+    { key: "input", label: t("artifacts.preview.compare.refs.input"), item: refs.input },
+    { key: "working", label: t("artifacts.preview.compare.refs.working"), item: refs.working },
+    { key: "wt", label: t("artifacts.preview.compare.refs.wt"), item: refs.wt },
+  ];
+  el.artifactCompareRefs.innerHTML = `
+    <div class="compare-strip-title">${escapeHtml(t("artifacts.preview.compare.refs.title"))}</div>
+    <div class="compare-reference-list">
+      ${rows
+        .map((row) => {
+          const value = row.item ? displayArtifactPath(row.item.path) : t("artifacts.preview.compare.refs.missing");
+          const missing = !row.item ? " is-missing" : "";
+          return `
+            <div class="compare-reference-chip${missing}">
+              <span class="compare-reference-label">${escapeHtml(row.label)}</span>
+              <strong class="compare-reference-value">${escapeHtml(value)}</strong>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderComparePresetStrip(structureItems) {
+  if (!el.artifactComparePresets) return;
+  const groups = buildComparePresetGroups(structureItems);
+  if (!groups.length) {
+    el.artifactComparePresets.innerHTML = "";
+    return;
+  }
+  const currentKey = `${String(state.artifactCompareLeftPath || "").trim()}::${String(
+    state.artifactCompareRightPath || ""
+  ).trim()}`;
+
+  const activeVariantByGroup = new Map();
+  groups.forEach((group) => {
+    const activeVariant =
+      (Array.isArray(group.variants) ? group.variants : []).find(
+        (variant) => `${variant.leftPath}::${variant.rightPath}` === currentKey
+      ) || null;
+    activeVariantByGroup.set(group.id, activeVariant);
+  });
+
+  el.artifactComparePresets.innerHTML = `
+    <div class="compare-strip-title">${escapeHtml(t("artifacts.preview.compare.preset.title"))}</div>
+    <div class="compare-preset-list">
+      ${groups
+        .map((group) => {
+          const variants = Array.isArray(group.variants) ? group.variants : [];
+          const activeVariant = activeVariantByGroup.get(group.id) || variants[0] || null;
+          if (!activeVariant) return "";
+          const active = activeVariantByGroup.get(group.id) ? " is-active" : "";
+          const showSelect = variants.length > 1;
+          return `
+            <div class="compare-preset-group${active}" data-compare-preset-group="${escapeAttr(group.id)}">
+              <button
+                type="button"
+                class="ghost compare-preset-btn${active}"
+                data-compare-preset-group-btn="${escapeAttr(group.id)}"
+              >${escapeHtml(group.label)}</button>
+              ${
+                showSelect
+                  ? `<select class="compare-preset-select" data-compare-preset-group-select="${escapeAttr(group.id)}">
+                      ${variants
+                        .map(
+                          (variant) =>
+                            `<option value="${escapeAttr(variant.id)}"${
+                              variant.id === activeVariant.id ? " selected" : ""
+                            }>${escapeHtml(variant.label)}</option>`
+                        )
+                        .join("")}
+                    </select>`
+                  : ""
+              }
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+
+  const variantById = new Map();
+  groups.forEach((group) => {
+    (Array.isArray(group.variants) ? group.variants : []).forEach((variant) => {
+      variantById.set(variant.id, variant);
+    });
+  });
+
+  const applyVariant = async (variantId) => {
+    const variant = variantById.get(String(variantId || "").trim());
+    if (!variant) return;
+    state.artifactCompareLeftPath = variant.leftPath;
+    state.artifactCompareRightPath = variant.rightPath;
+    renderArtifactCompareSelects();
+    renderCopilotContext();
+    await compareSelected3dArtifacts();
+  };
+
+  Array.from(el.artifactComparePresets.querySelectorAll("[data-compare-preset-group-btn]")).forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const groupId = String(btn.getAttribute("data-compare-preset-group-btn") || "").trim();
+      const select = el.artifactComparePresets.querySelector(`[data-compare-preset-group-select="${groupId}"]`);
+      const chosenVariantId =
+        select instanceof HTMLSelectElement && select.value
+          ? select.value
+          : activeVariantByGroup.get(groupId)?.id || "";
+      await applyVariant(chosenVariantId);
+    });
+  });
+
+  Array.from(el.artifactComparePresets.querySelectorAll("[data-compare-preset-group-select]")).forEach((select) => {
+    select.addEventListener("change", async () => {
+      const groupId = String(select.getAttribute("data-compare-preset-group-select") || "").trim();
+      if (!groupId || !(select instanceof HTMLSelectElement)) return;
+      if (!activeVariantByGroup.get(groupId)) return;
+      await applyVariant(select.value);
+    });
+  });
+}
+
 function chooseDefaultComparePaths(structureItems) {
   const paths = new Set(structureItems.map((item) => String(item?.path || "")));
   if (!paths.has(state.artifactCompareLeftPath)) state.artifactCompareLeftPath = "";
   if (!paths.has(state.artifactCompareRightPath)) state.artifactCompareRightPath = "";
+  const refs = resolveCompareReferenceItems(structureItems);
 
   if (!state.artifactCompareLeftPath) {
-    const wtItem = structureItems.find((item) => artifactMetaForPath(item.path).stage === "wt");
-    const targetItem = structureItems.find((item) => artifactMetaForPath(item.path).stage === "af2_target");
-    state.artifactCompareLeftPath = String(wtItem?.path || targetItem?.path || structureItems[0]?.path || "");
+    state.artifactCompareLeftPath = String(
+      refs.input?.path ||
+        refs.wt?.path ||
+        refs.working?.path ||
+        refs.rfd3Backbone?.path ||
+        refs.bioemuBackbone?.path ||
+        structureItems[0]?.path ||
+        ""
+    );
   }
 
   if (!state.artifactCompareRightPath) {
     const candidates = structureItems.filter(
       (item) => String(item?.path || "") && String(item?.path || "") !== state.artifactCompareLeftPath
     );
-    const pick = (predicate) => candidates.find((item) => predicate(String(item?.path || ""), artifactMetaForPath(item?.path)));
-    const designItem =
-      pick(
-        (path, meta) =>
-          Boolean(meta?.tier) &&
-          meta?.stage === "af2" &&
-          /\/ranked_\d+\.pdb$/i.test(path) &&
-          !/(?:^|\/)recovered[_/]/i.test(path)
-      ) ||
-      pick((path, meta) => Boolean(meta?.tier) && meta?.stage === "af2" && /\/ranked_\d+\.pdb$/i.test(path)) ||
-      pick((path, meta) => meta?.stage === "af2" && !/(?:^|\/)wt(?:\/|$)/i.test(path)) ||
-      pick((_path, meta) => Boolean(meta?.tier)) ||
-      candidates[0];
-    state.artifactCompareRightPath = String(designItem?.path || "");
+    const preferredPaths = [];
+    if (state.artifactCompareLeftPath === String(refs.input?.path || "").trim()) {
+      preferredPaths.push(refs.bioemuBackbone?.path, refs.wt?.path, refs.rfd3Backbone?.path, refs.working?.path);
+    } else {
+      preferredPaths.push(refs.input?.path, refs.bioemuBackbone?.path, refs.rfd3Backbone?.path, refs.wt?.path);
+    }
+    const preferred = preferredPaths
+      .map((path) => String(path || "").trim())
+      .find((path) => path && path !== state.artifactCompareLeftPath && paths.has(path));
+    if (preferred) {
+      state.artifactCompareRightPath = preferred;
+    } else {
+      const pick = (predicate) =>
+        candidates.find((item) => predicate(String(item?.path || ""), artifactMetaForPath(item?.path)));
+      const designItem =
+        pick(
+          (path, meta) =>
+            compareArtifactRoleKey(meta) === "af2_candidate" &&
+            /\/ranked_\d+\.pdb$/i.test(path) &&
+            !/(?:^|\/)recovered[_/]/i.test(path)
+        ) ||
+        pick((_path, meta) => compareArtifactRoleKey(meta) === "backbone_snapshot") ||
+        pick((_path, meta) => compareArtifactRoleKey(meta) === "source_output") ||
+        candidates[0];
+      state.artifactCompareRightPath = String(designItem?.path || "");
+    }
   }
 
   if (state.artifactCompareRightPath === state.artifactCompareLeftPath) {
@@ -7912,24 +11952,44 @@ function renderArtifactCompareSelects() {
     const mode = state.artifactCompareMode === "sequence" ? "sequence" : "structure";
     el.artifactCompareMode.value = mode;
   }
-  const structureItems = (state.artifacts || [])
-    .filter((item) => isStructureArtifactItem(item))
-    .sort((a, b) => String(a.path || "").localeCompare(String(b.path || "")));
+  const structureItems = collectCompareStructureItems(state.artifacts);
+  if (!structureItems.length) {
+    if (el.artifactCompareRefs) el.artifactCompareRefs.innerHTML = "";
+    if (el.artifactComparePresets) el.artifactComparePresets.innerHTML = "";
+  }
 
   chooseDefaultComparePaths(structureItems);
+  renderCompareReferenceStrip(structureItems);
+  renderComparePresetStrip(structureItems);
   const fill = (selectEl, placeholderKey) => {
     selectEl.innerHTML = "";
     const first = document.createElement("option");
     first.value = "";
     first.textContent = t(placeholderKey);
     selectEl.appendChild(first);
+    const groups = new Map();
     structureItems.forEach((item) => {
-      const path = String(item.path || "");
+      const path = String(item?.path || "");
       const meta = artifactMetaForPath(path);
-      const opt = document.createElement("option");
-      opt.value = path;
-      opt.textContent = `${formatStageLabel(meta.stage)} · ${path}`;
-      selectEl.appendChild(opt);
+      const groupKey = compareArtifactGroupKey(meta);
+      if (!groups.has(groupKey)) groups.set(groupKey, []);
+      groups.get(groupKey).push(item);
+    });
+    const orderedGroups = ["references", "backbones", "af2_candidates", "source_outputs", "other"];
+    orderedGroups.forEach((groupKey) => {
+      const items = groups.get(groupKey) || [];
+      if (!items.length) return;
+      const optgroup = document.createElement("optgroup");
+      optgroup.label = compareArtifactGroupLabel(groupKey);
+      items.forEach((item) => {
+        const path = String(item.path || "");
+        const meta = artifactMetaForPath(path);
+        const opt = document.createElement("option");
+        opt.value = path;
+        opt.textContent = buildArtifactCompareOptionLabel(path, meta);
+        optgroup.appendChild(opt);
+      });
+      selectEl.appendChild(optgroup);
     });
   };
   fill(el.artifactCompareLeft, "artifacts.preview.compare.left");
@@ -7954,7 +12014,11 @@ async function compareSelected3dArtifacts() {
     return;
   }
   try {
-    const [leftResult, rightResult] = await Promise.all([
+    const targetSequencePromise = readCompareTargetSequence(state.currentRunId);
+    const inputPdbPromise = readCompareInputPdbText(state.currentRunId);
+    const workingPdbPromise = readCompareWorkingPdbText(state.currentRunId);
+    const wtPdbPromise = readCompareWtPdbText(state.currentRunId);
+    const [leftResult, rightResult, targetSequence, inputPdbText, workingPdbText, wtPdbText] = await Promise.all([
       apiCall("pipeline.read_artifact", {
         run_id: state.currentRunId,
         path: leftPath,
@@ -7964,20 +12028,43 @@ async function compareSelected3dArtifacts() {
         run_id: state.currentRunId,
         path: rightPath,
         max_bytes: 500000,
+      }),
+      targetSequencePromise,
+      inputPdbPromise,
+      workingPdbPromise,
+      wtPdbPromise,
+    ]);
+    const [leftText, rightText] = await Promise.all([
+      normalizeComparePdbTextForArtifact(state.currentRunId, leftPath, String(leftResult?.text || "")),
+      normalizeComparePdbTextForArtifact(state.currentRunId, rightPath, String(rightResult?.text || "")),
+    ]);
+    const [leftMeta, rightMeta] = await Promise.all([
+      buildComparePreviewCardData(state.currentRunId, leftPath, leftText, {
+        targetSequence,
+        inputPdbText,
+        workingPdbText,
+        wtPdbText,
+      }),
+      buildComparePreviewCardData(state.currentRunId, rightPath, rightText, {
+        targetSequence,
+        inputPdbText,
+        workingPdbText,
+        wtPdbText,
       }),
     ]);
     render3dComparison(
       {
         path: leftPath,
-        text: String(leftResult?.text || ""),
+        text: leftText,
         format: /\.sdf$/i.test(leftPath) ? "sdf" : "pdb",
       },
       {
         path: rightPath,
-        text: String(rightResult?.text || ""),
+        text: rightText,
         format: /\.sdf$/i.test(rightPath) ? "sdf" : "pdb",
       },
-      state.artifactCompareMode
+      state.artifactCompareMode,
+      { left: leftMeta, right: rightMeta }
     );
   } catch (err) {
     setComparePreviewPlaceholder("artifacts.preview.compare.failed", {
@@ -8091,8 +12178,10 @@ async function reportCompareSvgForPath(path, runId) {
       apiCall("pipeline.read_artifact", { run_id: runId, path: leftPath, max_bytes: 800000 }),
       apiCall("pipeline.read_artifact", { run_id: runId, path: rightPath, max_bytes: 800000 }),
     ]);
-    const leftText = String(leftResult?.text || "");
-    const rightText = String(rightResult?.text || "");
+    const [leftText, rightText] = await Promise.all([
+      normalizeComparePdbTextForArtifact(runId, leftPath, String(leftResult?.text || "")),
+      normalizeComparePdbTextForArtifact(runId, rightPath, String(rightResult?.text || "")),
+    ]);
     if (!leftText.trim() || !rightText.trim()) return "";
     if (wantsStructure) {
       return normalizeSvgAttachmentText(
@@ -8382,23 +12471,28 @@ function renderMarkdown(text) {
   return html.join("\n");
 }
 
-async function refreshArtifacts() {
-  if (!state.currentRunId) return;
+async function refreshArtifacts(options = {}) {
+  const runId = String(options?.runId || state.currentRunId || "").trim();
+  if (!runId) return;
   try {
     const result = await apiCall("pipeline.list_artifacts", {
-      run_id: state.currentRunId,
+      run_id: runId,
       max_depth: 6,
       limit: 300,
     });
+    if (runId !== String(state.currentRunId || "").trim()) return;
     state.artifacts = result.artifacts || [];
     rebuildArtifactMetaIndex(state.artifacts);
     renderAllArtifactViews(state.artifacts);
     refreshArtifactSelects();
     void refreshArtifactComparisonSummary();
     updateReportArtifactLinks(el.reportContent ? el.reportContent.value : "");
+    renderWorkflowReviewPanel(state.lastRunStatus);
     if (state.analyzeArtifactPath) {
       void previewAnalyzeSelectedArtifact();
     }
+    markArtifactsRefreshed(runId);
+    renderCopilotContext();
   } catch (err) {
     setMessage(t("artifact.error", { error: err.message }), "ai");
   }
@@ -9161,7 +13255,7 @@ function setHitWeightInputValues() {
   if (el.hitWeightSoluprot) el.hitWeightSoluprot.value = String(state.hitListWeights.soluprot ?? 0.4);
   if (el.hitWeightPlddt) el.hitWeightPlddt.value = String(state.hitListWeights.plddt ?? 0.3);
   if (el.hitWeightRmsd) el.hitWeightRmsd.value = String(state.hitListWeights.rmsd ?? 0.2);
-  if (el.hitWeightNovelty) el.hitWeightNovelty.value = String(state.hitListWeights.novelty ?? 0.1);
+  if (el.hitWeightNovelty) el.hitWeightNovelty.value = String(state.hitListWeights.novelty ?? 0);
 }
 
 function readHitWeightsFromInputs() {
@@ -9173,11 +13267,11 @@ function readHitWeightsFromInputs() {
     soluprot: parse(el.hitWeightSoluprot, state.hitListWeights.soluprot ?? 0.4),
     plddt: parse(el.hitWeightPlddt, state.hitListWeights.plddt ?? 0.3),
     rmsd: parse(el.hitWeightRmsd, state.hitListWeights.rmsd ?? 0.2),
-    novelty: parse(el.hitWeightNovelty, state.hitListWeights.novelty ?? 0.1),
+    novelty: parse(el.hitWeightNovelty, state.hitListWeights.novelty ?? 0),
   };
-  const sum = next.soluprot + next.plddt + next.rmsd + next.novelty;
+  const sum = next.soluprot + next.plddt + next.rmsd;
   if (sum <= 0) {
-    return { soluprot: 0.4, plddt: 0.3, rmsd: 0.2, novelty: 0.1 };
+    return { soluprot: 0.4, plddt: 0.3, rmsd: 0.2, novelty: 0 };
   }
   return next;
 }
@@ -9408,6 +13502,8 @@ function setChartPlaceholder(target, key) {
 }
 
 function finiteNumber(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "string" && !value.trim()) return null;
   const num = typeof value === "number" ? value : Number(value);
   return Number.isFinite(num) ? num : null;
 }
@@ -9432,16 +13528,32 @@ function chartTickText(value, digits = 1) {
   return value.toFixed(digits);
 }
 
+function wtScatterPointFromSummary(summary = state.artifactComparison) {
+  const wt = summary?.wt_vs_design && typeof summary.wt_vs_design === "object" ? summary.wt_vs_design : {};
+  const plddt = finiteNumber(wt?.plddt?.wt);
+  const rmsd = finiteNumber(wt?.rmsd?.wt);
+  if (plddt === null || rmsd === null) return null;
+  return {
+    x: plddt,
+    y: rmsd,
+    seqId: "WT",
+    source: "WT",
+    sourceKey: "wt",
+  };
+}
+
 function buildPlddtRmsdScatter(rows) {
-  const points = (rows || [])
+  const designPoints = (rows || [])
     .map((row) => ({
       x: finiteNumber(row?.plddt),
       y: finiteNumber(row?.rmsd),
-      selected: Boolean(row?.af2_selected),
       seqId: String(row?.seq_id || "-"),
-      source: String(row?.source || "-"),
+      source: sourceLabel(normalizeSourceKey(row?.source)),
+      sourceKey: normalizeSourceKey(row?.source),
     }))
     .filter((row) => row.x !== null && row.y !== null);
+  const wtPoint = wtScatterPointFromSummary();
+  const points = wtPoint ? [...designPoints, wtPoint] : designPoints;
   if (!points.length) return null;
 
   const width = 760;
@@ -9482,25 +13594,67 @@ function buildPlddtRmsdScatter(rows) {
     );
   }
 
-  const selectedColor = "#0f6b6f";
-  const unselectedColor = "#d97757";
+  const colorBySource = {
+    rfd3: "#0f6b6f",
+    bioemu: "#d97757",
+    wt: "#295b9d",
+    other: "#7b8794",
+  };
   const marks = points
     .map((p) => {
       const cx = xMap(p.x).toFixed(2);
       const cy = yMap(p.y).toFixed(2);
-      const fill = p.selected ? selectedColor : unselectedColor;
+      const fill = colorBySource[p.sourceKey] || colorBySource.other;
       const label = `${p.seqId} | ${p.source} | pLDDT=${chartTickText(p.x, 1)} | RMSD=${chartTickText(p.y, 2)}`;
-      return `<circle cx="${cx}" cy="${cy}" r="3.8" fill="${fill}" fill-opacity="0.8"><title>${svgSafe(label)}</title></circle>`;
+      const radius = p.sourceKey === "wt" ? 4.6 : 3.8;
+      const stroke = p.sourceKey === "wt" ? "#1b3f6e" : "rgba(16,42,45,0.35)";
+      const strokeWidth = p.sourceKey === "wt" ? 1.3 : 0.5;
+      return `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="${fill}" fill-opacity="0.86" stroke="${stroke}" stroke-width="${strokeWidth}"><title>${svgSafe(
+        label
+      )}</title></circle>`;
     })
     .join("");
 
-  const selectedCount = points.filter((p) => p.selected).length;
+  const sourceCounts = points.reduce(
+    (acc, point) => {
+      const key = point.sourceKey || "other";
+      if (!Object.prototype.hasOwnProperty.call(acc, key)) acc[key] = 0;
+      acc[key] += 1;
+      return acc;
+    },
+    { rfd3: 0, bioemu: 0, wt: 0, other: 0 }
+  );
+  const captionBits = [
+    `${sourceLabel("rfd3")}=${sourceCounts.rfd3}`,
+    `${sourceLabel("bioemu")}=${sourceCounts.bioemu}`,
+    `${t("artifacts.compare.wtValue")}=${sourceCounts.wt}`,
+  ];
+  if (sourceCounts.other > 0) captionBits.push(`${sourceLabel("other")}=${sourceCounts.other}`);
   const caption = `${t("analyze.chart.caption.rows", {
     rows: rows.length,
     cutoff: Math.max(0, Math.min(100, Number(state.hitListCutoff || 0))).toFixed(0),
-  })} · ${t("analyze.chart.caption.scatter", { points: points.length, selected: selectedCount })}`;
-  const legendSelected = t("analyze.chart.legend.selected", { af2Provider: af2ProviderName(currentRunAf2Provider()) });
-  const legendUnselected = t("analyze.chart.legend.unselected");
+  })} · ${t("analyze.chart.caption.scatterPoints", { points: points.length })} · ${captionBits.join(", ")}`;
+
+  const legendItems = [
+    { key: "rfd3", label: sourceLabel("rfd3") },
+    { key: "bioemu", label: sourceLabel("bioemu") },
+    { key: "wt", label: t("artifacts.compare.wtValue") },
+  ];
+  if (sourceCounts.other > 0) {
+    legendItems.push({ key: "other", label: sourceLabel("other") });
+  }
+  let legendX = left + 8;
+  const legend = legendItems
+    .map((item) => {
+      const color = colorBySource[item.key] || colorBySource.other;
+      const textX = legendX + 8;
+      const marker = `<circle cx="${legendX.toFixed(2)}" cy="14" r="4" fill="${color}" stroke="rgba(16,42,45,0.35)" stroke-width="0.6" />`;
+      const text = `<text x="${textX.toFixed(2)}" y="18" fill="#213c3f" font-size="11">${svgSafe(item.label)}</text>`;
+      const width = Math.max(56, item.label.length * 7 + 22);
+      legendX += width;
+      return `${marker}${text}`;
+    })
+    .join("");
 
   return {
     caption,
@@ -9517,10 +13671,7 @@ function buildPlddtRmsdScatter(rows) {
       <text x="14" y="${(top + plotH / 2).toFixed(2)}" text-anchor="middle" fill="#213c3f" font-size="12" transform="rotate(-90 14 ${(top + plotH / 2).toFixed(2)})">${svgSafe(
         t("analyze.chart.axis.rmsd")
       )}</text>
-      <circle cx="${(left + 8).toFixed(2)}" cy="14" r="4" fill="${selectedColor}" />
-      <text x="${(left + 16).toFixed(2)}" y="18" fill="#213c3f" font-size="11">${svgSafe(legendSelected)}</text>
-      <circle cx="${(left + 170).toFixed(2)}" cy="14" r="4" fill="${unselectedColor}" />
-      <text x="${(left + 178).toFixed(2)}" y="18" fill="#213c3f" font-size="11">${svgSafe(legendUnselected)}</text>
+      ${legend}
     </svg>`,
   };
 }
@@ -9794,6 +13945,7 @@ function renderHitList() {
   }
   const body = shown
     .map((row) => {
+      const wtDiffLabel = formatWtDifference(row);
       const classNames = [
         row.af2_selected ? "hit-list-row-pass" : "",
         row.plddt == null ? "hit-list-row-missing" : "",
@@ -9809,6 +13961,7 @@ function renderHitList() {
         <td class="num">${escapeHtml(formatMetricValue(row.soluprot, 3, false))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.plddt, 1, false))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.rmsd, 2, false))}</td>
+        <td class="num">${escapeHtml(wtDiffLabel)}</td>
         <td>${escapeHtml(localizedYesNo(Boolean(row.af2_selected)))}</td>
       </tr>`;
     })
@@ -9825,6 +13978,7 @@ function renderHitList() {
           <th>SoluProt</th>
           <th>pLDDT</th>
           <th>RMSD</th>
+          <th>${escapeHtml(t("analyze.hitList.identity"))}</th>
           <th>${escapeHtml(af2ProviderSelectedLabel(currentRunAf2Provider()))}</th>
         </tr>
       </thead>
@@ -9851,12 +14005,12 @@ function buildHitListDetailsMarkdown() {
   lines.push(`- Rows: ${maxRows}/${filtered.length}`);
   lines.push("");
   lines.push(
-    `| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+    `| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
   );
-  lines.push("|---:|---|---|---:|---:|---:|---:|---:|---|");
+  lines.push("|---:|---|---|---:|---:|---:|---:|---:|---:|---|");
   filtered.slice(0, maxRows).forEach((row) => {
     lines.push(
-      `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatMetricValue(row.tier, 2)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${row.af2_selected ? "yes" : "no"} |`
+      `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatMetricValue(row.tier, 2)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
     );
   });
   lines.push("");
@@ -9883,6 +14037,9 @@ async function refreshHitList() {
     state.hitListResult = result;
     state.hitListRows = Array.isArray(result?.rows) ? result.rows : [];
     renderHitList();
+    if (state.artifactComparison && typeof state.artifactComparison === "object") {
+      renderArtifactComparisonSummary(state.artifactComparison);
+    }
     if (!state.artifactComparison) {
       renderMonitorCompleteness(null, result?.completeness || null);
     }
@@ -10052,9 +14209,10 @@ function buildReportChartSection() {
 }
 
 function selectReportComparePaths() {
-  const structureItems = (state.artifacts || []).filter((item) => isStructureArtifactItem(item));
+  const structureItems = collectCompareStructureItems(state.artifacts);
   if (!structureItems.length) return { leftPath: "", rightPath: "" };
   chooseDefaultComparePaths(structureItems);
+  const refs = resolveCompareReferenceItems(structureItems);
   let leftPath = String(state.artifactCompareLeftPath || "").trim();
   let rightPath = String(state.artifactCompareRightPath || "").trim();
   if (!rightPath) {
@@ -10063,8 +14221,7 @@ function selectReportComparePaths() {
     if (fromHit) rightPath = String(fromHit.af2_ranked_pdb_path || "").trim();
   }
   if (!leftPath || leftPath === rightPath) {
-    const target = structureItems.find((item) => String(item?.path || "").toLowerCase() === "target.pdb");
-    if (target) leftPath = String(target.path || "");
+    leftPath = String(refs.input?.path || refs.wt?.path || refs.working?.path || structureItems[0]?.path || "");
   }
   if (leftPath === rightPath) {
     const alt = structureItems.find((item) => String(item?.path || "") !== leftPath);
@@ -10219,8 +14376,10 @@ async function buildReportCompareAttachments(compareSection) {
       apiCall("pipeline.read_artifact", { run_id: runId, path: leftPath, max_bytes: 800000 }),
       apiCall("pipeline.read_artifact", { run_id: runId, path: rightPath, max_bytes: 800000 }),
     ]);
-    const leftText = String(leftResult?.text || "");
-    const rightText = String(rightResult?.text || "");
+    const [leftText, rightText] = await Promise.all([
+      normalizeComparePdbTextForArtifact(runId, leftPath, String(leftResult?.text || "")),
+      normalizeComparePdbTextForArtifact(runId, rightPath, String(rightResult?.text || "")),
+    ]);
     if (!leftText.trim() || !rightText.trim()) return [];
     const attachments = [];
     const structureSvg = normalizeSvgAttachmentText(buildStructureDiffSvg(computePdbStructuralDiff(leftText, rightText), leftPath, rightPath));
@@ -10485,6 +14644,10 @@ function renderRuns(runs) {
         delete state.af2ProviderByRunId[runId];
         delete state.progressByRunId[runId];
         delete state.progressContextByRunId[runId];
+        if (state.workflowPlansByRunId && state.workflowPlansByRunId[runId]) {
+          delete state.workflowPlansByRunId[runId];
+          persistWorkflowPlans();
+        }
         if (state.currentRunId === runId) {
           setCurrentRunId("");
           state.artifacts = [];
@@ -10592,6 +14755,21 @@ if (el.clearMonitorMessagesMonitor) {
 
 el.runBtn.addEventListener("click", runPipeline);
 
+if (el.setupStepPrev) {
+  el.setupStepPrev.addEventListener("click", () => {
+    state.setupStepIndex = Math.max(0, Number(state.setupStepIndex || 0) - 1);
+    renderQuestions(state.plan?.questions || []);
+  });
+}
+
+if (el.setupStepNext) {
+  el.setupStepNext.addEventListener("click", () => {
+    const maxStep = SETUP_WIZARD_STEPS.length - 1;
+    state.setupStepIndex = Math.min(maxStep, Number(state.setupStepIndex || 0) + 1);
+    renderQuestions(state.plan?.questions || []);
+  });
+}
+
 if (el.viewRunReport) {
   el.viewRunReport.addEventListener("click", loadRunReportModal);
 }
@@ -10602,16 +14780,14 @@ if (el.viewAgentReport) {
 
 el.pollBtn.addEventListener("click", () => {
   if (state.currentRunId) {
-    pollStatus(state.currentRunId);
-    refreshAgentPanel();
+    void pollCurrentRun({ includeArtifacts: true });
   }
 });
 
 if (el.setupPollBtn) {
   el.setupPollBtn.addEventListener("click", () => {
     if (state.currentRunId) {
-      pollStatus(state.currentRunId);
-      refreshAgentPanel();
+      void pollCurrentRun({ includeArtifacts: true });
     }
   });
 }
@@ -10714,6 +14890,11 @@ bindArtifactFilterControls("analyze");
 if (el.artifactCompareLeft) {
   el.artifactCompareLeft.addEventListener("change", () => {
     state.artifactCompareLeftPath = String(el.artifactCompareLeft.value || "");
+    renderArtifactCompareSelects();
+    renderCopilotContext();
+    if (state.artifactCompareLeftPath && state.artifactCompareRightPath) {
+      void compareSelected3dArtifacts();
+    }
   });
 }
 
@@ -10721,12 +14902,35 @@ if (el.artifactCompareMode) {
   el.artifactCompareMode.addEventListener("change", () => {
     const mode = String(el.artifactCompareMode.value || "structure").trim().toLowerCase();
     state.artifactCompareMode = mode === "sequence" ? "sequence" : "structure";
+    renderCopilotContext();
+    if (state.artifactCompareLeftPath && state.artifactCompareRightPath) {
+      void compareSelected3dArtifacts();
+    }
   });
 }
 
 if (el.artifactCompareRight) {
   el.artifactCompareRight.addEventListener("change", () => {
     state.artifactCompareRightPath = String(el.artifactCompareRight.value || "");
+    renderArtifactCompareSelects();
+    renderCopilotContext();
+    if (state.artifactCompareLeftPath && state.artifactCompareRightPath) {
+      void compareSelected3dArtifacts();
+    }
+  });
+}
+
+if (el.artifactCompareSwap) {
+  el.artifactCompareSwap.addEventListener("click", () => {
+    const leftPath = String(state.artifactCompareLeftPath || "");
+    const rightPath = String(state.artifactCompareRightPath || "");
+    state.artifactCompareLeftPath = rightPath;
+    state.artifactCompareRightPath = leftPath;
+    renderArtifactCompareSelects();
+    renderCopilotContext();
+    if (state.artifactCompareLeftPath && state.artifactCompareRightPath) {
+      void compareSelected3dArtifacts();
+    }
   });
 }
 
@@ -10742,6 +14946,7 @@ if (el.artifactCompareClear) {
     state.artifactCompareRightPath = "";
     renderArtifactCompareSelects();
     setComparePreviewPlaceholder("artifacts.preview.placeholder");
+    renderCopilotContext();
   });
 }
 

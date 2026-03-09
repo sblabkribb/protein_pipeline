@@ -6,7 +6,11 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
+from pipeline_mcp.bio.pdb import residues_by_chain
+from pipeline_mcp.bio.pdb import sequence_by_chain
 from pipeline_mcp.models import PipelineRequest
+from pipeline_mcp.pipeline import _preprocess_pdb_text
+from pipeline_mcp.pipeline import _resolve_backbone_preprocess_options
 from pipeline_mcp.pipeline import PipelineRunner
 
 
@@ -20,6 +24,33 @@ def _tmpdir():
 
 
 class TestPipelineDryRun(unittest.TestCase):
+    def test_bioemu_zero_resseq_is_renumbered_not_dropped(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   0       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   1       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+
+        strip_nonpositive, renumber_from_1, detail = _resolve_backbone_preprocess_options(
+            pdb_text=pdb,
+            source="bioemu",
+            strip_nonpositive_resseq=True,
+            renumber_resseq_from_1=False,
+        )
+        self.assertFalse(strip_nonpositive)
+        self.assertTrue(renumber_from_1)
+        self.assertEqual(detail, "bioemu_zero_resseq_renumbered_from_1")
+
+        processed = _preprocess_pdb_text(
+            pdb,
+            chains=["A"],
+            strip_nonpositive_resseq=strip_nonpositive,
+            renumber_resseq_from_1=renumber_from_1,
+        )
+        self.assertEqual(sequence_by_chain(processed, chains=["A"]).get("A"), "AG")
+        residues = residues_by_chain(processed, only_atom_records=True).get("A") or []
+        self.assertEqual([res.resseq for res in residues], [1, 2])
+
     def test_pipeline_runs_and_writes_artifacts(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         pdb = (
@@ -337,8 +368,20 @@ class TestPipelineDryRun(unittest.TestCase):
                 if callable(on_job_id):
                     on_job_id(f"rfd3_job_{self.calls}")
                 return {
-                    "selected": {"id": "rfd3_design_1", "pdb": self.selected_pdb},
-                    "designs": [{"id": "rfd3_design_1", "pdb": self.selected_pdb}],
+                    "selected": {
+                        "id": "inputs_spec-1_0_model_0",
+                        "pdb": self.selected_pdb,
+                        "cif_gz_name": "inputs_spec-1_0_model_0.cif.gz",
+                        "json_name": "inputs_spec-1_0_model_0.json",
+                    },
+                    "designs": [
+                        {
+                            "id": "inputs_spec-1_0_model_0",
+                            "pdb": self.selected_pdb,
+                            "cif_gz_name": "inputs_spec-1_0_model_0.cif.gz",
+                            "json_name": "inputs_spec-1_0_model_0.json",
+                        }
+                    ],
                 }
 
         with _tmpdir() as tmp:
@@ -365,6 +408,13 @@ class TestPipelineDryRun(unittest.TestCase):
             run_id = "resume_rfd3_cache"
             runner.run(req, run_id=run_id)
             run_root = Path(tmp) / run_id
+            selected_meta = json.loads((run_root / "rfd3" / "selected.json").read_text(encoding="utf-8"))
+            self.assertEqual(selected_meta.get("id"), "rfd3_spec-1_0_model_0")
+            self.assertEqual(selected_meta.get("upstream_id"), "inputs_spec-1_0_model_0")
+            self.assertEqual(selected_meta.get("json_name"), "rfd3_spec-1_0_model_0.json")
+            designs_meta = json.loads((run_root / "rfd3" / "designs.json").read_text(encoding="utf-8"))
+            self.assertEqual(designs_meta[0].get("id"), "rfd3_spec-1_0_model_0")
+            self.assertTrue((run_root / "rfd3" / "designs" / "rfd3_spec-1_0_model_0.pdb").exists())
             runpod_job_path = run_root / "rfd3" / "runpod_job.json"
             runpod_meta = json.loads(runpod_job_path.read_text(encoding="utf-8"))
             runpod_meta["job_id"] = "cancelled_job"
@@ -454,7 +504,64 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertTrue(bioemu_completed)
             self.assertIn("cached", str(bioemu_completed[-1].get("detail") or ""))
 
-    def test_pipeline_novelty_reuses_cached_outputs_on_rerun(self) -> None:
+    def test_pipeline_bioemu_processed_stage_pdb_is_synced_for_compare(self) -> None:
+        target_pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        bioemu_pdb = (
+            "ATOM      1  CA  ALA A   0       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   1       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+
+        class _MMseqsStub:
+            def search(self, query_fasta, **kwargs):  # type: ignore[no-untyped-def]
+                _ = kwargs
+                _ = query_fasta
+                a3m = ">query\nAG\n>hit1\nAG\n"
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                return {"tsv": "", "a3m_gz_b64": a3m_b64}
+
+        class _BioEmuStub:
+            def sample(self, **kwargs):  # type: ignore[no-untyped-def]
+                on_job_id = kwargs.get("on_job_id")
+                if callable(on_job_id):
+                    on_job_id("bioemu_job_sync")
+                return {"topology_pdb": bioemu_pdb}
+
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=_MMseqsStub(),
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                bioemu=_BioEmuStub(),
+            )
+            req = PipelineRequest(
+                target_fasta=">q1\nAG\n",
+                target_pdb=target_pdb,
+                dry_run=False,
+                bioemu_use=True,
+                bioemu_sequence="AG",
+                stop_after="design",
+                num_seq_per_tier=1,
+                conservation_tiers=[0.3],
+                pdb_strip_nonpositive_resseq=True,
+                pdb_renumber_resseq_from_1=False,
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            stage_pdb = (out / "bioemu" / "designs" / "bioemu_topology.pdb").read_text(encoding="utf-8")
+            self.assertIn("ALA A   1", stage_pdb)
+            self.assertNotIn("ALA A   0", stage_pdb)
+            output_payload = json.loads((out / "bioemu" / "output.json").read_text(encoding="utf-8"))
+            self.assertIn("ALA A   1", str(output_payload.get("topology_pdb") or ""))
+            self.assertNotIn("ALA A   0", str(output_payload.get("topology_pdb") or ""))
+
+    def test_pipeline_wt_diff_reuses_cached_outputs_on_rerun(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
@@ -501,7 +608,7 @@ class TestPipelineDryRun(unittest.TestCase):
             runner.run(req, run_id=run_id)
             runner.run(req, run_id=run_id)
 
-            self.assertEqual(mmseqs.novelty_calls, 1)
+            self.assertEqual(mmseqs.novelty_calls, 0)
             run_root = Path(tmp) / run_id
             events = [
                 json.loads(line)
@@ -541,6 +648,9 @@ class TestPipelineDryRun(unittest.TestCase):
             sources = [str(item.get("source") or "") for item in backbones if isinstance(item, dict)]
             self.assertEqual(sources.count("rfd3"), 2)
             self.assertEqual(sources.count("bioemu"), 3)
+            rfd3_ids = [str(item.get("id") or "") for item in backbones if isinstance(item, dict) and item.get("source") == "rfd3"]
+            self.assertTrue(all(rid.startswith("rfd3_") for rid in rfd3_ids))
+            self.assertFalse(any("inputs_spec" in rid for rid in rfd3_ids))
 
     def test_pipeline_includes_fixed_positions_extra(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
