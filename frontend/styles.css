@@ -2543,6 +2543,8 @@ textarea:focus-visible {
 .comparison-kpis div {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 8px;
   font-size: 12px;
   border-bottom: 1px dashed rgba(16, 42, 45, 0.12);
@@ -2551,6 +2553,11 @@ textarea:focus-visible {
 
 .comparison-kpis span {
   color: var(--ink-soft);
+}
+
+.comparison-kpis strong {
+  text-align: right;
+  word-break: break-word;
 }
 
 .comparison-actions {
@@ -2834,6 +2841,45 @@ textarea:focus-visible {
   gap: 8px;
 }
 
+.compare-reference-disclosure {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compare-reference-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-soft);
+}
+
+.compare-reference-summary::-webkit-details-marker {
+  display: none;
+}
+
+.compare-reference-summary::after {
+  content: "+";
+  font-size: 14px;
+  line-height: 1;
+  color: var(--ink-soft);
+}
+
+.compare-reference-disclosure[open] .compare-reference-summary::after {
+  content: "-";
+}
+
+.compare-reference-disclosure .compare-reference-list {
+  margin-top: 2px;
+}
+
 .compare-preset-group {
   display: flex;
   align-items: center;
@@ -2927,7 +2973,9 @@ textarea:focus-visible {
 }
 
 .compare-studio-column .comparison-summary {
-  max-height: 540px;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
 }
 
 .compare-studio-mount:empty {
