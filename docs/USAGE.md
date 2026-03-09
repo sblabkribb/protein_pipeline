@@ -1,94 +1,115 @@
-﻿# Usage Guide
+# Usage Guide
 
 ## 목적
-- 자연어 프롬프트로 파이프라인을 실행하기 전에 필요한 입력을 질문 형태로 수집합니다.
-- 결과 산출물은 MCP의 artifact API로 조회합니다.
+- 현재 UI와 MCP 도구 기준으로 안전하게 실행, 재실행, 비교, 리포트 확인하는 방법을 정리합니다.
+- 특히 `run_id` 재사용 규칙과 Analyze 탭의 최신 동선을 기준으로 설명합니다.
 
-## 자연어 → 질문 → 실행 (추천)
-1) `pipeline.plan_from_prompt`
-   - 자연어를 파싱하고, 누락된 입력을 `questions`로 반환합니다.
-2) `pipeline.run`
-   - 질문 응답을 합쳐 최종 실행합니다.
+## 권장 사용 흐름
 
-### 예시
-- plan:
-  - prompt: "rfd3 diffusion design, diffdock 사용"
-- 질문 예시:
-  - target_pdb 또는 target_fasta
-  - rfd3_contig (A1-221 형식)
-  - diffdock_ligand_smiles 또는 diffdock_ligand_sdf
-  - stop_after
+### 1. Setup에서 새 run 시작
+- 기본값은 새 `run_id` 생성입니다.
+- `pipeline` 또는 `workflow` 모드를 선택합니다.
+- `target_input`에 FASTA/PDB를 넣으면 UI가 타입을 판별하고 필요한 필드를 채웁니다.
+- 필요하면 `rfd3_input_pdb`, `rfd3_contig`, `bioemu_use`, ligand 입력, tier 설정을 추가합니다.
+- 실행 전 `Check Setup`으로 `pipeline.preflight`를 돌리는 것이 안전합니다.
 
-### 프롬프트 고급 파라미터 (key=value)
-- 프롬프트에 `key=value` 형태로 파라미터를 직접 지정할 수 있습니다.
-- 예시:
-  - `soluprot_cutoff=0.6`
-  - `mask_consensus_apply=true`
-  - `af2_plddt_cutoff=85`
-  - `surface_only=true`
-  - `pi_max=6`
-  - `design_chains=A,B`
-  - `fixed_positions_extra={"A":[10,25],"B":[3,5]}`
+### 2. 기존 run 이어서 실행
+- Setup의 run selector에서 기존 run을 선택하면 해당 run의 `request.json`을 폼으로 불러옵니다.
+- 기본 동작은 여전히 새 run fork입니다.
+- 같은 run을 이어서 쓰려면 다음 조건이 모두 필요합니다.
+  - `pipeline` 또는 `workflow` 모드
+  - `start_from > msa`
+  - 기존 run 선택
+  - `Continue same run` 활성화
+- 이 경우 선택한 `start_from` 이후 산출물은 덮어써집니다.
 
-## 빠른 실행 (대화형 질문 생략)
+### 3. Monitor에서 상태 확인
+- `pipeline.status` 기반으로 현재 `stage`, `state`, `updated`를 확인합니다.
+- 아티팩트 목록과 미리보기, agent panel, 리포트 액션을 사용합니다.
+- Workflow Studio로 실행한 run은 checkpoint review gate가 Monitor에 나타납니다.
+
+### 4. Analyze에서 비교와 선별
+- Compare Studio:
+  - 3D 구조 비교와 sequence diff 비교를 지원합니다.
+  - Quick Compare는 `WT vs RFD3`, `WT vs BioEmu`, `RFD3 vs BioEmu` 3개 그룹만 노출합니다.
+  - 각 그룹은 `Tier 0.30 / 0.50 / 0.70`만 선택합니다.
+  - 기준선(`Input Structure`, `Working Backbone`, `WT ColabFold`)은 접힌 reference 영역에서만 확인합니다.
+- Comparison Summary:
+  - `Funnel`, `WT vs Design`, `RFD3 vs BioEmu`, `Tier Compare`, `Distribution`, `Sequence Diversity`를 카드로 바로 보여줍니다.
+- Run-to-Run Compare:
+  - 현재 run과 기준 run의 SoluProt, pLDDT, RMSD, pass-rate 변화를 비교합니다.
+- Hit List:
+  - tier/source 후보를 weighted score로 정렬합니다.
+  - `soluprot`, `plddt`, `rmsd`, `novelty` 가중치를 조절할 수 있습니다.
+
+## partial rerun 안전 규칙
+- 같은 `run_id` 재사용은 “같은 request를 더 뒤 단계까지 이어서 실행”할 때만 권장됩니다.
+- 다음이 바뀌면 새 `run_id`를 쓰거나 `start_from='msa'`로 다시 시작하세요.
+  - `target_fasta`, `target_pdb`
+  - `rfd3_input_pdb`, `rfd3_contig`, `bioemu_use` 같은 backbone 입력
+  - `design_chains`, `fixed_positions_extra`
+  - MSA/보존도/ProteinMPNN에 영향을 주는 upstream 파라미터
+- 현재 backend는 request diff와 stage별 request hash를 확인해서 unsafe partial rerun을 거부합니다.
+
+## MCP 도구 권장 흐름
+1. `pipeline.plan_from_prompt`
+   - 자연어를 파싱하고 누락 입력을 질문 형태로 반환합니다.
+2. `pipeline.preflight`
+   - 실행 전에 입력/서비스/환경 설정을 점검합니다.
+3. `pipeline.run`
+   - 최종 request로 실행합니다.
+
+빠른 실행이 필요하면:
 - `pipeline.run_from_prompt`
-  - target_pdb/target_fasta가 이미 준비된 경우 바로 실행합니다.
+- `pipeline.af2_predict` / `pipeline.run_af2`
+- `pipeline.diffdock` / `pipeline.run_diffdock`
 
-## RFD3 + BioEmu 동시 백본 생성 예시
-- 목표: `RFD3 50개 + BioEmu 50개` 백본을 ProteinMPNN 입력으로 사용
-- `pipeline.run` 주요 인자:
-  - `rfd3_contig`, `rfd3_input_pdb`
-  - `rfd3_use_ensemble=true`, `rfd3_max_return_designs=50`
-  - `bioemu_use=true`, `bioemu_num_samples=50`, `bioemu_max_return_structures=50`
-  - `num_seq_per_tier`, `conservation_tiers`
-- 필요 환경 변수:
-  - `RFD3_ENDPOINT_ID`
-  - `BIOEMU_ENDPOINT_ID`
+분석/리포트:
+- `pipeline.compare_runs`
+- `pipeline.get_hit_list`
+- `pipeline.export_results_package`
+- `pipeline.generate_report`
+- `pipeline.get_report`
+- `pipeline.save_report`
 
-## 단일 도구 실행
-- `pipeline.af2_predict`
-  - FASTA/sequence 또는 target_pdb로 AlphaFold2만 실행합니다.
-- `pipeline.diffdock`
-  - protein_pdb + ligand(SMILES/SDF)로 DiffDock만 실행합니다.
+운영/조회:
+- `pipeline.status`
+- `pipeline.list_runs`
+- `pipeline.list_artifacts`
+- `pipeline.read_artifact`
+- `pipeline.list_agent_events`
+- `pipeline.cancel_run`
+- `pipeline.delete_run`
 
-## 피드백/실험/리포트
-- `pipeline.submit_feedback` / `pipeline.list_feedback`
-- `pipeline.submit_experiment` / `pipeline.list_experiments`
-- `pipeline.generate_report` / `pipeline.save_report` / `pipeline.get_report`
+## 자연어 프롬프트 예시
+- `"rfd3 diffusion design with bioemu and af2 filtering"`
+- `"msa only for this fasta"`
+- `"proteinmpnn design with fixed positions on chain A and wt compare"`
 
-### 리포트 점수 환경변수
-- `PIPELINE_REPORT_BASE_SCORE` (기본 50)
-- `PIPELINE_REPORT_FEEDBACK_WEIGHT` (기본 20)
-- `PIPELINE_REPORT_EXPERIMENT_WEIGHT` (기본 30)
-- `PIPELINE_REPORT_MIN_SCORE` / `PIPELINE_REPORT_MAX_SCORE` (기본 0 / 100)
-- `PIPELINE_REPORT_EVIDENCE_MEDIUM_FEEDBACK` (기본 2)
-- `PIPELINE_REPORT_EVIDENCE_HIGH_FEEDBACK` (기본 6)
-- `PIPELINE_REPORT_EVIDENCE_MEDIUM_EXPERIMENT` (기본 1)
-- `PIPELINE_REPORT_EVIDENCE_HIGH_EXPERIMENT` (기본 3)
-- `PIPELINE_REPORT_PROMOTE_SCORE` (기본 75)
-- `PIPELINE_REPORT_PROMISING_SCORE` (기본 60)
-- `PIPELINE_REPORT_REVIEW_SCORE` (기본 40)
-- `PIPELINE_REPORT_PROMOTE_REQUIRE_EVIDENCE` (기본 true)
-- 커스텀 스코어러:
-  - `PIPELINE_REPORT_SCORER` = 모듈 경로 또는 `/abs/path/to/scorer.py`
-  - `PIPELINE_REPORT_SCORER_FN` = 함수명 (기본 `score_report`)
-
-예시 (`/opt/protein_pipeline/custom_scorer.py`):
-```python
-def score_report(feedback_counts, experiment_counts, config):
-    score = 70
-    return {
-        "score": score,
-        "evidence": "medium",
-        "recommendation": "promising",
-        "scoring_config": config,
-    }
-```
+프롬프트 또는 명시 인자에서 자주 쓰는 키:
+- `stop_after`
+- `start_from`
+- `design_chains`
+- `conservation_tiers`
+- `num_seq_per_tier`
+- `fixed_positions_extra`
+- `soluprot_cutoff`
+- `af2_plddt_cutoff`
+- `af2_rmsd_cutoff`
+- `bioemu_use`
 
 ## 산출물 확인
-- `pipeline.list_artifacts`로 파일 목록
-- `pipeline.read_artifact`로 파일 내용 조회
+- `pipeline.list_artifacts`로 경로 목록을 가져옵니다.
+- `pipeline.read_artifact`로 텍스트/PDB/JSON/SVG 등을 읽습니다.
+- 자주 보는 파일:
+  - `summary.json`
+  - `comparisons.json`
+  - `report.md`, `report_ko.md`
+  - `agent_panel_report.md`, `agent_panel_report_ko.md`
+  - `tiers/<tier>/af2_scores.json`
+  - `tiers/<tier>/designs.fasta`
 
-## 스크린샷 가이드
-- 스크린샷 파일은 `docs/screenshots/`에 저장하세요.
-- README에는 요약과 대표 이미지 1~2개만 넣고, 상세 이미지는 이 문서에 모으는 것을 권장합니다.
+## Compare Studio 해석 주의
+- 구조 diff 색은 mutation이 아니라 CA 좌표 이동량 기준입니다.
+- 같은 residue(`ASN->ASN`, `ASP->ASP`)라도 정렬 후 좌표가 다르면 노랑/빨강으로 표시될 수 있습니다.
+- sequence diff와 structure diff는 다른 기준이므로 별도로 확인해야 합니다.
