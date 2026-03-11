@@ -333,3 +333,27 @@ def read_artifact(
         "truncated": bool(truncated),
     }
     return data, meta
+
+
+def save_workflow_session(output_root: str, run_id: str, session: object) -> dict[str, object]:
+    root = resolve_run_path(output_root, run_id)
+    if not root.exists():
+        raise ValueError("run_id not found")
+    path = root / "workflow_studio" / "session.json"
+    write_json(path, session)
+    stat = path.stat()
+    return {
+        "path": "workflow_studio/session.json",
+        "size": int(stat.st_size),
+        "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(stat.st_mtime)),
+    }
+
+
+def load_workflow_session(output_root: str, run_id: str) -> dict[str, object] | None:
+    path = resolve_run_path(output_root, run_id, "workflow_studio/session.json")
+    if not path.exists():
+        return None
+    payload = read_json(path)
+    if isinstance(payload, dict):
+        return payload
+    raise ValueError("workflow session must be a JSON object")

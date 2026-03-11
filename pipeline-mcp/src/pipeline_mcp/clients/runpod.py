@@ -8,6 +8,17 @@ from collections.abc import Callable
 
 import requests
 
+_RUNPOD_JOB_API_BASE = "https://api.runpod.ai/v2"
+_RUNPOD_REST_API_BASE = "https://rest.runpod.io/v1"
+
+
+def _status_message(status_code: int | None) -> str | None:
+    if status_code == 401:
+        return "RUNPOD_API_KEY was rejected by the RunPod API. Update the key and restart pipeline-mcp."
+    if status_code == 403:
+        return "RUNPOD_API_KEY does not have permission for the requested RunPod API action."
+    return None
+
 
 def _env_true(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "y", "on"}
@@ -29,11 +40,43 @@ class RunPodClient:
     timeout_s: float = 60.0
     poll_interval_s: float = 2.0
 
+    def _raise_for_status(self, response: requests.Response) -> None:
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as exc:
+            message = _status_message(exc.response.status_code if exc.response is not None else None)
+            if message:
+                raise RuntimeError(message) from exc
+            raise
+
     def _headers(self) -> dict[str, str]:
         return {"Authorization": f"Bearer {self.api_key}"}
 
+    def _rest(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json_body: dict[str, Any] | None = None,
+    ) -> Any:
+        url = f"{_RUNPOD_REST_API_BASE}{path}"
+        response = requests.request(
+            method=method.upper(),
+            url=url,
+            headers=self._headers(),
+            params=params,
+            json=json_body,
+            timeout=self.timeout_s,
+            verify=requests_verify_arg(ca_bundle=self.ca_bundle, skip_verify=self.skip_verify),
+        )
+        self._raise_for_status(response)
+        if not response.content:
+            return {}
+        return response.json()
+
     def run(self, endpoint_id: str, input_payload: dict[str, Any]) -> str:
-        url = f"https://api.runpod.ai/v2/{endpoint_id}/run"
+        url = f"{_RUNPOD_JOB_API_BASE}/{endpoint_id}/run"
         r = requests.post(
             url,
             headers=self._headers(),
@@ -41,7 +84,7 @@ class RunPodClient:
             timeout=self.timeout_s,
             verify=requests_verify_arg(ca_bundle=self.ca_bundle, skip_verify=self.skip_verify),
         )
-        r.raise_for_status()
+        self._raise_for_status(r)
         data = r.json()
         job_id = data.get("id")
         if not job_id:
@@ -49,31 +92,45 @@ class RunPodClient:
         return str(job_id)
 
     def status(self, endpoint_id: str, job_id: str) -> dict[str, Any]:
-        url = f"https://api.runpod.ai/v2/{endpoint_id}/status/{job_id}"
+        url = f"{_RUNPOD_JOB_API_BASE}/{endpoint_id}/status/{job_id}"
         r = requests.get(
             url,
             headers=self._headers(),
             timeout=self.timeout_s,
             verify=requests_verify_arg(ca_bundle=self.ca_bundle, skip_verify=self.skip_verify),
         )
-        r.raise_for_status()
+        self._raise_for_status(r)
         data = r.json()
         if not isinstance(data, dict):
             raise RuntimeError(f"Unexpected RunPod status response: {data!r}")
         return data
 
     def cancel(self, endpoint_id: str, job_id: str) -> dict[str, Any]:
-        url = f"https://api.runpod.ai/v2/{endpoint_id}/cancel/{job_id}"
+        url = f"{_RUNPOD_JOB_API_BASE}/{endpoint_id}/cancel/{job_id}"
         r = requests.post(
             url,
             headers=self._headers(),
             timeout=self.timeout_s,
             verify=requests_verify_arg(ca_bundle=self.ca_bundle, skip_verify=self.skip_verify),
         )
-        r.raise_for_status()
+        self._raise_for_status(r)
         data = r.json()
         if not isinstance(data, dict):
             raise RuntimeError(f"Unexpected RunPod cancel response: {data!r}")
+        return data
+
+    def health(self, endpoint_id: str) -> dict[str, Any]:
+        url = f"{_RUNPOD_JOB_API_BASE}/{endpoint_id}/health"
+        r = requests.get(
+            url,
+            headers=self._headers(),
+            timeout=self.timeout_s,
+            verify=requests_verify_arg(ca_bundle=self.ca_bundle, skip_verify=self.skip_verify),
+        )
+        self._raise_for_status(r)
+        data = r.json()
+        if not isinstance(data, dict):
+            raise RuntimeError(f"Unexpected RunPod health response: {data!r}")
         return data
 
     def wait(self, endpoint_id: str, job_id: str) -> dict[str, Any]:
@@ -119,3 +176,43 @@ class RunPodClient:
             on_job_id(job_id)
         data = self.wait(endpoint_id, job_id)
         return job_id, data
+
+    def list_endpoints(self, *, include_workers: bool = False, include_template: bool = True) -> Any:
+        params = {
+            "includeWorkers": "true" if include_workers else "false",
+            "includeTemplate": "true" if include_template else "false",
+        }
+        return self._rest("GET", "/endpoints", params=params)
+
+    def get_endpoint(self, endpoint_id: str, *, include_workers: bool = True, include_template: bool = True) -> dict[str, Any]:
+        params = {
+            "includeWorkers": "true" if include_workers else "false",
+            "includeTemplate": "true" if include_template else "false",
+        }
+        data = self._rest("GET", f"/endpoints/{endpoint_id}", params=params)
+        if not isinstance(data, dict):
+            raise RuntimeError(f"Unexpected RunPod endpoint response: {data!r}")
+        return data
+
+    def update_endpoint(self, endpoint_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+        data = self._rest("PATCH", f"/endpoints/{endpoint_id}", json_body=patch)
+        if not isinstance(data, dict):
+            raise RuntimeError(f"Unexpected RunPod endpoint update response: {data!r}")
+        return data
+
+    def list_endpoint_billing(
+        self,
+        *,
+        start_time: str,
+        end_time: str,
+        bucket_size: str = "day",
+        endpoint_id: str | None = None,
+    ) -> Any:
+        params: dict[str, Any] = {
+            "startTime": start_time,
+            "endTime": end_time,
+            "bucketSize": bucket_size,
+        }
+        if endpoint_id:
+            params["endpointId"] = endpoint_id
+        return self._rest("GET", "/billing/endpoints", params=params)

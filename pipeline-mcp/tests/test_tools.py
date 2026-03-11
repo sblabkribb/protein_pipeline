@@ -156,6 +156,32 @@ class TestTools(unittest.TestCase):
             self.assertIn("target.original.pdb", paths)
             self.assertNotIn("backbones/demo/target.original.pdb", paths)
 
+    def test_pipeline_save_and_get_workflow_session(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.run",
+                {"target_fasta": fasta, "dry_run": True, "stop_after": "msa", "run_id": "workflow_session_case"},
+            )
+            run_id = str(out.get("run_id") or "")
+            session = {
+                "session_id": "studio_session_001",
+                "head_run_id": run_id,
+                "nodes": ["msa", "design", "af2"],
+            }
+            saved = dispatcher.call_tool(
+                "pipeline.save_workflow_session",
+                {"run_id": run_id, "session": session},
+            )
+            self.assertTrue(bool(saved.get("saved")))
+            self.assertEqual(str(saved.get("path") or ""), "workflow_studio/session.json")
+
+            loaded = dispatcher.call_tool("pipeline.get_workflow_session", {"run_id": run_id})
+            self.assertTrue(bool(loaded.get("found")))
+            self.assertEqual((loaded.get("session") or {}).get("session_id"), "studio_session_001")
+
     def test_pipeline_run_rejects_running_run_id(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         with _tmpdir() as tmp:
@@ -226,6 +252,67 @@ class TestTools(unittest.TestCase):
             ids = {str(item.get("id")) for item in required if isinstance(item, dict)}
             self.assertNotIn("target_input", ids)
             self.assertNotIn("fixed_positions_extra", ids)
+
+    def test_pipeline_preflight_soluprot_start_requires_design_outputs(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            run_id = "resume_soluprot_case"
+            init_run(tmp, run_id)
+            out = dispatcher.call_tool(
+                "pipeline.preflight",
+                {
+                    "run_id": run_id,
+                    "target_fasta": ">q1\nACDEFGHIK\n",
+                    "start_from": "soluprot",
+                    "stop_after": "soluprot",
+                },
+            )
+            self.assertFalse(bool(out.get("ok")))
+            errors = [str(x) for x in (out.get("errors") or [])]
+            self.assertTrue(any("Design/ProteinMPNN outputs" in e for e in errors))
+
+    def test_pipeline_preflight_af2_start_accepts_existing_soluprot_passed_sequences(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            run_id = "resume_af2_case"
+            paths = init_run(tmp, run_id)
+            tier_dir = paths.root / "tiers" / "30"
+            tier_dir.mkdir(parents=True, exist_ok=True)
+            (tier_dir / "designs_filtered.fasta").write_text(">seq1\nACDEFGHIK\n", encoding="utf-8")
+            out = dispatcher.call_tool(
+                "pipeline.preflight",
+                {
+                    "run_id": run_id,
+                    "target_fasta": ">q1\nACDEFGHIK\n",
+                    "start_from": "af2",
+                    "stop_after": "af2",
+                },
+            )
+            self.assertTrue(bool(out.get("ok")))
+
+    def test_pipeline_preflight_novelty_start_requires_af2_selected_sequences(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            run_id = "resume_novelty_case"
+            paths = init_run(tmp, run_id)
+            tier_dir = paths.root / "tiers" / "30"
+            tier_dir.mkdir(parents=True, exist_ok=True)
+            (tier_dir / "af2_selected.fasta").write_text("", encoding="utf-8")
+            out = dispatcher.call_tool(
+                "pipeline.preflight",
+                {
+                    "run_id": run_id,
+                    "target_fasta": ">q1\nACDEFGHIK\n",
+                    "start_from": "novelty",
+                    "stop_after": "novelty",
+                },
+            )
+            self.assertFalse(bool(out.get("ok")))
+            errors = [str(x) for x in (out.get("errors") or [])]
+            self.assertTrue(any("AF2-selected sequences" in e for e in errors))
 
     def test_pipeline_run_rfd3_stop_requires_rfd3_inputs(self) -> None:
         with _tmpdir() as tmp:

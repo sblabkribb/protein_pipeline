@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>K-Biofoundry | Protein Pipeline Console</title>
-    <link rel="stylesheet" href="./styles.css?v=20260309_compare_summary_inline" />
+    <link rel="stylesheet" href="./styles.css?v=20260310_runpod_admin_main2" />
   </head>
   <body>
     <div class="bg-orb orb-a" aria-hidden="true"></div>
@@ -26,6 +26,14 @@
         </div>
         <button id="copilotOpenBtn" class="ghost" data-i18n="copilot.open">Copilot</button>
         <button id="helpBtn" class="ghost" data-i18n="action.help">Usage</button>
+        <button
+          id="runpodAdminBtn"
+          class="ghost hidden"
+          type="button"
+          onclick="window.location.href = window.location.pathname.startsWith('/pipeline') ? '/pipeline/runpod-admin/' : '/runpod-admin/'"
+        >
+          RunPod Admin
+        </button>
         <button id="adminBtn" class="ghost hidden" data-i18n="action.admin">Admin</button>
         <button id="settingsBtn" class="ghost" data-i18n="action.settings">Settings</button>
         <button id="logoutBtn" class="ghost" data-i18n="action.logout">Logout</button>
@@ -74,6 +82,17 @@
             data-i18n="tabs.setup"
           >
             Setup
+          </button>
+          <button
+            id="tabBtnStudio"
+            class="tab-btn"
+            role="tab"
+            aria-selected="false"
+            aria-controls="tab-studio"
+            data-tab="studio"
+            data-i18n="tabs.studio"
+          >
+            Studio
           </button>
           <button
             id="tabBtnMonitor"
@@ -208,6 +227,101 @@
               </div>
 
               <div id="questionStack" class="question-stack hidden"></div>
+            </div>
+          </div>
+        </section>
+
+        <section
+          id="tab-studio"
+          class="tab-panel"
+          data-tab="studio"
+          role="tabpanel"
+          aria-labelledby="tabBtnStudio"
+        >
+          <div class="tab-content-shell">
+            <div class="panel panel-block studio-shell-panel">
+              <div class="panel-header">
+                <h3 data-i18n="studio.title">Workflow Studio</h3>
+                <p data-i18n="studio.desc">
+                  Run one stage at a time, adjust key parameters, and decide whether to rerun or move forward.
+                </p>
+              </div>
+              <div class="studio-toolbar">
+                <label class="run-context-select">
+                  <span data-i18n="studio.session">Session</span>
+                  <select id="studioSessionSelector" class="run-selector">
+                    <option value="" data-i18n="studio.selectSession">Select session</option>
+                  </select>
+                </label>
+                <div class="studio-toolbar-actions">
+                  <button id="studioRunBtn" class="primary" type="button" data-i18n="studio.action.run">
+                    Run This Stage
+                  </button>
+                  <button id="studioStopBtn" class="ghost" type="button" data-i18n="monitor.stop">
+                    Stop Run
+                  </button>
+                  <button id="studioResumeBtn" class="ghost" type="button" data-i18n="monitor.resume">
+                    Resume Run
+                  </button>
+                  <button id="studioAdoptRunBtn" class="ghost" type="button" data-i18n="studio.adoptRun">
+                    Adopt Current Run
+                  </button>
+                  <button id="studioRefreshBtn" class="ghost" type="button" data-i18n="studio.refresh">
+                    Refresh Studio
+                  </button>
+                  <button id="studioDeleteSessionBtn" class="ghost" type="button" data-i18n="studio.deleteSession">
+                    Delete Session
+                  </button>
+                  <button id="studioDeleteOtherSessionsBtn" class="ghost" type="button" data-i18n="studio.deleteOtherSessions">
+                    Delete Other Sessions
+                  </button>
+                  <button id="studioOpenMonitorBtn" class="ghost" type="button" data-i18n="studio.openMonitor">
+                    Open Monitor
+                  </button>
+                </div>
+              </div>
+              <div id="studioRunPanel" class="studio-run-panel">
+                <div class="studio-run-panel-head">
+                  <strong data-i18n="studio.runStatus.title">Execution Status</strong>
+                  <div id="studioRunInlineStatus" class="run-inline-status studio-run-inline-status" data-i18n="studio.runStatus.empty">
+                    Studio run: -
+                  </div>
+                </div>
+                <div class="studio-run-panel-grid">
+                  <div class="studio-run-stat">
+                    <span class="label" data-i18n="studio.runStatus.run">Run</span>
+                    <strong id="studioRunIdValue" class="value">-</strong>
+                  </div>
+                  <div class="studio-run-stat">
+                    <span class="label" data-i18n="studio.runStatus.backend">Backend Stage</span>
+                    <strong id="studioRunStageValue" class="value">-</strong>
+                  </div>
+                  <div class="studio-run-stat">
+                    <span class="label" data-i18n="studio.runStatus.requested">Requested</span>
+                    <strong id="studioRunRequestedValue" class="value">-</strong>
+                  </div>
+                  <div class="studio-run-stat">
+                    <span class="label" data-i18n="studio.runStatus.updated">Updated</span>
+                    <strong id="studioRunUpdatedValue" class="value">-</strong>
+                  </div>
+                  <div class="studio-run-stat">
+                    <span class="label" data-i18n="studio.runStatus.state">State</span>
+                    <span id="studioRunStateValue" class="value state-badge">-</span>
+                  </div>
+                </div>
+              </div>
+              <div class="panel-divider"></div>
+              <div id="workflowStudioRoot" class="workflow-studio-root"></div>
+              <div class="panel-divider"></div>
+              <div class="panel-header small">
+                <h3 data-i18n="artifacts.preview.title">Artifact Preview</h3>
+                <p data-i18n="artifacts.preview.desc">3D structures, images, or text extracts.</p>
+              </div>
+              <div id="studioArtifactPreview" class="artifact-preview studio-artifact-preview">
+                <div class="placeholder" data-i18n="artifacts.preview.placeholder">
+                  Select an artifact to preview it here.
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -897,33 +1011,51 @@
           <div class="help-section">
             <h5 data-i18n="help.quick.title">Quick Start</h5>
             <ul>
-              <li data-i18n="help.quick.step1">Setup: choose mode, attach inputs, and run.</li>
-              <li data-i18n="help.quick.step2">Monitor: watch status and review artifacts.</li>
-              <li data-i18n="help.quick.step3">Analyze: record feedback, experiments, and reports.</li>
+              <li data-i18n="help.quick.step1">
+                Setup: choose Pipeline or Workflow Studio, attach target input, run preflight, then launch.
+              </li>
+              <li data-i18n="help.quick.step2">
+                Monitor: follow stage status, review checkpoint artifacts, and continue from the monitor panel when needed.
+              </li>
+              <li data-i18n="help.quick.step3">
+                Analyze: start with Compare Studio, Run-to-Run Compare, and Hit List, then save feedback, experiments, and reports.
+              </li>
             </ul>
           </div>
           <div class="help-section">
             <h5 data-i18n="help.setup.title">Setup Tips</h5>
             <ul>
-              <li data-i18n="help.setup.step1">Use Run Mode to select pipeline or specific tools.</li>
+              <li data-i18n="help.setup.step1">
+                Select a recent run and use Load Request to restore its settings before editing.
+              </li>
               <li data-i18n="help.setup.step2">
-                Attach required files; missing inputs keep Run disabled.
+                Leave Continue same run off unless you need a safe partial rerun with start_from &gt; MSA.
               </li>
             </ul>
           </div>
           <div class="help-section">
             <h5 data-i18n="help.monitor.title">Monitoring</h5>
             <ul>
-              <li data-i18n="help.monitor.step1">Select a recent run to load status and artifacts.</li>
-              <li data-i18n="help.monitor.step2">Use Auto Poll for live updates.</li>
+              <li data-i18n="help.monitor.step1">
+                Select a recent run to load status, artifacts, reports, and workflow review context.
+              </li>
+              <li data-i18n="help.monitor.step2">
+                Use Auto Poll for live updates and workflow actions when a checkpoint pauses execution.
+              </li>
             </ul>
           </div>
           <div class="help-section">
             <h5 data-i18n="help.analyze.title">Analysis</h5>
             <ul>
-              <li data-i18n="help.analyze.step1">Feedback captures subjective evaluation.</li>
-              <li data-i18n="help.analyze.step2">Experiments log wet-lab outcomes.</li>
-              <li data-i18n="help.analyze.step3">Reports consolidate results and link artifacts.</li>
+              <li data-i18n="help.analyze.step1">
+                Use Compare Studio for tier-based WT/RFD3/BioEmu comparison, and open folded baselines only when needed.
+              </li>
+              <li data-i18n="help.analyze.step2">
+                Read the inline Comparison Summary, then review full-run deltas and ranked candidates in Run-to-Run Compare and Hit List.
+              </li>
+              <li data-i18n="help.analyze.step3">
+                After triage, log feedback and experiments, then generate the final report package.
+              </li>
             </ul>
           </div>
           <div class="help-section">
@@ -998,6 +1130,6 @@
     <button id="copilotFabBtn" class="primary copilot-fab" data-i18n="copilot.open">Copilot</button>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260309_compare_summary_inline"></script>
+    <script type="module" src="./app.js?v=20260310_runpod_admin_main2"></script>
   </body>
 </html>
