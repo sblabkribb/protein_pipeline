@@ -7,6 +7,7 @@ MCP-enabled protein design pipeline and static console UI for staged protein des
 - Optional backbone generation with RFD3 and/or BioEmu
 - MSA, conservation, ligand mask/mask consensus, ProteinMPNN tier design, SoluProt, AF2/ColabFold, and novelty/WT-diff stages
 - Analyze tab with Compare Studio, Run-to-Run Compare, weighted Hit List, report generation, and export packaging
+- RunPod Admin console for managed serverless endpoint monitoring, billing review, worker inspection, and safe scaling patches
 - Safe partial reruns: the UI defaults to forking a new `run_id`, and the backend rejects unsafe late-stage reruns when upstream inputs changed
 
 ## Core stage order
@@ -19,6 +20,7 @@ The full pipeline also writes conservation, masking, WT comparison, report, and 
 - `Workflow Studio`: checkpoint-based pipeline execution with checkpoint review in Monitor
 - `Monitor`: status, artifacts, report actions, agent panel, workflow review gate
 - `Analyze`: Compare Studio, comparison summary, run-to-run compare, hit list, candidate charts, feedback, experiments, and report review
+- `RunPod Admin`: fleet-level RunPod operations view with calendar-aligned usage/spend charts, endpoint detail, worker state, CSV/SVG exports, and patch controls
 
 Compare Studio currently uses:
 - tier-only quick compare presets: `WT vs RFD3`, `WT vs BioEmu`, `RFD3 vs BioEmu`
@@ -76,6 +78,13 @@ Inspection and operations:
 - `pipeline.cancel_run`
 - `pipeline.delete_run`
 
+RunPod admin and monitoring:
+- `pipeline.runpod_list_endpoints`
+- `pipeline.runpod_get_endpoint`
+- `pipeline.runpod_update_endpoint`
+- `pipeline.runpod_list_billing`
+- `pipeline.runpod_get_history`
+
 Review data:
 - `pipeline.submit_feedback`
 - `pipeline.list_feedback`
@@ -124,10 +133,17 @@ python3 -m http.server 5173
 
 Open `http://127.0.0.1:5173`.
 
-RunPod admin UI:
+Available UI routes:
+- Main console: `http://127.0.0.1:5173/`
+- RunPod Admin: `http://127.0.0.1:5173/runpod-admin/`
 
-- `http://127.0.0.1:5173/runpod-admin/`
-- See `frontend/runpod-admin/TODO.md` for scope and follow-up work.
+RunPod Admin is a standalone operations console for the RunPod Serverless endpoints wired into `protein_pipeline`.
+
+- Starts with fleet-wide monitoring for the selected calendar window (`week`, `month`, `last 6 months`)
+- Lets you filter to managed endpoints only, then drill into a single endpoint
+- Shows worker state, queued/running job counts, spend history, and per-endpoint downloads
+- Supports safe endpoint patches for GPU types, scaler settings, worker min/max, timeouts, template, and network volume
+- Falls back to health-only monitoring if the RunPod key cannot access admin or billing APIs
 
 ## Auth and CORS
 - `PIPELINE_AUTH_ENABLED=1`
@@ -143,6 +159,8 @@ RunPod admin UI:
 - `docs/stepper_orchestration.md`: stepwise orchestration and safe `run_id` reuse
 - `docs/runpod_model_execution.md`: RunPod execution model details
 - `docs/ui_pipeline_ppt_ko.md`: Korean UI/pipeline slide notes
+- `frontend/runpod-admin/README.md`: RunPod Admin UI access and backend dependency summary
+- `frontend/runpod-admin/TODO.md`: RunPod Admin scope, rationale, and follow-up work
 
 ## Repo structure
 - `frontend/`: static console UI
