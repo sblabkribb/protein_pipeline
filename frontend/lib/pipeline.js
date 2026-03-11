@@ -297,6 +297,279 @@ export function buildRunArguments({ prompt, routed, answers, runId }) {
   return args;
 }
 
+const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
+  msa: Object.freeze(["target_input", "pdb_strip_nonpositive_resseq"]),
+  rfd3: Object.freeze(["rfd3_input_pdb", "rfd3_contig", "rfd3_max_return_designs"]),
+  bioemu: Object.freeze(["bioemu_use", "bioemu_num_samples", "bioemu_max_return_structures"]),
+  design: Object.freeze([
+    "design_chains",
+    "fixed_positions_extra",
+    "num_seq_per_tier",
+    "mask_consensus_apply",
+    "ligand_mask_use_original_target",
+  ]),
+  soluprot: Object.freeze(["soluprot_cutoff"]),
+  af2: Object.freeze(["af2_provider", "af2_max_candidates_per_tier", "af2_plddt_cutoff", "af2_rmsd_cutoff"]),
+  novelty: Object.freeze(["novelty_enabled", "wt_compare"]),
+});
+
+const WORKFLOW_STUDIO_IGNORED_FIELDS = new Set([
+  "run_mode",
+  "start_from",
+  "stop_after",
+  "confirm_run",
+  "questions",
+  "missing",
+]);
+
+const WORKFLOW_STUDIO_FIELD_STAGE = Object.freeze(
+  Object.fromEntries(
+    Object.entries(WORKFLOW_STUDIO_STAGE_FIELDS).flatMap(([stage, fields]) =>
+      fields.map((fieldId) => [fieldId, stage])
+    )
+  )
+);
+
+const WORKFLOW_STUDIO_EXISTING_OUTPUT_REQUIREMENTS = Object.freeze({
+  soluprot: Object.freeze({
+    satisfiedByStartFrom: "design",
+    upstreamStage: "design",
+    code: "design_outputs_missing",
+    minSize: 1,
+    pathPatterns: Object.freeze([
+      /(?:^|\/)tiers\/[^/]+\/proteinmpnn\.json$/i,
+      /(?:^|\/)tiers\/[^/]+\/designs(?:_pi_filtered)?\.fasta$/i,
+    ]),
+  }),
+  af2: Object.freeze({
+    satisfiedByStartFrom: "soluprot",
+    upstreamStage: "soluprot",
+    code: "soluprot_passed_missing",
+    minSize: 1,
+    pathPatterns: Object.freeze([/(?:^|\/)tiers\/[^/]+\/designs_filtered\.fasta$/i]),
+  }),
+  novelty: Object.freeze({
+    satisfiedByStartFrom: "af2",
+    upstreamStage: "af2",
+    code: "af2_selected_missing",
+    minSize: 1,
+    pathPatterns: Object.freeze([/(?:^|\/)tiers\/[^/]+\/af2_selected\.fasta$/i]),
+  }),
+});
+
+function stageIndex(stage) {
+  const normalized = normalizeStage(stage);
+  return normalized ? STAGE_ORDER.indexOf(normalized) : -1;
+}
+
+function cloneWorkflowValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => cloneWorkflowValue(item));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, cloneWorkflowValue(item)])
+    );
+  }
+  return value;
+}
+
+function workflowValuesEqual(a, b) {
+  if (a === b) return true;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((item, idx) => workflowValuesEqual(item, b[idx]));
+  }
+  if (a && typeof a === "object") {
+    if (!b || typeof b !== "object" || Array.isArray(b)) return false;
+    const aKeys = Object.keys(a).sort();
+    const bKeys = Object.keys(b).sort();
+    if (!workflowValuesEqual(aKeys, bKeys)) return false;
+    return aKeys.every((key) => workflowValuesEqual(a[key], b[key]));
+  }
+  if (b && typeof b === "object") return false;
+  return false;
+}
+
+function workflowValueIsAbsent(value) {
+  if (value === undefined || value === null) return true;
+  if (typeof value === "string") return value.trim() === "";
+  if (Array.isArray(value)) return value.length === 0 || value.every((item) => workflowValueIsAbsent(item));
+  if (value && typeof value === "object") return Object.keys(value).length === 0;
+  return false;
+}
+
+function workflowStageOrderForNodes(nodes) {
+  const normalized = new Set(
+    (Array.isArray(nodes) ? nodes : [])
+      .map((stage) => normalizeStage(stage))
+      .filter(Boolean)
+  );
+  return normalized.size ? STAGE_ORDER.filter((stage) => normalized.has(stage)) : [...STAGE_ORDER];
+}
+
+export function createWorkflowSessionId(prefix, now = new Date()) {
+  const safePrefix = sanitizeName(prefix || "workflow") || "workflow";
+  return createRunId(`${safePrefix}_studio`, now);
+}
+
+export function workflowStudioStageFields(stage) {
+  const normalized = normalizeStage(stage);
+  return normalized ? [...(WORKFLOW_STUDIO_STAGE_FIELDS[normalized] || [])] : [];
+}
+
+export function splitWorkflowStudioAnswers(answers) {
+  const baseAnswers = {};
+  const stageDrafts = Object.fromEntries(STAGE_ORDER.map((stage) => [stage, {}]));
+  const skipBaseKeys = new Set(WORKFLOW_STUDIO_IGNORED_FIELDS);
+  if (String(answers?.target_input || "").trim()) {
+    skipBaseKeys.add("target_pdb");
+    skipBaseKeys.add("target_fasta");
+  }
+  Object.entries(answers || {}).forEach(([key, value]) => {
+    if (value === undefined) return;
+    const owner = WORKFLOW_STUDIO_FIELD_STAGE[key];
+    if (owner) {
+      stageDrafts[owner][key] = cloneWorkflowValue(value);
+      return;
+    }
+    if (skipBaseKeys.has(key)) return;
+    baseAnswers[key] = cloneWorkflowValue(value);
+  });
+  return { baseAnswers, stageDrafts };
+}
+
+export function mergeWorkflowStudioAnswers({ baseAnswers, stageDrafts, nodes } = {}) {
+  const merged = {};
+  Object.entries(baseAnswers || {}).forEach(([key, value]) => {
+    if (value === undefined) return;
+    merged[key] = cloneWorkflowValue(value);
+  });
+  workflowStageOrderForNodes(nodes).forEach((stage) => {
+    Object.entries(stageDrafts?.[stage] || {}).forEach(([key, value]) => {
+      if (value === undefined) return;
+      merged[key] = cloneWorkflowValue(value);
+    });
+  });
+  return merged;
+}
+
+export function buildWorkflowStudioEffectiveAnswers({ headRequest, baseAnswers, stageDrafts, nodes } = {}) {
+  const inheritedDraft = buildSetupDraftFromRequest(
+    headRequest && typeof headRequest === "object" && !Array.isArray(headRequest) ? headRequest : {}
+  ).answers;
+  const inheritedSplit = splitWorkflowStudioAnswers(inheritedDraft);
+  const mergedBaseAnswers = {
+    ...(inheritedSplit.baseAnswers || {}),
+  };
+  Object.entries(baseAnswers || {}).forEach(([key, value]) => {
+    if (value === undefined) return;
+    mergedBaseAnswers[key] = cloneWorkflowValue(value);
+  });
+  const mergedStageDrafts = Object.fromEntries(
+    STAGE_ORDER.map((stage) => [
+      stage,
+      {
+        ...(inheritedSplit.stageDrafts?.[stage] || {}),
+        ...(stageDrafts?.[stage] || {}),
+      },
+    ])
+  );
+  return mergeWorkflowStudioAnswers({
+    baseAnswers: mergedBaseAnswers,
+    stageDrafts: mergedStageDrafts,
+    nodes,
+  });
+}
+
+export function workflowStudioChangedFields(previousPayload, nextPayload) {
+  const previous = previousPayload && typeof previousPayload === "object" ? previousPayload : {};
+  const next = nextPayload && typeof nextPayload === "object" ? nextPayload : {};
+  const keys = new Set([...Object.keys(previous), ...Object.keys(next)]);
+  const changed = [];
+  Array.from(keys)
+    .sort()
+    .forEach((key) => {
+      if (WORKFLOW_STUDIO_IGNORED_FIELDS.has(key)) return;
+      if (workflowValueIsAbsent(previous[key]) && workflowValueIsAbsent(next[key])) return;
+      if (!workflowValuesEqual(previous[key], next[key])) {
+        changed.push(key);
+      }
+    });
+  return changed;
+}
+
+export function minimumWorkflowStudioStartStage({ previousPayload, nextPayload, targetStage } = {}) {
+  const target = normalizeStage(targetStage) || "msa";
+  const changed = workflowStudioChangedFields(previousPayload, nextPayload);
+  if (!changed.length) return target;
+  let earliestIndex = STAGE_ORDER.indexOf(target);
+  changed.forEach((key) => {
+    const owner = WORKFLOW_STUDIO_FIELD_STAGE[key];
+    const idx = owner ? STAGE_ORDER.indexOf(owner) : 0;
+    if (idx >= 0 && idx < earliestIndex) {
+      earliestIndex = idx;
+    }
+  });
+  return STAGE_ORDER[earliestIndex] || target;
+}
+
+export function workflowStudioDependencyStatus({ targetStage, requiredStart, artifacts } = {}) {
+  const target = normalizeStage(targetStage);
+  const start = normalizeStage(requiredStart) || target;
+  const requirement = target ? WORKFLOW_STUDIO_EXISTING_OUTPUT_REQUIREMENTS[target] || null : null;
+  if (!target || !requirement) {
+    return {
+      required: false,
+      blocked: false,
+      code: "",
+      upstreamStage: "",
+      matchedPaths: [],
+    };
+  }
+
+  const startIdx = stageIndex(start);
+  const satisfyIdx = stageIndex(requirement.satisfiedByStartFrom);
+  if (startIdx >= 0 && satisfyIdx >= 0 && startIdx <= satisfyIdx) {
+    return {
+      required: false,
+      blocked: false,
+      code: "",
+      upstreamStage: requirement.upstreamStage,
+      matchedPaths: [],
+    };
+  }
+
+  const files = Array.isArray(artifacts)
+    ? artifacts.filter((item) => item && item.type === "file" && String(item.path || "").trim())
+    : [];
+  const matchedPaths = files
+    .filter((item) => {
+      const normalizedPath = normalizeArtifactPath(item.path);
+      const size = Number(item.size || 0);
+      if (!Number.isFinite(size) || size < Number(requirement.minSize || 0)) return false;
+      return requirement.pathPatterns.some((pattern) => pattern.test(normalizedPath));
+    })
+    .map((item) => String(item.path || ""));
+
+  return {
+    required: true,
+    blocked: matchedPaths.length === 0,
+    code: requirement.code,
+    upstreamStage: requirement.upstreamStage,
+    matchedPaths,
+  };
+}
+
+export function nextWorkflowStudioStage(nodes, stage) {
+  const order = workflowStageOrderForNodes(nodes);
+  const normalized = normalizeStage(stage);
+  if (!normalized) return order[0] || "";
+  const idx = order.indexOf(normalized);
+  if (idx < 0 || idx + 1 >= order.length) return "";
+  return order[idx + 1];
+}
+
 function cloneSetupValue(value) {
   if (Array.isArray(value)) {
     return value.map((item) => cloneSetupValue(item));

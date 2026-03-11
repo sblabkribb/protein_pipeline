@@ -11,6 +11,7 @@ from .storage import new_run_id
 from .auth import AuthError
 from .auth import load_auth_manager
 from .auth import safe_run_prefix
+from .runpod_metrics import ensure_runpod_metrics_collector
 from .tools import ToolDispatcher
 
 
@@ -18,6 +19,13 @@ _DISPATCHER: ToolDispatcher | None = None
 _AUTH = None
 _ALLOW_ALL_ORIGINS = True
 _ALLOWED_ORIGINS: set[str] = set()
+_ADMIN_ONLY_TOOLS = {
+    "pipeline.runpod_list_endpoints",
+    "pipeline.runpod_get_endpoint",
+    "pipeline.runpod_update_endpoint",
+    "pipeline.runpod_list_billing",
+    "pipeline.runpod_get_history",
+}
 
 
 def _init_cors() -> None:
@@ -215,7 +223,16 @@ class Handler(BaseHTTPRequestHandler):
                 user = self._require_auth()
                 if user is None and self.auth is not None and getattr(self.auth, "enabled", False):
                     return
-                self._json(200, self.dispatcher.list_tools())
+                tools = self.dispatcher.list_tools()
+                if user is not None and not self._is_admin(user):
+                    entries = tools.get("tools") if isinstance(tools, dict) else None
+                    if isinstance(entries, list):
+                        tools["tools"] = [
+                            item
+                            for item in entries
+                            if isinstance(item, dict) and str(item.get("name") or "") not in _ADMIN_ONLY_TOOLS
+                        ]
+                self._json(200, tools)
                 return
             if self.path.rstrip("/") == "/tools/call":
                 user = self._require_auth()
@@ -226,10 +243,15 @@ class Handler(BaseHTTPRequestHandler):
                 arguments = body.get("arguments") or {}
                 if not isinstance(name, str) or not isinstance(arguments, dict):
                     raise ValueError("Expected {name: str, arguments: object}")
+                if name in _ADMIN_ONLY_TOOLS and user is not None and not self._is_admin(user):
+                    self._json(403, {"ok": False, "error": "admin required"})
+                    return
                 run_scoped_tools = {
                     "pipeline.status",
                     "pipeline.list_artifacts",
                     "pipeline.read_artifact",
+                    "pipeline.save_workflow_session",
+                    "pipeline.get_workflow_session",
                     "pipeline.delete_run",
                     "pipeline.cancel_run",
                     "pipeline.submit_feedback",
@@ -286,8 +308,10 @@ def main(argv: list[str] | None = None) -> None:
 
     from .app import build_runner
 
+    runner = build_runner()
+    ensure_runpod_metrics_collector(runner)
     global _DISPATCHER
-    _DISPATCHER = ToolDispatcher(build_runner())
+    _DISPATCHER = ToolDispatcher(runner)
     global _AUTH
     _AUTH = load_auth_manager()
     _init_cors()

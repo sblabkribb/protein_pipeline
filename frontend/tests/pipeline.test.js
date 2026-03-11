@@ -8,18 +8,27 @@ import {
 } from "../lib/compare.js";
 import {
   artifactMetaFromPath,
+  buildWorkflowStudioEffectiveAnswers,
   buildSetupDraftFromRequest,
   buildRunArguments,
   buildUserPrefix,
+  createWorkflowSessionId,
   createRunId,
   detectTargetKey,
   displayArtifactPath,
   displayRfd3Id,
   filterRunsByPrefix,
   inferRequestRunMode,
+  mergeWorkflowStudioAnswers,
+  minimumWorkflowStudioStartStage,
+  nextWorkflowStudioStage,
   sanitizeName,
   shouldReuseSelectedRun,
   stageFromPath,
+  splitWorkflowStudioAnswers,
+  workflowStudioChangedFields,
+  workflowStudioDependencyStatus,
+  workflowStudioStageFields,
 } from "../lib/pipeline.js";
 
 test("sanitizeName normalizes", () => {
@@ -36,6 +45,11 @@ test("buildUserPrefix builds org_name", () => {
 test("createRunId uses prefix and utc timestamp", () => {
   const runId = createRunId("kbf_hana", new Date(Date.UTC(2024, 0, 2, 3, 4, 5)));
   assert.match(runId, /^kbf_hana_20240102_030405_[0-9a-f]{8}$/);
+});
+
+test("createWorkflowSessionId uses studio suffix and utc timestamp", () => {
+  const sessionId = createWorkflowSessionId("kbf_hana", new Date(Date.UTC(2024, 0, 2, 3, 4, 5)));
+  assert.match(sessionId, /^kbf_hana_studio_20240102_030405_[0-9a-f]{8}$/);
 });
 
 test("stageFromPath inference", () => {
@@ -215,6 +229,31 @@ test("buildRunArguments normalizes wt_diff alias to novelty", () => {
   assert.equal(args.stop_after, "novelty");
 });
 
+test("workflowStudioChangedFields ignores absent optional values", () => {
+  const previous = {
+    target_pdb: "PDB",
+    target_fasta: "",
+    design_chains: null,
+    fixed_positions_extra: null,
+    novelty_enabled: false,
+    af2_provider: "colabfold",
+  };
+  const next = {
+    target_pdb: "PDB",
+    novelty_enabled: false,
+    af2_provider: "colabfold",
+  };
+  assert.deepEqual(workflowStudioChangedFields(previous, next), []);
+  assert.equal(
+    minimumWorkflowStudioStartStage({
+      previousPayload: previous,
+      nextPayload: next,
+      targetStage: "novelty",
+    }),
+    "novelty"
+  );
+});
+
 test("buildRunArguments omits start_from when it is msa", () => {
   const args = buildRunArguments({
     prompt: "",
@@ -224,6 +263,176 @@ test("buildRunArguments omits start_from when it is msa", () => {
   });
   assert.equal(args.stop_after, "af2");
   assert.equal(args.start_from, undefined);
+});
+
+test("workflowStudioStageFields exposes key fields per stage", () => {
+  assert.deepEqual(workflowStudioStageFields("design"), [
+    "design_chains",
+    "fixed_positions_extra",
+    "num_seq_per_tier",
+    "mask_consensus_apply",
+    "ligand_mask_use_original_target",
+  ]);
+  assert.deepEqual(workflowStudioStageFields("soluprot"), ["soluprot_cutoff"]);
+  assert.deepEqual(workflowStudioStageFields("unknown"), []);
+});
+
+test("splitWorkflowStudioAnswers isolates stage-owned drafts", () => {
+  const split = splitWorkflowStudioAnswers({
+    target_input: ">q1\nACDE",
+    design_chains: ["A"],
+    af2_provider: "af2",
+    conservation_tiers: [0.3, 0.5],
+    stop_after: "af2",
+  });
+  assert.deepEqual(split.baseAnswers, { conservation_tiers: [0.3, 0.5] });
+  assert.deepEqual(split.stageDrafts.msa, { target_input: ">q1\nACDE" });
+  assert.deepEqual(split.stageDrafts.design, { design_chains: ["A"] });
+  assert.deepEqual(split.stageDrafts.af2, { af2_provider: "af2" });
+});
+
+test("mergeWorkflowStudioAnswers applies drafts in pipeline stage order", () => {
+  const merged = mergeWorkflowStudioAnswers({
+    baseAnswers: { conservation_tiers: [0.3] },
+    stageDrafts: {
+      msa: { target_input: ">q1\nACDE" },
+      design: { design_chains: ["A"] },
+      af2: { af2_provider: "af2" },
+    },
+    nodes: ["msa", "design", "af2"],
+  });
+  assert.deepEqual(merged, {
+    conservation_tiers: [0.3],
+    target_input: ">q1\nACDE",
+    design_chains: ["A"],
+    af2_provider: "af2",
+  });
+});
+
+test("buildWorkflowStudioEffectiveAnswers inherits prior run values for untouched fields", () => {
+  const merged = buildWorkflowStudioEffectiveAnswers({
+    headRequest: {
+      target_pdb: "ATOM",
+      rfd3_input_pdb: "ATOM",
+      rfd3_contig: "A1-10",
+      bioemu_use: true,
+      bioemu_num_samples: 10,
+      bioemu_max_return_structures: 10,
+      stop_after: "rfd3",
+    },
+    baseAnswers: {},
+    stageDrafts: {
+      msa: { target_input: "ATOM" },
+      rfd3: { rfd3_input_pdb: "ATOM" },
+      bioemu: { bioemu_use: true, bioemu_num_samples: 10, bioemu_max_return_structures: 10 },
+    },
+    nodes: ["msa", "rfd3", "bioemu"],
+  });
+  assert.equal(merged.rfd3_contig, "A1-10");
+  assert.equal(merged.bioemu_use, true);
+});
+
+test("workflowStudioChangedFields compares nested values", () => {
+  const changed = workflowStudioChangedFields(
+    {
+      target_pdb: "ATOM",
+      design_chains: ["A"],
+      fixed_positions_extra: { A: [6, 10] },
+    },
+    {
+      target_pdb: "ATOM",
+      design_chains: ["A", "B"],
+      fixed_positions_extra: { A: [6, 10] },
+    }
+  );
+  assert.deepEqual(changed, ["design_chains"]);
+});
+
+test("minimumWorkflowStudioStartStage returns earliest affected stage", () => {
+  assert.equal(
+    minimumWorkflowStudioStartStage({
+      previousPayload: { target_pdb: "ATOM", af2_provider: "colabfold" },
+      nextPayload: { target_pdb: "ATOM", af2_provider: "af2" },
+      targetStage: "af2",
+    }),
+    "af2"
+  );
+  assert.equal(
+    minimumWorkflowStudioStartStage({
+      previousPayload: { target_pdb: "ATOM", design_chains: ["A"] },
+      nextPayload: { target_pdb: "MODEL", design_chains: ["A", "B"] },
+      targetStage: "design",
+    }),
+    "msa"
+  );
+});
+
+test("workflowStudioDependencyStatus blocks downstream stages without current-run upstream outputs", () => {
+  const soluprot = workflowStudioDependencyStatus({
+    targetStage: "soluprot",
+    requiredStart: "soluprot",
+    artifacts: [],
+  });
+  assert.equal(soluprot.required, true);
+  assert.equal(soluprot.blocked, true);
+  assert.equal(soluprot.code, "design_outputs_missing");
+
+  const af2 = workflowStudioDependencyStatus({
+    targetStage: "af2",
+    requiredStart: "af2",
+    artifacts: [{ type: "file", path: "tiers/30/soluprot.json", size: 128 }],
+  });
+  assert.equal(af2.required, true);
+  assert.equal(af2.blocked, true);
+  assert.equal(af2.code, "soluprot_passed_missing");
+
+  const novelty = workflowStudioDependencyStatus({
+    targetStage: "novelty",
+    requiredStart: "novelty",
+    artifacts: [{ type: "file", path: "tiers/30/af2_selected.fasta", size: 0 }],
+  });
+  assert.equal(novelty.required, true);
+  assert.equal(novelty.blocked, true);
+  assert.equal(novelty.code, "af2_selected_missing");
+});
+
+test("workflowStudioDependencyStatus accepts matching upstream outputs", () => {
+  const soluprot = workflowStudioDependencyStatus({
+    targetStage: "soluprot",
+    requiredStart: "soluprot",
+    artifacts: [{ type: "file", path: "tiers/30/proteinmpnn.json", size: 256 }],
+  });
+  assert.equal(soluprot.blocked, false);
+  assert.deepEqual(soluprot.matchedPaths, ["tiers/30/proteinmpnn.json"]);
+
+  const af2 = workflowStudioDependencyStatus({
+    targetStage: "af2",
+    requiredStart: "af2",
+    artifacts: [{ type: "file", path: "tiers/30/designs_filtered.fasta", size: 64 }],
+  });
+  assert.equal(af2.blocked, false);
+
+  const novelty = workflowStudioDependencyStatus({
+    targetStage: "novelty",
+    requiredStart: "novelty",
+    artifacts: [{ type: "file", path: "tiers/30/af2_selected.fasta", size: 64 }],
+  });
+  assert.equal(novelty.blocked, false);
+});
+
+test("workflowStudioDependencyStatus is skipped when rerun regenerates upstream outputs", () => {
+  const dependency = workflowStudioDependencyStatus({
+    targetStage: "novelty",
+    requiredStart: "af2",
+    artifacts: [],
+  });
+  assert.equal(dependency.required, false);
+  assert.equal(dependency.blocked, false);
+});
+
+test("nextWorkflowStudioStage follows configured workflow nodes", () => {
+  assert.equal(nextWorkflowStudioStage(["msa", "design", "af2"], "msa"), "design");
+  assert.equal(nextWorkflowStudioStage(["msa", "design", "af2"], "af2"), "");
 });
 
 test("shouldReuseSelectedRun requires explicit continue toggle and partial stage", () => {

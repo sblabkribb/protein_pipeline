@@ -42,7 +42,9 @@ from .storage import new_run_id
 from .storage import normalize_run_id
 from .storage import load_status
 from .storage import list_artifacts
+from .storage import load_workflow_session
 from .storage import read_artifact
+from .storage import save_workflow_session
 from .storage import delete_run
 from .storage import append_run_event
 from .storage import read_json
@@ -50,6 +52,8 @@ from .storage import resolve_run_path
 from .storage import mark_cancel_requested
 from .report_scoring import compute_score
 from .report_scoring import scoring_config
+from .runpod_admin import build_runpod_admin_service
+from .runpod_admin import sanitize_runpod_endpoint_patch
 from .storage import set_status
 from .storage import write_json
 
@@ -1870,6 +1874,88 @@ def _collect_runpod_jobs(run_root: Path) -> list[dict[str, str]]:
                 jobs.append(entry)
 
     return jobs
+
+
+def _runpod_admin_service(runner: PipelineRunner):
+    service = build_runpod_admin_service(runner)
+    if service is None:
+        raise ValueError("RunPod admin is unavailable: no RunPod-backed endpoints are configured")
+    return service
+
+
+def _runpod_list_endpoints_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    service = _runpod_admin_service(runner)
+    include_workers = _as_bool(arguments.get("include_workers"), False)
+    managed_only = _as_bool(arguments.get("managed_only"), False)
+    result = service.list_endpoints(include_workers=include_workers)
+    endpoints = result.get("endpoints") if isinstance(result.get("endpoints"), list) else []
+    visible = [item for item in endpoints if isinstance(item, dict) and (not managed_only or bool(item.get("managed")))]
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    visible_summary = {
+        **summary,
+        "visible_endpoints": len(visible),
+        "visible_managed_endpoints": sum(1 for item in visible if item.get("managed")),
+    }
+    return {
+        **result,
+        "endpoints": visible,
+        "filters": {"managed_only": managed_only, "include_workers": include_workers},
+        "visible_summary": visible_summary,
+    }
+
+
+def _runpod_get_endpoint_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    service = _runpod_admin_service(runner)
+    endpoint_id = str(arguments.get("endpoint_id") or "").strip()
+    if not endpoint_id:
+        raise ValueError("endpoint_id is required")
+    include_workers = _as_bool(arguments.get("include_workers"), True)
+    return service.get_endpoint(endpoint_id, include_workers=include_workers)
+
+
+def _runpod_update_endpoint_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    service = _runpod_admin_service(runner)
+    endpoint_id = str(arguments.get("endpoint_id") or "").strip()
+    if not endpoint_id:
+        raise ValueError("endpoint_id is required")
+    patch = sanitize_runpod_endpoint_patch(arguments.get("patch"))
+    return service.update_endpoint(endpoint_id, patch)
+
+
+def _runpod_list_billing_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    service = _runpod_admin_service(runner)
+    endpoint_id = str(arguments.get("endpoint_id") or "").strip() or None
+    days = _as_int(arguments.get("days"), 7)
+    bucket_size = str(arguments.get("bucket_size") or "day").strip().lower() or "day"
+    start_time = str(arguments.get("start_time") or "").strip() or None
+    end_time = str(arguments.get("end_time") or "").strip() or None
+    return service.list_billing(
+        endpoint_id=endpoint_id,
+        days=max(days, 1),
+        bucket_size=bucket_size,
+        start_time=start_time,
+        end_time=end_time,
+    )
+
+
+def _runpod_get_history_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    service = _runpod_admin_service(runner)
+    endpoint_id = str(arguments.get("endpoint_id") or "").strip() or None
+    days = _as_int(arguments.get("days"), 7)
+    usage_resolution = str(arguments.get("usage_resolution") or "auto").strip().lower() or "auto"
+    billing_resolution = str(arguments.get("billing_resolution") or "auto").strip().lower() or "auto"
+    start_time = str(arguments.get("start_time") or "").strip() or None
+    end_time = str(arguments.get("end_time") or "").strip() or None
+    limit = _as_int(arguments.get("limit"), 120)
+    return service.get_history(
+        endpoint_id=endpoint_id,
+        days=max(days, 1),
+        usage_resolution=usage_resolution,
+        billing_resolution=billing_resolution,
+        start_time=start_time,
+        end_time=end_time,
+        limit=max(limit, 1),
+    )
 
 
 def _client_cancel_info(client: object | None) -> tuple[object, str] | None:
@@ -4490,6 +4576,108 @@ def tool_definitions() -> list[dict[str, Any]]:
                 "required": ["run_id", "path"],
             },
         },
+        {
+            "name": "pipeline.save_workflow_session",
+            "description": "Save Workflow Studio session metadata under a run_id.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "session": {"type": "object"},
+                },
+                "required": ["run_id", "session"],
+            },
+        },
+        {
+            "name": "pipeline.get_workflow_session",
+            "description": "Read Workflow Studio session metadata for a run_id.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"run_id": {"type": "string"}},
+                "required": ["run_id"],
+            },
+        },
+        {
+            "name": "pipeline.runpod_list_endpoints",
+            "description": "List RunPod serverless endpoints and highlight the ones used by protein_pipeline.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "managed_only": {"type": "boolean"},
+                    "include_workers": {"type": "boolean"},
+                },
+            },
+        },
+        {
+            "name": "pipeline.runpod_get_endpoint",
+            "description": "Get a RunPod serverless endpoint with worker details.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "endpoint_id": {"type": "string"},
+                    "include_workers": {"type": "boolean"},
+                },
+                "required": ["endpoint_id"],
+            },
+        },
+        {
+            "name": "pipeline.runpod_update_endpoint",
+            "description": "Patch a RunPod serverless endpoint configuration such as GPU types or worker scaling limits.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "endpoint_id": {"type": "string"},
+                    "patch": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string"},
+                            "gpuTypeIds": {"type": "array", "items": {"type": "string"}},
+                            "dataCenterIds": {"type": "array", "items": {"type": "string"}},
+                            "idleTimeout": {"type": "integer"},
+                            "executionTimeoutMs": {"type": "integer"},
+                            "flashBoot": {"type": "boolean"},
+                            "scalerType": {"type": "string"},
+                            "scalerValue": {"type": "integer"},
+                            "templateId": {"type": "string"},
+                            "networkVolumeId": {"type": "string"},
+                            "workersMin": {"type": "integer"},
+                            "workersMax": {"type": "integer"},
+                        },
+                    },
+                },
+                "required": ["endpoint_id", "patch"],
+            },
+        },
+        {
+            "name": "pipeline.runpod_list_billing",
+            "description": "Fetch recent RunPod serverless billing records for endpoint-level spend tracking.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "endpoint_id": {"type": "string"},
+                    "days": {"type": "integer"},
+                    "bucket_size": {"type": "string"},
+                    "start_time": {"type": "string"},
+                    "end_time": {"type": "string"},
+                },
+            },
+        },
+        {
+            "name": "pipeline.runpod_get_history",
+            "description": "Read server-collected RunPod usage and billing history stored for the admin dashboard.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "endpoint_id": {"type": "string"},
+                    "days": {"type": "integer"},
+                    "usage_resolution": {"type": "string"},
+                    "billing_resolution": {"type": "string"},
+                    "start_time": {"type": "string"},
+                    "end_time": {"type": "string"},
+                    "limit": {"type": "integer"}
+                },
+            },
+        },
     ]
 
 
@@ -4519,7 +4707,7 @@ class ToolDispatcher:
 
         if name == "pipeline.preflight":
             req = pipeline_request_from_args(arguments, strict_target=False)
-            return preflight_request(req, self.runner)
+            return preflight_request(req, self.runner, run_id=str(arguments.get("run_id") or "") or None)
 
         if name == "pipeline.af2_predict":
             return _run_af2_predict(self.runner, arguments)
@@ -4675,5 +4863,40 @@ class ToolDispatcher:
             meta["encoding"] = encoding
             meta["text"] = data.decode(encoding, errors="replace")
             return {"run_id": run_id, **meta}
+
+        if name == "pipeline.save_workflow_session":
+            run_id = str(arguments.get("run_id") or "")
+            session = arguments.get("session")
+            if not run_id:
+                raise ValueError("run_id is required")
+            if not isinstance(session, dict):
+                raise ValueError("session must be an object")
+            meta = save_workflow_session(self.runner.output_root, run_id, session)
+            return {"run_id": run_id, "saved": True, **meta}
+
+        if name == "pipeline.get_workflow_session":
+            run_id = str(arguments.get("run_id") or "")
+            if not run_id:
+                raise ValueError("run_id is required")
+            session = load_workflow_session(self.runner.output_root, run_id)
+            return {
+                "run_id": run_id,
+                "found": isinstance(session, dict),
+                "session": session if isinstance(session, dict) else None,
+            }
+
+        if name == "pipeline.runpod_list_endpoints":
+            return _runpod_list_endpoints_tool(self.runner, arguments)
+
+        if name == "pipeline.runpod_get_endpoint":
+            return _runpod_get_endpoint_tool(self.runner, arguments)
+
+        if name == "pipeline.runpod_update_endpoint":
+            return _runpod_update_endpoint_tool(self.runner, arguments)
+
+        if name == "pipeline.runpod_list_billing":
+            return _runpod_list_billing_tool(self.runner, arguments)
+        if name == "pipeline.runpod_get_history":
+            return _runpod_get_history_tool(self.runner, arguments)
 
         raise ValueError(f"Unknown tool: {name}")

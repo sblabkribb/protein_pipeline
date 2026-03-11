@@ -17,9 +17,25 @@ from .pipeline import _resolve_af2_model_preset
 from .pipeline import _rfd3_active
 from .pipeline import _split_multichain_sequence
 from .pipeline import _validate_af2_chain_sequences
+from .storage import resolve_run_path
 
 
 _STAGE_ORDER = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"]
+
+_RESUME_OUTPUT_REQUIREMENTS = {
+    "soluprot": {
+        "globs": ("tiers/*/proteinmpnn.json", "tiers/*/designs.fasta", "tiers/*/designs_pi_filtered.fasta"),
+        "message": "start_from='soluprot' requires existing Design/ProteinMPNN outputs in the current run.",
+    },
+    "af2": {
+        "globs": ("tiers/*/designs_filtered.fasta",),
+        "message": "start_from='af2' requires SoluProt-passed sequences in the current run.",
+    },
+    "novelty": {
+        "globs": ("tiers/*/af2_selected.fasta",),
+        "message": "start_from='novelty' requires AF2-selected sequences in the current run.",
+    },
+}
 
 
 def _normalize_stage(value: str | None) -> str | None:
@@ -56,7 +72,23 @@ def _has_fixed_positions_extra(request: PipelineRequest) -> bool:
     return False
 
 
-def preflight_request(request: PipelineRequest, runner: PipelineRunner) -> dict[str, Any]:
+def _run_has_nonempty_artifacts(output_root: str, run_id: str, patterns: tuple[str, ...]) -> bool:
+    if not output_root or not run_id or not patterns:
+        return False
+    try:
+        root = resolve_run_path(output_root, run_id)
+    except Exception:
+        return False
+    if not root.exists():
+        return False
+    for pattern in patterns:
+        for path in root.glob(pattern):
+            if path.is_file() and path.stat().st_size > 0:
+                return True
+    return False
+
+
+def preflight_request(request: PipelineRequest, runner: PipelineRunner, *, run_id: str | None = None) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
     required_inputs: list[dict[str, object]] = []
@@ -75,6 +107,10 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner) -> dict[
         warnings.append(
             f"Unknown stop_after={stop_after_raw!r}; expected one of {_STAGE_ORDER[:-1] + ['wt_diff']}; defaulting to full pipeline."
         )
+
+    normalized_run_id = str(run_id or "").strip()
+    if normalized_run_id:
+        detected["run_id"] = normalized_run_id
 
     if start_from is not None and stop_after is not None:
         if _STAGE_ORDER.index(start_from) > _STAGE_ORDER.index(stop_after):
@@ -104,6 +140,15 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner) -> dict[
         errors.append("stop_after='bioemu' requires bioemu_use=true.")
     if stop_after == "rfd3" and not rfd3_active:
         errors.append("stop_after='rfd3' requires rfd3 inputs (for example rfd3_input_pdb + rfd3_contig).")
+
+    if start_from in _RESUME_OUTPUT_REQUIREMENTS:
+        requirement = _RESUME_OUTPUT_REQUIREMENTS[start_from]
+        if not _run_has_nonempty_artifacts(
+            runner.output_root,
+            normalized_run_id,
+            tuple(requirement["globs"]),
+        ):
+            errors.append(str(requirement["message"]))
 
     if not has_target and not rfd3_active and not has_bioemu_sequence:
         errors.append("One of target_fasta or target_pdb (or rfd3 inputs) is required.")

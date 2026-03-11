@@ -124,6 +124,11 @@ python3 -m http.server 5173
 
 Open `http://127.0.0.1:5173`.
 
+RunPod admin UI:
+
+- `http://127.0.0.1:5173/runpod-admin/`
+- See `frontend/runpod-admin/TODO.md` for scope and follow-up work.
+
 ## Auth and CORS
 - `PIPELINE_AUTH_ENABLED=1`
 - `PIPELINE_ADMIN_USERNAME`
