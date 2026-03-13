@@ -888,6 +888,60 @@ class TestPipelineDryRun(unittest.TestCase):
             request_payload = json.loads((Path(res.output_dir) / "request.json").read_text(encoding="utf-8"))
             self.assertEqual(float(request_payload.get("af2_plddt_cutoff") or 0.0), 70.0)
 
+    def test_pipeline_selected_tiers_limits_outputs_to_requested_tier(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            req = PipelineRequest(
+                target_fasta=">q1\nACDEFGHIK\n",
+                target_pdb="",
+                dry_run=True,
+                stop_after="af2",
+                conservation_tiers=[0.3, 0.5, 0.7],
+                selected_tiers=[0.5],
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+
+            self.assertFalse((out / "tiers" / "30").exists())
+            self.assertTrue((out / "tiers" / "50" / "af2_scores.json").exists())
+            self.assertFalse((out / "tiers" / "70").exists())
+
+            request_payload = json.loads((out / "request.json").read_text(encoding="utf-8"))
+            self.assertEqual(request_payload.get("selected_tiers"), [0.5])
+
+    def test_pipeline_partial_rerun_scopes_cleanup_to_selected_tiers(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            run_id = "partial_rerun_selected_tier"
+            initial = PipelineRequest(
+                target_fasta=">q1\nACDEFGHIK\n",
+                target_pdb="",
+                dry_run=True,
+                stop_after="af2",
+                conservation_tiers=[0.3, 0.5],
+            )
+            res = runner.run(initial, run_id=run_id)
+            out = Path(res.output_dir)
+
+            tier30_novelty = out / "tiers" / "30" / "novelty.json"
+            tier50_novelty = out / "tiers" / "50" / "novelty.json"
+            tier30_novelty.write_text("keep", encoding="utf-8")
+            tier50_novelty.write_text("drop", encoding="utf-8")
+
+            rerun = PipelineRequest(
+                target_fasta=">q1\nACDEFGHIK\n",
+                target_pdb="",
+                dry_run=True,
+                start_from="af2",
+                stop_after="af2",
+                conservation_tiers=[0.3, 0.5],
+                selected_tiers=[0.5],
+            )
+            runner.run(rerun, run_id=run_id)
+
+            self.assertTrue(tier30_novelty.exists())
+            self.assertFalse(tier50_novelty.exists())
+
     def test_clear_stage_outputs_removes_korean_reports_and_wt(self) -> None:
         with _tmpdir() as tmp:
             root = Path(tmp) / "cleanup_case"

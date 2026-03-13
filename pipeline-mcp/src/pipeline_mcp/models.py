@@ -60,6 +60,7 @@ class PipelineRequest:
     fixed_positions_extra: dict[str, list[int]] | None = None
 
     conservation_tiers: list[float] = field(default_factory=lambda: [0.3, 0.5, 0.7])
+    selected_tiers: list[float] | None = None
     conservation_mode: str = "quantile"  # quantile | threshold
     conservation_weighting: str = "none"  # none | mmseqs_cluster
     conservation_cluster_method: str = "linclust"

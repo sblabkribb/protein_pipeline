@@ -146,13 +146,9 @@
                     <button id="setupLoadRunRequest" class="ghost" type="button" data-i18n="setup.loadRequest">
                       Load Request
                     </button>
-                    <label class="toggle setup-run-toggle">
-                      <input id="setupContinueRun" type="checkbox" />
-                      <span data-i18n="setup.continueRun">Continue same run</span>
-                    </label>
                   </div>
                   <div id="setupRunReuseHint" class="run-context-hint" data-i18n="setup.runReuse.default">
-                    Default: launch a new run ID. Partial reruns require an existing run.
+                    Setup always launches a new run. Load Request copies settings from the selected run.
                   </div>
                 </div>
                 <div class="run-context-meta">
@@ -247,12 +243,12 @@
                 </p>
               </div>
               <div class="studio-toolbar">
-                <label class="run-context-select">
-                  <span data-i18n="studio.session">Session</span>
-                  <select id="studioSessionSelector" class="run-selector">
-                    <option value="" data-i18n="studio.selectSession">Select session</option>
-                  </select>
-                </label>
+                <div class="studio-session-panel">
+                  <div class="studio-session-head">
+                    <strong data-i18n="studio.session">Session</strong>
+                  </div>
+                  <div id="studioSessionList" class="run-list studio-session-list"></div>
+                </div>
                 <div class="studio-toolbar-actions">
                   <button id="studioRunBtn" class="primary" type="button" data-i18n="studio.action.run">
                     Run This Stage
@@ -268,12 +264,6 @@
                   </button>
                   <button id="studioRefreshBtn" class="ghost" type="button" data-i18n="studio.refresh">
                     Refresh Studio
-                  </button>
-                  <button id="studioDeleteSessionBtn" class="ghost" type="button" data-i18n="studio.deleteSession">
-                    Delete Session
-                  </button>
-                  <button id="studioDeleteOtherSessionsBtn" class="ghost" type="button" data-i18n="studio.deleteOtherSessions">
-                    Delete Other Sessions
                   </button>
                   <button id="studioOpenMonitorBtn" class="ghost" type="button" data-i18n="studio.openMonitor">
                     Open Monitor
@@ -1026,10 +1016,10 @@
             <h5 data-i18n="help.setup.title">Setup Tips</h5>
             <ul>
               <li data-i18n="help.setup.step1">
-                Select a recent run and use Load Request to restore its settings before editing.
+                Select a recent run and use Load Request to copy its settings into a new run before editing.
               </li>
               <li data-i18n="help.setup.step2">
-                Leave Continue same run off unless you need a safe partial rerun with start_from &gt; MSA.
+                Use Resume Run in Monitor or Studio for same-run continuation. Setup is for fresh runs only.
               </li>
             </ul>
           </div>

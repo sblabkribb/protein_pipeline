@@ -8,18 +8,32 @@ import {
   createRunId,
   detectTargetKey,
   displayArtifactPath,
+  expandWorkflowStudioNodes,
   filterRunsByPrefix,
   inferRequestRunMode,
   isBinaryPath,
   isImagePath,
+  latestWorkflowStudioCompletedNodesFromEvents,
+  latestMeaningfulStatusFromEvents,
   minimumWorkflowStudioStartStage,
   nextWorkflowStudioStage,
+  normalizeSetupDraftForFreshRun,
+  normalizeWorkflowStudioNode,
+  parseWorkflowStudioNode,
+  progressStepsForRequest,
+  progressUnitsForRequest,
+  residuePickerControlState,
+  resolveWorkflowStudioStageForSession,
   sanitizeName,
-  shouldReuseSelectedRun,
+  shouldPollRunForTabChange,
   splitWorkflowStudioAnswers,
+  workflowStudioRetainedArtifactPath,
+  upsertWorkflowStudioStageStatus,
+  workflowStudioSessionRunKey,
   stageFromPath,
   workflowStudioChangedFields,
   workflowStudioDependencyStatus,
+  workflowStudioExecutionTarget,
   workflowStudioStageFields,
 } from "./lib/pipeline.js";
 import {
@@ -131,10 +145,8 @@ function normalizeWorkflowStageList(value) {
   const source = Array.isArray(value) ? value : DEFAULT_WORKFLOW_STAGES;
   const out = [];
   source.forEach((item) => {
-    const stage = String(item || "")
-      .trim()
-      .toLowerCase();
-    if (!DEFAULT_WORKFLOW_STAGES.includes(stage)) return;
+    const stage = normalizeWorkflowStudioNode(item);
+    if (!stage) return;
     if (!out.includes(stage)) out.push(stage);
   });
   if (!out.length) return ["msa", "design", "soluprot", "af2"];
@@ -249,18 +261,21 @@ function normalizeWorkflowStudioSessionPayload(payload, sessionIdFallback = "") 
     .trim();
   if (!sessionId) return null;
   const nodes = normalizeWorkflowStageList(source.nodes);
-  const activeStageCandidates = normalizeWorkflowStageList([source.active_stage || source.activeStage || nodes[0] || ""]);
-  const activeStage = activeStageCandidates[0] || nodes[0] || "msa";
+  const activeStage = resolveWorkflowStudioStageForSession(
+    nodes,
+    source.active_stage || source.activeStage || nodes[0] || "",
+    nodes[0] || "msa"
+  ) || nodes[0] || "msa";
   const stageDrafts = Object.fromEntries(DEFAULT_WORKFLOW_STAGES.map((stage) => [stage, {}]));
   const stageExplicitEmpty = Object.fromEntries(DEFAULT_WORKFLOW_STAGES.map((stage) => [stage, {}]));
   Object.entries(source.stage_drafts || source.stageDrafts || {}).forEach(([stage, values]) => {
-    const normalizedStage = normalizeWorkflowStageList([stage])[0];
+    const normalizedStage = workflowStudioNodeBaseStage(stage, "");
     if (!normalizedStage) return;
     if (!values || typeof values !== "object" || Array.isArray(values)) return;
     stageDrafts[normalizedStage] = cloneWorkflowStudioValue(values);
   });
   Object.entries(source.stage_explicit_empty || source.stageExplicitEmpty || {}).forEach(([stage, values]) => {
-    const normalizedStage = normalizeWorkflowStageList([stage])[0];
+    const normalizedStage = workflowStudioNodeBaseStage(stage, "");
     if (!normalizedStage) return;
     if (!values || typeof values !== "object" || Array.isArray(values)) return;
     stageExplicitEmpty[normalizedStage] = Object.fromEntries(
@@ -288,6 +303,7 @@ function normalizeWorkflowStudioSessionPayload(payload, sessionIdFallback = "") 
           run_id: String(item.run_id || "").trim(),
           start_from: String(item.start_from || "").trim().toLowerCase(),
           stop_after: String(item.stop_after || "").trim().toLowerCase(),
+          target_node: workflowStudioNodeId(item.target_node || "", ""),
           created_at: String(item.created_at || "").trim(),
         }))
         .filter((item) => item.run_id)
@@ -298,6 +314,7 @@ function normalizeWorkflowStudioSessionPayload(payload, sessionIdFallback = "") 
           run_id: String(source.pending.run_id || "").trim(),
           start_from: String(source.pending.start_from || "").trim().toLowerCase(),
           stop_after: String(source.pending.stop_after || "").trim().toLowerCase(),
+          target_node: workflowStudioNodeId(source.pending.target_node || "", ""),
           request_snapshot:
             source.pending.request_snapshot &&
             typeof source.pending.request_snapshot === "object" &&
@@ -435,7 +452,6 @@ const state = {
   reportModalImageCache: {},
   copilotHistory: [],
   setupResiduePicker: createSetupResiduePickerState(),
-  setupContinueRun: false,
   setupStepIndex: 0,
   autoAnalyzePendingByRunId: {},
   workflowDesigner: createWorkflowDesignerState(),
@@ -499,7 +515,6 @@ const el = {
   setupStepNext: document.getElementById("setupStepNext"),
   setupRunSelector: document.getElementById("setupRunSelector"),
   setupLoadRunRequest: document.getElementById("setupLoadRunRequest"),
-  setupContinueRun: document.getElementById("setupContinueRun"),
   setupRunReuseHint: document.getElementById("setupRunReuseHint"),
   setupContextStageValue: document.getElementById("setupContextStageValue"),
   setupContextStateValue: document.getElementById("setupContextStateValue"),
@@ -516,14 +531,12 @@ const el = {
   setupErrorDetails: document.getElementById("setupErrorDetails"),
   setupErrorSummary: document.getElementById("setupErrorSummary"),
   setupErrorRaw: document.getElementById("setupErrorRaw"),
-  studioSessionSelector: document.getElementById("studioSessionSelector"),
+  studioSessionList: document.getElementById("studioSessionList"),
   studioRunBtn: document.getElementById("studioRunBtn"),
   studioStopBtn: document.getElementById("studioStopBtn"),
   studioResumeBtn: document.getElementById("studioResumeBtn"),
   studioAdoptRunBtn: document.getElementById("studioAdoptRunBtn"),
   studioRefreshBtn: document.getElementById("studioRefreshBtn"),
-  studioDeleteSessionBtn: document.getElementById("studioDeleteSessionBtn"),
-  studioDeleteOtherSessionsBtn: document.getElementById("studioDeleteOtherSessionsBtn"),
   studioOpenMonitorBtn: document.getElementById("studioOpenMonitorBtn"),
   studioRunPanel: document.getElementById("studioRunPanel"),
   studioRunInlineStatus: document.getElementById("studioRunInlineStatus"),
@@ -777,15 +790,14 @@ const I18N = {
     "setup.clear": "Clear Note",
     "setup.loadRequest": "Load Request",
     "setup.loadRequest.loaded":
-      "Loaded request.json from {id}. New runs fork by default; enable Continue same run only for partial reruns.",
+      "Loaded request.json from {id}. Setup will launch a new run; use Resume Run in Monitor or Studio to continue the same run.",
     "setup.loadRequest.failed": "Failed to load request.json: {error}",
-    "setup.continueRun": "Continue same run",
-    "setup.runReuse.default": "Default: launch a new run ID. Partial reruns require an existing run.",
+    "setup.runReuse.default":
+      "Setup always launches a new run. Load Request copies settings from the selected run; use Resume Run in Monitor or Studio to continue the same run.",
+    "setup.runReuse.selected":
+      "Selected run: {id}. Load Request copies its settings into a new run. Use Resume Run in Monitor or Studio to continue this run.",
     "setup.runReuse.workflow":
       "Workflow Studio manages reruns and forks per stage. Load a previous request to seed a new session.",
-    "setup.runReuse.selectRun": "Select a run, load its request, then enable Continue same run for start_from > MSA.",
-    "setup.runReuse.partial":
-      "Partial rerun target: {id}. Continue same run will reuse this run ID and overwrite downstream outputs.",
     "setup.hint": "Complete required inputs to enable execution.",
     "setup.runStatus.empty": "Run status: -",
     "setup.runStatus.line": "Run status: {id} · {stage} / {state} · {updated}",
@@ -1138,8 +1150,8 @@ const I18N = {
     "help.quick.step2": "Monitor: follow stage status and artifacts. Use Studio for stage-by-stage reruns and next-step decisions.",
     "help.quick.step3": "Analyze: start with Compare Studio, Run-to-Run Compare, and Hit List, then save feedback, experiments, and reports.",
     "help.setup.title": "Setup Tips",
-    "help.setup.step1": "Select a recent run and use Load Request to restore its settings before editing.",
-    "help.setup.step2": "Leave Continue same run off unless you need a safe partial rerun with start_from > MSA.",
+    "help.setup.step1": "Select a recent run and use Load Request to copy its settings into a new run before editing.",
+    "help.setup.step2": "Use Resume Run in Monitor or Studio for same-run continuation. Setup is for fresh runs only.",
     "help.monitor.title": "Monitoring",
     "help.monitor.step1": "Select a recent run to load status, artifacts, reports, and workflow review context.",
     "help.monitor.step2": "Use Auto Poll for live updates. For workflow runs, use Studio to rerun a stage or move forward.",
@@ -1165,6 +1177,7 @@ const I18N = {
     "studio.openMonitor": "Open Monitor",
     "studio.empty.title": "No studio session",
     "studio.empty.desc": "Open Workflow Studio from Setup, or adopt a workflow run from Monitor.",
+    "studio.sessions.none": "No saved Studio sessions.",
     "studio.summary.session": "Session",
     "studio.summary.headRun": "Head Run",
     "studio.summary.currentStage": "Current Stage",
@@ -1178,6 +1191,8 @@ const I18N = {
     "studio.results.representative": "Representative artifact",
     "studio.results.more": "Other artifacts",
     "studio.results.morePlaceholder": "Select another artifact",
+    "studio.results.select": "Artifact",
+    "studio.results.selectPlaceholder": "Select an artifact to preview",
     "studio.results.fileCount": "{count} files",
     "studio.noResults": "No result artifacts for this stage yet.",
     "studio.noResultsSkipped": "This stage was not run for the current head run.",
@@ -1194,9 +1209,13 @@ const I18N = {
     "studio.deleteSession": "Delete Session",
     "studio.deleteSessionConfirm": "Delete Studio session {id}? This only removes the local session.",
     "studio.deleteSessionSuccess": "Deleted Studio session: {id}",
+    "studio.current": "Current",
     "studio.deleteOtherSessions": "Delete Other Sessions",
     "studio.deleteOtherSessionsConfirm": "Delete {count} other Studio sessions? Keep current session {id}.",
     "studio.deleteOtherSessionsSuccess": "Deleted {count} other Studio sessions.",
+    "studio.cleanupDuplicates": "Clean Up",
+    "studio.cleanupDuplicatesConfirm": "Delete {count} duplicate Studio sessions for {id}? Keep the selected session.",
+    "studio.cleanupDuplicatesSuccess": "Deleted {count} duplicate Studio sessions.",
     "studio.status.idle": "Ready",
     "studio.status.launching": "Starting",
     "studio.status.running": "Running",
@@ -1345,7 +1364,7 @@ const I18N = {
     "hint.none": "No missing inputs. You can run now.",
     "hint.ready": "All required inputs captured.",
     "hint.missing": "Missing required inputs.",
-    "hint.partialRun": "Partial reruns need a selected run and Continue same run enabled.",
+    "hint.partialRun": "Setup launches fresh runs only. Use Resume Run in Monitor or Studio for start_from > MSA partial reruns.",
     "hint.nextStep": "Move to the final step to launch the run.",
     "hint.running": "A run is already in progress.",
     "run.reset": "Inputs reset. Reconfirm selections and attachments.",
@@ -1669,15 +1688,14 @@ const I18N = {
     "setup.clear": "메모 지우기",
     "setup.loadRequest": "요청 불러오기",
     "setup.loadRequest.loaded":
-      "{id}의 request.json을 불러왔습니다. 기본 실행은 새 run으로 fork되며, partial rerun일 때만 Continue same run을 켜세요.",
+      "{id}의 request.json을 불러왔습니다. Setup은 새 run으로 실행하며, 같은 run 재개는 Monitor 또는 Studio에서 하세요.",
     "setup.loadRequest.failed": "request.json 불러오기 실패: {error}",
-    "setup.continueRun": "같은 run 이어서 실행",
-    "setup.runReuse.default": "기본값은 새 run ID 실행입니다. partial rerun은 기존 run이 필요합니다.",
+    "setup.runReuse.default":
+      "Setup은 항상 새 run으로 실행합니다. 요청 불러오기는 선택한 run의 설정만 복사하며, 같은 run 재개는 Monitor 또는 Studio에서 하세요.",
+    "setup.runReuse.selected":
+      "선택한 run: {id}. 요청 불러오기는 이 설정을 새 run으로 복사합니다. 같은 run 재개는 Monitor 또는 Studio에서 하세요.",
     "setup.runReuse.workflow":
       "Workflow Studio가 단계별 rerun/fork를 관리합니다. 이전 request를 불러와 새 세션의 시작점으로 사용할 수 있습니다.",
-    "setup.runReuse.selectRun": "run을 선택해 request를 불러온 뒤, start_from > MSA인 경우 Continue same run을 켜세요.",
-    "setup.runReuse.partial":
-      "partial rerun 대상: {id}. Continue same run을 켜면 이 run ID를 재사용하고 downstream 출력을 덮어씁니다.",
     "setup.hint": "필수 입력을 완료하면 실행할 수 있습니다.",
     "setup.runStatus.empty": "실행 상태: -",
     "setup.runStatus.line": "실행 상태: {id} · {stage} / {state} · {updated}",
@@ -2029,8 +2047,8 @@ const I18N = {
     "help.quick.step2": "Monitor: 단계 상태와 아티팩트를 추적합니다. 단계별 rerun과 다음 단계 결정은 Studio에서 진행합니다.",
     "help.quick.step3": "Analyze: Compare Studio, Run-to-Run 비교, Hit List로 선별한 뒤 피드백, 실험, 리포트를 기록합니다.",
     "help.setup.title": "설정 팁",
-    "help.setup.step1": "최근 run을 선택하고 요청 불러오기로 기존 설정을 폼에 복원한 뒤 수정하세요.",
-    "help.setup.step2": "start_from > MSA인 안전한 partial rerun이 아니면 같은 run 이어서 실행은 끄고 새 run으로 실행하세요.",
+    "help.setup.step1": "최근 run을 선택한 뒤 요청 불러오기로 설정을 새 run에 복사하고 필요한 부분만 수정하세요.",
+    "help.setup.step2": "같은 run 재개는 Monitor 또는 Studio의 재시작/Resume 경로를 사용하세요. Setup은 새 실행용입니다.",
     "help.monitor.title": "모니터링",
     "help.monitor.step1": "최근 run을 선택하면 상태, 아티팩트, 리포트, workflow 검토 정보가 함께 로드됩니다.",
     "help.monitor.step2": "자동 조회로 진행 상황을 갱신하고, workflow run의 단계별 rerun이나 진행 결정은 Studio에서 처리하세요.",
@@ -2056,6 +2074,7 @@ const I18N = {
     "studio.openMonitor": "모니터 열기",
     "studio.empty.title": "스튜디오 세션이 없습니다",
     "studio.empty.desc": "Setup에서 Workflow Studio를 열거나 Monitor의 workflow run을 가져오세요.",
+    "studio.sessions.none": "저장된 Studio 세션이 없습니다.",
     "studio.summary.session": "세션",
     "studio.summary.headRun": "기준 Run",
     "studio.summary.currentStage": "현재 단계",
@@ -2069,6 +2088,8 @@ const I18N = {
     "studio.results.representative": "대표 아티팩트",
     "studio.results.more": "다른 아티팩트",
     "studio.results.morePlaceholder": "다른 아티팩트 선택",
+    "studio.results.select": "아티팩트",
+    "studio.results.selectPlaceholder": "미리볼 아티팩트 선택",
     "studio.results.fileCount": "{count}개 파일",
     "studio.noResults": "이 단계 결과 아티팩트가 아직 없습니다.",
     "studio.noResultsSkipped": "이 단계는 현재 head run에서 실행되지 않았습니다.",
@@ -2085,9 +2106,13 @@ const I18N = {
     "studio.deleteSession": "세션 삭제",
     "studio.deleteSessionConfirm": "Studio 세션 {id}을(를) 삭제할까요? 로컬 세션만 제거됩니다.",
     "studio.deleteSessionSuccess": "Studio 세션 삭제됨: {id}",
+    "studio.current": "현재",
     "studio.deleteOtherSessions": "다른 세션 정리",
     "studio.deleteOtherSessionsConfirm": "현재 세션 {id}만 남기고 다른 Studio 세션 {count}개를 삭제할까요?",
     "studio.deleteOtherSessionsSuccess": "다른 Studio 세션 {count}개 삭제됨",
+    "studio.cleanupDuplicates": "정리",
+    "studio.cleanupDuplicatesConfirm": "Studio 세션 {id} 기준으로 중복 세션 {count}개를 삭제할까요? 선택한 세션은 유지됩니다.",
+    "studio.cleanupDuplicatesSuccess": "중복 Studio 세션 {count}개 삭제됨",
     "studio.status.idle": "실행 준비",
     "studio.status.launching": "실행 요청됨",
     "studio.status.running": "실행 중",
@@ -2236,7 +2261,7 @@ const I18N = {
     "hint.none": "누락된 입력이 없습니다. 지금 실행할 수 있습니다.",
     "hint.ready": "필수 입력이 모두 완료되었습니다.",
     "hint.missing": "필수 입력이 누락되었습니다.",
-    "hint.partialRun": "partial rerun은 run 선택과 Continue same run 활성화가 필요합니다.",
+    "hint.partialRun": "Setup은 새 run 실행만 지원합니다. start_from > MSA partial rerun은 Monitor 또는 Studio에서 재시작하세요.",
     "hint.nextStep": "마지막 단계로 이동하면 실행할 수 있습니다.",
     "hint.running": "이미 실행 중인 작업이 있습니다.",
     "run.reset": "입력을 초기화했습니다. 선택과 첨부를 다시 확인하세요.",
@@ -2648,6 +2673,30 @@ function normalizePipelineStage(value, fallback = "") {
   return fallback;
 }
 
+function workflowStudioNodeBaseStage(value, fallback = "") {
+  return parseWorkflowStudioNode(value)?.baseStage || normalizePipelineStage(value, fallback);
+}
+
+function workflowStudioNodeId(value, fallback = "") {
+  return normalizeWorkflowStudioNode(value) || fallback;
+}
+
+function workflowStudioStatusStageValue(status, fallback = "") {
+  const recoveredStage = String(status?._studio_stage || "").trim();
+  if (recoveredStage) return recoveredStage;
+  return String(status?.stage || fallback || "").trim();
+}
+
+function workflowStudioRequestTargetNode(payload, fallback = "") {
+  const stopAfter = normalizePipelineStage(payload?.stop_after, "");
+  const selected = Array.isArray(payload?.selected_tiers) ? payload.selected_tiers : [];
+  if (!stopAfter || !selected.length) return workflowStudioNodeId(fallback, "");
+  const target = workflowStudioExecutionTarget(
+    `${stopAfter === "design" ? "proteinmpnn" : stopAfter}_${selected[0]}`
+  );
+  return target.nodeId || workflowStudioNodeId(fallback, "");
+}
+
 function syncStartStopStages() {
   const start = normalizePipelineStage(state.answers.start_from, "");
   const stop = normalizePipelineStage(state.answers.stop_after, "");
@@ -2661,7 +2710,7 @@ function normalizeWorkflowNodesForState(value) {
   const source = Array.isArray(value) ? value : state.workflowDesigner?.nodes;
   const list = [];
   (source || []).forEach((item) => {
-    const stage = normalizePipelineStage(item, "");
+    const stage = workflowStudioNodeBaseStage(item, "");
     if (!stage) return;
     if (!list.includes(stage)) list.push(stage);
   });
@@ -2867,6 +2916,25 @@ function workflowStudioSessionOptionLabel(session) {
   return detail.length ? `${base} · ${detail.join(" · ")}` : base;
 }
 
+function workflowStudioSessionDetailLabel(session) {
+  return [
+    session?.active_stage ? formatStageLabel(session.active_stage) : "",
+    workflowStudioSessionTimestampLabel(session),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function workflowStudioSessionDuplicateCounts(sessions = workflowStudioSessionsOrdered()) {
+  const counts = new Map();
+  (Array.isArray(sessions) ? sessions : []).forEach((session) => {
+    const runKey = workflowStudioSessionRunKey(session);
+    if (!runKey) return;
+    counts.set(runKey, (counts.get(runKey) || 0) + 1);
+  });
+  return counts;
+}
+
 function workflowStudioDeleteSessionById(sessionId, { chooseFallback = true } = {}) {
   const key = String(sessionId || "").trim();
   if (!key || !state.workflowStudioSessionsById?.[key]) return false;
@@ -2904,6 +2972,29 @@ function workflowStudioDeleteOtherSessions(currentSessionId = state.currentWorkf
     setCurrentWorkflowStudioSessionId(workflowStudioSessionsOrdered()[0]?.session_id || "");
   }
   return otherIds.length;
+}
+
+function workflowStudioDeleteDuplicateSessions(sessionId) {
+  const keepId = String(sessionId || "").trim();
+  const keepSession = workflowStudioSessionForId(keepId);
+  if (!keepId || !keepSession) return 0;
+  const runKey = workflowStudioSessionRunKey(keepSession);
+  if (!runKey) return 0;
+  const duplicateIds = workflowStudioSessionsOrdered()
+    .filter((session) => String(session?.session_id || "").trim() !== keepId)
+    .filter((session) => workflowStudioSessionRunKey(session) === runKey)
+    .map((session) => String(session?.session_id || "").trim())
+    .filter(Boolean);
+  duplicateIds.forEach((duplicateId) => {
+    workflowStudioDeleteSessionById(duplicateId, { chooseFallback: false });
+  });
+  if (!duplicateIds.length) return 0;
+  if (state.workflowStudioSessionsById?.[keepId]) {
+    setCurrentWorkflowStudioSessionId(keepId);
+  } else {
+    setCurrentWorkflowStudioSessionId(workflowStudioSessionsOrdered()[0]?.session_id || "");
+  }
+  return duplicateIds.length;
 }
 
 function workflowStudioDeleteSessionsForRun(runId) {
@@ -2999,13 +3090,13 @@ function createWorkflowStudioSession({
   status = null,
 } = {}) {
   const nextSessionId = String(sessionId || "").trim() || createWorkflowSessionId("workflow");
-  const normalizedNodes = normalizeWorkflowNodesForState(nodes);
+  const normalizedNodes = normalizeWorkflowStageList(nodes);
   const split = splitWorkflowStudioAnswers(answers || {});
   const now = new Date().toISOString();
   const session = normalizeWorkflowStudioSessionPayload(
     {
       session_id: nextSessionId,
-      label: normalizedNodes.join(" -> "),
+      label: normalizeWorkflowNodesForState(normalizedNodes).join(" -> "),
       prompt: String(prompt || "").trim(),
       nodes: normalizedNodes,
       active_stage: normalizedNodes[0] || "msa",
@@ -3024,16 +3115,22 @@ function createWorkflowStudioSession({
   );
   if (!session) return null;
   const completedState = String(status?.state || "").trim().toLowerCase();
-  const stopAfter = normalizePipelineStage(
-    session.head_request?.stop_after || status?.stage || session.active_stage || "",
+  const stopAfter = workflowStudioNodeBaseStage(
+    session.head_request?.stop_after || workflowStudioStatusStageValue(status, "") || session.active_stage || "",
     ""
   );
+  const headTargetNode = workflowStudioRequestTargetNode(session.head_request, session.active_stage);
   if (session.head_run_id && stopAfter && ["completed", "done"].includes(completedState)) {
-    pipelineStageSlice("msa", stopAfter).forEach((stage) => {
-      if (!session.nodes.includes(stage)) return;
-      session.stage_states[stage] = "completed";
-      session.stage_run_ids[stage] = session.head_run_id;
-    });
+    if (headTargetNode && session.nodes.includes(headTargetNode)) {
+      session.stage_states[headTargetNode] = "completed";
+      session.stage_run_ids[headTargetNode] = session.head_run_id;
+    } else {
+      pipelineStageSlice("msa", stopAfter).forEach((stage) => {
+        if (!session.nodes.includes(stage)) return;
+        session.stage_states[stage] = "completed";
+        session.stage_run_ids[stage] = session.head_run_id;
+      });
+    }
   }
   return session;
 }
@@ -3054,38 +3151,48 @@ function workflowStudioExecutionSegments(session) {
       const runId = String(item?.run_id || "").trim();
       const stopAfter = normalizePipelineStage(item?.stop_after || "", "");
       if (!runId || !stopAfter) return;
+      const targetNode = workflowStudioNodeId(item?.target_node || "", "");
       segments.push({
         run_id: runId,
         start_from: normalizePipelineStage(item?.start_from || "", stopAfter),
         stop_after: stopAfter,
+        target_node: targetNode,
       });
     });
   }
   const headRunId = String(session?.head_run_id || "").trim();
   const headStopAfter = normalizePipelineStage(session?.head_request?.stop_after || "", "");
   if (headRunId && headStopAfter && !session?.pending) {
+    const headTargetNode = workflowStudioRequestTargetNode(session?.head_request || {}, "");
     segments.unshift({
       run_id: headRunId,
       start_from: normalizePipelineStage(session?.head_request?.start_from || "", headStopAfter),
       stop_after: headStopAfter,
+      target_node: headTargetNode,
     });
   }
   return segments;
 }
 
 function workflowStudioRecoveredStageState(session, stage) {
-  const normalizedStage = normalizePipelineStage(stage, "");
+  const normalizedStage = workflowStudioNodeId(stage, "");
   if (!session || !normalizedStage) return "";
   if (session.pending && String(session.pending.run_id || "").trim()) return "";
   const storedState = String(session.stage_states?.[normalizedStage] || "").trim().toLowerCase();
   if (["failed", "error", "cancelled", "canceled", "stopped"].includes(storedState)) return storedState;
   const stageRunId = String(session.stage_run_ids?.[normalizedStage] || "").trim();
+  const stageBase = workflowStudioNodeBaseStage(normalizedStage, "");
   const segments = workflowStudioExecutionSegments(session);
   for (const segment of segments) {
     const segmentRunId = String(segment?.run_id || "").trim();
     if (stageRunId && segmentRunId && stageRunId !== segmentRunId) continue;
-    const executedStages = pipelineStageSlice(segment.start_from || "msa", segment.stop_after || normalizedStage);
-    if (executedStages.includes(normalizedStage)) {
+    const targetNode = workflowStudioNodeId(segment?.target_node || "", "");
+    if (targetNode) {
+      if (targetNode === normalizedStage) return "completed";
+      continue;
+    }
+    const executedStages = pipelineStageSlice(segment.start_from || "msa", segment.stop_after || stageBase);
+    if (!parseWorkflowStudioNode(normalizedStage)?.isTier && executedStages.includes(stageBase)) {
       return "completed";
     }
   }
@@ -3094,11 +3201,15 @@ function workflowStudioRecoveredStageState(session, stage) {
 
 function buildWorkflowStudioPreflightRequest(session, targetStage = session?.active_stage || "", preview = null) {
   const effectivePreview = preview || workflowStudioExecutionPreview(session, targetStage);
-  const normalizedTarget = normalizePipelineStage(targetStage, effectivePreview?.targetStage || "msa") || "msa";
+  const route = workflowStudioExecutionTarget(targetStage || effectivePreview?.targetStage || "msa");
+  const normalizedTarget = route.nodeId || effectivePreview?.targetStage || "msa";
   const args = buildRunArguments({
     prompt: session?.prompt || el.promptInput?.value.trim() || "",
-    routed: { stop_after: normalizedTarget },
-    answers: effectivePreview?.nextPayload || {},
+    routed: { stop_after: route.stopAfter || workflowStudioNodeBaseStage(normalizedTarget, "msa") || "msa" },
+    answers: {
+      ...(effectivePreview?.nextPayload || {}),
+      ...(route.selectedTiers ? { selected_tiers: route.selectedTiers } : {}),
+    },
     runId: "",
   });
   if (effectivePreview?.reuseRun && effectivePreview?.requiredStart !== "msa") {
@@ -3106,7 +3217,12 @@ function buildWorkflowStudioPreflightRequest(session, targetStage = session?.act
   } else {
     delete args.start_from;
   }
-  args.stop_after = normalizedTarget;
+  args.stop_after = route.stopAfter || workflowStudioNodeBaseStage(normalizedTarget, "msa") || "msa";
+  if (route.selectedTiers) {
+    args.selected_tiers = [...route.selectedTiers];
+  } else {
+    delete args.selected_tiers;
+  }
   args.auto_recover = true;
   args.force = false;
   if (effectivePreview?.reuseRun && String(session?.head_run_id || "").trim()) {
@@ -3247,12 +3363,16 @@ function workflowStudioHeadRunStopAfter(session) {
 }
 
 function workflowStudioStageSkippedByHeadRun(session, stage) {
-  const normalizedStage = normalizePipelineStage(stage, "");
+  const normalizedStage = workflowStudioNodeId(stage, "");
   if (!session || !normalizedStage) return false;
+  if (parseWorkflowStudioNode(normalizedStage)?.isTier) return false;
   const headRunId = String(session.head_run_id || "").trim();
   if (!headRunId) return false;
   const stageRunId = String(session.stage_run_ids?.[normalizedStage] || "").trim();
   const storedState = String(session.stage_states?.[normalizedStage] || "").trim().toLowerCase();
+  if (["launching", "running", "completed", "done"].includes(storedState)) {
+    return false;
+  }
   if (["failed", "error", "cancelled", "canceled", "stopped"].includes(storedState) && stageRunId) {
     return false;
   }
@@ -3270,6 +3390,7 @@ function workflowStudioStageSkippedByHeadRun(session, stage) {
 
 function normalizeWorkflowStudioAnswersForRun(rawAnswers) {
   const answers = cloneWorkflowStudioValue(rawAnswers || {});
+  delete answers.selected_tiers;
   const targetInput = String(answers.target_input || "").trim();
   delete answers.target_pdb;
   delete answers.target_fasta;
@@ -3294,12 +3415,16 @@ function normalizeWorkflowStudioAnswersForRun(rawAnswers) {
 }
 
 function workflowStudioStageState(session, stage) {
-  const normalizedStage = normalizePipelineStage(stage, "");
+  const normalizedStage = resolveWorkflowStudioStageForSession(session?.nodes, stage, workflowStudioNodeId(stage, ""));
   if (!session || !normalizedStage) return "idle";
   const pending = session.pending;
   const storedState = String(session.stage_states?.[normalizedStage] || "").trim().toLowerCase();
   const liveStatus = workflowStudioLiveStatus(session);
-  const liveStage = normalizePipelineStage(liveStatus?.stage || "", "");
+  const liveStage = resolveWorkflowStudioStageForSession(
+    session?.nodes,
+    workflowStudioStatusStageValue(liveStatus, ""),
+    workflowStudioNodeId(workflowStudioStatusStageValue(liveStatus, ""), "")
+  );
   const liveStateRaw = String(liveStatus?.state || "").trim().toLowerCase();
   const liveState =
     liveStateRaw === "done"
@@ -3315,9 +3440,25 @@ function workflowStudioStageState(session, stage) {
     pendingRunId && String(state.lastRunStatus?.run_id || "").trim() === pendingRunId
       ? String(state.lastRunStatus?.state || "").trim().toLowerCase()
       : "";
+  const pendingTargetNode = resolveWorkflowStudioStageForSession(
+    session?.nodes,
+    pending?.target_node || "",
+    workflowStudioNodeId(pending?.target_node || "", "")
+  );
   const pendingStages =
-    pending && pending.run_id ? pipelineStageSlice(pending.start_from || "msa", pending.stop_after || normalizedStage) : [];
-  if (pending && pending.run_id && pendingStages.includes(normalizedStage)) {
+    pending && pending.run_id && !pendingTargetNode
+      ? pipelineStageSlice(
+          pending.start_from || "msa",
+          pending.stop_after || workflowStudioNodeBaseStage(normalizedStage, "msa")
+        )
+      : [];
+  if (
+    pending &&
+    pending.run_id &&
+    (pendingTargetNode
+      ? pendingTargetNode === normalizedStage
+      : pendingStages.includes(workflowStudioNodeBaseStage(normalizedStage, "")))
+  ) {
     if (pendingStatusState === "running") {
       return "running";
     }
@@ -3346,8 +3487,8 @@ function workflowStudioStageCompleted(session, stage) {
 }
 
 function workflowStudioFormatRequestedRange(start, stop) {
-  const normalizedStart = normalizePipelineStage(start, "");
-  const normalizedStop = normalizePipelineStage(stop, normalizedStart || "");
+  const normalizedStart = workflowStudioNodeId(start, normalizePipelineStage(start, ""));
+  const normalizedStop = workflowStudioNodeId(stop, normalizePipelineStage(stop, normalizedStart || ""));
   if (!normalizedStop) return "-";
   const startLabel = formatStageLabel(normalizedStart || normalizedStop);
   const stopLabel = formatStageLabel(normalizedStop);
@@ -3372,6 +3513,16 @@ function workflowStudioStatusSnapshot(session = workflowStudioSessionForId()) {
   const rawStatus = workflowStudioLiveStatus(session);
   const status =
     pending && rawStatus && String(rawStatus.state || "").trim().toLowerCase() !== "running" ? null : rawStatus;
+  const statusStage = resolveWorkflowStudioStageForSession(
+    session?.nodes,
+    workflowStudioStatusStageValue(status, ""),
+    workflowStudioNodeId(workflowStudioStatusStageValue(status, ""), "")
+  );
+  const pendingTargetNode = resolveWorkflowStudioStageForSession(
+    session?.nodes,
+    pending?.target_node || "",
+    workflowStudioNodeId(pending?.target_node || "", "")
+  );
   const currentRunState = currentRunId === runId ? currentRunStateText() : "";
   const fallbackState = pending
     ? currentRunState === "running"
@@ -3383,13 +3534,29 @@ function workflowStudioStatusSnapshot(session = workflowStudioSessionForId()) {
   const stateText = String(status?.state || fallbackState || "").trim().toLowerCase();
   const stateLabel = stateText ? t(`studio.status.${stateText}`) : "-";
   const stage = formatStatusStage(
-    status?.stage || pending?.start_from || workflowStudioHeadRunStopAfter(session) || session.active_stage || ""
+    statusStage ||
+      pendingTargetNode ||
+      pending?.start_from ||
+      workflowStudioRequestTargetNode(session?.head_request || {}, "") ||
+      workflowStudioHeadRunStopAfter(session) ||
+      session.active_stage ||
+      ""
   );
   const updated = String(status?.updated_at || "").trim() || (pending ? t("studio.runStatus.awaiting") : "-");
+  const headTargetNode = resolveWorkflowStudioStageForSession(
+    session?.nodes,
+    workflowStudioRequestTargetNode(session?.head_request || {}, ""),
+    workflowStudioRequestTargetNode(session?.head_request || {}, "")
+  );
   const requested = pending?.stop_after
-    ? workflowStudioFormatRequestedRange(pending.start_from || pending.stop_after, pending.stop_after)
-    : workflowStudioHeadRunStopAfter(session)
-      ? workflowStudioFormatRequestedRange("msa", workflowStudioHeadRunStopAfter(session))
+    ? workflowStudioFormatRequestedRange(
+        pendingTargetNode || pending.start_from || pending.stop_after,
+        pendingTargetNode || pending.stop_after
+      )
+    : headTargetNode
+      ? workflowStudioFormatRequestedRange(headTargetNode, headTargetNode)
+      : workflowStudioHeadRunStopAfter(session)
+        ? workflowStudioFormatRequestedRange("msa", workflowStudioHeadRunStopAfter(session))
       : "-";
   const line = runId
     ? t("studio.runStatus.line", {
@@ -3430,7 +3597,47 @@ function updateWorkflowStudioRunStatus(session = workflowStudioSessionForId()) {
 }
 
 function workflowStudioStageArtifacts(stage) {
-  return workflowArtifactGroupsForReview().find((group) => group.stage === stage)?.items || [];
+  const meta = parseWorkflowStudioNode(stage);
+  const baseStage = meta?.baseStage || normalizePipelineStage(stage, "");
+  const tierKey = meta?.tierKey || "";
+  const artifacts = Array.isArray(state.artifacts) ? state.artifacts : [];
+  const matchesStage = (path) => {
+    const normalized = String(path || "")
+      .trim()
+      .replace(/\\/g, "/")
+      .replace(/\/+/g, "/")
+      .toLowerCase();
+    if (!normalized) return false;
+    if (tierKey) {
+      const tierMatch = normalized.match(/(?:^|\/)tiers\/([^/]+)/);
+      if (!tierMatch || normalizeTierKeyValue(tierMatch[1]) !== tierKey) return false;
+    }
+    if (baseStage === "design") {
+      return (
+        /(?:^|\/)tiers\/[^/]+\/(proteinmpnn\.json|designs(?:_pi_filtered)?\.fasta|fixed_positions(?:_check)?\.json|mutation_report\.json|mutations_by_(?:position|sequence)\.(?:tsv|svg)|proteinmpnn_backbones\.json)$/i.test(
+          normalized
+        ) ||
+        (tierKey ? new RegExp(`(?:^|/)backbones/[^/]+/tiers/${tierKey}/`, "i").test(normalized) : false)
+      );
+    }
+    if (baseStage === "soluprot") {
+      return /(?:^|\/)tiers\/[^/]+\/(soluprot\.json|designs_filtered\.fasta)$/i.test(normalized);
+    }
+    if (baseStage === "af2") {
+      return (
+        /(?:^|\/)tiers\/[^/]+\/(af2_scores\.json|af2_selected\.fasta)$/i.test(normalized) ||
+        /(?:^|\/)tiers\/[^/]+\/af2\//i.test(normalized)
+      );
+    }
+    if (baseStage === "novelty") {
+      return /(?:^|\/)tiers\/[^/]+\/novelty\.(?:json|tsv)$/i.test(normalized);
+    }
+    return artifactMetaForPath(path).stage === baseStage;
+  };
+  return artifacts.filter((item) => {
+    if (!item || item.type !== "file" || !String(item.path || "").trim()) return false;
+    return matchesStage(item.path);
+  }).sort((a, b) => String(a.path || "").localeCompare(String(b.path || "")));
 }
 
 function workflowStudioChainRangesForAnswers(answers = {}) {
@@ -3496,7 +3703,7 @@ function workflowStudioArtifactPreviewScore(stage, path) {
   } else if (isBinaryPath(text)) {
     score = 150;
   }
-  const patterns = WORKFLOW_STUDIO_REPRESENTATIVE_PATTERNS[normalizePipelineStage(stage, "")] || [];
+  const patterns = WORKFLOW_STUDIO_REPRESENTATIVE_PATTERNS[workflowStudioNodeBaseStage(stage, "")] || [];
   patterns.forEach((pattern, idx) => {
     if (pattern.test(text)) {
       score -= 30 - idx * 4;
@@ -3557,10 +3764,11 @@ function workflowStudioRunActive(session = workflowStudioSessionForId()) {
 }
 
 function workflowStudioExecutionPreview(session, targetStage = session?.active_stage || "") {
-  const normalizedTarget = normalizePipelineStage(targetStage, session?.nodes?.[0] || "msa") || session?.nodes?.[0] || "msa";
+  const route = workflowStudioExecutionTarget(targetStage || session?.nodes?.[0] || "msa");
+  const normalizedTarget = route.nodeId || session?.nodes?.[0] || "msa";
   const nextPayload = normalizeWorkflowStudioAnswersForRun(workflowStudioDraftAnswers(session));
   const hasExplicitContig = workflowStudioHasExplicitContigDraft(session);
-  if (normalizedTarget === "rfd3" && !hasExplicitContig && !String(nextPayload.rfd3_contig || "").trim()) {
+  if (route.baseStage === "rfd3" && !hasExplicitContig && !String(nextPayload.rfd3_contig || "").trim()) {
     const contigOptions = workflowStudioContigOptionsForAnswers(nextPayload, "");
     if (contigOptions.length) {
       nextPayload.rfd3_contig = contigOptions[0].value;
@@ -3576,11 +3784,13 @@ function workflowStudioExecutionPreview(session, targetStage = session?.active_s
   const requiredStart = minimumWorkflowStudioStartStage({
     previousPayload,
     nextPayload,
-    targetStage: normalizedTarget,
+    targetStage: route.baseStage || normalizedTarget,
   });
   const sameRunCandidate = Boolean(String(session?.head_run_id || "").trim()) && requiredStart !== "msa";
   return {
     targetStage: normalizedTarget,
+    targetBaseStage: route.baseStage || normalizedTarget,
+    selectedTiers: route.selectedTiers ? [...route.selectedTiers] : undefined,
     nextPayload,
     previousPayload,
     changedFields,
@@ -3590,7 +3800,8 @@ function workflowStudioExecutionPreview(session, targetStage = session?.active_s
 }
 
 function workflowStudioExecutionNoteKey(preview, activeStage) {
-  if (preview.requiredStart === activeStage) {
+  const activeBaseStage = workflowStudioNodeBaseStage(activeStage, "");
+  if (preview.requiredStart === activeBaseStage) {
     return preview.reuseRun ? "studio.note.continue" : "studio.note.newRun";
   }
   if (preview.requiredStart === "msa") {
@@ -3602,10 +3813,11 @@ function workflowStudioExecutionNoteKey(preview, activeStage) {
 function ensureWorkflowPlanForSessionRun(runId, session) {
   const key = String(runId || "").trim();
   if (!key || !session) return;
+  const baseNodes = normalizeWorkflowNodesForState(session.nodes);
   state.runModeById[key] = "workflow";
   state.workflowPlansByRunId[key] = {
-    nodes: Array.isArray(session.nodes) ? session.nodes : normalizeWorkflowNodesForState(session.nodes),
-    finalStopAfter: session.nodes?.[session.nodes.length - 1] || "novelty",
+    nodes: baseNodes,
+    finalStopAfter: baseNodes[baseNodes.length - 1] || "novelty",
     checkpointEnabled: false,
     checkpointStages: [],
     checkpointIndex: 0,
@@ -3687,10 +3899,16 @@ async function adoptWorkflowStudioSessionFromRun(runId, { activate = true } = {}
   try {
     const payload = await readRunRequestPayload(key);
     const draft = buildSetupDraftFromRequest(payload);
+    const laneTiers =
+      Array.isArray(payload?.selected_tiers) && payload.selected_tiers.length
+        ? payload.selected_tiers
+        : Array.isArray(payload?.conservation_tiers) && payload.conservation_tiers.length
+          ? payload.conservation_tiers
+          : [0.3, 0.5, 0.7];
     const session = createWorkflowStudioSession({
       sessionId: createWorkflowSessionId(key),
       prompt: "",
-      nodes: plan.nodes,
+      nodes: expandWorkflowStudioNodes(plan.nodes, laneTiers),
       answers: draft.answers,
       headRunId: key,
       headRequest: payload,
@@ -3714,9 +3932,6 @@ async function adoptWorkflowStudioSessionFromRun(runId, { activate = true } = {}
 async function openWorkflowStudioFromSetup({ prompt = "", workflowPlan = null, selectedRunId = "" } = {}) {
   const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
   const sessionId = createWorkflowSessionId(prefix);
-  const nodes = Array.isArray(workflowPlan?.nodes) && workflowPlan.nodes.length
-    ? workflowPlan.nodes
-    : normalizeWorkflowNodesForState(state.workflowDesigner?.nodes);
   const selected = String(selectedRunId || "").trim();
   let headRequest = {};
   let sourceRunId = "";
@@ -3730,6 +3945,17 @@ async function openWorkflowStudioFromSetup({ prompt = "", workflowPlan = null, s
       headRequest = {};
     }
   }
+  const baseNodes =
+    Array.isArray(workflowPlan?.nodes) && workflowPlan.nodes.length
+      ? workflowPlan.nodes
+      : normalizeWorkflowNodesForState(state.workflowDesigner?.nodes);
+  const laneTiers =
+    Array.isArray(state.answers?.conservation_tiers) && state.answers.conservation_tiers.length
+      ? state.answers.conservation_tiers
+      : Array.isArray(headRequest?.conservation_tiers) && headRequest.conservation_tiers.length
+        ? headRequest.conservation_tiers
+        : [0.3, 0.5, 0.7];
+  const nodes = expandWorkflowStudioNodes(baseNodes, laneTiers);
   const session = createWorkflowStudioSession({
     sessionId,
     prompt,
@@ -3761,27 +3987,51 @@ function syncWorkflowStudioSessionFromStatus(status = state.lastRunStatus) {
   workflowStudioSessionsOrdered().forEach((session) => {
     const pending = session.pending;
     if (!pending || String(pending.run_id || "").trim() !== runId) return;
+    const targetNode = workflowStudioNodeId(pending.target_node || "", "");
+    let sessionTouched = false;
     if (runState === "running") {
-      pipelineStageSlice(pending.start_from || "msa", pending.stop_after || session.active_stage || "msa").forEach((stage) => {
-        if (!session.nodes.includes(stage)) return;
-        session.stage_states[stage] = "running";
-        session.stage_run_ids[stage] = runId;
-      });
-      session.head_run_id = runId;
-      session.updated_at = new Date().toISOString();
-      touched = true;
+      if (targetNode && session.nodes.includes(targetNode)) {
+        sessionTouched =
+          upsertWorkflowStudioStageStatus(session.stage_states, session.stage_run_ids, targetNode, "running", runId) ||
+          sessionTouched;
+      } else {
+        pipelineStageSlice(pending.start_from || "msa", pending.stop_after || session.active_stage || "msa").forEach((stage) => {
+          if (!session.nodes.includes(stage)) return;
+          sessionTouched =
+            upsertWorkflowStudioStageStatus(session.stage_states, session.stage_run_ids, stage, "running", runId) ||
+            sessionTouched;
+        });
+      }
+      if (String(session.head_run_id || "").trim() !== runId) {
+        session.head_run_id = runId;
+        sessionTouched = true;
+      }
+      if (sessionTouched) {
+        session.updated_at = new Date().toISOString();
+        touched = true;
+      }
       return;
     }
     if (!["completed", "done", "failed", "error", "cancelled", "canceled", "stopped"].includes(runState)) {
       return;
     }
     if (["completed", "done"].includes(runState)) {
-      pipelineStageSlice(pending.start_from || "msa", pending.stop_after || session.active_stage || "msa").forEach((stage) => {
-        if (!session.nodes.includes(stage)) return;
-        session.stage_states[stage] = "completed";
-        session.stage_run_ids[stage] = runId;
-      });
-      session.head_run_id = runId;
+      if (targetNode && session.nodes.includes(targetNode)) {
+        sessionTouched =
+          upsertWorkflowStudioStageStatus(session.stage_states, session.stage_run_ids, targetNode, "completed", runId) ||
+          sessionTouched;
+      } else {
+        pipelineStageSlice(pending.start_from || "msa", pending.stop_after || session.active_stage || "msa").forEach((stage) => {
+          if (!session.nodes.includes(stage)) return;
+          sessionTouched =
+            upsertWorkflowStudioStageStatus(session.stage_states, session.stage_run_ids, stage, "completed", runId) ||
+            sessionTouched;
+        });
+      }
+      if (String(session.head_run_id || "").trim() !== runId) {
+        session.head_run_id = runId;
+        sessionTouched = true;
+      }
       session.head_request =
         pending.request_snapshot && typeof pending.request_snapshot === "object"
           ? cloneWorkflowStudioValue(pending.request_snapshot)
@@ -3791,24 +4041,81 @@ function syncWorkflowStudioSessionFromStatus(status = state.lastRunStatus) {
           run_id: runId,
           start_from: pending.start_from || "msa",
           stop_after: pending.stop_after || session.active_stage || "msa",
+          target_node: targetNode,
           created_at: new Date().toISOString(),
         },
         ...(Array.isArray(session.history) ? session.history : []),
       ].slice(0, 20);
+      sessionTouched = true;
     } else {
-      const failedStage = normalizePipelineStage(pending.stop_after || session.active_stage || "", "");
+      const failedStage = targetNode || normalizePipelineStage(pending.stop_after || session.active_stage || "", "");
       if (failedStage) {
-        session.stage_states[failedStage] = runState === "error" ? "failed" : runState;
-        session.stage_run_ids[failedStage] = runId;
+        sessionTouched =
+          upsertWorkflowStudioStageStatus(
+            session.stage_states,
+            session.stage_run_ids,
+            failedStage,
+            runState === "error" ? "failed" : runState,
+            runId
+          ) || sessionTouched;
       }
     }
     session.pending = null;
-    session.updated_at = new Date().toISOString();
-    touched = true;
-    void saveWorkflowStudioSessionToRun(session, runId);
+    sessionTouched = true;
+    if (sessionTouched) {
+      session.updated_at = new Date().toISOString();
+      touched = true;
+      void saveWorkflowStudioSessionToRun(session, runId);
+    }
   });
-  if (touched) persistWorkflowStudioSessions();
-  renderWorkflowStudio();
+  workflowStudioSessionsOrdered().forEach((session) => {
+    if (session?.pending || String(session?.head_run_id || "").trim() !== runId) return;
+    let normalizedRunState = runState;
+    if (normalizedRunState === "done") normalizedRunState = "completed";
+    if (normalizedRunState === "error") normalizedRunState = "failed";
+    if (!["running", "completed", "failed", "cancelled", "canceled", "stopped"].includes(normalizedRunState)) {
+      return;
+    }
+    const resolvedStatusStage = resolveWorkflowStudioStageForSession(session?.nodes, workflowStudioStatusStageValue(status, ""), "");
+    const resolvedCompletedStages = new Set();
+    if (normalizedRunState === "completed" && Array.isArray(status?._studio_completed_nodes)) {
+      status._studio_completed_nodes.forEach((stage) => {
+        const resolvedStage = resolveWorkflowStudioStageForSession(session?.nodes, stage, "");
+        if (resolvedStage) {
+          resolvedCompletedStages.add(resolvedStage);
+        }
+      });
+    }
+    if (resolvedStatusStage) {
+      resolvedCompletedStages.add(resolvedStatusStage);
+    }
+    if (!resolvedCompletedStages.size) return;
+    let sessionTouched = false;
+    resolvedCompletedStages.forEach((stage) => {
+      sessionTouched =
+        upsertWorkflowStudioStageStatus(
+          session.stage_states,
+          session.stage_run_ids,
+          stage,
+          normalizedRunState === "completed" ? "completed" : normalizedRunState,
+          runId
+        ) || sessionTouched;
+    });
+    if (sessionTouched) {
+      session.updated_at = new Date().toISOString();
+      touched = true;
+    }
+  });
+  if (touched) {
+    persistWorkflowStudioSessions();
+  }
+  if (activeTabId() === "studio") {
+    if (touched) {
+      renderWorkflowStudio();
+    } else {
+      updateWorkflowStudioRunStatus();
+    }
+  }
 }
 
 function workflowStudioSummaryCards(session, preview) {
@@ -3833,6 +4140,26 @@ function workflowStudioFieldAccept(fieldId) {
     return ".pdb,.ent,.txt";
   }
   return ".txt";
+}
+
+async function loadWorkflowStudioSession(sessionId) {
+  const key = String(sessionId || "").trim();
+  if (!key) return;
+  const session = workflowStudioSessionForId(key);
+  if (!session) return;
+  setCurrentWorkflowStudioSessionId(key);
+  renderWorkflowStudio();
+  const headRunId = String(session?.head_run_id || "").trim();
+  if (!headRunId) return;
+  if (headRunId !== String(state.currentRunId || "").trim()) {
+    setCurrentRunId(headRunId);
+  }
+  await pollStatus(headRunId);
+  await refreshArtifacts({ runId: headRunId });
+  await refreshAgentPanel();
+  await refreshRunCompare();
+  await refreshHitList();
+  ensureAutoPoll();
 }
 
 async function openWorkflowStudioRunInMonitor(session = workflowStudioSessionForId()) {
@@ -3891,12 +4218,28 @@ function renderWorkflowStudioResiduePicker(mountEl, session, activeStage) {
   loadRunBtn.className = "ghost";
   loadRunBtn.textContent = t("setup.residuePicker.loadRunTarget");
 
+  const runAf2Btn = document.createElement("button");
+  runAf2Btn.type = "button";
+  runAf2Btn.className = "ghost";
+  const pickerProvider = mergedAnswers.af2_provider || "colabfold";
+  runAf2Btn.textContent = t("setup.residuePicker.runAf2", af2ProviderTemplateParams(pickerProvider));
+
   const targetPdbText = getTargetInputPdbTextFromAnswers(mergedAnswers);
+  const targetFastaText = getTargetInputFastaTextFromAnswers(mergedAnswers);
   const rfd3PdbText = getRfd3InputPdbTextFromAnswers(mergedAnswers);
+  const pickerBusy = Boolean(state.setupResiduePicker.runningAf2);
   const selectedRunIdForPicker = String(session.head_run_id || state.currentRunId || "").trim();
-  loadTargetBtn.disabled = !targetPdbText;
-  loadRfd3Btn.disabled = !rfd3PdbText;
-  loadRunBtn.disabled = !selectedRunIdForPicker;
+  const controlState = residuePickerControlState({
+    targetPdbText,
+    targetFastaText,
+    rfd3PdbText,
+    selectedRunId: selectedRunIdForPicker,
+    busy: pickerBusy,
+  });
+  loadTargetBtn.disabled = !controlState.canLoadTarget;
+  loadRfd3Btn.disabled = !controlState.canLoadRfd3;
+  loadRunBtn.disabled = !controlState.canLoadRun;
+  runAf2Btn.disabled = !controlState.canRunAf2;
 
   const loadStructureFromText = (pdbText, sourceLabel, sourceKey) => {
     const text = String(pdbText || "").trim();
@@ -3946,6 +4289,42 @@ function renderWorkflowStudioResiduePicker(mountEl, session, activeStage) {
     renderWorkflowStudio();
   });
 
+  runAf2Btn.addEventListener("click", async () => {
+    const fastaText = String(getTargetInputFastaTextFromAnswers(workflowStudioDraftAnswers(session)) || "").trim();
+    if (!fastaText) {
+      state.setupResiduePicker.notice = t("setup.residuePicker.runAf2NeedsFasta");
+      renderWorkflowStudio();
+      return;
+    }
+    state.setupResiduePicker.runningAf2 = true;
+    state.setupResiduePicker.notice = t("setup.residuePicker.runAf2Running", af2ProviderTemplateParams(pickerProvider));
+    renderWorkflowStudio();
+
+    try {
+      const { outRunId, selectedPath, selectedPdb, loaded } = await predictResiduePickerTargetStructure({
+        fastaText,
+        af2Provider: pickerProvider,
+      });
+      const current = workflowStudioSessionForId(session.session_id);
+      if (current) {
+        current.base_answers = current.base_answers && typeof current.base_answers === "object" ? current.base_answers : {};
+        current.base_answers.target_fasta = fastaText;
+        current.base_answers.target_pdb = selectedPdb;
+        current.updated_at = new Date().toISOString();
+        upsertWorkflowStudioSession(current);
+      }
+      state.setupResiduePicker.notice = loaded
+        ? t("setup.residuePicker.runAf2Loaded", { run: outRunId, path: selectedPath })
+        : t("setup.residuePicker.noPdb");
+    } catch (err) {
+      state.setupResiduePicker.notice = t("setup.residuePicker.runAf2Failed", { error: err.message });
+    } finally {
+      state.setupResiduePicker.runningAf2 = false;
+      renderWorkflowStudio();
+    }
+  });
+
+  controls.appendChild(runAf2Btn);
   controls.appendChild(loadTargetBtn);
   controls.appendChild(loadRfd3Btn);
   controls.appendChild(loadRunBtn);
@@ -4100,26 +4479,83 @@ function renderWorkflowStudioResiduePicker(mountEl, session, activeStage) {
   mountEl.appendChild(card);
 }
 
+function renderWorkflowStudioSessionList() {
+  if (!el.studioSessionList) return;
+  const sessions = workflowStudioSessionsOrdered();
+  const duplicateCounts = workflowStudioSessionDuplicateCounts(sessions);
+  el.studioSessionList.innerHTML = "";
+  if (!sessions.length) {
+    el.studioSessionList.innerHTML = `<div class="placeholder">${escapeHtml(t("studio.sessions.none"))}</div>`;
+    return;
+  }
+  sessions.forEach((session) => {
+    const sessionId = String(session?.session_id || "").trim();
+    if (!sessionId) return;
+    const item = document.createElement("div");
+    item.className = "run-item studio-session-item";
+    if (sessionId === String(state.currentWorkflowStudioSessionId || "").trim()) {
+      item.classList.add("active");
+    }
+
+    const summary = document.createElement("div");
+    summary.className = "studio-session-copy";
+    const title = document.createElement("strong");
+    title.textContent = workflowStudioSessionLabel(session) || sessionId;
+    const metaText = workflowStudioSessionDetailLabel(session);
+    summary.appendChild(title);
+    if (metaText) {
+      const meta = document.createElement("div");
+      meta.className = "studio-session-meta";
+      meta.textContent = metaText;
+      summary.appendChild(meta);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "run-item-actions studio-session-actions";
+    if (sessionId === String(state.currentWorkflowStudioSessionId || "").trim()) {
+      const currentTag = document.createElement("span");
+      currentTag.className = "stage-tag";
+      currentTag.textContent = t("studio.current");
+      actions.appendChild(currentTag);
+    } else {
+      const loadBtn = document.createElement("button");
+      loadBtn.type = "button";
+      loadBtn.className = "ghost studio-session-action";
+      loadBtn.dataset.studioSessionAction = "load";
+      loadBtn.dataset.sessionId = sessionId;
+      loadBtn.textContent = t("runs.load");
+      actions.appendChild(loadBtn);
+    }
+
+    const runKey = workflowStudioSessionRunKey(session);
+    const duplicateCount = runKey ? duplicateCounts.get(runKey) || 0 : 0;
+    if (duplicateCount > 1) {
+      const cleanupBtn = document.createElement("button");
+      cleanupBtn.type = "button";
+      cleanupBtn.className = "ghost studio-session-action";
+      cleanupBtn.dataset.studioSessionAction = "cleanup";
+      cleanupBtn.dataset.sessionId = sessionId;
+      cleanupBtn.textContent = t("studio.cleanupDuplicates");
+      actions.appendChild(cleanupBtn);
+    }
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "run-delete";
+    deleteBtn.dataset.studioSessionAction = "delete";
+    deleteBtn.dataset.sessionId = sessionId;
+    deleteBtn.textContent = t("runs.delete");
+    actions.appendChild(deleteBtn);
+
+    item.appendChild(summary);
+    item.appendChild(actions);
+    el.studioSessionList.appendChild(item);
+  });
+}
+
 function renderWorkflowStudio() {
   const session = workflowStudioSessionForId();
-  if (el.studioSessionSelector) {
-    const sessions = workflowStudioSessionsOrdered();
-    el.studioSessionSelector.innerHTML = "";
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = t("studio.selectSession");
-    el.studioSessionSelector.appendChild(placeholder);
-    sessions.forEach((session) => {
-      const option = document.createElement("option");
-      option.value = session.session_id;
-      option.textContent = workflowStudioSessionOptionLabel(session);
-      el.studioSessionSelector.appendChild(option);
-    });
-    el.studioSessionSelector.value =
-      state.currentWorkflowStudioSessionId && sessions.some((item) => item.session_id === state.currentWorkflowStudioSessionId)
-        ? state.currentWorkflowStudioSessionId
-        : "";
-  }
+  renderWorkflowStudioSessionList();
   if (el.studioAdoptRunBtn) {
     el.studioAdoptRunBtn.disabled = !String(state.currentRunId || "").trim();
   }
@@ -4134,12 +4570,6 @@ function renderWorkflowStudio() {
   }
   if (el.studioRefreshBtn) {
     el.studioRefreshBtn.disabled = false;
-  }
-  if (el.studioDeleteSessionBtn) {
-    el.studioDeleteSessionBtn.disabled = !session;
-  }
-  if (el.studioDeleteOtherSessionsBtn) {
-    el.studioDeleteOtherSessionsBtn.disabled = !session || workflowStudioSessionsOrdered().length <= 1;
   }
   if (el.studioOpenMonitorBtn) {
     el.studioOpenMonitorBtn.disabled = !String(workflowStudioActionRunId(session) || "").trim();
@@ -4158,7 +4588,11 @@ function renderWorkflowStudio() {
     `;
     return;
   }
-  const activeStage = normalizePipelineStage(session.active_stage || session.nodes?.[0] || "", session.nodes?.[0] || "msa");
+  const activeStage = resolveWorkflowStudioStageForSession(
+    session?.nodes,
+    session.active_stage || session.nodes?.[0] || "",
+    session.nodes?.[0] || "msa"
+  );
   const preview = workflowStudioExecutionPreview(session, activeStage);
   const preflightRequest = buildWorkflowStudioPreflightRequest(session, activeStage, preview);
   const activeCheckState = workflowStudioCheckState(session.session_id);
@@ -4360,51 +4794,31 @@ function renderWorkflowStudio() {
     : `<div class="placeholder">${escapeHtml(t("hint.none"))}</div>`;
   const activeStageState = workflowStudioStageState(session, activeStage);
   const stageArtifacts = workflowStudioStageArtifacts(activeStage);
-  const representativeArtifact = workflowStudioRepresentativeArtifact(activeStage, stageArtifacts);
+  const retainedArtifactPath = workflowStudioRetainedArtifactPath(stageArtifacts, state.studioArtifactPath);
   const selectedArtifact =
-    stageArtifacts.find((item) => String(item?.path || "") === String(state.studioArtifactPath || "").trim()) ||
-    representativeArtifact ||
-    null;
+    stageArtifacts.find((item) => String(item?.path || "").trim() === retainedArtifactPath) || null;
   const selectedArtifactPath = String(selectedArtifact?.path || "").trim();
-  const representativePath = String(representativeArtifact?.path || "").trim();
   const autoPreviewNeeded = selectedArtifactPath !== String(state.studioArtifactPath || "").trim();
   state.studioArtifactPath = selectedArtifactPath;
-  const extraArtifacts = stageArtifacts.filter((item) => String(item?.path || "") !== representativePath);
-  const extraArtifactValue =
-    selectedArtifactPath && selectedArtifactPath !== representativePath ? selectedArtifactPath : "";
-  const artifactList = representativeArtifact
+  const artifactList = stageArtifacts.length
     ? `
-        <button
-          type="button"
-          class="studio-result-primary${selectedArtifactPath === representativePath ? " active" : ""}"
-          data-studio-artifact="${escapeAttr(representativePath)}"
-        >
-          <span class="studio-result-label">${escapeHtml(t("studio.results.representative"))}</span>
-          <strong>${escapeHtml(displayArtifactPath(representativePath))}</strong>
+        <label class="studio-result-select">
+          <span>${escapeHtml(t("studio.results.select"))}</span>
+          <select data-studio-artifact-select>
+            <option value="">${escapeHtml(t("studio.results.selectPlaceholder"))}</option>
+            ${stageArtifacts
+              .map((item) => {
+                const path = String(item?.path || "");
+                return `
+                  <option value="${escapeAttr(path)}"${selectedArtifactPath === path ? " selected" : ""}>
+                    ${escapeHtml(displayArtifactPath(path))}
+                  </option>
+                `;
+              })
+              .join("")}
+          </select>
           <span class="studio-result-meta">${escapeHtml(t("studio.results.fileCount", { count: stageArtifacts.length }))}</span>
-        </button>
-        ${
-          extraArtifacts.length
-            ? `
-              <label class="studio-result-select">
-                <span>${escapeHtml(t("studio.results.more"))}</span>
-                <select data-studio-artifact-select>
-                  <option value="">${escapeHtml(t("studio.results.morePlaceholder"))}</option>
-                  ${extraArtifacts
-                    .map((item) => {
-                      const path = String(item?.path || "");
-                      return `
-                        <option value="${escapeAttr(path)}"${extraArtifactValue === path ? " selected" : ""}>
-                          ${escapeHtml(displayArtifactPath(path))}
-                        </option>
-                      `;
-                    })
-                    .join("")}
-                </select>
-              </label>
-            `
-            : ""
-        }
+        </label>
       `
     : `<div class="placeholder">${escapeHtml(
         t(activeStageState === "skipped" ? "studio.noResultsSkipped" : "studio.noResults")
@@ -4413,8 +4827,8 @@ function renderWorkflowStudio() {
   const historyHtml = history.length
     ? history
         .map((item) => {
-          const start = formatStageLabel(item.start_from || "");
-          const stop = formatStageLabel(item.stop_after || "");
+          const start = formatStageLabel(item.target_node || item.start_from || "");
+          const stop = formatStageLabel(item.target_node || item.stop_after || "");
           return `
             <div class="studio-history-item">
               <strong>${escapeHtml(String(item.run_id || ""))}</strong><br />
@@ -4502,7 +4916,11 @@ function renderWorkflowStudio() {
               .join("")}
           </div>
           ${validationPanel}
-          <div class="studio-note${preview.requiredStart !== activeStage && preview.requiredStart !== "msa" ? " warn" : ""}">
+          <div class="studio-note${
+            preview.requiredStart !== workflowStudioNodeBaseStage(activeStage, "") && preview.requiredStart !== "msa"
+              ? " warn"
+              : ""
+          }">
             ${escapeHtml(rerunNote)}
           </div>
           <div class="studio-summary-actions">
@@ -4535,7 +4953,11 @@ function renderWorkflowStudio() {
             )}</strong>
           </div>
           <div class="studio-editor-grid">${fieldCards}</div>
-          ${activeStage === "design" ? `<div class="studio-inline-slot" data-studio-residue-picker></div>` : ""}
+          ${
+            workflowStudioNodeBaseStage(activeStage, "") === "design"
+              ? `<div class="studio-inline-slot" data-studio-residue-picker></div>`
+              : ""
+          }
         </section>
         <section class="studio-section">
           <div class="studio-section-head">
@@ -4555,7 +4977,7 @@ function renderWorkflowStudio() {
   }
   Array.from(el.workflowStudioRoot.querySelectorAll("[data-studio-stage]")).forEach((btn) => {
     btn.addEventListener("click", () => {
-      const stage = normalizePipelineStage(btn.getAttribute("data-studio-stage") || "", activeStage);
+      const stage = workflowStudioNodeId(btn.getAttribute("data-studio-stage") || "", activeStage);
       if (!stage) return;
       session.active_stage = stage;
       session.updated_at = new Date().toISOString();
@@ -4563,33 +4985,12 @@ function renderWorkflowStudio() {
       renderWorkflowStudio();
     });
   });
-  Array.from(el.workflowStudioRoot.querySelectorAll("[data-studio-artifact]")).forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const path = String(btn.getAttribute("data-studio-artifact") || "").trim();
-      if (!path) return;
-      const artifact = (Array.isArray(state.artifacts) ? state.artifacts : []).find(
-        (item) => item && item.type === "file" && String(item.path || "") === path
-      );
-      if (!artifact) return;
-      state.studioArtifactPath = path;
-      await previewArtifact(artifact, {
-        target: "studio",
-        runId: String(session.head_run_id || state.currentRunId || "").trim(),
-      });
-      renderWorkflowStudio();
-    });
-  });
   Array.from(el.workflowStudioRoot.querySelectorAll("[data-studio-artifact-select]")).forEach((select) => {
     select.addEventListener("change", async () => {
       const path = String(select.value || "").trim();
       if (!path) {
-        state.studioArtifactPath = representativePath;
-        if (representativeArtifact) {
-          await previewArtifact(representativeArtifact, {
-            target: "studio",
-            runId: String(session.head_run_id || state.currentRunId || "").trim(),
-          });
-        }
+        state.studioArtifactPath = "";
+        setFilePreviewPlaceholder("studio");
         renderWorkflowStudio();
         return;
       }
@@ -4747,7 +5148,11 @@ function renderWorkflowStudio() {
     });
   });
   if (!selectedArtifact) {
-    setFilePreviewPlaceholder("studio", activeStageState === "skipped" ? "studio.noResultsSkipped" : "studio.noResults");
+    if (stageArtifacts.length) {
+      setFilePreviewPlaceholder("studio");
+    } else {
+      setFilePreviewPlaceholder("studio", activeStageState === "skipped" ? "studio.noResultsSkipped" : "studio.noResults");
+    }
   } else if (autoPreviewNeeded) {
     const previewRunId = String(session.head_run_id || state.currentRunId || "").trim();
     if (previewRunId) {
@@ -4771,8 +5176,13 @@ async function runWorkflowStudioStage(sessionId = state.currentWorkflowStudioSes
     setMessage(t("studio.runFailed", { error: fieldErrors[0] }), "ai");
     return;
   }
-  const targetStage = normalizePipelineStage(session.active_stage || session.nodes?.[0] || "", session.nodes?.[0] || "msa");
-  if (!targetStage) return;
+  const targetStage = resolveWorkflowStudioStageForSession(
+    session?.nodes,
+    session.active_stage || session.nodes?.[0] || "",
+    session.nodes?.[0] || "msa"
+  );
+  const route = workflowStudioExecutionTarget(targetStage);
+  if (!targetStage || !route.stopAfter) return;
   const preview = workflowStudioExecutionPreview(session, targetStage);
   const actionRunId = String(workflowStudioActionRunId(session) || "").trim();
   if (actionRunId && actionRunId !== String(state.currentRunId || "").trim()) {
@@ -4790,8 +5200,11 @@ async function runWorkflowStudioStage(sessionId = state.currentWorkflowStudioSes
   const runId = preview.reuseRun ? session.head_run_id : createRunId(prefix);
   const args = buildRunArguments({
     prompt: session.prompt || el.promptInput.value.trim(),
-    routed: { stop_after: targetStage },
-    answers: preview.nextPayload,
+    routed: { stop_after: route.stopAfter },
+    answers: {
+      ...preview.nextPayload,
+      ...(route.selectedTiers ? { selected_tiers: route.selectedTiers } : {}),
+    },
     runId,
   });
   if (preview.reuseRun && preview.requiredStart !== "msa") {
@@ -4799,7 +5212,12 @@ async function runWorkflowStudioStage(sessionId = state.currentWorkflowStudioSes
   } else {
     delete args.start_from;
   }
-  args.stop_after = targetStage;
+  args.stop_after = route.stopAfter;
+  if (route.selectedTiers) {
+    args.selected_tiers = [...route.selectedTiers];
+  } else {
+    delete args.selected_tiers;
+  }
   args.auto_recover = true;
   args.force = false;
   try {
@@ -4819,7 +5237,8 @@ async function runWorkflowStudioStage(sessionId = state.currentWorkflowStudioSes
   const requestSnapshot = cloneWorkflowStudioValue({
     ...preview.nextPayload,
     start_from: String(args.start_from || "msa").trim().toLowerCase(),
-    stop_after: targetStage,
+    stop_after: route.stopAfter,
+    ...(route.selectedTiers ? { selected_tiers: [...route.selectedTiers] } : {}),
   });
   const previousPending = session.pending ? cloneWorkflowStudioValue(session.pending) : null;
   const previousHeadRunId = String(session.head_run_id || "").trim();
@@ -4830,7 +5249,8 @@ async function runWorkflowStudioStage(sessionId = state.currentWorkflowStudioSes
   session.pending = {
     run_id: runId,
     start_from: String(args.start_from || "msa").trim().toLowerCase(),
-    stop_after: targetStage,
+    stop_after: route.stopAfter,
+    target_node: targetStage,
     request_snapshot: requestSnapshot,
   };
   session.head_run_id = runId;
@@ -4848,7 +5268,8 @@ async function runWorkflowStudioStage(sessionId = state.currentWorkflowStudioSes
     session.pending = {
       run_id: launchedRunId,
       start_from: String(args.start_from || "msa").trim().toLowerCase(),
-      stop_after: targetStage,
+      stop_after: route.stopAfter,
+      target_node: targetStage,
       request_snapshot: requestSnapshot,
     };
     session.head_run_id = launchedRunId;
@@ -6310,7 +6731,16 @@ function setActiveTab(value) {
   if (next === "studio") {
     renderWorkflowStudio();
   }
-  if (next === "monitor" && el.autoPoll?.checked && state.currentRunId) {
+  const studioRunId =
+    next === "studio" ? String(workflowStudioActionRunId(workflowStudioSessionForId()) || "").trim() : "";
+  if (
+    shouldPollRunForTabChange({
+      nextTab: next,
+      studioRunId,
+      currentRunId: state.currentRunId,
+      autoPollEnabled: Boolean(el.autoPoll?.checked),
+    })
+  ) {
     void pollCurrentRun({ includeArtifacts: "auto" });
   }
 }
@@ -6765,9 +7195,6 @@ function setRunMode(mode, { render = true } = {}) {
   const normalized = RUN_MODE_OPTIONS.find((opt) => opt.value === mode)?.value || "pipeline";
   state.runMode = normalized;
   state.setupStepIndex = 0;
-  if (normalized !== "pipeline" && normalized !== "workflow") {
-    state.setupContinueRun = false;
-  }
   if (normalized === "workflow") {
     state.workflowDesigner = createWorkflowDesignerState();
   }
@@ -6796,7 +7223,6 @@ function resetPlan({ keepMode = true } = {}) {
   state.answerMeta = {};
   state.setupLoadedRequestRunId = "";
   state.chainRanges = null;
-  state.setupContinueRun = false;
   resetSetupResiduePicker();
   const nextMode = keepMode ? state.runMode : "pipeline";
   setRunMode(nextMode);
@@ -6983,7 +7409,11 @@ function normalizeTierKeyValue(value) {
 
 function buildProgressContextFromRequestPayload(payload) {
   if (!payload || typeof payload !== "object") return null;
-  const rawTiers = Array.isArray(payload.conservation_tiers) ? payload.conservation_tiers : [0.3, 0.5, 0.7];
+  const rawTiers = Array.isArray(payload.selected_tiers) && payload.selected_tiers.length
+    ? payload.selected_tiers
+    : Array.isArray(payload.conservation_tiers)
+      ? payload.conservation_tiers
+      : [0.3, 0.5, 0.7];
   const tierKeys = Array.from(
     new Set(
       rawTiers
@@ -7001,6 +7431,7 @@ function buildProgressContextFromRequestPayload(payload) {
     noveltyEnabled,
     stopAfter,
     startFrom,
+    wtCompare: Boolean(payload.wt_compare),
   };
 }
 
@@ -7128,9 +7559,16 @@ function computePipelineTierAwareProgress(status, runState, offset, cached) {
   const ctx = state.progressContextByRunId[runId];
   if (!ctx || !Array.isArray(ctx.tierKeys) || ctx.tierKeys.length === 0) return null;
 
-  const preSteps = ["msa", "conservation", "backbone", "wt", "masking"];
-  const tierSteps = ctx.noveltyEnabled ? ["design", "soluprot", "af2", "novelty"] : ["design", "soluprot", "af2"];
-  const totalUnits = preSteps.length + ctx.tierKeys.length * tierSteps.length + 1;
+  const units = progressUnitsForRequest({
+    mode: "pipeline",
+    startFrom: ctx.startFrom || "msa",
+    stopAfter: ctx.stopAfter || "",
+    noveltyEnabled: ctx.noveltyEnabled,
+    wtCompare: ctx.wtCompare,
+    tierKeys: ctx.tierKeys,
+  });
+  if (!Array.isArray(units) || !units.length) return null;
+
   const currentStep = mapStageToProgressStep(status?.stage, "pipeline");
   const parsedTierStage = parseTierStage(status?.stage);
   if (!currentStep) return null;
@@ -7141,32 +7579,39 @@ function computePipelineTierAwareProgress(status, runState, offset, cached) {
     };
   }
 
-  let unitIndex = null;
+  const tierSteps = new Set(["design", "soluprot", "af2", "novelty"]);
+  const tierKeys = Array.from(new Set(ctx.tierKeys.map((item) => normalizeTierKeyValue(item)).filter(Boolean)));
+  let unitIndex = -1;
   let label = progressStepLabel(currentStep);
-  if (preSteps.includes(currentStep)) {
-    unitIndex = preSteps.indexOf(currentStep);
-  } else if (tierSteps.includes(currentStep)) {
-    let tierIndex = parsedTierStage ? ctx.tierKeys.indexOf(parsedTierStage.tierKey) : -1;
-    if (tierIndex < 0 && cached && Number.isFinite(cached.tierIndex)) {
-      tierIndex = Math.max(0, Math.min(ctx.tierKeys.length - 1, Number(cached.tierIndex)));
-    }
-    if (tierIndex < 0) tierIndex = 0;
-    const subIndex = Math.max(0, tierSteps.indexOf(currentStep));
-    unitIndex = preSteps.length + tierIndex * tierSteps.length + subIndex;
-    label = `${t("artifacts.filter.tier")} ${tierIndex + 1}/${ctx.tierKeys.length} · ${progressStepLabel(currentStep)}`;
-  } else {
-    return null;
-  }
+  let tierIndex = -1;
 
-  let percent = ((unitIndex + offset) / Math.max(1, totalUnits)) * 100;
+  if (!tierSteps.has(currentStep)) {
+    unitIndex = units.findIndex((unit) => unit?.step === currentStep && !unit?.tierKey);
+  } else {
+    let targetTierKey = parsedTierStage?.tierKey || "";
+    if (!targetTierKey && cached && Number.isFinite(cached.tierIndex)) {
+      const cachedIndex = Math.max(0, Math.min(tierKeys.length - 1, Number(cached.tierIndex)));
+      targetTierKey = tierKeys[cachedIndex] || "";
+    }
+    if (!targetTierKey) {
+      targetTierKey = units.find((unit) => unit?.step === currentStep && unit?.tierKey)?.tierKey || tierKeys[0] || "";
+    }
+    unitIndex = units.findIndex((unit) => unit?.step === currentStep && String(unit?.tierKey || "") === targetTierKey);
+    tierIndex = tierKeys.indexOf(targetTierKey);
+    if (tierIndex < 0) tierIndex = 0;
+    label = `${t("artifacts.filter.tier")} ${tierIndex + 1}/${Math.max(1, tierKeys.length)} · ${progressStepLabel(currentStep)}`;
+  }
+  if (unitIndex < 0) return null;
+
+  let percent = ((unitIndex + offset) / Math.max(1, units.length)) * 100;
   if (TERMINAL_RUN_STATES.has(runState) && runState !== "completed") {
-    percent = Math.max(percent, ((unitIndex + 0.75) / Math.max(1, totalUnits)) * 100);
+    percent = Math.max(percent, ((unitIndex + 0.75) / Math.max(1, units.length)) * 100);
   }
   percent = Math.max(1, Math.min(99, percent));
   return {
     percent,
     label,
-    tierIndex: parsedTierStage ? ctx.tierKeys.indexOf(parsedTierStage.tierKey) : null,
+    tierIndex: tierIndex >= 0 ? tierIndex : null,
   };
 }
 
@@ -7290,11 +7735,15 @@ function renderRunProgress(status) {
   const mode = progressModeForStatus(status);
   const runId = String(state.currentRunId || "");
   let steps = PROGRESS_PLANS[mode] || PROGRESS_PLANS.pipeline;
-  if (mode === "pipeline" || mode === "workflow") {
-    const ctx = state.progressContextByRunId[runId];
-    if (ctx && ctx.noveltyEnabled === false) {
-      steps = steps.filter((step) => step !== "novelty");
-    }
+  const ctx = state.progressContextByRunId[runId];
+  if ((mode === "pipeline" || mode === "workflow") && ctx) {
+    steps = progressStepsForRequest({
+      mode,
+      startFrom: ctx?.startFrom || "msa",
+      stopAfter: ctx?.stopAfter || "",
+      noveltyEnabled: ctx?.noveltyEnabled,
+      wtCompare: ctx?.wtCompare,
+    });
   }
   const runState = String(status?.state || "").trim().toLowerCase();
   const currentStep = mapStageToProgressStep(status?.stage, mode);
@@ -7972,6 +8421,83 @@ function getTargetInputFastaText() {
 
 function getRfd3InputPdbText() {
   return getRfd3InputPdbTextFromAnswers(state.answers);
+}
+
+async function predictResiduePickerTargetStructure({ fastaText = "", af2Provider = "colabfold" } = {}) {
+  const normalizedFasta = String(fastaText || "").trim();
+  if (!normalizedFasta) {
+    throw new Error(t("setup.residuePicker.runAf2NeedsFasta"));
+  }
+  const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
+  const runId = createRunId(`${prefix}_picker_af2`);
+  const result = await apiCall("pipeline.af2_predict", {
+    run_id: runId,
+    target_fasta: normalizedFasta,
+    af2_provider: normalizeAf2Provider(af2Provider || "colabfold"),
+  });
+  const outRunId = String(result?.run_id || runId);
+  const candidates = [];
+  const summaryAf2 = result?.summary?.af2;
+  if (summaryAf2 && typeof summaryAf2 === "object") {
+    Object.keys(summaryAf2).forEach((seqId) => {
+      const clean = String(seqId || "").trim();
+      if (!clean) return;
+      candidates.push(`af2/${clean}/ranked_0.pdb`);
+    });
+  }
+  try {
+    const listed = await apiCall("pipeline.list_artifacts", {
+      run_id: outRunId,
+      max_depth: 5,
+      limit: 300,
+    });
+    const listedPaths = Array.isArray(listed?.artifacts)
+      ? listed.artifacts
+          .map((item) => String(item?.path || ""))
+          .filter((path) => /\/ranked_0\.pdb$/i.test(path))
+          .sort()
+      : [];
+    listedPaths.forEach((path) => candidates.push(path));
+  } catch {
+    // best-effort candidate discovery
+  }
+  candidates.push("af2/target/ranked_0.pdb");
+  candidates.push("af2/sequence/ranked_0.pdb");
+
+  const tried = new Set();
+  let selectedPath = "";
+  let selectedPdb = "";
+  for (const path of candidates) {
+    const normalizedPath = String(path || "").trim();
+    if (!normalizedPath || tried.has(normalizedPath)) continue;
+    tried.add(normalizedPath);
+    try {
+      const artifact = await apiCall("pipeline.read_artifact", {
+        run_id: outRunId,
+        path: normalizedPath,
+        max_bytes: 2_000_000,
+      });
+      const text = String(artifact?.text || "").trim();
+      if (!text) continue;
+      selectedPath = normalizedPath;
+      selectedPdb = text;
+      break;
+    } catch {
+      continue;
+    }
+  }
+
+  if (!selectedPdb) {
+    throw new Error(t("setup.residuePicker.runAf2NoResult"));
+  }
+
+  const sourceLabel = `${outRunId}:${selectedPath}`;
+  const loaded = setSetupResiduePickerStructure(selectedPdb, {
+    sourceLabel,
+    sourceKey: `af2_picker:${outRunId}`,
+  });
+  await refreshRuns();
+  return { outRunId, selectedPath, selectedPdb, sourceLabel, loaded };
 }
 
 function refreshChainRangesFromAnswers() {
@@ -9661,17 +10187,25 @@ function renderQuestions(questions) {
     const runAf2Btn = document.createElement("button");
     runAf2Btn.type = "button";
     runAf2Btn.className = "ghost";
-    runAf2Btn.textContent = t("setup.residuePicker.runAf2");
+    const pickerProvider = state.answers.af2_provider || "colabfold";
+    runAf2Btn.textContent = t("setup.residuePicker.runAf2", af2ProviderTemplateParams(pickerProvider));
 
     const targetPdbText = getTargetInputPdbText();
     const targetFastaText = getTargetInputFastaText();
     const rfd3PdbText = getRfd3InputPdbText();
     const pickerBusy = Boolean(state.setupResiduePicker.runningAf2);
     const selectedRunIdForPicker = String(el.setupRunSelector?.value || state.currentRunId || "").trim();
-    loadTargetBtn.disabled = pickerBusy || !targetPdbText;
-    loadRfd3Btn.disabled = pickerBusy || !rfd3PdbText;
-    loadRunBtn.disabled = pickerBusy || !selectedRunIdForPicker;
-    runAf2Btn.disabled = pickerBusy || !targetFastaText;
+    const controlState = residuePickerControlState({
+      targetPdbText,
+      targetFastaText,
+      rfd3PdbText,
+      selectedRunId: selectedRunIdForPicker,
+      busy: pickerBusy,
+    });
+    loadTargetBtn.disabled = !controlState.canLoadTarget;
+    loadRfd3Btn.disabled = !controlState.canLoadRfd3;
+    loadRunBtn.disabled = !controlState.canLoadRun;
+    runAf2Btn.disabled = !controlState.canRunAf2;
 
     const loadStructureFromText = (pdbText, sourceLabel, sourceKey) => {
       const text = String(pdbText || "").trim();
@@ -9738,86 +10272,22 @@ function renderQuestions(questions) {
         return;
       }
 
-      const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
-      const runId = createRunId(`${prefix}_picker_af2`);
       state.setupResiduePicker.runningAf2 = true;
-      state.setupResiduePicker.notice = t("setup.residuePicker.runAf2Running");
+      state.setupResiduePicker.notice = t("setup.residuePicker.runAf2Running", af2ProviderTemplateParams(pickerProvider));
       renderQuestions(state.plan?.questions || []);
 
       try {
-        const result = await apiCall("pipeline.af2_predict", {
-          run_id: runId,
-          target_fasta: fastaText,
-          af2_provider: normalizeAf2Provider(state.answers.af2_provider || "colabfold"),
+        const { outRunId, selectedPath, selectedPdb, loaded } = await predictResiduePickerTargetStructure({
+          fastaText,
+          af2Provider: pickerProvider,
         });
-        const outRunId = String(result?.run_id || runId);
-        const candidates = [];
-        const summaryAf2 = result?.summary?.af2;
-        if (summaryAf2 && typeof summaryAf2 === "object") {
-          Object.keys(summaryAf2).forEach((seqId) => {
-            const clean = String(seqId || "").trim();
-            if (!clean) return;
-            candidates.push(`af2/${clean}/ranked_0.pdb`);
-          });
-        }
-        try {
-          const listed = await apiCall("pipeline.list_artifacts", {
-            run_id: outRunId,
-            max_depth: 5,
-            limit: 300,
-          });
-          const listedPaths = Array.isArray(listed?.artifacts)
-            ? listed.artifacts
-                .map((item) => String(item?.path || ""))
-                .filter((path) => /\/ranked_0\.pdb$/i.test(path))
-                .sort()
-            : [];
-          listedPaths.forEach((path) => candidates.push(path));
-        } catch {
-          // best-effort candidate discovery
-        }
-        candidates.push("af2/target/ranked_0.pdb");
-        candidates.push("af2/sequence/ranked_0.pdb");
-
-        const tried = new Set();
-        let selectedPath = "";
-        let selectedPdb = "";
-        for (const path of candidates) {
-          const normalizedPath = String(path || "").trim();
-          if (!normalizedPath || tried.has(normalizedPath)) continue;
-          tried.add(normalizedPath);
-          try {
-            const artifact = await apiCall("pipeline.read_artifact", {
-              run_id: outRunId,
-              path: normalizedPath,
-              max_bytes: 2_000_000,
-            });
-            const text = String(artifact?.text || "").trim();
-            if (!text) continue;
-            selectedPath = normalizedPath;
-            selectedPdb = text;
-            break;
-          } catch {
-            continue;
-          }
-        }
-
-        if (!selectedPdb) {
-          throw new Error(t("setup.residuePicker.runAf2NoResult"));
-        }
-
         state.answers.target_fasta = fastaText;
         state.answers.target_pdb = selectedPdb;
         state.answerMeta.target_pdb = { fileName: `${outRunId}:${selectedPath}` };
         refreshChainRangesFromAnswers();
-        const loaded = setSetupResiduePickerStructure(selectedPdb, {
-          sourceLabel: `${outRunId}:${selectedPath}`,
-          sourceKey: `af2_picker:${outRunId}`,
-        });
         state.setupResiduePicker.notice = loaded
           ? t("setup.residuePicker.runAf2Loaded", { run: outRunId, path: selectedPath })
           : t("setup.residuePicker.noPdb");
-        await refreshRuns();
       } catch (err) {
         state.setupResiduePicker.notice = t("setup.residuePicker.runAf2Failed", { error: err.message });
       } finally {
@@ -10067,13 +10537,7 @@ function updateRunEligibility(questions) {
     if (id === "bioemu_use") return state.answers.bioemu_use !== true;
     return isAnswerMissing(state.answers[id]);
   });
-  const partialRerunBlocked =
-    isSetupPartialRerunRequested() && !shouldReuseSelectedRun({
-      mode: state.runMode,
-      startFrom: state.answers.start_from,
-      continueInSelectedRun: state.setupContinueRun,
-      selectedRunId: selectedSetupRunId(),
-    });
+  const partialRerunBlocked = isSetupPartialRerunRequested();
   const runBusy = state.runSubmitting || String(state.currentRunState || "").toLowerCase() === "running";
   const wizardBlocked = setupWizardEnabled(questions) && !isSetupWizardFinalStep();
   if (missing.length === 0 && !runBusy && !wizardBlocked && !partialRerunBlocked) {
@@ -10456,7 +10920,6 @@ async function runPipeline() {
     workflowPlan = derived.workflow;
   }
   const answers = state.plan?.allow_unfiltered_answers ? rawAnswers : filterAnswersForMode(mode, rawAnswers);
-  const selectedRunId = String(el.setupRunSelector?.value || state.currentRunId || "").trim();
   if (mode === "workflow") {
     const studioSourceRunId = String(state.setupLoadedRequestRunId || "").trim();
     const session = await openWorkflowStudioFromSetup({
@@ -10471,18 +10934,12 @@ async function runPipeline() {
   }
   const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
   const requestedStartFrom = normalizePipelineStage(answers.start_from, "");
-  const reuseSelectedRun = shouldReuseSelectedRun({
-    mode,
-    startFrom: requestedStartFrom,
-    continueInSelectedRun: state.setupContinueRun,
-    selectedRunId,
-  });
-  if (mode === "pipeline" && requestedStartFrom && requestedStartFrom !== "msa" && !reuseSelectedRun) {
+  if (mode === "pipeline" && requestedStartFrom && requestedStartFrom !== "msa") {
     setMessage(t("hint.partialRun"), "ai");
     updateRunEligibility(state.plan?.questions || []);
     return;
   }
-  const runId = reuseSelectedRun ? selectedRunId : createRunId(prefix);
+  const runId = createRunId(prefix);
   state.runModeById[runId] = mode;
   let args = {};
   let toolName = "pipeline.run";
@@ -10570,31 +11027,7 @@ async function runPipeline() {
 }
 
 function parseFallbackStatusFromEvents(eventsText, runId) {
-  const raw = String(eventsText || "");
-  if (!raw.trim()) return null;
-  const lines = raw.split(/\r?\n/).filter((line) => line.trim());
-  for (let i = lines.length - 1; i >= 0; i -= 1) {
-    try {
-      const item = JSON.parse(lines[i]);
-      if (!item || typeof item !== "object") continue;
-      if (String(item.kind || "").toLowerCase() !== "status") continue;
-      const stage = String(item.stage || "").trim() || "init";
-      const stateText = String(item.state || "").trim() || "running";
-      const updatedAt = String(item.updated_at || "").trim() || "-";
-      const detailText =
-        item.detail !== undefined && item.detail !== null ? String(item.detail).trim() : "events fallback";
-      return {
-        run_id: String(item.run_id || runId || "").trim() || String(runId || ""),
-        stage,
-        state: stateText,
-        updated_at: updatedAt,
-        detail: detailText || "events fallback",
-      };
-    } catch (err) {
-      continue;
-    }
-  }
-  return null;
+  return latestMeaningfulStatusFromEvents(eventsText, runId);
 }
 
 function parseFallbackStatusFromRunpodJobs(jobsText, runId) {
@@ -10648,6 +11081,31 @@ async function loadFallbackRunStatus(runId) {
   return null;
 }
 
+async function enrichStatusForStudio(status, runId) {
+  const payload = status && typeof status === "object" ? { ...status } : {};
+  const stage = String(payload.stage || "").trim().toLowerCase();
+  if (stage && stage !== "done") return payload;
+  try {
+    const events = await apiCall("pipeline.read_artifact", {
+      run_id: runId,
+      path: "events.jsonl",
+      max_bytes: 512000,
+    });
+    const recovered = latestMeaningfulStatusFromEvents(events?.text, runId);
+    const recoveredStage = String(recovered?.stage || "").trim();
+    if (recoveredStage) {
+      payload._studio_stage = recoveredStage;
+    }
+    const recoveredNodes = latestWorkflowStudioCompletedNodesFromEvents(events?.text, runId);
+    if (recoveredNodes.length) {
+      payload._studio_completed_nodes = recoveredNodes;
+    }
+  } catch (err) {
+    // ignore missing events
+  }
+  return payload;
+}
+
 async function pollStatus(runId) {
   try {
     const result = await apiCall("pipeline.status", { run_id: runId });
@@ -10674,7 +11132,8 @@ async function pollStatus(runId) {
       return;
     }
     const mode = await ensureRunModeForRunId(runId, result.status);
-    updateRunInfo({ ...(result.status || {}), _mode: mode });
+    const status = await enrichStatusForStudio(result.status, runId);
+    updateRunInfo({ ...(status || {}), _mode: mode });
     const stageRaw = result.status?.stage || "-";
     const stage = formatStatusStage(stageRaw);
     const stateText = result.status?.state || "-";
@@ -12305,27 +12764,11 @@ function isSetupPartialRerunRequested(mode = state.runMode, answers = state.answ
 function syncSetupRunReuseControls() {
   const runId = selectedSetupRunId();
   const workflowMode = state.runMode === "workflow";
-  const partialRerun = workflowMode ? false : isSetupPartialRerunRequested();
-  const canContinue = Boolean(runId && partialRerun);
-  if (!canContinue) {
-    state.setupContinueRun = false;
-  }
-  if (el.setupContinueRun) {
-    el.setupContinueRun.checked = Boolean(state.setupContinueRun);
-    el.setupContinueRun.disabled = !canContinue;
-  }
   if (el.setupLoadRunRequest) {
     el.setupLoadRunRequest.disabled = !runId;
   }
   if (el.setupRunReuseHint) {
-    let key = "setup.runReuse.default";
-    if (workflowMode) {
-      key = "setup.runReuse.workflow";
-    } else if (partialRerun && !runId) {
-      key = "setup.runReuse.selectRun";
-    } else if (partialRerun && runId) {
-      key = "setup.runReuse.partial";
-    }
+    const key = workflowMode ? "setup.runReuse.workflow" : runId ? "setup.runReuse.selected" : "setup.runReuse.default";
     el.setupRunReuseHint.textContent = t(key, { id: runId });
   }
 }
@@ -12338,13 +12781,12 @@ async function loadSetupRequestIntoForm(runId, { announce = true } = {}) {
   }
   try {
     const payload = await readRunRequestPayload(key);
-    const draft = buildSetupDraftFromRequest(payload);
+    const draft = normalizeSetupDraftForFreshRun(buildSetupDraftFromRequest(payload));
     const nextMode = draft.mode || state.runMode || "pipeline";
     state.answers = {};
     state.answerMeta = {};
     state.setupLoadedRequestRunId = "";
     state.chainRanges = null;
-    state.setupContinueRun = false;
     resetSetupResiduePicker();
     setRunMode(nextMode, { render: false });
     state.answers = draft.answers;
@@ -15417,6 +15859,11 @@ async function loadAgentReportModal() {
 }
 
 function formatStageLabel(stage) {
+  const workflowNode = parseWorkflowStudioNode(stage);
+  if (workflowNode?.isTier) {
+    const tierLabel = t("artifacts.filter.tier");
+    return `${formatStageLabel(workflowNode.baseStage)} · ${tierLabel} ${workflowNode.tier.toFixed(2)}`;
+  }
   const dynamicProvider = currentRunAf2Provider();
   if (stage === "af2") {
     return af2ProviderName(dynamicProvider, state.lang || "en");
@@ -17549,7 +17996,7 @@ if (el.runSelector) {
 
 if (el.setupRunSelector) {
   el.setupRunSelector.addEventListener("change", async () => {
-    await handleRunSelectorChange(el.setupRunSelector.value, { loadSetupRequest: true });
+    await handleRunSelectorChange(el.setupRunSelector.value);
   });
 }
 
@@ -17559,30 +18006,47 @@ if (el.setupLoadRunRequest) {
   });
 }
 
-if (el.setupContinueRun) {
-  el.setupContinueRun.addEventListener("change", () => {
-    state.setupContinueRun = Boolean(el.setupContinueRun.checked);
-    syncSetupRunReuseControls();
-    updateRunEligibility(state.plan?.questions || []);
-  });
-}
-
-if (el.studioSessionSelector) {
-  el.studioSessionSelector.addEventListener("change", async () => {
-    const sessionId = String(el.studioSessionSelector.value || "").trim();
-    setCurrentWorkflowStudioSessionId(sessionId);
-    renderWorkflowStudio();
-    if (!sessionId) return;
+if (el.studioSessionList) {
+  el.studioSessionList.addEventListener("click", async (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+    const actionBtn = target.closest("[data-studio-session-action]");
+    if (!(actionBtn instanceof HTMLElement)) return;
+    const action = String(actionBtn.dataset.studioSessionAction || "").trim().toLowerCase();
+    const sessionId = String(actionBtn.dataset.sessionId || "").trim();
+    if (!action || !sessionId) return;
     const session = workflowStudioSessionForId(sessionId);
-    const headRunId = String(session?.head_run_id || "").trim();
-    if (!headRunId || headRunId === state.currentRunId) return;
-    setCurrentRunId(headRunId);
-    await pollStatus(headRunId);
-    await refreshArtifacts({ runId: headRunId });
-    await refreshAgentPanel();
-    await refreshRunCompare();
-    await refreshHitList();
-    ensureAutoPoll();
+    if (!session) return;
+    if (action === "load") {
+      await loadWorkflowStudioSession(sessionId);
+      return;
+    }
+    if (action === "delete") {
+      const label = workflowStudioSessionLabel(session) || session.session_id;
+      const ok = window.confirm(t("studio.deleteSessionConfirm", { id: label }));
+      if (!ok) return;
+      const deleted = workflowStudioDeleteSessionById(session.session_id);
+      if (!deleted) return;
+      setMessage(t("studio.deleteSessionSuccess", { id: label }), "ai");
+      renderWorkflowStudio();
+      return;
+    }
+    if (action === "cleanup") {
+      const count = workflowStudioSessionsOrdered().filter((item) => {
+        return (
+          String(item?.session_id || "").trim() !== sessionId &&
+          workflowStudioSessionRunKey(item) === workflowStudioSessionRunKey(session)
+        );
+      }).length;
+      if (count <= 0) return;
+      const label = workflowStudioSessionLabel(session) || session.session_id;
+      const ok = window.confirm(t("studio.cleanupDuplicatesConfirm", { id: label, count }));
+      if (!ok) return;
+      const deleted = workflowStudioDeleteDuplicateSessions(sessionId);
+      if (!deleted) return;
+      setMessage(t("studio.cleanupDuplicatesSuccess", { count: deleted }), "ai");
+      renderWorkflowStudio();
+    }
   });
 }
 
@@ -17642,36 +18106,6 @@ if (el.studioRefreshBtn) {
     await refreshRunCompare();
     await refreshHitList();
     ensureAutoPoll();
-  });
-}
-
-if (el.studioDeleteSessionBtn) {
-  el.studioDeleteSessionBtn.addEventListener("click", () => {
-    const session = workflowStudioSessionForId();
-    if (!session) return;
-    const label = workflowStudioSessionLabel(session) || session.session_id;
-    const ok = window.confirm(t("studio.deleteSessionConfirm", { id: label }));
-    if (!ok) return;
-    const deleted = workflowStudioDeleteSessionById(session.session_id);
-    if (!deleted) return;
-    setMessage(t("studio.deleteSessionSuccess", { id: label }), "ai");
-    renderWorkflowStudio();
-  });
-}
-
-if (el.studioDeleteOtherSessionsBtn) {
-  el.studioDeleteOtherSessionsBtn.addEventListener("click", () => {
-    const session = workflowStudioSessionForId();
-    if (!session) return;
-    const count = workflowStudioSessionsOrdered().filter((item) => item?.session_id !== session.session_id).length;
-    if (count <= 0) return;
-    const label = workflowStudioSessionLabel(session) || session.session_id;
-    const ok = window.confirm(t("studio.deleteOtherSessionsConfirm", { id: label, count }));
-    if (!ok) return;
-    const deleted = workflowStudioDeleteOtherSessions(session.session_id);
-    if (!deleted) return;
-    setMessage(t("studio.deleteOtherSessionsSuccess", { count: deleted }), "ai");
-    renderWorkflowStudio();
   });
 }
 
