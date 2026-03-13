@@ -1,4 +1,35 @@
 const STAGE_ORDER = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"];
+const WORKFLOW_TIER_STAGE_ORDER = ["proteinmpnn", "soluprot", "af2", "novelty"];
+const WORKFLOW_TIER_STAGE_TO_BASE = Object.freeze({
+  proteinmpnn: "design",
+  soluprot: "soluprot",
+  af2: "af2",
+  novelty: "novelty",
+});
+const DEFAULT_WORKFLOW_TIER_KEYS = Object.freeze(["30", "50", "70"]);
+const TERMINAL_STATUS_STAGES = new Set(["done"]);
+const PIPELINE_PROGRESS_STEPS = Object.freeze([
+  "msa",
+  "conservation",
+  "backbone",
+  "wt",
+  "masking",
+  "design",
+  "soluprot",
+  "af2",
+  "novelty",
+]);
+const RUN_PROGRESS_PLANS = Object.freeze({
+  pipeline: [...PIPELINE_PROGRESS_STEPS, "done"],
+  workflow: [...PIPELINE_PROGRESS_STEPS, "done"],
+  design: ["msa", "conservation", "backbone", "masking", "design", "done"],
+  soluprot: ["msa", "conservation", "backbone", "masking", "design", "soluprot", "done"],
+  rfd3: ["msa", "conservation", "rfd3", "done"],
+  bioemu: ["msa", "conservation", "bioemu", "done"],
+  msa: ["msa", "done"],
+  af2: ["af2", "done"],
+  diffdock: ["diffdock", "done"],
+});
 
 function normalizeStage(value) {
   let raw = String(value || "")
@@ -8,6 +39,423 @@ function normalizeStage(value) {
   if (raw === "wt_diff" || raw === "wtdiff") raw = "novelty";
   if (!raw) return "";
   return STAGE_ORDER.includes(raw) ? raw : "";
+}
+
+function normalizeWorkflowTierKey(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return "";
+  if (Math.abs(parsed) <= 1.0) {
+    return String(Math.round(parsed * 100));
+  }
+  return String(Math.round(parsed));
+}
+
+export function normalizeWorkflowStudioNode(value) {
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  const base = normalizeStage(raw);
+  if (base) return base;
+  const match = raw.match(/^(proteinmpnn|soluprot|af2|novelty)_([0-9]+(?:\.[0-9]+)?)$/);
+  if (!match) return "";
+  const tierKey = normalizeWorkflowTierKey(match[2]);
+  if (!tierKey) return "";
+  return `${match[1]}_${tierKey}`;
+}
+
+export function parseWorkflowStudioNode(value) {
+  const nodeId = normalizeWorkflowStudioNode(value);
+  if (!nodeId) return null;
+  const baseStage = normalizeStage(nodeId);
+  if (baseStage) {
+    return {
+      nodeId,
+      baseStage,
+      executionStage: baseStage,
+      isTier: false,
+      tierKey: "",
+      tier: null,
+      tierStage: "",
+      selectedTiers: null,
+    };
+  }
+  const match = nodeId.match(/^(proteinmpnn|soluprot|af2|novelty)_([0-9]+)$/);
+  if (!match) return null;
+  const tierStage = match[1];
+  const tierKey = match[2];
+  const base = WORKFLOW_TIER_STAGE_TO_BASE[tierStage] || "";
+  if (!base) return null;
+  return {
+    nodeId,
+    baseStage: base,
+    executionStage: base,
+    isTier: true,
+    tierKey,
+    tier: Number(tierKey) / 100,
+    tierStage,
+    selectedTiers: [Number(tierKey) / 100],
+  };
+}
+
+export function resolveWorkflowStudioStageForSession(nodes, stage, fallback = "") {
+  const sessionNodes = Array.from(
+    new Set(
+      (Array.isArray(nodes) ? nodes : [])
+        .map((item) => normalizeWorkflowStudioNode(item))
+        .filter(Boolean)
+    )
+  );
+  const normalizedStage = normalizeWorkflowStudioNode(stage);
+  if (!normalizedStage) return fallback;
+  if (sessionNodes.includes(normalizedStage)) return normalizedStage;
+  const stageMeta = parseWorkflowStudioNode(normalizedStage);
+  if (!stageMeta) return fallback;
+  if (stageMeta.isTier && sessionNodes.includes(stageMeta.baseStage)) {
+    return stageMeta.baseStage;
+  }
+  const sameBaseNode = sessionNodes.find((item) => parseWorkflowStudioNode(item)?.baseStage === stageMeta.baseStage);
+  return sameBaseNode || fallback;
+}
+
+export function workflowStudioRetainedArtifactPath(items, currentPath = "") {
+  const selected = String(currentPath || "").trim();
+  if (!selected) return "";
+  const files = Array.isArray(items) ? items : [];
+  return files.some((item) => item && item.type === "file" && String(item.path || "").trim() === selected) ? selected : "";
+}
+
+export function residuePickerControlState({
+  targetPdbText = "",
+  targetFastaText = "",
+  rfd3PdbText = "",
+  selectedRunId = "",
+  busy = false,
+} = {}) {
+  const isBusy = Boolean(busy);
+  return {
+    canLoadTarget: !isBusy && Boolean(String(targetPdbText || "").trim()),
+    canLoadRfd3: !isBusy && Boolean(String(rfd3PdbText || "").trim()),
+    canLoadRun: !isBusy && Boolean(String(selectedRunId || "").trim()),
+    canRunAf2: !isBusy && Boolean(String(targetFastaText || "").trim()),
+  };
+}
+
+export function upsertWorkflowStudioStageStatus(stageStates = {}, stageRunIds = {}, stage = "", nextState = "", runId = "") {
+  const normalizedStage = normalizeWorkflowStudioNode(stage);
+  const normalizedState = String(nextState || "").trim().toLowerCase();
+  const normalizedRunId = String(runId || "").trim();
+  if (!normalizedStage || !normalizedState) return false;
+  const previousState = String(stageStates?.[normalizedStage] || "").trim().toLowerCase();
+  const previousRunId = String(stageRunIds?.[normalizedStage] || "").trim();
+  if (previousState === normalizedState && previousRunId === normalizedRunId) {
+    return false;
+  }
+  stageStates[normalizedStage] = normalizedState;
+  if (normalizedRunId) {
+    stageRunIds[normalizedStage] = normalizedRunId;
+  } else {
+    delete stageRunIds[normalizedStage];
+  }
+  return true;
+}
+
+function statusFromEventItem(item, runId = "") {
+  if (!item || typeof item !== "object") return null;
+  if (String(item.kind || "").trim().toLowerCase() !== "status") return null;
+  const itemRunId = String(item.run_id || runId || "").trim();
+  const expectedRunId = String(runId || "").trim();
+  if (expectedRunId && itemRunId && itemRunId !== expectedRunId) return null;
+  const stage = String(item.stage || "").trim() || "init";
+  const stateText = String(item.state || "").trim() || "running";
+  const updatedAt = String(item.updated_at || "").trim() || "-";
+  const detailText =
+    item.detail !== undefined && item.detail !== null ? String(item.detail).trim() : "events fallback";
+  return {
+    run_id: itemRunId || expectedRunId,
+    stage,
+    state: stateText,
+    updated_at: updatedAt,
+    detail: detailText || "events fallback",
+  };
+}
+
+function statusRecordsFromEvents(eventsText, runId = "") {
+  const raw = String(eventsText || "");
+  if (!raw.trim()) return [];
+  return raw
+    .split(/\r?\n/)
+    .filter((line) => line.trim())
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch (err) {
+        return null;
+      }
+    })
+    .map((item) => statusFromEventItem(item, runId))
+    .filter(Boolean);
+}
+
+export function latestMeaningfulStatusFromEvents(eventsText, runId = "") {
+  const records = statusRecordsFromEvents(eventsText, runId);
+  if (!records.length) return null;
+  let fallback = null;
+  for (let i = records.length - 1; i >= 0; i -= 1) {
+    const record = records[i];
+    if (!record) continue;
+    if (!fallback) fallback = record;
+    const stage = String(record.stage || "").trim().toLowerCase();
+    if (!TERMINAL_STATUS_STAGES.has(stage)) {
+      return record;
+    }
+  }
+  return fallback;
+}
+
+export function latestWorkflowStudioCompletedNodesFromEvents(eventsText, runId = "") {
+  const records = statusRecordsFromEvents(eventsText, runId);
+  if (!records.length) return [];
+  let startIndex = 0;
+  for (let i = records.length - 1; i >= 0; i -= 1) {
+    const stage = String(records[i]?.stage || "").trim().toLowerCase();
+    const stateText = String(records[i]?.state || "").trim().toLowerCase();
+    if (stage === "init" && stateText === "running") {
+      startIndex = i;
+      break;
+    }
+  }
+  const recovered = [];
+  for (let i = startIndex; i < records.length; i += 1) {
+    const record = records[i];
+    const stage = String(record?.stage || "").trim().toLowerCase();
+    const stateText = String(record?.state || "").trim().toLowerCase();
+    if (!["completed", "done"].includes(stateText)) continue;
+    if (TERMINAL_STATUS_STAGES.has(stage)) continue;
+    const nodeId = normalizeWorkflowStudioNode(stage);
+    if (!nodeId) continue;
+    recovered.push(nodeId);
+  }
+  return orderedWorkflowStudioNodes(recovered);
+}
+
+export function shouldPollRunForTabChange({
+  nextTab = "",
+  studioRunId = "",
+  currentRunId = "",
+  autoPollEnabled = false,
+} = {}) {
+  const tab = String(nextTab || "").trim().toLowerCase();
+  const studioRun = String(studioRunId || "").trim();
+  const currentRun = String(currentRunId || "").trim();
+  if (tab === "studio") {
+    return Boolean(studioRun || currentRun);
+  }
+  if (tab === "monitor") {
+    return Boolean(autoPollEnabled) && Boolean(currentRun);
+  }
+  return false;
+}
+
+function workflowStudioNodeSortKey(value) {
+  const meta = parseWorkflowStudioNode(value);
+  if (!meta) return Number.MAX_SAFE_INTEGER;
+  if (!meta.isTier) {
+    const baseIdx = STAGE_ORDER.indexOf(meta.baseStage);
+    if (meta.baseStage === "msa") return 0;
+    if (meta.baseStage === "rfd3") return 100;
+    if (meta.baseStage === "bioemu") return 200;
+    return 900 + Math.max(0, baseIdx);
+  }
+  const tierNum = Number(meta.tierKey || 0);
+  const stageIdx = Math.max(0, WORKFLOW_TIER_STAGE_ORDER.indexOf(meta.tierStage));
+  return 300 + tierNum * 10 + stageIdx;
+}
+
+function orderedWorkflowStudioNodes(nodes) {
+  const normalized = Array.from(
+    new Set(
+      (Array.isArray(nodes) ? nodes : [])
+        .map((stage) => normalizeWorkflowStudioNode(stage))
+        .filter(Boolean)
+    )
+  );
+  return normalized.sort((a, b) => {
+    const diff = workflowStudioNodeSortKey(a) - workflowStudioNodeSortKey(b);
+    if (diff !== 0) return diff;
+    return String(a).localeCompare(String(b));
+  });
+}
+
+function normalizedWorkflowTierKeys(tiers) {
+  const keys = Array.from(
+    new Set(
+      (Array.isArray(tiers) ? tiers : [])
+        .map((item) => normalizeWorkflowTierKey(item))
+        .filter(Boolean)
+    )
+  );
+  return keys.length ? keys.sort((a, b) => Number(a) - Number(b)) : [...DEFAULT_WORKFLOW_TIER_KEYS];
+}
+
+export function expandWorkflowStudioNodes(nodes, conservationTiers = [0.3, 0.5, 0.7]) {
+  const source = Array.isArray(nodes) ? nodes : [];
+  const normalized = source.map((stage) => normalizeWorkflowStudioNode(stage)).filter(Boolean);
+  if (!normalized.length) {
+    return ["msa", "proteinmpnn_30", "soluprot_30", "af2_30"];
+  }
+  if (normalized.some((stage) => parseWorkflowStudioNode(stage)?.isTier)) {
+    return orderedWorkflowStudioNodes(normalized);
+  }
+
+  const selectedBaseStages = new Set(
+    normalized
+      .map((stage) => parseWorkflowStudioNode(stage)?.baseStage || normalizeStage(stage))
+      .filter(Boolean)
+  );
+  const output = [];
+  ["msa", "rfd3", "bioemu"].forEach((stage) => {
+    if (selectedBaseStages.has(stage)) output.push(stage);
+  });
+  const tierKeys = normalizedWorkflowTierKeys(conservationTiers);
+  tierKeys.forEach((tierKey) => {
+    if (selectedBaseStages.has("design")) output.push(`proteinmpnn_${tierKey}`);
+    if (selectedBaseStages.has("soluprot")) output.push(`soluprot_${tierKey}`);
+    if (selectedBaseStages.has("af2")) output.push(`af2_${tierKey}`);
+    if (selectedBaseStages.has("novelty")) output.push(`novelty_${tierKey}`);
+  });
+  return output.length ? output : ["msa", "proteinmpnn_30", "soluprot_30", "af2_30"];
+}
+
+export function workflowStudioSessionRunKey(session) {
+  if (!session || typeof session !== "object") return "";
+  const direct = [
+    session.head_run_id,
+    session.pending?.run_id,
+    session.source_run_id,
+  ]
+    .map((item) => String(item || "").trim())
+    .find(Boolean);
+  if (direct) return direct;
+  if (Array.isArray(session.history)) {
+    const historyRunId = session.history.map((item) => String(item?.run_id || "").trim()).find(Boolean);
+    if (historyRunId) return historyRunId;
+  }
+  const stageRunIds = Object.values(session.stage_run_ids || {})
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+  const uniqueRunIds = Array.from(new Set(stageRunIds));
+  return uniqueRunIds.length === 1 ? uniqueRunIds[0] : "";
+}
+
+function progressStepForRequestedStage(stage, { wtCompare = false, start = false } = {}) {
+  const normalized = normalizeStage(stage);
+  if (normalized === "msa") return "msa";
+  if (normalized === "rfd3" || normalized === "bioemu") return "backbone";
+  if (normalized === "design") return "design";
+  if (normalized === "soluprot") return "soluprot";
+  if (normalized === "af2") return "af2";
+  if (normalized === "novelty") return start && wtCompare ? "wt" : "novelty";
+  return "";
+}
+
+export function progressStepsForRequest({
+  mode = "pipeline",
+  startFrom = "msa",
+  stopAfter = "",
+  noveltyEnabled = false,
+  wtCompare = false,
+} = {}) {
+  const normalizedMode = String(mode || "").trim().toLowerCase();
+  if (!["pipeline", "workflow"].includes(normalizedMode)) {
+    const plan = RUN_PROGRESS_PLANS[normalizedMode] || RUN_PROGRESS_PLANS.pipeline;
+    return noveltyEnabled === false ? plan.filter((step) => step !== "novelty") : [...plan];
+  }
+  const effectiveStopAfter = normalizeStage(stopAfter) || (noveltyEnabled ? "novelty" : "af2");
+  const startStep = progressStepForRequestedStage(startFrom, {
+    wtCompare: Boolean(wtCompare),
+    start: true,
+  }) || "msa";
+  const endStep = progressStepForRequestedStage(effectiveStopAfter, {
+    wtCompare: Boolean(wtCompare),
+    start: false,
+  }) || (noveltyEnabled ? "novelty" : "af2");
+  if (normalizeStage(startFrom) === "novelty") {
+    const steps = [];
+    if (Boolean(wtCompare)) steps.push("wt");
+    steps.push(endStep);
+    return [...Array.from(new Set(steps.filter(Boolean))), "done"];
+  }
+  const startIdx = PIPELINE_PROGRESS_STEPS.indexOf(startStep);
+  const endIdx = PIPELINE_PROGRESS_STEPS.indexOf(endStep);
+  if (startIdx < 0 || endIdx < 0 || startIdx > endIdx) {
+    return [...RUN_PROGRESS_PLANS.pipeline];
+  }
+  return [...PIPELINE_PROGRESS_STEPS.slice(startIdx, endIdx + 1), "done"];
+}
+
+export function progressUnitsForRequest({
+  mode = "pipeline",
+  startFrom = "msa",
+  stopAfter = "",
+  noveltyEnabled = false,
+  wtCompare = false,
+  tierKeys = DEFAULT_WORKFLOW_TIER_KEYS,
+} = {}) {
+  const normalizedMode = String(mode || "").trim().toLowerCase();
+  const steps = progressStepsForRequest({
+    mode: normalizedMode,
+    startFrom,
+    stopAfter,
+    noveltyEnabled,
+    wtCompare,
+  }).filter(Boolean);
+  if (!steps.length) return [{ step: "done" }];
+  if (!["pipeline", "workflow"].includes(normalizedMode)) {
+    return steps.map((step) => ({ step }));
+  }
+  const tierStepSet = new Set(["design", "soluprot", "af2", "novelty"]);
+  const units = [];
+  const normalizedTiers = normalizedWorkflowTierKeys(tierKeys);
+  steps
+    .filter((step) => step !== "done" && !tierStepSet.has(step))
+    .forEach((step) => {
+      units.push({ step });
+    });
+  const tierWindow = steps.filter((step) => step !== "done" && tierStepSet.has(step));
+  if (tierWindow.length) {
+    normalizedTiers.forEach((tierKey) => {
+      tierWindow.forEach((step) => {
+        units.push({ step, tierKey });
+      });
+    });
+  }
+  units.push({ step: "done" });
+  return units;
+}
+
+export function workflowStudioExecutionTarget(stage) {
+  const meta = parseWorkflowStudioNode(stage);
+  if (!meta) {
+    return {
+      nodeId: "",
+      baseStage: "",
+      stopAfter: "",
+      selectedTiers: undefined,
+      tierKey: "",
+      isTier: false,
+    };
+  }
+  return {
+    nodeId: meta.nodeId,
+    baseStage: meta.baseStage,
+    stopAfter: meta.executionStage,
+    selectedTiers: meta.selectedTiers ? [...meta.selectedTiers] : undefined,
+    tierKey: meta.tierKey,
+    isTier: meta.isTier,
+  };
 }
 
 function hasMeaningfulValue(value) {
@@ -317,6 +765,7 @@ const WORKFLOW_STUDIO_IGNORED_FIELDS = new Set([
   "run_mode",
   "start_from",
   "stop_after",
+  "selected_tiers",
   "confirm_run",
   "questions",
   "missing",
@@ -402,7 +851,7 @@ function workflowValueIsAbsent(value) {
 function workflowStageOrderForNodes(nodes) {
   const normalized = new Set(
     (Array.isArray(nodes) ? nodes : [])
-      .map((stage) => normalizeStage(stage))
+      .map((stage) => parseWorkflowStudioNode(stage)?.baseStage || normalizeStage(stage))
       .filter(Boolean)
   );
   return normalized.size ? STAGE_ORDER.filter((stage) => normalized.has(stage)) : [...STAGE_ORDER];
@@ -414,7 +863,7 @@ export function createWorkflowSessionId(prefix, now = new Date()) {
 }
 
 export function workflowStudioStageFields(stage) {
-  const normalized = normalizeStage(stage);
+  const normalized = parseWorkflowStudioNode(stage)?.baseStage || normalizeStage(stage);
   return normalized ? [...(WORKFLOW_STUDIO_STAGE_FIELDS[normalized] || [])] : [];
 }
 
@@ -500,7 +949,7 @@ export function workflowStudioChangedFields(previousPayload, nextPayload) {
 }
 
 export function minimumWorkflowStudioStartStage({ previousPayload, nextPayload, targetStage } = {}) {
-  const target = normalizeStage(targetStage) || "msa";
+  const target = parseWorkflowStudioNode(targetStage)?.baseStage || normalizeStage(targetStage) || "msa";
   const changed = workflowStudioChangedFields(previousPayload, nextPayload);
   if (!changed.length) return target;
   let earliestIndex = STAGE_ORDER.indexOf(target);
@@ -515,7 +964,9 @@ export function minimumWorkflowStudioStartStage({ previousPayload, nextPayload, 
 }
 
 export function workflowStudioDependencyStatus({ targetStage, requiredStart, artifacts } = {}) {
-  const target = normalizeStage(targetStage);
+  const targetMeta = parseWorkflowStudioNode(targetStage);
+  const target = targetMeta?.baseStage || normalizeStage(targetStage);
+  const targetTierKey = targetMeta?.tierKey || "";
   const start = normalizeStage(requiredStart) || target;
   const requirement = target ? WORKFLOW_STUDIO_EXISTING_OUTPUT_REQUIREMENTS[target] || null : null;
   if (!target || !requirement) {
@@ -535,7 +986,11 @@ export function workflowStudioDependencyStatus({ targetStage, requiredStart, art
       required: false,
       blocked: false,
       code: "",
-      upstreamStage: requirement.upstreamStage,
+      upstreamStage: targetTierKey
+        ? requirement.upstreamStage === "design"
+          ? `proteinmpnn_${targetTierKey}`
+          : `${requirement.upstreamStage}_${targetTierKey}`
+        : requirement.upstreamStage,
       matchedPaths: [],
     };
   }
@@ -548,6 +1003,10 @@ export function workflowStudioDependencyStatus({ targetStage, requiredStart, art
       const normalizedPath = normalizeArtifactPath(item.path);
       const size = Number(item.size || 0);
       if (!Number.isFinite(size) || size < Number(requirement.minSize || 0)) return false;
+      if (targetTierKey) {
+        const tierMatch = normalizedPath.match(/(?:^|\/)tiers\/([^/]+)/);
+        if (!tierMatch || normalizeWorkflowTierKey(tierMatch[1]) !== targetTierKey) return false;
+      }
       return requirement.pathPatterns.some((pattern) => pattern.test(normalizedPath));
     })
     .map((item) => String(item.path || ""));
@@ -556,14 +1015,18 @@ export function workflowStudioDependencyStatus({ targetStage, requiredStart, art
     required: true,
     blocked: matchedPaths.length === 0,
     code: requirement.code,
-    upstreamStage: requirement.upstreamStage,
+    upstreamStage: targetTierKey
+      ? requirement.upstreamStage === "design"
+        ? `proteinmpnn_${targetTierKey}`
+        : `${requirement.upstreamStage}_${targetTierKey}`
+      : requirement.upstreamStage,
     matchedPaths,
   };
 }
 
 export function nextWorkflowStudioStage(nodes, stage) {
-  const order = workflowStageOrderForNodes(nodes);
-  const normalized = normalizeStage(stage);
+  const order = orderedWorkflowStudioNodes(nodes);
+  const normalized = normalizeWorkflowStudioNode(stage);
   if (!normalized) return order[0] || "";
   const idx = order.indexOf(normalized);
   if (idx < 0 || idx + 1 >= order.length) return "";
@@ -602,7 +1065,13 @@ export function buildSetupDraftFromRequest(payload) {
   const mode = inferRequestRunMode(payload) || "pipeline";
   const answers = {};
   const answerMeta = {};
-  const skipKeys = new Set(["target_fasta", "target_pdb", "diffdock_ligand_sdf", "diffdock_ligand_smiles"]);
+  const skipKeys = new Set([
+    "target_fasta",
+    "target_pdb",
+    "diffdock_ligand_sdf",
+    "diffdock_ligand_smiles",
+    "selected_tiers",
+  ]);
 
   Object.entries(payload).forEach(([key, value]) => {
     if (skipKeys.has(key)) return;
@@ -654,6 +1123,28 @@ export function buildSetupDraftFromRequest(payload) {
   const normalizedStop = normalizeStage(answers.stop_after);
   if (normalizedStop) {
     answers.stop_after = normalizedStop;
+  }
+
+  return { mode, answers, answerMeta };
+}
+
+export function normalizeSetupDraftForFreshRun(draft) {
+  if (!draft || typeof draft !== "object" || Array.isArray(draft)) {
+    return { mode: "", answers: {}, answerMeta: {} };
+  }
+
+  const mode = String(draft.mode || "").trim().toLowerCase();
+  const answers =
+    draft.answers && typeof draft.answers === "object" && !Array.isArray(draft.answers)
+      ? cloneSetupValue(draft.answers)
+      : {};
+  const answerMeta =
+    draft.answerMeta && typeof draft.answerMeta === "object" && !Array.isArray(draft.answerMeta)
+      ? cloneSetupValue(draft.answerMeta)
+      : {};
+
+  if (mode === "pipeline") {
+    answers.start_from = "msa";
   }
 
   return { mode, answers, answerMeta };

@@ -420,6 +420,17 @@ class TestTools(unittest.TestCase):
         self.assertEqual(req.start_from, "soluprot")
         self.assertEqual(req.stop_after, "novelty")
 
+    def test_pipeline_request_parses_selected_tiers_subset(self) -> None:
+        req = pipeline_request_from_args(
+            {
+                "target_fasta": ">q1\nACDEFGHIK\n",
+                "conservation_tiers": [0.3, 0.5, 0.7],
+                "selected_tiers": [0.5],
+            }
+        )
+        self.assertEqual(req.conservation_tiers, [0.3, 0.5, 0.7])
+        self.assertEqual(req.selected_tiers, [0.5])
+
     def test_pipeline_preflight_rejects_start_from_after_stop_after(self) -> None:
         with _tmpdir() as tmp:
             runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)

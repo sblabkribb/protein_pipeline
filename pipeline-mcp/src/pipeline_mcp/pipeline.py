@@ -69,7 +69,14 @@ _SUMMARY_ARTIFACTS = (
     "agent_panel_report_ko.md",
     "agent_panel.jsonl",
 )
-_PARTIAL_RERUN_IGNORED_FIELDS = {"start_from", "stop_after", "force", "auto_recover", "agent_panel_enabled"}
+_PARTIAL_RERUN_IGNORED_FIELDS = {
+    "start_from",
+    "stop_after",
+    "force",
+    "auto_recover",
+    "agent_panel_enabled",
+    "selected_tiers",
+}
 _PARTIAL_RERUN_DESIGN_FIELDS = {
     "target_fasta",
     "target_pdb",
@@ -174,19 +181,46 @@ def _remove_path_if_exists(path: Path) -> bool:
         return False
 
 
-def _clear_tier_outputs_from_stage(root: Path, *, start_from: str) -> list[str]:
+def _cleanup_selected_tier_keys(selected_tier_keys: set[str] | None) -> list[str]:
+    if not selected_tier_keys:
+        return []
+    return sorted({str(key).strip() for key in selected_tier_keys if str(key).strip()})
+
+
+def _clear_tier_outputs_from_stage(
+    root: Path,
+    *,
+    start_from: str,
+    selected_tier_keys: set[str] | None = None,
+) -> list[str]:
     removed: list[str] = []
     tiers_dir = root / "tiers"
     if not tiers_dir.exists():
         return removed
+    tier_keys = _cleanup_selected_tier_keys(selected_tier_keys)
 
     if start_from == "design":
-        if _remove_path_if_exists(tiers_dir):
-            removed.append("tiers/")
+        if not tier_keys:
+            if _remove_path_if_exists(tiers_dir):
+                removed.append("tiers/")
+        else:
+            for tier_key in tier_keys:
+                tier_path = tiers_dir / tier_key
+                if _remove_path_if_exists(tier_path):
+                    removed.append(f"tiers/{tier_key}/")
+            backbones_dir = root / "backbones"
+            if backbones_dir.exists():
+                for backbone_dir in sorted(p for p in backbones_dir.iterdir() if p.is_dir()):
+                    for tier_key in tier_keys:
+                        tier_path = backbone_dir / "tiers" / tier_key
+                        if _remove_path_if_exists(tier_path):
+                            removed.append(f"backbones/{backbone_dir.name}/tiers/{tier_key}/")
         return removed
 
     for tier_dir in sorted(tiers_dir.iterdir()):
         if not tier_dir.is_dir():
+            continue
+        if tier_keys and tier_dir.name not in tier_keys:
             continue
         rel_prefix = f"tiers/{tier_dir.name}"
 
@@ -221,7 +255,12 @@ def _clear_tier_outputs_from_stage(root: Path, *, start_from: str) -> list[str]:
     return removed
 
 
-def _clear_stage_outputs_from(root: Path, *, start_from: str) -> list[str]:
+def _clear_stage_outputs_from(
+    root: Path,
+    *,
+    start_from: str,
+    selected_tier_keys: set[str] | None = None,
+) -> list[str]:
     removed: list[str] = []
 
     def _remove(rel_path: str) -> None:
@@ -299,7 +338,13 @@ def _clear_stage_outputs_from(root: Path, *, start_from: str) -> list[str]:
         return removed
 
     _remove("wt")
-    removed.extend(_clear_tier_outputs_from_stage(root, start_from=start_from))
+    removed.extend(
+        _clear_tier_outputs_from_stage(
+            root,
+            start_from=start_from,
+            selected_tier_keys=selected_tier_keys,
+        )
+    )
     return removed
 
 
@@ -428,6 +473,49 @@ def _minimum_safe_partial_rerun_stage(
             return stage_name, matched
 
     return "design", sorted(changed)
+
+
+def _selected_tier_key(value: object) -> str:
+    tier = float(value)
+    if abs(tier) > 1.0:
+        tier = tier / 100.0
+    return _tier_key(tier)
+
+
+def _resolve_active_tiers(request: PipelineRequest) -> tuple[list[float], set[str]]:
+    configured_tiers = [float(tier) for tier in (request.conservation_tiers or [])]
+    if not configured_tiers:
+        configured_tiers = [0.3, 0.5, 0.7]
+
+    configured_by_key: dict[str, float] = {}
+    configured_order: list[str] = []
+    for tier in configured_tiers:
+        key = _tier_key(tier)
+        if key in configured_by_key:
+            continue
+        configured_by_key[key] = float(tier)
+        configured_order.append(key)
+
+    raw_selected = getattr(request, "selected_tiers", None)
+    if not raw_selected:
+        return [configured_by_key[key] for key in configured_order], set(configured_order)
+
+    selected_keys: set[str] = set()
+    for value in raw_selected:
+        selected_keys.add(_selected_tier_key(value))
+
+    missing_keys = sorted(key for key in selected_keys if key not in configured_by_key)
+    if missing_keys:
+        raise PipelineInputRequired(
+            stage="init",
+            message=(
+                "selected_tiers must be a subset of conservation_tiers; "
+                f"configured={configured_order}, selected_missing={missing_keys}"
+            ),
+        )
+
+    active_tiers = [configured_by_key[key] for key in configured_order if key in selected_keys]
+    return active_tiers, selected_keys
 
 
 def _runpod_meta_matches(meta: dict[str, Any], expected: dict[str, Any]) -> bool:
@@ -1459,6 +1547,8 @@ class PipelineRunner:
                     message="start_from='bioemu' requires bioemu_use=true.",
                 )
 
+            active_tiers, active_tier_keys = _resolve_active_tiers(request)
+
             if normalized_start_from not in {None, "msa"}:
                 if not paths.request_json.exists():
                     raise PipelineInputRequired(
@@ -1500,8 +1590,14 @@ class PipelineRunner:
             write_json(paths.request_json, current_request_payload)
 
             if normalized_start_from is not None:
-                cleared = _clear_stage_outputs_from(paths.root, start_from=normalized_start_from)
+                cleared = _clear_stage_outputs_from(
+                    paths.root,
+                    start_from=normalized_start_from,
+                    selected_tier_keys=(active_tier_keys if getattr(request, "selected_tiers", None) else None),
+                )
                 detail = f"start_from={normalized_start_from}"
+                if getattr(request, "selected_tiers", None):
+                    detail = f"{detail}; selected_tiers={','.join(sorted(active_tier_keys))}"
                 if cleared:
                     detail = f"{detail}; cleared={len(cleared)}"
                 set_status(paths, stage="init", state="running", detail=detail)
@@ -3650,7 +3746,7 @@ class PipelineRunner:
                         if int(pdb_pos) in chain_mask:
                             ligand_mask_query_positions.add(int(qpos))
 
-                for tier in request.conservation_tiers:
+                for tier in active_tiers:
                     tier_key = _tier_key(tier)
                     base_fixed = conservation.fixed_positions_by_tier.get(tier, []) or []
 
@@ -3910,7 +4006,7 @@ class PipelineRunner:
                 )
                 return native, samples
 
-            for tier in request.conservation_tiers:
+            for tier in active_tiers:
 
                 tier_str = _tier_key(tier)
                 _ensure_not_cancelled(stage=f"proteinmpnn_{tier_str}")

@@ -17,18 +17,32 @@ import {
   detectTargetKey,
   displayArtifactPath,
   displayRfd3Id,
+  expandWorkflowStudioNodes,
   filterRunsByPrefix,
   inferRequestRunMode,
+  latestWorkflowStudioCompletedNodesFromEvents,
+  latestMeaningfulStatusFromEvents,
+  normalizeSetupDraftForFreshRun,
   mergeWorkflowStudioAnswers,
   minimumWorkflowStudioStartStage,
   nextWorkflowStudioStage,
+  parseWorkflowStudioNode,
+  resolveWorkflowStudioStageForSession,
   sanitizeName,
   shouldReuseSelectedRun,
+  shouldPollRunForTabChange,
   stageFromPath,
   splitWorkflowStudioAnswers,
+  workflowStudioRetainedArtifactPath,
+  workflowStudioExecutionTarget,
+  progressStepsForRequest,
+  progressUnitsForRequest,
+  residuePickerControlState,
   workflowStudioChangedFields,
   workflowStudioDependencyStatus,
   workflowStudioStageFields,
+  upsertWorkflowStudioStageStatus,
+  workflowStudioSessionRunKey,
 } from "../lib/pipeline.js";
 
 test("sanitizeName normalizes", () => {
@@ -274,7 +288,34 @@ test("workflowStudioStageFields exposes key fields per stage", () => {
     "ligand_mask_use_original_target",
   ]);
   assert.deepEqual(workflowStudioStageFields("soluprot"), ["soluprot_cutoff"]);
+  assert.deepEqual(workflowStudioStageFields("soluprot_50"), ["soluprot_cutoff"]);
   assert.deepEqual(workflowStudioStageFields("unknown"), []);
+});
+
+test("parseWorkflowStudioNode parses tier lanes into base execution stages", () => {
+  assert.deepEqual(parseWorkflowStudioNode("proteinmpnn_30"), {
+    nodeId: "proteinmpnn_30",
+    baseStage: "design",
+    executionStage: "design",
+    isTier: true,
+    tierKey: "30",
+    tier: 0.3,
+    tierStage: "proteinmpnn",
+    selectedTiers: [0.3],
+  });
+  assert.equal(parseWorkflowStudioNode("af2").baseStage, "af2");
+});
+
+test("expandWorkflowStudioNodes expands downstream workflow stages per tier", () => {
+  assert.deepEqual(expandWorkflowStudioNodes(["msa", "design", "soluprot", "af2"], [0.3, 0.5]), [
+    "msa",
+    "proteinmpnn_30",
+    "soluprot_30",
+    "af2_30",
+    "proteinmpnn_50",
+    "soluprot_50",
+    "af2_50",
+  ]);
 });
 
 test("splitWorkflowStudioAnswers isolates stage-owned drafts", () => {
@@ -420,6 +461,19 @@ test("workflowStudioDependencyStatus accepts matching upstream outputs", () => {
   assert.equal(novelty.blocked, false);
 });
 
+test("workflowStudioDependencyStatus scopes tier lanes to matching tier outputs", () => {
+  const dependency = workflowStudioDependencyStatus({
+    targetStage: "af2_50",
+    requiredStart: "af2",
+    artifacts: [
+      { type: "file", path: "tiers/30/designs_filtered.fasta", size: 64 },
+      { type: "file", path: "tiers/50/designs_filtered.fasta", size: 64 },
+    ],
+  });
+  assert.equal(dependency.blocked, false);
+  assert.deepEqual(dependency.matchedPaths, ["tiers/50/designs_filtered.fasta"]);
+});
+
 test("workflowStudioDependencyStatus is skipped when rerun regenerates upstream outputs", () => {
   const dependency = workflowStudioDependencyStatus({
     targetStage: "novelty",
@@ -433,6 +487,378 @@ test("workflowStudioDependencyStatus is skipped when rerun regenerates upstream 
 test("nextWorkflowStudioStage follows configured workflow nodes", () => {
   assert.equal(nextWorkflowStudioStage(["msa", "design", "af2"], "msa"), "design");
   assert.equal(nextWorkflowStudioStage(["msa", "design", "af2"], "af2"), "");
+  assert.equal(
+    nextWorkflowStudioStage(
+      ["msa", "proteinmpnn_30", "soluprot_30", "af2_30", "proteinmpnn_50"],
+      "af2_30"
+    ),
+    "proteinmpnn_50"
+  );
+});
+
+test("workflowStudioExecutionTarget maps tier nodes to base stop_after and selected_tiers", () => {
+  assert.deepEqual(workflowStudioExecutionTarget("novelty_70"), {
+    nodeId: "novelty_70",
+    baseStage: "novelty",
+    stopAfter: "novelty",
+    selectedTiers: [0.7],
+    tierKey: "70",
+    isTier: true,
+  });
+  assert.deepEqual(workflowStudioExecutionTarget("bioemu"), {
+    nodeId: "bioemu",
+    baseStage: "bioemu",
+    stopAfter: "bioemu",
+    selectedTiers: undefined,
+    tierKey: "",
+    isTier: false,
+  });
+});
+
+test("resolveWorkflowStudioStageForSession keeps legacy base sessions aligned with live tier stages", () => {
+  assert.equal(
+    resolveWorkflowStudioStageForSession(["msa", "rfd3", "bioemu", "design", "soluprot", "af2"], "af2_30"),
+    "af2"
+  );
+  assert.equal(
+    resolveWorkflowStudioStageForSession(["msa", "proteinmpnn_30", "soluprot_30", "af2_30"], "af2"),
+    "af2_30"
+  );
+  assert.equal(
+    resolveWorkflowStudioStageForSession(["msa", "proteinmpnn_30", "soluprot_30", "af2_30"], "af2_30"),
+    "af2_30"
+  );
+});
+
+test("workflowStudioRetainedArtifactPath only preserves explicit artifact selections", () => {
+  const artifacts = [
+    { type: "file", path: "tiers/30/af2_scores.json" },
+    { type: "file", path: "tiers/30/af2/ranked_0.pdb" },
+  ];
+  assert.equal(workflowStudioRetainedArtifactPath(artifacts, ""), "");
+  assert.equal(
+    workflowStudioRetainedArtifactPath(artifacts, "tiers/30/af2/ranked_0.pdb"),
+    "tiers/30/af2/ranked_0.pdb"
+  );
+  assert.equal(workflowStudioRetainedArtifactPath(artifacts, "tiers/70/af2/ranked_0.pdb"), "");
+});
+
+test("residuePickerControlState enables FASTA-based AF2 runs when sequence input is present", () => {
+  assert.deepEqual(
+    residuePickerControlState({
+      targetPdbText: "",
+      targetFastaText: ">target\nACDEFG",
+      rfd3PdbText: "",
+      selectedRunId: "run-1",
+      busy: false,
+    }),
+    {
+      canLoadTarget: false,
+      canLoadRfd3: false,
+      canLoadRun: true,
+      canRunAf2: true,
+    }
+  );
+  assert.deepEqual(
+    residuePickerControlState({
+      targetPdbText: "ATOM",
+      targetFastaText: ">target\nACDEFG",
+      rfd3PdbText: "ATOM",
+      selectedRunId: "run-1",
+      busy: true,
+    }),
+    {
+      canLoadTarget: false,
+      canLoadRfd3: false,
+      canLoadRun: false,
+      canRunAf2: false,
+    }
+  );
+});
+
+test("upsertWorkflowStudioStageStatus only reports changes when state or run id actually changed", () => {
+  const stageStates = {};
+  const stageRunIds = {};
+  assert.equal(upsertWorkflowStudioStageStatus(stageStates, stageRunIds, "af2", "running", "run-1"), true);
+  assert.deepEqual(stageStates, { af2: "running" });
+  assert.deepEqual(stageRunIds, { af2: "run-1" });
+  assert.equal(upsertWorkflowStudioStageStatus(stageStates, stageRunIds, "af2", "running", "run-1"), false);
+  assert.equal(upsertWorkflowStudioStageStatus(stageStates, stageRunIds, "af2", "completed", "run-1"), true);
+  assert.deepEqual(stageStates, { af2: "completed" });
+  assert.deepEqual(stageRunIds, { af2: "run-1" });
+  assert.equal(upsertWorkflowStudioStageStatus(stageStates, stageRunIds, "af2", "completed", "run-2"), true);
+  assert.deepEqual(stageRunIds, { af2: "run-2" });
+});
+
+test("latestMeaningfulStatusFromEvents skips terminal done stages when recovering Studio state", () => {
+  const status = latestMeaningfulStatusFromEvents(
+    [
+      JSON.stringify({
+        kind: "status",
+        run_id: "admin_20260310_065409_2f2c2372",
+        stage: "af2_70",
+        state: "completed",
+        updated_at: "2026-03-12 01:09:20",
+      }),
+      JSON.stringify({
+        kind: "status",
+        run_id: "admin_20260310_065409_2f2c2372",
+        stage: "done",
+        state: "completed",
+        updated_at: "2026-03-12 01:09:20",
+      }),
+    ].join("\n"),
+    "admin_20260310_065409_2f2c2372"
+  );
+  assert.equal(status?.stage, "af2_70");
+  assert.equal(status?.state, "completed");
+});
+
+test("latestMeaningfulStatusFromEvents falls back to the latest status when only terminal events exist", () => {
+  const status = latestMeaningfulStatusFromEvents(
+    JSON.stringify({
+      kind: "status",
+      run_id: "run-1",
+      stage: "done",
+      state: "completed",
+      updated_at: "2026-03-12 01:09:20",
+    }),
+    "run-1"
+  );
+  assert.equal(status?.stage, "done");
+  assert.equal(status?.state, "completed");
+});
+
+test("latestWorkflowStudioCompletedNodesFromEvents only keeps the latest reused run segment", () => {
+  const nodes = latestWorkflowStudioCompletedNodesFromEvents(
+    [
+      JSON.stringify({
+        kind: "status",
+        run_id: "run-1",
+        stage: "af2_70",
+        state: "completed",
+        updated_at: "2026-03-12 01:09:20",
+      }),
+      JSON.stringify({
+        kind: "status",
+        run_id: "run-1",
+        stage: "done",
+        state: "completed",
+        updated_at: "2026-03-12 01:09:20",
+      }),
+      JSON.stringify({
+        kind: "status",
+        run_id: "run-1",
+        stage: "init",
+        state: "running",
+        updated_at: "2026-03-12 01:42:15",
+      }),
+      JSON.stringify({
+        kind: "status",
+        run_id: "run-1",
+        stage: "rfd3",
+        state: "completed",
+        updated_at: "2026-03-12 01:42:15",
+      }),
+      JSON.stringify({
+        kind: "status",
+        run_id: "run-1",
+        stage: "proteinmpnn_50",
+        state: "completed",
+        updated_at: "2026-03-12 01:45:48",
+      }),
+      JSON.stringify({
+        kind: "status",
+        run_id: "run-1",
+        stage: "soluprot_50",
+        state: "completed",
+        updated_at: "2026-03-12 01:45:48",
+      }),
+      JSON.stringify({
+        kind: "status",
+        run_id: "run-1",
+        stage: "af2_50",
+        state: "completed",
+        updated_at: "2026-03-12 01:45:48",
+      }),
+      JSON.stringify({
+        kind: "status",
+        run_id: "run-1",
+        stage: "novelty_50",
+        state: "completed",
+        updated_at: "2026-03-12 01:45:48",
+      }),
+      JSON.stringify({
+        kind: "status",
+        run_id: "run-1",
+        stage: "done",
+        state: "completed",
+        updated_at: "2026-03-12 01:45:48",
+      }),
+    ].join("\n"),
+    "run-1"
+  );
+  assert.deepEqual(nodes, ["rfd3", "proteinmpnn_50", "soluprot_50", "af2_50", "novelty_50"]);
+});
+
+test("latestWorkflowStudioCompletedNodesFromEvents can recover AF2 for base-node Studio sessions", () => {
+  const resolved = Array.from(
+    new Set(
+      latestWorkflowStudioCompletedNodesFromEvents(
+        [
+          JSON.stringify({
+            kind: "status",
+            run_id: "admin_20260310_065409_2f2c2372",
+            stage: "init",
+            state: "running",
+            updated_at: "2026-03-12 01:42:15",
+          }),
+          JSON.stringify({
+            kind: "status",
+            run_id: "admin_20260310_065409_2f2c2372",
+            stage: "proteinmpnn_30",
+            state: "completed",
+            updated_at: "2026-03-12 01:45:48",
+          }),
+          JSON.stringify({
+            kind: "status",
+            run_id: "admin_20260310_065409_2f2c2372",
+            stage: "soluprot_30",
+            state: "completed",
+            updated_at: "2026-03-12 01:45:48",
+          }),
+          JSON.stringify({
+            kind: "status",
+            run_id: "admin_20260310_065409_2f2c2372",
+            stage: "af2_30",
+            state: "completed",
+            updated_at: "2026-03-12 01:45:48",
+          }),
+          JSON.stringify({
+            kind: "status",
+            run_id: "admin_20260310_065409_2f2c2372",
+            stage: "novelty_30",
+            state: "completed",
+            updated_at: "2026-03-12 01:45:48",
+          }),
+          JSON.stringify({
+            kind: "status",
+            run_id: "admin_20260310_065409_2f2c2372",
+            stage: "done",
+            state: "completed",
+            updated_at: "2026-03-12 01:45:48",
+          }),
+        ].join("\n"),
+        "admin_20260310_065409_2f2c2372"
+      )
+        .map((stage) =>
+          resolveWorkflowStudioStageForSession(["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"], stage, "")
+        )
+        .filter(Boolean)
+    )
+  );
+  assert.deepEqual(resolved, ["design", "soluprot", "af2", "novelty"]);
+});
+
+test("shouldPollRunForTabChange polls immediately when entering Studio with a session run", () => {
+  assert.equal(
+    shouldPollRunForTabChange({
+      nextTab: "studio",
+      studioRunId: "admin_20260310_065409_2f2c2372",
+      currentRunId: "",
+      autoPollEnabled: false,
+    }),
+    true
+  );
+  assert.equal(
+    shouldPollRunForTabChange({
+      nextTab: "monitor",
+      studioRunId: "",
+      currentRunId: "admin_20260310_065409_2f2c2372",
+      autoPollEnabled: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldPollRunForTabChange({
+      nextTab: "monitor",
+      studioRunId: "",
+      currentRunId: "admin_20260310_065409_2f2c2372",
+      autoPollEnabled: true,
+    }),
+    true
+  );
+});
+
+test("workflowStudioSessionRunKey groups duplicate sessions by linked run id", () => {
+  assert.equal(workflowStudioSessionRunKey({ head_run_id: "run-head" }), "run-head");
+  assert.equal(workflowStudioSessionRunKey({ pending: { run_id: "run-pending" } }), "run-pending");
+  assert.equal(workflowStudioSessionRunKey({ source_run_id: "run-source" }), "run-source");
+  assert.equal(
+    workflowStudioSessionRunKey({
+      history: [{ run_id: "run-history" }, { run_id: "run-older" }],
+    }),
+    "run-history"
+  );
+  assert.equal(
+    workflowStudioSessionRunKey({
+      stage_run_ids: { msa: "run-stage", af2: "run-stage" },
+    }),
+    "run-stage"
+  );
+  assert.equal(
+    workflowStudioSessionRunKey({
+      stage_run_ids: { msa: "run-a", af2: "run-b" },
+    }),
+    ""
+  );
+});
+
+test("progressStepsForRequest narrows novelty reruns to WT baseline and novelty", () => {
+  assert.deepEqual(
+    progressStepsForRequest({
+      mode: "pipeline",
+      startFrom: "novelty",
+      stopAfter: "novelty",
+      noveltyEnabled: true,
+      wtCompare: true,
+    }),
+    ["wt", "novelty", "done"]
+  );
+});
+
+test("progressUnitsForRequest expands partial reruns across tiers without replaying skipped stages", () => {
+  assert.deepEqual(
+    progressUnitsForRequest({
+      mode: "pipeline",
+      startFrom: "novelty",
+      stopAfter: "novelty",
+      noveltyEnabled: true,
+      wtCompare: true,
+      tierKeys: ["30", "50", "70"],
+    }),
+    [
+      { step: "wt" },
+      { step: "novelty", tierKey: "30" },
+      { step: "novelty", tierKey: "50" },
+      { step: "novelty", tierKey: "70" },
+      { step: "done" },
+    ]
+  );
+  assert.deepEqual(
+    progressUnitsForRequest({
+      mode: "pipeline",
+      startFrom: "design",
+      stopAfter: "design",
+      noveltyEnabled: true,
+      tierKeys: ["30", "50"],
+    }),
+    [
+      { step: "design", tierKey: "30" },
+      { step: "design", tierKey: "50" },
+      { step: "done" },
+    ]
+  );
 });
 
 test("shouldReuseSelectedRun requires explicit continue toggle and partial stage", () => {
@@ -484,6 +910,43 @@ test("buildSetupDraftFromRequest prepares file answers and metadata", () => {
   assert.deepEqual(draft.answers.design_chains, ["A"]);
   assert.equal(draft.answerMeta.target_input.fileName, "request.json:target_pdb");
   assert.equal(draft.answerMeta.rfd3_input_pdb.fileName, "request.json:rfd3_input_pdb");
+});
+
+test("normalizeSetupDraftForFreshRun resets pipeline start_from to msa", () => {
+  const draft = {
+    mode: "pipeline",
+    answers: {
+      start_from: "af2",
+      stop_after: "novelty",
+      design_chains: ["A"],
+    },
+    answerMeta: {
+      target_input: { fileName: "request.json:target_pdb" },
+    },
+  };
+  const normalized = normalizeSetupDraftForFreshRun(draft);
+  assert.equal(normalized.mode, "pipeline");
+  assert.equal(normalized.answers.start_from, "msa");
+  assert.equal(normalized.answers.stop_after, "novelty");
+  assert.deepEqual(normalized.answers.design_chains, ["A"]);
+  assert.equal(normalized.answerMeta.target_input.fileName, "request.json:target_pdb");
+  assert.equal(draft.answers.start_from, "af2");
+});
+
+test("normalizeSetupDraftForFreshRun leaves non-pipeline modes unchanged", () => {
+  const draft = {
+    mode: "af2",
+    answers: {
+      target_fasta: ">seq\nAAAA",
+      af2_provider: "colabfold",
+    },
+    answerMeta: {},
+  };
+  const normalized = normalizeSetupDraftForFreshRun(draft);
+  assert.equal(normalized.mode, "af2");
+  assert.equal(normalized.answers.target_fasta, ">seq\nAAAA");
+  assert.equal(normalized.answers.af2_provider, "colabfold");
+  assert.equal(normalized.answers.start_from, undefined);
 });
 
 test("buildSetupDraftFromRequest maps diffdock ligand metadata", () => {

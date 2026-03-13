@@ -3972,6 +3972,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     design_chains = _as_list_of_str(args.get("design_chains"))
     fixed_positions_extra = _as_fixed_positions_extra(args.get("fixed_positions_extra"))
     conservation_tiers = _as_list_of_float(args.get("conservation_tiers"))
+    selected_tiers = _as_list_of_float(args.get("selected_tiers"))
     ligand_resnames = _as_list_of_str(args.get("ligand_resnames"))
     ligand_atom_chains = _as_list_of_str(args.get("ligand_atom_chains"))
     af2_sequence_ids = _as_list_of_str(args.get("af2_sequence_ids"))
@@ -4023,6 +4024,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         design_chains=design_chains,
         fixed_positions_extra=fixed_positions_extra,
         conservation_tiers=conservation_tiers or [0.3, 0.5, 0.7],
+        selected_tiers=selected_tiers or None,
         conservation_mode=str(args.get("conservation_mode") or "quantile"),
         conservation_weighting=str(args.get("conservation_weighting") or "none"),
         conservation_cluster_method=str(args.get("conservation_cluster_method") or "linclust"),
@@ -4136,6 +4138,7 @@ def _pipeline_run_schema() -> dict[str, Any]:
                 "description": "Extra fixed positions per chain (1-based, query/FASTA numbering). Use '*' to apply to all chains.",
             },
             "conservation_tiers": {"type": "array", "items": {"type": "number"}},
+            "selected_tiers": {"type": "array", "items": {"type": "number"}},
             "conservation_mode": {"type": "string", "enum": ["quantile", "threshold"]},
             "conservation_weighting": {"type": "string"},
             "conservation_cluster_method": {"type": "string"},
