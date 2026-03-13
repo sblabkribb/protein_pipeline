@@ -31,6 +31,30 @@ const RUN_PROGRESS_PLANS = Object.freeze({
   diffdock: ["diffdock", "done"],
 });
 
+export const DEFAULT_ARTIFACT_COMPARE_MODE = "sequence";
+
+function wtIdentityPercent(row) {
+  const directPct = Number(row?.wt_identity_pct);
+  if (Number.isFinite(directPct)) return directPct;
+  const rawIdentity = Number(row?.wt_identity);
+  if (!Number.isFinite(rawIdentity)) return null;
+  return rawIdentity <= 1 ? rawIdentity * 100 : rawIdentity;
+}
+
+export function formatWtIdentitySummary(row, lang = "en") {
+  const diffCount = Number(row?.wt_diff_count);
+  const compareLen = Number(row?.wt_compare_len);
+  const identityPct = wtIdentityPercent(row);
+  const label = String(lang || "").trim().toLowerCase().startsWith("ko") ? "상동성" : "identity";
+  const countText =
+    Number.isFinite(diffCount) && Number.isFinite(compareLen) && compareLen > 0
+      ? `${Math.max(0, Math.round(diffCount))}/${Math.round(compareLen)}`
+      : "";
+  const identityText = Number.isFinite(identityPct) ? `${label} ${Number(identityPct).toFixed(1)}%` : "";
+  if (countText && identityText) return `${countText} · ${identityText}`;
+  return countText || identityText || "-";
+}
+
 function normalizeStage(value) {
   let raw = String(value || "")
     .trim()
@@ -39,6 +63,19 @@ function normalizeStage(value) {
   if (raw === "wt_diff" || raw === "wtdiff") raw = "novelty";
   if (!raw) return "";
   return STAGE_ORDER.includes(raw) ? raw : "";
+}
+
+function stageRangeIncludes(start, stop, targetStage) {
+  const normalizedStart = normalizeStage(start) || "msa";
+  const normalizedStop = normalizeStage(stop) || normalizedStart;
+  const normalizedTarget = normalizeStage(targetStage);
+  const startIdx = STAGE_ORDER.indexOf(normalizedStart);
+  const stopIdx = STAGE_ORDER.indexOf(normalizedStop);
+  const targetIdx = STAGE_ORDER.indexOf(normalizedTarget);
+  if (startIdx < 0 || stopIdx < 0 || targetIdx < 0) return false;
+  const from = Math.min(startIdx, stopIdx);
+  const to = Math.max(startIdx, stopIdx);
+  return targetIdx >= from && targetIdx <= to;
 }
 
 function normalizeWorkflowTierKey(value) {
@@ -348,6 +385,15 @@ export function workflowStudioSessionRunKey(session) {
     .filter(Boolean);
   const uniqueRunIds = Array.from(new Set(stageRunIds));
   return uniqueRunIds.length === 1 ? uniqueRunIds[0] : "";
+}
+
+export function workflowStudioActionRunIdForSession(session, currentRunId = "") {
+  if (!session || typeof session !== "object") {
+    return String(currentRunId || "").trim();
+  }
+  const pendingRunId = String(session?.pending?.run_id || "").trim();
+  if (pendingRunId) return pendingRunId;
+  return workflowStudioSessionRunKey(session);
 }
 
 function progressStepForRequestedStage(stage, { wtCompare = false, start = false } = {}) {
@@ -714,6 +760,60 @@ export function mergeRunInputs(answers) {
   return payload;
 }
 
+export function normalizeFixedPositionsExtraDraft(raw) {
+  if (raw === null || raw === undefined || raw === "") return {};
+  let parsed = raw;
+  if (typeof raw === "string") {
+    try {
+      parsed = JSON.parse(raw);
+    } catch (_err) {
+      return {};
+    }
+  }
+  if (Array.isArray(parsed)) {
+    const nums = parsed
+      .map((value) => Number.parseInt(value, 10))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    return nums.length ? { "*": Array.from(new Set(nums)).sort((left, right) => left - right) } : {};
+  }
+  if (!parsed || typeof parsed !== "object") return {};
+  const out = {};
+  Object.entries(parsed).forEach(([chain, values]) => {
+    const nums = (Array.isArray(values) ? values : [values])
+      .map((value) => Number.parseInt(value, 10))
+      .filter((value) => Number.isFinite(value) && value > 0);
+    if (nums.length) {
+      out[String(chain)] = Array.from(new Set(nums)).sort((left, right) => left - right);
+    }
+  });
+  return out;
+}
+
+export function mergeFixedPositionsExtraDraft(baseMap, addMap) {
+  const merged = normalizeFixedPositionsExtraDraft(baseMap);
+  Object.entries(normalizeFixedPositionsExtraDraft(addMap)).forEach(([chain, values]) => {
+    const next = new Set((merged[chain] || []).map((value) => Number.parseInt(value, 10)));
+    values.forEach((value) => next.add(value));
+    const sorted = Array.from(next)
+      .filter((value) => Number.isFinite(value) && value > 0)
+      .sort((left, right) => left - right);
+    if (sorted.length) merged[chain] = sorted;
+  });
+  return merged;
+}
+
+export function withFixedPositionsExtra(answers = {}, fixedPositions = {}) {
+  const nextAnswers =
+    answers && typeof answers === "object" && !Array.isArray(answers) ? cloneWorkflowValue(answers) : {};
+  const normalized = normalizeFixedPositionsExtraDraft(fixedPositions);
+  if (Object.keys(normalized).length) {
+    nextAnswers.fixed_positions_extra = normalized;
+  } else {
+    delete nextAnswers.fixed_positions_extra;
+  }
+  return nextAnswers;
+}
+
 export function buildRunArguments({ prompt, routed, answers, runId }) {
   const args = {
     prompt,
@@ -931,6 +1031,18 @@ export function buildWorkflowStudioEffectiveAnswers({ headRequest, baseAnswers, 
   });
 }
 
+export function buildWorkflowStudioFreshSessionSeed({ session = null, prompt = "", answers = {}, nodes = [] } = {}) {
+  const sourceSession = session && typeof session === "object" && !Array.isArray(session) ? session : null;
+  return {
+    prompt: "",
+    nodes: orderedWorkflowStudioNodes(
+      sourceSession && Array.isArray(sourceSession.nodes) && sourceSession.nodes.length ? sourceSession.nodes : nodes
+    ),
+    answers: {},
+    sourceRunId: "",
+  };
+}
+
 export function workflowStudioChangedFields(previousPayload, nextPayload) {
   const previous = previousPayload && typeof previousPayload === "object" ? previousPayload : {};
   const next = nextPayload && typeof nextPayload === "object" ? nextPayload : {};
@@ -1068,6 +1180,7 @@ export function buildSetupDraftFromRequest(payload) {
   const skipKeys = new Set([
     "target_fasta",
     "target_pdb",
+    "rfd3_input_pdb",
     "diffdock_ligand_sdf",
     "diffdock_ligand_smiles",
     "selected_tiers",
@@ -1095,7 +1208,7 @@ export function buildSetupDraftFromRequest(payload) {
   }
 
   const rfd3Input = String(payload.rfd3_input_pdb || "");
-  if (rfd3Input.trim()) {
+  if (rfd3Input.trim() && rfd3Input.trim() !== targetPdb.trim()) {
     answers.rfd3_input_pdb = rfd3Input;
     answerMeta.rfd3_input_pdb = { fileName: "request.json:rfd3_input_pdb" };
   }
@@ -1209,4 +1322,53 @@ export function detectTargetKey(text) {
     return "target_fasta";
   }
   return "target_pdb";
+}
+
+export function targetInputPdbText(answers = {}) {
+  const explicit = String(answers?.target_pdb || "").trim();
+  if (explicit) return explicit;
+  const text = String(answers?.target_input || "").trim();
+  if (!text) return "";
+  return detectTargetKey(text) === "target_pdb" ? text : "";
+}
+
+export function explicitRfd3InputPdbText(answers = {}) {
+  return String(answers?.rfd3_input_pdb || "").trim();
+}
+
+export function runUsesRfd3Stage({ mode = "", answers = {}, nodes = [] } = {}) {
+  const normalizedMode = String(mode || "")
+    .trim()
+    .toLowerCase();
+  if (normalizedMode === "rfd3") return true;
+  if (normalizedMode === "workflow") {
+    return (Array.isArray(nodes) ? nodes : []).some((node) => {
+      const parsed = parseWorkflowStudioNode(node);
+      return (parsed?.baseStage || normalizeStage(node)) === "rfd3";
+    });
+  }
+  if (normalizedMode === "pipeline") {
+    return stageRangeIncludes(answers?.start_from || "msa", answers?.stop_after || "novelty", "rfd3");
+  }
+  return false;
+}
+
+export function effectiveRfd3InputPdb({ mode = "", answers = {}, nodes = [] } = {}) {
+  const explicit = explicitRfd3InputPdbText(answers);
+  if (explicit) return explicit;
+  if (!runUsesRfd3Stage({ mode, answers, nodes })) return "";
+  return targetInputPdbText(answers);
+}
+
+export function shouldShowRfd3InputPdbField({ mode = "", answers = {}, nodes = [], overrideVisible = false } = {}) {
+  const normalizedMode = String(mode || "")
+    .trim()
+    .toLowerCase();
+  if (normalizedMode === "rfd3") return true;
+  const targetPdb = targetInputPdbText(answers);
+  const explicit = explicitRfd3InputPdbText(answers);
+  const hasCustomOverride = Boolean(explicit) && explicit !== targetPdb;
+  if (hasCustomOverride || overrideVisible) return true;
+  if (!runUsesRfd3Stage({ mode, answers, nodes })) return false;
+  return !targetPdb;
 }

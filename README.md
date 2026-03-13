@@ -152,6 +152,15 @@ RunPod Admin is a standalone operations console for the RunPod Serverless endpoi
 - `PIPELINE_AUTH_TOKEN_TTL_S`
 - `PIPELINE_CORS_ORIGINS`
 - `PIPELINE_AUTH_TOKEN` or `PIPELINE_AUTH_USERNAME` + `PIPELINE_AUTH_PASSWORD`
+- `PIPELINE_OIDC_ISSUER`
+- `PIPELINE_OIDC_CLIENT_ID`
+- `PIPELINE_OIDC_AUDIENCE` (optional, defaults to `PIPELINE_OIDC_CLIENT_ID`)
+- `PIPELINE_OIDC_SCOPES` (optional, defaults to `openid profile email`)
+- `PIPELINE_OIDC_PROVIDER_NAME` (optional, defaults to `KBF SSO`)
+- `PIPELINE_OIDC_JWKS_URL` (optional override)
+- `PIPELINE_OIDC_ALGORITHMS` (optional, defaults to `RS256`)
+
+`PIPELINE_AUTH_*` keeps the legacy local admin login available. `PIPELINE_OIDC_*` enables KBF SSO and is the preferred mode for the production portal/subdomain deployment.
 
 ## Docs
 - `docs/USAGE.md`: UI and API usage guide

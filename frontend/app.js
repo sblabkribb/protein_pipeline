@@ -1,5 +1,7 @@
 import {
   artifactMetaFromPath,
+  buildWorkflowStudioFreshSessionSeed,
+  DEFAULT_ARTIFACT_COMPARE_MODE,
   buildWorkflowStudioEffectiveAnswers,
   buildSetupDraftFromRequest,
   buildRunArguments,
@@ -8,6 +10,8 @@ import {
   createRunId,
   detectTargetKey,
   displayArtifactPath,
+  effectiveRfd3InputPdb,
+  explicitRfd3InputPdbText,
   expandWorkflowStudioNodes,
   filterRunsByPrefix,
   inferRequestRunMode,
@@ -15,9 +19,15 @@ import {
   isImagePath,
   latestWorkflowStudioCompletedNodesFromEvents,
   latestMeaningfulStatusFromEvents,
+  formatWtIdentitySummary,
+  mergeFixedPositionsExtraDraft,
   minimumWorkflowStudioStartStage,
   nextWorkflowStudioStage,
+  normalizeFixedPositionsExtraDraft,
   normalizeSetupDraftForFreshRun,
+  runUsesRfd3Stage,
+  shouldShowRfd3InputPdbField,
+  targetInputPdbText,
   normalizeWorkflowStudioNode,
   parseWorkflowStudioNode,
   progressStepsForRequest,
@@ -29,32 +39,67 @@ import {
   splitWorkflowStudioAnswers,
   workflowStudioRetainedArtifactPath,
   upsertWorkflowStudioStageStatus,
+  workflowStudioActionRunIdForSession,
   workflowStudioSessionRunKey,
   stageFromPath,
   workflowStudioChangedFields,
   workflowStudioDependencyStatus,
   workflowStudioExecutionTarget,
   workflowStudioStageFields,
+  withFixedPositionsExtra,
 } from "./lib/pipeline.js";
 import {
+  buildCompareMetaTooltip,
+  buildCompareScopeDescription,
+  buildStructureDiffLegend,
   coerceFiniteMetricValue,
   extractDesignChainsFromPayload,
   filterPdbTextByChains,
   selectResidueStripMetrics,
 } from "./lib/compare.js";
+import { buildCopilotReply } from "./lib/copilot.js";
+import {
+  aminoAcidPropertyInfo,
+  availableConservedTierPresetKeys,
+  buildSequenceSelectionTracks,
+  buildDetachedResiduePickerStoragePayload,
+  buildDetachedResiduePickerResultStoragePayload,
+  clearResiduePickerSelectionState,
+  conservedTierPresetState,
+  DEFAULT_SURFACE_AREA_CUTOFF,
+  deriveResidueSpatialPresets,
+  normalizeSurfaceAreaCutoff,
+  queryPositionsToResidueSelectionMap,
+  resolveResiduePickerSelectionState,
+  resolveResidueSelectionMaps,
+  sequenceResiduePalette,
+} from "./lib/residue-picker.js";
+import {
+  buildCompareHoverText,
+  buildCompareViewerLegendLines,
+  buildResiduePickerHoverText,
+  buildResiduePickerViewerLegendLines,
+} from "./lib/viewer-annotations.js";
+import {
+  buildOidcAuthorizationUrl,
+  buildOidcLogoutUrl,
+  buildOidcRedirectUri,
+  normalizeApiBase,
+  parseOidcCallback,
+  stripOidcCallbackUrl,
+  resolveDefaultApiBase,
+} from "./lib/auth.js";
+import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js";
 
-const defaultApiBase = (() => {
-  const origin = window.location.origin;
-  const path = window.location.pathname || "";
-  if (origin && origin !== "null") {
-    if (path.startsWith("/pipeline")) {
-      return `${origin}/pipeline/api`;
-    }
-  }
-  return "https://k-biofoundrycopilot.duckdns.org/pipeline/api";
-})();
+const defaultApiBase = resolveDefaultApiBase({
+  origin: window.location.origin,
+  pathname: window.location.pathname,
+});
 
 const savedApiBase = localStorage.getItem("kbf.apiBase") || "";
+const ID_TOKEN_KEY = "kbf.idToken";
+const OIDC_STATE_KEY = "kbf.oidc.state";
+const OIDC_VERIFIER_KEY = "kbf.oidc.verifier";
 
 const LANG_KEY = "kbf.lang";
 const LANG_OPTIONS = ["en", "ko"];
@@ -64,7 +109,21 @@ const WORKFLOW_PLAN_STORAGE_KEY = "kbf.workflowPlans";
 const WORKFLOW_STUDIO_STORAGE_KEY = "kbf.workflowStudioSessions";
 const WORKFLOW_STUDIO_CURRENT_KEY = "kbf.workflowStudioCurrent";
 const WORKFLOW_STUDIO_SESSION_PATH = "workflow_studio/session.json";
+const RESIDUE_PICKER_DETACHED_QUERY_KEY = "residue_picker";
+const RESIDUE_PICKER_REQUEST_STORAGE_KEY_PREFIX = "kbf.residuePicker.request.";
+const RESIDUE_PICKER_RESULT_STORAGE_KEY_PREFIX = "kbf.residuePicker.result.";
+const RESIDUE_PICKER_RESULT_MESSAGE_TYPE = "kbf.residuePicker.result";
+const RESIDUE_PICKER_RESET_MESSAGE_TYPE = "kbf.residuePicker.reset";
+const RESIDUE_PICKER_POPUP_WINDOW_NAME = "kbf_residue_picker";
+const RESIDUE_PICKER_REQUEST_REGISTRY_KEY = "__kbfResiduePickerRequests";
 const DEFAULT_WORKFLOW_STAGES = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"];
+const detachedResiduePickerToken = (() => {
+  try {
+    return String(new URLSearchParams(window.location.search).get(RESIDUE_PICKER_DETACHED_QUERY_KEY) || "").trim();
+  } catch (_err) {
+    return "";
+  }
+})();
 
 function loadLang() {
   const saved = localStorage.getItem(LANG_KEY);
@@ -102,10 +161,6 @@ function setReportLang(value) {
   updateReportLangSelect();
 }
 
-function normalizeApiBase(value) {
-  return String(value || "").trim().replace(/\/$/, "");
-}
-
 function resolveApiBase() {
   const normalized = normalizeApiBase(savedApiBase);
   if (!normalized) return defaultApiBase;
@@ -118,6 +173,14 @@ function resolveApiBase() {
   ) {
     return `${window.location.origin}/pipeline/api`;
   }
+  if (
+    window.location.origin &&
+    window.location.origin !== "null" &&
+    !window.location.pathname.startsWith("/pipeline") &&
+    /k-biofoundrycopilot\.duckdns\.org\/pipeline\/api$/i.test(normalized)
+  ) {
+    return `${window.location.origin}/api`;
+  }
   return normalized;
 }
 
@@ -127,7 +190,16 @@ function createSetupResiduePickerState() {
     sourceLabel: "",
     sourceKey: "",
     selection: {},
+    manualSelection: {},
+    excludedSelection: {},
+    activePresetIds: [],
     residueOrderByChain: {},
+    sequenceByChain: {},
+    sequencePaletteByChain: {},
+    spatialPresets: { surface: {}, core: {}, interface: {}, residues: [] },
+    surfaceAreaCutoff: DEFAULT_SURFACE_AREA_CUTOFF,
+    structureColorMode: "secondary",
+    conservationPreview: null,
     notice: "",
     runningAf2: false,
   };
@@ -323,6 +395,16 @@ function normalizeWorkflowStudioSessionPayload(payload, sessionIdFallback = "") 
               : {},
         }
       : null;
+  const residuePickerState =
+    source.residue_picker_state &&
+    typeof source.residue_picker_state === "object" &&
+    !Array.isArray(source.residue_picker_state)
+      ? cloneWorkflowStudioValue(source.residue_picker_state)
+      : null;
+  const uiState =
+    source.ui_state && typeof source.ui_state === "object" && !Array.isArray(source.ui_state)
+      ? cloneWorkflowStudioValue(source.ui_state)
+      : {};
   return {
     session_id: sessionId,
     label: String(source.label || "").trim(),
@@ -347,6 +429,8 @@ function normalizeWorkflowStudioSessionPayload(payload, sessionIdFallback = "") 
     updated_at: String(source.updated_at || source.updatedAt || "").trim(),
     pending: pending && pending.run_id ? pending : null,
     history,
+    residue_picker_state: residuePickerState,
+    ui_state: uiState,
   };
 }
 
@@ -376,6 +460,8 @@ const state = {
   apiBase: resolveApiBase(),
   user: loadUser(),
   token: localStorage.getItem("kbf.token") || "",
+  idToken: localStorage.getItem(ID_TOKEN_KEY) || "",
+  oidcConfig: null,
   lang: loadLang(),
   reportLang: loadReportLang(),
   plan: null,
@@ -411,8 +497,9 @@ const state = {
   studioOpenField: "",
   artifactCompareLeftPath: "",
   artifactCompareRightPath: "",
-  artifactCompareMode: "structure",
+  artifactCompareMode: DEFAULT_ARTIFACT_COMPARE_MODE,
   compareRefsExpanded: false,
+  backboneManifestByRunId: {},
   compareTargetSequenceByRunId: {},
   compareInputPdbTextByRunId: {},
   compareWorkingPdbTextByRunId: {},
@@ -452,6 +539,13 @@ const state = {
   reportModalImageCache: {},
   copilotHistory: [],
   setupResiduePicker: createSetupResiduePickerState(),
+  detachedResiduePicker: {
+    token: detachedResiduePickerToken,
+    request: null,
+    initializedToken: "",
+    predictedResult: null,
+    processedTokens: {},
+  },
   setupStepIndex: 0,
   autoAnalyzePendingByRunId: {},
   workflowDesigner: createWorkflowDesignerState(),
@@ -487,11 +581,17 @@ function persistWorkflowStudioSessions() {
 const el = {
   loginGate: document.getElementById("loginGate"),
   appShell: document.getElementById("appShell"),
+  loginLocalDesc: document.getElementById("loginLocalDesc"),
+  loginSsoDesc: document.getElementById("loginSsoDesc"),
+  loginLocalForm: document.getElementById("loginLocalForm"),
+  loginSsoActions: document.getElementById("loginSsoActions"),
   loginUsername: document.getElementById("loginUsername"),
   loginPassword: document.getElementById("loginPassword"),
   loginBtn: document.getElementById("loginBtn"),
+  ssoLoginBtn: document.getElementById("ssoLoginBtn"),
   loginError: document.getElementById("loginError"),
   logoutBtn: document.getElementById("logoutBtn"),
+  accountBtn: document.getElementById("accountBtn"),
   adminBtn: document.getElementById("adminBtn"),
   runpodAdminBtn: document.getElementById("runpodAdminBtn"),
   helpBtn: document.getElementById("helpBtn"),
@@ -533,6 +633,7 @@ const el = {
   setupErrorRaw: document.getElementById("setupErrorRaw"),
   studioSessionList: document.getElementById("studioSessionList"),
   studioRunBtn: document.getElementById("studioRunBtn"),
+  studioNewSessionBtn: document.getElementById("studioNewSessionBtn"),
   studioStopBtn: document.getElementById("studioStopBtn"),
   studioResumeBtn: document.getElementById("studioResumeBtn"),
   studioAdoptRunBtn: document.getElementById("studioAdoptRunBtn"),
@@ -546,6 +647,7 @@ const el = {
   studioRunUpdatedValue: document.getElementById("studioRunUpdatedValue"),
   studioRunStateValue: document.getElementById("studioRunStateValue"),
   workflowStudioRoot: document.getElementById("workflowStudioRoot"),
+  detachedResiduePickerRoot: document.getElementById("detachedResiduePickerRoot"),
   studioArtifactPreview: document.getElementById("studioArtifactPreview"),
   runIdValue: document.getElementById("runIdValue"),
   runSelector: document.getElementById("runSelector"),
@@ -599,6 +701,7 @@ const el = {
   artifactCompareClear: document.getElementById("artifactCompareClear"),
   artifactCompareRefs: document.getElementById("artifactCompareRefs"),
   artifactComparePresets: document.getElementById("artifactComparePresets"),
+  artifactCompareManifest: document.getElementById("artifactCompareManifest"),
   artifactComparisonDetails: document.getElementById("artifactComparisonDetails"),
   artifactGenerateReport: document.getElementById("artifactGenerateReport"),
   agentPanelList: document.getElementById("agentPanelList"),
@@ -714,6 +817,7 @@ const I18N = {
   en: {
     "brand.subtitle": "Protein Pipeline Console",
     "action.admin": "Admin",
+    "action.account": "Account",
     "action.settings": "Settings",
     "action.logout": "Logout",
     "action.help": "Usage",
@@ -768,11 +872,14 @@ const I18N = {
     "analyze.kpi.recommendation": "Recommendation",
     "login.title": "Enter the Lab",
     "login.desc": "Identify yourself to separate runs and keep artifacts organized.",
+    "login.sso.desc": "Sign in with KBF SSO to keep the same identity and permissions across services.",
     "login.username": "Username",
     "login.username.placeholder": "e.g. hana.kim",
     "login.password": "Password",
     "login.password.placeholder": "••••••••",
     "login.submit": "Access Console",
+    "login.sso.submit": "Continue with KBF SSO",
+    "login.sso.hint": "Use your KBF account. Password changes are managed in the SSO account page.",
     "setup.title": "Run Setup",
     "setup.desc": "Choose a workflow, attach inputs, and launch the job.",
     "setup.section.input": "Input",
@@ -803,7 +910,7 @@ const I18N = {
     "setup.runStatus.line": "Run status: {id} · {stage} / {state} · {updated}",
     "setup.residuePicker.title": "Residue Picker (Optional)",
     "setup.residuePicker.help":
-      "Select residues from a structure and append them to fixed_positions_extra. If target_pdb is missing, run once to create target.pdb ({af2Provider} target), then load it from the selected run.",
+      "Select residues from the sequence strip or 3D structure and append them to fixed_positions_extra. If target_pdb is missing, run once to create target.pdb ({af2Provider} target), then load it from the selected run.",
     "setup.residuePicker.source": "Structure source: {source}",
     "setup.residuePicker.source.none": "none",
     "setup.residuePicker.loadTargetInput": "Load target_input PDB",
@@ -819,11 +926,28 @@ const I18N = {
     "setup.residuePicker.viewerUnavailable": "3D viewer unavailable.",
     "setup.residuePicker.selection.none": "No residues selected.",
     "setup.residuePicker.selection.summary": "Selected residues: {summary}",
+    "setup.residuePicker.openDetached": "Open picker in a popup",
+    "setup.residuePicker.surfaceCutoffLabel": "Surface cutoff (A^2)",
+    "setup.residuePicker.surfaceCutoffHelp": "PyMOL-style atom exposed-area threshold for Surface/Core classification. Default: 2.5",
+    "setup.residuePicker.launcherHelp":
+      "Open the residue picker in a popup window. The larger workspace keeps the sequence strip and 3D structure linked, then writes back to fixed_positions_extra.",
+    "setup.residuePicker.launcherConserved":
+      "Conserved presets only appear when a selected run already has MMseqs2/conservation outputs.",
+    "setup.residuePicker.detached.title": "Residue Picker Popup",
+    "setup.residuePicker.detached.desc":
+      "Pick residues on the larger sequence strip or 3D structure, then send them back to {context}.",
+    "setup.residuePicker.detached.applyClose": "Apply and close",
+    "setup.residuePicker.detached.close": "Close window",
+    "setup.residuePicker.detached.missing": "This residue picker request has expired. Reopen it from Setup or Studio.",
+    "setup.residuePicker.detached.sent": "Applied {count} residues back to {context}.",
+    "setup.residuePicker.detached.sentCleared": "Cleared fixed_positions_extra in {context}.",
     "setup.residuePicker.apply": "Apply to fixed_positions_extra",
+    "setup.residuePicker.applyFailed": "Failed to return the selected residues to the parent tab. Keep this popup open and try again.",
     "setup.residuePicker.clearSelection": "Clear selection",
     "setup.residuePicker.note":
-      "Applied values use sequence-order indices per chain (query position space) for ProteinMPNN constraints.",
+      "Sequence and 3D picks stay linked. Applied values use sequence-order indices per chain (query position space) for ProteinMPNN constraints.",
     "setup.residuePicker.applied": "Applied {count} residue positions to fixed_positions_extra.",
+    "setup.residuePicker.cleared": "Cleared fixed_positions_extra.",
     "setup.residuePicker.loadFailed": "Failed to load structure: {error}",
     "setup.residuePicker.noRun": "Select a run first.",
     "setup.residuePicker.noSelection": "Select at least one residue.",
@@ -1014,7 +1138,7 @@ const I18N = {
     "artifacts.preview.compare.sequenceRight": "Candidate",
     "artifacts.preview.compare.sequenceEmpty": "No sequence extracted from this structure.",
     "artifacts.preview.compare.diffLegendStructure":
-      "Structure diff after CA alignment: <=1.5A gray, 1.5-3.0A yellow, >3.0A red, gaps WT blue / Design orange",
+      "Structure diff after CA alignment",
     "artifacts.preview.compare.diffLegendSequence":
       "Sequence diff on residue identity: WT-only/WT-mutated blue, Design-only/Design-mutated orange, same residue gray",
     "artifacts.preview.compare.diffNone": "No residue-level differences detected.",
@@ -1173,10 +1297,11 @@ const I18N = {
     "studio.session": "Session",
     "studio.selectSession": "Select session",
     "studio.adoptRun": "Adopt Current Run",
+    "studio.action.new": "New Workflow",
     "studio.refresh": "Refresh Studio",
     "studio.openMonitor": "Open Monitor",
     "studio.empty.title": "No studio session",
-    "studio.empty.desc": "Open Workflow Studio from Setup, or adopt a workflow run from Monitor.",
+    "studio.empty.desc": "Create a new workflow here, or adopt a workflow run from Monitor.",
     "studio.sessions.none": "No saved Studio sessions.",
     "studio.summary.session": "Session",
     "studio.summary.headRun": "Head Run",
@@ -1248,6 +1373,7 @@ const I18N = {
     "studio.action.setup": "Back to Setup",
     "studio.action.next": "Next: {stage}",
     "studio.createdSession": "Workflow Studio session ready: {id}",
+    "studio.createdFreshSession": "New Workflow Studio session ready: {id}",
     "studio.createFailed": "Failed to create a Workflow Studio session.",
     "studio.adoptedRun": "Workflow Studio session loaded: {id}",
     "studio.adoptFailed": "Failed to build a Workflow Studio session from the current run.",
@@ -1302,9 +1428,9 @@ const I18N = {
     "question.stripNonpositive.label": "Strip non-positive residues",
     "question.stripNonpositive.help": "Remove residues with resseq <= 0 before RFD3 and downstream steps.",
     "question.rfd3InputPdb.label": "RFD3 Input PDB",
-    "question.rfd3InputPdb.help": "Provide rfd3_input_pdb text (raw PDB).",
+    "question.rfd3InputPdb.help": "Optional override. When target_input is a PDB, RFD3 uses it by default and you only need this field for a different seed backbone.",
     "question.rfd3Contig.label": "RFD3 Contig",
-    "question.rfd3Contig.help": "Provide rfd3_contig (format: A1-221, no colon).",
+    "question.rfd3Contig.help": "Provide rfd3_contig (format: A1-221, no colon). When target_input is a PDB, contig suggestions come from that structure by default.",
     "question.soluprotCutoff.label": "SoluProt Cutoff",
     "question.soluprotCutoff.help": "Minimum SoluProt score required to pass filtering (default: 0.5).",
     "question.diffdockLigand.label": "DiffDock Ligand",
@@ -1329,8 +1455,14 @@ const I18N = {
     "choice.chainNote": "Upload a target PDB to enable chain selection.",
     "choice.chainDefaultNote": "Tip: with no target FASTA, the pipeline defaults to the primary chain. Select chains explicitly for multi-chain designs or to avoid short-chain mismatches.",
     "choice.contigNone": "None (skip RFD3)",
-    "choice.contigNote": "Upload a PDB to suggest rfd3_contig options.",
+    "choice.contigNote": "Upload target_input PDB or a separate RFD3 input PDB to suggest rfd3_contig options.",
     "choice.contigPositiveOnly": "Contig suggestions use protein residues (ATOM and common amino-acid HETATM) with positive numbering only.",
+    "setup.rfd3.defaultFromTarget": "RFD3 will use the current target_input PDB as its default seed structure.",
+    "setup.rfd3.defaultFromTargetOverride": "A separate RFD3 input override is enabled. Leave it empty or switch back to use target_input again.",
+    "setup.rfd3.useSeparateInput": "Use separate RFD3 input",
+    "setup.rfd3.useTargetDefault": "Use target_input default",
+    "studio.rfd3.defaultFromTarget": "This RFD3 stage will use the current target_input PDB by default.",
+    "studio.rfd3.defaultFromTargetOverride": "This RFD3 stage currently exposes a separate input override. Switch back if you want to use target_input again.",
     "choice.stripNonpositive.on": "Strip (recommended)",
     "choice.stripNonpositive.off": "Keep as-is",
     "choice.wtCompare.on": "Enable WT compare",
@@ -1555,9 +1687,9 @@ const I18N = {
     "analyze.hitList.weight.plddt": "pLDDT W",
     "analyze.hitList.weight.rmsd": "RMSD W",
     "analyze.hitList.weight.novelty": "WT Diff W (off)",
-    "analyze.hitList.identity": "WT Diff (n/len, %)",
+    "analyze.hitList.identity": "WT Diff (n/len · identity)",
     "analyze.hitList.identityInfo":
-      "WT difference is shown as count/length and percent and does not affect ranking/filtering.",
+      "WT difference is shown as count/length plus WT sequence identity and does not affect ranking/filtering.",
     "analyze.hitList.refresh": "Refresh",
     "analyze.hitList.details": "View Details",
     "analyze.hitList.placeholder": "Load a run to build the hit list.",
@@ -1603,6 +1735,12 @@ const I18N = {
     "auth.required": "Username and password required.",
     "auth.loginFailed": "Login failed",
     "auth.sessionInvalid": "Session invalid",
+    "auth.ssoUnavailable": "SSO is not available right now.",
+    "auth.ssoConfigMissing": "SSO configuration is incomplete.",
+    "auth.ssoCancelled": "SSO sign-in was cancelled.",
+    "auth.ssoStateMismatch": "SSO session did not match this browser tab.",
+    "auth.ssoTokenMissing": "SSO token exchange returned no access token.",
+    "auth.ssoCompleting": "Completing sign-in with {provider}...",
     "auth.createFailed": "Create user failed",
     "auth.created": "Created {username}.",
     "error.api": "API error",
@@ -1612,6 +1750,7 @@ const I18N = {
   ko: {
     "brand.subtitle": "단백질 파이프라인 콘솔",
     "action.admin": "관리자",
+    "action.account": "계정",
     "action.settings": "설정",
     "action.logout": "로그아웃",
     "action.help": "사용법",
@@ -1666,11 +1805,14 @@ const I18N = {
     "analyze.kpi.recommendation": "권고",
     "login.title": "랩 입장",
     "login.desc": "실행을 구분하고 아티팩트를 정리하기 위해 계정을 확인합니다.",
+    "login.sso.desc": "서비스 간 동일한 계정과 권한을 유지하려면 KBF SSO로 로그인하세요.",
     "login.username": "사용자명",
     "login.username.placeholder": "예: hana.kim",
     "login.password": "비밀번호",
     "login.password.placeholder": "••••••••",
     "login.submit": "콘솔 접속",
+    "login.sso.submit": "KBF SSO로 계속",
+    "login.sso.hint": "KBF 계정을 사용합니다. 비밀번호 변경은 SSO 계정 페이지에서 처리합니다.",
     "setup.title": "실행 설정",
     "setup.desc": "워크플로를 선택하고 입력을 첨부해 실행하세요.",
     "setup.section.input": "입력",
@@ -1701,7 +1843,7 @@ const I18N = {
     "setup.runStatus.line": "실행 상태: {id} · {stage} / {state} · {updated}",
     "setup.residuePicker.title": "잔기 선택기 (선택)",
     "setup.residuePicker.help":
-      "구조에서 잔기를 선택해 fixed_positions_extra에 추가합니다. target_pdb가 없으면 먼저 1회 실행해 target.pdb({af2Provider} target)를 만든 뒤, 선택한 run에서 불러오세요.",
+      "서열 strip 또는 3D 구조에서 잔기를 선택해 fixed_positions_extra에 추가합니다. target_pdb가 없으면 먼저 1회 실행해 target.pdb({af2Provider} target)를 만든 뒤, 선택한 run에서 불러오세요.",
     "setup.residuePicker.source": "구조 소스: {source}",
     "setup.residuePicker.source.none": "없음",
     "setup.residuePicker.loadTargetInput": "target_input PDB 불러오기",
@@ -1717,11 +1859,28 @@ const I18N = {
     "setup.residuePicker.viewerUnavailable": "3D 뷰어를 사용할 수 없습니다.",
     "setup.residuePicker.selection.none": "선택된 잔기가 없습니다.",
     "setup.residuePicker.selection.summary": "선택 잔기: {summary}",
+    "setup.residuePicker.openDetached": "팝업창으로 열기",
+    "setup.residuePicker.surfaceCutoffLabel": "Surface cutoff (A^2)",
+    "setup.residuePicker.surfaceCutoffHelp": "PyMOL 방식의 원자 노출면적 기준으로 Surface/Core를 나눕니다. 기본값: 2.5",
+    "setup.residuePicker.launcherHelp":
+      "잔기 선택기를 팝업창으로 엽니다. 넓은 워크스페이스에서 서열 strip과 3D 구조를 함께 보며 고른 뒤 fixed_positions_extra에 반영합니다.",
+    "setup.residuePicker.launcherConserved":
+      "Conserved preset은 선택한 run에 MMseqs2/conservation 결과가 있을 때만 표시됩니다.",
+    "setup.residuePicker.detached.title": "잔기 선택 팝업",
+    "setup.residuePicker.detached.desc":
+      "넓은 서열 strip과 3D 구조에서 잔기를 고른 뒤 {context}에 바로 반영합니다.",
+    "setup.residuePicker.detached.applyClose": "반영 후 닫기",
+    "setup.residuePicker.detached.close": "창 닫기",
+    "setup.residuePicker.detached.missing": "이 잔기 선택 요청은 만료되었습니다. Setup 또는 Studio에서 다시 열어 주세요.",
+    "setup.residuePicker.detached.sent": "{context}에 잔기 {count}개를 반영했습니다.",
+    "setup.residuePicker.detached.sentCleared": "{context}의 fixed_positions_extra를 비웠습니다.",
     "setup.residuePicker.apply": "fixed_positions_extra에 반영",
+    "setup.residuePicker.applyFailed": "선택 잔기를 원래 탭으로 돌려주지 못했습니다. 이 팝업을 닫지 말고 다시 시도해 주세요.",
     "setup.residuePicker.clearSelection": "선택 초기화",
     "setup.residuePicker.note":
-      "반영 값은 체인별 서열 순서 인덱스(query position) 기준으로 저장되어 ProteinMPNN 제약에 사용됩니다.",
+      "서열 strip과 3D 선택은 항상 연동됩니다. 반영 값은 체인별 서열 순서 인덱스(query position) 기준으로 저장되어 ProteinMPNN 제약에 사용됩니다.",
     "setup.residuePicker.applied": "{count}개 위치를 fixed_positions_extra에 반영했습니다.",
+    "setup.residuePicker.cleared": "fixed_positions_extra를 비웠습니다.",
     "setup.residuePicker.loadFailed": "구조 로드 실패: {error}",
     "setup.residuePicker.noRun": "먼저 run을 선택하세요.",
     "setup.residuePicker.noSelection": "최소 1개 잔기를 선택하세요.",
@@ -1911,7 +2070,7 @@ const I18N = {
     "artifacts.preview.compare.sequenceRight": "후보",
     "artifacts.preview.compare.sequenceEmpty": "해당 구조에서 서열을 추출하지 못했습니다.",
     "artifacts.preview.compare.diffLegendStructure":
-      "CA 정렬 후 구조 차이: <=1.5A 회색, 1.5-3.0A 노랑, >3.0A 빨강, gap WT 파랑 / Design 주황",
+      "CA 정렬 후 구조 차이",
     "artifacts.preview.compare.diffLegendSequence":
       "잔기 동일성 기준 차이: WT 쪽 불일치 파랑, Design 쪽 불일치 주황, 동일 잔기 회색",
     "artifacts.preview.compare.diffNone": "잔기 기준 차이가 감지되지 않았습니다.",
@@ -2070,10 +2229,11 @@ const I18N = {
     "studio.session": "세션",
     "studio.selectSession": "세션 선택",
     "studio.adoptRun": "현재 run 가져오기",
+    "studio.action.new": "새 워크플로우",
     "studio.refresh": "스튜디오 새로고침",
     "studio.openMonitor": "모니터 열기",
     "studio.empty.title": "스튜디오 세션이 없습니다",
-    "studio.empty.desc": "Setup에서 Workflow Studio를 열거나 Monitor의 workflow run을 가져오세요.",
+    "studio.empty.desc": "여기서 새 워크플로우를 만들거나 Monitor의 workflow run을 가져오세요.",
     "studio.sessions.none": "저장된 Studio 세션이 없습니다.",
     "studio.summary.session": "세션",
     "studio.summary.headRun": "기준 Run",
@@ -2145,6 +2305,7 @@ const I18N = {
     "studio.action.setup": "Setup으로",
     "studio.action.next": "다음: {stage}",
     "studio.createdSession": "Workflow Studio 세션 준비 완료: {id}",
+    "studio.createdFreshSession": "새 Workflow Studio 세션 준비 완료: {id}",
     "studio.createFailed": "Workflow Studio 세션을 만들지 못했습니다.",
     "studio.adoptedRun": "Workflow Studio 세션을 불러왔습니다: {id}",
     "studio.adoptFailed": "현재 run에서 Workflow Studio 세션을 만들지 못했습니다.",
@@ -2199,9 +2360,9 @@ const I18N = {
     "question.stripNonpositive.label": "음수 잔기 제거",
     "question.stripNonpositive.help": "RFD3 및 이후 단계 전에 resseq <= 0 잔기를 제거합니다.",
     "question.rfd3InputPdb.label": "RFD3 입력 PDB",
-    "question.rfd3InputPdb.help": "rfd3_input_pdb 원문을 입력하세요.",
+    "question.rfd3InputPdb.help": "선택적 override입니다. target_input이 PDB이면 RFD3는 기본적으로 그 구조를 사용하고, 다른 seed backbone이 필요할 때만 이 필드를 씁니다.",
     "question.rfd3Contig.label": "RFD3 컨티그",
-    "question.rfd3Contig.help": "rfd3_contig 형식 (예: A1-221, 콜론 없이).",
+    "question.rfd3Contig.help": "rfd3_contig 형식 (예: A1-221, 콜론 없이)입니다. target_input이 PDB이면 기본적으로 그 구조에서 컨티그 후보를 제안합니다.",
     "question.soluprotCutoff.label": "SoluProt 컷오프",
     "question.soluprotCutoff.help": "필터 통과로 간주할 최소 SoluProt 점수입니다. (기본값: 0.5)",
     "question.diffdockLigand.label": "DiffDock 리간드",
@@ -2226,8 +2387,14 @@ const I18N = {
     "choice.chainNote": "타깃 PDB를 업로드하면 체인 선택이 활성화됩니다.",
     "choice.chainDefaultNote": "팁: target FASTA가 없으면 기본적으로 주 체인만 사용합니다. 멀티체인 설계나 짧은 체인 불일치 방지를 위해 체인을 명시적으로 선택하세요.",
     "choice.contigNone": "선택 안함 (RFD3 사용 안함)",
-    "choice.contigNote": "PDB를 업로드하면 rfd3_contig 옵션이 제안됩니다.",
+    "choice.contigNote": "target_input PDB 또는 별도 RFD3 입력 PDB를 올리면 rfd3_contig 옵션이 제안됩니다.",
     "choice.contigPositiveOnly": "컨티그 제안은 단백질 잔기(ATOM 및 일부 아미노산 HETATM) 중 양수 번호만 사용합니다.",
+    "setup.rfd3.defaultFromTarget": "현재 target_input PDB를 RFD3의 기본 seed 구조로 사용합니다.",
+    "setup.rfd3.defaultFromTargetOverride": "별도 RFD3 입력 override가 켜져 있습니다. 비워 두거나 target_input 기본값으로 되돌릴 수 있습니다.",
+    "setup.rfd3.useSeparateInput": "별도 RFD3 input 사용",
+    "setup.rfd3.useTargetDefault": "target_input 기본값 사용",
+    "studio.rfd3.defaultFromTarget": "이 RFD3 단계는 현재 target_input PDB를 기본으로 사용합니다.",
+    "studio.rfd3.defaultFromTargetOverride": "이 RFD3 단계는 별도 입력 override가 열려 있습니다. target_input 기본값으로 되돌릴 수 있습니다.",
     "choice.stripNonpositive.on": "제거 (권장)",
     "choice.stripNonpositive.off": "그대로 유지",
     "choice.wtCompare.on": "WT 비교 사용",
@@ -2450,8 +2617,8 @@ const I18N = {
     "analyze.hitList.weight.plddt": "pLDDT 가중치",
     "analyze.hitList.weight.rmsd": "RMSD 가중치",
     "analyze.hitList.weight.novelty": "WT Diff 가중치 (비활성)",
-    "analyze.hitList.identity": "WT 차이 (개수/길이, %)",
-    "analyze.hitList.identityInfo": "WT 대비 차이(개수/길이, 퍼센트)로 표시되며 랭킹/필터에는 반영되지 않습니다.",
+    "analyze.hitList.identity": "WT 차이 (개수/길이 · 상동성)",
+    "analyze.hitList.identityInfo": "WT 대비 차이(개수/길이)와 WT 서열 상동성 %를 함께 표시하며 랭킹/필터에는 반영되지 않습니다.",
     "analyze.hitList.refresh": "새로고침",
     "analyze.hitList.details": "상세 보기",
     "analyze.hitList.placeholder": "실행을 선택하면 Hit List를 생성합니다.",
@@ -2497,6 +2664,12 @@ const I18N = {
     "auth.required": "사용자명과 비밀번호가 필요합니다.",
     "auth.loginFailed": "로그인 실패",
     "auth.sessionInvalid": "세션이 유효하지 않습니다.",
+    "auth.ssoUnavailable": "지금은 SSO를 사용할 수 없습니다.",
+    "auth.ssoConfigMissing": "SSO 설정이 완전하지 않습니다.",
+    "auth.ssoCancelled": "SSO 로그인이 취소되었습니다.",
+    "auth.ssoStateMismatch": "이 브라우저 탭의 SSO 세션과 일치하지 않습니다.",
+    "auth.ssoTokenMissing": "SSO 토큰 교환 결과에 access token이 없습니다.",
+    "auth.ssoCompleting": "{provider} 로그인 마무리 중...",
     "auth.createFailed": "사용자 생성 실패",
     "auth.created": "{username} 생성 완료.",
     "error.api": "API 오류",
@@ -3110,6 +3283,7 @@ function createWorkflowStudioSession({
       stage_states: {},
       stage_run_ids: {},
       history: [],
+      residue_picker_state: null,
     },
     nextSessionId
   );
@@ -3388,7 +3562,7 @@ function workflowStudioStageSkippedByHeadRun(session, stage) {
   return !stageRunId || stageRunId === headRunId;
 }
 
-function normalizeWorkflowStudioAnswersForRun(rawAnswers) {
+function normalizeWorkflowStudioAnswersForRun(rawAnswers, { nodes = [] } = {}) {
   const answers = cloneWorkflowStudioValue(rawAnswers || {});
   delete answers.selected_tiers;
   const targetInput = String(answers.target_input || "").trim();
@@ -3405,10 +3579,24 @@ function normalizeWorkflowStudioAnswersForRun(rawAnswers) {
   if (Array.isArray(answers.design_chains) && answers.design_chains.length === 0) {
     delete answers.design_chains;
   }
+  if (String(answers.rfd3_input_pdb || "").trim() === String(answers.target_pdb || "").trim()) {
+    delete answers.rfd3_input_pdb;
+  }
   if (typeof answers.rfd3_input_pdb === "string" && !answers.rfd3_input_pdb.trim()) {
     delete answers.rfd3_input_pdb;
   }
   if (typeof answers.rfd3_contig === "string" && !answers.rfd3_contig.trim()) {
+    delete answers.rfd3_contig;
+  }
+  const effectiveRfd3Input = effectiveRfd3InputPdb({
+    mode: "workflow",
+    answers,
+    nodes,
+  });
+  if (effectiveRfd3Input) {
+    answers.rfd3_input_pdb = effectiveRfd3Input;
+  } else {
+    delete answers.rfd3_input_pdb;
     delete answers.rfd3_contig;
   }
   return answers;
@@ -3730,9 +3918,7 @@ function workflowStudioRepresentativeArtifact(stage, items = []) {
 }
 
 function workflowStudioActionRunId(session = workflowStudioSessionForId()) {
-  const pendingRunId = String(session?.pending?.run_id || "").trim();
-  if (pendingRunId) return pendingRunId;
-  return String(session?.head_run_id || state.currentRunId || "").trim();
+  return workflowStudioActionRunIdForSession(session, state.currentRunId);
 }
 
 function workflowStudioLiveStatus(session = workflowStudioSessionForId()) {
@@ -3766,7 +3952,9 @@ function workflowStudioRunActive(session = workflowStudioSessionForId()) {
 function workflowStudioExecutionPreview(session, targetStage = session?.active_stage || "") {
   const route = workflowStudioExecutionTarget(targetStage || session?.nodes?.[0] || "msa");
   const normalizedTarget = route.nodeId || session?.nodes?.[0] || "msa";
-  const nextPayload = normalizeWorkflowStudioAnswersForRun(workflowStudioDraftAnswers(session));
+  const nextPayload = normalizeWorkflowStudioAnswersForRun(workflowStudioDraftAnswers(session), {
+    nodes: session?.nodes || [],
+  });
   const hasExplicitContig = workflowStudioHasExplicitContigDraft(session);
   if (route.baseStage === "rfd3" && !hasExplicitContig && !String(nextPayload.rfd3_contig || "").trim()) {
     const contigOptions = workflowStudioContigOptionsForAnswers(nextPayload, "");
@@ -4179,303 +4367,727 @@ async function openWorkflowStudioRunInMonitor(session = workflowStudioSessionFor
   ensureAutoPoll();
 }
 
+function normalizeDetachedResiduePickerContext(value) {
+  return String(value || "").trim().toLowerCase() === "studio" ? "studio" : "setup";
+}
+
+function residuePickerDetachedRequestStorageKey(token) {
+  return `${RESIDUE_PICKER_REQUEST_STORAGE_KEY_PREFIX}${String(token || "").trim()}`;
+}
+
+function residuePickerDetachedResultStorageKey(token) {
+  return `${RESIDUE_PICKER_RESULT_STORAGE_KEY_PREFIX}${String(token || "").trim()}`;
+}
+
+function detachedResiduePickerRequestRegistry(target = window, { create = false } = {}) {
+  if (!target || (typeof target !== "object" && typeof target !== "function")) return null;
+  try {
+    const existing = target[RESIDUE_PICKER_REQUEST_REGISTRY_KEY];
+    if (existing && typeof existing === "object" && !Array.isArray(existing)) {
+      return existing;
+    }
+    if (!create) return null;
+    const registry = {};
+    target[RESIDUE_PICKER_REQUEST_REGISTRY_KEY] = registry;
+    return registry;
+  } catch (_err) {
+    return null;
+  }
+}
+
+function setDetachedResiduePickerRequestRegistryValue(token = "", payload = null, target = window) {
+  const key = String(token || "").trim();
+  if (!key || !payload || typeof payload !== "object" || Array.isArray(payload)) return;
+  const registry = detachedResiduePickerRequestRegistry(target, { create: true });
+  if (!registry) return;
+  registry[key] = cloneWorkflowStudioValue(payload);
+}
+
+function getDetachedResiduePickerRequestRegistryValue(token = "", target = window) {
+  const key = String(token || "").trim();
+  if (!key) return null;
+  const registry = detachedResiduePickerRequestRegistry(target, { create: false });
+  if (!registry || !registry[key] || typeof registry[key] !== "object" || Array.isArray(registry[key])) return null;
+  return cloneWorkflowStudioValue(registry[key]);
+}
+
+function deleteDetachedResiduePickerRequestRegistryValue(token = "", target = window) {
+  const key = String(token || "").trim();
+  if (!key) return;
+  const registry = detachedResiduePickerRequestRegistry(target, { create: false });
+  if (!registry || !Object.prototype.hasOwnProperty.call(registry, key)) return;
+  delete registry[key];
+}
+
+function removeDetachedResiduePickerRequest(token = "") {
+  const key = String(token || "").trim();
+  if (!key) return;
+  deleteDetachedResiduePickerRequestRegistryValue(key, window);
+  try {
+    if (window.opener && !window.opener.closed) {
+      deleteDetachedResiduePickerRequestRegistryValue(key, window.opener);
+    }
+  } catch (_err) {
+    // ignore opener cleanup errors
+  }
+  try {
+    sessionStorage.removeItem(residuePickerDetachedRequestStorageKey(key));
+  } catch (_err) {
+    // ignore sessionStorage cleanup errors
+  }
+  try {
+    localStorage.removeItem(residuePickerDetachedRequestStorageKey(key));
+  } catch (_err) {
+    // ignore localStorage cleanup errors
+  }
+}
+
+function residuePickerContextLabel(context) {
+  return t(normalizeDetachedResiduePickerContext(context) === "studio" ? "tabs.studio" : "tabs.setup");
+}
+
+function buildDetachedResiduePickerUrl(token) {
+  const url = new URL(window.location.href);
+  url.searchParams.set(RESIDUE_PICKER_DETACHED_QUERY_KEY, String(token || "").trim());
+  return url.toString();
+}
+
+function buildResiduePickerStateSnapshot() {
+  return {
+    pdbText: String(state.setupResiduePicker.pdbText || "").trim(),
+    sourceLabel: String(state.setupResiduePicker.sourceLabel || "").trim(),
+    sourceKey: String(state.setupResiduePicker.sourceKey || "").trim(),
+    selection: cloneWorkflowStudioValue(state.setupResiduePicker.selection || {}),
+    manualSelection: cloneWorkflowStudioValue(state.setupResiduePicker.manualSelection || {}),
+    excludedSelection: cloneWorkflowStudioValue(state.setupResiduePicker.excludedSelection || {}),
+    activePresetIds: Array.isArray(state.setupResiduePicker.activePresetIds)
+      ? state.setupResiduePicker.activePresetIds.map((presetId) => String(presetId || "").trim()).filter(Boolean)
+      : [],
+    surfaceAreaCutoff: normalizeSurfaceAreaCutoff(
+      state.setupResiduePicker.surfaceAreaCutoff,
+      DEFAULT_SURFACE_AREA_CUTOFF
+    ),
+    structureColorMode: String(state.setupResiduePicker.structureColorMode || "secondary").trim() || "secondary",
+    conservationPreview:
+      state.setupResiduePicker.conservationPreview && typeof state.setupResiduePicker.conservationPreview === "object"
+        ? cloneWorkflowStudioValue(state.setupResiduePicker.conservationPreview)
+        : null,
+  };
+}
+
+function buildResiduePickerRequestSnapshot({ targetPdbText = "", rfd3PdbText = "", selectedRunId = "" } = {}) {
+  const snapshot = buildResiduePickerStateSnapshot();
+  const snapshotPdbText = String(snapshot.pdbText || "").trim();
+  if (!snapshotPdbText) return snapshot;
+
+  const normalizedTargetPdb = String(targetPdbText || "").trim();
+  const normalizedRfd3Pdb = String(rfd3PdbText || "").trim();
+  const normalizedSourceKey = String(snapshot.sourceKey || "").trim();
+  const normalizedSelectedRunId = String(selectedRunId || "").trim();
+  const sameInlineSource =
+    (normalizedTargetPdb && snapshotPdbText === normalizedTargetPdb) ||
+    (normalizedRfd3Pdb && snapshotPdbText === normalizedRfd3Pdb) ||
+    (normalizedSelectedRunId && normalizedSourceKey === `run_target:${normalizedSelectedRunId}`);
+  if (sameInlineSource) {
+    return snapshot;
+  }
+
+  return {
+    ...snapshot,
+    pdbText: "",
+    sourceLabel: "",
+    sourceKey: "",
+    selection: {},
+    manualSelection: {},
+    excludedSelection: {},
+    activePresetIds: [],
+    conservationPreview: null,
+  };
+}
+
+function buildWorkflowStudioResiduePickerSnapshot(session, { targetPdbText = "", rfd3PdbText = "" } = {}) {
+  const mergedAnswers = workflowStudioDraftAnswers(session);
+  const persisted =
+    session?.residue_picker_state && typeof session.residue_picker_state === "object" && !Array.isArray(session.residue_picker_state)
+      ? cloneWorkflowStudioValue(session.residue_picker_state)
+      : null;
+  const structureText = String(persisted?.pdbText || targetPdbText || rfd3PdbText || "").trim();
+  const sourceLabel = String(
+    persisted?.sourceLabel ||
+      (targetPdbText
+        ? t("setup.residuePicker.loadTargetInput")
+        : rfd3PdbText
+          ? t("setup.residuePicker.loadRfd3Input")
+          : "")
+  ).trim();
+  const sourceKey = String(
+    persisted?.sourceKey || (targetPdbText ? "target_input" : rfd3PdbText ? "rfd3_input_pdb" : "")
+  ).trim();
+  const residueOrderByChain = structureText ? parsePdbResidueOrderByChain(structureText) : {};
+  const fixedPositions = normalizeFixedPositionsValue(mergedAnswers?.fixed_positions_extra);
+  const selectionFromFixedPositions =
+    structureText && Object.keys(residueOrderByChain).length
+      ? queryPositionsToResidueSelectionMap(fixedPositions, residueOrderByChain)
+      : {};
+  const hasAppliedSelection = countSelectedResidues(selectionFromFixedPositions) > 0;
+  const selection =
+    hasAppliedSelection ? selectionFromFixedPositions : {};
+  return {
+    pdbText: structureText,
+    sourceLabel,
+    sourceKey,
+    selection,
+    manualSelection:
+      hasAppliedSelection ? selectionFromFixedPositions : {},
+    excludedSelection: {},
+    activePresetIds: [],
+    surfaceAreaCutoff: normalizeSurfaceAreaCutoff(
+      persisted?.surfaceAreaCutoff,
+      DEFAULT_SURFACE_AREA_CUTOFF
+    ),
+    structureColorMode: String(persisted?.structureColorMode || "secondary").trim() || "secondary",
+    conservationPreview:
+      persisted?.conservationPreview && typeof persisted.conservationPreview === "object" && !Array.isArray(persisted.conservationPreview)
+        ? cloneWorkflowStudioValue(persisted.conservationPreview)
+        : null,
+  };
+}
+
+function restoreResiduePickerStateSnapshot(snapshot, { fallbackTargetPdbText = "", fallbackRfd3PdbText = "" } = {}) {
+  const payload = snapshot && typeof snapshot === "object" && !Array.isArray(snapshot) ? snapshot : {};
+  const selection = normalizeResidueSelectionMap(payload.selection || {});
+  const manualSelection = normalizeResidueSelectionMap(payload.manualSelection || {});
+  const excludedSelection = normalizeResidueSelectionMap(payload.excludedSelection || {});
+  const activePresetIds = Array.isArray(payload.activePresetIds)
+    ? payload.activePresetIds.map((presetId) => String(presetId || "").trim()).filter(Boolean)
+    : [];
+  const surfaceAreaCutoff = normalizeSurfaceAreaCutoff(
+    payload.surfaceAreaCutoff,
+    DEFAULT_SURFACE_AREA_CUTOFF
+  );
+  const structureColorMode = String(payload.structureColorMode || state.setupResiduePicker.structureColorMode || "secondary").trim() || "secondary";
+  const conservationPreview =
+    payload.conservationPreview && typeof payload.conservationPreview === "object" && !Array.isArray(payload.conservationPreview)
+      ? cloneWorkflowStudioValue(payload.conservationPreview)
+      : null;
+
+  resetSetupResiduePicker();
+  state.setupResiduePicker.surfaceAreaCutoff = surfaceAreaCutoff;
+  state.setupResiduePicker.structureColorMode = structureColorMode;
+  state.setupResiduePicker.conservationPreview = conservationPreview;
+
+  const snapshotPdbText = String(payload.pdbText || "").trim();
+  const sourceLabel = String(payload.sourceLabel || "").trim();
+  const sourceKey = String(payload.sourceKey || "").trim();
+  let loaded = false;
+
+  if (snapshotPdbText) {
+    loaded = setSetupResiduePickerStructure(snapshotPdbText, {
+      sourceLabel,
+      sourceKey,
+    });
+  } else if (String(fallbackTargetPdbText || "").trim()) {
+    loaded = setSetupResiduePickerStructure(fallbackTargetPdbText, {
+      sourceLabel: t("setup.residuePicker.loadTargetInput"),
+      sourceKey: "target_input",
+    });
+  } else if (String(fallbackRfd3PdbText || "").trim()) {
+    loaded = setSetupResiduePickerStructure(fallbackRfd3PdbText, {
+      sourceLabel: t("setup.residuePicker.loadRfd3Input"),
+      sourceKey: "rfd3_input_pdb",
+    });
+  }
+
+  if (loaded) {
+    syncSetupResiduePickerSelectionState({
+      selectionFallback: selection,
+      manualSelection,
+      excludedSelection,
+      activePresetIds,
+      allowFallback: true,
+    });
+    state.setupResiduePicker.surfaceAreaCutoff = surfaceAreaCutoff;
+    state.setupResiduePicker.structureColorMode = structureColorMode;
+    if (conservationPreview) {
+      state.setupResiduePicker.conservationPreview = conservationPreview;
+    }
+    return;
+  }
+
+  state.setupResiduePicker.manualSelection = manualSelection;
+  state.setupResiduePicker.excludedSelection = excludedSelection;
+  state.setupResiduePicker.activePresetIds = activePresetIds;
+  state.setupResiduePicker.selection = selection;
+}
+
+function loadDetachedResiduePickerRequest(token = detachedResiduePickerToken) {
+  const key = String(token || "").trim();
+  if (!key) return null;
+  try {
+    const liveRequest =
+      getDetachedResiduePickerRequestRegistryValue(key, window) ||
+      (() => {
+        try {
+          if (window.opener && !window.opener.closed) {
+            return getDetachedResiduePickerRequestRegistryValue(key, window.opener);
+          }
+        } catch (_err) {
+          return null;
+        }
+        return null;
+      })();
+    const raw =
+      sessionStorage.getItem(residuePickerDetachedRequestStorageKey(key)) ||
+      localStorage.getItem(residuePickerDetachedRequestStorageKey(key));
+    if (!raw && !liveRequest) return null;
+    const parsed = raw ? JSON.parse(raw) : {};
+    const merged =
+      liveRequest && typeof liveRequest === "object" && !Array.isArray(liveRequest)
+        ? {
+            ...(parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}),
+            ...liveRequest,
+          }
+        : parsed;
+    if (!merged || typeof merged !== "object" || Array.isArray(merged)) return null;
+    return {
+      token: key,
+      context: normalizeDetachedResiduePickerContext(merged.context),
+      sessionId: String(merged.sessionId || "").trim(),
+      activeStage: String(merged.activeStage || "").trim(),
+      targetPdbText: String(merged.targetPdbText || "").trim(),
+      targetFastaText: String(merged.targetFastaText || "").trim(),
+      rfd3PdbText: String(merged.rfd3PdbText || "").trim(),
+      selectedRunId: String(merged.selectedRunId || "").trim(),
+      pickerProvider: normalizeAf2Provider(merged.pickerProvider || "colabfold"),
+      snapshot: merged.snapshot && typeof merged.snapshot === "object" ? cloneWorkflowStudioValue(merged.snapshot) : {},
+    };
+  } catch (_err) {
+    return null;
+  }
+}
+
+function openDetachedResiduePicker({
+  context = "setup",
+  sessionId = "",
+  activeStage = "design",
+  targetPdbText = "",
+  targetFastaText = "",
+  rfd3PdbText = "",
+  selectedRunId = "",
+  pickerProvider = "colabfold",
+  snapshotOverride = null,
+} = {}) {
+  const token = createRunId("picker_tab");
+  const request = {
+    token,
+    context: normalizeDetachedResiduePickerContext(context),
+    sessionId: String(sessionId || "").trim(),
+    activeStage: String(activeStage || "").trim() || "design",
+    targetPdbText: String(targetPdbText || "").trim(),
+    targetFastaText: String(targetFastaText || "").trim(),
+    rfd3PdbText: String(rfd3PdbText || "").trim(),
+    selectedRunId: String(selectedRunId || "").trim(),
+    pickerProvider: normalizeAf2Provider(pickerProvider || "colabfold"),
+    snapshot:
+      snapshotOverride && typeof snapshotOverride === "object" && !Array.isArray(snapshotOverride)
+        ? cloneWorkflowStudioValue(snapshotOverride)
+        : buildResiduePickerRequestSnapshot({
+            targetPdbText,
+            rfd3PdbText,
+            selectedRunId,
+          }),
+    created_at: new Date().toISOString(),
+  };
+  setDetachedResiduePickerRequestRegistryValue(token, request, window);
+  try {
+    sessionStorage.setItem(
+      residuePickerDetachedRequestStorageKey(token),
+      JSON.stringify(buildDetachedResiduePickerStoragePayload(request))
+    );
+  } catch (_err) {
+    // Popup can still recover the full request from the opener registry.
+  }
+  const popupFeatures = buildPopupWindowFeatures({
+    screenX: window.screenX,
+    screenY: window.screenY,
+    outerWidth: window.outerWidth,
+    outerHeight: window.outerHeight,
+    availWidth: window.screen?.availWidth || window.outerWidth,
+    availHeight: window.screen?.availHeight || window.outerHeight,
+  });
+  const opened = openPopupWindow({
+    open: window.open.bind(window),
+    url: buildDetachedResiduePickerUrl(token),
+    name: RESIDUE_PICKER_POPUP_WINDOW_NAME,
+    features: popupFeatures,
+  });
+  if (opened) return;
+  removeDetachedResiduePickerRequest(token);
+  setMessage(t("setup.residuePicker.loadFailed", { error: "popup blocked" }), "ai");
+}
+
+function createDetachedResiduePickerResultPayload(request, mappedSelection, selectedCount) {
+  return {
+    token: String(request?.token || detachedResiduePickerToken || "").trim(),
+    context: normalizeDetachedResiduePickerContext(request?.context),
+    sessionId: String(request?.sessionId || "").trim(),
+    activeStage: String(request?.activeStage || "").trim(),
+    mappedSelection: normalizeFixedPositionsValue(mappedSelection),
+    selectedCount: Number(selectedCount) || countSelectedResidues(mappedSelection),
+    snapshot: buildResiduePickerStateSnapshot(),
+    predictedResult:
+      state.detachedResiduePicker.predictedResult && typeof state.detachedResiduePicker.predictedResult === "object"
+        ? cloneWorkflowStudioValue(state.detachedResiduePicker.predictedResult)
+        : null,
+    applied_at: new Date().toISOString(),
+  };
+}
+
+function markDetachedResiduePickerTokenProcessed(token = "") {
+  const key = String(token || "").trim();
+  if (!key) return true;
+  const now = Date.now();
+  const seenAt = Number(state.detachedResiduePicker.processedTokens?.[key] || 0);
+  if (Number.isFinite(seenAt) && now - seenAt < 5000) {
+    return false;
+  }
+  if (!state.detachedResiduePicker.processedTokens || typeof state.detachedResiduePicker.processedTokens !== "object") {
+    state.detachedResiduePicker.processedTokens = {};
+  }
+  state.detachedResiduePicker.processedTokens[key] = now;
+  Object.entries(state.detachedResiduePicker.processedTokens).forEach(([tokenKey, timestamp]) => {
+    if (!Number.isFinite(Number(timestamp)) || now - Number(timestamp) > 300000) {
+      delete state.detachedResiduePicker.processedTokens[tokenKey];
+    }
+  });
+  return true;
+}
+
+function dispatchDetachedResiduePickerResult(payload) {
+  const message = {
+    type: RESIDUE_PICKER_RESULT_MESSAGE_TYPE,
+    payload,
+  };
+  let delivered = false;
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage(message, window.location.origin);
+      delivered = true;
+    }
+  } catch (_err) {
+    delivered = false;
+  }
+  try {
+    localStorage.setItem(
+      residuePickerDetachedResultStorageKey(payload?.token || ""),
+      JSON.stringify(buildDetachedResiduePickerResultStoragePayload(payload))
+    );
+    return true;
+  } catch (_err) {
+    return delivered;
+  }
+}
+
+function dispatchDetachedResiduePickerReset(request = null) {
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage(
+        {
+          type: RESIDUE_PICKER_RESET_MESSAGE_TYPE,
+          payload: {
+            context: normalizeDetachedResiduePickerContext(request?.context),
+            sessionId: String(request?.sessionId || "").trim(),
+          },
+        },
+        window.location.origin
+      );
+      return true;
+    }
+  } catch (_err) {
+    return false;
+  }
+  return false;
+}
+
+async function createFreshWorkflowStudioSession() {
+  const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
+  const currentSession = workflowStudioSessionForId();
+  const laneTiers =
+    Array.isArray(state.answers?.conservation_tiers) && state.answers.conservation_tiers.length
+      ? state.answers.conservation_tiers
+      : [0.3, 0.5, 0.7];
+  const fallbackNodes = expandWorkflowStudioNodes(normalizeWorkflowNodesForState(state.workflowDesigner?.nodes), laneTiers);
+  const seed = buildWorkflowStudioFreshSessionSeed({
+    session: currentSession,
+    prompt: el.promptInput?.value.trim() || "",
+    answers: state.answers,
+    nodes: fallbackNodes,
+  });
+  const session = createWorkflowStudioSession({
+    sessionId: createWorkflowSessionId(prefix),
+    prompt: seed.prompt,
+    nodes: seed.nodes.length ? seed.nodes : fallbackNodes,
+    answers: seed.answers,
+    headRunId: "",
+    headRequest: {},
+    sourceRunId: "",
+  });
+  if (!session) return null;
+  const normalized = upsertWorkflowStudioSession(session);
+  if (!normalized) return null;
+  setMessage(t("studio.createdFreshSession", { id: workflowStudioSessionLabel(normalized) }), "ai");
+  setActiveTab("studio");
+  renderWorkflowStudio();
+  return normalized;
+}
+
+function clearSetupFixedPositionsExtraState() {
+  state.answers = withFixedPositionsExtra(state.answers, {});
+  state.answerMeta.fixed_positions_extra = {
+    ...(state.answerMeta.fixed_positions_extra || {}),
+    error: "",
+    raw: "",
+  };
+  clearSetupResiduePickerSelectionState();
+  state.setupResiduePicker.notice = t("setup.residuePicker.cleared");
+}
+
+function clearWorkflowStudioFixedPositionsExtraState(sessionId = state.currentWorkflowStudioSessionId || "") {
+  const key = String(sessionId || "").trim();
+  if (!key) return null;
+  const current = workflowStudioSessionForId(key);
+  if (!current) return null;
+  if (!current.stage_drafts || typeof current.stage_drafts !== "object") {
+    current.stage_drafts = {};
+  }
+  current.stage_drafts.design = withFixedPositionsExtra(current.stage_drafts.design, {});
+  current.residue_picker_state = clearResiduePickerSelectionState(current.residue_picker_state || {});
+  current.updated_at = new Date().toISOString();
+  setWorkflowStudioFieldError(current.session_id, "fixed_positions_extra", "");
+  return upsertWorkflowStudioSession(current);
+}
+
+function applyDetachedResiduePickerReset(payload = null) {
+  const context = normalizeDetachedResiduePickerContext(payload?.context);
+  if (context === "studio") {
+    clearSetupResiduePickerSelectionState();
+    clearWorkflowStudioFixedPositionsExtraState(payload?.sessionId);
+    renderWorkflowStudio();
+  } else {
+    clearSetupFixedPositionsExtraState();
+    renderQuestions(state.plan?.questions || []);
+  }
+}
+
+function applyDetachedResiduePickerResult(result) {
+  const payload = result && typeof result === "object" && !Array.isArray(result) ? result : null;
+  if (!payload) return;
+  if (!markDetachedResiduePickerTokenProcessed(payload.token)) return;
+  const mappedSelection = normalizeFixedPositionsValue(payload.mappedSelection);
+  const selectedCount = countSelectedResidues(mappedSelection);
+  const predicted = payload.predictedResult && typeof payload.predictedResult === "object" ? payload.predictedResult : null;
+  const context = normalizeDetachedResiduePickerContext(payload.context);
+
+  if (context === "studio") {
+    const sessionId = String(payload.sessionId || state.currentWorkflowStudioSessionId || "").trim();
+    const current = workflowStudioSessionForId(sessionId);
+    if (!current) return;
+    if (!current.stage_drafts.design) current.stage_drafts.design = {};
+    const nextFixedPositions = selectedCount
+      ? mergeFixedPositionsMap(workflowStudioDraftAnswers(current).fixed_positions_extra, mappedSelection)
+      : {};
+    current.stage_drafts.design = withFixedPositionsExtra(current.stage_drafts.design, nextFixedPositions);
+    if (predicted?.selectedPdb) {
+      current.base_answers = current.base_answers && typeof current.base_answers === "object" ? current.base_answers : {};
+      current.base_answers.target_fasta = String(
+        predicted.fastaText || getTargetInputFastaTextFromAnswers(workflowStudioDraftAnswers(current)) || ""
+      ).trim();
+      current.base_answers.target_pdb = String(predicted.selectedPdb || "").trim();
+    }
+    current.updated_at = new Date().toISOString();
+    current.residue_picker_state =
+      payload.snapshot && typeof payload.snapshot === "object" && !Array.isArray(payload.snapshot)
+        ? cloneWorkflowStudioValue(payload.snapshot)
+        : current.residue_picker_state || null;
+    setWorkflowStudioFieldError(current.session_id, "fixed_positions_extra", "");
+    upsertWorkflowStudioSession(current);
+    renderWorkflowStudio();
+  } else {
+    const nextFixedPositions = selectedCount ? mergeFixedPositionsMap(state.answers.fixed_positions_extra, mappedSelection) : {};
+    state.answers = withFixedPositionsExtra(state.answers, nextFixedPositions);
+    state.answerMeta.fixed_positions_extra = {
+      ...(state.answerMeta.fixed_positions_extra || {}),
+      error: "",
+      raw: selectedCount ? JSON.stringify(nextFixedPositions) : "",
+    };
+    if (predicted?.selectedPdb) {
+      state.answers.target_fasta = String(predicted.fastaText || getTargetInputFastaText() || "").trim();
+      state.answers.target_pdb = String(predicted.selectedPdb || "").trim();
+      state.answerMeta.target_pdb = {
+        fileName: `${String(predicted.outRunId || "").trim()}:${String(predicted.selectedPath || "").trim()}`,
+      };
+      refreshChainRangesFromAnswers();
+    }
+    restoreResiduePickerStateSnapshot(payload.snapshot, {
+      fallbackTargetPdbText: predicted?.selectedPdb || getTargetInputPdbText(),
+      fallbackRfd3PdbText: getRfd3InputPdbText(),
+    });
+    state.setupResiduePicker.notice = selectedCount
+      ? t("setup.residuePicker.applied", { count: selectedCount })
+      : t("setup.residuePicker.cleared");
+    renderQuestions(state.plan?.questions || []);
+  }
+
+  setMessage(
+    selectedCount
+      ? t("setup.residuePicker.detached.sent", {
+          count: selectedCount,
+          context: residuePickerContextLabel(context),
+        })
+      : t("setup.residuePicker.detached.sentCleared", {
+          context: residuePickerContextLabel(context),
+        }),
+    "ai"
+  );
+}
+
+function renderDetachedResiduePickerWorkspace() {
+  if (!el.detachedResiduePickerRoot) return;
+  if (!detachedResiduePickerToken) {
+    el.detachedResiduePickerRoot.classList.add("hidden");
+    el.detachedResiduePickerRoot.innerHTML = "";
+    return;
+  }
+  el.detachedResiduePickerRoot.classList.remove("hidden");
+  if (state.detachedResiduePicker.initializedToken !== detachedResiduePickerToken) {
+    const request = loadDetachedResiduePickerRequest(detachedResiduePickerToken);
+    state.detachedResiduePicker.initializedToken = detachedResiduePickerToken;
+    state.detachedResiduePicker.request = request;
+    state.detachedResiduePicker.predictedResult = null;
+    if (request) {
+      restoreResiduePickerStateSnapshot(request.snapshot, {
+        fallbackTargetPdbText: request.targetPdbText,
+        fallbackRfd3PdbText: request.rfd3PdbText,
+      });
+    }
+  }
+
+  const request = state.detachedResiduePicker.request;
+  if (!request) {
+    el.detachedResiduePickerRoot.innerHTML = `
+      <div class="detached-picker-shell">
+        <div class="detached-picker-hero">
+          <div class="detached-picker-copy">
+            <strong>${escapeHtml(t("setup.residuePicker.detached.title"))}</strong>
+            <p>${escapeHtml(t("setup.residuePicker.detached.missing"))}</p>
+          </div>
+          <button type="button" class="ghost" data-detached-picker-close>${escapeHtml(
+            t("setup.residuePicker.detached.close")
+          )}</button>
+        </div>
+      </div>
+    `;
+    const closeBtn = el.detachedResiduePickerRoot.querySelector("[data-detached-picker-close]");
+    if (closeBtn instanceof HTMLElement) {
+      closeBtn.addEventListener("click", () => {
+        window.close();
+      });
+    }
+    return;
+  }
+
+  const contextLabel = residuePickerContextLabel(request.context);
+  el.detachedResiduePickerRoot.innerHTML = `
+    <div class="detached-picker-shell">
+      <div class="detached-picker-hero">
+        <div class="detached-picker-copy">
+          <strong>${escapeHtml(t("setup.residuePicker.detached.title"))}</strong>
+          <p>${escapeHtml(t("setup.residuePicker.detached.desc", { context: contextLabel }))}</p>
+        </div>
+        <button type="button" class="ghost" data-detached-picker-close>${escapeHtml(
+          t("setup.residuePicker.detached.close")
+        )}</button>
+      </div>
+      <div class="detached-picker-card-slot"></div>
+    </div>
+  `;
+
+  const closeBtn = el.detachedResiduePickerRoot.querySelector("[data-detached-picker-close]");
+  if (closeBtn instanceof HTMLElement) {
+    closeBtn.addEventListener("click", () => {
+      window.close();
+    });
+  }
+
+  const cardSlot = el.detachedResiduePickerRoot.querySelector(".detached-picker-card-slot");
+  if (!(cardSlot instanceof HTMLElement)) return;
+  const card = buildResiduePickerCard({
+    targetPdbText: request.targetPdbText,
+    targetFastaText: request.targetFastaText,
+    rfd3PdbText: request.rfd3PdbText,
+    selectedRunId: request.selectedRunId,
+    pickerProvider: request.pickerProvider || "colabfold",
+    detached: true,
+    applyButtonLabel: t("setup.residuePicker.detached.applyClose"),
+    rerender: () => renderDetachedResiduePickerWorkspace(),
+    onPredictLoaded: ({ outRunId, selectedPath, selectedPdb }) => {
+      state.detachedResiduePicker.predictedResult = {
+        outRunId,
+        selectedPath,
+        selectedPdb,
+        fastaText: request.targetFastaText,
+      };
+    },
+    onApplySelection: (mappedSelection, selectedCount) => {
+      const payload = createDetachedResiduePickerResultPayload(request, mappedSelection, selectedCount);
+      const delivered = dispatchDetachedResiduePickerResult(payload);
+      if (delivered) {
+        removeDetachedResiduePickerRequest(request.token);
+      }
+      return delivered;
+    },
+    onApplyCompleted: () => {
+      window.setTimeout(() => {
+        window.close();
+      }, 80);
+    },
+  });
+  cardSlot.appendChild(card);
+}
+
 function renderWorkflowStudioResiduePicker(mountEl, session, activeStage) {
   if (!mountEl || !session || activeStage !== "design") return;
-
   const mergedAnswers = workflowStudioDraftAnswers(session);
-  const card = document.createElement("div");
-  card.className = "question-card setup-residue-picker studio-residue-picker-card";
-
-  const title = document.createElement("div");
-  title.className = "question-title";
-  title.textContent = t("setup.residuePicker.title");
-
-  const help = document.createElement("div");
-  help.className = "question-help";
-  help.textContent = t("setup.residuePicker.help");
-
-  const source = document.createElement("div");
-  source.className = "question-summary";
-  source.textContent = t("setup.residuePicker.source", {
-    source: state.setupResiduePicker.sourceLabel || t("setup.residuePicker.source.none"),
-  });
-
-  const controls = document.createElement("div");
-  controls.className = "setup-residue-picker-controls";
-
-  const loadTargetBtn = document.createElement("button");
-  loadTargetBtn.type = "button";
-  loadTargetBtn.className = "ghost";
-  loadTargetBtn.textContent = t("setup.residuePicker.loadTargetInput");
-
-  const loadRfd3Btn = document.createElement("button");
-  loadRfd3Btn.type = "button";
-  loadRfd3Btn.className = "ghost";
-  loadRfd3Btn.textContent = t("setup.residuePicker.loadRfd3Input");
-
-  const loadRunBtn = document.createElement("button");
-  loadRunBtn.type = "button";
-  loadRunBtn.className = "ghost";
-  loadRunBtn.textContent = t("setup.residuePicker.loadRunTarget");
-
-  const runAf2Btn = document.createElement("button");
-  runAf2Btn.type = "button";
-  runAf2Btn.className = "ghost";
-  const pickerProvider = mergedAnswers.af2_provider || "colabfold";
-  runAf2Btn.textContent = t("setup.residuePicker.runAf2", af2ProviderTemplateParams(pickerProvider));
-
+  const selectedRunIdForPicker = String(workflowStudioSessionRunKey(session) || "").trim();
   const targetPdbText = getTargetInputPdbTextFromAnswers(mergedAnswers);
   const targetFastaText = getTargetInputFastaTextFromAnswers(mergedAnswers);
   const rfd3PdbText = getRfd3InputPdbTextFromAnswers(mergedAnswers);
-  const pickerBusy = Boolean(state.setupResiduePicker.runningAf2);
-  const selectedRunIdForPicker = String(session.head_run_id || state.currentRunId || "").trim();
-  const controlState = residuePickerControlState({
-    targetPdbText,
-    targetFastaText,
-    rfd3PdbText,
-    selectedRunId: selectedRunIdForPicker,
-    busy: pickerBusy,
-  });
-  loadTargetBtn.disabled = !controlState.canLoadTarget;
-  loadRfd3Btn.disabled = !controlState.canLoadRfd3;
-  loadRunBtn.disabled = !controlState.canLoadRun;
-  runAf2Btn.disabled = !controlState.canRunAf2;
-
-  const loadStructureFromText = (pdbText, sourceLabel, sourceKey) => {
-    const text = String(pdbText || "").trim();
-    if (!text) {
-      state.setupResiduePicker.notice = t("setup.residuePicker.noPdb");
+  const pickerProvider = mergedAnswers.af2_provider || "colabfold";
+  const card = buildResiduePickerLauncherCard({
+    runId: selectedRunIdForPicker,
+    onResetSelection: () => {
+      clearSetupResiduePickerSelectionState();
+      clearWorkflowStudioFixedPositionsExtraState(session.session_id);
       renderWorkflowStudio();
-      return;
-    }
-    const loaded = setSetupResiduePickerStructure(text, { sourceLabel, sourceKey });
-    state.setupResiduePicker.notice = loaded ? "" : t("setup.residuePicker.noPdb");
-    renderWorkflowStudio();
-  };
-
-  loadTargetBtn.addEventListener("click", () => {
-    loadStructureFromText(targetPdbText, t("setup.residuePicker.loadTargetInput"), "target_input");
-  });
-  loadRfd3Btn.addEventListener("click", () => {
-    loadStructureFromText(rfd3PdbText, t("setup.residuePicker.loadRfd3Input"), "rfd3_input_pdb");
-  });
-  loadRunBtn.addEventListener("click", async () => {
-    if (!selectedRunIdForPicker) {
-      state.setupResiduePicker.notice = t("setup.residuePicker.noRun");
-      renderWorkflowStudio();
-      return;
-    }
-    try {
-      const result = await apiCall("pipeline.read_artifact", {
-        run_id: selectedRunIdForPicker,
-        path: "target.pdb",
-        max_bytes: 2_000_000,
+    },
+    onOpenDetached: () => {
+      openDetachedResiduePicker({
+        context: "studio",
+        sessionId: session.session_id,
+        activeStage,
+        targetPdbText,
+        targetFastaText,
+        rfd3PdbText,
+        selectedRunId: selectedRunIdForPicker,
+        pickerProvider,
+        snapshotOverride: buildWorkflowStudioResiduePickerSnapshot(session, {
+          targetPdbText,
+          rfd3PdbText,
+        }),
       });
-      const text = String(result?.text || "").trim();
-      if (!text) {
-        state.setupResiduePicker.notice = t("setup.residuePicker.noPdb");
-        renderWorkflowStudio();
-        return;
-      }
-      const label = `${selectedRunIdForPicker}:target.pdb`;
-      const loaded = setSetupResiduePickerStructure(text, {
-        sourceLabel: label,
-        sourceKey: `run_target:${selectedRunIdForPicker}`,
-      });
-      state.setupResiduePicker.notice = loaded ? "" : t("setup.residuePicker.noPdb");
-    } catch (err) {
-      state.setupResiduePicker.notice = t("setup.residuePicker.loadFailed", { error: err.message });
-    }
-    renderWorkflowStudio();
+    },
   });
-
-  runAf2Btn.addEventListener("click", async () => {
-    const fastaText = String(getTargetInputFastaTextFromAnswers(workflowStudioDraftAnswers(session)) || "").trim();
-    if (!fastaText) {
-      state.setupResiduePicker.notice = t("setup.residuePicker.runAf2NeedsFasta");
-      renderWorkflowStudio();
-      return;
-    }
-    state.setupResiduePicker.runningAf2 = true;
-    state.setupResiduePicker.notice = t("setup.residuePicker.runAf2Running", af2ProviderTemplateParams(pickerProvider));
-    renderWorkflowStudio();
-
-    try {
-      const { outRunId, selectedPath, selectedPdb, loaded } = await predictResiduePickerTargetStructure({
-        fastaText,
-        af2Provider: pickerProvider,
-      });
-      const current = workflowStudioSessionForId(session.session_id);
-      if (current) {
-        current.base_answers = current.base_answers && typeof current.base_answers === "object" ? current.base_answers : {};
-        current.base_answers.target_fasta = fastaText;
-        current.base_answers.target_pdb = selectedPdb;
-        current.updated_at = new Date().toISOString();
-        upsertWorkflowStudioSession(current);
-      }
-      state.setupResiduePicker.notice = loaded
-        ? t("setup.residuePicker.runAf2Loaded", { run: outRunId, path: selectedPath })
-        : t("setup.residuePicker.noPdb");
-    } catch (err) {
-      state.setupResiduePicker.notice = t("setup.residuePicker.runAf2Failed", { error: err.message });
-    } finally {
-      state.setupResiduePicker.runningAf2 = false;
-      renderWorkflowStudio();
-    }
-  });
-
-  controls.appendChild(runAf2Btn);
-  controls.appendChild(loadTargetBtn);
-  controls.appendChild(loadRfd3Btn);
-  controls.appendChild(loadRunBtn);
-
-  const viewerWrap = document.createElement("div");
-  viewerWrap.className = "setup-residue-picker-view";
-
-  const selectionText = document.createElement("div");
-  selectionText.className = "question-summary";
-
-  const notice = document.createElement("div");
-  notice.className = "question-summary setup-residue-picker-notice";
-  notice.textContent = state.setupResiduePicker.notice || "";
-
-  const updateSelectionSummary = () => {
-    const normalized = normalizeResidueSelectionMap(state.setupResiduePicker.selection);
-    state.setupResiduePicker.selection = normalized;
-    const summary = selectionSummaryText(normalized);
-    selectionText.textContent = summary
-      ? t("setup.residuePicker.selection.summary", { summary })
-      : t("setup.residuePicker.selection.none");
-  };
-  updateSelectionSummary();
-
-  if (!state.setupResiduePicker.pdbText) {
-    const placeholder = document.createElement("div");
-    placeholder.className = "placeholder";
-    placeholder.textContent = t("setup.residuePicker.viewerPlaceholder");
-    viewerWrap.appendChild(placeholder);
-  } else if (!window.$3Dmol) {
-    const placeholder = document.createElement("div");
-    placeholder.className = "placeholder";
-    placeholder.textContent = t("setup.residuePicker.viewerUnavailable");
-    viewerWrap.appendChild(placeholder);
-  } else {
-    const viewerEl = document.createElement("div");
-    viewerEl.className = "viewer3d setup-residue-picker-viewer";
-    viewerWrap.appendChild(viewerEl);
-
-    const viewer = window.$3Dmol.createViewer(viewerEl, { backgroundColor: "white" });
-    viewer.addModel(state.setupResiduePicker.pdbText, "pdb");
-    const residueSetByChain = {};
-    Object.entries(state.setupResiduePicker.residueOrderByChain || {}).forEach(([chain, values]) => {
-      residueSetByChain[chain] = new Set(values);
-    });
-
-    const redrawViewer = () => {
-      viewer.setStyle({}, { cartoon: { color: "spectrum" } });
-      Object.entries(normalizeResidueSelectionMap(state.setupResiduePicker.selection)).forEach(
-        ([chain, values]) => {
-          values.forEach((resi) => {
-            const selector = { resi };
-            const chainId = denormalizeChainId(chain);
-            if (chainId) selector.chain = chainId;
-            viewer.setStyle(selector, {
-              cartoon: { color: "#d9480f" },
-              stick: { radius: 0.2, color: "#d9480f" },
-            });
-          });
-        }
-      );
-      viewer.render();
-    };
-
-    viewer.setClickable({}, true, (atom) => {
-      const chain = normalizeChainId(atom?.chain || "");
-      const resi = Number.parseInt(atom?.resi, 10);
-      if (!Number.isFinite(resi) || resi <= 0) return;
-      const allowed = residueSetByChain[chain];
-      if (!allowed || !allowed.has(resi)) return;
-
-      const next = normalizeResidueSelectionMap(state.setupResiduePicker.selection);
-      const chainSet = new Set(next[chain] || []);
-      if (chainSet.has(resi)) {
-        chainSet.delete(resi);
-      } else {
-        chainSet.add(resi);
-      }
-      const sorted = Array.from(chainSet).sort((a, b) => a - b);
-      if (sorted.length) {
-        next[chain] = sorted;
-      } else {
-        delete next[chain];
-      }
-      state.setupResiduePicker.selection = next;
-      state.setupResiduePicker.notice = "";
-      notice.textContent = "";
-      updateSelectionSummary();
-      redrawViewer();
-    });
-
-    viewer.zoomTo();
-    redrawViewer();
-  }
-
-  const actionRow = document.createElement("div");
-  actionRow.className = "setup-residue-picker-controls";
-
-  const applyBtn = document.createElement("button");
-  applyBtn.type = "button";
-  applyBtn.className = "primary";
-  applyBtn.textContent = t("setup.residuePicker.apply");
-  applyBtn.addEventListener("click", () => {
-    const mappedSelection = selectedResiduesToQueryPositions(
-      state.setupResiduePicker.selection,
-      state.setupResiduePicker.residueOrderByChain
-    );
-    const selectedCount = countSelectedResidues(mappedSelection);
-    if (!selectedCount) {
-      state.setupResiduePicker.notice = t("setup.residuePicker.noSelection");
-      renderWorkflowStudio();
-      return;
-    }
-    const current = workflowStudioSessionForId(session.session_id);
-    if (!current) return;
-    if (!current.stage_drafts.design) current.stage_drafts.design = {};
-    const merged = mergeFixedPositionsMap(workflowStudioDraftAnswers(current).fixed_positions_extra, mappedSelection);
-    current.stage_drafts.design.fixed_positions_extra = merged;
-    current.updated_at = new Date().toISOString();
-    setWorkflowStudioFieldError(current.session_id, "fixed_positions_extra", "");
-    upsertWorkflowStudioSession(current);
-    state.setupResiduePicker.notice = t("setup.residuePicker.applied", { count: selectedCount });
-    renderWorkflowStudio();
-  });
-
-  const clearSelectionBtn = document.createElement("button");
-  clearSelectionBtn.type = "button";
-  clearSelectionBtn.className = "ghost";
-  clearSelectionBtn.textContent = t("setup.residuePicker.clearSelection");
-  clearSelectionBtn.addEventListener("click", () => {
-    state.setupResiduePicker.selection = {};
-    state.setupResiduePicker.notice = "";
-    renderWorkflowStudio();
-  });
-
-  actionRow.appendChild(applyBtn);
-  actionRow.appendChild(clearSelectionBtn);
-
-  const note = document.createElement("div");
-  note.className = "question-summary";
-  note.textContent = t("setup.residuePicker.note");
-
-  card.appendChild(title);
-  card.appendChild(help);
-  card.appendChild(source);
-  card.appendChild(controls);
-  card.appendChild(viewerWrap);
-  card.appendChild(selectionText);
-  card.appendChild(actionRow);
-  card.appendChild(note);
-  card.appendChild(notice);
+  card.classList.add("studio-residue-picker-card");
   mountEl.appendChild(card);
 }
 
@@ -4561,6 +5173,9 @@ function renderWorkflowStudio() {
   }
   if (el.studioRunBtn) {
     el.studioRunBtn.disabled = !session || state.runSubmitting || String(state.currentRunState || "").toLowerCase() === "running";
+  }
+  if (el.studioNewSessionBtn) {
+    el.studioNewSessionBtn.disabled = false;
   }
   if (el.studioStopBtn) {
     el.studioStopBtn.disabled = !session || !workflowStudioRunActive(session);
@@ -4658,6 +5273,14 @@ function renderWorkflowStudio() {
   }).join("");
   const fields = workflowStudioStageFields(activeStage);
   const mergedAnswers = workflowStudioDraftAnswers(session);
+  const studioTargetPdbText = targetInputPdbText(mergedAnswers);
+  const showStudioRfd3InputField = shouldShowRfd3InputPdbField({
+    mode: "workflow",
+    answers: mergedAnswers,
+    nodes: session?.nodes || [],
+    overrideVisible: workflowStudioRfd3InputOverrideVisible(session),
+  });
+  const visibleFields = fields.filter((fieldId) => fieldId !== "rfd3_input_pdb" || showStudioRfd3InputField);
   const designChainValue = Array.isArray(mergedAnswers.design_chains) ? mergedAnswers.design_chains : [];
   const designChainOptions = workflowStudioDesignChainOptionsForAnswers(mergedAnswers, designChainValue);
   const hasExplicitContig = workflowStudioHasExplicitContigDraft(session);
@@ -4666,8 +5289,8 @@ function renderWorkflowStudio() {
   const contigValue =
     computedContigValue || (!hasExplicitContig && activeStage === "rfd3" && previewContigOptions.length ? previewContigOptions[0].value : "");
   const contigOptions = workflowStudioContigOptionsForAnswers(mergedAnswers, contigValue);
-  const fieldCards = fields.length
-    ? fields
+  const fieldCards = visibleFields.length
+    ? visibleFields
         .map((fieldId) => {
           const question = normalizeQuestion({ id: fieldId }) || { id: fieldId };
           const value = mergedAnswers[fieldId] !== undefined ? mergedAnswers[fieldId] : question.default;
@@ -4792,6 +5415,25 @@ function renderWorkflowStudio() {
         })
         .join("")
     : `<div class="placeholder">${escapeHtml(t("hint.none"))}</div>`;
+  const studioRfd3Note =
+    workflowStudioNodeBaseStage(activeStage, "") === "rfd3" && studioTargetPdbText
+      ? `
+          <div class="studio-note">
+            ${escapeHtml(
+              showStudioRfd3InputField
+                ? t("studio.rfd3.defaultFromTargetOverride")
+                : t("studio.rfd3.defaultFromTarget")
+            )}
+          </div>
+          <div class="studio-field-actions">
+            <button type="button" class="ghost" data-studio-rfd3-override="${
+              showStudioRfd3InputField ? "reset" : "show"
+            }">${escapeHtml(
+              showStudioRfd3InputField ? t("setup.rfd3.useTargetDefault") : t("setup.rfd3.useSeparateInput")
+            )}</button>
+          </div>
+        `
+      : "";
   const activeStageState = workflowStudioStageState(session, activeStage);
   const stageArtifacts = workflowStudioStageArtifacts(activeStage);
   const retainedArtifactPath = workflowStudioRetainedArtifactPath(stageArtifacts, state.studioArtifactPath);
@@ -4943,6 +5585,7 @@ function renderWorkflowStudio() {
                   )}</button>`
                 : ""
             }
+            <button type="button" class="ghost" data-studio-action="new">${escapeHtml(t("studio.action.new"))}</button>
             <button type="button" class="ghost" data-studio-action="monitor">${escapeHtml(t("studio.action.monitor"))}</button>
           </div>
         </section>
@@ -4952,6 +5595,7 @@ function renderWorkflowStudio() {
               t("studio.section.editor", { stage: formatStageLabel(activeStage) })
             )}</strong>
           </div>
+          ${studioRfd3Note}
           <div class="studio-editor-grid">${fieldCards}</div>
           ${
             workflowStudioNodeBaseStage(activeStage, "") === "design"
@@ -5006,6 +5650,26 @@ function renderWorkflowStudio() {
       renderWorkflowStudio();
     });
   });
+  Array.from(el.workflowStudioRoot.querySelectorAll("[data-studio-rfd3-override]")).forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const action = String(btn.getAttribute("data-studio-rfd3-override") || "").trim().toLowerCase();
+      const current = workflowStudioSessionForId(session.session_id);
+      if (!current) return;
+      if (!current.stage_drafts.rfd3) current.stage_drafts.rfd3 = {};
+      delete current.stage_drafts.rfd3.rfd3_input_pdb;
+      if (!current.ui_state || typeof current.ui_state !== "object" || Array.isArray(current.ui_state)) {
+        current.ui_state = {};
+      }
+      if (action === "show") {
+        current.ui_state.rfd3_input_override_visible = true;
+      } else {
+        delete current.ui_state.rfd3_input_override_visible;
+      }
+      current.updated_at = new Date().toISOString();
+      upsertWorkflowStudioSession(current);
+      renderWorkflowStudio();
+    });
+  });
   Array.from(el.workflowStudioRoot.querySelectorAll("[data-studio-attach]")).forEach((btn) => {
     btn.addEventListener("click", () => {
       const fieldId = String(btn.getAttribute("data-studio-attach") || "").trim();
@@ -5022,6 +5686,12 @@ function renderWorkflowStudio() {
           if (!current) return;
           if (!current.stage_drafts[activeStage]) current.stage_drafts[activeStage] = {};
           current.stage_drafts[activeStage][fieldId] = text;
+          if (fieldId === "rfd3_input_pdb") {
+            if (!current.ui_state || typeof current.ui_state !== "object" || Array.isArray(current.ui_state)) {
+              current.ui_state = {};
+            }
+            current.ui_state.rfd3_input_override_visible = true;
+          }
           current.updated_at = new Date().toISOString();
           setWorkflowStudioFieldError(current.session_id, fieldId, "");
           upsertWorkflowStudioSession(current);
@@ -5140,6 +5810,10 @@ function renderWorkflowStudio() {
       }
       if (action === "monitor") {
         await openWorkflowStudioRunInMonitor(workflowStudioSessionForId(session.session_id) || session);
+        return;
+      }
+      if (action === "new") {
+        await createFreshWorkflowStudioSession();
         return;
       }
       if (action === "setup") {
@@ -5811,11 +6485,247 @@ function saveToken(token) {
   localStorage.setItem("kbf.token", token);
 }
 
+function saveIdToken(token) {
+  if (token) {
+    localStorage.setItem(ID_TOKEN_KEY, token);
+    return;
+  }
+  localStorage.removeItem(ID_TOKEN_KEY);
+}
+
 function clearSession() {
   localStorage.removeItem("kbf.user");
   localStorage.removeItem("kbf.token");
+  localStorage.removeItem(ID_TOKEN_KEY);
   state.user = null;
   state.token = "";
+  state.idToken = "";
+}
+
+function oidcEnabled() {
+  return Boolean(state.oidcConfig && state.oidcConfig.enabled);
+}
+
+function readOidcRequest() {
+  try {
+    return {
+      state: String(sessionStorage.getItem(OIDC_STATE_KEY) || "").trim(),
+      codeVerifier: String(sessionStorage.getItem(OIDC_VERIFIER_KEY) || "").trim(),
+    };
+  } catch (_err) {
+    return { state: "", codeVerifier: "" };
+  }
+}
+
+function saveOidcRequest({ stateToken, codeVerifier }) {
+  try {
+    sessionStorage.setItem(OIDC_STATE_KEY, String(stateToken || ""));
+    sessionStorage.setItem(OIDC_VERIFIER_KEY, String(codeVerifier || ""));
+  } catch (_err) {
+    // Ignore transient storage failures.
+  }
+}
+
+function clearOidcRequest() {
+  try {
+    sessionStorage.removeItem(OIDC_STATE_KEY);
+    sessionStorage.removeItem(OIDC_VERIFIER_KEY);
+  } catch (_err) {
+    // Ignore transient storage failures.
+  }
+}
+
+function base64UrlEncode(bytes) {
+  let binary = "";
+  bytes.forEach((value) => {
+    binary += String.fromCharCode(value);
+  });
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function randomUrlSafeToken(length = 32) {
+  if (!window.crypto?.getRandomValues) {
+    throw new Error(t("auth.ssoUnavailable"));
+  }
+  const bytes = new Uint8Array(length);
+  window.crypto.getRandomValues(bytes);
+  return base64UrlEncode(bytes);
+}
+
+async function sha256Base64Url(value) {
+  if (!window.crypto?.subtle) {
+    throw new Error(t("auth.ssoUnavailable"));
+  }
+  const encoded = new TextEncoder().encode(String(value || ""));
+  const digest = await window.crypto.subtle.digest("SHA-256", encoded);
+  return base64UrlEncode(new Uint8Array(digest));
+}
+
+function stripOidcCallbackParams() {
+  const next = stripOidcCallbackUrl(window.location.href);
+  window.history.replaceState({}, document.title, next);
+}
+
+async function fetchOidcConfig() {
+  try {
+    const response = await fetch(`${state.apiBase}/auth/oidc/config`);
+    if (!response.ok) return { ok: false, enabled: false };
+    const payload = await response.json().catch(() => null);
+    if (!payload || typeof payload !== "object") return { ok: false, enabled: false };
+    return {
+      ok: Boolean(payload.ok),
+      enabled: Boolean(payload.enabled),
+      issuer: String(payload.issuer || "").trim(),
+      client_id: String(payload.client_id || "").trim(),
+      scopes: String(payload.scopes || "openid profile email").trim(),
+      provider_name: String(payload.provider_name || "KBF SSO").trim(),
+      authorization_endpoint: String(payload.authorization_endpoint || "").trim(),
+      end_session_endpoint: String(payload.end_session_endpoint || "").trim(),
+      account_url: String(payload.account_url || "").trim(),
+    };
+  } catch (_err) {
+    return { ok: false, enabled: false };
+  }
+}
+
+function syncLoginMode() {
+  const useOidc = oidcEnabled();
+  if (el.loginLocalDesc) el.loginLocalDesc.classList.toggle("hidden", useOidc);
+  if (el.loginSsoDesc) el.loginSsoDesc.classList.toggle("hidden", !useOidc);
+  if (el.loginLocalForm) el.loginLocalForm.classList.toggle("hidden", useOidc);
+  if (el.loginSsoActions) el.loginSsoActions.classList.toggle("hidden", !useOidc);
+  if (el.accountBtn) {
+    const visible = useOidc && Boolean(state.user) && Boolean(state.oidcConfig?.account_url);
+    el.accountBtn.classList.toggle("hidden", !visible);
+  }
+}
+
+async function startOidcLogin() {
+  if (!oidcEnabled()) {
+    throw new Error(t("auth.ssoUnavailable"));
+  }
+  const authorizationEndpoint = String(state.oidcConfig?.authorization_endpoint || "").trim();
+  const clientId = String(state.oidcConfig?.client_id || "").trim();
+  if (!authorizationEndpoint || !clientId) {
+    throw new Error(t("auth.ssoConfigMissing"));
+  }
+  const stateToken = randomUrlSafeToken(24);
+  const codeVerifier = randomUrlSafeToken(48);
+  const codeChallenge = await sha256Base64Url(codeVerifier);
+  const redirectUri = buildOidcRedirectUri({
+    origin: window.location.origin,
+    pathname: window.location.pathname,
+  });
+  saveOidcRequest({ stateToken, codeVerifier });
+  window.location.assign(
+    buildOidcAuthorizationUrl({
+      authorizationEndpoint,
+      clientId,
+      redirectUri,
+      scopes: state.oidcConfig?.scopes || "openid profile email",
+      state: stateToken,
+      codeChallenge,
+    })
+  );
+}
+
+async function finishOidcLogin(code, callbackState) {
+  const oidcRequest = readOidcRequest();
+  if (!oidcRequest.state || !oidcRequest.codeVerifier || callbackState !== oidcRequest.state) {
+    throw new Error(t("auth.ssoStateMismatch"));
+  }
+  const redirectUri = buildOidcRedirectUri({
+    origin: window.location.origin,
+    pathname: window.location.pathname,
+  });
+  const response = await fetch(`${state.apiBase}/auth/oidc/exchange`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      code,
+      redirect_uri: redirectUri,
+      code_verifier: oidcRequest.codeVerifier,
+    }),
+  });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !payload || !payload.ok) {
+    throw new Error(payload?.error || `HTTP ${response.status}`);
+  }
+  const accessToken = String(payload.access_token || "").trim();
+  if (!accessToken) {
+    throw new Error(t("auth.ssoTokenMissing"));
+  }
+  state.token = accessToken;
+  state.idToken = String(payload.id_token || "").trim();
+  saveToken(state.token);
+  saveIdToken(state.idToken);
+  clearOidcRequest();
+  stripOidcCallbackParams();
+  await loadSession();
+}
+
+async function bootstrapAuth() {
+  state.oidcConfig = await fetchOidcConfig();
+  syncLoginMode();
+  const callback = parseOidcCallback(window.location.search);
+  if (callback.error) {
+    clearSession();
+    clearOidcRequest();
+    stripOidcCallbackParams();
+    showLogin();
+    el.loginError.textContent = callback.errorDescription || t("auth.ssoCancelled");
+    return;
+  }
+  if (callback.code) {
+    showLogin();
+    el.loginError.textContent = t("auth.ssoCompleting", {
+      provider: state.oidcConfig?.provider_name || "KBF SSO",
+    });
+    try {
+      await finishOidcLogin(callback.code, callback.state);
+      return;
+    } catch (err) {
+      clearSession();
+      clearOidcRequest();
+      stripOidcCallbackParams();
+      showLogin();
+      el.loginError.textContent = err.message || t("auth.loginFailed");
+      return;
+    }
+  }
+  if (state.user && state.token) {
+    await loadSession();
+    return;
+  }
+  showLogin();
+}
+
+function openAccountConsole() {
+  const accountUrl = String(state.oidcConfig?.account_url || "").trim();
+  if (!accountUrl) return;
+  window.location.assign(accountUrl);
+}
+
+function logoutCurrentSession() {
+  const endSessionEndpoint = String(state.oidcConfig?.end_session_endpoint || "").trim();
+  const redirectUri = buildOidcRedirectUri({
+    origin: window.location.origin,
+    pathname: window.location.pathname,
+  });
+  const logoutUrl = buildOidcLogoutUrl({
+    endSessionEndpoint,
+    postLogoutRedirectUri: redirectUri,
+    clientId: state.oidcConfig?.client_id || "",
+    idTokenHint: state.idToken || "",
+  });
+  clearOidcRequest();
+  clearSession();
+  syncLoginMode();
+  if (logoutUrl) {
+    window.location.assign(logoutUrl);
+    return;
+  }
+  showLogin();
 }
 
 function appendMessage(container, text, role = "ai") {
@@ -6369,15 +7279,12 @@ function copilotResumeReply(snapshot = copilotSnapshot()) {
 }
 
 function generateCopilotReply(prompt, intentHint = "") {
-  const intent = copilotIntentFromPrompt(prompt, intentHint);
-  const snapshot = copilotSnapshot();
-  if (intent === "usage") return copilotUsageReply(snapshot);
-  if (intent === "interpret") return copilotInterpretReply(snapshot);
-  if (intent === "summary") return copilotSummaryReply(snapshot);
-  if (intent === "compare") return copilotCompareReply(snapshot);
-  if (intent === "next") return copilotNextReply(snapshot);
-  if (intent === "resume") return copilotResumeReply(snapshot);
-  return `${copilotSummaryReply(snapshot)}\n\n${copilotNextReply(snapshot)}`;
+  return buildCopilotReply({
+    prompt,
+    intentHint,
+    snapshot: copilotSnapshot(),
+    lang: state.lang || "en",
+  });
 }
 
 function renderCopilotMessages() {
@@ -6685,6 +7592,7 @@ function setLanguage(lang) {
     updateRunInfo(state.lastRunStatus);
   }
   renderWorkflowStudio();
+  renderDetachedResiduePickerWorkspace();
   if (el.reportModal && el.reportModalContent && !el.reportModal.classList.contains("hidden")) {
     if (state.reportModalMode === "rendered") {
       el.reportModalContent.innerHTML = renderReportModalContent();
@@ -6758,8 +7666,10 @@ function initTabs() {
 }
 
 function showLogin() {
+  syncLoginMode();
   el.loginGate.classList.remove("hidden");
   if (el.appShell) el.appShell.classList.add("hidden");
+  if (el.detachedResiduePickerRoot) el.detachedResiduePickerRoot.classList.add("hidden");
   if (el.chatArea) el.chatArea.classList.add("hidden");
   if (el.adminBtn) el.adminBtn.classList.add("hidden");
   if (el.runpodAdminBtn) el.runpodAdminBtn.classList.add("hidden");
@@ -6770,6 +7680,14 @@ function showLogin() {
 
 function showChat() {
   el.loginGate.classList.add("hidden");
+  syncLoginMode();
+  if (detachedResiduePickerToken) {
+    if (el.appShell) el.appShell.classList.add("hidden");
+    if (el.detachedResiduePickerRoot) el.detachedResiduePickerRoot.classList.remove("hidden");
+    renderDetachedResiduePickerWorkspace();
+    return;
+  }
+  if (el.detachedResiduePickerRoot) el.detachedResiduePickerRoot.classList.add("hidden");
   if (el.appShell) el.appShell.classList.remove("hidden");
   if (el.chatArea) el.chatArea.classList.remove("hidden");
   setUserBadge();
@@ -6779,8 +7697,9 @@ function showChat() {
 
 function updateAdminUI() {
   const isAdmin = state.user && state.user.role === "admin";
+  const useOidc = oidcEnabled();
   if (isAdmin) {
-    if (el.adminBtn) el.adminBtn.classList.remove("hidden");
+    if (el.adminBtn) el.adminBtn.classList.toggle("hidden", useOidc);
     if (el.runpodAdminBtn) el.runpodAdminBtn.classList.remove("hidden");
     if (el.adminRunsToggle) el.adminRunsToggle.classList.remove("hidden");
   } else {
@@ -6789,6 +7708,9 @@ function updateAdminUI() {
     if (el.adminPanel) el.adminPanel.classList.add("hidden");
     if (el.adminRunsToggle) el.adminRunsToggle.classList.add("hidden");
     if (el.showAllRuns) el.showAllRuns.checked = false;
+  }
+  if (useOidc && el.adminPanel) {
+    el.adminPanel.classList.add("hidden");
   }
 }
 
@@ -8109,6 +9031,15 @@ async function apiCall(name, args) {
 }
 
 async function authLogin() {
+  if (oidcEnabled()) {
+    el.loginError.textContent = "";
+    try {
+      await startOidcLogin();
+    } catch (err) {
+      el.loginError.textContent = err.message || t("auth.ssoUnavailable");
+    }
+    return;
+  }
   const username = el.loginUsername.value.trim();
   const password = el.loginPassword.value.trim();
   el.loginError.textContent = "";
@@ -8317,8 +9248,82 @@ function filterSelectionByResidueOrder(selectionMap, orderByChain) {
   return filtered;
 }
 
+function residuePickerPresetSelectionsById(presetDescriptors = residuePickerPresetDescriptors()) {
+  const out = {};
+  (Array.isArray(presetDescriptors) ? presetDescriptors : []).forEach((preset) => {
+    const presetId = String(preset?.id || "").trim();
+    if (!presetId) return;
+    out[presetId] = normalizeResidueSelectionMap(preset.selection || {});
+  });
+  return out;
+}
+
+function normalizeResiduePickerActivePresetIds(activePresetIds = [], presetSelectionsById = {}) {
+  const seen = new Set();
+  const out = [];
+  (Array.isArray(activePresetIds) ? activePresetIds : []).forEach((presetId) => {
+    const normalizedId = String(presetId || "").trim();
+    if (!normalizedId || seen.has(normalizedId)) return;
+    if (!countSelectedResidues(presetSelectionsById?.[normalizedId] || {})) return;
+    seen.add(normalizedId);
+    out.push(normalizedId);
+  });
+  return out;
+}
+
+function syncSetupResiduePickerSelectionState({
+  selectionFallback = {},
+  manualSelection,
+  excludedSelection,
+  activePresetIds,
+  presetSelectionsById = residuePickerPresetSelectionsById(),
+  allowFallback = false,
+} = {}) {
+  const residueOrderByChain = state.setupResiduePicker.residueOrderByChain || {};
+  const fallbackSelection = filterSelectionByResidueOrder(selectionFallback, residueOrderByChain);
+  const rawManualSelection = manualSelection ?? state.setupResiduePicker.manualSelection;
+  const rawExcludedSelection = excludedSelection ?? state.setupResiduePicker.excludedSelection;
+  const rawActivePresetIds = activePresetIds ?? state.setupResiduePicker.activePresetIds;
+  const resolved = resolveResiduePickerSelectionState({
+    selectionFallback: fallbackSelection,
+    manualSelection: filterSelectionByResidueOrder(rawManualSelection, residueOrderByChain),
+    excludedSelection: filterSelectionByResidueOrder(rawExcludedSelection, residueOrderByChain),
+    activePresetIds: normalizeResiduePickerActivePresetIds(rawActivePresetIds, presetSelectionsById),
+    presetSelectionsById,
+    allowFallback,
+  });
+  const nextSelection = filterSelectionByResidueOrder(resolved.selection, residueOrderByChain);
+  state.setupResiduePicker.manualSelection = resolved.manualSelection;
+  state.setupResiduePicker.excludedSelection = resolved.excludedSelection;
+  state.setupResiduePicker.activePresetIds = resolved.activePresetIds;
+  state.setupResiduePicker.selection = nextSelection;
+  return nextSelection;
+}
+
 function resetSetupResiduePicker() {
   state.setupResiduePicker = createSetupResiduePickerState();
+}
+
+function clearSetupResiduePickerSelectionState() {
+  state.setupResiduePicker = clearResiduePickerSelectionState(state.setupResiduePicker);
+  return state.setupResiduePicker;
+}
+
+function recomputeSetupResiduePickerSpatialPresets(pdbText = state.setupResiduePicker.pdbText || "") {
+  const text = String(pdbText || "").trim();
+  if (!text) {
+    state.setupResiduePicker.spatialPresets = { surface: {}, core: {}, interface: {}, residues: [] };
+    return state.setupResiduePicker.spatialPresets;
+  }
+  const surfaceAreaCutoff = normalizeSurfaceAreaCutoff(
+    state.setupResiduePicker.surfaceAreaCutoff,
+    DEFAULT_SURFACE_AREA_CUTOFF
+  );
+  state.setupResiduePicker.surfaceAreaCutoff = surfaceAreaCutoff;
+  state.setupResiduePicker.spatialPresets = deriveResidueSpatialPresets(text, {
+    surfaceAreaCutoff,
+  });
+  return state.setupResiduePicker.spatialPresets;
 }
 
 function setSetupResiduePickerStructure(pdbText, { sourceLabel = "", sourceKey = "" } = {}) {
@@ -8326,53 +9331,116 @@ function setSetupResiduePickerStructure(pdbText, { sourceLabel = "", sourceKey =
   if (!text) return false;
   const residueOrderByChain = parsePdbResidueOrderByChain(text);
   if (!Object.keys(residueOrderByChain).length) return false;
+  const sequenceByChain = parsePdbSequenceByChain(text);
+  const sequencePaletteByChain = {};
+  Object.entries(sequenceByChain).forEach(([chain, sequence]) => {
+    sequencePaletteByChain[chain] = sequenceResiduePalette(sequence);
+  });
+  const previousCutoff = normalizeSurfaceAreaCutoff(
+    state.setupResiduePicker.surfaceAreaCutoff,
+    DEFAULT_SURFACE_AREA_CUTOFF
+  );
+  const spatialPresets = deriveResidueSpatialPresets(text, {
+    surfaceAreaCutoff: previousCutoff,
+  });
   const nextSelection = filterSelectionByResidueOrder(state.setupResiduePicker.selection, residueOrderByChain);
+  const nextManualSelection = filterSelectionByResidueOrder(state.setupResiduePicker.manualSelection, residueOrderByChain);
+  const nextExcludedSelection = filterSelectionByResidueOrder(state.setupResiduePicker.excludedSelection, residueOrderByChain);
   state.setupResiduePicker = {
     pdbText: text,
     sourceLabel,
     sourceKey,
     selection: nextSelection,
+    manualSelection: nextManualSelection,
+    excludedSelection: nextExcludedSelection,
+    activePresetIds: Array.isArray(state.setupResiduePicker.activePresetIds)
+      ? state.setupResiduePicker.activePresetIds.map((presetId) => String(presetId || "").trim()).filter(Boolean)
+      : [],
     residueOrderByChain,
+    sequenceByChain,
+    sequencePaletteByChain,
+    spatialPresets,
+    surfaceAreaCutoff: previousCutoff,
+    structureColorMode: state.setupResiduePicker.structureColorMode || "secondary",
+    conservationPreview:
+      String(sourceKey || "").startsWith("run_target:") ? state.setupResiduePicker.conservationPreview || null : null,
     notice: "",
     runningAf2: false,
   };
+  syncSetupResiduePickerSelectionState({ selectionFallback: nextSelection, allowFallback: true });
   return true;
 }
 
 function normalizeFixedPositionsValue(raw) {
-  if (raw === null || raw === undefined || raw === "") return {};
-  let parsed = raw;
   if (typeof raw === "string") {
     const out = parseFixedPositionsExtra(raw);
     if (out.error) return {};
-    parsed = out.value;
+    return normalizeFixedPositionsExtraDraft(out.value);
   }
-  if (Array.isArray(parsed)) {
-    const nums = parsed
-      .map((v) => Number.parseInt(v, 10))
-      .filter((v) => Number.isFinite(v) && v > 0);
-    return nums.length ? { "*": Array.from(new Set(nums)).sort((a, b) => a - b) } : {};
-  }
-  if (!parsed || typeof parsed !== "object") return {};
-  const out = {};
-  Object.entries(parsed).forEach(([chain, values]) => {
-    const nums = (Array.isArray(values) ? values : [values])
-      .map((v) => Number.parseInt(v, 10))
-      .filter((v) => Number.isFinite(v) && v > 0);
-    if (nums.length) out[String(chain)] = Array.from(new Set(nums)).sort((a, b) => a - b);
-  });
-  return out;
+  return normalizeFixedPositionsExtraDraft(raw);
 }
 
 function mergeFixedPositionsMap(baseMap, addMap) {
-  const merged = normalizeFixedPositionsValue(baseMap);
-  Object.entries(normalizeFixedPositionsValue(addMap)).forEach(([chain, values]) => {
-    const next = new Set((merged[chain] || []).map((v) => Number.parseInt(v, 10)));
-    values.forEach((v) => next.add(v));
-    const sorted = Array.from(next).filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
-    if (sorted.length) merged[chain] = sorted;
+  return mergeFixedPositionsExtraDraft(baseMap, addMap);
+}
+
+function setupWorkflowNodesForRfd3() {
+  return state.runMode === "workflow" ? normalizeWorkflowNodesForState(state.workflowDesigner?.nodes) : [];
+}
+
+function setupRfd3InputOverrideVisible() {
+  return state.answerMeta?.rfd3_input_pdb?.overrideVisible === true;
+}
+
+function setSetupRfd3InputOverrideVisible(visible) {
+  const nextVisible = visible === true;
+  const meta = { ...(state.answerMeta.rfd3_input_pdb || {}) };
+  if (nextVisible) {
+    meta.overrideVisible = true;
+  } else {
+    delete meta.overrideVisible;
+  }
+  if (Object.keys(meta).length) {
+    state.answerMeta.rfd3_input_pdb = meta;
+  } else {
+    delete state.answerMeta.rfd3_input_pdb;
+  }
+}
+
+function setupRunUsesRfd3Stage(answers = state.answers) {
+  return runUsesRfd3Stage({
+    mode: state.runMode,
+    answers,
+    nodes: setupWorkflowNodesForRfd3(),
   });
-  return merged;
+}
+
+function shouldShowSetupRfd3InputField(answers = state.answers) {
+  return shouldShowRfd3InputPdbField({
+    mode: state.runMode,
+    answers,
+    nodes: setupWorkflowNodesForRfd3(),
+    overrideVisible: setupRfd3InputOverrideVisible(),
+  });
+}
+
+function workflowStudioRfd3InputOverrideVisible(session) {
+  return session?.ui_state?.rfd3_input_override_visible === true;
+}
+
+function setWorkflowStudioRfd3InputOverrideVisible(sessionId, visible) {
+  const current = workflowStudioSessionForId(sessionId);
+  if (!current) return;
+  if (!current.ui_state || typeof current.ui_state !== "object" || Array.isArray(current.ui_state)) {
+    current.ui_state = {};
+  }
+  if (visible === true) {
+    current.ui_state.rfd3_input_override_visible = true;
+  } else {
+    delete current.ui_state.rfd3_input_override_visible;
+  }
+  current.updated_at = new Date().toISOString();
+  upsertWorkflowStudioSession(current);
 }
 
 function selectedResiduesToQueryPositions(selectionMap, residueOrderByChain) {
@@ -8392,11 +9460,7 @@ function selectedResiduesToQueryPositions(selectionMap, residueOrderByChain) {
 }
 
 function getTargetInputPdbTextFromAnswers(answers = state.answers) {
-  const explicit = String(answers?.target_pdb || "").trim();
-  if (explicit) return explicit;
-  const text = String(answers?.target_input || "").trim();
-  if (!text) return "";
-  return detectTargetKey(text) === "target_pdb" ? text : "";
+  return targetInputPdbText(answers);
 }
 
 function getTargetInputFastaTextFromAnswers(answers = state.answers) {
@@ -8408,7 +9472,18 @@ function getTargetInputFastaTextFromAnswers(answers = state.answers) {
 }
 
 function getRfd3InputPdbTextFromAnswers(answers = state.answers) {
-  return String(answers?.rfd3_input_pdb || "").trim();
+  return explicitRfd3InputPdbText(answers);
+}
+
+function getEffectiveRfd3InputPdbTextFromAnswers(
+  answers = state.answers,
+  { mode = state.runMode, nodes = setupWorkflowNodesForRfd3() } = {}
+) {
+  return effectiveRfd3InputPdb({
+    mode,
+    answers,
+    nodes,
+  });
 }
 
 function getTargetInputPdbText() {
@@ -8421,6 +9496,41 @@ function getTargetInputFastaText() {
 
 function getRfd3InputPdbText() {
   return getRfd3InputPdbTextFromAnswers(state.answers);
+}
+
+async function loadResiduePickerConservationPreview(runId = "") {
+  const key = String(runId || "").trim();
+  if (!key) {
+    state.setupResiduePicker.conservationPreview = null;
+    return null;
+  }
+  try {
+    const result = await apiCall("pipeline.read_artifact", {
+      run_id: key,
+      path: "conservation.json",
+      max_bytes: 500000,
+    });
+    const payload = JSON.parse(String(result?.text || "{}"));
+    const fixed = payload?.fixed_positions_by_tier && typeof payload.fixed_positions_by_tier === "object"
+      ? payload.fixed_positions_by_tier
+      : {};
+    const tiers = {};
+    Object.entries(fixed).forEach(([tier, values]) => {
+      if (!Array.isArray(values)) return;
+      const numeric = values
+        .map((value) => Number.parseInt(value, 10))
+        .filter((value) => Number.isFinite(value) && value > 0);
+      const tierNum = Number(tier);
+      const tierKey = Number.isFinite(tierNum)
+        ? String(tierNum > 1 ? Math.round(tierNum) : Math.round(tierNum * 100))
+        : String(tier || "");
+      if (numeric.length && tierKey) tiers[tierKey] = numeric;
+    });
+    state.setupResiduePicker.conservationPreview = { tiers };
+  } catch (_err) {
+    state.setupResiduePicker.conservationPreview = null;
+  }
+  return state.setupResiduePicker.conservationPreview;
 }
 
 async function predictResiduePickerTargetStructure({ fastaText = "", af2Provider = "colabfold" } = {}) {
@@ -8500,8 +9610,832 @@ async function predictResiduePickerTargetStructure({ fastaText = "", af2Provider
   return { outRunId, selectedPath, selectedPdb, sourceLabel, loaded };
 }
 
+function residuePickerPresetSelectionForTier(tierKey) {
+  const preview = state.setupResiduePicker.conservationPreview;
+  const tiers = preview && typeof preview.tiers === "object" ? preview.tiers : null;
+  const chainIds = Object.keys(state.setupResiduePicker.residueOrderByChain || {});
+  if (!tiers || !Array.isArray(tiers[tierKey]) || chainIds.length !== 1) return {};
+  const chainId = chainIds[0];
+  const order = Array.isArray(state.setupResiduePicker.residueOrderByChain?.[chainId])
+    ? state.setupResiduePicker.residueOrderByChain[chainId]
+    : [];
+  const residues = tiers[tierKey]
+    .map((position) => order[Number(position) - 1])
+    .filter((resi) => Number.isFinite(resi) && resi > 0);
+  return residues.length ? { [chainId]: Array.from(new Set(residues)).sort((a, b) => a - b) } : {};
+}
+
+function residuePickerPresetDescriptors() {
+  const isKo = (state.lang || "en") === "ko";
+  const spatial = state.setupResiduePicker.spatialPresets || { surface: {}, core: {}, interface: {} };
+  const base = [
+    {
+      id: "surface",
+      label: isKo ? "Surface" : "Surface",
+      selection: spatial.surface || {},
+      emptyReason: isKo ? "surface 잔기가 없습니다." : "No surface residues available.",
+    },
+    {
+      id: "core",
+      label: isKo ? "Core" : "Core",
+      selection: spatial.core || {},
+      emptyReason: isKo ? "core 잔기가 없습니다." : "No core residues available.",
+    },
+    {
+      id: "interface",
+      label: isKo ? "Interface" : "Interface",
+      selection: spatial.interface || {},
+      emptyReason: isKo ? "interface 잔기가 없습니다." : "No interface residues available.",
+    },
+  ];
+  const conserved = availableConservedTierPresetKeys(state.setupResiduePicker.conservationPreview, [0.3, 0.5, 0.7]).map(
+    (tierKey) => {
+      const tier = Number(tierKey);
+      const availability = conservedTierPresetState(state.setupResiduePicker.conservationPreview, tier / 100, state.lang || "en");
+      const selection = residuePickerPresetSelectionForTier(tierKey);
+      const chainCount = Object.keys(state.setupResiduePicker.residueOrderByChain || {}).length;
+      return {
+        id: `conserved_${tierKey}`,
+        label: `Conserved ${tierKey}`,
+        selection,
+        disabled: !availability.enabled,
+        emptyReason:
+          availability.reason ||
+          (chainCount !== 1
+            ? (state.lang || "en") === "ko"
+              ? "Conserved preset은 단일 체인 구조에서만 바로 선택할 수 있습니다."
+              : "Conserved presets are currently available only for single-chain residue picking."
+            : (state.lang || "en") === "ko"
+              ? "선택할 conserved 잔기가 없습니다."
+              : "No conserved residues are available for this tier."),
+      };
+    }
+  );
+  return [...base, ...conserved].map((item) => {
+    const selection = item.selection && typeof item.selection === "object" ? item.selection : {};
+    const count = countSelectedResidues(selection);
+    return {
+      ...item,
+      count,
+      disabled: Boolean(item.disabled) || !count,
+      title: Boolean(item.disabled) || !count ? item.emptyReason : "",
+    };
+  });
+}
+
+function applyResiduePickerBaseStyle(viewer, colorMode = "secondary") {
+  if (!viewer) return;
+  const mode = String(colorMode || "secondary").trim().toLowerCase();
+  if (mode === "chain") {
+    viewer.setStyle({}, { cartoon: { colorscheme: "chain" } });
+    return;
+  }
+  if (mode === "spectrum") {
+    viewer.setStyle({}, { cartoon: { color: "spectrum" } });
+    return;
+  }
+  viewer.setStyle({}, { cartoon: { colorscheme: "ssPyMol" } });
+}
+
+function buildResiduePickerLauncherCard({ onOpenDetached, onResetSelection, sourceLabel = "", runId = "" } = {}) {
+  const card = document.createElement("div");
+  card.className = "question-card residue-picker-launcher";
+
+  const title = document.createElement("div");
+  title.className = "question-title";
+  title.textContent = t("setup.residuePicker.title");
+
+  const help = document.createElement("div");
+  help.className = "question-help";
+  help.textContent = t("setup.residuePicker.launcherHelp");
+
+  const conservedNote = document.createElement("div");
+  conservedNote.className = "question-summary";
+  conservedNote.textContent = t("setup.residuePicker.launcherConserved");
+
+  const source = document.createElement("div");
+  source.className = "question-summary";
+  const normalizedSource = String(sourceLabel || "").trim();
+  const normalizedRunId = String(runId || "").trim();
+  source.textContent = normalizedSource
+    ? t("setup.residuePicker.source", { source: normalizedSource })
+    : normalizedRunId
+      ? t("setup.residuePicker.source", { source: normalizedRunId })
+      : t("setup.residuePicker.source", { source: t("setup.residuePicker.source.none") });
+
+  const actionRow = document.createElement("div");
+  actionRow.className = "setup-residue-picker-controls";
+
+  const openBtn = document.createElement("button");
+  openBtn.type = "button";
+  openBtn.className = "primary";
+  openBtn.textContent = t("setup.residuePicker.openDetached");
+  openBtn.addEventListener("click", () => {
+    if (typeof onOpenDetached === "function") {
+      onOpenDetached();
+    }
+  });
+  actionRow.appendChild(openBtn);
+
+  const resetBtn = document.createElement("button");
+  resetBtn.type = "button";
+  resetBtn.className = "ghost";
+  resetBtn.textContent = t("setup.residuePicker.clearSelection");
+  resetBtn.addEventListener("click", () => {
+    if (typeof onResetSelection === "function") {
+      onResetSelection();
+    }
+  });
+  actionRow.appendChild(resetBtn);
+
+  card.appendChild(title);
+  card.appendChild(help);
+  card.appendChild(source);
+  card.appendChild(conservedNote);
+  card.appendChild(actionRow);
+  return card;
+}
+
+function buildResiduePickerCard({
+  targetPdbText = "",
+  targetFastaText = "",
+  rfd3PdbText = "",
+  selectedRunId = "",
+  pickerProvider = "colabfold",
+  detached = false,
+  applyButtonLabel = "",
+  rerender,
+  onOpenDetached,
+  onPredictLoaded,
+  onApplySelection,
+  onApplyCompleted,
+} = {}) {
+  const card = document.createElement("div");
+  card.className = "question-card setup-residue-picker";
+  if (detached) {
+    card.classList.add("detached-picker-card");
+  }
+
+  const title = document.createElement("div");
+  title.className = "question-title";
+  title.textContent = t("setup.residuePicker.title");
+
+  const help = document.createElement("div");
+  help.className = "question-help";
+  help.textContent = t("setup.residuePicker.help");
+
+  const head = document.createElement("div");
+  head.className = "setup-residue-picker-head";
+  const headCopy = document.createElement("div");
+  headCopy.className = "setup-residue-picker-head-copy";
+  headCopy.appendChild(title);
+  headCopy.appendChild(help);
+  head.appendChild(headCopy);
+  const headActions = document.createElement("div");
+  headActions.className = "setup-residue-picker-controls";
+  const clearSelectionState = ({ syncParent = false, refresh = true } = {}) => {
+    clearSetupResiduePickerSelectionState();
+    if (detached) {
+      const request = state.detachedResiduePicker.request;
+      if (request && typeof request === "object") {
+        request.snapshot = buildResiduePickerStateSnapshot();
+        try {
+          sessionStorage.setItem(
+            residuePickerDetachedRequestStorageKey(request.token),
+            JSON.stringify(buildDetachedResiduePickerStoragePayload(request))
+          );
+        } catch (_err) {
+          // ignore snapshot refresh failures inside popup
+        }
+      }
+    }
+    if (syncParent && detached) {
+      dispatchDetachedResiduePickerReset(state.detachedResiduePicker.request);
+    }
+    if (refresh) refreshCard();
+  };
+  if (!detached && typeof onOpenDetached === "function") {
+    const openDetachedBtn = document.createElement("button");
+    openDetachedBtn.type = "button";
+    openDetachedBtn.className = "ghost";
+    openDetachedBtn.textContent = t("setup.residuePicker.openDetached");
+    openDetachedBtn.addEventListener("click", () => {
+      onOpenDetached();
+    });
+    headActions.appendChild(openDetachedBtn);
+  }
+  if (detached) {
+    const clearTopBtn = document.createElement("button");
+    clearTopBtn.type = "button";
+    clearTopBtn.className = "ghost";
+    clearTopBtn.textContent = t("setup.residuePicker.clearSelection");
+    clearTopBtn.addEventListener("click", () => {
+      clearSelectionState({ syncParent: true, refresh: true });
+    });
+    headActions.appendChild(clearTopBtn);
+  }
+  if (headActions.childElementCount) {
+    head.appendChild(headActions);
+  }
+
+  const source = document.createElement("div");
+  source.className = "question-summary";
+  source.textContent = t("setup.residuePicker.source", {
+    source: state.setupResiduePicker.sourceLabel || t("setup.residuePicker.source.none"),
+  });
+
+  const controls = document.createElement("div");
+  controls.className = "setup-residue-picker-controls";
+
+  const loadTargetBtn = document.createElement("button");
+  loadTargetBtn.type = "button";
+  loadTargetBtn.className = "ghost";
+  loadTargetBtn.textContent = t("setup.residuePicker.loadTargetInput");
+
+  const loadRfd3Btn = document.createElement("button");
+  loadRfd3Btn.type = "button";
+  loadRfd3Btn.className = "ghost";
+  loadRfd3Btn.textContent = t("setup.residuePicker.loadRfd3Input");
+
+  const loadRunBtn = document.createElement("button");
+  loadRunBtn.type = "button";
+  loadRunBtn.className = "ghost";
+  loadRunBtn.textContent = t("setup.residuePicker.loadRunTarget");
+
+  const runAf2Btn = document.createElement("button");
+  runAf2Btn.type = "button";
+  runAf2Btn.className = "ghost";
+  runAf2Btn.textContent = t("setup.residuePicker.runAf2", af2ProviderTemplateParams(pickerProvider));
+
+  const controlState = residuePickerControlState({
+    targetPdbText,
+    targetFastaText,
+    rfd3PdbText,
+    selectedRunId,
+    busy: Boolean(state.setupResiduePicker.runningAf2),
+  });
+  loadTargetBtn.disabled = !controlState.canLoadTarget;
+  loadRfd3Btn.disabled = !controlState.canLoadRfd3;
+  loadRunBtn.disabled = !controlState.canLoadRun;
+  runAf2Btn.disabled = !controlState.canRunAf2;
+
+  const refreshCard = () => {
+    if (typeof rerender === "function") rerender();
+  };
+
+  const loadStructureFromText = (pdbText, sourceLabelText, sourceKey) => {
+    const text = String(pdbText || "").trim();
+    if (!text) {
+      state.setupResiduePicker.notice = t("setup.residuePicker.noPdb");
+      refreshCard();
+      return;
+    }
+    const loaded = setSetupResiduePickerStructure(text, { sourceLabel: sourceLabelText, sourceKey });
+    state.setupResiduePicker.notice = loaded ? "" : t("setup.residuePicker.noPdb");
+    refreshCard();
+  };
+
+  loadTargetBtn.addEventListener("click", () => {
+    loadStructureFromText(targetPdbText, t("setup.residuePicker.loadTargetInput"), "target_input");
+  });
+  loadRfd3Btn.addEventListener("click", () => {
+    loadStructureFromText(rfd3PdbText, t("setup.residuePicker.loadRfd3Input"), "rfd3_input_pdb");
+  });
+  loadRunBtn.addEventListener("click", async () => {
+    if (!selectedRunId) {
+      state.setupResiduePicker.notice = t("setup.residuePicker.noRun");
+      refreshCard();
+      return;
+    }
+    try {
+      await loadResiduePickerConservationPreview(selectedRunId);
+      const result = await apiCall("pipeline.read_artifact", {
+        run_id: selectedRunId,
+        path: "target.pdb",
+        max_bytes: 2_000_000,
+      });
+      const text = String(result?.text || "").trim();
+      if (!text) {
+        state.setupResiduePicker.notice = t("setup.residuePicker.noPdb");
+        refreshCard();
+        return;
+      }
+      const label = `${selectedRunId}:target.pdb`;
+      const loaded = setSetupResiduePickerStructure(text, {
+        sourceLabel: label,
+        sourceKey: `run_target:${selectedRunId}`,
+      });
+      state.setupResiduePicker.notice = loaded ? "" : t("setup.residuePicker.noPdb");
+    } catch (err) {
+      state.setupResiduePicker.notice = t("setup.residuePicker.loadFailed", { error: err.message });
+    }
+    refreshCard();
+  });
+  runAf2Btn.addEventListener("click", async () => {
+    if (!String(targetFastaText || "").trim()) {
+      state.setupResiduePicker.notice = t("setup.residuePicker.runAf2NeedsFasta");
+      refreshCard();
+      return;
+    }
+    state.setupResiduePicker.runningAf2 = true;
+    state.setupResiduePicker.notice = t("setup.residuePicker.runAf2Running", af2ProviderTemplateParams(pickerProvider));
+    refreshCard();
+    try {
+      const result = await predictResiduePickerTargetStructure({
+        fastaText: targetFastaText,
+        af2Provider: pickerProvider,
+      });
+      if (typeof onPredictLoaded === "function") {
+        onPredictLoaded(result);
+      }
+      state.setupResiduePicker.notice = result.loaded
+        ? t("setup.residuePicker.runAf2Loaded", { run: result.outRunId, path: result.selectedPath })
+        : t("setup.residuePicker.noPdb");
+    } catch (err) {
+      state.setupResiduePicker.notice = t("setup.residuePicker.runAf2Failed", { error: err.message });
+    } finally {
+      state.setupResiduePicker.runningAf2 = false;
+      refreshCard();
+    }
+  });
+
+  controls.appendChild(runAf2Btn);
+  controls.appendChild(loadTargetBtn);
+  controls.appendChild(loadRfd3Btn);
+  controls.appendChild(loadRunBtn);
+
+  const modeRow = document.createElement("div");
+  modeRow.className = "setup-residue-picker-mode-row";
+  [
+    {
+      id: "secondary",
+      label: (state.lang || "en") === "ko" ? "2차구조" : "Secondary",
+    },
+    {
+      id: "spectrum",
+      label: (state.lang || "en") === "ko" ? "N→C" : "N→C",
+    },
+    {
+      id: "chain",
+      label: (state.lang || "en") === "ko" ? "Chain" : "Chain",
+    },
+  ].forEach((mode) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `ghost mode-chip${state.setupResiduePicker.structureColorMode === mode.id ? " selected" : ""}`;
+    button.textContent = mode.label;
+    button.addEventListener("click", () => {
+      state.setupResiduePicker.structureColorMode = mode.id;
+      refreshCard();
+    });
+    modeRow.appendChild(button);
+  });
+
+  const cutoffRow = document.createElement("div");
+  cutoffRow.className = "setup-residue-picker-threshold";
+  const cutoffLabel = document.createElement("label");
+  cutoffLabel.className = "setup-residue-picker-threshold-label";
+  cutoffLabel.textContent = t("setup.residuePicker.surfaceCutoffLabel");
+  const cutoffInput = document.createElement("input");
+  cutoffInput.type = "number";
+  cutoffInput.min = "0";
+  cutoffInput.step = "0.1";
+  cutoffInput.value = String(
+    normalizeSurfaceAreaCutoff(state.setupResiduePicker.surfaceAreaCutoff, DEFAULT_SURFACE_AREA_CUTOFF)
+  );
+  cutoffInput.addEventListener("change", () => {
+    state.setupResiduePicker.surfaceAreaCutoff = normalizeSurfaceAreaCutoff(
+      cutoffInput.value,
+      DEFAULT_SURFACE_AREA_CUTOFF
+    );
+    recomputeSetupResiduePickerSpatialPresets();
+    refreshCard();
+  });
+  const cutoffHelp = document.createElement("div");
+  cutoffHelp.className = "setup-residue-picker-threshold-help";
+  cutoffHelp.textContent = t("setup.residuePicker.surfaceCutoffHelp");
+  cutoffRow.appendChild(cutoffLabel);
+  cutoffRow.appendChild(cutoffInput);
+  cutoffRow.appendChild(cutoffHelp);
+
+  const presetRow = document.createElement("div");
+  presetRow.className = "setup-residue-picker-preset-row";
+  const presetDescriptors = residuePickerPresetDescriptors();
+  const presetSelectionsById = residuePickerPresetSelectionsById(presetDescriptors);
+  syncSetupResiduePickerSelectionState({
+    selectionFallback: state.setupResiduePicker.selection,
+    presetSelectionsById,
+    allowFallback: true,
+  });
+  const presetButtons = [];
+  presetDescriptors.forEach((preset) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "ghost preset-chip";
+    button.disabled = Boolean(preset.disabled);
+    button.title = preset.title || "";
+    button.textContent = `${preset.label}${preset.count ? ` (${preset.count})` : ""}`;
+    button.addEventListener("click", () => {
+      const activePresetIds = new Set(
+        normalizeResiduePickerActivePresetIds(state.setupResiduePicker.activePresetIds, presetSelectionsById)
+      );
+      if (activePresetIds.has(preset.id)) {
+        activePresetIds.delete(preset.id);
+      } else {
+        activePresetIds.add(preset.id);
+      }
+      syncSetupResiduePickerSelectionState({
+        selectionFallback: state.setupResiduePicker.selection,
+        activePresetIds: Array.from(activePresetIds),
+        presetSelectionsById,
+      });
+      syncSelectionViews({ clearNotice: true });
+    });
+    presetButtons.push({ button, preset });
+    presetRow.appendChild(button);
+  });
+
+  const workspace = document.createElement("div");
+  workspace.className = "setup-residue-picker-workspace";
+
+  const sequencePane = document.createElement("div");
+  sequencePane.className = "setup-residue-picker-sequence";
+  const sequenceTitle = document.createElement("div");
+  sequenceTitle.className = "status-subtitle";
+  sequenceTitle.textContent = (state.lang || "en") === "ko" ? "서열 선택" : "Sequence Selection";
+  sequencePane.appendChild(sequenceTitle);
+
+  const sequenceBody = document.createElement("div");
+  sequenceBody.className = "setup-residue-picker-sequence-body";
+  sequencePane.appendChild(sequenceBody);
+
+  const viewerPane = document.createElement("div");
+  viewerPane.className = "setup-residue-picker-view";
+  const viewerTitle = document.createElement("div");
+  viewerTitle.className = "status-subtitle";
+  viewerTitle.textContent = (state.lang || "en") === "ko" ? "구조 보기" : "Structure View";
+  viewerPane.appendChild(viewerTitle);
+
+  const selectionText = document.createElement("div");
+  selectionText.className = "question-summary";
+
+  const notice = document.createElement("div");
+  notice.className = "question-summary setup-residue-picker-notice";
+  notice.textContent = state.setupResiduePicker.notice || "";
+
+  let redrawViewer = () => {};
+  let syncSequenceSelection = () => {};
+  let syncPresetSelection = () => {};
+
+  const setNotice = (text = "") => {
+    state.setupResiduePicker.notice = String(text || "");
+    notice.textContent = state.setupResiduePicker.notice;
+  };
+
+  const selectionMapHasResidue = (selectionMap, chain, residue) =>
+    Array.isArray(selectionMap?.[chain]) && selectionMap[chain].includes(residue);
+
+  const updateSelectionResidue = (selectionMap, chain, residue, selected) => {
+    const next = normalizeResidueSelectionMap(selectionMap);
+    const chainId = normalizeChainId(chain || "");
+    if (!chainId || !Number.isFinite(residue) || residue <= 0) return next;
+    const chainSet = new Set(next[chainId] || []);
+    if (selected) {
+      chainSet.add(residue);
+    } else {
+      chainSet.delete(residue);
+    }
+    if (chainSet.size) {
+      next[chainId] = Array.from(chainSet).sort((left, right) => left - right);
+    } else {
+      delete next[chainId];
+    }
+    return next;
+  };
+
+  const updateSelectionSummary = () => {
+    const normalized = normalizeResidueSelectionMap(state.setupResiduePicker.selection);
+    state.setupResiduePicker.selection = normalized;
+    const summary = selectionSummaryText(normalized);
+    selectionText.textContent = summary
+      ? t("setup.residuePicker.selection.summary", { summary })
+      : t("setup.residuePicker.selection.none");
+  };
+
+  const syncSelectionViews = ({ clearNotice = false } = {}) => {
+    if (clearNotice) {
+      setNotice("");
+    } else {
+      notice.textContent = state.setupResiduePicker.notice || "";
+    }
+    updateSelectionSummary();
+    syncPresetSelection();
+    syncSequenceSelection();
+    redrawViewer();
+  };
+
+  const toggleSelection = (chain, resi) => {
+    const chainId = normalizeChainId(chain || "");
+    const residue = Number.parseInt(resi, 10);
+    if (!Number.isFinite(residue) || residue <= 0) return;
+    const currentSelection = normalizeResidueSelectionMap(state.setupResiduePicker.selection);
+    const manualSelection = normalizeResidueSelectionMap(state.setupResiduePicker.manualSelection || {});
+    const excludedSelection = normalizeResidueSelectionMap(state.setupResiduePicker.excludedSelection || {});
+    const activePresetIds = normalizeResiduePickerActivePresetIds(
+      state.setupResiduePicker.activePresetIds,
+      presetSelectionsById
+    );
+    const presetSelected = activePresetIds.some((presetId) =>
+      selectionMapHasResidue(presetSelectionsById[presetId], chainId, residue)
+    );
+    const currentlySelected = selectionMapHasResidue(currentSelection, chainId, residue);
+    let nextManualSelection = manualSelection;
+    let nextExcludedSelection = excludedSelection;
+    if (currentlySelected) {
+      nextManualSelection = updateSelectionResidue(nextManualSelection, chainId, residue, false);
+      if (presetSelected) {
+        nextExcludedSelection = updateSelectionResidue(nextExcludedSelection, chainId, residue, true);
+      }
+    } else {
+      if (presetSelected) {
+        nextExcludedSelection = updateSelectionResidue(nextExcludedSelection, chainId, residue, false);
+      } else {
+        nextExcludedSelection = updateSelectionResidue(nextExcludedSelection, chainId, residue, false);
+        nextManualSelection = updateSelectionResidue(nextManualSelection, chainId, residue, true);
+      }
+    }
+    syncSetupResiduePickerSelectionState({
+      selectionFallback: currentSelection,
+      manualSelection: nextManualSelection,
+      excludedSelection: nextExcludedSelection,
+      activePresetIds,
+      presetSelectionsById,
+    });
+    syncSelectionViews({ clearNotice: true });
+  };
+
+  updateSelectionSummary();
+
+  const sequenceTracks = buildSequenceSelectionTracks(
+    state.setupResiduePicker.sequenceByChain || {},
+    state.setupResiduePicker.residueOrderByChain || {},
+    { lineLength: 24, labelEvery: 2 }
+  );
+  if (!sequenceTracks.length) {
+    const empty = document.createElement("div");
+    empty.className = "placeholder";
+    empty.textContent = t("setup.residuePicker.viewerPlaceholder");
+    sequenceBody.appendChild(empty);
+  } else {
+    sequenceTracks.forEach((track) => {
+      const chainBlock = document.createElement("div");
+      chainBlock.className = "sequence-track-block";
+      const chainHeader = document.createElement("div");
+      chainHeader.className = "sequence-track-header";
+      chainHeader.textContent = `Chain ${track.chain} · ${track.rows.reduce((count, row) => count + row.cells.length, 0)} aa`;
+      chainBlock.appendChild(chainHeader);
+
+      (Array.isArray(track.rows) ? track.rows : []).forEach((row) => {
+        const rowWrap = document.createElement("div");
+        rowWrap.className = "sequence-track-row";
+
+        const residueGrid = document.createElement("div");
+        residueGrid.className = "sequence-track-grid";
+        residueGrid.style.gridTemplateColumns = `repeat(${row.cells.length}, minmax(20px, 1fr))`;
+
+        row.cells.forEach((cell) => {
+          const residueButton = document.createElement("button");
+          residueButton.type = "button";
+          residueButton.className = "sequence-track-residue";
+          residueButton.dataset.chain = track.chain;
+          residueButton.dataset.resi = String(cell.resi);
+          residueButton.title = `${track.chain}:${cell.resi} ${cell.aa} · ${cell.label}`;
+          residueButton.style.setProperty("--residue-color", String(cell.color || aminoAcidPropertyInfo(cell.aa).color));
+
+          const residueLetter = document.createElement("span");
+          residueLetter.className = "sequence-track-aa";
+          residueLetter.textContent = String(cell.aa || "X");
+
+          const residueBar = document.createElement("span");
+          residueBar.className = "sequence-track-bar";
+
+          residueButton.appendChild(residueLetter);
+          residueButton.appendChild(residueBar);
+          residueButton.addEventListener("click", () => toggleSelection(track.chain, cell.resi));
+          residueGrid.appendChild(residueButton);
+        });
+
+        const labelGrid = document.createElement("div");
+        labelGrid.className = "sequence-track-labels";
+        labelGrid.style.gridTemplateColumns = `repeat(${row.cells.length}, minmax(20px, 1fr))`;
+        row.labels.forEach((label) => {
+          const value = String(label?.value || "").trim();
+          const slot = Number(label?.slot);
+          if (!value || !Number.isFinite(slot)) return;
+          const labelEl = document.createElement("span");
+          labelEl.className = `sequence-track-label${label.edge ? " edge" : ""}`;
+          labelEl.style.gridColumn = String(slot + 1);
+          labelEl.textContent = value;
+          labelGrid.appendChild(labelEl);
+        });
+
+        rowWrap.appendChild(residueGrid);
+        rowWrap.appendChild(labelGrid);
+        chainBlock.appendChild(rowWrap);
+      });
+
+      sequenceBody.appendChild(chainBlock);
+    });
+  }
+
+  syncSequenceSelection = () => {
+    const selection = normalizeResidueSelectionMap(state.setupResiduePicker.selection);
+    Array.from(sequenceBody.querySelectorAll(".sequence-track-residue")).forEach((node) => {
+      if (!(node instanceof HTMLElement)) return;
+      const chain = normalizeChainId(node.dataset.chain || "");
+      const resi = Number.parseInt(node.dataset.resi || "", 10);
+      const selected = Number.isFinite(resi) && Array.isArray(selection[chain]) && selection[chain].includes(resi);
+      node.classList.toggle("selected", Boolean(selected));
+    });
+  };
+  syncPresetSelection = () => {
+    const activePresetIds = new Set(
+      normalizeResiduePickerActivePresetIds(state.setupResiduePicker.activePresetIds, presetSelectionsById)
+    );
+    presetButtons.forEach(({ button, preset }) => {
+      if (!(button instanceof HTMLElement)) return;
+      button.classList.toggle("selected", activePresetIds.has(preset.id));
+    });
+  };
+  syncPresetSelection();
+  syncSequenceSelection();
+
+  if (!state.setupResiduePicker.pdbText) {
+    const placeholder = document.createElement("div");
+    placeholder.className = "placeholder";
+    placeholder.textContent = t("setup.residuePicker.viewerPlaceholder");
+    viewerPane.appendChild(placeholder);
+  } else if (!window.$3Dmol) {
+    const placeholder = document.createElement("div");
+    placeholder.className = "placeholder";
+    placeholder.textContent = t("setup.residuePicker.viewerUnavailable");
+    viewerPane.appendChild(placeholder);
+  } else {
+    const viewerEl = document.createElement("div");
+    viewerEl.className = "viewer3d setup-residue-picker-viewer";
+    viewerPane.appendChild(viewerEl);
+
+    const viewer = window.$3Dmol.createViewer(viewerEl, { backgroundColor: "white" });
+    viewer.addModel(state.setupResiduePicker.pdbText, "pdb");
+    const residueSetByChain = {};
+    const surfaceSelection = normalizeResidueSelectionMap(state.setupResiduePicker.spatialPresets?.surface || {});
+    const coreSelection = normalizeResidueSelectionMap(state.setupResiduePicker.spatialPresets?.core || {});
+    const interfaceSelection = normalizeResidueSelectionMap(state.setupResiduePicker.spatialPresets?.interface || {});
+    const residueAnnotationByKey = new Map();
+    Object.entries(state.setupResiduePicker.residueOrderByChain || {}).forEach(([chain, values]) => {
+      residueSetByChain[chain] = new Set(values);
+    });
+    (Array.isArray(state.setupResiduePicker.spatialPresets?.residues)
+      ? state.setupResiduePicker.spatialPresets.residues
+      : []
+    ).forEach((entry) => {
+      const chain = normalizeChainId(entry?.chain || "");
+      const resi = Number.parseInt(entry?.resi, 10);
+      const key = residueAnnotationKey(chain, resi);
+      if (!key) return;
+      const exposureClass = selectionMapHasResidue(coreSelection, chain, resi)
+        ? "core"
+        : selectionMapHasResidue(surfaceSelection, chain, resi)
+          ? "surface"
+          : "";
+      residueAnnotationByKey.set(key, {
+        exposureClass,
+        interfaceHit: selectionMapHasResidue(interfaceSelection, chain, resi) || Boolean(entry?.interface),
+      });
+    });
+    const pickerLegend = createViewerLegendCard(
+      buildResiduePickerViewerLegendLines({
+        colorMode: state.setupResiduePicker.structureColorMode,
+        lang: state.lang || "en",
+      })
+    );
+    if (pickerLegend) {
+      viewerPane.appendChild(pickerLegend);
+    }
+
+    redrawViewer = () => {
+      applyResiduePickerBaseStyle(viewer, state.setupResiduePicker.structureColorMode);
+      Object.entries(normalizeResidueSelectionMap(state.setupResiduePicker.selection)).forEach(([chain, values]) => {
+        values.forEach((resi) => {
+          const selector = { resi };
+          const chainId = denormalizeChainId(chain);
+          if (chainId) selector.chain = chainId;
+          viewer.setStyle(selector, {
+            cartoon: { color: "#d9480f" },
+            stick: { radius: 0.2, color: "#d9480f" },
+          });
+        });
+      });
+      viewer.render();
+    };
+
+    installViewerHoverLabels(viewer, (atom) => {
+      const chain = normalizeChainId(atom?.chain || "");
+      const resi = Number.parseInt(atom?.resi, 10);
+      if (!Number.isFinite(resi) || resi <= 0) return "";
+      const allowed = residueSetByChain[chain];
+      if (!allowed || !allowed.has(resi)) return "";
+      const annotation = residueAnnotationByKey.get(residueAnnotationKey(chain, resi)) || {};
+      return buildResiduePickerHoverText({
+        chain,
+        resi,
+        resn: atom?.resn || "",
+        selected: selectionMapHasResidue(normalizeResidueSelectionMap(state.setupResiduePicker.selection), chain, resi),
+        exposureClass: annotation.exposureClass || "",
+        interfaceHit: Boolean(annotation.interfaceHit),
+        lang: state.lang || "en",
+      });
+    });
+
+    viewer.setClickable({}, true, (atom) => {
+      const chain = normalizeChainId(atom?.chain || "");
+      const resi = Number.parseInt(atom?.resi, 10);
+      if (!Number.isFinite(resi) || resi <= 0) return;
+      const allowed = residueSetByChain[chain];
+      if (!allowed || !allowed.has(resi)) return;
+      toggleSelection(chain, resi);
+    });
+
+    viewer.zoomTo();
+    redrawViewer();
+  }
+
+  workspace.appendChild(viewerPane);
+  workspace.appendChild(sequencePane);
+
+  const actionRow = document.createElement("div");
+  actionRow.className = "setup-residue-picker-controls";
+
+  const applyBtn = document.createElement("button");
+  applyBtn.type = "button";
+  applyBtn.className = "primary";
+  applyBtn.textContent = applyButtonLabel || t("setup.residuePicker.apply");
+  applyBtn.addEventListener("click", () => {
+    const mappedSelection = selectedResiduesToQueryPositions(
+      state.setupResiduePicker.selection,
+      state.setupResiduePicker.residueOrderByChain
+    );
+    const selectedCount = countSelectedResidues(mappedSelection);
+    if (typeof onApplySelection === "function") {
+      const delivered = onApplySelection(mappedSelection, selectedCount);
+      if (delivered === false) {
+        setNotice(t("setup.residuePicker.applyFailed"));
+        return;
+      }
+    }
+    setNotice(
+      selectedCount ? t("setup.residuePicker.applied", { count: selectedCount }) : t("setup.residuePicker.cleared")
+    );
+    syncSelectionViews();
+    if (typeof onApplyCompleted === "function") {
+      onApplyCompleted({ mappedSelection, selectedCount });
+    }
+  });
+
+  const clearSelectionBtn = document.createElement("button");
+  clearSelectionBtn.type = "button";
+  clearSelectionBtn.className = "ghost";
+  clearSelectionBtn.textContent = t("setup.residuePicker.clearSelection");
+  clearSelectionBtn.addEventListener("click", () => {
+    clearSelectionState({ syncParent: detached, refresh: false });
+    syncSelectionViews({ clearNotice: true });
+  });
+
+  actionRow.appendChild(applyBtn);
+  if (!detached) {
+    actionRow.appendChild(clearSelectionBtn);
+  }
+
+  const note = document.createElement("div");
+  note.className = "question-summary";
+  note.textContent = t("setup.residuePicker.note");
+
+  card.appendChild(head);
+  card.appendChild(source);
+  card.appendChild(controls);
+  card.appendChild(modeRow);
+  card.appendChild(cutoffRow);
+  card.appendChild(presetRow);
+  card.appendChild(workspace);
+  card.appendChild(selectionText);
+  card.appendChild(actionRow);
+  card.appendChild(note);
+  card.appendChild(notice);
+  return card;
+}
+
 function refreshChainRangesFromAnswers() {
-  const rfd3Text = getRfd3InputPdbText();
+  const rfd3Text = setupRunUsesRfd3Stage() ? getEffectiveRfd3InputPdbTextFromAnswers() : "";
   if (rfd3Text) {
     updateChainRangesFromText(rfd3Text);
     return;
@@ -9180,9 +11114,11 @@ function renderQuestions(questions) {
         value: `${chain}${range.min}-${range.max}`,
       }));
       const rfd3Active =
-        state.runMode === "rfd3" ||
-        !isAnswerMissing(state.answers.rfd3_input_pdb) ||
-        contigs.length > 0;
+        runUsesRfd3Stage({
+          mode: state.runMode,
+          answers: state.answers,
+          nodes: setupWorkflowNodesForRfd3(),
+        }) || shouldShowSetupRfd3InputField();
       const routedDefault = state.plan?.routed_request?.rfd3_contig;
       if (rfd3Active && !state.answers.rfd3_contig && routedDefault) {
         state.answers.rfd3_contig = routedDefault;
@@ -9456,11 +11392,10 @@ function renderQuestions(questions) {
     state.answers.bioemu_use === true ||
     state.answers.stop_after === "bioemu";
   const rfd3CountRelevant =
-    state.runMode === "pipeline" ||
-    state.runMode === "workflow" ||
     state.runMode === "rfd3" ||
     state.answers.stop_after === "rfd3" ||
-    !isAnswerMissing(state.answers.rfd3_input_pdb);
+    setupRunUsesRfd3Stage() ||
+    shouldShowSetupRfd3InputField();
 
   const compactQuestions = textQuestions.filter((q) => compactParameterQuestionIds.has(q.id));
 
@@ -9875,7 +11810,14 @@ function renderQuestions(questions) {
     appendTextQuestionCard(q);
   });
 
-  if (fileQuestions.length) {
+  const setupTargetPdbText = getTargetInputPdbText();
+  const setupRfd3Active = setupRunUsesRfd3Stage();
+  const showSetupRfd3InputItem = shouldShowSetupRfd3InputField();
+  const visibleFileQuestions = fileQuestions.filter(
+    (q) => q.id !== "rfd3_input_pdb" || showSetupRfd3InputItem
+  );
+
+  if (visibleFileQuestions.length) {
     const card = document.createElement("div");
     card.className = "question-card attachments";
 
@@ -9890,7 +11832,37 @@ function renderQuestions(questions) {
     const list = document.createElement("div");
     list.className = "attachment-list";
 
-    fileQuestions.forEach((q) => {
+    if (state.runMode !== "rfd3" && setupTargetPdbText && (setupRfd3Active || showSetupRfd3InputItem)) {
+      const notice = document.createElement("div");
+      notice.className = "question-summary";
+      notice.textContent = showSetupRfd3InputItem
+        ? t("setup.rfd3.defaultFromTargetOverride")
+        : t("setup.rfd3.defaultFromTarget");
+      card.appendChild(notice);
+
+      const noticeActions = document.createElement("div");
+      noticeActions.className = "file-controls";
+      const toggleBtn = document.createElement("button");
+      toggleBtn.type = "button";
+      toggleBtn.className = "ghost";
+      toggleBtn.textContent = showSetupRfd3InputItem
+        ? t("setup.rfd3.useTargetDefault")
+        : t("setup.rfd3.useSeparateInput");
+      toggleBtn.addEventListener("click", () => {
+        state.answers.rfd3_input_pdb = "";
+        state.answerMeta.rfd3_input_pdb = {};
+        setSetupRfd3InputOverrideVisible(!showSetupRfd3InputItem);
+        if (state.setupResiduePicker.sourceKey === "rfd3_input_pdb") {
+          resetSetupResiduePicker();
+        }
+        refreshChainRangesFromAnswers();
+        renderQuestions(state.plan?.questions || []);
+      });
+      noticeActions.appendChild(toggleBtn);
+      card.appendChild(noticeActions);
+    }
+
+    visibleFileQuestions.forEach((q) => {
       const item = document.createElement("div");
       item.className = "attachment-item" + (q.required ? " required" : "");
 
@@ -9983,6 +11955,9 @@ function renderQuestions(questions) {
         if (!file) {
           state.answers[q.id] = "";
           state.answerMeta[q.id] = {};
+          if (q.id === "rfd3_input_pdb") {
+            setSetupRfd3InputOverrideVisible(false);
+          }
           if (q.id === "target_input") {
             state.answers.target_fasta = "";
             state.answers.target_pdb = "";
@@ -10018,6 +11993,9 @@ function renderQuestions(questions) {
           const text = await file.text();
           state.answers[q.id] = text;
           state.answerMeta[q.id] = { fileName: file.name };
+          if (q.id === "rfd3_input_pdb") {
+            setSetupRfd3InputOverrideVisible(true);
+          }
           const kb = Math.max(1, Math.round(file.size / 1024));
           fileName.textContent = file.name;
           meta.textContent = t("attachment.attached", { name: file.name, kb });
@@ -10062,6 +12040,9 @@ function renderQuestions(questions) {
         } catch (err) {
           state.answers[q.id] = "";
           state.answerMeta[q.id] = {};
+          if (q.id === "rfd3_input_pdb") {
+            setSetupRfd3InputOverrideVisible(false);
+          }
           if (q.id === "target_input") {
             state.answers.target_fasta = "";
             state.answers.target_pdb = "";
@@ -10096,6 +12077,9 @@ function renderQuestions(questions) {
         fileInput.value = "";
         state.answers[q.id] = "";
         state.answerMeta[q.id] = {};
+        if (q.id === "rfd3_input_pdb") {
+          setSetupRfd3InputOverrideVisible(false);
+        }
         if (q.id === "target_input") {
           state.answers.target_fasta = "";
           state.answers.target_pdb = "";
@@ -10149,310 +12133,28 @@ function renderQuestions(questions) {
     (state.runMode === "pipeline" || state.runMode === "workflow") &&
     normalizedQuestions.some((q) => q.id === "fixed_positions_extra");
   if (showResiduePicker) {
-    const card = document.createElement("div");
-    card.className = "question-card setup-residue-picker";
-
-    const title = document.createElement("div");
-    title.className = "question-title";
-    title.textContent = t("setup.residuePicker.title");
-
-    const help = document.createElement("div");
-    help.className = "question-help";
-    help.textContent = t("setup.residuePicker.help");
-
-    const source = document.createElement("div");
-    source.className = "question-summary";
-    source.textContent = t("setup.residuePicker.source", {
-      source: state.setupResiduePicker.sourceLabel || t("setup.residuePicker.source.none"),
-    });
-
-    const controls = document.createElement("div");
-    controls.className = "setup-residue-picker-controls";
-
-    const loadTargetBtn = document.createElement("button");
-    loadTargetBtn.type = "button";
-    loadTargetBtn.className = "ghost";
-    loadTargetBtn.textContent = t("setup.residuePicker.loadTargetInput");
-
-    const loadRfd3Btn = document.createElement("button");
-    loadRfd3Btn.type = "button";
-    loadRfd3Btn.className = "ghost";
-    loadRfd3Btn.textContent = t("setup.residuePicker.loadRfd3Input");
-
-    const loadRunBtn = document.createElement("button");
-    loadRunBtn.type = "button";
-    loadRunBtn.className = "ghost";
-    loadRunBtn.textContent = t("setup.residuePicker.loadRunTarget");
-
-    const runAf2Btn = document.createElement("button");
-    runAf2Btn.type = "button";
-    runAf2Btn.className = "ghost";
-    const pickerProvider = state.answers.af2_provider || "colabfold";
-    runAf2Btn.textContent = t("setup.residuePicker.runAf2", af2ProviderTemplateParams(pickerProvider));
-
+    const selectedRunIdForPicker = String(el.setupRunSelector?.value || state.currentRunId || "").trim();
     const targetPdbText = getTargetInputPdbText();
     const targetFastaText = getTargetInputFastaText();
     const rfd3PdbText = getRfd3InputPdbText();
-    const pickerBusy = Boolean(state.setupResiduePicker.runningAf2);
-    const selectedRunIdForPicker = String(el.setupRunSelector?.value || state.currentRunId || "").trim();
-    const controlState = residuePickerControlState({
-      targetPdbText,
-      targetFastaText,
-      rfd3PdbText,
-      selectedRunId: selectedRunIdForPicker,
-      busy: pickerBusy,
-    });
-    loadTargetBtn.disabled = !controlState.canLoadTarget;
-    loadRfd3Btn.disabled = !controlState.canLoadRfd3;
-    loadRunBtn.disabled = !controlState.canLoadRun;
-    runAf2Btn.disabled = !controlState.canRunAf2;
-
-    const loadStructureFromText = (pdbText, sourceLabel, sourceKey) => {
-      const text = String(pdbText || "").trim();
-      if (!text) {
-        state.setupResiduePicker.notice = t("setup.residuePicker.noPdb");
+    const pickerProvider = state.answers.af2_provider || "colabfold";
+    const card = buildResiduePickerLauncherCard({
+      runId: selectedRunIdForPicker,
+      onResetSelection: () => {
+        clearSetupFixedPositionsExtraState();
         renderQuestions(state.plan?.questions || []);
-        return;
-      }
-      const loaded = setSetupResiduePickerStructure(text, { sourceLabel, sourceKey });
-      if (!loaded) {
-        state.setupResiduePicker.notice = t("setup.residuePicker.noPdb");
-      } else {
-        state.setupResiduePicker.notice = "";
-      }
-      renderQuestions(state.plan?.questions || []);
-    };
-
-    loadTargetBtn.addEventListener("click", () => {
-      loadStructureFromText(targetPdbText, t("setup.residuePicker.loadTargetInput"), "target_input");
-    });
-    loadRfd3Btn.addEventListener("click", () => {
-      loadStructureFromText(rfd3PdbText, t("setup.residuePicker.loadRfd3Input"), "rfd3_input_pdb");
-    });
-    loadRunBtn.addEventListener("click", async () => {
-      const runId = String(el.setupRunSelector?.value || state.currentRunId || "").trim();
-      if (!runId) {
-        state.setupResiduePicker.notice = t("setup.residuePicker.noRun");
-        renderQuestions(state.plan?.questions || []);
-        return;
-      }
-      try {
-        const result = await apiCall("pipeline.read_artifact", {
-          run_id: runId,
-          path: "target.pdb",
-          max_bytes: 2_000_000,
+      },
+      onOpenDetached: () => {
+        openDetachedResiduePicker({
+          context: "setup",
+          targetPdbText,
+          targetFastaText,
+          rfd3PdbText,
+          selectedRunId: selectedRunIdForPicker,
+          pickerProvider,
         });
-        const text = String(result?.text || "").trim();
-        if (!text) {
-          state.setupResiduePicker.notice = t("setup.residuePicker.noPdb");
-          renderQuestions(state.plan?.questions || []);
-          return;
-        }
-        const label = `${runId}:target.pdb`;
-        const loaded = setSetupResiduePickerStructure(text, {
-          sourceLabel: label,
-          sourceKey: `run_target:${runId}`,
-        });
-        if (!loaded) {
-          state.setupResiduePicker.notice = t("setup.residuePicker.noPdb");
-        } else {
-          state.setupResiduePicker.notice = "";
-        }
-      } catch (err) {
-        state.setupResiduePicker.notice = t("setup.residuePicker.loadFailed", { error: err.message });
-      }
-      renderQuestions(state.plan?.questions || []);
+      },
     });
-
-    runAf2Btn.addEventListener("click", async () => {
-      const fastaText = String(getTargetInputFastaText() || "").trim();
-      if (!fastaText) {
-        state.setupResiduePicker.notice = t("setup.residuePicker.runAf2NeedsFasta");
-        renderQuestions(state.plan?.questions || []);
-        return;
-      }
-
-      state.setupResiduePicker.runningAf2 = true;
-      state.setupResiduePicker.notice = t("setup.residuePicker.runAf2Running", af2ProviderTemplateParams(pickerProvider));
-      renderQuestions(state.plan?.questions || []);
-
-      try {
-        const { outRunId, selectedPath, selectedPdb, loaded } = await predictResiduePickerTargetStructure({
-          fastaText,
-          af2Provider: pickerProvider,
-        });
-        state.answers.target_fasta = fastaText;
-        state.answers.target_pdb = selectedPdb;
-        state.answerMeta.target_pdb = { fileName: `${outRunId}:${selectedPath}` };
-        refreshChainRangesFromAnswers();
-        state.setupResiduePicker.notice = loaded
-          ? t("setup.residuePicker.runAf2Loaded", { run: outRunId, path: selectedPath })
-          : t("setup.residuePicker.noPdb");
-      } catch (err) {
-        state.setupResiduePicker.notice = t("setup.residuePicker.runAf2Failed", { error: err.message });
-      } finally {
-        state.setupResiduePicker.runningAf2 = false;
-        renderQuestions(state.plan?.questions || []);
-      }
-    });
-
-    controls.appendChild(runAf2Btn);
-    controls.appendChild(loadTargetBtn);
-    controls.appendChild(loadRfd3Btn);
-    controls.appendChild(loadRunBtn);
-
-    const viewerWrap = document.createElement("div");
-    viewerWrap.className = "setup-residue-picker-view";
-
-    const selectionText = document.createElement("div");
-    selectionText.className = "question-summary";
-
-    const notice = document.createElement("div");
-    notice.className = "question-summary setup-residue-picker-notice";
-    if (state.setupResiduePicker.notice) {
-      notice.textContent = state.setupResiduePicker.notice;
-    } else {
-      notice.textContent = "";
-    }
-
-    const updateSelectionSummary = () => {
-      const normalized = normalizeResidueSelectionMap(state.setupResiduePicker.selection);
-      state.setupResiduePicker.selection = normalized;
-      const summary = selectionSummaryText(normalized);
-      if (summary) {
-        selectionText.textContent = t("setup.residuePicker.selection.summary", { summary });
-      } else {
-        selectionText.textContent = t("setup.residuePicker.selection.none");
-      }
-    };
-    updateSelectionSummary();
-
-    if (!state.setupResiduePicker.pdbText) {
-      const placeholder = document.createElement("div");
-      placeholder.className = "placeholder";
-      placeholder.textContent = t("setup.residuePicker.viewerPlaceholder");
-      viewerWrap.appendChild(placeholder);
-    } else if (!window.$3Dmol) {
-      const placeholder = document.createElement("div");
-      placeholder.className = "placeholder";
-      placeholder.textContent = t("setup.residuePicker.viewerUnavailable");
-      viewerWrap.appendChild(placeholder);
-    } else {
-      const viewerEl = document.createElement("div");
-      viewerEl.className = "viewer3d setup-residue-picker-viewer";
-      viewerWrap.appendChild(viewerEl);
-
-      const viewer = window.$3Dmol.createViewer(viewerEl, { backgroundColor: "white" });
-      viewer.addModel(state.setupResiduePicker.pdbText, "pdb");
-      const residueSetByChain = {};
-      Object.entries(state.setupResiduePicker.residueOrderByChain || {}).forEach(([chain, values]) => {
-        residueSetByChain[chain] = new Set(values);
-      });
-
-      const redrawViewer = () => {
-        viewer.setStyle({}, { cartoon: { color: "spectrum" } });
-        Object.entries(normalizeResidueSelectionMap(state.setupResiduePicker.selection)).forEach(
-          ([chain, values]) => {
-            values.forEach((resi) => {
-              const selector = { resi };
-              const chainId = denormalizeChainId(chain);
-              if (chainId) selector.chain = chainId;
-              viewer.setStyle(selector, {
-                cartoon: { color: "#d9480f" },
-                stick: { radius: 0.2, color: "#d9480f" },
-              });
-            });
-          }
-        );
-        viewer.render();
-      };
-
-      viewer.setClickable({}, true, (atom) => {
-        const chain = normalizeChainId(atom?.chain || "");
-        const resi = Number.parseInt(atom?.resi, 10);
-        if (!Number.isFinite(resi) || resi <= 0) return;
-        const allowed = residueSetByChain[chain];
-        if (!allowed || !allowed.has(resi)) return;
-
-        const next = normalizeResidueSelectionMap(state.setupResiduePicker.selection);
-        const chainSet = new Set(next[chain] || []);
-        if (chainSet.has(resi)) {
-          chainSet.delete(resi);
-        } else {
-          chainSet.add(resi);
-        }
-        const sorted = Array.from(chainSet).sort((a, b) => a - b);
-        if (sorted.length) {
-          next[chain] = sorted;
-        } else {
-          delete next[chain];
-        }
-        state.setupResiduePicker.selection = next;
-        state.setupResiduePicker.notice = "";
-        notice.textContent = "";
-        updateSelectionSummary();
-        redrawViewer();
-      });
-
-      viewer.zoomTo();
-      redrawViewer();
-    }
-
-    const actionRow = document.createElement("div");
-    actionRow.className = "setup-residue-picker-controls";
-
-    const applyBtn = document.createElement("button");
-    applyBtn.type = "button";
-    applyBtn.className = "primary";
-    applyBtn.textContent = t("setup.residuePicker.apply");
-    applyBtn.addEventListener("click", () => {
-      const mappedSelection = selectedResiduesToQueryPositions(
-        state.setupResiduePicker.selection,
-        state.setupResiduePicker.residueOrderByChain
-      );
-      const selectedCount = countSelectedResidues(mappedSelection);
-      if (!selectedCount) {
-        state.setupResiduePicker.notice = t("setup.residuePicker.noSelection");
-        renderQuestions(state.plan?.questions || []);
-        return;
-      }
-      const merged = mergeFixedPositionsMap(state.answers.fixed_positions_extra, mappedSelection);
-      state.answers.fixed_positions_extra = merged;
-      state.answerMeta.fixed_positions_extra = {
-        ...(state.answerMeta.fixed_positions_extra || {}),
-        error: "",
-        raw: JSON.stringify(merged),
-      };
-      state.setupResiduePicker.notice = t("setup.residuePicker.applied", { count: selectedCount });
-      renderQuestions(state.plan?.questions || []);
-    });
-
-    const clearSelectionBtn = document.createElement("button");
-    clearSelectionBtn.type = "button";
-    clearSelectionBtn.className = "ghost";
-    clearSelectionBtn.textContent = t("setup.residuePicker.clearSelection");
-    clearSelectionBtn.addEventListener("click", () => {
-      state.setupResiduePicker.selection = {};
-      state.setupResiduePicker.notice = "";
-      renderQuestions(state.plan?.questions || []);
-    });
-
-    actionRow.appendChild(applyBtn);
-    actionRow.appendChild(clearSelectionBtn);
-
-    const note = document.createElement("div");
-    note.className = "question-summary";
-    note.textContent = t("setup.residuePicker.note");
-
-    card.appendChild(title);
-    card.appendChild(help);
-    card.appendChild(source);
-    card.appendChild(controls);
-    card.appendChild(viewerWrap);
-    card.appendChild(selectionText);
-    card.appendChild(actionRow);
-    card.appendChild(note);
-    card.appendChild(notice);
     appendInputCard(card);
   }
 
@@ -10471,12 +12173,27 @@ function updateRunEligibility(questions) {
       .filter((q) => q && q.required && q.id !== "run_mode")
       .map((q) => q.id)
   );
+  const setupNodes = setupWorkflowNodesForRfd3();
+  const rfd3StageActive = runUsesRfd3Stage({
+    mode: state.runMode,
+    answers: state.answers,
+    nodes: setupNodes,
+  });
+  const effectiveRfd3Input = effectiveRfd3InputPdb({
+    mode: state.runMode,
+    answers: state.answers,
+    nodes: setupNodes,
+  });
+  const hasEffectiveRfd3Input = Boolean(String(effectiveRfd3Input || "").trim());
 
   if (state.runMode === "pipeline") {
-    const hasRfd3Input = !isAnswerMissing(state.answers.rfd3_input_pdb);
-    if (hasRfd3Input) {
-      requiredIds.delete("target_input");
-      requiredIds.add("rfd3_contig");
+    if (rfd3StageActive && !hasEffectiveRfd3Input) {
+      requiredIds.add("rfd3_input_pdb");
+    }
+    if (hasEffectiveRfd3Input) {
+      if (rfd3StageActive) {
+        requiredIds.add("rfd3_contig");
+      }
     }
     if (state.answers.diffdock_use === "use") {
       requiredIds.add("diffdock_ligand");
@@ -10487,7 +12204,6 @@ function updateRunEligibility(questions) {
       requiredIds.add("bioemu_use");
     }
     if (state.answers.stop_after === "rfd3") {
-      requiredIds.add("rfd3_input_pdb");
       requiredIds.add("rfd3_contig");
     }
   }
@@ -10595,8 +12311,22 @@ function buildAnswerPayload(mode = state.runMode) {
   if (answers.confirm_run !== undefined) {
     delete answers.confirm_run;
   }
-  if ((mode === "pipeline" || mode === "workflow") && isAnswerMissing(answers.rfd3_input_pdb)) {
-    delete answers.rfd3_contig;
+  if (String(answers.rfd3_input_pdb || "").trim() === String(answers.target_pdb || "").trim()) {
+    delete answers.rfd3_input_pdb;
+  }
+  const rfd3Nodes = mode === "workflow" ? setupWorkflowNodesForRfd3() : [];
+  const effectiveRfd3Input = effectiveRfd3InputPdb({
+    mode,
+    answers,
+    nodes: rfd3Nodes,
+  });
+  if (effectiveRfd3Input) {
+    answers.rfd3_input_pdb = effectiveRfd3Input;
+  } else {
+    delete answers.rfd3_input_pdb;
+    if (mode === "pipeline" || mode === "workflow") {
+      delete answers.rfd3_contig;
+    }
   }
   if (Array.isArray(answers.design_chains) && answers.design_chains.length === 0) {
     delete answers.design_chains;
@@ -11660,6 +13390,57 @@ function render3dModel(text, format, previewEl) {
   viewer.render();
 }
 
+function residueAnnotationKey(chain, resi) {
+  const chainId = normalizeChainId(chain || "");
+  const residue = Number.parseInt(resi, 10);
+  if (!chainId || !Number.isFinite(residue) || residue <= 0) return "";
+  return `${chainId}:${residue}`;
+}
+
+function createViewerLegendCard(lines = []) {
+  const rows = (Array.isArray(lines) ? lines : []).map((line) => String(line || "").trim()).filter(Boolean);
+  if (!rows.length) return null;
+  const overlay = document.createElement("div");
+  overlay.className = "viewer3d-legend";
+  rows.forEach((line) => {
+    const row = document.createElement("div");
+    row.className = "viewer3d-legend-line";
+    row.textContent = line;
+    overlay.appendChild(row);
+  });
+  return overlay;
+}
+
+function installViewerHoverLabels(viewer, buildText) {
+  if (!viewer || typeof viewer.setHoverable !== "function" || typeof buildText !== "function") return;
+  viewer.setHoverable(
+    {},
+    true,
+    (atom, hoveredViewer) => {
+      const text = String(buildText(atom) || "").trim();
+      if (!text || atom?.__hoverLabel) return;
+      atom.__hoverLabel = hoveredViewer.addLabel(text, {
+        position: { x: Number(atom?.x || 0), y: Number(atom?.y || 0), z: Number(atom?.z || 0) },
+        showBackground: true,
+        backgroundColor: "#102a2d",
+        backgroundOpacity: 0.92,
+        fontColor: "#ffffff",
+        fontSize: 11,
+        borderRadius: 6,
+        padding: 4,
+        inFront: true,
+      });
+      hoveredViewer.render();
+    },
+    (atom, hoveredViewer) => {
+      if (!atom?.__hoverLabel) return;
+      hoveredViewer.removeLabel(atom.__hoverLabel);
+      delete atom.__hoverLabel;
+      hoveredViewer.render();
+    }
+  );
+}
+
 function formatMetricValue(value, digits = 2, signed = false) {
   if (typeof value !== "number" || !Number.isFinite(value)) return "-";
   const text = value.toFixed(digits);
@@ -11673,32 +13454,7 @@ function formatPercentValue(value, digits = 1) {
 }
 
 function formatWtDifference(row) {
-  const diffCount = Number(row?.wt_diff_count);
-  const compareLen = Number(row?.wt_compare_len);
-  let diffPct = Number(row?.wt_diff_pct);
-  if (!Number.isFinite(diffPct)) {
-    const diffRatio = Number(row?.wt_diff_ratio);
-    if (Number.isFinite(diffRatio)) diffPct = diffRatio * 100;
-  }
-  if (!Number.isFinite(diffPct)) {
-    const novelty = Number(row?.novelty);
-    if (Number.isFinite(novelty)) diffPct = novelty * 100;
-  }
-  if (!Number.isFinite(diffPct)) {
-    const identityPct =
-      Number.isFinite(Number(row?.wt_identity_pct))
-        ? Number(row.wt_identity_pct)
-        : Number.isFinite(Number(row?.wt_identity))
-          ? Number(row.wt_identity) * 100
-          : null;
-    if (Number.isFinite(identityPct)) diffPct = 100 - Number(identityPct);
-  }
-  const pctText = Number.isFinite(diffPct) ? `${Number(diffPct).toFixed(1)}%` : null;
-  if (Number.isFinite(diffCount) && Number.isFinite(compareLen) && compareLen > 0) {
-    if (pctText) return `${Math.max(0, Math.round(diffCount))}/${Math.round(compareLen)} (${pctText})`;
-    return `${Math.max(0, Math.round(diffCount))}/${Math.round(compareLen)}`;
-  }
-  return pctText || "-";
+  return formatWtIdentitySummary(row, state.lang || "en");
 }
 
 function localizedYesNo(value) {
@@ -12018,6 +13774,10 @@ function comparisonSummaryHasData(summary) {
     if (!bucket || typeof bucket !== "object") return false;
     return (
       Number(bucket.backbone_count || 0) > 0 ||
+      Number(bucket.requested_count || 0) > 0 ||
+      Number(bucket.observed_count || 0) > 0 ||
+      Number(bucket.materialized_count || 0) > 0 ||
+      Number(bucket.propagated_count || 0) > 0 ||
       Number(bucket.soluprot_total || 0) > 0 ||
       Number(bucket.af2_candidate_total || 0) > 0 ||
       Number(bucket.af2_selected_total || 0) > 0
@@ -12281,6 +14041,14 @@ function buildComparisonDetailMarkdown(summary, runId) {
   );
   lines.push("|---|---:|---:|---:|---:|---:|---:|");
   const metricFallback = medianFallbackBySource();
+  const sourceUsageLines = ["rfd3", "bioemu", "other"]
+    .map((key) =>
+      formatBackboneUsageSummary(key, source[key] && typeof source[key] === "object" ? source[key] : null, {
+        includeSourceLabel: true,
+        includeSelected: true,
+      })
+    )
+    .filter(Boolean);
   ["rfd3", "bioemu", "other"].forEach((key) => {
     const bucket = source[key] && typeof source[key] === "object" ? source[key] : null;
     if (!bucket) return;
@@ -12291,6 +14059,12 @@ function buildComparisonDetailMarkdown(summary, runId) {
       `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${formatMetricValue(plddtMedian, 1)} | ${formatMetricValue(rmsdMedian, 2)} |`
     );
   });
+  if (sourceUsageLines.length) {
+    lines.push("- Backbone generation/use:");
+    sourceUsageLines.forEach((line) => {
+      lines.push(`  - ${line}`);
+    });
+  }
   lines.push("");
 
   if (tierRows.length) {
@@ -12390,9 +14164,13 @@ function renderArtifactComparisonSummary(summary) {
     const bucket = source[key];
     if (!bucket || typeof bucket !== "object") return false;
     const backbone = Number(bucket.backbone_count || 0);
+    const requested = Number(bucket.requested_count || 0);
+    const observed = Number(bucket.observed_count || 0);
+    const materialized = Number(bucket.materialized_count || 0);
+    const propagated = Number(bucket.propagated_count || 0);
     const solTotal = Number(bucket.soluprot_total || 0);
     const af2 = Number(bucket.af2_selected_total || 0);
-    return backbone > 0 || solTotal > 0 || af2 > 0;
+    return backbone > 0 || requested > 0 || observed > 0 || materialized > 0 || propagated > 0 || solTotal > 0 || af2 > 0;
   });
   const hasFunnel =
     Number(funnelOverall?.backbone_count || 0) > 0 ||
@@ -12425,6 +14203,14 @@ function renderArtifactComparisonSummary(summary) {
     .join("");
 
   const metricFallback = medianFallbackBySource();
+  const sourceUsageNotes = sourceRows
+    .map((key) =>
+      formatBackboneUsageSummary(key, source[key] && typeof source[key] === "object" ? source[key] : null, {
+        includeSourceLabel: true,
+        includeSelected: true,
+      })
+    )
+    .filter(Boolean);
   const sourceTableRows = sourceRows
     .map((key) => {
       const bucket = source[key] && typeof source[key] === "object" ? source[key] : {};
@@ -12595,6 +14381,11 @@ function renderArtifactComparisonSummary(summary) {
         </thead>
         <tbody>${sourceTableRows}</tbody>
       </table>
+      ${
+        sourceUsageNotes.length
+          ? `<div class="comparison-note">${sourceUsageNotes.map((line) => escapeHtml(line)).join("<br>")}</div>`
+          : ""
+      }
     </div>`
         : ""
     }
@@ -12668,8 +14459,12 @@ function buildCompletenessBadges(summary, fallbackCompleteness = null) {
       : {};
   const fallback = fallbackCompleteness && typeof fallbackCompleteness === "object" ? fallbackCompleteness : {};
 
-  const rfd3Backbones = Number(source?.rfd3?.backbone_count || 0);
-  const bioemuBackbones = Number(source?.bioemu?.backbone_count || 0);
+  const rfd3Backbones = Number(
+    source?.rfd3?.backbone_count || source?.rfd3?.propagated_count || source?.rfd3?.materialized_count || source?.rfd3?.observed_count || 0
+  );
+  const bioemuBackbones = Number(
+    source?.bioemu?.backbone_count || source?.bioemu?.propagated_count || source?.bioemu?.materialized_count || source?.bioemu?.observed_count || 0
+  );
   const hasRfd3 = rfd3Backbones > 0 || Boolean(fallback.has_rfd3);
   const hasBioemu = bioemuBackbones > 0 || Boolean(fallback.has_bioemu);
   const wtEnabled =
@@ -14108,9 +15903,59 @@ async function buildComparePreviewCardData(
 }
 
 function renderCompareMetadataPanel(leftMeta, rightMeta) {
+  const createCompareTooltipBubble = (text = "") => {
+    const message = String(text || "").trim();
+    if (!message) return null;
+    const bubble = document.createElement("span");
+    bubble.className = "compare-tooltip-bubble";
+    bubble.setAttribute("role", "tooltip");
+    bubble.textContent = message;
+    return bubble;
+  };
+
+  const appendCompareMetaItem = (listEl, { label = "", value = "-", tooltip = "", mono = false } = {}) => {
+    if (!(listEl instanceof HTMLElement)) return;
+    const row = document.createElement("div");
+    row.className = "compare-meta-item";
+    const labelWrap = document.createElement("div");
+    labelWrap.className = "compare-meta-label-wrap";
+    const labelEl = document.createElement("span");
+    labelEl.className = "compare-meta-label";
+    labelEl.textContent = String(label || "").trim() || "-";
+    labelWrap.appendChild(labelEl);
+    const tooltipBubble = createCompareTooltipBubble(tooltip);
+    if (tooltipBubble) {
+      labelWrap.classList.add("compare-inline-help");
+      labelWrap.tabIndex = 0;
+      labelWrap.setAttribute("aria-label", `${label}. ${tooltip}`);
+      labelWrap.appendChild(tooltipBubble);
+    }
+    const valueEl = document.createElement("strong");
+    valueEl.className = `compare-meta-value${mono ? " compare-meta-mono" : ""}`;
+    const text = String(value ?? "").trim();
+    valueEl.textContent = text || "-";
+    row.appendChild(labelWrap);
+    row.appendChild(valueEl);
+    listEl.appendChild(row);
+  };
+
   const panel = document.createElement("div");
   panel.className = "compare-meta-panel";
   panel.innerHTML = `<div class="compare-meta-title">${escapeHtml(t("artifacts.preview.compare.meta.title"))}</div>`;
+  const scopeDescription = buildCompareScopeDescription({
+    leftMeta,
+    rightMeta,
+    provider: leftMeta?.af2ProviderLabel || rightMeta?.af2ProviderLabel || currentRunAf2Provider(),
+    lang: state.lang || "en",
+  });
+  if (scopeDescription) {
+    const help = document.createElement("div");
+    help.className = "compare-meta-help";
+    const helpText = document.createElement("span");
+    helpText.textContent = scopeDescription;
+    help.appendChild(helpText);
+    panel.appendChild(help);
+  }
   const grid = document.createElement("div");
   grid.className = "compare-meta-grid";
   const af2Provider =
@@ -14125,88 +15970,80 @@ function renderCompareMetadataPanel(leftMeta, rightMeta) {
     const data = entry.data || {};
     const card = document.createElement("div");
     card.className = "compare-meta-card";
-    card.innerHTML = `
-      <div class="compare-meta-card-title">${escapeHtml(entry.title)}</div>
-      <div class="compare-meta-card-subtitle">${escapeHtml(String(data.descriptor || "-"))}</div>
-      <div class="compare-meta-list">
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.role"))}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.role || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.source"))}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.source || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.provenance"))}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.provenance || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.tier"))}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.tier || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.backbone"))}</span>
-          <strong class="compare-meta-value compare-meta-mono">${escapeHtml(String(data.backbone || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.chains"))}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.chains || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.fixedCount"))}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.fixedCount || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.wtDiff"))}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.wtDiff || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.inputStructRmsd"))}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.inputStructRmsd || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.wtStructRmsd"))}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.wtStructRmsd || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.workingStructRmsd"))}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.workingStructRmsd || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.commonCa"))}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.commonCa || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(
-            t("artifacts.preview.compare.meta.predScope", { af2Provider })
-          )}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.af2Scope || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(
-            t("artifacts.preview.compare.meta.predSelected", { af2Provider })
-          )}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.af2Selected || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(
-            t("artifacts.preview.compare.meta.predPlddt", { af2Provider })
-          )}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.af2Plddt || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(
-            t("artifacts.preview.compare.meta.predRmsd", { af2Provider })
-          )}</span>
-          <strong class="compare-meta-value">${escapeHtml(String(data.af2Rmsd || "-"))}</strong>
-        </div>
-        <div class="compare-meta-item">
-          <span class="compare-meta-label">${escapeHtml(t("artifacts.preview.compare.meta.path"))}</span>
-          <strong class="compare-meta-value compare-meta-mono">${escapeHtml(String(data.path || "-"))}</strong>
-        </div>
-      </div>
-    `;
+    const cardTitle = document.createElement("div");
+    cardTitle.className = "compare-meta-card-title";
+    cardTitle.textContent = entry.title;
+    const subtitle = document.createElement("div");
+    subtitle.className = "compare-meta-card-subtitle";
+    subtitle.textContent = String(data.descriptor || "-");
+    const list = document.createElement("div");
+    list.className = "compare-meta-list";
+    const tooltipOptions = {
+      provider: af2Provider,
+      lang: state.lang || "en",
+    };
+    [
+      { key: "role", label: t("artifacts.preview.compare.meta.role"), value: data.role },
+      { key: "source", label: t("artifacts.preview.compare.meta.source"), value: data.source },
+      { key: "provenance", label: t("artifacts.preview.compare.meta.provenance"), value: data.provenance },
+      { key: "tier", label: t("artifacts.preview.compare.meta.tier"), value: data.tier },
+      {
+        key: "backbone",
+        label: t("artifacts.preview.compare.meta.backbone"),
+        value: data.backbone,
+        mono: true,
+      },
+      { key: "chains", label: t("artifacts.preview.compare.meta.chains"), value: data.chains },
+      { key: "fixedCount", label: t("artifacts.preview.compare.meta.fixedCount"), value: data.fixedCount },
+      { key: "wtDiff", label: t("artifacts.preview.compare.meta.wtDiff"), value: data.wtDiff },
+      {
+        key: "inputStructRmsd",
+        label: t("artifacts.preview.compare.meta.inputStructRmsd"),
+        value: data.inputStructRmsd,
+      },
+      {
+        key: "wtStructRmsd",
+        label: t("artifacts.preview.compare.meta.wtStructRmsd"),
+        value: data.wtStructRmsd,
+      },
+      {
+        key: "workingStructRmsd",
+        label: t("artifacts.preview.compare.meta.workingStructRmsd"),
+        value: data.workingStructRmsd,
+      },
+      { key: "commonCa", label: t("artifacts.preview.compare.meta.commonCa"), value: data.commonCa },
+      {
+        key: "predScope",
+        label: t("artifacts.preview.compare.meta.predScope", { af2Provider }),
+        value: data.af2Scope,
+      },
+      {
+        key: "predSelected",
+        label: t("artifacts.preview.compare.meta.predSelected", { af2Provider }),
+        value: data.af2Selected,
+      },
+      {
+        key: "predPlddt",
+        label: t("artifacts.preview.compare.meta.predPlddt", { af2Provider }),
+        value: data.af2Plddt,
+      },
+      {
+        key: "predRmsd",
+        label: t("artifacts.preview.compare.meta.predRmsd", { af2Provider }),
+        value: data.af2Rmsd,
+      },
+      { key: "path", label: t("artifacts.preview.compare.meta.path"), value: data.path, mono: true },
+    ].forEach((item) => {
+      appendCompareMetaItem(list, {
+        label: item.label,
+        value: item.value,
+        tooltip: buildCompareMetaTooltip(item.key, tooltipOptions),
+        mono: Boolean(item.mono),
+      });
+    });
+    card.appendChild(cardTitle);
+    card.appendChild(subtitle);
+    card.appendChild(list);
     grid.appendChild(card);
   });
   panel.appendChild(grid);
@@ -14562,8 +16399,6 @@ function applyComparisonStyles(panes, compareMode, structureDiff, seqDiff, selec
     applyDiffResidueStyle(panes[1].viewer, structureDiff.midResidues, "#e6a700");
     applyDiffResidueStyle(panes[0].viewer, structureDiff.highResidues, "#d62728");
     applyDiffResidueStyle(panes[1].viewer, structureDiff.highResidues, "#d62728");
-    applyDiffResidueStyle(panes[0].viewer, structureDiff.leftOnlyResidues, "#1f77b4");
-    applyDiffResidueStyle(panes[1].viewer, structureDiff.rightOnlyResidues, "#ff7f0e");
   } else if (seqDiff && seqDiff.totalCount > 0) {
     applyDiffResidueStyle(panes[0].viewer, seqDiff.leftResidues, "#1f77b4");
     applyDiffResidueStyle(panes[1].viewer, seqDiff.rightResidues, "#ff7f0e");
@@ -14601,6 +16436,22 @@ function renderResidueLinkedView(structureDiff, onSelect) {
   title.innerHTML = `<strong>${escapeHtml(t("residue.linked.title"))}</strong><span>${escapeHtml(
     t("residue.linked.help")
   )}</span>`;
+  const legend = document.createElement("div");
+  legend.className = "residue-linked-legend";
+  legend.innerHTML =
+    (state.lang || "en") === "ko"
+      ? `
+        <span class="legend-chip low">0.0-1.5A</span>
+        <span class="legend-chip mid">1.5-3.0A</span>
+        <span class="legend-chip high">&gt;3.0A</span>
+        <span class="legend-chip selected">selected</span>
+      `
+      : `
+        <span class="legend-chip low">0.0-1.5A</span>
+        <span class="legend-chip mid">1.5-3.0A</span>
+        <span class="legend-chip high">&gt;3.0A</span>
+        <span class="legend-chip selected">selected</span>
+      `;
   const selectedInfo = document.createElement("div");
   selectedInfo.className = "hint";
   selectedInfo.textContent = t("residue.linked.selectedNone");
@@ -14700,6 +16551,7 @@ function renderResidueLinkedView(structureDiff, onSelect) {
   });
 
   root.appendChild(title);
+  root.appendChild(legend);
   root.appendChild(selectedInfo);
   root.appendChild(strip);
   root.appendChild(tableWrap);
@@ -14737,7 +16589,28 @@ function render3dComparison(left, right, mode = "structure", compareMeta = null)
   const seqDiff = usePdbPair ? computePdbSequenceDiff(left.text, right.text) : null;
   const rightTextForView =
     structureDiff && structureDiff.ok ? applyTransformToPdbText(right.text, structureDiff.transform) : right.text;
-  const buildPane = (path, text, format) => {
+  const metricByResidueKey = new Map();
+  (Array.isArray(structureDiff?.residueMetrics) ? structureDiff.residueMetrics : []).forEach((item) => {
+    const key = residueAnnotationKey(item?.chain, item?.resi);
+    if (!key) return;
+    metricByResidueKey.set(key, item);
+  });
+  const leftSequenceOnly = new Set();
+  Object.entries(seqDiff?.leftResidues || {}).forEach(([chain, values]) => {
+    (Array.isArray(values) ? values : []).forEach((resi) => {
+      const key = residueAnnotationKey(chain, resi);
+      if (key) leftSequenceOnly.add(key);
+    });
+  });
+  const rightSequenceOnly = new Set();
+  Object.entries(seqDiff?.rightResidues || {}).forEach(([chain, values]) => {
+    (Array.isArray(values) ? values : []).forEach((resi) => {
+      const key = residueAnnotationKey(chain, resi);
+      if (key) rightSequenceOnly.add(key);
+    });
+  });
+  let selectedResidue = null;
+  const buildPane = (path, text, format, side) => {
     const pane = document.createElement("div");
     pane.className = "viewer3d-pane";
     const header = document.createElement("div");
@@ -14755,6 +16628,48 @@ function render3dComparison(left, right, mode = "structure", compareMeta = null)
     } else {
       apply3dStyle(viewer, format);
     }
+    if (format === "pdb") {
+      const legend = createViewerLegendCard(
+        buildCompareViewerLegendLines({
+          compareMode,
+          lang: state.lang || "en",
+        })
+      );
+      if (legend) {
+        pane.appendChild(legend);
+      }
+      installViewerHoverLabels(viewer, (atom) => {
+        const chain = normalizeChainId(atom?.chain || "");
+        const resi = Number.parseInt(atom?.resi, 10);
+        if (!Number.isFinite(resi) || resi <= 0) return "";
+        const key = residueAnnotationKey(chain, resi);
+        const metric = metricByResidueKey.get(key);
+        const sequenceSide =
+          compareMode === "sequence"
+            ? side === "left"
+              ? leftSequenceOnly.has(key)
+                ? "left"
+                : ""
+              : rightSequenceOnly.has(key)
+                ? "right"
+                : ""
+            : "";
+        const isSelected =
+          selectedResidue &&
+          normalizeChainId(selectedResidue.chain || "") === chain &&
+          Number(selectedResidue.resi) === resi;
+        return buildCompareHoverText({
+          chain,
+          resi,
+          resn: atom?.resn || "",
+          compareMode,
+          distance: metric?.distance ?? null,
+          sequenceSide,
+          selected: Boolean(isSelected),
+          lang: state.lang || "en",
+        });
+      });
+    }
     viewer.zoomTo();
     viewer.render();
     if (typeof viewer.resize === "function") {
@@ -14762,8 +16677,8 @@ function render3dComparison(left, right, mode = "structure", compareMeta = null)
     }
     panes.push({ viewer, format, text, path });
   };
-  buildPane(left.path, left.text, left.format);
-  buildPane(right.path, rightTextForView, right.format);
+  buildPane(left.path, left.text, left.format, "left");
+  buildPane(right.path, rightTextForView, right.format, "right");
 
   if (
     panes.length === 2 &&
@@ -14772,16 +16687,16 @@ function render3dComparison(left, right, mode = "structure", compareMeta = null)
     panes[0].text &&
     panes[1].text
   ) {
-    let selectedResidue = null;
     applyComparisonStyles(panes, compareMode, structureDiff, seqDiff, selectedResidue);
     const legend = document.createElement("div");
     legend.className = "viewer3d-diff-note";
     if (compareMode === "structure" && structureDiff && structureDiff.ok) {
-      const rmsdText = formatMetricValue(structureDiff.rmsd, 2, false);
-      const p90Text = formatMetricValue(structureDiff.p90Distance, 2, false);
-      legend.textContent = `${t("artifacts.preview.compare.diffLegendStructure")} · RMSD=${rmsdText}A, P90=${p90Text}A, n=${Number(
-        structureDiff.commonCount || 0
-      )}`;
+      legend.textContent = buildStructureDiffLegend({
+        rmsd: structureDiff.rmsd,
+        p90Distance: structureDiff.p90Distance,
+        commonCount: structureDiff.commonCount,
+        lang: state.lang || "en",
+      });
     } else {
       const seqDiff = computePdbSequenceDiff(left.text, right.text);
       legend.textContent =
@@ -15030,6 +16945,107 @@ function renderComparePresetStrip(structureItems) {
   });
 }
 
+function currentBackboneManifest(runId = state.currentRunId) {
+  const key = String(runId || "").trim();
+  return key ? state.backboneManifestByRunId[key] || null : null;
+}
+
+async function loadBackboneManifest(runId = state.currentRunId) {
+  const key = String(runId || "").trim();
+  if (!key) return null;
+  try {
+    const result = await apiCall("pipeline.read_artifact", {
+      run_id: key,
+      path: "backbones.json",
+      max_bytes: 300000,
+    });
+    const payload = JSON.parse(String(result?.text || "{}"));
+    state.backboneManifestByRunId[key] = payload && typeof payload === "object" ? payload : null;
+  } catch (_err) {
+    state.backboneManifestByRunId[key] = null;
+  }
+  return state.backboneManifestByRunId[key];
+}
+
+function compareManifestModeLabel(mode) {
+  const raw = String(mode || "")
+    .trim()
+    .toLowerCase();
+  const isKo = (state.lang || "en") === "ko";
+  if (raw === "selected_only") return isKo ? "대표 1개만 사용" : "selected representative only";
+  if (raw === "all_observed") return isKo ? "관측 구조 전체 사용" : "all observed used";
+  if (raw === "all_materialized") return isKo ? "저장 구조 전체 사용" : "all saved used";
+  if (raw === "partial") return isKo ? "일부만 사용" : "partially used";
+  if (raw === "none") return isKo ? "미사용" : "not used";
+  if (raw === "propagated_only") return isKo ? "사용" : "used";
+  return raw || "-";
+}
+
+function formatBackboneUsageSummary(sourceKey, summary, { includeSourceLabel = true, includeSelected = false } = {}) {
+  if (!summary || typeof summary !== "object") return "";
+  const isKo = (state.lang || "en") === "ko";
+  const label = sourceKey === "rfd3" ? "RFD3" : sourceKey === "bioemu" ? "BioEmu" : sourceLabel(sourceKey);
+  const requested = Number(summary.requested_count || 0);
+  const observed = Number(summary.observed_count || 0);
+  const materialized = Number(summary.materialized_count || 0);
+  const used = Number(summary.propagated_count || summary.backbone_count || 0);
+  const modeText = compareManifestModeLabel(summary.propagation_mode);
+  const selectedId = String(summary.selected_backbone_id || "").trim();
+  const prefix = includeSourceLabel ? `${label} · ` : "";
+  const parts = [
+    isKo ? `요청 ${requested}` : `requested ${requested}`,
+    isKo ? `관측 ${observed}` : `observed ${observed}`,
+    isKo ? `저장 ${materialized}` : `saved ${materialized}`,
+    isKo ? `사용 ${used}` : `used ${used}`,
+  ];
+  if (modeText && modeText !== "-") parts.push(modeText);
+  if (includeSelected && selectedId) {
+    parts.push(isKo ? `대표 ${displayArtifactPath(selectedId)}` : `selected ${displayArtifactPath(selectedId)}`);
+  }
+  return `${prefix}${parts.join(" · ")}`;
+}
+
+function compareManifestSummaryText(sourceKey, summary) {
+  return formatBackboneUsageSummary(sourceKey, summary, { includeSourceLabel: true, includeSelected: false });
+}
+
+function renderCompareManifestStrip() {
+  if (!el.artifactCompareManifest) return;
+  const manifest = currentBackboneManifest();
+  const sources = manifest?.sources && typeof manifest.sources === "object" ? manifest.sources : null;
+  const rows = ["rfd3", "bioemu"]
+    .map((sourceKey) => {
+      const summary = sources && typeof sources[sourceKey] === "object" ? sources[sourceKey] : null;
+      if (!summary) return null;
+      return { sourceKey, summary };
+    })
+    .filter(Boolean);
+  if (!rows.length) {
+    el.artifactCompareManifest.innerHTML = "";
+    return;
+  }
+  const isKo = (state.lang || "en") === "ko";
+  const title = isKo ? "Backbone 생성/사용 현황" : "Backbone Generation / Usage";
+  el.artifactCompareManifest.innerHTML = `
+    <div class="compare-strip-title">${escapeHtml(title)}</div>
+    <div class="compare-manifest-list">
+      ${rows
+        .map(({ sourceKey, summary }) => {
+          const detail = formatBackboneUsageSummary(sourceKey, summary, {
+            includeSourceLabel: true,
+            includeSelected: true,
+          });
+          return `
+            <div class="compare-manifest-chip" title="${escapeAttr(detail)}">
+              <strong>${escapeHtml(compareManifestSummaryText(sourceKey, summary))}</strong>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
 function chooseDefaultComparePaths(structureItems) {
   const paths = new Set(structureItems.map((item) => String(item?.path || "")));
   if (!paths.has(state.artifactCompareLeftPath)) state.artifactCompareLeftPath = "";
@@ -15089,7 +17105,7 @@ function chooseDefaultComparePaths(structureItems) {
 function renderArtifactCompareSelects() {
   if (!el.artifactCompareLeft || !el.artifactCompareRight) return;
   if (el.artifactCompareMode) {
-    const mode = state.artifactCompareMode === "sequence" ? "sequence" : "structure";
+    const mode = state.artifactCompareMode === "structure" ? "structure" : DEFAULT_ARTIFACT_COMPARE_MODE;
     el.artifactCompareMode.value = mode;
   }
   const structureItems = collectCompareStructureItems(state.artifacts);
@@ -15101,6 +17117,7 @@ function renderArtifactCompareSelects() {
   chooseDefaultComparePaths(structureItems);
   renderCompareReferenceStrip(structureItems);
   renderComparePresetStrip(structureItems);
+  renderCompareManifestStrip();
   const fill = (selectEl, placeholderKey) => {
     selectEl.innerHTML = "";
     const first = document.createElement("option");
@@ -15623,6 +17640,7 @@ async function refreshArtifacts(options = {}) {
     if (runId !== String(state.currentRunId || "").trim()) return;
     state.artifacts = result.artifacts || [];
     rebuildArtifactMetaIndex(state.artifacts);
+    await loadBackboneManifest(runId);
     renderAllArtifactViews(state.artifacts);
     refreshArtifactSelects();
     void refreshArtifactComparisonSummary();
@@ -17872,10 +19890,26 @@ async function createUser() {
 
 el.loginBtn.addEventListener("click", authLogin);
 
+if (el.ssoLoginBtn) {
+  el.ssoLoginBtn.addEventListener("click", async () => {
+    el.loginError.textContent = "";
+    try {
+      await startOidcLogin();
+    } catch (err) {
+      el.loginError.textContent = err.message || t("auth.ssoUnavailable");
+    }
+  });
+}
+
 el.logoutBtn.addEventListener("click", () => {
-  clearSession();
-  showLogin();
+  logoutCurrentSession();
 });
+
+if (el.accountBtn) {
+  el.accountBtn.addEventListener("click", () => {
+    openAccountConsole();
+  });
+}
 
 el.planBtn.addEventListener("click", resetInputs);
 
@@ -18075,6 +20109,15 @@ if (el.studioRunBtn) {
   });
 }
 
+if (el.studioNewSessionBtn) {
+  el.studioNewSessionBtn.addEventListener("click", async () => {
+    const session = await createFreshWorkflowStudioSession();
+    if (!session) {
+      setMessage(t("studio.createFailed"), "ai");
+    }
+  });
+}
+
 if (el.studioStopBtn) {
   el.studioStopBtn.addEventListener("click", async () => {
     const session = workflowStudioSessionForId();
@@ -18174,8 +20217,8 @@ if (el.artifactCompareLeft) {
 
 if (el.artifactCompareMode) {
   el.artifactCompareMode.addEventListener("change", () => {
-    const mode = String(el.artifactCompareMode.value || "structure").trim().toLowerCase();
-    state.artifactCompareMode = mode === "sequence" ? "sequence" : "structure";
+    const mode = String(el.artifactCompareMode.value || DEFAULT_ARTIFACT_COMPARE_MODE).trim().toLowerCase();
+    state.artifactCompareMode = mode === "structure" ? "structure" : DEFAULT_ARTIFACT_COMPARE_MODE;
     renderCopilotContext();
     if (state.artifactCompareLeftPath && state.artifactCompareRightPath) {
       void compareSelected3dArtifacts();
@@ -18448,14 +20491,47 @@ if (el.reportContent) {
   });
 }
 
+window.addEventListener("storage", (event) => {
+  const key = String(event?.key || "").trim();
+  if (!key.startsWith(RESIDUE_PICKER_RESULT_STORAGE_KEY_PREFIX) || !String(event?.newValue || "").trim()) {
+    return;
+  }
+  let payload = null;
+  try {
+    payload = JSON.parse(String(event.newValue || ""));
+  } catch (_err) {
+    payload = null;
+  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return;
+  applyDetachedResiduePickerResult(payload);
+  const token = String(payload.token || "").trim();
+  if (!token) return;
+  localStorage.removeItem(residuePickerDetachedResultStorageKey(token));
+  removeDetachedResiduePickerRequest(token);
+});
+
+window.addEventListener("message", (event) => {
+  if (event.origin !== window.location.origin) return;
+  const data = event.data && typeof event.data === "object" ? event.data : null;
+  if (!data) return;
+  if (data.type === RESIDUE_PICKER_RESULT_MESSAGE_TYPE) {
+    const payload = data.payload && typeof data.payload === "object" ? data.payload : null;
+    if (!payload) return;
+    applyDetachedResiduePickerResult(payload);
+    const token = String(payload.token || "").trim();
+    if (!token) return;
+    removeDetachedResiduePickerRequest(token);
+    return;
+  }
+  if (data.type === RESIDUE_PICKER_RESET_MESSAGE_TYPE) {
+    applyDetachedResiduePickerReset(data.payload);
+  }
+});
+
 initLanguage();
 initCopilot();
 
-if (state.user && state.token) {
-  loadSession();
-} else {
-  showLogin();
-}
+void bootstrapAuth();
 
 initFeedbackUI();
 if (el.hitListCutoff) {

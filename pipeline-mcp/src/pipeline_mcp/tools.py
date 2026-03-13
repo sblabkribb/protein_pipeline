@@ -1325,6 +1325,12 @@ def _normalize_backbone_source(raw: object) -> str:
 def _source_metrics_bucket() -> dict[str, object]:
     return {
         "backbone_count": 0,
+        "requested_count": 0,
+        "observed_count": 0,
+        "materialized_count": 0,
+        "propagated_count": 0,
+        "propagation_mode": "",
+        "selected_backbone_id": None,
         "soluprot_scores": [],
         "soluprot_total": 0,
         "soluprot_passed": 0,
@@ -1335,6 +1341,26 @@ def _source_metrics_bucket() -> dict[str, object]:
         "af2_selected_rmsd": [],
         "af2_selected_total": 0,
     }
+
+
+def _source_propagation_mode(
+    observed_count: object,
+    materialized_count: object,
+    propagated_count: object,
+) -> str:
+    observed = int(observed_count or 0)
+    materialized = int(materialized_count or 0)
+    propagated = int(propagated_count or 0)
+    if propagated <= 0:
+        return "none"
+    available = observed if observed > materialized else materialized
+    if available <= 0:
+        return "propagated_only"
+    if propagated >= available:
+        return "all_observed" if observed > materialized else "all_materialized"
+    if propagated == 1 and available > 1:
+        return "selected_only"
+    return "partial"
 
 
 def _source_for_sequence_id(seq_id: str, lookup: dict[str, str]) -> str:
@@ -1361,8 +1387,30 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
     }
 
     backbone_source_by_id: dict[str, str] = {}
+    manifest_sources_present: set[str] = set()
     backbones = _load_json_file(run_root / "backbones.json")
     if isinstance(backbones, dict):
+        manifest_sources = backbones.get("sources")
+        if isinstance(manifest_sources, dict):
+            for raw_source, raw_summary in manifest_sources.items():
+                if not isinstance(raw_summary, dict):
+                    continue
+                source = _normalize_backbone_source(raw_source)
+                manifest_sources_present.add(source)
+                bucket = out[source]
+                requested_count = int(raw_summary.get("requested_count") or 0)
+                observed_count = int(raw_summary.get("observed_count") or 0)
+                materialized_count = int(raw_summary.get("materialized_count") or 0)
+                propagated_count = int(raw_summary.get("propagated_count") or 0)
+                bucket["requested_count"] = requested_count
+                bucket["observed_count"] = observed_count
+                bucket["materialized_count"] = materialized_count
+                bucket["propagated_count"] = propagated_count
+                bucket["backbone_count"] = propagated_count
+                bucket["propagation_mode"] = str(raw_summary.get("propagation_mode") or "").strip()
+                selected_backbone_id = str(raw_summary.get("selected_backbone_id") or "").strip()
+                if selected_backbone_id:
+                    bucket["selected_backbone_id"] = selected_backbone_id
         items = backbones.get("backbones")
         if isinstance(items, list):
             for item in items:
@@ -1372,7 +1420,30 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
                 backbone_id = str(item.get("id") or "").strip()
                 if backbone_id:
                     backbone_source_by_id[backbone_id] = source
-                out[source]["backbone_count"] = int(out[source].get("backbone_count") or 0) + 1
+                if bool(item.get("selected")) and backbone_id and not str(out[source].get("selected_backbone_id") or "").strip():
+                    out[source]["selected_backbone_id"] = backbone_id
+                if source in manifest_sources_present:
+                    continue
+                if bool(item.get("materialized", True)):
+                    out[source]["materialized_count"] = int(out[source].get("materialized_count") or 0) + 1
+                if bool(item.get("propagated", True)):
+                    out[source]["propagated_count"] = int(out[source].get("propagated_count") or 0) + 1
+                    out[source]["backbone_count"] = int(out[source].get("backbone_count") or 0) + 1
+        for source, bucket in out.items():
+            if source not in manifest_sources_present:
+                bucket["observed_count"] = max(
+                    int(bucket.get("observed_count") or 0),
+                    int(bucket.get("materialized_count") or 0),
+                )
+                bucket["requested_count"] = max(
+                    int(bucket.get("requested_count") or 0),
+                    int(bucket.get("observed_count") or 0),
+                )
+                bucket["propagation_mode"] = _source_propagation_mode(
+                    bucket.get("observed_count"),
+                    bucket.get("materialized_count"),
+                    bucket.get("propagated_count"),
+                )
 
     if not summary:
         return out
@@ -1638,6 +1709,9 @@ def _build_comparison_summary(
 
     source_compare: dict[str, dict[str, object]] = {}
     funnel_by_source: dict[str, dict[str, object]] = {}
+    requested_total = 0
+    observed_total = 0
+    materialized_total = 0
     for source_key in ("rfd3", "bioemu", "other"):
         bucket = source_metrics.get(source_key)
         if not isinstance(bucket, dict):
@@ -1655,9 +1729,20 @@ def _build_comparison_summary(
         sol_passed_src = int(bucket.get("soluprot_passed") or 0)
         af2_candidates_src = int(bucket.get("af2_candidate_total") or 0)
         af2_selected_src = int(bucket.get("af2_selected_total") or 0)
-        backbone_src = int(bucket.get("backbone_count") or 0)
+        requested_src = int(bucket.get("requested_count") or 0)
+        observed_src = int(bucket.get("observed_count") or 0)
+        materialized_src = int(bucket.get("materialized_count") or 0)
+        propagated_src = int(bucket.get("propagated_count") or 0)
+        backbone_src = propagated_src if propagated_src > 0 else int(bucket.get("backbone_count") or 0)
+        propagation_mode = str(bucket.get("propagation_mode") or "").strip()
+        selected_backbone_id = str(bucket.get("selected_backbone_id") or "").strip() or None
         source_compare[source_key] = {
             "backbone_count": backbone_src,
+            "requested_count": requested_src,
+            "observed_count": observed_src,
+            "materialized_count": materialized_src,
+            "propagated_count": propagated_src,
+            "propagation_mode": propagation_mode,
             "soluprot_total": sol_total_src,
             "soluprot_passed": sol_passed_src,
             "soluprot_pass_rate": _safe_ratio(sol_passed_src, sol_total_src),
@@ -1674,8 +1759,15 @@ def _build_comparison_summary(
                 [float(v) for v in source_rmsd_values if isinstance(v, (int, float))]
             ),
         }
+        if selected_backbone_id:
+            source_compare[source_key]["selected_backbone_id"] = selected_backbone_id
         funnel_by_source[source_key] = {
             "backbone_count": backbone_src,
+            "requested_count": requested_src,
+            "observed_count": observed_src,
+            "materialized_count": materialized_src,
+            "propagated_count": propagated_src,
+            "propagation_mode": propagation_mode,
             "soluprot_total": sol_total_src,
             "soluprot_passed": sol_passed_src,
             "soluprot_pass_rate": _safe_ratio(sol_passed_src, sol_total_src),
@@ -1691,16 +1783,26 @@ def _build_comparison_summary(
                 backbone_src,
             ),
         }
+        if selected_backbone_id:
+            funnel_by_source[source_key]["selected_backbone_id"] = selected_backbone_id
+        requested_total += requested_src
+        observed_total += observed_src
+        materialized_total += materialized_src
 
     backbone_total = 0
     for source_key in ("rfd3", "bioemu", "other"):
         bucket = source_metrics.get(source_key)
         if isinstance(bucket, dict):
-            backbone_total += int(bucket.get("backbone_count") or 0)
+            propagated_count = int(bucket.get("propagated_count") or 0)
+            backbone_total += propagated_count if propagated_count > 0 else int(bucket.get("backbone_count") or 0)
 
     funnel = {
         "overall": {
             "backbone_count": backbone_total,
+            "requested_count": requested_total,
+            "observed_count": observed_total,
+            "materialized_count": materialized_total,
+            "propagated_count": backbone_total,
             "soluprot_total": sol_total,
             "soluprot_passed": sol_passed,
             "soluprot_pass_rate": _safe_ratio(sol_passed, sol_total),
@@ -1726,7 +1828,7 @@ def _build_comparison_summary(
     }
 
     return {
-        "version": 3,
+        "version": 4,
         "generated_at": _now_iso(),
         "wt_compare_enabled": wt_enabled,
         "wt_vs_design": wt_vs_design,
@@ -2119,6 +2221,54 @@ def _append_wt_visual_lines(
         lines.append(f"  - {row}")
 
 
+def _propagation_mode_label(mode: object, *, lang: str = "en") -> str:
+    raw = str(mode or "").strip().lower()
+    is_ko = str(lang).lower().startswith("ko")
+    labels = {
+        "none": ("not used", "미사용"),
+        "propagated_only": ("used", "사용"),
+        "all_materialized": ("all saved used", "저장 구조 전체 사용"),
+        "all_observed": ("all observed used", "관측 구조 전체 사용"),
+        "selected_only": ("selected representative only", "대표 1개만 사용"),
+        "partial": ("partially used", "일부만 사용"),
+    }
+    pair = labels.get(raw)
+    if pair is None:
+        return raw
+    return pair[1] if is_ko else pair[0]
+
+
+def _source_usage_summary_text(source: str, bucket: dict[str, object], *, lang: str = "en") -> str | None:
+    if not isinstance(bucket, dict):
+        return None
+    is_ko = str(lang).lower().startswith("ko")
+    requested = int(bucket.get("requested_count") or 0)
+    observed = int(bucket.get("observed_count") or 0)
+    materialized = int(bucket.get("materialized_count") or 0)
+    used = int(bucket.get("propagated_count") or bucket.get("backbone_count") or 0)
+    mode = _propagation_mode_label(bucket.get("propagation_mode"), lang=lang)
+    selected = str(bucket.get("selected_backbone_id") or "").strip()
+    if requested <= 0 and observed <= 0 and materialized <= 0 and used <= 0 and not mode and not selected:
+        return None
+    source_name = "RFD3" if source == "rfd3" else "BioEmu" if source == "bioemu" else ("기타" if is_ko else "Other")
+    counts_text = (
+        f"요청 {requested} · 관측 {observed} · 저장 {materialized} · 사용 {used}"
+        if is_ko
+        else f"requested {requested} · observed {observed} · saved {materialized} · used {used}"
+    )
+    suffixes: list[str] = []
+    if mode:
+        suffixes.append(mode)
+    if selected:
+        suffixes.append(
+            f"selected {selected}"
+            if not is_ko
+            else f"대표 {selected}"
+        )
+    detail = f" ({'; '.join(suffixes)})" if suffixes else ""
+    return f"{source_name}: {counts_text}{detail}"
+
+
 def _append_source_comparison_lines(
     lines: list[str],
     *,
@@ -2215,6 +2365,16 @@ def _append_source_comparison_lines(
         lines.append(
             f"| {source_names.get(source, source)} | {backbone_count} | {pass_text} | {sol_text} | {af2_text} | {plddt_text} | {rmsd_text} |"
         )
+
+    usage_rows = []
+    for source, bucket, *_rest in rows:
+        usage = _source_usage_summary_text(source, bucket, lang=lang)
+        if usage:
+            usage_rows.append(usage)
+    if usage_rows:
+        lines.append("- Backbone generation/use:" if not is_ko else "- 백본 생성/사용:")
+        for usage in usage_rows:
+            lines.append(f"  - {usage}")
 
     rfd3_bucket = source_metrics.get("rfd3") if isinstance(source_metrics.get("rfd3"), dict) else {}
     bioemu_bucket = source_metrics.get("bioemu") if isinstance(source_metrics.get("bioemu"), dict) else {}
@@ -2395,11 +2555,11 @@ def _format_wt_difference(value: object) -> str:
         return "-"
     diff_count = value.get("wt_diff_count")
     compare_len = value.get("wt_compare_len")
-    diff_pct = value.get("wt_diff_pct")
     if not isinstance(diff_count, (int, float)) or not isinstance(compare_len, (int, float)) or float(compare_len) <= 0:
         return "-"
-    if isinstance(diff_pct, (int, float)):
-        return f"{int(diff_count)}/{int(compare_len)} ({float(diff_pct):.1f}%)"
+    identity_pct = value.get("wt_identity_pct")
+    if isinstance(identity_pct, (int, float)):
+        return f"{int(diff_count)}/{int(compare_len)} (identity {float(identity_pct):.1f}%)"
     return f"{int(diff_count)}/{int(compare_len)}"
 
 
@@ -2561,7 +2721,11 @@ def _append_top_hit_lines(
             f"- {len(rows)} candidates ranked, median score={_format_metric(stats.get('score_median'), 1)}"
         )
     )
-    lines.append("| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | WT Diff (n/len, %) | ColabFold selected |")
+    lines.append(
+        "| 순위 | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | WT 차이 (n/len · 상동성) | ColabFold selected |"
+        if is_ko
+        else "| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | WT change (n/len · identity) | ColabFold selected |"
+    )
     lines.append("|---:|---|---|---:|---:|---:|---:|---:|---:|---|")
     for row in rows[: max(1, int(top_n))]:
         lines.append(

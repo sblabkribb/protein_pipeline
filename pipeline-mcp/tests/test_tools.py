@@ -542,6 +542,8 @@ class TestTools(unittest.TestCase):
             self.assertIn("Score", report_text)
             self.assertIn("WT Comparison", report_text)
             self.assertIn("Backbone Source Comparison", report_text)
+            self.assertIn("Backbone generation/use", report_text)
+            self.assertIn("WT change (n/len · identity)", report_text)
             comparison_summary = report.get("comparison_summary") or {}
             self.assertIn("wt_vs_design", comparison_summary)
             self.assertIn("source_compare", comparison_summary)
@@ -554,6 +556,11 @@ class TestTools(unittest.TestCase):
                 for bucket in source_compare.values():
                     if not isinstance(bucket, dict):
                         continue
+                    self.assertIn("requested_count", bucket)
+                    self.assertIn("observed_count", bucket)
+                    self.assertIn("materialized_count", bucket)
+                    self.assertIn("propagated_count", bucket)
+                    self.assertIn("propagation_mode", bucket)
                     self.assertIn("plddt_median", bucket)
                     self.assertIn("rmsd_median", bucket)
             tier_compare = comparison_summary.get("tier_compare") or []
@@ -639,6 +646,11 @@ class TestTools(unittest.TestCase):
                 for bucket in source_compare.values():
                     if not isinstance(bucket, dict):
                         continue
+                    self.assertIn("requested_count", bucket)
+                    self.assertIn("observed_count", bucket)
+                    self.assertIn("materialized_count", bucket)
+                    self.assertIn("propagated_count", bucket)
+                    self.assertIn("propagation_mode", bucket)
                     self.assertIn("plddt_median", bucket)
                     self.assertIn("rmsd_median", bucket)
 
