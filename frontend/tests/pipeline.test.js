@@ -1,13 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildCompareMetaTooltip,
+  buildCompareScopeDescription,
+  buildStructureDiffLegend,
   coerceFiniteMetricValue,
   extractDesignChainsFromPayload,
   filterPdbTextByChains,
   selectResidueStripMetrics,
 } from "../lib/compare.js";
 import {
+  buildCopilotReply,
+  copilotIntentFromPrompt,
+} from "../lib/copilot.js";
+import {
+  DEFAULT_ARTIFACT_COMPARE_MODE,
   artifactMetaFromPath,
+  buildWorkflowStudioFreshSessionSeed,
   buildWorkflowStudioEffectiveAnswers,
   buildSetupDraftFromRequest,
   buildRunArguments,
@@ -17,23 +26,30 @@ import {
   detectTargetKey,
   displayArtifactPath,
   displayRfd3Id,
+  effectiveRfd3InputPdb,
   expandWorkflowStudioNodes,
   filterRunsByPrefix,
   inferRequestRunMode,
   latestWorkflowStudioCompletedNodesFromEvents,
   latestMeaningfulStatusFromEvents,
+  mergeFixedPositionsExtraDraft,
   normalizeSetupDraftForFreshRun,
+  normalizeFixedPositionsExtraDraft,
+  formatWtIdentitySummary,
   mergeWorkflowStudioAnswers,
   minimumWorkflowStudioStartStage,
   nextWorkflowStudioStage,
   parseWorkflowStudioNode,
   resolveWorkflowStudioStageForSession,
+  runUsesRfd3Stage,
   sanitizeName,
   shouldReuseSelectedRun,
+  shouldShowRfd3InputPdbField,
   shouldPollRunForTabChange,
   stageFromPath,
   splitWorkflowStudioAnswers,
   workflowStudioRetainedArtifactPath,
+  workflowStudioActionRunIdForSession,
   workflowStudioExecutionTarget,
   progressStepsForRequest,
   progressUnitsForRequest,
@@ -42,8 +58,33 @@ import {
   workflowStudioDependencyStatus,
   workflowStudioStageFields,
   upsertWorkflowStudioStageStatus,
+  withFixedPositionsExtra,
   workflowStudioSessionRunKey,
 } from "../lib/pipeline.js";
+import {
+  aminoAcidPropertyInfo,
+  availableConservedTierPresetKeys,
+  buildSequenceSelectionTracks,
+  buildDetachedResiduePickerStoragePayload,
+  buildDetachedResiduePickerResultStoragePayload,
+  classifyResidueExposure,
+  clearResiduePickerSelectionState,
+  conservedTierPresetState,
+  DEFAULT_SURFACE_AREA_CUTOFF,
+  deriveResidueSpatialPresets,
+  mergeResidueSelectionMaps,
+  queryPositionsToResidueSelectionMap,
+  resolveResiduePickerSelectionState,
+  resolveResidueSelectionMaps,
+  selectionMapContains,
+  toggleResidueSelectionMaps,
+} from "../lib/residue-picker.js";
+import { buildPopupWindowFeatures, openPopupWindow } from "../lib/windowing.js";
+import {
+  buildCompareViewerLegendLines,
+  buildResiduePickerHoverText,
+  buildResiduePickerViewerLegendLines,
+} from "../lib/viewer-annotations.js";
 
 test("sanitizeName normalizes", () => {
   assert.equal(sanitizeName(" Hana Kim "), "hana_kim");
@@ -64,6 +105,70 @@ test("createRunId uses prefix and utc timestamp", () => {
 test("createWorkflowSessionId uses studio suffix and utc timestamp", () => {
   const sessionId = createWorkflowSessionId("kbf_hana", new Date(Date.UTC(2024, 0, 2, 3, 4, 5)));
   assert.match(sessionId, /^kbf_hana_studio_20240102_030405_[0-9a-f]{8}$/);
+});
+
+test("buildWorkflowStudioFreshSessionSeed creates a blank session while preserving workflow nodes", () => {
+  const seed = buildWorkflowStudioFreshSessionSeed({
+    session: {
+      prompt: "optimize scaffold",
+      nodes: ["msa", "proteinmpnn_30", "af2_30"],
+      head_run_id: "run-123",
+      head_request: {
+        target_pdb: "HEADER\n",
+        wt_compare: true,
+      },
+      base_answers: {
+        target_pdb: "HEADER\n",
+      },
+      stage_drafts: {
+        design: {
+          fixed_positions_extra: { A: [5, 9] },
+        },
+        af2: {
+          af2_provider: "af2",
+        },
+      },
+    },
+  });
+
+  assert.equal(seed.prompt, "");
+  assert.deepEqual(seed.nodes, ["msa", "proteinmpnn_30", "af2_30"]);
+  assert.equal(seed.sourceRunId, "");
+  assert.deepEqual(seed.answers, {});
+});
+
+test("buildWorkflowStudioFreshSessionSeed stays blank when no studio session exists", () => {
+  const seed = buildWorkflowStudioFreshSessionSeed({
+    prompt: "fresh start",
+    answers: {
+      target_pdb: "HEADER\n",
+      fixed_positions_extra: { A: [2] },
+    },
+    nodes: ["af2_70", "msa", "proteinmpnn_70"],
+  });
+
+  assert.equal(seed.prompt, "");
+  assert.deepEqual(seed.nodes, ["msa", "proteinmpnn_70", "af2_70"]);
+  assert.equal(seed.sourceRunId, "");
+  assert.deepEqual(seed.answers, {});
+});
+
+test("workflowStudioActionRunIdForSession does not borrow current run for a fresh session", () => {
+  assert.equal(
+    workflowStudioActionRunIdForSession(
+      {
+        session_id: "admin_studio_20260313_063140_82003e07",
+        head_run_id: "",
+        source_run_id: "",
+        pending: null,
+        history: [],
+        stage_run_ids: {},
+      },
+      "admin_20260310_065409_2f2c2372"
+    ),
+    ""
+  );
+  assert.equal(workflowStudioActionRunIdForSession(null, "admin_20260310_065409_2f2c2372"), "admin_20260310_065409_2f2c2372");
 });
 
 test("stageFromPath inference", () => {
@@ -279,6 +384,48 @@ test("buildRunArguments omits start_from when it is msa", () => {
   assert.equal(args.start_from, undefined);
 });
 
+test("normalizeFixedPositionsExtraDraft keeps only positive unique positions by chain", () => {
+  assert.deepEqual(
+    normalizeFixedPositionsExtraDraft({
+      A: [9, "4", 9, -1, 0],
+      b: [3, 3, 7],
+      C: [],
+    }),
+    {
+      A: [4, 9],
+      b: [3, 7],
+    }
+  );
+});
+
+test("mergeFixedPositionsExtraDraft appends new query positions without duplicates", () => {
+  assert.deepEqual(
+    mergeFixedPositionsExtraDraft(
+      { A: [2, 5] },
+      { A: [5, 8], B: [3] }
+    ),
+    {
+      A: [2, 5, 8],
+      B: [3],
+    }
+  );
+});
+
+test("withFixedPositionsExtra clears fixed_positions_extra when selection is empty", () => {
+  assert.deepEqual(
+    withFixedPositionsExtra(
+      {
+        target_pdb: "ATOM",
+        fixed_positions_extra: { A: [4, 9] },
+      },
+      {}
+    ),
+    {
+      target_pdb: "ATOM",
+    }
+  );
+});
+
 test("workflowStudioStageFields exposes key fields per stage", () => {
   assert.deepEqual(workflowStudioStageFields("design"), [
     "design_chains",
@@ -371,6 +518,124 @@ test("buildWorkflowStudioEffectiveAnswers inherits prior run values for untouche
   });
   assert.equal(merged.rfd3_contig, "A1-10");
   assert.equal(merged.bioemu_use, true);
+});
+
+test("runUsesRfd3Stage tracks whether current execution path includes rfd3", () => {
+  assert.equal(
+    runUsesRfd3Stage({
+      mode: "pipeline",
+      answers: {
+        target_input: "ATOM      1  N",
+        start_from: "msa",
+        stop_after: "novelty",
+      },
+    }),
+    true
+  );
+  assert.equal(
+    runUsesRfd3Stage({
+      mode: "pipeline",
+      answers: {
+        target_input: "ATOM      1  N",
+        start_from: "design",
+        stop_after: "novelty",
+      },
+    }),
+    false
+  );
+  assert.equal(
+    runUsesRfd3Stage({
+      mode: "workflow",
+      answers: {
+        target_input: "ATOM      1  N",
+      },
+      nodes: ["msa", "design", "af2"],
+    }),
+    false
+  );
+  assert.equal(
+    runUsesRfd3Stage({
+      mode: "workflow",
+      answers: {
+        target_input: "ATOM      1  N",
+      },
+      nodes: ["msa", "rfd3", "design"],
+    }),
+    true
+  );
+});
+
+test("effectiveRfd3InputPdb defaults to target_input pdb only when rfd3 is in scope", () => {
+  assert.equal(
+    effectiveRfd3InputPdb({
+      mode: "pipeline",
+      answers: {
+        target_input: "ATOM      1  N",
+        start_from: "msa",
+        stop_after: "novelty",
+      },
+    }),
+    "ATOM      1  N"
+  );
+  assert.equal(
+    effectiveRfd3InputPdb({
+      mode: "pipeline",
+      answers: {
+        target_input: "ATOM      1  N",
+        start_from: "design",
+        stop_after: "novelty",
+      },
+    }),
+    ""
+  );
+  assert.equal(
+    effectiveRfd3InputPdb({
+      mode: "workflow",
+      answers: {
+        target_input: "ATOM      1  N",
+        rfd3_input_pdb: "ATOM      1  CA",
+      },
+      nodes: ["msa", "rfd3", "design"],
+    }),
+    "ATOM      1  CA"
+  );
+});
+
+test("shouldShowRfd3InputPdbField only exposes separate override when needed", () => {
+  assert.equal(
+    shouldShowRfd3InputPdbField({
+      mode: "pipeline",
+      answers: {
+        target_input: "ATOM      1  N",
+        start_from: "msa",
+        stop_after: "novelty",
+      },
+    }),
+    false
+  );
+  assert.equal(
+    shouldShowRfd3InputPdbField({
+      mode: "pipeline",
+      answers: {
+        target_input: ">q1\nACDE",
+        start_from: "msa",
+        stop_after: "novelty",
+      },
+    }),
+    true
+  );
+  assert.equal(
+    shouldShowRfd3InputPdbField({
+      mode: "pipeline",
+      answers: {
+        target_input: "ATOM      1  N",
+        start_from: "msa",
+        stop_after: "novelty",
+      },
+      overrideVisible: true,
+    }),
+    true
+  );
 });
 
 test("workflowStudioChangedFields compares nested values", () => {
@@ -912,6 +1177,18 @@ test("buildSetupDraftFromRequest prepares file answers and metadata", () => {
   assert.equal(draft.answerMeta.rfd3_input_pdb.fileName, "request.json:rfd3_input_pdb");
 });
 
+test("buildSetupDraftFromRequest drops redundant rfd3_input_pdb when it matches target_pdb", () => {
+  const draft = buildSetupDraftFromRequest({
+    target_pdb: "ATOM      1  N",
+    rfd3_input_pdb: "ATOM      1  N",
+    rfd3_contig: "A1-20",
+  });
+  assert.equal(draft.answers.target_input, "ATOM      1  N");
+  assert.equal(draft.answers.rfd3_input_pdb, undefined);
+  assert.equal(draft.answerMeta.rfd3_input_pdb, undefined);
+  assert.equal(draft.answers.rfd3_contig, "A1-20");
+});
+
 test("normalizeSetupDraftForFreshRun resets pipeline start_from to msa", () => {
   const draft = {
     mode: "pipeline",
@@ -1016,4 +1293,455 @@ test("detectTargetKey", () => {
   assert.equal(detectTargetKey(">seq\nAAAA"), "target_fasta");
   assert.equal(detectTargetKey("ATOM      1  N"), "target_pdb");
   assert.equal(detectTargetKey("ACDEFGHIK"), "target_fasta");
+});
+
+test("DEFAULT_ARTIFACT_COMPARE_MODE prefers sequence diff", () => {
+  assert.equal(DEFAULT_ARTIFACT_COMPARE_MODE, "sequence");
+});
+
+test("formatWtIdentitySummary shows difference count and identity percent", () => {
+  assert.equal(
+    formatWtIdentitySummary({
+      wt_diff_count: 8,
+      wt_compare_len: 10,
+      wt_identity_pct: 20,
+    }),
+    "8/10 · identity 20.0%"
+  );
+});
+
+test("buildStructureDiffLegend stays in structure language only", () => {
+  const text = buildStructureDiffLegend({
+    rmsd: 1.07,
+    p90Distance: 1.39,
+    commonCount: 221,
+    lang: "en",
+  });
+  assert.match(text, /RMSD=1\.07A/);
+  assert.match(text, /P90=1\.39A/);
+  assert.doesNotMatch(text, /gap/i);
+  assert.doesNotMatch(text, /WT.*Design/i);
+});
+
+test("buildCompareScopeDescription explains reference and candidate scope", () => {
+  const text = buildCompareScopeDescription({
+    leftMeta: { compareRole: "wt_colabfold" },
+    rightMeta: { compareRole: "af2_candidate", tier: "30", backboneSource: "bioemu" },
+    provider: "colabfold",
+    lang: "en",
+  });
+  assert.match(text, /predicted wild-type reference/i);
+  assert.match(text, /single candidate/i);
+  assert.match(text, /Tier 0\.30/i);
+});
+
+test("buildCompareMetaTooltip explains hard-to-read compare metrics", () => {
+  const wtRmsd = buildCompareMetaTooltip("wtStructRmsd", { provider: "colabfold", lang: "ko" });
+  const scope = buildCompareMetaTooltip("predScope", { provider: "colabfold", lang: "en" });
+  assert.match(wtRmsd, /WT/i);
+  assert.match(wtRmsd, /RMSD/i);
+  assert.match(wtRmsd, /야생형|기준 구조/);
+  assert.match(scope, /exact file|WT reference|tier\/backbone summary/i);
+});
+
+test("copilotIntentFromPrompt detects metric term questions", () => {
+  assert.equal(copilotIntentFromPrompt("WT CF RMSD 이 무슨 의미야"), "term");
+});
+
+test("buildCopilotReply defines terms before snapshot dumping", () => {
+  const text = buildCopilotReply({
+    prompt: "WT CF RMSD 이 무슨 의미야",
+    lang: "ko",
+    snapshot: {
+      runId: "admin_20260310_065409_2f2c2372",
+      provider: "ColabFold",
+      rows: [],
+      compare: { ready: false },
+    },
+  });
+  assert.match(text, /^WT CF RMSD는/);
+  assert.doesNotMatch(text, /^Run /);
+});
+
+test("buildCopilotReply recommends top 3 rows when asked", () => {
+  const text = buildCopilotReply({
+    prompt: "최종 3종을 추천해줘",
+    lang: "ko",
+    snapshot: {
+      runId: "admin_20260310_065409_2f2c2372",
+      provider: "ColabFold",
+      rows: [
+        {
+          seq_id: "bioemu_topology:2",
+          source: "bioemu",
+          score: 76.8,
+          plddt: 89.0,
+          rmsd: 1.78,
+          wt_diff_count: 10,
+          wt_compare_len: 229,
+          wt_identity_pct: 95.6,
+        },
+        {
+          seq_id: "rfd3_spec-1_0_model_0:1",
+          source: "rfd3",
+          score: 74.4,
+          plddt: 87.5,
+          rmsd: 1.55,
+          wt_diff_count: 15,
+          wt_compare_len: 229,
+          wt_identity_pct: 93.4,
+        },
+        {
+          seq_id: "bioemu_topology:5",
+          source: "bioemu",
+          score: 72.1,
+          plddt: 86.3,
+          rmsd: 1.92,
+          wt_diff_count: 12,
+          wt_compare_len: 229,
+          wt_identity_pct: 94.8,
+        },
+      ],
+      compare: { ready: false },
+    },
+  });
+  assert.match(text, /1\.\s+bioemu_topology:2/);
+  assert.match(text, /2\.\s+rfd3_spec-1_0_model_0:1/);
+  assert.match(text, /3\.\s+bioemu_topology:5/);
+});
+
+test("aminoAcidPropertyInfo groups residues by chemistry", () => {
+  assert.equal(aminoAcidPropertyInfo("D").group, "negative");
+  assert.equal(aminoAcidPropertyInfo("W").group, "aromatic");
+  assert.equal(aminoAcidPropertyInfo("G").group, "special");
+});
+
+test("classifyResidueExposure uses exposed atom area cutoff for surface/core and keeps interface", () => {
+  const result = classifyResidueExposure([
+    { chain: "A", resi: 1, exposedAreaMax: 18.2, interface: false },
+    { chain: "A", resi: 2, exposedAreaMax: 0.8, interface: false },
+    { chain: "A", resi: 3, exposedAreaMax: 12.4, interface: true },
+  ], {
+    surfaceAreaCutoff: DEFAULT_SURFACE_AREA_CUTOFF,
+  });
+  assert.deepEqual(result.surface, { A: [1, 3] });
+  assert.deepEqual(result.core, { A: [2] });
+  assert.deepEqual(result.interface, { A: [3] });
+});
+
+test("deriveResidueSpatialPresets reclassifies surface/core when cutoff changes", () => {
+  const pdbText = "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C";
+
+  const defaultResult = deriveResidueSpatialPresets(pdbText, {
+    surfaceAreaCutoff: DEFAULT_SURFACE_AREA_CUTOFF,
+  });
+  assert.deepEqual(defaultResult.surface, { A: [1] });
+  assert.deepEqual(defaultResult.core, {});
+
+  const strictResult = deriveResidueSpatialPresets(pdbText, {
+    surfaceAreaCutoff: 200,
+  });
+  assert.deepEqual(strictResult.surface, {});
+  assert.deepEqual(strictResult.core, { A: [1] });
+});
+
+test("mergeResidueSelectionMaps unions preset and manual picks", () => {
+  assert.deepEqual(
+    mergeResidueSelectionMaps(
+      { A: [1, 3] },
+      { A: [2], B: [4] }
+    ),
+    { A: [1, 2, 3], B: [4] }
+  );
+});
+
+test("toggleResidueSelectionMaps removes preset residues on second click", () => {
+  assert.equal(selectionMapContains({ A: [1, 2], B: [4] }, { A: [1], B: [4] }), true);
+  assert.equal(selectionMapContains({ A: [1] }, { A: [1, 2] }), false);
+
+  assert.deepEqual(
+    toggleResidueSelectionMaps(
+      { A: [1, 2, 9], B: [4] },
+      { A: [1, 2], B: [4] }
+    ),
+    { A: [9] }
+  );
+
+  assert.deepEqual(
+    toggleResidueSelectionMaps(
+      { A: [1] },
+      { A: [1, 2] }
+    ),
+    { A: [1, 2] }
+  );
+});
+
+test("resolveResidueSelectionMaps keeps overlapping presets and manual exclusions separate", () => {
+  assert.deepEqual(
+    resolveResidueSelectionMaps({
+      activePresetIds: ["core", "interface"],
+      presetSelectionsById: {
+        core: { A: [2, 3, 4] },
+        interface: { A: [4, 5] },
+      },
+      manualSelection: { A: [9] },
+      excludedSelection: { A: [4] },
+    }),
+    { A: [2, 3, 5, 9] }
+  );
+});
+
+test("clearResiduePickerSelectionState clears active picks without dropping other picker state", () => {
+  assert.deepEqual(
+    clearResiduePickerSelectionState({
+      pdbText: "ATOM ...",
+      sourceKey: "target_input",
+      selection: { A: [5] },
+      manualSelection: { A: [5] },
+      excludedSelection: { A: [6] },
+      activePresetIds: ["core"],
+      notice: "selected",
+    }),
+    {
+      pdbText: "ATOM ...",
+      sourceKey: "target_input",
+      selection: {},
+      manualSelection: {},
+      excludedSelection: {},
+      activePresetIds: [],
+      notice: "",
+    }
+  );
+});
+
+test("resolveResiduePickerSelectionState does not resurrect a preset after it is toggled off", () => {
+  assert.deepEqual(
+    resolveResiduePickerSelectionState({
+      selectionFallback: { A: [10, 11] },
+      manualSelection: {},
+      excludedSelection: {},
+      activePresetIds: [],
+      presetSelectionsById: {
+        core: { A: [10, 11] },
+      },
+      allowFallback: false,
+    }),
+    {
+      manualSelection: {},
+      excludedSelection: {},
+      activePresetIds: [],
+      selection: {},
+    }
+  );
+});
+
+test("buildSequenceSelectionTracks chunks chains into numbered sequence rows", () => {
+  const tracks = buildSequenceSelectionTracks(
+    { A: "ACDEFGHIKLMN" },
+    { A: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22] },
+    { lineLength: 5, labelEvery: 2 }
+  );
+  assert.equal(tracks.length, 1);
+  assert.equal(tracks[0].rows.length, 3);
+  assert.equal(tracks[0].rows[0].startResi, 11);
+  assert.equal(tracks[0].rows[0].endResi, 15);
+  assert.deepEqual(
+    tracks[0].rows[0].cells.map((cell) => cell.resi),
+    [11, 12, 13, 14, 15]
+  );
+  assert.deepEqual(
+    tracks[0].rows[0].labels.map((label) => label.value),
+    ["11", "12", "14", "15"]
+  );
+  assert.equal(tracks[0].rows[2].startResi, 21);
+  assert.equal(tracks[0].rows[2].endResi, 22);
+});
+
+test("conservedTierPresetState disables when conservation preview is missing", () => {
+  const state = conservedTierPresetState(null, 0.3, "en");
+  assert.equal(state.enabled, false);
+  assert.match(state.reason, /conservation/i);
+});
+
+test("availableConservedTierPresetKeys only returns tiers with preview data", () => {
+  assert.deepEqual(availableConservedTierPresetKeys(null), []);
+  assert.deepEqual(
+    availableConservedTierPresetKeys({
+      tiers: {
+        30: [1, 2],
+        70: [9],
+      },
+    }),
+    ["30", "70"]
+  );
+});
+
+test("buildDetachedResiduePickerStoragePayload strips bulky structure text before storage", () => {
+  const payload = buildDetachedResiduePickerStoragePayload({
+    token: "picker_tab_20260313_064037_03031a3f",
+    context: "studio",
+    sessionId: "admin_studio_20260313_063140_82003e07",
+    activeStage: "design",
+    targetPdbText: "ATOM      1  N   GLY A   1",
+    targetFastaText: ">A\nACDEFG",
+    rfd3PdbText: "ATOM      1  CA  ALA A   1",
+    selectedRunId: "admin_20260310_065409_2f2c2372",
+    pickerProvider: "colabfold",
+    snapshot: {
+      pdbText: "ATOM      1  N   GLY A   1",
+      sourceLabel: "loaded target",
+      sourceKey: "target_input",
+      selection: { A: [5, 9] },
+      manualSelection: { A: [5, 9] },
+      excludedSelection: {},
+      activePresetIds: ["surface"],
+      structureColorMode: "chain",
+      conservationPreview: { tiers: { 30: [5, 9] } },
+    },
+  });
+
+  assert.equal(payload.targetPdbText, "");
+  assert.equal(payload.rfd3PdbText, "");
+  assert.equal(payload.targetFastaText, ">A\nACDEFG");
+  assert.equal(payload.snapshot.pdbText, "");
+  assert.equal(payload.snapshot.sourceLabel, "");
+  assert.equal(payload.snapshot.sourceKey, "");
+  assert.deepEqual(payload.snapshot.selection, { A: [5, 9] });
+  assert.deepEqual(payload.snapshot.activePresetIds, ["surface"]);
+});
+
+test("buildDetachedResiduePickerResultStoragePayload strips bulky popup result fields before storage fallback", () => {
+  const payload = buildDetachedResiduePickerResultStoragePayload({
+    token: "picker_tab_20260313_064037_03031a3f",
+    context: "studio",
+    sessionId: "admin_studio_20260313_063140_82003e07",
+    mappedSelection: { A: [5, 9] },
+    selectedCount: 2,
+    snapshot: {
+      pdbText: "ATOM      1  N   GLY A   1",
+      sourceLabel: "loaded target",
+      sourceKey: "target_input",
+      selection: { A: [58, 62] },
+      manualSelection: { A: [58, 62] },
+      excludedSelection: {},
+      activePresetIds: ["surface"],
+    },
+    predictedResult: {
+      outRunId: "tmp_af2_run",
+      selectedPath: "af2/ranked_0.pdb",
+      selectedPdb: "ATOM      1  N   GLY A   1",
+      fastaText: ">A\nACDEFG",
+    },
+  });
+
+  assert.equal(payload.snapshot.pdbText, "");
+  assert.equal(payload.snapshot.sourceLabel, "");
+  assert.equal(payload.snapshot.sourceKey, "");
+  assert.deepEqual(payload.snapshot.selection, { A: [58, 62] });
+  assert.equal(payload.predictedResult.selectedPdb, "");
+  assert.equal(payload.predictedResult.fastaText, ">A\nACDEFG");
+});
+
+test("queryPositionsToResidueSelectionMap maps fixed_positions_extra back to residue ids", () => {
+  assert.deepEqual(
+    queryPositionsToResidueSelectionMap(
+      { A: [1, 3], B: [2] },
+      {
+        A: [58, 62, 74],
+        B: [101, 102, 103],
+      }
+    ),
+    {
+      A: [58, 74],
+      B: [102],
+    }
+  );
+});
+
+test("buildPopupWindowFeatures requests a centered resizable popup window", () => {
+  const features = buildPopupWindowFeatures({
+    screenX: 100,
+    screenY: 80,
+    outerWidth: 1600,
+    outerHeight: 1200,
+    availWidth: 1920,
+    availHeight: 1080,
+  });
+
+  assert.match(features, /popup=yes/);
+  assert.match(features, /resizable=yes/);
+  assert.match(features, /scrollbars=yes/);
+  assert.match(features, /width=1600/);
+  assert.match(features, /height=950/);
+  assert.match(features, /left=100/);
+  assert.match(features, /top=205/);
+});
+
+test("openPopupWindow bootstraps a blank popup before navigating to the target url", () => {
+  const calls = [];
+  const popup = {
+    location: {
+      replace(url) {
+        this.url = url;
+      },
+    },
+    focusCalled: false,
+    focus() {
+      this.focusCalled = true;
+    },
+  };
+  const opened = openPopupWindow({
+    open: (url, name, features) => {
+      calls.push({ url, name, features });
+      return popup;
+    },
+    url: "https://example.test/picker?token=abc",
+    name: "picker_popup",
+    features: "popup=yes,width=1200",
+  });
+
+  assert.equal(opened, popup);
+  assert.deepEqual(calls, [{ url: "", name: "picker_popup", features: "popup=yes,width=1200" }]);
+  assert.equal(popup.location.url, "https://example.test/picker?token=abc");
+  assert.equal(popup.focusCalled, true);
+});
+
+test("buildResiduePickerViewerLegendLines describes color mode and selection", () => {
+  assert.deepEqual(
+    buildResiduePickerViewerLegendLines({ colorMode: "secondary", lang: "en" }),
+    [
+      "Cartoon view",
+      "Base colors: secondary structure",
+      "Selected residue: orange",
+      "Hover a residue to inspect it",
+    ]
+  );
+});
+
+test("buildCompareViewerLegendLines explains structure diff colors", () => {
+  assert.deepEqual(
+    buildCompareViewerLegendLines({ compareMode: "structure", lang: "en" }),
+    [
+      "Gray: aligned backbone",
+      "Amber: 1.5-3.0A shift",
+      "Red: >3.0A shift",
+      "Teal: selected residue",
+    ]
+  );
+});
+
+test("buildResiduePickerHoverText summarizes residue annotations", () => {
+  const text = buildResiduePickerHoverText({
+    chain: "A",
+    resi: 58,
+    resn: "TYR",
+    selected: true,
+    exposureClass: "core",
+    interfaceHit: true,
+    lang: "en",
+  });
+  assert.match(text, /A:58 TYR/);
+  assert.match(text, /selected/i);
+  assert.match(text, /core/i);
+  assert.match(text, /interface/i);
 });

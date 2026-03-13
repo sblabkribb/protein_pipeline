@@ -9,6 +9,7 @@ from pathlib import Path
 from pipeline_mcp.bio.pdb import residues_by_chain
 from pipeline_mcp.bio.pdb import sequence_by_chain
 from pipeline_mcp.models import PipelineRequest
+from pipeline_mcp.pipeline import _build_backbone_source_summaries
 from pipeline_mcp.pipeline import _clear_stage_outputs_from
 from pipeline_mcp.pipeline import _preprocess_pdb_text
 from pipeline_mcp.pipeline import _resolve_backbone_preprocess_options
@@ -26,6 +27,37 @@ def _tmpdir():
 
 
 class TestPipelineDryRun(unittest.TestCase):
+    def test_backbone_source_summary_marks_selected_only_when_observed_exceeds_used(self) -> None:
+        req = PipelineRequest(
+            target_fasta=">q1\nACDEFGHIK\n",
+            target_pdb="",
+            dry_run=True,
+            rfd3_contig="A1-2",
+            rfd3_input_pdb="ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\nEND\n",
+            rfd3_max_return_designs=10,
+        )
+        summaries, mode = _build_backbone_source_summaries(
+            req,
+            backbone_entries=[
+                {
+                    "id": "rfd3_model_1",
+                    "source": "rfd3",
+                    "materialized": True,
+                    "propagated": True,
+                }
+            ],
+            observed_counts={"rfd3": 10},
+            selected_ids={"rfd3": "rfd3_model_1"},
+        )
+        rfd3 = summaries.get("rfd3") if isinstance(summaries.get("rfd3"), dict) else {}
+        self.assertEqual(rfd3.get("requested_count"), 10)
+        self.assertEqual(rfd3.get("observed_count"), 10)
+        self.assertEqual(rfd3.get("materialized_count"), 1)
+        self.assertEqual(rfd3.get("propagated_count"), 1)
+        self.assertEqual(rfd3.get("propagation_mode"), "selected_only")
+        self.assertEqual(rfd3.get("selected_backbone_id"), "rfd3_model_1")
+        self.assertEqual(mode, "selected_only")
+
     def test_bioemu_zero_resseq_is_renumbered_not_dropped(self) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   0       0.000   0.000   0.000  1.00 20.00           C\n"
@@ -653,6 +685,51 @@ class TestPipelineDryRun(unittest.TestCase):
             rfd3_ids = [str(item.get("id") or "") for item in backbones if isinstance(item, dict) and item.get("source") == "rfd3"]
             self.assertTrue(all(rid.startswith("rfd3_") for rid in rfd3_ids))
             self.assertFalse(any("inputs_spec" in rid for rid in rfd3_ids))
+
+            source_summary = payload.get("sources") if isinstance(payload.get("sources"), dict) else {}
+            rfd3_summary = source_summary.get("rfd3") if isinstance(source_summary.get("rfd3"), dict) else {}
+            bioemu_summary = source_summary.get("bioemu") if isinstance(source_summary.get("bioemu"), dict) else {}
+            self.assertEqual(rfd3_summary.get("requested_count"), 2)
+            self.assertEqual(rfd3_summary.get("observed_count"), 2)
+            self.assertEqual(rfd3_summary.get("materialized_count"), 2)
+            self.assertEqual(rfd3_summary.get("propagated_count"), 2)
+            self.assertEqual(rfd3_summary.get("propagation_mode"), "all_materialized")
+            self.assertEqual(rfd3_summary.get("selected_backbone_id"), rfd3_ids[0])
+            self.assertEqual(bioemu_summary.get("requested_count"), 3)
+            self.assertEqual(bioemu_summary.get("observed_count"), 3)
+            self.assertEqual(bioemu_summary.get("materialized_count"), 3)
+            self.assertEqual(bioemu_summary.get("propagated_count"), 3)
+            self.assertEqual(bioemu_summary.get("propagation_mode"), "all_materialized")
+            self.assertEqual(payload.get("propagation_mode"), "all_materialized")
+
+            primary = backbones[0] if isinstance(backbones[0], dict) else {}
+            self.assertTrue(primary.get("primary"))
+            self.assertTrue(primary.get("selected"))
+            self.assertTrue(primary.get("propagated"))
+            self.assertTrue(primary.get("materialized"))
+            self.assertEqual(primary.get("origin_stage"), "rfd3")
+
+            first_bioemu = next(item for item in backbones if isinstance(item, dict) and item.get("source") == "bioemu")
+            self.assertTrue(first_bioemu.get("propagated"))
+            self.assertTrue(first_bioemu.get("materialized"))
+            self.assertEqual(first_bioemu.get("origin_stage"), "bioemu")
+            self.assertIsInstance(first_bioemu.get("frame_index"), int)
+
+            tier_payload = json.loads(
+                (out / "tiers" / "30" / "proteinmpnn_backbones.json").read_text(encoding="utf-8")
+            )
+            tier_backbones = tier_payload.get("backbones") if isinstance(tier_payload.get("backbones"), list) else []
+            self.assertEqual(len(tier_backbones), 5)
+            self.assertTrue(all(isinstance(item, dict) and item.get("propagated") for item in tier_backbones))
+            self.assertTrue(all(isinstance(item, dict) and item.get("source") in {"rfd3", "bioemu"} for item in tier_backbones))
+            self.assertTrue(
+                all(
+                    isinstance(item, dict)
+                    and isinstance(item.get("sequence_count"), int)
+                    and int(item.get("sequence_count") or 0) >= 1
+                    for item in tier_backbones
+                )
+            )
 
     def test_pipeline_includes_fixed_positions_extra(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"

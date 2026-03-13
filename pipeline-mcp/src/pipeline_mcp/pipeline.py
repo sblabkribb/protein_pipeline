@@ -602,6 +602,126 @@ def _canonicalize_rfd3_design_list(items: object) -> list[dict[str, Any]]:
     return out
 
 
+def _backbone_origin_stage(source: object | None) -> str:
+    raw = str(source or "").strip().lower()
+    if raw == "rfd3":
+        return "rfd3"
+    if raw in {"bioemu", "biomu"}:
+        return "bioemu"
+    if raw == "target":
+        return "target"
+    return raw or "unknown"
+
+
+def _backbone_origin_artifact(source: object | None, backbone_id: object | None, selected_id: object | None = None) -> str:
+    source_key = _backbone_origin_stage(source)
+    raw_id = str(backbone_id or "").strip()
+    safe_id = _safe_id(raw_id) if raw_id else ""
+    selected_key = str(selected_id or "").strip()
+    if source_key == "rfd3":
+        if raw_id and selected_key and raw_id == selected_key:
+            return "rfd3/selected.pdb"
+        return f"rfd3/designs/{safe_id}.pdb" if safe_id else "rfd3/selected.pdb"
+    if source_key == "bioemu":
+        return f"bioemu/designs/{safe_id}.pdb" if safe_id else "bioemu/output.json"
+    if source_key == "target":
+        return "target.pdb"
+    return f"backbones/{safe_id}/target.pdb" if safe_id else "target.pdb"
+
+
+def _backbone_propagation_mode(observed_count: int, materialized_count: int, propagated_count: int) -> str:
+    observed = max(0, int(observed_count or 0))
+    materialized = max(0, int(materialized_count or 0))
+    propagated = max(0, int(propagated_count or 0))
+    if propagated <= 0:
+        return "none"
+    available = observed if observed > materialized else materialized
+    if available <= 0:
+        return "propagated_only"
+    if propagated >= available:
+        return "all_observed" if observed > materialized else "all_materialized"
+    if propagated == 1 and available > 1:
+        return "selected_only"
+    return "partial"
+
+
+def _requested_backbone_count(request: PipelineRequest, source: str) -> int:
+    normalized = _backbone_origin_stage(source)
+    if normalized == "rfd3" and _rfd3_active(request):
+        return max(1, int(request.rfd3_max_return_designs or 1))
+    if normalized == "bioemu" and _bioemu_active(request):
+        num_samples = max(1, int(request.bioemu_num_samples or 1))
+        max_return = max(1, int(request.bioemu_max_return_structures or 1))
+        return min(num_samples, max_return)
+    return 0
+
+
+def _build_backbone_source_summaries(
+    request: PipelineRequest,
+    *,
+    backbone_entries: list[dict[str, Any]],
+    observed_counts: dict[str, int] | None = None,
+    selected_ids: dict[str, str | None] | None = None,
+) -> tuple[dict[str, dict[str, object]], str]:
+    observed_counts = observed_counts or {}
+    selected_ids = selected_ids or {}
+    counts_by_source: dict[str, dict[str, int]] = {}
+    propagated_ids_by_source: dict[str, list[str]] = {}
+    for entry in backbone_entries:
+        if not isinstance(entry, dict):
+            continue
+        source = _backbone_origin_stage(entry.get("source"))
+        bucket = counts_by_source.setdefault(source, {"materialized_count": 0, "propagated_count": 0})
+        raw_id = str(entry.get("id") or "").strip()
+        if bool(entry.get("materialized")):
+            bucket["materialized_count"] = int(bucket.get("materialized_count") or 0) + 1
+        if bool(entry.get("propagated")):
+            bucket["propagated_count"] = int(bucket.get("propagated_count") or 0) + 1
+            if raw_id:
+                propagated_ids = propagated_ids_by_source.setdefault(source, [])
+                if raw_id not in propagated_ids:
+                    propagated_ids.append(raw_id)
+
+    source_keys = [
+        key
+        for key in sorted(set(list(observed_counts.keys()) + list(counts_by_source.keys()) + list(selected_ids.keys())))
+        if _requested_backbone_count(request, key) > 0
+        or max(0, int(observed_counts.get(key) or 0)) > 0
+        or key in counts_by_source
+        or bool(selected_ids.get(key))
+    ]
+
+    summaries: dict[str, dict[str, object]] = {}
+    total_observed = 0
+    total_materialized = 0
+    total_propagated = 0
+    for source in source_keys:
+        source_counts = counts_by_source.get(source) or {}
+        materialized_count = max(0, int(source_counts.get("materialized_count") or 0))
+        propagated_count = max(0, int(source_counts.get("propagated_count") or 0))
+        observed_count = max(materialized_count, max(0, int(observed_counts.get(source) or 0)))
+        requested_count = max(observed_count, _requested_backbone_count(request, source))
+        selected_backbone_id = str(selected_ids.get(source) or "").strip() or None
+        propagated_ids = propagated_ids_by_source.get(source) or []
+        if not selected_backbone_id and len(propagated_ids) == 1:
+            selected_backbone_id = str(propagated_ids[0] or "").strip() or None
+        propagation_mode = _backbone_propagation_mode(observed_count, materialized_count, propagated_count)
+        payload: dict[str, object] = {
+            "requested_count": requested_count,
+            "observed_count": observed_count,
+            "materialized_count": materialized_count,
+            "propagated_count": propagated_count,
+            "propagation_mode": propagation_mode,
+        }
+        if selected_backbone_id:
+            payload["selected_backbone_id"] = selected_backbone_id
+        summaries[source] = payload
+        total_observed += observed_count
+        total_materialized += materialized_count
+        total_propagated += propagated_count
+    return summaries, _backbone_propagation_mode(total_observed, total_materialized, total_propagated)
+
+
 def _rfd3_active(request: PipelineRequest) -> bool:
     return bool(
         (request.rfd3_inputs_text or "").strip()
@@ -1650,7 +1770,9 @@ class PipelineRunner:
                 )
             rfd3_backbones: list[dict[str, Any]] | None = None
             rfd3_selected_id: str | None = None
+            rfd3_observed_count = 0
             bioemu_backbones: list[dict[str, Any]] | None = None
+            bioemu_observed_count = 0
             target_record: FastaRecord | None = None
             msa_defer = False
 
@@ -2019,7 +2141,7 @@ class PipelineRunner:
 
             if _rfd3_active(request):
                 def _run_rfd3() -> None:
-                    nonlocal target_pdb_text, rfd3_backbones, rfd3_selected_id, rfd3_input_pdb_text
+                    nonlocal target_pdb_text, rfd3_backbones, rfd3_selected_id, rfd3_input_pdb_text, rfd3_observed_count
                     rfd3_dir = _ensure_dir(paths.root / "rfd3")
                     rfd3_detail = "auto_strip_nonpositive_resseq" if auto_strip_nonpositive else None
                     set_status(paths, stage="rfd3", state="running", detail=rfd3_detail)
@@ -2068,7 +2190,16 @@ class PipelineRunner:
                         rfd3_selected_id = _canonicalize_rfd3_design_id("design_0" if use_ensemble else "dry_run")
                         _write_text(rfd3_dir / "selected.pdb", target_pdb_text)
                         write_json(rfd3_dir / "selected.json", {"id": rfd3_selected_id, "source": "dummy"})
-                        write_json(rfd3_dir / "designs.json", [])
+                        dry_run_designs = [
+                            {
+                                "id": _canonicalize_rfd3_design_id(f"design_{i}") if use_ensemble else rfd3_selected_id,
+                                "score": None,
+                                "source": "dummy",
+                            }
+                            for i in range(int(request.rfd3_max_return_designs or 1) if use_ensemble else 1)
+                        ]
+                        rfd3_observed_count = len(dry_run_designs)
+                        write_json(rfd3_dir / "designs.json", dry_run_designs)
                         if use_ensemble:
                             rfd3_backbones = [
                                 {
@@ -2106,7 +2237,7 @@ class PipelineRunner:
                         )
 
                         def _load_cached_rfd3_outputs() -> bool:
-                            nonlocal target_pdb_text, rfd3_backbones, rfd3_selected_id
+                            nonlocal target_pdb_text, rfd3_backbones, rfd3_selected_id, rfd3_observed_count
                             if request.force or not selected_pdb_path.exists():
                                 return False
                             try:
@@ -2150,6 +2281,7 @@ class PipelineRunner:
 
                             target_pdb_text = cached_pdb_text
                             rfd3_selected_id = _canonicalize_rfd3_design_id(selected_meta.get("id") or "cached")
+                            rfd3_observed_count = 1
                             rfd3_backbones = None
                             if use_ensemble and designs_json_path.exists():
                                 try:
@@ -2158,6 +2290,7 @@ class PipelineRunner:
                                     cached_designs_raw = None
                                 if isinstance(cached_designs_raw, list):
                                     cached_designs = _canonicalize_rfd3_design_list(cached_designs_raw)
+                                    rfd3_observed_count = len(cached_designs) if cached_designs else rfd3_observed_count
                                     if cached_designs != cached_designs_raw:
                                         write_json(designs_json_path, cached_designs)
                                     ensemble: list[dict[str, Any]] = []
@@ -2260,6 +2393,7 @@ class PipelineRunner:
                                 on_job_id=_on_rfd3_job_id,
                             )
                         canonical_designs = _canonicalize_rfd3_design_list(rfd3_out.get("designs"))
+                        rfd3_observed_count = len(canonical_designs) if canonical_designs else 1
                         write_json(rfd3_dir / "designs.json", canonical_designs)
 
                         selected = rfd3_out.get("selected")
@@ -2331,7 +2465,7 @@ class PipelineRunner:
                         set_status(paths, stage="rfd3", state="completed")
 
                 def _fallback_rfd3(exc: Exception) -> None:
-                    nonlocal target_pdb_text, rfd3_backbones, rfd3_selected_id, rfd3_input_pdb_text
+                    nonlocal target_pdb_text, rfd3_backbones, rfd3_selected_id, rfd3_input_pdb_text, rfd3_observed_count
                     rfd3_dir = _ensure_dir(paths.root / "rfd3")
                     write_json(
                         rfd3_dir / "recovery.json",
@@ -2339,6 +2473,7 @@ class PipelineRunner:
                     )
                     rfd3_backbones = None
                     rfd3_selected_id = _canonicalize_rfd3_design_id("recovered")
+                    rfd3_observed_count = 1
                     if not target_pdb_text.strip():
                         if rfd3_input_pdb_text.strip():
                             target_pdb_text = rfd3_input_pdb_text
@@ -2423,6 +2558,7 @@ class PipelineRunner:
 
                 if request.dry_run:
                     sample_count = min(bioemu_num_samples, bioemu_max_return_structures)
+                    bioemu_observed_count = sample_count
                     base_pdb = target_pdb_text if target_pdb_text.strip() else _dummy_backbone_pdb(bioemu_sequence, chain_id="A")
                     bioemu_backbones = [
                         {
@@ -2471,7 +2607,7 @@ class PipelineRunner:
                     )
 
                     def _load_cached_bioemu_outputs() -> bool:
-                        nonlocal bioemu_backbones
+                        nonlocal bioemu_backbones, bioemu_observed_count
                         if request.force:
                             return False
                         if not sample_pdbs_path.exists() and not output_path.exists():
@@ -2555,6 +2691,7 @@ class PipelineRunner:
                         if not parsed_samples:
                             return False
 
+                        bioemu_observed_count = len(parsed_samples)
                         bioemu_backbones = parsed_samples[: bioemu_max_return_structures]
                         write_json(
                             sample_pdbs_path,
@@ -2681,6 +2818,7 @@ class PipelineRunner:
                         if not parsed_samples:
                             raise RuntimeError("BioEmu output missing sample_pdbs/topology_pdb")
 
+                        bioemu_observed_count = len(parsed_samples)
                         limit = bioemu_max_return_structures
                         bioemu_backbones = parsed_samples[:limit]
 
@@ -2989,6 +3127,7 @@ class PipelineRunner:
             backbones_dir = _ensure_dir(paths.root / "backbones")
             backbone_contexts: list[dict[str, Any]] = []
             backbone_entries: list[dict[str, Any]] = []
+            source_rank_by_key: dict[str, int] = {}
             for idx, b in enumerate(backbones):
                 raw_id = str(b.get("id") or f"backbone_{idx}")
                 dir_id = _safe_id(raw_id) or f"backbone_{idx}"
@@ -2996,12 +3135,22 @@ class PipelineRunner:
                 pdb_text = str(b.get("pdb_text") or "")
                 if pdb_text.strip():
                     _write_text(bb_dir / "target.pdb", pdb_text)
+                source_key = _backbone_origin_stage(b.get("source"))
+                source_rank_by_key[source_key] = int(source_rank_by_key.get(source_key) or 0) + 1
+                source_rank = int(source_rank_by_key[source_key] or 0)
+                frame_index = b.get("frame_index")
+                selected = bool(source_key == "rfd3" and rfd3_selected_id and raw_id == rfd3_selected_id)
+                materialized = bool(pdb_text.strip())
                 ctx = {
                     "id": raw_id,
                     "dir": bb_dir,
                     "pdb_text": pdb_text,
                     "score": b.get("score"),
                     "source": str(b.get("source") or "unknown"),
+                    "rank": source_rank,
+                    "frame_index": frame_index,
+                    "selected": selected,
+                    "materialized": materialized,
                 }
                 backbone_contexts.append(ctx)
                 backbone_entries.append(
@@ -3012,9 +3161,32 @@ class PipelineRunner:
                         "score": b.get("score"),
                         "source": str(b.get("source") or "unknown"),
                         "primary": idx == 0,
+                        "selected": selected,
+                        "propagated": True,
+                        "materialized": materialized,
+                        "rank": source_rank,
+                        "frame_index": frame_index,
+                        "origin_stage": source_key,
+                        "origin_artifact": _backbone_origin_artifact(source_key, raw_id, rfd3_selected_id),
                     }
                 )
-            write_json(paths.root / "backbones.json", {"backbones": backbone_entries})
+            source_summaries, propagation_mode = _build_backbone_source_summaries(
+                request,
+                backbone_entries=backbone_entries,
+                observed_counts={
+                    "rfd3": rfd3_observed_count,
+                    "bioemu": bioemu_observed_count,
+                },
+                selected_ids={"rfd3": rfd3_selected_id},
+            )
+            write_json(
+                paths.root / "backbones.json",
+                {
+                    "propagation_mode": propagation_mode,
+                    "sources": source_summaries,
+                    "backbones": backbone_entries,
+                },
+            )
 
             pdb_chains = list(residues_by_chain(target_pdb_text, only_atom_records=True).keys())
             requested_chains = request.design_chains or pdb_chains or None
@@ -4173,6 +4345,18 @@ class PipelineRunner:
                                 "proteinmpnn_json": str(bb_tier_dir / "proteinmpnn.json"),
                                 "fixed_positions_json": str(bb_tier_dir / "fixed_positions.json"),
                                 "mutation_report_path": mutation_paths.get("mutation_report_path"),
+                                "sequence_count": len(samples),
+                                "propagated": True,
+                                "materialized": bool(ctx.get("materialized")),
+                                "selected": bool(ctx.get("selected")),
+                                "rank": ctx.get("rank"),
+                                "frame_index": ctx.get("frame_index"),
+                                "origin_stage": _backbone_origin_stage(ctx.get("source")),
+                                "origin_artifact": _backbone_origin_artifact(
+                                    ctx.get("source"),
+                                    ctx.get("id"),
+                                    rfd3_selected_id,
+                                ),
                             }
                         )
 

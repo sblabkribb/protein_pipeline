@@ -5,6 +5,151 @@ function normalizeChainId(value) {
   return text || "_";
 }
 
+function formatLegendMetric(value, digits = 2) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num.toFixed(digits) : "-";
+}
+
+function normalizeTierLabel(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  const num = Number(text);
+  if (!Number.isFinite(num)) return text;
+  const normalized = num > 1 ? num / 100 : num;
+  return normalized.toFixed(2);
+}
+
+function compareRoleKey(meta) {
+  return String(meta?.compareRole || "")
+    .trim()
+    .toLowerCase();
+}
+
+function compareSourceLabel(source, lang = "en") {
+  const normalized = String(source || "")
+    .trim()
+    .toLowerCase();
+  if (normalized === "rfd3") return "RFD3";
+  if (normalized === "bioemu") return "BioEmu";
+  if (normalized === "wt") return lang === "ko" ? "WT" : "WT";
+  return normalized || (lang === "ko" ? "기타" : "other");
+}
+
+function compareProviderLabel(provider = "colabfold") {
+  return /af2/i.test(String(provider || "")) ? "AlphaFold2" : "ColabFold";
+}
+
+export function buildStructureDiffLegend({ rmsd = null, p90Distance = null, commonCount = null, lang = "en" } = {}) {
+  const isKo = String(lang || "").trim().toLowerCase().startsWith("ko");
+  const prefix = isKo
+    ? "구조 차이: 황색 1.5-3.0A, 적색 >3.0A"
+    : "Structure delta: amber 1.5-3.0A, red >3.0A";
+  return `${prefix} · RMSD=${formatLegendMetric(rmsd)}A, P90=${formatLegendMetric(p90Distance)}A, n=${Number(
+    commonCount || 0
+  )}`;
+}
+
+export function buildCompareScopeDescription({ leftMeta = null, rightMeta = null, provider = "colabfold", lang = "en" } = {}) {
+  const isKo = String(lang || "").trim().toLowerCase().startsWith("ko");
+  const providerLabel = compareProviderLabel(provider);
+  const lines = [];
+  const leftRole = compareRoleKey(leftMeta);
+  const rightRole = compareRoleKey(rightMeta);
+
+  if (leftRole === "wt_colabfold") {
+    lines.push(
+      isKo
+        ? `WT ${providerLabel}은 야생형 서열에서 예측한 기준 구조입니다. 실험 입력 구조가 아니라 비교 기준선으로 사용합니다.`
+        : `WT ${providerLabel} is the predicted wild-type reference structure. It is a comparison baseline, not the experimental input structure.`
+    );
+  } else if (leftRole === "input_reference") {
+    lines.push(
+      isKo
+        ? "입력 reference는 사용자가 제공한 원본 구조입니다."
+        : "The input reference is the original user-provided structure."
+    );
+  }
+
+  if (rightRole === "af2_candidate") {
+    const tierText = normalizeTierLabel(rightMeta?.tier);
+    const sourceText = compareSourceLabel(rightMeta?.backboneSource || rightMeta?.source, lang);
+    lines.push(
+      isKo
+        ? `${sourceText}${tierText ? ` 티어 ${tierText}` : ""} 후보는 전체 집계가 아니라 현재 선택된 단일 candidate입니다.`
+        : `${sourceText}${tierText ? ` Tier ${tierText}` : ""} candidate is a single candidate, not the whole aggregate.`
+    );
+  } else if (rightRole === "backbone_snapshot") {
+    lines.push(
+      isKo
+        ? "백본 snapshot은 design/AF2 이전 단계의 생성 구조입니다."
+        : "A backbone snapshot is a generated structure before downstream design/AF2 filtering."
+    );
+  }
+
+  if (!lines.length) {
+    lines.push(
+      isKo
+        ? "좌측은 기준 구조, 우측은 현재 선택된 비교 대상입니다."
+        : "The left side is the reference structure and the right side is the currently selected comparison target."
+    );
+  }
+  return lines.join(" ");
+}
+
+export function buildCompareMetaTooltip(fieldKey = "", { provider = "colabfold", lang = "en" } = {}) {
+  const isKo = String(lang || "").trim().toLowerCase().startsWith("ko");
+  const providerLabel = compareProviderLabel(provider);
+  const key = String(fieldKey || "").trim();
+  if (isKo) {
+    const ko = {
+      role: "이 구조가 비교에서 어떤 역할인지 보여줍니다. 예: 입력 기준, WT 기준선, AF2 후보.",
+      source: "이 구조를 만든 소스입니다. 예: RFD3, BioEmu, WT 기준선.",
+      provenance: "어느 단계와 산출 경로에서 온 구조인지 설명합니다.",
+      tier: "이 구조가 속한 보존/디자인 티어입니다. 보통 티어가 높을수록 제약이 더 강합니다.",
+      backbone: "downstream design/AF2에 연결된 backbone 식별자입니다.",
+      chains: "현재 비교에 포함된 체인 요약입니다.",
+      fixedCount: "ProteinMPNN 설계에서 고정된 잔기 개수입니다.",
+      wtDiff: "WT 서열 대비 바뀐 위치 수와 비교 길이, identity를 함께 보여줍니다.",
+      inputStructRmsd: "원본 입력 구조와 현재 구조 사이의 C-alpha RMSD입니다.",
+      wtStructRmsd: `WT ${providerLabel} 기준 구조와 현재 구조 사이의 C-alpha RMSD입니다.`,
+      workingStructRmsd: "현재 run의 working target.pdb backbone과의 C-alpha RMSD입니다.",
+      commonCa: "RMSD 계산에 실제로 공통 정렬된 C-alpha 잔기 수입니다.",
+      predScope: `${providerLabel} 지표가 이 파일 자체인지, WT 기준인지, tier/backbone 요약인지 구분합니다.`,
+      predSelected: `${providerLabel} 결과 중 현재 scope에서 최종 선택된 개수입니다.`,
+      predPlddt: `${providerLabel}의 구조 confidence 지표입니다. 일반적으로 높을수록 좋습니다.`,
+      predRmsd: `${providerLabel} 결과에 연결된 구조 차이 RMSD입니다.`,
+      path: "현재 비교 항목으로 선택된 실제 artifact 파일 경로입니다.",
+    };
+    return (
+      ko[key] ||
+      `${providerLabel} 기반 비교 컨텍스트 항목입니다. hover/focus 시 간단한 설명을 확인할 수 있습니다.`
+    );
+  }
+  const en = {
+    role: "Shows how this structure is used in the comparison, such as input reference, WT baseline, or AF2 candidate.",
+    source: "Identifies which source produced this structure, such as RFD3, BioEmu, or the WT baseline.",
+    provenance: "Explains which stage and artifact path this structure came from.",
+    tier: "Conservation/design tier associated with this structure. Higher tiers usually mean stricter constraints.",
+    backbone: "Backbone identifier propagated into downstream design and AF2 steps.",
+    chains: "Summary of chains currently present in this comparison item.",
+    fixedCount: "Number of residues kept fixed during ProteinMPNN design.",
+    wtDiff: "Sequence difference versus wild type, reported as changed positions, compared length, and identity.",
+    inputStructRmsd: "C-alpha RMSD between this structure and the original input structure.",
+    wtStructRmsd: `C-alpha RMSD between this structure and the WT ${providerLabel} baseline.`,
+    workingStructRmsd: "C-alpha RMSD between this structure and the run's working target.pdb backbone.",
+    commonCa: "Number of aligned common C-alpha residues used for RMSD.",
+    predScope: `${providerLabel} scope tells you whether the metric belongs to this exact file, the WT reference, or a tier/backbone summary.`,
+    predSelected: `Number of ${providerLabel} results retained in the current scope.`,
+    predPlddt: `${providerLabel} confidence score for the predicted structure. Higher is usually better.`,
+    predRmsd: `RMSD value associated with the relevant ${providerLabel} scope.`,
+    path: "Actual artifact file path used for this comparison row.",
+  };
+  return (
+    en[key] ||
+    `${providerLabel}-based compare metadata field. Hover or focus to read a short explanation.`
+  );
+}
+
 export function compareResidueMetricPosition(left, right) {
   const leftChain = normalizeChainId(left?.chain);
   const rightChain = normalizeChainId(right?.chain);

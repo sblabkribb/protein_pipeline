@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>K-Biofoundry | Protein Pipeline Console</title>
-    <link rel="stylesheet" href="./styles.css?v=20260310_runpod_admin_main2" />
+    <link rel="stylesheet" href="./styles.css?v=v0.2.1" />
   </head>
   <body>
     <div class="bg-orb orb-a" aria-hidden="true"></div>
@@ -26,6 +26,7 @@
         </div>
         <button id="copilotOpenBtn" class="ghost" data-i18n="copilot.open">Copilot</button>
         <button id="helpBtn" class="ghost" data-i18n="action.help">Usage</button>
+        <button id="accountBtn" class="ghost hidden" data-i18n="action.account">Account</button>
         <button
           id="runpodAdminBtn"
           class="ghost hidden"
@@ -44,28 +45,39 @@
       <div id="loginGate" class="login-gate">
         <div class="login-card">
           <h1 data-i18n="login.title">Enter the Lab</h1>
-          <p data-i18n="login.desc">
+          <p id="loginLocalDesc" data-i18n="login.desc">
             Identify yourself to separate runs and keep artifacts organized.
           </p>
-          <label>
-            <span data-i18n="login.username">Username</span>
-            <input
-              id="loginUsername"
-              type="text"
-              placeholder="e.g. hana.kim"
-              data-i18n-placeholder="login.username.placeholder"
-            />
-          </label>
-          <label>
-            <span data-i18n="login.password">Password</span>
-            <input
-              id="loginPassword"
-              type="password"
-              placeholder="••••••••"
-              data-i18n-placeholder="login.password.placeholder"
-            />
-          </label>
-          <button id="loginBtn" class="primary" data-i18n="login.submit">Access Console</button>
+          <p id="loginSsoDesc" class="hidden" data-i18n="login.sso.desc">
+            Sign in with KBF SSO to keep the same identity and permissions across services.
+          </p>
+          <div id="loginLocalForm" class="login-stack">
+            <label>
+              <span data-i18n="login.username">Username</span>
+              <input
+                id="loginUsername"
+                type="text"
+                placeholder="e.g. hana.kim"
+                data-i18n-placeholder="login.username.placeholder"
+              />
+            </label>
+            <label>
+              <span data-i18n="login.password">Password</span>
+              <input
+                id="loginPassword"
+                type="password"
+                placeholder="••••••••"
+                data-i18n-placeholder="login.password.placeholder"
+              />
+            </label>
+            <button id="loginBtn" class="primary" data-i18n="login.submit">Access Console</button>
+          </div>
+          <div id="loginSsoActions" class="login-stack hidden">
+            <button id="ssoLoginBtn" class="primary" data-i18n="login.sso.submit">Continue with KBF SSO</button>
+            <div class="hint" data-i18n="login.sso.hint">
+              Use your KBF account. Password changes are managed in the SSO account page.
+            </div>
+          </div>
           <div id="loginError" class="hint"></div>
         </div>
       </div>
@@ -252,6 +264,9 @@
                 <div class="studio-toolbar-actions">
                   <button id="studioRunBtn" class="primary" type="button" data-i18n="studio.action.run">
                     Run This Stage
+                  </button>
+                  <button id="studioNewSessionBtn" class="ghost" type="button" data-i18n="studio.action.new">
+                    New Workflow
                   </button>
                   <button id="studioStopBtn" class="ghost" type="button" data-i18n="monitor.stop">
                     Stop Run
@@ -521,11 +536,11 @@
               <div class="status-card feedback-card compare-studio-card">
                 <div class="artifact-compare-controls">
                   <select id="artifactCompareMode" class="artifact-select">
-                    <option value="structure" data-i18n="artifacts.preview.compare.mode.structure">
-                      Structure Diff
-                    </option>
                     <option value="sequence" data-i18n="artifacts.preview.compare.mode.sequence">
                       Sequence Diff
+                    </option>
+                    <option value="structure" data-i18n="artifacts.preview.compare.mode.structure">
+                      Structure Diff
                     </option>
                   </select>
                   <select id="artifactCompareLeft" class="artifact-select"></select>
@@ -542,6 +557,7 @@
                 </div>
                 <div id="artifactCompareRefs" class="compare-reference-strip"></div>
                 <div id="artifactComparePresets" class="compare-preset-strip"></div>
+                <div id="artifactCompareManifest" class="compare-manifest-strip"></div>
                 <div class="compare-studio-grid">
                   <div class="compare-studio-column">
                     <div class="status-subtitle" data-i18n="artifacts.preview.title">Artifact Preview</div>
@@ -900,6 +916,7 @@
           </div>
         </section>
       </div>
+      <section id="detachedResiduePickerRoot" class="detached-picker-root hidden" aria-live="polite"></section>
     </main>
 
     <div id="settingsPanel" class="overlay hidden" role="dialog" aria-modal="true">
@@ -1120,6 +1137,6 @@
     <button id="copilotFabBtn" class="primary copilot-fab" data-i18n="copilot.open">Copilot</button>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260310_runpod_admin_main2"></script>
+    <script type="module" src="./app.js?v=v0.2.1"></script>
   </body>
 </html>

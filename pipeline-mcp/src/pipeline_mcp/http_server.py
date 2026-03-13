@@ -11,12 +11,19 @@ from .storage import new_run_id
 from .auth import AuthError
 from .auth import load_auth_manager
 from .auth import safe_run_prefix
+from .oidc import claims_to_user
+from .oidc import account_console_url
+from .oidc import exchange_oidc_code
+from .oidc import get_oidc_discovery
+from .oidc import load_oidc_settings
+from .oidc import verify_oidc_token
 from .runpod_metrics import ensure_runpod_metrics_collector
 from .tools import ToolDispatcher
 
 
 _DISPATCHER: ToolDispatcher | None = None
 _AUTH = None
+_OIDC = None
 _ALLOW_ALL_ORIGINS = True
 _ALLOWED_ORIGINS: set[str] = set()
 _ADMIN_ONLY_TOOLS = {
@@ -53,6 +60,16 @@ class Handler(BaseHTTPRequestHandler):
     @property
     def auth(self):
         return _AUTH
+
+    @property
+    def oidc(self):
+        return _OIDC
+
+    def _auth_enabled(self) -> bool:
+        auth = self.auth
+        if auth is not None and getattr(auth, "enabled", False):
+            return True
+        return self.oidc is not None
 
     def _set_cors_headers(self) -> None:
         origin = self.headers.get("Origin")
@@ -136,23 +153,30 @@ class Handler(BaseHTTPRequestHandler):
         return data
 
     def _require_user(self) -> dict[str, Any] | None:
-        auth = self.auth
-        if auth is None or not getattr(auth, "enabled", False):
-            return None
         header = self.headers.get("Authorization") or ""
         token = ""
         if header.startswith("Bearer "):
             token = header.removeprefix("Bearer ").strip()
         if not token:
             return None
-        return auth.verify_token(token)
+        auth = self.auth
+        if auth is not None and getattr(auth, "enabled", False):
+            user = auth.verify_token(token)
+            if user is not None:
+                return user
+        if self.oidc is not None:
+            try:
+                claims = verify_oidc_token(token, self.oidc)
+            except Exception:
+                return None
+            return claims_to_user(claims, client_id=self.oidc.client_id)
+        return None
 
     def _is_admin(self, user: dict[str, Any] | None) -> bool:
         return bool(user and str(user.get("role") or "") == "admin")
 
     def _require_auth(self) -> dict[str, Any] | None:
-        auth = self.auth
-        if auth is None or not getattr(auth, "enabled", False):
+        if not self._auth_enabled():
             return None
         user = self._require_user()
         if user is None:
@@ -172,6 +196,30 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:  # noqa: N802
+        if self.path.rstrip("/") == "/auth/oidc/config":
+            if self.oidc is None:
+                self._json(200, {"ok": True, "enabled": False})
+                return
+            try:
+                discovery = get_oidc_discovery(self.oidc)
+                authorization_endpoint = str(discovery.get("authorization_endpoint") or "")
+            except Exception:
+                authorization_endpoint = ""
+            self._json(
+                200,
+                {
+                    "ok": True,
+                    "enabled": True,
+                    "issuer": self.oidc.issuer,
+                    "client_id": self.oidc.client_id,
+                    "scopes": self.oidc.scopes,
+                    "provider_name": self.oidc.provider_name,
+                    "authorization_endpoint": authorization_endpoint,
+                    "end_session_endpoint": str(discovery.get("end_session_endpoint") or ""),
+                    "account_url": account_console_url(self.oidc),
+                },
+            )
+            return
         if self.path.rstrip("/") == "/auth/me":
             user = self._require_auth()
             if user is None:
@@ -188,7 +236,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.path.rstrip("/") == "/auth/login":
                 auth = self.auth
                 if auth is None or not getattr(auth, "enabled", False):
-                    self._json(400, {"ok": False, "error": "auth disabled"})
+                    self._json(400, {"ok": False, "error": "local auth disabled"})
                     return
                 body = self._read_json()
                 username = str(body.get("username") or "")
@@ -198,6 +246,32 @@ class Handler(BaseHTTPRequestHandler):
                     self._json(401, {"ok": False, "error": "invalid credentials"})
                     return
                 self._json(200, {"ok": True, **result})
+                return
+
+            if self.path.rstrip("/") == "/auth/oidc/exchange":
+                if self.oidc is None:
+                    self._json(400, {"ok": False, "error": "oidc disabled"})
+                    return
+                body = self._read_json()
+                code = str(body.get("code") or "")
+                redirect_uri = str(body.get("redirect_uri") or "")
+                code_verifier = str(body.get("code_verifier") or "") or None
+                token_data = exchange_oidc_code(
+                    self.oidc,
+                    code=code,
+                    redirect_uri=redirect_uri,
+                    code_verifier=code_verifier,
+                )
+                self._json(
+                    200,
+                    {
+                        "ok": True,
+                        "access_token": token_data.get("access_token"),
+                        "id_token": token_data.get("id_token"),
+                        "token_type": token_data.get("token_type"),
+                        "expires_in": token_data.get("expires_in"),
+                    },
+                )
                 return
 
             if self.path.rstrip("/") == "/auth/create_user":
@@ -314,6 +388,8 @@ def main(argv: list[str] | None = None) -> None:
     _DISPATCHER = ToolDispatcher(runner)
     global _AUTH
     _AUTH = load_auth_manager()
+    global _OIDC
+    _OIDC = load_oidc_settings()
     _init_cors()
 
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
