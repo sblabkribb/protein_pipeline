@@ -1,7 +1,12 @@
+import sys
+from types import SimpleNamespace
+
+from pipeline_mcp import oidc
 from pipeline_mcp.oidc import OIDCSettings
 from pipeline_mcp.oidc import _claims_match_expected_client
 from pipeline_mcp.oidc import account_console_url
 from pipeline_mcp.oidc import claims_to_user
+from pipeline_mcp.oidc import verify_oidc_token
 
 
 def test_claims_to_user_maps_pipeline_roles_and_identity():
@@ -19,6 +24,21 @@ def test_claims_to_user_maps_pipeline_roles_and_identity():
     assert user["username"] == "tester@kribb.re.kr"
     assert user["role"] == "user"
     assert user["run_prefix"] == "tester_kribb.re.kr"
+
+
+def test_claims_to_user_maps_realm_admin_to_admin():
+    claims = {
+        "sub": "user-123",
+        "email": "sso-admin@kribb.re.kr",
+        "preferred_username": "sso-admin@kribb.re.kr",
+        "resource_access": {
+            "realm-management": {"roles": ["realm-admin"]},
+        },
+    }
+
+    user = claims_to_user(claims)
+
+    assert user["role"] == "admin"
 
 
 def test_account_console_url_uses_realm_issuer():
@@ -75,3 +95,72 @@ def test_claims_match_expected_client_rejects_other_client():
     }
 
     assert _claims_match_expected_client(claims, settings) is False
+
+
+def test_verify_oidc_token_uses_cached_metadata_when_upstream_fetch_temporarily_fails(monkeypatch):
+    settings = OIDCSettings(
+        issuer="https://sso.k-biofoundrycopilot.duckdns.org/realms/kbf",
+        client_id="protein-pipeline",
+        audience="protein-pipeline",
+        scopes="openid profile email",
+        provider_name="KBF SSO",
+        jwks_url=None,
+        algorithms=("RS256",),
+    )
+    claims = {
+        "iss": settings.issuer,
+        "sub": "user-123",
+        "aud": "account",
+        "azp": settings.client_id,
+    }
+    discovery_url = f"{settings.issuer}/.well-known/openid-configuration"
+    jwks_url = f"{settings.issuer}/protocol/openid-connect/certs"
+    successful_responses = {
+        discovery_url: {
+            "issuer": settings.issuer,
+            "jwks_uri": jwks_url,
+        },
+        jwks_url: {
+            "keys": [{"kid": "kid-1", "kty": "RSA", "n": "abc", "e": "AQAB"}],
+        },
+    }
+    request_attempts = []
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self._payload
+
+    class FakeJWT:
+        @staticmethod
+        def get_unverified_header(_token):
+            return {"kid": "kid-1"}
+
+        @staticmethod
+        def decode(_token, _signing_key, algorithms, options):
+            assert algorithms == ["RS256"]
+            assert options["verify_signature"] is True
+            return dict(claims)
+
+    def fake_get(url, timeout=10):
+        assert timeout == 10
+        request_attempts.append(url)
+        if len(request_attempts) <= 2:
+            return FakeResponse(successful_responses[url])
+        raise RuntimeError("temporary network failure")
+
+    monkeypatch.setattr(oidc.requests, "get", fake_get)
+    monkeypatch.setitem(sys.modules, "jose", SimpleNamespace(jwt=FakeJWT))
+    monkeypatch.setattr(oidc, "_OIDC_DISCOVERY_CACHE", {}, raising=False)
+    monkeypatch.setattr(oidc, "_OIDC_JWKS_CACHE", {}, raising=False)
+
+    assert verify_oidc_token("header.payload.sig", settings) == claims
+
+    # The second verification should keep using cached discovery/JWKS data.
+    assert verify_oidc_token("header.payload.sig", settings) == claims
+    assert request_attempts == [discovery_url, jwks_url]

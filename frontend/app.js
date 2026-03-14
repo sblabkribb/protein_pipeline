@@ -1,5 +1,6 @@
 import {
   artifactMetaFromPath,
+  buildWorkflowProgressContext,
   buildWorkflowStudioFreshSessionSeed,
   DEFAULT_ARTIFACT_COMPARE_MODE,
   buildWorkflowStudioEffectiveAnswers,
@@ -23,6 +24,7 @@ import {
   mergeFixedPositionsExtraDraft,
   minimumWorkflowStudioStartStage,
   nextWorkflowStudioStage,
+  normalizeWorkflowStudioPayloadForComparison,
   normalizeFixedPositionsExtraDraft,
   normalizeSetupDraftForFreshRun,
   runUsesRfd3Stage,
@@ -40,6 +42,7 @@ import {
   workflowStudioRetainedArtifactPath,
   upsertWorkflowStudioStageStatus,
   workflowStudioActionRunIdForSession,
+  workflowStudioSessionIdForRun as workflowStudioSessionIdForLinkedRun,
   workflowStudioSessionRunKey,
   stageFromPath,
   workflowStudioChangedFields,
@@ -86,6 +89,8 @@ import {
   buildOidcRedirectUri,
   normalizeApiBase,
   parseOidcCallback,
+  shouldClearStoredSession,
+  shouldRestoreStoredSession,
   stripOidcCallbackUrl,
   resolveDefaultApiBase,
 } from "./lib/auth.js";
@@ -3563,43 +3568,7 @@ function workflowStudioStageSkippedByHeadRun(session, stage) {
 }
 
 function normalizeWorkflowStudioAnswersForRun(rawAnswers, { nodes = [] } = {}) {
-  const answers = cloneWorkflowStudioValue(rawAnswers || {});
-  delete answers.selected_tiers;
-  const targetInput = String(answers.target_input || "").trim();
-  delete answers.target_pdb;
-  delete answers.target_fasta;
-  if (targetInput) {
-    if (detectTargetKey(targetInput) === "target_fasta") {
-      answers.target_fasta = targetInput;
-    } else {
-      answers.target_pdb = targetInput;
-    }
-  }
-  delete answers.target_input;
-  if (Array.isArray(answers.design_chains) && answers.design_chains.length === 0) {
-    delete answers.design_chains;
-  }
-  if (String(answers.rfd3_input_pdb || "").trim() === String(answers.target_pdb || "").trim()) {
-    delete answers.rfd3_input_pdb;
-  }
-  if (typeof answers.rfd3_input_pdb === "string" && !answers.rfd3_input_pdb.trim()) {
-    delete answers.rfd3_input_pdb;
-  }
-  if (typeof answers.rfd3_contig === "string" && !answers.rfd3_contig.trim()) {
-    delete answers.rfd3_contig;
-  }
-  const effectiveRfd3Input = effectiveRfd3InputPdb({
-    mode: "workflow",
-    answers,
-    nodes,
-  });
-  if (effectiveRfd3Input) {
-    answers.rfd3_input_pdb = effectiveRfd3Input;
-  } else {
-    delete answers.rfd3_input_pdb;
-    delete answers.rfd3_contig;
-  }
-  return answers;
+  return normalizeWorkflowStudioPayloadForComparison(rawAnswers, { nodes });
 }
 
 function workflowStudioStageState(session, stage) {
@@ -3962,12 +3931,15 @@ function workflowStudioExecutionPreview(session, targetStage = session?.active_s
       nextPayload.rfd3_contig = contigOptions[0].value;
     }
   }
-  const previousPayload =
+  const previousPayloadRaw =
     session?.pending?.request_snapshot && typeof session.pending.request_snapshot === "object"
       ? session.pending.request_snapshot
       : session?.head_request && typeof session.head_request === "object"
         ? session.head_request
         : {};
+  const previousPayload = normalizeWorkflowStudioPayloadForComparison(previousPayloadRaw, {
+    nodes: session?.nodes || [],
+  });
   const changedFields = workflowStudioChangedFields(previousPayload, nextPayload);
   const requiredStart = minimumWorkflowStudioStartStage({
     previousPayload,
@@ -4012,6 +3984,19 @@ function ensureWorkflowPlanForSessionRun(runId, session) {
     graphEnabled: true,
     mmseqLoopEnabled: false,
   };
+  const initialProgressContext = buildWorkflowProgressContext({
+    nodes: baseNodes,
+    tierKeys:
+      Array.isArray(session?.head_request?.selected_tiers) && session.head_request.selected_tiers.length
+        ? session.head_request.selected_tiers
+        : Array.isArray(session?.head_request?.conservation_tiers) && session.head_request.conservation_tiers.length
+          ? session.head_request.conservation_tiers
+          : undefined,
+    wtCompare: Boolean(session?.head_request?.wt_compare),
+  });
+  if (initialProgressContext) {
+    state.progressContextByRunId[key] = initialProgressContext;
+  }
   persistWorkflowPlans();
 }
 
@@ -4056,14 +4041,7 @@ async function loadWorkflowStudioSessionFromRun(runId) {
 }
 
 function workflowStudioSessionIdForRun(runId) {
-  const key = String(runId || "").trim();
-  if (!key) return "";
-  const matched = workflowStudioSessionsOrdered().find((session) => {
-    if (String(session.head_run_id || "").trim() === key) return true;
-    if (String(session.source_run_id || "").trim() === key) return true;
-    return Array.isArray(session.history) && session.history.some((item) => String(item.run_id || "").trim() === key);
-  });
-  return String(matched?.session_id || "").trim();
+  return workflowStudioSessionIdForLinkedRun(workflowStudioSessionsOrdered(), runId);
 }
 
 async function adoptWorkflowStudioSessionFromRun(runId, { activate = true } = {}) {
@@ -6693,7 +6671,7 @@ async function bootstrapAuth() {
       return;
     }
   }
-  if (state.user && state.token) {
+  if (shouldRestoreStoredSession({ token: state.token })) {
     await loadSession();
     return;
   }
@@ -8357,25 +8335,43 @@ function buildProgressContextFromRequestPayload(payload) {
   };
 }
 
+function progressContextForRunId(runId, payload = null) {
+  const key = String(runId || "").trim();
+  const requestContext = payload ? buildProgressContextFromRequestPayload(payload) : null;
+  const workflowPlan = key ? workflowPlanForRunId(key) : null;
+  if (!workflowPlan?.nodes?.length) return requestContext;
+  const existingContext = state.progressContextByRunId?.[key] || null;
+  return buildWorkflowProgressContext({
+    nodes: workflowPlan.nodes,
+    tierKeys: requestContext?.tierKeys || existingContext?.tierKeys,
+    wtCompare:
+      requestContext && Object.prototype.hasOwnProperty.call(requestContext, "wtCompare")
+        ? requestContext.wtCompare
+        : existingContext?.wtCompare,
+  });
+}
+
 async function ensureRunModeForRunId(runId, status) {
   if (!runId) return "pipeline";
   if (state.workflowPlansByRunId && state.workflowPlansByRunId[runId]) {
-    if (!state.progressContextByRunId[runId]) {
-      try {
-        const req = await apiCall("pipeline.read_artifact", {
-          run_id: runId,
-          path: "request.json",
-          max_bytes: 2_500_000,
-        });
-        const text = typeof req?.text === "string" ? req.text : "";
-        if (text.trim()) {
-          const payload = JSON.parse(text);
-          const progressContext = buildProgressContextFromRequestPayload(payload);
-          if (progressContext) state.progressContextByRunId[runId] = progressContext;
-        }
-      } catch (_err) {
-        // Keep workflow mode even if request.json cannot be loaded.
+    const baseProgressContext = progressContextForRunId(runId);
+    if (baseProgressContext) {
+      state.progressContextByRunId[runId] = baseProgressContext;
+    }
+    try {
+      const req = await apiCall("pipeline.read_artifact", {
+        run_id: runId,
+        path: "request.json",
+        max_bytes: 2_500_000,
+      });
+      const text = typeof req?.text === "string" ? req.text : "";
+      if (text.trim()) {
+        const payload = JSON.parse(text);
+        const progressContext = progressContextForRunId(runId, payload);
+        if (progressContext) state.progressContextByRunId[runId] = progressContext;
       }
+    } catch (_err) {
+      // Keep workflow mode even if request.json cannot be loaded.
     }
     state.runModeById[runId] = "workflow";
     return "workflow";
@@ -8399,7 +8395,7 @@ async function ensureRunModeForRunId(runId, status) {
           refreshAf2ProviderLabels({ rerenderQuestions: true });
         }
       }
-      const progressContext = buildProgressContextFromRequestPayload(payload);
+      const progressContext = progressContextForRunId(runId, payload);
       if (progressContext) {
         state.progressContextByRunId[runId] = progressContext;
       }
@@ -9077,16 +9073,21 @@ async function loadSession() {
     showLogin();
     return;
   }
+  let failureStatus = 0;
+  let failureMessage = "";
   try {
     const res = await fetch(`${state.apiBase}/auth/me`, {
       headers: { ...authHeaders() },
     });
+    const payload = await res.json().catch(() => null);
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
+      failureStatus = res.status;
+      failureMessage = payload && typeof payload.error === "string" ? payload.error : `HTTP ${res.status}`;
+      throw new Error(failureMessage);
     }
-    const payload = await res.json();
     if (!payload.ok) {
-      throw new Error(payload.error || t("auth.sessionInvalid"));
+      failureMessage = payload.error || t("auth.sessionInvalid");
+      throw new Error(failureMessage);
     }
     state.user = payload.user;
     saveUser(payload.user);
@@ -9094,7 +9095,18 @@ async function loadSession() {
     updateAdminUI();
     refreshRuns();
   } catch (err) {
-    clearSession();
+    if (shouldClearStoredSession({ status: failureStatus, error: failureMessage || err?.message })) {
+      clearSession();
+      showLogin();
+      return;
+    }
+    const cachedUser = state.user || loadUser();
+    if (cachedUser) {
+      state.user = cachedUser;
+      showChat();
+      updateAdminUI();
+      return;
+    }
     showLogin();
   }
 }
@@ -12715,7 +12727,7 @@ async function runPipeline() {
     setAf2ProviderForRun(runId, args.af2_provider);
   }
   if (toolName === "pipeline.run") {
-    const progressContext = buildProgressContextFromRequestPayload(args);
+    const progressContext = progressContextForRunId(runId, args);
     if (progressContext) state.progressContextByRunId[runId] = progressContext;
   }
 
@@ -12977,7 +12989,7 @@ async function resumeCurrentRun(runIdArg = state.currentRunId, { targetTab = "mo
   if (inferredMode && PROGRESS_PLANS[inferredMode]) {
     state.runModeById[runId] = inferredMode;
   }
-  const resumeProgressContext = buildProgressContextFromRequestPayload(args);
+  const resumeProgressContext = progressContextForRunId(runId, args);
   if (resumeProgressContext) {
     state.progressContextByRunId[runId] = resumeProgressContext;
   }
@@ -14871,7 +14883,7 @@ async function continueWorkflowRun(runId) {
       force: false,
       auto_recover: true,
     };
-    const progressContext = buildProgressContextFromRequestPayload(args);
+    const progressContext = progressContextForRunId(key, args);
     if (progressContext) state.progressContextByRunId[key] = progressContext;
     const result = await apiCall("pipeline.run", args);
     const resumedRunId = String(result?.run_id || key).trim() || key;
@@ -14948,7 +14960,7 @@ async function rerunWorkflowStage(runId, targetStage = "msa") {
     };
     const result = await apiCall("pipeline.run", args);
     const launchedRunId = String(result?.run_id || newRunId).trim() || newRunId;
-    const progressContext = buildProgressContextFromRequestPayload(args);
+    const progressContext = progressContextForRunId(launchedRunId, args);
     if (progressContext) {
       state.progressContextByRunId[launchedRunId] = progressContext;
     }
@@ -20007,6 +20019,10 @@ async function handleRunSelectorChange(nextRunId, { loadSetupRequest = false } =
   const changed = runId !== state.currentRunId;
   if (changed) {
     setCurrentRunId(runId);
+    const studioSession = await adoptWorkflowStudioSessionFromRun(runId);
+    if (studioSession) {
+      renderWorkflowStudio();
+    }
     renderQuestions(state.plan?.questions || []);
     await pollStatus(runId);
     await refreshArtifacts();

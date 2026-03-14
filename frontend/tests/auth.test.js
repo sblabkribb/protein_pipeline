@@ -8,6 +8,8 @@ import {
   parseOidcCallback,
   stripOidcCallbackUrl,
   resolveDefaultApiBase,
+  shouldClearStoredSession,
+  shouldRestoreStoredSession,
 } from "../lib/auth.js";
 
 test("resolveDefaultApiBase prefers subdomain api host", () => {
@@ -107,4 +109,18 @@ test("buildOidcLogoutUrl includes redirect and id token hint", () => {
   );
   assert.equal(url.searchParams.get("client_id"), "protein-pipeline");
   assert.equal(url.searchParams.get("id_token_hint"), "header.payload.sig");
+});
+
+test("shouldRestoreStoredSession only depends on a persisted token", () => {
+  assert.equal(shouldRestoreStoredSession({ token: "abc.def" }), true);
+  assert.equal(shouldRestoreStoredSession({ token: "   " }), false);
+  assert.equal(shouldRestoreStoredSession({ token: "", user: { username: "tester" } }), false);
+});
+
+test("shouldClearStoredSession only clears for explicit auth failures", () => {
+  assert.equal(shouldClearStoredSession({ status: 401, error: "unauthorized" }), true);
+  assert.equal(shouldClearStoredSession({ status: 403, error: "admin required" }), true);
+  assert.equal(shouldClearStoredSession({ status: 502, error: "bad gateway" }), false);
+  assert.equal(shouldClearStoredSession({ error: "unauthorized" }), true);
+  assert.equal(shouldClearStoredSession({ error: "network error" }), false);
 });

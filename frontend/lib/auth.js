@@ -2,6 +2,19 @@ export function normalizeApiBase(value) {
   return String(value || "").trim().replace(/\/$/, "");
 }
 
+export function shouldRestoreStoredSession({ token } = {}) {
+  return Boolean(String(token || "").trim());
+}
+
+export function shouldClearStoredSession({ status = 0, error = "" } = {}) {
+  const normalizedStatus = Number.parseInt(status, 10);
+  if ([401, 403].includes(normalizedStatus)) return true;
+  const normalizedError = String(error || "")
+    .trim()
+    .toLowerCase();
+  return ["unauthorized", "session invalid", "admin required"].includes(normalizedError);
+}
+
 export function resolveDefaultApiBase({
   origin = typeof window !== "undefined" ? window.location.origin : "",
   pathname = typeof window !== "undefined" ? window.location.pathname : "",

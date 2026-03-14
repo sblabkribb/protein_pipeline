@@ -38,6 +38,7 @@ import {
   formatWtIdentitySummary,
   mergeWorkflowStudioAnswers,
   minimumWorkflowStudioStartStage,
+  normalizeWorkflowStudioPayloadForComparison,
   nextWorkflowStudioStage,
   parseWorkflowStudioNode,
   resolveWorkflowStudioStageForSession,
@@ -51,11 +52,13 @@ import {
   workflowStudioRetainedArtifactPath,
   workflowStudioActionRunIdForSession,
   workflowStudioExecutionTarget,
+  buildWorkflowProgressContext,
   progressStepsForRequest,
   progressUnitsForRequest,
   residuePickerControlState,
   workflowStudioChangedFields,
   workflowStudioDependencyStatus,
+  workflowStudioSessionIdForRun,
   workflowStudioStageFields,
   upsertWorkflowStudioStageStatus,
   withFixedPositionsExtra,
@@ -1076,6 +1079,70 @@ test("workflowStudioSessionRunKey groups duplicate sessions by linked run id", (
       stage_run_ids: { msa: "run-a", af2: "run-b" },
     }),
     ""
+  );
+});
+
+test("workflowStudioSessionIdForRun finds a linked studio session for a run", () => {
+  const sessions = [
+    { session_id: "studio-head", head_run_id: "run-head" },
+    { session_id: "studio-source", source_run_id: "run-source" },
+    { session_id: "studio-history", history: [{ run_id: "run-history" }] },
+    { session_id: "studio-stage", stage_run_ids: { af2: "run-stage" } },
+  ];
+
+  assert.equal(workflowStudioSessionIdForRun(sessions, "run-head"), "studio-head");
+  assert.equal(workflowStudioSessionIdForRun(sessions, "run-source"), "studio-source");
+  assert.equal(workflowStudioSessionIdForRun(sessions, "run-history"), "studio-history");
+  assert.equal(workflowStudioSessionIdForRun(sessions, "run-stage"), "studio-stage");
+  assert.equal(workflowStudioSessionIdForRun(sessions, "run-missing"), "");
+});
+
+test("buildWorkflowProgressContext prefers workflow nodes over partial rerun bounds", () => {
+  assert.deepEqual(
+    buildWorkflowProgressContext({
+      nodes: ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"],
+      tierKeys: [0.3, 0.5, 0.7],
+      wtCompare: true,
+    }),
+    {
+      tierKeys: ["30", "50", "70"],
+      noveltyEnabled: true,
+      stopAfter: "novelty",
+      startFrom: "msa",
+      wtCompare: true,
+    }
+  );
+});
+
+test("normalizeWorkflowStudioPayloadForComparison ignores equivalent RFD3 seed PDB text", () => {
+  const pdbText = [
+    "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C",
+    "END",
+  ].join("\n");
+  const previousPayload = normalizeWorkflowStudioPayloadForComparison(
+    {
+      target_pdb: pdbText,
+      rfd3_input_pdb: `${pdbText}   \n`,
+      rfd3_contig: "A1-3",
+    },
+    { nodes: ["msa", "rfd3", "novelty"] }
+  );
+  const nextPayload = normalizeWorkflowStudioPayloadForComparison(
+    {
+      target_input: pdbText,
+      rfd3_contig: "A1-3",
+    },
+    { nodes: ["msa", "rfd3", "novelty"] }
+  );
+
+  assert.deepEqual(workflowStudioChangedFields(previousPayload, nextPayload), []);
+  assert.equal(
+    minimumWorkflowStudioStartStage({
+      previousPayload,
+      nextPayload,
+      targetStage: "novelty",
+    }),
+    "novelty"
   );
 });
 

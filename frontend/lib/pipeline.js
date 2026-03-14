@@ -396,6 +396,39 @@ export function workflowStudioActionRunIdForSession(session, currentRunId = "") 
   return workflowStudioSessionRunKey(session);
 }
 
+export function workflowStudioSessionIdForRun(sessions, runId = "") {
+  const key = String(runId || "").trim();
+  if (!key) return "";
+  const matched = (Array.isArray(sessions) ? sessions : []).find(
+    (session) => workflowStudioSessionRunKey(session) === key
+  );
+  return String(matched?.session_id || "").trim();
+}
+
+export function buildWorkflowProgressContext({
+  nodes = [],
+  tierKeys = DEFAULT_WORKFLOW_TIER_KEYS,
+  wtCompare = false,
+} = {}) {
+  const baseNodes = Array.from(
+    new Set(
+      (Array.isArray(nodes) ? nodes : [])
+        .map((item) => parseWorkflowStudioNode(item)?.baseStage || normalizeStage(item))
+        .filter(Boolean)
+    )
+  );
+  if (!baseNodes.length) return null;
+  const startFrom = baseNodes[0] || "msa";
+  const stopAfter = baseNodes[baseNodes.length - 1] || "af2";
+  return {
+    tierKeys: normalizedWorkflowTierKeys(tierKeys),
+    noveltyEnabled: stopAfter === "novelty",
+    stopAfter,
+    startFrom,
+    wtCompare: Boolean(wtCompare),
+  };
+}
+
 function progressStepForRequestedStage(stage, { wtCompare = false, start = false } = {}) {
   const normalized = normalizeStage(stage);
   if (normalized === "msa") return "msa";
@@ -1358,6 +1391,55 @@ export function effectiveRfd3InputPdb({ mode = "", answers = {}, nodes = [] } = 
   if (explicit) return explicit;
   if (!runUsesRfd3Stage({ mode, answers, nodes })) return "";
   return targetInputPdbText(answers);
+}
+
+export function normalizeWorkflowStudioPayloadForComparison(payload, { nodes = [] } = {}) {
+  const answers = cloneWorkflowValue(payload && typeof payload === "object" ? payload : {});
+  delete answers.selected_tiers;
+
+  const targetInput = String(answers.target_input || answers.target_pdb || answers.target_fasta || "").trim();
+  delete answers.target_pdb;
+  delete answers.target_fasta;
+  if (targetInput) {
+    if (detectTargetKey(targetInput) === "target_fasta") {
+      answers.target_fasta = targetInput;
+    } else {
+      answers.target_pdb = targetInput;
+    }
+  }
+  delete answers.target_input;
+
+  if (Array.isArray(answers.design_chains) && answers.design_chains.length === 0) {
+    delete answers.design_chains;
+  }
+  if (typeof answers.rfd3_input_pdb === "string") {
+    answers.rfd3_input_pdb = answers.rfd3_input_pdb.trim();
+  }
+  if (typeof answers.rfd3_contig === "string") {
+    answers.rfd3_contig = answers.rfd3_contig.trim();
+  }
+  if (String(answers.rfd3_input_pdb || "").trim() === String(answers.target_pdb || "").trim()) {
+    delete answers.rfd3_input_pdb;
+  }
+  if (typeof answers.rfd3_input_pdb === "string" && !answers.rfd3_input_pdb.trim()) {
+    delete answers.rfd3_input_pdb;
+  }
+  if (typeof answers.rfd3_contig === "string" && !answers.rfd3_contig.trim()) {
+    delete answers.rfd3_contig;
+  }
+
+  const effectiveRfd3Input = effectiveRfd3InputPdb({
+    mode: "workflow",
+    answers,
+    nodes,
+  });
+  if (effectiveRfd3Input) {
+    answers.rfd3_input_pdb = String(effectiveRfd3Input).trim();
+  } else {
+    delete answers.rfd3_input_pdb;
+    delete answers.rfd3_contig;
+  }
+  return answers;
 }
 
 export function shouldShowRfd3InputPdbField({ mode = "", answers = {}, nodes = [], overrideVisible = false } = {}) {

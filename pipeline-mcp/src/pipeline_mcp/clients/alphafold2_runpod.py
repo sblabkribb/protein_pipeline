@@ -10,6 +10,7 @@ from collections.abc import Callable
 
 import requests
 
+from ..af2_utils import af2_error_is_missing_pdb_outputs
 from .runpod import RunPodClient
 from ..models import SequenceRecord
 
@@ -117,61 +118,68 @@ class AlphaFold2RunPodClient:
                 payload["alphafold_extra_flags"] = str(extra_flags)
 
             existing_job_id = (resume_job_ids or {}).get(seq.id) if resume_job_ids else None
-            if isinstance(existing_job_id, str) and existing_job_id.strip():
-                job_id = existing_job_id.strip()
-                if on_job_id is not None:
-                    on_job_id(seq.id, job_id)
+            for attempt in range(2):
                 try:
-                    job = self.runpod.wait(self.endpoint_id, job_id)
-                except requests.HTTPError as exc:
-                    status_code = exc.response.status_code if exc.response is not None else None
-                    if status_code == 404:
+                    if isinstance(existing_job_id, str) and existing_job_id.strip():
+                        job_id = existing_job_id.strip()
+                        if on_job_id is not None:
+                            on_job_id(seq.id, job_id)
+                        try:
+                            job = self.runpod.wait(self.endpoint_id, job_id)
+                        except requests.HTTPError as exc:
+                            status_code = exc.response.status_code if exc.response is not None else None
+                            if status_code == 404:
+                                _, job = self.runpod.run_and_wait_with_job_id(
+                                    self.endpoint_id,
+                                    payload,
+                                    on_job_id=(lambda job_id, seq_id=seq.id: on_job_id(seq_id, job_id)) if on_job_id else None,
+                                )
+                            else:
+                                raise
+                    else:
                         _, job = self.runpod.run_and_wait_with_job_id(
                             self.endpoint_id,
                             payload,
                             on_job_id=(lambda job_id, seq_id=seq.id: on_job_id(seq_id, job_id)) if on_job_id else None,
                         )
-                    else:
+                    if job.get("status") not in {"COMPLETED", "COMPLETED_WITH_ERRORS"}:
+                        raise RuntimeError(f"AlphaFold2 RunPod job not completed: {job}")
+
+                    output = job.get("output")
+                    if not isinstance(output, dict):
+                        raise RuntimeError(f"AlphaFold2 output missing/invalid: {job}")
+
+                    entries = _archive_entries(output)
+                    if len(entries) != 1:
+                        raise RuntimeError(
+                            "AlphaFold2 endpoint returned multiple archives for a single sequence; "
+                            "use an input archive for batch mode."
+                        )
+
+                    archive_name = entries[0]["name"]
+                    archive_bytes = base64.b64decode(entries[0]["base64"])
+                    with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz") as tar:
+                        ranking_text = _extract_member_text(tar, "ranking_debug.json")
+                        if ranking_text is None:
+                            raise RuntimeError("ranking_debug.json not found in AlphaFold2 archive")
+                        ranking = json.loads(ranking_text)
+                        if not isinstance(ranking, dict):
+                            raise RuntimeError("ranking_debug.json is not an object")
+
+                        ranked0 = _extract_member_text(tar, "ranked_0.pdb")
+                        best_model, best_plddt = _best_plddt_from_ranking_debug(ranking)
+
+                    results[seq.id] = {
+                        "archive_name": archive_name,
+                        "best_model": best_model,
+                        "best_plddt": best_plddt,
+                        "ranking_debug": ranking,
+                        "ranked_0_pdb": ranked0,
+                        "files": output.get("files"),
+                    }
+                    break
+                except Exception as exc:
+                    if attempt >= 1 or not af2_error_is_missing_pdb_outputs(str(exc)):
                         raise
-            else:
-                _, job = self.runpod.run_and_wait_with_job_id(
-                    self.endpoint_id,
-                    payload,
-                    on_job_id=(lambda job_id, seq_id=seq.id: on_job_id(seq_id, job_id)) if on_job_id else None,
-                )
-            if job.get("status") not in {"COMPLETED", "COMPLETED_WITH_ERRORS"}:
-                raise RuntimeError(f"AlphaFold2 RunPod job not completed: {job}")
-
-            output = job.get("output")
-            if not isinstance(output, dict):
-                raise RuntimeError(f"AlphaFold2 output missing/invalid: {job}")
-
-            entries = _archive_entries(output)
-            if len(entries) != 1:
-                raise RuntimeError(
-                    "AlphaFold2 endpoint returned multiple archives for a single sequence; "
-                    "use an input archive for batch mode."
-                )
-
-            archive_name = entries[0]["name"]
-            archive_bytes = base64.b64decode(entries[0]["base64"])
-            with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz") as tar:
-                ranking_text = _extract_member_text(tar, "ranking_debug.json")
-                if ranking_text is None:
-                    raise RuntimeError("ranking_debug.json not found in AlphaFold2 archive")
-                ranking = json.loads(ranking_text)
-                if not isinstance(ranking, dict):
-                    raise RuntimeError("ranking_debug.json is not an object")
-
-                ranked0 = _extract_member_text(tar, "ranked_0.pdb")
-                best_model, best_plddt = _best_plddt_from_ranking_debug(ranking)
-
-            results[seq.id] = {
-                "archive_name": archive_name,
-                "best_model": best_model,
-                "best_plddt": best_plddt,
-                "ranking_debug": ranking,
-                "ranked_0_pdb": ranked0,
-                "files": output.get("files"),
-            }
+                    existing_job_id = None
         return results

@@ -965,6 +965,114 @@ class TestPipelineDryRun(unittest.TestCase):
             request_payload = json.loads((Path(res.output_dir) / "request.json").read_text(encoding="utf-8"))
             self.assertEqual(float(request_payload.get("af2_plddt_cutoff") or 0.0), 70.0)
 
+    def test_pipeline_rerun_same_id_retries_previous_af2_missing_pdb_failures(self) -> None:
+        fasta = ">q1\nACDE\n"
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU A   4       3.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        af2_error = (
+            "AlphaFold2 endpoint reported an error:\n"
+            "RuntimeError: colabfold_batch completed but no PDB outputs were found. "
+            "Check your localcolabfold installation, databases, and colabfold_args."
+        )
+
+        class _FailingColabFoldStub:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def predict(self, sequences, **kwargs):  # type: ignore[no-untyped-def]
+                self.calls += 1
+                on_job_id = kwargs.get("on_job_id")
+                if callable(on_job_id):
+                    for idx, seq in enumerate(sequences, start=1):
+                        on_job_id(seq.id, f"failed_job_{self.calls}_{idx}")
+                raise RuntimeError(af2_error)
+
+        class _SuccessfulColabFoldStub:
+            def __init__(self, ranked_pdb: str) -> None:
+                self.calls = 0
+                self.resume_history: list[dict[str, str] | None] = []
+                self.ranked_pdb = ranked_pdb
+
+            def predict(self, sequences, **kwargs):  # type: ignore[no-untyped-def]
+                self.calls += 1
+                raw_resume = kwargs.get("resume_job_ids")
+                if isinstance(raw_resume, dict):
+                    self.resume_history.append({str(k): str(v) for k, v in raw_resume.items()})
+                else:
+                    self.resume_history.append(None)
+                on_job_id = kwargs.get("on_job_id")
+                if callable(on_job_id):
+                    for idx, seq in enumerate(sequences, start=1):
+                        on_job_id(seq.id, f"fresh_job_{self.calls}_{idx}")
+                return {
+                    str(seq.id): {
+                        "best_model": "model_1",
+                        "best_plddt": 91.0,
+                        "ranking_debug": {"order": ["model_1"], "plddts": {"model_1": 91.0}},
+                        "ranked_0_pdb": self.ranked_pdb,
+                    }
+                    for seq in sequences
+                }
+
+        req = PipelineRequest(
+            target_fasta=fasta,
+            target_pdb=pdb,
+            dry_run=False,
+            stop_after="af2",
+            conservation_tiers=[0.3],
+            num_seq_per_tier=1,
+            soluprot_cutoff=0.0,
+            af2_plddt_cutoff=0.0,
+            af2_rmsd_cutoff=0.0,
+        )
+
+        with _tmpdir() as tmp:
+            run_id = "rerun_af2_missing_pdb"
+            failing = _FailingColabFoldStub()
+            first_runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                colabfold=failing,
+            )
+            first_runner.run(req, run_id=run_id)
+
+            run_root = Path(tmp) / run_id
+            first_wt_metrics = json.loads((run_root / "wt" / "metrics.json").read_text(encoding="utf-8"))
+            self.assertTrue(bool(((first_wt_metrics.get("af2") or {}).get("skipped"))))
+            first_tier_af2 = json.loads((run_root / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8"))
+            self.assertTrue(bool(first_tier_af2.get("recovered")))
+
+            success = _SuccessfulColabFoldStub(pdb)
+            second_runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                colabfold=success,
+            )
+            second_runner.run(req, run_id=run_id)
+
+            self.assertEqual(success.calls, 2)
+            self.assertIsNone(success.resume_history[0])
+            self.assertEqual(success.resume_history[1], {})
+
+            wt_metrics = json.loads((run_root / "wt" / "metrics.json").read_text(encoding="utf-8"))
+            self.assertFalse(bool(((wt_metrics.get("af2") or {}).get("skipped"))))
+            self.assertTrue((run_root / "wt" / "af2" / "ranked_0.pdb").exists())
+
+            tier_af2 = json.loads((run_root / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8"))
+            self.assertFalse(bool(tier_af2.get("recovered")))
+            self.assertTrue(bool(tier_af2.get("selected_ids")))
+
     def test_pipeline_selected_tiers_limits_outputs_to_requested_tier(self) -> None:
         with _tmpdir() as tmp:
             runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
