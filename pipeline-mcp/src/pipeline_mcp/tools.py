@@ -1246,6 +1246,12 @@ def _load_json_file(path: Path) -> dict[str, object] | None:
     return raw if isinstance(raw, dict) else None
 
 
+def _af2_payload_has_recovered_failure(af2: dict[str, object] | None) -> bool:
+    if not isinstance(af2, dict):
+        return False
+    return bool(af2.get("recovered"))
+
+
 def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -> dict[str, object]:
     out = {
         "soluprot_scores": [],
@@ -1287,8 +1293,13 @@ def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -
 
         af2 = _load_json_file(tier_dir / "af2_scores.json")
         if isinstance(af2, dict):
-            scores = af2.get("scores") if isinstance(af2.get("scores"), dict) else {}
-            rmsd_scores = af2.get("rmsd_scores") if isinstance(af2.get("rmsd_scores"), dict) else {}
+            recovered_failure = _af2_payload_has_recovered_failure(af2)
+            scores = af2.get("scores") if isinstance(af2.get("scores"), dict) and not recovered_failure else {}
+            rmsd_scores = (
+                af2.get("rmsd_scores")
+                if isinstance(af2.get("rmsd_scores"), dict) and not recovered_failure
+                else {}
+            )
             candidate_ids = af2.get("candidate_ids") if isinstance(af2.get("candidate_ids"), list) else []
             candidate_total = len(candidate_ids)
             if candidate_total <= 0 and isinstance(af2.get("candidate_count_after_budget"), int):
@@ -1302,7 +1313,11 @@ def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -
                     out["af2_plddt"].append(float(scores.get(seq_id)))
                 if seq_id in rmsd_scores and isinstance(rmsd_scores.get(seq_id), (int, float)):
                     out["af2_rmsd"].append(float(rmsd_scores.get(seq_id)))
-            selected_ids = af2.get("selected_ids") if isinstance(af2.get("selected_ids"), list) else []
+            selected_ids = (
+                af2.get("selected_ids")
+                if isinstance(af2.get("selected_ids"), list) and not recovered_failure
+                else []
+            )
             if selected_ids:
                 out["af2_selected_total"] += len(selected_ids)
                 for seq_id in selected_ids:
@@ -1497,8 +1512,13 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
 
         af2 = _load_json_file(tier_dir / "af2_scores.json")
         if isinstance(af2, dict):
-            scores = af2.get("scores") if isinstance(af2.get("scores"), dict) else {}
-            rmsd_scores = af2.get("rmsd_scores") if isinstance(af2.get("rmsd_scores"), dict) else {}
+            recovered_failure = _af2_payload_has_recovered_failure(af2)
+            scores = af2.get("scores") if isinstance(af2.get("scores"), dict) and not recovered_failure else {}
+            rmsd_scores = (
+                af2.get("rmsd_scores")
+                if isinstance(af2.get("rmsd_scores"), dict) and not recovered_failure
+                else {}
+            )
             candidate_ids = af2.get("candidate_ids") if isinstance(af2.get("candidate_ids"), list) else []
             candidate_metric_ids = candidate_ids if candidate_ids else list(scores.keys())
             for seq_id in candidate_metric_ids:
@@ -1515,7 +1535,11 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
                     cast_rmsd = bucket.get("af2_candidate_rmsd")
                     if isinstance(cast_rmsd, list):
                         cast_rmsd.append(float(raw_rmsd))
-            selected_ids = af2.get("selected_ids") if isinstance(af2.get("selected_ids"), list) else []
+            selected_ids = (
+                af2.get("selected_ids")
+                if isinstance(af2.get("selected_ids"), list) and not recovered_failure
+                else []
+            )
             for seq_id in selected_ids:
                 source = _source_for_sequence_id(str(seq_id), lookup)
                 bucket = out[source]
@@ -1584,8 +1608,13 @@ def _collect_tier_compare_metrics(
         candidate_plddt: list[float] = []
         candidate_rmsd: list[float] = []
         if isinstance(af2, dict):
-            scores = af2.get("scores") if isinstance(af2.get("scores"), dict) else {}
-            rmsd_scores = af2.get("rmsd_scores") if isinstance(af2.get("rmsd_scores"), dict) else {}
+            recovered_failure = _af2_payload_has_recovered_failure(af2)
+            scores = af2.get("scores") if isinstance(af2.get("scores"), dict) and not recovered_failure else {}
+            rmsd_scores = (
+                af2.get("rmsd_scores")
+                if isinstance(af2.get("rmsd_scores"), dict) and not recovered_failure
+                else {}
+            )
             candidate_ids = af2.get("candidate_ids") if isinstance(af2.get("candidate_ids"), list) else []
             af2_candidate_total = len(candidate_ids)
             if af2_candidate_total <= 0 and isinstance(af2.get("candidate_count_after_budget"), int):
@@ -1600,7 +1629,11 @@ def _collect_tier_compare_metrics(
                     candidate_plddt.append(float(raw_plddt))
                 if isinstance(raw_rmsd, (int, float)):
                     candidate_rmsd.append(float(raw_rmsd))
-            selected_ids = af2.get("selected_ids") if isinstance(af2.get("selected_ids"), list) else []
+            selected_ids = (
+                af2.get("selected_ids")
+                if isinstance(af2.get("selected_ids"), list) and not recovered_failure
+                else []
+            )
             af2_selected_total = len(selected_ids)
 
         rows.append(
@@ -3770,18 +3803,19 @@ def _build_hit_list_rows(
         af2_candidates: set[str] = set()
         af2 = _load_json_file(tier_dir / "af2_scores.json")
         if isinstance(af2, dict):
+            recovered_failure = _af2_payload_has_recovered_failure(af2)
             raw_af2_scores = af2.get("scores")
-            if isinstance(raw_af2_scores, dict):
+            if isinstance(raw_af2_scores, dict) and not recovered_failure:
                 for seq_id, raw_score in raw_af2_scores.items():
                     if isinstance(raw_score, (int, float)):
                         af2_scores[str(seq_id)] = float(raw_score)
             raw_rmsd = af2.get("rmsd_scores")
-            if isinstance(raw_rmsd, dict):
+            if isinstance(raw_rmsd, dict) and not recovered_failure:
                 for seq_id, raw_score in raw_rmsd.items():
                     if isinstance(raw_score, (int, float)):
                         af2_rmsd[str(seq_id)] = float(raw_score)
             raw_selected = af2.get("selected_ids")
-            if isinstance(raw_selected, list):
+            if isinstance(raw_selected, list) and not recovered_failure:
                 af2_selected = {str(x) for x in raw_selected if str(x).strip()}
             raw_candidates = af2.get("candidate_ids")
             if isinstance(raw_candidates, list):

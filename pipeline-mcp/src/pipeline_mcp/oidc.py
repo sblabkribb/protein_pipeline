@@ -2,11 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+import time
 from typing import Any
 
 import requests
 
 from .auth import safe_run_prefix
+
+
+_OIDC_CACHE_TTL_S = 300.0
+_OIDC_DISCOVERY_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_OIDC_JWKS_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 
 
 @dataclass(frozen=True)
@@ -90,16 +96,39 @@ def load_oidc_settings() -> OIDCSettings | None:
     )
 
 
-def get_oidc_discovery(settings: OIDCSettings) -> dict[str, str]:
-    response = requests.get(
-        f"{settings.issuer}/.well-known/openid-configuration",
-        timeout=10,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    if not isinstance(payload, dict):
-        raise ValueError("invalid OIDC discovery payload")
+def _cache_lookup[T](cache: dict[str, tuple[float, T]], key: str) -> tuple[T | None, bool]:
+    cached = cache.get(key)
+    if cached is None:
+        return None, False
+    expires_at, payload = cached
+    return payload, expires_at > time.time()
+
+
+def _cache_store[T](cache: dict[str, tuple[float, T]], key: str, payload: T) -> T:
+    cache[key] = (time.time() + _OIDC_CACHE_TTL_S, payload)
     return payload
+
+
+def get_oidc_discovery(settings: OIDCSettings, *, force_refresh: bool = False) -> dict[str, Any]:
+    cache_key = settings.issuer
+    cached_payload, is_fresh = _cache_lookup(_OIDC_DISCOVERY_CACHE, cache_key)
+    if cached_payload is not None and is_fresh and not force_refresh:
+        return cached_payload
+
+    try:
+        response = requests.get(
+            f"{settings.issuer}/.well-known/openid-configuration",
+            timeout=10,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("invalid OIDC discovery payload")
+        return _cache_store(_OIDC_DISCOVERY_CACHE, cache_key, payload)
+    except Exception:
+        if cached_payload is not None:
+            return cached_payload
+        raise
 
 
 def account_console_url(settings: OIDCSettings) -> str:
@@ -122,6 +151,47 @@ def get_client_roles(claims: dict[str, Any], client_id: str) -> set[str]:
     return {str(role) for role in roles}
 
 
+def get_realm_roles(claims: dict[str, Any]) -> set[str]:
+    roles: set[str] = set()
+    realm_access = claims.get("realm_access")
+    if isinstance(realm_access, dict):
+        realm_roles = realm_access.get("roles")
+        if isinstance(realm_roles, list):
+            roles.update(str(role) for role in realm_roles)
+    roles.update(get_client_roles(claims, "realm-management"))
+    return roles
+
+
+def _get_jwks_keys(settings: OIDCSettings, *, force_refresh: bool = False) -> list[dict[str, Any]]:
+    jwks_uri = settings.jwks_url
+    cache_key = jwks_uri or settings.issuer
+    cached_keys, is_fresh = _cache_lookup(_OIDC_JWKS_CACHE, cache_key)
+    if cached_keys is not None and is_fresh and not force_refresh:
+        return cached_keys
+
+    if not jwks_uri:
+        discovery = get_oidc_discovery(settings, force_refresh=force_refresh)
+        jwks_uri = str(discovery.get("jwks_uri") or "")
+    if not jwks_uri:
+        raise ValueError("OIDC JWKS URI is not configured")
+
+    try:
+        jwks_response = requests.get(jwks_uri, timeout=10)
+        jwks_response.raise_for_status()
+        jwks_payload = jwks_response.json()
+        keys = jwks_payload.get("keys") if isinstance(jwks_payload, dict) else None
+        if not isinstance(keys, list) or not keys:
+            raise ValueError("OIDC JWKS payload is invalid")
+        normalized = [key for key in keys if isinstance(key, dict)]
+        if not normalized:
+            raise ValueError("OIDC JWKS payload is invalid")
+        return _cache_store(_OIDC_JWKS_CACHE, cache_key, normalized)
+    except Exception:
+        if cached_keys is not None:
+            return cached_keys
+        raise
+
+
 def claims_to_user(claims: dict[str, Any], client_id: str = "protein-pipeline") -> dict[str, Any]:
     username = (
         str(claims.get("preferred_username") or "").strip()
@@ -131,7 +201,8 @@ def claims_to_user(claims: dict[str, Any], client_id: str = "protein-pipeline") 
     if not username:
         raise ValueError("missing subject")
     roles = get_client_roles(claims, client_id)
-    role = "admin" if "pipeline-admin" in roles else "user"
+    realm_roles = get_realm_roles(claims)
+    role = "admin" if "pipeline-admin" in roles or "realm-admin" in realm_roles else "user"
     return {
         "username": username,
         "role": role,
@@ -140,6 +211,15 @@ def claims_to_user(claims: dict[str, Any], client_id: str = "protein-pipeline") 
         "subject": str(claims.get("sub") or ""),
         "email": str(claims.get("email") or ""),
     }
+
+
+def _select_signing_key(keys: list[dict[str, Any]], kid: Any) -> dict[str, Any] | None:
+    for key in keys:
+        if key.get("kid") == kid:
+            return key
+    if len(keys) == 1:
+        return keys[0]
+    return None
 
 
 def verify_oidc_token(token: str, settings: OIDCSettings) -> dict[str, Any]:
@@ -151,27 +231,11 @@ def verify_oidc_token(token: str, settings: OIDCSettings) -> dict[str, Any]:
     header = jwt.get_unverified_header(token)
     kid = header.get("kid")
 
-    jwks_uri = settings.jwks_url
-    if not jwks_uri:
-        discovery = get_oidc_discovery(settings)
-        jwks_uri = str(discovery.get("jwks_uri") or "")
-    if not jwks_uri:
-        raise ValueError("OIDC JWKS URI is not configured")
-
-    jwks_response = requests.get(jwks_uri, timeout=10)
-    jwks_response.raise_for_status()
-    jwks_payload = jwks_response.json()
-    keys = jwks_payload.get("keys") if isinstance(jwks_payload, dict) else None
-    if not isinstance(keys, list) or not keys:
-        raise ValueError("OIDC JWKS payload is invalid")
-
-    signing_key = None
-    for key in keys:
-        if isinstance(key, dict) and key.get("kid") == kid:
-            signing_key = key
-            break
-    if signing_key is None and len(keys) == 1 and isinstance(keys[0], dict):
-        signing_key = keys[0]
+    keys = _get_jwks_keys(settings)
+    signing_key = _select_signing_key(keys, kid)
+    if signing_key is None:
+        keys = _get_jwks_keys(settings, force_refresh=True)
+        signing_key = _select_signing_key(keys, kid)
     if signing_key is None:
         raise ValueError("unable to select OIDC signing key")
 

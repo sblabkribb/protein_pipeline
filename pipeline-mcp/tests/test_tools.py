@@ -11,6 +11,8 @@ from pipeline_mcp.storage import set_status
 from pipeline_mcp.tools import ToolDispatcher
 from pipeline_mcp.tools import AutoRetryConfig
 from pipeline_mcp.tools import _run_with_auto_retry
+from pipeline_mcp.tools import _build_comparison_summary
+from pipeline_mcp.tools import _build_hit_list_rows
 from pipeline_mcp.tools import pipeline_request_from_args
 
 
@@ -653,6 +655,91 @@ class TestTools(unittest.TestCase):
                     self.assertIn("propagation_mode", bucket)
                     self.assertIn("plddt_median", bucket)
                     self.assertIn("rmsd_median", bucket)
+
+    def test_recovered_af2_placeholders_are_ignored_in_comparison_summary_and_hit_list(self) -> None:
+        with _tmpdir() as tmp:
+            run_root = Path(tmp)
+            tier_dir = run_root / "tiers" / "30"
+            tier_dir.mkdir(parents=True, exist_ok=True)
+
+            (tier_dir / "soluprot.json").write_text(
+                json.dumps(
+                    {
+                        "scores": {
+                            "rfd3_model:1": 0.9,
+                            "bioemu_model:1": 0.8,
+                        },
+                        "passed_ids": ["rfd3_model:1", "bioemu_model:1"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (tier_dir / "af2_scores.json").write_text(
+                json.dumps(
+                    {
+                        "scores": {
+                            "rfd3_model:1": 0.0,
+                            "bioemu_model:1": 0.0,
+                        },
+                        "rmsd_scores": {},
+                        "candidate_ids": ["rfd3_model:1", "bioemu_model:1"],
+                        "selected_ids": ["rfd3_model:1", "bioemu_model:1"],
+                        "recovered": True,
+                        "error": "af2_30 failed: no PDB outputs were found",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            summary = {
+                "tiers": [
+                    {
+                        "tier": 0.3,
+                        "proteinmpnn_samples": [
+                            {
+                                "id": "rfd3_model:1",
+                                "sequence": "ACDE",
+                                "meta": {"backbone_source": "rfd3"},
+                            },
+                            {
+                                "id": "bioemu_model:1",
+                                "sequence": "ACDF",
+                                "meta": {"backbone_source": "bioemu"},
+                            },
+                        ],
+                    }
+                ]
+            }
+            request = {"target_fasta": ">q1\nACDE\n", "wt_compare": True}
+
+            comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
+            tier_compare = comparison_summary.get("tier_compare") or []
+            self.assertEqual(len(tier_compare), 1)
+            row = tier_compare[0]
+            self.assertEqual(int(row.get("af2_candidate_total") or 0), 2)
+            self.assertEqual(int(row.get("af2_selected_total") or 0), 0)
+            self.assertIsNone(row.get("plddt_median"))
+            self.assertIsNone(row.get("rmsd_median"))
+
+            source_compare = comparison_summary.get("source_compare") or {}
+            self.assertEqual(int((source_compare.get("rfd3") or {}).get("af2_candidate_total") or 0), 1)
+            self.assertEqual(int((source_compare.get("rfd3") or {}).get("af2_selected_total") or 0), 0)
+            self.assertIsNone((source_compare.get("rfd3") or {}).get("plddt_median"))
+            self.assertIsNone((source_compare.get("rfd3") or {}).get("rmsd_median"))
+
+            hit_rows = _build_hit_list_rows(
+                run_root=run_root,
+                request=request,
+                summary=summary,
+                weights={"soluprot": 1.0, "plddt": 1.0, "rmsd": 1.0, "novelty": 0.0},
+                rmsd_ref=5.0,
+            )
+            self.assertEqual(len(hit_rows), 2)
+            for row in hit_rows:
+                self.assertIsNone(row.get("plddt"))
+                self.assertIsNone(row.get("rmsd"))
+                self.assertTrue(bool(row.get("af2_candidate")))
+                self.assertFalse(bool(row.get("af2_selected")))
 
     def test_compare_runs_hit_list_and_export_package_tools(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"

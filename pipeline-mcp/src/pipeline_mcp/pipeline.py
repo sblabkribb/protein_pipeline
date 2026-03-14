@@ -16,6 +16,7 @@ import re
 from typing import Any
 from collections.abc import Callable
 
+from .af2_utils import af2_payload_has_missing_pdb_failure
 from .agent_panel import emit_agent_panel_event
 from .agent_panel import write_agent_panel_report
 from .bio.a3m import compute_conservation
@@ -179,6 +180,13 @@ def _remove_path_if_exists(path: Path) -> bool:
         return True
     except FileNotFoundError:
         return False
+
+
+def _unlink_if_exists(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
 
 
 def _cleanup_selected_tier_keys(selected_tier_keys: set[str] | None) -> list[str]:
@@ -540,6 +548,14 @@ class PipelineCancelled(RuntimeError):
 def _safe_id(value: str) -> str:
     safe = _SAFE_ID_RE.sub("_", value).strip("._-")
     return safe[:128] or "id"
+
+
+def _should_retry_cached_wt_af2(payload: dict[str, Any] | None) -> bool:
+    return isinstance(payload, dict) and bool(payload.get("skipped")) and af2_payload_has_missing_pdb_failure(payload)
+
+
+def _should_retry_cached_tier_af2(payload: dict[str, Any] | None) -> bool:
+    return isinstance(payload, dict) and af2_payload_has_missing_pdb_failure(payload)
 
 
 def _canonicalize_rfd3_design_id(value: object | None) -> str:
@@ -3425,9 +3441,13 @@ class PipelineRunner:
                         return None
                     return raw if isinstance(raw, dict) else None
 
-                if metrics_path.exists() and not request.force:
+                cached_metrics = _load_json_file(metrics_path) if metrics_path.exists() and not request.force else None
+                cached_af2 = cached_metrics.get("af2") if isinstance(cached_metrics, dict) and isinstance(cached_metrics.get("af2"), dict) else None
+                if cached_metrics is not None and not _should_retry_cached_wt_af2(cached_af2):
                     set_status(paths, stage="wt_baseline", state="completed", detail="cached")
                     return
+                if _should_retry_cached_wt_af2(cached_af2):
+                    _unlink_if_exists(wt_root / "af2" / "runpod_job.json")
 
                 seq_source = "target_fasta" if str(request.target_fasta or "").strip() else "target_pdb"
                 wt_seq = target_record.sequence if target_record else ""
@@ -3511,6 +3531,9 @@ class PipelineRunner:
                 af2_metrics_path = af2_root / "metrics.json"
                 af2_job_path = af2_root / "runpod_job.json"
                 af2_payload = _load_json_file(af2_metrics_path) if af2_metrics_path.exists() and not request.force else None
+                if _should_retry_cached_wt_af2(af2_payload):
+                    af2_payload = None
+                    _unlink_if_exists(af2_job_path)
                 af2_cached = af2_payload is not None
                 set_status(paths, stage="wt_af2", state="running", detail=("cached" if af2_cached else None))
                 if af2_payload is None:
@@ -4665,6 +4688,7 @@ class PipelineRunner:
                     af2_dir = _ensure_dir(tier_dir / "af2")
                     af2_scores_path = tier_dir / "af2_scores.json"
                     af2_selected_path = tier_dir / "af2_selected.fasta"
+                    jobs_path = af2_dir / "runpod_jobs.json"
                     af2_recovered = False
                     af2_error: str | None = None
                     af2_recovery: dict[str, object] | None = None
@@ -4676,6 +4700,9 @@ class PipelineRunner:
                                 cached = json.loads(af2_scores_path.read_text(encoding="utf-8"))
                             except Exception:
                                 cached = None
+                            if _should_retry_cached_tier_af2(cached):
+                                cached = None
+                                _unlink_if_exists(jobs_path)
                             cached_scores_raw = cached.get("scores") if isinstance(cached, dict) else None
                             cached_model_preset = cached.get("model_preset") if isinstance(cached, dict) else None
                             cached_db_preset = cached.get("db_preset") if isinstance(cached, dict) else None
@@ -4731,7 +4758,6 @@ class PipelineRunner:
                                     for s in to_predict
                                 ]
 
-                                jobs_path = af2_dir / "runpod_jobs.json"
                                 jobs: dict[str, str] = {} if request.force else _load_jobs_map(jobs_path)
 
                                 def _on_af2_job_id(seq_id: str, job_id: str) -> None:
