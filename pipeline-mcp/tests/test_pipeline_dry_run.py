@@ -1063,7 +1063,7 @@ class TestPipelineDryRun(unittest.TestCase):
 
             self.assertEqual(success.calls, 2)
             self.assertIsNone(success.resume_history[0])
-            self.assertEqual(success.resume_history[1], {})
+            self.assertIsNone(success.resume_history[1])
 
             wt_metrics = json.loads((run_root / "wt" / "metrics.json").read_text(encoding="utf-8"))
             self.assertFalse(bool(((wt_metrics.get("af2") or {}).get("skipped"))))
@@ -1072,6 +1072,79 @@ class TestPipelineDryRun(unittest.TestCase):
             tier_af2 = json.loads((run_root / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8"))
             self.assertFalse(bool(tier_af2.get("recovered")))
             self.assertTrue(bool(tier_af2.get("selected_ids")))
+
+    def test_pipeline_af2_missing_pdb_failure_does_not_recover_entire_tier_when_other_candidates_succeed(self) -> None:
+        fasta = ">q1\nACDE\n"
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU A   4       3.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        af2_error = (
+            "AlphaFold2 endpoint reported an error:\n"
+            "RuntimeError: colabfold_batch completed but no PDB outputs were found. "
+            "Check your localcolabfold installation, databases, and colabfold_args."
+        )
+
+        class _PartiallyFailingColabFoldStub:
+            def __init__(self, ranked_pdb: str) -> None:
+                self.calls: list[list[str]] = []
+                self.ranked_pdb = ranked_pdb
+
+            def predict(self, sequences, **kwargs):  # type: ignore[no-untyped-def]
+                seq_ids = [str(seq.id) for seq in sequences]
+                self.calls.append(seq_ids)
+                on_job_id = kwargs.get("on_job_id")
+                if callable(on_job_id):
+                    for idx, seq_id in enumerate(seq_ids, start=1):
+                        on_job_id(seq_id, f"job_{len(self.calls)}_{idx}")
+                if any(seq_id.endswith("fallback_001") or seq_id.endswith(":1") for seq_id in seq_ids):
+                    raise RuntimeError(af2_error)
+                return {
+                    seq_id: {
+                        "best_model": "model_1",
+                        "best_plddt": 91.0,
+                        "ranking_debug": {"order": ["model_1"], "plddts": {"model_1": 91.0}},
+                        "ranked_0_pdb": self.ranked_pdb,
+                    }
+                    for seq_id in seq_ids
+                }
+
+        req = PipelineRequest(
+            target_fasta=fasta,
+            target_pdb=pdb,
+            dry_run=False,
+            stop_after="af2",
+            conservation_tiers=[0.3],
+            num_seq_per_tier=2,
+            soluprot_cutoff=0.0,
+            af2_plddt_cutoff=0.0,
+            af2_rmsd_cutoff=0.0,
+        )
+
+        with _tmpdir() as tmp:
+            stub = _PartiallyFailingColabFoldStub(pdb)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                colabfold=stub,
+            )
+            res = runner.run(req, run_id="partial_af2_missing_pdb")
+
+            run_root = Path(res.output_dir)
+            tier_af2 = json.loads((run_root / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8"))
+            self.assertEqual(stub.calls[1], ["target:fallback_001"])
+            self.assertEqual(stub.calls[2], ["target:fallback_002"])
+            self.assertFalse(bool(tier_af2.get("recovered")))
+            self.assertTrue(bool(tier_af2.get("selected_ids")))
+            self.assertIn("target:fallback_001", tier_af2.get("failed_ids") or [])
+            self.assertIn("target:fallback_001", tier_af2.get("prediction_errors") or {})
+            self.assertTrue((run_root / "tiers" / "30" / "af2" / "target_fallback_002" / "ranked_0.pdb").exists())
 
     def test_pipeline_selected_tiers_limits_outputs_to_requested_tier(self) -> None:
         with _tmpdir() as tmp:
