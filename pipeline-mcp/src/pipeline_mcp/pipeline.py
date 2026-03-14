@@ -16,6 +16,7 @@ import re
 from typing import Any
 from collections.abc import Callable
 
+from .af2_utils import af2_error_is_missing_pdb_outputs
 from .af2_utils import af2_payload_has_missing_pdb_failure
 from .agent_panel import emit_agent_panel_event
 from .agent_panel import write_agent_panel_report
@@ -4726,6 +4727,8 @@ class PipelineRunner:
                             if request.force or not cached_ok
                             else [s for s in af2_candidates if s.id not in cached_scores]
                         )
+                        af2_result: dict[str, object] = {}
+                        partial_prediction_errors: dict[str, str] = {}
 
                         if to_predict:
                             if request.dry_run:
@@ -4773,34 +4776,56 @@ class PipelineRunner:
                                         detail=f"runpod_job_id={job_id} seq_id={seq_id}",
                                     )
 
-                                try:
-                                    af2_result = af2_client.predict(
-                                        af2_inputs,
-                                        model_preset=af2_model_preset,
-                                        db_preset=request.af2_db_preset,
-                                        max_template_date=request.af2_max_template_date,
-                                        extra_flags=request.af2_extra_flags,
-                                        on_job_id=_on_af2_job_id,
-                                        resume_job_ids=jobs,
-                                    )
-                                except TypeError:
+                                def _predict_af2_batch(
+                                    batch_inputs: list[SequenceRecord],
+                                    *,
+                                    resume_job_ids: dict[str, str] | None,
+                                ) -> dict[str, object]:
                                     try:
-                                        af2_result = af2_client.predict(
-                                            af2_inputs,
+                                        return af2_client.predict(
+                                            batch_inputs,
                                             model_preset=af2_model_preset,
                                             db_preset=request.af2_db_preset,
                                             max_template_date=request.af2_max_template_date,
                                             extra_flags=request.af2_extra_flags,
                                             on_job_id=_on_af2_job_id,
+                                            resume_job_ids=resume_job_ids,
                                         )
                                     except TypeError:
-                                        af2_result = af2_client.predict(
-                                            af2_inputs,
-                                            model_preset=af2_model_preset,
-                                            db_preset=request.af2_db_preset,
-                                            max_template_date=request.af2_max_template_date,
-                                            extra_flags=request.af2_extra_flags,
-                                        )
+                                        try:
+                                            return af2_client.predict(
+                                                batch_inputs,
+                                                model_preset=af2_model_preset,
+                                                db_preset=request.af2_db_preset,
+                                                max_template_date=request.af2_max_template_date,
+                                                extra_flags=request.af2_extra_flags,
+                                                on_job_id=_on_af2_job_id,
+                                            )
+                                        except TypeError:
+                                            return af2_client.predict(
+                                                batch_inputs,
+                                                model_preset=af2_model_preset,
+                                                db_preset=request.af2_db_preset,
+                                                max_template_date=request.af2_max_template_date,
+                                                extra_flags=request.af2_extra_flags,
+                                            )
+
+                                for seq_input in af2_inputs:
+                                    seq_resume_job_id = str(jobs.get(seq_input.id) or "").strip()
+                                    seq_resume = {seq_input.id: seq_resume_job_id} if seq_resume_job_id else None
+                                    try:
+                                        rec = _predict_af2_batch([seq_input], resume_job_ids=seq_resume)
+                                    except Exception as exc:
+                                        if request.auto_recover and af2_error_is_missing_pdb_outputs(str(exc)):
+                                            partial_prediction_errors[seq_input.id] = str(exc)
+                                            continue
+                                        raise
+                                    if isinstance(rec, dict):
+                                        af2_result.update(rec)
+
+                                if partial_prediction_errors and not af2_result:
+                                    first_error = next(iter(partial_prediction_errors.values()))
+                                    raise RuntimeError(first_error)
 
                             for seq in to_predict:
                                 rec = (af2_result or {}).get(seq.id, {}) if isinstance(af2_result, dict) else {}
@@ -4900,6 +4925,8 @@ class PipelineRunner:
                                 "cutoff": request.af2_plddt_cutoff,
                                 "rmsd_cutoff": request.af2_rmsd_cutoff,
                                 "rmsd_missing_ids": rmsd_missing,
+                                "failed_ids": sorted(partial_prediction_errors.keys()),
+                                "prediction_errors": partial_prediction_errors,
                                 "top_k": request.af2_top_k,
                                 "selected_ids": af2_selected_ids,
                                 "model_preset": af2_model_preset,
