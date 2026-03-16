@@ -15,8 +15,12 @@ import {
 } from "../lib/copilot.js";
 import {
   DEFAULT_ARTIFACT_COMPARE_MODE,
+  DEFAULT_ARTIFACT_LIST_LIMIT,
   artifactMetaFromPath,
+  artifactDownloadFilename,
+  buildArtifactDownloadRequest,
   buildWorkflowStudioFreshSessionSeed,
+  buildWorkflowStudioNodesFromRequest,
   buildWorkflowStudioEffectiveAnswers,
   buildSetupDraftFromRequest,
   buildRunArguments,
@@ -29,6 +33,7 @@ import {
   effectiveRfd3InputPdb,
   expandWorkflowStudioNodes,
   filterRunsByPrefix,
+  formatBackboneUsageSummary,
   inferRequestRunMode,
   latestWorkflowStudioCompletedNodesFromEvents,
   latestMeaningfulStatusFromEvents,
@@ -156,6 +161,31 @@ test("buildWorkflowStudioFreshSessionSeed stays blank when no studio session exi
   assert.deepEqual(seed.answers, {});
 });
 
+test("buildWorkflowStudioNodesFromRequest reconstructs studio lanes for direct pipeline runs", () => {
+  const nodes = buildWorkflowStudioNodesFromRequest({
+    target_pdb: "HEADER\n",
+    bioemu_use: true,
+    conservation_tiers: [0.3, 0.5, 0.7],
+    stop_after: "af2",
+    wt_compare: true,
+  });
+
+  assert.deepEqual(nodes, [
+    "msa",
+    "rfd3",
+    "bioemu",
+    "proteinmpnn_30",
+    "soluprot_30",
+    "af2_30",
+    "proteinmpnn_50",
+    "soluprot_50",
+    "af2_50",
+    "proteinmpnn_70",
+    "soluprot_70",
+    "af2_70",
+  ]);
+});
+
 test("workflowStudioActionRunIdForSession does not borrow current run for a fresh session", () => {
   assert.equal(
     workflowStudioActionRunIdForSession(
@@ -225,6 +255,11 @@ test("artifactMetaFromPath classifies compare references and source outputs", ()
   assert.equal(sourceOutput.compareGroup, "source_outputs");
 });
 
+test("DEFAULT_ARTIFACT_LIST_LIMIT leaves room for WT compare references in larger runs", () => {
+  assert.equal(DEFAULT_ARTIFACT_LIST_LIMIT, 1000);
+  assert.ok(DEFAULT_ARTIFACT_LIST_LIMIT > 300);
+});
+
 test("extractDesignChainsFromPayload prefers resolved design chains", () => {
   const chains = extractDesignChainsFromPayload({
     requested_design_chains: ["A", "B"],
@@ -288,6 +323,79 @@ test("displayArtifactPath aliases legacy rfd3 ids", () => {
   );
   assert.equal(displayRfd3Id("inputs_spec-1_0_model_0:1"), "rfd3_spec-1_0_model_0:1");
   assert.equal(displayArtifactPath("rfd3/inputs.json"), "rfd3/inputs.json");
+});
+
+test("formatBackboneUsageSummary includes representative backbone id in Korean summaries", () => {
+  const text = formatBackboneUsageSummary(
+    "rfd3",
+    {
+      requested_count: 10,
+      observed_count: 10,
+      materialized_count: 1,
+      propagated_count: 1,
+      propagation_mode: "selected_only",
+      selected_backbone_id: "rfd3_spec-1_0_model_0",
+    },
+    {
+      lang: "ko",
+      includeSourceLabel: true,
+      includeSelected: true,
+    }
+  );
+  assert.equal(
+    text,
+    "RFD3 · 요청 10 · 관측 10 · 저장 1 · 사용 1 · 대표 1개만 사용 · 대표 rfd3_spec-1_0_model_0"
+  );
+});
+
+test("buildArtifactDownloadRequest requests base64 bytes with size slack", () => {
+  assert.deepEqual(
+    buildArtifactDownloadRequest({
+      type: "file",
+      path: "tiers/30/af2/ranked_0.pdb",
+      size: 4096,
+    }),
+    {
+      path: "tiers/30/af2/ranked_0.pdb",
+      max_bytes: 5120,
+      base64: true,
+    }
+  );
+});
+
+test("artifactDownloadFilename falls back to basename", () => {
+  assert.equal(
+    artifactDownloadFilename("backbones/rfd3_spec-1_0_model_0/target.pdb"),
+    "target.pdb"
+  );
+  assert.equal(artifactDownloadFilename("report.md"), "report.md");
+});
+
+test("renderMcpGuideMarkup provides Korean token instructions for VS Code MCP", async () => {
+  const mcpGuide = await import("../lib/mcp-guide.js").catch(() => null);
+  assert.ok(mcpGuide && typeof mcpGuide.renderMcpGuideMarkup === "function");
+
+  const html = mcpGuide.renderMcpGuideMarkup({ lang: "ko" });
+  assert.match(html, /MCP 가이드/);
+  assert.match(html, /KBF_SSO_ACCESS_TOKEN/);
+  assert.match(html, /auth-storage/);
+  assert.match(html, /access_token/);
+  assert.match(html, /로컬 스토리지|Local Storage/);
+  assert.match(html, /Codex/);
+  assert.match(html, /원격 MCP 엔드포인트/);
+});
+
+test("renderMcpGuideMarkup keeps English MCP setup and token copy steps", async () => {
+  const mcpGuide = await import("../lib/mcp-guide.js").catch(() => null);
+  assert.ok(mcpGuide && typeof mcpGuide.renderMcpGuideMarkup === "function");
+
+  const html = mcpGuide.renderMcpGuideMarkup({ lang: "en" });
+  assert.match(html, /VS Code mcp\.json/);
+  assert.match(html, /Authorization/);
+  assert.match(html, /Bearer/);
+  assert.match(html, /KBF_SSO_ACCESS_TOKEN/);
+  assert.match(html, /notebook service MCP page/i);
+  assert.match(html, /Codex/);
 });
 
 test("buildRunArguments merges routed and answers", () => {
@@ -521,6 +629,46 @@ test("buildWorkflowStudioEffectiveAnswers inherits prior run values for untouche
   });
   assert.equal(merged.rfd3_contig, "A1-10");
   assert.equal(merged.bioemu_use, true);
+});
+
+test("buildWorkflowStudioEffectiveAnswers applies workflow defaults for untouched design and af2 counts", () => {
+  const merged = buildWorkflowStudioEffectiveAnswers({
+    headRequest: {
+      target_pdb: "ATOM",
+      stop_after: "af2",
+    },
+    baseAnswers: {},
+    stageDrafts: {
+      msa: { target_input: "ATOM" },
+    },
+    nodes: ["msa", "design", "af2"],
+  });
+  assert.equal(merged.num_seq_per_tier, 2);
+  assert.equal(merged.af2_max_candidates_per_tier, 0);
+});
+
+test("normalizeWorkflowStudioPayloadForComparison ignores implicit studio defaults", () => {
+  const normalized = normalizeWorkflowStudioPayloadForComparison(
+    {
+      target_input: "ATOM",
+      num_seq_per_tier: 2,
+      af2_max_candidates_per_tier: 0,
+    },
+    { nodes: ["msa", "design", "af2"] }
+  );
+  assert.equal(normalized.num_seq_per_tier, undefined);
+  assert.equal(normalized.af2_max_candidates_per_tier, undefined);
+});
+
+test("buildRunArguments mirrors unified BioEmu count into the legacy payload field", () => {
+  const args = buildRunArguments({
+    prompt: "sample backbones",
+    routed: { stop_after: "bioemu", bioemu_use: true },
+    answers: { bioemu_num_samples: 4 },
+    runId: "bioemu_count_sync",
+  });
+  assert.equal(args.bioemu_num_samples, 4);
+  assert.equal(args.bioemu_max_return_structures, 4);
 });
 
 test("runUsesRfd3Stage tracks whether current execution path includes rfd3", () => {
@@ -1302,6 +1450,19 @@ test("buildSetupDraftFromRequest maps diffdock ligand metadata", () => {
   assert.equal(draft.answers.diffdock_ligand, "CCO");
   assert.equal(draft.answers.diffdock_use, "use");
   assert.equal(draft.answerMeta.diffdock_ligand.fileName, "request.json:diffdock_ligand.smiles");
+});
+
+test("buildSetupDraftFromRequest collapses legacy BioEmu counts to one visible field", () => {
+  const draft = buildSetupDraftFromRequest({
+    target_pdb: "ATOM      1  N",
+    stop_after: "bioemu",
+    bioemu_use: true,
+    bioemu_num_samples: 10,
+    bioemu_max_return_structures: 4,
+  });
+  assert.equal(draft.mode, "bioemu");
+  assert.equal(draft.answers.bioemu_num_samples, 4);
+  assert.equal(draft.answers.bioemu_max_return_structures, undefined);
 });
 
 test("inferRequestRunMode keeps pipeline runs with stop_after af2 in pipeline mode", () => {

@@ -334,6 +334,54 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.mcp-guide-grid {
+  align-items: start;
+}
+
+.mcp-guide-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mcp-guide-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.mcp-guide-note {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(15, 107, 111, 0.08);
+  border: 1px solid rgba(11, 111, 123, 0.12);
+}
+
+.mcp-guide-steps {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.mcp-guide-code {
+  margin: 0;
+  padding: 14px;
+  border-radius: 12px;
+  background: #0f1f21;
+  color: #e7f0f2;
+  overflow: auto;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .analyze-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3040,6 +3088,19 @@ textarea:focus-visible {
   border-color: rgba(15, 107, 111, 0.4);
 }
 
+.artifact-item-main {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.artifact-item-path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .stage-tag {
   background: rgba(15, 107, 111, 0.1);
   color: var(--teal-dark);
@@ -3053,6 +3114,17 @@ textarea:focus-visible {
   gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.artifact-item-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+}
+
+.artifact-download-btn {
+  white-space: nowrap;
 }
 
 .tier-tag {
