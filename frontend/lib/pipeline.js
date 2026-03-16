@@ -32,6 +32,7 @@ const RUN_PROGRESS_PLANS = Object.freeze({
 });
 
 export const DEFAULT_ARTIFACT_COMPARE_MODE = "sequence";
+export const DEFAULT_ARTIFACT_LIST_LIMIT = 1000;
 
 function wtIdentityPercent(row) {
   const directPct = Number(row?.wt_identity_pct);
@@ -547,6 +548,35 @@ function hasMeaningfulValue(value) {
   return false;
 }
 
+function positiveIntegerOrNull(value) {
+  const parsed = Number.parseInt(String(value ?? "").trim(), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function effectiveBioEmuCountValue(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const numSamples = positiveIntegerOrNull(payload.bioemu_num_samples);
+  const maxReturn = positiveIntegerOrNull(payload.bioemu_max_return_structures);
+  if (numSamples !== null && maxReturn !== null) return Math.min(numSamples, maxReturn);
+  return numSamples ?? maxReturn;
+}
+
+export function normalizeBioEmuCountFields(payload, { includeLegacyField = true } = {}) {
+  const next =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? { ...payload }
+      : {};
+  const unifiedCount = effectiveBioEmuCountValue(next);
+  if (unifiedCount !== null) {
+    next.bioemu_num_samples = unifiedCount;
+    if (includeLegacyField) next.bioemu_max_return_structures = unifiedCount;
+  }
+  if (!includeLegacyField) {
+    delete next.bioemu_max_return_structures;
+  }
+  return next;
+}
+
 export function sanitizeName(input) {
   return String(input || "")
     .trim()
@@ -784,8 +814,9 @@ export function isImagePath(path) {
 }
 
 export function mergeRunInputs(answers) {
+  const normalizedAnswers = normalizeBioEmuCountFields(answers, { includeLegacyField: true });
   const payload = {};
-  for (const [key, value] of Object.entries(answers || {})) {
+  for (const [key, value] of Object.entries(normalizedAnswers)) {
     if (value === undefined || value === null) continue;
     if (typeof value === "string" && value.trim() === "") continue;
     payload[key] = value;
@@ -881,7 +912,7 @@ export function buildRunArguments({ prompt, routed, answers, runId }) {
 const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
   msa: Object.freeze(["target_input", "pdb_strip_nonpositive_resseq"]),
   rfd3: Object.freeze(["rfd3_input_pdb", "rfd3_contig", "rfd3_max_return_designs"]),
-  bioemu: Object.freeze(["bioemu_use", "bioemu_num_samples", "bioemu_max_return_structures"]),
+  bioemu: Object.freeze(["bioemu_use", "bioemu_num_samples"]),
   design: Object.freeze([
     "design_chains",
     "fixed_positions_extra",
@@ -892,6 +923,15 @@ const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
   soluprot: Object.freeze(["soluprot_cutoff"]),
   af2: Object.freeze(["af2_provider", "af2_max_candidates_per_tier", "af2_plddt_cutoff", "af2_rmsd_cutoff"]),
   novelty: Object.freeze(["novelty_enabled", "wt_compare"]),
+});
+
+const WORKFLOW_STUDIO_STAGE_DEFAULTS = Object.freeze({
+  design: Object.freeze({
+    num_seq_per_tier: 2,
+  }),
+  af2: Object.freeze({
+    af2_max_candidates_per_tier: 0,
+  }),
 });
 
 const WORKFLOW_STUDIO_IGNORED_FIELDS = new Set([
@@ -990,6 +1030,30 @@ function workflowStageOrderForNodes(nodes) {
   return normalized.size ? STAGE_ORDER.filter((stage) => normalized.has(stage)) : [...STAGE_ORDER];
 }
 
+function applyWorkflowStudioStageDefaults(answers = {}, nodes = []) {
+  const next = cloneWorkflowValue(answers && typeof answers === "object" ? answers : {});
+  workflowStageOrderForNodes(nodes).forEach((stage) => {
+    Object.entries(WORKFLOW_STUDIO_STAGE_DEFAULTS[stage] || {}).forEach(([key, value]) => {
+      if (workflowValueIsAbsent(next[key])) {
+        next[key] = cloneWorkflowValue(value);
+      }
+    });
+  });
+  return next;
+}
+
+function stripWorkflowStudioStageDefaults(answers = {}, nodes = []) {
+  const next = cloneWorkflowValue(answers && typeof answers === "object" ? answers : {});
+  workflowStageOrderForNodes(nodes).forEach((stage) => {
+    Object.entries(WORKFLOW_STUDIO_STAGE_DEFAULTS[stage] || {}).forEach(([key, value]) => {
+      if (workflowValuesEqual(next[key], value)) {
+        delete next[key];
+      }
+    });
+  });
+  return next;
+}
+
 export function createWorkflowSessionId(prefix, now = new Date()) {
   const safePrefix = sanitizeName(prefix || "workflow") || "workflow";
   return createRunId(`${safePrefix}_studio`, now);
@@ -1057,10 +1121,13 @@ export function buildWorkflowStudioEffectiveAnswers({ headRequest, baseAnswers, 
       },
     ])
   );
-  return mergeWorkflowStudioAnswers({
+  const mergedAnswers = mergeWorkflowStudioAnswers({
     baseAnswers: mergedBaseAnswers,
     stageDrafts: mergedStageDrafts,
     nodes,
+  });
+  return normalizeBioEmuCountFields(applyWorkflowStudioStageDefaults(mergedAnswers, nodes), {
+    includeLegacyField: false,
   });
 }
 
@@ -1074,6 +1141,35 @@ export function buildWorkflowStudioFreshSessionSeed({ session = null, prompt = "
     answers: {},
     sourceRunId: "",
   };
+}
+
+export function buildWorkflowStudioNodesFromRequest(payload = {}) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+  const mode = inferRequestRunMode(payload) || "pipeline";
+  const startFrom = normalizeStage(payload.start_from) || "msa";
+  const stopAfter = normalizeStage(payload.stop_after) || (Boolean(payload.novelty_enabled) ? "novelty" : "af2");
+  const conservationTiers =
+    Array.isArray(payload.selected_tiers) && payload.selected_tiers.length
+      ? payload.selected_tiers
+      : Array.isArray(payload.conservation_tiers) && payload.conservation_tiers.length
+        ? payload.conservation_tiers
+        : DEFAULT_WORKFLOW_TIER_KEYS;
+  const nodes = [];
+  if (stageRangeIncludes(startFrom, stopAfter, "msa")) nodes.push("msa");
+  if (
+    stageRangeIncludes(startFrom, stopAfter, "rfd3") &&
+    runUsesRfd3Stage({ mode, answers: payload, nodes: [] })
+  ) {
+    nodes.push("rfd3");
+  }
+  if (stageRangeIncludes(startFrom, stopAfter, "bioemu") && Boolean(payload.bioemu_use)) {
+    nodes.push("bioemu");
+  }
+  if (stageRangeIncludes(startFrom, stopAfter, "design")) nodes.push("design");
+  if (stageRangeIncludes(startFrom, stopAfter, "soluprot")) nodes.push("soluprot");
+  if (stageRangeIncludes(startFrom, stopAfter, "af2")) nodes.push("af2");
+  if (stageRangeIncludes(startFrom, stopAfter, "novelty")) nodes.push("novelty");
+  return expandWorkflowStudioNodes(nodes, conservationTiers);
 }
 
 export function workflowStudioChangedFields(previousPayload, nextPayload) {
@@ -1208,7 +1304,7 @@ export function buildSetupDraftFromRequest(payload) {
   }
 
   const mode = inferRequestRunMode(payload) || "pipeline";
-  const answers = {};
+  let answers = {};
   const answerMeta = {};
   const skipKeys = new Set([
     "target_fasta",
@@ -1225,6 +1321,7 @@ export function buildSetupDraftFromRequest(payload) {
     if (typeof value === "string" && value.trim() === "") return;
     answers[key] = cloneSetupValue(value);
   });
+  answers = normalizeBioEmuCountFields(answers, { includeLegacyField: false });
 
   const targetPdb = String(payload.target_pdb || "");
   const targetFasta = String(payload.target_fasta || "");
@@ -1439,7 +1536,7 @@ export function normalizeWorkflowStudioPayloadForComparison(payload, { nodes = [
     delete answers.rfd3_input_pdb;
     delete answers.rfd3_contig;
   }
-  return answers;
+  return stripWorkflowStudioStageDefaults(normalizeBioEmuCountFields(answers, { includeLegacyField: false }), nodes);
 }
 
 export function shouldShowRfd3InputPdbField({ mode = "", answers = {}, nodes = [], overrideVisible = false } = {}) {

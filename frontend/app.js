@@ -2,7 +2,9 @@ import {
   artifactMetaFromPath,
   buildWorkflowProgressContext,
   buildWorkflowStudioFreshSessionSeed,
+  buildWorkflowStudioNodesFromRequest,
   DEFAULT_ARTIFACT_COMPARE_MODE,
+  DEFAULT_ARTIFACT_LIST_LIMIT,
   buildWorkflowStudioEffectiveAnswers,
   buildSetupDraftFromRequest,
   buildRunArguments,
@@ -24,6 +26,7 @@ import {
   mergeFixedPositionsExtraDraft,
   minimumWorkflowStudioStartStage,
   nextWorkflowStudioStage,
+  normalizeBioEmuCountFields,
   normalizeWorkflowStudioPayloadForComparison,
   normalizeFixedPositionsExtraDraft,
   normalizeSetupDraftForFreshRun,
@@ -85,12 +88,11 @@ import {
 } from "./lib/viewer-annotations.js";
 import {
   buildOidcAuthorizationUrl,
-  buildOidcLogoutUrl,
   buildOidcRedirectUri,
   normalizeApiBase,
   parseOidcCallback,
+  shouldAttemptSessionRestore,
   shouldClearStoredSession,
-  shouldRestoreStoredSession,
   stripOidcCallbackUrl,
   resolveDefaultApiBase,
 } from "./lib/auth.js";
@@ -117,6 +119,9 @@ const WORKFLOW_STUDIO_SESSION_PATH = "workflow_studio/session.json";
 const RESIDUE_PICKER_DETACHED_QUERY_KEY = "residue_picker";
 const RESIDUE_PICKER_REQUEST_STORAGE_KEY_PREFIX = "kbf.residuePicker.request.";
 const RESIDUE_PICKER_RESULT_STORAGE_KEY_PREFIX = "kbf.residuePicker.result.";
+const QUESTION_ID_ALIASES = Object.freeze({
+  bioemu_max_return_structures: "bioemu_num_samples",
+});
 const RESIDUE_PICKER_RESULT_MESSAGE_TYPE = "kbf.residuePicker.result";
 const RESIDUE_PICKER_RESET_MESSAGE_TYPE = "kbf.residuePicker.reset";
 const RESIDUE_PICKER_POPUP_WINDOW_NAME = "kbf_residue_picker";
@@ -830,6 +835,7 @@ const I18N = {
     "tabs.studio": "Studio",
     "tabs.monitor": "Monitor",
     "tabs.analyze": "Analyze",
+    "tabs.mcp": "MCP",
     "copilot.open": "Copilot",
     "copilot.title": "Context Copilot",
     "copilot.desc": "Usage + interpretation helper using current run/screen data.",
@@ -1409,8 +1415,8 @@ const I18N = {
     "question.bioemuNumSamples.help": "Number of BioEmu samples to generate.",
     "question.bioemuMaxReturn.label": "BioEmu Return Count",
     "question.bioemuMaxReturn.help": "Maximum number of BioEmu structures to keep.",
-    "question.numSeqPerTier.label": "ProteinMPNN per Tier",
-    "question.numSeqPerTier.help": "Number of ProteinMPNN sequences to generate for each tier and backbone.",
+    "question.numSeqPerTier.label": "ProteinMPNN per Backbone",
+    "question.numSeqPerTier.help": "Number of ProteinMPNN sequences to generate for each backbone within each tier.",
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} per Tier (Top N)",
     "question.af2MaxCandidatesPerTier.help":
       "Run {af2Provider} only for top N SoluProt-passed designs per tier (ranked by SoluProt score, 0 = all).",
@@ -1763,6 +1769,7 @@ const I18N = {
     "tabs.studio": "스튜디오",
     "tabs.monitor": "모니터",
     "tabs.analyze": "분석",
+    "tabs.mcp": "MCP",
     "copilot.open": "Copilot",
     "copilot.title": "Context Copilot",
     "copilot.desc": "현재 run/화면 데이터를 바탕으로 사용법과 해석을 도와줍니다.",
@@ -2337,12 +2344,13 @@ const I18N = {
     "question.maskConsensusApply.help": "전문가 합의 마스킹을 ProteinMPNN에 적용합니다.",
     "question.bioemuUse.label": "BioEmu 사용",
     "question.bioemuUse.help": "BioEmu backbone 샘플링 단계를 실행합니다.",
-    "question.bioemuNumSamples.label": "BioEmu 샘플 수",
-    "question.bioemuNumSamples.help": "생성할 BioEmu 샘플 개수입니다.",
+    "question.bioemuNumSamples.label": "BioEmu 반환 개수",
+    "question.bioemuNumSamples.help":
+      "보존할 BioEmu 백본 개수입니다. 내부적으로 샘플 수와 반환 개수를 같은 값으로 맞춥니다.",
     "question.bioemuMaxReturn.label": "BioEmu 반환 개수",
     "question.bioemuMaxReturn.help": "보존할 BioEmu 구조 최대 개수입니다.",
-    "question.numSeqPerTier.label": "티어당 ProteinMPNN 개수",
-    "question.numSeqPerTier.help": "각 티어/백본마다 생성할 ProteinMPNN 서열 개수입니다.",
+    "question.numSeqPerTier.label": "백본당 ProteinMPNN 생성 개수",
+    "question.numSeqPerTier.help": "각 티어에서 각 RFD3/BioEmu 백본마다 생성할 ProteinMPNN 서열 개수입니다.",
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} 티어당 실행 개수 (상위 N개)",
     "question.af2MaxCandidatesPerTier.help":
       "티어별 SoluProt 통과 서열 중 상위 N개(점수 순)만 {af2Provider}를 실행합니다. 0이면 전체 실행.",
@@ -2813,7 +2821,7 @@ function labelFromMap(value, map) {
 }
 
 const TAB_KEY = "kbf.activeTab";
-const TAB_OPTIONS = ["setup", "studio", "monitor", "analyze"];
+const TAB_OPTIONS = ["setup", "studio", "monitor", "analyze", "mcp"];
 const tabButtons = Array.from(document.querySelectorAll(".tab-btn"));
 const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
 const langButtons = Array.from(document.querySelectorAll(".lang-btn"));
@@ -4060,21 +4068,24 @@ async function adoptWorkflowStudioSessionFromRun(runId, { activate = true } = {}
       return normalized;
     }
   }
-  const plan = workflowPlanForRunId(key);
-  if (!plan) return null;
   try {
     const payload = await readRunRequestPayload(key);
     const draft = buildSetupDraftFromRequest(payload);
+    const plan = workflowPlanForRunId(key);
     const laneTiers =
       Array.isArray(payload?.selected_tiers) && payload.selected_tiers.length
         ? payload.selected_tiers
         : Array.isArray(payload?.conservation_tiers) && payload.conservation_tiers.length
           ? payload.conservation_tiers
           : [0.3, 0.5, 0.7];
+    const baseNodes =
+      Array.isArray(plan?.nodes) && plan.nodes.length
+        ? plan.nodes
+        : buildWorkflowStudioNodesFromRequest(payload);
     const session = createWorkflowStudioSession({
       sessionId: createWorkflowSessionId(key),
       prompt: "",
-      nodes: expandWorkflowStudioNodes(plan.nodes, laneTiers),
+      nodes: expandWorkflowStudioNodes(baseNodes, laneTiers),
       answers: draft.answers,
       headRunId: key,
       headRequest: payload,
@@ -6129,17 +6140,15 @@ const QUESTION_PRESETS = {
     labelKey: "question.bioemuNumSamples.label",
     questionKey: "question.bioemuNumSamples.help",
   },
-  bioemu_max_return_structures: {
-    labelKey: "question.bioemuMaxReturn.label",
-    questionKey: "question.bioemuMaxReturn.help",
-  },
   num_seq_per_tier: {
     labelKey: "question.numSeqPerTier.label",
     questionKey: "question.numSeqPerTier.help",
+    default: 2,
   },
   af2_max_candidates_per_tier: {
     labelKey: "question.af2MaxCandidatesPerTier.label",
     questionKey: "question.af2MaxCandidatesPerTier.help",
+    default: 0,
   },
   af2_plddt_cutoff: {
     labelKey: "question.af2PlddtCutoff.label",
@@ -6460,7 +6469,11 @@ function saveUser(user) {
 }
 
 function saveToken(token) {
-  localStorage.setItem("kbf.token", token);
+  if (token) {
+    localStorage.setItem("kbf.token", token);
+    return;
+  }
+  localStorage.removeItem("kbf.token");
 }
 
 function saveIdToken(token) {
@@ -6546,7 +6559,9 @@ function stripOidcCallbackParams() {
 
 async function fetchOidcConfig() {
   try {
-    const response = await fetch(`${state.apiBase}/auth/oidc/config`);
+    const response = await fetch(`${state.apiBase}/auth/oidc/config`, {
+      credentials: "include",
+    });
     if (!response.ok) return { ok: false, enabled: false };
     const payload = await response.json().catch(() => null);
     if (!payload || typeof payload !== "object") return { ok: false, enabled: false };
@@ -6618,6 +6633,7 @@ async function finishOidcLogin(code, callbackState) {
   });
   const response = await fetch(`${state.apiBase}/auth/oidc/exchange`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       code,
@@ -6629,14 +6645,10 @@ async function finishOidcLogin(code, callbackState) {
   if (!response.ok || !payload || !payload.ok) {
     throw new Error(payload?.error || `HTTP ${response.status}`);
   }
-  const accessToken = String(payload.access_token || "").trim();
-  if (!accessToken) {
-    throw new Error(t("auth.ssoTokenMissing"));
-  }
-  state.token = accessToken;
-  state.idToken = String(payload.id_token || "").trim();
-  saveToken(state.token);
-  saveIdToken(state.idToken);
+  state.token = "";
+  state.idToken = "";
+  saveToken("");
+  saveIdToken("");
   clearOidcRequest();
   stripOidcCallbackParams();
   await loadSession();
@@ -6671,7 +6683,7 @@ async function bootstrapAuth() {
       return;
     }
   }
-  if (shouldRestoreStoredSession({ token: state.token })) {
+  if (shouldAttemptSessionRestore({ token: state.token, oidcEnabled: oidcEnabled() })) {
     await loadSession();
     return;
   }
@@ -6684,18 +6696,26 @@ function openAccountConsole() {
   window.location.assign(accountUrl);
 }
 
-function logoutCurrentSession() {
-  const endSessionEndpoint = String(state.oidcConfig?.end_session_endpoint || "").trim();
+async function logoutCurrentSession() {
   const redirectUri = buildOidcRedirectUri({
     origin: window.location.origin,
     pathname: window.location.pathname,
   });
-  const logoutUrl = buildOidcLogoutUrl({
-    endSessionEndpoint,
-    postLogoutRedirectUri: redirectUri,
-    clientId: state.oidcConfig?.client_id || "",
-    idTokenHint: state.idToken || "",
-  });
+  let logoutUrl = "";
+  try {
+    const response = await fetch(`${state.apiBase}/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ redirect_uri: redirectUri }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (response.ok && payload && payload.ok) {
+      logoutUrl = String(payload.logout_url || "").trim();
+    }
+  } catch (_err) {
+    logoutUrl = "";
+  }
   clearOidcRequest();
   clearSession();
   syncLoginMode();
@@ -7747,9 +7767,9 @@ function buildManualPlan(mode) {
         default: 10,
       },
       {
-        id: "bioemu_max_return_structures",
-        labelKey: "question.bioemuMaxReturn.label",
-        questionKey: "question.bioemuMaxReturn.help",
+        id: "rfd3_max_return_designs",
+        labelKey: "question.rfd3MaxReturn.label",
+        questionKey: "question.rfd3MaxReturn.help",
         required: false,
         default: 10,
       },
@@ -7841,13 +7861,6 @@ function buildManualPlan(mode) {
         required: false,
       },
       {
-        id: "rfd3_max_return_designs",
-        labelKey: "question.rfd3MaxReturn.label",
-        questionKey: "question.rfd3MaxReturn.help",
-        required: false,
-        default: 10,
-      },
-      {
         id: "diffdock_ligand",
         labelKey: "question.diffdockLigand.label",
         questionKey: "question.diffdockLigand.help",
@@ -7917,13 +7930,6 @@ function buildManualPlan(mode) {
         questionKey: "question.bioemuNumSamples.help",
         required: false,
         default: 10,
-      },
-      {
-        id: "bioemu_max_return_structures",
-        labelKey: "question.bioemuMaxReturn.label",
-        questionKey: "question.bioemuMaxReturn.help",
-        required: false,
-        default: 10,
       }
     );
   }
@@ -7980,13 +7986,6 @@ function buildManualPlan(mode) {
         questionKey: "question.bioemuNumSamples.help",
         required: false,
         default: 10,
-      },
-      {
-        id: "bioemu_max_return_structures",
-        labelKey: "question.bioemuMaxReturn.label",
-        questionKey: "question.bioemuMaxReturn.help",
-        required: false,
-        default: 10,
       }
     );
   }
@@ -8023,13 +8022,6 @@ function buildManualPlan(mode) {
         id: "bioemu_num_samples",
         labelKey: "question.bioemuNumSamples.label",
         questionKey: "question.bioemuNumSamples.help",
-        required: false,
-        default: 10,
-      },
-      {
-        id: "bioemu_max_return_structures",
-        labelKey: "question.bioemuMaxReturn.label",
-        questionKey: "question.bioemuMaxReturn.help",
         required: false,
         default: 10,
       }
@@ -9009,6 +9001,7 @@ function authHeaders() {
 async function apiCall(name, args) {
   const res = await fetch(`${state.apiBase}/tools/call`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ name, arguments: args || {} }),
   });
@@ -9046,6 +9039,7 @@ async function authLogin() {
   try {
     const res = await fetch(`${state.apiBase}/auth/login`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
@@ -9069,7 +9063,7 @@ async function authLogin() {
 }
 
 async function loadSession() {
-  if (!state.token) {
+  if (!state.token && !oidcEnabled()) {
     showLogin();
     return;
   }
@@ -9077,6 +9071,7 @@ async function loadSession() {
   let failureMessage = "";
   try {
     const res = await fetch(`${state.apiBase}/auth/me`, {
+      credentials: "include",
       headers: { ...authHeaders() },
     });
     const payload = await res.json().catch(() => null);
@@ -10473,9 +10468,17 @@ function isAnswerMissing(value) {
 
 function normalizeQuestion(q) {
   if (!q || !q.id) return q;
-  const preset = QUESTION_PRESETS[q.id];
-  if (!preset) return q;
-  const merged = { ...preset, ...q };
+  const aliasId = QUESTION_ID_ALIASES[q.id];
+  const base = aliasId ? { ...q, id: aliasId } : q;
+  if (aliasId) {
+    delete base.labelKey;
+    delete base.questionKey;
+    delete base.label;
+    delete base.question;
+  }
+  const preset = QUESTION_PRESETS[base.id];
+  if (!preset) return base;
+  const merged = { ...preset, ...base };
   if (merged.required === undefined) merged.required = Boolean(preset.required);
   return merged;
 }
@@ -11386,17 +11389,24 @@ function renderQuestions(questions) {
 
   appendCompactOptionBoard();
 
-  const bioemuCountQuestionIds = new Set(["bioemu_num_samples", "bioemu_max_return_structures"]);
+  const bioemuCountQuestionIds = new Set(["bioemu_num_samples"]);
   const rfd3CountQuestionIds = new Set(["rfd3_max_return_designs"]);
   const compactParameterQuestionIds = new Set([
     "bioemu_num_samples",
-    "bioemu_max_return_structures",
     "rfd3_max_return_designs",
     "num_seq_per_tier",
     "af2_max_candidates_per_tier",
     "af2_plddt_cutoff",
     "af2_rmsd_cutoff",
   ]);
+  const compactParameterPriority = {
+    bioemu_num_samples: 10,
+    rfd3_max_return_designs: 20,
+    num_seq_per_tier: 30,
+    af2_max_candidates_per_tier: 40,
+    af2_plddt_cutoff: 50,
+    af2_rmsd_cutoff: 60,
+  };
   const bioemuCountRelevant =
     state.runMode === "pipeline" ||
     state.runMode === "workflow" ||
@@ -11409,7 +11419,14 @@ function renderQuestions(questions) {
     setupRunUsesRfd3Stage() ||
     shouldShowSetupRfd3InputField();
 
-  const compactQuestions = textQuestions.filter((q) => compactParameterQuestionIds.has(q.id));
+  const compactQuestions = textQuestions
+    .filter((q) => compactParameterQuestionIds.has(q.id))
+    .sort((left, right) => {
+      const leftPriority = compactParameterPriority[left.id] ?? Number.MAX_SAFE_INTEGER;
+      const rightPriority = compactParameterPriority[right.id] ?? Number.MAX_SAFE_INTEGER;
+      if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+      return String(left.id || "").localeCompare(String(right.id || ""));
+    });
 
   const appendCompactParameterBoard = (questionsForBoard) => {
     if (!questionsForBoard.length) return;
@@ -12307,7 +12324,7 @@ function updateMonitorActionButtons() {
 }
 
 function buildAnswerPayload(mode = state.runMode) {
-  const answers = { ...state.answers };
+  const answers = normalizeBioEmuCountFields({ ...state.answers }, { includeLegacyField: false });
   if (answers.target_input && !answers.target_pdb && !answers.target_fasta) {
     if (mode === "diffdock") {
       answers.target_pdb = answers.target_input;
@@ -12376,7 +12393,6 @@ function filterAnswersForMode(mode, answers) {
       "ligand_mask_use_original_target",
       "bioemu_use",
       "bioemu_num_samples",
-      "bioemu_max_return_structures",
       "af2_max_candidates_per_tier",
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
@@ -12399,7 +12415,6 @@ function filterAnswersForMode(mode, answers) {
       "mask_consensus_apply",
       "ligand_mask_use_original_target",
       "bioemu_num_samples",
-      "bioemu_max_return_structures",
       "af2_max_candidates_per_tier",
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
@@ -12415,7 +12430,6 @@ function filterAnswersForMode(mode, answers) {
       "target_pdb",
       "bioemu_use",
       "bioemu_num_samples",
-      "bioemu_max_return_structures",
     ],
     rfd3: ["rfd3_input_pdb", "rfd3_contig", "rfd3_max_return_designs", "pdb_strip_nonpositive_resseq"],
     msa: ["target_fasta", "target_pdb", "pdb_strip_nonpositive_resseq"],
@@ -12426,7 +12440,6 @@ function filterAnswersForMode(mode, answers) {
       "pdb_strip_nonpositive_resseq",
       "bioemu_use",
       "bioemu_num_samples",
-      "bioemu_max_return_structures",
     ],
     soluprot: [
       "target_fasta",
@@ -12435,7 +12448,6 @@ function filterAnswersForMode(mode, answers) {
       "pdb_strip_nonpositive_resseq",
       "bioemu_use",
       "bioemu_num_samples",
-      "bioemu_max_return_structures",
     ],
     af2: ["target_fasta", "target_pdb", "af2_provider"],
     diffdock: ["target_pdb", "diffdock_ligand_smiles", "diffdock_ligand_sdf"],
@@ -17647,7 +17659,7 @@ async function refreshArtifacts(options = {}) {
     const result = await apiCall("pipeline.list_artifacts", {
       run_id: runId,
       max_depth: 6,
-      limit: 300,
+      limit: DEFAULT_ARTIFACT_LIST_LIMIT,
     });
     if (runId !== String(state.currentRunId || "").trim()) return;
     state.artifacts = result.artifacts || [];

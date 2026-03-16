@@ -128,6 +128,17 @@
           >
             Analyze
           </button>
+          <button
+            id="tabBtnMcp"
+            class="tab-btn"
+            role="tab"
+            aria-selected="false"
+            aria-controls="tab-mcp"
+            data-tab="mcp"
+            data-i18n="tabs.mcp"
+          >
+            MCP
+          </button>
         </nav>
 
         <section
@@ -912,6 +923,107 @@
                 </div>
               </div>
             </div>
+            </div>
+          </div>
+        </section>
+
+        <section
+          id="tab-mcp"
+          class="tab-panel"
+          data-tab="mcp"
+          role="tabpanel"
+          aria-labelledby="tabBtnMcp"
+        >
+          <div class="tab-content-shell">
+            <div class="panel panel-block">
+              <div class="panel-header">
+                <h3>MCP for VS Code</h3>
+                <p>
+                  Connect the shared protein pipeline MCP endpoint from VS Code without opening raw backend ports.
+                </p>
+              </div>
+
+              <div class="tab-grid monitor-grid mcp-guide-grid">
+                <div class="status-card mcp-guide-card">
+                  <div class="panel-header small">
+                    <h3>Endpoint</h3>
+                    <p>Remote HTTP MCP endpoint for the pipeline service.</p>
+                  </div>
+                  <div class="mcp-guide-list">
+                    <div><strong>URL</strong>: <code>https://pipeline.k-biofoundrycopilot.duckdns.org/mcp</code></div>
+                    <div><strong>Header</strong>: <code>Authorization: Bearer &lt;KBF_SSO_ACCESS_TOKEN&gt;</code></div>
+                    <div>
+                      Non-admin users only see allowed tools, and run-scoped tools only work for their own
+                      <code> run_id</code> values.
+                    </div>
+                  </div>
+                </div>
+
+                <div class="status-card mcp-guide-card">
+                  <div class="panel-header small">
+                    <h3>VS Code mcp.json</h3>
+                    <p>Open <strong>MCP: Open User Configuration</strong> and paste this into <code>mcp.json</code>.</p>
+                  </div>
+                  <pre class="mcp-guide-code"><code>{
+  "servers": {
+    "protein-pipeline": {
+      "type": "http",
+      "url": "https://pipeline.k-biofoundrycopilot.duckdns.org/mcp",
+      "headers": {
+        "Authorization": "Bearer &lt;KBF_SSO_ACCESS_TOKEN&gt;"
+      }
+    }
+  }
+}</code></pre>
+                </div>
+
+                <div class="status-card mcp-guide-card span-2">
+                  <div class="panel-header small">
+                    <h3>How to get the token</h3>
+                    <p>Choose the token source that matches your auth mode.</p>
+                  </div>
+                  <div class="mcp-guide-list">
+                    <div>
+                      <strong>Local auth mode</strong>: open browser devtools, go to <code>Local Storage</code>, and copy
+                      <code> kbf.token</code>.
+                    </div>
+                    <div>
+                      <strong>OIDC / KBF SSO mode</strong>: use a KBF SSO access token. The current recommended path is to
+                      open the notebook service MCP page and copy the token from <code>auth-storage</code>, then reuse the
+                      same bearer token here.
+                    </div>
+                    <div class="mcp-guide-note">
+                      If you are signed in with SSO and <code>kbf.token</code> is empty in this app, that is expected. The
+                      pipeline UI currently uses the server-side session cookie for the browser session, while VS Code MCP
+                      still requires a bearer token in <code>mcp.json</code>.
+                    </div>
+                  </div>
+                </div>
+
+                <div class="status-card mcp-guide-card">
+                  <div class="panel-header small">
+                    <h3>Verify it works</h3>
+                    <p>After saving the configuration:</p>
+                  </div>
+                  <ol class="mcp-guide-steps">
+                    <li>Run <strong>MCP: List Servers</strong> and confirm <code>protein-pipeline</code> is available.</li>
+                    <li>Ask VS Code Copilot to call MCP for a run status or a pipeline launch.</li>
+                    <li>Check that returned <code>run_id</code> values use your user-scoped prefix.</li>
+                  </ol>
+                </div>
+
+                <div class="status-card mcp-guide-card">
+                  <div class="panel-header small">
+                    <h3>Prompt examples</h3>
+                    <p>Start with direct MCP wording so the tool is clearly invoked.</p>
+                  </div>
+                  <pre class="mcp-guide-code"><code>Use MCP to list my recent protein pipeline runs.
+
+Use MCP to check the status of run_id abc_20260316_123456_deadbeef.
+
+MCP를 이용해서 현재 사용자 기준으로 실행 가능한 pipeline.run 예시를 만들어줘.</code></pre>
+                </div>
+              </div>
             </div>
           </div>
         </section>
