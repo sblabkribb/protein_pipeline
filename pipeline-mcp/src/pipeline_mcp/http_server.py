@@ -3,14 +3,17 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from typing import Any
+from urllib.parse import urlencode
 
 from .storage import new_run_id
 from .auth import AuthError
 from .auth import load_auth_manager
 from .auth import safe_run_prefix
+from .oidc import claims_from_oidc_token_data
 from .oidc import claims_to_user
 from .oidc import account_console_url
 from .oidc import exchange_oidc_code
@@ -18,12 +21,14 @@ from .oidc import get_oidc_discovery
 from .oidc import load_oidc_settings
 from .oidc import verify_oidc_token
 from .runpod_metrics import ensure_runpod_metrics_collector
+from .session_auth import load_session_manager
 from .tools import ToolDispatcher
 
 
 _DISPATCHER: ToolDispatcher | None = None
 _AUTH = None
 _OIDC = None
+_SESSIONS = None
 _ALLOW_ALL_ORIGINS = True
 _ALLOWED_ORIGINS: set[str] = set()
 _ADMIN_ONLY_TOOLS = {
@@ -32,6 +37,23 @@ _ADMIN_ONLY_TOOLS = {
     "pipeline.runpod_update_endpoint",
     "pipeline.runpod_list_billing",
     "pipeline.runpod_get_history",
+}
+
+_RUN_SCOPED_TOOLS = {
+    "pipeline.status",
+    "pipeline.list_artifacts",
+    "pipeline.read_artifact",
+    "pipeline.save_workflow_session",
+    "pipeline.get_workflow_session",
+    "pipeline.delete_run",
+    "pipeline.cancel_run",
+    "pipeline.submit_feedback",
+    "pipeline.list_feedback",
+    "pipeline.submit_experiment",
+    "pipeline.list_experiments",
+    "pipeline.generate_report",
+    "pipeline.save_report",
+    "pipeline.get_report",
 }
 
 
@@ -65,6 +87,10 @@ class Handler(BaseHTTPRequestHandler):
     def oidc(self):
         return _OIDC
 
+    @property
+    def sessions(self):
+        return _SESSIONS
+
     def _auth_enabled(self) -> bool:
         auth = self.auth
         if auth is not None and getattr(auth, "enabled", False):
@@ -73,21 +99,31 @@ class Handler(BaseHTTPRequestHandler):
 
     def _set_cors_headers(self) -> None:
         origin = self.headers.get("Origin")
-        if _ALLOW_ALL_ORIGINS:
-            self.send_header("Access-Control-Allow-Origin", "*")
-        elif origin and origin in _ALLOWED_ORIGINS:
-            self.send_header("Access-Control-Allow-Origin", origin)
+        allow_origin = bool(origin and (_ALLOW_ALL_ORIGINS or origin in _ALLOWED_ORIGINS))
+        if allow_origin:
+            self.send_header("Access-Control-Allow-Origin", str(origin))
             self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Credentials", "true")
+        elif _ALLOW_ALL_ORIGINS:
+            self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
         self.send_header("Access-Control-Max-Age", "600")
 
-    def _json(self, code: int, payload: dict[str, Any]) -> None:
+    def _json(
+        self,
+        code: int,
+        payload: dict[str, Any],
+        *,
+        extra_headers: list[tuple[str, str]] | None = None,
+    ) -> None:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
         self._set_cors_headers()
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
+        for key, value in extra_headers or []:
+            self.send_header(key, value)
         self.end_headers()
         self.wfile.write(data)
 
@@ -152,24 +188,114 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("JSON body must be an object")
         return data
 
+    def _request_is_secure(self) -> bool:
+        forced = str(os.environ.get("PIPELINE_SESSION_COOKIE_SECURE") or "").strip().lower()
+        if forced in {"1", "true", "yes", "y", "on"}:
+            return True
+        if forced in {"0", "false", "no", "n", "off"}:
+            return False
+        forwarded_proto = str(self.headers.get("X-Forwarded-Proto") or "").split(",", 1)[0].strip().lower()
+        if forwarded_proto:
+            return forwarded_proto == "https"
+        origin = str(self.headers.get("Origin") or "").strip().lower()
+        if origin.startswith("https://"):
+            return True
+        referer = str(self.headers.get("Referer") or "").strip().lower()
+        return referer.startswith("https://")
+
+    def _session_cookie_name(self) -> str:
+        manager = self.sessions
+        if manager is None:
+            return "kbf_session"
+        return str(manager.config.cookie_name or "kbf_session")
+
+    def _session_cookie_samesite(self) -> str:
+        raw = str(os.environ.get("PIPELINE_SESSION_COOKIE_SAMESITE", "Lax") or "Lax").strip()
+        normalized = raw[:1].upper() + raw[1:].lower() if raw else "Lax"
+        return normalized if normalized in {"Lax", "Strict", "None"} else "Lax"
+
+    def _cookie_value(self, name: str) -> str:
+        raw = str(self.headers.get("Cookie") or "").strip()
+        if not raw:
+            return ""
+        cookie = SimpleCookie()
+        try:
+            cookie.load(raw)
+        except Exception:
+            return ""
+        morsel = cookie.get(str(name or ""))
+        if morsel is None:
+            return ""
+        return str(morsel.value or "").strip()
+
+    def _session_id_from_cookie(self) -> str:
+        return self._cookie_value(self._session_cookie_name())
+
+    def _session_cookie_headers(self, session_id: str, *, max_age: int | None = None, clear: bool = False) -> list[tuple[str, str]]:
+        cookie = SimpleCookie()
+        name = self._session_cookie_name()
+        cookie[name] = "" if clear else str(session_id or "")
+        morsel = cookie[name]
+        morsel["path"] = "/"
+        morsel["httponly"] = True
+        morsel["samesite"] = self._session_cookie_samesite()
+        if self._request_is_secure():
+            morsel["secure"] = True
+        if clear:
+            morsel["expires"] = "Thu, 01 Jan 1970 00:00:00 GMT"
+            morsel["max-age"] = "0"
+        elif max_age is not None:
+            morsel["max-age"] = str(max(0, int(max_age)))
+        return [("Set-Cookie", morsel.OutputString())]
+
+    def _expire_session_cookie_headers(self) -> list[tuple[str, str]]:
+        return self._session_cookie_headers("", clear=True)
+
+    def _build_oidc_logout_url(self, *, id_token_hint: str = "", redirect_uri: str = "") -> str:
+        if self.oidc is None:
+            return ""
+        try:
+            discovery = get_oidc_discovery(self.oidc)
+        except Exception:
+            return ""
+        end_session_endpoint = str(discovery.get("end_session_endpoint") or "").strip()
+        if not end_session_endpoint:
+            return ""
+        params: dict[str, str] = {}
+        if id_token_hint:
+            params["id_token_hint"] = id_token_hint
+        if redirect_uri:
+            params["post_logout_redirect_uri"] = redirect_uri
+        if self.oidc.client_id:
+            params["client_id"] = self.oidc.client_id
+        if not params:
+            return end_session_endpoint
+        return f"{end_session_endpoint}?{urlencode(params)}"
+
     def _require_user(self) -> dict[str, Any] | None:
         header = self.headers.get("Authorization") or ""
         token = ""
         if header.startswith("Bearer "):
             token = header.removeprefix("Bearer ").strip()
-        if not token:
-            return None
-        auth = self.auth
-        if auth is not None and getattr(auth, "enabled", False):
-            user = auth.verify_token(token)
+        if token:
+            auth = self.auth
+            if auth is not None and getattr(auth, "enabled", False):
+                user = auth.verify_token(token)
+                if user is not None:
+                    return user
+            if self.oidc is not None:
+                try:
+                    claims = verify_oidc_token(token, self.oidc)
+                except Exception:
+                    claims = None
+                if claims is not None:
+                    return claims_to_user(claims, client_id=self.oidc.client_id)
+        manager = self.sessions
+        session_id = self._session_id_from_cookie()
+        if manager is not None and session_id:
+            user = manager.get_user(session_id, oidc_settings=self.oidc)
             if user is not None:
                 return user
-        if self.oidc is not None:
-            try:
-                claims = verify_oidc_token(token, self.oidc)
-            except Exception:
-                return None
-            return claims_to_user(claims, client_id=self.oidc.client_id)
         return None
 
     def _is_admin(self, user: dict[str, Any] | None) -> bool:
@@ -180,7 +306,8 @@ class Handler(BaseHTTPRequestHandler):
             return None
         user = self._require_user()
         if user is None:
-            self._json(401, {"ok": False, "error": "unauthorized"})
+            extra_headers = self._expire_session_cookie_headers() if self._session_id_from_cookie() else None
+            self._json(401, {"ok": False, "error": "unauthorized"}, extra_headers=extra_headers)
         return user
 
     def _enforce_run_access(self, user: dict[str, Any] | None, run_id: str) -> None:
@@ -189,6 +316,119 @@ class Handler(BaseHTTPRequestHandler):
         prefix = safe_run_prefix(str(user.get("username") or "user")) + "_"
         if not str(run_id or "").startswith(prefix):
             raise AuthError("run_id not allowed for this user")
+
+    def _list_tools_for_user(self, user: dict[str, Any] | None) -> dict[str, Any]:
+        tools = self.dispatcher.list_tools()
+        if user is not None and not self._is_admin(user):
+            entries = tools.get("tools") if isinstance(tools, dict) else None
+            if isinstance(entries, list):
+                tools["tools"] = [
+                    item
+                    for item in entries
+                    if isinstance(item, dict) and str(item.get("name") or "") not in _ADMIN_ONLY_TOOLS
+                ]
+        return tools
+
+    def _call_tool_for_user(
+        self,
+        user: dict[str, Any] | None,
+        name: str,
+        arguments: dict[str, Any],
+    ) -> dict[str, Any]:
+        if name in _ADMIN_ONLY_TOOLS and user is not None and not self._is_admin(user):
+            raise AuthError("admin required")
+        if name in _RUN_SCOPED_TOOLS:
+            run_id = str(arguments.get("run_id") or "")
+            if run_id:
+                self._enforce_run_access(user, run_id)
+        if name in {"pipeline.run", "pipeline.run_from_prompt"} and user is not None and not self._is_admin(user):
+            prefix = safe_run_prefix(str(user.get("username") or "user"))
+            run_id = arguments.get("run_id")
+            if run_id:
+                self._enforce_run_access(user, str(run_id))
+            else:
+                arguments["run_id"] = new_run_id(prefix)
+        if name in {
+            "pipeline.submit_feedback",
+            "pipeline.submit_experiment",
+            "pipeline.save_report",
+        } and user is not None:
+            arguments.setdefault(
+                "user",
+                {
+                    "username": str(user.get("username") or ""),
+                    "role": str(user.get("role") or ""),
+                },
+            )
+        out = self.dispatcher.call_tool(name, arguments)
+        if name == "pipeline.list_runs" and user is not None and not self._is_admin(user):
+            prefix = safe_run_prefix(str(user.get("username") or "user")) + "_"
+            runs = out.get("runs") if isinstance(out, dict) else None
+            if isinstance(runs, list):
+                out["runs"] = [r for r in runs if str(r).startswith(prefix)]
+        return out
+
+    def _mcp_success(self, request_id: str | int | None, result: dict[str, Any]) -> dict[str, Any]:
+        return {"jsonrpc": "2.0", "id": request_id, "result": result}
+
+    def _mcp_error(
+        self,
+        request_id: str | int | None,
+        code: int,
+        message: str,
+        *,
+        data: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        error: dict[str, Any] = {"code": code, "message": message}
+        if data is not None:
+            error["data"] = data
+        return {"jsonrpc": "2.0", "id": request_id, "error": error}
+
+    def _mcp_tool_result(self, result: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "content": [{"type": "json", "json": result}],
+            "isError": False,
+        }
+
+    def _handle_mcp_rpc(self, body: dict[str, Any], user: dict[str, Any] | None) -> dict[str, Any]:
+        request_id = body.get("id")
+        method = body.get("method")
+        params = body.get("params") or {}
+        if not isinstance(method, str) or not method.strip():
+            return self._mcp_error(request_id, -32600, "Invalid request: method is required")
+        if not isinstance(params, dict):
+            return self._mcp_error(request_id, -32602, "params must be an object")
+
+        try:
+            if method == "initialize":
+                return self._mcp_success(
+                    request_id,
+                    {
+                        "protocolVersion": "2025-06-18",
+                        "serverInfo": {"name": "protein-pipeline", "version": "0.0.0"},
+                        "capabilities": {"tools": {"listChanged": False}},
+                    },
+                )
+            if method == "ping":
+                return self._mcp_success(request_id, {"status": "ok"})
+            if method == "tools/list":
+                return self._mcp_success(request_id, self._list_tools_for_user(user))
+            if method == "tools/call":
+                name = params.get("name")
+                arguments = params.get("arguments") or {}
+                if not isinstance(name, str) or not name.strip():
+                    return self._mcp_error(request_id, -32602, "tools/call requires params.name")
+                if not isinstance(arguments, dict):
+                    return self._mcp_error(request_id, -32602, "tools/call requires params.arguments object")
+                result = self._call_tool_for_user(user, name, arguments)
+                return self._mcp_success(request_id, self._mcp_tool_result(result))
+            return self._mcp_error(request_id, -32601, f"Method not found: {method}")
+        except ValueError as exc:
+            return self._mcp_error(request_id, -32602, str(exc))
+        except AuthError as exc:
+            return self._mcp_error(request_id, -32000, str(exc))
+        except Exception as exc:  # noqa: BLE001
+            return self._mcp_error(request_id, -32000, "Internal server error", data={"detail": str(exc)})
 
     def do_OPTIONS(self) -> None:  # noqa: N802
         self.send_response(204)
@@ -245,7 +485,13 @@ class Handler(BaseHTTPRequestHandler):
                 if result is None:
                     self._json(401, {"ok": False, "error": "invalid credentials"})
                     return
-                self._json(200, {"ok": True, **result})
+                extra_headers = None
+                manager = self.sessions
+                user = result.get("user") if isinstance(result, dict) else None
+                if manager is not None and isinstance(user, dict):
+                    session_id = manager.create_local_session(user)
+                    extra_headers = self._session_cookie_headers(session_id, max_age=manager.cookie_max_age(session_id))
+                self._json(200, {"ok": True, **result}, extra_headers=extra_headers)
                 return
 
             if self.path.rstrip("/") == "/auth/oidc/exchange":
@@ -262,15 +508,43 @@ class Handler(BaseHTTPRequestHandler):
                     redirect_uri=redirect_uri,
                     code_verifier=code_verifier,
                 )
+                claims = claims_from_oidc_token_data(self.oidc, token_data)
+                user = claims_to_user(claims, client_id=self.oidc.client_id)
+                extra_headers = None
+                manager = self.sessions
+                if manager is not None:
+                    session_id = manager.create_oidc_session(self.oidc, token_data, user=user)
+                    extra_headers = self._session_cookie_headers(session_id, max_age=manager.cookie_max_age(session_id))
                 self._json(
                     200,
                     {
                         "ok": True,
-                        "access_token": token_data.get("access_token"),
-                        "id_token": token_data.get("id_token"),
-                        "token_type": token_data.get("token_type"),
-                        "expires_in": token_data.get("expires_in"),
+                        "user": user,
+                        "session": {"auth_type": "oidc"},
                     },
+                    extra_headers=extra_headers,
+                )
+                return
+
+            if self.path.rstrip("/") == "/auth/logout":
+                body = self._read_json()
+                redirect_uri = str(body.get("redirect_uri") or "").strip()
+                logout_url = ""
+                manager = self.sessions
+                session_id = self._session_id_from_cookie()
+                if manager is not None and session_id:
+                    session = manager.get_session(session_id, oidc_settings=self.oidc)
+                    id_token_hint = manager.get_oidc_id_token(session_id)
+                    manager.destroy_session(session_id)
+                    if isinstance(session, dict) and str(session.get("auth_type") or "") == "oidc":
+                        logout_url = self._build_oidc_logout_url(
+                            id_token_hint=id_token_hint,
+                            redirect_uri=redirect_uri,
+                        )
+                self._json(
+                    200,
+                    {"ok": True, "logout_url": logout_url},
+                    extra_headers=self._expire_session_cookie_headers(),
                 )
                 return
 
@@ -293,78 +567,30 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {"ok": True, "user": created})
                 return
 
+            if self.path.rstrip("/") == "/mcp":
+                user = self._require_auth()
+                if user is None and self._auth_enabled():
+                    return
+                body = self._read_json()
+                self._json(200, self._handle_mcp_rpc(body, user))
+                return
+
             if self.path.rstrip("/") == "/tools/list":
                 user = self._require_auth()
-                if user is None and self.auth is not None and getattr(self.auth, "enabled", False):
+                if user is None and self._auth_enabled():
                     return
-                tools = self.dispatcher.list_tools()
-                if user is not None and not self._is_admin(user):
-                    entries = tools.get("tools") if isinstance(tools, dict) else None
-                    if isinstance(entries, list):
-                        tools["tools"] = [
-                            item
-                            for item in entries
-                            if isinstance(item, dict) and str(item.get("name") or "") not in _ADMIN_ONLY_TOOLS
-                        ]
-                self._json(200, tools)
+                self._json(200, self._list_tools_for_user(user))
                 return
             if self.path.rstrip("/") == "/tools/call":
                 user = self._require_auth()
-                if user is None and self.auth is not None and getattr(self.auth, "enabled", False):
+                if user is None and self._auth_enabled():
                     return
                 body = self._read_json()
                 name = body.get("name")
                 arguments = body.get("arguments") or {}
                 if not isinstance(name, str) or not isinstance(arguments, dict):
                     raise ValueError("Expected {name: str, arguments: object}")
-                if name in _ADMIN_ONLY_TOOLS and user is not None and not self._is_admin(user):
-                    self._json(403, {"ok": False, "error": "admin required"})
-                    return
-                run_scoped_tools = {
-                    "pipeline.status",
-                    "pipeline.list_artifacts",
-                    "pipeline.read_artifact",
-                    "pipeline.save_workflow_session",
-                    "pipeline.get_workflow_session",
-                    "pipeline.delete_run",
-                    "pipeline.cancel_run",
-                    "pipeline.submit_feedback",
-                    "pipeline.list_feedback",
-                    "pipeline.submit_experiment",
-                    "pipeline.list_experiments",
-                    "pipeline.generate_report",
-                    "pipeline.save_report",
-                    "pipeline.get_report",
-                }
-                if name in run_scoped_tools:
-                    run_id = str(arguments.get("run_id") or "")
-                    if run_id:
-                        self._enforce_run_access(user, run_id)
-                if name in {"pipeline.run", "pipeline.run_from_prompt"} and user is not None and not self._is_admin(user):
-                    prefix = safe_run_prefix(str(user.get("username") or "user"))
-                    run_id = arguments.get("run_id")
-                    if run_id:
-                        self._enforce_run_access(user, str(run_id))
-                    else:
-                        arguments["run_id"] = new_run_id(prefix)
-                if name in {
-                    "pipeline.submit_feedback",
-                    "pipeline.submit_experiment",
-                    "pipeline.save_report",
-                } and user is not None:
-                    arguments.setdefault(
-                        "user",
-                        {
-                            "username": str(user.get("username") or ""),
-                            "role": str(user.get("role") or ""),
-                        },
-                    )
-                out = self.dispatcher.call_tool(name, arguments)
-                if name == "pipeline.list_runs" and user is not None and not self._is_admin(user):
-                    prefix = safe_run_prefix(str(user.get("username") or "user")) + "_"
-                    runs = out.get("runs") if isinstance(out, dict) else None
-                    if isinstance(runs, list):
-                        out["runs"] = [r for r in runs if str(r).startswith(prefix)]
+                out = self._call_tool_for_user(user, name, arguments)
                 self._json(200, {"ok": True, "result": out})
                 return
             self._json(404, {"error": "not found"})
@@ -390,6 +616,8 @@ def main(argv: list[str] | None = None) -> None:
     _AUTH = load_auth_manager()
     global _OIDC
     _OIDC = load_oidc_settings()
+    global _SESSIONS
+    _SESSIONS = load_session_manager()
     _init_cors()
 
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
