@@ -3,7 +3,7 @@
 이 저장소의 `pipeline-mcp`는 파이프라인 오케스트레이터(HTTP tool server)이며, 실제 연산은 주로 RunPod 엔드포인트(MMseqs2/ProteinMPNN/AF2)를 호출합니다.
 
 ## 권장 포트
-- `18080`: `pipeline-mcp` HTTP 서버(외부 호출 필요 시에만 공개)
+- `18080`: `pipeline-mcp` HTTP 서버(Caddy가 `https://pipeline.k-biofoundrycopilot.duckdns.org/mcp`와 `/api/*`로 프록시)
 - `18081`: SoluProt 점수 서버(권장: `127.0.0.1` 바인드로 내부에서만 사용)
 - `18082`: (선택) AF2 HTTP 서버(직접 운영 시)
 
@@ -49,10 +49,14 @@ disown || true
 curl -sS http://127.0.0.1:18080/healthz; echo
 curl -sS -X POST http://127.0.0.1:18080/tools/list -H 'Content-Type: application/json' -d '{}' ; echo
 
-# (원격에서 확인: 서버 IP/도메인으로 접근)
-SERVER=http://<SERVER_IP>:18080
-curl -sS "$SERVER/healthz"; echo
-curl -sS -X POST "$SERVER/tools/list" -H 'Content-Type: application/json' -d '{}' ; echo
+# (원격에서 확인: 공용 도메인은 Caddy/SSO 뒤로만 접근)
+SERVER=https://pipeline.k-biofoundrycopilot.duckdns.org
+TOKEN=<KBF_SSO_ACCESS_TOKEN>
+curl -ksS "$SERVER/healthz"; echo
+curl -ksS -X POST "$SERVER/mcp" \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | jq .
 ```
 
 중지:
@@ -62,6 +66,8 @@ rm -f /opt/protein_pipeline/logs/pipeline-mcp_18080.pid
 ```
 
 ## 파이프라인 호출(원격에서)
+원격 MCP 클라이언트는 `https://pipeline.k-biofoundrycopilot.duckdns.org/mcp`에 붙습니다. 아래 `curl` 예시는 운영/디버깅용 direct HTTP tool API 예시입니다.
+
 `target_fasta`/`target_pdb`는 “파일 경로”가 아니라 “파일 내용(text)”을 JSON에 넣어 호출합니다.
 
 ```bash
@@ -158,9 +164,9 @@ rm -f /opt/protein_pipeline/logs/soluprot_18081.pid
 ```
 
 ## 보안 권장사항
-`pipeline-mcp`는 기본적으로 인증이 없습니다. `0.0.0.0:18080`을 외부에 공개하면 누구나 `/tools/call`로 실행(과금/리소스 사용)할 수 있습니다.
-- 가능하면 `--host 127.0.0.1`로 실행하고 SSH 터널/리버스 프록시(인증)로만 접근
-- 또는 방화벽으로 접근 IP 제한
+운영에서는 raw port를 외부에 직접 열지 않는 것을 권장합니다.
+- `pipeline-mcp`는 `127.0.0.1:18080` 또는 내부망에만 두고, 공용 접근은 Caddy + OIDC가 붙은 `https://pipeline.k-biofoundrycopilot.duckdns.org/mcp`로만 노출
+- 내부 `/tools/*` API를 외부에 직접 열면 인증 우회나 오동작 위험이 커집니다. 가능하면 reverse proxy 뒤로만 두세요.
 
 ## UI + Nginx (Docker)
 프론트엔드를 5173/443에 고정으로 올리고 `/api/`를 pipeline-mcp로 프록시합니다.

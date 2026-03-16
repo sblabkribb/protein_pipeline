@@ -6,6 +6,8 @@
 
 참고: 이 저장소에 포함된 stepper 스킬 원문은 `tmp/skills-dist/protein-pipeline-stepper.SKILL.md` 입니다.
 
+참고: 운영 환경의 MCP 클라이언트 endpoint는 `https://pipeline.k-biofoundrycopilot.duckdns.org/mcp` 입니다. 이 문서의 `curl` 예시는 stepper가 실제로 위임하는 내부 HTTP tool API(`/tools/call`)를 디버깅/재현하는 목적입니다.
+
 ---
 
 ## 1) Stepper가 하는 호출 순서(요약)

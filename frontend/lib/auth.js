@@ -6,6 +6,10 @@ export function shouldRestoreStoredSession({ token } = {}) {
   return Boolean(String(token || "").trim());
 }
 
+export function shouldAttemptSessionRestore({ token, oidcEnabled = false } = {}) {
+  return shouldRestoreStoredSession({ token }) || Boolean(oidcEnabled);
+}
+
 export function shouldClearStoredSession({ status = 0, error = "" } = {}) {
   const normalizedStatus = Number.parseInt(status, 10);
   if ([401, 403].includes(normalizedStatus)) return true;

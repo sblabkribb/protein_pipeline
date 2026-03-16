@@ -91,12 +91,11 @@ import {
 } from "./lib/viewer-annotations.js";
 import {
   buildOidcAuthorizationUrl,
-  buildOidcLogoutUrl,
   buildOidcRedirectUri,
   normalizeApiBase,
   parseOidcCallback,
+  shouldAttemptSessionRestore,
   shouldClearStoredSession,
-  shouldRestoreStoredSession,
   stripOidcCallbackUrl,
   resolveDefaultApiBase,
 } from "./lib/auth.js";
@@ -6481,7 +6480,11 @@ function saveUser(user) {
 }
 
 function saveToken(token) {
-  localStorage.setItem("kbf.token", token);
+  if (token) {
+    localStorage.setItem("kbf.token", token);
+    return;
+  }
+  localStorage.removeItem("kbf.token");
 }
 
 function saveIdToken(token) {
@@ -6567,7 +6570,9 @@ function stripOidcCallbackParams() {
 
 async function fetchOidcConfig() {
   try {
-    const response = await fetch(`${state.apiBase}/auth/oidc/config`);
+    const response = await fetch(`${state.apiBase}/auth/oidc/config`, {
+      credentials: "include",
+    });
     if (!response.ok) return { ok: false, enabled: false };
     const payload = await response.json().catch(() => null);
     if (!payload || typeof payload !== "object") return { ok: false, enabled: false };
@@ -6639,6 +6644,7 @@ async function finishOidcLogin(code, callbackState) {
   });
   const response = await fetch(`${state.apiBase}/auth/oidc/exchange`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       code,
@@ -6650,14 +6656,10 @@ async function finishOidcLogin(code, callbackState) {
   if (!response.ok || !payload || !payload.ok) {
     throw new Error(payload?.error || `HTTP ${response.status}`);
   }
-  const accessToken = String(payload.access_token || "").trim();
-  if (!accessToken) {
-    throw new Error(t("auth.ssoTokenMissing"));
-  }
-  state.token = accessToken;
-  state.idToken = String(payload.id_token || "").trim();
-  saveToken(state.token);
-  saveIdToken(state.idToken);
+  state.token = "";
+  state.idToken = "";
+  saveToken("");
+  saveIdToken("");
   clearOidcRequest();
   stripOidcCallbackParams();
   await loadSession();
@@ -6692,7 +6694,7 @@ async function bootstrapAuth() {
       return;
     }
   }
-  if (shouldRestoreStoredSession({ token: state.token })) {
+  if (shouldAttemptSessionRestore({ token: state.token, oidcEnabled: oidcEnabled() })) {
     await loadSession();
     return;
   }
@@ -6705,18 +6707,26 @@ function openAccountConsole() {
   window.location.assign(accountUrl);
 }
 
-function logoutCurrentSession() {
-  const endSessionEndpoint = String(state.oidcConfig?.end_session_endpoint || "").trim();
+async function logoutCurrentSession() {
   const redirectUri = buildOidcRedirectUri({
     origin: window.location.origin,
     pathname: window.location.pathname,
   });
-  const logoutUrl = buildOidcLogoutUrl({
-    endSessionEndpoint,
-    postLogoutRedirectUri: redirectUri,
-    clientId: state.oidcConfig?.client_id || "",
-    idTokenHint: state.idToken || "",
-  });
+  let logoutUrl = "";
+  try {
+    const response = await fetch(`${state.apiBase}/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ redirect_uri: redirectUri }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (response.ok && payload && payload.ok) {
+      logoutUrl = String(payload.logout_url || "").trim();
+    }
+  } catch (_err) {
+    logoutUrl = "";
+  }
   clearOidcRequest();
   clearSession();
   syncLoginMode();
@@ -9008,6 +9018,7 @@ function authHeaders() {
 async function apiCall(name, args) {
   const res = await fetch(`${state.apiBase}/tools/call`, {
     method: "POST",
+    credentials: "include",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ name, arguments: args || {} }),
   });
@@ -9045,6 +9056,7 @@ async function authLogin() {
   try {
     const res = await fetch(`${state.apiBase}/auth/login`, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
     });
@@ -9068,7 +9080,7 @@ async function authLogin() {
 }
 
 async function loadSession() {
-  if (!state.token) {
+  if (!state.token && !oidcEnabled()) {
     showLogin();
     return;
   }
@@ -9076,6 +9088,7 @@ async function loadSession() {
   let failureMessage = "";
   try {
     const res = await fetch(`${state.apiBase}/auth/me`, {
+      credentials: "include",
       headers: { ...authHeaders() },
     });
     const payload = await res.json().catch(() => null);

@@ -260,6 +260,33 @@ def verify_oidc_token(token: str, settings: OIDCSettings) -> dict[str, Any]:
     return claims
 
 
+def claims_from_oidc_token_data(settings: OIDCSettings, token_data: dict[str, Any]) -> dict[str, Any]:
+    access_token = str(token_data.get("access_token") or "").strip()
+    id_token = str(token_data.get("id_token") or "").strip()
+    errors: list[str] = []
+    for token in (access_token, id_token):
+        if not token:
+            continue
+        try:
+            return verify_oidc_token(token, settings)
+        except Exception as exc:
+            errors.append(str(exc))
+    if errors:
+        raise ValueError("; ".join(errors))
+    raise ValueError("OIDC token response did not include a usable access_token or id_token")
+
+
+def _post_token_request(token_endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
+    response = requests.post(token_endpoint, data=payload, timeout=10)
+    token_data = response.json() if response.content else {}
+    if response.status_code >= 400:
+        detail = token_data.get("error_description") or token_data.get("error") or f"HTTP {response.status_code}"
+        raise ValueError(str(detail))
+    if not isinstance(token_data, dict):
+        raise ValueError("invalid OIDC token response")
+    return token_data
+
+
 def exchange_oidc_code(
     settings: OIDCSettings,
     *,
@@ -281,11 +308,19 @@ def exchange_oidc_code(
     if code_verifier:
         payload["code_verifier"] = code_verifier
 
-    response = requests.post(token_endpoint, data=payload, timeout=10)
-    token_data = response.json() if response.content else {}
-    if response.status_code >= 400:
-        detail = token_data.get("error_description") or token_data.get("error") or f"HTTP {response.status_code}"
-        raise ValueError(str(detail))
-    if not isinstance(token_data, dict):
-        raise ValueError("invalid OIDC token response")
-    return token_data
+    return _post_token_request(token_endpoint, payload)
+
+
+def refresh_oidc_tokens(settings: OIDCSettings, *, refresh_token: str) -> dict[str, Any]:
+    discovery = get_oidc_discovery(settings)
+    token_endpoint = str(discovery.get("token_endpoint") or "")
+    if not token_endpoint:
+        raise ValueError("OIDC token endpoint is unavailable")
+    payload = {
+        "grant_type": "refresh_token",
+        "refresh_token": str(refresh_token or "").strip(),
+        "client_id": settings.client_id,
+    }
+    if not payload["refresh_token"]:
+        raise ValueError("refresh_token is required")
+    return _post_token_request(token_endpoint, payload)
