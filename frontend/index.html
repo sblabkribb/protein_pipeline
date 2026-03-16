@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>K-Biofoundry | Protein Pipeline Console</title>
-    <link rel="stylesheet" href="./styles.css?v=v0.2.1" />
+    <link rel="stylesheet" href="./styles.css?v=20260316_artifacts1" />
   </head>
   <body>
     <div class="bg-orb orb-a" aria-hidden="true"></div>
@@ -127,6 +127,17 @@
             data-i18n="tabs.analyze"
           >
             Analyze
+          </button>
+          <button
+            id="tabBtnMcp"
+            class="tab-btn"
+            role="tab"
+            aria-selected="false"
+            aria-controls="tab-mcp"
+            data-tab="mcp"
+            data-i18n="tabs.mcp"
+          >
+            MCP
           </button>
         </nav>
 
@@ -915,6 +926,20 @@
             </div>
           </div>
         </section>
+
+        <section
+          id="tab-mcp"
+          class="tab-panel"
+          data-tab="mcp"
+          role="tabpanel"
+          aria-labelledby="tabBtnMcp"
+        >
+          <div class="tab-content-shell">
+            <div class="panel panel-block">
+              <div id="mcpGuidePanel"></div>
+            </div>
+          </div>
+        </section>
       </div>
       <section id="detachedResiduePickerRoot" class="detached-picker-root hidden" aria-live="polite"></section>
     </main>
@@ -1137,6 +1162,6 @@
     <button id="copilotFabBtn" class="primary copilot-fab" data-i18n="copilot.open">Copilot</button>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=v0.2.1"></script>
+    <script type="module" src="./app.js?v=20260316_mcp1"></script>
   </body>
 </html>
