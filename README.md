@@ -162,6 +162,15 @@ RunPod Admin is a standalone operations console for the RunPod Serverless endpoi
 
 `PIPELINE_AUTH_*` keeps the legacy local admin login available. `PIPELINE_OIDC_*` enables KBF SSO and is the preferred mode for the production portal/subdomain deployment.
 
+## Remote MCP endpoint
+- Public team-shared endpoint: `https://pipeline.k-biofoundrycopilot.duckdns.org/mcp`
+- Auth: `Authorization: Bearer <KBF SSO access token>`
+- Remote MCP reuses the same authorization rules as the HTTP tool server:
+  - non-admin users only see non-admin tools
+  - non-admin `pipeline.run` and `pipeline.run_from_prompt` calls get a user-scoped `run_id` when omitted
+  - run-scoped tools only allow `run_id` values owned by the caller
+- `/tools/list` and `/tools/call` remain available for direct HTTP automation and internal ops; `/mcp` is the MCP-facing JSON-RPC surface routed through Caddy/TLS
+
 ## Docs
 - `docs/USAGE.md`: UI and API usage guide
 - `docs/runbook.md`: operator runbook

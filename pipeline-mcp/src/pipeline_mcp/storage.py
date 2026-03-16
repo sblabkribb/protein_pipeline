@@ -11,6 +11,16 @@ import shutil
 
 
 _SAFE_NAME_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
+_ARTIFACT_PRIORITY_RULES: tuple[tuple[int, re.Pattern[str]], ...] = (
+    (0, re.compile(r"^target\.original\.pdb$")),
+    (1, re.compile(r"^target\.pdb$")),
+    (2, re.compile(r"^comparisons\.json$")),
+    (3, re.compile(r"^workflow_studio/session\.json$")),
+    (4, re.compile(r"^wt/af2/ranked_0\.pdb$")),
+    (5, re.compile(r"^workflow_studio(?:/|$)")),
+    (6, re.compile(r"^wt(?:/|$)")),
+    (7, re.compile(r"^backbones/[^/]+/target\.pdb$")),
+)
 
 
 def _is_user_visible_artifact_path(path: str | Path) -> bool:
@@ -18,6 +28,14 @@ def _is_user_visible_artifact_path(path: str | Path) -> bool:
     if normalized == "target.original.pdb":
         return True
     return not normalized.endswith(".original.pdb")
+
+
+def _artifact_priority(path: str | Path) -> int:
+    normalized = str(path or "").replace("\\", "/").strip("/")
+    for rank, pattern in _ARTIFACT_PRIORITY_RULES:
+        if pattern.match(normalized):
+            return rank
+    return 99
 
 
 def new_run_id(prefix: str = "run") -> str:
@@ -270,8 +288,6 @@ def list_artifacts(
         filenames.sort()
 
         for name in dirnames:
-            if limit and len(results) >= limit:
-                return results
             path = Path(dirpath) / name
             rel = path.resolve().relative_to(root)
             stat = path.stat()
@@ -284,8 +300,6 @@ def list_artifacts(
                 }
             )
         for name in filenames:
-            if limit and len(results) >= limit:
-                return results
             path = Path(dirpath) / name
             rel = path.resolve().relative_to(root)
             stat = path.stat()
@@ -297,8 +311,15 @@ def list_artifacts(
                     "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(stat.st_mtime)),
                 }
             )
-        if limit and len(results) >= limit:
-            return results
+    if limit and len(results) > limit:
+        indexed = list(enumerate(results))
+        indexed.sort(
+            key=lambda item: (
+                _artifact_priority(item[1].get("path") or ""),
+                item[0],
+            )
+        )
+        return [entry for _, entry in indexed[:limit]]
 
     return results
 

@@ -158,6 +158,42 @@ class TestTools(unittest.TestCase):
             self.assertIn("target.original.pdb", paths)
             self.assertNotIn("backbones/demo/target.original.pdb", paths)
 
+    def test_pipeline_list_artifacts_prioritizes_wt_and_workflow_session_when_limit_truncates(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            run_id = "artifact_priority_case"
+            root = init_run(tmp, run_id).root
+
+            (root / "target.original.pdb").write_text("END\n", encoding="utf-8")
+            (root / "target.pdb").write_text("END\n", encoding="utf-8")
+            (root / "workflow_studio" / "session.json").parent.mkdir(parents=True, exist_ok=True)
+            (root / "workflow_studio" / "session.json").write_text("{}\n", encoding="utf-8")
+            (root / "wt" / "af2").mkdir(parents=True, exist_ok=True)
+            (root / "wt" / "af2" / "ranked_0.pdb").write_text("END\n", encoding="utf-8")
+            (root / "wt" / "af2" / "metrics.json").write_text("{}\n", encoding="utf-8")
+            (root / "backbones" / "bioemu_topology").mkdir(parents=True, exist_ok=True)
+            (root / "backbones" / "bioemu_topology" / "target.pdb").write_text("END\n", encoding="utf-8")
+            (root / "backbones" / "rfd3_spec-1_0_model_0").mkdir(parents=True, exist_ok=True)
+            (root / "backbones" / "rfd3_spec-1_0_model_0" / "target.pdb").write_text("END\n", encoding="utf-8")
+
+            for idx in range(140):
+                candidate_dir = root / "tiers" / "50" / "af2" / f"candidate_{idx:03d}"
+                candidate_dir.mkdir(parents=True, exist_ok=True)
+                (candidate_dir / "metrics.json").write_text("{}\n", encoding="utf-8")
+                (candidate_dir / "ranked_0.pdb").write_text("END\n", encoding="utf-8")
+                (candidate_dir / "ranking_debug.json").write_text("{}\n", encoding="utf-8")
+
+            listed = dispatcher.call_tool(
+                "pipeline.list_artifacts",
+                {"run_id": run_id, "max_depth": 6, "limit": 300},
+            )
+            paths = [str(item.get("path") or "") for item in (listed.get("artifacts") or []) if isinstance(item, dict)]
+
+            self.assertLessEqual(len(paths), 300)
+            self.assertIn("workflow_studio/session.json", paths)
+            self.assertIn("wt/af2/ranked_0.pdb", paths)
+
     def test_pipeline_save_and_get_workflow_session(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         with _tmpdir() as tmp:

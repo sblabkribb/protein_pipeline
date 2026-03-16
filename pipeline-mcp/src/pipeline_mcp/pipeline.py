@@ -673,6 +673,29 @@ def _requested_backbone_count(request: PipelineRequest, source: str) -> int:
     return 0
 
 
+def _backbone_source_note(
+    source: str,
+    *,
+    requested_count: int,
+    observed_count: int,
+    materialized_count: int,
+    propagated_count: int,
+    backbone_ids: list[str] | None = None,
+) -> str | None:
+    normalized = _backbone_origin_stage(source)
+    ids = [str(item or "").strip().lower() for item in (backbone_ids or []) if str(item or "").strip()]
+    if normalized == "rfd3" and observed_count > materialized_count and materialized_count == 1 and propagated_count <= 1:
+        return "Additional RFD3 designs were metadata-only; downstream used the selected backbone PDB."
+    if (
+        normalized == "bioemu"
+        and requested_count > materialized_count
+        and materialized_count == 1
+        and "bioemu_topology" in ids
+    ):
+        return "BioEmu returned topology_pdb only; sample_pdbs were not materialized."
+    return None
+
+
 def _build_backbone_source_summaries(
     request: PipelineRequest,
     *,
@@ -683,6 +706,7 @@ def _build_backbone_source_summaries(
     observed_counts = observed_counts or {}
     selected_ids = selected_ids or {}
     counts_by_source: dict[str, dict[str, int]] = {}
+    ids_by_source: dict[str, list[str]] = {}
     propagated_ids_by_source: dict[str, list[str]] = {}
     for entry in backbone_entries:
         if not isinstance(entry, dict):
@@ -690,6 +714,10 @@ def _build_backbone_source_summaries(
         source = _backbone_origin_stage(entry.get("source"))
         bucket = counts_by_source.setdefault(source, {"materialized_count": 0, "propagated_count": 0})
         raw_id = str(entry.get("id") or "").strip()
+        if raw_id:
+            backbone_ids = ids_by_source.setdefault(source, [])
+            if raw_id not in backbone_ids:
+                backbone_ids.append(raw_id)
         if bool(entry.get("materialized")):
             bucket["materialized_count"] = int(bucket.get("materialized_count") or 0) + 1
         if bool(entry.get("propagated")):
@@ -730,6 +758,16 @@ def _build_backbone_source_summaries(
             "propagated_count": propagated_count,
             "propagation_mode": propagation_mode,
         }
+        note = _backbone_source_note(
+            source,
+            requested_count=requested_count,
+            observed_count=observed_count,
+            materialized_count=materialized_count,
+            propagated_count=propagated_count,
+            backbone_ids=ids_by_source.get(source) or [],
+        )
+        if note:
+            payload["note"] = note
         if selected_backbone_id:
             payload["selected_backbone_id"] = selected_backbone_id
         summaries[source] = payload
