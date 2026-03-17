@@ -23,10 +23,12 @@ class BioEmuRunPodClient:
         model_name: str = "bioemu-v1.1",
         filter_samples: bool = True,
         base_seed: int | None = None,
+        steering_config_text: str | None = None,
         env: dict[str, str] | None = None,
         return_pdb: bool = True,
         return_sample_pdbs: bool = True,
         max_return_sample_pdbs: int = 10,
+        min_return_sample_pdbs: int | None = None,
         resume_job_id: str | None = None,
         on_job_id: Callable[[str], None] | None = None,
     ) -> dict[str, Any]:
@@ -39,10 +41,14 @@ class BioEmuRunPodClient:
             "return_sample_pdbs": bool(return_sample_pdbs),
             "max_return_sample_pdbs": int(max(1, max_return_sample_pdbs)),
         }
+        if min_return_sample_pdbs is not None:
+            payload["min_return_sample_pdbs"] = int(max(0, min_return_sample_pdbs))
         if batch_size_100 is not None:
             payload["batch_size_100"] = int(batch_size_100)
         if base_seed is not None:
             payload["base_seed"] = int(base_seed)
+        if steering_config_text is not None:
+            payload["steering_config_text"] = str(steering_config_text)
         if env:
             payload["env"] = dict(env)
 

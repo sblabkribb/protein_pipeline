@@ -58,7 +58,6 @@ _PROMPT_INT_KEYS = {
     "mmseqs_threads",
     "rfd3_design_index",
     "rfd3_max_return_designs",
-    "rfd3_partial_t",
     "bioemu_num_samples",
     "bioemu_batch_size_100",
     "bioemu_base_seed",
@@ -72,6 +71,7 @@ _PROMPT_FLOAT_KEYS = {
     "af2_plddt_cutoff",
     "af2_rmsd_cutoff",
     "ligand_mask_distance",
+    "rfd3_partial_t",
     "msa_min_coverage",
     "msa_min_identity",
     "query_pdb_min_identity",
@@ -421,7 +421,6 @@ def plan_from_prompt(
 
     has_target = bool(str(target_fasta or "").strip() or str(target_pdb or "").strip())
     has_rfd3_pdb = bool(str(rfd3_input_pdb or "").strip())
-    has_rfd3_contig = bool(str(routed.get("rfd3_contig") or "").strip())
     has_diffdock_ligand = bool(str(diffdock_ligand_smiles or "").strip() or str(diffdock_ligand_sdf or "").strip())
 
     missing: list[str] = []
@@ -444,15 +443,6 @@ def plan_from_prompt(
                 {
                     "id": "rfd3_input_pdb",
                     "question": "Provide rfd3_input_pdb text (raw PDB).",
-                    "required": True,
-                }
-            )
-        if not has_rfd3_contig:
-            missing.append("rfd3_contig")
-            questions.append(
-                {
-                    "id": "rfd3_contig",
-                    "question": "Provide rfd3_contig (format: A1-221, no colon).",
                     "required": True,
                 }
             )

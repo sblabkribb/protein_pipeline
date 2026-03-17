@@ -96,11 +96,16 @@ def main() -> None:
 
     parser.add_argument("--rfd3-input-pdb", required=True, help="path to input PDB file")
     parser.add_argument("--rfd3-contig", default="", help="RFD3 contig, e.g. A1-229 (optional if using inputs)")
+    parser.add_argument(
+        "--rfd3-mode",
+        default="",
+        help="RFD3 mode: legacy_contig, binder, enzyme, local_diversify, or advanced",
+    )
     parser.add_argument("--rfd3-inputs-path", default="", help="path to RFD3 inputs.json/yaml (optional)")
     parser.add_argument("--rfd3-inputs-text", default="", help="inline RFD3 inputs JSON/YAML (optional)")
     parser.add_argument("--rfd3-design-index", type=int, default=0)
     parser.add_argument("--rfd3-max-return-designs", type=int, default=50)
-    parser.add_argument("--rfd3-partial-t", type=int, default=20)
+    parser.add_argument("--rfd3-partial-t", type=float, default=None)
     parser.add_argument("--rfd3-use-ensemble", action="store_true")
     parser.add_argument("--rfd3-cli-args", default="", help="extra RFD3 CLI args (optional)")
 
@@ -158,11 +163,12 @@ def main() -> None:
     payload = {
         "run_id": run_id,
         "rfd3_input_pdb": pdb_text,
+        "rfd3_mode": str(args.rfd3_mode or "").strip() or None,
         "rfd3_contig": contig or None,
         "rfd3_inputs_text": inputs_text or None,
         "rfd3_design_index": int(args.rfd3_design_index),
         "rfd3_max_return_designs": int(args.rfd3_max_return_designs),
-        "rfd3_partial_t": int(args.rfd3_partial_t),
+        "rfd3_partial_t": (float(args.rfd3_partial_t) if args.rfd3_partial_t is not None else None),
         "rfd3_use_ensemble": bool(args.rfd3_use_ensemble),
         "rfd3_cli_args": str(args.rfd3_cli_args or "").strip() or None,
         "conservation_tiers": _parse_floats(args.conservation_tiers),
