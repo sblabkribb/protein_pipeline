@@ -4122,6 +4122,17 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     rfd3_contig = _as_str_or_list(args.get("rfd3_contig"))
     rfd3_input_files = _as_dict_str(args.get("rfd3_input_files"), name="rfd3_input_files")
     rfd3_input_pdb = _as_text(args.get("rfd3_input_pdb")).strip() or None
+    rfd3_mode = _as_text(args.get("rfd3_mode")).strip() or None
+    rfd3_hotspots = _as_str_or_list(args.get("rfd3_hotspots"))
+    rfd3_infer_ori_strategy = _as_text(args.get("rfd3_infer_ori_strategy")).strip() or None
+    rfd3_is_non_loopy = (
+        _as_bool(args.get("rfd3_is_non_loopy"), False)
+        if str(args.get("rfd3_is_non_loopy") or "").strip()
+        else None
+    )
+    rfd3_unindex = _as_str_or_list(args.get("rfd3_unindex"))
+    rfd3_length = _as_str_or_list(args.get("rfd3_length"))
+    rfd3_select_fixed_atoms = _as_str_or_list(args.get("rfd3_select_fixed_atoms"))
     rfd3_ligand = _as_str_or_list(args.get("rfd3_ligand"))
     rfd3_select_unfixed_sequence = _as_text(args.get("rfd3_select_unfixed_sequence")).strip() or None
     rfd3_cli_args = _as_text(args.get("rfd3_cli_args")).strip() or None
@@ -4129,11 +4140,14 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     rfd3_design_index = _as_int(args.get("rfd3_design_index"), 0)
     rfd3_use_ensemble = _as_bool(args.get("rfd3_use_ensemble"), False)
     rfd3_max_return_designs = _as_int(args.get("rfd3_max_return_designs"), 10)
-    rfd3_partial_t = _as_int(args.get("rfd3_partial_t"), 20)
+    rfd3_partial_t = (
+        _as_float(args.get("rfd3_partial_t"), 0.0)
+        if str(args.get("rfd3_partial_t") or "").strip()
+        else None
+    )
 
     bioemu_use = _as_bool(args.get("bioemu_use"), False)
     bioemu_sequence = _as_text(args.get("bioemu_sequence")).strip() or None
-    bioemu_num_samples = _as_int(args.get("bioemu_num_samples"), 10)
     bioemu_batch_size_100 = (
         _as_int(args.get("bioemu_batch_size_100"), 50)
         if str(args.get("bioemu_batch_size_100") or "").strip()
@@ -4146,7 +4160,13 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         if str(args.get("bioemu_base_seed") or "").strip()
         else None
     )
+    bioemu_steering_config_text = _as_text(args.get("bioemu_steering_config_text")).strip() or None
     bioemu_max_return_structures = _as_int(args.get("bioemu_max_return_structures"), 10)
+    if str(args.get("bioemu_num_samples") or "").strip():
+        bioemu_num_samples = _as_int(args.get("bioemu_num_samples"), bioemu_max_return_structures)
+    else:
+        requested_return_count = max(1, int(bioemu_max_return_structures))
+        bioemu_num_samples = requested_return_count * 2 if bioemu_filter_samples else requested_return_count
     bioemu_env = _as_dict_str(args.get("bioemu_env"), name="bioemu_env")
 
     diffdock_ligand_smiles = _as_text(args.get("diffdock_ligand_smiles")).strip() or None
@@ -4195,8 +4215,15 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         rfd3_inputs_text=rfd3_inputs_text,
         rfd3_input_files=rfd3_input_files,
         rfd3_input_pdb=rfd3_input_pdb,
+        rfd3_mode=rfd3_mode,
         rfd3_spec_name=str(args.get("rfd3_spec_name") or "spec-1"),
         rfd3_contig=rfd3_contig,
+        rfd3_hotspots=rfd3_hotspots,
+        rfd3_infer_ori_strategy=rfd3_infer_ori_strategy,
+        rfd3_is_non_loopy=rfd3_is_non_loopy,
+        rfd3_unindex=rfd3_unindex,
+        rfd3_length=rfd3_length,
+        rfd3_select_fixed_atoms=rfd3_select_fixed_atoms,
         rfd3_ligand=rfd3_ligand,
         rfd3_select_unfixed_sequence=rfd3_select_unfixed_sequence,
         rfd3_cli_args=rfd3_cli_args,
@@ -4204,7 +4231,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         rfd3_design_index=rfd3_design_index,
         rfd3_use_ensemble=rfd3_use_ensemble,
         rfd3_max_return_designs=max(1, int(rfd3_max_return_designs)),
-        rfd3_partial_t=int(rfd3_partial_t),
+        rfd3_partial_t=(float(rfd3_partial_t) if rfd3_partial_t is not None else None),
         bioemu_use=bioemu_use,
         bioemu_sequence=bioemu_sequence,
         bioemu_num_samples=max(1, int(bioemu_num_samples)),
@@ -4212,6 +4239,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         bioemu_model_name=bioemu_model_name,
         bioemu_filter_samples=bioemu_filter_samples,
         bioemu_base_seed=(int(bioemu_base_seed) if bioemu_base_seed is not None else None),
+        bioemu_steering_config_text=bioemu_steering_config_text,
         bioemu_max_return_structures=max(1, int(bioemu_max_return_structures)),
         bioemu_env=bioemu_env,
         diffdock_ligand_smiles=diffdock_ligand_smiles,
@@ -4305,8 +4333,20 @@ def _pipeline_run_schema() -> dict[str, Any]:
                 "additionalProperties": {"type": "string"},
             },
             "rfd3_input_pdb": {"type": "string"},
+            "rfd3_mode": {
+                "type": "string",
+                "enum": ["legacy_contig", "binder", "enzyme", "local_diversify", "advanced"],
+            },
             "rfd3_spec_name": {"type": "string"},
             "rfd3_contig": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+            "rfd3_hotspots": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+            "rfd3_infer_ori_strategy": {"type": "string"},
+            "rfd3_is_non_loopy": {"type": "boolean"},
+            "rfd3_unindex": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+            "rfd3_length": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+            "rfd3_select_fixed_atoms": {
+                "anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]
+            },
             "rfd3_ligand": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
             "rfd3_select_unfixed_sequence": {"type": "string"},
             "rfd3_cli_args": {"type": "string"},
@@ -4314,7 +4354,7 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "rfd3_design_index": {"type": "integer"},
             "rfd3_use_ensemble": {"type": "boolean"},
             "rfd3_max_return_designs": {"type": "integer"},
-            "rfd3_partial_t": {"type": "integer"},
+            "rfd3_partial_t": {"type": "number"},
             "bioemu_use": {"type": "boolean"},
             "bioemu_sequence": {"type": "string"},
             "bioemu_num_samples": {"type": "integer"},
@@ -4322,6 +4362,7 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "bioemu_model_name": {"type": "string"},
             "bioemu_filter_samples": {"type": "boolean"},
             "bioemu_base_seed": {"type": "integer"},
+            "bioemu_steering_config_text": {"type": "string"},
             "bioemu_max_return_structures": {"type": "integer"},
             "bioemu_env": {"type": "object", "additionalProperties": {"type": "string"}},
             "diffdock_ligand_smiles": {"type": "string"},
@@ -4399,7 +4440,8 @@ def _pipeline_run_schema() -> dict[str, Any]:
             {"required": ["bioemu_sequence"]},
             {"required": ["rfd3_inputs"]},
             {"required": ["rfd3_inputs_text"]},
-            {"required": ["rfd3_contig"]},
+            {"required": ["rfd3_input_pdb"]},
+            {"required": ["rfd3_input_files"]},
         ],
     }
 

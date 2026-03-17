@@ -356,7 +356,7 @@ class TestTools(unittest.TestCase):
         with _tmpdir() as tmp:
             runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
             dispatcher = ToolDispatcher(runner)
-            with self.assertRaisesRegex(ValueError, "stop_after='rfd3' requires rfd3 inputs"):
+            with self.assertRaisesRegex(ValueError, "stop_after='rfd3' requires RFD3 inputs"):
                 dispatcher.call_tool(
                     "pipeline.run",
                     {
@@ -412,8 +412,10 @@ class TestTools(unittest.TestCase):
                 "bioemu_use": True,
                 "bioemu_num_samples": 25,
                 "bioemu_model_name": "bioemu-v1.1",
+                "bioemu_filter_samples": False,
                 "bioemu_max_return_structures": 12,
                 "bioemu_base_seed": 7,
+                "bioemu_steering_config_text": "guiding_potential:\n  type: harmonic\n",
                 "af2_max_candidates_per_tier": 5,
                 "bioemu_env": {"BIOEMU_COLABFOLD_DIR": "/runpod-volume/bioemu/colabfold"},
                 "ligand_mask_use_original_target": False,
@@ -422,8 +424,10 @@ class TestTools(unittest.TestCase):
         self.assertTrue(req.bioemu_use)
         self.assertEqual(req.bioemu_num_samples, 25)
         self.assertEqual(req.bioemu_model_name, "bioemu-v1.1")
+        self.assertFalse(req.bioemu_filter_samples)
         self.assertEqual(req.bioemu_max_return_structures, 12)
         self.assertEqual(req.bioemu_base_seed, 7)
+        self.assertEqual(req.bioemu_steering_config_text, "guiding_potential:\n  type: harmonic")
         self.assertEqual(req.af2_max_candidates_per_tier, 5)
         self.assertEqual(req.bioemu_env, {"BIOEMU_COLABFOLD_DIR": "/runpod-volume/bioemu/colabfold"})
         self.assertFalse(req.ligand_mask_use_original_target)
@@ -431,6 +435,52 @@ class TestTools(unittest.TestCase):
     def test_pipeline_request_defaults_original_ligand_mask_on(self) -> None:
         req = pipeline_request_from_args({"target_fasta": ">q1\nACDEFGHIK\n"})
         self.assertTrue(req.ligand_mask_use_original_target)
+
+    def test_pipeline_request_defaults_bioemu_filter_samples_on(self) -> None:
+        req = pipeline_request_from_args({"target_fasta": ">q1\nACDEFGHIK\n", "bioemu_use": True})
+        self.assertTrue(req.bioemu_filter_samples)
+
+    def test_pipeline_request_defaults_bioemu_num_samples_to_oversampled_return_count(self) -> None:
+        req = pipeline_request_from_args(
+            {
+                "target_fasta": ">q1\nACDEFGHIK\n",
+                "bioemu_use": True,
+                "bioemu_max_return_structures": 10,
+            }
+        )
+        self.assertEqual(req.bioemu_max_return_structures, 10)
+        self.assertEqual(req.bioemu_num_samples, 20)
+
+    def test_pipeline_request_defaults_bioemu_num_samples_to_return_count_when_filter_disabled(self) -> None:
+        req = pipeline_request_from_args(
+            {
+                "target_fasta": ">q1\nACDEFGHIK\n",
+                "bioemu_use": True,
+                "bioemu_filter_samples": False,
+                "bioemu_max_return_structures": 12,
+            }
+        )
+        self.assertFalse(req.bioemu_filter_samples)
+        self.assertEqual(req.bioemu_max_return_structures, 12)
+        self.assertEqual(req.bioemu_num_samples, 12)
+
+    def test_pipeline_request_parses_rfd3_mode_controls(self) -> None:
+        req = pipeline_request_from_args(
+            {
+                "target_fasta": ">q1\nACDEFGHIK\n",
+                "rfd3_input_pdb": "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\nEND\n",
+                "rfd3_mode": "enzyme",
+                "rfd3_unindex": "A10-20",
+                "rfd3_length": "20-40",
+                "rfd3_select_fixed_atoms": "A57:CA,A57:CB",
+                "rfd3_partial_t": 7.5,
+            }
+        )
+        self.assertEqual(req.rfd3_mode, "enzyme")
+        self.assertEqual(req.rfd3_unindex, "A10-20")
+        self.assertEqual(req.rfd3_length, "20-40")
+        self.assertEqual(req.rfd3_select_fixed_atoms, "A57:CA,A57:CB")
+        self.assertEqual(req.rfd3_partial_t, 7.5)
 
     def test_pipeline_request_defaults_wt_diff_enabled(self) -> None:
         req = pipeline_request_from_args({"target_fasta": ">q1\nACDEFGHIK\n"})

@@ -25,8 +25,15 @@ class PipelineRequest:
     rfd3_inputs_text: str | None = None
     rfd3_input_files: dict[str, str] | None = None
     rfd3_input_pdb: str | None = None
+    rfd3_mode: str | None = None
     rfd3_spec_name: str = "spec-1"
     rfd3_contig: str | list[str] | None = None
+    rfd3_hotspots: str | list[str] | None = None
+    rfd3_infer_ori_strategy: str | None = None
+    rfd3_is_non_loopy: bool | None = None
+    rfd3_unindex: str | list[str] | None = None
+    rfd3_length: str | list[str] | None = None
+    rfd3_select_fixed_atoms: str | list[str] | None = None
     rfd3_ligand: str | list[str] | None = None
     rfd3_select_unfixed_sequence: str | None = None
     rfd3_cli_args: str | None = None
@@ -34,7 +41,7 @@ class PipelineRequest:
     rfd3_design_index: int = 0
     rfd3_use_ensemble: bool = False
     rfd3_max_return_designs: int = 10
-    rfd3_partial_t: int = 20
+    rfd3_partial_t: float | None = None
 
     bioemu_use: bool = False
     bioemu_sequence: str | None = None
@@ -43,6 +50,7 @@ class PipelineRequest:
     bioemu_model_name: str = "bioemu-v1.1"
     bioemu_filter_samples: bool = True
     bioemu_base_seed: int | None = None
+    bioemu_steering_config_text: str | None = None
     bioemu_max_return_structures: int = 10
     bioemu_env: dict[str, str] | None = None
 

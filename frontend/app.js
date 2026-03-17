@@ -1,9 +1,10 @@
 import {
   artifactMetaFromPath,
+  artifactMetaFromPathForManifest,
   artifactDownloadFilename,
   buildArtifactDownloadRequest,
   buildWorkflowProgressContext,
-  buildWorkflowStudioFreshSessionSeed,
+  backboneSourceIndexFromManifest,
   buildWorkflowStudioNodesFromRequest,
   DEFAULT_ARTIFACT_COMPARE_MODE,
   DEFAULT_ARTIFACT_LIST_LIMIT,
@@ -15,9 +16,11 @@ import {
   createRunId,
   detectTargetKey,
   displayArtifactPath,
+  effectiveRfd3Mode,
   effectiveRfd3InputPdb,
   explicitRfd3InputPdbText,
   expandWorkflowStudioNodes,
+  filterWorkflowStudioSessionsForUser,
   filterRunsByPrefix,
   formatBackboneUsageSummary as formatBackboneUsageSummaryCore,
   inferRequestRunMode,
@@ -30,6 +33,7 @@ import {
   minimumWorkflowStudioStartStage,
   nextWorkflowStudioStage,
   normalizeBioEmuCountFields,
+  normalizeRfd3Mode,
   normalizeWorkflowStudioPayloadForComparison,
   normalizeFixedPositionsExtraDraft,
   normalizeSetupDraftForFreshRun,
@@ -46,6 +50,8 @@ import {
   shouldPollRunForTabChange,
   splitWorkflowStudioAnswers,
   workflowStudioRetainedArtifactPath,
+  workflowStudioOwnerFromUser,
+  workflowStudioStorageKeysForUser,
   upsertWorkflowStudioStageStatus,
   workflowStudioActionRunIdForSession,
   workflowStudioSessionIdForRun as workflowStudioSessionIdForLinkedRun,
@@ -123,9 +129,7 @@ const WORKFLOW_STUDIO_SESSION_PATH = "workflow_studio/session.json";
 const RESIDUE_PICKER_DETACHED_QUERY_KEY = "residue_picker";
 const RESIDUE_PICKER_REQUEST_STORAGE_KEY_PREFIX = "kbf.residuePicker.request.";
 const RESIDUE_PICKER_RESULT_STORAGE_KEY_PREFIX = "kbf.residuePicker.result.";
-const QUESTION_ID_ALIASES = Object.freeze({
-  bioemu_max_return_structures: "bioemu_num_samples",
-});
+const QUESTION_ID_ALIASES = Object.freeze({});
 const RESIDUE_PICKER_RESULT_MESSAGE_TYPE = "kbf.residuePicker.result";
 const RESIDUE_PICKER_RESET_MESSAGE_TYPE = "kbf.residuePicker.reset";
 const RESIDUE_PICKER_POPUP_WINDOW_NAME = "kbf_residue_picker";
@@ -445,11 +449,27 @@ function normalizeWorkflowStudioSessionPayload(payload, sessionIdFallback = "") 
     history,
     residue_picker_state: residuePickerState,
     ui_state: uiState,
+    owner_username: String(source.owner_username || source.ownerUsername || "").trim(),
+    owner_run_prefix: String(source.owner_run_prefix || source.ownerRunPrefix || "").trim(),
+    owner_role: String(source.owner_role || source.ownerRole || "").trim().toLowerCase(),
   };
 }
 
-function loadWorkflowStudioSessionsById() {
-  const raw = localStorage.getItem(WORKFLOW_STUDIO_STORAGE_KEY);
+function workflowStudioLatestSessionId(sessionsById = {}) {
+  return Object.values(sessionsById || {})
+    .filter((item) => item && typeof item === "object" && String(item.session_id || "").trim())
+    .sort((a, b) => {
+      const aTime = Date.parse(String(a.updated_at || a.created_at || "")) || 0;
+      const bTime = Date.parse(String(b.updated_at || b.created_at || "")) || 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return String(b.session_id || "").localeCompare(String(a.session_id || ""));
+    })[0]?.session_id || "";
+}
+
+function loadWorkflowStudioSessionsFromStorageKey(storageKey) {
+  const key = String(storageKey || "").trim();
+  if (!key) return {};
+  const raw = localStorage.getItem(key);
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
@@ -466,13 +486,45 @@ function loadWorkflowStudioSessionsById() {
   }
 }
 
-function loadCurrentWorkflowStudioSessionId() {
-  return String(localStorage.getItem(WORKFLOW_STUDIO_CURRENT_KEY) || "").trim();
+function loadWorkflowStudioSessionsById(user = null) {
+  const owner = workflowStudioOwnerFromUser(user);
+  if (!owner.owner_username || !owner.owner_run_prefix) return {};
+  const { sessionsKey } = workflowStudioStorageKeysForUser(user);
+  const scopedSessions = filterWorkflowStudioSessionsForUser(
+    loadWorkflowStudioSessionsFromStorageKey(sessionsKey),
+    user
+  );
+  if (sessionsKey === WORKFLOW_STUDIO_STORAGE_KEY) return scopedSessions;
+  const legacySessions = filterWorkflowStudioSessionsForUser(
+    loadWorkflowStudioSessionsFromStorageKey(WORKFLOW_STUDIO_STORAGE_KEY),
+    user
+  );
+  return {
+    ...legacySessions,
+    ...scopedSessions,
+  };
 }
+
+function loadCurrentWorkflowStudioSessionId(user = null, sessionsById = {}) {
+  const owner = workflowStudioOwnerFromUser(user);
+  if (!owner.owner_username || !owner.owner_run_prefix) return "";
+  const { currentKey } = workflowStudioStorageKeysForUser(user);
+  const sessions = sessionsById && typeof sessionsById === "object" && !Array.isArray(sessionsById) ? sessionsById : {};
+  const scopedCurrent = String(localStorage.getItem(currentKey) || "").trim();
+  if (scopedCurrent && sessions[scopedCurrent]) return scopedCurrent;
+  if (currentKey !== WORKFLOW_STUDIO_CURRENT_KEY) {
+    const legacyCurrent = String(localStorage.getItem(WORKFLOW_STUDIO_CURRENT_KEY) || "").trim();
+    if (legacyCurrent && sessions[legacyCurrent]) return legacyCurrent;
+  }
+  return workflowStudioLatestSessionId(sessions);
+}
+
+const initialUser = loadUser();
+const initialWorkflowStudioSessionsById = loadWorkflowStudioSessionsById(initialUser);
 
 const state = {
   apiBase: resolveApiBase(),
-  user: loadUser(),
+  user: initialUser,
   token: localStorage.getItem("kbf.token") || "",
   idToken: localStorage.getItem(ID_TOKEN_KEY) || "",
   oidcConfig: null,
@@ -564,8 +616,8 @@ const state = {
   autoAnalyzePendingByRunId: {},
   workflowDesigner: createWorkflowDesignerState(),
   workflowPlansByRunId: loadWorkflowPlansByRunId(),
-  workflowStudioSessionsById: loadWorkflowStudioSessionsById(),
-  currentWorkflowStudioSessionId: loadCurrentWorkflowStudioSessionId(),
+  workflowStudioSessionsById: initialWorkflowStudioSessionsById,
+  currentWorkflowStudioSessionId: loadCurrentWorkflowStudioSessionId(initialUser, initialWorkflowStudioSessionsById),
   workflowStudioFieldErrorsBySession: {},
   workflowStudioChecksBySession: {},
   workflowStudioCheckTimersBySession: {},
@@ -583,10 +635,32 @@ function persistWorkflowPlans() {
   }
 }
 
-function persistWorkflowStudioSessions() {
+function persistWorkflowStudioSessions(user = state.user) {
   try {
-    localStorage.setItem(WORKFLOW_STUDIO_STORAGE_KEY, JSON.stringify(state.workflowStudioSessionsById || {}));
-    localStorage.setItem(WORKFLOW_STUDIO_CURRENT_KEY, String(state.currentWorkflowStudioSessionId || ""));
+    const owner = workflowStudioOwnerFromUser(user);
+    if (!owner.owner_username || !owner.owner_run_prefix) return;
+    const { sessionsKey, currentKey } = workflowStudioStorageKeysForUser(user);
+    const scopedSessions = {};
+    Object.entries(state.workflowStudioSessionsById || {}).forEach(([sessionId, payload]) => {
+      const normalized = normalizeWorkflowStudioSessionPayload(
+        {
+          ...(payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {}),
+          ...owner,
+        },
+        sessionId
+      );
+      if (!normalized || !filterWorkflowStudioSessionsForUser({ [normalized.session_id]: normalized }, user)[normalized.session_id]) {
+        return;
+      }
+      scopedSessions[normalized.session_id] = normalized;
+    });
+    localStorage.setItem(sessionsKey, JSON.stringify(scopedSessions));
+    const currentId = String(state.currentWorkflowStudioSessionId || "").trim();
+    if (currentId && scopedSessions[currentId]) {
+      localStorage.setItem(currentKey, currentId);
+    } else {
+      localStorage.removeItem(currentKey);
+    }
   } catch (_err) {
     // Ignore localStorage quota/transient errors.
   }
@@ -647,7 +721,6 @@ const el = {
   setupErrorRaw: document.getElementById("setupErrorRaw"),
   studioSessionList: document.getElementById("studioSessionList"),
   studioRunBtn: document.getElementById("studioRunBtn"),
-  studioNewSessionBtn: document.getElementById("studioNewSessionBtn"),
   studioStopBtn: document.getElementById("studioStopBtn"),
   studioResumeBtn: document.getElementById("studioResumeBtn"),
   studioAdoptRunBtn: document.getElementById("studioAdoptRunBtn"),
@@ -920,7 +993,7 @@ const I18N = {
     "setup.runReuse.selected":
       "Selected run: {id}. Load Request copies its settings into a new run. Use Resume Run in Monitor or Studio to continue this run.",
     "setup.runReuse.workflow":
-      "Workflow Studio manages reruns and forks per stage. Load a previous request to seed a new session.",
+      "Workflow Studio manages reruns and forks per stage. Adopt a workflow run from Monitor to continue stage-by-stage work.",
     "setup.hint": "Complete required inputs to enable execution.",
     "setup.runStatus.empty": "Run status: -",
     "setup.runStatus.line": "Run status: {id} · {stage} / {state} · {updated}",
@@ -1316,11 +1389,10 @@ const I18N = {
     "studio.session": "Session",
     "studio.selectSession": "Select session",
     "studio.adoptRun": "Adopt Current Run",
-    "studio.action.new": "New Workflow",
     "studio.refresh": "Refresh Studio",
     "studio.openMonitor": "Open Monitor",
     "studio.empty.title": "No studio session",
-    "studio.empty.desc": "Create a new workflow here, or adopt a workflow run from Monitor.",
+    "studio.empty.desc": "Adopt a workflow run from Monitor to inspect results and rerun stages here.",
     "studio.sessions.none": "No saved Studio sessions.",
     "studio.summary.session": "Session",
     "studio.summary.headRun": "Head Run",
@@ -1392,7 +1464,6 @@ const I18N = {
     "studio.action.setup": "Back to Setup",
     "studio.action.next": "Next: {stage}",
     "studio.createdSession": "Workflow Studio session ready: {id}",
-    "studio.createdFreshSession": "New Workflow Studio session ready: {id}",
     "studio.createFailed": "Failed to create a Workflow Studio session.",
     "studio.adoptedRun": "Workflow Studio session loaded: {id}",
     "studio.adoptFailed": "Failed to build a Workflow Studio session from the current run.",
@@ -1419,8 +1490,8 @@ const I18N = {
     "question.maskConsensusApply.help": "Apply expert mask consensus to ProteinMPNN (optional).",
     "question.bioemuUse.label": "Enable BioEmu",
     "question.bioemuUse.help": "Run the BioEmu backbone sampling stage.",
-    "question.bioemuNumSamples.label": "BioEmu Samples",
-    "question.bioemuNumSamples.help": "Number of BioEmu samples to generate.",
+    "question.bioemuNumSamples.label": "BioEmu Generate Count",
+    "question.bioemuNumSamples.help": "Number of BioEmu samples to generate before filtering and return-count capping.",
     "question.bioemuMaxReturn.label": "BioEmu Return Count",
     "question.bioemuMaxReturn.help": "Maximum number of BioEmu structures to keep.",
     "question.numSeqPerTier.label": "ProteinMPNN per Backbone",
@@ -1443,11 +1514,44 @@ const I18N = {
     "question.fixedPositionsExtra.label": "Fixed Positions (Extra)",
     "question.fixedPositionsExtra.help": "Optional hard constraints before design. Use JSON ({\"A\":[6,10],\"*\":[120]}) or shorthand (A:6,10;*:120).",
     "question.ligandMaskOriginal.label": "Preserve Original Ligand Mask",
-    "question.ligandMaskOriginal.help": "Project ligand-contact residues from original target_pdb/rfd3_input_pdb onto current backbones.",
+    "question.ligandMaskOriginal.help":
+      "Preserve ligand-contact residues as fixed positions on the current design backbones. The reference structure uses target_pdb first, then rfd3_input_pdb if needed.",
     "question.stripNonpositive.label": "Strip non-positive residues",
     "question.stripNonpositive.help": "Remove residues with resseq <= 0 before RFD3 and downstream steps.",
     "question.rfd3InputPdb.label": "RFD3 Input PDB",
     "question.rfd3InputPdb.help": "Optional override. When target_input is a PDB, RFD3 uses it by default and you only need this field for a different seed backbone.",
+    "question.rfd3Mode.label": "RFD3 mode",
+    "question.rfd3Mode.help": "Choose how RFD3 should use the input backbone.",
+    "question.rfd3Mode.mode.localDiversify":
+      "Start from the input backbone and use partial diffusion noise for near-fold diversification.",
+    "question.rfd3Mode.mode.legacyContig":
+      "Use an indexed contig such as A1-221 when you need explicit residue mapping from the input structure.",
+    "question.rfd3Mode.mode.binder":
+      "Use contigs with optional hotspots and orientation controls for binder or interface-focused generation.",
+    "question.rfd3Mode.mode.enzyme":
+      "Use unindexed motif placement with optional length and fixed-atom constraints for active-site-centered design.",
+    "question.rfd3Mode.mode.advanced":
+      "Provide raw Foundry RFD3 JSON or YAML inputs directly when you need full control over the spec.",
+    "question.rfd3Hotspots.label": "RFD3 hotspots",
+    "question.rfd3Hotspots.help": "Optional Binder hotspots (comma or newline separated).",
+    "question.rfd3Orientation.label": "RFD3 orientation",
+    "question.rfd3Orientation.help": "Optional Binder orientation strategy.",
+    "question.rfd3NonLoopy.label": "RFD3 non-loopy",
+    "question.rfd3NonLoopy.help": "Bias Binder generation away from loopy geometries.",
+    "question.rfd3Unindex.label": "RFD3 unindex",
+    "question.rfd3Unindex.help": "Indexed residues to keep while allowing repositioning.",
+    "question.rfd3Length.label": "RFD3 length",
+    "question.rfd3Length.help": "Optional free-length range for the designed region.",
+    "question.rfd3FixedAtoms.label": "RFD3 fixed atoms",
+    "question.rfd3FixedAtoms.help": "Optional atom selections to keep fixed.",
+    "question.rfd3AdvancedInputs.label": "RFD3 advanced inputs",
+    "question.rfd3AdvancedInputs.help": "Advanced raw RFD3 inputs JSON/YAML.",
+    "question.rfd3PartialT.label": "RFD3 partial_t",
+    "question.rfd3PartialT.help": "Partial diffusion noise scale in angstroms.",
+    "question.bioemuFilterSamples.label": "BioEmu sample filter",
+    "question.bioemuFilterSamples.help": "Keep BioEmu sample filtering enabled by default.",
+    "question.bioemuSteeringConfig.label": "BioEmu steering config",
+    "question.bioemuSteeringConfig.help": "Optional BioEmu guiding potential config text.",
     "question.rfd3Contig.label": "RFD3 Contig",
     "question.rfd3Contig.help": "Provide rfd3_contig (format: A1-221, no colon). When target_input is a PDB, contig suggestions come from that structure by default.",
     "question.soluprotCutoff.label": "SoluProt Cutoff",
@@ -1496,6 +1600,11 @@ const I18N = {
     "choice.novelty.off": "Disable WT Diff",
     "choice.af2Provider.colabfold": "ColabFold (default)",
     "choice.af2Provider.af2": "AlphaFold2",
+    "choice.rfd3Mode.localDiversify": "Local Diversify",
+    "choice.rfd3Mode.legacyContig": "Legacy Contig",
+    "choice.rfd3Mode.binder": "Binder",
+    "choice.rfd3Mode.enzyme": "Enzyme",
+    "choice.rfd3Mode.advanced": "Advanced",
     "advanced.bioemuCounts.title": "BioEmu Count Options",
     "advanced.bioemuCounts.help": "These values are optional and hidden by default.",
     "advanced.bioemuCounts.show": "Show BioEmu Count Options",
@@ -2252,11 +2361,10 @@ const I18N = {
     "studio.session": "세션",
     "studio.selectSession": "세션 선택",
     "studio.adoptRun": "현재 run 가져오기",
-    "studio.action.new": "새 워크플로우",
     "studio.refresh": "스튜디오 새로고침",
     "studio.openMonitor": "모니터 열기",
     "studio.empty.title": "스튜디오 세션이 없습니다",
-    "studio.empty.desc": "여기서 새 워크플로우를 만들거나 Monitor의 workflow run을 가져오세요.",
+    "studio.empty.desc": "Monitor의 workflow run을 가져와 여기서 결과를 보고 단계를 다시 실행하세요.",
     "studio.sessions.none": "저장된 Studio 세션이 없습니다.",
     "studio.summary.session": "세션",
     "studio.summary.headRun": "기준 Run",
@@ -2328,7 +2436,6 @@ const I18N = {
     "studio.action.setup": "Setup으로",
     "studio.action.next": "다음: {stage}",
     "studio.createdSession": "Workflow Studio 세션 준비 완료: {id}",
-    "studio.createdFreshSession": "새 Workflow Studio 세션 준비 완료: {id}",
     "studio.createFailed": "Workflow Studio 세션을 만들지 못했습니다.",
     "studio.adoptedRun": "Workflow Studio 세션을 불러왔습니다: {id}",
     "studio.adoptFailed": "현재 run에서 Workflow Studio 세션을 만들지 못했습니다.",
@@ -2355,9 +2462,9 @@ const I18N = {
     "question.maskConsensusApply.help": "전문가 합의 마스킹을 ProteinMPNN에 적용합니다.",
     "question.bioemuUse.label": "BioEmu 사용",
     "question.bioemuUse.help": "BioEmu backbone 샘플링 단계를 실행합니다.",
-    "question.bioemuNumSamples.label": "BioEmu 반환 개수",
+    "question.bioemuNumSamples.label": "BioEmu 생성 개수",
     "question.bioemuNumSamples.help":
-      "보존할 BioEmu 백본 개수입니다. 내부적으로 샘플 수와 반환 개수를 같은 값으로 맞춥니다.",
+      "필터링과 반환 개수 제한 전에 먼저 생성할 BioEmu 샘플 수입니다.",
     "question.bioemuMaxReturn.label": "BioEmu 반환 개수",
     "question.bioemuMaxReturn.help": "보존할 BioEmu 구조 최대 개수입니다.",
     "question.numSeqPerTier.label": "백본당 ProteinMPNN 생성 개수",
@@ -2380,11 +2487,44 @@ const I18N = {
     "question.fixedPositionsExtra.label": "고정 위치 추가",
     "question.fixedPositionsExtra.help": "디자인 전 반드시 보존할 위치입니다(선택). JSON({\"A\":[6,10],\"*\":[120]}) 또는 단축표기(A:6,10;*:120) 사용.",
     "question.ligandMaskOriginal.label": "원본 리간드 마스크 보존",
-    "question.ligandMaskOriginal.help": "원본 target_pdb/rfd3_input_pdb의 리간드 접촉 잔기를 현재 백본에 투영해 보존합니다.",
+    "question.ligandMaskOriginal.help":
+      "원본 구조의 리간드 접촉 잔기를 현재 디자인 백본에 fixed position으로 보존합니다. 기준 구조는 target_pdb를 우선 사용하고, 없으면 rfd3_input_pdb를 사용합니다.",
     "question.stripNonpositive.label": "음수 잔기 제거",
     "question.stripNonpositive.help": "RFD3 및 이후 단계 전에 resseq <= 0 잔기를 제거합니다.",
     "question.rfd3InputPdb.label": "RFD3 입력 PDB",
     "question.rfd3InputPdb.help": "선택적 override입니다. target_input이 PDB이면 RFD3는 기본적으로 그 구조를 사용하고, 다른 seed backbone이 필요할 때만 이 필드를 씁니다.",
+    "question.rfd3Mode.label": "RFD3 모드",
+    "question.rfd3Mode.help": "RFD3가 입력 backbone을 어떻게 사용할지 선택합니다.",
+    "question.rfd3Mode.mode.localDiversify":
+      "입력 backbone에서 시작해 partial diffusion noise로 같은 fold 주변 다양화를 시도합니다.",
+    "question.rfd3Mode.mode.legacyContig":
+      "입력 구조 잔기 매핑을 명시적으로 유지해야 할 때 A1-221 같은 indexed contig를 사용합니다.",
+    "question.rfd3Mode.mode.binder":
+      "binder 또는 인터페이스 중심 생성이 필요할 때 contig와 hotspot, orientation 옵션을 함께 사용합니다.",
+    "question.rfd3Mode.mode.enzyme":
+      "활성부위 중심 설계가 필요할 때 unindex와 length, fixed atom 제약을 사용합니다.",
+    "question.rfd3Mode.mode.advanced":
+      "Foundry RFD3 JSON/YAML 입력을 직접 넣어 spec를 완전히 제어합니다.",
+    "question.rfd3Hotspots.label": "RFD3 hotspots",
+    "question.rfd3Hotspots.help": "선택적 Binder hotspots입니다. 쉼표나 줄바꿈으로 구분합니다.",
+    "question.rfd3Orientation.label": "RFD3 orientation",
+    "question.rfd3Orientation.help": "선택적 Binder orientation strategy입니다.",
+    "question.rfd3NonLoopy.label": "RFD3 non-loopy",
+    "question.rfd3NonLoopy.help": "loopy geometries를 피하도록 Binder generation을 bias합니다.",
+    "question.rfd3Unindex.label": "RFD3 unindex",
+    "question.rfd3Unindex.help": "재배치를 허용하면서 유지할 indexed residues입니다.",
+    "question.rfd3Length.label": "RFD3 length",
+    "question.rfd3Length.help": "디자인할 영역의 선택적 free-length range입니다.",
+    "question.rfd3FixedAtoms.label": "RFD3 fixed atoms",
+    "question.rfd3FixedAtoms.help": "고정할 선택적 atom selections입니다.",
+    "question.rfd3AdvancedInputs.label": "RFD3 advanced inputs",
+    "question.rfd3AdvancedInputs.help": "고급 raw RFD3 inputs JSON/YAML입니다.",
+    "question.rfd3PartialT.label": "RFD3 partial_t",
+    "question.rfd3PartialT.help": "Partial diffusion noise scale (angstrom)입니다.",
+    "question.bioemuFilterSamples.label": "BioEmu sample filter",
+    "question.bioemuFilterSamples.help": "기본 BioEmu sample filtering을 유지합니다.",
+    "question.bioemuSteeringConfig.label": "BioEmu steering config",
+    "question.bioemuSteeringConfig.help": "선택적 BioEmu guiding potential config text입니다.",
     "question.rfd3Contig.label": "RFD3 컨티그",
     "question.rfd3Contig.help": "rfd3_contig 형식 (예: A1-221, 콜론 없이)입니다. target_input이 PDB이면 기본적으로 그 구조에서 컨티그 후보를 제안합니다.",
     "question.soluprotCutoff.label": "SoluProt 컷오프",
@@ -2433,6 +2573,11 @@ const I18N = {
     "choice.novelty.off": "WT Diff 사용 안 함",
     "choice.af2Provider.colabfold": "ColabFold (기본)",
     "choice.af2Provider.af2": "AlphaFold2",
+    "choice.rfd3Mode.localDiversify": "Local Diversify",
+    "choice.rfd3Mode.legacyContig": "Legacy Contig",
+    "choice.rfd3Mode.binder": "Binder",
+    "choice.rfd3Mode.enzyme": "Enzyme",
+    "choice.rfd3Mode.advanced": "Advanced",
     "advanced.bioemuCounts.title": "BioEmu 개수 옵션",
     "advanced.bioemuCounts.help": "선택 입력이며 기본으로 숨김입니다.",
     "advanced.bioemuCounts.show": "BioEmu 개수 옵션 보기",
@@ -3033,8 +3178,9 @@ function workflowArtifactCountsForNodes(nodes) {
     counts[stage] = 0;
   });
   const artifacts = Array.isArray(state.artifacts) ? state.artifacts : [];
+  const backboneSourceIndex = backboneSourceIndexFromManifest(currentBackboneManifest());
   artifacts.forEach((item) => {
-    const stage = artifactMetaForPath(item?.path || "").stage;
+    const stage = artifactMetaFromPathForManifest(item?.path || "", backboneSourceIndex).stage;
     if (Object.prototype.hasOwnProperty.call(counts, stage)) {
       counts[stage] += 1;
     }
@@ -3046,8 +3192,9 @@ function workflowArtifactGroupsForReview() {
   const artifacts = Array.isArray(state.artifacts) ? state.artifacts : [];
   const files = artifacts.filter((item) => item && item.type === "file" && String(item.path || "").trim());
   const groups = new Map();
+  const backboneSourceIndex = backboneSourceIndexFromManifest(currentBackboneManifest());
   files.forEach((item) => {
-    const stage = artifactMetaForPath(item.path).stage || "misc";
+    const stage = artifactMetaFromPathForManifest(item.path, backboneSourceIndex).stage || "misc";
     if (!groups.has(stage)) groups.set(stage, []);
     groups.get(stage).push(item);
   });
@@ -3233,7 +3380,13 @@ function setCurrentWorkflowStudioSessionId(sessionId) {
 }
 
 function upsertWorkflowStudioSession(session) {
-  const normalized = normalizeWorkflowStudioSessionPayload(session, session?.session_id || "");
+  const normalized = normalizeWorkflowStudioSessionPayload(
+    {
+      ...(session && typeof session === "object" && !Array.isArray(session) ? session : {}),
+      ...workflowStudioOwnerFromUser(state.user),
+    },
+    session?.session_id || ""
+  );
   if (!normalized) return null;
   state.workflowStudioSessionsById[normalized.session_id] = normalized;
   setCurrentWorkflowStudioSessionId(normalized.session_id);
@@ -3308,6 +3461,7 @@ function createWorkflowStudioSession({
       stage_run_ids: {},
       history: [],
       residue_picker_state: null,
+      ...workflowStudioOwnerFromUser(state.user),
     },
     nextSessionId
   );
@@ -3944,7 +4098,13 @@ function workflowStudioExecutionPreview(session, targetStage = session?.active_s
     nodes: session?.nodes || [],
   });
   const hasExplicitContig = workflowStudioHasExplicitContigDraft(session);
-  if (route.baseStage === "rfd3" && !hasExplicitContig && !String(nextPayload.rfd3_contig || "").trim()) {
+  const previewRfd3Mode = effectiveRfd3Mode(nextPayload) || "local_diversify";
+  if (
+    route.baseStage === "rfd3" &&
+    rfd3ModeUsesContig(previewRfd3Mode) &&
+    !hasExplicitContig &&
+    !String(nextPayload.rfd3_contig || "").trim()
+  ) {
     const contigOptions = workflowStudioContigOptionsForAnswers(nextPayload, "");
     if (contigOptions.length) {
       nextPayload.rfd3_contig = contigOptions[0].value;
@@ -4809,38 +4969,6 @@ function dispatchDetachedResiduePickerReset(request = null) {
   return false;
 }
 
-async function createFreshWorkflowStudioSession() {
-  const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
-  const currentSession = workflowStudioSessionForId();
-  const laneTiers =
-    Array.isArray(state.answers?.conservation_tiers) && state.answers.conservation_tiers.length
-      ? state.answers.conservation_tiers
-      : [0.3, 0.5, 0.7];
-  const fallbackNodes = expandWorkflowStudioNodes(normalizeWorkflowNodesForState(state.workflowDesigner?.nodes), laneTiers);
-  const seed = buildWorkflowStudioFreshSessionSeed({
-    session: currentSession,
-    prompt: el.promptInput?.value.trim() || "",
-    answers: state.answers,
-    nodes: fallbackNodes,
-  });
-  const session = createWorkflowStudioSession({
-    sessionId: createWorkflowSessionId(prefix),
-    prompt: seed.prompt,
-    nodes: seed.nodes.length ? seed.nodes : fallbackNodes,
-    answers: seed.answers,
-    headRunId: "",
-    headRequest: {},
-    sourceRunId: "",
-  });
-  if (!session) return null;
-  const normalized = upsertWorkflowStudioSession(session);
-  if (!normalized) return null;
-  setMessage(t("studio.createdFreshSession", { id: workflowStudioSessionLabel(normalized) }), "ai");
-  setActiveTab("studio");
-  renderWorkflowStudio();
-  return normalized;
-}
-
 function clearSetupFixedPositionsExtraState() {
   state.answers = withFixedPositionsExtra(state.answers, {});
   state.answerMeta.fixed_positions_extra = {
@@ -5174,9 +5302,6 @@ function renderWorkflowStudio() {
   if (el.studioRunBtn) {
     el.studioRunBtn.disabled = !session || state.runSubmitting || String(state.currentRunState || "").toLowerCase() === "running";
   }
-  if (el.studioNewSessionBtn) {
-    el.studioNewSessionBtn.disabled = false;
-  }
   if (el.studioStopBtn) {
     el.studioStopBtn.disabled = !session || !workflowStudioRunActive(session);
   }
@@ -5280,25 +5405,48 @@ function renderWorkflowStudio() {
     nodes: session?.nodes || [],
     overrideVisible: workflowStudioRfd3InputOverrideVisible(session),
   });
-  const visibleFields = fields.filter((fieldId) => fieldId !== "rfd3_input_pdb" || showStudioRfd3InputField);
+  const studioRfd3Mode = effectiveRfd3Mode(mergedAnswers) || "local_diversify";
+  const visibleFields = fields.filter((fieldId) => {
+    if (fieldId === "rfd3_input_pdb") return showStudioRfd3InputField;
+    if (fieldId === "rfd3_contig") return rfd3ModeUsesContig(studioRfd3Mode);
+    if (fieldId === "rfd3_hotspots" || fieldId === "rfd3_infer_ori_strategy" || fieldId === "rfd3_is_non_loopy") {
+      return rfd3ModeUsesBinderFields(studioRfd3Mode);
+    }
+    if (fieldId === "rfd3_unindex" || fieldId === "rfd3_length" || fieldId === "rfd3_select_fixed_atoms") {
+      return rfd3ModeUsesEnzymeFields(studioRfd3Mode);
+    }
+    if (fieldId === "rfd3_partial_t") return rfd3ModeUsesPartialT(studioRfd3Mode);
+    if (fieldId === "rfd3_inputs_text") return rfd3ModeUsesAdvancedInputs(studioRfd3Mode);
+    return true;
+  });
   const designChainValue = Array.isArray(mergedAnswers.design_chains) ? mergedAnswers.design_chains : [];
   const designChainOptions = workflowStudioDesignChainOptionsForAnswers(mergedAnswers, designChainValue);
   const hasExplicitContig = workflowStudioHasExplicitContigDraft(session);
   const computedContigValue = String(mergedAnswers.rfd3_contig || "").trim();
   const previewContigOptions = workflowStudioContigOptionsForAnswers(mergedAnswers, computedContigValue);
   const contigValue =
-    computedContigValue || (!hasExplicitContig && activeStage === "rfd3" && previewContigOptions.length ? previewContigOptions[0].value : "");
+    computedContigValue ||
+    (!hasExplicitContig && activeStage === "rfd3" && rfd3ModeUsesContig(studioRfd3Mode) && previewContigOptions.length
+      ? previewContigOptions[0].value
+      : "");
   const contigOptions = workflowStudioContigOptionsForAnswers(mergedAnswers, contigValue);
   const fieldCards = visibleFields.length
     ? visibleFields
         .map((fieldId) => {
           const question = normalizeQuestion({ id: fieldId }) || { id: fieldId };
-          const value = mergedAnswers[fieldId] !== undefined ? mergedAnswers[fieldId] : question.default;
-          const label = question.labelKey ? t(question.labelKey) : fieldId;
+          const value =
+            fieldId === "rfd3_mode"
+              ? mergedAnswers[fieldId] !== undefined
+                ? mergedAnswers[fieldId]
+                : studioRfd3Mode || question.default
+              : mergedAnswers[fieldId] !== undefined
+                ? mergedAnswers[fieldId]
+                : question.default;
+          const label = question.labelKey ? t(question.labelKey) : question.label || fieldId;
           const help = question.questionKey ? t(question.questionKey) : question.question || "";
           const error = workflowStudioFieldError(session.session_id, fieldId);
           const isBool = ANSWER_BOOL_KEYS.has(fieldId);
-          const isChoice = fieldId === "af2_provider";
+          const isChoice = fieldId === "af2_provider" || fieldId === "rfd3_mode";
           const isDesignChains = fieldId === "design_chains";
           const isContigField = fieldId === "rfd3_contig";
           const isAttachable = fieldId === "target_input" || fieldId === "rfd3_input_pdb";
@@ -5371,12 +5519,24 @@ function renderWorkflowStudio() {
             : isChoice
               ? `
                 <select data-studio-field="${escapeAttr(fieldId)}">
-                  <option value="colabfold"${String(value || "colabfold") === "colabfold" ? " selected" : ""}>${escapeHtml(
-                    af2ProviderName("colabfold", state.lang || "en")
-                  )}</option>
-                  <option value="af2"${String(value || "") === "af2" ? " selected" : ""}>${escapeHtml(
-                    af2ProviderName("af2", state.lang || "en")
-                  )}</option>
+                  ${
+                    fieldId === "af2_provider"
+                      ? `
+                        <option value="colabfold"${String(value || "colabfold") === "colabfold" ? " selected" : ""}>${escapeHtml(
+                          af2ProviderName("colabfold", state.lang || "en")
+                        )}</option>
+                        <option value="af2"${String(value || "") === "af2" ? " selected" : ""}>${escapeHtml(
+                          af2ProviderName("af2", state.lang || "en")
+                        )}</option>
+                      `
+                      : RFD3_MODE_OPTIONS.map(
+                          (item) => `
+                            <option value="${escapeAttr(item.value)}"${normalizeRfd3Mode(value || "local_diversify") === item.value ? " selected" : ""}>
+                              ${escapeHtml(labelFor(item))}
+                            </option>
+                          `
+                        ).join("")
+                  }
                 </select>
               `
             : isLongText
@@ -5390,6 +5550,8 @@ function renderWorkflowStudio() {
             detailNote = designChainOptions.length ? t("choice.chainDefaultNote") : t("choice.chainNote");
           } else if (isContigField) {
             detailNote = contigOptions.length ? t("choice.contigPositiveOnly") : t("choice.contigNote");
+          } else if (fieldId === "rfd3_mode") {
+            detailNote = t(rfd3ModeDescriptionKey(value || "local_diversify"));
           }
           const cardClass = isLongText ? "studio-field full" : "studio-field";
           return `
@@ -5585,7 +5747,6 @@ function renderWorkflowStudio() {
                   )}</button>`
                 : ""
             }
-            <button type="button" class="ghost" data-studio-action="new">${escapeHtml(t("studio.action.new"))}</button>
             <button type="button" class="ghost" data-studio-action="monitor">${escapeHtml(t("studio.action.monitor"))}</button>
           </div>
         </section>
@@ -5810,10 +5971,6 @@ function renderWorkflowStudio() {
       }
       if (action === "monitor") {
         await openWorkflowStudioRunInMonitor(workflowStudioSessionForId(session.session_id) || session);
-        return;
-      }
-      if (action === "new") {
-        await createFreshWorkflowStudioSession();
         return;
       }
       if (action === "setup") {
@@ -6046,7 +6203,6 @@ function questionSetupStepId(questionId) {
     questionId === "target_pdb" ||
     questionId === "target_fasta" ||
     questionId === "rfd3_input_pdb" ||
-    questionId === "rfd3_contig" ||
     questionId === "diffdock_ligand"
   ) {
     return "input";
@@ -6150,6 +6306,12 @@ const QUESTION_PRESETS = {
   bioemu_num_samples: {
     labelKey: "question.bioemuNumSamples.label",
     questionKey: "question.bioemuNumSamples.help",
+    default: 20,
+  },
+  bioemu_max_return_structures: {
+    labelKey: "question.bioemuMaxReturn.label",
+    questionKey: "question.bioemuMaxReturn.help",
+    default: 10,
   },
   num_seq_per_tier: {
     labelKey: "question.numSeqPerTier.label",
@@ -6184,14 +6346,70 @@ const QUESTION_PRESETS = {
   rfd3_max_return_designs: {
     labelKey: "question.rfd3MaxReturn.label",
     questionKey: "question.rfd3MaxReturn.help",
+    default: 10,
   },
   rfd3_input_pdb: {
     labelKey: "question.rfd3InputPdb.label",
     questionKey: "question.rfd3InputPdb.help",
   },
+  rfd3_mode: {
+    labelKey: "question.rfd3Mode.label",
+    questionKey: "question.rfd3Mode.help",
+    default: "local_diversify",
+  },
   rfd3_contig: {
     labelKey: "question.rfd3Contig.label",
     questionKey: "question.rfd3Contig.help",
+  },
+  rfd3_hotspots: {
+    labelKey: "question.rfd3Hotspots.label",
+    questionKey: "question.rfd3Hotspots.help",
+    placeholder: "A59, A62, A68",
+  },
+  rfd3_infer_ori_strategy: {
+    labelKey: "question.rfd3Orientation.label",
+    questionKey: "question.rfd3Orientation.help",
+    placeholder: "global",
+  },
+  rfd3_is_non_loopy: {
+    labelKey: "question.rfd3NonLoopy.label",
+    questionKey: "question.rfd3NonLoopy.help",
+  },
+  rfd3_unindex: {
+    labelKey: "question.rfd3Unindex.label",
+    questionKey: "question.rfd3Unindex.help",
+    placeholder: "A45-60",
+  },
+  rfd3_length: {
+    labelKey: "question.rfd3Length.label",
+    questionKey: "question.rfd3Length.help",
+    placeholder: "20-40",
+  },
+  rfd3_select_fixed_atoms: {
+    labelKey: "question.rfd3FixedAtoms.label",
+    questionKey: "question.rfd3FixedAtoms.help",
+    placeholder: "A57:CA,A57:CB",
+    multiline: true,
+  },
+  rfd3_partial_t: {
+    labelKey: "question.rfd3PartialT.label",
+    questionKey: "question.rfd3PartialT.help",
+    default: 10.0,
+  },
+  rfd3_inputs_text: {
+    labelKey: "question.rfd3AdvancedInputs.label",
+    questionKey: "question.rfd3AdvancedInputs.help",
+    multiline: true,
+  },
+  bioemu_filter_samples: {
+    labelKey: "question.bioemuFilterSamples.label",
+    questionKey: "question.bioemuFilterSamples.help",
+    default: true,
+  },
+  bioemu_steering_config_text: {
+    labelKey: "question.bioemuSteeringConfig.label",
+    questionKey: "question.bioemuSteeringConfig.help",
+    multiline: true,
   },
   soluprot_cutoff: {
     labelKey: "question.soluprotCutoff.label",
@@ -6240,7 +6458,9 @@ const ANSWER_BOOL_KEYS = new Set([
   "pdb_renumber_resseq_from_1",
   "mmseqs_use_gpu",
   "rfd3_use_ensemble",
+  "rfd3_is_non_loopy",
   "bioemu_use",
+  "bioemu_filter_samples",
   "novelty_enabled",
   "confirm_run",
 ]);
@@ -6254,7 +6474,6 @@ const ANSWER_INT_KEYS = new Set([
   "mmseqs_threads",
   "rfd3_design_index",
   "rfd3_max_return_designs",
-  "rfd3_partial_t",
   "bioemu_num_samples",
   "bioemu_max_return_structures",
   "af2_max_candidates_per_tier",
@@ -6268,6 +6487,7 @@ const ANSWER_FLOAT_KEYS = new Set([
   "af2_plddt_cutoff",
   "af2_rmsd_cutoff",
   "ligand_mask_distance",
+  "rfd3_partial_t",
   "msa_min_coverage",
   "msa_min_identity",
   "query_pdb_min_identity",
@@ -6292,7 +6512,14 @@ const ANSWER_JSON_KEYS = new Set([
   "rfd3_input_files",
 ]);
 
-const ANSWER_TEXTAREA_KEYS = new Set(["rfd3_cli_args", "diffdock_extra_args", "af2_extra_flags"]);
+const ANSWER_TEXTAREA_KEYS = new Set([
+  "rfd3_cli_args",
+  "rfd3_inputs_text",
+  "rfd3_select_fixed_atoms",
+  "bioemu_steering_config_text",
+  "diffdock_extra_args",
+  "af2_extra_flags",
+]);
 
 const FEEDBACK_REASONS_BY_RATING = {
   good: [
@@ -6495,6 +6722,24 @@ function saveIdToken(token) {
   localStorage.removeItem(ID_TOKEN_KEY);
 }
 
+function reloadWorkflowStudioSessionsForUser(user = state.user) {
+  state.workflowStudioSessionsById = loadWorkflowStudioSessionsById(user);
+  state.currentWorkflowStudioSessionId = loadCurrentWorkflowStudioSessionId(user, state.workflowStudioSessionsById);
+  state.studioArtifactPath = "";
+  state.studioOpenField = "";
+  state.workflowStudioFieldErrorsBySession = {};
+  state.workflowStudioChecksBySession = {};
+  Object.values(state.workflowStudioCheckTimersBySession || {}).forEach((timerId) => {
+    try {
+      window.clearTimeout(timerId);
+    } catch (_err) {
+      // Ignore timer cleanup failures.
+    }
+  });
+  state.workflowStudioCheckTimersBySession = {};
+  if (user) persistWorkflowStudioSessions(user);
+}
+
 function clearSession() {
   localStorage.removeItem("kbf.user");
   localStorage.removeItem("kbf.token");
@@ -6502,6 +6747,20 @@ function clearSession() {
   state.user = null;
   state.token = "";
   state.idToken = "";
+  state.workflowStudioSessionsById = {};
+  state.currentWorkflowStudioSessionId = "";
+  state.studioArtifactPath = "";
+  state.studioOpenField = "";
+  state.workflowStudioFieldErrorsBySession = {};
+  state.workflowStudioChecksBySession = {};
+  Object.values(state.workflowStudioCheckTimersBySession || {}).forEach((timerId) => {
+    try {
+      window.clearTimeout(timerId);
+    } catch (_err) {
+      // Ignore timer cleanup failures.
+    }
+  });
+  state.workflowStudioCheckTimersBySession = {};
 }
 
 function oidcEnabled() {
@@ -7781,7 +8040,23 @@ function buildManualPlan(mode) {
         labelKey: "question.bioemuNumSamples.label",
         questionKey: "question.bioemuNumSamples.help",
         required: false,
+        default: 20,
+      },
+      {
+        id: "bioemu_max_return_structures",
+        labelKey: "question.bioemuMaxReturn.label",
+        questionKey: "question.bioemuMaxReturn.help",
+        required: false,
         default: 10,
+      },
+      {
+        id: "bioemu_filter_samples",
+        required: false,
+        default: true,
+      },
+      {
+        id: "bioemu_steering_config_text",
+        required: false,
       },
       {
         id: "rfd3_max_return_designs",
@@ -7789,6 +8064,11 @@ function buildManualPlan(mode) {
         questionKey: "question.rfd3MaxReturn.help",
         required: false,
         default: 10,
+      },
+      {
+        id: "rfd3_partial_t",
+        required: false,
+        default: 10.0,
       },
       {
         id: "af2_max_candidates_per_tier",
@@ -7872,9 +8152,42 @@ function buildManualPlan(mode) {
         required: false,
       },
       {
+        id: "rfd3_mode",
+        required: false,
+        default: "local_diversify",
+      },
+      {
         id: "rfd3_contig",
         labelKey: "question.rfd3Contig.label",
         questionKey: "question.rfd3Contig.help",
+        required: false,
+      },
+      {
+        id: "rfd3_hotspots",
+        required: false,
+      },
+      {
+        id: "rfd3_infer_ori_strategy",
+        required: false,
+      },
+      {
+        id: "rfd3_is_non_loopy",
+        required: false,
+      },
+      {
+        id: "rfd3_unindex",
+        required: false,
+      },
+      {
+        id: "rfd3_length",
+        required: false,
+      },
+      {
+        id: "rfd3_select_fixed_atoms",
+        required: false,
+      },
+      {
+        id: "rfd3_inputs_text",
         required: false,
       },
       {
@@ -7904,10 +8217,48 @@ function buildManualPlan(mode) {
         required: true,
       },
       {
+        id: "rfd3_mode",
+        required: false,
+        default: "local_diversify",
+      },
+      {
         id: "rfd3_contig",
         labelKey: "question.rfd3Contig.label",
         questionKey: "question.rfd3Contig.help",
-        required: true,
+        required: false,
+      },
+      {
+        id: "rfd3_hotspots",
+        required: false,
+      },
+      {
+        id: "rfd3_infer_ori_strategy",
+        required: false,
+      },
+      {
+        id: "rfd3_is_non_loopy",
+        required: false,
+      },
+      {
+        id: "rfd3_unindex",
+        required: false,
+      },
+      {
+        id: "rfd3_length",
+        required: false,
+      },
+      {
+        id: "rfd3_select_fixed_atoms",
+        required: false,
+      },
+      {
+        id: "rfd3_partial_t",
+        required: false,
+        default: 10.0,
+      },
+      {
+        id: "rfd3_inputs_text",
+        required: false,
       },
       {
         id: "rfd3_max_return_designs",
@@ -7946,7 +8297,23 @@ function buildManualPlan(mode) {
         labelKey: "question.bioemuNumSamples.label",
         questionKey: "question.bioemuNumSamples.help",
         required: false,
+        default: 20,
+      },
+      {
+        id: "bioemu_max_return_structures",
+        labelKey: "question.bioemuMaxReturn.label",
+        questionKey: "question.bioemuMaxReturn.help",
+        required: false,
         default: 10,
+      },
+      {
+        id: "bioemu_filter_samples",
+        required: false,
+        default: true,
+      },
+      {
+        id: "bioemu_steering_config_text",
+        required: false,
       }
     );
   }
@@ -8002,7 +8369,23 @@ function buildManualPlan(mode) {
         labelKey: "question.bioemuNumSamples.label",
         questionKey: "question.bioemuNumSamples.help",
         required: false,
+        default: 20,
+      },
+      {
+        id: "bioemu_max_return_structures",
+        labelKey: "question.bioemuMaxReturn.label",
+        questionKey: "question.bioemuMaxReturn.help",
+        required: false,
         default: 10,
+      },
+      {
+        id: "bioemu_filter_samples",
+        required: false,
+        default: true,
+      },
+      {
+        id: "bioemu_steering_config_text",
+        required: false,
       }
     );
   }
@@ -8040,7 +8423,23 @@ function buildManualPlan(mode) {
         labelKey: "question.bioemuNumSamples.label",
         questionKey: "question.bioemuNumSamples.help",
         required: false,
+        default: 20,
+      },
+      {
+        id: "bioemu_max_return_structures",
+        labelKey: "question.bioemuMaxReturn.label",
+        questionKey: "question.bioemuMaxReturn.help",
+        required: false,
         default: 10,
+      },
+      {
+        id: "bioemu_filter_samples",
+        required: false,
+        default: true,
+      },
+      {
+        id: "bioemu_steering_config_text",
+        required: false,
       }
     );
   }
@@ -9071,6 +9470,7 @@ async function authLogin() {
     state.user = payload.user;
     saveToken(payload.token);
     saveUser(payload.user);
+    reloadWorkflowStudioSessionsForUser(state.user);
     showChat();
     updateAdminUI();
     refreshRuns();
@@ -9103,6 +9503,7 @@ async function loadSession() {
     }
     state.user = payload.user;
     saveUser(payload.user);
+    reloadWorkflowStudioSessionsForUser(state.user);
     showChat();
     updateAdminUI();
     refreshRuns();
@@ -9115,6 +9516,7 @@ async function loadSession() {
     const cachedUser = state.user || loadUser();
     if (cachedUser) {
       state.user = cachedUser;
+      reloadWorkflowStudioSessionsForUser(state.user);
       showChat();
       updateAdminUI();
       return;
@@ -9446,6 +9848,141 @@ function shouldShowSetupRfd3InputField(answers = state.answers) {
     nodes: setupWorkflowNodesForRfd3(),
     overrideVisible: setupRfd3InputOverrideVisible(),
   });
+}
+
+const RFD3_MODE_OPTIONS = Object.freeze([
+  { labelKey: "choice.rfd3Mode.localDiversify", value: "local_diversify" },
+  { labelKey: "choice.rfd3Mode.legacyContig", value: "legacy_contig" },
+  { labelKey: "choice.rfd3Mode.binder", value: "binder" },
+  { labelKey: "choice.rfd3Mode.enzyme", value: "enzyme" },
+  { labelKey: "choice.rfd3Mode.advanced", value: "advanced" },
+]);
+
+const SETUP_RFD3_MODE_DETAIL_IDS = new Set([
+  "rfd3_partial_t",
+  "rfd3_contig",
+  "rfd3_hotspots",
+  "rfd3_infer_ori_strategy",
+  "rfd3_is_non_loopy",
+  "rfd3_unindex",
+  "rfd3_length",
+  "rfd3_select_fixed_atoms",
+  "rfd3_inputs_text",
+]);
+
+function rfd3ModeI18nSuffix(mode) {
+  const normalized = normalizeRfd3Mode(mode);
+  if (normalized === "local_diversify") return "localDiversify";
+  if (normalized === "legacy_contig") return "legacyContig";
+  return normalized || "localDiversify";
+}
+
+function rfd3ModeDescriptionKey(mode) {
+  return `question.rfd3Mode.mode.${rfd3ModeI18nSuffix(mode)}`;
+}
+
+function setupRfd3ModeDetailIds(mode) {
+  const normalized = normalizeRfd3Mode(mode) || "local_diversify";
+  const ids = [];
+  if (rfd3ModeUsesPartialT(normalized)) ids.push("rfd3_partial_t");
+  if (rfd3ModeUsesContig(normalized)) ids.push("rfd3_contig");
+  if (rfd3ModeUsesBinderFields(normalized)) {
+    ids.push("rfd3_hotspots", "rfd3_infer_ori_strategy", "rfd3_is_non_loopy");
+  }
+  if (rfd3ModeUsesEnzymeFields(normalized)) {
+    ids.push("rfd3_unindex", "rfd3_length", "rfd3_select_fixed_atoms");
+  }
+  if (rfd3ModeUsesAdvancedInputs(normalized)) ids.push("rfd3_inputs_text");
+  return ids;
+}
+
+function rfd3ModeUsesContig(mode) {
+  const normalized = normalizeRfd3Mode(mode);
+  return normalized === "legacy_contig" || normalized === "binder";
+}
+
+function rfd3ModeUsesBinderFields(mode) {
+  return normalizeRfd3Mode(mode) === "binder";
+}
+
+function rfd3ModeUsesEnzymeFields(mode) {
+  return normalizeRfd3Mode(mode) === "enzyme";
+}
+
+function rfd3ModeUsesPartialT(mode) {
+  return ["local_diversify", "legacy_contig", "binder", "enzyme"].includes(normalizeRfd3Mode(mode));
+}
+
+function rfd3ModeUsesAdvancedInputs(mode) {
+  return normalizeRfd3Mode(mode) === "advanced";
+}
+
+function effectiveSetupRfd3Mode(answers = state.answers) {
+  const merged = {
+    ...(answers || {}),
+    rfd3_input_pdb:
+      effectiveRfd3InputPdb({
+        mode: state.runMode,
+        answers,
+        nodes: setupWorkflowNodesForRfd3(),
+      }) || answers?.rfd3_input_pdb,
+  };
+  return effectiveRfd3Mode(merged) || "local_diversify";
+}
+
+function questionVisibleForCurrentState(question, normalizedQuestions = []) {
+  const id = String(question?.id || "").trim();
+  if (!id) return false;
+
+  const answers = state.answers || {};
+  const mode = state.runMode || "pipeline";
+  const setupNodes = setupWorkflowNodesForRfd3();
+  const rfd3Active =
+    runUsesRfd3Stage({
+      mode,
+      answers,
+      nodes: setupNodes,
+    }) || shouldShowSetupRfd3InputField(answers);
+  const bioemuRelevant =
+    mode === "pipeline" ||
+    mode === "workflow" ||
+    mode === "bioemu" ||
+    mode === "design" ||
+    mode === "soluprot" ||
+    answers.bioemu_use === true ||
+    answers.stop_after === "bioemu";
+  const currentRfd3Mode = effectiveSetupRfd3Mode(answers);
+
+  if (id === "rfd3_input_pdb") {
+    return rfd3Active && shouldShowSetupRfd3InputField(answers);
+  }
+  if (id === "rfd3_mode" || id === "rfd3_max_return_designs") {
+    return rfd3Active;
+  }
+  if (id === "rfd3_contig") {
+    return rfd3Active && rfd3ModeUsesContig(currentRfd3Mode);
+  }
+  if (id === "rfd3_hotspots" || id === "rfd3_infer_ori_strategy" || id === "rfd3_is_non_loopy") {
+    return rfd3Active && rfd3ModeUsesBinderFields(currentRfd3Mode);
+  }
+  if (id === "rfd3_unindex" || id === "rfd3_length" || id === "rfd3_select_fixed_atoms") {
+    return rfd3Active && rfd3ModeUsesEnzymeFields(currentRfd3Mode);
+  }
+  if (id === "rfd3_partial_t") {
+    return rfd3Active && rfd3ModeUsesPartialT(currentRfd3Mode);
+  }
+  if (id === "rfd3_inputs_text") {
+    return rfd3Active && rfd3ModeUsesAdvancedInputs(currentRfd3Mode);
+  }
+  if (
+    id === "bioemu_filter_samples" ||
+    id === "bioemu_steering_config_text" ||
+    id === "bioemu_num_samples" ||
+    id === "bioemu_max_return_structures"
+  ) {
+    return bioemuRelevant;
+  }
+  return true;
 }
 
 function workflowStudioRfd3InputOverrideVisible(session) {
@@ -10700,7 +11237,8 @@ function renderQuestions(questions) {
 
   const normalizedQuestions = (questions || [])
     .map((q) => normalizeQuestion(q))
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((q) => questionVisibleForCurrentState(q));
   const visibleQuestions = renderSetupWizard(normalizedQuestions);
   if (state.runMode === "pipeline") {
     if (!normalizePipelineStage(state.answers.start_from, "")) {
@@ -10721,6 +11259,7 @@ function renderQuestions(questions) {
     "run_mode",
     "start_from",
     "stop_after",
+    "rfd3_mode",
     "design_chains",
     "rfd3_contig",
     "pdb_strip_nonpositive_resseq",
@@ -10728,6 +11267,7 @@ function renderQuestions(questions) {
     "mask_consensus_apply",
     "ligand_mask_use_original_target",
     "bioemu_use",
+    "bioemu_filter_samples",
     "novelty_enabled",
     "af2_provider",
     "confirm_run",
@@ -10752,12 +11292,12 @@ function renderQuestions(questions) {
   const compactChoiceQuestionIds = new Set([
     "novelty_enabled",
     "bioemu_use",
+    "bioemu_filter_samples",
     "af2_provider",
     "design_chains",
     "pdb_strip_nonpositive_resseq",
     "wt_compare",
     "mask_consensus_apply",
-    "ligand_mask_use_original_target",
   ]);
 
   const buildQuestionCardClass = (q, extraClasses = []) => {
@@ -10776,8 +11316,156 @@ function renderQuestions(questions) {
     return classes.join(" ");
   };
 
+  function renderSetupRfd3ModeDetailsCard(card, normalizedQuestions) {
+    const currentMode = effectiveSetupRfd3Mode(state.answers);
+    const fieldIds = setupRfd3ModeDetailIds(currentMode);
+    if (!fieldIds.length) return;
+
+    const grid = document.createElement("div");
+    grid.className = "parameter-board-grid option-board-grid";
+
+    const createField = (question) => {
+      const field = document.createElement("div");
+      field.className = "parameter-field option-field";
+
+      const label = document.createElement("div");
+      label.className = "parameter-label";
+      label.textContent = question.labelKey ? t(question.labelKey) : question.label || question.id || "input";
+
+      const desc = document.createElement("div");
+      desc.className = "parameter-help";
+      desc.textContent = question.questionKey ? t(question.questionKey) : question.question || "";
+
+      field.appendChild(label);
+      field.appendChild(desc);
+      return field;
+    };
+
+    const appendParsedInput = (field, question) => {
+      const multiline = Boolean(question.multiline) || ANSWER_TEXTAREA_KEYS.has(question.id);
+      const inputWrap = document.createElement("div");
+      inputWrap.className = "input-row";
+      const input = multiline ? document.createElement("textarea") : document.createElement("input");
+      if (!multiline) {
+        input.type = ANSWER_INT_KEYS.has(question.id) || ANSWER_FLOAT_KEYS.has(question.id) ? "number" : "text";
+        if (ANSWER_FLOAT_KEYS.has(question.id)) input.step = "0.01";
+        if (ANSWER_INT_KEYS.has(question.id)) input.step = "1";
+      } else {
+        input.rows = 3;
+      }
+      if (question.placeholder) input.placeholder = question.placeholder;
+      if (state.answers[question.id] === undefined && question.default !== undefined) {
+        state.answers[question.id] = question.default;
+      }
+      input.value = formatAnswerValue(state.answers[question.id]);
+
+      const errorEl = document.createElement("div");
+      errorEl.className = "question-error";
+      const existingError = (state.answerMeta[question.id] || {}).error;
+      if (existingError) {
+        errorEl.textContent = existingError;
+        errorEl.style.display = "block";
+      } else {
+        errorEl.style.display = "none";
+      }
+
+      input.addEventListener("input", () => {
+        const parsed = parseAnswerValue(question.id, input.value);
+        if (parsed.error) {
+          state.answers[question.id] = "";
+          state.answerMeta[question.id] = { ...state.answerMeta[question.id], error: parsed.error, raw: input.value };
+          errorEl.textContent = parsed.error;
+          errorEl.style.display = "block";
+        } else {
+          state.answers[question.id] = parsed.value;
+          state.answerMeta[question.id] = { ...state.answerMeta[question.id], error: "", raw: input.value };
+          errorEl.textContent = "";
+          errorEl.style.display = "none";
+        }
+        updateRunEligibility(normalizedQuestions);
+      });
+
+      inputWrap.appendChild(input);
+      field.appendChild(inputWrap);
+      field.appendChild(errorEl);
+    };
+
+    fieldIds.forEach((fieldId) => {
+      const question = normalizedQuestions.find((item) => item.id === fieldId) || normalizeQuestion({ id: fieldId }) || { id: fieldId };
+      const field = createField(question);
+
+      if (fieldId === "rfd3_contig") {
+        const contigs = Object.entries(state.chainRanges || {}).map(([chain, range]) => ({
+          label: `${chain}${range.min}-${range.max}`,
+          value: `${chain}${range.min}-${range.max}`,
+        }));
+        const routedDefault = state.plan?.routed_request?.rfd3_contig;
+        let current = String(state.answers.rfd3_contig || routedDefault || "").trim();
+        if (!current && contigs.length) {
+          current = contigs[0].value;
+          state.answers.rfd3_contig = current;
+        }
+        if (contigs.length) {
+          const select = document.createElement("select");
+          const noneOption = document.createElement("option");
+          noneOption.value = "";
+          noneOption.textContent = t("choice.contigNone");
+          select.appendChild(noneOption);
+          contigs.forEach((item) => {
+            const option = document.createElement("option");
+            option.value = item.value;
+            option.textContent = item.label;
+            if (current === item.value) option.selected = true;
+            select.appendChild(option);
+          });
+          select.addEventListener("change", () => {
+            state.answers.rfd3_contig = select.value;
+            updateRunEligibility(normalizedQuestions);
+          });
+          field.appendChild(select);
+          const note = document.createElement("div");
+          note.className = "choice-note";
+          note.textContent = t("choice.contigPositiveOnly");
+          field.appendChild(note);
+        } else {
+          appendParsedInput(field, question);
+          const note = document.createElement("div");
+          note.className = "choice-note";
+          note.textContent = t("choice.contigNote");
+          field.appendChild(note);
+        }
+      } else if (fieldId === "rfd3_is_non_loopy") {
+        let current = state.answers.rfd3_is_non_loopy;
+        if (typeof current !== "boolean") {
+          const routedDefault = state.plan?.routed_request?.rfd3_is_non_loopy;
+          current = typeof routedDefault === "boolean" ? routedDefault : Boolean(question.default);
+          state.answers.rfd3_is_non_loopy = current;
+        }
+        renderChoiceButtons(
+          field,
+          [
+            { labelKey: "common.enabled", value: true },
+            { labelKey: "common.disabled", value: false },
+          ],
+          current,
+          (value) => {
+            state.answers.rfd3_is_non_loopy = value;
+            updateRunEligibility(normalizedQuestions);
+          },
+          { rerender: false }
+        );
+      } else {
+        appendParsedInput(field, question);
+      }
+
+      grid.appendChild(field);
+    });
+
+    card.appendChild(grid);
+  }
+
   choiceQuestions.forEach((q) => {
-    if (compactChoiceQuestionIds.has(q.id)) return;
+    if (compactChoiceQuestionIds.has(q.id) || SETUP_RFD3_MODE_DETAIL_IDS.has(q.id)) return;
     const card = document.createElement("div");
     card.className = buildQuestionCardClass(q, q.id === "run_mode" ? ["run-mode-card"] : []);
 
@@ -10905,6 +11593,35 @@ function renderQuestions(questions) {
           updateRunEligibility(normalizedQuestions);
         }
       );
+    }
+
+    if (q.id === "rfd3_mode") {
+      const routedDefault = state.plan?.routed_request?.rfd3_mode;
+      const current = normalizeRfd3Mode(state.answers.rfd3_mode || routedDefault || effectiveSetupRfd3Mode(state.answers));
+      state.answers.rfd3_mode = current || "local_diversify";
+      renderChoiceButtons(card, RFD3_MODE_OPTIONS, state.answers.rfd3_mode, (value) => {
+        state.answers.rfd3_mode = normalizeRfd3Mode(value) || "local_diversify";
+        updateRunEligibility(normalizedQuestions);
+      });
+      const selectedOpt =
+        RFD3_MODE_OPTIONS.find((opt) => String(opt.value || "").trim() === state.answers.rfd3_mode) || RFD3_MODE_OPTIONS[0];
+      if (selectedOpt) {
+        const modeGuide = document.createElement("div");
+        modeGuide.className = "mode-guide";
+        const item = document.createElement("div");
+        item.className = "mode-guide-item selected";
+        const label = document.createElement("div");
+        label.className = "mode-guide-label";
+        label.textContent = labelFor(selectedOpt);
+        const desc = document.createElement("div");
+        desc.className = "mode-guide-desc";
+        desc.textContent = t(rfd3ModeDescriptionKey(state.answers.rfd3_mode));
+        item.appendChild(label);
+        item.appendChild(desc);
+        modeGuide.appendChild(item);
+        card.appendChild(modeGuide);
+      }
+      renderSetupRfd3ModeDetailsCard(card, normalizedQuestions);
     }
 
     if (q.id === "design_chains") {
@@ -11151,13 +11868,14 @@ function renderQuestions(questions) {
           answers: state.answers,
           nodes: setupWorkflowNodesForRfd3(),
         }) || shouldShowSetupRfd3InputField();
+      const currentMode = effectiveSetupRfd3Mode(state.answers);
       const routedDefault = state.plan?.routed_request?.rfd3_contig;
-      if (rfd3Active && !state.answers.rfd3_contig && routedDefault) {
+      if (rfd3Active && rfd3ModeUsesContig(currentMode) && !state.answers.rfd3_contig && routedDefault) {
         state.answers.rfd3_contig = routedDefault;
       }
       if (contigs.length) {
         let current = state.answers.rfd3_contig;
-        if (!current && rfd3Active) {
+        if (!current && rfd3Active && rfd3ModeUsesContig(currentMode)) {
           current = contigs[0].value;
           state.answers.rfd3_contig = current;
         }
@@ -11241,6 +11959,8 @@ function renderQuestions(questions) {
       fallback,
       onLabelKey,
       offLabelKey,
+      onLabel,
+      offLabel,
       onChange,
       rerender = false,
     }) => {
@@ -11251,8 +11971,8 @@ function renderQuestions(questions) {
         renderChoiceButtons(
           field,
           [
-            { labelKey: onLabelKey, value: true },
-            { labelKey: offLabelKey, value: false },
+            onLabelKey ? { labelKey: onLabelKey, value: true } : { label: onLabel || "On", value: true },
+            offLabelKey ? { labelKey: offLabelKey, value: false } : { label: offLabel || "Off", value: false },
           ],
           current,
           (value) => {
@@ -11286,6 +12006,14 @@ function renderQuestions(questions) {
       fallback: false,
       onLabelKey: "choice.bioemuUse.on",
       offLabelKey: "choice.bioemuUse.off",
+      rerender: false,
+    });
+
+    renderBooleanField({
+      id: "bioemu_filter_samples",
+      fallback: true,
+      onLabel: "Enabled",
+      offLabel: "Disabled",
       rerender: false,
     });
 
@@ -11390,14 +12118,6 @@ function renderQuestions(questions) {
       rerender: false,
     });
 
-    renderBooleanField({
-      id: "ligand_mask_use_original_target",
-      fallback: true,
-      onLabelKey: "choice.ligandMaskOriginal.on",
-      offLabelKey: "choice.ligandMaskOriginal.off",
-      rerender: false,
-    });
-
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
@@ -11406,9 +12126,10 @@ function renderQuestions(questions) {
 
   appendCompactOptionBoard();
 
-  const bioemuCountQuestionIds = new Set(["bioemu_num_samples"]);
+  const bioemuCountQuestionIds = new Set(["bioemu_max_return_structures", "bioemu_num_samples"]);
   const rfd3CountQuestionIds = new Set(["rfd3_max_return_designs"]);
   const compactParameterQuestionIds = new Set([
+    "bioemu_max_return_structures",
     "bioemu_num_samples",
     "rfd3_max_return_designs",
     "num_seq_per_tier",
@@ -11417,17 +12138,20 @@ function renderQuestions(questions) {
     "af2_rmsd_cutoff",
   ]);
   const compactParameterPriority = {
-    bioemu_num_samples: 10,
-    rfd3_max_return_designs: 20,
-    num_seq_per_tier: 30,
-    af2_max_candidates_per_tier: 40,
-    af2_plddt_cutoff: 50,
-    af2_rmsd_cutoff: 60,
+    bioemu_max_return_structures: 10,
+    bioemu_num_samples: 20,
+    rfd3_max_return_designs: 30,
+    num_seq_per_tier: 40,
+    af2_max_candidates_per_tier: 50,
+    af2_plddt_cutoff: 60,
+    af2_rmsd_cutoff: 70,
   };
   const bioemuCountRelevant =
     state.runMode === "pipeline" ||
     state.runMode === "workflow" ||
     state.runMode === "bioemu" ||
+    state.runMode === "design" ||
+    state.runMode === "soluprot" ||
     state.answers.bioemu_use === true ||
     state.answers.stop_after === "bioemu";
   const rfd3CountRelevant =
@@ -11852,7 +12576,7 @@ function renderQuestions(questions) {
 
   const hiddenTextQuestionIds = new Set(compactQuestions.map((q) => q.id));
   textQuestions.forEach((q) => {
-    if (hiddenTextQuestionIds.has(q.id)) return;
+    if (hiddenTextQuestionIds.has(q.id) || SETUP_RFD3_MODE_DETAIL_IDS.has(q.id)) return;
     appendTextQuestionCard(q);
   });
 
@@ -12231,14 +12955,21 @@ function updateRunEligibility(questions) {
     nodes: setupNodes,
   });
   const hasEffectiveRfd3Input = Boolean(String(effectiveRfd3Input || "").trim());
+  const currentRfd3Mode = effectiveSetupRfd3Mode(state.answers);
 
   if (state.runMode === "pipeline") {
     if (rfd3StageActive && !hasEffectiveRfd3Input) {
       requiredIds.add("rfd3_input_pdb");
     }
-    if (hasEffectiveRfd3Input) {
-      if (rfd3StageActive) {
+    if (rfd3StageActive && hasEffectiveRfd3Input) {
+      if (rfd3ModeUsesContig(currentRfd3Mode)) {
         requiredIds.add("rfd3_contig");
+      }
+      if (rfd3ModeUsesEnzymeFields(currentRfd3Mode)) {
+        requiredIds.add("rfd3_unindex");
+      }
+      if (rfd3ModeUsesAdvancedInputs(currentRfd3Mode)) {
+        requiredIds.add("rfd3_inputs_text");
       }
     }
     if (state.answers.diffdock_use === "use") {
@@ -12249,15 +12980,20 @@ function updateRunEligibility(questions) {
     if (state.answers.stop_after === "bioemu") {
       requiredIds.add("bioemu_use");
     }
-    if (state.answers.stop_after === "rfd3") {
-      requiredIds.add("rfd3_contig");
-    }
   }
 
   if (state.runMode === "rfd3") {
     requiredIds.delete("target_input");
     requiredIds.add("rfd3_input_pdb");
-    requiredIds.add("rfd3_contig");
+    if (rfd3ModeUsesContig(currentRfd3Mode)) {
+      requiredIds.add("rfd3_contig");
+    }
+    if (rfd3ModeUsesEnzymeFields(currentRfd3Mode)) {
+      requiredIds.add("rfd3_unindex");
+    }
+    if (rfd3ModeUsesAdvancedInputs(currentRfd3Mode)) {
+      requiredIds.add("rfd3_inputs_text");
+    }
   }
 
   if (state.runMode === "msa") {
@@ -12341,7 +13077,7 @@ function updateMonitorActionButtons() {
 }
 
 function buildAnswerPayload(mode = state.runMode) {
-  const answers = normalizeBioEmuCountFields({ ...state.answers }, { includeLegacyField: false });
+  const answers = normalizeBioEmuCountFields({ ...state.answers }, { includeLegacyField: true });
   if (answers.target_input && !answers.target_pdb && !answers.target_fasta) {
     if (mode === "diffdock") {
       answers.target_pdb = answers.target_input;
@@ -12366,13 +13102,47 @@ function buildAnswerPayload(mode = state.runMode) {
     answers,
     nodes: rfd3Nodes,
   });
+  const normalizedRfd3Mode = normalizeRfd3Mode(
+    answers.rfd3_mode || effectiveRfd3Mode({ ...answers, rfd3_input_pdb: effectiveRfd3Input })
+  );
   if (effectiveRfd3Input) {
     answers.rfd3_input_pdb = effectiveRfd3Input;
+    if (normalizedRfd3Mode) {
+      answers.rfd3_mode = normalizedRfd3Mode;
+    }
   } else {
     delete answers.rfd3_input_pdb;
     if (mode === "pipeline" || mode === "workflow") {
+      delete answers.rfd3_mode;
       delete answers.rfd3_contig;
+      delete answers.rfd3_hotspots;
+      delete answers.rfd3_infer_ori_strategy;
+      delete answers.rfd3_is_non_loopy;
+      delete answers.rfd3_unindex;
+      delete answers.rfd3_length;
+      delete answers.rfd3_select_fixed_atoms;
+      delete answers.rfd3_partial_t;
+      delete answers.rfd3_inputs_text;
     }
+  }
+  if (normalizedRfd3Mode && !rfd3ModeUsesContig(normalizedRfd3Mode)) {
+    delete answers.rfd3_contig;
+  }
+  if (normalizedRfd3Mode && !rfd3ModeUsesBinderFields(normalizedRfd3Mode)) {
+    delete answers.rfd3_hotspots;
+    delete answers.rfd3_infer_ori_strategy;
+    delete answers.rfd3_is_non_loopy;
+  }
+  if (normalizedRfd3Mode && !rfd3ModeUsesEnzymeFields(normalizedRfd3Mode)) {
+    delete answers.rfd3_unindex;
+    delete answers.rfd3_length;
+    delete answers.rfd3_select_fixed_atoms;
+  }
+  if (normalizedRfd3Mode && !rfd3ModeUsesPartialT(normalizedRfd3Mode)) {
+    delete answers.rfd3_partial_t;
+  }
+  if (normalizedRfd3Mode && !rfd3ModeUsesAdvancedInputs(normalizedRfd3Mode)) {
+    delete answers.rfd3_inputs_text;
   }
   if (Array.isArray(answers.design_chains) && answers.design_chains.length === 0) {
     delete answers.design_chains;
@@ -12398,7 +13168,16 @@ function filterAnswersForMode(mode, answers) {
       "target_fasta",
       "target_pdb",
       "rfd3_input_pdb",
+      "rfd3_mode",
       "rfd3_contig",
+      "rfd3_hotspots",
+      "rfd3_infer_ori_strategy",
+      "rfd3_is_non_loopy",
+      "rfd3_unindex",
+      "rfd3_length",
+      "rfd3_select_fixed_atoms",
+      "rfd3_partial_t",
+      "rfd3_inputs_text",
       "rfd3_max_return_designs",
       "diffdock_ligand_smiles",
       "diffdock_ligand_sdf",
@@ -12410,6 +13189,9 @@ function filterAnswersForMode(mode, answers) {
       "ligand_mask_use_original_target",
       "bioemu_use",
       "bioemu_num_samples",
+      "bioemu_max_return_structures",
+      "bioemu_filter_samples",
+      "bioemu_steering_config_text",
       "af2_max_candidates_per_tier",
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
@@ -12423,7 +13205,16 @@ function filterAnswersForMode(mode, answers) {
       "target_fasta",
       "target_pdb",
       "rfd3_input_pdb",
+      "rfd3_mode",
       "rfd3_contig",
+      "rfd3_hotspots",
+      "rfd3_infer_ori_strategy",
+      "rfd3_is_non_loopy",
+      "rfd3_unindex",
+      "rfd3_length",
+      "rfd3_select_fixed_atoms",
+      "rfd3_partial_t",
+      "rfd3_inputs_text",
       "rfd3_max_return_designs",
       "design_chains",
       "fixed_positions_extra",
@@ -12432,6 +13223,9 @@ function filterAnswersForMode(mode, answers) {
       "mask_consensus_apply",
       "ligand_mask_use_original_target",
       "bioemu_num_samples",
+      "bioemu_max_return_structures",
+      "bioemu_filter_samples",
+      "bioemu_steering_config_text",
       "af2_max_candidates_per_tier",
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
@@ -12447,8 +13241,25 @@ function filterAnswersForMode(mode, answers) {
       "target_pdb",
       "bioemu_use",
       "bioemu_num_samples",
+      "bioemu_max_return_structures",
+      "bioemu_filter_samples",
+      "bioemu_steering_config_text",
     ],
-    rfd3: ["rfd3_input_pdb", "rfd3_contig", "rfd3_max_return_designs", "pdb_strip_nonpositive_resseq"],
+    rfd3: [
+      "rfd3_input_pdb",
+      "rfd3_mode",
+      "rfd3_contig",
+      "rfd3_hotspots",
+      "rfd3_infer_ori_strategy",
+      "rfd3_is_non_loopy",
+      "rfd3_unindex",
+      "rfd3_length",
+      "rfd3_select_fixed_atoms",
+      "rfd3_partial_t",
+      "rfd3_inputs_text",
+      "rfd3_max_return_designs",
+      "pdb_strip_nonpositive_resseq",
+    ],
     msa: ["target_fasta", "target_pdb", "pdb_strip_nonpositive_resseq"],
     design: [
       "target_fasta",
@@ -12457,6 +13268,9 @@ function filterAnswersForMode(mode, answers) {
       "pdb_strip_nonpositive_resseq",
       "bioemu_use",
       "bioemu_num_samples",
+      "bioemu_max_return_structures",
+      "bioemu_filter_samples",
+      "bioemu_steering_config_text",
     ],
     soluprot: [
       "target_fasta",
@@ -12465,6 +13279,9 @@ function filterAnswersForMode(mode, answers) {
       "pdb_strip_nonpositive_resseq",
       "bioemu_use",
       "bioemu_num_samples",
+      "bioemu_max_return_structures",
+      "bioemu_filter_samples",
+      "bioemu_steering_config_text",
     ],
     af2: ["target_fasta", "target_pdb", "af2_provider"],
     diffdock: ["target_pdb", "diffdock_ligand_smiles", "diffdock_ligand_sdf"],
@@ -20186,15 +21003,6 @@ if (el.studioAdoptRunBtn) {
 if (el.studioRunBtn) {
   el.studioRunBtn.addEventListener("click", async () => {
     await runWorkflowStudioStage();
-  });
-}
-
-if (el.studioNewSessionBtn) {
-  el.studioNewSessionBtn.addEventListener("click", async () => {
-    const session = await createFreshWorkflowStudioSession();
-    if (!session) {
-      setMessage(t("studio.createFailed"), "ai");
-    }
   });
 }
 

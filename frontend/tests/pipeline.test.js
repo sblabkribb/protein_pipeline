@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   buildCompareMetaTooltip,
   buildCompareScopeDescription,
@@ -17,8 +19,10 @@ import {
   DEFAULT_ARTIFACT_COMPARE_MODE,
   DEFAULT_ARTIFACT_LIST_LIMIT,
   artifactMetaFromPath,
+  artifactMetaFromPathForManifest,
   artifactDownloadFilename,
   buildArtifactDownloadRequest,
+  backboneSourceIndexFromManifest,
   buildWorkflowStudioFreshSessionSeed,
   buildWorkflowStudioNodesFromRequest,
   buildWorkflowStudioEffectiveAnswers,
@@ -57,10 +61,14 @@ import {
   workflowStudioRetainedArtifactPath,
   workflowStudioActionRunIdForSession,
   workflowStudioExecutionTarget,
+  workflowStudioOwnerFromUser,
+  workflowStudioSessionBelongsToUser,
+  workflowStudioStorageKeysForUser,
   buildWorkflowProgressContext,
   progressStepsForRequest,
   progressUnitsForRequest,
   residuePickerControlState,
+  filterWorkflowStudioSessionsForUser,
   workflowStudioChangedFields,
   workflowStudioDependencyStatus,
   workflowStudioSessionIdForRun,
@@ -113,6 +121,89 @@ test("createRunId uses prefix and utc timestamp", () => {
 test("createWorkflowSessionId uses studio suffix and utc timestamp", () => {
   const sessionId = createWorkflowSessionId("kbf_hana", new Date(Date.UTC(2024, 0, 2, 3, 4, 5)));
   assert.match(sessionId, /^kbf_hana_studio_20240102_030405_[0-9a-f]{8}$/);
+});
+
+test("workflowStudioStorageKeysForUser scopes browser storage by run prefix", () => {
+  const keys = workflowStudioStorageKeysForUser({
+    username: "hana.kim",
+    role: "user",
+    run_prefix: "hana_kim",
+  });
+  assert.deepEqual(keys, {
+    scope: "hana_kim",
+    sessionsKey: "kbf.workflowStudioSessions.hana_kim",
+    currentKey: "kbf.workflowStudioCurrent.hana_kim",
+  });
+});
+
+test("workflowStudioSessionBelongsToUser prefers owner metadata and legacy prefix fallback", () => {
+  const hana = { username: "hana", role: "user", run_prefix: "hana" };
+  const minsu = { username: "minsu", role: "user", run_prefix: "minsu" };
+  const owned = {
+    session_id: "hana_studio_20260317_010101_deadbeef",
+    owner_username: "hana",
+    owner_run_prefix: "hana",
+    head_run_id: "hana_20260317_010101_deadbeef",
+  };
+  const legacyOwned = {
+    session_id: "hana_studio_20260317_010101_deadbeef",
+    head_run_id: "hana_20260317_010101_deadbeef",
+    source_run_id: "hana_20260317_010101_deadbeef",
+    stage_run_ids: { msa: "hana_20260317_010101_deadbeef" },
+  };
+  const foreign = {
+    session_id: "minsu_studio_20260317_010101_deadbeef",
+    owner_username: "minsu",
+    owner_run_prefix: "minsu",
+    head_run_id: "minsu_20260317_010101_deadbeef",
+  };
+
+  assert.equal(workflowStudioSessionBelongsToUser(owned, hana), true);
+  assert.equal(workflowStudioSessionBelongsToUser(owned, minsu), false);
+  assert.equal(workflowStudioSessionBelongsToUser(legacyOwned, hana), true);
+  assert.equal(workflowStudioSessionBelongsToUser(legacyOwned, minsu), false);
+  assert.equal(workflowStudioSessionBelongsToUser(foreign, hana), false);
+});
+
+test("filterWorkflowStudioSessionsForUser keeps only the active user's sessions", () => {
+  const hana = { username: "hana", role: "user", run_prefix: "hana" };
+  const sessions = {
+    hana_owned: {
+      session_id: "hana_studio_20260317_010101_deadbeef",
+      owner_username: "hana",
+      owner_run_prefix: "hana",
+    },
+    hana_legacy: {
+      session_id: "hana_studio_20260317_010102_deadbeef",
+      head_run_id: "hana_20260317_010102_deadbeef",
+    },
+    foreign: {
+      session_id: "minsu_studio_20260317_010103_deadbeef",
+      owner_username: "minsu",
+      owner_run_prefix: "minsu",
+    },
+  };
+
+  assert.deepEqual(Object.keys(filterWorkflowStudioSessionsForUser(sessions, hana)).sort(), [
+    "hana_legacy",
+    "hana_owned",
+  ]);
+  assert.deepEqual(workflowStudioOwnerFromUser(hana), {
+    owner_username: "hana",
+    owner_run_prefix: "hana",
+    owner_role: "user",
+  });
+});
+
+test("app scopes Workflow Studio storage and reloads it per active user", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(source, /function reloadWorkflowStudioSessionsForUser\(/);
+  assert.match(source, /workflowStudioStorageKeysForUser\(/);
+  assert.match(source, /workflowStudioOwnerFromUser\(/);
+  assert.match(source, /filterWorkflowStudioSessionsForUser\(/);
+  assert.doesNotMatch(source, /workflowStudioSessionsById:\s*loadWorkflowStudioSessionsById\(\)/);
+  assert.doesNotMatch(source, /currentWorkflowStudioSessionId:\s*loadCurrentWorkflowStudioSessionId\(\)/);
 });
 
 test("buildWorkflowStudioFreshSessionSeed creates a blank session while preserving workflow nodes", () => {
@@ -253,6 +344,36 @@ test("artifactMetaFromPath classifies compare references and source outputs", ()
   const sourceOutput = artifactMetaFromPath("bioemu/designs/bioemu_topology.pdb");
   assert.equal(sourceOutput.compareRole, "source_output");
   assert.equal(sourceOutput.compareGroup, "source_outputs");
+});
+
+test("artifactMetaFromPathForManifest reclassifies backbone descendants by source manifest", () => {
+  const manifest = {
+    backbones: [
+      { id: "rfd3_spec-1_0_model_0", source: "rfd3" },
+      { id: "sample_0000", source: "bioemu" },
+    ],
+  };
+  const sourceIndex = backboneSourceIndexFromManifest(manifest);
+
+  const rfd3Tier = artifactMetaFromPathForManifest(
+    "backbones/rfd3_spec-1_0_model_0/tiers/30/proteinmpnn.json",
+    sourceIndex
+  );
+  assert.equal(rfd3Tier.stage, "rfd3");
+  assert.equal(rfd3Tier.source, "rfd3");
+
+  const bioemuTier = artifactMetaFromPathForManifest("backbones/sample_0000/tiers/30/proteinmpnn.json", sourceIndex);
+  assert.equal(bioemuTier.stage, "bioemu");
+  assert.equal(bioemuTier.source, "bioemu");
+  assert.equal(bioemuTier.backboneSource, "bioemu");
+
+  const bioemuAf2 = artifactMetaFromPathForManifest("tiers/30/af2/sample_0000_1/ranked_0.pdb", sourceIndex);
+  assert.equal(bioemuAf2.backboneId, "sample_0000");
+  assert.equal(bioemuAf2.stage, "bioemu");
+  assert.equal(bioemuAf2.source, "bioemu");
+
+  const unrelated = artifactMetaFromPathForManifest("tiers/30/soluprot.json", sourceIndex);
+  assert.equal(unrelated.stage, "soluprot");
 });
 
 test("DEFAULT_ARTIFACT_LIST_LIMIT leaves room for WT compare references in larger runs", () => {
@@ -647,6 +768,124 @@ test("buildWorkflowStudioEffectiveAnswers applies workflow defaults for untouche
   assert.equal(merged.af2_max_candidates_per_tier, 0);
 });
 
+test("buildWorkflowStudioEffectiveAnswers applies workflow defaults for untouched rfd3 and bioemu counts", () => {
+  const merged = buildWorkflowStudioEffectiveAnswers({
+    headRequest: {
+      target_pdb: "ATOM",
+      stop_after: "af2",
+      bioemu_use: true,
+    },
+    baseAnswers: {},
+    stageDrafts: {
+      msa: { target_input: "ATOM" },
+      bioemu: { bioemu_use: true },
+    },
+    nodes: ["msa", "rfd3", "bioemu", "design", "af2"],
+  });
+  assert.equal(merged.rfd3_max_return_designs, 10);
+  assert.equal(merged.bioemu_num_samples, 20);
+  assert.equal(merged.bioemu_max_return_structures, 10);
+  assert.equal(merged.bioemu_filter_samples, true);
+  assert.equal(merged.num_seq_per_tier, 2);
+  assert.equal(merged.af2_max_candidates_per_tier, 0);
+});
+
+test("workflow studio question metadata keeps default return counts for rfd3 and bioemu", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  assert.match(
+    source,
+    /bioemu_num_samples:\s*\{[\s\S]*?labelKey:\s*"question\.bioemuNumSamples\.label",[\s\S]*?default:\s*20,/m
+  );
+  assert.match(
+    source,
+    /bioemu_max_return_structures:\s*\{[\s\S]*?labelKey:\s*"question\.bioemuMaxReturn\.label",[\s\S]*?default:\s*10,/m
+  );
+  assert.match(
+    source,
+    /rfd3_max_return_designs:\s*\{[\s\S]*?labelKey:\s*"question\.rfd3MaxReturn\.label",[\s\S]*?default:\s*10,/m
+  );
+  assert.match(source, /rfd3_partial_t:\s*\{[\s\S]*?default:\s*10(?:\.0)?,/m);
+});
+
+test("RFD3 mode question metadata and localized guidance copy are present", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  assert.match(
+    source,
+    /rfd3_mode:\s*\{[\s\S]*?labelKey:\s*"question\.rfd3Mode\.label",[\s\S]*?questionKey:\s*"question\.rfd3Mode\.help",[\s\S]*?default:\s*"local_diversify",/m
+  );
+  assert.match(
+    source,
+    /if \(q\.id === "rfd3_mode"\) \{[\s\S]*?mode-guide-desc[\s\S]*?rfd3ModeDescriptionKey\(/m
+  );
+  ["localDiversify", "legacyContig", "binder", "enzyme", "advanced"].forEach((suffix) => {
+    assert.equal(source.split(`"choice.rfd3Mode.${suffix}":`).length - 1, 2);
+    assert.equal(source.split(`"question.rfd3Mode.mode.${suffix}":`).length - 1, 2);
+  });
+});
+
+test("Setup and Studio source reflect RFD3 detail localization and no Studio new workflow action", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+
+  assert.doesNotMatch(source, /data-studio-action="new"/);
+  assert.doesNotMatch(source, /studioNewSessionBtn/);
+  assert.doesNotMatch(source, /studio\.action\.new/);
+  assert.doesNotMatch(source, /createFreshWorkflowStudioSession\(/);
+  assert.doesNotMatch(html, /studioNewSessionBtn/);
+
+  [
+    "question.rfd3Hotspots.label",
+    "question.rfd3Hotspots.help",
+    "question.rfd3Orientation.label",
+    "question.rfd3Orientation.help",
+    "question.rfd3NonLoopy.label",
+    "question.rfd3NonLoopy.help",
+    "question.rfd3Unindex.label",
+    "question.rfd3Unindex.help",
+    "question.rfd3Length.label",
+    "question.rfd3Length.help",
+    "question.rfd3FixedAtoms.label",
+    "question.rfd3FixedAtoms.help",
+    "question.rfd3AdvancedInputs.label",
+    "question.rfd3AdvancedInputs.help",
+    "question.rfd3PartialT.label",
+    "question.rfd3PartialT.help",
+    "question.bioemuFilterSamples.label",
+    "question.bioemuFilterSamples.help",
+    "question.bioemuSteeringConfig.label",
+    "question.bioemuSteeringConfig.help",
+  ].forEach((key) => {
+    assert.ok(source.split(`"${key}"`).length - 1 >= 2, `missing localized key ${key}`);
+  });
+
+  [
+    "choice.rfd3Mode.localDiversify",
+    "choice.rfd3Mode.legacyContig",
+    "choice.rfd3Mode.binder",
+    "choice.rfd3Mode.enzyme",
+    "choice.rfd3Mode.advanced",
+  ].forEach((key) => {
+    assert.equal(source.split(`"${key}":`).length - 1, 2, `missing mode choice key ${key}`);
+  });
+  assert.equal(source.split(`"choice.rfd3Mode.localDiversify": "Local Diversify"`).length - 1, 2);
+  assert.equal(source.split(`"choice.rfd3Mode.legacyContig": "Legacy Contig"`).length - 1, 2);
+  assert.equal(source.split(`"choice.rfd3Mode.binder": "Binder"`).length - 1, 2);
+  assert.equal(source.split(`"choice.rfd3Mode.enzyme": "Enzyme"`).length - 1, 2);
+  assert.equal(source.split(`"choice.rfd3Mode.advanced": "Advanced"`).length - 1, 2);
+
+  const rfd3DetailIdsBlock = source.match(/const SETUP_RFD3_MODE_DETAIL_IDS = new Set\(\[([\s\S]*?)\]\);/);
+  assert.ok(rfd3DetailIdsBlock);
+  assert.match(rfd3DetailIdsBlock[1], /"rfd3_partial_t"/);
+  assert.match(source, /function renderSetupRfd3ModeDetailsCard\(/);
+  assert.match(source, /renderSetupRfd3ModeDetailsCard\(card, normalizedQuestions\)/);
+  const compactChoiceBlock = source.match(/const compactChoiceQuestionIds = new Set\(\[([\s\S]*?)\]\);/);
+  assert.ok(compactChoiceBlock);
+  assert.doesNotMatch(compactChoiceBlock[1], /ligand_mask_use_original_target/);
+  const compactParameterBlock = source.match(/const compactParameterQuestionIds = new Set\(\[([\s\S]*?)\]\);/);
+  assert.ok(compactParameterBlock);
+  assert.doesNotMatch(compactParameterBlock[1], /rfd3_partial_t/);
+});
+
 test("normalizeWorkflowStudioPayloadForComparison ignores implicit studio defaults", () => {
   const normalized = normalizeWorkflowStudioPayloadForComparison(
     {
@@ -660,15 +899,15 @@ test("normalizeWorkflowStudioPayloadForComparison ignores implicit studio defaul
   assert.equal(normalized.af2_max_candidates_per_tier, undefined);
 });
 
-test("buildRunArguments mirrors unified BioEmu count into the legacy payload field", () => {
+test("buildRunArguments preserves distinct BioEmu generated and return counts", () => {
   const args = buildRunArguments({
     prompt: "sample backbones",
     routed: { stop_after: "bioemu", bioemu_use: true },
-    answers: { bioemu_num_samples: 4 },
+    answers: { bioemu_num_samples: 20, bioemu_max_return_structures: 10 },
     runId: "bioemu_count_sync",
   });
-  assert.equal(args.bioemu_num_samples, 4);
-  assert.equal(args.bioemu_max_return_structures, 4);
+  assert.equal(args.bioemu_num_samples, 20);
+  assert.equal(args.bioemu_max_return_structures, 10);
 });
 
 test("runUsesRfd3Stage tracks whether current execution path includes rfd3", () => {
@@ -1294,6 +1533,38 @@ test("normalizeWorkflowStudioPayloadForComparison ignores equivalent RFD3 seed P
   );
 });
 
+test("normalizeWorkflowStudioPayloadForComparison preserves visible binder partial_t fields", () => {
+  const normalized = normalizeWorkflowStudioPayloadForComparison(
+    {
+      target_input: "ATOM      1  CA  ALA A   1       0.0   0.0   0.0  1.00 20.00           C\nEND\n",
+      rfd3_mode: "binder",
+      rfd3_contig: "A1-3",
+      rfd3_partial_t: 8,
+      rfd3_hotspots: "A10",
+    },
+    { nodes: ["msa", "rfd3", "novelty"] }
+  );
+  assert.equal(normalized.rfd3_mode, "binder");
+  assert.equal(normalized.rfd3_partial_t, 8);
+  assert.equal(normalized.rfd3_contig, "A1-3");
+  assert.equal(normalized.rfd3_hotspots, "A10");
+});
+
+test("normalizeWorkflowStudioPayloadForComparison drops advanced-only-hidden partial_t", () => {
+  const normalized = normalizeWorkflowStudioPayloadForComparison(
+    {
+      target_input: "ATOM      1  CA  ALA A   1       0.0   0.0   0.0  1.00 20.00           C\nEND\n",
+      rfd3_mode: "advanced",
+      rfd3_partial_t: 8,
+      rfd3_inputs_text: "{\"spec-1\":{\"input\":\"input.pdb\"}}",
+    },
+    { nodes: ["msa", "rfd3", "novelty"] }
+  );
+  assert.equal(normalized.rfd3_mode, "advanced");
+  assert.equal(normalized.rfd3_partial_t, undefined);
+  assert.equal(normalized.rfd3_inputs_text, "{\"spec-1\":{\"input\":\"input.pdb\"}}");
+});
+
 test("progressStepsForRequest narrows novelty reruns to WT baseline and novelty", () => {
   assert.deepEqual(
     progressStepsForRequest({
@@ -1452,17 +1723,17 @@ test("buildSetupDraftFromRequest maps diffdock ligand metadata", () => {
   assert.equal(draft.answerMeta.diffdock_ligand.fileName, "request.json:diffdock_ligand.smiles");
 });
 
-test("buildSetupDraftFromRequest collapses legacy BioEmu counts to one visible field", () => {
+test("buildSetupDraftFromRequest preserves distinct BioEmu generated and return counts", () => {
   const draft = buildSetupDraftFromRequest({
     target_pdb: "ATOM      1  N",
     stop_after: "bioemu",
     bioemu_use: true,
-    bioemu_num_samples: 10,
-    bioemu_max_return_structures: 4,
+    bioemu_num_samples: 20,
+    bioemu_max_return_structures: 10,
   });
   assert.equal(draft.mode, "bioemu");
-  assert.equal(draft.answers.bioemu_num_samples, 4);
-  assert.equal(draft.answers.bioemu_max_return_structures, undefined);
+  assert.equal(draft.answers.bioemu_num_samples, 20);
+  assert.equal(draft.answers.bioemu_max_return_structures, 10);
 });
 
 test("inferRequestRunMode keeps pipeline runs with stop_after af2 in pipeline mode", () => {
