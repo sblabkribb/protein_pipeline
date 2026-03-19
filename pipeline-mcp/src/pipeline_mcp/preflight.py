@@ -32,8 +32,8 @@ _RESUME_OUTPUT_REQUIREMENTS = {
         "message": "start_from='af2' requires SoluProt-passed sequences in the current run.",
     },
     "novelty": {
-        "globs": ("tiers/*/af2_selected.fasta",),
-        "message": "start_from='novelty' requires AF2-selected sequences in the current run.",
+        "globs": ("tiers/*/af2_selected.fasta", "tiers/*/relax_selected.fasta"),
+        "message": "start_from='novelty' requires AF2-selected sequences (or relax-selected sequences) in the current run.",
     },
 }
 
@@ -259,6 +259,9 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner, *, run_i
 
     if request.wt_compare and af2_client is None:
         warnings.append(f"WT compare requested but {af2_provider_label} is not configured.")
+
+    if request.relax_enabled and runner.rosetta_relax is None:
+        _warn_or_error("Rosetta relax is not configured; relax filtering will be skipped if auto_recover is enabled.")
 
     if request.surface_only and (not target_pdb) and af2_client is None and (not rfd3_active):
         _warn_or_error(

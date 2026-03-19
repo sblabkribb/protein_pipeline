@@ -817,6 +817,21 @@ class TestTools(unittest.TestCase):
         req = pipeline_request_from_args({"target_fasta": ">q1\nACDEFGHIK\n"})
         self.assertTrue(req.ligand_mask_use_original_target)
 
+    def test_pipeline_request_parses_relax_args(self) -> None:
+        req = pipeline_request_from_args(
+            {
+                "target_fasta": ">q1\nACDEFGHIK\n",
+                "relax_enabled": True,
+                "relax_score_per_residue_cutoff": -2.5,
+                "relax_nstruct": 2,
+                "relax_extra_flags": "-ex1 -use_input_sc",
+            }
+        )
+        self.assertTrue(req.relax_enabled)
+        self.assertEqual(req.relax_score_per_residue_cutoff, -2.5)
+        self.assertEqual(req.relax_nstruct, 2)
+        self.assertEqual(req.relax_extra_flags, "-ex1 -use_input_sc")
+
     def test_pipeline_request_defaults_bioemu_filter_samples_on(self) -> None:
         req = pipeline_request_from_args({"target_fasta": ">q1\nACDEFGHIK\n", "bioemu_use": True})
         self.assertTrue(req.bioemu_filter_samples)
@@ -1246,6 +1261,133 @@ class TestTools(unittest.TestCase):
                 self.assertIsNone(row.get("rmsd"))
                 self.assertTrue(bool(row.get("af2_candidate")))
                 self.assertFalse(bool(row.get("af2_selected")))
+
+    def test_comparison_summary_and_hit_list_include_relax_metrics(self) -> None:
+        with _tmpdir() as tmp:
+            run_root = Path(tmp)
+            tier_dir = run_root / "tiers" / "30"
+            tier_dir.mkdir(parents=True, exist_ok=True)
+            wt_dir = run_root / "wt"
+            wt_dir.mkdir(parents=True, exist_ok=True)
+
+            (tier_dir / "soluprot.json").write_text(
+                json.dumps(
+                    {
+                        "scores": {
+                            "rfd3_model:1": 0.91,
+                            "bioemu_model:1": 0.83,
+                        },
+                        "passed_ids": ["rfd3_model:1", "bioemu_model:1"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (tier_dir / "af2_scores.json").write_text(
+                json.dumps(
+                    {
+                        "scores": {
+                            "rfd3_model:1": 92.0,
+                            "bioemu_model:1": 88.0,
+                        },
+                        "rmsd_scores": {
+                            "rfd3_model:1": 0.8,
+                            "bioemu_model:1": 1.4,
+                        },
+                        "candidate_ids": ["rfd3_model:1", "bioemu_model:1"],
+                        "selected_ids": ["rfd3_model:1", "bioemu_model:1"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (tier_dir / "relax_scores.json").write_text(
+                json.dumps(
+                    {
+                        "score_per_residue": {
+                            "rfd3_model:1": -3.5,
+                            "bioemu_model:1": -2.1,
+                        },
+                        "total_scores": {
+                            "rfd3_model:1": -350.0,
+                            "bioemu_model:1": -210.0,
+                        },
+                        "delta_total_scores": {
+                            "rfd3_model:1": -140.0,
+                            "bioemu_model:1": -90.0,
+                        },
+                        "candidate_ids": ["rfd3_model:1", "bioemu_model:1"],
+                        "selected_ids": ["rfd3_model:1"],
+                        "cutoff": -3.0,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (wt_dir / "metrics.json").write_text(
+                json.dumps(
+                    {
+                        "enabled": True,
+                        "relax": {
+                            "score_per_residue": -3.0,
+                            "total_score": -300.0,
+                            "delta_total_score": -120.0,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            summary = {
+                "tiers": [
+                    {
+                        "tier": 0.3,
+                        "proteinmpnn_samples": [
+                            {
+                                "id": "rfd3_model:1",
+                                "sequence": "ACDE",
+                                "meta": {"backbone_source": "rfd3"},
+                            },
+                            {
+                                "id": "bioemu_model:1",
+                                "sequence": "ACDF",
+                                "meta": {"backbone_source": "bioemu"},
+                            },
+                        ],
+                    }
+                ]
+            }
+            request = {"target_fasta": ">q1\nACDE\n", "wt_compare": True, "relax_enabled": True}
+
+            comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
+            relax_metric = (comparison_summary.get("wt_vs_design") or {}).get("relax") or {}
+            self.assertAlmostEqual(float(relax_metric.get("wt") or 0.0), -3.0, places=6)
+            self.assertAlmostEqual(float(relax_metric.get("design_median") or 0.0), -2.8, places=6)
+            self.assertAlmostEqual(float(relax_metric.get("delta_design_minus_wt") or 0.0), 0.2, places=6)
+
+            source_compare = comparison_summary.get("source_compare") or {}
+            self.assertAlmostEqual(float((source_compare.get("rfd3") or {}).get("relax_median") or 0.0), -3.5, places=6)
+            self.assertAlmostEqual(float((source_compare.get("bioemu") or {}).get("relax_median") or 0.0), -2.1, places=6)
+
+            tier_compare = comparison_summary.get("tier_compare") or []
+            self.assertEqual(len(tier_compare), 1)
+            self.assertAlmostEqual(float((tier_compare[0] or {}).get("relax_median") or 0.0), -2.8, places=6)
+            self.assertEqual(int((tier_compare[0] or {}).get("relax_selected_total") or 0), 1)
+
+            relax_distribution = (comparison_summary.get("distributions") or {}).get("relax") or {}
+            self.assertEqual(int(relax_distribution.get("count") or 0), 2)
+            self.assertAlmostEqual(float(relax_distribution.get("median") or 0.0), -2.8, places=6)
+
+            hit_rows = _build_hit_list_rows(
+                run_root=run_root,
+                request=request,
+                summary=summary,
+                weights={"soluprot": 1.0, "plddt": 1.0, "rmsd": 1.0, "novelty": 0.0},
+                rmsd_ref=5.0,
+            )
+            self.assertEqual(len(hit_rows), 2)
+            by_id = {str(row.get("seq_id")): row for row in hit_rows}
+            self.assertAlmostEqual(float((by_id.get("rfd3_model:1") or {}).get("relax") or 0.0), -3.5, places=6)
+            self.assertAlmostEqual(float((by_id.get("bioemu_model:1") or {}).get("relax") or 0.0), -2.1, places=6)
+            self.assertTrue(bool((by_id.get("rfd3_model:1") or {}).get("relax_selected")))
+            self.assertFalse(bool((by_id.get("bioemu_model:1") or {}).get("relax_selected")))
 
     def test_compare_runs_hit_list_and_export_package_tools(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"

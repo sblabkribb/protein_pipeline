@@ -560,6 +560,21 @@ test("buildRunArguments keeps false/zero values from answers", () => {
   assert.equal(args.af2_provider, "af2");
 });
 
+test("buildRunArguments preserves relax controls from answers", () => {
+  const args = buildRunArguments({
+    prompt: "",
+    routed: { stop_after: "af2" },
+    answers: {
+      relax_enabled: true,
+      relax_score_per_residue_cutoff: -2.5,
+    },
+    runId: "run_relax",
+  });
+  assert.equal(args.relax_enabled, true);
+  assert.equal(args.relax_score_per_residue_cutoff, -2.5);
+  assert.equal(args.stop_after, "af2");
+});
+
 test("buildRunArguments maps novelty_enabled to stop_after novelty", () => {
   const args = buildRunArguments({
     prompt: "",
@@ -667,6 +682,14 @@ test("workflowStudioStageFields exposes key fields per stage", () => {
     "mask_consensus_apply",
     "ligand_mask_use_original_target",
   ]);
+  assert.deepEqual(workflowStudioStageFields("af2"), [
+    "af2_provider",
+    "af2_max_candidates_per_tier",
+    "af2_plddt_cutoff",
+    "af2_rmsd_cutoff",
+    "relax_enabled",
+    "relax_score_per_residue_cutoff",
+  ]);
   assert.deepEqual(workflowStudioStageFields("soluprot"), ["soluprot_cutoff"]);
   assert.deepEqual(workflowStudioStageFields("soluprot_50"), ["soluprot_cutoff"]);
   assert.deepEqual(workflowStudioStageFields("unknown"), []);
@@ -751,6 +774,28 @@ test("buildWorkflowStudioEffectiveAnswers inherits prior run values for untouche
   });
   assert.equal(merged.rfd3_contig, "A1-10");
   assert.equal(merged.bioemu_use, true);
+});
+
+test("inferRequestRunMode treats relax controls as pipeline configuration", () => {
+  assert.equal(
+    inferRequestRunMode({
+      target_pdb: "ATOM",
+      stop_after: "af2",
+      relax_enabled: true,
+      relax_score_per_residue_cutoff: -2.7,
+    }),
+    "pipeline"
+  );
+});
+
+test("app source exposes relax controls in setup and analyze views", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(source, /relax_enabled/);
+  assert.match(source, /relax_score_per_residue_cutoff/);
+  assert.match(source, /question\.relaxEnabled\.label/);
+  assert.match(source, /question\.relaxScorePerResidueCutoff\.label/);
+  assert.match(source, /Relax/);
 });
 
 test("buildWorkflowStudioEffectiveAnswers applies workflow defaults for untouched design and af2 counts", () => {
@@ -919,7 +964,7 @@ test("product shell exposes a sidebar with home, fast, and advanced entry points
   assert.match(source, /"tabs\.home":/);
   assert.match(source, /"tabs\.fast":/);
   assert.match(source, /"tabs\.advanced":/);
-  assert.match(source, /const TAB_OPTIONS = \["home", "fast", "advanced", "studio", "rounds", "monitor", "analyze", "mcp"\];/);
+  assert.match(source, /const TAB_OPTIONS = \["home", "fast", "advanced", "studio", "monitor", "rounds", "analyze", "mcp"\];/);
 });
 
 test("sidebar prioritizes monitor before rounds in the execution navigation order", () => {
@@ -1255,7 +1300,7 @@ test("rounds editing uses an overlay form instead of prompt dialogs", () => {
   assert.match(html, /id="roundsEditProjectBtn"/);
   assert.match(source, /function openWorkspaceRecordEditor\(/);
   assert.match(source, /async function submitWorkspaceRecordEditor\(/);
-  assert.match(source, /if \(el\.workspaceRecordForm\) \{[\s\S]*submitWorkspaceRecordEditor\(\);/m);
+  assert.match(source, /el\.workspaceRecordForm\?\.addEventListener\("submit", async \(event\) => \{[\s\S]*submitWorkspaceRecordEditor\(\);/m);
   assert.doesNotMatch(source, /async function createProjectFromHome\([\s\S]*window\.prompt/m);
   assert.doesNotMatch(source, /async function createRoundFromHome\([\s\S]*window\.prompt/m);
   assert.doesNotMatch(source, /async function editCurrentRoundFromWorkspace\([\s\S]*window\.prompt/m);

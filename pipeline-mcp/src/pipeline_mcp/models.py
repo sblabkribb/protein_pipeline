@@ -113,6 +113,10 @@ class PipelineRequest:
     af2_max_candidates_per_tier: int = 0
     af2_top_k: int = 20
     af2_sequence_ids: list[str] | None = None
+    relax_enabled: bool = False
+    relax_score_per_residue_cutoff: float | None = None
+    relax_nstruct: int = 1
+    relax_extra_flags: str | None = None
 
     mmseqs_target_db: str = "uniref90"
     mmseqs_max_seqs: int = 3000
@@ -152,6 +156,7 @@ class TierResult:
     passed_ids: list[str] | None = None
     af2: dict[str, object] | None = None
     af2_selected_ids: list[str] | None = None
+    relax_selected_ids: list[str] | None = None
     novelty_tsv: str | None = None
 
 

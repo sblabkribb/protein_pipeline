@@ -1903,7 +1903,9 @@ const I18N = {
     "rounds.detail.hypothesis": "Hypothesis",
     "rounds.detail.notes": "Notes",
     "rounds.detail.selectedCandidates": "Selected Candidates",
+    "rounds.detail.selectedCandidatesAuto": "Auto from linked run results",
     "rounds.detail.experimentSummary": "Experiment Summary",
+    "rounds.detail.experimentSummaryAuto": "Auto from linked result/experiment data",
     "rounds.detail.reportSummary": "Report Summary",
     "rounds.detail.reportSummaryEmpty": "No report or linked-run summary yet.",
     "rounds.detail.nextRoundNotes": "Next-Round Notes",
@@ -1911,7 +1913,9 @@ const I18N = {
     "rounds.detail.modelSuggestionsPlaceholder": "Model guidance will appear here once round-level learning is enabled.",
     "rounds.detail.status": "Status",
     "rounds.detail.linkedRuns": "Linked Runs",
+    "rounds.detail.autoManaged": "Auto",
     "rounds.action.edit": "Edit Round",
+    "rounds.action.editProject": "Edit Project",
     "rounds.action.showArchived": "Show archived",
     "rounds.action.archiveProject": "Archive Project",
     "rounds.action.restoreProject": "Restore Project",
@@ -1933,6 +1937,7 @@ const I18N = {
     "rounds.message.projectArchived": "Archived project {name}.",
     "rounds.message.projectRestored": "Restored project {name}.",
     "rounds.message.projectDeleted": "Deleted project metadata for {name}.",
+    "rounds.message.projectUpdated": "Updated project {name}.",
     "rounds.message.roundArchived": "Archived round {name}.",
     "rounds.message.roundRestored": "Restored round {name}.",
     "rounds.message.roundDeleted": "Deleted round metadata for {name}.",
@@ -1944,6 +1949,24 @@ const I18N = {
     "rounds.status.cancelled": "Cancelled",
     "rounds.status.archived": "Archived",
     "rounds.error.roundRequired": "Select a round first.",
+    "workspaceRecord.projectCreateTitle": "New Project",
+    "workspaceRecord.projectEditTitle": "Edit Project",
+    "workspaceRecord.roundCreateTitle": "New Round",
+    "workspaceRecord.roundEditTitle": "Edit Round",
+    "workspaceRecord.projectSubheading": "Name the project and capture the campaign scope.",
+    "workspaceRecord.roundSubheading": "Record the manual planning notes for this round.",
+    "workspaceRecord.projectName": "Project Name",
+    "workspaceRecord.projectDescription": "Project Description",
+    "workspaceRecord.roundTitle": "Round Title",
+    "workspaceRecord.roundGoal": "Goal",
+    "workspaceRecord.roundHypothesis": "Hypothesis",
+    "workspaceRecord.roundNotes": "Notes",
+    "workspaceRecord.nextRoundNotes": "Next-Round Notes",
+    "workspaceRecord.roundManagedHint": "Selected candidates and experiment summary are auto-managed from linked run results.",
+    "workspaceRecord.saveProject": "Save Project",
+    "workspaceRecord.saveRound": "Save Round",
+    "workspaceRecord.error.projectNameRequired": "Enter a project name.",
+    "workspaceRecord.error.roundTitleRequired": "Enter a round title.",
     "fast.title": "Fast Launch",
     "fast.desc": "Paste a PDB or FASTA, keep the standard defaults, and launch without opening the full expert setup.",
     "fast.input.label": "Target Input",
@@ -2432,6 +2455,7 @@ const I18N = {
     "help.admin.title": "Admin",
     "help.admin.step1": "Admins can create users from the Admin button.",
     "common.close": "Close",
+    "common.save": "Save",
     "common.none": "None",
     "common.enabled": "Enabled",
     "common.disabled": "Disabled",
@@ -2561,6 +2585,12 @@ const I18N = {
     "question.af2PlddtCutoff.help": "Minimum pLDDT threshold for {af2Provider} pass filtering (default: 85).",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD Cutoff",
     "question.af2RmsdCutoff.help": "Maximum RMSD threshold (angstrom) for {af2Provider} pass filtering (default: 2.0).",
+    "question.relaxEnabled.label": "Rosetta Relax",
+    "question.relaxEnabled.help":
+      "Run Rosetta FastRelax on AF2-selected structures to collect an energy-based support metric and optionally apply a cutoff.",
+    "question.relaxScorePerResidueCutoff.label": "Rosetta Relax Score/Residue Cutoff",
+    "question.relaxScorePerResidueCutoff.help":
+      "Maximum Rosetta total_score per residue allowed after relax. Lower, more negative values are better. Leave blank to report without filtering.",
     "question.noveltyEnabled.label": "WT Diff",
     "question.noveltyEnabled.help": "Run the final WT Diff comparison for AF2-selected sequences.",
     "question.af2Provider.label": "Structure Predictor",
@@ -2654,6 +2684,8 @@ const I18N = {
     "choice.ligandMaskOriginal.off": "Use backbone-only mask",
     "choice.bioemuUse.on": "Enable BioEmu",
     "choice.bioemuUse.off": "Disable BioEmu",
+    "choice.relax.on": "Enable Relax",
+    "choice.relax.off": "Disable Relax",
     "choice.rfd3Use.on": "Enable RFD3",
     "choice.rfd3Use.off": "Disable RFD3",
     "choice.novelty.on": "Enable WT Diff",
@@ -2862,7 +2894,7 @@ const I18N = {
       "Run 3D/sequence diff and review WT/RFD3/BioEmu comparison in one place.",
     "analyze.runCompare.title": "Run-to-Run Compare",
     "analyze.runCompare.desc":
-      "Compare pLDDT, RMSD, SoluProt, and pass-rate deltas against a baseline run.",
+      "Compare pLDDT, RMSD, Relax, SoluProt, and pass-rate deltas against a baseline run.",
     "analyze.runCompare.baseline": "Baseline Run",
     "analyze.runCompare.refresh": "Compare",
     "analyze.runCompare.details": "View Details",
@@ -3007,7 +3039,9 @@ const I18N = {
     "rounds.detail.hypothesis": "가설",
     "rounds.detail.notes": "메모",
     "rounds.detail.selectedCandidates": "선정 후보",
+    "rounds.detail.selectedCandidatesAuto": "연결된 run 결과에서 자동 반영",
     "rounds.detail.experimentSummary": "실험 요약",
+    "rounds.detail.experimentSummaryAuto": "연결된 결과/실험 데이터에서 자동 반영",
     "rounds.detail.reportSummary": "리포트 요약",
     "rounds.detail.reportSummaryEmpty": "아직 연결된 리포트나 run 요약이 없습니다.",
     "rounds.detail.nextRoundNotes": "다음 라운드 메모",
@@ -3015,7 +3049,9 @@ const I18N = {
     "rounds.detail.modelSuggestionsPlaceholder": "라운드 학습 기능이 준비되면 여기에서 모델 제안을 표시합니다.",
     "rounds.detail.status": "상태",
     "rounds.detail.linkedRuns": "연결된 run",
+    "rounds.detail.autoManaged": "자동",
     "rounds.action.edit": "라운드 수정",
+    "rounds.action.editProject": "프로젝트 수정",
     "rounds.action.showArchived": "보관 항목 보기",
     "rounds.action.archiveProject": "프로젝트 보관",
     "rounds.action.restoreProject": "프로젝트 복구",
@@ -3036,6 +3072,7 @@ const I18N = {
     "rounds.message.projectArchived": "{name} 프로젝트를 보관했습니다.",
     "rounds.message.projectRestored": "{name} 프로젝트를 복구했습니다.",
     "rounds.message.projectDeleted": "{name} 프로젝트 메타데이터를 삭제했습니다.",
+    "rounds.message.projectUpdated": "{name} 프로젝트를 업데이트했습니다.",
     "rounds.message.roundArchived": "{name} 라운드를 보관했습니다.",
     "rounds.message.roundRestored": "{name} 라운드를 복구했습니다.",
     "rounds.message.roundDeleted": "{name} 라운드 메타데이터를 삭제했습니다.",
@@ -3047,6 +3084,24 @@ const I18N = {
     "rounds.status.cancelled": "취소됨",
     "rounds.status.archived": "보관됨",
     "rounds.error.roundRequired": "먼저 라운드를 선택하세요.",
+    "workspaceRecord.projectCreateTitle": "새 프로젝트",
+    "workspaceRecord.projectEditTitle": "프로젝트 수정",
+    "workspaceRecord.roundCreateTitle": "새 라운드",
+    "workspaceRecord.roundEditTitle": "라운드 수정",
+    "workspaceRecord.projectSubheading": "프로젝트 이름과 캠페인 범위를 입력하세요.",
+    "workspaceRecord.roundSubheading": "이 라운드에서 사람이 직접 관리할 계획 메모를 기록합니다.",
+    "workspaceRecord.projectName": "프로젝트 이름",
+    "workspaceRecord.projectDescription": "프로젝트 설명",
+    "workspaceRecord.roundTitle": "라운드 제목",
+    "workspaceRecord.roundGoal": "목표",
+    "workspaceRecord.roundHypothesis": "가설",
+    "workspaceRecord.roundNotes": "메모",
+    "workspaceRecord.nextRoundNotes": "다음 라운드 메모",
+    "workspaceRecord.roundManagedHint": "선정 후보와 실험 요약은 연결된 run 결과에서 자동으로 관리됩니다.",
+    "workspaceRecord.saveProject": "프로젝트 저장",
+    "workspaceRecord.saveRound": "라운드 저장",
+    "workspaceRecord.error.projectNameRequired": "프로젝트 이름을 입력하세요.",
+    "workspaceRecord.error.roundTitleRequired": "라운드 제목을 입력하세요.",
     "fast.title": "Fast 실행",
     "fast.desc": "PDB 또는 FASTA를 붙여 넣고 표준 기본값으로 바로 실행합니다. 전체 전문가 설정을 열지 않아도 됩니다.",
     "fast.input.label": "타깃 입력",
@@ -3534,6 +3589,7 @@ const I18N = {
     "help.admin.title": "관리자",
     "help.admin.step1": "관리자는 Admin 버튼에서 사용자를 생성할 수 있습니다.",
     "common.close": "닫기",
+    "common.save": "저장",
     "common.none": "없음",
     "common.enabled": "활성",
     "common.disabled": "비활성",
@@ -3664,6 +3720,12 @@ const I18N = {
     "question.af2PlddtCutoff.help": "{af2Provider} 통과 필터링에 사용할 최소 pLDDT 임계값입니다. (기본값: 85)",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD 컷오프",
     "question.af2RmsdCutoff.help": "{af2Provider} 통과 필터링에 사용할 최대 RMSD 임계값(Å)입니다. (기본값: 2.0)",
+    "question.relaxEnabled.label": "Rosetta Relax",
+    "question.relaxEnabled.help":
+      "AF2로 선별된 구조에 Rosetta FastRelax를 실행해 보조 에너지 지표를 수집하고 필요하면 컷오프를 적용합니다.",
+    "question.relaxScorePerResidueCutoff.label": "Rosetta Relax score/residue 컷오프",
+    "question.relaxScorePerResidueCutoff.help":
+      "relax 이후 total_score per residue의 최대 허용값입니다. 더 낮고 음수일수록 유리합니다. 비워두면 필터 없이 보고만 합니다.",
     "question.noveltyEnabled.label": "WT Diff",
     "question.noveltyEnabled.help": "AF2 선택 서열에 대해 마지막 WT Diff 비교를 실행합니다.",
     "question.af2Provider.label": "구조 예측기",
@@ -3757,6 +3819,8 @@ const I18N = {
     "choice.ligandMaskOriginal.off": "현재 백본 기준만 사용",
     "choice.bioemuUse.on": "BioEmu 사용",
     "choice.bioemuUse.off": "BioEmu 사용 안 함",
+    "choice.relax.on": "Relax 사용",
+    "choice.relax.off": "Relax 사용 안 함",
     "choice.rfd3Use.on": "RFD3 사용",
     "choice.rfd3Use.off": "RFD3 사용 안 함",
     "choice.novelty.on": "WT Diff 사용",
@@ -3963,7 +4027,7 @@ const I18N = {
       "3D/서열 비교와 WT/RFD3/BioEmu 비교 요약을 한 화면에서 확인합니다.",
     "analyze.runCompare.title": "Run-to-Run 비교",
     "analyze.runCompare.desc":
-      "기준 실행 대비 pLDDT, RMSD, SoluProt, 통과율 변화를 비교합니다.",
+      "기준 실행 대비 pLDDT, RMSD, Relax, SoluProt, 통과율 변화를 비교합니다.",
     "analyze.runCompare.baseline": "기준 실행",
     "analyze.runCompare.refresh": "비교",
     "analyze.runCompare.details": "상세 보기",
@@ -4170,7 +4234,7 @@ function labelFromMap(value, map) {
 }
 
 const TAB_KEY = "kbf.activeTab";
-const TAB_OPTIONS = ["home", "fast", "advanced", "studio", "rounds", "monitor", "analyze", "mcp"];
+const TAB_OPTIONS = ["home", "fast", "advanced", "studio", "monitor", "rounds", "analyze", "mcp"];
 const tabButtons = Array.from(document.querySelectorAll("#appSidebar .tab-btn"));
 const tabPanels = Array.from(document.querySelectorAll("#appShell .tab-panel"));
 const langButtons = Array.from(document.querySelectorAll(".lang-btn"));
@@ -7602,6 +7666,14 @@ const QUESTION_PRESETS = {
     questionKey: "question.af2RmsdCutoff.help",
     default: 2.0,
   },
+  relax_enabled: {
+    labelKey: "question.relaxEnabled.label",
+    questionKey: "question.relaxEnabled.help",
+  },
+  relax_score_per_residue_cutoff: {
+    labelKey: "question.relaxScorePerResidueCutoff.label",
+    questionKey: "question.relaxScorePerResidueCutoff.help",
+  },
   novelty_enabled: {
     labelKey: "question.noveltyEnabled.label",
     questionKey: "question.noveltyEnabled.help",
@@ -7732,6 +7804,7 @@ const ANSWER_BOOL_KEYS = new Set([
   "bioemu_use",
   "bioemu_filter_samples",
   "novelty_enabled",
+  "relax_enabled",
   "confirm_run",
 ]);
 
@@ -7756,6 +7829,7 @@ const ANSWER_FLOAT_KEYS = new Set([
   "soluprot_cutoff",
   "af2_plddt_cutoff",
   "af2_rmsd_cutoff",
+  "relax_score_per_residue_cutoff",
   "ligand_mask_distance",
   "rfd3_partial_t",
   "msa_min_coverage",
@@ -9308,6 +9382,13 @@ function initHomeContext() {
       setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
     }
   });
+  el.roundsEditProjectBtn?.addEventListener("click", async () => {
+    try {
+      await editCurrentProjectFromWorkspace();
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    }
+  });
   el.roundsShowArchived?.addEventListener("change", async (event) => {
     state.roundsShowArchived = Boolean(event?.target?.checked);
     try {
@@ -9374,6 +9455,21 @@ function initHomeContext() {
   el.roundsRestoreRoundBtn?.addEventListener("click", async () => {
     try {
       await restoreCurrentRoundFromWorkspace();
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    }
+  });
+  el.workspaceRecordClose?.addEventListener("click", closeWorkspaceRecordEditor);
+  el.workspaceRecordCancel?.addEventListener("click", closeWorkspaceRecordEditor);
+  el.workspaceRecordPanel?.addEventListener("click", (event) => {
+    if (event.target === el.workspaceRecordPanel) {
+      closeWorkspaceRecordEditor();
+    }
+  });
+  el.workspaceRecordForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      await submitWorkspaceRecordEditor();
     } catch (err) {
       setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
     }
@@ -9633,6 +9729,18 @@ function buildManualPlan(mode) {
         questionKey: "question.af2RmsdCutoff.help",
         required: false,
         default: 2.0,
+      },
+      {
+        id: "relax_enabled",
+        labelKey: "question.relaxEnabled.label",
+        questionKey: "question.relaxEnabled.help",
+        required: false,
+      },
+      {
+        id: "relax_score_per_residue_cutoff",
+        labelKey: "question.relaxScorePerResidueCutoff.label",
+        questionKey: "question.relaxScorePerResidueCutoff.help",
+        required: false,
       },
       {
         id: "af2_provider",
@@ -13180,6 +13288,7 @@ function renderQuestions(questions) {
     "bioemu_use",
     "bioemu_filter_samples",
     "novelty_enabled",
+    "relax_enabled",
     "af2_provider",
     "confirm_run",
   ]);
@@ -13205,6 +13314,7 @@ function renderQuestions(questions) {
     "rfd3_use",
     "bioemu_use",
     "bioemu_filter_samples",
+    "relax_enabled",
     "af2_provider",
     "design_chains",
     "pdb_strip_nonpositive_resseq",
@@ -13773,6 +13883,31 @@ function renderQuestions(questions) {
       );
     }
 
+    if (q.id === "relax_enabled") {
+      let current = state.answers.relax_enabled;
+      if (typeof current !== "boolean") {
+        const routedDefault = state.plan?.routed_request?.relax_enabled;
+        if (typeof routedDefault === "boolean") {
+          current = routedDefault;
+        } else {
+          current = q.default !== undefined ? Boolean(q.default) : false;
+        }
+        state.answers.relax_enabled = current;
+      }
+      renderChoiceButtons(
+        card,
+        [
+          { labelKey: "choice.relax.on", value: true },
+          { labelKey: "choice.relax.off", value: false },
+        ],
+        current,
+        (value) => {
+          state.answers.relax_enabled = value;
+          updateRunEligibility(normalizedQuestions);
+        }
+      );
+    }
+
     if (q.id === "confirm_run") {
       let current = state.answers.confirm_run;
       if (typeof current !== "boolean") {
@@ -13950,6 +14085,14 @@ function renderQuestions(questions) {
     });
 
     renderBooleanField({
+      id: "relax_enabled",
+      fallback: false,
+      onLabelKey: "choice.relax.on",
+      offLabelKey: "choice.relax.off",
+      rerender: false,
+    });
+
+    renderBooleanField({
       id: "bioemu_filter_samples",
       fallback: true,
       onLabel: "Enabled",
@@ -14076,6 +14219,7 @@ function renderQuestions(questions) {
     "af2_max_candidates_per_tier",
     "af2_plddt_cutoff",
     "af2_rmsd_cutoff",
+    "relax_score_per_residue_cutoff",
   ]);
   const compactParameterPriority = {
     bioemu_max_return_structures: 10,
@@ -14085,6 +14229,7 @@ function renderQuestions(questions) {
     af2_max_candidates_per_tier: 50,
     af2_plddt_cutoff: 60,
     af2_rmsd_cutoff: 70,
+    relax_score_per_residue_cutoff: 80,
   };
   const bioemuCountRelevant =
     state.runMode === "pipeline" ||
@@ -14948,6 +15093,8 @@ function filterAnswersForMode(mode, answers) {
       "af2_max_candidates_per_tier",
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
+      "relax_enabled",
+      "relax_score_per_residue_cutoff",
       "af2_provider",
       "novelty_enabled",
       "num_seq_per_tier",
@@ -14983,6 +15130,8 @@ function filterAnswersForMode(mode, answers) {
       "af2_max_candidates_per_tier",
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
+      "relax_enabled",
+      "relax_score_per_residue_cutoff",
       "af2_provider",
       "num_seq_per_tier",
       "bioemu_use",
@@ -16343,7 +16492,8 @@ function comparisonTierRows(summary) {
         Number(row.af2_candidate_total || 0) > 0 ||
         Number(row.af2_selected_total || 0) > 0 ||
         finiteNumber(row.plddt_median) !== null ||
-        finiteNumber(row.rmsd_median) !== null
+        finiteNumber(row.rmsd_median) !== null ||
+        finiteNumber(row.relax_median) !== null
       );
     })
     .slice()
@@ -16364,6 +16514,7 @@ function comparisonDistributionEntries(summary) {
     ["SoluProt", distributions.soluprot],
     ["pLDDT", distributions.plddt],
     ["RMSD", distributions.rmsd],
+    ["Relax/res", distributions.relax],
   ].filter(([, metric]) => Number(metric?.count || 0) > 0);
 }
 
@@ -16402,7 +16553,7 @@ function comparisonSummaryHasData(summary) {
     summary?.funnel && typeof summary.funnel === "object" && summary.funnel.overall
       ? summary.funnel.overall
       : null;
-  const wtKeys = ["soluprot", "plddt", "rmsd"];
+  const wtKeys = ["soluprot", "plddt", "rmsd", "relax"];
   const hasWt = wtKeys.some((key) => {
     const metric = wt[key];
     return (
@@ -16424,7 +16575,9 @@ function comparisonSummaryHasData(summary) {
       Number(bucket.propagated_count || 0) > 0 ||
       Number(bucket.soluprot_total || 0) > 0 ||
       Number(bucket.af2_candidate_total || 0) > 0 ||
-      Number(bucket.af2_selected_total || 0) > 0
+      Number(bucket.af2_selected_total || 0) > 0 ||
+      Number(bucket.relax_candidate_total || 0) > 0 ||
+      Number(bucket.relax_selected_total || 0) > 0
     );
   });
   if (hasSource) return true;
@@ -16432,7 +16585,8 @@ function comparisonSummaryHasData(summary) {
     if (
       Number(funnelOverall.backbone_count || 0) > 0 ||
       Number(funnelOverall.soluprot_total || 0) > 0 ||
-      Number(funnelOverall.af2_candidate_total || 0) > 0
+      Number(funnelOverall.af2_candidate_total || 0) > 0 ||
+      Number(funnelOverall.relax_candidate_total || 0) > 0
     ) {
       return true;
     }
@@ -16467,23 +16621,26 @@ function parsePassStat(raw) {
 
 function medianFallbackBySource(rows = state.hitListRows) {
   const buckets = {
-    rfd3: { plddt: [], rmsd: [] },
-    bioemu: { plddt: [], rmsd: [] },
-    other: { plddt: [], rmsd: [] },
+    rfd3: { plddt: [], rmsd: [], relax: [] },
+    bioemu: { plddt: [], rmsd: [], relax: [] },
+    other: { plddt: [], rmsd: [], relax: [] },
   };
   (Array.isArray(rows) ? rows : []).forEach((row) => {
     const key = normalizeSourceKey(row?.source);
     if (!Object.prototype.hasOwnProperty.call(buckets, key)) return;
     const plddt = finiteNumber(row?.plddt);
     const rmsd = finiteNumber(row?.rmsd);
+    const relax = finiteNumber(row?.relax);
     if (plddt !== null) buckets[key].plddt.push(plddt);
     if (rmsd !== null) buckets[key].rmsd.push(rmsd);
+    if (relax !== null) buckets[key].relax.push(relax);
   });
   const out = {};
   ["rfd3", "bioemu", "other"].forEach((key) => {
     out[key] = {
       plddt_median: buckets[key].plddt.length ? percentileValue(buckets[key].plddt, 0.5) : null,
       rmsd_median: buckets[key].rmsd.length ? percentileValue(buckets[key].rmsd, 0.5) : null,
+      relax_median: buckets[key].relax.length ? percentileValue(buckets[key].relax, 0.5) : null,
     };
   });
   return out;
@@ -16652,6 +16809,7 @@ function buildComparisonDetailMarkdown(summary, runId) {
     { key: "soluprot", label: "SoluProt", digits: 3 },
     { key: "plddt", label: "pLDDT", digits: 1 },
     { key: "rmsd", label: "RMSD", digits: 2 },
+    { key: "relax", label: "Relax/res", digits: 3 },
   ];
   lines.push("| Metric | WT | Design median | Delta |");
   lines.push("|---|---:|---:|---:|");
@@ -16681,9 +16839,9 @@ function buildComparisonDetailMarkdown(summary, runId) {
 
   lines.push("## Source Compare");
   lines.push(
-    `| Source | Backbones | SoluProt pass | Median SoluProt | ${af2ProviderPassLabel(af2Provider)} | Median pLDDT | Median RMSD |`
+    `| Source | Backbones | SoluProt pass | Median SoluProt | ${af2ProviderPassLabel(af2Provider)} | Relax pass | Median pLDDT | Median RMSD | Median Relax/res |`
   );
-  lines.push("|---|---:|---:|---:|---:|---:|---:|");
+  lines.push("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
   const metricFallback = medianFallbackBySource();
   const sourceUsageLines = ["rfd3", "bioemu", "other"]
     .map((key) =>
@@ -16699,8 +16857,9 @@ function buildComparisonDetailMarkdown(summary, runId) {
     const fallback = metricFallback[key] && typeof metricFallback[key] === "object" ? metricFallback[key] : {};
     const plddtMedian = finiteNumber(bucket.plddt_median) ?? finiteNumber(fallback.plddt_median);
     const rmsdMedian = finiteNumber(bucket.rmsd_median) ?? finiteNumber(fallback.rmsd_median);
+    const relaxMedian = finiteNumber(bucket.relax_median) ?? finiteNumber(fallback.relax_median);
     lines.push(
-      `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${formatMetricValue(plddtMedian, 1)} | ${formatMetricValue(rmsdMedian, 2)} |`
+      `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${Number(bucket.relax_selected_total || 0)}/${Number(bucket.relax_candidate_total || 0)} (${formatPercentValue(bucket.relax_pass_rate)}) | ${formatMetricValue(plddtMedian, 1)} | ${formatMetricValue(rmsdMedian, 2)} | ${formatMetricValue(relaxMedian, 3)} |`
     );
   });
   if (sourceUsageLines.length) {
@@ -16714,13 +16873,13 @@ function buildComparisonDetailMarkdown(summary, runId) {
   if (tierRows.length) {
     lines.push("## Tier Compare");
     lines.push(
-      `| Tier | Designs | SoluProt pass | ${af2ProviderPassLabel(af2Provider)} | Median pLDDT | Median RMSD |`
+      `| Tier | Designs | SoluProt pass | ${af2ProviderPassLabel(af2Provider)} | Relax pass | Median pLDDT | Median RMSD | Median Relax/res |`
     );
-    lines.push("|---:|---:|---:|---:|---:|---:|");
+    lines.push("|---:|---:|---:|---:|---:|---:|---:|---:|");
     tierRows.forEach((row) => {
       if (!row || typeof row !== "object") return;
       lines.push(
-        `| ${formatMetricValue(row.tier, 2)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${formatMetricValue(row.plddt_median, 1)} | ${formatMetricValue(row.rmsd_median, 2)} |`
+        `| ${formatMetricValue(row.tier, 2)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${Number(row.relax_selected_total || 0)}/${Number(row.relax_candidate_total || 0)} (${formatPercentValue(row.relax_pass_rate)}) | ${formatMetricValue(row.plddt_median, 1)} | ${formatMetricValue(row.rmsd_median, 2)} | ${formatMetricValue(row.relax_median, 3)} |`
       );
     });
     lines.push("");
@@ -16733,6 +16892,7 @@ function buildComparisonDetailMarkdown(summary, runId) {
     ["SoluProt", distributions.soluprot],
     ["pLDDT", distributions.plddt],
     ["RMSD", distributions.rmsd],
+    ["Relax/res", distributions.relax],
   ].forEach(([name, stat]) => {
     const metric = stat && typeof stat === "object" ? stat : {};
     lines.push(
@@ -16794,6 +16954,7 @@ function renderArtifactComparisonSummary(summary) {
     { key: "soluprot", label: "SoluProt", digits: 3 },
     { key: "plddt", label: "pLDDT", digits: 1 },
     { key: "rmsd", label: "RMSD", digits: 2 },
+    { key: "relax", label: "Relax/res", digits: 3 },
   ];
   const wtHasData = wtRows.some((row) => {
     const metric = wt[row.key] || {};
@@ -16814,7 +16975,8 @@ function renderArtifactComparisonSummary(summary) {
     const propagated = Number(bucket.propagated_count || 0);
     const solTotal = Number(bucket.soluprot_total || 0);
     const af2 = Number(bucket.af2_selected_total || 0);
-    return backbone > 0 || requested > 0 || observed > 0 || materialized > 0 || propagated > 0 || solTotal > 0 || af2 > 0;
+    const relax = Number(bucket.relax_selected_total || 0);
+    return backbone > 0 || requested > 0 || observed > 0 || materialized > 0 || propagated > 0 || solTotal > 0 || af2 > 0 || relax > 0;
   });
   const hasFunnel =
     Number(funnelOverall?.backbone_count || 0) > 0 ||
@@ -16863,6 +17025,7 @@ function renderArtifactComparisonSummary(summary) {
       const passText = formatPassRate(bucket);
       const solMedian = formatMetricValue(bucket.soluprot_median, 3, false);
       const af2 = String(Number(bucket.af2_selected_total || 0));
+      const relaxPass = `${Number(bucket.relax_selected_total || 0)}/${Number(bucket.relax_candidate_total || 0)} (${formatPercentValue(bucket.relax_pass_rate)})`;
       const plddt = formatMetricValue(
         finiteNumber(bucket.plddt_median) ?? finiteNumber(fallback.plddt_median),
         1,
@@ -16873,6 +17036,11 @@ function renderArtifactComparisonSummary(summary) {
         2,
         false
       );
+      const relaxMedian = formatMetricValue(
+        finiteNumber(bucket.relax_median) ?? finiteNumber(fallback.relax_median),
+        3,
+        false
+      );
       return `
         <tr>
           <th>${escapeHtml(sourceLabel(key))}</th>
@@ -16880,8 +17048,10 @@ function renderArtifactComparisonSummary(summary) {
           <td>${escapeHtml(passText)}</td>
           <td>${escapeHtml(solMedian)}</td>
           <td>${escapeHtml(af2)}</td>
+          <td>${escapeHtml(relaxPass)}</td>
           <td>${escapeHtml(plddt)}</td>
           <td>${escapeHtml(rmsd)}</td>
+          <td>${escapeHtml(relaxMedian)}</td>
         </tr>
       `;
     })
@@ -16915,8 +17085,10 @@ function renderArtifactComparisonSummary(summary) {
           <td>${escapeHtml(String(Number(row?.design_total || 0)))}</td>
           <td>${escapeHtml(formatPassRate(row))}</td>
           <td>${escapeHtml(formatAf2SelectionStat(row))}</td>
+          <td>${escapeHtml(`${Number(row?.relax_selected_total || 0)}/${Number(row?.relax_candidate_total || 0)} (${formatPercentValue(row?.relax_pass_rate)})`)}</td>
           <td>${escapeHtml(formatMetricValue(finiteNumber(row?.plddt_median), 1, false))}</td>
           <td>${escapeHtml(formatMetricValue(finiteNumber(row?.rmsd_median), 2, false))}</td>
+          <td>${escapeHtml(formatMetricValue(finiteNumber(row?.relax_median), 3, false))}</td>
         </tr>
       `;
     })
@@ -17019,8 +17191,10 @@ function renderArtifactComparisonSummary(summary) {
             <th>${escapeHtml(t("artifacts.compare.passRate"))}</th>
             <th>${escapeHtml(t("artifacts.compare.soluprotMedian"))}</th>
             <th>${escapeHtml(t("artifacts.compare.af2Selected", { af2Provider: af2ProviderName(af2Provider) }))}</th>
+            <th>Relax pass</th>
             <th>${escapeHtml(t("artifacts.compare.plddtMedian"))}</th>
             <th>${escapeHtml(t("artifacts.compare.rmsdMedian"))}</th>
+            <th>Relax/res</th>
           </tr>
         </thead>
         <tbody>${sourceTableRows}</tbody>
@@ -17044,8 +17218,10 @@ function renderArtifactComparisonSummary(summary) {
             <th>${escapeHtml(t("artifacts.compare.designCount"))}</th>
             <th>${escapeHtml(t("artifacts.compare.passRate"))}</th>
             <th>${escapeHtml(t("artifacts.compare.af2Selected", { af2Provider: af2ProviderName(af2Provider) }))}</th>
+            <th>Relax pass</th>
             <th>${escapeHtml(t("artifacts.compare.plddtMedian"))}</th>
             <th>${escapeHtml(t("artifacts.compare.rmsdMedian"))}</th>
+            <th>Relax/res</th>
           </tr>
         </thead>
         <tbody>${tierTableRows}</tbody>
@@ -21116,6 +21292,7 @@ function renderRunCompareSummary(result) {
     { key: "soluprot_median", label: "SoluProt", digits: 3, percent: false },
     { key: "plddt_median", label: "pLDDT", digits: 1, percent: false },
     { key: "rmsd_median", label: "RMSD", digits: 2, percent: false },
+    { key: "relax_median", label: "Relax/res", digits: 3, percent: false },
     { key: "soluprot_pass_rate", label: "SoluProt pass", digits: 1, percent: true },
     { key: "af2_pass_rate", label: af2ProviderPassLabel(currentRunAf2Provider()), digits: 1, percent: true },
   ];
@@ -21171,6 +21348,7 @@ function buildRunCompareDetailsMarkdown(result) {
     ["SoluProt median", "soluprot_median", 3, false],
     ["pLDDT median", "plddt_median", 1, false],
     ["RMSD median", "rmsd_median", 2, false],
+    ["Relax/res median", "relax_median", 3, false],
     ["SoluProt pass rate", "soluprot_pass_rate", 1, true],
     [`${af2ProviderPassLabel(currentRunAf2Provider())} rate`, "af2_pass_rate", 1, true],
     ["Backbone count", "backbone_count", 0, false],
@@ -21754,6 +21932,7 @@ function renderHitList() {
         <td class="num">${escapeHtml(formatMetricValue(row.soluprot, 3, false))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.plddt, 1, false))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.rmsd, 2, false))}</td>
+        <td class="num">${escapeHtml(formatMetricValue(row.relax, 3, false))}</td>
         <td class="num">${escapeHtml(wtDiffLabel)}</td>
         <td>${escapeHtml(localizedYesNo(Boolean(row.af2_selected)))}</td>
       </tr>`;
@@ -21771,6 +21950,7 @@ function renderHitList() {
           <th>SoluProt</th>
           <th>pLDDT</th>
           <th>RMSD</th>
+          <th>Relax</th>
           <th>${escapeHtml(t("analyze.hitList.identity"))}</th>
           <th>${escapeHtml(af2ProviderSelectedLabel(currentRunAf2Provider()))}</th>
         </tr>
@@ -21798,12 +21978,12 @@ function buildHitListDetailsMarkdown() {
   lines.push(`- Rows: ${maxRows}/${filtered.length}`);
   lines.push("");
   lines.push(
-    `| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+    `| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | Relax | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
   );
-  lines.push("|---:|---|---|---:|---:|---:|---:|---:|---:|---|");
+  lines.push("|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|");
   filtered.slice(0, maxRows).forEach((row) => {
     lines.push(
-      `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatMetricValue(row.tier, 2)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
+      `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatMetricValue(row.tier, 2)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatMetricValue(row.relax, 3)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
     );
   });
   lines.push("");
@@ -22252,12 +22432,12 @@ function buildReportHitListSection() {
   );
   lines.push("");
   lines.push(
-    `| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+    `| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | Relax | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
   );
-  lines.push("|---:|---|---|---:|---:|---:|---:|---:|---|");
+  lines.push("|---:|---|---|---:|---:|---:|---:|---:|---:|---|");
   rows.slice(0, maxRows).forEach((row) => {
     lines.push(
-      `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatMetricValue(row.tier, 2)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${row.af2_selected ? "yes" : "no"} |`
+      `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatMetricValue(row.tier, 2)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatMetricValue(row.relax, 3)} | ${row.af2_selected ? "yes" : "no"} |`
     );
   });
   lines.push("");

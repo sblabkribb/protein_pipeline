@@ -1691,6 +1691,12 @@ def _af2_payload_has_recovered_failure(af2: dict[str, object] | None) -> bool:
     return bool(af2.get("recovered"))
 
 
+def _relax_payload_has_recovered_failure(relax: dict[str, object] | None) -> bool:
+    if not isinstance(relax, dict):
+        return False
+    return bool(relax.get("recovered"))
+
+
 def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -> dict[str, object]:
     out = {
         "soluprot_scores": [],
@@ -1702,6 +1708,10 @@ def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -
         "af2_selected_plddt": [],
         "af2_selected_rmsd": [],
         "af2_selected_total": 0,
+        "relax_candidate_total": 0,
+        "relax_score_per_residue": [],
+        "relax_selected_score_per_residue": [],
+        "relax_selected_total": 0,
     }
     if not summary:
         return out
@@ -1764,6 +1774,34 @@ def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -
                         out["af2_selected_plddt"].append(float(scores.get(seq_id)))
                     if seq_id in rmsd_scores and isinstance(rmsd_scores.get(seq_id), (int, float)):
                         out["af2_selected_rmsd"].append(float(rmsd_scores.get(seq_id)))
+
+        relax = _load_json_file(tier_dir / "relax_scores.json")
+        if isinstance(relax, dict):
+            recovered_failure = _relax_payload_has_recovered_failure(relax)
+            score_per_residue = (
+                relax.get("score_per_residue")
+                if isinstance(relax.get("score_per_residue"), dict) and not recovered_failure
+                else {}
+            )
+            candidate_ids = relax.get("candidate_ids") if isinstance(relax.get("candidate_ids"), list) else []
+            candidate_total = len(candidate_ids)
+            if candidate_total <= 0:
+                candidate_total = len(score_per_residue)
+            out["relax_candidate_total"] += max(0, candidate_total)
+            candidate_metric_ids = candidate_ids if candidate_ids else list(score_per_residue.keys())
+            for seq_id in candidate_metric_ids:
+                if seq_id in score_per_residue and isinstance(score_per_residue.get(seq_id), (int, float)):
+                    out["relax_score_per_residue"].append(float(score_per_residue.get(seq_id)))
+            selected_ids = (
+                relax.get("selected_ids")
+                if isinstance(relax.get("selected_ids"), list) and not recovered_failure
+                else []
+            )
+            if selected_ids:
+                out["relax_selected_total"] += len(selected_ids)
+                for seq_id in selected_ids:
+                    if seq_id in score_per_residue and isinstance(score_per_residue.get(seq_id), (int, float)):
+                        out["relax_selected_score_per_residue"].append(float(score_per_residue.get(seq_id)))
     return out
 
 
@@ -1794,6 +1832,10 @@ def _source_metrics_bucket() -> dict[str, object]:
         "af2_selected_plddt": [],
         "af2_selected_rmsd": [],
         "af2_selected_total": 0,
+        "relax_candidate_total": 0,
+        "relax_candidate_score_per_residue": [],
+        "relax_selected_score_per_residue": [],
+        "relax_selected_total": 0,
     }
 
 
@@ -1994,6 +2036,40 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
                     if isinstance(cast_rmsd, list):
                         cast_rmsd.append(float(raw_rmsd))
 
+        relax = _load_json_file(tier_dir / "relax_scores.json")
+        if isinstance(relax, dict):
+            recovered_failure = _relax_payload_has_recovered_failure(relax)
+            score_per_residue = (
+                relax.get("score_per_residue")
+                if isinstance(relax.get("score_per_residue"), dict) and not recovered_failure
+                else {}
+            )
+            candidate_ids = relax.get("candidate_ids") if isinstance(relax.get("candidate_ids"), list) else []
+            candidate_metric_ids = candidate_ids if candidate_ids else list(score_per_residue.keys())
+            for seq_id in candidate_metric_ids:
+                source = _source_for_sequence_id(str(seq_id), lookup)
+                bucket = out[source]
+                bucket["relax_candidate_total"] = int(bucket.get("relax_candidate_total") or 0) + 1
+                raw_relax = score_per_residue.get(seq_id)
+                if isinstance(raw_relax, (int, float)):
+                    cast_relax = bucket.get("relax_candidate_score_per_residue")
+                    if isinstance(cast_relax, list):
+                        cast_relax.append(float(raw_relax))
+            selected_ids = (
+                relax.get("selected_ids")
+                if isinstance(relax.get("selected_ids"), list) and not recovered_failure
+                else []
+            )
+            for seq_id in selected_ids:
+                source = _source_for_sequence_id(str(seq_id), lookup)
+                bucket = out[source]
+                bucket["relax_selected_total"] = int(bucket.get("relax_selected_total") or 0) + 1
+                raw_relax = score_per_residue.get(seq_id)
+                if isinstance(raw_relax, (int, float)):
+                    cast_relax = bucket.get("relax_selected_score_per_residue")
+                    if isinstance(cast_relax, list):
+                        cast_relax.append(float(raw_relax))
+
     return out
 
 
@@ -2075,6 +2151,33 @@ def _collect_tier_compare_metrics(
             )
             af2_selected_total = len(selected_ids)
 
+        relax = _load_json_file(tier_dir / "relax_scores.json")
+        relax_candidate_total = 0
+        relax_selected_total = 0
+        candidate_relax: list[float] = []
+        if isinstance(relax, dict):
+            recovered_failure = _relax_payload_has_recovered_failure(relax)
+            score_per_residue = (
+                relax.get("score_per_residue")
+                if isinstance(relax.get("score_per_residue"), dict) and not recovered_failure
+                else {}
+            )
+            candidate_ids = relax.get("candidate_ids") if isinstance(relax.get("candidate_ids"), list) else []
+            relax_candidate_total = len(candidate_ids)
+            if relax_candidate_total <= 0:
+                relax_candidate_total = len(score_per_residue)
+            candidate_metric_ids = candidate_ids if candidate_ids else list(score_per_residue.keys())
+            for seq_id in candidate_metric_ids:
+                raw_relax = score_per_residue.get(seq_id)
+                if isinstance(raw_relax, (int, float)):
+                    candidate_relax.append(float(raw_relax))
+            selected_ids = (
+                relax.get("selected_ids")
+                if isinstance(relax.get("selected_ids"), list) and not recovered_failure
+                else []
+            )
+            relax_selected_total = len(selected_ids)
+
         rows.append(
             {
                 "tier": tier_num,
@@ -2088,6 +2191,10 @@ def _collect_tier_compare_metrics(
                 "af2_pass_rate": _safe_ratio(af2_selected_total, af2_candidate_total),
                 "plddt_median": _median(candidate_plddt),
                 "rmsd_median": _median(candidate_rmsd),
+                "relax_candidate_total": relax_candidate_total,
+                "relax_selected_total": relax_selected_total,
+                "relax_pass_rate": _safe_ratio(relax_selected_total, relax_candidate_total),
+                "relax_median": _median(candidate_relax),
             }
         )
     rows.sort(key=lambda item: float(item.get("tier") or 0.0))
@@ -2122,15 +2229,19 @@ def _build_comparison_summary(
     wt_sol_score: float | None = None
     wt_plddt: float | None = None
     wt_rmsd: float | None = None
+    wt_relax: float | None = None
 
     if isinstance(wt_metrics, dict):
         wt_sol = wt_metrics.get("soluprot") if isinstance(wt_metrics.get("soluprot"), dict) else None
         wt_af2 = wt_metrics.get("af2") if isinstance(wt_metrics.get("af2"), dict) else None
+        wt_relax_metric = wt_metrics.get("relax") if isinstance(wt_metrics.get("relax"), dict) else None
         if isinstance(wt_sol, dict) and not wt_sol.get("skipped"):
             wt_sol_score = _as_float_or_none(wt_sol.get("score"))
         if isinstance(wt_af2, dict) and not wt_af2.get("skipped"):
             wt_plddt = _as_float_or_none(wt_af2.get("best_plddt"))
             wt_rmsd = _as_float_or_none(wt_af2.get("rmsd_ca"))
+        if isinstance(wt_relax_metric, dict) and not wt_relax_metric.get("skipped"):
+            wt_relax = _as_float_or_none(wt_relax_metric.get("score_per_residue"))
 
     sol_scores_raw = design_metrics.get("soluprot_scores") if isinstance(design_metrics.get("soluprot_scores"), list) else []
     sol_scores = [float(v) for v in sol_scores_raw if isinstance(v, (int, float))]
@@ -2139,6 +2250,8 @@ def _build_comparison_summary(
     sol_passed = int(design_metrics.get("soluprot_passed") or 0)
     af2_candidate_total = int(design_metrics.get("af2_candidate_total") or 0)
     af2_selected_total = int(design_metrics.get("af2_selected_total") or 0)
+    relax_candidate_total = int(design_metrics.get("relax_candidate_total") or 0)
+    relax_selected_total = int(design_metrics.get("relax_selected_total") or 0)
 
     plddt_raw = (
         design_metrics.get("af2_plddt")
@@ -2155,6 +2268,13 @@ def _build_comparison_summary(
     )
     rmsd_values = [float(v) for v in rmsd_raw if isinstance(v, (int, float))]
     design_rmsd_median = _median(rmsd_values) if rmsd_values else None
+    relax_raw = (
+        design_metrics.get("relax_score_per_residue")
+        if isinstance(design_metrics.get("relax_score_per_residue"), list)
+        else []
+    )
+    relax_values = [float(v) for v in relax_raw if isinstance(v, (int, float))]
+    design_relax_median = _median(relax_values) if relax_values else None
 
     wt_vs_design: dict[str, object] = {
         "soluprot": {
@@ -2177,6 +2297,14 @@ def _build_comparison_summary(
             "delta_design_minus_wt": _metric_delta(design_rmsd_median, wt_rmsd),
             "design_total": af2_candidate_total,
         },
+        "relax": {
+            "wt": wt_relax,
+            "design_median": design_relax_median,
+            "delta_design_minus_wt": _metric_delta(design_relax_median, wt_relax),
+            "design_total": relax_candidate_total,
+            "design_selected": relax_selected_total,
+            "design_pass_rate": _safe_ratio(relax_selected_total, relax_candidate_total),
+        },
     }
 
     source_compare: dict[str, dict[str, object]] = {}
@@ -2197,10 +2325,17 @@ def _build_comparison_summary(
         source_rmsd_values = (
             bucket.get("af2_candidate_rmsd") if isinstance(bucket.get("af2_candidate_rmsd"), list) else []
         )
+        source_relax_values = (
+            bucket.get("relax_candidate_score_per_residue")
+            if isinstance(bucket.get("relax_candidate_score_per_residue"), list)
+            else []
+        )
         sol_total_src = int(bucket.get("soluprot_total") or 0)
         sol_passed_src = int(bucket.get("soluprot_passed") or 0)
         af2_candidates_src = int(bucket.get("af2_candidate_total") or 0)
         af2_selected_src = int(bucket.get("af2_selected_total") or 0)
+        relax_candidates_src = int(bucket.get("relax_candidate_total") or 0)
+        relax_selected_src = int(bucket.get("relax_selected_total") or 0)
         requested_src = int(bucket.get("requested_count") or 0)
         observed_src = int(bucket.get("observed_count") or 0)
         materialized_src = int(bucket.get("materialized_count") or 0)
@@ -2230,6 +2365,12 @@ def _build_comparison_summary(
             "rmsd_median": _median(
                 [float(v) for v in source_rmsd_values if isinstance(v, (int, float))]
             ),
+            "relax_candidate_total": relax_candidates_src,
+            "relax_selected_total": relax_selected_src,
+            "relax_pass_rate": _safe_ratio(relax_selected_src, relax_candidates_src),
+            "relax_median": _median(
+                [float(v) for v in source_relax_values if isinstance(v, (int, float))]
+            ),
         }
         if selected_backbone_id:
             source_compare[source_key]["selected_backbone_id"] = selected_backbone_id
@@ -2246,6 +2387,9 @@ def _build_comparison_summary(
             "af2_candidate_total": af2_candidates_src,
             "af2_selected_total": af2_selected_src,
             "af2_pass_rate": _safe_ratio(af2_selected_src, af2_candidates_src),
+            "relax_candidate_total": relax_candidates_src,
+            "relax_selected_total": relax_selected_src,
+            "relax_pass_rate": _safe_ratio(relax_selected_src, relax_candidates_src),
             "retention_backbone_to_soluprot_passed": _safe_ratio(
                 min(sol_passed_src, backbone_src),
                 backbone_src,
@@ -2253,6 +2397,10 @@ def _build_comparison_summary(
             "retention_backbone_to_af2_selected": _safe_ratio(
                 min(af2_selected_src, backbone_src),
                 backbone_src,
+            ),
+            "retention_af2_selected_to_relax_selected": _safe_ratio(
+                min(relax_selected_src, af2_selected_src),
+                af2_selected_src,
             ),
         }
         if selected_backbone_id:
@@ -2281,6 +2429,9 @@ def _build_comparison_summary(
             "af2_candidate_total": af2_candidate_total,
             "af2_selected_total": af2_selected_total,
             "af2_pass_rate": _safe_ratio(af2_selected_total, af2_candidate_total),
+            "relax_candidate_total": relax_candidate_total,
+            "relax_selected_total": relax_selected_total,
+            "relax_pass_rate": _safe_ratio(relax_selected_total, relax_candidate_total),
             "retention_backbone_to_soluprot_passed": _safe_ratio(
                 min(sol_passed, backbone_total),
                 backbone_total,
@@ -2288,6 +2439,10 @@ def _build_comparison_summary(
             "retention_backbone_to_af2_selected": _safe_ratio(
                 min(af2_selected_total, backbone_total),
                 backbone_total,
+            ),
+            "retention_af2_selected_to_relax_selected": _safe_ratio(
+                min(relax_selected_total, af2_selected_total),
+                af2_selected_total,
             ),
         },
         "by_source": funnel_by_source,
@@ -2297,10 +2452,11 @@ def _build_comparison_summary(
         "soluprot": _distribution_stats(sol_scores),
         "plddt": _distribution_stats(plddt_values),
         "rmsd": _distribution_stats(rmsd_values),
+        "relax": _distribution_stats(relax_values),
     }
 
     return {
-        "version": 4,
+        "version": 5,
         "generated_at": _now_iso(),
         "wt_compare_enabled": wt_enabled,
         "wt_vs_design": wt_vs_design,
@@ -4052,6 +4208,7 @@ def _comparison_snapshot(comparison: dict[str, object] | None) -> dict[str, floa
             "soluprot_median": None,
             "plddt_median": None,
             "rmsd_median": None,
+            "relax_median": None,
             "soluprot_pass_rate": None,
             "af2_pass_rate": None,
             "backbone_count": None,
@@ -4062,10 +4219,12 @@ def _comparison_snapshot(comparison: dict[str, object] | None) -> dict[str, floa
     sol = wt.get("soluprot") if isinstance(wt.get("soluprot"), dict) else {}
     plddt = wt.get("plddt") if isinstance(wt.get("plddt"), dict) else {}
     rmsd = wt.get("rmsd") if isinstance(wt.get("rmsd"), dict) else {}
+    relax = wt.get("relax") if isinstance(wt.get("relax"), dict) else {}
     return {
         "soluprot_median": _to_float_or_none(sol.get("design_median")),
         "plddt_median": _to_float_or_none(plddt.get("design_median")),
         "rmsd_median": _to_float_or_none(rmsd.get("design_median")),
+        "relax_median": _to_float_or_none(relax.get("design_median")),
         "soluprot_pass_rate": _to_float_or_none(overall.get("soluprot_pass_rate")),
         "af2_pass_rate": _to_float_or_none(overall.get("af2_pass_rate")),
         "backbone_count": _to_float_or_none(overall.get("backbone_count")),
@@ -4260,6 +4419,20 @@ def _build_hit_list_rows(
             if isinstance(raw_candidates, list):
                 af2_candidates = {str(x) for x in raw_candidates if str(x).strip()}
 
+        relax_scores: dict[str, float] = {}
+        relax_selected: set[str] = set()
+        relax = _load_json_file(tier_dir / "relax_scores.json")
+        if isinstance(relax, dict):
+            recovered_failure = _relax_payload_has_recovered_failure(relax)
+            raw_relax_scores = relax.get("score_per_residue")
+            if isinstance(raw_relax_scores, dict) and not recovered_failure:
+                for seq_id, raw_score in raw_relax_scores.items():
+                    if isinstance(raw_score, (int, float)):
+                        relax_scores[str(seq_id)] = float(raw_score)
+            raw_selected = relax.get("selected_ids")
+            if isinstance(raw_selected, list) and not recovered_failure:
+                relax_selected = {str(x) for x in raw_selected if str(x).strip()}
+
         for sample in samples:
             if not isinstance(sample, dict):
                 continue
@@ -4272,6 +4445,7 @@ def _build_hit_list_rows(
             soluprot = sol_scores.get(seq_id)
             plddt = af2_scores.get(seq_id)
             rmsd = af2_rmsd.get(seq_id)
+            relax_score = relax_scores.get(seq_id)
             wt_compare = _sequence_difference_stats(target_sequence or "", sequence) if target_sequence else None
             wt_identity = wt_compare.get("identity") if isinstance(wt_compare, dict) else None
             wt_identity_pct = wt_compare.get("identity_pct") if isinstance(wt_compare, dict) else None
@@ -4320,6 +4494,7 @@ def _build_hit_list_rows(
                     "soluprot": soluprot,
                     "plddt": plddt,
                     "rmsd": rmsd,
+                    "relax": relax_score,
                     "wt_identity": wt_identity,
                     "wt_identity_pct": wt_identity_pct,
                     "wt_diff_count": wt_diff_count,
@@ -4330,6 +4505,7 @@ def _build_hit_list_rows(
                     "soluprot_passed": seq_id in passed_ids,
                     "af2_candidate": seq_id in af2_candidates or seq_id in af2_scores,
                     "af2_selected": seq_id in af2_selected,
+                    "relax_selected": seq_id in relax_selected,
                     "component_scores": component_scores,
                     "score_norm": score_norm,
                     "score": composite_score,
@@ -4358,6 +4534,7 @@ def _hit_list_stats(rows: list[dict[str, object]]) -> dict[str, object]:
     plddt_values = [float(row["plddt"]) for row in rows if isinstance(row.get("plddt"), (int, float))]
     rmsd_values = [float(row["rmsd"]) for row in rows if isinstance(row.get("rmsd"), (int, float))]
     sol_values = [float(row["soluprot"]) for row in rows if isinstance(row.get("soluprot"), (int, float))]
+    relax_values = [float(row["relax"]) for row in rows if isinstance(row.get("relax"), (int, float))]
     return {
         "count": len(rows),
         "score_median": _median(score_values),
@@ -4365,6 +4542,7 @@ def _hit_list_stats(rows: list[dict[str, object]]) -> dict[str, object]:
         "plddt_median": _median(plddt_values),
         "rmsd_median": _median(rmsd_values),
         "soluprot_median": _median(sol_values),
+        "relax_median": _median(relax_values),
     }
 
 
@@ -4772,6 +4950,14 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         af2_max_candidates_per_tier=max(0, int(af2_max_candidates_per_tier)),
         af2_top_k=_as_int(args.get("af2_top_k"), 20),
         af2_sequence_ids=af2_sequence_ids,
+        relax_enabled=_as_bool(args.get("relax_enabled"), False),
+        relax_score_per_residue_cutoff=(
+            _as_float(args.get("relax_score_per_residue_cutoff"), 0.0)
+            if str(args.get("relax_score_per_residue_cutoff") or "").strip()
+            else None
+        ),
+        relax_nstruct=max(1, _as_int(args.get("relax_nstruct"), 1)),
+        relax_extra_flags=(str(args.get("relax_extra_flags")) if args.get("relax_extra_flags") else None),
         mmseqs_target_db=str(args.get("mmseqs_target_db") or "uniref90"),
         mmseqs_max_seqs=_as_int(args.get("mmseqs_max_seqs"), 3000),
         mmseqs_threads=_as_int(args.get("mmseqs_threads"), 4),
@@ -4888,6 +5074,10 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "af2_max_candidates_per_tier": {"type": "integer"},
             "af2_top_k": {"type": "integer"},
             "af2_sequence_ids": {"type": "array", "items": {"type": "string"}},
+            "relax_enabled": {"type": "boolean"},
+            "relax_score_per_residue_cutoff": {"type": "number"},
+            "relax_nstruct": {"type": "integer"},
+            "relax_extra_flags": {"type": "string"},
             "mmseqs_target_db": {"type": "string"},
             "mmseqs_max_seqs": {"type": "integer"},
             "mmseqs_threads": {"type": "integer"},
