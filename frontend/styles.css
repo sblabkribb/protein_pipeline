@@ -880,6 +880,19 @@ body {
   margin-top: 18px;
 }
 
+.rounds-detail-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rounds-managed-tag {
+  border-color: rgba(15, 122, 119, 0.14);
+  background: rgba(229, 246, 244, 0.92);
+  color: var(--teal-dark);
+}
+
 .rounds-detail-pre {
   margin: 10px 0 0;
   padding: 14px 16px;
@@ -2867,6 +2880,49 @@ textarea:focus-visible {
   width: min(900px, 100%);
   max-height: 85vh;
   overflow: hidden;
+}
+
+.workspace-record-card {
+  width: min(640px, 100%);
+  max-height: 85vh;
+  overflow: auto;
+}
+
+.workspace-record-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.workspace-record-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.workspace-record-field span {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.workspace-record-field input,
+.workspace-record-field textarea {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(16, 42, 45, 0.12);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 12px 14px;
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+
+.workspace-record-field textarea {
+  min-height: 96px;
+}
+
+.workspace-record-actions {
+  justify-content: flex-end;
 }
 
 .report-modal-content {
