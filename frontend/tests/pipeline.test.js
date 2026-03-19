@@ -26,6 +26,8 @@ import {
   buildWorkflowStudioFreshSessionSeed,
   buildWorkflowStudioNodesFromRequest,
   buildWorkflowStudioEffectiveAnswers,
+  buildFastLaunchPreset,
+  withProjectRoundContext,
   buildSetupDraftFromRequest,
   buildRunArguments,
   buildUserPrefix,
@@ -903,6 +905,438 @@ test("RFD3 separate-input toggles also enable RFD3 in setup and studio", () => {
     source,
     /if \(fieldId === "rfd3_input_pdb"\) \{[\s\S]*?current\.ui_state\.rfd3_input_override_visible = true;[\s\S]*?current\.stage_drafts\.rfd3\.rfd3_use = true;[\s\S]*?\}/m
   );
+});
+
+test("product shell exposes a sidebar with home, fast, and advanced entry points", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(html, /id="appSidebar"/);
+  assert.match(html, /data-tab="home"/);
+  assert.match(html, /data-tab="fast"/);
+  assert.match(html, /data-tab="advanced"/);
+
+  assert.match(source, /"tabs\.home":/);
+  assert.match(source, /"tabs\.fast":/);
+  assert.match(source, /"tabs\.advanced":/);
+  assert.match(source, /const TAB_OPTIONS = \["home", "fast", "advanced", "studio", "rounds", "monitor", "analyze", "mcp"\];/);
+});
+
+test("sidebar prioritizes monitor before rounds in the execution navigation order", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  const studioIdx = html.indexOf('id="tabBtnStudio"');
+  const monitorIdx = html.indexOf('id="tabBtnMonitor"');
+  const roundsIdx = html.indexOf('id="tabBtnRounds"');
+  const analyzeIdx = html.indexOf('id="tabBtnAnalyze"');
+
+  assert.ok(studioIdx >= 0);
+  assert.ok(monitorIdx > studioIdx);
+  assert.ok(roundsIdx > monitorIdx);
+  assert.ok(analyzeIdx > roundsIdx);
+  assert.match(source, /const TAB_OPTIONS = \["home", "fast", "advanced", "studio", "monitor", "rounds", "analyze", "mcp"\];/);
+});
+
+test("home is the default launcher and its cards route into fast, advanced, and studio", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(html, /id="tabBtnHome"[\s\S]*class="tab-btn app-nav-btn active"/m);
+  assert.match(html, /id="tab-home"[\s\S]*class="tab-panel active"/m);
+  assert.match(html, /data-home-target="fast"/);
+  assert.match(html, /data-home-target="advanced"/);
+  assert.match(html, /data-home-target="studio"/);
+  assert.match(source, /setActiveTab\(stored \|\| "home"\);/);
+  assert.match(source, /querySelectorAll\("\[data-home-target\]"\)/);
+});
+
+test("studio launcher opens the studio tab instead of redirecting into advanced", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(
+    source,
+    /if \(target === "studio"\) \{[\s\S]*setRunMode\("workflow", \{ render: false \}\);[\s\S]*setActiveTab\("studio"\);/m
+  );
+});
+
+test("buildFastLaunchPreset applies standard pipeline defaults with BioEmu on and RFD3 off", () => {
+  const preset = buildFastLaunchPreset({
+    target_input: "ATOM      1  N   GLY A   1      11.104  13.207   9.247  1.00 20.00           N",
+    prompt: "stability screen",
+  });
+  const args = buildRunArguments({
+    prompt: preset.prompt,
+    routed: preset.routed,
+    answers: preset.answers,
+    runId: "fast_demo",
+  });
+
+  assert.equal(preset.mode, "pipeline");
+  assert.equal(preset.answers.target_input.startsWith("ATOM"), true);
+  assert.equal(preset.answers.bioemu_use, true);
+  assert.equal(preset.answers.rfd3_use, false);
+  assert.equal(preset.answers.mask_consensus_apply, false);
+  assert.equal(preset.answers.bioemu_num_samples, 20);
+  assert.equal(preset.answers.bioemu_max_return_structures, 10);
+  assert.equal(preset.routed.stop_after, "novelty");
+  assert.equal(preset.routed.bioemu_use, true);
+  assert.equal(preset.routed.rfd3_use, false);
+  assert.equal(args.bioemu_use, true);
+  assert.equal(args.rfd3_use, false);
+  assert.equal(args.stop_after, "novelty");
+});
+
+test("shell keeps monitor, analyze, and mcp panels inside app-shell-main", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  assert.match(
+    html,
+    /<div class="app-shell-main">[\s\S]*id="tab-monitor"[\s\S]*id="tab-analyze"[\s\S]*id="tab-mcp"[\s\S]*<\/div>\s*<\/div>\s*<\/div>\s*<section id="detachedResiduePickerRoot"/m
+  );
+});
+
+test("shell styling defines a light editorial sidebar and paper-surface tokens", () => {
+  const css = readFileSync(resolve(process.cwd(), "frontend/styles.css"), "utf-8");
+
+  assert.match(css, /--sidebar-surface:/);
+  assert.match(css, /--paper:/);
+  assert.match(css, /\.app-sidebar\s*\{[\s\S]*background:[\s\S]*var\(--sidebar-surface\)/m);
+  assert.match(css, /\.panel\s*\{[\s\S]*background:[\s\S]*var\(--paper\)/m);
+});
+
+test("home cards avoid oversized mint blocks and home report text wraps inside context cards", () => {
+  const css = readFileSync(resolve(process.cwd(), "frontend/styles.css"), "utf-8");
+
+  assert.match(css, /\.home-mode-card::before\s*\{[\s\S]*inset:\s*0\s+0\s+auto\s+0;[\s\S]*height:\s*3px;/m);
+  assert.doesNotMatch(css, /\.home-mode-card::before\s*\{[\s\S]*height:\s*72px;/m);
+  assert.match(css, /#homeReportValue\s*\{[\s\S]*display:\s*block;[\s\S]*max-width:\s*100%;[\s\S]*overflow-wrap:\s*anywhere;/m);
+});
+
+test("monitor layout uses a top summary panel with lower two-column workspace that collapses early", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const css = readFileSync(resolve(process.cwd(), "frontend/styles.css"), "utf-8");
+
+  assert.match(html, /class="panel panel-block monitor-summary-panel span-2"/);
+  assert.match(html, /class="panel panel-block monitor-status-panel"/);
+  assert.match(html, /class="panel panel-block monitor-artifacts-panel"/);
+  assert.match(css, /\.monitor-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(320px,\s*1fr\)\);/m);
+  assert.match(css, /\.monitor-summary-panel\s*\{[\s\S]*grid-column:\s*1\s*\/\s*-1;/m);
+  assert.match(css, /@media \(max-width:\s*1240px\)\s*\{[\s\S]*\.monitor-grid\s*\{[\s\S]*grid-template-columns:\s*1fr;/m);
+});
+
+test("monitor run selector layout constrains long run ids inside the summary card", () => {
+  const css = readFileSync(resolve(process.cwd(), "frontend/styles.css"), "utf-8");
+
+  assert.match(css, /\.run-id-select-wrap\s*\{[\s\S]*min-width:\s*0;[\s\S]*width:\s*100%;[\s\S]*max-width:\s*100%;/m);
+  assert.match(css, /#runIdValue\s*\{[\s\S]*max-width:\s*100%;[\s\S]*overflow-wrap:\s*anywhere;/m);
+  assert.match(css, /\.monitor-summary-top\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1\.2fr\)\s+minmax\(280px,\s*0\.8fr\);/m);
+  assert.match(css, /@media \(max-width:\s*860px\)\s*\{[\s\S]*\.status-row,\s*\.status-row-run-select[\s\S]*grid-template-columns:\s*1fr;/m);
+});
+
+test("fast panel exposes reduced launch controls while advanced keeps the full setup surface", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(html, /id="fastTargetInput"/);
+  assert.match(html, /id="fastRunBtn"/);
+  assert.match(html, /id="fastOpenAdvancedBtn"/);
+  assert.match(html, /id="tab-advanced"/);
+  assert.match(source, /buildFastLaunchPreset\(/);
+});
+
+test("fast preset application clears stale setup state before writing fast answers", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  assert.match(source, /function applyFastLaunchPresetToState\(preset\) \{[\s\S]*?state\.answerMeta = \{\};/m);
+  assert.match(source, /function applyFastLaunchPresetToState\(preset\) \{[\s\S]*?state\.setupLoadedRequestRunId = "";/m);
+  assert.match(source, /function applyFastLaunchPresetToState\(preset\) \{[\s\S]*?state\.chainRanges = null;/m);
+  assert.match(source, /function applyFastLaunchPresetToState\(preset\) \{[\s\S]*?resetSetupResiduePicker\(\);/m);
+});
+
+test("home exposes project and round selectors with create actions", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(html, /id="homeProjectSelector"/);
+  assert.match(html, /id="homeRoundSelector"/);
+  assert.match(html, /id="homeCreateProjectBtn"/);
+  assert.match(html, /id="homeCreateRoundBtn"/);
+  assert.match(source, /pipeline\.list_projects/);
+  assert.match(source, /pipeline\.list_rounds/);
+  assert.match(source, /pipeline\.save_project/);
+  assert.match(source, /pipeline\.save_round/);
+});
+
+test("home exposes quick actions for continuing the round and opening monitor/analyze", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(html, /id="homeContinueRoundBtn"/);
+  assert.match(html, /id="homeOpenMonitorBtn"/);
+  assert.match(html, /id="homeOpenAnalyzeBtn"/);
+  assert.match(source, /homeContinueRoundBtn\?\.addEventListener\("click",[\s\S]*?setActiveTab\("rounds"\)/m);
+  assert.match(source, /homeOpenMonitorBtn\?\.addEventListener\("click",[\s\S]*?setActiveTab\("monitor"\)/m);
+  assert.match(source, /homeOpenAnalyzeBtn\?\.addEventListener\("click",[\s\S]*?setActiveTab\("analyze"\)/m);
+});
+
+test("withProjectRoundContext adds selected project and round metadata to run payloads", () => {
+  assert.deepEqual(
+    withProjectRoundContext(
+      { run_id: "demo_run", stop_after: "novelty" },
+      { projectId: "tev_campaign", roundId: "round_01" }
+    ),
+    {
+      run_id: "demo_run",
+      stop_after: "novelty",
+      project_id: "tev_campaign",
+      round_id: "round_01",
+    }
+  );
+  assert.deepEqual(
+    withProjectRoundContext(
+      { run_id: "demo_run", stop_after: "novelty" },
+      { projectId: "tev_campaign", roundId: "" }
+    ),
+    {
+      run_id: "demo_run",
+      stop_after: "novelty",
+      project_id: "tev_campaign",
+    }
+  );
+});
+
+test("rounds workspace exposes project list, round list, and round detail regions", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(html, /data-tab="rounds"/);
+  assert.match(html, /id="tab-rounds"/);
+  assert.match(html, /id="roundsProjectToolbar"/);
+  assert.match(html, /id="roundsRoundToolbar"/);
+  assert.match(html, /id="roundsProjectList"/);
+  assert.match(html, /id="roundsList"/);
+  assert.match(html, /id="roundsDetail"/);
+  assert.match(html, /id="roundsCreateProjectBtn"/);
+  assert.match(html, /id="roundsCreateRoundBtn"/);
+  assert.match(source, /function renderRoundsWorkspace\(/);
+  assert.match(source, /"tabs\.rounds":/);
+});
+
+test("rounds workspace exposes editable operational detail sections", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(html, /id="roundsEditRoundBtn"/);
+  assert.match(html, /id="roundsArchiveRoundBtn"/);
+  assert.match(html, /id="roundsDeleteRoundBtn"/);
+  assert.match(html, /id="roundsArchiveProjectBtn"/);
+  assert.match(html, /id="roundsDeleteProjectBtn"/);
+  assert.match(source, /"rounds\.detail\.hypothesis":/);
+  assert.match(source, /"rounds\.detail\.selectedCandidates":/);
+  assert.match(source, /"rounds\.detail\.experimentSummary":/);
+  assert.match(source, /"rounds\.detail\.reportSummary":/);
+  assert.match(source, /"rounds\.detail\.nextRoundNotes":/);
+  assert.match(source, /"rounds\.detail\.modelSuggestions":/);
+  assert.match(source, /async function editCurrentRoundFromWorkspace\(/);
+  assert.match(source, /async function archiveCurrentRoundFromWorkspace\(/);
+  assert.match(source, /async function deleteCurrentRoundFromWorkspace\(/);
+  assert.match(source, /async function archiveCurrentProjectFromWorkspace\(/);
+  assert.match(source, /async function deleteCurrentProjectFromWorkspace\(/);
+  assert.match(source, /apiCall\("pipeline\.save_round",/);
+  assert.match(source, /apiCall\("pipeline\.archive_round",/);
+  assert.match(source, /apiCall\("pipeline\.delete_round",/);
+  assert.match(source, /apiCall\("pipeline\.archive_project",/);
+  assert.match(source, /apiCall\("pipeline\.delete_project",/);
+});
+
+test("rounds workspace can show archived records and restore project or round metadata", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(html, /id="roundsShowArchived"/);
+  assert.match(html, /id="roundsRestoreProjectBtn"/);
+  assert.match(html, /id="roundsRestoreRoundBtn"/);
+  assert.match(source, /"rounds\.action\.showArchived":/);
+  assert.match(source, /"rounds\.action\.restoreProject":/);
+  assert.match(source, /"rounds\.action\.restoreRound":/);
+  assert.match(source, /async function restoreCurrentProjectFromWorkspace\(/);
+  assert.match(source, /async function restoreCurrentRoundFromWorkspace\(/);
+  assert.match(source, /apiCall\("pipeline\.restore_project",/);
+  assert.match(source, /apiCall\("pipeline\.restore_round",/);
+  assert.match(source, /include_archived:\s*Boolean\(state\.roundsShowArchived\)/);
+});
+
+test("advanced workflow mode exposes a dedicated studio-session creation action and studio empty state can return there", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(html, /id="studioCreateBtn"/);
+  assert.match(source, /"setup\.workflow\.launchTitle":/);
+  assert.match(source, /"setup\.workflow\.launchHint":/);
+  assert.match(source, /"setup\.workflow\.launchAction":/);
+  assert.match(source, /"studio\.empty\.action":/);
+  assert.match(source, /async function createWorkflowStudioFromStudio\(/);
+  assert.match(source, /async function createWorkflowStudioFromStudio\([\s\S]*openWorkflowStudioFromSetup\(/m);
+  assert.match(source, /if \(el\.studioCreateBtn\) \{[\s\S]*state\.studioBuilderOpen = true;[\s\S]*renderWorkflowStudio\(\);/m);
+  assert.match(
+    source,
+    /launchBtn\.id = "workflowDesignerLaunchBtn";[\s\S]*launchBtn\.addEventListener\("click", async \(\) => \{[\s\S]*runPipeline\(\);/m
+  );
+  assert.match(source, /"studio\.empty\.action": "Create Workflow Studio"/);
+  assert.match(source, /"studio\.empty\.action": "Workflow Studio 생성"/);
+  assert.doesNotMatch(source, /"studio\.empty\.action": "Create in Advanced"/);
+  assert.doesNotMatch(source, /"studio\.empty\.action": "Advanced에서 생성"/);
+});
+
+test("studio tab creates fresh sessions and can render the workflow builder inline", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(html, /id="roundsDetailBody"/);
+  assert.match(source, /studioBuilderOpen:\s*false/);
+  assert.match(source, /function applyTargetInputTextToState\(/);
+  assert.match(source, /function buildWorkflowDesignerCard\(/);
+  assert.match(source, /allowTargetInputEdit:\s*true/);
+  assert.match(source, /const showTargetInputEditor = Boolean\(allowTargetInputEdit\);/);
+  assert.match(source, /workflowDesignerTargetInput/);
+  assert.match(source, /const showCreationBuilder = Boolean\(state\.studioBuilderOpen\) \|\| !session;/);
+  assert.match(source, /const studioBuilderCard = showCreationBuilder\s*\?\s*buildWorkflowDesignerCard\(\{/);
+  assert.match(source, /if \(studioBuilderCard\) \{[\s\S]*el\.workflowStudioRoot\.appendChild\(studioBuilderCard\);/m);
+  assert.match(source, /if \(studioBuilderCard\) \{[\s\S]*el\.workflowStudioRoot\.prepend\(studioBuilderCard\);/m);
+  assert.match(source, /selectedRunId:\s*String\(selectedRunId \|\| ""\)\.trim\(\)/);
+  assert.doesNotMatch(source, /selectedRunId:\s*String\(selectedRunId \|\| state\.currentRunId \|\| ""\)\.trim\(\)/);
+  assert.match(source, /if \(el\.studioCreateBtn\) \{[\s\S]*setCurrentWorkflowStudioSessionId\(\"\"\);[\s\S]*state\.studioBuilderOpen = true;[\s\S]*renderWorkflowStudio\(\);/m);
+  assert.match(source, /if \(target === "studio"\) \{[\s\S]*setCurrentWorkflowStudioSessionId\(\"\"\);[\s\S]*state\.studioBuilderOpen = true;[\s\S]*renderWorkflowStudio\(\);/m);
+});
+
+test("rounds layout separates creation and management actions into dedicated rows", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const css = readFileSync(resolve(process.cwd(), "frontend/styles.css"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(html, /class="rounds-block rounds-project-block"/);
+  assert.match(html, /class="rounds-block rounds-round-block"/);
+  assert.match(html, /class="rounds-detail-head"/);
+  assert.match(html, /id="roundsProjectManageRow"/);
+  assert.match(html, /id="roundsRoundManageRow"/);
+  assert.match(html, /id="roundsDetailBody"/);
+  assert.match(html, /class="toggle rounds-archive-toggle rounds-filter-chip"/);
+  assert.doesNotMatch(html, /class="rounds-detail-action-stack"/);
+  assert.match(css, /\.rounds-block\s*\{/m);
+  assert.match(css, /\.rounds-toolbar\s*\{/m);
+  assert.match(css, /\.rounds-filter-chip\s*\{/m);
+  assert.match(css, /\.rounds-filter-chip input:checked \+ span\s*\{/m);
+  assert.doesNotMatch(css, /\.rounds-detail-action-stack\s*\{/m);
+  assert.doesNotMatch(css, /\.rounds-detail-toolbar\s*\{/m);
+  assert.match(source, /el\.roundsProjectManageRow\.hidden = !projectId;/);
+  assert.match(source, /el\.roundsRoundManageRow\.hidden = !projectId \|\| !roundId;/);
+  assert.match(source, /detailRoot\.innerHTML =/);
+  assert.match(source, /renderRoundsWorkspace\(\);/);
+  assert.match(
+    source,
+    /function roundsWorkspaceProjects\(\)\s*\{\s*return Array\.isArray\(state\.roundsWorkspaceProjects\) \? state\.roundsWorkspaceProjects : \[\];\s*\}/m
+  );
+  assert.match(
+    source,
+    /function roundsWorkspaceRounds\(projectId = state\.currentProjectId\)\s*\{[\s\S]*return Array\.isArray\(state\.roundsWorkspaceByProjectId\?\.\[projectKey\]\) \? state\.roundsWorkspaceByProjectId\[projectKey\] : \[\];\s*\}/m
+  );
+});
+
+test("rounds editing uses an overlay form instead of prompt dialogs", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(html, /id="workspaceRecordPanel"/);
+  assert.match(html, /id="workspaceRecordTitleInput"/);
+  assert.match(html, /id="workspaceRecordDescriptionInput"/);
+  assert.match(html, /id="workspaceRecordGoalInput"/);
+  assert.match(html, /id="workspaceRecordHypothesisInput"/);
+  assert.match(html, /id="workspaceRecordNotesInput"/);
+  assert.match(html, /id="workspaceRecordNextRoundNotesInput"/);
+  assert.match(html, /id="roundsEditProjectBtn"/);
+  assert.match(source, /function openWorkspaceRecordEditor\(/);
+  assert.match(source, /async function submitWorkspaceRecordEditor\(/);
+  assert.match(source, /if \(el\.workspaceRecordForm\) \{[\s\S]*submitWorkspaceRecordEditor\(\);/m);
+  assert.doesNotMatch(source, /async function createProjectFromHome\([\s\S]*window\.prompt/m);
+  assert.doesNotMatch(source, /async function createRoundFromHome\([\s\S]*window\.prompt/m);
+  assert.doesNotMatch(source, /async function editCurrentRoundFromWorkspace\([\s\S]*window\.prompt/m);
+});
+
+test("round detail distinguishes manual notes from auto-managed result fields", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(source, /"rounds\.detail\.selectedCandidatesAuto": "Auto from linked run results"/);
+  assert.match(source, /"rounds\.detail\.experimentSummaryAuto": "Auto from linked result\/experiment data"/);
+  assert.match(source, /"rounds\.detail\.selectedCandidatesAuto": "연결된 run 결과에서 자동 반영"/);
+  assert.match(source, /"rounds\.detail\.experimentSummaryAuto": "연결된 결과\/실험 데이터에서 자동 반영"/);
+});
+
+test("round detail and home context derive live round status from linked run state instead of static planned metadata", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(source, /function normalizeRoundStatusKey\(/);
+  assert.match(source, /function latestLinkedRunStateForRound\(/);
+  assert.match(source, /function effectiveRoundStatusInfo\(/);
+  assert.match(source, /if \(el\.homeRoundStatusValue\) \{[\s\S]*effectiveRoundStatusInfo\(roundRecord\)\.label/m);
+  assert.match(source, /const statusInfo = effectiveRoundStatusInfo\(roundRecord\);/);
+  assert.match(source, /await refreshSelectedRoundLinkedRunStatus\(\{ projectId: nextProjectId, roundId: nextRoundId \}\);/);
+  assert.match(source, /async function refreshSelectedRoundLinkedRunStatus\(/);
+  assert.match(source, /apiCall\("pipeline\.status", \{ run_id: latestRunId \}\)/);
+  assert.match(source, /"rounds\.status\.planned": "Planned"/);
+  assert.match(source, /"rounds\.status\.running": "Running"/);
+  assert.match(source, /"rounds\.status\.completed": "Completed"/);
+  assert.match(source, /"rounds\.status\.failed": "Failed"/);
+  assert.match(source, /"rounds\.status\.cancelled": "Cancelled"/);
+  assert.match(source, /"rounds\.status\.planned": "계획됨"/);
+  assert.match(source, /"rounds\.status\.running": "실행 중"/);
+});
+
+test("studio session recovery treats head runs as msa-origin and carries completed tier nodes while a later tier stage is still running", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(source, /start_from:\s*normalizePipelineStage\(session\?\.head_request\?\.start_from \|\| "", "msa"\)/);
+  assert.match(source, /if \(Array\.isArray\(status\?\._studio_completed_nodes\)\) \{/);
+  assert.match(
+    source,
+    /upsertWorkflowStudioStageStatus\(\s*session\.stage_states,\s*session\.stage_run_ids,\s*stage,\s*"completed",\s*runId\s*\)/m
+  );
+  assert.match(
+    source,
+    /if \(\s*normalizedRunState === "running"[\s\S]*session\.active_stage = resolvedStatusStage;[\s\S]*\)/m
+  );
+  assert.match(source, /void saveWorkflowStudioSessionToRun\(session, runId\);/);
+});
+
+test("entering rounds tab refreshes project and round workspace data from the backend", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(
+    source,
+    /if \(next === "rounds"\) \{[\s\S]*renderRoundsWorkspace\(\);[\s\S]*void syncHomeProjectRoundContext\(\{ preserveSelection: true \}\)\.then\(\(\) => \{[\s\S]*renderRoundsWorkspace\(\);[\s\S]*\}\);[\s\S]*\}/m
+  );
+});
+
+test("home context copy and rounds detail include result-oriented summary surfaces", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(html, /data-i18n="home\.context\.report"/);
+  assert.match(source, /"home\.context\.report": "Recent Result"/);
+  assert.match(source, /"rounds\.detail\.reportSummary": "Report Summary"/);
+});
+
+test("user-facing advanced copy no longer says setup in the redesigned shell", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(html, /Advanced Run Setup/);
+  assert.match(html, /Check Advanced/);
+  assert.match(html, /Advanced Tips/);
+  assert.doesNotMatch(html, />Run Setup</);
+  assert.doesNotMatch(html, /Check Setup/);
+  assert.match(source, /"setup\.title": "Advanced Run Setup"/);
+  assert.match(source, /"setup\.check": "Check Advanced"/);
+  assert.match(source, /"help\.setup\.title": "Advanced Tips"/);
+  assert.match(source, /"studio\.action\.setup": "Back to Advanced"/);
 });
 
 test("normalizeWorkflowStudioPayloadForComparison ignores implicit studio defaults", () => {

@@ -13,6 +13,7 @@ from pipeline_mcp.tools import AutoRetryConfig
 from pipeline_mcp.tools import _run_with_auto_retry
 from pipeline_mcp.tools import _build_comparison_summary
 from pipeline_mcp.tools import _build_hit_list_rows
+from pipeline_mcp.tools import tool_definitions
 from pipeline_mcp.tools import pipeline_request_from_args
 
 
@@ -26,6 +27,386 @@ def _tmpdir():
 
 
 class TestTools(unittest.TestCase):
+    def test_tool_definitions_expose_project_round_ids_on_run_schemas(self) -> None:
+        defs = {tool["name"]: tool for tool in tool_definitions()}
+        run_props = defs["pipeline.run"]["inputSchema"]["properties"]
+        prompt_props = defs["pipeline.run_from_prompt"]["inputSchema"]["properties"]
+
+        self.assertEqual(run_props["project_id"]["type"], "string")
+        self.assertEqual(run_props["round_id"]["type"], "string")
+        self.assertEqual(prompt_props["project_id"]["type"], "string")
+        self.assertEqual(prompt_props["round_id"]["type"], "string")
+
+    def test_pipeline_request_from_args_accepts_project_and_round_ids(self) -> None:
+        req = pipeline_request_from_args(
+            {
+                "target_fasta": ">q1\nACDEFGHIK\n",
+                "project_id": "tev_campaign",
+                "round_id": "round_01",
+            }
+        )
+        self.assertEqual(req.project_id, "tev_campaign")
+        self.assertEqual(req.round_id, "round_01")
+
+    def test_project_and_round_tools_enforce_owner_scope(self) -> None:
+        owner = {"username": "hana", "run_prefix": "hana", "role": "user"}
+        foreign = {"username": "minsu", "run_prefix": "minsu", "role": "user"}
+        admin = {"username": "admin", "run_prefix": "admin", "role": "admin"}
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+
+            project = dispatcher.call_tool(
+                "pipeline.save_project",
+                {
+                    "project_id": "tev_campaign",
+                    "name": "TEV campaign",
+                    "description": "stability round-tracking",
+                    "user": owner,
+                },
+            )
+            self.assertEqual(str(project.get("project", {}).get("project_id") or ""), "tev_campaign")
+            self.assertEqual(str(project.get("project", {}).get("owner_username") or ""), "hana")
+
+            round_saved = dispatcher.call_tool(
+                "pipeline.save_round",
+                {
+                    "project_id": "tev_campaign",
+                    "round_id": "round_01",
+                    "title": "Round 01",
+                    "goal": "baseline stability screen",
+                    "next_round_notes": "retest top 5 with tighter solubility gate",
+                    "user": owner,
+                },
+            )
+            self.assertEqual(str(round_saved.get("round", {}).get("round_id") or ""), "round_01")
+            self.assertEqual(str(round_saved.get("round", {}).get("owner_username") or ""), "hana")
+            self.assertEqual(
+                str(round_saved.get("round", {}).get("next_round_notes") or ""),
+                "retest top 5 with tighter solubility gate",
+            )
+
+            owned_projects = dispatcher.call_tool("pipeline.list_projects", {"user": owner})
+            self.assertEqual(len(owned_projects.get("projects") or []), 1)
+
+            foreign_projects = dispatcher.call_tool("pipeline.list_projects", {"user": foreign})
+            self.assertEqual(len(foreign_projects.get("projects") or []), 0)
+
+            admin_projects = dispatcher.call_tool("pipeline.list_projects", {"user": admin})
+            self.assertEqual(len(admin_projects.get("projects") or []), 1)
+
+            owned_rounds = dispatcher.call_tool(
+                "pipeline.list_rounds",
+                {"project_id": "tev_campaign", "user": owner},
+            )
+            self.assertEqual(len(owned_rounds.get("rounds") or []), 1)
+
+            foreign_rounds = dispatcher.call_tool(
+                "pipeline.list_rounds",
+                {"project_id": "tev_campaign", "user": foreign},
+            )
+            self.assertEqual(len(foreign_rounds.get("rounds") or []), 0)
+
+            with self.assertRaisesRegex(ValueError, "not allowed"):
+                dispatcher.call_tool(
+                    "pipeline.get_project",
+                    {"project_id": "tev_campaign", "user": foreign},
+                )
+
+            with self.assertRaisesRegex(ValueError, "not allowed"):
+                dispatcher.call_tool(
+                    "pipeline.save_round",
+                    {
+                        "project_id": "tev_campaign",
+                        "round_id": "round_02",
+                        "title": "Round 02",
+                        "user": foreign,
+                    },
+                )
+
+    def test_archive_and_delete_rounds_projects_respect_owner_scope_and_visibility(self) -> None:
+        owner = {"username": "hana", "run_prefix": "hana", "role": "user"}
+        foreign = {"username": "minsu", "run_prefix": "minsu", "role": "user"}
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+
+            dispatcher.call_tool(
+                "pipeline.save_project",
+                {
+                    "project_id": "tev_campaign",
+                    "name": "TEV campaign",
+                    "user": owner,
+                },
+            )
+            dispatcher.call_tool(
+                "pipeline.save_round",
+                {
+                    "project_id": "tev_campaign",
+                    "round_id": "round_01",
+                    "title": "Round 01",
+                    "user": owner,
+                },
+            )
+
+            with self.assertRaisesRegex(ValueError, "not allowed"):
+                dispatcher.call_tool(
+                    "pipeline.archive_round",
+                    {"project_id": "tev_campaign", "round_id": "round_01", "user": foreign},
+                )
+
+            archived_round = dispatcher.call_tool(
+                "pipeline.archive_round",
+                {"project_id": "tev_campaign", "round_id": "round_01", "user": owner},
+            )
+            self.assertEqual(str(archived_round.get("round", {}).get("status") or ""), "archived")
+
+            visible_rounds = dispatcher.call_tool(
+                "pipeline.list_rounds",
+                {"project_id": "tev_campaign", "user": owner},
+            ).get("rounds") or []
+            self.assertEqual(len(visible_rounds), 0)
+
+            archived_rounds = dispatcher.call_tool(
+                "pipeline.list_rounds",
+                {"project_id": "tev_campaign", "user": owner, "include_archived": True},
+            ).get("rounds") or []
+            self.assertEqual(len(archived_rounds), 1)
+
+            restored_round = dispatcher.call_tool(
+                "pipeline.restore_round",
+                {"project_id": "tev_campaign", "round_id": "round_01", "user": owner},
+            )
+            self.assertEqual(str(restored_round.get("round", {}).get("status") or ""), "active")
+
+            visible_rounds_after_restore = dispatcher.call_tool(
+                "pipeline.list_rounds",
+                {"project_id": "tev_campaign", "user": owner},
+            ).get("rounds") or []
+            self.assertEqual(len(visible_rounds_after_restore), 1)
+
+            deleted_round = dispatcher.call_tool(
+                "pipeline.delete_round",
+                {"project_id": "tev_campaign", "round_id": "round_01", "user": owner},
+            )
+            self.assertEqual(bool(deleted_round.get("deleted")), True)
+            self.assertFalse((Path(tmp) / "_workspace" / "projects" / "tev_campaign" / "rounds" / "round_01.json").exists())
+
+            dispatcher.call_tool(
+                "pipeline.save_round",
+                {
+                    "project_id": "tev_campaign",
+                    "round_id": "round_02",
+                    "title": "Round 02",
+                    "user": owner,
+                },
+            )
+            with self.assertRaisesRegex(ValueError, "delete_rounds=true"):
+                dispatcher.call_tool(
+                    "pipeline.delete_project",
+                    {"project_id": "tev_campaign", "user": owner},
+                )
+
+            archived_project = dispatcher.call_tool(
+                "pipeline.archive_project",
+                {"project_id": "tev_campaign", "user": owner},
+            )
+            self.assertEqual(str(archived_project.get("project", {}).get("status") or ""), "archived")
+
+            visible_projects = dispatcher.call_tool("pipeline.list_projects", {"user": owner}).get("projects") or []
+            self.assertEqual(len(visible_projects), 0)
+
+            archived_projects = dispatcher.call_tool(
+                "pipeline.list_projects",
+                {"user": owner, "include_archived": True},
+            ).get("projects") or []
+            self.assertEqual(len(archived_projects), 1)
+
+            restored_project = dispatcher.call_tool(
+                "pipeline.restore_project",
+                {"project_id": "tev_campaign", "user": owner},
+            )
+            self.assertEqual(str(restored_project.get("project", {}).get("status") or ""), "active")
+
+            visible_projects_after_restore = dispatcher.call_tool("pipeline.list_projects", {"user": owner}).get("projects") or []
+            self.assertEqual(len(visible_projects_after_restore), 1)
+
+            deleted_project = dispatcher.call_tool(
+                "pipeline.delete_project",
+                {"project_id": "tev_campaign", "delete_rounds": True, "user": owner},
+            )
+            self.assertEqual(bool(deleted_project.get("deleted")), True)
+            self.assertFalse((Path(tmp) / "_workspace" / "projects" / "tev_campaign").exists())
+
+    def test_save_project_and_round_generate_unique_ids_for_localized_names(self) -> None:
+        owner = {"username": "hana", "run_prefix": "hana", "role": "user"}
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+
+            project_a = dispatcher.call_tool(
+                "pipeline.save_project",
+                {
+                    "name": "새 프로젝트",
+                    "user": owner,
+                },
+            )["project"]
+            project_b = dispatcher.call_tool(
+                "pipeline.save_project",
+                {
+                    "name": "프로젝트",
+                    "user": owner,
+                },
+            )["project"]
+
+            self.assertNotEqual(str(project_a.get("project_id") or ""), str(project_b.get("project_id") or ""))
+            self.assertNotEqual(str(project_a.get("project_id") or ""), "id")
+            self.assertNotEqual(str(project_b.get("project_id") or ""), "id")
+
+            listed_projects = dispatcher.call_tool("pipeline.list_projects", {"user": owner, "limit": 20}).get("projects") or []
+            self.assertEqual(len(listed_projects), 2)
+
+            round_a = dispatcher.call_tool(
+                "pipeline.save_round",
+                {
+                    "project_id": str(project_a.get("project_id") or ""),
+                    "title": "라운드",
+                    "user": owner,
+                },
+            )["round"]
+            round_b = dispatcher.call_tool(
+                "pipeline.save_round",
+                {
+                    "project_id": str(project_a.get("project_id") or ""),
+                    "title": "라운드",
+                    "user": owner,
+                },
+            )["round"]
+
+            self.assertNotEqual(str(round_a.get("round_id") or ""), str(round_b.get("round_id") or ""))
+            self.assertNotEqual(str(round_a.get("round_id") or ""), "id")
+            self.assertNotEqual(str(round_b.get("round_id") or ""), "id")
+
+            listed_rounds = dispatcher.call_tool(
+                "pipeline.list_rounds",
+                {"project_id": str(project_a.get("project_id") or ""), "user": owner, "limit": 20},
+            ).get("rounds") or []
+            self.assertEqual(len(listed_rounds), 2)
+
+    def test_pipeline_run_enforces_round_owner_scope_and_links_run(self) -> None:
+        owner = {"username": "hana", "run_prefix": "hana", "role": "user"}
+        foreign = {"username": "minsu", "run_prefix": "minsu", "role": "user"}
+        fasta = ">q1\nACDEFGHIK\n"
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            dispatcher.call_tool(
+                "pipeline.save_project",
+                {
+                    "project_id": "tev_campaign",
+                    "name": "TEV campaign",
+                    "description": "stability round-tracking",
+                    "user": owner,
+                },
+            )
+            dispatcher.call_tool(
+                "pipeline.save_round",
+                {
+                    "project_id": "tev_campaign",
+                    "round_id": "round_01",
+                    "title": "Round 01",
+                    "goal": "baseline stability screen",
+                    "user": owner,
+                },
+            )
+
+            with self.assertRaisesRegex(ValueError, "not allowed"):
+                dispatcher.call_tool(
+                    "pipeline.run",
+                    {
+                        "target_fasta": fasta,
+                        "dry_run": True,
+                        "num_seq_per_tier": 1,
+                        "conservation_tiers": [0.3],
+                        "project_id": "tev_campaign",
+                        "round_id": "round_01",
+                        "user": foreign,
+                    },
+                )
+
+            out = dispatcher.call_tool(
+                "pipeline.run",
+                {
+                    "target_fasta": fasta,
+                    "dry_run": True,
+                    "num_seq_per_tier": 1,
+                    "conservation_tiers": [0.3],
+                    "project_id": "tev_campaign",
+                    "round_id": "round_01",
+                    "user": owner,
+                },
+            )
+            round_path = (
+                Path(tmp)
+                / "_workspace"
+                / "projects"
+                / "tev_campaign"
+                / "rounds"
+                / "round_01.json"
+            )
+            record = json.loads(round_path.read_text(encoding="utf-8"))
+            self.assertEqual(record.get("linked_run_ids"), [str(out.get("run_id") or "")])
+
+    def test_pipeline_preflight_enforces_round_owner_scope(self) -> None:
+        owner = {"username": "hana", "run_prefix": "hana", "role": "user"}
+        foreign = {"username": "minsu", "run_prefix": "minsu", "role": "user"}
+        fasta = ">q1\nACDEFGHIK\n"
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            dispatcher.call_tool(
+                "pipeline.save_project",
+                {
+                    "project_id": "tev_campaign",
+                    "name": "TEV campaign",
+                    "description": "stability round-tracking",
+                    "user": owner,
+                },
+            )
+            dispatcher.call_tool(
+                "pipeline.save_round",
+                {
+                    "project_id": "tev_campaign",
+                    "round_id": "round_01",
+                    "title": "Round 01",
+                    "goal": "baseline stability screen",
+                    "user": owner,
+                },
+            )
+
+            with self.assertRaisesRegex(ValueError, "not allowed"):
+                dispatcher.call_tool(
+                    "pipeline.preflight",
+                    {
+                        "target_fasta": fasta,
+                        "project_id": "tev_campaign",
+                        "round_id": "round_01",
+                        "user": foreign,
+                    },
+                )
+
+            out = dispatcher.call_tool(
+                "pipeline.preflight",
+                {
+                    "target_fasta": fasta,
+                    "project_id": "tev_campaign",
+                    "round_id": "round_01",
+                    "user": owner,
+                },
+            )
+            self.assertIsInstance(out, dict)
+            self.assertIn("ok", out)
+
     def test_pipeline_run_tool_dry_run(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         pdb = (

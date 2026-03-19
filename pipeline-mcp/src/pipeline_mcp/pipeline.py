@@ -72,6 +72,8 @@ _SUMMARY_ARTIFACTS = (
     "agent_panel.jsonl",
 )
 _PARTIAL_RERUN_IGNORED_FIELDS = {
+    "project_id",
+    "round_id",
     "start_from",
     "stop_after",
     "force",
@@ -563,6 +565,58 @@ class BackboneContractError(RuntimeError):
 def _safe_id(value: str) -> str:
     safe = _SAFE_ID_RE.sub("_", value).strip("._-")
     return safe[:128] or "id"
+
+
+def _now_iso() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _workspace_root(output_root: str) -> Path:
+    return Path(str(output_root or "")).expanduser().resolve() / "_workspace"
+
+
+def _round_record_path(output_root: str, project_id: str, round_id: str) -> Path:
+    return _workspace_root(output_root) / "projects" / _safe_id(project_id) / "rounds" / f"{_safe_id(round_id)}.json"
+
+
+def _attach_run_to_round_record(output_root: str, request: PipelineRequest, run_id: str) -> None:
+    project_id = str(getattr(request, "project_id", "") or "").strip()
+    round_id = str(getattr(request, "round_id", "") or "").strip()
+    if round_id and not project_id:
+        raise PipelineInputRequired(
+            stage="init",
+            message="round_id requires project_id.",
+        )
+    if not project_id or not round_id:
+        return
+    round_path = _round_record_path(output_root, project_id, round_id)
+    if not round_path.exists():
+        raise PipelineInputRequired(
+            stage="init",
+            message=f"round_id={round_id!r} was not found under project_id={project_id!r}.",
+        )
+    try:
+        raw = json.loads(round_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise PipelineInputRequired(
+            stage="init",
+            message=f"Failed to read round metadata for project_id={project_id!r}, round_id={round_id!r}: {exc}",
+        ) from exc
+    if not isinstance(raw, dict):
+        raise PipelineInputRequired(
+            stage="init",
+            message=f"Round metadata for project_id={project_id!r}, round_id={round_id!r} is invalid.",
+        )
+    linked_run_ids: list[str] = []
+    for item in raw.get("linked_run_ids") or []:
+        text = str(item or "").strip()
+        if text and text not in linked_run_ids:
+            linked_run_ids.append(text)
+    if run_id not in linked_run_ids:
+        linked_run_ids.append(run_id)
+    raw["linked_run_ids"] = linked_run_ids
+    raw["updated_at"] = _now_iso()
+    write_json(round_path, raw)
 
 
 def _should_retry_cached_wt_af2(payload: dict[str, Any] | None) -> bool:
@@ -2113,6 +2167,7 @@ class PipelineRunner:
                     )
 
             write_json(paths.request_json, current_request_payload)
+            _attach_run_to_round_record(self.output_root, request, run_id)
 
             if normalized_start_from is not None:
                 cleared = _clear_stage_outputs_from(
