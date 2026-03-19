@@ -175,6 +175,51 @@ class TestPipelineDryRun(unittest.TestCase):
                 self.assertTrue((tier_dir / "af2_scores.json").exists())
                 self.assertTrue((tier_dir / "af2_selected.fasta").exists())
 
+    def test_pipeline_dry_run_writes_relax_artifacts_when_enabled(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU A   4       3.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  PHE A   5       4.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  GLY A   6       5.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      7  CA  HIS A   7       6.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      8  CA  ILE A   8       7.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      9  CA  LYS A   9       8.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            req = PipelineRequest(
+                target_fasta=fasta,
+                target_pdb=pdb,
+                dry_run=True,
+                stop_after="af2",
+                num_seq_per_tier=2,
+                conservation_tiers=[0.3],
+                relax_enabled=True,
+                relax_score_per_residue_cutoff=-3.0,
+                af2_plddt_cutoff=0.0,
+                af2_rmsd_cutoff=0.0,
+            )
+            res = runner.run(req)
+
+            tier_dir = Path(res.output_dir) / "tiers" / "30"
+            relax_scores = json.loads((tier_dir / "relax_scores.json").read_text(encoding="utf-8"))
+            relax_metrics = json.loads(
+                (tier_dir / "relax" / "target_30_s1" / "metrics.json").read_text(encoding="utf-8")
+            )
+
+            self.assertTrue((tier_dir / "relax_selected.fasta").exists())
+            self.assertEqual(relax_scores.get("selected_ids"), ["target:30_s1"])
+            self.assertEqual(relax_scores.get("mode"), "dry_run")
+            self.assertEqual(res.tiers[0].relax_selected_ids, ["target:30_s1"])
+            self.assertAlmostEqual(float(relax_metrics.get("score_per_residue") or 0.0), -3.5)
+            self.assertAlmostEqual(float(relax_metrics.get("total_score") or 0.0), -31.5)
+            self.assertAlmostEqual(float(relax_metrics.get("delta_total_score") or 0.0), -25.0)
+
     def test_runner_links_project_round_metadata_to_launched_run(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         owner = {"username": "hana", "run_prefix": "hana", "role": "user"}

@@ -163,6 +163,10 @@ _PARTIAL_RERUN_AF2_FIELDS = {
     "af2_max_candidates_per_tier",
     "af2_top_k",
     "af2_sequence_ids",
+    "relax_enabled",
+    "relax_score_per_residue_cutoff",
+    "relax_nstruct",
+    "relax_extra_flags",
 }
 _PARTIAL_RERUN_NOVELTY_FIELDS = {"novelty_enabled", "novelty_target_db", "wt_compare"}
 
@@ -257,6 +261,9 @@ def _clear_tier_outputs_from_stage(
             _remove("af2")
             _remove("af2_scores.json")
             _remove("af2_selected.fasta")
+            _remove("relax")
+            _remove("relax_scores.json")
+            _remove("relax_selected.fasta")
             _remove("novelty.tsv")
             _remove("novelty.json")
             continue
@@ -265,6 +272,9 @@ def _clear_tier_outputs_from_stage(
             _remove("af2")
             _remove("af2_scores.json")
             _remove("af2_selected.fasta")
+            _remove("relax")
+            _remove("relax_scores.json")
+            _remove("relax_selected.fasta")
             _remove("novelty.tsv")
             _remove("novelty.json")
             continue
@@ -625,6 +635,10 @@ def _should_retry_cached_wt_af2(payload: dict[str, Any] | None) -> bool:
 
 def _should_retry_cached_tier_af2(payload: dict[str, Any] | None) -> bool:
     return isinstance(payload, dict) and af2_payload_has_missing_pdb_failure(payload)
+
+
+def _relax_payload_has_recovered_failure(payload: dict[str, Any] | None) -> bool:
+    return isinstance(payload, dict) and bool(payload.get("recovered"))
 
 
 def _canonicalize_rfd3_design_id(value: object | None) -> str:
@@ -1357,6 +1371,37 @@ def _clean_protein_sequence(seq: str) -> str:
     return "".join(ch for ch in str(seq or "").upper() if ch.isalpha())
 
 
+def _sequence_length(seq: str) -> int:
+    return len(_clean_protein_sequence(seq))
+
+
+def _extract_predicted_pdb_text(
+    seq_id: str,
+    *,
+    af2_result: dict[str, object] | None,
+    af2_dir: Path,
+) -> str | None:
+    rec = af2_result.get(seq_id) if isinstance(af2_result, dict) else None
+    if isinstance(rec, dict):
+        for key in ("ranked_0_pdb", "pdb", "pdb_text"):
+            value = rec.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+    pdb_path = af2_dir / _safe_id(seq_id) / "ranked_0.pdb"
+    if pdb_path.exists():
+        return pdb_path.read_text(encoding="utf-8")
+    return None
+
+
+def _score_per_residue(total_score: float | None, sequence: str) -> float | None:
+    if total_score is None:
+        return None
+    length = _sequence_length(sequence)
+    if length <= 0:
+        return None
+    return float(total_score) / float(length)
+
+
 def _sequence_difference_stats(reference_seq: str, query_seq: str) -> dict[str, float | int] | None:
     reference = _clean_protein_sequence(reference_seq)
     query = _clean_protein_sequence(query_seq)
@@ -1981,6 +2026,7 @@ class PipelineRunner:
     rfd3: Any | None = None
     bioemu: Any | None = None
     diffdock: Any | None = None
+    rosetta_relax: Any | None = None
 
     def run(self, request: PipelineRequest, *, run_id: str | None = None) -> PipelineResult:
         run_id = run_id or new_run_id("pipeline")
@@ -2000,6 +2046,8 @@ class PipelineRunner:
         af2_provider_label = _af2_provider_display_name(af2_provider)
         af2_provider_hint = _af2_provider_config_hint(af2_provider)
         af2_endpoint_id = str(getattr(af2_client, "endpoint_id", "") or "").strip() if af2_client is not None else ""
+        relax_enabled = bool(getattr(request, "relax_enabled", False))
+        rosetta_relax_client = self.rosetta_relax if relax_enabled else None
 
         msa_a3m_path = None
         msa_filtered_a3m_path = None
@@ -4254,11 +4302,11 @@ class PipelineRunner:
 
                 cached_metrics = _load_json_file(metrics_path) if metrics_path.exists() and not request.force else None
                 cached_af2 = cached_metrics.get("af2") if isinstance(cached_metrics, dict) and isinstance(cached_metrics.get("af2"), dict) else None
-                if cached_metrics is not None and not _should_retry_cached_wt_af2(cached_af2):
-                    set_status(paths, stage="wt_baseline", state="completed", detail="cached")
-                    return
-                if _should_retry_cached_wt_af2(cached_af2):
-                    _unlink_if_exists(wt_root / "af2" / "runpod_job.json")
+                cached_relax = (
+                    cached_metrics.get("relax")
+                    if isinstance(cached_metrics, dict) and isinstance(cached_metrics.get("relax"), dict)
+                    else None
+                )
 
                 seq_source = "target_fasta" if str(request.target_fasta or "").strip() else "target_pdb"
                 wt_seq = target_record.sequence if target_record else ""
@@ -4269,6 +4317,42 @@ class PipelineRunner:
                         seq_source = "target_pdb"
                     except Exception:
                         pass
+
+                wt_af2_model_preset = _resolve_af2_model_preset(
+                    request.af2_model_preset,
+                    chain_count=len(design_chains or _split_multichain_sequence(wt_seq)),
+                )
+                cached_af2_ok = (
+                    cached_af2 is not None
+                    and not _should_retry_cached_wt_af2(cached_af2)
+                    and (
+                        cached_af2.get("model_preset") in {None, wt_af2_model_preset}
+                    )
+                    and (
+                        cached_af2.get("db_preset") in {None, request.af2_db_preset}
+                    )
+                    and (
+                        cached_af2.get("max_template_date") in {None, request.af2_max_template_date}
+                    )
+                    and (
+                        cached_af2.get("provider") in {None, af2_provider}
+                    )
+                )
+                cached_relax_ok = (
+                    (not relax_enabled)
+                    or (
+                        cached_relax is not None
+                        and not _relax_payload_has_recovered_failure(cached_relax)
+                        and cached_relax.get("nstruct") in {None, max(1, int(getattr(request, "relax_nstruct", 1) or 1))}
+                        and str(cached_relax.get("extra_flags") or "").strip()
+                        == str(getattr(request, "relax_extra_flags", "") or "").strip()
+                    )
+                )
+                if cached_metrics is not None and cached_af2_ok and cached_relax_ok:
+                    set_status(paths, stage="wt_baseline", state="completed", detail="cached")
+                    return
+                if _should_retry_cached_wt_af2(cached_af2):
+                    _unlink_if_exists(wt_root / "af2" / "runpod_job.json")
 
                 payload: dict[str, object] = {
                     "enabled": True,
@@ -4354,13 +4438,9 @@ class PipelineRunner:
                         elif af2_client is None:
                             af2_payload = {"skipped": True, "reason": f"{af2_provider_label} not configured"}
                         else:
-                            af2_model_preset = _resolve_af2_model_preset(
-                                request.af2_model_preset,
-                                chain_count=len(design_chains or _split_multichain_sequence(wt_seq)),
-                            )
                             seq_in = _prepare_af2_sequence(
                                 wt_seq,
-                                model_preset=af2_model_preset,
+                                model_preset=wt_af2_model_preset,
                                 chain_ids=design_chains,
                             )
                             seqrec = SequenceRecord(
@@ -4395,7 +4475,7 @@ class PipelineRunner:
                             try:
                                 af2_out = af2_client.predict(
                                     [seqrec],
-                                    model_preset=af2_model_preset,
+                                    model_preset=wt_af2_model_preset,
                                     db_preset=request.af2_db_preset,
                                     max_template_date=request.af2_max_template_date,
                                     extra_flags=request.af2_extra_flags,
@@ -4405,7 +4485,7 @@ class PipelineRunner:
                             except TypeError:
                                 af2_out = af2_client.predict(
                                     [seqrec],
-                                    model_preset=af2_model_preset,
+                                    model_preset=wt_af2_model_preset,
                                     db_preset=request.af2_db_preset,
                                     max_template_date=request.af2_max_template_date,
                                     extra_flags=request.af2_extra_flags,
@@ -4429,7 +4509,7 @@ class PipelineRunner:
                             af2_payload = {
                                 "best_plddt": best_plddt,
                                 "rmsd_ca": rmsd_val,
-                                "model_preset": af2_model_preset,
+                                "model_preset": wt_af2_model_preset,
                                 "db_preset": request.af2_db_preset,
                                 "max_template_date": request.af2_max_template_date,
                                 "provider": af2_provider,
@@ -4440,6 +4520,67 @@ class PipelineRunner:
                 payload["af2"] = af2_payload or {"skipped": True}
                 af2_detail = "cached" if af2_cached else ("skipped" if bool((af2_payload or {}).get("skipped")) else None)
                 set_status(paths, stage="wt_af2", state="completed", detail=af2_detail)
+
+                if relax_enabled:
+                    relax_root = _ensure_dir(wt_root / "relax")
+                    relax_metrics_path = relax_root / "metrics.json"
+                    relax_payload = _load_json_file(relax_metrics_path) if relax_metrics_path.exists() and not request.force else None
+                    relax_cached = (
+                        relax_payload is not None
+                        and not _relax_payload_has_recovered_failure(relax_payload)
+                        and relax_payload.get("nstruct") in {None, max(1, int(getattr(request, "relax_nstruct", 1) or 1))}
+                        and str(relax_payload.get("extra_flags") or "").strip()
+                        == str(getattr(request, "relax_extra_flags", "") or "").strip()
+                    )
+                    set_status(paths, stage="wt_relax", state="running", detail=("cached" if relax_cached else None))
+                    if not relax_cached:
+                        try:
+                            wt_ranked_pdb_path = wt_root / "af2" / "ranked_0.pdb"
+                            wt_ranked_pdb = wt_ranked_pdb_path.read_text(encoding="utf-8") if wt_ranked_pdb_path.exists() else ""
+                            if not wt_seq:
+                                relax_payload = {"skipped": True, "reason": "WT sequence unavailable"}
+                            elif not wt_ranked_pdb.strip():
+                                relax_payload = {"skipped": True, "reason": "WT AF2 structure unavailable"}
+                            elif rosetta_relax_client is None:
+                                relax_payload = {"skipped": True, "reason": "Rosetta relax is not configured"}
+                            else:
+                                relax_result = rosetta_relax_client.relax(
+                                    wt_ranked_pdb,
+                                    nstruct=max(1, int(getattr(request, "relax_nstruct", 1) or 1)),
+                                    extra_flags=getattr(request, "relax_extra_flags", None),
+                                )
+                                _write_text(relax_root / "relaxed_best.pdb", str(relax_result.get("best_pdb_text") or ""))
+                                total_score = (
+                                    float(relax_result.get("total_score"))
+                                    if isinstance(relax_result.get("total_score"), (int, float))
+                                    else None
+                                )
+                                delta_total_score = (
+                                    float(relax_result.get("delta_total_score"))
+                                    if isinstance(relax_result.get("delta_total_score"), (int, float))
+                                    else None
+                                )
+                                relax_payload = {
+                                    "score_per_residue": _score_per_residue(total_score, wt_seq),
+                                    "total_score": total_score,
+                                    "delta_total_score": delta_total_score,
+                                    "input_total_score": (
+                                        float(relax_result.get("input_total_score"))
+                                        if isinstance(relax_result.get("input_total_score"), (int, float))
+                                        else None
+                                    ),
+                                    "description": str(relax_result.get("description") or "").strip() or None,
+                                    "nstruct": max(1, int(getattr(request, "relax_nstruct", 1) or 1)),
+                                    "extra_flags": str(getattr(request, "relax_extra_flags", "") or "").strip() or None,
+                                    "mode": str(relax_result.get("mode") or "").strip() or None,
+                                    "sequence_length": _sequence_length(wt_seq),
+                                }
+                        except Exception as exc:
+                            relax_payload = {"skipped": True, "error": str(exc)}
+                        write_json(relax_metrics_path, relax_payload)
+                    payload["relax"] = relax_payload or {"skipped": True}
+                    relax_detail = "cached" if relax_cached else ("skipped" if bool((relax_payload or {}).get("skipped")) else None)
+                    set_status(paths, stage="wt_relax", state="completed", detail=relax_detail)
 
                 write_json(metrics_path, payload)
                 set_status(paths, stage="wt_baseline", state="completed")
@@ -5464,6 +5605,7 @@ class PipelineRunner:
 
                 af2_result = None
                 af2_selected_ids: list[str] | None = None
+                relax_selected_ids: list[str] | None = None
                 af2_candidates = passed
                 af2_budget_applied = False
                 if request.af2_sequence_ids:
@@ -5493,10 +5635,11 @@ class PipelineRunner:
                             key=lambda rec: (-_soluprot_score_for_candidate(rec), order_by_id.get(rec.id, 10**9)),
                         )[:max_candidates]
                         af2_budget_applied = True
+                af2_dir = tier_dir / "af2"
                 if af2_candidates:
                     _ensure_not_cancelled(stage=f"af2_{tier_str}")
                     set_status(paths, stage=f"af2_{tier_str}", state="running")
-                    af2_dir = _ensure_dir(tier_dir / "af2")
+                    af2_dir = _ensure_dir(af2_dir)
                     af2_scores_path = tier_dir / "af2_scores.json"
                     af2_selected_path = tier_dir / "af2_selected.fasta"
                     jobs_path = af2_dir / "runpod_jobs.json"
@@ -5804,6 +5947,292 @@ class PipelineRunner:
                         recovery=af2_recovery,
                     )
 
+                relax_candidates = [s for s in af2_candidates if af2_selected_ids and s.id in set(af2_selected_ids)]
+                if relax_enabled:
+                    relax_dir = _ensure_dir(tier_dir / "relax")
+                    relax_scores_path = tier_dir / "relax_scores.json"
+                    relax_selected_path = tier_dir / "relax_selected.fasta"
+                    if relax_candidates:
+                        _ensure_not_cancelled(stage=f"relax_{tier_str}")
+                        set_status(paths, stage=f"relax_{tier_str}", state="running")
+                        relax_recovered = False
+                        relax_error: str | None = None
+                        relax_recovery: dict[str, object] | None = None
+                        try:
+                            candidate_ids = [s.id for s in relax_candidates]
+                            cached_score_per_residue: dict[str, float] = {}
+                            cached_total_scores: dict[str, float] = {}
+                            cached_delta_total_scores: dict[str, float] = {}
+                            partial_relax_errors: dict[str, str] = {}
+                            cached_mode: str | None = None
+                            cached_ok = False
+                            if relax_scores_path.exists() and not request.force:
+                                try:
+                                    cached = json.loads(relax_scores_path.read_text(encoding="utf-8"))
+                                except Exception:
+                                    cached = None
+                                cached_candidate_ids = cached.get("candidate_ids") if isinstance(cached, dict) else None
+                                cached_nstruct = cached.get("nstruct") if isinstance(cached, dict) else None
+                                cached_extra_flags = cached.get("extra_flags") if isinstance(cached, dict) else None
+                                cached_mode_raw = cached.get("mode") if isinstance(cached, dict) else None
+                                raw_score_per_residue = (
+                                    cached.get("score_per_residue")
+                                    if isinstance(cached, dict) and isinstance(cached.get("score_per_residue"), dict)
+                                    else None
+                                )
+                                raw_total_scores = (
+                                    cached.get("total_scores")
+                                    if isinstance(cached, dict) and isinstance(cached.get("total_scores"), dict)
+                                    else None
+                                )
+                                raw_delta_total_scores = (
+                                    cached.get("delta_total_scores")
+                                    if isinstance(cached, dict) and isinstance(cached.get("delta_total_scores"), dict)
+                                    else None
+                                )
+                                raw_errors = (
+                                    cached.get("errors")
+                                    if isinstance(cached, dict) and isinstance(cached.get("errors"), dict)
+                                    else None
+                                )
+                                if (
+                                    not _relax_payload_has_recovered_failure(cached)
+                                    and isinstance(cached_candidate_ids, list)
+                                    and [str(x) for x in cached_candidate_ids] == candidate_ids
+                                    and cached_nstruct in {None, max(1, int(getattr(request, "relax_nstruct", 1) or 1))}
+                                    and str(cached_extra_flags or "").strip()
+                                    == str(getattr(request, "relax_extra_flags", "") or "").strip()
+                                ):
+                                    if isinstance(raw_score_per_residue, dict):
+                                        cached_score_per_residue = {
+                                            str(k): float(v)
+                                            for k, v in raw_score_per_residue.items()
+                                            if isinstance(v, (int, float))
+                                        }
+                                    if isinstance(raw_total_scores, dict):
+                                        cached_total_scores = {
+                                            str(k): float(v)
+                                            for k, v in raw_total_scores.items()
+                                            if isinstance(v, (int, float))
+                                        }
+                                    if isinstance(raw_delta_total_scores, dict):
+                                        cached_delta_total_scores = {
+                                            str(k): float(v)
+                                            for k, v in raw_delta_total_scores.items()
+                                            if isinstance(v, (int, float))
+                                        }
+                                    if isinstance(raw_errors, dict):
+                                        partial_relax_errors = {
+                                            str(k): str(v)
+                                            for k, v in raw_errors.items()
+                                            if str(k).strip() and str(v).strip()
+                                        }
+                                    cached_mode = str(cached_mode_raw or "").strip() or None
+                                    cached_ok = True
+
+                            to_relax = (
+                                list(relax_candidates)
+                                if request.force or not cached_ok
+                                else [s for s in relax_candidates if s.id not in cached_score_per_residue]
+                            )
+                            relax_mode = cached_mode
+
+                            if to_relax:
+                                if request.dry_run:
+                                    for seq in to_relax:
+                                        seq_dir = _ensure_dir(relax_dir / _safe_id(seq.id))
+                                        seq_index = candidate_ids.index(seq.id)
+                                        score_per_residue = -3.5 if (seq_index % 2 == 0) else -2.1
+                                        total_score = score_per_residue * float(max(1, _sequence_length(seq.sequence)))
+                                        input_total_score = total_score + float(max(25, _sequence_length(seq.sequence)))
+                                        delta_total_score = total_score - input_total_score
+                                        cached_score_per_residue[seq.id] = float(score_per_residue)
+                                        cached_total_scores[seq.id] = float(total_score)
+                                        cached_delta_total_scores[seq.id] = float(delta_total_score)
+                                        write_json(
+                                            seq_dir / "metrics.json",
+                                            {
+                                                "score_per_residue": float(score_per_residue),
+                                                "total_score": float(total_score),
+                                                "delta_total_score": float(delta_total_score),
+                                                "input_total_score": float(input_total_score),
+                                                "nstruct": max(1, int(getattr(request, "relax_nstruct", 1) or 1)),
+                                                "extra_flags": str(getattr(request, "relax_extra_flags", "") or "").strip() or None,
+                                                "mode": "dry_run",
+                                                "sequence_length": _sequence_length(seq.sequence),
+                                            },
+                                        )
+                                    relax_mode = "dry_run"
+                                else:
+                                    if rosetta_relax_client is None:
+                                        raise RuntimeError("Rosetta relax is required for relax_enabled=true")
+                                    for seq in to_relax:
+                                        pdb_text = _extract_predicted_pdb_text(
+                                            seq.id,
+                                            af2_result=af2_result,
+                                            af2_dir=af2_dir,
+                                        )
+                                        if not pdb_text or not pdb_text.strip():
+                                            partial_relax_errors[seq.id] = "AF2 structure unavailable for Rosetta relax"
+                                            continue
+                                        try:
+                                            relax_result = rosetta_relax_client.relax(
+                                                pdb_text,
+                                                nstruct=max(1, int(getattr(request, "relax_nstruct", 1) or 1)),
+                                                extra_flags=getattr(request, "relax_extra_flags", None),
+                                            )
+                                        except Exception as exc:
+                                            partial_relax_errors[seq.id] = str(exc)
+                                            continue
+                                        total_score = (
+                                            float(relax_result.get("total_score"))
+                                            if isinstance(relax_result.get("total_score"), (int, float))
+                                            else None
+                                        )
+                                        score_per_residue = _score_per_residue(total_score, seq.sequence)
+                                        if score_per_residue is None:
+                                            partial_relax_errors[seq.id] = "Failed to compute Rosetta score per residue"
+                                            continue
+                                        delta_total_score = (
+                                            float(relax_result.get("delta_total_score"))
+                                            if isinstance(relax_result.get("delta_total_score"), (int, float))
+                                            else None
+                                        )
+                                        seq_dir = _ensure_dir(relax_dir / _safe_id(seq.id))
+                                        _write_text(seq_dir / "relaxed_best.pdb", str(relax_result.get("best_pdb_text") or ""))
+                                        write_json(
+                                            seq_dir / "metrics.json",
+                                            {
+                                                "score_per_residue": float(score_per_residue),
+                                                "total_score": total_score,
+                                                "delta_total_score": delta_total_score,
+                                                "input_total_score": (
+                                                    float(relax_result.get("input_total_score"))
+                                                    if isinstance(relax_result.get("input_total_score"), (int, float))
+                                                    else None
+                                                ),
+                                                "description": str(relax_result.get("description") or "").strip() or None,
+                                                "nstruct": max(1, int(getattr(request, "relax_nstruct", 1) or 1)),
+                                                "extra_flags": str(getattr(request, "relax_extra_flags", "") or "").strip() or None,
+                                                "mode": str(relax_result.get("mode") or "").strip() or None,
+                                                "sequence_length": _sequence_length(seq.sequence),
+                                            },
+                                        )
+                                        cached_score_per_residue[seq.id] = float(score_per_residue)
+                                        if total_score is not None:
+                                            cached_total_scores[seq.id] = float(total_score)
+                                        if delta_total_score is not None:
+                                            cached_delta_total_scores[seq.id] = float(delta_total_score)
+                                        relax_mode = str(relax_result.get("mode") or "").strip() or relax_mode
+
+                            if partial_relax_errors and not cached_score_per_residue:
+                                first_error = next(iter(partial_relax_errors.values()))
+                                raise RuntimeError(first_error)
+
+                            relax_cutoff = (
+                                float(request.relax_score_per_residue_cutoff)
+                                if isinstance(request.relax_score_per_residue_cutoff, (int, float))
+                                else None
+                            )
+                            if relax_cutoff is None:
+                                relax_selected_ids = list(candidate_ids)
+                            else:
+                                selected_pairs = [
+                                    (seq_id, score)
+                                    for seq_id, score in cached_score_per_residue.items()
+                                    if score <= relax_cutoff
+                                ]
+                                selected_pairs.sort(key=lambda item: item[1])
+                                relax_selected_ids = [seq_id for seq_id, _ in selected_pairs]
+
+                            selected_records = [s for s in relax_candidates if s.id in set(relax_selected_ids)]
+                            _write_text(
+                                relax_selected_path,
+                                to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in selected_records]),
+                            )
+                            write_json(
+                                relax_scores_path,
+                                {
+                                    "score_per_residue": cached_score_per_residue,
+                                    "total_scores": cached_total_scores,
+                                    "delta_total_scores": cached_delta_total_scores,
+                                    "candidate_ids": candidate_ids,
+                                    "selected_ids": relax_selected_ids,
+                                    "cutoff": request.relax_score_per_residue_cutoff,
+                                    "nstruct": max(1, int(getattr(request, "relax_nstruct", 1) or 1)),
+                                    "extra_flags": str(getattr(request, "relax_extra_flags", "") or "").strip() or None,
+                                    "failed_ids": sorted(partial_relax_errors.keys()),
+                                    "errors": partial_relax_errors,
+                                    "mode": relax_mode,
+                                    "cached": (not to_relax and cached_ok and not request.force),
+                                },
+                            )
+                            set_status(
+                                paths,
+                                stage=f"relax_{tier_str}",
+                                state="completed",
+                                detail="cached" if (not to_relax and cached_ok and not request.force) else None,
+                            )
+                        except Exception as exc:
+                            if is_cancel_requested(self.output_root, run_id) or _is_cancel_error(exc):
+                                raise PipelineCancelled(
+                                    stage=f"relax_{tier_str}",
+                                    message=f"run cancelled while relax_{tier_str}: {exc}",
+                                ) from exc
+                            relax_error = f"relax_{tier_str} failed: {exc}"
+                            errors.append(relax_error)
+                            if not request.auto_recover:
+                                raise
+                            relax_recovered = True
+                            relax_recovery = {
+                                "attempted": True,
+                                "error": relax_error,
+                                "actions": ["Kept AF2-selected candidates without Rosetta relax filtering"],
+                            }
+                            relax_selected_ids = [s.id for s in relax_candidates]
+                            _write_text(
+                                relax_selected_path,
+                                to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in relax_candidates]),
+                            )
+                            write_json(
+                                relax_scores_path,
+                                {
+                                    "score_per_residue": {},
+                                    "total_scores": {},
+                                    "delta_total_scores": {},
+                                    "candidate_ids": [s.id for s in relax_candidates],
+                                    "selected_ids": relax_selected_ids,
+                                    "cutoff": request.relax_score_per_residue_cutoff,
+                                    "nstruct": max(1, int(getattr(request, "relax_nstruct", 1) or 1)),
+                                    "extra_flags": str(getattr(request, "relax_extra_flags", "") or "").strip() or None,
+                                    "recovered": True,
+                                    "error": relax_error,
+                                },
+                            )
+                            set_status(paths, stage=f"relax_{tier_str}", state="completed", detail="recovered")
+                        _emit_panel(
+                            f"relax_{tier_str}",
+                            detail=("recovered" if relax_recovered else None),
+                            error=relax_error,
+                            recovery=relax_recovery,
+                        )
+                    else:
+                        relax_selected_ids = []
+                        _write_text(relax_selected_path, "")
+                        write_json(
+                            relax_scores_path,
+                            {
+                                "score_per_residue": {},
+                                "total_scores": {},
+                                "delta_total_scores": {},
+                                "candidate_ids": [],
+                                "selected_ids": [],
+                                "cutoff": request.relax_score_per_residue_cutoff,
+                                "nstruct": max(1, int(getattr(request, "relax_nstruct", 1) or 1)),
+                                "extra_flags": str(getattr(request, "relax_extra_flags", "") or "").strip() or None,
+                            },
+                        )
+
                 if normalized_stop_after == "af2" or not novelty_enabled:
                     tier_results.append(
                         TierResult(
@@ -5819,12 +6248,14 @@ class PipelineRunner:
                             passed_ids=passed_ids,
                             af2=af2_result,
                             af2_selected_ids=af2_selected_ids,
+                            relax_selected_ids=relax_selected_ids,
                         )
                     )
                     continue
 
                 novelty_tsv = None
-                novelty_candidates = [s for s in passed if af2_selected_ids and s.id in set(af2_selected_ids)]
+                novelty_selected_ids = relax_selected_ids if relax_enabled else af2_selected_ids
+                novelty_candidates = [s for s in passed if novelty_selected_ids and s.id in set(novelty_selected_ids)]
                 if novelty_candidates:
                     _ensure_not_cancelled(stage=f"novelty_{tier_str}")
                     novelty_recovered = False
@@ -5982,6 +6413,7 @@ class PipelineRunner:
                         passed_ids=passed_ids,
                         af2=af2_result,
                         af2_selected_ids=af2_selected_ids,
+                        relax_selected_ids=relax_selected_ids,
                         novelty_tsv=novelty_tsv,
                     )
                 )

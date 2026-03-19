@@ -1271,7 +1271,14 @@ const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
     "ligand_mask_use_original_target",
   ]),
   soluprot: Object.freeze(["soluprot_cutoff"]),
-  af2: Object.freeze(["af2_provider", "af2_max_candidates_per_tier", "af2_plddt_cutoff", "af2_rmsd_cutoff"]),
+  af2: Object.freeze([
+    "af2_provider",
+    "af2_max_candidates_per_tier",
+    "af2_plddt_cutoff",
+    "af2_rmsd_cutoff",
+    "relax_enabled",
+    "relax_score_per_residue_cutoff",
+  ]),
   novelty: Object.freeze(["novelty_enabled", "wt_compare"]),
 });
 
@@ -1774,6 +1781,8 @@ export function inferRequestRunMode(payload) {
     hasMeaningfulValue(payload.ligand_mask_use_original_target) ||
     hasMeaningfulValue(payload.af2_plddt_cutoff) ||
     hasMeaningfulValue(payload.af2_rmsd_cutoff) ||
+    hasMeaningfulValue(payload.relax_enabled) ||
+    hasMeaningfulValue(payload.relax_score_per_residue_cutoff) ||
     hasMeaningfulValue(payload.conservation_mode) ||
     hasMeaningfulValue(payload.conservation_weighting) ||
     hasMeaningfulValue(payload.surface_only);
