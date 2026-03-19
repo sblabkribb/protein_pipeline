@@ -106,6 +106,16 @@ def main() -> None:
     parser.add_argument("--rfd3-design-index", type=int, default=0)
     parser.add_argument("--rfd3-max-return-designs", type=int, default=50)
     parser.add_argument("--rfd3-partial-t", type=float, default=None)
+    parser.add_argument(
+        "--rfd3-sampling-strategy",
+        default="",
+        help="RFD3 sampling strategy: auto, batch, or independent_jobs",
+    )
+    parser.add_argument(
+        "--rfd3-fail-on-duplicate-backbones",
+        action="store_true",
+        help="fail if RFD3 still collapses to fewer unique backbones than requested",
+    )
     parser.add_argument("--rfd3-use-ensemble", action="store_true")
     parser.add_argument("--rfd3-cli-args", default="", help="extra RFD3 CLI args (optional)")
 
@@ -169,6 +179,8 @@ def main() -> None:
         "rfd3_design_index": int(args.rfd3_design_index),
         "rfd3_max_return_designs": int(args.rfd3_max_return_designs),
         "rfd3_partial_t": (float(args.rfd3_partial_t) if args.rfd3_partial_t is not None else None),
+        "rfd3_sampling_strategy": str(args.rfd3_sampling_strategy or "").strip() or None,
+        "rfd3_fail_on_duplicate_backbones": bool(args.rfd3_fail_on_duplicate_backbones),
         "rfd3_use_ensemble": bool(args.rfd3_use_ensemble),
         "rfd3_cli_args": str(args.rfd3_cli_args or "").strip() or None,
         "conservation_tiers": _parse_floats(args.conservation_tiers),

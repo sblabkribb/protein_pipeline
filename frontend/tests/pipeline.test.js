@@ -263,7 +263,6 @@ test("buildWorkflowStudioNodesFromRequest reconstructs studio lanes for direct p
 
   assert.deepEqual(nodes, [
     "msa",
-    "rfd3",
     "bioemu",
     "proteinmpnn_30",
     "soluprot_30",
@@ -794,6 +793,10 @@ test("workflow studio question metadata keeps default return counts for rfd3 and
   const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
   assert.match(
     source,
+    /rfd3_use:\s*\{[\s\S]*?labelKey:\s*"question\.rfd3Use\.label",[\s\S]*?questionKey:\s*"question\.rfd3Use\.help",[\s\S]*?default:\s*false,/m
+  );
+  assert.match(
+    source,
     /bioemu_num_samples:\s*\{[\s\S]*?labelKey:\s*"question\.bioemuNumSamples\.label",[\s\S]*?default:\s*20,/m
   );
   assert.match(
@@ -886,6 +889,22 @@ test("Setup and Studio source reflect RFD3 detail localization and no Studio new
   assert.doesNotMatch(compactParameterBlock[1], /rfd3_partial_t/);
 });
 
+test("RFD3 separate-input toggles also enable RFD3 in setup and studio", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  assert.match(
+    source,
+    /toggleBtn\.addEventListener\("click", \(\) => \{[\s\S]*?if \(!showSetupRfd3InputItem\) \{[\s\S]*?state\.answers\.rfd3_use = true;[\s\S]*?\}/m
+  );
+  assert.match(
+    source,
+    /if \(action === "show"\) \{[\s\S]*?current\.ui_state\.rfd3_input_override_visible = true;[\s\S]*?current\.stage_drafts\.rfd3\.rfd3_use = true;[\s\S]*?\}/m
+  );
+  assert.match(
+    source,
+    /if \(fieldId === "rfd3_input_pdb"\) \{[\s\S]*?current\.ui_state\.rfd3_input_override_visible = true;[\s\S]*?current\.stage_drafts\.rfd3\.rfd3_use = true;[\s\S]*?\}/m
+  );
+});
+
 test("normalizeWorkflowStudioPayloadForComparison ignores implicit studio defaults", () => {
   const normalized = normalizeWorkflowStudioPayloadForComparison(
     {
@@ -955,6 +974,62 @@ test("runUsesRfd3Stage tracks whether current execution path includes rfd3", () 
   );
 });
 
+test("buildWorkflowStudioNodesFromRequest keeps RFD3 off by default unless explicitly enabled", () => {
+  assert.deepEqual(
+    buildWorkflowStudioNodesFromRequest({
+      target_pdb: "ATOM      1  N",
+      start_from: "msa",
+      stop_after: "novelty",
+      bioemu_use: true,
+      novelty_enabled: true,
+    }),
+    [
+      "msa",
+      "bioemu",
+      "proteinmpnn_30",
+      "soluprot_30",
+      "af2_30",
+      "novelty_30",
+      "proteinmpnn_50",
+      "soluprot_50",
+      "af2_50",
+      "novelty_50",
+      "proteinmpnn_70",
+      "soluprot_70",
+      "af2_70",
+      "novelty_70",
+    ]
+  );
+  assert.deepEqual(
+    buildWorkflowStudioNodesFromRequest({
+      target_pdb: "ATOM      1  N",
+      rfd3_use: true,
+      rfd3_input_pdb: "ATOM      1  CA",
+      start_from: "msa",
+      stop_after: "novelty",
+      bioemu_use: true,
+      novelty_enabled: true,
+    }),
+    [
+      "msa",
+      "rfd3",
+      "bioemu",
+      "proteinmpnn_30",
+      "soluprot_30",
+      "af2_30",
+      "novelty_30",
+      "proteinmpnn_50",
+      "soluprot_50",
+      "af2_50",
+      "novelty_50",
+      "proteinmpnn_70",
+      "soluprot_70",
+      "af2_70",
+      "novelty_70",
+    ]
+  );
+});
+
 test("effectiveRfd3InputPdb defaults to target_input pdb only when rfd3 is in scope", () => {
   assert.equal(
     effectiveRfd3InputPdb({
@@ -965,7 +1040,31 @@ test("effectiveRfd3InputPdb defaults to target_input pdb only when rfd3 is in sc
         stop_after: "novelty",
       },
     }),
+    ""
+  );
+  assert.equal(
+    effectiveRfd3InputPdb({
+      mode: "pipeline",
+      answers: {
+        target_input: "ATOM      1  N",
+        rfd3_use: true,
+        start_from: "msa",
+        stop_after: "novelty",
+      },
+    }),
     "ATOM      1  N"
+  );
+  assert.equal(
+    effectiveRfd3InputPdb({
+      mode: "pipeline",
+      answers: {
+        target_input: "ATOM      1  N",
+        rfd3_use: false,
+        start_from: "msa",
+        stop_after: "novelty",
+      },
+    }),
+    ""
   );
   assert.equal(
     effectiveRfd3InputPdb({
@@ -997,6 +1096,7 @@ test("shouldShowRfd3InputPdbField only exposes separate override when needed", (
       mode: "pipeline",
       answers: {
         target_input: "ATOM      1  N",
+        rfd3_use: false,
         start_from: "msa",
         stop_after: "novelty",
       },
@@ -1008,6 +1108,7 @@ test("shouldShowRfd3InputPdbField only exposes separate override when needed", (
       mode: "pipeline",
       answers: {
         target_input: ">q1\nACDE",
+        rfd3_use: true,
         start_from: "msa",
         stop_after: "novelty",
       },
@@ -1019,6 +1120,7 @@ test("shouldShowRfd3InputPdbField only exposes separate override when needed", (
       mode: "pipeline",
       answers: {
         target_input: "ATOM      1  N",
+        rfd3_use: true,
         start_from: "msa",
         stop_after: "novelty",
       },
@@ -1659,6 +1761,7 @@ test("buildSetupDraftFromRequest prepares file answers and metadata", () => {
   assert.equal(draft.answers.start_from, "af2");
   assert.equal(draft.answers.stop_after, "novelty");
   assert.deepEqual(draft.answers.design_chains, ["A"]);
+  assert.equal(draft.answers.rfd3_use, true);
   assert.equal(draft.answerMeta.target_input.fileName, "request.json:target_pdb");
   assert.equal(draft.answerMeta.rfd3_input_pdb.fileName, "request.json:rfd3_input_pdb");
 });
@@ -1673,6 +1776,27 @@ test("buildSetupDraftFromRequest drops redundant rfd3_input_pdb when it matches 
   assert.equal(draft.answers.rfd3_input_pdb, undefined);
   assert.equal(draft.answerMeta.rfd3_input_pdb, undefined);
   assert.equal(draft.answers.rfd3_contig, "A1-20");
+  assert.equal(draft.answers.rfd3_use, true);
+});
+
+test("buildSetupDraftFromRequest leaves RFD3 disabled for plain target-only pipeline requests", () => {
+  const draft = buildSetupDraftFromRequest({
+    target_pdb: "ATOM      1  N",
+    stop_after: "novelty",
+    rfd3_max_return_designs: 10,
+  });
+  assert.equal(draft.answers.rfd3_use, undefined);
+});
+
+test("buildSetupDraftFromRequest preserves explicit RFD3 disable state", () => {
+  const draft = buildSetupDraftFromRequest({
+    target_pdb: "ATOM      1  N",
+    rfd3_use: false,
+    rfd3_input_pdb: "ATOM      1  CA",
+    rfd3_mode: "local_diversify",
+  });
+  assert.equal(draft.answers.rfd3_use, false);
+  assert.equal(draft.answers.rfd3_input_pdb, "ATOM      1  CA");
 });
 
 test("normalizeSetupDraftForFreshRun resets pipeline start_from to msa", () => {

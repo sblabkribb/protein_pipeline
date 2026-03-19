@@ -139,7 +139,9 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner, *, run_i
     if stop_after == "bioemu" and not bioemu_active:
         errors.append("stop_after='bioemu' requires bioemu_use=true.")
     if stop_after == "rfd3" and not rfd3_active:
-        errors.append("stop_after='rfd3' requires RFD3 inputs (for example rfd3_input_pdb or rfd3_inputs_text).")
+        errors.append(
+            "stop_after='rfd3' requires rfd3_use=true and RFD3 inputs (for example rfd3_input_pdb or rfd3_inputs_text)."
+        )
 
     if start_from in _RESUME_OUTPUT_REQUIREMENTS:
         requirement = _RESUME_OUTPUT_REQUIREMENTS[start_from]
