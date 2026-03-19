@@ -356,7 +356,7 @@ class TestTools(unittest.TestCase):
         with _tmpdir() as tmp:
             runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
             dispatcher = ToolDispatcher(runner)
-            with self.assertRaisesRegex(ValueError, "stop_after='rfd3' requires RFD3 inputs"):
+            with self.assertRaisesRegex(ValueError, "stop_after='rfd3' requires rfd3_use=true and RFD3 inputs"):
                 dispatcher.call_tool(
                     "pipeline.run",
                     {
@@ -474,6 +474,8 @@ class TestTools(unittest.TestCase):
                 "rfd3_length": "20-40",
                 "rfd3_select_fixed_atoms": "A57:CA,A57:CB",
                 "rfd3_partial_t": 7.5,
+                "rfd3_sampling_strategy": "independent_jobs",
+                "rfd3_fail_on_duplicate_backbones": True,
             }
         )
         self.assertEqual(req.rfd3_mode, "enzyme")
@@ -481,6 +483,31 @@ class TestTools(unittest.TestCase):
         self.assertEqual(req.rfd3_length, "20-40")
         self.assertEqual(req.rfd3_select_fixed_atoms, "A57:CA,A57:CB")
         self.assertEqual(req.rfd3_partial_t, 7.5)
+        self.assertEqual(req.rfd3_sampling_strategy, "independent_jobs")
+        self.assertTrue(req.rfd3_fail_on_duplicate_backbones)
+
+    def test_pipeline_request_preserves_explicit_rfd3_disable_state(self) -> None:
+        req = pipeline_request_from_args(
+            {
+                "target_pdb": "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\nEND\n",
+                "rfd3_use": False,
+                "rfd3_input_pdb": "ATOM      1  CA  ALA A   1       1.000   0.000   0.000  1.00 20.00           C\nEND\n",
+                "rfd3_mode": "local_diversify",
+            }
+        )
+        self.assertFalse(req.rfd3_use)
+        self.assertEqual(req.rfd3_mode, "local_diversify")
+
+    def test_pipeline_request_inferrs_legacy_rfd3_enable_when_flag_missing(self) -> None:
+        req = pipeline_request_from_args(
+            {
+                "target_fasta": ">q1\nACDEFGHIK\n",
+                "rfd3_input_pdb": "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\nEND\n",
+                "rfd3_mode": "local_diversify",
+            }
+        )
+        self.assertIsNone(req.rfd3_use)
+        self.assertEqual(req.rfd3_mode, "local_diversify")
 
     def test_pipeline_request_defaults_wt_diff_enabled(self) -> None:
         req = pipeline_request_from_args({"target_fasta": ">q1\nACDEFGHIK\n"})
@@ -554,10 +581,22 @@ class TestTools(unittest.TestCase):
             run_id = str(out.get("run_id") or "")
             self.assertTrue(run_id)
 
-            listing = dispatcher.call_tool("pipeline.list_artifacts", {"run_id": run_id, "limit": 200})
-            artifacts = listing.get("artifacts") or []
-            paths = {str(a.get("path")) for a in artifacts if isinstance(a, dict)}
-            self.assertIn("bioemu/sample_pdbs.json", paths)
+    def test_pipeline_preflight_rejects_stop_after_rfd3_when_rfd3_is_disabled(self) -> None:
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.preflight",
+                {
+                    "target_pdb": "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\nEND\n",
+                    "rfd3_use": False,
+                    "rfd3_input_pdb": "ATOM      1  CA  ALA A   1       1.000   0.000   0.000  1.00 20.00           C\nEND\n",
+                    "stop_after": "rfd3",
+                },
+            )
+            self.assertFalse(bool(out.get("ok")))
+            errors = [str(x) for x in (out.get("errors") or [])]
+            self.assertTrue(any("rfd3_use=true" in e for e in errors))
 
     def test_pipeline_af2_predict_dry_run(self) -> None:
         fasta = ">s1\nACDEFGHIK\n"

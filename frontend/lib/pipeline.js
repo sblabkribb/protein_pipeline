@@ -126,6 +126,36 @@ export function effectiveRfd3Mode(payload = {}) {
   return "";
 }
 
+function hasLegacyRfd3Config(payload = {}) {
+  return Boolean(
+    hasMeaningfulValue(payload?.rfd3_inputs_text) ||
+      hasMeaningfulValue(payload?.rfd3_inputs) ||
+      hasMeaningfulValue(payload?.rfd3_input_files) ||
+      hasMeaningfulValue(payload?.rfd3_input_pdb) ||
+      hasMeaningfulValue(payload?.rfd3_mode) ||
+      hasMeaningfulValue(payload?.rfd3_contig) ||
+      hasMeaningfulValue(payload?.rfd3_hotspots) ||
+      hasMeaningfulValue(payload?.rfd3_infer_ori_strategy) ||
+      typeof payload?.rfd3_is_non_loopy === "boolean" ||
+      hasMeaningfulValue(payload?.rfd3_unindex) ||
+      hasMeaningfulValue(payload?.rfd3_length) ||
+      hasMeaningfulValue(payload?.rfd3_select_fixed_atoms) ||
+      hasMeaningfulValue(payload?.rfd3_ligand) ||
+      hasMeaningfulValue(payload?.rfd3_select_unfixed_sequence) ||
+      hasMeaningfulValue(payload?.rfd3_cli_args) ||
+      hasMeaningfulValue(payload?.rfd3_env) ||
+      hasMeaningfulValue(payload?.rfd3_partial_t) ||
+      hasMeaningfulValue(payload?.rfd3_sampling_strategy) ||
+      payload?.rfd3_fail_on_duplicate_backbones === true ||
+      payload?.rfd3_use_ensemble === true
+  );
+}
+
+export function rfd3UseValue(payload = {}) {
+  if (typeof payload?.rfd3_use === "boolean") return payload.rfd3_use;
+  return hasLegacyRfd3Config(payload);
+}
+
 function stageRangeIncludes(start, stop, targetStage) {
   const normalizedStart = normalizeStage(start) || "msa";
   const normalizedStop = normalizeStage(stop) || normalizedStart;
@@ -1151,6 +1181,7 @@ export function buildRunArguments({ prompt, routed, answers, runId }) {
 const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
   msa: Object.freeze(["target_input", "pdb_strip_nonpositive_resseq"]),
   rfd3: Object.freeze([
+    "rfd3_use",
     "rfd3_input_pdb",
     "rfd3_mode",
     "rfd3_contig",
@@ -1422,10 +1453,7 @@ export function buildWorkflowStudioNodesFromRequest(payload = {}) {
         : DEFAULT_WORKFLOW_TIER_KEYS;
   const nodes = [];
   if (stageRangeIncludes(startFrom, stopAfter, "msa")) nodes.push("msa");
-  if (
-    stageRangeIncludes(startFrom, stopAfter, "rfd3") &&
-    runUsesRfd3Stage({ mode, answers: payload, nodes: [] })
-  ) {
+  if (stageRangeIncludes(startFrom, stopAfter, "rfd3") && rfd3EnabledForContext({ mode, answers: payload, nodes: [] })) {
     nodes.push("rfd3");
   }
   if (stageRangeIncludes(startFrom, stopAfter, "bioemu") && Boolean(payload.bioemu_use)) {
@@ -1608,6 +1636,11 @@ export function buildSetupDraftFromRequest(payload) {
     answers.rfd3_input_pdb = rfd3Input;
     answerMeta.rfd3_input_pdb = { fileName: "request.json:rfd3_input_pdb" };
   }
+  if (typeof payload.rfd3_use === "boolean") {
+    answers.rfd3_use = payload.rfd3_use;
+  } else if (rfd3UseValue(payload)) {
+    answers.rfd3_use = true;
+  }
 
   const ligandSdf = String(payload.diffdock_ligand_sdf || "");
   const ligandSmiles = String(payload.diffdock_ligand_smiles || "");
@@ -1749,10 +1782,19 @@ export function runUsesRfd3Stage({ mode = "", answers = {}, nodes = [] } = {}) {
   return false;
 }
 
+export function rfd3EnabledForContext({ mode = "", answers = {}, nodes = [] } = {}) {
+  const normalizedMode = String(mode || "")
+    .trim()
+    .toLowerCase();
+  if (normalizedMode === "rfd3") return true;
+  if (!runUsesRfd3Stage({ mode, answers, nodes })) return false;
+  return rfd3UseValue(answers);
+}
+
 export function effectiveRfd3InputPdb({ mode = "", answers = {}, nodes = [] } = {}) {
   const explicit = explicitRfd3InputPdbText(answers);
+  if (!rfd3EnabledForContext({ mode, answers, nodes })) return "";
   if (explicit) return explicit;
-  if (!runUsesRfd3Stage({ mode, answers, nodes })) return "";
   return targetInputPdbText(answers);
 }
 
@@ -1838,39 +1880,58 @@ export function normalizeWorkflowStudioPayloadForComparison(payload, { nodes = [
   if (typeof answers.bioemu_steering_config_text === "string" && !answers.bioemu_steering_config_text.trim()) {
     delete answers.bioemu_steering_config_text;
   }
-
-  const effectiveRfd3Input = effectiveRfd3InputPdb({
+  const rfd3Enabled = rfd3EnabledForContext({
     mode: "workflow",
     answers,
     nodes,
   });
-  const rfd3Mode = normalizeRfd3Mode(answers.rfd3_mode || effectiveRfd3Mode({ ...answers, rfd3_input_pdb: effectiveRfd3Input }));
-  if (effectiveRfd3Input) {
+  const effectiveRfd3Input = rfd3Enabled
+    ? effectiveRfd3InputPdb({
+        mode: "workflow",
+        answers,
+        nodes,
+      })
+    : "";
+  const rfd3Mode = rfd3Enabled
+    ? normalizeRfd3Mode(answers.rfd3_mode || effectiveRfd3Mode({ ...answers, rfd3_input_pdb: effectiveRfd3Input }))
+    : "";
+  if (rfd3Enabled && effectiveRfd3Input) {
     answers.rfd3_input_pdb = String(effectiveRfd3Input).trim();
+    answers.rfd3_use = true;
   } else {
     delete answers.rfd3_input_pdb;
+    delete answers.rfd3_mode;
     delete answers.rfd3_contig;
+    delete answers.rfd3_hotspots;
+    delete answers.rfd3_infer_ori_strategy;
+    delete answers.rfd3_is_non_loopy;
+    delete answers.rfd3_unindex;
+    delete answers.rfd3_length;
+    delete answers.rfd3_select_fixed_atoms;
+    delete answers.rfd3_partial_t;
+    delete answers.rfd3_inputs_text;
+    delete answers.rfd3_use;
   }
-  if (rfd3Mode) {
+  if (rfd3Enabled && rfd3Mode) {
     answers.rfd3_mode = rfd3Mode;
   }
-  if (rfd3Mode !== "legacy_contig" && rfd3Mode !== "binder") {
+  if (rfd3Enabled && rfd3Mode !== "legacy_contig" && rfd3Mode !== "binder") {
     delete answers.rfd3_contig;
   }
-  if (rfd3Mode !== "binder") {
+  if (rfd3Enabled && rfd3Mode !== "binder") {
     delete answers.rfd3_hotspots;
     delete answers.rfd3_infer_ori_strategy;
     delete answers.rfd3_is_non_loopy;
   }
-  if (rfd3Mode !== "enzyme") {
+  if (rfd3Enabled && rfd3Mode !== "enzyme") {
     delete answers.rfd3_unindex;
     delete answers.rfd3_length;
     delete answers.rfd3_select_fixed_atoms;
   }
-  if (rfd3Mode === "advanced") {
+  if (rfd3Enabled && rfd3Mode === "advanced") {
     delete answers.rfd3_partial_t;
   }
-  if (rfd3Mode !== "advanced") {
+  if (rfd3Enabled && rfd3Mode !== "advanced") {
     delete answers.rfd3_inputs_text;
   }
   return stripWorkflowStudioStageDefaults(normalizeBioEmuCountFields(answers, { includeLegacyField: true }), nodes);
@@ -1881,10 +1942,10 @@ export function shouldShowRfd3InputPdbField({ mode = "", answers = {}, nodes = [
     .trim()
     .toLowerCase();
   if (normalizedMode === "rfd3") return true;
+  if (!rfd3EnabledForContext({ mode, answers, nodes })) return false;
   const targetPdb = targetInputPdbText(answers);
   const explicit = explicitRfd3InputPdbText(answers);
   const hasCustomOverride = Boolean(explicit) && explicit !== targetPdb;
   if (hasCustomOverride || overrideVisible) return true;
-  if (!runUsesRfd3Stage({ mode, answers, nodes })) return false;
   return !targetPdb;
 }

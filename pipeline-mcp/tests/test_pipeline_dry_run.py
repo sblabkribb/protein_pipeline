@@ -27,6 +27,15 @@ def _tmpdir():
     yield str(path)
 
 
+def _simple_ca_backbone(offset: float) -> str:
+    return (
+        f"ATOM      1  CA  ALA A   1      {offset:8.3f}{0.000:8.3f}{0.000:8.3f}  1.00 20.00           C\n"
+        f"ATOM      2  CA  GLY A   2      {offset + 1.000:8.3f}{0.000:8.3f}{0.000:8.3f}  1.00 20.00           C\n"
+        f"ATOM      3  CA  SER A   3      {offset + 2.000:8.3f}{0.000:8.3f}{0.000:8.3f}  1.00 20.00           C\n"
+        "END\n"
+    )
+
+
 class TestPipelineDryRun(unittest.TestCase):
     def test_backbone_source_summary_marks_selected_only_when_observed_exceeds_used(self) -> None:
         req = PipelineRequest(
@@ -463,6 +472,173 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertEqual(source.get("unique_count"), 1)
             self.assertEqual(source.get("duplicate_count"), 3)
             self.assertTrue(bool(source.get("deduplicated")))
+
+    def test_pipeline_rfd3_auto_retry_persists_raw_designs_and_recovers_unique_backbones(self) -> None:
+        pdb = _simple_ca_backbone(0.0)
+
+        class _MMseqsStub:
+            def search(self, query_fasta, **kwargs):  # type: ignore[no-untyped-def]
+                _ = kwargs
+                _ = query_fasta
+                a3m = ">query\nAGS\n>hit1\nAGS\n"
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                return {"tsv": "", "a3m_gz_b64": a3m_b64}
+
+        class _RFD3Stub:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, object]] = []
+
+            def design(self, **kwargs):  # type: ignore[no-untyped-def]
+                self.calls.append(dict(kwargs))
+                on_job_id = kwargs.get("on_job_id")
+                if callable(on_job_id):
+                    on_job_id(f"rfd3_retry_job_{len(self.calls)}")
+                if int(kwargs.get("max_return_designs") or 0) > 1:
+                    duplicate = _simple_ca_backbone(0.0)
+                    return {
+                        "selected": {
+                            "id": "inputs_spec-1_0_model_0",
+                            "pdb": duplicate,
+                            "cif_gz_name": "inputs_spec-1_0_model_0.cif.gz",
+                            "json_name": "inputs_spec-1_0_model_0.json",
+                        },
+                        "designs": [
+                            {
+                                "id": f"inputs_spec-1_0_model_{idx}",
+                                "pdb": duplicate,
+                                "cif_gz_name": f"inputs_spec-1_0_model_{idx}.cif.gz",
+                                "json_name": f"inputs_spec-1_0_model_{idx}.json",
+                            }
+                            for idx in range(3)
+                        ],
+                    }
+                unique = _simple_ca_backbone(float(len(self.calls)))
+                return {
+                    "selected": {
+                        "id": "inputs_spec-1_0_model_0",
+                        "pdb": unique,
+                        "cif_gz_name": "inputs_spec-1_0_model_0.cif.gz",
+                        "json_name": "inputs_spec-1_0_model_0.json",
+                    },
+                    "designs": [
+                        {
+                            "id": "inputs_spec-1_0_model_0",
+                            "pdb": unique,
+                            "cif_gz_name": "inputs_spec-1_0_model_0.cif.gz",
+                            "json_name": "inputs_spec-1_0_model_0.json",
+                        }
+                    ],
+                }
+
+        with _tmpdir() as tmp:
+            rfd3 = _RFD3Stub()
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=_MMseqsStub(),
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=rfd3,
+            )
+            req = PipelineRequest(
+                target_fasta=">q1\nAGS\n",
+                target_pdb=pdb,
+                dry_run=False,
+                stop_after="rfd3",
+                rfd3_mode="local_diversify",
+                rfd3_input_pdb=pdb,
+                rfd3_max_return_designs=3,
+                conservation_tiers=[0.3],
+                num_seq_per_tier=1,
+            )
+            runner.run(req, run_id="rfd3_duplicate_retry")
+            out = Path(tmp) / "rfd3_duplicate_retry"
+            self.assertEqual(len(rfd3.calls), 3)
+            self.assertEqual(int(rfd3.calls[0].get("max_return_designs") or 0), 3)
+            self.assertEqual(int(rfd3.calls[1].get("max_return_designs") or 0), 1)
+            self.assertEqual(int(rfd3.calls[2].get("max_return_designs") or 0), 1)
+
+            raw_designs = json.loads((out / "rfd3" / "raw_designs.json").read_text(encoding="utf-8"))
+            self.assertEqual(len(raw_designs), 5)
+            self.assertEqual(len(list((out / "rfd3" / "raw_designs").glob("*.pdb"))), 5)
+            self.assertEqual(len(list((out / "rfd3" / "designs").glob("*.pdb"))), 3)
+
+            diversity = json.loads((out / "rfd3" / "diversity_summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(diversity.get("input_count"), 5)
+            self.assertEqual(diversity.get("unique_count"), 3)
+            self.assertEqual(diversity.get("duplicate_count"), 2)
+
+            debug = json.loads((out / "rfd3" / "debug_summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(debug.get("sampling_strategy_requested"), "auto")
+            self.assertEqual(debug.get("sampling_strategy_effective"), "auto")
+            self.assertTrue(bool(debug.get("independent_retry_performed")))
+            self.assertEqual(debug.get("independent_retry_attempt_count"), 2)
+            self.assertEqual(debug.get("requested_count"), 3)
+            self.assertEqual(debug.get("final_unique_count"), 3)
+
+    def test_pipeline_rfd3_strict_duplicate_mode_fails_after_retries(self) -> None:
+        pdb = _simple_ca_backbone(0.0)
+
+        class _MMseqsStub:
+            def search(self, query_fasta, **kwargs):  # type: ignore[no-untyped-def]
+                _ = kwargs
+                _ = query_fasta
+                a3m = ">query\nAGS\n>hit1\nAGS\n"
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                return {"tsv": "", "a3m_gz_b64": a3m_b64}
+
+        class _RFD3Stub:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def design(self, **kwargs):  # type: ignore[no-untyped-def]
+                self.calls += 1
+                on_job_id = kwargs.get("on_job_id")
+                if callable(on_job_id):
+                    on_job_id(f"rfd3_strict_job_{self.calls}")
+                duplicate = _simple_ca_backbone(0.0)
+                max_return_designs = int(kwargs.get("max_return_designs") or 1)
+                return {
+                    "selected": {
+                        "id": "inputs_spec-1_0_model_0",
+                        "pdb": duplicate,
+                        "cif_gz_name": "inputs_spec-1_0_model_0.cif.gz",
+                        "json_name": "inputs_spec-1_0_model_0.json",
+                    },
+                    "designs": [
+                        {
+                            "id": f"inputs_spec-1_0_model_{idx}",
+                            "pdb": duplicate,
+                            "cif_gz_name": f"inputs_spec-1_0_model_{idx}.cif.gz",
+                            "json_name": f"inputs_spec-1_0_model_{idx}.json",
+                        }
+                        for idx in range(max_return_designs)
+                    ],
+                }
+
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=_MMseqsStub(),
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=_RFD3Stub(),
+            )
+            req = PipelineRequest(
+                target_fasta=">q1\nAGS\n",
+                target_pdb=pdb,
+                dry_run=False,
+                stop_after="rfd3",
+                rfd3_mode="local_diversify",
+                rfd3_input_pdb=pdb,
+                rfd3_max_return_designs=3,
+                rfd3_fail_on_duplicate_backbones=True,
+                conservation_tiers=[0.3],
+                num_seq_per_tier=1,
+            )
+            with self.assertRaisesRegex(RuntimeError, "duplicate backbone"):
+                runner.run(req, run_id="rfd3_duplicate_strict_fail")
 
     def test_pipeline_rfd3_reuses_cached_selected_on_rerun(self) -> None:
         pdb = (

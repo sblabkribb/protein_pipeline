@@ -21,6 +21,7 @@ class PipelineRequest:
     target_fasta: str
     target_pdb: str
 
+    rfd3_use: bool | None = None
     rfd3_inputs: dict[str, object] | None = None
     rfd3_inputs_text: str | None = None
     rfd3_input_files: dict[str, str] | None = None
@@ -42,6 +43,8 @@ class PipelineRequest:
     rfd3_use_ensemble: bool = False
     rfd3_max_return_designs: int = 10
     rfd3_partial_t: float | None = None
+    rfd3_sampling_strategy: str | None = None
+    rfd3_fail_on_duplicate_backbones: bool = False
 
     bioemu_use: bool = False
     bioemu_sequence: str | None = None

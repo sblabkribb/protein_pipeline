@@ -4122,6 +4122,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     rfd3_contig = _as_str_or_list(args.get("rfd3_contig"))
     rfd3_input_files = _as_dict_str(args.get("rfd3_input_files"), name="rfd3_input_files")
     rfd3_input_pdb = _as_text(args.get("rfd3_input_pdb")).strip() or None
+    rfd3_use_raw = args.get("rfd3_use")
     rfd3_mode = _as_text(args.get("rfd3_mode")).strip() or None
     rfd3_hotspots = _as_str_or_list(args.get("rfd3_hotspots"))
     rfd3_infer_ori_strategy = _as_text(args.get("rfd3_infer_ori_strategy")).strip() or None
@@ -4145,6 +4146,8 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         if str(args.get("rfd3_partial_t") or "").strip()
         else None
     )
+    rfd3_sampling_strategy = _as_text(args.get("rfd3_sampling_strategy")).strip() or None
+    rfd3_fail_on_duplicate_backbones = _as_bool(args.get("rfd3_fail_on_duplicate_backbones"), False)
 
     bioemu_use = _as_bool(args.get("bioemu_use"), False)
     bioemu_sequence = _as_text(args.get("bioemu_sequence")).strip() or None
@@ -4175,7 +4178,34 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     diffdock_extra_args = _as_text(args.get("diffdock_extra_args")).strip() or None
     diffdock_cuda_visible_devices = _as_text(args.get("diffdock_cuda_visible_devices")).strip() or None
 
-    has_rfd3 = bool(rfd3_inputs_text or rfd3_inputs or rfd3_input_pdb or rfd3_contig or rfd3_input_files)
+    legacy_rfd3_requested = bool(
+        rfd3_inputs_text
+        or rfd3_inputs
+        or rfd3_input_pdb
+        or rfd3_input_files
+        or rfd3_contig
+        or rfd3_mode
+        or rfd3_hotspots
+        or rfd3_infer_ori_strategy
+        or rfd3_is_non_loopy is not None
+        or rfd3_unindex
+        or rfd3_length
+        or rfd3_select_fixed_atoms
+        or rfd3_ligand
+        or rfd3_select_unfixed_sequence
+        or rfd3_cli_args
+        or rfd3_env
+        or (rfd3_design_index != 0)
+        or rfd3_partial_t is not None
+        or rfd3_sampling_strategy
+        or rfd3_fail_on_duplicate_backbones
+        or rfd3_use_ensemble
+    )
+    if rfd3_use_raw is None or (isinstance(rfd3_use_raw, str) and not rfd3_use_raw.strip()):
+        rfd3_use = None
+    else:
+        rfd3_use = _as_bool(rfd3_use_raw, False)
+    has_rfd3 = legacy_rfd3_requested if rfd3_use is None else (bool(rfd3_use) and legacy_rfd3_requested)
     if strict_target and not target_fasta.strip() and not target_pdb.strip() and not has_rfd3:
         raise ValueError("One of target_fasta or target_pdb or rfd3 inputs is required")
 
@@ -4211,6 +4241,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     return PipelineRequest(
         target_fasta=target_fasta,
         target_pdb=target_pdb,
+        rfd3_use=rfd3_use,
         rfd3_inputs=rfd3_inputs,
         rfd3_inputs_text=rfd3_inputs_text,
         rfd3_input_files=rfd3_input_files,
@@ -4232,6 +4263,8 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         rfd3_use_ensemble=rfd3_use_ensemble,
         rfd3_max_return_designs=max(1, int(rfd3_max_return_designs)),
         rfd3_partial_t=(float(rfd3_partial_t) if rfd3_partial_t is not None else None),
+        rfd3_sampling_strategy=rfd3_sampling_strategy,
+        rfd3_fail_on_duplicate_backbones=rfd3_fail_on_duplicate_backbones,
         bioemu_use=bioemu_use,
         bioemu_sequence=bioemu_sequence,
         bioemu_num_samples=max(1, int(bioemu_num_samples)),
@@ -4326,6 +4359,7 @@ def _pipeline_run_schema() -> dict[str, Any]:
         "properties": {
             "target_fasta": {"type": "string"},
             "target_pdb": {"type": "string"},
+            "rfd3_use": {"type": "boolean"},
             "rfd3_inputs": {"type": "object"},
             "rfd3_inputs_text": {"type": "string"},
             "rfd3_input_files": {
