@@ -8,10 +8,12 @@ import {
   buildWorkflowStudioNodesFromRequest,
   DEFAULT_ARTIFACT_COMPARE_MODE,
   DEFAULT_ARTIFACT_LIST_LIMIT,
+  buildFastLaunchPreset,
   buildWorkflowStudioEffectiveAnswers,
   buildSetupDraftFromRequest,
   buildRunArguments,
   buildUserPrefix,
+  withProjectRoundContext,
   createWorkflowSessionId,
   createRunId,
   detectTargetKey,
@@ -522,6 +524,31 @@ function loadCurrentWorkflowStudioSessionId(user = null, sessionsById = {}) {
 
 const initialUser = loadUser();
 const initialWorkflowStudioSessionsById = loadWorkflowStudioSessionsById(initialUser);
+const HOME_PROJECT_STORAGE_PREFIX = "kbf.currentProjectId";
+const HOME_ROUND_STORAGE_PREFIX = "kbf.currentRoundId";
+
+function homeContextStorageKeysForUser(user = null) {
+  const scope =
+    String(user?.run_prefix || buildUserPrefix({ name: user?.username || "user" })).trim() || "default";
+  return {
+    projectKey: `${HOME_PROJECT_STORAGE_PREFIX}.${scope}`,
+    roundKey: `${HOME_ROUND_STORAGE_PREFIX}.${scope}`,
+  };
+}
+
+function loadHomeContextSelection(user = null) {
+  try {
+    const { projectKey, roundKey } = homeContextStorageKeysForUser(user);
+    return {
+      projectId: String(localStorage.getItem(projectKey) || "").trim(),
+      roundId: String(localStorage.getItem(roundKey) || "").trim(),
+    };
+  } catch (_err) {
+    return { projectId: "", roundId: "" };
+  }
+}
+
+const initialHomeContext = loadHomeContextSelection(initialUser);
 
 const state = {
   apiBase: resolveApiBase(),
@@ -547,6 +574,19 @@ const state = {
   answerMeta: {},
   setupLoadedRequestRunId: "",
   chainRanges: null,
+  projects: [],
+  roundsByProjectId: {},
+  roundsShowArchived: false,
+  roundsWorkspaceProjects: [],
+  roundsWorkspaceByProjectId: {},
+  currentProjectId: initialHomeContext.projectId,
+  currentRoundId: initialHomeContext.roundId,
+  workspaceRecordEditor: {
+    kind: "",
+    mode: "",
+    projectId: "",
+    roundId: "",
+  },
   artifacts: [],
   artifactRefreshAtByRunId: {},
   artifactRefreshStatusKeyByRunId: {},
@@ -616,6 +656,7 @@ const state = {
   setupStepIndex: 0,
   autoAnalyzePendingByRunId: {},
   workflowDesigner: createWorkflowDesignerState(),
+  studioBuilderOpen: false,
   workflowPlansByRunId: loadWorkflowPlansByRunId(),
   workflowStudioSessionsById: initialWorkflowStudioSessionsById,
   currentWorkflowStudioSessionId: loadCurrentWorkflowStudioSessionId(initialUser, initialWorkflowStudioSessionsById),
@@ -690,6 +731,63 @@ const el = {
   userBadge: document.getElementById("userBadge"),
   messages: document.getElementById("messages"),
   monitorMessages: document.getElementById("monitorMessages"),
+  fastTargetInput: document.getElementById("fastTargetInput"),
+  fastTargetFile: document.getElementById("fastTargetFile"),
+  fastLoadFileBtn: document.getElementById("fastLoadFileBtn"),
+  fastPromptInput: document.getElementById("fastPromptInput"),
+  fastRunBtn: document.getElementById("fastRunBtn"),
+  fastOpenAdvancedBtn: document.getElementById("fastOpenAdvancedBtn"),
+  homeProjectSelector: document.getElementById("homeProjectSelector"),
+  homeRoundSelector: document.getElementById("homeRoundSelector"),
+  homeCreateProjectBtn: document.getElementById("homeCreateProjectBtn"),
+  homeCreateRoundBtn: document.getElementById("homeCreateRoundBtn"),
+  homeContinueRoundBtn: document.getElementById("homeContinueRoundBtn"),
+  homeOpenMonitorBtn: document.getElementById("homeOpenMonitorBtn"),
+  homeOpenAnalyzeBtn: document.getElementById("homeOpenAnalyzeBtn"),
+  homeRoundStatusValue: document.getElementById("homeRoundStatusValue"),
+  homeRunsValue: document.getElementById("homeRunsValue"),
+  homeReportValue: document.getElementById("homeReportValue"),
+  roundsProjectList: document.getElementById("roundsProjectList"),
+  roundsList: document.getElementById("roundsList"),
+  roundsDetail: document.getElementById("roundsDetail"),
+  roundsDetailBody: document.getElementById("roundsDetailBody"),
+  roundsCreateProjectBtn: document.getElementById("roundsCreateProjectBtn"),
+  roundsProjectManageRow: document.getElementById("roundsProjectManageRow"),
+  roundsShowArchived: document.getElementById("roundsShowArchived"),
+  roundsEditProjectBtn: document.getElementById("roundsEditProjectBtn"),
+  roundsArchiveProjectBtn: document.getElementById("roundsArchiveProjectBtn"),
+  roundsRestoreProjectBtn: document.getElementById("roundsRestoreProjectBtn"),
+  roundsDeleteProjectBtn: document.getElementById("roundsDeleteProjectBtn"),
+  roundsCreateRoundBtn: document.getElementById("roundsCreateRoundBtn"),
+  roundsRoundManageRow: document.getElementById("roundsRoundManageRow"),
+  roundsEditRoundBtn: document.getElementById("roundsEditRoundBtn"),
+  roundsArchiveRoundBtn: document.getElementById("roundsArchiveRoundBtn"),
+  roundsRestoreRoundBtn: document.getElementById("roundsRestoreRoundBtn"),
+  roundsDeleteRoundBtn: document.getElementById("roundsDeleteRoundBtn"),
+  workspaceRecordPanel: document.getElementById("workspaceRecordPanel"),
+  workspaceRecordHeading: document.getElementById("workspaceRecordHeading"),
+  workspaceRecordSubheading: document.getElementById("workspaceRecordSubheading"),
+  workspaceRecordForm: document.getElementById("workspaceRecordForm"),
+  workspaceRecordKind: document.getElementById("workspaceRecordKind"),
+  workspaceRecordMode: document.getElementById("workspaceRecordMode"),
+  workspaceRecordProjectId: document.getElementById("workspaceRecordProjectId"),
+  workspaceRecordRoundId: document.getElementById("workspaceRecordRoundId"),
+  workspaceRecordTitleLabel: document.getElementById("workspaceRecordTitleLabel"),
+  workspaceRecordTitleInput: document.getElementById("workspaceRecordTitleInput"),
+  workspaceRecordDescriptionField: document.getElementById("workspaceRecordDescriptionField"),
+  workspaceRecordDescriptionInput: document.getElementById("workspaceRecordDescriptionInput"),
+  workspaceRecordGoalField: document.getElementById("workspaceRecordGoalField"),
+  workspaceRecordGoalInput: document.getElementById("workspaceRecordGoalInput"),
+  workspaceRecordHypothesisField: document.getElementById("workspaceRecordHypothesisField"),
+  workspaceRecordHypothesisInput: document.getElementById("workspaceRecordHypothesisInput"),
+  workspaceRecordNotesField: document.getElementById("workspaceRecordNotesField"),
+  workspaceRecordNotesInput: document.getElementById("workspaceRecordNotesInput"),
+  workspaceRecordNextRoundNotesField: document.getElementById("workspaceRecordNextRoundNotesField"),
+  workspaceRecordNextRoundNotesInput: document.getElementById("workspaceRecordNextRoundNotesInput"),
+  workspaceRecordManagedHint: document.getElementById("workspaceRecordManagedHint"),
+  workspaceRecordSubmit: document.getElementById("workspaceRecordSubmit"),
+  workspaceRecordCancel: document.getElementById("workspaceRecordCancel"),
+  workspaceRecordClose: document.getElementById("workspaceRecordClose"),
   promptInput: document.getElementById("promptInput"),
   checkBtn: document.getElementById("checkBtn"),
   planBtn: document.getElementById("planBtn"),
@@ -721,6 +819,7 @@ const el = {
   setupErrorSummary: document.getElementById("setupErrorSummary"),
   setupErrorRaw: document.getElementById("setupErrorRaw"),
   studioSessionList: document.getElementById("studioSessionList"),
+  studioCreateBtn: document.getElementById("studioCreateBtn"),
   studioRunBtn: document.getElementById("studioRunBtn"),
   studioStopBtn: document.getElementById("studioStopBtn"),
   studioResumeBtn: document.getElementById("studioResumeBtn"),
@@ -902,6 +1001,838 @@ const el = {
   showAllRuns: document.getElementById("showAllRuns"),
 };
 
+function persistHomeContextSelection(user = state.user) {
+  try {
+    const { projectKey, roundKey } = homeContextStorageKeysForUser(user);
+    const projectId = String(state.currentProjectId || "").trim();
+    const roundId = String(state.currentRoundId || "").trim();
+    if (projectId) {
+      localStorage.setItem(projectKey, projectId);
+    } else {
+      localStorage.removeItem(projectKey);
+    }
+    if (projectId && roundId) {
+      localStorage.setItem(roundKey, roundId);
+    } else {
+      localStorage.removeItem(roundKey);
+    }
+  } catch (_err) {
+    // Ignore localStorage quota/transient errors.
+  }
+}
+
+function currentProjectRoundContext() {
+  const projectId = String(state.currentProjectId || "").trim();
+  const roundId = projectId ? String(state.currentRoundId || "").trim() : "";
+  return { projectId, roundId };
+}
+
+function currentProjectRecord(projectId = state.currentProjectId) {
+  const key = String(projectId || "").trim();
+  if (!key) return null;
+  return (Array.isArray(state.projects) ? state.projects : []).find((item) => String(item?.project_id || "").trim() === key) || null;
+}
+
+function currentRoundRecord(projectId = state.currentProjectId, roundId = state.currentRoundId) {
+  const projectKey = String(projectId || "").trim();
+  const roundKey = String(roundId || "").trim();
+  if (!projectKey || !roundKey) return null;
+  const rounds = Array.isArray(state.roundsByProjectId?.[projectKey]) ? state.roundsByProjectId[projectKey] : [];
+  return rounds.find((item) => String(item?.round_id || "").trim() === roundKey) || null;
+}
+
+function roundsWorkspaceProjects() {
+  return Array.isArray(state.roundsWorkspaceProjects) ? state.roundsWorkspaceProjects : [];
+}
+
+function roundsWorkspaceRounds(projectId = state.currentProjectId) {
+  const projectKey = String(projectId || "").trim();
+  if (!projectKey) return [];
+  return Array.isArray(state.roundsWorkspaceByProjectId?.[projectKey]) ? state.roundsWorkspaceByProjectId[projectKey] : [];
+}
+
+function currentWorkspaceProjectRecord(projectId = state.currentProjectId) {
+  const key = String(projectId || "").trim();
+  if (!key) return null;
+  return roundsWorkspaceProjects().find((item) => String(item?.project_id || "").trim() === key) || null;
+}
+
+function currentWorkspaceRoundRecord(projectId = state.currentProjectId, roundId = state.currentRoundId) {
+  const projectKey = String(projectId || "").trim();
+  const roundKey = String(roundId || "").trim();
+  if (!projectKey || !roundKey) return null;
+  return roundsWorkspaceRounds(projectKey).find((item) => String(item?.round_id || "").trim() === roundKey) || null;
+}
+
+function formatRoundDetailValue(value) {
+  if (Array.isArray(value)) {
+    if (!value.length) return "-";
+    return value.map((item) => String(item ?? "").trim()).filter(Boolean).join(", ") || "-";
+  }
+  if (value && typeof value === "object") {
+    const keys = Object.keys(value);
+    return keys.length ? JSON.stringify(value, null, 2) : "-";
+  }
+  return String(value || "").trim() || "-";
+}
+
+function roundFieldHasContent(value) {
+  if (Array.isArray(value)) return value.length > 0;
+  if (value && typeof value === "object") return Object.keys(value).length > 0;
+  return Boolean(String(value || "").trim());
+}
+
+function roundAutoManagedFieldText(value, emptyLabelKey, hasLinkedRuns = false) {
+  if (roundFieldHasContent(value)) {
+    return formatRoundDetailValue(value);
+  }
+  return hasLinkedRuns ? t(emptyLabelKey) : "-";
+}
+
+function openWorkspaceRecordEditor({
+  kind,
+  mode = "create",
+  projectId = state.currentProjectId,
+  roundId = state.currentRoundId,
+} = {}) {
+  const normalizedKind = String(kind || "").trim().toLowerCase();
+  if (!["project", "round"].includes(normalizedKind) || !el.workspaceRecordPanel) return;
+  const normalizedMode = String(mode || "create").trim().toLowerCase() === "edit" ? "edit" : "create";
+  const project = normalizedKind === "project" ? currentProjectRecord(projectId) : currentProjectRecord(projectId);
+  const round = normalizedKind === "round" ? currentRoundRecord(projectId, roundId) : null;
+  state.workspaceRecordEditor = {
+    kind: normalizedKind,
+    mode: normalizedMode,
+    projectId: String(projectId || "").trim(),
+    roundId: String(roundId || "").trim(),
+  };
+  if (el.workspaceRecordKind) el.workspaceRecordKind.value = normalizedKind;
+  if (el.workspaceRecordMode) el.workspaceRecordMode.value = normalizedMode;
+  if (el.workspaceRecordProjectId) el.workspaceRecordProjectId.value = String(projectId || "").trim();
+  if (el.workspaceRecordRoundId) el.workspaceRecordRoundId.value = normalizedKind === "round" ? String(roundId || "").trim() : "";
+
+  const isProject = normalizedKind === "project";
+  const isEdit = normalizedMode === "edit";
+  if (el.workspaceRecordHeading) {
+    el.workspaceRecordHeading.textContent = isProject
+      ? t(isEdit ? "workspaceRecord.projectEditTitle" : "workspaceRecord.projectCreateTitle")
+      : t(isEdit ? "workspaceRecord.roundEditTitle" : "workspaceRecord.roundCreateTitle");
+  }
+  if (el.workspaceRecordSubheading) {
+    el.workspaceRecordSubheading.textContent = isProject
+      ? t("workspaceRecord.projectSubheading")
+      : t("workspaceRecord.roundSubheading");
+  }
+  if (el.workspaceRecordTitleLabel) {
+    el.workspaceRecordTitleLabel.textContent = t(
+      isProject ? "workspaceRecord.projectName" : "workspaceRecord.roundTitle"
+    );
+  }
+  if (el.workspaceRecordTitleInput) {
+    el.workspaceRecordTitleInput.value = isProject
+      ? String(project?.name || "").trim()
+      : String(round?.title || round?.round_id || "").trim();
+  }
+  if (el.workspaceRecordDescriptionField) el.workspaceRecordDescriptionField.hidden = !isProject;
+  if (el.workspaceRecordDescriptionInput) {
+    el.workspaceRecordDescriptionInput.value = isProject ? String(project?.description || "").trim() : "";
+  }
+  if (el.workspaceRecordGoalField) el.workspaceRecordGoalField.hidden = isProject;
+  if (el.workspaceRecordGoalInput) {
+    el.workspaceRecordGoalInput.value = isProject ? "" : String(round?.goal || "").trim();
+  }
+  if (el.workspaceRecordHypothesisField) el.workspaceRecordHypothesisField.hidden = isProject;
+  if (el.workspaceRecordHypothesisInput) {
+    el.workspaceRecordHypothesisInput.value = isProject ? "" : String(round?.hypothesis || "").trim();
+  }
+  if (el.workspaceRecordNotesField) el.workspaceRecordNotesField.hidden = isProject;
+  if (el.workspaceRecordNotesInput) {
+    el.workspaceRecordNotesInput.value = isProject ? "" : String(round?.notes || "").trim();
+  }
+  if (el.workspaceRecordNextRoundNotesField) el.workspaceRecordNextRoundNotesField.hidden = isProject;
+  if (el.workspaceRecordNextRoundNotesInput) {
+    el.workspaceRecordNextRoundNotesInput.value = isProject ? "" : String(round?.next_round_notes || "").trim();
+  }
+  if (el.workspaceRecordManagedHint) el.workspaceRecordManagedHint.hidden = isProject;
+  if (el.workspaceRecordSubmit) {
+    el.workspaceRecordSubmit.textContent = t(isProject ? "workspaceRecord.saveProject" : "workspaceRecord.saveRound");
+  }
+  el.workspaceRecordPanel.classList.remove("hidden");
+  queueMicrotask(() => {
+    el.workspaceRecordTitleInput?.focus();
+    el.workspaceRecordTitleInput?.select?.();
+  });
+}
+
+function closeWorkspaceRecordEditor() {
+  state.workspaceRecordEditor = {
+    kind: "",
+    mode: "",
+    projectId: "",
+    roundId: "",
+  };
+  if (el.workspaceRecordForm) el.workspaceRecordForm.reset();
+  if (el.workspaceRecordPanel) el.workspaceRecordPanel.classList.add("hidden");
+}
+
+async function submitWorkspaceRecordEditor() {
+  const kind = String(el.workspaceRecordKind?.value || state.workspaceRecordEditor.kind || "").trim().toLowerCase();
+  const mode = String(el.workspaceRecordMode?.value || state.workspaceRecordEditor.mode || "create").trim().toLowerCase();
+  if (kind === "project") {
+    const projectId = String(el.workspaceRecordProjectId?.value || state.currentProjectId || "").trim();
+    const name = String(el.workspaceRecordTitleInput?.value || "").trim();
+    const description = String(el.workspaceRecordDescriptionInput?.value || "").trim();
+    if (!name) {
+      setMessage(t("workspaceRecord.error.projectNameRequired"), "ai");
+      el.workspaceRecordTitleInput?.focus();
+      return;
+    }
+    const saved = await apiCall("pipeline.save_project", {
+      ...(mode === "edit" && projectId ? { project_id: projectId } : {}),
+      name,
+      description,
+    });
+    const project = saved?.project && typeof saved.project === "object" ? saved.project : {};
+    state.currentProjectId = String(project.project_id || projectId || "").trim();
+    await syncHomeProjectRoundContext({ preserveSelection: true });
+    closeWorkspaceRecordEditor();
+    setMessage(
+      t(mode === "edit" ? "rounds.message.projectUpdated" : "home.message.projectCreated", {
+        name: String(project.name || name).trim(),
+      }),
+      "ai"
+    );
+    return;
+  }
+
+  if (kind === "round") {
+    const projectId = String(el.workspaceRecordProjectId?.value || state.currentProjectId || "").trim();
+    const roundId = String(el.workspaceRecordRoundId?.value || state.currentRoundId || "").trim();
+    const title = String(el.workspaceRecordTitleInput?.value || "").trim();
+    if (!projectId) {
+      setMessage(t("home.error.projectRequired"), "ai");
+      return;
+    }
+    if (!title) {
+      setMessage(t("workspaceRecord.error.roundTitleRequired"), "ai");
+      el.workspaceRecordTitleInput?.focus();
+      return;
+    }
+    const saved = await apiCall("pipeline.save_round", {
+      project_id: projectId,
+      ...(mode === "edit" && roundId ? { round_id: roundId } : {}),
+      title,
+      goal: String(el.workspaceRecordGoalInput?.value || "").trim(),
+      hypothesis: String(el.workspaceRecordHypothesisInput?.value || "").trim(),
+      notes: String(el.workspaceRecordNotesInput?.value || "").trim(),
+      next_round_notes: String(el.workspaceRecordNextRoundNotesInput?.value || "").trim(),
+    });
+    const round = saved?.round && typeof saved.round === "object" ? saved.round : {};
+    state.currentProjectId = String(round.project_id || projectId).trim();
+    state.currentRoundId = String(round.round_id || roundId || "").trim();
+    await syncHomeProjectRoundContext({ preserveSelection: true });
+    closeWorkspaceRecordEditor();
+    setMessage(
+      t(mode === "edit" ? "rounds.message.roundUpdated" : "home.message.roundCreated", {
+        name: String(round.title || title).trim(),
+      }),
+      "ai"
+    );
+  }
+}
+
+function normalizeRoundStatusKey(value = "") {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  if (["launching", "queued", "resuming", "running"].includes(raw)) return "running";
+  if (["completed", "done", "success", "succeeded"].includes(raw)) return "completed";
+  if (["failed", "error", "timed_out", "timeout", "stopped"].includes(raw)) return "failed";
+  if (["cancelled", "canceled"].includes(raw)) return "cancelled";
+  if (raw === "archived") return "archived";
+  if (raw === "planned") return "planned";
+  return raw;
+}
+
+function roundStatusLabel(statusKey = "", fallback = "") {
+  const key = normalizeRoundStatusKey(statusKey);
+  const labelKeyMap = {
+    planned: "rounds.status.planned",
+    running: "rounds.status.running",
+    completed: "rounds.status.completed",
+    failed: "rounds.status.failed",
+    cancelled: "rounds.status.cancelled",
+    archived: "rounds.status.archived",
+  };
+  const labelKey = labelKeyMap[key];
+  if (labelKey) return t(labelKey);
+  return String(fallback || statusKey || "").trim() || t("rounds.status.planned");
+}
+
+function latestLinkedRunStateForRound(roundRecord) {
+  const linkedRuns = Array.isArray(roundRecord?.linked_run_ids) ? roundRecord.linked_run_ids : [];
+  for (let idx = linkedRuns.length - 1; idx >= 0; idx -= 1) {
+    const runId = String(linkedRuns[idx] || "").trim();
+    if (!runId) continue;
+    const runState =
+      runId === String(state.currentRunId || "").trim()
+        ? String(state.currentRunState || "").trim()
+        : String(state.progressByRunId?.[runId]?.state || "").trim();
+    const normalized = normalizeRoundStatusKey(runState);
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+function effectiveRoundStatusInfo(roundRecord) {
+  const storedStatusRaw = String(roundRecord?.status || "").trim();
+  const storedStatusKey = normalizeRoundStatusKey(storedStatusRaw);
+  if (storedStatusKey === "archived") {
+    return { key: "archived", label: roundStatusLabel("archived") };
+  }
+  const linkedStatusKey = latestLinkedRunStateForRound(roundRecord);
+  if (["running", "failed", "cancelled"].includes(linkedStatusKey)) {
+    return { key: linkedStatusKey, label: roundStatusLabel(linkedStatusKey) };
+  }
+  if (linkedStatusKey === "completed" && (!storedStatusKey || storedStatusKey === "planned" || storedStatusKey === "running")) {
+    return { key: "completed", label: roundStatusLabel("completed") };
+  }
+  if (storedStatusRaw) {
+    return { key: storedStatusKey || "planned", label: roundStatusLabel(storedStatusKey, storedStatusRaw) };
+  }
+  if (linkedStatusKey) {
+    return { key: linkedStatusKey, label: roundStatusLabel(linkedStatusKey) };
+  }
+  return { key: "planned", label: roundStatusLabel("planned") };
+}
+
+function roundStatusBadgeMarkup(roundRecord, { showPlanned = false } = {}) {
+  const statusInfo = effectiveRoundStatusInfo(roundRecord);
+  if (!statusInfo?.label) return "";
+  if (!showPlanned && statusInfo.key === "planned") return "";
+  const statusClass = String(statusInfo.key || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-");
+  return `<span class="stage-tag rounds-status-tag ${escapeHtml(statusClass)}">${escapeHtml(statusInfo.label)}</span>`;
+}
+
+function renderHomeContextSelectors() {
+  const projects = Array.isArray(state.projects) ? state.projects : [];
+  const projectId = String(state.currentProjectId || "").trim();
+  const rounds = projectId && Array.isArray(state.roundsByProjectId?.[projectId]) ? state.roundsByProjectId[projectId] : [];
+  const roundId = projectId ? String(state.currentRoundId || "").trim() : "";
+  const roundRecord = currentRoundRecord(projectId, roundId);
+  if (el.homeProjectSelector) {
+    const options = [`<option value="">${t("home.select.projectPlaceholder")}</option>`];
+    projects.forEach((project) => {
+      const id = String(project?.project_id || "").trim();
+      if (!id) return;
+      const name = String(project?.name || id).trim();
+      options.push(`<option value="${escapeHtml(id)}">${escapeHtml(name)}</option>`);
+    });
+    el.homeProjectSelector.innerHTML = options.join("");
+    el.homeProjectSelector.value = projectId && projects.some((item) => String(item?.project_id || "").trim() === projectId) ? projectId : "";
+  }
+  if (el.homeRoundSelector) {
+    const options = [`<option value="">${t("home.select.roundPlaceholder")}</option>`];
+    rounds.forEach((round) => {
+      const id = String(round?.round_id || "").trim();
+      if (!id) return;
+      const title = String(round?.title || id).trim();
+      options.push(`<option value="${escapeHtml(id)}">${escapeHtml(title)}</option>`);
+    });
+    el.homeRoundSelector.innerHTML = options.join("");
+    el.homeRoundSelector.value = roundId && rounds.some((item) => String(item?.round_id || "").trim() === roundId) ? roundId : "";
+    el.homeRoundSelector.disabled = !projectId;
+  }
+  if (el.homeCreateRoundBtn) {
+    el.homeCreateRoundBtn.disabled = !projectId;
+  }
+  if (el.roundsShowArchived) {
+    el.roundsShowArchived.checked = Boolean(state.roundsShowArchived);
+  }
+  if (el.homeContinueRoundBtn) {
+    el.homeContinueRoundBtn.disabled = !projectId || !roundId;
+  }
+  if (el.homeRunsValue) {
+    const runningCount = (state.runs || []).filter(
+      (runId) => String(state.progressByRunId?.[String(runId || "").trim()]?.state || "").trim().toLowerCase() === "running"
+    ).length;
+    el.homeRunsValue.textContent = String(
+      runningCount || (String(state.currentRunState || "").trim().toLowerCase() === "running" ? 1 : 0)
+    );
+  }
+  if (el.homeRoundStatusValue) {
+    el.homeRoundStatusValue.textContent = roundRecord ? effectiveRoundStatusInfo(roundRecord).label : t("home.context.empty");
+  }
+  if (el.homeReportValue) {
+    const runId = String(state.currentRunId || "").trim();
+    const runState = String(state.currentRunState || "").trim();
+    el.homeReportValue.textContent = runId ? (runState ? `${runId} · ${runState}` : runId) : t("home.context.empty");
+  }
+  renderRoundsWorkspace();
+}
+
+function renderRoundsWorkspace() {
+  if (!el.roundsProjectList || !el.roundsList || !el.roundsDetail || !el.roundsDetailBody) return;
+  const projects = roundsWorkspaceProjects();
+  const projectId = String(state.currentProjectId || "").trim();
+  const rounds = roundsWorkspaceRounds(projectId);
+  const roundId = String(state.currentRoundId || "").trim();
+  const projectRecord = currentWorkspaceProjectRecord(projectId);
+  const roundRecord = currentWorkspaceRoundRecord(projectId, roundId);
+  const projectArchived = String(projectRecord?.status || "").trim().toLowerCase() === "archived";
+  const roundArchived = String(roundRecord?.status || "").trim().toLowerCase() === "archived";
+
+  el.roundsProjectList.innerHTML = "";
+  if (!projects.length) {
+    el.roundsProjectList.innerHTML = `<div class="placeholder">${escapeHtml(t("rounds.empty.projects"))}</div>`;
+  } else {
+    projects.forEach((project) => {
+      const id = String(project?.project_id || "").trim();
+      if (!id) return;
+      const archived = String(project?.status || "").trim().toLowerCase() === "archived";
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "run-item rounds-item" + (id === projectId ? " active" : "");
+      row.innerHTML = `
+        <span>${escapeHtml(String(project?.name || id).trim())}</span>
+        ${archived ? `<span class="stage-tag rounds-status-tag archived">${escapeHtml(t("rounds.status.archived"))}</span>` : ""}
+      `;
+      row.addEventListener("click", async () => {
+        state.currentProjectId = id;
+        state.currentRoundId = "";
+        persistHomeContextSelection();
+        renderHomeContextSelectors();
+        await syncHomeProjectRoundContext({ preserveSelection: true });
+      });
+      el.roundsProjectList.appendChild(row);
+    });
+  }
+
+  el.roundsList.innerHTML = "";
+  if (!projectId) {
+    el.roundsList.innerHTML = `<div class="placeholder">${escapeHtml(t("rounds.empty.projectSelection"))}</div>`;
+  } else if (!rounds.length) {
+    el.roundsList.innerHTML = `<div class="placeholder">${escapeHtml(t("rounds.empty.rounds"))}</div>`;
+  } else {
+    rounds.forEach((round) => {
+      const id = String(round?.round_id || "").trim();
+      if (!id) return;
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "run-item rounds-item" + (id === roundId ? " active" : "");
+      row.innerHTML = `
+        <span>${escapeHtml(String(round?.title || id).trim())}</span>
+        ${roundStatusBadgeMarkup(round)}
+      `;
+      row.addEventListener("click", async () => {
+        state.currentRoundId = id;
+        persistHomeContextSelection();
+        renderHomeContextSelectors();
+        renderRoundsWorkspace();
+        await refreshSelectedRoundLinkedRunStatus();
+      });
+      el.roundsList.appendChild(row);
+    });
+  }
+
+  if (el.roundsCreateRoundBtn) {
+    el.roundsCreateRoundBtn.hidden = !projectId;
+    el.roundsCreateRoundBtn.disabled = !projectId;
+  }
+  if (el.roundsProjectManageRow) {
+    el.roundsProjectManageRow.hidden = !projectId;
+  }
+  if (el.roundsEditProjectBtn) {
+    el.roundsEditProjectBtn.disabled = !projectId;
+  }
+  if (el.roundsArchiveProjectBtn) {
+    el.roundsArchiveProjectBtn.hidden = !projectId || projectArchived;
+    el.roundsArchiveProjectBtn.disabled = !projectId || projectArchived;
+  }
+  if (el.roundsRestoreProjectBtn) {
+    el.roundsRestoreProjectBtn.hidden = !projectId || !projectArchived;
+    el.roundsRestoreProjectBtn.disabled = !projectId || !projectArchived;
+  }
+  if (el.roundsDeleteProjectBtn) {
+    el.roundsDeleteProjectBtn.disabled = !projectId;
+  }
+  if (el.roundsRoundManageRow) {
+    el.roundsRoundManageRow.hidden = !projectId || !roundId;
+  }
+  if (el.roundsEditRoundBtn) {
+    el.roundsEditRoundBtn.disabled = !projectId || !roundId;
+  }
+  if (el.roundsArchiveRoundBtn) {
+    el.roundsArchiveRoundBtn.hidden = !projectId || !roundId || roundArchived;
+    el.roundsArchiveRoundBtn.disabled = !projectId || !roundId || roundArchived;
+  }
+  if (el.roundsRestoreRoundBtn) {
+    el.roundsRestoreRoundBtn.hidden = !projectId || !roundId || !roundArchived;
+    el.roundsRestoreRoundBtn.disabled = !projectId || !roundId || !roundArchived;
+  }
+  if (el.roundsDeleteRoundBtn) {
+    el.roundsDeleteRoundBtn.disabled = !projectId || !roundId;
+  }
+
+  const detailRoot = el.roundsDetailBody;
+  if (!projectRecord) {
+    detailRoot.innerHTML = `
+      <div class="rounds-detail-empty">
+        <div class="panel-header small">
+          <h3>${escapeHtml(t("rounds.detail.emptyTitle"))}</h3>
+          <p>${escapeHtml(t("rounds.detail.emptyProject"))}</p>
+        </div>
+        <div class="placeholder">${escapeHtml(t("rounds.detail.emptyProjectPlaceholder"))}</div>
+      </div>
+    `;
+    return;
+  }
+
+  if (!roundRecord) {
+    const projectText = String(projectRecord?.name || projectId || "-").trim();
+    const projectStatusText = String(projectRecord?.status || "").trim() || "-";
+    detailRoot.innerHTML = `
+      <div class="rounds-detail-empty">
+        <div class="panel-header small">
+          <h3>${escapeHtml(projectText)}</h3>
+          <p>${escapeHtml(t("rounds.detail.projectOnly", { project: projectText }))}</p>
+        </div>
+        <div class="rounds-detail-summary">
+          <div class="home-context-item">
+            <span>${escapeHtml(t("rounds.detail.projectStatus"))}</span>
+            <strong>${escapeHtml(projectStatusText)}</strong>
+          </div>
+          <div class="home-context-item">
+            <span>${escapeHtml(t("rounds.detail.roundCount"))}</span>
+            <strong>${escapeHtml(String(rounds.length))}</strong>
+          </div>
+        </div>
+        <div class="placeholder">${escapeHtml(t("rounds.detail.emptyRound", { project: projectText }))}</div>
+      </div>
+    `;
+    return;
+  }
+  const linkedRuns = Array.isArray(roundRecord?.linked_run_ids) ? roundRecord.linked_run_ids : [];
+  const notesText = String(roundRecord?.notes || "").trim() || "-";
+  const goalText = String(roundRecord?.goal || "").trim() || "-";
+  const hypothesisText = String(roundRecord?.hypothesis || "").trim() || "-";
+  const nextRoundNotesText = String(roundRecord?.next_round_notes || "").trim() || "-";
+  const statusInfo = effectiveRoundStatusInfo(roundRecord);
+  const projectText = String(projectRecord?.name || projectId || "-").trim();
+  const latestLinkedRunId = linkedRuns.length ? String(linkedRuns[linkedRuns.length - 1] || "").trim() : "";
+  const latestLinkedRunState =
+    latestLinkedRunId && latestLinkedRunId === String(state.currentRunId || "").trim()
+      ? String(state.currentRunState || "").trim()
+      : String(state.progressByRunId?.[latestLinkedRunId]?.state || "").trim();
+  const selectedCandidatesText = roundAutoManagedFieldText(
+    roundRecord?.selected_candidates,
+    "rounds.detail.selectedCandidatesAuto",
+    linkedRuns.length > 0
+  );
+  const experimentSummaryText = roundAutoManagedFieldText(
+    roundRecord?.experiment_summary,
+    "rounds.detail.experimentSummaryAuto",
+    linkedRuns.length > 0
+  );
+  const reportSummaryText = latestLinkedRunId
+    ? `${latestLinkedRunId}${latestLinkedRunState ? ` · ${latestLinkedRunState}` : ""}`
+    : t("rounds.detail.reportSummaryEmpty");
+  const linkedRunsMarkup = linkedRuns.length
+    ? `<div class="rounds-linked-runs">${linkedRuns
+        .map(
+          (run) =>
+            `<button class="stage-tag rounds-run-chip" type="button" data-round-run-id="${escapeHtml(
+              String(run || "").trim()
+            )}">${escapeHtml(String(run || "").trim())}</button>`
+        )
+        .join("")}</div>`
+    : `<div class="placeholder">-</div>`;
+  detailRoot.innerHTML = `
+    <div class="panel-header small">
+      <h3>${escapeHtml(String(roundRecord?.title || roundId).trim())}</h3>
+      <p>${escapeHtml(String(roundRecord?.round_id || roundId).trim())}</p>
+    </div>
+    <div class="home-context-strip rounds-detail-grid">
+      <div class="home-context-item">
+        <span>${escapeHtml(t("rounds.detail.project"))}</span>
+        <strong>${escapeHtml(projectText)}</strong>
+      </div>
+      <div class="home-context-item">
+        <span>${escapeHtml(t("rounds.detail.status"))}</span>
+        ${roundStatusBadgeMarkup(roundRecord, { showPlanned: true }) || `<strong>${escapeHtml(statusInfo.label)}</strong>`}
+      </div>
+      <div class="home-context-item rounds-detail-block">
+        <span>${escapeHtml(t("rounds.detail.goal"))}</span>
+        <strong>${escapeHtml(goalText)}</strong>
+      </div>
+      <div class="home-context-item rounds-detail-block">
+        <span>${escapeHtml(t("rounds.detail.hypothesis"))}</span>
+        <strong>${escapeHtml(hypothesisText)}</strong>
+      </div>
+      <div class="home-context-item rounds-detail-block">
+        <span>${escapeHtml(t("rounds.detail.notes"))}</span>
+        <strong>${escapeHtml(notesText)}</strong>
+      </div>
+    </div>
+    <div class="rounds-detail-section">
+      <div class="status-subtitle rounds-detail-subtitle">
+        ${escapeHtml(t("rounds.detail.selectedCandidates"))}
+        <span class="stage-tag rounds-managed-tag">${escapeHtml(t("rounds.detail.autoManaged"))}</span>
+      </div>
+      <pre class="rounds-detail-pre">${escapeHtml(selectedCandidatesText)}</pre>
+    </div>
+    <div class="rounds-detail-section">
+      <div class="status-subtitle rounds-detail-subtitle">
+        ${escapeHtml(t("rounds.detail.experimentSummary"))}
+        <span class="stage-tag rounds-managed-tag">${escapeHtml(t("rounds.detail.autoManaged"))}</span>
+      </div>
+      <pre class="rounds-detail-pre">${escapeHtml(experimentSummaryText)}</pre>
+    </div>
+    <div class="rounds-detail-section">
+      <div class="status-subtitle">${escapeHtml(t("rounds.detail.reportSummary"))}</div>
+      <pre class="rounds-detail-pre">${escapeHtml(reportSummaryText)}</pre>
+    </div>
+    <div class="rounds-detail-section">
+      <div class="status-subtitle">${escapeHtml(t("rounds.detail.nextRoundNotes"))}</div>
+      <pre class="rounds-detail-pre">${escapeHtml(nextRoundNotesText)}</pre>
+    </div>
+    <div class="status-subtitle rounds-linked-title">${escapeHtml(t("rounds.detail.linkedRuns"))}</div>
+    ${linkedRunsMarkup}
+    <div class="rounds-detail-section rounds-detail-section-placeholder">
+      <div class="status-subtitle">${escapeHtml(t("rounds.detail.modelSuggestions"))}</div>
+      <div class="placeholder">${escapeHtml(t("rounds.detail.modelSuggestionsPlaceholder"))}</div>
+    </div>
+  `;
+  detailRoot.querySelectorAll("[data-round-run-id]").forEach((node) => {
+    node.addEventListener("click", async () => {
+      const runId = String(node.getAttribute("data-round-run-id") || "").trim();
+      if (!runId) return;
+      await handleRunSelectorChange(runId);
+      setActiveTab("monitor");
+    });
+  });
+}
+
+async function syncHomeProjectRoundContext({ preserveSelection = true } = {}) {
+  if (!state.user) {
+    state.projects = [];
+    state.roundsByProjectId = {};
+    state.roundsWorkspaceProjects = [];
+    state.roundsWorkspaceByProjectId = {};
+    state.currentProjectId = "";
+    state.currentRoundId = "";
+    renderHomeContextSelectors();
+    return;
+  }
+  try {
+    const projectResult = await apiCall("pipeline.list_projects", { limit: 200 });
+    const projects = Array.isArray(projectResult?.projects) ? projectResult.projects : [];
+    state.projects = projects;
+    let workspaceProjects = projects;
+    if (state.roundsShowArchived) {
+      const workspaceProjectResult = await apiCall("pipeline.list_projects", {
+        limit: 200,
+        include_archived: Boolean(state.roundsShowArchived),
+      });
+      workspaceProjects = Array.isArray(workspaceProjectResult?.projects) ? workspaceProjectResult.projects : projects;
+    }
+    state.roundsWorkspaceProjects = workspaceProjects;
+    let nextProjectId = preserveSelection ? String(state.currentProjectId || "").trim() : "";
+    if (!workspaceProjects.some((item) => String(item?.project_id || "").trim() === nextProjectId)) {
+      nextProjectId = String(workspaceProjects[0]?.project_id || "").trim();
+    }
+    state.currentProjectId = nextProjectId;
+    if (!nextProjectId) {
+      state.currentRoundId = "";
+      state.roundsByProjectId = {};
+      state.roundsWorkspaceByProjectId = {};
+      persistHomeContextSelection();
+      renderHomeContextSelectors();
+      return;
+    }
+    const roundResult = await apiCall("pipeline.list_rounds", {
+      project_id: nextProjectId,
+      limit: 200,
+    });
+    const rounds = Array.isArray(roundResult?.rounds) ? roundResult.rounds : [];
+    state.roundsByProjectId = {
+      ...(state.roundsByProjectId || {}),
+      [nextProjectId]: rounds,
+    };
+    let workspaceRounds = rounds;
+    if (state.roundsShowArchived) {
+      const workspaceRoundResult = await apiCall("pipeline.list_rounds", {
+        project_id: nextProjectId,
+        limit: 200,
+        include_archived: Boolean(state.roundsShowArchived),
+      });
+      workspaceRounds = Array.isArray(workspaceRoundResult?.rounds) ? workspaceRoundResult.rounds : rounds;
+    }
+    state.roundsWorkspaceByProjectId = {
+      ...(state.roundsWorkspaceByProjectId || {}),
+      [nextProjectId]: workspaceRounds,
+    };
+    let nextRoundId = preserveSelection ? String(state.currentRoundId || "").trim() : "";
+    if (!workspaceRounds.some((item) => String(item?.round_id || "").trim() === nextRoundId)) {
+      nextRoundId = String(workspaceRounds[0]?.round_id || "").trim();
+    }
+    state.currentRoundId = nextRoundId;
+    await refreshSelectedRoundLinkedRunStatus({ projectId: nextProjectId, roundId: nextRoundId });
+    persistHomeContextSelection();
+    renderHomeContextSelectors();
+  } catch (err) {
+    setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    renderHomeContextSelectors();
+  }
+}
+
+async function refreshSelectedRoundLinkedRunStatus({ projectId = state.currentProjectId, roundId = state.currentRoundId } = {}) {
+  const round = currentRoundRecord(projectId, roundId) || currentWorkspaceRoundRecord(projectId, roundId);
+  const linkedRuns = Array.isArray(round?.linked_run_ids) ? round.linked_run_ids : [];
+  const latestRunId = linkedRuns.length ? String(linkedRuns[linkedRuns.length - 1] || "").trim() : "";
+  if (!latestRunId) return;
+  const isCurrentRun = latestRunId === String(state.currentRunId || "").trim();
+  if (isCurrentRun && String(state.currentRunState || "").trim()) return;
+  if (String(state.progressByRunId?.[latestRunId]?.state || "").trim()) return;
+  try {
+    const status = await apiCall("pipeline.status", { run_id: latestRunId });
+    if (!status || typeof status !== "object") return;
+    state.progressByRunId[latestRunId] = status;
+    if (isCurrentRun) {
+      state.currentRunState = String(status.state || "").trim().toLowerCase();
+    }
+    renderHomeContextSelectors();
+  } catch (_err) {
+    // Keep rounds rendering resilient when a linked run status is unavailable.
+  }
+}
+
+async function createProjectFromHome() {
+  openWorkspaceRecordEditor({ kind: "project", mode: "create", projectId: "", roundId: "" });
+}
+
+async function createRoundFromHome() {
+  const projectId = String(state.currentProjectId || "").trim();
+  if (!projectId) {
+    setMessage(t("home.error.projectRequired"), "ai");
+    return;
+  }
+  openWorkspaceRecordEditor({ kind: "round", mode: "create", projectId, roundId: "" });
+}
+
+async function editCurrentProjectFromWorkspace() {
+  const projectId = String(state.currentProjectId || "").trim();
+  const project = currentProjectRecord(projectId);
+  if (!projectId || !project) {
+    setMessage(t("home.error.projectRequired"), "ai");
+    return;
+  }
+  openWorkspaceRecordEditor({ kind: "project", mode: "edit", projectId, roundId: state.currentRoundId });
+}
+
+async function editCurrentRoundFromWorkspace() {
+  const projectId = String(state.currentProjectId || "").trim();
+  const round = currentRoundRecord(projectId, state.currentRoundId);
+  if (!projectId || !round) {
+    setMessage(t("rounds.error.roundRequired"), "ai");
+    return;
+  }
+  openWorkspaceRecordEditor({ kind: "round", mode: "edit", projectId, roundId: String(round.round_id || "").trim() });
+}
+
+async function archiveCurrentProjectFromWorkspace() {
+  const projectId = String(state.currentProjectId || "").trim();
+  const project = currentWorkspaceProjectRecord(projectId);
+  if (!projectId || !project) {
+    setMessage(t("home.error.projectRequired"), "ai");
+    return;
+  }
+  const projectName = String(project.name || project.project_id || projectId).trim();
+  if (!window.confirm(t("rounds.confirm.archiveProject", { name: projectName }))) return;
+  await apiCall("pipeline.archive_project", { project_id: projectId });
+  await syncHomeProjectRoundContext({ preserveSelection: true });
+  setMessage(t("rounds.message.projectArchived", { name: projectName }), "ai");
+}
+
+async function restoreCurrentProjectFromWorkspace() {
+  const projectId = String(state.currentProjectId || "").trim();
+  const project = currentWorkspaceProjectRecord(projectId);
+  if (!projectId || !project) {
+    setMessage(t("home.error.projectRequired"), "ai");
+    return;
+  }
+  const projectName = String(project.name || project.project_id || projectId).trim();
+  await apiCall("pipeline.restore_project", { project_id: projectId });
+  await syncHomeProjectRoundContext({ preserveSelection: true });
+  setMessage(t("rounds.message.projectRestored", { name: projectName }), "ai");
+}
+
+async function deleteCurrentProjectFromWorkspace() {
+  const projectId = String(state.currentProjectId || "").trim();
+  const project = currentWorkspaceProjectRecord(projectId);
+  if (!projectId || !project) {
+    setMessage(t("home.error.projectRequired"), "ai");
+    return;
+  }
+  const projectName = String(project.name || project.project_id || projectId).trim();
+  if (!window.confirm(t("rounds.confirm.deleteProject", { name: projectName }))) return;
+  await apiCall("pipeline.delete_project", { project_id: projectId, delete_rounds: true });
+  await syncHomeProjectRoundContext({ preserveSelection: true });
+  setMessage(t("rounds.message.projectDeleted", { name: projectName }), "ai");
+}
+
+async function archiveCurrentRoundFromWorkspace() {
+  const projectId = String(state.currentProjectId || "").trim();
+  const round = currentWorkspaceRoundRecord(projectId, state.currentRoundId);
+  if (!projectId || !round) {
+    setMessage(t("rounds.error.roundRequired"), "ai");
+    return;
+  }
+  const roundName = String(round.title || round.round_id || "").trim();
+  if (!window.confirm(t("rounds.confirm.archiveRound", { name: roundName }))) return;
+  await apiCall("pipeline.archive_round", {
+    project_id: projectId,
+    round_id: String(round.round_id || "").trim(),
+  });
+  await syncHomeProjectRoundContext({ preserveSelection: true });
+  setMessage(t("rounds.message.roundArchived", { name: roundName }), "ai");
+}
+
+async function restoreCurrentRoundFromWorkspace() {
+  const projectId = String(state.currentProjectId || "").trim();
+  const round = currentWorkspaceRoundRecord(projectId, state.currentRoundId);
+  if (!projectId || !round) {
+    setMessage(t("rounds.error.roundRequired"), "ai");
+    return;
+  }
+  const roundName = String(round.title || round.round_id || "").trim();
+  await apiCall("pipeline.restore_round", {
+    project_id: projectId,
+    round_id: String(round.round_id || "").trim(),
+  });
+  await syncHomeProjectRoundContext({ preserveSelection: true });
+  setMessage(t("rounds.message.roundRestored", { name: roundName }), "ai");
+}
+
+async function deleteCurrentRoundFromWorkspace() {
+  const projectId = String(state.currentProjectId || "").trim();
+  const round = currentWorkspaceRoundRecord(projectId, state.currentRoundId);
+  if (!projectId || !round) {
+    setMessage(t("rounds.error.roundRequired"), "ai");
+    return;
+  }
+  const roundName = String(round.title || round.round_id || "").trim();
+  if (!window.confirm(t("rounds.confirm.deleteRound", { name: roundName }))) return;
+  await apiCall("pipeline.delete_round", {
+    project_id: projectId,
+    round_id: String(round.round_id || "").trim(),
+  });
+  await syncHomeProjectRoundContext({ preserveSelection: true });
+  setMessage(t("rounds.message.roundDeleted", { name: roundName }), "ai");
+}
+
 const I18N = {
   en: {
     "brand.subtitle": "Protein Pipeline Console",
@@ -910,11 +1841,133 @@ const I18N = {
     "action.settings": "Settings",
     "action.logout": "Logout",
     "action.help": "Usage",
-    "tabs.setup": "Setup",
+    "tabs.home": "Home",
+    "tabs.fast": "Fast",
+    "tabs.advanced": "Advanced",
     "tabs.studio": "Studio",
+    "tabs.rounds": "Rounds",
     "tabs.monitor": "Monitor",
     "tabs.analyze": "Analyze",
     "tabs.mcp": "MCP",
+    "home.title": "Launch Workspace",
+    "home.desc": "Choose how you want to start the next design cycle.",
+    "home.card.fast.title": "Fast",
+    "home.card.fast.desc": "Start from a PDB or FASTA with pipeline defaults chosen for you.",
+    "home.card.advanced.title": "Advanced",
+    "home.card.advanced.desc": "Open the full configuration surface with all expert controls.",
+    "home.card.studio.title": "Studio",
+    "home.card.studio.desc": "Build and run a workflow stage by stage while watching the outputs.",
+    "home.context.project": "Active Project",
+    "home.context.round": "Active Round",
+    "home.context.roundStatus": "Round Status",
+    "home.context.runs": "Runs in Progress",
+    "home.context.report": "Recent Result",
+    "home.context.empty": "Not connected yet",
+    "home.action.open": "Open",
+    "home.action.createProject": "New Project",
+    "home.action.createRound": "New Round",
+    "home.action.continueRound": "Continue Active Round",
+    "home.action.openMonitor": "Open Monitor",
+    "home.action.openAnalyze": "Open Analyze",
+    "home.select.projectPlaceholder": "Select project",
+    "home.select.roundPlaceholder": "Select round",
+    "home.prompt.projectName": "Enter a new project name.",
+    "home.prompt.projectDescription": "Optional project description.",
+    "home.prompt.roundTitle": "Enter a new round title.",
+    "home.prompt.roundGoal": "Optional round goal.",
+    "home.message.projectCreated": "Created project {name}.",
+    "home.message.roundCreated": "Created round {name}.",
+    "home.message.studioBuilderReady": "Workflow Studio builder is ready. Choose stages, then create the session.",
+    "home.message.contextLoadFailed": "Failed to load projects or rounds: {error}",
+    "home.error.projectRequired": "Select or create a project before creating a round.",
+    "rounds.title": "Rounds Workspace",
+    "rounds.desc": "Organize projects, active rounds, and linked runs in one place.",
+    "rounds.projects": "Projects",
+    "rounds.projects.desc": "Create and select campaign spaces for each target.",
+    "rounds.list": "Rounds",
+    "rounds.rounds.desc": "Keep each design-test-learn cycle grouped under the active project.",
+    "rounds.empty.projects": "No projects yet. Create one to start tracking rounds.",
+    "rounds.empty.projectSelection": "Select a project to view or create rounds.",
+    "rounds.empty.rounds": "No rounds yet. Create one inside the selected project.",
+    "rounds.detail.title": "Round Detail",
+    "rounds.detail.empty": "Select a round to see its goal, notes, and linked runs.",
+    "rounds.detail.emptyTitle": "Start a rounds workspace",
+    "rounds.detail.emptyProject": "Create or select a project to start tracking rounds and linked runs.",
+    "rounds.detail.emptyProjectPlaceholder": "No project selected yet. Use New Project to create the first campaign space.",
+    "rounds.detail.projectOnly": "{project} is ready. Select a round from the list or create a new one for the next cycle.",
+    "rounds.detail.emptyRound": "No round selected in {project}. Create a round to capture the next design-test-learn cycle.",
+    "rounds.detail.project": "Project",
+    "rounds.detail.projectStatus": "Project Status",
+    "rounds.detail.roundCount": "Rounds",
+    "rounds.detail.goal": "Goal",
+    "rounds.detail.hypothesis": "Hypothesis",
+    "rounds.detail.notes": "Notes",
+    "rounds.detail.selectedCandidates": "Selected Candidates",
+    "rounds.detail.experimentSummary": "Experiment Summary",
+    "rounds.detail.reportSummary": "Report Summary",
+    "rounds.detail.reportSummaryEmpty": "No report or linked-run summary yet.",
+    "rounds.detail.nextRoundNotes": "Next-Round Notes",
+    "rounds.detail.modelSuggestions": "Model Suggestions",
+    "rounds.detail.modelSuggestionsPlaceholder": "Model guidance will appear here once round-level learning is enabled.",
+    "rounds.detail.status": "Status",
+    "rounds.detail.linkedRuns": "Linked Runs",
+    "rounds.action.edit": "Edit Round",
+    "rounds.action.showArchived": "Show archived",
+    "rounds.action.archiveProject": "Archive Project",
+    "rounds.action.restoreProject": "Restore Project",
+    "rounds.action.deleteProject": "Delete Project",
+    "rounds.action.archiveRound": "Archive Round",
+    "rounds.action.restoreRound": "Restore Round",
+    "rounds.action.deleteRound": "Delete Round",
+    "rounds.confirm.archiveProject": "Archive project {name}? It will disappear from the default project list, but runs stay untouched.",
+    "rounds.confirm.deleteProject":
+      "Delete project {name} and its round metadata? Linked run outputs will stay on disk.",
+    "rounds.confirm.archiveRound": "Archive round {name}? It will disappear from the default round list, but linked runs stay untouched.",
+    "rounds.confirm.deleteRound": "Delete round {name}? Linked run outputs will stay on disk.",
+    "rounds.prompt.editTitle": "Update the round title.",
+    "rounds.prompt.editGoal": "Update the round goal.",
+    "rounds.prompt.editHypothesis": "Update the working hypothesis.",
+    "rounds.prompt.editNotes": "Update round notes.",
+    "rounds.prompt.editNextRoundNotes": "Update notes for the next round.",
+    "rounds.prompt.editStatus": "Update the round status.",
+    "rounds.message.projectArchived": "Archived project {name}.",
+    "rounds.message.projectRestored": "Restored project {name}.",
+    "rounds.message.projectDeleted": "Deleted project metadata for {name}.",
+    "rounds.message.roundArchived": "Archived round {name}.",
+    "rounds.message.roundRestored": "Restored round {name}.",
+    "rounds.message.roundDeleted": "Deleted round metadata for {name}.",
+    "rounds.message.roundUpdated": "Updated round {name}.",
+    "rounds.status.planned": "Planned",
+    "rounds.status.running": "Running",
+    "rounds.status.completed": "Completed",
+    "rounds.status.failed": "Failed",
+    "rounds.status.cancelled": "Cancelled",
+    "rounds.status.archived": "Archived",
+    "rounds.error.roundRequired": "Select a round first.",
+    "fast.title": "Fast Launch",
+    "fast.desc": "Paste a PDB or FASTA, keep the standard defaults, and launch without opening the full expert setup.",
+    "fast.input.label": "Target Input",
+    "fast.input.help": "Provide a raw PDB or FASTA sequence.",
+    "fast.input.placeholder": "Paste PDB or FASTA here.",
+    "fast.note.label": "Run Notes",
+    "fast.note.help": "Optional notes copied into the run prompt.",
+    "fast.note.placeholder": "Optional notes for this launch.",
+    "fast.action.loadFile": "Load File",
+    "fast.action.reviewAdvanced": "Review in Advanced",
+    "fast.action.run": "Run Fast",
+    "fast.review.title": "Default Pipeline Review",
+    "fast.review.desc": "Fast keeps a conservative standard pipeline profile.",
+    "fast.review.rfd3.label": "RFD3",
+    "fast.review.rfd3.value": "Off by default",
+    "fast.review.bioemu.label": "BioEmu",
+    "fast.review.bioemu.value": "On for backbone exploration",
+    "fast.review.counts.label": "Backbone Counts",
+    "fast.review.counts.value": "20 generated / 10 returned",
+    "fast.review.stop.label": "Pipeline Stop",
+    "fast.review.stop.value": "Run through novelty",
+    "fast.error.targetRequired": "Paste a PDB or FASTA in Fast before launching.",
+    "fast.message.reviewReady": "Fast defaults were copied into Advanced. Review or edit before launching.",
+    "fast.message.fileLoaded": "Loaded {name} into Fast target input.",
     "copilot.open": "Copilot",
     "copilot.title": "Context Copilot",
     "copilot.desc": "Usage + interpretation helper using current run/screen data.",
@@ -935,8 +1988,8 @@ const I18N = {
     "copilot.clear": "Clear",
     "copilot.role.user": "You",
     "copilot.role.ai": "Copilot",
-    "copilot.action.openSetup": "Open Setup",
-    "copilot.action.openSetup.desc": "Fill inputs and launch a new run.",
+    "copilot.action.openSetup": "Open Advanced",
+    "copilot.action.openSetup.desc": "Fill inputs and launch a new run from the advanced surface.",
     "copilot.action.openMonitor": "Open Monitor",
     "copilot.action.openMonitor.desc": "Check state, errors, and artifact progress.",
     "copilot.action.openAnalyze": "Open Analyze",
@@ -970,8 +2023,8 @@ const I18N = {
     "login.submit": "Access Console",
     "login.sso.submit": "Continue with KBF SSO",
     "login.sso.hint": "Use your KBF account. Password changes are managed in the SSO account page.",
-    "setup.title": "Run Setup",
-    "setup.desc": "Choose a workflow, attach inputs, and launch the job.",
+    "setup.title": "Advanced Run Setup",
+    "setup.desc": "Choose a workflow, attach inputs, and launch the job from the full configuration surface.",
     "setup.section.input": "Input",
     "setup.section.inputDesc": "Attach required files and add optional context notes.",
     "setup.section.execution": "Execution Settings",
@@ -982,15 +2035,15 @@ const I18N = {
     "setup.section.logDesc": "Preflight and run messages appear here.",
     "setup.openMonitor": "Open Monitor",
     "setup.prompt.placeholder": "Prompt or notes (key=value supported).",
-    "setup.check": "Check Setup",
+    "setup.check": "Check Advanced",
     "setup.reset": "Reset Inputs",
     "setup.clear": "Clear Note",
     "setup.loadRequest": "Load Request",
     "setup.loadRequest.loaded":
-      "Loaded request.json from {id}. Setup will launch a new run; use Resume Run in Monitor or Studio to continue the same run.",
+      "Loaded request.json from {id}. Advanced will launch a new run; use Resume Run in Monitor or Studio to continue the same run.",
     "setup.loadRequest.failed": "Failed to load request.json: {error}",
     "setup.runReuse.default":
-      "Setup always launches a new run. Load Request copies settings from the selected run; use Resume Run in Monitor or Studio to continue the same run.",
+      "Advanced always launches a new run. Load Request copies settings from the selected run; use Resume Run in Monitor or Studio to continue the same run.",
     "setup.runReuse.selected":
       "Selected run: {id}. Load Request copies its settings into a new run. Use Resume Run in Monitor or Studio to continue this run.",
     "setup.runReuse.workflow":
@@ -1028,7 +2081,7 @@ const I18N = {
       "Pick residues on the larger sequence strip or 3D structure, then send them back to {context}.",
     "setup.residuePicker.detached.applyClose": "Apply and close",
     "setup.residuePicker.detached.close": "Close window",
-    "setup.residuePicker.detached.missing": "This residue picker request has expired. Reopen it from Setup or Studio.",
+    "setup.residuePicker.detached.missing": "This residue picker request has expired. Reopen it from Advanced or Studio.",
     "setup.residuePicker.detached.sent": "Applied {count} residues back to {context}.",
     "setup.residuePicker.detached.sentCleared": "Cleared fixed_positions_extra in {context}.",
     "setup.residuePicker.apply": "Apply to fixed_positions_extra",
@@ -1042,7 +2095,7 @@ const I18N = {
     "setup.residuePicker.noRun": "Select a run first.",
     "setup.residuePicker.noSelection": "Select at least one residue.",
     "setup.residuePicker.noPdb": "No PDB text available from this source.",
-    "preflight.title": "Setup check",
+    "preflight.title": "Advanced check",
     "preflight.ok": "No blocking issues found.",
     "preflight.blocked": "Fix the issues below before running.",
     "preflight.errors": "Errors",
@@ -1052,7 +2105,7 @@ const I18N = {
     "preflight.detected": "Detected",
     "preflight.routed": "Prompt routing",
     "preflight.failed": "Preflight failed: {error}",
-    "preflight.unavailable": "Setup check is not available for {mode}.",
+    "preflight.unavailable": "Advanced check is not available for {mode}.",
     "monitor.title": "Run Monitor",
     "monitor.desc": "Track live status, scores, and recent runs.",
     "monitor.runId": "Run ID",
@@ -1363,12 +2416,12 @@ const I18N = {
     "admin.create": "Create User",
     "help.title": "Usage Guide",
     "help.quick.title": "Quick Start",
-    "help.quick.step1": "Setup: choose Pipeline or Workflow Studio, attach target input, run preflight, then launch or open Studio.",
+    "help.quick.step1": "Advanced: choose Pipeline or Workflow Studio, attach target input, run preflight, then launch or open Studio.",
     "help.quick.step2": "Monitor: follow stage status and artifacts. Use Studio for stage-by-stage reruns and next-step decisions.",
     "help.quick.step3": "Analyze: start with Compare Studio, Run-to-Run Compare, and Hit List, then save feedback, experiments, and reports.",
-    "help.setup.title": "Setup Tips",
+    "help.setup.title": "Advanced Tips",
     "help.setup.step1": "Select a recent run and use Load Request to copy its settings into a new run before editing.",
-    "help.setup.step2": "Use Resume Run in Monitor or Studio for same-run continuation. Setup is for fresh runs only.",
+    "help.setup.step2": "Use Resume Run in Monitor or Studio for same-run continuation. Advanced is for fresh runs only.",
     "help.monitor.title": "Monitoring",
     "help.monitor.step1": "Select a recent run to load status, artifacts, reports, and workflow review context.",
     "help.monitor.step2": "Use Auto Poll for live updates. For workflow runs, use Studio to rerun a stage or move forward.",
@@ -1389,11 +2442,13 @@ const I18N = {
     "studio.desc": "Run one stage at a time, adjust key parameters, and decide whether to rerun or move forward.",
     "studio.session": "Session",
     "studio.selectSession": "Select session",
+    "studio.create": "Create Workflow Studio",
     "studio.adoptRun": "Adopt Current Run",
     "studio.refresh": "Refresh Studio",
     "studio.openMonitor": "Open Monitor",
     "studio.empty.title": "No studio session",
-    "studio.empty.desc": "Adopt a workflow run from Monitor to inspect results and rerun stages here.",
+    "studio.empty.desc": "Create a fresh studio session here, or adopt a workflow run from Monitor to inspect and rerun stages.",
+    "studio.empty.action": "Create Workflow Studio",
     "studio.sessions.none": "No saved Studio sessions.",
     "studio.summary.session": "Session",
     "studio.summary.headRun": "Head Run",
@@ -1462,7 +2517,7 @@ const I18N = {
     "studio.note.restartFrom": "Input changed upstream. Studio will restart from {stage}.",
     "studio.action.run": "Run This Stage",
     "studio.action.monitor": "Open Monitor",
-    "studio.action.setup": "Back to Setup",
+    "studio.action.setup": "Back to Advanced",
     "studio.action.next": "Next: {stage}",
     "studio.createdSession": "Workflow Studio session ready: {id}",
     "studio.createFailed": "Failed to create a Workflow Studio session.",
@@ -1629,7 +2684,7 @@ const I18N = {
     "hint.none": "No missing inputs. You can run now.",
     "hint.ready": "All required inputs captured.",
     "hint.missing": "Missing required inputs.",
-    "hint.partialRun": "Setup launches fresh runs only. Use Resume Run in Monitor or Studio for start_from > MSA partial reruns.",
+    "hint.partialRun": "Advanced launches fresh runs only. Use Resume Run in Monitor or Studio for start_from > MSA partial reruns.",
     "hint.nextStep": "Move to the final step to launch the run.",
     "hint.running": "A run is already in progress.",
     "run.reset": "Inputs reset. Reconfirm selections and attachments.",
@@ -1651,6 +2706,9 @@ const I18N = {
     "setup.workflow.stageGuideLabel": "Selected Stage",
     "setup.workflow.controls": "Studio Flow",
     "setup.workflow.controlsHint": "Reruns, forks, and next-step decisions happen in Studio after you open the session.",
+    "setup.workflow.launchTitle": "Create Session",
+    "setup.workflow.launchHint": "When the target input and stage list are ready, create a fresh Workflow Studio session here.",
+    "setup.workflow.launchAction": "Create Workflow Studio",
     "setup.workflow.summaryTitle": "Plan Snapshot",
     "setup.workflow.stageDesc.msa": "Find homologous sequences and assemble the MSA baseline.",
     "setup.workflow.stageDesc.rfd3": "Generate backbone candidates from the prepared scaffold input.",
@@ -1690,7 +2748,7 @@ const I18N = {
     "setup.modeGuide.title": "Mode Guide",
     "setup.modeGuide.pipeline": "Run the end-to-end pipeline through the final WT Diff stage.",
     "setup.modeGuide.workflow":
-      "Select stages in Setup, then fill stage inputs and run step-by-step in Studio.",
+      "Select stages in Advanced, then fill stage inputs and run step-by-step in Studio.",
     "setup.modeGuide.rfd3": "Run only RFD3 backbone generation.",
     "setup.modeGuide.bioemu": "Run only BioEmu backbone sampling.",
     "setup.modeGuide.msa": "Run only MSA/MMseqs retrieval and cache preparation.",
@@ -1887,11 +2945,132 @@ const I18N = {
     "action.settings": "설정",
     "action.logout": "로그아웃",
     "action.help": "사용법",
-    "tabs.setup": "설정",
+    "tabs.home": "홈",
+    "tabs.fast": "빠른 실행",
+    "tabs.advanced": "고급 설정",
     "tabs.studio": "스튜디오",
+    "tabs.rounds": "라운드",
     "tabs.monitor": "모니터",
     "tabs.analyze": "분석",
     "tabs.mcp": "MCP",
+    "home.title": "실행 워크스페이스",
+    "home.desc": "다음 디자인 사이클을 어떻게 시작할지 선택하세요.",
+    "home.card.fast.title": "Fast",
+    "home.card.fast.desc": "PDB 또는 FASTA만 넣으면 기본 파이프라인 설정으로 바로 시작합니다.",
+    "home.card.advanced.title": "Advanced",
+    "home.card.advanced.desc": "전문가용 전체 설정 화면으로 들어갑니다.",
+    "home.card.studio.title": "Studio",
+    "home.card.studio.desc": "단계를 보면서 워크플로우를 직접 구성하고 실행합니다.",
+    "home.context.project": "활성 프로젝트",
+    "home.context.round": "활성 라운드",
+    "home.context.roundStatus": "라운드 상태",
+    "home.context.runs": "진행 중 실행",
+    "home.context.report": "최근 결과",
+    "home.context.empty": "아직 연결된 항목이 없습니다",
+    "home.action.open": "열기",
+    "home.action.createProject": "새 프로젝트",
+    "home.action.createRound": "새 라운드",
+    "home.action.continueRound": "활성 라운드 계속",
+    "home.action.openMonitor": "Monitor 열기",
+    "home.action.openAnalyze": "Analyze 열기",
+    "home.select.projectPlaceholder": "프로젝트 선택",
+    "home.select.roundPlaceholder": "라운드 선택",
+    "home.prompt.projectName": "새 프로젝트 이름을 입력하세요.",
+    "home.prompt.projectDescription": "프로젝트 설명은 선택 사항입니다.",
+    "home.prompt.roundTitle": "새 라운드 제목을 입력하세요.",
+    "home.prompt.roundGoal": "라운드 목표는 선택 사항입니다.",
+    "home.message.projectCreated": "{name} 프로젝트를 만들었습니다.",
+    "home.message.roundCreated": "{name} 라운드를 만들었습니다.",
+    "home.message.studioBuilderReady": "Workflow Studio 빌더를 준비했습니다. 단계를 고른 뒤 세션을 생성하세요.",
+    "home.message.contextLoadFailed": "프로젝트/라운드 목록을 불러오지 못했습니다: {error}",
+    "home.error.projectRequired": "라운드를 만들기 전에 프로젝트를 선택하거나 생성하세요.",
+    "rounds.title": "Rounds 워크스페이스",
+    "rounds.desc": "프로젝트, 활성 라운드, 연결된 run을 한 곳에서 정리합니다.",
+    "rounds.projects": "프로젝트",
+    "rounds.projects.desc": "타깃별 캠페인 공간을 만들고 선택합니다.",
+    "rounds.list": "라운드",
+    "rounds.rounds.desc": "활성 프로젝트 아래에서 각 design-test-learn 사이클을 관리합니다.",
+    "rounds.empty.projects": "아직 프로젝트가 없습니다. 먼저 프로젝트를 생성하세요.",
+    "rounds.empty.projectSelection": "라운드를 보거나 만들려면 먼저 프로젝트를 선택하세요.",
+    "rounds.empty.rounds": "선택한 프로젝트에 아직 라운드가 없습니다.",
+    "rounds.detail.title": "라운드 상세",
+    "rounds.detail.empty": "라운드를 선택하면 목표, 메모, 연결된 run을 볼 수 있습니다.",
+    "rounds.detail.emptyTitle": "Rounds 워크스페이스 시작",
+    "rounds.detail.emptyProject": "프로젝트를 만들거나 선택하면 라운드와 연결된 run을 추적할 수 있습니다.",
+    "rounds.detail.emptyProjectPlaceholder": "아직 프로젝트가 선택되지 않았습니다. 새 프로젝트로 첫 캠페인 공간을 만드세요.",
+    "rounds.detail.projectOnly": "{project} 프로젝트가 준비되었습니다. 목록에서 라운드를 선택하거나 새 라운드를 만드세요.",
+    "rounds.detail.emptyRound": "{project}에 아직 선택된 라운드가 없습니다. 다음 design-test-learn 사이클을 기록할 라운드를 만드세요.",
+    "rounds.detail.project": "프로젝트",
+    "rounds.detail.projectStatus": "프로젝트 상태",
+    "rounds.detail.roundCount": "라운드 수",
+    "rounds.detail.goal": "목표",
+    "rounds.detail.hypothesis": "가설",
+    "rounds.detail.notes": "메모",
+    "rounds.detail.selectedCandidates": "선정 후보",
+    "rounds.detail.experimentSummary": "실험 요약",
+    "rounds.detail.reportSummary": "리포트 요약",
+    "rounds.detail.reportSummaryEmpty": "아직 연결된 리포트나 run 요약이 없습니다.",
+    "rounds.detail.nextRoundNotes": "다음 라운드 메모",
+    "rounds.detail.modelSuggestions": "모델 제안",
+    "rounds.detail.modelSuggestionsPlaceholder": "라운드 학습 기능이 준비되면 여기에서 모델 제안을 표시합니다.",
+    "rounds.detail.status": "상태",
+    "rounds.detail.linkedRuns": "연결된 run",
+    "rounds.action.edit": "라운드 수정",
+    "rounds.action.showArchived": "보관 항목 보기",
+    "rounds.action.archiveProject": "프로젝트 보관",
+    "rounds.action.restoreProject": "프로젝트 복구",
+    "rounds.action.deleteProject": "프로젝트 삭제",
+    "rounds.action.archiveRound": "라운드 보관",
+    "rounds.action.restoreRound": "라운드 복구",
+    "rounds.action.deleteRound": "라운드 삭제",
+    "rounds.confirm.archiveProject": "{name} 프로젝트를 보관할까요? 기본 프로젝트 목록에서는 숨겨지지만 실행 결과는 유지됩니다.",
+    "rounds.confirm.deleteProject": "{name} 프로젝트와 라운드 메타데이터를 삭제할까요? 연결된 실행 산출물은 유지됩니다.",
+    "rounds.confirm.archiveRound": "{name} 라운드를 보관할까요? 기본 라운드 목록에서는 숨겨지지만 연결된 실행은 유지됩니다.",
+    "rounds.confirm.deleteRound": "{name} 라운드 메타데이터를 삭제할까요? 연결된 실행 산출물은 유지됩니다.",
+    "rounds.prompt.editTitle": "라운드 제목을 수정하세요.",
+    "rounds.prompt.editGoal": "라운드 목표를 수정하세요.",
+    "rounds.prompt.editHypothesis": "작업 가설을 수정하세요.",
+    "rounds.prompt.editNotes": "라운드 메모를 수정하세요.",
+    "rounds.prompt.editNextRoundNotes": "다음 라운드 메모를 수정하세요.",
+    "rounds.prompt.editStatus": "라운드 상태를 수정하세요.",
+    "rounds.message.projectArchived": "{name} 프로젝트를 보관했습니다.",
+    "rounds.message.projectRestored": "{name} 프로젝트를 복구했습니다.",
+    "rounds.message.projectDeleted": "{name} 프로젝트 메타데이터를 삭제했습니다.",
+    "rounds.message.roundArchived": "{name} 라운드를 보관했습니다.",
+    "rounds.message.roundRestored": "{name} 라운드를 복구했습니다.",
+    "rounds.message.roundDeleted": "{name} 라운드 메타데이터를 삭제했습니다.",
+    "rounds.message.roundUpdated": "{name} 라운드를 업데이트했습니다.",
+    "rounds.status.planned": "계획됨",
+    "rounds.status.running": "실행 중",
+    "rounds.status.completed": "완료",
+    "rounds.status.failed": "실패",
+    "rounds.status.cancelled": "취소됨",
+    "rounds.status.archived": "보관됨",
+    "rounds.error.roundRequired": "먼저 라운드를 선택하세요.",
+    "fast.title": "Fast 실행",
+    "fast.desc": "PDB 또는 FASTA를 붙여 넣고 표준 기본값으로 바로 실행합니다. 전체 전문가 설정을 열지 않아도 됩니다.",
+    "fast.input.label": "타깃 입력",
+    "fast.input.help": "원본 PDB 또는 FASTA 서열을 입력하세요.",
+    "fast.input.placeholder": "여기에 PDB 또는 FASTA를 붙여 넣으세요.",
+    "fast.note.label": "실행 메모",
+    "fast.note.help": "선택 메모이며 run prompt로 함께 복사됩니다.",
+    "fast.note.placeholder": "이 실행에 대한 메모를 선택적으로 남기세요.",
+    "fast.action.loadFile": "파일 불러오기",
+    "fast.action.reviewAdvanced": "Advanced에서 검토",
+    "fast.action.run": "Fast 실행",
+    "fast.review.title": "기본 파이프라인 검토",
+    "fast.review.desc": "Fast는 보수적인 표준 파이프라인 프로필을 유지합니다.",
+    "fast.review.rfd3.label": "RFD3",
+    "fast.review.rfd3.value": "기본적으로 꺼짐",
+    "fast.review.bioemu.label": "BioEmu",
+    "fast.review.bioemu.value": "백본 탐색용으로 켜짐",
+    "fast.review.counts.label": "백본 개수",
+    "fast.review.counts.value": "20개 생성 / 10개 반환",
+    "fast.review.stop.label": "파이프라인 종료 단계",
+    "fast.review.stop.value": "novelty까지 실행",
+    "fast.error.targetRequired": "Fast 실행 전에 PDB 또는 FASTA를 붙여 넣으세요.",
+    "fast.message.reviewReady": "Fast 기본값을 Advanced로 복사했습니다. 실행 전에 검토하거나 수정할 수 있습니다.",
+    "fast.message.fileLoaded": "{name} 파일을 Fast 타깃 입력에 불러왔습니다.",
     "copilot.open": "Copilot",
     "copilot.title": "Context Copilot",
     "copilot.desc": "현재 run/화면 데이터를 바탕으로 사용법과 해석을 도와줍니다.",
@@ -1912,8 +3091,8 @@ const I18N = {
     "copilot.clear": "지우기",
     "copilot.role.user": "사용자",
     "copilot.role.ai": "Copilot",
-    "copilot.action.openSetup": "Setup 열기",
-    "copilot.action.openSetup.desc": "입력을 채우고 새 run을 시작합니다.",
+    "copilot.action.openSetup": "Advanced 열기",
+    "copilot.action.openSetup.desc": "고급 설정 화면에서 입력을 채우고 새 run을 시작합니다.",
     "copilot.action.openMonitor": "Monitor 열기",
     "copilot.action.openMonitor.desc": "상태, 에러, 아티팩트 진행을 확인합니다.",
     "copilot.action.openAnalyze": "Analyze 열기",
@@ -1947,8 +3126,8 @@ const I18N = {
     "login.submit": "콘솔 접속",
     "login.sso.submit": "KBF SSO로 계속",
     "login.sso.hint": "KBF 계정을 사용합니다. 비밀번호 변경은 SSO 계정 페이지에서 처리합니다.",
-    "setup.title": "실행 설정",
-    "setup.desc": "워크플로를 선택하고 입력을 첨부해 실행하세요.",
+    "setup.title": "고급 실행 설정",
+    "setup.desc": "전체 설정 화면에서 워크플로를 선택하고 입력을 첨부해 실행하세요.",
     "setup.section.input": "입력",
     "setup.section.inputDesc": "필수 파일을 첨부하고 선택적으로 메모를 남기세요.",
     "setup.section.execution": "실행 설정",
@@ -1964,10 +3143,10 @@ const I18N = {
     "setup.clear": "메모 지우기",
     "setup.loadRequest": "요청 불러오기",
     "setup.loadRequest.loaded":
-      "{id}의 request.json을 불러왔습니다. Setup은 새 run으로 실행하며, 같은 run 재개는 Monitor 또는 Studio에서 하세요.",
+      "{id}의 request.json을 불러왔습니다. Advanced는 새 run으로 실행하며, 같은 run 재개는 Monitor 또는 Studio에서 하세요.",
     "setup.loadRequest.failed": "request.json 불러오기 실패: {error}",
     "setup.runReuse.default":
-      "Setup은 항상 새 run으로 실행합니다. 요청 불러오기는 선택한 run의 설정만 복사하며, 같은 run 재개는 Monitor 또는 Studio에서 하세요.",
+      "Advanced는 항상 새 run으로 실행합니다. 요청 불러오기는 선택한 run의 설정만 복사하며, 같은 run 재개는 Monitor 또는 Studio에서 하세요.",
     "setup.runReuse.selected":
       "선택한 run: {id}. 요청 불러오기는 이 설정을 새 run으로 복사합니다. 같은 run 재개는 Monitor 또는 Studio에서 하세요.",
     "setup.runReuse.workflow":
@@ -2005,7 +3184,7 @@ const I18N = {
       "넓은 서열 strip과 3D 구조에서 잔기를 고른 뒤 {context}에 바로 반영합니다.",
     "setup.residuePicker.detached.applyClose": "반영 후 닫기",
     "setup.residuePicker.detached.close": "창 닫기",
-    "setup.residuePicker.detached.missing": "이 잔기 선택 요청은 만료되었습니다. Setup 또는 Studio에서 다시 열어 주세요.",
+    "setup.residuePicker.detached.missing": "이 잔기 선택 요청은 만료되었습니다. Advanced 또는 Studio에서 다시 열어 주세요.",
     "setup.residuePicker.detached.sent": "{context}에 잔기 {count}개를 반영했습니다.",
     "setup.residuePicker.detached.sentCleared": "{context}의 fixed_positions_extra를 비웠습니다.",
     "setup.residuePicker.apply": "fixed_positions_extra에 반영",
@@ -2339,12 +3518,12 @@ const I18N = {
     "admin.create": "사용자 생성",
     "help.title": "사용 가이드",
     "help.quick.title": "빠른 시작",
-    "help.quick.step1": "Setup: Pipeline 또는 Workflow Studio를 선택하고 target 입력을 첨부한 뒤 preflight 후 실행하거나 Studio를 엽니다.",
+    "help.quick.step1": "Advanced: Pipeline 또는 Workflow Studio를 선택하고 target 입력을 첨부한 뒤 preflight 후 실행하거나 Studio를 엽니다.",
     "help.quick.step2": "Monitor: 단계 상태와 아티팩트를 추적합니다. 단계별 rerun과 다음 단계 결정은 Studio에서 진행합니다.",
     "help.quick.step3": "Analyze: Compare Studio, Run-to-Run 비교, Hit List로 선별한 뒤 피드백, 실험, 리포트를 기록합니다.",
-    "help.setup.title": "설정 팁",
+    "help.setup.title": "Advanced 팁",
     "help.setup.step1": "최근 run을 선택한 뒤 요청 불러오기로 설정을 새 run에 복사하고 필요한 부분만 수정하세요.",
-    "help.setup.step2": "같은 run 재개는 Monitor 또는 Studio의 재시작/Resume 경로를 사용하세요. Setup은 새 실행용입니다.",
+    "help.setup.step2": "같은 run 재개는 Monitor 또는 Studio의 재시작/Resume 경로를 사용하세요. Advanced는 새 실행용입니다.",
     "help.monitor.title": "모니터링",
     "help.monitor.step1": "최근 run을 선택하면 상태, 아티팩트, 리포트, workflow 검토 정보가 함께 로드됩니다.",
     "help.monitor.step2": "자동 조회로 진행 상황을 갱신하고, workflow run의 단계별 rerun이나 진행 결정은 Studio에서 처리하세요.",
@@ -2365,11 +3544,13 @@ const I18N = {
     "studio.desc": "단계를 하나씩 실행하고 핵심 파라미터를 조정한 뒤 재실행할지 다음 단계로 갈지 결정합니다.",
     "studio.session": "세션",
     "studio.selectSession": "세션 선택",
+    "studio.create": "Workflow Studio 생성",
     "studio.adoptRun": "현재 run 가져오기",
     "studio.refresh": "스튜디오 새로고침",
     "studio.openMonitor": "모니터 열기",
     "studio.empty.title": "스튜디오 세션이 없습니다",
-    "studio.empty.desc": "Monitor의 workflow run을 가져와 여기서 결과를 보고 단계를 다시 실행하세요.",
+    "studio.empty.desc": "여기서 새 Studio 세션을 만들거나 Monitor의 workflow run을 가져와 결과를 보고 단계를 다시 실행하세요.",
+    "studio.empty.action": "Workflow Studio 생성",
     "studio.sessions.none": "저장된 Studio 세션이 없습니다.",
     "studio.summary.session": "세션",
     "studio.summary.headRun": "기준 Run",
@@ -2438,7 +3619,7 @@ const I18N = {
     "studio.note.restartFrom": "상위 단계 입력이 바뀌어 {stage}부터 다시 시작합니다.",
     "studio.action.run": "이 단계 실행",
     "studio.action.monitor": "모니터 열기",
-    "studio.action.setup": "Setup으로",
+    "studio.action.setup": "Advanced로",
     "studio.action.next": "다음: {stage}",
     "studio.createdSession": "Workflow Studio 세션 준비 완료: {id}",
     "studio.createFailed": "Workflow Studio 세션을 만들지 못했습니다.",
@@ -2606,7 +3787,7 @@ const I18N = {
     "hint.none": "누락된 입력이 없습니다. 지금 실행할 수 있습니다.",
     "hint.ready": "필수 입력이 모두 완료되었습니다.",
     "hint.missing": "필수 입력이 누락되었습니다.",
-    "hint.partialRun": "Setup은 새 run 실행만 지원합니다. start_from > MSA partial rerun은 Monitor 또는 Studio에서 재시작하세요.",
+    "hint.partialRun": "Advanced는 새 run 실행만 지원합니다. start_from > MSA partial rerun은 Monitor 또는 Studio에서 재시작하세요.",
     "hint.nextStep": "마지막 단계로 이동하면 실행할 수 있습니다.",
     "hint.running": "이미 실행 중인 작업이 있습니다.",
     "run.reset": "입력을 초기화했습니다. 선택과 첨부를 다시 확인하세요.",
@@ -2628,6 +3809,9 @@ const I18N = {
     "setup.workflow.stageGuideLabel": "선택 단계",
     "setup.workflow.controls": "Studio 흐름",
     "setup.workflow.controlsHint": "재실행, fork, 다음 단계 결정은 세션을 연 뒤 Studio에서 처리합니다.",
+    "setup.workflow.launchTitle": "세션 생성",
+    "setup.workflow.launchHint": "타깃 입력과 단계 목록이 준비되면 여기서 새 Workflow Studio 세션을 생성하세요.",
+    "setup.workflow.launchAction": "Workflow Studio 생성",
     "setup.workflow.summaryTitle": "실행 요약",
     "setup.workflow.stageDesc.msa": "상동 서열을 탐색해 MSA 기반 데이터를 구성합니다.",
     "setup.workflow.stageDesc.rfd3": "준비된 스캐폴드 입력을 바탕으로 백본 후보를 생성합니다.",
@@ -2665,7 +3849,7 @@ const I18N = {
     "runmode.diffdock": "DiffDock",
     "setup.modeGuide.title": "모드 가이드",
     "setup.modeGuide.pipeline": "마지막 WT Diff 단계까지 전체 파이프라인을 한 번에 실행합니다.",
-    "setup.modeGuide.workflow": "Setup에서 단계 구성을 정한 뒤 Studio에서 단계별 입력과 실행을 진행합니다.",
+    "setup.modeGuide.workflow": "Advanced에서 단계 구성을 정한 뒤 Studio에서 단계별 입력과 실행을 진행합니다.",
     "setup.modeGuide.rfd3": "RFD3 백본 생성만 실행합니다.",
     "setup.modeGuide.bioemu": "BioEmu 백본 샘플링만 실행합니다.",
     "setup.modeGuide.msa": "MSA/MMseqs 탐색과 캐시 준비만 실행합니다.",
@@ -2986,11 +4170,14 @@ function labelFromMap(value, map) {
 }
 
 const TAB_KEY = "kbf.activeTab";
-const TAB_OPTIONS = ["setup", "studio", "monitor", "analyze", "mcp"];
-const tabButtons = Array.from(document.querySelectorAll(".tab-btn"));
-const tabPanels = Array.from(document.querySelectorAll(".tab-panel"));
+const TAB_OPTIONS = ["home", "fast", "advanced", "studio", "rounds", "monitor", "analyze", "mcp"];
+const tabButtons = Array.from(document.querySelectorAll("#appSidebar .tab-btn"));
+const tabPanels = Array.from(document.querySelectorAll("#appShell .tab-panel"));
 const langButtons = Array.from(document.querySelectorAll(".lang-btn"));
 let tabsInitialized = false;
+let homeLauncherInitialized = false;
+let homeContextInitialized = false;
+let fastLauncherInitialized = false;
 let langInitialized = false;
 let copilotInitialized = false;
 
@@ -3380,6 +4567,9 @@ function setCurrentWorkflowStudioSessionId(sessionId) {
   const next = String(sessionId || "").trim();
   const changed = next !== String(state.currentWorkflowStudioSessionId || "").trim();
   state.currentWorkflowStudioSessionId = next;
+  if (next) {
+    state.studioBuilderOpen = false;
+  }
   if (changed) {
     state.studioArtifactPath = "";
     state.studioOpenField = "";
@@ -3527,7 +4717,7 @@ function workflowStudioExecutionSegments(session) {
     const headTargetNode = workflowStudioRequestTargetNode(session?.head_request || {}, "");
     segments.unshift({
       run_id: headRunId,
-      start_from: normalizePipelineStage(session?.head_request?.start_from || "", headStopAfter),
+      start_from: normalizePipelineStage(session?.head_request?.start_from || "", "msa"),
       stop_after: headStopAfter,
       target_node: headTargetNode,
     });
@@ -3564,15 +4754,18 @@ function buildWorkflowStudioPreflightRequest(session, targetStage = session?.act
   const effectivePreview = preview || workflowStudioExecutionPreview(session, targetStage);
   const route = workflowStudioExecutionTarget(targetStage || effectivePreview?.targetStage || "msa");
   const normalizedTarget = route.nodeId || effectivePreview?.targetStage || "msa";
-  const args = buildRunArguments({
-    prompt: session?.prompt || el.promptInput?.value.trim() || "",
-    routed: { stop_after: route.stopAfter || workflowStudioNodeBaseStage(normalizedTarget, "msa") || "msa" },
-    answers: {
-      ...(effectivePreview?.nextPayload || {}),
-      ...(route.selectedTiers ? { selected_tiers: route.selectedTiers } : {}),
-    },
-    runId: "",
-  });
+  const args = withProjectRoundContext(
+    buildRunArguments({
+      prompt: session?.prompt || el.promptInput?.value.trim() || "",
+      routed: { stop_after: route.stopAfter || workflowStudioNodeBaseStage(normalizedTarget, "msa") || "msa" },
+      answers: {
+        ...(effectivePreview?.nextPayload || {}),
+        ...(route.selectedTiers ? { selected_tiers: route.selectedTiers } : {}),
+      },
+      runId: "",
+    }),
+    currentProjectRoundContext()
+  );
   if (effectivePreview?.reuseRun && effectivePreview?.requiredStart !== "msa") {
     args.start_from = effectivePreview.requiredStart;
   } else {
@@ -4435,7 +5628,7 @@ function syncWorkflowStudioSessionFromStatus(status = state.lastRunStatus) {
     }
     const resolvedStatusStage = resolveWorkflowStudioStageForSession(session?.nodes, workflowStudioStatusStageValue(status, ""), "");
     const resolvedCompletedStages = new Set();
-    if (normalizedRunState === "completed" && Array.isArray(status?._studio_completed_nodes)) {
+    if (Array.isArray(status?._studio_completed_nodes)) {
       status._studio_completed_nodes.forEach((stage) => {
         const resolvedStage = resolveWorkflowStudioStageForSession(session?.nodes, stage, "");
         if (resolvedStage) {
@@ -4443,10 +5636,6 @@ function syncWorkflowStudioSessionFromStatus(status = state.lastRunStatus) {
         }
       });
     }
-    if (resolvedStatusStage) {
-      resolvedCompletedStages.add(resolvedStatusStage);
-    }
-    if (!resolvedCompletedStages.size) return;
     let sessionTouched = false;
     resolvedCompletedStages.forEach((stage) => {
       sessionTouched =
@@ -4454,13 +5643,36 @@ function syncWorkflowStudioSessionFromStatus(status = state.lastRunStatus) {
           session.stage_states,
           session.stage_run_ids,
           stage,
-          normalizedRunState === "completed" ? "completed" : normalizedRunState,
+          "completed",
           runId
         ) || sessionTouched;
     });
+    if (resolvedStatusStage) {
+      sessionTouched =
+        upsertWorkflowStudioStageStatus(
+          session.stage_states,
+          session.stage_run_ids,
+          resolvedStatusStage,
+          normalizedRunState === "completed" ? "completed" : normalizedRunState,
+          runId
+        ) || sessionTouched;
+      const currentActiveStage = workflowStudioNodeId(session?.active_stage || "", "");
+      const initialStage = workflowStudioNodeId(session?.nodes?.[0] || "", "");
+      const activeState = String(session.stage_states?.[currentActiveStage] || "").trim().toLowerCase();
+      if (
+        normalizedRunState === "running" &&
+        resolvedStatusStage !== currentActiveStage &&
+        (!currentActiveStage || currentActiveStage === initialStage || ["", "idle", "launching"].includes(activeState))
+      ) {
+        session.active_stage = resolvedStatusStage;
+        sessionTouched = true;
+      }
+    }
+    if (!sessionTouched) return;
     if (sessionTouched) {
       session.updated_at = new Date().toISOString();
       touched = true;
+      void saveWorkflowStudioSessionToRun(session, runId);
     }
   });
   if (touched) {
@@ -4612,7 +5824,7 @@ function removeDetachedResiduePickerRequest(token = "") {
 }
 
 function residuePickerContextLabel(context) {
-  return t(normalizeDetachedResiduePickerContext(context) === "studio" ? "tabs.studio" : "tabs.setup");
+  return t(normalizeDetachedResiduePickerContext(context) === "studio" ? "tabs.studio" : "tabs.advanced");
 }
 
 function buildDetachedResiduePickerUrl(token) {
@@ -5304,6 +6516,28 @@ function renderWorkflowStudioSessionList() {
 
 function renderWorkflowStudio() {
   const session = workflowStudioSessionForId();
+  const showCreationBuilder = Boolean(state.studioBuilderOpen) || !session;
+  const studioBuilderCard = showCreationBuilder
+    ? buildWorkflowDesignerCard({
+        onLaunch: async () => {
+          await createWorkflowStudioFromStudio();
+        },
+        rerender: () => {
+          renderWorkflowStudio();
+        },
+        allowTargetInputEdit: true,
+        secondaryAction: session
+          ? {
+              label: t("common.close"),
+              onClick: () => {
+                state.studioBuilderOpen = false;
+                renderWorkflowStudio();
+              },
+            }
+          : null,
+        extraClass: "studio-workflow-designer",
+      })
+    : null;
   renderWorkflowStudioSessionList();
   if (el.studioAdoptRunBtn) {
     el.studioAdoptRunBtn.disabled = !String(state.currentRunId || "").trim();
@@ -5325,16 +6559,21 @@ function renderWorkflowStudio() {
   }
   updateWorkflowStudioRunStatus(session);
   if (!el.workflowStudioRoot) return;
+  el.workflowStudioRoot.innerHTML = "";
   if (!session) {
     setFilePreviewPlaceholder("studio");
-    el.workflowStudioRoot.innerHTML = `
-      <div class="studio-empty">
-        <div>
-          <strong>${escapeHtml(t("studio.empty.title"))}</strong>
-          <p>${escapeHtml(t("studio.empty.desc"))}</p>
-        </div>
+    if (studioBuilderCard) {
+      el.workflowStudioRoot.appendChild(studioBuilderCard);
+    }
+    const emptyNote = document.createElement("div");
+    emptyNote.className = "studio-empty";
+    emptyNote.innerHTML = `
+      <div>
+        <strong>${escapeHtml(t("studio.empty.title"))}</strong>
+        <p>${escapeHtml(t("studio.empty.desc"))}</p>
       </div>
     `;
+    el.workflowStudioRoot.appendChild(emptyNote);
     return;
   }
   const activeStage = resolveWorkflowStudioStageForSession(
@@ -5791,6 +7030,9 @@ function renderWorkflowStudio() {
       </div>
     </div>
   `;
+  if (studioBuilderCard) {
+    el.workflowStudioRoot.prepend(studioBuilderCard);
+  }
   queueWorkflowStudioCheck(session, activeStage, preflightRequest);
   const residuePickerMount = el.workflowStudioRoot.querySelector("[data-studio-residue-picker]");
   if (residuePickerMount) {
@@ -5993,7 +7235,7 @@ function renderWorkflowStudio() {
         return;
       }
       if (action === "setup") {
-        setActiveTab("setup");
+        setActiveTab("advanced");
       }
     });
   });
@@ -6048,15 +7290,18 @@ async function runWorkflowStudioStage(sessionId = state.currentWorkflowStudioSes
   }
   const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
   const runId = preview.reuseRun ? session.head_run_id : createRunId(prefix);
-  const args = buildRunArguments({
-    prompt: session.prompt || el.promptInput.value.trim(),
-    routed: { stop_after: route.stopAfter },
-    answers: {
-      ...preview.nextPayload,
-      ...(route.selectedTiers ? { selected_tiers: route.selectedTiers } : {}),
-    },
-    runId,
-  });
+  const args = withProjectRoundContext(
+    buildRunArguments({
+      prompt: session.prompt || el.promptInput.value.trim(),
+      routed: { stop_after: route.stopAfter },
+      answers: {
+        ...preview.nextPayload,
+        ...(route.selectedTiers ? { selected_tiers: route.selectedTiers } : {}),
+      },
+      runId,
+    }),
+    currentProjectRoundContext()
+  );
   if (preview.reuseRun && preview.requiredStart !== "msa") {
     args.start_from = preview.requiredStart;
   } else {
@@ -6772,6 +8017,10 @@ function clearSession() {
   state.user = null;
   state.token = "";
   state.idToken = "";
+  state.projects = [];
+  state.roundsByProjectId = {};
+  state.currentProjectId = "";
+  state.currentRoundId = "";
   state.workflowStudioSessionsById = {};
   state.currentWorkflowStudioSessionId = "";
   state.studioArtifactPath = "";
@@ -6786,6 +8035,7 @@ function clearSession() {
     }
   });
   state.workflowStudioCheckTimersBySession = {};
+  renderHomeContextSelectors();
 }
 
 function oidcEnabled() {
@@ -7051,7 +8301,7 @@ function activeTabId() {
   const active = Array.isArray(tabPanels)
     ? tabPanels.find((panel) => panel.classList.contains("active"))
     : null;
-  const tab = active?.dataset?.tab || localStorage.getItem(TAB_KEY) || "setup";
+  const tab = active?.dataset?.tab || localStorage.getItem(TAB_KEY) || "home";
   return normalizeTab(tab);
 }
 
@@ -7166,7 +8416,12 @@ function copilotSummaryCards(snapshot = copilotSnapshot()) {
     pushCard(isKo ? "탭" : "Tab", t(`tabs.${snapshot.tab}`), isKo ? "현재 작업 화면" : "Current workspace", "teal");
     pushCard("Run", isKo ? "선택 안됨" : "Not selected", isKo ? "Monitor 또는 Analyze에서 run을 선택하세요." : "Select a run in Monitor or Analyze.", "amber");
     pushCard(isKo ? "비교" : "Compare", snapshot.compare.ready ? `${copilotShortArtifactLabel(snapshot.compare.leftPath)} vs ${copilotShortArtifactLabel(snapshot.compare.rightPath)}` : isKo ? "선택 필요" : "Selection needed", copilotCompareStateText(snapshot.compare), "amber");
-    pushCard(isKo ? "Next" : "Next", isKo ? "Setup 또는 Monitor 열기" : "Open Setup or Monitor", isKo ? "새 run을 시작하거나 기존 run 상태를 불러오세요." : "Create a new run or load an existing run.", "rose");
+    pushCard(
+      isKo ? "Next" : "Next",
+      isKo ? "Advanced 또는 Monitor 열기" : "Open Advanced or Monitor",
+      isKo ? "새 run을 시작하거나 기존 run 상태를 불러오세요." : "Create a new run or load an existing run.",
+      "rose"
+    );
     return cards;
   }
 
@@ -7390,10 +8645,10 @@ function copilotIntentFromPrompt(prompt, intentHint = "") {
 
 function copilotUsageReply(snapshot = copilotSnapshot()) {
   const isKo = copilotIsKorean();
-  if (snapshot.tab === "setup") {
+  if (snapshot.tab === "setup" || snapshot.tab === "advanced") {
     return isKo
-      ? "Setup에서는 Scope/Input/Options를 채우면 Run 버튼이 활성화됩니다.\n구간 실행이 필요하면 시작 단계와 중단 단계를 함께 지정하세요."
-      : "In Setup, fill Scope/Input/Options until Run is enabled.\nFor partial runs, set both `start_from` and `stop_after`.";
+      ? "Advanced에서는 Scope/Input/Options를 채우면 Run 버튼이 활성화됩니다.\n구간 실행이 필요하면 시작 단계와 중단 단계를 함께 지정하세요."
+      : "In Advanced, fill Scope/Input/Options until Run is enabled.\nFor partial runs, set both `start_from` and `stop_after`.";
   }
   if (snapshot.tab === "monitor") {
     return isKo
@@ -7525,8 +8780,8 @@ function copilotNextReply(snapshot = copilotSnapshot()) {
     .toLowerCase();
   if (!snapshot.runId) {
     return isKo
-      ? "1) Setup에서 입력을 채워 run을 시작하세요.\n2) Monitor에서 기존 run을 선택해 상태와 산출물을 확인하세요."
-      : "1) Fill inputs in Setup and launch a run.\n2) Select an existing run in Monitor to inspect state and outputs.";
+      ? "1) Advanced에서 입력을 채워 run을 시작하세요.\n2) Monitor에서 기존 run을 선택해 상태와 산출물을 확인하세요."
+      : "1) Fill inputs in Advanced and launch a run.\n2) Select an existing run in Monitor to inspect state and outputs.";
   }
   if (stateText === "running") {
     return isKo
@@ -7641,7 +8896,7 @@ async function handleCopilotAction(actionId) {
   const announce = !["openSetup", "openMonitor", "openAnalyze"].includes(actionId);
   try {
     if (actionId === "openSetup") {
-      setActiveTab("setup");
+      setActiveTab("advanced");
     } else if (actionId === "openMonitor") {
       setActiveTab("monitor");
     } else if (actionId === "openAnalyze") {
@@ -7845,6 +9100,7 @@ function applyI18n() {
   document.querySelectorAll("option[data-i18n]").forEach((node) => {
     node.textContent = t(node.dataset.i18n);
   });
+  renderHomeContextSelectors();
   renderMcpGuide();
 }
 
@@ -7916,8 +9172,12 @@ function initLanguage() {
 }
 
 function normalizeTab(value) {
-  if (TAB_OPTIONS.includes(value)) return value;
-  return "setup";
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (raw === "setup") return "advanced";
+  if (TAB_OPTIONS.includes(raw)) return raw;
+  return "home";
 }
 
 function setActiveTab(value) {
@@ -7938,6 +9198,14 @@ function setActiveTab(value) {
   if (next === "studio") {
     renderWorkflowStudio();
   }
+  if (next === "rounds") {
+    renderRoundsWorkspace();
+    void syncHomeProjectRoundContext({ preserveSelection: true }).then(() => {
+      if (normalizeTab(localStorage.getItem(TAB_KEY) || state.activeTab || "") === "rounds") {
+        renderRoundsWorkspace();
+      }
+    });
+  }
   const studioRunId =
     next === "studio" ? String(workflowStudioActionRunId(workflowStudioSessionForId()) || "").trim() : "";
   if (
@@ -7952,6 +9220,245 @@ function setActiveTab(value) {
   }
 }
 
+function openAdvancedWorkflowBuilder({ announce = true } = {}) {
+  setRunMode("workflow", { render: false });
+  setActiveTab("advanced");
+  renderQuestions(state.plan?.questions || []);
+  updateRunEligibility(state.plan?.questions || []);
+  if (announce) {
+    setMessage(t("home.message.studioBuilderReady"), "ai");
+  }
+}
+
+async function createWorkflowStudioFromStudio({ selectedRunId = "" } = {}) {
+  setRunMode("workflow", { render: false });
+  setActiveTab("studio");
+  const session = await openWorkflowStudioFromSetup({
+    prompt: "",
+    selectedRunId: String(selectedRunId || "").trim(),
+  });
+  if (!session) {
+    setMessage(t("studio.createFailed"), "ai");
+    return null;
+  }
+  state.studioBuilderOpen = false;
+  return session;
+}
+
+function initHomeLauncher() {
+  if (homeLauncherInitialized) return;
+  document.querySelectorAll("[data-home-target]").forEach((node) => {
+    node.addEventListener("click", () => {
+      const target = String(node.dataset.homeTarget || "").trim();
+      if (!target) return;
+      if (target === "studio") {
+        setRunMode("workflow", { render: false });
+        setCurrentWorkflowStudioSessionId("");
+        state.studioBuilderOpen = true;
+        setActiveTab("studio");
+        renderWorkflowStudio();
+        setMessage(t("home.message.studioBuilderReady"), "ai");
+        return;
+      }
+      setActiveTab(target);
+    });
+  });
+  homeLauncherInitialized = true;
+}
+
+function initHomeContext() {
+  if (homeContextInitialized) return;
+  el.homeProjectSelector?.addEventListener("change", async (event) => {
+    state.currentProjectId = String(event?.target?.value || "").trim();
+    state.currentRoundId = "";
+    persistHomeContextSelection();
+    renderHomeContextSelectors();
+    await syncHomeProjectRoundContext({ preserveSelection: true });
+  });
+  el.homeRoundSelector?.addEventListener("change", (event) => {
+    state.currentRoundId = String(event?.target?.value || "").trim();
+    persistHomeContextSelection();
+    renderHomeContextSelectors();
+  });
+  el.homeCreateProjectBtn?.addEventListener("click", async () => {
+    try {
+      await createProjectFromHome();
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    }
+  });
+  el.homeCreateRoundBtn?.addEventListener("click", async () => {
+    try {
+      await createRoundFromHome();
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    }
+  });
+  el.roundsCreateProjectBtn?.addEventListener("click", async () => {
+    try {
+      await createProjectFromHome();
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    }
+  });
+  el.roundsCreateRoundBtn?.addEventListener("click", async () => {
+    try {
+      await createRoundFromHome();
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    }
+  });
+  el.roundsShowArchived?.addEventListener("change", async (event) => {
+    state.roundsShowArchived = Boolean(event?.target?.checked);
+    try {
+      await syncHomeProjectRoundContext({ preserveSelection: true });
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    }
+  });
+  el.roundsArchiveProjectBtn?.addEventListener("click", async () => {
+    try {
+      await archiveCurrentProjectFromWorkspace();
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    }
+  });
+  el.roundsDeleteProjectBtn?.addEventListener("click", async () => {
+    try {
+      await deleteCurrentProjectFromWorkspace();
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    }
+  });
+  el.roundsRestoreProjectBtn?.addEventListener("click", async () => {
+    try {
+      await restoreCurrentProjectFromWorkspace();
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    }
+  });
+  el.homeContinueRoundBtn?.addEventListener("click", () => {
+    if (!String(state.currentRoundId || "").trim()) {
+      setMessage(t("rounds.error.roundRequired"), "ai");
+      return;
+    }
+    setActiveTab("rounds");
+  });
+  el.homeOpenMonitorBtn?.addEventListener("click", () => {
+    setActiveTab("monitor");
+  });
+  el.homeOpenAnalyzeBtn?.addEventListener("click", () => {
+    setActiveTab("analyze");
+  });
+  el.roundsEditRoundBtn?.addEventListener("click", async () => {
+    try {
+      await editCurrentRoundFromWorkspace();
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    }
+  });
+  el.roundsArchiveRoundBtn?.addEventListener("click", async () => {
+    try {
+      await archiveCurrentRoundFromWorkspace();
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    }
+  });
+  el.roundsDeleteRoundBtn?.addEventListener("click", async () => {
+    try {
+      await deleteCurrentRoundFromWorkspace();
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    }
+  });
+  el.roundsRestoreRoundBtn?.addEventListener("click", async () => {
+    try {
+      await restoreCurrentRoundFromWorkspace();
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+    }
+  });
+  homeContextInitialized = true;
+}
+
+function applyFastLaunchPresetToState(preset) {
+  if (!preset || typeof preset !== "object") return;
+  state.answerMeta = {};
+  state.setupLoadedRequestRunId = "";
+  state.chainRanges = null;
+  resetSetupResiduePicker();
+  state.runMode = preset.mode || "pipeline";
+  state.plan = {
+    ...buildManualPlan("pipeline"),
+    source: "fast",
+    routed_request: { ...(preset.routed || {}) },
+  };
+  state.answers = {
+    ...(preset.answers || {}),
+    confirm_run: true,
+  };
+  state.setupStepIndex = 0;
+  if (el.promptInput) {
+    el.promptInput.value = String(preset.prompt || "").trim();
+  }
+  updateRunLabel();
+  renderQuestions(state.plan.questions || []);
+  updateRunEligibility(state.plan.questions || []);
+}
+
+function buildFastLaunchPresetFromUi() {
+  return buildFastLaunchPreset({
+    target_input: String(el.fastTargetInput?.value || "").trim(),
+    prompt: String(el.fastPromptInput?.value || "").trim(),
+  });
+}
+
+async function loadFastTargetFile(file) {
+  if (!file || typeof file.text !== "function") return;
+  const text = await file.text();
+  if (el.fastTargetInput) {
+    el.fastTargetInput.value = String(text || "");
+  }
+  setMessage(t("fast.message.fileLoaded", { name: file.name || "input" }), "ai");
+}
+
+function initFastLauncher() {
+  if (fastLauncherInitialized) return;
+  el.fastLoadFileBtn?.addEventListener("click", () => {
+    el.fastTargetFile?.click();
+  });
+  el.fastTargetFile?.addEventListener("change", async (event) => {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    await loadFastTargetFile(file);
+    event.target.value = "";
+  });
+  el.fastOpenAdvancedBtn?.addEventListener("click", () => {
+    const targetInput = String(el.fastTargetInput?.value || "").trim();
+    if (!targetInput) {
+      setMessage(t("fast.error.targetRequired"), "ai");
+      setActiveTab("fast");
+      return;
+    }
+    const preset = buildFastLaunchPresetFromUi();
+    applyFastLaunchPresetToState(preset);
+    setActiveTab("advanced");
+    setMessage(t("fast.message.reviewReady"), "ai");
+  });
+  el.fastRunBtn?.addEventListener("click", async () => {
+    const targetInput = String(el.fastTargetInput?.value || "").trim();
+    if (!targetInput) {
+      setMessage(t("fast.error.targetRequired"), "ai");
+      setActiveTab("fast");
+      return;
+    }
+    const preset = buildFastLaunchPresetFromUi();
+    applyFastLaunchPresetToState(preset);
+    await runPipeline();
+  });
+  fastLauncherInitialized = true;
+}
+
 function initTabs() {
   if (!tabButtons.length) return;
   if (!tabsInitialized) {
@@ -7960,8 +9467,12 @@ function initTabs() {
     });
     tabsInitialized = true;
   }
+  initHomeLauncher();
+  initHomeContext();
+  initFastLauncher();
   const stored = localStorage.getItem(TAB_KEY);
-  setActiveTab(stored || "setup");
+  setActiveTab(stored || "home");
+  void syncHomeProjectRoundContext({ preserveSelection: true });
 }
 
 function showLogin() {
@@ -9255,6 +10766,7 @@ function updateRunInfo(status) {
   renderWorkflowReviewPanel(status);
   renderCopilotContext();
   syncWorkflowStudioSessionFromStatus(status);
+  renderHomeContextSelectors();
 }
 
 function updateInlineStatus(status, runId = state.currentRunId) {
@@ -9298,6 +10810,7 @@ function setCurrentRunId(runId) {
   state.hitListRows = [];
   if (runId && !state.timingByRunId[runId]) state.timingByRunId[runId] = {};
   el.runIdValue.textContent = runId || "-";
+  el.runIdValue.title = runId || "";
   el.runStageValue.textContent = "-";
   el.runStateValue.textContent = "-";
   el.runUpdatedValue.textContent = "-";
@@ -9352,6 +10865,7 @@ function setCurrentRunId(runId) {
   refreshExperiments();
   loadReport();
   renderWorkflowStudio();
+  renderHomeContextSelectors();
 }
 
 function ensureAutoPoll() {
@@ -10106,6 +11620,353 @@ function getTargetInputFastaText() {
 
 function getRfd3InputPdbText() {
   return getRfd3InputPdbTextFromAnswers(state.answers);
+}
+
+function applyTargetInputTextToState(text, { fileName = "" } = {}) {
+  const trimmed = String(text || "").trim();
+  state.answers.target_input = trimmed;
+  state.answers.target_fasta = "";
+  state.answers.target_pdb = "";
+  state.answerMeta = state.answerMeta && typeof state.answerMeta === "object" ? state.answerMeta : {};
+  state.answerMeta.target_pdb = {};
+  if (!trimmed) return;
+  const key = detectTargetKey(trimmed) || "target_pdb";
+  state.answers[key] = trimmed;
+  if (key === "target_pdb" && fileName) {
+    state.answerMeta.target_pdb = { fileName: String(fileName || "").trim() };
+  }
+}
+
+function buildWorkflowDesignerCard({
+  onLaunch = null,
+  rerender = null,
+  secondaryAction = null,
+  extraClass = "",
+  allowTargetInputEdit = false,
+} = {}) {
+  const stageChoices = PIPELINE_STAGE_ORDER.map((stage) => ({
+    stage,
+    label:
+      stage === "novelty"
+        ? t("stop.full")
+        : stage === "af2"
+          ? t("stage.af2")
+          : t(`stage.${stage}`),
+    desc: t(`setup.workflow.stageDesc.${stage}`),
+  }));
+  const stageChoiceMap = new Map(stageChoices.map((item) => [item.stage, item]));
+  const stageLabelFor = (stage) => stageChoiceMap.get(stage)?.label || formatStageLabel(stage);
+  const stageDescFor = (stage) => stageChoiceMap.get(stage)?.desc || t("setup.workflow.stageGuideHint");
+  const rerenderFn = typeof rerender === "function" ? rerender : () => {};
+  const showTargetInputEditor = Boolean(allowTargetInputEdit);
+  const applyNodeSet = (nextSet) => {
+    const ordered = PIPELINE_STAGE_ORDER.filter((stage) => nextSet.has(stage));
+    if (!ordered.length) return;
+    state.workflowDesigner.nodes = ordered;
+    const normalizedCheckpoints = normalizeWorkflowCheckpointList(state.workflowDesigner.checkpointStages, ordered);
+    state.workflowDesigner.checkpointStages = normalizedCheckpoints;
+    if (!normalizedCheckpoints.length) {
+      state.workflowDesigner.checkpointEnabled = false;
+    }
+    state.workflowDesigner.flowPulse = Number(state.workflowDesigner.flowPulse || 0) + 1;
+    rerenderFn();
+  };
+
+  const card = document.createElement("div");
+  card.className = `question-card workflow-designer ${extraClass}`.trim();
+
+  const title = document.createElement("div");
+  title.className = "question-title";
+  title.textContent = t("setup.workflow.title");
+
+  const help = document.createElement("div");
+  help.className = "question-help";
+  help.textContent = t("setup.workflow.help");
+
+  const layout = document.createElement("div");
+  layout.className = "workflow-designer-layout";
+
+  const mainCol = document.createElement("div");
+  mainCol.className = "workflow-designer-main";
+
+  const sideCol = document.createElement("div");
+  sideCol.className = "workflow-designer-side";
+
+  const hasTargetInputValue = () =>
+    Boolean(
+      String(state.answers.target_input || "").trim() ||
+        String(getTargetInputPdbText() || "").trim() ||
+        String(getTargetInputFastaText() || "").trim()
+    );
+
+  if (showTargetInputEditor) {
+    const targetInputBlock = document.createElement("section");
+    targetInputBlock.className = "workflow-block workflow-target-input-block";
+    const targetInputTitle = document.createElement("div");
+    targetInputTitle.className = "workflow-section-label";
+    targetInputTitle.textContent = t("question.targetInput.label");
+    const targetInputHelp = document.createElement("div");
+    targetInputHelp.className = "workflow-block-help";
+    targetInputHelp.textContent = t("question.targetInput.help");
+    const workflowDesignerTargetInput = document.createElement("textarea");
+    workflowDesignerTargetInput.className = "workflow-target-input";
+    workflowDesignerTargetInput.rows = 8;
+    workflowDesignerTargetInput.placeholder = t("fast.input.placeholder");
+    workflowDesignerTargetInput.value = String(
+      state.answers.target_input || getTargetInputPdbText() || getTargetInputFastaText() || ""
+    );
+    const targetInputActions = document.createElement("div");
+    targetInputActions.className = "workflow-designer-actions";
+    const targetInputLoadBtn = document.createElement("button");
+    targetInputLoadBtn.type = "button";
+    targetInputLoadBtn.className = "ghost";
+    targetInputLoadBtn.textContent = t("fast.action.loadFile");
+    const targetInputFile = document.createElement("input");
+    targetInputFile.type = "file";
+    targetInputFile.accept = ".pdb,.ent,.fa,.fasta,.txt,.seq";
+    targetInputFile.className = "hidden";
+    targetInputActions.appendChild(targetInputLoadBtn);
+    targetInputActions.appendChild(targetInputFile);
+    targetInputBlock.appendChild(targetInputTitle);
+    targetInputBlock.appendChild(targetInputHelp);
+    targetInputBlock.appendChild(workflowDesignerTargetInput);
+    targetInputBlock.appendChild(targetInputActions);
+    mainCol.appendChild(targetInputBlock);
+  }
+
+  const guideBlock = document.createElement("section");
+  guideBlock.className = "workflow-block";
+  const guideTitle = document.createElement("div");
+  guideTitle.className = "workflow-section-label";
+  guideTitle.textContent = t("setup.workflow.stageGuide");
+  const guideHint = document.createElement("div");
+  guideHint.className = "workflow-block-help";
+  guideHint.textContent = t("setup.workflow.stageGuideHint");
+  const guideLabel = document.createElement("div");
+  guideLabel.className = "workflow-stage-guide-label";
+  const guideDesc = document.createElement("div");
+  guideDesc.className = "workflow-stage-guide-desc";
+  guideBlock.appendChild(guideTitle);
+  guideBlock.appendChild(guideHint);
+  guideBlock.appendChild(guideLabel);
+  guideBlock.appendChild(guideDesc);
+
+  const updateGuide = (stage) => {
+    const item = stageChoiceMap.get(stage) || stageChoices[0] || null;
+    if (!item) {
+      guideLabel.textContent = t("setup.workflow.stageGuideHint");
+      guideDesc.textContent = "";
+      return;
+    }
+    guideLabel.textContent = `${t("setup.workflow.stageGuideLabel")}: ${item.label}`;
+    guideDesc.textContent = stageDescFor(item.stage);
+  };
+
+  const paletteBlock = document.createElement("section");
+  paletteBlock.className = "workflow-block";
+  const paletteTitle = document.createElement("div");
+  paletteTitle.className = "workflow-section-label";
+  paletteTitle.textContent = t("setup.workflow.palette");
+  const paletteHelp = document.createElement("div");
+  paletteHelp.className = "workflow-block-help";
+  paletteHelp.textContent = t("setup.workflow.paletteHelp");
+  paletteBlock.appendChild(paletteTitle);
+  paletteBlock.appendChild(paletteHelp);
+
+  const palette = document.createElement("div");
+  palette.className = "choice-group workflow-palette";
+  const selected = new Set(normalizeWorkflowNodesForState(state.workflowDesigner.nodes));
+  stageChoices.forEach((item) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "choice-btn workflow-palette-btn";
+    if (selected.has(item.stage)) btn.classList.add("selected");
+    btn.textContent = item.label;
+    btn.title = stageDescFor(item.stage);
+    btn.addEventListener("mouseenter", () => updateGuide(item.stage));
+    btn.addEventListener("focus", () => updateGuide(item.stage));
+    btn.addEventListener("click", () => {
+      const nextSet = new Set(selected);
+      if (nextSet.has(item.stage)) {
+        nextSet.delete(item.stage);
+      } else {
+        nextSet.add(item.stage);
+      }
+      applyNodeSet(nextSet);
+    });
+    palette.appendChild(btn);
+  });
+  paletteBlock.appendChild(palette);
+
+  const canvasBlock = document.createElement("section");
+  canvasBlock.className = "workflow-block";
+  const canvasTitle = document.createElement("div");
+  canvasTitle.className = "workflow-section-label";
+  canvasTitle.textContent = t("setup.workflow.canvas");
+  const canvasHelp = document.createElement("div");
+  canvasHelp.className = "workflow-block-help";
+  canvasHelp.textContent = t("setup.workflow.canvasHelp");
+  canvasBlock.appendChild(canvasTitle);
+  canvasBlock.appendChild(canvasHelp);
+
+  const canvas = document.createElement("div");
+  canvas.className = "workflow-canvas";
+  const nodes = normalizeWorkflowNodesForState(state.workflowDesigner.nodes);
+  if (!nodes.length) {
+    canvas.innerHTML = `<div class="placeholder">${escapeHtml(t("setup.workflow.empty"))}</div>`;
+  } else {
+    nodes.forEach((stage, idx) => {
+      const node = document.createElement("div");
+      node.className = "workflow-node";
+      node.style.animationDelay = `${Math.min(idx, 8) * 60}ms`;
+      node.dataset.stage = stage;
+      const isFinal = idx === nodes.length - 1;
+      if (isFinal) node.classList.add("final-node");
+      const stageLabel = stageLabelFor(stage);
+      node.title = stageDescFor(stage);
+      node.innerHTML = `
+        <span class="workflow-node-title">${escapeHtml(stageLabel)}</span>
+        <span class="workflow-node-badges">
+          ${isFinal ? `<span class="workflow-node-badge final">${escapeHtml(t("setup.workflow.badge.final"))}</span>` : ""}
+        </span>
+      `;
+      node.addEventListener("mouseenter", () => updateGuide(stage));
+      const removeBtn = document.createElement("button");
+      removeBtn.type = "button";
+      removeBtn.className = "workflow-node-remove";
+      removeBtn.textContent = "x";
+      removeBtn.title = t("setup.workflow.removeNode");
+      removeBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const nextSet = new Set(nodes);
+        nextSet.delete(stage);
+        applyNodeSet(nextSet);
+      });
+      node.appendChild(removeBtn);
+      canvas.appendChild(node);
+      if (idx < nodes.length - 1) {
+        const edge = document.createElement("span");
+        edge.className = "workflow-edge";
+        edge.textContent = "->";
+        canvas.appendChild(edge);
+      }
+    });
+  }
+  canvasBlock.appendChild(canvas);
+
+  const hint = document.createElement("div");
+  hint.className = "workflow-block-help";
+  hint.textContent = t("setup.workflow.nodeHint");
+  const orderHint = document.createElement("div");
+  orderHint.className = "workflow-block-help";
+  orderHint.textContent = t("setup.workflow.orderLocked");
+  canvasBlock.appendChild(hint);
+  canvasBlock.appendChild(orderHint);
+
+  const controlsBlock = document.createElement("section");
+  controlsBlock.className = "workflow-block";
+  const controlsTitle = document.createElement("div");
+  controlsTitle.className = "workflow-section-label";
+  controlsTitle.textContent = t("setup.workflow.controls");
+  controlsBlock.appendChild(controlsTitle);
+  const controlsHint = document.createElement("div");
+  controlsHint.className = "workflow-block-help";
+  controlsHint.textContent = t("setup.workflow.controlsHint");
+  controlsBlock.appendChild(controlsHint);
+
+  const launchTitle = document.createElement("div");
+  launchTitle.className = "workflow-section-label";
+  launchTitle.textContent = t("setup.workflow.launchTitle");
+  const launchHint = document.createElement("div");
+  launchHint.className = "workflow-block-help";
+  launchHint.textContent = t("setup.workflow.launchHint");
+  const launchActions = document.createElement("div");
+  launchActions.className = "workflow-designer-actions";
+  const launchBtn = document.createElement("button");
+  launchBtn.id = "workflowDesignerLaunchBtn";
+  launchBtn.type = "button";
+  launchBtn.className = "primary";
+  launchBtn.textContent = t("setup.workflow.launchAction");
+  const syncWorkflowDesignerLaunchEligibility = () => {
+    launchBtn.disabled = !nodes.length || !hasTargetInputValue() || Boolean(state.runSubmitting);
+  };
+  syncWorkflowDesignerLaunchEligibility();
+  launchBtn.addEventListener("click", async () => {
+    if (launchBtn.disabled || typeof onLaunch !== "function") return;
+    await onLaunch();
+  });
+  if (showTargetInputEditor) {
+    const workflowDesignerTargetInput = mainCol.querySelector(".workflow-target-input");
+    const targetInputFile = mainCol.querySelector('input[type="file"].hidden');
+    const targetInputLoadBtn = mainCol.querySelector(".workflow-target-input-block .ghost");
+    if (workflowDesignerTargetInput instanceof HTMLTextAreaElement) {
+      workflowDesignerTargetInput.addEventListener("input", () => {
+        applyTargetInputTextToState(workflowDesignerTargetInput.value);
+        syncWorkflowDesignerLaunchEligibility();
+      });
+    }
+    if (targetInputLoadBtn instanceof HTMLButtonElement && targetInputFile instanceof HTMLInputElement) {
+      targetInputLoadBtn.addEventListener("click", () => {
+        targetInputFile.click();
+      });
+      targetInputFile.addEventListener("change", async (event) => {
+        const file = event?.target?.files?.[0];
+        if (!file || typeof file.text !== "function") return;
+        const text = await file.text();
+        if (workflowDesignerTargetInput instanceof HTMLTextAreaElement) {
+          workflowDesignerTargetInput.value = String(text || "");
+        }
+        applyTargetInputTextToState(text, { fileName: file.name || "input" });
+        syncWorkflowDesignerLaunchEligibility();
+        setMessage(t("fast.message.fileLoaded", { name: file.name || "input" }), "ai");
+        event.target.value = "";
+      });
+    }
+  }
+  launchActions.appendChild(launchBtn);
+  if (secondaryAction && typeof secondaryAction.onClick === "function") {
+    const secondaryBtn = document.createElement("button");
+    secondaryBtn.type = "button";
+    secondaryBtn.className = "ghost";
+    secondaryBtn.textContent = secondaryAction.label || t("common.close");
+    secondaryBtn.addEventListener("click", () => secondaryAction.onClick());
+    launchActions.appendChild(secondaryBtn);
+  }
+  controlsBlock.appendChild(launchTitle);
+  controlsBlock.appendChild(launchHint);
+  controlsBlock.appendChild(launchActions);
+
+  const summaryBlock = document.createElement("section");
+  summaryBlock.className = "workflow-block";
+  const summaryTitle = document.createElement("div");
+  summaryTitle.className = "workflow-section-label";
+  summaryTitle.textContent = t("setup.workflow.summaryTitle");
+  const summary = document.createElement("div");
+  summary.className = "question-summary";
+  summary.textContent = t("setup.workflow.summaryStudio", {
+    stages: nodes.map((stage) => formatStageLabel(stage)).join(" -> "),
+  });
+  const checkpointSummary = document.createElement("div");
+  checkpointSummary.className = "question-summary";
+  checkpointSummary.textContent = t("setup.workflow.summaryStudioHint");
+  summaryBlock.appendChild(summaryTitle);
+  summaryBlock.appendChild(summary);
+  summaryBlock.appendChild(checkpointSummary);
+
+  mainCol.appendChild(paletteBlock);
+  mainCol.appendChild(canvasBlock);
+  sideCol.appendChild(guideBlock);
+  sideCol.appendChild(controlsBlock);
+  sideCol.appendChild(summaryBlock);
+
+  layout.appendChild(mainCol);
+  layout.appendChild(sideCol);
+
+  card.appendChild(title);
+  card.appendChild(help);
+  card.appendChild(layout);
+  updateGuide(nodes[0] || stageChoices[0]?.stage || "");
+  return card;
 }
 
 async function loadResiduePickerConservationPreview(runId = "") {
@@ -12347,232 +14208,16 @@ function renderQuestions(questions) {
 
   function appendWorkflowDesignerCard() {
     if (state.runMode !== "workflow") return;
-    const stageChoices = PIPELINE_STAGE_ORDER.map((stage) => ({
-      stage,
-      label:
-        stage === "novelty"
-          ? t("stop.full")
-          : stage === "af2"
-            ? t("stage.af2")
-            : t(`stage.${stage}`),
-      desc: t(`setup.workflow.stageDesc.${stage}`),
-    }));
-    const stageChoiceMap = new Map(stageChoices.map((item) => [item.stage, item]));
-    const stageLabelFor = (stage) => stageChoiceMap.get(stage)?.label || formatStageLabel(stage);
-    const stageDescFor = (stage) => stageChoiceMap.get(stage)?.desc || t("setup.workflow.stageGuideHint");
-    const applyNodeSet = (nextSet) => {
-      const ordered = PIPELINE_STAGE_ORDER.filter((stage) => nextSet.has(stage));
-      if (!ordered.length) return;
-      state.workflowDesigner.nodes = ordered;
-      const normalizedCheckpoints = normalizeWorkflowCheckpointList(
-        state.workflowDesigner.checkpointStages,
-        ordered
-      );
-      state.workflowDesigner.checkpointStages = normalizedCheckpoints;
-      if (!normalizedCheckpoints.length) {
-        state.workflowDesigner.checkpointEnabled = false;
-      }
-      state.workflowDesigner.flowPulse = Number(state.workflowDesigner.flowPulse || 0) + 1;
-      renderQuestions(state.plan?.questions || []);
-    };
-
-    const card = document.createElement("div");
-    card.className = "question-card workflow-designer";
-
-    const title = document.createElement("div");
-    title.className = "question-title";
-    title.textContent = t("setup.workflow.title");
-
-    const help = document.createElement("div");
-    help.className = "question-help";
-    help.textContent = t("setup.workflow.help");
-
-    const layout = document.createElement("div");
-    layout.className = "workflow-designer-layout";
-
-    const mainCol = document.createElement("div");
-    mainCol.className = "workflow-designer-main";
-
-    const sideCol = document.createElement("div");
-    sideCol.className = "workflow-designer-side";
-
-    const guideBlock = document.createElement("section");
-    guideBlock.className = "workflow-block";
-    const guideTitle = document.createElement("div");
-    guideTitle.className = "workflow-section-label";
-    guideTitle.textContent = t("setup.workflow.stageGuide");
-    const guideHint = document.createElement("div");
-    guideHint.className = "workflow-block-help";
-    guideHint.textContent = t("setup.workflow.stageGuideHint");
-    const guideLabel = document.createElement("div");
-    guideLabel.className = "workflow-stage-guide-label";
-    const guideDesc = document.createElement("div");
-    guideDesc.className = "workflow-stage-guide-desc";
-    guideBlock.appendChild(guideTitle);
-    guideBlock.appendChild(guideHint);
-    guideBlock.appendChild(guideLabel);
-    guideBlock.appendChild(guideDesc);
-
-    const updateGuide = (stage) => {
-      const item = stageChoiceMap.get(stage) || stageChoices[0] || null;
-      if (!item) {
-        guideLabel.textContent = t("setup.workflow.stageGuideHint");
-        guideDesc.textContent = "";
-        return;
-      }
-      guideLabel.textContent = `${t("setup.workflow.stageGuideLabel")}: ${item.label}`;
-      guideDesc.textContent = stageDescFor(item.stage);
-    };
-
-    const paletteBlock = document.createElement("section");
-    paletteBlock.className = "workflow-block";
-    const paletteTitle = document.createElement("div");
-    paletteTitle.className = "workflow-section-label";
-    paletteTitle.textContent = t("setup.workflow.palette");
-    const paletteHelp = document.createElement("div");
-    paletteHelp.className = "workflow-block-help";
-    paletteHelp.textContent = t("setup.workflow.paletteHelp");
-    paletteBlock.appendChild(paletteTitle);
-    paletteBlock.appendChild(paletteHelp);
-
-    const palette = document.createElement("div");
-    palette.className = "choice-group workflow-palette";
-    const selected = new Set(normalizeWorkflowNodesForState(state.workflowDesigner.nodes));
-    stageChoices.forEach((item) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "choice-btn workflow-palette-btn";
-      if (selected.has(item.stage)) btn.classList.add("selected");
-      btn.textContent = item.label;
-      btn.title = stageDescFor(item.stage);
-      btn.addEventListener("mouseenter", () => {
-        updateGuide(item.stage);
-      });
-      btn.addEventListener("focus", () => {
-        updateGuide(item.stage);
-      });
-      btn.addEventListener("click", () => {
-        const nextSet = new Set(selected);
-        if (nextSet.has(item.stage)) {
-          nextSet.delete(item.stage);
-        } else {
-          nextSet.add(item.stage);
-        }
-        applyNodeSet(nextSet);
-      });
-      palette.appendChild(btn);
-    });
-    paletteBlock.appendChild(palette);
-
-    const canvasBlock = document.createElement("section");
-    canvasBlock.className = "workflow-block";
-    const canvasTitle = document.createElement("div");
-    canvasTitle.className = "workflow-section-label";
-    canvasTitle.textContent = t("setup.workflow.canvas");
-    const canvasHelp = document.createElement("div");
-    canvasHelp.className = "workflow-block-help";
-    canvasHelp.textContent = t("setup.workflow.canvasHelp");
-    canvasBlock.appendChild(canvasTitle);
-    canvasBlock.appendChild(canvasHelp);
-
-    const canvas = document.createElement("div");
-    canvas.className = "workflow-canvas";
-    const nodes = normalizeWorkflowNodesForState(state.workflowDesigner.nodes);
-    if (!nodes.length) {
-      canvas.innerHTML = `<div class="placeholder">${escapeHtml(t("setup.workflow.empty"))}</div>`;
-    } else {
-      nodes.forEach((stage, idx) => {
-        const node = document.createElement("div");
-        node.className = "workflow-node";
-        node.style.animationDelay = `${Math.min(idx, 8) * 60}ms`;
-        node.dataset.stage = stage;
-        const isFinal = idx === nodes.length - 1;
-        if (isFinal) node.classList.add("final-node");
-        const stageLabel = stageLabelFor(stage);
-        node.title = stageDescFor(stage);
-        node.innerHTML = `
-          <span class="workflow-node-title">${escapeHtml(stageLabel)}</span>
-          <span class="workflow-node-badges">
-            ${isFinal ? `<span class="workflow-node-badge final">${escapeHtml(t("setup.workflow.badge.final"))}</span>` : ""}
-          </span>
-        `;
-        node.addEventListener("mouseenter", () => {
-          updateGuide(stage);
-        });
-        const removeBtn = document.createElement("button");
-        removeBtn.type = "button";
-        removeBtn.className = "workflow-node-remove";
-        removeBtn.textContent = "x";
-        removeBtn.title = t("setup.workflow.removeNode");
-        removeBtn.addEventListener("click", (event) => {
-          event.stopPropagation();
-          const nextSet = new Set(nodes);
-          nextSet.delete(stage);
-          applyNodeSet(nextSet);
-        });
-        node.appendChild(removeBtn);
-        canvas.appendChild(node);
-        if (idx < nodes.length - 1) {
-          const edge = document.createElement("span");
-          edge.className = "workflow-edge";
-          edge.textContent = "->";
-          canvas.appendChild(edge);
-        }
-      });
-    }
-    canvasBlock.appendChild(canvas);
-
-    const hint = document.createElement("div");
-    hint.className = "workflow-block-help";
-    hint.textContent = t("setup.workflow.nodeHint");
-    const orderHint = document.createElement("div");
-    orderHint.className = "workflow-block-help";
-    orderHint.textContent = t("setup.workflow.orderLocked");
-    canvasBlock.appendChild(hint);
-    canvasBlock.appendChild(orderHint);
-
-    const controlsBlock = document.createElement("section");
-    controlsBlock.className = "workflow-block";
-    const controlsTitle = document.createElement("div");
-    controlsTitle.className = "workflow-section-label";
-    controlsTitle.textContent = t("setup.workflow.controls");
-    controlsBlock.appendChild(controlsTitle);
-    const controlsHint = document.createElement("div");
-    controlsHint.className = "workflow-block-help";
-    controlsHint.textContent = t("setup.workflow.controlsHint");
-    controlsBlock.appendChild(controlsHint);
-
-    const summaryBlock = document.createElement("section");
-    summaryBlock.className = "workflow-block";
-    const summaryTitle = document.createElement("div");
-    summaryTitle.className = "workflow-section-label";
-    summaryTitle.textContent = t("setup.workflow.summaryTitle");
-    const summary = document.createElement("div");
-    summary.className = "question-summary";
-    summary.textContent = t("setup.workflow.summaryStudio", {
-      stages: nodes.map((stage) => formatStageLabel(stage)).join(" -> "),
-    });
-    const checkpointSummary = document.createElement("div");
-    checkpointSummary.className = "question-summary";
-    checkpointSummary.textContent = t("setup.workflow.summaryStudioHint");
-    summaryBlock.appendChild(summaryTitle);
-    summaryBlock.appendChild(summary);
-    summaryBlock.appendChild(checkpointSummary);
-
-    mainCol.appendChild(paletteBlock);
-    mainCol.appendChild(canvasBlock);
-    sideCol.appendChild(guideBlock);
-    sideCol.appendChild(controlsBlock);
-    sideCol.appendChild(summaryBlock);
-
-    layout.appendChild(mainCol);
-    layout.appendChild(sideCol);
-
-    card.appendChild(title);
-    card.appendChild(help);
-    card.appendChild(layout);
-    updateGuide(nodes[0] || stageChoices[0]?.stage || "");
-    appendConfigCard(card);
+    appendConfigCard(
+      buildWorkflowDesignerCard({
+        onLaunch: async () => {
+          await runPipeline();
+        },
+        rerender: () => {
+          renderQuestions(state.plan?.questions || []);
+        },
+      })
+    );
   }
 
   appendWorkflowDesignerCard();
@@ -13529,12 +15174,15 @@ async function runPreflight({ announce = true } = {}) {
   }
 
   const routed = mergeRoutedWithMode(effectiveMode, plan?.routed_request || {});
-  const args = buildRunArguments({
-    prompt,
-    routed,
-    answers,
-    runId: "",
-  });
+  const args = withProjectRoundContext(
+    buildRunArguments({
+      prompt,
+      routed,
+      answers,
+      runId: "",
+    }),
+    currentProjectRoundContext()
+  );
   delete args.run_id;
 
   try {
@@ -13658,28 +15306,37 @@ async function runPipeline() {
   }
 
   if (["pipeline", "rfd3", "bioemu", "msa", "design", "soluprot"].includes(mode)) {
-    args = buildRunArguments({
-      prompt,
-      routed: mergeRoutedWithMode(effectiveMode, state.plan?.routed_request || {}),
-      answers,
-      runId,
-    });
+    args = withProjectRoundContext(
+      buildRunArguments({
+        prompt,
+        routed: mergeRoutedWithMode(effectiveMode, state.plan?.routed_request || {}),
+        answers,
+        runId,
+      }),
+      currentProjectRoundContext()
+    );
   } else if (mode === "af2") {
     toolName = "pipeline.af2_predict";
-    args = {
-      run_id: runId,
-      target_fasta: answers.target_fasta || "",
-      target_pdb: answers.target_pdb || "",
-      af2_provider: normalizeAf2Provider(answers.af2_provider || "colabfold"),
-    };
+    args = withProjectRoundContext(
+      {
+        run_id: runId,
+        target_fasta: answers.target_fasta || "",
+        target_pdb: answers.target_pdb || "",
+        af2_provider: normalizeAf2Provider(answers.af2_provider || "colabfold"),
+      },
+      currentProjectRoundContext()
+    );
   } else if (mode === "diffdock") {
     toolName = "pipeline.diffdock";
-    args = {
-      run_id: runId,
-      protein_pdb: answers.target_pdb || "",
-      diffdock_ligand_smiles: answers.diffdock_ligand_smiles || "",
-      diffdock_ligand_sdf: answers.diffdock_ligand_sdf || "",
-    };
+    args = withProjectRoundContext(
+      {
+        run_id: runId,
+        protein_pdb: answers.target_pdb || "",
+        diffdock_ligand_smiles: answers.diffdock_ligand_smiles || "",
+        diffdock_ligand_sdf: answers.diffdock_ligand_sdf || "",
+      },
+      currentProjectRoundContext()
+    );
   }
 
   if (Object.prototype.hasOwnProperty.call(args, "af2_provider")) {
@@ -13785,17 +15442,18 @@ async function loadFallbackRunStatus(runId) {
 async function enrichStatusForStudio(status, runId) {
   const payload = status && typeof status === "object" ? { ...status } : {};
   const stage = String(payload.stage || "").trim().toLowerCase();
-  if (stage && stage !== "done") return payload;
   try {
     const events = await apiCall("pipeline.read_artifact", {
       run_id: runId,
       path: "events.jsonl",
       max_bytes: 512000,
     });
-    const recovered = latestMeaningfulStatusFromEvents(events?.text, runId);
-    const recoveredStage = String(recovered?.stage || "").trim();
-    if (recoveredStage) {
-      payload._studio_stage = recoveredStage;
+    if (!stage || stage === "done") {
+      const recovered = latestMeaningfulStatusFromEvents(events?.text, runId);
+      const recoveredStage = String(recovered?.stage || "").trim();
+      if (recoveredStage) {
+        payload._studio_stage = recoveredStage;
+      }
     }
     const recoveredNodes = latestWorkflowStudioCompletedNodesFromEvents(events?.text, runId);
     if (recoveredNodes.length) {
@@ -20785,6 +22443,7 @@ function renderRuns(runs) {
   el.runList.innerHTML = "";
   if (!runs.length) {
     el.runList.innerHTML = `<div class="placeholder">${t("runs.none")}</div>`;
+    renderHomeContextSelectors();
     return;
   }
   runs.forEach((runId) => {
@@ -20848,6 +22507,7 @@ function renderRuns(runs) {
     });
     el.runList.appendChild(div);
   });
+  renderHomeContextSelectors();
 }
 
 async function healthCheck() {
@@ -21106,8 +22766,19 @@ if (el.studioAdoptRunBtn) {
       setMessage(t("studio.adoptFailed"), "ai");
       return;
     }
+    state.studioBuilderOpen = false;
     setCurrentWorkflowStudioSessionId(session.session_id);
     setMessage(t("studio.adoptedRun", { id: workflowStudioSessionLabel(session) }), "ai");
+    setActiveTab("studio");
+    renderWorkflowStudio();
+  });
+}
+
+if (el.studioCreateBtn) {
+  el.studioCreateBtn.addEventListener("click", () => {
+    setRunMode("workflow", { render: false });
+    setCurrentWorkflowStudioSessionId("");
+    state.studioBuilderOpen = true;
     setActiveTab("studio");
     renderWorkflowStudio();
   });

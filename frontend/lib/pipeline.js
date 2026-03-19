@@ -1178,6 +1178,67 @@ export function buildRunArguments({ prompt, routed, answers, runId }) {
   return args;
 }
 
+function positiveIntegerOrDefault(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? "").trim(), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export function withProjectRoundContext(args = {}, context = {}) {
+  const next = args && typeof args === "object" && !Array.isArray(args) ? { ...args } : {};
+  const source = context && typeof context === "object" && !Array.isArray(context) ? context : {};
+  const projectId = String(source.projectId ?? source.project_id ?? next.project_id ?? "").trim();
+  const roundId = String(source.roundId ?? source.round_id ?? next.round_id ?? "").trim();
+  if (projectId) {
+    next.project_id = projectId;
+  } else {
+    delete next.project_id;
+  }
+  if (projectId && roundId) {
+    next.round_id = roundId;
+  } else {
+    delete next.round_id;
+  }
+  return next;
+}
+
+export function buildFastLaunchPreset(draft = {}) {
+  const source = draft && typeof draft === "object" && !Array.isArray(draft) ? draft : {};
+  const targetInput = String(
+    source.target_input || source.target_pdb || source.target_fasta || ""
+  ).trim();
+  const prompt = String(source.prompt || source.note || "").trim();
+  const stopAfter = normalizeStage(source.stop_after) || "novelty";
+  const noveltyEnabled = stopAfter === "novelty";
+  const answers = normalizeBioEmuCountFields(
+    {
+      target_input: targetInput,
+      start_from: "msa",
+      stop_after: stopAfter,
+      novelty_enabled: noveltyEnabled,
+      pdb_strip_nonpositive_resseq: source.pdb_strip_nonpositive_resseq !== false,
+      wt_compare: source.wt_compare !== false,
+      mask_consensus_apply: source.mask_consensus_apply === true,
+      bioemu_use: true,
+      bioemu_filter_samples: source.bioemu_filter_samples !== false,
+      bioemu_num_samples: positiveIntegerOrDefault(source.bioemu_num_samples, 20),
+      bioemu_max_return_structures: positiveIntegerOrDefault(source.bioemu_max_return_structures, 10),
+      rfd3_use: false,
+    },
+    { includeLegacyField: true }
+  );
+  return {
+    mode: "pipeline",
+    prompt,
+    answers,
+    routed: {
+      stop_after: stopAfter,
+      novelty_enabled: noveltyEnabled,
+      bioemu_use: true,
+      rfd3_use: false,
+    },
+  };
+}
+
 const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
   msa: Object.freeze(["target_input", "pdb_strip_nonpositive_resseq"]),
   rfd3: Object.freeze([

@@ -15,6 +15,7 @@ from pipeline_mcp.pipeline import _preprocess_pdb_text
 from pipeline_mcp.pipeline import _resolve_backbone_preprocess_options
 from pipeline_mcp.pipeline import PipelineInputRequired
 from pipeline_mcp.pipeline import PipelineRunner
+from pipeline_mcp.tools import ToolDispatcher
 from pipeline_mcp.tools import pipeline_request_from_args
 
 
@@ -173,6 +174,59 @@ class TestPipelineDryRun(unittest.TestCase):
                 self.assertTrue((tier_dir / "designs_filtered.fasta").exists())
                 self.assertTrue((tier_dir / "af2_scores.json").exists())
                 self.assertTrue((tier_dir / "af2_selected.fasta").exists())
+
+    def test_runner_links_project_round_metadata_to_launched_run(self) -> None:
+        fasta = ">q1\nACDEFGHIK\n"
+        owner = {"username": "hana", "run_prefix": "hana", "role": "user"}
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            dispatcher.call_tool(
+                "pipeline.save_project",
+                {
+                    "project_id": "tev_campaign",
+                    "name": "TEV campaign",
+                    "description": "stability round-tracking",
+                    "user": owner,
+                },
+            )
+            dispatcher.call_tool(
+                "pipeline.save_round",
+                {
+                    "project_id": "tev_campaign",
+                    "round_id": "round_01",
+                    "title": "Round 01",
+                    "goal": "baseline stability screen",
+                    "user": owner,
+                },
+            )
+
+            req = PipelineRequest(
+                target_fasta=fasta,
+                target_pdb="",
+                dry_run=True,
+                num_seq_per_tier=1,
+                conservation_tiers=[0.3],
+                project_id="tev_campaign",
+                round_id="round_01",
+            )
+            res = runner.run(req)
+
+            out = Path(res.output_dir)
+            request_payload = json.loads((out / "request.json").read_text(encoding="utf-8"))
+            self.assertEqual(request_payload.get("project_id"), "tev_campaign")
+            self.assertEqual(request_payload.get("round_id"), "round_01")
+
+            round_path = (
+                Path(tmp)
+                / "_workspace"
+                / "projects"
+                / "tev_campaign"
+                / "rounds"
+                / "round_01.json"
+            )
+            round_record = json.loads(round_path.read_text(encoding="utf-8"))
+            self.assertEqual(round_record.get("linked_run_ids"), [res.run_id])
 
     def test_surface_and_pi_filters(self) -> None:
         fasta = ">q1\nDDDDDDDD\n"

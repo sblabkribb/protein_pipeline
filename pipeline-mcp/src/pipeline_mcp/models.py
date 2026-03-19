@@ -20,6 +20,8 @@ class SequenceRecord:
 class PipelineRequest:
     target_fasta: str
     target_pdb: str
+    project_id: str | None = None
+    round_id: str | None = None
 
     rfd3_use: bool | None = None
     rfd3_inputs: dict[str, object] | None = None

@@ -80,8 +80,12 @@ Core expectations:
 - system chooses the standard pipeline defaults
 - RFD3 remains off by default
 - BioEmu is the default exploratory backbone source
+- BioEmu defaults should be explicit: `20` generated / `10` returned unless the user overrides them later in Advanced
 - if ligand context is absent, ligand-only steps are skipped automatically
 - user gets a concise review card before launch, not a full expert form
+- Fast must allow two actions:
+  - launch immediately with the standard defaults
+  - review the same prepared request in `Advanced` before launch
 
 ### Advanced
 
@@ -105,6 +109,8 @@ It remains the place for:
 - composing workflow paths
 - stage-by-stage reruns
 - artifact-aware iteration
+- inheriting the currently selected `Project` / `Round` by default when a Studio action launches or forks a run
+- allowing an explicit round reassignment only through a deliberate user action, not implicitly dropping the linkage
 
 ### Rounds
 
@@ -204,7 +210,51 @@ Each pipeline request should optionally include:
 - `project_id`
 - `round_id`
 
-Legacy runs can remain unattached until imported or assigned.
+Studio-originated runs, reruns, and forks should use the same linkage fields.
+Legacy runs can remain unattached only inside an explicit legacy import flow.
+
+## Access Control
+
+`Project` and `Round` metadata must follow the same ownership model already used for runs and workflow studio sessions.
+
+Required rules:
+
+- non-admin users can only see their own projects, rounds, runs, and studio sessions
+- admins can see all projects, rounds, runs, and studio sessions
+- ownership must be enforced on the server, not only filtered in the browser
+
+Recommended ownership fields:
+
+### Project Ownership
+
+- `owner_username`
+- `owner_run_prefix`
+- `owner_role`
+
+### Round Ownership
+
+- `owner_username`
+- `owner_run_prefix`
+- `owner_role`
+
+### Security Rules
+
+- list APIs must return only owned records for non-admin users
+- read/update APIs must reject access to foreign records for non-admin users
+- frontend filtering is UX only and must not be treated as the security boundary
+- legacy unattached runs may be shown only after explicit attachment or under an admin-visible legacy bucket
+- non-admin users must not see unattached legacy runs in normal `Home`, `Rounds`, `Monitor`, or `Analyze` views
+
+## Project Management Surface
+
+The shell must provide a minimal way to create and switch projects.
+
+Required product behaviors:
+
+- `Home` must expose the currently selected project and round
+- the user must be able to create the first project without leaving the product
+- `Rounds` must allow project switching as well as round selection
+- project creation/editing can be lightweight, but it cannot be omitted if project selectors are visible
 
 ## Visual Direction
 
@@ -283,3 +333,4 @@ This is intentionally deferred so unfinished model behavior does not leak into t
 - iterative work has an explicit home in `Rounds`
 - the product looks like a scientific platform, not an internal tool panel
 - future ML guidance can attach to `Round` detail without another top-level IA rewrite
+- non-admin users cannot see other users' projects, rounds, or runs

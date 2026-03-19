@@ -9,10 +9,12 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import time
 import uuid
 import zipfile
 from typing import Any
+from typing import Callable
 
 from .bio.fasta import FastaRecord
 from .bio.fasta import parse_fasta
@@ -898,6 +900,443 @@ def _list_agent_events(runner: PipelineRunner, arguments: dict[str, Any]) -> dic
     limit = _as_int(arguments.get("limit"), 50)
     items = list_run_events(runner.output_root, run_id, filename="agent_panel.jsonl", limit=limit)
     return {"run_id": run_id, "items": items}
+
+
+def _workspace_root(output_root: str) -> Path:
+    return ensure_dir(Path(output_root).resolve() / "_workspace")
+
+
+def _projects_root(output_root: str) -> Path:
+    return ensure_dir(_workspace_root(output_root) / "projects")
+
+
+def _project_dir(output_root: str, project_id: str) -> Path:
+    return _projects_root(output_root) / _safe_id(project_id)
+
+
+def _project_record_path(output_root: str, project_id: str) -> Path:
+    return _project_dir(output_root, project_id) / "project.json"
+
+
+def _rounds_dir(output_root: str, project_id: str) -> Path:
+    return ensure_dir(_project_dir(output_root, project_id) / "rounds")
+
+
+def _round_record_path(output_root: str, project_id: str, round_id: str) -> Path:
+    return _rounds_dir(output_root, project_id) / f"{_safe_id(round_id)}.json"
+
+
+def _allocate_unique_record_id(
+    *,
+    preferred: str,
+    fallback_prefix: str,
+    path_for: Callable[[str], Path],
+) -> str:
+    base = _safe_id(preferred)
+    if not preferred.strip() or base in {"", "id"}:
+        base = _safe_id(fallback_prefix)
+    candidate = base
+    index = 2
+    while path_for(candidate).exists():
+        candidate = f"{base}_{index}"
+        index += 1
+    return candidate
+
+
+def _normalize_owner(value: object | None) -> dict[str, str]:
+    raw = value if isinstance(value, dict) else {}
+    normalized = _normalize_user(value) or {}
+    username = str(normalized.get("username") or "").strip()
+    run_prefix = str(raw.get("run_prefix") or "").strip() if isinstance(raw, dict) else ""
+    if not run_prefix and username:
+        run_prefix = _safe_id(username)
+    role = str(normalized.get("role") or "").strip().lower() or "user"
+    return {
+        "owner_username": username,
+        "owner_run_prefix": run_prefix,
+        "owner_role": role,
+    }
+
+
+def _user_is_admin(value: object | None) -> bool:
+    owner = _normalize_owner(value)
+    return owner.get("owner_role") == "admin"
+
+
+def _record_visible_to_user(record: dict[str, Any], user: object | None) -> bool:
+    if user is None or _user_is_admin(user):
+        return True
+    owner = _normalize_owner(user)
+    if not owner["owner_username"] and not owner["owner_run_prefix"]:
+        return False
+    record_username = str(record.get("owner_username") or "").strip()
+    record_run_prefix = str(record.get("owner_run_prefix") or "").strip()
+    if record_username and record_username == owner["owner_username"]:
+        return True
+    if record_run_prefix and record_run_prefix == owner["owner_run_prefix"]:
+        return True
+    return False
+
+
+def _require_record_access(record: dict[str, Any], user: object | None, *, kind: str) -> None:
+    if not _record_visible_to_user(record, user):
+        raise ValueError(f"{kind} not allowed for this user")
+
+
+def _record_status(record: dict[str, Any] | None) -> str:
+    return str((record or {}).get("status") or "").strip().lower()
+
+
+def _record_is_archived(record: dict[str, Any] | None) -> bool:
+    return _record_status(record) == "archived"
+
+
+def _record_listed_for_user(record: dict[str, Any], user: object | None, *, include_archived: bool) -> bool:
+    if not _record_visible_to_user(record, user):
+        return False
+    if include_archived:
+        return True
+    return not _record_is_archived(record)
+
+
+def _load_json_record(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    raw = read_json(path)
+    if isinstance(raw, dict):
+        return {str(k): v for k, v in raw.items()}
+    return None
+
+
+def _sort_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        records,
+        key=lambda item: (
+            str(item.get("updated_at") or ""),
+            str(item.get("created_at") or ""),
+            str(item.get("round_id") or item.get("project_id") or ""),
+        ),
+        reverse=True,
+    )
+
+
+def _save_project(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    user = arguments.get("user")
+    owner = _normalize_owner(user)
+    name = _as_text(arguments.get("name")).strip()
+    if not name:
+        raise ValueError("name is required")
+    raw_project_id = _as_text(arguments.get("project_id")).strip()
+    if raw_project_id:
+        project_id = _safe_id(raw_project_id)
+    else:
+        project_id = _allocate_unique_record_id(
+            preferred=name,
+            fallback_prefix="project",
+            path_for=lambda candidate: _project_record_path(runner.output_root, candidate),
+        )
+    path = _project_record_path(runner.output_root, project_id)
+    existing = _load_json_record(path)
+    if existing is not None:
+        _require_record_access(existing, user, kind="project")
+    created_at = str((existing or {}).get("created_at") or _now_iso())
+    record: dict[str, Any] = {
+        "project_id": project_id,
+        "name": name,
+        "status": _as_text(arguments.get("status")).strip() or str((existing or {}).get("status") or "active"),
+        "description": _as_text(arguments.get("description")).strip() or str((existing or {}).get("description") or ""),
+        "target_summary": _as_text(arguments.get("target_summary")).strip() or str((existing or {}).get("target_summary") or ""),
+        "created_by": str((existing or {}).get("created_by") or owner.get("owner_username") or ""),
+        "created_at": created_at,
+        "updated_at": _now_iso(),
+        "owner_username": str((existing or {}).get("owner_username") or owner.get("owner_username") or ""),
+        "owner_run_prefix": str((existing or {}).get("owner_run_prefix") or owner.get("owner_run_prefix") or ""),
+        "owner_role": str((existing or {}).get("owner_role") or owner.get("owner_role") or ""),
+    }
+    write_json(path, record)
+    rel_path = path.relative_to(_workspace_root(runner.output_root)).as_posix()
+    return {"saved": True, "path": rel_path, "project": record}
+
+
+def _list_projects(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    user = arguments.get("user")
+    limit = _as_int(arguments.get("limit"), 200)
+    include_archived = _as_bool(arguments.get("include_archived"), False)
+    items: list[dict[str, Any]] = []
+    for path in sorted(_projects_root(runner.output_root).glob("*/project.json")):
+        record = _load_json_record(path)
+        if record is None or not _record_listed_for_user(record, user, include_archived=include_archived):
+            continue
+        items.append(record)
+    return {"projects": _sort_records(items)[: max(0, limit)]}
+
+
+def _get_project(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    raw_project_id = _as_text(arguments.get("project_id")).strip()
+    if not raw_project_id:
+        raise ValueError("project_id is required")
+    project_id = _safe_id(raw_project_id)
+    record = _load_json_record(_project_record_path(runner.output_root, project_id))
+    if record is None:
+        return {"found": False, "project": None}
+    _require_record_access(record, arguments.get("user"), kind="project")
+    return {"found": True, "project": record}
+
+
+def _require_request_metadata_access(
+    runner: PipelineRunner,
+    *,
+    project_id: object | None,
+    round_id: object | None,
+    user: object | None,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    raw_project_id = _as_text(project_id).strip()
+    raw_round_id = _as_text(round_id).strip()
+    if raw_round_id and not raw_project_id:
+        raise ValueError("round_id requires project_id")
+    if not raw_project_id:
+        return None, None
+    project = _load_json_record(_project_record_path(runner.output_root, _safe_id(raw_project_id)))
+    if project is None:
+        raise ValueError("project_id not found")
+    _require_record_access(project, user, kind="project")
+    if not raw_round_id:
+        return project, None
+    round_record = _load_json_record(
+        _round_record_path(runner.output_root, _safe_id(raw_project_id), _safe_id(raw_round_id))
+    )
+    if round_record is None:
+        raise ValueError("round_id not found")
+    _require_record_access(round_record, user, kind="round")
+    return project, round_record
+
+
+def _save_round(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    user = arguments.get("user")
+    owner = _normalize_owner(user)
+    raw_project_id = _as_text(arguments.get("project_id")).strip()
+    if not raw_project_id:
+        raise ValueError("project_id is required")
+    project_id = _safe_id(raw_project_id)
+    project = _load_json_record(_project_record_path(runner.output_root, project_id))
+    if project is None:
+        raise ValueError("project_id not found")
+    _require_record_access(project, user, kind="project")
+    title = _as_text(arguments.get("title")).strip()
+    raw_round_id = _as_text(arguments.get("round_id")).strip()
+    if raw_round_id:
+        round_id = _safe_id(raw_round_id)
+    else:
+        round_id = _allocate_unique_record_id(
+            preferred=title,
+            fallback_prefix="round",
+            path_for=lambda candidate: _round_record_path(runner.output_root, project_id, candidate),
+        )
+    path = _round_record_path(runner.output_root, project_id, round_id)
+    existing = _load_json_record(path)
+    if existing is not None:
+        _require_record_access(existing, user, kind="round")
+    if not title:
+        title = str((existing or {}).get("title") or round_id)
+    record: dict[str, Any] = {
+        "round_id": round_id,
+        "project_id": project_id,
+        "parent_round_id": _as_text(arguments.get("parent_round_id")).strip() or str((existing or {}).get("parent_round_id") or ""),
+        "title": title,
+        "goal": _as_text(arguments.get("goal")).strip() or str((existing or {}).get("goal") or ""),
+        "hypothesis": _as_text(arguments.get("hypothesis")).strip() or str((existing or {}).get("hypothesis") or ""),
+        "notes": _as_text(arguments.get("notes")).strip() or str((existing or {}).get("notes") or ""),
+        "next_round_notes": _as_text(arguments.get("next_round_notes")).strip()
+        or str((existing or {}).get("next_round_notes") or ""),
+        "status": _as_text(arguments.get("status")).strip() or str((existing or {}).get("status") or "planned"),
+        "linked_run_ids": _as_list_of_str(arguments.get("linked_run_ids")) or list((existing or {}).get("linked_run_ids") or []),
+        "selected_candidates": _safe_json(arguments.get("selected_candidates"))
+        if "selected_candidates" in arguments
+        else _safe_json((existing or {}).get("selected_candidates") or []),
+        "experiment_summary": _safe_json(arguments.get("experiment_summary"))
+        if "experiment_summary" in arguments
+        else _safe_json((existing or {}).get("experiment_summary") or {}),
+        "created_by": str((existing or {}).get("created_by") or owner.get("owner_username") or project.get("created_by") or ""),
+        "created_at": str((existing or {}).get("created_at") or _now_iso()),
+        "updated_at": _now_iso(),
+        "owner_username": str((existing or {}).get("owner_username") or owner.get("owner_username") or project.get("owner_username") or ""),
+        "owner_run_prefix": str((existing or {}).get("owner_run_prefix") or owner.get("owner_run_prefix") or project.get("owner_run_prefix") or ""),
+        "owner_role": str((existing or {}).get("owner_role") or owner.get("owner_role") or project.get("owner_role") or ""),
+    }
+    write_json(path, record)
+    rel_path = path.relative_to(_workspace_root(runner.output_root)).as_posix()
+    return {"saved": True, "path": rel_path, "round": record}
+
+
+def _list_rounds(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    user = arguments.get("user")
+    limit = _as_int(arguments.get("limit"), 500)
+    include_archived = _as_bool(arguments.get("include_archived"), False)
+    raw_project_id = _as_text(arguments.get("project_id")).strip()
+    project_id = _safe_id(raw_project_id) if raw_project_id else ""
+    items: list[dict[str, Any]] = []
+    if project_id:
+        project = _load_json_record(_project_record_path(runner.output_root, project_id))
+        if project is None or not _record_listed_for_user(project, user, include_archived=include_archived):
+            return {"project_id": project_id, "rounds": []}
+        paths = sorted(_rounds_dir(runner.output_root, project_id).glob("*.json"))
+    else:
+        paths = sorted(_projects_root(runner.output_root).glob("*/rounds/*.json"))
+    for path in paths:
+        record = _load_json_record(path)
+        if record is None or not _record_listed_for_user(record, user, include_archived=include_archived):
+            continue
+        items.append(record)
+    return {"project_id": project_id or None, "rounds": _sort_records(items)[: max(0, limit)]}
+
+
+def _get_round(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    raw_project_id = _as_text(arguments.get("project_id")).strip()
+    raw_round_id = _as_text(arguments.get("round_id")).strip()
+    if not raw_project_id:
+        raise ValueError("project_id is required")
+    if not raw_round_id:
+        raise ValueError("round_id is required")
+    project_id = _safe_id(raw_project_id)
+    round_id = _safe_id(raw_round_id)
+    record = _load_json_record(_round_record_path(runner.output_root, project_id, round_id))
+    if record is None:
+        return {"found": False, "round": None}
+    _require_record_access(record, arguments.get("user"), kind="round")
+    return {"found": True, "round": record}
+
+
+def _archive_project(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    user = arguments.get("user")
+    raw_project_id = _as_text(arguments.get("project_id")).strip()
+    if not raw_project_id:
+        raise ValueError("project_id is required")
+    project_id = _safe_id(raw_project_id)
+    path = _project_record_path(runner.output_root, project_id)
+    record = _load_json_record(path)
+    if record is None:
+        return {"found": False, "archived": False, "project": None}
+    _require_record_access(record, user, kind="project")
+    record["status"] = "archived"
+    record["updated_at"] = _now_iso()
+    write_json(path, record)
+    rel_path = path.relative_to(_workspace_root(runner.output_root)).as_posix()
+    return {"found": True, "archived": True, "path": rel_path, "project": record}
+
+
+def _restore_project(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    user = arguments.get("user")
+    raw_project_id = _as_text(arguments.get("project_id")).strip()
+    if not raw_project_id:
+        raise ValueError("project_id is required")
+    project_id = _safe_id(raw_project_id)
+    path = _project_record_path(runner.output_root, project_id)
+    record = _load_json_record(path)
+    if record is None:
+        return {"found": False, "restored": False, "project": None}
+    _require_record_access(record, user, kind="project")
+    record["status"] = "active"
+    record["updated_at"] = _now_iso()
+    write_json(path, record)
+    rel_path = path.relative_to(_workspace_root(runner.output_root)).as_posix()
+    return {"found": True, "restored": True, "path": rel_path, "project": record}
+
+
+def _archive_round(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    user = arguments.get("user")
+    raw_project_id = _as_text(arguments.get("project_id")).strip()
+    raw_round_id = _as_text(arguments.get("round_id")).strip()
+    if not raw_project_id:
+        raise ValueError("project_id is required")
+    if not raw_round_id:
+        raise ValueError("round_id is required")
+    project_id = _safe_id(raw_project_id)
+    round_id = _safe_id(raw_round_id)
+    path = _round_record_path(runner.output_root, project_id, round_id)
+    record = _load_json_record(path)
+    if record is None:
+        return {"found": False, "archived": False, "round": None}
+    _require_record_access(record, user, kind="round")
+    record["status"] = "archived"
+    record["updated_at"] = _now_iso()
+    write_json(path, record)
+    rel_path = path.relative_to(_workspace_root(runner.output_root)).as_posix()
+    return {"found": True, "archived": True, "path": rel_path, "round": record}
+
+
+def _restore_round(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    user = arguments.get("user")
+    raw_project_id = _as_text(arguments.get("project_id")).strip()
+    raw_round_id = _as_text(arguments.get("round_id")).strip()
+    if not raw_project_id:
+        raise ValueError("project_id is required")
+    if not raw_round_id:
+        raise ValueError("round_id is required")
+    project_id = _safe_id(raw_project_id)
+    round_id = _safe_id(raw_round_id)
+    path = _round_record_path(runner.output_root, project_id, round_id)
+    record = _load_json_record(path)
+    if record is None:
+        return {"found": False, "restored": False, "round": None}
+    _require_record_access(record, user, kind="round")
+    record["status"] = "active"
+    record["updated_at"] = _now_iso()
+    write_json(path, record)
+    rel_path = path.relative_to(_workspace_root(runner.output_root)).as_posix()
+    return {"found": True, "restored": True, "path": rel_path, "round": record}
+
+
+def _delete_round_record(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    user = arguments.get("user")
+    raw_project_id = _as_text(arguments.get("project_id")).strip()
+    raw_round_id = _as_text(arguments.get("round_id")).strip()
+    if not raw_project_id:
+        raise ValueError("project_id is required")
+    if not raw_round_id:
+        raise ValueError("round_id is required")
+    project_id = _safe_id(raw_project_id)
+    round_id = _safe_id(raw_round_id)
+    path = _round_record_path(runner.output_root, project_id, round_id)
+    record = _load_json_record(path)
+    if record is None:
+        return {"found": False, "deleted": False, "round": None}
+    _require_record_access(record, user, kind="round")
+    rel_path = path.relative_to(_workspace_root(runner.output_root)).as_posix()
+    path.unlink()
+    rounds_dir = path.parent
+    try:
+        if rounds_dir.exists() and not any(rounds_dir.iterdir()):
+            rounds_dir.rmdir()
+    except OSError:
+        pass
+    return {"found": True, "deleted": True, "path": rel_path, "round": record}
+
+
+def _delete_project_record(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    user = arguments.get("user")
+    raw_project_id = _as_text(arguments.get("project_id")).strip()
+    if not raw_project_id:
+        raise ValueError("project_id is required")
+    delete_rounds = _as_bool(arguments.get("delete_rounds"), False)
+    project_id = _safe_id(raw_project_id)
+    path = _project_record_path(runner.output_root, project_id)
+    record = _load_json_record(path)
+    if record is None:
+        return {"found": False, "deleted": False, "project": None}
+    _require_record_access(record, user, kind="project")
+    project_dir = _project_dir(runner.output_root, project_id)
+    round_paths = sorted((project_dir / "rounds").glob("*.json")) if (project_dir / "rounds").exists() else []
+    if round_paths and not delete_rounds:
+        raise ValueError("project has rounds; pass delete_rounds=true to delete metadata")
+    rel_path = project_dir.relative_to(_workspace_root(runner.output_root)).as_posix()
+    shutil.rmtree(project_dir)
+    return {
+        "found": True,
+        "deleted": True,
+        "path": rel_path,
+        "deleted_round_count": len(round_paths),
+        "project": record,
+    }
 
 
 def _load_report_text(output_root: str, run_id: str) -> str | None:
@@ -4117,6 +4556,8 @@ def _export_results_package(runner: PipelineRunner, arguments: dict[str, Any]) -
 def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = True) -> PipelineRequest:
     target_fasta = _as_text(args.get("target_fasta"))
     target_pdb = _as_text(args.get("target_pdb"))
+    project_id = _as_text(args.get("project_id")).strip() or None
+    round_id = _as_text(args.get("round_id")).strip() or None
     rfd3_inputs = _as_dict(args.get("rfd3_inputs"), name="rfd3_inputs")
     rfd3_inputs_text = _as_text(args.get("rfd3_inputs_text")).strip() or None
     rfd3_contig = _as_str_or_list(args.get("rfd3_contig"))
@@ -4241,6 +4682,8 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     return PipelineRequest(
         target_fasta=target_fasta,
         target_pdb=target_pdb,
+        project_id=project_id,
+        round_id=round_id,
         rfd3_use=rfd3_use,
         rfd3_inputs=rfd3_inputs,
         rfd3_inputs_text=rfd3_inputs_text,
@@ -4455,6 +4898,8 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "msa_min_identity": {"type": "number"},
             "query_pdb_min_identity": {"type": "number"},
             "query_pdb_policy": {"type": "string", "enum": ["error", "warn", "ignore"]},
+            "project_id": {"type": "string"},
+            "round_id": {"type": "string"},
             "run_id": {"type": "string"},
             "start_from": {"type": "string"},
             "stop_after": {"type": "string"},
@@ -4777,6 +5222,8 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "prompt": {"type": "string"},
                     "target_fasta": {"type": "string"},
                     "target_pdb": {"type": "string"},
+                    "project_id": {"type": "string"},
+                    "round_id": {"type": "string"},
                     "run_id": {"type": "string"},
                     "agent_panel_enabled": {"type": "boolean"},
                     "auto_recover": {"type": "boolean"},
@@ -4803,6 +5250,171 @@ def tool_definitions() -> list[dict[str, Any]]:
             "inputSchema": {
                 "type": "object",
                 "properties": {"limit": {"type": "integer"}},
+            },
+        },
+        {
+            "name": "pipeline.save_project",
+            "description": "Create or update a persisted project record for organizing rounds and runs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string"},
+                    "name": {"type": "string"},
+                    "status": {"type": "string"},
+                    "description": {"type": "string"},
+                    "target_summary": {"type": "string"},
+                    "user": {"type": "object"},
+                },
+                "required": ["name"],
+            },
+        },
+        {
+            "name": "pipeline.list_projects",
+            "description": "List visible persisted project records for the current user.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer"},
+                    "include_archived": {"type": "boolean"},
+                    "user": {"type": "object"},
+                },
+            },
+        },
+        {
+            "name": "pipeline.get_project",
+            "description": "Read a persisted project record by project_id.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string"},
+                    "user": {"type": "object"},
+                },
+                "required": ["project_id"],
+            },
+        },
+        {
+            "name": "pipeline.save_round",
+            "description": "Create or update a persisted round record inside a project.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string"},
+                    "round_id": {"type": "string"},
+                    "parent_round_id": {"type": "string"},
+                    "title": {"type": "string"},
+                    "goal": {"type": "string"},
+                    "hypothesis": {"type": "string"},
+                    "notes": {"type": "string"},
+                    "next_round_notes": {"type": "string"},
+                    "status": {"type": "string"},
+                    "linked_run_ids": {"type": "array", "items": {"type": "string"}},
+                    "selected_candidates": {},
+                    "experiment_summary": {},
+                    "user": {"type": "object"},
+                },
+                "required": ["project_id", "title"],
+            },
+        },
+        {
+            "name": "pipeline.list_rounds",
+            "description": "List visible persisted round records, optionally scoped to a project.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string"},
+                    "limit": {"type": "integer"},
+                    "include_archived": {"type": "boolean"},
+                    "user": {"type": "object"},
+                },
+            },
+        },
+        {
+            "name": "pipeline.get_round",
+            "description": "Read a persisted round record by project_id and round_id.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string"},
+                    "round_id": {"type": "string"},
+                    "user": {"type": "object"},
+                },
+                "required": ["project_id", "round_id"],
+            },
+        },
+        {
+            "name": "pipeline.archive_project",
+            "description": "Archive a project record so it is hidden from default project lists without touching run outputs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string"},
+                    "user": {"type": "object"},
+                },
+                "required": ["project_id"],
+            },
+        },
+        {
+            "name": "pipeline.delete_project",
+            "description": "Delete a project record and, optionally, its round metadata without deleting run outputs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string"},
+                    "delete_rounds": {"type": "boolean"},
+                    "user": {"type": "object"},
+                },
+                "required": ["project_id"],
+            },
+        },
+        {
+            "name": "pipeline.restore_project",
+            "description": "Restore an archived project record back into default project lists without touching run outputs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string"},
+                    "user": {"type": "object"},
+                },
+                "required": ["project_id"],
+            },
+        },
+        {
+            "name": "pipeline.archive_round",
+            "description": "Archive a round record so it is hidden from default round lists without touching run outputs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string"},
+                    "round_id": {"type": "string"},
+                    "user": {"type": "object"},
+                },
+                "required": ["project_id", "round_id"],
+            },
+        },
+        {
+            "name": "pipeline.restore_round",
+            "description": "Restore an archived round record back into default round lists without touching run outputs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string"},
+                    "round_id": {"type": "string"},
+                    "user": {"type": "object"},
+                },
+                "required": ["project_id", "round_id"],
+            },
+        },
+        {
+            "name": "pipeline.delete_round",
+            "description": "Delete a round record without deleting any linked run outputs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string"},
+                    "round_id": {"type": "string"},
+                    "user": {"type": "object"},
+                },
+                "required": ["project_id", "round_id"],
             },
         },
         {
@@ -4969,6 +5581,12 @@ class ToolDispatcher:
         if name == "pipeline.run":
             run_id = arguments.get("run_id")
             req = pipeline_request_from_args(arguments)
+            _require_request_metadata_access(
+                self.runner,
+                project_id=req.project_id,
+                round_id=req.round_id,
+                user=arguments.get("user"),
+            )
             retry = _auto_retry_config(arguments)
             normalized_run_id = normalize_run_id(str(run_id)) if run_id is not None else None
             if normalized_run_id is not None:
@@ -4984,6 +5602,12 @@ class ToolDispatcher:
 
         if name == "pipeline.preflight":
             req = pipeline_request_from_args(arguments, strict_target=False)
+            _require_request_metadata_access(
+                self.runner,
+                project_id=req.project_id,
+                round_id=req.round_id,
+                user=arguments.get("user"),
+            )
             return preflight_request(req, self.runner, run_id=str(arguments.get("run_id") or "") or None)
 
         if name == "pipeline.af2_predict":
@@ -5068,7 +5692,21 @@ class ToolDispatcher:
             req = request_from_prompt(prompt=prompt, target_fasta=target_fasta, target_pdb=target_pdb)
             agent_panel_enabled = _as_bool(arguments.get("agent_panel_enabled"), req.agent_panel_enabled)
             auto_recover = _as_bool(arguments.get("auto_recover"), req.auto_recover)
-            req = replace(req, agent_panel_enabled=agent_panel_enabled, auto_recover=auto_recover)
+            project_id = _as_text(arguments.get("project_id")).strip() or None
+            round_id = _as_text(arguments.get("round_id")).strip() or None
+            req = replace(
+                req,
+                agent_panel_enabled=agent_panel_enabled,
+                auto_recover=auto_recover,
+                project_id=project_id,
+                round_id=round_id,
+            )
+            _require_request_metadata_access(
+                self.runner,
+                project_id=req.project_id,
+                round_id=req.round_id,
+                user=arguments.get("user"),
+            )
             normalized_run_id = normalize_run_id(str(run_id)) if run_id is not None else None
             if normalized_run_id is not None:
                 status = load_status(self.runner.output_root, normalized_run_id)
@@ -5093,6 +5731,42 @@ class ToolDispatcher:
         if name == "pipeline.list_runs":
             limit = arguments.get("limit")
             return {"runs": list_runs(self.runner.output_root, limit=int(limit) if limit is not None else 50)}
+
+        if name == "pipeline.save_project":
+            return _save_project(self.runner, arguments)
+
+        if name == "pipeline.list_projects":
+            return _list_projects(self.runner, arguments)
+
+        if name == "pipeline.get_project":
+            return _get_project(self.runner, arguments)
+
+        if name == "pipeline.save_round":
+            return _save_round(self.runner, arguments)
+
+        if name == "pipeline.list_rounds":
+            return _list_rounds(self.runner, arguments)
+
+        if name == "pipeline.get_round":
+            return _get_round(self.runner, arguments)
+
+        if name == "pipeline.archive_project":
+            return _archive_project(self.runner, arguments)
+
+        if name == "pipeline.restore_project":
+            return _restore_project(self.runner, arguments)
+
+        if name == "pipeline.delete_project":
+            return _delete_project_record(self.runner, arguments)
+
+        if name == "pipeline.archive_round":
+            return _archive_round(self.runner, arguments)
+
+        if name == "pipeline.restore_round":
+            return _restore_round(self.runner, arguments)
+
+        if name == "pipeline.delete_round":
+            return _delete_round_record(self.runner, arguments)
 
         if name == "pipeline.delete_run":
             return _delete_run_tool(self.runner, arguments)

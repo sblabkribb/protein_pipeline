@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>K-Biofoundry | Protein Pipeline Console</title>
-    <link rel="stylesheet" href="./styles.css?v=20260316_artifacts1" />
+    <link rel="stylesheet" href="./styles.css?v=20260319_studio-stage-sync-fix7" />
   </head>
   <body>
     <div class="bg-orb orb-a" aria-hidden="true"></div>
@@ -83,79 +83,287 @@
       </div>
 
       <div id="appShell" class="app-shell hidden">
-        <nav class="tabbar" role="tablist" aria-label="Console modes">
-          <button
-            id="tabBtnSetup"
-            class="tab-btn active"
-            role="tab"
-            aria-selected="true"
-            aria-controls="tab-setup"
-            data-tab="setup"
-            data-i18n="tabs.setup"
-          >
-            Setup
-          </button>
-          <button
-            id="tabBtnStudio"
-            class="tab-btn"
-            role="tab"
-            aria-selected="false"
-            aria-controls="tab-studio"
-            data-tab="studio"
-            data-i18n="tabs.studio"
-          >
-            Studio
-          </button>
-          <button
-            id="tabBtnMonitor"
-            class="tab-btn"
-            role="tab"
-            aria-selected="false"
-            aria-controls="tab-monitor"
-            data-tab="monitor"
-            data-i18n="tabs.monitor"
-          >
-            Monitor
-          </button>
-          <button
-            id="tabBtnAnalyze"
-            class="tab-btn"
-            role="tab"
-            aria-selected="false"
-            aria-controls="tab-analyze"
-            data-tab="analyze"
-            data-i18n="tabs.analyze"
-          >
-            Analyze
-          </button>
-          <button
-            id="tabBtnMcp"
-            class="tab-btn"
-            role="tab"
-            aria-selected="false"
-            aria-controls="tab-mcp"
-            data-tab="mcp"
-            data-i18n="tabs.mcp"
-          >
-            MCP
-          </button>
-        </nav>
+        <div class="app-shell-frame">
+          <aside id="appSidebar" class="app-sidebar">
+            <div class="app-sidebar-head">
+              <div class="app-sidebar-kicker">K-Biofoundry</div>
+              <div class="app-sidebar-title" data-i18n="brand.subtitle">Protein Pipeline Console</div>
+            </div>
+            <nav class="app-sidebar-nav" role="tablist" aria-label="Console modes">
+              <button
+                id="tabBtnHome"
+                class="tab-btn app-nav-btn active"
+                role="tab"
+                aria-selected="true"
+                aria-controls="tab-home"
+                data-tab="home"
+                data-i18n="tabs.home"
+              >
+                Home
+              </button>
+              <button
+                id="tabBtnFast"
+                class="tab-btn app-nav-btn"
+                role="tab"
+                aria-selected="false"
+                aria-controls="tab-fast"
+                data-tab="fast"
+                data-i18n="tabs.fast"
+              >
+                Fast
+              </button>
+              <button
+                id="tabBtnAdvanced"
+                class="tab-btn app-nav-btn"
+                role="tab"
+                aria-selected="false"
+                aria-controls="tab-advanced"
+                data-tab="advanced"
+                data-i18n="tabs.advanced"
+              >
+                Advanced
+              </button>
+              <button
+                id="tabBtnStudio"
+                class="tab-btn app-nav-btn"
+                role="tab"
+                aria-selected="false"
+                aria-controls="tab-studio"
+                data-tab="studio"
+                data-i18n="tabs.studio"
+              >
+                Studio
+              </button>
+              <button
+                id="tabBtnMonitor"
+                class="tab-btn app-nav-btn"
+                role="tab"
+                aria-selected="false"
+                aria-controls="tab-monitor"
+                data-tab="monitor"
+                data-i18n="tabs.monitor"
+              >
+                Monitor
+              </button>
+              <button
+                id="tabBtnRounds"
+                class="tab-btn app-nav-btn"
+                role="tab"
+                aria-selected="false"
+                aria-controls="tab-rounds"
+                data-tab="rounds"
+                data-i18n="tabs.rounds"
+              >
+                Rounds
+              </button>
+              <button
+                id="tabBtnAnalyze"
+                class="tab-btn app-nav-btn"
+                role="tab"
+                aria-selected="false"
+                aria-controls="tab-analyze"
+                data-tab="analyze"
+                data-i18n="tabs.analyze"
+              >
+                Analyze
+              </button>
+              <button
+                id="tabBtnMcp"
+                class="tab-btn app-nav-btn"
+                role="tab"
+                aria-selected="false"
+                aria-controls="tab-mcp"
+                data-tab="mcp"
+                data-i18n="tabs.mcp"
+              >
+                MCP
+              </button>
+            </nav>
+            <div class="app-sidebar-foot">
+              <div class="user-badge" id="userBadge"></div>
+            </div>
+          </aside>
+
+          <div class="app-shell-main">
+        <section
+          id="tab-home"
+          class="tab-panel active"
+          data-tab="home"
+          role="tabpanel"
+          aria-labelledby="tabBtnHome"
+        >
+          <div class="tab-content-shell">
+            <div class="panel panel-block home-shell">
+              <div class="panel-header home-header">
+                <h2 data-i18n="home.title">Launch Workspace</h2>
+                <p data-i18n="home.desc">Choose how you want to start the next design cycle.</p>
+              </div>
+              <div class="home-card-grid">
+                <button class="home-mode-card" type="button" data-home-target="fast">
+                  <h3 data-i18n="home.card.fast.title">Fast</h3>
+                  <p data-i18n="home.card.fast.desc">
+                    Start from a PDB or FASTA with pipeline defaults chosen for you.
+                  </p>
+                </button>
+                <button class="home-mode-card" type="button" data-home-target="advanced">
+                  <h3 data-i18n="home.card.advanced.title">Advanced</h3>
+                  <p data-i18n="home.card.advanced.desc">
+                    Open the full configuration surface with all expert controls.
+                  </p>
+                </button>
+                <button class="home-mode-card" type="button" data-home-target="studio">
+                  <h3 data-i18n="home.card.studio.title">Studio</h3>
+                  <p data-i18n="home.card.studio.desc">
+                    Build and run a workflow stage by stage while watching the outputs.
+                  </p>
+                </button>
+              </div>
+              <div class="home-context-strip">
+                <div class="home-context-item home-context-item-select">
+                  <span data-i18n="home.context.project">Active Project</span>
+                  <select id="homeProjectSelector" class="run-selector">
+                    <option value="" data-i18n="home.select.projectPlaceholder">Select project</option>
+                  </select>
+                  <div class="home-context-actions">
+                    <button id="homeCreateProjectBtn" class="ghost" type="button" data-i18n="home.action.createProject">
+                      New Project
+                    </button>
+                  </div>
+                </div>
+                <div class="home-context-item home-context-item-select">
+                  <span data-i18n="home.context.round">Active Round</span>
+                  <select id="homeRoundSelector" class="run-selector">
+                    <option value="" data-i18n="home.select.roundPlaceholder">Select round</option>
+                  </select>
+                  <div class="home-context-actions">
+                    <button id="homeCreateRoundBtn" class="ghost" type="button" data-i18n="home.action.createRound">
+                      New Round
+                    </button>
+                  </div>
+                </div>
+                <div class="home-context-item">
+                  <span data-i18n="home.context.roundStatus">Round Status</span>
+                  <strong id="homeRoundStatusValue" data-i18n="home.context.empty">Not connected yet</strong>
+                </div>
+                <div class="home-context-item">
+                  <span data-i18n="home.context.runs">Runs in Progress</span>
+                  <strong id="homeRunsValue">0</strong>
+                </div>
+                <div class="home-context-item">
+                  <span data-i18n="home.context.report">Recent Result</span>
+                  <strong id="homeReportValue" data-i18n="home.context.empty">Not connected yet</strong>
+                </div>
+              </div>
+              <div class="home-quick-actions">
+                <button id="homeContinueRoundBtn" class="ghost" type="button" data-i18n="home.action.continueRound">
+                  Continue Active Round
+                </button>
+                <button id="homeOpenMonitorBtn" class="ghost" type="button" data-i18n="home.action.openMonitor">
+                  Open Monitor
+                </button>
+                <button id="homeOpenAnalyzeBtn" class="ghost" type="button" data-i18n="home.action.openAnalyze">
+                  Open Analyze
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
 
         <section
-          id="tab-setup"
-          class="tab-panel active"
-          data-tab="setup"
+          id="tab-fast"
+          class="tab-panel"
+          data-tab="fast"
           role="tabpanel"
-          aria-labelledby="tabBtnSetup"
+          aria-labelledby="tabBtnFast"
+        >
+          <div class="tab-content-shell">
+            <div class="panel panel-block fast-shell">
+              <div class="fast-grid">
+                <div class="fast-input-card">
+                  <div class="panel-header">
+                    <h2 data-i18n="fast.title">Fast Launch</h2>
+                    <p data-i18n="fast.desc">
+                      Paste a PDB or FASTA, keep the standard defaults, and launch without opening the full expert setup.
+                    </p>
+                  </div>
+                  <label class="fast-field">
+                    <span data-i18n="fast.input.label">Target Input</span>
+                    <small data-i18n="fast.input.help">Provide a raw PDB or FASTA sequence.</small>
+                    <textarea
+                      id="fastTargetInput"
+                      rows="10"
+                      placeholder="Paste PDB or FASTA here."
+                      data-i18n-placeholder="fast.input.placeholder"
+                    ></textarea>
+                  </label>
+                  <div class="fast-inline-actions">
+                    <input id="fastTargetFile" type="file" class="hidden" accept=".pdb,.ent,.fa,.fasta,.txt,.seq" />
+                    <button id="fastLoadFileBtn" class="ghost" type="button" data-i18n="fast.action.loadFile">
+                      Load File
+                    </button>
+                  </div>
+                  <label class="fast-field">
+                    <span data-i18n="fast.note.label">Run Notes</span>
+                    <small data-i18n="fast.note.help">Optional notes copied into the run prompt.</small>
+                    <textarea
+                      id="fastPromptInput"
+                      rows="4"
+                      placeholder="Optional notes for this launch."
+                      data-i18n-placeholder="fast.note.placeholder"
+                    ></textarea>
+                  </label>
+                  <div class="fast-actions">
+                    <button id="fastOpenAdvancedBtn" class="ghost" type="button" data-i18n="fast.action.reviewAdvanced">
+                      Review in Advanced
+                    </button>
+                    <button id="fastRunBtn" class="primary" type="button" data-i18n="fast.action.run">
+                      Run Fast
+                    </button>
+                  </div>
+                </div>
+                <aside class="fast-review-card mode-shell-placeholder">
+                  <div class="panel-header">
+                    <h3 data-i18n="fast.review.title">Default Pipeline Review</h3>
+                    <p data-i18n="fast.review.desc">Fast keeps a conservative standard pipeline profile.</p>
+                  </div>
+                  <div class="home-context-strip fast-review-list">
+                    <div class="home-context-item">
+                      <span data-i18n="fast.review.rfd3.label">RFD3</span>
+                      <strong data-i18n="fast.review.rfd3.value">Off by default</strong>
+                    </div>
+                    <div class="home-context-item">
+                      <span data-i18n="fast.review.bioemu.label">BioEmu</span>
+                      <strong data-i18n="fast.review.bioemu.value">On for backbone exploration</strong>
+                    </div>
+                    <div class="home-context-item">
+                      <span data-i18n="fast.review.counts.label">Backbone Counts</span>
+                      <strong data-i18n="fast.review.counts.value">20 generated / 10 returned</strong>
+                    </div>
+                    <div class="home-context-item">
+                      <span data-i18n="fast.review.stop.label">Pipeline Stop</span>
+                      <strong data-i18n="fast.review.stop.value">Run through novelty</strong>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section
+          id="tab-advanced"
+          class="tab-panel"
+          data-tab="advanced"
+          role="tabpanel"
+          aria-labelledby="tabBtnAdvanced"
         >
           <div class="panel panel-chat setup-shell">
             <div id="chatArea" class="chat-area">
               <div class="chat-header">
                 <div>
-                  <h2 data-i18n="setup.title">Run Setup</h2>
+                  <h2 data-i18n="setup.title">Advanced Run Setup</h2>
                   <p data-i18n="setup.desc">Choose a workflow, attach inputs, and launch the job.</p>
                 </div>
-                <div class="user-badge" id="userBadge"></div>
               </div>
               <div class="tab-run-context">
                 <label class="run-context-select">
@@ -171,7 +379,7 @@
                     </button>
                   </div>
                   <div id="setupRunReuseHint" class="run-context-hint" data-i18n="setup.runReuse.default">
-                    Setup always launches a new run. Load Request copies settings from the selected run.
+                    Advanced always launches a new run. Load Request copies settings from the selected run.
                   </div>
                 </div>
                 <div class="run-context-meta">
@@ -202,7 +410,7 @@
                         data-i18n-placeholder="setup.prompt.placeholder"
                       ></textarea>
                       <div class="composer-actions">
-                        <button id="checkBtn" class="ghost" data-i18n="setup.check">Check Setup</button>
+                        <button id="checkBtn" class="ghost" data-i18n="setup.check">Check Advanced</button>
                         <button id="planBtn" class="ghost" data-i18n="setup.reset">Reset Inputs</button>
                         <button id="clearBtn" class="ghost" data-i18n="setup.clear">Clear Note</button>
                       </div>
@@ -273,6 +481,9 @@
                   <div id="studioSessionList" class="run-list studio-session-list"></div>
                 </div>
                 <div class="studio-toolbar-actions">
+                  <button id="studioCreateBtn" class="ghost" type="button" data-i18n="studio.create">
+                    Create Workflow Studio
+                  </button>
                   <button id="studioRunBtn" class="primary" type="button" data-i18n="studio.action.run">
                     Run This Stage
                   </button>
@@ -340,6 +551,106 @@
         </section>
 
         <section
+          id="tab-rounds"
+          class="tab-panel"
+          data-tab="rounds"
+          role="tabpanel"
+          aria-labelledby="tabBtnRounds"
+        >
+          <div class="tab-content-shell">
+            <div class="panel panel-block rounds-shell">
+              <div class="panel-header">
+                <h2 data-i18n="rounds.title">Rounds Workspace</h2>
+                <p data-i18n="rounds.desc">Organize projects, active rounds, and linked runs in one place.</p>
+              </div>
+              <div class="rounds-grid">
+                <section class="rounds-column">
+                  <section class="rounds-block rounds-project-block">
+                    <div class="rounds-block-head">
+                      <div>
+                        <div class="status-subtitle" data-i18n="rounds.projects">Projects</div>
+                        <p class="rounds-block-copy" data-i18n="rounds.projects.desc">
+                          Create and select campaign spaces for each target.
+                        </p>
+                      </div>
+                    </div>
+                    <div id="roundsProjectToolbar" class="home-context-actions rounds-toolbar rounds-primary-toolbar">
+                      <button id="roundsCreateProjectBtn" class="ghost" type="button" data-i18n="home.action.createProject">
+                        New Project
+                      </button>
+                      <label class="toggle rounds-archive-toggle rounds-filter-chip">
+                        <input id="roundsShowArchived" type="checkbox" />
+                        <span data-i18n="rounds.action.showArchived">Show archived</span>
+                      </label>
+                    </div>
+                    <div id="roundsProjectList" class="run-list rounds-list"></div>
+                    <div id="roundsProjectManageRow" class="home-context-actions rounds-toolbar rounds-manage-toolbar" hidden>
+                      <button id="roundsEditProjectBtn" class="ghost" type="button" data-i18n="rounds.action.editProject">
+                        Edit Project
+                      </button>
+                      <button id="roundsArchiveProjectBtn" class="ghost" type="button" data-i18n="rounds.action.archiveProject">
+                        Archive Project
+                      </button>
+                      <button id="roundsRestoreProjectBtn" class="ghost" type="button" data-i18n="rounds.action.restoreProject">
+                        Restore Project
+                      </button>
+                      <button id="roundsDeleteProjectBtn" class="ghost danger-action" type="button" data-i18n="rounds.action.deleteProject">
+                        Delete Project
+                      </button>
+                    </div>
+                  </section>
+                  <section class="rounds-block rounds-round-block">
+                    <div class="rounds-block-head">
+                      <div>
+                        <div class="status-subtitle" data-i18n="rounds.list">Rounds</div>
+                        <p class="rounds-block-copy" data-i18n="rounds.rounds.desc">
+                          Keep each design-test-learn cycle grouped under the active project.
+                        </p>
+                      </div>
+                    </div>
+                    <div id="roundsRoundToolbar" class="home-context-actions rounds-toolbar rounds-primary-toolbar">
+                      <button id="roundsCreateRoundBtn" class="ghost" type="button" data-i18n="home.action.createRound">
+                        New Round
+                      </button>
+                    </div>
+                    <div id="roundsList" class="run-list rounds-list"></div>
+                    <div id="roundsRoundManageRow" class="home-context-actions rounds-toolbar rounds-manage-toolbar" hidden>
+                      <button id="roundsEditRoundBtn" class="ghost" type="button" data-i18n="rounds.action.edit">
+                        Edit Round
+                      </button>
+                      <button id="roundsArchiveRoundBtn" class="ghost" type="button" data-i18n="rounds.action.archiveRound">
+                        Archive Round
+                      </button>
+                      <button id="roundsRestoreRoundBtn" class="ghost" type="button" data-i18n="rounds.action.restoreRound">
+                        Restore Round
+                      </button>
+                      <button id="roundsDeleteRoundBtn" class="ghost danger-action" type="button" data-i18n="rounds.action.deleteRound">
+                        Delete Round
+                      </button>
+                    </div>
+                  </section>
+                </section>
+                <section id="roundsDetail" class="rounds-detail-card mode-shell-placeholder">
+                  <div class="rounds-detail-head">
+                    <div class="panel-header small">
+                      <h3 data-i18n="rounds.detail.title">Round Detail</h3>
+                      <p data-i18n="rounds.detail.empty">
+                        Select a round to see its goal, notes, and linked runs.
+                      </p>
+                    </div>
+                  </div>
+                  <div id="roundsDetailBody" class="rounds-detail-body">
+                    <div class="placeholder" data-i18n="rounds.detail.empty">
+                      Select a round to see its goal, notes, and linked runs.
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section
           id="tab-monitor"
           class="tab-panel"
           data-tab="monitor"
@@ -348,58 +659,73 @@
         >
           <div class="tab-content-shell">
             <div class="tab-grid monitor-grid">
-            <div class="panel panel-block">
+            <div class="panel panel-block monitor-summary-panel span-2">
               <div class="panel-header">
                 <h3 data-i18n="monitor.title">Run Monitor</h3>
                 <p data-i18n="monitor.desc">Track live status, scores, and recent runs.</p>
               </div>
-              <div class="status-card">
-                <div class="status-row status-row-run-select">
-                  <span class="label" data-i18n="monitor.runId">Run ID</span>
-                  <div class="run-id-select-wrap">
-                    <span id="runIdValue" class="value">-</span>
-                    <select id="runSelector" class="run-selector">
-                      <option value="" data-i18n="monitor.selectRun">Select run</option>
-                    </select>
+              <div class="monitor-summary-top">
+                <div class="status-card monitor-selector-card">
+                  <div class="status-row status-row-run-select">
+                    <span class="label" data-i18n="monitor.runId">Run ID</span>
+                    <div class="run-id-select-wrap">
+                      <span id="runIdValue" class="value">-</span>
+                      <select id="runSelector" class="run-selector">
+                        <option value="" data-i18n="monitor.selectRun">Select run</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="status-row status-detail-row">
+                    <span class="label" data-i18n="monitor.detail">Detail</span>
+                    <span id="runDetailValue" class="value status-detail-value">-</span>
+                  </div>
+                  <details id="runErrorDetails" class="error-details hidden">
+                    <summary id="runErrorSummary">Error summary</summary>
+                    <pre id="runErrorRaw"></pre>
+                  </details>
+                </div>
+                <div class="monitor-meta-grid">
+                  <div class="monitor-meta-card">
+                    <span class="monitor-meta-label" data-i18n="monitor.stage">Stage</span>
+                    <strong id="runStageValue" class="monitor-meta-value">-</strong>
+                  </div>
+                  <div class="monitor-meta-card">
+                    <span class="monitor-meta-label" data-i18n="monitor.state">State</span>
+                    <strong id="runStateValue" class="monitor-meta-value">-</strong>
+                  </div>
+                  <div class="monitor-meta-card">
+                    <span class="monitor-meta-label" data-i18n="monitor.updated">Updated</span>
+                    <strong id="runUpdatedValue" class="monitor-meta-value">-</strong>
                   </div>
                 </div>
-                <div class="status-row">
-                  <span class="label" data-i18n="monitor.stage">Stage</span>
-                  <span id="runStageValue" class="value">-</span>
-                </div>
-                <div class="status-row">
-                  <span class="label" data-i18n="monitor.state">State</span>
-                  <span id="runStateValue" class="value">-</span>
-                </div>
-                <div class="status-row">
-                  <span class="label" data-i18n="monitor.updated">Updated</span>
-                  <span id="runUpdatedValue" class="value">-</span>
-                </div>
-                <div class="status-row status-detail-row">
-                  <span class="label" data-i18n="monitor.detail">Detail</span>
-                  <span id="runDetailValue" class="value status-detail-value">-</span>
-                </div>
-                <details id="runErrorDetails" class="error-details hidden">
-                  <summary id="runErrorSummary">Error summary</summary>
-                  <pre id="runErrorRaw"></pre>
-                </details>
-                <div class="status-subtitle" data-i18n="monitor.progress">Progress</div>
-                <div class="progress-wrap">
-                  <div class="progress-meta">
-                    <span id="runProgressLabel" class="progress-label">-</span>
-                    <span id="runProgressPercent" class="progress-percent">0%</span>
+              </div>
+              <div class="monitor-summary-bottom">
+                <div class="status-card monitor-progress-card">
+                  <div class="status-subtitle" data-i18n="monitor.progress">Progress</div>
+                  <div class="progress-wrap">
+                    <div class="progress-meta">
+                      <span id="runProgressLabel" class="progress-label">-</span>
+                      <span id="runProgressPercent" class="progress-percent">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                      <div id="runProgressFill" class="progress-fill"></div>
+                    </div>
+                    <div id="runProgressStages" class="progress-stages"></div>
                   </div>
-                  <div class="progress-bar">
-                    <div id="runProgressFill" class="progress-fill"></div>
+                </div>
+                <div class="status-card monitor-score-card">
+                  <div class="status-subtitle" data-i18n="monitor.scoring">Scoring</div>
+                  <div class="score-row score-row-compact monitor-score-row">
+                    <div class="score-pill" id="runScoreValue">Score: -</div>
+                    <div class="score-pill" id="runEvidenceValue">Evidence: -</div>
+                    <div class="score-pill" id="runRecommendationValue">Recommendation: -</div>
                   </div>
-                  <div id="runProgressStages" class="progress-stages"></div>
                 </div>
-                <div class="status-subtitle" data-i18n="monitor.scoring">Scoring</div>
-                <div class="score-row score-row-compact">
-                  <div class="score-pill" id="runScoreValue">Score: -</div>
-                  <div class="score-pill" id="runEvidenceValue">Evidence: -</div>
-                  <div class="score-pill" id="runRecommendationValue">Recommendation: -</div>
-                </div>
+              </div>
+            </div>
+
+            <div class="panel panel-block monitor-status-panel">
+              <div class="status-card monitor-ops-card">
                 <div class="status-subtitle" data-i18n="monitor.completeness">Data Completeness</div>
                 <div id="monitorCompletenessBadges" class="completeness-badges">
                   <span class="placeholder" data-i18n="monitor.completeness.placeholder">
@@ -441,7 +767,7 @@
               </div>
             </div>
 
-            <div class="panel panel-block">
+            <div class="panel panel-block monitor-artifacts-panel">
               <div class="panel-header">
                 <h3 data-i18n="artifacts.title">Artifacts</h3>
                 <p data-i18n="artifacts.desc">Filter outputs from the run.</p>
@@ -471,7 +797,7 @@
               </div>
             </div>
 
-            <div class="panel panel-block span-2">
+            <div class="panel panel-block span-2 monitor-agent-panel">
               <div class="panel-header">
                 <h3 data-i18n="agent.title">Agent Panel</h3>
                 <p data-i18n="agent.desc">Stage-by-stage expert consensus and recovery notes.</p>
@@ -937,9 +1263,60 @@
             </div>
           </div>
         </section>
+          </div>
+        </div>
       </div>
       <section id="detachedResiduePickerRoot" class="detached-picker-root hidden" aria-live="polite"></section>
     </main>
+
+    <div id="workspaceRecordPanel" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="workspaceRecordHeading">
+      <div class="overlay-card workspace-record-card">
+        <div class="overlay-header">
+          <div>
+            <h4 id="workspaceRecordHeading">Workspace Record</h4>
+            <div id="workspaceRecordSubheading" class="hint"></div>
+          </div>
+          <button id="workspaceRecordClose" class="ghost" data-i18n="common.close">Close</button>
+        </div>
+        <form id="workspaceRecordForm" class="workspace-record-form">
+          <input id="workspaceRecordKind" type="hidden" value="" />
+          <input id="workspaceRecordMode" type="hidden" value="" />
+          <input id="workspaceRecordProjectId" type="hidden" value="" />
+          <input id="workspaceRecordRoundId" type="hidden" value="" />
+          <label class="workspace-record-field">
+            <span id="workspaceRecordTitleLabel" data-i18n="workspaceRecord.projectName">Project Name</span>
+            <input id="workspaceRecordTitleInput" type="text" />
+          </label>
+          <label id="workspaceRecordDescriptionField" class="workspace-record-field">
+            <span data-i18n="workspaceRecord.projectDescription">Project Description</span>
+            <textarea id="workspaceRecordDescriptionInput" rows="3"></textarea>
+          </label>
+          <label id="workspaceRecordGoalField" class="workspace-record-field">
+            <span data-i18n="workspaceRecord.roundGoal">Goal</span>
+            <textarea id="workspaceRecordGoalInput" rows="3"></textarea>
+          </label>
+          <label id="workspaceRecordHypothesisField" class="workspace-record-field">
+            <span data-i18n="workspaceRecord.roundHypothesis">Hypothesis</span>
+            <textarea id="workspaceRecordHypothesisInput" rows="3"></textarea>
+          </label>
+          <label id="workspaceRecordNotesField" class="workspace-record-field">
+            <span data-i18n="workspaceRecord.roundNotes">Notes</span>
+            <textarea id="workspaceRecordNotesInput" rows="4"></textarea>
+          </label>
+          <label id="workspaceRecordNextRoundNotesField" class="workspace-record-field">
+            <span data-i18n="workspaceRecord.nextRoundNotes">Next-Round Notes</span>
+            <textarea id="workspaceRecordNextRoundNotesInput" rows="3"></textarea>
+          </label>
+          <div id="workspaceRecordManagedHint" class="hint" data-i18n="workspaceRecord.roundManagedHint">
+            Selected candidates and experiment summary are auto-managed from linked run results.
+          </div>
+          <div class="settings-actions workspace-record-actions">
+            <button id="workspaceRecordSubmit" class="primary" type="submit" data-i18n="common.save">Save</button>
+            <button id="workspaceRecordCancel" class="ghost" type="button" data-i18n="common.close">Close</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <div id="settingsPanel" class="overlay hidden" role="dialog" aria-modal="true">
       <div class="overlay-card settings-card">
@@ -1041,7 +1418,7 @@
             <h5 data-i18n="help.quick.title">Quick Start</h5>
             <ul>
               <li data-i18n="help.quick.step1">
-                Setup: choose Pipeline or Workflow Studio, attach target input, run preflight, then launch.
+                  Advanced: choose Pipeline or Workflow Studio, attach target input, run preflight, then launch.
               </li>
               <li data-i18n="help.quick.step2">
                 Monitor: follow stage status, review checkpoint artifacts, and continue from the monitor panel when needed.
@@ -1052,13 +1429,13 @@
             </ul>
           </div>
           <div class="help-section">
-            <h5 data-i18n="help.setup.title">Setup Tips</h5>
+            <h5 data-i18n="help.setup.title">Advanced Tips</h5>
             <ul>
               <li data-i18n="help.setup.step1">
                 Select a recent run and use Load Request to copy its settings into a new run before editing.
               </li>
               <li data-i18n="help.setup.step2">
-                Use Resume Run in Monitor or Studio for same-run continuation. Setup is for fresh runs only.
+                Use Resume Run in Monitor or Studio for same-run continuation. Advanced is for fresh runs only.
               </li>
             </ul>
           </div>
@@ -1159,6 +1536,6 @@
     <button id="copilotFabBtn" class="primary copilot-fab" data-i18n="copilot.open">Copilot</button>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260317_gate1"></script>
+    <script type="module" src="./app.js?v=20260319_studio-stage-sync-fix7"></script>
   </body>
 </html>

@@ -349,15 +349,31 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 arguments["run_id"] = new_run_id(prefix)
         if name in {
+            "pipeline.run",
+            "pipeline.preflight",
+            "pipeline.run_from_prompt",
             "pipeline.submit_feedback",
             "pipeline.submit_experiment",
             "pipeline.save_report",
+            "pipeline.save_project",
+            "pipeline.list_projects",
+            "pipeline.get_project",
+            "pipeline.archive_project",
+            "pipeline.restore_project",
+            "pipeline.delete_project",
+            "pipeline.save_round",
+            "pipeline.list_rounds",
+            "pipeline.get_round",
+            "pipeline.archive_round",
+            "pipeline.restore_round",
+            "pipeline.delete_round",
         } and user is not None:
             arguments.setdefault(
                 "user",
                 {
                     "username": str(user.get("username") or ""),
                     "role": str(user.get("role") or ""),
+                    "run_prefix": safe_run_prefix(str(user.get("username") or "user")),
                 },
             )
         out = self.dispatcher.call_tool(name, arguments)

@@ -113,7 +113,14 @@ Expected: FAIL because the new modes do not exist yet.
 - map current full Setup behavior to `Advanced`
 - create a reduced `Fast` form with PDB/FASTA-first inputs
 - auto-derive default execution behavior from Fast inputs
+- codify Fast defaults in a shared helper instead of duplicating them in the DOM layer
+- make Fast defaults explicit:
+  - `RFD3 off`
+  - `BioEmu on`
+  - `20` generated / `10` returned
+  - stop after `novelty`
 - preserve the existing expert validation path in Advanced
+- provide both `Run Fast` and `Review in Advanced` actions from the Fast surface
 
 **Step 4: Run test to verify it passes**
 
@@ -153,6 +160,8 @@ Expected: FAIL if shell refactor disconnects Studio.
 - keep current Studio panel ids and rendering functions
 - wire the Home `Studio` card to the existing Studio surface
 - ensure no duplicate navigation state is created
+- ensure Studio-launched runs inherit the currently selected `project_id` / `round_id` context by default
+- cover rerun/fork/continue flows so they do not silently drop round linkage
 
 **Step 4: Run test to verify it passes**
 
@@ -180,7 +189,9 @@ Add tests for:
 
 - creating a project payload
 - creating/updating a round payload
+- listing/getting owned project and round records
 - validating optional `project_id` and `round_id` on pipeline requests
+- validating owner metadata and admin/non-admin access rules
 
 **Step 2: Run test to verify it fails**
 
@@ -191,6 +202,9 @@ Expected: FAIL because the metadata tools do not exist.
 
 - add `project_id` and `round_id` to `PipelineRequest`
 - define minimal tool handlers for project/round CRUD
+- define explicit list/get handlers for project/round selectors
+- define owner metadata fields for project/round records
+- expose `project_id` / `round_id` in MCP run schemas and inject authenticated user context on the real HTTP tool-call path so owner enforcement applies outside direct in-process calls
 - keep schemas simple and JSON-file-backed
 
 **Step 4: Run test to verify it passes**
@@ -220,6 +234,7 @@ Add tests for:
 - saving project metadata under a stable workspace path
 - saving round metadata with linked runs
 - attaching a launched run to a round
+- rejecting foreign project/round access for non-admin users
 
 **Step 2: Run test to verify it fails**
 
@@ -231,6 +246,7 @@ Expected: FAIL because records are not written yet.
 - choose a stable metadata root under the pipeline output root
 - write project and round JSON files
 - append launched run ids to the target round when request metadata is present
+- enforce owner-based filtering and access checks in backend APIs
 
 **Step 4: Run test to verify it passes**
 
@@ -258,7 +274,9 @@ Add tests asserting:
 
 - selected project and round are stored in frontend state
 - Home context strip reads from current project/round
+- Home allows project creation/selection, not only round selection
 - Fast and Advanced requests include round metadata when selected
+- frontend only renders owned project/round records for non-admin users
 
 **Step 2: Run test to verify it fails**
 
@@ -268,8 +286,10 @@ Expected: FAIL because no round context exists.
 **Step 3: Write minimal implementation**
 
 - add project/round selectors to Home
+- add a lightweight project create action on Home
 - store current project/round in state
 - include `project_id` and `round_id` in outgoing run payloads
+- treat frontend filtering as presentation only; rely on backend-scoped results
 
 **Step 4: Run test to verify it passes**
 
@@ -297,7 +317,8 @@ Add tests asserting that:
 
 - a `Rounds` navigation entry exists
 - the page contains round list/detail regions
-- round actions exist for create/update/select
+- project and round actions exist for create/update/select
+- admin can view all records while non-admin sees only owned records
 
 **Step 2: Run test to verify it fails**
 
@@ -308,6 +329,7 @@ Expected: FAIL because the workspace does not exist.
 
 - build a two-column Rounds workspace
 - load project/round metadata from new backend APIs
+- expose a lightweight project switcher/create entry within the workspace
 - show linked runs and summary notes in round detail
 
 **Step 4: Run test to verify it passes**
@@ -344,7 +366,8 @@ Expected: FAIL because these views are run-only today.
 **Step 3: Write minimal implementation**
 
 - scope run listings and summaries by selected round when available
-- preserve fallback behavior for legacy unattached runs
+- show unattached legacy runs only inside an explicit admin-visible legacy bucket
+- keep normal non-admin views scoped to attached owned runs only
 
 **Step 4: Run test to verify it passes**
 
