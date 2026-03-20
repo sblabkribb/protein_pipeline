@@ -1608,7 +1608,11 @@ def _extract_primary_target_sequence(
     return seq or None
 
 
-def _collect_design_sequences(summary: dict[str, object] | None) -> list[str]:
+def _collect_design_sequences(
+    summary: dict[str, object] | None,
+    *,
+    hide_target: bool = False,
+) -> list[str]:
     if not isinstance(summary, dict):
         return []
     tiers = summary.get("tiers")
@@ -1622,8 +1626,13 @@ def _collect_design_sequences(summary: dict[str, object] | None) -> list[str]:
         samples = tier.get("proteinmpnn_samples")
         if not isinstance(samples, list):
             continue
+        visible_seq_sources = _visible_sample_sources(samples, hide_target=hide_target)
+        use_visible_filter = bool(samples)
         for sample in samples:
             if not isinstance(sample, dict):
+                continue
+            seq_id = str(sample.get("id") or "").strip()
+            if not _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter):
                 continue
             seq = _normalize_sequence(sample.get("sequence"))
             if not seq or seq in seen:
@@ -1639,7 +1648,8 @@ def _build_diversity_summary(
     summary: dict[str, object] | None,
 ) -> dict[str, object]:
     wt_seq = _extract_primary_target_sequence(request)
-    design_seqs = _collect_design_sequences(summary)
+    hide_target = _should_hide_target_source(summary)
+    design_seqs = _collect_design_sequences(summary, hide_target=hide_target)
 
     wt_id_values: list[float] = []
     if wt_seq:
@@ -1697,7 +1707,12 @@ def _relax_payload_has_recovered_failure(relax: dict[str, object] | None) -> boo
     return bool(relax.get("recovered"))
 
 
-def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -> dict[str, object]:
+def _collect_design_metrics(
+    run_root: Path,
+    summary: dict[str, object] | None,
+    *,
+    hide_target: bool = False,
+) -> dict[str, object]:
     out = {
         "soluprot_scores": [],
         "soluprot_total": 0,
@@ -1729,16 +1744,30 @@ def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -
         except Exception:
             continue
         tier_dir = run_root / "tiers" / tier_key
+        samples = tier.get("proteinmpnn_samples") if isinstance(tier.get("proteinmpnn_samples"), list) else []
+        visible_seq_sources = _visible_sample_sources(samples, hide_target=hide_target)
+        use_visible_filter = bool(samples)
 
         sol = _load_json_file(tier_dir / "soluprot.json")
         if isinstance(sol, dict):
             scores = sol.get("scores")
             passed_ids = sol.get("passed_ids") if isinstance(sol.get("passed_ids"), list) else []
             if isinstance(scores, dict):
-                values = [float(v) for v in scores.values() if isinstance(v, (int, float))]
+                values = [
+                    float(v)
+                    for seq_id, v in scores.items()
+                    if isinstance(v, (int, float))
+                    and _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                ]
                 out["soluprot_scores"].extend(values)
                 out["soluprot_total"] += len(values)
-            out["soluprot_passed"] += len(passed_ids)
+            out["soluprot_passed"] += len(
+                _filtered_metric_ids(
+                    passed_ids,
+                    visible_seq_sources,
+                    use_visible_filter=use_visible_filter,
+                )
+            )
 
         af2 = _load_json_file(tier_dir / "af2_scores.json")
         if isinstance(af2, dict):
@@ -1750,13 +1779,36 @@ def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -
                 else {}
             )
             candidate_ids = af2.get("candidate_ids") if isinstance(af2.get("candidate_ids"), list) else []
-            candidate_total = len(candidate_ids)
+            filtered_candidate_ids = _filtered_metric_ids(
+                candidate_ids,
+                visible_seq_sources,
+                use_visible_filter=use_visible_filter,
+            )
+            candidate_total = len(filtered_candidate_ids)
             if candidate_total <= 0 and isinstance(af2.get("candidate_count_after_budget"), int):
-                candidate_total = int(af2.get("candidate_count_after_budget") or 0)
+                candidate_total = (
+                    int(af2.get("candidate_count_after_budget") or 0)
+                    if not use_visible_filter
+                    else 0
+                )
             if candidate_total <= 0:
-                candidate_total = len(scores)
+                candidate_total = len(
+                    [
+                        seq_id
+                        for seq_id in scores.keys()
+                        if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                    ]
+                )
             out["af2_candidate_total"] += max(0, candidate_total)
-            candidate_metric_ids = candidate_ids if candidate_ids else list(scores.keys())
+            candidate_metric_ids = (
+                filtered_candidate_ids
+                if candidate_ids
+                else [
+                    str(seq_id)
+                    for seq_id in scores.keys()
+                    if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                ]
+            )
             for seq_id in candidate_metric_ids:
                 if seq_id in scores and isinstance(scores.get(seq_id), (int, float)):
                     out["af2_plddt"].append(float(scores.get(seq_id)))
@@ -1768,8 +1820,13 @@ def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -
                 else []
             )
             if selected_ids:
-                out["af2_selected_total"] += len(selected_ids)
-                for seq_id in selected_ids:
+                filtered_selected_ids = _filtered_metric_ids(
+                    selected_ids,
+                    visible_seq_sources,
+                    use_visible_filter=use_visible_filter,
+                )
+                out["af2_selected_total"] += len(filtered_selected_ids)
+                for seq_id in filtered_selected_ids:
                     if seq_id in scores and isinstance(scores.get(seq_id), (int, float)):
                         out["af2_selected_plddt"].append(float(scores.get(seq_id)))
                     if seq_id in rmsd_scores and isinstance(rmsd_scores.get(seq_id), (int, float)):
@@ -1784,11 +1841,30 @@ def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -
                 else {}
             )
             candidate_ids = relax.get("candidate_ids") if isinstance(relax.get("candidate_ids"), list) else []
-            candidate_total = len(candidate_ids)
+            filtered_candidate_ids = _filtered_metric_ids(
+                candidate_ids,
+                visible_seq_sources,
+                use_visible_filter=use_visible_filter,
+            )
+            candidate_total = len(filtered_candidate_ids)
             if candidate_total <= 0:
-                candidate_total = len(score_per_residue)
+                candidate_total = len(
+                    [
+                        seq_id
+                        for seq_id in score_per_residue.keys()
+                        if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                    ]
+                )
             out["relax_candidate_total"] += max(0, candidate_total)
-            candidate_metric_ids = candidate_ids if candidate_ids else list(score_per_residue.keys())
+            candidate_metric_ids = (
+                filtered_candidate_ids
+                if candidate_ids
+                else [
+                    str(seq_id)
+                    for seq_id in score_per_residue.keys()
+                    if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                ]
+            )
             for seq_id in candidate_metric_ids:
                 if seq_id in score_per_residue and isinstance(score_per_residue.get(seq_id), (int, float)):
                     out["relax_score_per_residue"].append(float(score_per_residue.get(seq_id)))
@@ -1798,18 +1874,142 @@ def _collect_design_metrics(run_root: Path, summary: dict[str, object] | None) -
                 else []
             )
             if selected_ids:
-                out["relax_selected_total"] += len(selected_ids)
-                for seq_id in selected_ids:
+                filtered_selected_ids = _filtered_metric_ids(
+                    selected_ids,
+                    visible_seq_sources,
+                    use_visible_filter=use_visible_filter,
+                )
+                out["relax_selected_total"] += len(filtered_selected_ids)
+                for seq_id in filtered_selected_ids:
                     if seq_id in score_per_residue and isinstance(score_per_residue.get(seq_id), (int, float)):
                         out["relax_selected_score_per_residue"].append(float(score_per_residue.get(seq_id)))
     return out
 
 
-def _normalize_backbone_source(raw: object) -> str:
+def _classify_backbone_source(raw: object) -> str:
     value = str(raw or "").strip().lower()
     if value.startswith("rfd3"):
         return "rfd3"
     if value.startswith("bioemu"):
+        return "bioemu"
+    if value == "target":
+        return "target"
+    return "other"
+
+
+def _normalize_backbone_source(raw: object) -> str:
+    source = _classify_backbone_source(raw)
+    if source == "target":
+        return "other"
+    return source
+
+
+def _visible_backbone_source(raw: object, *, hide_target: bool) -> str | None:
+    source = _classify_backbone_source(raw)
+    if source == "target":
+        return None if hide_target else "other"
+    return source
+
+
+def _should_hide_target_source(
+    summary: dict[str, object] | None,
+    *,
+    run_root: Path | None = None,
+) -> bool:
+    sources: set[str] = set()
+    if isinstance(summary, dict):
+        tiers = summary.get("tiers")
+        if isinstance(tiers, list):
+            for tier in tiers:
+                if not isinstance(tier, dict):
+                    continue
+                samples = tier.get("proteinmpnn_samples")
+                if not isinstance(samples, list):
+                    continue
+                for sample in samples:
+                    if not isinstance(sample, dict):
+                        continue
+                    meta = sample.get("meta") if isinstance(sample.get("meta"), dict) else {}
+                    sources.add(_classify_backbone_source(meta.get("backbone_source")))
+    if run_root is not None:
+        backbones = _load_json_file(run_root / "backbones.json")
+        if isinstance(backbones, dict):
+            manifest_sources = backbones.get("sources")
+            if isinstance(manifest_sources, dict):
+                for raw_source in manifest_sources:
+                    sources.add(_classify_backbone_source(raw_source))
+            items = backbones.get("backbones")
+            if isinstance(items, list):
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    sources.add(_classify_backbone_source(item.get("source")))
+    return "target" in sources and bool({"rfd3", "bioemu"} & sources)
+
+
+def _visible_sample_sources(
+    samples: list[object] | None,
+    *,
+    hide_target: bool,
+) -> dict[str, str]:
+    out: dict[str, str] = {}
+    if not isinstance(samples, list):
+        return out
+    for sample in samples:
+        if not isinstance(sample, dict):
+            continue
+        seq_id = str(sample.get("id") or "").strip()
+        if not seq_id:
+            continue
+        meta = sample.get("meta") if isinstance(sample.get("meta"), dict) else {}
+        source = _visible_backbone_source(meta.get("backbone_source"), hide_target=hide_target)
+        if source is None:
+            continue
+        out[seq_id] = source
+    return out
+
+
+def _should_include_seq_id(seq_id: object, visible_seq_sources: dict[str, str], *, use_visible_filter: bool) -> bool:
+    if not use_visible_filter:
+        return True
+    return str(seq_id or "").strip() in visible_seq_sources
+
+
+def _filtered_metric_ids(
+    seq_ids: list[object],
+    visible_seq_sources: dict[str, str],
+    *,
+    use_visible_filter: bool,
+) -> list[str]:
+    out: list[str] = []
+    for seq_id in seq_ids:
+        seq = str(seq_id or "").strip()
+        if not seq:
+            continue
+        if not _should_include_seq_id(seq, visible_seq_sources, use_visible_filter=use_visible_filter):
+            continue
+        out.append(seq)
+    return out
+
+
+def _source_for_sequence_id(seq_id: str, lookup: dict[str, str], *, hide_target: bool = False) -> str | None:
+    seq = str(seq_id or "").strip()
+    if not seq:
+        return None
+    backbone_id = seq.split(":", 1)[0]
+    raw_source = _classify_backbone_source(backbone_id)
+    if raw_source == "target":
+        return None if hide_target else "other"
+    mapped = lookup.get(backbone_id)
+    if mapped:
+        return mapped
+    source = _visible_backbone_source(backbone_id, hide_target=hide_target)
+    if source is not None and source != "other":
+        return source
+    low = backbone_id.lower()
+    if low.startswith("rfd3"):
+        return "rfd3"
+    if low.startswith("bioemu"):
         return "bioemu"
     return "other"
 
@@ -1859,23 +2059,12 @@ def _source_propagation_mode(
     return "partial"
 
 
-def _source_for_sequence_id(seq_id: str, lookup: dict[str, str]) -> str:
-    seq = str(seq_id or "").strip()
-    if not seq:
-        return "other"
-    backbone_id = seq.split(":", 1)[0]
-    mapped = lookup.get(backbone_id)
-    if mapped:
-        return mapped
-    low = backbone_id.lower()
-    if low.startswith("rfd3"):
-        return "rfd3"
-    if low.startswith("bioemu"):
-        return "bioemu"
-    return "other"
-
-
-def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -> dict[str, dict[str, object]]:
+def _collect_source_metrics(
+    run_root: Path,
+    summary: dict[str, object] | None,
+    *,
+    hide_target: bool = False,
+) -> dict[str, dict[str, object]]:
     out: dict[str, dict[str, object]] = {
         "rfd3": _source_metrics_bucket(),
         "bioemu": _source_metrics_bucket(),
@@ -1891,7 +2080,9 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
             for raw_source, raw_summary in manifest_sources.items():
                 if not isinstance(raw_summary, dict):
                     continue
-                source = _normalize_backbone_source(raw_source)
+                source = _visible_backbone_source(raw_source, hide_target=hide_target)
+                if source is None:
+                    continue
                 manifest_sources_present.add(source)
                 bucket = out[source]
                 requested_count = int(raw_summary.get("requested_count") or 0)
@@ -1912,7 +2103,9 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
             for item in items:
                 if not isinstance(item, dict):
                     continue
-                source = _normalize_backbone_source(item.get("source"))
+                source = _visible_backbone_source(item.get("source"), hide_target=hide_target)
+                if source is None:
+                    continue
                 backbone_id = str(item.get("id") or "").strip()
                 if backbone_id:
                     backbone_source_by_id[backbone_id] = source
@@ -1970,7 +2163,13 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
                     backbone_id = str(entry.get("id") or "").strip()
                     if not backbone_id:
                         continue
-                    lookup.setdefault(backbone_id, _normalize_backbone_source(entry.get("source")))
+                    source = _visible_backbone_source(entry.get("source"), hide_target=hide_target)
+                    if source is None:
+                        continue
+                    lookup.setdefault(backbone_id, source)
+
+        samples = tier.get("proteinmpnn_samples") if isinstance(tier.get("proteinmpnn_samples"), list) else []
+        visible_seq_sources = _visible_sample_sources(samples, hide_target=hide_target)
 
         sol = _load_json_file(tier_dir / "soluprot.json")
         if isinstance(sol, dict):
@@ -1980,14 +2179,22 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
                 for seq_id, raw_score in scores.items():
                     if not isinstance(raw_score, (int, float)):
                         continue
-                    source = _source_for_sequence_id(str(seq_id), lookup)
+                    source = visible_seq_sources.get(str(seq_id))
+                    if source is None:
+                        source = _source_for_sequence_id(str(seq_id), lookup, hide_target=hide_target)
+                    if source is None:
+                        continue
                     bucket = out[source]
                     bucket["soluprot_total"] = int(bucket.get("soluprot_total") or 0) + 1
                     cast_scores = bucket.get("soluprot_scores")
                     if isinstance(cast_scores, list):
                         cast_scores.append(float(raw_score))
             for seq_id in passed_ids:
-                source = _source_for_sequence_id(str(seq_id), lookup)
+                source = visible_seq_sources.get(str(seq_id))
+                if source is None:
+                    source = _source_for_sequence_id(str(seq_id), lookup, hide_target=hide_target)
+                if source is None:
+                    continue
                 bucket = out[source]
                 bucket["soluprot_passed"] = int(bucket.get("soluprot_passed") or 0) + 1
 
@@ -2003,7 +2210,11 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
             candidate_ids = af2.get("candidate_ids") if isinstance(af2.get("candidate_ids"), list) else []
             candidate_metric_ids = candidate_ids if candidate_ids else list(scores.keys())
             for seq_id in candidate_metric_ids:
-                source = _source_for_sequence_id(str(seq_id), lookup)
+                source = visible_seq_sources.get(str(seq_id))
+                if source is None:
+                    source = _source_for_sequence_id(str(seq_id), lookup, hide_target=hide_target)
+                if source is None:
+                    continue
                 bucket = out[source]
                 bucket["af2_candidate_total"] = int(bucket.get("af2_candidate_total") or 0) + 1
                 raw_plddt = scores.get(seq_id)
@@ -2022,7 +2233,11 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
                 else []
             )
             for seq_id in selected_ids:
-                source = _source_for_sequence_id(str(seq_id), lookup)
+                source = visible_seq_sources.get(str(seq_id))
+                if source is None:
+                    source = _source_for_sequence_id(str(seq_id), lookup, hide_target=hide_target)
+                if source is None:
+                    continue
                 bucket = out[source]
                 bucket["af2_selected_total"] = int(bucket.get("af2_selected_total") or 0) + 1
                 raw_plddt = scores.get(seq_id)
@@ -2047,7 +2262,11 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
             candidate_ids = relax.get("candidate_ids") if isinstance(relax.get("candidate_ids"), list) else []
             candidate_metric_ids = candidate_ids if candidate_ids else list(score_per_residue.keys())
             for seq_id in candidate_metric_ids:
-                source = _source_for_sequence_id(str(seq_id), lookup)
+                source = visible_seq_sources.get(str(seq_id))
+                if source is None:
+                    source = _source_for_sequence_id(str(seq_id), lookup, hide_target=hide_target)
+                if source is None:
+                    continue
                 bucket = out[source]
                 bucket["relax_candidate_total"] = int(bucket.get("relax_candidate_total") or 0) + 1
                 raw_relax = score_per_residue.get(seq_id)
@@ -2061,7 +2280,11 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
                 else []
             )
             for seq_id in selected_ids:
-                source = _source_for_sequence_id(str(seq_id), lookup)
+                source = visible_seq_sources.get(str(seq_id))
+                if source is None:
+                    source = _source_for_sequence_id(str(seq_id), lookup, hide_target=hide_target)
+                if source is None:
+                    continue
                 bucket = out[source]
                 bucket["relax_selected_total"] = int(bucket.get("relax_selected_total") or 0) + 1
                 raw_relax = score_per_residue.get(seq_id)
@@ -2076,6 +2299,8 @@ def _collect_source_metrics(run_root: Path, summary: dict[str, object] | None) -
 def _collect_tier_compare_metrics(
     run_root: Path,
     summary: dict[str, object] | None,
+    *,
+    hide_target: bool = False,
 ) -> list[dict[str, object]]:
     if not isinstance(summary, dict):
         return []
@@ -2097,13 +2322,18 @@ def _collect_tier_compare_metrics(
         tier_dir = run_root / "tiers" / tier_key
 
         samples = tier.get("proteinmpnn_samples") if isinstance(tier.get("proteinmpnn_samples"), list) else []
-        designs_total = len(samples)
+        visible_seq_sources = _visible_sample_sources(samples, hide_target=hide_target)
+        use_visible_filter = bool(samples)
+        designs_total = len(visible_seq_sources) if use_visible_filter else len(samples)
         source_counts = {"rfd3": 0, "bioemu": 0, "other": 0}
         for sample in samples:
             if not isinstance(sample, dict):
                 continue
+            seq_id = str(sample.get("id") or "").strip()
+            if not _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter):
+                continue
             meta = sample.get("meta") if isinstance(sample.get("meta"), dict) else {}
-            source = _normalize_backbone_source(meta.get("backbone_source"))
+            source = _visible_backbone_source(meta.get("backbone_source"), hide_target=hide_target) or "other"
             if source not in source_counts:
                 source = "other"
             source_counts[source] = int(source_counts.get(source) or 0) + 1
@@ -2113,9 +2343,22 @@ def _collect_tier_compare_metrics(
         sol_passed = 0
         if isinstance(sol, dict):
             scores = sol.get("scores") if isinstance(sol.get("scores"), dict) else {}
-            sol_total = len([1 for v in scores.values() if isinstance(v, (int, float))])
+            sol_total = len(
+                [
+                    1
+                    for seq_id, v in scores.items()
+                    if isinstance(v, (int, float))
+                    and _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                ]
+            )
             passed_ids = sol.get("passed_ids") if isinstance(sol.get("passed_ids"), list) else []
-            sol_passed = len(passed_ids)
+            sol_passed = len(
+                _filtered_metric_ids(
+                    passed_ids,
+                    visible_seq_sources,
+                    use_visible_filter=use_visible_filter,
+                )
+            )
 
         af2 = _load_json_file(tier_dir / "af2_scores.json")
         af2_candidate_total = 0
@@ -2131,12 +2374,35 @@ def _collect_tier_compare_metrics(
                 else {}
             )
             candidate_ids = af2.get("candidate_ids") if isinstance(af2.get("candidate_ids"), list) else []
-            af2_candidate_total = len(candidate_ids)
+            filtered_candidate_ids = _filtered_metric_ids(
+                candidate_ids,
+                visible_seq_sources,
+                use_visible_filter=use_visible_filter,
+            )
+            af2_candidate_total = len(filtered_candidate_ids)
             if af2_candidate_total <= 0 and isinstance(af2.get("candidate_count_after_budget"), int):
-                af2_candidate_total = int(af2.get("candidate_count_after_budget") or 0)
+                af2_candidate_total = (
+                    int(af2.get("candidate_count_after_budget") or 0)
+                    if not use_visible_filter
+                    else 0
+                )
             if af2_candidate_total <= 0:
-                af2_candidate_total = len(scores)
-            candidate_metric_ids = candidate_ids if candidate_ids else list(scores.keys())
+                af2_candidate_total = len(
+                    [
+                        seq_id
+                        for seq_id in scores.keys()
+                        if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                    ]
+                )
+            candidate_metric_ids = (
+                filtered_candidate_ids
+                if candidate_ids
+                else [
+                    str(seq_id)
+                    for seq_id in scores.keys()
+                    if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                ]
+            )
             for seq_id in candidate_metric_ids:
                 raw_plddt = scores.get(seq_id)
                 raw_rmsd = rmsd_scores.get(seq_id)
@@ -2149,7 +2415,13 @@ def _collect_tier_compare_metrics(
                 if isinstance(af2.get("selected_ids"), list) and not recovered_failure
                 else []
             )
-            af2_selected_total = len(selected_ids)
+            af2_selected_total = len(
+                _filtered_metric_ids(
+                    selected_ids,
+                    visible_seq_sources,
+                    use_visible_filter=use_visible_filter,
+                )
+            )
 
         relax = _load_json_file(tier_dir / "relax_scores.json")
         relax_candidate_total = 0
@@ -2163,10 +2435,29 @@ def _collect_tier_compare_metrics(
                 else {}
             )
             candidate_ids = relax.get("candidate_ids") if isinstance(relax.get("candidate_ids"), list) else []
-            relax_candidate_total = len(candidate_ids)
+            filtered_candidate_ids = _filtered_metric_ids(
+                candidate_ids,
+                visible_seq_sources,
+                use_visible_filter=use_visible_filter,
+            )
+            relax_candidate_total = len(filtered_candidate_ids)
             if relax_candidate_total <= 0:
-                relax_candidate_total = len(score_per_residue)
-            candidate_metric_ids = candidate_ids if candidate_ids else list(score_per_residue.keys())
+                relax_candidate_total = len(
+                    [
+                        seq_id
+                        for seq_id in score_per_residue.keys()
+                        if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                    ]
+                )
+            candidate_metric_ids = (
+                filtered_candidate_ids
+                if candidate_ids
+                else [
+                    str(seq_id)
+                    for seq_id in score_per_residue.keys()
+                    if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                ]
+            )
             for seq_id in candidate_metric_ids:
                 raw_relax = score_per_residue.get(seq_id)
                 if isinstance(raw_relax, (int, float)):
@@ -2176,7 +2467,13 @@ def _collect_tier_compare_metrics(
                 if isinstance(relax.get("selected_ids"), list) and not recovered_failure
                 else []
             )
-            relax_selected_total = len(selected_ids)
+            relax_selected_total = len(
+                _filtered_metric_ids(
+                    selected_ids,
+                    visible_seq_sources,
+                    use_visible_filter=use_visible_filter,
+                )
+            )
 
         rows.append(
             {
@@ -2220,9 +2517,10 @@ def _build_comparison_summary(
     summary: dict[str, object] | None,
 ) -> dict[str, object]:
     wt_metrics = _load_wt_metrics(run_root)
-    design_metrics = _collect_design_metrics(run_root, summary)
-    source_metrics = _collect_source_metrics(run_root, summary)
-    tier_compare = _collect_tier_compare_metrics(run_root, summary)
+    hide_target = _should_hide_target_source(summary, run_root=run_root)
+    design_metrics = _collect_design_metrics(run_root, summary, hide_target=hide_target)
+    source_metrics = _collect_source_metrics(run_root, summary, hide_target=hide_target)
+    tier_compare = _collect_tier_compare_metrics(run_root, summary, hide_target=hide_target)
     diversity = _build_diversity_summary(request=request, summary=summary)
 
     wt_enabled = bool(request.get("wt_compare")) if isinstance(request, dict) else False
@@ -2456,7 +2754,7 @@ def _build_comparison_summary(
     }
 
     return {
-        "version": 5,
+        "version": 6,
         "generated_at": _now_iso(),
         "wt_compare_enabled": wt_enabled,
         "wt_vs_design": wt_vs_design,
@@ -3447,6 +3745,8 @@ def _build_report_text(
             )
         lines.append("")
 
+    hide_target = _should_hide_target_source(summary, run_root=run_root)
+
     if summary:
         errors = summary.get("errors")
         lines.append("## Summary")
@@ -3466,8 +3766,29 @@ def _build_report_text(
                 samples = tier.get("proteinmpnn_samples") or []
                 passed = tier.get("passed_ids") or []
                 selected = tier.get("af2_selected_ids") or []
+                visible_seq_sources = _visible_sample_sources(samples, hide_target=hide_target)
+                use_visible_filter = bool(samples)
+                design_count = (
+                    len(visible_seq_sources)
+                    if use_visible_filter
+                    else len(samples)
+                )
+                passed_count = len(
+                    _filtered_metric_ids(
+                        passed if isinstance(passed, list) else [],
+                        visible_seq_sources,
+                        use_visible_filter=use_visible_filter,
+                    )
+                )
+                selected_count = len(
+                    _filtered_metric_ids(
+                        selected if isinstance(selected, list) else [],
+                        visible_seq_sources,
+                        use_visible_filter=use_visible_filter,
+                    )
+                )
                 lines.append(
-                    f"  - Tier {tier_val}: designs={len(samples)} passed={len(passed)} af2_selected={len(selected)}"
+                    f"  - Tier {tier_val}: designs={design_count} passed={passed_count} af2_selected={selected_count}"
                 )
         if summary.get("msa_a3m_path"):
             lines.append(f"- msa_a3m_path: {summary.get('msa_a3m_path')}")
@@ -3480,8 +3801,8 @@ def _build_report_text(
     lines.extend(_mask_consensus_report_lines(run_root=run_root, request=request, lang="en"))
 
     wt_metrics = _load_wt_metrics(run_root)
-    design_metrics = _collect_design_metrics(run_root, summary)
-    source_metrics = _collect_source_metrics(run_root, summary)
+    design_metrics = _collect_design_metrics(run_root, summary, hide_target=hide_target)
+    source_metrics = _collect_source_metrics(run_root, summary, hide_target=hide_target)
     comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
     _append_report_snapshot_lines(lines, comparison_summary=comparison_summary, lang="en")
     if wt_metrics or (request and request.get("wt_compare")):
@@ -3766,6 +4087,8 @@ def _build_report_text_ko(
             )
         lines.append("")
 
+    hide_target = _should_hide_target_source(summary, run_root=run_root)
+
     if summary:
         errors = summary.get("errors")
         lines.append("## 요약")
@@ -3785,8 +4108,29 @@ def _build_report_text_ko(
                 samples = tier.get("proteinmpnn_samples") or []
                 passed = tier.get("passed_ids") or []
                 selected = tier.get("af2_selected_ids") or []
+                visible_seq_sources = _visible_sample_sources(samples, hide_target=hide_target)
+                use_visible_filter = bool(samples)
+                design_count = (
+                    len(visible_seq_sources)
+                    if use_visible_filter
+                    else len(samples)
+                )
+                passed_count = len(
+                    _filtered_metric_ids(
+                        passed if isinstance(passed, list) else [],
+                        visible_seq_sources,
+                        use_visible_filter=use_visible_filter,
+                    )
+                )
+                selected_count = len(
+                    _filtered_metric_ids(
+                        selected if isinstance(selected, list) else [],
+                        visible_seq_sources,
+                        use_visible_filter=use_visible_filter,
+                    )
+                )
                 lines.append(
-                    f"  - 티어 {tier_val}: designs={len(samples)} passed={len(passed)} af2_selected={len(selected)}"
+                    f"  - 티어 {tier_val}: designs={design_count} passed={passed_count} af2_selected={selected_count}"
                 )
         if summary.get("msa_a3m_path"):
             lines.append(f"- msa_a3m_path: {summary.get('msa_a3m_path')}")
@@ -3799,8 +4143,8 @@ def _build_report_text_ko(
     lines.extend(_mask_consensus_report_lines(run_root=run_root, request=request, lang="ko"))
 
     wt_metrics = _load_wt_metrics(run_root)
-    design_metrics = _collect_design_metrics(run_root, summary)
-    source_metrics = _collect_source_metrics(run_root, summary)
+    design_metrics = _collect_design_metrics(run_root, summary, hide_target=hide_target)
+    source_metrics = _collect_source_metrics(run_root, summary, hide_target=hide_target)
     comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
     _append_report_snapshot_lines(lines, comparison_summary=comparison_summary, lang="ko")
     if wt_metrics or (request and request.get("wt_compare")):
@@ -4363,6 +4707,7 @@ def _build_hit_list_rows(
     tiers = summary.get("tiers")
     if not isinstance(tiers, list):
         return []
+    hide_target = _should_hide_target_source(summary, run_root=run_root)
     target_sequence = _extract_primary_target_sequence(request, run_root=run_root)
     scored_weight_keys = ("soluprot", "plddt", "rmsd")
     total_weight = float(sum(max(0.0, float(weights.get(key, 0.0))) for key in scored_weight_keys))
@@ -4381,6 +4726,8 @@ def _build_hit_list_rows(
         tier_key = _tier_key(tier_num)
         tier_dir = run_root / "tiers" / tier_key
         samples = tier.get("proteinmpnn_samples") if isinstance(tier.get("proteinmpnn_samples"), list) else []
+        visible_seq_sources = _visible_sample_sources(samples, hide_target=hide_target)
+        use_visible_filter = bool(samples)
 
         sol_scores: dict[str, float] = {}
         passed_ids: set[str] = set()
@@ -4439,9 +4786,16 @@ def _build_hit_list_rows(
             seq_id = str(sample.get("id") or "").strip()
             if not seq_id:
                 continue
+            if not _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter):
+                continue
             sequence = _normalize_sequence(sample.get("sequence"))
             meta = sample.get("meta") if isinstance(sample.get("meta"), dict) else {}
-            source = _normalize_backbone_source(meta.get("backbone_source") if isinstance(meta, dict) else None)
+            source = _visible_backbone_source(
+                meta.get("backbone_source") if isinstance(meta, dict) else None,
+                hide_target=hide_target,
+            )
+            if source is None:
+                continue
             soluprot = sol_scores.get(seq_id)
             plddt = af2_scores.get(seq_id)
             rmsd = af2_rmsd.get(seq_id)
