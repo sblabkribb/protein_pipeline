@@ -1389,6 +1389,127 @@ class TestTools(unittest.TestCase):
             self.assertTrue(bool((by_id.get("rfd3_model:1") or {}).get("relax_selected")))
             self.assertFalse(bool((by_id.get("bioemu_model:1") or {}).get("relax_selected")))
 
+    def test_comparison_summary_hides_target_designs_when_generated_sources_exist(self) -> None:
+        with _tmpdir() as tmp:
+            run_root = Path(tmp)
+            tier_dir = run_root / "tiers" / "30"
+            tier_dir.mkdir(parents=True, exist_ok=True)
+
+            (tier_dir / "soluprot.json").write_text(
+                json.dumps(
+                    {
+                        "scores": {
+                            "target:1": 0.51,
+                            "bioemu_model:1": 0.83,
+                        },
+                        "passed_ids": ["target:1", "bioemu_model:1"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            summary = {
+                "tiers": [
+                    {
+                        "tier": 0.3,
+                        "proteinmpnn_samples": [
+                            {
+                                "id": "target:1",
+                                "sequence": "ACDE",
+                                "meta": {"backbone_source": "target"},
+                            },
+                            {
+                                "id": "bioemu_model:1",
+                                "sequence": "ACDF",
+                                "meta": {"backbone_source": "bioemu"},
+                            },
+                        ],
+                    }
+                ]
+            }
+            request = {"target_fasta": ">q1\nACDE\n", "wt_compare": True}
+
+            comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
+            tier_compare = comparison_summary.get("tier_compare") or []
+            self.assertEqual(len(tier_compare), 1)
+            row = tier_compare[0]
+            self.assertEqual(int(row.get("design_total") or 0), 1)
+            self.assertEqual(int((row.get("source_counts") or {}).get("bioemu") or 0), 1)
+            self.assertEqual(int((row.get("source_counts") or {}).get("other") or 0), 0)
+
+            source_compare = comparison_summary.get("source_compare") or {}
+            self.assertEqual(int((source_compare.get("bioemu") or {}).get("soluprot_total") or 0), 1)
+            self.assertEqual(int((source_compare.get("other") or {}).get("soluprot_total") or 0), 0)
+
+            diversity = comparison_summary.get("diversity") or {}
+            self.assertEqual(int((diversity.get("design_unique_sequences") or 0)), 1)
+
+            hit_rows = _build_hit_list_rows(
+                run_root=run_root,
+                request=request,
+                summary=summary,
+                weights={"soluprot": 1.0, "plddt": 1.0, "rmsd": 1.0, "novelty": 0.0},
+                rmsd_ref=5.0,
+            )
+            self.assertEqual(len(hit_rows), 1)
+            self.assertEqual(str((hit_rows[0] or {}).get("seq_id") or ""), "bioemu_model:1")
+            self.assertEqual(str((hit_rows[0] or {}).get("source") or ""), "bioemu")
+
+    def test_comparison_summary_keeps_target_designs_for_target_only_runs(self) -> None:
+        with _tmpdir() as tmp:
+            run_root = Path(tmp)
+            tier_dir = run_root / "tiers" / "30"
+            tier_dir.mkdir(parents=True, exist_ok=True)
+
+            (tier_dir / "soluprot.json").write_text(
+                json.dumps(
+                    {
+                        "scores": {
+                            "target:1": 0.51,
+                        },
+                        "passed_ids": ["target:1"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            summary = {
+                "tiers": [
+                    {
+                        "tier": 0.3,
+                        "proteinmpnn_samples": [
+                            {
+                                "id": "target:1",
+                                "sequence": "ACDE",
+                                "meta": {"backbone_source": "target"},
+                            }
+                        ],
+                    }
+                ]
+            }
+            request = {"target_fasta": ">q1\nACDE\n", "wt_compare": True}
+
+            comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
+            tier_compare = comparison_summary.get("tier_compare") or []
+            self.assertEqual(len(tier_compare), 1)
+            row = tier_compare[0]
+            self.assertEqual(int(row.get("design_total") or 0), 1)
+            self.assertEqual(int((row.get("source_counts") or {}).get("other") or 0), 1)
+
+            source_compare = comparison_summary.get("source_compare") or {}
+            self.assertEqual(int((source_compare.get("other") or {}).get("soluprot_total") or 0), 1)
+
+            hit_rows = _build_hit_list_rows(
+                run_root=run_root,
+                request=request,
+                summary=summary,
+                weights={"soluprot": 1.0, "plddt": 1.0, "rmsd": 1.0, "novelty": 0.0},
+                rmsd_ref=5.0,
+            )
+            self.assertEqual(len(hit_rows), 1)
+            self.assertEqual(str((hit_rows[0] or {}).get("seq_id") or ""), "target:1")
+            self.assertEqual(str((hit_rows[0] or {}).get("source") or ""), "other")
+
     def test_compare_runs_hit_list_and_export_package_tools(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         with _tmpdir() as tmp:
