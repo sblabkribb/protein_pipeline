@@ -321,29 +321,33 @@
                     </button>
                   </div>
                 </div>
-                <aside class="fast-review-card mode-shell-placeholder">
+                <aside class="fast-options-card mode-shell-placeholder">
                   <div class="panel-header">
-                    <h3 data-i18n="fast.review.title">Default Pipeline Review</h3>
-                    <p data-i18n="fast.review.desc">Fast keeps a conservative standard pipeline profile.</p>
+                    <h3 data-i18n="fast.options.title">Launch Options</h3>
+                    <p data-i18n="fast.options.desc">
+                      Fast keeps ProteinMPNN at 2 sequences per backbone and rounds backbone counts up to satisfy the
+                      total output target.
+                    </p>
                   </div>
-                  <div class="home-context-strip fast-review-list">
-                    <div class="home-context-item">
-                      <span data-i18n="fast.review.rfd3.label">RFD3</span>
-                      <strong data-i18n="fast.review.rfd3.value">Off by default</strong>
+                  <label class="fast-field">
+                    <span data-i18n="question.selectedTiers.label">Sequence Conservation</span>
+                    <small data-i18n="question.selectedTiers.help">
+                      Choose which sequence-conservation levels to generate. Default: 30%, 50%, 70%.
+                    </small>
+                    <div id="fastSelectedTiers" class="choice-group" role="group" aria-label="Sequence conservation">
+                      <button type="button" class="choice-btn selected" data-fast-tier="0.3" aria-pressed="true">30%</button>
+                      <button type="button" class="choice-btn selected" data-fast-tier="0.5" aria-pressed="true">50%</button>
+                      <button type="button" class="choice-btn selected" data-fast-tier="0.7" aria-pressed="true">70%</button>
                     </div>
-                    <div class="home-context-item">
-                      <span data-i18n="fast.review.bioemu.label">BioEmu</span>
-                      <strong data-i18n="fast.review.bioemu.value">On for backbone exploration</strong>
-                    </div>
-                    <div class="home-context-item">
-                      <span data-i18n="fast.review.counts.label">Backbone Counts</span>
-                      <strong data-i18n="fast.review.counts.value">20 generated / 10 returned</strong>
-                    </div>
-                    <div class="home-context-item">
-                      <span data-i18n="fast.review.stop.label">Pipeline Stop</span>
-                      <strong data-i18n="fast.review.stop.value">Run through novelty</strong>
-                    </div>
-                  </div>
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="fast.totalOutput.label">Total Output Sequences</span>
+                    <small data-i18n="fast.totalOutput.help">
+                      Target total ProteinMPNN designs across the selected sequence-conservation levels. PDB input uses
+                      RFD3 + BioEmu; FASTA input uses BioEmu only.
+                    </small>
+                    <input id="fastTotalOutputInput" type="number" min="1" step="1" value="120" />
+                  </label>
                 </aside>
               </div>
             </div>

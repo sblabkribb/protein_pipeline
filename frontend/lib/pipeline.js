@@ -7,6 +7,7 @@ const WORKFLOW_TIER_STAGE_TO_BASE = Object.freeze({
   novelty: "novelty",
 });
 const DEFAULT_WORKFLOW_TIER_KEYS = Object.freeze(["30", "50", "70"]);
+const DEFAULT_SELECTED_TIERS = Object.freeze([0.3, 0.5, 0.7]);
 const TERMINAL_STATUS_STAGES = new Set(["done"]);
 const PIPELINE_PROGRESS_STEPS = Object.freeze([
   "msa",
@@ -52,6 +53,14 @@ export function normalizeConservationTier(value) {
   const num = Number(text);
   if (!Number.isFinite(num) || num <= 0) return null;
   return num > 1 ? num / 100 : num;
+}
+
+function normalizeSelectedTiers(values, fallback = DEFAULT_SELECTED_TIERS) {
+  const source = Array.isArray(values) ? values : values === undefined || values === null ? [] : [values];
+  const normalized = Array.from(
+    new Set(source.map((value) => normalizeConservationTier(value)).filter((value) => value !== null))
+  ).sort((left, right) => left - right);
+  return normalized.length ? normalized : Array.isArray(fallback) ? [...fallback] : [];
 }
 
 export function formatConservationTierValue(value) {
@@ -1242,6 +1251,14 @@ export function buildFastLaunchPreset(draft = {}) {
   const prompt = String(source.prompt || source.note || "").trim();
   const stopAfter = normalizeStage(source.stop_after) || "novelty";
   const noveltyEnabled = stopAfter === "novelty";
+  const selectedTiers = normalizeSelectedTiers(source.selected_tiers ?? source.conservation_tiers);
+  const numSeqPerTier = positiveIntegerOrDefault(source.num_seq_per_tier, 2);
+  const totalOutputSequences = positiveIntegerOrDefault(source.total_output_sequences, 120);
+  const activeBackboneSources = detectTargetKey(targetInput) === "target_pdb" ? 2 : 1;
+  const perSourceBackboneCount = Math.max(
+    1,
+    Math.ceil(totalOutputSequences / (selectedTiers.length * numSeqPerTier * activeBackboneSources))
+  );
   const answers = normalizeBioEmuCountFields(
     {
       target_input: targetInput,
@@ -1253,9 +1270,15 @@ export function buildFastLaunchPreset(draft = {}) {
       mask_consensus_apply: source.mask_consensus_apply === true,
       bioemu_use: true,
       bioemu_filter_samples: source.bioemu_filter_samples !== false,
-      bioemu_num_samples: positiveIntegerOrDefault(source.bioemu_num_samples, 20),
-      bioemu_max_return_structures: positiveIntegerOrDefault(source.bioemu_max_return_structures, 10),
+      bioemu_num_samples: positiveIntegerOrDefault(source.bioemu_num_samples, perSourceBackboneCount * 2),
+      bioemu_max_return_structures: positiveIntegerOrDefault(
+        source.bioemu_max_return_structures,
+        perSourceBackboneCount
+      ),
       rfd3_use: true,
+      rfd3_max_return_designs: positiveIntegerOrDefault(source.rfd3_max_return_designs, perSourceBackboneCount),
+      selected_tiers: selectedTiers,
+      num_seq_per_tier: numSeqPerTier,
     },
     { includeLegacyField: true }
   );
@@ -1763,6 +1786,7 @@ export function buildSetupDraftFromRequest(payload) {
     "diffdock_ligand_sdf",
     "diffdock_ligand_smiles",
     "selected_tiers",
+    "conservation_tiers",
   ]);
 
   Object.entries(payload).forEach(([key, value]) => {
@@ -1823,6 +1847,18 @@ export function buildSetupDraftFromRequest(payload) {
     answers.stop_after = normalizedStop;
   }
 
+  const selectedTiers = normalizeSelectedTiers(
+    Array.isArray(payload.selected_tiers) && payload.selected_tiers.length
+      ? payload.selected_tiers
+      : Array.isArray(payload.conservation_tiers) && payload.conservation_tiers.length
+        ? payload.conservation_tiers
+        : [],
+    []
+  );
+  if (selectedTiers.length) {
+    answers.selected_tiers = selectedTiers;
+  }
+
   return { mode, answers, answerMeta };
 }
 
@@ -1860,6 +1896,7 @@ export function inferRequestRunMode(payload) {
 
   const isPipelineLikeRequest =
     hasMeaningfulValue(payload.num_seq_per_tier) ||
+    hasMeaningfulValue(payload.selected_tiers) ||
     hasMeaningfulValue(payload.mmseqs_target_db) ||
     hasMeaningfulValue(payload.novelty_target_db) ||
     hasMeaningfulValue(payload.rfd3_max_return_designs) ||

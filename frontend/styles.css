@@ -641,12 +641,19 @@ body {
   flex-wrap: wrap;
 }
 
-.fast-review-card {
+.fast-review-card,
+.fast-options-card {
   padding: 24px;
 }
 
 .fast-review-list {
   grid-template-columns: 1fr;
+}
+
+.fast-options-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
 .rounds-shell {

@@ -37,6 +37,7 @@ import {
   minimumWorkflowStudioStartStage,
   nextWorkflowStudioStage,
   normalizeBioEmuCountFields,
+  normalizeConservationTier,
   normalizeRfd3Mode,
   normalizeWorkflowStudioPayloadForComparison,
   normalizeFixedPositionsExtraDraft,
@@ -737,6 +738,8 @@ const el = {
   fastTargetFile: document.getElementById("fastTargetFile"),
   fastLoadFileBtn: document.getElementById("fastLoadFileBtn"),
   fastPromptInput: document.getElementById("fastPromptInput"),
+  fastSelectedTiers: document.getElementById("fastSelectedTiers"),
+  fastTotalOutputInput: document.getElementById("fastTotalOutputInput"),
   fastRunBtn: document.getElementById("fastRunBtn"),
   fastOpenAdvancedBtn: document.getElementById("fastOpenAdvancedBtn"),
   homeProjectSelector: document.getElementById("homeProjectSelector"),
@@ -1970,7 +1973,7 @@ const I18N = {
     "workspaceRecord.error.projectNameRequired": "Enter a project name.",
     "workspaceRecord.error.roundTitleRequired": "Enter a round title.",
     "fast.title": "Fast Launch",
-    "fast.desc": "Paste a PDB or FASTA, keep the standard defaults, and launch without opening the full expert setup.",
+    "fast.desc": "Paste a PDB or FASTA, choose sequence conservation and total output count, then launch with standard defaults.",
     "fast.input.label": "Target Input",
     "fast.input.help": "Provide a raw PDB or FASTA sequence.",
     "fast.input.placeholder": "Paste PDB or FASTA here.",
@@ -1978,20 +1981,17 @@ const I18N = {
     "fast.note.help": "Optional notes copied into the run prompt.",
     "fast.note.placeholder": "Optional notes for this launch.",
     "fast.action.loadFile": "Load File",
-    "fast.action.reviewAdvanced": "Review in Advanced",
+    "fast.action.reviewAdvanced": "Open Advanced",
     "fast.action.run": "Run Fast",
-    "fast.review.title": "Default Pipeline Review",
-    "fast.review.desc": "Fast keeps a conservative standard pipeline profile.",
-    "fast.review.rfd3.label": "RFD3",
-    "fast.review.rfd3.value": "Off by default",
-    "fast.review.bioemu.label": "BioEmu",
-    "fast.review.bioemu.value": "On for backbone exploration",
-    "fast.review.counts.label": "Backbone Counts",
-    "fast.review.counts.value": "20 generated / 10 returned",
-    "fast.review.stop.label": "Pipeline Stop",
-    "fast.review.stop.value": "Run through novelty",
+    "fast.options.title": "Launch Options",
+    "fast.options.desc":
+      "Fast keeps ProteinMPNN at 2 sequences per backbone and rounds backbone counts up to satisfy the total output target.",
+    "fast.totalOutput.label": "Total Output Sequences",
+    "fast.totalOutput.help":
+      "Target total ProteinMPNN designs across the selected sequence-conservation levels. PDB input uses RFD3 + BioEmu; FASTA input uses BioEmu only.",
     "fast.error.targetRequired": "Paste a PDB or FASTA in Fast before launching.",
-    "fast.message.reviewReady": "Fast defaults were copied into Advanced. Review or edit before launching.",
+    "fast.message.reviewReady":
+      "Fast defaults were copied into Advanced. Adjust sequence conservation or counts before launching if needed.",
     "fast.message.fileLoaded": "Loaded {name} into Fast target input.",
     "copilot.open": "Copilot",
     "copilot.title": "Context Copilot",
@@ -2580,6 +2580,8 @@ const I18N = {
     "question.bioemuMaxReturn.help": "Maximum number of BioEmu structures to keep.",
     "question.numSeqPerTier.label": "ProteinMPNN per Backbone",
     "question.numSeqPerTier.help": "Number of ProteinMPNN sequences to generate for each backbone within each sequence-conservation level.",
+    "question.selectedTiers.label": "Sequence Conservation",
+    "question.selectedTiers.help": "Choose which sequence-conservation levels to generate. Default: 30%, 50%, 70%.",
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} per Conservation Level (Top N)",
     "question.af2MaxCandidatesPerTier.help":
       "Run {af2Provider} only for top N SoluProt-passed designs per sequence-conservation level (ranked by SoluProt score, 0 = all).",
@@ -3107,7 +3109,7 @@ const I18N = {
     "workspaceRecord.error.projectNameRequired": "프로젝트 이름을 입력하세요.",
     "workspaceRecord.error.roundTitleRequired": "라운드 제목을 입력하세요.",
     "fast.title": "Fast 실행",
-    "fast.desc": "PDB 또는 FASTA를 붙여 넣고 표준 기본값으로 바로 실행합니다. 전체 전문가 설정을 열지 않아도 됩니다.",
+    "fast.desc": "PDB 또는 FASTA를 붙여 넣고 서열 보존율과 총 출력 개수를 고른 뒤 표준 기본값으로 바로 실행합니다.",
     "fast.input.label": "타깃 입력",
     "fast.input.help": "원본 PDB 또는 FASTA 서열을 입력하세요.",
     "fast.input.placeholder": "여기에 PDB 또는 FASTA를 붙여 넣으세요.",
@@ -3115,20 +3117,17 @@ const I18N = {
     "fast.note.help": "선택 메모이며 run prompt로 함께 복사됩니다.",
     "fast.note.placeholder": "이 실행에 대한 메모를 선택적으로 남기세요.",
     "fast.action.loadFile": "파일 불러오기",
-    "fast.action.reviewAdvanced": "Advanced에서 검토",
+    "fast.action.reviewAdvanced": "Advanced 열기",
     "fast.action.run": "Fast 실행",
-    "fast.review.title": "기본 파이프라인 검토",
-    "fast.review.desc": "Fast는 보수적인 표준 파이프라인 프로필을 유지합니다.",
-    "fast.review.rfd3.label": "RFD3",
-    "fast.review.rfd3.value": "기본적으로 꺼짐",
-    "fast.review.bioemu.label": "BioEmu",
-    "fast.review.bioemu.value": "백본 탐색용으로 켜짐",
-    "fast.review.counts.label": "백본 개수",
-    "fast.review.counts.value": "20개 생성 / 10개 반환",
-    "fast.review.stop.label": "파이프라인 종료 단계",
-    "fast.review.stop.value": "novelty까지 실행",
+    "fast.options.title": "실행 옵션",
+    "fast.options.desc":
+      "Fast는 백본당 ProteinMPNN 2개를 유지하고, 총 출력 목표에 맞춰 백본 개수를 올림 계산합니다.",
+    "fast.totalOutput.label": "총 출력 서열 수",
+    "fast.totalOutput.help":
+      "선택한 서열 보존율 구간 전체에서 생성할 ProteinMPNN 서열 총량입니다. PDB 입력은 RFD3+BioEmu, FASTA 입력은 BioEmu 기준으로 계산합니다.",
     "fast.error.targetRequired": "Fast 실행 전에 PDB 또는 FASTA를 붙여 넣으세요.",
-    "fast.message.reviewReady": "Fast 기본값을 Advanced로 복사했습니다. 실행 전에 검토하거나 수정할 수 있습니다.",
+    "fast.message.reviewReady":
+      "Fast 기본값을 Advanced로 복사했습니다. 필요하면 서열 보존율이나 개수를 조정한 뒤 실행하세요.",
     "fast.message.fileLoaded": "{name} 파일을 Fast 타깃 입력에 불러왔습니다.",
     "copilot.open": "Copilot",
     "copilot.title": "Context Copilot",
@@ -3717,6 +3716,8 @@ const I18N = {
     "question.bioemuMaxReturn.help": "보존할 BioEmu 구조 최대 개수입니다.",
     "question.numSeqPerTier.label": "백본당 ProteinMPNN 생성 개수",
     "question.numSeqPerTier.help": "각 서열 보존율 구간에서 각 RFD3/BioEmu 백본마다 생성할 ProteinMPNN 서열 개수입니다.",
+    "question.selectedTiers.label": "서열 보존율",
+    "question.selectedTiers.help": "생성할 서열 보존율 구간을 선택하세요. 기본값은 30%, 50%, 70%입니다.",
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} 서열 보존율 구간당 실행 개수 (상위 N개)",
     "question.af2MaxCandidatesPerTier.help":
       "각 서열 보존율 구간에서 SoluProt를 통과한 서열 중 상위 N개(점수 순)만 {af2Provider}를 실행합니다. 0이면 전체 실행.",
@@ -7646,6 +7647,11 @@ const QUESTION_PRESETS = {
     questionKey: "question.numSeqPerTier.help",
     default: 2,
   },
+  selected_tiers: {
+    labelKey: "question.selectedTiers.label",
+    questionKey: "question.selectedTiers.help",
+    default: [0.3, 0.5, 0.7],
+  },
   af2_max_candidates_per_tier: {
     labelKey: "question.af2MaxCandidatesPerTier.label",
     questionKey: "question.af2MaxCandidatesPerTier.help",
@@ -7842,7 +7848,7 @@ const ANSWER_LIST_KEYS = new Set([
   "rfd3_ligand",
 ]);
 
-const ANSWER_FLOAT_LIST_KEYS = new Set(["conservation_tiers"]);
+const ANSWER_FLOAT_LIST_KEYS = new Set(["conservation_tiers", "selected_tiers"]);
 
 const ANSWER_JSON_KEYS = new Set([
   "fixed_positions_extra",
@@ -9497,10 +9503,47 @@ function applyFastLaunchPresetToState(preset) {
   updateRunEligibility(state.plan.questions || []);
 }
 
+const FAST_SELECTED_TIER_VALUES = Object.freeze([0.3, 0.5, 0.7]);
+
+function normalizeSelectedTierValues(values, fallback = FAST_SELECTED_TIER_VALUES) {
+  const source = Array.isArray(values) ? values : values === undefined || values === null ? [] : [values];
+  const normalized = Array.from(
+    new Set(source.map((value) => normalizeConservationTier(value)).filter((value) => value !== null))
+  ).sort((left, right) => left - right);
+  return normalized.length ? normalized : Array.isArray(fallback) ? [...fallback] : [];
+}
+
+function readFastSelectedTiers() {
+  const values = Array.from(el.fastSelectedTiers?.querySelectorAll("[data-fast-tier].selected") || []).map((button) =>
+    button.getAttribute("data-fast-tier")
+  );
+  return normalizeSelectedTierValues(values, FAST_SELECTED_TIER_VALUES);
+}
+
+function currentSetupSelectedTiers(question = null) {
+  const routedDefault = Array.isArray(state.plan?.routed_request?.selected_tiers)
+    ? state.plan.routed_request.selected_tiers
+    : [];
+  const fallback = Array.isArray(question?.default) ? question.default : FAST_SELECTED_TIER_VALUES;
+  const current = normalizeSelectedTierValues(
+    Array.isArray(state.answers.selected_tiers) && state.answers.selected_tiers.length
+      ? state.answers.selected_tiers
+      : Array.isArray(state.answers.conservation_tiers) && state.answers.conservation_tiers.length
+        ? state.answers.conservation_tiers
+        : routedDefault,
+    fallback
+  );
+  state.answers.selected_tiers = current;
+  delete state.answers.conservation_tiers;
+  return current;
+}
+
 function buildFastLaunchPresetFromUi() {
   return buildFastLaunchPreset({
     target_input: String(el.fastTargetInput?.value || "").trim(),
     prompt: String(el.fastPromptInput?.value || "").trim(),
+    selected_tiers: readFastSelectedTiers(),
+    total_output_sequences: Number.parseInt(String(el.fastTotalOutputInput?.value || "").trim(), 10),
   });
 }
 
@@ -9515,6 +9558,17 @@ async function loadFastTargetFile(file) {
 
 function initFastLauncher() {
   if (fastLauncherInitialized) return;
+  el.fastSelectedTiers?.querySelectorAll("[data-fast-tier]").forEach((button) => {
+    const selected = button.classList.contains("selected");
+    button.setAttribute("aria-pressed", selected ? "true" : "false");
+    button.addEventListener("click", () => {
+      const isSelected = button.classList.contains("selected");
+      const selectedCount = el.fastSelectedTiers?.querySelectorAll("[data-fast-tier].selected").length || 0;
+      if (isSelected && selectedCount <= 1) return;
+      button.classList.toggle("selected", !isSelected);
+      button.setAttribute("aria-pressed", isSelected ? "false" : "true");
+    });
+  });
   el.fastLoadFileBtn?.addEventListener("click", () => {
     el.fastTargetFile?.click();
   });
@@ -9750,6 +9804,13 @@ function buildManualPlan(mode) {
         questionKey: "question.numSeqPerTier.help",
         required: false,
         default: 2,
+      },
+      {
+        id: "selected_tiers",
+        labelKey: "question.selectedTiers.label",
+        questionKey: "question.selectedTiers.help",
+        required: false,
+        default: [0.3, 0.5, 0.7],
       },
       {
         id: "design_chains",
@@ -13279,6 +13340,7 @@ function renderQuestions(questions) {
     "stop_after",
     "rfd3_use",
     "rfd3_mode",
+    "selected_tiers",
     "design_chains",
     "rfd3_contig",
     "pdb_strip_nonpositive_resseq",
@@ -13316,6 +13378,7 @@ function renderQuestions(questions) {
     "bioemu_filter_samples",
     "relax_enabled",
     "af2_provider",
+    "selected_tiers",
     "design_chains",
     "pdb_strip_nonpositive_resseq",
     "wt_compare",
@@ -14174,6 +14237,39 @@ function renderQuestions(questions) {
         note.className = "choice-note";
         note.textContent = chains.length ? t("choice.chainDefaultNote") : t("choice.chainNote");
         field.appendChild(note);
+      });
+    }
+
+    const selectedTiersQuestion = questionById.get("selected_tiers");
+    if (selectedTiersQuestion) {
+      appendOptionField(selectedTiersQuestion, (field) => {
+        const current = currentSetupSelectedTiers(selectedTiersQuestion);
+        renderChoiceButtons(
+          field,
+          FAST_SELECTED_TIER_VALUES.map((value) => ({
+            label: formatConservationTierValue(value),
+            value,
+          })),
+          current,
+          (value) => {
+            const normalizedValue = normalizeConservationTier(value);
+            if (normalizedValue === null) return;
+            const next = new Set(current.map((item) => String(item)));
+            const key = String(normalizedValue);
+            if (next.has(key)) {
+              if (next.size <= 1) return;
+              next.delete(key);
+            } else {
+              next.add(key);
+            }
+            state.answers.selected_tiers = Array.from(next)
+              .map((item) => Number.parseFloat(item))
+              .filter((item) => Number.isFinite(item))
+              .sort((left, right) => left - right);
+            updateRunEligibility(normalizedQuestions);
+          },
+          { multi: true }
+        );
       });
     }
 
@@ -15098,6 +15194,7 @@ function filterAnswersForMode(mode, answers) {
       "af2_provider",
       "novelty_enabled",
       "num_seq_per_tier",
+      "selected_tiers",
       "start_from",
       "stop_after",
     ],
@@ -15134,6 +15231,7 @@ function filterAnswersForMode(mode, answers) {
       "relax_score_per_residue_cutoff",
       "af2_provider",
       "num_seq_per_tier",
+      "selected_tiers",
       "bioemu_use",
       "novelty_enabled",
       "start_from",
