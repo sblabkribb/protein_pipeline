@@ -73,9 +73,12 @@ import {
   buildCompareMetaTooltip,
   buildCompareScopeDescription,
   buildStructureDiffLegend,
+  comparisonSummaryHasRelaxMetrics,
   coerceFiniteMetricValue,
   extractDesignChainsFromPayload,
   filterPdbTextByChains,
+  hitListHasRelaxMetrics,
+  runCompareHasRelaxMetrics,
   selectResidueStripMetrics,
 } from "./lib/compare.js";
 import { buildCopilotReply } from "./lib/copilot.js";
@@ -16577,7 +16580,7 @@ function formatPassRate(sourceBucket) {
   return `${passed}/${total} (${rate.toFixed(1)}%)`;
 }
 
-function comparisonTierRows(summary) {
+function comparisonTierRows(summary, { includeRelax = true } = {}) {
   const rows = Array.isArray(summary?.tier_compare) ? summary.tier_compare : [];
   return rows
     .filter((row) => {
@@ -16589,7 +16592,7 @@ function comparisonTierRows(summary) {
         Number(row.af2_selected_total || 0) > 0 ||
         finiteNumber(row.plddt_median) !== null ||
         finiteNumber(row.rmsd_median) !== null ||
-        finiteNumber(row.relax_median) !== null
+        (includeRelax && finiteNumber(row.relax_median) !== null)
       );
     })
     .slice()
@@ -16603,15 +16606,18 @@ function comparisonTierRows(summary) {
     });
 }
 
-function comparisonDistributionEntries(summary) {
+function comparisonDistributionEntries(summary, { includeRelax = true } = {}) {
   const distributions =
     summary?.distributions && typeof summary.distributions === "object" ? summary.distributions : {};
-  return [
+  const entries = [
     ["SoluProt", distributions.soluprot],
     ["pLDDT", distributions.plddt],
     ["RMSD", distributions.rmsd],
-    ["Relax/res", distributions.relax],
-  ].filter(([, metric]) => Number(metric?.count || 0) > 0);
+  ];
+  if (includeRelax) {
+    entries.push(["Relax/res", distributions.relax]);
+  }
+  return entries.filter(([, metric]) => Number(metric?.count || 0) > 0);
 }
 
 function comparisonDiversitySummary(summary) {
@@ -16894,19 +16900,20 @@ function buildComparisonDetailMarkdown(summary, runId) {
     summary?.funnel && typeof summary.funnel === "object" ? summary.funnel : { overall: {}, by_source: {} };
   const source =
     summary?.source_compare && typeof summary.source_compare === "object" ? summary.source_compare : {};
-  const tierRows = Array.isArray(summary?.tier_compare) ? summary.tier_compare : [];
   const distributions =
     summary?.distributions && typeof summary.distributions === "object" ? summary.distributions : {};
   const diversity = summary?.diversity && typeof summary.diversity === "object" ? summary.diversity : {};
   const af2Provider = currentRunAf2Provider(runId);
+  const showRelax = comparisonSummaryHasRelaxMetrics(summary);
+  const tierRows = comparisonTierRows(summary, { includeRelax: showRelax });
 
   lines.push("## WT vs Design");
   const wtRows = [
     { key: "soluprot", label: "SoluProt", digits: 3 },
     { key: "plddt", label: "pLDDT", digits: 1 },
     { key: "rmsd", label: "RMSD", digits: 2 },
-    { key: "relax", label: "Relax/res", digits: 3 },
   ];
+  if (showRelax) wtRows.push({ key: "relax", label: "Relax/res", digits: 3 });
   lines.push("| Metric | WT | Design median | Delta |");
   lines.push("|---|---:|---:|---:|");
   wtRows.forEach((row) => {
@@ -16935,9 +16942,11 @@ function buildComparisonDetailMarkdown(summary, runId) {
 
   lines.push("## Source Compare");
   lines.push(
-    `| Source | Backbones | SoluProt pass | Median SoluProt | ${af2ProviderPassLabel(af2Provider)} | Relax pass | Median pLDDT | Median RMSD | Median Relax/res |`
+    showRelax
+      ? `| Source | Backbones | SoluProt pass | Median SoluProt | ${af2ProviderPassLabel(af2Provider)} | Relax pass | Median pLDDT | Median RMSD | Median Relax/res |`
+      : `| Source | Backbones | SoluProt pass | Median SoluProt | ${af2ProviderPassLabel(af2Provider)} | Median pLDDT | Median RMSD |`
   );
-  lines.push("|---|---:|---:|---:|---:|---:|---:|---:|---:|");
+  lines.push(showRelax ? "|---|---:|---:|---:|---:|---:|---:|---:|---:|" : "|---|---:|---:|---:|---:|---:|---:|");
   const metricFallback = medianFallbackBySource();
   const sourceUsageLines = ["rfd3", "bioemu", "other"]
     .map((key) =>
@@ -16955,7 +16964,9 @@ function buildComparisonDetailMarkdown(summary, runId) {
     const rmsdMedian = finiteNumber(bucket.rmsd_median) ?? finiteNumber(fallback.rmsd_median);
     const relaxMedian = finiteNumber(bucket.relax_median) ?? finiteNumber(fallback.relax_median);
     lines.push(
-      `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${Number(bucket.relax_selected_total || 0)}/${Number(bucket.relax_candidate_total || 0)} (${formatPercentValue(bucket.relax_pass_rate)}) | ${formatMetricValue(plddtMedian, 1)} | ${formatMetricValue(rmsdMedian, 2)} | ${formatMetricValue(relaxMedian, 3)} |`
+      showRelax
+        ? `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${Number(bucket.relax_selected_total || 0)}/${Number(bucket.relax_candidate_total || 0)} (${formatPercentValue(bucket.relax_pass_rate)}) | ${formatMetricValue(plddtMedian, 1)} | ${formatMetricValue(rmsdMedian, 2)} | ${formatMetricValue(relaxMedian, 3)} |`
+        : `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${formatMetricValue(plddtMedian, 1)} | ${formatMetricValue(rmsdMedian, 2)} |`
     );
   });
   if (sourceUsageLines.length) {
@@ -16969,13 +16980,17 @@ function buildComparisonDetailMarkdown(summary, runId) {
   if (tierRows.length) {
     lines.push(`## ${t("artifacts.compare.tier")}`);
     lines.push(
-      `| ${t("artifacts.filter.tier")} | Designs | SoluProt pass | ${af2ProviderPassLabel(af2Provider)} | Relax pass | Median pLDDT | Median RMSD | Median Relax/res |`
+      showRelax
+        ? `| ${t("artifacts.filter.tier")} | Designs | SoluProt pass | ${af2ProviderPassLabel(af2Provider)} | Relax pass | Median pLDDT | Median RMSD | Median Relax/res |`
+        : `| ${t("artifacts.filter.tier")} | Designs | SoluProt pass | ${af2ProviderPassLabel(af2Provider)} | Median pLDDT | Median RMSD |`
     );
-    lines.push("|---:|---:|---:|---:|---:|---:|---:|---:|");
+    lines.push(showRelax ? "|---:|---:|---:|---:|---:|---:|---:|---:|" : "|---:|---:|---:|---:|---:|---:|");
     tierRows.forEach((row) => {
       if (!row || typeof row !== "object") return;
       lines.push(
-        `| ${formatConservationTierValue(row.tier)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${Number(row.relax_selected_total || 0)}/${Number(row.relax_candidate_total || 0)} (${formatPercentValue(row.relax_pass_rate)}) | ${formatMetricValue(row.plddt_median, 1)} | ${formatMetricValue(row.rmsd_median, 2)} | ${formatMetricValue(row.relax_median, 3)} |`
+        showRelax
+          ? `| ${formatConservationTierValue(row.tier)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${Number(row.relax_selected_total || 0)}/${Number(row.relax_candidate_total || 0)} (${formatPercentValue(row.relax_pass_rate)}) | ${formatMetricValue(row.plddt_median, 1)} | ${formatMetricValue(row.rmsd_median, 2)} | ${formatMetricValue(row.relax_median, 3)} |`
+          : `| ${formatConservationTierValue(row.tier)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${formatMetricValue(row.plddt_median, 1)} | ${formatMetricValue(row.rmsd_median, 2)} |`
       );
     });
     lines.push("");
@@ -16984,12 +16999,8 @@ function buildComparisonDetailMarkdown(summary, runId) {
   lines.push("## Distribution");
   lines.push("| Metric | n | P10 | P25 | Median | P75 | P90 | IQR |");
   lines.push("|---|---:|---:|---:|---:|---:|---:|---:|");
-  [
-    ["SoluProt", distributions.soluprot],
-    ["pLDDT", distributions.plddt],
-    ["RMSD", distributions.rmsd],
-    ["Relax/res", distributions.relax],
-  ].forEach(([name, stat]) => {
+  const distributionEntries = comparisonDistributionEntries(summary, { includeRelax: showRelax });
+  distributionEntries.forEach(([name, stat]) => {
     const metric = stat && typeof stat === "object" ? stat : {};
     lines.push(
       `| ${name} | ${Number(metric.count || 0)} | ${formatMetricValue(metric.p10, 3)} | ${formatMetricValue(metric.p25, 3)} | ${formatMetricValue(metric.median, 3)} | ${formatMetricValue(metric.p75, 3)} | ${formatMetricValue(metric.p90, 3)} | ${formatMetricValue(metric.iqr, 3)} |`
@@ -17042,16 +17053,17 @@ function renderArtifactComparisonSummary(summary) {
       : {};
   const wtEnabled = Boolean(summary?.wt_compare_enabled);
   const af2Provider = currentRunAf2Provider();
-  const tierRows = comparisonTierRows(summary);
-  const distributionRows = comparisonDistributionEntries(summary);
+  const showRelax = comparisonSummaryHasRelaxMetrics(summary);
+  const tierRows = comparisonTierRows(summary, { includeRelax: showRelax });
+  const distributionRows = comparisonDistributionEntries(summary, { includeRelax: showRelax });
   const diversity = comparisonDiversitySummary(summary);
 
   const wtRows = [
     { key: "soluprot", label: "SoluProt", digits: 3 },
     { key: "plddt", label: "pLDDT", digits: 1 },
     { key: "rmsd", label: "RMSD", digits: 2 },
-    { key: "relax", label: "Relax/res", digits: 3 },
   ];
+  if (showRelax) wtRows.push({ key: "relax", label: "Relax/res", digits: 3 });
   const wtHasData = wtRows.some((row) => {
     const metric = wt[row.key] || {};
     return (
@@ -17121,7 +17133,6 @@ function renderArtifactComparisonSummary(summary) {
       const passText = formatPassRate(bucket);
       const solMedian = formatMetricValue(bucket.soluprot_median, 3, false);
       const af2 = String(Number(bucket.af2_selected_total || 0));
-      const relaxPass = `${Number(bucket.relax_selected_total || 0)}/${Number(bucket.relax_candidate_total || 0)} (${formatPercentValue(bucket.relax_pass_rate)})`;
       const plddt = formatMetricValue(
         finiteNumber(bucket.plddt_median) ?? finiteNumber(fallback.plddt_median),
         1,
@@ -17144,10 +17155,18 @@ function renderArtifactComparisonSummary(summary) {
           <td>${escapeHtml(passText)}</td>
           <td>${escapeHtml(solMedian)}</td>
           <td>${escapeHtml(af2)}</td>
-          <td>${escapeHtml(relaxPass)}</td>
+          ${
+            showRelax
+              ? `<td>${escapeHtml(
+                  `${Number(bucket.relax_selected_total || 0)}/${Number(bucket.relax_candidate_total || 0)} (${formatPercentValue(
+                    bucket.relax_pass_rate
+                  )})`
+                )}</td>`
+              : ""
+          }
           <td>${escapeHtml(plddt)}</td>
           <td>${escapeHtml(rmsd)}</td>
-          <td>${escapeHtml(relaxMedian)}</td>
+          ${showRelax ? `<td>${escapeHtml(relaxMedian)}</td>` : ""}
         </tr>
       `;
     })
@@ -17181,10 +17200,18 @@ function renderArtifactComparisonSummary(summary) {
           <td>${escapeHtml(String(Number(row?.design_total || 0)))}</td>
           <td>${escapeHtml(formatPassRate(row))}</td>
           <td>${escapeHtml(formatAf2SelectionStat(row))}</td>
-          <td>${escapeHtml(`${Number(row?.relax_selected_total || 0)}/${Number(row?.relax_candidate_total || 0)} (${formatPercentValue(row?.relax_pass_rate)})`)}</td>
+          ${
+            showRelax
+              ? `<td>${escapeHtml(
+                  `${Number(row?.relax_selected_total || 0)}/${Number(row?.relax_candidate_total || 0)} (${formatPercentValue(
+                    row?.relax_pass_rate
+                  )})`
+                )}</td>`
+              : ""
+          }
           <td>${escapeHtml(formatMetricValue(finiteNumber(row?.plddt_median), 1, false))}</td>
           <td>${escapeHtml(formatMetricValue(finiteNumber(row?.rmsd_median), 2, false))}</td>
-          <td>${escapeHtml(formatMetricValue(finiteNumber(row?.relax_median), 3, false))}</td>
+          ${showRelax ? `<td>${escapeHtml(formatMetricValue(finiteNumber(row?.relax_median), 3, false))}</td>` : ""}
         </tr>
       `;
     })
@@ -17287,10 +17314,10 @@ function renderArtifactComparisonSummary(summary) {
             <th>${escapeHtml(t("artifacts.compare.passRate"))}</th>
             <th>${escapeHtml(t("artifacts.compare.soluprotMedian"))}</th>
             <th>${escapeHtml(t("artifacts.compare.af2Selected", { af2Provider: af2ProviderName(af2Provider) }))}</th>
-            <th>Relax pass</th>
+            ${showRelax ? "<th>Relax pass</th>" : ""}
             <th>${escapeHtml(t("artifacts.compare.plddtMedian"))}</th>
             <th>${escapeHtml(t("artifacts.compare.rmsdMedian"))}</th>
-            <th>Relax/res</th>
+            ${showRelax ? "<th>Relax/res</th>" : ""}
           </tr>
         </thead>
         <tbody>${sourceTableRows}</tbody>
@@ -17314,10 +17341,10 @@ function renderArtifactComparisonSummary(summary) {
             <th>${escapeHtml(t("artifacts.compare.designCount"))}</th>
             <th>${escapeHtml(t("artifacts.compare.passRate"))}</th>
             <th>${escapeHtml(t("artifacts.compare.af2Selected", { af2Provider: af2ProviderName(af2Provider) }))}</th>
-            <th>Relax pass</th>
+            ${showRelax ? "<th>Relax pass</th>" : ""}
             <th>${escapeHtml(t("artifacts.compare.plddtMedian"))}</th>
             <th>${escapeHtml(t("artifacts.compare.rmsdMedian"))}</th>
-            <th>Relax/res</th>
+            ${showRelax ? "<th>Relax/res</th>" : ""}
           </tr>
         </thead>
         <tbody>${tierTableRows}</tbody>
@@ -21382,14 +21409,15 @@ function renderRunCompareSummary(result) {
   const current = result.current && typeof result.current === "object" ? result.current : {};
   const baseline = result.baseline && typeof result.baseline === "object" ? result.baseline : {};
   const delta = result.delta && typeof result.delta === "object" ? result.delta : {};
+  const showRelax = runCompareHasRelaxMetrics(result);
   const rows = [
     { key: "soluprot_median", label: "SoluProt", digits: 3, percent: false },
     { key: "plddt_median", label: "pLDDT", digits: 1, percent: false },
     { key: "rmsd_median", label: "RMSD", digits: 2, percent: false },
-    { key: "relax_median", label: "Relax/res", digits: 3, percent: false },
     { key: "soluprot_pass_rate", label: "SoluProt pass", digits: 1, percent: true },
     { key: "af2_pass_rate", label: af2ProviderPassLabel(currentRunAf2Provider()), digits: 1, percent: true },
   ];
+  if (showRelax) rows.splice(3, 0, { key: "relax_median", label: "Relax/res", digits: 3, percent: false });
   const format = (value, digits, isPercent, signed = false) => {
     if (typeof value !== "number" || !Number.isFinite(value)) return "-";
     const scaled = isPercent ? value * 100.0 : value;
@@ -21431,6 +21459,7 @@ function renderRunCompareSummary(result) {
 
 function buildRunCompareDetailsMarkdown(result) {
   const lines = [];
+  const showRelax = runCompareHasRelaxMetrics(result);
   lines.push(`# ${t("analyze.runCompare.detailsTitle")}`);
   lines.push("");
   lines.push(`- Run: ${result?.run_id || "-"}`);
@@ -21442,11 +21471,11 @@ function buildRunCompareDetailsMarkdown(result) {
     ["SoluProt median", "soluprot_median", 3, false],
     ["pLDDT median", "plddt_median", 1, false],
     ["RMSD median", "rmsd_median", 2, false],
-    ["Relax/res median", "relax_median", 3, false],
     ["SoluProt pass rate", "soluprot_pass_rate", 1, true],
     [`${af2ProviderPassLabel(currentRunAf2Provider())} rate`, "af2_pass_rate", 1, true],
     ["Backbone count", "backbone_count", 0, false],
   ];
+  if (showRelax) rows.splice(3, 0, ["Relax/res median", "relax_median", 3, false]);
   const format = (value, digits, percent, signed = false) => {
     if (typeof value !== "number" || !Number.isFinite(value)) return "-";
     const scaled = percent ? value * 100.0 : value;
@@ -21988,6 +22017,7 @@ function renderHitList() {
   const limit = Math.max(10, Math.min(500, Number(state.hitListLimit || 120)));
   state.hitListLimit = limit;
   const shown = filtered.slice(0, limit);
+  const showRelax = hitListHasRelaxMetrics(shown);
   if (el.hitListSummary) {
     el.hitListSummary.innerHTML = `<div class="score-pill">${escapeHtml(
       t("analyze.hitList.summary", {
@@ -22026,7 +22056,7 @@ function renderHitList() {
         <td class="num">${escapeHtml(formatMetricValue(row.soluprot, 3, false))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.plddt, 1, false))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.rmsd, 2, false))}</td>
-        <td class="num">${escapeHtml(formatMetricValue(row.relax, 3, false))}</td>
+        ${showRelax ? `<td class="num">${escapeHtml(formatMetricValue(row.relax, 3, false))}</td>` : ""}
         <td class="num">${escapeHtml(wtDiffLabel)}</td>
         <td>${escapeHtml(localizedYesNo(Boolean(row.af2_selected)))}</td>
       </tr>`;
@@ -22044,7 +22074,7 @@ function renderHitList() {
           <th>SoluProt</th>
           <th>pLDDT</th>
           <th>RMSD</th>
-          <th>Relax</th>
+          ${showRelax ? "<th>Relax/res</th>" : ""}
           <th>${escapeHtml(t("analyze.hitList.identity"))}</th>
           <th>${escapeHtml(af2ProviderSelectedLabel(currentRunAf2Provider()))}</th>
         </tr>
@@ -22064,6 +22094,7 @@ function buildHitListDetailsMarkdown() {
   const cutoff = Math.max(0, Math.min(100, Number(state.hitListCutoff || 0)));
   const filtered = filteredHitListRows({ applyLimit: false });
   const maxRows = Math.min(filtered.length, 200);
+  const showRelax = hitListHasRelaxMetrics(filtered.slice(0, maxRows));
   const lines = [];
   lines.push(`# ${t("analyze.hitList.detailsTitle")}`);
   lines.push("");
@@ -22072,12 +22103,16 @@ function buildHitListDetailsMarkdown() {
   lines.push(`- Rows: ${maxRows}/${filtered.length}`);
   lines.push("");
   lines.push(
-    `| Rank | seq_id | Source | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | Relax | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+    showRelax
+      ? `| Rank | seq_id | Source | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | Relax/res | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+      : `| Rank | seq_id | Source | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
   );
-  lines.push("|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|");
+  lines.push(showRelax ? "|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|" : "|---:|---|---|---:|---:|---:|---:|---:|---:|---|");
   filtered.slice(0, maxRows).forEach((row) => {
     lines.push(
-      `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatMetricValue(row.relax, 3)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
+      showRelax
+        ? `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatMetricValue(row.relax, 3)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
+        : `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
     );
   });
   lines.push("");
@@ -22509,6 +22544,7 @@ function buildReportHitListSection() {
   const rows = filteredHitListRows({ applyLimit: false });
   const cutoff = Math.max(0, Math.min(100, Number(state.hitListCutoff || 0)));
   const maxRows = Math.min(rows.length, Math.max(20, Math.min(200, Number(state.hitListLimit || 120))));
+  const showRelax = hitListHasRelaxMetrics(rows.slice(0, maxRows));
   const lines = [];
   lines.push(`## ${t("report.hitList.title")}`);
   lines.push("");
@@ -22526,12 +22562,16 @@ function buildReportHitListSection() {
   );
   lines.push("");
   lines.push(
-    `| Rank | seq_id | Source | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | Relax | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+    showRelax
+      ? `| Rank | seq_id | Source | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | Relax/res | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+      : `| Rank | seq_id | Source | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
   );
-  lines.push("|---:|---|---|---:|---:|---:|---:|---:|---:|---|");
+  lines.push(showRelax ? "|---:|---|---|---:|---:|---:|---:|---:|---:|---|" : "|---:|---|---|---:|---:|---:|---:|---:|---|");
   rows.slice(0, maxRows).forEach((row) => {
     lines.push(
-      `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatMetricValue(row.relax, 3)} | ${row.af2_selected ? "yes" : "no"} |`
+      showRelax
+        ? `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatMetricValue(row.relax, 3)} | ${row.af2_selected ? "yes" : "no"} |`
+        : `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${row.af2_selected ? "yes" : "no"} |`
     );
   });
   lines.push("");

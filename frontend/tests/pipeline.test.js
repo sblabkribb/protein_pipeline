@@ -6,9 +6,12 @@ import {
   buildCompareMetaTooltip,
   buildCompareScopeDescription,
   buildStructureDiffLegend,
+  comparisonSummaryHasRelaxMetrics,
   coerceFiniteMetricValue,
   extractDesignChainsFromPayload,
   filterPdbTextByChains,
+  hitListHasRelaxMetrics,
+  runCompareHasRelaxMetrics,
   selectResidueStripMetrics,
 } from "../lib/compare.js";
 import {
@@ -844,6 +847,14 @@ test("app source exposes relax controls in setup and analyze views", () => {
   assert.match(source, /question\.relaxEnabled\.label/);
   assert.match(source, /question\.relaxScorePerResidueCutoff\.label/);
   assert.match(source, /Relax/);
+});
+
+test("app source gates analyze relax rows and columns behind actual relax data", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(source, /comparisonSummaryHasRelaxMetrics\(/);
+  assert.match(source, /runCompareHasRelaxMetrics\(/);
+  assert.match(source, /hitListHasRelaxMetrics\(/);
 });
 
 test("buildWorkflowStudioEffectiveAnswers applies workflow defaults for untouched design and af2 counts", () => {
@@ -2544,6 +2555,78 @@ test("buildCompareMetaTooltip explains hard-to-read compare metrics", () => {
   assert.match(wtRmsd, /RMSD/i);
   assert.match(wtRmsd, /야생형|기준 구조/);
   assert.match(scope, /exact file|WT reference|tier\/backbone summary/i);
+});
+
+test("relax visibility helpers require actual analyze data", () => {
+  assert.equal(
+    comparisonSummaryHasRelaxMetrics({
+      wt_vs_design: {
+        plddt: { wt: 88.4, design_median: 86.1 },
+        rmsd: { wt: 0.4, design_median: 0.9 },
+      },
+      source_compare: {
+        rfd3: {
+          backbone_count: 10,
+          af2_selected_total: 4,
+          relax_candidate_total: 0,
+          relax_selected_total: 0,
+          relax_median: null,
+        },
+      },
+      tier_compare: [
+        {
+          tier: 0.3,
+          design_total: 20,
+          relax_candidate_total: 0,
+          relax_selected_total: 0,
+          relax_median: null,
+        },
+      ],
+      distributions: {
+        plddt: { count: 4, median: 86.1 },
+        rmsd: { count: 4, median: 0.9 },
+      },
+    }),
+    false
+  );
+  assert.equal(
+    comparisonSummaryHasRelaxMetrics({
+      wt_vs_design: {
+        relax: { wt: -3.1, design_median: -2.8 },
+      },
+    }),
+    true
+  );
+  assert.equal(
+    runCompareHasRelaxMetrics({
+      current: { plddt_median: 88.1 },
+      baseline: { plddt_median: 86.4 },
+      delta: { plddt_median: 1.7 },
+    }),
+    false
+  );
+  assert.equal(
+    runCompareHasRelaxMetrics({
+      current: { relax_median: -2.7 },
+      baseline: { relax_median: -2.9 },
+      delta: { relax_median: 0.2 },
+    }),
+    true
+  );
+  assert.equal(
+    hitListHasRelaxMetrics([
+      { seq_id: "a", relax: null },
+      { seq_id: "b", relax: undefined },
+    ]),
+    false
+  );
+  assert.equal(
+    hitListHasRelaxMetrics([
+      { seq_id: "a", relax: null },
+      { seq_id: "b", relax: -2.4 },
+    ]),
+    true
+  );
 });
 
 test("copilotIntentFromPrompt detects metric term questions", () => {

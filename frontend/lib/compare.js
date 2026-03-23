@@ -12,6 +12,44 @@ function formatLegendMetric(value, digits = 2) {
   return Number.isFinite(num) ? num.toFixed(digits) : "-";
 }
 
+function finiteMetricNumber(value) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function hasPositiveMetricCount(value) {
+  const num = finiteMetricNumber(value);
+  return num !== null && num > 0;
+}
+
+function relaxDistributionHasMetrics(metric) {
+  if (!metric || typeof metric !== "object") return false;
+  return (
+    hasPositiveMetricCount(metric.count) ||
+    finiteMetricNumber(metric.p10) !== null ||
+    finiteMetricNumber(metric.p25) !== null ||
+    finiteMetricNumber(metric.median) !== null ||
+    finiteMetricNumber(metric.p75) !== null ||
+    finiteMetricNumber(metric.p90) !== null ||
+    finiteMetricNumber(metric.iqr) !== null
+  );
+}
+
+function relaxBucketHasMetrics(bucket) {
+  if (!bucket || typeof bucket !== "object") return false;
+  return (
+    hasPositiveMetricCount(bucket.relax_candidate_total) ||
+    hasPositiveMetricCount(bucket.relax_selected_total) ||
+    finiteMetricNumber(bucket.relax_median) !== null
+  );
+}
+
 function normalizeTierLabel(value) {
   const text = formatConservationTierValue(value);
   return text === "-" ? "" : text;
@@ -35,6 +73,55 @@ function compareSourceLabel(source, lang = "en") {
 
 function compareProviderLabel(provider = "colabfold") {
   return /af2/i.test(String(provider || "")) ? "AlphaFold2" : "ColabFold";
+}
+
+export function comparisonSummaryHasRelaxMetrics(summary = {}) {
+  const wtRelax =
+    summary?.wt_vs_design && typeof summary.wt_vs_design === "object" && summary.wt_vs_design.relax
+      ? summary.wt_vs_design.relax
+      : null;
+  if (
+    wtRelax &&
+    typeof wtRelax === "object" &&
+    (finiteMetricNumber(wtRelax.wt) !== null ||
+      finiteMetricNumber(wtRelax.design_median) !== null ||
+      finiteMetricNumber(wtRelax.delta_design_minus_wt) !== null ||
+      hasPositiveMetricCount(wtRelax.design_total) ||
+      hasPositiveMetricCount(wtRelax.design_selected))
+  ) {
+    return true;
+  }
+
+  const source = summary?.source_compare && typeof summary.source_compare === "object" ? summary.source_compare : {};
+  if (Object.values(source).some((bucket) => relaxBucketHasMetrics(bucket))) {
+    return true;
+  }
+
+  const funnelOverall =
+    summary?.funnel && typeof summary.funnel === "object" && summary.funnel.overall ? summary.funnel.overall : null;
+  if (relaxBucketHasMetrics(funnelOverall)) {
+    return true;
+  }
+
+  const tierRows = Array.isArray(summary?.tier_compare) ? summary.tier_compare : [];
+  if (tierRows.some((row) => relaxBucketHasMetrics(row))) {
+    return true;
+  }
+
+  const relaxDistribution =
+    summary?.distributions && typeof summary.distributions === "object" ? summary.distributions.relax : null;
+  return relaxDistributionHasMetrics(relaxDistribution);
+}
+
+export function runCompareHasRelaxMetrics(result = {}) {
+  return ["current", "baseline", "delta"].some((key) => {
+    const bucket = result?.[key];
+    return bucket && typeof bucket === "object" && finiteMetricNumber(bucket.relax_median) !== null;
+  });
+}
+
+export function hitListHasRelaxMetrics(rows = []) {
+  return (Array.isArray(rows) ? rows : []).some((row) => finiteMetricNumber(row?.relax) !== null);
 }
 
 export function buildStructureDiffLegend({ rmsd = null, p90Distance = null, commonCount = null, lang = "en" } = {}) {
