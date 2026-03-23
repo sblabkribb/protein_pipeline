@@ -1,3 +1,5 @@
+import { formatConservationTierLabel, formatConservationTierValue } from "./pipeline.js";
+
 function normalizeChainId(value) {
   const text = String(value || "")
     .trim()
@@ -11,12 +13,8 @@ function formatLegendMetric(value, digits = 2) {
 }
 
 function normalizeTierLabel(value) {
-  const text = String(value ?? "").trim();
-  if (!text) return "";
-  const num = Number(text);
-  if (!Number.isFinite(num)) return text;
-  const normalized = num > 1 ? num / 100 : num;
-  return normalized.toFixed(2);
+  const text = formatConservationTierValue(value);
+  return text === "-" ? "" : text;
 }
 
 function compareRoleKey(meta) {
@@ -71,12 +69,12 @@ export function buildCompareScopeDescription({ leftMeta = null, rightMeta = null
   }
 
   if (rightRole === "af2_candidate") {
-    const tierText = normalizeTierLabel(rightMeta?.tier);
+    const tierText = formatConservationTierLabel(rightMeta?.tier, lang);
     const sourceText = compareSourceLabel(rightMeta?.backboneSource || rightMeta?.source, lang);
     lines.push(
       isKo
-        ? `${sourceText}${tierText ? ` 티어 ${tierText}` : ""} 후보는 전체 집계가 아니라 현재 선택된 단일 candidate입니다.`
-        : `${sourceText}${tierText ? ` Tier ${tierText}` : ""} candidate is a single candidate, not the whole aggregate.`
+        ? `${sourceText}${tierText ? ` ${tierText}` : ""} 후보는 전체 집계가 아니라 현재 선택된 단일 candidate입니다.`
+        : `${sourceText}${tierText ? ` ${tierText}` : ""} candidate is a single candidate, not the whole aggregate.`
     );
   } else if (rightRole === "backbone_snapshot") {
     lines.push(
@@ -105,7 +103,7 @@ export function buildCompareMetaTooltip(fieldKey = "", { provider = "colabfold",
       role: "이 구조가 비교에서 어떤 역할인지 보여줍니다. 예: 입력 기준, WT 기준선, AF2 후보.",
       source: "이 구조를 만든 소스입니다. 예: RFD3, BioEmu, WT 기준선.",
       provenance: "어느 단계와 산출 경로에서 온 구조인지 설명합니다.",
-      tier: "이 구조가 속한 보존/디자인 티어입니다. 보통 티어가 높을수록 제약이 더 강합니다.",
+      tier: "이 구조가 속한 서열 보존율 구간입니다. 보통 보존율이 높을수록 제약이 더 강합니다.",
       backbone: "downstream design/AF2에 연결된 backbone 식별자입니다.",
       chains: "현재 비교에 포함된 체인 요약입니다.",
       fixedCount: "ProteinMPNN 설계에서 고정된 잔기 개수입니다.",
@@ -129,7 +127,7 @@ export function buildCompareMetaTooltip(fieldKey = "", { provider = "colabfold",
     role: "Shows how this structure is used in the comparison, such as input reference, WT baseline, or AF2 candidate.",
     source: "Identifies which source produced this structure, such as RFD3, BioEmu, or the WT baseline.",
     provenance: "Explains which stage and artifact path this structure came from.",
-    tier: "Conservation/design tier associated with this structure. Higher tiers usually mean stricter constraints.",
+    tier: "Sequence-conservation band associated with this structure. Higher conservation usually means stricter constraints.",
     backbone: "Backbone identifier propagated into downstream design and AF2 steps.",
     chains: "Summary of chains currently present in this comparison item.",
     fixedCount: "Number of residues kept fixed during ProteinMPNN design.",

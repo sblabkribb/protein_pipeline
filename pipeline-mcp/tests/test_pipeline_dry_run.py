@@ -37,6 +37,26 @@ def _simple_ca_backbone(offset: float) -> str:
     )
 
 
+def _bent_ca_backbone(
+    mid_y: float,
+    third_y: float = 0.0,
+    third_z: float = 0.0,
+    tail_y: float = 0.0,
+) -> str:
+    coords = [
+        (1, "ALA", 0.0, 0.0, 0.0),
+        (2, "GLY", 1.0, mid_y, 0.0),
+        (3, "SER", 2.0, third_y, third_z),
+        (4, "TYR", 3.0, tail_y, 0.0),
+    ]
+    lines = [
+        f"ATOM  {idx:5d}  CA  {resname} A{idx:4d}    {x:8.3f}{y:8.3f}{z:8.3f}  1.00 20.00           C"
+        for idx, resname, x, y, z in coords
+    ]
+    lines.append("END")
+    return "\n".join(lines) + "\n"
+
+
 class TestPipelineDryRun(unittest.TestCase):
     def test_backbone_source_summary_marks_selected_only_when_observed_exceeds_used(self) -> None:
         req = PipelineRequest(
@@ -515,7 +535,8 @@ class TestPipelineDryRun(unittest.TestCase):
             inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("input"), "input.pdb")
-            self.assertEqual(spec.get("partial_t"), 10.0)
+            self.assertEqual(spec.get("partial_t"), 5.0)
+            self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
 
     def test_pipeline_rfd3_partial_t_respects_override(self) -> None:
         pdb = (
@@ -529,7 +550,14 @@ class TestPipelineDryRun(unittest.TestCase):
                 target_fasta="",
                 target_pdb="",
                 dry_run=True,
-                rfd3_inputs={"spec-1": {"input": "input.pdb", "contig": "A1-2", "partial_t": 5}},
+                rfd3_inputs={
+                    "spec-1": {
+                        "input": "input.pdb",
+                        "contig": "A1-2",
+                        "partial_t": 5,
+                        "select_fixed_atoms": {"A2": "ALL"},
+                    }
+                },
                 rfd3_input_pdb=pdb,
                 num_seq_per_tier=1,
                 conservation_tiers=[0.3],
@@ -539,6 +567,7 @@ class TestPipelineDryRun(unittest.TestCase):
             inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("partial_t"), 5)
+            self.assertEqual(spec.get("select_fixed_atoms"), {"A2": "ALL"})
 
     def test_pipeline_rfd3_duplicate_backbone_summary_written(self) -> None:
         pdb = (
@@ -1730,6 +1759,75 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertIn("target:fallback_001", tier_af2.get("failed_ids") or [])
             self.assertIn("target:fallback_001", tier_af2.get("prediction_errors") or {})
             self.assertTrue((run_root / "tiers" / "30" / "af2" / "target_fallback_002" / "ranked_0.pdb").exists())
+
+    def test_pipeline_af2_rmsd_uses_parent_backbone_for_multi_backbone_candidates(self) -> None:
+        fasta = ">q1\nAGSY\n"
+        target_pdb = _bent_ca_backbone(0.0)
+        bioemu_pdb = _bent_ca_backbone(1.5, third_y=0.3, third_z=0.5, tail_y=0.2)
+
+        class _BioEmuStub:
+            def sample(self, **kwargs):  # type: ignore[no-untyped-def]
+                return {
+                    "sample_pdbs": [
+                        {
+                            "id": "bioemu_000",
+                            "frame_index": 0,
+                            "pdb": bioemu_pdb,
+                        }
+                    ]
+                }
+
+        class _ColabFoldStub:
+            def predict(self, sequences, **kwargs):  # type: ignore[no-untyped-def]
+                out = {}
+                for seq in sequences:
+                    seq_id = str(seq.id)
+                    ranked_pdb = bioemu_pdb if seq_id.startswith("bioemu_000:") else target_pdb
+                    out[seq_id] = {
+                        "best_model": "model_1",
+                        "best_plddt": 91.0,
+                        "ranking_debug": {"order": ["model_1"], "plddts": {"model_1": 91.0}},
+                        "ranked_0_pdb": ranked_pdb,
+                    }
+                return out
+
+        req = PipelineRequest(
+            target_fasta=fasta,
+            target_pdb=target_pdb,
+            dry_run=False,
+            bioemu_use=True,
+            bioemu_num_samples=1,
+            bioemu_max_return_structures=1,
+            stop_after="af2",
+            conservation_tiers=[0.3],
+            num_seq_per_tier=1,
+            soluprot_cutoff=0.0,
+            af2_plddt_cutoff=0.0,
+            af2_rmsd_cutoff=0.0,
+        )
+
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                colabfold=_ColabFoldStub(),
+                bioemu=_BioEmuStub(),
+            )
+            res = runner.run(req, run_id="multi_backbone_parent_rmsd")
+
+            tier_af2 = json.loads(
+                (Path(res.output_dir) / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8")
+            )
+            rmsd_scores = tier_af2.get("rmsd_scores") or {}
+            target_rmsd_scores = tier_af2.get("target_rmsd_scores") or {}
+
+            self.assertAlmostEqual(float(rmsd_scores.get("target:fallback_001") or 0.0), 0.0, places=6)
+            self.assertAlmostEqual(float(rmsd_scores.get("bioemu_000:fallback_001") or 0.0), 0.0, places=6)
+            self.assertGreater(float(target_rmsd_scores.get("bioemu_000:fallback_001") or 0.0), 0.1)
+            self.assertEqual(str(tier_af2.get("rmsd_reference_mode") or ""), "parent_backbone")
 
     def test_pipeline_selected_tiers_limits_outputs_to_requested_tier(self) -> None:
         with _tmpdir() as tmp:

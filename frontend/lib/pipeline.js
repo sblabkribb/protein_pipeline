@@ -34,6 +34,39 @@ const RUN_PROGRESS_PLANS = Object.freeze({
 export const DEFAULT_ARTIFACT_COMPARE_MODE = "sequence";
 export const DEFAULT_ARTIFACT_LIST_LIMIT = 1000;
 
+function isKoreanLang(lang = "en") {
+  return String(lang || "").trim().toLowerCase().startsWith("ko");
+}
+
+function formatPercentLike(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return "";
+  const rounded = Math.round(num * 100) / 100;
+  const text = Number.isInteger(rounded) ? String(Math.trunc(rounded)) : String(rounded);
+  return text;
+}
+
+export function normalizeConservationTier(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const num = Number(text);
+  if (!Number.isFinite(num) || num <= 0) return null;
+  return num > 1 ? num / 100 : num;
+}
+
+export function formatConservationTierValue(value) {
+  const normalized = normalizeConservationTier(value);
+  if (normalized === null) return "-";
+  const percentText = formatPercentLike(normalized * 100);
+  return percentText ? `${percentText}%` : "-";
+}
+
+export function formatConservationTierLabel(value, lang = "en") {
+  const tierValue = formatConservationTierValue(value);
+  if (tierValue === "-") return "-";
+  return isKoreanLang(lang) ? `서열 보존율 ${tierValue}` : `Sequence conservation ${tierValue}`;
+}
+
 function wtIdentityPercent(row) {
   const directPct = Number(row?.wt_identity_pct);
   if (Number.isFinite(directPct)) return directPct;
@@ -46,7 +79,7 @@ export function formatWtIdentitySummary(row, lang = "en") {
   const diffCount = Number(row?.wt_diff_count);
   const compareLen = Number(row?.wt_compare_len);
   const identityPct = wtIdentityPercent(row);
-  const label = String(lang || "").trim().toLowerCase().startsWith("ko") ? "상동성" : "identity";
+  const label = isKoreanLang(lang) ? "상동성" : "identity";
   const countText =
     Number.isFinite(diffCount) && Number.isFinite(compareLen) && compareLen > 0
       ? `${Math.max(0, Math.round(diffCount))}/${Math.round(compareLen)}`
@@ -1222,7 +1255,7 @@ export function buildFastLaunchPreset(draft = {}) {
       bioemu_filter_samples: source.bioemu_filter_samples !== false,
       bioemu_num_samples: positiveIntegerOrDefault(source.bioemu_num_samples, 20),
       bioemu_max_return_structures: positiveIntegerOrDefault(source.bioemu_max_return_structures, 10),
-      rfd3_use: false,
+      rfd3_use: true,
     },
     { includeLegacyField: true }
   );
@@ -1234,7 +1267,7 @@ export function buildFastLaunchPreset(draft = {}) {
       stop_after: stopAfter,
       novelty_enabled: noveltyEnabled,
       bioemu_use: true,
-      rfd3_use: false,
+      rfd3_use: true,
     },
   };
 }
@@ -1284,7 +1317,9 @@ const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
 
 const WORKFLOW_STUDIO_STAGE_DEFAULTS = Object.freeze({
   rfd3: Object.freeze({
+    rfd3_use: true,
     rfd3_max_return_designs: 10,
+    rfd3_partial_t: 5.0,
   }),
   bioemu: Object.freeze({
     bioemu_num_samples: 20,
@@ -1427,6 +1462,59 @@ export function createWorkflowSessionId(prefix, now = new Date()) {
 export function workflowStudioStageFields(stage) {
   const normalized = parseWorkflowStudioNode(stage)?.baseStage || normalizeStage(stage);
   return normalized ? [...(WORKFLOW_STUDIO_STAGE_FIELDS[normalized] || [])] : [];
+}
+
+function workflowStudioRfd3ModeUsesContig(mode) {
+  const normalized = normalizeRfd3Mode(mode);
+  return normalized === "legacy_contig" || normalized === "binder";
+}
+
+function workflowStudioRfd3ModeUsesBinderFields(mode) {
+  return normalizeRfd3Mode(mode) === "binder";
+}
+
+function workflowStudioRfd3ModeUsesEnzymeFields(mode) {
+  return normalizeRfd3Mode(mode) === "enzyme";
+}
+
+function workflowStudioRfd3ModeUsesPartialT(mode) {
+  return ["local_diversify", "legacy_contig", "binder", "enzyme"].includes(normalizeRfd3Mode(mode));
+}
+
+function workflowStudioRfd3ModeUsesAdvancedInputs(mode) {
+  return normalizeRfd3Mode(mode) === "advanced";
+}
+
+export function workflowStudioVisibleStageFields(stage, { answers = {}, nodes = [], overrideVisible = false } = {}) {
+  const baseStage = parseWorkflowStudioNode(stage)?.baseStage || normalizeStage(stage);
+  const fields = workflowStudioStageFields(stage);
+  if (!fields.length) return [];
+  if (baseStage !== "rfd3") return fields;
+
+  const rfd3Mode = effectiveRfd3Mode(answers) || "local_diversify";
+  const rfd3Enabled = rfd3EnabledForContext({ mode: "workflow", answers, nodes });
+  const showRfd3InputPdb = shouldShowRfd3InputPdbField({
+    mode: "workflow",
+    answers,
+    nodes,
+    overrideVisible,
+  });
+
+  return fields.filter((fieldId) => {
+    if (fieldId === "rfd3_use") return true;
+    if (!rfd3Enabled) return false;
+    if (fieldId === "rfd3_input_pdb") return showRfd3InputPdb;
+    if (fieldId === "rfd3_contig") return workflowStudioRfd3ModeUsesContig(rfd3Mode);
+    if (fieldId === "rfd3_hotspots" || fieldId === "rfd3_infer_ori_strategy" || fieldId === "rfd3_is_non_loopy") {
+      return workflowStudioRfd3ModeUsesBinderFields(rfd3Mode);
+    }
+    if (fieldId === "rfd3_unindex" || fieldId === "rfd3_length" || fieldId === "rfd3_select_fixed_atoms") {
+      return workflowStudioRfd3ModeUsesEnzymeFields(rfd3Mode);
+    }
+    if (fieldId === "rfd3_partial_t") return workflowStudioRfd3ModeUsesPartialT(rfd3Mode);
+    if (fieldId === "rfd3_inputs_text") return workflowStudioRfd3ModeUsesAdvancedInputs(rfd3Mode);
+    return true;
+  });
 }
 
 export function splitWorkflowStudioAnswers(answers) {

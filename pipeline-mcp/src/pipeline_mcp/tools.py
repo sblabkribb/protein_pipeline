@@ -1720,8 +1720,10 @@ def _collect_design_metrics(
         "af2_candidate_total": 0,
         "af2_plddt": [],
         "af2_rmsd": [],
+        "af2_target_rmsd": [],
         "af2_selected_plddt": [],
         "af2_selected_rmsd": [],
+        "af2_selected_target_rmsd": [],
         "af2_selected_total": 0,
         "relax_candidate_total": 0,
         "relax_score_per_residue": [],
@@ -1778,6 +1780,11 @@ def _collect_design_metrics(
                 if isinstance(af2.get("rmsd_scores"), dict) and not recovered_failure
                 else {}
             )
+            target_rmsd_scores = (
+                af2.get("target_rmsd_scores")
+                if isinstance(af2.get("target_rmsd_scores"), dict) and not recovered_failure
+                else {}
+            )
             candidate_ids = af2.get("candidate_ids") if isinstance(af2.get("candidate_ids"), list) else []
             filtered_candidate_ids = _filtered_metric_ids(
                 candidate_ids,
@@ -1814,6 +1821,8 @@ def _collect_design_metrics(
                     out["af2_plddt"].append(float(scores.get(seq_id)))
                 if seq_id in rmsd_scores and isinstance(rmsd_scores.get(seq_id), (int, float)):
                     out["af2_rmsd"].append(float(rmsd_scores.get(seq_id)))
+                if seq_id in target_rmsd_scores and isinstance(target_rmsd_scores.get(seq_id), (int, float)):
+                    out["af2_target_rmsd"].append(float(target_rmsd_scores.get(seq_id)))
             selected_ids = (
                 af2.get("selected_ids")
                 if isinstance(af2.get("selected_ids"), list) and not recovered_failure
@@ -1831,6 +1840,8 @@ def _collect_design_metrics(
                         out["af2_selected_plddt"].append(float(scores.get(seq_id)))
                     if seq_id in rmsd_scores and isinstance(rmsd_scores.get(seq_id), (int, float)):
                         out["af2_selected_rmsd"].append(float(rmsd_scores.get(seq_id)))
+                    if seq_id in target_rmsd_scores and isinstance(target_rmsd_scores.get(seq_id), (int, float)):
+                        out["af2_selected_target_rmsd"].append(float(target_rmsd_scores.get(seq_id)))
 
         relax = _load_json_file(tier_dir / "relax_scores.json")
         if isinstance(relax, dict):
@@ -2510,6 +2521,23 @@ def _metric_delta(design_value: float | None, wt_value: float | None) -> float |
     return float(design_value - wt_value)
 
 
+def _design_rmsd_values_for_wt_compare(design_metrics: dict[str, object]) -> list[float]:
+    target_rmsd_raw = (
+        design_metrics.get("af2_target_rmsd")
+        if isinstance(design_metrics.get("af2_target_rmsd"), list)
+        else []
+    )
+    target_rmsd_values = [float(v) for v in target_rmsd_raw if isinstance(v, (int, float))]
+    if target_rmsd_values:
+        return target_rmsd_values
+    rmsd_raw = (
+        design_metrics.get("af2_rmsd")
+        if isinstance(design_metrics.get("af2_rmsd"), list)
+        else []
+    )
+    return [float(v) for v in rmsd_raw if isinstance(v, (int, float))]
+
+
 def _build_comparison_summary(
     *,
     run_root: Path,
@@ -2565,7 +2593,9 @@ def _build_comparison_summary(
         else []
     )
     rmsd_values = [float(v) for v in rmsd_raw if isinstance(v, (int, float))]
+    wt_compare_rmsd_values = _design_rmsd_values_for_wt_compare(design_metrics)
     design_rmsd_median = _median(rmsd_values) if rmsd_values else None
+    wt_compare_rmsd_median = _median(wt_compare_rmsd_values) if wt_compare_rmsd_values else None
     relax_raw = (
         design_metrics.get("relax_score_per_residue")
         if isinstance(design_metrics.get("relax_score_per_residue"), list)
@@ -2591,8 +2621,8 @@ def _build_comparison_summary(
         },
         "rmsd": {
             "wt": wt_rmsd,
-            "design_median": design_rmsd_median,
-            "delta_design_minus_wt": _metric_delta(design_rmsd_median, wt_rmsd),
+            "design_median": wt_compare_rmsd_median,
+            "delta_design_minus_wt": _metric_delta(wt_compare_rmsd_median, wt_rmsd),
             "design_total": af2_candidate_total,
         },
         "relax": {
@@ -3053,11 +3083,11 @@ def _mask_consensus_report_lines(
 
     tier_keys = _sort_tier_keys(list(fixed_query.keys()) + list(fixed_by_tier.keys()))
     if not tier_keys:
-        lines.append("- 티어별 합의: 없음" if is_ko else "- Per-tier consensus: none")
+        lines.append("- 서열 보존율별 합의: 없음" if is_ko else "- Sequence-conservation consensus: none")
         lines.append("")
         return lines
 
-    lines.append("- 티어별 합의:" if is_ko else "- Per-tier consensus:")
+    lines.append("- 서열 보존율별 합의:" if is_ko else "- Sequence-conservation consensus:")
     for tier_key in tier_keys:
         query_positions = _normalize_positions(fixed_query.get(tier_key))
         chain_positions = _normalize_chain_positions(fixed_by_tier.get(tier_key))
@@ -3098,7 +3128,7 @@ def _mask_consensus_report_lines(
 
         if not segments:
             segments.append("데이터 없음" if is_ko else "no data")
-        lines.append(f"  - Tier {tier_key}: " + "; ".join(segments))
+        lines.append(f"  - {_format_conservation_tier_label(tier_key, lang=lang)}: " + "; ".join(segments))
     lines.append("")
     return lines
 
@@ -3384,16 +3414,17 @@ def _append_extended_comparison_lines(
             lines.append(f"| {source_name} | {int(bucket.get('backbone_count') or 0)} | {sol_txt} | {af2_txt} |")
 
     if tier_rows:
-        lines.append("- Tier summary:" if not is_ko else "- 티어별 요약:")
+        lines.append("- Sequence-conservation summary:" if not is_ko else "- 서열 보존율별 요약:")
         lines.append(
-            "| Tier | Designs | SoluProt pass | ColabFold pass | Median pLDDT | Median RMSD |"
+            "| Sequence conservation | Designs | SoluProt pass | ColabFold pass | Median pLDDT | Median RMSD |"
+            if not is_ko
+            else "| 서열 보존율 | Designs | SoluProt pass | ColabFold pass | Median pLDDT | Median RMSD |"
         )
         lines.append("|---:|---:|---:|---:|---:|---:|")
         for row in tier_rows:
             if not isinstance(row, dict):
                 continue
-            tier = row.get("tier")
-            tier_text = f"{float(tier):.2f}" if isinstance(tier, (int, float)) else "-"
+            tier_text = _format_conservation_tier_value(row.get("tier"))
             sol_txt = f"{int(row.get('soluprot_passed') or 0)}/{int(row.get('soluprot_total') or 0)} ({_pct(row.get('soluprot_pass_rate'))})"
             af2_txt = f"{int(row.get('af2_selected_total') or 0)}/{int(row.get('af2_candidate_total') or 0)} ({_pct(row.get('af2_pass_rate'))})"
             plddt = row.get("plddt_median")
@@ -3474,6 +3505,41 @@ def _format_metric(value: object, digits: int) -> str:
     if isinstance(value, (int, float)):
         return f"{float(value):.{digits}f}"
     return "-"
+
+
+def _normalize_conservation_tier(value: object) -> float | None:
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            num = float(text)
+        except ValueError:
+            return None
+    elif isinstance(value, (int, float)):
+        num = float(value)
+    else:
+        return None
+    if num <= 0:
+        return None
+    return num / 100.0 if num > 1.0 else num
+
+
+def _format_conservation_tier_value(value: object) -> str:
+    normalized = _normalize_conservation_tier(value)
+    if normalized is None:
+        return "-"
+    pct = round(normalized * 100.0, 2)
+    return f"{pct:.2f}".rstrip("0").rstrip(".") + "%"
+
+
+def _format_conservation_tier_label(value: object, *, lang: str = "en") -> str:
+    tier_text = _format_conservation_tier_value(value)
+    if tier_text == "-":
+        return "-"
+    if str(lang).lower().startswith("ko"):
+        return f"서열 보존율 {tier_text}"
+    return f"Sequence conservation {tier_text}"
 
 
 def _format_wt_difference(value: object) -> str:
@@ -3648,9 +3714,9 @@ def _append_top_hit_lines(
         )
     )
     lines.append(
-        "| 순위 | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | WT 차이 (n/len · 상동성) | ColabFold selected |"
+        "| 순위 | seq_id | Source | 서열 보존율 | Score | SoluProt | pLDDT | RMSD | WT 차이 (n/len · 상동성) | ColabFold selected |"
         if is_ko
-        else "| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | WT change (n/len · identity) | ColabFold selected |"
+        else "| Rank | seq_id | Source | Sequence conservation | Score | SoluProt | pLDDT | RMSD | WT change (n/len · identity) | ColabFold selected |"
     )
     lines.append("|---:|---|---|---:|---:|---:|---:|---:|---:|---|")
     for row in rows[: max(1, int(top_n))]:
@@ -3661,7 +3727,7 @@ def _append_top_hit_lines(
                     str(row.get("rank") or "-"),
                     str(row.get("seq_id") or "-"),
                     str(row.get("source") or "-"),
-                    _format_metric(row.get("tier"), 2),
+                    _format_conservation_tier_value(row.get("tier")),
                     _format_metric(row.get("score"), 1),
                     _format_metric(row.get("soluprot"), 3),
                     _format_metric(row.get("plddt"), 1),
@@ -3758,7 +3824,7 @@ def _build_report_text(
                 lines.append(f"  - ... (+{len(errors) - 5} more)")
         tiers = summary.get("tiers")
         if isinstance(tiers, list) and tiers:
-            lines.append(f"- Tiers: {len(tiers)}")
+            lines.append(f"- Conservation levels: {len(tiers)}")
             for tier in tiers:
                 if not isinstance(tier, dict):
                     continue
@@ -3788,7 +3854,7 @@ def _build_report_text(
                     )
                 )
                 lines.append(
-                    f"  - Tier {tier_val}: designs={design_count} passed={passed_count} af2_selected={selected_count}"
+                    f"  - {_format_conservation_tier_label(tier_val)}: designs={design_count} passed={passed_count} af2_selected={selected_count}"
                 )
         if summary.get("msa_a3m_path"):
             lines.append(f"- msa_a3m_path: {summary.get('msa_a3m_path')}")
@@ -3867,7 +3933,7 @@ def _build_report_text(
             lines.append(f"- WT ColabFold: skipped ({reason})")
 
         plddt_vals = design_metrics.get("af2_plddt") or []
-        rmsd_vals = design_metrics.get("af2_rmsd") or []
+        rmsd_vals = _design_rmsd_values_for_wt_compare(design_metrics)
         af2_total = int(design_metrics.get("af2_candidate_total") or 0)
         if plddt_vals:
             plddt_median = _median([float(x) for x in plddt_vals if isinstance(x, (int, float))])
@@ -4100,7 +4166,7 @@ def _build_report_text_ko(
                 lines.append(f"  - ... (+{len(errors) - 5} more)")
         tiers = summary.get("tiers")
         if isinstance(tiers, list) and tiers:
-            lines.append(f"- 티어 수: {len(tiers)}")
+            lines.append(f"- 서열 보존율 구간 수: {len(tiers)}")
             for tier in tiers:
                 if not isinstance(tier, dict):
                     continue
@@ -4130,7 +4196,7 @@ def _build_report_text_ko(
                     )
                 )
                 lines.append(
-                    f"  - 티어 {tier_val}: designs={design_count} passed={passed_count} af2_selected={selected_count}"
+                    f"  - {_format_conservation_tier_label(tier_val, lang='ko')}: designs={design_count} passed={passed_count} af2_selected={selected_count}"
                 )
         if summary.get("msa_a3m_path"):
             lines.append(f"- msa_a3m_path: {summary.get('msa_a3m_path')}")
@@ -4209,7 +4275,7 @@ def _build_report_text_ko(
             lines.append(f"- WT ColabFold: skipped ({reason})")
 
         plddt_vals = design_metrics.get("af2_plddt") or []
-        rmsd_vals = design_metrics.get("af2_rmsd") or []
+        rmsd_vals = _design_rmsd_values_for_wt_compare(design_metrics)
         af2_total = int(design_metrics.get("af2_candidate_total") or 0)
         if plddt_vals:
             plddt_median = _median([float(x) for x in plddt_vals if isinstance(x, (int, float))])

@@ -61,6 +61,7 @@ _SAFE_ID_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
 _AF2_ALLOWED_AA = set("ACDEFGHIKLMNPQRSTVWYX")
 _AF2_PROVIDER_COLABFOLD = "colabfold"
 _AF2_PROVIDER_AF2 = "af2"
+_AF2_RMSD_REFERENCE_MODE_PARENT_BACKBONE = "parent_backbone"
 _PIPELINE_STAGE_ORDER = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"]
 _SUMMARY_ARTIFACTS = (
     "summary.json",
@@ -1155,6 +1156,66 @@ def _normalize_rfd3_inputs(inputs: dict[str, Any] | None) -> dict[str, Any] | No
     return normalized
 
 
+def _rfd3_input_file_text(input_name: str, *, input_files: dict[str, str]) -> str:
+    normalized_name = str(input_name or "").strip().replace("\\", "/")
+    if not normalized_name:
+        return ""
+    normalized_files = {
+        str(name or "").strip().replace("\\", "/"): str(content)
+        for name, content in (input_files or {}).items()
+    }
+    direct = str(normalized_files.get(normalized_name) or "")
+    if direct:
+        return direct
+    basename = Path(normalized_name).name
+    if not basename:
+        return ""
+    matches = [content for name, content in normalized_files.items() if Path(name).name == basename]
+    if len(matches) == 1:
+        return str(matches[0])
+    return ""
+
+
+def _default_rfd3_select_fixed_atoms(pdb_text: str) -> dict[str, str] | None:
+    residues = residues_by_chain(pdb_text, only_atom_records=True)
+    for chain_id, res_list in residues.items():
+        if not res_list:
+            continue
+        residue = res_list[0]
+        chain = str(chain_id or "").strip()
+        residue_token = f"{int(residue.resseq)}{str(residue.icode or '').strip()}"
+        if chain and chain != "_":
+            residue_token = f"{chain}{residue_token}"
+        return {residue_token: "ALL"}
+    return None
+
+
+def _inject_rfd3_default_fixed_atoms(
+    inputs: dict[str, Any] | None,
+    *,
+    input_files: dict[str, str],
+) -> dict[str, Any] | None:
+    if inputs is None:
+        return None
+    for spec in inputs.values():
+        if not isinstance(spec, dict):
+            continue
+        if "select_fixed_atoms" in spec:
+            continue
+        if "partial_t" not in spec:
+            continue
+        input_name = str(spec.get("input") or "").strip()
+        if not input_name:
+            continue
+        input_pdb_text = _rfd3_input_file_text(input_name, input_files=input_files)
+        if not input_pdb_text:
+            continue
+        fixed_atoms = _default_rfd3_select_fixed_atoms(input_pdb_text)
+        if fixed_atoms:
+            spec["select_fixed_atoms"] = fixed_atoms
+    return inputs
+
+
 def _rfd3_simple_inputs(request: PipelineRequest, *, input_files: dict[str, str]) -> dict[str, object]:
     mode = _effective_rfd3_mode(request, input_files=input_files)
     if mode == "advanced":
@@ -1224,7 +1285,7 @@ def _effective_rfd3_partial_t(request: PipelineRequest, *, mode: str | None) -> 
     if request.rfd3_partial_t is not None:
         return float(request.rfd3_partial_t)
     if mode == "local_diversify":
-        return 10.0
+        return 5.0
     return None
 
 
@@ -1391,6 +1452,53 @@ def _extract_predicted_pdb_text(
     if pdb_path.exists():
         return pdb_path.read_text(encoding="utf-8")
     return None
+
+
+def _af2_candidate_parent_backbone(
+    seq_id: str,
+    *,
+    candidate_records_by_id: dict[str, SequenceRecord],
+    backbone_pdb_by_id: dict[str, str],
+    fallback_pdb_text: str,
+) -> tuple[str | None, str]:
+    candidate = candidate_records_by_id.get(seq_id)
+    meta = candidate.meta if isinstance(candidate, SequenceRecord) and isinstance(candidate.meta, dict) else {}
+    backbone_id = str(meta.get("backbone_id") or "").strip() or None
+    if backbone_id:
+        pdb_text = str(backbone_pdb_by_id.get(backbone_id) or "")
+        if pdb_text.strip():
+            return backbone_id, pdb_text
+    return backbone_id, str(fallback_pdb_text or "")
+
+
+def _cached_rmsd_metric(
+    metrics_payload: dict[str, object] | None,
+    *,
+    key: str,
+    expected_reference_hash: str,
+    reference_hash_key: str,
+    expected_reference_mode: str | None = None,
+    reference_mode_key: str = "rmsd_reference_mode",
+    expected_backbone_id: str | None = None,
+    backbone_id_key: str = "rmsd_reference_backbone_id",
+) -> float | None:
+    if not isinstance(metrics_payload, dict) or not expected_reference_hash:
+        return None
+    raw = metrics_payload.get(key)
+    if not isinstance(raw, (int, float)):
+        return None
+    cached_hash = str(metrics_payload.get(reference_hash_key) or "").strip()
+    if cached_hash != expected_reference_hash:
+        return None
+    if expected_reference_mode is not None:
+        cached_mode = str(metrics_payload.get(reference_mode_key) or "").strip()
+        if cached_mode != expected_reference_mode:
+            return None
+    if expected_backbone_id is not None:
+        cached_backbone_id = str(metrics_payload.get(backbone_id_key) or "").strip() or None
+        if cached_backbone_id != expected_backbone_id:
+            return None
+    return float(raw)
 
 
 def _score_per_residue(total_score: float | None, sequence: str) -> float | None:
@@ -2670,6 +2778,10 @@ class PipelineRunner:
                     inputs_obj = _inject_rfd3_partial_t(
                         inputs_obj,
                         _effective_rfd3_partial_t(request, mode=rfd3_mode),
+                    )
+                    inputs_obj = _inject_rfd3_default_fixed_atoms(
+                        inputs_obj,
+                        input_files=rfd3_files,
                     )
 
                     if inputs_text is None and inputs_obj is None:
@@ -3997,6 +4109,9 @@ class PipelineRunner:
                 target_pdb_text = str(backbones[0].get("pdb_text") or "")
             if target_pdb_text.strip():
                 _write_text(paths.root / "target.pdb", target_pdb_text)
+            wt_compare_reference_pdb_text = (
+                target_pdb_input_text if target_pdb_input_text.strip() else target_pdb_text
+            )
 
             backbones_dir = _ensure_dir(paths.root / "backbones")
             backbone_contexts: list[dict[str, Any]] = []
@@ -4044,6 +4159,11 @@ class PipelineRunner:
                         "origin_artifact": _backbone_origin_artifact(source_key, raw_id, rfd3_selected_id),
                     }
                 )
+            backbone_pdb_by_id = {
+                str(ctx.get("id") or ""): str(ctx.get("pdb_text") or "")
+                for ctx in backbone_contexts
+                if str(ctx.get("id") or "").strip()
+            }
             source_summaries, propagation_mode = _build_backbone_source_summaries(
                 request,
                 backbone_entries=backbone_entries,
@@ -4310,9 +4430,9 @@ class PipelineRunner:
 
                 seq_source = "target_fasta" if str(request.target_fasta or "").strip() else "target_pdb"
                 wt_seq = target_record.sequence if target_record else ""
-                if not wt_seq and target_pdb_text.strip():
+                if not wt_seq and wt_compare_reference_pdb_text.strip():
                     try:
-                        tmp = _target_record_from_pdb(target_pdb_text, design_chains=design_chains)
+                        tmp = _target_record_from_pdb(wt_compare_reference_pdb_text, design_chains=design_chains)
                         wt_seq = tmp.sequence
                         seq_source = "target_pdb"
                     except Exception:
@@ -4501,9 +4621,9 @@ class PipelineRunner:
                                 write_json(af2_root / "ranking_debug.json", rec["ranking_debug"])
                             best_plddt = rec.get("best_plddt")
                             rmsd_val = None
-                            if isinstance(ranked0, str) and ranked0.strip() and target_pdb_text.strip():
+                            if isinstance(ranked0, str) and ranked0.strip() and wt_compare_reference_pdb_text.strip():
                                 try:
-                                    rmsd_val = ca_rmsd(target_pdb_text, ranked0, chains=design_chains)
+                                    rmsd_val = ca_rmsd(wt_compare_reference_pdb_text, ranked0, chains=design_chains)
                                 except Exception:
                                     rmsd_val = None
                             af2_payload = {
@@ -5675,6 +5795,16 @@ class PipelineRunner:
                                 cached_ok = True
 
                         candidate_ids = [s.id for s in af2_candidates]
+                        candidate_records_by_id = {
+                            str(record.id): record
+                            for record in af2_candidates
+                            if str(record.id).strip()
+                        }
+                        wt_compare_reference_hash = (
+                            _sha256_text(wt_compare_reference_pdb_text)
+                            if wt_compare_reference_pdb_text.strip()
+                            else ""
+                        )
                         to_predict = (
                             list(af2_candidates)
                             if request.force or not cached_ok
@@ -5806,51 +5936,83 @@ class PipelineRunner:
 
                         candidate_scores = {seq_id: cached_scores[seq_id] for seq_id in candidate_ids if seq_id in cached_scores}
                         rmsd_scores: dict[str, float] = {}
+                        target_rmsd_scores: dict[str, float] = {}
                         rmsd_missing: list[str] = []
                         rmsd_cutoff = float(request.af2_rmsd_cutoff)
                         if rmsd_cutoff <= 0.0:
                             rmsd_cutoff = None
-                        if rmsd_cutoff is not None:
-                            for seq_id in candidate_ids:
-                                rmsd = None
-                                seq_dir = _ensure_dir(af2_dir / _safe_id(seq_id))
-                                metrics_path = seq_dir / "metrics.json"
-                                metrics_payload: dict[str, object] | None = None
-                                if metrics_path.exists():
-                                    try:
-                                        metrics_payload = json.loads(metrics_path.read_text(encoding="utf-8"))
-                                    except Exception:
-                                        metrics_payload = None
-                                if isinstance(metrics_payload, dict):
-                                    raw = metrics_payload.get("rmsd_ca")
-                                    if isinstance(raw, (int, float)):
-                                        rmsd = float(raw)
-                                if rmsd is None:
-                                    pdb_text = None
-                                    rec = (af2_result or {}).get(seq_id) if isinstance(af2_result, dict) else None
-                                    if isinstance(rec, dict):
-                                        for key in ("ranked_0_pdb", "pdb", "pdb_text"):
-                                            val = rec.get(key)
-                                            if isinstance(val, str) and val.strip():
-                                                pdb_text = val
-                                                break
-                                    if not pdb_text:
-                                        pdb_path = seq_dir / "ranked_0.pdb"
-                                        if pdb_path.exists():
-                                            pdb_text = pdb_path.read_text(encoding="utf-8")
-                                    if pdb_text and target_pdb_text.strip():
-                                        rmsd_val = ca_rmsd(target_pdb_text, pdb_text, chains=design_chains)
+                        for seq_id in candidate_ids:
+                            rmsd = None
+                            target_rmsd = None
+                            seq_dir = _ensure_dir(af2_dir / _safe_id(seq_id))
+                            metrics_path = seq_dir / "metrics.json"
+                            metrics_payload: dict[str, object] | None = None
+                            if metrics_path.exists():
+                                try:
+                                    metrics_payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+                                except Exception:
+                                    metrics_payload = None
+                            parent_backbone_id, parent_reference_pdb_text = _af2_candidate_parent_backbone(
+                                seq_id,
+                                candidate_records_by_id=candidate_records_by_id,
+                                backbone_pdb_by_id=backbone_pdb_by_id,
+                                fallback_pdb_text=target_pdb_text,
+                            )
+                            parent_reference_hash = (
+                                _sha256_text(parent_reference_pdb_text)
+                                if parent_reference_pdb_text.strip()
+                                else ""
+                            )
+                            if isinstance(metrics_payload, dict):
+                                rmsd = _cached_rmsd_metric(
+                                    metrics_payload,
+                                    key="rmsd_ca",
+                                    expected_reference_hash=parent_reference_hash,
+                                    reference_hash_key="rmsd_reference_hash",
+                                    expected_reference_mode=_AF2_RMSD_REFERENCE_MODE_PARENT_BACKBONE,
+                                    expected_backbone_id=parent_backbone_id,
+                                )
+                                target_rmsd = _cached_rmsd_metric(
+                                    metrics_payload,
+                                    key="target_rmsd_ca",
+                                    expected_reference_hash=wt_compare_reference_hash,
+                                    reference_hash_key="target_rmsd_reference_hash",
+                                )
+                            if rmsd is None or target_rmsd is None:
+                                pdb_text = _extract_predicted_pdb_text(
+                                    seq_id,
+                                    af2_result=af2_result,
+                                    af2_dir=af2_dir,
+                                )
+                                if pdb_text:
+                                    if rmsd is None and parent_reference_pdb_text.strip():
+                                        rmsd_val = ca_rmsd(parent_reference_pdb_text, pdb_text, chains=design_chains)
                                         if isinstance(rmsd_val, (int, float)):
                                             rmsd = float(rmsd_val)
-                                if rmsd is None:
-                                    rmsd_missing.append(seq_id)
-                                    continue
-                                rmsd_scores[seq_id] = rmsd
-                                payload = metrics_payload if isinstance(metrics_payload, dict) else {}
-                                if "best_plddt" not in payload and seq_id in cached_scores:
-                                    payload["best_plddt"] = cached_scores[seq_id]
-                                payload["rmsd_ca"] = rmsd
-                                write_json(metrics_path, payload)
+                                    if target_rmsd is None and wt_compare_reference_pdb_text.strip():
+                                        target_rmsd_val = ca_rmsd(
+                                            wt_compare_reference_pdb_text,
+                                            pdb_text,
+                                            chains=design_chains,
+                                        )
+                                        if isinstance(target_rmsd_val, (int, float)):
+                                            target_rmsd = float(target_rmsd_val)
+                            payload = metrics_payload if isinstance(metrics_payload, dict) else {}
+                            if "best_plddt" not in payload and seq_id in cached_scores:
+                                payload["best_plddt"] = cached_scores[seq_id]
+                            payload["rmsd_ca"] = rmsd
+                            payload["rmsd_reference_mode"] = _AF2_RMSD_REFERENCE_MODE_PARENT_BACKBONE
+                            payload["rmsd_reference_backbone_id"] = parent_backbone_id
+                            payload["rmsd_reference_hash"] = parent_reference_hash or None
+                            payload["target_rmsd_ca"] = target_rmsd
+                            payload["target_rmsd_reference_hash"] = wt_compare_reference_hash or None
+                            write_json(metrics_path, payload)
+                            if target_rmsd is not None:
+                                target_rmsd_scores[seq_id] = target_rmsd
+                            if rmsd is None:
+                                rmsd_missing.append(seq_id)
+                                continue
+                            rmsd_scores[seq_id] = rmsd
                         selected_pairs = [
                             (seq_id, score)
                             for seq_id, score in candidate_scores.items()
@@ -5870,6 +6032,8 @@ class PipelineRunner:
                             {
                                 "scores": cached_scores,
                                 "rmsd_scores": rmsd_scores,
+                                "target_rmsd_scores": target_rmsd_scores,
+                                "rmsd_reference_mode": _AF2_RMSD_REFERENCE_MODE_PARENT_BACKBONE,
                                 "candidate_ids": candidate_ids,
                                 "candidate_count_before_budget": af2_candidates_before_budget,
                                 "candidate_count_after_budget": len(candidate_ids),
@@ -5921,6 +6085,8 @@ class PipelineRunner:
                             {
                                 "scores": fallback_scores,
                                 "rmsd_scores": {},
+                                "target_rmsd_scores": {},
+                                "rmsd_reference_mode": _AF2_RMSD_REFERENCE_MODE_PARENT_BACKBONE,
                                 "candidate_ids": candidate_ids,
                                 "candidate_count_before_budget": af2_candidates_before_budget,
                                 "candidate_count_after_budget": len(candidate_ids),

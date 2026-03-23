@@ -24,6 +24,8 @@ import {
   expandWorkflowStudioNodes,
   filterWorkflowStudioSessionsForUser,
   filterRunsByPrefix,
+  formatConservationTierLabel,
+  formatConservationTierValue,
   formatBackboneUsageSummary as formatBackboneUsageSummaryCore,
   inferRequestRunMode,
   isBinaryPath,
@@ -63,7 +65,7 @@ import {
   workflowStudioChangedFields,
   workflowStudioDependencyStatus,
   workflowStudioExecutionTarget,
-  workflowStudioStageFields,
+  workflowStudioVisibleStageFields,
   withFixedPositionsExtra,
 } from "./lib/pipeline.js";
 import {
@@ -2227,10 +2229,10 @@ const I18N = {
     "artifacts.filter.placeholder": "Filter by name or stage",
     "artifacts.refresh": "Refresh",
     "artifacts.filter.allStages": "All stages",
-    "artifacts.filter.allTiers": "All tiers",
+    "artifacts.filter.allTiers": "All conservation levels",
     "artifacts.filter.allTypes": "All types",
     "artifacts.filter.stage": "Stage",
-    "artifacts.filter.tier": "Tier",
+    "artifacts.filter.tier": "Sequence conservation",
     "artifacts.filter.type": "Type",
     "artifacts.compare.title": "Comparison Summary",
     "artifacts.compare.desc":
@@ -2260,7 +2262,7 @@ const I18N = {
     "artifacts.compare.af2Selected": "{af2Provider} selected",
     "artifacts.compare.plddtMedian": "Median pLDDT",
     "artifacts.compare.rmsdMedian": "Median RMSD",
-    "artifacts.compare.tier": "Tier Compare",
+    "artifacts.compare.tier": "Sequence Conservation Compare",
     "artifacts.compare.distribution": "Distribution",
     "artifacts.compare.sequenceDiversity": "Sequence Diversity",
     "artifacts.compare.uniqueSequences": "Unique design sequences",
@@ -2317,7 +2319,7 @@ const I18N = {
     "artifacts.preview.compare.meta.role": "Role",
     "artifacts.preview.compare.meta.source": "Source",
     "artifacts.preview.compare.meta.provenance": "Provenance",
-    "artifacts.preview.compare.meta.tier": "Tier",
+    "artifacts.preview.compare.meta.tier": "Sequence conservation",
     "artifacts.preview.compare.meta.backbone": "Backbone",
     "artifacts.preview.compare.meta.chains": "Chains",
     "artifacts.preview.compare.meta.fixedCount": "Fixed Count",
@@ -2329,7 +2331,7 @@ const I18N = {
     "artifacts.preview.compare.meta.predScope": "{af2Provider} Scope",
     "artifacts.preview.compare.meta.predScopeExact": "Exact candidate",
     "artifacts.preview.compare.meta.predScopeWt": "WT reference",
-    "artifacts.preview.compare.meta.predScopeTier": "Tier summary",
+    "artifacts.preview.compare.meta.predScopeTier": "Sequence-conservation summary",
     "artifacts.preview.compare.meta.predScopeBackbone": "Backbone summary",
     "artifacts.preview.compare.meta.predScopePre": "Pre-{af2Provider}",
     "artifacts.preview.compare.meta.predSelected": "{af2Provider} Selected",
@@ -2348,7 +2350,7 @@ const I18N = {
     "artifacts.preview.compare.provenance.working": "Primary backbone copy used for downstream stages",
     "artifacts.preview.compare.provenance.wt": "WT sequence predicted by {af2Provider}",
     "artifacts.preview.compare.provenance.backbone": "{source} backbone snapshot",
-    "artifacts.preview.compare.provenance.candidate": "Tier {tier} candidate predicted by {af2Provider}",
+    "artifacts.preview.compare.provenance.candidate": "{tier} candidate predicted by {af2Provider}",
     "artifacts.preview.compare.provenance.source": "{source} source-stage output",
     "artifacts.preview.compare.provenance.other": "Structure artifact",
     "feedback.title": "Feedback",
@@ -2577,10 +2579,10 @@ const I18N = {
     "question.bioemuMaxReturn.label": "BioEmu Return Count",
     "question.bioemuMaxReturn.help": "Maximum number of BioEmu structures to keep.",
     "question.numSeqPerTier.label": "ProteinMPNN per Backbone",
-    "question.numSeqPerTier.help": "Number of ProteinMPNN sequences to generate for each backbone within each tier.",
-    "question.af2MaxCandidatesPerTier.label": "{af2Provider} per Tier (Top N)",
+    "question.numSeqPerTier.help": "Number of ProteinMPNN sequences to generate for each backbone within each sequence-conservation level.",
+    "question.af2MaxCandidatesPerTier.label": "{af2Provider} per Conservation Level (Top N)",
     "question.af2MaxCandidatesPerTier.help":
-      "Run {af2Provider} only for top N SoluProt-passed designs per tier (ranked by SoluProt score, 0 = all).",
+      "Run {af2Provider} only for top N SoluProt-passed designs per sequence-conservation level (ranked by SoluProt score, 0 = all).",
     "question.af2PlddtCutoff.label": "{af2Provider} pLDDT Cutoff",
     "question.af2PlddtCutoff.help": "Minimum pLDDT threshold for {af2Provider} pass filtering (default: 85).",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD Cutoff",
@@ -2755,6 +2757,8 @@ const I18N = {
     "setup.workflow.summaryStudio": "Stages: {stages}",
     "setup.workflow.summaryStudioHint":
       "Workflow Studio pauses after each stage so you can review outputs before continuing.",
+    "setup.workflow.af2RelaxHint":
+      "If this flow includes AF2, Rosetta Relax controls appear inside each AF2 stage after the Studio session is created.",
     "setup.workflow.checkpoint": "Pause at checkpoint",
     "setup.workflow.showResults": "Show checkpoint results",
     "setup.workflow.showGraph": "Show graph at checkpoint",
@@ -2926,13 +2930,13 @@ const I18N = {
     "analyze.chart.noData": "No numeric data for the selected chart in current filters.",
     "analyze.chart.option.plddtRmsd": "Scatter: pLDDT vs RMSD vs WT",
     "analyze.chart.option.scoreHist": "Histogram: Hit Score",
-    "analyze.chart.option.tierPass": "Tier AF2 Pass Rate",
+    "analyze.chart.option.tierPass": "AF2 Pass Rate by Conservation Level",
     "analyze.chart.axis.plddt": "pLDDT",
     "analyze.chart.axis.rmsd": "RMSD (A)",
     "analyze.chart.axis.score": "Hit Score",
     "analyze.chart.axis.passRate": "Pass Rate (%)",
     "analyze.chart.axis.count": "Count",
-    "analyze.chart.axis.tier": "Tier",
+    "analyze.chart.axis.tier": "Sequence conservation",
     "analyze.chart.legend.selected": "{af2Provider} selected",
     "analyze.chart.legend.unselected": "Not selected",
     "analyze.chart.legend.wt": "WT",
@@ -2941,7 +2945,7 @@ const I18N = {
     "analyze.chart.caption.scatterPoints": "Points={points}",
     "analyze.chart.caption.scatterWithWt": "Points={points}, selected={selected}, WT={wt}",
     "analyze.chart.caption.hist": "Values={values}, bins={bins}",
-    "analyze.chart.caption.tier": "Tiers={tiers}, rows={rows}",
+    "analyze.chart.caption.tier": "Conservation levels={tiers}, rows={rows}",
     "analyze.files.title": "Artifact File Viewer",
     "analyze.files.desc": "Preview PDB/FASTA/CSV and text artifacts in Analyze.",
     "analyze.files.select": "Artifact File",
@@ -3362,10 +3366,10 @@ const I18N = {
     "artifacts.filter.placeholder": "이름 또는 단계로 필터",
     "artifacts.refresh": "새로고침",
     "artifacts.filter.allStages": "전체 단계",
-    "artifacts.filter.allTiers": "전체 티어",
+    "artifacts.filter.allTiers": "전체 서열 보존율",
     "artifacts.filter.allTypes": "전체 형식",
     "artifacts.filter.stage": "단계",
-    "artifacts.filter.tier": "티어",
+    "artifacts.filter.tier": "서열 보존율",
     "artifacts.filter.type": "형식",
     "artifacts.compare.title": "비교 요약",
     "artifacts.compare.desc": "리포트에서 생성된 WT 비교와 RFD3/BioEmu 비교 지표를 보여줍니다.",
@@ -3394,7 +3398,7 @@ const I18N = {
     "artifacts.compare.af2Selected": "{af2Provider} 선발",
     "artifacts.compare.plddtMedian": "pLDDT 중앙값",
     "artifacts.compare.rmsdMedian": "RMSD 중앙값",
-    "artifacts.compare.tier": "티어 비교",
+    "artifacts.compare.tier": "서열 보존율 비교",
     "artifacts.compare.distribution": "분포",
     "artifacts.compare.sequenceDiversity": "서열 다양성",
     "artifacts.compare.uniqueSequences": "고유 디자인 서열 수",
@@ -3451,7 +3455,7 @@ const I18N = {
     "artifacts.preview.compare.meta.role": "역할",
     "artifacts.preview.compare.meta.source": "소스",
     "artifacts.preview.compare.meta.provenance": "계보",
-    "artifacts.preview.compare.meta.tier": "티어",
+    "artifacts.preview.compare.meta.tier": "서열 보존율",
     "artifacts.preview.compare.meta.backbone": "백본",
     "artifacts.preview.compare.meta.chains": "체인",
     "artifacts.preview.compare.meta.fixedCount": "고정 잔기 수",
@@ -3463,7 +3467,7 @@ const I18N = {
     "artifacts.preview.compare.meta.predScope": "{af2Provider} 범위",
     "artifacts.preview.compare.meta.predScopeExact": "정확 후보",
     "artifacts.preview.compare.meta.predScopeWt": "WT 기준",
-    "artifacts.preview.compare.meta.predScopeTier": "티어 요약",
+    "artifacts.preview.compare.meta.predScopeTier": "서열 보존율 요약",
     "artifacts.preview.compare.meta.predScopeBackbone": "백본 요약",
     "artifacts.preview.compare.meta.predScopePre": "{af2Provider} 전",
     "artifacts.preview.compare.meta.predSelected": "{af2Provider} 선발",
@@ -3482,7 +3486,7 @@ const I18N = {
     "artifacts.preview.compare.provenance.working": "downstream 단계에 사용된 primary 백본 복사본",
     "artifacts.preview.compare.provenance.wt": "WT 서열을 {af2Provider}로 예측한 구조",
     "artifacts.preview.compare.provenance.backbone": "{source} 백본 스냅샷",
-    "artifacts.preview.compare.provenance.candidate": "티어 {tier} 후보 ({af2Provider})",
+    "artifacts.preview.compare.provenance.candidate": "{tier} 후보 ({af2Provider})",
     "artifacts.preview.compare.provenance.source": "{source} 소스 단계 출력",
     "artifacts.preview.compare.provenance.other": "구조 아티팩트",
     "feedback.title": "피드백",
@@ -3712,10 +3716,10 @@ const I18N = {
     "question.bioemuMaxReturn.label": "BioEmu 반환 개수",
     "question.bioemuMaxReturn.help": "보존할 BioEmu 구조 최대 개수입니다.",
     "question.numSeqPerTier.label": "백본당 ProteinMPNN 생성 개수",
-    "question.numSeqPerTier.help": "각 티어에서 각 RFD3/BioEmu 백본마다 생성할 ProteinMPNN 서열 개수입니다.",
-    "question.af2MaxCandidatesPerTier.label": "{af2Provider} 티어당 실행 개수 (상위 N개)",
+    "question.numSeqPerTier.help": "각 서열 보존율 구간에서 각 RFD3/BioEmu 백본마다 생성할 ProteinMPNN 서열 개수입니다.",
+    "question.af2MaxCandidatesPerTier.label": "{af2Provider} 서열 보존율 구간당 실행 개수 (상위 N개)",
     "question.af2MaxCandidatesPerTier.help":
-      "티어별 SoluProt 통과 서열 중 상위 N개(점수 순)만 {af2Provider}를 실행합니다. 0이면 전체 실행.",
+      "각 서열 보존율 구간에서 SoluProt를 통과한 서열 중 상위 N개(점수 순)만 {af2Provider}를 실행합니다. 0이면 전체 실행.",
     "question.af2PlddtCutoff.label": "{af2Provider} pLDDT 컷오프",
     "question.af2PlddtCutoff.help": "{af2Provider} 통과 필터링에 사용할 최소 pLDDT 임계값입니다. (기본값: 85)",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD 컷오프",
@@ -3889,6 +3893,8 @@ const I18N = {
     "setup.workflow.nodeHint": "선택된 단계는 순서대로 실행됩니다. x 버튼으로 단계를 제거할 수 있습니다.",
     "setup.workflow.summaryStudio": "단계: {stages}",
     "setup.workflow.summaryStudioHint": "Workflow Studio는 각 단계 뒤에 멈춰 결과를 검토한 뒤 계속 진행할 수 있게 합니다.",
+    "setup.workflow.af2RelaxHint":
+      "이 플로우에 AF2가 포함되면 Studio 세션을 만든 뒤 각 AF2 단계에서 Rosetta Relax 설정을 조정할 수 있습니다.",
     "setup.workflow.checkpoint": "체크포인트에서 일시 정지",
     "setup.workflow.showResults": "체크포인트 결과 표시",
     "setup.workflow.showGraph": "체크포인트에서 그래프 표시",
@@ -4058,13 +4064,13 @@ const I18N = {
     "analyze.chart.noData": "현재 필터에서 선택한 차트를 그릴 수 있는 수치 데이터가 없습니다.",
     "analyze.chart.option.plddtRmsd": "분산: pLDDT vs RMSD vs WT",
     "analyze.chart.option.scoreHist": "히스토그램: Hit 점수",
-    "analyze.chart.option.tierPass": "티어별 AF2 통과율",
+    "analyze.chart.option.tierPass": "서열 보존율별 AF2 통과율",
     "analyze.chart.axis.plddt": "pLDDT",
     "analyze.chart.axis.rmsd": "RMSD (A)",
     "analyze.chart.axis.score": "Hit 점수",
     "analyze.chart.axis.passRate": "통과율 (%)",
     "analyze.chart.axis.count": "개수",
-    "analyze.chart.axis.tier": "티어",
+    "analyze.chart.axis.tier": "서열 보존율",
     "analyze.chart.legend.selected": "{af2Provider} 선발",
     "analyze.chart.legend.unselected": "미선발",
     "analyze.chart.legend.wt": "WT",
@@ -4073,7 +4079,7 @@ const I18N = {
     "analyze.chart.caption.scatterPoints": "포인트={points}",
     "analyze.chart.caption.scatterWithWt": "포인트={points}, 선발={selected}, WT={wt}",
     "analyze.chart.caption.hist": "값={values}, 구간={bins}",
-    "analyze.chart.caption.tier": "티어={tiers}, 행={rows}",
+    "analyze.chart.caption.tier": "서열 보존율={tiers}, 행={rows}",
     "analyze.files.title": "아티팩트 파일 뷰어",
     "analyze.files.desc": "Analyze에서 PDB/FASTA/CSV 및 텍스트 아티팩트를 미리보기합니다.",
     "analyze.files.select": "아티팩트 파일",
@@ -6708,7 +6714,6 @@ function renderWorkflowStudio() {
       </button>
     `;
   }).join("");
-  const fields = workflowStudioStageFields(activeStage);
   const mergedAnswers = workflowStudioDraftAnswers(session);
   const studioTargetPdbText = targetInputPdbText(mergedAnswers);
   const showStudioRfd3InputField = shouldShowRfd3InputPdbField({
@@ -6723,20 +6728,10 @@ function renderWorkflowStudio() {
     nodes: session?.nodes || [],
   });
   const studioRfd3Mode = effectiveRfd3Mode(mergedAnswers) || "local_diversify";
-  const visibleFields = fields.filter((fieldId) => {
-    if (fieldId === "rfd3_use") return true;
-    if (!studioRfd3Enabled) return false;
-    if (fieldId === "rfd3_input_pdb") return showStudioRfd3InputField;
-    if (fieldId === "rfd3_contig") return rfd3ModeUsesContig(studioRfd3Mode);
-    if (fieldId === "rfd3_hotspots" || fieldId === "rfd3_infer_ori_strategy" || fieldId === "rfd3_is_non_loopy") {
-      return rfd3ModeUsesBinderFields(studioRfd3Mode);
-    }
-    if (fieldId === "rfd3_unindex" || fieldId === "rfd3_length" || fieldId === "rfd3_select_fixed_atoms") {
-      return rfd3ModeUsesEnzymeFields(studioRfd3Mode);
-    }
-    if (fieldId === "rfd3_partial_t") return rfd3ModeUsesPartialT(studioRfd3Mode);
-    if (fieldId === "rfd3_inputs_text") return rfd3ModeUsesAdvancedInputs(studioRfd3Mode);
-    return true;
+  const visibleFields = workflowStudioVisibleStageFields(activeStage, {
+    answers: mergedAnswers,
+    nodes: session?.nodes || [],
+    overrideVisible: workflowStudioRfd3InputOverrideVisible(session),
   });
   const designChainValue = Array.isArray(mergedAnswers.design_chains) ? mergedAnswers.design_chains : [];
   const designChainOptions = workflowStudioDesignChainOptionsForAnswers(mergedAnswers, designChainValue);
@@ -7634,7 +7629,7 @@ const QUESTION_PRESETS = {
   rfd3_use: {
     labelKey: "question.rfd3Use.label",
     questionKey: "question.rfd3Use.help",
-    default: false,
+    default: true,
   },
   bioemu_num_samples: {
     labelKey: "question.bioemuNumSamples.label",
@@ -7735,7 +7730,7 @@ const QUESTION_PRESETS = {
   rfd3_partial_t: {
     labelKey: "question.rfd3PartialT.label",
     questionKey: "question.rfd3PartialT.help",
-    default: 10.0,
+    default: 5.0,
   },
   rfd3_inputs_text: {
     labelKey: "question.rfd3AdvancedInputs.label",
@@ -9695,7 +9690,7 @@ function buildManualPlan(mode) {
         labelKey: "question.rfd3Use.label",
         questionKey: "question.rfd3Use.help",
         required: false,
-        default: false,
+        default: true,
       },
       {
         id: "rfd3_max_return_designs",
@@ -9707,7 +9702,7 @@ function buildManualPlan(mode) {
       {
         id: "rfd3_partial_t",
         required: false,
-        default: 10.0,
+        default: 5.0,
       },
       {
         id: "af2_max_candidates_per_tier",
@@ -9905,7 +9900,7 @@ function buildManualPlan(mode) {
       {
         id: "rfd3_partial_t",
         required: false,
-        default: 10.0,
+        default: 5.0,
       },
       {
         id: "rfd3_inputs_text",
@@ -10576,7 +10571,7 @@ function computePipelineTierAwareProgress(status, runState, offset, cached) {
     unitIndex = units.findIndex((unit) => unit?.step === currentStep && String(unit?.tierKey || "") === targetTierKey);
     tierIndex = tierKeys.indexOf(targetTierKey);
     if (tierIndex < 0) tierIndex = 0;
-    label = `${t("artifacts.filter.tier")} ${tierIndex + 1}/${Math.max(1, tierKeys.length)} · ${progressStepLabel(currentStep)}`;
+    label = `${formatConservationTierLabel(targetTierKey, state.lang || "en")} · ${progressStepLabel(currentStep)}`;
   }
   if (unitIndex < 0) return null;
 
@@ -10608,19 +10603,18 @@ function formatStatusStage(stage) {
   const tierMatch = lower.match(/^(proteinmpnn|soluprot|af2|novelty)_([0-9]+(?:\.[0-9]+)?)$/);
   if (tierMatch) {
     const key = tierMatch[1];
-    const tier = tierMatch[2];
-    const tierLabel = t("artifacts.filter.tier");
+    const tierLabel = formatConservationTierLabel(tierMatch[2], state.lang || "en");
     if (key === "proteinmpnn") {
-      return `${formatStageLabel("design")} · ${tierLabel} ${tier}`;
+      return `${formatStageLabel("design")} · ${tierLabel}`;
     }
     if (key === "soluprot") {
-      return `${formatStageLabel("soluprot")} · ${tierLabel} ${tier}`;
+      return `${formatStageLabel("soluprot")} · ${tierLabel}`;
     }
     if (key === "af2") {
-      return `${formatStageLabel("af2")} · ${tierLabel} ${tier}`;
+      return `${formatStageLabel("af2")} · ${tierLabel}`;
     }
     if (key === "novelty") {
-      return `${formatStageLabel("novelty")} · ${tierLabel} ${tier}`;
+      return `${formatStageLabel("novelty")} · ${tierLabel}`;
     }
   }
 
@@ -12057,9 +12051,15 @@ function buildWorkflowDesignerCard({
   const checkpointSummary = document.createElement("div");
   checkpointSummary.className = "question-summary";
   checkpointSummary.textContent = t("setup.workflow.summaryStudioHint");
+  const af2RelaxHint = document.createElement("div");
+  af2RelaxHint.className = "workflow-block-help";
+  af2RelaxHint.textContent = t("setup.workflow.af2RelaxHint");
   summaryBlock.appendChild(summaryTitle);
   summaryBlock.appendChild(summary);
   summaryBlock.appendChild(checkpointSummary);
+  if (nodes.includes("af2")) {
+    summaryBlock.appendChild(af2RelaxHint);
+  }
 
   mainCol.appendChild(paletteBlock);
   mainCol.appendChild(canvasBlock);
@@ -15201,7 +15201,7 @@ function filterAnswersForMode(mode, answers) {
 }
 
 function buildRoutedForMode(mode) {
-  if (mode === "pipeline") return { stop_after: "novelty", novelty_enabled: true, rfd3_use: false };
+  if (mode === "pipeline") return { stop_after: "novelty", novelty_enabled: true, rfd3_use: true };
   if (mode === "rfd3") return { stop_after: "rfd3", rfd3_use: true };
   if (mode === "bioemu") return { stop_after: "bioemu", bioemu_use: true };
   if (mode === "msa") return { stop_after: "msa" };
@@ -15227,7 +15227,11 @@ function withWorkflowDerivedAnswers(baseAnswers) {
   answers.stop_after = workflow.stopAfter;
   answers.novelty_enabled = workflow.noveltyEnabled && workflow.stopAfter === "novelty";
   answers.bioemu_use = workflow.bioemuUse;
-  if (!workflow.nodes.includes("rfd3")) {
+  if (workflow.nodes.includes("rfd3")) {
+    if (typeof answers.rfd3_use !== "boolean") {
+      answers.rfd3_use = true;
+    }
+  } else {
     answers.rfd3_use = false;
   }
   return { answers, workflow };
@@ -15967,11 +15971,10 @@ function renderArtifacts(list, view = "monitor") {
       const meta = artifactMetaForPath(item.path);
       const tier = meta.tier;
       const type = artifactTypeFromItem(item);
-      const tierLabel = t("artifacts.filter.tier");
       const tags = [];
       tags.push(`<span class="stage-tag">${formatStageLabel(meta.stage)}</span>`);
       if (tier) {
-        tags.push(`<span class="stage-tag tier-tag">${tierLabel} ${tier}</span>`);
+        tags.push(`<span class="stage-tag tier-tag">${escapeHtml(formatConservationTierLabel(tier, state.lang || "en"))}</span>`);
       }
       if (type) {
         tags.push(`<span class="stage-tag type-tag">${String(type).toUpperCase()}</span>`);
@@ -16315,12 +16318,7 @@ function compareSourceKeyFromMeta(meta) {
 }
 
 function formatCompareTierLabel(tier) {
-  const text = String(tier || "").trim();
-  if (!text) return "-";
-  const num = Number(text);
-  const normalized =
-    Number.isFinite(num) && num > 1 ? (num / 100).toFixed(2) : Number.isFinite(num) ? num.toFixed(2) : text;
-  return (state.lang || "en") === "ko" ? `티어 ${normalized}` : `Tier ${normalized}`;
+  return formatConservationTierLabel(tier, state.lang || "en");
 }
 
 function normalizeCompareTierKey(value) {
@@ -16871,15 +16869,15 @@ function buildComparisonDetailMarkdown(summary, runId) {
   lines.push("");
 
   if (tierRows.length) {
-    lines.push("## Tier Compare");
+    lines.push(`## ${t("artifacts.compare.tier")}`);
     lines.push(
-      `| Tier | Designs | SoluProt pass | ${af2ProviderPassLabel(af2Provider)} | Relax pass | Median pLDDT | Median RMSD | Median Relax/res |`
+      `| ${t("artifacts.filter.tier")} | Designs | SoluProt pass | ${af2ProviderPassLabel(af2Provider)} | Relax pass | Median pLDDT | Median RMSD | Median Relax/res |`
     );
     lines.push("|---:|---:|---:|---:|---:|---:|---:|---:|");
     tierRows.forEach((row) => {
       if (!row || typeof row !== "object") return;
       lines.push(
-        `| ${formatMetricValue(row.tier, 2)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${Number(row.relax_selected_total || 0)}/${Number(row.relax_candidate_total || 0)} (${formatPercentValue(row.relax_pass_rate)}) | ${formatMetricValue(row.plddt_median, 1)} | ${formatMetricValue(row.rmsd_median, 2)} | ${formatMetricValue(row.relax_median, 3)} |`
+        `| ${formatConservationTierValue(row.tier)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${Number(row.relax_selected_total || 0)}/${Number(row.relax_candidate_total || 0)} (${formatPercentValue(row.relax_pass_rate)}) | ${formatMetricValue(row.plddt_median, 1)} | ${formatMetricValue(row.rmsd_median, 2)} | ${formatMetricValue(row.relax_median, 3)} |`
       );
     });
     lines.push("");
@@ -17078,7 +17076,7 @@ function renderArtifactComparisonSummary(summary) {
   )}, ${af2ProviderName(af2Provider)} ${formatPercentValue(funnelOverall?.retention_backbone_to_af2_selected)}`;
   const tierTableRows = tierRows
     .map((row) => {
-      const tierText = formatMetricValue(finiteNumber(row?.tier), 2, false);
+      const tierText = formatConservationTierValue(finiteNumber(row?.tier));
       return `
         <tr>
           <td>${escapeHtml(tierText)}</td>
@@ -17539,10 +17537,9 @@ function renderWorkflowReviewPanel(status = state.lastRunStatus) {
               const meta = artifactMetaForPath(path);
               const tier = meta.tier;
               const type = artifactTypeFromItem(item);
-              const tierLabel = t("artifacts.filter.tier");
               const tags = [];
               if (tier) {
-                tags.push(`<span class="stage-tag tier-tag">${escapeHtml(`${tierLabel} ${tier}`)}</span>`);
+                tags.push(`<span class="stage-tag tier-tag">${escapeHtml(formatConservationTierLabel(tier, state.lang || "en"))}</span>`);
               }
               if (type) {
                 tags.push(`<span class="stage-tag type-tag">${escapeHtml(String(type).toUpperCase())}</span>`);
@@ -20685,8 +20682,7 @@ async function loadAgentReportModal() {
 function formatStageLabel(stage) {
   const workflowNode = parseWorkflowStudioNode(stage);
   if (workflowNode?.isTier) {
-    const tierLabel = t("artifacts.filter.tier");
-    return `${formatStageLabel(workflowNode.baseStage)} · ${tierLabel} ${workflowNode.tier.toFixed(2)}`;
+    return `${formatStageLabel(workflowNode.baseStage)} · ${formatConservationTierLabel(workflowNode.tier, state.lang || "en")}`;
   }
   const dynamicProvider = currentRunAf2Provider();
   if (stage === "af2") {
@@ -20780,7 +20776,7 @@ function renderArtifactFilters(items, view = "monitor") {
     options.forEach((opt) => {
       const option = document.createElement("option");
       option.value = opt;
-      option.textContent = opt;
+      option.textContent = formatConservationTierValue(opt);
       selectEl.appendChild(option);
     });
     if (!options.includes(current)) {
@@ -21927,7 +21923,7 @@ function renderHitList() {
         <td class="num">${escapeHtml(String(row.rank || "-"))}</td>
         <td>${escapeHtml(String(row.seq_id || "-"))}</td>
         <td>${escapeHtml(String(row.source || "-"))}</td>
-        <td class="num">${escapeHtml(formatMetricValue(row.tier, 2, false))}</td>
+        <td class="num">${escapeHtml(formatConservationTierValue(row.tier))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.score, 1, false))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.soluprot, 3, false))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.plddt, 1, false))}</td>
@@ -21978,12 +21974,12 @@ function buildHitListDetailsMarkdown() {
   lines.push(`- Rows: ${maxRows}/${filtered.length}`);
   lines.push("");
   lines.push(
-    `| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | Relax | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+    `| Rank | seq_id | Source | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | Relax | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
   );
   lines.push("|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|");
   filtered.slice(0, maxRows).forEach((row) => {
     lines.push(
-      `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatMetricValue(row.tier, 2)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatMetricValue(row.relax, 3)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
+      `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatMetricValue(row.relax, 3)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
     );
   });
   lines.push("");
@@ -22432,12 +22428,12 @@ function buildReportHitListSection() {
   );
   lines.push("");
   lines.push(
-    `| Rank | seq_id | Source | Tier | Score | SoluProt | pLDDT | RMSD | Relax | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+    `| Rank | seq_id | Source | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | Relax | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
   );
   lines.push("|---:|---|---|---:|---:|---:|---:|---:|---:|---|");
   rows.slice(0, maxRows).forEach((row) => {
     lines.push(
-      `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatMetricValue(row.tier, 2)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatMetricValue(row.relax, 3)} | ${row.af2_selected ? "yes" : "no"} |`
+      `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatMetricValue(row.relax, 3)} | ${row.af2_selected ? "yes" : "no"} |`
     );
   });
   lines.push("");

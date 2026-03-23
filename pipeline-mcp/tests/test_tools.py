@@ -1389,6 +1389,102 @@ class TestTools(unittest.TestCase):
             self.assertTrue(bool((by_id.get("rfd3_model:1") or {}).get("relax_selected")))
             self.assertFalse(bool((by_id.get("bioemu_model:1") or {}).get("relax_selected")))
 
+    def test_wt_comparison_uses_target_rmsd_when_available_but_hit_list_keeps_parent_backbone_rmsd(self) -> None:
+        with _tmpdir() as tmp:
+            run_root = Path(tmp)
+            tier_dir = run_root / "tiers" / "30"
+            tier_dir.mkdir(parents=True, exist_ok=True)
+            wt_dir = run_root / "wt"
+            wt_dir.mkdir(parents=True, exist_ok=True)
+
+            (tier_dir / "soluprot.json").write_text(
+                json.dumps(
+                    {
+                        "scores": {
+                            "rfd3_model:1": 0.91,
+                            "bioemu_model:1": 0.83,
+                        },
+                        "passed_ids": ["rfd3_model:1", "bioemu_model:1"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (tier_dir / "af2_scores.json").write_text(
+                json.dumps(
+                    {
+                        "scores": {
+                            "rfd3_model:1": 92.0,
+                            "bioemu_model:1": 88.0,
+                        },
+                        "rmsd_scores": {
+                            "rfd3_model:1": 0.4,
+                            "bioemu_model:1": 0.2,
+                        },
+                        "target_rmsd_scores": {
+                            "rfd3_model:1": 0.4,
+                            "bioemu_model:1": 2.4,
+                        },
+                        "candidate_ids": ["rfd3_model:1", "bioemu_model:1"],
+                        "selected_ids": ["rfd3_model:1", "bioemu_model:1"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (wt_dir / "metrics.json").write_text(
+                json.dumps(
+                    {
+                        "enabled": True,
+                        "af2": {
+                            "best_plddt": 90.0,
+                            "rmsd_ca": 0.5,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            summary = {
+                "tiers": [
+                    {
+                        "tier": 0.3,
+                        "proteinmpnn_samples": [
+                            {
+                                "id": "rfd3_model:1",
+                                "sequence": "ACDE",
+                                "meta": {"backbone_source": "rfd3"},
+                            },
+                            {
+                                "id": "bioemu_model:1",
+                                "sequence": "ACDF",
+                                "meta": {"backbone_source": "bioemu"},
+                            },
+                        ],
+                    }
+                ]
+            }
+            request = {"target_fasta": ">q1\nACDE\n", "wt_compare": True}
+
+            comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
+            rmsd_metric = (comparison_summary.get("wt_vs_design") or {}).get("rmsd") or {}
+            self.assertAlmostEqual(float(rmsd_metric.get("wt") or 0.0), 0.5, places=6)
+            self.assertAlmostEqual(float(rmsd_metric.get("design_median") or 0.0), 1.4, places=6)
+            self.assertAlmostEqual(float(rmsd_metric.get("delta_design_minus_wt") or 0.0), 0.9, places=6)
+
+            source_compare = comparison_summary.get("source_compare") or {}
+            self.assertAlmostEqual(float((source_compare.get("rfd3") or {}).get("rmsd_median") or 0.0), 0.4, places=6)
+            self.assertAlmostEqual(float((source_compare.get("bioemu") or {}).get("rmsd_median") or 0.0), 0.2, places=6)
+
+            hit_rows = _build_hit_list_rows(
+                run_root=run_root,
+                request=request,
+                summary=summary,
+                weights={"soluprot": 1.0, "plddt": 1.0, "rmsd": 1.0, "novelty": 0.0},
+                rmsd_ref=5.0,
+            )
+            by_id = {str(row.get("seq_id")): row for row in hit_rows}
+            self.assertAlmostEqual(float((by_id.get("rfd3_model:1") or {}).get("rmsd") or 0.0), 0.4, places=6)
+            self.assertAlmostEqual(float((by_id.get("bioemu_model:1") or {}).get("rmsd") or 0.0), 0.2, places=6)
+
     def test_comparison_summary_hides_target_designs_when_generated_sources_exist(self) -> None:
         with _tmpdir() as tmp:
             run_root = Path(tmp)

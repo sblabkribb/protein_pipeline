@@ -39,6 +39,8 @@ import {
   effectiveRfd3InputPdb,
   expandWorkflowStudioNodes,
   filterRunsByPrefix,
+  formatConservationTierLabel,
+  formatConservationTierValue,
   formatBackboneUsageSummary,
   inferRequestRunMode,
   latestWorkflowStudioCompletedNodesFromEvents,
@@ -75,6 +77,7 @@ import {
   workflowStudioDependencyStatus,
   workflowStudioSessionIdForRun,
   workflowStudioStageFields,
+  workflowStudioVisibleStageFields,
   upsertWorkflowStudioStageStatus,
   withFixedPositionsExtra,
   workflowStudioSessionRunKey,
@@ -695,6 +698,44 @@ test("workflowStudioStageFields exposes key fields per stage", () => {
   assert.deepEqual(workflowStudioStageFields("unknown"), []);
 });
 
+test("workflowStudioVisibleStageFields keeps AF2 controls visible when RFD3 is disabled", () => {
+  assert.deepEqual(
+    workflowStudioVisibleStageFields("af2_30", {
+      answers: {
+        rfd3_use: false,
+      },
+      nodes: ["msa", "bioemu", "proteinmpnn_30", "soluprot_30", "af2_30"],
+    }),
+    [
+      "af2_provider",
+      "af2_max_candidates_per_tier",
+      "af2_plddt_cutoff",
+      "af2_rmsd_cutoff",
+      "relax_enabled",
+      "relax_score_per_residue_cutoff",
+    ]
+  );
+});
+
+test("workflowStudioVisibleStageFields still filters RFD3-only controls by mode", () => {
+  assert.deepEqual(
+    workflowStudioVisibleStageFields("rfd3", {
+      answers: {
+        rfd3_use: true,
+        rfd3_mode: "local_diversify",
+      },
+      nodes: ["msa", "rfd3", "bioemu"],
+    }),
+    [
+      "rfd3_use",
+      "rfd3_input_pdb",
+      "rfd3_mode",
+      "rfd3_partial_t",
+      "rfd3_max_return_designs",
+    ]
+  );
+});
+
 test("parseWorkflowStudioNode parses tier lanes into base execution stages", () => {
   assert.deepEqual(parseWorkflowStudioNode("proteinmpnn_30"), {
     nodeId: "proteinmpnn_30",
@@ -707,6 +748,13 @@ test("parseWorkflowStudioNode parses tier lanes into base execution stages", () 
     selectedTiers: [0.3],
   });
   assert.equal(parseWorkflowStudioNode("af2").baseStage, "af2");
+});
+
+test("conservation tier formatters show percentages instead of raw fractions", () => {
+  assert.equal(formatConservationTierValue(0.3), "30%");
+  assert.equal(formatConservationTierValue("70"), "70%");
+  assert.equal(formatConservationTierLabel(0.5, "en"), "Sequence conservation 50%");
+  assert.equal(formatConservationTierLabel("30", "ko"), "서열 보존율 30%");
 });
 
 test("expandWorkflowStudioNodes expands downstream workflow stages per tier", () => {
@@ -814,7 +862,7 @@ test("buildWorkflowStudioEffectiveAnswers applies workflow defaults for untouche
   assert.equal(merged.af2_max_candidates_per_tier, 0);
 });
 
-test("buildWorkflowStudioEffectiveAnswers applies workflow defaults for untouched rfd3 and bioemu counts", () => {
+test("buildWorkflowStudioEffectiveAnswers applies workflow defaults for untouched rfd3 and bioemu controls", () => {
   const merged = buildWorkflowStudioEffectiveAnswers({
     headRequest: {
       target_pdb: "ATOM",
@@ -828,7 +876,9 @@ test("buildWorkflowStudioEffectiveAnswers applies workflow defaults for untouche
     },
     nodes: ["msa", "rfd3", "bioemu", "design", "af2"],
   });
+  assert.equal(merged.rfd3_use, true);
   assert.equal(merged.rfd3_max_return_designs, 10);
+  assert.equal(merged.rfd3_partial_t, 5);
   assert.equal(merged.bioemu_num_samples, 20);
   assert.equal(merged.bioemu_max_return_structures, 10);
   assert.equal(merged.bioemu_filter_samples, true);
@@ -840,7 +890,7 @@ test("workflow studio question metadata keeps default return counts for rfd3 and
   const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
   assert.match(
     source,
-    /rfd3_use:\s*\{[\s\S]*?labelKey:\s*"question\.rfd3Use\.label",[\s\S]*?questionKey:\s*"question\.rfd3Use\.help",[\s\S]*?default:\s*false,/m
+    /rfd3_use:\s*\{[\s\S]*?labelKey:\s*"question\.rfd3Use\.label",[\s\S]*?questionKey:\s*"question\.rfd3Use\.help",[\s\S]*?default:\s*true,/m
   );
   assert.match(
     source,
@@ -854,7 +904,7 @@ test("workflow studio question metadata keeps default return counts for rfd3 and
     source,
     /rfd3_max_return_designs:\s*\{[\s\S]*?labelKey:\s*"question\.rfd3MaxReturn\.label",[\s\S]*?default:\s*10,/m
   );
-  assert.match(source, /rfd3_partial_t:\s*\{[\s\S]*?default:\s*10(?:\.0)?,/m);
+  assert.match(source, /rfd3_partial_t:\s*\{[\s\S]*?default:\s*5(?:\.0)?,/m);
 });
 
 test("RFD3 mode question metadata and localized guidance copy are present", () => {
@@ -1005,7 +1055,7 @@ test("studio launcher opens the studio tab instead of redirecting into advanced"
   );
 });
 
-test("buildFastLaunchPreset applies standard pipeline defaults with BioEmu on and RFD3 off", () => {
+test("buildFastLaunchPreset applies standard pipeline defaults with BioEmu and RFD3 on", () => {
   const preset = buildFastLaunchPreset({
     target_input: "ATOM      1  N   GLY A   1      11.104  13.207   9.247  1.00 20.00           N",
     prompt: "stability screen",
@@ -1020,15 +1070,15 @@ test("buildFastLaunchPreset applies standard pipeline defaults with BioEmu on an
   assert.equal(preset.mode, "pipeline");
   assert.equal(preset.answers.target_input.startsWith("ATOM"), true);
   assert.equal(preset.answers.bioemu_use, true);
-  assert.equal(preset.answers.rfd3_use, false);
+  assert.equal(preset.answers.rfd3_use, true);
   assert.equal(preset.answers.mask_consensus_apply, false);
   assert.equal(preset.answers.bioemu_num_samples, 20);
   assert.equal(preset.answers.bioemu_max_return_structures, 10);
   assert.equal(preset.routed.stop_after, "novelty");
   assert.equal(preset.routed.bioemu_use, true);
-  assert.equal(preset.routed.rfd3_use, false);
+  assert.equal(preset.routed.rfd3_use, true);
   assert.equal(args.bioemu_use, true);
-  assert.equal(args.rfd3_use, false);
+  assert.equal(args.rfd3_use, true);
   assert.equal(args.stop_after, "novelty");
 });
 
@@ -2434,7 +2484,7 @@ test("buildCompareScopeDescription explains reference and candidate scope", () =
   });
   assert.match(text, /predicted wild-type reference/i);
   assert.match(text, /single candidate/i);
-  assert.match(text, /Tier 0\.30/i);
+  assert.match(text, /Sequence conservation 30%/i);
 });
 
 test("buildCompareMetaTooltip explains hard-to-read compare metrics", () => {
