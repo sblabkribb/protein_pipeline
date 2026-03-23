@@ -538,6 +538,35 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertEqual(spec.get("partial_t"), 5.0)
             self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
 
+    def test_pipeline_rfd3_input_only_spec_injects_default_fixed_atoms_without_partial_t(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            req = PipelineRequest(
+                target_fasta="",
+                target_pdb="",
+                dry_run=True,
+                rfd3_inputs={
+                    "spec-1": {
+                        "input": "input.pdb",
+                    }
+                },
+                rfd3_input_pdb=pdb,
+                num_seq_per_tier=1,
+                conservation_tiers=[0.3],
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
+            spec = inputs.get("spec-1") or {}
+            self.assertEqual(spec.get("input"), "input.pdb")
+            self.assertNotIn("partial_t", spec)
+            self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
+
     def test_pipeline_rfd3_partial_t_respects_override(self) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"

@@ -1300,7 +1300,6 @@ const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
   rfd3: Object.freeze([
     "rfd3_use",
     "rfd3_input_pdb",
-    "rfd3_mode",
     "rfd3_contig",
     "rfd3_hotspots",
     "rfd3_infer_ori_strategy",
@@ -1514,7 +1513,6 @@ export function workflowStudioVisibleStageFields(stage, { answers = {}, nodes = 
   if (!fields.length) return [];
   if (baseStage !== "rfd3") return fields;
 
-  const rfd3Mode = effectiveRfd3Mode(answers) || "local_diversify";
   const rfd3Enabled = rfd3EnabledForContext({ mode: "workflow", answers, nodes });
   const showRfd3InputPdb = shouldShowRfd3InputPdbField({
     mode: "workflow",
@@ -1527,15 +1525,19 @@ export function workflowStudioVisibleStageFields(stage, { answers = {}, nodes = 
     if (fieldId === "rfd3_use") return true;
     if (!rfd3Enabled) return false;
     if (fieldId === "rfd3_input_pdb") return showRfd3InputPdb;
-    if (fieldId === "rfd3_contig") return workflowStudioRfd3ModeUsesContig(rfd3Mode);
-    if (fieldId === "rfd3_hotspots" || fieldId === "rfd3_infer_ori_strategy" || fieldId === "rfd3_is_non_loopy") {
-      return workflowStudioRfd3ModeUsesBinderFields(rfd3Mode);
+    if (
+      fieldId === "rfd3_contig" ||
+      fieldId === "rfd3_hotspots" ||
+      fieldId === "rfd3_infer_ori_strategy" ||
+      fieldId === "rfd3_is_non_loopy" ||
+      fieldId === "rfd3_unindex" ||
+      fieldId === "rfd3_length" ||
+      fieldId === "rfd3_select_fixed_atoms" ||
+      fieldId === "rfd3_partial_t" ||
+      fieldId === "rfd3_inputs_text"
+    ) {
+      return true;
     }
-    if (fieldId === "rfd3_unindex" || fieldId === "rfd3_length" || fieldId === "rfd3_select_fixed_atoms") {
-      return workflowStudioRfd3ModeUsesEnzymeFields(rfd3Mode);
-    }
-    if (fieldId === "rfd3_partial_t") return workflowStudioRfd3ModeUsesPartialT(rfd3Mode);
-    if (fieldId === "rfd3_inputs_text") return workflowStudioRfd3ModeUsesAdvancedInputs(rfd3Mode);
     return true;
   });
 }

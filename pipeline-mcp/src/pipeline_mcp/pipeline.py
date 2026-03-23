@@ -1190,6 +1190,36 @@ def _default_rfd3_select_fixed_atoms(pdb_text: str) -> dict[str, str] | None:
     return None
 
 
+def _rfd3_spec_has_value(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, tuple, set, dict)):
+        return bool(value)
+    return True
+
+
+def _rfd3_spec_uses_default_fixed_atoms(spec: Any) -> bool:
+    if not isinstance(spec, dict):
+        return False
+    if _rfd3_spec_has_value(spec.get("select_fixed_atoms")):
+        return False
+    if not _rfd3_spec_has_value(spec.get("input")):
+        return False
+    if _rfd3_spec_has_value(spec.get("contig")):
+        return False
+    if _rfd3_spec_has_value(spec.get("unindex")):
+        return False
+    if _rfd3_spec_has_value(spec.get("hotspots")):
+        return False
+    if _rfd3_spec_has_value(spec.get("infer_ori_strategy")):
+        return False
+    if _rfd3_spec_has_value(spec.get("is_non_loopy")):
+        return False
+    return True
+
+
 def _inject_rfd3_default_fixed_atoms(
     inputs: dict[str, Any] | None,
     *,
@@ -1200,9 +1230,7 @@ def _inject_rfd3_default_fixed_atoms(
     for spec in inputs.values():
         if not isinstance(spec, dict):
             continue
-        if "select_fixed_atoms" in spec:
-            continue
-        if "partial_t" not in spec:
+        if not _rfd3_spec_uses_default_fixed_atoms(spec):
             continue
         input_name = str(spec.get("input") or "").strip()
         if not input_name:

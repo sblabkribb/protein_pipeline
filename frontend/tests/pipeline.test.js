@@ -720,21 +720,27 @@ test("workflowStudioVisibleStageFields keeps AF2 controls visible when RFD3 is d
   );
 });
 
-test("workflowStudioVisibleStageFields still filters RFD3-only controls by mode", () => {
+test("workflowStudioVisibleStageFields exposes RFD3 option fields without a visible mode selector", () => {
   assert.deepEqual(
     workflowStudioVisibleStageFields("rfd3", {
       answers: {
         rfd3_use: true,
-        rfd3_mode: "local_diversify",
       },
       nodes: ["msa", "rfd3", "bioemu"],
     }),
     [
       "rfd3_use",
       "rfd3_input_pdb",
-      "rfd3_mode",
+      "rfd3_contig",
+      "rfd3_hotspots",
+      "rfd3_infer_ori_strategy",
+      "rfd3_is_non_loopy",
+      "rfd3_unindex",
+      "rfd3_length",
+      "rfd3_select_fixed_atoms",
       "rfd3_partial_t",
       "rfd3_max_return_designs",
+      "rfd3_inputs_text",
     ]
   );
 });
@@ -918,16 +924,13 @@ test("workflow studio question metadata keeps default return counts for rfd3 and
   assert.match(source, /rfd3_partial_t:\s*\{[\s\S]*?default:\s*5(?:\.0)?,/m);
 });
 
-test("RFD3 mode question metadata and localized guidance copy are present", () => {
+test("RFD3 mode metadata stays for compatibility while setup no longer renders a mode selector", () => {
   const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
   assert.match(
     source,
     /rfd3_mode:\s*\{[\s\S]*?labelKey:\s*"question\.rfd3Mode\.label",[\s\S]*?questionKey:\s*"question\.rfd3Mode\.help",[\s\S]*?default:\s*"local_diversify",/m
   );
-  assert.match(
-    source,
-    /if \(q\.id === "rfd3_mode"\) \{[\s\S]*?mode-guide-desc[\s\S]*?rfd3ModeDescriptionKey\(/m
-  );
+  assert.doesNotMatch(source, /if \(q\.id === "rfd3_mode"\) \{/);
   ["localDiversify", "legacyContig", "binder", "enzyme", "advanced"].forEach((suffix) => {
     assert.equal(source.split(`"choice.rfd3Mode.${suffix}":`).length - 1, 2);
     assert.equal(source.split(`"question.rfd3Mode.mode.${suffix}":`).length - 1, 2);
@@ -2211,7 +2214,6 @@ test("normalizeWorkflowStudioPayloadForComparison preserves visible binder parti
   const normalized = normalizeWorkflowStudioPayloadForComparison(
     {
       target_input: "ATOM      1  CA  ALA A   1       0.0   0.0   0.0  1.00 20.00           C\nEND\n",
-      rfd3_mode: "binder",
       rfd3_contig: "A1-3",
       rfd3_partial_t: 8,
       rfd3_hotspots: "A10",
@@ -2228,7 +2230,6 @@ test("normalizeWorkflowStudioPayloadForComparison drops advanced-only-hidden par
   const normalized = normalizeWorkflowStudioPayloadForComparison(
     {
       target_input: "ATOM      1  CA  ALA A   1       0.0   0.0   0.0  1.00 20.00           C\nEND\n",
-      rfd3_mode: "advanced",
       rfd3_partial_t: 8,
       rfd3_inputs_text: "{\"spec-1\":{\"input\":\"input.pdb\"}}",
     },

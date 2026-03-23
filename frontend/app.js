@@ -6752,19 +6752,12 @@ function renderWorkflowStudio() {
     ? visibleFields
         .map((fieldId) => {
           const question = normalizeQuestion({ id: fieldId }) || { id: fieldId };
-          const value =
-            fieldId === "rfd3_mode"
-              ? mergedAnswers[fieldId] !== undefined
-                ? mergedAnswers[fieldId]
-                : studioRfd3Mode || question.default
-              : mergedAnswers[fieldId] !== undefined
-                ? mergedAnswers[fieldId]
-                : question.default;
+          const value = mergedAnswers[fieldId] !== undefined ? mergedAnswers[fieldId] : question.default;
           const label = question.labelKey ? t(question.labelKey) : question.label || fieldId;
           const help = question.questionKey ? t(question.questionKey) : question.question || "";
           const error = workflowStudioFieldError(session.session_id, fieldId);
           const isBool = ANSWER_BOOL_KEYS.has(fieldId);
-          const isChoice = fieldId === "af2_provider" || fieldId === "rfd3_mode";
+          const isChoice = fieldId === "af2_provider";
           const isDesignChains = fieldId === "design_chains";
           const isContigField = fieldId === "rfd3_contig";
           const isAttachable = fieldId === "target_input" || fieldId === "rfd3_input_pdb";
@@ -6837,24 +6830,12 @@ function renderWorkflowStudio() {
             : isChoice
               ? `
                 <select data-studio-field="${escapeAttr(fieldId)}">
-                  ${
-                    fieldId === "af2_provider"
-                      ? `
-                        <option value="colabfold"${String(value || "colabfold") === "colabfold" ? " selected" : ""}>${escapeHtml(
-                          af2ProviderName("colabfold", state.lang || "en")
-                        )}</option>
-                        <option value="af2"${String(value || "") === "af2" ? " selected" : ""}>${escapeHtml(
-                          af2ProviderName("af2", state.lang || "en")
-                        )}</option>
-                      `
-                      : RFD3_MODE_OPTIONS.map(
-                          (item) => `
-                            <option value="${escapeAttr(item.value)}"${normalizeRfd3Mode(value || "local_diversify") === item.value ? " selected" : ""}>
-                              ${escapeHtml(labelFor(item))}
-                            </option>
-                          `
-                        ).join("")
-                  }
+                  <option value="colabfold"${String(value || "colabfold") === "colabfold" ? " selected" : ""}>${escapeHtml(
+                    af2ProviderName("colabfold", state.lang || "en")
+                  )}</option>
+                  <option value="af2"${String(value || "") === "af2" ? " selected" : ""}>${escapeHtml(
+                    af2ProviderName("af2", state.lang || "en")
+                  )}</option>
                 </select>
               `
             : isLongText
@@ -6868,8 +6849,6 @@ function renderWorkflowStudio() {
             detailNote = designChainOptions.length ? t("choice.chainDefaultNote") : t("choice.chainNote");
           } else if (isContigField) {
             detailNote = contigOptions.length ? t("choice.contigPositiveOnly") : t("choice.contigNote");
-          } else if (fieldId === "rfd3_mode") {
-            detailNote = t(rfd3ModeDescriptionKey(value || "local_diversify"));
           }
           const cardClass = isLongText ? "studio-field full" : "studio-field";
           return `
@@ -9862,11 +9841,6 @@ function buildManualPlan(mode) {
         required: false,
       },
       {
-        id: "rfd3_mode",
-        required: false,
-        default: "local_diversify",
-      },
-      {
         id: "rfd3_contig",
         labelKey: "question.rfd3Contig.label",
         questionKey: "question.rfd3Contig.help",
@@ -9925,11 +9899,6 @@ function buildManualPlan(mode) {
         labelKey: "question.rfd3InputPdb.label",
         questionKey: "question.rfd3InputPdb.help",
         required: true,
-      },
-      {
-        id: "rfd3_mode",
-        required: false,
-        default: "local_diversify",
       },
       {
         id: "rfd3_contig",
@@ -11602,18 +11571,7 @@ function rfd3ModeDescriptionKey(mode) {
 }
 
 function setupRfd3ModeDetailIds(mode) {
-  const normalized = normalizeRfd3Mode(mode) || "local_diversify";
-  const ids = [];
-  if (rfd3ModeUsesPartialT(normalized)) ids.push("rfd3_partial_t");
-  if (rfd3ModeUsesContig(normalized)) ids.push("rfd3_contig");
-  if (rfd3ModeUsesBinderFields(normalized)) {
-    ids.push("rfd3_hotspots", "rfd3_infer_ori_strategy", "rfd3_is_non_loopy");
-  }
-  if (rfd3ModeUsesEnzymeFields(normalized)) {
-    ids.push("rfd3_unindex", "rfd3_length", "rfd3_select_fixed_atoms");
-  }
-  if (rfd3ModeUsesAdvancedInputs(normalized)) ids.push("rfd3_inputs_text");
-  return ids;
+  return Array.from(SETUP_RFD3_MODE_DETAIL_IDS);
 }
 
 function rfd3ModeUsesContig(mode) {
@@ -11677,31 +11635,29 @@ function questionVisibleForCurrentState(question, normalizedQuestions = []) {
     mode === "soluprot" ||
     answers.bioemu_use === true ||
     answers.stop_after === "bioemu";
-  const currentRfd3Mode = effectiveSetupRfd3Mode(answers);
-
   if (id === "rfd3_use") {
     return rfd3InScope && mode !== "rfd3";
   }
   if (id === "rfd3_input_pdb") {
     return rfd3Enabled && shouldShowSetupRfd3InputField(answers);
   }
-  if (id === "rfd3_mode" || id === "rfd3_max_return_designs") {
+  if (id === "rfd3_max_return_designs") {
     return rfd3Enabled;
   }
   if (id === "rfd3_contig") {
-    return rfd3Enabled && rfd3ModeUsesContig(currentRfd3Mode);
+    return rfd3Enabled;
   }
   if (id === "rfd3_hotspots" || id === "rfd3_infer_ori_strategy" || id === "rfd3_is_non_loopy") {
-    return rfd3Enabled && rfd3ModeUsesBinderFields(currentRfd3Mode);
+    return rfd3Enabled;
   }
   if (id === "rfd3_unindex" || id === "rfd3_length" || id === "rfd3_select_fixed_atoms") {
-    return rfd3Enabled && rfd3ModeUsesEnzymeFields(currentRfd3Mode);
+    return rfd3Enabled;
   }
   if (id === "rfd3_partial_t") {
-    return rfd3Enabled && rfd3ModeUsesPartialT(currentRfd3Mode);
+    return rfd3Enabled;
   }
   if (id === "rfd3_inputs_text") {
-    return rfd3Enabled && rfd3ModeUsesAdvancedInputs(currentRfd3Mode);
+    return rfd3Enabled;
   }
   if (
     id === "bioemu_filter_samples" ||
@@ -13342,7 +13298,6 @@ function renderQuestions(questions) {
     "start_from",
     "stop_after",
     "rfd3_use",
-    "rfd3_mode",
     "selected_tiers",
     "design_chains",
     "rfd3_contig",
@@ -13405,8 +13360,7 @@ function renderQuestions(questions) {
   };
 
   function renderSetupRfd3ModeDetailsCard(card, normalizedQuestions) {
-    const currentMode = effectiveSetupRfd3Mode(state.answers);
-    const fieldIds = setupRfd3ModeDetailIds(currentMode);
+    const fieldIds = setupRfd3ModeDetailIds();
     if (!fieldIds.length) return;
 
     const grid = document.createElement("div");
@@ -13706,35 +13660,6 @@ function renderQuestions(questions) {
           updateRunEligibility(normalizedQuestions);
         }
       );
-    }
-
-    if (q.id === "rfd3_mode") {
-      const routedDefault = state.plan?.routed_request?.rfd3_mode;
-      const current = normalizeRfd3Mode(state.answers.rfd3_mode || routedDefault || effectiveSetupRfd3Mode(state.answers));
-      state.answers.rfd3_mode = current || "local_diversify";
-      renderChoiceButtons(card, RFD3_MODE_OPTIONS, state.answers.rfd3_mode, (value) => {
-        state.answers.rfd3_mode = normalizeRfd3Mode(value) || "local_diversify";
-        updateRunEligibility(normalizedQuestions);
-      });
-      const selectedOpt =
-        RFD3_MODE_OPTIONS.find((opt) => String(opt.value || "").trim() === state.answers.rfd3_mode) || RFD3_MODE_OPTIONS[0];
-      if (selectedOpt) {
-        const modeGuide = document.createElement("div");
-        modeGuide.className = "mode-guide";
-        const item = document.createElement("div");
-        item.className = "mode-guide-item selected";
-        const label = document.createElement("div");
-        label.className = "mode-guide-label";
-        label.textContent = labelFor(selectedOpt);
-        const desc = document.createElement("div");
-        desc.className = "mode-guide-desc";
-        desc.textContent = t(rfd3ModeDescriptionKey(state.answers.rfd3_mode));
-        item.appendChild(label);
-        item.appendChild(desc);
-        modeGuide.appendChild(item);
-        card.appendChild(modeGuide);
-      }
-      renderSetupRfd3ModeDetailsCard(card, normalizedQuestions);
     }
 
     if (q.id === "design_chains") {
@@ -14540,12 +14465,16 @@ function renderQuestions(questions) {
     card.appendChild(inputWrap);
     card.appendChild(errorEl);
     appendConfigCard(card);
+    return card;
   }
 
   const hiddenTextQuestionIds = new Set(compactQuestions.map((q) => q.id));
   textQuestions.forEach((q) => {
     if (hiddenTextQuestionIds.has(q.id) || SETUP_RFD3_MODE_DETAIL_IDS.has(q.id)) return;
-    appendTextQuestionCard(q);
+    const card = appendTextQuestionCard(q);
+    if (q.id === "rfd3_max_return_designs") {
+      renderSetupRfd3ModeDetailsCard(card, normalizedQuestions);
+    }
   });
 
   const setupTargetPdbText = getTargetInputPdbText();
