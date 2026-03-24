@@ -11,6 +11,8 @@
 
 # --- Pipeline outputs ---
 /outputs/
+/logs/*
+!/logs/.gitkeep
 
 # --- Local scratch / artifacts ---
 /tmp/
