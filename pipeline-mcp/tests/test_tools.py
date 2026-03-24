@@ -1695,6 +1695,38 @@ class TestTools(unittest.TestCase):
                 places=6,
             )
 
+    def test_get_hit_list_exposes_relax_requested_even_before_relax_metrics_exist(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU A   4       3.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.run",
+                {
+                    "target_pdb": pdb,
+                    "dry_run": True,
+                    "stop_after": "soluprot",
+                    "num_seq_per_tier": 1,
+                    "conservation_tiers": [0.3],
+                    "relax_enabled": True,
+                    "relax_score_per_residue_cutoff": None,
+                },
+            )
+            run_id = str(out.get("run_id") or "")
+            self.assertTrue(run_id)
+
+            hit_list = dispatcher.call_tool(
+                "pipeline.get_hit_list",
+                {"run_id": run_id, "limit": 20, "min_score": 0.0},
+            )
+            self.assertEqual(hit_list.get("relax_enabled"), True)
+
     def test_get_hit_list_prefers_saved_design_chains_for_wt_difference_metrics(self) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"

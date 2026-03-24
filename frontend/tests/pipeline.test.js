@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
+  analyzeChartViewOptions,
   buildCompareMetaTooltip,
   buildCompareScopeDescription,
   buildStructureDiffLegend,
@@ -11,6 +12,7 @@ import {
   extractDesignChainsFromPayload,
   filterPdbTextByChains,
   hitListHasRelaxMetrics,
+  hitListRelaxColumnEnabled,
   runCompareHasRelaxMetrics,
   selectResidueStripMetrics,
 } from "../lib/compare.js";
@@ -40,11 +42,14 @@ import {
   displayArtifactPath,
   displayRfd3Id,
   effectiveRfd3InputPdb,
+  effectiveRfd3Mode,
   expandWorkflowStudioNodes,
   filterRunsByPrefix,
+  formatArtifactTypeLabel,
   formatConservationTierLabel,
   formatConservationTierValue,
   formatBackboneUsageSummary,
+  inferDefaultRfd3Contig,
   inferRequestRunMode,
   latestWorkflowStudioCompletedNodesFromEvents,
   latestMeaningfulStatusFromEvents,
@@ -57,6 +62,7 @@ import {
   normalizeWorkflowStudioPayloadForComparison,
   nextWorkflowStudioStage,
   parseWorkflowStudioNode,
+  resolveRfd3Defaults,
   resolveWorkflowStudioStageForSession,
   runUsesRfd3Stage,
   sanitizeName,
@@ -109,6 +115,16 @@ import {
   buildResiduePickerHoverText,
   buildResiduePickerViewerLegendLines,
 } from "../lib/viewer-annotations.js";
+
+const RFD3_AUTO_CONTIG_PDB = [
+  "ATOM      1  N   GLY A  -8       0.000   0.000   0.000  1.00 20.00           N",
+  "ATOM      2  CA  GLY A  -8       0.000   0.000   0.000  1.00 20.00           C",
+  "ATOM      3  N   GLY A   1       1.000   0.000   0.000  1.00 20.00           N",
+  "ATOM      4  CA  GLY A   3       2.000   0.000   0.000  1.00 20.00           C",
+  "HETATM    5  CA  MSE B   4       3.000   0.000   0.000  1.00 20.00           C",
+  "HETATM    6  O   HOH C   1       4.000   0.000   0.000  1.00 20.00           O",
+  "END",
+].join("\n");
 
 test("sanitizeName normalizes", () => {
   assert.equal(sanitizeName(" Hana Kim "), "hana_kim");
@@ -212,6 +228,21 @@ test("app scopes Workflow Studio storage and reloads it per active user", () => 
   assert.match(source, /filterWorkflowStudioSessionsForUser\(/);
   assert.doesNotMatch(source, /workflowStudioSessionsById:\s*loadWorkflowStudioSessionsById\(\)/);
   assert.doesNotMatch(source, /currentWorkflowStudioSessionId:\s*loadCurrentWorkflowStudioSessionId\(\)/);
+});
+
+test("app uses artifact type labels for artifact filter options", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(source, /formatArtifactTypeLabel/);
+  assert.match(source, /option\.textContent = formatArtifactTypeLabel\(opt\);/);
+  assert.doesNotMatch(source, /option\.textContent = formatConservationTierValue\(opt\);/);
+});
+
+test("app buildAnswerPayload uses shared inferred RFD3 defaults", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(source, /resolveRfd3Defaults\(/);
+  assert.match(source, /if \(inferredContig\) \{\s*answers\.rfd3_contig = inferredContig;\s*\}/m);
 });
 
 test("buildWorkflowStudioFreshSessionSeed creates a blank session while preserving workflow nodes", () => {
@@ -581,6 +612,33 @@ test("buildRunArguments preserves relax controls from answers", () => {
   assert.equal(args.stop_after, "af2");
 });
 
+test("buildRunArguments allows relax without a cutoff", () => {
+  const args = buildRunArguments({
+    prompt: "",
+    routed: { stop_after: "af2" },
+    answers: {
+      relax_enabled: true,
+    },
+    runId: "run_relax_optional",
+  });
+  assert.equal(args.relax_enabled, true);
+  assert.equal(args.relax_score_per_residue_cutoff, undefined);
+});
+
+test("buildRunArguments drops relax cutoff when relax is disabled", () => {
+  const args = buildRunArguments({
+    prompt: "",
+    routed: { stop_after: "af2" },
+    answers: {
+      relax_enabled: false,
+      relax_score_per_residue_cutoff: -2.5,
+    },
+    runId: "run_relax_disabled",
+  });
+  assert.equal(args.relax_enabled, false);
+  assert.equal(args.relax_score_per_residue_cutoff, undefined);
+});
+
 test("buildRunArguments maps novelty_enabled to stop_after novelty", () => {
   const args = buildRunArguments({
     prompt: "",
@@ -694,7 +752,6 @@ test("workflowStudioStageFields exposes key fields per stage", () => {
     "af2_plddt_cutoff",
     "af2_rmsd_cutoff",
     "relax_enabled",
-    "relax_score_per_residue_cutoff",
   ]);
   assert.deepEqual(workflowStudioStageFields("soluprot"), ["soluprot_cutoff"]);
   assert.deepEqual(workflowStudioStageFields("soluprot_50"), ["soluprot_cutoff"]);
@@ -715,7 +772,6 @@ test("workflowStudioVisibleStageFields keeps AF2 controls visible when RFD3 is d
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
       "relax_enabled",
-      "relax_score_per_residue_cutoff",
     ]
   );
 });
@@ -764,6 +820,29 @@ test("conservation tier formatters show percentages instead of raw fractions", (
   assert.equal(formatConservationTierValue("70"), "70%");
   assert.equal(formatConservationTierLabel(0.5, "en"), "Sequence conservation 50%");
   assert.equal(formatConservationTierLabel("30", "ko"), "서열 보존율 30%");
+});
+
+test("artifact type formatter keeps extension labels readable", () => {
+  assert.equal(formatArtifactTypeLabel("pdb"), "PDB");
+  assert.equal(formatArtifactTypeLabel("json"), "JSON");
+  assert.equal(formatArtifactTypeLabel("dir"), "DIR");
+  assert.equal(formatArtifactTypeLabel(""), "-");
+});
+
+test("inferDefaultRfd3Contig keeps only protein residues with positive numbering", () => {
+  assert.equal(inferDefaultRfd3Contig({ target_input: RFD3_AUTO_CONTIG_PDB }), "A1-3");
+  assert.equal(inferDefaultRfd3Contig({ target_pdb: RFD3_AUTO_CONTIG_PDB }), "A1-3");
+});
+
+test("effectiveRfd3Mode prefers legacy_contig when a PDB yields an auto contig", () => {
+  assert.equal(effectiveRfd3Mode({ target_input: RFD3_AUTO_CONTIG_PDB }), "legacy_contig");
+  assert.equal(
+    effectiveRfd3Mode({
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      rfd3_inputs_text: "{\"spec-1\":{\"input\":\"input.pdb\"}}",
+    }),
+    "advanced"
+  );
 });
 
 test("expandWorkflowStudioNodes expands downstream workflow stages per tier", () => {
@@ -860,7 +939,28 @@ test("app source gates analyze relax rows and columns behind actual relax data",
 
   assert.match(source, /comparisonSummaryHasRelaxMetrics\(/);
   assert.match(source, /runCompareHasRelaxMetrics\(/);
-  assert.match(source, /hitListHasRelaxMetrics\(/);
+  assert.match(source, /hitListRelaxColumnEnabled\(/);
+});
+
+test("app source wires relax scatter chart ids into analyze and report outputs", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(source, /plddt_relax/);
+  assert.match(source, /rmsd_relax/);
+  assert.match(source, /analyze\.chart\.option\.plddtRelax/);
+  assert.match(source, /analyze\.chart\.option\.rmsdRelax/);
+});
+
+test("hit list source keeps numeric headers aligned when relax column is rendered", () => {
+  const appSource = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  const cssSource = readFileSync(resolve(process.cwd(), "frontend/styles.css"), "utf-8");
+
+  assert.match(appSource, /<th class="num">score<\/th>/);
+  assert.match(appSource, /<th class="num">SoluProt<\/th>/);
+  assert.match(appSource, /<th class="num">pLDDT<\/th>/);
+  assert.match(appSource, /<th class="num">RMSD<\/th>/);
+  assert.match(appSource, /<th class="num">Relax\/res<\/th>/);
+  assert.match(cssSource, /\.hit-list-table thead th\.num\s*\{\s*text-align:\s*right;/);
 });
 
 test("buildWorkflowStudioEffectiveAnswers applies workflow defaults for untouched design and af2 counts", () => {
@@ -924,7 +1024,7 @@ test("workflow studio question metadata keeps default return counts for rfd3 and
   assert.match(source, /rfd3_partial_t:\s*\{[\s\S]*?default:\s*5(?:\.0)?,/m);
 });
 
-test("RFD3 mode metadata stays for compatibility while setup no longer renders a mode selector", () => {
+test("RFD3 mode metadata stays for compatibility while setup avoids a top-level q.id mode card", () => {
   const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
   assert.match(
     source,
@@ -935,6 +1035,24 @@ test("RFD3 mode metadata stays for compatibility while setup no longer renders a
     assert.equal(source.split(`"choice.rfd3Mode.${suffix}":`).length - 1, 2);
     assert.equal(source.split(`"question.rfd3Mode.mode.${suffix}":`).length - 1, 2);
   });
+});
+
+test("advanced setup source restores an auto-aware rfd3_mode selector in the RFD3 detail card", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(source, /SETUP_RFD3_MODE_DETAIL_IDS = new Set\(\[[\s\S]*"rfd3_mode"/m);
+  assert.match(source, /if \(fieldId === "rfd3_mode"\) \{/);
+  assert.match(source, /delete state\.answers\.rfd3_mode;/);
+});
+
+test("advanced setup source renders the RFD3 detail card independently from hidden parameter cards", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.doesNotMatch(
+    source,
+    /if \(q\.id === "rfd3_max_return_designs"\) \{\s*renderSetupRfd3ModeDetailsCard\(card, normalizedQuestions\);\s*\}/m
+  );
+  assert.match(source, /appendRfd3DetailBoard\(\);/);
 });
 
 test("Setup and Studio source reflect RFD3 detail localization and no Studio new workflow action", () => {
@@ -1088,6 +1206,7 @@ test("buildFastLaunchPreset sizes fast pipeline defaults from total output and s
   assert.equal(preset.answers.bioemu_use, true);
   assert.equal(preset.answers.rfd3_use, true);
   assert.equal(preset.answers.mask_consensus_apply, false);
+  assert.equal(preset.answers.relax_enabled, true);
   assert.deepEqual(preset.answers.selected_tiers, [0.3, 0.5, 0.7]);
   assert.equal(preset.answers.num_seq_per_tier, 2);
   assert.equal(preset.answers.bioemu_num_samples, 20);
@@ -1098,8 +1217,25 @@ test("buildFastLaunchPreset sizes fast pipeline defaults from total output and s
   assert.equal(preset.routed.rfd3_use, true);
   assert.equal(args.bioemu_use, true);
   assert.equal(args.rfd3_use, true);
+  assert.equal(args.relax_enabled, true);
   assert.equal(args.stop_after, "novelty");
   assert.deepEqual(args.selected_tiers, [0.3, 0.5, 0.7]);
+});
+
+test("buildFastLaunchPreset lets callers explicitly disable relax", () => {
+  const preset = buildFastLaunchPreset({
+    target_input: "ATOM      1  N   GLY A   1      11.104  13.207   9.247  1.00 20.00           N",
+    relax_enabled: false,
+  });
+  const args = buildRunArguments({
+    prompt: preset.prompt,
+    routed: preset.routed,
+    answers: preset.answers,
+    runId: "fast_relax_off",
+  });
+
+  assert.equal(preset.answers.relax_enabled, false);
+  assert.equal(args.relax_enabled, false);
 });
 
 test("buildFastLaunchPreset rounds backbone counts up to satisfy total output targets", () => {
@@ -2210,6 +2346,49 @@ test("normalizeWorkflowStudioPayloadForComparison ignores equivalent RFD3 seed P
   );
 });
 
+test("resolveRfd3Defaults infers legacy_contig for pipeline PDB inputs", () => {
+  const resolved = resolveRfd3Defaults({
+    mode: "pipeline",
+    answers: {
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      start_from: "msa",
+      stop_after: "novelty",
+      rfd3_use: true,
+    },
+  });
+  assert.equal(resolved.rfd3Enabled, true);
+  assert.equal(resolved.rfd3Mode, "legacy_contig");
+  assert.equal(resolved.inferredContig, "A1-3");
+  assert.equal(resolved.effectiveRfd3Input, RFD3_AUTO_CONTIG_PDB);
+});
+
+test("resolveRfd3Defaults keeps advanced overrides ahead of auto legacy_contig", () => {
+  const resolved = resolveRfd3Defaults({
+    mode: "pipeline",
+    answers: {
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      start_from: "msa",
+      stop_after: "novelty",
+      rfd3_use: true,
+      rfd3_inputs_text: "{\"spec-1\":{\"input\":\"input.pdb\"}}",
+    },
+  });
+  assert.equal(resolved.rfd3Mode, "advanced");
+  assert.equal(resolved.inferredContig, "");
+});
+
+test("normalizeWorkflowStudioPayloadForComparison auto-fills inferred legacy contigs", () => {
+  const normalized = normalizeWorkflowStudioPayloadForComparison(
+    {
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      rfd3_use: true,
+    },
+    { nodes: ["msa", "rfd3", "novelty"] }
+  );
+  assert.equal(normalized.rfd3_mode, "legacy_contig");
+  assert.equal(normalized.rfd3_contig, "A1-3");
+});
+
 test("normalizeWorkflowStudioPayloadForComparison preserves visible binder partial_t fields", () => {
   const normalized = normalizeWorkflowStudioPayloadForComparison(
     {
@@ -2627,6 +2806,54 @@ test("relax visibility helpers require actual analyze data", () => {
       { seq_id: "b", relax: -2.4 },
     ]),
     true
+  );
+  assert.equal(
+    hitListRelaxColumnEnabled(
+      [
+        { seq_id: "a", relax: null },
+        { seq_id: "b", relax: undefined },
+      ],
+      { relax_enabled: true }
+    ),
+    true
+  );
+  assert.equal(
+    hitListRelaxColumnEnabled(
+      [
+        { seq_id: "a", relax: null },
+        { seq_id: "b", relax: undefined },
+      ],
+      { relax_enabled: false }
+    ),
+    false
+  );
+});
+
+test("analyzeChartViewOptions exposes relax scatter views only when relax metrics exist", () => {
+  assert.deepEqual(
+    analyzeChartViewOptions({
+      rows: [{ seq_id: "a", plddt: 86.4, rmsd: 1.2, relax: null }],
+      summary: {},
+    }).map((option) => option.id),
+    ["plddt_rmsd", "score_hist", "tier_pass"]
+  );
+  assert.deepEqual(
+    analyzeChartViewOptions({
+      rows: [{ seq_id: "a", plddt: 86.4, rmsd: 1.2, relax: -2.6 }],
+      summary: {},
+    }).map((option) => option.id),
+    ["plddt_rmsd", "plddt_relax", "rmsd_relax", "score_hist", "tier_pass"]
+  );
+  assert.deepEqual(
+    analyzeChartViewOptions({
+      rows: [],
+      summary: {
+        wt_vs_design: {
+          relax: { wt: -3.1, design_median: -2.8 },
+        },
+      },
+    }).map((option) => option.id),
+    ["plddt_rmsd", "plddt_relax", "rmsd_relax", "score_hist", "tier_pass"]
   );
 });
 

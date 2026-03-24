@@ -4999,6 +4999,7 @@ def _get_hit_list(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
         "weights": weights,
         "min_score": float(min_score),
         "rmsd_ref": float(rmsd_ref),
+        "relax_enabled": bool(request.get("relax_enabled") is True) if isinstance(request, dict) else False,
         "total_rows": len(rows),
         "filtered_rows": len(filtered),
         "rows": sliced,

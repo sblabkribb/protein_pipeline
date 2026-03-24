@@ -75,6 +75,17 @@ function compareProviderLabel(provider = "colabfold") {
   return /af2/i.test(String(provider || "")) ? "AlphaFold2" : "ColabFold";
 }
 
+const BASE_ANALYZE_CHART_VIEW_OPTIONS = Object.freeze([
+  Object.freeze({ id: "plddt_rmsd", labelKey: "analyze.chart.option.plddtRmsd" }),
+  Object.freeze({ id: "score_hist", labelKey: "analyze.chart.option.scoreHist" }),
+  Object.freeze({ id: "tier_pass", labelKey: "analyze.chart.option.tierPass" }),
+]);
+
+const RELAX_ANALYZE_CHART_VIEW_OPTIONS = Object.freeze([
+  Object.freeze({ id: "plddt_relax", labelKey: "analyze.chart.option.plddtRelax" }),
+  Object.freeze({ id: "rmsd_relax", labelKey: "analyze.chart.option.rmsdRelax" }),
+]);
+
 export function comparisonSummaryHasRelaxMetrics(summary = {}) {
   const wtRelax =
     summary?.wt_vs_design && typeof summary.wt_vs_design === "object" && summary.wt_vs_design.relax
@@ -122,6 +133,19 @@ export function runCompareHasRelaxMetrics(result = {}) {
 
 export function hitListHasRelaxMetrics(rows = []) {
   return (Array.isArray(rows) ? rows : []).some((row) => finiteMetricNumber(row?.relax) !== null);
+}
+
+export function hitListRelaxColumnEnabled(rows = [], result = {}) {
+  return hitListHasRelaxMetrics(rows) || result?.relax_enabled === true;
+}
+
+export function analyzeChartViewOptions({ rows = [], summary = {} } = {}) {
+  const options = [BASE_ANALYZE_CHART_VIEW_OPTIONS[0]];
+  if (hitListHasRelaxMetrics(rows) || comparisonSummaryHasRelaxMetrics(summary)) {
+    options.push(...RELAX_ANALYZE_CHART_VIEW_OPTIONS);
+  }
+  options.push(...BASE_ANALYZE_CHART_VIEW_OPTIONS.slice(1));
+  return options.map((option) => ({ ...option }));
 }
 
 export function buildStructureDiffLegend({ rmsd = null, p90Distance = null, commonCount = null, lang = "en" } = {}) {

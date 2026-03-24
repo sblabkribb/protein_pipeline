@@ -76,6 +76,12 @@ export function formatConservationTierLabel(value, lang = "en") {
   return isKoreanLang(lang) ? `서열 보존율 ${tierValue}` : `Sequence conservation ${tierValue}`;
 }
 
+export function formatArtifactTypeLabel(value) {
+  const type = String(value || "").trim();
+  if (!type) return "-";
+  return type.toUpperCase();
+}
+
 function wtIdentityPercent(row) {
   const directPct = Number(row?.wt_identity_pct);
   if (Number.isFinite(directPct)) return directPct;
@@ -132,6 +138,100 @@ export function normalizeRfd3Mode(value) {
   return aliases[raw] || raw;
 }
 
+const RFD3_PROTEIN_RESNAMES = new Set([
+  "ALA",
+  "ARG",
+  "ASN",
+  "ASP",
+  "CYS",
+  "GLN",
+  "GLU",
+  "GLY",
+  "HIS",
+  "ILE",
+  "LEU",
+  "LYS",
+  "MET",
+  "PHE",
+  "PRO",
+  "SER",
+  "THR",
+  "TRP",
+  "TYR",
+  "VAL",
+  "ASX",
+  "GLX",
+  "XLE",
+  "UNK",
+  "MSE",
+  "SEC",
+  "PYL",
+  "SEP",
+  "TPO",
+  "PTR",
+  "HYP",
+  "HID",
+  "HIE",
+  "HIP",
+  "CYX",
+]);
+
+function normalizeRfd3ChainId(chainId) {
+  const clean = String(chainId || "").trim();
+  return clean || "_";
+}
+
+function isProteinPdbAtomLine(line) {
+  if (line.startsWith("ATOM")) return true;
+  if (!line.startsWith("HETATM")) return false;
+  const resname = line.slice(17, 20).trim().toUpperCase();
+  return RFD3_PROTEIN_RESNAMES.has(resname);
+}
+
+function rfd3ModeUsesContig(mode) {
+  const normalized = normalizeRfd3Mode(mode);
+  return normalized === "legacy_contig" || normalized === "binder";
+}
+
+function inferredRfd3ContigRanges(payload = {}) {
+  const rfd3Input = String(payload?.rfd3_input_pdb || "").trim();
+  const targetPdb = String(payload?.target_pdb || "").trim();
+  const targetInput = String(payload?.target_input || "").trim();
+  const pdbText =
+    rfd3Input || targetPdb || (targetInput && detectTargetKey(targetInput) === "target_pdb" ? targetInput : "");
+  if (!pdbText) return null;
+  const ranges = {};
+  String(pdbText)
+    .split(/\r?\n/)
+    .forEach((line) => {
+      if (!isProteinPdbAtomLine(line)) return;
+      const chainId = normalizeRfd3ChainId(line[21] || "");
+      const resSeq = Number.parseInt(line.slice(22, 26).trim(), 10);
+      if (!Number.isFinite(resSeq)) return;
+      const entry = ranges[chainId] || { minPos: null, maxPos: null };
+      if (resSeq > 0) {
+        entry.minPos = entry.minPos === null ? resSeq : Math.min(entry.minPos, resSeq);
+        entry.maxPos = entry.maxPos === null ? resSeq : Math.max(entry.maxPos, resSeq);
+      }
+      ranges[chainId] = entry;
+    });
+  const normalized = Object.entries(ranges).reduce((acc, [chainId, entry]) => {
+    if (entry.minPos === null || entry.maxPos === null) return acc;
+    acc[chainId] = { min: entry.minPos, max: entry.maxPos };
+    return acc;
+  }, {});
+  return Object.keys(normalized).length ? normalized : null;
+}
+
+export function inferDefaultRfd3Contig(payload = {}) {
+  const ranges = inferredRfd3ContigRanges(payload) || {};
+  const firstChain = Object.keys(ranges).sort((left, right) => left.localeCompare(right))[0] || "";
+  if (!firstChain) return "";
+  const range = ranges[firstChain];
+  if (!range) return "";
+  return `${firstChain}${range.min}-${range.max}`;
+}
+
 export function effectiveRfd3Mode(payload = {}) {
   const explicit = normalizeRfd3Mode(payload?.rfd3_mode);
   if (explicit) return explicit;
@@ -153,6 +253,9 @@ export function effectiveRfd3Mode(payload = {}) {
     return "binder";
   }
   if (hasMeaningfulValue(payload?.rfd3_contig)) {
+    return "legacy_contig";
+  }
+  if (hasMeaningfulValue(inferDefaultRfd3Contig(payload))) {
     return "legacy_contig";
   }
   if (hasMeaningfulValue(payload?.rfd3_input_pdb)) {
@@ -1215,6 +1318,9 @@ export function buildRunArguments({ prompt, routed, answers, runId }) {
   } else if (args.novelty_enabled === true && !normalizedStopAfter) {
     args.stop_after = "novelty";
   }
+  if (args.relax_enabled !== true) {
+    delete args.relax_score_per_residue_cutoff;
+  }
   delete args.questions;
   delete args.missing;
   return args;
@@ -1277,6 +1383,7 @@ export function buildFastLaunchPreset(draft = {}) {
       ),
       rfd3_use: true,
       rfd3_max_return_designs: positiveIntegerOrDefault(source.rfd3_max_return_designs, perSourceBackboneCount),
+      relax_enabled: source.relax_enabled !== false,
       selected_tiers: selectedTiers,
       num_seq_per_tier: numSeqPerTier,
     },
@@ -1332,7 +1439,6 @@ const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
     "af2_plddt_cutoff",
     "af2_rmsd_cutoff",
     "relax_enabled",
-    "relax_score_per_residue_cutoff",
   ]),
   novelty: Object.freeze(["novelty_enabled", "wt_compare"]),
 });
@@ -1353,6 +1459,7 @@ const WORKFLOW_STUDIO_STAGE_DEFAULTS = Object.freeze({
   }),
   af2: Object.freeze({
     af2_max_candidates_per_tier: 0,
+    relax_enabled: true,
   }),
 });
 
@@ -1995,6 +2102,24 @@ export function effectiveRfd3InputPdb({ mode = "", answers = {}, nodes = [] } = 
   return targetInputPdbText(answers);
 }
 
+export function resolveRfd3Defaults({ mode = "", answers = {}, nodes = [] } = {}) {
+  const rfd3Enabled = rfd3EnabledForContext({ mode, answers, nodes });
+  const effectiveRfd3Input = rfd3Enabled ? effectiveRfd3InputPdb({ mode, answers, nodes }) : "";
+  const rfd3Mode = rfd3Enabled
+    ? normalizeRfd3Mode(answers.rfd3_mode || effectiveRfd3Mode({ ...answers, rfd3_input_pdb: effectiveRfd3Input }))
+    : "";
+  const inferredContig =
+    rfd3Enabled && rfd3ModeUsesContig(rfd3Mode) && !hasMeaningfulValue(answers?.rfd3_contig)
+      ? inferDefaultRfd3Contig({ ...answers, rfd3_input_pdb: effectiveRfd3Input })
+      : "";
+  return {
+    rfd3Enabled,
+    effectiveRfd3Input,
+    rfd3Mode,
+    inferredContig,
+  };
+}
+
 export function normalizeWorkflowStudioPayloadForComparison(payload, { nodes = [] } = {}) {
   const answers = cloneWorkflowValue(payload && typeof payload === "object" ? payload : {});
   delete answers.selected_tiers;
@@ -2077,21 +2202,16 @@ export function normalizeWorkflowStudioPayloadForComparison(payload, { nodes = [
   if (typeof answers.bioemu_steering_config_text === "string" && !answers.bioemu_steering_config_text.trim()) {
     delete answers.bioemu_steering_config_text;
   }
-  const rfd3Enabled = rfd3EnabledForContext({
+  const {
+    rfd3Enabled,
+    effectiveRfd3Input,
+    rfd3Mode,
+    inferredContig,
+  } = resolveRfd3Defaults({
     mode: "workflow",
     answers,
     nodes,
   });
-  const effectiveRfd3Input = rfd3Enabled
-    ? effectiveRfd3InputPdb({
-        mode: "workflow",
-        answers,
-        nodes,
-      })
-    : "";
-  const rfd3Mode = rfd3Enabled
-    ? normalizeRfd3Mode(answers.rfd3_mode || effectiveRfd3Mode({ ...answers, rfd3_input_pdb: effectiveRfd3Input }))
-    : "";
   if (rfd3Enabled && effectiveRfd3Input) {
     answers.rfd3_input_pdb = String(effectiveRfd3Input).trim();
     answers.rfd3_use = true;
@@ -2111,6 +2231,9 @@ export function normalizeWorkflowStudioPayloadForComparison(payload, { nodes = [
   }
   if (rfd3Enabled && rfd3Mode) {
     answers.rfd3_mode = rfd3Mode;
+  }
+  if (rfd3Enabled && inferredContig) {
+    answers.rfd3_contig = inferredContig;
   }
   if (rfd3Enabled && rfd3Mode !== "legacy_contig" && rfd3Mode !== "binder") {
     delete answers.rfd3_contig;

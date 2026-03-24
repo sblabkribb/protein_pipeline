@@ -3845,6 +3845,10 @@ textarea:focus-visible {
   text-align: left;
 }
 
+.hit-list-table thead th.num {
+  text-align: right;
+}
+
 .hit-list-table td.num {
   text-align: right;
   font-variant-numeric: tabular-nums;

@@ -6141,7 +6141,8 @@ class PipelineRunner:
                         recovery=af2_recovery,
                     )
 
-                relax_candidates = [s for s in af2_candidates if af2_selected_ids and s.id in set(af2_selected_ids)]
+                relax_gate_ids = {str(seq_id) for seq_id in (af2_selected_ids or []) if str(seq_id).strip()}
+                relax_candidates = list(af2_candidates)
                 if relax_enabled:
                     relax_dir = _ensure_dir(tier_dir / "relax")
                     relax_scores_path = tier_dir / "relax_scores.json"
@@ -6329,11 +6330,12 @@ class PipelineRunner:
                                 else None
                             )
                             if relax_cutoff is None:
-                                relax_selected_ids = list(candidate_ids)
+                                relax_selected_ids = [seq_id for seq_id in candidate_ids if seq_id in relax_gate_ids]
                             else:
                                 selected_pairs = [
                                     (seq_id, score)
                                     for seq_id, score in cached_score_per_residue.items()
+                                    if seq_id in relax_gate_ids
                                     if score <= relax_cutoff
                                 ]
                                 selected_pairs.sort(key=lambda item: item[1])
@@ -6383,10 +6385,16 @@ class PipelineRunner:
                                 "error": relax_error,
                                 "actions": ["Kept AF2-selected candidates without Rosetta relax filtering"],
                             }
-                            relax_selected_ids = [s.id for s in relax_candidates]
+                            relax_selected_ids = [s.id for s in relax_candidates if s.id in relax_gate_ids]
                             _write_text(
                                 relax_selected_path,
-                                to_fasta([FastaRecord(header=s.header or s.id, sequence=s.sequence) for s in relax_candidates]),
+                                to_fasta(
+                                    [
+                                        FastaRecord(header=s.header or s.id, sequence=s.sequence)
+                                        for s in relax_candidates
+                                        if s.id in relax_gate_ids
+                                    ]
+                                ),
                             )
                             write_json(
                                 relax_scores_path,

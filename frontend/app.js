@@ -24,6 +24,7 @@ import {
   expandWorkflowStudioNodes,
   filterWorkflowStudioSessionsForUser,
   filterRunsByPrefix,
+  formatArtifactTypeLabel,
   formatConservationTierLabel,
   formatConservationTierValue,
   formatBackboneUsageSummary as formatBackboneUsageSummaryCore,
@@ -43,6 +44,7 @@ import {
   normalizeFixedPositionsExtraDraft,
   normalizeSetupDraftForFreshRun,
   rfd3EnabledForContext,
+  resolveRfd3Defaults,
   runUsesRfd3Stage,
   shouldShowRfd3InputPdbField,
   targetInputPdbText,
@@ -70,6 +72,7 @@ import {
   withFixedPositionsExtra,
 } from "./lib/pipeline.js";
 import {
+  analyzeChartViewOptions,
   buildCompareMetaTooltip,
   buildCompareScopeDescription,
   buildStructureDiffLegend,
@@ -77,7 +80,7 @@ import {
   coerceFiniteMetricValue,
   extractDesignChainsFromPayload,
   filterPdbTextByChains,
-  hitListHasRelaxMetrics,
+  hitListRelaxColumnEnabled,
   runCompareHasRelaxMetrics,
   selectResidueStripMetrics,
 } from "./lib/compare.js";
@@ -2679,6 +2682,8 @@ const I18N = {
     "setup.rfd3.defaultFromTargetOverride": "A separate RFD3 input override is enabled. Leave it empty or switch back to use target_input again.",
     "setup.rfd3.useSeparateInput": "Use separate RFD3 input",
     "setup.rfd3.useTargetDefault": "Use target_input default",
+    "setup.rfd3.detail.title": "RFD3 Detail Options",
+    "setup.rfd3.detail.help": "Leave mode on Auto to use the inferred default, or override it here when you need a specific RFD3 config path.",
     "studio.rfd3.defaultFromTarget": "This RFD3 stage will use the current target_input PDB by default.",
     "studio.rfd3.defaultFromTargetOverride": "This RFD3 stage currently exposes a separate input override. Switch back if you want to use target_input again.",
     "choice.stripNonpositive.on": "Strip (recommended)",
@@ -2934,10 +2939,13 @@ const I18N = {
     "analyze.chart.placeholder": "Run hit list to render candidate charts.",
     "analyze.chart.noData": "No numeric data for the selected chart in current filters.",
     "analyze.chart.option.plddtRmsd": "Scatter: pLDDT vs RMSD vs WT",
+    "analyze.chart.option.plddtRelax": "Scatter: pLDDT vs Relax/res",
+    "analyze.chart.option.rmsdRelax": "Scatter: RMSD vs Relax/res",
     "analyze.chart.option.scoreHist": "Histogram: Hit Score",
     "analyze.chart.option.tierPass": "AF2 Pass Rate by Conservation Level",
     "analyze.chart.axis.plddt": "pLDDT",
     "analyze.chart.axis.rmsd": "RMSD (A)",
+    "analyze.chart.axis.relax": "Relax/res",
     "analyze.chart.axis.score": "Hit Score",
     "analyze.chart.axis.passRate": "Pass Rate (%)",
     "analyze.chart.axis.count": "Count",
@@ -3815,6 +3823,8 @@ const I18N = {
     "setup.rfd3.defaultFromTargetOverride": "별도 RFD3 입력 override가 켜져 있습니다. 비워 두거나 target_input 기본값으로 되돌릴 수 있습니다.",
     "setup.rfd3.useSeparateInput": "별도 RFD3 input 사용",
     "setup.rfd3.useTargetDefault": "target_input 기본값 사용",
+    "setup.rfd3.detail.title": "RFD3 상세 옵션",
+    "setup.rfd3.detail.help": "모드를 자동으로 두면 추론된 기본값을 사용하고, 특정 RFD3 config 경로가 필요할 때만 여기서 override하세요.",
     "studio.rfd3.defaultFromTarget": "이 RFD3 단계는 현재 target_input PDB를 기본으로 사용합니다.",
     "studio.rfd3.defaultFromTargetOverride": "이 RFD3 단계는 별도 입력 override가 열려 있습니다. target_input 기본값으로 되돌릴 수 있습니다.",
     "choice.stripNonpositive.on": "제거 (권장)",
@@ -4067,10 +4077,13 @@ const I18N = {
     "analyze.chart.placeholder": "Hit List를 실행하면 후보 차트를 표시합니다.",
     "analyze.chart.noData": "현재 필터에서 선택한 차트를 그릴 수 있는 수치 데이터가 없습니다.",
     "analyze.chart.option.plddtRmsd": "분산: pLDDT vs RMSD vs WT",
+    "analyze.chart.option.plddtRelax": "분산: pLDDT vs Relax/res",
+    "analyze.chart.option.rmsdRelax": "분산: RMSD vs Relax/res",
     "analyze.chart.option.scoreHist": "히스토그램: Hit 점수",
     "analyze.chart.option.tierPass": "서열 보존율별 AF2 통과율",
     "analyze.chart.axis.plddt": "pLDDT",
     "analyze.chart.axis.rmsd": "RMSD (A)",
+    "analyze.chart.axis.relax": "Relax/res",
     "analyze.chart.axis.score": "Hit 점수",
     "analyze.chart.axis.passRate": "통과율 (%)",
     "analyze.chart.axis.count": "개수",
@@ -7652,6 +7665,7 @@ const QUESTION_PRESETS = {
   relax_enabled: {
     labelKey: "question.relaxEnabled.label",
     questionKey: "question.relaxEnabled.help",
+    default: true,
   },
   relax_score_per_residue_cutoff: {
     labelKey: "question.relaxScorePerResidueCutoff.label",
@@ -8017,7 +8031,7 @@ const PROGRESS_PLANS = {
 };
 
 const TERMINAL_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
-const CHART_VIEW_OPTIONS = new Set(["plddt_rmsd", "score_hist", "tier_pass"]);
+const CHART_VIEW_OPTIONS = new Set(["plddt_rmsd", "plddt_relax", "rmsd_relax", "score_hist", "tier_pass"]);
 
 function loadUser() {
   const raw = localStorage.getItem("kbf.user");
@@ -8364,6 +8378,8 @@ function activeTabId() {
 
 function chartViewLabel() {
   const view = normalizeChartView(state.chartView);
+  if (view === "plddt_relax") return t("analyze.chart.option.plddtRelax");
+  if (view === "rmsd_relax") return t("analyze.chart.option.rmsdRelax");
   if (view === "score_hist") return t("analyze.chart.option.scoreHist");
   if (view === "tier_pass") return t("analyze.chart.option.tierPass");
   return t("analyze.chart.option.plddtRmsd");
@@ -9766,6 +9782,7 @@ function buildManualPlan(mode) {
         labelKey: "question.relaxEnabled.label",
         questionKey: "question.relaxEnabled.help",
         required: false,
+        default: true,
       },
       {
         id: "relax_score_per_residue_cutoff",
@@ -11548,6 +11565,7 @@ const RFD3_MODE_OPTIONS = Object.freeze([
 ]);
 
 const SETUP_RFD3_MODE_DETAIL_IDS = new Set([
+  "rfd3_mode",
   "rfd3_partial_t",
   "rfd3_contig",
   "rfd3_hotspots",
@@ -13436,7 +13454,39 @@ function renderQuestions(questions) {
       const question = normalizedQuestions.find((item) => item.id === fieldId) || normalizeQuestion({ id: fieldId }) || { id: fieldId };
       const field = createField(question);
 
-      if (fieldId === "rfd3_contig") {
+      if (fieldId === "rfd3_mode") {
+        const explicitMode = normalizeRfd3Mode(state.answers.rfd3_mode);
+        const effectiveMode = explicitMode || effectiveSetupRfd3Mode(state.answers);
+        const select = document.createElement("select");
+        const autoOption = document.createElement("option");
+        autoOption.value = "";
+        autoOption.textContent = t("feedback.stage.auto");
+        if (!explicitMode) autoOption.selected = true;
+        select.appendChild(autoOption);
+        RFD3_MODE_OPTIONS.forEach((item) => {
+          const option = document.createElement("option");
+          option.value = item.value;
+          option.textContent = t(item.labelKey);
+          if (explicitMode === item.value) option.selected = true;
+          select.appendChild(option);
+        });
+        select.addEventListener("change", () => {
+          const nextMode = normalizeRfd3Mode(select.value);
+          if (nextMode) {
+            state.answers.rfd3_mode = nextMode;
+          } else {
+            delete state.answers.rfd3_mode;
+          }
+          updateRunEligibility(normalizedQuestions);
+          renderQuestions(state.plan?.questions || []);
+        });
+        field.appendChild(select);
+        const note = document.createElement("div");
+        note.className = "choice-note";
+        const prefix = explicitMode ? "" : `${t("feedback.stage.auto")}: `;
+        note.textContent = `${prefix}${t(rfd3ModeDescriptionKey(effectiveMode))}`;
+        field.appendChild(note);
+      } else if (fieldId === "rfd3_contig") {
         const contigs = Object.entries(state.chainRanges || {}).map(([chain, range]) => ({
           label: `${chain}${range.min}-${range.max}`,
           value: `${chain}${range.min}-${range.max}`,
@@ -13895,6 +13945,7 @@ function renderQuestions(questions) {
         (value) => {
           state.answers.relax_enabled = value;
           updateRunEligibility(normalizedQuestions);
+          renderQuestions(state.plan?.questions || []);
         }
       );
     }
@@ -14077,7 +14128,7 @@ function renderQuestions(questions) {
 
     renderBooleanField({
       id: "relax_enabled",
-      fallback: false,
+      fallback: true,
       onLabelKey: "choice.relax.on",
       offLabelKey: "choice.relax.off",
       rerender: false,
@@ -14253,7 +14304,6 @@ function renderQuestions(questions) {
     af2_max_candidates_per_tier: 50,
     af2_plddt_cutoff: 60,
     af2_rmsd_cutoff: 70,
-    relax_score_per_residue_cutoff: 80,
   };
   const bioemuCountRelevant =
     state.runMode === "pipeline" ||
@@ -14271,6 +14321,7 @@ function renderQuestions(questions) {
 
   const compactQuestions = textQuestions
     .filter((q) => compactParameterQuestionIds.has(q.id))
+    .filter((q) => q.id !== "relax_score_per_residue_cutoff" || state.answers.relax_enabled === true)
     .sort((left, right) => {
       const leftPriority = compactParameterPriority[left.id] ?? Number.MAX_SAFE_INTEGER;
       const rightPriority = compactParameterPriority[right.id] ?? Number.MAX_SAFE_INTEGER;
@@ -14375,6 +14426,29 @@ function renderQuestions(questions) {
 
   appendCompactParameterBoard(compactQuestions);
 
+  const appendRfd3DetailBoard = () => {
+    const rfd3DetailRelevant =
+      state.runMode === "rfd3" || setupRunEnablesRfd3Stage() || shouldShowSetupRfd3InputField();
+    if (!rfd3DetailRelevant) return;
+    const card = document.createElement("div");
+    card.className = "question-card parameter-board option-board";
+
+    const title = document.createElement("div");
+    title.className = "question-title";
+    title.textContent = t("setup.rfd3.detail.title");
+
+    const help = document.createElement("div");
+    help.className = "question-help";
+    help.textContent = t("setup.rfd3.detail.help");
+
+    card.appendChild(title);
+    card.appendChild(help);
+    renderSetupRfd3ModeDetailsCard(card, normalizedQuestions);
+    appendConfigCard(card);
+  };
+
+  appendRfd3DetailBoard();
+
   function appendWorkflowDesignerCard() {
     if (state.runMode !== "workflow") return;
     appendConfigCard(
@@ -14471,10 +14545,7 @@ function renderQuestions(questions) {
   const hiddenTextQuestionIds = new Set(compactQuestions.map((q) => q.id));
   textQuestions.forEach((q) => {
     if (hiddenTextQuestionIds.has(q.id) || SETUP_RFD3_MODE_DETAIL_IDS.has(q.id)) return;
-    const card = appendTextQuestionCard(q);
-    if (q.id === "rfd3_max_return_designs") {
-      renderSetupRfd3ModeDetailsCard(card, normalizedQuestions);
-    }
+    appendTextQuestionCard(q);
   });
 
   const setupTargetPdbText = getTargetInputPdbText();
@@ -15007,19 +15078,16 @@ function buildAnswerPayload(mode = state.runMode) {
     delete answers.rfd3_input_pdb;
   }
   const rfd3Nodes = mode === "workflow" ? setupWorkflowNodesForRfd3() : [];
-  const rfd3Enabled = rfd3EnabledForContext({
+  const {
+    rfd3Enabled,
+    effectiveRfd3Input,
+    rfd3Mode: normalizedRfd3Mode,
+    inferredContig,
+  } = resolveRfd3Defaults({
     mode,
     answers,
     nodes: rfd3Nodes,
   });
-  const effectiveRfd3Input = effectiveRfd3InputPdb({
-    mode,
-    answers,
-    nodes: rfd3Nodes,
-  });
-  const normalizedRfd3Mode = rfd3Enabled
-    ? normalizeRfd3Mode(answers.rfd3_mode || effectiveRfd3Mode({ ...answers, rfd3_input_pdb: effectiveRfd3Input }))
-    : "";
   if (mode === "rfd3" || rfd3Enabled) {
     answers.rfd3_use = true;
   } else if (mode === "pipeline" || mode === "workflow") {
@@ -15049,6 +15117,9 @@ function buildAnswerPayload(mode = state.runMode) {
       delete answers.rfd3_partial_t;
       delete answers.rfd3_inputs_text;
     }
+  }
+  if (inferredContig) {
+    answers.rfd3_contig = inferredContig;
   }
   if (normalizedRfd3Mode && !rfd3ModeUsesContig(normalizedRfd3Mode)) {
     delete answers.rfd3_contig;
@@ -15160,7 +15231,6 @@ function filterAnswersForMode(mode, answers) {
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
       "relax_enabled",
-      "relax_score_per_residue_cutoff",
       "af2_provider",
       "num_seq_per_tier",
       "selected_tiers",
@@ -16007,7 +16077,7 @@ function renderArtifacts(list, view = "monitor") {
         tags.push(`<span class="stage-tag tier-tag">${escapeHtml(formatConservationTierLabel(tier, state.lang || "en"))}</span>`);
       }
       if (type) {
-        tags.push(`<span class="stage-tag type-tag">${String(type).toUpperCase()}</span>`);
+        tags.push(`<span class="stage-tag type-tag">${formatArtifactTypeLabel(type)}</span>`);
       }
       const displayPath = escapeHtml(displayArtifactPath(item.path));
       div.innerHTML = `
@@ -17596,7 +17666,7 @@ function renderWorkflowReviewPanel(status = state.lastRunStatus) {
                 tags.push(`<span class="stage-tag tier-tag">${escapeHtml(formatConservationTierLabel(tier, state.lang || "en"))}</span>`);
               }
               if (type) {
-                tags.push(`<span class="stage-tag type-tag">${escapeHtml(String(type).toUpperCase())}</span>`);
+                tags.push(`<span class="stage-tag type-tag">${escapeHtml(formatArtifactTypeLabel(type))}</span>`);
               }
               const tagsHtml = tags.length ? `<span class="workflow-result-meta">${tags.join("")}</span>` : "";
               return `
@@ -20164,6 +20234,12 @@ function reportChartSvgForPath(path) {
   if (key === "plddt_rmsd.svg") {
     return normalizeSvgAttachmentText(buildPlddtRmsdScatter(rows)?.svg || "");
   }
+  if (key === "plddt_relax.svg") {
+    return normalizeSvgAttachmentText(buildPlddtRelaxScatter(rows)?.svg || "");
+  }
+  if (key === "rmsd_relax.svg") {
+    return normalizeSvgAttachmentText(buildRmsdRelaxScatter(rows)?.svg || "");
+  }
   if (key === "score_hist.svg") {
     return normalizeSvgAttachmentText(buildScoreHistogram(rows)?.svg || "");
   }
@@ -20830,7 +20906,7 @@ function renderArtifactFilters(items, view = "monitor") {
     options.forEach((opt) => {
       const option = document.createElement("option");
       option.value = opt;
-      option.textContent = formatConservationTierValue(opt);
+      option.textContent = formatArtifactTypeLabel(opt);
       selectEl.appendChild(option);
     });
     if (!options.includes(current)) {
@@ -21470,11 +21546,42 @@ async function refreshRunCompare() {
 
 function normalizeChartView(value) {
   const raw = String(value || "").trim().toLowerCase();
-  if (CHART_VIEW_OPTIONS.has(raw)) return raw;
+  if (!CHART_VIEW_OPTIONS.has(raw)) return "plddt_rmsd";
+  const available = new Set(
+    analyzeChartViewOptions({
+      rows: filteredHitListRows({ applyLimit: false }),
+      summary: state.artifactComparison,
+    }).map((option) => option.id)
+  );
+  if (available.has(raw)) return raw;
   return "plddt_rmsd";
 }
 
+function syncChartSelectorOptions(selectEl, options) {
+  if (!selectEl) return;
+  const nextOptions = Array.isArray(options) ? options : [];
+  const nextSignature = nextOptions.map((option) => `${option.id}:${option.labelKey}`).join("|");
+  const currentSignature = Array.from(selectEl.options)
+    .map((option) => `${option.value}:${option.dataset.i18n || option.textContent}`)
+    .join("|");
+  if (currentSignature === nextSignature) return;
+  selectEl.innerHTML = "";
+  nextOptions.forEach((option) => {
+    const optionEl = document.createElement("option");
+    optionEl.value = option.id;
+    optionEl.dataset.i18n = option.labelKey;
+    optionEl.textContent = t(option.labelKey);
+    selectEl.appendChild(optionEl);
+  });
+}
+
 function syncChartSelectors() {
+  const options = analyzeChartViewOptions({
+    rows: filteredHitListRows({ applyLimit: false }),
+    summary: state.artifactComparison,
+  });
+  syncChartSelectorOptions(el.analyzeChartType, options);
+  syncChartSelectorOptions(el.reportChartType, options);
   const next = normalizeChartView(state.chartView);
   state.chartView = next;
   if (el.analyzeChartType && el.analyzeChartType.value !== next) el.analyzeChartType.value = next;
@@ -21551,31 +21658,44 @@ function chartTickText(value, digits = 1) {
   return value.toFixed(digits);
 }
 
-function wtScatterPointFromSummary(summary = state.artifactComparison) {
+function wtScatterPointFromSummary({ xMetric, yMetric, summary = state.artifactComparison } = {}) {
   const wt = summary?.wt_vs_design && typeof summary.wt_vs_design === "object" ? summary.wt_vs_design : {};
-  const plddt = finiteNumber(wt?.plddt?.wt);
-  const rmsd = finiteNumber(wt?.rmsd?.wt);
-  if (plddt === null || rmsd === null) return null;
+  const x = finiteNumber(wt?.[xMetric]?.wt);
+  const y = finiteNumber(wt?.[yMetric]?.wt);
+  if (x === null || y === null) return null;
   return {
-    x: plddt,
-    y: rmsd,
+    x,
+    y,
     seqId: "WT",
     source: "WT",
     sourceKey: "wt",
   };
 }
 
-function buildPlddtRmsdScatter(rows) {
+function buildMetricScatter(
+  rows,
+  {
+    xKey,
+    yKey,
+    xMetric,
+    yMetric,
+    titleKey,
+    xLabelKey,
+    yLabelKey,
+    xDigits = 1,
+    yDigits = 2,
+  } = {}
+) {
   const designPoints = (rows || [])
     .map((row) => ({
-      x: finiteNumber(row?.plddt),
-      y: finiteNumber(row?.rmsd),
+      x: finiteNumber(row?.[xKey]),
+      y: finiteNumber(row?.[yKey]),
       seqId: String(row?.seq_id || "-"),
       source: sourceLabel(normalizeSourceKey(row?.source)),
       sourceKey: normalizeSourceKey(row?.source),
     }))
     .filter((row) => row.x !== null && row.y !== null);
-  const wtPoint = wtScatterPointFromSummary();
+  const wtPoint = wtScatterPointFromSummary({ xMetric, yMetric });
   const points = wtPoint ? [...designPoints, wtPoint] : designPoints;
   if (!points.length) return null;
 
@@ -21587,8 +21707,8 @@ function buildPlddtRmsdScatter(rows) {
   const bottom = 50;
   const plotW = width - left - right;
   const plotH = height - top - bottom;
-  const xExtent = extentWithPadding(points.map((p) => p.x), { padRatio: 0.05, minPad: 0.5 });
-  const yExtent = extentWithPadding(points.map((p) => p.y), { padRatio: 0.08, minPad: 0.2 });
+  const xExtent = extentWithPadding(points.map((p) => p.x), { padRatio: 0.05, minPad: 0.2 });
+  const yExtent = extentWithPadding(points.map((p) => p.y), { padRatio: 0.08, minPad: 0.1 });
   const xMap = (v) => left + ((v - xExtent.min) / Math.max(xExtent.max - xExtent.min, 1e-6)) * plotW;
   const yMap = (v) => top + plotH - ((v - yExtent.min) / Math.max(yExtent.max - yExtent.min, 1e-6)) * plotH;
 
@@ -21602,7 +21722,7 @@ function buildPlddtRmsdScatter(rows) {
       `<line x1="${x.toFixed(2)}" y1="${top}" x2="${x.toFixed(2)}" y2="${(top + plotH).toFixed(2)}" stroke="rgba(16,42,45,0.12)" />`
     );
     gridLines.push(
-      `<text x="${x.toFixed(2)}" y="${(top + plotH + 18).toFixed(2)}" text-anchor="middle" fill="#4f6365" font-size="11">${svgSafe(chartTickText(xValue, 1))}</text>`
+      `<text x="${x.toFixed(2)}" y="${(top + plotH + 18).toFixed(2)}" text-anchor="middle" fill="#4f6365" font-size="11">${svgSafe(chartTickText(xValue, xDigits))}</text>`
     );
   }
   for (let i = 0; i <= ticks; i += 1) {
@@ -21613,7 +21733,7 @@ function buildPlddtRmsdScatter(rows) {
       `<line x1="${left}" y1="${y.toFixed(2)}" x2="${(left + plotW).toFixed(2)}" y2="${y.toFixed(2)}" stroke="rgba(16,42,45,0.12)" />`
     );
     gridLines.push(
-      `<text x="${(left - 8).toFixed(2)}" y="${(y + 4).toFixed(2)}" text-anchor="end" fill="#4f6365" font-size="11">${svgSafe(chartTickText(yValue, 2))}</text>`
+      `<text x="${(left - 8).toFixed(2)}" y="${(y + 4).toFixed(2)}" text-anchor="end" fill="#4f6365" font-size="11">${svgSafe(chartTickText(yValue, yDigits))}</text>`
     );
   }
 
@@ -21623,12 +21743,17 @@ function buildPlddtRmsdScatter(rows) {
     wt: "#295b9d",
     other: "#7b8794",
   };
+  const xLabel = t(xLabelKey);
+  const yLabel = t(yLabelKey);
   const marks = points
     .map((p) => {
       const cx = xMap(p.x).toFixed(2);
       const cy = yMap(p.y).toFixed(2);
       const fill = colorBySource[p.sourceKey] || colorBySource.other;
-      const label = `${p.seqId} | ${p.source} | pLDDT=${chartTickText(p.x, 1)} | RMSD=${chartTickText(p.y, 2)}`;
+      const label = `${p.seqId} | ${p.source} | ${xLabel}=${chartTickText(p.x, xDigits)} | ${yLabel}=${chartTickText(
+        p.y,
+        yDigits
+      )}`;
       const radius = p.sourceKey === "wt" ? 4.6 : 3.8;
       const stroke = p.sourceKey === "wt" ? "#1b3f6e" : "rgba(16,42,45,0.35)";
       const strokeWidth = p.sourceKey === "wt" ? 1.3 : 0.5;
@@ -21681,22 +21806,62 @@ function buildPlddtRmsdScatter(rows) {
 
   return {
     caption,
-    svg: `<svg class="chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${svgSafe(
-      t("analyze.chart.option.plddtRmsd")
-    )}">
+    svg: `<svg class="chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${svgSafe(t(titleKey))}">
       <rect x="0" y="0" width="${width}" height="${height}" fill="rgba(255,255,255,0.98)" />
       ${gridLines.join("")}
       <rect x="${left}" y="${top}" width="${plotW}" height="${plotH}" fill="none" stroke="rgba(16,42,45,0.2)" />
       ${marks}
       <text x="${(left + plotW / 2).toFixed(2)}" y="${(height - 10).toFixed(2)}" text-anchor="middle" fill="#213c3f" font-size="12">${svgSafe(
-        t("analyze.chart.axis.plddt")
+        xLabel
       )}</text>
       <text x="14" y="${(top + plotH / 2).toFixed(2)}" text-anchor="middle" fill="#213c3f" font-size="12" transform="rotate(-90 14 ${(top + plotH / 2).toFixed(2)})">${svgSafe(
-        t("analyze.chart.axis.rmsd")
+        yLabel
       )}</text>
       ${legend}
     </svg>`,
   };
+}
+
+function buildPlddtRmsdScatter(rows) {
+  return buildMetricScatter(rows, {
+    xKey: "plddt",
+    yKey: "rmsd",
+    xMetric: "plddt",
+    yMetric: "rmsd",
+    titleKey: "analyze.chart.option.plddtRmsd",
+    xLabelKey: "analyze.chart.axis.plddt",
+    yLabelKey: "analyze.chart.axis.rmsd",
+    xDigits: 1,
+    yDigits: 2,
+  });
+}
+
+function buildPlddtRelaxScatter(rows) {
+  return buildMetricScatter(rows, {
+    xKey: "plddt",
+    yKey: "relax",
+    xMetric: "plddt",
+    yMetric: "relax",
+    titleKey: "analyze.chart.option.plddtRelax",
+    xLabelKey: "analyze.chart.axis.plddt",
+    yLabelKey: "analyze.chart.axis.relax",
+    xDigits: 1,
+    yDigits: 3,
+  });
+}
+
+function buildRmsdRelaxScatter(rows) {
+  return buildMetricScatter(rows, {
+    xKey: "rmsd",
+    yKey: "relax",
+    xMetric: "rmsd",
+    yMetric: "relax",
+    titleKey: "analyze.chart.option.rmsdRelax",
+    xLabelKey: "analyze.chart.axis.rmsd",
+    yLabelKey: "analyze.chart.axis.relax",
+    xDigits: 2,
+    yDigits: 3,
+  });
 }
 
 function buildScoreHistogram(rows) {
@@ -21885,6 +22050,8 @@ function buildTierPassRateChart(rows) {
 function selectedChartPayload(rows) {
   const view = normalizeChartView(state.chartView);
   if (view === "plddt_rmsd") return buildPlddtRmsdScatter(rows);
+  if (view === "plddt_relax") return buildPlddtRelaxScatter(rows);
+  if (view === "rmsd_relax") return buildRmsdRelaxScatter(rows);
   if (view === "score_hist") return buildScoreHistogram(rows);
   if (view === "tier_pass") return buildTierPassRateChart(rows);
   return null;
@@ -21946,7 +22113,7 @@ function renderHitList() {
   const limit = Math.max(10, Math.min(500, Number(state.hitListLimit || 120)));
   state.hitListLimit = limit;
   const shown = filtered.slice(0, limit);
-  const showRelax = hitListHasRelaxMetrics(shown);
+  const showRelax = hitListRelaxColumnEnabled(shown, state.hitListResult);
   if (el.hitListSummary) {
     el.hitListSummary.innerHTML = `<div class="score-pill">${escapeHtml(
       t("analyze.hitList.summary", {
@@ -21995,16 +22162,16 @@ function renderHitList() {
     <table class="hit-list-table">
       <thead>
         <tr>
-          <th>#</th>
+          <th class="num">#</th>
           <th>seq_id</th>
           <th>source</th>
-          <th>tier</th>
-          <th>score</th>
-          <th>SoluProt</th>
-          <th>pLDDT</th>
-          <th>RMSD</th>
-          ${showRelax ? "<th>Relax/res</th>" : ""}
-          <th>${escapeHtml(t("analyze.hitList.identity"))}</th>
+          <th class="num">tier</th>
+          <th class="num">score</th>
+          <th class="num">SoluProt</th>
+          <th class="num">pLDDT</th>
+          <th class="num">RMSD</th>
+          ${showRelax ? '<th class="num">Relax/res</th>' : ""}
+          <th class="num">${escapeHtml(t("analyze.hitList.identity"))}</th>
           <th>${escapeHtml(af2ProviderSelectedLabel(currentRunAf2Provider()))}</th>
         </tr>
       </thead>
@@ -22023,7 +22190,7 @@ function buildHitListDetailsMarkdown() {
   const cutoff = Math.max(0, Math.min(100, Number(state.hitListCutoff || 0)));
   const filtered = filteredHitListRows({ applyLimit: false });
   const maxRows = Math.min(filtered.length, 200);
-  const showRelax = hitListHasRelaxMetrics(filtered.slice(0, maxRows));
+  const showRelax = hitListRelaxColumnEnabled(filtered.slice(0, maxRows), state.hitListResult);
   const lines = [];
   lines.push(`# ${t("analyze.hitList.detailsTitle")}`);
   lines.push("");
@@ -22234,6 +22401,16 @@ function buildReportChartSection() {
       id: "plddt_rmsd",
       title: t("analyze.chart.option.plddtRmsd"),
       build: buildPlddtRmsdScatter,
+    },
+    {
+      id: "plddt_relax",
+      title: t("analyze.chart.option.plddtRelax"),
+      build: buildPlddtRelaxScatter,
+    },
+    {
+      id: "rmsd_relax",
+      title: t("analyze.chart.option.rmsdRelax"),
+      build: buildRmsdRelaxScatter,
     },
     {
       id: "score_hist",
@@ -22473,7 +22650,7 @@ function buildReportHitListSection() {
   const rows = filteredHitListRows({ applyLimit: false });
   const cutoff = Math.max(0, Math.min(100, Number(state.hitListCutoff || 0)));
   const maxRows = Math.min(rows.length, Math.max(20, Math.min(200, Number(state.hitListLimit || 120))));
-  const showRelax = hitListHasRelaxMetrics(rows.slice(0, maxRows));
+  const showRelax = hitListRelaxColumnEnabled(rows.slice(0, maxRows), state.hitListResult);
   const lines = [];
   lines.push(`## ${t("report.hitList.title")}`);
   lines.push("");
