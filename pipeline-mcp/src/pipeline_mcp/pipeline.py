@@ -2088,6 +2088,61 @@ def _preprocess_pdb_text(
     return processed
 
 
+def _strip_pdb_to_chains(
+    pdb_text: str,
+    *,
+    chains: list[str] | None,
+) -> str:
+    selected = [str(chain_id).strip() for chain_id in (chains or []) if str(chain_id).strip()]
+    if not pdb_text.strip() or not selected:
+        return pdb_text
+
+    chain_set = set(selected)
+    out_lines: list[str] = []
+    for raw in pdb_text.splitlines():
+        rec = raw[:6].strip().upper()
+        if rec in {"ATOM", "HETATM", "TER"}:
+            chain_id = raw[21:22].strip() or "_"
+            if chain_id not in chain_set:
+                continue
+        out_lines.append(raw)
+    return "\n".join(out_lines) + ("\n" if pdb_text.endswith("\n") else "")
+
+
+def _proteinmpnn_input_pdb_text(
+    pdb_text: str,
+    *,
+    design_chains: list[str] | None,
+    af2_model_preset: str,
+) -> str:
+    if not _is_monomer_preset(af2_model_preset):
+        return pdb_text
+
+    selected = [str(chain_id).strip() for chain_id in (design_chains or []) if str(chain_id).strip()]
+    if not selected:
+        return pdb_text
+
+    return _strip_pdb_to_chains(pdb_text, chains=[selected[0]])
+
+
+def _wt_compare_reference_pdb_text(
+    target_pdb_input_text: str,
+    *,
+    fallback_pdb_text: str,
+    design_chains: list[str] | None,
+    strip_nonpositive_resseq: bool,
+    renumber_resseq_from_1: bool,
+) -> str:
+    if target_pdb_input_text.strip():
+        return _preprocess_pdb_text(
+            target_pdb_input_text,
+            chains=design_chains,
+            strip_nonpositive_resseq=strip_nonpositive_resseq,
+            renumber_resseq_from_1=renumber_resseq_from_1,
+        )
+    return fallback_pdb_text
+
+
 def _sync_processed_source_pdb_artifacts(
     *,
     run_root: Path,
@@ -4129,9 +4184,6 @@ class PipelineRunner:
                 target_pdb_text = str(backbones[0].get("pdb_text") or "")
             if target_pdb_text.strip():
                 _write_text(paths.root / "target.pdb", target_pdb_text)
-            wt_compare_reference_pdb_text = (
-                target_pdb_input_text if target_pdb_input_text.strip() else target_pdb_text
-            )
 
             backbones_dir = _ensure_dir(paths.root / "backbones")
             backbone_contexts: list[dict[str, Any]] = []
@@ -4257,6 +4309,13 @@ class PipelineRunner:
                 stage="chain_strategy",
                 state="completed",
                 detail=(chain_note[:500] if chain_note else None),
+            )
+            wt_compare_reference_pdb_text = _wt_compare_reference_pdb_text(
+                target_pdb_input_text,
+                fallback_pdb_text=target_pdb_text,
+                design_chains=design_chains,
+                strip_nonpositive_resseq=effective_strip_nonpositive,
+                renumber_resseq_from_1=effective_renumber,
             )
 
             set_status(paths, stage="query_pdb_check", state="running")
@@ -5328,6 +5387,11 @@ class PipelineRunner:
                     )
                     if not ctx_design_chains:
                         ctx_design_chains = list(residues_by_chain_map.keys()) or list(ligand_mask.keys()) or ["A"]
+                    proteinmpnn_pdb_text = _proteinmpnn_input_pdb_text(
+                        ctx["pdb_text"],
+                        design_chains=ctx_design_chains,
+                        af2_model_preset=af2_model_preset,
+                    )
                     fixed_positions_by_chain: dict[str, list[int]] = {}
                     extra_fixed = request.fixed_positions_extra or {}
                     for chain_id in ctx_design_chains:
@@ -5399,14 +5463,14 @@ class PipelineRunner:
 
                     (native, samples), mpnn_recovered, mpnn_err, mpnn_rec = _recover_stage(
                         f"proteinmpnn_{tier_str}",
-                        lambda dir_=bb_tier_dir, ctx_=ctx, fixed_=fixed_positions_by_chain, chains_=ctx_design_chains: self._run_proteinmpnn(
+                        lambda dir_=bb_tier_dir, pdb_text_=proteinmpnn_pdb_text, fixed_=fixed_positions_by_chain, chains_=ctx_design_chains: self._run_proteinmpnn(
                             dir_,
                             request,
-                            pdb_text=ctx_["pdb_text"],
+                            pdb_text=pdb_text_,
                             tier_str=tier_str,
                             design_chains=chains_,
                             fixed_positions_by_chain=fixed_,
-                            on_job_id=lambda job_id, stage=f"proteinmpnn_{tier_str}", dir_=dir_, bb_id=ctx_["id"]: (
+                            on_job_id=lambda job_id, stage=f"proteinmpnn_{tier_str}", dir_=dir_, bb_id=ctx["id"]: (
                                 write_json(dir_ / "runpod_job.json", {"job_id": job_id}),
                                 set_status(
                                     paths,
@@ -5416,9 +5480,9 @@ class PipelineRunner:
                                 ),
                             ),
                         ),
-                        fallback=lambda exc, dir_=bb_tier_dir, ctx_=ctx, fixed_=fixed_positions_by_chain, chains_=ctx_design_chains: _fallback_proteinmpnn(
+                        fallback=lambda exc, dir_=bb_tier_dir, pdb_text_=proteinmpnn_pdb_text, fixed_=fixed_positions_by_chain, chains_=ctx_design_chains: _fallback_proteinmpnn(
                             tier_dir=dir_,
-                            pdb_text=ctx_["pdb_text"],
+                            pdb_text=pdb_text_,
                             design_chains_local=chains_,
                             fixed_positions_by_chain=fixed_,
                             reason=str(exc),

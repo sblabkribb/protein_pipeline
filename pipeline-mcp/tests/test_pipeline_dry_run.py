@@ -12,6 +12,7 @@ from pipeline_mcp.models import PipelineRequest
 from pipeline_mcp.pipeline import _build_backbone_source_summaries
 from pipeline_mcp.pipeline import _clear_stage_outputs_from
 from pipeline_mcp.pipeline import _preprocess_pdb_text
+from pipeline_mcp.pipeline import _proteinmpnn_input_pdb_text
 from pipeline_mcp.pipeline import _resolve_backbone_preprocess_options
 from pipeline_mcp.pipeline import PipelineInputRequired
 from pipeline_mcp.pipeline import PipelineRunner
@@ -1591,6 +1592,42 @@ class TestPipelineDryRun(unittest.TestCase):
             payload = json.loads((out / "tiers" / "30" / "proteinmpnn.json").read_text(encoding="utf-8"))
             self.assertEqual(payload["request"]["pdb_path_chains"], ["A"])
 
+    def test_proteinmpnn_input_pdb_text_strips_partner_chains_for_monomer_af2(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP B   1       0.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU B   2       1.000   1.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+
+        processed = _proteinmpnn_input_pdb_text(
+            pdb,
+            design_chains=["A"],
+            af2_model_preset="monomer",
+        )
+
+        self.assertEqual(set(residues_by_chain(processed, only_atom_records=True).keys()), {"A"})
+        self.assertNotIn(" B ", processed)
+
+    def test_proteinmpnn_input_pdb_text_keeps_partner_chains_for_multimer_af2(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ASP B   1       0.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLU B   2       1.000   1.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+
+        processed = _proteinmpnn_input_pdb_text(
+            pdb,
+            design_chains=["A"],
+            af2_model_preset="multimer",
+        )
+
+        self.assertEqual(set(residues_by_chain(processed, only_atom_records=True).keys()), {"A", "B"})
+        self.assertIn(" B ", processed)
+
     def test_pipeline_rejects_unsafe_partial_rerun_when_design_inputs_change(self) -> None:
         with _tmpdir() as tmp:
             runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
@@ -1928,6 +1965,87 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertAlmostEqual(float(rmsd_scores.get("bioemu_000:fallback_001") or 0.0), 0.0, places=6)
             self.assertGreater(float(target_rmsd_scores.get("bioemu_000:fallback_001") or 0.0), 0.1)
             self.assertEqual(str(tier_af2.get("rmsd_reference_mode") or ""), "parent_backbone")
+
+    def test_pipeline_wt_and_target_rmsd_use_processed_target_reference(self) -> None:
+        fasta = ">q1\nAGSY\n"
+        raw_target_pdb = (
+            "ATOM      1  CA  GLY A  -2       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  SER A  -1       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ALA A   1       0.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  GLY A   2       1.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  SER A   3       2.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  TYR A   4       3.000   1.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        processed_target_pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  SER A   3       2.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  TYR A   4       3.000   1.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+
+        class _BioEmuStub:
+            def sample(self, **kwargs):  # type: ignore[no-untyped-def]
+                return {
+                    "sample_pdbs": [
+                        {
+                            "id": "bioemu_000",
+                            "frame_index": 0,
+                            "pdb": processed_target_pdb,
+                        }
+                    ]
+                }
+
+        class _ColabFoldStub:
+            def predict(self, sequences, **kwargs):  # type: ignore[no-untyped-def]
+                return {
+                    str(seq.id): {
+                        "best_model": "model_1",
+                        "best_plddt": 91.0,
+                        "ranking_debug": {"order": ["model_1"], "plddts": {"model_1": 91.0}},
+                        "ranked_0_pdb": processed_target_pdb,
+                    }
+                    for seq in sequences
+                }
+
+        req = PipelineRequest(
+            target_fasta=fasta,
+            target_pdb=raw_target_pdb,
+            dry_run=False,
+            bioemu_use=True,
+            bioemu_num_samples=1,
+            bioemu_max_return_structures=1,
+            wt_compare=True,
+            pdb_strip_nonpositive_resseq=True,
+            stop_after="af2",
+            conservation_tiers=[0.3],
+            num_seq_per_tier=1,
+            soluprot_cutoff=0.0,
+            af2_plddt_cutoff=0.0,
+            af2_rmsd_cutoff=0.0,
+        )
+
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                colabfold=_ColabFoldStub(),
+                bioemu=_BioEmuStub(),
+            )
+            res = runner.run(req, run_id="processed_target_reference")
+            out = Path(res.output_dir)
+
+            wt_metrics = json.loads((out / "wt" / "metrics.json").read_text(encoding="utf-8"))
+            tier_af2 = json.loads((out / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8"))
+            target_rmsd_scores = tier_af2.get("target_rmsd_scores") or {}
+
+            self.assertAlmostEqual(float(wt_metrics["af2"]["rmsd_ca"]), 0.0, places=6)
+            self.assertAlmostEqual(float(target_rmsd_scores.get("target:fallback_001") or 0.0), 0.0, places=6)
+            self.assertAlmostEqual(float(target_rmsd_scores.get("bioemu_000:fallback_001") or 0.0), 0.0, places=6)
 
     def test_pipeline_selected_tiers_limits_outputs_to_requested_tier(self) -> None:
         with _tmpdir() as tmp:
