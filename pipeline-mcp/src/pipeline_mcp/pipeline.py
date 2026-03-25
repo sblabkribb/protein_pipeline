@@ -1207,15 +1207,7 @@ def _rfd3_spec_uses_default_fixed_atoms(spec: Any) -> bool:
         return False
     if not _rfd3_spec_has_value(spec.get("input")):
         return False
-    if _rfd3_spec_has_value(spec.get("contig")):
-        return False
     if _rfd3_spec_has_value(spec.get("unindex")):
-        return False
-    if _rfd3_spec_has_value(spec.get("hotspots")):
-        return False
-    if _rfd3_spec_has_value(spec.get("infer_ori_strategy")):
-        return False
-    if _rfd3_spec_has_value(spec.get("is_non_loopy")):
         return False
     return True
 

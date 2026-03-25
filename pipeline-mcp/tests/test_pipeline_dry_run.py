@@ -556,6 +556,34 @@ class TestPipelineDryRun(unittest.TestCase):
             spec = inputs.get("spec-1") or {}
             self.assertNotIn("partial_t", spec)
 
+    def test_pipeline_rfd3_binder_injects_default_fixed_atoms(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            req = PipelineRequest(
+                target_fasta="",
+                target_pdb="",
+                dry_run=True,
+                rfd3_mode="binder",
+                rfd3_contig="A1-2",
+                rfd3_input_pdb=pdb,
+                rfd3_partial_t=5.0,
+                num_seq_per_tier=1,
+                conservation_tiers=[0.3],
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
+            spec = inputs.get("spec-1") or {}
+            self.assertEqual(spec.get("input"), "input.pdb")
+            self.assertEqual(spec.get("contig"), "A1-2")
+            self.assertEqual(spec.get("partial_t"), 5.0)
+            self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
+
     def test_pipeline_rfd3_local_diversify_partial_t_default_injected(self) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
