@@ -1,5 +1,6 @@
 import unittest
 
+from pipeline_mcp.bio.pdb import ca_rmsd
 from pipeline_mcp.bio.pdb import ligand_atoms_present
 from pipeline_mcp.bio.pdb import ligand_proximity_mask
 from pipeline_mcp.bio.pdb import preprocess_pdb
@@ -148,6 +149,45 @@ class TestPdbPreprocess(unittest.TestCase):
                 {"index": 2, "original_resseq": 20, "original_icode": "", "processed_resseq": 2, "processed_icode": ""},
             ],
         )
+
+
+class TestCaRmsd(unittest.TestCase):
+    def test_ca_rmsd_subset_matching(self) -> None:
+        # Reference: Residues 10-12
+        pdb_ref = (
+            "ATOM      1  CA  ALA A  10       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  ALA A  11       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  ALA A  12       2.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        # Mobile: Residues 1-12. Residues 10-12 are identical to ref.
+        pdb_mob = (
+            "ATOM      1  CA  GLY A   1      10.000  10.000  10.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2      11.000  10.000  10.000  1.00 20.00           C\n"
+            "ATOM      3  CA  GLY A   3      12.000  10.000  10.000  1.00 20.00           C\n"
+            "ATOM     10  CA  ALA A  10       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM     11  CA  ALA A  11       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM     12  CA  ALA A  12       2.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        rmsd = ca_rmsd(pdb_ref, pdb_mob)
+        self.assertAlmostEqual(rmsd, 0.0, places=5)
+
+    def test_ca_rmsd_mismatching_resseq(self) -> None:
+        # Different shapes but same indices if matched by position
+        pdb_ref = (
+            "ATOM      1  CA  ALA A  10       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  ALA A  11       1.000   1.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        pdb_mob = (
+            "ATOM      1  CA  GLY A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        # Should return None because no resseq match
+        rmsd = ca_rmsd(pdb_ref, pdb_mob)
+        self.assertIsNone(rmsd)
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ import uuid
 from contextlib import contextmanager
 from pathlib import Path
 
+from pipeline_mcp.bio.pdb import ca_rmsd
 from pipeline_mcp.bio.pdb import residues_by_chain
 from pipeline_mcp.bio.pdb import sequence_by_chain
 from pipeline_mcp.models import PipelineRequest
@@ -804,6 +805,209 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertEqual(debug.get("independent_retry_attempt_count"), 2)
             self.assertEqual(debug.get("requested_count"), 3)
             self.assertEqual(debug.get("final_unique_count"), 3)
+
+    def test_pipeline_rfd3_target_rmsd_gate_retries_until_requested_count_is_filled(self) -> None:
+        target_pdb = _bent_ca_backbone(0.0)
+        off_target_batch = [
+            _bent_ca_backbone(15.0),
+            _bent_ca_backbone(16.0, third_y=0.5),
+            _bent_ca_backbone(17.0, third_z=0.5),
+        ]
+        accepted_batch = [
+            _bent_ca_backbone(0.10),
+            _bent_ca_backbone(0.20, third_y=0.05),
+            _bent_ca_backbone(0.15, third_z=0.05, tail_y=0.02),
+        ]
+
+        class _MMseqsStub:
+            def search(self, query_fasta, **kwargs):  # type: ignore[no-untyped-def]
+                _ = kwargs
+                _ = query_fasta
+                a3m = ">query\nAGSY\n>hit1\nAGSY\n"
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                return {"tsv": "", "a3m_gz_b64": a3m_b64}
+
+        class _RFD3Stub:
+            def __init__(self) -> None:
+                self.calls: list[int] = []
+
+            def design(self, **kwargs):  # type: ignore[no-untyped-def]
+                requested = int(kwargs.get("max_return_designs") or 0)
+                self.calls.append(requested)
+                on_job_id = kwargs.get("on_job_id")
+                if callable(on_job_id):
+                    on_job_id(f"rfd3_target_gate_job_{len(self.calls)}")
+                batch = off_target_batch if len(self.calls) == 1 else accepted_batch
+                return {
+                    "selected": {
+                        "id": f"inputs_spec-1_0_model_{len(self.calls)}_0",
+                        "pdb": batch[0],
+                        "json_name": f"inputs_spec-1_0_model_{len(self.calls)}_0.json",
+                    },
+                    "designs": [
+                        {
+                            "id": f"inputs_spec-1_0_model_{len(self.calls)}_{idx}",
+                            "pdb": pdb_text,
+                            "json_name": f"inputs_spec-1_0_model_{len(self.calls)}_{idx}.json",
+                        }
+                        for idx, pdb_text in enumerate(batch[:requested])
+                    ],
+                }
+
+        with _tmpdir() as tmp:
+            rfd3 = _RFD3Stub()
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=_MMseqsStub(),
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=rfd3,
+            )
+            req = PipelineRequest(
+                target_fasta=">q1\nAGSY\n",
+                target_pdb=target_pdb,
+                dry_run=False,
+                stop_after="rfd3",
+                rfd3_mode="local_diversify",
+                rfd3_input_pdb=target_pdb,
+                rfd3_max_return_designs=3,
+                rfd3_target_rmsd_cutoff=1.0,
+                rfd3_max_attempted_designs=6,
+                conservation_tiers=[0.3],
+                num_seq_per_tier=1,
+            )
+            runner.run(req, run_id="rfd3_target_gate_retry")
+
+            out = Path(tmp) / "rfd3_target_gate_retry"
+            debug = json.loads((out / "rfd3" / "debug_summary.json").read_text(encoding="utf-8"))
+            raw_designs = json.loads((out / "rfd3" / "raw_designs.json").read_text(encoding="utf-8"))
+            selected_pdb = (out / "rfd3" / "selected.pdb").read_text(encoding="utf-8")
+
+            self.assertEqual(rfd3.calls, [3, 3])
+            self.assertEqual(len(raw_designs), 6)
+            self.assertEqual(len(list((out / "rfd3" / "designs").glob("*.pdb"))), 3)
+            self.assertEqual(debug.get("off_target_reject_count"), 3)
+            self.assertEqual(debug.get("final_unique_count"), 3)
+            self.assertAlmostEqual(float(debug.get("target_rmsd_cutoff") or 0.0), 1.0)
+            self.assertLess(float(ca_rmsd(target_pdb, selected_pdb, chains=["A"]) or 99.0), 1.0)
+
+    def test_pipeline_rfd3_target_rmsd_gate_fails_when_retry_budget_is_exhausted(self) -> None:
+        target_pdb = _bent_ca_backbone(0.0)
+
+        class _MMseqsStub:
+            def search(self, query_fasta, **kwargs):  # type: ignore[no-untyped-def]
+                _ = kwargs
+                _ = query_fasta
+                a3m = ">query\nAGSY\n>hit1\nAGSY\n"
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                return {"tsv": "", "a3m_gz_b64": a3m_b64}
+
+        class _RFD3Stub:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            def design(self, **kwargs):  # type: ignore[no-untyped-def]
+                self.calls += 1
+                requested = int(kwargs.get("max_return_designs") or 1)
+                on_job_id = kwargs.get("on_job_id")
+                if callable(on_job_id):
+                    on_job_id(f"rfd3_target_gate_fail_job_{self.calls}")
+                batch = [
+                    _bent_ca_backbone(12.0 + float(self.calls) + idx, third_y=0.2 * idx)
+                    for idx in range(requested)
+                ]
+                return {
+                    "selected": {
+                        "id": f"inputs_spec-1_0_model_{self.calls}_0",
+                        "pdb": batch[0],
+                        "json_name": f"inputs_spec-1_0_model_{self.calls}_0.json",
+                    },
+                    "designs": [
+                        {
+                            "id": f"inputs_spec-1_0_model_{self.calls}_{idx}",
+                            "pdb": pdb_text,
+                            "json_name": f"inputs_spec-1_0_model_{self.calls}_{idx}.json",
+                        }
+                        for idx, pdb_text in enumerate(batch)
+                    ],
+                }
+
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=_MMseqsStub(),
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=_RFD3Stub(),
+            )
+            req = PipelineRequest(
+                target_fasta=">q1\nAGSY\n",
+                target_pdb=target_pdb,
+                dry_run=False,
+                stop_after="rfd3",
+                rfd3_mode="local_diversify",
+                rfd3_input_pdb=target_pdb,
+                rfd3_max_return_designs=2,
+                rfd3_target_rmsd_cutoff=1.0,
+                rfd3_max_attempted_designs=6,
+                conservation_tiers=[0.3],
+                num_seq_per_tier=1,
+            )
+            with self.assertRaisesRegex(RuntimeError, "target RMSD gate"):
+                runner.run(req, run_id="rfd3_target_gate_fail")
+
+    def test_pipeline_rfd3_uses_spec_chain_for_gate_and_input_preprocessing(self) -> None:
+        multichain_pdb = (
+            "ATOM      1  CA  ALA B   1      10.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY B   2      11.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  SER B   3      12.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  TYR B   4      13.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      7  CA  SER A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      8  CA  TYR A   4       3.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+
+        def _ca_chain_lengths(pdb_text: str) -> dict[str, int]:
+            out: dict[str, set[tuple[int, str]]] = {}
+            for raw in pdb_text.splitlines():
+                if not raw.startswith("ATOM"):
+                    continue
+                if raw[12:16].strip() != "CA":
+                    continue
+                chain_id = (raw[21] or " ").strip() or "_"
+                resseq = int(raw[22:26])
+                icode = raw[26].strip()
+                out.setdefault(chain_id, set()).add((resseq, icode))
+            return {chain_id: len(items) for chain_id, items in out.items()}
+
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            req = PipelineRequest(
+                target_fasta="",
+                target_pdb=multichain_pdb,
+                dry_run=True,
+                stop_after="rfd3",
+                rfd3_mode="binder",
+                rfd3_contig="A1-4",
+                rfd3_input_pdb=multichain_pdb,
+                rfd3_max_return_designs=2,
+                conservation_tiers=[0.3],
+                num_seq_per_tier=1,
+            )
+            res = runner.run(req, run_id="rfd3_spec_chain_hint")
+            out = Path(res.output_dir)
+
+            mode_payload = json.loads((out / "rfd3" / "mode.json").read_text(encoding="utf-8"))
+            input_pdb = (out / "rfd3" / "input_files" / "input.pdb").read_text(encoding="utf-8")
+            dry_selected = (out / "rfd3" / "selected.pdb").read_text(encoding="utf-8")
+
+            self.assertEqual(mode_payload.get("target_gate_design_chains"), ["A"])
+            self.assertEqual(_ca_chain_lengths(input_pdb), {"A": 4})
+            self.assertEqual(_ca_chain_lengths(dry_selected), {"A": 4})
 
     def test_pipeline_rfd3_strict_duplicate_mode_fails_after_retries(self) -> None:
         pdb = _simple_ca_backbone(0.0)

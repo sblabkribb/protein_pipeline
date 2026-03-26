@@ -108,6 +108,8 @@ _PARTIAL_RERUN_DESIGN_FIELDS = {
     "rfd3_partial_t",
     "rfd3_sampling_strategy",
     "rfd3_fail_on_duplicate_backbones",
+    "rfd3_target_rmsd_cutoff",
+    "rfd3_max_attempted_designs",
     "bioemu_use",
     "bioemu_sequence",
     "bioemu_num_samples",
@@ -734,6 +736,28 @@ def _rfd3_duplicate_backbone_message(*, requested_count: int, unique_count: int,
     )
 
 
+def _rfd3_target_gate_message(
+    *,
+    requested_count: int,
+    accepted_count: int,
+    rejected_count: int,
+    cutoff: float | None,
+) -> str | None:
+    requested = max(0, int(requested_count or 0))
+    accepted = max(0, int(accepted_count or 0))
+    if requested <= 0 or accepted >= requested:
+        return None
+    if not isinstance(cutoff, (int, float)):
+        return None
+    rejected = max(0, int(rejected_count or 0))
+    if rejected <= 0:
+        return None
+    return (
+        f"RFD3 target RMSD gate accepted only {accepted} backbone(s) for requested {requested}. "
+        f"Rejected {rejected} backbone(s) above cutoff {float(cutoff):.3f}A."
+    )
+
+
 def _rfd3_uniquify_design_records(
     records: list[dict[str, Any]] | None,
     *,
@@ -1236,6 +1260,86 @@ def _inject_rfd3_default_fixed_atoms(
     return inputs
 
 
+def _rfd3_chain_ids_from_value(value: Any) -> list[str]:
+    out: list[str] = []
+
+    def _add(chain_id: str) -> None:
+        token = str(chain_id or "").strip()
+        if not token or token in out:
+            return
+        out.append(token)
+
+    if value is None:
+        return out
+    if isinstance(value, dict):
+        for key in value.keys():
+            for chain_id in _rfd3_chain_ids_from_value(key):
+                _add(chain_id)
+        return out
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            for chain_id in _rfd3_chain_ids_from_value(item):
+                _add(chain_id)
+        return out
+    text = str(value or "").strip()
+    if not text:
+        return out
+    for match in re.finditer(r"([A-Za-z])\s*:?\s*-?\d", text):
+        _add(str(match.group(1)))
+    return out
+
+
+def _rfd3_design_chains_from_inputs(inputs: dict[str, Any] | None) -> list[str] | None:
+    if not isinstance(inputs, dict):
+        return None
+    out: list[str] = []
+
+    def _append(chains: list[str]) -> None:
+        for chain_id in chains:
+            token = str(chain_id or "").strip()
+            if not token or token in out:
+                continue
+            out.append(token)
+
+    for spec in inputs.values():
+        if not isinstance(spec, dict):
+            continue
+        for key in ("contig", "select_unfixed_sequence", "hotspots", "unindex"):
+            _append(_rfd3_chain_ids_from_value(spec.get(key)))
+    if out:
+        return out
+    for spec in inputs.values():
+        if not isinstance(spec, dict):
+            continue
+        _append(_rfd3_chain_ids_from_value(spec.get("select_fixed_atoms")))
+    return out or None
+
+
+def _rfd3_requested_design_chains(
+    request: PipelineRequest,
+    *,
+    input_files: dict[str, str],
+) -> list[str] | None:
+    explicit = [str(chain_id).strip() for chain_id in (request.design_chains or []) if str(chain_id).strip()]
+    if explicit:
+        return explicit
+    try:
+        inputs_text = str(request.rfd3_inputs_text or "").strip() or None
+        inputs_obj = copy.deepcopy(request.rfd3_inputs) if isinstance(request.rfd3_inputs, dict) else None
+        if inputs_text is not None and inputs_obj is None:
+            parsed = _parse_json_dict(inputs_text)
+            if parsed is not None:
+                inputs_obj = parsed
+                inputs_text = None
+        if inputs_text is None and inputs_obj is None:
+            inputs_obj = _rfd3_simple_inputs(request, input_files=input_files)
+        inputs_obj = copy.deepcopy(_normalize_rfd3_inputs(inputs_obj))
+        inputs_obj = _inject_rfd3_default_fixed_atoms(inputs_obj, input_files=input_files)
+    except Exception:
+        return None
+    return _rfd3_design_chains_from_inputs(inputs_obj)
+
+
 def _rfd3_simple_inputs(request: PipelineRequest, *, input_files: dict[str, str]) -> dict[str, object]:
     mode = _effective_rfd3_mode(request, input_files=input_files)
     if mode == "advanced":
@@ -1370,6 +1474,80 @@ def _deduplicate_backbones_by_exact_ca(
     return unique, summary
 
 
+def _filter_backbones_by_target_rmsd(
+    backbones: list[dict[str, Any]] | None,
+    *,
+    reference_pdb_text: str,
+    chains: list[str] | None,
+    cutoff: float | None,
+    source: str,
+) -> tuple[list[dict[str, Any]] | None, dict[str, Any] | None]:
+    if not isinstance(backbones, list):
+        return backbones, None
+    items = [item for item in backbones if isinstance(item, dict)]
+    if not items:
+        return [], None
+
+    chain_list = [str(chain_id).strip() for chain_id in (chains or []) if str(chain_id).strip()] or None
+    if cutoff is None or not reference_pdb_text.strip():
+        return items, {
+            "source": source,
+            "method": "target_ca_rmsd",
+            "applied": False,
+            "cutoff": float(cutoff) if isinstance(cutoff, (int, float)) else None,
+            "design_chains": chain_list,
+            "input_count": len(items),
+            "accepted_count": len(items),
+            "rejected_count": 0,
+            "accepted_ids": [str(item.get("id") or "") for item in items if str(item.get("id") or "").strip()],
+            "rejected_ids": [],
+            "missing_rmsd_ids": [],
+            "rmsd_by_id": {},
+        }
+
+    accepted: list[dict[str, Any]] = []
+    rejected_ids: list[str] = []
+    missing_rmsd_ids: list[str] = []
+    rmsd_by_id: dict[str, float] = {}
+
+    for item in items:
+        item_id = str(item.get("id") or "").strip()
+        pdb_text = str(item.get("pdb_text") or "")
+        rmsd = ca_rmsd(reference_pdb_text, pdb_text, chains=chain_list)
+        if not isinstance(rmsd, (int, float)):
+            entry = dict(item)
+            entry["target_rmsd"] = None
+            accepted.append(entry)
+            if item_id:
+                missing_rmsd_ids.append(item_id)
+            continue
+        rmsd_value = float(rmsd)
+        if item_id:
+            rmsd_by_id[item_id] = rmsd_value
+        entry = dict(item)
+        entry["target_rmsd"] = rmsd_value
+        if rmsd_value <= float(cutoff):
+            accepted.append(entry)
+        elif item_id:
+            rejected_ids.append(item_id)
+
+    summary = {
+        "source": source,
+        "method": "target_ca_rmsd",
+        "applied": True,
+        "cutoff": float(cutoff),
+        "design_chains": chain_list,
+        "input_count": len(items),
+        "accepted_count": len(accepted),
+        "rejected_count": len(rejected_ids),
+        "accepted_ids": [str(item.get("id") or "") for item in accepted if str(item.get("id") or "").strip()],
+        "rejected_ids": rejected_ids,
+        "missing_rmsd_ids": missing_rmsd_ids,
+        "rmsd_by_id": rmsd_by_id,
+    }
+    return accepted, summary
+
+
 def _rfd3_cli_has_arg(cli_args: str | None, key: str) -> bool:
     if not cli_args:
         return False
@@ -1419,6 +1597,55 @@ def _resolve_af2_model_preset(requested: str, *, chain_count: int) -> str:
     if _is_multimer_preset(preset):
         return preset
     return preset
+
+
+def _resolve_pipeline_chain_strategy(
+    *,
+    pdb_text: str,
+    request_design_chains: list[str] | None,
+    target_fasta_text: str,
+    target_record: FastaRecord | None,
+    af2_model_preset_requested: str,
+) -> tuple[list[str], list[str] | None, list[str] | None, list[str] | None, str | None, str]:
+    pdb_chains = list(residues_by_chain(pdb_text, only_atom_records=True).keys())
+    requested_chains = list(request_design_chains) if request_design_chains else (pdb_chains or None)
+    auto_design_chains: list[str] | None = None
+    auto_chain_note: str | None = None
+    if request_design_chains is None and not str(target_fasta_text or "").strip():
+        query_seq = _clean_protein_sequence(target_record.sequence) if target_record else ""
+        if query_seq and pdb_chains:
+            seq_by_chain = sequence_by_chain(pdb_text, chains=pdb_chains)
+            best_chain = None
+            best_score: tuple[float, int, int] | None = None
+            for chain_id, chain_seq in seq_by_chain.items():
+                clean_seq = _clean_protein_sequence(chain_seq)
+                if not clean_seq:
+                    continue
+                aln = global_alignment_mapping(query_seq, clean_seq)
+                score = (float(aln.query_identity), int(aln.matches), int(aln.target_len))
+                if best_score is None or score > best_score:
+                    best_score = score
+                    best_chain = chain_id
+            if best_chain:
+                requested_chains = [best_chain]
+                auto_design_chains = [best_chain]
+                auto_chain_note = f"auto_design_chains={best_chain} (target_fasta empty)"
+
+    af2_model_preset = _resolve_af2_model_preset(
+        af2_model_preset_requested,
+        chain_count=len(requested_chains or []),
+    )
+    chain_notes: list[str] = []
+    if requested_chains and _is_monomer_preset(af2_model_preset):
+        if len(requested_chains) > 1:
+            chain_notes.append(f"monomer preset: using first chain only ({requested_chains[0]})")
+        design_chains = [requested_chains[0]]
+    else:
+        design_chains = requested_chains
+    if auto_chain_note:
+        chain_notes.insert(0, auto_chain_note)
+    chain_note = " | ".join(chain_notes) if chain_notes else None
+    return pdb_chains, requested_chains, auto_design_chains, design_chains, chain_note, af2_model_preset
 
 
 def _normalize_af2_provider(value: object | None) -> str:
@@ -2109,6 +2336,22 @@ def _strip_pdb_to_chains(
     return "\n".join(out_lines) + ("\n" if pdb_text.endswith("\n") else "")
 
 
+def _prepare_pdb_text_for_design_context(
+    pdb_text: str,
+    *,
+    chains: list[str] | None,
+    strip_nonpositive_resseq: bool,
+    renumber_resseq_from_1: bool,
+) -> str:
+    prepared = _strip_pdb_to_chains(pdb_text, chains=chains)
+    return _preprocess_pdb_text(
+        prepared,
+        chains=chains,
+        strip_nonpositive_resseq=strip_nonpositive_resseq,
+        renumber_resseq_from_1=renumber_resseq_from_1,
+    )
+
+
 def _proteinmpnn_input_pdb_text(
     pdb_text: str,
     *,
@@ -2422,6 +2665,9 @@ class PipelineRunner:
             rfd3_files = _rfd3_input_files(request) if _rfd3_active(request) else {}
             rfd3_input_pdb_text = str(request.rfd3_input_pdb or "")
             rfd3_reference_pdb_text = str(rfd3_files.get("input.pdb") or rfd3_input_pdb_text)
+            rfd3_preferred_design_chains = (
+                _rfd3_requested_design_chains(request, input_files=rfd3_files) if _rfd3_active(request) else None
+            )
             effective_strip_nonpositive = bool(request.pdb_strip_nonpositive_resseq)
             effective_renumber = bool(request.pdb_renumber_resseq_from_1)
             auto_strip_nonpositive = False
@@ -2439,26 +2685,29 @@ class PipelineRunner:
                     effective_strip_nonpositive = True
                     auto_strip_nonpositive = True
 
-            if rfd3_files and (effective_strip_nonpositive or effective_renumber):
+            if rfd3_files and (effective_strip_nonpositive or effective_renumber or bool(rfd3_preferred_design_chains)):
                 processed_files: dict[str, str] = {}
                 for name, content in rfd3_files.items():
                     text = str(content or "")
-                    processed_files[name] = _preprocess_pdb_text(
+                    processed_files[name] = _prepare_pdb_text_for_design_context(
                         text,
-                        chains=request.design_chains,
+                        chains=rfd3_preferred_design_chains,
                         strip_nonpositive_resseq=effective_strip_nonpositive,
                         renumber_resseq_from_1=effective_renumber,
                     )
                 rfd3_files = processed_files
                 if "input.pdb" in rfd3_files:
                     rfd3_input_pdb_text = str(rfd3_files.get("input.pdb") or "")
-            elif rfd3_input_pdb_text.strip() and (effective_strip_nonpositive or effective_renumber):
-                rfd3_input_pdb_text = _preprocess_pdb_text(
+            elif rfd3_input_pdb_text.strip() and (
+                effective_strip_nonpositive or effective_renumber or bool(rfd3_preferred_design_chains)
+            ):
+                rfd3_input_pdb_text = _prepare_pdb_text_for_design_context(
                     rfd3_input_pdb_text,
-                    chains=request.design_chains,
+                    chains=rfd3_preferred_design_chains,
                     strip_nonpositive_resseq=effective_strip_nonpositive,
                     renumber_resseq_from_1=effective_renumber,
                 )
+            rfd3_reference_pdb_text = str(rfd3_files.get("input.pdb") or rfd3_input_pdb_text)
             rfd3_backbones: list[dict[str, Any]] | None = None
             rfd3_selected_id: str | None = None
             rfd3_observed_count = 0
@@ -2480,18 +2729,18 @@ class PipelineRunner:
                 elif rfd3_files and "input.pdb" in rfd3_files:
                     msa_source_pdb_text = str(rfd3_files.get("input.pdb") or "")
                 if msa_source_pdb_text.strip() and (
-                    effective_strip_nonpositive or effective_renumber
+                    effective_strip_nonpositive or effective_renumber or bool(rfd3_preferred_design_chains)
                 ):
-                    msa_source_pdb_text, _ = preprocess_pdb(
+                    msa_source_pdb_text = _prepare_pdb_text_for_design_context(
                         msa_source_pdb_text,
-                        chains=request.design_chains,
+                        chains=(request.design_chains or rfd3_preferred_design_chains),
                         strip_nonpositive_resseq=effective_strip_nonpositive,
                         renumber_resseq_from_1=effective_renumber,
                     )
                 if msa_source_pdb_text.strip():
                     target_record = _target_record_from_pdb(
                         msa_source_pdb_text,
-                        design_chains=request.design_chains,
+                        design_chains=(request.design_chains or rfd3_preferred_design_chains),
                     )
                 elif _rfd3_active(request):
                     msa_defer = True
@@ -2858,6 +3107,11 @@ class PipelineRunner:
                         inputs_obj,
                         input_files=rfd3_files,
                     )
+                    rfd3_runtime_design_chains = (
+                        _rfd3_design_chains_from_inputs(inputs_obj)
+                        or rfd3_preferred_design_chains
+                        or request.design_chains
+                    )
 
                     if inputs_text is None and inputs_obj is None:
                         raise ValueError("RFD3 inputs are required (inputs_text/inputs/input_pdb)")
@@ -2868,17 +3122,6 @@ class PipelineRunner:
                         inputs_payload = parsed_payload if parsed_payload is not None else {"raw_text": inputs_text}
                     if inputs_payload is not None:
                         write_json(rfd3_dir / "inputs.json", inputs_payload)
-                    write_json(
-                        rfd3_dir / "mode.json",
-                        {
-                            "mode": rfd3_mode,
-                            "requested_partial_t": request.rfd3_partial_t,
-                            "effective_partial_t": _effective_rfd3_partial_t(request, mode=rfd3_mode),
-                            "sampling_strategy": _normalize_rfd3_sampling_strategy(request.rfd3_sampling_strategy),
-                            "fail_on_duplicate_backbones": bool(request.rfd3_fail_on_duplicate_backbones),
-                        },
-                    )
-
                     if rfd3_files:
                         files_dir = _ensure_dir(rfd3_dir / "input_files")
                         for raw_name, content in rfd3_files.items():
@@ -2892,17 +3135,80 @@ class PipelineRunner:
 
                     selected_pdb_path = rfd3_dir / "selected.pdb"
                     selected_json_path = rfd3_dir / "selected.json"
+                    selected_cif_path = rfd3_dir / "selected.cif.gz"
                     designs_json_path = rfd3_dir / "designs.json"
                     raw_designs_json_path = rfd3_dir / "raw_designs.json"
                     debug_summary_path = rfd3_dir / "debug_summary.json"
+                    target_gate_summary_path = rfd3_dir / "target_gate_summary.json"
                     cache_meta_path = rfd3_dir / "cache_meta.json"
                     runpod_job_path = rfd3_dir / "runpod_job.json"
                     raw_designs_dir = rfd3_dir / "raw_designs"
                     designs_dir = rfd3_dir / "designs"
                     max_designs = max(1, int(request.rfd3_max_return_designs or 1))
                     use_ensemble = bool(request.rfd3_use_ensemble) or max_designs > 1
+                    requested_final_count = max_designs if use_ensemble else 1
                     sampling_strategy = _normalize_rfd3_sampling_strategy(request.rfd3_sampling_strategy)
                     fail_on_duplicate_backbones = bool(request.rfd3_fail_on_duplicate_backbones)
+                    rfd3_target_rmsd_cutoff = (
+                        float(request.rfd3_target_rmsd_cutoff)
+                        if request.rfd3_target_rmsd_cutoff is not None
+                        else None
+                    )
+                    if isinstance(rfd3_target_rmsd_cutoff, float) and rfd3_target_rmsd_cutoff <= 0.0:
+                        rfd3_target_rmsd_cutoff = None
+                    rfd3_max_attempted_designs = max(
+                        requested_final_count,
+                        int(request.rfd3_max_attempted_designs or (requested_final_count * 3)),
+                    )
+                    target_gate_source_pdb_text = (
+                        target_pdb_input_text
+                        if target_pdb_input_text.strip()
+                        else (
+                            rfd3_reference_pdb_text
+                            if rfd3_reference_pdb_text.strip()
+                            else target_pdb_text
+                        )
+                    )
+                    (
+                        _rfd3_gate_pdb_chains,
+                        _rfd3_gate_requested_chains,
+                        _rfd3_gate_auto_design_chains,
+                        rfd3_target_gate_design_chains,
+                        _rfd3_gate_chain_note,
+                        _rfd3_gate_model_preset,
+                    ) = _resolve_pipeline_chain_strategy(
+                        pdb_text=target_gate_source_pdb_text,
+                        request_design_chains=rfd3_runtime_design_chains,
+                        target_fasta_text=str(request.target_fasta or ""),
+                        target_record=target_record,
+                        af2_model_preset_requested=request.af2_model_preset,
+                    )
+                    rfd3_target_gate_reference_pdb_text = _preprocess_pdb_text(
+                        target_gate_source_pdb_text,
+                        chains=rfd3_target_gate_design_chains,
+                        strip_nonpositive_resseq=effective_strip_nonpositive,
+                        renumber_resseq_from_1=effective_renumber,
+                    )
+                    rfd3_target_gate_reference_hash = (
+                        _sha256_text(rfd3_target_gate_reference_pdb_text)
+                        if rfd3_target_gate_reference_pdb_text.strip()
+                        else None
+                    )
+                    write_json(
+                        rfd3_dir / "mode.json",
+                        {
+                            "mode": rfd3_mode,
+                            "requested_partial_t": request.rfd3_partial_t,
+                            "effective_partial_t": _effective_rfd3_partial_t(request, mode=rfd3_mode),
+                            "sampling_strategy": _normalize_rfd3_sampling_strategy(request.rfd3_sampling_strategy),
+                            "fail_on_duplicate_backbones": bool(request.rfd3_fail_on_duplicate_backbones),
+                            "target_rmsd_cutoff": rfd3_target_rmsd_cutoff,
+                            "max_attempted_designs": rfd3_max_attempted_designs,
+                            "requested_final_count": requested_final_count,
+                            "target_gate_design_chains": rfd3_target_gate_design_chains,
+                            "target_gate_reference_sha256": rfd3_target_gate_reference_hash,
+                        },
+                    )
 
                     def _persist_rfd3_design_sets(
                         raw_designs: list[dict[str, Any]] | None,
@@ -2979,13 +3285,24 @@ class PipelineRunner:
                                 "return_designs_pdb": use_ensemble,
                                 "min_return_design_pdbs": max_designs if use_ensemble else 0,
                                 "sampling_strategy": sampling_strategy,
+                                "requested_final_count": requested_final_count,
+                                "target_rmsd_cutoff": rfd3_target_rmsd_cutoff,
+                                "target_gate_design_chains": rfd3_target_gate_design_chains,
+                                "target_gate_reference_sha256": rfd3_target_gate_reference_hash,
+                                "max_attempted_designs": rfd3_max_attempted_designs,
                             }
                         )
+                        raw_designs: list[dict[str, Any]] = []
+                        raw_design_ids: set[str] = set()
+                        selected_score: Any = None
+                        attempts: list[dict[str, Any]] = []
+                        rfd3_target_gate_summary: dict[str, Any] | None = None
 
                         def _build_rfd3_debug_summary(
                             *,
                             raw_designs: list[dict[str, Any]],
                             diversity_summary: dict[str, Any] | None,
+                            target_gate_summary: dict[str, Any] | None,
                             attempts: list[dict[str, Any]],
                             independent_retry_performed: bool,
                             independent_retry_attempt_count: int,
@@ -3001,26 +3318,49 @@ class PipelineRunner:
                                 if isinstance(diversity_summary, dict)
                                 else 0
                             )
+                            accepted_count = (
+                                int(target_gate_summary.get("accepted_count") or 0)
+                                if isinstance(target_gate_summary, dict)
+                                else unique_count
+                            )
+                            rejected_count = (
+                                int(target_gate_summary.get("rejected_count") or 0)
+                                if isinstance(target_gate_summary, dict)
+                                else 0
+                            )
                             return {
                                 "sampling_strategy_requested": sampling_strategy,
                                 "sampling_strategy_effective": sampling_strategy,
                                 "independent_retry_performed": independent_retry_performed,
                                 "independent_retry_attempt_count": independent_retry_attempt_count,
-                                "requested_count": max_designs,
+                                "requested_count": requested_final_count,
+                                "max_attempted_designs": rfd3_max_attempted_designs,
                                 "raw_count": len(raw_designs),
-                                "final_unique_count": unique_count,
+                                "unique_before_target_gate_count": unique_count,
+                                "final_unique_count": accepted_count,
                                 "duplicate_count": duplicate_count,
                                 "duplicate_contract_error": _rfd3_duplicate_backbone_message(
-                                    requested_count=max_designs,
+                                    requested_count=requested_final_count,
                                     unique_count=unique_count,
                                     duplicate_count=duplicate_count,
+                                ),
+                                "target_rmsd_cutoff": rfd3_target_rmsd_cutoff,
+                                "target_rmsd_gate_applied": bool(
+                                    isinstance(target_gate_summary, dict) and target_gate_summary.get("applied")
+                                ),
+                                "off_target_reject_count": rejected_count,
+                                "target_rmsd_contract_error": _rfd3_target_gate_message(
+                                    requested_count=requested_final_count,
+                                    accepted_count=accepted_count,
+                                    rejected_count=rejected_count,
+                                    cutoff=rfd3_target_rmsd_cutoff,
                                 ),
                                 "cache_hit": cache_hit,
                                 "attempts": attempts,
                             }
 
                         def _load_cached_rfd3_outputs() -> bool:
-                            nonlocal target_pdb_text, rfd3_backbones, rfd3_selected_id, rfd3_observed_count, rfd3_diversity_summary, rfd3_debug_summary
+                            nonlocal target_pdb_text, rfd3_backbones, rfd3_selected_id, rfd3_observed_count, rfd3_diversity_summary, rfd3_debug_summary, raw_designs, raw_design_ids, selected_score, attempts, rfd3_target_gate_summary
                             if request.force or not selected_pdb_path.exists():
                                 return False
                             try:
@@ -3064,6 +3404,7 @@ class PipelineRunner:
 
                             target_pdb_text = cached_pdb_text
                             rfd3_selected_id = _canonicalize_rfd3_design_id(selected_meta.get("id") or "cached")
+                            selected_score = selected_meta.get("score")
 
                             cached_designs_path = raw_designs_json_path if raw_designs_json_path.exists() else designs_json_path
                             cached_designs: list[dict[str, Any]] = []
@@ -3083,9 +3424,6 @@ class PipelineRunner:
                                         "source": "rfd3",
                                     }
                                 ]
-                            rfd3_observed_count = len(cached_designs)
-                            rfd3_backbones = None
-                            rfd3_diversity_summary = None
 
                             existing_debug: dict[str, Any] = {}
                             if debug_summary_path.exists():
@@ -3096,70 +3434,47 @@ class PipelineRunner:
                                 if isinstance(debug_raw, dict):
                                     existing_debug = dict(debug_raw)
 
-                            if use_ensemble:
-                                ensemble = _rfd3_design_records_to_backbones(cached_designs)
-                                if ensemble and not any(str(item.get("id") or "") == str(rfd3_selected_id or "") for item in ensemble):
-                                    ensemble.insert(
-                                        0,
-                                        {
-                                            "id": rfd3_selected_id or _canonicalize_rfd3_design_id("cached"),
-                                            "pdb_text": target_pdb_text,
-                                            "score": selected_meta.get("score"),
-                                            "source": "rfd3",
-                                        },
-                                    )
-                                materialized_count = _backbone_materialized_count(ensemble)
-                                missing_design_pdbs = _rfd3_missing_design_pdb_message(
-                                    requested_count=max_designs,
-                                    observed_count=rfd3_observed_count,
-                                    materialized_count=materialized_count,
-                                )
-                                if missing_design_pdbs:
+                            raw_designs = list(cached_designs)
+                            raw_design_ids = {
+                                str(item.get("id") or "").strip()
+                                for item in raw_designs
+                                if isinstance(item, dict) and str(item.get("id") or "").strip()
+                            }
+                            attempts = (
+                                list(existing_debug.get("attempts"))
+                                if isinstance(existing_debug.get("attempts"), list)
+                                else []
+                            )
+                            try:
+                                refresh_state = _refresh_rfd3_final_backbones()
+                            except BackboneContractError:
+                                return False
+                            independent_retry_performed = bool(existing_debug.get("independent_retry_performed"))
+                            independent_retry_attempt_count = int(existing_debug.get("independent_retry_attempt_count") or 0)
+                            rfd3_debug_summary = _build_rfd3_debug_summary(
+                                raw_designs=raw_designs,
+                                diversity_summary=rfd3_diversity_summary,
+                                target_gate_summary=rfd3_target_gate_summary,
+                                attempts=attempts,
+                                independent_retry_performed=independent_retry_performed,
+                                independent_retry_attempt_count=independent_retry_attempt_count,
+                                cache_hit=True,
+                            )
+                            write_json(debug_summary_path, rfd3_debug_summary)
+                            _persist_rfd3_design_sets(raw_designs, rfd3_backbones)
+                            duplicate_message = str(rfd3_debug_summary.get("duplicate_contract_error") or "").strip()
+                            target_gate_message = str(rfd3_debug_summary.get("target_rmsd_contract_error") or "").strip()
+                            accepted_count = int(refresh_state.get("accepted_count") or 0)
+                            if accepted_count < requested_final_count:
+                                if len(raw_designs) < rfd3_max_attempted_designs:
                                     return False
-                                rfd3_backbones, rfd3_diversity_summary = _deduplicate_backbones_by_exact_ca(
-                                    ensemble,
-                                    source="rfd3",
-                                )
-                                if rfd3_diversity_summary is not None:
-                                    write_json(rfd3_dir / "diversity_summary.json", rfd3_diversity_summary)
-                                independent_retry_performed = bool(existing_debug.get("independent_retry_performed"))
-                                independent_retry_attempt_count = int(existing_debug.get("independent_retry_attempt_count") or 0)
-                                rfd3_debug_summary = _build_rfd3_debug_summary(
-                                    raw_designs=cached_designs,
-                                    diversity_summary=rfd3_diversity_summary,
-                                    attempts=(existing_debug.get("attempts") if isinstance(existing_debug.get("attempts"), list) else []),
-                                    independent_retry_performed=independent_retry_performed,
-                                    independent_retry_attempt_count=independent_retry_attempt_count,
-                                    cache_hit=True,
-                                )
-                                write_json(debug_summary_path, rfd3_debug_summary)
-                                _persist_rfd3_design_sets(cached_designs, rfd3_backbones)
-                                duplicate_message = str(rfd3_debug_summary.get("duplicate_contract_error") or "").strip()
-                                if sampling_strategy == "auto" and duplicate_message and not independent_retry_performed:
-                                    return False
-                                if fail_on_duplicate_backbones and duplicate_message:
-                                    raise BackboneContractError(duplicate_message)
-                            else:
-                                rfd3_debug_summary = {
-                                    "sampling_strategy_requested": sampling_strategy,
-                                    "sampling_strategy_effective": sampling_strategy,
-                                    "independent_retry_performed": False,
-                                    "independent_retry_attempt_count": 0,
-                                    "requested_count": max_designs,
-                                    "raw_count": len(cached_designs),
-                                    "final_unique_count": 1,
-                                    "duplicate_count": 0,
-                                    "duplicate_contract_error": None,
-                                    "cache_hit": True,
-                                    "attempts": [],
-                                }
-                                write_json(debug_summary_path, rfd3_debug_summary)
-                                _persist_rfd3_design_sets(cached_designs, None)
+                                raise BackboneContractError(target_gate_message or duplicate_message or "RFD3 target RMSD gate failed")
+                            if sampling_strategy == "auto" and duplicate_message and not independent_retry_performed:
+                                return False
+                            if fail_on_duplicate_backbones and duplicate_message:
+                                raise BackboneContractError(duplicate_message)
                             set_status(paths, stage="rfd3", state="completed", detail="cached")
                             return True
-
-                        if _load_cached_rfd3_outputs():
-                            return
 
                         resume_job_id: str | None = None
                         if runpod_job_path.exists() and not request.force and sampling_strategy != "independent_jobs":
@@ -3184,10 +3499,6 @@ class PipelineRunner:
                                     resume_job_id = job_id
 
                         runpod_jobs_dir = _ensure_dir(rfd3_dir / "runpod_jobs")
-                        raw_designs: list[dict[str, Any]] = []
-                        raw_design_ids: set[str] = set()
-                        selected_score: Any = None
-                        attempts: list[dict[str, Any]] = []
 
                         def _call_rfd3_design(
                             *,
@@ -3312,23 +3623,6 @@ class PipelineRunner:
                             if missing_design_pdbs:
                                 raise BackboneContractError(missing_design_pdbs)
 
-                            if primary_attempt:
-                                rfd3_selected_id = selected_id
-                                selected_score = selected.get("score")
-                                target_pdb_text = selected_pdb_text
-                                _write_text(selected_pdb_path, target_pdb_text)
-                                selected_meta = {k: v for k, v in selected.items() if k not in {"pdb", "cif_gz_base64"}}
-                                selected_meta.setdefault("source", "rfd3")
-                                selected_meta["request_hash"] = rfd3_request_hash
-                                write_json(selected_json_path, selected_meta)
-                                cif_b64 = selected.get("cif_gz_base64")
-                                if isinstance(cif_b64, str) and cif_b64.strip():
-                                    try:
-                                        cif_bytes = base64.b64decode(cif_b64)
-                                        (rfd3_dir / "selected.cif.gz").write_bytes(cif_bytes)
-                                    except Exception:
-                                        pass
-
                             attempts.append(
                                 {
                                     "label": attempt_label,
@@ -3339,15 +3633,72 @@ class PipelineRunner:
                                 }
                             )
 
-                        def _refresh_rfd3_final_backbones() -> None:
-                            nonlocal rfd3_backbones, rfd3_diversity_summary, rfd3_observed_count
-                            rfd3_observed_count = len(raw_designs) if raw_designs else 1
-                            if not use_ensemble:
-                                rfd3_backbones = None
-                                rfd3_diversity_summary = None
+                            if primary_attempt:
+                                _write_selected_design_record(selected)
+
+                        def _write_selected_design_record(record: dict[str, Any] | None) -> None:
+                            nonlocal target_pdb_text, rfd3_selected_id, selected_score
+                            if not isinstance(record, dict):
                                 return
+                            selected_record = _canonicalize_rfd3_design_record(record)
+                            selected_id = str(
+                                selected_record.get("id") or _canonicalize_rfd3_design_id("selected")
+                            ).strip()
+                            selected_pdb_text = str(
+                                selected_record.get("pdb") or selected_record.get("pdb_text") or ""
+                            )
+                            if not selected_id or not selected_pdb_text.strip():
+                                return
+                            rfd3_selected_id = selected_id
+                            selected_score = selected_record.get("score")
+                            target_pdb_text = selected_pdb_text
+                            _write_text(selected_pdb_path, target_pdb_text)
+                            selected_meta = {
+                                key: value
+                                for key, value in selected_record.items()
+                                if key not in {"pdb", "pdb_text", "cif_gz_base64"}
+                            }
+                            selected_meta.setdefault("source", "rfd3")
+                            selected_meta["request_hash"] = rfd3_request_hash
+                            write_json(selected_json_path, selected_meta)
+                            cif_b64 = selected_record.get("cif_gz_base64")
+                            if isinstance(cif_b64, str) and cif_b64.strip():
+                                try:
+                                    cif_bytes = base64.b64decode(cif_b64)
+                                    selected_cif_path.write_bytes(cif_bytes)
+                                except Exception:
+                                    _remove_path_if_exists(selected_cif_path)
+                            else:
+                                _remove_path_if_exists(selected_cif_path)
+
+                        def _selected_design_record_from_raw() -> dict[str, Any] | None:
+                            selected_key = str(rfd3_selected_id or "").strip()
+                            for record in raw_designs:
+                                if not isinstance(record, dict):
+                                    continue
+                                if str(record.get("id") or "").strip() == selected_key:
+                                    return dict(record)
+                            if selected_key and target_pdb_text.strip():
+                                return {
+                                    "id": selected_key,
+                                    "pdb": target_pdb_text,
+                                    "score": selected_score,
+                                    "source": "rfd3",
+                                }
+                            return None
+
+                        def _refresh_rfd3_final_backbones() -> dict[str, Any]:
+                            nonlocal target_pdb_text, rfd3_backbones, rfd3_diversity_summary, rfd3_observed_count, rfd3_selected_id, selected_score, rfd3_target_gate_summary
+                            rfd3_observed_count = len(raw_designs) if raw_designs else 1
                             ensemble = _rfd3_design_records_to_backbones(raw_designs)
-                            if ensemble and not any(str(item.get("id") or "") == str(rfd3_selected_id or "") for item in ensemble):
+                            selected_record = _selected_design_record_from_raw()
+                            if (
+                                selected_record is not None
+                                and not any(
+                                    str(item.get("id") or "") == str(rfd3_selected_id or "")
+                                    for item in ensemble
+                                )
+                            ):
                                 ensemble.insert(
                                     0,
                                     {
@@ -3359,18 +3710,93 @@ class PipelineRunner:
                                 )
                             materialized_count = _backbone_materialized_count(ensemble)
                             missing_design_pdbs = _rfd3_missing_design_pdb_message(
-                                requested_count=max_designs,
+                                requested_count=requested_final_count,
                                 observed_count=rfd3_observed_count,
                                 materialized_count=materialized_count,
                             )
                             if missing_design_pdbs:
                                 raise BackboneContractError(missing_design_pdbs)
-                            rfd3_backbones, rfd3_diversity_summary = _deduplicate_backbones_by_exact_ca(
+                            deduplicated_backbones, rfd3_diversity_summary = _deduplicate_backbones_by_exact_ca(
                                 ensemble,
                                 source="rfd3",
                             )
                             if rfd3_diversity_summary is not None:
                                 write_json(rfd3_dir / "diversity_summary.json", rfd3_diversity_summary)
+                            accepted_backbones, rfd3_target_gate_summary = _filter_backbones_by_target_rmsd(
+                                deduplicated_backbones,
+                                reference_pdb_text=rfd3_target_gate_reference_pdb_text,
+                                chains=rfd3_target_gate_design_chains,
+                                cutoff=rfd3_target_rmsd_cutoff,
+                                source="rfd3",
+                            )
+                            if rfd3_target_gate_summary is not None:
+                                write_json(target_gate_summary_path, rfd3_target_gate_summary)
+                            accepted_backbones = accepted_backbones or []
+                            promoted_record: dict[str, Any] | None = None
+                            if accepted_backbones:
+                                promoted_backbone = next(
+                                    (
+                                        item
+                                        for item in accepted_backbones
+                                        if str(item.get("id") or "").strip()
+                                        == str(rfd3_selected_id or "").strip()
+                                    ),
+                                    accepted_backbones[0],
+                                )
+                                promoted_id = str(promoted_backbone.get("id") or "").strip()
+                                for record in raw_designs:
+                                    if not isinstance(record, dict):
+                                        continue
+                                    if str(record.get("id") or "").strip() == promoted_id:
+                                        promoted_record = dict(record)
+                                        break
+                                if promoted_record is None:
+                                    promoted_record = {
+                                        "id": promoted_id,
+                                        "pdb": str(promoted_backbone.get("pdb_text") or ""),
+                                        "score": promoted_backbone.get("score"),
+                                        "source": "rfd3",
+                                    }
+                                _write_selected_design_record(promoted_record)
+                            if use_ensemble:
+                                rfd3_backbones = accepted_backbones
+                            else:
+                                rfd3_backbones = None
+                            accepted_count = len(accepted_backbones)
+                            unique_count = (
+                                int(rfd3_diversity_summary.get("unique_count") or 0)
+                                if isinstance(rfd3_diversity_summary, dict)
+                                else accepted_count
+                            )
+                            rejected_count = (
+                                int(rfd3_target_gate_summary.get("rejected_count") or 0)
+                                if isinstance(rfd3_target_gate_summary, dict)
+                                else 0
+                            )
+                            return {
+                                "accepted_count": accepted_count,
+                                "unique_count": unique_count,
+                                "duplicate_count": (
+                                    int(rfd3_diversity_summary.get("duplicate_count") or 0)
+                                    if isinstance(rfd3_diversity_summary, dict)
+                                    else 0
+                                ),
+                                "off_target_reject_count": rejected_count,
+                            }
+
+                        def _read_attempt_job_id(attempt_label: str, *, primary_attempt: bool) -> str | None:
+                            meta_path = runpod_job_path if primary_attempt else runpod_jobs_dir / f"{attempt_label}.json"
+                            try:
+                                attempt_job_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                            except Exception:
+                                attempt_job_meta = {}
+                            if not isinstance(attempt_job_meta, dict):
+                                return None
+                            job_id = str(attempt_job_meta.get("job_id") or "").strip()
+                            return job_id or None
+
+                        if _load_cached_rfd3_outputs():
+                            return
 
                         if sampling_strategy == "independent_jobs" and use_ensemble and max_designs > 1:
                             for index in range(max_designs):
@@ -3380,19 +3806,15 @@ class PipelineRunner:
                                     attempt_label=attempt_label,
                                     primary_attempt=(index == 0),
                                 )
-                                job_id = ""
-                                try:
-                                    attempt_job_meta = json.loads((runpod_job_path if index == 0 else runpod_jobs_dir / f"{attempt_label}.json").read_text(encoding="utf-8"))
-                                except Exception:
-                                    attempt_job_meta = {}
-                                if isinstance(attempt_job_meta, dict):
-                                    job_id = str(attempt_job_meta.get("job_id") or "")
                                 _ingest_rfd3_output(
                                     out,
                                     attempt_label=attempt_label,
                                     requested_designs=1,
                                     primary_attempt=(index == 0),
-                                    job_id=job_id or None,
+                                    job_id=_read_attempt_job_id(
+                                        attempt_label,
+                                        primary_attempt=(index == 0),
+                                    ),
                                 )
                             independent_retry_performed = True
                             independent_retry_attempt_count = max_designs
@@ -3404,70 +3826,60 @@ class PipelineRunner:
                                 resume_job=resume_job_id,
                                 primary_attempt=True,
                             )
-                            batch_job_id = ""
-                            try:
-                                batch_job_meta = json.loads(runpod_job_path.read_text(encoding="utf-8"))
-                            except Exception:
-                                batch_job_meta = {}
-                            if isinstance(batch_job_meta, dict):
-                                batch_job_id = str(batch_job_meta.get("job_id") or "")
                             _ingest_rfd3_output(
                                 out,
                                 attempt_label="batch",
                                 requested_designs=batch_requested_designs,
                                 primary_attempt=True,
-                                job_id=batch_job_id or None,
+                                job_id=_read_attempt_job_id("batch", primary_attempt=True),
                             )
                             independent_retry_performed = False
                             independent_retry_attempt_count = 0
 
-                        _refresh_rfd3_final_backbones()
-
-                        if sampling_strategy == "auto" and use_ensemble and max_designs > 1:
-                            current_unique = (
-                                int(rfd3_diversity_summary.get("unique_count") or 0)
-                                if isinstance(rfd3_diversity_summary, dict)
-                                else 0
+                        refresh_state = _refresh_rfd3_final_backbones()
+                        retry_index = 0
+                        while int(refresh_state.get("accepted_count") or 0) < requested_final_count:
+                            remaining_budget = max(0, rfd3_max_attempted_designs - len(raw_designs))
+                            if remaining_budget <= 0:
+                                break
+                            accepted_deficit = max(
+                                0,
+                                requested_final_count - int(refresh_state.get("accepted_count") or 0),
                             )
-                            deficit = max(0, max_designs - current_unique)
-                            if deficit > 0:
-                                independent_retry_performed = True
-                            for retry_index in range(deficit):
-                                attempt_label = f"retry_{retry_index + 1}"
-                                out = _call_rfd3_design(
-                                    requested_designs=1,
-                                    attempt_label=attempt_label,
-                                    primary_attempt=False,
-                                )
-                                job_id = ""
-                                try:
-                                    attempt_job_meta = json.loads((runpod_jobs_dir / f"{attempt_label}.json").read_text(encoding="utf-8"))
-                                except Exception:
-                                    attempt_job_meta = {}
-                                if isinstance(attempt_job_meta, dict):
-                                    job_id = str(attempt_job_meta.get("job_id") or "")
-                                _ingest_rfd3_output(
-                                    out,
-                                    attempt_label=attempt_label,
-                                    requested_designs=1,
-                                    primary_attempt=False,
-                                    job_id=job_id or None,
-                                )
-                                independent_retry_attempt_count += 1
-                                _refresh_rfd3_final_backbones()
-                                current_unique = (
-                                    int(rfd3_diversity_summary.get("unique_count") or 0)
-                                    if isinstance(rfd3_diversity_summary, dict)
-                                    else 0
-                                )
-                                if current_unique >= max_designs:
-                                    break
+                            unique_deficit = max(
+                                0,
+                                requested_final_count - int(refresh_state.get("unique_count") or 0),
+                            )
+                            if sampling_strategy == "independent_jobs":
+                                requested_retry_designs = 1
+                            elif sampling_strategy == "auto" and unique_deficit > 0:
+                                requested_retry_designs = 1
+                            else:
+                                requested_retry_designs = min(accepted_deficit, remaining_budget)
+                            requested_retry_designs = max(1, min(requested_retry_designs, remaining_budget))
+                            retry_index += 1
+                            attempt_label = f"retry_{retry_index}"
+                            out = _call_rfd3_design(
+                                requested_designs=requested_retry_designs,
+                                attempt_label=attempt_label,
+                                primary_attempt=False,
+                            )
+                            _ingest_rfd3_output(
+                                out,
+                                attempt_label=attempt_label,
+                                requested_designs=requested_retry_designs,
+                                primary_attempt=False,
+                                job_id=_read_attempt_job_id(attempt_label, primary_attempt=False),
+                            )
+                            independent_retry_performed = True
+                            independent_retry_attempt_count += 1
+                            refresh_state = _refresh_rfd3_final_backbones()
 
-                        _refresh_rfd3_final_backbones()
                         _persist_rfd3_design_sets(raw_designs, rfd3_backbones)
                         rfd3_debug_summary = _build_rfd3_debug_summary(
                             raw_designs=raw_designs,
                             diversity_summary=rfd3_diversity_summary,
+                            target_gate_summary=rfd3_target_gate_summary,
                             attempts=attempts,
                             independent_retry_performed=independent_retry_performed,
                             independent_retry_attempt_count=independent_retry_attempt_count,
@@ -3484,10 +3896,20 @@ class PipelineRunner:
                                 "cli_args": cli_args,
                                 "sampling_strategy": sampling_strategy,
                                 "independent_retry_performed": independent_retry_performed,
+                                "requested_final_count": requested_final_count,
+                                "target_rmsd_cutoff": rfd3_target_rmsd_cutoff,
+                                "target_gate_design_chains": rfd3_target_gate_design_chains,
+                                "target_gate_reference_sha256": rfd3_target_gate_reference_hash,
+                                "max_attempted_designs": rfd3_max_attempted_designs,
                                 "source": "rfd3",
                             },
                         )
                         duplicate_message = str(rfd3_debug_summary.get("duplicate_contract_error") or "").strip()
+                        target_gate_message = str(rfd3_debug_summary.get("target_rmsd_contract_error") or "").strip()
+                        if int(refresh_state.get("accepted_count") or 0) < requested_final_count:
+                            raise BackboneContractError(
+                                target_gate_message or duplicate_message or "RFD3 target RMSD gate failed"
+                            )
                         if fail_on_duplicate_backbones and duplicate_message:
                             raise BackboneContractError(duplicate_message)
                         set_status(paths, stage="rfd3", state="completed")
@@ -4255,43 +4677,20 @@ class PipelineRunner:
                 },
             )
 
-            pdb_chains = list(residues_by_chain(target_pdb_text, only_atom_records=True).keys())
-            requested_chains = request.design_chains or pdb_chains or None
-            auto_design_chains: list[str] | None = None
-            auto_chain_note: str | None = None
-            if request.design_chains is None and not str(request.target_fasta or "").strip():
-                query_seq = _clean_protein_sequence(target_record.sequence) if target_record else ""
-                if query_seq and pdb_chains:
-                    seq_by_chain = sequence_by_chain(target_pdb_text, chains=pdb_chains)
-                    best_chain = None
-                    best_score: tuple[float, int, int] | None = None
-                    for chain_id, chain_seq in seq_by_chain.items():
-                        clean_seq = _clean_protein_sequence(chain_seq)
-                        if not clean_seq:
-                            continue
-                        aln = global_alignment_mapping(query_seq, clean_seq)
-                        score = (float(aln.query_identity), int(aln.matches), int(aln.target_len))
-                        if best_score is None or score > best_score:
-                            best_score = score
-                            best_chain = chain_id
-                    if best_chain:
-                        requested_chains = [best_chain]
-                        auto_design_chains = list(requested_chains)
-                        auto_chain_note = f"auto_design_chains={best_chain} (target_fasta empty)"
-            af2_model_preset = _resolve_af2_model_preset(
-                request.af2_model_preset,
-                chain_count=len(requested_chains or []),
+            (
+                pdb_chains,
+                requested_chains,
+                auto_design_chains,
+                design_chains,
+                chain_note,
+                af2_model_preset,
+            ) = _resolve_pipeline_chain_strategy(
+                pdb_text=target_pdb_text,
+                request_design_chains=request.design_chains,
+                target_fasta_text=str(request.target_fasta or ""),
+                target_record=target_record,
+                af2_model_preset_requested=request.af2_model_preset,
             )
-            chain_notes: list[str] = []
-            if requested_chains and _is_monomer_preset(af2_model_preset):
-                if len(requested_chains) > 1:
-                    chain_notes.append(f"monomer preset: using first chain only ({requested_chains[0]})")
-                design_chains = [requested_chains[0]]
-            else:
-                design_chains = requested_chains
-            if auto_chain_note:
-                chain_notes.insert(0, auto_chain_note)
-            chain_note = " | ".join(chain_notes) if chain_notes else None
 
             write_json(
                 paths.root / "chain_strategy.json",

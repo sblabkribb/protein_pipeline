@@ -5188,6 +5188,25 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     )
     rfd3_sampling_strategy = _as_text(args.get("rfd3_sampling_strategy")).strip() or None
     rfd3_fail_on_duplicate_backbones = _as_bool(args.get("rfd3_fail_on_duplicate_backbones"), False)
+    rfd3_target_rmsd_cutoff_raw = args.get("rfd3_target_rmsd_cutoff")
+    rfd3_target_rmsd_cutoff_specified = (
+        "rfd3_target_rmsd_cutoff" in args
+        and rfd3_target_rmsd_cutoff_raw is not None
+        and not (
+            isinstance(rfd3_target_rmsd_cutoff_raw, str)
+            and not rfd3_target_rmsd_cutoff_raw.strip()
+        )
+    )
+    rfd3_target_rmsd_cutoff = (
+        _as_float(rfd3_target_rmsd_cutoff_raw, 10.0)
+        if rfd3_target_rmsd_cutoff_specified
+        else 10.0
+    )
+    rfd3_max_attempted_designs = (
+        _as_int(args.get("rfd3_max_attempted_designs"), 0)
+        if str(args.get("rfd3_max_attempted_designs") or "").strip()
+        else None
+    )
 
     bioemu_use = _as_bool(args.get("bioemu_use"), False)
     bioemu_sequence = _as_text(args.get("bioemu_sequence")).strip() or None
@@ -5239,6 +5258,8 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         or rfd3_partial_t is not None
         or rfd3_sampling_strategy
         or rfd3_fail_on_duplicate_backbones
+        or rfd3_target_rmsd_cutoff_specified
+        or (rfd3_max_attempted_designs is not None)
         or rfd3_use_ensemble
     )
     if rfd3_use_raw is None or (isinstance(rfd3_use_raw, str) and not rfd3_use_raw.strip()):
@@ -5307,6 +5328,14 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         rfd3_partial_t=(float(rfd3_partial_t) if rfd3_partial_t is not None else None),
         rfd3_sampling_strategy=rfd3_sampling_strategy,
         rfd3_fail_on_duplicate_backbones=rfd3_fail_on_duplicate_backbones,
+        rfd3_target_rmsd_cutoff=(
+            float(rfd3_target_rmsd_cutoff) if rfd3_target_rmsd_cutoff is not None else None
+        ),
+        rfd3_max_attempted_designs=(
+            max(1, int(rfd3_max_attempted_designs))
+            if rfd3_max_attempted_designs is not None
+            else None
+        ),
         bioemu_use=bioemu_use,
         bioemu_sequence=bioemu_sequence,
         bioemu_num_samples=max(1, int(bioemu_num_samples)),
@@ -5439,6 +5468,10 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "rfd3_use_ensemble": {"type": "boolean"},
             "rfd3_max_return_designs": {"type": "integer"},
             "rfd3_partial_t": {"type": "number"},
+            "rfd3_sampling_strategy": {"type": "string"},
+            "rfd3_fail_on_duplicate_backbones": {"type": "boolean"},
+            "rfd3_target_rmsd_cutoff": {"type": "number"},
+            "rfd3_max_attempted_designs": {"type": "integer"},
             "bioemu_use": {"type": "boolean"},
             "bioemu_sequence": {"type": "string"},
             "bioemu_num_samples": {"type": "integer"},

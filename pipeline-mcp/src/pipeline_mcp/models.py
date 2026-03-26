@@ -47,6 +47,9 @@ class PipelineRequest:
     rfd3_partial_t: float | None = None
     rfd3_sampling_strategy: str | None = None
     rfd3_fail_on_duplicate_backbones: bool = False
+    rfd3_target_rmsd_cutoff: float | None = 10.0
+    rfd3_target_gate_chains: list[str] | None = None
+    rfd3_max_attempted_designs: int | None = None
 
     bioemu_use: bool = False
     bioemu_sequence: str | None = None

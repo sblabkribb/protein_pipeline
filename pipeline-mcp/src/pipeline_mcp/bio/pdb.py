@@ -373,14 +373,14 @@ def preprocess_pdb(
     return ("\n".join(out_lines) + ("\n" if pdb_text.endswith("\n") else "")), mapping
 
 
-def _ca_coords_by_chain(pdb_text: str, *, chains: list[str] | None = None) -> dict[str, dict[int, tuple[float, float, float]]]:
+def _ca_coords_by_chain(pdb_text: str, *, chains: list[str] | None = None) -> dict[str, dict[tuple[int, str], tuple[float, float, float]]]:
     residues = residues_by_chain(pdb_text, only_atom_records=True)
     chain_set = set(chains) if chains is not None else None
-    out: dict[str, dict[int, tuple[float, float, float]]] = {}
+    out: dict[str, dict[tuple[int, str], tuple[float, float, float]]] = {}
     for chain_id, res_list in residues.items():
         if chain_set is not None and chain_id not in chain_set:
             continue
-        coords: dict[int, tuple[float, float, float]] = {}
+        coords: dict[tuple[int, str], tuple[float, float, float]] = {}
         for res in res_list:
             ca = None
             for atom in res.atoms:
@@ -388,15 +388,15 @@ def _ca_coords_by_chain(pdb_text: str, *, chains: list[str] | None = None) -> di
                     ca = (atom.x, atom.y, atom.z)
                     break
             if ca is not None:
-                coords[res.index] = ca
+                coords[(res.resseq, res.icode)] = ca
         if coords:
             out[chain_id] = coords
     return out
 
 
 def _match_ca_coords(
-    ref_coords: dict[str, dict[int, tuple[float, float, float]]],
-    mob_coords: dict[str, dict[int, tuple[float, float, float]]],
+    ref_coords: dict[str, dict[tuple[int, str], tuple[float, float, float]]],
+    mob_coords: dict[str, dict[tuple[int, str], tuple[float, float, float]]],
     *,
     chains: list[str] | None = None,
 ) -> tuple[list[tuple[float, float, float]], list[tuple[float, float, float]]]:
