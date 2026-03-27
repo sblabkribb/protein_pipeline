@@ -517,7 +517,10 @@ def ca_rmsd(
     ref_coords = _ca_coords_by_chain(pdb_ref, chains=chains)
     mob_coords = _ca_coords_by_chain(pdb_mobile, chains=chains)
     ref, mob = _match_ca_coords(ref_coords, mob_coords, chains=chains)
-    if len(ref) < 3 or len(mob) < 3:
+    # Two matched CA atoms are enough for a meaningful rigid-body superposition.
+    # Keep returning None for 0/1 matched atoms because that alignment is too weak
+    # to use as a structural gate.
+    if len(ref) < 2 or len(mob) < 2:
         return None
     ref_center = _centroid(ref)
     mob_center = _centroid(mob)

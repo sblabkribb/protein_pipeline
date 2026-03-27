@@ -47,7 +47,7 @@ class PipelineRequest:
     rfd3_partial_t: float | None = None
     rfd3_sampling_strategy: str | None = None
     rfd3_fail_on_duplicate_backbones: bool = False
-    rfd3_target_rmsd_cutoff: float | None = 10.0
+    rfd3_target_rmsd_cutoff: float | None = 2.0
     rfd3_target_gate_chains: list[str] | None = None
     rfd3_max_attempted_designs: int | None = None
 
@@ -60,6 +60,8 @@ class PipelineRequest:
     bioemu_base_seed: int | None = None
     bioemu_steering_config_text: str | None = None
     bioemu_max_return_structures: int = 10
+    bioemu_target_rmsd_cutoff: float | None = 2.0
+    bioemu_max_attempted_structures: int | None = None
     bioemu_env: dict[str, str] | None = None
 
     diffdock_ligand_smiles: str | None = None

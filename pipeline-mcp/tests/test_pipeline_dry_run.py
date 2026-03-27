@@ -583,7 +583,7 @@ class TestPipelineDryRun(unittest.TestCase):
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("input"), "input.pdb")
             self.assertEqual(spec.get("contig"), "A1-2")
-            self.assertEqual(spec.get("partial_t"), 5.0)
+            self.assertEqual(spec.get("partial_T"), 5.0)
             self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
 
     def test_pipeline_rfd3_local_diversify_partial_t_default_injected(self) -> None:
@@ -608,7 +608,7 @@ class TestPipelineDryRun(unittest.TestCase):
             inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("input"), "input.pdb")
-            self.assertEqual(spec.get("partial_t"), 5.0)
+            self.assertEqual(spec.get("partial_T"), 5.0)
             self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
 
     def test_pipeline_rfd3_input_only_spec_injects_default_fixed_atoms_without_partial_t(self) -> None:
@@ -668,7 +668,7 @@ class TestPipelineDryRun(unittest.TestCase):
             out = Path(res.output_dir)
             inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
             spec = inputs.get("spec-1") or {}
-            self.assertEqual(spec.get("partial_t"), 5)
+            self.assertEqual(spec.get("partial_T"), 5)
             self.assertEqual(spec.get("select_fixed_atoms"), {"A2": "ALL"})
 
     def test_pipeline_rfd3_duplicate_backbone_summary_written(self) -> None:
@@ -1236,6 +1236,224 @@ class TestPipelineDryRun(unittest.TestCase):
             bioemu_completed = [e for e in events if e.get("stage") == "bioemu" and e.get("state") == "completed"]
             self.assertTrue(bioemu_completed)
             self.assertIn("cached", str(bioemu_completed[-1].get("detail") or ""))
+
+    def test_pipeline_bioemu_target_rmsd_gate_retries_until_requested_count_is_filled(self) -> None:
+        target_pdb = _bent_ca_backbone(0.0)
+        first_batch = [
+            _bent_ca_backbone(0.10),
+            _bent_ca_backbone(0.40, third_y=0.05),
+            _bent_ca_backbone(0.90, third_z=0.05),
+            _bent_ca_backbone(1.50, tail_y=0.10),
+            _bent_ca_backbone(5.00),
+            _bent_ca_backbone(5.50, third_y=0.20),
+            _bent_ca_backbone(6.00, third_z=0.10),
+            _bent_ca_backbone(7.00, tail_y=0.20),
+            _bent_ca_backbone(8.00, third_y=0.10, third_z=0.10),
+            _bent_ca_backbone(9.00, tail_y=0.30),
+        ]
+        retry_batch = [
+            _bent_ca_backbone(0.20, third_y=0.02),
+            _bent_ca_backbone(0.30, third_z=0.02),
+            _bent_ca_backbone(0.60, tail_y=0.05),
+            _bent_ca_backbone(1.10, third_y=0.03, third_z=0.01),
+            _bent_ca_backbone(1.70, tail_y=0.04),
+            _bent_ca_backbone(1.80, third_y=0.02, tail_y=0.03),
+        ]
+
+        class _MMseqsStub:
+            def search(self, query_fasta, **kwargs):  # type: ignore[no-untyped-def]
+                _ = kwargs
+                _ = query_fasta
+                a3m = ">query\nAGSY\n>hit1\nAGSY\n"
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                return {"tsv": "", "a3m_gz_b64": a3m_b64}
+
+        class _BioEmuStub:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, int | None]] = []
+
+            def sample(self, **kwargs):  # type: ignore[no-untyped-def]
+                requested_return = int(kwargs.get("max_return_sample_pdbs") or 0)
+                call = {
+                    "num_samples": int(kwargs.get("num_samples") or 0),
+                    "max_return_sample_pdbs": requested_return,
+                    "min_return_sample_pdbs": int(kwargs.get("min_return_sample_pdbs") or 0),
+                    "base_seed": int(kwargs.get("base_seed")) if kwargs.get("base_seed") is not None else None,
+                }
+                self.calls.append(call)
+                on_job_id = kwargs.get("on_job_id")
+                if callable(on_job_id):
+                    on_job_id(f"bioemu_target_gate_job_{len(self.calls)}")
+                batch = first_batch if len(self.calls) == 1 else retry_batch
+                return {
+                    "sample_pdbs": [
+                        {
+                            "id": f"bioemu_{len(self.calls)}_{idx}",
+                            "pdb": pdb_text,
+                            "frame_index": idx,
+                        }
+                        for idx, pdb_text in enumerate(batch[:requested_return])
+                    ],
+                    "topology_pdb": batch[0],
+                }
+
+        with _tmpdir() as tmp:
+            bioemu = _BioEmuStub()
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=_MMseqsStub(),
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                bioemu=bioemu,
+            )
+            req = PipelineRequest(
+                target_fasta=">q1\nAGSY\n",
+                target_pdb=target_pdb,
+                dry_run=False,
+                stop_after="bioemu",
+                bioemu_use=True,
+                bioemu_sequence="AGSY",
+                bioemu_num_samples=20,
+                bioemu_max_return_structures=10,
+                bioemu_target_rmsd_cutoff=2.0,
+                bioemu_max_attempted_structures=16,
+                conservation_tiers=[0.3],
+                num_seq_per_tier=1,
+            )
+
+            runner.run(req, run_id="bioemu_target_gate_retry")
+
+            out = Path(tmp) / "bioemu_target_gate_retry"
+            debug = json.loads((out / "bioemu" / "debug_summary.json").read_text(encoding="utf-8"))
+            raw_samples = json.loads((out / "bioemu" / "raw_samples.json").read_text(encoding="utf-8"))
+            sample_meta = json.loads((out / "bioemu" / "sample_pdbs.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(
+                bioemu.calls,
+                [
+                    {
+                        "num_samples": 20,
+                        "max_return_sample_pdbs": 10,
+                        "min_return_sample_pdbs": 10,
+                        "base_seed": None,
+                    },
+                    {
+                        "num_samples": 12,
+                        "max_return_sample_pdbs": 6,
+                        "min_return_sample_pdbs": 6,
+                        "base_seed": None,
+                    },
+                ],
+            )
+            self.assertEqual(len(raw_samples), 16)
+            self.assertEqual(len(sample_meta.get("samples") or []), 10)
+            self.assertEqual(len(list((out / "bioemu" / "designs").glob("*.pdb"))), 10)
+            self.assertTrue(bool(debug.get("retry_performed")))
+            self.assertEqual(debug.get("retry_attempt_count"), 1)
+            self.assertEqual(debug.get("off_target_reject_count"), 6)
+            self.assertEqual(debug.get("final_accepted_count"), 10)
+            self.assertAlmostEqual(float(debug.get("target_rmsd_cutoff") or 0.0), 2.0)
+            for entry in sample_meta.get("samples") or []:
+                if not isinstance(entry, dict):
+                    continue
+                sample_id = str(entry.get("id") or "").strip()
+                self.assertTrue(sample_id)
+                pdb_path = out / "bioemu" / "designs" / f"{sample_id}.pdb"
+                self.assertTrue(pdb_path.exists())
+                rmsd = ca_rmsd(target_pdb, pdb_path.read_text(encoding="utf-8"), chains=["A"])
+                self.assertIsNotNone(rmsd)
+                self.assertLessEqual(float(rmsd or 99.0), 2.0)
+
+    def test_pipeline_bioemu_target_rmsd_gate_fails_when_retry_budget_is_exhausted(self) -> None:
+        target_pdb = _bent_ca_backbone(0.0)
+
+        class _MMseqsStub:
+            def search(self, query_fasta, **kwargs):  # type: ignore[no-untyped-def]
+                _ = kwargs
+                _ = query_fasta
+                a3m = ">query\nAGSY\n>hit1\nAGSY\n"
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                return {"tsv": "", "a3m_gz_b64": a3m_b64}
+
+        class _BioEmuStub:
+            def __init__(self) -> None:
+                self.calls: list[dict[str, int | None]] = []
+
+            def sample(self, **kwargs):  # type: ignore[no-untyped-def]
+                requested_return = int(kwargs.get("max_return_sample_pdbs") or 0)
+                self.calls.append(
+                    {
+                        "num_samples": int(kwargs.get("num_samples") or 0),
+                        "max_return_sample_pdbs": requested_return,
+                        "min_return_sample_pdbs": int(kwargs.get("min_return_sample_pdbs") or 0),
+                        "base_seed": int(kwargs.get("base_seed")) if kwargs.get("base_seed") is not None else None,
+                    }
+                )
+                on_job_id = kwargs.get("on_job_id")
+                if callable(on_job_id):
+                    on_job_id(f"bioemu_target_gate_fail_job_{len(self.calls)}")
+                batch = [
+                    _bent_ca_backbone(5.0 + float(len(self.calls)) + idx, third_y=0.1 * idx)
+                    for idx in range(requested_return)
+                ]
+                return {
+                    "sample_pdbs": [
+                        {
+                            "id": f"bioemu_fail_{len(self.calls)}_{idx}",
+                            "pdb": pdb_text,
+                            "frame_index": idx,
+                        }
+                        for idx, pdb_text in enumerate(batch)
+                    ],
+                    "topology_pdb": batch[0] if batch else "",
+                }
+
+        with _tmpdir() as tmp:
+            bioemu = _BioEmuStub()
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=_MMseqsStub(),
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                bioemu=bioemu,
+            )
+            req = PipelineRequest(
+                target_fasta=">q1\nAGSY\n",
+                target_pdb=target_pdb,
+                dry_run=False,
+                stop_after="bioemu",
+                bioemu_use=True,
+                bioemu_sequence="AGSY",
+                bioemu_num_samples=20,
+                bioemu_max_return_structures=10,
+                bioemu_target_rmsd_cutoff=2.0,
+                bioemu_max_attempted_structures=20,
+                conservation_tiers=[0.3],
+                num_seq_per_tier=1,
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "BioEmu target RMSD gate"):
+                runner.run(req, run_id="bioemu_target_gate_fail")
+
+            self.assertEqual(
+                bioemu.calls,
+                [
+                    {
+                        "num_samples": 20,
+                        "max_return_sample_pdbs": 10,
+                        "min_return_sample_pdbs": 10,
+                        "base_seed": None,
+                    },
+                    {
+                        "num_samples": 20,
+                        "max_return_sample_pdbs": 10,
+                        "min_return_sample_pdbs": 10,
+                        "base_seed": None,
+                    },
+                ],
+            )
 
     def test_pipeline_bioemu_processed_stage_pdb_is_synced_for_compare(self) -> None:
         target_pdb = (

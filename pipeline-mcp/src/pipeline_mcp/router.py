@@ -63,6 +63,7 @@ _PROMPT_INT_KEYS = {
     "bioemu_batch_size_100",
     "bioemu_base_seed",
     "bioemu_max_return_structures",
+    "bioemu_max_attempted_structures",
     "conservation_cluster_cov_mode",
     "conservation_cluster_kmer_per_seq",
 }
@@ -73,6 +74,7 @@ _PROMPT_FLOAT_KEYS = {
     "af2_rmsd_cutoff",
     "ligand_mask_distance",
     "rfd3_partial_t",
+    "rfd3_target_rmsd_cutoff",
     "msa_min_coverage",
     "msa_min_identity",
     "query_pdb_min_identity",
@@ -80,6 +82,7 @@ _PROMPT_FLOAT_KEYS = {
     "conservation_cluster_coverage",
     "surface_min_rel",
     "surface_min_abs",
+    "bioemu_target_rmsd_cutoff",
     "pi_min",
     "pi_max",
 }

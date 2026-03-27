@@ -27,6 +27,7 @@ from .pipeline import PipelineCancelled
 from .pipeline import _dummy_backbone_pdb
 from .pipeline import _normalize_af2_provider
 from .pipeline import _prepare_af2_sequence
+from .pipeline import _recommended_bioemu_num_samples
 from .pipeline import _resolve_af2_model_preset
 from .pipeline import _split_multichain_sequence
 from .pipeline import _target_record_from_pdb
@@ -5198,9 +5199,9 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         )
     )
     rfd3_target_rmsd_cutoff = (
-        _as_float(rfd3_target_rmsd_cutoff_raw, 10.0)
+        _as_float(rfd3_target_rmsd_cutoff_raw, 2.0)
         if rfd3_target_rmsd_cutoff_specified
-        else 10.0
+        else 2.0
     )
     rfd3_max_attempted_designs = (
         _as_int(args.get("rfd3_max_attempted_designs"), 0)
@@ -5224,11 +5225,30 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     )
     bioemu_steering_config_text = _as_text(args.get("bioemu_steering_config_text")).strip() or None
     bioemu_max_return_structures = _as_int(args.get("bioemu_max_return_structures"), 10)
+    bioemu_target_rmsd_cutoff_raw = args.get("bioemu_target_rmsd_cutoff")
+    bioemu_target_rmsd_cutoff_specified = (
+        "bioemu_target_rmsd_cutoff" in args
+        and bioemu_target_rmsd_cutoff_raw is not None
+        and not (
+            isinstance(bioemu_target_rmsd_cutoff_raw, str)
+            and not bioemu_target_rmsd_cutoff_raw.strip()
+        )
+    )
+    bioemu_target_rmsd_cutoff = (
+        _as_float(bioemu_target_rmsd_cutoff_raw, 2.0)
+        if bioemu_target_rmsd_cutoff_specified
+        else 2.0
+    )
+    bioemu_max_attempted_structures = (
+        _as_int(args.get("bioemu_max_attempted_structures"), 0)
+        if str(args.get("bioemu_max_attempted_structures") or "").strip()
+        else None
+    )
     if str(args.get("bioemu_num_samples") or "").strip():
         bioemu_num_samples = _as_int(args.get("bioemu_num_samples"), bioemu_max_return_structures)
     else:
         requested_return_count = max(1, int(bioemu_max_return_structures))
-        bioemu_num_samples = requested_return_count * 2 if bioemu_filter_samples else requested_return_count
+        bioemu_num_samples = _recommended_bioemu_num_samples(requested_return_count, bioemu_filter_samples)
     bioemu_env = _as_dict_str(args.get("bioemu_env"), name="bioemu_env")
 
     diffdock_ligand_smiles = _as_text(args.get("diffdock_ligand_smiles")).strip() or None
@@ -5345,6 +5365,14 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         bioemu_base_seed=(int(bioemu_base_seed) if bioemu_base_seed is not None else None),
         bioemu_steering_config_text=bioemu_steering_config_text,
         bioemu_max_return_structures=max(1, int(bioemu_max_return_structures)),
+        bioemu_target_rmsd_cutoff=(
+            float(bioemu_target_rmsd_cutoff) if bioemu_target_rmsd_cutoff is not None else None
+        ),
+        bioemu_max_attempted_structures=(
+            max(1, int(bioemu_max_attempted_structures))
+            if bioemu_max_attempted_structures is not None
+            else None
+        ),
         bioemu_env=bioemu_env,
         diffdock_ligand_smiles=diffdock_ligand_smiles,
         diffdock_ligand_sdf=diffdock_ligand_sdf,
@@ -5481,6 +5509,8 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "bioemu_base_seed": {"type": "integer"},
             "bioemu_steering_config_text": {"type": "string"},
             "bioemu_max_return_structures": {"type": "integer"},
+            "bioemu_target_rmsd_cutoff": {"type": "number"},
+            "bioemu_max_attempted_structures": {"type": "integer"},
             "bioemu_env": {"type": "object", "additionalProperties": {"type": "string"}},
             "diffdock_ligand_smiles": {"type": "string"},
             "diffdock_ligand_sdf": {"type": "string"},

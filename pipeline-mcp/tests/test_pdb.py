@@ -152,6 +152,20 @@ class TestPdbPreprocess(unittest.TestCase):
 
 
 class TestCaRmsd(unittest.TestCase):
+    def test_ca_rmsd_two_residue_identical_backbones(self) -> None:
+        pdb_ref = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  ALA A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        pdb_mob = (
+            "ATOM      1  CA  ALA A   1      10.000   5.000  -3.000  1.00 20.00           C\n"
+            "ATOM      2  CA  ALA A   2      11.000   5.000  -3.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        rmsd = ca_rmsd(pdb_ref, pdb_mob)
+        self.assertAlmostEqual(rmsd, 0.0, places=5)
+
     def test_ca_rmsd_subset_matching(self) -> None:
         # Reference: Residues 10-12
         pdb_ref = (
@@ -186,6 +200,18 @@ class TestCaRmsd(unittest.TestCase):
             "END\n"
         )
         # Should return None because no resseq match
+        rmsd = ca_rmsd(pdb_ref, pdb_mob)
+        self.assertIsNone(rmsd)
+
+    def test_ca_rmsd_single_matched_residue_returns_none(self) -> None:
+        pdb_ref = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        pdb_mob = (
+            "ATOM      1  CA  ALA A   1       5.000   5.000   5.000  1.00 20.00           C\n"
+            "END\n"
+        )
         rmsd = ca_rmsd(pdb_ref, pdb_mob)
         self.assertIsNone(rmsd)
 
