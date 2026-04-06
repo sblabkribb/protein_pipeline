@@ -32,6 +32,8 @@ import {
   buildWorkflowStudioNodesFromRequest,
   buildWorkflowStudioEffectiveAnswers,
   buildFastLaunchPreset,
+  classifyDiffdockLigandContent,
+  diffdockLigandSubmissionFields,
   withProjectRoundContext,
   buildSetupDraftFromRequest,
   buildRunArguments,
@@ -124,6 +126,44 @@ const RFD3_AUTO_CONTIG_PDB = [
   "HETATM    5  CA  MSE B   4       3.000   0.000   0.000  1.00 20.00           C",
   "HETATM    6  O   HOH C   1       4.000   0.000   0.000  1.00 20.00           O",
   "END",
+].join("\n");
+
+const DIFFDOCK_MODEL_SERVER_CIF = [
+  "data_6CKL",
+  "#",
+  "_model_server_result.job_id abc",
+  "loop_",
+  "_chem_comp_bond.atom_id_1",
+  "_chem_comp_bond.atom_id_2",
+  "_chem_comp_bond.comp_id",
+  "_chem_comp_bond.value_order",
+  "C1 O1 LIG sing",
+  "#",
+  "loop_",
+  "_atom_site.group_PDB",
+  "_atom_site.id",
+  "_atom_site.type_symbol",
+  "_atom_site.label_atom_id",
+  "_atom_site.label_comp_id",
+  "_atom_site.label_seq_id",
+  "_atom_site.label_alt_id",
+  "_atom_site.pdbx_PDB_ins_code",
+  "_atom_site.label_asym_id",
+  "_atom_site.label_entity_id",
+  "_atom_site.Cartn_x",
+  "_atom_site.Cartn_y",
+  "_atom_site.Cartn_z",
+  "_atom_site.occupancy",
+  "_atom_site.B_iso_or_equiv",
+  "_atom_site.pdbx_formal_charge",
+  "_atom_site.auth_atom_id",
+  "_atom_site.auth_comp_id",
+  "_atom_site.auth_seq_id",
+  "_atom_site.auth_asym_id",
+  "_atom_site.pdbx_PDB_model_num",
+  "HETATM 1 C C1 LIG . . . D 1 0.000 0.000 0.000 1 20.00 ? C1 LIG 1 A 1",
+  "HETATM 2 O O1 LIG . . . D 1 1.200 0.000 0.000 1 20.00 ? O1 LIG 1 A 1",
+  "#",
 ].join("\n");
 
 test("sanitizeName normalizes", () => {
@@ -581,6 +621,19 @@ test("buildRunArguments normalizes start/stop stage range", () => {
   assert.equal(args.stop_after, "af2");
 });
 
+test("classifyDiffdockLigandContent detects ModelServer mmCIF text", () => {
+  assert.equal(classifyDiffdockLigandContent(DIFFDOCK_MODEL_SERVER_CIF), "mmcif");
+});
+
+test("diffdockLigandSubmissionFields routes ModelServer mmCIF away from smiles", () => {
+  const fields = diffdockLigandSubmissionFields({
+    ligandText: DIFFDOCK_MODEL_SERVER_CIF,
+    fileName: "ligand.txt",
+  });
+  assert.equal(fields.diffdock_ligand_smiles, undefined);
+  assert.equal(fields.diffdock_ligand_sdf, DIFFDOCK_MODEL_SERVER_CIF);
+});
+
 test("buildRunArguments keeps false/zero values from answers", () => {
   const args = buildRunArguments({
     prompt: "",
@@ -637,6 +690,58 @@ test("buildRunArguments drops relax cutoff when relax is disabled", () => {
   });
   assert.equal(args.relax_enabled, false);
   assert.equal(args.relax_score_per_residue_cutoff, undefined);
+});
+
+test("buildRunArguments preserves backbone gate fields and DSSP toggle", () => {
+  const args = buildRunArguments({
+    prompt: "",
+    routed: { stop_after: "af2" },
+    answers: {
+      target_input: "ATOM      1  N",
+      bioemu_use: true,
+      backbone_filter_use_dssp: true,
+      rfd3_target_rmsd_cutoff: 2,
+      bioemu_target_rmsd_cutoff: 2,
+    },
+    runId: "run_hidden_gate",
+  });
+  assert.equal(args.backbone_filter_use_dssp, true);
+  assert.equal(args.rfd3_target_rmsd_cutoff, 2);
+  assert.equal(args.bioemu_target_rmsd_cutoff, 2);
+});
+
+test("buildRunArguments preserves local_diversify unindex and fixed-atom fields", () => {
+  const args = buildRunArguments({
+    prompt: "",
+    routed: { stop_after: "rfd3" },
+    answers: {
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      rfd3_use: true,
+      rfd3_mode: "local_diversify",
+      rfd3_partial_t: 5,
+      rfd3_unindex: "A2",
+      rfd3_select_fixed_atoms: "A2",
+    },
+    runId: "run_local_diversify_unindex",
+  });
+  assert.equal(args.rfd3_mode, "local_diversify");
+  assert.equal(args.rfd3_partial_t, 5);
+  assert.equal(args.rfd3_unindex, "A2");
+  assert.equal(args.rfd3_select_fixed_atoms, "A2");
+});
+
+test("buildRunArguments drops compare_rmsd_scope from frontend-only UI state", () => {
+  const args = buildRunArguments({
+    prompt: "",
+    routed: { stop_after: "af2" },
+    answers: {
+      target_input: "ATOM      1  N",
+      bioemu_use: true,
+      compare_rmsd_scope: "both",
+    },
+    runId: "run_compare_scope",
+  });
+  assert.equal(args.compare_rmsd_scope, undefined);
 });
 
 test("buildRunArguments maps novelty_enabled to stop_after novelty", () => {
@@ -834,8 +939,15 @@ test("inferDefaultRfd3Contig keeps only protein residues with positive numbering
   assert.equal(inferDefaultRfd3Contig({ target_pdb: RFD3_AUTO_CONTIG_PDB }), "A1-3");
 });
 
-test("effectiveRfd3Mode prefers legacy_contig when a PDB yields an auto contig", () => {
-  assert.equal(effectiveRfd3Mode({ target_input: RFD3_AUTO_CONTIG_PDB }), "legacy_contig");
+test("effectiveRfd3Mode prefers local_diversify for direct PDB inputs", () => {
+  assert.equal(effectiveRfd3Mode({ target_input: RFD3_AUTO_CONTIG_PDB }), "local_diversify");
+  assert.equal(
+    effectiveRfd3Mode({
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      rfd3_contig: "A1-3",
+    }),
+    "legacy_contig"
+  );
   assert.equal(
     effectiveRfd3Mode({
       target_input: RFD3_AUTO_CONTIG_PDB,
@@ -995,7 +1107,7 @@ test("buildWorkflowStudioEffectiveAnswers applies workflow defaults for untouche
   });
   assert.equal(merged.rfd3_use, true);
   assert.equal(merged.rfd3_max_return_designs, 10);
-  assert.equal(merged.rfd3_partial_t, 5);
+  assert.equal(merged.rfd3_partial_t, 10);
   assert.equal(merged.bioemu_num_samples, 20);
   assert.equal(merged.bioemu_max_return_structures, 10);
   assert.equal(merged.bioemu_filter_samples, true);
@@ -1021,7 +1133,34 @@ test("workflow studio question metadata keeps default return counts for rfd3 and
     source,
     /rfd3_max_return_designs:\s*\{[\s\S]*?labelKey:\s*"question\.rfd3MaxReturn\.label",[\s\S]*?default:\s*10,/m
   );
-  assert.match(source, /rfd3_partial_t:\s*\{[\s\S]*?default:\s*5(?:\.0)?,/m);
+  assert.match(source, /rfd3_partial_t:\s*\{[\s\S]*?default:\s*10(?:\.0)?,/m);
+});
+
+test("compare metadata source keeps legacy RMSD keys removed while adding scoped compare RMSD fields", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  assert.doesNotMatch(source, /inputStructRmsd/);
+  assert.doesNotMatch(source, /workingStructRmsd/);
+  assert.match(source, /"artifacts\.preview\.compare\.meta\.inputReferenceRmsd":/);
+  assert.match(source, /"artifacts\.preview\.compare\.meta\.workingBackboneRmsd":/);
+});
+
+test("advanced setup source adds compare_rmsd_scope to the compact parameter board with off default", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(
+    source,
+    /compare_rmsd_scope:\s*\{[\s\S]*?labelKey:\s*"question\.compareRmsdScope\.label",[\s\S]*?questionKey:\s*"question\.compareRmsdScope\.help",[\s\S]*?default:\s*"off",/m
+  );
+  assert.match(source, /const compactParameterQuestionIds = new Set\(\[[\s\S]*"compare_rmsd_scope"/m);
+  assert.match(source, /if \(q\.id === "compare_rmsd_scope"\) \{/);
+  [
+    "choice.compareRmsdScope.off",
+    "choice.compareRmsdScope.input",
+    "choice.compareRmsdScope.backbone",
+    "choice.compareRmsdScope.both",
+  ].forEach((key) => {
+    assert.equal(source.split(`"${key}":`).length - 1, 2, `missing compare scope key ${key}`);
+  });
 });
 
 test("RFD3 mode metadata stays for compatibility while setup avoids a top-level q.id mode card", () => {
@@ -1205,6 +1344,7 @@ test("buildFastLaunchPreset sizes fast pipeline defaults from total output and s
   assert.equal(preset.answers.target_input.startsWith("ATOM"), true);
   assert.equal(preset.answers.bioemu_use, true);
   assert.equal(preset.answers.rfd3_use, true);
+  assert.equal(preset.answers.rfd3_mode, "local_diversify");
   assert.equal(preset.answers.mask_consensus_apply, false);
   assert.equal(preset.answers.relax_enabled, true);
   assert.deepEqual(preset.answers.selected_tiers, [0.3, 0.5, 0.7]);
@@ -1235,6 +1375,7 @@ test("buildFastLaunchPreset lets callers explicitly disable relax", () => {
   });
 
   assert.equal(preset.answers.relax_enabled, false);
+  assert.equal(preset.answers.rfd3_mode, "local_diversify");
   assert.equal(args.relax_enabled, false);
 });
 
@@ -2346,7 +2487,7 @@ test("normalizeWorkflowStudioPayloadForComparison ignores equivalent RFD3 seed P
   );
 });
 
-test("resolveRfd3Defaults infers legacy_contig for pipeline PDB inputs", () => {
+test("resolveRfd3Defaults infers local_diversify for pipeline PDB inputs", () => {
   const resolved = resolveRfd3Defaults({
     mode: "pipeline",
     answers: {
@@ -2357,12 +2498,12 @@ test("resolveRfd3Defaults infers legacy_contig for pipeline PDB inputs", () => {
     },
   });
   assert.equal(resolved.rfd3Enabled, true);
-  assert.equal(resolved.rfd3Mode, "legacy_contig");
-  assert.equal(resolved.inferredContig, "A1-3");
+  assert.equal(resolved.rfd3Mode, "local_diversify");
+  assert.equal(resolved.inferredContig, "");
   assert.equal(resolved.effectiveRfd3Input, RFD3_AUTO_CONTIG_PDB);
 });
 
-test("resolveRfd3Defaults keeps advanced overrides ahead of auto legacy_contig", () => {
+test("resolveRfd3Defaults keeps advanced overrides ahead of auto local_diversify", () => {
   const resolved = resolveRfd3Defaults({
     mode: "pipeline",
     answers: {
@@ -2377,7 +2518,7 @@ test("resolveRfd3Defaults keeps advanced overrides ahead of auto legacy_contig",
   assert.equal(resolved.inferredContig, "");
 });
 
-test("normalizeWorkflowStudioPayloadForComparison auto-fills inferred legacy contigs", () => {
+test("normalizeWorkflowStudioPayloadForComparison defaults pipeline PDB inputs to local_diversify", () => {
   const normalized = normalizeWorkflowStudioPayloadForComparison(
     {
       target_input: RFD3_AUTO_CONTIG_PDB,
@@ -2385,8 +2526,8 @@ test("normalizeWorkflowStudioPayloadForComparison auto-fills inferred legacy con
     },
     { nodes: ["msa", "rfd3", "novelty"] }
   );
-  assert.equal(normalized.rfd3_mode, "legacy_contig");
-  assert.equal(normalized.rfd3_contig, "A1-3");
+  assert.equal(normalized.rfd3_mode, "local_diversify");
+  assert.equal(normalized.rfd3_contig, undefined);
 });
 
 test("normalizeWorkflowStudioPayloadForComparison preserves visible binder partial_t fields", () => {
@@ -2403,6 +2544,24 @@ test("normalizeWorkflowStudioPayloadForComparison preserves visible binder parti
   assert.equal(normalized.rfd3_partial_t, 8);
   assert.equal(normalized.rfd3_contig, "A1-3");
   assert.equal(normalized.rfd3_hotspots, "A10");
+});
+
+test("normalizeWorkflowStudioPayloadForComparison preserves local_diversify unindex fields", () => {
+  const normalized = normalizeWorkflowStudioPayloadForComparison(
+    {
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      rfd3_use: true,
+      rfd3_mode: "local_diversify",
+      rfd3_partial_t: 5,
+      rfd3_unindex: "A2",
+      rfd3_select_fixed_atoms: "A2",
+    },
+    { nodes: ["msa", "rfd3", "novelty"] }
+  );
+  assert.equal(normalized.rfd3_mode, "local_diversify");
+  assert.equal(normalized.rfd3_partial_t, 5);
+  assert.equal(normalized.rfd3_unindex, "A2");
+  assert.equal(normalized.rfd3_select_fixed_atoms, "A2");
 });
 
 test("normalizeWorkflowStudioPayloadForComparison drops advanced-only-hidden partial_t", () => {
@@ -2549,6 +2708,27 @@ test("buildSetupDraftFromRequest drops redundant rfd3_input_pdb when it matches 
   assert.equal(draft.answers.rfd3_use, true);
 });
 
+test("buildSetupDraftFromRequest preserves backbone gate fields from prior runs", () => {
+  const draft = buildSetupDraftFromRequest({
+    target_pdb: "ATOM      1  N",
+    bioemu_use: true,
+    backbone_filter_use_dssp: false,
+    rfd3_target_rmsd_cutoff: 2,
+    bioemu_target_rmsd_cutoff: 2,
+  });
+  assert.equal(draft.answers.backbone_filter_use_dssp, false);
+  assert.equal(draft.answers.rfd3_target_rmsd_cutoff, 2);
+  assert.equal(draft.answers.bioemu_target_rmsd_cutoff, 2);
+});
+
+test("buildSetupDraftFromRequest defaults compare_rmsd_scope to off for frontend drafts", () => {
+  const draft = buildSetupDraftFromRequest({
+    target_pdb: "ATOM      1  N",
+    bioemu_use: true,
+  });
+  assert.equal(draft.answers.compare_rmsd_scope, "off");
+});
+
 test("buildSetupDraftFromRequest leaves RFD3 disabled for plain target-only pipeline requests", () => {
   const draft = buildSetupDraftFromRequest({
     target_pdb: "ATOM      1  N",
@@ -2615,6 +2795,16 @@ test("buildSetupDraftFromRequest maps diffdock ligand metadata", () => {
   assert.equal(draft.answers.diffdock_ligand, "CCO");
   assert.equal(draft.answers.diffdock_use, "use");
   assert.equal(draft.answerMeta.diffdock_ligand.fileName, "request.json:diffdock_ligand.smiles");
+});
+
+test("buildSetupDraftFromRequest labels ModelServer ligand payload as cif", () => {
+  const draft = buildSetupDraftFromRequest({
+    target_pdb: "ATOM      1  N",
+    diffdock_ligand_smiles: DIFFDOCK_MODEL_SERVER_CIF,
+  });
+  assert.equal(draft.mode, "diffdock");
+  assert.equal(draft.answers.diffdock_ligand, DIFFDOCK_MODEL_SERVER_CIF);
+  assert.equal(draft.answerMeta.diffdock_ligand.fileName, "request.json:diffdock_ligand.cif");
 });
 
 test("buildSetupDraftFromRequest preserves distinct BioEmu generated and return counts", () => {
@@ -2731,10 +2921,16 @@ test("buildCompareScopeDescription explains reference and candidate scope", () =
 test("buildCompareMetaTooltip explains hard-to-read compare metrics", () => {
   const wtRmsd = buildCompareMetaTooltip("wtStructRmsd", { provider: "colabfold", lang: "ko" });
   const scope = buildCompareMetaTooltip("predScope", { provider: "colabfold", lang: "en" });
+  const inputReference = buildCompareMetaTooltip("inputReferenceRmsd", { provider: "colabfold", lang: "en" });
+  const workingBackbone = buildCompareMetaTooltip("workingBackboneRmsd", { provider: "colabfold", lang: "ko" });
   assert.match(wtRmsd, /WT/i);
   assert.match(wtRmsd, /RMSD/i);
   assert.match(wtRmsd, /야생형|기준 구조/);
   assert.match(scope, /exact file|WT reference|tier\/backbone summary/i);
+  assert.match(inputReference, /input/i);
+  assert.match(inputReference, /RMSD/i);
+  assert.match(workingBackbone, /백본|backbone/i);
+  assert.match(workingBackbone, /RMSD/i);
 });
 
 test("relax visibility helpers require actual analyze data", () => {

@@ -819,7 +819,7 @@ class TestTools(unittest.TestCase):
 
     def test_pipeline_request_defaults_rfd3_target_rmsd_cutoff_when_omitted(self) -> None:
         req = pipeline_request_from_args({"target_fasta": ">q1\nACDEFGHIK\n"})
-        self.assertEqual(req.rfd3_target_rmsd_cutoff, 2.0)
+        self.assertIsNone(req.rfd3_target_rmsd_cutoff)
 
     def test_pipeline_request_preserves_explicit_zero_rfd3_target_rmsd_cutoff(self) -> None:
         req = pipeline_request_from_args(
@@ -832,7 +832,7 @@ class TestTools(unittest.TestCase):
 
     def test_pipeline_request_defaults_bioemu_target_rmsd_cutoff_when_omitted(self) -> None:
         req = pipeline_request_from_args({"target_fasta": ">q1\nACDEFGHIK\n", "bioemu_use": True})
-        self.assertEqual(req.bioemu_target_rmsd_cutoff, 2.0)
+        self.assertIsNone(req.bioemu_target_rmsd_cutoff)
 
     def test_pipeline_request_preserves_explicit_zero_bioemu_target_rmsd_cutoff(self) -> None:
         req = pipeline_request_from_args(
@@ -843,6 +843,20 @@ class TestTools(unittest.TestCase):
             }
         )
         self.assertEqual(req.bioemu_target_rmsd_cutoff, 0.0)
+
+    def test_pipeline_request_defaults_backbone_filter_use_dssp_when_omitted(self) -> None:
+        req = pipeline_request_from_args({"target_fasta": ">q1\nACDEFGHIK\n", "bioemu_use": True})
+        self.assertTrue(req.backbone_filter_use_dssp)
+
+    def test_pipeline_request_preserves_explicit_false_backbone_filter_use_dssp(self) -> None:
+        req = pipeline_request_from_args(
+            {
+                "target_fasta": ">q1\nACDEFGHIK\n",
+                "bioemu_use": True,
+                "backbone_filter_use_dssp": False,
+            }
+        )
+        self.assertFalse(req.backbone_filter_use_dssp)
 
     def test_pipeline_request_without_target_or_rfd3_inputs_still_fails_when_cutoff_omitted(self) -> None:
         with self.assertRaisesRegex(ValueError, "One of target_fasta or target_pdb or rfd3 inputs is required"):
@@ -912,6 +926,20 @@ class TestTools(unittest.TestCase):
         self.assertEqual(req.rfd3_partial_t, 7.5)
         self.assertEqual(req.rfd3_sampling_strategy, "independent_jobs")
         self.assertTrue(req.rfd3_fail_on_duplicate_backbones)
+
+    def test_pipeline_request_parses_rfd3_select_fixed_atoms_json_object_string(self) -> None:
+        req = pipeline_request_from_args(
+            {
+                "target_fasta": ">q1\nACDEFGHIK\n",
+                "rfd3_input_pdb": "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\nEND\n",
+                "rfd3_mode": "local_diversify",
+                "rfd3_unindex": "A1",
+                "rfd3_select_fixed_atoms": "{\"A1\":\"ALL\"}",
+            }
+        )
+        self.assertEqual(req.rfd3_mode, "local_diversify")
+        self.assertEqual(req.rfd3_unindex, "A1")
+        self.assertEqual(req.rfd3_select_fixed_atoms, {"A1": "ALL"})
 
     def test_pipeline_request_preserves_explicit_rfd3_disable_state(self) -> None:
         req = pipeline_request_from_args(
@@ -1062,6 +1090,70 @@ class TestTools(unittest.TestCase):
             artifacts = listing.get("artifacts") or []
             paths = {str(a.get("path")) for a in artifacts if isinstance(a, dict)}
             self.assertIn("diffdock/output.json", paths)
+
+    def test_pipeline_diffdock_dry_run_normalizes_modelserver_ligand_text(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        modelserver_cif = "\n".join(
+            [
+                "data_6CKL",
+                "#",
+                "_model_server_result.job_id abc",
+                "loop_",
+                "_chem_comp_bond.atom_id_1",
+                "_chem_comp_bond.atom_id_2",
+                "_chem_comp_bond.comp_id",
+                "_chem_comp_bond.value_order",
+                "C1 O1 LIG sing",
+                "#",
+                "loop_",
+                "_atom_site.group_PDB",
+                "_atom_site.id",
+                "_atom_site.type_symbol",
+                "_atom_site.label_atom_id",
+                "_atom_site.label_comp_id",
+                "_atom_site.label_seq_id",
+                "_atom_site.label_alt_id",
+                "_atom_site.pdbx_PDB_ins_code",
+                "_atom_site.label_asym_id",
+                "_atom_site.label_entity_id",
+                "_atom_site.Cartn_x",
+                "_atom_site.Cartn_y",
+                "_atom_site.Cartn_z",
+                "_atom_site.occupancy",
+                "_atom_site.B_iso_or_equiv",
+                "_atom_site.pdbx_formal_charge",
+                "_atom_site.auth_atom_id",
+                "_atom_site.auth_comp_id",
+                "_atom_site.auth_seq_id",
+                "_atom_site.auth_asym_id",
+                "_atom_site.pdbx_PDB_model_num",
+                "HETATM 1 C C1 LIG . . . D 1 0.000 0.000 0.000 1 20.00 ? C1 LIG 1 A 1",
+                "HETATM 2 O O1 LIG . . . D 1 1.200 0.000 0.000 1 20.00 ? O1 LIG 1 A 1",
+                "#",
+            ]
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            out = dispatcher.call_tool(
+                "pipeline.diffdock",
+                {"protein_pdb": pdb, "ligand_smiles": modelserver_cif, "dry_run": True},
+            )
+            run_id = str(out.get("run_id") or "")
+            self.assertTrue(run_id)
+
+            listing = dispatcher.call_tool("pipeline.list_artifacts", {"run_id": run_id, "limit": 200})
+            artifacts = listing.get("artifacts") or []
+            paths = {str(a.get("path")) for a in artifacts if isinstance(a, dict)}
+            self.assertIn("diffdock/ligand.sdf", paths)
+            self.assertIn("diffdock/rank1.sdf", paths)
+            self.assertIn("diffdock/ligand.pdb", paths)
+            self.assertIn("diffdock/complex.pdb", paths)
+            self.assertNotIn("diffdock/ligand.smiles", paths)
 
     def test_pipeline_feedback_and_report(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"

@@ -34,6 +34,15 @@ const RUN_PROGRESS_PLANS = Object.freeze({
 
 export const DEFAULT_ARTIFACT_COMPARE_MODE = "sequence";
 export const DEFAULT_ARTIFACT_LIST_LIMIT = 1000;
+const HIDDEN_TARGET_RMSD_GATE_FIELDS = Object.freeze([]);
+const FRONTEND_ONLY_SETUP_FIELDS = Object.freeze(["compare_rmsd_scope"]);
+
+function normalizeCompareRmsdScope(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  return ["off", "input", "backbone", "both"].includes(normalized) ? normalized : "off";
+}
 
 function isKoreanLang(lang = "en") {
   return String(lang || "").trim().toLowerCase().startsWith("ko");
@@ -61,6 +70,52 @@ function normalizeSelectedTiers(values, fallback = DEFAULT_SELECTED_TIERS) {
     new Set(source.map((value) => normalizeConservationTier(value)).filter((value) => value !== null))
   ).sort((left, right) => left - right);
   return normalized.length ? normalized : Array.isArray(fallback) ? [...fallback] : [];
+}
+
+export function classifyDiffdockLigandContent(text, fileName = "") {
+  const rawText = String(text || "");
+  const trimmed = rawText.trim();
+  if (!trimmed) return "";
+
+  const normalizedName = String(fileName || "")
+    .trim()
+    .toLowerCase();
+  if (normalizedName.endsWith(".sdf")) return "sdf";
+  if (
+    normalizedName.endsWith(".cif") ||
+    normalizedName.endsWith(".mmcif") ||
+    normalizedName.endsWith(".bcif")
+  ) {
+    return "mmcif";
+  }
+  if (
+    /^data_/m.test(trimmed) &&
+    /_atom_site\./.test(trimmed) &&
+    /_chem_comp_bond\./.test(trimmed)
+  ) {
+    return "mmcif";
+  }
+  if (/\$\$\$\s*$/.test(trimmed) || /\bM  END\b/.test(trimmed)) {
+    return "sdf";
+  }
+  return "smiles";
+}
+
+export function diffdockLigandSubmissionFields({ ligandText = "", fileName = "" } = {}) {
+  const trimmed = String(ligandText || "").trim();
+  if (!trimmed) return {};
+  const kind = classifyDiffdockLigandContent(trimmed, fileName);
+  if (kind === "sdf" || kind === "mmcif") {
+    return { diffdock_ligand_sdf: ligandText };
+  }
+  return { diffdock_ligand_smiles: ligandText };
+}
+
+function diffdockLigandMetaFileName(text, fileName) {
+  const kind = classifyDiffdockLigandContent(text, fileName);
+  if (kind === "mmcif") return "request.json:diffdock_ligand.cif";
+  if (kind === "sdf") return "request.json:diffdock_ligand.sdf";
+  return "request.json:diffdock_ligand.smiles";
 }
 
 export function formatConservationTierValue(value) {
@@ -190,7 +245,32 @@ function isProteinPdbAtomLine(line) {
 
 function rfd3ModeUsesContig(mode) {
   const normalized = normalizeRfd3Mode(mode);
-  return normalized === "legacy_contig" || normalized === "binder";
+  return normalized === "legacy_contig" || normalized === "binder" || normalized === "local_diversify" || normalized === "enzyme";
+}
+
+function rfd3ModeUsesUnindex(mode) {
+  const normalized = normalizeRfd3Mode(mode);
+  return normalized === "enzyme" || normalized === "local_diversify";
+}
+
+
+export function inferRfd3LocalDiversifyEnzymeDefaults(payload = {}) {
+  const ranges = inferredRfd3ContigRanges(payload) || {};
+  const firstChain = Object.keys(ranges).sort((left, right) => left.localeCompare(right))[0] || "";
+  if (!firstChain) return null;
+  const range = ranges[firstChain];
+  if (!range || range.max <= range.min) return null;
+  
+  const unindex = `${firstChain}${range.min}`;
+  const contig = `${firstChain}${range.min + 1}-${range.max}`;
+  const select_fixed_atoms = JSON.stringify({ [unindex]: "ALL" });
+  
+  return { unindex, contig, select_fixed_atoms };
+}
+
+function rfd3ModeUsesSelectFixedAtoms(mode) {
+  const normalized = normalizeRfd3Mode(mode);
+  return normalized === "enzyme" || normalized === "local_diversify";
 }
 
 function inferredRfd3ContigRanges(payload = {}) {
@@ -200,26 +280,33 @@ function inferredRfd3ContigRanges(payload = {}) {
   const pdbText =
     rfd3Input || targetPdb || (targetInput && detectTargetKey(targetInput) === "target_pdb" ? targetInput : "");
   if (!pdbText) return null;
-  const ranges = {};
+  
+  const uniqueResidues = {};
+  
   String(pdbText)
     .split(/\r?\n/)
     .forEach((line) => {
       if (!isProteinPdbAtomLine(line)) return;
       const chainId = normalizeRfd3ChainId(line[21] || "");
       const resSeq = Number.parseInt(line.slice(22, 26).trim(), 10);
+      const iCode = line.slice(26, 27).trim();
       if (!Number.isFinite(resSeq)) return;
-      const entry = ranges[chainId] || { minPos: null, maxPos: null };
-      if (resSeq > 0) {
-        entry.minPos = entry.minPos === null ? resSeq : Math.min(entry.minPos, resSeq);
-        entry.maxPos = entry.maxPos === null ? resSeq : Math.max(entry.maxPos, resSeq);
+      
+      const residueKey = `${resSeq}_${iCode}`;
+      if (!uniqueResidues[chainId]) {
+        uniqueResidues[chainId] = new Set();
       }
-      ranges[chainId] = entry;
+      uniqueResidues[chainId].add(residueKey);
     });
-  const normalized = Object.entries(ranges).reduce((acc, [chainId, entry]) => {
-    if (entry.minPos === null || entry.maxPos === null) return acc;
-    acc[chainId] = { min: entry.minPos, max: entry.maxPos };
+    
+  const normalized = Object.entries(uniqueResidues).reduce((acc, [chainId, resSet]) => {
+    const size = resSet.size;
+    if (size === 0) return acc;
+    // Backend renumbers starting from 1
+    acc[chainId] = { min: 1, max: size };
     return acc;
   }, {});
+  
   return Object.keys(normalized).length ? normalized : null;
 }
 
@@ -239,27 +326,40 @@ export function effectiveRfd3Mode(payload = {}) {
     return "advanced";
   }
   if (
-    hasMeaningfulValue(payload?.rfd3_unindex) ||
-    hasMeaningfulValue(payload?.rfd3_length) ||
-    hasMeaningfulValue(payload?.rfd3_select_fixed_atoms)
-  ) {
-    return "enzyme";
-  }
-  if (
     hasMeaningfulValue(payload?.rfd3_hotspots) ||
     hasMeaningfulValue(payload?.rfd3_infer_ori_strategy) ||
     typeof payload?.rfd3_is_non_loopy === "boolean"
   ) {
     return "binder";
   }
+  const hasInput =
+    hasMeaningfulValue(payload?.rfd3_input_pdb) ||
+    hasMeaningfulValue(payload?.target_pdb) ||
+    (() => {
+      const targetInput = String(payload?.target_input || "").trim();
+      return Boolean(targetInput && detectTargetKey(targetInput) === "target_pdb");
+    })();
+  if (hasInput) {
+    if (hasMeaningfulValue(payload?.rfd3_contig)) {
+      return "legacy_contig";
+    }
+    if (hasMeaningfulValue(payload?.rfd3_length)) {
+      return "enzyme";
+    }
+    return "local_diversify";
+  }
+  if (
+    hasMeaningfulValue(payload?.rfd3_unindex) ||
+    hasMeaningfulValue(payload?.rfd3_length) ||
+    hasMeaningfulValue(payload?.rfd3_select_fixed_atoms)
+  ) {
+    return "enzyme";
+  }
   if (hasMeaningfulValue(payload?.rfd3_contig)) {
     return "legacy_contig";
   }
   if (hasMeaningfulValue(inferDefaultRfd3Contig(payload))) {
     return "legacy_contig";
-  }
-  if (hasMeaningfulValue(payload?.rfd3_input_pdb)) {
-    return "local_diversify";
   }
   const targetInput = String(payload?.target_input || "").trim();
   if (targetInput && detectTargetKey(targetInput) === "target_pdb") {
@@ -1321,6 +1421,12 @@ export function buildRunArguments({ prompt, routed, answers, runId }) {
   if (args.relax_enabled !== true) {
     delete args.relax_score_per_residue_cutoff;
   }
+  HIDDEN_TARGET_RMSD_GATE_FIELDS.forEach((fieldId) => {
+    delete args[fieldId];
+  });
+  FRONTEND_ONLY_SETUP_FIELDS.forEach((fieldId) => {
+    delete args[fieldId];
+  });
   delete args.questions;
   delete args.missing;
   return args;
@@ -1354,6 +1460,7 @@ export function buildFastLaunchPreset(draft = {}) {
   const targetInput = String(
     source.target_input || source.target_pdb || source.target_fasta || ""
   ).trim();
+  const targetKind = detectTargetKey(targetInput);
   const prompt = String(source.prompt || source.note || "").trim();
   const stopAfter = normalizeStage(source.stop_after) || "novelty";
   const noveltyEnabled = stopAfter === "novelty";
@@ -1382,6 +1489,9 @@ export function buildFastLaunchPreset(draft = {}) {
         perSourceBackboneCount
       ),
       rfd3_use: true,
+      ...(targetKind === "target_pdb"
+        ? { rfd3_mode: normalizeRfd3Mode(source.rfd3_mode) || "local_diversify" }
+        : {}),
       rfd3_max_return_designs: positiveIntegerOrDefault(source.rfd3_max_return_designs, perSourceBackboneCount),
       relax_enabled: source.relax_enabled !== false,
       selected_tiers: selectedTiers,
@@ -1403,7 +1513,7 @@ export function buildFastLaunchPreset(draft = {}) {
 }
 
 const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
-  msa: Object.freeze(["target_input", "pdb_strip_nonpositive_resseq"]),
+  msa: Object.freeze(["target_input", "pdb_strip_nonpositive_resseq", "backbone_filter_use_dssp"]),
   rfd3: Object.freeze([
     "rfd3_use",
     "rfd3_input_pdb",
@@ -1415,6 +1525,7 @@ const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
     "rfd3_length",
     "rfd3_select_fixed_atoms",
     "rfd3_partial_t",
+    "rfd3_target_rmsd_cutoff",
     "rfd3_max_return_designs",
     "rfd3_inputs_text",
   ]),
@@ -1423,6 +1534,7 @@ const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
     "bioemu_num_samples",
     "bioemu_max_return_structures",
     "bioemu_filter_samples",
+    "bioemu_target_rmsd_cutoff",
     "bioemu_steering_config_text",
   ]),
   design: Object.freeze([
@@ -1444,10 +1556,13 @@ const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
 });
 
 const WORKFLOW_STUDIO_STAGE_DEFAULTS = Object.freeze({
+  msa: Object.freeze({
+    backbone_filter_use_dssp: true,
+  }),
   rfd3: Object.freeze({
     rfd3_use: true,
     rfd3_max_return_designs: 10,
-    rfd3_partial_t: 5.0,
+    rfd3_partial_t: 10.0,
   }),
   bioemu: Object.freeze({
     bioemu_num_samples: 20,
@@ -1595,7 +1710,7 @@ export function workflowStudioStageFields(stage) {
 
 function workflowStudioRfd3ModeUsesContig(mode) {
   const normalized = normalizeRfd3Mode(mode);
-  return normalized === "legacy_contig" || normalized === "binder";
+  return normalized === "legacy_contig" || normalized === "binder" || normalized === "local_diversify" || normalized === "enzyme";
 }
 
 function workflowStudioRfd3ModeUsesBinderFields(mode) {
@@ -1896,6 +2011,7 @@ export function buildSetupDraftFromRequest(payload) {
     "diffdock_ligand_smiles",
     "selected_tiers",
     "conservation_tiers",
+    ...HIDDEN_TARGET_RMSD_GATE_FIELDS,
   ]);
 
   Object.entries(payload).forEach(([key, value]) => {
@@ -1930,15 +2046,20 @@ export function buildSetupDraftFromRequest(payload) {
   } else if (rfd3UseValue(payload)) {
     answers.rfd3_use = true;
   }
+  answers.compare_rmsd_scope = normalizeCompareRmsdScope(answers.compare_rmsd_scope);
 
   const ligandSdf = String(payload.diffdock_ligand_sdf || "");
   const ligandSmiles = String(payload.diffdock_ligand_smiles || "");
   if (ligandSdf.trim()) {
     answers.diffdock_ligand = ligandSdf;
-    answerMeta.diffdock_ligand = { fileName: "request.json:diffdock_ligand.sdf" };
+    answerMeta.diffdock_ligand = {
+      fileName: diffdockLigandMetaFileName(ligandSdf, "request.json:diffdock_ligand.sdf"),
+    };
   } else if (ligandSmiles.trim()) {
     answers.diffdock_ligand = ligandSmiles;
-    answerMeta.diffdock_ligand = { fileName: "request.json:diffdock_ligand.smiles" };
+    answerMeta.diffdock_ligand = {
+      fileName: diffdockLigandMetaFileName(ligandSmiles, "request.json:diffdock_ligand.smiles"),
+    };
   }
 
   if (mode === "pipeline") {
@@ -2108,15 +2229,30 @@ export function resolveRfd3Defaults({ mode = "", answers = {}, nodes = [] } = {}
   const rfd3Mode = rfd3Enabled
     ? normalizeRfd3Mode(answers.rfd3_mode || effectiveRfd3Mode({ ...answers, rfd3_input_pdb: effectiveRfd3Input }))
     : "";
-  const inferredContig =
-    rfd3Enabled && rfd3ModeUsesContig(rfd3Mode) && !hasMeaningfulValue(answers?.rfd3_contig)
-      ? inferDefaultRfd3Contig({ ...answers, rfd3_input_pdb: effectiveRfd3Input })
-      : "";
+  let inferredContig = "";
+  let inferredUnindex = "";
+  let inferredSelectFixedAtoms = "";
+  
+  if (rfd3Enabled) {
+    if ((rfd3Mode === "local_diversify" || rfd3Mode === "enzyme") && !hasMeaningfulValue(answers?.rfd3_unindex)) {
+      const defaults = inferRfd3LocalDiversifyEnzymeDefaults({ ...answers, rfd3_input_pdb: effectiveRfd3Input });
+      if (defaults) {
+        inferredContig = defaults.contig;
+        inferredUnindex = defaults.unindex;
+        inferredSelectFixedAtoms = defaults.select_fixed_atoms;
+      }
+    } else if (rfd3ModeUsesContig(rfd3Mode) && !hasMeaningfulValue(answers?.rfd3_contig)) {
+      inferredContig = inferDefaultRfd3Contig({ ...answers, rfd3_input_pdb: effectiveRfd3Input });
+    }
+  }
+
   return {
     rfd3Enabled,
     effectiveRfd3Input,
     rfd3Mode,
     inferredContig,
+    inferredUnindex,
+    inferredSelectFixedAtoms,
   };
 }
 
@@ -2207,6 +2343,8 @@ export function normalizeWorkflowStudioPayloadForComparison(payload, { nodes = [
     effectiveRfd3Input,
     rfd3Mode,
     inferredContig,
+    inferredUnindex,
+    inferredSelectFixedAtoms,
   } = resolveRfd3Defaults({
     mode: "workflow",
     answers,
@@ -2235,7 +2373,13 @@ export function normalizeWorkflowStudioPayloadForComparison(payload, { nodes = [
   if (rfd3Enabled && inferredContig) {
     answers.rfd3_contig = inferredContig;
   }
-  if (rfd3Enabled && rfd3Mode !== "legacy_contig" && rfd3Mode !== "binder") {
+  if (rfd3Enabled && inferredUnindex) {
+    answers.rfd3_unindex = inferredUnindex;
+  }
+  if (rfd3Enabled && inferredSelectFixedAtoms) {
+    answers.rfd3_select_fixed_atoms = inferredSelectFixedAtoms;
+  }
+  if (rfd3Enabled && rfd3Mode !== "legacy_contig" && rfd3Mode !== "binder" && rfd3Mode !== "local_diversify" && rfd3Mode !== "enzyme") {
     delete answers.rfd3_contig;
   }
   if (rfd3Enabled && rfd3Mode !== "binder") {
@@ -2243,9 +2387,13 @@ export function normalizeWorkflowStudioPayloadForComparison(payload, { nodes = [
     delete answers.rfd3_infer_ori_strategy;
     delete answers.rfd3_is_non_loopy;
   }
-  if (rfd3Enabled && rfd3Mode !== "enzyme") {
+  if (rfd3Enabled && !rfd3ModeUsesUnindex(rfd3Mode)) {
     delete answers.rfd3_unindex;
+  }
+  if (rfd3Enabled && rfd3Mode !== "enzyme") {
     delete answers.rfd3_length;
+  }
+  if (rfd3Enabled && !rfd3ModeUsesSelectFixedAtoms(rfd3Mode)) {
     delete answers.rfd3_select_fixed_atoms;
   }
   if (rfd3Enabled && rfd3Mode === "advanced") {

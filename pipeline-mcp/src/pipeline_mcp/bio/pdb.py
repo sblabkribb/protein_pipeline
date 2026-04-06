@@ -399,6 +399,7 @@ def _match_ca_coords(
     mob_coords: dict[str, dict[tuple[int, str], tuple[float, float, float]]],
     *,
     chains: list[str] | None = None,
+    include_positions: dict[str, set[tuple[int, str]]] | None = None,
 ) -> tuple[list[tuple[float, float, float]], list[tuple[float, float, float]]]:
     chain_order = chains or sorted(set(ref_coords) & set(mob_coords))
     ref: list[tuple[float, float, float]] = []
@@ -409,6 +410,9 @@ def _match_ca_coords(
         if not ref_chain or not mob_chain:
             continue
         for idx in sorted(set(ref_chain) & set(mob_chain)):
+            allowed = include_positions.get(chain_id) if isinstance(include_positions, dict) else None
+            if allowed is not None and idx not in allowed:
+                continue
             ref.append(ref_chain[idx])
             mob.append(mob_chain[idx])
     return ref, mob
@@ -513,10 +517,16 @@ def ca_rmsd(
     pdb_mobile: str,
     *,
     chains: list[str] | None = None,
+    include_positions: dict[str, set[tuple[int, str]]] | None = None,
 ) -> float | None:
     ref_coords = _ca_coords_by_chain(pdb_ref, chains=chains)
     mob_coords = _ca_coords_by_chain(pdb_mobile, chains=chains)
-    ref, mob = _match_ca_coords(ref_coords, mob_coords, chains=chains)
+    ref, mob = _match_ca_coords(
+        ref_coords,
+        mob_coords,
+        chains=chains,
+        include_positions=include_positions,
+    )
     # Two matched CA atoms are enough for a meaningful rigid-body superposition.
     # Keep returning None for 0/1 matched atoms because that alignment is too weak
     # to use as a structural gate.
@@ -539,6 +549,179 @@ def ca_rmsd(
         dz = r[2] - mz
         total += dx * dx + dy * dy + dz * dz
     return math.sqrt(total / float(len(ref_c)))
+
+
+def _require_numpy():
+    try:
+        import numpy as np  # type: ignore[import-not-found]
+    except ModuleNotFoundError as exc:  # pragma: no cover - exercised in runtime only
+        raise RuntimeError(
+            "numpy is required for DSSP-based backbone filtering; install pipeline-mcp requirements"
+        ) from exc
+    return np
+
+
+def _dssp_complete_backbone_residues(
+    pdb_text: str,
+    *,
+    chains: list[str] | None = None,
+) -> dict[str, list[dict[str, object]]]:
+    residues = residues_by_chain(pdb_text, only_atom_records=True)
+    chain_set = set(chains) if chains is not None else None
+    out: dict[str, list[dict[str, object]]] = {}
+    for chain_id, res_list in residues.items():
+        if chain_set is not None and chain_id not in chain_set:
+            continue
+        chain_entries: list[dict[str, object]] = []
+        for res in res_list:
+            atoms_by_name: dict[str, tuple[float, float, float]] = {}
+            for atom in res.atoms:
+                atom_name = atom.atom_name.strip().upper()
+                if atom_name in {"N", "CA", "C", "O"} and atom_name not in atoms_by_name:
+                    atoms_by_name[atom_name] = (atom.x, atom.y, atom.z)
+            if all(name in atoms_by_name for name in ("N", "CA", "C", "O")):
+                chain_entries.append(
+                    {
+                        "key": (int(res.resseq), str(res.icode or "")),
+                        "resname": str(res.resname or "").upper(),
+                        "coords": [
+                            atoms_by_name["N"],
+                            atoms_by_name["CA"],
+                            atoms_by_name["C"],
+                            atoms_by_name["O"],
+                        ],
+                    }
+                )
+        if chain_entries:
+            out[chain_id] = chain_entries
+    return out
+
+
+def _dssp_get_hydrogen_atom_position_numpy(coord):
+    np = _require_numpy()
+    vec_cn = coord[:, 1:, 0] - coord[:, :-1, 2]
+    vec_cn = vec_cn / np.linalg.norm(vec_cn, axis=-1, keepdims=True)
+    vec_can = coord[:, 1:, 0] - coord[:, 1:, 1]
+    vec_can = vec_can / np.linalg.norm(vec_can, axis=-1, keepdims=True)
+    vec_nh = vec_cn + vec_can
+    vec_nh = vec_nh / np.linalg.norm(vec_nh, axis=-1, keepdims=True)
+    return coord[:, 1:, 0] + 1.01 * vec_nh
+
+
+def _dssp_get_hbond_map_numpy(
+    coord,
+    donor_mask=None,
+    *,
+    cutoff: float = -0.5,
+    margin: float = 1.0,
+):
+    np = _require_numpy()
+    org_shape = coord.shape
+    if len(org_shape) == 3:
+        coord = coord[None, ...]
+    elif len(org_shape) != 4:
+        raise ValueError("DSSP coordinates must have shape [L, atom, xyz] or [batch, L, atom, xyz]")
+    batch, length, atom_count, _ = coord.shape
+    if atom_count not in {4, 5}:
+        raise ValueError("DSSP coordinates require 4 or 5 atoms per residue")
+    hydrogen = coord[:, 1:, 4] if atom_count == 5 else _dssp_get_hydrogen_atom_position_numpy(coord)
+    n_map = np.broadcast_to(coord[:, 1:, 0][:, :, None, :], (batch, length - 1, length - 1, 3))
+    h_map = np.broadcast_to(hydrogen[:, :, None, :], (batch, length - 1, length - 1, 3))
+    c_map = np.broadcast_to(coord[:, :-1, 2][:, None, :, :], (batch, length - 1, length - 1, 3))
+    o_map = np.broadcast_to(coord[:, :-1, 3][:, None, :, :], (batch, length - 1, length - 1, 3))
+    d_on = np.linalg.norm(o_map - n_map, axis=-1)
+    d_ch = np.linalg.norm(c_map - h_map, axis=-1)
+    d_oh = np.linalg.norm(o_map - h_map, axis=-1)
+    d_cn = np.linalg.norm(c_map - n_map, axis=-1)
+    energy = np.pad(
+        0.084 * (1.0 / d_on + 1.0 / d_ch - 1.0 / d_oh - 1.0 / d_cn) * 332.0,
+        ((0, 0), (1, 0), (0, 1)),
+    )
+    local_mask = ~np.eye(length, dtype=bool)
+    local_mask &= ~np.diag(np.ones(length - 1, dtype=bool), k=-1)
+    local_mask &= ~np.diag(np.ones(length - 2, dtype=bool), k=-2)
+    donor_vector = (
+        np.asarray(donor_mask, dtype=float)
+        if donor_mask is not None
+        else np.ones(length, dtype=float)
+    )
+    donor_grid = np.broadcast_to(donor_vector[:, None], (length, length))
+    hbond_map = np.clip(cutoff - margin - energy, a_min=-margin, a_max=margin)
+    hbond_map = (np.sin(hbond_map / margin * math.pi / 2.0) + 1.0) / 2.0
+    hbond_map = hbond_map * np.broadcast_to(local_mask[None, :, :], (batch, length, length))
+    hbond_map = hbond_map * np.broadcast_to(donor_grid[None, :, :], (batch, length, length))
+    return np.squeeze(hbond_map, axis=0) if len(org_shape) == 3 else hbond_map
+
+
+def _dssp_assign_c3_numpy(coord, donor_mask=None):
+    np = _require_numpy()
+    org_shape = coord.shape
+    if len(org_shape) == 3:
+        coord = coord[None, ...]
+    hbmap = _dssp_get_hbond_map_numpy(coord, donor_mask=donor_mask)
+    if hbmap.ndim == 2:
+        hbmap = hbmap[None, ...]
+    hbmap = np.swapaxes(hbmap, -1, -2)
+    turn3 = np.diagonal(hbmap, offset=3, axis1=-2, axis2=-1) > 0.0
+    turn4 = np.diagonal(hbmap, offset=4, axis1=-2, axis2=-1) > 0.0
+    turn5 = np.diagonal(hbmap, offset=5, axis1=-2, axis2=-1) > 0.0
+    h3 = np.pad(turn3[:, :-1] * turn3[:, 1:], ((0, 0), (1, 3)))
+    h4 = np.pad(turn4[:, :-1] * turn4[:, 1:], ((0, 0), (1, 4)))
+    h5 = np.pad(turn5[:, :-1] * turn5[:, 1:], ((0, 0), (1, 5)))
+    helix4 = h4 + np.roll(h4, 1, 1) + np.roll(h4, 2, 1) + np.roll(h4, 3, 1)
+    h3 = h3 * ~np.roll(helix4, -1, 1) * ~helix4
+    h5 = h5 * ~np.roll(helix4, -1, 1) * ~helix4
+    helix3 = h3 + np.roll(h3, 1, 1) + np.roll(h3, 2, 1)
+    helix5 = h5 + np.roll(h5, 1, 1) + np.roll(h5, 2, 1) + np.roll(h5, 3, 1) + np.roll(h5, 4, 1)
+    unfold = np.lib.stride_tricks.sliding_window_view(hbmap, 3, axis=-2)
+    unfold = np.lib.stride_tricks.sliding_window_view(unfold, 3, axis=-2) > 0.0
+    unfold_rev = np.swapaxes(unfold, 1, 2)
+    p_bridge = (unfold[:, :, :, 0, 1] * unfold_rev[:, :, :, 1, 2]) + (
+        unfold_rev[:, :, :, 0, 1] * unfold[:, :, :, 1, 2]
+    )
+    p_bridge = np.pad(p_bridge, ((0, 0), (1, 1), (1, 1)))
+    a_bridge = (unfold[:, :, :, 1, 1] * unfold_rev[:, :, :, 1, 1]) + (
+        unfold[:, :, :, 0, 2] * unfold_rev[:, :, :, 0, 2]
+    )
+    a_bridge = np.pad(a_bridge, ((0, 0), (1, 1), (1, 1)))
+    ladder = (p_bridge + a_bridge) > 0
+    helix = (helix3 + helix4 + helix5) > 0
+    strand = np.any(ladder, axis=-1) | np.any(ladder, axis=-2)
+    loop = (~helix) & (~strand)
+    onehot = np.stack([loop, helix, strand], axis=-1)
+    if len(org_shape) == 3:
+        onehot = np.squeeze(onehot, axis=0)
+    return onehot
+
+
+def dssp_non_loop_positions_by_chain(
+    pdb_text: str,
+    *,
+    chains: list[str] | None = None,
+) -> dict[str, set[tuple[int, str]]]:
+    np = _require_numpy()
+    backbone = _dssp_complete_backbone_residues(pdb_text, chains=chains)
+    out: dict[str, set[tuple[int, str]]] = {}
+    for chain_id, residues in backbone.items():
+        if len(residues) < 2:
+            continue
+        coords = np.asarray([entry["coords"] for entry in residues], dtype=float)
+        donor_mask = np.asarray(
+            [0.0 if str(entry.get("resname") or "").upper() == "PRO" else 1.0 for entry in residues],
+            dtype=float,
+        )
+        onehot = _dssp_assign_c3_numpy(coords, donor_mask=donor_mask)
+        if onehot.ndim != 2 or onehot.shape[-1] != 3:
+            continue
+        non_loop: set[tuple[int, str]] = set()
+        for idx, entry in enumerate(residues):
+            if bool(onehot[idx][1]) or bool(onehot[idx][2]):
+                key = entry.get("key")
+                if isinstance(key, tuple) and len(key) == 2:
+                    non_loop.add((int(key[0]), str(key[1] or "")))
+        if non_loop:
+            out[chain_id] = non_loop
+    return out
 
 
 _VDW_RADII = {

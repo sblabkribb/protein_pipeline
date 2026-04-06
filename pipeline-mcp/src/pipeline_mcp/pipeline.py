@@ -30,8 +30,10 @@ from .bio.a3m import weights_from_mmseqs_cluster_tsv
 from .bio.fasta import FastaRecord
 from .bio.fasta import parse_fasta
 from .bio.fasta import to_fasta
+from .bio.ligand_text import normalize_diffdock_ligand_inputs
 from .bio.alignment import global_alignment_mapping
 from .bio.pdb import ca_rmsd
+from .bio.pdb import dssp_non_loop_positions_by_chain
 from .bio.pdb import ligand_atoms_present
 from .bio.pdb import ligand_proximity_mask
 from .bio.pdb import preprocess_pdb
@@ -1254,24 +1256,28 @@ def _effective_rfd3_mode(
     if (request.rfd3_inputs_text or "").strip() or request.rfd3_inputs:
         return "advanced"
     if (
-        request.rfd3_unindex is not None
-        or request.rfd3_length is not None
-        or request.rfd3_select_fixed_atoms is not None
-    ):
-        return "enzyme"
-    if (
         request.rfd3_hotspots is not None
         or (request.rfd3_infer_ori_strategy or "").strip()
         or request.rfd3_is_non_loopy is not None
     ):
         return "binder"
-    if request.rfd3_contig is not None:
-        return "legacy_contig"
     has_input = bool((request.rfd3_input_pdb or "").strip()) or bool(
         (input_files or {}).get("input.pdb")
     )
     if has_input:
+        if (request.rfd3_contig or "").strip():
+            return "legacy_contig"
+        if request.rfd3_length is not None:
+            return "enzyme"
         return "local_diversify"
+    if (
+        request.rfd3_unindex is not None
+        or request.rfd3_length is not None
+        or request.rfd3_select_fixed_atoms is not None
+    ):
+        return "enzyme"
+    if (request.rfd3_contig or "").strip():
+        return "legacy_contig"
     return None
 
 
@@ -1353,8 +1359,9 @@ def _normalize_rfd3_inputs(inputs: dict[str, Any] | None) -> dict[str, Any] | No
                 spec_out["select_unfixed_sequence"] = _normalize_rfd3_contig_value(
                     spec_out.get("select_unfixed_sequence")
                 )
-            if "partial_t" in spec_out:
-                spec_out["partial_T"] = spec_out.pop("partial_t")
+            if "partial_T" in spec_out and "partial_t" not in spec_out:
+                spec_out["partial_t"] = spec_out["partial_T"]
+            spec_out.pop("partial_T", None)
             normalized[key] = spec_out
         else:
             normalized[key] = spec
@@ -1385,20 +1392,6 @@ def _rfd3_input_file_text(input_name: str, *, input_files: dict[str, str]) -> st
     return ""
 
 
-def _default_rfd3_select_fixed_atoms(pdb_text: str) -> dict[str, str] | None:
-    residues = residues_by_chain(pdb_text, only_atom_records=True)
-    for chain_id, res_list in residues.items():
-        if not res_list:
-            continue
-        residue = res_list[0]
-        chain = str(chain_id or "").strip()
-        residue_token = f"{int(residue.resseq)}{str(residue.icode or '').strip()}"
-        if chain and chain != "_":
-            residue_token = f"{chain}{residue_token}"
-        return {residue_token: "ALL"}
-    return None
-
-
 def _rfd3_spec_has_value(value: Any) -> bool:
     if value is None:
         return False
@@ -1407,42 +1400,6 @@ def _rfd3_spec_has_value(value: Any) -> bool:
     if isinstance(value, (list, tuple, set, dict)):
         return bool(value)
     return True
-
-
-def _rfd3_spec_uses_default_fixed_atoms(spec: Any) -> bool:
-    if not isinstance(spec, dict):
-        return False
-    if _rfd3_spec_has_value(spec.get("select_fixed_atoms")):
-        return False
-    if not _rfd3_spec_has_value(spec.get("input")):
-        return False
-    if _rfd3_spec_has_value(spec.get("unindex")):
-        return False
-    return True
-
-
-def _inject_rfd3_default_fixed_atoms(
-    inputs: dict[str, Any] | None,
-    *,
-    input_files: dict[str, str],
-) -> dict[str, Any] | None:
-    if inputs is None:
-        return None
-    for spec in inputs.values():
-        if not isinstance(spec, dict):
-            continue
-        if not _rfd3_spec_uses_default_fixed_atoms(spec):
-            continue
-        input_name = str(spec.get("input") or "").strip()
-        if not input_name:
-            continue
-        input_pdb_text = _rfd3_input_file_text(input_name, input_files=input_files)
-        if not input_pdb_text:
-            continue
-        fixed_atoms = _default_rfd3_select_fixed_atoms(input_pdb_text)
-        if fixed_atoms:
-            spec["select_fixed_atoms"] = fixed_atoms
-    return inputs
 
 
 def _rfd3_chain_ids_from_value(value: Any) -> list[str]:
@@ -1527,9 +1484,6 @@ def _rfd3_requested_design_chains(
         if inputs_text is None and inputs_obj is None:
             inputs_obj = _rfd3_simple_inputs(request, input_files=input_files)
         inputs_obj = copy.deepcopy(_normalize_rfd3_inputs(inputs_obj))
-        inputs_obj = _inject_rfd3_default_fixed_atoms(
-            inputs_obj, input_files=input_files
-        )
     except Exception:
         return None
     return _rfd3_design_chains_from_inputs(inputs_obj)
@@ -1538,6 +1492,8 @@ def _rfd3_requested_design_chains(
 def _rfd3_simple_inputs(
     request: PipelineRequest, *, input_files: dict[str, str]
 ) -> dict[str, object]:
+    from .bio.pdb import residues_by_chain
+
     mode = _effective_rfd3_mode(request, input_files=input_files)
     if mode == "advanced":
         raise ValueError("RFD3 advanced mode requires rfd3_inputs or rfd3_inputs_text")
@@ -1557,14 +1513,46 @@ def _rfd3_simple_inputs(
                 ).strip()
             if request.rfd3_is_non_loopy is not None:
                 spec["is_non_loopy"] = bool(request.rfd3_is_non_loopy)
-    elif mode == "enzyme":
-        if request.rfd3_unindex is None:
+    elif mode in {"enzyme", "local_diversify"}:
+        contig_val = request.rfd3_contig
+        unindex_val = request.rfd3_unindex
+        fixed_val = request.rfd3_select_fixed_atoms
+        
+        if unindex_val is None:
+            pdb_text = request.rfd3_input_pdb or ""
+            if not pdb_text.strip() and "input.pdb" in input_files:
+                try:
+                    with open(input_files["input.pdb"], "r") as f:
+                        pdb_text = f.read()
+                except Exception:
+                    pass
+            if pdb_text.strip():
+                # Renumber residues from 1 temporarily for inference if needed, because RFD3 fails on negative contigs
+                if _has_nonpositive_resseq(pdb_text):
+                    pdb_text = _prepare_pdb_text_for_design_context(pdb_text, chains=None, strip_nonpositive_resseq=False, renumber_resseq_from_1=True)
+                
+                by_chain = residues_by_chain(pdb_text)
+                if by_chain:
+                    first_chain = sorted(by_chain.keys())[0]
+                    res_list = by_chain[first_chain]
+                    if len(res_list) > 1:
+                        unindex_val = f"{first_chain}{res_list[0].resseq}"
+                        fixed_val = {unindex_val: "ALL"}
+                        if contig_val is None:
+                            contig_val = f"{first_chain}{res_list[1].resseq}-{res_list[-1].resseq}"
+        
+        if mode == "enzyme" and unindex_val is None:
             raise ValueError("RFD3 enzyme mode requires rfd3_unindex")
-        spec["unindex"] = request.rfd3_unindex
-        if request.rfd3_length is not None:
+            
+        if contig_val is not None:
+            spec["contig"] = _normalize_rfd3_contig_value(contig_val)
+        if unindex_val is not None:
+            spec["unindex"] = unindex_val
+        if fixed_val is not None:
+            spec["select_fixed_atoms"] = fixed_val
+            
+        if mode == "enzyme" and request.rfd3_length is not None:
             spec["length"] = request.rfd3_length
-        if request.rfd3_select_fixed_atoms is not None:
-            spec["select_fixed_atoms"] = request.rfd3_select_fixed_atoms
     if request.rfd3_ligand is not None:
         spec["ligand"] = request.rfd3_ligand
     if request.rfd3_select_unfixed_sequence is not None:
@@ -1609,9 +1597,11 @@ def _inject_rfd3_partial_t(
     for spec in inputs.values():
         if not isinstance(spec, dict):
             continue
-        if "partial_T" in spec:
+        if "partial_T" in spec and "partial_t" not in spec:
+            spec["partial_t"] = spec.pop("partial_T")
+        if "partial_t" in spec:
             continue
-        spec["partial_T"] = float(partial_t)
+        spec["partial_t"] = float(partial_t)
     return inputs
 
 
@@ -1701,6 +1691,7 @@ def _filter_backbones_by_target_rmsd(
     source: str,
     strip_nonpositive_resseq: bool = False,
     renumber_resseq_from_1: bool = False,
+    use_dssp_non_loop: bool = True,
 ) -> tuple[list[dict[str, Any]] | None, dict[str, Any] | None]:
     if not isinstance(backbones, list):
         return backbones, None
@@ -1711,11 +1702,28 @@ def _filter_backbones_by_target_rmsd(
     chain_list = [
         str(chain_id).strip() for chain_id in (chains or []) if str(chain_id).strip()
     ] or None
+    include_positions = None
+    mask_applied = False
+    mask_mode = "all_ca"
+    mask_residue_count = 0
+    if use_dssp_non_loop and reference_pdb_text.strip():
+        dssp_positions = dssp_non_loop_positions_by_chain(
+            reference_pdb_text,
+            chains=chain_list,
+        )
+        mask_residue_count = sum(len(v) for v in dssp_positions.values())
+        if mask_residue_count >= 2:
+            include_positions = dssp_positions
+            mask_applied = True
+            mask_mode = "dssp_non_loop_reference"
     if cutoff is None or not reference_pdb_text.strip():
         return items, {
             "source": source,
             "method": "target_ca_rmsd",
             "applied": False,
+            "mask_applied": mask_applied,
+            "mask_mode": mask_mode,
+            "mask_residue_count": mask_residue_count,
             "cutoff": float(cutoff) if isinstance(cutoff, (int, float)) else None,
             "design_chains": chain_list,
             "input_count": len(items),
@@ -1751,7 +1759,12 @@ def _filter_backbones_by_target_rmsd(
             strip_nonpositive_resseq=bb_strip_nonpositive,
             renumber_resseq_from_1=bb_renumber,
         )
-        rmsd = ca_rmsd(reference_pdb_text, prepared_pdb_text, chains=chain_list)
+        rmsd = ca_rmsd(
+            reference_pdb_text,
+            prepared_pdb_text,
+            chains=chain_list,
+            include_positions=include_positions,
+        )
         if not isinstance(rmsd, (int, float)):
             entry = dict(item)
             entry["target_rmsd"] = None
@@ -1773,8 +1786,11 @@ def _filter_backbones_by_target_rmsd(
 
     summary = {
         "source": source,
-        "method": "target_ca_rmsd",
+        "method": "target_ca_rmsd_dssp_non_loop" if mask_applied else "target_ca_rmsd",
         "applied": True,
+        "mask_applied": mask_applied,
+        "mask_mode": mask_mode,
+        "mask_residue_count": mask_residue_count,
         "cutoff": float(cutoff),
         "design_chains": chain_list,
         "input_count": len(items),
@@ -1889,7 +1905,7 @@ def _resolve_pipeline_chain_strategy(
 
     af2_model_preset = _resolve_af2_model_preset(
         af2_model_preset_requested,
-        chain_count=len(requested_chains or []),
+        chain_count=len(pdb_chains or []),
     )
     chain_notes: list[str] = []
     if requested_chains and _is_monomer_preset(af2_model_preset):
@@ -3055,7 +3071,8 @@ class PipelineRunner:
                             continue
                         candidates.append(str(content))
                 if any(_has_nonpositive_resseq(text) for text in candidates):
-                    effective_strip_nonpositive = True
+                    effective_strip_nonpositive = False
+                    effective_renumber = True
                     auto_strip_nonpositive = True
 
             if rfd3_files and (
@@ -3574,10 +3591,6 @@ class PipelineRunner:
                         inputs_obj,
                         _effective_rfd3_partial_t(request, mode=rfd3_mode),
                     )
-                    inputs_obj = _inject_rfd3_default_fixed_atoms(
-                        inputs_obj,
-                        input_files=rfd3_files,
-                    )
                     rfd3_runtime_design_chains = (
                         _rfd3_design_chains_from_inputs(inputs_obj)
                         or rfd3_preferred_design_chains
@@ -3696,6 +3709,9 @@ class PipelineRunner:
                                 request.rfd3_fail_on_duplicate_backbones
                             ),
                             "target_rmsd_cutoff": rfd3_target_rmsd_cutoff,
+                            "backbone_filter_use_dssp": bool(
+                                request.backbone_filter_use_dssp
+                            ),
                             "max_attempted_designs": rfd3_max_attempted_designs,
                             "requested_final_count": requested_final_count,
                             "target_gate_design_chains": rfd3_target_gate_design_chains,
@@ -4396,6 +4412,9 @@ class PipelineRunner:
                                     source="rfd3",
                                     strip_nonpositive_resseq=effective_strip_nonpositive,
                                     renumber_resseq_from_1=effective_renumber,
+                                    use_dssp_non_loop=bool(
+                                        request.backbone_filter_use_dssp
+                                    ),
                                 )
                             )
                             if rfd3_target_gate_summary is not None:
@@ -4618,10 +4637,17 @@ class PipelineRunner:
                         target_gate_message = str(
                             rfd3_debug_summary.get("target_rmsd_contract_error") or ""
                         ).strip()
-                        if (
-                            int(refresh_state.get("accepted_count") or 0)
-                            < requested_final_count
-                        ):
+                        accepted_count = int(refresh_state.get("accepted_count") or 0)
+                        if accepted_count < requested_final_count:
+                            if accepted_count <= 0:
+                                message = (
+                                    target_gate_message
+                                    or duplicate_message
+                                    or "RFD3 target RMSD gate failed"
+                                )
+                                raise RuntimeError(
+                                    f"RFD3 produced no acceptable backbones. {message}"
+                                )
                             raise BackboneContractError(
                                 target_gate_message
                                 or duplicate_message
@@ -4652,22 +4678,22 @@ class PipelineRunner:
                     )
                     rfd3_backbones = None
                     rfd3_selected_id = _canonicalize_rfd3_design_id("recovered")
-                    rfd3_observed_count = 1
-                    rfd3_diversity_summary = None
-                    rfd3_debug_summary = None
-                    if not target_pdb_text.strip():
-                        if rfd3_input_pdb_text.strip():
-                            target_pdb_text = rfd3_input_pdb_text
-                        elif rfd3_files and "input.pdb" in rfd3_files:
-                            target_pdb_text = str(rfd3_files.get("input.pdb") or "")
-                        elif target_record is not None:
-                            target_pdb_text = _dummy_backbone_pdb(
-                                target_record.sequence, chain_id="A"
-                            )
-                        else:
-                            target_pdb_text = _dummy_backbone_pdb(
-                                "A" * 60, chain_id="A"
-                            )
+                    fallback_pdb_text = ""
+                    if rfd3_input_pdb_text.strip():
+                        fallback_pdb_text = rfd3_input_pdb_text
+                    elif rfd3_files and "input.pdb" in rfd3_files:
+                        fallback_pdb_text = str(rfd3_files.get("input.pdb") or "")
+                    elif target_pdb_input_text.strip():
+                        fallback_pdb_text = target_pdb_input_text
+                    elif target_pdb_text.strip():
+                        fallback_pdb_text = target_pdb_text
+                    elif target_record is not None:
+                        fallback_pdb_text = _dummy_backbone_pdb(
+                            target_record.sequence, chain_id="A"
+                        )
+                    else:
+                        fallback_pdb_text = _dummy_backbone_pdb("A" * 60, chain_id="A")
+                    target_pdb_text = fallback_pdb_text
                     if target_pdb_text.strip():
                         _write_text(rfd3_dir / "selected.pdb", target_pdb_text)
                         write_json(
@@ -4793,6 +4819,9 @@ class PipelineRunner:
                         "steering_config_text": bioemu_steering_config_text,
                         "max_return_structures": bioemu_max_return_structures,
                         "target_rmsd_cutoff": bioemu_target_rmsd_cutoff,
+                        "backbone_filter_use_dssp": bool(
+                            request.backbone_filter_use_dssp
+                        ),
                         "max_attempted_structures": bioemu_max_attempted_structures,
                         "env": bioemu_env,
                     },
@@ -5047,6 +5076,9 @@ class PipelineRunner:
                                 source="bioemu",
                                 strip_nonpositive_resseq=effective_strip_nonpositive,
                                 renumber_resseq_from_1=effective_renumber,
+                                use_dssp_non_loop=bool(
+                                    request.backbone_filter_use_dssp
+                                ),
                             )
                         )
                         if bioemu_target_gate_summary is not None:
@@ -6051,7 +6083,7 @@ class PipelineRunner:
             wt_compare_reference_pdb_text = _wt_compare_reference_pdb_text(
                 target_pdb_input_text,
                 fallback_pdb_text=target_pdb_text,
-                design_chains=design_chains,
+                design_chains=None,
                 strip_nonpositive_resseq=effective_strip_nonpositive,
                 renumber_resseq_from_1=effective_renumber,
             )
@@ -6277,27 +6309,23 @@ class PipelineRunner:
                 )
 
                 seq_source = (
-                    "target_fasta"
-                    if str(request.target_fasta or "").strip()
-                    else "target_pdb"
+                    "target_pdb"
+                    if wt_compare_reference_pdb_text.strip()
+                    else "target_fasta"
                 )
-                wt_seq = target_record.sequence if target_record else ""
-                if not wt_seq and wt_compare_reference_pdb_text.strip():
+                wt_seq = ""
+                if wt_compare_reference_pdb_text.strip():
                     try:
-                        tmp = _target_record_from_pdb(
-                            wt_compare_reference_pdb_text, design_chains=design_chains
-                        )
-                        wt_seq = tmp.sequence
-                        seq_source = "target_pdb"
+                        seqs = sequence_by_chain(wt_compare_reference_pdb_text)
+                        if seqs:
+                            wt_seq = "/".join(seqs.values())
                     except Exception:
                         pass
+                if not wt_seq and target_record:
+                    wt_seq = target_record.sequence
+                    seq_source = "target_fasta"
 
-                wt_af2_model_preset = _resolve_af2_model_preset(
-                    request.af2_model_preset,
-                    chain_count=len(
-                        design_chains or _split_multichain_sequence(wt_seq)
-                    ),
-                )
+                wt_af2_model_preset = af2_model_preset
                 cached_af2_ok = (
                     cached_af2 is not None
                     and not _should_retry_cached_wt_af2(cached_af2)
@@ -6749,15 +6777,18 @@ class PipelineRunner:
                             detail=f"backbone={raw_id}",
                         )
 
+                        ligand_smiles, ligand_sdf = normalize_diffdock_ligand_inputs(
+                            request.diffdock_ligand_smiles,
+                            request.diffdock_ligand_sdf,
+                        )
+
                         _write_text(diffdock_dir / "protein.pdb", ctx["pdb_text"])
-                        if request.diffdock_ligand_sdf:
-                            _write_text(
-                                diffdock_dir / "ligand.sdf", request.diffdock_ligand_sdf
-                            )
-                        elif request.diffdock_ligand_smiles:
+                        if ligand_sdf:
+                            _write_text(diffdock_dir / "ligand.sdf", ligand_sdf)
+                        elif ligand_smiles:
                             _write_text(
                                 diffdock_dir / "ligand.smiles",
-                                request.diffdock_ligand_smiles,
+                                ligand_smiles,
                             )
 
                         def _on_diffdock_job(job_id: str) -> None:
@@ -6773,8 +6804,8 @@ class PipelineRunner:
 
                         diffdock_out = self.diffdock.dock(
                             protein_pdb=ctx["pdb_text"],
-                            ligand_smiles=request.diffdock_ligand_smiles,
-                            ligand_sdf=request.diffdock_ligand_sdf,
+                            ligand_smiles=ligand_smiles,
+                            ligand_sdf=ligand_sdf,
                             complex_name=dir_id or "complex",
                             config=request.diffdock_config,
                             extra_args=request.diffdock_extra_args,

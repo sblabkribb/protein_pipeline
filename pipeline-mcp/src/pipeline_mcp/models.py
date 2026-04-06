@@ -36,7 +36,7 @@ class PipelineRequest:
     rfd3_is_non_loopy: bool | None = None
     rfd3_unindex: str | list[str] | None = None
     rfd3_length: str | list[str] | None = None
-    rfd3_select_fixed_atoms: str | list[str] | None = None
+    rfd3_select_fixed_atoms: str | list[str] | dict[str, str] | None = None
     rfd3_ligand: str | list[str] | None = None
     rfd3_select_unfixed_sequence: str | None = None
     rfd3_cli_args: str | None = None
@@ -44,12 +44,13 @@ class PipelineRequest:
     rfd3_design_index: int = 0
     rfd3_use_ensemble: bool = False
     rfd3_max_return_designs: int = 10
-    rfd3_partial_t: float | None = None
+    rfd3_partial_t: float | None = 10.0
     rfd3_sampling_strategy: str | None = None
     rfd3_fail_on_duplicate_backbones: bool = False
-    rfd3_target_rmsd_cutoff: float | None = 2.0
+    rfd3_target_rmsd_cutoff: float | None = None
     rfd3_target_gate_chains: list[str] | None = None
     rfd3_max_attempted_designs: int | None = None
+    backbone_filter_use_dssp: bool = True
 
     bioemu_use: bool = False
     bioemu_sequence: str | None = None
@@ -60,7 +61,7 @@ class PipelineRequest:
     bioemu_base_seed: int | None = None
     bioemu_steering_config_text: str | None = None
     bioemu_max_return_structures: int = 10
-    bioemu_target_rmsd_cutoff: float | None = 2.0
+    bioemu_target_rmsd_cutoff: float | None = None
     bioemu_max_attempted_structures: int | None = None
     bioemu_env: dict[str, str] | None = None
 
@@ -126,7 +127,10 @@ class PipelineRequest:
     mmseqs_target_db: str = "uniref90"
     mmseqs_max_seqs: int = 3000
     mmseqs_threads: int = 4
-    mmseqs_use_gpu: bool = field(default_factory=lambda: _env_true("PIPELINE_MMSEQS_USE_GPU") or _env_true("MMSEQS_USE_GPU"))
+    mmseqs_use_gpu: bool = field(
+        default_factory=lambda: _env_true("PIPELINE_MMSEQS_USE_GPU")
+        or _env_true("MMSEQS_USE_GPU")
+    )
 
     novelty_enabled: bool = False
     novelty_target_db: str = "uniref90"
@@ -137,8 +141,12 @@ class PipelineRequest:
     query_pdb_min_identity: float = 0.9
     query_pdb_policy: str = "error"  # error | warn | ignore
 
-    start_from: str | None = None  # msa | rfd3 | bioemu | design | soluprot | af2 | novelty (wt_diff alias)
-    stop_after: str | None = None  # rfd3 | bioemu | msa | design | soluprot | af2 | novelty (wt_diff alias)
+    start_from: str | None = (
+        None  # msa | rfd3 | bioemu | design | soluprot | af2 | novelty (wt_diff alias)
+    )
+    stop_after: str | None = (
+        None  # rfd3 | bioemu | msa | design | soluprot | af2 | novelty (wt_diff alias)
+    )
     force: bool = False
     dry_run: bool = False
     agent_panel_enabled: bool = True

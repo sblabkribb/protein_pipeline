@@ -12,6 +12,8 @@ from pipeline_mcp.bio.pdb import sequence_by_chain
 from pipeline_mcp.models import PipelineRequest
 from pipeline_mcp.pipeline import _build_backbone_source_summaries
 from pipeline_mcp.pipeline import _clear_stage_outputs_from
+from pipeline_mcp.pipeline import _effective_rfd3_mode
+from pipeline_mcp.pipeline import _filter_backbones_by_target_rmsd
 from pipeline_mcp.pipeline import _preprocess_pdb_text
 from pipeline_mcp.pipeline import _proteinmpnn_input_pdb_text
 from pipeline_mcp.pipeline import _resolve_backbone_preprocess_options
@@ -59,7 +61,123 @@ def _bent_ca_backbone(
     return "\n".join(lines) + "\n"
 
 
+_DSSP_REFERENCE_FRAGMENT = (
+    "ATOM    122  N   PRO A   8      24.436  65.567  18.208  1.00 14.61           N\n"
+    "ATOM    123  CA  PRO A   8      23.672  66.249  19.267  1.00 19.75           C\n"
+    "ATOM    124  C   PRO A   8      24.408  67.421  19.901  1.00 18.44           C\n"
+    "ATOM    125  O   PRO A   8      25.615  67.350  20.201  1.00 17.32           O\n"
+    "ATOM    129  N   ARG A   9      23.653  68.494  20.092  1.00 16.55           N\n"
+    "ATOM    130  CA  ARG A   9      24.204  69.699  20.746  1.00 18.68           C\n"
+    "ATOM    131  C   ARG A   9      23.296  69.977  21.968  1.00 16.26           C\n"
+    "ATOM    132  O   ARG A   9      22.081  69.742  21.913  1.00 16.03           O\n"
+    "ATOM    140  N   ASP A  10      23.888  70.487  23.047  1.00 12.55           N\n"
+    "ATOM    141  CA  ASP A  10      23.093  70.768  24.233  1.00 14.08           C\n"
+    "ATOM    142  C   ASP A  10      22.656  72.240  24.108  1.00 17.64           C\n"
+    "ATOM    143  O   ASP A  10      23.494  73.119  24.217  1.00 14.77           O\n"
+    "ATOM    148  N   TYR A  11      21.355  72.489  23.922  1.00 14.49           N\n"
+    "ATOM    149  CA  TYR A  11      20.872  73.850  23.751  1.00 16.25           C\n"
+    "ATOM    150  C   TYR A  11      20.350  74.358  25.081  1.00 16.15           C\n"
+    "ATOM    151  O   TYR A  11      19.838  75.472  25.163  1.00 16.44           O\n"
+    "ATOM    160  N   ASN A  12      20.443  73.544  26.128  1.00 16.20           N\n"
+    "ATOM    161  CA  ASN A  12      19.912  73.987  27.424  1.00 14.90           C\n"
+    "ATOM    162  C   ASN A  12      20.613  75.215  27.988  1.00 12.68           C\n"
+    "ATOM    163  O   ASN A  12      19.962  76.005  28.663  1.00 21.94           O\n"
+    "ATOM    168  N   PRO A  13      21.931  75.398  27.702  1.00 14.07           N\n"
+    "ATOM    169  CA  PRO A  13      22.578  76.591  28.248  1.00 14.31           C\n"
+    "ATOM    170  C   PRO A  13      21.955  77.846  27.628  1.00 19.90           C\n"
+    "ATOM    171  O   PRO A  13      21.917  78.904  28.242  1.00 19.37           O\n"
+    "ATOM    175  N   ILE A  14      21.510  77.742  26.388  1.00 10.68           N\n"
+    "ATOM    176  CA  ILE A  14      20.834  78.887  25.774  1.00 16.74           C\n"
+    "ATOM    177  C   ILE A  14      19.397  78.981  26.276  1.00 17.98           C\n"
+    "ATOM    178  O   ILE A  14      18.923  80.051  26.733  1.00 11.21           O\n"
+    "ATOM    183  N   SER A  15      18.649  77.873  26.247  1.00 14.52           N\n"
+    "ATOM    184  CA  SER A  15      17.239  77.988  26.654  1.00 13.39           C\n"
+    "ATOM    185  C   SER A  15      17.089  78.363  28.102  1.00 19.62           C\n"
+    "ATOM    186  O   SER A  15      16.096  78.992  28.450  1.00 13.30           O\n"
+    "ATOM    189  N   SER A  16      18.081  78.033  28.932  1.00 14.98           N\n"
+    "ATOM    190  CA  SER A  16      17.968  78.363  30.356  1.00 15.64           C\n"
+    "ATOM    191  C   SER A  16      18.093  79.873  30.582  1.00 15.36           C\n"
+    "ATOM    192  O   SER A  16      17.760  80.385  31.663  1.00 15.60           O\n"
+    "ATOM    195  N   THR A  17      18.524  80.598  29.559  1.00 11.88           N\n"
+    "ATOM    196  CA  THR A  17      18.647  82.072  29.708  1.00 11.24           C\n"
+    "ATOM    197  C   THR A  17      17.473  82.815  29.083  1.00 20.21           C\n"
+    "ATOM    198  O   THR A  17      17.388  84.055  29.193  1.00 13.86           O\n"
+    "END\n"
+)
+
+
+def _shift_residue_backbone(pdb_text: str, offsets: dict[int, tuple[float, float, float]]) -> str:
+    out: list[str] = []
+    for raw in pdb_text.splitlines():
+        if not raw.startswith("ATOM"):
+            out.append(raw)
+            continue
+        resseq = int(raw[22:26].strip())
+        delta = offsets.get(resseq)
+        if delta is None:
+            out.append(raw)
+            continue
+        x = float(raw[30:38]) + float(delta[0])
+        y = float(raw[38:46]) + float(delta[1])
+        z = float(raw[46:54]) + float(delta[2])
+        out.append(f"{raw[:30]}{x:8.3f}{y:8.3f}{z:8.3f}{raw[54:]}")
+    return "\n".join(out) + "\n"
+
+
 class TestPipelineDryRun(unittest.TestCase):
+    def test_filter_backbones_by_target_rmsd_uses_dssp_mask_by_default(self) -> None:
+        shifted = _shift_residue_backbone(
+            _DSSP_REFERENCE_FRAGMENT,
+            {
+                8: (11.0, 0.0, 0.0),
+                9: (0.0, 11.0, 0.0),
+                10: (0.0, 0.0, 11.0),
+                17: (-11.0, 7.0, 0.0),
+            },
+        )
+        backbones = [{"id": "candidate_1", "pdb_text": shifted}]
+        accepted, summary = _filter_backbones_by_target_rmsd(
+            backbones,
+            reference_pdb_text=_DSSP_REFERENCE_FRAGMENT,
+            chains=["A"],
+            cutoff=2.0,
+            source="rfd3",
+        )
+        self.assertEqual(len(accepted or []), 1)
+        self.assertTrue(isinstance(summary, dict) and summary.get("mask_applied"))
+        self.assertEqual(summary.get("mask_mode"), "dssp_non_loop_reference")
+
+    def test_effective_rfd3_mode_prefers_local_diversify_for_direct_input_pdb(self) -> None:
+        req = PipelineRequest(
+            target_fasta="",
+            target_pdb="",
+            dry_run=True,
+        )
+        self.assertEqual(
+            _effective_rfd3_mode(req, input_files={"input.pdb": "/tmp/input.pdb"}),
+            "local_diversify",
+        )
+        req_with_contig = PipelineRequest(
+            target_fasta="",
+            target_pdb="",
+            dry_run=True,
+            rfd3_contig="A1-2",
+        )
+        self.assertEqual(
+            _effective_rfd3_mode(req_with_contig, input_files={"input.pdb": "/tmp/input.pdb"}),
+            "legacy_contig",
+        )
+        req_with_length = PipelineRequest(
+            target_fasta="",
+            target_pdb="",
+            dry_run=True,
+            rfd3_length="20-40",
+        )
+        self.assertEqual(
+            _effective_rfd3_mode(req_with_length, input_files={"input.pdb": "/tmp/input.pdb"}),
+            "enzyme",
+        )
+
     def test_backbone_source_summary_marks_selected_only_when_observed_exceeds_used(self) -> None:
         req = PipelineRequest(
             target_fasta=">q1\nACDEFGHIK\n",
@@ -225,6 +343,7 @@ class TestPipelineDryRun(unittest.TestCase):
                 relax_score_per_residue_cutoff=-3.0,
                 af2_plddt_cutoff=0.0,
                 af2_rmsd_cutoff=0.0,
+                rfd3_use=False,
             )
             res = runner.run(req)
 
@@ -535,7 +654,7 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertEqual(spec.get("ligand"), "LIG")
             self.assertEqual(spec.get("select_unfixed_sequence"), "A1-2")
 
-    def test_pipeline_rfd3_legacy_contig_does_not_inject_partial_t(self) -> None:
+    def test_pipeline_rfd3_legacy_contig_injects_request_default_partial_t(self) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
@@ -556,9 +675,10 @@ class TestPipelineDryRun(unittest.TestCase):
             out = Path(res.output_dir)
             inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
             spec = inputs.get("spec-1") or {}
-            self.assertNotIn("partial_t", spec)
+            self.assertEqual(spec.get("partial_t"), 10.0)
+            self.assertNotIn("partial_T", spec)
 
-    def test_pipeline_rfd3_binder_injects_default_fixed_atoms(self) -> None:
+    def test_pipeline_rfd3_binder_leaves_fixed_atoms_unset_by_default(self) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
@@ -583,10 +703,11 @@ class TestPipelineDryRun(unittest.TestCase):
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("input"), "input.pdb")
             self.assertEqual(spec.get("contig"), "A1-2")
-            self.assertEqual(spec.get("partial_T"), 5.0)
-            self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
+            self.assertEqual(spec.get("partial_t"), 5.0)
+            self.assertNotIn("partial_T", spec)
+            self.assertNotIn("select_fixed_atoms", spec)
 
-    def test_pipeline_rfd3_local_diversify_partial_t_default_injected(self) -> None:
+    def test_pipeline_rfd3_local_diversify_partial_t_request_default_injected(self) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
@@ -608,10 +729,45 @@ class TestPipelineDryRun(unittest.TestCase):
             inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("input"), "input.pdb")
-            self.assertEqual(spec.get("partial_T"), 5.0)
-            self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
+            self.assertEqual(spec.get("partial_t"), 10.0)
+            self.assertNotIn("partial_T", spec)
+            self.assertIn("select_fixed_atoms", spec)
+            self.assertEqual(spec["select_fixed_atoms"], {"A1": "ALL"})
+            self.assertEqual(spec["unindex"], "A1")
 
-    def test_pipeline_rfd3_input_only_spec_injects_default_fixed_atoms_without_partial_t(self) -> None:
+    def test_pipeline_rfd3_local_diversify_passthroughs_unindex_and_fixed_atoms(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  SER A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            req = PipelineRequest(
+                target_fasta="",
+                target_pdb="",
+                dry_run=True,
+                rfd3_mode="local_diversify",
+                rfd3_input_pdb=pdb,
+                rfd3_partial_t=5.0,
+                rfd3_unindex="A2",
+                rfd3_select_fixed_atoms={"A2": "ALL"},
+                num_seq_per_tier=1,
+                conservation_tiers=[0.3],
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
+            spec = inputs.get("spec-1") or {}
+            self.assertEqual(spec.get("input"), "input.pdb")
+            self.assertEqual(spec.get("partial_t"), 5.0)
+            self.assertEqual(spec.get("unindex"), "A2")
+            self.assertEqual(spec.get("select_fixed_atoms"), {"A2": "ALL"})
+            self.assertNotIn("contig", spec)
+            self.assertNotIn("partial_T", spec)
+
+    def test_pipeline_rfd3_input_only_spec_leaves_fixed_atoms_unset_with_request_default_partial_t(self) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
@@ -637,8 +793,9 @@ class TestPipelineDryRun(unittest.TestCase):
             inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("input"), "input.pdb")
-            self.assertNotIn("partial_t", spec)
-            self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
+            self.assertEqual(spec.get("partial_t"), 10.0)
+            self.assertNotIn("partial_T", spec)
+            self.assertNotIn("select_fixed_atoms", spec)
 
     def test_pipeline_rfd3_partial_t_respects_override(self) -> None:
         pdb = (
@@ -668,8 +825,39 @@ class TestPipelineDryRun(unittest.TestCase):
             out = Path(res.output_dir)
             inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
             spec = inputs.get("spec-1") or {}
-            self.assertEqual(spec.get("partial_T"), 5)
+            self.assertEqual(spec.get("partial_t"), 5)
+            self.assertNotIn("partial_T", spec)
             self.assertEqual(spec.get("select_fixed_atoms"), {"A2": "ALL"})
+
+    def test_pipeline_rfd3_normalizes_partial_T_to_partial_t(self) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            req = PipelineRequest(
+                target_fasta="",
+                target_pdb="",
+                dry_run=True,
+                rfd3_inputs={
+                    "spec-1": {
+                        "input": "input.pdb",
+                        "contig": "A1-2",
+                        "partial_T": 7,
+                    }
+                },
+                rfd3_input_pdb=pdb,
+                num_seq_per_tier=1,
+                conservation_tiers=[0.3],
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
+            spec = inputs.get("spec-1") or {}
+            self.assertEqual(spec.get("partial_t"), 7)
+            self.assertNotIn("partial_T", spec)
 
     def test_pipeline_rfd3_duplicate_backbone_summary_written(self) -> None:
         pdb = (
@@ -892,7 +1080,7 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertAlmostEqual(float(debug.get("target_rmsd_cutoff") or 0.0), 1.0)
             self.assertLess(float(ca_rmsd(target_pdb, selected_pdb, chains=["A"]) or 99.0), 1.0)
 
-    def test_pipeline_rfd3_target_rmsd_gate_fails_when_retry_budget_is_exhausted(self) -> None:
+    def test_pipeline_rfd3_target_rmsd_gate_falls_back_when_zero_backbones_pass(self) -> None:
         target_pdb = _bent_ca_backbone(0.0)
 
         class _MMseqsStub:
@@ -955,8 +1143,15 @@ class TestPipelineDryRun(unittest.TestCase):
                 conservation_tiers=[0.3],
                 num_seq_per_tier=1,
             )
-            with self.assertRaisesRegex(RuntimeError, "target RMSD gate"):
-                runner.run(req, run_id="rfd3_target_gate_fail")
+            result = runner.run(req, run_id="rfd3_target_gate_fail")
+            out = Path(result.output_dir)
+            selected_pdb = (out / "rfd3" / "selected.pdb").read_text(encoding="utf-8")
+            selected_meta = json.loads((out / "rfd3" / "selected.json").read_text(encoding="utf-8"))
+            recovery = json.loads((out / "rfd3" / "recovery.json").read_text(encoding="utf-8"))
+
+            self.assertEqual(selected_meta.get("source"), "fallback")
+            self.assertEqual(selected_pdb, target_pdb)
+            self.assertIn("no acceptable backbones", str(recovery.get("error") or "").lower())
 
     def test_pipeline_rfd3_uses_spec_chain_for_gate_and_input_preprocessing(self) -> None:
         multichain_pdb = (
@@ -1943,6 +2138,7 @@ class TestPipelineDryRun(unittest.TestCase):
                 target_pdb="",
                 dry_run=False,
                 conservation_tiers=[0.3],
+                rfd3_use=False,
             )
             run_id = "sequence_only_requires_fixed_positions_extra"
             with self.assertRaises(Exception) as ctx:
@@ -2295,6 +2491,7 @@ class TestPipelineDryRun(unittest.TestCase):
             soluprot_cutoff=0.0,
             af2_plddt_cutoff=0.0,
             af2_rmsd_cutoff=0.0,
+            rfd3_use=False,
         )
 
         with _tmpdir() as tmp:

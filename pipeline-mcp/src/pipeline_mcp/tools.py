@@ -18,6 +18,7 @@ from typing import Callable
 
 from .bio.fasta import FastaRecord
 from .bio.fasta import parse_fasta
+from .bio.ligand_text import normalize_diffdock_ligand_inputs
 from .bio.sdf import append_ligand_pdb
 from .bio.sdf import sdf_to_pdb
 from .models import PipelineRequest
@@ -161,6 +162,43 @@ def _as_str_or_list(value: object | None) -> str | list[str] | None:
     if isinstance(value, list):
         return [str(v) for v in value if v is not None]
     return str(value)
+
+
+def _as_rfd3_select_fixed_atoms(value: object | None) -> str | list[str] | dict[str, str] | None:
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        out: dict[str, str] = {}
+        for key, item in value.items():
+            if item is None:
+                continue
+            out[str(key)] = str(item)
+        return out or None
+    if isinstance(value, list):
+        return [str(item) for item in value if item is not None]
+    text = str(value).strip()
+    if not text:
+        return None
+    if text.startswith("{"):
+        try:
+            parsed = json.loads(text)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, dict):
+            out: dict[str, str] = {}
+            for key, item in parsed.items():
+                if item is None:
+                    continue
+                out[str(key)] = str(item)
+            return out or None
+    if text.startswith("["):
+        try:
+            parsed = json.loads(text)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, list):
+            return [str(item) for item in parsed if item is not None]
+    return text
 
 
 def _as_list_of_str(value: object | None) -> list[str] | None:
@@ -601,6 +639,9 @@ def _run_diffdock(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
         raise ValueError("protein_pdb is required")
     if not (ligand_smiles.strip() or ligand_sdf.strip()):
         raise ValueError("diffdock_ligand_smiles or diffdock_ligand_sdf is required")
+    ligand_smiles, ligand_sdf = normalize_diffdock_ligand_inputs(ligand_smiles, ligand_sdf)
+    ligand_smiles_text = ligand_smiles or ""
+    ligand_sdf_text = ligand_sdf or ""
 
     normalized_run_id = normalize_run_id(str(run_id)) if run_id is not None else new_run_id("diffdock")
     paths = init_run(runner.output_root, normalized_run_id)
@@ -608,8 +649,8 @@ def _run_diffdock(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
 
     request_payload = {
         "protein_pdb": protein_pdb,
-        "diffdock_ligand_smiles": ligand_smiles or None,
-        "diffdock_ligand_sdf": ligand_sdf or None,
+        "diffdock_ligand_smiles": ligand_smiles_text or None,
+        "diffdock_ligand_sdf": ligand_sdf_text or None,
         "complex_name": complex_name,
         "diffdock_config": diffdock_config,
         "diffdock_extra_args": diffdock_extra_args,
@@ -620,10 +661,10 @@ def _run_diffdock(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
 
     diffdock_dir = ensure_dir(paths.root / "diffdock")
     _write_text(diffdock_dir / "protein.pdb", protein_pdb)
-    if ligand_sdf.strip():
-        _write_text(diffdock_dir / "ligand.sdf", ligand_sdf)
+    if ligand_sdf_text.strip():
+        _write_text(diffdock_dir / "ligand.sdf", ligand_sdf_text)
     else:
-        _write_text(diffdock_dir / "ligand.smiles", ligand_smiles)
+        _write_text(diffdock_dir / "ligand.smiles", ligand_smiles_text)
 
     def _on_job_id(job_id: str) -> None:
         write_json(diffdock_dir / "runpod_job.json", {"job_id": job_id})
@@ -632,14 +673,14 @@ def _run_diffdock(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
     try:
         if dry_run:
             output_payload = {"dry_run": True}
-            sdf_text = ligand_sdf if ligand_sdf.strip() else ""
+            sdf_text = ligand_sdf_text if ligand_sdf_text.strip() else ""
         else:
             if runner.diffdock is None:
                 raise RuntimeError("DiffDock endpoint is not configured (set DIFFDOCK_ENDPOINT_ID)")
             diffdock_out = runner.diffdock.dock(
                 protein_pdb=protein_pdb,
-                ligand_smiles=ligand_smiles or None,
-                ligand_sdf=ligand_sdf or None,
+                ligand_smiles=ligand_smiles_text or None,
+                ligand_sdf=ligand_sdf_text or None,
                 complex_name=complex_name,
                 config=diffdock_config,
                 extra_args=diffdock_extra_args,
@@ -5174,7 +5215,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     )
     rfd3_unindex = _as_str_or_list(args.get("rfd3_unindex"))
     rfd3_length = _as_str_or_list(args.get("rfd3_length"))
-    rfd3_select_fixed_atoms = _as_str_or_list(args.get("rfd3_select_fixed_atoms"))
+    rfd3_select_fixed_atoms = _as_rfd3_select_fixed_atoms(args.get("rfd3_select_fixed_atoms"))
     rfd3_ligand = _as_str_or_list(args.get("rfd3_ligand"))
     rfd3_select_unfixed_sequence = _as_text(args.get("rfd3_select_unfixed_sequence")).strip() or None
     rfd3_cli_args = _as_text(args.get("rfd3_cli_args")).strip() or None
@@ -5199,9 +5240,9 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         )
     )
     rfd3_target_rmsd_cutoff = (
-        _as_float(rfd3_target_rmsd_cutoff_raw, 2.0)
+        _as_float(rfd3_target_rmsd_cutoff_raw, 0.0)
         if rfd3_target_rmsd_cutoff_specified
-        else 2.0
+        else None
     )
     rfd3_max_attempted_designs = (
         _as_int(args.get("rfd3_max_attempted_designs"), 0)
@@ -5235,10 +5276,11 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         )
     )
     bioemu_target_rmsd_cutoff = (
-        _as_float(bioemu_target_rmsd_cutoff_raw, 2.0)
+        _as_float(bioemu_target_rmsd_cutoff_raw, 0.0)
         if bioemu_target_rmsd_cutoff_specified
-        else 2.0
+        else None
     )
+    backbone_filter_use_dssp = _as_bool(args.get("backbone_filter_use_dssp"), True)
     bioemu_max_attempted_structures = (
         _as_int(args.get("bioemu_max_attempted_structures"), 0)
         if str(args.get("bioemu_max_attempted_structures") or "").strip()
@@ -5356,6 +5398,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
             if rfd3_max_attempted_designs is not None
             else None
         ),
+        backbone_filter_use_dssp=backbone_filter_use_dssp,
         bioemu_use=bioemu_use,
         bioemu_sequence=bioemu_sequence,
         bioemu_num_samples=max(1, int(bioemu_num_samples)),
@@ -5486,7 +5529,11 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "rfd3_unindex": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
             "rfd3_length": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
             "rfd3_select_fixed_atoms": {
-                "anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "array", "items": {"type": "string"}},
+                    {"type": "object", "additionalProperties": {"type": "string"}},
+                ]
             },
             "rfd3_ligand": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
             "rfd3_select_unfixed_sequence": {"type": "string"},
@@ -5500,6 +5547,7 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "rfd3_fail_on_duplicate_backbones": {"type": "boolean"},
             "rfd3_target_rmsd_cutoff": {"type": "number"},
             "rfd3_max_attempted_designs": {"type": "integer"},
+            "backbone_filter_use_dssp": {"type": "boolean"},
             "bioemu_use": {"type": "boolean"},
             "bioemu_sequence": {"type": "string"},
             "bioemu_num_samples": {"type": "integer"},

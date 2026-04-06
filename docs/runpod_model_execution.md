@@ -173,7 +173,8 @@ RFDiffusion3 (RFD3) RunPod Serverless endpoint 실행 방식.
 
 ### 5.1 입력(payload)
 
-- `inputs` (dict) 또는 `inputs_text` (JSON/YAML string) — 둘 중 하나 필수
+- `inputs` (dict) 또는 `inputs_text` (JSON/YAML string) — preferred contract
+- `partial_diffusion` (dict) — legacy compatibility contract, handler가 `inputs={"partial_diffusion": ...}`로 번역
 - `input_files` (dict filename->content)
 - `cli_args` (str)
 - `env` (dict)
@@ -188,7 +189,9 @@ rfd3 design inputs=<inputs.json|inputs.yaml> out_dir=<work_dir>/out [cli_args...
 
 ### 5.3 출력
 
-- `designs`: `{id, json_name, cif_gz_name, score?}` list
-- `selected`: `{id, json, json_name, cif_gz_name, cif_gz_base64, pdb}`
+- `designs`: `{id, json_name, cif_gz_name, score?, pdb?, cif_name?, cif_text?}` list
+- `selected`: `{id, json, json_name, cif_gz_name, cif_name?, cif_text?, cif_gz_base64, pdb}`
+- `runtime`: `{input_contract, translation_applied, translation_source?, inputs_file, rfd3_bin, cli_args, checkpoint_dirs, checkpoints_available, auto_install_requested, package_versions}`
 
 RFD3 결과 `.cif.gz`는 `gemmi`로 PDB로 변환되어 `selected.pdb`로 전달됩니다.
+재현성을 위해 `rfd3-runpod/requirements.txt`는 pinned version을 사용하고, 실제 실행 버전은 `runtime.package_versions`에 남깁니다.

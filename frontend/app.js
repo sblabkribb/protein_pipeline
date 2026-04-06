@@ -12,6 +12,7 @@ import {
   buildWorkflowStudioEffectiveAnswers,
   buildSetupDraftFromRequest,
   buildRunArguments,
+  diffdockLigandSubmissionFields,
   buildUserPrefix,
   withProjectRoundContext,
   createWorkflowSessionId,
@@ -2330,9 +2331,9 @@ const I18N = {
     "artifacts.preview.compare.meta.chains": "Chains",
     "artifacts.preview.compare.meta.fixedCount": "Fixed Count",
     "artifacts.preview.compare.meta.wtDiff": "WT Seq Diff",
-    "artifacts.preview.compare.meta.inputStructRmsd": "Input RMSD",
+    "artifacts.preview.compare.meta.inputReferenceRmsd": "Input RMSD",
+    "artifacts.preview.compare.meta.workingBackboneRmsd": "Backbone RMSD",
     "artifacts.preview.compare.meta.wtStructRmsd": "WT CF RMSD",
-    "artifacts.preview.compare.meta.workingStructRmsd": "Working RMSD",
     "artifacts.preview.compare.meta.commonCa": "Common CA",
     "artifacts.preview.compare.meta.predScope": "{af2Provider} Scope",
     "artifacts.preview.compare.meta.predScopeExact": "Exact candidate",
@@ -2580,10 +2581,16 @@ const I18N = {
     "question.bioemuUse.help": "Run the BioEmu backbone sampling stage.",
     "question.rfd3Use.label": "Enable RFD3",
     "question.rfd3Use.help": "Run the RFD3 backbone generation stage.",
+    "question.backboneFilterUseDssp.label": "Backbone gate ignores loops",
+    "question.backboneFilterUseDssp.help":
+      "Use DSSP to exclude loop residues when calculating target-backbone RMSD for RFD3 and BioEmu filtering. Enabled by default.",
     "question.bioemuNumSamples.label": "BioEmu Generate Count",
     "question.bioemuNumSamples.help": "Number of BioEmu samples to generate before filtering and return-count capping.",
     "question.bioemuMaxReturn.label": "BioEmu Return Count",
     "question.bioemuMaxReturn.help": "Maximum number of BioEmu structures to keep.",
+    "question.bioemuTargetRmsdCutoff.label": "BioEmu Target RMSD Cutoff",
+    "question.bioemuTargetRmsdCutoff.help":
+      "Maximum allowed target-backbone RMSD (angstrom) for BioEmu samples after optional DSSP non-loop masking.",
     "question.numSeqPerTier.label": "ProteinMPNN per Backbone",
     "question.numSeqPerTier.help": "Number of ProteinMPNN sequences to generate for each backbone within each sequence-conservation level.",
     "question.selectedTiers.label": "Sequence Conservation",
@@ -2595,6 +2602,8 @@ const I18N = {
     "question.af2PlddtCutoff.help": "Minimum pLDDT threshold for {af2Provider} pass filtering (default: 85).",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD Cutoff",
     "question.af2RmsdCutoff.help": "Maximum RMSD threshold (angstrom) for {af2Provider} pass filtering (default: 2.0).",
+    "question.compareRmsdScope.label": "Compare RMSD",
+    "question.compareRmsdScope.help": "Choose which reference RMSDs appear in Compare metadata. This affects the UI only and is not sent to the backend.",
     "question.relaxEnabled.label": "Rosetta Relax",
     "question.relaxEnabled.help":
       "Run Rosetta FastRelax on AF2-selected structures to collect an energy-based support metric and optionally apply a cutoff.",
@@ -2607,6 +2616,9 @@ const I18N = {
     "question.af2Provider.help": "Choose structure prediction provider.",
     "question.rfd3MaxReturn.label": "RFD3 Return Count",
     "question.rfd3MaxReturn.help": "Maximum number of RFD3 backbone designs to keep.",
+    "question.rfd3TargetRmsdCutoff.label": "RFD3 Target RMSD Cutoff",
+    "question.rfd3TargetRmsdCutoff.help":
+      "Maximum allowed target-backbone RMSD (angstrom) for RFD3 designs after optional DSSP non-loop masking.",
     "question.confirmRun.label": "Confirm Run",
     "question.confirmRun.help": "Review the parsed settings and confirm to enable execution.",
     "question.fixedPositionsExtra.label": "Fixed Positions (Extra)",
@@ -2704,6 +2716,10 @@ const I18N = {
     "choice.novelty.off": "Disable WT Diff",
     "choice.af2Provider.colabfold": "ColabFold (default)",
     "choice.af2Provider.af2": "AlphaFold2",
+    "choice.compareRmsdScope.off": "Off",
+    "choice.compareRmsdScope.input": "Input only",
+    "choice.compareRmsdScope.backbone": "Backbone only",
+    "choice.compareRmsdScope.both": "Input + Backbone",
     "choice.rfd3Mode.localDiversify": "Local Diversify",
     "choice.rfd3Mode.legacyContig": "Legacy Contig",
     "choice.rfd3Mode.binder": "Binder",
@@ -3470,9 +3486,9 @@ const I18N = {
     "artifacts.preview.compare.meta.chains": "체인",
     "artifacts.preview.compare.meta.fixedCount": "고정 잔기 수",
     "artifacts.preview.compare.meta.wtDiff": "WT 서열 차이",
-    "artifacts.preview.compare.meta.inputStructRmsd": "입력 구조 RMSD",
+    "artifacts.preview.compare.meta.inputReferenceRmsd": "입력 RMSD",
+    "artifacts.preview.compare.meta.workingBackboneRmsd": "백본 RMSD",
     "artifacts.preview.compare.meta.wtStructRmsd": "WT CF RMSD",
-    "artifacts.preview.compare.meta.workingStructRmsd": "작업 백본 RMSD",
     "artifacts.preview.compare.meta.commonCa": "공통 CA",
     "artifacts.preview.compare.meta.predScope": "{af2Provider} 범위",
     "artifacts.preview.compare.meta.predScopeExact": "정확 후보",
@@ -3720,11 +3736,17 @@ const I18N = {
     "question.bioemuUse.help": "BioEmu backbone 샘플링 단계를 실행합니다.",
     "question.rfd3Use.label": "RFD3 사용",
     "question.rfd3Use.help": "RFD3 backbone 생성 단계를 실행합니다.",
+    "question.backboneFilterUseDssp.label": "Backbone gate에서 loop 제외",
+    "question.backboneFilterUseDssp.help":
+      "RFD3/BioEmu target-backbone RMSD 필터 계산 시 DSSP로 loop 잔기를 제외합니다. 기본값은 켜짐입니다.",
     "question.bioemuNumSamples.label": "BioEmu 생성 개수",
     "question.bioemuNumSamples.help":
       "필터링과 반환 개수 제한 전에 먼저 생성할 BioEmu 샘플 수입니다.",
     "question.bioemuMaxReturn.label": "BioEmu 반환 개수",
     "question.bioemuMaxReturn.help": "보존할 BioEmu 구조 최대 개수입니다.",
+    "question.bioemuTargetRmsdCutoff.label": "BioEmu target RMSD 컷오프",
+    "question.bioemuTargetRmsdCutoff.help":
+      "선택적 DSSP non-loop masking 이후 BioEmu 샘플에 허용할 최대 target-backbone RMSD(Å)입니다.",
     "question.numSeqPerTier.label": "백본당 ProteinMPNN 생성 개수",
     "question.numSeqPerTier.help": "각 서열 보존율 구간에서 각 RFD3/BioEmu 백본마다 생성할 ProteinMPNN 서열 개수입니다.",
     "question.selectedTiers.label": "서열 보존율",
@@ -3736,6 +3758,8 @@ const I18N = {
     "question.af2PlddtCutoff.help": "{af2Provider} 통과 필터링에 사용할 최소 pLDDT 임계값입니다. (기본값: 85)",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD 컷오프",
     "question.af2RmsdCutoff.help": "{af2Provider} 통과 필터링에 사용할 최대 RMSD 임계값(Å)입니다. (기본값: 2.0)",
+    "question.compareRmsdScope.label": "비교 RMSD",
+    "question.compareRmsdScope.help": "Compare 메타데이터에 어떤 기준 RMSD를 표시할지 선택합니다. UI에만 적용되며 backend로 전송되지 않습니다.",
     "question.relaxEnabled.label": "Rosetta Relax",
     "question.relaxEnabled.help":
       "AF2로 선별된 구조에 Rosetta FastRelax를 실행해 보조 에너지 지표를 수집하고 필요하면 컷오프를 적용합니다.",
@@ -3748,6 +3772,9 @@ const I18N = {
     "question.af2Provider.help": "구조 예측 provider를 선택하세요.",
     "question.rfd3MaxReturn.label": "RFD3 반환 개수",
     "question.rfd3MaxReturn.help": "보존할 RFD3 백본 디자인 최대 개수입니다.",
+    "question.rfd3TargetRmsdCutoff.label": "RFD3 target RMSD 컷오프",
+    "question.rfd3TargetRmsdCutoff.help":
+      "선택적 DSSP non-loop masking 이후 RFD3 디자인에 허용할 최대 target-backbone RMSD(Å)입니다.",
     "question.confirmRun.label": "실행 확인",
     "question.confirmRun.help": "해석된 설정을 확인한 뒤 실행을 승인하세요.",
     "question.fixedPositionsExtra.label": "고정 위치 추가",
@@ -3845,6 +3872,10 @@ const I18N = {
     "choice.novelty.off": "WT Diff 사용 안 함",
     "choice.af2Provider.colabfold": "ColabFold (기본)",
     "choice.af2Provider.af2": "AlphaFold2",
+    "choice.compareRmsdScope.off": "끄기",
+    "choice.compareRmsdScope.input": "입력만",
+    "choice.compareRmsdScope.backbone": "백본만",
+    "choice.compareRmsdScope.both": "입력 + 백본",
     "choice.rfd3Mode.localDiversify": "Local Diversify",
     "choice.rfd3Mode.legacyContig": "Legacy Contig",
     "choice.rfd3Mode.binder": "Binder",
@@ -7627,6 +7658,11 @@ const QUESTION_PRESETS = {
     questionKey: "question.rfd3Use.help",
     default: true,
   },
+  backbone_filter_use_dssp: {
+    labelKey: "question.backboneFilterUseDssp.label",
+    questionKey: "question.backboneFilterUseDssp.help",
+    default: true,
+  },
   bioemu_num_samples: {
     labelKey: "question.bioemuNumSamples.label",
     questionKey: "question.bioemuNumSamples.help",
@@ -7636,6 +7672,10 @@ const QUESTION_PRESETS = {
     labelKey: "question.bioemuMaxReturn.label",
     questionKey: "question.bioemuMaxReturn.help",
     default: 10,
+  },
+  bioemu_target_rmsd_cutoff: {
+    labelKey: "question.bioemuTargetRmsdCutoff.label",
+    questionKey: "question.bioemuTargetRmsdCutoff.help",
   },
   num_seq_per_tier: {
     labelKey: "question.numSeqPerTier.label",
@@ -7662,6 +7702,11 @@ const QUESTION_PRESETS = {
     questionKey: "question.af2RmsdCutoff.help",
     default: 2.0,
   },
+  compare_rmsd_scope: {
+    labelKey: "question.compareRmsdScope.label",
+    questionKey: "question.compareRmsdScope.help",
+    default: "off",
+  },
   relax_enabled: {
     labelKey: "question.relaxEnabled.label",
     questionKey: "question.relaxEnabled.help",
@@ -7685,6 +7730,10 @@ const QUESTION_PRESETS = {
     labelKey: "question.rfd3MaxReturn.label",
     questionKey: "question.rfd3MaxReturn.help",
     default: 10,
+  },
+  rfd3_target_rmsd_cutoff: {
+    labelKey: "question.rfd3TargetRmsdCutoff.label",
+    questionKey: "question.rfd3TargetRmsdCutoff.help",
   },
   rfd3_input_pdb: {
     labelKey: "question.rfd3InputPdb.label",
@@ -7732,7 +7781,7 @@ const QUESTION_PRESETS = {
   rfd3_partial_t: {
     labelKey: "question.rfd3PartialT.label",
     questionKey: "question.rfd3PartialT.help",
-    default: 5.0,
+    default: 10.0,
   },
   rfd3_inputs_text: {
     labelKey: "question.rfd3AdvancedInputs.label",
@@ -7784,6 +7833,13 @@ const QUESTION_PRESETS = {
   },
 };
 
+function normalizeCompareRmsdScope(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  return ["off", "input", "backbone", "both"].includes(normalized) ? normalized : "off";
+}
+
 const ANSWER_BOOL_KEYS = new Set([
   "dry_run",
   "force",
@@ -7795,6 +7851,7 @@ const ANSWER_BOOL_KEYS = new Set([
   "pdb_strip_nonpositive_resseq",
   "pdb_renumber_resseq_from_1",
   "rfd3_use",
+  "backbone_filter_use_dssp",
   "mmseqs_use_gpu",
   "rfd3_use_ensemble",
   "rfd3_is_non_loopy",
@@ -7829,6 +7886,8 @@ const ANSWER_FLOAT_KEYS = new Set([
   "relax_score_per_residue_cutoff",
   "ligand_mask_distance",
   "rfd3_partial_t",
+  "rfd3_target_rmsd_cutoff",
+  "bioemu_target_rmsd_cutoff",
   "msa_min_coverage",
   "msa_min_identity",
   "query_pdb_min_identity",
@@ -9715,6 +9774,11 @@ function buildManualPlan(mode) {
         default: true,
       },
       {
+        id: "backbone_filter_use_dssp",
+        required: false,
+        default: true,
+      },
+      {
         id: "bioemu_num_samples",
         labelKey: "question.bioemuNumSamples.label",
         questionKey: "question.bioemuNumSamples.help",
@@ -9727,6 +9791,10 @@ function buildManualPlan(mode) {
         questionKey: "question.bioemuMaxReturn.help",
         required: false,
         default: 10,
+      },
+      {
+        id: "bioemu_target_rmsd_cutoff",
+        required: false,
       },
       {
         id: "bioemu_filter_samples",
@@ -9752,9 +9820,13 @@ function buildManualPlan(mode) {
         default: 10,
       },
       {
+        id: "rfd3_target_rmsd_cutoff",
+        required: false,
+      },
+      {
         id: "rfd3_partial_t",
         required: false,
-        default: 5.0,
+        default: 10.0,
       },
       {
         id: "af2_max_candidates_per_tier",
@@ -9950,7 +10022,16 @@ function buildManualPlan(mode) {
       {
         id: "rfd3_partial_t",
         required: false,
-        default: 5.0,
+        default: 10.0,
+      },
+      {
+        id: "backbone_filter_use_dssp",
+        required: false,
+        default: true,
+      },
+      {
+        id: "rfd3_target_rmsd_cutoff",
+        required: false,
       },
       {
         id: "rfd3_inputs_text",
@@ -9989,6 +10070,11 @@ function buildManualPlan(mode) {
         default: true,
       },
       {
+        id: "backbone_filter_use_dssp",
+        required: false,
+        default: true,
+      },
+      {
         id: "bioemu_num_samples",
         labelKey: "question.bioemuNumSamples.label",
         questionKey: "question.bioemuNumSamples.help",
@@ -10001,6 +10087,10 @@ function buildManualPlan(mode) {
         questionKey: "question.bioemuMaxReturn.help",
         required: false,
         default: 10,
+      },
+      {
+        id: "bioemu_target_rmsd_cutoff",
+        required: false,
       },
       {
         id: "bioemu_filter_samples",
@@ -10061,6 +10151,11 @@ function buildManualPlan(mode) {
         default: true,
       },
       {
+        id: "backbone_filter_use_dssp",
+        required: false,
+        default: true,
+      },
+      {
         id: "bioemu_num_samples",
         labelKey: "question.bioemuNumSamples.label",
         questionKey: "question.bioemuNumSamples.help",
@@ -10073,6 +10168,10 @@ function buildManualPlan(mode) {
         questionKey: "question.bioemuMaxReturn.help",
         required: false,
         default: 10,
+      },
+      {
+        id: "bioemu_target_rmsd_cutoff",
+        required: false,
       },
       {
         id: "bioemu_filter_samples",
@@ -11605,6 +11704,16 @@ function rfd3ModeUsesEnzymeFields(mode) {
   return normalizeRfd3Mode(mode) === "enzyme";
 }
 
+function rfd3ModeUsesUnindexFields(mode) {
+  const normalized = normalizeRfd3Mode(mode);
+  return normalized === "enzyme" || normalized === "local_diversify";
+}
+
+function rfd3ModeUsesFixedAtomFields(mode) {
+  const normalized = normalizeRfd3Mode(mode);
+  return normalized === "enzyme" || normalized === "local_diversify";
+}
+
 function rfd3ModeUsesPartialT(mode) {
   return ["local_diversify", "legacy_contig", "binder", "enzyme"].includes(normalizeRfd3Mode(mode));
 }
@@ -11659,7 +11768,13 @@ function questionVisibleForCurrentState(question, normalizedQuestions = []) {
   if (id === "rfd3_input_pdb") {
     return rfd3Enabled && shouldShowSetupRfd3InputField(answers);
   }
+  if (id === "backbone_filter_use_dssp") {
+    return rfd3Enabled || bioemuRelevant;
+  }
   if (id === "rfd3_max_return_designs") {
+    return rfd3Enabled;
+  }
+  if (id === "rfd3_target_rmsd_cutoff") {
     return rfd3Enabled;
   }
   if (id === "rfd3_contig") {
@@ -11681,7 +11796,8 @@ function questionVisibleForCurrentState(question, normalizedQuestions = []) {
     id === "bioemu_filter_samples" ||
     id === "bioemu_steering_config_text" ||
     id === "bioemu_num_samples" ||
-    id === "bioemu_max_return_structures"
+    id === "bioemu_max_return_structures" ||
+    id === "bioemu_target_rmsd_cutoff"
   ) {
     return bioemuRelevant;
   }
@@ -13293,9 +13409,12 @@ function renderQuestions(questions) {
 
   const normalizedQuestions = (questions || [])
     .map((q) => normalizeQuestion(q))
-    .filter(Boolean)
-    .filter((q) => questionVisibleForCurrentState(q));
-  const visibleQuestions = renderSetupWizard(normalizedQuestions);
+    .filter(Boolean);
+  if (!normalizedQuestions.some((q) => q.id === "compare_rmsd_scope")) {
+    normalizedQuestions.push(normalizeQuestion({ id: "compare_rmsd_scope" }));
+  }
+  const filteredVisibleQuestions = normalizedQuestions.filter((q) => questionVisibleForCurrentState(q));
+  const visibleQuestions = renderSetupWizard(filteredVisibleQuestions);
   if (state.runMode === "pipeline") {
     if (!normalizePipelineStage(state.answers.start_from, "")) {
       state.answers.start_from = "msa";
@@ -13316,6 +13435,7 @@ function renderQuestions(questions) {
     "start_from",
     "stop_after",
     "rfd3_use",
+    "backbone_filter_use_dssp",
     "selected_tiers",
     "design_chains",
     "rfd3_contig",
@@ -13350,6 +13470,7 @@ function renderQuestions(questions) {
   const compactChoiceQuestionIds = new Set([
     "novelty_enabled",
     "rfd3_use",
+    "backbone_filter_use_dssp",
     "bioemu_use",
     "bioemu_filter_samples",
     "relax_enabled",
@@ -14287,6 +14408,7 @@ function renderQuestions(questions) {
   const bioemuCountQuestionIds = new Set(["bioemu_max_return_structures", "bioemu_num_samples"]);
   const rfd3CountQuestionIds = new Set(["rfd3_max_return_designs"]);
   const compactParameterQuestionIds = new Set([
+    "compare_rmsd_scope",
     "bioemu_max_return_structures",
     "bioemu_num_samples",
     "rfd3_max_return_designs",
@@ -14297,6 +14419,7 @@ function renderQuestions(questions) {
     "relax_score_per_residue_cutoff",
   ]);
   const compactParameterPriority = {
+    compare_rmsd_scope: 5,
     bioemu_max_return_structures: 10,
     bioemu_num_samples: 20,
     rfd3_max_return_designs: 30,
@@ -14361,26 +14484,45 @@ function renderQuestions(questions) {
       fieldHelp.className = "parameter-help";
       fieldHelp.textContent = q.questionKey ? t(q.questionKey) : q.question || "";
 
-      const input = document.createElement("input");
-      input.type = ANSWER_INT_KEYS.has(q.id) || ANSWER_FLOAT_KEYS.has(q.id) ? "number" : "text";
-      if (ANSWER_FLOAT_KEYS.has(q.id)) input.step = "0.01";
-      if (ANSWER_INT_KEYS.has(q.id)) input.step = "1";
-      if (q.id === "af2_plddt_cutoff") {
-        input.min = "0";
-        input.max = "100";
-        input.step = "0.1";
-      } else if (q.id === "af2_rmsd_cutoff") {
-        input.min = "0.01";
-        input.step = "0.01";
-      }
-      if (q.placeholder) {
-        input.placeholder = q.placeholder;
-      }
-      input.disabled = inactive;
       if (state.answers[q.id] === undefined && q.default !== undefined) {
         state.answers[q.id] = q.default;
       }
-      input.value = formatAnswerValue(state.answers[q.id]);
+
+      let input = null;
+      if (q.id === "compare_rmsd_scope") {
+        state.answers[q.id] = normalizeCompareRmsdScope(state.answers[q.id] || q.default);
+        input = document.createElement("select");
+        [
+          { labelKey: "choice.compareRmsdScope.off", value: "off" },
+          { labelKey: "choice.compareRmsdScope.input", value: "input" },
+          { labelKey: "choice.compareRmsdScope.backbone", value: "backbone" },
+          { labelKey: "choice.compareRmsdScope.both", value: "both" },
+        ].forEach((optionDef) => {
+          const option = document.createElement("option");
+          option.value = optionDef.value;
+          option.textContent = t(optionDef.labelKey);
+          if (state.answers[q.id] === optionDef.value) option.selected = true;
+          input.appendChild(option);
+        });
+      } else {
+        input = document.createElement("input");
+        input.type = ANSWER_INT_KEYS.has(q.id) || ANSWER_FLOAT_KEYS.has(q.id) ? "number" : "text";
+        if (ANSWER_FLOAT_KEYS.has(q.id)) input.step = "0.01";
+        if (ANSWER_INT_KEYS.has(q.id)) input.step = "1";
+        if (q.id === "af2_plddt_cutoff") {
+          input.min = "0";
+          input.max = "100";
+          input.step = "0.1";
+        } else if (q.id === "af2_rmsd_cutoff") {
+          input.min = "0.01";
+          input.step = "0.01";
+        }
+        if (q.placeholder) {
+          input.placeholder = q.placeholder;
+        }
+        input.value = formatAnswerValue(state.answers[q.id]);
+      }
+      input.disabled = inactive;
 
       const errorEl = document.createElement("span");
       errorEl.className = "parameter-error";
@@ -14392,6 +14534,13 @@ function renderQuestions(questions) {
       }
 
       input.addEventListener("input", () => {
+        if (q.id === "compare_rmsd_scope") {
+          state.answers[q.id] = normalizeCompareRmsdScope(input.value || q.default);
+          state.answerMeta[q.id] = { ...state.answerMeta[q.id], error: "", raw: input.value };
+          errorEl.textContent = "";
+          updateRunEligibility(normalizedQuestions);
+          return;
+        }
         const parsed = parseAnswerValue(q.id, input.value);
         if (parsed.error) {
           state.answers[q.id] = "";
@@ -15083,6 +15232,8 @@ function buildAnswerPayload(mode = state.runMode) {
     effectiveRfd3Input,
     rfd3Mode: normalizedRfd3Mode,
     inferredContig,
+    inferredUnindex,
+    inferredSelectFixedAtoms,
   } = resolveRfd3Defaults({
     mode,
     answers,
@@ -15121,6 +15272,12 @@ function buildAnswerPayload(mode = state.runMode) {
   if (inferredContig) {
     answers.rfd3_contig = inferredContig;
   }
+  if (inferredUnindex) {
+    answers.rfd3_unindex = inferredUnindex;
+  }
+  if (inferredSelectFixedAtoms) {
+    answers.rfd3_select_fixed_atoms = inferredSelectFixedAtoms;
+  }
   if (normalizedRfd3Mode && !rfd3ModeUsesContig(normalizedRfd3Mode)) {
     delete answers.rfd3_contig;
   }
@@ -15129,9 +15286,13 @@ function buildAnswerPayload(mode = state.runMode) {
     delete answers.rfd3_infer_ori_strategy;
     delete answers.rfd3_is_non_loopy;
   }
-  if (normalizedRfd3Mode && !rfd3ModeUsesEnzymeFields(normalizedRfd3Mode)) {
+  if (normalizedRfd3Mode && !rfd3ModeUsesUnindexFields(normalizedRfd3Mode)) {
     delete answers.rfd3_unindex;
+  }
+  if (normalizedRfd3Mode && !rfd3ModeUsesEnzymeFields(normalizedRfd3Mode)) {
     delete answers.rfd3_length;
+  }
+  if (normalizedRfd3Mode && !rfd3ModeUsesFixedAtomFields(normalizedRfd3Mode)) {
     delete answers.rfd3_select_fixed_atoms;
   }
   if (normalizedRfd3Mode && !rfd3ModeUsesPartialT(normalizedRfd3Mode)) {
@@ -15148,11 +15309,15 @@ function buildAnswerPayload(mode = state.runMode) {
   }
   if (answers.diffdock_ligand) {
     const name = (state.answerMeta.diffdock_ligand || {}).fileName || "";
-    if (name.toLowerCase().endsWith(".sdf")) {
-      answers.diffdock_ligand_sdf = answers.diffdock_ligand;
-    } else {
-      answers.diffdock_ligand_smiles = answers.diffdock_ligand;
-    }
+    delete answers.diffdock_ligand_sdf;
+    delete answers.diffdock_ligand_smiles;
+    Object.assign(
+      answers,
+      diffdockLigandSubmissionFields({
+        ligandText: answers.diffdock_ligand,
+        fileName: name,
+      })
+    );
     delete answers.diffdock_ligand;
   }
   return answers;
@@ -18687,6 +18852,10 @@ function buildCompareProvenanceText(meta, { provider = "", inputPdbText = "" } =
   return t("artifacts.preview.compare.provenance.other");
 }
 
+function currentCompareRmsdScope() {
+  return normalizeCompareRmsdScope(state.answers?.compare_rmsd_scope || "off");
+}
+
 async function buildComparePredictionMeta(runId, meta, rawPath, af2Summary = null) {
   const currentProvider = currentRunAf2Provider(runId);
   if (isCompareWtReference(meta, rawPath)) {
@@ -18795,11 +18964,10 @@ async function buildComparePreviewCardData(
     isPdb ? readCompareFixedCount(runId, meta) : Promise.resolve(null),
     meta?.tier ? readCompareAf2Scores(runId, meta.tier) : Promise.resolve(null),
   ]);
-  const inputStructureDiff =
-    isPdb && inputPdbText ? computePdbStructuralDiff(inputPdbText, String(text || "")) : null;
-  const wtStructureDiff = isPdb && wtPdbText ? computePdbStructuralDiff(wtPdbText, String(text || "")) : null;
-  const workingStructureDiff =
+  const inputReferenceDiff = isPdb && inputPdbText ? computePdbStructuralDiff(inputPdbText, String(text || "")) : null;
+  const workingBackboneDiff =
     isPdb && workingPdbText ? computePdbStructuralDiff(workingPdbText, String(text || "")) : null;
+  const wtStructureDiff = isPdb && wtPdbText ? computePdbStructuralDiff(wtPdbText, String(text || "")) : null;
   const predictionMeta = isPdb ? await buildComparePredictionMeta(runId, meta, rawPath, af2Summary) : null;
   const af2ProviderRaw = String(predictionMeta?.provider || currentRunAf2Provider(runId) || "").trim();
   const roleLabel = compareArtifactRoleLabel(meta, af2ProviderRaw);
@@ -18816,24 +18984,13 @@ async function buildComparePreviewCardData(
     chains: isPdb ? formatPdbChainSummary(sequenceByChain) : "-",
     fixedCount: Number.isFinite(fixedCount) ? String(fixedCount) : "-",
     wtDiff: wtDiff ? formatWtDifference(wtDiff) : "-",
-    inputStructRmsd:
-      inputStructureDiff && inputStructureDiff.ok
-        ? `${formatMetricValue(inputStructureDiff.rmsd, 2, false)}A`
-        : "-",
+    inputReferenceRmsd:
+      inputReferenceDiff && inputReferenceDiff.ok ? `${formatMetricValue(inputReferenceDiff.rmsd, 2, false)}A` : "-",
+    workingBackboneRmsd:
+      workingBackboneDiff && workingBackboneDiff.ok ? `${formatMetricValue(workingBackboneDiff.rmsd, 2, false)}A` : "-",
     wtStructRmsd:
       wtStructureDiff && wtStructureDiff.ok ? `${formatMetricValue(wtStructureDiff.rmsd, 2, false)}A` : "-",
-    workingStructRmsd:
-      workingStructureDiff && workingStructureDiff.ok
-        ? `${formatMetricValue(workingStructureDiff.rmsd, 2, false)}A`
-        : "-",
-    commonCa:
-      inputStructureDiff && inputStructureDiff.ok
-        ? String(Number(inputStructureDiff.commonCount || 0))
-        : wtStructureDiff && wtStructureDiff.ok
-          ? String(Number(wtStructureDiff.commonCount || 0))
-          : workingStructureDiff && workingStructureDiff.ok
-            ? String(Number(workingStructureDiff.commonCount || 0))
-            : "-",
+    commonCa: wtStructureDiff && wtStructureDiff.ok ? String(Number(wtStructureDiff.commonCount || 0)) : "-",
     af2Scope: String(predictionMeta?.scope || "-"),
     af2Selected: String(predictionMeta?.selectedLabel || "-"),
     af2Plddt: String(predictionMeta?.plddtLabel || "-"),
@@ -18903,6 +19060,9 @@ function renderCompareMetadataPanel(leftMeta, rightMeta) {
     String(leftMeta?.af2ProviderLabel || "").trim() ||
     String(rightMeta?.af2ProviderLabel || "").trim() ||
     af2ProviderName(currentRunAf2Provider(), state.lang || "en");
+  const compareRmsdScope = currentCompareRmsdScope();
+  const showInputReferenceRmsd = compareRmsdScope === "input" || compareRmsdScope === "both";
+  const showWorkingBackboneRmsd = compareRmsdScope === "backbone" || compareRmsdScope === "both";
   const cards = [
     { title: t("artifacts.preview.compare.meta.left"), data: leftMeta },
     { title: t("artifacts.preview.compare.meta.right"), data: rightMeta },
@@ -18923,7 +19083,7 @@ function renderCompareMetadataPanel(leftMeta, rightMeta) {
       provider: af2Provider,
       lang: state.lang || "en",
     };
-    [
+    const items = [
       { key: "role", label: t("artifacts.preview.compare.meta.role"), value: data.role },
       { key: "source", label: t("artifacts.preview.compare.meta.source"), value: data.source },
       { key: "provenance", label: t("artifacts.preview.compare.meta.provenance"), value: data.provenance },
@@ -18937,20 +19097,26 @@ function renderCompareMetadataPanel(leftMeta, rightMeta) {
       { key: "chains", label: t("artifacts.preview.compare.meta.chains"), value: data.chains },
       { key: "fixedCount", label: t("artifacts.preview.compare.meta.fixedCount"), value: data.fixedCount },
       { key: "wtDiff", label: t("artifacts.preview.compare.meta.wtDiff"), value: data.wtDiff },
-      {
-        key: "inputStructRmsd",
-        label: t("artifacts.preview.compare.meta.inputStructRmsd"),
-        value: data.inputStructRmsd,
-      },
+    ];
+    if (showInputReferenceRmsd) {
+      items.push({
+        key: "inputReferenceRmsd",
+        label: t("artifacts.preview.compare.meta.inputReferenceRmsd"),
+        value: data.inputReferenceRmsd,
+      });
+    }
+    if (showWorkingBackboneRmsd) {
+      items.push({
+        key: "workingBackboneRmsd",
+        label: t("artifacts.preview.compare.meta.workingBackboneRmsd"),
+        value: data.workingBackboneRmsd,
+      });
+    }
+    items.push(
       {
         key: "wtStructRmsd",
         label: t("artifacts.preview.compare.meta.wtStructRmsd"),
         value: data.wtStructRmsd,
-      },
-      {
-        key: "workingStructRmsd",
-        label: t("artifacts.preview.compare.meta.workingStructRmsd"),
-        value: data.workingStructRmsd,
       },
       { key: "commonCa", label: t("artifacts.preview.compare.meta.commonCa"), value: data.commonCa },
       {
@@ -18974,7 +19140,8 @@ function renderCompareMetadataPanel(leftMeta, rightMeta) {
         value: data.af2Rmsd,
       },
       { key: "path", label: t("artifacts.preview.compare.meta.path"), value: data.path, mono: true },
-    ].forEach((item) => {
+    );
+    items.forEach((item) => {
       appendCompareMetaItem(list, {
         label: item.label,
         value: item.value,
