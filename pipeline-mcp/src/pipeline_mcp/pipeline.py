@@ -58,6 +58,7 @@ from .storage import is_cancel_requested
 from .storage import new_run_id
 from .storage import set_status
 from .storage import write_json
+from .evolution import run_evolution
 
 
 _SAFE_ID_RE = re.compile(r"[^a-zA-Z0-9_.-]+")
@@ -1265,8 +1266,6 @@ def _effective_rfd3_mode(
         (input_files or {}).get("input.pdb")
     )
     if has_input:
-        if (request.rfd3_contig or "").strip():
-            return "legacy_contig"
         if request.rfd3_length is not None:
             return "enzyme"
         return "local_diversify"
@@ -1342,6 +1341,25 @@ def _normalize_rfd3_contig_value(value: Any) -> Any:
             for item in value
         ]
     return value
+
+
+def _infer_rfd3_shifted_contig_defaults(
+    value: Any,
+) -> tuple[str, str, dict[str, str]] | None:
+    normalized = _normalize_rfd3_contig_value(value)
+    if not isinstance(normalized, str):
+        return None
+    match = re.fullmatch(r"\s*([A-Za-z_])\s*(-?\d+)\s*-\s*(-?\d+)\s*", normalized)
+    if not match:
+        return None
+    chain_id = str(match.group(1))
+    start = int(match.group(2))
+    stop = int(match.group(3))
+    if stop <= start:
+        return None
+    unindex = f"{chain_id}{start}"
+    shifted_contig = f"{chain_id}{start + 1}-{stop}"
+    return shifted_contig, unindex, {unindex: "ALL"}
 
 
 def _normalize_rfd3_inputs(inputs: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -1517,40 +1535,65 @@ def _rfd3_simple_inputs(
         contig_val = request.rfd3_contig
         unindex_val = request.rfd3_unindex
         fixed_val = request.rfd3_select_fixed_atoms
-        
-        if unindex_val is None:
-            pdb_text = request.rfd3_input_pdb or ""
-            if not pdb_text.strip() and "input.pdb" in input_files:
-                try:
-                    with open(input_files["input.pdb"], "r") as f:
-                        pdb_text = f.read()
-                except Exception:
-                    pass
-            if pdb_text.strip():
-                # Renumber residues from 1 temporarily for inference if needed, because RFD3 fails on negative contigs
-                if _has_nonpositive_resseq(pdb_text):
-                    pdb_text = _prepare_pdb_text_for_design_context(pdb_text, chains=None, strip_nonpositive_resseq=False, renumber_resseq_from_1=True)
-                
-                by_chain = residues_by_chain(pdb_text)
-                if by_chain:
-                    first_chain = sorted(by_chain.keys())[0]
-                    res_list = by_chain[first_chain]
-                    if len(res_list) > 1:
-                        unindex_val = f"{first_chain}{res_list[0].resseq}"
-                        fixed_val = {unindex_val: "ALL"}
-                        if contig_val is None:
-                            contig_val = f"{first_chain}{res_list[1].resseq}-{res_list[-1].resseq}"
-        
+        explicit_mode = _normalize_rfd3_mode(request.rfd3_mode)
+
+        if (
+            explicit_mode is None
+            and unindex_val is None
+            and fixed_val is None
+            and contig_val is not None
+        ):
+            shifted_defaults = _infer_rfd3_shifted_contig_defaults(contig_val)
+            if shifted_defaults is not None:
+                contig_val, unindex_val, fixed_val = shifted_defaults
+
+        pdb_text = str(
+            _rfd3_input_file_text("input.pdb", input_files=input_files)
+            or request.rfd3_input_pdb
+            or ""
+        )
+        if pdb_text.strip():
+            # Renumber residues from 1 temporarily for inference if needed, because RFD3 fails on negative contigs
+            if _has_nonpositive_resseq(pdb_text):
+                pdb_text = _prepare_pdb_text_for_design_context(
+                    pdb_text,
+                    chains=None,
+                    strip_nonpositive_resseq=False,
+                    renumber_resseq_from_1=True,
+                )
+
+            by_chain = residues_by_chain(pdb_text)
+            if by_chain:
+                first_chain = sorted(by_chain.keys())[0]
+                res_list = by_chain[first_chain]
+                if len(res_list) > 1:
+                    default_unindex = f"{first_chain}{res_list[0].resseq}"
+                    default_contig = (
+                        f"{first_chain}{res_list[1].resseq}-{res_list[-1].resseq}"
+                    )
+                    if unindex_val is None:
+                        unindex_val = default_unindex
+                    if (
+                        fixed_val is None
+                        and str(unindex_val or "").strip() == default_unindex
+                    ):
+                        fixed_val = {default_unindex: "ALL"}
+                    if (
+                        contig_val is None
+                        and str(unindex_val or "").strip() == default_unindex
+                    ):
+                        contig_val = default_contig
+
         if mode == "enzyme" and unindex_val is None:
             raise ValueError("RFD3 enzyme mode requires rfd3_unindex")
-            
+
         if contig_val is not None:
             spec["contig"] = _normalize_rfd3_contig_value(contig_val)
         if unindex_val is not None:
             spec["unindex"] = unindex_val
         if fixed_val is not None:
             spec["select_fixed_atoms"] = fixed_val
-            
+
         if mode == "enzyme" and request.rfd3_length is not None:
             spec["length"] = request.rfd3_length
     if request.rfd3_ligand is not None:
@@ -2797,6 +2840,8 @@ class PipelineRunner:
         self, request: PipelineRequest, *, run_id: str | None = None
     ) -> PipelineResult:
         run_id = run_id or new_run_id("pipeline")
+        if getattr(request, "evolution_mode", False):
+            return run_evolution(self, request, run_id)
         # A fresh run attempt for the same run_id should clear stale cancellation intent.
         clear_cancel_requested(self.output_root, run_id)
         paths = init_run(self.output_root, run_id)

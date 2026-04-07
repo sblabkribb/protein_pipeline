@@ -946,7 +946,7 @@ test("effectiveRfd3Mode prefers local_diversify for direct PDB inputs", () => {
       target_input: RFD3_AUTO_CONTIG_PDB,
       rfd3_contig: "A1-3",
     }),
-    "legacy_contig"
+    "local_diversify"
   );
   assert.equal(
     effectiveRfd3Mode({
@@ -2499,8 +2499,46 @@ test("resolveRfd3Defaults infers local_diversify for pipeline PDB inputs", () =>
   });
   assert.equal(resolved.rfd3Enabled, true);
   assert.equal(resolved.rfd3Mode, "local_diversify");
-  assert.equal(resolved.inferredContig, "");
+  assert.equal(resolved.inferredContig, "A2-3");
+  assert.equal(resolved.inferredUnindex, "A1");
+  assert.equal(resolved.inferredSelectFixedAtoms, "{\"A1\":\"ALL\"}");
   assert.equal(resolved.effectiveRfd3Input, RFD3_AUTO_CONTIG_PDB);
+});
+
+test("resolveRfd3Defaults shifts auto contig into unindex and fixed atoms", () => {
+  const resolved = resolveRfd3Defaults({
+    mode: "pipeline",
+    answers: {
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      start_from: "msa",
+      stop_after: "novelty",
+      rfd3_use: true,
+      rfd3_contig: "A1-3",
+    },
+  });
+  assert.equal(resolved.rfd3Mode, "local_diversify");
+  assert.equal(resolved.inferredContig, "A2-3");
+  assert.equal(resolved.inferredUnindex, "A1");
+  assert.equal(resolved.inferredSelectFixedAtoms, "{\"A1\":\"ALL\"}");
+});
+
+test("resolveRfd3Defaults backfills contig when only default unindex is present", () => {
+  const resolved = resolveRfd3Defaults({
+    mode: "pipeline",
+    answers: {
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      start_from: "msa",
+      stop_after: "novelty",
+      rfd3_use: true,
+      rfd3_mode: "local_diversify",
+      rfd3_unindex: "A1",
+      rfd3_select_fixed_atoms: "{\"A1\":\"ALL\"}",
+    },
+  });
+  assert.equal(resolved.rfd3Mode, "local_diversify");
+  assert.equal(resolved.inferredContig, "A2-3");
+  assert.equal(resolved.inferredUnindex, "");
+  assert.equal(resolved.inferredSelectFixedAtoms, "");
 });
 
 test("resolveRfd3Defaults keeps advanced overrides ahead of auto local_diversify", () => {
@@ -2527,7 +2565,9 @@ test("normalizeWorkflowStudioPayloadForComparison defaults pipeline PDB inputs t
     { nodes: ["msa", "rfd3", "novelty"] }
   );
   assert.equal(normalized.rfd3_mode, "local_diversify");
-  assert.equal(normalized.rfd3_contig, undefined);
+  assert.equal(normalized.rfd3_contig, "A2-3");
+  assert.equal(normalized.rfd3_unindex, "A1");
+  assert.equal(normalized.rfd3_select_fixed_atoms, "{\"A1\":\"ALL\"}");
 });
 
 test("normalizeWorkflowStudioPayloadForComparison preserves visible binder partial_t fields", () => {

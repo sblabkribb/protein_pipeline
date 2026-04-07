@@ -5197,6 +5197,10 @@ def _export_results_package(runner: PipelineRunner, arguments: dict[str, Any]) -
 def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = True) -> PipelineRequest:
     target_fasta = _as_text(args.get("target_fasta"))
     target_pdb = _as_text(args.get("target_pdb"))
+    evolution_mode = _as_bool(args.get("evolution_mode"), False)
+    evolution_initial_samples = _as_int(args.get("evolution_initial_samples"), 20)
+    evolution_rounds = _as_int(args.get("evolution_rounds"), 3)
+    evolution_samples_per_round = _as_int(args.get("evolution_samples_per_round"), 5)
     project_id = _as_text(args.get("project_id")).strip() or None
     round_id = _as_text(args.get("round_id")).strip() or None
     rfd3_inputs = _as_dict(args.get("rfd3_inputs"), name="rfd3_inputs")
@@ -5364,6 +5368,10 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     return PipelineRequest(
         target_fasta=target_fasta,
         target_pdb=target_pdb,
+        evolution_mode=evolution_mode,
+        evolution_initial_samples=evolution_initial_samples,
+        evolution_rounds=evolution_rounds,
+        evolution_samples_per_round=evolution_samples_per_round,
         project_id=project_id,
         round_id=round_id,
         rfd3_use=rfd3_use,
@@ -5627,6 +5635,10 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "stop_after": {"type": "string"},
             "force": {"type": "boolean"},
             "dry_run": {"type": "boolean"},
+            "evolution_mode": {"type": "boolean", "description": "Run in 3-round multi-stage evolution mode"},
+            "evolution_initial_samples": {"type": "integer", "description": "Initial random samples to evaluate (default 20)"},
+            "evolution_rounds": {"type": "integer", "description": "Number of BO rounds (default 3)"},
+            "evolution_samples_per_round": {"type": "integer", "description": "Samples to evaluate per BO round (default 5)"},
             "agent_panel_enabled": {"type": "boolean"},
             "auto_recover": {"type": "boolean"},
             "wt_compare": {"type": "boolean"},
@@ -5675,6 +5687,10 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "af2_provider": {"type": "string", "enum": ["colabfold", "af2"]},
                     "run_id": {"type": "string"},
                     "dry_run": {"type": "boolean"},
+            "evolution_mode": {"type": "boolean", "description": "Run in 3-round multi-stage evolution mode"},
+            "evolution_initial_samples": {"type": "integer", "description": "Initial random samples to evaluate (default 20)"},
+            "evolution_rounds": {"type": "integer", "description": "Number of BO rounds (default 3)"},
+            "evolution_samples_per_round": {"type": "integer", "description": "Samples to evaluate per BO round (default 5)"},
                 },
                 "anyOf": [{"required": ["target_fasta"]}, {"required": ["target_pdb"]}],
             },
@@ -5697,6 +5713,10 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "diffdock_cuda_visible_devices": {"type": "string"},
                     "run_id": {"type": "string"},
                     "dry_run": {"type": "boolean"},
+            "evolution_mode": {"type": "boolean", "description": "Run in 3-round multi-stage evolution mode"},
+            "evolution_initial_samples": {"type": "integer", "description": "Initial random samples to evaluate (default 20)"},
+            "evolution_rounds": {"type": "integer", "description": "Number of BO rounds (default 3)"},
+            "evolution_samples_per_round": {"type": "integer", "description": "Samples to evaluate per BO round (default 5)"},
                 },
                 "anyOf": [{"required": ["protein_pdb"]}, {"required": ["target_pdb"]}],
             },
@@ -5891,6 +5911,10 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "run_id": {"type": "string"},
                     "force": {"type": "boolean"},
                     "dry_run": {"type": "boolean"},
+            "evolution_mode": {"type": "boolean", "description": "Run in 3-round multi-stage evolution mode"},
+            "evolution_initial_samples": {"type": "integer", "description": "Initial random samples to evaluate (default 20)"},
+            "evolution_rounds": {"type": "integer", "description": "Number of BO rounds (default 3)"},
+            "evolution_samples_per_round": {"type": "integer", "description": "Samples to evaluate per BO round (default 5)"},
                 },
                 "anyOf": [{"required": ["fasta"]}, {"required": ["sequence"]}],
             },
@@ -5911,6 +5935,10 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "run_id": {"type": "string"},
                     "force": {"type": "boolean"},
                     "dry_run": {"type": "boolean"},
+            "evolution_mode": {"type": "boolean", "description": "Run in 3-round multi-stage evolution mode"},
+            "evolution_initial_samples": {"type": "integer", "description": "Initial random samples to evaluate (default 20)"},
+            "evolution_rounds": {"type": "integer", "description": "Number of BO rounds (default 3)"},
+            "evolution_samples_per_round": {"type": "integer", "description": "Samples to evaluate per BO round (default 5)"},
                 },
                 "anyOf": [
                     {"required": ["protein_pdb", "ligand_smiles"]},

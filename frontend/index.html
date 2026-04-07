@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>K-Biofoundry | Protein Pipeline Console</title>
-    <link rel="stylesheet" href="./styles.css?v=20260331_rfd3-local-diversify-unindex" />
+    <link rel="stylesheet" href="./styles.css?v=20260407_v3" />
   </head>
   <body>
     <div class="bg-orb orb-a" aria-hidden="true"></div>
@@ -122,6 +122,17 @@
                 data-i18n="tabs.advanced"
               >
                 Advanced
+              </button>
+              <button
+                id="tabBtnEvolution"
+                class="tab-btn app-nav-btn"
+                role="tab"
+                aria-selected="false"
+                aria-controls="tab-evolution"
+                data-tab="evolution"
+                data-i18n="tabs.evolution"
+              >
+                Evolution
               </button>
               <button
                 id="tabBtnStudio"
@@ -458,6 +469,70 @@
               </div>
 
               <div id="questionStack" class="question-stack hidden"></div>
+            </div>
+          </div>
+        </section>
+
+        <section
+          id="tab-evolution"
+          class="tab-panel"
+          data-tab="evolution"
+          role="tabpanel"
+          aria-labelledby="tabBtnEvolution"
+        >
+          <div class="tab-content-shell">
+            <div class="panel panel-block evolution-shell">
+              <div class="panel-header">
+                <h2 data-i18n="evolution.title">Evolution Studio</h2>
+                <p data-i18n="evolution.desc">
+                  Upload a PDB and run the multi-round evolution pipeline with one click.
+                </p>
+              </div>
+              <div class="evolution-grid">
+                <div class="evolution-input-card">
+                  <label class="fast-field">
+                    <span data-i18n="evolution.input.label">Target PDB</span>
+                    <small data-i18n="evolution.input.help">Provide a PDB structure to evolve.</small>
+                    <textarea
+                      id="evolutionTargetInput"
+                      rows="10"
+                      placeholder="Paste PDB here."
+                      data-i18n-placeholder="evolution.input.placeholder"
+                    ></textarea>
+                  </label>
+                  <div class="fast-inline-actions">
+                    <input id="evolutionTargetFile" type="file" class="hidden" accept=".pdb,.ent" />
+                    <button id="evolutionLoadFileBtn" class="ghost" type="button" data-i18n="fast.action.loadFile">
+                      Load File
+                    </button>
+                  </div>
+                  <div class="evolution-actions">
+                    <button id="evolutionRunBtn" class="primary" type="button" data-i18n="evolution.action.run">
+                      Start Evolution
+                    </button>
+                  </div>
+                </div>
+                <aside class="evolution-options-card mode-shell-placeholder">
+                  <div class="panel-header">
+                    <h3 data-i18n="evolution.options.title">Evolution Settings</h3>
+                    <p data-i18n="evolution.options.desc">
+                      Configure the Bayesian Optimization parameters for the evolution process.
+                    </p>
+                  </div>
+                  <label class="fast-field">
+                    <span data-i18n="evolution.initialSamples.label">Initial Samples</span>
+                    <input id="evolutionInitialSamplesInput" type="number" min="1" step="1" value="20" />
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="evolution.rounds.label">BO Rounds</span>
+                    <input id="evolutionRoundsInput" type="number" min="1" step="1" value="3" />
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="evolution.samplesPerRound.label">Samples Per Round</span>
+                    <input id="evolutionSamplesPerRoundInput" type="number" min="1" step="1" value="5" />
+                  </label>
+                </aside>
+              </div>
             </div>
           </div>
         </section>
@@ -1540,6 +1615,6 @@
     <button id="copilotFabBtn" class="primary copilot-fab" data-i18n="copilot.open">Copilot</button>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260331_rfd3-local-diversify-unindex"></script>
+    <script type="module" src="./app.js?v=20260407_v3"></script>
   </body>
 </html>

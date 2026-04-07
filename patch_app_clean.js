@@ -90,9 +90,18 @@ const questionsToAdd = `      {
       },
 `;
 
+// Add to pipeline mode (after num_seq_per_tier)
 content = content.replace(
   /id: "num_seq_per_tier",[\s\S]*?default: 2,\s*\},/g,
   match => match + '\n' + questionsToAdd
+);
+
+// Add to design mode (after num_seq_per_tier if it exists, or at the end of questions.push)
+// Wait, design mode doesn't have num_seq_per_tier. Let's add it after bioemu_steering_config_text in design mode.
+// We can use a more specific regex for design mode.
+content = content.replace(
+  /(if \(mode === "design"\) \{[\s\S]*?id: "bioemu_steering_config_text",\s*required: false,\s*\})\s*\);\s*\}/g,
+  (match, p1) => p1 + ',\n' + questionsToAdd + '    );\n  }'
 );
 
 // 7. Add renderBooleanField for evolution_mode

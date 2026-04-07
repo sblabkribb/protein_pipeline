@@ -20,6 +20,10 @@ class SequenceRecord:
 class PipelineRequest:
     target_fasta: str
     target_pdb: str
+    evolution_mode: bool = False
+    evolution_initial_samples: int = 20
+    evolution_rounds: int = 3
+    evolution_samples_per_round: int = 5
     project_id: str | None = None
     round_id: str | None = None
 

@@ -71,7 +71,7 @@ import {
   workflowStudioExecutionTarget,
   workflowStudioVisibleStageFields,
   withFixedPositionsExtra,
-} from "./lib/pipeline.js";
+} from "./lib/pipeline.js?v=20260407_v3";
 import {
   analyzeChartViewOptions,
   buildCompareMetaTooltip,
@@ -84,8 +84,8 @@ import {
   hitListRelaxColumnEnabled,
   runCompareHasRelaxMetrics,
   selectResidueStripMetrics,
-} from "./lib/compare.js";
-import { buildCopilotReply } from "./lib/copilot.js";
+} from "./lib/compare.js?v=20260407_v3";
+import { buildCopilotReply } from "./lib/copilot.js?v=20260407_v3";
 import {
   aminoAcidPropertyInfo,
   availableConservedTierPresetKeys,
@@ -101,13 +101,13 @@ import {
   resolveResiduePickerSelectionState,
   resolveResidueSelectionMaps,
   sequenceResiduePalette,
-} from "./lib/residue-picker.js";
+} from "./lib/residue-picker.js?v=20260407_v3";
 import {
   buildCompareHoverText,
   buildCompareViewerLegendLines,
   buildResiduePickerHoverText,
   buildResiduePickerViewerLegendLines,
-} from "./lib/viewer-annotations.js";
+} from "./lib/viewer-annotations.js?v=20260407_v3";
 import {
   buildOidcAuthorizationUrl,
   buildOidcRedirectUri,
@@ -117,9 +117,9 @@ import {
   shouldClearStoredSession,
   stripOidcCallbackUrl,
   resolveDefaultApiBase,
-} from "./lib/auth.js";
-import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js";
-import { renderMcpGuideMarkup } from "./lib/mcp-guide.js";
+} from "./lib/auth.js?v=20260407_v3";
+import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=20260407_v3";
+import { renderMcpGuideMarkup } from "./lib/mcp-guide.js?v=20260407_v3";
 
 const defaultApiBase = resolveDefaultApiBase({
   origin: window.location.origin,
@@ -749,6 +749,13 @@ const el = {
   fastTotalOutputInput: document.getElementById("fastTotalOutputInput"),
   fastRunBtn: document.getElementById("fastRunBtn"),
   fastOpenAdvancedBtn: document.getElementById("fastOpenAdvancedBtn"),
+  evolutionTargetInput: document.getElementById("evolutionTargetInput"),
+  evolutionTargetFile: document.getElementById("evolutionTargetFile"),
+  evolutionLoadFileBtn: document.getElementById("evolutionLoadFileBtn"),
+  evolutionRunBtn: document.getElementById("evolutionRunBtn"),
+  evolutionInitialSamplesInput: document.getElementById("evolutionInitialSamplesInput"),
+  evolutionRoundsInput: document.getElementById("evolutionRoundsInput"),
+  evolutionSamplesPerRoundInput: document.getElementById("evolutionSamplesPerRoundInput"),
   homeProjectSelector: document.getElementById("homeProjectSelector"),
   homeRoundSelector: document.getElementById("homeRoundSelector"),
   homeCreateProjectBtn: document.getElementById("homeCreateProjectBtn"),
@@ -1854,8 +1861,10 @@ const I18N = {
     "action.logout": "Logout",
     "action.help": "Usage",
     "tabs.home": "Home",
+    "tabs.evolution": "Evolution",
     "tabs.fast": "Fast",
     "tabs.advanced": "Advanced",
+    "tabs.evolution": "Evolution",
     "tabs.studio": "Studio",
     "tabs.rounds": "Rounds",
     "tabs.monitor": "Monitor",
@@ -1892,6 +1901,18 @@ const I18N = {
     "home.message.studioBuilderReady": "Workflow Studio builder is ready. Choose stages, then create the session.",
     "home.message.contextLoadFailed": "Failed to load projects or rounds: {error}",
     "home.error.projectRequired": "Select or create a project before creating a round.",
+    "evolution.title": "Evolution Studio",
+    "evolution.desc": "Upload a PDB and run the multi-round evolution pipeline with one click.",
+    "evolution.input.label": "Target PDB",
+    "evolution.input.help": "Provide a PDB structure to evolve.",
+    "evolution.input.placeholder": "Paste PDB here.",
+    "evolution.action.run": "Start Evolution",
+    "evolution.options.title": "Evolution Settings",
+    "evolution.options.desc": "Configure the Bayesian Optimization parameters for the evolution process.",
+    "evolution.initialSamples.label": "Initial Samples",
+    "evolution.rounds.label": "BO Rounds",
+    "evolution.samplesPerRound.label": "Samples Per Round",
+    "evolution.error.targetRequired": "Paste a PDB in Evolution before launching.",
     "rounds.title": "Rounds Workspace",
     "rounds.desc": "Organize projects, active rounds, and linked runs in one place.",
     "rounds.projects": "Projects",
@@ -2593,6 +2614,14 @@ const I18N = {
       "Maximum allowed target-backbone RMSD (angstrom) for BioEmu samples after optional DSSP non-loop masking.",
     "question.numSeqPerTier.label": "ProteinMPNN per Backbone",
     "question.numSeqPerTier.help": "Number of ProteinMPNN sequences to generate for each backbone within each sequence-conservation level.",
+    "question.evolutionMode.label": "Evolution Mode",
+    "question.evolutionMode.help": "Enable Bayesian Optimization for sequence design.",
+    "question.evolutionInitialSamples.label": "Evolution Initial Samples",
+    "question.evolutionInitialSamples.help": "Number of initial samples for BO.",
+    "question.evolutionRounds.label": "Evolution Rounds",
+    "question.evolutionRounds.help": "Number of BO rounds.",
+    "question.evolutionSamplesPerRound.label": "Evolution Samples Per Round",
+    "question.evolutionSamplesPerRound.help": "Number of samples per BO round.",
     "question.selectedTiers.label": "Sequence Conservation",
     "question.selectedTiers.help": "Choose which sequence-conservation levels to generate. Default: 30%, 50%, 70%.",
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} per Conservation Level (Top N)",
@@ -2750,6 +2779,8 @@ const I18N = {
     "run.reset": "Inputs reset. Reconfirm selections and attachments.",
     "setup.options.title": "Core Option Board",
     "setup.options.help": "Review key execution options in one board.",
+    "setup.evolution.title": "Evolution (BO) Settings",
+    "setup.evolution.help": "Configure Bayesian Optimization for automated sequence design.",
     "setup.parameters.title": "Compact Parameter Board",
     "setup.parameters.help":
       "Tune key numeric settings in one place. BioEmu and RFD3 counts stay visible in Pipeline and Workflow modes.",
@@ -3011,6 +3042,7 @@ const I18N = {
     "action.logout": "로그아웃",
     "action.help": "사용법",
     "tabs.home": "홈",
+    "tabs.evolution": "진화 (Evolution)",
     "tabs.fast": "빠른 실행",
     "tabs.advanced": "고급 설정",
     "tabs.studio": "스튜디오",
@@ -3049,6 +3081,18 @@ const I18N = {
     "home.message.studioBuilderReady": "Workflow Studio 빌더를 준비했습니다. 단계를 고른 뒤 세션을 생성하세요.",
     "home.message.contextLoadFailed": "프로젝트/라운드 목록을 불러오지 못했습니다: {error}",
     "home.error.projectRequired": "라운드를 만들기 전에 프로젝트를 선택하거나 생성하세요.",
+    "evolution.title": "진화 스튜디오",
+    "evolution.desc": "PDB를 업로드하고 한 번의 클릭으로 다회차 진화 파이프라인을 실행하세요.",
+    "evolution.input.label": "대상 PDB",
+    "evolution.input.help": "진화시킬 PDB 구조를 제공하세요.",
+    "evolution.input.placeholder": "여기에 PDB를 붙여넣으세요.",
+    "evolution.action.run": "진화 시작",
+    "evolution.options.title": "진화 설정",
+    "evolution.options.desc": "진화 과정을 위한 베이지안 최적화(BO) 파라미터를 설정합니다.",
+    "evolution.initialSamples.label": "초기 샘플 수",
+    "evolution.rounds.label": "BO 회차",
+    "evolution.samplesPerRound.label": "회차당 샘플 수",
+    "evolution.error.targetRequired": "진화를 시작하기 전에 PDB를 붙여넣으세요.",
     "rounds.title": "Rounds 워크스페이스",
     "rounds.desc": "프로젝트, 활성 라운드, 연결된 run을 한 곳에서 정리합니다.",
     "rounds.projects": "프로젝트",
@@ -3749,6 +3793,14 @@ const I18N = {
       "선택적 DSSP non-loop masking 이후 BioEmu 샘플에 허용할 최대 target-backbone RMSD(Å)입니다.",
     "question.numSeqPerTier.label": "백본당 ProteinMPNN 생성 개수",
     "question.numSeqPerTier.help": "각 서열 보존율 구간에서 각 RFD3/BioEmu 백본마다 생성할 ProteinMPNN 서열 개수입니다.",
+    "question.evolutionMode.label": "에볼루션 모드",
+    "question.evolutionMode.help": "시퀀스 설계를 위해 베이지안 최적화(BO)를 활성화합니다.",
+    "question.evolutionInitialSamples.label": "에볼루션 초기 샘플 수",
+    "question.evolutionInitialSamples.help": "BO를 위한 초기 샘플 수입니다.",
+    "question.evolutionRounds.label": "에볼루션 라운드 수",
+    "question.evolutionRounds.help": "BO 라운드 수입니다.",
+    "question.evolutionSamplesPerRound.label": "라운드당 에볼루션 샘플 수",
+    "question.evolutionSamplesPerRound.help": "BO 라운드당 샘플 수입니다.",
     "question.selectedTiers.label": "서열 보존율",
     "question.selectedTiers.help": "생성할 서열 보존율 구간을 선택하세요. 기본값은 30%, 50%, 70%입니다.",
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} 서열 보존율 구간당 실행 개수 (상위 N개)",
@@ -3906,6 +3958,8 @@ const I18N = {
     "run.reset": "입력을 초기화했습니다. 선택과 첨부를 다시 확인하세요.",
     "setup.options.title": "핵심 옵션 보드",
     "setup.options.help": "주요 실행 옵션을 한 보드에서 한 번에 확인하고 조정합니다.",
+    "setup.evolution.title": "Evolution (BO) 설정",
+    "setup.evolution.help": "베이지안 최적화(BO) 기반의 자동 서열 설계를 설정합니다.",
     "setup.parameters.title": "핵심 파라미터 보드",
     "setup.parameters.help":
       "주요 숫자 파라미터를 한 카드에서 조정합니다. Pipeline/Workflow 모드에서는 BioEmu/RFD3 개수 설정을 항상 표시합니다.",
@@ -4288,7 +4342,7 @@ function labelFromMap(value, map) {
 }
 
 const TAB_KEY = "kbf.activeTab";
-const TAB_OPTIONS = ["home", "fast", "advanced", "studio", "monitor", "rounds", "analyze", "mcp"];
+const TAB_OPTIONS = ["home", "fast", "advanced", "evolution", "studio", "monitor", "rounds", "analyze", "mcp"];
 const tabButtons = Array.from(document.querySelectorAll("#appSidebar .tab-btn"));
 const tabPanels = Array.from(document.querySelectorAll("#appShell .tab-panel"));
 const langButtons = Array.from(document.querySelectorAll(".lang-btn"));
@@ -4296,6 +4350,7 @@ let tabsInitialized = false;
 let homeLauncherInitialized = false;
 let homeContextInitialized = false;
 let fastLauncherInitialized = false;
+let evolutionLauncherInitialized = false;
 let langInitialized = false;
 let copilotInitialized = false;
 
@@ -7825,6 +7880,26 @@ const QUESTION_PRESETS = {
     labelKey: "question.ligandMaskOriginal.label",
     questionKey: "question.ligandMaskOriginal.help",
   },
+  evolution_mode: {
+    labelKey: "question.evolutionMode.label",
+    questionKey: "question.evolutionMode.help",
+    default: false,
+  },
+  evolution_initial_samples: {
+    labelKey: "question.evolutionInitialSamples.label",
+    questionKey: "question.evolutionInitialSamples.help",
+    default: 20,
+  },
+  evolution_rounds: {
+    labelKey: "question.evolutionRounds.label",
+    questionKey: "question.evolutionRounds.help",
+    default: 3,
+  },
+  evolution_samples_per_round: {
+    labelKey: "question.evolutionSamplesPerRound.label",
+    questionKey: "question.evolutionSamplesPerRound.help",
+    default: 5,
+  },
   confirm_run: {
     labelKey: "question.confirmRun.label",
     questionKey: "question.confirmRun.help",
@@ -7860,10 +7935,14 @@ const ANSWER_BOOL_KEYS = new Set([
   "novelty_enabled",
   "relax_enabled",
   "confirm_run",
+  "evolution_mode",
 ]);
 
 const ANSWER_INT_KEYS = new Set([
   "num_seq_per_tier",
+  "evolution_initial_samples",
+  "evolution_rounds",
+  "evolution_samples_per_round",
   "batch_size",
   "seed",
   "af2_top_k",
@@ -7876,6 +7955,9 @@ const ANSWER_INT_KEYS = new Set([
   "af2_max_candidates_per_tier",
   "conservation_cluster_cov_mode",
   "conservation_cluster_kmer_per_seq",
+  "evolution_initial_samples",
+  "evolution_rounds",
+  "evolution_samples_per_round",
 ]);
 
 const ANSWER_FLOAT_KEYS = new Set([
@@ -9661,6 +9743,53 @@ function initFastLauncher() {
   fastLauncherInitialized = true;
 }
 
+async function loadEvolutionTargetFile(file) {
+  if (!file || typeof file.text !== "function") return;
+  const text = await file.text();
+  if (el.evolutionTargetInput) {
+    el.evolutionTargetInput.value = String(text || "");
+  }
+  setMessage(t("fast.message.fileLoaded", { name: file.name || "input" }), "ai");
+}
+
+function initEvolutionLauncher() {
+  if (evolutionLauncherInitialized) return;
+  el.evolutionLoadFileBtn?.addEventListener("click", () => {
+    el.evolutionTargetFile?.click();
+  });
+  el.evolutionTargetFile?.addEventListener("change", async (event) => {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    await loadEvolutionTargetFile(file);
+    event.target.value = "";
+  });
+    el.evolutionRunBtn?.addEventListener("click", async () => {
+    const targetInput = String(el.evolutionTargetInput?.value || "").trim();
+    if (!targetInput) {
+      setMessage(t("evolution.error.targetRequired"), "ai");
+      setActiveTab("evolution");
+      return;
+    }
+    
+    state.answers = {
+      run_mode: "pipeline",
+      target_input: targetInput,
+      evolution_mode: true,
+      evolution_initial_samples: Number.parseInt(el.evolutionInitialSamplesInput?.value || "20", 10),
+      evolution_rounds: Number.parseInt(el.evolutionRoundsInput?.value || "3", 10),
+      evolution_samples_per_round: Number.parseInt(el.evolutionSamplesPerRoundInput?.value || "5", 10),
+      start_from: "msa",
+      stop_after: "novelty",
+      novelty_enabled: true
+    };
+    
+    await ensureManualPlan();
+    
+    await runPipeline();
+  });
+  evolutionLauncherInitialized = true;
+}
+
 function initTabs() {
   if (!tabButtons.length) return;
   if (!tabsInitialized) {
@@ -9671,6 +9800,7 @@ function initTabs() {
   }
   initHomeLauncher();
   initHomeContext();
+  initEvolutionLauncher();
   initFastLauncher();
   const stored = localStorage.getItem(TAB_KEY);
   setActiveTab(stored || "home");
@@ -9876,6 +10006,43 @@ function buildManualPlan(mode) {
         required: false,
         default: 2,
       },
+      {
+        id: "evolution_mode",
+        labelKey: "question.evolutionMode.label",
+        questionKey: "question.evolutionMode.help",
+        label: "Evolution Mode",
+        question: "Enable Bayesian Optimization for sequence design.",
+        required: false,
+        default: false,
+      },
+      {
+        id: "evolution_initial_samples",
+        labelKey: "question.evolutionInitialSamples.label",
+        questionKey: "question.evolutionInitialSamples.help",
+        label: "Evolution Initial Samples",
+        question: "Number of initial samples for BO.",
+        required: false,
+        default: 20,
+      },
+      {
+        id: "evolution_rounds",
+        labelKey: "question.evolutionRounds.label",
+        questionKey: "question.evolutionRounds.help",
+        label: "Evolution Rounds",
+        question: "Number of BO rounds.",
+        required: false,
+        default: 3,
+      },
+      {
+        id: "evolution_samples_per_round",
+        labelKey: "question.evolutionSamplesPerRound.label",
+        questionKey: "question.evolutionSamplesPerRound.help",
+        label: "Evolution Samples Per Round",
+        question: "Number of samples per BO round.",
+        required: false,
+        default: 5,
+      },
+
       {
         id: "selected_tiers",
         labelKey: "question.selectedTiers.label",
@@ -10181,7 +10348,43 @@ function buildManualPlan(mode) {
       {
         id: "bioemu_steering_config_text",
         required: false,
-      }
+      },
+      {
+        id: "evolution_mode",
+        labelKey: "question.evolutionMode.label",
+        questionKey: "question.evolutionMode.help",
+        label: "Evolution Mode",
+        question: "Enable Bayesian Optimization for sequence design.",
+        required: false,
+        default: false,
+      },
+      {
+        id: "evolution_initial_samples",
+        labelKey: "question.evolutionInitialSamples.label",
+        questionKey: "question.evolutionInitialSamples.help",
+        label: "Evolution Initial Samples",
+        question: "Number of initial samples for BO.",
+        required: false,
+        default: 20,
+      },
+      {
+        id: "evolution_rounds",
+        labelKey: "question.evolutionRounds.label",
+        questionKey: "question.evolutionRounds.help",
+        label: "Evolution Rounds",
+        question: "Number of BO rounds.",
+        required: false,
+        default: 3,
+      },
+      {
+        id: "evolution_samples_per_round",
+        labelKey: "question.evolutionSamplesPerRound.label",
+        questionKey: "question.evolutionSamplesPerRound.help",
+        label: "Evolution Samples Per Round",
+        question: "Number of samples per BO round.",
+        required: false,
+        default: 5,
+      },
     );
   }
 
@@ -11762,6 +11965,13 @@ function questionVisibleForCurrentState(question, normalizedQuestions = []) {
     mode === "soluprot" ||
     answers.bioemu_use === true ||
     answers.stop_after === "bioemu";
+  if (
+    id === "evolution_initial_samples" ||
+    id === "evolution_rounds" ||
+    id === "evolution_samples_per_round"
+  ) {
+    return answers.evolution_mode === true;
+  }
   if (id === "rfd3_use") {
     return rfd3InScope && mode !== "rfd3";
   }
@@ -13449,7 +13659,8 @@ function renderQuestions(questions) {
     "relax_enabled",
     "af2_provider",
     "confirm_run",
-  ]);
+  "evolution_mode",
+]);
 
   const isFileQuestion = (q) => q && fileQuestionIds.has(q.id);
   const isChoiceQuestion = (q) => q && choiceQuestionIds.has(q.id);
@@ -13678,7 +13889,7 @@ function renderQuestions(questions) {
   }
 
   choiceQuestions.forEach((q) => {
-    if (compactChoiceQuestionIds.has(q.id) || SETUP_RFD3_MODE_DETAIL_IDS.has(q.id)) return;
+    if (compactChoiceQuestionIds.has(q.id) || SETUP_RFD3_MODE_DETAIL_IDS.has(q.id) || q.id === "evolution_mode") return;
     const card = document.createElement("div");
     card.className = buildQuestionCardClass(q, q.id === "run_mode" ? ["run-mode-card"] : []);
 
@@ -14255,6 +14466,7 @@ function renderQuestions(questions) {
       rerender: false,
     });
 
+
     renderBooleanField({
       id: "bioemu_filter_samples",
       fallback: true,
@@ -14403,7 +14615,95 @@ function renderQuestions(questions) {
     appendConfigCard(card);
   };
 
+  const appendEvolutionBoard = () => {
+    const evolutionIds = ["evolution_mode", "evolution_initial_samples", "evolution_rounds", "evolution_samples_per_round"];
+    const evolutionQuestions = normalizedQuestions.filter((q) => evolutionIds.includes(q.id));
+    if (!evolutionQuestions.length) return;
+
+    const card = document.createElement("div");
+    card.className = "question-card parameter-board evolution-board";
+
+    const title = document.createElement("div");
+    title.className = "question-title";
+    title.textContent = t("setup.evolution.title");
+
+    const help = document.createElement("div");
+    help.className = "question-help";
+    help.textContent = t("setup.evolution.help");
+
+    const grid = document.createElement("div");
+    grid.className = "parameter-board-grid option-board-grid";
+
+    const modeQuestion = evolutionQuestions.find(q => q.id === "evolution_mode");
+    if (modeQuestion) {
+      const field = document.createElement("div");
+      field.className = "parameter-field option-field";
+      const label = document.createElement("div");
+      label.className = "parameter-label";
+      label.textContent = t(modeQuestion.labelKey);
+      const desc = document.createElement("div");
+      desc.className = "parameter-help";
+      desc.textContent = t(modeQuestion.questionKey);
+      field.appendChild(label);
+      field.appendChild(desc);
+
+      let current = state.answers.evolution_mode;
+      if (typeof current !== "boolean") {
+        current = Boolean(modeQuestion.default);
+        state.answers.evolution_mode = current;
+      }
+
+      renderChoiceButtons(field, [
+        { label: "On", value: true },
+        { label: "Off", value: false }
+      ], current, (value) => {
+        state.answers.evolution_mode = value;
+        updateRunEligibility(normalizedQuestions);
+        renderQuestions(state.plan?.questions || []);
+      }, { rerender: false });
+      grid.appendChild(field);
+    }
+
+    if (state.answers.evolution_mode === true) {
+      evolutionQuestions.filter(q => q.id !== "evolution_mode").forEach(q => {
+        const field = document.createElement("div");
+        field.className = "parameter-field option-field";
+        const label = document.createElement("div");
+        label.className = "parameter-label";
+        label.textContent = t(q.labelKey);
+        const desc = document.createElement("div");
+        desc.className = "parameter-help";
+        desc.textContent = t(q.questionKey);
+        field.appendChild(label);
+        field.appendChild(desc);
+
+        const inputWrap = document.createElement("div");
+        inputWrap.className = "input-row";
+        const input = document.createElement("input");
+        input.type = "number";
+        input.step = "1";
+        if (state.answers[q.id] === undefined) {
+          state.answers[q.id] = q.default;
+        }
+        input.value = state.answers[q.id];
+        input.addEventListener("input", () => {
+          state.answers[q.id] = parseInt(input.value, 10) || 0;
+          updateRunEligibility(normalizedQuestions);
+        });
+        inputWrap.appendChild(input);
+        field.appendChild(inputWrap);
+        grid.appendChild(field);
+      });
+    }
+
+    card.appendChild(title);
+    card.appendChild(help);
+    card.appendChild(grid);
+    appendConfigCard(card);
+  };
+
   appendCompactOptionBoard();
+  appendEvolutionBoard();
 
   const bioemuCountQuestionIds = new Set(["bioemu_max_return_structures", "bioemu_num_samples"]);
   const rfd3CountQuestionIds = new Set(["rfd3_max_return_designs"]);
@@ -14427,6 +14727,9 @@ function renderQuestions(questions) {
     af2_max_candidates_per_tier: 50,
     af2_plddt_cutoff: 60,
     af2_rmsd_cutoff: 70,
+    evolution_initial_samples: 80,
+    evolution_rounds: 81,
+    evolution_samples_per_round: 82,
   };
   const bioemuCountRelevant =
     state.runMode === "pipeline" ||
@@ -14445,6 +14748,7 @@ function renderQuestions(questions) {
   const compactQuestions = textQuestions
     .filter((q) => compactParameterQuestionIds.has(q.id))
     .filter((q) => q.id !== "relax_score_per_residue_cutoff" || state.answers.relax_enabled === true)
+    .filter((q) => !["evolution_initial_samples", "evolution_rounds", "evolution_samples_per_round"].includes(q.id) || state.answers.evolution_mode === true)
     .sort((left, right) => {
       const leftPriority = compactParameterPriority[left.id] ?? Number.MAX_SAFE_INTEGER;
       const rightPriority = compactParameterPriority[right.id] ?? Number.MAX_SAFE_INTEGER;

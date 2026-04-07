@@ -603,18 +603,18 @@ body {
   flex-wrap: wrap;
 }
 
-.fast-shell {
+.fast-shell, .evolution-shell {
   min-height: 460px;
 }
 
-.fast-grid {
+.fast-grid, .evolution-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
   gap: 18px;
   align-items: start;
 }
 
-.fast-input-card {
+.fast-input-card, .evolution-input-card {
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -642,7 +642,7 @@ body {
 }
 
 .fast-review-card,
-.fast-options-card {
+.fast-options-card, .evolution-options-card {
   padding: 24px;
 }
 
@@ -650,7 +650,7 @@ body {
   grid-template-columns: 1fr;
 }
 
-.fast-options-card {
+.fast-options-card, .evolution-options-card {
   display: flex;
   flex-direction: column;
   gap: 18px;
