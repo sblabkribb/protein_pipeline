@@ -1582,7 +1582,7 @@ const WORKFLOW_STUDIO_STAGE_DEFAULTS = Object.freeze({
   rfd3: Object.freeze({
     rfd3_use: true,
     rfd3_max_return_designs: 10,
-    rfd3_partial_t: 10.0,
+    rfd3_partial_t: 5.0,
   }),
   bioemu: Object.freeze({
     bioemu_num_samples: 20,

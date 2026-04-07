@@ -106,7 +106,9 @@ _DSSP_REFERENCE_FRAGMENT = (
 )
 
 
-def _shift_residue_backbone(pdb_text: str, offsets: dict[int, tuple[float, float, float]]) -> str:
+def _shift_residue_backbone(
+    pdb_text: str, offsets: dict[int, tuple[float, float, float]]
+) -> str:
     out: list[str] = []
     for raw in pdb_text.splitlines():
         if not raw.startswith("ATOM"):
@@ -147,7 +149,9 @@ class TestPipelineDryRun(unittest.TestCase):
         self.assertTrue(isinstance(summary, dict) and summary.get("mask_applied"))
         self.assertEqual(summary.get("mask_mode"), "dssp_non_loop_reference")
 
-    def test_effective_rfd3_mode_prefers_local_diversify_for_direct_input_pdb(self) -> None:
+    def test_effective_rfd3_mode_prefers_local_diversify_for_direct_input_pdb(
+        self,
+    ) -> None:
         req = PipelineRequest(
             target_fasta="",
             target_pdb="",
@@ -164,7 +168,9 @@ class TestPipelineDryRun(unittest.TestCase):
             rfd3_contig="A1-2",
         )
         self.assertEqual(
-            _effective_rfd3_mode(req_with_contig, input_files={"input.pdb": "/tmp/input.pdb"}),
+            _effective_rfd3_mode(
+                req_with_contig, input_files={"input.pdb": "/tmp/input.pdb"}
+            ),
             "local_diversify",
         )
         req_with_length = PipelineRequest(
@@ -174,11 +180,15 @@ class TestPipelineDryRun(unittest.TestCase):
             rfd3_length="20-40",
         )
         self.assertEqual(
-            _effective_rfd3_mode(req_with_length, input_files={"input.pdb": "/tmp/input.pdb"}),
+            _effective_rfd3_mode(
+                req_with_length, input_files={"input.pdb": "/tmp/input.pdb"}
+            ),
             "enzyme",
         )
 
-    def test_backbone_source_summary_marks_selected_only_when_observed_exceeds_used(self) -> None:
+    def test_backbone_source_summary_marks_selected_only_when_observed_exceeds_used(
+        self,
+    ) -> None:
         req = PipelineRequest(
             target_fasta=">q1\nACDEFGHIK\n",
             target_pdb="",
@@ -210,7 +220,9 @@ class TestPipelineDryRun(unittest.TestCase):
         self.assertIn("metadata-only", str(rfd3.get("note") or ""))
         self.assertEqual(mode, "selected_only")
 
-    def test_backbone_source_summary_notes_bioemu_topology_only_materialization(self) -> None:
+    def test_backbone_source_summary_notes_bioemu_topology_only_materialization(
+        self,
+    ) -> None:
         req = PipelineRequest(
             target_fasta=">q1\nACDEFGHIK\n",
             target_pdb="",
@@ -231,7 +243,9 @@ class TestPipelineDryRun(unittest.TestCase):
             ],
             observed_counts={"bioemu": 1},
         )
-        bioemu = summaries.get("bioemu") if isinstance(summaries.get("bioemu"), dict) else {}
+        bioemu = (
+            summaries.get("bioemu") if isinstance(summaries.get("bioemu"), dict) else {}
+        )
         self.assertEqual(bioemu.get("requested_count"), 10)
         self.assertEqual(bioemu.get("observed_count"), 1)
         self.assertEqual(bioemu.get("materialized_count"), 1)
@@ -247,11 +261,13 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
 
-        strip_nonpositive, renumber_from_1, detail = _resolve_backbone_preprocess_options(
-            pdb_text=pdb,
-            source="bioemu",
-            strip_nonpositive_resseq=True,
-            renumber_resseq_from_1=False,
+        strip_nonpositive, renumber_from_1, detail = (
+            _resolve_backbone_preprocess_options(
+                pdb_text=pdb,
+                source="bioemu",
+                strip_nonpositive_resseq=True,
+                renumber_resseq_from_1=False,
+            )
         )
         self.assertFalse(strip_nonpositive)
         self.assertTrue(renumber_from_1)
@@ -283,8 +299,16 @@ class TestPipelineDryRun(unittest.TestCase):
         )
 
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
-            req = PipelineRequest(target_fasta=fasta, target_pdb=pdb, dry_run=True, num_seq_per_tier=2, conservation_tiers=[0.3, 0.5])
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
+            req = PipelineRequest(
+                target_fasta=fasta,
+                target_pdb=pdb,
+                dry_run=True,
+                num_seq_per_tier=2,
+                conservation_tiers=[0.3, 0.5],
+            )
             res = runner.run(req)
 
             out = Path(res.output_dir)
@@ -331,7 +355,9 @@ class TestPipelineDryRun(unittest.TestCase):
         )
 
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             req = PipelineRequest(
                 target_fasta=fasta,
                 target_pdb=pdb,
@@ -348,20 +374,32 @@ class TestPipelineDryRun(unittest.TestCase):
             res = runner.run(req)
 
             tier_dir = Path(res.output_dir) / "tiers" / "30"
-            relax_scores = json.loads((tier_dir / "relax_scores.json").read_text(encoding="utf-8"))
+            relax_scores = json.loads(
+                (tier_dir / "relax_scores.json").read_text(encoding="utf-8")
+            )
             relax_metrics = json.loads(
-                (tier_dir / "relax" / "target_30_s1" / "metrics.json").read_text(encoding="utf-8")
+                (tier_dir / "relax" / "target_30_s1" / "metrics.json").read_text(
+                    encoding="utf-8"
+                )
             )
 
             self.assertTrue((tier_dir / "relax_selected.fasta").exists())
             self.assertEqual(relax_scores.get("selected_ids"), ["target:30_s1"])
             self.assertEqual(relax_scores.get("mode"), "dry_run")
             self.assertEqual(res.tiers[0].relax_selected_ids, ["target:30_s1"])
-            self.assertAlmostEqual(float(relax_metrics.get("score_per_residue") or 0.0), -3.5)
-            self.assertAlmostEqual(float(relax_metrics.get("total_score") or 0.0), -31.5)
-            self.assertAlmostEqual(float(relax_metrics.get("delta_total_score") or 0.0), -25.0)
+            self.assertAlmostEqual(
+                float(relax_metrics.get("score_per_residue") or 0.0), -3.5
+            )
+            self.assertAlmostEqual(
+                float(relax_metrics.get("total_score") or 0.0), -31.5
+            )
+            self.assertAlmostEqual(
+                float(relax_metrics.get("delta_total_score") or 0.0), -25.0
+            )
 
-    def test_pipeline_dry_run_scores_relax_for_all_af2_candidates_even_when_none_pass_af2_cutoffs(self) -> None:
+    def test_pipeline_dry_run_scores_relax_for_all_af2_candidates_even_when_none_pass_af2_cutoffs(
+        self,
+    ) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
@@ -377,7 +415,9 @@ class TestPipelineDryRun(unittest.TestCase):
         )
 
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             req = PipelineRequest(
                 target_fasta=fasta,
                 target_pdb=pdb,
@@ -393,22 +433,31 @@ class TestPipelineDryRun(unittest.TestCase):
             res = runner.run(req)
 
             tier_dir = Path(res.output_dir) / "tiers" / "30"
-            relax_scores = json.loads((tier_dir / "relax_scores.json").read_text(encoding="utf-8"))
+            relax_scores = json.loads(
+                (tier_dir / "relax_scores.json").read_text(encoding="utf-8")
+            )
             candidate_ids = list(res.tiers[0].passed_ids or [])
 
             self.assertEqual(relax_scores.get("candidate_ids"), candidate_ids)
-            self.assertEqual(set((relax_scores.get("score_per_residue") or {}).keys()), set(candidate_ids))
+            self.assertEqual(
+                set((relax_scores.get("score_per_residue") or {}).keys()),
+                set(candidate_ids),
+            )
             self.assertEqual(relax_scores.get("selected_ids"), [])
             self.assertEqual(res.tiers[0].relax_selected_ids, [])
             for seq_id in candidate_ids:
-                metrics_path = tier_dir / "relax" / seq_id.replace(":", "_") / "metrics.json"
+                metrics_path = (
+                    tier_dir / "relax" / seq_id.replace(":", "_") / "metrics.json"
+                )
                 self.assertTrue(metrics_path.exists())
 
     def test_runner_links_project_round_metadata_to_launched_run(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         owner = {"username": "hana", "run_prefix": "hana", "role": "user"}
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             dispatcher = ToolDispatcher(runner)
             dispatcher.call_tool(
                 "pipeline.save_project",
@@ -442,7 +491,9 @@ class TestPipelineDryRun(unittest.TestCase):
             res = runner.run(req)
 
             out = Path(res.output_dir)
-            request_payload = json.loads((out / "request.json").read_text(encoding="utf-8"))
+            request_payload = json.loads(
+                (out / "request.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(request_payload.get("project_id"), "tev_campaign")
             self.assertEqual(request_payload.get("round_id"), "round_01")
 
@@ -469,7 +520,9 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             req = PipelineRequest(
                 target_fasta=fasta,
                 target_pdb=pdb,
@@ -486,8 +539,16 @@ class TestPipelineDryRun(unittest.TestCase):
     def test_pipeline_dry_run_generates_dummy_pdb_when_missing(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
-            req = PipelineRequest(target_fasta=fasta, target_pdb="", dry_run=True, num_seq_per_tier=2, conservation_tiers=[0.3])
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
+            req = PipelineRequest(
+                target_fasta=fasta,
+                target_pdb="",
+                dry_run=True,
+                num_seq_per_tier=2,
+                conservation_tiers=[0.3],
+            )
             res = runner.run(req)
             out = Path(res.output_dir)
             self.assertTrue((out / "ligand_mask.json").exists())
@@ -499,8 +560,16 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
-            req = PipelineRequest(target_fasta="", target_pdb=pdb, dry_run=True, num_seq_per_tier=2, conservation_tiers=[0.3])
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
+            req = PipelineRequest(
+                target_fasta="",
+                target_pdb=pdb,
+                dry_run=True,
+                num_seq_per_tier=2,
+                conservation_tiers=[0.3],
+            )
             res = runner.run(req)
             out = Path(res.output_dir)
             self.assertTrue((out / "target.fasta").exists())
@@ -510,7 +579,9 @@ class TestPipelineDryRun(unittest.TestCase):
     def test_pipeline_auto_recover_msa_without_mmseqs(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             req = PipelineRequest(
                 target_fasta=fasta,
                 target_pdb="",
@@ -530,7 +601,9 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb=pdb,
@@ -559,7 +632,9 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb="",
@@ -571,7 +646,9 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            input_pdb = (out / "rfd3" / "input_files" / "input.pdb").read_text(encoding="utf-8")
+            input_pdb = (out / "rfd3" / "input_files" / "input.pdb").read_text(
+                encoding="utf-8"
+            )
             selected_pdb = (out / "rfd3" / "selected.pdb").read_text(encoding="utf-8")
             self.assertNotIn("  -1", input_pdb)
             self.assertNotIn("  -1", selected_pdb)
@@ -591,7 +668,9 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             req = PipelineRequest(
                 target_fasta=fasta,
                 target_pdb=pdb,
@@ -611,7 +690,14 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb="",
@@ -633,7 +719,14 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb="",
@@ -647,7 +740,9 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
+            inputs = json.loads(
+                (out / "rfd3" / "inputs.json").read_text(encoding="utf-8")
+            )
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("input"), "input.pdb")
             self.assertEqual(spec.get("contig"), "A2-2")
@@ -656,14 +751,23 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertEqual(spec.get("ligand"), "LIG")
             self.assertEqual(spec.get("select_unfixed_sequence"), "A1-2")
 
-    def test_pipeline_rfd3_legacy_contig_injects_request_default_partial_t(self) -> None:
+    def test_pipeline_rfd3_legacy_contig_injects_request_default_partial_t(
+        self,
+    ) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb="",
@@ -675,9 +779,11 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
+            inputs = json.loads(
+                (out / "rfd3" / "inputs.json").read_text(encoding="utf-8")
+            )
             spec = inputs.get("spec-1") or {}
-            self.assertEqual(spec.get("partial_t"), 10.0)
+            self.assertEqual(spec.get("partial_t"), 5.0)
             self.assertNotIn("partial_T", spec)
 
     def test_pipeline_rfd3_binder_leaves_fixed_atoms_unset_by_default(self) -> None:
@@ -687,7 +793,14 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb="",
@@ -701,7 +814,9 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
+            inputs = json.loads(
+                (out / "rfd3" / "inputs.json").read_text(encoding="utf-8")
+            )
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("input"), "input.pdb")
             self.assertEqual(spec.get("contig"), "A1-2")
@@ -709,14 +824,23 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertNotIn("partial_T", spec)
             self.assertNotIn("select_fixed_atoms", spec)
 
-    def test_pipeline_rfd3_local_diversify_partial_t_request_default_injected(self) -> None:
+    def test_pipeline_rfd3_local_diversify_partial_t_request_default_injected(
+        self,
+    ) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb="",
@@ -728,16 +852,20 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
+            inputs = json.loads(
+                (out / "rfd3" / "inputs.json").read_text(encoding="utf-8")
+            )
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("input"), "input.pdb")
-            self.assertEqual(spec.get("partial_t"), 10.0)
+            self.assertEqual(spec.get("partial_t"), 5.0)
             self.assertNotIn("partial_T", spec)
             self.assertIn("select_fixed_atoms", spec)
             self.assertEqual(spec["select_fixed_atoms"], {"A1": "ALL"})
             self.assertEqual(spec["unindex"], "A1")
 
-    def test_pipeline_rfd3_auto_mode_with_contig_shifts_first_residue_into_unindex(self) -> None:
+    def test_pipeline_rfd3_auto_mode_with_contig_shifts_first_residue_into_unindex(
+        self,
+    ) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
@@ -745,7 +873,14 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb="",
@@ -757,14 +892,18 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
+            inputs = json.loads(
+                (out / "rfd3" / "inputs.json").read_text(encoding="utf-8")
+            )
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("input"), "input.pdb")
             self.assertEqual(spec.get("contig"), "A2-3")
             self.assertEqual(spec.get("unindex"), "A1")
             self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
 
-    def test_pipeline_rfd3_local_diversify_passthroughs_unindex_and_fixed_atoms(self) -> None:
+    def test_pipeline_rfd3_explicit_local_diversify_still_shifts_first_residue_into_unindex(
+        self,
+    ) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
@@ -772,7 +911,53 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
+            req = PipelineRequest(
+                target_fasta="",
+                target_pdb="",
+                dry_run=True,
+                rfd3_mode="local_diversify",
+                rfd3_contig="A1-3",
+                rfd3_input_pdb=pdb,
+                num_seq_per_tier=1,
+                conservation_tiers=[0.3],
+            )
+            res = runner.run(req)
+            out = Path(res.output_dir)
+            inputs = json.loads(
+                (out / "rfd3" / "inputs.json").read_text(encoding="utf-8")
+            )
+            spec = inputs.get("spec-1") or {}
+            self.assertEqual(spec.get("input"), "input.pdb")
+            self.assertEqual(spec.get("contig"), "A2-3")
+            self.assertEqual(spec.get("unindex"), "A1")
+            self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
+
+    def test_pipeline_rfd3_local_diversify_passthroughs_unindex_and_fixed_atoms(
+        self,
+    ) -> None:
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  SER A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        with _tmpdir() as tmp:
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb="",
@@ -787,7 +972,9 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
+            inputs = json.loads(
+                (out / "rfd3" / "inputs.json").read_text(encoding="utf-8")
+            )
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("input"), "input.pdb")
             self.assertEqual(spec.get("partial_t"), 5.0)
@@ -796,7 +983,9 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertNotIn("contig", spec)
             self.assertNotIn("partial_T", spec)
 
-    def test_pipeline_rfd3_local_diversify_default_unindex_backfills_missing_contig(self) -> None:
+    def test_pipeline_rfd3_local_diversify_default_unindex_backfills_missing_contig(
+        self,
+    ) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
@@ -804,7 +993,14 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb="",
@@ -818,20 +1014,31 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
+            inputs = json.loads(
+                (out / "rfd3" / "inputs.json").read_text(encoding="utf-8")
+            )
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("contig"), "A2-3")
             self.assertEqual(spec.get("unindex"), "A1")
             self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
 
-    def test_pipeline_rfd3_input_only_spec_leaves_fixed_atoms_unset_with_request_default_partial_t(self) -> None:
+    def test_pipeline_rfd3_input_only_spec_leaves_fixed_atoms_unset_with_request_default_partial_t(
+        self,
+    ) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb="",
@@ -847,10 +1054,12 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
+            inputs = json.loads(
+                (out / "rfd3" / "inputs.json").read_text(encoding="utf-8")
+            )
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("input"), "input.pdb")
-            self.assertEqual(spec.get("partial_t"), 10.0)
+            self.assertEqual(spec.get("partial_t"), 5.0)
             self.assertNotIn("partial_T", spec)
             self.assertNotIn("select_fixed_atoms", spec)
 
@@ -861,7 +1070,14 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb="",
@@ -880,7 +1096,9 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
+            inputs = json.loads(
+                (out / "rfd3" / "inputs.json").read_text(encoding="utf-8")
+            )
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("partial_t"), 5)
             self.assertNotIn("partial_T", spec)
@@ -893,7 +1111,14 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb="",
@@ -911,7 +1136,9 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            inputs = json.loads((out / "rfd3" / "inputs.json").read_text(encoding="utf-8"))
+            inputs = json.loads(
+                (out / "rfd3" / "inputs.json").read_text(encoding="utf-8")
+            )
             spec = inputs.get("spec-1") or {}
             self.assertEqual(spec.get("partial_t"), 7)
             self.assertNotIn("partial_T", spec)
@@ -923,7 +1150,14 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta=">q1\nAG\n",
                 target_pdb=pdb,
@@ -937,7 +1171,9 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            diversity = json.loads((out / "rfd3" / "diversity_summary.json").read_text(encoding="utf-8"))
+            diversity = json.loads(
+                (out / "rfd3" / "diversity_summary.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(diversity.get("input_count"), 4)
             self.assertEqual(diversity.get("unique_count"), 1)
             self.assertEqual(diversity.get("duplicate_count"), 3)
@@ -948,7 +1184,9 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertEqual(source.get("duplicate_count"), 3)
             self.assertTrue(bool(source.get("deduplicated")))
 
-    def test_pipeline_rfd3_auto_retry_persists_raw_designs_and_recovers_unique_backbones(self) -> None:
+    def test_pipeline_rfd3_auto_retry_persists_raw_designs_and_recovers_unique_backbones(
+        self,
+    ) -> None:
         pdb = _simple_ca_backbone(0.0)
 
         class _MMseqsStub:
@@ -956,7 +1194,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 _ = kwargs
                 _ = query_fasta
                 a3m = ">query\nAGS\n>hit1\nAGS\n"
-                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode(
+                    "ascii"
+                )
                 return {"tsv": "", "a3m_gz_b64": a3m_b64}
 
         class _RFD3Stub:
@@ -1033,17 +1273,23 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertEqual(int(rfd3.calls[1].get("max_return_designs") or 0), 1)
             self.assertEqual(int(rfd3.calls[2].get("max_return_designs") or 0), 1)
 
-            raw_designs = json.loads((out / "rfd3" / "raw_designs.json").read_text(encoding="utf-8"))
+            raw_designs = json.loads(
+                (out / "rfd3" / "raw_designs.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(len(raw_designs), 5)
             self.assertEqual(len(list((out / "rfd3" / "raw_designs").glob("*.pdb"))), 5)
             self.assertEqual(len(list((out / "rfd3" / "designs").glob("*.pdb"))), 3)
 
-            diversity = json.loads((out / "rfd3" / "diversity_summary.json").read_text(encoding="utf-8"))
+            diversity = json.loads(
+                (out / "rfd3" / "diversity_summary.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(diversity.get("input_count"), 5)
             self.assertEqual(diversity.get("unique_count"), 3)
             self.assertEqual(diversity.get("duplicate_count"), 2)
 
-            debug = json.loads((out / "rfd3" / "debug_summary.json").read_text(encoding="utf-8"))
+            debug = json.loads(
+                (out / "rfd3" / "debug_summary.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(debug.get("sampling_strategy_requested"), "auto")
             self.assertEqual(debug.get("sampling_strategy_effective"), "auto")
             self.assertTrue(bool(debug.get("independent_retry_performed")))
@@ -1051,7 +1297,9 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertEqual(debug.get("requested_count"), 3)
             self.assertEqual(debug.get("final_unique_count"), 3)
 
-    def test_pipeline_rfd3_target_rmsd_gate_retries_until_requested_count_is_filled(self) -> None:
+    def test_pipeline_rfd3_target_rmsd_gate_retries_until_requested_count_is_filled(
+        self,
+    ) -> None:
         target_pdb = _bent_ca_backbone(0.0)
         off_target_batch = [
             _bent_ca_backbone(15.0),
@@ -1069,7 +1317,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 _ = kwargs
                 _ = query_fasta
                 a3m = ">query\nAGSY\n>hit1\nAGSY\n"
-                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode(
+                    "ascii"
+                )
                 return {"tsv": "", "a3m_gz_b64": a3m_b64}
 
         class _RFD3Stub:
@@ -1125,8 +1375,12 @@ class TestPipelineDryRun(unittest.TestCase):
             runner.run(req, run_id="rfd3_target_gate_retry")
 
             out = Path(tmp) / "rfd3_target_gate_retry"
-            debug = json.loads((out / "rfd3" / "debug_summary.json").read_text(encoding="utf-8"))
-            raw_designs = json.loads((out / "rfd3" / "raw_designs.json").read_text(encoding="utf-8"))
+            debug = json.loads(
+                (out / "rfd3" / "debug_summary.json").read_text(encoding="utf-8")
+            )
+            raw_designs = json.loads(
+                (out / "rfd3" / "raw_designs.json").read_text(encoding="utf-8")
+            )
             selected_pdb = (out / "rfd3" / "selected.pdb").read_text(encoding="utf-8")
 
             self.assertEqual(rfd3.calls, [3, 3])
@@ -1135,9 +1389,13 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertEqual(debug.get("off_target_reject_count"), 3)
             self.assertEqual(debug.get("final_unique_count"), 3)
             self.assertAlmostEqual(float(debug.get("target_rmsd_cutoff") or 0.0), 1.0)
-            self.assertLess(float(ca_rmsd(target_pdb, selected_pdb, chains=["A"]) or 99.0), 1.0)
+            self.assertLess(
+                float(ca_rmsd(target_pdb, selected_pdb, chains=["A"]) or 99.0), 1.0
+            )
 
-    def test_pipeline_rfd3_target_rmsd_gate_falls_back_when_zero_backbones_pass(self) -> None:
+    def test_pipeline_rfd3_target_rmsd_gate_falls_back_when_zero_backbones_pass(
+        self,
+    ) -> None:
         target_pdb = _bent_ca_backbone(0.0)
 
         class _MMseqsStub:
@@ -1145,7 +1403,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 _ = kwargs
                 _ = query_fasta
                 a3m = ">query\nAGSY\n>hit1\nAGSY\n"
-                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode(
+                    "ascii"
+                )
                 return {"tsv": "", "a3m_gz_b64": a3m_b64}
 
         class _RFD3Stub:
@@ -1203,14 +1463,22 @@ class TestPipelineDryRun(unittest.TestCase):
             result = runner.run(req, run_id="rfd3_target_gate_fail")
             out = Path(result.output_dir)
             selected_pdb = (out / "rfd3" / "selected.pdb").read_text(encoding="utf-8")
-            selected_meta = json.loads((out / "rfd3" / "selected.json").read_text(encoding="utf-8"))
-            recovery = json.loads((out / "rfd3" / "recovery.json").read_text(encoding="utf-8"))
+            selected_meta = json.loads(
+                (out / "rfd3" / "selected.json").read_text(encoding="utf-8")
+            )
+            recovery = json.loads(
+                (out / "rfd3" / "recovery.json").read_text(encoding="utf-8")
+            )
 
             self.assertEqual(selected_meta.get("source"), "fallback")
             self.assertEqual(selected_pdb, target_pdb)
-            self.assertIn("no acceptable backbones", str(recovery.get("error") or "").lower())
+            self.assertIn(
+                "no acceptable backbones", str(recovery.get("error") or "").lower()
+            )
 
-    def test_pipeline_rfd3_uses_spec_chain_for_gate_and_input_preprocessing(self) -> None:
+    def test_pipeline_rfd3_uses_spec_chain_for_gate_and_input_preprocessing(
+        self,
+    ) -> None:
         multichain_pdb = (
             "ATOM      1  CA  ALA B   1      10.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  GLY B   2      11.000   0.000   0.000  1.00 20.00           C\n"
@@ -1237,7 +1505,14 @@ class TestPipelineDryRun(unittest.TestCase):
             return {chain_id: len(items) for chain_id, items in out.items()}
 
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb=multichain_pdb,
@@ -1253,8 +1528,12 @@ class TestPipelineDryRun(unittest.TestCase):
             res = runner.run(req, run_id="rfd3_spec_chain_hint")
             out = Path(res.output_dir)
 
-            mode_payload = json.loads((out / "rfd3" / "mode.json").read_text(encoding="utf-8"))
-            input_pdb = (out / "rfd3" / "input_files" / "input.pdb").read_text(encoding="utf-8")
+            mode_payload = json.loads(
+                (out / "rfd3" / "mode.json").read_text(encoding="utf-8")
+            )
+            input_pdb = (out / "rfd3" / "input_files" / "input.pdb").read_text(
+                encoding="utf-8"
+            )
             dry_selected = (out / "rfd3" / "selected.pdb").read_text(encoding="utf-8")
 
             self.assertEqual(mode_payload.get("target_gate_design_chains"), ["A"])
@@ -1269,7 +1548,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 _ = kwargs
                 _ = query_fasta
                 a3m = ">query\nAGS\n>hit1\nAGS\n"
-                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode(
+                    "ascii"
+                )
                 return {"tsv": "", "a3m_gz_b64": a3m_b64}
 
         class _RFD3Stub:
@@ -1337,7 +1618,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 _ = kwargs
                 _ = query_fasta
                 a3m = ">query\nAG\n>hit1\nAG\n"
-                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode(
+                    "ascii"
+                )
                 return {"tsv": "", "a3m_gz_b64": a3m_b64}
 
         class _RFD3Stub:
@@ -1393,13 +1676,23 @@ class TestPipelineDryRun(unittest.TestCase):
             run_id = "resume_rfd3_cache"
             runner.run(req, run_id=run_id)
             run_root = Path(tmp) / run_id
-            selected_meta = json.loads((run_root / "rfd3" / "selected.json").read_text(encoding="utf-8"))
+            selected_meta = json.loads(
+                (run_root / "rfd3" / "selected.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(selected_meta.get("id"), "rfd3_spec-1_0_model_0")
-            self.assertEqual(selected_meta.get("upstream_id"), "inputs_spec-1_0_model_0")
-            self.assertEqual(selected_meta.get("json_name"), "rfd3_spec-1_0_model_0.json")
-            designs_meta = json.loads((run_root / "rfd3" / "designs.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                selected_meta.get("upstream_id"), "inputs_spec-1_0_model_0"
+            )
+            self.assertEqual(
+                selected_meta.get("json_name"), "rfd3_spec-1_0_model_0.json"
+            )
+            designs_meta = json.loads(
+                (run_root / "rfd3" / "designs.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(designs_meta[0].get("id"), "rfd3_spec-1_0_model_0")
-            self.assertTrue((run_root / "rfd3" / "designs" / "rfd3_spec-1_0_model_0.pdb").exists())
+            self.assertTrue(
+                (run_root / "rfd3" / "designs" / "rfd3_spec-1_0_model_0.pdb").exists()
+            )
             runpod_job_path = run_root / "rfd3" / "runpod_job.json"
             runpod_meta = json.loads(runpod_job_path.read_text(encoding="utf-8"))
             runpod_meta["job_id"] = "cancelled_job"
@@ -1410,10 +1703,16 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertEqual(rfd3.calls, 1)
             events = [
                 json.loads(line)
-                for line in (run_root / "events.jsonl").read_text(encoding="utf-8").splitlines()
+                for line in (run_root / "events.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
                 if line.strip()
             ]
-            rfd3_completed = [e for e in events if e.get("stage") == "rfd3" and e.get("state") == "completed"]
+            rfd3_completed = [
+                e
+                for e in events
+                if e.get("stage") == "rfd3" and e.get("state") == "completed"
+            ]
             self.assertTrue(rfd3_completed)
             self.assertEqual(rfd3_completed[-1].get("detail"), "cached")
 
@@ -1429,7 +1728,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 _ = kwargs
                 _ = query_fasta
                 a3m = ">query\nAG\n>hit1\nAG\n"
-                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode(
+                    "ascii"
+                )
                 return {"tsv": "", "a3m_gz_b64": a3m_b64}
 
         class _BioEmuStub:
@@ -1443,7 +1744,13 @@ class TestPipelineDryRun(unittest.TestCase):
                 if callable(on_job_id):
                     on_job_id(f"bioemu_job_{self.calls}")
                 return {
-                    "sample_pdbs": [{"id": "bioemu_topology", "pdb": self.sample_pdb, "frame_index": 0}],
+                    "sample_pdbs": [
+                        {
+                            "id": "bioemu_topology",
+                            "pdb": self.sample_pdb,
+                            "frame_index": 0,
+                        }
+                    ],
                     "topology_pdb": self.sample_pdb,
                 }
 
@@ -1482,14 +1789,22 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertEqual(bioemu.calls, 1)
             events = [
                 json.loads(line)
-                for line in (run_root / "events.jsonl").read_text(encoding="utf-8").splitlines()
+                for line in (run_root / "events.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
                 if line.strip()
             ]
-            bioemu_completed = [e for e in events if e.get("stage") == "bioemu" and e.get("state") == "completed"]
+            bioemu_completed = [
+                e
+                for e in events
+                if e.get("stage") == "bioemu" and e.get("state") == "completed"
+            ]
             self.assertTrue(bioemu_completed)
             self.assertIn("cached", str(bioemu_completed[-1].get("detail") or ""))
 
-    def test_pipeline_bioemu_target_rmsd_gate_retries_until_requested_count_is_filled(self) -> None:
+    def test_pipeline_bioemu_target_rmsd_gate_retries_until_requested_count_is_filled(
+        self,
+    ) -> None:
         target_pdb = _bent_ca_backbone(0.0)
         first_batch = [
             _bent_ca_backbone(0.10),
@@ -1517,7 +1832,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 _ = kwargs
                 _ = query_fasta
                 a3m = ">query\nAGSY\n>hit1\nAGSY\n"
-                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode(
+                    "ascii"
+                )
                 return {"tsv": "", "a3m_gz_b64": a3m_b64}
 
         class _BioEmuStub:
@@ -1529,8 +1846,12 @@ class TestPipelineDryRun(unittest.TestCase):
                 call = {
                     "num_samples": int(kwargs.get("num_samples") or 0),
                     "max_return_sample_pdbs": requested_return,
-                    "min_return_sample_pdbs": int(kwargs.get("min_return_sample_pdbs") or 0),
-                    "base_seed": int(kwargs.get("base_seed")) if kwargs.get("base_seed") is not None else None,
+                    "min_return_sample_pdbs": int(
+                        kwargs.get("min_return_sample_pdbs") or 0
+                    ),
+                    "base_seed": int(kwargs.get("base_seed"))
+                    if kwargs.get("base_seed") is not None
+                    else None,
                 }
                 self.calls.append(call)
                 on_job_id = kwargs.get("on_job_id")
@@ -1577,9 +1898,15 @@ class TestPipelineDryRun(unittest.TestCase):
             runner.run(req, run_id="bioemu_target_gate_retry")
 
             out = Path(tmp) / "bioemu_target_gate_retry"
-            debug = json.loads((out / "bioemu" / "debug_summary.json").read_text(encoding="utf-8"))
-            raw_samples = json.loads((out / "bioemu" / "raw_samples.json").read_text(encoding="utf-8"))
-            sample_meta = json.loads((out / "bioemu" / "sample_pdbs.json").read_text(encoding="utf-8"))
+            debug = json.loads(
+                (out / "bioemu" / "debug_summary.json").read_text(encoding="utf-8")
+            )
+            raw_samples = json.loads(
+                (out / "bioemu" / "raw_samples.json").read_text(encoding="utf-8")
+            )
+            sample_meta = json.loads(
+                (out / "bioemu" / "sample_pdbs.json").read_text(encoding="utf-8")
+            )
 
             self.assertEqual(
                 bioemu.calls,
@@ -1613,11 +1940,15 @@ class TestPipelineDryRun(unittest.TestCase):
                 self.assertTrue(sample_id)
                 pdb_path = out / "bioemu" / "designs" / f"{sample_id}.pdb"
                 self.assertTrue(pdb_path.exists())
-                rmsd = ca_rmsd(target_pdb, pdb_path.read_text(encoding="utf-8"), chains=["A"])
+                rmsd = ca_rmsd(
+                    target_pdb, pdb_path.read_text(encoding="utf-8"), chains=["A"]
+                )
                 self.assertIsNotNone(rmsd)
                 self.assertLessEqual(float(rmsd or 99.0), 2.0)
 
-    def test_pipeline_bioemu_target_rmsd_gate_fails_when_retry_budget_is_exhausted(self) -> None:
+    def test_pipeline_bioemu_target_rmsd_gate_fails_when_retry_budget_is_exhausted(
+        self,
+    ) -> None:
         target_pdb = _bent_ca_backbone(0.0)
 
         class _MMseqsStub:
@@ -1625,7 +1956,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 _ = kwargs
                 _ = query_fasta
                 a3m = ">query\nAGSY\n>hit1\nAGSY\n"
-                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode(
+                    "ascii"
+                )
                 return {"tsv": "", "a3m_gz_b64": a3m_b64}
 
         class _BioEmuStub:
@@ -1638,15 +1971,21 @@ class TestPipelineDryRun(unittest.TestCase):
                     {
                         "num_samples": int(kwargs.get("num_samples") or 0),
                         "max_return_sample_pdbs": requested_return,
-                        "min_return_sample_pdbs": int(kwargs.get("min_return_sample_pdbs") or 0),
-                        "base_seed": int(kwargs.get("base_seed")) if kwargs.get("base_seed") is not None else None,
+                        "min_return_sample_pdbs": int(
+                            kwargs.get("min_return_sample_pdbs") or 0
+                        ),
+                        "base_seed": int(kwargs.get("base_seed"))
+                        if kwargs.get("base_seed") is not None
+                        else None,
                     }
                 )
                 on_job_id = kwargs.get("on_job_id")
                 if callable(on_job_id):
                     on_job_id(f"bioemu_target_gate_fail_job_{len(self.calls)}")
                 batch = [
-                    _bent_ca_backbone(5.0 + float(len(self.calls)) + idx, third_y=0.1 * idx)
+                    _bent_ca_backbone(
+                        5.0 + float(len(self.calls)) + idx, third_y=0.1 * idx
+                    )
                     for idx in range(requested_return)
                 ]
                 return {
@@ -1724,7 +2063,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 _ = kwargs
                 _ = query_fasta
                 a3m = ">query\nAG\n>hit1\nAG\n"
-                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode(
+                    "ascii"
+                )
                 return {"tsv": "", "a3m_gz_b64": a3m_b64}
 
         class _BioEmuStub:
@@ -1758,10 +2099,14 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            stage_pdb = (out / "bioemu" / "designs" / "bioemu_topology.pdb").read_text(encoding="utf-8")
+            stage_pdb = (out / "bioemu" / "designs" / "bioemu_topology.pdb").read_text(
+                encoding="utf-8"
+            )
             self.assertIn("ALA A   1", stage_pdb)
             self.assertNotIn("ALA A   0", stage_pdb)
-            output_payload = json.loads((out / "bioemu" / "output.json").read_text(encoding="utf-8"))
+            output_payload = json.loads(
+                (out / "bioemu" / "output.json").read_text(encoding="utf-8")
+            )
             self.assertIn("ALA A   1", str(output_payload.get("topology_pdb") or ""))
             self.assertNotIn("ALA A   0", str(output_payload.get("topology_pdb") or ""))
 
@@ -1777,7 +2122,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 _ = kwargs
                 _ = query_fasta
                 a3m = ">query\nAG\n>hit1\nAG\n"
-                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode(
+                    "ascii"
+                )
                 return {"tsv": "", "a3m_gz_b64": a3m_b64}
 
         class _RFD3Stub:
@@ -1827,7 +2174,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 conservation_tiers=[0.3],
                 num_seq_per_tier=1,
             )
-            with self.assertRaisesRegex(RuntimeError, "RFD3 returned only 1 design PDB"):
+            with self.assertRaisesRegex(
+                RuntimeError, "RFD3 returned only 1 design PDB"
+            ):
                 runner.run(req, run_id="rfd3_missing_design_pdbs")
 
     def test_pipeline_fails_when_bioemu_requested_sample_pdbs_are_missing(self) -> None:
@@ -1842,7 +2191,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 _ = kwargs
                 _ = query_fasta
                 a3m = ">query\nAG\n>hit1\nAG\n"
-                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode(
+                    "ascii"
+                )
                 return {"tsv": "", "a3m_gz_b64": a3m_b64}
 
         class _BioEmuStub:
@@ -1873,10 +2224,14 @@ class TestPipelineDryRun(unittest.TestCase):
                 conservation_tiers=[0.3],
                 num_seq_per_tier=1,
             )
-            with self.assertRaisesRegex(RuntimeError, "BioEmu returned only 1 structure"):
+            with self.assertRaisesRegex(
+                RuntimeError, "BioEmu returned only 1 structure"
+            ):
                 runner.run(req, run_id="bioemu_missing_sample_pdbs")
 
-    def test_pipeline_bioemu_uses_oversampled_generation_count_for_strict_filtered_returns(self) -> None:
+    def test_pipeline_bioemu_uses_oversampled_generation_count_for_strict_filtered_returns(
+        self,
+    ) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
@@ -1895,7 +2250,11 @@ class TestPipelineDryRun(unittest.TestCase):
                     on_job_id("bioemu_job_oversampled")
                 return {
                     "sample_pdbs": [
-                        {"id": f"bioemu_{i:03d}", "pdb": self.sample_pdb, "frame_index": i}
+                        {
+                            "id": f"bioemu_{i:03d}",
+                            "pdb": self.sample_pdb,
+                            "frame_index": i,
+                        }
                         for i in range(10)
                     ],
                     "topology_pdb": self.sample_pdb,
@@ -1953,14 +2312,22 @@ class TestPipelineDryRun(unittest.TestCase):
                 _ = query_fasta
                 if bool(kwargs.get("return_a3m")):
                     a3m = ">query\nACDEFGHIK\n>hit1\nACDEFGHIK\n"
-                    a3m_b64 = base64.b64encode(gzip.compress(a3m.encode("utf-8"))).decode("ascii")
+                    a3m_b64 = base64.b64encode(
+                        gzip.compress(a3m.encode("utf-8"))
+                    ).decode("ascii")
                     return {"tsv": "", "a3m_gz_b64": a3m_b64}
                 self.novelty_calls += 1
                 return {"tsv": "q1\thit1\t99.0\n"}
 
         with _tmpdir() as tmp:
             mmseqs = _MMseqsStub()
-            runner = PipelineRunner(output_root=tmp, mmseqs=mmseqs, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=mmseqs,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+            )
             req = PipelineRequest(
                 target_fasta=fasta,
                 target_pdb=pdb,
@@ -1981,10 +2348,16 @@ class TestPipelineDryRun(unittest.TestCase):
             run_root = Path(tmp) / run_id
             events = [
                 json.loads(line)
-                for line in (run_root / "events.jsonl").read_text(encoding="utf-8").splitlines()
+                for line in (run_root / "events.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
                 if line.strip()
             ]
-            novelty_completed = [e for e in events if e.get("stage") == "novelty_30" and e.get("state") == "completed"]
+            novelty_completed = [
+                e
+                for e in events
+                if e.get("stage") == "novelty_30" and e.get("state") == "completed"
+            ]
             self.assertTrue(novelty_completed)
             self.assertEqual(novelty_completed[-1].get("detail"), "cached")
 
@@ -1995,7 +2368,14 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb="",
@@ -2014,16 +2394,36 @@ class TestPipelineDryRun(unittest.TestCase):
             out = Path(res.output_dir)
             payload = json.loads((out / "backbones.json").read_text(encoding="utf-8"))
             backbones = payload.get("backbones") or []
-            sources = [str(item.get("source") or "") for item in backbones if isinstance(item, dict)]
+            sources = [
+                str(item.get("source") or "")
+                for item in backbones
+                if isinstance(item, dict)
+            ]
             self.assertEqual(sources.count("rfd3"), 1)
             self.assertEqual(sources.count("bioemu"), 3)
-            rfd3_ids = [str(item.get("id") or "") for item in backbones if isinstance(item, dict) and item.get("source") == "rfd3"]
+            rfd3_ids = [
+                str(item.get("id") or "")
+                for item in backbones
+                if isinstance(item, dict) and item.get("source") == "rfd3"
+            ]
             self.assertTrue(all(rid.startswith("rfd3_") for rid in rfd3_ids))
             self.assertFalse(any("inputs_spec" in rid for rid in rfd3_ids))
 
-            source_summary = payload.get("sources") if isinstance(payload.get("sources"), dict) else {}
-            rfd3_summary = source_summary.get("rfd3") if isinstance(source_summary.get("rfd3"), dict) else {}
-            bioemu_summary = source_summary.get("bioemu") if isinstance(source_summary.get("bioemu"), dict) else {}
+            source_summary = (
+                payload.get("sources")
+                if isinstance(payload.get("sources"), dict)
+                else {}
+            )
+            rfd3_summary = (
+                source_summary.get("rfd3")
+                if isinstance(source_summary.get("rfd3"), dict)
+                else {}
+            )
+            bioemu_summary = (
+                source_summary.get("bioemu")
+                if isinstance(source_summary.get("bioemu"), dict)
+                else {}
+            )
             self.assertEqual(rfd3_summary.get("requested_count"), 2)
             self.assertEqual(rfd3_summary.get("observed_count"), 2)
             self.assertEqual(rfd3_summary.get("materialized_count"), 1)
@@ -2046,19 +2446,39 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertTrue(primary.get("materialized"))
             self.assertEqual(primary.get("origin_stage"), "rfd3")
 
-            first_bioemu = next(item for item in backbones if isinstance(item, dict) and item.get("source") == "bioemu")
+            first_bioemu = next(
+                item
+                for item in backbones
+                if isinstance(item, dict) and item.get("source") == "bioemu"
+            )
             self.assertTrue(first_bioemu.get("propagated"))
             self.assertTrue(first_bioemu.get("materialized"))
             self.assertEqual(first_bioemu.get("origin_stage"), "bioemu")
             self.assertIsInstance(first_bioemu.get("frame_index"), int)
 
             tier_payload = json.loads(
-                (out / "tiers" / "30" / "proteinmpnn_backbones.json").read_text(encoding="utf-8")
+                (out / "tiers" / "30" / "proteinmpnn_backbones.json").read_text(
+                    encoding="utf-8"
+                )
             )
-            tier_backbones = tier_payload.get("backbones") if isinstance(tier_payload.get("backbones"), list) else []
+            tier_backbones = (
+                tier_payload.get("backbones")
+                if isinstance(tier_payload.get("backbones"), list)
+                else []
+            )
             self.assertEqual(len(tier_backbones), 4)
-            self.assertTrue(all(isinstance(item, dict) and item.get("propagated") for item in tier_backbones))
-            self.assertTrue(all(isinstance(item, dict) and item.get("source") in {"rfd3", "bioemu"} for item in tier_backbones))
+            self.assertTrue(
+                all(
+                    isinstance(item, dict) and item.get("propagated")
+                    for item in tier_backbones
+                )
+            )
+            self.assertTrue(
+                all(
+                    isinstance(item, dict) and item.get("source") in {"rfd3", "bioemu"}
+                    for item in tier_backbones
+                )
+            )
             self.assertTrue(
                 all(
                     isinstance(item, dict)
@@ -2068,14 +2488,23 @@ class TestPipelineDryRun(unittest.TestCase):
                 )
             )
 
-    def test_pipeline_dry_run_generates_120_sequences_for_10_rfd3_and_10_bioemu_backbones(self) -> None:
+    def test_pipeline_dry_run_generates_120_sequences_for_10_rfd3_and_10_bioemu_backbones(
+        self,
+    ) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta="",
                 target_pdb="",
@@ -2095,22 +2524,44 @@ class TestPipelineDryRun(unittest.TestCase):
             out = Path(res.output_dir)
 
             self.assertEqual(len(res.tiers), 3)
-            self.assertTrue(all(len(tier.proteinmpnn_samples) == 22 for tier in res.tiers))
-            self.assertEqual(sum(len(tier.proteinmpnn_samples) for tier in res.tiers), 66)
+            self.assertTrue(
+                all(len(tier.proteinmpnn_samples) == 22 for tier in res.tiers)
+            )
+            self.assertEqual(
+                sum(len(tier.proteinmpnn_samples) for tier in res.tiers), 66
+            )
 
             payload = json.loads((out / "backbones.json").read_text(encoding="utf-8"))
-            source_summary = payload.get("sources") if isinstance(payload.get("sources"), dict) else {}
-            rfd3_summary = source_summary.get("rfd3") if isinstance(source_summary.get("rfd3"), dict) else {}
-            bioemu_summary = source_summary.get("bioemu") if isinstance(source_summary.get("bioemu"), dict) else {}
+            source_summary = (
+                payload.get("sources")
+                if isinstance(payload.get("sources"), dict)
+                else {}
+            )
+            rfd3_summary = (
+                source_summary.get("rfd3")
+                if isinstance(source_summary.get("rfd3"), dict)
+                else {}
+            )
+            bioemu_summary = (
+                source_summary.get("bioemu")
+                if isinstance(source_summary.get("bioemu"), dict)
+                else {}
+            )
             self.assertEqual(rfd3_summary.get("propagated_count"), 1)
             self.assertEqual(rfd3_summary.get("duplicate_count"), 9)
             self.assertEqual(bioemu_summary.get("propagated_count"), 10)
 
             for tier_key in ("30", "50", "70"):
                 tier_payload = json.loads(
-                    (out / "tiers" / tier_key / "proteinmpnn_backbones.json").read_text(encoding="utf-8")
+                    (out / "tiers" / tier_key / "proteinmpnn_backbones.json").read_text(
+                        encoding="utf-8"
+                    )
                 )
-                tier_backbones = tier_payload.get("backbones") if isinstance(tier_payload.get("backbones"), list) else []
+                tier_backbones = (
+                    tier_payload.get("backbones")
+                    if isinstance(tier_payload.get("backbones"), list)
+                    else []
+                )
                 self.assertEqual(len(tier_backbones), 11)
                 self.assertTrue(
                     all(
@@ -2135,7 +2586,9 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             req = PipelineRequest(
                 target_fasta=fasta,
                 target_pdb=pdb,
@@ -2146,7 +2599,11 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            fixed = json.loads((out / "tiers" / "30" / "fixed_positions.json").read_text(encoding="utf-8"))
+            fixed = json.loads(
+                (out / "tiers" / "30" / "fixed_positions.json").read_text(
+                    encoding="utf-8"
+                )
+            )
             self.assertIn(9, fixed.get("A", []))
 
     def test_pipeline_projects_original_ligand_mask_to_rfd3_backbone(self) -> None:
@@ -2164,7 +2621,14 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None, rfd3=None)
+            runner = PipelineRunner(
+                output_root=tmp,
+                mmseqs=None,
+                proteinmpnn=None,
+                soluprot=None,
+                af2=None,
+                rfd3=None,
+            )
             req = PipelineRequest(
                 target_fasta=">q1\nACD\n",
                 target_pdb=target_pdb_with_ligand,
@@ -2177,19 +2641,27 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            projected = json.loads((out / "ligand_mask_original_target.json").read_text(encoding="utf-8"))
+            projected = json.loads(
+                (out / "ligand_mask_original_target.json").read_text(encoding="utf-8")
+            )
             query_by_chain = projected.get("query_positions_by_chain") or {}
             projected_positions = query_by_chain.get("A") or []
             self.assertTrue(projected_positions)
 
-            fixed = json.loads((out / "tiers" / "30" / "fixed_positions.json").read_text(encoding="utf-8"))
+            fixed = json.loads(
+                (out / "tiers" / "30" / "fixed_positions.json").read_text(
+                    encoding="utf-8"
+                )
+            )
             fixed_a = set(fixed.get("A") or [])
             self.assertTrue(set(int(p) for p in projected_positions).issubset(fixed_a))
 
     def test_pipeline_requires_fixed_positions_extra_for_sequence_only(self) -> None:
         fasta = ">q1\nACDEFGHIK\n"
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             req = PipelineRequest(
                 target_fasta=fasta,
                 target_pdb="",
@@ -2201,7 +2673,9 @@ class TestPipelineDryRun(unittest.TestCase):
             with self.assertRaises(Exception) as ctx:
                 runner.run(req, run_id=run_id)
             self.assertIn("fixed_positions_extra", str(ctx.exception))
-            status = json.loads((Path(tmp) / run_id / "status.json").read_text(encoding="utf-8"))
+            status = json.loads(
+                (Path(tmp) / run_id / "status.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(status.get("stage"), "needs_fixed_positions_extra")
             self.assertEqual(status.get("state"), "failed")
 
@@ -2220,7 +2694,9 @@ class TestPipelineDryRun(unittest.TestCase):
             "END\n"
         )
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             req = PipelineRequest(
                 target_fasta=fasta,
                 target_pdb=pdb,
@@ -2232,12 +2708,16 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            af2_scores = json.loads((out / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8"))
+            af2_scores = json.loads(
+                (out / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8")
+            )
             candidate_ids = af2_scores.get("candidate_ids") or []
             self.assertEqual(len(candidate_ids), 1)
             self.assertTrue(bool(af2_scores.get("candidate_budget_applied")))
             self.assertEqual(int(af2_scores.get("max_candidates_per_tier") or 0), 1)
-            self.assertGreater(int(af2_scores.get("candidate_count_before_budget") or 0), 1)
+            self.assertGreater(
+                int(af2_scores.get("candidate_count_before_budget") or 0), 1
+            )
 
     def test_chain_strategy_forces_single_chain_in_monomer_mode(self) -> None:
         fasta = ">q1\nACD\n"
@@ -2252,7 +2732,9 @@ class TestPipelineDryRun(unittest.TestCase):
         )
 
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             req = PipelineRequest(
                 target_fasta=fasta,
                 target_pdb=pdb,
@@ -2264,10 +2746,14 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             res = runner.run(req)
             out = Path(res.output_dir)
-            payload = json.loads((out / "tiers" / "30" / "proteinmpnn.json").read_text(encoding="utf-8"))
+            payload = json.loads(
+                (out / "tiers" / "30" / "proteinmpnn.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(payload["request"]["pdb_path_chains"], ["A"])
 
-    def test_proteinmpnn_input_pdb_text_strips_partner_chains_for_monomer_af2(self) -> None:
+    def test_proteinmpnn_input_pdb_text_strips_partner_chains_for_monomer_af2(
+        self,
+    ) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
@@ -2282,10 +2768,14 @@ class TestPipelineDryRun(unittest.TestCase):
             af2_model_preset="monomer",
         )
 
-        self.assertEqual(set(residues_by_chain(processed, only_atom_records=True).keys()), {"A"})
+        self.assertEqual(
+            set(residues_by_chain(processed, only_atom_records=True).keys()), {"A"}
+        )
         self.assertNotIn(" B ", processed)
 
-    def test_proteinmpnn_input_pdb_text_keeps_partner_chains_for_multimer_af2(self) -> None:
+    def test_proteinmpnn_input_pdb_text_keeps_partner_chains_for_multimer_af2(
+        self,
+    ) -> None:
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
             "ATOM      2  CA  CYS A   2       1.000   0.000   0.000  1.00 20.00           C\n"
@@ -2300,12 +2790,18 @@ class TestPipelineDryRun(unittest.TestCase):
             af2_model_preset="multimer",
         )
 
-        self.assertEqual(set(residues_by_chain(processed, only_atom_records=True).keys()), {"A", "B"})
+        self.assertEqual(
+            set(residues_by_chain(processed, only_atom_records=True).keys()), {"A", "B"}
+        )
         self.assertIn(" B ", processed)
 
-    def test_pipeline_rejects_unsafe_partial_rerun_when_design_inputs_change(self) -> None:
+    def test_pipeline_rejects_unsafe_partial_rerun_when_design_inputs_change(
+        self,
+    ) -> None:
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             run_id = "partial_rerun_guard"
             initial = PipelineRequest(
                 target_fasta=">q1\nACDEFGHIK\n",
@@ -2329,9 +2825,13 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertIn("target_fasta", str(ctx.exception))
             self.assertIn("start_from='design'", str(ctx.exception))
 
-    def test_pipeline_design_boundary_rerun_refreshes_design_and_msa_fingerprints(self) -> None:
+    def test_pipeline_design_boundary_rerun_refreshes_design_and_msa_fingerprints(
+        self,
+    ) -> None:
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             run_id = "partial_rerun_design"
             initial = PipelineRequest(
                 target_fasta=">q1\nACDEFGHIK\n",
@@ -2353,20 +2853,28 @@ class TestPipelineDryRun(unittest.TestCase):
             res = runner.run(rerun, run_id=run_id)
             out = Path(res.output_dir)
 
-            designs_fasta = (out / "tiers" / "30" / "designs.fasta").read_text(encoding="utf-8")
+            designs_fasta = (out / "tiers" / "30" / "designs.fasta").read_text(
+                encoding="utf-8"
+            )
             self.assertIn("YYYYYYYYY", designs_fasta)
             self.assertNotIn("ACDEFGHIK", designs_fasta)
 
-            msa_meta = json.loads((out / "msa" / "request_meta.json").read_text(encoding="utf-8"))
+            msa_meta = json.loads(
+                (out / "msa" / "request_meta.json").read_text(encoding="utf-8")
+            )
             self.assertTrue(str(msa_meta.get("request_hash") or "").strip())
 
-            proteinmpnn_payload = json.loads((out / "tiers" / "30" / "proteinmpnn.json").read_text(encoding="utf-8"))
+            proteinmpnn_payload = json.loads(
+                (out / "tiers" / "30" / "proteinmpnn.json").read_text(encoding="utf-8")
+            )
             self.assertTrue(str(proteinmpnn_payload.get("request_hash") or "").strip())
             self.assertTrue(str(proteinmpnn_payload.get("input_hash") or "").strip())
 
     def test_pipeline_af2_partial_rerun_allows_af2_only_changes(self) -> None:
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             run_id = "partial_rerun_af2"
             initial = PipelineRequest(
                 target_fasta=">q1\nACDEFGHIK\n",
@@ -2388,10 +2896,16 @@ class TestPipelineDryRun(unittest.TestCase):
                 af2_plddt_cutoff=70.0,
             )
             res = runner.run(rerun, run_id=run_id)
-            request_payload = json.loads((Path(res.output_dir) / "request.json").read_text(encoding="utf-8"))
-            self.assertEqual(float(request_payload.get("af2_plddt_cutoff") or 0.0), 70.0)
+            request_payload = json.loads(
+                (Path(res.output_dir) / "request.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                float(request_payload.get("af2_plddt_cutoff") or 0.0), 70.0
+            )
 
-    def test_pipeline_rerun_same_id_retries_previous_af2_missing_pdb_failures(self) -> None:
+    def test_pipeline_rerun_same_id_retries_previous_af2_missing_pdb_failures(
+        self,
+    ) -> None:
         fasta = ">q1\nACDE\n"
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
@@ -2428,7 +2942,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 self.calls += 1
                 raw_resume = kwargs.get("resume_job_ids")
                 if isinstance(raw_resume, dict):
-                    self.resume_history.append({str(k): str(v) for k, v in raw_resume.items()})
+                    self.resume_history.append(
+                        {str(k): str(v) for k, v in raw_resume.items()}
+                    )
                 else:
                     self.resume_history.append(None)
                 on_job_id = kwargs.get("on_job_id")
@@ -2439,7 +2955,10 @@ class TestPipelineDryRun(unittest.TestCase):
                     str(seq.id): {
                         "best_model": "model_1",
                         "best_plddt": 91.0,
-                        "ranking_debug": {"order": ["model_1"], "plddts": {"model_1": 91.0}},
+                        "ranking_debug": {
+                            "order": ["model_1"],
+                            "plddts": {"model_1": 91.0},
+                        },
                         "ranked_0_pdb": self.ranked_pdb,
                     }
                     for seq in sequences
@@ -2471,9 +2990,15 @@ class TestPipelineDryRun(unittest.TestCase):
             first_runner.run(req, run_id=run_id)
 
             run_root = Path(tmp) / run_id
-            first_wt_metrics = json.loads((run_root / "wt" / "metrics.json").read_text(encoding="utf-8"))
+            first_wt_metrics = json.loads(
+                (run_root / "wt" / "metrics.json").read_text(encoding="utf-8")
+            )
             self.assertTrue(bool(((first_wt_metrics.get("af2") or {}).get("skipped"))))
-            first_tier_af2 = json.loads((run_root / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8"))
+            first_tier_af2 = json.loads(
+                (run_root / "tiers" / "30" / "af2_scores.json").read_text(
+                    encoding="utf-8"
+                )
+            )
             self.assertTrue(bool(first_tier_af2.get("recovered")))
 
             success = _SuccessfulColabFoldStub(pdb)
@@ -2491,15 +3016,23 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertIsNone(success.resume_history[0])
             self.assertIsNone(success.resume_history[1])
 
-            wt_metrics = json.loads((run_root / "wt" / "metrics.json").read_text(encoding="utf-8"))
+            wt_metrics = json.loads(
+                (run_root / "wt" / "metrics.json").read_text(encoding="utf-8")
+            )
             self.assertFalse(bool(((wt_metrics.get("af2") or {}).get("skipped"))))
             self.assertTrue((run_root / "wt" / "af2" / "ranked_0.pdb").exists())
 
-            tier_af2 = json.loads((run_root / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8"))
+            tier_af2 = json.loads(
+                (run_root / "tiers" / "30" / "af2_scores.json").read_text(
+                    encoding="utf-8"
+                )
+            )
             self.assertFalse(bool(tier_af2.get("recovered")))
             self.assertTrue(bool(tier_af2.get("selected_ids")))
 
-    def test_pipeline_af2_missing_pdb_failure_does_not_recover_entire_tier_when_other_candidates_succeed(self) -> None:
+    def test_pipeline_af2_missing_pdb_failure_does_not_recover_entire_tier_when_other_candidates_succeed(
+        self,
+    ) -> None:
         fasta = ">q1\nACDE\n"
         pdb = (
             "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
@@ -2526,13 +3059,19 @@ class TestPipelineDryRun(unittest.TestCase):
                 if callable(on_job_id):
                     for idx, seq_id in enumerate(seq_ids, start=1):
                         on_job_id(seq_id, f"job_{len(self.calls)}_{idx}")
-                if any(seq_id.endswith("fallback_001") or seq_id.endswith(":1") for seq_id in seq_ids):
+                if any(
+                    seq_id.endswith("fallback_001") or seq_id.endswith(":1")
+                    for seq_id in seq_ids
+                ):
                     raise RuntimeError(af2_error)
                 return {
                     seq_id: {
                         "best_model": "model_1",
                         "best_plddt": 91.0,
-                        "ranking_debug": {"order": ["model_1"], "plddts": {"model_1": 91.0}},
+                        "ranking_debug": {
+                            "order": ["model_1"],
+                            "plddts": {"model_1": 91.0},
+                        },
                         "ranked_0_pdb": self.ranked_pdb,
                     }
                     for seq_id in seq_ids
@@ -2564,16 +3103,33 @@ class TestPipelineDryRun(unittest.TestCase):
             res = runner.run(req, run_id="partial_af2_missing_pdb")
 
             run_root = Path(res.output_dir)
-            tier_af2 = json.loads((run_root / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8"))
+            tier_af2 = json.loads(
+                (run_root / "tiers" / "30" / "af2_scores.json").read_text(
+                    encoding="utf-8"
+                )
+            )
             self.assertEqual(stub.calls[1], ["target:fallback_001"])
             self.assertEqual(stub.calls[2], ["target:fallback_002"])
             self.assertFalse(bool(tier_af2.get("recovered")))
             self.assertTrue(bool(tier_af2.get("selected_ids")))
             self.assertIn("target:fallback_001", tier_af2.get("failed_ids") or [])
-            self.assertIn("target:fallback_001", tier_af2.get("prediction_errors") or {})
-            self.assertTrue((run_root / "tiers" / "30" / "af2" / "target_fallback_002" / "ranked_0.pdb").exists())
+            self.assertIn(
+                "target:fallback_001", tier_af2.get("prediction_errors") or {}
+            )
+            self.assertTrue(
+                (
+                    run_root
+                    / "tiers"
+                    / "30"
+                    / "af2"
+                    / "target_fallback_002"
+                    / "ranked_0.pdb"
+                ).exists()
+            )
 
-    def test_pipeline_af2_rmsd_uses_parent_backbone_for_multi_backbone_candidates(self) -> None:
+    def test_pipeline_af2_rmsd_uses_parent_backbone_for_multi_backbone_candidates(
+        self,
+    ) -> None:
         fasta = ">q1\nAGSY\n"
         target_pdb = _bent_ca_backbone(0.0)
         bioemu_pdb = _bent_ca_backbone(1.5, third_y=0.3, third_z=0.5, tail_y=0.2)
@@ -2595,11 +3151,16 @@ class TestPipelineDryRun(unittest.TestCase):
                 out = {}
                 for seq in sequences:
                     seq_id = str(seq.id)
-                    ranked_pdb = bioemu_pdb if seq_id.startswith("bioemu_000:") else target_pdb
+                    ranked_pdb = (
+                        bioemu_pdb if seq_id.startswith("bioemu_000:") else target_pdb
+                    )
                     out[seq_id] = {
                         "best_model": "model_1",
                         "best_plddt": 91.0,
-                        "ranking_debug": {"order": ["model_1"], "plddts": {"model_1": 91.0}},
+                        "ranking_debug": {
+                            "order": ["model_1"],
+                            "plddts": {"model_1": 91.0},
+                        },
                         "ranked_0_pdb": ranked_pdb,
                     }
                 return out
@@ -2632,15 +3193,25 @@ class TestPipelineDryRun(unittest.TestCase):
             res = runner.run(req, run_id="multi_backbone_parent_rmsd")
 
             tier_af2 = json.loads(
-                (Path(res.output_dir) / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8")
+                (Path(res.output_dir) / "tiers" / "30" / "af2_scores.json").read_text(
+                    encoding="utf-8"
+                )
             )
             rmsd_scores = tier_af2.get("rmsd_scores") or {}
             target_rmsd_scores = tier_af2.get("target_rmsd_scores") or {}
 
-            self.assertAlmostEqual(float(rmsd_scores.get("target:fallback_001") or 0.0), 0.0, places=6)
-            self.assertAlmostEqual(float(rmsd_scores.get("bioemu_000:fallback_001") or 0.0), 0.0, places=6)
-            self.assertGreater(float(target_rmsd_scores.get("bioemu_000:fallback_001") or 0.0), 0.1)
-            self.assertEqual(str(tier_af2.get("rmsd_reference_mode") or ""), "parent_backbone")
+            self.assertAlmostEqual(
+                float(rmsd_scores.get("target:fallback_001") or 0.0), 0.0, places=6
+            )
+            self.assertAlmostEqual(
+                float(rmsd_scores.get("bioemu_000:fallback_001") or 0.0), 0.0, places=6
+            )
+            self.assertGreater(
+                float(target_rmsd_scores.get("bioemu_000:fallback_001") or 0.0), 0.1
+            )
+            self.assertEqual(
+                str(tier_af2.get("rmsd_reference_mode") or ""), "parent_backbone"
+            )
 
     def test_pipeline_wt_and_target_rmsd_use_processed_target_reference(self) -> None:
         fasta = ">q1\nAGSY\n"
@@ -2679,7 +3250,10 @@ class TestPipelineDryRun(unittest.TestCase):
                     str(seq.id): {
                         "best_model": "model_1",
                         "best_plddt": 91.0,
-                        "ranking_debug": {"order": ["model_1"], "plddts": {"model_1": 91.0}},
+                        "ranking_debug": {
+                            "order": ["model_1"],
+                            "plddts": {"model_1": 91.0},
+                        },
                         "ranked_0_pdb": processed_target_pdb,
                     }
                     for seq in sequences
@@ -2715,17 +3289,31 @@ class TestPipelineDryRun(unittest.TestCase):
             res = runner.run(req, run_id="processed_target_reference")
             out = Path(res.output_dir)
 
-            wt_metrics = json.loads((out / "wt" / "metrics.json").read_text(encoding="utf-8"))
-            tier_af2 = json.loads((out / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8"))
+            wt_metrics = json.loads(
+                (out / "wt" / "metrics.json").read_text(encoding="utf-8")
+            )
+            tier_af2 = json.loads(
+                (out / "tiers" / "30" / "af2_scores.json").read_text(encoding="utf-8")
+            )
             target_rmsd_scores = tier_af2.get("target_rmsd_scores") or {}
 
             self.assertAlmostEqual(float(wt_metrics["af2"]["rmsd_ca"]), 0.0, places=6)
-            self.assertAlmostEqual(float(target_rmsd_scores.get("target:fallback_001") or 0.0), 0.0, places=6)
-            self.assertAlmostEqual(float(target_rmsd_scores.get("bioemu_000:fallback_001") or 0.0), 0.0, places=6)
+            self.assertAlmostEqual(
+                float(target_rmsd_scores.get("target:fallback_001") or 0.0),
+                0.0,
+                places=6,
+            )
+            self.assertAlmostEqual(
+                float(target_rmsd_scores.get("bioemu_000:fallback_001") or 0.0),
+                0.0,
+                places=6,
+            )
 
     def test_pipeline_selected_tiers_limits_outputs_to_requested_tier(self) -> None:
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             req = PipelineRequest(
                 target_fasta=">q1\nACDEFGHIK\n",
                 target_pdb="",
@@ -2741,12 +3329,16 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertTrue((out / "tiers" / "50" / "af2_scores.json").exists())
             self.assertFalse((out / "tiers" / "70").exists())
 
-            request_payload = json.loads((out / "request.json").read_text(encoding="utf-8"))
+            request_payload = json.loads(
+                (out / "request.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(request_payload.get("selected_tiers"), [0.5])
 
     def test_pipeline_partial_rerun_scopes_cleanup_to_selected_tiers(self) -> None:
         with _tmpdir() as tmp:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            runner = PipelineRunner(
+                output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
+            )
             run_id = "partial_rerun_selected_tier"
             initial = PipelineRequest(
                 target_fasta=">q1\nACDEFGHIK\n",

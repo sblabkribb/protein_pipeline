@@ -1535,11 +1535,9 @@ def _rfd3_simple_inputs(
         contig_val = request.rfd3_contig
         unindex_val = request.rfd3_unindex
         fixed_val = request.rfd3_select_fixed_atoms
-        explicit_mode = _normalize_rfd3_mode(request.rfd3_mode)
 
         if (
-            explicit_mode is None
-            and unindex_val is None
+            unindex_val is None
             and fixed_val is None
             and contig_val is not None
         ):

@@ -819,7 +819,7 @@ class TestTools(unittest.TestCase):
 
     def test_pipeline_request_defaults_rfd3_target_rmsd_cutoff_when_omitted(self) -> None:
         req = pipeline_request_from_args({"target_fasta": ">q1\nACDEFGHIK\n"})
-        self.assertIsNone(req.rfd3_target_rmsd_cutoff)
+        self.assertEqual(req.rfd3_target_rmsd_cutoff, 2.0)
 
     def test_pipeline_request_preserves_explicit_zero_rfd3_target_rmsd_cutoff(self) -> None:
         req = pipeline_request_from_args(
@@ -832,7 +832,7 @@ class TestTools(unittest.TestCase):
 
     def test_pipeline_request_defaults_bioemu_target_rmsd_cutoff_when_omitted(self) -> None:
         req = pipeline_request_from_args({"target_fasta": ">q1\nACDEFGHIK\n", "bioemu_use": True})
-        self.assertIsNone(req.bioemu_target_rmsd_cutoff)
+        self.assertEqual(req.bioemu_target_rmsd_cutoff, 2.0)
 
     def test_pipeline_request_preserves_explicit_zero_bioemu_target_rmsd_cutoff(self) -> None:
         req = pipeline_request_from_args(

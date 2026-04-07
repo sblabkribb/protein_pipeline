@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>K-Biofoundry | Protein Pipeline Console</title>
-    <link rel="stylesheet" href="./styles.css?v=20260407_v3" />
+    <link rel="stylesheet" href="./styles.css?v=20260407_v6" />
   </head>
   <body>
     <div class="bg-orb orb-a" aria-hidden="true"></div>
@@ -227,6 +227,10 @@
                   <p data-i18n="home.card.studio.desc">
                     Build and run a workflow stage by stage while watching the outputs.
                   </p>
+                </button>
+                <button class="home-mode-card" type="button" data-home-target="evolution">
+                  <h3 data-i18n="home.card.evolution.title">Evolution</h3>
+                  <p data-i18n="home.card.evolution.desc">Autonomous multi-round sequence design pipeline.</p>
                 </button>
               </div>
               <div class="home-context-strip">
@@ -531,6 +535,44 @@
                     <span data-i18n="evolution.samplesPerRound.label">Samples Per Round</span>
                     <input id="evolutionSamplesPerRoundInput" type="number" min="1" step="1" value="5" />
                   </label>
+                  <div class="panel-header" style="margin-top: 1rem;">
+                    <h4 data-i18n="evolution.filtering.title">Filtering</h4>
+                  </div>
+                  <label class="fast-field">
+                    <span data-i18n="evolution.af2PlddtCutoff.label">ColabFold pLDDT Cutoff</span>
+                    <input id="evolutionAf2PlddtCutoffInput" type="number" min="0" max="100" step="0.1" value="85" />
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="evolution.af2RmsdCutoff.label">ColabFold RMSD Cutoff</span>
+                    <input id="evolutionAf2RmsdCutoffInput" type="number" min="0.01" step="0.01" value="2.0" />
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="evolution.relaxScoreCutoff.label">Rosetta Relax Score/Residue Cutoff</span>
+                    <input id="evolutionRelaxScoreCutoffInput" type="number" step="0.1" value="0.0" />
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="evolution.bioemuTargetRmsdCutoff.label">BioEmu Input-Backbone RMSD Limit</span>
+                    <input id="evolutionBioemuTargetRmsdCutoffInput" type="number" min="0" step="0.01" value="2.0" />
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="evolution.rfd3TargetRmsdCutoff.label">RFD3 Input-Backbone RMSD Limit</span>
+                    <input id="evolutionRfd3TargetRmsdCutoffInput" type="number" min="0" step="0.01" value="2.0" />
+                  </label>
+
+                  <div class="panel-header" style="margin-top: 1rem;">
+                    <h4 data-i18n="evolution.constraints.title">Constraints</h4>
+                  </div>
+                  <label class="fast-field">
+                    <span data-i18n="evolution.bioemuSteeringConfig.label">BioEmu Steering Config</span>
+                    <textarea id="evolutionBioemuSteeringConfigInput" rows="3" placeholder="JSON config"></textarea>
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="evolution.fixedPositionsExtra.label">Fixed Positions Extra</span>
+                    <textarea id="evolutionFixedPositionsExtraInput" rows="3" placeholder="A:6,10;*:120"></textarea>
+                  </label>
+
+                  <div class="panel-divider"></div>
+
                 </aside>
               </div>
             </div>
@@ -1615,6 +1657,6 @@
     <button id="copilotFabBtn" class="primary copilot-fab" data-i18n="copilot.open">Copilot</button>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260407_v3"></script>
+    <script type="module" src="./app.js?v=20260407_v7"></script>
   </body>
 </html>

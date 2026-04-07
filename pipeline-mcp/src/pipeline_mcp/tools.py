@@ -5246,7 +5246,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     rfd3_target_rmsd_cutoff = (
         _as_float(rfd3_target_rmsd_cutoff_raw, 0.0)
         if rfd3_target_rmsd_cutoff_specified
-        else None
+        else 2.0
     )
     rfd3_max_attempted_designs = (
         _as_int(args.get("rfd3_max_attempted_designs"), 0)
@@ -5282,7 +5282,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     bioemu_target_rmsd_cutoff = (
         _as_float(bioemu_target_rmsd_cutoff_raw, 0.0)
         if bioemu_target_rmsd_cutoff_specified
-        else None
+        else 2.0
     )
     backbone_filter_use_dssp = _as_bool(args.get("backbone_filter_use_dssp"), True)
     bioemu_max_attempted_structures = (

@@ -656,6 +656,29 @@ body {
   gap: 18px;
 }
 
+.evolution-shell {
+  min-height: 460px;
+}
+
+.evolution-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.evolution-input-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.evolution-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .rounds-shell {
   min-height: 460px;
 }

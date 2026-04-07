@@ -71,7 +71,7 @@ import {
   workflowStudioExecutionTarget,
   workflowStudioVisibleStageFields,
   withFixedPositionsExtra,
-} from "./lib/pipeline.js?v=20260407_v3";
+} from "./lib/pipeline.js?v=20260407_v6";
 import {
   analyzeChartViewOptions,
   buildCompareMetaTooltip,
@@ -84,8 +84,8 @@ import {
   hitListRelaxColumnEnabled,
   runCompareHasRelaxMetrics,
   selectResidueStripMetrics,
-} from "./lib/compare.js?v=20260407_v3";
-import { buildCopilotReply } from "./lib/copilot.js?v=20260407_v3";
+} from "./lib/compare.js?v=20260407_v6";
+import { buildCopilotReply } from "./lib/copilot.js?v=20260407_v6";
 import {
   aminoAcidPropertyInfo,
   availableConservedTierPresetKeys,
@@ -101,13 +101,13 @@ import {
   resolveResiduePickerSelectionState,
   resolveResidueSelectionMaps,
   sequenceResiduePalette,
-} from "./lib/residue-picker.js?v=20260407_v3";
+} from "./lib/residue-picker.js?v=20260407_v6";
 import {
   buildCompareHoverText,
   buildCompareViewerLegendLines,
   buildResiduePickerHoverText,
   buildResiduePickerViewerLegendLines,
-} from "./lib/viewer-annotations.js?v=20260407_v3";
+} from "./lib/viewer-annotations.js?v=20260407_v6";
 import {
   buildOidcAuthorizationUrl,
   buildOidcRedirectUri,
@@ -117,9 +117,9 @@ import {
   shouldClearStoredSession,
   stripOidcCallbackUrl,
   resolveDefaultApiBase,
-} from "./lib/auth.js?v=20260407_v3";
-import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=20260407_v3";
-import { renderMcpGuideMarkup } from "./lib/mcp-guide.js?v=20260407_v3";
+} from "./lib/auth.js?v=20260407_v6";
+import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=20260407_v6";
+import { renderMcpGuideMarkup } from "./lib/mcp-guide.js?v=20260407_v6";
 
 const defaultApiBase = resolveDefaultApiBase({
   origin: window.location.origin,
@@ -756,6 +756,13 @@ const el = {
   evolutionInitialSamplesInput: document.getElementById("evolutionInitialSamplesInput"),
   evolutionRoundsInput: document.getElementById("evolutionRoundsInput"),
   evolutionSamplesPerRoundInput: document.getElementById("evolutionSamplesPerRoundInput"),
+  evolutionAf2PlddtCutoffInput: document.getElementById("evolutionAf2PlddtCutoffInput"),
+  evolutionAf2RmsdCutoffInput: document.getElementById("evolutionAf2RmsdCutoffInput"),
+  evolutionRelaxScoreCutoffInput: document.getElementById("evolutionRelaxScoreCutoffInput"),
+  evolutionBioemuTargetRmsdCutoffInput: document.getElementById("evolutionBioemuTargetRmsdCutoffInput"),
+  evolutionBioemuSteeringConfigInput: document.getElementById("evolutionBioemuSteeringConfigInput"),
+  evolutionRfd3TargetRmsdCutoffInput: document.getElementById("evolutionRfd3TargetRmsdCutoffInput"),
+  evolutionFixedPositionsExtraInput: document.getElementById("evolutionFixedPositionsExtraInput"),
   homeProjectSelector: document.getElementById("homeProjectSelector"),
   homeRoundSelector: document.getElementById("homeRoundSelector"),
   homeCreateProjectBtn: document.getElementById("homeCreateProjectBtn"),
@@ -1864,7 +1871,6 @@ const I18N = {
     "tabs.evolution": "Evolution",
     "tabs.fast": "Fast",
     "tabs.advanced": "Advanced",
-    "tabs.evolution": "Evolution",
     "tabs.studio": "Studio",
     "tabs.rounds": "Rounds",
     "tabs.monitor": "Monitor",
@@ -1878,6 +1884,8 @@ const I18N = {
     "home.card.advanced.desc": "Open the full configuration surface with all expert controls.",
     "home.card.studio.title": "Studio",
     "home.card.studio.desc": "Build and run a workflow stage by stage while watching the outputs.",
+    "home.card.evolution.title": "Evolution",
+    "home.card.evolution.desc": "Autonomous multi-round sequence design pipeline.",
     "home.context.project": "Active Project",
     "home.context.round": "Active Round",
     "home.context.roundStatus": "Round Status",
@@ -1912,6 +1920,15 @@ const I18N = {
     "evolution.initialSamples.label": "Initial Samples",
     "evolution.rounds.label": "BO Rounds",
     "evolution.samplesPerRound.label": "Samples Per Round",
+    "evolution.filtering.title": "Filtering",
+    "evolution.constraints.title": "Constraints",
+    "evolution.af2PlddtCutoff.label": "ColabFold pLDDT Cutoff",
+    "evolution.af2RmsdCutoff.label": "ColabFold RMSD Cutoff",
+    "evolution.relaxScoreCutoff.label": "Rosetta Relax Score/Residue Cutoff",
+    "evolution.bioemuTargetRmsdCutoff.label": "BioEmu Input-Backbone RMSD Limit",
+    "evolution.bioemuSteeringConfig.label": "BioEmu Steering Config",
+    "evolution.rfd3TargetRmsdCutoff.label": "RFD3 Input-Backbone RMSD Limit",
+    "evolution.fixedPositionsExtra.label": "Fixed Positions Extra",
     "evolution.error.targetRequired": "Paste a PDB in Evolution before launching.",
     "rounds.title": "Rounds Workspace",
     "rounds.desc": "Organize projects, active rounds, and linked runs in one place.",
@@ -2602,16 +2619,16 @@ const I18N = {
     "question.bioemuUse.help": "Run the BioEmu backbone sampling stage.",
     "question.rfd3Use.label": "Enable RFD3",
     "question.rfd3Use.help": "Run the RFD3 backbone generation stage.",
-    "question.backboneFilterUseDssp.label": "Backbone gate ignores loops",
+    "question.backboneFilterUseDssp.label": "Ignore Loops In Input-Backbone Gate",
     "question.backboneFilterUseDssp.help":
-      "Use DSSP to exclude loop residues when calculating target-backbone RMSD for RFD3 and BioEmu filtering. Enabled by default.",
+      "Use DSSP to exclude loop residues when calculating input-backbone RMSD for RFD3 and BioEmu gating. Default RFD3/BioEmu limit: 2.0 A.",
     "question.bioemuNumSamples.label": "BioEmu Generate Count",
     "question.bioemuNumSamples.help": "Number of BioEmu samples to generate before filtering and return-count capping.",
     "question.bioemuMaxReturn.label": "BioEmu Return Count",
     "question.bioemuMaxReturn.help": "Maximum number of BioEmu structures to keep.",
-    "question.bioemuTargetRmsdCutoff.label": "BioEmu Target RMSD Cutoff",
+    "question.bioemuTargetRmsdCutoff.label": "BioEmu Input-Backbone RMSD Limit",
     "question.bioemuTargetRmsdCutoff.help":
-      "Maximum allowed target-backbone RMSD (angstrom) for BioEmu samples after optional DSSP non-loop masking.",
+      "Maximum allowed input-backbone RMSD (angstrom) for BioEmu samples after optional DSSP non-loop masking. default: 2.0 A.",
     "question.numSeqPerTier.label": "ProteinMPNN per Backbone",
     "question.numSeqPerTier.help": "Number of ProteinMPNN sequences to generate for each backbone within each sequence-conservation level.",
     "question.evolutionMode.label": "Evolution Mode",
@@ -2645,9 +2662,9 @@ const I18N = {
     "question.af2Provider.help": "Choose structure prediction provider.",
     "question.rfd3MaxReturn.label": "RFD3 Return Count",
     "question.rfd3MaxReturn.help": "Maximum number of RFD3 backbone designs to keep.",
-    "question.rfd3TargetRmsdCutoff.label": "RFD3 Target RMSD Cutoff",
+    "question.rfd3TargetRmsdCutoff.label": "RFD3 Input-Backbone RMSD Limit",
     "question.rfd3TargetRmsdCutoff.help":
-      "Maximum allowed target-backbone RMSD (angstrom) for RFD3 designs after optional DSSP non-loop masking.",
+      "Maximum allowed input-backbone RMSD (angstrom) for RFD3 designs after optional DSSP non-loop masking. default: 2.0 A.",
     "question.confirmRun.label": "Confirm Run",
     "question.confirmRun.help": "Review the parsed settings and confirm to enable execution.",
     "question.fixedPositionsExtra.label": "Fixed Positions (Extra)",
@@ -2784,6 +2801,9 @@ const I18N = {
     "setup.parameters.title": "Compact Parameter Board",
     "setup.parameters.help":
       "Tune key numeric settings in one place. BioEmu and RFD3 counts stay visible in Pipeline and Workflow modes.",
+    "setup.constraints.title": "Advanced Constraints",
+    "setup.constraints.help":
+      "Keep input-backbone RMSD limits, steering config, and fixed-position overrides together in one place.",
     "setup.parameters.inactive": "Inactive in current context",
     "setup.workflow.title": "Workflow Studio",
     "setup.workflow.help":
@@ -3042,7 +3062,7 @@ const I18N = {
     "action.logout": "로그아웃",
     "action.help": "사용법",
     "tabs.home": "홈",
-    "tabs.evolution": "진화 (Evolution)",
+    "tabs.evolution": "Evolution",
     "tabs.fast": "빠른 실행",
     "tabs.advanced": "고급 설정",
     "tabs.studio": "스튜디오",
@@ -3058,6 +3078,8 @@ const I18N = {
     "home.card.advanced.desc": "전문가용 전체 설정 화면으로 들어갑니다.",
     "home.card.studio.title": "Studio",
     "home.card.studio.desc": "단계를 보면서 워크플로우를 직접 구성하고 실행합니다.",
+    "home.card.evolution.title": "Evolution",
+    "home.card.evolution.desc": "다라운드 자동 유도 진화 파이프라인을 실행합니다.",
     "home.context.project": "활성 프로젝트",
     "home.context.round": "활성 라운드",
     "home.context.roundStatus": "라운드 상태",
@@ -3092,6 +3114,15 @@ const I18N = {
     "evolution.initialSamples.label": "초기 샘플 수",
     "evolution.rounds.label": "BO 회차",
     "evolution.samplesPerRound.label": "회차당 샘플 수",
+    "evolution.filtering.title": "필터링 (Filtering)",
+    "evolution.constraints.title": "구조 제약 (Constraints)",
+    "evolution.af2PlddtCutoff.label": "ColabFold pLDDT 컷오프",
+    "evolution.af2RmsdCutoff.label": "ColabFold RMSD 컷오프",
+    "evolution.relaxScoreCutoff.label": "Rosetta Relax score/residue 컷오프",
+    "evolution.bioemuTargetRmsdCutoff.label": "BioEmu input-backbone RMSD 제한",
+    "evolution.bioemuSteeringConfig.label": "BioEmu steering config",
+    "evolution.rfd3TargetRmsdCutoff.label": "RFD3 input-backbone RMSD 제한",
+    "evolution.fixedPositionsExtra.label": "고정 위치 추가 (Fixed Positions Extra)",
     "evolution.error.targetRequired": "진화를 시작하기 전에 PDB를 붙여넣으세요.",
     "rounds.title": "Rounds 워크스페이스",
     "rounds.desc": "프로젝트, 활성 라운드, 연결된 run을 한 곳에서 정리합니다.",
@@ -3780,17 +3811,17 @@ const I18N = {
     "question.bioemuUse.help": "BioEmu backbone 샘플링 단계를 실행합니다.",
     "question.rfd3Use.label": "RFD3 사용",
     "question.rfd3Use.help": "RFD3 backbone 생성 단계를 실행합니다.",
-    "question.backboneFilterUseDssp.label": "Backbone gate에서 loop 제외",
+    "question.backboneFilterUseDssp.label": "Input-backbone 제약에서 loop 제외",
     "question.backboneFilterUseDssp.help":
-      "RFD3/BioEmu target-backbone RMSD 필터 계산 시 DSSP로 loop 잔기를 제외합니다. 기본값은 켜짐입니다.",
+      "RFD3/BioEmu input-backbone RMSD 제한 계산 시 DSSP로 loop 잔기를 제외합니다. 두 제한의 기본값은 2.0 Å입니다.",
     "question.bioemuNumSamples.label": "BioEmu 생성 개수",
     "question.bioemuNumSamples.help":
       "필터링과 반환 개수 제한 전에 먼저 생성할 BioEmu 샘플 수입니다.",
     "question.bioemuMaxReturn.label": "BioEmu 반환 개수",
     "question.bioemuMaxReturn.help": "보존할 BioEmu 구조 최대 개수입니다.",
-    "question.bioemuTargetRmsdCutoff.label": "BioEmu target RMSD 컷오프",
+    "question.bioemuTargetRmsdCutoff.label": "BioEmu input-backbone RMSD 제한",
     "question.bioemuTargetRmsdCutoff.help":
-      "선택적 DSSP non-loop masking 이후 BioEmu 샘플에 허용할 최대 target-backbone RMSD(Å)입니다.",
+      "선택적 DSSP non-loop masking 이후 BioEmu 샘플에 허용할 최대 input-backbone RMSD(Å)입니다. 기본값은 2.0 Å입니다.",
     "question.numSeqPerTier.label": "백본당 ProteinMPNN 생성 개수",
     "question.numSeqPerTier.help": "각 서열 보존율 구간에서 각 RFD3/BioEmu 백본마다 생성할 ProteinMPNN 서열 개수입니다.",
     "question.evolutionMode.label": "에볼루션 모드",
@@ -3824,9 +3855,9 @@ const I18N = {
     "question.af2Provider.help": "구조 예측 provider를 선택하세요.",
     "question.rfd3MaxReturn.label": "RFD3 반환 개수",
     "question.rfd3MaxReturn.help": "보존할 RFD3 백본 디자인 최대 개수입니다.",
-    "question.rfd3TargetRmsdCutoff.label": "RFD3 target RMSD 컷오프",
+    "question.rfd3TargetRmsdCutoff.label": "RFD3 input-backbone RMSD 제한",
     "question.rfd3TargetRmsdCutoff.help":
-      "선택적 DSSP non-loop masking 이후 RFD3 디자인에 허용할 최대 target-backbone RMSD(Å)입니다.",
+      "선택적 DSSP non-loop masking 이후 RFD3 디자인에 허용할 최대 input-backbone RMSD(Å)입니다. 기본값은 2.0 Å입니다.",
     "question.confirmRun.label": "실행 확인",
     "question.confirmRun.help": "해석된 설정을 확인한 뒤 실행을 승인하세요.",
     "question.fixedPositionsExtra.label": "고정 위치 추가",
@@ -3963,6 +3994,9 @@ const I18N = {
     "setup.parameters.title": "핵심 파라미터 보드",
     "setup.parameters.help":
       "주요 숫자 파라미터를 한 카드에서 조정합니다. Pipeline/Workflow 모드에서는 BioEmu/RFD3 개수 설정을 항상 표시합니다.",
+    "setup.constraints.title": "고급 제약 조건",
+    "setup.constraints.help":
+      "input-backbone RMSD 제한, steering config, 고정 위치 override를 한 카드에서 함께 관리합니다.",
     "setup.parameters.inactive": "현재 조건에서 비활성",
     "setup.workflow.title": "Workflow Studio",
     "setup.workflow.help":
@@ -7731,6 +7765,7 @@ const QUESTION_PRESETS = {
   bioemu_target_rmsd_cutoff: {
     labelKey: "question.bioemuTargetRmsdCutoff.label",
     questionKey: "question.bioemuTargetRmsdCutoff.help",
+    default: 2.0,
   },
   num_seq_per_tier: {
     labelKey: "question.numSeqPerTier.label",
@@ -7789,6 +7824,7 @@ const QUESTION_PRESETS = {
   rfd3_target_rmsd_cutoff: {
     labelKey: "question.rfd3TargetRmsdCutoff.label",
     questionKey: "question.rfd3TargetRmsdCutoff.help",
+    default: 2.0,
   },
   rfd3_input_pdb: {
     labelKey: "question.rfd3InputPdb.label",
@@ -7836,7 +7872,7 @@ const QUESTION_PRESETS = {
   rfd3_partial_t: {
     labelKey: "question.rfd3PartialT.label",
     questionKey: "question.rfd3PartialT.help",
-    default: 10.0,
+    default: 5.0,
   },
   rfd3_inputs_text: {
     labelKey: "question.rfd3AdvancedInputs.label",
@@ -9778,6 +9814,13 @@ function initEvolutionLauncher() {
       evolution_initial_samples: Number.parseInt(el.evolutionInitialSamplesInput?.value || "20", 10),
       evolution_rounds: Number.parseInt(el.evolutionRoundsInput?.value || "3", 10),
       evolution_samples_per_round: Number.parseInt(el.evolutionSamplesPerRoundInput?.value || "5", 10),
+      af2_plddt_cutoff: Number.parseFloat(el.evolutionAf2PlddtCutoffInput?.value || "85"),
+      af2_rmsd_cutoff: Number.parseFloat(el.evolutionAf2RmsdCutoffInput?.value || "2.0"),
+      relax_score_per_residue_cutoff: Number.parseFloat(el.evolutionRelaxScoreCutoffInput?.value || "0.0"),
+      bioemu_target_rmsd_cutoff: Number.parseFloat(el.evolutionBioemuTargetRmsdCutoffInput?.value || "2.0"),
+      bioemu_steering_config_text: el.evolutionBioemuSteeringConfigInput?.value || "",
+      rfd3_target_rmsd_cutoff: Number.parseFloat(el.evolutionRfd3TargetRmsdCutoffInput?.value || "2.0"),
+      fixed_positions_extra: el.evolutionFixedPositionsExtraInput?.value || "",
       start_from: "msa",
       stop_after: "novelty",
       novelty_enabled: true
@@ -14756,6 +14799,27 @@ function renderQuestions(questions) {
       return String(left.id || "").localeCompare(String(right.id || ""));
     });
 
+  const advancedConstraintQuestionIds = new Set([
+    "bioemu_target_rmsd_cutoff",
+    "bioemu_steering_config_text",
+    "rfd3_target_rmsd_cutoff",
+    "fixed_positions_extra",
+  ]);
+  const advancedConstraintPriority = {
+    bioemu_target_rmsd_cutoff: 10,
+    bioemu_steering_config_text: 20,
+    rfd3_target_rmsd_cutoff: 30,
+    fixed_positions_extra: 40,
+  };
+  const advancedConstraintQuestions = textQuestions
+    .filter((q) => advancedConstraintQuestionIds.has(q.id))
+    .sort((left, right) => {
+      const leftPriority = advancedConstraintPriority[left.id] ?? Number.MAX_SAFE_INTEGER;
+      const rightPriority = advancedConstraintPriority[right.id] ?? Number.MAX_SAFE_INTEGER;
+      if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+      return String(left.id || "").localeCompare(String(right.id || ""));
+    });
+
   const appendCompactParameterBoard = (questionsForBoard) => {
     if (!questionsForBoard.length) return;
     const card = document.createElement("div");
@@ -14879,6 +14943,96 @@ function renderQuestions(questions) {
 
   appendCompactParameterBoard(compactQuestions);
 
+  const appendAdvancedConstraintBoard = () => {
+    if (!advancedConstraintQuestions.length) return;
+    const card = document.createElement("div");
+    card.className = "question-card parameter-board option-board";
+
+    const title = document.createElement("div");
+    title.className = "question-title";
+    title.textContent = t("setup.constraints.title");
+
+    const help = document.createElement("div");
+    help.className = "question-help";
+    help.textContent = t("setup.constraints.help");
+
+    const grid = document.createElement("div");
+    grid.className = "parameter-board-grid option-board-grid";
+
+    advancedConstraintQuestions.forEach((q) => {
+      const field = document.createElement("div");
+      field.className = "parameter-field option-field" + (q.required ? " required" : "");
+
+      const label = document.createElement("div");
+      label.className = "parameter-label";
+      label.textContent = q.labelKey ? t(q.labelKey) : q.label || q.id || "input";
+
+      const desc = document.createElement("div");
+      desc.className = "parameter-help";
+      desc.textContent = q.questionKey ? t(q.questionKey) : q.question || "";
+
+      const inputWrap = document.createElement("div");
+      inputWrap.className = "input-row";
+
+      const multiline = Boolean(q.multiline) || ANSWER_TEXTAREA_KEYS.has(q.id);
+      const input = multiline ? document.createElement("textarea") : document.createElement("input");
+      if (!multiline) {
+        input.type = ANSWER_INT_KEYS.has(q.id) || ANSWER_FLOAT_KEYS.has(q.id) ? "number" : "text";
+        if (ANSWER_FLOAT_KEYS.has(q.id)) input.step = "0.01";
+        if (ANSWER_INT_KEYS.has(q.id)) input.step = "1";
+      } else {
+        input.rows = 3;
+      }
+      if (q.placeholder) {
+        input.placeholder = q.placeholder;
+      }
+      if (state.answers[q.id] === undefined && q.default !== undefined) {
+        state.answers[q.id] = q.default;
+      }
+      input.value = formatAnswerValue(state.answers[q.id]);
+
+      const errorEl = document.createElement("div");
+      errorEl.className = "question-error";
+      const existingError = (state.answerMeta[q.id] || {}).error;
+      if (existingError) {
+        errorEl.textContent = existingError;
+        errorEl.style.display = "block";
+      } else {
+        errorEl.style.display = "none";
+      }
+
+      input.addEventListener("input", () => {
+        const parsed = parseAnswerValue(q.id, input.value);
+        if (parsed.error) {
+          state.answers[q.id] = "";
+          state.answerMeta[q.id] = { ...state.answerMeta[q.id], error: parsed.error, raw: input.value };
+          errorEl.textContent = parsed.error;
+          errorEl.style.display = "block";
+        } else {
+          state.answers[q.id] = parsed.value;
+          state.answerMeta[q.id] = { ...state.answerMeta[q.id], error: "", raw: input.value };
+          errorEl.textContent = "";
+          errorEl.style.display = "none";
+        }
+        updateRunEligibility(normalizedQuestions);
+      });
+
+      inputWrap.appendChild(input);
+      field.appendChild(label);
+      field.appendChild(desc);
+      field.appendChild(inputWrap);
+      field.appendChild(errorEl);
+      grid.appendChild(field);
+    });
+
+    card.appendChild(title);
+    card.appendChild(help);
+    card.appendChild(grid);
+    appendConfigCard(card);
+  };
+
+  appendAdvancedConstraintBoard();
+
   const appendRfd3DetailBoard = () => {
     const rfd3DetailRelevant =
       state.runMode === "rfd3" || setupRunEnablesRfd3Stage() || shouldShowSetupRfd3InputField();
@@ -14995,7 +15149,10 @@ function renderQuestions(questions) {
     return card;
   }
 
-  const hiddenTextQuestionIds = new Set(compactQuestions.map((q) => q.id));
+  const hiddenTextQuestionIds = new Set([
+    ...compactQuestions.map((q) => q.id),
+    ...advancedConstraintQuestions.map((q) => q.id),
+  ]);
   textQuestions.forEach((q) => {
     if (hiddenTextQuestionIds.has(q.id) || SETUP_RFD3_MODE_DETAIL_IDS.has(q.id)) return;
     appendTextQuestionCard(q);
@@ -15644,6 +15801,7 @@ function filterAnswersForMode(mode, answers) {
       "rfd3_select_fixed_atoms",
       "rfd3_partial_t",
       "rfd3_inputs_text",
+      "rfd3_target_rmsd_cutoff",
       "rfd3_max_return_designs",
       "diffdock_ligand_smiles",
       "diffdock_ligand_sdf",
@@ -15657,6 +15815,7 @@ function filterAnswersForMode(mode, answers) {
       "bioemu_num_samples",
       "bioemu_max_return_structures",
       "bioemu_filter_samples",
+      "bioemu_target_rmsd_cutoff",
       "bioemu_steering_config_text",
       "af2_max_candidates_per_tier",
       "af2_plddt_cutoff",
@@ -15685,6 +15844,7 @@ function filterAnswersForMode(mode, answers) {
       "rfd3_select_fixed_atoms",
       "rfd3_partial_t",
       "rfd3_inputs_text",
+      "rfd3_target_rmsd_cutoff",
       "rfd3_max_return_designs",
       "design_chains",
       "fixed_positions_extra",
@@ -15695,6 +15855,7 @@ function filterAnswersForMode(mode, answers) {
       "bioemu_num_samples",
       "bioemu_max_return_structures",
       "bioemu_filter_samples",
+      "bioemu_target_rmsd_cutoff",
       "bioemu_steering_config_text",
       "af2_max_candidates_per_tier",
       "af2_plddt_cutoff",
@@ -15715,6 +15876,7 @@ function filterAnswersForMode(mode, answers) {
       "bioemu_num_samples",
       "bioemu_max_return_structures",
       "bioemu_filter_samples",
+      "bioemu_target_rmsd_cutoff",
       "bioemu_steering_config_text",
     ],
     rfd3: [
@@ -15730,6 +15892,7 @@ function filterAnswersForMode(mode, answers) {
       "rfd3_select_fixed_atoms",
       "rfd3_partial_t",
       "rfd3_inputs_text",
+      "rfd3_target_rmsd_cutoff",
       "rfd3_max_return_designs",
       "pdb_strip_nonpositive_resseq",
     ],
@@ -15743,6 +15906,7 @@ function filterAnswersForMode(mode, answers) {
       "bioemu_num_samples",
       "bioemu_max_return_structures",
       "bioemu_filter_samples",
+      "bioemu_target_rmsd_cutoff",
       "bioemu_steering_config_text",
     ],
     soluprot: [
@@ -15754,6 +15918,7 @@ function filterAnswersForMode(mode, answers) {
       "bioemu_num_samples",
       "bioemu_max_return_structures",
       "bioemu_filter_samples",
+      "bioemu_target_rmsd_cutoff",
       "bioemu_steering_config_text",
     ],
     af2: ["target_fasta", "target_pdb", "af2_provider"],

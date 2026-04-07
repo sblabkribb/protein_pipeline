@@ -710,6 +710,44 @@ test("buildRunArguments preserves backbone gate fields and DSSP toggle", () => {
   assert.equal(args.bioemu_target_rmsd_cutoff, 2);
 });
 
+test("advanced setup source keeps target RMSD gates in mode filters", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(
+    source,
+    /pipeline:\s*\[[\s\S]*?"rfd3_target_rmsd_cutoff"[\s\S]*?"bioemu_target_rmsd_cutoff"[\s\S]*?\],/m
+  );
+  assert.match(
+    source,
+    /workflow:\s*\[[\s\S]*?"rfd3_target_rmsd_cutoff"[\s\S]*?"bioemu_target_rmsd_cutoff"[\s\S]*?\],/m
+  );
+  assert.match(
+    source,
+    /bioemu:\s*\[[\s\S]*?"bioemu_target_rmsd_cutoff"[\s\S]*?\],/m
+  );
+  assert.match(
+    source,
+    /rfd3:\s*\[[\s\S]*?"rfd3_target_rmsd_cutoff"[\s\S]*?\],/m
+  );
+});
+
+test("advanced setup source defaults input-backbone RMSD limits to 2.0 and uses clearer labels", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(
+    source,
+    /bioemu_target_rmsd_cutoff:\s*\{[\s\S]*?labelKey:\s*"question\.bioemuTargetRmsdCutoff\.label"[\s\S]*?default:\s*2\.0[\s\S]*?\}/m
+  );
+  assert.match(
+    source,
+    /rfd3_target_rmsd_cutoff:\s*\{[\s\S]*?labelKey:\s*"question\.rfd3TargetRmsdCutoff\.label"[\s\S]*?default:\s*2\.0[\s\S]*?\}/m
+  );
+  assert.match(source, /"question\.bioemuTargetRmsdCutoff\.label":\s*"BioEmu Input-Backbone RMSD Limit"/);
+  assert.match(source, /"question\.rfd3TargetRmsdCutoff\.label":\s*"RFD3 Input-Backbone RMSD Limit"/);
+  assert.match(source, /"question\.bioemuTargetRmsdCutoff\.help":[\s\S]*?default:\s*2\.0 A/);
+  assert.match(source, /"question\.rfd3TargetRmsdCutoff\.help":[\s\S]*?default:\s*2\.0 A/);
+});
+
 test("buildRunArguments preserves local_diversify unindex and fixed-atom fields", () => {
   const args = buildRunArguments({
     prompt: "",
@@ -850,6 +888,10 @@ test("workflowStudioStageFields exposes key fields per stage", () => {
     "num_seq_per_tier",
     "mask_consensus_apply",
     "ligand_mask_use_original_target",
+    "evolution_mode",
+    "evolution_initial_samples",
+    "evolution_rounds",
+    "evolution_samples_per_round",
   ]);
   assert.deepEqual(workflowStudioStageFields("af2"), [
     "af2_provider",
@@ -900,6 +942,7 @@ test("workflowStudioVisibleStageFields exposes RFD3 option fields without a visi
       "rfd3_length",
       "rfd3_select_fixed_atoms",
       "rfd3_partial_t",
+      "rfd3_target_rmsd_cutoff",
       "rfd3_max_return_designs",
       "rfd3_inputs_text",
     ]
@@ -1107,7 +1150,7 @@ test("buildWorkflowStudioEffectiveAnswers applies workflow defaults for untouche
   });
   assert.equal(merged.rfd3_use, true);
   assert.equal(merged.rfd3_max_return_designs, 10);
-  assert.equal(merged.rfd3_partial_t, 10);
+  assert.equal(merged.rfd3_partial_t, 5);
   assert.equal(merged.bioemu_num_samples, 20);
   assert.equal(merged.bioemu_max_return_structures, 10);
   assert.equal(merged.bioemu_filter_samples, true);
@@ -1133,7 +1176,7 @@ test("workflow studio question metadata keeps default return counts for rfd3 and
     source,
     /rfd3_max_return_designs:\s*\{[\s\S]*?labelKey:\s*"question\.rfd3MaxReturn\.label",[\s\S]*?default:\s*10,/m
   );
-  assert.match(source, /rfd3_partial_t:\s*\{[\s\S]*?default:\s*10(?:\.0)?,/m);
+  assert.match(source, /rfd3_partial_t:\s*\{[\s\S]*?default:\s*5(?:\.0)?,/m);
 });
 
 test("compare metadata source keeps legacy RMSD keys removed while adding scoped compare RMSD fields", () => {
@@ -1192,6 +1235,18 @@ test("advanced setup source renders the RFD3 detail card independently from hidd
     /if \(q\.id === "rfd3_max_return_designs"\) \{\s*renderSetupRfd3ModeDetailsCard\(card, normalizedQuestions\);\s*\}/m
   );
   assert.match(source, /appendRfd3DetailBoard\(\);/);
+});
+
+test("advanced setup source groups target RMSD gates and fixed positions into a dedicated constraints card", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(
+    source,
+    /const advancedConstraintQuestionIds = new Set\(\[[\s\S]*"bioemu_target_rmsd_cutoff"[\s\S]*"bioemu_steering_config_text"[\s\S]*"rfd3_target_rmsd_cutoff"[\s\S]*"fixed_positions_extra"[\s\S]*\]\);/m
+  );
+  assert.match(source, /appendAdvancedConstraintBoard\(\);/);
+  assert.match(source, /setup\.constraints\.title/);
+  assert.match(source, /setup\.constraints\.help/);
 });
 
 test("Setup and Studio source reflect RFD3 detail localization and no Studio new workflow action", () => {
@@ -1285,7 +1340,7 @@ test("product shell exposes a sidebar with home, fast, and advanced entry points
   assert.match(source, /"tabs\.home":/);
   assert.match(source, /"tabs\.fast":/);
   assert.match(source, /"tabs\.advanced":/);
-  assert.match(source, /const TAB_OPTIONS = \["home", "fast", "advanced", "studio", "monitor", "rounds", "analyze", "mcp"\];/);
+  assert.match(source, /const TAB_OPTIONS = \["home", "fast", "advanced", "evolution", "studio", "monitor", "rounds", "analyze", "mcp"\];/);
 });
 
 test("sidebar prioritizes monitor before rounds in the execution navigation order", () => {
@@ -1301,7 +1356,7 @@ test("sidebar prioritizes monitor before rounds in the execution navigation orde
   assert.ok(monitorIdx > studioIdx);
   assert.ok(roundsIdx > monitorIdx);
   assert.ok(analyzeIdx > roundsIdx);
-  assert.match(source, /const TAB_OPTIONS = \["home", "fast", "advanced", "studio", "monitor", "rounds", "analyze", "mcp"\];/);
+  assert.match(source, /const TAB_OPTIONS = \["home", "fast", "advanced", "evolution", "studio", "monitor", "rounds", "analyze", "mcp"\];/);
 });
 
 test("home is the default launcher and its cards route into fast, advanced, and studio", () => {
@@ -1651,7 +1706,7 @@ test("rounds layout separates creation and management actions into dedicated row
   assert.match(source, /renderRoundsWorkspace\(\);/);
   assert.match(
     source,
-    /function roundsWorkspaceProjects\(\)\s*\{\s*return Array\.isArray\(state\.roundsWorkspaceProjects\) \? state\.roundsWorkspaceProjects : \[\];\s*\}/m
+    /const TAB_OPTIONS = \["home", "fast", "advanced", "evolution", "studio", "monitor", "rounds", "analyze", "mcp"\];/
   );
   assert.match(
     source,
@@ -2592,14 +2647,14 @@ test("normalizeWorkflowStudioPayloadForComparison preserves local_diversify unin
       target_input: RFD3_AUTO_CONTIG_PDB,
       rfd3_use: true,
       rfd3_mode: "local_diversify",
-      rfd3_partial_t: 5,
+      rfd3_partial_t: 3,
       rfd3_unindex: "A2",
       rfd3_select_fixed_atoms: "A2",
     },
     { nodes: ["msa", "rfd3", "novelty"] }
   );
   assert.equal(normalized.rfd3_mode, "local_diversify");
-  assert.equal(normalized.rfd3_partial_t, 5);
+  assert.equal(normalized.rfd3_partial_t, 3);
   assert.equal(normalized.rfd3_unindex, "A2");
   assert.equal(normalized.rfd3_select_fixed_atoms, "A2");
 });
