@@ -84,6 +84,7 @@ import {
   progressUnitsForRequest,
   residuePickerControlState,
   filterWorkflowStudioSessionsForUser,
+  resolveRfd3ContigChoices,
   workflowStudioChangedFields,
   workflowStudioDependencyStatus,
   workflowStudioSessionIdForRun,
@@ -1177,6 +1178,45 @@ test("workflow studio question metadata keeps default return counts for rfd3 and
     /rfd3_max_return_designs:\s*\{[\s\S]*?labelKey:\s*"question\.rfd3MaxReturn\.label",[\s\S]*?default:\s*10,/m
   );
   assert.match(source, /rfd3_partial_t:\s*\{[\s\S]*?default:\s*5(?:\.0)?,/m);
+});
+
+test("manual setup source keeps rfd3_partial_t default at 5.0 in pipeline and rfd3 modes", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  const matches = source.match(/id:\s*"rfd3_partial_t",\s*required:\s*false,\s*default:\s*5(?:\.0)?/gm) || [];
+  assert.ok(matches.length >= 2, `expected at least 2 rfd3_partial_t default=5 entries, got ${matches.length}`);
+  assert.doesNotMatch(source, /id:\s*"rfd3_partial_t",\s*required:\s*false,\s*default:\s*10(?:\.0)?/m);
+});
+
+test("app source keeps contig visible for local_diversify and enzyme setup modes", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  assert.match(
+    source,
+    /function rfd3ModeUsesContig\(mode\) \{[\s\S]*?normalized === "legacy_contig"[\s\S]*?normalized === "binder"[\s\S]*?normalized === "local_diversify"[\s\S]*?normalized === "enzyme"[\s\S]*?\}/m
+  );
+});
+
+test("rfd3 detail card source seeds inferred contig and fixed-atom defaults into visible setup state", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  assert.match(source, /const resolvedRfd3Defaults = resolveRfd3Defaults\(/);
+  assert.match(source, /isAnswerMissing\(state\.answers\.rfd3_contig\)[\s\S]*?resolvedRfd3Defaults\.inferredContig[\s\S]*?state\.answers\.rfd3_contig = resolvedRfd3Defaults\.inferredContig;/m);
+  assert.match(source, /isAnswerMissing\(state\.answers\.rfd3_unindex\)[\s\S]*?resolvedRfd3Defaults\.inferredUnindex[\s\S]*?state\.answers\.rfd3_unindex = resolvedRfd3Defaults\.inferredUnindex;/m);
+  assert.match(source, /isAnswerMissing\(state\.answers\.rfd3_select_fixed_atoms\)[\s\S]*?resolvedRfd3Defaults\.inferredSelectFixedAtoms[\s\S]*?state\.answers\.rfd3_select_fixed_atoms = resolvedRfd3Defaults\.inferredSelectFixedAtoms;/m);
+});
+
+test("app source clears structure-bound RFD3 fields when seed PDB text changes", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  assert.match(
+    source,
+    /function clearStructureBoundRfd3Answers\(\) \{[\s\S]*?state\.answers\.rfd3_contig = ""[\s\S]*?state\.answers\.rfd3_unindex = ""[\s\S]*?state\.answers\.rfd3_select_fixed_atoms = ""[\s\S]*?\}/m
+  );
+  assert.match(
+    source,
+    /if \(q\.id === "target_input"\) \{[\s\S]*?clearStructureBoundRfd3Answers\(\);[\s\S]*?refreshChainRangesFromAnswers\(\);/m
+  );
+  assert.match(
+    source,
+    /if \(q\.id === "rfd3_input_pdb"\) \{[\s\S]*?clearStructureBoundRfd3Answers\(\);[\s\S]*?refreshChainRangesFromAnswers\(\);/m
+  );
 });
 
 test("compare metadata source keeps legacy RMSD keys removed while adding scoped compare RMSD fields", () => {
@@ -2596,6 +2636,87 @@ test("resolveRfd3Defaults backfills contig when only default unindex is present"
   assert.equal(resolved.inferredSelectFixedAtoms, "");
 });
 
+test("resolveRfd3Defaults shifts explicit local_diversify contig off the fixed first residue", () => {
+  const resolved = resolveRfd3Defaults({
+    mode: "pipeline",
+    answers: {
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      start_from: "msa",
+      stop_after: "novelty",
+      rfd3_use: true,
+      rfd3_mode: "local_diversify",
+      rfd3_contig: "A1-3",
+      rfd3_unindex: "A1",
+      rfd3_select_fixed_atoms: "{\"A1\":\"ALL\"}",
+    },
+  });
+  assert.equal(resolved.rfd3Mode, "local_diversify");
+  assert.equal(resolved.inferredContig, "A2-3");
+  assert.equal(resolved.inferredUnindex, "");
+  assert.equal(resolved.inferredSelectFixedAtoms, "");
+});
+
+test("resolveRfd3Defaults respects explicit local_diversify omission of unindex and fixed atoms", () => {
+  const resolved = resolveRfd3Defaults({
+    mode: "pipeline",
+    answers: {
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      start_from: "msa",
+      stop_after: "novelty",
+      rfd3_use: true,
+      rfd3_mode: "local_diversify",
+      rfd3_contig: "A1-3",
+    },
+  });
+  assert.equal(resolved.rfd3Mode, "local_diversify");
+  assert.equal(resolved.inferredContig, "");
+  assert.equal(resolved.inferredUnindex, "");
+  assert.equal(resolved.inferredSelectFixedAtoms, "");
+});
+
+test("resolveRfd3ContigChoices prefers inferred shifted contig for auto local_diversify UI", () => {
+  const resolved = resolveRfd3ContigChoices({
+    mode: "pipeline",
+    answers: {
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      start_from: "msa",
+      stop_after: "novelty",
+      rfd3_use: true,
+    },
+    chainRanges: {
+      A: { min: 1, max: 3 },
+    },
+  });
+  assert.equal(resolved.rfd3Mode, "local_diversify");
+  assert.equal(resolved.currentValue, "A2-3");
+  assert.deepEqual(
+    resolved.options.map((item) => item.value),
+    ["A2-3", "A1-3"]
+  );
+});
+
+test("resolveRfd3ContigChoices keeps explicit local_diversify raw contig when first residue is not fixed", () => {
+  const resolved = resolveRfd3ContigChoices({
+    mode: "pipeline",
+    answers: {
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      start_from: "msa",
+      stop_after: "novelty",
+      rfd3_use: true,
+      rfd3_mode: "local_diversify",
+      rfd3_contig: "A1-3",
+    },
+    chainRanges: {
+      A: { min: 1, max: 3 },
+    },
+  });
+  assert.equal(resolved.currentValue, "A1-3");
+  assert.deepEqual(
+    resolved.options.map((item) => item.value),
+    ["A1-3"]
+  );
+});
+
 test("resolveRfd3Defaults keeps advanced overrides ahead of auto local_diversify", () => {
   const resolved = resolveRfd3Defaults({
     mode: "pipeline",
@@ -2657,6 +2778,22 @@ test("normalizeWorkflowStudioPayloadForComparison preserves local_diversify unin
   assert.equal(normalized.rfd3_partial_t, 3);
   assert.equal(normalized.rfd3_unindex, "A2");
   assert.equal(normalized.rfd3_select_fixed_atoms, "A2");
+});
+
+test("normalizeWorkflowStudioPayloadForComparison clamps stale local_diversify contig to the current input range", () => {
+  const normalized = normalizeWorkflowStudioPayloadForComparison(
+    {
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      rfd3_use: true,
+      rfd3_mode: "local_diversify",
+      rfd3_contig: "A1-9",
+    },
+    { nodes: ["msa", "rfd3", "novelty"] }
+  );
+  assert.equal(normalized.rfd3_mode, "local_diversify");
+  assert.equal(normalized.rfd3_contig, "A1-3");
+  assert.ok(!("rfd3_unindex" in normalized));
+  assert.ok(!("rfd3_select_fixed_atoms" in normalized));
 });
 
 test("normalizeWorkflowStudioPayloadForComparison drops advanced-only-hidden partial_t", () => {

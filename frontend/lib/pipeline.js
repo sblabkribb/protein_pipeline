@@ -269,6 +269,96 @@ function inferRfd3ShiftedContigDefaults(contigValue) {
   return { unindex, contig, select_fixed_atoms };
 }
 
+function parseSimpleRfd3ContigRange(value) {
+  const normalized = String(value || "").trim();
+  const match = normalized.match(/^\s*([A-Za-z_])\s*:?\s*(-?\d+)\s*-\s*(-?\d+)\s*$/);
+  if (!match) return null;
+  return {
+    chainId: String(match[1] || ""),
+    start: Number.parseInt(match[2], 10),
+    stop: Number.parseInt(match[3], 10),
+  };
+}
+
+function parseSimpleRfd3ResidueToken(value) {
+  const normalized = String(value || "").trim();
+  const match = normalized.match(/^\s*([A-Za-z_])\s*:?\s*(-?\d+)\s*$/);
+  if (!match) return null;
+  return {
+    chainId: String(match[1] || ""),
+    resseq: Number.parseInt(match[2], 10),
+  };
+}
+
+function sanitizeRfd3ContigToRanges(value, ranges) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  const parsed = parseSimpleRfd3ContigRange(normalized);
+  if (!parsed) return normalized;
+  const range = ranges?.[parsed.chainId];
+  if (!range) return normalized;
+  const start = Math.max(parsed.start, Number(range.min));
+  const stop = Math.min(parsed.stop, Number(range.max));
+  if (!Number.isFinite(start) || !Number.isFinite(stop) || stop < start) {
+    return normalized;
+  }
+  return `${parsed.chainId}${start}-${stop}`;
+}
+
+function sanitizeRfd3ResidueTokenToRanges(value, ranges) {
+  const normalized = String(value || "").trim();
+  if (!normalized) return "";
+  const parsed = parseSimpleRfd3ResidueToken(normalized);
+  if (!parsed) return normalized;
+  const range = ranges?.[parsed.chainId];
+  if (!range) return normalized;
+  if (parsed.resseq < Number(range.min) || parsed.resseq > Number(range.max)) {
+    return "";
+  }
+  return `${parsed.chainId}${parsed.resseq}`;
+}
+
+function sanitizeRfd3SelectFixedAtomsToRanges(value, ranges) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    if (!normalized) return "";
+    if (normalized.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(normalized);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          const filtered = Object.entries(parsed).reduce((acc, [key, fieldValue]) => {
+            const sanitizedKey = sanitizeRfd3ResidueTokenToRanges(key, ranges);
+            if (sanitizedKey) {
+              acc[sanitizedKey] = fieldValue;
+            } else if (!parseSimpleRfd3ResidueToken(key)) {
+              acc[key] = fieldValue;
+            }
+            return acc;
+          }, {});
+          return Object.keys(filtered).length ? JSON.stringify(filtered) : "";
+        }
+      } catch (_err) {
+        return normalized;
+      }
+    }
+    return sanitizeRfd3ResidueTokenToRanges(normalized, ranges);
+  }
+  if (typeof value === "object" && !Array.isArray(value)) {
+    const filtered = Object.entries(value).reduce((acc, [key, fieldValue]) => {
+      const sanitizedKey = sanitizeRfd3ResidueTokenToRanges(key, ranges);
+      if (sanitizedKey) {
+        acc[sanitizedKey] = fieldValue;
+      } else if (!parseSimpleRfd3ResidueToken(key)) {
+        acc[key] = fieldValue;
+      }
+      return acc;
+    }, {});
+    return Object.keys(filtered).length ? filtered : null;
+  }
+  return value;
+}
+
 export function inferRfd3LocalDiversifyEnzymeDefaults(payload = {}) {
   const ranges = inferredRfd3ContigRanges(payload) || {};
   const firstChain = Object.keys(ranges).sort((left, right) => left.localeCompare(right))[0] || "";
@@ -332,6 +422,50 @@ export function inferDefaultRfd3Contig(payload = {}) {
   const range = ranges[firstChain];
   if (!range) return "";
   return `${firstChain}${range.min}-${range.max}`;
+}
+
+export function sanitizeRfd3StructureBoundAnswers(
+  answers = {},
+  { mode = "", nodes = [] } = {}
+) {
+  const next = cloneWorkflowValue(answers && typeof answers === "object" ? answers : {});
+  const effectiveInput = effectiveRfd3InputPdb({ mode, answers: next, nodes });
+  if (!effectiveInput) return next;
+  const normalizedMode = normalizeRfd3Mode(
+    next.rfd3_mode || effectiveRfd3Mode({ ...next, rfd3_input_pdb: effectiveInput })
+  );
+  if (normalizedMode !== "local_diversify" && normalizedMode !== "enzyme") {
+    return next;
+  }
+  const ranges = inferredRfd3ContigRanges({ ...next, rfd3_input_pdb: effectiveInput }) || {};
+  if (!Object.keys(ranges).length) return next;
+
+  if (typeof next.rfd3_contig === "string") {
+    const sanitized = sanitizeRfd3ContigToRanges(next.rfd3_contig, ranges);
+    if (sanitized) next.rfd3_contig = sanitized;
+    else delete next.rfd3_contig;
+  }
+  if (typeof next.rfd3_unindex === "string") {
+    const sanitized = sanitizeRfd3ResidueTokenToRanges(next.rfd3_unindex, ranges);
+    if (sanitized) next.rfd3_unindex = sanitized;
+    else delete next.rfd3_unindex;
+  }
+  if (next.rfd3_select_fixed_atoms !== undefined) {
+    const sanitized = sanitizeRfd3SelectFixedAtomsToRanges(
+      next.rfd3_select_fixed_atoms,
+      ranges
+    );
+    if (
+      sanitized === null ||
+      sanitized === undefined ||
+      (typeof sanitized === "string" && !sanitized.trim())
+    ) {
+      delete next.rfd3_select_fixed_atoms;
+    } else {
+      next.rfd3_select_fixed_atoms = sanitized;
+    }
+  }
+  return next;
 }
 
 export function effectiveRfd3Mode(payload = {}) {
@@ -2262,9 +2396,16 @@ export function effectiveRfd3InputPdb({ mode = "", answers = {}, nodes = [] } = 
 export function resolveRfd3Defaults({ mode = "", answers = {}, nodes = [] } = {}) {
   const rfd3Enabled = rfd3EnabledForContext({ mode, answers, nodes });
   const effectiveRfd3Input = rfd3Enabled ? effectiveRfd3InputPdb({ mode, answers, nodes }) : "";
-  const explicitRfd3Mode = normalizeRfd3Mode(answers.rfd3_mode);
+  const sanitizedAnswers = sanitizeRfd3StructureBoundAnswers(
+    { ...answers, rfd3_input_pdb: effectiveRfd3Input },
+    { mode, nodes }
+  );
+  const explicitRfd3Mode = normalizeRfd3Mode(sanitizedAnswers.rfd3_mode);
   const rfd3Mode = rfd3Enabled
-    ? normalizeRfd3Mode(answers.rfd3_mode || effectiveRfd3Mode({ ...answers, rfd3_input_pdb: effectiveRfd3Input }))
+    ? normalizeRfd3Mode(
+        sanitizedAnswers.rfd3_mode ||
+          effectiveRfd3Mode({ ...sanitizedAnswers, rfd3_input_pdb: effectiveRfd3Input })
+      )
     : "";
   let inferredContig = "";
   let inferredUnindex = "";
@@ -2272,31 +2413,51 @@ export function resolveRfd3Defaults({ mode = "", answers = {}, nodes = [] } = {}
   
   if (rfd3Enabled) {
     if (rfd3Mode === "local_diversify" || rfd3Mode === "enzyme") {
+      const currentUnindex = String(sanitizedAnswers?.rfd3_unindex || "").trim();
+      const explicitLocalMode = Boolean(explicitRfd3Mode);
+      const shiftedCandidate = hasMeaningfulValue(sanitizedAnswers?.rfd3_contig)
+        ? inferRfd3ShiftedContigDefaults(sanitizedAnswers.rfd3_contig)
+        : null;
       const shiftedDefaults =
-        !explicitRfd3Mode && hasMeaningfulValue(answers?.rfd3_contig)
-          ? inferRfd3ShiftedContigDefaults(answers.rfd3_contig)
+        shiftedCandidate &&
+        (
+          (!explicitLocalMode && !currentUnindex) ||
+          (currentUnindex && currentUnindex === shiftedCandidate.unindex)
+        )
+          ? shiftedCandidate
           : null;
       const defaults =
-        shiftedDefaults || inferRfd3LocalDiversifyEnzymeDefaults({ ...answers, rfd3_input_pdb: effectiveRfd3Input });
+        shiftedDefaults ||
+        inferRfd3LocalDiversifyEnzymeDefaults({
+          ...sanitizedAnswers,
+          rfd3_input_pdb: effectiveRfd3Input,
+        });
       if (defaults) {
-        const currentUnindex = String(answers?.rfd3_unindex || "").trim();
         if (shiftedDefaults) {
           inferredContig = defaults.contig;
-        } else if (!hasMeaningfulValue(answers?.rfd3_contig) && (!currentUnindex || currentUnindex === defaults.unindex)) {
+        } else if (
+          (!explicitLocalMode || currentUnindex) &&
+          !hasMeaningfulValue(sanitizedAnswers?.rfd3_contig) &&
+          (!currentUnindex || currentUnindex === defaults.unindex)
+        ) {
           inferredContig = defaults.contig;
         }
-        if (!hasMeaningfulValue(answers?.rfd3_unindex)) {
+        if (!explicitLocalMode && !hasMeaningfulValue(sanitizedAnswers?.rfd3_unindex)) {
           inferredUnindex = defaults.unindex;
         }
         if (
-          !hasMeaningfulValue(answers?.rfd3_select_fixed_atoms) &&
+          !explicitLocalMode &&
+          !hasMeaningfulValue(sanitizedAnswers?.rfd3_select_fixed_atoms) &&
           (!currentUnindex || currentUnindex === defaults.unindex)
         ) {
           inferredSelectFixedAtoms = defaults.select_fixed_atoms;
         }
       }
-    } else if (rfd3ModeUsesContig(rfd3Mode) && !hasMeaningfulValue(answers?.rfd3_contig)) {
-      inferredContig = inferDefaultRfd3Contig({ ...answers, rfd3_input_pdb: effectiveRfd3Input });
+    } else if (rfd3ModeUsesContig(rfd3Mode) && !hasMeaningfulValue(sanitizedAnswers?.rfd3_contig)) {
+      inferredContig = inferDefaultRfd3Contig({
+        ...sanitizedAnswers,
+        rfd3_input_pdb: effectiveRfd3Input,
+      });
     }
   }
 
@@ -2304,14 +2465,67 @@ export function resolveRfd3Defaults({ mode = "", answers = {}, nodes = [] } = {}
     rfd3Enabled,
     effectiveRfd3Input,
     rfd3Mode,
+    sanitizedContig: String(sanitizedAnswers?.rfd3_contig || "").trim(),
+    sanitizedUnindex: String(sanitizedAnswers?.rfd3_unindex || "").trim(),
+    sanitizedSelectFixedAtoms:
+      typeof sanitizedAnswers?.rfd3_select_fixed_atoms === "string"
+        ? sanitizedAnswers.rfd3_select_fixed_atoms
+        : sanitizedAnswers?.rfd3_select_fixed_atoms || "",
     inferredContig,
     inferredUnindex,
     inferredSelectFixedAtoms,
   };
 }
 
+export function resolveRfd3ContigChoices({
+  mode = "",
+  answers = {},
+  nodes = [],
+  chainRanges = {},
+  routedContig = "",
+} = {}) {
+  const sanitizedAnswers = sanitizeRfd3StructureBoundAnswers(answers, { mode, nodes });
+  const resolvedDefaults = resolveRfd3Defaults({ mode, answers: sanitizedAnswers, nodes });
+  const options = Object.entries(chainRanges || {}).map(([chain, range]) => ({
+    label: `${chain}${range.min}-${range.max}`,
+    value: `${chain}${range.min}-${range.max}`,
+  }));
+  const inferredContig = String(resolvedDefaults.inferredContig || "").trim();
+  let currentValue = String(resolvedDefaults.sanitizedContig || "").trim();
+
+  if (
+    !currentValue &&
+    resolvedDefaults.rfd3Enabled &&
+    rfd3ModeUsesContig(resolvedDefaults.rfd3Mode) &&
+    inferredContig
+  ) {
+    currentValue = inferredContig;
+  }
+  if (!currentValue) {
+    currentValue = String(routedContig || "").trim();
+  }
+  if (!currentValue && options.length) {
+    currentValue = options[0].value;
+  }
+
+  [inferredContig, currentValue]
+    .filter((value) => String(value || "").trim())
+    .reverse()
+    .forEach((value) => {
+      if (!options.some((item) => item.value === value)) {
+        options.unshift({ label: value, value });
+      }
+    });
+
+  return {
+    ...resolvedDefaults,
+    options,
+    currentValue,
+  };
+}
+
 export function normalizeWorkflowStudioPayloadForComparison(payload, { nodes = [] } = {}) {
-  const answers = cloneWorkflowValue(payload && typeof payload === "object" ? payload : {});
+  let answers = cloneWorkflowValue(payload && typeof payload === "object" ? payload : {});
   delete answers.selected_tiers;
 
   const targetInput = String(answers.target_input || answers.target_pdb || answers.target_fasta || "").trim();
@@ -2392,6 +2606,7 @@ export function normalizeWorkflowStudioPayloadForComparison(payload, { nodes = [
   if (typeof answers.bioemu_steering_config_text === "string" && !answers.bioemu_steering_config_text.trim()) {
     delete answers.bioemu_steering_config_text;
   }
+  answers = sanitizeRfd3StructureBoundAnswers(answers, { mode: "workflow", nodes });
   const {
     rfd3Enabled,
     effectiveRfd3Input,

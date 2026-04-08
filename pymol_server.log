@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/opt/protein_pipeline/venv/lib/python3.12/site-packages/claudemol/plugin.py", line 49, in _run_server
+    self.socket.bind((self.host, self.port))
+OSError: [Errno 98] Address already in use

@@ -45,8 +45,10 @@ import {
   normalizeFixedPositionsExtraDraft,
   normalizeSetupDraftForFreshRun,
   rfd3EnabledForContext,
+  resolveRfd3ContigChoices,
   resolveRfd3Defaults,
   runUsesRfd3Stage,
+  sanitizeRfd3StructureBoundAnswers,
   shouldShowRfd3InputPdbField,
   targetInputPdbText,
   normalizeWorkflowStudioNode,
@@ -71,7 +73,7 @@ import {
   workflowStudioExecutionTarget,
   workflowStudioVisibleStageFields,
   withFixedPositionsExtra,
-} from "./lib/pipeline.js?v=20260407_v6";
+} from "./lib/pipeline.js?v=20260408_v11";
 import {
   analyzeChartViewOptions,
   buildCompareMetaTooltip,
@@ -9999,7 +10001,7 @@ function buildManualPlan(mode) {
       {
         id: "rfd3_partial_t",
         required: false,
-        default: 10.0,
+        default: 5.0,
       },
       {
         id: "af2_max_candidates_per_tier",
@@ -10232,7 +10234,7 @@ function buildManualPlan(mode) {
       {
         id: "rfd3_partial_t",
         required: false,
-        default: 10.0,
+        default: 5.0,
       },
       {
         id: "backbone_filter_use_dssp",
@@ -11939,7 +11941,12 @@ function setupRfd3ModeDetailIds(mode) {
 
 function rfd3ModeUsesContig(mode) {
   const normalized = normalizeRfd3Mode(mode);
-  return normalized === "legacy_contig" || normalized === "binder";
+  return (
+    normalized === "legacy_contig" ||
+    normalized === "binder" ||
+    normalized === "local_diversify" ||
+    normalized === "enzyme"
+  );
 }
 
 function rfd3ModeUsesBinderFields(mode) {
@@ -13439,6 +13446,12 @@ function updateChainRangesFromText(text) {
   state.chainRanges = ranges;
 }
 
+function clearStructureBoundRfd3Answers() {
+  state.answers.rfd3_contig = "";
+  state.answers.rfd3_unindex = "";
+  state.answers.rfd3_select_fixed_atoms = "";
+}
+
 function isAnswerMissing(value) {
   if (Array.isArray(value)) return value.length === 0;
   if (value === null || value === undefined) return true;
@@ -13755,6 +13768,35 @@ function renderQuestions(questions) {
   function renderSetupRfd3ModeDetailsCard(card, normalizedQuestions) {
     const fieldIds = setupRfd3ModeDetailIds();
     if (!fieldIds.length) return;
+    const resolvedRfd3Defaults = resolveRfd3Defaults({
+      mode: state.runMode,
+      answers: state.answers,
+      nodes: setupWorkflowNodesForRfd3(),
+    });
+    if (
+      isAnswerMissing(state.answers.rfd3_contig) &&
+      resolvedRfd3Defaults.inferredContig
+    ) {
+      state.answers.rfd3_contig = resolvedRfd3Defaults.inferredContig;
+    }
+    if (
+      isAnswerMissing(state.answers.rfd3_unindex) &&
+      resolvedRfd3Defaults.inferredUnindex
+    ) {
+      state.answers.rfd3_unindex = resolvedRfd3Defaults.inferredUnindex;
+    }
+    if (
+      isAnswerMissing(state.answers.rfd3_select_fixed_atoms) &&
+      resolvedRfd3Defaults.inferredSelectFixedAtoms
+    ) {
+      state.answers.rfd3_select_fixed_atoms = resolvedRfd3Defaults.inferredSelectFixedAtoms;
+    }
+    if (
+      isAnswerMissing(state.answers.rfd3_partial_t) &&
+      resolvedRfd3Defaults.rfd3Mode === "local_diversify"
+    ) {
+      state.answers.rfd3_partial_t = QUESTION_PRESETS.rfd3_partial_t?.default ?? 5.0;
+    }
 
     const grid = document.createElement("div");
     grid.className = "parameter-board-grid option-board-grid";
@@ -13862,14 +13904,15 @@ function renderQuestions(questions) {
         note.textContent = `${prefix}${t(rfd3ModeDescriptionKey(effectiveMode))}`;
         field.appendChild(note);
       } else if (fieldId === "rfd3_contig") {
-        const contigs = Object.entries(state.chainRanges || {}).map(([chain, range]) => ({
-          label: `${chain}${range.min}-${range.max}`,
-          value: `${chain}${range.min}-${range.max}`,
-        }));
-        const routedDefault = state.plan?.routed_request?.rfd3_contig;
-        let current = String(state.answers.rfd3_contig || routedDefault || "").trim();
-        if (!current && contigs.length) {
-          current = contigs[0].value;
+        const { options: contigs, currentValue } = resolveRfd3ContigChoices({
+          mode: state.runMode,
+          answers: state.answers,
+          nodes: setupWorkflowNodesForRfd3(),
+          chainRanges: state.chainRanges || {},
+          routedContig: state.plan?.routed_request?.rfd3_contig,
+        });
+        const current = String(currentValue || "").trim();
+        if (current) {
           state.answers.rfd3_contig = current;
         }
         if (contigs.length) {
@@ -14346,22 +14389,22 @@ function renderQuestions(questions) {
     }
 
     if (q.id === "rfd3_contig") {
-      const ranges = state.chainRanges || {};
-      const contigs = Object.entries(ranges).map(([chain, range]) => ({
-        label: `${chain}${range.min}-${range.max}`,
-        value: `${chain}${range.min}-${range.max}`,
-      }));
       const rfd3Active = setupRunEnablesRfd3Stage(state.answers) || shouldShowSetupRfd3InputField();
       const currentMode = effectiveSetupRfd3Mode(state.answers);
-      const routedDefault = state.plan?.routed_request?.rfd3_contig;
-      if (rfd3Active && rfd3ModeUsesContig(currentMode) && !state.answers.rfd3_contig && routedDefault) {
-        state.answers.rfd3_contig = routedDefault;
-      }
+      const { options: contigs, currentValue } = resolveRfd3ContigChoices({
+        mode: state.runMode,
+        answers: state.answers,
+        nodes: setupWorkflowNodesForRfd3(),
+        chainRanges: state.chainRanges || {},
+        routedContig: state.plan?.routed_request?.rfd3_contig,
+      });
       if (contigs.length) {
-        let current = state.answers.rfd3_contig;
+        let current = String(state.answers.rfd3_contig || "").trim();
         if (!current && rfd3Active && rfd3ModeUsesContig(currentMode)) {
-          current = contigs[0].value;
-          state.answers.rfd3_contig = current;
+          current = String(currentValue || "").trim();
+          if (current) {
+            state.answers.rfd3_contig = current;
+          }
         }
         const options = [{ labelKey: "choice.contigNone", value: "" }, ...contigs];
         renderChoiceButtons(card, options, current || "", (value) => {
@@ -15318,6 +15361,9 @@ function renderQuestions(questions) {
           meta.textContent = t("attachment.none");
           let rerender = false;
           if (q.id === "target_input") {
+            if (!explicitRfd3InputPdbText(state.answers)) {
+              clearStructureBoundRfd3Answers();
+            }
             if (state.setupResiduePicker.sourceKey === "target_input") {
               resetSetupResiduePicker();
             }
@@ -15325,11 +15371,9 @@ function renderQuestions(questions) {
             rerender = true;
           }
           if (q.id === "rfd3_input_pdb") {
+            clearStructureBoundRfd3Answers();
             if (state.setupResiduePicker.sourceKey === "rfd3_input_pdb") {
               resetSetupResiduePicker();
-            }
-            if (state.runMode === "pipeline" || state.runMode === "workflow") {
-              state.answers.rfd3_contig = "";
             }
             refreshChainRangesFromAnswers();
             rerender = true;
@@ -15357,6 +15401,9 @@ function renderQuestions(questions) {
             state.answers.target_fasta = "";
             state.answers.target_pdb = "";
             state.answerMeta.target_pdb = {};
+            if (!explicitRfd3InputPdbText(state.answers)) {
+              clearStructureBoundRfd3Answers();
+            }
             if (key === "target_pdb") {
               state.answers.target_pdb = text;
               state.answerMeta.target_pdb = { fileName: file.name };
@@ -15376,6 +15423,7 @@ function renderQuestions(questions) {
             rerender = true;
           }
           if (q.id === "rfd3_input_pdb") {
+            clearStructureBoundRfd3Answers();
             const loaded = setSetupResiduePickerStructure(text, {
               sourceLabel: t("setup.residuePicker.loadRfd3Input"),
               sourceKey: "rfd3_input_pdb",
@@ -15409,12 +15457,17 @@ function renderQuestions(questions) {
           }
           if (q.id === "rfd3_input_pdb" && state.setupResiduePicker.sourceKey === "rfd3_input_pdb") {
             resetSetupResiduePicker();
-            if (state.runMode === "pipeline" || state.runMode === "workflow") {
-              state.answers.rfd3_contig = "";
-            }
             rerender = true;
           }
-          if (q.id === "target_input" || q.id === "rfd3_input_pdb") {
+          if (q.id === "target_input") {
+            if (!explicitRfd3InputPdbText(state.answers)) {
+              clearStructureBoundRfd3Answers();
+            }
+            refreshChainRangesFromAnswers();
+            rerender = true;
+          }
+          if (q.id === "rfd3_input_pdb") {
+            clearStructureBoundRfd3Answers();
             refreshChainRangesFromAnswers();
             rerender = true;
           }
@@ -15441,6 +15494,9 @@ function renderQuestions(questions) {
         meta.textContent = t("attachment.none");
         let rerender = false;
         if (q.id === "target_input") {
+          if (!explicitRfd3InputPdbText(state.answers)) {
+            clearStructureBoundRfd3Answers();
+          }
           if (state.setupResiduePicker.sourceKey === "target_input") {
             resetSetupResiduePicker();
           }
@@ -15448,14 +15504,12 @@ function renderQuestions(questions) {
           rerender = true;
         }
         if (q.id === "rfd3_input_pdb") {
+          clearStructureBoundRfd3Answers();
           if (state.setupResiduePicker.sourceKey === "rfd3_input_pdb") {
             resetSetupResiduePicker();
           }
           refreshChainRangesFromAnswers();
           rerender = true;
-        }
-        if (q.id === "rfd3_input_pdb" && (state.runMode === "pipeline" || state.runMode === "workflow")) {
-          state.answers.rfd3_contig = "";
         }
         if (rerender) {
           renderQuestions(state.plan?.questions || []);
@@ -15668,7 +15722,7 @@ function updateMonitorActionButtons() {
 }
 
 function buildAnswerPayload(mode = state.runMode) {
-  const answers = normalizeBioEmuCountFields({ ...state.answers }, { includeLegacyField: true });
+  let answers = normalizeBioEmuCountFields({ ...state.answers }, { includeLegacyField: true });
   if (answers.target_input && !answers.target_pdb && !answers.target_fasta) {
     if (mode === "diffdock") {
       answers.target_pdb = answers.target_input;
@@ -15688,6 +15742,10 @@ function buildAnswerPayload(mode = state.runMode) {
     delete answers.rfd3_input_pdb;
   }
   const rfd3Nodes = mode === "workflow" ? setupWorkflowNodesForRfd3() : [];
+  answers = sanitizeRfd3StructureBoundAnswers(answers, {
+    mode,
+    nodes: rfd3Nodes,
+  });
   const {
     rfd3Enabled,
     effectiveRfd3Input,
@@ -15738,6 +15796,12 @@ function buildAnswerPayload(mode = state.runMode) {
   }
   if (inferredSelectFixedAtoms) {
     answers.rfd3_select_fixed_atoms = inferredSelectFixedAtoms;
+  }
+  if (
+    isAnswerMissing(answers.rfd3_partial_t) &&
+    normalizedRfd3Mode === "local_diversify"
+  ) {
+    answers.rfd3_partial_t = QUESTION_PRESETS.rfd3_partial_t?.default ?? 5.0;
   }
   if (normalizedRfd3Mode && !rfd3ModeUsesContig(normalizedRfd3Mode)) {
     delete answers.rfd3_contig;
@@ -15936,12 +16000,12 @@ function filterAnswersForMode(mode, answers) {
 
 function buildRoutedForMode(mode) {
   if (mode === "pipeline") return { stop_after: "novelty", novelty_enabled: true, rfd3_use: true };
-  if (mode === "rfd3") return { stop_after: "rfd3", rfd3_use: true };
-  if (mode === "bioemu") return { stop_after: "bioemu", bioemu_use: true };
-  if (mode === "msa") return { stop_after: "msa" };
-  if (mode === "design") return { stop_after: "design", bioemu_use: true };
-  if (mode === "soluprot") return { stop_after: "soluprot", bioemu_use: true };
-  if (mode === "af2") return { stop_after: "af2" };
+  if (mode === "rfd3") return { start_from: "rfd3", stop_after: "rfd3", rfd3_use: true };
+  if (mode === "bioemu") return { start_from: "bioemu", stop_after: "bioemu", bioemu_use: true };
+  if (mode === "msa") return { start_from: "msa", stop_after: "msa" };
+  if (mode === "design") return { start_from: "design", stop_after: "design", bioemu_use: true };
+  if (mode === "soluprot") return { start_from: "soluprot", stop_after: "soluprot", bioemu_use: true };
+  if (mode === "af2") return { start_from: "af2", stop_after: "af2" };
   return {};
 }
 

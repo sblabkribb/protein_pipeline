@@ -1362,6 +1362,33 @@ def _infer_rfd3_shifted_contig_defaults(
     return shifted_contig, unindex, {unindex: "ALL"}
 
 
+def _clamp_rfd3_contig_to_input_pdb(value: Any, *, pdb_text: str) -> Any:
+    from .bio.pdb import residues_by_chain
+
+    normalized = _normalize_rfd3_contig_value(value)
+    if not isinstance(normalized, str):
+        return normalized
+    match = re.fullmatch(r"\s*([A-Za-z_])\s*(-?\d+)\s*-\s*(-?\d+)\s*", normalized)
+    if not match:
+        return normalized
+    chain_id = str(match.group(1))
+    start = int(match.group(2))
+    stop = int(match.group(3))
+    res_list = residues_by_chain(pdb_text).get(chain_id) or []
+    if not res_list:
+        return normalized
+    resseqs = [int(res.resseq) for res in res_list]
+    if not resseqs:
+        return normalized
+    if any(curr != prev + 1 for prev, curr in zip(resseqs, resseqs[1:])):
+        return normalized
+    clamped_start = max(start, resseqs[0])
+    clamped_stop = min(stop, resseqs[-1])
+    if clamped_stop < clamped_start:
+        return normalized
+    return f"{chain_id}{clamped_start}-{clamped_stop}"
+
+
 def _normalize_rfd3_inputs(inputs: dict[str, Any] | None) -> dict[str, Any] | None:
     if inputs is None:
         return None
@@ -1532,18 +1559,11 @@ def _rfd3_simple_inputs(
             if request.rfd3_is_non_loopy is not None:
                 spec["is_non_loopy"] = bool(request.rfd3_is_non_loopy)
     elif mode in {"enzyme", "local_diversify"}:
+        explicit_mode = _normalize_rfd3_mode(request.rfd3_mode)
+        auto_fill_local_defaults = not bool(explicit_mode)
         contig_val = request.rfd3_contig
         unindex_val = request.rfd3_unindex
         fixed_val = request.rfd3_select_fixed_atoms
-
-        if (
-            unindex_val is None
-            and fixed_val is None
-            and contig_val is not None
-        ):
-            shifted_defaults = _infer_rfd3_shifted_contig_defaults(contig_val)
-            if shifted_defaults is not None:
-                contig_val, unindex_val, fixed_val = shifted_defaults
 
         pdb_text = str(
             _rfd3_input_file_text("input.pdb", input_files=input_files)
@@ -1560,6 +1580,11 @@ def _rfd3_simple_inputs(
                     renumber_resseq_from_1=True,
                 )
 
+            if contig_val is not None:
+                contig_val = _clamp_rfd3_contig_to_input_pdb(
+                    contig_val, pdb_text=pdb_text
+                )
+
             by_chain = residues_by_chain(pdb_text)
             if by_chain:
                 first_chain = sorted(by_chain.keys())[0]
@@ -1569,18 +1594,43 @@ def _rfd3_simple_inputs(
                     default_contig = (
                         f"{first_chain}{res_list[1].resseq}-{res_list[-1].resseq}"
                     )
-                    if unindex_val is None:
-                        unindex_val = default_unindex
-                    if (
-                        fixed_val is None
-                        and str(unindex_val or "").strip() == default_unindex
-                    ):
-                        fixed_val = {default_unindex: "ALL"}
-                    if (
+                    if auto_fill_local_defaults:
+                        if unindex_val is None:
+                            unindex_val = default_unindex
+                        if (
+                            fixed_val is None
+                            and str(unindex_val or "").strip() == default_unindex
+                        ):
+                            fixed_val = {default_unindex: "ALL"}
+                        if (
+                            contig_val is None
+                            and str(unindex_val or "").strip() == default_unindex
+                        ):
+                            contig_val = default_contig
+                    elif (
                         contig_val is None
                         and str(unindex_val or "").strip() == default_unindex
                     ):
                         contig_val = default_contig
+
+        if (
+            auto_fill_local_defaults
+            and unindex_val is None
+            and fixed_val is None
+            and contig_val is not None
+        ):
+            shifted_defaults = _infer_rfd3_shifted_contig_defaults(contig_val)
+            if shifted_defaults is not None:
+                contig_val, unindex_val, fixed_val = shifted_defaults
+
+        if contig_val is not None and unindex_val is not None:
+            shifted_defaults = _infer_rfd3_shifted_contig_defaults(contig_val)
+            if shifted_defaults is not None:
+                shifted_contig, shifted_unindex, shifted_fixed = shifted_defaults
+                if str(unindex_val or "").strip() == shifted_unindex:
+                    contig_val = shifted_contig
+                    if auto_fill_local_defaults and fixed_val is None:
+                        fixed_val = shifted_fixed
 
         if mode == "enzyme" and unindex_val is None:
             raise ValueError("RFD3 enzyme mode requires rfd3_unindex")
@@ -3017,46 +3067,39 @@ class PipelineRunner:
             active_tiers, active_tier_keys = _resolve_active_tiers(request)
 
             if normalized_start_from not in {None, "msa"}:
-                if not paths.request_json.exists():
-                    raise PipelineInputRequired(
-                        stage="init",
-                        message=(
-                            f"start_from={normalized_start_from!r} requires an existing run with request.json. "
-                            "Use start_from='msa' for a new run_id."
-                        ),
-                    )
-                try:
-                    saved_request_payload = _normalize_request_payload(
-                        json.loads(paths.request_json.read_text(encoding="utf-8"))
-                    )
-                except Exception as exc:
-                    raise PipelineInputRequired(
-                        stage="init",
-                        message=(
-                            f"Cannot safely continue run {run_id!r}: failed to read saved request.json ({exc}). "
-                            "Use start_from='msa' or a new run_id."
-                        ),
-                    ) from exc
-                minimum_stage, changed_fields = _minimum_safe_partial_rerun_stage(
-                    saved_request_payload,
-                    current_request_payload,
-                )
-                if minimum_stage is not None and _stage_index(
-                    normalized_start_from
-                ) > _stage_index(minimum_stage):
-                    changed_list = ", ".join(changed_fields[:8])
-                    if len(changed_fields) > 8:
-                        changed_list = (
-                            f"{changed_list}, ... (+{len(changed_fields) - 8})"
+                if paths.request_json.exists():
+                    try:
+                        saved_request_payload = _normalize_request_payload(
+                            json.loads(paths.request_json.read_text(encoding="utf-8"))
                         )
-                    raise PipelineInputRequired(
-                        stage="init",
-                        message=(
-                            f"Unsafe partial rerun for run {run_id!r}: changed request fields ({changed_list}) "
-                            f"require start_from={minimum_stage!r} or earlier. Use a new run_id if you want to keep "
-                            "the previous outputs."
-                        ),
+                    except Exception as exc:
+                        raise PipelineInputRequired(
+                            stage="init",
+                            message=(
+                                f"Cannot safely continue run {run_id!r}: failed to read saved request.json ({exc}). "
+                                "Use start_from='msa' or a new run_id."
+                            ),
+                        ) from exc
+                    minimum_stage, changed_fields = _minimum_safe_partial_rerun_stage(
+                        saved_request_payload,
+                        current_request_payload,
                     )
+                    if minimum_stage is not None and _stage_index(
+                        normalized_start_from
+                    ) > _stage_index(minimum_stage):
+                        changed_list = ", ".join(changed_fields[:8])
+                        if len(changed_fields) > 8:
+                            changed_list = (
+                                f"{changed_list}, ... (+{len(changed_fields) - 8})"
+                            )
+                        raise PipelineInputRequired(
+                            stage="init",
+                            message=(
+                                f"Unsafe partial rerun for run {run_id!r}: changed request fields ({changed_list}) "
+                                f"require start_from={minimum_stage!r} or earlier. Use a new run_id if you want to keep "
+                                "the previous outputs."
+                            ),
+                        )
 
             write_json(paths.request_json, current_request_payload)
             _attach_run_to_round_record(self.output_root, request, run_id)
@@ -3191,6 +3234,12 @@ class PipelineRunner:
                     msa_defer = True
                 else:
                     raise ValueError("One of target_fasta or target_pdb is required")
+
+            if normalized_start_from is not None and _stage_index("msa") < _stage_index(
+                normalized_start_from
+            ):
+                if not (paths.root / "msa" / "result.tsv").exists():
+                    msa_defer = True
 
             def _run_msa(target_record: FastaRecord) -> str:
                 nonlocal msa_tsv_path, msa_a3m_path, msa_filtered_a3m_path
