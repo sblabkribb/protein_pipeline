@@ -1259,7 +1259,7 @@ def _effective_rfd3_mode(
     if (
         request.rfd3_hotspots is not None
         or (request.rfd3_infer_ori_strategy or "").strip()
-        or request.rfd3_is_non_loopy is not None
+        or request.rfd3_is_non_loopy is True
     ):
         return "binder"
     has_input = bool((request.rfd3_input_pdb or "").strip()) or bool(
@@ -1290,7 +1290,7 @@ def _has_rfd3_config(request: PipelineRequest) -> bool:
         or request.rfd3_contig
         or request.rfd3_hotspots
         or (request.rfd3_infer_ori_strategy or "").strip()
-        or request.rfd3_is_non_loopy is not None
+        or request.rfd3_is_non_loopy is True
         or request.rfd3_unindex
         or request.rfd3_length
         or request.rfd3_select_fixed_atoms
@@ -1560,7 +1560,14 @@ def _rfd3_simple_inputs(
                 spec["is_non_loopy"] = bool(request.rfd3_is_non_loopy)
     elif mode in {"enzyme", "local_diversify"}:
         explicit_mode = _normalize_rfd3_mode(request.rfd3_mode)
-        auto_fill_local_defaults = not bool(explicit_mode)
+        preserve_explicit_local_inputs = bool(explicit_mode) and any(
+            value is not None
+            for value in (
+                request.rfd3_unindex,
+                request.rfd3_select_fixed_atoms,
+            )
+        )
+        auto_fill_local_defaults = not preserve_explicit_local_inputs
         contig_val = request.rfd3_contig
         unindex_val = request.rfd3_unindex
         fixed_val = request.rfd3_select_fixed_atoms
@@ -4890,7 +4897,7 @@ class PipelineRunner:
                     bioemu_max_return_structures,
                     int(
                         request.bioemu_max_attempted_structures
-                        or (bioemu_max_return_structures * 3)
+                        or (bioemu_max_return_structures * 10)
                     ),
                 )
                 bioemu_env = (
@@ -6410,7 +6417,12 @@ class PipelineRunner:
                     try:
                         seqs = sequence_by_chain(wt_compare_reference_pdb_text)
                         if seqs:
-                            wt_seq = "/".join(seqs.values())
+                            if design_chains:
+                                wt_seq = "/".join(
+                                    seqs[c] for c in design_chains if c in seqs
+                                )
+                            else:
+                                wt_seq = "/".join(seqs.values())
                     except Exception:
                         pass
                 if not wt_seq and target_record:
@@ -6673,10 +6685,15 @@ class PipelineRunner:
                                 and wt_compare_reference_pdb_text.strip()
                             ):
                                 try:
+                                    dssp_positions = dssp_non_loop_positions_by_chain(
+                                        wt_compare_reference_pdb_text,
+                                        chains=design_chains,
+                                    )
                                     rmsd_val = ca_rmsd(
                                         wt_compare_reference_pdb_text,
                                         ranked0,
                                         chains=design_chains,
+                                        include_positions=dssp_positions,
                                     )
                                 except Exception:
                                     rmsd_val = None
@@ -8483,24 +8500,40 @@ class PipelineRunner:
                                         rmsd is None
                                         and parent_reference_pdb_text.strip()
                                     ):
-                                        rmsd_val = ca_rmsd(
-                                            parent_reference_pdb_text,
-                                            pdb_text,
-                                            chains=design_chains,
-                                        )
-                                        if isinstance(rmsd_val, (int, float)):
-                                            rmsd = float(rmsd_val)
+                                        try:
+                                            dssp_positions = dssp_non_loop_positions_by_chain(
+                                                parent_reference_pdb_text,
+                                                chains=design_chains,
+                                            )
+                                            rmsd_val = ca_rmsd(
+                                                parent_reference_pdb_text,
+                                                pdb_text,
+                                                chains=design_chains,
+                                                include_positions=dssp_positions,
+                                            )
+                                            if isinstance(rmsd_val, (int, float)):
+                                                rmsd = float(rmsd_val)
+                                        except Exception:
+                                            pass
                                     if (
                                         target_rmsd is None
                                         and wt_compare_reference_pdb_text.strip()
                                     ):
-                                        target_rmsd_val = ca_rmsd(
-                                            wt_compare_reference_pdb_text,
-                                            pdb_text,
-                                            chains=design_chains,
-                                        )
-                                        if isinstance(target_rmsd_val, (int, float)):
-                                            target_rmsd = float(target_rmsd_val)
+                                        try:
+                                            dssp_positions = dssp_non_loop_positions_by_chain(
+                                                wt_compare_reference_pdb_text,
+                                                chains=design_chains,
+                                            )
+                                            target_rmsd_val = ca_rmsd(
+                                                wt_compare_reference_pdb_text,
+                                                pdb_text,
+                                                chains=design_chains,
+                                                include_positions=dssp_positions,
+                                            )
+                                            if isinstance(target_rmsd_val, (int, float)):
+                                                target_rmsd = float(target_rmsd_val)
+                                        except Exception:
+                                            pass
                             payload = (
                                 metrics_payload
                                 if isinstance(metrics_payload, dict)

@@ -122,6 +122,52 @@ def test_mcp_tools_call_injects_run_id_for_non_admin(monkeypatch):
     assert captured["payload"]["result"]["content"][0]["json"]["arguments"]["run_id"] == "tester_example.org_job"
 
 
+def test_mcp_tools_call_normalizes_custom_run_id_for_non_admin(monkeypatch):
+    captured: dict = {}
+    dispatcher = _FakeDispatcher()
+    handler = _make_handler(
+        "/mcp",
+        {
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "pipeline.run",
+                "arguments": {"target_fasta": ">a\nAAAA", "run_id": "full_pipeline"},
+            },
+        },
+        captured,
+    )
+
+    monkeypatch.setattr(http_server, "_DISPATCHER", dispatcher, raising=False)
+    monkeypatch.setattr(http_server, "_AUTH", None, raising=False)
+    monkeypatch.setattr(http_server, "_OIDC", None, raising=False)
+    monkeypatch.setattr(http_server, "_SESSIONS", None, raising=False)
+    handler._require_auth = lambda: {"username": "tester@example.org", "role": "user", "run_prefix": "tester_example.org"}
+
+    handler.do_POST()
+
+    assert captured["code"] == 200
+    assert dispatcher.calls == [
+        (
+            "pipeline.run",
+            {
+                "target_fasta": ">a\nAAAA",
+                "run_id": "tester_example.org_full_pipeline",
+                "user": {
+                    "username": "tester@example.org",
+                    "role": "user",
+                    "run_prefix": "tester_example.org",
+                },
+            },
+        )
+    ]
+    assert (
+        captured["payload"]["result"]["content"][0]["json"]["arguments"]["run_id"]
+        == "tester_example.org_full_pipeline"
+    )
+
+
 def test_mcp_tools_call_injects_user_for_pipeline_run(monkeypatch):
     captured: dict = {}
     dispatcher = _FakeDispatcher()

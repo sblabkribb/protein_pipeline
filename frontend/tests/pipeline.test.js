@@ -58,6 +58,7 @@ import {
   mergeFixedPositionsExtraDraft,
   normalizeSetupDraftForFreshRun,
   normalizeFixedPositionsExtraDraft,
+  normalizeRequestedRunId,
   formatWtIdentitySummary,
   mergeWorkflowStudioAnswers,
   minimumWorkflowStudioStartStage,
@@ -181,6 +182,15 @@ test("buildUserPrefix builds org_name", () => {
 test("createRunId uses prefix and utc timestamp", () => {
   const runId = createRunId("kbf_hana", new Date(Date.UTC(2024, 0, 2, 3, 4, 5)));
   assert.match(runId, /^kbf_hana_20240102_030405_[0-9a-f]{8}$/);
+});
+
+test("normalizeRequestedRunId prefixes custom ids for the active user", () => {
+  assert.equal(normalizeRequestedRunId("full_pipeline", "kbf_hana"), "kbf_hana_full_pipeline");
+  assert.equal(
+    normalizeRequestedRunId("kbf_hana_full_pipeline", "kbf_hana"),
+    "kbf_hana_full_pipeline"
+  );
+  assert.equal(normalizeRequestedRunId("Full-Pipeline", "kbf_hana"), "kbf_hana_full-pipeline");
 });
 
 test("createWorkflowSessionId uses studio suffix and utc timestamp", () => {
@@ -2656,7 +2666,7 @@ test("resolveRfd3Defaults shifts explicit local_diversify contig off the fixed f
   assert.equal(resolved.inferredSelectFixedAtoms, "");
 });
 
-test("resolveRfd3Defaults respects explicit local_diversify omission of unindex and fixed atoms", () => {
+test("resolveRfd3Defaults shifts explicit local_diversify contig-only defaults into unindex and fixed atoms", () => {
   const resolved = resolveRfd3Defaults({
     mode: "pipeline",
     answers: {
@@ -2669,9 +2679,26 @@ test("resolveRfd3Defaults respects explicit local_diversify omission of unindex 
     },
   });
   assert.equal(resolved.rfd3Mode, "local_diversify");
-  assert.equal(resolved.inferredContig, "");
-  assert.equal(resolved.inferredUnindex, "");
-  assert.equal(resolved.inferredSelectFixedAtoms, "");
+  assert.equal(resolved.inferredContig, "A2-3");
+  assert.equal(resolved.inferredUnindex, "A1");
+  assert.equal(resolved.inferredSelectFixedAtoms, "{\"A1\":\"ALL\"}");
+});
+
+test("resolveRfd3Defaults backfills empty local_diversify defaults even when the mode is explicit", () => {
+  const resolved = resolveRfd3Defaults({
+    mode: "pipeline",
+    answers: {
+      target_input: RFD3_AUTO_CONTIG_PDB,
+      start_from: "msa",
+      stop_after: "novelty",
+      rfd3_use: true,
+      rfd3_mode: "local_diversify",
+    },
+  });
+  assert.equal(resolved.rfd3Mode, "local_diversify");
+  assert.equal(resolved.inferredContig, "A2-3");
+  assert.equal(resolved.inferredUnindex, "A1");
+  assert.equal(resolved.inferredSelectFixedAtoms, "{\"A1\":\"ALL\"}");
 });
 
 test("resolveRfd3ContigChoices prefers inferred shifted contig for auto local_diversify UI", () => {
@@ -2695,7 +2722,7 @@ test("resolveRfd3ContigChoices prefers inferred shifted contig for auto local_di
   );
 });
 
-test("resolveRfd3ContigChoices keeps explicit local_diversify raw contig when first residue is not fixed", () => {
+test("resolveRfd3ContigChoices keeps explicit local_diversify raw contig selected while exposing shifted defaults", () => {
   const resolved = resolveRfd3ContigChoices({
     mode: "pipeline",
     answers: {
@@ -2713,7 +2740,7 @@ test("resolveRfd3ContigChoices keeps explicit local_diversify raw contig when fi
   assert.equal(resolved.currentValue, "A1-3");
   assert.deepEqual(
     resolved.options.map((item) => item.value),
-    ["A1-3"]
+    ["A2-3", "A1-3"]
   );
 });
 
@@ -2791,9 +2818,9 @@ test("normalizeWorkflowStudioPayloadForComparison clamps stale local_diversify c
     { nodes: ["msa", "rfd3", "novelty"] }
   );
   assert.equal(normalized.rfd3_mode, "local_diversify");
-  assert.equal(normalized.rfd3_contig, "A1-3");
-  assert.ok(!("rfd3_unindex" in normalized));
-  assert.ok(!("rfd3_select_fixed_atoms" in normalized));
+  assert.equal(normalized.rfd3_contig, "A2-3");
+  assert.equal(normalized.rfd3_unindex, "A1");
+  assert.equal(normalized.rfd3_select_fixed_atoms, "{\"A1\":\"ALL\"}");
 });
 
 test("normalizeWorkflowStudioPayloadForComparison drops advanced-only-hidden partial_t", () => {

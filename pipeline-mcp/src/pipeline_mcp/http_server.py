@@ -317,6 +317,20 @@ class Handler(BaseHTTPRequestHandler):
         if not str(run_id or "").startswith(prefix):
             raise AuthError("run_id not allowed for this user")
 
+    def _normalize_scoped_run_id(self, user: dict[str, Any] | None, run_id: str) -> str:
+        raw = str(run_id or "").strip()
+        if not raw or user is None or self._is_admin(user):
+            return raw
+        prefix = safe_run_prefix(str(user.get("username") or "user"))
+        if raw.startswith(f"{prefix}_"):
+            return raw
+        normalized = safe_run_prefix(raw)
+        if not normalized:
+            return raw
+        if normalized.startswith(f"{prefix}_"):
+            return normalized
+        return f"{prefix}_{normalized}"
+
     def _list_tools_for_user(self, user: dict[str, Any] | None) -> dict[str, Any]:
         tools = self.dispatcher.list_tools()
         if user is not None and not self._is_admin(user):
@@ -345,7 +359,9 @@ class Handler(BaseHTTPRequestHandler):
             prefix = safe_run_prefix(str(user.get("username") or "user"))
             run_id = arguments.get("run_id")
             if run_id:
-                self._enforce_run_access(user, str(run_id))
+                normalized_run_id = self._normalize_scoped_run_id(user, str(run_id))
+                arguments["run_id"] = normalized_run_id
+                self._enforce_run_access(user, normalized_run_id)
             else:
                 arguments["run_id"] = new_run_id(prefix)
         if name in {

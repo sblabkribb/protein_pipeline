@@ -1022,7 +1022,7 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertEqual(spec.get("unindex"), "A1")
             self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
 
-    def test_pipeline_rfd3_explicit_local_diversify_contig_only_does_not_infer_fixed_residue(
+    def test_pipeline_rfd3_explicit_local_diversify_contig_only_infers_fixed_residue(
         self,
     ) -> None:
         pdb = (
@@ -1056,9 +1056,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 (out / "rfd3" / "inputs.json").read_text(encoding="utf-8")
             )
             spec = inputs.get("spec-1") or {}
-            self.assertEqual(spec.get("contig"), "A1-3")
-            self.assertNotIn("unindex", spec)
-            self.assertNotIn("select_fixed_atoms", spec)
+            self.assertEqual(spec.get("contig"), "A2-3")
+            self.assertEqual(spec.get("unindex"), "A1")
+            self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
 
     def test_pipeline_rfd3_local_diversify_shifts_explicit_overlap_with_unindex(
         self,
@@ -1100,7 +1100,7 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertEqual(spec.get("unindex"), "A1")
             self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
 
-    def test_pipeline_rfd3_local_diversify_clamps_stale_contig_to_current_input_range(
+    def test_pipeline_rfd3_local_diversify_clamps_stale_contig_to_current_input_range_before_inference(
         self,
     ) -> None:
         pdb = (
@@ -1134,9 +1134,9 @@ class TestPipelineDryRun(unittest.TestCase):
                 (out / "rfd3" / "inputs.json").read_text(encoding="utf-8")
             )
             spec = inputs.get("spec-1") or {}
-            self.assertEqual(spec.get("contig"), "A1-3")
-            self.assertNotIn("unindex", spec)
-            self.assertNotIn("select_fixed_atoms", spec)
+            self.assertEqual(spec.get("contig"), "A2-3")
+            self.assertEqual(spec.get("unindex"), "A1")
+            self.assertEqual(spec.get("select_fixed_atoms"), {"A1": "ALL"})
 
     def test_pipeline_rfd3_auto_local_diversify_clamps_stale_contig_before_shift(
         self,

@@ -19,6 +19,11 @@ export function shouldClearStoredSession({ status = 0, error = "" } = {}) {
   return ["unauthorized", "session invalid", "admin required"].includes(normalizedError);
 }
 
+export function resolveLoginMode({ authBootstrapPending = false, oidcConfig = null } = {}) {
+  if (authBootstrapPending) return "loading";
+  return oidcConfig && oidcConfig.enabled ? "oidc" : "local";
+}
+
 export function resolveDefaultApiBase({
   origin = typeof window !== "undefined" ? window.location.origin : "",
   pathname = typeof window !== "undefined" ? window.location.pathname : "",

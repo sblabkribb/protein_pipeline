@@ -20,6 +20,8 @@ _ARTIFACT_PRIORITY_RULES: tuple[tuple[int, re.Pattern[str]], ...] = (
     (5, re.compile(r"^workflow_studio(?:/|$)")),
     (6, re.compile(r"^wt(?:/|$)")),
     (7, re.compile(r"^backbones/[^/]+/target\.pdb$")),
+    (8, re.compile(r"^msa(?:/|$)")),
+    (9, re.compile(r"^conservation(?:/|$)")),
 )
 
 
@@ -66,7 +68,9 @@ def ensure_dir(path: Path) -> Path:
 
 def write_json(path: Path, data: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def read_json(path: Path) -> object:
@@ -127,7 +131,9 @@ def _cancel_request_path(output_root: str, run_id: str) -> Path:
     return resolve_run_path(output_root, run_id) / "cancel.requested.json"
 
 
-def mark_cancel_requested(output_root: str, run_id: str, *, reason: str | None = None) -> None:
+def mark_cancel_requested(
+    output_root: str, run_id: str, *, reason: str | None = None
+) -> None:
     path = _cancel_request_path(output_root, run_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload: dict[str, object] = {
@@ -151,7 +157,9 @@ def is_cancel_requested(output_root: str, run_id: str) -> bool:
     return _cancel_request_path(output_root, run_id).exists()
 
 
-def set_status(paths: RunPaths, *, stage: str, state: str, detail: str | None = None) -> None:
+def set_status(
+    paths: RunPaths, *, stage: str, state: str, detail: str | None = None
+) -> None:
     payload: dict[str, object] = {
         "run_id": paths.run_id,
         "stage": stage,
@@ -199,7 +207,9 @@ def _safe_relpath(path: str) -> Path:
     return rel
 
 
-def resolve_run_path(output_root: str, run_id: str, rel_path: str | None = None) -> Path:
+def resolve_run_path(
+    output_root: str, run_id: str, rel_path: str | None = None
+) -> Path:
     run_id = normalize_run_id(run_id)
     root = Path(output_root).resolve() / run_id
     if rel_path is None or str(rel_path).strip() == "":
@@ -212,7 +222,9 @@ def run_exists(output_root: str, run_id: str) -> bool:
     return root.exists()
 
 
-def append_run_event(output_root: str, run_id: str, *, filename: str, payload: dict[str, object]) -> dict[str, object]:
+def append_run_event(
+    output_root: str, run_id: str, *, filename: str, payload: dict[str, object]
+) -> dict[str, object]:
     root = resolve_run_path(output_root, run_id)
     if not root.exists():
         raise ValueError("run_id not found")
@@ -269,7 +281,9 @@ def list_artifacts(
                 "path": str(rel).replace("\\", "/"),
                 "type": "file",
                 "size": int(stat.st_size),
-                "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(stat.st_mtime)),
+                "modified_at": time.strftime(
+                    "%Y-%m-%d %H:%M:%S", time.gmtime(stat.st_mtime)
+                ),
             }
         ]
 
@@ -296,7 +310,9 @@ def list_artifacts(
                     "path": str(rel).replace("\\", "/"),
                     "type": "dir",
                     "size": int(stat.st_size),
-                    "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(stat.st_mtime)),
+                    "modified_at": time.strftime(
+                        "%Y-%m-%d %H:%M:%S", time.gmtime(stat.st_mtime)
+                    ),
                 }
             )
         for name in filenames:
@@ -308,7 +324,9 @@ def list_artifacts(
                     "path": str(rel).replace("\\", "/"),
                     "type": "file",
                     "size": int(stat.st_size),
-                    "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(stat.st_mtime)),
+                    "modified_at": time.strftime(
+                        "%Y-%m-%d %H:%M:%S", time.gmtime(stat.st_mtime)
+                    ),
                 }
             )
     if limit and len(results) > limit:
@@ -356,7 +374,9 @@ def read_artifact(
     return data, meta
 
 
-def save_workflow_session(output_root: str, run_id: str, session: object) -> dict[str, object]:
+def save_workflow_session(
+    output_root: str, run_id: str, session: object
+) -> dict[str, object]:
     root = resolve_run_path(output_root, run_id)
     if not root.exists():
         raise ValueError("run_id not found")

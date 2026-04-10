@@ -43,6 +43,7 @@ import {
   normalizeRfd3Mode,
   normalizeWorkflowStudioPayloadForComparison,
   normalizeFixedPositionsExtraDraft,
+  normalizeRequestedRunId,
   normalizeSetupDraftForFreshRun,
   rfd3EnabledForContext,
   resolveRfd3ContigChoices,
@@ -73,7 +74,7 @@ import {
   workflowStudioExecutionTarget,
   workflowStudioVisibleStageFields,
   withFixedPositionsExtra,
-} from "./lib/pipeline.js?v=20260408_v11";
+} from "./lib/pipeline.js?v=20260409_v12";
 import {
   analyzeChartViewOptions,
   buildCompareMetaTooltip,
@@ -115,11 +116,12 @@ import {
   buildOidcRedirectUri,
   normalizeApiBase,
   parseOidcCallback,
+  resolveLoginMode,
   shouldAttemptSessionRestore,
   shouldClearStoredSession,
   stripOidcCallbackUrl,
   resolveDefaultApiBase,
-} from "./lib/auth.js?v=20260407_v6";
+} from "./lib/auth.js?v=20260409_v7";
 import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=20260407_v6";
 import { renderMcpGuideMarkup } from "./lib/mcp-guide.js?v=20260407_v6";
 
@@ -568,6 +570,7 @@ const state = {
   token: localStorage.getItem("kbf.token") || "",
   idToken: localStorage.getItem(ID_TOKEN_KEY) || "",
   oidcConfig: null,
+  authBootstrapPending: true,
   lang: loadLang(),
   reportLang: loadReportLang(),
   plan: null,
@@ -725,6 +728,7 @@ const el = {
   appShell: document.getElementById("appShell"),
   loginLocalDesc: document.getElementById("loginLocalDesc"),
   loginSsoDesc: document.getElementById("loginSsoDesc"),
+  loginLoading: document.getElementById("loginLoading"),
   loginLocalForm: document.getElementById("loginLocalForm"),
   loginSsoActions: document.getElementById("loginSsoActions"),
   loginUsername: document.getElementById("loginUsername"),
@@ -823,6 +827,9 @@ const el = {
   questionStack: document.getElementById("questionStack"),
   questionInputStack: document.getElementById("questionInputStack"),
   questionConfigStack: document.getElementById("questionConfigStack"),
+  customRunIdInput: document.getElementById("customRunIdInput"),
+  fastCustomRunIdInput: document.getElementById("fastCustomRunIdInput"),
+  evolutionCustomRunIdInput: document.getElementById("evolutionCustomRunIdInput"),
   setupStepper: document.getElementById("setupStepper"),
   setupStepMeta: document.getElementById("setupStepMeta"),
   setupStepDots: document.getElementById("setupStepDots"),
@@ -2088,6 +2095,7 @@ const I18N = {
     "login.title": "Enter the Lab",
     "login.desc": "Identify yourself to separate runs and keep artifacts organized.",
     "login.sso.desc": "Sign in with KBF SSO to keep the same identity and permissions across services.",
+    "login.loading": "Checking sign-in method...",
     "login.username": "Username",
     "login.username.placeholder": "e.g. hana.kim",
     "login.password": "Password",
@@ -3281,6 +3289,7 @@ const I18N = {
     "login.title": "랩 입장",
     "login.desc": "실행을 구분하고 아티팩트를 정리하기 위해 계정을 확인합니다.",
     "login.sso.desc": "서비스 간 동일한 계정과 권한을 유지하려면 KBF SSO로 로그인하세요.",
+    "login.loading": "로그인 방식을 확인하는 중입니다...",
     "login.username": "사용자명",
     "login.username.placeholder": "예: hana.kim",
     "login.password": "비밀번호",
@@ -8188,11 +8197,13 @@ const STAGE_LABELS = {
   design: { en: "ProteinMPNN", ko: "ProteinMPNN" },
   soluprot: { en: "SoluProt", ko: "SoluProt" },
   af2: { en: "ColabFold", ko: "ColabFold" },
+  relax: { en: "Relax", ko: "Relax" },
   novelty: { en: "WT Diff", ko: "WT Diff" },
   wt: { en: "WT Compare", ko: "WT 비교" },
   wt_baseline: { en: "WT Baseline", ko: "WT 기준선" },
   wt_soluprot: { en: "WT SoluProt", ko: "WT SoluProt" },
   wt_af2: { en: "WT ColabFold", ko: "WT ColabFold" },
+  wt_relax: { en: "WT Relax", ko: "WT Relax" },
   agent: { en: "Agent Panel", ko: "에이전트 패널" },
   misc: { en: "Misc", ko: "기타" },
 };
@@ -8377,13 +8388,19 @@ async function fetchOidcConfig() {
 }
 
 function syncLoginMode() {
-  const useOidc = oidcEnabled();
-  if (el.loginLocalDesc) el.loginLocalDesc.classList.toggle("hidden", useOidc);
-  if (el.loginSsoDesc) el.loginSsoDesc.classList.toggle("hidden", !useOidc);
-  if (el.loginLocalForm) el.loginLocalForm.classList.toggle("hidden", useOidc);
-  if (el.loginSsoActions) el.loginSsoActions.classList.toggle("hidden", !useOidc);
+  const mode = resolveLoginMode({
+    authBootstrapPending: state.authBootstrapPending,
+    oidcConfig: state.oidcConfig,
+  });
+  const loading = mode === "loading";
+  const useOidc = mode === "oidc";
+  if (el.loginLoading) el.loginLoading.classList.toggle("hidden", !loading);
+  if (el.loginLocalDesc) el.loginLocalDesc.classList.toggle("hidden", loading || useOidc);
+  if (el.loginSsoDesc) el.loginSsoDesc.classList.toggle("hidden", loading || !useOidc);
+  if (el.loginLocalForm) el.loginLocalForm.classList.toggle("hidden", loading || useOidc);
+  if (el.loginSsoActions) el.loginSsoActions.classList.toggle("hidden", loading || !useOidc);
   if (el.accountBtn) {
-    const visible = useOidc && Boolean(state.user) && Boolean(state.oidcConfig?.account_url);
+    const visible = !loading && useOidc && Boolean(state.user) && Boolean(state.oidcConfig?.account_url);
     el.accountBtn.classList.toggle("hidden", !visible);
   }
 }
@@ -8450,7 +8467,10 @@ async function finishOidcLogin(code, callbackState) {
 }
 
 async function bootstrapAuth() {
+  state.authBootstrapPending = true;
+  syncLoginMode();
   state.oidcConfig = await fetchOidcConfig();
+  state.authBootstrapPending = false;
   syncLoginMode();
   const callback = parseOidcCallback(window.location.search);
   if (callback.error) {
@@ -10898,7 +10918,7 @@ function mapStageToProgressStep(stage, mode) {
   if (raw === "done") return "done";
   if (raw === "mmseqs_msa") return "msa";
   if (raw === "conservation") return "conservation";
-  if (raw === "wt_baseline" || raw === "wt_soluprot" || raw === "wt_af2") return "wt";
+  if (raw === "wt_baseline" || raw === "wt_soluprot" || raw === "wt_af2" || raw.startsWith("wt_relax")) return "wt";
   if (raw === "rfd3") return mode === "rfd3" ? "rfd3" : "backbone";
   if (raw === "bioemu") return mode === "bioemu" ? "bioemu" : "backbone";
   if (raw === "af2_target" || raw === "pdb_preprocess" || raw === "query_pdb_check") return "backbone";
@@ -10906,19 +10926,20 @@ function mapStageToProgressStep(stage, mode) {
   if (raw === "ligand_mask" || raw === "surface_mask" || raw === "mask_consensus") return "masking";
   if (raw === "design" || raw.startsWith("proteinmpnn_")) return "design";
   if (raw === "soluprot" || raw.startsWith("soluprot_")) return "soluprot";
-  if (raw === "af2" || raw.startsWith("af2_")) return "af2";
+  if (raw === "af2" || raw.startsWith("af2_") || raw === "relax" || raw.startsWith("relax_")) return "af2";
   if (raw === "novelty" || raw.startsWith("novelty_")) return "novelty";
   return null;
 }
 
 function parseTierStage(stage) {
   const raw = String(stage || "").trim().toLowerCase();
-  const match = raw.match(/^(proteinmpnn|soluprot|af2|novelty)_([0-9]+(?:\.[0-9]+)?)$/);
+  const match = raw.match(/^(proteinmpnn|soluprot|af2|relax|novelty)_([0-9]+(?:\.[0-9]+)?)$/);
   if (!match) return null;
   const base = match[1];
   const tierKey = normalizeTierKeyValue(match[2]);
   if (!tierKey) return null;
   if (base === "proteinmpnn") return { step: "design", tierKey };
+  if (base === "relax") return { step: "relax", tierKey };
   return { step: base, tierKey };
 }
 
@@ -10948,7 +10969,7 @@ function computePipelineTierAwareProgress(status, runState, offset, cached) {
     };
   }
 
-  const tierSteps = new Set(["design", "soluprot", "af2", "novelty"]);
+  const tierSteps = new Set(["design", "soluprot", "af2", "relax", "novelty"]);
   const tierKeys = Array.from(new Set(ctx.tierKeys.map((item) => normalizeTierKeyValue(item)).filter(Boolean)));
   let unitIndex = -1;
   let label = progressStepLabel(currentStep);
@@ -10997,7 +11018,7 @@ function formatStatusStage(stage) {
   if (!raw) return "-";
   const lower = raw.toLowerCase();
 
-  const tierMatch = lower.match(/^(proteinmpnn|soluprot|af2|novelty)_([0-9]+(?:\.[0-9]+)?)$/);
+  const tierMatch = lower.match(/^(proteinmpnn|soluprot|af2|relax|novelty)_([0-9]+(?:\.[0-9]+)?)$/);
   if (tierMatch) {
     const key = tierMatch[1];
     const tierLabel = formatConservationTierLabel(tierMatch[2], state.lang || "en");
@@ -11007,7 +11028,7 @@ function formatStatusStage(stage) {
     if (key === "soluprot") {
       return `${formatStageLabel("soluprot")} · ${tierLabel}`;
     }
-    if (key === "af2") {
+    if (key === "af2" || key === "relax") {
       return `${formatStageLabel("af2")} · ${tierLabel}`;
     }
     if (key === "novelty") {
@@ -11481,6 +11502,10 @@ async function apiCall(name, args) {
 }
 
 async function authLogin() {
+  if (state.authBootstrapPending) {
+    el.loginError.textContent = t("login.loading");
+    return;
+  }
   if (oidcEnabled()) {
     el.loginError.textContent = "";
     try {
@@ -16239,7 +16264,24 @@ async function runPipeline() {
     updateRunEligibility(state.plan?.questions || []);
     return;
   }
-  const runId = createRunId(prefix);
+  
+  let customId = (
+    el.customRunIdInput?.value?.trim() ||
+    el.fastCustomRunIdInput?.value?.trim() ||
+    el.evolutionCustomRunIdInput?.value?.trim() ||
+    ""
+  );
+
+  if (customId) {
+    customId = customId.replace(/\s+/g, "_");
+    if (!/^[a-zA-Z0-9_-]+$/.test(customId)) {
+      setMessage("Run ID can only contain letters, numbers, hyphens, and underscores (no Korean characters).", "ai");
+      return;
+    }
+    customId = normalizeRequestedRunId(customId, prefix);
+  }
+  
+  const runId = customId || createRunId(prefix);
   state.runModeById[runId] = mode;
   let args = {};
   let toolName = "pipeline.run";
@@ -17106,6 +17148,16 @@ function compareSourceKeyFromMeta(meta) {
     .trim()
     .toLowerCase();
   if (stage === "wt" || stage === "wt_af2") return "wt";
+  
+  const manifest = currentBackboneManifest();
+  if (manifest && meta?.backboneId) {
+    const index = backboneSourceIndexFromManifest(manifest);
+    const manifestSource = String(index[meta.backboneId] || "").trim().toLowerCase();
+    if (manifestSource === "rfd3" || manifestSource === "bioemu") {
+      return manifestSource;
+    }
+  }
+
   const backboneSource = normalizeSourceKey(meta?.backboneSource);
   if (backboneSource !== "other") return backboneSource;
   const source = normalizeSourceKey(meta?.source);
@@ -21272,8 +21324,8 @@ async function refreshArtifacts(options = {}) {
     });
     if (runId !== String(state.currentRunId || "").trim()) return;
     state.artifacts = result.artifacts || [];
-    rebuildArtifactMetaIndex(state.artifacts);
     await loadBackboneManifest(runId);
+    rebuildArtifactMetaIndex(state.artifacts);
     renderAllArtifactViews(state.artifacts);
     refreshArtifactSelects();
     void refreshArtifactComparisonSummary();
@@ -23517,17 +23569,23 @@ async function saveReport() {
 async function refreshRuns() {
   if (!state.user) return;
   try {
-    const result = await apiCall("pipeline.list_runs", { limit: 30 });
+    const result = await apiCall("pipeline.list_runs", { limit: 50 });
     let runs = result.runs || [];
     if (state.user.role !== "admin" || !el.showAllRuns.checked) {
-      const prefix = state.user.run_prefix || buildUserPrefix({ name: state.user.username || "user" });
+      const prefix =
+        state.user.run_prefix ||
+        buildUserPrefix({ name: state.user.username || "user" });
       runs = filterRunsByPrefix(runs, prefix);
+    }
+    const current = String(state.currentRunId || "").trim();
+    if (current && !runs.includes(current)) {
+      runs = [current, ...runs];
     }
     state.runs = runs;
     renderRuns(runs);
     populateRunCompareBaselineOptions();
   } catch (err) {
-    // ignore errors here
+    // ignore
   }
 }
 
@@ -23589,6 +23647,21 @@ function renderRuns(runs) {
       if (!ok) return;
       try {
         await apiCall("pipeline.delete_run", { run_id: runId });
+        
+        const projects = Object.keys(state.roundsWorkspaceByProjectId || {});
+        for (const projectId of projects) {
+          const rounds = state.roundsWorkspaceByProjectId[projectId] || [];
+          for (const round of rounds) {
+            if (Array.isArray(round.linked_run_ids) && round.linked_run_ids.includes(runId)) {
+              const updatedRound = { ...round, linked_run_ids: round.linked_run_ids.filter(id => id !== runId) };
+              try {
+                await apiCall("pipeline.save_round", { round: updatedRound });
+              } catch (err) {}
+            }
+          }
+        }
+        await syncHomeProjectRoundContext();
+
         delete state.runModeById[runId];
         delete state.af2ProviderByRunId[runId];
         delete state.progressByRunId[runId];

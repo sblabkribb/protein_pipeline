@@ -728,7 +728,13 @@ def _delete_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
     status = load_status(runner.output_root, run_id)
     if status is not None and str(status.get("state") or "").lower() == "running" and not force:
         raise ValueError("run is still running; stop it or set force=true to delete anyway")
-    return delete_run(runner.output_root, run_id)
+    res = delete_run(runner.output_root, run_id)
+    for path in _projects_root(runner.output_root).glob("*/rounds/*.json"):
+        record = _load_json_record(path)
+        if record and "linked_run_ids" in record and run_id in record["linked_run_ids"]:
+            record["linked_run_ids"] = [r for r in record["linked_run_ids"] if r != run_id]
+            write_json(path, record)
+    return res
 
 
 def _cancel_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -4852,6 +4858,7 @@ def _build_hit_list_rows(
 
         af2_scores: dict[str, float] = {}
         af2_rmsd: dict[str, float] = {}
+        af2_target_rmsd: dict[str, float] = {}
         af2_selected: set[str] = set()
         af2_candidates: set[str] = set()
         af2 = _load_json_file(tier_dir / "af2_scores.json")
@@ -4867,12 +4874,41 @@ def _build_hit_list_rows(
                 for seq_id, raw_score in raw_rmsd.items():
                     if isinstance(raw_score, (int, float)):
                         af2_rmsd[str(seq_id)] = float(raw_score)
+            raw_target_rmsd = af2.get("target_rmsd_scores")
+            if isinstance(raw_target_rmsd, dict) and not recovered_failure:
+                for seq_id, raw_score in raw_target_rmsd.items():
+                    if isinstance(raw_score, (int, float)):
+                        af2_target_rmsd[str(seq_id)] = float(raw_score)
             raw_selected = af2.get("selected_ids")
             if isinstance(raw_selected, list) and not recovered_failure:
                 af2_selected = {str(x) for x in raw_selected if str(x).strip()}
             raw_candidates = af2.get("candidate_ids")
             if isinstance(raw_candidates, list):
                 af2_candidates = {str(x) for x in raw_candidates if str(x).strip()}
+
+        # Prefer per-candidate AF2 metrics because they explicitly track
+        # parent-backbone RMSD reference mode.
+        af2_rmsd_cache: dict[str, float | None] = {}
+
+        def _hit_list_backbone_rmsd(seq_id: str) -> float | None:
+            seq_key = str(seq_id or "").strip()
+            if not seq_key:
+                return None
+            if seq_key in af2_rmsd_cache:
+                return af2_rmsd_cache[seq_key]
+            metrics = _load_json_file(
+                tier_dir / "af2" / _safe_id(seq_key) / "metrics.json"
+            )
+            if isinstance(metrics, dict):
+                mode = str(metrics.get("rmsd_reference_mode") or "").strip()
+                raw_metrics_rmsd = metrics.get("rmsd_ca")
+                if isinstance(raw_metrics_rmsd, (int, float)) and (
+                    not mode or mode == "parent_backbone"
+                ):
+                    af2_rmsd_cache[seq_key] = float(raw_metrics_rmsd)
+                    return af2_rmsd_cache[seq_key]
+            af2_rmsd_cache[seq_key] = af2_rmsd.get(seq_key)
+            return af2_rmsd_cache[seq_key]
 
         relax_scores: dict[str, float] = {}
         relax_selected: set[str] = set()
@@ -4906,7 +4942,8 @@ def _build_hit_list_rows(
                 continue
             soluprot = sol_scores.get(seq_id)
             plddt = af2_scores.get(seq_id)
-            rmsd = af2_rmsd.get(seq_id)
+            rmsd = _hit_list_backbone_rmsd(seq_id)
+            target_rmsd = af2_target_rmsd.get(seq_id)
             relax_score = relax_scores.get(seq_id)
             wt_compare = _sequence_difference_stats(target_sequence or "", sequence) if target_sequence else None
             wt_identity = wt_compare.get("identity") if isinstance(wt_compare, dict) else None
@@ -4956,6 +4993,7 @@ def _build_hit_list_rows(
                     "soluprot": soluprot,
                     "plddt": plddt,
                     "rmsd": rmsd,
+                    "rmsd_target": target_rmsd,
                     "relax": relax_score,
                     "wt_identity": wt_identity,
                     "wt_identity_pct": wt_identity_pct,
@@ -5214,7 +5252,7 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     rfd3_infer_ori_strategy = _as_text(args.get("rfd3_infer_ori_strategy")).strip() or None
     rfd3_is_non_loopy = (
         _as_bool(args.get("rfd3_is_non_loopy"), False)
-        if str(args.get("rfd3_is_non_loopy") or "").strip()
+        if args.get("rfd3_is_non_loopy") is not None and str(args.get("rfd3_is_non_loopy")).strip() != ""
         else None
     )
     rfd3_unindex = _as_str_or_list(args.get("rfd3_unindex"))

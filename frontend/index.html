@@ -45,13 +45,14 @@
       <div id="loginGate" class="login-gate">
         <div class="login-card">
           <h1 data-i18n="login.title">Enter the Lab</h1>
-          <p id="loginLocalDesc" data-i18n="login.desc">
+          <p id="loginLocalDesc" class="hidden" data-i18n="login.desc">
             Identify yourself to separate runs and keep artifacts organized.
           </p>
           <p id="loginSsoDesc" class="hidden" data-i18n="login.sso.desc">
             Sign in with KBF SSO to keep the same identity and permissions across services.
           </p>
-          <div id="loginLocalForm" class="login-stack">
+          <div id="loginLoading" class="hint" data-i18n="login.loading">Checking sign-in method...</div>
+          <div id="loginLocalForm" class="login-stack hidden">
             <label>
               <span data-i18n="login.username">Username</span>
               <input
@@ -327,6 +328,11 @@
                       data-i18n-placeholder="fast.note.placeholder"
                     ></textarea>
                   </label>
+                  <label class="fast-field">
+                    <span data-i18n="setup.customRunId.label">Custom Run ID</span>
+                    <small data-i18n="setup.customRunId.help">Leave empty for auto-generation.</small>
+                    <input id="fastCustomRunIdInput" type="text" placeholder="custom_run_01" />
+                  </label>
                   <div class="fast-actions">
                     <button id="fastOpenAdvancedBtn" class="ghost" type="button" data-i18n="fast.action.reviewAdvanced">
                       Review in Advanced
@@ -460,6 +466,13 @@
                     </div>
                   </div>
                   <div id="questionConfigStack" class="question-stack section-stack"></div>
+                  
+                  <label class="fast-field" style="margin-top: 1rem;">
+                    <span data-i18n="setup.customRunId.label">Custom Run ID</span>
+                    <small data-i18n="setup.customRunId.help">Leave empty for auto-generation.</small>
+                    <input id="customRunIdInput" type="text" placeholder="custom_run_01" />
+                  </label>
+
                   <div class="run-actions">
                     <button id="runBtn" class="primary" disabled>Run</button>
                     <div id="runHint" class="hint" data-i18n="setup.hint">
@@ -503,6 +516,11 @@
                       placeholder="Paste PDB here."
                       data-i18n-placeholder="evolution.input.placeholder"
                     ></textarea>
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="setup.customRunId.label">Custom Run ID</span>
+                    <small data-i18n="setup.customRunId.help">Leave empty for auto-generation.</small>
+                    <input id="evolutionCustomRunIdInput" type="text" placeholder="custom_run_01" />
                   </label>
                   <div class="fast-inline-actions">
                     <input id="evolutionTargetFile" type="file" class="hidden" accept=".pdb,.ent" />
@@ -1657,6 +1675,6 @@
     <button id="copilotFabBtn" class="primary copilot-fab" data-i18n="copilot.open">Copilot</button>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260408_v11"></script>
+    <script type="module" src="./app.js?v=20260409_v14"></script>
   </body>
 </html>

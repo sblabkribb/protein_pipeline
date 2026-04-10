@@ -1,9 +1,10 @@
-const STAGE_ORDER = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"];
-const WORKFLOW_TIER_STAGE_ORDER = ["proteinmpnn", "soluprot", "af2", "novelty"];
+const STAGE_ORDER = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "relax", "novelty"];
+const WORKFLOW_TIER_STAGE_ORDER = ["proteinmpnn", "soluprot", "af2", "relax", "novelty"];
 const WORKFLOW_TIER_STAGE_TO_BASE = Object.freeze({
   proteinmpnn: "design",
   soluprot: "soluprot",
   af2: "af2",
+  relax: "relax",
   novelty: "novelty",
 });
 const DEFAULT_WORKFLOW_TIER_KEYS = Object.freeze(["30", "50", "70"]);
@@ -18,6 +19,7 @@ const PIPELINE_PROGRESS_STEPS = Object.freeze([
   "design",
   "soluprot",
   "af2",
+  "relax",
   "novelty",
 ]);
 const RUN_PROGRESS_PLANS = Object.freeze({
@@ -33,7 +35,7 @@ const RUN_PROGRESS_PLANS = Object.freeze({
 });
 
 export const DEFAULT_ARTIFACT_COMPARE_MODE = "sequence";
-export const DEFAULT_ARTIFACT_LIST_LIMIT = 1000;
+export const DEFAULT_ARTIFACT_LIST_LIMIT = 5000;
 const HIDDEN_TARGET_RMSD_GATE_FIELDS = Object.freeze([]);
 const FRONTEND_ONLY_SETUP_FIELDS = Object.freeze(["compare_rmsd_scope"]);
 
@@ -387,6 +389,7 @@ function inferredRfd3ContigRanges(payload = {}) {
   if (!pdbText) return null;
   
   const uniqueResidues = {};
+  let hasNonPositive = false;
   
   String(pdbText)
     .split(/\r?\n/)
@@ -397,18 +400,28 @@ function inferredRfd3ContigRanges(payload = {}) {
       const iCode = line.slice(26, 27).trim();
       if (!Number.isFinite(resSeq)) return;
       
+      if (resSeq <= 0) {
+        hasNonPositive = true;
+      }
+      
       const residueKey = `${resSeq}_${iCode}`;
       if (!uniqueResidues[chainId]) {
-        uniqueResidues[chainId] = new Set();
+        uniqueResidues[chainId] = { residues: new Set(), min: resSeq, max: resSeq };
+      } else {
+        uniqueResidues[chainId].min = Math.min(uniqueResidues[chainId].min, resSeq);
+        uniqueResidues[chainId].max = Math.max(uniqueResidues[chainId].max, resSeq);
       }
-      uniqueResidues[chainId].add(residueKey);
+      uniqueResidues[chainId].residues.add(residueKey);
     });
     
-  const normalized = Object.entries(uniqueResidues).reduce((acc, [chainId, resSet]) => {
-    const size = resSet.size;
+  const normalized = Object.entries(uniqueResidues).reduce((acc, [chainId, data]) => {
+    const size = data.residues.size;
     if (size === 0) return acc;
-    // Backend renumbers starting from 1
-    acc[chainId] = { min: 1, max: size };
+    if (hasNonPositive) {
+      acc[chainId] = { min: 1, max: size, size };
+    } else {
+      acc[chainId] = { min: data.min, max: data.max, size };
+    }
     return acc;
   }, {});
   
@@ -477,7 +490,7 @@ export function effectiveRfd3Mode(payload = {}) {
   if (
     hasMeaningfulValue(payload?.rfd3_hotspots) ||
     hasMeaningfulValue(payload?.rfd3_infer_ori_strategy) ||
-    typeof payload?.rfd3_is_non_loopy === "boolean"
+    payload?.rfd3_is_non_loopy === true
   ) {
     return "binder";
   }
@@ -527,7 +540,7 @@ function hasLegacyRfd3Config(payload = {}) {
       hasMeaningfulValue(payload?.rfd3_contig) ||
       hasMeaningfulValue(payload?.rfd3_hotspots) ||
       hasMeaningfulValue(payload?.rfd3_infer_ori_strategy) ||
-      typeof payload?.rfd3_is_non_loopy === "boolean" ||
+      payload?.rfd3_is_non_loopy === true ||
       hasMeaningfulValue(payload?.rfd3_unindex) ||
       hasMeaningfulValue(payload?.rfd3_length) ||
       hasMeaningfulValue(payload?.rfd3_select_fixed_atoms) ||
@@ -578,7 +591,7 @@ export function normalizeWorkflowStudioNode(value) {
     .replace(/[\s-]+/g, "_");
   const base = normalizeStage(raw);
   if (base) return base;
-  const match = raw.match(/^(proteinmpnn|soluprot|af2|novelty)_([0-9]+(?:\.[0-9]+)?)$/);
+  const match = raw.match(/^(proteinmpnn|soluprot|af2|relax|novelty)_([0-9]+(?:\.[0-9]+)?)$/);
   if (!match) return "";
   const tierKey = normalizeWorkflowTierKey(match[2]);
   if (!tierKey) return "";
@@ -601,7 +614,7 @@ export function parseWorkflowStudioNode(value) {
       selectedTiers: null,
     };
   }
-  const match = nodeId.match(/^(proteinmpnn|soluprot|af2|novelty)_([0-9]+)$/);
+  const match = nodeId.match(/^(proteinmpnn|soluprot|af2|relax|novelty)_([0-9]+)$/);
   if (!match) return null;
   const tierStage = match[1];
   const tierKey = match[2];
@@ -918,6 +931,7 @@ function progressStepForRequestedStage(stage, { wtCompare = false, start = false
   if (normalized === "design") return "design";
   if (normalized === "soluprot") return "soluprot";
   if (normalized === "af2") return "af2";
+  if (normalized === "relax") return "relax";
   if (normalized === "novelty") return start && wtCompare ? "wt" : "novelty";
   return "";
 }
@@ -977,7 +991,7 @@ export function progressUnitsForRequest({
   if (!["pipeline", "workflow"].includes(normalizedMode)) {
     return steps.map((step) => ({ step }));
   }
-  const tierStepSet = new Set(["design", "soluprot", "af2", "novelty"]);
+  const tierStepSet = new Set(["design", "soluprot", "af2", "relax", "novelty"]);
   const units = [];
   const normalizedTiers = normalizedWorkflowTierKeys(tierKeys);
   steps
@@ -1152,6 +1166,16 @@ export function createRunId(prefix, now = new Date()) {
   return `${safePrefix}_${ts}_${rand}`;
 }
 
+export function normalizeRequestedRunId(runId, prefix = "") {
+  const requested = sanitizeName(String(runId || "").replace(/\s+/g, "_"));
+  if (!requested) return "";
+  const safePrefix = sanitizeName(prefix || "");
+  if (!safePrefix || requested.startsWith(`${safePrefix}_`)) {
+    return requested;
+  }
+  return `${safePrefix}_${requested}`;
+}
+
 function normalizeArtifactPath(path) {
   return String(path || "")
     .trim()
@@ -1287,9 +1311,9 @@ export function artifactMetaFromPath(path) {
     stage = "agent";
   } else if (matchPath(normalized, /(?:^|\/)wt(?:\/|$)/)) {
     stage = "wt";
-  } else if (isRfd3Backbone || matchPath(normalized, /(?:^|\/)(?:rfd3|rfdiffusion)(?:\/|$)/)) {
+  } else if ((isRfd3Backbone && !matchPath(normalized, /(?:^|\/)tiers(?:\/|$)/)) || matchPath(normalized, /(?:^|\/)(?:rfd3|rfdiffusion)(?:\/|$)/)) {
     stage = "rfd3";
-  } else if (isBioemuBackbone || matchPath(normalized, /(?:^|\/)bioemu(?:\/|$)/)) {
+  } else if ((isBioemuBackbone && !matchPath(normalized, /(?:^|\/)tiers(?:\/|$)/)) || matchPath(normalized, /(?:^|\/)bioemu(?:\/|$)/)) {
     stage = "bioemu";
   } else if (
     matchPath(normalized, /(?:^|\/)af2_target(?:\/|$)/) ||
@@ -1299,7 +1323,7 @@ export function artifactMetaFromPath(path) {
     stage = "af2_target";
   } else if (matchPath(normalized, /(?:^|\/)diffdock(?:\/|$)/)) {
     stage = "diffdock";
-  } else if (matchPath(normalized, /(?:^|\/)(?:af2|alphafold2?|alphafold|colabfold)(?:\/|$)/)) {
+  } else if (matchPath(normalized, /(?:^|\/)(?:af2|alphafold2?|alphafold|colabfold|relax)(?:\/|$)/)) {
     stage = "af2";
   } else if (matchPath(normalized, /(?:^|\/)soluprot(?:\/|$)/) || normalized.includes("soluprot")) {
     stage = "soluprot";
@@ -1376,8 +1400,11 @@ export function artifactMetaFromPathForManifest(path, manifestOrIndex = null) {
   if (manifestSource !== "rfd3" && manifestSource !== "bioemu") {
     return meta;
   }
+  
+  const nextStage = meta.stage === "misc" ? manifestSource : meta.stage;
+  
   if (
-    meta.stage === manifestSource &&
+    meta.stage === nextStage &&
     meta.source === manifestSource &&
     meta.backboneSource === manifestSource
   ) {
@@ -1385,7 +1412,7 @@ export function artifactMetaFromPathForManifest(path, manifestOrIndex = null) {
   }
   return {
     ...meta,
-    stage: manifestSource,
+    stage: nextStage,
     source: manifestSource,
     backboneSource: manifestSource,
   };
@@ -2414,14 +2441,19 @@ export function resolveRfd3Defaults({ mode = "", answers = {}, nodes = [] } = {}
   if (rfd3Enabled) {
     if (rfd3Mode === "local_diversify" || rfd3Mode === "enzyme") {
       const currentUnindex = String(sanitizedAnswers?.rfd3_unindex || "").trim();
-      const explicitLocalMode = Boolean(explicitRfd3Mode);
+      const preserveExplicitLocalInputs =
+        Boolean(explicitRfd3Mode) &&
+        (
+          hasMeaningfulValue(sanitizedAnswers?.rfd3_unindex) ||
+          hasMeaningfulValue(sanitizedAnswers?.rfd3_select_fixed_atoms)
+        );
       const shiftedCandidate = hasMeaningfulValue(sanitizedAnswers?.rfd3_contig)
         ? inferRfd3ShiftedContigDefaults(sanitizedAnswers.rfd3_contig)
         : null;
       const shiftedDefaults =
         shiftedCandidate &&
         (
-          (!explicitLocalMode && !currentUnindex) ||
+          (!preserveExplicitLocalInputs && !currentUnindex) ||
           (currentUnindex && currentUnindex === shiftedCandidate.unindex)
         )
           ? shiftedCandidate
@@ -2436,17 +2468,20 @@ export function resolveRfd3Defaults({ mode = "", answers = {}, nodes = [] } = {}
         if (shiftedDefaults) {
           inferredContig = defaults.contig;
         } else if (
-          (!explicitLocalMode || currentUnindex) &&
+          (!preserveExplicitLocalInputs || currentUnindex) &&
           !hasMeaningfulValue(sanitizedAnswers?.rfd3_contig) &&
           (!currentUnindex || currentUnindex === defaults.unindex)
         ) {
           inferredContig = defaults.contig;
         }
-        if (!explicitLocalMode && !hasMeaningfulValue(sanitizedAnswers?.rfd3_unindex)) {
+        if (
+          !preserveExplicitLocalInputs &&
+          !hasMeaningfulValue(sanitizedAnswers?.rfd3_unindex)
+        ) {
           inferredUnindex = defaults.unindex;
         }
         if (
-          !explicitLocalMode &&
+          !preserveExplicitLocalInputs &&
           !hasMeaningfulValue(sanitizedAnswers?.rfd3_select_fixed_atoms) &&
           (!currentUnindex || currentUnindex === defaults.unindex)
         ) {
