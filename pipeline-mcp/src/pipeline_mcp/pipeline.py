@@ -8573,9 +8573,12 @@ class PipelineRunner:
                             )
                         ]
                         selected_pairs.sort(key=lambda t: t[1], reverse=True)
+                        af2_top_k = int(request.af2_top_k)
+                        if af2_top_k > 0:
+                            selected_pairs = selected_pairs[:af2_top_k]
                         af2_selected_ids = [
                             seq_id
-                            for seq_id, _ in selected_pairs[: int(request.af2_top_k)]
+                            for seq_id, _ in selected_pairs
                         ]
 
                         selected_records = [
@@ -8652,7 +8655,8 @@ class PipelineRunner:
                             ],
                         }
                         candidate_ids = [s.id for s in af2_candidates]
-                        af2_selected_ids = candidate_ids[: int(request.af2_top_k)]
+                        af2_top_k = int(request.af2_top_k)
+                        af2_selected_ids = candidate_ids[:af2_top_k] if af2_top_k > 0 else candidate_ids
                         selected_records = [
                             s for s in af2_candidates if s.id in set(af2_selected_ids)
                         ]

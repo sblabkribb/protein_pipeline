@@ -121,7 +121,7 @@ class PipelineRequest:
     af2_rmsd_cutoff: float = 2.0
     # Limit AF2 predictions per tier using top SoluProt-scored candidates (<=0 means no limit).
     af2_max_candidates_per_tier: int = 0
-    af2_top_k: int = 20
+    af2_top_k: int = 0
     af2_sequence_ids: list[str] | None = None
     relax_enabled: bool = False
     relax_score_per_residue_cutoff: float | None = None

@@ -8176,6 +8176,7 @@ const ARTIFACT_STAGE_ORDER = [
   "af2",
   "novelty",
   "wt",
+  "evolution",
   "agent",
   "misc",
 ];
@@ -8204,6 +8205,7 @@ const STAGE_LABELS = {
   wt_soluprot: { en: "WT SoluProt", ko: "WT SoluProt" },
   wt_af2: { en: "WT ColabFold", ko: "WT ColabFold" },
   wt_relax: { en: "WT Relax", ko: "WT Relax" },
+  evolution: { en: "Evolution", ko: "진화(Evolution)" },
   agent: { en: "Agent Panel", ko: "에이전트 패널" },
   misc: { en: "Misc", ko: "기타" },
 };

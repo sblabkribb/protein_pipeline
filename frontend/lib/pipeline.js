@@ -1309,6 +1309,8 @@ export function artifactMetaFromPath(path) {
     stage = "query_pdb_check";
   } else if (matchPath(normalized, /(?:^|\/)agent_panel(?:\/|$)/)) {
     stage = "agent";
+  } else if (matchPath(normalized, /(?:^|\/)evolution(?:\/|$)/) || normalized === "summary.json") {
+    stage = "evolution";
   } else if (matchPath(normalized, /(?:^|\/)wt(?:\/|$)/)) {
     stage = "wt";
   } else if ((isRfd3Backbone && !matchPath(normalized, /(?:^|\/)tiers(?:\/|$)/)) || matchPath(normalized, /(?:^|\/)(?:rfd3|rfdiffusion)(?:\/|$)/)) {

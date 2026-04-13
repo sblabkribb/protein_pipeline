@@ -80,6 +80,11 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
     
     def evaluate_af2(indices):
         scores = []
+        evolution_dir = paths.root / "evolution"
+        evolution_dir.mkdir(parents=True, exist_ok=True)
+        designs_dir = evolution_dir / "designs"
+        designs_dir.mkdir(parents=True, exist_ok=True)
+
         for idx in indices:
             sid = seq_ids[idx]
             seq = seq_texts[idx]
@@ -101,6 +106,33 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
                 af2_res = summary.get("af2", {}).get(sid, {})
                 plddt = af2_res.get("best_plddt", 0.0)
                 scores.append(plddt)
+                
+                # Copy the best model to the evolution/designs directory
+                eval_run_path = resolve_run_path(runner.output_root, eval_run_id)
+                af2_out_dir = eval_run_path / request.af2_provider
+                best_pdb_path = None
+                
+                # Af2 prediction usually creates a file like ranked_0.pdb
+                if (af2_out_dir / sid / "ranked_0.pdb").exists():
+                    best_pdb_path = af2_out_dir / sid / "ranked_0.pdb"
+                elif (af2_out_dir / f"{sid}_unrelaxed_rank_001_alphafold2_ptm_model_1_seed_000.pdb").exists():
+                    # For ColabFold standard output without folder
+                    best_pdb_path = next(af2_out_dir.glob(f"{sid}_unrelaxed_rank_001_*.pdb"), None)
+
+                # Fallback to recursively finding the best model by looking at af2_res or just searching
+                if not best_pdb_path:
+                    # Let's just find any pdb file in that directory
+                    pdb_files = list(af2_out_dir.rglob("*.pdb"))
+                    if pdb_files:
+                        best_pdb_path = pdb_files[0]
+                        for p in pdb_files:
+                            if "ranked_0" in p.name or "rank_001" in p.name:
+                                best_pdb_path = p
+                                break
+
+                if best_pdb_path:
+                    dest_path = designs_dir / f"{sid}.pdb"
+                    shutil.copy2(best_pdb_path, dest_path)
             except Exception as e:
                 print(f"Evaluation failed for {sid}: {e}")
                 scores.append(0.0)
