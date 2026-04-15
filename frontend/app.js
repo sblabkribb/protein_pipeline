@@ -8211,14 +8211,14 @@ const STAGE_LABELS = {
 };
 
 const PROGRESS_PLANS = {
-  pipeline: ["msa", "conservation", "backbone", "wt", "masking", "design", "soluprot", "af2", "novelty", "done"],
-  workflow: ["msa", "conservation", "backbone", "wt", "masking", "design", "soluprot", "af2", "novelty", "done"],
+  pipeline: ["msa", "conservation", "backbone", "wt", "masking", "design", "soluprot", "af2", "relax", "novelty", "done"],
+  workflow: ["msa", "conservation", "backbone", "wt", "masking", "design", "soluprot", "af2", "relax", "novelty", "done"],
   design: ["msa", "conservation", "backbone", "masking", "design", "done"],
   soluprot: ["msa", "conservation", "backbone", "masking", "design", "soluprot", "done"],
   rfd3: ["msa", "conservation", "rfd3", "done"],
   bioemu: ["msa", "conservation", "bioemu", "done"],
   msa: ["msa", "done"],
-  af2: ["af2", "done"],
+  af2: ["af2", "relax", "done"],
   diffdock: ["diffdock", "done"],
 };
 
@@ -10928,7 +10928,8 @@ function mapStageToProgressStep(stage, mode) {
   if (raw === "ligand_mask" || raw === "surface_mask" || raw === "mask_consensus") return "masking";
   if (raw === "design" || raw.startsWith("proteinmpnn_")) return "design";
   if (raw === "soluprot" || raw.startsWith("soluprot_")) return "soluprot";
-  if (raw === "af2" || raw.startsWith("af2_") || raw === "relax" || raw.startsWith("relax_")) return "af2";
+  if (raw === "af2" || raw.startsWith("af2_")) return "af2";
+  if (raw === "relax" || raw.startsWith("relax_")) return "relax";
   if (raw === "novelty" || raw.startsWith("novelty_")) return "novelty";
   return null;
 }
@@ -11030,8 +11031,11 @@ function formatStatusStage(stage) {
     if (key === "soluprot") {
       return `${formatStageLabel("soluprot")} · ${tierLabel}`;
     }
-    if (key === "af2" || key === "relax") {
+    if (key === "af2") {
       return `${formatStageLabel("af2")} · ${tierLabel}`;
+    }
+    if (key === "relax") {
+      return `${formatStageLabel("relax")} · ${tierLabel}`;
     }
     if (key === "novelty") {
       return `${formatStageLabel("novelty")} · ${tierLabel}`;
@@ -15919,6 +15923,10 @@ function filterAnswersForMode(mode, answers) {
       "selected_tiers",
       "start_from",
       "stop_after",
+      "evolution_mode",
+      "evolution_initial_samples",
+      "evolution_rounds",
+      "evolution_samples_per_round",
     ],
     workflow: [
       "target_fasta",
@@ -15959,6 +15967,10 @@ function filterAnswersForMode(mode, answers) {
       "novelty_enabled",
       "start_from",
       "stop_after",
+      "evolution_mode",
+      "evolution_initial_samples",
+      "evolution_rounds",
+      "evolution_samples_per_round",
     ],
     bioemu: [
       "target_fasta",

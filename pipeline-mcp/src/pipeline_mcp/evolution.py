@@ -89,11 +89,11 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
             sid = seq_ids[idx]
             seq = seq_texts[idx]
             
-            eval_run_id = f"{run_id}_eval_{sid.replace(':', '_')}"
+            from .tools import _run_af2_predict, _safe_id
+            eval_run_id = f"{run_id}_eval_{_safe_id(sid)}"
             fasta_payload = f">{sid}\n{seq}\n"
-            
+
             try:
-                from .tools import _run_af2_predict
                 res = _run_af2_predict(runner, {
                     "run_id": eval_run_id,
                     "target_fasta": fasta_payload,

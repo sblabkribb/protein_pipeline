@@ -14,8 +14,25 @@ class FastaRecord:
 
     @property
     def id(self) -> str:
-        m = _HEADER_ID_RE.match(self.header.strip())
-        return (m.group(1) if m else self.header.strip()) or "seq"
+        h = self.header.strip()
+        if not h:
+            return "seq"
+
+        # Take everything before the first pipe
+        base = h.split("|", 1)[0].strip()
+
+        # Split into first word and rest
+        parts = base.split(None, 1)
+        first = parts[0]
+
+        # If the first word contains '=' and the base contains 'sample=',
+        # it's likely a ProteinMPNN-style parameter list header without a leading ID.
+        # We keep the spaces in the base part to ensure uniqueness.
+        if "=" in first and "sample=" in base:
+            return base
+
+        # Otherwise, follow standard: stop at first space
+        return first
 
 
 def parse_fasta(text: str) -> list[FastaRecord]:

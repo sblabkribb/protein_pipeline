@@ -29,3 +29,4 @@
 ## Notes / Assumptions
 - Login is client-side only (localStorage). For real multi-tenant auth, add server-side auth later.
 - API base defaults to `http://127.0.0.1:18080` but is user-configurable.
+- Fixed AF2 prediction loop to continue on individual sequence failures (e.g., RunPod execution timeout).

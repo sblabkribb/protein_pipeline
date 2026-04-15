@@ -689,7 +689,9 @@ def _should_retry_cached_wt_af2(payload: dict[str, Any] | None) -> bool:
 
 
 def _should_retry_cached_tier_af2(payload: dict[str, Any] | None) -> bool:
-    return isinstance(payload, dict) and af2_payload_has_missing_pdb_failure(payload)
+    if not isinstance(payload, dict):
+        return False
+    return af2_payload_has_missing_pdb_failure(payload) or bool(payload.get("recovered"))
 
 
 def _relax_payload_has_recovered_failure(payload: dict[str, Any] | None) -> bool:
@@ -7572,7 +7574,12 @@ class PipelineRunner:
                     tier_dir / "designs.fasta",
                     to_fasta(
                         [
-                            FastaRecord(header=s.header or s.id, sequence=s.sequence)
+                            FastaRecord(
+                                header=f"{s.id} {s.header}"
+                                if s.header and not s.header.startswith(s.id)
+                                else (s.header or s.id),
+                                sequence=s.sequence,
+                            )
                             for s in samples
                         ]
                     ),
@@ -7875,7 +7882,10 @@ class PipelineRunner:
                             to_fasta(
                                 [
                                     FastaRecord(
-                                        header=s.header or s.id, sequence=s.sequence
+                                        header=f"{s.id} {s.header}"
+                                        if s.header and not s.header.startswith(s.id)
+                                        else (s.header or s.id),
+                                        sequence=s.sequence,
                                     )
                                     for s in pi_passed
                                 ]
@@ -7889,7 +7899,10 @@ class PipelineRunner:
                             to_fasta(
                                 [
                                     FastaRecord(
-                                        header=s.header or s.id, sequence=s.sequence
+                                        header=f"{s.id} {s.header}"
+                                        if s.header and not s.header.startswith(s.id)
+                                        else (s.header or s.id),
+                                        sequence=s.sequence,
                                     )
                                     for s in samples
                                 ]
@@ -8119,7 +8132,10 @@ class PipelineRunner:
                         to_fasta(
                             [
                                 FastaRecord(
-                                    header=s.header or s.id, sequence=s.sequence
+                                    header=f"{s.id} {s.header}"
+                                    if s.header and not s.header.startswith(s.id)
+                                    else (s.header or s.id),
+                                    sequence=s.sequence,
                                 )
                                 for s in passed
                             ]
@@ -8385,20 +8401,19 @@ class PipelineRunner:
                                         rec = _predict_af2_batch(
                                             [seq_input], resume_job_ids=seq_resume
                                         )
+                                        if isinstance(rec, dict):
+                                            af2_result.update(rec)
                                     except Exception as exc:
                                         if (
                                             request.auto_recover
-                                            and af2_error_is_missing_pdb_outputs(
-                                                str(exc)
-                                            )
+                                            or af2_error_is_missing_pdb_outputs(str(exc))
+                                            or "executiontimeout" in str(exc).lower()
                                         ):
                                             partial_prediction_errors[seq_input.id] = (
                                                 str(exc)
                                             )
                                             continue
                                         raise
-                                    if isinstance(rec, dict):
-                                        af2_result.update(rec)
 
                                 if partial_prediction_errors and not af2_result:
                                     first_error = next(
@@ -8589,7 +8604,10 @@ class PipelineRunner:
                             to_fasta(
                                 [
                                     FastaRecord(
-                                        header=s.header or s.id, sequence=s.sequence
+                                        header=f"{s.id} {s.header}"
+                                        if s.header and not s.header.startswith(s.id)
+                                        else (s.header or s.id),
+                                        sequence=s.sequence,
                                     )
                                     for s in selected_records
                                 ]
@@ -8666,7 +8684,10 @@ class PipelineRunner:
                             to_fasta(
                                 [
                                     FastaRecord(
-                                        header=s.header or s.id, sequence=s.sequence
+                                        header=f"{s.id} {s.header}"
+                                        if s.header and not s.header.startswith(s.id)
+                                        else (s.header or s.id),
+                                        sequence=s.sequence,
                                     )
                                     for s in selected_records
                                 ]
@@ -9090,7 +9111,10 @@ class PipelineRunner:
                                 to_fasta(
                                     [
                                         FastaRecord(
-                                            header=s.header or s.id, sequence=s.sequence
+                                            header=f"{s.id} {s.header}"
+                                            if s.header and not s.header.startswith(s.id)
+                                            else (s.header or s.id),
+                                            sequence=s.sequence,
                                         )
                                         for s in selected_records
                                     ]
@@ -9157,7 +9181,10 @@ class PipelineRunner:
                                 to_fasta(
                                     [
                                         FastaRecord(
-                                            header=s.header or s.id, sequence=s.sequence
+                                            header=f"{s.id} {s.header}"
+                                            if s.header and not s.header.startswith(s.id)
+                                            else (s.header or s.id),
+                                            sequence=s.sequence,
                                         )
                                         for s in relax_candidates
                                         if s.id in relax_gate_ids
@@ -9885,7 +9912,12 @@ class PipelineRunner:
                 out_fasta,
                 to_fasta(
                     [
-                        FastaRecord(header=s.header or s.id, sequence=s.sequence)
+                        FastaRecord(
+                            header=f"{s.id} {s.header}"
+                            if s.header and not s.header.startswith(s.id)
+                            else (s.header or s.id),
+                            sequence=s.sequence,
+                        )
                         for s in [native, *samples]
                     ]
                 ),
@@ -9941,7 +9973,12 @@ class PipelineRunner:
                     )
                 ]
                 + [
-                    FastaRecord(header=s.header or s.id, sequence=s.sequence)
+                    FastaRecord(
+                        header=f"{s.id} {s.header}"
+                        if s.header and not s.header.startswith(s.id)
+                        else (s.header or s.id),
+                        sequence=s.sequence,
+                    )
                     for s in samples
                 ]
             ),
