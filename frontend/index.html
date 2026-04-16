@@ -589,6 +589,26 @@
                     <textarea id="evolutionFixedPositionsExtraInput" rows="3" placeholder="A:6,10;*:120"></textarea>
                   </label>
 
+                  <!-- Literature-Driven Masking UI -->
+                  <div class="field-group" style="margin-top: 1rem;">
+                    <label style="font-weight: 500; font-size: 0.85em; color: var(--text-color-muted); display: block; margin-bottom: 0.5rem;">Extract Constraints from Paper (PDF)</label>
+                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+                      <input type="file" id="paperMaskInput" accept="application/pdf" style="display: none;" />
+                      <button type="button" class="btn" id="paperMaskUploadBtn" style="white-space: nowrap;">📄 Upload & Analyze</button>
+                      <span id="paperMaskStatus" class="status-subtitle" style="margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></span>
+                    </div>
+                    <div id="paperMaskReviewPanel" class="hidden" style="border: 1px solid var(--border-color); padding: 1rem; border-radius: 4px; background: var(--bg-color-alt);">
+                      <div class="status-subtitle">AI Suggested Masks</div>
+                      <div id="paperMaskList" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto; margin-bottom: 1rem;">
+                        <!-- Items injected here -->
+                      </div>
+                      <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
+                        <button type="button" class="btn" id="paperMaskCancelBtn">Cancel</button>
+                        <button type="button" class="btn primary" id="paperMaskApplyBtn">Apply Selected to Constraints</button>
+                      </div>
+                    </div>
+                  </div>
+
                   <div class="panel-divider"></div>
 
                 </aside>
