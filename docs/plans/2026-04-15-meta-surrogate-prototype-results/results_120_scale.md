@@ -21,18 +21,25 @@ The goal is to demonstrate that the model consistently identifies the absolute b
 *   **Model:** `facebook/esm2_t6_8M_UR50D` (8 Million parameters).
 *   **Process:** Sequences were tokenized and passed through the model. The output hidden states were mean-pooled (ignoring padding via attention masks) to yield a **320-dimensional semantic embedding** per sequence.
 
-### 2.3. MLP Surrogate Architectures
-*   **SoluProt Predictor:** Multi-Layer Perceptron with hidden layers `(256, 128)`.
+### 2.3. MLP Surrogate Architectures (Independent Predictors)
+To accurately predict multiple, potentially conflicting structural metrics, we trained **independent, separate MLP models** for each metric using the exact same ESM-2 embedding inputs. They were *not* trained as a single combined score.
+
+*   **SoluProt Predictor (Model A):** Multi-Layer Perceptron with hidden layers `(256, 128)`.
+    *   Trained on 2,985 sequences to predict the singular SoluProt score.
     *   Test Set MSE: `0.0011`
-*   **pLDDT Predictor:** Multi-Layer Perceptron with hidden layers `(128, 64)`.
+*   **pLDDT Predictor (Model B):** Multi-Layer Perceptron with hidden layers `(128, 64)`.
+    *   Trained on 392 sequences to predict the singular AF2 pLDDT score.
     *   Test Set MSE: `1.8677` (Predicts Ground Truth AF2 with ~1.3 point average error).
 
 ## 3. Multi-Objective Validation (120-Sequence Pool)
 
 To simulate a real-world Bayesian Optimization (BO) round, we randomly selected an **unseen pool of 120 sequences** from the 20% test set. 
 
-### 3.1. The Task
-The model was asked to calculate a combined Acquisition Score (50% predicted SoluProt + 50% predicted Relax) for all 120 sequences without executing any actual metrics. It then selected the **Top 10% (12 sequences)** to be sent to the "Oracle".
+### 3.1. The Multi-Objective Task (Acquisition Phase)
+Instead of optimizing for a single metric, we simulated a Pareto-balance task. The system executed the following steps:
+1.  **Independent Predictions:** The 120 embeddings were passed through Model A to get 120 predicted SoluProt scores, and through Model B (and the Relax simulator) to get independent Thermodynamic stability predictions.
+2.  **Mathematical Combination:** The independent predictions were normalized and combined into a final Acquisition Score (`50% Pred_SoluProt + 50% Pred_Relax`).
+3.  **Selection:** The system selected the **Top 10% (12 sequences)** with the highest combined Acquisition Score to be sent to the "Oracle".
 
 ### 3.2. Ground Truth vs. Prediction Results
 We compared the actual (Ground Truth) combined scores of the model's selected 12 sequences against a completely random selection of 12 sequences.
