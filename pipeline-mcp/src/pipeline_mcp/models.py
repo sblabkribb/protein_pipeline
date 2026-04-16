@@ -24,6 +24,8 @@ class PipelineRequest:
     evolution_initial_samples: int = 20
     evolution_rounds: int = 3
     evolution_samples_per_round: int = 5
+    evolution_pool_size: int = 1000
+    evolution_oracle_samples: int = 20
     project_id: str | None = None
     round_id: str | None = None
 

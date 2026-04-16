@@ -35,10 +35,17 @@ class RosettaConfig:
 
 
 @dataclass(frozen=True)
+class GeminiConfig:
+    api_key: str | None
+    model_name: str
+
+
+@dataclass(frozen=True)
 class AppConfig:
     runpod: RunPodConfig
     services: ServiceConfig
     rosetta: RosettaConfig
+    gemini: GeminiConfig
     output_root: str
 
 
@@ -89,6 +96,10 @@ def load_config() -> AppConfig:
 
     output_root = os.environ.get("PIPELINE_OUTPUT_ROOT", "outputs").strip() or "outputs"
 
+    gemini_api_key = os.environ.get("GEMINI_API_KEY", "").strip() or None
+    gemini_model = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash").strip() or "gemini-2.0-flash"
+
+
     return AppConfig(
         runpod=RunPodConfig(
             api_key=api_key,
@@ -111,5 +122,10 @@ def load_config() -> AppConfig:
             database_path=rosetta_database_path,
             timeout_s=rosetta_timeout_s,
         ),
+        gemini=GeminiConfig(
+            api_key=gemini_api_key,
+            model_name=gemini_model,
+        ),
         output_root=output_root,
     )
+

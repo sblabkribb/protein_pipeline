@@ -691,7 +691,9 @@ def _should_retry_cached_wt_af2(payload: dict[str, Any] | None) -> bool:
 def _should_retry_cached_tier_af2(payload: dict[str, Any] | None) -> bool:
     if not isinstance(payload, dict):
         return False
-    return af2_payload_has_missing_pdb_failure(payload) or bool(payload.get("recovered"))
+    # If the previous run had missing pdbs or completed with an error / auto_recover, we MUST retry it.
+    # Therefore, return True to invalidate the cache and force a rerun.
+    return af2_payload_has_missing_pdb_failure(payload) or bool(payload.get("recovered")) or payload.get("error") is not None
 
 
 def _relax_payload_has_recovered_failure(payload: dict[str, Any] | None) -> bool:
@@ -2892,6 +2894,7 @@ class PipelineRunner:
     bioemu: Any | None = None
     diffdock: Any | None = None
     rosetta_relax: Any | None = None
+    gemini: Any | None = None
 
     def run(
         self, request: PipelineRequest, *, run_id: str | None = None

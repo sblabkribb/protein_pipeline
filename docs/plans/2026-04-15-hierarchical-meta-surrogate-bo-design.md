@@ -43,15 +43,22 @@ When a user initiates `evolution_mode`, sequence generation creates an initial p
 
 ## 4. Model and Data Management Strategy
 
-### 4.1. Data Management (`knowledge_base/`)
-*   All pipeline outputs (`summary.json`) that contain ground truth AF2/Relax metrics are automatically parsed and appended to a centralized training ledger (e.g., SQLite or structured Parquet files).
-*   Data is periodically cleaned to remove redundant sequences or failed Oracle runs.
+### 4.1. Data Management: NCP S3 Object Storage
+The system utilizes **NCP (Naver Cloud Platform) Object Storage** as the central repository for all design artifacts and the cumulative knowledge base. This enables a true **Distributed Data Flywheel**.
+*   **Artifact Sync:** Upon completion of any run, the entire `outputs/{run_id}` directory is synchronized to the `protein-pipeline-outputs` bucket.
+*   **Knowledge Ledger:** A structured file (e.g., `knowledge_base/training_ledger.parquet`) is maintained in S3. It stores sanitized `[Sequence, Mean_Embedding, Global_pLDDT, SoluProt, Relax]` tuples from every validated design.
+*   **Scalability:** Storing data in S3 allows multiple pipeline instances (nodes) to share the same intelligence and enables large-scale offline training without local disk constraints.
 
-### 4.2. Model Management & Training Lifecycle
-1.  **V1 (Offline Pre-training):** Train an initial `meta_surrogate_v1.pt` on ~1,000 diverse protein families. This solves the cold-start problem.
-2.  **V2+ (Continual Learning):** A background cron job or admin-triggered script reads the newly accumulated user data from the `knowledge_base/`.
-3.  It performs Transfer Learning on the current model weights using the new, highly targeted data.
-4.  The new weights (`meta_surrogate_v2.pt`) are deployed, making Stage 2 predictions slightly more accurate for the entire user base.
+### 4.2. pLDDT Handling & Training Granularity
+While AlphaFold2 provides per-residue confidence scores, our Meta-Surrogate is optimized for **Global Design Selection**.
+*   **Input Representation:** Residue-level ESM-3 embeddings are combined via **Mean Pooling** to represent the sequence's overall structural potential.
+*   **Target Metric:** The model is trained to predict the **Global Average pLDDT** of the structure. This provides a single, high-signal optimization target for the Bayesian Acquisition function.
+*   **Logic:** By mapping the entire semantic space of the PLM to the global confidence score, the surrogate learns to identify sequences that achieve high structural integrity across the entire 3D fold.
+
+### 4.3. Model Management & Training Lifecycle
+1.  **V1 (Offline Pre-training):** Initial models are trained on historical data accumulated from previous SOTA runs.
+2.  **V2+ (Continual Learning):** A periodic re-training job pulls the latest `training_ledger.parquet` from NCP S3, performs incremental fine-tuning (Transfer Learning), and pushes the updated weights back to the **S3 Model Registry**.
+3.  **Deployment:** The `evolution.py` engine always fetches the `latest` model weights from S3 at runtime to ensure maximum predictive accuracy.
 
 ## 5. Implementation Plan (Prototyping Phase)
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from dotenv import load_dotenv
 
 from .clients.alphafold2 import AlphaFold2Client
 from .clients.alphafold2_runpod import AlphaFold2RunPodClient
@@ -12,11 +13,13 @@ from .clients.rosetta_relax import RosettaRelaxClient
 from .clients.rfd3_runpod import RFD3RunPodClient
 from .clients.runpod import RunPodClient
 from .clients.soluprot import SoluProtClient
+from .clients.gemini import GeminiClient
 from .config import load_config
 from .pipeline import PipelineRunner
 
 
 def build_runner() -> PipelineRunner:
+    load_dotenv()
     cfg = load_config()
     runpod = RunPodClient(
         api_key=cfg.runpod.api_key,
@@ -64,6 +67,10 @@ def build_runner() -> PipelineRunner:
             docker_image=cfg.rosetta.docker_image or "rosettacommons/rosetta:latest",
             timeout_s=cfg.rosetta.timeout_s,
         )
+    
+    gemini = None
+    if cfg.gemini.api_key:
+        gemini = GeminiClient(api_key=cfg.gemini.api_key, model_name=cfg.gemini.model_name)
 
     return PipelineRunner(
         output_root=cfg.output_root,
@@ -76,4 +83,5 @@ def build_runner() -> PipelineRunner:
         bioemu=bioemu,
         diffdock=diffdock,
         rosetta_relax=rosetta_relax,
+        gemini=gemini,
     )

@@ -187,7 +187,49 @@ export function copilotIntentFromPrompt(prompt, intentHint = "") {
   return "general";
 }
 
-export function buildCopilotReply({ prompt = "", intentHint = "", snapshot = {}, lang = "en" } = {}) {
+/**
+ * Fetches a reasoned reply from the backend agent.
+ */
+async function fetchAgentReasoning(snapshot, prompt, lang = "en") {
+  const runId = snapshot?.runId || snapshot?.run_id || snapshot?.request?.run_id;
+  if (!runId) return null;
+
+  try {
+    const response = await fetch("/api/rpc", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: Date.now(),
+        method: "tools/call",
+        params: {
+          name: "pipeline.agent_chat",
+          arguments: { run_id: runId, prompt: prompt, lang: lang }
+        }
+      })
+    });
+
+    const data = await response.json();
+    if (data.result && data.result.reply) {
+      return data.result.reply;
+    }
+    return null;
+  } catch (err) {
+    console.error("Agent Reasoning Error:", err);
+    return null;
+  }
+}
+
+export async function buildCopilotReply({ prompt = "", intentHint = "", snapshot = {}, lang = "en" } = {}) {
+  // 1. Try Backend Reasoning Agent first if we have a run context
+  if (prompt && (snapshot?.runId || snapshot?.run_id)) {
+    const reasonedReply = await fetchAgentReasoning(snapshot, prompt, lang);
+    if (reasonedReply) {
+      return reasonedReply;
+    }
+  }
+
+  // 2. Fallback to existing Rule-based logic
   const intent = copilotIntentFromPrompt(prompt, intentHint);
   if (intent === "term") return explainMetricTerm(prompt, lang);
   if (intent === "recommend") return recommendReply(snapshot, lang);
