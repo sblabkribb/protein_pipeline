@@ -950,6 +950,145 @@ def _list_agent_events(runner: PipelineRunner, arguments: dict[str, Any]) -> dic
     return {"run_id": run_id, "items": items}
 
 
+def _agent_chat_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    run_id = str(arguments.get("run_id") or "").strip()
+    prompt = str(arguments.get("prompt") or "").strip()
+    lang = str(arguments.get("lang") or "en").lower()
+    if not run_id:
+        # Try to find the latest run_id if not provided
+        try:
+            output_path = Path(runner.output_root)
+            runs = sorted([d.name for d in output_path.iterdir() if d.is_dir() and not d.name.startswith("_")])
+            if runs:
+                run_id = runs[-1]
+        except Exception:
+            pass
+    if not run_id:
+        raise ValueError("run_id is required")
+    
+    run_root = resolve_run_path(runner.output_root, run_id)
+    status = read_json(run_root / "status.json") or {}
+    summary = read_json(run_root / "summary.json") or {}
+    agent_events = list_run_events(runner.output_root, run_id, filename="agent_panel.jsonl", limit=20)
+    
+    # Reasoning logic: Synthesize information from different stages
+    is_ko = lang.startswith("ko")
+    response_lines = []
+    
+    # 1. Status Awareness
+    state = str(status.get("state") or "unknown")
+    stage = str(status.get("stage") or "none")
+    
+    if is_ko:
+        response_lines.append(f"현재 Run {run_id}은(는) {stage} 단계에서 {state} 상태입니다.")
+    else:
+        response_lines.append(f"Run {run_id} is currently in {state} state at {stage} stage.")
+
+    # 2. Expert Interpretation from Agent Panel
+    interpretations = []
+    for event in agent_events:
+        interp = event.get("consensus", {}).get("interpretations")
+        if isinstance(interp, list):
+            interpretations.extend(interp)
+    
+    if interpretations:
+        unique_interp = list(dict.fromkeys(interpretations)) # Remove duplicates
+        if is_ko:
+            response_lines.append("\n### 전문가 분석 (Agent Panel Insights):")
+        else:
+            response_lines.append("\n### Expert Insights (Agent Panel):")
+        for i in unique_interp[-5:]: # Show last 5 unique insights
+            response_lines.append(f"- {i}")
+
+    # 3. Evolution Specific Reasoning (The new 3-stage BO)
+    evo_stages = summary.get("stages")
+    if evo_stages and summary.get("evolution_mode"):
+        passed = evo_stages.get("stage1_passed", 0)
+        total = evo_stages.get("stage1_total", 0)
+        cutoff = evo_stages.get("soluprot_cutoff", 0.0)
+        
+        if is_ko:
+            response_lines.append("\n### 계층적 BO 분석 (Hierarchical BO Analysis):")
+            response_lines.append(f"- **Stage 1 (SoluProt Gate):** 총 {total}개 후보 중 {passed}개가 통과했습니다 (임계값: {cutoff}).")
+            if total > 0 and (passed / total) < 0.2:
+                response_lines.append("  - *분석:* 수용성 필터링 통과율이 매우 낮습니다. 설계 시 sampling_temp를 조절하거나 soluprot_cutoff를 낮추는 것을 추천합니다.")
+        else:
+            response_lines.append("\n### Hierarchical BO Analysis:")
+            response_lines.append(f"- **Stage 1 (SoluProt Gate):** {passed}/{total} sequences passed the gate (Cutoff: {cutoff}).")
+            if total > 0 and (passed / total) < 0.2:
+                response_lines.append("  - *Insight:* Low solubility pass rate detected. Consider adjusting sampling_temp or lowering soluprot_cutoff.")
+
+    # 4. Action Recommendation (Gemini Upgrade)
+    context_text = "\n".join(response_lines)
+    system_instruction = (
+        "You are an AI Protein Engineering Expert integrated into a design pipeline. "
+        "Your goal is to help users analyze results, troubleshoot failures, and optimize design parameters. "
+        "Use the provided context (status, summary, expert interpretations) to give specific, actionable advice. "
+        "Be professional, technical, and bilingual (respond in the user's language - Korean or English). "
+        "If the data shows low MSA depth, suggest increasing max_seqs. If solubility pass rate is low, suggest lowering soluprot_cutoff or sampling_temp."
+    )
+    
+    final_reply = ""
+    model_used = "local-fallback"
+    if runner.gemini and runner.gemini.is_available():
+        try:
+            gemini_advice = runner.gemini.chat(
+                system_instruction, 
+                f"Pipeline Context:\n{context_text}\n\nUser Question/Prompt: {prompt}\n\nPlease provide a summary of insights and actionable advice."
+            )
+            final_reply = gemini_advice
+            model_used = runner.gemini.model_name
+        except Exception as e:
+            final_reply = f"{context_text}\n\n(Gemini Error: {e})\nConsider optimizing parameters based on the insights above."
+    else:
+        # Standard fallback logic
+        if is_ko:
+            response_lines.append("\n### 추천 액션:")
+            if state == "failed":
+                response_lines.append("- 로그를 분석한 결과 파라미터 최적화가 필요해 보입니다. `resume` 기능을 통해 설정을 변경하여 재시작할 수 있습니다.")
+            else:
+                response_lines.append("- 현재 결과가 만족스럽다면 `Compare Studio`에서 상위 후보들을 정밀 검토해 보세요.")
+        else:
+            response_lines.append("\n### Recommended Actions:")
+            if state == "failed":
+                response_lines.append("- Analysis suggests parameter tuning is needed. Use the `resume` feature to restart with adjusted settings.")
+            else:
+                response_lines.append("- If results look promising, proceed to `Compare Studio` for high-fidelity review.")
+        final_reply = "\n".join(response_lines)
+
+    # 5. Training Data Collection (Reasoning Dataset)
+    try:
+        dataset_dir = Path(runner.output_root) / "_reasoning_data"
+        dataset_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Monthly file rotation: dataset_2026_04.jsonl
+        filename = f"dataset_{time.strftime('%Y_%m', time.gmtime())}.jsonl"
+        log_entry = {
+            "timestamp": _now_iso(),
+            "run_id": run_id,
+            "model": model_used,
+            "context": context_text,
+            "expert_panel_data": interpretations,
+            "prompt": prompt,
+            "response": final_reply,
+            "language": lang
+        }
+        
+        with open(dataset_dir / filename, "a", encoding="utf-8") as f:
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+    except Exception as e:
+        # Prevent logging failure from breaking the tool response
+        pass
+
+    return {
+        "run_id": run_id,
+        "reply": final_reply,
+        "status": state,
+        "stage": stage
+    }
+    
+
+
 def _workspace_root(output_root: str) -> Path:
     return ensure_dir(Path(output_root).resolve() / "_workspace")
 
@@ -5697,9 +5836,105 @@ def _pipeline_run_schema() -> dict[str, Any]:
     }
 
 
+def _extract_text_from_base64_pdf(b64_data: str) -> str:
+    import base64
+    import io
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        raise RuntimeError("pypdf is required to process PDFs")
+    
+    try:
+        pdf_bytes = base64.b64decode(b64_data)
+        reader = PdfReader(io.BytesIO(pdf_bytes))
+        text_parts = []
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                text_parts.append(text)
+        return "\n".join(text_parts)
+    except Exception as e:
+        raise ValueError(f"Failed to parse PDF: {str(e)}")
+
+
+def _analyze_paper_for_masking(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    file_b64 = arguments.get("file_b64")
+    file_text = arguments.get("file_text")
+    target_sequence = str(arguments.get("target_sequence") or "").strip()
+    
+    if not file_b64 and not file_text:
+        raise ValueError("Either file_b64 or file_text must be provided")
+    
+    paper_content = ""
+    if file_b64:
+        paper_content = _extract_text_from_base64_pdf(str(file_b64))
+    else:
+        paper_content = str(file_text).strip()
+        
+    if not paper_content:
+        raise ValueError("Could not extract any text from the provided document")
+
+    if not runner.gemini or not runner.gemini.is_available():
+        raise RuntimeError("Gemini reasoning agent is not configured or unavailable")
+
+    system_instruction = (
+        "You are an expert structural biologist. Your task is to read a research paper and extract structural constraints for protein design. "
+        "Identify critical residues that MUST NOT be mutated (e.g., catalytic triads, binding interfaces, conserved motifs). "
+        "Return the result ONLY as a valid JSON object matching this schema:\n"
+        "{\n"
+        "  \"suggested_masks\": [\n"
+        "    {\n"
+        "      \"chain\": \"A\",\n"
+        "      \"residue_index\": 64,\n"
+        "      \"residue_name\": \"HIS\",\n"
+        "      \"label\": \"Short descriptive label (e.g., Catalytic Site)\",\n"
+        "      \"evidence\": \"Exact quote from the paper justifying this selection\",\n"
+        "      \"confidence\": \"high\" or \"low_sequence_mismatch\" (use low if numbering seems to mismatch the provided sequence)\n"
+        "    }\n"
+        "  ]\n"
+        "}"
+    )
+    
+    prompt = f"Reference Paper Content:\n{paper_content[:150000]}\n\n" # Limit to avoid massive context
+    if target_sequence:
+        prompt += f"Target Protein Sequence (for numbering alignment check):\n{target_sequence}\n\n"
+    prompt += "Extract the structural constraints as requested."
+
+    try:
+        import json
+        response_text = runner.gemini.chat(system_instruction, prompt)
+        
+        # Clean up markdown code blocks if present
+        clean_json = response_text
+        if clean_json.startswith("```json"):
+            clean_json = clean_json[7:]
+        if clean_json.endswith("```"):
+            clean_json = clean_json[:-3]
+        clean_json = clean_json.strip()
+        
+        parsed = json.loads(clean_json)
+        if "suggested_masks" not in parsed:
+             parsed = {"suggested_masks": []}
+        return {"success": True, "result": parsed}
+    except Exception as e:
+        raise RuntimeError(f"Agent failed to process the document: {str(e)}")
+
+
 def tool_definitions() -> list[dict[str, Any]]:
     run_schema = _pipeline_run_schema()
     return [
+        {
+            "name": "pipeline.analyze_paper_for_masking",
+            "description": "Analyze a research paper (PDF base64 or text) to extract residues that should be masked.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "file_b64": {"type": "string"},
+                    "file_text": {"type": "string"},
+                    "target_sequence": {"type": "string"}
+                }
+            }
+        },
         {
             "name": "pipeline.run",
             "description": "Run the full protein design pipeline (MMseqs2→mask→ProteinMPNN→SoluProt→ColabFold/AF2→optional WT Diff).",
@@ -6355,6 +6590,19 @@ def tool_definitions() -> list[dict[str, Any]]:
                 },
             },
         },
+        {
+            "name": "pipeline.agent_chat",
+            "description": "Reasoning agent that analyzes run status and expert insights to answer user questions.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "prompt": {"type": "string"},
+                    "lang": {"type": "string", "description": "Language code (en, ko)"}
+                },
+                "required": ["run_id", "prompt"]
+            }
+        }
     ]
 
 
@@ -6366,6 +6614,12 @@ class ToolDispatcher:
         return {"tools": tool_definitions()}
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        if name == "pipeline.analyze_paper_for_masking":
+            return _analyze_paper_for_masking(self.runner, arguments)
+        
+        if name == "pipeline.agent_chat":
+            return _agent_chat_tool(self.runner, arguments)
+        
         if name == "pipeline.run":
             run_id = arguments.get("run_id")
             req = pipeline_request_from_args(arguments)
