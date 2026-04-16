@@ -669,6 +669,7 @@ const state = {
     processedTokens: {},
   },
   setupStepIndex: 0,
+  suggestedMasks: [],
   autoAnalyzePendingByRunId: {},
   workflowDesigner: createWorkflowDesignerState(),
   studioBuilderOpen: false,
@@ -769,6 +770,13 @@ const el = {
   evolutionBioemuSteeringConfigInput: document.getElementById("evolutionBioemuSteeringConfigInput"),
   evolutionRfd3TargetRmsdCutoffInput: document.getElementById("evolutionRfd3TargetRmsdCutoffInput"),
   evolutionFixedPositionsExtraInput: document.getElementById("evolutionFixedPositionsExtraInput"),
+  paperMaskInput: document.getElementById("paperMaskInput"),
+  paperMaskUploadBtn: document.getElementById("paperMaskUploadBtn"),
+  paperMaskStatus: document.getElementById("paperMaskStatus"),
+  paperMaskReviewPanel: document.getElementById("paperMaskReviewPanel"),
+  paperMaskList: document.getElementById("paperMaskList"),
+  paperMaskApplyBtn: document.getElementById("paperMaskApplyBtn"),
+  paperMaskCancelBtn: document.getElementById("paperMaskCancelBtn"),
   homeProjectSelector: document.getElementById("homeProjectSelector"),
   homeRoundSelector: document.getElementById("homeRoundSelector"),
   homeCreateProjectBtn: document.getElementById("homeCreateProjectBtn"),
@@ -24437,3 +24445,145 @@ setComparePreviewPlaceholder("artifacts.preview.placeholder");
 updateMonitorActionButtons();
 renderCopilotContext();
 ensureAutoPoll();
+
+// --- Literature-Driven Masking Logic ---
+
+function handlePaperMaskUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    const base64Data = e.target.result.split(',')[1];
+    
+    if (el.paperMaskStatus) el.paperMaskStatus.textContent = "Analyzing document with AI...";
+    if (el.paperMaskUploadBtn) el.paperMaskUploadBtn.disabled = true;
+    if (el.paperMaskReviewPanel) el.paperMaskReviewPanel.classList.add("hidden");
+
+    // Try to get sequence from input
+    let targetSeq = "";
+    const fastaText = String(el.evolutionTargetInput?.value || "").trim();
+    if (fastaText && !fastaText.startsWith("HEADER")) {
+       targetSeq = fastaText.replace(/^>.*$/gm, '').replace(/\s+/g, '');
+    }
+
+    try {
+      const response = await apiCall("pipeline.analyze_paper_for_masking", {
+        file_b64: base64Data,
+        target_sequence: targetSeq
+      });
+      
+      if (response && response.success && response.result) {
+        state.suggestedMasks = response.result.suggested_masks || [];
+        renderPaperMaskReviewPanel();
+      }
+    } catch (err) {
+      if (el.paperMaskStatus) el.paperMaskStatus.textContent = `Error: ${err.message}`;
+    } finally {
+      if (el.paperMaskUploadBtn) el.paperMaskUploadBtn.disabled = false;
+      event.target.value = ""; // Reset input
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+if (el.paperMaskUploadBtn && el.paperMaskInput) {
+  el.paperMaskUploadBtn.addEventListener("click", () => el.paperMaskInput.click());
+  el.paperMaskInput.addEventListener("change", handlePaperMaskUpload);
+}
+
+function renderPaperMaskReviewPanel() {
+  if (!el.paperMaskReviewPanel || !el.paperMaskList) return;
+  
+  if (!state.suggestedMasks || state.suggestedMasks.length === 0) {
+    if (el.paperMaskStatus) el.paperMaskStatus.textContent = "No constraints found in the document.";
+    return;
+  }
+
+  if (el.paperMaskStatus) el.paperMaskStatus.textContent = `Found ${state.suggestedMasks.length} constraint(s).`;
+  el.paperMaskReviewPanel.classList.remove("hidden");
+  el.paperMaskList.innerHTML = "";
+
+  state.suggestedMasks.forEach((mask, index) => {
+    const chain = String(mask.chain || "A");
+    const resi = Number(mask.residue_index);
+    const resn = String(mask.residue_name || "");
+    const label = String(mask.label || "Constraint");
+    const evidence = String(mask.evidence || "No evidence provided.");
+    const confidence = String(mask.confidence || "high");
+    
+    const warningMarkup = confidence !== "high" ? `<span title="Sequence mismatch suspected" style="cursor:help;">⚠️</span>` : "";
+
+    const item = document.createElement("div");
+    item.style.cssText = "display: flex; flex-direction: column; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color);";
+    
+    item.innerHTML = `
+      <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
+        <input type="checkbox" checked data-mask-index="${index}" class="paper-mask-checkbox" />
+        Chain ${escapeHtml(chain)}: ${resi} ${escapeHtml(resn)} - ${escapeHtml(label)} ${warningMarkup}
+      </label>
+      <div style="margin-top: 0.25rem; font-size: 0.85em; color: var(--text-color-muted); padding-left: 1.5rem;">
+        <em>"${escapeHtml(evidence)}"</em>
+      </div>
+    `;
+    el.paperMaskList.appendChild(item);
+  });
+}
+
+if (el.paperMaskCancelBtn) {
+  el.paperMaskCancelBtn.addEventListener("click", () => {
+    if (el.paperMaskReviewPanel) el.paperMaskReviewPanel.classList.add("hidden");
+    if (el.paperMaskStatus) el.paperMaskStatus.textContent = "";
+    state.suggestedMasks = [];
+  });
+}
+
+if (el.paperMaskApplyBtn) {
+  el.paperMaskApplyBtn.addEventListener("click", () => {
+    const checkboxes = Array.from(document.querySelectorAll(".paper-mask-checkbox"));
+    const selectedIndexes = checkboxes.filter(cb => cb.checked).map(cb => Number(cb.getAttribute("data-mask-index")));
+    
+    const currentConstraintsRaw = String(el.evolutionFixedPositionsExtraInput?.value || "").trim();
+    let currentConstraints = {};
+    if (currentConstraintsRaw) {
+      try {
+        const parsed = JSON.parse(currentConstraintsRaw);
+        if (typeof parsed === "object" && !Array.isArray(parsed)) {
+            currentConstraints = parsed;
+        }
+      } catch(e) {
+        console.warn("Failed to parse existing fixed_positions_extra");
+      }
+    }
+
+    let appliedCount = 0;
+    selectedIndexes.forEach(index => {
+      const mask = state.suggestedMasks[index];
+      if (!mask) return;
+      const chain = mask.chain || "A";
+      const resi = Number(mask.residue_index);
+      if (!Number.isFinite(resi)) return;
+      
+      if (!currentConstraints[chain]) currentConstraints[chain] = [];
+      if (!currentConstraints[chain].includes(resi)) {
+        currentConstraints[chain].push(resi);
+        currentConstraints[chain].sort((a,b) => a - b);
+        appliedCount++;
+      }
+    });
+
+    if (appliedCount > 0) {
+       const newJson = JSON.stringify(currentConstraints);
+       if (el.evolutionFixedPositionsExtraInput) el.evolutionFixedPositionsExtraInput.value = newJson;
+       
+       // Update state.answers so it propagates
+       if (!state.answers) state.answers = {};
+       state.answers.fixed_positions_extra = currentConstraints;
+       
+       setMessage(`Successfully applied ${appliedCount} residues to fixed_positions_extra.`, "ai");
+    }
+
+    if (el.paperMaskReviewPanel) el.paperMaskReviewPanel.classList.add("hidden");
+    if (el.paperMaskStatus) el.paperMaskStatus.textContent = "";
+  });
+}
