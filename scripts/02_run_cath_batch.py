@@ -39,7 +39,7 @@ def process_target(pdb_path: Path, runner, subset_name: str) -> bool:
     success = False
     try:
         pdb_content = pdb_path.read_text(encoding="utf-8")
-        
+
         # 사용자 정의 파이프라인 수식: 3 (Tiers) * 2 (Backbones) * 10 (Samples) * 2 (MPNN) = 120
         request = PipelineRequest(
             target_fasta="",
@@ -55,7 +55,9 @@ def process_target(pdb_path: Path, runner, subset_name: str) -> bool:
             
             # 3. Backbone Generation (BioEmu 10개 + RFD3 10개)
             bioemu_use=True,
-            bioemu_num_samples=10,
+            bioemu_num_samples=20,          # 충분히 20개를 생성하고
+            bioemu_max_return_structures=10, # 필터링을 거쳐 10개만 리턴
+            bioemu_target_rmsd_cutoff=4.0,  # 컷오프를 4.0A로 완화하여 더 많은 백본 통과 유도
             
             rfd3_mode="scaffold", 
             rfd3_max_return_designs=10,

@@ -105,22 +105,58 @@ class RosettaRelaxClient:
         )
 
     def _runpod_sync_call(self, endpoint_id: str, api_key: str, payload: dict) -> dict:
-        url = f"https://api.runpod.ai/v2/{endpoint_id}/runsync"
+        import urllib.request
+        import urllib.error
+        import time
+        import json
+        
+        # 1. Start the job asynchronously
+        url_run = f"https://api.runpod.ai/v2/{endpoint_id}/run"
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}"
         }
         data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        req_run = urllib.request.Request(url_run, data=data, headers=headers, method="POST")
+        
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout_s) as response:
+            with urllib.request.urlopen(req_run, timeout=60) as response:
                 result = json.loads(response.read().decode())
-                if result.get("status") == "COMPLETED" and "output" in result:
-                    return result["output"]
-                else:
-                    raise RuntimeError(f"RunPod error: {result}")
+                job_id = result.get("id")
+                if not job_id:
+                    raise RuntimeError(f"RunPod start failed: {result}")
         except Exception as e:
-            raise RuntimeError(f"RunPod communication failed: {e}")
+            raise RuntimeError(f"RunPod failed to submit job: {e}")
+
+        # 2. Poll for status
+        url_status = f"https://api.runpod.ai/v2/{endpoint_id}/status/{job_id}"
+        req_status = urllib.request.Request(url_status, headers=headers, method="GET")
+        
+        start_time = time.time()
+        while True:
+            if time.time() - start_time > self.timeout_s:
+                raise RuntimeError("RunPod Relax job timed out")
+                
+            try:
+                with urllib.request.urlopen(req_status, timeout=30) as response:
+                    status_res = json.loads(response.read().decode())
+                    status = status_res.get("status")
+                    
+                    if status == "COMPLETED":
+                        if "output" in status_res:
+                            return status_res["output"]
+                        raise RuntimeError("Job completed but missing output")
+                    elif status in {"FAILED", "CANCELLED", "TIMED_OUT"}:
+                        raise RuntimeError(f"Job failed with status: {status}")
+            except urllib.error.HTTPError as e:
+                # Ignore transient 5xx errors during long polls
+                if e.code not in [500, 502, 503, 504]:
+                    raise RuntimeError(f"RunPod API Error: {e.code} {e.reason}")
+            except Exception as e:
+                # Ignore connection resets
+                pass
+                
+            time.sleep(5)
 
     def run(self, input_pdb: Path, output_dir: Path, nstruct: int = 1, extra_flags: str | None = None) -> dict[str, Any]:
         mode = self._mode()

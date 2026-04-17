@@ -32,8 +32,15 @@ class BioEmuRunPodClient:
         resume_job_id: str | None = None,
         on_job_id: Callable[[str], None] | None = None,
     ) -> dict[str, Any]:
+        # Append a newline to the sequence. The RunPod server has a bug where it treats
+        # pure sequences without newlines as potential filenames and crashes on long sequences
+        # (OSError: [Errno 36] File name too long). Adding a newline forces it to write to sequence.fasta.
+        safe_sequence = str(sequence).strip()
+        if not safe_sequence.startswith(">"):
+            safe_sequence = f">target\n{safe_sequence}"
+
         payload: dict[str, Any] = {
-            "sequence": str(sequence),
+            "sequence": safe_sequence,
             "num_samples": int(max(1, num_samples)),
             "model_name": str(model_name or "bioemu-v1.1"),
             "filter_samples": bool(filter_samples),
