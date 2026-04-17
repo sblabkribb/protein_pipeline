@@ -14,6 +14,7 @@ class RunPodConfig:
     bioemu_endpoint_id: str | None
     diffdock_endpoint_id: str | None
     rfd3_endpoint_id: str | None
+    relax_endpoint_id: str | None
     ca_bundle: str | None
     skip_verify: bool
 
@@ -81,6 +82,7 @@ def load_config() -> AppConfig:
     bioemu_endpoint_id = os.environ.get("BIOEMU_ENDPOINT_ID", "").strip() or None
     diffdock_endpoint_id = os.environ.get("DIFFDOCK_ENDPOINT_ID", "").strip() or None
     rfd3_endpoint_id = os.environ.get("RFD3_ENDPOINT_ID", "").strip() or None
+    relax_endpoint_id = os.environ.get("RUNPOD_RELAX_ENDPOINT_ID", "").strip() or None
 
     ca_bundle = os.environ.get("RUNPOD_CA_BUNDLE", "").strip() or None
     skip_verify = _env_true("RUNPOD_SKIP_VERIFY") or _env_true("RUNPOD_INSECURE")
@@ -110,6 +112,7 @@ def load_config() -> AppConfig:
             bioemu_endpoint_id=bioemu_endpoint_id,
             diffdock_endpoint_id=diffdock_endpoint_id,
             rfd3_endpoint_id=rfd3_endpoint_id,
+            relax_endpoint_id=relax_endpoint_id,
             ca_bundle=ca_bundle,
             skip_verify=bool(skip_verify),
         ),

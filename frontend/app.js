@@ -760,9 +760,8 @@ const el = {
   evolutionTargetFile: document.getElementById("evolutionTargetFile"),
   evolutionLoadFileBtn: document.getElementById("evolutionLoadFileBtn"),
   evolutionRunBtn: document.getElementById("evolutionRunBtn"),
-  evolutionInitialSamplesInput: document.getElementById("evolutionInitialSamplesInput"),
-  evolutionRoundsInput: document.getElementById("evolutionRoundsInput"),
-  evolutionSamplesPerRoundInput: document.getElementById("evolutionSamplesPerRoundInput"),
+  evolutionPoolSizeInput: document.getElementById("evolutionPoolSizeInput"),
+  evolutionOracleSamplesInput: document.getElementById("evolutionOracleSamplesInput"),
   evolutionAf2PlddtCutoffInput: document.getElementById("evolutionAf2PlddtCutoffInput"),
   evolutionAf2RmsdCutoffInput: document.getElementById("evolutionAf2RmsdCutoffInput"),
   evolutionRelaxScoreCutoffInput: document.getElementById("evolutionRelaxScoreCutoffInput"),
@@ -777,6 +776,22 @@ const el = {
   paperMaskList: document.getElementById("paperMaskList"),
   paperMaskApplyBtn: document.getElementById("paperMaskApplyBtn"),
   paperMaskCancelBtn: document.getElementById("paperMaskCancelBtn"),
+
+  paperMaskInputFast: document.getElementById("paperMaskInputFast"),
+  paperMaskUploadBtnFast: document.getElementById("paperMaskUploadBtnFast"),
+  paperMaskStatusFast: document.getElementById("paperMaskStatusFast"),
+  paperMaskReviewPanelFast: document.getElementById("paperMaskReviewPanelFast"),
+  paperMaskListFast: document.getElementById("paperMaskListFast"),
+  paperMaskApplyBtnFast: document.getElementById("paperMaskApplyBtnFast"),
+  paperMaskCancelBtnFast: document.getElementById("paperMaskCancelBtnFast"),
+
+  paperMaskInputAdvanced: document.getElementById("paperMaskInputAdvanced"),
+  paperMaskUploadBtnAdvanced: document.getElementById("paperMaskUploadBtnAdvanced"),
+  paperMaskStatusAdvanced: document.getElementById("paperMaskStatusAdvanced"),
+  paperMaskReviewPanelAdvanced: document.getElementById("paperMaskReviewPanelAdvanced"),
+  paperMaskListAdvanced: document.getElementById("paperMaskListAdvanced"),
+  paperMaskApplyBtnAdvanced: document.getElementById("paperMaskApplyBtnAdvanced"),
+  paperMaskCancelBtnAdvanced: document.getElementById("paperMaskCancelBtnAdvanced"),
   homeProjectSelector: document.getElementById("homeProjectSelector"),
   homeRoundSelector: document.getElementById("homeRoundSelector"),
   homeCreateProjectBtn: document.getElementById("homeCreateProjectBtn"),
@@ -1933,10 +1948,9 @@ const I18N = {
     "evolution.input.placeholder": "Paste PDB here.",
     "evolution.action.run": "Start Evolution",
     "evolution.options.title": "Evolution Settings",
-    "evolution.options.desc": "Configure the Bayesian Optimization parameters for the evolution process.",
-    "evolution.initialSamples.label": "Initial Samples",
-    "evolution.rounds.label": "BO Rounds",
-    "evolution.samplesPerRound.label": "Samples Per Round",
+    "evolution.options.desc": "Configure the 3-stage Meta-Surrogate parameters for the evolution process.",
+    "evolution.poolSize.label": "Stage 1: Generation Pool Size",
+    "evolution.oracleSamples.label": "Stage 3: Oracle AF2 Samples",
     "evolution.filtering.title": "Filtering",
     "evolution.constraints.title": "Constraints",
     "evolution.af2PlddtCutoff.label": "ColabFold pLDDT Cutoff",
@@ -3128,10 +3142,9 @@ const I18N = {
     "evolution.input.placeholder": "여기에 PDB를 붙여넣으세요.",
     "evolution.action.run": "진화 시작",
     "evolution.options.title": "진화 설정",
-    "evolution.options.desc": "진화 과정을 위한 베이지안 최적화(BO) 파라미터를 설정합니다.",
-    "evolution.initialSamples.label": "초기 샘플 수",
-    "evolution.rounds.label": "BO 회차",
-    "evolution.samplesPerRound.label": "회차당 샘플 수",
+    "evolution.options.desc": "진화 프로세스를 위한 3단계 메타-서로게이트 매개변수를 설정합니다.",
+    "evolution.poolSize.label": "Stage 1: 초기 생성 풀 크기",
+    "evolution.oracleSamples.label": "Stage 3: 최종 AF2 검증 수",
     "evolution.filtering.title": "필터링 (Filtering)",
     "evolution.constraints.title": "구조 제약 (Constraints)",
     "evolution.af2PlddtCutoff.label": "ColabFold pLDDT 컷오프",
@@ -9843,9 +9856,8 @@ function initEvolutionLauncher() {
       run_mode: "pipeline",
       target_input: targetInput,
       evolution_mode: true,
-      evolution_initial_samples: Number.parseInt(el.evolutionInitialSamplesInput?.value || "20", 10),
-      evolution_rounds: Number.parseInt(el.evolutionRoundsInput?.value || "3", 10),
-      evolution_samples_per_round: Number.parseInt(el.evolutionSamplesPerRoundInput?.value || "5", 10),
+      evolution_pool_size: Number.parseInt(el.evolutionPoolSizeInput?.value || "1000", 10),
+      evolution_oracle_samples: Number.parseInt(el.evolutionOracleSamplesInput?.value || "20", 10),
       af2_plddt_cutoff: Number.parseFloat(el.evolutionAf2PlddtCutoffInput?.value || "85"),
       af2_rmsd_cutoff: Number.parseFloat(el.evolutionAf2RmsdCutoffInput?.value || "2.0"),
       relax_score_per_residue_cutoff: Number.parseFloat(el.evolutionRelaxScoreCutoffInput?.value || "0.0"),
@@ -24448,7 +24460,49 @@ ensureAutoPoll();
 
 // --- Literature-Driven Masking Logic ---
 
-function handlePaperMaskUpload(event) {
+const PAPER_MASK_CONFIGS = [
+  {
+    key: "evolution",
+    input: "paperMaskInput",
+    btn: "paperMaskUploadBtn",
+    status: "paperMaskStatus",
+    panel: "paperMaskReviewPanel",
+    list: "paperMaskList",
+    applyBtn: "paperMaskApplyBtn",
+    cancelBtn: "paperMaskCancelBtn",
+    targetInput: "evolutionTargetInput",
+    fixedPositionsInput: "evolutionFixedPositionsExtraInput",
+    checkboxClass: "paper-mask-checkbox-evolution"
+  },
+  {
+    key: "fast",
+    input: "paperMaskInputFast",
+    btn: "paperMaskUploadBtnFast",
+    status: "paperMaskStatusFast",
+    panel: "paperMaskReviewPanelFast",
+    list: "paperMaskListFast",
+    applyBtn: "paperMaskApplyBtnFast",
+    cancelBtn: "paperMaskCancelBtnFast",
+    targetInput: "fastTargetInput",
+    fixedPositionsInput: "evolutionFixedPositionsExtraInput", // Usually shared or linked
+    checkboxClass: "paper-mask-checkbox-fast"
+  },
+  {
+    key: "advanced",
+    input: "paperMaskInputAdvanced",
+    btn: "paperMaskUploadBtnAdvanced",
+    status: "paperMaskStatusAdvanced",
+    panel: "paperMaskReviewPanelAdvanced",
+    list: "paperMaskListAdvanced",
+    applyBtn: "paperMaskApplyBtnAdvanced",
+    cancelBtn: "paperMaskCancelBtnAdvanced",
+    targetInput: "promptInput", // Advanced often uses context from the prompt/chat but let's try to find sequence
+    fixedPositionsInput: "evolutionFixedPositionsExtraInput",
+    checkboxClass: "paper-mask-checkbox-advanced"
+  }
+];
+
+function handlePaperMaskUpload(event, config) {
   const file = event.target.files[0];
   if (!file) return;
 
@@ -24456,13 +24510,14 @@ function handlePaperMaskUpload(event) {
   reader.onload = async (e) => {
     const base64Data = e.target.result.split(',')[1];
     
-    if (el.paperMaskStatus) el.paperMaskStatus.textContent = "Analyzing document with AI...";
-    if (el.paperMaskUploadBtn) el.paperMaskUploadBtn.disabled = true;
-    if (el.paperMaskReviewPanel) el.paperMaskReviewPanel.classList.add("hidden");
+    if (el[config.status]) el[config.status].textContent = "Analyzing document with AI...";
+    if (el[config.btn]) el[config.btn].disabled = true;
+    if (el[config.panel]) el[config.panel].classList.add("hidden");
 
-    // Try to get sequence from input
+    // Try to get sequence from current tab's input
     let targetSeq = "";
-    const fastaText = String(el.evolutionTargetInput?.value || "").trim();
+    const targetInputEl = el[config.targetInput];
+    const fastaText = String(targetInputEl?.value || "").trim();
     if (fastaText && !fastaText.startsWith("HEADER")) {
        targetSeq = fastaText.replace(/^>.*$/gm, '').replace(/\s+/g, '');
     }
@@ -24475,34 +24530,35 @@ function handlePaperMaskUpload(event) {
       
       if (response && response.success && response.result) {
         state.suggestedMasks = response.result.suggested_masks || [];
-        renderPaperMaskReviewPanel();
+        renderPaperMaskReviewPanel(config);
+      } else {
+        if (el[config.status]) el[config.status].textContent = "Analysis failed.";
       }
     } catch (err) {
-      if (el.paperMaskStatus) el.paperMaskStatus.textContent = `Error: ${err.message}`;
+      if (el[config.status]) el[config.status].textContent = `Error: ${err.message}`;
     } finally {
-      if (el.paperMaskUploadBtn) el.paperMaskUploadBtn.disabled = false;
+      if (el[config.btn]) el[config.btn].disabled = false;
       event.target.value = ""; // Reset input
     }
   };
   reader.readAsDataURL(file);
 }
 
-if (el.paperMaskUploadBtn && el.paperMaskInput) {
-  el.paperMaskUploadBtn.addEventListener("click", () => el.paperMaskInput.click());
-  el.paperMaskInput.addEventListener("change", handlePaperMaskUpload);
-}
+function renderPaperMaskReviewPanel(config) {
+  const panelEl = el[config.panel];
+  const listEl = el[config.list];
+  const statusEl = el[config.status];
 
-function renderPaperMaskReviewPanel() {
-  if (!el.paperMaskReviewPanel || !el.paperMaskList) return;
+  if (!panelEl || !listEl) return;
   
   if (!state.suggestedMasks || state.suggestedMasks.length === 0) {
-    if (el.paperMaskStatus) el.paperMaskStatus.textContent = "No constraints found in the document.";
+    if (statusEl) statusEl.textContent = "No constraints found.";
     return;
   }
 
-  if (el.paperMaskStatus) el.paperMaskStatus.textContent = `Found ${state.suggestedMasks.length} constraint(s).`;
-  el.paperMaskReviewPanel.classList.remove("hidden");
-  el.paperMaskList.innerHTML = "";
+  if (statusEl) statusEl.textContent = `Found ${state.suggestedMasks.length} constraint(s).`;
+  panelEl.classList.remove("hidden");
+  listEl.innerHTML = "";
 
   state.suggestedMasks.forEach((mask, index) => {
     const chain = String(mask.chain || "A");
@@ -24515,75 +24571,90 @@ function renderPaperMaskReviewPanel() {
     const warningMarkup = confidence !== "high" ? `<span title="Sequence mismatch suspected" style="cursor:help;">⚠️</span>` : "";
 
     const item = document.createElement("div");
-    item.style.cssText = "display: flex; flex-direction: column; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color);";
+    item.style.cssText = "display: flex; flex-direction: column; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); margin-bottom: 0.25rem;";
     
     item.innerHTML = `
-      <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500;">
-        <input type="checkbox" checked data-mask-index="${index}" class="paper-mask-checkbox" />
-        Chain ${escapeHtml(chain)}: ${resi} ${escapeHtml(resn)} - ${escapeHtml(label)} ${warningMarkup}
+      <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; cursor: pointer;">
+        <input type="checkbox" checked data-mask-index="${index}" class="${config.checkboxClass}" />
+        <span>Chain ${escapeHtml(chain)}: ${resi} ${escapeHtml(resn)} - ${escapeHtml(label)} ${warningMarkup}</span>
       </label>
-      <div style="margin-top: 0.25rem; font-size: 0.85em; color: var(--text-color-muted); padding-left: 1.5rem;">
+      <div style="margin-top: 0.25rem; font-size: 0.8em; color: var(--text-color-muted); padding-left: 1.5rem; line-height: 1.2;">
         <em>"${escapeHtml(evidence)}"</em>
       </div>
     `;
-    el.paperMaskList.appendChild(item);
+    listEl.appendChild(item);
   });
 }
 
-if (el.paperMaskCancelBtn) {
-  el.paperMaskCancelBtn.addEventListener("click", () => {
-    if (el.paperMaskReviewPanel) el.paperMaskReviewPanel.classList.add("hidden");
-    if (el.paperMaskStatus) el.paperMaskStatus.textContent = "";
-    state.suggestedMasks = [];
-  });
-}
+// Initialize all configs
+PAPER_MASK_CONFIGS.forEach(config => {
+  const uploadBtn = el[config.btn];
+  const fileInput = el[config.input];
+  const applyBtn = el[config.applyBtn];
+  const cancelBtn = el[config.cancelBtn];
 
-if (el.paperMaskApplyBtn) {
-  el.paperMaskApplyBtn.addEventListener("click", () => {
-    const checkboxes = Array.from(document.querySelectorAll(".paper-mask-checkbox"));
-    const selectedIndexes = checkboxes.filter(cb => cb.checked).map(cb => Number(cb.getAttribute("data-mask-index")));
-    
-    const currentConstraintsRaw = String(el.evolutionFixedPositionsExtraInput?.value || "").trim();
-    let currentConstraints = {};
-    if (currentConstraintsRaw) {
-      try {
-        const parsed = JSON.parse(currentConstraintsRaw);
-        if (typeof parsed === "object" && !Array.isArray(parsed)) {
-            currentConstraints = parsed;
-        }
-      } catch(e) {
-        console.warn("Failed to parse existing fixed_positions_extra");
-      }
-    }
+  if (uploadBtn && fileInput) {
+    uploadBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => handlePaperMaskUpload(e, config));
+  }
 
-    let appliedCount = 0;
-    selectedIndexes.forEach(index => {
-      const mask = state.suggestedMasks[index];
-      if (!mask) return;
-      const chain = mask.chain || "A";
-      const resi = Number(mask.residue_index);
-      if (!Number.isFinite(resi)) return;
-      
-      if (!currentConstraints[chain]) currentConstraints[chain] = [];
-      if (!currentConstraints[chain].includes(resi)) {
-        currentConstraints[chain].push(resi);
-        currentConstraints[chain].sort((a,b) => a - b);
-        appliedCount++;
-      }
+  if (cancelBtn) {
+    cancelBtn.addEventListener("click", () => {
+      if (el[config.panel]) el[config.panel].classList.add("hidden");
+      if (el[config.status]) el[config.status].textContent = "";
+      state.suggestedMasks = [];
     });
+  }
 
-    if (appliedCount > 0) {
-       const newJson = JSON.stringify(currentConstraints);
-       if (el.evolutionFixedPositionsExtraInput) el.evolutionFixedPositionsExtraInput.value = newJson;
-       
-       // Update state.answers so it propagates
-       if (!state.answers) state.answers = {};
-       state.answers.fixed_positions_extra = currentConstraints;
-       
-       setMessage(`Successfully applied ${appliedCount} residues to fixed_positions_extra.`, "ai");
-    }
+  if (applyBtn) {
+    applyBtn.addEventListener("click", () => {
+      const checkboxes = Array.from(document.querySelectorAll(`.${config.checkboxClass}`));
+      const selectedIndexes = checkboxes.filter(cb => cb.checked).map(cb => Number(cb.getAttribute("data-mask-index")));
+      
+      const constraintsInput = el[config.fixedPositionsInput];
+      const currentConstraintsRaw = String(constraintsInput?.value || "").trim();
+      let currentConstraints = {};
+      
+      if (currentConstraintsRaw) {
+        try {
+          const parsed = JSON.parse(currentConstraintsRaw);
+          if (typeof parsed === "object" && !Array.isArray(parsed)) {
+              currentConstraints = parsed;
+          }
+        } catch(e) {
+          console.warn("Failed to parse existing fixed_positions_extra");
+        }
+      }
 
-    if (el.paperMaskReviewPanel) el.paperMaskReviewPanel.classList.add("hidden");
-    if (el.paperMaskStatus) el.paperMaskStatus.textContent = "";
-  });
-}
+      let appliedCount = 0;
+      selectedIndexes.forEach(index => {
+        const mask = state.suggestedMasks[index];
+        if (!mask) return;
+        const chain = mask.chain || "A";
+        const resi = Number(mask.residue_index);
+        if (!Number.isFinite(resi)) return;
+        
+        if (!currentConstraints[chain]) currentConstraints[chain] = [];
+        if (!currentConstraints[chain].includes(resi)) {
+          currentConstraints[chain].push(resi);
+          currentConstraints[chain].sort((a,b) => a - b);
+          appliedCount++;
+        }
+      });
+
+      if (appliedCount > 0) {
+         const newJson = JSON.stringify(currentConstraints);
+         if (constraintsInput) constraintsInput.value = newJson;
+         
+         // Sync with app state
+         if (!state.answers) state.answers = {};
+         state.answers.fixed_positions_extra = currentConstraints;
+         
+         setMessage(`Successfully applied ${appliedCount} residues to fixed_positions_extra.`, "ai");
+      }
+
+      if (el[config.panel]) el[config.panel].classList.add("hidden");
+      if (el[config.status]) el[config.status].textContent = "";
+    });
+  }
+});

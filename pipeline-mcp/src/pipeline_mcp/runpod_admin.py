@@ -22,6 +22,7 @@ _MANAGED_SERVICE_SPECS: tuple[tuple[str, str, str, str], ...] = (
     ("rfd3", "RFD3", "rfd3", "RFD3_ENDPOINT_ID"),
     ("bioemu", "BioEmu", "bioemu", "BIOEMU_ENDPOINT_ID"),
     ("diffdock", "DiffDock", "diffdock", "DIFFDOCK_ENDPOINT_ID"),
+    ("relax", "Rosetta Relax", "rosetta_relax", "RUNPOD_RELAX_ENDPOINT_ID"),
 )
 
 _RUNPOD_ENDPOINT_PATCH_FIELDS = {
@@ -218,7 +219,7 @@ def _extract_endpoint_id(client: object | None) -> str:
 
 
 def _extract_runpod_client(runner: PipelineRunner) -> RunPodClient | None:
-    for attr in ("mmseqs", "proteinmpnn", "colabfold", "af2", "rfd3", "bioemu", "diffdock"):
+    for attr in ("mmseqs", "proteinmpnn", "colabfold", "af2", "rfd3", "bioemu", "diffdock", "rosetta_relax"):
         client = getattr(runner, attr, None)
         runpod = getattr(client, "runpod", None)
         if isinstance(runpod, RunPodClient):

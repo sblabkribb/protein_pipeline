@@ -8,7 +8,7 @@
 rfd3-runpod/
 /diffdock_runpod/
 /bioemu-runpod/
-
+/relax_runpod/
 # --- Pipeline outputs ---
 /outputs/
 /logs/*

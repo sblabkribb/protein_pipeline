@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>K-Biofoundry | Protein Pipeline Console</title>
-    <link rel="stylesheet" href="./styles.css?v=20260407_v6" />
+    <link rel="stylesheet" href="./styles.css?v=20260417_131749" />
   </head>
   <body>
     <div class="bg-orb orb-a" aria-hidden="true"></div>
@@ -369,6 +369,24 @@
                     </small>
                     <input id="fastTotalOutputInput" type="number" min="1" step="1" value="120" />
                   </label>
+
+                  <!-- Literature-Driven Masking UI (Fast) -->
+                  <div class="field-group" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                    <label style="font-weight: 500; font-size: 0.85em; color: var(--text-color-muted); display: block; margin-bottom: 0.5rem;">Extract Constraints from Paper (PDF)</label>
+                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+                      <input type="file" id="paperMaskInputFast" accept="application/pdf" style="display: none;" />
+                      <button type="button" class="btn" id="paperMaskUploadBtnFast" style="white-space: nowrap; font-size: 0.85em;">📄 Upload & Analyze</button>
+                      <span id="paperMaskStatusFast" class="status-subtitle" style="margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.75em;"></span>
+                    </div>
+                    <div id="paperMaskReviewPanelFast" class="hidden" style="border: 1px solid var(--border-color); padding: 0.75rem; border-radius: 4px; background: var(--bg-color-alt); font-size: 0.9em;">
+                      <div class="status-subtitle" style="font-size: 0.8em;">AI Suggested Masks</div>
+                      <div id="paperMaskListFast" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 200px; overflow-y: auto; margin-bottom: 0.75rem;"></div>
+                      <div style="display: flex; justify-content: flex-end; gap: 0.4rem;">
+                        <button type="button" class="btn" id="paperMaskCancelBtnFast" style="font-size: 0.8em; padding: 2px 8px;">Cancel</button>
+                        <button type="button" class="btn primary" id="paperMaskApplyBtnFast" style="font-size: 0.8em; padding: 2px 8px;">Apply</button>
+                      </div>
+                    </div>
+                  </div>
                 </aside>
               </div>
             </div>
@@ -457,6 +475,25 @@
                       Select run mode and configure pipeline options.
                     </p>
                   </div>
+
+                  <!-- Literature-Driven Masking UI (Advanced) -->
+                  <div class="field-group" style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
+                    <label style="font-weight: 500; font-size: 0.85em; color: var(--text-color-muted); display: block; margin-bottom: 0.5rem;">Extract Constraints from Paper (PDF)</label>
+                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
+                      <input type="file" id="paperMaskInputAdvanced" accept="application/pdf" style="display: none;" />
+                      <button type="button" class="btn" id="paperMaskUploadBtnAdvanced" style="white-space: nowrap; font-size: 0.85em;">📄 Upload & Analyze Paper</button>
+                      <span id="paperMaskStatusAdvanced" class="status-subtitle" style="margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.75em;"></span>
+                    </div>
+                    <div id="paperMaskReviewPanelAdvanced" class="hidden" style="border: 1px solid var(--border-color); padding: 0.75rem; border-radius: 4px; background: var(--bg-color-alt); font-size: 0.9em;">
+                      <div class="status-subtitle" style="font-size: 0.8em;">AI Suggested Masks</div>
+                      <div id="paperMaskListAdvanced" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 200px; overflow-y: auto; margin-bottom: 0.75rem;"></div>
+                      <div style="display: flex; justify-content: flex-end; gap: 0.4rem;">
+                        <button type="button" class="btn" id="paperMaskCancelBtnAdvanced" style="font-size: 0.8em; padding: 2px 8px;">Cancel</button>
+                        <button type="button" class="btn primary" id="paperMaskApplyBtnAdvanced" style="font-size: 0.8em; padding: 2px 8px;">Apply</button>
+                      </div>
+                    </div>
+                  </div>
+
                   <div id="setupStepper" class="setup-stepper hidden">
                     <div id="setupStepMeta" class="setup-step-meta"></div>
                     <div id="setupStepDots" class="setup-step-dots"></div>
@@ -542,16 +579,12 @@
                     </p>
                   </div>
                   <label class="fast-field">
-                    <span data-i18n="evolution.initialSamples.label">Initial Samples</span>
-                    <input id="evolutionInitialSamplesInput" type="number" min="1" step="1" value="20" />
+                    <span data-i18n="evolution.poolSize.label">Stage 1: Generation Pool Size</span>
+                    <input id="evolutionPoolSizeInput" type="number" min="10" step="10" value="1000" />
                   </label>
                   <label class="fast-field">
-                    <span data-i18n="evolution.rounds.label">BO Rounds</span>
-                    <input id="evolutionRoundsInput" type="number" min="1" step="1" value="3" />
-                  </label>
-                  <label class="fast-field">
-                    <span data-i18n="evolution.samplesPerRound.label">Samples Per Round</span>
-                    <input id="evolutionSamplesPerRoundInput" type="number" min="1" step="1" value="5" />
+                    <span data-i18n="evolution.oracleSamples.label">Stage 3: Oracle AF2 Samples</span>
+                    <input id="evolutionOracleSamplesInput" type="number" min="1" step="1" value="20" />
                   </label>
                   <div class="panel-header" style="margin-top: 1rem;">
                     <h4 data-i18n="evolution.filtering.title">Filtering</h4>
@@ -1695,6 +1728,6 @@
     <button id="copilotFabBtn" class="primary copilot-fab" data-i18n="copilot.open">Copilot</button>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260413003_v14"></script>
+    <script type="module" src="./app.js?v=20260417_131749"></script>
   </body>
 </html>

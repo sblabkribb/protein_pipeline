@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import gzip
+import os
+import json
+import time
 from pathlib import Path
 import shlex
 import subprocess
 import tempfile
 from typing import Any
-
+import urllib.request
+import urllib.error
 
 def _is_number_token(value: object) -> bool:
     try:
@@ -15,7 +19,6 @@ def _is_number_token(value: object) -> bool:
         return True
     except Exception:
         return False
-
 
 def _parse_rosetta_scorefile(path: Path) -> list[dict[str, Any]]:
     if not path.exists():
@@ -44,7 +47,6 @@ def _parse_rosetta_scorefile(path: Path) -> list[dict[str, Any]]:
         raise RuntimeError(f"No Rosetta score rows found in {path}")
     return rows
 
-
 def _best_score_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
     best_row: dict[str, Any] | None = None
     best_score: float | None = None
@@ -60,13 +62,11 @@ def _best_score_row(rows: list[dict[str, Any]]) -> dict[str, Any]:
         raise RuntimeError("Rosetta scorefile did not contain a numeric total_score")
     return best_row
 
-
 def _read_pdb_text(path: Path) -> str:
     if path.suffix == ".gz":
         with gzip.open(path, "rt", encoding="utf-8") as handle:
             return handle.read()
     return path.read_text(encoding="utf-8")
-
 
 @dataclass(frozen=True)
 class RosettaRelaxClient:
@@ -81,160 +81,169 @@ class RosettaRelaxClient:
     container_score_binary: str = "/usr/local/bin/score_jd2.default.linuxgccrelease"
     container_database_path: str = "/usr/local/database"
 
+    @property
+    def endpoint_id(self) -> str | None:
+        return os.getenv("RUNPOD_RELAX_ENDPOINT_ID")
+
     def is_configured(self) -> bool:
+        # Now also checks for RunPod configuration
+        if os.getenv("RUNPOD_RELAX_ENDPOINT_ID"):
+            return True
         if self.relax_binary and self.score_binary and self.database_path:
             return True
         return bool(self.docker_bin and self.docker_image)
 
     def _mode(self) -> str:
+        if os.getenv("RUNPOD_RELAX_ENDPOINT_ID"):
+            return "runpod"
         if self.relax_binary and self.score_binary and self.database_path:
             return "binary"
         if self.docker_bin and self.docker_image:
             return "docker"
         raise RuntimeError(
-            "Rosetta relax is not configured. Set ROSETTA_DOCKER_IMAGE/ROSETTA_DOCKER_BIN or "
-            "ROSETTA_RELAX_BIN/ROSETTA_SCORE_BIN/ROSETTA_DATABASE."
+            "Rosetta relax is not configured. Set RUNPOD_RELAX_ENDPOINT_ID or ROSETTA_DOCKER_IMAGE/ROSETTA_DOCKER_BIN."
         )
+
+    def _runpod_sync_call(self, endpoint_id: str, api_key: str, payload: dict) -> dict:
+        url = f"https://api.runpod.ai/v2/{endpoint_id}/runsync"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        data = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=self.timeout_s) as response:
+                result = json.loads(response.read().decode())
+                if result.get("status") == "COMPLETED" and "output" in result:
+                    return result["output"]
+                else:
+                    raise RuntimeError(f"RunPod error: {result}")
+        except Exception as e:
+            raise RuntimeError(f"RunPod communication failed: {e}")
+
+    def run(self, input_pdb: Path, output_dir: Path, nstruct: int = 1, extra_flags: str | None = None) -> dict[str, Any]:
+        mode = self._mode()
+        
+        if mode == "runpod":
+            # --- SERVERLESS EXECUTION ---
+            endpoint_id = os.getenv("RUNPOD_RELAX_ENDPOINT_ID")
+            api_key = os.getenv("RUNPOD_API_KEY")
+            if not api_key: raise RuntimeError("RUNPOD_API_KEY is missing in environment")
+            
+            with open(input_pdb, "r") as f:
+                pdb_content = f.read()
+                
+            payload = {
+                "input": {
+                    "target_id": input_pdb.stem,
+                    "pdb_content": pdb_content,
+                    "nstruct": nstruct,
+                    "extra_flags": extra_flags or ""
+                }
+            }
+            
+            print(f"Sending Relax job to RunPod Serverless ({endpoint_id})...")
+            start_time = time.time()
+            output = self._runpod_sync_call(endpoint_id, api_key, payload)
+            elapsed = time.time() - start_time
+            print(f"RunPod Relax completed in {elapsed:.2f}s")
+            
+            if output.get("error"):
+                raise RuntimeError(f"RunPod Handler Error: {output['error']}")
+                
+            # Emulate local file creation for pipeline compatibility
+            output_dir.mkdir(parents=True, exist_ok=True)
+            relaxed_pdb_content = output.get("relaxed_pdb_content", "")
+            score_per_res = output.get("score_per_res", 0.0)
+            
+            best_pdb_path = output_dir / f"{input_pdb.stem}_relaxed.pdb"
+            best_pdb_path.write_text(relaxed_pdb_content)
+            
+            # Create a mock score file
+            score_path = output_dir / "score.sc"
+            with open(score_path, "w") as f:
+                f.write("SCORE: total_score description\n")
+                f.write(f"SCORE: {score_per_res * 100} {input_pdb.stem}_relaxed\n") # fake total score
+                
+            return {
+                "best_pdb": best_pdb_path,
+                "best_score": score_per_res * 100,
+                "score_per_residue": score_per_res,
+                "scorefile": score_path,
+            }
+
+        # --- LOCAL EXECUTION (Docker or Binary Fallback) ---
+        return self._run_local(input_pdb, output_dir, mode, nstruct, extra_flags)
 
     def _runtime_path(self, path: Path, *, root: Path, mode: str) -> str:
         if mode == "docker":
-            rel = path.relative_to(root).as_posix()
+            rel = path.resolve().relative_to(root.resolve())
             return f"{self.container_workdir}/{rel}"
-        return str(path)
+        return str(path.resolve())
 
-    def _runtime_prefix(self, *, root: Path, mode: str) -> list[str]:
+    def _run_local(self, input_pdb: Path, output_dir: Path, mode: str, nstruct: int, extra_flags: str | None) -> dict[str, Any]:
+        root = output_dir.resolve()
+        score_path = root / "score.sc"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        args: list[str] = []
         if mode == "docker":
-            return [
-                str(self.docker_bin),
+            args.extend([
+                self.docker_bin or "docker",
                 "run",
                 "--rm",
+                "--network=none",
                 "-v",
                 f"{root}:{self.container_workdir}",
                 "-w",
                 self.container_workdir,
-                str(self.docker_image),
-            ]
-        return []
+            ])
+            args.append(self.docker_image)
+            args.append(self.container_relax_binary)
+            args.extend(["-database", self.container_database_path])
+        else:
+            args.append(self.relax_binary)
+            args.extend(["-database", self.database_path])
 
-    def _database_arg(self, *, mode: str) -> str:
-        if mode == "docker":
-            return str(self.container_database_path)
-        return str(self.database_path)
+        args.extend([
+            "-s",
+            self._runtime_path(input_pdb, root=root, mode=mode),
+            "-ignore_unrecognized_res",
+            "-nstruct",
+            str(nstruct),
+            "-out:file:scorefile",
+            self._runtime_path(score_path, root=root, mode=mode),
+            "-out:path:all",
+            self._runtime_path(output_dir, root=root, mode=mode),
+        ])
 
-    def _run(
-        self,
-        args: list[str],
-        *,
-        workdir: Path,
-        mode: str,
-    ) -> subprocess.CompletedProcess[str]:
-        cmd = self._runtime_prefix(root=workdir, mode=mode) + list(args)
-        result = subprocess.run(
-            cmd,
-            cwd=(str(workdir) if mode == "binary" else None),
-            capture_output=True,
-            text=True,
-            timeout=self.timeout_s,
-            check=False,
-        )
-        if result.returncode != 0:
-            stderr = (result.stderr or "").strip()
-            stdout = (result.stdout or "").strip()
-            tail = stderr or stdout or f"exit code {result.returncode}"
-            raise RuntimeError(f"Rosetta command failed: {tail[-2000:]}")
-        return result
+        if extra_flags:
+            args.extend(shlex.split(extra_flags))
 
-    def relax(
-        self,
-        pdb_text: str,
-        *,
-        nstruct: int = 1,
-        extra_flags: str | None = None,
-    ) -> dict[str, Any]:
-        mode = self._mode()
-        with tempfile.TemporaryDirectory(prefix="rosetta_relax_") as tmpdir:
-            root = Path(tmpdir)
-            input_pdb = root / "input.pdb"
-            relax_dir = root / "relax"
-            relax_dir.mkdir(parents=True, exist_ok=True)
-            relax_scorefile = relax_dir / "score.sc"
-            input_scorefile = root / "input_score.sc"
-            input_pdb.write_text(str(pdb_text or ""), encoding="utf-8")
+        print(f"Running Rosetta Relax (Local): {' '.join(args)}")
+        subprocess.run(args, check=True, capture_output=True, text=True, cwd=root)
 
-            relax_binary = self.container_relax_binary if mode == "docker" else str(self.relax_binary)
-            score_binary = self.container_score_binary if mode == "docker" else str(self.score_binary)
-            database = self._database_arg(mode=mode)
-            input_pdb_arg = self._runtime_path(input_pdb, root=root, mode=mode)
-            relax_dir_arg = self._runtime_path(relax_dir, root=root, mode=mode)
-            relax_scorefile_arg = self._runtime_path(relax_scorefile, root=root, mode=mode)
-            input_scorefile_arg = self._runtime_path(input_scorefile, root=root, mode=mode)
+        if not score_path.exists():
+            raise RuntimeError("Rosetta relax failed to produce a scorefile.")
 
-            relax_args = [
-                str(relax_binary),
-                "-database",
-                database,
-                "-in:file:s",
-                input_pdb_arg,
-                "-nstruct",
-                str(max(1, int(nstruct))),
-                "-out:path:all",
-                relax_dir_arg,
-                "-out:file:scorefile",
-                relax_scorefile_arg,
-                "-relax:constrain_relax_to_start_coords",
-                "-use_input_sc",
-                "-overwrite",
-            ]
-            if extra_flags:
-                relax_args.extend(shlex.split(str(extra_flags)))
-            self._run(relax_args, workdir=root, mode=mode)
+        rows = _parse_rosetta_scorefile(score_path)
+        best_row = _best_score_row(rows)
+        desc = best_row.get("description", "")
+        if not desc:
+            raise RuntimeError("Could not determine best model description from scorefile")
 
-            relax_rows = _parse_rosetta_scorefile(relax_scorefile)
-            best_row = _best_score_row(relax_rows)
-            best_description = str(best_row.get("description") or "").strip()
-            if not best_description:
-                raise RuntimeError("Rosetta relax output did not include a pose description")
+        best_pdb = output_dir / f"{desc}.pdb"
+        if not best_pdb.exists():
+            raise RuntimeError(f"Best PDB not found: {best_pdb}")
 
-            relaxed_pdb_path: Path | None = None
-            for candidate in (
-                relax_dir / f"{best_description}.pdb",
-                relax_dir / f"{best_description}.pdb.gz",
-            ):
-                if candidate.exists():
-                    relaxed_pdb_path = candidate
-                    break
-            if relaxed_pdb_path is None:
-                matches = sorted(relax_dir.glob(f"{best_description}*.pdb*"))
-                if matches:
-                    relaxed_pdb_path = matches[0]
-            if relaxed_pdb_path is None:
-                raise RuntimeError(f"Rosetta relax output PDB missing for {best_description}")
+        total_score = float(best_row.get("total_score", best_row.get("score", 0.0)))
+        res_count = sum(1 for line in best_pdb.read_text().splitlines() if line.startswith("ATOM") and line[12:16].strip() == "CA")
+        score_per_residue = total_score / res_count if res_count > 0 else 0.0
 
-            input_score_args = [
-                str(score_binary),
-                "-database",
-                database,
-                "-in:file:s",
-                input_pdb_arg,
-                "-out:file:scorefile",
-                input_scorefile_arg,
-                "-overwrite",
-            ]
-            self._run(input_score_args, workdir=root, mode=mode)
-
-            input_rows = _parse_rosetta_scorefile(input_scorefile)
-            input_row = _best_score_row(input_rows)
-            input_total_score = float(input_row.get("total_score", input_row.get("score")))
-            total_score = float(best_row.get("total_score", best_row.get("score")))
-            best_pdb_text = _read_pdb_text(relaxed_pdb_path)
-
-            return {
-                "description": best_description,
-                "total_score": total_score,
-                "input_total_score": input_total_score,
-                "delta_total_score": total_score - input_total_score,
-                "best_pdb_text": best_pdb_text,
-                "nstruct": max(1, int(nstruct)),
-                "extra_flags": str(extra_flags).strip() or None,
-                "mode": mode,
-            }
+        return {
+            "best_pdb": best_pdb,
+            "best_score": total_score,
+            "score_per_residue": score_per_residue,
+            "scorefile": score_path,
+        }

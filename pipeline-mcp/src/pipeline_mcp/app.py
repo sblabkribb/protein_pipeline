@@ -3,6 +3,9 @@ from __future__ import annotations
 import shutil
 from dotenv import load_dotenv
 
+# Load environment variables early
+load_dotenv()
+
 from .clients.alphafold2 import AlphaFold2Client
 from .clients.alphafold2_runpod import AlphaFold2RunPodClient
 from .clients.bioemu_runpod import BioEmuRunPodClient
@@ -19,7 +22,6 @@ from .pipeline import PipelineRunner
 
 
 def build_runner() -> PipelineRunner:
-    load_dotenv()
     cfg = load_config()
     runpod = RunPodClient(
         api_key=cfg.runpod.api_key,
@@ -54,7 +56,10 @@ def build_runner() -> PipelineRunner:
 
     rosetta_relax = None
     rosetta_docker_bin = cfg.rosetta.docker_bin or shutil.which("docker")
-    if cfg.rosetta.relax_binary and cfg.rosetta.score_binary and cfg.rosetta.database_path:
+    
+    if cfg.runpod.relax_endpoint_id:
+        rosetta_relax = RosettaRelaxClient() # Client picks up RUNPOD_RELAX_ENDPOINT_ID internally
+    elif cfg.rosetta.relax_binary and cfg.rosetta.score_binary and cfg.rosetta.database_path:
         rosetta_relax = RosettaRelaxClient(
             relax_binary=cfg.rosetta.relax_binary,
             score_binary=cfg.rosetta.score_binary,
