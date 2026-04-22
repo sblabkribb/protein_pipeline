@@ -1,5 +1,8 @@
-import unittest
 import json
+import re
+import subprocess
+import sys
+import unittest
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
@@ -27,6 +30,63 @@ def _tmpdir():
 
 
 class TestTools(unittest.TestCase):
+    def test_frontend_cath_tab_is_standalone_pipeline_ui(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        index_html = (repo_root / "frontend" / "index.html").read_text(encoding="utf-8")
+        app_js = (repo_root / "frontend" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('data-tab="cath"', index_html)
+        tabs_match = re.search(r"const TAB_OPTIONS = \[(.*?)\];", app_js, re.DOTALL)
+        self.assertIsNotNone(tabs_match)
+        self.assertIn('"cath"', tabs_match.group(1))
+        self.assertNotIn("pipeline.cath_launch_training", app_js)
+        self.assertNotIn("cathLaunchTrainBtn", app_js)
+        self.assertNotIn("cathTrainingSubsets", app_js)
+
+    def test_frontend_cath_launch_buttons_survive_empty_overview(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        app_js = (repo_root / "frontend" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('const order = ["train", "val", "test"];', app_js)
+        self.assertIn("? overview.subsets", app_js)
+        self.assertIn(": {};", app_js)
+        self.assertNotIn('if (!subsets) {', app_js)
+        self.assertIn('data-cath-launch="${escapeHtml(subset)}"', app_js)
+
+    def test_frontend_fasta_download_uses_valid_template_literals(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        app_js = (repo_root / "frontend" / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("const fasta = `>${seqId}\\n${sequence}\\n`;", app_js)
+        self.assertIn("downloadTextFile(`${seqId}.fasta`, fasta);", app_js)
+        self.assertNotIn(r"const fasta = \`>\${seqId}\\n\${sequence}\\n\`;", app_js)
+
+    def test_app_module_imports_without_python_dotenv(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        script = """
+import builtins
+
+real_import = builtins.__import__
+
+def blocked(name, globals=None, locals=None, fromlist=(), level=0):
+    if name == "dotenv":
+        raise ModuleNotFoundError("No module named 'dotenv'")
+    return real_import(name, globals, locals, fromlist, level)
+
+builtins.__import__ = blocked
+import pipeline_mcp.app
+print("ok")
+"""
+        result = subprocess.run(
+            [sys.executable, "-c", script],
+            cwd=repo_root,
+            env={"PYTHONPATH": str(repo_root / "src")},
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("ok", result.stdout)
+
     def test_tool_definitions_expose_project_round_ids_on_run_schemas(self) -> None:
         defs = {tool["name"]: tool for tool in tool_definitions()}
         run_props = defs["pipeline.run"]["inputSchema"]["properties"]
@@ -47,6 +107,57 @@ class TestTools(unittest.TestCase):
         )
         self.assertEqual(req.project_id, "tev_campaign")
         self.assertEqual(req.round_id, "round_01")
+
+    def test_tool_definitions_include_cath_ops_tools(self) -> None:
+        defs = {tool["name"]: tool for tool in tool_definitions()}
+        expected = {
+            "pipeline.cath_get_batch_overview",
+            "pipeline.cath_launch_batch",
+            "pipeline.cath_launch_training",
+            "pipeline.cath_list_jobs",
+            "pipeline.cath_get_job",
+            "pipeline.cath_read_job_log",
+            "pipeline.cath_stop_job",
+        }
+        self.assertTrue(expected.issubset(defs.keys()))
+
+    def test_cath_batch_overview_reports_completed_running_and_failed_counts(self) -> None:
+        with _tmpdir() as tmp:
+            workspace = Path(tmp)
+            outputs_root = workspace / "outputs"
+            outputs_root.mkdir(parents=True, exist_ok=True)
+            (workspace / "cath_test").mkdir(parents=True, exist_ok=True)
+            (workspace / "cath_test" / "1abcA00.pdb").write_text("END\n", encoding="utf-8")
+            (workspace / "cath_test" / "2defA00.pdb").write_text("END\n", encoding="utf-8")
+            (workspace / "cath_test" / "3ghiA00.pdb").write_text("END\n", encoding="utf-8")
+            (workspace / "batch_success_test.csv").write_text(
+                "timestamp,run_id\n2026-04-21T00:00:00Z,cath_test_1abcA00\n",
+                encoding="utf-8",
+            )
+            (workspace / "batch_failed_test.csv").write_text(
+                "timestamp,run_id,error\n2026-04-21T00:01:00Z,cath_test_2defA00,boom\n",
+                encoding="utf-8",
+            )
+
+            run_id = "cath_test_3ghiA00"
+            run_paths = init_run(str(outputs_root), run_id)
+            set_status(
+                run_paths,
+                stage="af2_30",
+                state="running",
+                detail="predicting",
+            )
+
+            runner = PipelineRunner(output_root=str(outputs_root), mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            overview = dispatcher.call_tool("pipeline.cath_get_batch_overview", {"item_limit": 10})
+
+            totals = overview.get("totals") or {}
+            test_subset = (overview.get("subsets") or {}).get("test") or {}
+            self.assertEqual(int(totals.get("total") or 0), 3)
+            self.assertEqual(int(test_subset.get("counts", {}).get("completed") or 0), 1)
+            self.assertEqual(int(test_subset.get("counts", {}).get("failed") or 0), 1)
+            self.assertEqual(int(test_subset.get("counts", {}).get("running") or 0), 1)
 
     def test_project_and_round_tools_enforce_owner_scope(self) -> None:
         owner = {"username": "hana", "run_prefix": "hana", "role": "user"}

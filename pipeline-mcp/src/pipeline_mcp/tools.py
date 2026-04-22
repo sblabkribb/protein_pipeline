@@ -21,6 +21,15 @@ from .bio.fasta import parse_fasta
 from .bio.ligand_text import normalize_diffdock_ligand_inputs
 from .bio.sdf import append_ligand_pdb
 from .bio.sdf import sdf_to_pdb
+from .cath_ops import job_kind_batch
+from .cath_ops import job_kind_train
+from .cath_ops import launch_cath_batch_job
+from .cath_ops import launch_cath_training_job
+from .cath_ops import list_managed_jobs
+from .cath_ops import read_managed_job
+from .cath_ops import read_managed_job_log
+from .cath_ops import stop_managed_job
+from .cath_ops import summarize_all_subsets
 from .models import PipelineRequest
 from .models import SequenceRecord
 from .pipeline import PipelineRunner
@@ -164,7 +173,9 @@ def _as_str_or_list(value: object | None) -> str | list[str] | None:
     return str(value)
 
 
-def _as_rfd3_select_fixed_atoms(value: object | None) -> str | list[str] | dict[str, str] | None:
+def _as_rfd3_select_fixed_atoms(
+    value: object | None,
+) -> str | list[str] | dict[str, str] | None:
     if value is None:
         return None
     if isinstance(value, dict):
@@ -240,7 +251,9 @@ def _as_fixed_positions_extra(value: object | None) -> dict[str, list[int]] | No
     if isinstance(value, list):
         if not value:
             return None
-        positions = sorted({int(str(item).strip()) for item in value if item is not None})
+        positions = sorted(
+            {int(str(item).strip()) for item in value if item is not None}
+        )
         positions = [pos for pos in positions if pos > 0]
         return {"*": positions} if positions else None
     if not isinstance(value, dict):
@@ -251,8 +264,12 @@ def _as_fixed_positions_extra(value: object | None) -> dict[str, list[int]] | No
         chain = str(raw_chain)
         if raw_positions is None:
             continue
-        positions_raw = raw_positions if isinstance(raw_positions, list) else [raw_positions]
-        positions = sorted({int(str(item).strip()) for item in positions_raw if item is not None})
+        positions_raw = (
+            raw_positions if isinstance(raw_positions, list) else [raw_positions]
+        )
+        positions = sorted(
+            {int(str(item).strip()) for item in positions_raw if item is not None}
+        )
         positions = [pos for pos in positions if pos > 0]
         if positions:
             out[chain] = positions
@@ -382,14 +399,20 @@ def _af2_records_from_inputs(
     else:
         raise ValueError("One of target_fasta or target_pdb is required")
 
-    chain_counts = [len(_split_multichain_sequence(rec.sequence)) for rec in fasta_records]
+    chain_counts = [
+        len(_split_multichain_sequence(rec.sequence)) for rec in fasta_records
+    ]
     max_chains = max(chain_counts) if chain_counts else 1
     resolved_preset = _resolve_af2_model_preset(model_preset, chain_count=max_chains)
 
     seq_records: list[SequenceRecord] = []
     for rec in fasta_records:
-        prepared = _prepare_af2_sequence(rec.sequence, model_preset=resolved_preset, chain_ids=None)
-        seq_records.append(SequenceRecord(id=rec.id, sequence=prepared, header=rec.header, meta={}))
+        prepared = _prepare_af2_sequence(
+            rec.sequence, model_preset=resolved_preset, chain_ids=None
+        )
+        seq_records.append(
+            SequenceRecord(id=rec.id, sequence=prepared, header=rec.header, meta={})
+        )
     return seq_records, resolved_preset
 
 
@@ -397,7 +420,9 @@ def _af2_provider_label(provider: str) -> str:
     return "ColabFold" if provider == "colabfold" else "AlphaFold2"
 
 
-def _select_af2_client(runner: PipelineRunner, provider: str) -> tuple[object | None, str]:
+def _select_af2_client(
+    runner: PipelineRunner, provider: str
+) -> tuple[object | None, str]:
     requested = _normalize_af2_provider(provider)
     if requested == "colabfold":
         if runner.colabfold is not None:
@@ -420,14 +445,23 @@ class AutoRetryConfig:
 
 def _auto_retry_config(args: dict[str, Any]) -> AutoRetryConfig:
     enabled = _as_bool(args.get("auto_retry"), _env_true("PIPELINE_AUTO_RETRY"))
-    max_attempts = _as_int(args.get("auto_retry_max"), _env_int("PIPELINE_AUTO_RETRY_MAX", 2))
-    backoff_s = _as_float(args.get("auto_retry_backoff_s"), _env_float("PIPELINE_AUTO_RETRY_BACKOFF_S", 10.0))
+    max_attempts = _as_int(
+        args.get("auto_retry_max"), _env_int("PIPELINE_AUTO_RETRY_MAX", 2)
+    )
+    backoff_s = _as_float(
+        args.get("auto_retry_backoff_s"),
+        _env_float("PIPELINE_AUTO_RETRY_BACKOFF_S", 10.0),
+    )
     if not enabled:
         return AutoRetryConfig(enabled=False, max_attempts=1, backoff_s=0.0)
-    return AutoRetryConfig(enabled=True, max_attempts=max(1, max_attempts), backoff_s=max(0.0, backoff_s))
+    return AutoRetryConfig(
+        enabled=True, max_attempts=max(1, max_attempts), backoff_s=max(0.0, backoff_s)
+    )
 
 
-def _retry_request(request: PipelineRequest, error: str) -> tuple[PipelineRequest, str] | None:
+def _retry_request(
+    request: PipelineRequest, error: str
+) -> tuple[PipelineRequest, str] | None:
     msg = error.lower()
     if "cancelled" in msg or "canceled" in msg or "cancel requested" in msg:
         return None
@@ -439,8 +473,14 @@ def _retry_request(request: PipelineRequest, error: str) -> tuple[PipelineReques
                 "fallback mmseqs_target_db=uniref90",
             )
 
-    if "unable to extract protein sequence from target_pdb" in msg and request.design_chains:
-        return (replace(request, design_chains=None, force=True), "retry without design_chains")
+    if (
+        "unable to extract protein sequence from target_pdb" in msg
+        and request.design_chains
+    ):
+        return (
+            replace(request, design_chains=None, force=True),
+            "retry without design_chains",
+        )
 
     if "timed out" in msg or "timeout" in msg or "timed_out" in msg:
         if request.mmseqs_max_seqs > 100:
@@ -481,7 +521,9 @@ def _run_with_auto_retry(
             attempt += 1
 
 
-def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _run_af2_predict(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     run_id = arguments.get("run_id")
     target_fasta = _as_text(arguments.get("target_fasta"))
     target_pdb = _as_text(arguments.get("target_pdb"))
@@ -493,9 +535,15 @@ def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
     requested_preset = str(arguments.get("af2_model_preset") or "auto")
     db_preset = str(arguments.get("af2_db_preset") or "full_dbs")
     max_template_date = str(arguments.get("af2_max_template_date") or "2020-05-14")
-    extra_flags = (str(arguments.get("af2_extra_flags")) if arguments.get("af2_extra_flags") else None)
+    extra_flags = (
+        str(arguments.get("af2_extra_flags"))
+        if arguments.get("af2_extra_flags")
+        else None
+    )
 
-    normalized_run_id = normalize_run_id(str(run_id)) if run_id is not None else new_run_id("af2")
+    normalized_run_id = (
+        normalize_run_id(str(run_id)) if run_id is not None else new_run_id("af2")
+    )
     paths = init_run(runner.output_root, normalized_run_id)
     set_status(paths, stage="af2", state="running")
 
@@ -518,7 +566,12 @@ def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
     def _on_job_id(seq_id: str, job_id: str) -> None:
         jobs[seq_id] = job_id
         write_json(af2_dir / "runpod_jobs.json", {"jobs": dict(jobs)})
-        set_status(paths, stage="af2", state="running", detail=f"runpod_job_id={job_id} seq_id={seq_id}")
+        set_status(
+            paths,
+            stage="af2",
+            state="running",
+            detail=f"runpod_job_id={job_id} seq_id={seq_id}",
+        )
 
     try:
         seq_records, resolved_preset = _af2_records_from_inputs(
@@ -528,6 +581,7 @@ def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
         )
 
         if dry_run:
+
             def _first_chain(seq: str) -> str:
                 raw = str(seq or "").strip()
                 if "\n>" in raw:
@@ -571,17 +625,27 @@ def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
                 )
 
         if not isinstance(results, dict):
-            raise RuntimeError(f"{provider_label} output invalid: {type(results).__name__}")
+            raise RuntimeError(
+                f"{provider_label} output invalid: {type(results).__name__}"
+            )
 
         summary_results: dict[str, dict[str, Any]] = {}
         for rec in seq_records:
             payload = results.get(rec.id)
             if not isinstance(payload, dict):
-                raise RuntimeError(f"{provider_label} output missing record for {rec.id}")
+                raise RuntimeError(
+                    f"{provider_label} output missing record for {rec.id}"
+                )
 
-            ranked0 = payload.get("ranked_0_pdb") or payload.get("pdb") or payload.get("pdb_text")
+            ranked0 = (
+                payload.get("ranked_0_pdb")
+                or payload.get("pdb")
+                or payload.get("pdb_text")
+            )
             if not isinstance(ranked0, str) or not ranked0.strip():
-                raise RuntimeError(f"{provider_label} output missing ranked_0.pdb for {rec.id}")
+                raise RuntimeError(
+                    f"{provider_label} output missing ranked_0.pdb for {rec.id}"
+                )
 
             seq_dir = ensure_dir(af2_dir / _safe_id(rec.id))
             _write_text(seq_dir / "ranked_0.pdb", ranked0)
@@ -612,7 +676,11 @@ def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
         }
         write_json(paths.summary_json, _safe_json(summary))
         set_status(paths, stage="done", state="completed")
-        return {"run_id": normalized_run_id, "output_dir": str(paths.root), "summary": summary}
+        return {
+            "run_id": normalized_run_id,
+            "output_dir": str(paths.root),
+            "summary": summary,
+        }
     except Exception as exc:
         set_status(paths, stage="error", state="failed", detail=str(exc))
         error_summary = {
@@ -626,24 +694,38 @@ def _run_af2_predict(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
 
 def _run_diffdock(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
     run_id = arguments.get("run_id")
-    protein_pdb = _as_text(arguments.get("protein_pdb")) or _as_text(arguments.get("target_pdb"))
-    ligand_smiles = _as_text(arguments.get("diffdock_ligand_smiles")) or _as_text(arguments.get("ligand_smiles"))
-    ligand_sdf = _as_text(arguments.get("diffdock_ligand_sdf")) or _as_text(arguments.get("ligand_sdf"))
+    protein_pdb = _as_text(arguments.get("protein_pdb")) or _as_text(
+        arguments.get("target_pdb")
+    )
+    ligand_smiles = _as_text(arguments.get("diffdock_ligand_smiles")) or _as_text(
+        arguments.get("ligand_smiles")
+    )
+    ligand_sdf = _as_text(arguments.get("diffdock_ligand_sdf")) or _as_text(
+        arguments.get("ligand_sdf")
+    )
     complex_name = str(arguments.get("complex_name") or "complex")
-    diffdock_config = str(arguments.get("diffdock_config") or "default_inference_args.yaml")
+    diffdock_config = str(
+        arguments.get("diffdock_config") or "default_inference_args.yaml"
+    )
     diffdock_extra_args = _as_text(arguments.get("diffdock_extra_args")).strip() or None
-    diffdock_cuda_visible_devices = _as_text(arguments.get("diffdock_cuda_visible_devices")).strip() or None
+    diffdock_cuda_visible_devices = (
+        _as_text(arguments.get("diffdock_cuda_visible_devices")).strip() or None
+    )
     dry_run = _as_bool(arguments.get("dry_run"), False)
 
     if not protein_pdb.strip():
         raise ValueError("protein_pdb is required")
     if not (ligand_smiles.strip() or ligand_sdf.strip()):
         raise ValueError("diffdock_ligand_smiles or diffdock_ligand_sdf is required")
-    ligand_smiles, ligand_sdf = normalize_diffdock_ligand_inputs(ligand_smiles, ligand_sdf)
+    ligand_smiles, ligand_sdf = normalize_diffdock_ligand_inputs(
+        ligand_smiles, ligand_sdf
+    )
     ligand_smiles_text = ligand_smiles or ""
     ligand_sdf_text = ligand_sdf or ""
 
-    normalized_run_id = normalize_run_id(str(run_id)) if run_id is not None else new_run_id("diffdock")
+    normalized_run_id = (
+        normalize_run_id(str(run_id)) if run_id is not None else new_run_id("diffdock")
+    )
     paths = init_run(runner.output_root, normalized_run_id)
     set_status(paths, stage="diffdock", state="running")
 
@@ -668,7 +750,9 @@ def _run_diffdock(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
 
     def _on_job_id(job_id: str) -> None:
         write_json(diffdock_dir / "runpod_job.json", {"job_id": job_id})
-        set_status(paths, stage="diffdock", state="running", detail=f"runpod_job_id={job_id}")
+        set_status(
+            paths, stage="diffdock", state="running", detail=f"runpod_job_id={job_id}"
+        )
 
     try:
         if dry_run:
@@ -676,7 +760,9 @@ def _run_diffdock(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
             sdf_text = ligand_sdf_text if ligand_sdf_text.strip() else ""
         else:
             if runner.diffdock is None:
-                raise RuntimeError("DiffDock endpoint is not configured (set DIFFDOCK_ENDPOINT_ID)")
+                raise RuntimeError(
+                    "DiffDock endpoint is not configured (set DIFFDOCK_ENDPOINT_ID)"
+                )
             diffdock_out = runner.diffdock.dock(
                 protein_pdb=protein_pdb,
                 ligand_smiles=ligand_smiles_text or None,
@@ -708,7 +794,11 @@ def _run_diffdock(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
         }
         write_json(paths.summary_json, _safe_json(summary))
         set_status(paths, stage="done", state="completed")
-        return {"run_id": normalized_run_id, "output_dir": str(paths.root), "summary": summary}
+        return {
+            "run_id": normalized_run_id,
+            "output_dir": str(paths.root),
+            "summary": summary,
+        }
     except Exception as exc:
         set_status(paths, stage="error", state="failed", detail=str(exc))
         error_summary = {
@@ -720,24 +810,36 @@ def _run_diffdock(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
         raise
 
 
-def _delete_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _delete_run_tool(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     run_id = str(arguments.get("run_id") or "")
     if not run_id:
         raise ValueError("run_id is required")
     force = _as_bool(arguments.get("force"), False)
     status = load_status(runner.output_root, run_id)
-    if status is not None and str(status.get("state") or "").lower() == "running" and not force:
-        raise ValueError("run is still running; stop it or set force=true to delete anyway")
+    if (
+        status is not None
+        and str(status.get("state") or "").lower() == "running"
+        and not force
+    ):
+        raise ValueError(
+            "run is still running; stop it or set force=true to delete anyway"
+        )
     res = delete_run(runner.output_root, run_id)
     for path in _projects_root(runner.output_root).glob("*/rounds/*.json"):
         record = _load_json_record(path)
         if record and "linked_run_ids" in record and run_id in record["linked_run_ids"]:
-            record["linked_run_ids"] = [r for r in record["linked_run_ids"] if r != run_id]
+            record["linked_run_ids"] = [
+                r for r in record["linked_run_ids"] if r != run_id
+            ]
             write_json(path, record)
     return res
 
 
-def _cancel_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _cancel_run_tool(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     run_id = str(arguments.get("run_id") or "")
     if not run_id:
         raise ValueError("run_id is required")
@@ -748,7 +850,9 @@ def _cancel_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
     mark_cancel_requested(runner.output_root, run_id, reason="pipeline.cancel_run")
 
     jobs = _collect_runpod_jobs(root)
-    af2_clients = [client for client in (runner.colabfold, runner.af2) if client is not None]
+    af2_clients = [
+        client for client in (runner.colabfold, runner.af2) if client is not None
+    ]
     af2_runpod = None
     for client in af2_clients:
         info = _client_cancel_info(client)
@@ -797,7 +901,14 @@ def _cancel_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
             except Exception as exc:
                 msg = f"{kind}:{job_id}: {exc}"
                 errors.append(msg)
-                results.append({"kind": kind, "job_id": job_id, "endpoint_id": explicit_endpoint_id, "error": str(exc)})
+                results.append(
+                    {
+                        "kind": kind,
+                        "job_id": job_id,
+                        "endpoint_id": explicit_endpoint_id,
+                        "error": str(exc),
+                    }
+                )
                 continue
 
         clients = [client for client in client_map.get(kind, []) if client is not None]
@@ -839,13 +950,19 @@ def _cancel_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
                 attempt_errors.append(f"{endpoint_id}: {exc}")
 
         if not cancelled_this_job:
-            reason = "; ".join(attempt_errors) if attempt_errors else "endpoint_not_configured"
+            reason = (
+                "; ".join(attempt_errors)
+                if attempt_errors
+                else "endpoint_not_configured"
+            )
             msg = f"{kind}:{job_id}: {reason}"
             errors.append(msg)
             results.append({"kind": kind, "job_id": job_id, "error": reason})
 
     status = load_status(runner.output_root, run_id)
-    stage = str(status.get("stage") or "cancel") if isinstance(status, dict) else "cancel"
+    stage = (
+        str(status.get("stage") or "cancel") if isinstance(status, dict) else "cancel"
+    )
     paths = RunPaths(run_id=run_id, root=root)
     detail = f"cancelled_jobs={cancelled}" if cancelled else "cancel_requested"
     set_status(paths, stage=stage, state="cancelled", detail=detail)
@@ -859,7 +976,9 @@ def _cancel_run_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
     }
 
 
-def _submit_feedback(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _submit_feedback(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     run_id = str(arguments.get("run_id") or "").strip()
     if not run_id:
         raise ValueError("run_id is required")
@@ -887,7 +1006,9 @@ def _submit_feedback(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
         "user": user,
         "created_at": _now_iso(),
     }
-    return append_run_event(runner.output_root, run_id, filename="feedback.jsonl", payload=entry)
+    return append_run_event(
+        runner.output_root, run_id, filename="feedback.jsonl", payload=entry
+    )
 
 
 def _list_feedback(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -895,11 +1016,15 @@ def _list_feedback(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[st
     if not run_id:
         raise ValueError("run_id is required")
     limit = _as_int(arguments.get("limit"), 50)
-    items = list_run_events(runner.output_root, run_id, filename="feedback.jsonl", limit=limit)
+    items = list_run_events(
+        runner.output_root, run_id, filename="feedback.jsonl", limit=limit
+    )
     return {"run_id": run_id, "items": items}
 
 
-def _submit_experiment(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _submit_experiment(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     run_id = str(arguments.get("run_id") or "").strip()
     if not run_id:
         raise ValueError("run_id is required")
@@ -929,28 +1054,40 @@ def _submit_experiment(runner: PipelineRunner, arguments: dict[str, Any]) -> dic
         "user": user,
         "created_at": _now_iso(),
     }
-    return append_run_event(runner.output_root, run_id, filename="experiments.jsonl", payload=entry)
+    return append_run_event(
+        runner.output_root, run_id, filename="experiments.jsonl", payload=entry
+    )
 
 
-def _list_experiments(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _list_experiments(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     run_id = str(arguments.get("run_id") or "").strip()
     if not run_id:
         raise ValueError("run_id is required")
     limit = _as_int(arguments.get("limit"), 50)
-    items = list_run_events(runner.output_root, run_id, filename="experiments.jsonl", limit=limit)
+    items = list_run_events(
+        runner.output_root, run_id, filename="experiments.jsonl", limit=limit
+    )
     return {"run_id": run_id, "items": items}
 
 
-def _list_agent_events(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _list_agent_events(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     run_id = str(arguments.get("run_id") or "").strip()
     if not run_id:
         raise ValueError("run_id is required")
     limit = _as_int(arguments.get("limit"), 50)
-    items = list_run_events(runner.output_root, run_id, filename="agent_panel.jsonl", limit=limit)
+    items = list_run_events(
+        runner.output_root, run_id, filename="agent_panel.jsonl", limit=limit
+    )
     return {"run_id": run_id, "items": items}
 
 
-def _agent_chat_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _agent_chat_tool(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     run_id = str(arguments.get("run_id") or "").strip()
     prompt = str(arguments.get("prompt") or "").strip()
     lang = str(arguments.get("lang") or "en").lower()
@@ -958,31 +1095,43 @@ def _agent_chat_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
         # Try to find the latest run_id if not provided
         try:
             output_path = Path(runner.output_root)
-            runs = sorted([d.name for d in output_path.iterdir() if d.is_dir() and not d.name.startswith("_")])
+            runs = sorted(
+                [
+                    d.name
+                    for d in output_path.iterdir()
+                    if d.is_dir() and not d.name.startswith("_")
+                ]
+            )
             if runs:
                 run_id = runs[-1]
         except Exception:
             pass
     if not run_id:
         raise ValueError("run_id is required")
-    
+
     run_root = resolve_run_path(runner.output_root, run_id)
     status = read_json(run_root / "status.json") or {}
     summary = read_json(run_root / "summary.json") or {}
-    agent_events = list_run_events(runner.output_root, run_id, filename="agent_panel.jsonl", limit=20)
-    
+    agent_events = list_run_events(
+        runner.output_root, run_id, filename="agent_panel.jsonl", limit=20
+    )
+
     # Reasoning logic: Synthesize information from different stages
     is_ko = lang.startswith("ko")
     response_lines = []
-    
+
     # 1. Status Awareness
     state = str(status.get("state") or "unknown")
     stage = str(status.get("stage") or "none")
-    
+
     if is_ko:
-        response_lines.append(f"현재 Run {run_id}은(는) {stage} 단계에서 {state} 상태입니다.")
+        response_lines.append(
+            f"현재 Run {run_id}은(는) {stage} 단계에서 {state} 상태입니다."
+        )
     else:
-        response_lines.append(f"Run {run_id} is currently in {state} state at {stage} stage.")
+        response_lines.append(
+            f"Run {run_id} is currently in {state} state at {stage} stage."
+        )
 
     # 2. Expert Interpretation from Agent Panel
     interpretations = []
@@ -990,14 +1139,14 @@ def _agent_chat_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
         interp = event.get("consensus", {}).get("interpretations")
         if isinstance(interp, list):
             interpretations.extend(interp)
-    
+
     if interpretations:
-        unique_interp = list(dict.fromkeys(interpretations)) # Remove duplicates
+        unique_interp = list(dict.fromkeys(interpretations))  # Remove duplicates
         if is_ko:
             response_lines.append("\n### 전문가 분석 (Agent Panel Insights):")
         else:
             response_lines.append("\n### Expert Insights (Agent Panel):")
-        for i in unique_interp[-5:]: # Show last 5 unique insights
+        for i in unique_interp[-5:]:  # Show last 5 unique insights
             response_lines.append(f"- {i}")
 
     # 3. Evolution Specific Reasoning (The new 3-stage BO)
@@ -1006,17 +1155,25 @@ def _agent_chat_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
         passed = evo_stages.get("stage1_passed", 0)
         total = evo_stages.get("stage1_total", 0)
         cutoff = evo_stages.get("soluprot_cutoff", 0.0)
-        
+
         if is_ko:
             response_lines.append("\n### 계층적 BO 분석 (Hierarchical BO Analysis):")
-            response_lines.append(f"- **Stage 1 (SoluProt Gate):** 총 {total}개 후보 중 {passed}개가 통과했습니다 (임계값: {cutoff}).")
+            response_lines.append(
+                f"- **Stage 1 (SoluProt Gate):** 총 {total}개 후보 중 {passed}개가 통과했습니다 (임계값: {cutoff})."
+            )
             if total > 0 and (passed / total) < 0.2:
-                response_lines.append("  - *분석:* 수용성 필터링 통과율이 매우 낮습니다. 설계 시 sampling_temp를 조절하거나 soluprot_cutoff를 낮추는 것을 추천합니다.")
+                response_lines.append(
+                    "  - *분석:* 수용성 필터링 통과율이 매우 낮습니다. 설계 시 sampling_temp를 조절하거나 soluprot_cutoff를 낮추는 것을 추천합니다."
+                )
         else:
             response_lines.append("\n### Hierarchical BO Analysis:")
-            response_lines.append(f"- **Stage 1 (SoluProt Gate):** {passed}/{total} sequences passed the gate (Cutoff: {cutoff}).")
+            response_lines.append(
+                f"- **Stage 1 (SoluProt Gate):** {passed}/{total} sequences passed the gate (Cutoff: {cutoff})."
+            )
             if total > 0 and (passed / total) < 0.2:
-                response_lines.append("  - *Insight:* Low solubility pass rate detected. Consider adjusting sampling_temp or lowering soluprot_cutoff.")
+                response_lines.append(
+                    "  - *Insight:* Low solubility pass rate detected. Consider adjusting sampling_temp or lowering soluprot_cutoff."
+                )
 
     # 4. Action Recommendation (Gemini Upgrade)
     context_text = "\n".join(response_lines)
@@ -1027,14 +1184,14 @@ def _agent_chat_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
         "Be professional, technical, and bilingual (respond in the user's language - Korean or English). "
         "If the data shows low MSA depth, suggest increasing max_seqs. If solubility pass rate is low, suggest lowering soluprot_cutoff or sampling_temp."
     )
-    
+
     final_reply = ""
     model_used = "local-fallback"
     if runner.gemini and runner.gemini.is_available():
         try:
             gemini_advice = runner.gemini.chat(
-                system_instruction, 
-                f"Pipeline Context:\n{context_text}\n\nUser Question/Prompt: {prompt}\n\nPlease provide a summary of insights and actionable advice."
+                system_instruction,
+                f"Pipeline Context:\n{context_text}\n\nUser Question/Prompt: {prompt}\n\nPlease provide a summary of insights and actionable advice.",
             )
             final_reply = gemini_advice
             model_used = runner.gemini.model_name
@@ -1045,22 +1202,30 @@ def _agent_chat_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
         if is_ko:
             response_lines.append("\n### 추천 액션:")
             if state == "failed":
-                response_lines.append("- 로그를 분석한 결과 파라미터 최적화가 필요해 보입니다. `resume` 기능을 통해 설정을 변경하여 재시작할 수 있습니다.")
+                response_lines.append(
+                    "- 로그를 분석한 결과 파라미터 최적화가 필요해 보입니다. `resume` 기능을 통해 설정을 변경하여 재시작할 수 있습니다."
+                )
             else:
-                response_lines.append("- 현재 결과가 만족스럽다면 `Compare Studio`에서 상위 후보들을 정밀 검토해 보세요.")
+                response_lines.append(
+                    "- 현재 결과가 만족스럽다면 `Compare Studio`에서 상위 후보들을 정밀 검토해 보세요."
+                )
         else:
             response_lines.append("\n### Recommended Actions:")
             if state == "failed":
-                response_lines.append("- Analysis suggests parameter tuning is needed. Use the `resume` feature to restart with adjusted settings.")
+                response_lines.append(
+                    "- Analysis suggests parameter tuning is needed. Use the `resume` feature to restart with adjusted settings."
+                )
             else:
-                response_lines.append("- If results look promising, proceed to `Compare Studio` for high-fidelity review.")
+                response_lines.append(
+                    "- If results look promising, proceed to `Compare Studio` for high-fidelity review."
+                )
         final_reply = "\n".join(response_lines)
 
     # 5. Training Data Collection (Reasoning Dataset)
     try:
         dataset_dir = Path(runner.output_root) / "_reasoning_data"
         dataset_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Monthly file rotation: dataset_2026_04.jsonl
         filename = f"dataset_{time.strftime('%Y_%m', time.gmtime())}.jsonl"
         log_entry = {
@@ -1071,22 +1236,16 @@ def _agent_chat_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
             "expert_panel_data": interpretations,
             "prompt": prompt,
             "response": final_reply,
-            "language": lang
+            "language": lang,
         }
-        
+
         with open(dataset_dir / filename, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
     except Exception as e:
         # Prevent logging failure from breaking the tool response
         pass
 
-    return {
-        "run_id": run_id,
-        "reply": final_reply,
-        "status": state,
-        "stage": stage
-    }
-    
+    return {"run_id": run_id, "reply": final_reply, "status": state, "stage": stage}
 
 
 def _workspace_root(output_root: str) -> Path:
@@ -1134,7 +1293,9 @@ def _normalize_owner(value: object | None) -> dict[str, str]:
     raw = value if isinstance(value, dict) else {}
     normalized = _normalize_user(value) or {}
     username = str(normalized.get("username") or "").strip()
-    run_prefix = str(raw.get("run_prefix") or "").strip() if isinstance(raw, dict) else ""
+    run_prefix = (
+        str(raw.get("run_prefix") or "").strip() if isinstance(raw, dict) else ""
+    )
     if not run_prefix and username:
         run_prefix = _safe_id(username)
     role = str(normalized.get("role") or "").strip().lower() or "user"
@@ -1165,7 +1326,9 @@ def _record_visible_to_user(record: dict[str, Any], user: object | None) -> bool
     return False
 
 
-def _require_record_access(record: dict[str, Any], user: object | None, *, kind: str) -> None:
+def _require_record_access(
+    record: dict[str, Any], user: object | None, *, kind: str
+) -> None:
     if not _record_visible_to_user(record, user):
         raise ValueError(f"{kind} not allowed for this user")
 
@@ -1178,7 +1341,9 @@ def _record_is_archived(record: dict[str, Any] | None) -> bool:
     return _record_status(record) == "archived"
 
 
-def _record_listed_for_user(record: dict[str, Any], user: object | None, *, include_archived: bool) -> bool:
+def _record_listed_for_user(
+    record: dict[str, Any], user: object | None, *, include_archived: bool
+) -> bool:
     if not _record_visible_to_user(record, user):
         return False
     if include_archived:
@@ -1220,7 +1385,9 @@ def _save_project(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
         project_id = _allocate_unique_record_id(
             preferred=name,
             fallback_prefix="project",
-            path_for=lambda candidate: _project_record_path(runner.output_root, candidate),
+            path_for=lambda candidate: _project_record_path(
+                runner.output_root, candidate
+            ),
         )
     path = _project_record_path(runner.output_root, project_id)
     existing = _load_json_record(path)
@@ -1230,15 +1397,28 @@ def _save_project(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
     record: dict[str, Any] = {
         "project_id": project_id,
         "name": name,
-        "status": _as_text(arguments.get("status")).strip() or str((existing or {}).get("status") or "active"),
-        "description": _as_text(arguments.get("description")).strip() or str((existing or {}).get("description") or ""),
-        "target_summary": _as_text(arguments.get("target_summary")).strip() or str((existing or {}).get("target_summary") or ""),
-        "created_by": str((existing or {}).get("created_by") or owner.get("owner_username") or ""),
+        "status": _as_text(arguments.get("status")).strip()
+        or str((existing or {}).get("status") or "active"),
+        "description": _as_text(arguments.get("description")).strip()
+        or str((existing or {}).get("description") or ""),
+        "target_summary": _as_text(arguments.get("target_summary")).strip()
+        or str((existing or {}).get("target_summary") or ""),
+        "created_by": str(
+            (existing or {}).get("created_by") or owner.get("owner_username") or ""
+        ),
         "created_at": created_at,
         "updated_at": _now_iso(),
-        "owner_username": str((existing or {}).get("owner_username") or owner.get("owner_username") or ""),
-        "owner_run_prefix": str((existing or {}).get("owner_run_prefix") or owner.get("owner_run_prefix") or ""),
-        "owner_role": str((existing or {}).get("owner_role") or owner.get("owner_role") or ""),
+        "owner_username": str(
+            (existing or {}).get("owner_username") or owner.get("owner_username") or ""
+        ),
+        "owner_run_prefix": str(
+            (existing or {}).get("owner_run_prefix")
+            or owner.get("owner_run_prefix")
+            or ""
+        ),
+        "owner_role": str(
+            (existing or {}).get("owner_role") or owner.get("owner_role") or ""
+        ),
     }
     write_json(path, record)
     rel_path = path.relative_to(_workspace_root(runner.output_root)).as_posix()
@@ -1252,7 +1432,9 @@ def _list_projects(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[st
     items: list[dict[str, Any]] = []
     for path in sorted(_projects_root(runner.output_root).glob("*/project.json")):
         record = _load_json_record(path)
-        if record is None or not _record_listed_for_user(record, user, include_archived=include_archived):
+        if record is None or not _record_listed_for_user(
+            record, user, include_archived=include_archived
+        ):
             continue
         items.append(record)
     return {"projects": _sort_records(items)[: max(0, limit)]}
@@ -1283,14 +1465,18 @@ def _require_request_metadata_access(
         raise ValueError("round_id requires project_id")
     if not raw_project_id:
         return None, None
-    project = _load_json_record(_project_record_path(runner.output_root, _safe_id(raw_project_id)))
+    project = _load_json_record(
+        _project_record_path(runner.output_root, _safe_id(raw_project_id))
+    )
     if project is None:
         raise ValueError("project_id not found")
     _require_record_access(project, user, kind="project")
     if not raw_round_id:
         return project, None
     round_record = _load_json_record(
-        _round_record_path(runner.output_root, _safe_id(raw_project_id), _safe_id(raw_round_id))
+        _round_record_path(
+            runner.output_root, _safe_id(raw_project_id), _safe_id(raw_round_id)
+        )
     )
     if round_record is None:
         raise ValueError("round_id not found")
@@ -1317,7 +1503,9 @@ def _save_round(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, 
         round_id = _allocate_unique_record_id(
             preferred=title,
             fallback_prefix="round",
-            path_for=lambda candidate: _round_record_path(runner.output_root, project_id, candidate),
+            path_for=lambda candidate: _round_record_path(
+                runner.output_root, project_id, candidate
+            ),
         )
     path = _round_record_path(runner.output_root, project_id, round_id)
     existing = _load_json_record(path)
@@ -1328,27 +1516,53 @@ def _save_round(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, 
     record: dict[str, Any] = {
         "round_id": round_id,
         "project_id": project_id,
-        "parent_round_id": _as_text(arguments.get("parent_round_id")).strip() or str((existing or {}).get("parent_round_id") or ""),
+        "parent_round_id": _as_text(arguments.get("parent_round_id")).strip()
+        or str((existing or {}).get("parent_round_id") or ""),
         "title": title,
-        "goal": _as_text(arguments.get("goal")).strip() or str((existing or {}).get("goal") or ""),
-        "hypothesis": _as_text(arguments.get("hypothesis")).strip() or str((existing or {}).get("hypothesis") or ""),
-        "notes": _as_text(arguments.get("notes")).strip() or str((existing or {}).get("notes") or ""),
+        "goal": _as_text(arguments.get("goal")).strip()
+        or str((existing or {}).get("goal") or ""),
+        "hypothesis": _as_text(arguments.get("hypothesis")).strip()
+        or str((existing or {}).get("hypothesis") or ""),
+        "notes": _as_text(arguments.get("notes")).strip()
+        or str((existing or {}).get("notes") or ""),
         "next_round_notes": _as_text(arguments.get("next_round_notes")).strip()
         or str((existing or {}).get("next_round_notes") or ""),
-        "status": _as_text(arguments.get("status")).strip() or str((existing or {}).get("status") or "planned"),
-        "linked_run_ids": _as_list_of_str(arguments.get("linked_run_ids")) or list((existing or {}).get("linked_run_ids") or []),
+        "status": _as_text(arguments.get("status")).strip()
+        or str((existing or {}).get("status") or "planned"),
+        "linked_run_ids": _as_list_of_str(arguments.get("linked_run_ids"))
+        or list((existing or {}).get("linked_run_ids") or []),
         "selected_candidates": _safe_json(arguments.get("selected_candidates"))
         if "selected_candidates" in arguments
         else _safe_json((existing or {}).get("selected_candidates") or []),
         "experiment_summary": _safe_json(arguments.get("experiment_summary"))
         if "experiment_summary" in arguments
         else _safe_json((existing or {}).get("experiment_summary") or {}),
-        "created_by": str((existing or {}).get("created_by") or owner.get("owner_username") or project.get("created_by") or ""),
+        "created_by": str(
+            (existing or {}).get("created_by")
+            or owner.get("owner_username")
+            or project.get("created_by")
+            or ""
+        ),
         "created_at": str((existing or {}).get("created_at") or _now_iso()),
         "updated_at": _now_iso(),
-        "owner_username": str((existing or {}).get("owner_username") or owner.get("owner_username") or project.get("owner_username") or ""),
-        "owner_run_prefix": str((existing or {}).get("owner_run_prefix") or owner.get("owner_run_prefix") or project.get("owner_run_prefix") or ""),
-        "owner_role": str((existing or {}).get("owner_role") or owner.get("owner_role") or project.get("owner_role") or ""),
+        "owner_username": str(
+            (existing or {}).get("owner_username")
+            or owner.get("owner_username")
+            or project.get("owner_username")
+            or ""
+        ),
+        "owner_run_prefix": str(
+            (existing or {}).get("owner_run_prefix")
+            or owner.get("owner_run_prefix")
+            or project.get("owner_run_prefix")
+            or ""
+        ),
+        "owner_role": str(
+            (existing or {}).get("owner_role")
+            or owner.get("owner_role")
+            or project.get("owner_role")
+            or ""
+        ),
     }
     write_json(path, record)
     rel_path = path.relative_to(_workspace_root(runner.output_root)).as_posix()
@@ -1363,18 +1577,27 @@ def _list_rounds(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str,
     project_id = _safe_id(raw_project_id) if raw_project_id else ""
     items: list[dict[str, Any]] = []
     if project_id:
-        project = _load_json_record(_project_record_path(runner.output_root, project_id))
-        if project is None or not _record_listed_for_user(project, user, include_archived=include_archived):
+        project = _load_json_record(
+            _project_record_path(runner.output_root, project_id)
+        )
+        if project is None or not _record_listed_for_user(
+            project, user, include_archived=include_archived
+        ):
             return {"project_id": project_id, "rounds": []}
         paths = sorted(_rounds_dir(runner.output_root, project_id).glob("*.json"))
     else:
         paths = sorted(_projects_root(runner.output_root).glob("*/rounds/*.json"))
     for path in paths:
         record = _load_json_record(path)
-        if record is None or not _record_listed_for_user(record, user, include_archived=include_archived):
+        if record is None or not _record_listed_for_user(
+            record, user, include_archived=include_archived
+        ):
             continue
         items.append(record)
-    return {"project_id": project_id or None, "rounds": _sort_records(items)[: max(0, limit)]}
+    return {
+        "project_id": project_id or None,
+        "rounds": _sort_records(items)[: max(0, limit)],
+    }
 
 
 def _get_round(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -1386,14 +1609,18 @@ def _get_round(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, A
         raise ValueError("round_id is required")
     project_id = _safe_id(raw_project_id)
     round_id = _safe_id(raw_round_id)
-    record = _load_json_record(_round_record_path(runner.output_root, project_id, round_id))
+    record = _load_json_record(
+        _round_record_path(runner.output_root, project_id, round_id)
+    )
     if record is None:
         return {"found": False, "round": None}
     _require_record_access(record, arguments.get("user"), kind="round")
     return {"found": True, "round": record}
 
 
-def _archive_project(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _archive_project(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     user = arguments.get("user")
     raw_project_id = _as_text(arguments.get("project_id")).strip()
     if not raw_project_id:
@@ -1411,7 +1638,9 @@ def _archive_project(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
     return {"found": True, "archived": True, "path": rel_path, "project": record}
 
 
-def _restore_project(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _restore_project(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     user = arguments.get("user")
     raw_project_id = _as_text(arguments.get("project_id")).strip()
     if not raw_project_id:
@@ -1473,7 +1702,9 @@ def _restore_round(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[st
     return {"found": True, "restored": True, "path": rel_path, "round": record}
 
 
-def _delete_round_record(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _delete_round_record(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     user = arguments.get("user")
     raw_project_id = _as_text(arguments.get("project_id")).strip()
     raw_round_id = _as_text(arguments.get("round_id")).strip()
@@ -1499,7 +1730,9 @@ def _delete_round_record(runner: PipelineRunner, arguments: dict[str, Any]) -> d
     return {"found": True, "deleted": True, "path": rel_path, "round": record}
 
 
-def _delete_project_record(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _delete_project_record(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     user = arguments.get("user")
     raw_project_id = _as_text(arguments.get("project_id")).strip()
     if not raw_project_id:
@@ -1512,9 +1745,15 @@ def _delete_project_record(runner: PipelineRunner, arguments: dict[str, Any]) ->
         return {"found": False, "deleted": False, "project": None}
     _require_record_access(record, user, kind="project")
     project_dir = _project_dir(runner.output_root, project_id)
-    round_paths = sorted((project_dir / "rounds").glob("*.json")) if (project_dir / "rounds").exists() else []
+    round_paths = (
+        sorted((project_dir / "rounds").glob("*.json"))
+        if (project_dir / "rounds").exists()
+        else []
+    )
     if round_paths and not delete_rounds:
-        raise ValueError("project has rounds; pass delete_rounds=true to delete metadata")
+        raise ValueError(
+            "project has rounds; pass delete_rounds=true to delete metadata"
+        )
     rel_path = project_dir.relative_to(_workspace_root(runner.output_root)).as_posix()
     shutil.rmtree(project_dir)
     return {
@@ -1584,7 +1823,9 @@ def _save_report_attachments(
         if not rel_path:
             raise ValueError(f"attachments[{idx}].path is invalid")
         if not rel_path.startswith("report_assets/"):
-            raise ValueError(f"attachments[{idx}].path must start with 'report_assets/'")
+            raise ValueError(
+                f"attachments[{idx}].path must start with 'report_assets/'"
+            )
 
         text_value = item.get("text")
         base64_value = item.get("base64")
@@ -1601,7 +1842,9 @@ def _save_report_attachments(
             data = _as_text(text_value).encode("utf-8")
 
         if len(data) > max_file_bytes:
-            raise ValueError(f"attachments[{idx}] is too large (max {max_file_bytes} bytes)")
+            raise ValueError(
+                f"attachments[{idx}] is too large (max {max_file_bytes} bytes)"
+            )
         total_bytes += len(data)
         if total_bytes > max_total_bytes:
             raise ValueError(f"attachments total size exceeds {max_total_bytes} bytes")
@@ -1712,7 +1955,9 @@ def _sequence_identity(seq_a: str, seq_b: str) -> float | None:
     return float(ident) if isinstance(ident, (int, float)) else None
 
 
-def _sequence_difference_stats(wt_seq: str, design_seq: str) -> dict[str, object] | None:
+def _sequence_difference_stats(
+    wt_seq: str, design_seq: str
+) -> dict[str, object] | None:
     wt = _normalize_sequence(wt_seq)
     design = _normalize_sequence(design_seq)
     if not wt or not design:
@@ -1744,7 +1989,12 @@ def _sequence_difference_stats(wt_seq: str, design_seq: str) -> dict[str, object
 def _extract_design_chains_from_payload(payload: dict[str, object] | None) -> list[str]:
     if not isinstance(payload, dict):
         return []
-    for key in ("design_chains_used", "auto_selected_design_chains", "design_chains", "requested_design_chains"):
+    for key in (
+        "design_chains_used",
+        "auto_selected_design_chains",
+        "design_chains",
+        "requested_design_chains",
+    ):
         chains = _as_list_of_str(payload.get(key))
         if chains:
             return chains
@@ -1819,7 +2069,9 @@ def _collect_design_sequences(
             if not isinstance(sample, dict):
                 continue
             seq_id = str(sample.get("id") or "").strip()
-            if not _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter):
+            if not _should_include_seq_id(
+                seq_id, visible_seq_sources, use_visible_filter=use_visible_filter
+            ):
                 continue
             seq = _normalize_sequence(sample.get("sequence"))
             if not seq or seq in seen:
@@ -1933,20 +2185,30 @@ def _collect_design_metrics(
         except Exception:
             continue
         tier_dir = run_root / "tiers" / tier_key
-        samples = tier.get("proteinmpnn_samples") if isinstance(tier.get("proteinmpnn_samples"), list) else []
+        samples = (
+            tier.get("proteinmpnn_samples")
+            if isinstance(tier.get("proteinmpnn_samples"), list)
+            else []
+        )
         visible_seq_sources = _visible_sample_sources(samples, hide_target=hide_target)
         use_visible_filter = bool(samples)
 
         sol = _load_json_file(tier_dir / "soluprot.json")
         if isinstance(sol, dict):
             scores = sol.get("scores")
-            passed_ids = sol.get("passed_ids") if isinstance(sol.get("passed_ids"), list) else []
+            passed_ids = (
+                sol.get("passed_ids") if isinstance(sol.get("passed_ids"), list) else []
+            )
             if isinstance(scores, dict):
                 values = [
                     float(v)
                     for seq_id, v in scores.items()
                     if isinstance(v, (int, float))
-                    and _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                    and _should_include_seq_id(
+                        seq_id,
+                        visible_seq_sources,
+                        use_visible_filter=use_visible_filter,
+                    )
                 ]
                 out["soluprot_scores"].extend(values)
                 out["soluprot_total"] += len(values)
@@ -1961,7 +2223,11 @@ def _collect_design_metrics(
         af2 = _load_json_file(tier_dir / "af2_scores.json")
         if isinstance(af2, dict):
             recovered_failure = _af2_payload_has_recovered_failure(af2)
-            scores = af2.get("scores") if isinstance(af2.get("scores"), dict) and not recovered_failure else {}
+            scores = (
+                af2.get("scores")
+                if isinstance(af2.get("scores"), dict) and not recovered_failure
+                else {}
+            )
             rmsd_scores = (
                 af2.get("rmsd_scores")
                 if isinstance(af2.get("rmsd_scores"), dict) and not recovered_failure
@@ -1969,17 +2235,24 @@ def _collect_design_metrics(
             )
             target_rmsd_scores = (
                 af2.get("target_rmsd_scores")
-                if isinstance(af2.get("target_rmsd_scores"), dict) and not recovered_failure
+                if isinstance(af2.get("target_rmsd_scores"), dict)
+                and not recovered_failure
                 else {}
             )
-            candidate_ids = af2.get("candidate_ids") if isinstance(af2.get("candidate_ids"), list) else []
+            candidate_ids = (
+                af2.get("candidate_ids")
+                if isinstance(af2.get("candidate_ids"), list)
+                else []
+            )
             filtered_candidate_ids = _filtered_metric_ids(
                 candidate_ids,
                 visible_seq_sources,
                 use_visible_filter=use_visible_filter,
             )
             candidate_total = len(filtered_candidate_ids)
-            if candidate_total <= 0 and isinstance(af2.get("candidate_count_after_budget"), int):
+            if candidate_total <= 0 and isinstance(
+                af2.get("candidate_count_after_budget"), int
+            ):
                 candidate_total = (
                     int(af2.get("candidate_count_after_budget") or 0)
                     if not use_visible_filter
@@ -1990,7 +2263,11 @@ def _collect_design_metrics(
                     [
                         seq_id
                         for seq_id in scores.keys()
-                        if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                        if _should_include_seq_id(
+                            seq_id,
+                            visible_seq_sources,
+                            use_visible_filter=use_visible_filter,
+                        )
                     ]
                 )
             out["af2_candidate_total"] += max(0, candidate_total)
@@ -2000,15 +2277,23 @@ def _collect_design_metrics(
                 else [
                     str(seq_id)
                     for seq_id in scores.keys()
-                    if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                    if _should_include_seq_id(
+                        seq_id,
+                        visible_seq_sources,
+                        use_visible_filter=use_visible_filter,
+                    )
                 ]
             )
             for seq_id in candidate_metric_ids:
                 if seq_id in scores and isinstance(scores.get(seq_id), (int, float)):
                     out["af2_plddt"].append(float(scores.get(seq_id)))
-                if seq_id in rmsd_scores and isinstance(rmsd_scores.get(seq_id), (int, float)):
+                if seq_id in rmsd_scores and isinstance(
+                    rmsd_scores.get(seq_id), (int, float)
+                ):
                     out["af2_rmsd"].append(float(rmsd_scores.get(seq_id)))
-                if seq_id in target_rmsd_scores and isinstance(target_rmsd_scores.get(seq_id), (int, float)):
+                if seq_id in target_rmsd_scores and isinstance(
+                    target_rmsd_scores.get(seq_id), (int, float)
+                ):
                     out["af2_target_rmsd"].append(float(target_rmsd_scores.get(seq_id)))
             selected_ids = (
                 af2.get("selected_ids")
@@ -2023,22 +2308,35 @@ def _collect_design_metrics(
                 )
                 out["af2_selected_total"] += len(filtered_selected_ids)
                 for seq_id in filtered_selected_ids:
-                    if seq_id in scores and isinstance(scores.get(seq_id), (int, float)):
+                    if seq_id in scores and isinstance(
+                        scores.get(seq_id), (int, float)
+                    ):
                         out["af2_selected_plddt"].append(float(scores.get(seq_id)))
-                    if seq_id in rmsd_scores and isinstance(rmsd_scores.get(seq_id), (int, float)):
+                    if seq_id in rmsd_scores and isinstance(
+                        rmsd_scores.get(seq_id), (int, float)
+                    ):
                         out["af2_selected_rmsd"].append(float(rmsd_scores.get(seq_id)))
-                    if seq_id in target_rmsd_scores and isinstance(target_rmsd_scores.get(seq_id), (int, float)):
-                        out["af2_selected_target_rmsd"].append(float(target_rmsd_scores.get(seq_id)))
+                    if seq_id in target_rmsd_scores and isinstance(
+                        target_rmsd_scores.get(seq_id), (int, float)
+                    ):
+                        out["af2_selected_target_rmsd"].append(
+                            float(target_rmsd_scores.get(seq_id))
+                        )
 
         relax = _load_json_file(tier_dir / "relax_scores.json")
         if isinstance(relax, dict):
             recovered_failure = _relax_payload_has_recovered_failure(relax)
             score_per_residue = (
                 relax.get("score_per_residue")
-                if isinstance(relax.get("score_per_residue"), dict) and not recovered_failure
+                if isinstance(relax.get("score_per_residue"), dict)
+                and not recovered_failure
                 else {}
             )
-            candidate_ids = relax.get("candidate_ids") if isinstance(relax.get("candidate_ids"), list) else []
+            candidate_ids = (
+                relax.get("candidate_ids")
+                if isinstance(relax.get("candidate_ids"), list)
+                else []
+            )
             filtered_candidate_ids = _filtered_metric_ids(
                 candidate_ids,
                 visible_seq_sources,
@@ -2050,7 +2348,11 @@ def _collect_design_metrics(
                     [
                         seq_id
                         for seq_id in score_per_residue.keys()
-                        if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                        if _should_include_seq_id(
+                            seq_id,
+                            visible_seq_sources,
+                            use_visible_filter=use_visible_filter,
+                        )
                     ]
                 )
             out["relax_candidate_total"] += max(0, candidate_total)
@@ -2060,12 +2362,20 @@ def _collect_design_metrics(
                 else [
                     str(seq_id)
                     for seq_id in score_per_residue.keys()
-                    if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                    if _should_include_seq_id(
+                        seq_id,
+                        visible_seq_sources,
+                        use_visible_filter=use_visible_filter,
+                    )
                 ]
             )
             for seq_id in candidate_metric_ids:
-                if seq_id in score_per_residue and isinstance(score_per_residue.get(seq_id), (int, float)):
-                    out["relax_score_per_residue"].append(float(score_per_residue.get(seq_id)))
+                if seq_id in score_per_residue and isinstance(
+                    score_per_residue.get(seq_id), (int, float)
+                ):
+                    out["relax_score_per_residue"].append(
+                        float(score_per_residue.get(seq_id))
+                    )
             selected_ids = (
                 relax.get("selected_ids")
                 if isinstance(relax.get("selected_ids"), list) and not recovered_failure
@@ -2079,8 +2389,12 @@ def _collect_design_metrics(
                 )
                 out["relax_selected_total"] += len(filtered_selected_ids)
                 for seq_id in filtered_selected_ids:
-                    if seq_id in score_per_residue and isinstance(score_per_residue.get(seq_id), (int, float)):
-                        out["relax_selected_score_per_residue"].append(float(score_per_residue.get(seq_id)))
+                    if seq_id in score_per_residue and isinstance(
+                        score_per_residue.get(seq_id), (int, float)
+                    ):
+                        out["relax_selected_score_per_residue"].append(
+                            float(score_per_residue.get(seq_id))
+                        )
     return out
 
 
@@ -2127,7 +2441,11 @@ def _should_hide_target_source(
                 for sample in samples:
                     if not isinstance(sample, dict):
                         continue
-                    meta = sample.get("meta") if isinstance(sample.get("meta"), dict) else {}
+                    meta = (
+                        sample.get("meta")
+                        if isinstance(sample.get("meta"), dict)
+                        else {}
+                    )
                     sources.add(_classify_backbone_source(meta.get("backbone_source")))
     if run_root is not None:
         backbones = _load_json_file(run_root / "backbones.json")
@@ -2160,14 +2478,18 @@ def _visible_sample_sources(
         if not seq_id:
             continue
         meta = sample.get("meta") if isinstance(sample.get("meta"), dict) else {}
-        source = _visible_backbone_source(meta.get("backbone_source"), hide_target=hide_target)
+        source = _visible_backbone_source(
+            meta.get("backbone_source"), hide_target=hide_target
+        )
         if source is None:
             continue
         out[seq_id] = source
     return out
 
 
-def _should_include_seq_id(seq_id: object, visible_seq_sources: dict[str, str], *, use_visible_filter: bool) -> bool:
+def _should_include_seq_id(
+    seq_id: object, visible_seq_sources: dict[str, str], *, use_visible_filter: bool
+) -> bool:
     if not use_visible_filter:
         return True
     return str(seq_id or "").strip() in visible_seq_sources
@@ -2184,13 +2506,17 @@ def _filtered_metric_ids(
         seq = str(seq_id or "").strip()
         if not seq:
             continue
-        if not _should_include_seq_id(seq, visible_seq_sources, use_visible_filter=use_visible_filter):
+        if not _should_include_seq_id(
+            seq, visible_seq_sources, use_visible_filter=use_visible_filter
+        ):
             continue
         out.append(seq)
     return out
 
 
-def _source_for_sequence_id(seq_id: str, lookup: dict[str, str], *, hide_target: bool = False) -> str | None:
+def _source_for_sequence_id(
+    seq_id: str, lookup: dict[str, str], *, hide_target: bool = False
+) -> str | None:
     seq = str(seq_id or "").strip()
     if not seq:
         return None
@@ -2292,8 +2618,12 @@ def _collect_source_metrics(
                 bucket["materialized_count"] = materialized_count
                 bucket["propagated_count"] = propagated_count
                 bucket["backbone_count"] = propagated_count
-                bucket["propagation_mode"] = str(raw_summary.get("propagation_mode") or "").strip()
-                selected_backbone_id = str(raw_summary.get("selected_backbone_id") or "").strip()
+                bucket["propagation_mode"] = str(
+                    raw_summary.get("propagation_mode") or ""
+                ).strip()
+                selected_backbone_id = str(
+                    raw_summary.get("selected_backbone_id") or ""
+                ).strip()
                 if selected_backbone_id:
                     bucket["selected_backbone_id"] = selected_backbone_id
         items = backbones.get("backbones")
@@ -2301,21 +2631,33 @@ def _collect_source_metrics(
             for item in items:
                 if not isinstance(item, dict):
                     continue
-                source = _visible_backbone_source(item.get("source"), hide_target=hide_target)
+                source = _visible_backbone_source(
+                    item.get("source"), hide_target=hide_target
+                )
                 if source is None:
                     continue
                 backbone_id = str(item.get("id") or "").strip()
                 if backbone_id:
                     backbone_source_by_id[backbone_id] = source
-                if bool(item.get("selected")) and backbone_id and not str(out[source].get("selected_backbone_id") or "").strip():
+                if (
+                    bool(item.get("selected"))
+                    and backbone_id
+                    and not str(out[source].get("selected_backbone_id") or "").strip()
+                ):
                     out[source]["selected_backbone_id"] = backbone_id
                 if source in manifest_sources_present:
                     continue
                 if bool(item.get("materialized", True)):
-                    out[source]["materialized_count"] = int(out[source].get("materialized_count") or 0) + 1
+                    out[source]["materialized_count"] = (
+                        int(out[source].get("materialized_count") or 0) + 1
+                    )
                 if bool(item.get("propagated", True)):
-                    out[source]["propagated_count"] = int(out[source].get("propagated_count") or 0) + 1
-                    out[source]["backbone_count"] = int(out[source].get("backbone_count") or 0) + 1
+                    out[source]["propagated_count"] = (
+                        int(out[source].get("propagated_count") or 0) + 1
+                    )
+                    out[source]["backbone_count"] = (
+                        int(out[source].get("backbone_count") or 0) + 1
+                    )
         for source, bucket in out.items():
             if source not in manifest_sources_present:
                 bucket["observed_count"] = max(
@@ -2361,36 +2703,50 @@ def _collect_source_metrics(
                     backbone_id = str(entry.get("id") or "").strip()
                     if not backbone_id:
                         continue
-                    source = _visible_backbone_source(entry.get("source"), hide_target=hide_target)
+                    source = _visible_backbone_source(
+                        entry.get("source"), hide_target=hide_target
+                    )
                     if source is None:
                         continue
                     lookup.setdefault(backbone_id, source)
 
-        samples = tier.get("proteinmpnn_samples") if isinstance(tier.get("proteinmpnn_samples"), list) else []
+        samples = (
+            tier.get("proteinmpnn_samples")
+            if isinstance(tier.get("proteinmpnn_samples"), list)
+            else []
+        )
         visible_seq_sources = _visible_sample_sources(samples, hide_target=hide_target)
 
         sol = _load_json_file(tier_dir / "soluprot.json")
         if isinstance(sol, dict):
             scores = sol.get("scores")
-            passed_ids = sol.get("passed_ids") if isinstance(sol.get("passed_ids"), list) else []
+            passed_ids = (
+                sol.get("passed_ids") if isinstance(sol.get("passed_ids"), list) else []
+            )
             if isinstance(scores, dict):
                 for seq_id, raw_score in scores.items():
                     if not isinstance(raw_score, (int, float)):
                         continue
                     source = visible_seq_sources.get(str(seq_id))
                     if source is None:
-                        source = _source_for_sequence_id(str(seq_id), lookup, hide_target=hide_target)
+                        source = _source_for_sequence_id(
+                            str(seq_id), lookup, hide_target=hide_target
+                        )
                     if source is None:
                         continue
                     bucket = out[source]
-                    bucket["soluprot_total"] = int(bucket.get("soluprot_total") or 0) + 1
+                    bucket["soluprot_total"] = (
+                        int(bucket.get("soluprot_total") or 0) + 1
+                    )
                     cast_scores = bucket.get("soluprot_scores")
                     if isinstance(cast_scores, list):
                         cast_scores.append(float(raw_score))
             for seq_id in passed_ids:
                 source = visible_seq_sources.get(str(seq_id))
                 if source is None:
-                    source = _source_for_sequence_id(str(seq_id), lookup, hide_target=hide_target)
+                    source = _source_for_sequence_id(
+                        str(seq_id), lookup, hide_target=hide_target
+                    )
                 if source is None:
                     continue
                 bucket = out[source]
@@ -2399,22 +2755,36 @@ def _collect_source_metrics(
         af2 = _load_json_file(tier_dir / "af2_scores.json")
         if isinstance(af2, dict):
             recovered_failure = _af2_payload_has_recovered_failure(af2)
-            scores = af2.get("scores") if isinstance(af2.get("scores"), dict) and not recovered_failure else {}
+            scores = (
+                af2.get("scores")
+                if isinstance(af2.get("scores"), dict) and not recovered_failure
+                else {}
+            )
             rmsd_scores = (
                 af2.get("rmsd_scores")
                 if isinstance(af2.get("rmsd_scores"), dict) and not recovered_failure
                 else {}
             )
-            candidate_ids = af2.get("candidate_ids") if isinstance(af2.get("candidate_ids"), list) else []
-            candidate_metric_ids = candidate_ids if candidate_ids else list(scores.keys())
+            candidate_ids = (
+                af2.get("candidate_ids")
+                if isinstance(af2.get("candidate_ids"), list)
+                else []
+            )
+            candidate_metric_ids = (
+                candidate_ids if candidate_ids else list(scores.keys())
+            )
             for seq_id in candidate_metric_ids:
                 source = visible_seq_sources.get(str(seq_id))
                 if source is None:
-                    source = _source_for_sequence_id(str(seq_id), lookup, hide_target=hide_target)
+                    source = _source_for_sequence_id(
+                        str(seq_id), lookup, hide_target=hide_target
+                    )
                 if source is None:
                     continue
                 bucket = out[source]
-                bucket["af2_candidate_total"] = int(bucket.get("af2_candidate_total") or 0) + 1
+                bucket["af2_candidate_total"] = (
+                    int(bucket.get("af2_candidate_total") or 0) + 1
+                )
                 raw_plddt = scores.get(seq_id)
                 if isinstance(raw_plddt, (int, float)):
                     cast_plddt = bucket.get("af2_candidate_plddt")
@@ -2433,11 +2803,15 @@ def _collect_source_metrics(
             for seq_id in selected_ids:
                 source = visible_seq_sources.get(str(seq_id))
                 if source is None:
-                    source = _source_for_sequence_id(str(seq_id), lookup, hide_target=hide_target)
+                    source = _source_for_sequence_id(
+                        str(seq_id), lookup, hide_target=hide_target
+                    )
                 if source is None:
                     continue
                 bucket = out[source]
-                bucket["af2_selected_total"] = int(bucket.get("af2_selected_total") or 0) + 1
+                bucket["af2_selected_total"] = (
+                    int(bucket.get("af2_selected_total") or 0) + 1
+                )
                 raw_plddt = scores.get(seq_id)
                 if isinstance(raw_plddt, (int, float)):
                     cast_plddt = bucket.get("af2_selected_plddt")
@@ -2454,19 +2828,30 @@ def _collect_source_metrics(
             recovered_failure = _relax_payload_has_recovered_failure(relax)
             score_per_residue = (
                 relax.get("score_per_residue")
-                if isinstance(relax.get("score_per_residue"), dict) and not recovered_failure
+                if isinstance(relax.get("score_per_residue"), dict)
+                and not recovered_failure
                 else {}
             )
-            candidate_ids = relax.get("candidate_ids") if isinstance(relax.get("candidate_ids"), list) else []
-            candidate_metric_ids = candidate_ids if candidate_ids else list(score_per_residue.keys())
+            candidate_ids = (
+                relax.get("candidate_ids")
+                if isinstance(relax.get("candidate_ids"), list)
+                else []
+            )
+            candidate_metric_ids = (
+                candidate_ids if candidate_ids else list(score_per_residue.keys())
+            )
             for seq_id in candidate_metric_ids:
                 source = visible_seq_sources.get(str(seq_id))
                 if source is None:
-                    source = _source_for_sequence_id(str(seq_id), lookup, hide_target=hide_target)
+                    source = _source_for_sequence_id(
+                        str(seq_id), lookup, hide_target=hide_target
+                    )
                 if source is None:
                     continue
                 bucket = out[source]
-                bucket["relax_candidate_total"] = int(bucket.get("relax_candidate_total") or 0) + 1
+                bucket["relax_candidate_total"] = (
+                    int(bucket.get("relax_candidate_total") or 0) + 1
+                )
                 raw_relax = score_per_residue.get(seq_id)
                 if isinstance(raw_relax, (int, float)):
                     cast_relax = bucket.get("relax_candidate_score_per_residue")
@@ -2480,11 +2865,15 @@ def _collect_source_metrics(
             for seq_id in selected_ids:
                 source = visible_seq_sources.get(str(seq_id))
                 if source is None:
-                    source = _source_for_sequence_id(str(seq_id), lookup, hide_target=hide_target)
+                    source = _source_for_sequence_id(
+                        str(seq_id), lookup, hide_target=hide_target
+                    )
                 if source is None:
                     continue
                 bucket = out[source]
-                bucket["relax_selected_total"] = int(bucket.get("relax_selected_total") or 0) + 1
+                bucket["relax_selected_total"] = (
+                    int(bucket.get("relax_selected_total") or 0) + 1
+                )
                 raw_relax = score_per_residue.get(seq_id)
                 if isinstance(raw_relax, (int, float)):
                     cast_relax = bucket.get("relax_selected_score_per_residue")
@@ -2519,7 +2908,11 @@ def _collect_tier_compare_metrics(
             continue
         tier_dir = run_root / "tiers" / tier_key
 
-        samples = tier.get("proteinmpnn_samples") if isinstance(tier.get("proteinmpnn_samples"), list) else []
+        samples = (
+            tier.get("proteinmpnn_samples")
+            if isinstance(tier.get("proteinmpnn_samples"), list)
+            else []
+        )
         visible_seq_sources = _visible_sample_sources(samples, hide_target=hide_target)
         use_visible_filter = bool(samples)
         designs_total = len(visible_seq_sources) if use_visible_filter else len(samples)
@@ -2528,10 +2921,17 @@ def _collect_tier_compare_metrics(
             if not isinstance(sample, dict):
                 continue
             seq_id = str(sample.get("id") or "").strip()
-            if not _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter):
+            if not _should_include_seq_id(
+                seq_id, visible_seq_sources, use_visible_filter=use_visible_filter
+            ):
                 continue
             meta = sample.get("meta") if isinstance(sample.get("meta"), dict) else {}
-            source = _visible_backbone_source(meta.get("backbone_source"), hide_target=hide_target) or "other"
+            source = (
+                _visible_backbone_source(
+                    meta.get("backbone_source"), hide_target=hide_target
+                )
+                or "other"
+            )
             if source not in source_counts:
                 source = "other"
             source_counts[source] = int(source_counts.get(source) or 0) + 1
@@ -2546,10 +2946,16 @@ def _collect_tier_compare_metrics(
                     1
                     for seq_id, v in scores.items()
                     if isinstance(v, (int, float))
-                    and _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                    and _should_include_seq_id(
+                        seq_id,
+                        visible_seq_sources,
+                        use_visible_filter=use_visible_filter,
+                    )
                 ]
             )
-            passed_ids = sol.get("passed_ids") if isinstance(sol.get("passed_ids"), list) else []
+            passed_ids = (
+                sol.get("passed_ids") if isinstance(sol.get("passed_ids"), list) else []
+            )
             sol_passed = len(
                 _filtered_metric_ids(
                     passed_ids,
@@ -2565,20 +2971,30 @@ def _collect_tier_compare_metrics(
         candidate_rmsd: list[float] = []
         if isinstance(af2, dict):
             recovered_failure = _af2_payload_has_recovered_failure(af2)
-            scores = af2.get("scores") if isinstance(af2.get("scores"), dict) and not recovered_failure else {}
+            scores = (
+                af2.get("scores")
+                if isinstance(af2.get("scores"), dict) and not recovered_failure
+                else {}
+            )
             rmsd_scores = (
                 af2.get("rmsd_scores")
                 if isinstance(af2.get("rmsd_scores"), dict) and not recovered_failure
                 else {}
             )
-            candidate_ids = af2.get("candidate_ids") if isinstance(af2.get("candidate_ids"), list) else []
+            candidate_ids = (
+                af2.get("candidate_ids")
+                if isinstance(af2.get("candidate_ids"), list)
+                else []
+            )
             filtered_candidate_ids = _filtered_metric_ids(
                 candidate_ids,
                 visible_seq_sources,
                 use_visible_filter=use_visible_filter,
             )
             af2_candidate_total = len(filtered_candidate_ids)
-            if af2_candidate_total <= 0 and isinstance(af2.get("candidate_count_after_budget"), int):
+            if af2_candidate_total <= 0 and isinstance(
+                af2.get("candidate_count_after_budget"), int
+            ):
                 af2_candidate_total = (
                     int(af2.get("candidate_count_after_budget") or 0)
                     if not use_visible_filter
@@ -2589,7 +3005,11 @@ def _collect_tier_compare_metrics(
                     [
                         seq_id
                         for seq_id in scores.keys()
-                        if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                        if _should_include_seq_id(
+                            seq_id,
+                            visible_seq_sources,
+                            use_visible_filter=use_visible_filter,
+                        )
                     ]
                 )
             candidate_metric_ids = (
@@ -2598,7 +3018,11 @@ def _collect_tier_compare_metrics(
                 else [
                     str(seq_id)
                     for seq_id in scores.keys()
-                    if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                    if _should_include_seq_id(
+                        seq_id,
+                        visible_seq_sources,
+                        use_visible_filter=use_visible_filter,
+                    )
                 ]
             )
             for seq_id in candidate_metric_ids:
@@ -2629,10 +3053,15 @@ def _collect_tier_compare_metrics(
             recovered_failure = _relax_payload_has_recovered_failure(relax)
             score_per_residue = (
                 relax.get("score_per_residue")
-                if isinstance(relax.get("score_per_residue"), dict) and not recovered_failure
+                if isinstance(relax.get("score_per_residue"), dict)
+                and not recovered_failure
                 else {}
             )
-            candidate_ids = relax.get("candidate_ids") if isinstance(relax.get("candidate_ids"), list) else []
+            candidate_ids = (
+                relax.get("candidate_ids")
+                if isinstance(relax.get("candidate_ids"), list)
+                else []
+            )
             filtered_candidate_ids = _filtered_metric_ids(
                 candidate_ids,
                 visible_seq_sources,
@@ -2644,7 +3073,11 @@ def _collect_tier_compare_metrics(
                     [
                         seq_id
                         for seq_id in score_per_residue.keys()
-                        if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                        if _should_include_seq_id(
+                            seq_id,
+                            visible_seq_sources,
+                            use_visible_filter=use_visible_filter,
+                        )
                     ]
                 )
             candidate_metric_ids = (
@@ -2653,7 +3086,11 @@ def _collect_tier_compare_metrics(
                 else [
                     str(seq_id)
                     for seq_id in score_per_residue.keys()
-                    if _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter)
+                    if _should_include_seq_id(
+                        seq_id,
+                        visible_seq_sources,
+                        use_visible_filter=use_visible_filter,
+                    )
                 ]
             )
             for seq_id in candidate_metric_ids:
@@ -2688,7 +3125,9 @@ def _collect_tier_compare_metrics(
                 "rmsd_median": _median(candidate_rmsd),
                 "relax_candidate_total": relax_candidate_total,
                 "relax_selected_total": relax_selected_total,
-                "relax_pass_rate": _safe_ratio(relax_selected_total, relax_candidate_total),
+                "relax_pass_rate": _safe_ratio(
+                    relax_selected_total, relax_candidate_total
+                ),
                 "relax_median": _median(candidate_relax),
             }
         )
@@ -2708,13 +3147,17 @@ def _metric_delta(design_value: float | None, wt_value: float | None) -> float |
     return float(design_value - wt_value)
 
 
-def _design_rmsd_values_for_wt_compare(design_metrics: dict[str, object]) -> list[float]:
+def _design_rmsd_values_for_wt_compare(
+    design_metrics: dict[str, object],
+) -> list[float]:
     target_rmsd_raw = (
         design_metrics.get("af2_target_rmsd")
         if isinstance(design_metrics.get("af2_target_rmsd"), list)
         else []
     )
-    target_rmsd_values = [float(v) for v in target_rmsd_raw if isinstance(v, (int, float))]
+    target_rmsd_values = [
+        float(v) for v in target_rmsd_raw if isinstance(v, (int, float))
+    ]
     if target_rmsd_values:
         return target_rmsd_values
     rmsd_raw = (
@@ -2735,7 +3178,9 @@ def _build_comparison_summary(
     hide_target = _should_hide_target_source(summary, run_root=run_root)
     design_metrics = _collect_design_metrics(run_root, summary, hide_target=hide_target)
     source_metrics = _collect_source_metrics(run_root, summary, hide_target=hide_target)
-    tier_compare = _collect_tier_compare_metrics(run_root, summary, hide_target=hide_target)
+    tier_compare = _collect_tier_compare_metrics(
+        run_root, summary, hide_target=hide_target
+    )
     diversity = _build_diversity_summary(request=request, summary=summary)
 
     wt_enabled = bool(request.get("wt_compare")) if isinstance(request, dict) else False
@@ -2745,9 +3190,19 @@ def _build_comparison_summary(
     wt_relax: float | None = None
 
     if isinstance(wt_metrics, dict):
-        wt_sol = wt_metrics.get("soluprot") if isinstance(wt_metrics.get("soluprot"), dict) else None
-        wt_af2 = wt_metrics.get("af2") if isinstance(wt_metrics.get("af2"), dict) else None
-        wt_relax_metric = wt_metrics.get("relax") if isinstance(wt_metrics.get("relax"), dict) else None
+        wt_sol = (
+            wt_metrics.get("soluprot")
+            if isinstance(wt_metrics.get("soluprot"), dict)
+            else None
+        )
+        wt_af2 = (
+            wt_metrics.get("af2") if isinstance(wt_metrics.get("af2"), dict) else None
+        )
+        wt_relax_metric = (
+            wt_metrics.get("relax")
+            if isinstance(wt_metrics.get("relax"), dict)
+            else None
+        )
         if isinstance(wt_sol, dict) and not wt_sol.get("skipped"):
             wt_sol_score = _as_float_or_none(wt_sol.get("score"))
         if isinstance(wt_af2, dict) and not wt_af2.get("skipped"):
@@ -2756,7 +3211,11 @@ def _build_comparison_summary(
         if isinstance(wt_relax_metric, dict) and not wt_relax_metric.get("skipped"):
             wt_relax = _as_float_or_none(wt_relax_metric.get("score_per_residue"))
 
-    sol_scores_raw = design_metrics.get("soluprot_scores") if isinstance(design_metrics.get("soluprot_scores"), list) else []
+    sol_scores_raw = (
+        design_metrics.get("soluprot_scores")
+        if isinstance(design_metrics.get("soluprot_scores"), list)
+        else []
+    )
     sol_scores = [float(v) for v in sol_scores_raw if isinstance(v, (int, float))]
     design_sol_median = _median(sol_scores) if sol_scores else None
     sol_total = int(design_metrics.get("soluprot_total") or 0)
@@ -2782,7 +3241,9 @@ def _build_comparison_summary(
     rmsd_values = [float(v) for v in rmsd_raw if isinstance(v, (int, float))]
     wt_compare_rmsd_values = _design_rmsd_values_for_wt_compare(design_metrics)
     design_rmsd_median = _median(rmsd_values) if rmsd_values else None
-    wt_compare_rmsd_median = _median(wt_compare_rmsd_values) if wt_compare_rmsd_values else None
+    wt_compare_rmsd_median = (
+        _median(wt_compare_rmsd_values) if wt_compare_rmsd_values else None
+    )
     relax_raw = (
         design_metrics.get("relax_score_per_residue")
         if isinstance(design_metrics.get("relax_score_per_residue"), list)
@@ -2798,7 +3259,9 @@ def _build_comparison_summary(
             "delta_design_minus_wt": _metric_delta(design_sol_median, wt_sol_score),
             "design_total": sol_total,
             "design_passed": sol_passed,
-            "design_pass_rate": (float(sol_passed) / float(sol_total)) if sol_total > 0 else None,
+            "design_pass_rate": (float(sol_passed) / float(sol_total))
+            if sol_total > 0
+            else None,
         },
         "plddt": {
             "wt": wt_plddt,
@@ -2818,7 +3281,9 @@ def _build_comparison_summary(
             "delta_design_minus_wt": _metric_delta(design_relax_median, wt_relax),
             "design_total": relax_candidate_total,
             "design_selected": relax_selected_total,
-            "design_pass_rate": _safe_ratio(relax_selected_total, relax_candidate_total),
+            "design_pass_rate": _safe_ratio(
+                relax_selected_total, relax_candidate_total
+            ),
         },
     }
 
@@ -2832,13 +3297,19 @@ def _build_comparison_summary(
         if not isinstance(bucket, dict):
             continue
         source_sol_scores = (
-            bucket.get("soluprot_scores") if isinstance(bucket.get("soluprot_scores"), list) else []
+            bucket.get("soluprot_scores")
+            if isinstance(bucket.get("soluprot_scores"), list)
+            else []
         )
         source_plddt_values = (
-            bucket.get("af2_candidate_plddt") if isinstance(bucket.get("af2_candidate_plddt"), list) else []
+            bucket.get("af2_candidate_plddt")
+            if isinstance(bucket.get("af2_candidate_plddt"), list)
+            else []
         )
         source_rmsd_values = (
-            bucket.get("af2_candidate_rmsd") if isinstance(bucket.get("af2_candidate_rmsd"), list) else []
+            bucket.get("af2_candidate_rmsd")
+            if isinstance(bucket.get("af2_candidate_rmsd"), list)
+            else []
         )
         source_relax_values = (
             bucket.get("relax_candidate_score_per_residue")
@@ -2855,9 +3326,15 @@ def _build_comparison_summary(
         observed_src = int(bucket.get("observed_count") or 0)
         materialized_src = int(bucket.get("materialized_count") or 0)
         propagated_src = int(bucket.get("propagated_count") or 0)
-        backbone_src = propagated_src if propagated_src > 0 else int(bucket.get("backbone_count") or 0)
+        backbone_src = (
+            propagated_src
+            if propagated_src > 0
+            else int(bucket.get("backbone_count") or 0)
+        )
         propagation_mode = str(bucket.get("propagation_mode") or "").strip()
-        selected_backbone_id = str(bucket.get("selected_backbone_id") or "").strip() or None
+        selected_backbone_id = (
+            str(bucket.get("selected_backbone_id") or "").strip() or None
+        )
         source_compare[source_key] = {
             "backbone_count": backbone_src,
             "requested_count": requested_src,
@@ -2929,7 +3406,11 @@ def _build_comparison_summary(
         bucket = source_metrics.get(source_key)
         if isinstance(bucket, dict):
             propagated_count = int(bucket.get("propagated_count") or 0)
-            backbone_total += propagated_count if propagated_count > 0 else int(bucket.get("backbone_count") or 0)
+            backbone_total += (
+                propagated_count
+                if propagated_count > 0
+                else int(bucket.get("backbone_count") or 0)
+            )
 
     funnel = {
         "overall": {
@@ -3124,17 +3605,27 @@ def _collect_runpod_jobs(run_root: Path) -> list[dict[str, str]]:
 def _runpod_admin_service(runner: PipelineRunner):
     service = build_runpod_admin_service(runner)
     if service is None:
-        raise ValueError("RunPod admin is unavailable: no RunPod-backed endpoints are configured")
+        raise ValueError(
+            "RunPod admin is unavailable: no RunPod-backed endpoints are configured"
+        )
     return service
 
 
-def _runpod_list_endpoints_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _runpod_list_endpoints_tool(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     service = _runpod_admin_service(runner)
     include_workers = _as_bool(arguments.get("include_workers"), False)
     managed_only = _as_bool(arguments.get("managed_only"), False)
     result = service.list_endpoints(include_workers=include_workers)
-    endpoints = result.get("endpoints") if isinstance(result.get("endpoints"), list) else []
-    visible = [item for item in endpoints if isinstance(item, dict) and (not managed_only or bool(item.get("managed")))]
+    endpoints = (
+        result.get("endpoints") if isinstance(result.get("endpoints"), list) else []
+    )
+    visible = [
+        item
+        for item in endpoints
+        if isinstance(item, dict) and (not managed_only or bool(item.get("managed")))
+    ]
     summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
     visible_summary = {
         **summary,
@@ -3149,7 +3640,9 @@ def _runpod_list_endpoints_tool(runner: PipelineRunner, arguments: dict[str, Any
     }
 
 
-def _runpod_get_endpoint_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _runpod_get_endpoint_tool(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     service = _runpod_admin_service(runner)
     endpoint_id = str(arguments.get("endpoint_id") or "").strip()
     if not endpoint_id:
@@ -3158,7 +3651,9 @@ def _runpod_get_endpoint_tool(runner: PipelineRunner, arguments: dict[str, Any])
     return service.get_endpoint(endpoint_id, include_workers=include_workers)
 
 
-def _runpod_update_endpoint_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _runpod_update_endpoint_tool(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     service = _runpod_admin_service(runner)
     endpoint_id = str(arguments.get("endpoint_id") or "").strip()
     if not endpoint_id:
@@ -3167,7 +3662,9 @@ def _runpod_update_endpoint_tool(runner: PipelineRunner, arguments: dict[str, An
     return service.update_endpoint(endpoint_id, patch)
 
 
-def _runpod_list_billing_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _runpod_list_billing_tool(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     service = _runpod_admin_service(runner)
     endpoint_id = str(arguments.get("endpoint_id") or "").strip() or None
     days = _as_int(arguments.get("days"), 7)
@@ -3183,12 +3680,18 @@ def _runpod_list_billing_tool(runner: PipelineRunner, arguments: dict[str, Any])
     )
 
 
-def _runpod_get_history_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _runpod_get_history_tool(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     service = _runpod_admin_service(runner)
     endpoint_id = str(arguments.get("endpoint_id") or "").strip() or None
     days = _as_int(arguments.get("days"), 7)
-    usage_resolution = str(arguments.get("usage_resolution") or "auto").strip().lower() or "auto"
-    billing_resolution = str(arguments.get("billing_resolution") or "auto").strip().lower() or "auto"
+    usage_resolution = (
+        str(arguments.get("usage_resolution") or "auto").strip().lower() or "auto"
+    )
+    billing_resolution = (
+        str(arguments.get("billing_resolution") or "auto").strip().lower() or "auto"
+    )
     start_time = str(arguments.get("start_time") or "").strip() or None
     end_time = str(arguments.get("end_time") or "").strip() or None
     limit = _as_int(arguments.get("limit"), 120)
@@ -3201,6 +3704,98 @@ def _runpod_get_history_tool(runner: PipelineRunner, arguments: dict[str, Any]) 
         end_time=end_time,
         limit=max(limit, 1),
     )
+
+
+def _cath_get_batch_overview_tool(
+    runner: PipelineRunner,
+    arguments: dict[str, Any],
+) -> dict[str, Any]:
+    item_limit = max(1, _as_int(arguments.get("item_limit"), 200))
+    return summarize_all_subsets(runner.output_root, item_limit=item_limit)
+
+
+def _cath_launch_batch_tool(
+    runner: PipelineRunner,
+    arguments: dict[str, Any],
+) -> dict[str, Any]:
+    subset = str(arguments.get("subset") or "").strip().lower()
+    keep_local = _as_bool(arguments.get("keep_local"), False)
+    stop_on_error = _as_bool(arguments.get("stop_on_error"), False)
+    max_workers = arguments.get("max_workers")
+    launch = launch_cath_batch_job(
+        runner.output_root,
+        subset=subset,
+        keep_local=keep_local,
+        stop_on_error=stop_on_error,
+        max_workers=(
+            max(1, int(max_workers))
+            if isinstance(max_workers, (int, float)) or str(max_workers or "").strip()
+            else None
+        ),
+    )
+    return {"job": launch}
+
+
+def _cath_launch_training_tool(
+    runner: PipelineRunner,
+    arguments: dict[str, Any],
+) -> dict[str, Any]:
+    raw_subsets = arguments.get("subsets")
+    subsets: list[str] = []
+    if isinstance(raw_subsets, list):
+        subsets = [
+            str(item).strip().lower() for item in raw_subsets if str(item).strip()
+        ]
+    elif raw_subsets is not None:
+        subsets = [str(raw_subsets).strip().lower()]
+    launch = launch_cath_training_job(runner.output_root, subsets=subsets)
+    return {"job": launch}
+
+
+def _cath_list_jobs_tool(
+    runner: PipelineRunner,
+    arguments: dict[str, Any],
+) -> dict[str, Any]:
+    kind = str(arguments.get("kind") or "").strip()
+    limit = max(1, _as_int(arguments.get("limit"), 20))
+    normalized_kind = kind or None
+    if normalized_kind == "batch":
+        normalized_kind = job_kind_batch()
+    elif normalized_kind == "train":
+        normalized_kind = job_kind_train()
+    jobs = list_managed_jobs(runner.output_root, kind=normalized_kind, limit=limit)
+    return {"jobs": jobs}
+
+
+def _cath_get_job_tool(
+    runner: PipelineRunner,
+    arguments: dict[str, Any],
+) -> dict[str, Any]:
+    job_id = str(arguments.get("job_id") or "").strip()
+    if not job_id:
+        raise ValueError("job_id is required")
+    return {"job": read_managed_job(runner.output_root, job_id)}
+
+
+def _cath_read_job_log_tool(
+    runner: PipelineRunner,
+    arguments: dict[str, Any],
+) -> dict[str, Any]:
+    job_id = str(arguments.get("job_id") or "").strip()
+    if not job_id:
+        raise ValueError("job_id is required")
+    max_bytes = max(1, _as_int(arguments.get("max_bytes"), 120_000))
+    return read_managed_job_log(runner.output_root, job_id, max_bytes=max_bytes)
+
+
+def _cath_stop_job_tool(
+    runner: PipelineRunner,
+    arguments: dict[str, Any],
+) -> dict[str, Any]:
+    job_id = str(arguments.get("job_id") or "").strip()
+    if not job_id:
+        raise ValueError("job_id is required")
+    return stop_managed_job(runner.output_root, job_id)
 
 
 def _client_cancel_info(client: object | None) -> tuple[object, str] | None:
@@ -3240,16 +3835,28 @@ def _mask_consensus_report_lines(
     none_label = "없음" if is_ko else "none"
     lines: list[str] = []
     lines.append("## 마스킹 합의" if is_ko else "## Mask Consensus")
-    lines.append(f"- ProteinMPNN 적용 여부: {'yes' if enabled else 'no'}" if is_ko else f"- Applied to ProteinMPNN: {'yes' if enabled else 'no'}")
+    lines.append(
+        f"- ProteinMPNN 적용 여부: {'yes' if enabled else 'no'}"
+        if is_ko
+        else f"- Applied to ProteinMPNN: {'yes' if enabled else 'no'}"
+    )
 
     if payload is None:
-        lines.append("- 마스킹 합의 데이터가 아직 없습니다." if is_ko else "- Mask consensus data not available yet.")
+        lines.append(
+            "- 마스킹 합의 데이터가 아직 없습니다."
+            if is_ko
+            else "- Mask consensus data not available yet."
+        )
         lines.append("")
         return lines
 
     consensus = payload.get("consensus") if isinstance(payload, dict) else None
     if not isinstance(consensus, dict):
-        lines.append("- 마스킹 합의 데이터가 올바르지 않습니다." if is_ko else "- Mask consensus data invalid.")
+        lines.append(
+            "- 마스킹 합의 데이터가 올바르지 않습니다."
+            if is_ko
+            else "- Mask consensus data invalid."
+        )
         lines.append("")
         return lines
 
@@ -3265,22 +3872,38 @@ def _mask_consensus_report_lines(
         label = "참고" if is_ko else "Note"
         lines.append(f"- {label}: {note.strip()}")
 
-    fixed_query = consensus.get("fixed_positions_query_by_tier") if isinstance(consensus.get("fixed_positions_query_by_tier"), dict) else {}
-    fixed_by_tier = consensus.get("fixed_positions_by_tier") if isinstance(consensus.get("fixed_positions_by_tier"), dict) else {}
+    fixed_query = (
+        consensus.get("fixed_positions_query_by_tier")
+        if isinstance(consensus.get("fixed_positions_query_by_tier"), dict)
+        else {}
+    )
+    fixed_by_tier = (
+        consensus.get("fixed_positions_by_tier")
+        if isinstance(consensus.get("fixed_positions_by_tier"), dict)
+        else {}
+    )
 
     tier_keys = _sort_tier_keys(list(fixed_query.keys()) + list(fixed_by_tier.keys()))
     if not tier_keys:
-        lines.append("- 서열 보존율별 합의: 없음" if is_ko else "- Sequence-conservation consensus: none")
+        lines.append(
+            "- 서열 보존율별 합의: 없음"
+            if is_ko
+            else "- Sequence-conservation consensus: none"
+        )
         lines.append("")
         return lines
 
-    lines.append("- 서열 보존율별 합의:" if is_ko else "- Sequence-conservation consensus:")
+    lines.append(
+        "- 서열 보존율별 합의:" if is_ko else "- Sequence-conservation consensus:"
+    )
     for tier_key in tier_keys:
         query_positions = _normalize_positions(fixed_query.get(tier_key))
         chain_positions = _normalize_chain_positions(fixed_by_tier.get(tier_key))
         applied_positions: dict[str, list[int]] = {}
         if enabled:
-            applied_payload = _load_json_file(run_root / "tiers" / str(tier_key) / "fixed_positions.json")
+            applied_payload = _load_json_file(
+                run_root / "tiers" / str(tier_key) / "fixed_positions.json"
+            )
             applied_positions = _normalize_chain_positions(applied_payload)
 
         segments: list[str] = []
@@ -3315,7 +3938,10 @@ def _mask_consensus_report_lines(
 
         if not segments:
             segments.append("데이터 없음" if is_ko else "no data")
-        lines.append(f"  - {_format_conservation_tier_label(tier_key, lang=lang)}: " + "; ".join(segments))
+        lines.append(
+            f"  - {_format_conservation_tier_label(tier_key, lang=lang)}: "
+            + "; ".join(segments)
+        )
     lines.append("")
     return lines
 
@@ -3381,7 +4007,9 @@ def _propagation_mode_label(mode: object, *, lang: str = "en") -> str:
     return pair[1] if is_ko else pair[0]
 
 
-def _source_usage_summary_text(source: str, bucket: dict[str, object], *, lang: str = "en") -> str | None:
+def _source_usage_summary_text(
+    source: str, bucket: dict[str, object], *, lang: str = "en"
+) -> str | None:
     if not isinstance(bucket, dict):
         return None
     is_ko = str(lang).lower().startswith("ko")
@@ -3391,9 +4019,22 @@ def _source_usage_summary_text(source: str, bucket: dict[str, object], *, lang: 
     used = int(bucket.get("propagated_count") or bucket.get("backbone_count") or 0)
     mode = _propagation_mode_label(bucket.get("propagation_mode"), lang=lang)
     selected = str(bucket.get("selected_backbone_id") or "").strip()
-    if requested <= 0 and observed <= 0 and materialized <= 0 and used <= 0 and not mode and not selected:
+    if (
+        requested <= 0
+        and observed <= 0
+        and materialized <= 0
+        and used <= 0
+        and not mode
+        and not selected
+    ):
         return None
-    source_name = "RFD3" if source == "rfd3" else "BioEmu" if source == "bioemu" else ("기타" if is_ko else "Other")
+    source_name = (
+        "RFD3"
+        if source == "rfd3"
+        else "BioEmu"
+        if source == "bioemu"
+        else ("기타" if is_ko else "Other")
+    )
     counts_text = (
         f"요청 {requested} · 관측 {observed} · 저장 {materialized} · 사용 {used}"
         if is_ko
@@ -3403,11 +4044,7 @@ def _source_usage_summary_text(source: str, bucket: dict[str, object], *, lang: 
     if mode:
         suffixes.append(mode)
     if selected:
-        suffixes.append(
-            f"selected {selected}"
-            if not is_ko
-            else f"대표 {selected}"
-        )
+        suffixes.append(f"selected {selected}" if not is_ko else f"대표 {selected}")
     detail = f" ({'; '.join(suffixes)})" if suffixes else ""
     return f"{source_name}: {counts_text}{detail}"
 
@@ -3448,11 +4085,21 @@ def _append_source_comparison_lines(
         sol_passed = int(bucket.get("soluprot_passed") or 0)
         af2_candidate_total = int(bucket.get("af2_candidate_total") or 0)
         af2_selected_total = int(bucket.get("af2_selected_total") or 0)
-        sol_scores = bucket.get("soluprot_scores") if isinstance(bucket.get("soluprot_scores"), list) else []
-        plddt_vals = (
-            bucket.get("af2_candidate_plddt") if isinstance(bucket.get("af2_candidate_plddt"), list) else []
+        sol_scores = (
+            bucket.get("soluprot_scores")
+            if isinstance(bucket.get("soluprot_scores"), list)
+            else []
         )
-        rmsd_vals = bucket.get("af2_candidate_rmsd") if isinstance(bucket.get("af2_candidate_rmsd"), list) else []
+        plddt_vals = (
+            bucket.get("af2_candidate_plddt")
+            if isinstance(bucket.get("af2_candidate_plddt"), list)
+            else []
+        )
+        rmsd_vals = (
+            bucket.get("af2_candidate_rmsd")
+            if isinstance(bucket.get("af2_candidate_rmsd"), list)
+            else []
+        )
         if (
             backbone_count <= 0
             and sol_total <= 0
@@ -3473,16 +4120,26 @@ def _append_source_comparison_lines(
                 sol_passed,
                 af2_candidate_total,
                 af2_selected_total,
-                _median([float(x) for x in sol_scores if isinstance(x, (int, float))]) if sol_scores else None,
-                _median([float(x) for x in plddt_vals if isinstance(x, (int, float))]) if plddt_vals else None,
-                _median([float(x) for x in rmsd_vals if isinstance(x, (int, float))]) if rmsd_vals else None,
+                _median([float(x) for x in sol_scores if isinstance(x, (int, float))])
+                if sol_scores
+                else None,
+                _median([float(x) for x in plddt_vals if isinstance(x, (int, float))])
+                if plddt_vals
+                else None,
+                _median([float(x) for x in rmsd_vals if isinstance(x, (int, float))])
+                if rmsd_vals
+                else None,
             )
         )
 
     if not rows:
         return
 
-    lines.append("## 백본 소스 비교 (RFD3 vs BioEmu)" if is_ko else "## Backbone Source Comparison (RFD3 vs BioEmu)")
+    lines.append(
+        "## 백본 소스 비교 (RFD3 vs BioEmu)"
+        if is_ko
+        else "## Backbone Source Comparison (RFD3 vs BioEmu)"
+    )
     lines.append(
         "| Source | Backbones | SoluProt pass | Median SoluProt | ColabFold selected/candidates | Median pLDDT | Median RMSD |"
     )
@@ -3500,11 +4157,19 @@ def _append_source_comparison_lines(
         rmsd_med,
     ) in rows:
         pass_rate = (sol_passed / sol_total) if sol_total else None
-        pass_text = f"{sol_passed}/{sol_total} ({pass_rate:.1%})" if pass_rate is not None else "-"
+        pass_text = (
+            f"{sol_passed}/{sol_total} ({pass_rate:.1%})"
+            if pass_rate is not None
+            else "-"
+        )
         sol_text = f"{sol_med:.3f}" if sol_med is not None else "-"
         plddt_text = f"{plddt_med:.1f}" if plddt_med is not None else "-"
         rmsd_text = f"{rmsd_med:.2f}" if rmsd_med is not None else "-"
-        af2_text = f"{af2_selected_total}/{af2_candidate_total}" if af2_candidate_total > 0 else str(af2_selected_total)
+        af2_text = (
+            f"{af2_selected_total}/{af2_candidate_total}"
+            if af2_candidate_total > 0
+            else str(af2_selected_total)
+        )
         lines.append(
             f"| {source_names.get(source, source)} | {backbone_count} | {pass_text} | {sol_text} | {af2_text} | {plddt_text} | {rmsd_text} |"
         )
@@ -3519,25 +4184,65 @@ def _append_source_comparison_lines(
         for usage in usage_rows:
             lines.append(f"  - {usage}")
 
-    rfd3_bucket = source_metrics.get("rfd3") if isinstance(source_metrics.get("rfd3"), dict) else {}
-    bioemu_bucket = source_metrics.get("bioemu") if isinstance(source_metrics.get("bioemu"), dict) else {}
-    rfd3_total = int(rfd3_bucket.get("soluprot_total") or 0) if isinstance(rfd3_bucket, dict) else 0
-    bioemu_total = int(bioemu_bucket.get("soluprot_total") or 0) if isinstance(bioemu_bucket, dict) else 0
-    rfd3_passed = int(rfd3_bucket.get("soluprot_passed") or 0) if isinstance(rfd3_bucket, dict) else 0
-    bioemu_passed = int(bioemu_bucket.get("soluprot_passed") or 0) if isinstance(bioemu_bucket, dict) else 0
-    rfd3_af2 = int(rfd3_bucket.get("af2_selected_total") or 0) if isinstance(rfd3_bucket, dict) else 0
-    bioemu_af2 = int(bioemu_bucket.get("af2_selected_total") or 0) if isinstance(bioemu_bucket, dict) else 0
+    rfd3_bucket = (
+        source_metrics.get("rfd3")
+        if isinstance(source_metrics.get("rfd3"), dict)
+        else {}
+    )
+    bioemu_bucket = (
+        source_metrics.get("bioemu")
+        if isinstance(source_metrics.get("bioemu"), dict)
+        else {}
+    )
+    rfd3_total = (
+        int(rfd3_bucket.get("soluprot_total") or 0)
+        if isinstance(rfd3_bucket, dict)
+        else 0
+    )
+    bioemu_total = (
+        int(bioemu_bucket.get("soluprot_total") or 0)
+        if isinstance(bioemu_bucket, dict)
+        else 0
+    )
+    rfd3_passed = (
+        int(rfd3_bucket.get("soluprot_passed") or 0)
+        if isinstance(rfd3_bucket, dict)
+        else 0
+    )
+    bioemu_passed = (
+        int(bioemu_bucket.get("soluprot_passed") or 0)
+        if isinstance(bioemu_bucket, dict)
+        else 0
+    )
+    rfd3_af2 = (
+        int(rfd3_bucket.get("af2_selected_total") or 0)
+        if isinstance(rfd3_bucket, dict)
+        else 0
+    )
+    bioemu_af2 = (
+        int(bioemu_bucket.get("af2_selected_total") or 0)
+        if isinstance(bioemu_bucket, dict)
+        else 0
+    )
     if rfd3_total > 0 or bioemu_total > 0:
         rfd3_rate = (rfd3_passed / rfd3_total) if rfd3_total else 0.0
         bioemu_rate = (bioemu_passed / bioemu_total) if bioemu_total else 0.0
         lines.append("- SoluProt 통과율 바:" if is_ko else "- SoluProt pass-rate bars:")
         lines.append(f"  - RFD3 {_ascii_bar(rfd3_rate, max_value=1.0)} {rfd3_rate:.1%}")
-        lines.append(f"  - BioEmu {_ascii_bar(bioemu_rate, max_value=1.0)} {bioemu_rate:.1%}")
+        lines.append(
+            f"  - BioEmu {_ascii_bar(bioemu_rate, max_value=1.0)} {bioemu_rate:.1%}"
+        )
     if rfd3_af2 > 0 or bioemu_af2 > 0:
         max_af2 = float(max(rfd3_af2, bioemu_af2, 1))
-        lines.append("- ColabFold 선발 개수 바:" if is_ko else "- ColabFold selected-count bars:")
-        lines.append(f"  - RFD3 {_ascii_bar(float(rfd3_af2), max_value=max_af2)} {rfd3_af2}")
-        lines.append(f"  - BioEmu {_ascii_bar(float(bioemu_af2), max_value=max_af2)} {bioemu_af2}")
+        lines.append(
+            "- ColabFold 선발 개수 바:" if is_ko else "- ColabFold selected-count bars:"
+        )
+        lines.append(
+            f"  - RFD3 {_ascii_bar(float(rfd3_af2), max_value=max_af2)} {rfd3_af2}"
+        )
+        lines.append(
+            f"  - BioEmu {_ascii_bar(float(bioemu_af2), max_value=max_af2)} {bioemu_af2}"
+        )
     lines.append("")
 
 
@@ -3550,21 +4255,39 @@ def _append_extended_comparison_lines(
     if not isinstance(comparison_summary, dict):
         return
     is_ko = str(lang).lower().startswith("ko")
-    funnel = comparison_summary.get("funnel") if isinstance(comparison_summary.get("funnel"), dict) else {}
-    overall = funnel.get("overall") if isinstance(funnel.get("overall"), dict) else {}
-    by_source = funnel.get("by_source") if isinstance(funnel.get("by_source"), dict) else {}
-    tier_rows = comparison_summary.get("tier_compare") if isinstance(comparison_summary.get("tier_compare"), list) else []
-    distributions = (
-        comparison_summary.get("distributions") if isinstance(comparison_summary.get("distributions"), dict) else {}
+    funnel = (
+        comparison_summary.get("funnel")
+        if isinstance(comparison_summary.get("funnel"), dict)
+        else {}
     )
-    diversity = comparison_summary.get("diversity") if isinstance(comparison_summary.get("diversity"), dict) else {}
+    overall = funnel.get("overall") if isinstance(funnel.get("overall"), dict) else {}
+    by_source = (
+        funnel.get("by_source") if isinstance(funnel.get("by_source"), dict) else {}
+    )
+    tier_rows = (
+        comparison_summary.get("tier_compare")
+        if isinstance(comparison_summary.get("tier_compare"), list)
+        else []
+    )
+    distributions = (
+        comparison_summary.get("distributions")
+        if isinstance(comparison_summary.get("distributions"), dict)
+        else {}
+    )
+    diversity = (
+        comparison_summary.get("diversity")
+        if isinstance(comparison_summary.get("diversity"), dict)
+        else {}
+    )
     if not overall and not tier_rows and not distributions and not diversity:
         return
 
     def _pct(value: object) -> str:
         return f"{float(value):.1%}" if isinstance(value, (int, float)) else "-"
 
-    lines.append("## 확장 비교 하이라이트" if is_ko else "## Extended Comparison Highlights")
+    lines.append(
+        "## 확장 비교 하이라이트" if is_ko else "## Extended Comparison Highlights"
+    )
 
     backbones = int(overall.get("backbone_count") or 0)
     sol_passed = int(overall.get("soluprot_passed") or 0)
@@ -3595,13 +4318,23 @@ def _append_extended_comparison_lines(
         lines.append("| Source | Backbones | SoluProt pass | ColabFold pass |")
         lines.append("|---|---:|---:|---:|")
         for source, bucket in rows:
-            source_name = "RFD3" if source == "rfd3" else "BioEmu" if source == "bioemu" else ("기타" if is_ko else "Other")
+            source_name = (
+                "RFD3"
+                if source == "rfd3"
+                else "BioEmu"
+                if source == "bioemu"
+                else ("기타" if is_ko else "Other")
+            )
             sol_txt = f"{int(bucket.get('soluprot_passed') or 0)}/{int(bucket.get('soluprot_total') or 0)} ({_pct(bucket.get('soluprot_pass_rate'))})"
             af2_txt = f"{int(bucket.get('af2_selected_total') or 0)}/{int(bucket.get('af2_candidate_total') or 0)} ({_pct(bucket.get('af2_pass_rate'))})"
-            lines.append(f"| {source_name} | {int(bucket.get('backbone_count') or 0)} | {sol_txt} | {af2_txt} |")
+            lines.append(
+                f"| {source_name} | {int(bucket.get('backbone_count') or 0)} | {sol_txt} | {af2_txt} |"
+            )
 
     if tier_rows:
-        lines.append("- Sequence-conservation summary:" if not is_ko else "- 서열 보존율별 요약:")
+        lines.append(
+            "- Sequence-conservation summary:" if not is_ko else "- 서열 보존율별 요약:"
+        )
         lines.append(
             "| Sequence conservation | Designs | SoluProt pass | ColabFold pass | Median pLDDT | Median RMSD |"
             if not is_ko
@@ -3616,7 +4349,9 @@ def _append_extended_comparison_lines(
             af2_txt = f"{int(row.get('af2_selected_total') or 0)}/{int(row.get('af2_candidate_total') or 0)} ({_pct(row.get('af2_pass_rate'))})"
             plddt = row.get("plddt_median")
             rmsd = row.get("rmsd_median")
-            plddt_txt = f"{float(plddt):.1f}" if isinstance(plddt, (int, float)) else "-"
+            plddt_txt = (
+                f"{float(plddt):.1f}" if isinstance(plddt, (int, float)) else "-"
+            )
             rmsd_txt = f"{float(rmsd):.2f}" if isinstance(rmsd, (int, float)) else "-"
             lines.append(
                 f"| {tier_text} | {int(row.get('design_total') or 0)} | {sol_txt} | {af2_txt} | {plddt_txt} | {rmsd_txt} |"
@@ -3628,9 +4363,9 @@ def _append_extended_comparison_lines(
         return (
             f"- {name}: n={int(metric.get('count') or 0)} "
             f"P10/P50/P90="
-            f"{(f'{float(metric.get('p10')):.3f}' if isinstance(metric.get('p10'), (int, float)) else '-')}/"
-            f"{(f'{float(metric.get('median')):.3f}' if isinstance(metric.get('median'), (int, float)) else '-')}/"
-            f"{(f'{float(metric.get('p90')):.3f}' if isinstance(metric.get('p90'), (int, float)) else '-')}"
+            f"{(f'{float(metric.get("p10")):.3f}' if isinstance(metric.get('p10'), (int, float)) else '-')}/"
+            f"{(f'{float(metric.get("median")):.3f}' if isinstance(metric.get('median'), (int, float)) else '-')}/"
+            f"{(f'{float(metric.get("p90")):.3f}' if isinstance(metric.get('p90'), (int, float)) else '-')}"
         )
 
     dist_lines = [
@@ -3643,7 +4378,11 @@ def _append_extended_comparison_lines(
         lines.append("- Distribution snapshot:" if not is_ko else "- 분포 요약:")
         lines.extend(dist_lines)
 
-    wt_identity = diversity.get("wt_identity") if isinstance(diversity.get("wt_identity"), dict) else {}
+    wt_identity = (
+        diversity.get("wt_identity")
+        if isinstance(diversity.get("wt_identity"), dict)
+        else {}
+    )
     pairwise = (
         diversity.get("design_pairwise_identity")
         if isinstance(diversity.get("design_pairwise_identity"), dict)
@@ -3734,7 +4473,11 @@ def _format_wt_difference(value: object) -> str:
         return "-"
     diff_count = value.get("wt_diff_count")
     compare_len = value.get("wt_compare_len")
-    if not isinstance(diff_count, (int, float)) or not isinstance(compare_len, (int, float)) or float(compare_len) <= 0:
+    if (
+        not isinstance(diff_count, (int, float))
+        or not isinstance(compare_len, (int, float))
+        or float(compare_len) <= 0
+    ):
         return "-"
     identity_pct = value.get("wt_identity_pct")
     if isinstance(identity_pct, (int, float)):
@@ -3758,13 +4501,21 @@ def _append_report_snapshot_lines(
     if not isinstance(comparison_summary, dict):
         return
     is_ko = str(lang).lower().startswith("ko")
-    funnel = comparison_summary.get("funnel") if isinstance(comparison_summary.get("funnel"), dict) else {}
+    funnel = (
+        comparison_summary.get("funnel")
+        if isinstance(comparison_summary.get("funnel"), dict)
+        else {}
+    )
     overall = funnel.get("overall") if isinstance(funnel.get("overall"), dict) else {}
     distributions = (
-        comparison_summary.get("distributions") if isinstance(comparison_summary.get("distributions"), dict) else {}
+        comparison_summary.get("distributions")
+        if isinstance(comparison_summary.get("distributions"), dict)
+        else {}
     )
     wt_vs_design = (
-        comparison_summary.get("wt_vs_design") if isinstance(comparison_summary.get("wt_vs_design"), dict) else {}
+        comparison_summary.get("wt_vs_design")
+        if isinstance(comparison_summary.get("wt_vs_design"), dict)
+        else {}
     )
     if not overall and not distributions and not wt_vs_design:
         return
@@ -3804,9 +4555,19 @@ def _append_report_snapshot_lines(
             f"{int(overall.get('af2_candidate_total') or 0)} ({_format_ratio(overall.get('af2_pass_rate'))})"
         )
     )
-    sol_dist = distributions.get("soluprot") if isinstance(distributions.get("soluprot"), dict) else {}
-    plddt_dist = distributions.get("plddt") if isinstance(distributions.get("plddt"), dict) else {}
-    rmsd_dist = distributions.get("rmsd") if isinstance(distributions.get("rmsd"), dict) else {}
+    sol_dist = (
+        distributions.get("soluprot")
+        if isinstance(distributions.get("soluprot"), dict)
+        else {}
+    )
+    plddt_dist = (
+        distributions.get("plddt")
+        if isinstance(distributions.get("plddt"), dict)
+        else {}
+    )
+    rmsd_dist = (
+        distributions.get("rmsd") if isinstance(distributions.get("rmsd"), dict) else {}
+    )
     lines.append(
         (
             "- 중앙값: "
@@ -3838,13 +4599,19 @@ def _append_report_snapshot_lines(
         else None
     )
     if any(isinstance(v, (int, float)) for v in [sol_delta, plddt_delta, rmsd_delta]):
-        sol_text = f"{float(sol_delta):+.3f}" if isinstance(sol_delta, (int, float)) else "-"
-        plddt_text = f"{float(plddt_delta):+.1f}" if isinstance(plddt_delta, (int, float)) else "-"
-        rmsd_text = f"{float(rmsd_delta):+.2f}" if isinstance(rmsd_delta, (int, float)) else "-"
+        sol_text = (
+            f"{float(sol_delta):+.3f}" if isinstance(sol_delta, (int, float)) else "-"
+        )
+        plddt_text = (
+            f"{float(plddt_delta):+.1f}"
+            if isinstance(plddt_delta, (int, float))
+            else "-"
+        )
+        rmsd_text = (
+            f"{float(rmsd_delta):+.2f}" if isinstance(rmsd_delta, (int, float)) else "-"
+        )
         lines.append(
-            (
-                f"- WT 대비 Δ: SoluProt={sol_text}, pLDDT={plddt_text}, RMSD={rmsd_text}"
-            )
+            (f"- WT 대비 Δ: SoluProt={sol_text}, pLDDT={plddt_text}, RMSD={rmsd_text}")
             if is_ko
             else (
                 f"- Δ vs WT: SoluProt={sol_text}, pLDDT={plddt_text}, RMSD={rmsd_text}"
@@ -3887,7 +4654,11 @@ def _append_top_hit_lines(
     )
     lines.append("## 주요 후보 (Hit List)" if is_ko else "## Top Candidate Hit List")
     if not rows:
-        lines.append("- 후보 점수 데이터를 계산할 수 없습니다." if is_ko else "- Candidate ranking data is not available.")
+        lines.append(
+            "- 후보 점수 데이터를 계산할 수 없습니다."
+            if is_ko
+            else "- Candidate ranking data is not available."
+        )
         lines.append("")
         return
     stats = _hit_list_stats(rows)
@@ -3970,9 +4741,13 @@ def _build_report_text(
         lines.append(f"- target_pdb: {'yes' if target_pdb else 'no'}")
         lines.append(f"- target_fasta: {'yes' if target_fasta else 'no'}")
         if request.get("start_from"):
-            lines.append(f"- start_from: {_display_pipeline_stage(request.get('start_from'))}")
+            lines.append(
+                f"- start_from: {_display_pipeline_stage(request.get('start_from'))}"
+            )
         if request.get("stop_after"):
-            lines.append(f"- stop_after: {_display_pipeline_stage(request.get('stop_after'))}")
+            lines.append(
+                f"- stop_after: {_display_pipeline_stage(request.get('stop_after'))}"
+            )
         if request.get("design_chains"):
             lines.append(f"- design_chains: {request.get('design_chains')}")
         if request.get("rfd3_contig"):
@@ -3986,7 +4761,9 @@ def _build_report_text(
         if request.get("mmseqs_target_db"):
             lines.append(f"- mmseqs_target_db: {request.get('mmseqs_target_db')}")
         if "wt_compare" in request:
-            lines.append(f"- wt_compare: {'yes' if request.get('wt_compare') else 'no'}")
+            lines.append(
+                f"- wt_compare: {'yes' if request.get('wt_compare') else 'no'}"
+            )
         if "mask_consensus_apply" in request:
             lines.append(
                 f"- mask_consensus_apply: {'yes' if request.get('mask_consensus_apply') else 'no'}"
@@ -4019,12 +4796,12 @@ def _build_report_text(
                 samples = tier.get("proteinmpnn_samples") or []
                 passed = tier.get("passed_ids") or []
                 selected = tier.get("af2_selected_ids") or []
-                visible_seq_sources = _visible_sample_sources(samples, hide_target=hide_target)
+                visible_seq_sources = _visible_sample_sources(
+                    samples, hide_target=hide_target
+                )
                 use_visible_filter = bool(samples)
                 design_count = (
-                    len(visible_seq_sources)
-                    if use_visible_filter
-                    else len(samples)
+                    len(visible_seq_sources) if use_visible_filter else len(samples)
                 )
                 passed_count = len(
                     _filtered_metric_ids(
@@ -4051,13 +4828,19 @@ def _build_report_text(
             lines.append(f"- ligand_mask_path: {summary.get('ligand_mask_path')}")
         lines.append("")
 
-    lines.extend(_mask_consensus_report_lines(run_root=run_root, request=request, lang="en"))
+    lines.extend(
+        _mask_consensus_report_lines(run_root=run_root, request=request, lang="en")
+    )
 
     wt_metrics = _load_wt_metrics(run_root)
     design_metrics = _collect_design_metrics(run_root, summary, hide_target=hide_target)
     source_metrics = _collect_source_metrics(run_root, summary, hide_target=hide_target)
-    comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
-    _append_report_snapshot_lines(lines, comparison_summary=comparison_summary, lang="en")
+    comparison_summary = _build_comparison_summary(
+        run_root=run_root, request=request, summary=summary
+    )
+    _append_report_snapshot_lines(
+        lines, comparison_summary=comparison_summary, lang="en"
+    )
     if wt_metrics or (request and request.get("wt_compare")):
         lines.append("## WT Comparison")
         enabled = bool(request.get("wt_compare")) if request else False
@@ -4092,14 +4875,18 @@ def _build_report_text(
         sol_total = int(design_metrics.get("soluprot_total") or 0)
         sol_passed = int(design_metrics.get("soluprot_passed") or 0)
         if sol_scores and sol_total:
-            sol_median = _median([float(x) for x in sol_scores if isinstance(x, (int, float))])
+            sol_median = _median(
+                [float(x) for x in sol_scores if isinstance(x, (int, float))]
+            )
             if sol_median is not None:
                 design_sol_median = float(sol_median)
             pass_rate = (sol_passed / sol_total) if sol_total else 0.0
             lines.append(
                 f"- Designs SoluProt: median={sol_median:.3f} pass_rate={pass_rate:.1%} ({sol_passed}/{sol_total})"
             )
-            if isinstance(wt_sol, dict) and isinstance(wt_sol.get("score"), (int, float)):
+            if isinstance(wt_sol, dict) and isinstance(
+                wt_sol.get("score"), (int, float)
+            ):
                 delta = float(sol_median) - float(wt_sol.get("score"))
                 lines.append(f"- ΔSoluProt (median - WT): {delta:+.3f}")
         elif sol_total == 0:
@@ -4112,8 +4899,12 @@ def _build_report_text(
                 wt_plddt_val = float(wt_plddt)
             if isinstance(wt_rmsd, (int, float)):
                 wt_rmsd_val = float(wt_rmsd)
-            plddt_text = f"{float(wt_plddt):.1f}" if isinstance(wt_plddt, (int, float)) else "-"
-            rmsd_text = f"{float(wt_rmsd):.2f}" if isinstance(wt_rmsd, (int, float)) else "-"
+            plddt_text = (
+                f"{float(wt_plddt):.1f}" if isinstance(wt_plddt, (int, float)) else "-"
+            )
+            rmsd_text = (
+                f"{float(wt_rmsd):.2f}" if isinstance(wt_rmsd, (int, float)) else "-"
+            )
             lines.append(f"- WT ColabFold: pLDDT={plddt_text} RMSD={rmsd_text}")
         elif isinstance(wt_af2, dict):
             reason = wt_af2.get("reason") or wt_af2.get("error") or "skipped"
@@ -4123,28 +4914,36 @@ def _build_report_text(
         rmsd_vals = _design_rmsd_values_for_wt_compare(design_metrics)
         af2_total = int(design_metrics.get("af2_candidate_total") or 0)
         if plddt_vals:
-            plddt_median = _median([float(x) for x in plddt_vals if isinstance(x, (int, float))])
+            plddt_median = _median(
+                [float(x) for x in plddt_vals if isinstance(x, (int, float))]
+            )
             if plddt_median is not None:
                 design_plddt_median = float(plddt_median)
             plddt_max = max(plddt_vals) if plddt_vals else None
             lines.append(
                 f"- Designs ColabFold pLDDT: median={plddt_median:.1f} max={float(plddt_max):.1f} (n={af2_total})"
             )
-            if isinstance(wt_af2, dict) and isinstance(wt_af2.get("best_plddt"), (int, float)):
+            if isinstance(wt_af2, dict) and isinstance(
+                wt_af2.get("best_plddt"), (int, float)
+            ):
                 delta = float(plddt_median) - float(wt_af2.get("best_plddt"))
                 lines.append(f"- ΔpLDDT (median - WT): {delta:+.1f}")
         else:
             lines.append("- Designs ColabFold pLDDT: not available")
 
         if rmsd_vals:
-            rmsd_median = _median([float(x) for x in rmsd_vals if isinstance(x, (int, float))])
+            rmsd_median = _median(
+                [float(x) for x in rmsd_vals if isinstance(x, (int, float))]
+            )
             if rmsd_median is not None:
                 design_rmsd_median = float(rmsd_median)
             rmsd_min = min(rmsd_vals) if rmsd_vals else None
             lines.append(
                 f"- Designs RMSD: median={rmsd_median:.2f} min={float(rmsd_min):.2f} (lower is better)"
             )
-            if isinstance(wt_af2, dict) and isinstance(wt_af2.get("rmsd_ca"), (int, float)):
+            if isinstance(wt_af2, dict) and isinstance(
+                wt_af2.get("rmsd_ca"), (int, float)
+            ):
                 delta = float(rmsd_median) - float(wt_af2.get("rmsd_ca"))
                 lines.append(f"- ΔRMSD (median - WT): {delta:+.2f} (lower is better)")
         else:
@@ -4162,14 +4961,20 @@ def _build_report_text(
         lines.append("")
 
     _append_source_comparison_lines(lines, source_metrics=source_metrics, lang="en")
-    _append_extended_comparison_lines(lines, comparison_summary=comparison_summary, lang="en")
-    _append_top_hit_lines(lines, run_root=run_root, request=request, summary=summary, lang="en", top_n=10)
+    _append_extended_comparison_lines(
+        lines, comparison_summary=comparison_summary, lang="en"
+    )
+    _append_top_hit_lines(
+        lines, run_root=run_root, request=request, summary=summary, lang="en", top_n=10
+    )
 
     if agent_items:
         lines.append("## Agent Panel")
         for item in agent_items[-10:]:
             stage = item.get("stage") or "-"
-            consensus = item.get("consensus") if isinstance(item.get("consensus"), dict) else {}
+            consensus = (
+                item.get("consensus") if isinstance(item.get("consensus"), dict) else {}
+            )
             decision = consensus.get("decision") or "-"
             confidence = consensus.get("confidence")
             error = item.get("error")
@@ -4182,9 +4987,15 @@ def _build_report_text(
             actions = consensus.get("actions") if isinstance(consensus, dict) else None
             if isinstance(actions, list) and actions:
                 lines.append(f"  - actions: {'; '.join(str(a) for a in actions)}")
-            interpretations = consensus.get("interpretations") if isinstance(consensus, dict) else None
+            interpretations = (
+                consensus.get("interpretations")
+                if isinstance(consensus, dict)
+                else None
+            )
             if isinstance(interpretations, list) and interpretations:
-                lines.append(f"  - interpretation: {'; '.join(str(a) for a in interpretations)}")
+                lines.append(
+                    f"  - interpretation: {'; '.join(str(a) for a in interpretations)}"
+                )
         lines.append("")
 
         lines.append("## Stage Interpretations")
@@ -4195,8 +5006,12 @@ def _build_report_text(
                 latest_by_stage[stage] = item
         for stage, item in latest_by_stage.items():
             lines.append(f"- {stage}")
-            consensus = item.get("consensus") if isinstance(item.get("consensus"), dict) else {}
-            interpretations = consensus.get("interpretations") if isinstance(consensus, dict) else []
+            consensus = (
+                item.get("consensus") if isinstance(item.get("consensus"), dict) else {}
+            )
+            interpretations = (
+                consensus.get("interpretations") if isinstance(consensus, dict) else []
+            )
             if isinstance(interpretations, list) and interpretations:
                 for text in interpretations:
                     lines.append(f"  - {text}")
@@ -4206,7 +5021,11 @@ def _build_report_text(
             for agent in agents:
                 if not isinstance(agent, dict):
                     continue
-                interp = agent.get("interpretation") if isinstance(agent.get("interpretation"), list) else None
+                interp = (
+                    agent.get("interpretation")
+                    if isinstance(agent.get("interpretation"), list)
+                    else None
+                )
                 if isinstance(interp, list):
                     fallback.extend([str(x) for x in interp if x])
             if fallback:
@@ -4231,7 +5050,11 @@ def _build_report_text(
             reasons = item.get("reasons") or []
             comment = item.get("comment") or ""
             stamp = item.get("created_at") or ""
-            reason_text = ", ".join(str(r) for r in reasons) if isinstance(reasons, list) else str(reasons)
+            reason_text = (
+                ", ".join(str(r) for r in reasons)
+                if isinstance(reasons, list)
+                else str(reasons)
+            )
             line = f"- [{rating}] {reason_text}"
             if comment:
                 line += f" — {comment}"
@@ -4273,7 +5096,9 @@ def _build_report_text(
     elif recommendation == "promising":
         lines.append("- Consider additional experiments or parameter refinements.")
     elif recommendation == "needs_review":
-        lines.append("- Review model outputs, constraints, and consider re-running key stages.")
+        lines.append(
+            "- Review model outputs, constraints, and consider re-running key stages."
+        )
     else:
         lines.append("- Deprioritize or revisit target/constraints before re-running.")
     lines.append("")
@@ -4312,9 +5137,13 @@ def _build_report_text_ko(
         lines.append(f"- target_pdb: {'yes' if target_pdb else 'no'}")
         lines.append(f"- target_fasta: {'yes' if target_fasta else 'no'}")
         if request.get("start_from"):
-            lines.append(f"- start_from: {_display_pipeline_stage(request.get('start_from'))}")
+            lines.append(
+                f"- start_from: {_display_pipeline_stage(request.get('start_from'))}"
+            )
         if request.get("stop_after"):
-            lines.append(f"- stop_after: {_display_pipeline_stage(request.get('stop_after'))}")
+            lines.append(
+                f"- stop_after: {_display_pipeline_stage(request.get('stop_after'))}"
+            )
         if request.get("design_chains"):
             lines.append(f"- design_chains: {request.get('design_chains')}")
         if request.get("rfd3_contig"):
@@ -4328,7 +5157,9 @@ def _build_report_text_ko(
         if request.get("mmseqs_target_db"):
             lines.append(f"- mmseqs_target_db: {request.get('mmseqs_target_db')}")
         if "wt_compare" in request:
-            lines.append(f"- wt_compare: {'yes' if request.get('wt_compare') else 'no'}")
+            lines.append(
+                f"- wt_compare: {'yes' if request.get('wt_compare') else 'no'}"
+            )
         if "mask_consensus_apply" in request:
             lines.append(
                 f"- mask_consensus_apply: {'yes' if request.get('mask_consensus_apply') else 'no'}"
@@ -4361,12 +5192,12 @@ def _build_report_text_ko(
                 samples = tier.get("proteinmpnn_samples") or []
                 passed = tier.get("passed_ids") or []
                 selected = tier.get("af2_selected_ids") or []
-                visible_seq_sources = _visible_sample_sources(samples, hide_target=hide_target)
+                visible_seq_sources = _visible_sample_sources(
+                    samples, hide_target=hide_target
+                )
                 use_visible_filter = bool(samples)
                 design_count = (
-                    len(visible_seq_sources)
-                    if use_visible_filter
-                    else len(samples)
+                    len(visible_seq_sources) if use_visible_filter else len(samples)
                 )
                 passed_count = len(
                     _filtered_metric_ids(
@@ -4393,13 +5224,19 @@ def _build_report_text_ko(
             lines.append(f"- ligand_mask_path: {summary.get('ligand_mask_path')}")
         lines.append("")
 
-    lines.extend(_mask_consensus_report_lines(run_root=run_root, request=request, lang="ko"))
+    lines.extend(
+        _mask_consensus_report_lines(run_root=run_root, request=request, lang="ko")
+    )
 
     wt_metrics = _load_wt_metrics(run_root)
     design_metrics = _collect_design_metrics(run_root, summary, hide_target=hide_target)
     source_metrics = _collect_source_metrics(run_root, summary, hide_target=hide_target)
-    comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
-    _append_report_snapshot_lines(lines, comparison_summary=comparison_summary, lang="ko")
+    comparison_summary = _build_comparison_summary(
+        run_root=run_root, request=request, summary=summary
+    )
+    _append_report_snapshot_lines(
+        lines, comparison_summary=comparison_summary, lang="ko"
+    )
     if wt_metrics or (request and request.get("wt_compare")):
         lines.append("## WT 비교")
         enabled = bool(request.get("wt_compare")) if request else False
@@ -4434,14 +5271,18 @@ def _build_report_text_ko(
         sol_total = int(design_metrics.get("soluprot_total") or 0)
         sol_passed = int(design_metrics.get("soluprot_passed") or 0)
         if sol_scores and sol_total:
-            sol_median = _median([float(x) for x in sol_scores if isinstance(x, (int, float))])
+            sol_median = _median(
+                [float(x) for x in sol_scores if isinstance(x, (int, float))]
+            )
             if sol_median is not None:
                 design_sol_median = float(sol_median)
             pass_rate = (sol_passed / sol_total) if sol_total else 0.0
             lines.append(
                 f"- Designs SoluProt: median={sol_median:.3f} pass_rate={pass_rate:.1%} ({sol_passed}/{sol_total})"
             )
-            if isinstance(wt_sol, dict) and isinstance(wt_sol.get("score"), (int, float)):
+            if isinstance(wt_sol, dict) and isinstance(
+                wt_sol.get("score"), (int, float)
+            ):
                 delta = float(sol_median) - float(wt_sol.get("score"))
                 lines.append(f"- ΔSoluProt (median - WT): {delta:+.3f}")
         elif sol_total == 0:
@@ -4454,8 +5295,12 @@ def _build_report_text_ko(
                 wt_plddt_val = float(wt_plddt)
             if isinstance(wt_rmsd, (int, float)):
                 wt_rmsd_val = float(wt_rmsd)
-            plddt_text = f"{float(wt_plddt):.1f}" if isinstance(wt_plddt, (int, float)) else "-"
-            rmsd_text = f"{float(wt_rmsd):.2f}" if isinstance(wt_rmsd, (int, float)) else "-"
+            plddt_text = (
+                f"{float(wt_plddt):.1f}" if isinstance(wt_plddt, (int, float)) else "-"
+            )
+            rmsd_text = (
+                f"{float(wt_rmsd):.2f}" if isinstance(wt_rmsd, (int, float)) else "-"
+            )
             lines.append(f"- WT ColabFold: pLDDT={plddt_text} RMSD={rmsd_text}")
         elif isinstance(wt_af2, dict):
             reason = wt_af2.get("reason") or wt_af2.get("error") or "skipped"
@@ -4465,28 +5310,36 @@ def _build_report_text_ko(
         rmsd_vals = _design_rmsd_values_for_wt_compare(design_metrics)
         af2_total = int(design_metrics.get("af2_candidate_total") or 0)
         if plddt_vals:
-            plddt_median = _median([float(x) for x in plddt_vals if isinstance(x, (int, float))])
+            plddt_median = _median(
+                [float(x) for x in plddt_vals if isinstance(x, (int, float))]
+            )
             if plddt_median is not None:
                 design_plddt_median = float(plddt_median)
             plddt_max = max(plddt_vals) if plddt_vals else None
             lines.append(
                 f"- Designs ColabFold pLDDT: median={plddt_median:.1f} max={float(plddt_max):.1f} (n={af2_total})"
             )
-            if isinstance(wt_af2, dict) and isinstance(wt_af2.get("best_plddt"), (int, float)):
+            if isinstance(wt_af2, dict) and isinstance(
+                wt_af2.get("best_plddt"), (int, float)
+            ):
                 delta = float(plddt_median) - float(wt_af2.get("best_plddt"))
                 lines.append(f"- ΔpLDDT (median - WT): {delta:+.1f}")
         else:
             lines.append("- Designs ColabFold pLDDT: not available")
 
         if rmsd_vals:
-            rmsd_median = _median([float(x) for x in rmsd_vals if isinstance(x, (int, float))])
+            rmsd_median = _median(
+                [float(x) for x in rmsd_vals if isinstance(x, (int, float))]
+            )
             if rmsd_median is not None:
                 design_rmsd_median = float(rmsd_median)
             rmsd_min = min(rmsd_vals) if rmsd_vals else None
             lines.append(
                 f"- Designs RMSD: median={rmsd_median:.2f} min={float(rmsd_min):.2f} (lower is better)"
             )
-            if isinstance(wt_af2, dict) and isinstance(wt_af2.get("rmsd_ca"), (int, float)):
+            if isinstance(wt_af2, dict) and isinstance(
+                wt_af2.get("rmsd_ca"), (int, float)
+            ):
                 delta = float(rmsd_median) - float(wt_af2.get("rmsd_ca"))
                 lines.append(f"- ΔRMSD (median - WT): {delta:+.2f} (lower is better)")
         else:
@@ -4504,14 +5357,20 @@ def _build_report_text_ko(
         lines.append("")
 
     _append_source_comparison_lines(lines, source_metrics=source_metrics, lang="ko")
-    _append_extended_comparison_lines(lines, comparison_summary=comparison_summary, lang="ko")
-    _append_top_hit_lines(lines, run_root=run_root, request=request, summary=summary, lang="ko", top_n=10)
+    _append_extended_comparison_lines(
+        lines, comparison_summary=comparison_summary, lang="ko"
+    )
+    _append_top_hit_lines(
+        lines, run_root=run_root, request=request, summary=summary, lang="ko", top_n=10
+    )
 
     if agent_items:
         lines.append("## 에이전트 패널")
         for item in agent_items[-10:]:
             stage = item.get("stage") or "-"
-            consensus = item.get("consensus") if isinstance(item.get("consensus"), dict) else {}
+            consensus = (
+                item.get("consensus") if isinstance(item.get("consensus"), dict) else {}
+            )
             decision = consensus.get("decision") or "-"
             confidence = consensus.get("confidence")
             error = item.get("error")
@@ -4524,9 +5383,15 @@ def _build_report_text_ko(
             actions = consensus.get("actions") if isinstance(consensus, dict) else None
             if isinstance(actions, list) and actions:
                 lines.append(f"  - actions: {'; '.join(str(a) for a in actions)}")
-            interpretations = consensus.get("interpretations") if isinstance(consensus, dict) else None
+            interpretations = (
+                consensus.get("interpretations")
+                if isinstance(consensus, dict)
+                else None
+            )
             if isinstance(interpretations, list) and interpretations:
-                lines.append(f"  - interpretation: {'; '.join(str(a) for a in interpretations)}")
+                lines.append(
+                    f"  - interpretation: {'; '.join(str(a) for a in interpretations)}"
+                )
         lines.append("")
 
         lines.append("## 단계 해석")
@@ -4537,8 +5402,14 @@ def _build_report_text_ko(
                 latest_by_stage[stage] = item
         for stage, item in latest_by_stage.items():
             lines.append(f"- {stage}")
-            consensus = item.get("consensus") if isinstance(item.get("consensus"), dict) else {}
-            interpretations = consensus.get("interpretations") if isinstance(consensus.get("interpretations"), list) else []
+            consensus = (
+                item.get("consensus") if isinstance(item.get("consensus"), dict) else {}
+            )
+            interpretations = (
+                consensus.get("interpretations")
+                if isinstance(consensus.get("interpretations"), list)
+                else []
+            )
             if isinstance(interpretations, list) and interpretations:
                 for text in interpretations:
                     lines.append(f"  - {text}")
@@ -4548,7 +5419,11 @@ def _build_report_text_ko(
             for agent in agents:
                 if not isinstance(agent, dict):
                     continue
-                interp = agent.get("interpretation") if isinstance(agent.get("interpretation"), list) else None
+                interp = (
+                    agent.get("interpretation")
+                    if isinstance(agent.get("interpretation"), list)
+                    else None
+                )
                 if isinstance(interp, list):
                     fallback.extend([str(x) for x in interp if x])
             if fallback:
@@ -4573,7 +5448,11 @@ def _build_report_text_ko(
             reasons = item.get("reasons") or []
             comment = item.get("comment") or ""
             stamp = item.get("created_at") or ""
-            reason_text = ", ".join(str(r) for r in reasons) if isinstance(reasons, list) else str(reasons)
+            reason_text = (
+                ", ".join(str(r) for r in reasons)
+                if isinstance(reasons, list)
+                else str(reasons)
+            )
             line = f"- [{rating}] {reason_text}"
             if comment:
                 line += f" — {comment}"
@@ -4624,7 +5503,10 @@ def _build_report_text_ko(
         lines.append("리포트 데이터가 아직 없습니다.")
     return "\n".join(lines).strip() + "\n"
 
-def _generate_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+
+def _generate_report(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     run_id = str(arguments.get("run_id") or "").strip()
     if not run_id:
         raise ValueError("run_id is required")
@@ -4646,9 +5528,15 @@ def _generate_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
             request = raw
 
     status = load_status(runner.output_root, run_id)
-    feedback_items = list_run_events(runner.output_root, run_id, filename="feedback.jsonl", limit=50)
-    experiment_items = list_run_events(runner.output_root, run_id, filename="experiments.jsonl", limit=50)
-    agent_items = list_run_events(runner.output_root, run_id, filename="agent_panel.jsonl", limit=50)
+    feedback_items = list_run_events(
+        runner.output_root, run_id, filename="feedback.jsonl", limit=50
+    )
+    experiment_items = list_run_events(
+        runner.output_root, run_id, filename="experiments.jsonl", limit=50
+    )
+    agent_items = list_run_events(
+        runner.output_root, run_id, filename="agent_panel.jsonl", limit=50
+    )
     feedback_counts = _summarize_feedback(feedback_items)
     experiment_counts = _summarize_experiments(experiment_items)
     score_payload = _score_payload(feedback_counts, experiment_counts)
@@ -4675,7 +5563,9 @@ def _generate_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
         experiment_items=experiment_items,
         agent_items=agent_items,
     )
-    comparison_summary = _build_comparison_summary(run_root=root, request=request, summary=summary)
+    comparison_summary = _build_comparison_summary(
+        run_root=root, request=request, summary=summary
+    )
     write_json(root / "comparisons.json", comparison_summary)
     _save_report_text(runner.output_root, run_id, report_text)
     _save_report_text_ko(runner.output_root, run_id, report_text_ko)
@@ -4691,7 +5581,9 @@ def _generate_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[
         "scoring_config": score_payload.get("scoring_config") or scoring_config(),
         "created_at": _now_iso(),
     }
-    append_run_event(runner.output_root, run_id, filename="report_revisions.jsonl", payload=entry)
+    append_run_event(
+        runner.output_root, run_id, filename="report_revisions.jsonl", payload=entry
+    )
     return {
         "run_id": run_id,
         "report": report_text,
@@ -4714,7 +5606,9 @@ def _save_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str,
     user = _normalize_user(arguments.get("user"))
     source = str(arguments.get("source") or "user").strip()
     _save_report_text(runner.output_root, run_id, content)
-    saved_attachments = _save_report_attachments(runner.output_root, run_id, arguments.get("attachments"))
+    saved_attachments = _save_report_attachments(
+        runner.output_root, run_id, arguments.get("attachments")
+    )
     entry: dict[str, object] = {
         "id": uuid.uuid4().hex,
         "run_id": run_id,
@@ -4725,7 +5619,9 @@ def _save_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str,
     }
     if saved_attachments:
         entry["attachments"] = saved_attachments
-    append_run_event(runner.output_root, run_id, filename="report_revisions.jsonl", payload=entry)
+    append_run_event(
+        runner.output_root, run_id, filename="report_revisions.jsonl", payload=entry
+    )
     out: dict[str, object] = {"run_id": run_id, "report": content}
     if saved_attachments:
         out["attachments"] = saved_attachments
@@ -4745,7 +5641,9 @@ def _get_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, 
             report_ko = report_ko_path.read_text(encoding="utf-8")
         except Exception:
             report_ko = ""
-    revisions = list_run_events(runner.output_root, run_id, filename="report_revisions.jsonl", limit=1)
+    revisions = list_run_events(
+        runner.output_root, run_id, filename="report_revisions.jsonl", limit=1
+    )
     latest = revisions[-1] if revisions else None
     out = {
         "run_id": run_id,
@@ -4758,8 +5656,12 @@ def _get_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, 
             if key in latest:
                 out[key] = latest.get(key)
     if "score" not in out:
-        feedback_items = list_run_events(runner.output_root, run_id, filename="feedback.jsonl", limit=50)
-        experiment_items = list_run_events(runner.output_root, run_id, filename="experiments.jsonl", limit=50)
+        feedback_items = list_run_events(
+            runner.output_root, run_id, filename="feedback.jsonl", limit=50
+        )
+        experiment_items = list_run_events(
+            runner.output_root, run_id, filename="experiments.jsonl", limit=50
+        )
         feedback_counts = _summarize_feedback(feedback_items)
         experiment_counts = _summarize_experiments(experiment_items)
         score_payload = _score_payload(feedback_counts, experiment_counts)
@@ -4787,7 +5689,9 @@ def _get_report(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, 
     return out
 
 
-def _load_run_request_summary(run_root: Path) -> tuple[dict[str, object] | None, dict[str, object] | None]:
+def _load_run_request_summary(
+    run_root: Path,
+) -> tuple[dict[str, object] | None, dict[str, object] | None]:
     request = _load_json_file(run_root / "request.json")
     summary = _load_json_file(run_root / "summary.json")
     return request, summary
@@ -4799,7 +5703,9 @@ def _to_float_or_none(value: object) -> float | None:
     return None
 
 
-def _comparison_snapshot(comparison: dict[str, object] | None) -> dict[str, float | None]:
+def _comparison_snapshot(
+    comparison: dict[str, object] | None,
+) -> dict[str, float | None]:
     if not isinstance(comparison, dict):
         return {
             "soluprot_median": None,
@@ -4810,8 +5716,14 @@ def _comparison_snapshot(comparison: dict[str, object] | None) -> dict[str, floa
             "af2_pass_rate": None,
             "backbone_count": None,
         }
-    wt = comparison.get("wt_vs_design") if isinstance(comparison.get("wt_vs_design"), dict) else {}
-    funnel = comparison.get("funnel") if isinstance(comparison.get("funnel"), dict) else {}
+    wt = (
+        comparison.get("wt_vs_design")
+        if isinstance(comparison.get("wt_vs_design"), dict)
+        else {}
+    )
+    funnel = (
+        comparison.get("funnel") if isinstance(comparison.get("funnel"), dict) else {}
+    )
     overall = funnel.get("overall") if isinstance(funnel.get("overall"), dict) else {}
     sol = wt.get("soluprot") if isinstance(wt.get("soluprot"), dict) else {}
     plddt = wt.get("plddt") if isinstance(wt.get("plddt"), dict) else {}
@@ -4844,11 +5756,14 @@ def _compute_comparison_delta(
 def _completeness_flags(comparison: dict[str, object] | None) -> dict[str, object]:
     source = (
         comparison.get("source_compare")
-        if isinstance(comparison, dict) and isinstance(comparison.get("source_compare"), dict)
+        if isinstance(comparison, dict)
+        and isinstance(comparison.get("source_compare"), dict)
         else {}
     )
     funnel = (
-        comparison.get("funnel") if isinstance(comparison, dict) and isinstance(comparison.get("funnel"), dict) else {}
+        comparison.get("funnel")
+        if isinstance(comparison, dict) and isinstance(comparison.get("funnel"), dict)
+        else {}
     )
     overall = funnel.get("overall") if isinstance(funnel.get("overall"), dict) else {}
     rfd3 = source.get("rfd3") if isinstance(source.get("rfd3"), dict) else {}
@@ -4861,7 +5776,9 @@ def _completeness_flags(comparison: dict[str, object] | None) -> dict[str, objec
         "bioemu_only": has_bioemu and not has_rfd3,
         "rfd3_missing": not has_rfd3,
         "bioemu_missing": not has_bioemu,
-        "wt_compare_enabled": bool(comparison.get("wt_compare_enabled")) if isinstance(comparison, dict) else False,
+        "wt_compare_enabled": bool(comparison.get("wt_compare_enabled"))
+        if isinstance(comparison, dict)
+        else False,
         "af2_candidates": int(overall.get("af2_candidate_total") or 0),
         "af2_selected": int(overall.get("af2_selected_total") or 0),
     }
@@ -4963,7 +5880,9 @@ def _build_hit_list_rows(
     hide_target = _should_hide_target_source(summary, run_root=run_root)
     target_sequence = _extract_primary_target_sequence(request, run_root=run_root)
     scored_weight_keys = ("soluprot", "plddt", "rmsd")
-    total_weight = float(sum(max(0.0, float(weights.get(key, 0.0))) for key in scored_weight_keys))
+    total_weight = float(
+        sum(max(0.0, float(weights.get(key, 0.0))) for key in scored_weight_keys)
+    )
     rows: list[dict[str, object]] = []
 
     for tier in tiers:
@@ -4978,7 +5897,11 @@ def _build_hit_list_rows(
             continue
         tier_key = _tier_key(tier_num)
         tier_dir = run_root / "tiers" / tier_key
-        samples = tier.get("proteinmpnn_samples") if isinstance(tier.get("proteinmpnn_samples"), list) else []
+        samples = (
+            tier.get("proteinmpnn_samples")
+            if isinstance(tier.get("proteinmpnn_samples"), list)
+            else []
+        )
         visible_seq_sources = _visible_sample_sources(samples, hide_target=hide_target)
         use_visible_filter = bool(samples)
 
@@ -5069,7 +5992,9 @@ def _build_hit_list_rows(
             seq_id = str(sample.get("id") or "").strip()
             if not seq_id:
                 continue
-            if not _should_include_seq_id(seq_id, visible_seq_sources, use_visible_filter=use_visible_filter):
+            if not _should_include_seq_id(
+                seq_id, visible_seq_sources, use_visible_filter=use_visible_filter
+            ):
                 continue
             sequence = _normalize_sequence(sample.get("sequence"))
             meta = sample.get("meta") if isinstance(sample.get("meta"), dict) else {}
@@ -5084,13 +6009,37 @@ def _build_hit_list_rows(
             rmsd = _hit_list_backbone_rmsd(seq_id)
             target_rmsd = af2_target_rmsd.get(seq_id)
             relax_score = relax_scores.get(seq_id)
-            wt_compare = _sequence_difference_stats(target_sequence or "", sequence) if target_sequence else None
-            wt_identity = wt_compare.get("identity") if isinstance(wt_compare, dict) else None
-            wt_identity_pct = wt_compare.get("identity_pct") if isinstance(wt_compare, dict) else None
-            wt_diff_count = wt_compare.get("difference_count") if isinstance(wt_compare, dict) else None
-            wt_compare_len = wt_compare.get("compare_length") if isinstance(wt_compare, dict) else None
-            wt_diff_ratio = wt_compare.get("difference_ratio") if isinstance(wt_compare, dict) else None
-            wt_diff_pct = wt_compare.get("difference_pct") if isinstance(wt_compare, dict) else None
+            wt_compare = (
+                _sequence_difference_stats(target_sequence or "", sequence)
+                if target_sequence
+                else None
+            )
+            wt_identity = (
+                wt_compare.get("identity") if isinstance(wt_compare, dict) else None
+            )
+            wt_identity_pct = (
+                wt_compare.get("identity_pct") if isinstance(wt_compare, dict) else None
+            )
+            wt_diff_count = (
+                wt_compare.get("difference_count")
+                if isinstance(wt_compare, dict)
+                else None
+            )
+            wt_compare_len = (
+                wt_compare.get("compare_length")
+                if isinstance(wt_compare, dict)
+                else None
+            )
+            wt_diff_ratio = (
+                wt_compare.get("difference_ratio")
+                if isinstance(wt_compare, dict)
+                else None
+            )
+            wt_diff_pct = (
+                wt_compare.get("difference_pct")
+                if isinstance(wt_compare, dict)
+                else None
+            )
             novelty = wt_diff_ratio if isinstance(wt_diff_ratio, (int, float)) else None
 
             component_scores: dict[str, float] = {}
@@ -5099,7 +6048,9 @@ def _build_hit_list_rows(
             if plddt is not None:
                 component_scores["plddt"] = _clamp01(plddt / 100.0)
             if rmsd is not None:
-                component_scores["rmsd"] = 1.0 - _clamp01(rmsd / max(1e-6, float(rmsd_ref)))
+                component_scores["rmsd"] = 1.0 - _clamp01(
+                    rmsd / max(1e-6, float(rmsd_ref))
+                )
             if novelty is not None:
                 component_scores["novelty"] = _clamp01(novelty)
 
@@ -5117,11 +6068,15 @@ def _build_hit_list_rows(
                 weighted_sum += ww * score
             score_norm = (weighted_sum / used_weight) if used_weight > 0 else None
             coverage = (used_weight / total_weight) if total_weight > 0 else 0.0
-            composite_score = (score_norm * 100.0 * coverage) if score_norm is not None else None
+            composite_score = (
+                (score_norm * 100.0 * coverage) if score_norm is not None else None
+            )
 
             ranked_path = tier_dir / "af2" / _safe_id(seq_id) / "ranked_0.pdb"
             ranked_rel = (
-                f"tiers/{tier_key}/af2/{_safe_id(seq_id)}/ranked_0.pdb" if ranked_path.exists() else None
+                f"tiers/{tier_key}/af2/{_safe_id(seq_id)}/ranked_0.pdb"
+                if ranked_path.exists()
+                else None
             )
             rows.append(
                 {
@@ -5169,15 +6124,35 @@ def _build_hit_list_rows(
 
 
 def _hit_list_stats(rows: list[dict[str, object]]) -> dict[str, object]:
-    score_values = [float(row["score"]) for row in rows if isinstance(row.get("score"), (int, float))]
-    plddt_values = [float(row["plddt"]) for row in rows if isinstance(row.get("plddt"), (int, float))]
-    rmsd_values = [float(row["rmsd"]) for row in rows if isinstance(row.get("rmsd"), (int, float))]
-    sol_values = [float(row["soluprot"]) for row in rows if isinstance(row.get("soluprot"), (int, float))]
-    relax_values = [float(row["relax"]) for row in rows if isinstance(row.get("relax"), (int, float))]
+    score_values = [
+        float(row["score"])
+        for row in rows
+        if isinstance(row.get("score"), (int, float))
+    ]
+    plddt_values = [
+        float(row["plddt"])
+        for row in rows
+        if isinstance(row.get("plddt"), (int, float))
+    ]
+    rmsd_values = [
+        float(row["rmsd"]) for row in rows if isinstance(row.get("rmsd"), (int, float))
+    ]
+    sol_values = [
+        float(row["soluprot"])
+        for row in rows
+        if isinstance(row.get("soluprot"), (int, float))
+    ]
+    relax_values = [
+        float(row["relax"])
+        for row in rows
+        if isinstance(row.get("relax"), (int, float))
+    ]
     return {
         "count": len(rows),
         "score_median": _median(score_values),
-        "score_p90": _percentile_from_sorted(sorted(score_values), 0.90) if score_values else None,
+        "score_p90": _percentile_from_sorted(sorted(score_values), 0.90)
+        if score_values
+        else None,
         "plddt_median": _median(plddt_values),
         "rmsd_median": _median(rmsd_values),
         "soluprot_median": _median(sol_values),
@@ -5196,7 +6171,9 @@ def _get_hit_list(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
     min_score = _as_float(arguments.get("min_score"), 0.0)
     rmsd_ref = max(0.1, _as_float(arguments.get("rmsd_ref"), 5.0))
     request, summary = _load_run_request_summary(root)
-    comparison_summary = _build_comparison_summary(run_root=root, request=request, summary=summary)
+    comparison_summary = _build_comparison_summary(
+        run_root=root, request=request, summary=summary
+    )
     weights = _normalize_hit_weights(arguments.get("weights"))
     rows = _build_hit_list_rows(
         run_root=root,
@@ -5209,7 +6186,10 @@ def _get_hit_list(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
         row
         for row in rows
         if (row.get("score") is None and min_score <= 0.0)
-        or (isinstance(row.get("score"), (int, float)) and float(row.get("score")) >= float(min_score))
+        or (
+            isinstance(row.get("score"), (int, float))
+            and float(row.get("score")) >= float(min_score)
+        )
     ]
     sliced = filtered[:limit]
     return {
@@ -5218,7 +6198,9 @@ def _get_hit_list(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
         "weights": weights,
         "min_score": float(min_score),
         "rmsd_ref": float(rmsd_ref),
-        "relax_enabled": bool(request.get("relax_enabled") is True) if isinstance(request, dict) else False,
+        "relax_enabled": bool(request.get("relax_enabled") is True)
+        if isinstance(request, dict)
+        else False,
         "total_rows": len(rows),
         "filtered_rows": len(filtered),
         "rows": sliced,
@@ -5229,8 +6211,8 @@ def _get_hit_list(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
 
 def _csv_escape(value: object) -> str:
     text = str(value if value is not None else "")
-    if any(ch in text for ch in [",", "\"", "\n", "\r"]):
-        return "\"" + text.replace("\"", "\"\"") + "\""
+    if any(ch in text for ch in [",", '"', "\n", "\r"]):
+        return '"' + text.replace('"', '""') + '"'
     return text
 
 
@@ -5238,7 +6220,9 @@ def _to_json_bytes(payload: object) -> bytes:
     return (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
 
-def _export_results_package(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _export_results_package(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     run_id = str(arguments.get("run_id") or "").strip()
     if not run_id:
         raise ValueError("run_id is required")
@@ -5249,7 +6233,9 @@ def _export_results_package(runner: PipelineRunner, arguments: dict[str, Any]) -
     include_top_n = max(1, min(200, _as_int(arguments.get("include_top_n"), 10)))
     weights = _normalize_hit_weights(arguments.get("weights"))
     request, summary = _load_run_request_summary(run_root)
-    comparison_summary = _build_comparison_summary(run_root=run_root, request=request, summary=summary)
+    comparison_summary = _build_comparison_summary(
+        run_root=run_root, request=request, summary=summary
+    )
     hit_rows = _build_hit_list_rows(
         run_root=run_root,
         request=request,
@@ -5269,7 +6255,9 @@ def _export_results_package(runner: PipelineRunner, arguments: dict[str, Any]) -
 
     included: list[str] = []
 
-    def _write_file_if_exists(zf: zipfile.ZipFile, rel_path: str, arcname: str | None = None) -> None:
+    def _write_file_if_exists(
+        zf: zipfile.ZipFile, rel_path: str, arcname: str | None = None
+    ) -> None:
         src = run_root / rel_path
         if not src.exists() or not src.is_file():
             return
@@ -5297,15 +6285,23 @@ def _export_results_package(runner: PipelineRunner, arguments: dict[str, Any]) -
 
         tiers_root = run_root / "tiers"
         if tiers_root.exists() and tiers_root.is_dir():
-            for tier_dir in sorted([p for p in tiers_root.iterdir() if p.is_dir()], key=lambda p: p.name):
+            for tier_dir in sorted(
+                [p for p in tiers_root.iterdir() if p.is_dir()], key=lambda p: p.name
+            ):
                 tier_name = tier_dir.name
                 for name in ["soluprot.json", "af2_scores.json", "novelty.tsv"]:
                     rel = f"tiers/{tier_name}/{name}"
                     _write_file_if_exists(zf, rel)
 
-        zf.writestr("tables/hit_list_full.json", _to_json_bytes({"rows": hit_rows, "weights": weights}))
+        zf.writestr(
+            "tables/hit_list_full.json",
+            _to_json_bytes({"rows": hit_rows, "weights": weights}),
+        )
         included.append("tables/hit_list_full.json")
-        zf.writestr("tables/hit_list_top.json", _to_json_bytes({"rows": top_rows, "weights": weights}))
+        zf.writestr(
+            "tables/hit_list_top.json",
+            _to_json_bytes({"rows": top_rows, "weights": weights}),
+        )
         included.append("tables/hit_list_top.json")
 
         csv_header = [
@@ -5333,7 +6329,11 @@ def _export_results_package(runner: PipelineRunner, arguments: dict[str, Any]) -
             csv_lines.append(
                 ",".join(
                     _csv_escape(
-                        row.get(key if key != "af2_ranked_pdb_path" else "af2_ranked_pdb_path")
+                        row.get(
+                            key
+                            if key != "af2_ranked_pdb_path"
+                            else "af2_ranked_pdb_path"
+                        )
                     )
                     for key in csv_header
                 )
@@ -5371,7 +6371,9 @@ def _export_results_package(runner: PipelineRunner, arguments: dict[str, Any]) -
     }
 
 
-def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = True) -> PipelineRequest:
+def pipeline_request_from_args(
+    args: dict[str, Any], *, strict_target: bool = True
+) -> PipelineRequest:
     target_fasta = _as_text(args.get("target_fasta"))
     target_pdb = _as_text(args.get("target_pdb"))
     evolution_mode = _as_bool(args.get("evolution_mode"), False)
@@ -5385,22 +6387,31 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     rfd3_inputs = _as_dict(args.get("rfd3_inputs"), name="rfd3_inputs")
     rfd3_inputs_text = _as_text(args.get("rfd3_inputs_text")).strip() or None
     rfd3_contig = _as_str_or_list(args.get("rfd3_contig"))
-    rfd3_input_files = _as_dict_str(args.get("rfd3_input_files"), name="rfd3_input_files")
+    rfd3_input_files = _as_dict_str(
+        args.get("rfd3_input_files"), name="rfd3_input_files"
+    )
     rfd3_input_pdb = _as_text(args.get("rfd3_input_pdb")).strip() or None
     rfd3_use_raw = args.get("rfd3_use")
     rfd3_mode = _as_text(args.get("rfd3_mode")).strip() or None
     rfd3_hotspots = _as_str_or_list(args.get("rfd3_hotspots"))
-    rfd3_infer_ori_strategy = _as_text(args.get("rfd3_infer_ori_strategy")).strip() or None
+    rfd3_infer_ori_strategy = (
+        _as_text(args.get("rfd3_infer_ori_strategy")).strip() or None
+    )
     rfd3_is_non_loopy = (
         _as_bool(args.get("rfd3_is_non_loopy"), False)
-        if args.get("rfd3_is_non_loopy") is not None and str(args.get("rfd3_is_non_loopy")).strip() != ""
+        if args.get("rfd3_is_non_loopy") is not None
+        and str(args.get("rfd3_is_non_loopy")).strip() != ""
         else None
     )
     rfd3_unindex = _as_str_or_list(args.get("rfd3_unindex"))
     rfd3_length = _as_str_or_list(args.get("rfd3_length"))
-    rfd3_select_fixed_atoms = _as_rfd3_select_fixed_atoms(args.get("rfd3_select_fixed_atoms"))
+    rfd3_select_fixed_atoms = _as_rfd3_select_fixed_atoms(
+        args.get("rfd3_select_fixed_atoms")
+    )
     rfd3_ligand = _as_str_or_list(args.get("rfd3_ligand"))
-    rfd3_select_unfixed_sequence = _as_text(args.get("rfd3_select_unfixed_sequence")).strip() or None
+    rfd3_select_unfixed_sequence = (
+        _as_text(args.get("rfd3_select_unfixed_sequence")).strip() or None
+    )
     rfd3_cli_args = _as_text(args.get("rfd3_cli_args")).strip() or None
     rfd3_env = _as_dict_str(args.get("rfd3_env"), name="rfd3_env")
     rfd3_design_index = _as_int(args.get("rfd3_design_index"), 0)
@@ -5411,8 +6422,12 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         if str(args.get("rfd3_partial_t") or "").strip()
         else None
     )
-    rfd3_sampling_strategy = _as_text(args.get("rfd3_sampling_strategy")).strip() or None
-    rfd3_fail_on_duplicate_backbones = _as_bool(args.get("rfd3_fail_on_duplicate_backbones"), False)
+    rfd3_sampling_strategy = (
+        _as_text(args.get("rfd3_sampling_strategy")).strip() or None
+    )
+    rfd3_fail_on_duplicate_backbones = _as_bool(
+        args.get("rfd3_fail_on_duplicate_backbones"), False
+    )
     rfd3_target_rmsd_cutoff_raw = args.get("rfd3_target_rmsd_cutoff")
     rfd3_target_rmsd_cutoff_specified = (
         "rfd3_target_rmsd_cutoff" in args
@@ -5447,7 +6462,9 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         if str(args.get("bioemu_base_seed") or "").strip()
         else None
     )
-    bioemu_steering_config_text = _as_text(args.get("bioemu_steering_config_text")).strip() or None
+    bioemu_steering_config_text = (
+        _as_text(args.get("bioemu_steering_config_text")).strip() or None
+    )
     bioemu_max_return_structures = _as_int(args.get("bioemu_max_return_structures"), 10)
     bioemu_target_rmsd_cutoff_raw = args.get("bioemu_target_rmsd_cutoff")
     bioemu_target_rmsd_cutoff_specified = (
@@ -5470,17 +6487,25 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         else None
     )
     if str(args.get("bioemu_num_samples") or "").strip():
-        bioemu_num_samples = _as_int(args.get("bioemu_num_samples"), bioemu_max_return_structures)
+        bioemu_num_samples = _as_int(
+            args.get("bioemu_num_samples"), bioemu_max_return_structures
+        )
     else:
         requested_return_count = max(1, int(bioemu_max_return_structures))
-        bioemu_num_samples = _recommended_bioemu_num_samples(requested_return_count, bioemu_filter_samples)
+        bioemu_num_samples = _recommended_bioemu_num_samples(
+            requested_return_count, bioemu_filter_samples
+        )
     bioemu_env = _as_dict_str(args.get("bioemu_env"), name="bioemu_env")
 
-    diffdock_ligand_smiles = _as_text(args.get("diffdock_ligand_smiles")).strip() or None
+    diffdock_ligand_smiles = (
+        _as_text(args.get("diffdock_ligand_smiles")).strip() or None
+    )
     diffdock_ligand_sdf = _as_text(args.get("diffdock_ligand_sdf")).strip() or None
     diffdock_config = str(args.get("diffdock_config") or "default_inference_args.yaml")
     diffdock_extra_args = _as_text(args.get("diffdock_extra_args")).strip() or None
-    diffdock_cuda_visible_devices = _as_text(args.get("diffdock_cuda_visible_devices")).strip() or None
+    diffdock_cuda_visible_devices = (
+        _as_text(args.get("diffdock_cuda_visible_devices")).strip() or None
+    )
 
     legacy_rfd3_requested = bool(
         rfd3_inputs_text
@@ -5507,12 +6532,23 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         or (rfd3_max_attempted_designs is not None)
         or rfd3_use_ensemble
     )
-    if rfd3_use_raw is None or (isinstance(rfd3_use_raw, str) and not rfd3_use_raw.strip()):
+    if rfd3_use_raw is None or (
+        isinstance(rfd3_use_raw, str) and not rfd3_use_raw.strip()
+    ):
         rfd3_use = None
     else:
         rfd3_use = _as_bool(rfd3_use_raw, False)
-    has_rfd3 = legacy_rfd3_requested if rfd3_use is None else (bool(rfd3_use) and legacy_rfd3_requested)
-    if strict_target and not target_fasta.strip() and not target_pdb.strip() and not has_rfd3:
+    has_rfd3 = (
+        legacy_rfd3_requested
+        if rfd3_use is None
+        else (bool(rfd3_use) and legacy_rfd3_requested)
+    )
+    if (
+        strict_target
+        and not target_fasta.strip()
+        and not target_pdb.strip()
+        and not has_rfd3
+    ):
         raise ValueError("One of target_fasta or target_pdb or rfd3 inputs is required")
 
     start_from = _canonical_pipeline_stage_arg(args.get("start_from"))
@@ -5532,12 +6568,22 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
     af2_sequence_ids = _as_list_of_str(args.get("af2_sequence_ids"))
     af2_provider = _as_af2_provider(args.get("af2_provider"), "colabfold")
     surface_only = _as_bool(args.get("surface_only"), False)
-    ligand_mask_use_original_target = _as_bool(args.get("ligand_mask_use_original_target"), True)
+    ligand_mask_use_original_target = _as_bool(
+        args.get("ligand_mask_use_original_target"), True
+    )
     novelty_enabled = _as_bool(args.get("novelty_enabled"), True)
     surface_min_rel = _as_float(args.get("surface_min_rel"), 0.2)
     surface_min_abs = _as_float(args.get("surface_min_abs"), 10.0)
-    pi_min = _as_float(args.get("pi_min"), 0.0) if str(args.get("pi_min") or "").strip() else None
-    pi_max = _as_float(args.get("pi_max"), 0.0) if str(args.get("pi_max") or "").strip() else None
+    pi_min = (
+        _as_float(args.get("pi_min"), 0.0)
+        if str(args.get("pi_min") or "").strip()
+        else None
+    )
+    pi_max = (
+        _as_float(args.get("pi_max"), 0.0)
+        if str(args.get("pi_max") or "").strip()
+        else None
+    )
     af2_max_candidates_per_tier = (
         _as_int(args.get("af2_max_candidates_per_tier"), 0)
         if str(args.get("af2_max_candidates_per_tier") or "").strip()
@@ -5580,7 +6626,9 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         rfd3_sampling_strategy=rfd3_sampling_strategy,
         rfd3_fail_on_duplicate_backbones=rfd3_fail_on_duplicate_backbones,
         rfd3_target_rmsd_cutoff=(
-            float(rfd3_target_rmsd_cutoff) if rfd3_target_rmsd_cutoff is not None else None
+            float(rfd3_target_rmsd_cutoff)
+            if rfd3_target_rmsd_cutoff is not None
+            else None
         ),
         rfd3_max_attempted_designs=(
             max(1, int(rfd3_max_attempted_designs))
@@ -5591,14 +6639,20 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         bioemu_use=bioemu_use,
         bioemu_sequence=bioemu_sequence,
         bioemu_num_samples=max(1, int(bioemu_num_samples)),
-        bioemu_batch_size_100=(int(bioemu_batch_size_100) if bioemu_batch_size_100 is not None else None),
+        bioemu_batch_size_100=(
+            int(bioemu_batch_size_100) if bioemu_batch_size_100 is not None else None
+        ),
         bioemu_model_name=bioemu_model_name,
         bioemu_filter_samples=bioemu_filter_samples,
-        bioemu_base_seed=(int(bioemu_base_seed) if bioemu_base_seed is not None else None),
+        bioemu_base_seed=(
+            int(bioemu_base_seed) if bioemu_base_seed is not None else None
+        ),
         bioemu_steering_config_text=bioemu_steering_config_text,
         bioemu_max_return_structures=max(1, int(bioemu_max_return_structures)),
         bioemu_target_rmsd_cutoff=(
-            float(bioemu_target_rmsd_cutoff) if bioemu_target_rmsd_cutoff is not None else None
+            float(bioemu_target_rmsd_cutoff)
+            if bioemu_target_rmsd_cutoff is not None
+            else None
         ),
         bioemu_max_attempted_structures=(
             max(1, int(bioemu_max_attempted_structures))
@@ -5617,8 +6671,12 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         selected_tiers=selected_tiers or None,
         conservation_mode=str(args.get("conservation_mode") or "quantile"),
         conservation_weighting=str(args.get("conservation_weighting") or "none"),
-        conservation_cluster_method=str(args.get("conservation_cluster_method") or "linclust"),
-        conservation_cluster_min_seq_id=_as_float(args.get("conservation_cluster_min_seq_id"), 0.9),
+        conservation_cluster_method=str(
+            args.get("conservation_cluster_method") or "linclust"
+        ),
+        conservation_cluster_min_seq_id=_as_float(
+            args.get("conservation_cluster_min_seq_id"), 0.9
+        ),
         conservation_cluster_coverage=(
             _as_float(args.get("conservation_cluster_coverage"), 0.0)
             if str(args.get("conservation_cluster_coverage") or "").strip()
@@ -5641,8 +6699,12 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         surface_only=surface_only,
         surface_min_rel=surface_min_rel,
         surface_min_abs=surface_min_abs,
-        pdb_strip_nonpositive_resseq=_as_bool(args.get("pdb_strip_nonpositive_resseq"), True),
-        pdb_renumber_resseq_from_1=_as_bool(args.get("pdb_renumber_resseq_from_1"), False),
+        pdb_strip_nonpositive_resseq=_as_bool(
+            args.get("pdb_strip_nonpositive_resseq"), True
+        ),
+        pdb_renumber_resseq_from_1=_as_bool(
+            args.get("pdb_renumber_resseq_from_1"), False
+        ),
         num_seq_per_tier=_as_int(args.get("num_seq_per_tier"), 2),
         batch_size=_as_int(args.get("batch_size"), 1),
         sampling_temp=_as_float(args.get("sampling_temp"), 0.1),
@@ -5653,7 +6715,9 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
         af2_model_preset=str(args.get("af2_model_preset") or "auto"),
         af2_db_preset=str(args.get("af2_db_preset") or "full_dbs"),
         af2_max_template_date=str(args.get("af2_max_template_date") or "2020-05-14"),
-        af2_extra_flags=(str(args.get("af2_extra_flags")) if args.get("af2_extra_flags") else None),
+        af2_extra_flags=(
+            str(args.get("af2_extra_flags")) if args.get("af2_extra_flags") else None
+        ),
         af2_provider=af2_provider,
         af2_plddt_cutoff=_as_float(args.get("af2_plddt_cutoff"), 85.0),
         af2_rmsd_cutoff=_as_float(args.get("af2_rmsd_cutoff"), 2.0),
@@ -5667,7 +6731,11 @@ def pipeline_request_from_args(args: dict[str, Any], *, strict_target: bool = Tr
             else None
         ),
         relax_nstruct=max(1, _as_int(args.get("relax_nstruct"), 1)),
-        relax_extra_flags=(str(args.get("relax_extra_flags")) if args.get("relax_extra_flags") else None),
+        relax_extra_flags=(
+            str(args.get("relax_extra_flags"))
+            if args.get("relax_extra_flags")
+            else None
+        ),
         mmseqs_target_db=str(args.get("mmseqs_target_db") or "uniref90"),
         mmseqs_max_seqs=_as_int(args.get("mmseqs_max_seqs"), 3000),
         mmseqs_threads=_as_int(args.get("mmseqs_threads"), 4),
@@ -5708,15 +6776,41 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "rfd3_input_pdb": {"type": "string"},
             "rfd3_mode": {
                 "type": "string",
-                "enum": ["legacy_contig", "binder", "enzyme", "local_diversify", "advanced"],
+                "enum": [
+                    "legacy_contig",
+                    "binder",
+                    "enzyme",
+                    "local_diversify",
+                    "advanced",
+                ],
             },
             "rfd3_spec_name": {"type": "string"},
-            "rfd3_contig": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
-            "rfd3_hotspots": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+            "rfd3_contig": {
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "array", "items": {"type": "string"}},
+                ]
+            },
+            "rfd3_hotspots": {
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "array", "items": {"type": "string"}},
+                ]
+            },
             "rfd3_infer_ori_strategy": {"type": "string"},
             "rfd3_is_non_loopy": {"type": "boolean"},
-            "rfd3_unindex": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
-            "rfd3_length": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+            "rfd3_unindex": {
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "array", "items": {"type": "string"}},
+                ]
+            },
+            "rfd3_length": {
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "array", "items": {"type": "string"}},
+                ]
+            },
             "rfd3_select_fixed_atoms": {
                 "anyOf": [
                     {"type": "string"},
@@ -5724,7 +6818,12 @@ def _pipeline_run_schema() -> dict[str, Any]:
                     {"type": "object", "additionalProperties": {"type": "string"}},
                 ]
             },
-            "rfd3_ligand": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+            "rfd3_ligand": {
+                "anyOf": [
+                    {"type": "string"},
+                    {"type": "array", "items": {"type": "string"}},
+                ]
+            },
             "rfd3_select_unfixed_sequence": {"type": "string"},
             "rfd3_cli_args": {"type": "string"},
             "rfd3_env": {"type": "object", "additionalProperties": {"type": "string"}},
@@ -5748,7 +6847,10 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "bioemu_max_return_structures": {"type": "integer"},
             "bioemu_target_rmsd_cutoff": {"type": "number"},
             "bioemu_max_attempted_structures": {"type": "integer"},
-            "bioemu_env": {"type": "object", "additionalProperties": {"type": "string"}},
+            "bioemu_env": {
+                "type": "object",
+                "additionalProperties": {"type": "string"},
+            },
             "diffdock_ligand_smiles": {"type": "string"},
             "diffdock_ligand_sdf": {"type": "string"},
             "diffdock_config": {"type": "string"},
@@ -5816,12 +6918,30 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "stop_after": {"type": "string"},
             "force": {"type": "boolean"},
             "dry_run": {"type": "boolean"},
-            "evolution_mode": {"type": "boolean", "description": "Run in 3-stage Meta-Surrogate evolution mode"},
-            "evolution_pool_size": {"type": "integer", "description": "Initial sequences to generate in Stage 1 (default 1000)"},
-            "evolution_oracle_samples": {"type": "integer", "description": "Top candidates to validate with AF2 in Stage 3 (default 20)"},
-            "evolution_initial_samples": {"type": "integer", "description": "Initial random samples to evaluate (legacy BO mode only)"},
-            "evolution_rounds": {"type": "integer", "description": "Number of BO rounds (default 3)"},
-            "evolution_samples_per_round": {"type": "integer", "description": "Samples to evaluate per BO round (default 5)"},
+            "evolution_mode": {
+                "type": "boolean",
+                "description": "Run in 3-stage Meta-Surrogate evolution mode",
+            },
+            "evolution_pool_size": {
+                "type": "integer",
+                "description": "Initial sequences to generate in Stage 1 (default 1000)",
+            },
+            "evolution_oracle_samples": {
+                "type": "integer",
+                "description": "Top candidates to validate with AF2 in Stage 3 (default 20)",
+            },
+            "evolution_initial_samples": {
+                "type": "integer",
+                "description": "Initial random samples to evaluate (legacy BO mode only)",
+            },
+            "evolution_rounds": {
+                "type": "integer",
+                "description": "Number of BO rounds (default 3)",
+            },
+            "evolution_samples_per_round": {
+                "type": "integer",
+                "description": "Samples to evaluate per BO round (default 5)",
+            },
             "agent_panel_enabled": {"type": "boolean"},
             "auto_recover": {"type": "boolean"},
             "wt_compare": {"type": "boolean"},
@@ -5845,11 +6965,12 @@ def _pipeline_run_schema() -> dict[str, Any]:
 def _extract_text_from_base64_pdf(b64_data: str) -> str:
     import base64
     import io
+
     try:
         from pypdf import PdfReader
     except ImportError:
         raise RuntimeError("pypdf is required to process PDFs")
-    
+
     try:
         pdf_bytes = base64.b64decode(b64_data)
         reader = PdfReader(io.BytesIO(pdf_bytes))
@@ -5863,20 +6984,22 @@ def _extract_text_from_base64_pdf(b64_data: str) -> str:
         raise ValueError(f"Failed to parse PDF: {str(e)}")
 
 
-def _analyze_paper_for_masking(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+def _analyze_paper_for_masking(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
     file_b64 = arguments.get("file_b64")
     file_text = arguments.get("file_text")
     target_sequence = str(arguments.get("target_sequence") or "").strip()
-    
+
     if not file_b64 and not file_text:
         raise ValueError("Either file_b64 or file_text must be provided")
-    
+
     paper_content = ""
     if file_b64:
         paper_content = _extract_text_from_base64_pdf(str(file_b64))
     else:
         paper_content = str(file_text).strip()
-        
+
     if not paper_content:
         raise ValueError("Could not extract any text from the provided document")
 
@@ -5888,28 +7011,41 @@ def _analyze_paper_for_masking(runner: PipelineRunner, arguments: dict[str, Any]
         "Identify critical residues that MUST NOT be mutated (e.g., catalytic triads, binding interfaces, conserved motifs). "
         "Return the result ONLY as a valid JSON object matching this schema:\n"
         "{\n"
-        "  \"suggested_masks\": [\n"
+        '  "suggested_masks": [\n'
         "    {\n"
-        "      \"chain\": \"A\",\n"
-        "      \"residue_index\": 64,\n"
-        "      \"residue_name\": \"HIS\",\n"
-        "      \"label\": \"Short descriptive label (e.g., Catalytic Site)\",\n"
-        "      \"evidence\": \"Exact quote from the paper justifying this selection\",\n"
-        "      \"confidence\": \"high\" or \"low_sequence_mismatch\" (use low if numbering seems to mismatch the provided sequence)\n"
+        '      "chain": "A",\n'
+        '      "residue_index": 64,\n'
+        '      "residue_name": "HIS",\n'
+        '      "label": "Short descriptive label (e.g., Catalytic Site)",\n'
+        '      "evidence": "Exact quote from the paper justifying this selection",\n'
+        '      "confidence": "high" or "low_sequence_mismatch" (use low if numbering seems to mismatch the provided sequence)\n'
         "    }\n"
         "  ]\n"
         "}"
     )
-    
-    prompt = f"Reference Paper Content:\n{paper_content[:150000]}\n\n" # Limit to avoid massive context
+
+    prompt = f"Reference Paper Content:\n{paper_content[:150000]}\n\n"  # Limit to avoid massive context
     if target_sequence:
         prompt += f"Target Protein Sequence (for numbering alignment check):\n{target_sequence}\n\n"
     prompt += "Extract the structural constraints as requested."
 
     try:
         import json
+        import mlflow
+
+        # Log to MLflow
+        try:
+            mlflow.set_tracking_uri("http://127.0.0.1:18050")
+            mlflow.set_experiment("PDF_Constraint_Extraction")
+            with mlflow.start_run(run_name=f"PDF_Masking_{int(time.time())}"):
+                mlflow.log_param("has_target_sequence", bool(target_sequence))
+                mlflow.log_param("paper_text_length", len(paper_content))
+                mlflow.log_param("gemini_model", runner.gemini.model_name if hasattr(runner.gemini, "model_name") else "unknown")
+        except Exception as mle:
+            print(f"MLflow logging failed (non-critical): {mle}")
+
         response_text = runner.gemini.chat(system_instruction, prompt)
-        
+
         # Clean up markdown code blocks if present
         clean_json = response_text
         if clean_json.startswith("```json"):
@@ -5917,10 +7053,10 @@ def _analyze_paper_for_masking(runner: PipelineRunner, arguments: dict[str, Any]
         if clean_json.endswith("```"):
             clean_json = clean_json[:-3]
         clean_json = clean_json.strip()
-        
+
         parsed = json.loads(clean_json)
         if "suggested_masks" not in parsed:
-             parsed = {"suggested_masks": []}
+            parsed = {"suggested_masks": []}
         return {"success": True, "result": parsed}
     except Exception as e:
         raise RuntimeError(f"Agent failed to process the document: {str(e)}")
@@ -5937,9 +7073,9 @@ def tool_definitions() -> list[dict[str, Any]]:
                 "properties": {
                     "file_b64": {"type": "string"},
                     "file_text": {"type": "string"},
-                    "target_sequence": {"type": "string"}
-                }
-            }
+                    "target_sequence": {"type": "string"},
+                },
+            },
         },
         {
             "name": "pipeline.run",
@@ -5966,12 +7102,30 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "af2_provider": {"type": "string", "enum": ["colabfold", "af2"]},
                     "run_id": {"type": "string"},
                     "dry_run": {"type": "boolean"},
-            "evolution_mode": {"type": "boolean", "description": "Run in 3-stage Meta-Surrogate evolution mode"},
-            "evolution_pool_size": {"type": "integer", "description": "Initial sequences to generate in Stage 1 (default 1000)"},
-            "evolution_oracle_samples": {"type": "integer", "description": "Top candidates to validate with AF2 in Stage 3 (default 20)"},
-            "evolution_initial_samples": {"type": "integer", "description": "Initial random samples to evaluate (legacy BO mode only)"},
-            "evolution_rounds": {"type": "integer", "description": "Number of BO rounds (default 3)"},
-            "evolution_samples_per_round": {"type": "integer", "description": "Samples to evaluate per BO round (default 5)"},
+                    "evolution_mode": {
+                        "type": "boolean",
+                        "description": "Run in 3-stage Meta-Surrogate evolution mode",
+                    },
+                    "evolution_pool_size": {
+                        "type": "integer",
+                        "description": "Initial sequences to generate in Stage 1 (default 1000)",
+                    },
+                    "evolution_oracle_samples": {
+                        "type": "integer",
+                        "description": "Top candidates to validate with AF2 in Stage 3 (default 20)",
+                    },
+                    "evolution_initial_samples": {
+                        "type": "integer",
+                        "description": "Initial random samples to evaluate (legacy BO mode only)",
+                    },
+                    "evolution_rounds": {
+                        "type": "integer",
+                        "description": "Number of BO rounds (default 3)",
+                    },
+                    "evolution_samples_per_round": {
+                        "type": "integer",
+                        "description": "Samples to evaluate per BO round (default 5)",
+                    },
                 },
                 "anyOf": [{"required": ["target_fasta"]}, {"required": ["target_pdb"]}],
             },
@@ -5994,12 +7148,30 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "diffdock_cuda_visible_devices": {"type": "string"},
                     "run_id": {"type": "string"},
                     "dry_run": {"type": "boolean"},
-            "evolution_mode": {"type": "boolean", "description": "Run in 3-stage Meta-Surrogate evolution mode"},
-            "evolution_pool_size": {"type": "integer", "description": "Initial sequences to generate in Stage 1 (default 1000)"},
-            "evolution_oracle_samples": {"type": "integer", "description": "Top candidates to validate with AF2 in Stage 3 (default 20)"},
-            "evolution_initial_samples": {"type": "integer", "description": "Initial random samples to evaluate (legacy BO mode only)"},
-            "evolution_rounds": {"type": "integer", "description": "Number of BO rounds (default 3)"},
-            "evolution_samples_per_round": {"type": "integer", "description": "Samples to evaluate per BO round (default 5)"},
+                    "evolution_mode": {
+                        "type": "boolean",
+                        "description": "Run in 3-stage Meta-Surrogate evolution mode",
+                    },
+                    "evolution_pool_size": {
+                        "type": "integer",
+                        "description": "Initial sequences to generate in Stage 1 (default 1000)",
+                    },
+                    "evolution_oracle_samples": {
+                        "type": "integer",
+                        "description": "Top candidates to validate with AF2 in Stage 3 (default 20)",
+                    },
+                    "evolution_initial_samples": {
+                        "type": "integer",
+                        "description": "Initial random samples to evaluate (legacy BO mode only)",
+                    },
+                    "evolution_rounds": {
+                        "type": "integer",
+                        "description": "Number of BO rounds (default 3)",
+                    },
+                    "evolution_samples_per_round": {
+                        "type": "integer",
+                        "description": "Samples to evaluate per BO round (default 5)",
+                    },
                 },
                 "anyOf": [{"required": ["protein_pdb"]}, {"required": ["target_pdb"]}],
             },
@@ -6012,7 +7184,12 @@ def tool_definitions() -> list[dict[str, Any]]:
                 "properties": {
                     "run_id": {"type": "string"},
                     "rating": {"type": "string", "enum": ["good", "bad"]},
-                    "reasons": {"anyOf": [{"type": "array", "items": {"type": "string"}}, {"type": "string"}]},
+                    "reasons": {
+                        "anyOf": [
+                            {"type": "array", "items": {"type": "string"}},
+                            {"type": "string"},
+                        ]
+                    },
                     "comment": {"type": "string"},
                     "artifact_path": {"type": "string"},
                     "stage": {"type": "string"},
@@ -6027,7 +7204,10 @@ def tool_definitions() -> list[dict[str, Any]]:
             "description": "List feedback entries for a run.",
             "inputSchema": {
                 "type": "object",
-                "properties": {"run_id": {"type": "string"}, "limit": {"type": "integer"}},
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "limit": {"type": "integer"},
+                },
                 "required": ["run_id"],
             },
         },
@@ -6039,7 +7219,10 @@ def tool_definitions() -> list[dict[str, Any]]:
                 "properties": {
                     "run_id": {"type": "string"},
                     "assay_type": {"type": "string"},
-                    "result": {"type": "string", "enum": ["success", "fail", "inconclusive"]},
+                    "result": {
+                        "type": "string",
+                        "enum": ["success", "fail", "inconclusive"],
+                    },
                     "metrics": {"type": "object"},
                     "conditions": {"type": "string"},
                     "sample_id": {"type": "string"},
@@ -6055,7 +7238,10 @@ def tool_definitions() -> list[dict[str, Any]]:
             "description": "List experimental results for a run.",
             "inputSchema": {
                 "type": "object",
-                "properties": {"run_id": {"type": "string"}, "limit": {"type": "integer"}},
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "limit": {"type": "integer"},
+                },
                 "required": ["run_id"],
             },
         },
@@ -6064,7 +7250,10 @@ def tool_definitions() -> list[dict[str, Any]]:
             "description": "List agent panel events for a run.",
             "inputSchema": {
                 "type": "object",
-                "properties": {"run_id": {"type": "string"}, "limit": {"type": "integer"}},
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "limit": {"type": "integer"},
+                },
                 "required": ["run_id"],
             },
         },
@@ -6194,12 +7383,30 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "run_id": {"type": "string"},
                     "force": {"type": "boolean"},
                     "dry_run": {"type": "boolean"},
-            "evolution_mode": {"type": "boolean", "description": "Run in 3-stage Meta-Surrogate evolution mode"},
-            "evolution_pool_size": {"type": "integer", "description": "Initial sequences to generate in Stage 1 (default 1000)"},
-            "evolution_oracle_samples": {"type": "integer", "description": "Top candidates to validate with AF2 in Stage 3 (default 20)"},
-            "evolution_initial_samples": {"type": "integer", "description": "Initial random samples to evaluate (legacy BO mode only)"},
-            "evolution_rounds": {"type": "integer", "description": "Number of BO rounds (default 3)"},
-            "evolution_samples_per_round": {"type": "integer", "description": "Samples to evaluate per BO round (default 5)"},
+                    "evolution_mode": {
+                        "type": "boolean",
+                        "description": "Run in 3-stage Meta-Surrogate evolution mode",
+                    },
+                    "evolution_pool_size": {
+                        "type": "integer",
+                        "description": "Initial sequences to generate in Stage 1 (default 1000)",
+                    },
+                    "evolution_oracle_samples": {
+                        "type": "integer",
+                        "description": "Top candidates to validate with AF2 in Stage 3 (default 20)",
+                    },
+                    "evolution_initial_samples": {
+                        "type": "integer",
+                        "description": "Initial random samples to evaluate (legacy BO mode only)",
+                    },
+                    "evolution_rounds": {
+                        "type": "integer",
+                        "description": "Number of BO rounds (default 3)",
+                    },
+                    "evolution_samples_per_round": {
+                        "type": "integer",
+                        "description": "Samples to evaluate per BO round (default 5)",
+                    },
                 },
                 "anyOf": [{"required": ["fasta"]}, {"required": ["sequence"]}],
             },
@@ -6220,12 +7427,30 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "run_id": {"type": "string"},
                     "force": {"type": "boolean"},
                     "dry_run": {"type": "boolean"},
-            "evolution_mode": {"type": "boolean", "description": "Run in 3-stage Meta-Surrogate evolution mode"},
-            "evolution_pool_size": {"type": "integer", "description": "Initial sequences to generate in Stage 1 (default 1000)"},
-            "evolution_oracle_samples": {"type": "integer", "description": "Top candidates to validate with AF2 in Stage 3 (default 20)"},
-            "evolution_initial_samples": {"type": "integer", "description": "Initial random samples to evaluate (legacy BO mode only)"},
-            "evolution_rounds": {"type": "integer", "description": "Number of BO rounds (default 3)"},
-            "evolution_samples_per_round": {"type": "integer", "description": "Samples to evaluate per BO round (default 5)"},
+                    "evolution_mode": {
+                        "type": "boolean",
+                        "description": "Run in 3-stage Meta-Surrogate evolution mode",
+                    },
+                    "evolution_pool_size": {
+                        "type": "integer",
+                        "description": "Initial sequences to generate in Stage 1 (default 1000)",
+                    },
+                    "evolution_oracle_samples": {
+                        "type": "integer",
+                        "description": "Top candidates to validate with AF2 in Stage 3 (default 20)",
+                    },
+                    "evolution_initial_samples": {
+                        "type": "integer",
+                        "description": "Initial random samples to evaluate (legacy BO mode only)",
+                    },
+                    "evolution_rounds": {
+                        "type": "integer",
+                        "description": "Number of BO rounds (default 3)",
+                    },
+                    "evolution_samples_per_round": {
+                        "type": "integer",
+                        "description": "Samples to evaluate per BO round (default 5)",
+                    },
                 },
                 "anyOf": [
                     {"required": ["protein_pdb", "ligand_smiles"]},
@@ -6459,7 +7684,10 @@ def tool_definitions() -> list[dict[str, Any]]:
             "description": "Delete a run directory and all artifacts under run_id.",
             "inputSchema": {
                 "type": "object",
-                "properties": {"run_id": {"type": "string"}, "force": {"type": "boolean"}},
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "force": {"type": "boolean"},
+                },
                 "required": ["run_id"],
             },
         },
@@ -6524,6 +7752,91 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.cath_get_batch_overview",
+            "description": "Summarize CATH batch progress across train/val/test subsets.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "item_limit": {"type": "integer"},
+                },
+            },
+        },
+        {
+            "name": "pipeline.cath_launch_batch",
+            "description": "Launch a managed CATH batch generation job for one subset.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "subset": {"type": "string", "enum": ["train", "val", "test"]},
+                    "keep_local": {"type": "boolean"},
+                    "max_workers": {"type": "integer"},
+                },
+                "required": ["subset"],
+            },
+        },
+        {
+            "name": "pipeline.cath_launch_training",
+            "description": "Launch surrogate training from local CATH outputs for selected subsets.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "subsets": {
+                        "type": "array",
+                        "items": {"type": "string", "enum": ["train", "val", "test"]},
+                    },
+                },
+                "required": ["subsets"],
+            },
+        },
+        {
+            "name": "pipeline.cath_list_jobs",
+            "description": "List managed CATH batch/training jobs.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": ["batch", "train", "cath_batch", "cath_train"],
+                    },
+                    "limit": {"type": "integer"},
+                },
+            },
+        },
+        {
+            "name": "pipeline.cath_get_job",
+            "description": "Read metadata for one managed CATH job.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                },
+                "required": ["job_id"],
+            },
+        },
+        {
+            "name": "pipeline.cath_read_job_log",
+            "description": "Read the tail of a managed CATH job log.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                    "max_bytes": {"type": "integer"},
+                },
+                "required": ["job_id"],
+            },
+        },
+        {
+            "name": "pipeline.cath_stop_job",
+            "description": "Request stop for a managed CATH batch/training job.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                },
+                "required": ["job_id"],
+            },
+        },
+        {
             "name": "pipeline.runpod_list_endpoints",
             "description": "List RunPod serverless endpoints and highlight the ones used by protein_pipeline.",
             "inputSchema": {
@@ -6557,8 +7870,14 @@ def tool_definitions() -> list[dict[str, Any]]:
                         "type": "object",
                         "properties": {
                             "name": {"type": "string"},
-                            "gpuTypeIds": {"type": "array", "items": {"type": "string"}},
-                            "dataCenterIds": {"type": "array", "items": {"type": "string"}},
+                            "gpuTypeIds": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                            "dataCenterIds": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
                             "idleTimeout": {"type": "integer"},
                             "executionTimeoutMs": {"type": "integer"},
                             "flashBoot": {"type": "boolean"},
@@ -6600,7 +7919,7 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "billing_resolution": {"type": "string"},
                     "start_time": {"type": "string"},
                     "end_time": {"type": "string"},
-                    "limit": {"type": "integer"}
+                    "limit": {"type": "integer"},
                 },
             },
         },
@@ -6612,11 +7931,11 @@ def tool_definitions() -> list[dict[str, Any]]:
                 "properties": {
                     "run_id": {"type": "string"},
                     "prompt": {"type": "string"},
-                    "lang": {"type": "string", "description": "Language code (en, ko)"}
+                    "lang": {"type": "string", "description": "Language code (en, ko)"},
                 },
-                "required": ["run_id", "prompt"]
-            }
-        }
+                "required": ["run_id", "prompt"],
+            },
+        },
     ]
 
 
@@ -6630,10 +7949,10 @@ class ToolDispatcher:
     def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if name == "pipeline.analyze_paper_for_masking":
             return _analyze_paper_for_masking(self.runner, arguments)
-        
+
         if name == "pipeline.agent_chat":
             return _agent_chat_tool(self.runner, arguments)
-        
+
         if name == "pipeline.run":
             run_id = arguments.get("run_id")
             req = pipeline_request_from_args(arguments)
@@ -6644,17 +7963,28 @@ class ToolDispatcher:
                 user=arguments.get("user"),
             )
             retry = _auto_retry_config(arguments)
-            normalized_run_id = normalize_run_id(str(run_id)) if run_id is not None else None
+            normalized_run_id = (
+                normalize_run_id(str(run_id)) if run_id is not None else None
+            )
             if normalized_run_id is not None:
                 status = load_status(self.runner.output_root, normalized_run_id)
-                if isinstance(status, dict) and str(status.get("state") or "").lower() == "running":
+                if (
+                    isinstance(status, dict)
+                    and str(status.get("state") or "").lower() == "running"
+                ):
                     raise ValueError(
                         f"run_id={normalized_run_id} is already running; use pipeline.status or pipeline.cancel_run first"
                     )
             if retry.enabled and normalized_run_id is None:
                 normalized_run_id = new_run_id("pipeline")
-            res = _run_with_auto_retry(self.runner, req, run_id=normalized_run_id, retry=retry)
-            return {"run_id": res.run_id, "output_dir": res.output_dir, "summary": asdict(res)}
+            res = _run_with_auto_retry(
+                self.runner, req, run_id=normalized_run_id, retry=retry
+            )
+            return {
+                "run_id": res.run_id,
+                "output_dir": res.output_dir,
+                "summary": asdict(res),
+            }
 
         if name == "pipeline.preflight":
             req = pipeline_request_from_args(arguments, strict_target=False)
@@ -6664,7 +7994,9 @@ class ToolDispatcher:
                 round_id=req.round_id,
                 user=arguments.get("user"),
             )
-            return preflight_request(req, self.runner, run_id=str(arguments.get("run_id") or "") or None)
+            return preflight_request(
+                req, self.runner, run_id=str(arguments.get("run_id") or "") or None
+            )
 
         if name == "pipeline.af2_predict":
             return _run_af2_predict(self.runner, arguments)
@@ -6679,7 +8011,9 @@ class ToolDispatcher:
             if "target_fasta" not in legacy_args and legacy_args.get("sequence"):
                 sequence = _as_text(legacy_args.get("sequence")).strip()
                 if sequence:
-                    seq_id = str(legacy_args.get("sequence_id") or "seq1").strip() or "seq1"
+                    seq_id = (
+                        str(legacy_args.get("sequence_id") or "seq1").strip() or "seq1"
+                    )
                     legacy_args["target_fasta"] = f">{seq_id}\n{sequence}\n"
             return _run_af2_predict(self.runner, legacy_args)
 
@@ -6745,8 +8079,12 @@ class ToolDispatcher:
             target_pdb = _as_text(arguments.get("target_pdb"))
             if not target_fasta.strip() and not target_pdb.strip():
                 raise ValueError("One of target_fasta or target_pdb is required")
-            req = request_from_prompt(prompt=prompt, target_fasta=target_fasta, target_pdb=target_pdb)
-            agent_panel_enabled = _as_bool(arguments.get("agent_panel_enabled"), req.agent_panel_enabled)
+            req = request_from_prompt(
+                prompt=prompt, target_fasta=target_fasta, target_pdb=target_pdb
+            )
+            agent_panel_enabled = _as_bool(
+                arguments.get("agent_panel_enabled"), req.agent_panel_enabled
+            )
             auto_recover = _as_bool(arguments.get("auto_recover"), req.auto_recover)
             project_id = _as_text(arguments.get("project_id")).strip() or None
             round_id = _as_text(arguments.get("round_id")).strip() or None
@@ -6763,17 +8101,29 @@ class ToolDispatcher:
                 round_id=req.round_id,
                 user=arguments.get("user"),
             )
-            normalized_run_id = normalize_run_id(str(run_id)) if run_id is not None else None
+            normalized_run_id = (
+                normalize_run_id(str(run_id)) if run_id is not None else None
+            )
             if normalized_run_id is not None:
                 status = load_status(self.runner.output_root, normalized_run_id)
-                if isinstance(status, dict) and str(status.get("state") or "").lower() == "running":
+                if (
+                    isinstance(status, dict)
+                    and str(status.get("state") or "").lower() == "running"
+                ):
                     raise ValueError(
                         f"run_id={normalized_run_id} is already running; use pipeline.status or pipeline.cancel_run first"
                     )
             if retry.enabled and normalized_run_id is None:
                 normalized_run_id = new_run_id("pipeline")
-            res = _run_with_auto_retry(self.runner, req, run_id=normalized_run_id, retry=retry)
-            return {"routed_request": asdict(req), "run_id": res.run_id, "output_dir": res.output_dir, "summary": asdict(res)}
+            res = _run_with_auto_retry(
+                self.runner, req, run_id=normalized_run_id, retry=retry
+            )
+            return {
+                "routed_request": asdict(req),
+                "run_id": res.run_id,
+                "output_dir": res.output_dir,
+                "summary": asdict(res),
+            }
 
         if name == "pipeline.status":
             run_id = str(arguments.get("run_id") or "")
@@ -6786,7 +8136,12 @@ class ToolDispatcher:
 
         if name == "pipeline.list_runs":
             limit = arguments.get("limit")
-            return {"runs": list_runs(self.runner.output_root, limit=int(limit) if limit is not None else 50)}
+            return {
+                "runs": list_runs(
+                    self.runner.output_root,
+                    limit=int(limit) if limit is not None else 50,
+                )
+            }
 
         if name == "pipeline.save_project":
             return _save_project(self.runner, arguments)
@@ -6891,6 +8246,27 @@ class ToolDispatcher:
                 "found": isinstance(session, dict),
                 "session": session if isinstance(session, dict) else None,
             }
+
+        if name == "pipeline.cath_get_batch_overview":
+            return _cath_get_batch_overview_tool(self.runner, arguments)
+
+        if name == "pipeline.cath_launch_batch":
+            return _cath_launch_batch_tool(self.runner, arguments)
+
+        if name == "pipeline.cath_launch_training":
+            return _cath_launch_training_tool(self.runner, arguments)
+
+        if name == "pipeline.cath_list_jobs":
+            return _cath_list_jobs_tool(self.runner, arguments)
+
+        if name == "pipeline.cath_get_job":
+            return _cath_get_job_tool(self.runner, arguments)
+
+        if name == "pipeline.cath_read_job_log":
+            return _cath_read_job_log_tool(self.runner, arguments)
+
+        if name == "pipeline.cath_stop_job":
+            return _cath_stop_job_tool(self.runner, arguments)
 
         if name == "pipeline.runpod_list_endpoints":
             return _runpod_list_endpoints_tool(self.runner, arguments)

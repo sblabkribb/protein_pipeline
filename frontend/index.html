@@ -158,6 +158,17 @@
                 Monitor
               </button>
               <button
+                id="tabBtnCath"
+                class="tab-btn app-nav-btn hidden"
+                role="tab"
+                aria-selected="false"
+                aria-controls="tab-cath"
+                data-tab="cath"
+                data-i18n="tabs.cath"
+              >
+                CATH
+              </button>
+              <button
                 id="tabBtnRounds"
                 class="tab-btn app-nav-btn"
                 role="tab"
@@ -1011,6 +1022,46 @@
         </section>
 
         <section
+          id="tab-cath"
+          class="tab-panel"
+          data-tab="cath"
+          role="tabpanel"
+          aria-labelledby="tabBtnCath"
+        >
+          <div class="tab-content-shell">
+            <div class="tab-grid">
+              <div id="cathOpsPanel" class="panel panel-block monitor-cath-panel hidden">
+                <div class="panel-header">
+                  <h3 data-i18n="cath.title">CATH Pipeline</h3>
+                  <p data-i18n="cath.desc">Run subset pipeline jobs and inspect progress. Agent and Gemini features stay disabled here.</p>
+                </div>
+                <div class="cath-toolbar">
+                  <label class="toggle">
+                    <input id="cathKeepLocal" type="checkbox" checked />
+                    <span data-i18n="cath.keepLocal">Keep local outputs</span>
+                  </label>
+                  <label class="toggle">
+                    <input id="cathStopOnError" type="checkbox" />
+                    <span data-i18n="cath.stopOnError">에러 발생 시 정지</span>
+                  </label>
+                  <label class="cath-inline-field">
+                    <span data-i18n="cath.maxWorkers">Max workers</span>
+                    <input id="cathMaxWorkers" type="number" min="1" step="1" value="4" />
+                  </label>
+                  <button id="cathRefreshBtn" class="ghost" data-i18n="cath.refresh">Refresh</button>
+                </div>
+                <div id="cathSubsetGrid" class="cath-subset-grid"></div>
+                <div class="panel-divider"></div>
+                <div class="status-subtitle" data-i18n="cath.jobs">Managed Jobs</div>
+                <div id="cathJobsList" class="cath-jobs-list"></div>
+                <div class="status-subtitle" data-i18n="cath.log">Job Log</div>
+                <pre id="cathJobLog" class="cath-job-log" data-i18n="cath.logPlaceholder">Select a job to inspect its log.</pre>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section
           id="tab-analyze"
           class="tab-panel"
           data-tab="analyze"
@@ -1728,6 +1779,6 @@
     <button id="copilotFabBtn" class="primary copilot-fab" data-i18n="copilot.open">Copilot</button>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260417_131749"></script>
+    <script type="module" src="./app.js?v=20260421_164900"></script>
   </body>
 </html>

@@ -251,6 +251,42 @@ class TestCaRmsd(unittest.TestCase):
         rmsd = ca_rmsd(pdb_ref, pdb_mob)
         self.assertAlmostEqual(rmsd, 0.0, places=5)
 
+    def test_ca_rmsd_uses_mean_over_matched_atoms(self) -> None:
+        pdb_ref = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  SER A   3       0.000   2.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        pdb_mob = (
+            "ATOM      1  CA  ALA A   1       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       3.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  SER A   3       1.000   3.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        pdb_ref_duplicated = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  SER A   3       0.000   2.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  ALA A   4       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  GLY A   5       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  SER A   6       0.000   2.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        pdb_mob_duplicated = (
+            "ATOM      1  CA  ALA A   1       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       3.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  SER A   3       1.000   3.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  ALA A   4       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  GLY A   5       3.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      6  CA  SER A   6       1.000   3.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+        rmsd = ca_rmsd(pdb_ref, pdb_mob)
+        duplicated_rmsd = ca_rmsd(pdb_ref_duplicated, pdb_mob_duplicated)
+        self.assertGreater(rmsd, 0.0)
+        self.assertAlmostEqual(duplicated_rmsd, rmsd, places=6)
+
     def test_ca_rmsd_mismatching_resseq(self) -> None:
         # Different shapes but same indices if matched by position
         pdb_ref = (

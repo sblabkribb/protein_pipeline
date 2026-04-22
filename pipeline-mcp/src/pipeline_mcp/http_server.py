@@ -32,6 +32,13 @@ _SESSIONS = None
 _ALLOW_ALL_ORIGINS = True
 _ALLOWED_ORIGINS: set[str] = set()
 _ADMIN_ONLY_TOOLS = {
+    "pipeline.cath_get_batch_overview",
+    "pipeline.cath_launch_batch",
+    "pipeline.cath_launch_training",
+    "pipeline.cath_list_jobs",
+    "pipeline.cath_get_job",
+    "pipeline.cath_read_job_log",
+    "pipeline.cath_stop_job",
     "pipeline.runpod_list_endpoints",
     "pipeline.runpod_get_endpoint",
     "pipeline.runpod_update_endpoint",
@@ -187,6 +194,16 @@ class Handler(BaseHTTPRequestHandler):
         if not isinstance(data, dict):
             raise ValueError("JSON body must be an object")
         return data
+
+    def _route_path(self) -> str:
+        raw = str(self.path or "").split("?", 1)[0].strip() or "/"
+        normalized = raw.rstrip("/") or "/"
+        if normalized == "/api":
+            return "/"
+        if normalized.startswith("/api/"):
+            stripped = normalized[4:]
+            return stripped or "/"
+        return normalized
 
     def _request_is_secure(self) -> bool:
         forced = str(os.environ.get("PIPELINE_SESSION_COOKIE_SECURE") or "").strip().lower()
@@ -468,7 +485,8 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self) -> None:  # noqa: N802
-        if self.path.rstrip("/") == "/auth/oidc/config":
+        route_path = self._route_path()
+        if route_path == "/auth/oidc/config":
             if self.oidc is None:
                 self._json(200, {"ok": True, "enabled": False})
                 return
@@ -492,20 +510,21 @@ class Handler(BaseHTTPRequestHandler):
                 },
             )
             return
-        if self.path.rstrip("/") == "/auth/me":
+        if route_path == "/auth/me":
             user = self._require_auth()
             if user is None:
                 return
             self._json(200, {"ok": True, "user": user})
             return
-        if self.path.rstrip("/") == "/healthz":
+        if route_path == "/healthz":
             self._json(200, {"ok": True})
             return
         self._json(404, {"error": "not found"})
 
     def do_POST(self) -> None:  # noqa: N802
         try:
-            if self.path.rstrip("/") == "/auth/login":
+            route_path = self._route_path()
+            if route_path == "/auth/login":
                 auth = self.auth
                 if auth is None or not getattr(auth, "enabled", False):
                     self._json(400, {"ok": False, "error": "local auth disabled"})
@@ -526,7 +545,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {"ok": True, **result}, extra_headers=extra_headers)
                 return
 
-            if self.path.rstrip("/") == "/auth/oidc/exchange":
+            if route_path == "/auth/oidc/exchange":
                 if self.oidc is None:
                     self._json(400, {"ok": False, "error": "oidc disabled"})
                     return
@@ -558,7 +577,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 return
 
-            if self.path.rstrip("/") == "/auth/logout":
+            if route_path == "/auth/logout":
                 body = self._read_json()
                 redirect_uri = str(body.get("redirect_uri") or "").strip()
                 logout_url = ""
@@ -580,7 +599,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 return
 
-            if self.path.rstrip("/") == "/auth/create_user":
+            if route_path == "/auth/create_user":
                 auth = self.auth
                 if auth is None or not getattr(auth, "enabled", False):
                     self._json(400, {"ok": False, "error": "auth disabled"})
@@ -599,7 +618,7 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, {"ok": True, "user": created})
                 return
 
-            if self.path.rstrip("/") == "/mcp":
+            if route_path == "/mcp":
                 user = self._require_auth()
                 if user is None and self._auth_enabled():
                     return
@@ -607,13 +626,13 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(200, self._handle_mcp_rpc(body, user))
                 return
 
-            if self.path.rstrip("/") == "/tools/list":
+            if route_path == "/tools/list":
                 user = self._require_auth()
                 if user is None and self._auth_enabled():
                     return
                 self._json(200, self._list_tools_for_user(user))
                 return
-            if self.path.rstrip("/") == "/tools/call":
+            if route_path == "/tools/call":
                 user = self._require_auth()
                 if user is None and self._auth_enabled():
                     return

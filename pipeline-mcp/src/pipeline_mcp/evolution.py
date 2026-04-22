@@ -5,9 +5,18 @@ from pathlib import Path
 import os
 import shutil
 import pickle
-import torch
 from dataclasses import replace
-from transformers import AutoTokenizer, EsmModel
+
+try:
+    import torch
+except Exception:  # pragma: no cover - optional runtime dependency
+    torch = None
+
+try:
+    from transformers import AutoTokenizer, EsmModel
+except Exception:  # pragma: no cover - optional runtime dependency
+    AutoTokenizer = None
+    EsmModel = None
 
 from .models import PipelineRequest, PipelineResult
 from .storage import init_run, set_status, write_json, new_run_id, resolve_run_path
@@ -22,6 +31,10 @@ PLDDT_MODEL_PATH = MODEL_DIR / "global_plddt_v1.pkl"
 RELAX_MODEL_PATH = MODEL_DIR / "global_relax_v1.pkl"
 
 def get_esm_embeddings(sequences, device):
+    if torch is None or AutoTokenizer is None or EsmModel is None:
+        raise RuntimeError(
+            "Evolution mode requires torch and transformers to be installed"
+        )
     print(f"Loading ESM model {ESM_MODEL_NAME} for embedding extraction...")
     tokenizer = AutoTokenizer.from_pretrained(ESM_MODEL_NAME)
     model = EsmModel.from_pretrained(ESM_MODEL_NAME).to(device)
@@ -44,6 +57,8 @@ def get_esm_embeddings(sequences, device):
     return np.vstack(embeddings)
 
 def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResult:
+    if torch is None:
+        raise RuntimeError("Evolution mode requires torch to be installed")
     paths = init_run(runner.output_root, run_id)
     set_status(paths, stage="evolution", state="running", detail="Initializing Multi-Objective (pLDDT, Solu, Relax) Evolution")
 

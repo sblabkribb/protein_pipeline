@@ -27,3 +27,48 @@ def test_handler_accepts_cookie_session_without_authorization_header(tmp_path, m
     handler.headers = {"Cookie": f"{manager.config.cookie_name}={session_id}"}
 
     assert handler._require_user() == user
+
+
+def test_handler_accepts_api_prefixed_healthz_route():
+    captured = {}
+
+    handler = Handler.__new__(Handler)
+    handler.path = "/api/healthz"
+    handler.headers = {}
+    handler._json = lambda status, payload, extra_headers=None: captured.update(  # noqa: ARG005
+        status=status,
+        payload=payload,
+    )
+
+    handler.do_GET()
+
+    assert captured["status"] == 200
+    assert captured["payload"] == {"ok": True}
+
+
+def test_handler_accepts_api_prefixed_tools_call_route():
+    captured = {}
+
+    handler = Handler.__new__(Handler)
+    handler.path = "/api/tools/call"
+    handler.headers = {}
+    handler._auth_enabled = lambda: False
+    handler._require_auth = lambda: None
+    handler._read_json = lambda: {"name": "pipeline.list_runs", "arguments": {"limit": 1}}
+    handler._call_tool_for_user = lambda user, name, arguments: {  # noqa: ARG005
+        "name": name,
+        "arguments": arguments,
+    }
+    handler._json = lambda status, payload, extra_headers=None: captured.update(  # noqa: ARG005
+        status=status,
+        payload=payload,
+    )
+    handler.log_error = lambda *args, **kwargs: None  # noqa: ARG005
+
+    handler.do_POST()
+
+    assert captured["status"] == 200
+    assert captured["payload"] == {
+        "ok": True,
+        "result": {"name": "pipeline.list_runs", "arguments": {"limit": 1}},
+    }

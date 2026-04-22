@@ -635,6 +635,8 @@ const state = {
   hitListResult: null,
   hitListRows: [],
   hitListCutoff: 0,
+  hitListSort: { key: "score", order: "desc" },
+  hitListSelectedSeqId: null,
   hitListLimit: 120,
   chartView: "plddt_rmsd",
   hitListWeights: {
@@ -643,6 +645,11 @@ const state = {
     rmsd: 0.2,
     novelty: 0,
   },
+  cathOverview: null,
+  cathJobs: [],
+  cathSelectedJobId: "",
+  cathSelectedJobLog: "",
+  cathLastRefreshAt: 0,
   runs: [],
   runModeById: {},
   af2ProviderByRunId: {},
@@ -741,6 +748,7 @@ const el = {
   accountBtn: document.getElementById("accountBtn"),
   adminBtn: document.getElementById("adminBtn"),
   runpodAdminBtn: document.getElementById("runpodAdminBtn"),
+  tabBtnCath: document.getElementById("tabBtnCath"),
   helpBtn: document.getElementById("helpBtn"),
   copilotOpenBtn: document.getElementById("copilotOpenBtn"),
   copilotFabBtn: document.getElementById("copilotFabBtn"),
@@ -951,6 +959,14 @@ const el = {
   artifactGenerateReport: document.getElementById("artifactGenerateReport"),
   agentPanelList: document.getElementById("agentPanelList"),
   agentPanelStatus: document.getElementById("agentPanelStatus"),
+  cathOpsPanel: document.getElementById("cathOpsPanel"),
+  cathKeepLocal: document.getElementById("cathKeepLocal"),
+  cathStopOnError: document.getElementById("cathStopOnError"),
+  cathMaxWorkers: document.getElementById("cathMaxWorkers"),
+  cathRefreshBtn: document.getElementById("cathRefreshBtn"),
+  cathSubsetGrid: document.getElementById("cathSubsetGrid"),
+  cathJobsList: document.getElementById("cathJobsList"),
+  cathJobLog: document.getElementById("cathJobLog"),
   mcpGuidePanel: document.getElementById("mcpGuidePanel"),
   viewRunReport: document.getElementById("viewRunReport"),
   viewAgentReport: document.getElementById("viewAgentReport"),
@@ -1906,6 +1922,7 @@ const I18N = {
     "tabs.studio": "Studio",
     "tabs.rounds": "Rounds",
     "tabs.monitor": "Monitor",
+    "tabs.cath": "CATH",
     "tabs.analyze": "Analyze",
     "tabs.mcp": "MCP",
     "home.title": "Launch Workspace",
@@ -2274,6 +2291,29 @@ const I18N = {
     "monitor.showAll": "Show all runs (admin)",
     "monitor.activity": "Activity Log",
     "monitor.clearLog": "Clear",
+    "cath.title": "CATH Pipeline",
+    "cath.desc": "Run subset pipeline jobs and inspect progress. Agent and Gemini features stay disabled here.",
+    "cath.keepLocal": "Keep local outputs",
+    "cath.stopOnError": "Stop on error",
+    "cath.maxWorkers": "Max workers",
+    "cath.refresh": "Refresh",
+    "cath.jobs": "Managed Jobs",
+    "cath.log": "Job Log",
+    "cath.logPlaceholder": "Select a job to inspect its log.",
+    "cath.noOverview": "No CATH subset progress found yet.",
+    "cath.noSubsetItems": "No active or failed targets.",
+    "cath.noJobs": "No managed jobs yet.",
+    "cath.launchBatch": "Run Pipeline",
+    "cath.stopJob": "Stop",
+    "cath.refreshFailed": "Failed to load CATH operations: {error}",
+    "cath.batchStarted": "Started CATH pipeline for {subset} ({id}).",
+    "cath.stopRequested": "Stop requested for job {id}.",
+    "cath.stopFailed": "Failed to stop CATH job: {error}",
+    "cath.count.total": "Total",
+    "cath.count.completed": "Completed",
+    "cath.count.failed": "Failed",
+    "cath.count.running": "Running",
+    "cath.count.waiting": "Waiting",
     "agent.title": "Agent Panel",
     "agent.desc": "Stage-by-stage expert consensus and recovery notes.",
     "agent.refresh": "Refresh",
@@ -3100,6 +3140,7 @@ const I18N = {
     "tabs.studio": "스튜디오",
     "tabs.rounds": "라운드",
     "tabs.monitor": "모니터",
+    "tabs.cath": "CATH",
     "tabs.analyze": "분석",
     "tabs.mcp": "MCP",
     "home.title": "실행 워크스페이스",
@@ -3467,6 +3508,29 @@ const I18N = {
     "monitor.showAll": "모든 실행 보기 (관리자)",
     "monitor.activity": "활동 로그",
     "monitor.clearLog": "지우기",
+    "cath.title": "CATH 파이프라인",
+    "cath.desc": "train/val/test subset 파이프라인을 실행하고 진행 상황을 봅니다. 여기서는 에이전트와 Gemini 기능이 비활성입니다.",
+    "cath.keepLocal": "로컬 산출물 유지",
+    "cath.stopOnError": "에러 발생 시 정지",
+    "cath.maxWorkers": "최대 워커",
+    "cath.refresh": "새로고침",
+    "cath.jobs": "관리 작업",
+    "cath.log": "작업 로그",
+    "cath.logPlaceholder": "작업을 선택하면 로그를 표시합니다.",
+    "cath.noOverview": "아직 CATH subset 진행 정보가 없습니다.",
+    "cath.noSubsetItems": "실행 중이거나 실패한 타깃이 없습니다.",
+    "cath.noJobs": "아직 관리 작업이 없습니다.",
+    "cath.launchBatch": "파이프라인 실행",
+    "cath.stopJob": "정지",
+    "cath.refreshFailed": "CATH 운영 정보를 불러오지 못했습니다: {error}",
+    "cath.batchStarted": "{subset} CATH 파이프라인을 시작했습니다 ({id}).",
+    "cath.stopRequested": "{id} 작업에 정지 요청을 보냈습니다.",
+    "cath.stopFailed": "CATH 작업 정지 실패: {error}",
+    "cath.count.total": "전체",
+    "cath.count.completed": "완료",
+    "cath.count.failed": "실패",
+    "cath.count.running": "실행 중",
+    "cath.count.waiting": "대기",
     "agent.title": "에이전트 패널",
     "agent.desc": "단계별 전문가 합의와 복구 기록을 확인합니다.",
     "agent.refresh": "새로고침",
@@ -4408,7 +4472,7 @@ function labelFromMap(value, map) {
 }
 
 const TAB_KEY = "kbf.activeTab";
-const TAB_OPTIONS = ["home", "fast", "advanced", "evolution", "studio", "monitor", "rounds", "analyze", "mcp"];
+const TAB_OPTIONS = ["home", "fast", "advanced", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"];
 const tabButtons = Array.from(document.querySelectorAll("#appSidebar .tab-btn"));
 const tabPanels = Array.from(document.querySelectorAll("#appShell .tab-panel"));
 const langButtons = Array.from(document.querySelectorAll(".lang-btn"));
@@ -9493,6 +9557,9 @@ function setActiveTab(value) {
   if (next === "studio") {
     renderWorkflowStudio();
   }
+  if (next === "cath" && isAdminUser()) {
+    void refreshCathOps({ force: true });
+  }
   if (next === "rounds") {
     renderRoundsWorkspace();
     void syncHomeProjectRoundContext({ preserveSelection: true }).then(() => {
@@ -9925,18 +9992,35 @@ function showChat() {
 }
 
 function updateAdminUI() {
-  const isAdmin = state.user && state.user.role === "admin";
+  const isAdmin = isAdminUser();
   const useOidc = oidcEnabled();
   if (isAdmin) {
     if (el.adminBtn) el.adminBtn.classList.toggle("hidden", useOidc);
     if (el.runpodAdminBtn) el.runpodAdminBtn.classList.remove("hidden");
     if (el.adminRunsToggle) el.adminRunsToggle.classList.remove("hidden");
+    if (el.tabBtnCath) el.tabBtnCath.classList.remove("hidden");
+    if (el.cathOpsPanel) el.cathOpsPanel.classList.remove("hidden");
+    if (activeTabId() === "cath") {
+      void refreshCathOps({ force: true });
+    }
   } else {
     if (el.adminBtn) el.adminBtn.classList.add("hidden");
     if (el.runpodAdminBtn) el.runpodAdminBtn.classList.add("hidden");
     if (el.adminPanel) el.adminPanel.classList.add("hidden");
     if (el.adminRunsToggle) el.adminRunsToggle.classList.add("hidden");
+    if (el.tabBtnCath) el.tabBtnCath.classList.add("hidden");
     if (el.showAllRuns) el.showAllRuns.checked = false;
+    if (el.cathOpsPanel) el.cathOpsPanel.classList.add("hidden");
+    state.cathOverview = null;
+    state.cathJobs = [];
+    state.cathSelectedJobId = "";
+    state.cathSelectedJobLog = "";
+    renderCathSubsetGrid();
+    renderCathJobsList();
+    renderCathJobLog();
+    if (activeTabId() === "cath") {
+      setActiveTab("home");
+    }
   }
   if (useOidc && el.adminPanel) {
     el.adminPanel.classList.add("hidden");
@@ -11421,8 +11505,16 @@ function ensureAutoPoll() {
   }
   if (state.pollTimer) return;
   state.pollTimer = window.setInterval(() => {
+    if (activeTabId() === "cath" && isAdminUser()) {
+      void refreshCathOps();
+      return;
+    }
     void pollCurrentRun({ includeArtifacts: "auto" });
   }, 5000);
+  if (activeTabId() === "cath" && isAdminUser()) {
+    void refreshCathOps({ force: true });
+    return;
+  }
   void pollCurrentRun({ includeArtifacts: "auto" });
 }
 
@@ -11479,7 +11571,12 @@ async function pollCurrentRun({ includeArtifacts = "auto" } = {}) {
   const studioRunId =
     activeTabId() === "studio" ? String(workflowStudioActionRunId(workflowStudioSessionForId()) || "").trim() : "";
   const runId = String(studioRunId || state.currentRunId || "").trim();
-  if (!runId) return;
+  if (!runId) {
+    if (activeTabId() === "cath" && isAdminUser()) {
+      await refreshCathOps();
+    }
+    return;
+  }
   if (studioRunId && studioRunId !== String(state.currentRunId || "").trim()) {
     setCurrentRunId(studioRunId);
   }
@@ -11487,6 +11584,9 @@ async function pollCurrentRun({ includeArtifacts = "auto" } = {}) {
   state.pollCyclePromise = (async () => {
     await pollStatus(runId);
     await refreshAgentPanel();
+    if (activeTabId() === "cath" && isAdminUser()) {
+      await refreshCathOps();
+    }
     const shouldRefresh =
       includeArtifacts === true || (includeArtifacts === "auto" && shouldAutoRefreshArtifacts(runId));
     if (shouldRefresh) {
@@ -22388,14 +22488,78 @@ function setChartView(value) {
   }
 }
 
+function getWtHitListRow(summary = state.artifactComparison) {
+  const wt = summary?.wt_vs_design && typeof summary.wt_vs_design === "object" ? summary.wt_vs_design : {};
+  const hasData = Object.values(wt).some((v) => finiteNumber(v?.wt) !== null);
+  if (!hasData) return null;
+
+  return {
+    seq_id: "WT",
+    source: "wt",
+    rank: "-",
+    tier: "-",
+    score: finiteNumber(wt?.score?.wt),
+    soluprot: finiteNumber(wt?.soluprot?.wt),
+    plddt: finiteNumber(wt?.plddt?.wt),
+    rmsd: finiteNumber(wt?.rmsd?.wt),
+    relax: finiteNumber(wt?.relax?.wt),
+    sequence: "",
+    af2_selected: false,
+    is_wt: true,
+  };
+}
+
 function filteredHitListRows({ applyLimit = false } = {}) {
-  const rows = Array.isArray(state.hitListRows) ? state.hitListRows : [];
+  const baseRows = Array.isArray(state.hitListRows) ? state.hitListRows : [];
+  
+  // Deduplicate baseRows by seq_id to prevent "multiple rows selected" issues
+  const uniqueBaseRows = [];
+  const seenIds = new Set();
+  for (const row of baseRows) {
+    const id = String(row.seq_id || "");
+    if (!seenIds.has(id)) {
+      uniqueBaseRows.push(row);
+      seenIds.add(id);
+    }
+  }
+
+  const wtRow = getWtHitListRow();
+  // Only inject WT row if it doesn't already exist in the base data (by ID or source)
+  const hasWt = uniqueBaseRows.some((r) => {
+    const id = String(r.seq_id || "").toUpperCase();
+    const src = normalizeSourceKey(r.source);
+    return id === "WT" || src === "wt";
+  });
+  const rows = (wtRow && !hasWt) ? [wtRow, ...uniqueBaseRows] : uniqueBaseRows;
+
   const cutoff = Math.max(0, Math.min(100, Number(state.hitListCutoff || 0)));
   const filtered = rows.filter((row) => {
+    if (row.is_wt) return true;
     const score = Number(row?.score);
     if (Number.isFinite(score) && score >= cutoff) return true;
     return row?.score === null && cutoff <= 0;
   });
+
+  const sort = state.hitListSort || { key: "score", order: "desc" };
+  filtered.sort((a, b) => {
+    const valA = a[sort.key];
+    const valB = b[sort.key];
+
+    if (valA === null || valA === undefined || valA === "-") return 1;
+    if (valB === null || valB === undefined || valB === "-") return -1;
+
+    const numA = Number(valA);
+    const numB = Number(valB);
+
+    if (Number.isFinite(numA) && Number.isFinite(numB)) {
+      return sort.order === "asc" ? numA - numB : numB - numA;
+    }
+
+    const strA = String(valA).toLowerCase();
+    const strB = String(valB).toLowerCase();
+    return sort.order === "asc" ? strA.localeCompare(strB) : strB.localeCompare(strA);
+  });
+
   if (!applyLimit) return filtered;
   const limit = Math.max(10, Math.min(500, Number(state.hitListLimit || 120)));
   return filtered.slice(0, limit);
@@ -22439,6 +22603,10 @@ function svgSafe(text) {
   return escapeHtml(String(text || ""));
 }
 
+function varColorTeal() {
+  return "#0f7a77";
+}
+
 function chartTickText(value, digits = 1) {
   if (typeof value !== "number" || !Number.isFinite(value)) return "-";
   return value.toFixed(digits);
@@ -22446,8 +22614,9 @@ function chartTickText(value, digits = 1) {
 
 function wtScatterPointFromSummary({ xMetric, yMetric, summary = state.artifactComparison } = {}) {
   const wt = summary?.wt_vs_design && typeof summary.wt_vs_design === "object" ? summary.wt_vs_design : {};
-  const x = finiteNumber(wt?.[xMetric]?.wt);
-  const y = finiteNumber(wt?.[yMetric]?.wt);
+  let x = finiteNumber(wt?.[xMetric]?.wt);
+  let y = finiteNumber(wt?.[yMetric]?.wt);
+
   if (x === null || y === null) return null;
   return {
     x,
@@ -22479,9 +22648,23 @@ function buildMetricScatter(
       seqId: String(row?.seq_id || "-"),
       source: sourceLabel(normalizeSourceKey(row?.source)),
       sourceKey: normalizeSourceKey(row?.source),
+      soluprot: finiteNumber(row?.soluprot),
+      plddt: finiteNumber(row?.plddt),
+      rmsd: finiteNumber(row?.rmsd),
+      relax: finiteNumber(row?.relax),
     }))
     .filter((row) => row.x !== null && row.y !== null);
-  const wtPoint = wtScatterPointFromSummary({ xMetric, yMetric });
+
+  const hasWtInDesign = designPoints.some((p) => p.sourceKey === "wt" || String(p.seqId).toUpperCase() === "WT");
+  const wtPoint = hasWtInDesign ? null : wtScatterPointFromSummary({ xMetric, yMetric });
+
+  if (wtPoint) {
+    const wt = state.artifactComparison?.wt_vs_design || {};
+    wtPoint.soluprot = finiteNumber(wt?.soluprot?.wt);
+    wtPoint.plddt = finiteNumber(wt?.plddt?.wt);
+    wtPoint.rmsd = 0;
+    wtPoint.relax = finiteNumber(wt?.relax?.wt);
+  }
   const points = wtPoint ? [...designPoints, wtPoint] : designPoints;
   if (!points.length) return null;
 
@@ -22536,15 +22719,25 @@ function buildMetricScatter(
       const cx = xMap(p.x).toFixed(2);
       const cy = yMap(p.y).toFixed(2);
       const fill = colorBySource[p.sourceKey] || colorBySource.other;
-      const label = `${p.seqId} | ${p.source} | ${xLabel}=${chartTickText(p.x, xDigits)} | ${yLabel}=${chartTickText(
-        p.y,
-        yDigits
-      )}`;
+      const metrics = [
+        `ID: ${p.seqId}`,
+        `Src: ${p.source}`,
+        `SoluProt: ${formatMetricValue(p.soluprot, 3, false)}`,
+        `pLDDT: ${formatMetricValue(p.plddt, 1, false)}`,
+        `RMSD: ${formatMetricValue(p.rmsd, 2, false)}`,
+        `Relax: ${formatMetricValue(p.relax, 3, false)}`,
+      ].join(" | ");
+
       const radius = p.sourceKey === "wt" ? 4.6 : 3.8;
       const stroke = p.sourceKey === "wt" ? "#1b3f6e" : "rgba(16,42,45,0.35)";
       const strokeWidth = p.sourceKey === "wt" ? 1.3 : 0.5;
-      return `<circle cx="${cx}" cy="${cy}" r="${radius}" fill="${fill}" fill-opacity="0.86" stroke="${stroke}" stroke-width="${strokeWidth}"><title>${svgSafe(
-        label
+      const isSelected = state.hitListSelectedSeqId && String(p.seqId) === String(state.hitListSelectedSeqId);
+      const sRadius = isSelected ? radius * 1.5 : radius;
+      const sStroke = isSelected ? varColorTeal() : stroke;
+      const sStrokeWidth = isSelected ? strokeWidth + 1.5 : strokeWidth;
+
+      return `<circle class="chart-point" data-seq-id="${escapeHtml(p.seqId)}" cx="${cx}" cy="${cy}" r="${sRadius}" fill="${fill}" fill-opacity="0.86" stroke="${sStroke}" stroke-width="${sStrokeWidth}" style="cursor: pointer;"><title>${svgSafe(
+        metrics
       )}</title></circle>`;
     })
     .join("");
@@ -22921,16 +23114,19 @@ function renderHitList() {
     return;
   }
   const body = shown
-    .map((row) => {
+    .map((row, idx) => {
       const wtDiffLabel = formatWtDifference(row);
+      const isSelected = state.hitListSelectedSeqId && String(row.seq_id) === String(state.hitListSelectedSeqId);
       const classNames = [
         row.af2_selected ? "hit-list-row-pass" : "",
         row.plddt == null ? "hit-list-row-missing" : "",
+        row.is_wt ? "hit-list-row-wt" : "",
+        isSelected ? "hit-list-row-selected" : "",
       ]
         .filter(Boolean)
         .join(" ");
-      return `<tr class="${classNames}">
-        <td class="num">${escapeHtml(String(row.rank || "-"))}</td>
+      return `<tr class="${classNames}" data-seq-id="${escapeHtml(String(row.seq_id || ""))}">
+        <td class="num">${idx + 1}</td>
         <td>${escapeHtml(String(row.seq_id || "-"))}</td>
         <td>${escapeHtml(String(row.source || "-"))}</td>
         <td class="num">${escapeHtml(formatConservationTierValue(row.tier))}</td>
@@ -22941,24 +23137,36 @@ function renderHitList() {
         ${showRelax ? `<td class="num">${escapeHtml(formatMetricValue(row.relax, 3, false))}</td>` : ""}
         <td class="num">${escapeHtml(wtDiffLabel)}</td>
         <td>${escapeHtml(localizedYesNo(Boolean(row.af2_selected)))}</td>
+        <td class="actions" style="white-space: nowrap;">
+          <button type="button" class="ghost" data-action="download-fasta" data-seq-id="${escapeHtml(String(row.seq_id || ""))}" data-sequence="${escapeHtml(String(row.sequence || ""))}" style="padding: 2px 6px; font-size: 0.8em;">FASTA</button>
+          ${row.af2_ranked_pdb_path ? `<button type="button" class="ghost" data-action="download-pdb" data-path="${escapeHtml(String(row.af2_ranked_pdb_path))}" style="padding: 2px 6px; font-size: 0.8em;">PDB</button>` : ""}
+        </td>
       </tr>`;
     })
     .join("");
+
+  const sort = state.hitListSort || { key: "score", order: "desc" };
+  const sortClass = (key) => {
+    if (sort.key !== key) return "";
+    return sort.order === "asc" ? "sort-asc" : "sort-desc";
+  };
+
   el.hitListTable.innerHTML = `
     <table class="hit-list-table">
       <thead>
         <tr>
           <th class="num">#</th>
-          <th>seq_id</th>
-          <th>source</th>
-          <th class="num">tier</th>
-          <th class="num">score</th>
-          <th class="num">SoluProt</th>
-          <th class="num">pLDDT</th>
-          <th class="num">RMSD</th>
-          ${showRelax ? '<th class="num">Relax/res</th>' : ""}
+          <th data-sort="seq_id" class="${sortClass("seq_id")}">seq_id</th>
+          <th data-sort="source" class="${sortClass("source")}">source</th>
+          <th class="num" data-sort="tier" class="${sortClass("tier")}">tier</th>
+          <th class="num" data-sort="score" class="${sortClass("score")}">score</th>
+          <th class="num" data-sort="soluprot" class="${sortClass("soluprot")}">SoluProt</th>
+          <th class="num" data-sort="plddt" class="${sortClass("plddt")}">pLDDT</th>
+          <th class="num" data-sort="rmsd" class="${sortClass("rmsd")}">RMSD</th>
+          ${showRelax ? `<th class="num" data-sort="relax" class="${sortClass("relax")}">Relax/res</th>` : ""}
           <th class="num">${escapeHtml(t("analyze.hitList.identity"))}</th>
           <th>${escapeHtml(af2ProviderSelectedLabel(currentRunAf2Provider()))}</th>
+          <th>Actions</th>
         </tr>
       </thead>
       <tbody>${body}</tbody>
@@ -22970,6 +23178,13 @@ function renderHitList() {
   }
   renderCandidateCharts();
   renderCopilotContext();
+
+  if (state.hitListSelectedSeqId) {
+    const targetRow = el.hitListTable.querySelector(`tr[data-seq-id="${state.hitListSelectedSeqId}"]`);
+    if (targetRow) {
+      targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }
 }
 
 function buildHitListDetailsMarkdown() {
@@ -23002,6 +23217,7 @@ function buildHitListDetailsMarkdown() {
 }
 
 async function refreshHitList() {
+  state.hitListSelectedSeqId = null;
   if (!state.currentRunId) {
     state.hitListResult = null;
     state.hitListRows = [];
@@ -23623,6 +23839,250 @@ async function refreshRuns() {
   }
 }
 
+function isAdminUser() {
+  return Boolean(state.user && state.user.role === "admin");
+}
+
+function renderCathJobLog() {
+  if (!el.cathJobLog) return;
+  const text = String(state.cathSelectedJobLog || "").trim();
+  el.cathJobLog.textContent = text || t("cath.logPlaceholder");
+}
+
+function renderCathJobsList() {
+  if (!el.cathJobsList) return;
+  const jobs = Array.isArray(state.cathJobs) ? state.cathJobs : [];
+  if (!jobs.length) {
+    el.cathJobsList.innerHTML = `<div class="placeholder">${escapeHtml(t("cath.noJobs"))}</div>`;
+    return;
+  }
+  el.cathJobsList.innerHTML = jobs
+    .map((job) => {
+      const jobId = String(job?.job_id || "").trim();
+      const label = String(job?.label || job?.kind || jobId || "-").trim();
+      const stateText = String(job?.state || "unknown").trim();
+      const createdAt = String(job?.created_at || "").trim();
+      const isActive = jobId && jobId === String(state.cathSelectedJobId || "").trim();
+      return `
+        <div class="cath-job-item${isActive ? " active" : ""}">
+          <button type="button" class="cath-job-main" data-cath-job-open="${escapeHtml(jobId)}">
+            <strong>${escapeHtml(label)}</strong>
+            <span class="cath-job-meta">${escapeHtml(stateText)}${createdAt ? ` · ${escapeHtml(createdAt)}` : ""}</span>
+          </button>
+          <button type="button" class="ghost cath-job-stop" data-cath-job-stop="${escapeHtml(jobId)}">
+            ${escapeHtml(t("cath.stopJob"))}
+          </button>
+        </div>
+      `;
+    })
+    .join("");
+  Array.from(el.cathJobsList.querySelectorAll("[data-cath-job-open]")).forEach((node) => {
+    node.addEventListener("click", async () => {
+      const jobId = String(node.getAttribute("data-cath-job-open") || "").trim();
+      await loadCathJobLog(jobId);
+    });
+  });
+  Array.from(el.cathJobsList.querySelectorAll("[data-cath-job-stop]")).forEach((node) => {
+    node.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const jobId = String(node.getAttribute("data-cath-job-stop") || "").trim();
+      await stopCathJob(jobId);
+    });
+  });
+}
+
+function renderCathSubsetGrid() {
+  if (!el.cathSubsetGrid) return;
+  const overview = state.cathOverview;
+  const subsets = overview && typeof overview === "object" && overview.subsets && typeof overview.subsets === "object"
+    ? overview.subsets
+    : {};
+  const hasOverview = Object.keys(subsets).length > 0;
+  const order = ["train", "val", "test"];
+  el.cathSubsetGrid.innerHTML = order
+    .map((subset) => {
+      const entry = subsets[subset] || {};
+      const counts = entry.counts || {};
+      const items = Array.isArray(entry.items) ? entry.items : [];
+      let itemHtml = "";
+      if (items.length > 0) {
+        const rows = items.map((item) => {
+          const targetId = String(item?.target_id || item?.run_id || "-").trim();
+          const stateText = String(item?.state || "unknown").trim();
+          const stageText = String(item?.stage || "-").trim();
+          const detail = String(item?.detail || "-").trim();
+          const updatedAt = String(item?.updated_at || "-").trim();
+          return `
+            <tr>
+              <td>${escapeHtml(targetId)}</td>
+              <td><span class="state-badge">${escapeHtml(stateText)}</span></td>
+              <td>${escapeHtml(stageText)}</td>
+              <td class="col-detail" title="${escapeHtml(detail)}">${escapeHtml(detail)}</td>
+              <td>${escapeHtml(updatedAt)}</td>
+            </tr>
+          `;
+        }).join("");
+        
+        itemHtml = `
+          <div class="cath-subset-table-container">
+            <table class="cath-subset-table">
+              <thead>
+                <tr>
+                  <th>Target</th>
+                  <th>State</th>
+                  <th>Stage</th>
+                  <th class="col-detail">Detail</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rows}
+              </tbody>
+            </table>
+          </div>
+        `;
+      } else {
+        itemHtml = `<div class="placeholder cath-subset-placeholder">${escapeHtml(
+            t(hasOverview ? "cath.noSubsetItems" : "cath.noOverview")
+          )}</div>`;
+      }
+      
+      const countRows = [
+        ["cath.count.total", counts.total],
+        ["cath.count.completed", counts.completed],
+        ["cath.count.failed", counts.failed],
+        ["cath.count.running", counts.running],
+        ["cath.count.waiting", counts.waiting],
+      ]
+        .map(
+          ([labelKey, value]) => `
+            <div class="cath-count-pill">
+              <span>${escapeHtml(t(labelKey))}</span>
+              <strong>${escapeHtml(String(Number(value) || 0))}</strong>
+            </div>
+          `
+        )
+        .join("");
+      const subsetPath = String(entry.target_dir || "").trim();
+      return `
+        <article class="cath-subset-card">
+          <div class="cath-subset-head">
+            <div>
+              <strong class="cath-subset-title">${escapeHtml(subset)}</strong>
+              ${subsetPath ? `<div class="cath-subset-path">${escapeHtml(subsetPath)}</div>` : ""}
+            </div>
+            <button type="button" class="ghost" data-cath-launch="${escapeHtml(subset)}">
+              ${escapeHtml(t("cath.launchBatch"))}
+            </button>
+          </div>
+          <div class="cath-count-grid">${countRows}</div>
+          <div class="cath-subset-items">${itemHtml}</div>
+        </article>
+      `;
+    })
+    .join("");
+
+  Array.from(el.cathSubsetGrid.querySelectorAll("[data-cath-launch]")).forEach((node) => {
+    node.addEventListener("click", async () => {
+      const subset = String(node.getAttribute("data-cath-launch") || "").trim();
+      await launchCathBatch(subset);
+    });
+  });
+}
+
+async function loadCathJobLog(jobId, { announce = false } = {}) {
+  const id = String(jobId || "").trim();
+  state.cathSelectedJobId = id;
+  if (!id) {
+    state.cathSelectedJobLog = "";
+    renderCathJobsList();
+    renderCathJobLog();
+    return;
+  }
+  try {
+    const result = await apiCall("pipeline.cath_read_job_log", {
+      job_id: id,
+      max_bytes: 160000,
+    });
+    state.cathSelectedJobLog = String(result?.text || "").trim();
+  } catch (err) {
+    state.cathSelectedJobLog = String(err?.message || "");
+    if (announce) {
+      setMessage(t("cath.refreshFailed", { error: err.message }), "ai");
+    }
+  }
+  renderCathJobsList();
+  renderCathJobLog();
+}
+
+async function refreshCathOps({ force = false } = {}) {
+  if (!isAdminUser() || !el.cathOpsPanel) return;
+  const now = Date.now();
+  if (!force && now - Number(state.cathLastRefreshAt || 0) < 10000) return;
+  try {
+    const [overview, jobsResult] = await Promise.all([
+      apiCall("pipeline.cath_get_batch_overview", { item_limit: 60 }),
+      apiCall("pipeline.cath_list_jobs", { limit: 30 }),
+    ]);
+    state.cathOverview = overview && typeof overview === "object" ? overview : null;
+    state.cathJobs = Array.isArray(jobsResult?.jobs) ? jobsResult.jobs : [];
+    state.cathLastRefreshAt = Date.now();
+    const selected = String(state.cathSelectedJobId || "").trim();
+    if (selected && !state.cathJobs.some((job) => String(job?.job_id || "").trim() === selected)) {
+      state.cathSelectedJobId = "";
+      state.cathSelectedJobLog = "";
+    }
+    renderCathSubsetGrid();
+    renderCathJobsList();
+    if (state.cathSelectedJobId) {
+      await loadCathJobLog(state.cathSelectedJobId);
+    } else {
+      renderCathJobLog();
+    }
+  } catch (err) {
+    if (force) {
+      setMessage(t("cath.refreshFailed", { error: err.message }), "ai");
+    }
+  }
+}
+
+async function launchCathBatch(subset) {
+  const normalizedSubset = String(subset || "").trim().toLowerCase();
+  if (!normalizedSubset) return;
+  const maxWorkers = Number.parseInt(String(el.cathMaxWorkers?.value || "").trim(), 10);
+  const args = {
+    subset: normalizedSubset,
+    keep_local: Boolean(el.cathKeepLocal?.checked),
+    stop_on_error: Boolean(el.cathStopOnError?.checked),
+  };
+  if (Number.isFinite(maxWorkers) && maxWorkers > 0) {
+    args.max_workers = maxWorkers;
+  }
+  const result = await apiCall("pipeline.cath_launch_batch", args);
+  const jobId = String(result?.job?.job_id || "").trim();
+  state.cathSelectedJobId = jobId;
+  state.cathSelectedJobLog = "";
+  setMessage(t("cath.batchStarted", { subset: normalizedSubset, id: jobId || "-" }), "ai");
+  await refreshCathOps({ force: true });
+  if (jobId) {
+    await loadCathJobLog(jobId);
+  }
+}
+
+async function stopCathJob(jobId) {
+  const id = String(jobId || "").trim();
+  if (!id) return;
+  try {
+    await apiCall("pipeline.cath_stop_job", { job_id: id });
+    state.cathSelectedJobId = id;
+    setMessage(t("cath.stopRequested", { id }), "ai");
+    await refreshCathOps({ force: true });
+    await loadCathJobLog(id);
+  } catch (err) {
+    setMessage(t("cath.stopFailed", { error: err.message }), "ai");
+  }
+}
+
 function syncRunSelector(runs = []) {
   const current = String(state.currentRunId || "").trim();
   const ordered = [];
@@ -23888,6 +24348,12 @@ if (el.resumeRunBtn) {
 if (el.refreshRunsBtn) {
   el.refreshRunsBtn.addEventListener("click", () => {
     refreshRuns();
+  });
+}
+
+if (el.cathRefreshBtn) {
+  el.cathRefreshBtn.addEventListener("click", () => {
+    refreshCathOps({ force: true });
   });
 }
 
@@ -24372,6 +24838,56 @@ if (el.hitListDetails) {
   });
 }
 
+if (el.hitListTable) {
+  el.hitListTable.addEventListener("click", async (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) return;
+
+    const sortTh = target.closest("th[data-sort]");
+    if (sortTh) {
+      const key = sortTh.dataset.sort;
+      const current = state.hitListSort || { key: "score", order: "desc" };
+      if (current.key === key) {
+        state.hitListSort = { key, order: current.order === "asc" ? "desc" : "asc" };
+      } else {
+        state.hitListSort = { key, order: "desc" };
+      }
+      renderHitList();
+      return;
+    }
+
+    const btn = target.closest("button[data-action]");
+    if (btn) {
+      const action = btn.dataset.action;
+      const seqId = btn.dataset.seqId;
+      if (action === "download-fasta") {
+        const sequence = btn.dataset.sequence;
+        const fasta = `>${seqId}\n${sequence}\n`;
+        downloadTextFile(`${seqId}.fasta`, fasta);
+      } else if (action === "download-pdb") {
+        const path = btn.dataset.path;
+        if (path) {
+          await downloadArtifact({ type: "file", path, size: 5000000 }, { buttonEl: btn });
+        }
+      }
+    }
+  });
+}
+
+if (el.analyzeChartCanvas) {
+  el.analyzeChartCanvas.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const point = target ? target.closest(".chart-point") : null;
+    if (point) {
+      const seqId = point.dataset.seqId;
+      if (seqId) {
+        state.hitListSelectedSeqId = seqId;
+        renderHitList();
+      }
+    }
+  });
+}
+
 if (el.analyzeChartType) {
   el.analyzeChartType.addEventListener("change", () => {
     setChartView(el.analyzeChartType.value);
@@ -24658,3 +25174,7 @@ PAPER_MASK_CONFIGS.forEach(config => {
     });
   }
 });
+
+renderCathSubsetGrid();
+renderCathJobsList();
+renderCathJobLog();

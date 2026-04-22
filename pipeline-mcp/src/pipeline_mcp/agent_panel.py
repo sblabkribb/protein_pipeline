@@ -7,6 +7,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any
+import mlflow
 
 from .storage import append_run_event
 from .storage import resolve_run_path
@@ -444,6 +445,24 @@ def emit_agent_panel_event(
         recovery=recovery,
     )
     append_run_event(output_root, run_id, filename="agent_panel.jsonl", payload=event)
+    
+    # Log to MLflow
+    try:
+        mlflow.set_tracking_uri("http://127.0.0.1:18050")
+        mlflow.set_experiment("Agent_Operations_Trace")
+        with mlflow.start_run(run_name=f"Agent_{run_id}_{stage}", nested=True):
+            mlflow.log_param("run_id", run_id)
+            mlflow.log_param("stage", stage)
+            consensus = event.get("consensus", {})
+            if isinstance(consensus, dict):
+                mlflow.log_param("decision", consensus.get("decision"))
+                mlflow.log_param("confidence", consensus.get("confidence"))
+                mlflow.log_param("rationale", consensus.get("rationale")[:250] if consensus.get("rationale") else "")
+            if error:
+                mlflow.log_param("error", error[:250])
+    except Exception as mle:
+        pass # Non-critical
+
     run_root = resolve_run_path(output_root, run_id)
     safe_stage = _safe_stage(stage)
     write_json(run_root / "agent_panel" / f"{safe_stage}.json", event)

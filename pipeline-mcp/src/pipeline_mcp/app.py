@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import shutil
-from dotenv import load_dotenv
+
+try:
+    from dotenv import load_dotenv
+except ModuleNotFoundError:  # pragma: no cover - exercised via subprocess test
+    def load_dotenv(*_args, **_kwargs) -> bool:
+        return False
 
 # Load environment variables early
 load_dotenv()

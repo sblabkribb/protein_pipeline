@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import copy
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import as_completed
 from dataclasses import MISSING
 from dataclasses import asdict
 from dataclasses import dataclass
@@ -11,9 +13,11 @@ import json
 import math
 import os
 import shutil
+import threading
 import time
 from pathlib import Path
 import re
+import mlflow
 from typing import Any
 from collections.abc import Callable
 
@@ -430,6 +434,27 @@ def _load_jobs_map(path: Path) -> dict[str, str]:
 
 def _env_true(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _parallel_worker_limit(
+    total_items: int,
+    *,
+    env_name: str,
+    default: int,
+    hard_cap: int = 8,
+) -> int:
+    total = max(0, int(total_items))
+    if total <= 1:
+        return 1
+    raw = os.environ.get(env_name, "").strip()
+    configured = default
+    if raw:
+        try:
+            configured = int(raw)
+        except ValueError:
+            configured = default
+    configured = max(1, min(int(configured), int(hard_cap)))
+    return max(1, min(total, configured))
 
 
 def _tier_key(tier: float) -> str:
@@ -8103,6 +8128,24 @@ class PipelineRunner:
                                         "passed_ids": passed_ids,
                                     },
                                 )
+
+                                # Log to MLflow
+                                try:
+                                    mlflow.set_tracking_uri("http://127.0.0.1:18050")
+                                    mlflow.set_experiment("Pipeline_Inference_Scores")
+                                    with mlflow.start_run(run_name=f"SoluProt_{paths.run_id}_{tier_str}", nested=True):
+                                        mlflow.log_param("run_id", paths.run_id)
+                                        mlflow.log_param("tier", tier_str)
+                                        mlflow.log_param("cutoff", request.soluprot_cutoff)
+                                        mlflow.log_param("num_inputs", len(soluprot_inputs))
+                                        mlflow.log_param("num_passed", len(passed))
+                                        if soluprot_scores:
+                                            valid_scores = [v for v in soluprot_scores.values() if isinstance(v, (int, float))]
+                                            if valid_scores:
+                                                mlflow.log_metric("avg_soluprot", sum(valid_scores)/len(valid_scores))
+                                                mlflow.log_metric("max_soluprot", max(valid_scores))
+                                except Exception as mle:
+                                    pass # Non-critical
                 except Exception as exc:
                     sol_error = f"soluprot_{tier_str} failed: {exc}"
                     errors.append(sol_error)
@@ -8340,22 +8383,24 @@ class PipelineRunner:
                                 jobs: dict[str, str] = (
                                     {} if request.force else _load_jobs_map(jobs_path)
                                 )
+                                jobs_lock = threading.Lock()
 
                                 def _on_af2_job_id(seq_id: str, job_id: str) -> None:
-                                    jobs[seq_id] = job_id
-                                    payload: dict[str, object] = {
-                                        "jobs": dict(jobs),
-                                        "provider": af2_provider,
-                                    }
-                                    if af2_endpoint_id:
-                                        payload["endpoint_id"] = af2_endpoint_id
-                                    write_json(jobs_path, payload)
-                                    set_status(
-                                        paths,
-                                        stage=f"af2_{tier_str}",
-                                        state="running",
-                                        detail=f"runpod_job_id={job_id} seq_id={seq_id}",
-                                    )
+                                    with jobs_lock:
+                                        jobs[seq_id] = job_id
+                                        payload: dict[str, object] = {
+                                            "jobs": dict(jobs),
+                                            "provider": af2_provider,
+                                        }
+                                        if af2_endpoint_id:
+                                            payload["endpoint_id"] = af2_endpoint_id
+                                        write_json(jobs_path, payload)
+                                        set_status(
+                                            paths,
+                                            stage=f"af2_{tier_str}",
+                                            state="running",
+                                            detail=f"runpod_job_id={job_id} seq_id={seq_id}",
+                                        )
 
                                 def _predict_af2_batch(
                                     batch_inputs: list[SequenceRecord],
@@ -8391,7 +8436,9 @@ class PipelineRunner:
                                                 extra_flags=request.af2_extra_flags,
                                             )
 
-                                for seq_input in af2_inputs:
+                                def _predict_single_af2(
+                                    seq_input: SequenceRecord,
+                                ) -> dict[str, object]:
                                     seq_resume_job_id = str(
                                         jobs.get(seq_input.id) or ""
                                     ).strip()
@@ -8400,23 +8447,60 @@ class PipelineRunner:
                                         if seq_resume_job_id
                                         else None
                                     )
-                                    try:
-                                        rec = _predict_af2_batch(
-                                            [seq_input], resume_job_ids=seq_resume
-                                        )
-                                        if isinstance(rec, dict):
-                                            af2_result.update(rec)
-                                    except Exception as exc:
-                                        if (
-                                            request.auto_recover
-                                            or af2_error_is_missing_pdb_outputs(str(exc))
-                                            or "executiontimeout" in str(exc).lower()
-                                        ):
-                                            partial_prediction_errors[seq_input.id] = (
-                                                str(exc)
-                                            )
-                                            continue
-                                        raise
+                                    return _predict_af2_batch(
+                                        [seq_input], resume_job_ids=seq_resume
+                                    )
+
+                                af2_parallel_workers = _parallel_worker_limit(
+                                    len(af2_inputs),
+                                    env_name="PIPELINE_AF2_MAX_WORKERS",
+                                    default=4,
+                                    hard_cap=12,
+                                )
+                                if af2_parallel_workers <= 1:
+                                    for seq_input in af2_inputs:
+                                        try:
+                                            rec = _predict_single_af2(seq_input)
+                                            if isinstance(rec, dict):
+                                                af2_result.update(rec)
+                                        except Exception as exc:
+                                            if (
+                                                request.auto_recover
+                                                or af2_error_is_missing_pdb_outputs(str(exc))
+                                                or "executiontimeout" in str(exc).lower()
+                                            ):
+                                                partial_prediction_errors[seq_input.id] = (
+                                                    str(exc)
+                                                )
+                                                continue
+                                            raise
+                                else:
+                                    with ThreadPoolExecutor(
+                                        max_workers=af2_parallel_workers
+                                    ) as executor:
+                                        future_map = {
+                                            executor.submit(
+                                                _predict_single_af2, seq_input
+                                            ): seq_input.id
+                                            for seq_input in af2_inputs
+                                        }
+                                        for future in as_completed(future_map):
+                                            seq_id = future_map[future]
+                                            try:
+                                                rec = future.result()
+                                                if isinstance(rec, dict):
+                                                    af2_result.update(rec)
+                                            except Exception as exc:
+                                                if (
+                                                    request.auto_recover
+                                                    or af2_error_is_missing_pdb_outputs(str(exc))
+                                                    or "executiontimeout" in str(exc).lower()
+                                                ):
+                                                    partial_prediction_errors[seq_id] = (
+                                                        str(exc)
+                                                    )
+                                                    continue
+                                                raise
 
                                 if partial_prediction_errors and not af2_result:
                                     first_error = next(
@@ -8454,6 +8538,22 @@ class PipelineRunner:
                                         "provider": af2_provider,
                                     },
                                 )
+
+                        # Log AlphaFold2 results to MLflow
+                        try:
+                            mlflow.set_tracking_uri("http://127.0.0.1:18050")
+                            mlflow.set_experiment("Pipeline_Inference_Scores")
+                            with mlflow.start_run(run_name=f"AF2_{paths.run_id}_{tier_str}", nested=True):
+                                mlflow.log_param("run_id", paths.run_id)
+                                mlflow.log_param("tier", tier_str)
+                                mlflow.log_param("num_candidates", len(candidate_ids))
+                                if cached_scores:
+                                    valid_plddt = [v for v in cached_scores.values() if isinstance(v, (int, float))]
+                                    if valid_plddt:
+                                        mlflow.log_metric("avg_plddt", sum(valid_plddt)/len(valid_plddt))
+                                        mlflow.log_metric("max_plddt", max(valid_plddt))
+                        except Exception as mle:
+                            pass # Non-critical
 
                         candidate_scores = {
                             seq_id: cached_scores[seq_id]
@@ -8878,12 +8978,29 @@ class PipelineRunner:
                             relax_mode = cached_mode
 
                             if to_relax:
-                                if request.dry_run:
-                                    for seq in to_relax:
-                                        seq_dir = _ensure_dir(
-                                            relax_dir / _safe_id(seq.id)
+                                candidate_index_by_id = {
+                                    str(seq_id): idx
+                                    for idx, seq_id in enumerate(candidate_ids)
+                                }
+                                relax_parallel_workers = _parallel_worker_limit(
+                                    len(to_relax),
+                                    env_name="PIPELINE_RELAX_MAX_WORKERS",
+                                    default=4,
+                                    hard_cap=12,
+                                )
+                                if not request.dry_run and rosetta_relax_client is None:
+                                    raise RuntimeError(
+                                        "Rosetta relax is required for relax_enabled=true"
+                                    )
+
+                                def _run_relax_for_sequence(
+                                    seq: SequenceRecord,
+                                ) -> dict[str, object]:
+                                    seq_dir = _ensure_dir(relax_dir / _safe_id(seq.id))
+                                    if request.dry_run:
+                                        seq_index = int(
+                                            candidate_index_by_id.get(str(seq.id), 0)
                                         )
-                                        seq_index = candidate_ids.index(seq.id)
                                         score_per_residue = (
                                             -3.5 if (seq_index % 2 == 0) else -2.1
                                         )
@@ -8895,13 +9012,6 @@ class PipelineRunner:
                                         )
                                         delta_total_score = (
                                             total_score - input_total_score
-                                        )
-                                        cached_score_per_residue[seq.id] = float(
-                                            score_per_residue
-                                        )
-                                        cached_total_scores[seq.id] = float(total_score)
-                                        cached_delta_total_scores[seq.id] = float(
-                                            delta_total_score
                                         )
                                         write_json(
                                             seq_dir / "metrics.json",
@@ -8938,142 +9048,183 @@ class PipelineRunner:
                                                 ),
                                             },
                                         )
-                                    relax_mode = "dry_run"
-                                else:
-                                    if rosetta_relax_client is None:
+                                        return {
+                                            "seq_id": str(seq.id),
+                                            "score_per_residue": float(
+                                                score_per_residue
+                                            ),
+                                            "total_score": float(total_score),
+                                            "delta_total_score": float(
+                                                delta_total_score
+                                            ),
+                                            "mode": "dry_run",
+                                        }
+
+                                    pdb_text = _extract_predicted_pdb_text(
+                                        seq.id,
+                                        af2_result=af2_result,
+                                        af2_dir=af2_dir,
+                                    )
+                                    if not pdb_text or not pdb_text.strip():
                                         raise RuntimeError(
-                                            "Rosetta relax is required for relax_enabled=true"
+                                            "AF2 structure unavailable for Rosetta relax"
                                         )
-                                    for seq in to_relax:
-                                        pdb_text = _extract_predicted_pdb_text(
-                                            seq.id,
-                                            af2_result=af2_result,
-                                            af2_dir=af2_dir,
+                                    relax_result = rosetta_relax_client.relax(
+                                        pdb_text,
+                                        nstruct=max(
+                                            1,
+                                            int(
+                                                getattr(request, "relax_nstruct", 1) or 1
+                                            ),
+                                        ),
+                                        extra_flags=getattr(
+                                            request, "relax_extra_flags", None
+                                        ),
+                                    )
+                                    total_score = (
+                                        float(relax_result.get("total_score"))
+                                        if isinstance(
+                                            relax_result.get("total_score"),
+                                            (int, float),
                                         )
-                                        if not pdb_text or not pdb_text.strip():
-                                            partial_relax_errors[seq.id] = (
-                                                "AF2 structure unavailable for Rosetta relax"
-                                            )
-                                            continue
-                                        try:
-                                            relax_result = rosetta_relax_client.relax(
-                                                pdb_text,
-                                                nstruct=max(
-                                                    1,
-                                                    int(
-                                                        getattr(
-                                                            request, "relax_nstruct", 1
-                                                        )
-                                                        or 1
+                                        else None
+                                    )
+                                    score_per_residue = _score_per_residue(
+                                        total_score, seq.sequence
+                                    )
+                                    if score_per_residue is None:
+                                        raise RuntimeError(
+                                            "Failed to compute Rosetta score per residue"
+                                        )
+                                    delta_total_score = (
+                                        float(relax_result.get("delta_total_score"))
+                                        if isinstance(
+                                            relax_result.get("delta_total_score"),
+                                            (int, float),
+                                        )
+                                        else None
+                                    )
+                                    _write_text(
+                                        seq_dir / "relaxed_best.pdb",
+                                        str(relax_result.get("best_pdb_text") or ""),
+                                    )
+                                    write_json(
+                                        seq_dir / "metrics.json",
+                                        {
+                                            "score_per_residue": float(
+                                                score_per_residue
+                                            ),
+                                            "total_score": total_score,
+                                            "delta_total_score": delta_total_score,
+                                            "input_total_score": (
+                                                float(
+                                                    relax_result.get(
+                                                        "input_total_score"
+                                                    )
+                                                )
+                                                if isinstance(
+                                                    relax_result.get(
+                                                        "input_total_score"
                                                     ),
+                                                    (int, float),
+                                                )
+                                                else None
+                                            ),
+                                            "description": str(
+                                                relax_result.get("description") or ""
+                                            ).strip()
+                                            or None,
+                                            "nstruct": max(
+                                                1,
+                                                int(
+                                                    getattr(request, "relax_nstruct", 1)
+                                                    or 1
                                                 ),
-                                                extra_flags=getattr(
-                                                    request, "relax_extra_flags", None
-                                                ),
+                                            ),
+                                            "extra_flags": str(
+                                                getattr(
+                                                    request, "relax_extra_flags", ""
+                                                )
+                                                or ""
+                                            ).strip()
+                                            or None,
+                                            "mode": str(
+                                                relax_result.get("mode") or ""
+                                            ).strip()
+                                            or None,
+                                            "sequence_length": _sequence_length(
+                                                seq.sequence
+                                            ),
+                                        },
+                                    )
+                                    return {
+                                        "seq_id": str(seq.id),
+                                        "score_per_residue": float(
+                                            score_per_residue
+                                        ),
+                                        "total_score": total_score,
+                                        "delta_total_score": delta_total_score,
+                                        "mode": str(relax_result.get("mode") or "").strip()
+                                        or None,
+                                    }
+
+                                def _ingest_relax_result(
+                                    relax_entry: dict[str, object],
+                                ) -> None:
+                                    seq_id = str(relax_entry.get("seq_id") or "").strip()
+                                    if not seq_id:
+                                        return
+                                    score_per_residue = relax_entry.get(
+                                        "score_per_residue"
+                                    )
+                                    total_score = relax_entry.get("total_score")
+                                    delta_total_score = relax_entry.get(
+                                        "delta_total_score"
+                                    )
+                                    if isinstance(score_per_residue, (int, float)):
+                                        cached_score_per_residue[seq_id] = float(
+                                            score_per_residue
+                                        )
+                                    if isinstance(total_score, (int, float)):
+                                        cached_total_scores[seq_id] = float(total_score)
+                                    if isinstance(delta_total_score, (int, float)):
+                                        cached_delta_total_scores[seq_id] = float(
+                                            delta_total_score
+                                        )
+                                    mode_value = str(
+                                        relax_entry.get("mode") or ""
+                                    ).strip()
+                                    if mode_value:
+                                        nonlocal_relax_mode[0] = mode_value
+
+                                nonlocal_relax_mode = [relax_mode]
+                                if relax_parallel_workers <= 1:
+                                    for seq in to_relax:
+                                        try:
+                                            _ingest_relax_result(
+                                                _run_relax_for_sequence(seq)
                                             )
                                         except Exception as exc:
                                             partial_relax_errors[seq.id] = str(exc)
-                                            continue
-                                        total_score = (
-                                            float(relax_result.get("total_score"))
-                                            if isinstance(
-                                                relax_result.get("total_score"),
-                                                (int, float),
-                                            )
-                                            else None
-                                        )
-                                        score_per_residue = _score_per_residue(
-                                            total_score, seq.sequence
-                                        )
-                                        if score_per_residue is None:
-                                            partial_relax_errors[seq.id] = (
-                                                "Failed to compute Rosetta score per residue"
-                                            )
-                                            continue
-                                        delta_total_score = (
-                                            float(relax_result.get("delta_total_score"))
-                                            if isinstance(
-                                                relax_result.get("delta_total_score"),
-                                                (int, float),
-                                            )
-                                            else None
-                                        )
-                                        seq_dir = _ensure_dir(
-                                            relax_dir / _safe_id(seq.id)
-                                        )
-                                        _write_text(
-                                            seq_dir / "relaxed_best.pdb",
-                                            str(
-                                                relax_result.get("best_pdb_text") or ""
-                                            ),
-                                        )
-                                        write_json(
-                                            seq_dir / "metrics.json",
-                                            {
-                                                "score_per_residue": float(
-                                                    score_per_residue
-                                                ),
-                                                "total_score": total_score,
-                                                "delta_total_score": delta_total_score,
-                                                "input_total_score": (
-                                                    float(
-                                                        relax_result.get(
-                                                            "input_total_score"
-                                                        )
-                                                    )
-                                                    if isinstance(
-                                                        relax_result.get(
-                                                            "input_total_score"
-                                                        ),
-                                                        (int, float),
-                                                    )
-                                                    else None
-                                                ),
-                                                "description": str(
-                                                    relax_result.get("description")
-                                                    or ""
-                                                ).strip()
-                                                or None,
-                                                "nstruct": max(
-                                                    1,
-                                                    int(
-                                                        getattr(
-                                                            request, "relax_nstruct", 1
-                                                        )
-                                                        or 1
-                                                    ),
-                                                ),
-                                                "extra_flags": str(
-                                                    getattr(
-                                                        request, "relax_extra_flags", ""
-                                                    )
-                                                    or ""
-                                                ).strip()
-                                                or None,
-                                                "mode": str(
-                                                    relax_result.get("mode") or ""
-                                                ).strip()
-                                                or None,
-                                                "sequence_length": _sequence_length(
-                                                    seq.sequence
-                                                ),
-                                            },
-                                        )
-                                        cached_score_per_residue[seq.id] = float(
-                                            score_per_residue
-                                        )
-                                        if total_score is not None:
-                                            cached_total_scores[seq.id] = float(
-                                                total_score
-                                            )
-                                        if delta_total_score is not None:
-                                            cached_delta_total_scores[seq.id] = float(
-                                                delta_total_score
-                                            )
-                                        relax_mode = (
-                                            str(relax_result.get("mode") or "").strip()
-                                            or relax_mode
-                                        )
+                                else:
+                                    with ThreadPoolExecutor(
+                                        max_workers=relax_parallel_workers
+                                    ) as executor:
+                                        future_map = {
+                                            executor.submit(
+                                                _run_relax_for_sequence, seq
+                                            ): seq
+                                            for seq in to_relax
+                                        }
+                                        for future in as_completed(future_map):
+                                            seq = future_map[future]
+                                            try:
+                                                _ingest_relax_result(
+                                                    future.result()
+                                                )
+                                            except Exception as exc:
+                                                partial_relax_errors[seq.id] = str(exc)
+                                relax_mode = nonlocal_relax_mode[0]
 
                             if partial_relax_errors and not cached_score_per_residue:
                                 first_error = next(iter(partial_relax_errors.values()))
