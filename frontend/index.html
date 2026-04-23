@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>K-Biofoundry | Protein Pipeline Console</title>
-    <link rel="stylesheet" href="./styles.css?v=20260417_131749" />
+    <link rel="stylesheet" href="./styles.css?v=20260423_153753" />
   </head>
   <body>
     <div class="bg-orb orb-a" aria-hidden="true"></div>
@@ -594,7 +594,11 @@
                     <input id="evolutionPoolSizeInput" type="number" min="10" step="10" value="1000" />
                   </label>
                   <label class="fast-field">
-                    <span data-i18n="evolution.oracleSamples.label">Stage 3: Oracle AF2 Samples</span>
+                    <span data-i18n="evolution.initialSamples.label">Stage 2: K-Means Training Samples</span>
+                    <input id="evolutionInitialSamplesInput" type="number" min="10" step="5" value="30" />
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="evolution.oracleSamples.label">Stage 3: Select Top K (Final AF2)</span>
                     <input id="evolutionOracleSamplesInput" type="number" min="1" step="1" value="20" />
                   </label>
                   <div class="panel-header" style="margin-top: 1rem;">
@@ -1779,6 +1783,6 @@
     <button id="copilotFabBtn" class="primary copilot-fab" data-i18n="copilot.open">Copilot</button>
 
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
-    <script type="module" src="./app.js?v=20260421_164900"></script>
+    <script type="module" src="./app.js?v=20260423_153753"></script>
   </body>
 </html>
