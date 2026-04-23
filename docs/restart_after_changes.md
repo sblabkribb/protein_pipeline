@@ -22,14 +22,15 @@ UI/Backend 수정 후 반영 절차를 한 곳에 모은 문서입니다.
 ```bash
 cd /opt/protein_pipeline/pipeline-mcp
 
+# 1. 끈질긴 자동 재시작 프로세스나 기존 시스템 파이썬 프로세스를 완벽하게 죽입니다.
+pkill -f "python.*pipeline_mcp.http_server" || true
 if [ -f /opt/protein_pipeline/logs/pipeline-mcp_18080.pid ]; then
-  kill "$(cat /opt/protein_pipeline/logs/pipeline-mcp_18080.pid)" 2>/dev/null || true
+  kill -9 "$(cat /opt/protein_pipeline/logs/pipeline-mcp_18080.pid)" 2>/dev/null || true
   rm -f /opt/protein_pipeline/logs/pipeline-mcp_18080.pid
-else
-  pkill -f "python.*pipeline_mcp.http_server --host 127.0.0.1 --port 18080" || true
 fi
+sleep 2 # 프로세스가 완전히 죽을 때까지 대기
 
-# 가상환경의 python을 명시적으로 사용하여 mlflow 등 의존성 에러를 방지합니다.
+# 2. 가상환경의 python을 명시적으로 사용하여 mlflow, torch 등 의존성 에러를 방지합니다.
 /opt/protein_pipeline/venv/bin/python - <<'PY'
 import os
 import subprocess
@@ -56,7 +57,7 @@ with log_path.open("ab") as log:
     )
 
 Path("/opt/protein_pipeline/logs/pipeline-mcp_18080.pid").write_text(f"{proc.pid}\n", encoding="utf-8")
-print(proc.pid)
+print(f"Backend started with PID: {proc.pid}")
 PY
 ```
 
@@ -115,13 +116,16 @@ curl -ksS --resolve pipeline.k-biofoundrycopilot.duckdns.org:443:127.0.0.1 \
 
 ```bash
 cd /opt/protein_pipeline/pipeline-mcp
-if [ -f /opt/protein_pipeline/logs/pipeline-mcp_18080.pid ]; then
-  kill "$(cat /opt/protein_pipeline/logs/pipeline-mcp_18080.pid)" 2>/dev/null || true
-  rm -f /opt/protein_pipeline/logs/pipeline-mcp_18080.pid
-else
-  pkill -f "python.*pipeline_mcp.http_server --host 127.0.0.1 --port 18080" || true
-fi
 
+# 1. 끈질긴 자동 재시작 프로세스나 기존 시스템 파이썬 프로세스를 완벽하게 죽입니다.
+pkill -f "python.*pipeline_mcp.http_server" || true
+if [ -f /opt/protein_pipeline/logs/pipeline-mcp_18080.pid ]; then
+  kill -9 "$(cat /opt/protein_pipeline/logs/pipeline-mcp_18080.pid)" 2>/dev/null || true
+  rm -f /opt/protein_pipeline/logs/pipeline-mcp_18080.pid
+fi
+sleep 2 # 프로세스가 완전히 죽을 때까지 대기
+
+# 2. 가상환경의 python을 명시적으로 사용하여 기동
 /opt/protein_pipeline/venv/bin/python - <<'PY'
 import os
 import subprocess
@@ -148,7 +152,7 @@ with log_path.open("ab") as log:
     )
 
 Path("/opt/protein_pipeline/logs/pipeline-mcp_18080.pid").write_text(f"{proc.pid}\n", encoding="utf-8")
-print(proc.pid)
+print(f"Backend started with PID: {proc.pid}")
 PY
 
 curl -sS http://127.0.0.1:18080/healthz && echo
