@@ -26,10 +26,11 @@ if [ -f /opt/protein_pipeline/logs/pipeline-mcp_18080.pid ]; then
   kill "$(cat /opt/protein_pipeline/logs/pipeline-mcp_18080.pid)" 2>/dev/null || true
   rm -f /opt/protein_pipeline/logs/pipeline-mcp_18080.pid
 else
-  pkill -f "python3 -m pipeline_mcp.http_server --host 127.0.0.1 --port 18080" || true
+  pkill -f "python.*pipeline_mcp.http_server --host 127.0.0.1 --port 18080" || true
 fi
 
-python3 - <<'PY'
+# 가상환경의 python을 명시적으로 사용하여 mlflow 등 의존성 에러를 방지합니다.
+/opt/protein_pipeline/venv/bin/python - <<'PY'
 import os
 import subprocess
 from pathlib import Path
@@ -46,7 +47,7 @@ env["PYTHONPATH"] = "src"
 log_path = Path("/opt/protein_pipeline/logs/pipeline-mcp_18080.log")
 with log_path.open("ab") as log:
     proc = subprocess.Popen(
-        ["python3", "-m", "pipeline_mcp.http_server", "--host", "127.0.0.1", "--port", "18080"],
+        ["/opt/protein_pipeline/venv/bin/python", "-m", "pipeline_mcp.http_server", "--host", "127.0.0.1", "--port", "18080"],
         cwd="/opt/protein_pipeline/pipeline-mcp",
         env=env,
         stdout=log,
@@ -118,9 +119,10 @@ if [ -f /opt/protein_pipeline/logs/pipeline-mcp_18080.pid ]; then
   kill "$(cat /opt/protein_pipeline/logs/pipeline-mcp_18080.pid)" 2>/dev/null || true
   rm -f /opt/protein_pipeline/logs/pipeline-mcp_18080.pid
 else
-  pkill -f "python3 -m pipeline_mcp.http_server --host 127.0.0.1 --port 18080" || true
+  pkill -f "python.*pipeline_mcp.http_server --host 127.0.0.1 --port 18080" || true
 fi
-python3 - <<'PY'
+
+/opt/protein_pipeline/venv/bin/python - <<'PY'
 import os
 import subprocess
 from pathlib import Path
@@ -137,7 +139,7 @@ env["PYTHONPATH"] = "src"
 log_path = Path("/opt/protein_pipeline/logs/pipeline-mcp_18080.log")
 with log_path.open("ab") as log:
     proc = subprocess.Popen(
-        ["python3", "-m", "pipeline_mcp.http_server", "--host", "127.0.0.1", "--port", "18080"],
+        ["/opt/protein_pipeline/venv/bin/python", "-m", "pipeline_mcp.http_server", "--host", "127.0.0.1", "--port", "18080"],
         cwd="/opt/protein_pipeline/pipeline-mcp",
         env=env,
         stdout=log,
