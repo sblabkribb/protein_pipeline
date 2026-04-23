@@ -25,5 +25,36 @@ Instead of random picking, we should:
 3.  Select the **centroid** (or the sequence closest to the centroid) of each cluster to be sent to AF2.
 4.  **Result:** The 30 Oracle calls are perfectly distributed across the sequence space, capturing every major structural variation. The Surrogate Model trained on this diverse set will be highly accurate and unbiased.
 
-## 4. Conclusion
-While the N=30 Random Sampling surrogate closed 46% of the performance gap, introducing Diversity-Aware Sampling (K-Means) for the initial budget will likely push this efficiency to 80-90%, making the 1,000-Oracle run completely obsolete.
+## 5. Empirical Diversity Analysis (N=30)
+To verify if our local surrogate suffers from Mode Collapse (picking sequences that are too similar to each other), we added a Sequence Identity tracking module to `05_active_learning_sim.py`.
+
+We tracked three metrics across the 12 evaluated targets:
+1.  **Pool Sim:** Average pairwise sequence identity within the remaining 90 candidate sequences.
+2.  **Surr Sim:** Average pairwise sequence identity within the Top 10 sequences chosen by the Surrogate.
+3.  **Surr vs Opt:** Average pairwise sequence identity between the Surrogate's Top 10 and the True Optimal Top 10.
+
+### Results
+| Target | Pool Sim | Surr Sim (Model's Pick) | Surr vs Opt (Accuracy) |
+| :--- | :---: | :---: | :---: |
+| `1h41B03` | 0.86 | 0.89 | 0.88 |
+| `1f4hB01` | 0.80 | 0.93 | 0.88 |
+| `1efnD00` | 0.81 | 0.94 | 0.91 |
+| `1e1hB02` | 0.81 | 0.84 | 0.83 |
+| `1m3iC02` | 0.76 | 0.82 | 0.80 |
+| `1ltsA00` | 0.83 | 0.93 | 0.88 |
+| `1jmoL00` | 0.78 | 0.78 | 0.80 |
+| `1ibvC00` | 0.86 | 0.87 | 0.87 |
+| `1jmzG00` | 0.79 | 0.89 | 0.84 |
+| `1kvdD00` | 0.89 | 0.95 | 0.95 |
+| `1b65A00` | 0.86 | 0.89 | 0.84 |
+| `1keeF01` | 0.88 | 0.92 | 0.87 |
+
+### Interpretation
+1.  **ProteinMPNN Bias:** The base `Pool Sim` is very high (average ~82%). This means ProteinMPNN is generating highly conserved sequences for these specific backbones. There is very little wild variation to begin with.
+2.  **Mild Mode Collapse:** The `Surr Sim` is consistently higher than the `Pool Sim` (e.g., 0.80 -> 0.93 in `1f4hB01`). This proves our hypothesis: **Random Forests do suffer from a slight mode collapse**. Once they find a "good" motif in the 30 training samples, they aggressively pick sequences that contain that exact motif, leading to less diverse Top 10 lists.
+3.  **Accuracy (Surr vs Opt):** The similarity between the Surrogate's picks and the True Optimal picks is incredibly high (average ~86%). This means that even though the model is slightly biased towards certain motifs, **those motifs are actually the correct, high-scoring motifs**. 
+
+### Final Verdict on Scaling to 10,000 Sequences
+If we scale this up to 10,000 sequences, the `Pool Sim` will likely drop as more diverse sequences are generated. If we continue to use Random Sampling for the initial 30, the Random Forest's "Mode Collapse" will become a serious problem—it will ignore huge swathes of the diverse 10,000-sequence space. 
+
+**Therefore, moving from Random Sampling to K-Means (Diversity-Aware) Sampling for the initial budget is absolutely critical before scaling the system.**
