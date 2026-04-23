@@ -1,34 +1,30 @@
+import os
 import json
+import shutil
+import pickle
 import time
 import numpy as np
 from pathlib import Path
-import os
-import shutil
-import pickle
-from dataclasses import replace
+from dataclasses import asdict, replace
+from sklearn.cluster import KMeans
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import pairwise_distances_argmin_min
+import mlflow
 
 try:
     import torch
-except Exception:  # pragma: no cover - optional runtime dependency
-    torch = None
-
-try:
     from transformers import AutoTokenizer, EsmModel
-except Exception:  # pragma: no cover - optional runtime dependency
+except ImportError:
+    torch = None
     AutoTokenizer = None
     EsmModel = None
 
 from .models import PipelineRequest, PipelineResult
-from .storage import init_run, set_status, write_json, new_run_id, resolve_run_path
-from .bio.fasta import parse_fasta
+from .storage import init_run, resolve_run_path, set_status, write_json
+from .fasta import parse_fasta
 from .s3 import ncp_storage
 
-# Configuration for Deep Meta-Surrogate
 ESM_MODEL_NAME = "facebook/esm2_t6_8M_UR50D"
-MODEL_DIR = Path("pipeline-mcp/models")
-SOLUPROT_MODEL_PATH = MODEL_DIR / "global_soluprot_v1.pkl"
-PLDDT_MODEL_PATH = MODEL_DIR / "global_plddt_v1.pkl"
-RELAX_MODEL_PATH = MODEL_DIR / "global_relax_v1.pkl"
 
 def get_esm_embeddings(sequences, device):
     if torch is None or AutoTokenizer is None or EsmModel is None:
@@ -41,11 +37,11 @@ def get_esm_embeddings(sequences, device):
     model.eval()
     
     embeddings = []
-    batch_size = 16
     with torch.no_grad():
-        for i in range(0, len(sequences), batch_size):
-            batch = sequences[i:i+batch_size]
-            inputs = tokenizer(batch, return_tensors="pt", padding=True, truncation=True).to(device)
+        for i in range(0, len(sequences), 16):
+            batch_seqs = sequences[i:i+16]
+            inputs = tokenizer(batch_seqs, return_tensors="pt", padding=True, truncation=True, max_length=1024)
+            inputs = {k: v.to(device) for k, v in inputs.items()}
             outputs = model(**inputs)
             
             mask = inputs['attention_mask'].unsqueeze(-1).expand(outputs.last_hidden_state.size()).float()
@@ -60,7 +56,7 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
     if torch is None:
         raise RuntimeError("Evolution mode requires torch to be installed")
     paths = init_run(runner.output_root, run_id)
-    set_status(paths, stage="evolution", state="running", detail="Initializing Multi-Objective (pLDDT, Solu, Relax) Evolution")
+    set_status(paths, stage="evolution", state="running", detail="Initializing Local Active Learning Evolution")
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -106,59 +102,51 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
     gated_seq_ids = [sid for sid, seq in all_seqs.items() if soluprot_scores.get(sid, 0.0) >= soluprot_cutoff]
     if not gated_seq_ids: gated_seq_ids = list(all_seqs.keys())[:200]
 
-    # 2. Stage 2: 3-Way Meta-Surrogate Ranking
-    set_status(paths, stage="evolution", state="running", detail="Stage 2: Ranking with pLDDT, SoluProt, and Relax predictors")
+    # 2. Stage 2: K-Means Diversity Sampling
+    set_status(paths, stage="evolution", state="running", detail="Stage 2: K-Means Diversity Sampling & Active Learning")
     
     seq_texts = [all_seqs[sid] for sid in gated_seq_ids]
     X_embeddings = get_esm_embeddings(seq_texts, device)
     
-    # Load Models
-    mlp_solu, mlp_plddt, mlp_relax = None, None, None
-    try:
-        if SOLUPROT_MODEL_PATH.exists():
-            with open(SOLUPROT_MODEL_PATH, 'rb') as f: mlp_solu = pickle.load(f)
-        if PLDDT_MODEL_PATH.exists():
-            with open(PLDDT_MODEL_PATH, 'rb') as f: mlp_plddt = pickle.load(f)
-        if RELAX_MODEL_PATH.exists():
-            with open(RELAX_MODEL_PATH, 'rb') as f: mlp_relax = pickle.load(f)
-    except: pass
-
-    # Multi-Objective Scoring Logic
-    if mlp_plddt and mlp_solu:
-        pred_plddt = mlp_plddt.predict(X_embeddings)
-        pred_solu = mlp_solu.predict(X_embeddings)
-        
-        # Acquisition function: We want high pLDDT, high SoluProt, low Relax (so subtract relax)
-        # Weights: 40% pLDDT, 30% SoluProt, 30% Relax
-        combined_scores = (pred_plddt * 0.4) + (pred_solu * 30.0) # Scaling SoluProt to match pLDDT range
-        
-        if mlp_relax:
-            pred_relax = mlp_relax.predict(X_embeddings)
-            # Subtract relax per res (usually around -3.0. Negative value means better packing)
-            # So -(-3.0) * 10 = +30 points.
-            combined_scores -= (pred_relax * 10.0)
+    # Active Learning Parameters
+    N_TRAIN = 30 # Oracle budget for training
+    TOP_K = getattr(request, "evolution_oracle_samples", 20) # Final selection budget
+    
+    if len(gated_seq_ids) <= N_TRAIN + TOP_K:
+        # If pool is too small, just evaluate everything
+        train_idx = np.arange(len(gated_seq_ids))
+        pool_idx = []
     else:
-        # If models not available, fallback to SoluProt only or random
-        combined_scores = np.array([soluprot_scores.get(sid, 0.0) for sid in gated_seq_ids])
+        # K-Means Sampling
+        kmeans = KMeans(n_clusters=N_TRAIN, random_state=42, n_init=10)
+        kmeans.fit(X_embeddings)
+        closest_idx, _ = pairwise_distances_argmin_min(kmeans.cluster_centers_, X_embeddings)
+        train_idx = np.unique(closest_idx)
+        
+        if len(train_idx) < N_TRAIN:
+            remaining = np.setdiff1d(np.arange(len(gated_seq_ids)), train_idx)
+            padding = np.random.choice(remaining, N_TRAIN - len(train_idx), replace=False)
+            train_idx = np.concatenate([train_idx, padding])
+            
+        pool_idx = np.setdiff1d(np.arange(len(gated_seq_ids)), train_idx)
 
-    n_oracle = getattr(request, "evolution_oracle_samples", 20)
-    top_indices = np.argsort(combined_scores)[::-1][:n_oracle]
-    selected_ids = [gated_seq_ids[i] for i in top_indices]
-
-    # 3. Stage 3: The Oracle (AF2 + RunPod Relax)
-    set_status(paths, stage="evolution", state="running", detail=f"Stage 3: Validating Top {n_oracle} with AF2 & Rosetta")
+    # 3. Stage 3a: Run Oracle (AF2) on Training Set
+    from .tools import _run_af2_predict, _safe_id
     
     final_results = []
     evolution_dir = paths.root / "evolution"
     designs_dir = evolution_dir / "designs"
     designs_dir.mkdir(parents=True, exist_ok=True)
-
-    from .tools import _run_af2_predict, _safe_id
-    for sid in selected_ids:
+    
+    plddt_actual = []
+    
+    set_status(paths, stage="evolution", state="running", detail=f"Stage 3a: Evaluating {len(train_idx)} diverse training samples")
+    
+    for idx in train_idx:
+        sid = gated_seq_ids[idx]
         seq = all_seqs[sid]
-        eval_run_id = f"{run_id}_eval_{_safe_id(sid)}"
+        eval_run_id = f"{run_id}_train_{_safe_id(sid)}"
         try:
-            # 3.1. AF2 Prediction
             res = _run_af2_predict(runner, {
                 "run_id": eval_run_id,
                 "target_fasta": f">{sid}\n{seq}\n",
@@ -168,35 +156,82 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
             af2_data = res.get("summary", {}).get("af2", {}).get(sid, {})
             plddt = af2_data.get("best_plddt", 0.0)
             
-            # 3.2. Rosetta Relax (Direct Integration)
+            # Run Relax
             relax_score = None
             eval_path = resolve_run_path(runner.output_root, eval_run_id)
             af2_pdb = list((eval_path / request.af2_provider).rglob("*.pdb"))
-            
             if af2_pdb and runner.rosetta_relax:
                 print(f"Executing Serverless Relax for {sid}...")
                 relax_out_dir = eval_path / "relax"
                 relax_res = runner.rosetta_relax.run(af2_pdb[0], relax_out_dir, nstruct=request.relax_nstruct)
                 relax_score = relax_res.get("score_per_residue")
-                
                 if relax_res.get("best_pdb"):
                     shutil.copy2(relax_res["best_pdb"], designs_dir / f"{sid}_relaxed.pdb")
 
             if af2_pdb:
                 shutil.copy2(af2_pdb[0], designs_dir / f"{sid}.pdb")
 
+            plddt_actual.append(plddt)
             final_results.append({
-                "id": sid, 
-                "plddt": plddt, 
-                "soluprot": soluprot_scores.get(sid, 0.0),
-                "relax_score": relax_score
+                "id": sid, "plddt": plddt, "soluprot": soluprot_scores.get(sid, 0.0), "relax_score": relax_score, "phase": "train"
             })
-            
         except Exception as e:
-            print(f"Oracle error for {sid}: {e}")
+            print(f"Oracle error for training sample {sid}: {e}")
+            plddt_actual.append(0.0)
 
-    # 4. Finalize & Sync
-    # Rank by a composite of actual results for the final summary
+    # 4. Stage 3b: Train Local Surrogate and Predict Pool
+    if len(pool_idx) > 0:
+        set_status(paths, stage="evolution", state="running", detail=f"Stage 3b: Training Surrogate & Predicting Pool")
+        
+        X_train = X_embeddings[train_idx]
+        y_train = np.array(plddt_actual)
+        
+        rf = RandomForestRegressor(n_estimators=100, random_state=42)
+        rf.fit(X_train, y_train)
+        
+        X_pool = X_embeddings[pool_idx]
+        pred_plddt = rf.predict(X_pool)
+        
+        top_surrogate_idx = np.argsort(pred_plddt)[-TOP_K:]
+        
+        # 5. Stage 3c: Run Oracle on Top K Predictions
+        set_status(paths, stage="evolution", state="running", detail=f"Stage 3c: Evaluating Top {TOP_K} Surrogate Predictions")
+        for i in top_surrogate_idx:
+            idx = pool_idx[i]
+            sid = gated_seq_ids[idx]
+            seq = all_seqs[sid]
+            eval_run_id = f"{run_id}_topk_{_safe_id(sid)}"
+            try:
+                res = _run_af2_predict(runner, {
+                    "run_id": eval_run_id,
+                    "target_fasta": f">{sid}\n{seq}\n",
+                    "target_pdb": request.target_pdb,
+                    "af2_provider": request.af2_provider,
+                })
+                af2_data = res.get("summary", {}).get("af2", {}).get(sid, {})
+                plddt = af2_data.get("best_plddt", 0.0)
+                
+                relax_score = None
+                eval_path = resolve_run_path(runner.output_root, eval_run_id)
+                af2_pdb = list((eval_path / request.af2_provider).rglob("*.pdb"))
+                if af2_pdb and runner.rosetta_relax:
+                    print(f"Executing Serverless Relax for {sid}...")
+                    relax_out_dir = eval_path / "relax"
+                    relax_res = runner.rosetta_relax.run(af2_pdb[0], relax_out_dir, nstruct=request.relax_nstruct)
+                    relax_score = relax_res.get("score_per_residue")
+                    if relax_res.get("best_pdb"):
+                        shutil.copy2(relax_res["best_pdb"], designs_dir / f"{sid}_relaxed.pdb")
+
+                if af2_pdb:
+                    shutil.copy2(af2_pdb[0], designs_dir / f"{sid}.pdb")
+
+                final_results.append({
+                    "id": sid, "plddt": plddt, "soluprot": soluprot_scores.get(sid, 0.0), "relax_score": relax_score, "phase": "top_k"
+                })
+            except Exception as e:
+                print(f"Oracle error for Top K sample {sid}: {e}")
+
+    # 6. Finalize & Sync
     def composite_actual(r):
         s = r['plddt'] * 0.4 + r['soluprot'] * 30.0
         if r['relax_score'] is not None:
@@ -207,8 +242,8 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
     
     summary = {
         "run_id": run_id,
-        "evolution_mode": "meta-surrogate-v1-full-triple",
-        "pool_statistics": {"initial": len(all_seqs), "gated": len(gated_seq_ids), "oracle": len(final_results)},
+        "evolution_mode": "local-active-learning-kmeans",
+        "pool_statistics": {"initial": len(all_seqs), "gated": len(gated_seq_ids), "oracle_train": N_TRAIN, "oracle_top_k": TOP_K},
         "best_design": best_res,
         "evaluated_samples": final_results
     }
@@ -221,4 +256,20 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
         ncp_storage.sync_outputs(run_id)
     except: pass
     
+    # MLflow Tracking
+    try:
+        mlflow.set_tracking_uri("http://127.0.0.1:18050")
+        mlflow.set_experiment("Pipeline_Evolution_Runs")
+        with mlflow.start_run(run_name=f"Evo_{run_id}"):
+            mlflow.log_param("run_id", run_id)
+            mlflow.log_param("pool_size", len(all_seqs))
+            mlflow.log_param("train_size", N_TRAIN)
+            mlflow.log_param("top_k", TOP_K)
+            mlflow.log_metric("best_plddt", best_res.get("plddt", 0))
+            if best_res.get("soluprot") is not None:
+                mlflow.log_metric("best_soluprot", best_res.get("soluprot"))
+            if best_res.get("relax_score") is not None:
+                mlflow.log_metric("best_relax", best_res.get("relax_score"))
+    except Exception: pass
+
     return PipelineResult(run_id=run_id, output_dir=str(paths.root), tiers=[])
