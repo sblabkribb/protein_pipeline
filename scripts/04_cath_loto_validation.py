@@ -61,6 +61,81 @@ def get_esm_embeddings(df: pd.DataFrame, cache_path: str = "cath_embeddings.npy"
     np.save(cache_path, final_embeddings)
     return final_embeddings
 
+import time
+
+def run_loto_validation(df: pd.DataFrame, embeddings: np.ndarray):
+    targets = df['target_id'].unique()
+    print(f"Found {len(targets)} unique targets for LOTO.")
+    
+    mlflow.set_tracking_uri("http://127.0.0.1:18050")
+    mlflow.set_experiment("CATH_LOTO_Validation")
+    
+    mlp_params = {"hidden_layer_sizes": (256, 128), "max_iter": 500, "random_state": 42}
+    
+    solu_mses = []
+    plddt_mses = []
+    
+    with mlflow.start_run(run_name=f"LOTO_Summary_{int(time.time())}"):
+        mlflow.log_param("num_targets", len(targets))
+        mlflow.log_param("total_sequences", len(df))
+        mlflow.log_params({f"mlp_{k}": v for k, v in mlp_params.items()})
+        
+        for target in targets:
+            print(f"\n--- Processing Target: {target} ---")
+            with mlflow.start_run(run_name=f"Fold_{target}", nested=True):
+                # Split logic
+                test_mask = df['target_id'] == target
+                train_mask = ~test_mask
+                
+                X_train = embeddings[train_mask]
+                X_test = embeddings[test_mask]
+                
+                mlflow.log_param("target_id", target)
+                mlflow.log_param("train_size", len(X_train))
+                mlflow.log_param("test_size", len(X_test))
+                
+                # SoluProt Training
+                y_solu_train = df.loc[train_mask, 'soluprot_score'].values
+                y_solu_test = df.loc[test_mask, 'soluprot_score'].values
+                
+                valid_solu_train_mask = ~np.isnan(y_solu_train)
+                valid_solu_test_mask = ~np.isnan(y_solu_test)
+                
+                if valid_solu_train_mask.sum() > 0 and valid_solu_test_mask.sum() > 0:
+                    mlp_solu = MLPRegressor(**mlp_params)
+                    mlp_solu.fit(X_train[valid_solu_train_mask], y_solu_train[valid_solu_train_mask])
+                    pred_s = mlp_solu.predict(X_test[valid_solu_test_mask])
+                    mse_s = mean_squared_error(y_solu_test[valid_solu_test_mask], pred_s)
+                    solu_mses.append(mse_s)
+                    mlflow.log_metric("soluprot_mse", mse_s)
+                    print(f"SoluProt MSE: {mse_s:.4f}")
+                
+                # pLDDT Training
+                y_plddt_train = df.loc[train_mask, 'plddt_score'].values
+                y_plddt_test = df.loc[test_mask, 'plddt_score'].values
+                
+                valid_plddt_train_mask = ~np.isnan(y_plddt_train)
+                valid_plddt_test_mask = ~np.isnan(y_plddt_test)
+                
+                if valid_plddt_train_mask.sum() > 0 and valid_plddt_test_mask.sum() > 0:
+                    mlp_plddt = MLPRegressor(**mlp_params)
+                    mlp_plddt.fit(X_train[valid_plddt_train_mask], y_plddt_train[valid_plddt_train_mask])
+                    pred_p = mlp_plddt.predict(X_test[valid_plddt_test_mask])
+                    mse_p = mean_squared_error(y_plddt_test[valid_plddt_test_mask], pred_p)
+                    plddt_mses.append(mse_p)
+                    mlflow.log_metric("plddt_mse", mse_p)
+                    print(f"pLDDT MSE: {mse_p:.4f}")
+
+        # Log aggregate metrics to parent
+        if solu_mses:
+            avg_solu = np.mean(solu_mses)
+            mlflow.log_metric("avg_loto_soluprot_mse", avg_solu)
+            print(f"\n=> Average SoluProt LOTO MSE: {avg_solu:.4f}")
+        if plddt_mses:
+            avg_plddt = np.mean(plddt_mses)
+            mlflow.log_metric("avg_loto_plddt_mse", avg_plddt)
+            print(f"=> Average pLDDT LOTO MSE: {avg_plddt:.4f}")
+
 def main():
     print("Starting LOTO Validation...")
 
