@@ -2705,8 +2705,12 @@ const I18N = {
     "question.numSeqPerTier.help": "Number of ProteinMPNN sequences to generate for each backbone within each sequence-conservation level.",
     "question.evolutionMode.label": "Evolution Mode",
     "question.evolutionMode.help": "Enable Bayesian Optimization for sequence design.",
-    "question.evolutionInitialSamples.label": "Evolution Initial Samples",
-    "question.evolutionInitialSamples.help": "Number of initial samples for BO.",
+    "question.evolutionPoolSize.label": "Evolution Initial Pool Size",
+    "question.evolutionPoolSize.help": "Total number of sequences to generate with ProteinMPNN initially (default 1000)",
+    "question.evolutionInitialSamples.label": "Evolution Oracle Budget (N)",
+    "question.evolutionInitialSamples.help": "Number of diverse sequences to pick via K-Means and evaluate with AF2 for training the surrogate model (default 30)",
+    "question.evolutionOracleSamples.label": "Evolution Final AF2 Budget (Top K)",
+    "question.evolutionOracleSamples.help": "Number of top-predicted sequences to validate with AF2 (default 20)",
     "question.evolutionRounds.label": "Evolution Rounds",
     "question.evolutionRounds.help": "Number of BO rounds.",
     "question.evolutionSamplesPerRound.label": "Evolution Samples Per Round",
@@ -3922,8 +3926,12 @@ const I18N = {
     "question.numSeqPerTier.help": "각 서열 보존율 구간에서 각 RFD3/BioEmu 백본마다 생성할 ProteinMPNN 서열 개수입니다.",
     "question.evolutionMode.label": "에볼루션 모드",
     "question.evolutionMode.help": "시퀀스 설계를 위해 베이지안 최적화(BO)를 활성화합니다.",
-    "question.evolutionInitialSamples.label": "에볼루션 초기 샘플 수",
-    "question.evolutionInitialSamples.help": "BO를 위한 초기 샘플 수입니다.",
+    "question.evolutionPoolSize.label": "Evolution 생성 풀 크기",
+    "question.evolutionPoolSize.help": "ProteinMPNN으로 초기 생성할 총 서열 개수 (기본 1000)",
+    "question.evolutionInitialSamples.label": "Evolution 훈련용 오라클 예산 (N)",
+    "question.evolutionInitialSamples.help": "대리 모델을 훈련하기 위해 K-Means로 다양하게 뽑아 먼저 AF2를 돌릴 서열 개수 (기본 30)",
+    "question.evolutionOracleSamples.label": "Evolution 최종 AF2 검증 수 (Top K)",
+    "question.evolutionOracleSamples.help": "대리 모델이 예측한 서열 중 실제로 AF2를 돌릴 상위 서열 개수 (기본 20)",
     "question.evolutionRounds.label": "에볼루션 라운드 수",
     "question.evolutionRounds.help": "BO 라운드 수입니다.",
     "question.evolutionSamplesPerRound.label": "라운드당 에볼루션 샘플 수",
@@ -8068,11 +8076,18 @@ const ANSWER_BOOL_KEYS = new Set([
   "relax_enabled",
   "confirm_run",
   "evolution_mode",
+  "evolution_pool_size",
+  "evolution_initial_samples",
+  "evolution_oracle_samples",
+  "evolution_rounds",
+  "evolution_samples_per_round",
 ]);
 
 const ANSWER_INT_KEYS = new Set([
   "num_seq_per_tier",
+  "evolution_pool_size",
   "evolution_initial_samples",
+  "evolution_oracle_samples",
   "evolution_rounds",
   "evolution_samples_per_round",
   "batch_size",
@@ -10187,11 +10202,29 @@ function buildManualPlan(mode) {
         default: false,
       },
       {
+        id: "evolution_pool_size",
+        labelKey: "question.evolutionPoolSize.label",
+        questionKey: "question.evolutionPoolSize.help",
+        label: "Evolution Pool Size",
+        question: "Initial sequences to generate in Stage 1.",
+        required: false,
+        default: 1000,
+      },
+      {
         id: "evolution_initial_samples",
         labelKey: "question.evolutionInitialSamples.label",
         questionKey: "question.evolutionInitialSamples.help",
-        label: "Evolution Initial Samples",
-        question: "Number of initial samples for BO.",
+        label: "Evolution Oracle Budget",
+        question: "Number of initial samples for AF2 training.",
+        required: false,
+        default: 30,
+      },
+      {
+        id: "evolution_oracle_samples",
+        labelKey: "question.evolutionOracleSamples.label",
+        questionKey: "question.evolutionOracleSamples.help",
+        label: "Evolution Top K",
+        question: "Top candidates to validate with AF2.",
         required: false,
         default: 20,
       },
@@ -10530,11 +10563,29 @@ function buildManualPlan(mode) {
         default: false,
       },
       {
+        id: "evolution_pool_size",
+        labelKey: "question.evolutionPoolSize.label",
+        questionKey: "question.evolutionPoolSize.help",
+        label: "Evolution Pool Size",
+        question: "Initial sequences to generate in Stage 1.",
+        required: false,
+        default: 1000,
+      },
+      {
         id: "evolution_initial_samples",
         labelKey: "question.evolutionInitialSamples.label",
         questionKey: "question.evolutionInitialSamples.help",
-        label: "Evolution Initial Samples",
-        question: "Number of initial samples for BO.",
+        label: "Evolution Oracle Budget",
+        question: "Number of initial samples for AF2 training.",
+        required: false,
+        default: 30,
+      },
+      {
+        id: "evolution_oracle_samples",
+        labelKey: "question.evolutionOracleSamples.label",
+        questionKey: "question.evolutionOracleSamples.help",
+        label: "Evolution Top K",
+        question: "Top candidates to validate with AF2.",
         required: false,
         default: 20,
       },
@@ -12167,7 +12218,9 @@ function questionVisibleForCurrentState(question, normalizedQuestions = []) {
     answers.bioemu_use === true ||
     answers.stop_after === "bioemu";
   if (
+    id === "evolution_pool_size" ||
     id === "evolution_initial_samples" ||
+    id === "evolution_oracle_samples" ||
     id === "evolution_rounds" ||
     id === "evolution_samples_per_round"
   ) {
@@ -14853,7 +14906,7 @@ function renderQuestions(questions) {
   };
 
   const appendEvolutionBoard = () => {
-    const evolutionIds = ["evolution_mode", "evolution_initial_samples", "evolution_rounds", "evolution_samples_per_round"];
+    const evolutionIds = ["evolution_mode", "evolution_pool_size", "evolution_initial_samples", "evolution_oracle_samples", "evolution_rounds", "evolution_samples_per_round"];
     const evolutionQuestions = normalizedQuestions.filter((q) => evolutionIds.includes(q.id));
     if (!evolutionQuestions.length) return;
 
@@ -14964,9 +15017,11 @@ function renderQuestions(questions) {
     af2_max_candidates_per_tier: 50,
     af2_plddt_cutoff: 60,
     af2_rmsd_cutoff: 70,
+    evolution_pool_size: 79,
     evolution_initial_samples: 80,
-    evolution_rounds: 81,
-    evolution_samples_per_round: 82,
+    evolution_oracle_samples: 81,
+    evolution_rounds: 82,
+    evolution_samples_per_round: 83,
   };
   const bioemuCountRelevant =
     state.runMode === "pipeline" ||
@@ -14985,7 +15040,7 @@ function renderQuestions(questions) {
   const compactQuestions = textQuestions
     .filter((q) => compactParameterQuestionIds.has(q.id))
     .filter((q) => q.id !== "relax_score_per_residue_cutoff" || state.answers.relax_enabled === true)
-    .filter((q) => !["evolution_initial_samples", "evolution_rounds", "evolution_samples_per_round"].includes(q.id) || state.answers.evolution_mode === true)
+    .filter((q) => !["evolution_pool_size", "evolution_initial_samples", "evolution_oracle_samples", "evolution_rounds", "evolution_samples_per_round"].includes(q.id) || state.answers.evolution_mode === true)
     .sort((left, right) => {
       const leftPriority = compactParameterPriority[left.id] ?? Number.MAX_SAFE_INTEGER;
       const rightPriority = compactParameterPriority[right.id] ?? Number.MAX_SAFE_INTEGER;
@@ -16044,7 +16099,9 @@ function filterAnswersForMode(mode, answers) {
       "start_from",
       "stop_after",
       "evolution_mode",
+      "evolution_pool_size",
       "evolution_initial_samples",
+      "evolution_oracle_samples",
       "evolution_rounds",
       "evolution_samples_per_round",
     ],
@@ -16088,7 +16145,9 @@ function filterAnswersForMode(mode, answers) {
       "start_from",
       "stop_after",
       "evolution_mode",
+      "evolution_pool_size",
       "evolution_initial_samples",
+      "evolution_oracle_samples",
       "evolution_rounds",
       "evolution_samples_per_round",
     ],
