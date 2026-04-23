@@ -108,9 +108,11 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
     seq_texts = [all_seqs[sid] for sid in gated_seq_ids]
     X_embeddings = get_esm_embeddings(seq_texts, device)
     
-    # Active Learning Parameters
-    N_TRAIN = 30 # Oracle budget for training
-    TOP_K = getattr(request, "evolution_oracle_samples", 20) # Final selection budget
+    # Active Learning Parameters from UI Request
+    N_TRAIN = getattr(request, "evolution_initial_samples", 30) # Oracle budget for training (K-Means centers)
+    TOP_K = getattr(request, "evolution_oracle_samples", 20) # Final selection budget (Top predictions)
+    
+    print(f"Active Learning Config: N_TRAIN={N_TRAIN}, TOP_K={TOP_K}, Pool={len(gated_seq_ids)}")
     
     if len(gated_seq_ids) <= N_TRAIN + TOP_K:
         # If pool is too small, just evaluate everything
@@ -250,6 +252,23 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
     
     write_json(paths.summary_json, summary)
     set_status(paths, stage="done", state="completed")
+    
+    # Create ZIP Archive for user download
+    import zipfile
+    export_dir = paths.root / "exports"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
+    zip_path = export_dir / f"evolution_results_{stamp}.zip"
+    
+    with zipfile.ZipFile(zip_path, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+        # Add summary
+        zf.write(paths.summary_json, arcname="summary.json")
+        # Add all generated PDBs
+        for pdb_file in designs_dir.glob("*.pdb"):
+            zf.write(pdb_file, arcname=f"designs/{pdb_file.name}")
+            
+    summary["archive_name"] = zip_path.name
+    write_json(paths.summary_json, summary) # Update with archive name
     
     # Global Flywheel: Sync to S3
     try:
