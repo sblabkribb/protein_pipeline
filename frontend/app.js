@@ -7635,12 +7635,14 @@ async function runWorkflowStudioStage(sessionId = state.currentWorkflowStudioSes
   session.stage_run_ids[targetStage] = runId;
   upsertWorkflowStudioSession(session);
   state.runSubmitting = true;
+  state.runningRunIds.add(runId);
   renderWorkflowStudio();
   updateRunEligibility(state.plan?.questions || []);
   updateMonitorActionButtons();
   try {
     const result = await apiCall("pipeline.run", args);
     const launchedRunId = String(result?.run_id || runId).trim() || runId;
+    state.runningRunIds.add(launchedRunId);
     session.pending = {
       run_id: launchedRunId,
       start_from: String(args.start_from || "msa").trim().toLowerCase(),
@@ -16540,6 +16542,7 @@ async function runPipeline() {
   setMessage(t("run.launching", { mode: modeLabel, id: runId }), "ai");
   setCurrentRunId(runId);
   state.autoAnalyzePendingByRunId[runId] = true;
+  state.runningRunIds.add(runId);
   state.currentRunState = "running";
   state.runSubmitting = true;
   updateRunEligibility(state.plan?.questions || []);
@@ -16549,6 +16552,7 @@ async function runPipeline() {
   try {
     const result = await apiCall(toolName, args);
     state.runModeById[result.run_id] = mode;
+    state.runningRunIds.add(result.run_id);
     state.autoAnalyzePendingByRunId[result.run_id] = true;
     armRunStatusGracePeriod(result.run_id);
     if (toolName === "pipeline.run" && state.progressContextByRunId[runId] && runId !== result.run_id) {
@@ -16664,6 +16668,14 @@ async function pollStatus(runId) {
         const stageRaw = fallbackStatus.stage || "-";
         const stage = formatStatusStage(stageRaw);
         const stateText = fallbackStatus.state || "-";
+
+        const stateLower = String(stateText).toLowerCase();
+        if (stateLower === "running") {
+          state.runningRunIds.add(runId);
+        } else {
+          state.runningRunIds.delete(runId);
+        }
+
         const key = `${stageRaw}|${stateText}`;
         if (key !== state.lastStatusKey) {
           state.lastStatusKey = key;
@@ -16671,6 +16683,7 @@ async function pollStatus(runId) {
         }
       } else {
         updateRunInfo({ stage: "-", state: "not found", updated_at: "-" });
+        state.runningRunIds.delete(runId);
         const key = `not_found|${runId}`;
         if (key !== state.lastStatusKey) {
           state.lastStatusKey = key;
@@ -16685,6 +16698,14 @@ async function pollStatus(runId) {
     const stageRaw = result.status?.stage || "-";
     const stage = formatStatusStage(stageRaw);
     const stateText = result.status?.state || "-";
+
+    const stateLower = String(stateText).toLowerCase();
+    if (stateLower === "running") {
+      state.runningRunIds.add(runId);
+    } else {
+      state.runningRunIds.delete(runId);
+    }
+
     const key = `${stageRaw}|${stateText}`;
     if (key !== state.lastStatusKey) {
       state.lastStatusKey = key;
@@ -16835,6 +16856,7 @@ async function resumeCurrentRun(runIdArg = state.currentRunId, { targetTab = "mo
 
   setMessage(t("run.resume.starting", { id: runId }), "ai");
   state.runSubmitting = true;
+  state.runningRunIds.add(runId);
   state.currentRunState = "running";
   state.autoAnalyzePendingByRunId[runId] = autoAnalyzeOnComplete;
   updateRunEligibility(state.plan?.questions || []);
@@ -16846,6 +16868,7 @@ async function resumeCurrentRun(runIdArg = state.currentRunId, { targetTab = "mo
   try {
     const result = await apiCall(resumeToolName, resumeArgs);
     const resumedRunId = String(result?.run_id || runId).trim() || runId;
+    state.runningRunIds.add(resumedRunId);
     state.autoAnalyzePendingByRunId[resumedRunId] = autoAnalyzeOnComplete;
     armRunStatusGracePeriod(resumedRunId);
     if (inferredMode && PROGRESS_PLANS[inferredMode]) {
