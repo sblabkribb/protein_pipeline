@@ -583,6 +583,7 @@ const state = {
   currentRunId: null,
   currentRunState: "",
   runSubmitting: false,
+  runningRunIds: new Set(),
   pollTimer: null,
   pollCyclePromise: null,
   lastStatusKey: "",
@@ -15889,7 +15890,7 @@ function updateRunEligibility(questions) {
     return isAnswerMissing(state.answers[id]);
   });
   const partialRerunBlocked = isSetupPartialRerunRequested();
-  const runBusy = state.runSubmitting || String(state.currentRunState || "").toLowerCase() === "running";
+  const runBusy = state.runSubmitting;
   const wizardBlocked = setupWizardEnabled(questions) && !isSetupWizardFinalStep();
   if (missing.length === 0 && !runBusy && !wizardBlocked && !partialRerunBlocked) {
     el.runBtn.disabled = false;
