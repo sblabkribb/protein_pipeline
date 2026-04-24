@@ -6856,7 +6856,7 @@ function renderWorkflowStudio() {
     el.studioAdoptRunBtn.disabled = !String(state.currentRunId || "").trim();
   }
   if (el.studioRunBtn) {
-    el.studioRunBtn.disabled = !session || state.runSubmitting || String(state.currentRunState || "").toLowerCase() === "running";
+    el.studioRunBtn.disabled = !session || state.runSubmitting || workflowStudioRunActive(session);
   }
   if (el.studioStopBtn) {
     el.studioStopBtn.disabled = !session || !workflowStudioRunActive(session);
@@ -7538,7 +7538,7 @@ function renderWorkflowStudio() {
 }
 
 async function runWorkflowStudioStage(sessionId = state.currentWorkflowStudioSessionId) {
-  if (state.runSubmitting || String(state.currentRunState || "").toLowerCase() === "running") {
+  if (state.runSubmitting) {
     setMessage(t("run.alreadyRunning"), "ai");
     return;
   }
@@ -16425,7 +16425,7 @@ async function runPreflight({ announce = true } = {}) {
 }
 
 async function runPipeline() {
-  if (state.runSubmitting || String(state.currentRunState || "").toLowerCase() === "running") {
+  if (state.runSubmitting) {
     setMessage(t("run.alreadyRunning"), "ai");
     return;
   }
