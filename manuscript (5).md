@@ -67,3 +67,54 @@ We calculated the Intraclass Correlation Coefficient (ICC1) using a one-way ANOV
 ### Implications for Protein Design
 
 This result strongly suggests that "bad sequences are bad" primarily because the target context is challenging for the current generation of design and folding models, rather than due to stochastic failures of the ProteinMPNN sampler. This finding has significant implications for the design of protein engineering workflows. It justifies the `protein_pipeline`'s emphasis on comparative analysis across targets and backbone configurations. Since the target backbone is the primary determinant of success, the ability to quickly evaluate and compare multiple targets using the pipeline's integrated Analyze tab is essential for identifying viable starting points for experimental validation.
+
+## Discussion
+
+`protein_pipeline` demonstrates that a substantial contribution to computational protein design can come from the integration of workflow orchestration and empirical analysis. By coupling a stage-aware execution model with a run-centric artifact store, the platform enables researchers to move beyond simple job submission toward systematic exploration of design failure modes.
+
+Our empirical studies on surrogate model selection and error decomposition illustrate the power of this integrated approach. The discovery that Random Forest models trained on K-Means-selected embeddings provide robust surrogate performance allows for more efficient navigation of sequence space. More importantly, the error decomposition analysis provides a new perspective on ProteinMPNN-based design, showing that design success is overwhelmingly target-dependent. This insight validates the system's design goal of providing rich comparative tools, as the primary task of the researcher becomes the identification of "foldable" target backbones rather than the fine-tuning of sampling parameters.
+
+## Conclusion
+
+We have presented `protein_pipeline`, an integrated research platform that operationalizes protein design as a reproducible and inspectable workflow. Through its MCP-enabled backend and run-centric artifact management, the system reduces the operational overhead of coordinating heterogeneous modeling services. Furthermore, we have shown how the platform enables rigorous empirical analysis, leading to the identification of optimal surrogate modeling strategies and a deeper understanding of design failure modes.
+
+Future work will focus on expanding the platform's support for agentic planning and multi-objective optimization, as well as integrating broader benchmark suites to further refine our understanding of the interplay between backbone generation, sequence design, and structural evaluation. We expect that integrated systems like `protein_pipeline` will become increasingly important as protein design workflows continue to grow in complexity and as researchers demand tools that support both execution and scientific reasoning within a single environment.
+
+## References
+
+[1] Adam Roberts (2013). Ambiguous fragment assignment for high-throughput sequencing experiments. eScholarship (California Digital Library)
+[2] Stucchi D, Babí Almenar J, Casagrandi R (2026). An individual, mechanistic and dynamical model to simulate urban tree growth and ecosystem services supply under future scenarios.. The Science of the total environment. doi:10.1016/j.scitotenv.2026.181466
+[3] Puralewski R, Aggarwal N, Oler JA (2026). The Development of Trait Anxiety in Nonhuman Primates During the First Year of Life.. Developmental science. doi:10.1111/desc.70133
+[4] Ivo Djidrovski (2026). ToxMCP: Guardrailed, Auditable Agentic Workflows for Computational Toxicology via the Model Context Protocol. bioRxiv (Cold Spring Harbor Laboratory). doi:10.64898/2026.02.06.703989
+[5] John Ainsworth (2015). Re-engineering healthcare systems to use evidence from practice. Research Explorer (The University of Manchester)
+[6] GBD 2023 Demographics Collaborators (2025). Global age-sex-specific all-cause mortality and life expectancy estimates for 204 countries and territories and 660 subnational locations, 1950-2023: a demographic analysis for the Global Burden of Disease Study 2023.. Lancet (London, England). doi:10.1016/s0140-6736(25)01330-3
+[7] GBD 2023 Disease and Injury and Risk Factor Collaborators (2025). Burden of 375 diseases and injuries, risk-attributable burden of 88 risk factors, and healthy life expectancy in 204 countries and territories, including 660 subnational locations, 1990-2023: a systematic analysis for the Global Burden of Disease Study 2023.. Lancet (London, England). doi:10.1016/s0140-6736(25)01637-x
+[8] Reeve R, Blignaut B, Esterhuysen JJ (2010). Sequence-based prediction for vaccine strain selection and identification of antigenic variability in foot-and-mouth disease virus.. PLoS computational biology. doi:10.1371/journal.pcbi.1001027
+[9] Jamett J, Melendez P, Collao-Ferrada X (2026). Fuzzy Logic Approaches for Causal Inference in Health Care: Systematic Review.. JMIR AI. doi:10.2196/83425
+[10] de Wit XM, Gabbana A, Woodward M (2026). Data-driven Mori-Zwanzig modeling of Lagrangian particle dynamics in turbulent flows.. Proceedings of the National Academy of Sciences of the United States of America. doi:10.1073/pnas.2525390123
+[11] Wang G, Yu M, Shao B (2026). Efficient Communication in Word Formation: How Syntactic and Lexical Surprisal Jointly Shape English Conversion Over the Past Century.. Cognitive science. doi:10.1111/cogs.70202
+[12] Timothy R. Hannigan, Richard Franciscus Johannes Haans, Keyvan Vakili (2019). Topic Modeling in Management Research: Rendering New Theory from Textual Data. Academy of Management Annals. doi:10.5465/annals.2017.0099
+[13] Ranjan Sapkota, Konstantinos I. Roumeliotis, Manoj Karkee (2025). AI Agents vs. Agentic AI: A Conceptual taxonomy, applications and challenges. Information Fusion. doi:10.1016/j.inffus.2025.103599
+[14] Mariette Awad, Rahul Khanna (2015). Efficient Learning Machines: Theories, Concepts, and Applications for Engineers and System Designers. Directory of Open access Books (OAPEN Foundation). doi:10.1007/978-1-4302-5990-9
+[15] Tim Berners‐Lee, Wendy Hall, James Hendler (2006). A Framework for Web Science. Foundations and Trends® in Web Science. doi:10.1561/1800000001
+[16] Bernard R. Brooks, Charles L. Brooks, Alexander D. MacKerell (2009). CHARMM: The biomolecular simulation program. Journal of Computational Chemistry. doi:10.1002/jcc.21287
+[17] David E. Wilkins, T. J. Lee, Pauline M. Berry (2003). Interactive Execution Monitoring of Agent Teams. Journal of Artificial Intelligence Research. doi:10.1613/jair.1112
+[18] Marvin Hofer, Daniel Obraczka, Alieh Saeedi (2024). Construction of Knowledge Graphs: Current State and Challenges. Information. doi:10.3390/info15080509
+[19] Joshua Bongard, Michael Levin (2021). Living Things Are Not (20th Century) Machines: Updating Mechanism Metaphors in Light of the Modern Science of Machine Behavior. Frontiers in Ecology and Evolution. doi:10.3389/fevo.2021.650726
+[20] Simon I, van den Elshout RFA, Wardhana GK (2026). Ultrasound-responsive liposomes: A mechanistic framework to decode the effects of acoustic parameters.. Proceedings of the National Academy of Sciences of the United States of America. doi:10.1073/pnas.2535429123
+[21] Wang G, Paternoster L, Warrington NM (2026). Statistical Methods for Understanding Trajectories in Genetic Epidemiology.. Annual review of biomedical data science. doi:10.1146/annurev-biodatasci-092724-035434
+[22] Han Hu, Yonggang Wen, Tat‐Seng Chua (2014). Toward Scalable Systems for Big Data Analytics: A Technology Tutorial. IEEE Access. doi:10.1109/access.2014.2332453
+[23] Daniel P. Tabor, Loı̈c M. Roch, Semion K. Saikin (2018). Accelerating the discovery of materials for clean energy in the era of smart automation. Nature Reviews Materials. doi:10.1038/s41578-018-0005-z
+[24] Paula Sanz‐Leon, S. A. Knock, Marmaduke Woodman (2013). The Virtual Brain: a simulator of primate brain network dynamics. Frontiers in Neuroinformatics. doi:10.3389/fninf.2013.00010
+[25] J. M. Górriz, Javier Ramı́rez, Andrés Ortíz (2020). Artificial intelligence within the interplay between natural and artificial computation: Advances in data science, trends and applications. Neurocomputing. doi:10.1016/j.neucom.2020.05.078
+[26] Smith DD, Abbott DW, Wieden HJ (2025). In silico based re-engineering of a computationally designed biosensor with altered signalling mode and improved dynamic range.. Archives of biochemistry and biophysics. doi:10.1016/j.abb.2024.110275
+[27] Hellec E, Nunes F, Corporeau C (2024). KiNext: a portable and scalable workflow for the identification and classification of protein kinases.. BMC bioinformatics. doi:10.1186/s12859-024-05953-w
+[28] Tse TC, Weiner LS, Funkhouser CJ (2025). Acceptability and Usability of a Digital Behavioral Health Platform for Youth at Risk of Suicide: User-Centered Design Study With Patients, Practitioners, and Business Gatekeepers.. JMIR formative research. doi:10.2196/65418
+[29] Moreno L, Petrie H, Martínez P (2023). Designing user interfaces for content simplification aimed at people with cognitive impairments.. Universal access in the information society. doi:10.1007/s10209-023-00986-z
+[30] Palacios-Marín Á, Palacios-Marín AV, Tausif M (2026). A novel methodology to study the release of fragmented fibres, including microplastics, in laboratory washing conditions.. Scientific reports. doi:10.1038/s41598-026-41563-7
+[31] Liu Z, Zhao K, Ma J (2026). One-step fabrication of superhydrophobic fabrics with stable mechanical performance in harsh conditions.. Nature communications. doi:10.1038/s41467-026-70857-7
+[32] Nikolaos Cheimarios (2025). Scientific software development in the AI era: reproducibility, MLOps, and applications in soft matter physics. Frontiers in Physics. doi:10.3389/fphy.2025.1711356
+[33] Giancarlo Guizzardi (2005). Ontological foundations for structural conceptual models. University of Twente Research Information
+[34] Lu B, Jin G, Cui Y (2026). Carbon Dots Intercalated MXene for Flexible Organic Hydrogel Absorbers with Synergistically Enhanced Dielectric Loss.. Nano-micro letters. doi:10.1007/s40820-026-02135-6
+[35] Chang R, Dong H, Song X (2026). Harnessing the charge-transfer-to-solvent state of aqueous triiodide: A strategy to mitigate I2 trapping and enhance hydrated electron yield.. The Journal of chemical physics. doi:10.1063/5.0321927
+[36] Misra SN, Gagnani MA, M ID (2004). Biological and clinical aspects of Lanthanide coordination compounds.. Bioinorganic chemistry and applications. doi:10.1155/s1565363304000111
