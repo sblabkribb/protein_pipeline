@@ -35,3 +35,23 @@ A central design feature is the run-centric artifact model. Every execution is a
 ### Interactive Web Console
 
 The web console functions as the primary interaction surface, providing tools for experiment setup, live status tracking, result inspection, and side-by-side comparison of candidate designs. Unlike traditional job submission layers, the console is tightly coupled to the underlying artifact store and pipeline state. It allows researchers to move from job configuration to comparative analysis and report generation within a single environment, reducing reliance on ad hoc scripts and manual file handling.
+
+## Surrogate Model Selection and Optimization
+
+To evaluate the platform's utility for iterative protein design, we conducted a systematic benchmark of surrogate model selection and training strategies. Surrogate models are increasingly used in protein engineering to navigate large sequence spaces by approximating expensive structure-prediction or scoring functions.
+
+### Benchmark Setup
+
+The benchmark utilized 15 CATH test targets, with 120 ProteinMPNN-designed sequences per target (distributed across three conservation tiers). We used ESM-2 8M (320D) mean-pooled embeddings as the primary feature representation. The evaluation focused on "BO uplift Top-5," a metric reflecting the improvement in the top-ranked candidates when using Bayesian Optimization (BO) guided by the surrogate model compared to random selection.
+
+### Model Comparison and Robustness
+
+We compared eight different surrogate models, including Random Forest (RF), LightGBM, Ridge Regression, XGBoost, KNN, MLP, and Gaussian Process (GP-RBF). Our results indicate that tree-based and linear models (RF, LightGBM, Ridge, XGBoost) perform significantly better than MLP and GP-RBF in this low-data regime (N=30 training samples). Specifically, Random Forest (RF) demonstrated robust performance across targets, achieving a BO uplift Top-5 of 0.822, which was statistically equivalent to LightGBM (0.933) and Ridge (0.898) after Holm correction. Given its relative insensitivity to hyperparameters and consistent performance across multiple metrics, RF was selected as the default surrogate model for the pipeline.
+
+### Training-Set Selection: K-Means vs. Random Sampling
+
+A critical finding of our benchmark is the superiority of K-Means-based training-set selection over simple random sampling. By selecting sequences closest to the centroids of K-Means clusters in the ESM embedding space, we ensured a more diverse and representative training set. For small sample sizes (N ≤ 20), K-Means selection provided up to a 51% improvement in BO uplift compared to random sampling. At the default N=30, K-Means selection continued to provide a more stable and diverse training foundation for tree-based models.
+
+### Sample Size and Embedding Ablation
+
+We performed an ablation study on the training sample size (N ∈ {5, 10, 20, 30, 50, 80}). We found that N=30 represents an optimal plateau point, capturing approximately 80% of the uplift achieved at N=80 while requiring significantly fewer expensive AlphaFold2 calls. Furthermore, we compared ESM-2 8M (320D) embeddings with the larger ESM-2 150M (640D) model. We found no statistically significant difference in surrogate performance between the two, justifying the use of the 8M model, which offers a 5x speedup in inference time.
