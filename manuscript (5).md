@@ -55,3 +55,15 @@ A critical finding of our benchmark is the superiority of K-Means-based training
 ### Sample Size and Embedding Ablation
 
 We performed an ablation study on the training sample size (N ∈ {5, 10, 20, 30, 50, 80}). We found that N=30 represents an optimal plateau point, capturing approximately 80% of the uplift achieved at N=80 while requiring significantly fewer expensive AlphaFold2 calls. Furthermore, we compared ESM-2 8M (320D) embeddings with the larger ESM-2 150M (640D) model. We found no statistically significant difference in surrogate performance between the two, justifying the use of the 8M model, which offers a 5x speedup in inference time.
+
+## Why Bad Sequences are Bad: Error Decomposition Analysis
+
+A recurring question in ProteinMPNN-based design is whether low-scoring candidates (e.g., low pLDDT) result from imperfections in the sequence design model or from the intrinsic difficulty of the target backbone. To address this, we performed a variance decomposition analysis of AlphaFold2 pLDDT scores across 1,766 designs generated for 15 CATH targets.
+
+### Variance Decomposition and ICC1
+
+We calculated the Intraclass Correlation Coefficient (ICC1) using a one-way ANOVA-style decomposition. The total variance in pLDDT was decomposed into "between-target" variance (target-intrinsic difficulty) and "within-target" variance (ProteinMPNN sampling noise). Our analysis revealed an ICC1 of 0.996 for pLDDT. This indicates that 99.6% of the variance in design quality is explained by the target backbone itself, while ProteinMPNN sampling noise accounts for less than 0.4% of the variance.
+
+### Implications for Protein Design
+
+This result strongly suggests that "bad sequences are bad" primarily because the target context is challenging for the current generation of design and folding models, rather than due to stochastic failures of the ProteinMPNN sampler. This finding has significant implications for the design of protein engineering workflows. It justifies the `protein_pipeline`'s emphasis on comparative analysis across targets and backbone configurations. Since the target backbone is the primary determinant of success, the ability to quickly evaluate and compare multiple targets using the pipeline's integrated Analyze tab is essential for identifying viable starting points for experimental validation.
