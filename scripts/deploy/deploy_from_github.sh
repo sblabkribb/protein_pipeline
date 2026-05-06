@@ -9,7 +9,7 @@ case "$target" in
   dev)
     deploy_path="/opt/protein_pipeline-dev"
     service_name="pipeline-mcp-dev.service"
-    health_port="18083"
+    health_port="18087"
     ;;
   prod)
     deploy_path="/opt/protein_pipeline"
@@ -28,6 +28,7 @@ if [[ ! -d "$deploy_path/.git" ]]; then
 fi
 
 cd "$deploy_path"
+git remote set-url origin "$repo_url"
 
 if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
   echo "Refusing to deploy over tracked local modifications in $deploy_path." >&2

@@ -4,7 +4,7 @@
 
 **Goal:** Recreate `/opt/protein_pipeline-dev` from a clean release baseline and add GitHub Actions deployment that keeps dev and production separated.
 
-**Architecture:** Production remains `/opt/protein_pipeline` on `127.0.0.1:18080` and deploys only from release tags or explicit production dispatch. Development runs from `/opt/protein_pipeline-dev` on `127.0.0.1:18083`, with its own env file, venv, outputs, logs, sessions, OIDC client, and visible UI badge.
+**Architecture:** Production remains `/opt/protein_pipeline` on `127.0.0.1:18080` and deploys only from release tags or explicit production dispatch. Development runs from `/opt/protein_pipeline-dev` on `127.0.0.1:18087`, with its own env file, venv, outputs, logs, sessions, OIDC client, and visible UI badge.
 
 **Tech Stack:** GitHub Actions, SSH, systemd, Caddy, Python venv, static frontend.
 
@@ -52,4 +52,4 @@
 4. Create dev-only runtime directories and `.env`.
 5. Create a dev venv and install `pipeline-mcp/requirements.txt`.
 6. Install and start `pipeline-mcp-dev.service`.
-7. Verify `http://127.0.0.1:18083/healthz`.
+7. Verify `http://127.0.0.1:18087/healthz`.
