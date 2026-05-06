@@ -1485,6 +1485,7 @@ test("buildFastLaunchPreset sizes fast pipeline defaults from total output and s
   assert.equal(preset.answers.mask_consensus_apply, false);
   assert.equal(preset.answers.relax_enabled, true);
   assert.deepEqual(preset.answers.selected_tiers, [0.3, 0.5, 0.7]);
+  assert.deepEqual(preset.routed.selected_tiers, [0.3, 0.5, 0.7]);
   assert.equal(preset.answers.num_seq_per_tier, 2);
   assert.equal(preset.answers.bioemu_num_samples, 20);
   assert.equal(preset.answers.bioemu_max_return_structures, 10);
@@ -1497,6 +1498,24 @@ test("buildFastLaunchPreset sizes fast pipeline defaults from total output and s
   assert.equal(args.relax_enabled, true);
   assert.equal(args.stop_after, "novelty");
   assert.deepEqual(args.selected_tiers, [0.3, 0.5, 0.7]);
+});
+
+test("buildFastLaunchPreset carries a single selected tier through the routed request", () => {
+  const preset = buildFastLaunchPreset({
+    target_input: ">target\nACDEFGHIK",
+    selected_tiers: [0.7],
+    total_output_sequences: 12,
+  });
+  const args = buildRunArguments({
+    prompt: preset.prompt,
+    routed: preset.routed,
+    answers: preset.answers,
+    runId: "fast_single_tier",
+  });
+
+  assert.deepEqual(preset.answers.selected_tiers, [0.7]);
+  assert.deepEqual(preset.routed.selected_tiers, [0.7]);
+  assert.deepEqual(args.selected_tiers, [0.7]);
 });
 
 test("buildFastLaunchPreset lets callers explicitly disable relax", () => {
@@ -1618,6 +1637,21 @@ test("advanced pipeline source exposes selected_tiers as a conservation choice",
   assert.match(source, /id:\s*"selected_tiers"/);
   assert.match(source, /const ANSWER_FLOAT_LIST_KEYS = new Set\(\["conservation_tiers", "selected_tiers"\]\)/);
   assert.match(source, /const choiceQuestionIds = new Set\(\[[\s\S]*"selected_tiers"/m);
+});
+
+test("advanced option board mirrors visible choices into routed request state", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(source, /function mirrorSetupRoutedAnswer\(id, value\)/);
+  assert.match(source, /mirrorSetupRoutedAnswer\("selected_tiers", \[\.\.\.state\.answers\.selected_tiers\]\)/);
+  assert.match(source, /state\.answers\[id\] = value;[\s\S]*mirrorSetupRoutedAnswer\(id, value\);/m);
+});
+
+test("run button launches pipeline without passing the click event as override answers", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(source, /el\.runBtn\.addEventListener\("click", \(\) => \{[\s\S]*runPipeline\(\);[\s\S]*\}\);/m);
+  assert.match(source, /typeof overrideAnswers\.preventDefault === "function"[\s\S]*overrideAnswers = null;/m);
 });
 
 test("fast preset application clears stale setup state before writing fast answers", () => {

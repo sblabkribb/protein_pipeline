@@ -75,7 +75,7 @@ import {
   workflowStudioLaneTiersFromSources,
   workflowStudioVisibleStageFields,
   withFixedPositionsExtra,
-} from "./lib/pipeline.js?v=20260409_v12";
+} from "./lib/pipeline.js?v=20260506_tier_fix";
 import {
   analyzeChartViewOptions,
   buildCompareMetaTooltip,
@@ -9877,6 +9877,24 @@ function readFastSelectedTiers() {
   return normalizeSelectedTierValues(values, FAST_SELECTED_TIER_VALUES);
 }
 
+function setupRoutedRequest() {
+  if (!state.plan || typeof state.plan !== "object") return null;
+  if (!state.plan.routed_request || typeof state.plan.routed_request !== "object" || Array.isArray(state.plan.routed_request)) {
+    state.plan.routed_request = {};
+  }
+  return state.plan.routed_request;
+}
+
+function mirrorSetupRoutedAnswer(id, value) {
+  const routed = setupRoutedRequest();
+  if (!routed || !id) return;
+  if (value === undefined) {
+    delete routed[id];
+  } else {
+    routed[id] = value;
+  }
+}
+
 function currentSetupSelectedTiers(question = null) {
   const routedDefault = Array.isArray(state.plan?.routed_request?.selected_tiers)
     ? state.plan.routed_request.selected_tiers
@@ -9892,6 +9910,7 @@ function currentSetupSelectedTiers(question = null) {
   );
   state.answers.selected_tiers = current;
   delete state.answers.conservation_tiers;
+  mirrorSetupRoutedAnswer("selected_tiers", [...current]);
   return current;
 }
 
@@ -14736,6 +14755,7 @@ function renderQuestions(questions) {
           current = fallback;
         }
         state.answers[q.id] = current;
+        mirrorSetupRoutedAnswer(q.id, current);
       }
       return Boolean(current);
     };
@@ -14796,6 +14816,7 @@ function renderQuestions(questions) {
           current,
           (value) => {
             state.answers[id] = value;
+            mirrorSetupRoutedAnswer(id, value);
             if (onChange) onChange(value);
             updateRunEligibility(normalizedQuestions);
           },
@@ -14956,6 +14977,7 @@ function renderQuestions(questions) {
               .map((item) => Number.parseFloat(item))
               .filter((item) => Number.isFinite(item))
               .sort((left, right) => left - right);
+            mirrorSetupRoutedAnswer("selected_tiers", [...state.answers.selected_tiers]);
             updateRunEligibility(normalizedQuestions);
           },
           { multi: true }
@@ -16535,6 +16557,14 @@ async function runPreflight({ announce = true, mode: overrideMode = null, answer
 }
 
 async function runPipeline(overrideAnswers = null) {
+  if (
+    overrideAnswers &&
+    typeof overrideAnswers === "object" &&
+    typeof overrideAnswers.preventDefault === "function" &&
+    typeof overrideAnswers.type === "string"
+  ) {
+    overrideAnswers = null;
+  }
   if (state.runSubmitting) {
     setMessage(t("run.alreadyRunning"), "ai");
     return;
@@ -24555,7 +24585,9 @@ if (el.clearMonitorMessagesMonitor) {
   });
 }
 
-el.runBtn.addEventListener("click", runPipeline);
+el.runBtn.addEventListener("click", () => {
+  runPipeline();
+});
 
 if (el.setupStepPrev) {
   el.setupStepPrev.addEventListener("click", () => {

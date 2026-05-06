@@ -1688,6 +1688,7 @@ export function buildFastLaunchPreset(draft = {}) {
       novelty_enabled: noveltyEnabled,
       bioemu_use: bioemuEnabled,
       rfd3_use: rfd3Enabled,
+      selected_tiers: selectedTiers,
     },
   };
 }

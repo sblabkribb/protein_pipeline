@@ -84,6 +84,29 @@ def _job_state(job: dict[str, Any]) -> str:
     return str(job.get("state") or "").strip().lower()
 
 
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def _job_process_alive(job: dict[str, Any]) -> bool:
+    for key in ("child_pid", "helper_pid", "launcher_pid"):
+        try:
+            pid = int(job.get(key) or 0)
+        except Exception:
+            pid = 0
+        if _pid_alive(pid):
+            return True
+    return False
+
+
 def _job_subset(job: dict[str, Any]) -> str:
     metadata = job.get("metadata")
     if not isinstance(metadata, dict):
@@ -119,6 +142,15 @@ def _managed_batch_jobs_for_subset(output_root: str, subset: str) -> list[dict[s
 def _latest_terminal_job(jobs: list[dict[str, Any]]) -> dict[str, Any] | None:
     for job in jobs:
         if _job_state(job) in _TERMINAL_JOB_STATES:
+            return job
+    return None
+
+
+def _active_managed_batch_job(
+    output_root: str, subset: str
+) -> dict[str, Any] | None:
+    for job in _managed_batch_jobs_for_subset(output_root, subset):
+        if _job_state(job) in _ACTIVE_JOB_STATES and _job_process_alive(job):
             return job
     return None
 
@@ -508,6 +540,14 @@ def launch_cath_batch_job(
     max_workers: int | None = None,
 ) -> dict[str, Any]:
     subset = _safe_subset(subset)
+    active_job = _active_managed_batch_job(output_root, subset)
+    if active_job is not None:
+        return {
+            **active_job,
+            "already_running": True,
+            "message": f"CATH batch ({subset}) is already running",
+        }
+
     workspace_root = workspace_root_from_output_root(output_root)
     command = [
         sys.executable,

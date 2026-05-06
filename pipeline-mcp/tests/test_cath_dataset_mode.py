@@ -1,9 +1,11 @@
 import importlib.util
 import json
+import os
 import sys
 import tempfile
 import types
 import unittest
+import time
 from pathlib import Path
 from unittest import mock
 
@@ -107,6 +109,137 @@ class TestCathDatasetMode(unittest.TestCase):
             summary_path = module.META_ROOT / "training_summary_train.json"
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
             self.assertEqual(summary["artifacts"]["relax_model"], str(relax_model))
+
+    def test_cath_lock_blocks_live_duplicate(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        module = _load_module(
+            "run_cath_batch_script_lock",
+            repo_root / "scripts" / "02_run_cath_batch.py",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            module.project_root = Path(tmp)
+            first = module.acquire_cath_lock(
+                "batch_test",
+                {"kind": "cath_batch", "subset": "test"},
+            )
+            self.assertIsNotNone(first)
+            try:
+                second = module.acquire_cath_lock(
+                    "batch_test",
+                    {"kind": "cath_batch", "subset": "test"},
+                )
+                self.assertIsNone(second)
+            finally:
+                module.release_cath_lock(first)
+
+    def test_launch_cath_batch_reuses_active_subset_job(self) -> None:
+        from pipeline_mcp import cath_ops
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output_root = Path(tmp) / "outputs"
+            output_root.mkdir()
+            job_id = "cath_batch_existing"
+            job_root = cath_ops.managed_jobs_root(str(output_root)) / job_id
+            job_root.mkdir(parents=True)
+            (job_root / "job.json").write_text(
+                json.dumps(
+                    {
+                        "job_id": job_id,
+                        "kind": "cath_batch",
+                        "state": "running",
+                        "helper_pid": os.getpid(),
+                        "created_at": "2026-05-06T00:00:00Z",
+                        "metadata": {"subset": "test", "max_workers": 2},
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = cath_ops.launch_cath_batch_job(
+                str(output_root),
+                subset="test",
+                max_workers=2,
+            )
+
+            self.assertEqual(result["job_id"], job_id)
+            self.assertTrue(result["already_running"])
+
+    def test_prepare_cath_run_skips_recent_running_status(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        module = _load_module(
+            "run_cath_batch_script_recent_running",
+            repo_root / "scripts" / "02_run_cath_batch.py",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            module.project_root = root
+            run_id = "cath_test_recent"
+            run_root = root / "outputs" / run_id
+            run_root.mkdir(parents=True)
+            (run_root / "status.json").write_text(
+                json.dumps(
+                    {
+                        "run_id": run_id,
+                        "stage": "af2_30",
+                        "state": "running",
+                        "updated_at": time.strftime(
+                            "%Y-%m-%d %H:%M:%S", time.gmtime()
+                        ),
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            calls: list[str] = []
+            decision = module.prepare_cath_run_for_start(
+                object(),
+                run_id,
+                stale_after_seconds=3600,
+                cancel_func=lambda _runner, rid: calls.append(rid) or True,
+            )
+
+            self.assertEqual(decision, "skip_recent_running")
+            self.assertEqual(calls, [])
+            status = json.loads((run_root / "status.json").read_text(encoding="utf-8"))
+            self.assertEqual(status["state"], "running")
+
+    def test_prepare_cath_run_cancels_stale_running_status(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        module = _load_module(
+            "run_cath_batch_script_stale_running",
+            repo_root / "scripts" / "02_run_cath_batch.py",
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            module.project_root = root
+            run_id = "cath_test_stale"
+            run_root = root / "outputs" / run_id
+            run_root.mkdir(parents=True)
+            (run_root / "status.json").write_text(
+                json.dumps(
+                    {
+                        "run_id": run_id,
+                        "stage": "mmseqs_msa",
+                        "state": "running",
+                        "updated_at": "2000-01-01 00:00:00",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            calls: list[str] = []
+            decision = module.prepare_cath_run_for_start(
+                object(),
+                run_id,
+                stale_after_seconds=60,
+                cancel_func=lambda _runner, rid: calls.append(rid) or True,
+            )
+
+            self.assertEqual(decision, "cancelled_stale")
+            self.assertEqual(calls, [run_id])
 
 
 if __name__ == "__main__":
