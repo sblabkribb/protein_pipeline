@@ -65,6 +65,12 @@ def test_run_evolution_executes_initial_training_then_topk_each_round(
     def fake_af2_predict(runner, payload):
         fasta = str(payload["target_fasta"])
         seq_id = fasta.splitlines()[0].lstrip(">")
+        eval_paths = init_run(runner.output_root, str(payload["run_id"]))
+        (eval_paths.root / "af2" / seq_id).mkdir(parents=True, exist_ok=True)
+        (eval_paths.root / "status.json").write_text(
+            json.dumps({"run_id": payload["run_id"], "state": "completed"}),
+            encoding="utf-8",
+        )
         score = 70.0 + float(seq_id.rsplit("seq", 1)[-1])
         return {"summary": {"af2": {seq_id: {"best_plddt": score}}}}
 
@@ -88,6 +94,20 @@ def test_run_evolution_executes_initial_training_then_topk_each_round(
     summary = json.loads((Path(result.output_dir) / "summary.json").read_text())
 
     assert len(runner.pool_run_ids) == 3
+    subrun_manifest = json.loads(
+        (Path(result.output_dir) / "evolution" / "subruns" / "manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    subruns = subrun_manifest["subruns"]
+    assert len(subruns) == 12
+    assert sum(1 for item in subruns if item["category"] == "pool") == 3
+    assert sum(1 for item in subruns if item["category"] == "oracle") == 9
+    for pool_run_id in runner.pool_run_ids:
+        assert not (Path(runner.output_root) / pool_run_id).exists()
+        assert (
+            Path(result.output_dir) / "evolution" / "subruns" / pool_run_id
+        ).is_dir()
     assert summary["pool_statistics"]["rounds"] == 3
     assert summary["pool_statistics"]["oracle_train"] == 3
     assert summary["pool_statistics"]["oracle_top_k_per_round"] == 2

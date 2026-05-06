@@ -200,6 +200,8 @@ def list_runs(
         if not p.is_dir():
             continue
         name = p.name
+        if name.startswith((".", "_")):
+            continue
         if not include_subruns and _EVOLUTION_SUBRUN_RE.search(name):
             continue
         if not include_cath and _CATH_RUN_RE.search(name):

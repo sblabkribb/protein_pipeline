@@ -81,6 +81,7 @@ class TestTools(unittest.TestCase):
                 "pys74631_kribb.re.kr_ev_3rgk",
             ]
             hidden = [
+                ".evolution_orphans",
                 "admin_20260430_064926_afb67369_round1_pool",
                 "admin_20260430_064926_afb67369_r1_top_k_rfd3_spec-1_0_model_4_82",
                 "pys74631_kribb.re.kr_ev_3rgk_r1_train_rfd3_spec-1_0_model_8_59",

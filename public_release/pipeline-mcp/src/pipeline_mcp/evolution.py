@@ -202,6 +202,74 @@ def get_esm_embeddings(sequences, device):
             
     return np.vstack(embeddings)
 
+
+def _append_subrun_manifest(parent_root: Path, entry: dict[str, object]) -> None:
+    manifest_path = parent_root / "evolution" / "subruns" / "manifest.json"
+    manifest: dict[str, object] = {"subruns": []}
+    if manifest_path.exists():
+        try:
+            loaded = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                manifest = loaded
+        except Exception:
+            manifest = {"subruns": []}
+    entries = manifest.get("subruns")
+    if not isinstance(entries, list):
+        entries = []
+    original_run_id = str(entry.get("original_run_id") or "")
+    entries = [
+        item
+        for item in entries
+        if not (
+            isinstance(item, dict)
+            and str(item.get("original_run_id") or "") == original_run_id
+        )
+    ]
+    entries.append(entry)
+    write_json(manifest_path, {"subruns": entries})
+
+
+def _bundle_evolution_subrun(
+    output_root: str,
+    parent_root: Path,
+    child_run_id: str,
+    *,
+    category: str,
+    round_no: int | None = None,
+    phase: str | None = None,
+) -> dict[str, object] | None:
+    source = resolve_run_path(output_root, child_run_id)
+    if not source.exists() or not source.is_dir():
+        return None
+
+    subruns_dir = parent_root / "evolution" / "subruns"
+    subruns_dir.mkdir(parents=True, exist_ok=True)
+    target = subruns_dir / child_run_id
+    if target.exists():
+        suffix = 1
+        while (subruns_dir / f"{child_run_id}_dup{suffix}").exists():
+            suffix += 1
+        target = subruns_dir / f"{child_run_id}_dup{suffix}"
+
+    shutil.move(str(source), str(target))
+    try:
+        relative_path = str(target.relative_to(parent_root))
+    except ValueError:
+        relative_path = str(target)
+    entry: dict[str, object] = {
+        "original_run_id": child_run_id,
+        "category": category,
+        "path": relative_path,
+        "stored_at": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+    }
+    if round_no is not None:
+        entry["round"] = int(round_no)
+    if phase:
+        entry["phase"] = phase
+    _append_subrun_manifest(parent_root, entry)
+    return entry
+
+
 def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResult:
     if torch is None:
         raise RuntimeError("Evolution mode requires torch to be installed")
@@ -305,14 +373,22 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
 
         seq_texts = [all_seqs[sid] for sid in gated_seq_ids]
         embeddings = get_esm_embeddings(seq_texts, device)
-        pool_summaries.append(
-            {
-                "round": round_no,
-                "pool_run_id": pool_run_id,
-                "initial": len(all_seqs),
-                "gated": len(gated_seq_ids),
-            }
+        pool_summary: dict[str, object] = {
+            "round": round_no,
+            "pool_run_id": pool_run_id,
+            "initial": len(all_seqs),
+            "gated": len(gated_seq_ids),
+        }
+        bundled = _bundle_evolution_subrun(
+            runner.output_root,
+            paths.root,
+            pool_run_id,
+            category="pool",
+            round_no=round_no,
         )
+        if bundled is not None:
+            pool_summary["pool_output_path"] = bundled.get("path")
+        pool_summaries.append(pool_summary)
         return pool_run_id, all_seqs, soluprot_scores, gated_seq_ids, embeddings
 
     def _select_kmeans_indices(embeddings: np.ndarray, count: int) -> np.ndarray:
@@ -393,6 +469,15 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
         except Exception as exc:
             print(f"Oracle error for {phase} sample {sid}: {exc}")
             return None
+        finally:
+            _bundle_evolution_subrun(
+                runner.output_root,
+                paths.root,
+                eval_run_id,
+                category="oracle",
+                round_no=round_no,
+                phase=phase,
+            )
 
     def _fit_surrogate() -> object:
         if not X_labelled_parts or not y_labelled:
