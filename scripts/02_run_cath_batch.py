@@ -42,7 +42,7 @@ def build_cath_request(pdb_content: str) -> PipelineRequest:
         af2_provider="colabfold",
         af2_max_candidates_per_tier=0,
         af2_top_k=0,
-        relax_enabled=True,
+        relax_enabled=False,
         novelty_enabled=False,
         wt_compare=False,
         agent_panel_enabled=False,

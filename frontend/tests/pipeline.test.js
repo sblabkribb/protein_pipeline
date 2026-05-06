@@ -1516,6 +1516,27 @@ test("buildFastLaunchPreset lets callers explicitly disable relax", () => {
   assert.equal(args.relax_enabled, false);
 });
 
+test("buildFastLaunchPreset preserves explicit backbone-stage disables", () => {
+  const preset = buildFastLaunchPreset({
+    target_input: "ATOM      1  N   GLY A   1      11.104  13.207   9.247  1.00 20.00           N",
+    rfd3_use: false,
+    bioemu_use: false,
+  });
+  const args = buildRunArguments({
+    prompt: preset.prompt,
+    routed: preset.routed,
+    answers: preset.answers,
+    runId: "fast_backbones_off",
+  });
+
+  assert.equal(preset.answers.rfd3_use, false);
+  assert.equal(preset.answers.bioemu_use, false);
+  assert.equal(preset.routed.rfd3_use, false);
+  assert.equal(preset.routed.bioemu_use, false);
+  assert.equal(args.rfd3_use, false);
+  assert.equal(args.bioemu_use, false);
+});
+
 test("buildFastLaunchPreset rounds backbone counts up to satisfy total output targets", () => {
   const preset = buildFastLaunchPreset({
     target_input: "ATOM      1  N   GLY A   1      11.104  13.207   9.247  1.00 20.00           N",

@@ -13,5 +13,6 @@ cd "$PROJECT_ROOT"
 "$PYTHON_BIN" scripts/benchmark/09_bias_analysis.py
 "$PYTHON_BIN" scripts/benchmark/10_ensemble_benchmark.py
 "$PYTHON_BIN" scripts/benchmark/11_make_method_figures.py
+"$PYTHON_BIN" scripts/benchmark/12_make_cath_curated_figure.py
 
 echo "Regenerated benchmark tables and figures."

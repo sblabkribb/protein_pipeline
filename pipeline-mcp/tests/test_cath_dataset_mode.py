@@ -35,7 +35,7 @@ class TestCathDatasetMode(unittest.TestCase):
         self.assertEqual(float(request.soluprot_cutoff), 0.0)
         self.assertEqual(int(request.af2_max_candidates_per_tier), 0)
         self.assertEqual(int(request.af2_top_k), 0)
-        self.assertTrue(bool(request.relax_enabled))
+        self.assertFalse(bool(request.relax_enabled))
         self.assertFalse(bool(request.novelty_enabled))
         self.assertFalse(bool(request.wt_compare))
         self.assertEqual(str(request.stop_after), "af2")

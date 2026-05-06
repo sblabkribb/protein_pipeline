@@ -1642,10 +1642,15 @@ export function buildFastLaunchPreset(draft = {}) {
   const selectedTiers = normalizeSelectedTiers(source.selected_tiers ?? source.conservation_tiers);
   const numSeqPerTier = positiveIntegerOrDefault(source.num_seq_per_tier, 2);
   const totalOutputSequences = positiveIntegerOrDefault(source.total_output_sequences, 120);
-  const activeBackboneSources = detectTargetKey(targetInput) === "target_pdb" ? 2 : 1;
+  const rfd3Enabled = source.rfd3_use !== false;
+  const bioemuEnabled = source.bioemu_use !== false;
+  const activeBackboneSources =
+    targetKind === "target_pdb"
+      ? Number(rfd3Enabled) + Number(bioemuEnabled)
+      : Number(bioemuEnabled);
   const perSourceBackboneCount = Math.max(
     1,
-    Math.ceil(totalOutputSequences / (selectedTiers.length * numSeqPerTier * activeBackboneSources))
+    Math.ceil(totalOutputSequences / (selectedTiers.length * numSeqPerTier * Math.max(1, activeBackboneSources)))
   );
   const answers = normalizeBioEmuCountFields(
     {
@@ -1656,15 +1661,15 @@ export function buildFastLaunchPreset(draft = {}) {
       pdb_strip_nonpositive_resseq: source.pdb_strip_nonpositive_resseq !== false,
       wt_compare: source.wt_compare !== false,
       mask_consensus_apply: source.mask_consensus_apply === true,
-      bioemu_use: true,
+      bioemu_use: bioemuEnabled,
       bioemu_filter_samples: source.bioemu_filter_samples !== false,
       bioemu_num_samples: positiveIntegerOrDefault(source.bioemu_num_samples, perSourceBackboneCount * 2),
       bioemu_max_return_structures: positiveIntegerOrDefault(
         source.bioemu_max_return_structures,
         perSourceBackboneCount
       ),
-      rfd3_use: true,
-      ...(targetKind === "target_pdb"
+      rfd3_use: rfd3Enabled,
+      ...(targetKind === "target_pdb" && rfd3Enabled
         ? { rfd3_mode: normalizeRfd3Mode(source.rfd3_mode) || "local_diversify" }
         : {}),
       rfd3_max_return_designs: positiveIntegerOrDefault(source.rfd3_max_return_designs, perSourceBackboneCount),
@@ -1681,8 +1686,8 @@ export function buildFastLaunchPreset(draft = {}) {
     routed: {
       stop_after: stopAfter,
       novelty_enabled: noveltyEnabled,
-      bioemu_use: true,
-      rfd3_use: true,
+      bioemu_use: bioemuEnabled,
+      rfd3_use: rfd3Enabled,
     },
   };
 }

@@ -29,6 +29,7 @@ from .cath_ops import list_managed_jobs
 from .cath_ops import read_managed_job
 from .cath_ops import read_managed_job_log
 from .cath_ops import stop_managed_job
+from .cath_ops import delete_managed_job
 from .cath_ops import summarize_all_subsets
 from .models import PipelineRequest
 from .models import SequenceRecord
@@ -3796,6 +3797,16 @@ def _cath_stop_job_tool(
     if not job_id:
         raise ValueError("job_id is required")
     return stop_managed_job(runner.output_root, job_id)
+
+
+def _cath_delete_job_tool(
+    runner: PipelineRunner,
+    arguments: dict[str, Any],
+) -> dict[str, Any]:
+    job_id = str(arguments.get("job_id") or "").strip()
+    if not job_id:
+        raise ValueError("job_id is required")
+    return delete_managed_job(runner.output_root, job_id)
 
 
 def _client_cancel_info(client: object | None) -> tuple[object, str] | None:
@@ -7861,6 +7872,17 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.cath_delete_job",
+            "description": "Delete a managed job record from the operations history.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string"},
+                },
+                "required": ["job_id"],
+            },
+        },
+        {
             "name": "pipeline.runpod_list_endpoints",
             "description": "List RunPod serverless endpoints and highlight the ones used by protein_pipeline.",
             "inputSchema": {
@@ -8312,6 +8334,9 @@ class ToolDispatcher:
 
         if name == "pipeline.cath_stop_job":
             return _cath_stop_job_tool(self.runner, arguments)
+
+        if name == "pipeline.cath_delete_job":
+            return _cath_delete_job_tool(self.runner, arguments)
 
         if name == "pipeline.runpod_list_endpoints":
             return _runpod_list_endpoints_tool(self.runner, arguments)

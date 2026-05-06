@@ -4,6 +4,7 @@ import csv
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import time
@@ -341,6 +342,8 @@ def list_managed_jobs(
         meta = _job_payload(output_root, job_dir.name)
         if not isinstance(meta, dict):
             continue
+        if not str(meta.get("job_id") or "").strip():
+            meta = {**meta, "job_id": job_dir.name}
         if kind and str(meta.get("kind") or "").strip() != kind:
             continue
         jobs.append(meta)
@@ -421,6 +424,23 @@ def stop_managed_job(output_root: str, job_id: str) -> dict[str, Any]:
         },
     )
     return {"stopped": stopped, "job": meta}
+
+
+def delete_managed_job(output_root: str, job_id: str) -> dict[str, Any]:
+    root = managed_jobs_root(output_root).resolve()
+    target = (root / str(job_id or "").strip()).resolve()
+    if root not in target.parents:
+        raise ValueError("invalid job_id")
+    meta = _job_payload(output_root, target.name)
+    if not target.exists():
+        return {"job_id": target.name, "found": False, "deleted": False}
+    shutil.rmtree(target)
+    return {
+        "job_id": target.name,
+        "found": True,
+        "deleted": True,
+        "job": meta or {"job_id": target.name},
+    }
 
 
 def _launch_helper(

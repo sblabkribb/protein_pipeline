@@ -23,3 +23,23 @@ test("frontend app source parses as an ES module", () => {
 
   assert.equal(output, "");
 });
+
+test("managed background jobs stay in CATH ops instead of the run monitor", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.doesNotMatch(html, /id="monitorManagedJobsSection"/);
+  assert.doesNotMatch(html, /id="monitorManagedJobsList"/);
+  assert.match(source, /pipeline\.cath_list_jobs/);
+  assert.match(source, /data-cath-job-delete/);
+  assert.match(source, /pipeline\.cath_delete_job/);
+});
+
+test("pipeline route defaults do not silently force RFD3 on", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.doesNotMatch(
+    source,
+    /if \(mode === "pipeline"\) return \{[^}]*rfd3_use:\s*true[^}]*\}/
+  );
+});

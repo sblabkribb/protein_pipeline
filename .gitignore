@@ -76,3 +76,7 @@ ENV/
 Thumbs.db
 .vscode/
 .worktrees/
+
+# --- docs ---
+manuscript (5).docx
+manuscript (5).md

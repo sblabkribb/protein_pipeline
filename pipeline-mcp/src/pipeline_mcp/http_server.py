@@ -39,6 +39,7 @@ _ADMIN_ONLY_TOOLS = {
     "pipeline.cath_get_job",
     "pipeline.cath_read_job_log",
     "pipeline.cath_stop_job",
+    "pipeline.cath_delete_job",
     "pipeline.runpod_list_endpoints",
     "pipeline.runpod_get_endpoint",
     "pipeline.runpod_update_endpoint",

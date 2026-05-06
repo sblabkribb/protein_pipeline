@@ -39,6 +39,7 @@ _ADMIN_ONLY_TOOLS = {
     "pipeline.cath_get_job",
     "pipeline.cath_read_job_log",
     "pipeline.cath_stop_job",
+    "pipeline.cath_delete_job",
     "pipeline.runpod_list_endpoints",
     "pipeline.runpod_get_endpoint",
     "pipeline.runpod_update_endpoint",
@@ -223,8 +224,8 @@ class Handler(BaseHTTPRequestHandler):
     def _session_cookie_name(self) -> str:
         manager = self.sessions
         if manager is None:
-            return "pipeline_session"
-        return str(manager.config.cookie_name or "pipeline_session")
+            return "kbf_session"
+        return str(manager.config.cookie_name or "kbf_session")
 
     def _session_cookie_samesite(self) -> str:
         raw = str(os.environ.get("PIPELINE_SESSION_COOKIE_SAMESITE", "Lax") or "Lax").strip()

@@ -102,6 +102,12 @@ Full benchmark reruns are documented in `docs/reproduce_paper.md`. They can take
 substantially longer because ESM embedding generation and model comparisons are
 recomputed.
 
+The optional backbone/ensemble ablation is run through the live pipeline, not
+from cached model tables. `scripts/benchmark/13_run_backbone_ensemble_ablation.py`
+defines the matched single-backbone, RFD3-single, and RFD3-ensemble arms;
+`scripts/benchmark/launch_backbone_ensemble_ablation.py` starts the pilot as a
+managed background job on a configured server.
+
 Representative multi-round execution summaries used by the manuscript are under
 `data/case_studies/`. These are compact exports from completed production runs,
 not full `outputs/` directories.

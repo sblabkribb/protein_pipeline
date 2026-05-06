@@ -2320,6 +2320,10 @@ const I18N = {
     "cath.noJobs": "No managed jobs yet.",
     "cath.launchBatch": "Run Pipeline",
     "cath.stopJob": "Stop",
+    "cath.deleteJob": "Delete",
+    "cath.deleteConfirm": "Delete job record {id}? Pipeline outputs are not deleted.",
+    "cath.deleteSuccess": "Deleted job record {id}.",
+    "cath.deleteFailed": "Failed to delete managed job: {error}",
     "cath.refreshFailed": "Failed to load CATH operations: {error}",
     "cath.batchStarted": "Started CATH pipeline for {subset} ({id}).",
     "cath.stopRequested": "Stop requested for job {id}.",
@@ -3550,6 +3554,10 @@ const I18N = {
     "cath.noJobs": "아직 관리 작업이 없습니다.",
     "cath.launchBatch": "파이프라인 실행",
     "cath.stopJob": "정지",
+    "cath.deleteJob": "삭제",
+    "cath.deleteConfirm": "{id} 작업 기록을 삭제할까요? 파이프라인 산출물은 삭제하지 않습니다.",
+    "cath.deleteSuccess": "{id} 작업 기록을 삭제했습니다.",
+    "cath.deleteFailed": "관리 작업 삭제 실패: {error}",
     "cath.refreshFailed": "CATH 운영 정보를 불러오지 못했습니다: {error}",
     "cath.batchStarted": "{subset} CATH 파이프라인을 시작했습니다 ({id}).",
     "cath.stopRequested": "{id} 작업에 정지 요청을 보냈습니다.",
@@ -16286,7 +16294,7 @@ function filterAnswersForMode(mode, answers) {
 }
 
 function buildRoutedForMode(mode) {
-  if (mode === "pipeline") return { stop_after: "novelty", novelty_enabled: true, rfd3_use: true };
+  if (mode === "pipeline") return { stop_after: "novelty", novelty_enabled: true };
   if (mode === "rfd3") return { start_from: "rfd3", stop_after: "rfd3", rfd3_use: true };
   if (mode === "bioemu") return { start_from: "bioemu", stop_after: "bioemu", bioemu_use: true };
   if (mode === "msa") return { start_from: "msa", stop_after: "msa" };
@@ -24060,15 +24068,26 @@ function renderCathJobsList() {
       const stateText = String(job?.state || "unknown").trim();
       const createdAt = String(job?.created_at || "").trim();
       const isActive = jobId && jobId === String(state.cathSelectedJobId || "").trim();
+      const canDelete = ["completed", "failed", "error", "cancelled", "canceled", "stopped"].includes(
+        stateText.toLowerCase()
+      );
+      const canStop = !canDelete;
       return `
         <div class="cath-job-item${isActive ? " active" : ""}">
           <button type="button" class="cath-job-main" data-cath-job-open="${escapeHtml(jobId)}">
             <strong>${escapeHtml(label)}</strong>
             <span class="cath-job-meta">${escapeHtml(stateText)}${createdAt ? ` · ${escapeHtml(createdAt)}` : ""}</span>
           </button>
+          ${canStop ? `
           <button type="button" class="ghost cath-job-stop" data-cath-job-stop="${escapeHtml(jobId)}">
             ${escapeHtml(t("cath.stopJob"))}
           </button>
+          ` : ""}
+          ${canDelete ? `
+          <button type="button" class="ghost cath-job-delete" data-cath-job-delete="${escapeHtml(jobId)}">
+            ${escapeHtml(t("cath.deleteJob"))}
+          </button>
+          ` : ""}
         </div>
       `;
     })
@@ -24084,6 +24103,13 @@ function renderCathJobsList() {
       event.stopPropagation();
       const jobId = String(node.getAttribute("data-cath-job-stop") || "").trim();
       await stopCathJob(jobId);
+    });
+  });
+  Array.from(el.cathJobsList.querySelectorAll("[data-cath-job-delete]")).forEach((node) => {
+    node.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const jobId = String(node.getAttribute("data-cath-job-delete") || "").trim();
+      await deleteCathJob(jobId);
     });
   });
 }
@@ -24278,6 +24304,24 @@ async function stopCathJob(jobId) {
     await loadCathJobLog(id);
   } catch (err) {
     setMessage(t("cath.stopFailed", { error: err.message }), "ai");
+  }
+}
+
+async function deleteCathJob(jobId) {
+  const id = String(jobId || "").trim();
+  if (!id) return;
+  const ok = window.confirm(t("cath.deleteConfirm", { id }));
+  if (!ok) return;
+  try {
+    await apiCall("pipeline.cath_delete_job", { job_id: id });
+    if (state.cathSelectedJobId === id) {
+      state.cathSelectedJobId = "";
+      state.cathSelectedJobLog = "";
+    }
+    setMessage(t("cath.deleteSuccess", { id }), "ai");
+    await refreshCathOps({ force: true });
+  } catch (err) {
+    setMessage(t("cath.deleteFailed", { error: err.message }), "ai");
   }
 }
 

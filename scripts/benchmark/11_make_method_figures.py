@@ -7,7 +7,7 @@ Outputs:
     figures/benchmark/fig2_active_learning_loop.png
 
 Run:
-    /opt/protein_pipeline/venv/bin/python scripts/benchmark/11_make_method_figures.py
+    python scripts/benchmark/11_make_method_figures.py
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
-PROJECT_ROOT = Path("/opt/protein_pipeline")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FIG_DIR = PROJECT_ROOT / "figures" / "benchmark"
 
 COLOR_HEAVY_GPU_STAGE = "#F4B8AB"
@@ -359,7 +359,7 @@ def draw_active_learning_loop() -> Path:
         box_w,
         box_h * 1.16,
         "Step 4",
-        "Surrogate fit + rank\nlocal model\n(default RF, swappable)\npredict on ~70 pool",
+        "Surrogate fit + rank\nlocal model\n(default RF, swappable)\npredict on ~60 pool",
         COLOR_LOOP_SURROGATE,
         body_fs=7.9,
     )
@@ -395,7 +395,7 @@ def draw_active_learning_loop() -> Path:
     ax.text(
         6.6,
         1.05,
-        "Total AF2 calls per run = 20 (training) + 20 (top-K) = 40",
+        "Bootstrap round AF2 calls = 30 (training) + 20 (top-K) = 50",
         ha="center",
         va="center",
         fontsize=10,
@@ -405,7 +405,7 @@ def draw_active_learning_loop() -> Path:
     ax.text(
         6.6,
         0.58,
-        "Without surrogate (AF2 every gated candidate): \u2248 90 calls per run  \u2192  ~56% reduction",
+        "Without surrogate (AF2 every gated candidate): \u2248 90 calls per run  \u2192  ~44% reduction",
         ha="center",
         va="center",
         fontsize=9,
