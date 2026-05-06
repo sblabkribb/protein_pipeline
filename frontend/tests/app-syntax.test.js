@@ -43,3 +43,14 @@ test("pipeline route defaults do not silently force RFD3 on", () => {
     /if \(mode === "pipeline"\) return \{[^}]*rfd3_use:\s*true[^}]*\}/
   );
 });
+
+test("development host gets a visible environment badge", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.match(html, /id="environmentBadge"/);
+  assert.match(source, /dev-pipeline\.k-biofoundrycopilot\.duckdns\.org/);
+  assert.match(source, /body\.dataset\.environment/);
+  assert.match(styles, /body\[data-environment="development"\]/);
+});

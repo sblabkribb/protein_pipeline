@@ -126,6 +126,25 @@ body {
   letter-spacing: 0.01em;
 }
 
+.environment-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid rgba(201, 109, 87, 0.42);
+  border-radius: 6px;
+  background: #fff3e8;
+  color: #8a301b;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+body[data-environment="development"] .topbar {
+  border-top: 5px solid #c96d57;
+}
+
 .topbar-actions {
   display: flex;
   gap: 12px;

@@ -1,0 +1,105 @@
+name: Deploy Protein Pipeline
+
+on:
+  push:
+    branches:
+      - dev
+      - develop
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment target"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
+permissions:
+  contents: read
+
+concurrency:
+  group: protein-pipeline-${{ github.event_name == 'workflow_dispatch' && inputs.environment || startsWith(github.ref, 'refs/tags/v') && 'prod' || 'dev' }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Python test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest
+          python -m pip install -r pipeline-mcp/requirements.txt
+
+      - name: Run backend tests
+        env:
+          PYTHONPATH: pipeline-mcp/src
+        run: pytest pipeline-mcp/tests
+
+      - name: Run frontend tests
+        working-directory: frontend
+        run: npm test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'prod' && 'production' || startsWith(github.ref, 'refs/tags/v') && 'production' || 'development' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve deployment target
+        id: target
+        shell: bash
+        run: |
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            target="${{ inputs.environment }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            target="prod"
+          else
+            target="dev"
+          fi
+          echo "target=${target}" >> "${GITHUB_OUTPUT}"
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          if [[ -n "${DEPLOY_KNOWN_HOSTS}" ]]; then
+            printf '%s\n' "${DEPLOY_KNOWN_HOSTS}" > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -p "${DEPLOY_SSH_PORT}" "${DEPLOY_SSH_HOST}" > ~/.ssh/known_hosts
+          fi
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy on server
+        shell: bash
+        env:
+          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
+          DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
+          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
+          DEPLOY_TARGET: ${{ steps.target.outputs.target }}
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          ssh -p "${DEPLOY_SSH_PORT}" "${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}" \
+            "DEPLOY_TARGET='${DEPLOY_TARGET}' DEPLOY_SHA='${DEPLOY_SHA}' bash -s" \
+            < scripts/deploy/deploy_from_github.sh

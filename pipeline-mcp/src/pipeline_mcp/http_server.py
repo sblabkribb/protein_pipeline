@@ -65,6 +65,10 @@ _RUN_SCOPED_TOOLS = {
 }
 
 
+def _env_true(name: str) -> bool:
+    return str(os.environ.get(name, "")).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _init_cors() -> None:
     raw = os.environ.get("PIPELINE_CORS_ORIGINS", "*")
     parts = [p.strip() for p in raw.split(",") if p.strip()]
@@ -326,6 +330,9 @@ class Handler(BaseHTTPRequestHandler):
         if user is None:
             extra_headers = self._expire_session_cookie_headers() if self._session_id_from_cookie() else None
             self._json(401, {"ok": False, "error": "unauthorized"}, extra_headers=extra_headers)
+        elif _env_true("PIPELINE_REQUIRE_ADMIN") and not self._is_admin(user):
+            self._json(403, {"ok": False, "error": "admin required"})
+            return None
         return user
 
     def _enforce_run_access(self, user: dict[str, Any] | None, run_id: str) -> None:
@@ -540,6 +547,9 @@ class Handler(BaseHTTPRequestHandler):
                 extra_headers = None
                 manager = self.sessions
                 user = result.get("user") if isinstance(result, dict) else None
+                if _env_true("PIPELINE_REQUIRE_ADMIN") and not self._is_admin(user):
+                    self._json(403, {"ok": False, "error": "admin required"})
+                    return
                 if manager is not None and isinstance(user, dict):
                     session_id = manager.create_local_session(user)
                     extra_headers = self._session_cookie_headers(session_id, max_age=manager.cookie_max_age(session_id))
@@ -562,6 +572,9 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 claims = claims_from_oidc_token_data(self.oidc, token_data)
                 user = claims_to_user(claims, client_id=self.oidc.client_id)
+                if _env_true("PIPELINE_REQUIRE_ADMIN") and not self._is_admin(user):
+                    self._json(403, {"ok": False, "error": "admin required"})
+                    return
                 extra_headers = None
                 manager = self.sessions
                 if manager is not None:

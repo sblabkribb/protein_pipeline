@@ -161,6 +161,13 @@ const detachedResiduePickerToken = (() => {
   }
 })();
 
+function resolveUiEnvironment(locationObj = window.location) {
+  const hostname = String(locationObj?.hostname || "").toLowerCase();
+  return hostname === "dev-pipeline.k-biofoundrycopilot.duckdns.org" || hostname.startsWith("dev-pipeline.")
+    ? "development"
+    : "production";
+}
+
 function loadLang() {
   const saved = localStorage.getItem(LANG_KEY);
   if (LANG_OPTIONS.includes(saved)) return saved;
@@ -748,6 +755,7 @@ const el = {
   loginBtn: document.getElementById("loginBtn"),
   ssoLoginBtn: document.getElementById("ssoLoginBtn"),
   loginError: document.getElementById("loginError"),
+  environmentBadge: document.getElementById("environmentBadge"),
   logoutBtn: document.getElementById("logoutBtn"),
   accountBtn: document.getElementById("accountBtn"),
   adminBtn: document.getElementById("adminBtn"),
@@ -1081,6 +1089,14 @@ const el = {
   adminRunsToggle: document.getElementById("adminRunsToggle"),
   showAllRuns: document.getElementById("showAllRuns"),
 };
+
+function applyEnvironmentChrome() {
+  const uiEnvironment = resolveUiEnvironment();
+  document.body.dataset.environment = uiEnvironment;
+  if (el.environmentBadge) {
+    el.environmentBadge.classList.toggle("hidden", uiEnvironment !== "development");
+  }
+}
 
 function persistHomeContextSelection(user = state.user) {
   try {
@@ -1917,6 +1933,7 @@ async function deleteCurrentRoundFromWorkspace() {
 const I18N = {
   en: {
     "brand.subtitle": "Protein Pipeline Console",
+    "env.development": "Development",
     "action.admin": "Admin",
     "action.account": "Account",
     "action.settings": "Settings",
@@ -3152,6 +3169,7 @@ const I18N = {
   },
   ko: {
     "brand.subtitle": "단백질 파이프라인 콘솔",
+    "env.development": "개발 환경",
     "action.admin": "관리자",
     "action.account": "계정",
     "action.settings": "설정",
@@ -9813,6 +9831,10 @@ function initHomeContext() {
 
 function applyFastLaunchPresetToState(preset) {
   if (!preset || typeof preset !== "object") return;
+  const selectedTiers = normalizeSelectedTierValues(
+    preset.answers?.selected_tiers ?? preset.routed?.selected_tiers ?? preset.answers?.conservation_tiers,
+    FAST_SELECTED_TIER_VALUES
+  );
   state.answerMeta = {};
   state.setupLoadedRequestRunId = "";
   state.chainRanges = null;
@@ -9821,12 +9843,14 @@ function applyFastLaunchPresetToState(preset) {
   state.plan = {
     ...buildManualPlan("pipeline"),
     source: "fast",
-    routed_request: { ...(preset.routed || {}) },
+    routed_request: { ...(preset.routed || {}), selected_tiers: selectedTiers },
   };
   state.answers = {
     ...(preset.answers || {}),
+    selected_tiers: selectedTiers,
     confirm_run: true,
   };
+  delete state.answers.conservation_tiers;
   state.setupStepIndex = 0;
   if (el.promptInput) {
     el.promptInput.value = String(preset.prompt || "").trim();
@@ -25192,6 +25216,7 @@ window.addEventListener("message", (event) => {
   }
 });
 
+applyEnvironmentChrome();
 initLanguage();
 initCopilot();
 
