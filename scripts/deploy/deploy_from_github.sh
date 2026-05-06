@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 repo_url="${DEPLOY_REPO_URL:-git@github.com:sblabkribb/protein_pipeline.git}"
-target="${DEPLOY_TARGET:?DEPLOY_TARGET is required: dev or prod}"
+target="${DEPLOY_TARGET:?DEPLOY_TARGET is required: dev, staging, or prod}"
 sha="${DEPLOY_SHA:?DEPLOY_SHA is required}"
 
 case "$target" in
@@ -10,6 +10,11 @@ case "$target" in
     deploy_path="/opt/protein_pipeline-dev"
     service_name="pipeline-mcp-dev.service"
     health_port="18087"
+    ;;
+  staging)
+    deploy_path="/opt/protein_pipeline-staging"
+    service_name="pipeline-mcp-staging.service"
+    health_port="18085"
     ;;
   prod)
     deploy_path="/opt/protein_pipeline"

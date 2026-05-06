@@ -145,6 +145,16 @@ body[data-environment="development"] .topbar {
   border-top: 5px solid #c96d57;
 }
 
+body[data-environment="staging"] .environment-badge {
+  border-color: rgba(15, 122, 119, 0.38);
+  background: #e8f7f4;
+  color: #0b5758;
+}
+
+body[data-environment="staging"] .topbar {
+  border-top: 5px solid #0f7a77;
+}
+
 .topbar-actions {
   display: flex;
   gap: 12px;

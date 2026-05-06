@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Recreate `/opt/protein_pipeline-dev` from a clean release baseline and add GitHub Actions deployment that keeps dev and production separated.
+**Goal:** Recreate `/opt/protein_pipeline-dev` from a clean release baseline and add GitHub Actions deployment that keeps dev, staging, and production separated.
 
-**Architecture:** Production remains `/opt/protein_pipeline` on `127.0.0.1:18080` and deploys only from release tags or explicit production dispatch. Development runs from `/opt/protein_pipeline-dev` on `127.0.0.1:18087`, with its own env file, venv, outputs, logs, sessions, OIDC client, and visible UI badge.
+**Architecture:** Production remains `/opt/protein_pipeline` on `127.0.0.1:18080` and deploys only from release tags or explicit production dispatch. Staging runs from `/opt/protein_pipeline-staging` on `127.0.0.1:18085`. Development runs from `/opt/protein_pipeline-dev` on `127.0.0.1:18087`. Non-production environments use their own env files, venvs, outputs, logs, sessions, OIDC clients, and visible UI badges.
 
 **Tech Stack:** GitHub Actions, SSH, systemd, Caddy, Python venv, static frontend.
 

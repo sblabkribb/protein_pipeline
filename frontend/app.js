@@ -163,9 +163,13 @@ const detachedResiduePickerToken = (() => {
 
 function resolveUiEnvironment(locationObj = window.location) {
   const hostname = String(locationObj?.hostname || "").toLowerCase();
-  return hostname === "dev-pipeline.k-biofoundrycopilot.duckdns.org" || hostname.startsWith("dev-pipeline.")
-    ? "development"
-    : "production";
+  if (hostname === "dev-pipeline.k-biofoundrycopilot.duckdns.org" || hostname.startsWith("dev-pipeline.")) {
+    return "development";
+  }
+  if (hostname === "staging-pipeline.k-biofoundrycopilot.duckdns.org" || hostname.startsWith("staging-pipeline.")) {
+    return "staging";
+  }
+  return "production";
 }
 
 function loadLang() {
@@ -1094,7 +1098,10 @@ function applyEnvironmentChrome() {
   const uiEnvironment = resolveUiEnvironment();
   document.body.dataset.environment = uiEnvironment;
   if (el.environmentBadge) {
-    el.environmentBadge.classList.toggle("hidden", uiEnvironment !== "development");
+    el.environmentBadge.classList.toggle("hidden", uiEnvironment === "production");
+    el.environmentBadge.dataset.i18n =
+      uiEnvironment === "staging" ? "env.staging" : "env.development";
+    el.environmentBadge.textContent = t(el.environmentBadge.dataset.i18n);
   }
 }
 
@@ -1934,6 +1941,7 @@ const I18N = {
   en: {
     "brand.subtitle": "Protein Pipeline Console",
     "env.development": "Development",
+    "env.staging": "Staging",
     "action.admin": "Admin",
     "action.account": "Account",
     "action.settings": "Settings",
@@ -3170,6 +3178,7 @@ const I18N = {
   ko: {
     "brand.subtitle": "단백질 파이프라인 콘솔",
     "env.development": "개발 환경",
+    "env.staging": "스테이징",
     "action.admin": "관리자",
     "action.account": "계정",
     "action.settings": "설정",

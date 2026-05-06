@@ -5,6 +5,7 @@ on:
     branches:
       - dev
       - develop
+      - staging
     tags:
       - "v*"
   workflow_dispatch:
@@ -15,13 +16,14 @@ on:
         type: choice
         options:
           - dev
+          - staging
           - prod
 
 permissions:
   contents: read
 
 concurrency:
-  group: protein-pipeline-${{ github.event_name == 'workflow_dispatch' && inputs.environment || startsWith(github.ref, 'refs/tags/v') && 'prod' || 'dev' }}
+  group: protein-pipeline-${{ github.event_name == 'workflow_dispatch' && inputs.environment || startsWith(github.ref, 'refs/tags/v') && 'prod' || github.ref == 'refs/heads/staging' && 'staging' || 'dev' }}
   cancel-in-progress: false
 
 jobs:
@@ -44,19 +46,32 @@ jobs:
           python -m pip install pytest
           python -m pip install -r pipeline-mcp/requirements.txt
 
-      - name: Run backend tests
+      - name: Run backend deployment checks
         env:
           PYTHONPATH: pipeline-mcp/src
-        run: pytest pipeline-mcp/tests
+        run: |
+          pytest \
+            pipeline-mcp/tests/test_http_server_auth.py \
+            pipeline-mcp/tests/test_mcp_http_route.py \
+            pipeline-mcp/tests/test_oidc_auth.py \
+            pipeline-mcp/tests/test_session_auth.py \
+            pipeline-mcp/tests/test_runpod_admin.py
 
-      - name: Run frontend tests
-        working-directory: frontend
-        run: npm test
+      - name: Run frontend deployment checks
+        run: |
+          node --test \
+            frontend/tests/app-syntax.test.js \
+            frontend/tests/auth-session.test.js \
+            frontend/tests/auth.test.js \
+            frontend/tests/login-bootstrap.test.js \
+            frontend/tests/mcp-tab.test.js \
+            frontend/tests/runpod-admin.test.js
+          (cd frontend && node --test tests/logout-bridge.test.js)
 
   deploy:
     needs: test
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'prod' && 'production' || startsWith(github.ref, 'refs/tags/v') && 'production' || 'development' }}
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'prod' && 'production' || github.event_name == 'workflow_dispatch' && inputs.environment == 'staging' && 'staging' || startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref == 'refs/heads/staging' && 'staging' || 'development' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -68,6 +83,8 @@ jobs:
             target="${{ inputs.environment }}"
           elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             target="prod"
+          elif [[ "${GITHUB_REF}" == "refs/heads/staging" ]]; then
+            target="staging"
           else
             target="dev"
           fi
