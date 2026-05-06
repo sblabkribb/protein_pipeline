@@ -88,6 +88,7 @@ import {
   resolveRfd3ContigChoices,
   workflowStudioChangedFields,
   workflowStudioDependencyStatus,
+  workflowStudioLaneTiersFromSources,
   workflowStudioSessionIdForRun,
   workflowStudioStageFields,
   workflowStudioVisibleStageFields,
@@ -914,6 +915,37 @@ test("workflowStudioStageFields exposes key fields per stage", () => {
   assert.deepEqual(workflowStudioStageFields("soluprot"), ["soluprot_cutoff"]);
   assert.deepEqual(workflowStudioStageFields("soluprot_50"), ["soluprot_cutoff"]);
   assert.deepEqual(workflowStudioStageFields("unknown"), []);
+});
+
+test("workflowStudioLaneTiersFromSources prefers explicit selected tiers", () => {
+  assert.deepEqual(
+    workflowStudioLaneTiersFromSources({
+      answers: { selected_tiers: [0.7] },
+      headRequest: { conservation_tiers: [0.3, 0.5] },
+    }),
+    [0.7]
+  );
+  assert.deepEqual(
+    workflowStudioLaneTiersFromSources({
+      answers: { conservation_tiers: [0.5] },
+      headRequest: { selected_tiers: [0.3] },
+    }),
+    [0.5]
+  );
+});
+
+test("advanced numeric evolution controls are not parsed as booleans", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  const match = source.match(/const ANSWER_BOOL_KEYS = new Set\(\[([\s\S]*?)\]\);/m);
+  assert.ok(match, "ANSWER_BOOL_KEYS set should be present");
+  const boolKeys = match[1];
+
+  assert.match(boolKeys, /"evolution_mode"/);
+  assert.doesNotMatch(boolKeys, /"evolution_pool_size"/);
+  assert.doesNotMatch(boolKeys, /"evolution_initial_samples"/);
+  assert.doesNotMatch(boolKeys, /"evolution_oracle_samples"/);
+  assert.doesNotMatch(boolKeys, /"evolution_rounds"/);
+  assert.doesNotMatch(boolKeys, /"evolution_samples_per_round"/);
 });
 
 test("workflowStudioVisibleStageFields keeps AF2 controls visible when RFD3 is disabled", () => {

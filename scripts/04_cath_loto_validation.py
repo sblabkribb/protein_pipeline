@@ -141,80 +141,76 @@ import json
 import sys
 
 def extract_cath_batch_data(outputs_dir: str) -> pd.DataFrame:
-    """Extracts target, sequence, soluprot, and af2 plddt from pipeline outputs."""
+    """Extracts target, sequence, soluprot, plddt, and relax from pipeline summary JSONs."""
     records = []
-    
-    # Assuming outputs are structured like outputs/<run_id>/af2_*/metrics.json
     run_dirs = glob.glob(os.path.join(outputs_dir, "*"))
+    
+    def _norm_scores(raw_dict):
+        """Converts 'target:1' style keys to 'target_1' to match ID convention."""
+        return {str(k).replace(":", "_"): v for k, v in raw_dict.items()}
+
     for run_dir in run_dirs:
         if not os.path.isdir(run_dir):
             continue
-            
         target_id = os.path.basename(run_dir)
         
-        # 1. Get SoluProt scores
-        # The structure is usually outputs/<run_id>/tier_*/soluprot.json
-        soluprot_files = glob.glob(os.path.join(run_dir, "tier_*", "soluprot.json"))
-        solu_scores = {}
-        for sp_file in soluprot_files:
+        # Iterate through tiers (30, 50, 70)
+        tier_dirs = glob.glob(os.path.join(run_dir, "tiers", "*"))
+        for tier_dir in tier_dirs:
+            solu_scores = {}
+            af2_scores = {}
+            relax_scores = {}
+            
             try:
-                with open(sp_file) as f:
-                    sol_data = json.load(f)
-                    if isinstance(sol_data, dict) and "scores" in sol_data:
-                        solu_scores.update(sol_data["scores"])
-            except Exception:
-                pass
-                
-        # 2. Get sequences from FASTA
-        # Usually outputs/<run_id>/tier_*/designs_filtered.fasta
-        fasta_files = glob.glob(os.path.join(run_dir, "tier_*", "designs_filtered.fasta"))
-        sequences_by_id = {}
-        for f_file in fasta_files:
+                with open(os.path.join(tier_dir, "soluprot.json")) as f:
+                    solu_scores = _norm_scores(json.load(f).get("scores", {}))
+            except Exception: pass
+
             try:
-                from Bio import SeqIO
-                for record in SeqIO.parse(f_file, "fasta"):
-                    sequences_by_id[record.id] = str(record.seq)
-            except Exception:
-                # Fallback to simple parser if BioPython is missing
+                with open(os.path.join(tier_dir, "af2_scores.json")) as f:
+                    af2_scores = _norm_scores(json.load(f).get("scores", {}))
+            except Exception: pass
+
+            try:
+                with open(os.path.join(tier_dir, "relax_scores.json")) as f:
+                    relax_scores = _norm_scores(json.load(f).get("scores", {}))
+            except Exception: pass
+            
+            # 2. Get sequences from FASTA
+            fasta_path = os.path.join(tier_dir, "designs_filtered.fasta")
+            sequences_by_id = {}
+            if os.path.exists(fasta_path):
                 try:
-                    with open(f_file) as f:
+                    with open(fasta_path) as f:
                         lines = f.readlines()
                         curr_id = None
                         curr_seq = []
                         for line in lines:
                             if line.startswith(">"):
-                                if curr_id:
-                                    sequences_by_id[curr_id] = "".join(curr_seq)
-                                curr_id = line[1:].strip().split()[0]
+                                if curr_id: sequences_by_id[curr_id] = "".join(curr_seq)
+                                raw_id = line[1:].strip().split()[0]
+                                curr_id = raw_id.replace(":", "_") if ":" in raw_id else raw_id
                                 curr_seq = []
                             else:
                                 curr_seq.append(line.strip())
-                        if curr_id:
-                            sequences_by_id[curr_id] = "".join(curr_seq)
-                except Exception:
-                    pass
+                        if curr_id: sequences_by_id[curr_id] = "".join(curr_seq)
+                except Exception: pass
 
-        # 3. Get AF2 PLDDT
-        af2_metrics_files = glob.glob(os.path.join(run_dir, "tier_*", "af2", "*", "metrics.json"))
-        for metrics_file in af2_metrics_files:
-            try:
-                seq_id = os.path.basename(os.path.dirname(metrics_file))
-                with open(metrics_file) as f:
-                    m_data = json.load(f)
-                    plddt = m_data.get("best_plddt", np.nan)
-                
+            # 3. Merge by normalized sequence ID
+            for seq_id, plddt in af2_scores.items():
                 if seq_id in sequences_by_id:
                     records.append({
                         "target_id": target_id,
                         "seq_id": seq_id,
                         "sequence": sequences_by_id[seq_id],
                         "soluprot_score": float(solu_scores.get(seq_id, np.nan)),
-                        "plddt_score": float(plddt)
+                        "plddt_score": float(plddt),
+                        "relax_score": float(relax_scores.get(seq_id, np.nan))
                     })
-            except Exception:
-                pass
-            
+    
     df = pd.DataFrame(records)
+    if not df.empty:
+        df = df.drop_duplicates(subset=['target_id', 'sequence'])
     return df
 
 def main():

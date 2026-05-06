@@ -1,0 +1,98 @@
+{
+  "n_targets": 15,
+  "n_rows": 1800,
+  "n_plddt_labels": 1766,
+  "n_soluprot_labels": 1800,
+  "per_target": [
+    {
+      "run_id": "cath_test_1b65A00",
+      "n_rows": 120,
+      "n_plddt": 118,
+      "n_solu": 120
+    },
+    {
+      "run_id": "cath_test_1bctA00",
+      "n_rows": 120,
+      "n_plddt": 119,
+      "n_solu": 120
+    },
+    {
+      "run_id": "cath_test_1e1hB02",
+      "n_rows": 120,
+      "n_plddt": 119,
+      "n_solu": 120
+    },
+    {
+      "run_id": "cath_test_1e9tA00",
+      "n_rows": 120,
+      "n_plddt": 120,
+      "n_solu": 120
+    },
+    {
+      "run_id": "cath_test_1efnD00",
+      "n_rows": 120,
+      "n_plddt": 120,
+      "n_solu": 120
+    },
+    {
+      "run_id": "cath_test_1f4hB01",
+      "n_rows": 120,
+      "n_plddt": 119,
+      "n_solu": 120
+    },
+    {
+      "run_id": "cath_test_1h41B03",
+      "n_rows": 120,
+      "n_plddt": 120,
+      "n_solu": 120
+    },
+    {
+      "run_id": "cath_test_1ibvC00",
+      "n_rows": 120,
+      "n_plddt": 92,
+      "n_solu": 120
+    },
+    {
+      "run_id": "cath_test_1jmoL00",
+      "n_rows": 120,
+      "n_plddt": 120,
+      "n_solu": 120
+    },
+    {
+      "run_id": "cath_test_1jmzG00",
+      "n_rows": 120,
+      "n_plddt": 120,
+      "n_solu": 120
+    },
+    {
+      "run_id": "cath_test_1jygA00",
+      "n_rows": 120,
+      "n_plddt": 120,
+      "n_solu": 120
+    },
+    {
+      "run_id": "cath_test_1keeF01",
+      "n_rows": 120,
+      "n_plddt": 119,
+      "n_solu": 120
+    },
+    {
+      "run_id": "cath_test_1kvdD00",
+      "n_rows": 120,
+      "n_plddt": 120,
+      "n_solu": 120
+    },
+    {
+      "run_id": "cath_test_1ltsA00",
+      "n_rows": 120,
+      "n_plddt": 120,
+      "n_solu": 120
+    },
+    {
+      "run_id": "cath_test_1m3iC02",
+      "n_rows": 120,
+      "n_plddt": 120,
+      "n_solu": 120
+    }
+  ]
+}

@@ -1738,7 +1738,7 @@ const WORKFLOW_STUDIO_STAGE_DEFAULTS = Object.freeze({
   msa: Object.freeze({
     backbone_filter_use_dssp: true,
     evolution_mode: false,
-    evolution_initial_samples: 20,
+    evolution_initial_samples: 30,
     evolution_rounds: 3,
     evolution_samples_per_round: 5,
   }),
@@ -1755,7 +1755,7 @@ const WORKFLOW_STUDIO_STAGE_DEFAULTS = Object.freeze({
   design: Object.freeze({
     num_seq_per_tier: 2,
     evolution_mode: false,
-    evolution_initial_samples: 20,
+    evolution_initial_samples: 30,
     evolution_rounds: 3,
     evolution_samples_per_round: 5,
   }),
@@ -2068,6 +2068,33 @@ export function buildWorkflowStudioNodesFromRequest(payload = {}) {
   return expandWorkflowStudioNodes(nodes, conservationTiers);
 }
 
+export function workflowStudioLaneTiersFromSources({
+  answers = {},
+  headRequest = {},
+  fallback = DEFAULT_SELECTED_TIERS,
+} = {}) {
+  const selectedFromAnswers =
+    Array.isArray(answers?.selected_tiers) && answers.selected_tiers.length
+      ? answers.selected_tiers
+      : null;
+  const conservationFromAnswers =
+    Array.isArray(answers?.conservation_tiers) && answers.conservation_tiers.length
+      ? answers.conservation_tiers
+      : null;
+  const selectedFromHead =
+    Array.isArray(headRequest?.selected_tiers) && headRequest.selected_tiers.length
+      ? headRequest.selected_tiers
+      : null;
+  const conservationFromHead =
+    Array.isArray(headRequest?.conservation_tiers) && headRequest.conservation_tiers.length
+      ? headRequest.conservation_tiers
+      : null;
+  return normalizeSelectedTiers(
+    selectedFromAnswers || conservationFromAnswers || selectedFromHead || conservationFromHead || [],
+    fallback
+  );
+}
+
 export function workflowStudioChangedFields(previousPayload, nextPayload) {
   const previous = previousPayload && typeof previousPayload === "object" ? previousPayload : {};
   const next = nextPayload && typeof nextPayload === "object" ? nextPayload : {};
@@ -2315,6 +2342,10 @@ export function normalizeSetupDraftForFreshRun(draft) {
 
 export function inferRequestRunMode(payload) {
   if (!payload || typeof payload !== "object") return "";
+
+  if (payload.evolution_mode === true || String(payload.evolution_mode).toLowerCase() === "true") {
+    return "evolution";
+  }
 
   const stopAfter = normalizeStage(payload.stop_after);
   const isDiffdockRequest =

@@ -1,0 +1,15 @@
+.env
+**/.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+outputs/
+cath_outputs/
+logs/
+*.log
+pipeline-mcp/models/experts/
+pipeline-mcp/tests/_tmp/
+.DS_Store

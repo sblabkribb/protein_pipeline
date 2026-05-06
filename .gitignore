@@ -11,8 +11,15 @@ rfd3-runpod/
 /relax_runpod/
 # --- Pipeline outputs ---
 /outputs/
+/cath_outputs/
+/cath_embeddings.npy
+/data/
 /logs/*
 !/logs/.gitkeep
+/_ops/jobs/
+/batch_success_*.csv
+/batch_failed_*.csv
+/batch_status.csv
 
 # --- Local scratch / artifacts ---
 /tmp/
@@ -33,7 +40,15 @@ rfd3-runpod/
 *.a3m
 *.tsv
 *.pdf
+*.json
 /af2_wt_*_job.json
+
+# --- Public release package allowlist ---
+!/public_release/**/*.json
+!/public_release/**/*.fasta
+!/public_release/**/*.pdb
+!/public_release/pipeline-mcp/.env.example
+/public_release/cath_outputs/
 
 # --- Python ---
 __pycache__/
