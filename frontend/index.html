@@ -217,32 +217,29 @@
           <div class="tab-content-shell">
             <div class="panel panel-block home-shell">
               <div class="panel-header home-header">
-                <h2 data-i18n="home.title">Launch Workspace</h2>
-                <p data-i18n="home.desc">Choose how you want to start the next design cycle.</p>
+                <h2 data-i18n="home.title">Solubility/Stability Workspace</h2>
+                <p data-i18n="home.desc">Target design runs, active rounds, and result triage in one workspace.</p>
               </div>
-              <div class="home-card-grid">
-                <button class="home-mode-card" type="button" data-home-target="fast">
-                  <h3 data-i18n="home.card.fast.title">Fast</h3>
-                  <p data-i18n="home.card.fast.desc">
-                    Start from a PDB or FASTA with pipeline defaults chosen for you.
+              <div class="experiment-launchpad">
+                <button class="home-mode-card launchpad-primary" type="button" data-home-target="fast">
+                  <span class="launchpad-eyebrow" data-i18n="home.launchpad.primary">Primary workflow</span>
+                  <h3 data-i18n="home.launchpad.newExperiment">New Experiment</h3>
+                  <p data-i18n="home.launchpad.newExperimentDesc">
+                    Register a target and launch the standard solubility/stability workflow.
                   </p>
                 </button>
-                <button class="home-mode-card" type="button" data-home-target="advanced">
-                  <h3 data-i18n="home.card.advanced.title">Advanced</h3>
-                  <p data-i18n="home.card.advanced.desc">
-                    Open the full configuration surface with all expert controls.
-                  </p>
-                </button>
-                <button class="home-mode-card" type="button" data-home-target="studio">
-                  <h3 data-i18n="home.card.studio.title">Studio</h3>
-                  <p data-i18n="home.card.studio.desc">
-                    Build and run a workflow stage by stage while watching the outputs.
-                  </p>
-                </button>
-                <button class="home-mode-card" type="button" data-home-target="evolution">
-                  <h3 data-i18n="home.card.evolution.title">Evolution</h3>
-                  <p data-i18n="home.card.evolution.desc">Autonomous multi-round sequence design pipeline.</p>
-                </button>
+                <div class="launchpad-secondary-grid">
+                  <button class="launchpad-action-card" type="button" data-home-target="monitor">
+                    <span class="launchpad-step">01</span>
+                    <h3 data-i18n="home.launchpad.loadRun">Load Existing Run</h3>
+                    <p data-i18n="home.launchpad.loadRunDesc">Resume monitoring from the current run list.</p>
+                  </button>
+                  <button class="launchpad-action-card" type="button" data-home-target="analyze">
+                    <span class="launchpad-step">02</span>
+                    <h3 data-i18n="home.launchpad.analyzeResults">Analyze Results</h3>
+                    <p data-i18n="home.launchpad.analyzeResultsDesc">Review ranked candidates and comparison outputs.</p>
+                  </button>
+                </div>
               </div>
               <div class="home-context-strip">
                 <div class="home-context-item home-context-item-select">

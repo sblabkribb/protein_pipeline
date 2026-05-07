@@ -139,3 +139,15 @@ test("frontend exposes Tailwind-inspired platform color tokens", () => {
   assert.match(styles, /--action-primary/);
   assert.match(styles, /--state-success/);
 });
+
+test("home screen is an experiment launchpad", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.match(html, /class="experiment-launchpad"/);
+  assert.match(source, /home\.launchpad\.newExperiment/);
+  assert.match(source, /home\.launchpad\.loadRun/);
+  assert.match(source, /home\.launchpad\.analyzeResults/);
+  assert.match(styles, /\.experiment-launchpad/);
+});
