@@ -1973,15 +1973,34 @@ const I18N = {
     "tutorial.step.home.body":
       "Use Home as the landing point. Start a new experiment, reopen a monitor, or jump straight to result analysis from here.",
     "tutorial.step.home.hint": "For a first run, choose New Experiment and keep the default Fast path unless you already know the expert settings.",
+    "tutorial.step.homeRound.title": "Create rounds from Home",
+    "tutorial.step.homeRound.body":
+      "Create or select a project, then create the current round here. Runs launched while a round is active carry that project and round metadata.",
+    "tutorial.step.homeRound.hint": "Use rounds before repeated optimization so hypotheses, linked runs, selected candidates, and next-round notes stay traceable.",
     "tutorial.step.advanced.title": "Advanced is a guided setup",
     "tutorial.step.advanced.body":
       "Advanced collects target input, workflow path, candidate criteria, expert overrides, and final review as ordered steps.",
     "tutorial.step.advanced.hint": "Use this when you need to tune conservation tiers, output counts, RFD3/BioEmu/AF2 gates, or fixed positions.",
-    "tutorial.step.advancedExecution.title": "Execution settings decide run shape",
-    "tutorial.step.advancedExecution.body":
-      "In this area, choose Pipeline or Workflow Studio, set the stage range, tune candidate counts and quality cutoffs, then review before pressing Run.",
-    "tutorial.step.advancedExecution.hint":
-      "For most users, keep the full pipeline path. Change RFD3/BioEmu/AF2 thresholds only when you know why the default gate is too strict or too loose.",
+    "tutorial.step.advancedInput.title": "Start with the target input",
+    "tutorial.step.advancedInput.body":
+      "Step 1/5 is for the target sequence or structure. Paste or upload FASTA/PDB input here; Evolution (BO) is only an optional search toggle, not the run shape.",
+    "tutorial.step.advancedInput.hint": "If the target is missing, later workflow and review steps cannot launch a run.",
+    "tutorial.step.advancedWorkflow.title": "Workflow decides the run shape",
+    "tutorial.step.advancedWorkflow.body":
+      "Step 2/5 is where the run shape belongs. Choose the pipeline path, included stages, conservation levels, and whether to open a staged Workflow Studio session.",
+    "tutorial.step.advancedWorkflow.hint": "Use the full path for routine runs. Remove RFD3/BioEmu or open Studio when you want staged review or lower compute cost.",
+    "tutorial.step.advancedCriteria.title": "Criteria set the filters",
+    "tutorial.step.advancedCriteria.body":
+      "Step 3/5 controls candidate evaluation: output counts, SoluProt cutoff, AF2 pLDDT/RMSD gates, Relax, WT comparison, and ranking-related thresholds.",
+    "tutorial.step.advancedCriteria.hint": "Tight criteria reduce downstream workload; loose criteria keep more candidates for manual triage.",
+    "tutorial.step.advancedExpert.title": "Advanced options are overrides",
+    "tutorial.step.advancedExpert.body":
+      "Step 4/5 contains expert controls such as fixed residues, mask consensus, input-backbone gates, RFD3/BioEmu limits, and literature-derived masks.",
+    "tutorial.step.advancedExpert.hint": "Change these only when the target biology or prior evidence justifies overriding the defaults.",
+    "tutorial.step.advancedReview.title": "Review before launch",
+    "tutorial.step.advancedReview.body":
+      "Step 5/5 summarizes the selected mode, stages, target readiness, backbone sources, AF2 provider, Relax state, and conservation tiers before Run.",
+    "tutorial.step.advancedReview.hint": "Use this final screen to catch mismatched stages or missing target input before spending compute.",
     "tutorial.step.pdfAgent.title": "PDF agent extracts constraints",
     "tutorial.step.pdfAgent.body":
       "Upload a paper PDF here when the literature mentions catalytic residues, binding-site positions, or mutation-sensitive regions. The agent proposes residues to keep fixed.",
@@ -3329,15 +3348,34 @@ const I18N = {
     "tutorial.step.home.body":
       "Home은 시작 지점입니다. 새 실험을 만들거나, 기존 실행 모니터를 다시 열거나, 결과 분석으로 바로 이동할 수 있습니다.",
     "tutorial.step.home.hint": "처음 실행할 때는 새 실험을 누르고, 전문가 설정이 필요하지 않으면 Fast 기본 경로를 유지하세요.",
+    "tutorial.step.homeRound.title": "Home에서 라운드를 만듭니다",
+    "tutorial.step.homeRound.body":
+      "프로젝트를 만들거나 선택한 뒤 여기서 현재 라운드를 만듭니다. 라운드가 활성화된 상태에서 실행한 run에는 project/round 정보가 함께 들어갑니다.",
+    "tutorial.step.homeRound.hint": "반복 최적화 전 라운드를 만들면 가설, 연결 run, 선택 후보, 다음 라운드 메모를 추적하기 쉽습니다.",
     "tutorial.step.advanced.title": "고급 설정은 단계형 설정입니다",
     "tutorial.step.advanced.body":
       "고급 설정은 타깃 입력, 워크플로우 경로, 후보 평가 기준, 전문가 override, 최종 검토를 순서대로 모읍니다.",
     "tutorial.step.advanced.hint": "보존도 티어, 출력 개수, RFD3/BioEmu/AF2 기준, 고정 위치를 조정해야 할 때 사용하세요.",
-    "tutorial.step.advancedExecution.title": "실행 설정은 run 형태를 결정합니다",
-    "tutorial.step.advancedExecution.body":
-      "이 영역에서 Pipeline 또는 Workflow Studio를 고르고, 실행 단계 범위, 후보 수, 품질 cutoff를 조정한 뒤 마지막 검토 후 Run을 누릅니다.",
-    "tutorial.step.advancedExecution.hint":
-      "대부분은 전체 pipeline 경로를 유지하세요. RFD3/BioEmu/AF2 threshold는 기본 gate가 너무 엄격하거나 느슨한 이유가 있을 때만 바꾸는 것이 좋습니다.",
+    "tutorial.step.advancedInput.title": "먼저 타깃을 입력합니다",
+    "tutorial.step.advancedInput.body":
+      "1/5 입력 단계는 타깃 서열 또는 구조를 넣는 곳입니다. FASTA/PDB를 붙여넣거나 업로드하세요. Evolution (BO)는 선택적 탐색 toggle일 뿐 run 형태를 정하는 단계가 아닙니다.",
+    "tutorial.step.advancedInput.hint": "타깃이 없으면 뒤의 workflow와 검토 단계에서 run을 시작할 수 없습니다.",
+    "tutorial.step.advancedWorkflow.title": "워크플로우가 run 형태를 정합니다",
+    "tutorial.step.advancedWorkflow.body":
+      "2/5 워크플로우 단계에서 run 형태를 정합니다. 파이프라인 경로, 포함 단계, 보존율 구간, 단계별 Workflow Studio 세션 사용 여부를 고릅니다.",
+    "tutorial.step.advancedWorkflow.hint": "일반 실행은 전체 경로를 유지하세요. 단계별 검토나 compute 절약이 필요하면 RFD3/BioEmu를 빼거나 Studio를 사용합니다.",
+    "tutorial.step.advancedCriteria.title": "평가기준은 필터를 정합니다",
+    "tutorial.step.advancedCriteria.body":
+      "3/5 평가기준 단계에서는 후보 수, SoluProt cutoff, AF2 pLDDT/RMSD gate, Relax, WT 비교, ranking 관련 기준을 조정합니다.",
+    "tutorial.step.advancedCriteria.hint": "기준을 엄격하게 하면 downstream 부담이 줄고, 느슨하게 하면 수동 검토 후보가 더 많이 남습니다.",
+    "tutorial.step.advancedExpert.title": "고급 옵션은 override입니다",
+    "tutorial.step.advancedExpert.body":
+      "4/5 고급 옵션에는 고정 residue, mask consensus, input-backbone gate, RFD3/BioEmu 제한, 문헌 기반 mask가 들어갑니다.",
+    "tutorial.step.advancedExpert.hint": "타깃 생물학이나 기존 근거가 기본값을 바꿀 만큼 명확할 때 조정하세요.",
+    "tutorial.step.advancedReview.title": "실행 전 마지막 검토",
+    "tutorial.step.advancedReview.body":
+      "5/5 검토 단계에서는 선택한 모드, 실행 단계, 타깃 준비 상태, backbone source, AF2 provider, Relax, 보존율 구간을 실행 전에 확인합니다.",
+    "tutorial.step.advancedReview.hint": "compute를 쓰기 전에 단계 조합이나 타깃 입력 누락을 마지막으로 확인하세요.",
     "tutorial.step.pdfAgent.title": "PDF agent가 제약 조건을 뽑습니다",
     "tutorial.step.pdfAgent.body":
       "논문 PDF에 catalytic residue, binding-site position, mutation-sensitive region이 언급되어 있으면 업로드하세요. Agent가 고정할 residue 후보를 제안합니다.",
@@ -4819,6 +4857,14 @@ const TUTORIAL_STEPS = [
     hintKey: "tutorial.step.home.hint",
   },
   {
+    id: "homeRound",
+    tab: "home",
+    target: "#homeCreateRoundBtn",
+    titleKey: "tutorial.step.homeRound.title",
+    bodyKey: "tutorial.step.homeRound.body",
+    hintKey: "tutorial.step.homeRound.hint",
+  },
+  {
     id: "advanced",
     tab: "advanced",
     target: ".advanced-launch-frame",
@@ -4827,20 +4873,58 @@ const TUTORIAL_STEPS = [
     hintKey: "tutorial.step.advanced.hint",
   },
   {
-    id: "advancedExecution",
+    id: "advancedInput",
     tab: "advanced",
+    setupStep: "input",
+    target: "#questionInputStack",
+    titleKey: "tutorial.step.advancedInput.title",
+    bodyKey: "tutorial.step.advancedInput.body",
+    hintKey: "tutorial.step.advancedInput.hint",
+  },
+  {
+    id: "advancedWorkflow",
+    tab: "advanced",
+    setupStep: "workflow",
     target: "#questionConfigStack",
-    titleKey: "tutorial.step.advancedExecution.title",
-    bodyKey: "tutorial.step.advancedExecution.body",
-    hintKey: "tutorial.step.advancedExecution.hint",
+    titleKey: "tutorial.step.advancedWorkflow.title",
+    bodyKey: "tutorial.step.advancedWorkflow.body",
+    hintKey: "tutorial.step.advancedWorkflow.hint",
+  },
+  {
+    id: "advancedCriteria",
+    tab: "advanced",
+    setupStep: "criteria",
+    target: "#questionConfigStack",
+    titleKey: "tutorial.step.advancedCriteria.title",
+    bodyKey: "tutorial.step.advancedCriteria.body",
+    hintKey: "tutorial.step.advancedCriteria.hint",
+  },
+  {
+    id: "advancedExpert",
+    tab: "advanced",
+    setupStep: "expert",
+    target: "#questionConfigStack",
+    titleKey: "tutorial.step.advancedExpert.title",
+    bodyKey: "tutorial.step.advancedExpert.body",
+    hintKey: "tutorial.step.advancedExpert.hint",
   },
   {
     id: "pdfAgent",
     tab: "advanced",
+    setupStep: "expert",
     target: ".paper-mask-panel-advanced",
     titleKey: "tutorial.step.pdfAgent.title",
     bodyKey: "tutorial.step.pdfAgent.body",
     hintKey: "tutorial.step.pdfAgent.hint",
+  },
+  {
+    id: "advancedReview",
+    tab: "advanced",
+    setupStep: "review",
+    target: "#questionConfigStack",
+    titleKey: "tutorial.step.advancedReview.title",
+    bodyKey: "tutorial.step.advancedReview.body",
+    hintKey: "tutorial.step.advancedReview.hint",
   },
   {
     id: "evolution",
@@ -10205,6 +10289,21 @@ function renderTutorialDots() {
   });
 }
 
+function applyTutorialStepContext(step) {
+  const setupStep = String(step?.setupStep || "").trim();
+  if (!setupStep || step?.tab !== "advanced") return;
+  if (state.runMode !== "pipeline") {
+    setRunMode("pipeline", { render: false });
+  } else if (!state.plan || !Array.isArray(state.plan.questions) || !state.plan.questions.length) {
+    state.plan = buildManualPlan("pipeline");
+  }
+  const stepIndex = SETUP_WIZARD_STEPS.findIndex((item) => item.id === setupStep);
+  if (stepIndex < 0) return;
+  state.setupStepIndex = stepIndex;
+  renderQuestions(state.plan?.questions || []);
+  updateRunEligibility(state.plan?.questions || []);
+}
+
 function renderTutorialStep() {
   if (!tutorialIsOpen()) return;
   const step = TUTORIAL_STEPS[tutorialStepIndex] || TUTORIAL_STEPS[0];
@@ -10212,6 +10311,7 @@ function renderTutorialStep() {
   if (step.tab) {
     setActiveTab(step.tab);
   }
+  applyTutorialStepContext(step);
   const current = tutorialStepIndex + 1;
   const total = TUTORIAL_STEPS.length;
   if (el.tutorialStepMeta) {

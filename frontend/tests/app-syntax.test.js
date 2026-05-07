@@ -236,7 +236,12 @@ test("frontend includes a localized first-run tutorial overlay", () => {
 test("tutorial covers expert workflow controls and downstream review tools", () => {
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
-  assert.match(source, /id: "advancedExecution"/);
+  assert.match(source, /id: "homeRound"/);
+  assert.match(source, /id: "advancedInput"[\s\S]*?setupStep: "input"/m);
+  assert.match(source, /id: "advancedWorkflow"[\s\S]*?setupStep: "workflow"/m);
+  assert.match(source, /id: "advancedCriteria"[\s\S]*?setupStep: "criteria"/m);
+  assert.match(source, /id: "advancedExpert"[\s\S]*?setupStep: "expert"/m);
+  assert.match(source, /id: "advancedReview"[\s\S]*?setupStep: "review"/m);
   assert.match(source, /id: "pdfAgent"/);
   assert.match(source, /id: "evolutionSettings"/);
   assert.match(source, /id: "studioCheckpoint"/);
@@ -245,7 +250,14 @@ test("tutorial covers expert workflow controls and downstream review tools", () 
   assert.match(source, /id: "report"/);
   assert.match(source, /id: "copilot"/);
 
-  assert.match(source, /"tutorial\.step\.advancedExecution\.title"/);
+  assert.match(source, /function applyTutorialStepContext/);
+  assert.match(source, /state\.setupStepIndex = stepIndex;/);
+  assert.match(source, /"tutorial\.step\.homeRound\.title"/);
+  assert.match(source, /"tutorial\.step\.advancedInput\.title"/);
+  assert.match(source, /"tutorial\.step\.advancedWorkflow\.title"/);
+  assert.match(source, /"tutorial\.step\.advancedCriteria\.title"/);
+  assert.match(source, /"tutorial\.step\.advancedExpert\.title"/);
+  assert.match(source, /"tutorial\.step\.advancedReview\.title"/);
   assert.match(source, /"tutorial\.step\.pdfAgent\.title"/);
   assert.match(source, /"tutorial\.step\.evolutionSettings\.title"/);
   assert.match(source, /"tutorial\.step\.studioCheckpoint\.title"/);
