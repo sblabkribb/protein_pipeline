@@ -204,3 +204,31 @@ test("platform palette avoids beige-dominant application backgrounds", () => {
   assert.doesNotMatch(styles, /248,\s*245,\s*239/);
   assert.match(styles, /--surface-canvas:\s*oklch\(98\.5% 0\.002 247\.839\)/);
 });
+
+test("frontend includes a localized first-run tutorial overlay", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.match(html, /id="tutorialBtn"/);
+  assert.match(html, /id="tutorialOverlay"/);
+  assert.match(html, /id="tutorialSpotlight"/);
+  assert.match(html, /id="tutorialStepTitle"/);
+  assert.match(html, /id="tutorialSkip"/);
+  assert.match(html, /id="tutorialNext"/);
+
+  assert.match(source, /const TUTORIAL_STORAGE_KEY = "kbf\.tutorial\.completed\.v1"/);
+  assert.match(source, /const TUTORIAL_STEPS = \[/);
+  assert.match(source, /function maybeShowTutorialOnFirstVisit/);
+  assert.match(source, /function openTutorial/);
+  assert.match(source, /"action\.tutorial"/);
+  assert.match(source, /"tutorial\.step\.settings\.title"/);
+  assert.match(source, /"tutorial\.step\.evolution\.title"/);
+  assert.match(source, /"tutorial\.step\.studio\.title"/);
+  assert.match(source, /"tutorial\.step\.rounds\.title"/);
+  assert.match(source, /"tutorial\.step\.analyze\.title"/);
+
+  assert.match(styles, /\.tutorial-overlay/);
+  assert.match(styles, /\.tutorial-spotlight/);
+  assert.match(styles, /\.tutorial-card/);
+});

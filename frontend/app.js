@@ -138,6 +138,7 @@ const OIDC_VERIFIER_KEY = "kbf.oidc.verifier";
 
 const LANG_KEY = "kbf.lang";
 const LANG_OPTIONS = ["en", "ko"];
+const TUTORIAL_STORAGE_KEY = "kbf.tutorial.completed.v1";
 const REPORT_LANG_KEY = "kbf.reportLang";
 const REPORT_LANG_OPTIONS = ["auto", "en", "ko"];
 const WORKFLOW_PLAN_STORAGE_KEY = "kbf.workflowPlans";
@@ -766,6 +767,19 @@ const el = {
   runpodAdminBtn: document.getElementById("runpodAdminBtn"),
   tabBtnCath: document.getElementById("tabBtnCath"),
   helpBtn: document.getElementById("helpBtn"),
+  tutorialBtn: document.getElementById("tutorialBtn"),
+  tutorialOverlay: document.getElementById("tutorialOverlay"),
+  tutorialSpotlight: document.getElementById("tutorialSpotlight"),
+  tutorialCard: document.getElementById("tutorialCard"),
+  tutorialStepMeta: document.getElementById("tutorialStepMeta"),
+  tutorialStepTitle: document.getElementById("tutorialStepTitle"),
+  tutorialStepBody: document.getElementById("tutorialStepBody"),
+  tutorialStepHint: document.getElementById("tutorialStepHint"),
+  tutorialDots: document.getElementById("tutorialDots"),
+  tutorialSkip: document.getElementById("tutorialSkip"),
+  tutorialPrev: document.getElementById("tutorialPrev"),
+  tutorialNext: document.getElementById("tutorialNext"),
+  tutorialClose: document.getElementById("tutorialClose"),
   copilotOpenBtn: document.getElementById("copilotOpenBtn"),
   copilotFabBtn: document.getElementById("copilotFabBtn"),
   chatArea: document.getElementById("chatArea"),
@@ -1949,6 +1963,44 @@ const I18N = {
     "action.settings": "Settings",
     "action.logout": "Logout",
     "action.help": "Usage",
+    "action.tutorial": "Tutorial",
+    "tutorial.stepMeta": "Step {current}/{total}",
+    "tutorial.skip": "Skip",
+    "tutorial.prev": "Back",
+    "tutorial.next": "Next",
+    "tutorial.finish": "Finish",
+    "tutorial.step.home.title": "Start from the workspace",
+    "tutorial.step.home.body":
+      "Use Home as the landing point. Start a new experiment, reopen a monitor, or jump straight to result analysis from here.",
+    "tutorial.step.home.hint": "For a first run, choose New Experiment and keep the default Fast path unless you already know the expert settings.",
+    "tutorial.step.advanced.title": "Advanced is a guided setup",
+    "tutorial.step.advanced.body":
+      "Advanced collects target input, workflow path, candidate criteria, expert overrides, and final review as ordered steps.",
+    "tutorial.step.advanced.hint": "Use this when you need to tune conservation tiers, output counts, RFD3/BioEmu/AF2 gates, or fixed positions.",
+    "tutorial.step.evolution.title": "Evolution explores iterative designs",
+    "tutorial.step.evolution.body":
+      "Evolution starts from a target and searches candidate space across generated pools, oracle samples, and rounds.",
+    "tutorial.step.evolution.hint": "Use it after you understand the basic pipeline; the pool and round counts affect runtime and output size.",
+    "tutorial.step.studio.title": "Studio resumes staged workflows",
+    "tutorial.step.studio.body":
+      "Studio is for step-by-step workflow sessions, checkpoint review, and continuing a run after inspecting intermediate results.",
+    "tutorial.step.studio.hint": "If a run pauses at a checkpoint, review it in Monitor or Studio before resuming.",
+    "tutorial.step.monitor.title": "Monitor tracks live runs",
+    "tutorial.step.monitor.body":
+      "Monitor shows stage state, ETA, artifacts, checkpoint actions, completeness, and current run context.",
+    "tutorial.step.monitor.hint": "Use Auto Poll while a run is active, then inspect artifacts before moving to analysis.",
+    "tutorial.step.rounds.title": "Rounds organize experiments",
+    "tutorial.step.rounds.body":
+      "Rounds connect projects, hypotheses, linked run IDs, selected candidates, feedback, and next-round notes.",
+    "tutorial.step.rounds.hint": "Create a project and round before repeated optimization work so results stay traceable.",
+    "tutorial.step.analyze.title": "Analyze compares and ranks results",
+    "tutorial.step.analyze.body":
+      "Analyze brings together Compare Studio, run-to-run deltas, hit lists, charts, feedback, experiments, and report generation.",
+    "tutorial.step.analyze.hint": "Start with the hit list, then compare structures and generate a report after triage.",
+    "tutorial.step.settings.title": "Settings and help stay in the top bar",
+    "tutorial.step.settings.body":
+      "Settings contains fixed service information and report language. Usage is the static guide, and Tutorial can be replayed anytime.",
+    "tutorial.step.settings.hint": "The tutorial follows the selected KO/EN language, so switching language changes these explanations too.",
     "tabs.home": "Home",
     "tabs.evolution": "Evolution",
     "tabs.fast": "Fast",
@@ -3225,6 +3277,44 @@ const I18N = {
     "action.settings": "설정",
     "action.logout": "로그아웃",
     "action.help": "사용법",
+    "action.tutorial": "튜토리얼",
+    "tutorial.stepMeta": "{current}/{total} 단계",
+    "tutorial.skip": "건너뛰기",
+    "tutorial.prev": "이전",
+    "tutorial.next": "다음",
+    "tutorial.finish": "마침",
+    "tutorial.step.home.title": "워크스페이스에서 시작",
+    "tutorial.step.home.body":
+      "Home은 시작 지점입니다. 새 실험을 만들거나, 기존 실행 모니터를 다시 열거나, 결과 분석으로 바로 이동할 수 있습니다.",
+    "tutorial.step.home.hint": "처음 실행할 때는 새 실험을 누르고, 전문가 설정이 필요하지 않으면 Fast 기본 경로를 유지하세요.",
+    "tutorial.step.advanced.title": "고급 설정은 단계형 설정입니다",
+    "tutorial.step.advanced.body":
+      "고급 설정은 타깃 입력, 워크플로우 경로, 후보 평가 기준, 전문가 override, 최종 검토를 순서대로 모읍니다.",
+    "tutorial.step.advanced.hint": "보존도 티어, 출력 개수, RFD3/BioEmu/AF2 기준, 고정 위치를 조정해야 할 때 사용하세요.",
+    "tutorial.step.evolution.title": "Evolution은 반복 설계를 탐색합니다",
+    "tutorial.step.evolution.body":
+      "Evolution은 타깃에서 시작해 생성 pool, oracle sample, round를 거치며 후보 공간을 탐색합니다.",
+    "tutorial.step.evolution.hint": "기본 파이프라인을 이해한 뒤 사용하세요. pool과 round 수는 실행 시간과 출력 규모에 영향을 줍니다.",
+    "tutorial.step.studio.title": "스튜디오는 단계별 워크플로우를 이어갑니다",
+    "tutorial.step.studio.body":
+      "스튜디오는 단계별 워크플로우 세션, 체크포인트 검토, 중간 결과 확인 후 이어 실행할 때 쓰는 공간입니다.",
+    "tutorial.step.studio.hint": "실행이 체크포인트에서 멈추면 Monitor나 Studio에서 검토한 뒤 재개하세요.",
+    "tutorial.step.monitor.title": "Monitor는 실행 상태를 추적합니다",
+    "tutorial.step.monitor.body":
+      "Monitor에서는 단계 상태, 예상 시간, 산출물, 체크포인트 액션, completeness, 현재 실행 맥락을 확인합니다.",
+    "tutorial.step.monitor.hint": "실행 중에는 Auto Poll을 켜고, 완료 후에는 산출물을 확인한 뒤 분석으로 이동하세요.",
+    "tutorial.step.rounds.title": "라운드는 실험을 정리합니다",
+    "tutorial.step.rounds.body":
+      "라운드는 프로젝트, 가설, 연결된 run ID, 선택 후보, 피드백, 다음 라운드 메모를 묶어 관리합니다.",
+    "tutorial.step.rounds.hint": "반복 최적화를 시작하기 전에 프로젝트와 라운드를 만들면 결과 추적이 쉬워집니다.",
+    "tutorial.step.analyze.title": "분석은 결과를 비교하고 순위를 매깁니다",
+    "tutorial.step.analyze.body":
+      "분석 화면은 Compare Studio, run-to-run 차이, hit list, 차트, 피드백, 실험 기록, 보고서 생성을 한곳에 모읍니다.",
+    "tutorial.step.analyze.hint": "먼저 hit list로 후보를 좁히고, 구조 비교를 본 뒤 보고서를 생성하세요.",
+    "tutorial.step.settings.title": "설정과 도움말은 상단에 있습니다",
+    "tutorial.step.settings.body":
+      "설정에는 고정 서비스 정보와 보고서 언어가 있습니다. 사용법은 정적 가이드이고, 튜토리얼은 언제든 다시 볼 수 있습니다.",
+    "tutorial.step.settings.hint": "튜토리얼 설명은 현재 KO/EN 언어 선택을 따르므로 언어를 바꾸면 설명도 같이 바뀝니다.",
     "tabs.home": "홈",
     "tabs.evolution": "Evolution",
     "tabs.fast": "빠른 실행",
@@ -4630,6 +4720,76 @@ let fastLauncherInitialized = false;
 let evolutionLauncherInitialized = false;
 let langInitialized = false;
 let copilotInitialized = false;
+let tutorialInitialized = false;
+let tutorialFirstVisitPrompted = false;
+let tutorialStepIndex = 0;
+let tutorialReturnTab = "home";
+
+const TUTORIAL_STEPS = [
+  {
+    id: "home",
+    tab: "home",
+    target: "[data-home-target=\"fast\"]",
+    titleKey: "tutorial.step.home.title",
+    bodyKey: "tutorial.step.home.body",
+    hintKey: "tutorial.step.home.hint",
+  },
+  {
+    id: "advanced",
+    tab: "advanced",
+    target: ".advanced-launch-frame",
+    titleKey: "tutorial.step.advanced.title",
+    bodyKey: "tutorial.step.advanced.body",
+    hintKey: "tutorial.step.advanced.hint",
+  },
+  {
+    id: "evolution",
+    tab: "evolution",
+    target: ".evolution-input-card",
+    titleKey: "tutorial.step.evolution.title",
+    bodyKey: "tutorial.step.evolution.body",
+    hintKey: "tutorial.step.evolution.hint",
+  },
+  {
+    id: "studio",
+    tab: "studio",
+    target: "#workflowStudioRoot",
+    titleKey: "tutorial.step.studio.title",
+    bodyKey: "tutorial.step.studio.body",
+    hintKey: "tutorial.step.studio.hint",
+  },
+  {
+    id: "monitor",
+    tab: "monitor",
+    target: ".monitor-summary-panel",
+    titleKey: "tutorial.step.monitor.title",
+    bodyKey: "tutorial.step.monitor.body",
+    hintKey: "tutorial.step.monitor.hint",
+  },
+  {
+    id: "rounds",
+    tab: "rounds",
+    target: ".rounds-shell",
+    titleKey: "tutorial.step.rounds.title",
+    bodyKey: "tutorial.step.rounds.body",
+    hintKey: "tutorial.step.rounds.hint",
+  },
+  {
+    id: "analyze",
+    tab: "analyze",
+    target: ".analyze-grid",
+    titleKey: "tutorial.step.analyze.title",
+    bodyKey: "tutorial.step.analyze.body",
+    hintKey: "tutorial.step.analyze.hint",
+  },
+  {
+    id: "settings",
+    target: "#settingsBtn",
+    titleKey: "tutorial.step.settings.title",
+    bodyKey: "tutorial.step.settings.body",
+    hintKey: "tutorial.step.settings.hint",
+  },
+];
 
 const RUN_MODE_OPTIONS = [
   { labelKey: "runmode.pipeline", value: "pipeline" },
@@ -9751,6 +9911,9 @@ function setLanguage(lang) {
       void hydrateReportModalArtifactImages();
     }
   }
+  if (tutorialIsOpen()) {
+    renderTutorialStep();
+  }
 }
 
 function initLanguage() {
@@ -9818,6 +9981,199 @@ function setActiveTab(value) {
   ) {
     void pollCurrentRun({ includeArtifacts: "auto" });
   }
+}
+
+function tutorialIsOpen() {
+  return Boolean(el.tutorialOverlay && !el.tutorialOverlay.classList.contains("hidden"));
+}
+
+function clampTutorialValue(value, min, max) {
+  if (max < min) return min;
+  return Math.max(min, Math.min(max, value));
+}
+
+function tutorialTargetElement(step) {
+  const target = step?.target ? document.querySelector(step.target) : null;
+  if (target instanceof HTMLElement) return target;
+  return el.appShell || document.body;
+}
+
+function positionTutorialElements(targetEl) {
+  if (!el.tutorialSpotlight || !el.tutorialCard) return;
+  const viewportPadding = 16;
+  const rect = targetEl?.getBoundingClientRect?.();
+  const hasTarget = rect && rect.width > 0 && rect.height > 0;
+
+  if (hasTarget) {
+    const spotlightPadding = 8;
+    const left = clampTutorialValue(rect.left - spotlightPadding, 8, window.innerWidth - 24);
+    const top = clampTutorialValue(rect.top - spotlightPadding, 8, window.innerHeight - 24);
+    const width = Math.min(rect.width + spotlightPadding * 2, window.innerWidth - left - 8);
+    const height = Math.min(rect.height + spotlightPadding * 2, window.innerHeight - top - 8);
+    Object.assign(el.tutorialSpotlight.style, {
+      left: `${left}px`,
+      top: `${top}px`,
+      width: `${width}px`,
+      height: `${height}px`,
+    });
+  } else {
+    Object.assign(el.tutorialSpotlight.style, {
+      left: "50%",
+      top: "50%",
+      width: "0px",
+      height: "0px",
+    });
+  }
+
+  const cardRect = el.tutorialCard.getBoundingClientRect();
+  const cardWidth = Math.min(cardRect.width || 420, window.innerWidth - viewportPadding * 2);
+  const cardHeight = Math.min(cardRect.height || 260, window.innerHeight - viewportPadding * 2);
+  let left = hasTarget ? rect.left : (window.innerWidth - cardWidth) / 2;
+  let top = hasTarget ? rect.bottom + 14 : (window.innerHeight - cardHeight) / 2;
+  if (hasTarget && top + cardHeight > window.innerHeight - viewportPadding) {
+    top = rect.top - cardHeight - 14;
+  }
+  if (top < viewportPadding) {
+    top = window.innerHeight - cardHeight - viewportPadding;
+  }
+  if (hasTarget && rect.left > window.innerWidth / 2) {
+    left = rect.right - cardWidth;
+  }
+  left = clampTutorialValue(left, viewportPadding, window.innerWidth - cardWidth - viewportPadding);
+  top = clampTutorialValue(top, viewportPadding, window.innerHeight - cardHeight - viewportPadding);
+  Object.assign(el.tutorialCard.style, {
+    left: `${left}px`,
+    top: `${top}px`,
+  });
+}
+
+function renderTutorialDots() {
+  if (!el.tutorialDots) return;
+  el.tutorialDots.replaceChildren();
+  TUTORIAL_STEPS.forEach((_step, index) => {
+    const dot = document.createElement("span");
+    dot.className = "tutorial-dot";
+    dot.classList.toggle("active", index === tutorialStepIndex);
+    el.tutorialDots.appendChild(dot);
+  });
+}
+
+function renderTutorialStep() {
+  if (!tutorialIsOpen()) return;
+  const step = TUTORIAL_STEPS[tutorialStepIndex] || TUTORIAL_STEPS[0];
+  if (!step) return;
+  if (step.tab) {
+    setActiveTab(step.tab);
+  }
+  const current = tutorialStepIndex + 1;
+  const total = TUTORIAL_STEPS.length;
+  if (el.tutorialStepMeta) {
+    el.tutorialStepMeta.textContent = t("tutorial.stepMeta", { current, total });
+  }
+  if (el.tutorialStepTitle) el.tutorialStepTitle.textContent = t(step.titleKey);
+  if (el.tutorialStepBody) el.tutorialStepBody.textContent = t(step.bodyKey);
+  if (el.tutorialStepHint) el.tutorialStepHint.textContent = t(step.hintKey);
+  if (el.tutorialPrev) el.tutorialPrev.disabled = tutorialStepIndex <= 0;
+  if (el.tutorialNext) {
+    el.tutorialNext.textContent = tutorialStepIndex >= TUTORIAL_STEPS.length - 1 ? t("tutorial.finish") : t("tutorial.next");
+  }
+  renderTutorialDots();
+  window.requestAnimationFrame(() => {
+    const targetEl = tutorialTargetElement(step);
+    targetEl?.scrollIntoView?.({ block: "center", inline: "center", behavior: "smooth" });
+    window.requestAnimationFrame(() => positionTutorialElements(targetEl));
+  });
+}
+
+function completeTutorial() {
+  try {
+    localStorage.setItem(TUTORIAL_STORAGE_KEY, "1");
+  } catch (_err) {
+    // Ignore localStorage quota/transient errors.
+  }
+}
+
+function closeTutorial({ complete = true, restoreTab = true } = {}) {
+  if (!el.tutorialOverlay) return;
+  if (complete) completeTutorial();
+  el.tutorialOverlay.classList.add("hidden");
+  document.body.classList.remove("tutorial-active");
+  if (restoreTab && tutorialReturnTab) {
+    setActiveTab(tutorialReturnTab);
+  }
+}
+
+function openTutorial({ startIndex = 0, restoreTab = true } = {}) {
+  if (!el.tutorialOverlay || !TUTORIAL_STEPS.length) return;
+  tutorialReturnTab = restoreTab ? activeTabId() : "";
+  tutorialStepIndex = clampTutorialValue(Number(startIndex) || 0, 0, TUTORIAL_STEPS.length - 1);
+  el.tutorialOverlay.classList.remove("hidden");
+  document.body.classList.add("tutorial-active");
+  renderTutorialStep();
+}
+
+function maybeShowTutorialOnFirstVisit() {
+  if (!el.tutorialOverlay || detachedResiduePickerToken) return;
+  if (tutorialFirstVisitPrompted) return;
+  if (localStorage.getItem(TUTORIAL_STORAGE_KEY) === "1") return;
+  tutorialFirstVisitPrompted = true;
+  window.setTimeout(() => {
+    if (el.appShell?.classList.contains("hidden")) return;
+    if (localStorage.getItem(TUTORIAL_STORAGE_KEY) === "1") return;
+    openTutorial({ restoreTab: true });
+  }, 450);
+}
+
+function handleTutorialKeydown(event) {
+  if (!tutorialIsOpen()) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeTutorial({ complete: true });
+  }
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    if (tutorialStepIndex >= TUTORIAL_STEPS.length - 1) {
+      closeTutorial({ complete: true });
+      return;
+    }
+    tutorialStepIndex += 1;
+    renderTutorialStep();
+  }
+  if (event.key === "ArrowLeft" && tutorialStepIndex > 0) {
+    event.preventDefault();
+    tutorialStepIndex -= 1;
+    renderTutorialStep();
+  }
+}
+
+function initTutorial() {
+  if (tutorialInitialized) return;
+  el.tutorialBtn?.addEventListener("click", () => openTutorial({ restoreTab: true }));
+  el.tutorialSkip?.addEventListener("click", () => closeTutorial({ complete: true }));
+  el.tutorialClose?.addEventListener("click", () => closeTutorial({ complete: true }));
+  el.tutorialPrev?.addEventListener("click", () => {
+    if (tutorialStepIndex <= 0) return;
+    tutorialStepIndex -= 1;
+    renderTutorialStep();
+  });
+  el.tutorialNext?.addEventListener("click", () => {
+    if (tutorialStepIndex >= TUTORIAL_STEPS.length - 1) {
+      closeTutorial({ complete: true });
+      return;
+    }
+    tutorialStepIndex += 1;
+    renderTutorialStep();
+  });
+  window.addEventListener("resize", () => {
+    if (tutorialIsOpen()) renderTutorialStep();
+  });
+  window.addEventListener("scroll", () => {
+    if (tutorialIsOpen()) {
+      positionTutorialElements(tutorialTargetElement(TUTORIAL_STEPS[tutorialStepIndex]));
+    }
+  }, true);
+  document.addEventListener("keydown", handleTutorialKeydown);
+  tutorialInitialized = true;
 }
 
 function openAdvancedWorkflowBuilder({ announce = true } = {}) {
@@ -10247,6 +10603,9 @@ function showLogin() {
   if (el.settingsPanel) el.settingsPanel.classList.add("hidden");
   if (el.adminPanel) el.adminPanel.classList.add("hidden");
   if (el.helpPanel) el.helpPanel.classList.add("hidden");
+  if (el.tutorialBtn) el.tutorialBtn.classList.add("hidden");
+  if (el.tutorialOverlay) el.tutorialOverlay.classList.add("hidden");
+  document.body.classList.remove("tutorial-active");
 }
 
 function showChat() {
@@ -10261,9 +10620,12 @@ function showChat() {
   if (el.detachedResiduePickerRoot) el.detachedResiduePickerRoot.classList.add("hidden");
   if (el.appShell) el.appShell.classList.remove("hidden");
   if (el.chatArea) el.chatArea.classList.remove("hidden");
+  if (el.tutorialBtn) el.tutorialBtn.classList.remove("hidden");
   setUserBadge();
   ensureManualPlan();
   initTabs();
+  initTutorial();
+  maybeShowTutorialOnFirstVisit();
 }
 
 function updateAdminUI() {

@@ -25,6 +25,7 @@
         </div>
         <button id="copilotOpenBtn" class="ghost" data-i18n="copilot.open">Copilot</button>
         <button id="helpBtn" class="ghost" data-i18n="action.help">Usage</button>
+        <button id="tutorialBtn" class="ghost hidden" type="button" data-i18n="action.tutorial">Tutorial</button>
         <button id="accountBtn" class="ghost hidden" data-i18n="action.account">Account</button>
         <button
           id="runpodAdminBtn"
@@ -1737,6 +1738,33 @@
             <ul>
               <li data-i18n="help.admin.step1">Admins can create users from the Admin button.</li>
             </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="tutorialOverlay"
+      class="tutorial-overlay hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="tutorialStepTitle"
+    >
+      <div id="tutorialSpotlight" class="tutorial-spotlight" aria-hidden="true"></div>
+      <div id="tutorialCard" class="tutorial-card" role="document">
+        <div class="tutorial-card-head">
+          <div id="tutorialStepMeta" class="tutorial-step-meta"></div>
+          <button id="tutorialClose" class="ghost" type="button" data-i18n="common.close">Close</button>
+        </div>
+        <h4 id="tutorialStepTitle"></h4>
+        <p id="tutorialStepBody"></p>
+        <div id="tutorialStepHint" class="tutorial-step-hint"></div>
+        <div id="tutorialDots" class="tutorial-dots" aria-hidden="true"></div>
+        <div class="tutorial-actions">
+          <button id="tutorialSkip" class="ghost" type="button" data-i18n="tutorial.skip">Skip</button>
+          <div class="tutorial-step-actions">
+            <button id="tutorialPrev" class="ghost" type="button" data-i18n="tutorial.prev">Back</button>
+            <button id="tutorialNext" class="primary" type="button" data-i18n="tutorial.next">Next</button>
           </div>
         </div>
       </div>
