@@ -222,11 +222,11 @@
                 <p data-i18n="home.desc">Target design runs, active rounds, and result triage in one workspace.</p>
               </div>
               <div class="experiment-launchpad">
-                <button class="home-mode-card launchpad-primary" type="button" data-home-target="fast">
+                <button class="home-mode-card launchpad-primary" type="button" data-home-target="experiment">
                   <span class="launchpad-eyebrow" data-i18n="home.launchpad.primary">Primary workflow</span>
                   <h3 data-i18n="home.launchpad.newExperiment">New Experiment</h3>
                   <p data-i18n="home.launchpad.newExperimentDesc">
-                    Register a target and launch the standard solubility/stability workflow.
+                    Choose Fast, Advanced, Evolution, or Workflow Studio based on the control you need.
                   </p>
                 </button>
                 <div class="launchpad-secondary-grid">
@@ -1584,6 +1584,42 @@
             <button id="workspaceRecordCancel" class="ghost" type="button" data-i18n="common.close">Close</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <div id="experimentChoicePanel" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="experimentChoiceHeading">
+      <div class="overlay-card experiment-choice-card">
+        <div class="overlay-header">
+          <div>
+            <h4 id="experimentChoiceHeading" data-i18n="home.experimentChoice.title">Choose Experiment Type</h4>
+            <p class="hint" data-i18n="home.experimentChoice.desc">
+              Start with the path that matches how much setup and review control you need.
+            </p>
+          </div>
+          <button id="experimentChoiceClose" class="ghost" type="button" data-i18n="common.close">Close</button>
+        </div>
+        <div class="experiment-choice-grid">
+          <button class="experiment-choice-btn" type="button" data-experiment-target="fast">
+            <span class="experiment-choice-kicker" data-i18n="home.experimentChoice.fast.kicker">Default path</span>
+            <strong data-i18n="home.experimentChoice.fast.title">Fast</strong>
+            <span data-i18n="home.experimentChoice.fast.desc">Paste a target and run the standard defaults.</span>
+          </button>
+          <button class="experiment-choice-btn" type="button" data-experiment-target="advanced">
+            <span class="experiment-choice-kicker" data-i18n="home.experimentChoice.advanced.kicker">Guided setup</span>
+            <strong data-i18n="home.experimentChoice.advanced.title">Advanced</strong>
+            <span data-i18n="home.experimentChoice.advanced.desc">Step through input, workflow, criteria, expert options, and review.</span>
+          </button>
+          <button class="experiment-choice-btn" type="button" data-experiment-target="evolution">
+            <span class="experiment-choice-kicker" data-i18n="home.experimentChoice.evolution.kicker">Iterative design</span>
+            <strong data-i18n="home.experimentChoice.evolution.title">Evolution</strong>
+            <span data-i18n="home.experimentChoice.evolution.desc">Configure active-learning rounds and Top K selection.</span>
+          </button>
+          <button class="experiment-choice-btn" type="button" data-experiment-target="studio">
+            <span class="experiment-choice-kicker" data-i18n="home.experimentChoice.studio.kicker">Stage review</span>
+            <strong data-i18n="home.experimentChoice.studio.title">Workflow Studio</strong>
+            <span data-i18n="home.experimentChoice.studio.desc">Build or resume a staged workflow with checkpoints.</span>
+          </button>
+        </div>
       </div>
     </div>
 

@@ -841,6 +841,8 @@ const el = {
   homeRoundStatusValue: document.getElementById("homeRoundStatusValue"),
   homeRunsValue: document.getElementById("homeRunsValue"),
   homeReportValue: document.getElementById("homeReportValue"),
+  experimentChoicePanel: document.getElementById("experimentChoicePanel"),
+  experimentChoiceClose: document.getElementById("experimentChoiceClose"),
   roundsProjectList: document.getElementById("roundsProjectList"),
   roundsList: document.getElementById("roundsList"),
   roundsDetail: document.getElementById("roundsDetail"),
@@ -1972,10 +1974,14 @@ const I18N = {
     "tutorial.step.home.title": "Start from the workspace",
     "tutorial.step.home.body":
       "Use Home as the landing point. Start a new experiment, reopen a monitor, or jump straight to result analysis from here.",
-    "tutorial.step.home.hint": "For a first run, choose New Experiment and keep the default Fast path unless you already know the expert settings.",
+    "tutorial.step.home.hint": "New Experiment now lets you choose Fast, Advanced, Evolution, or Workflow Studio before moving into setup.",
+    "tutorial.step.homeProject.title": "Create or select a project first",
+    "tutorial.step.homeProject.body":
+      "Projects group related targets, hypotheses, rounds, and reports. Create a project here or select an existing one before starting repeated work.",
+    "tutorial.step.homeProject.hint": "A project is the top-level campaign space. Use one project per target family or biological objective.",
     "tutorial.step.homeRound.title": "Create rounds from Home",
     "tutorial.step.homeRound.body":
-      "Create or select a project, then create the current round here. Runs launched while a round is active carry that project and round metadata.",
+      "After a project is selected, create the active round here. Runs launched while a round is active carry that project and round metadata.",
     "tutorial.step.homeRound.hint": "Use rounds before repeated optimization so hypotheses, linked runs, selected candidates, and next-round notes stay traceable.",
     "tutorial.step.advanced.title": "Advanced is a guided setup",
     "tutorial.step.advanced.body":
@@ -2074,11 +2080,25 @@ const I18N = {
     "home.desc": "Target design runs, active rounds, and result triage in one workspace.",
     "home.launchpad.primary": "Primary workflow",
     "home.launchpad.newExperiment": "New Experiment",
-    "home.launchpad.newExperimentDesc": "Register a target and launch the standard solubility/stability workflow.",
+    "home.launchpad.newExperimentDesc": "Choose Fast, Advanced, Evolution, or Workflow Studio based on the control you need.",
     "home.launchpad.loadRun": "Load Existing Run",
     "home.launchpad.loadRunDesc": "Resume monitoring from the current run list.",
     "home.launchpad.analyzeResults": "Analyze Results",
     "home.launchpad.analyzeResultsDesc": "Review ranked candidates and comparison outputs.",
+    "home.experimentChoice.title": "Choose experiment type",
+    "home.experimentChoice.desc": "Start with the path that matches how much setup and review control you need.",
+    "home.experimentChoice.fast.kicker": "Default path",
+    "home.experimentChoice.fast.title": "Fast",
+    "home.experimentChoice.fast.desc": "Paste a target and run the standard defaults.",
+    "home.experimentChoice.advanced.kicker": "Guided setup",
+    "home.experimentChoice.advanced.title": "Advanced",
+    "home.experimentChoice.advanced.desc": "Step through input, workflow, criteria, expert options, and review.",
+    "home.experimentChoice.evolution.kicker": "Iterative design",
+    "home.experimentChoice.evolution.title": "Evolution",
+    "home.experimentChoice.evolution.desc": "Configure active-learning rounds and Top K selection.",
+    "home.experimentChoice.studio.kicker": "Stage review",
+    "home.experimentChoice.studio.title": "Workflow Studio",
+    "home.experimentChoice.studio.desc": "Build or resume a staged workflow with checkpoints.",
     "home.card.fast.title": "Fast",
     "home.card.fast.desc": "Start from a PDB or FASTA with pipeline defaults chosen for you.",
     "home.card.advanced.title": "Advanced",
@@ -3347,10 +3367,14 @@ const I18N = {
     "tutorial.step.home.title": "워크스페이스에서 시작",
     "tutorial.step.home.body":
       "Home은 시작 지점입니다. 새 실험을 만들거나, 기존 실행 모니터를 다시 열거나, 결과 분석으로 바로 이동할 수 있습니다.",
-    "tutorial.step.home.hint": "처음 실행할 때는 새 실험을 누르고, 전문가 설정이 필요하지 않으면 Fast 기본 경로를 유지하세요.",
+    "tutorial.step.home.hint": "새 실험에서는 Fast, Advanced, Evolution, Workflow Studio 중 필요한 시작 방식을 먼저 고를 수 있습니다.",
+    "tutorial.step.homeProject.title": "먼저 프로젝트를 만들거나 선택합니다",
+    "tutorial.step.homeProject.body":
+      "프로젝트는 관련 타깃, 가설, 라운드, 리포트를 묶는 상위 작업 공간입니다. 반복 작업을 시작하기 전에 여기서 프로젝트를 만들거나 기존 프로젝트를 선택하세요.",
+    "tutorial.step.homeProject.hint": "프로젝트는 캠페인 단위입니다. 타깃 계열이나 생물학적 목표별로 하나씩 두는 것이 좋습니다.",
     "tutorial.step.homeRound.title": "Home에서 라운드를 만듭니다",
     "tutorial.step.homeRound.body":
-      "프로젝트를 만들거나 선택한 뒤 여기서 현재 라운드를 만듭니다. 라운드가 활성화된 상태에서 실행한 run에는 project/round 정보가 함께 들어갑니다.",
+      "프로젝트가 선택된 뒤 여기서 활성 라운드를 만듭니다. 라운드가 활성화된 상태에서 실행한 run에는 project/round 정보가 함께 들어갑니다.",
     "tutorial.step.homeRound.hint": "반복 최적화 전 라운드를 만들면 가설, 연결 run, 선택 후보, 다음 라운드 메모를 추적하기 쉽습니다.",
     "tutorial.step.advanced.title": "고급 설정은 단계형 설정입니다",
     "tutorial.step.advanced.body":
@@ -3449,11 +3473,25 @@ const I18N = {
     "home.desc": "표적 설계 실행, 활성 라운드, 결과 검토를 한 화면에서 다룹니다.",
     "home.launchpad.primary": "기본 워크플로우",
     "home.launchpad.newExperiment": "새 실험",
-    "home.launchpad.newExperimentDesc": "표적을 등록하고 표준 용해도/안정성 워크플로우를 시작합니다.",
+    "home.launchpad.newExperimentDesc": "필요한 제어 수준에 따라 Fast, Advanced, Evolution, Workflow Studio 중 선택합니다.",
     "home.launchpad.loadRun": "기존 실행 불러오기",
     "home.launchpad.loadRunDesc": "현재 실행 목록에서 모니터링을 이어갑니다.",
     "home.launchpad.analyzeResults": "결과 분석",
     "home.launchpad.analyzeResultsDesc": "후보 순위와 비교 결과를 검토합니다.",
+    "home.experimentChoice.title": "실험 유형 선택",
+    "home.experimentChoice.desc": "필요한 설정 범위와 검토 수준에 맞는 시작 경로를 선택하세요.",
+    "home.experimentChoice.fast.kicker": "기본 경로",
+    "home.experimentChoice.fast.title": "Fast",
+    "home.experimentChoice.fast.desc": "타깃을 붙여넣고 표준 기본값으로 바로 실행합니다.",
+    "home.experimentChoice.advanced.kicker": "단계형 설정",
+    "home.experimentChoice.advanced.title": "Advanced",
+    "home.experimentChoice.advanced.desc": "입력, 워크플로우, 평가기준, 고급 옵션, 검토를 순서대로 설정합니다.",
+    "home.experimentChoice.evolution.kicker": "반복 설계",
+    "home.experimentChoice.evolution.title": "Evolution",
+    "home.experimentChoice.evolution.desc": "학습 라운드와 Top K 선별 수를 조정해 반복 탐색합니다.",
+    "home.experimentChoice.studio.kicker": "단계별 검토",
+    "home.experimentChoice.studio.title": "Workflow Studio",
+    "home.experimentChoice.studio.desc": "체크포인트가 있는 단계별 워크플로우를 만들거나 이어 실행합니다.",
     "home.card.fast.title": "Fast",
     "home.card.fast.desc": "PDB 또는 FASTA만 넣으면 기본 파이프라인 설정으로 바로 시작합니다.",
     "home.card.advanced.title": "Advanced",
@@ -4851,10 +4889,18 @@ const TUTORIAL_STEPS = [
   {
     id: "home",
     tab: "home",
-    target: "[data-home-target=\"fast\"]",
+    target: "[data-home-target=\"experiment\"]",
     titleKey: "tutorial.step.home.title",
     bodyKey: "tutorial.step.home.body",
     hintKey: "tutorial.step.home.hint",
+  },
+  {
+    id: "homeProject",
+    tab: "home",
+    target: "#homeCreateProjectBtn",
+    titleKey: "tutorial.step.homeProject.title",
+    bodyKey: "tutorial.step.homeProject.body",
+    hintKey: "tutorial.step.homeProject.hint",
   },
   {
     id: "homeRound",
@@ -10448,23 +10494,67 @@ async function createWorkflowStudioFromStudio({ selectedRunId = "" } = {}) {
   return session;
 }
 
+function openWorkflowStudioBuilderFromHome() {
+  setRunMode("workflow", { render: false });
+  setCurrentWorkflowStudioSessionId("");
+  state.studioBuilderOpen = true;
+  setActiveTab("studio");
+  renderWorkflowStudio();
+  setMessage(t("home.message.studioBuilderReady"), "ai");
+}
+
+function closeExperimentChoicePanel() {
+  if (!el.experimentChoicePanel) return;
+  el.experimentChoicePanel.classList.add("hidden");
+}
+
+function openExperimentChoicePanel() {
+  if (!el.experimentChoicePanel) return;
+  el.experimentChoicePanel.classList.remove("hidden");
+  const firstChoice = el.experimentChoicePanel.querySelector("[data-experiment-target]");
+  if (firstChoice && typeof firstChoice.focus === "function") {
+    firstChoice.focus({ preventScroll: true });
+  }
+}
+
+function handleExperimentChoice(target) {
+  const normalizedTarget = String(target || "").trim();
+  if (!normalizedTarget) return;
+  closeExperimentChoicePanel();
+  if (normalizedTarget === "studio") {
+    openWorkflowStudioBuilderFromHome();
+    return;
+  }
+  if (["fast", "advanced", "evolution"].includes(normalizedTarget)) {
+    setActiveTab(normalizedTarget);
+  }
+}
+
 function initHomeLauncher() {
   if (homeLauncherInitialized) return;
   document.querySelectorAll("[data-home-target]").forEach((node) => {
     node.addEventListener("click", () => {
       const target = String(node.dataset.homeTarget || "").trim();
       if (!target) return;
+      if (target === "experiment") {
+        openExperimentChoicePanel();
+        return;
+      }
       if (target === "studio") {
-        setRunMode("workflow", { render: false });
-        setCurrentWorkflowStudioSessionId("");
-        state.studioBuilderOpen = true;
-        setActiveTab("studio");
-        renderWorkflowStudio();
-        setMessage(t("home.message.studioBuilderReady"), "ai");
+        openWorkflowStudioBuilderFromHome();
         return;
       }
       setActiveTab(target);
     });
+  });
+  document.querySelectorAll("[data-experiment-target]").forEach((node) => {
+    node.addEventListener("click", () => handleExperimentChoice(node.dataset.experimentTarget));
+  });
+  el.experimentChoiceClose?.addEventListener("click", closeExperimentChoicePanel);
+  el.experimentChoicePanel?.addEventListener("click", (event) => {
+    if (event.target === el.experimentChoicePanel) {
+      closeExperimentChoicePanel();
+    }
   });
   homeLauncherInitialized = true;
 }

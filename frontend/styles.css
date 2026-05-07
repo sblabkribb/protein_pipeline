@@ -665,6 +665,72 @@ body[data-environment="staging"] .topbar {
   max-width: 28ch;
 }
 
+.experiment-choice-card {
+  width: min(780px, 100%);
+  border-radius: var(--radius-md);
+}
+
+.experiment-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.experiment-choice-btn {
+  appearance: none;
+  min-height: 172px;
+  padding: 18px;
+  border: 1px solid rgba(24, 41, 46, 0.1);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94)),
+    var(--surface-panel);
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  text-align: left;
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    background 180ms ease;
+}
+
+.experiment-choice-btn:hover,
+.experiment-choice-btn:focus-visible {
+  outline: none;
+  transform: translateY(-2px);
+  border-color: color-mix(in oklch, var(--action-primary) 30%, transparent);
+  background: color-mix(in oklch, var(--surface-muted) 72%, white);
+  box-shadow: 0 18px 34px rgba(15, 23, 42, 0.1);
+}
+
+.experiment-choice-btn strong {
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.experiment-choice-btn span:last-child {
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.experiment-choice-kicker {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--action-primary) 10%, white);
+  color: var(--teal-dark);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .mode-shell-placeholder {
   padding: 28px 24px;
 }
@@ -6348,6 +6414,7 @@ textarea:focus-visible {
 
   .home-card-grid,
   .experiment-launchpad,
+  .experiment-choice-grid,
   .home-context-strip,
   .fast-grid,
   .rounds-grid,

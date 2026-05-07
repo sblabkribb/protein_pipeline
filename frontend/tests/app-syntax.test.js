@@ -152,6 +152,27 @@ test("home screen is an experiment launchpad", () => {
   assert.match(styles, /\.experiment-launchpad/);
 });
 
+test("home new experiment opens a mode chooser instead of forcing fast launch", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.match(html, /data-home-target="experiment"/);
+  assert.match(html, /id="experimentChoicePanel"/);
+  assert.match(html, /data-experiment-target="fast"/);
+  assert.match(html, /data-experiment-target="advanced"/);
+  assert.match(html, /data-experiment-target="evolution"/);
+  assert.match(html, /data-experiment-target="studio"/);
+  assert.doesNotMatch(html, /class="home-mode-card launchpad-primary" type="button" data-home-target="fast"/);
+
+  assert.match(source, /function openExperimentChoicePanel/);
+  assert.match(source, /function handleExperimentChoice/);
+  assert.match(source, /querySelectorAll\("\[data-experiment-target\]"\)/);
+  assert.match(source, /"home\.experimentChoice\.advanced\.title"/);
+  assert.match(source, /"home\.experimentChoice\.studio\.desc"/);
+  assert.match(styles, /\.experiment-choice-grid/);
+});
+
 test("advanced setup uses experiment builder steps", () => {
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
@@ -236,7 +257,9 @@ test("frontend includes a localized first-run tutorial overlay", () => {
 test("tutorial covers expert workflow controls and downstream review tools", () => {
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
+  assert.match(source, /id: "homeProject"/);
   assert.match(source, /id: "homeRound"/);
+  assert.match(source, /id: "homeProject"[\s\S]*?target: "#homeCreateProjectBtn"[\s\S]*?id: "homeRound"[\s\S]*?target: "#homeCreateRoundBtn"/m);
   assert.match(source, /id: "advancedInput"[\s\S]*?setupStep: "input"/m);
   assert.match(source, /id: "advancedWorkflow"[\s\S]*?setupStep: "workflow"/m);
   assert.match(source, /id: "advancedCriteria"[\s\S]*?setupStep: "criteria"/m);
@@ -252,6 +275,7 @@ test("tutorial covers expert workflow controls and downstream review tools", () 
 
   assert.match(source, /function applyTutorialStepContext/);
   assert.match(source, /state\.setupStepIndex = stepIndex;/);
+  assert.match(source, /"tutorial\.step\.homeProject\.title"/);
   assert.match(source, /"tutorial\.step\.homeRound\.title"/);
   assert.match(source, /"tutorial\.step\.advancedInput\.title"/);
   assert.match(source, /"tutorial\.step\.advancedWorkflow\.title"/);
