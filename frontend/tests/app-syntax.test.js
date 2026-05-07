@@ -124,3 +124,18 @@ test("frontend uses solubility and stability platform branding", () => {
   assert.match(source, /KBF Protein Solubility & Stability Platform/);
   assert.doesNotMatch(html, /Protein Pipeline Console/);
 });
+
+test("frontend exposes Tailwind-inspired platform color tokens", () => {
+  const tailwindEntry = readFileSync(
+    new URL("../tailwind-entry.css", import.meta.url),
+    "utf8"
+  );
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.match(tailwindEntry, /--color-platform-teal/);
+  assert.match(tailwindEntry, /--color-platform-emerald/);
+  assert.match(tailwindEntry, /--color-platform-slate/);
+  assert.match(styles, /--surface-canvas/);
+  assert.match(styles, /--action-primary/);
+  assert.match(styles, /--state-success/);
+});
