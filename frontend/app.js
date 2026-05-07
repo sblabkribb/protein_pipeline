@@ -1939,7 +1939,8 @@ async function deleteCurrentRoundFromWorkspace() {
 
 const I18N = {
   en: {
-    "brand.subtitle": "Protein Pipeline Console",
+    "platform.name": "KBF Protein Solubility & Stability Platform",
+    "brand.subtitle": "Protein Solubility & Stability Platform",
     "env.development": "Development",
     "env.staging": "Staging",
     "action.admin": "Admin",
@@ -1958,7 +1959,7 @@ const I18N = {
     "tabs.analyze": "Analyze",
     "tabs.mcp": "MCP",
     "home.title": "Launch Workspace",
-    "home.desc": "Choose how you want to start the next design cycle.",
+    "home.desc": "Start, monitor, and evaluate solubility and stability workflows.",
     "home.card.fast.title": "Fast",
     "home.card.fast.desc": "Start from a PDB or FASTA with pipeline defaults chosen for you.",
     "home.card.advanced.title": "Advanced",
@@ -3190,7 +3191,8 @@ const I18N = {
     "health.ok": "OK",
   },
   ko: {
-    "brand.subtitle": "단백질 파이프라인 콘솔",
+    "platform.name": "KBF Protein Solubility & Stability Platform",
+    "brand.subtitle": "Protein Solubility & Stability Platform",
     "env.development": "개발 환경",
     "env.staging": "스테이징",
     "action.admin": "관리자",
@@ -3209,7 +3211,7 @@ const I18N = {
     "tabs.analyze": "분석",
     "tabs.mcp": "MCP",
     "home.title": "실행 워크스페이스",
-    "home.desc": "다음 디자인 사이클을 어떻게 시작할지 선택하세요.",
+    "home.desc": "용해도와 안정성 워크플로우를 시작하고 결과를 평가합니다.",
     "home.card.fast.title": "Fast",
     "home.card.fast.desc": "PDB 또는 FASTA만 넣으면 기본 파이프라인 설정으로 바로 시작합니다.",
     "home.card.advanced.title": "Advanced",

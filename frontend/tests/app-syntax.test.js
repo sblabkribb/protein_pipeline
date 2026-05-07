@@ -115,3 +115,12 @@ test("advanced setup visual hierarchy uses compact review and expert styling", (
   assert.match(styles, /\.expert-option/);
   assert.match(html, /class="setup-ux-grid setup-primary-layout"/);
 });
+
+test("frontend uses solubility and stability platform branding", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(html, /KBF Protein Solubility &amp; Stability Platform/);
+  assert.match(source, /KBF Protein Solubility & Stability Platform/);
+  assert.doesNotMatch(html, /Protein Pipeline Console/);
+});
