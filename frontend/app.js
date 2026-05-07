@@ -3068,6 +3068,8 @@ const I18N = {
     "setup.workflow.stageGuide": "Stage Guide",
     "setup.workflow.stageGuideHint": "Hover or focus a stage to view details.",
     "setup.workflow.stageGuideLabel": "Selected Stage",
+    "setup.workflow.settingsTitle": "Run Settings",
+    "setup.workflow.settingsHint": "Set conservation lanes and the main per-stage output limits before creating the Studio session.",
     "setup.workflow.controls": "Studio Flow",
     "setup.workflow.controlsHint": "Reruns, forks, and next-step decisions happen in Studio after you open the session.",
     "setup.workflow.launchTitle": "Create Session",
@@ -4421,6 +4423,8 @@ const I18N = {
     "setup.workflow.stageGuide": "단계 가이드",
     "setup.workflow.stageGuideHint": "단계에 마우스를 올리거나 포커스하면 설명이 표시됩니다.",
     "setup.workflow.stageGuideLabel": "선택 단계",
+    "setup.workflow.settingsTitle": "실행 설정",
+    "setup.workflow.settingsHint": "Studio 세션을 만들기 전에 보존율 lane과 단계별 주요 산출 개수를 정합니다.",
     "setup.workflow.controls": "Studio 흐름",
     "setup.workflow.controlsHint": "재실행, fork, 다음 단계 결정은 세션을 연 뒤 Studio에서 처리합니다.",
     "setup.workflow.launchTitle": "세션 생성",
@@ -13378,6 +13382,139 @@ function buildWorkflowDesignerCard({
   canvasBlock.appendChild(hint);
   canvasBlock.appendChild(orderHint);
 
+  const settingsBlock = document.createElement("section");
+  settingsBlock.className = "workflow-block workflow-settings-block";
+  const settingsTitle = document.createElement("div");
+  settingsTitle.className = "workflow-section-label";
+  settingsTitle.textContent = t("setup.workflow.settingsTitle");
+  const settingsHint = document.createElement("div");
+  settingsHint.className = "workflow-block-help";
+  settingsHint.textContent = t("setup.workflow.settingsHint");
+  const settingsGrid = document.createElement("div");
+  settingsGrid.className = "workflow-settings-grid";
+  const workflowQuestionParams = () => ({
+    af2Provider: af2ProviderName(state.answers.af2_provider || "colabfold", state.lang || "en"),
+  });
+  const workflowQuestionLabel = (id) => t(QUESTION_PRESETS[id]?.labelKey || id, workflowQuestionParams());
+  const workflowQuestionHelp = (id) => t(QUESTION_PRESETS[id]?.questionKey || "", workflowQuestionParams());
+  const clampWorkflowNumber = (value, fallback, { min = 0, integer = true } = {}) => {
+    const parsed = integer ? Number.parseInt(String(value ?? "").trim(), 10) : Number.parseFloat(String(value ?? "").trim());
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(min, parsed);
+  };
+  const appendWorkflowNumberSetting = (id, fallback, { min = 0, step = 1, integer = true } = {}) => {
+    state.answers[id] = clampWorkflowNumber(state.answers[id], fallback, { min, integer });
+    const field = document.createElement("label");
+    field.className = "workflow-setting-field";
+    const label = document.createElement("span");
+    label.className = "workflow-setting-label";
+    label.textContent = workflowQuestionLabel(id);
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = String(min);
+    input.step = String(step);
+    input.value = String(state.answers[id]);
+    input.addEventListener("input", () => {
+      const parsed = integer ? Number.parseInt(input.value, 10) : Number.parseFloat(input.value);
+      if (Number.isFinite(parsed)) state.answers[id] = Math.max(min, parsed);
+    });
+    input.addEventListener("change", () => {
+      state.answers[id] = clampWorkflowNumber(input.value, fallback, { min, integer });
+      input.value = String(state.answers[id]);
+    });
+    field.appendChild(label);
+    field.appendChild(input);
+    const helpText = workflowQuestionHelp(id);
+    if (helpText) {
+      const helpNode = document.createElement("span");
+      helpNode.className = "workflow-setting-help";
+      helpNode.textContent = helpText;
+      field.appendChild(helpNode);
+    }
+    settingsGrid.appendChild(field);
+  };
+  const appendWorkflowToggleSetting = (id, fallback = false) => {
+    if (typeof state.answers[id] !== "boolean") state.answers[id] = Boolean(fallback);
+    const field = document.createElement("label");
+    field.className = "workflow-setting-field workflow-setting-toggle";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = Boolean(state.answers[id]);
+    input.addEventListener("change", () => {
+      state.answers[id] = input.checked;
+    });
+    const label = document.createElement("span");
+    label.className = "workflow-setting-label";
+    label.textContent = workflowQuestionLabel(id);
+    field.appendChild(input);
+    field.appendChild(label);
+    settingsGrid.appendChild(field);
+  };
+
+  const tierField = document.createElement("div");
+  tierField.className = "workflow-setting-field workflow-tier-field";
+  const tierLabel = document.createElement("div");
+  tierLabel.className = "workflow-setting-label";
+  tierLabel.textContent = workflowQuestionLabel("selected_tiers");
+  const tierGroup = document.createElement("div");
+  tierGroup.className = "choice-group workflow-tier-choices";
+  state.answers.selected_tiers = normalizeSelectedTierValues(state.answers.selected_tiers, FAST_SELECTED_TIER_VALUES);
+  delete state.answers.conservation_tiers;
+  mirrorSetupRoutedAnswer("selected_tiers", [...state.answers.selected_tiers]);
+  FAST_SELECTED_TIER_VALUES.forEach((value) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "choice-btn workflow-tier-choice";
+    const isSelected = state.answers.selected_tiers.includes(value);
+    if (isSelected) btn.classList.add("selected");
+    btn.textContent = formatConservationTierValue(value);
+    btn.addEventListener("click", () => {
+      const next = new Set(state.answers.selected_tiers.map((item) => String(item)));
+      const key = String(value);
+      if (next.has(key)) {
+        if (next.size <= 1) return;
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      state.answers.selected_tiers = normalizeSelectedTierValues(
+        Array.from(next).map((item) => Number.parseFloat(item)),
+        state.answers.selected_tiers
+      );
+      mirrorSetupRoutedAnswer("selected_tiers", [...state.answers.selected_tiers]);
+      rerenderFn();
+    });
+    tierGroup.appendChild(btn);
+  });
+  const tierHelp = document.createElement("div");
+  tierHelp.className = "workflow-setting-help";
+  tierHelp.textContent = workflowQuestionHelp("selected_tiers");
+  tierField.appendChild(tierLabel);
+  tierField.appendChild(tierGroup);
+  tierField.appendChild(tierHelp);
+  settingsGrid.appendChild(tierField);
+
+  if (nodes.includes("rfd3")) {
+    appendWorkflowNumberSetting("rfd3_max_return_designs", 10, { min: 1, step: 1 });
+  }
+  if (nodes.includes("bioemu")) {
+    appendWorkflowNumberSetting("bioemu_num_samples", 20, { min: 1, step: 1 });
+    appendWorkflowNumberSetting("bioemu_max_return_structures", 10, { min: 1, step: 1 });
+  }
+  if (nodes.includes("design")) {
+    appendWorkflowNumberSetting("num_seq_per_tier", 2, { min: 1, step: 1 });
+  }
+  if (nodes.includes("af2")) {
+    appendWorkflowNumberSetting("af2_max_candidates_per_tier", 0, { min: 0, step: 1 });
+    appendWorkflowToggleSetting("relax_enabled", true);
+  }
+  if (nodes.includes("novelty")) {
+    appendWorkflowToggleSetting("wt_compare", true);
+  }
+  settingsBlock.appendChild(settingsTitle);
+  settingsBlock.appendChild(settingsHint);
+  settingsBlock.appendChild(settingsGrid);
+
   const controlsBlock = document.createElement("section");
   controlsBlock.className = "workflow-block";
   const controlsTitle = document.createElement("div");
@@ -13476,6 +13613,7 @@ function buildWorkflowDesignerCard({
 
   mainCol.appendChild(paletteBlock);
   mainCol.appendChild(canvasBlock);
+  mainCol.appendChild(settingsBlock);
   sideCol.appendChild(guideBlock);
   sideCol.appendChild(controlsBlock);
   sideCol.appendChild(summaryBlock);

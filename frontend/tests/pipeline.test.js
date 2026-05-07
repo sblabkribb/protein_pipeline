@@ -1201,6 +1201,42 @@ test("buildWorkflowStudioEffectiveAnswers applies workflow defaults for untouche
   assert.equal(merged.af2_max_candidates_per_tier, 0);
 });
 
+test("normalizeWorkflowStudioPayloadForComparison disables backbone stages excluded from studio nodes", () => {
+  const normalized = normalizeWorkflowStudioPayloadForComparison(
+    {
+      target_input: "ATOM",
+      rfd3_use: true,
+      rfd3_input_pdb: "CUSTOM RFD3",
+      rfd3_contig: "A1-20",
+      rfd3_max_return_designs: 10,
+      bioemu_use: true,
+      bioemu_num_samples: 20,
+      bioemu_max_return_structures: 10,
+      stop_after: "af2",
+    },
+    {
+      nodes: ["msa", "proteinmpnn_70", "soluprot_70", "af2_70"],
+    }
+  );
+
+  assert.equal(normalized.rfd3_use, false);
+  assert.equal(normalized.rfd3_input_pdb, undefined);
+  assert.equal(normalized.rfd3_contig, undefined);
+  assert.equal(normalized.rfd3_max_return_designs, undefined);
+  assert.equal(normalized.bioemu_use, false);
+  assert.equal(normalized.bioemu_num_samples, undefined);
+  assert.equal(normalized.bioemu_max_return_structures, undefined);
+
+  const args = buildRunArguments({
+    prompt: "",
+    routed: { stop_after: "design" },
+    answers: normalized,
+    runId: "studio_excluded",
+  });
+  assert.equal(args.rfd3_use, false);
+  assert.equal(args.bioemu_use, false);
+});
+
 test("workflow studio question metadata keeps default return counts for rfd3 and bioemu", () => {
   const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
   assert.match(
@@ -1816,6 +1852,18 @@ test("studio tab creates fresh sessions and can render the workflow builder inli
   assert.doesNotMatch(source, /selectedRunId:\s*String\(selectedRunId \|\| state\.currentRunId \|\| ""\)\.trim\(\)/);
   assert.match(source, /if \(el\.studioCreateBtn\) \{[\s\S]*setCurrentWorkflowStudioSessionId\(\"\"\);[\s\S]*state\.studioBuilderOpen = true;[\s\S]*renderWorkflowStudio\(\);/m);
   assert.match(source, /if \(target === "studio"\) \{[\s\S]*setCurrentWorkflowStudioSessionId\(\"\"\);[\s\S]*state\.studioBuilderOpen = true;[\s\S]*renderWorkflowStudio\(\);/m);
+});
+
+test("workflow builder exposes conservation tiers and stage throughput controls before studio creation", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(source, /workflow-settings-block/);
+  assert.match(source, /workflow-tier-choices/);
+  assert.match(source, /state\.answers\.selected_tiers = normalizeSelectedTierValues/);
+  assert.match(source, /appendWorkflowNumberSetting\("num_seq_per_tier"/);
+  assert.match(source, /appendWorkflowNumberSetting\("af2_max_candidates_per_tier"/);
+  assert.match(source, /appendWorkflowNumberSetting\("rfd3_max_return_designs"/);
+  assert.match(source, /appendWorkflowNumberSetting\("bioemu_num_samples"/);
 });
 
 test("rounds layout separates creation and management actions into dedicated rows", () => {
