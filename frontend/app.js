@@ -879,6 +879,7 @@ const el = {
   fastCustomRunIdInput: document.getElementById("fastCustomRunIdInput"),
   evolutionCustomRunIdInput: document.getElementById("evolutionCustomRunIdInput"),
   setupStepper: document.getElementById("setupStepper"),
+  setupStepSummary: document.getElementById("setupStepSummary"),
   setupStepMeta: document.getElementById("setupStepMeta"),
   setupStepDots: document.getElementById("setupStepDots"),
   setupStepPrev: document.getElementById("setupStepPrev"),
@@ -2125,6 +2126,7 @@ const I18N = {
     "fast.error.targetRequired": "Paste a PDB or FASTA in Fast before launching.",
     "fast.message.reviewReady":
       "Fast defaults were copied into Advanced. Adjust sequence conservation or counts before launching if needed.",
+    "fast.message.advancedOpened": "Advanced is open. Add a target in the Input step when you are ready.",
     "fast.message.fileLoaded": "Loaded {name} into Fast target input.",
     "copilot.open": "Copilot",
     "copilot.title": "Context Copilot",
@@ -2918,6 +2920,16 @@ const I18N = {
     "setup.wizard.stepMeta": "Step {current}/{total}: {label}",
     "setup.wizard.prev": "Previous",
     "setup.wizard.next": "Next",
+    "setup.stepSummary.input.title": "Input first",
+    "setup.stepSummary.input.help": "Attach the PDB or FASTA target, add optional notes, and import paper-derived constraints.",
+    "setup.stepSummary.workflow.title": "Choose the workflow path",
+    "setup.stepSummary.workflow.help": "Pick the run mode, stage range, and major engines before tuning thresholds.",
+    "setup.stepSummary.criteria.title": "Set candidate criteria",
+    "setup.stepSummary.criteria.help": "Control conservation tiers, candidate counts, filters, and quality cutoffs in one place.",
+    "setup.stepSummary.expert.title": "Expert overrides",
+    "setup.stepSummary.expert.help": "Use only when you need RFD3 mode details, target RMSD gates, or fixed-position overrides.",
+    "setup.stepSummary.review.title": "Review and launch",
+    "setup.stepSummary.review.help": "Confirm the run shape and required inputs before submitting the job.",
     "setup.review.title": "Review Run Setup",
     "setup.review.mode": "Mode",
     "setup.review.stages": "Stages",
@@ -3389,6 +3401,7 @@ const I18N = {
     "fast.error.targetRequired": "Fast 실행 전에 PDB 또는 FASTA를 붙여 넣으세요.",
     "fast.message.reviewReady":
       "Fast 기본값을 Advanced로 복사했습니다. 필요하면 서열 보존율이나 개수를 조정한 뒤 실행하세요.",
+    "fast.message.advancedOpened": "Advanced를 열었습니다. 준비되면 Input 단계에서 타깃을 추가하세요.",
     "fast.message.fileLoaded": "{name} 파일을 Fast 타깃 입력에 불러왔습니다.",
     "copilot.open": "Copilot",
     "copilot.title": "Context Copilot",
@@ -4182,6 +4195,16 @@ const I18N = {
     "setup.wizard.stepMeta": "{current}/{total} 단계: {label}",
     "setup.wizard.prev": "이전",
     "setup.wizard.next": "다음",
+    "setup.stepSummary.input.title": "입력부터 시작",
+    "setup.stepSummary.input.help": "PDB 또는 FASTA 타깃을 첨부하고, 선택 메모와 논문 기반 제약 조건을 추가합니다.",
+    "setup.stepSummary.workflow.title": "워크플로우 경로 선택",
+    "setup.stepSummary.workflow.help": "컷오프를 조정하기 전에 실행 모드, 단계 범위, 주요 엔진을 먼저 정합니다.",
+    "setup.stepSummary.criteria.title": "후보 평가 기준 설정",
+    "setup.stepSummary.criteria.help": "보존도 티어, 후보 수, 필터, 품질 기준을 한 곳에서 조정합니다.",
+    "setup.stepSummary.expert.title": "전문가용 override",
+    "setup.stepSummary.expert.help": "RFD3 세부 모드, target RMSD gate, 고정 위치 override가 필요할 때만 사용합니다.",
+    "setup.stepSummary.review.title": "검토 후 실행",
+    "setup.stepSummary.review.help": "작업 형태와 필수 입력을 확인한 뒤 제출합니다.",
     "setup.review.title": "실행 설정 검토",
     "setup.review.mode": "모드",
     "setup.review.stages": "단계",
@@ -7934,6 +7957,28 @@ function questionSetupStepId(questionId) {
   return "criteria";
 }
 
+function renderSetupStepSummary(stepId = activeSetupWizardStepId()) {
+  if (!el.setupStepSummary) return;
+  const normalizedStepId = String(stepId || "input").trim() || "input";
+  const titleKey = `setup.stepSummary.${normalizedStepId}.title`;
+  const helpKey = `setup.stepSummary.${normalizedStepId}.help`;
+
+  el.setupStepSummary.classList.remove("hidden");
+  el.setupStepSummary.dataset.step = normalizedStepId;
+  el.setupStepSummary.replaceChildren();
+
+  const title = document.createElement("div");
+  title.className = "setup-step-summary-title";
+  title.textContent = t(titleKey);
+
+  const help = document.createElement("div");
+  help.className = "setup-step-summary-help";
+  help.textContent = t(helpKey);
+
+  el.setupStepSummary.appendChild(title);
+  el.setupStepSummary.appendChild(help);
+}
+
 function isSetupWizardFinalStep() {
   const lastIndex = SETUP_WIZARD_STEPS.length - 1;
   return Number(state.setupStepIndex || 0) >= lastIndex;
@@ -7947,6 +7992,7 @@ function renderSetupWizard(questions) {
   if (!enabled) {
     state.setupStepIndex = 0;
     el.setupStepper.classList.add("hidden");
+    if (el.setupStepSummary) el.setupStepSummary.classList.add("hidden");
     return questions;
   }
 
@@ -7955,6 +8001,7 @@ function renderSetupWizard(questions) {
   const activeStepId = activeSetupWizardStepId();
 
   el.setupStepper.classList.remove("hidden");
+  renderSetupStepSummary(activeStepId);
   const label = t(SETUP_WIZARD_STEPS[currentStep].labelKey);
   el.setupStepMeta.textContent = t("setup.wizard.stepMeta", {
     current: currentStep + 1,
@@ -10050,6 +10097,24 @@ function buildFastLaunchPresetFromUi() {
   });
 }
 
+function openAdvancedFromFast() {
+  const targetInput = String(el.fastTargetInput?.value || "").trim();
+  if (targetInput) {
+    const preset = buildFastLaunchPresetFromUi();
+    applyFastLaunchPresetToState(preset);
+    setActiveTab("advanced");
+    setMessage(t("fast.message.reviewReady"), "ai");
+    return;
+  }
+
+  ensureManualPlan();
+  state.setupStepIndex = 0;
+  renderQuestions(state.plan?.questions || []);
+  updateRunEligibility(state.plan?.questions || []);
+  setActiveTab("advanced");
+  setMessage(t("fast.message.advancedOpened"), "ai");
+}
+
 async function loadFastTargetFile(file) {
   if (!file || typeof file.text !== "function") return;
   const text = await file.text();
@@ -10082,16 +10147,7 @@ function initFastLauncher() {
     event.target.value = "";
   });
   el.fastOpenAdvancedBtn?.addEventListener("click", () => {
-    const targetInput = String(el.fastTargetInput?.value || "").trim();
-    if (!targetInput) {
-      setMessage(t("fast.error.targetRequired"), "ai");
-      setActiveTab("fast");
-      return;
-    }
-    const preset = buildFastLaunchPresetFromUi();
-    applyFastLaunchPresetToState(preset);
-    setActiveTab("advanced");
-    setMessage(t("fast.message.reviewReady"), "ai");
+    openAdvancedFromFast();
   });
   el.fastRunBtn?.addEventListener("click", async () => {
     const targetInput = String(el.fastTargetInput?.value || "").trim();
@@ -14174,6 +14230,7 @@ function renderQuestions(questions) {
 
   if (!questions.length) {
     if (el.setupStepper) el.setupStepper.classList.add("hidden");
+    if (el.setupStepSummary) el.setupStepSummary.classList.add("hidden");
     el.runBtn.disabled = false;
     el.runHint.textContent = t("hint.none");
     return;

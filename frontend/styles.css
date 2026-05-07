@@ -3,7 +3,7 @@
 );
 
 :root {
-  --surface-canvas: oklch(98.4% 0.003 247.858);
+  --surface-canvas: oklch(98.5% 0.002 247.839);
   --surface-panel: #ffffff;
   --surface-muted: oklch(96.8% 0.007 247.896);
   --text-strong: oklch(12.9% 0.042 264.695);
@@ -47,15 +47,15 @@ body {
   min-height: 100vh;
   font-family: "Instrument Sans", "Space Grotesk", sans-serif;
   color: var(--ink);
-  background: linear-gradient(180deg, #f8f4ec 0%, var(--bg) 48%, var(--bg-deep) 100%);
+  background: linear-gradient(180deg, #f8fafc 0%, var(--bg) 48%, var(--bg-deep) 100%);
   overflow-x: hidden;
 }
 
 .bg-grid {
   position: fixed;
   inset: 0;
-  background-image: linear-gradient(to right, rgba(15, 122, 119, 0.06) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(15, 122, 119, 0.06) 1px, transparent 1px);
+  background-image: linear-gradient(to right, rgba(51, 65, 85, 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(51, 65, 85, 0.055) 1px, transparent 1px);
   background-size: 80px 80px;
   opacity: 0.26;
   pointer-events: none;
@@ -152,7 +152,7 @@ body[data-environment="staging"] .topbar {
   padding: 4px;
   border-radius: 999px;
   border: 1px solid rgba(24, 41, 46, 0.12);
-  background: rgba(255, 253, 248, 0.86);
+  background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 10px 24px rgba(20, 30, 34, 0.08);
 }
 
@@ -200,7 +200,7 @@ body[data-environment="staging"] .topbar {
   padding: 24px 18px;
   border-radius: 28px;
   border: 1px solid var(--sidebar-edge);
-  background: linear-gradient(180deg, rgba(255, 253, 248, 0.94), var(--sidebar-surface));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), var(--sidebar-surface));
   box-shadow: 0 24px 48px rgba(18, 31, 33, 0.1);
   backdrop-filter: blur(10px);
   overflow: hidden;
@@ -211,7 +211,7 @@ body[data-environment="staging"] .topbar {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at top right, rgba(168, 221, 212, 0.18), transparent 34%),
+    radial-gradient(circle at top right, rgba(125, 211, 252, 0.15), transparent 34%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.4), transparent 42%);
   pointer-events: none;
 }
@@ -502,8 +502,8 @@ body[data-environment="staging"] .topbar {
   padding: 30px;
   border-color: color-mix(in oklch, var(--action-primary) 24%, transparent);
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(241, 248, 246, 0.94)),
-    linear-gradient(90deg, rgba(20, 184, 166, 0.14), rgba(16, 185, 129, 0.1));
+    linear-gradient(135deg, rgba(255, 255, 255, 0.99), rgba(241, 245, 249, 0.94)),
+    linear-gradient(90deg, rgba(14, 165, 233, 0.1), rgba(20, 184, 166, 0.08));
 }
 
 .launchpad-eyebrow {
@@ -596,7 +596,7 @@ body[data-environment="staging"] .topbar {
 .mode-shell-placeholder {
   border: 1px solid rgba(24, 41, 46, 0.08);
   border-radius: var(--radius-sm);
-  background: linear-gradient(180deg, rgba(255, 253, 248, 0.98), rgba(248, 245, 239, 0.9));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.9));
   box-shadow: 0 18px 36px rgba(18, 31, 33, 0.08);
 }
 
@@ -625,7 +625,7 @@ body[data-environment="staging"] .topbar {
   inset: 0 0 auto 0;
   height: 3px;
   border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  background: linear-gradient(90deg, rgba(15, 122, 119, 0.92), rgba(168, 221, 212, 0.74));
+  background: linear-gradient(90deg, rgba(14, 116, 144, 0.92), rgba(14, 165, 233, 0.62));
 }
 
 .home-mode-card::after {
@@ -680,7 +680,7 @@ body[data-environment="staging"] .topbar {
   padding: 16px 18px;
   border-radius: 20px;
   border: 1px solid rgba(24, 41, 46, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(250, 246, 239, 0.88));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 250, 252, 0.9));
   box-shadow: 0 12px 28px rgba(21, 31, 36, 0.07);
   min-width: 0;
 }
@@ -910,8 +910,8 @@ body[data-environment="staging"] .topbar {
 .criteria-board {
   border-color: color-mix(in oklch, var(--state-success) 20%, transparent);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(244, 250, 248, 0.94)),
-    linear-gradient(90deg, rgba(16, 185, 129, 0.08), rgba(245, 158, 11, 0.06));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95)),
+    linear-gradient(90deg, rgba(14, 165, 233, 0.06), rgba(16, 185, 129, 0.05));
 }
 
 .fast-inline-actions,
@@ -983,7 +983,7 @@ body[data-environment="staging"] .topbar {
   padding: 18px;
   border-radius: 22px;
   border: 1px solid rgba(24, 41, 46, 0.08);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 245, 239, 0.9));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.92));
   box-shadow: 0 14px 28px rgba(21, 31, 36, 0.06);
 }
 
@@ -1437,8 +1437,8 @@ body[data-environment="staging"] .topbar {
 .setup-lane {
   background: rgba(255, 255, 255, 0.98);
   border-radius: var(--radius-sm);
-  border: 1px solid rgba(16, 42, 45, 0.1);
-  box-shadow: 0 8px 18px rgba(16, 42, 45, 0.08);
+  border: 1px solid rgba(51, 65, 85, 0.1);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
   padding: 16px;
   display: flex;
   flex-direction: column;
@@ -1467,6 +1467,38 @@ body[data-environment="staging"] .topbar {
   margin: 0;
   font-size: 12px;
   color: var(--ink-soft);
+}
+
+.advanced-launch-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(51, 65, 85, 0.1);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
+}
+
+.setup-step-summary {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(14, 116, 144, 0.16);
+  border-radius: var(--radius-sm);
+  background: rgba(240, 249, 255, 0.72);
+}
+
+.setup-step-summary-title {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.setup-step-summary-help {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .setup-stepper {
@@ -1518,13 +1550,14 @@ body[data-environment="staging"] .topbar {
 }
 
 .setup-lane-execution .section-stack {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
 .setup-lane-execution .section-stack.workflow-layout {
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
 }
 
 .setup-lane-execution .section-stack > .question-card {
@@ -1838,9 +1871,9 @@ textarea:focus-visible {
 .question-card {
   padding: 14px;
   border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(16, 42, 45, 0.1);
-  box-shadow: 0 2px 8px rgba(16, 42, 45, 0.07);
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(51, 65, 85, 0.1);
+  box-shadow: none;
   animation: fadeUp 0.35s ease;
 }
 
@@ -1883,7 +1916,7 @@ textarea:focus-visible {
 
 .choice-btn {
   border: 1px solid rgba(16, 42, 45, 0.2);
-  background: rgba(255, 249, 235, 0.8);
+  background: rgba(241, 245, 249, 0.82);
   color: var(--ink);
   border-radius: 999px;
   padding: 6px 12px;
@@ -2116,7 +2149,7 @@ textarea:focus-visible {
 }
 
 .parameter-board {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), var(--surface-muted));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 250, 252, 0.96));
 }
 
 .mode-guide {
@@ -2159,7 +2192,7 @@ textarea:focus-visible {
 }
 
 .option-board {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), var(--surface-muted));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96));
 }
 
 .parameter-board-grid {
@@ -2282,8 +2315,8 @@ textarea:focus-visible {
 .attachment-item {
   padding: 12px;
   border-radius: 12px;
-  background: rgba(255, 249, 235, 0.8);
-  border: 1px dashed rgba(16, 42, 45, 0.2);
+  background: rgba(248, 250, 252, 0.92);
+  border: 1px dashed rgba(51, 65, 85, 0.18);
 }
 
 .attachment-item.required {
@@ -3415,7 +3448,7 @@ textarea:focus-visible {
 }
 
 .status-card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(250, 246, 239, 0.92));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.92));
   border-radius: 20px;
   padding: 16px;
   border: 1px solid rgba(24, 41, 46, 0.08);

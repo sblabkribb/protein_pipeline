@@ -473,15 +473,6 @@
                   </div>
 
                   <div id="questionInputStack" class="question-stack section-stack"></div>
-                </section>
-
-                <section class="setup-lane setup-lane-execution">
-                  <div class="setup-section-title">
-                    <h3 data-i18n="setup.section.execution">Execution Settings</h3>
-                    <p data-i18n="setup.section.executionDesc">
-                      Select run mode and configure pipeline options.
-                    </p>
-                  </div>
 
                   <!-- Literature-Driven Masking UI (Advanced) -->
                   <div class="paper-mask-panel field-group paper-mask-panel-advanced">
@@ -502,31 +493,43 @@
                       </div>
                     </div>
                   </div>
+                </section>
 
-                  <div id="setupStepper" class="setup-stepper hidden">
-                    <div id="setupStepMeta" class="setup-step-meta"></div>
-                    <div id="setupStepDots" class="setup-step-dots"></div>
-                    <div class="setup-step-actions">
-                      <button id="setupStepPrev" class="ghost" type="button"></button>
-                      <button id="setupStepNext" class="ghost" type="button"></button>
-                    </div>
+                <section class="setup-lane setup-lane-execution">
+                  <div class="setup-section-title">
+                    <h3 data-i18n="setup.section.execution">Execution Settings</h3>
+                    <p data-i18n="setup.section.executionDesc">
+                      Select run mode and configure pipeline options.
+                    </p>
                   </div>
-                  <div id="questionConfigStack" class="question-stack section-stack"></div>
-                  
-                  <label class="fast-field setup-custom-run-field">
-                    <span data-i18n="setup.customRunId.label">Custom Run ID</span>
-                    <small data-i18n="setup.customRunId.help">Leave empty for auto-generation.</small>
-                    <input id="customRunIdInput" type="text" placeholder="custom_run_01" />
-                  </label>
 
-                  <div class="run-actions">
-                    <button id="runBtn" class="primary" disabled>Run</button>
-                    <div id="runHint" class="hint" data-i18n="setup.hint">
-                      Complete required inputs to enable execution.
+                  <div class="advanced-launch-frame">
+                    <div id="setupStepSummary" class="setup-step-summary hidden"></div>
+                    <div id="setupStepper" class="setup-stepper hidden">
+                      <div id="setupStepMeta" class="setup-step-meta"></div>
+                      <div id="setupStepDots" class="setup-step-dots"></div>
+                      <div class="setup-step-actions">
+                        <button id="setupStepPrev" class="ghost" type="button"></button>
+                        <button id="setupStepNext" class="ghost" type="button"></button>
+                      </div>
                     </div>
-                  </div>
-                  <div id="runInlineStatus" class="run-inline-status" data-i18n="setup.runStatus.empty">
-                    Run status: -
+                    <div id="questionConfigStack" class="question-stack section-stack"></div>
+
+                    <label class="fast-field setup-custom-run-field">
+                      <span data-i18n="setup.customRunId.label">Custom Run ID</span>
+                      <small data-i18n="setup.customRunId.help">Leave empty for auto-generation.</small>
+                      <input id="customRunIdInput" type="text" placeholder="custom_run_01" />
+                    </label>
+
+                    <div class="run-actions">
+                      <button id="runBtn" class="primary" disabled>Run</button>
+                      <div id="runHint" class="hint" data-i18n="setup.hint">
+                        Complete required inputs to enable execution.
+                      </div>
+                    </div>
+                    <div id="runInlineStatus" class="run-inline-status" data-i18n="setup.runStatus.empty">
+                      Run status: -
+                    </div>
                   </div>
                 </section>
               </div>

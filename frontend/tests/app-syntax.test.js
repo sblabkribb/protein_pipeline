@@ -172,3 +172,35 @@ test("advanced paper mask UI is class-driven", () => {
   assert.doesNotMatch(html, /style="/);
   assert.doesNotMatch(source, /item\.style\.cssText/);
 });
+
+test("fast advanced action opens advanced without requiring target input", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(source, /function openAdvancedFromFast\(\)/);
+  assert.match(
+    source,
+    /fastOpenAdvancedBtn\?\.[\s\S]*?addEventListener\("click", \(\) => \{\s*openAdvancedFromFast\(\);\s*\}\);/
+  );
+});
+
+test("advanced launch form uses a single ordered settings surface", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.match(html, /class="advanced-launch-frame"/);
+  assert.match(html, /id="setupStepSummary"/);
+  assert.match(source, /function renderSetupStepSummary/);
+  assert.match(styles, /\.advanced-launch-frame/);
+  assert.match(styles, /\.setup-step-summary/);
+});
+
+test("platform palette avoids beige-dominant application backgrounds", () => {
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.doesNotMatch(styles, /#f8f4ec/);
+  assert.doesNotMatch(styles, /255,\s*253,\s*248/);
+  assert.doesNotMatch(styles, /255,\s*249,\s*235/);
+  assert.doesNotMatch(styles, /248,\s*245,\s*239/);
+  assert.match(styles, /--surface-canvas:\s*oklch\(98\.5% 0\.002 247\.839\)/);
+});
