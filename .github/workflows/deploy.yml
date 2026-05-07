@@ -30,13 +30,13 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
 
@@ -73,7 +73,7 @@ jobs:
     runs-on: [self-hosted, protein-pipeline, deploy]
     environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'prod' && 'production' || github.event_name == 'workflow_dispatch' && inputs.environment == 'staging' && 'staging' || startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref == 'refs/heads/staging' && 'staging' || 'development' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Resolve deployment target
         id: target
