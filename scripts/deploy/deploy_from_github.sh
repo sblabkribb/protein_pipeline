@@ -52,6 +52,11 @@ fi
 venv/bin/python3 -m pip install --upgrade pip
 venv/bin/python3 -m pip install -r pipeline-mcp/requirements.txt
 
+if [[ -f frontend/package-lock.json ]]; then
+  npm --prefix frontend ci
+  npm --prefix frontend run build
+fi
+
 if [[ "$(id -u)" -eq 0 ]]; then
   systemctl restart "$service_name"
 else

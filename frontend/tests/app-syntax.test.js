@@ -79,3 +79,19 @@ test("frontend has Vite and Tailwind build wiring", () => {
   assert.match(viteConfig, /tailwindcss\(\)/);
   assert.match(tailwindEntry, /@import "tailwindcss"/);
 });
+
+test("frontend build runs in deployment checks and local deploy", () => {
+  const workflow = readFileSync(
+    new URL("../../.github/workflows/deploy.yml", import.meta.url),
+    "utf8"
+  );
+  const deployScript = readFileSync(
+    new URL("../../scripts/deploy/deploy_from_github.sh", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(workflow, /npm --prefix frontend ci/);
+  assert.match(workflow, /npm --prefix frontend run build/);
+  assert.match(deployScript, /npm --prefix frontend ci/);
+  assert.match(deployScript, /npm --prefix frontend run build/);
+});

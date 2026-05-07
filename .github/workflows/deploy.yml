@@ -59,6 +59,7 @@ jobs:
 
       - name: Run frontend deployment checks
         run: |
+          npm --prefix frontend ci
           node --test \
             frontend/tests/app-syntax.test.js \
             frontend/tests/auth-session.test.js \
@@ -67,6 +68,7 @@ jobs:
             frontend/tests/mcp-tab.test.js \
             frontend/tests/runpod-admin.test.js
           (cd frontend && node --test tests/logout-bridge.test.js)
+          npm --prefix frontend run build
 
   deploy:
     needs: test
