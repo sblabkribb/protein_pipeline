@@ -70,7 +70,7 @@ jobs:
 
   deploy:
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, protein-pipeline, deploy]
     environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment == 'prod' && 'production' || github.event_name == 'workflow_dispatch' && inputs.environment == 'staging' && 'staging' || startsWith(github.ref, 'refs/tags/v') && 'production' || github.ref == 'refs/heads/staging' && 'staging' || 'development' }}
     steps:
       - uses: actions/checkout@v4
@@ -90,33 +90,10 @@ jobs:
           fi
           echo "target=${target}" >> "${GITHUB_OUTPUT}"
 
-      - name: Configure SSH
+      - name: Deploy locally
         shell: bash
         env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
-          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
-          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
-          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
-        run: |
-          install -m 700 -d ~/.ssh
-          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          if [[ -n "${DEPLOY_KNOWN_HOSTS}" ]]; then
-            printf '%s\n' "${DEPLOY_KNOWN_HOSTS}" > ~/.ssh/known_hosts
-          else
-            ssh-keyscan -p "${DEPLOY_SSH_PORT}" "${DEPLOY_SSH_HOST}" > ~/.ssh/known_hosts
-          fi
-          chmod 644 ~/.ssh/known_hosts
-
-      - name: Deploy on server
-        shell: bash
-        env:
-          DEPLOY_SSH_HOST: ${{ secrets.DEPLOY_SSH_HOST }}
-          DEPLOY_SSH_USER: ${{ secrets.DEPLOY_SSH_USER }}
-          DEPLOY_SSH_PORT: ${{ secrets.DEPLOY_SSH_PORT || '22' }}
           DEPLOY_TARGET: ${{ steps.target.outputs.target }}
           DEPLOY_SHA: ${{ github.sha }}
         run: |
-          ssh -p "${DEPLOY_SSH_PORT}" "${DEPLOY_SSH_USER}@${DEPLOY_SSH_HOST}" \
-            "DEPLOY_TARGET='${DEPLOY_TARGET}' DEPLOY_SHA='${DEPLOY_SHA}' bash -s" \
-            < scripts/deploy/deploy_from_github.sh
+          bash scripts/deploy/deploy_from_github.sh
