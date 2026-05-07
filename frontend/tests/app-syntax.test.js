@@ -56,3 +56,26 @@ test("non-production hosts get visible environment badges", () => {
   assert.match(styles, /body\[data-environment="development"\]/);
   assert.match(styles, /body\[data-environment="staging"\]/);
 });
+
+test("frontend has Vite and Tailwind build wiring", () => {
+  const packageJson = JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8")
+  );
+  const viteConfig = readFileSync(
+    new URL("../vite.config.mjs", import.meta.url),
+    "utf8"
+  );
+  const tailwindEntry = readFileSync(
+    new URL("../tailwind-entry.css", import.meta.url),
+    "utf8"
+  );
+
+  assert.equal(packageJson.scripts.build, "vite build");
+  assert.equal(packageJson.scripts.dev, "vite --host 127.0.0.1");
+  assert.ok(packageJson.devDependencies.vite);
+  assert.ok(packageJson.devDependencies.tailwindcss);
+  assert.ok(packageJson.devDependencies["@tailwindcss/vite"]);
+  assert.match(viteConfig, /@tailwindcss\/vite/);
+  assert.match(viteConfig, /tailwindcss\(\)/);
+  assert.match(tailwindEntry, /@import "tailwindcss"/);
+});

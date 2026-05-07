@@ -41,6 +41,7 @@ rfd3-runpod/
 *.tsv
 *.pdf
 *.json
+!/frontend/package-lock.json
 /af2_wt_*_job.json
 
 # --- Public release package allowlist ---
@@ -76,6 +77,10 @@ ENV/
 Thumbs.db
 .vscode/
 .worktrees/
+
+# --- Frontend ---
+/frontend/node_modules/
+/frontend/dist/
 
 # --- docs ---
 manuscript (5).docx
