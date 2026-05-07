@@ -138,7 +138,7 @@ const OIDC_VERIFIER_KEY = "kbf.oidc.verifier";
 
 const LANG_KEY = "kbf.lang";
 const LANG_OPTIONS = ["en", "ko"];
-const TUTORIAL_STORAGE_KEY = "kbf.tutorial.completed.v1";
+const TUTORIAL_STORAGE_KEY = "kbf.tutorial.completed.v2";
 const REPORT_LANG_KEY = "kbf.reportLang";
 const REPORT_LANG_OPTIONS = ["auto", "en", "ko"];
 const WORKFLOW_PLAN_STORAGE_KEY = "kbf.workflowPlans";

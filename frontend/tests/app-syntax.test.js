@@ -217,7 +217,7 @@ test("frontend includes a localized first-run tutorial overlay", () => {
   assert.match(html, /id="tutorialSkip"/);
   assert.match(html, /id="tutorialNext"/);
 
-  assert.match(source, /const TUTORIAL_STORAGE_KEY = "kbf\.tutorial\.completed\.v1"/);
+  assert.match(source, /const TUTORIAL_STORAGE_KEY = "kbf\.tutorial\.completed\.v2"/);
   assert.match(source, /const TUTORIAL_STEPS = \[/);
   assert.match(source, /function maybeShowTutorialOnFirstVisit/);
   assert.match(source, /function openTutorial/);
