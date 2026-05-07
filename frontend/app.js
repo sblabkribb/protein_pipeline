@@ -14255,7 +14255,7 @@ function renderQuestions(questions) {
 
     const createField = (question) => {
       const field = document.createElement("div");
-      field.className = "parameter-field option-field";
+      field.className = "parameter-field option-field expert-option";
 
       const label = document.createElement("div");
       label.className = "parameter-label";
@@ -15461,7 +15461,7 @@ function renderQuestions(questions) {
 
     advancedConstraintQuestions.forEach((q) => {
       const field = document.createElement("div");
-      field.className = "parameter-field option-field" + (q.required ? " required" : "");
+      field.className = "parameter-field option-field expert-option" + (q.required ? " required" : "");
 
       const label = document.createElement("div");
       label.className = "parameter-label";

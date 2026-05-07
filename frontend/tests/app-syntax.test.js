@@ -104,3 +104,14 @@ test("advanced setup uses a staged wizard with a final review step", () => {
   assert.match(source, /setup\.wizard\.review/);
   assert.match(source, /function renderSetupReviewCard/);
 });
+
+test("advanced setup visual hierarchy uses compact review and expert styling", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.doesNotMatch(styles, /\.bg-orb/);
+  assert.match(styles, /--radius-sm:\s*8px/);
+  assert.match(styles, /\.setup-review-card/);
+  assert.match(styles, /\.expert-option/);
+  assert.match(html, /class="setup-ux-grid setup-primary-layout"/);
+});
