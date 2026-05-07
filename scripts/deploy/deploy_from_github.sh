@@ -58,5 +58,16 @@ else
   sudo systemctl restart "$service_name"
 fi
 
-curl -fsS "http://127.0.0.1:${health_port}/healthz"
-echo
+for attempt in {1..30}; do
+  if curl -fsS "http://127.0.0.1:${health_port}/healthz"; then
+    echo
+    exit 0
+  fi
+  sleep 1
+done
+
+echo "Health check failed for ${service_name} on port ${health_port}." >&2
+if command -v journalctl >/dev/null 2>&1; then
+  journalctl -u "$service_name" -n 80 --no-pager >&2 || true
+fi
+exit 4
