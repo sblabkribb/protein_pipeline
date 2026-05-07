@@ -10,7 +10,7 @@
 - Benchmark scripts: `scripts/benchmark/`
 - Benchmark data and cached results: `data/benchmark/`
 - Representative direct/evolution case-study summaries: `data/case_studies/`
-- QC-filtered CATH expansion summaries: `data/cath_curated/`
+- QC-filtered CATH benchmark summaries: `data/cath_curated/`
 - Raw expanded 73-run CATH archive summaries: `data/cath_73/`
 - Figures and tables: `figures/benchmark/`
 - Manuscript draft: `manuscript/`

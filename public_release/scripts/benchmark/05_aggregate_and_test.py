@@ -9,9 +9,9 @@ Outputs (under data/benchmark/results/):
     pairwise_wilcoxon_exp1.csv    - paired Wilcoxon vs RF (Holm-Bonferroni adjusted)
     sample_size_uplift_table.csv  - N_train -> mean BO uplift for the paper
 
-Bootstrap is target-aware: we resample 15 targets with replacement, then average
-within each bootstrap sample (cluster bootstrap). This respects the per-target
-correlation structure that a naive observation-level bootstrap would ignore.
+Bootstrap is target-aware: we resample target clusters with replacement, then
+average within each bootstrap sample. This respects the per-target correlation
+structure that a naive observation-level bootstrap would ignore.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path("/opt/protein_pipeline")
 RESULTS_DIR = PROJECT_ROOT / "data" / "benchmark" / "results"
 
 EXP1 = RESULTS_DIR / "exp1_model_comparison.parquet"

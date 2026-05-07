@@ -6961,8 +6961,9 @@ def _pipeline_run_schema() -> dict[str, Any]:
             },
             "evolution_surrogate_model": {
                 "type": "string",
-                "enum": ["rf", "lightgbm", "xgboost"],
-                "description": "Surrogate model used by evolution mode (default rf)",
+                "enum": ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
+                "default": "rf",
+                "description": "Surrogate model used by evolution mode. RF is the default pLDDT triage model; Ridge and ensemble are optional alternatives.",
             },
             "use_memory_bank": {
                 "type": "boolean",

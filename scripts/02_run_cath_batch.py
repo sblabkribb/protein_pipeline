@@ -70,13 +70,122 @@ def _ensure_pipeline_imports() -> None:
     ToolDispatcher = imported_tool_dispatcher
 
 
-def build_cath_request(pdb_content: str) -> PipelineRequest:
+def _first_model_pdb_text(pdb_content: str) -> str:
+    """Return a single-model PDB so NMR ensembles do not duplicate residues."""
+    lines = pdb_content.splitlines()
+    has_model = any(line.startswith("MODEL") for line in lines)
+    if not has_model:
+        return pdb_content
+
+    out: list[str] = []
+    in_first_model = False
+    seen_first_model = False
+    finished_first_model = False
+    for raw in lines:
+        if raw.startswith("MODEL"):
+            if not seen_first_model:
+                seen_first_model = True
+                in_first_model = True
+            else:
+                finished_first_model = True
+                in_first_model = False
+            continue
+        if raw.startswith("ENDMDL"):
+            if in_first_model:
+                finished_first_model = True
+                in_first_model = False
+            continue
+        if finished_first_model:
+            continue
+        if in_first_model:
+            out.append(raw)
+            continue
+        if not seen_first_model:
+            out.append(raw)
+    if not out or out[-1].strip() != "END":
+        out.append("END")
+    return "\n".join(out) + "\n"
+
+
+def _cath_chain_from_target_id(target_id: str | None) -> str | None:
+    clean = str(target_id or "").strip()
+    if len(clean) < 5:
+        return None
+    chain = clean[4]
+    return chain if chain.strip() else None
+
+
+def _protein_chain_rank(seq: str) -> tuple[float, int, int]:
+    canonical = set("ACDEFGHIKLMNPQRSTVWY")
+    clean = "".join(ch for ch in str(seq or "").upper() if ch.isalpha())
+    informative = sum(1 for ch in clean if ch in canonical)
+    length = len(clean)
+    fraction = float(informative) / float(length) if length else 0.0
+    return fraction, informative, length
+
+
+def _resolve_cath_design_chain(
+    pdb_content: str,
+    *,
+    target_id: str | None,
+) -> tuple[str | None, str | None]:
+    from pipeline_mcp.bio.pdb import sequence_by_chain
+
+    seq_by_chain = sequence_by_chain(pdb_content)
+    if not seq_by_chain:
+        return None, None
+
+    requested = _cath_chain_from_target_id(target_id)
+    if requested:
+        if requested in seq_by_chain:
+            return requested, seq_by_chain[requested]
+        requested_lower = requested.lower()
+        for chain_id, seq in seq_by_chain.items():
+            if chain_id.lower() == requested_lower:
+                return chain_id, seq
+
+    ranked = sorted(
+        seq_by_chain.items(),
+        key=lambda item: _protein_chain_rank(item[1]),
+        reverse=True,
+    )
+    chain_id, sequence = ranked[0]
+    return chain_id, sequence
+
+
+def _target_fasta_for_cath(
+    *,
+    target_id: str | None,
+    chain_id: str | None,
+    sequence: str | None,
+) -> str:
+    seq = "".join(ch for ch in str(sequence or "").upper() if ch.isalpha())
+    if not seq:
+        return ""
+    label = str(target_id or "cath_target").strip() or "cath_target"
+    if chain_id:
+        label = f"{label}_{chain_id}"
+    return f">{label}\n{seq}\n"
+
+
+def build_cath_request(pdb_content: str, target_id: str | None = None) -> PipelineRequest:
     _ensure_pipeline_imports()
+    normalized_pdb = _first_model_pdb_text(pdb_content)
+    design_chain, target_sequence = _resolve_cath_design_chain(
+        normalized_pdb,
+        target_id=target_id,
+    )
+    design_chains = [design_chain] if design_chain else None
     return PipelineRequest(
-        target_fasta="",
-        target_pdb=pdb_content,
+        target_fasta=_target_fasta_for_cath(
+            target_id=target_id,
+            chain_id=design_chain,
+            sequence=target_sequence,
+        ),
+        target_pdb=normalized_pdb,
         rfd3_use=False,
         mmseqs_target_db="uniref90",
+        design_chains=design_chains,
         conservation_tiers=[0.3, 0.5, 0.7],
         ligand_mask_distance=6.0,
         ligand_mask_use_original_target=True,
@@ -382,7 +491,7 @@ def process_target(
             if GLOBAL_STOP_EVENT:
                 return False
             try:
-                request = build_cath_request(pdb_content)
+                request = build_cath_request(pdb_content, target_id=pdb_path.stem)
 
                 runner.run(request, run_id=run_id)
 

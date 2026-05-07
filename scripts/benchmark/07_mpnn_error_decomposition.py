@@ -4,7 +4,7 @@ Decompose pLDDT variance to separate target-intrinsic difficulty from
 ProteinMPNN sampling noise.
 
 Methodology:
-    Total variance       = Var(plddt across all 1,766 designs)
+    Total variance       = Var(plddt across all benchmark designs)
     Between-target var   = Var of per-target means (target-intrinsic difficulty)
     Within-target var    = Mean of per-target Var (ProteinMPNN sampling noise)
     ICC1 (one-way ANOVA) = sigma^2_between / (sigma^2_between + sigma^2_within)
@@ -128,7 +128,7 @@ def make_figure(df: pd.DataFrame, summary: dict) -> None:
                   label="per-target median")
     ax_strip.axhline(70, color="#888", linestyle="--", linewidth=1,
                      label="pLDDT = 70 (fold success)")
-    ax_strip.set_title("Per-target pLDDT distributions across 120 ProteinMPNN designs")
+    ax_strip.set_title("Per-target pLDDT distributions across ProteinMPNN designs")
     ax_strip.set_xlabel("CATH target (sorted by mean pLDDT)")
     ax_strip.set_ylabel("AlphaFold2 mean pLDDT")
     ax_strip.tick_params(axis="x", rotation=45)

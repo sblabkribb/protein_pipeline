@@ -1,3 +1,3 @@
 selection,rf_overfit_identity_top5,true_overfit_identity_top5,rf_internal_identity_top5,true_internal_identity_top5,rand_internal_identity_top5,rf_top5_mean_plddt,true_top5_mean_plddt,rand_top5_mean_plddt,rf_overfit_identity_top10,true_overfit_identity_top10,rf_internal_identity_top10,true_internal_identity_top10,rand_internal_identity_top10,rf_top10_mean_plddt,true_top10_mean_plddt,rand_top10_mean_plddt
-kmeans,0.8909,0.8881,0.9006,0.8866,0.8578,83.077,84.5574,82.2623,0.8868,0.8813,0.8965,0.8774,0.8598,82.9807,84.0701,82.1204
-random,0.8931,0.8839,0.9025,0.8838,0.846,82.9227,84.4679,81.9815,0.8901,0.8781,0.897,0.8791,0.8549,82.8248,84.0274,82.1724
+kmeans,0.8624,0.8602,0.8912,0.8662,0.8279,92.506,93.0863,91.9526,0.8585,0.8543,0.8871,0.8641,0.8307,92.445,92.8947,91.9097
+random,0.872,0.8571,0.8976,0.862,0.8199,92.5149,93.0916,91.8445,0.87,0.8551,0.8916,0.8617,0.8273,92.4697,92.9162,91.9064

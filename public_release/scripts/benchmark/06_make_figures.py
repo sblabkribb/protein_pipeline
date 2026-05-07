@@ -6,7 +6,7 @@ Outputs (under figures/benchmark/):
     fig3_selection_n_curves.png  - RF BO uplift vs N under random and K-means selection
     fig4_selection_comparison.png - Per-model effect of selection strategy at fixed N=30
     fig5_model_comparison.png    - Exp1: 8 models x (Spearman + BO uplift), 2-panel per surrogate
-    fig7_per_target_heatmap.png  - 15 targets x 8 models RF-relative wins
+    fig7_per_target_heatmap.png  - per-target RF-relative wins
     fig8_sample_size.png         - Exp2: N learning curves, 2-panel per surrogate
     fig9_esm_size.png            - ESM-2 8M (320-D) vs 150M (640-D) embedding ablation
     table2_model_comparison.tex  - LaTeX-ready table for paper section 4
@@ -24,9 +24,10 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path("/opt/protein_pipeline")
 RESULTS_DIR = PROJECT_ROOT / "data" / "benchmark" / "results"
 FIG_DIR = PROJECT_ROOT / "figures" / "benchmark"
+CSV_PATH = PROJECT_ROOT / "data" / "benchmark" / "cath_pilot_dataset.csv"
 
 EXP1 = RESULTS_DIR / "exp1_model_comparison.parquet"
 EXP2 = RESULTS_DIR / "exp2_sample_size.parquet"
@@ -50,6 +51,15 @@ MODEL_COLORS = {
     "Random": "#7f7f7f",
 }
 SURROGATE_LABEL = {"plddt": "pLDDT (ColabFold)", "soluprot": "SoluProt"}
+
+
+def benchmark_scope_label() -> str:
+    """Return a short label that keeps figure titles synchronized with the CSV."""
+    try:
+        n_targets = pd.read_csv(CSV_PATH, usecols=["target"])["target"].nunique()
+    except Exception:
+        return "5 seeds x benchmark targets"
+    return f"5 seeds x {n_targets} targets"
 
 
 def setup_style() -> None:
@@ -91,7 +101,8 @@ def fig2_model_comparison() -> None:
                 ax.set_title(f"{SURROGATE_LABEL[surrogate]}")
 
     fig.suptitle(
-        "Surrogate model comparison (K-Means selection, N=30 train, 90 test, 5 seeds × 15 targets)",
+        "Surrogate model comparison "
+        f"(K-Means selection, N=30 train, held-out pool, {benchmark_scope_label()})",
         fontsize=12, y=1.00,
     )
     fig.tight_layout()
@@ -167,7 +178,8 @@ def fig3_sample_size() -> None:
                 ax.legend(loc="lower right", fontsize=8, framealpha=0.85)
 
     fig.suptitle(
-        "Sample-size ablation (K-Means selection, RF + 3 alternatives, 20-sample held-out, 5 seeds × 15 targets)",
+        "Sample-size ablation "
+        f"(K-Means selection, RF + 3 alternatives, 20-sample held-out, {benchmark_scope_label()})",
         fontsize=12, y=1.00,
     )
     fig.tight_layout()
@@ -334,6 +346,14 @@ def fig4_esm_size() -> None:
         print(f"[skip] {EXP3} missing - run 04_esm_size_ablation.py first")
         return
     df = pd.read_parquet(EXP3)
+    current_targets = pd.read_csv(CSV_PATH, usecols=["target"])["target"].nunique()
+    if df["target"].nunique() != current_targets or df["embedding"].nunique() < 2:
+        print(
+            "[skip] ESM-size figure: exp3 does not match the active benchmark "
+            f"({df['target'].nunique()} vs {current_targets} targets, "
+            f"{df['embedding'].nunique()} embedding size(s))"
+        )
+        return
     metrics = ["spearman", "top5_recall", "bo_uplift_top5"]
     metric_label = {
         "spearman": "Spearman ρ",
@@ -384,7 +404,7 @@ def fig4_esm_size() -> None:
         ax.set_title(metric_label[metric])
         ax.axhline(0, color="black", linewidth=0.6)
     axes[0].legend(loc="upper left", fontsize=8)
-    fig.suptitle("ESM-2 embedding size ablation (RF, N=30, 5 seeds × 15 targets)",
+    fig.suptitle(f"ESM-2 embedding size ablation (RF, N=30, {benchmark_scope_label()})",
                  fontsize=12, y=1.02)
     fig.tight_layout()
     out = FIG_DIR / "fig9_esm_size.png"

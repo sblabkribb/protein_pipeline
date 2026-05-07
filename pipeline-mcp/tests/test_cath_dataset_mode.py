@@ -42,6 +42,57 @@ class TestCathDatasetMode(unittest.TestCase):
         self.assertFalse(bool(request.wt_compare))
         self.assertEqual(str(request.stop_after), "af2")
 
+    def test_build_cath_request_uses_cath_chain_and_first_model_sequence(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        module = _load_module(
+            "run_cath_batch_script_chain_model",
+            repo_root / "scripts" / "02_run_cath_batch.py",
+        )
+
+        pdb = (
+            "HEADER    TEST\n"
+            "MODEL        1\n"
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ENDMDL\n"
+            "MODEL        2\n"
+            "ATOM      3  CA  VAL A   1       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  LEU A   2       3.000   0.000   0.000  1.00 20.00           C\n"
+            "ENDMDL\n"
+            "END\n"
+        )
+
+        request = module.build_cath_request(pdb, target_id="demoA00")
+
+        self.assertEqual(request.design_chains, ["A"])
+        self.assertIn(">demoA00_A", request.target_fasta)
+        self.assertIn("AG", request.target_fasta)
+        self.assertNotIn("VL", request.target_fasta)
+        self.assertNotIn("MODEL        2", request.target_pdb)
+
+    def test_build_cath_request_prefers_chain_from_cath_domain_id(self) -> None:
+        repo_root = Path(__file__).resolve().parents[2]
+        module = _load_module(
+            "run_cath_batch_script_chain_id",
+            repo_root / "scripts" / "02_run_cath_batch.py",
+        )
+
+        pdb = (
+            "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      2  CA  GLY A   2       1.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      3  CA  SER A   3       2.000   0.000   0.000  1.00 20.00           C\n"
+            "ATOM      4  CA  THR B   1       0.000   1.000   0.000  1.00 20.00           C\n"
+            "ATOM      5  CA  TYR B   2       1.000   1.000   0.000  1.00 20.00           C\n"
+            "END\n"
+        )
+
+        request = module.build_cath_request(pdb, target_id="demoB00")
+
+        self.assertEqual(request.design_chains, ["B"])
+        self.assertIn(">demoB00_B", request.target_fasta)
+        self.assertIn("TY", request.target_fasta)
+        self.assertNotIn("AGS", request.target_fasta)
+
     def test_train_cath_surrogate_exports_relax_model(self) -> None:
         repo_root = Path(__file__).resolve().parents[2]
         module = _load_module(

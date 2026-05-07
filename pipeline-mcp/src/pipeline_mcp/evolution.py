@@ -62,8 +62,9 @@ class _RankMeanEnsemble:
     Rank averaging is scale-invariant and robust to outlier predictions: a model
     that emits a wildly large pLDDT for one candidate cannot drag the consensus,
     because each model only contributes an ordinal position. This matches the
-    aggregation rule in scripts/benchmark/10_ensemble_benchmark.py and matches
-    Ridge solo on average BO uplift Top-5 (0.961 vs 0.962, n=70) on our pilot.
+    aggregation rule in scripts/benchmark/10_ensemble_benchmark.py. In the
+    23-target benchmark, rank-mean is a robustness option with a small pLDDT
+    uplift margin over RF, not the production default.
     """
 
     def __init__(self, seed: int = 42, members: tuple[str, ...] = _ENSEMBLE_MEMBERS):
@@ -93,14 +94,14 @@ class _RankMeanEnsemble:
 def _make_surrogate(kind: str, seed: int = 42):
     """Return a sklearn-compatible estimator selected by the production benchmark.
 
-    Available kinds (see manuscript Section 4 and ``2026-04-27-cath-rf-benchmark-*``):
-        rf        - Random Forest, robust multi-target default (legacy production)
-        ridge     - Ridge regression, wins SoluProt and ties pLDDT in our pilot
-        lightgbm  - Gradient boosting, top pLDDT BO uplift on our pilot
+    Available kinds (see manuscript Results and the 23-target CATH benchmark):
+        rf        - Random Forest, default for AF2/pLDDT triage
+        ridge     - Ridge regression, retained for SoluProt-oriented ranking
+                    and recall-heavy analyses
+        lightgbm  - Gradient boosting comparator
         xgboost   - Gradient boosting alternative
         ensemble  - Rank-mean over RF + Ridge + LightGBM + XGBoost; competitive
-                    with the best single model and more robust to per-target
-                    swings of which family wins
+                    robustness option for per-target model-switching
 
     Linear and kernel models are wrapped in a StandardScaler because ESM
     embeddings are zero-mean but not unit-variance per dimension.

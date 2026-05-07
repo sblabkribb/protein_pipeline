@@ -20,7 +20,7 @@ environments.
   result tables used for the manuscript.
 - `data/case_studies/` - compact 3RGK and 1LVM direct/evolution run summaries
   plus best-design PDBs for the representative multi-round traces.
-- `data/cath_curated/` - QC-filtered CATH expansion table and inclusion/exclusion
+- `data/cath_curated/` - QC-filtered CATH benchmark table and inclusion/exclusion
   reports for the publication-grade subset.
 - `data/cath_73/` - raw lightweight summary tables for the expanded 73-run CATH
   execution corpus before paper-level QC.

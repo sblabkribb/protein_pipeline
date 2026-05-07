@@ -6,11 +6,11 @@ The release includes the data required to reproduce the manuscript benchmark
 tables and figures:
 
 - processed benchmark table in `data/benchmark/cath_pilot_dataset.csv`
-- cached ESM embeddings in `data/benchmark/*.npy`
+- cached ESM-2 8M embeddings in `data/benchmark/cath_pilot_emb_320d.npy`
 - benchmark result files in `data/benchmark/results/`
 - representative 3RGK/1LVM direct and multi-round run summaries in
   `data/case_studies/`
-- QC-filtered CATH expansion summaries in `data/cath_curated/`
+- QC-filtered CATH benchmark summaries in `data/cath_curated/`
 - raw lightweight summaries of the expanded 73-run CATH execution corpus in
   `data/cath_73/`
 - generated figures and LaTeX tables in `figures/benchmark/`

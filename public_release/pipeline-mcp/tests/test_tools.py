@@ -179,6 +179,15 @@ print("ok")
         self.assertEqual(req.evolution_surrogate_model, "xgboost")
         self.assertTrue(req.use_memory_bank)
 
+    def test_pipeline_run_schema_advertises_supported_evolution_surrogates(self) -> None:
+        defs = {tool["name"]: tool for tool in tool_definitions()}
+        prop = defs["pipeline.run"]["inputSchema"]["properties"]["evolution_surrogate_model"]
+
+        self.assertEqual(prop["default"], "rf")
+        self.assertEqual(
+            prop["enum"], ["rf", "ridge", "lightgbm", "xgboost", "ensemble"]
+        )
+
     def test_tool_definitions_include_cath_ops_tools(self) -> None:
         defs = {tool["name"]: tool for tool in tool_definitions()}
         expected = {
@@ -2215,7 +2224,7 @@ print("ok")
             self.assertTrue(run_dir.exists())
 
             saved_chain_payload = {
-                "design_chains_used": ["B"],
+                "design_chains_used": ["A"],
                 "requested_design_chains": None,
                 "available_chains": ["A", "B"],
             }

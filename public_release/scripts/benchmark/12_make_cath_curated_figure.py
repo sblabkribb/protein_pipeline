@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Make the QC-filtered CATH expansion figure and summary table."""
+"""Make the QC-filtered CATH benchmark-corpus figure and summary table."""
 
 from __future__ import annotations
 
@@ -104,7 +104,7 @@ def main() -> None:
     ax2.tick_params(axis="y", length=0, labelleft=False)
 
     fig.suptitle(
-        "QC-filtered CATH expansion corpus: 23 targets, 2,737 valid paired designs",
+        "QC-filtered CATH benchmark corpus: 23 targets, 2,737 valid paired designs",
         fontsize=11,
         weight="bold",
         y=0.985,

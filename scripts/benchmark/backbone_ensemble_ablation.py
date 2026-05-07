@@ -127,8 +127,8 @@ def parse_fasta(text: str) -> list[dict[str, Any]]:
         nonlocal header, chunks
         if header is None:
             return
-        token = header.split()[0]
-        pieces = token.split("|")
+        seq_id = header.split()[0]
+        pieces = header.split("|")
         meta: dict[str, str] = {}
         for piece in pieces[1:]:
             if "=" in piece:
@@ -136,7 +136,7 @@ def parse_fasta(text: str) -> list[dict[str, Any]]:
                 meta[key] = value
         records.append(
             {
-                "seq_id": pieces[0],
+                "seq_id": seq_id,
                 "header": header,
                 "sequence": "".join(chunks),
                 "meta": meta,

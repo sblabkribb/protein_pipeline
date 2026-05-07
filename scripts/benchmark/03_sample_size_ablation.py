@@ -7,8 +7,8 @@ record metrics on the held-out pool. The remaining-pool size is fixed at 20
 so that BO uplift / Top-K recall numbers are comparable across N.
 
 N grid: {5, 10, 20, 30, 50, 80}
-    N=80 + 20 holdout requires >=100 labels - 1ibvC00 (92 pLDDT) skips N=80.
-Models: RF, XGBoost, GP-RBF, Ridge  (selected from Exp1 winners + RF baseline).
+    N=80 + 20 holdout requires at least 100 labels.
+Models: RF, XGBoost, LightGBM, Ridge (production-supported alternatives).
 
 Output parquet schema:
     surrogate, target, seed, model, n_train, n_test, <metric columns>
@@ -25,12 +25,11 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, WhiteKernel
 from sklearn.linear_model import Ridge
 from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.preprocessing import StandardScaler
 
+import lightgbm as lgb
 import xgboost as xgb
 
 import sys
@@ -62,18 +61,22 @@ def make_models(seed: int) -> dict[str, object]:
             n_jobs=1,
             verbosity=0,
         ),
-        "GP-RBF": GaussianProcessRegressor(
-            kernel=RBF() + WhiteKernel(),
-            normalize_y=True,
+        "LightGBM": lgb.LGBMRegressor(
+            n_estimators=100,
+            num_leaves=7,
+            min_data_in_leaf=2,
+            min_data_in_bin=1,
+            learning_rate=0.05,
             random_state=seed,
-            n_restarts_optimizer=2,
+            n_jobs=1,
+            verbose=-1,
         ),
         "Ridge": Ridge(alpha=1.0, random_state=seed),
     }
 
 
 def needs_scaling(name: str) -> bool:
-    return name in {"GP-RBF", "Ridge"}
+    return name == "Ridge"
 
 
 def fit_predict(model, X_tr, y_tr, X_te, scale: bool):
@@ -104,7 +107,9 @@ def bo_uplift(y_true: np.ndarray, y_pred: np.ndarray, k: int, seed: int) -> floa
 def evaluate(y_true: np.ndarray, y_pred: np.ndarray, seed: int) -> dict[str, float]:
     metrics: dict[str, float] = {}
     if len(y_true) >= 2 and np.std(y_true) > 0 and np.std(y_pred) > 0:
-        rho, _ = stats.spearmanr(y_true, y_pred)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=stats.ConstantInputWarning)
+            rho, _ = stats.spearmanr(y_true, y_pred)
         metrics["spearman"] = float(rho) if np.isfinite(rho) else float("nan")
     else:
         metrics["spearman"] = float("nan")
@@ -132,11 +137,11 @@ def main() -> int:
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
     targets = sorted(df["target"].unique())
-    print(f"Targets: {len(targets)}, Seeds: {len(SEEDS)}, N grid: {N_GRID}")
+    print(f"Targets: {len(targets)}, Seeds: {len(SEEDS)}, N grid: {N_GRID}", flush=True)
 
     rows: list[dict] = []
     started = time.time()
-    print(f"Selections: {SELECTION_STRATEGIES}, N grid: {N_GRID}")
+    print(f"Selections: {SELECTION_STRATEGIES}, N grid: {N_GRID}", flush=True)
 
     for surrogate in SURROGATE_TARGETS:
         for tgt in targets:
@@ -188,7 +193,10 @@ def main() -> int:
                                 }
                             )
             elapsed = time.time() - started
-            print(f"  done {surrogate}/{tgt} (n_avail={n_avail}, elapsed={elapsed:.0f}s)")
+            print(
+                f"  done {surrogate}/{tgt} (n_avail={n_avail}, elapsed={elapsed:.0f}s)",
+                flush=True,
+            )
 
     out_df = pd.DataFrame(rows)
     out_df.to_parquet(args.out, index=False)

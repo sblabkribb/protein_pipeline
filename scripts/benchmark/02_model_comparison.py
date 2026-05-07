@@ -4,7 +4,7 @@ Experiment 1: Compare RF against 7 alternative surrogates.
 
 Per-target leave-out CV with 5 random seeds:
     For each surrogate_target in {pLDDT, SoluProt}:
-        For each of 15 CATH targets:
+        For each CATH target in the benchmark CSV:
             For each seed in [42, 123, 7, 2024, 31337]:
                 shuffle the target's ~120 labels
                 split: 30 train / remainder test
@@ -138,7 +138,9 @@ def bo_uplift(y_true: np.ndarray, y_pred: np.ndarray, k: int, seed: int) -> floa
 def evaluate(y_true: np.ndarray, y_pred: np.ndarray, seed: int) -> dict[str, float]:
     metrics: dict[str, float] = {}
     if len(y_true) >= 2 and np.std(y_true) > 0 and np.std(y_pred) > 0:
-        rho, _ = stats.spearmanr(y_true, y_pred)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=stats.ConstantInputWarning)
+            rho, _ = stats.spearmanr(y_true, y_pred)
         metrics["spearman"] = float(rho) if np.isfinite(rho) else float("nan")
     else:
         metrics["spearman"] = float("nan")

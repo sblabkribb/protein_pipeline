@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 Replicate the bias-analysis methodology of
-``docs/2026-04-24-meta-surrogate-bias-analysis-ko.md`` on the 15-target pilot.
+``docs/2026-04-24-meta-surrogate-bias-analysis-ko.md`` on the benchmark set.
 
 For each (target, seed, selection_strategy):
-    1. Split 120 ProteinMPNN designs into 30 train + 90 test
+    1. Split ProteinMPNN designs into 30 train + held-out test candidates
        (selection ∈ {random, kmeans})
     2. Identify the training-set best (max actual pLDDT in train subset)
     3. Train Random Forest, predict pLDDT on the 90 test designs
@@ -32,7 +32,7 @@ from sklearn.ensemble import RandomForestRegressor
 sys.path.insert(0, str(Path(__file__).parent))
 from _selection import select_train_indices
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path("/opt/protein_pipeline")
 DATA_DIR = PROJECT_ROOT / "data" / "benchmark"
 RESULTS_DIR = DATA_DIR / "results"
 FIG_DIR = PROJECT_ROOT / "figures" / "benchmark"
@@ -152,7 +152,7 @@ def main() -> int:
     summary_path = RESULTS_DIR / "bias_analysis_summary.csv"
     summary.to_csv(summary_path)
 
-    print("\n=== Bias-analysis summary (means across 15 targets × 5 seeds) ===")
+    print(f"\n=== Bias-analysis summary (means across {len(targets)} targets x 5 seeds) ===")
     for k in TOP_K_SET:
         cols = [c for c in metric_cols if c.endswith(f"_top{k}") or c.endswith(f"top{k}_mean_plddt")]
         print(f"\n--- Top-{k} ---")
@@ -204,7 +204,7 @@ def main() -> int:
         ax_right.legend(loc="lower left", fontsize=9)
 
     fig.suptitle(
-        "Bias analysis on 15 CATH targets: K-Means vs Random selection (RF, N=30) — "
+        f"Bias analysis on {len(targets)} CATH targets: K-Means vs Random selection (RF, N=30) - "
         "Top-5 (top row) and Top-10 (bottom row)",
         fontsize=11, y=1.00,
     )
