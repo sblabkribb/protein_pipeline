@@ -2905,9 +2905,23 @@ const I18N = {
     "setup.wizard.scope": "Scope",
     "setup.wizard.input": "Input",
     "setup.wizard.options": "Options",
+    "setup.wizard.expert": "Expert",
+    "setup.wizard.review": "Review",
     "setup.wizard.stepMeta": "Step {current}/{total}: {label}",
     "setup.wizard.prev": "Previous",
     "setup.wizard.next": "Next",
+    "setup.review.title": "Review Run Setup",
+    "setup.review.mode": "Mode",
+    "setup.review.stages": "Stages",
+    "setup.review.input": "Input",
+    "setup.review.inputReady": "Target loaded",
+    "setup.review.inputMissing": "Target missing",
+    "setup.review.rfd3": "RFD3",
+    "setup.review.bioemu": "BioEmu",
+    "setup.review.af2": "AF2",
+    "setup.review.relax": "Relax",
+    "setup.review.tiers": "Conservation tiers",
+    "setup.review.none": "Not selected",
     "hint.none": "No missing inputs. You can run now.",
     "hint.ready": "All required inputs captured.",
     "hint.missing": "Missing required inputs.",
@@ -4141,9 +4155,23 @@ const I18N = {
     "setup.wizard.scope": "범위 설정",
     "setup.wizard.input": "입력",
     "setup.wizard.options": "옵션",
+    "setup.wizard.expert": "고급 옵션",
+    "setup.wizard.review": "검토",
     "setup.wizard.stepMeta": "{current}/{total} 단계: {label}",
     "setup.wizard.prev": "이전",
     "setup.wizard.next": "다음",
+    "setup.review.title": "실행 설정 검토",
+    "setup.review.mode": "모드",
+    "setup.review.stages": "단계",
+    "setup.review.input": "입력",
+    "setup.review.inputReady": "타깃 입력 완료",
+    "setup.review.inputMissing": "타깃 입력 없음",
+    "setup.review.rfd3": "RFD3",
+    "setup.review.bioemu": "BioEmu",
+    "setup.review.af2": "AF2",
+    "setup.review.relax": "Relax",
+    "setup.review.tiers": "보존도 tier",
+    "setup.review.none": "선택 없음",
     "hint.none": "누락된 입력이 없습니다. 지금 실행할 수 있습니다.",
     "hint.ready": "필수 입력이 모두 완료되었습니다.",
     "hint.missing": "필수 입력이 누락되었습니다.",
@@ -4569,8 +4597,20 @@ const SETUP_WIZARD_STEPS = [
   { id: "scope", labelKey: "setup.wizard.scope" },
   { id: "input", labelKey: "setup.wizard.input" },
   { id: "options", labelKey: "setup.wizard.options" },
+  { id: "expert", labelKey: "setup.wizard.expert" },
+  { id: "review", labelKey: "setup.wizard.review" },
 ];
-const ENABLE_SETUP_WIZARD = false;
+const ENABLE_SETUP_WIZARD = true;
+const SETUP_EXPERT_QUESTION_IDS = new Set([
+  "bioemu_target_rmsd_cutoff",
+  "bioemu_steering_config_text",
+  "rfd3_target_rmsd_cutoff",
+  "fixed_positions_extra",
+  "compare_rmsd_scope",
+  "af2_plddt_cutoff",
+  "af2_rmsd_cutoff",
+  "relax_score_per_residue_cutoff",
+]);
 
 function normalizePipelineStage(value, fallback = "") {
   let raw = String(value || "")
@@ -7799,9 +7839,23 @@ function setupWizardEnabled(questions) {
   return ENABLE_SETUP_WIZARD && state.runMode === "pipeline" && Array.isArray(questions) && questions.length > 0;
 }
 
+function activeSetupWizardStepIndex() {
+  const maxStep = SETUP_WIZARD_STEPS.length - 1;
+  const currentStep = Math.max(0, Math.min(maxStep, Number(state.setupStepIndex || 0)));
+  state.setupStepIndex = currentStep;
+  return currentStep;
+}
+
+function activeSetupWizardStepId() {
+  return SETUP_WIZARD_STEPS[activeSetupWizardStepIndex()]?.id || "scope";
+}
+
 function questionSetupStepId(questionId) {
   if (questionId === "run_mode" || questionId === "start_from" || questionId === "stop_after") {
     return "scope";
+  }
+  if (questionId === "confirm_run") {
+    return "review";
   }
   if (
     questionId === "target_input" ||
@@ -7811,6 +7865,9 @@ function questionSetupStepId(questionId) {
     questionId === "diffdock_ligand"
   ) {
     return "input";
+  }
+  if (SETUP_EXPERT_QUESTION_IDS.has(questionId) || SETUP_RFD3_MODE_DETAIL_IDS.has(questionId)) {
+    return "expert";
   }
   return "options";
 }
@@ -7832,9 +7889,8 @@ function renderSetupWizard(questions) {
   }
 
   const maxStep = SETUP_WIZARD_STEPS.length - 1;
-  const currentStep = Math.max(0, Math.min(maxStep, Number(state.setupStepIndex || 0)));
-  state.setupStepIndex = currentStep;
-  const activeStepId = SETUP_WIZARD_STEPS[currentStep].id;
+  const currentStep = activeSetupWizardStepIndex();
+  const activeStepId = activeSetupWizardStepId();
 
   el.setupStepper.classList.remove("hidden");
   const label = t(SETUP_WIZARD_STEPS[currentStep].labelKey);
@@ -13969,6 +14025,74 @@ function renderChoiceButtons(container, options, currentValue, onSelect, { multi
   container.appendChild(group);
 }
 
+function renderSetupReviewCard(normalizedQuestions = []) {
+  const confirmQuestion = normalizedQuestions.find((q) => q?.id === "confirm_run");
+  if (state.answers.confirm_run === undefined) {
+    state.answers.confirm_run = confirmQuestion?.default !== undefined ? Boolean(confirmQuestion.default) : true;
+  }
+
+  const card = document.createElement("div");
+  card.className = "question-card setup-review-card";
+
+  const title = document.createElement("div");
+  title.className = "question-title";
+  title.textContent = t("setup.review.title");
+
+  const grid = document.createElement("div");
+  grid.className = "setup-review-grid";
+
+  const appendItem = (labelKey, value, { muted = false } = {}) => {
+    const item = document.createElement("div");
+    item.className = "setup-review-item";
+    if (muted) item.classList.add("muted");
+
+    const label = document.createElement("div");
+    label.className = "setup-review-label";
+    label.textContent = t(labelKey);
+
+    const text = document.createElement("div");
+    text.className = "setup-review-value";
+    text.textContent = String(value || t("setup.review.none"));
+
+    item.appendChild(label);
+    item.appendChild(text);
+    grid.appendChild(item);
+  };
+
+  const modeOption = RUN_MODE_OPTIONS.find((item) => item.value === state.runMode);
+  const startStage = normalizePipelineStage(state.answers.start_from || "msa", "msa");
+  const stopStage = normalizePipelineStage(state.answers.stop_after || "novelty", "novelty");
+  const stopLabel = stopStage === "novelty" ? t("stop.full") : formatStageLabel(stopStage);
+  const hasTargetInput = Boolean(
+    String(state.answers.target_input || state.answers.target_pdb || state.answers.target_fasta || "").trim()
+  );
+  const tierQuestion = normalizedQuestions.find((q) => q?.id === "selected_tiers");
+  const selectedTiers = currentSetupSelectedTiers(tierQuestion);
+  const rfd3Active = setupRunEnablesRfd3Stage();
+  const bioemuActive = state.answers.bioemu_use === true || ["bioemu", "design", "soluprot", "af2", "novelty"].includes(stopStage);
+  const relaxActive = state.answers.relax_enabled === true;
+
+  appendItem("setup.review.mode", modeOption?.labelKey ? t(modeOption.labelKey) : state.runMode);
+  appendItem("setup.review.stages", `${formatStageLabel(startStage)} -> ${stopLabel}`);
+  appendItem("setup.review.input", hasTargetInput ? t("setup.review.inputReady") : t("setup.review.inputMissing"), {
+    muted: !hasTargetInput,
+  });
+  appendItem("setup.review.rfd3", rfd3Active ? t("common.enabled") : t("common.disabled"));
+  appendItem("setup.review.bioemu", bioemuActive ? t("common.enabled") : t("common.disabled"));
+  appendItem("setup.review.af2", af2ProviderName(state.answers.af2_provider || "colabfold", state.lang || "en"));
+  appendItem("setup.review.relax", relaxActive ? t("common.enabled") : t("common.disabled"));
+  appendItem(
+    "setup.review.tiers",
+    selectedTiers.length
+      ? selectedTiers.map((value) => formatConservationTierValue(value)).join(", ")
+      : t("setup.review.none")
+  );
+
+  card.appendChild(title);
+  card.appendChild(grid);
+  return card;
+}
+
 function renderQuestions(questions) {
   const inputStack = el.questionInputStack || el.questionStack;
   const configStack = el.questionConfigStack || el.questionStack;
@@ -14001,11 +14125,19 @@ function renderQuestions(questions) {
   }
   const filteredVisibleQuestions = normalizedQuestions.filter((q) => questionVisibleForCurrentState(q));
   const visibleQuestions = renderSetupWizard(filteredVisibleQuestions);
+  const setupWizardActive = setupWizardEnabled(filteredVisibleQuestions);
+  const setupWizardStepId = setupWizardActive ? activeSetupWizardStepId() : "";
   if (state.runMode === "pipeline") {
     if (!normalizePipelineStage(state.answers.start_from, "")) {
       state.answers.start_from = "msa";
     }
     syncStartStopStages();
+  }
+
+  if (setupWizardStepId === "review") {
+    appendConfigCard(renderSetupReviewCard(normalizedQuestions));
+    updateRunEligibility(normalizedQuestions);
+    return;
   }
 
   const fileQuestionIds = new Set([
@@ -15402,6 +15534,7 @@ function renderQuestions(questions) {
   appendAdvancedConstraintBoard();
 
   const appendRfd3DetailBoard = () => {
+    if (setupWizardActive && setupWizardStepId !== "expert") return;
     const rfd3DetailRelevant =
       state.runMode === "rfd3" || setupRunEnablesRfd3Stage() || shouldShowSetupRfd3InputField();
     if (!rfd3DetailRelevant) return;

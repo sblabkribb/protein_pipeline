@@ -95,3 +95,12 @@ test("frontend build runs in deployment checks and local deploy", () => {
   assert.match(deployScript, /npm --prefix frontend ci/);
   assert.match(deployScript, /npm --prefix frontend run build/);
 });
+
+test("advanced setup uses a staged wizard with a final review step", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(source, /const ENABLE_SETUP_WIZARD = true/);
+  assert.match(source, /setup\.wizard\.expert/);
+  assert.match(source, /setup\.wizard\.review/);
+  assert.match(source, /function renderSetupReviewCard/);
+});
