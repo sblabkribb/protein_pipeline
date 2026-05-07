@@ -232,3 +232,25 @@ test("frontend includes a localized first-run tutorial overlay", () => {
   assert.match(styles, /\.tutorial-spotlight/);
   assert.match(styles, /\.tutorial-card/);
 });
+
+test("tutorial covers expert workflow controls and downstream review tools", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(source, /id: "advancedExecution"/);
+  assert.match(source, /id: "pdfAgent"/);
+  assert.match(source, /id: "evolutionSettings"/);
+  assert.match(source, /id: "studioCheckpoint"/);
+  assert.match(source, /id: "monitorAgent"/);
+  assert.match(source, /id: "analyzeHitList"/);
+  assert.match(source, /id: "report"/);
+  assert.match(source, /id: "copilot"/);
+
+  assert.match(source, /"tutorial\.step\.advancedExecution\.title"/);
+  assert.match(source, /"tutorial\.step\.pdfAgent\.title"/);
+  assert.match(source, /"tutorial\.step\.evolutionSettings\.title"/);
+  assert.match(source, /"tutorial\.step\.studioCheckpoint\.title"/);
+  assert.match(source, /"tutorial\.step\.monitorAgent\.title"/);
+  assert.match(source, /"tutorial\.step\.analyzeHitList\.title"/);
+  assert.match(source, /"tutorial\.step\.report\.title"/);
+  assert.match(source, /"tutorial\.step\.copilot\.title"/);
+});

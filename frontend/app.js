@@ -1977,18 +1977,43 @@ const I18N = {
     "tutorial.step.advanced.body":
       "Advanced collects target input, workflow path, candidate criteria, expert overrides, and final review as ordered steps.",
     "tutorial.step.advanced.hint": "Use this when you need to tune conservation tiers, output counts, RFD3/BioEmu/AF2 gates, or fixed positions.",
+    "tutorial.step.advancedExecution.title": "Execution settings decide run shape",
+    "tutorial.step.advancedExecution.body":
+      "In this area, choose Pipeline or Workflow Studio, set the stage range, tune candidate counts and quality cutoffs, then review before pressing Run.",
+    "tutorial.step.advancedExecution.hint":
+      "For most users, keep the full pipeline path. Change RFD3/BioEmu/AF2 thresholds only when you know why the default gate is too strict or too loose.",
+    "tutorial.step.pdfAgent.title": "PDF agent extracts constraints",
+    "tutorial.step.pdfAgent.body":
+      "Upload a paper PDF here when the literature mentions catalytic residues, binding-site positions, or mutation-sensitive regions. The agent proposes residues to keep fixed.",
+    "tutorial.step.pdfAgent.hint":
+      "Always review the proposed residues before applying them; the agent helps triage literature evidence, but the final mask is still your decision.",
     "tutorial.step.evolution.title": "Evolution explores iterative designs",
     "tutorial.step.evolution.body":
       "Evolution starts from a target and searches candidate space across generated pools, oracle samples, and rounds.",
     "tutorial.step.evolution.hint": "Use it after you understand the basic pipeline; the pool and round counts affect runtime and output size.",
+    "tutorial.step.evolutionSettings.title": "Evolution numbers control cost and selectivity",
+    "tutorial.step.evolutionSettings.body":
+      "Generation Pool Size is the candidate pool. K-Means Training Samples is the learning/training sample count. Select Top K is how many candidates receive final AF2 evaluation.",
+    "tutorial.step.evolutionSettings.hint":
+      "Larger pools explore more sequences but take longer. Increase Top K only when you want broader final validation; reduce it for quick screening.",
     "tutorial.step.studio.title": "Studio resumes staged workflows",
     "tutorial.step.studio.body":
       "Studio is for step-by-step workflow sessions, checkpoint review, and continuing a run after inspecting intermediate results.",
     "tutorial.step.studio.hint": "If a run pauses at a checkpoint, review it in Monitor or Studio before resuming.",
+    "tutorial.step.studioCheckpoint.title": "Pause, inspect, then continue",
+    "tutorial.step.studioCheckpoint.body":
+      "Run This Stage advances one selected stage. Stop Run pauses execution, Resume Run continues the same run, and Open Monitor shows artifacts and checkpoint context.",
+    "tutorial.step.studioCheckpoint.hint":
+      "Use Studio when you want to inspect MSA, RFD3, BioEmu, design, or AF2 outputs before spending compute on the next step.",
     "tutorial.step.monitor.title": "Monitor tracks live runs",
     "tutorial.step.monitor.body":
       "Monitor shows stage state, ETA, artifacts, checkpoint actions, completeness, and current run context.",
     "tutorial.step.monitor.hint": "Use Auto Poll while a run is active, then inspect artifacts before moving to analysis.",
+    "tutorial.step.monitorAgent.title": "Agent Panel explains stage decisions",
+    "tutorial.step.monitorAgent.body":
+      "The Agent Panel summarizes expert checks, recovery notes, and report links for the current run. Use it when a stage needs review or recovery.",
+    "tutorial.step.monitorAgent.hint":
+      "View Report opens the run summary. View Agent Report opens the agent's stage-by-stage reasoning and warnings.",
     "tutorial.step.rounds.title": "Rounds organize experiments",
     "tutorial.step.rounds.body":
       "Rounds connect projects, hypotheses, linked run IDs, selected candidates, feedback, and next-round notes.",
@@ -1997,6 +2022,21 @@ const I18N = {
     "tutorial.step.analyze.body":
       "Analyze brings together Compare Studio, run-to-run deltas, hit lists, charts, feedback, experiments, and report generation.",
     "tutorial.step.analyze.hint": "Start with the hit list, then compare structures and generate a report after triage.",
+    "tutorial.step.analyzeHitList.title": "Hit List is the candidate shortlist",
+    "tutorial.step.analyzeHitList.body":
+      "Refresh the Hit List after loading a run. Score Cutoff filters weak candidates, Rows controls how many to show, and weights tune SoluProt, pLDDT, and RMSD importance.",
+    "tutorial.step.analyzeHitList.hint":
+      "Use Hit List first for triage, then open details or compare structures for the candidates that remain.",
+    "tutorial.step.report.title": "Reports consolidate the run",
+    "tutorial.step.report.body":
+      "Generate builds the markdown report, Rendered View previews it, Export Package bundles report assets, and Save stores your edited version.",
+    "tutorial.step.report.hint":
+      "Report language follows Settings. After generating, review the evidence score and artifact links before saving or exporting.",
+    "tutorial.step.copilot.title": "Copilot answers in context",
+    "tutorial.step.copilot.body":
+      "Copilot reads the current run context and can explain metrics, compare state, resume behavior, and practical next actions.",
+    "tutorial.step.copilot.hint":
+      "Use Copilot for interpretation and navigation help; use the main Run, Resume, Report, and Export buttons for irreversible actions.",
     "tutorial.step.settings.title": "Settings and help stay in the top bar",
     "tutorial.step.settings.body":
       "Settings contains fixed service information and report language. Usage is the static guide, and Tutorial can be replayed anytime.",
@@ -3291,18 +3331,43 @@ const I18N = {
     "tutorial.step.advanced.body":
       "고급 설정은 타깃 입력, 워크플로우 경로, 후보 평가 기준, 전문가 override, 최종 검토를 순서대로 모읍니다.",
     "tutorial.step.advanced.hint": "보존도 티어, 출력 개수, RFD3/BioEmu/AF2 기준, 고정 위치를 조정해야 할 때 사용하세요.",
+    "tutorial.step.advancedExecution.title": "실행 설정은 run 형태를 결정합니다",
+    "tutorial.step.advancedExecution.body":
+      "이 영역에서 Pipeline 또는 Workflow Studio를 고르고, 실행 단계 범위, 후보 수, 품질 cutoff를 조정한 뒤 마지막 검토 후 Run을 누릅니다.",
+    "tutorial.step.advancedExecution.hint":
+      "대부분은 전체 pipeline 경로를 유지하세요. RFD3/BioEmu/AF2 threshold는 기본 gate가 너무 엄격하거나 느슨한 이유가 있을 때만 바꾸는 것이 좋습니다.",
+    "tutorial.step.pdfAgent.title": "PDF agent가 제약 조건을 뽑습니다",
+    "tutorial.step.pdfAgent.body":
+      "논문 PDF에 catalytic residue, binding-site position, mutation-sensitive region이 언급되어 있으면 업로드하세요. Agent가 고정할 residue 후보를 제안합니다.",
+    "tutorial.step.pdfAgent.hint":
+      "적용 전에는 반드시 residue 후보를 검토하세요. Agent는 문헌 근거를 정리해주지만 최종 mask 결정은 사용자가 합니다.",
     "tutorial.step.evolution.title": "Evolution은 반복 설계를 탐색합니다",
     "tutorial.step.evolution.body":
       "Evolution은 타깃에서 시작해 생성 pool, oracle sample, round를 거치며 후보 공간을 탐색합니다.",
     "tutorial.step.evolution.hint": "기본 파이프라인을 이해한 뒤 사용하세요. pool과 round 수는 실행 시간과 출력 규모에 영향을 줍니다.",
+    "tutorial.step.evolutionSettings.title": "Evolution 숫자는 비용과 선별 강도를 정합니다",
+    "tutorial.step.evolutionSettings.body":
+      "Generation Pool Size는 후보 pool 크기입니다. K-Means Training Samples는 학습/훈련에 쓸 sample 수입니다. Select Top K는 최종 AF2 평가로 보낼 후보 수입니다.",
+    "tutorial.step.evolutionSettings.hint":
+      "pool이 크면 더 넓게 탐색하지만 오래 걸립니다. Top K는 최종 검증을 넓히고 싶을 때 늘리고, 빠른 screening에는 줄이세요.",
     "tutorial.step.studio.title": "스튜디오는 단계별 워크플로우를 이어갑니다",
     "tutorial.step.studio.body":
       "스튜디오는 단계별 워크플로우 세션, 체크포인트 검토, 중간 결과 확인 후 이어 실행할 때 쓰는 공간입니다.",
     "tutorial.step.studio.hint": "실행이 체크포인트에서 멈추면 Monitor나 Studio에서 검토한 뒤 재개하세요.",
+    "tutorial.step.studioCheckpoint.title": "멈추고 확인한 뒤 이어갑니다",
+    "tutorial.step.studioCheckpoint.body":
+      "Run This Stage는 선택한 단계를 진행합니다. Stop Run은 실행을 멈추고, Resume Run은 같은 run을 이어가며, Open Monitor는 산출물과 checkpoint 맥락을 보여줍니다.",
+    "tutorial.step.studioCheckpoint.hint":
+      "다음 단계에 compute를 쓰기 전에 MSA, RFD3, BioEmu, design, AF2 결과를 확인하고 싶을 때 Studio를 사용하세요.",
     "tutorial.step.monitor.title": "Monitor는 실행 상태를 추적합니다",
     "tutorial.step.monitor.body":
       "Monitor에서는 단계 상태, 예상 시간, 산출물, 체크포인트 액션, completeness, 현재 실행 맥락을 확인합니다.",
     "tutorial.step.monitor.hint": "실행 중에는 Auto Poll을 켜고, 완료 후에는 산출물을 확인한 뒤 분석으로 이동하세요.",
+    "tutorial.step.monitorAgent.title": "Agent Panel은 단계별 판단을 설명합니다",
+    "tutorial.step.monitorAgent.body":
+      "Agent Panel은 현재 run의 expert check, recovery note, report link를 정리합니다. 어떤 단계가 검토나 복구가 필요한지 볼 때 사용합니다.",
+    "tutorial.step.monitorAgent.hint":
+      "View Report는 run 요약을 열고, View Agent Report는 agent의 단계별 reasoning과 warning을 엽니다.",
     "tutorial.step.rounds.title": "라운드는 실험을 정리합니다",
     "tutorial.step.rounds.body":
       "라운드는 프로젝트, 가설, 연결된 run ID, 선택 후보, 피드백, 다음 라운드 메모를 묶어 관리합니다.",
@@ -3311,6 +3376,21 @@ const I18N = {
     "tutorial.step.analyze.body":
       "분석 화면은 Compare Studio, run-to-run 차이, hit list, 차트, 피드백, 실험 기록, 보고서 생성을 한곳에 모읍니다.",
     "tutorial.step.analyze.hint": "먼저 hit list로 후보를 좁히고, 구조 비교를 본 뒤 보고서를 생성하세요.",
+    "tutorial.step.analyzeHitList.title": "Hit List는 후보 shortlist입니다",
+    "tutorial.step.analyzeHitList.body":
+      "run을 불러온 뒤 Hit List를 새로고침하세요. Score Cutoff는 약한 후보를 거르고, Rows는 표시 개수, weight는 SoluProt/pLDDT/RMSD 중요도를 조정합니다.",
+    "tutorial.step.analyzeHitList.hint":
+      "먼저 Hit List로 후보를 좁힌 뒤, 남은 후보의 detail을 열거나 구조 비교로 넘어가세요.",
+    "tutorial.step.report.title": "리포트는 run 결과를 모읍니다",
+    "tutorial.step.report.body":
+      "Generate는 markdown report를 만들고, Rendered View는 렌더링 미리보기를 열며, Export Package는 report asset을 묶고, Save는 수정본을 저장합니다.",
+    "tutorial.step.report.hint":
+      "리포트 언어는 Settings를 따릅니다. 생성 후 evidence score와 artifact link를 확인한 뒤 저장하거나 export하세요.",
+    "tutorial.step.copilot.title": "Copilot은 현재 맥락으로 답합니다",
+    "tutorial.step.copilot.body":
+      "Copilot은 현재 run 맥락을 읽고 metric 해석, compare 상태, resume 방식, 다음 행동을 설명해줍니다.",
+    "tutorial.step.copilot.hint":
+      "해석과 탐색 도움에는 Copilot을 쓰고, 실제 실행/재개/리포트/export는 각 화면의 전용 버튼으로 처리하세요.",
     "tutorial.step.settings.title": "설정과 도움말은 상단에 있습니다",
     "tutorial.step.settings.body":
       "설정에는 고정 서비스 정보와 보고서 언어가 있습니다. 사용법은 정적 가이드이고, 튜토리얼은 언제든 다시 볼 수 있습니다.",
@@ -4743,12 +4823,36 @@ const TUTORIAL_STEPS = [
     hintKey: "tutorial.step.advanced.hint",
   },
   {
+    id: "advancedExecution",
+    tab: "advanced",
+    target: "#questionConfigStack",
+    titleKey: "tutorial.step.advancedExecution.title",
+    bodyKey: "tutorial.step.advancedExecution.body",
+    hintKey: "tutorial.step.advancedExecution.hint",
+  },
+  {
+    id: "pdfAgent",
+    tab: "advanced",
+    target: ".paper-mask-panel-advanced",
+    titleKey: "tutorial.step.pdfAgent.title",
+    bodyKey: "tutorial.step.pdfAgent.body",
+    hintKey: "tutorial.step.pdfAgent.hint",
+  },
+  {
     id: "evolution",
     tab: "evolution",
     target: ".evolution-input-card",
     titleKey: "tutorial.step.evolution.title",
     bodyKey: "tutorial.step.evolution.body",
     hintKey: "tutorial.step.evolution.hint",
+  },
+  {
+    id: "evolutionSettings",
+    tab: "evolution",
+    target: ".evolution-options-card",
+    titleKey: "tutorial.step.evolutionSettings.title",
+    bodyKey: "tutorial.step.evolutionSettings.body",
+    hintKey: "tutorial.step.evolutionSettings.hint",
   },
   {
     id: "studio",
@@ -4759,12 +4863,28 @@ const TUTORIAL_STEPS = [
     hintKey: "tutorial.step.studio.hint",
   },
   {
+    id: "studioCheckpoint",
+    tab: "studio",
+    target: ".studio-toolbar-actions",
+    titleKey: "tutorial.step.studioCheckpoint.title",
+    bodyKey: "tutorial.step.studioCheckpoint.body",
+    hintKey: "tutorial.step.studioCheckpoint.hint",
+  },
+  {
     id: "monitor",
     tab: "monitor",
     target: ".monitor-summary-panel",
     titleKey: "tutorial.step.monitor.title",
     bodyKey: "tutorial.step.monitor.body",
     hintKey: "tutorial.step.monitor.hint",
+  },
+  {
+    id: "monitorAgent",
+    tab: "monitor",
+    target: ".monitor-agent-panel",
+    titleKey: "tutorial.step.monitorAgent.title",
+    bodyKey: "tutorial.step.monitorAgent.body",
+    hintKey: "tutorial.step.monitorAgent.hint",
   },
   {
     id: "rounds",
@@ -4781,6 +4901,29 @@ const TUTORIAL_STEPS = [
     titleKey: "tutorial.step.analyze.title",
     bodyKey: "tutorial.step.analyze.body",
     hintKey: "tutorial.step.analyze.hint",
+  },
+  {
+    id: "analyzeHitList",
+    tab: "analyze",
+    target: ".analyze-hitlist",
+    titleKey: "tutorial.step.analyzeHitList.title",
+    bodyKey: "tutorial.step.analyzeHitList.body",
+    hintKey: "tutorial.step.analyzeHitList.hint",
+  },
+  {
+    id: "report",
+    tab: "analyze",
+    target: ".analyze-report",
+    titleKey: "tutorial.step.report.title",
+    bodyKey: "tutorial.step.report.body",
+    hintKey: "tutorial.step.report.hint",
+  },
+  {
+    id: "copilot",
+    target: "#copilotOpenBtn",
+    titleKey: "tutorial.step.copilot.title",
+    bodyKey: "tutorial.step.copilot.body",
+    hintKey: "tutorial.step.copilot.hint",
   },
   {
     id: "settings",
