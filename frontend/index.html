@@ -378,19 +378,19 @@
                   </label>
 
                   <!-- Literature-Driven Masking UI (Fast) -->
-                  <div class="field-group" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-                    <label style="font-weight: 500; font-size: 0.85em; color: var(--text-color-muted); display: block; margin-bottom: 0.5rem;">Extract Constraints from Paper (PDF)</label>
-                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
-                      <input type="file" id="paperMaskInputFast" accept="application/pdf" style="display: none;" />
-                      <button type="button" class="btn" id="paperMaskUploadBtnFast" style="white-space: nowrap; font-size: 0.85em;">📄 Upload & Analyze</button>
-                      <span id="paperMaskStatusFast" class="status-subtitle" style="margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.75em;"></span>
+                  <div class="paper-mask-panel field-group paper-mask-panel-compact">
+                    <label class="paper-mask-label">Extract Constraints from Paper (PDF)</label>
+                    <div class="paper-mask-controls">
+                      <input class="paper-mask-input" type="file" id="paperMaskInputFast" accept="application/pdf" />
+                      <button type="button" class="ghost paper-mask-upload" id="paperMaskUploadBtnFast">Upload PDF</button>
+                      <span id="paperMaskStatusFast" class="status-subtitle paper-mask-status"></span>
                     </div>
-                    <div id="paperMaskReviewPanelFast" class="hidden" style="border: 1px solid var(--border-color); padding: 0.75rem; border-radius: 4px; background: var(--bg-color-alt); font-size: 0.9em;">
-                      <div class="status-subtitle" style="font-size: 0.8em;">AI Suggested Masks</div>
-                      <div id="paperMaskListFast" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 200px; overflow-y: auto; margin-bottom: 0.75rem;"></div>
-                      <div style="display: flex; justify-content: flex-end; gap: 0.4rem;">
-                        <button type="button" class="btn" id="paperMaskCancelBtnFast" style="font-size: 0.8em; padding: 2px 8px;">Cancel</button>
-                        <button type="button" class="btn primary" id="paperMaskApplyBtnFast" style="font-size: 0.8em; padding: 2px 8px;">Apply</button>
+                    <div id="paperMaskReviewPanelFast" class="paper-mask-review hidden">
+                      <div class="status-subtitle paper-mask-review-title">AI Suggested Masks</div>
+                      <div id="paperMaskListFast" class="paper-mask-list"></div>
+                      <div class="paper-mask-actions">
+                        <button type="button" class="ghost paper-mask-action" id="paperMaskCancelBtnFast">Cancel</button>
+                        <button type="button" class="primary paper-mask-action" id="paperMaskApplyBtnFast">Apply</button>
                       </div>
                     </div>
                   </div>
@@ -484,19 +484,21 @@
                   </div>
 
                   <!-- Literature-Driven Masking UI (Advanced) -->
-                  <div class="field-group" style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
-                    <label style="font-weight: 500; font-size: 0.85em; color: var(--text-color-muted); display: block; margin-bottom: 0.5rem;">Extract Constraints from Paper (PDF)</label>
-                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
-                      <input type="file" id="paperMaskInputAdvanced" accept="application/pdf" style="display: none;" />
-                      <button type="button" class="btn" id="paperMaskUploadBtnAdvanced" style="white-space: nowrap; font-size: 0.85em;">📄 Upload & Analyze Paper</button>
-                      <span id="paperMaskStatusAdvanced" class="status-subtitle" style="margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.75em;"></span>
+                  <div class="paper-mask-panel field-group paper-mask-panel-advanced">
+                    <label class="paper-mask-label">Extract Constraints from Paper (PDF)</label>
+                    <div class="paper-mask-controls">
+                      <input class="paper-mask-input" type="file" id="paperMaskInputAdvanced" accept="application/pdf" />
+                      <button type="button" class="ghost paper-mask-upload" id="paperMaskUploadBtnAdvanced">
+                        Upload PDF
+                      </button>
+                      <span id="paperMaskStatusAdvanced" class="status-subtitle paper-mask-status"></span>
                     </div>
-                    <div id="paperMaskReviewPanelAdvanced" class="hidden" style="border: 1px solid var(--border-color); padding: 0.75rem; border-radius: 4px; background: var(--bg-color-alt); font-size: 0.9em;">
-                      <div class="status-subtitle" style="font-size: 0.8em;">AI Suggested Masks</div>
-                      <div id="paperMaskListAdvanced" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 200px; overflow-y: auto; margin-bottom: 0.75rem;"></div>
-                      <div style="display: flex; justify-content: flex-end; gap: 0.4rem;">
-                        <button type="button" class="btn" id="paperMaskCancelBtnAdvanced" style="font-size: 0.8em; padding: 2px 8px;">Cancel</button>
-                        <button type="button" class="btn primary" id="paperMaskApplyBtnAdvanced" style="font-size: 0.8em; padding: 2px 8px;">Apply</button>
+                    <div id="paperMaskReviewPanelAdvanced" class="paper-mask-review hidden">
+                      <div class="status-subtitle paper-mask-review-title">AI Suggested Masks</div>
+                      <div id="paperMaskListAdvanced" class="paper-mask-list"></div>
+                      <div class="paper-mask-actions">
+                        <button type="button" class="ghost paper-mask-action" id="paperMaskCancelBtnAdvanced">Cancel</button>
+                        <button type="button" class="primary paper-mask-action" id="paperMaskApplyBtnAdvanced">Apply</button>
                       </div>
                     </div>
                   </div>
@@ -511,7 +513,7 @@
                   </div>
                   <div id="questionConfigStack" class="question-stack section-stack"></div>
                   
-                  <label class="fast-field" style="margin-top: 1rem;">
+                  <label class="fast-field setup-custom-run-field">
                     <span data-i18n="setup.customRunId.label">Custom Run ID</span>
                     <small data-i18n="setup.customRunId.help">Leave empty for auto-generation.</small>
                     <input id="customRunIdInput" type="text" placeholder="custom_run_01" />
@@ -597,7 +599,7 @@
                     <span data-i18n="evolution.oracleSamples.label">Stage 3: Select Top K (Final AF2)</span>
                     <input id="evolutionOracleSamplesInput" type="number" min="1" step="1" value="20" />
                   </label>
-                  <div class="panel-header" style="margin-top: 1rem;">
+                  <div class="panel-header evolution-section-heading">
                     <h4 data-i18n="evolution.filtering.title">Filtering</h4>
                   </div>
                   <label class="fast-field">
@@ -621,7 +623,7 @@
                     <input id="evolutionRfd3TargetRmsdCutoffInput" type="number" min="0" step="0.01" value="2.0" />
                   </label>
 
-                  <div class="panel-header" style="margin-top: 1rem;">
+                  <div class="panel-header evolution-section-heading">
                     <h4 data-i18n="evolution.constraints.title">Constraints</h4>
                   </div>
                   <label class="fast-field">
@@ -634,21 +636,23 @@
                   </label>
 
                   <!-- Literature-Driven Masking UI -->
-                  <div class="field-group" style="margin-top: 1rem;">
-                    <label style="font-weight: 500; font-size: 0.85em; color: var(--text-color-muted); display: block; margin-bottom: 0.5rem;">Extract Constraints from Paper (PDF)</label>
-                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
-                      <input type="file" id="paperMaskInput" accept="application/pdf" style="display: none;" />
-                      <button type="button" class="btn" id="paperMaskUploadBtn" style="white-space: nowrap;">📄 Upload & Analyze</button>
-                      <span id="paperMaskStatus" class="status-subtitle" style="margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></span>
+                  <div class="paper-mask-panel field-group">
+                    <label class="paper-mask-label">Extract Constraints from Paper (PDF)</label>
+                    <div class="paper-mask-controls">
+                      <input class="paper-mask-input" type="file" id="paperMaskInput" accept="application/pdf" />
+                      <button type="button" class="ghost paper-mask-upload" id="paperMaskUploadBtn">Upload PDF</button>
+                      <span id="paperMaskStatus" class="status-subtitle paper-mask-status"></span>
                     </div>
-                    <div id="paperMaskReviewPanel" class="hidden" style="border: 1px solid var(--border-color); padding: 1rem; border-radius: 4px; background: var(--bg-color-alt);">
-                      <div class="status-subtitle">AI Suggested Masks</div>
-                      <div id="paperMaskList" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto; margin-bottom: 1rem;">
+                    <div id="paperMaskReviewPanel" class="paper-mask-review hidden">
+                      <div class="status-subtitle paper-mask-review-title">AI Suggested Masks</div>
+                      <div id="paperMaskList" class="paper-mask-list paper-mask-list-tall">
                         <!-- Items injected here -->
                       </div>
-                      <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
-                        <button type="button" class="btn" id="paperMaskCancelBtn">Cancel</button>
-                        <button type="button" class="btn primary" id="paperMaskApplyBtn">Apply Selected to Constraints</button>
+                      <div class="paper-mask-actions">
+                        <button type="button" class="ghost paper-mask-action" id="paperMaskCancelBtn">Cancel</button>
+                        <button type="button" class="primary paper-mask-action" id="paperMaskApplyBtn">
+                          Apply Selected to Constraints
+                        </button>
                       </div>
                     </div>
                   </div>

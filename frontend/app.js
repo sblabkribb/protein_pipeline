@@ -14964,7 +14964,8 @@ function renderQuestions(questions) {
     };
 
     const card = document.createElement("div");
-    card.className = "question-card parameter-board option-board";
+    card.className =
+      "question-card parameter-board option-board" + (setupWizardStepId === "criteria" ? " criteria-board" : "");
 
     const optionBoardTitleKey =
       setupWizardStepId === "workflow"
@@ -15398,7 +15399,7 @@ function renderQuestions(questions) {
   const appendCompactParameterBoard = (questionsForBoard) => {
     if (!questionsForBoard.length) return;
     const card = document.createElement("div");
-    card.className = "question-card parameter-board";
+    card.className = "question-card parameter-board" + (setupWizardStepId === "criteria" ? " criteria-board" : "");
 
     const parameterBoardTitleKey =
       setupWizardStepId === "criteria" ? "setup.criteria.parameters.title" : "setup.parameters.title";
@@ -25611,21 +25612,41 @@ function renderPaperMaskReviewPanel(config) {
     const label = String(mask.label || "Constraint");
     const evidence = String(mask.evidence || "No evidence provided.");
     const confidence = String(mask.confidence || "high");
-    
-    const warningMarkup = confidence !== "high" ? `<span title="Sequence mismatch suspected" style="cursor:help;">⚠️</span>` : "";
 
     const item = document.createElement("div");
-    item.style.cssText = "display: flex; flex-direction: column; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); margin-bottom: 0.25rem;";
-    
-    item.innerHTML = `
-      <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; cursor: pointer;">
-        <input type="checkbox" checked data-mask-index="${index}" class="${config.checkboxClass}" />
-        <span>Chain ${escapeHtml(chain)}: ${resi} ${escapeHtml(resn)} - ${escapeHtml(label)} ${warningMarkup}</span>
-      </label>
-      <div style="margin-top: 0.25rem; font-size: 0.8em; color: var(--text-color-muted); padding-left: 1.5rem; line-height: 1.2;">
-        <em>"${escapeHtml(evidence)}"</em>
-      </div>
-    `;
+    item.className = "paper-mask-suggestion";
+
+    const row = document.createElement("label");
+    row.className = "paper-mask-suggestion-row";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = true;
+    checkbox.dataset.maskIndex = String(index);
+    checkbox.classList.add(config.checkboxClass);
+
+    const summary = document.createElement("span");
+    summary.className = "paper-mask-suggestion-summary";
+    summary.textContent = `Chain ${chain}: ${resi} ${resn} - ${label}`;
+
+    if (confidence !== "high") {
+      const warning = document.createElement("span");
+      warning.className = "paper-mask-warning";
+      warning.title = "Sequence mismatch suspected";
+      warning.textContent = "!";
+      summary.appendChild(warning);
+    }
+
+    const evidenceEl = document.createElement("div");
+    evidenceEl.className = "paper-mask-evidence";
+    const evidenceText = document.createElement("em");
+    evidenceText.textContent = `"${evidence}"`;
+    evidenceEl.appendChild(evidenceText);
+
+    row.appendChild(checkbox);
+    row.appendChild(summary);
+    item.appendChild(row);
+    item.appendChild(evidenceEl);
     listEl.appendChild(item);
   });
 }

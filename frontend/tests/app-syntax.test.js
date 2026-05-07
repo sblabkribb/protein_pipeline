@@ -160,3 +160,15 @@ test("advanced setup uses experiment builder steps", () => {
   assert.doesNotMatch(source, /setup\.wizard\.scope/);
   assert.doesNotMatch(source, /setup\.wizard\.options/);
 });
+
+test("advanced paper mask UI is class-driven", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.match(html, /class="paper-mask-panel/);
+  assert.match(source, /paper-mask-suggestion/);
+  assert.match(styles, /\.paper-mask-panel/);
+  assert.doesNotMatch(html, /style="/);
+  assert.doesNotMatch(source, /item\.style\.cssText/);
+});
