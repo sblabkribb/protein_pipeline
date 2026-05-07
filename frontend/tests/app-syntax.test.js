@@ -151,3 +151,12 @@ test("home screen is an experiment launchpad", () => {
   assert.match(source, /home\.launchpad\.analyzeResults/);
   assert.match(styles, /\.experiment-launchpad/);
 });
+
+test("advanced setup uses experiment builder steps", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(source, /setup\.wizard\.workflow/);
+  assert.match(source, /setup\.wizard\.criteria/);
+  assert.doesNotMatch(source, /setup\.wizard\.scope/);
+  assert.doesNotMatch(source, /setup\.wizard\.options/);
+});

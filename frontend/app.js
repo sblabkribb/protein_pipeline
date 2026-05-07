@@ -2910,9 +2910,9 @@ const I18N = {
     "advanced.rfd3Counts.hide": "Hide RFD3 Count Options",
     "choice.confirmRun.yes": "Yes, run",
     "choice.confirmRun.no": "Review first",
-    "setup.wizard.scope": "Scope",
     "setup.wizard.input": "Input",
-    "setup.wizard.options": "Options",
+    "setup.wizard.workflow": "Workflow",
+    "setup.wizard.criteria": "Criteria",
     "setup.wizard.expert": "Expert",
     "setup.wizard.review": "Review",
     "setup.wizard.stepMeta": "Step {current}/{total}: {label}",
@@ -2937,10 +2937,16 @@ const I18N = {
     "hint.nextStep": "Move to the final step to launch the run.",
     "hint.running": "A run is already in progress.",
     "run.reset": "Inputs reset. Reconfirm selections and attachments.",
+    "setup.workflowBoard.title": "Workflow Controls",
+    "setup.workflowBoard.help": "Choose execution path and active pipeline stages.",
+    "setup.criteria.title": "Evaluation Criteria",
+    "setup.criteria.help": "Set candidate budgets, conservation tiers, filters, and quality thresholds.",
     "setup.options.title": "Core Option Board",
     "setup.options.help": "Review key execution options in one board.",
     "setup.evolution.title": "Evolution (BO) Settings",
     "setup.evolution.help": "Configure active-learning AF2 triage for automated sequence design.",
+    "setup.criteria.parameters.title": "Candidate Criteria",
+    "setup.criteria.parameters.help": "Tune sample counts and structural acceptance thresholds.",
     "setup.parameters.title": "Compact Parameter Board",
     "setup.parameters.help":
       "Tune key numeric settings in one place. BioEmu and RFD3 counts stay visible in Pipeline and Workflow modes.",
@@ -4168,9 +4174,9 @@ const I18N = {
     "advanced.rfd3Counts.hide": "RFD3 개수 옵션 숨기기",
     "choice.confirmRun.yes": "예, 실행",
     "choice.confirmRun.no": "검토 후",
-    "setup.wizard.scope": "범위 설정",
     "setup.wizard.input": "입력",
-    "setup.wizard.options": "옵션",
+    "setup.wizard.workflow": "워크플로우",
+    "setup.wizard.criteria": "평가 기준",
     "setup.wizard.expert": "고급 옵션",
     "setup.wizard.review": "검토",
     "setup.wizard.stepMeta": "{current}/{total} 단계: {label}",
@@ -4195,10 +4201,16 @@ const I18N = {
     "hint.nextStep": "마지막 단계로 이동하면 실행할 수 있습니다.",
     "hint.running": "이미 실행 중인 작업이 있습니다.",
     "run.reset": "입력을 초기화했습니다. 선택과 첨부를 다시 확인하세요.",
+    "setup.workflowBoard.title": "워크플로우 제어",
+    "setup.workflowBoard.help": "실행 경로와 사용할 파이프라인 단계를 선택합니다.",
+    "setup.criteria.title": "평가 기준",
+    "setup.criteria.help": "후보 수, 보존도 티어, 필터, 품질 기준을 설정합니다.",
     "setup.options.title": "핵심 옵션 보드",
     "setup.options.help": "주요 실행 옵션을 한 보드에서 한 번에 확인하고 조정합니다.",
     "setup.evolution.title": "Evolution (BO) 설정",
     "setup.evolution.help": "베이지안 최적화(BO) 기반의 자동 서열 설계를 설정합니다.",
+    "setup.criteria.parameters.title": "후보 평가 기준",
+    "setup.criteria.parameters.help": "샘플 수와 구조 품질 통과 기준을 조정합니다.",
     "setup.parameters.title": "핵심 파라미터 보드",
     "setup.parameters.help":
       "주요 숫자 파라미터를 한 카드에서 조정합니다. Pipeline/Workflow 모드에서는 BioEmu/RFD3 개수 설정을 항상 표시합니다.",
@@ -4610,22 +4622,53 @@ const RUN_MODE_OPTIONS = [
 
 const PIPELINE_STAGE_ORDER = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"];
 const SETUP_WIZARD_STEPS = [
-  { id: "scope", labelKey: "setup.wizard.scope" },
   { id: "input", labelKey: "setup.wizard.input" },
-  { id: "options", labelKey: "setup.wizard.options" },
+  { id: "workflow", labelKey: "setup.wizard.workflow" },
+  { id: "criteria", labelKey: "setup.wizard.criteria" },
   { id: "expert", labelKey: "setup.wizard.expert" },
   { id: "review", labelKey: "setup.wizard.review" },
 ];
 const ENABLE_SETUP_WIZARD = true;
+const SETUP_WORKFLOW_QUESTION_IDS = new Set([
+  "run_mode",
+  "start_from",
+  "stop_after",
+  "novelty_enabled",
+  "rfd3_use",
+  "bioemu_use",
+  "relax_enabled",
+  "af2_provider",
+  "evolution_mode",
+]);
+const SETUP_CRITERIA_QUESTION_IDS = new Set([
+  "selected_tiers",
+  "design_chains",
+  "num_seq_per_tier",
+  "af2_max_candidates_per_tier",
+  "af2_plddt_cutoff",
+  "af2_rmsd_cutoff",
+  "relax_score_per_residue_cutoff",
+  "bioemu_num_samples",
+  "bioemu_max_return_structures",
+  "bioemu_filter_samples",
+  "rfd3_max_return_designs",
+  "backbone_filter_use_dssp",
+  "pdb_strip_nonpositive_resseq",
+  "wt_compare",
+  "mask_consensus_apply",
+  "ligand_mask_use_original_target",
+  "evolution_pool_size",
+  "evolution_initial_samples",
+  "evolution_oracle_samples",
+  "evolution_rounds",
+  "evolution_samples_per_round",
+]);
 const SETUP_EXPERT_QUESTION_IDS = new Set([
   "bioemu_target_rmsd_cutoff",
   "bioemu_steering_config_text",
   "rfd3_target_rmsd_cutoff",
   "fixed_positions_extra",
   "compare_rmsd_scope",
-  "af2_plddt_cutoff",
-  "af2_rmsd_cutoff",
-  "relax_score_per_residue_cutoff",
 ]);
 
 function normalizePipelineStage(value, fallback = "") {
@@ -7863,13 +7906,10 @@ function activeSetupWizardStepIndex() {
 }
 
 function activeSetupWizardStepId() {
-  return SETUP_WIZARD_STEPS[activeSetupWizardStepIndex()]?.id || "scope";
+  return SETUP_WIZARD_STEPS[activeSetupWizardStepIndex()]?.id || "input";
 }
 
 function questionSetupStepId(questionId) {
-  if (questionId === "run_mode" || questionId === "start_from" || questionId === "stop_after") {
-    return "scope";
-  }
   if (questionId === "confirm_run") {
     return "review";
   }
@@ -7885,7 +7925,13 @@ function questionSetupStepId(questionId) {
   if (SETUP_EXPERT_QUESTION_IDS.has(questionId) || SETUP_RFD3_MODE_DETAIL_IDS.has(questionId)) {
     return "expert";
   }
-  return "options";
+  if (SETUP_WORKFLOW_QUESTION_IDS.has(questionId)) {
+    return "workflow";
+  }
+  if (SETUP_CRITERIA_QUESTION_IDS.has(questionId)) {
+    return "criteria";
+  }
+  return "criteria";
 }
 
 function isSetupWizardFinalStep() {
@@ -14920,13 +14966,26 @@ function renderQuestions(questions) {
     const card = document.createElement("div");
     card.className = "question-card parameter-board option-board";
 
+    const optionBoardTitleKey =
+      setupWizardStepId === "workflow"
+        ? "setup.workflowBoard.title"
+        : setupWizardStepId === "criteria"
+          ? "setup.criteria.title"
+          : "setup.options.title";
+    const optionBoardHelpKey =
+      setupWizardStepId === "workflow"
+        ? "setup.workflowBoard.help"
+        : setupWizardStepId === "criteria"
+          ? "setup.criteria.help"
+          : "setup.options.help";
+
     const title = document.createElement("div");
     title.className = "question-title";
-    title.textContent = t("setup.options.title");
+    title.textContent = t(optionBoardTitleKey);
 
     const help = document.createElement("div");
     help.className = "question-help";
-    help.textContent = t("setup.options.help");
+    help.textContent = t(optionBoardHelpKey);
 
     const grid = document.createElement("div");
     grid.className = "parameter-board-grid option-board-grid";
@@ -15341,13 +15400,18 @@ function renderQuestions(questions) {
     const card = document.createElement("div");
     card.className = "question-card parameter-board";
 
+    const parameterBoardTitleKey =
+      setupWizardStepId === "criteria" ? "setup.criteria.parameters.title" : "setup.parameters.title";
+    const parameterBoardHelpKey =
+      setupWizardStepId === "criteria" ? "setup.criteria.parameters.help" : "setup.parameters.help";
+
     const title = document.createElement("div");
     title.className = "question-title";
-    title.textContent = t("setup.parameters.title");
+    title.textContent = t(parameterBoardTitleKey);
 
     const help = document.createElement("div");
     help.className = "question-help";
-    help.textContent = t("setup.parameters.help");
+    help.textContent = t(parameterBoardHelpKey);
 
     const grid = document.createElement("div");
     grid.className = "parameter-board-grid";
