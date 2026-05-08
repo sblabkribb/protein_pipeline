@@ -3528,6 +3528,26 @@ test("buildCopilotReply recommends top 3 rows when asked", async () => {
   assert.match(text, /3\.\s+bioemu_topology:5/);
 });
 
+test("buildCopilotReply explains the Home tab instead of falling back to Analyze", async () => {
+  const text = await buildCopilotReply({
+    prompt: "이 화면 사용법",
+    intentHint: "usage",
+    lang: "ko",
+    snapshot: {
+      tab: "home",
+      runId: "",
+      rows: [],
+      compare: { ready: false },
+    },
+  });
+
+  assert.match(text, /프로젝트/);
+  assert.match(text, /회차/);
+  assert.match(text, /새 실험/);
+  assert.doesNotMatch(text, /Analyze에서는/);
+  assert.doesNotMatch(text, /Hit List/);
+});
+
 test("aminoAcidPropertyInfo groups residues by chemistry", () => {
   assert.equal(aminoAcidPropertyInfo("D").group, "negative");
   assert.equal(aminoAcidPropertyInfo("W").group, "aromatic");

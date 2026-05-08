@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { buildCopilotReply } from "../lib/copilot.js";
 
 test("frontend app source parses as an ES module", () => {
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
@@ -414,4 +415,19 @@ test("copilot awaits async replies before adding them to chat history", () => {
   assert.match(source, /async function submitCopilotPrompt\(rawPrompt,\s*intentHint = ""\)/);
   assert.match(source, /const reply = await generateCopilotReply\(prompt,\s*intentHint\);/);
   assert.match(source, /addCopilotHistory\("ai",\s*reply\);/);
+});
+
+test("copilot usage reply follows the active Home tab", async () => {
+  const text = await buildCopilotReply({
+    prompt: "이 화면 사용법",
+    intentHint: "usage",
+    lang: "ko",
+    snapshot: { tab: "home", runId: "", rows: [], compare: { ready: false } },
+  });
+
+  assert.match(text, /프로젝트/);
+  assert.match(text, /회차/);
+  assert.match(text, /새 실험/);
+  assert.doesNotMatch(text, /Analyze에서는/);
+  assert.doesNotMatch(text, /Hit List/);
 });

@@ -77,19 +77,49 @@ function interpretSnapshot(snapshot = {}, lang = "en") {
 function usageReply(snapshot = {}, lang = "en") {
   const ko = isKorean(lang);
   const tab = String(snapshot?.tab || "").trim().toLowerCase();
-  if (tab === "setup" || tab === "studio") {
+  if (tab === "home") {
     return ko
-      ? "Setup/Studio에서는 input을 정리하고 residue picker로 고정 위치를 지정한 뒤 run을 시작합니다.\n서열과 3D 선택은 같은 selection으로 동기화되는 흐름이 적절합니다."
-      : "In Setup/Studio, prepare the input, lock residues with the residue picker, and then launch the run.\nSequence and 3D selections should stay synchronized as one selection state.";
+      ? "Home에서는 먼저 프로젝트와 회차를 선택하거나 만든 뒤 새 실험을 시작합니다.\n새 실험을 누르면 Fast, Advanced, Evolution, Workflow Studio 중 시작 경로를 고를 수 있습니다.\n기존 실행 확인은 Monitor, 결과 검토는 Analyze로 이동하세요."
+      : "On Home, first select or create a project and round, then start a new experiment.\nNew Experiment lets you choose Fast, Advanced, Evolution, or Workflow Studio.\nUse Monitor for existing runs and Analyze for result review.";
+  }
+  if (tab === "fast") {
+    return ko
+      ? "Fast에서는 타깃 파일이나 텍스트를 넣고 표준 기본값으로 빠르게 실행합니다.\n조건을 더 확인해야 하면 Advanced 열기로 설정을 검토한 뒤 실행하세요."
+      : "In Fast, add a target file or text and run with standard defaults.\nUse Open Advanced when you want to review settings before launch.";
+  }
+  if (tab === "setup" || tab === "advanced") {
+    return ko
+      ? "Advanced에서는 입력, 워크플로우, 평가기준, 고급 옵션, 검토를 순서대로 확인한 뒤 새 run을 시작합니다.\n타깃 입력을 먼저 채우고, 필요한 단계와 보존율/평가기준을 조정하세요."
+      : "In Advanced, review input, workflow, criteria, advanced options, and final review before starting a new run.\nStart with target input, then adjust stages, conservation, and evaluation criteria.";
+  }
+  if (tab === "evolution") {
+    return ko
+      ? "Evolution에서는 타깃을 기준으로 반복 탐색을 설정합니다.\n학습 샘플 수, pool 크기, Top K, round 수를 조정해 탐색 범위와 실행 시간을 정하세요."
+      : "In Evolution, configure iterative search from a target.\nTune training samples, pool size, Top K, and rounds to control search breadth and runtime.";
+  }
+  if (tab === "studio") {
+    return ko
+      ? "Workflow Studio에서는 단계별 워크플로우를 만들거나 이어 실행합니다.\n각 단계 결과를 확인한 뒤 다음 단계로 진행하고, 필요하면 Monitor에서 산출물과 상태를 함께 보세요."
+      : "In Workflow Studio, create or continue a staged workflow.\nInspect each stage before continuing, and use Monitor when you need artifact and status context.";
   }
   if (tab === "monitor") {
     return ko
       ? "Monitor에서는 stage 상태와 산출물을 확인하고, 중단된 run은 resume로 이어갑니다."
       : "In Monitor, inspect stage state and artifacts, then resume interrupted runs when needed.";
   }
+  if (tab === "rounds") {
+    return ko
+      ? "Rounds에서는 프로젝트와 실험 회차를 정리합니다.\n반복 최적화의 가설, 선택 후보, 다음 회차 메모를 이 화면에서 관리하세요."
+      : "In Rounds, organize projects and experiment rounds.\nUse this page to track hypotheses, selected candidates, and next-round notes for iterative work.";
+  }
+  if (tab === "analyze") {
+    return ko
+      ? "Analyze에서는 1) Hit List로 후보를 좁히고 2) Compare Studio 기본 sequence diff를 보고 3) 필요할 때 구조 차이와 residue-linked view를 함께 확인합니다."
+      : "In Analyze, 1) narrow candidates in the Hit List, 2) start from the default sequence diff in Compare Studio, and 3) inspect structure deltas plus the residue-linked view when needed.";
+  }
   return ko
-    ? "Analyze에서는 1) Hit List로 후보를 좁히고 2) Compare Studio 기본 sequence diff를 보고 3) 필요할 때 구조 차이와 residue-linked view를 함께 확인합니다."
-    : "In Analyze, 1) narrow candidates in the Hit List, 2) start from the default sequence diff in Compare Studio, and 3) inspect structure deltas plus the residue-linked view when needed.";
+    ? "현재 화면의 주요 입력과 추천 액션을 먼저 확인하세요. run이 필요하면 Home 또는 Advanced에서 시작하고, 결과 확인은 Monitor와 Analyze를 사용합니다."
+    : "Start by checking the main inputs and suggested actions for the current page. Use Home or Advanced to start runs, then Monitor and Analyze for review.";
 }
 
 function summaryReply(snapshot = {}, lang = "en") {
