@@ -947,11 +947,30 @@ body[data-environment="staging"] .topbar {
   margin-bottom: 1.5rem;
 }
 
+.paper-mask-panel-featured {
+  border-color: color-mix(in oklch, var(--action-primary) 28%, transparent);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94)),
+    color-mix(in oklch, var(--action-primary) 7%, white);
+}
+
+.paper-mask-heading {
+  display: grid;
+  gap: 4px;
+}
+
 .paper-mask-label {
   display: block;
   color: var(--ink);
   font-size: 13px;
   font-weight: 700;
+}
+
+.paper-mask-help {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .paper-mask-controls {

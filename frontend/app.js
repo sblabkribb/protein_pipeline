@@ -2064,10 +2064,10 @@ const I18N = {
       "Copilot reads the current run context and can explain metrics, compare state, resume behavior, and practical next actions.",
     "tutorial.step.copilot.hint":
       "Use Copilot for interpretation and navigation help; use the main Run, Resume, Report, and Export buttons for irreversible actions.",
-    "tutorial.step.settings.title": "Settings and help stay in the top bar",
-    "tutorial.step.settings.body":
-      "Settings contains fixed service information and report language. Usage is the static guide, and Tutorial can be replayed anytime.",
-    "tutorial.step.settings.hint": "The tutorial follows the selected KO/EN language, so switching language changes these explanations too.",
+    "tutorial.step.topbar.title": "Top menu controls",
+    "tutorial.step.topbar.body":
+      "Use KO/EN for language, Copilot for contextual help, Usage for the static guide, Tutorial to replay this tour, Settings for report language, and Logout when finished.",
+    "tutorial.step.topbar.hint": "Settings is only one item here. Most everyday navigation stays in the left tabs and Home workspace.",
     "tabs.home": "Home",
     "tabs.evolution": "Evolution",
     "tabs.fast": "Fast",
@@ -2342,6 +2342,10 @@ const I18N = {
     "setup.prompt.placeholder": "Optional notes for this run. Leave blank for normal setup.",
     "setup.customRunId.label": "Run name",
     "setup.customRunId.help": "Optional. Leave blank to create one automatically.",
+    "setup.pdfAgent.label": "Extract Literature Constraints (PDF)",
+    "setup.pdfAgent.help":
+      "Upload a paper when residues or mutation-sensitive regions should guide fixed-position choices.",
+    "setup.pdfAgent.upload": "Upload PDF",
     "setup.check": "Check Advanced",
     "setup.reset": "Reset Inputs",
     "setup.clear": "Clear Note",
@@ -3472,10 +3476,10 @@ const I18N = {
       "Copilot은 현재 run 맥락을 읽고 metric 해석, compare 상태, resume 방식, 다음 행동을 설명해줍니다.",
     "tutorial.step.copilot.hint":
       "해석과 탐색 도움에는 Copilot을 쓰고, 실제 실행/재개/리포트/export는 각 화면의 전용 버튼으로 처리하세요.",
-    "tutorial.step.settings.title": "설정과 도움말은 상단에 있습니다",
-    "tutorial.step.settings.body":
-      "설정에는 고정 서비스 정보와 보고서 언어가 있습니다. 사용법은 정적 가이드이고, 튜토리얼은 언제든 다시 볼 수 있습니다.",
-    "tutorial.step.settings.hint": "튜토리얼 설명은 현재 KO/EN 언어 선택을 따르므로 언어를 바꾸면 설명도 같이 바뀝니다.",
+    "tutorial.step.topbar.title": "상단 메뉴 안내",
+    "tutorial.step.topbar.body":
+      "KO/EN은 언어 변경, Copilot은 현재 화면 도움, 사용법은 고정 가이드, 튜토리얼은 이 안내 다시 보기, 설정은 리포트 언어, 로그아웃은 세션 종료에 사용합니다.",
+    "tutorial.step.topbar.hint": "설정은 상단 메뉴 중 하나입니다. 평소 작업 이동은 왼쪽 탭과 Home 화면에서 시작하세요.",
     "tabs.home": "홈",
     "tabs.evolution": "Evolution",
     "tabs.fast": "빠른 실행",
@@ -3749,6 +3753,10 @@ const I18N = {
     "setup.prompt.placeholder": "선택 메모입니다. 일반 설정에서는 비워두세요.",
     "setup.customRunId.label": "실행 이름",
     "setup.customRunId.help": "선택 사항입니다. 비워두면 자동으로 만들어집니다.",
+    "setup.pdfAgent.label": "문헌 제약 조건 추출 (PDF)",
+    "setup.pdfAgent.help":
+      "논문에 고정해야 할 residue나 변이에 민감한 영역이 있을 때 업로드하세요.",
+    "setup.pdfAgent.upload": "PDF 업로드",
     "setup.check": "설정 점검",
     "setup.reset": "입력 초기화",
     "setup.clear": "메모 지우기",
@@ -4961,6 +4969,15 @@ const TUTORIAL_STEPS = [
     hintKey: "tutorial.step.advancedInput.hint",
   },
   {
+    id: "pdfAgent",
+    tab: "advanced",
+    setupStep: "input",
+    target: "#advancedPaperMaskPanel",
+    titleKey: "tutorial.step.pdfAgent.title",
+    bodyKey: "tutorial.step.pdfAgent.body",
+    hintKey: "tutorial.step.pdfAgent.hint",
+  },
+  {
     id: "advancedWorkflow",
     tab: "advanced",
     setupStep: "workflow",
@@ -4986,15 +5003,6 @@ const TUTORIAL_STEPS = [
     titleKey: "tutorial.step.advancedExpert.title",
     bodyKey: "tutorial.step.advancedExpert.body",
     hintKey: "tutorial.step.advancedExpert.hint",
-  },
-  {
-    id: "pdfAgent",
-    tab: "advanced",
-    setupStep: "expert",
-    target: ".paper-mask-panel-advanced",
-    titleKey: "tutorial.step.pdfAgent.title",
-    bodyKey: "tutorial.step.pdfAgent.body",
-    hintKey: "tutorial.step.pdfAgent.hint",
   },
   {
     id: "advancedReview",
@@ -5093,11 +5101,11 @@ const TUTORIAL_STEPS = [
     hintKey: "tutorial.step.copilot.hint",
   },
   {
-    id: "settings",
-    target: "#settingsBtn",
-    titleKey: "tutorial.step.settings.title",
-    bodyKey: "tutorial.step.settings.body",
-    hintKey: "tutorial.step.settings.hint",
+    id: "topbarMenu",
+    target: ".topbar-actions",
+    titleKey: "tutorial.step.topbar.title",
+    bodyKey: "tutorial.step.topbar.body",
+    hintKey: "tutorial.step.topbar.hint",
   },
 ];
 
@@ -8452,6 +8460,13 @@ function renderSetupStepSummary(stepId = activeSetupWizardStepId()) {
 function isSetupWizardFinalStep() {
   const lastIndex = SETUP_WIZARD_STEPS.length - 1;
   return Number(state.setupStepIndex || 0) >= lastIndex;
+}
+
+function syncSetupCustomRunField(questions = state.plan?.questions || []) {
+  const field = el.customRunIdInput?.closest(".setup-custom-run-field");
+  if (!field) return;
+  const shouldShow = !setupWizardEnabled(questions) || isSetupWizardFinalStep();
+  field.classList.toggle("hidden", !shouldShow);
 }
 
 function renderSetupWizard(questions) {
@@ -15128,6 +15143,7 @@ function renderQuestions(questions) {
     if (el.setupPrimaryLayout) el.setupPrimaryLayout.dataset.activeStep = "idle";
     if (el.setupStepper) el.setupStepper.classList.add("hidden");
     if (el.setupStepSummary) el.setupStepSummary.classList.add("hidden");
+    syncSetupCustomRunField([]);
     el.runBtn.disabled = false;
     el.runHint.textContent = t("hint.none");
     return;
@@ -15140,6 +15156,7 @@ function renderQuestions(questions) {
     normalizedQuestions.push(normalizeQuestion({ id: "compare_rmsd_scope" }));
   }
   const filteredVisibleQuestions = normalizedQuestions.filter((q) => questionVisibleForCurrentState(q));
+  syncSetupCustomRunField(filteredVisibleQuestions);
   const visibleQuestions = renderSetupWizard(filteredVisibleQuestions);
   const setupWizardActive = setupWizardEnabled(filteredVisibleQuestions);
   const setupWizardStepId = setupWizardActive ? activeSetupWizardStepId() : "";

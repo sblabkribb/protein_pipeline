@@ -497,14 +497,26 @@
                     <div id="messages" class="messages monitor-messages"></div>
                   </div>
 
-                  <div id="questionInputStack" class="question-stack section-stack"></div>
-
-                  <!-- Literature-Driven Masking UI (Advanced) -->
-                  <div class="paper-mask-panel field-group paper-mask-panel-advanced">
-                    <label class="paper-mask-label">Extract Constraints from Paper (PDF)</label>
+                  <div
+                    id="advancedPaperMaskPanel"
+                    class="paper-mask-panel field-group paper-mask-panel-advanced paper-mask-panel-featured"
+                  >
+                    <div class="paper-mask-heading">
+                      <label class="paper-mask-label" data-i18n="setup.pdfAgent.label">
+                        Extract Literature Constraints (PDF)
+                      </label>
+                      <p class="paper-mask-help" data-i18n="setup.pdfAgent.help">
+                        Upload a paper when residues or mutation-sensitive regions should guide fixed-position choices.
+                      </p>
+                    </div>
                     <div class="paper-mask-controls">
                       <input class="paper-mask-input" type="file" id="paperMaskInputAdvanced" accept="application/pdf" />
-                      <button type="button" class="ghost paper-mask-upload" id="paperMaskUploadBtnAdvanced">
+                      <button
+                        type="button"
+                        class="ghost paper-mask-upload"
+                        id="paperMaskUploadBtnAdvanced"
+                        data-i18n="setup.pdfAgent.upload"
+                      >
                         Upload PDF
                       </button>
                       <span id="paperMaskStatusAdvanced" class="status-subtitle paper-mask-status"></span>
@@ -518,6 +530,8 @@
                       </div>
                     </div>
                   </div>
+
+                  <div id="questionInputStack" class="question-stack section-stack"></div>
                 </section>
 
                 <section class="setup-lane setup-lane-execution">
@@ -540,7 +554,7 @@
                     </div>
                     <div id="questionConfigStack" class="question-stack section-stack"></div>
 
-                    <label class="fast-field setup-custom-run-field">
+                    <label class="fast-field setup-custom-run-field hidden">
                       <span data-i18n="setup.customRunId.label">Run name</span>
                       <small data-i18n="setup.customRunId.help">Optional. Leave blank to create one automatically.</small>
                       <input id="customRunIdInput" type="text" placeholder="custom_run_01" />

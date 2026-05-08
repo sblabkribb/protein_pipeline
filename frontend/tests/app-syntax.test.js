@@ -245,11 +245,17 @@ test("advanced launch form uses a single ordered settings surface", () => {
   assert.match(html, /class="advanced-launch-frame"/);
   assert.match(html, /id="setupPrimaryLayout"/);
   assert.match(html, /class="setup-lane setup-lane-input"/);
+  assert.match(html, /id="advancedPaperMaskPanel"[\s\S]*id="questionInputStack"/m);
+  assert.match(html, /class="fast-field setup-custom-run-field hidden"[\s\S]*id="customRunIdInput"/m);
   assert.match(html, /id="setupStepSummary"/);
   assert.match(source, /function renderSetupStepSummary/);
+  assert.match(source, /function syncSetupCustomRunField/);
+  assert.match(source, /customRunIdInput\?\.closest\("\.setup-custom-run-field"\)/);
+  assert.match(source, /syncSetupCustomRunField\(filteredVisibleQuestions\);/);
   assert.match(source, /setupPrimaryLayout\.dataset\.activeStep/);
   assert.match(styles, /\.advanced-launch-frame/);
   assert.match(styles, /\.setup-step-summary/);
+  assert.match(styles, /\.paper-mask-panel-featured/);
   assert.match(styles, /\.setup-primary-layout\[data-active-step="input"\]/);
   assert.match(styles, /\.setup-lane-execution\s*\{[\s\S]*?order:\s*-1;/m);
   assert.match(styles, /\.setup-primary-layout:not\(\[data-active-step="input"\]\)\s+\.setup-lane-input/);
@@ -320,7 +326,7 @@ test("frontend includes a localized first-run tutorial overlay", () => {
   assert.match(source, /function maybeShowTutorialOnFirstVisit/);
   assert.match(source, /function openTutorial/);
   assert.match(source, /"action\.tutorial"/);
-  assert.match(source, /"tutorial\.step\.settings\.title"/);
+  assert.match(source, /"tutorial\.step\.topbar\.title"/);
   assert.match(source, /"tutorial\.step\.evolution\.title"/);
   assert.match(source, /"tutorial\.step\.studio\.title"/);
   assert.match(source, /"tutorial\.step\.rounds\.title"/);
@@ -338,17 +344,19 @@ test("tutorial covers expert workflow controls and downstream review tools", () 
   assert.match(source, /id: "homeRound"/);
   assert.match(source, /id: "homeProject"[\s\S]*?target: "#homeCreateProjectBtn"[\s\S]*?id: "homeRound"[\s\S]*?target: "#homeCreateRoundBtn"/m);
   assert.match(source, /id: "advancedInput"[\s\S]*?setupStep: "input"/m);
+  assert.match(source, /id: "advancedInput"[\s\S]*?id: "pdfAgent"[\s\S]*?id: "advancedWorkflow"/m);
   assert.match(source, /id: "advancedWorkflow"[\s\S]*?setupStep: "workflow"/m);
   assert.match(source, /id: "advancedCriteria"[\s\S]*?setupStep: "criteria"/m);
   assert.match(source, /id: "advancedExpert"[\s\S]*?setupStep: "expert"/m);
   assert.match(source, /id: "advancedReview"[\s\S]*?setupStep: "review"/m);
-  assert.match(source, /id: "pdfAgent"/);
+  assert.match(source, /id: "pdfAgent"[\s\S]*?setupStep: "input"[\s\S]*?target: "#advancedPaperMaskPanel"/m);
   assert.match(source, /id: "evolutionSettings"/);
   assert.match(source, /id: "studioCheckpoint"/);
   assert.match(source, /id: "monitorAgent"/);
   assert.match(source, /id: "analyzeHitList"/);
   assert.match(source, /id: "report"/);
   assert.match(source, /id: "copilot"/);
+  assert.match(source, /id: "topbarMenu"[\s\S]*?target: "\.topbar-actions"/m);
 
   assert.match(source, /function applyTutorialStepContext/);
   assert.match(source, /state\.setupStepIndex = stepIndex;/);
@@ -366,4 +374,5 @@ test("tutorial covers expert workflow controls and downstream review tools", () 
   assert.match(source, /"tutorial\.step\.analyzeHitList\.title"/);
   assert.match(source, /"tutorial\.step\.report\.title"/);
   assert.match(source, /"tutorial\.step\.copilot\.title"/);
+  assert.match(source, /"tutorial\.step\.topbar\.title"/);
 });
