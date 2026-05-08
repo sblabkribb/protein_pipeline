@@ -1975,8 +1975,8 @@ const I18N = {
     "tutorial.finish": "Finish",
     "tutorial.step.home.title": "Start from the workspace",
     "tutorial.step.home.body":
-      "Use Home as the landing point. Start a new experiment, reopen a monitor, or jump straight to result analysis from here.",
-    "tutorial.step.home.hint": "New Experiment now lets you choose Fast, Advanced, Evolution, or Workflow Studio before moving into setup.",
+      "Use Home as the landing point. Before starting a new run, set the project and round so results are recorded in the right workspace.",
+    "tutorial.step.home.hint": "Project and round are not mandatory for a quick check, but they keep repeated optimization work traceable.",
     "tutorial.step.experimentChoice.title": "Choose the right start path",
     "tutorial.step.experimentChoice.body":
       "After clicking New Experiment, choose the setup path that matches the work. Fast is for a standard run with minimal input. Advanced is the guided full setup. Evolution runs iterative search. Workflow Studio lets you inspect each stage before continuing.",
@@ -3393,8 +3393,8 @@ const I18N = {
     "tutorial.finish": "마침",
     "tutorial.step.home.title": "워크스페이스에서 시작",
     "tutorial.step.home.body":
-      "Home은 시작 지점입니다. 새 실험을 만들거나, 기존 실행 모니터를 다시 열거나, 결과 분석으로 바로 이동할 수 있습니다.",
-    "tutorial.step.home.hint": "새 실험에서는 Fast, Advanced, Evolution, Workflow Studio 중 필요한 시작 방식을 먼저 고를 수 있습니다.",
+      "Home은 시작 지점입니다. 새 실행을 만들기 전에 프로젝트와 회차를 정하면 결과가 올바른 작업 공간에 기록됩니다.",
+    "tutorial.step.home.hint": "빠른 확인만 할 때는 필수는 아니지만, 반복 최적화 작업에서는 프로젝트와 회차를 먼저 정하는 것이 좋습니다.",
     "tutorial.step.experimentChoice.title": "시작 경로를 고릅니다",
     "tutorial.step.experimentChoice.body":
       "새 실험을 누른 뒤 작업 방식에 맞는 경로를 고릅니다. 빠른 실행은 최소 입력으로 표준 실행을 시작합니다. 고급 설정은 전체 설정을 단계별로 확인합니다. Evolution은 반복 탐색용입니다. 스튜디오는 각 단계를 확인하고 이어 실행할 때 사용합니다.",
@@ -4940,18 +4940,10 @@ const TUTORIAL_STEPS = [
   {
     id: "home",
     tab: "home",
-    target: "[data-home-target=\"experiment\"]",
+    target: ".home-shell",
     titleKey: "tutorial.step.home.title",
     bodyKey: "tutorial.step.home.body",
     hintKey: "tutorial.step.home.hint",
-  },
-  {
-    id: "experimentChoice",
-    tab: "home",
-    target: ".experiment-choice-grid",
-    titleKey: "tutorial.step.experimentChoice.title",
-    bodyKey: "tutorial.step.experimentChoice.body",
-    hintKey: "tutorial.step.experimentChoice.hint",
   },
   {
     id: "homeProject",
@@ -4968,6 +4960,14 @@ const TUTORIAL_STEPS = [
     titleKey: "tutorial.step.homeRound.title",
     bodyKey: "tutorial.step.homeRound.body",
     hintKey: "tutorial.step.homeRound.hint",
+  },
+  {
+    id: "experimentChoice",
+    tab: "home",
+    target: ".experiment-choice-grid",
+    titleKey: "tutorial.step.experimentChoice.title",
+    bodyKey: "tutorial.step.experimentChoice.body",
+    hintKey: "tutorial.step.experimentChoice.hint",
   },
   {
     id: "advanced",

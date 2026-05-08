@@ -364,7 +364,8 @@ test("tutorial covers expert workflow controls and downstream review tools", () 
   assert.match(source, /id: "homeProject"/);
   assert.match(source, /id: "homeRound"/);
   assert.match(source, /id: "experimentChoice"/);
-  assert.match(source, /id: "home"[\s\S]*?id: "experimentChoice"[\s\S]*?id: "homeProject"/m);
+  assert.match(source, /id: "home"[\s\S]*?target: "\.home-shell"/m);
+  assert.match(source, /id: "home"[\s\S]*?id: "homeProject"[\s\S]*?id: "homeRound"[\s\S]*?id: "experimentChoice"/m);
   assert.match(source, /id: "experimentChoice"[\s\S]*?target: "\.experiment-choice-grid"/m);
   assert.match(source, /"tutorial\.step\.experimentChoice\.title"/);
   assert.match(source, /"tutorial\.step\.experimentChoice\.title": "Choose the right start path"/);
