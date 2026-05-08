@@ -126,9 +126,27 @@ test("advanced optional prompt is collapsed and layout width is fluid", () => {
   assert.doesNotMatch(html, /<textarea\s+id="promptInput"[\s\S]*class="composer-actions advanced-primary-actions"/);
   assert.match(source, /"setup\.prompt\.summary": "Optional notes or natural-language setup"/);
   assert.match(source, /"setup\.prompt\.summary": "선택 메모 또는 자연어 설정"/);
-  assert.match(styles, /\.tab-panel\[data-tab="advanced"\]\s+\.tab-content-shell\s*\{[\s\S]*max-width:\s*min\(100%,\s*1740px\);/m);
   assert.match(styles, /\.setup-primary-layout\s*\{[\s\S]*--setup-content-max:\s*clamp\(960px,\s*86vw,\s*1320px\);/m);
   assert.match(styles, /\.setup-primary-layout\[data-active-step="input"\]\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*min\(100%,\s*var\(--setup-content-max\)\)\);/m);
+});
+
+test("all primary tabs share fluid shell width and responsive grid rules", () => {
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.match(styles, /--content-max:\s*1680px;/);
+  assert.match(styles, /--content-gutter:\s*clamp\(16px,\s*2\.2vw,\s*40px\);/);
+  assert.match(styles, /--layout-gap:\s*clamp\(16px,\s*1\.6vw,\s*28px\);/);
+  assert.match(styles, /\.topbar\s*\{[\s\S]*max-width:\s*min\(100%,\s*var\(--content-max\)\);[\s\S]*padding:\s*30px\s+var\(--content-gutter\)\s+18px;/m);
+  assert.match(styles, /\.layout\s*\{[\s\S]*padding:\s*0\s+var\(--content-gutter\)\s+clamp\(28px,\s*3vw,\s*44px\);/m);
+  assert.match(styles, /\.app-shell\s*\{[\s\S]*max-width:\s*min\(100%,\s*var\(--content-max\)\);[\s\S]*margin:\s*0\s+auto;/m);
+  assert.match(styles, /\.tab-content-shell\s*\{[\s\S]*max-width:\s*min\(100%,\s*var\(--content-max\)\);[\s\S]*padding:\s*var\(--tab-shell-padding\);/m);
+  assert.doesNotMatch(styles, /\.tab-panel\[data-tab="advanced"\]\s+\.tab-content-shell\s*\{[\s\S]*max-width:/m);
+  assert.match(styles, /\.home-shell\s*\{[\s\S]*gap:\s*var\(--layout-gap\);/m);
+  assert.match(styles, /\.experiment-launchpad\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1\.18fr\)\s+minmax\(clamp\(280px,\s*24vw,\s*420px\),\s*0\.82fr\);[\s\S]*gap:\s*var\(--layout-gap\);/m);
+  assert.match(styles, /\.fast-grid,\s*\.evolution-grid\s*\{[\s\S]*gap:\s*var\(--layout-gap\);/m);
+  assert.match(styles, /\.monitor-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);[\s\S]*gap:\s*var\(--layout-gap\);/m);
+  assert.match(styles, /\.studio-grid\s*\{[\s\S]*grid-template-columns:\s*minmax\(clamp\(220px,\s*18vw,\s*300px\),\s*0\.34fr\)\s+minmax\(0,\s*1fr\);[\s\S]*gap:\s*var\(--layout-gap\);/m);
+  assert.match(styles, /@media \(max-width:\s*1180px\)\s*\{[\s\S]*\.experiment-launchpad,\s*\.fast-grid,\s*\.evolution-grid,\s*\.rounds-grid,\s*\.monitor-grid,\s*\.analyze-grid,\s*\.studio-grid[\s\S]*grid-template-columns:\s*1fr;/m);
 });
 
 test("frontend uses solubility and stability platform branding", () => {

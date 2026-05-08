@@ -36,6 +36,11 @@
   --radius: 24px;
   --radius-sm: 8px;
   --radius-md: 12px;
+  --content-max: 1680px;
+  --content-gutter: clamp(16px, 2.2vw, 40px);
+  --tab-shell-padding: clamp(4px, 1vw, 14px) clamp(0px, 1vw, 12px) clamp(10px, 1.4vw, 18px);
+  --layout-gap: clamp(16px, 1.6vw, 28px);
+  --panel-padding: clamp(18px, 1.8vw, 28px);
 }
 
 * {
@@ -69,9 +74,9 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 18px;
-  max-width: 1480px;
+  max-width: min(100%, var(--content-max));
   margin: 0 auto;
-  padding: 30px 40px 18px;
+  padding: 30px var(--content-gutter) 18px;
 }
 
 .brand {
@@ -177,19 +182,22 @@ body[data-environment="staging"] .topbar {
   position: relative;
   z-index: 2;
   display: block;
-  padding: 0 40px 40px;
+  padding: 0 var(--content-gutter) clamp(28px, 3vw, 44px);
 }
 
 .app-shell {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  width: 100%;
+  max-width: min(100%, var(--content-max));
+  margin: 0 auto;
 }
 
 .app-shell-frame {
   display: grid;
-  grid-template-columns: 272px minmax(0, 1fr);
-  gap: 28px;
+  grid-template-columns: clamp(232px, 17vw, 272px) minmax(0, 1fr);
+  gap: var(--layout-gap);
   align-items: start;
 }
 
@@ -453,25 +461,20 @@ body[data-environment="staging"] .topbar {
 
 .tab-grid {
   display: grid;
-  gap: 24px;
+  gap: var(--layout-gap);
 }
 
 .tab-content-shell {
   width: 100%;
-  max-width: 1320px;
+  max-width: min(100%, var(--content-max));
   margin: 0 auto;
-  padding: 8px 4px 14px;
-}
-
-.tab-panel[data-tab="advanced"] .tab-content-shell {
-  max-width: min(100%, 1740px);
-  padding-inline: clamp(0px, 1vw, 12px);
+  padding: var(--tab-shell-padding);
 }
 
 .home-shell {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: var(--layout-gap);
   min-height: 520px;
 }
 
@@ -482,13 +485,13 @@ body[data-environment="staging"] .topbar {
 .home-card-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
+  gap: var(--layout-gap);
 }
 
 .experiment-launchpad {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1.18fr) minmax(clamp(280px, 24vw, 420px), 0.82fr);
+  gap: var(--layout-gap);
   align-items: stretch;
 }
 
@@ -502,7 +505,7 @@ body[data-environment="staging"] .topbar {
 
 .launchpad-primary {
   min-height: 280px;
-  padding: 30px;
+  padding: var(--panel-padding);
   border-color: color-mix(in oklch, var(--action-primary) 24%, transparent);
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.99), rgba(241, 245, 249, 0.94)),
@@ -526,7 +529,7 @@ body[data-environment="staging"] .topbar {
 
 .launchpad-secondary-grid {
   display: grid;
-  gap: 18px;
+  gap: clamp(14px, 1.3vw, 18px);
   grid-template-rows: 1fr 1fr;
 }
 
@@ -607,7 +610,7 @@ body[data-environment="staging"] .topbar {
   appearance: none;
   width: 100%;
   min-height: 220px;
-  padding: 26px 24px 26px;
+  padding: clamp(20px, 1.8vw, 26px) clamp(18px, 1.7vw, 24px);
   text-align: left;
   cursor: pointer;
   position: relative;
@@ -674,7 +677,7 @@ body[data-environment="staging"] .topbar {
 .experiment-choice-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: clamp(10px, 1vw, 14px);
 }
 
 .experiment-choice-btn {
@@ -739,7 +742,7 @@ body[data-environment="staging"] .topbar {
 .home-context-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 14px;
+  gap: clamp(12px, 1.1vw, 16px);
 }
 
 .home-context-item {
@@ -802,8 +805,8 @@ body[data-environment="staging"] .topbar {
 
 .fast-grid, .evolution-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.85fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1.28fr) minmax(clamp(280px, 24vw, 420px), 0.82fr);
+  gap: var(--layout-gap);
   align-items: start;
 }
 
@@ -1126,8 +1129,8 @@ body[data-environment="staging"] .topbar {
 
 .rounds-grid {
   display: grid;
-  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.2fr);
-  gap: 18px;
+  grid-template-columns: minmax(clamp(240px, 22vw, 360px), 0.82fr) minmax(0, 1.18fr);
+  gap: var(--layout-gap);
   align-items: start;
 }
 
@@ -1399,12 +1402,14 @@ body[data-environment="staging"] .topbar {
 }
 
 .monitor-grid {
-  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--layout-gap);
   align-items: start;
 }
 
 .analyze-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--layout-gap);
 }
 
 .mcp-guide-grid {
@@ -1511,7 +1516,7 @@ body[data-environment="staging"] .topbar {
   box-shadow:
     0 20px 48px rgba(18, 31, 33, 0.09),
     inset 0 1px 0 rgba(255, 255, 255, 0.74);
-  padding: 28px;
+  padding: var(--panel-padding);
   position: relative;
   border: 1px solid rgba(24, 41, 46, 0.08);
   overflow: hidden;
@@ -1575,7 +1580,7 @@ body[data-environment="staging"] .topbar {
 
 .tab-panel[data-tab="advanced"] .panel-chat {
   width: 100%;
-  max-width: min(100%, 1700px);
+  max-width: 100%;
   margin: 0 auto;
 }
 
@@ -5815,6 +5820,18 @@ textarea:focus-visible {
   }
 }
 
+@media (max-width: 1180px) {
+  .experiment-launchpad,
+  .fast-grid,
+  .evolution-grid,
+  .rounds-grid,
+  .monitor-grid,
+  .analyze-grid,
+  .studio-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 1100px) {
   .global-monitor-main {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5902,7 +5919,7 @@ textarea:focus-visible {
   display: flex;
   align-items: stretch;
   justify-content: space-between;
-  gap: 14px;
+  gap: var(--layout-gap);
   flex-wrap: wrap;
 }
 
@@ -6099,8 +6116,8 @@ textarea:focus-visible {
 
 .studio-grid {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(clamp(220px, 18vw, 300px), 0.34fr) minmax(0, 1fr);
+  gap: var(--layout-gap);
 }
 
 .studio-stage-rail,

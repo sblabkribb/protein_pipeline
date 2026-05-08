@@ -1638,7 +1638,7 @@ test("monitor layout uses a top summary panel with lower two-column workspace th
   assert.match(html, /class="panel panel-block monitor-summary-panel span-2"/);
   assert.match(html, /class="panel panel-block monitor-status-panel"/);
   assert.match(html, /class="panel panel-block monitor-artifacts-panel"/);
-  assert.match(css, /\.monitor-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(320px,\s*1fr\)\);/m);
+  assert.match(css, /\.monitor-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/m);
   assert.match(css, /\.monitor-summary-panel\s*\{[\s\S]*grid-column:\s*1\s*\/\s*-1;/m);
   assert.match(css, /@media \(max-width:\s*1240px\)\s*\{[\s\S]*\.monitor-grid\s*\{[\s\S]*grid-template-columns:\s*1fr;/m);
 });
