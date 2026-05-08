@@ -219,7 +219,7 @@
             <div class="panel panel-block home-shell">
               <div class="panel-header home-header">
                 <h2 data-i18n="home.title">Solubility/Stability Workspace</h2>
-                <p data-i18n="home.desc">Target design runs, active rounds, and result triage in one workspace.</p>
+                <p data-i18n="home.desc">Target design runs, current rounds, and result triage in one workspace.</p>
               </div>
               <div class="experiment-launchpad">
                 <button class="home-mode-card launchpad-primary" type="button" data-home-target="experiment">
@@ -244,7 +244,7 @@
               </div>
               <div class="home-context-strip">
                 <div class="home-context-item home-context-item-select">
-                  <span data-i18n="home.context.project">Active Project</span>
+                  <span data-i18n="home.context.project">Current Project</span>
                   <select id="homeProjectSelector" class="run-selector">
                     <option value="" data-i18n="home.select.projectPlaceholder">Select project</option>
                   </select>
@@ -255,7 +255,7 @@
                   </div>
                 </div>
                 <div class="home-context-item home-context-item-select">
-                  <span data-i18n="home.context.round">Active Round</span>
+                  <span data-i18n="home.context.round">Current Round</span>
                   <select id="homeRoundSelector" class="run-selector">
                     <option value="" data-i18n="home.select.roundPlaceholder">Select round</option>
                   </select>
@@ -280,7 +280,7 @@
               </div>
               <div class="home-quick-actions">
                 <button id="homeContinueRoundBtn" class="ghost" type="button" data-i18n="home.action.continueRound">
-                  Continue Active Round
+                  Continue Current Round
                 </button>
                 <button id="homeOpenMonitorBtn" class="ghost" type="button" data-i18n="home.action.openMonitor">
                   Open Monitor
@@ -337,8 +337,8 @@
                     ></textarea>
                   </label>
                   <label class="fast-field">
-                    <span data-i18n="setup.customRunId.label">Custom Run ID</span>
-                    <small data-i18n="setup.customRunId.help">Leave empty for auto-generation.</small>
+                    <span data-i18n="setup.customRunId.label">Run name</span>
+                    <small data-i18n="setup.customRunId.help">Optional. Leave blank to create one automatically.</small>
                     <input id="fastCustomRunIdInput" type="text" placeholder="custom_run_01" />
                   </label>
                   <div class="fast-actions">
@@ -445,11 +445,11 @@
                 </div>
               </div>
 
-              <div class="setup-ux-grid setup-primary-layout">
+              <div id="setupPrimaryLayout" class="setup-ux-grid setup-primary-layout">
                 <section class="setup-lane">
                   <div class="setup-section-title">
                     <h3 data-i18n="setup.section.input">Input</h3>
-                    <p data-i18n="setup.section.inputDesc">Attach required files and enter optional notes.</p>
+                    <p data-i18n="setup.section.inputDesc">Put the target, files, and notes for this experiment here.</p>
                   </div>
 
                   <div class="composer">
@@ -498,9 +498,9 @@
 
                 <section class="setup-lane setup-lane-execution">
                   <div class="setup-section-title">
-                    <h3 data-i18n="setup.section.execution">Execution Settings</h3>
+                    <h3 data-i18n="setup.section.execution">Step Setup</h3>
                     <p data-i18n="setup.section.executionDesc">
-                      Select run mode and configure pipeline options.
+                      Work through one step at a time.
                     </p>
                   </div>
 
@@ -517,8 +517,8 @@
                     <div id="questionConfigStack" class="question-stack section-stack"></div>
 
                     <label class="fast-field setup-custom-run-field">
-                      <span data-i18n="setup.customRunId.label">Custom Run ID</span>
-                      <small data-i18n="setup.customRunId.help">Leave empty for auto-generation.</small>
+                      <span data-i18n="setup.customRunId.label">Run name</span>
+                      <small data-i18n="setup.customRunId.help">Optional. Leave blank to create one automatically.</small>
                       <input id="customRunIdInput" type="text" placeholder="custom_run_01" />
                     </label>
 
@@ -568,8 +568,8 @@
                     ></textarea>
                   </label>
                   <label class="fast-field">
-                    <span data-i18n="setup.customRunId.label">Custom Run ID</span>
-                    <small data-i18n="setup.customRunId.help">Leave empty for auto-generation.</small>
+                    <span data-i18n="setup.customRunId.label">Run name</span>
+                    <small data-i18n="setup.customRunId.help">Optional. Leave blank to create one automatically.</small>
                     <input id="evolutionCustomRunIdInput" type="text" placeholder="custom_run_01" />
                   </label>
                   <div class="fast-inline-actions">
@@ -772,7 +772,7 @@
             <div class="panel panel-block rounds-shell">
               <div class="panel-header">
                 <h2 data-i18n="rounds.title">Rounds Workspace</h2>
-                <p data-i18n="rounds.desc">Organize projects, active rounds, and linked runs in one place.</p>
+                <p data-i18n="rounds.desc">Organize projects, experiment rounds, and linked runs in one place.</p>
               </div>
               <div class="rounds-grid">
                 <section class="rounds-column">
@@ -815,7 +815,7 @@
                       <div>
                         <div class="status-subtitle" data-i18n="rounds.list">Rounds</div>
                         <p class="rounds-block-copy" data-i18n="rounds.rounds.desc">
-                          Keep each design-test-learn cycle grouped under the active project.
+                          Keep each design-test-learn cycle grouped under the current project.
                         </p>
                       </div>
                     </div>

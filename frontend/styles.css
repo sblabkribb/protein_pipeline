@@ -1502,6 +1502,16 @@ body[data-environment="staging"] .topbar {
   width: 100%;
 }
 
+.setup-primary-layout[data-active-step="input"] {
+  grid-template-columns: minmax(0, 980px);
+}
+
+.setup-primary-layout[data-active-step="input"] .setup-lane,
+.setup-primary-layout[data-active-step="input"] .setup-lane-execution {
+  width: 100%;
+  justify-self: center;
+}
+
 .setup-lane {
   background: rgba(255, 255, 255, 0.98);
   border-radius: var(--radius-sm);

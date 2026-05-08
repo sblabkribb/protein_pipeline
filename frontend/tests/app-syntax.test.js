@@ -210,10 +210,35 @@ test("advanced launch form uses a single ordered settings surface", () => {
   const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
 
   assert.match(html, /class="advanced-launch-frame"/);
+  assert.match(html, /id="setupPrimaryLayout"/);
   assert.match(html, /id="setupStepSummary"/);
   assert.match(source, /function renderSetupStepSummary/);
+  assert.match(source, /setupPrimaryLayout\.dataset\.activeStep/);
   assert.match(styles, /\.advanced-launch-frame/);
   assert.match(styles, /\.setup-step-summary/);
+  assert.match(styles, /\.setup-primary-layout\[data-active-step="input"\]/);
+});
+
+test("advanced evolution controls live in workflow setup, not the input step", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(source, /if \(setupWizardStepId === "workflow"\) \{\s*appendEvolutionBoard\(\);\s*\}/m);
+  assert.match(source, /"setup\.evolution\.title": "Optional Evolution Search"/);
+  assert.match(source, /"setup\.evolution\.title": "Evolution 탐색 \(선택\)"/);
+  assert.match(source, /"setup\.customRunId\.label"/);
+  assert.doesNotMatch(html, /Custom Run ID/);
+});
+
+test("user-facing Korean tutorial copy avoids internal pipeline jargon", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(source, /"question\.runMode\.detail": "모드에 따라 필요한 입력, 실행 시간, 결과를 얼마나 자세히 만들지가 달라집니다\."/);
+  assert.match(source, /"tutorial\.step\.homeRound\.body":\s*"먼저 프로젝트를 고른 뒤 이번 실험 회차를 만듭니다\. 이후 실행하는 작업은 그 프로젝트와 회차 아래에 기록됩니다\."/);
+  assert.match(source, /"home\.context\.round": "현재 회차"/);
+  assert.doesNotMatch(source, /출력 깊이/);
+  assert.doesNotMatch(source, /활성 라운드/);
+  assert.doesNotMatch(source, /project\/round 정보/);
 });
 
 test("platform palette avoids beige-dominant application backgrounds", () => {

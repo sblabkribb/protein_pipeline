@@ -894,6 +894,7 @@ const el = {
   customRunIdInput: document.getElementById("customRunIdInput"),
   fastCustomRunIdInput: document.getElementById("fastCustomRunIdInput"),
   evolutionCustomRunIdInput: document.getElementById("evolutionCustomRunIdInput"),
+  setupPrimaryLayout: document.getElementById("setupPrimaryLayout"),
   setupStepper: document.getElementById("setupStepper"),
   setupStepSummary: document.getElementById("setupStepSummary"),
   setupStepMeta: document.getElementById("setupStepMeta"),
@@ -1981,8 +1982,8 @@ const I18N = {
     "tutorial.step.homeProject.hint": "A project is the top-level campaign space. Use one project per target family or biological objective.",
     "tutorial.step.homeRound.title": "Create rounds from Home",
     "tutorial.step.homeRound.body":
-      "After a project is selected, create the active round here. Runs launched while a round is active carry that project and round metadata.",
-    "tutorial.step.homeRound.hint": "Use rounds before repeated optimization so hypotheses, linked runs, selected candidates, and next-round notes stay traceable.",
+      "After choosing a project, create the round for this experiment cycle. Runs you start afterward are recorded under that project and round.",
+    "tutorial.step.homeRound.hint": "Use rounds before repeated optimization so hypotheses, selected candidates, and next-round notes stay easy to find.",
     "tutorial.step.advanced.title": "Advanced is a guided setup",
     "tutorial.step.advanced.body":
       "Advanced collects target input, workflow path, candidate criteria, expert overrides, and final review as ordered steps.",
@@ -2077,7 +2078,7 @@ const I18N = {
     "tabs.analyze": "Analyze",
     "tabs.mcp": "MCP",
     "home.title": "Solubility/Stability Workspace",
-    "home.desc": "Target design runs, active rounds, and result triage in one workspace.",
+    "home.desc": "Target design runs, current rounds, and result triage in one workspace.",
     "home.launchpad.primary": "Primary workflow",
     "home.launchpad.newExperiment": "New Experiment",
     "home.launchpad.newExperimentDesc": "Choose Fast, Advanced, Evolution, or Workflow Studio based on the control you need.",
@@ -2107,8 +2108,8 @@ const I18N = {
     "home.card.studio.desc": "Build and run a workflow stage by stage while watching the outputs.",
     "home.card.evolution.title": "Evolution",
     "home.card.evolution.desc": "Autonomous multi-round sequence design pipeline.",
-    "home.context.project": "Active Project",
-    "home.context.round": "Active Round",
+    "home.context.project": "Current Project",
+    "home.context.round": "Current Round",
     "home.context.roundStatus": "Round Status",
     "home.context.runs": "Runs in Progress",
     "home.context.report": "Recent Result",
@@ -2116,7 +2117,7 @@ const I18N = {
     "home.action.open": "Open",
     "home.action.createProject": "New Project",
     "home.action.createRound": "New Round",
-    "home.action.continueRound": "Continue Active Round",
+    "home.action.continueRound": "Continue Current Round",
     "home.action.openMonitor": "Open Monitor",
     "home.action.openAnalyze": "Open Analyze",
     "home.select.projectPlaceholder": "Select project",
@@ -2151,11 +2152,11 @@ const I18N = {
     "evolution.fixedPositionsExtra.label": "Fixed Positions Extra",
     "evolution.error.targetRequired": "Paste a PDB in Evolution before launching.",
     "rounds.title": "Rounds Workspace",
-    "rounds.desc": "Organize projects, active rounds, and linked runs in one place.",
+    "rounds.desc": "Organize projects, experiment rounds, and linked runs in one place.",
     "rounds.projects": "Projects",
     "rounds.projects.desc": "Create and select campaign spaces for each target.",
     "rounds.list": "Rounds",
-    "rounds.rounds.desc": "Keep each design-test-learn cycle grouped under the active project.",
+    "rounds.rounds.desc": "Keep each design-test-learn cycle grouped under the current project.",
     "rounds.empty.projects": "No projects yet. Create one to start tracking rounds.",
     "rounds.empty.projectSelection": "Select a project to view or create rounds.",
     "rounds.empty.rounds": "No rounds yet. Create one inside the selected project.",
@@ -2316,17 +2317,19 @@ const I18N = {
     "login.sso.submit": "Continue with KBF SSO",
     "login.sso.hint": "Use your KBF account. Password changes are managed in the SSO account page.",
     "setup.title": "Advanced Run Setup",
-    "setup.desc": "Choose a workflow, attach inputs, and launch the job from the full configuration surface.",
+    "setup.desc": "Choose a workflow, add the target files, and review the run before launch.",
     "setup.section.input": "Input",
-    "setup.section.inputDesc": "Attach required files and add optional context notes.",
-    "setup.section.execution": "Execution Settings",
-    "setup.section.executionDesc": "Select run mode and configure stage options.",
+    "setup.section.inputDesc": "Put the target, files, and notes for this experiment here.",
+    "setup.section.execution": "Step Setup",
+    "setup.section.executionDesc": "Work through one step at a time.",
     "setup.section.monitor": "Monitoring",
     "setup.section.monitorDesc": "Keep progress and errors visible while preparing a run.",
     "setup.section.log": "Activity Log",
     "setup.section.logDesc": "Preflight and run messages appear here.",
     "setup.openMonitor": "Open Monitor",
     "setup.prompt.placeholder": "Prompt or notes (key=value supported).",
+    "setup.customRunId.label": "Run name",
+    "setup.customRunId.help": "Optional. Leave blank to create one automatically.",
     "setup.check": "Check Advanced",
     "setup.reset": "Reset Inputs",
     "setup.clear": "Clear Note",
@@ -2860,7 +2863,7 @@ const I18N = {
     "runs.deleteSuccess": "Deleted run: {id}",
     "question.runMode.label": "Run Mode",
     "question.runMode.help": "Choose what to run.",
-    "question.runMode.detail": "Each mode changes required input, runtime, and output depth.",
+    "question.runMode.detail": "Each mode changes what you need to provide, how long it may run, and how detailed the results will be.",
     "question.targetInput.label": "Target Input",
     "question.targetInput.help": "Provide target_pdb or target_fasta (raw text).",
     "question.startFrom.label": "Start From",
@@ -2889,18 +2892,18 @@ const I18N = {
       "Maximum allowed input-backbone RMSD (angstrom) for BioEmu samples after optional DSSP non-loop masking. default: 2.0 A.",
     "question.numSeqPerTier.label": "ProteinMPNN per Backbone",
     "question.numSeqPerTier.help": "Number of ProteinMPNN sequences to generate for each backbone within each sequence-conservation level.",
-    "question.evolutionMode.label": "Evolution Mode",
-    "question.evolutionMode.help": "Enable active-learning AF2 triage for sequence design.",
-    "question.evolutionPoolSize.label": "Evolution Initial Pool Size",
-    "question.evolutionPoolSize.help": "Total number of sequences to generate with ProteinMPNN initially (default 1000)",
-    "question.evolutionInitialSamples.label": "Evolution Training Samples (N)",
-    "question.evolutionInitialSamples.help": "Number of diverse sequences to pick via K-Means and evaluate with AF2 for training the surrogate model (default 30)",
-    "question.evolutionOracleSamples.label": "Evolution Select Top K (Final AF2)",
-    "question.evolutionOracleSamples.help": "Number of top-predicted sequences to validate with AF2 (default 20)",
-    "question.evolutionRounds.label": "Evolution Rounds",
-    "question.evolutionRounds.help": "Number of BO rounds.",
-    "question.evolutionSamplesPerRound.label": "Evolution Samples Per Round",
-    "question.evolutionSamplesPerRound.help": "Number of samples per BO round.",
+    "question.evolutionMode.label": "Use Evolution search",
+    "question.evolutionMode.help": "Turn this on only when you want the system to make and test several candidate batches.",
+    "question.evolutionPoolSize.label": "Candidate pool size",
+    "question.evolutionPoolSize.help": "How many sequence candidates to create before selecting the first test set.",
+    "question.evolutionInitialSamples.label": "First test set size",
+    "question.evolutionInitialSamples.help": "How many diverse candidates to evaluate first so the search can learn.",
+    "question.evolutionOracleSamples.label": "Final candidates to validate",
+    "question.evolutionOracleSamples.help": "How many top candidates receive final AF2 structure evaluation.",
+    "question.evolutionRounds.label": "Search rounds",
+    "question.evolutionRounds.help": "How many learning cycles to run.",
+    "question.evolutionSamplesPerRound.label": "Candidates per search round",
+    "question.evolutionSamplesPerRound.help": "How many candidates to test in each learning cycle.",
     "question.selectedTiers.label": "Sequence Conservation",
     "question.selectedTiers.help": "Choose which sequence-conservation levels to generate. Default: 30%, 50%, 70%.",
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} per Conservation Level (Top N)",
@@ -3051,8 +3054,8 @@ const I18N = {
     "setup.wizard.stepMeta": "Step {current}/{total}: {label}",
     "setup.wizard.prev": "Previous",
     "setup.wizard.next": "Next",
-    "setup.stepSummary.input.title": "Input first",
-    "setup.stepSummary.input.help": "Attach the PDB or FASTA target, add optional notes, and import paper-derived constraints.",
+    "setup.stepSummary.input.title": "Add the target first",
+    "setup.stepSummary.input.help": "Add the PDB or FASTA target, any needed files, optional notes, and paper-derived constraints.",
     "setup.stepSummary.workflow.title": "Choose the workflow path",
     "setup.stepSummary.workflow.help": "Pick the run mode, stage range, and major engines before tuning thresholds.",
     "setup.stepSummary.criteria.title": "Set candidate criteria",
@@ -3086,8 +3089,8 @@ const I18N = {
     "setup.criteria.help": "Set candidate budgets, conservation tiers, filters, and quality thresholds.",
     "setup.options.title": "Core Option Board",
     "setup.options.help": "Review key execution options in one board.",
-    "setup.evolution.title": "Evolution (BO) Settings",
-    "setup.evolution.help": "Configure active-learning AF2 triage for automated sequence design.",
+    "setup.evolution.title": "Optional Evolution Search",
+    "setup.evolution.help": "Leave this off for a normal run. Turn it on when you want repeated candidate generation and evaluation.",
     "setup.criteria.parameters.title": "Candidate Criteria",
     "setup.criteria.parameters.help": "Tune sample counts and structural acceptance thresholds.",
     "setup.parameters.title": "Compact Parameter Board",
@@ -3373,9 +3376,8 @@ const I18N = {
       "프로젝트는 관련 타깃, 가설, 라운드, 리포트를 묶는 상위 작업 공간입니다. 반복 작업을 시작하기 전에 여기서 프로젝트를 만들거나 기존 프로젝트를 선택하세요.",
     "tutorial.step.homeProject.hint": "프로젝트는 캠페인 단위입니다. 타깃 계열이나 생물학적 목표별로 하나씩 두는 것이 좋습니다.",
     "tutorial.step.homeRound.title": "Home에서 라운드를 만듭니다",
-    "tutorial.step.homeRound.body":
-      "프로젝트가 선택된 뒤 여기서 활성 라운드를 만듭니다. 라운드가 활성화된 상태에서 실행한 run에는 project/round 정보가 함께 들어갑니다.",
-    "tutorial.step.homeRound.hint": "반복 최적화 전 라운드를 만들면 가설, 연결 run, 선택 후보, 다음 라운드 메모를 추적하기 쉽습니다.",
+    "tutorial.step.homeRound.body": "먼저 프로젝트를 고른 뒤 이번 실험 회차를 만듭니다. 이후 실행하는 작업은 그 프로젝트와 회차 아래에 기록됩니다.",
+    "tutorial.step.homeRound.hint": "반복 최적화 전 회차를 만들면 가설, 선택 후보, 다음 회차 메모를 찾기 쉽습니다.",
     "tutorial.step.advanced.title": "고급 설정은 단계형 설정입니다",
     "tutorial.step.advanced.body":
       "고급 설정은 타깃 입력, 워크플로우 경로, 후보 평가 기준, 전문가 override, 최종 검토를 순서대로 모읍니다.",
@@ -3470,7 +3472,7 @@ const I18N = {
     "tabs.analyze": "분석",
     "tabs.mcp": "MCP",
     "home.title": "용해도/안정성 워크스페이스",
-    "home.desc": "표적 설계 실행, 활성 라운드, 결과 검토를 한 화면에서 다룹니다.",
+    "home.desc": "표적 설계 실행, 현재 회차, 결과 검토를 한 화면에서 다룹니다.",
     "home.launchpad.primary": "기본 워크플로우",
     "home.launchpad.newExperiment": "새 실험",
     "home.launchpad.newExperimentDesc": "필요한 제어 수준에 따라 Fast, Advanced, Evolution, Workflow Studio 중 선택합니다.",
@@ -3500,8 +3502,8 @@ const I18N = {
     "home.card.studio.desc": "단계를 보면서 워크플로우를 직접 구성하고 실행합니다.",
     "home.card.evolution.title": "Evolution",
     "home.card.evolution.desc": "다라운드 자동 유도 진화 파이프라인을 실행합니다.",
-    "home.context.project": "활성 프로젝트",
-    "home.context.round": "활성 라운드",
+    "home.context.project": "현재 프로젝트",
+    "home.context.round": "현재 회차",
     "home.context.roundStatus": "라운드 상태",
     "home.context.runs": "진행 중 실행",
     "home.context.report": "최근 결과",
@@ -3509,7 +3511,7 @@ const I18N = {
     "home.action.open": "열기",
     "home.action.createProject": "새 프로젝트",
     "home.action.createRound": "새 라운드",
-    "home.action.continueRound": "활성 라운드 계속",
+    "home.action.continueRound": "현재 회차 계속",
     "home.action.openMonitor": "Monitor 열기",
     "home.action.openAnalyze": "Analyze 열기",
     "home.select.projectPlaceholder": "프로젝트 선택",
@@ -3544,11 +3546,11 @@ const I18N = {
     "evolution.fixedPositionsExtra.label": "고정 위치 추가 (Fixed Positions Extra)",
     "evolution.error.targetRequired": "진화를 시작하기 전에 PDB를 붙여넣으세요.",
     "rounds.title": "Rounds 워크스페이스",
-    "rounds.desc": "프로젝트, 활성 라운드, 연결된 run을 한 곳에서 정리합니다.",
+    "rounds.desc": "프로젝트, 실험 회차, 연결된 실행을 한 곳에서 정리합니다.",
     "rounds.projects": "프로젝트",
     "rounds.projects.desc": "타깃별 캠페인 공간을 만들고 선택합니다.",
     "rounds.list": "라운드",
-    "rounds.rounds.desc": "활성 프로젝트 아래에서 각 design-test-learn 사이클을 관리합니다.",
+    "rounds.rounds.desc": "현재 프로젝트 아래에서 각 설계-검증-학습 사이클을 관리합니다.",
     "rounds.empty.projects": "아직 프로젝트가 없습니다. 먼저 프로젝트를 생성하세요.",
     "rounds.empty.projectSelection": "라운드를 보거나 만들려면 먼저 프로젝트를 선택하세요.",
     "rounds.empty.rounds": "선택한 프로젝트에 아직 라운드가 없습니다.",
@@ -3708,17 +3710,19 @@ const I18N = {
     "login.sso.submit": "KBF SSO로 계속",
     "login.sso.hint": "KBF 계정을 사용합니다. 비밀번호 변경은 SSO 계정 페이지에서 처리합니다.",
     "setup.title": "고급 실행 설정",
-    "setup.desc": "전체 설정 화면에서 워크플로를 선택하고 입력을 첨부해 실행하세요.",
+    "setup.desc": "워크플로우를 고르고, 타깃 파일을 넣은 뒤 실행 전 검토합니다.",
     "setup.section.input": "입력",
-    "setup.section.inputDesc": "필수 파일을 첨부하고 선택적으로 메모를 남기세요.",
-    "setup.section.execution": "실행 설정",
-    "setup.section.executionDesc": "실행 모드와 단계 옵션을 설정하세요.",
+    "setup.section.inputDesc": "이번 실험에 필요한 타깃, 파일, 메모를 여기에 넣습니다.",
+    "setup.section.execution": "단계별 설정",
+    "setup.section.executionDesc": "한 단계씩 필요한 항목만 설정합니다.",
     "setup.section.monitor": "모니터링",
     "setup.section.monitorDesc": "실행 준비 중에도 진행률과 오류를 바로 확인합니다.",
     "setup.section.log": "활동 로그",
     "setup.section.logDesc": "사전 점검 및 실행 메시지를 확인합니다.",
     "setup.openMonitor": "모니터 열기",
     "setup.prompt.placeholder": "프롬프트/메모 입력 (key=value 지원).",
+    "setup.customRunId.label": "실행 이름",
+    "setup.customRunId.help": "선택 사항입니다. 비워두면 자동으로 만들어집니다.",
     "setup.check": "설정 점검",
     "setup.reset": "입력 초기화",
     "setup.clear": "메모 지우기",
@@ -4251,7 +4255,7 @@ const I18N = {
     "runs.deleteSuccess": "실행 삭제됨: {id}",
     "question.runMode.label": "실행 모드",
     "question.runMode.help": "실행할 항목을 선택하세요.",
-    "question.runMode.detail": "모드에 따라 필요한 입력, 실행 시간, 출력 깊이가 달라집니다.",
+    "question.runMode.detail": "모드에 따라 필요한 입력, 실행 시간, 결과를 얼마나 자세히 만들지가 달라집니다.",
     "question.targetInput.label": "타깃 입력",
     "question.targetInput.help": "target_pdb 또는 target_fasta 원문을 입력하세요.",
     "question.startFrom.label": "시작 단계",
@@ -4281,18 +4285,18 @@ const I18N = {
       "선택적 DSSP non-loop masking 이후 BioEmu 샘플에 허용할 최대 input-backbone RMSD(Å)입니다. 기본값은 2.0 Å입니다.",
     "question.numSeqPerTier.label": "백본당 ProteinMPNN 생성 개수",
     "question.numSeqPerTier.help": "각 서열 보존율 구간에서 각 RFD3/BioEmu 백본마다 생성할 ProteinMPNN 서열 개수입니다.",
-    "question.evolutionMode.label": "에볼루션 모드",
-    "question.evolutionMode.help": "시퀀스 설계를 위해 베이지안 최적화(BO)를 활성화합니다.",
-    "question.evolutionPoolSize.label": "Evolution 생성 풀 크기",
-    "question.evolutionPoolSize.help": "ProteinMPNN으로 초기 생성할 총 서열 개수 (기본 1000)",
-    "question.evolutionInitialSamples.label": "Evolution 모델 학습 샘플 수 (N)",
-    "question.evolutionInitialSamples.help": "대리 모델을 훈련하기 위해 K-Means로 다양하게 뽑아 먼저 AF2를 돌릴 서열 개수 (기본 30)",
-    "question.evolutionOracleSamples.label": "Evolution Top K 선택 (최종 검증)",
-    "question.evolutionOracleSamples.help": "대리 모델이 예측한 서열 중 실제로 AF2를 돌릴 상위 서열 개수 (기본 20)",
-    "question.evolutionRounds.label": "에볼루션 라운드 수",
-    "question.evolutionRounds.help": "BO 라운드 수입니다.",
-    "question.evolutionSamplesPerRound.label": "라운드당 에볼루션 샘플 수",
-    "question.evolutionSamplesPerRound.help": "BO 라운드당 샘플 수입니다.",
+    "question.evolutionMode.label": "Evolution 탐색 사용",
+    "question.evolutionMode.help": "여러 후보 묶음을 만들고 평가하면서 탐색할 때만 켭니다. 일반 실행이면 Off로 둡니다.",
+    "question.evolutionPoolSize.label": "처음 만들 후보 수",
+    "question.evolutionPoolSize.help": "처음에 만들 서열 후보의 전체 개수입니다.",
+    "question.evolutionInitialSamples.label": "처음 평가할 후보 수",
+    "question.evolutionInitialSamples.help": "탐색 방향을 잡기 위해 먼저 평가할 다양한 후보 수입니다.",
+    "question.evolutionOracleSamples.label": "최종 검증 후보 수",
+    "question.evolutionOracleSamples.help": "마지막에 AF2 구조 평가까지 보낼 상위 후보 수입니다.",
+    "question.evolutionRounds.label": "탐색 반복 횟수",
+    "question.evolutionRounds.help": "후보를 만들고 평가하는 학습 사이클 수입니다.",
+    "question.evolutionSamplesPerRound.label": "반복마다 평가할 후보 수",
+    "question.evolutionSamplesPerRound.help": "각 탐색 사이클에서 새로 평가할 후보 수입니다.",
     "question.selectedTiers.label": "서열 보존율",
     "question.selectedTiers.help": "생성할 서열 보존율 구간을 선택하세요. 기본값은 30%, 50%, 70%입니다.",
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} 서열 보존율 구간당 실행 개수 (상위 N개)",
@@ -4443,8 +4447,8 @@ const I18N = {
     "setup.wizard.stepMeta": "{current}/{total} 단계: {label}",
     "setup.wizard.prev": "이전",
     "setup.wizard.next": "다음",
-    "setup.stepSummary.input.title": "입력부터 시작",
-    "setup.stepSummary.input.help": "PDB 또는 FASTA 타깃을 첨부하고, 선택 메모와 논문 기반 제약 조건을 추가합니다.",
+    "setup.stepSummary.input.title": "타깃 입력부터 시작",
+    "setup.stepSummary.input.help": "PDB 또는 FASTA 타깃, 필요한 첨부파일, 선택 메모, 논문 기반 제약 조건을 넣습니다.",
     "setup.stepSummary.workflow.title": "워크플로우 경로 선택",
     "setup.stepSummary.workflow.help": "컷오프를 조정하기 전에 실행 모드, 단계 범위, 주요 엔진을 먼저 정합니다.",
     "setup.stepSummary.criteria.title": "후보 평가 기준 설정",
@@ -4478,8 +4482,8 @@ const I18N = {
     "setup.criteria.help": "후보 수, 보존도 티어, 필터, 품질 기준을 설정합니다.",
     "setup.options.title": "핵심 옵션 보드",
     "setup.options.help": "주요 실행 옵션을 한 보드에서 한 번에 확인하고 조정합니다.",
-    "setup.evolution.title": "Evolution (BO) 설정",
-    "setup.evolution.help": "베이지안 최적화(BO) 기반의 자동 서열 설계를 설정합니다.",
+    "setup.evolution.title": "Evolution 탐색 (선택)",
+    "setup.evolution.help": "일반 실행이면 끄고, 후보를 여러 번 만들고 평가하며 탐색할 때만 켭니다.",
     "setup.criteria.parameters.title": "후보 평가 기준",
     "setup.criteria.parameters.help": "샘플 수와 구조 품질 통과 기준을 조정합니다.",
     "setup.parameters.title": "핵심 파라미터 보드",
@@ -15062,6 +15066,7 @@ function renderQuestions(questions) {
   };
 
   if (!questions.length) {
+    if (el.setupPrimaryLayout) el.setupPrimaryLayout.dataset.activeStep = "idle";
     if (el.setupStepper) el.setupStepper.classList.add("hidden");
     if (el.setupStepSummary) el.setupStepSummary.classList.add("hidden");
     el.runBtn.disabled = false;
@@ -15079,6 +15084,9 @@ function renderQuestions(questions) {
   const visibleQuestions = renderSetupWizard(filteredVisibleQuestions);
   const setupWizardActive = setupWizardEnabled(filteredVisibleQuestions);
   const setupWizardStepId = setupWizardActive ? activeSetupWizardStepId() : "";
+  if (el.setupPrimaryLayout) {
+    el.setupPrimaryLayout.dataset.activeStep = setupWizardStepId || "all";
+  }
   if (state.runMode === "pipeline") {
     if (!normalizePipelineStage(state.answers.start_from, "")) {
       state.answers.start_from = "msa";
@@ -16122,8 +16130,17 @@ function renderQuestions(questions) {
     appendConfigCard(card);
   };
 
+  const evolutionQuestionIds = new Set([
+    "evolution_mode",
+    "evolution_pool_size",
+    "evolution_initial_samples",
+    "evolution_oracle_samples",
+    "evolution_rounds",
+    "evolution_samples_per_round",
+  ]);
+
   const appendEvolutionBoard = () => {
-    const evolutionIds = ["evolution_mode", "evolution_pool_size", "evolution_initial_samples", "evolution_oracle_samples", "evolution_rounds", "evolution_samples_per_round"];
+    const evolutionIds = Array.from(evolutionQuestionIds);
     const evolutionQuestions = normalizedQuestions.filter((q) => evolutionIds.includes(q.id));
     if (!evolutionQuestions.length) return;
 
@@ -16210,7 +16227,9 @@ function renderQuestions(questions) {
   };
 
   appendCompactOptionBoard();
-  appendEvolutionBoard();
+  if (setupWizardStepId === "workflow") {
+    appendEvolutionBoard();
+  }
 
   const bioemuCountQuestionIds = new Set(["bioemu_max_return_structures", "bioemu_num_samples"]);
   const rfd3CountQuestionIds = new Set(["rfd3_max_return_designs"]);
@@ -16624,6 +16643,7 @@ function renderQuestions(questions) {
   const hiddenTextQuestionIds = new Set([
     ...compactQuestions.map((q) => q.id),
     ...advancedConstraintQuestions.map((q) => q.id),
+    ...evolutionQuestionIds,
   ]);
   textQuestions.forEach((q) => {
     if (hiddenTextQuestionIds.has(q.id) || SETUP_RFD3_MODE_DETAIL_IDS.has(q.id)) return;
