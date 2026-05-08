@@ -826,6 +826,98 @@ body[data-environment="staging"] .topbar {
   color: var(--ink-soft);
 }
 
+.fast-upload-primary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px 16px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid color-mix(in oklch, var(--action-primary) 22%, transparent);
+  border-radius: var(--radius-sm);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.96)),
+    linear-gradient(90deg, rgba(14, 165, 233, 0.08), rgba(20, 184, 166, 0.05));
+}
+
+.fast-upload-primary span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.fast-upload-primary strong {
+  display: block;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.fast-upload-primary p {
+  margin: 6px 0 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.fast-upload-primary .ghost {
+  white-space: nowrap;
+}
+
+.fast-target-status {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: 4px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.fast-paste-details {
+  border: 1px solid rgba(24, 41, 46, 0.1);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--surface-muted) 72%, white);
+}
+
+.fast-paste-details summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px;
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.fast-paste-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.fast-paste-details summary::after {
+  content: "+";
+  margin-left: auto;
+  color: var(--ink-soft);
+  font-weight: 900;
+}
+
+.fast-paste-details[open] summary::after {
+  content: "-";
+}
+
+.fast-paste-details .fast-field {
+  padding: 0 14px 14px;
+}
+
+.residue-picker-flow-hint {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in oklch, var(--action-primary) 18%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklch, var(--surface-muted) 74%, white);
+  color: var(--ink);
+}
+
 .setup-custom-run-field,
 .evolution-section-heading {
   margin-top: 1rem;
@@ -6509,6 +6601,14 @@ textarea:focus-visible {
 
   .fast-actions {
     flex-direction: column;
+  }
+
+  .fast-upload-primary {
+    grid-template-columns: 1fr;
+  }
+
+  .fast-upload-primary .ghost {
+    width: 100%;
   }
 
   .rounds-filter-chip {

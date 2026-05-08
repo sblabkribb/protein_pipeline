@@ -307,25 +307,40 @@
                   <div class="panel-header">
                     <h2 data-i18n="fast.title">Fast Launch</h2>
                     <p data-i18n="fast.desc">
-                      Paste a PDB or FASTA, keep the standard defaults, and launch without opening the full expert setup.
+                      Upload a FASTA/PDB file, or paste text if needed, then launch with standard defaults.
                     </p>
                   </div>
-                  <label class="fast-field">
-                    <span data-i18n="fast.input.label">Target Input</span>
-                    <small data-i18n="fast.input.help">Provide a raw PDB or FASTA sequence.</small>
-                    <textarea
-                      id="fastTargetInput"
-                      rows="10"
-                      placeholder="Paste PDB or FASTA here."
-                      data-i18n-placeholder="fast.input.placeholder"
-                    ></textarea>
-                  </label>
-                  <div class="fast-inline-actions">
+                  <div class="fast-upload-primary">
+                    <div>
+                      <span data-i18n="fast.input.label">FASTA/PDB file or text</span>
+                      <strong data-i18n="fast.upload.title">Upload target file</strong>
+                      <p data-i18n="fast.upload.desc">
+                        Use a PDB, FASTA, FA, or text file for the usual Fast launch path.
+                      </p>
+                    </div>
                     <input id="fastTargetFile" type="file" class="hidden" accept=".pdb,.ent,.fa,.fasta,.txt,.seq" />
                     <button id="fastLoadFileBtn" class="ghost" type="button" data-i18n="fast.action.loadFile">
-                      Load File
+                      Choose File
                     </button>
+                    <p id="fastTargetStatus" class="fast-target-status" data-i18n="fast.upload.statusEmpty">
+                      No target loaded yet.
+                    </p>
                   </div>
+                  <details id="fastPasteDetails" class="fast-paste-details">
+                    <summary data-i18n="fast.paste.summary">Paste FASTA/PDB text instead</summary>
+                    <label class="fast-field">
+                      <span data-i18n="fast.paste.label">Direct text input</span>
+                      <small data-i18n="fast.input.help">
+                        Use raw text only when you do not have a file.
+                      </small>
+                      <textarea
+                        id="fastTargetInput"
+                        rows="8"
+                        placeholder="Paste FASTA or PDB text here."
+                        data-i18n-placeholder="fast.input.placeholder"
+                      ></textarea>
+                    </label>
+                  </details>
                   <label class="fast-field">
                     <span data-i18n="fast.note.label">Run Notes</span>
                     <small data-i18n="fast.note.help">Optional notes copied into the run prompt.</small>
@@ -1602,7 +1617,7 @@
           <button class="experiment-choice-btn" type="button" data-experiment-target="fast">
             <span class="experiment-choice-kicker" data-i18n="home.experimentChoice.fast.kicker">Default path</span>
             <strong data-i18n="home.experimentChoice.fast.title">Fast</strong>
-            <span data-i18n="home.experimentChoice.fast.desc">Paste a target and run the standard defaults.</span>
+            <span data-i18n="home.experimentChoice.fast.desc">Upload a target file or paste text, then run standard defaults.</span>
           </button>
           <button class="experiment-choice-btn" type="button" data-experiment-target="advanced">
             <span class="experiment-choice-kicker" data-i18n="home.experimentChoice.advanced.kicker">Guided setup</span>

@@ -1656,6 +1656,9 @@ test("fast panel exposes reduced launch controls while advanced keeps the full s
   const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
   const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
 
+  assert.match(html, /class="fast-upload-primary"/);
+  assert.match(html, /id="fastPasteDetails"/);
+  assert.match(html, /<details[^>]+id="fastPasteDetails"[\s\S]*id="fastTargetInput"[\s\S]*<\/details>/);
   assert.match(html, /id="fastTargetInput"/);
   assert.match(html, /id="fastRunBtn"/);
   assert.match(html, /id="fastOpenAdvancedBtn"/);
@@ -1665,6 +1668,18 @@ test("fast panel exposes reduced launch controls while advanced keeps the full s
   assert.doesNotMatch(html, /Default Pipeline Review|기본 파이프라인 검토/);
   assert.match(html, /id="tab-advanced"/);
   assert.match(source, /buildFastLaunchPreset\(/);
+});
+
+test("fast and residue picker copy describes upload-first and FASTA-to-structure flows", () => {
+  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+
+  assert.match(source, /"fast\.input\.label":\s*"FASTA\/PDB file or text"/);
+  assert.match(source, /"fast\.paste\.summary":\s*"Paste FASTA\/PDB text instead"/);
+  assert.match(source, /"fast\.input\.label":\s*"FASTA\/PDB 파일 또는 텍스트"/);
+  assert.match(source, /"fast\.paste\.summary":\s*"FASTA\/PDB 텍스트 직접 붙여넣기"/);
+  assert.match(source, /"setup\.residuePicker\.runAf2":\s*"Predict structure from FASTA"/);
+  assert.match(source, /"setup\.residuePicker\.runAf2":\s*"FASTA로 구조 예측"/);
+  assert.doesNotMatch(source, /test로 붙여|test input|sample target/i);
 });
 
 test("advanced pipeline source exposes selected_tiers as a conservation choice", () => {

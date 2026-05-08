@@ -789,6 +789,7 @@ const el = {
   fastTargetInput: document.getElementById("fastTargetInput"),
   fastTargetFile: document.getElementById("fastTargetFile"),
   fastLoadFileBtn: document.getElementById("fastLoadFileBtn"),
+  fastTargetStatus: document.getElementById("fastTargetStatus"),
   fastPromptInput: document.getElementById("fastPromptInput"),
   fastSelectedTiers: document.getElementById("fastSelectedTiers"),
   fastTotalOutputInput: document.getElementById("fastTotalOutputInput"),
@@ -2090,7 +2091,7 @@ const I18N = {
     "home.experimentChoice.desc": "Start with the path that matches how much setup and review control you need.",
     "home.experimentChoice.fast.kicker": "Default path",
     "home.experimentChoice.fast.title": "Fast",
-    "home.experimentChoice.fast.desc": "Paste a target and run the standard defaults.",
+    "home.experimentChoice.fast.desc": "Upload a target file or paste text, then run standard defaults.",
     "home.experimentChoice.advanced.kicker": "Guided setup",
     "home.experimentChoice.advanced.title": "Advanced",
     "home.experimentChoice.advanced.desc": "Step through input, workflow, criteria, expert options, and review.",
@@ -2239,14 +2240,21 @@ const I18N = {
     "workspaceRecord.error.projectNameRequired": "Enter a project name.",
     "workspaceRecord.error.roundTitleRequired": "Enter a round title.",
     "fast.title": "Fast Launch",
-    "fast.desc": "Paste a PDB or FASTA, choose sequence conservation and total output count, then launch with standard defaults.",
-    "fast.input.label": "Target Input",
-    "fast.input.help": "Provide a raw PDB or FASTA sequence.",
-    "fast.input.placeholder": "Paste PDB or FASTA here.",
+    "fast.desc": "Upload a FASTA/PDB file, or paste text if needed, then choose conservation and output count for a standard run.",
+    "fast.input.label": "FASTA/PDB file or text",
+    "fast.upload.title": "Upload target file",
+    "fast.upload.desc": "Use a PDB, FASTA, FA, or text file for the usual Fast launch path.",
+    "fast.upload.statusEmpty": "No target loaded yet.",
+    "fast.upload.statusFile": "Loaded {name}.",
+    "fast.upload.statusText": "Text input ready.",
+    "fast.paste.summary": "Paste FASTA/PDB text instead",
+    "fast.paste.label": "Direct text input",
+    "fast.input.help": "Use raw text only when you do not have a file.",
+    "fast.input.placeholder": "Paste FASTA or PDB text here.",
     "fast.note.label": "Run Notes",
     "fast.note.help": "Optional notes copied into the run prompt.",
     "fast.note.placeholder": "Optional notes for this launch.",
-    "fast.action.loadFile": "Load File",
+    "fast.action.loadFile": "Choose File",
     "fast.action.reviewAdvanced": "Open Advanced",
     "fast.action.run": "Run Fast",
     "fast.options.title": "Launch Options",
@@ -2255,11 +2263,11 @@ const I18N = {
     "fast.totalOutput.label": "Total Output Sequences",
     "fast.totalOutput.help":
       "Target total ProteinMPNN designs across the selected sequence-conservation levels. PDB input uses RFD3 + BioEmu; FASTA input uses BioEmu only.",
-    "fast.error.targetRequired": "Paste a PDB or FASTA in Fast before launching.",
+    "fast.error.targetRequired": "Choose a FASTA/PDB file or paste target text before launching.",
     "fast.message.reviewReady":
       "Fast defaults were copied into Advanced. Adjust sequence conservation or counts before launching if needed.",
     "fast.message.advancedOpened": "Advanced is open. Add a target in the Input step when you are ready.",
-    "fast.message.fileLoaded": "Loaded {name} into Fast target input.",
+    "fast.message.fileLoaded": "Loaded {name} into Fast target.",
     "copilot.open": "Copilot",
     "copilot.title": "Context Copilot",
     "copilot.desc": "Usage + interpretation helper using current run/screen data.",
@@ -2348,17 +2356,17 @@ const I18N = {
     "setup.runStatus.line": "Run status: {id} · {stage} / {state} · {updated}",
     "setup.residuePicker.title": "Residue Picker (Optional)",
     "setup.residuePicker.help":
-      "Select residues from the sequence strip or 3D structure and append them to fixed_positions_extra. If target_pdb is missing, run once to create target.pdb ({af2Provider} target), then load it from the selected run.",
+      "If you uploaded a PDB, load it and choose residues. If you entered FASTA, first predict a 3D structure with {af2Provider}, then choose residues.",
     "setup.residuePicker.source": "Structure source: {source}",
     "setup.residuePicker.source.none": "none",
-    "setup.residuePicker.loadTargetInput": "Load target_input PDB",
-    "setup.residuePicker.loadRfd3Input": "Load rfd3_input_pdb",
-    "setup.residuePicker.loadRunTarget": "Load selected run target.pdb",
-    "setup.residuePicker.runAf2": "Run {af2Provider} from FASTA",
-    "setup.residuePicker.runAf2Running": "Running {af2Provider} to generate a target structure...",
+    "setup.residuePicker.loadTargetInput": "Load uploaded PDB",
+    "setup.residuePicker.loadRfd3Input": "Load RFD3 seed PDB",
+    "setup.residuePicker.loadRunTarget": "Load PDB from selected run",
+    "setup.residuePicker.runAf2": "Predict structure from FASTA",
+    "setup.residuePicker.runAf2Running": "Predicting the target structure with {af2Provider}...",
     "setup.residuePicker.runAf2NeedsFasta": "Attach a FASTA/sequence in target_input first.",
-    "setup.residuePicker.runAf2NoResult": "{af2Provider} completed but ranked_0.pdb was not found.",
-    "setup.residuePicker.runAf2Loaded": "{af2Provider} structure loaded from {run}:{path}",
+    "setup.residuePicker.runAf2NoResult": "Prediction finished, but no PDB structure was found.",
+    "setup.residuePicker.runAf2Loaded": "Predicted structure loaded from {run}:{path}",
     "setup.residuePicker.runAf2Failed": "{af2Provider} run failed: {error}",
     "setup.residuePicker.viewerPlaceholder": "Load a structure to start residue picking.",
     "setup.residuePicker.viewerUnavailable": "3D viewer unavailable.",
@@ -2368,9 +2376,12 @@ const I18N = {
     "setup.residuePicker.surfaceCutoffLabel": "Surface cutoff (A^2)",
     "setup.residuePicker.surfaceCutoffHelp": "PyMOL-style atom exposed-area threshold for Surface/Core classification. Default: 2.5",
     "setup.residuePicker.launcherHelp":
-      "Open the residue picker in a popup window. The larger workspace keeps the sequence strip and 3D structure linked, then writes back to fixed_positions_extra.",
+      "Open the residue workspace. PDB inputs can be selected directly; FASTA inputs can be converted to a 3D structure first.",
     "setup.residuePicker.launcherConserved":
       "Conserved presets only appear when a selected run already has MMseqs2/conservation outputs.",
+    "setup.residuePicker.launcherPdbReady": "PDB target ready. Open the picker to choose residues.",
+    "setup.residuePicker.launcherFastaReady": "FASTA target ready. Open the picker, predict a 3D structure, then choose residues.",
+    "setup.residuePicker.launcherMissingTarget": "Add FASTA or PDB input before using residue selection.",
     "setup.residuePicker.detached.title": "Residue Picker Popup",
     "setup.residuePicker.detached.desc":
       "Pick residues on the larger sequence strip or 3D structure, then send them back to {context}.",
@@ -3484,7 +3495,7 @@ const I18N = {
     "home.experimentChoice.desc": "필요한 설정 범위와 검토 수준에 맞는 시작 경로를 선택하세요.",
     "home.experimentChoice.fast.kicker": "기본 경로",
     "home.experimentChoice.fast.title": "Fast",
-    "home.experimentChoice.fast.desc": "타깃을 붙여넣고 표준 기본값으로 바로 실행합니다.",
+    "home.experimentChoice.fast.desc": "타깃 파일을 올리거나 텍스트를 입력해 표준 기본값으로 바로 실행합니다.",
     "home.experimentChoice.advanced.kicker": "단계형 설정",
     "home.experimentChoice.advanced.title": "Advanced",
     "home.experimentChoice.advanced.desc": "입력, 워크플로우, 평가기준, 고급 옵션, 검토를 순서대로 설정합니다.",
@@ -3632,14 +3643,21 @@ const I18N = {
     "workspaceRecord.error.projectNameRequired": "프로젝트 이름을 입력하세요.",
     "workspaceRecord.error.roundTitleRequired": "라운드 제목을 입력하세요.",
     "fast.title": "Fast 실행",
-    "fast.desc": "PDB 또는 FASTA를 붙여 넣고 서열 보존율과 총 출력 개수를 고른 뒤 표준 기본값으로 바로 실행합니다.",
-    "fast.input.label": "타깃 입력",
-    "fast.input.help": "원본 PDB 또는 FASTA 서열을 입력하세요.",
-    "fast.input.placeholder": "여기에 PDB 또는 FASTA를 붙여 넣으세요.",
+    "fast.desc": "FASTA/PDB 파일을 올리거나 필요할 때만 텍스트를 붙여넣고, 보존율과 출력 개수를 고른 뒤 표준 설정으로 실행합니다.",
+    "fast.input.label": "FASTA/PDB 파일 또는 텍스트",
+    "fast.upload.title": "타깃 파일 업로드",
+    "fast.upload.desc": "일반적인 Fast 실행은 PDB, FASTA, FA, TXT 파일을 선택해서 시작합니다.",
+    "fast.upload.statusEmpty": "아직 타깃이 없습니다.",
+    "fast.upload.statusFile": "{name} 파일을 불러왔습니다.",
+    "fast.upload.statusText": "텍스트 입력이 준비되었습니다.",
+    "fast.paste.summary": "FASTA/PDB 텍스트 직접 붙여넣기",
+    "fast.paste.label": "직접 입력",
+    "fast.input.help": "파일이 없을 때만 FASTA 또는 PDB 원문을 직접 붙여넣으세요.",
+    "fast.input.placeholder": "여기에 FASTA 또는 PDB 텍스트를 붙여넣으세요.",
     "fast.note.label": "실행 메모",
     "fast.note.help": "선택 메모이며 run prompt로 함께 복사됩니다.",
     "fast.note.placeholder": "이 실행에 대한 메모를 선택적으로 남기세요.",
-    "fast.action.loadFile": "파일 불러오기",
+    "fast.action.loadFile": "파일 선택",
     "fast.action.reviewAdvanced": "Advanced 열기",
     "fast.action.run": "Fast 실행",
     "fast.options.title": "실행 옵션",
@@ -3648,11 +3666,11 @@ const I18N = {
     "fast.totalOutput.label": "총 출력 서열 수",
     "fast.totalOutput.help":
       "선택한 서열 보존율 구간 전체에서 생성할 ProteinMPNN 서열 총량입니다. PDB 입력은 RFD3+BioEmu, FASTA 입력은 BioEmu 기준으로 계산합니다.",
-    "fast.error.targetRequired": "Fast 실행 전에 PDB 또는 FASTA를 붙여 넣으세요.",
+    "fast.error.targetRequired": "Fast 실행 전에 FASTA/PDB 파일을 선택하거나 타깃 텍스트를 붙여넣으세요.",
     "fast.message.reviewReady":
       "Fast 기본값을 Advanced로 복사했습니다. 필요하면 서열 보존율이나 개수를 조정한 뒤 실행하세요.",
     "fast.message.advancedOpened": "Advanced를 열었습니다. 준비되면 Input 단계에서 타깃을 추가하세요.",
-    "fast.message.fileLoaded": "{name} 파일을 Fast 타깃 입력에 불러왔습니다.",
+    "fast.message.fileLoaded": "{name} 파일을 Fast 타깃으로 불러왔습니다.",
     "copilot.open": "Copilot",
     "copilot.title": "Context Copilot",
     "copilot.desc": "현재 run/화면 데이터를 바탕으로 사용법과 해석을 도와줍니다.",
@@ -3741,17 +3759,17 @@ const I18N = {
     "setup.runStatus.line": "실행 상태: {id} · {stage} / {state} · {updated}",
     "setup.residuePicker.title": "잔기 선택기 (선택)",
     "setup.residuePicker.help":
-      "서열 strip 또는 3D 구조에서 잔기를 선택해 fixed_positions_extra에 추가합니다. target_pdb가 없으면 먼저 1회 실행해 target.pdb({af2Provider} target)를 만든 뒤, 선택한 run에서 불러오세요.",
+      "PDB를 넣었다면 구조를 불러와 잔기를 고르세요. FASTA를 넣었다면 먼저 {af2Provider}로 3D 구조를 예측한 뒤 잔기를 선택합니다.",
     "setup.residuePicker.source": "구조 소스: {source}",
     "setup.residuePicker.source.none": "없음",
-    "setup.residuePicker.loadTargetInput": "target_input PDB 불러오기",
-    "setup.residuePicker.loadRfd3Input": "rfd3_input_pdb 불러오기",
-    "setup.residuePicker.loadRunTarget": "선택 run의 target.pdb 불러오기",
-    "setup.residuePicker.runAf2": "FASTA로 {af2Provider} 실행",
-    "setup.residuePicker.runAf2Running": "target 구조 생성을 위해 {af2Provider}를 실행 중입니다...",
+    "setup.residuePicker.loadTargetInput": "업로드한 PDB 불러오기",
+    "setup.residuePicker.loadRfd3Input": "RFD3 seed PDB 불러오기",
+    "setup.residuePicker.loadRunTarget": "선택한 run의 PDB 불러오기",
+    "setup.residuePicker.runAf2": "FASTA로 구조 예측",
+    "setup.residuePicker.runAf2Running": "{af2Provider}로 타깃 구조를 예측 중입니다...",
     "setup.residuePicker.runAf2NeedsFasta": "먼저 target_input에 FASTA/서열을 첨부하세요.",
-    "setup.residuePicker.runAf2NoResult": "{af2Provider}는 완료됐지만 ranked_0.pdb를 찾지 못했습니다.",
-    "setup.residuePicker.runAf2Loaded": "{run}:{path} 에서 {af2Provider} 구조를 불러왔습니다.",
+    "setup.residuePicker.runAf2NoResult": "구조 예측은 끝났지만 사용할 PDB 구조를 찾지 못했습니다.",
+    "setup.residuePicker.runAf2Loaded": "{run}:{path} 에서 예측 구조를 불러왔습니다.",
     "setup.residuePicker.runAf2Failed": "{af2Provider} 실행 실패: {error}",
     "setup.residuePicker.viewerPlaceholder": "잔기 선택을 시작하려면 구조를 불러오세요.",
     "setup.residuePicker.viewerUnavailable": "3D 뷰어를 사용할 수 없습니다.",
@@ -3761,9 +3779,12 @@ const I18N = {
     "setup.residuePicker.surfaceCutoffLabel": "Surface cutoff (A^2)",
     "setup.residuePicker.surfaceCutoffHelp": "PyMOL 방식의 원자 노출면적 기준으로 Surface/Core를 나눕니다. 기본값: 2.5",
     "setup.residuePicker.launcherHelp":
-      "잔기 선택기를 팝업창으로 엽니다. 넓은 워크스페이스에서 서열 strip과 3D 구조를 함께 보며 고른 뒤 fixed_positions_extra에 반영합니다.",
+      "잔기 선택 워크스페이스를 엽니다. PDB는 바로 고를 수 있고, FASTA는 먼저 3D 구조로 예측한 뒤 고릅니다.",
     "setup.residuePicker.launcherConserved":
       "Conserved preset은 선택한 run에 MMseqs2/conservation 결과가 있을 때만 표시됩니다.",
+    "setup.residuePicker.launcherPdbReady": "PDB 타깃이 준비되었습니다. 선택기를 열어 잔기를 고르세요.",
+    "setup.residuePicker.launcherFastaReady": "FASTA 타깃이 준비되었습니다. 선택기를 열고 3D 구조를 예측한 뒤 잔기를 고르세요.",
+    "setup.residuePicker.launcherMissingTarget": "잔기 선택을 쓰려면 먼저 FASTA 또는 PDB를 입력하세요.",
     "setup.residuePicker.detached.title": "잔기 선택 팝업",
     "setup.residuePicker.detached.desc":
       "넓은 서열 strip과 3D 구조에서 잔기를 고른 뒤 {context}에 바로 반영합니다.",
@@ -10794,6 +10815,16 @@ function buildFastLaunchPresetFromUi() {
   });
 }
 
+function updateFastTargetStatus({ fileName = "" } = {}) {
+  if (!el.fastTargetStatus) return;
+  const targetInput = String(el.fastTargetInput?.value || "").trim();
+  if (fileName) {
+    el.fastTargetStatus.textContent = t("fast.upload.statusFile", { name: fileName });
+    return;
+  }
+  el.fastTargetStatus.textContent = targetInput ? t("fast.upload.statusText") : t("fast.upload.statusEmpty");
+}
+
 function openAdvancedFromFast() {
   const targetInput = String(el.fastTargetInput?.value || "").trim();
   if (targetInput) {
@@ -10818,6 +10849,7 @@ async function loadFastTargetFile(file) {
   if (el.fastTargetInput) {
     el.fastTargetInput.value = String(text || "");
   }
+  updateFastTargetStatus({ fileName: file.name || "input" });
   setMessage(t("fast.message.fileLoaded", { name: file.name || "input" }), "ai");
 }
 
@@ -10842,6 +10874,9 @@ function initFastLauncher() {
     if (!file) return;
     await loadFastTargetFile(file);
     event.target.value = "";
+  });
+  el.fastTargetInput?.addEventListener("input", () => {
+    updateFastTargetStatus();
   });
   el.fastOpenAdvancedBtn?.addEventListener("click", () => {
     openAdvancedFromFast();
@@ -14021,7 +14056,14 @@ function applyResiduePickerBaseStyle(viewer, colorMode = "secondary") {
   viewer.setStyle({}, { cartoon: { colorscheme: "ssPyMol" } });
 }
 
-function buildResiduePickerLauncherCard({ onOpenDetached, onResetSelection, sourceLabel = "", runId = "" } = {}) {
+function buildResiduePickerLauncherCard({
+  onOpenDetached,
+  onResetSelection,
+  sourceLabel = "",
+  runId = "",
+  hasTargetPdb = false,
+  hasTargetFasta = false,
+} = {}) {
   const card = document.createElement("div");
   card.className = "question-card residue-picker-launcher";
 
@@ -14036,6 +14078,14 @@ function buildResiduePickerLauncherCard({ onOpenDetached, onResetSelection, sour
   const conservedNote = document.createElement("div");
   conservedNote.className = "question-summary";
   conservedNote.textContent = t("setup.residuePicker.launcherConserved");
+
+  const flowHint = document.createElement("div");
+  flowHint.className = "question-summary residue-picker-flow-hint";
+  flowHint.textContent = hasTargetPdb
+    ? t("setup.residuePicker.launcherPdbReady")
+    : hasTargetFasta
+      ? t("setup.residuePicker.launcherFastaReady")
+      : t("setup.residuePicker.launcherMissingTarget");
 
   const source = document.createElement("div");
   source.className = "question-summary";
@@ -14074,6 +14124,7 @@ function buildResiduePickerLauncherCard({ onOpenDetached, onResetSelection, sour
 
   card.appendChild(title);
   card.appendChild(help);
+  card.appendChild(flowHint);
   card.appendChild(source);
   card.appendChild(conservedNote);
   card.appendChild(actionRow);
@@ -17033,6 +17084,8 @@ function renderQuestions(questions) {
     const pickerProvider = state.answers.af2_provider || "colabfold";
     const card = buildResiduePickerLauncherCard({
       runId: selectedRunIdForPicker,
+      hasTargetPdb: Boolean(String(targetPdbText || "").trim()),
+      hasTargetFasta: Boolean(String(targetFastaText || "").trim()),
       onResetSelection: () => {
         clearSetupFixedPositionsExtraState();
         renderQuestions(state.plan?.questions || []);
