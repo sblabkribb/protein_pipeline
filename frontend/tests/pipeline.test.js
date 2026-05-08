@@ -3466,8 +3466,8 @@ test("copilotIntentFromPrompt detects metric term questions", () => {
   assert.equal(copilotIntentFromPrompt("WT CF RMSD 이 무슨 의미야"), "term");
 });
 
-test("buildCopilotReply defines terms before snapshot dumping", () => {
-  const text = buildCopilotReply({
+test("buildCopilotReply defines terms before snapshot dumping", async () => {
+  const text = await buildCopilotReply({
     prompt: "WT CF RMSD 이 무슨 의미야",
     lang: "ko",
     snapshot: {
@@ -3481,8 +3481,8 @@ test("buildCopilotReply defines terms before snapshot dumping", () => {
   assert.doesNotMatch(text, /^Run /);
 });
 
-test("buildCopilotReply recommends top 3 rows when asked", () => {
-  const text = buildCopilotReply({
+test("buildCopilotReply recommends top 3 rows when asked", async () => {
+  const text = await buildCopilotReply({
     prompt: "최종 3종을 추천해줘",
     lang: "ko",
     snapshot: {

@@ -9969,12 +9969,21 @@ function addCopilotHistory(role, text) {
   renderCopilotMessages();
 }
 
-function submitCopilotPrompt(rawPrompt, intentHint = "") {
+async function submitCopilotPrompt(rawPrompt, intentHint = "") {
   const prompt = String(rawPrompt || "").trim();
   if (!prompt) return;
   addCopilotHistory("user", prompt);
-  addCopilotHistory("ai", generateCopilotReply(prompt, intentHint));
-  renderCopilotContext();
+  try {
+    const reply = await generateCopilotReply(prompt, intentHint);
+    addCopilotHistory("ai", reply);
+  } catch (err) {
+    const message = copilotIsKorean()
+      ? `Copilot 응답을 만들지 못했습니다: ${err?.message || String(err)}`
+      : `Copilot could not generate a reply: ${err?.message || String(err)}`;
+    addCopilotHistory("ai", message);
+  } finally {
+    renderCopilotContext();
+  }
 }
 
 function clearCopilotHistory() {
@@ -10080,7 +10089,7 @@ function initCopilot() {
   });
   if (el.copilotSendBtn) {
     el.copilotSendBtn.addEventListener("click", () => {
-      submitCopilotPrompt(el.copilotInput?.value || "");
+      void submitCopilotPrompt(el.copilotInput?.value || "");
       if (el.copilotInput) el.copilotInput.value = "";
     });
   }
@@ -10088,27 +10097,27 @@ function initCopilot() {
     el.copilotInput.addEventListener("keydown", (event) => {
       if (event.key !== "Enter") return;
       event.preventDefault();
-      submitCopilotPrompt(el.copilotInput.value || "");
+      void submitCopilotPrompt(el.copilotInput.value || "");
       el.copilotInput.value = "";
     });
   }
   if (el.copilotQuickUsage) {
-    el.copilotQuickUsage.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.usage"), "usage"));
+    el.copilotQuickUsage.addEventListener("click", () => void submitCopilotPrompt(t("copilot.quick.usage"), "usage"));
   }
   if (el.copilotQuickInterpret) {
-    el.copilotQuickInterpret.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.interpret"), "interpret"));
+    el.copilotQuickInterpret.addEventListener("click", () => void submitCopilotPrompt(t("copilot.quick.interpret"), "interpret"));
   }
   if (el.copilotQuickSummary) {
-    el.copilotQuickSummary.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.summary"), "summary"));
+    el.copilotQuickSummary.addEventListener("click", () => void submitCopilotPrompt(t("copilot.quick.summary"), "summary"));
   }
   if (el.copilotQuickCompare) {
-    el.copilotQuickCompare.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.compare"), "compare"));
+    el.copilotQuickCompare.addEventListener("click", () => void submitCopilotPrompt(t("copilot.quick.compare"), "compare"));
   }
   if (el.copilotQuickNext) {
-    el.copilotQuickNext.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.next"), "next"));
+    el.copilotQuickNext.addEventListener("click", () => void submitCopilotPrompt(t("copilot.quick.next"), "next"));
   }
   if (el.copilotQuickResume) {
-    el.copilotQuickResume.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.resume"), "resume"));
+    el.copilotQuickResume.addEventListener("click", () => void submitCopilotPrompt(t("copilot.quick.resume"), "resume"));
   }
   setCopilotDrawerOpen(false);
   copilotInitialized = true;

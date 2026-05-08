@@ -406,3 +406,12 @@ test("tutorial covers expert workflow controls and downstream review tools", () 
   assert.match(source, /"tutorial\.step\.copilot\.title"/);
   assert.match(source, /"tutorial\.step\.topbar\.title"/);
 });
+
+test("copilot awaits async replies before adding them to chat history", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.doesNotMatch(source, /addCopilotHistory\("ai",\s*generateCopilotReply\(prompt,\s*intentHint\)\);/);
+  assert.match(source, /async function submitCopilotPrompt\(rawPrompt,\s*intentHint = ""\)/);
+  assert.match(source, /const reply = await generateCopilotReply\(prompt,\s*intentHint\);/);
+  assert.match(source, /addCopilotHistory\("ai",\s*reply\);/);
+});
