@@ -116,6 +116,21 @@ test("advanced setup visual hierarchy uses compact review and expert styling", (
   assert.match(html, /class="setup-ux-grid setup-primary-layout"/);
 });
 
+test("advanced optional prompt is collapsed and layout width is fluid", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(html, /<details[^>]+id="advancedPromptDetails"[^>]*class="advanced-prompt-details"[\s\S]*id="promptInput"[\s\S]*<\/details>/);
+  assert.match(html, /class="composer-actions advanced-primary-actions"[\s\S]*id="checkBtn"[\s\S]*id="planBtn"/);
+  assert.doesNotMatch(html, /<textarea\s+id="promptInput"[\s\S]*class="composer-actions advanced-primary-actions"/);
+  assert.match(source, /"setup\.prompt\.summary": "Optional notes or natural-language setup"/);
+  assert.match(source, /"setup\.prompt\.summary": "선택 메모 또는 자연어 설정"/);
+  assert.match(styles, /\.tab-panel\[data-tab="advanced"\]\s+\.tab-content-shell\s*\{[\s\S]*max-width:\s*min\(100%,\s*1740px\);/m);
+  assert.match(styles, /\.setup-primary-layout\s*\{[\s\S]*--setup-content-max:\s*clamp\(960px,\s*86vw,\s*1320px\);/m);
+  assert.match(styles, /\.setup-primary-layout\[data-active-step="input"\]\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*min\(100%,\s*var\(--setup-content-max\)\)\);/m);
+});
+
 test("frontend uses solubility and stability platform branding", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");

@@ -468,19 +468,28 @@
                   </div>
 
                   <div class="composer">
-                    <div class="composer-row">
-                      <textarea
-                        id="promptInput"
-                        rows="3"
-                        placeholder="Optional notes for this run (no prompt required)."
-                        data-i18n-placeholder="setup.prompt.placeholder"
-                      ></textarea>
-                      <div class="composer-actions">
-                        <button id="checkBtn" class="ghost" data-i18n="setup.check">Check Advanced</button>
-                        <button id="planBtn" class="ghost" data-i18n="setup.reset">Reset Inputs</button>
+                    <div class="composer-actions advanced-primary-actions">
+                      <button id="checkBtn" class="ghost" data-i18n="setup.check">Check Advanced</button>
+                      <button id="planBtn" class="ghost" data-i18n="setup.reset">Reset Inputs</button>
+                    </div>
+                    <details id="advancedPromptDetails" class="advanced-prompt-details">
+                      <summary data-i18n="setup.prompt.summary">Optional notes or natural-language setup</summary>
+                      <label class="advanced-prompt-field">
+                        <span data-i18n="setup.prompt.label">Notes or setup instructions</span>
+                        <small data-i18n="setup.prompt.help">
+                          Leave this empty for normal step-by-step setup. Use it only to add notes or ask the system to infer settings from text.
+                        </small>
+                        <textarea
+                          id="promptInput"
+                          rows="3"
+                          placeholder="Optional notes for this run. Leave blank for normal setup."
+                          data-i18n-placeholder="setup.prompt.placeholder"
+                        ></textarea>
+                      </label>
+                      <div class="advanced-prompt-actions">
                         <button id="clearBtn" class="ghost" data-i18n="setup.clear">Clear Note</button>
                       </div>
-                    </div>
+                    </details>
                     <div class="status-subtitle run-subtitle">
                       <span data-i18n="setup.section.log">Activity Log</span>
                       <button id="clearMonitorMessages" class="ghost" data-i18n="monitor.clearLog">Clear</button>
