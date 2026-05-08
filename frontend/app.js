@@ -1977,6 +1977,11 @@ const I18N = {
     "tutorial.step.home.body":
       "Use Home as the landing point. Start a new experiment, reopen a monitor, or jump straight to result analysis from here.",
     "tutorial.step.home.hint": "New Experiment now lets you choose Fast, Advanced, Evolution, or Workflow Studio before moving into setup.",
+    "tutorial.step.experimentChoice.title": "Choose the right start path",
+    "tutorial.step.experimentChoice.body":
+      "After clicking New Experiment, choose the setup path that matches the work. Fast is for a standard run with minimal input. Advanced is the guided full setup. Evolution runs iterative search. Workflow Studio lets you inspect each stage before continuing.",
+    "tutorial.step.experimentChoice.hint":
+      "Use Fast for routine checks, Advanced for most planned runs, Evolution for repeated optimization, and Workflow Studio when stage-by-stage review matters.",
     "tutorial.step.homeProject.title": "Create or select a project first",
     "tutorial.step.homeProject.body":
       "Projects group related targets, hypotheses, rounds, and reports. Create a project here or select an existing one before starting repeated work.",
@@ -3390,6 +3395,11 @@ const I18N = {
     "tutorial.step.home.body":
       "Home은 시작 지점입니다. 새 실험을 만들거나, 기존 실행 모니터를 다시 열거나, 결과 분석으로 바로 이동할 수 있습니다.",
     "tutorial.step.home.hint": "새 실험에서는 Fast, Advanced, Evolution, Workflow Studio 중 필요한 시작 방식을 먼저 고를 수 있습니다.",
+    "tutorial.step.experimentChoice.title": "시작 경로를 고릅니다",
+    "tutorial.step.experimentChoice.body":
+      "새 실험을 누른 뒤 작업 방식에 맞는 경로를 고릅니다. 빠른 실행은 최소 입력으로 표준 실행을 시작합니다. 고급 설정은 전체 설정을 단계별로 확인합니다. Evolution은 반복 탐색용입니다. 스튜디오는 각 단계를 확인하고 이어 실행할 때 사용합니다.",
+    "tutorial.step.experimentChoice.hint":
+      "일상적인 확인은 빠른 실행, 계획된 실행은 고급 설정, 반복 최적화는 Evolution, 단계별 검토가 필요하면 스튜디오를 선택하세요.",
     "tutorial.step.homeProject.title": "먼저 프로젝트를 만들거나 선택합니다",
     "tutorial.step.homeProject.body":
       "프로젝트는 관련 타깃, 가설, 라운드, 리포트를 묶는 상위 작업 공간입니다. 반복 작업을 시작하기 전에 여기서 프로젝트를 만들거나 기존 프로젝트를 선택하세요.",
@@ -4934,6 +4944,14 @@ const TUTORIAL_STEPS = [
     titleKey: "tutorial.step.home.title",
     bodyKey: "tutorial.step.home.body",
     hintKey: "tutorial.step.home.hint",
+  },
+  {
+    id: "experimentChoice",
+    tab: "home",
+    target: ".experiment-choice-grid",
+    titleKey: "tutorial.step.experimentChoice.title",
+    bodyKey: "tutorial.step.experimentChoice.body",
+    hintKey: "tutorial.step.experimentChoice.hint",
   },
   {
     id: "homeProject",
@@ -10384,6 +10402,11 @@ function renderTutorialDots() {
 }
 
 function applyTutorialStepContext(step) {
+  if (step?.id === "experimentChoice") {
+    openExperimentChoicePanel({ focusFirst: false });
+    return;
+  }
+  closeExperimentChoicePanel();
   const setupStep = String(step?.setupStep || "").trim();
   if (!setupStep || step?.tab !== "advanced") return;
   if (state.runMode !== "pipeline") {
@@ -10556,11 +10579,11 @@ function closeExperimentChoicePanel() {
   el.experimentChoicePanel.classList.add("hidden");
 }
 
-function openExperimentChoicePanel() {
+function openExperimentChoicePanel({ focusFirst = true } = {}) {
   if (!el.experimentChoicePanel) return;
   el.experimentChoicePanel.classList.remove("hidden");
   const firstChoice = el.experimentChoicePanel.querySelector("[data-experiment-target]");
-  if (firstChoice && typeof firstChoice.focus === "function") {
+  if (focusFirst && firstChoice && typeof firstChoice.focus === "function") {
     firstChoice.focus({ preventScroll: true });
   }
 }

@@ -363,6 +363,12 @@ test("tutorial covers expert workflow controls and downstream review tools", () 
 
   assert.match(source, /id: "homeProject"/);
   assert.match(source, /id: "homeRound"/);
+  assert.match(source, /id: "experimentChoice"/);
+  assert.match(source, /id: "home"[\s\S]*?id: "experimentChoice"[\s\S]*?id: "homeProject"/m);
+  assert.match(source, /id: "experimentChoice"[\s\S]*?target: "\.experiment-choice-grid"/m);
+  assert.match(source, /"tutorial\.step\.experimentChoice\.title"/);
+  assert.match(source, /"tutorial\.step\.experimentChoice\.title": "Choose the right start path"/);
+  assert.match(source, /"tutorial\.step\.experimentChoice\.title": "시작 경로를 고릅니다"/);
   assert.match(source, /id: "homeProject"[\s\S]*?target: "#homeCreateProjectBtn"[\s\S]*?id: "homeRound"[\s\S]*?target: "#homeCreateRoundBtn"/m);
   assert.match(source, /id: "advancedInput"[\s\S]*?setupStep: "input"/m);
   assert.match(source, /id: "advancedInput"[\s\S]*?id: "pdfAgent"[\s\S]*?id: "advancedWorkflow"/m);
@@ -380,6 +386,8 @@ test("tutorial covers expert workflow controls and downstream review tools", () 
   assert.match(source, /id: "topbarMenu"[\s\S]*?target: "\.topbar-actions"/m);
 
   assert.match(source, /function applyTutorialStepContext/);
+  assert.match(source, /if \(step\?\.id === "experimentChoice"\) \{\s*openExperimentChoicePanel\(\{ focusFirst: false \}\);\s*return;\s*\}/m);
+  assert.match(source, /closeExperimentChoicePanel\(\);\s*const setupStep = String\(step\?\.setupStep \|\| ""\)\.trim\(\);/m);
   assert.match(source, /state\.setupStepIndex = stepIndex;/);
   assert.match(source, /"tutorial\.step\.homeProject\.title"/);
   assert.match(source, /"tutorial\.step\.homeRound\.title"/);
