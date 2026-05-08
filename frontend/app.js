@@ -3051,7 +3051,7 @@ const I18N = {
     "setup.wizard.criteria": "Criteria",
     "setup.wizard.expert": "Expert",
     "setup.wizard.review": "Review",
-    "setup.wizard.stepMeta": "Step {current}/{total}: {label}",
+    "setup.wizard.stepMeta": "Current step: {label}",
     "setup.wizard.prev": "Previous",
     "setup.wizard.next": "Next",
     "setup.stepSummary.input.title": "Add the target first",
@@ -4444,7 +4444,7 @@ const I18N = {
     "setup.wizard.criteria": "평가 기준",
     "setup.wizard.expert": "고급 옵션",
     "setup.wizard.review": "검토",
-    "setup.wizard.stepMeta": "{current}/{total} 단계: {label}",
+    "setup.wizard.stepMeta": "현재 단계: {label}",
     "setup.wizard.prev": "이전",
     "setup.wizard.next": "다음",
     "setup.stepSummary.input.title": "타깃 입력부터 시작",
@@ -15177,6 +15177,44 @@ function renderQuestions(questions) {
     return classes.join(" ");
   };
 
+  function makeOptionalSetupDetails(card, { defaultOpen = false } = {}) {
+    const details = document.createElement("details");
+    details.className = `${card.className || "question-card"} optional-setup-card`;
+    if (defaultOpen) details.open = true;
+
+    const directChildren = Array.from(card.children || []);
+    const titleNode = directChildren.find((node) => node.classList?.contains("question-title"));
+    const helpNode = directChildren.find((node) => node.classList?.contains("question-help"));
+
+    const summary = document.createElement("summary");
+    summary.className = "optional-setup-summary";
+
+    const summaryText = document.createElement("span");
+    summaryText.className = "optional-setup-title";
+    summaryText.textContent = titleNode?.textContent || t("setup.options.title");
+    summary.appendChild(summaryText);
+
+    if (helpNode?.textContent) {
+      const summaryHelp = document.createElement("span");
+      summaryHelp.className = "optional-setup-help";
+      summaryHelp.textContent = helpNode.textContent;
+      summary.appendChild(summaryHelp);
+    }
+
+    titleNode?.remove();
+    helpNode?.remove();
+
+    const body = document.createElement("div");
+    body.className = "optional-setup-body";
+    while (card.firstChild) {
+      body.appendChild(card.firstChild);
+    }
+
+    details.appendChild(summary);
+    details.appendChild(body);
+    return details;
+  }
+
   function renderSetupRfd3ModeDetailsCard(card, normalizedQuestions) {
     const fieldIds = setupRfd3ModeDetailIds();
     if (!fieldIds.length) return;
@@ -16127,7 +16165,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(card);
+    appendConfigCard(makeOptionalSetupDetails(card));
   };
 
   const evolutionQuestionIds = new Set([
@@ -16223,7 +16261,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(card);
+    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
   };
 
   appendCompactOptionBoard();
@@ -16428,7 +16466,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(card);
+    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
   };
 
   appendCompactParameterBoard(compactQuestions);
@@ -16518,7 +16556,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(card);
+    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
   };
 
   appendAdvancedConstraintBoard();
@@ -16542,7 +16580,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     renderSetupRfd3ModeDetailsCard(card, normalizedQuestions);
-    appendConfigCard(card);
+    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
   };
 
   appendRfd3DetailBoard();

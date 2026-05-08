@@ -211,12 +211,17 @@ test("advanced launch form uses a single ordered settings surface", () => {
 
   assert.match(html, /class="advanced-launch-frame"/);
   assert.match(html, /id="setupPrimaryLayout"/);
+  assert.match(html, /class="setup-lane setup-lane-input"/);
   assert.match(html, /id="setupStepSummary"/);
   assert.match(source, /function renderSetupStepSummary/);
   assert.match(source, /setupPrimaryLayout\.dataset\.activeStep/);
   assert.match(styles, /\.advanced-launch-frame/);
   assert.match(styles, /\.setup-step-summary/);
   assert.match(styles, /\.setup-primary-layout\[data-active-step="input"\]/);
+  assert.match(styles, /\.setup-lane-execution\s*\{[\s\S]*?order:\s*-1;/m);
+  assert.match(styles, /\.setup-primary-layout:not\(\[data-active-step="input"\]\)\s+\.setup-lane-input/);
+  assert.match(source, /"setup\.wizard\.stepMeta": "Current step: \{label\}"/);
+  assert.match(source, /"setup\.wizard\.stepMeta": "현재 단계: \{label\}"/);
 });
 
 test("advanced evolution controls live in workflow setup, not the input step", () => {
@@ -228,6 +233,20 @@ test("advanced evolution controls live in workflow setup, not the input step", (
   assert.match(source, /"setup\.evolution\.title": "Evolution 탐색 \(선택\)"/);
   assert.match(source, /"setup\.customRunId\.label"/);
   assert.doesNotMatch(html, /Custom Run ID/);
+});
+
+test("advanced optional setup boards are collapsed by default", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.match(source, /function makeOptionalSetupDetails/);
+  assert.match(source, /document\.createElement\("details"\)/);
+  assert.match(source, /optional-setup-card/);
+  assert.match(source, /appendConfigCard\(makeOptionalSetupDetails\(card\)\);/);
+  assert.match(source, /appendConfigCard\(makeOptionalSetupDetails\(card,\s*\{ defaultOpen: false \}\)\);/m);
+  assert.match(styles, /\.optional-setup-card/);
+  assert.match(styles, /\.optional-setup-summary/);
+  assert.match(styles, /\.optional-setup-body/);
 });
 
 test("user-facing Korean tutorial copy avoids internal pipeline jargon", () => {
