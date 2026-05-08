@@ -669,21 +669,44 @@ body[data-environment="staging"] .topbar {
   max-width: 28ch;
 }
 
-.experiment-choice-card {
-  width: min(780px, 100%);
+.overlay-card.experiment-choice-card {
+  width: min(960px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 32px));
+  overflow: auto;
+  padding: clamp(20px, 3vw, 30px);
+  gap: 20px;
   border-radius: var(--radius-md);
+}
+
+.experiment-choice-card .overlay-header {
+  align-items: flex-start;
+}
+
+.experiment-choice-card .overlay-header > div {
+  min-width: 0;
+}
+
+.experiment-choice-card .hint {
+  max-width: 64ch;
+  line-height: 1.55;
+}
+
+.experiment-choice-card .ghost {
+  flex: 0 0 auto;
+  min-width: 64px;
+  white-space: nowrap;
 }
 
 .experiment-choice-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: clamp(10px, 1vw, 14px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(12px, 1.4vw, 18px);
 }
 
 .experiment-choice-btn {
   appearance: none;
-  min-height: 172px;
-  padding: 18px;
+  min-height: 184px;
+  padding: clamp(16px, 1.8vw, 22px);
   border: 1px solid rgba(24, 41, 46, 0.1);
   border-radius: var(--radius-sm);
   background:
@@ -694,7 +717,7 @@ body[data-environment="staging"] .topbar {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: 10px;
   text-align: left;
   transition:
     transform 180ms ease,
@@ -713,14 +736,18 @@ body[data-environment="staging"] .topbar {
 }
 
 .experiment-choice-btn strong {
-  font-size: 20px;
-  line-height: 1.2;
+  font-size: clamp(20px, 1.7vw, 24px);
+  line-height: 1.15;
+  letter-spacing: 0;
+  word-break: keep-all;
 }
 
 .experiment-choice-btn span:last-child {
   color: var(--ink-soft);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.55;
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 .experiment-choice-kicker {
@@ -733,6 +760,14 @@ body[data-environment="staging"] .topbar {
   font-weight: 800;
   letter-spacing: 0;
   text-transform: uppercase;
+  white-space: normal;
+  word-break: keep-all;
+}
+
+@media (min-width: 1040px) {
+  .experiment-choice-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .mode-shell-placeholder {

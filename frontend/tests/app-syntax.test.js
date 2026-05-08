@@ -204,6 +204,11 @@ test("home new experiment opens a mode chooser instead of forcing fast launch", 
   assert.match(source, /"home\.experimentChoice\.advanced\.title"/);
   assert.match(source, /"home\.experimentChoice\.studio\.desc"/);
   assert.match(styles, /\.experiment-choice-grid/);
+  assert.match(styles, /\.overlay-card\.experiment-choice-card\s*\{[\s\S]*width:\s*min\(960px,\s*calc\(100vw - 32px\)\);/m);
+  assert.match(styles, /\.experiment-choice-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/m);
+  assert.match(styles, /@media \(min-width:\s*1040px\)\s*\{[\s\S]*\.experiment-choice-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/m);
+  assert.match(styles, /\.experiment-choice-btn strong\s*\{[\s\S]*word-break:\s*keep-all;/m);
+  assert.match(styles, /\.experiment-choice-card \.ghost\s*\{[\s\S]*white-space:\s*nowrap;/m);
 });
 
 test("advanced setup uses experiment builder steps", () => {
