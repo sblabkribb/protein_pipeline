@@ -2703,8 +2703,63 @@ textarea:focus-visible {
   border: 1px dashed rgba(51, 65, 85, 0.18);
 }
 
+.attachment-item.attachment-target_input {
+  border-style: solid;
+  border-color: color-mix(in oklch, var(--action-primary) 32%, transparent);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 250, 252, 0.96)),
+    color-mix(in oklch, var(--action-primary) 6%, white);
+}
+
 .attachment-item.required {
   border-color: rgba(224, 122, 95, 0.6);
+}
+
+.optional-attachment-item {
+  padding: 0;
+  overflow: hidden;
+}
+
+.optional-attachment-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
+  padding: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.optional-attachment-summary::marker {
+  content: "";
+}
+
+.optional-attachment-summary::-webkit-details-marker {
+  display: none;
+}
+
+.optional-attachment-summary::after {
+  content: "+";
+  align-self: start;
+  justify-self: end;
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: rgba(15, 122, 119, 0.1);
+  color: var(--teal-dark);
+  font-weight: 800;
+}
+
+.optional-attachment-item[open] .optional-attachment-summary::after {
+  content: "-";
+}
+
+.optional-attachment-body {
+  border-top: 1px solid rgba(16, 42, 45, 0.08);
+  padding: 12px;
 }
 
 .attachment-title {

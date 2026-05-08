@@ -245,7 +245,7 @@ test("advanced launch form uses a single ordered settings surface", () => {
   assert.match(html, /class="advanced-launch-frame"/);
   assert.match(html, /id="setupPrimaryLayout"/);
   assert.match(html, /class="setup-lane setup-lane-input"/);
-  assert.match(html, /id="advancedPaperMaskPanel"[\s\S]*id="questionInputStack"/m);
+  assert.match(html, /id="questionInputStack"[\s\S]*class="composer"[\s\S]*id="advancedPaperMaskPanel"/m);
   assert.match(html, /class="fast-field setup-custom-run-field hidden"[\s\S]*id="customRunIdInput"/m);
   assert.match(html, /id="setupStepSummary"/);
   assert.match(source, /function renderSetupStepSummary/);
@@ -261,6 +261,22 @@ test("advanced launch form uses a single ordered settings surface", () => {
   assert.match(styles, /\.setup-primary-layout:not\(\[data-active-step="input"\]\)\s+\.setup-lane-input/);
   assert.match(source, /"setup\.wizard\.stepMeta": "Current step: \{label\}"/);
   assert.match(source, /"setup\.wizard\.stepMeta": "현재 단계: \{label\}"/);
+  assert.match(source, /"setup\.section\.inputDesc": "Start with the target\. Checks, notes, and literature constraints are below\."/);
+  assert.match(source, /"setup\.section\.inputDesc": "먼저 타깃을 넣으세요\. 설정 점검, 메모, 문헌 제약 조건은 아래에 있습니다\."/);
+});
+
+test("advanced target input is prioritized and rfd3 override input is collapsed", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const styles = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.match(source, /const safeFileId = String\(q\.id \|\| "file"\)\.replace\(/);
+  assert.match(source, /const isRfd3InputOverride = q\.id === "rfd3_input_pdb" && state\.runMode !== "rfd3";/);
+  assert.match(source, /document\.createElement\(isRfd3InputOverride \? "details" : "div"\)/);
+  assert.match(source, /optional-attachment-item/);
+  assert.match(source, /item\.open = setupRfd3InputOverrideVisible\(\) \|\| Boolean\(String\(state\.answers\[q\.id\] \|\| ""\)\.trim\(\)\);/);
+  assert.match(source, /attachment-\$\{safeFileId\}/);
+  assert.match(styles, /\.attachment-item\.attachment-target_input/);
+  assert.match(styles, /\.optional-attachment-item/);
 });
 
 test("advanced evolution controls live in workflow setup, not the input step", () => {

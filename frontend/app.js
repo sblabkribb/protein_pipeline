@@ -2327,7 +2327,7 @@ const I18N = {
     "setup.title": "Advanced Run Setup",
     "setup.desc": "Choose a workflow, add the target files, and review the run before launch.",
     "setup.section.input": "Input",
-    "setup.section.inputDesc": "Attach the target and required files here. Optional notes are collapsed below.",
+    "setup.section.inputDesc": "Start with the target. Checks, notes, and literature constraints are below.",
     "setup.section.execution": "Step Setup",
     "setup.section.executionDesc": "Work through one step at a time.",
     "setup.section.monitor": "Monitoring",
@@ -3738,7 +3738,7 @@ const I18N = {
     "setup.title": "고급 실행 설정",
     "setup.desc": "워크플로우를 고르고, 타깃 파일을 넣은 뒤 실행 전 검토합니다.",
     "setup.section.input": "입력",
-    "setup.section.inputDesc": "타깃과 필수 파일을 여기에 첨부합니다. 선택 메모는 아래 접힌 영역에 있습니다.",
+    "setup.section.inputDesc": "먼저 타깃을 넣으세요. 설정 점검, 메모, 문헌 제약 조건은 아래에 있습니다.",
     "setup.section.execution": "단계별 설정",
     "setup.section.executionDesc": "한 단계씩 필요한 항목만 설정합니다.",
     "setup.section.monitor": "모니터링",
@@ -16820,8 +16820,14 @@ function renderQuestions(questions) {
     }
 
     visibleFileQuestions.forEach((q) => {
-      const item = document.createElement("div");
-      item.className = "attachment-item" + (q.required ? " required" : "");
+      const safeFileId = String(q.id || "file").replace(/[^a-z0-9_-]+/gi, "-");
+      const isRfd3InputOverride = q.id === "rfd3_input_pdb" && state.runMode !== "rfd3";
+      const item = document.createElement(isRfd3InputOverride ? "details" : "div");
+      item.className = `attachment-item attachment-${safeFileId}` + (q.required ? " required" : "");
+      if (isRfd3InputOverride) {
+        item.className += " optional-attachment-item";
+        item.open = setupRfd3InputOverrideVisible() || Boolean(String(state.answers[q.id] || "").trim());
+      }
 
       const itemTitle = document.createElement("div");
       itemTitle.className = "attachment-title";
@@ -17085,10 +17091,23 @@ function renderQuestions(questions) {
       controls.appendChild(fileInput);
       controls.appendChild(clearBtn);
 
-      item.appendChild(itemTitle);
-      item.appendChild(itemHelp);
-      item.appendChild(controls);
-      item.appendChild(meta);
+      if (isRfd3InputOverride) {
+        const summary = document.createElement("summary");
+        summary.className = "optional-attachment-summary";
+        summary.appendChild(itemTitle);
+        summary.appendChild(itemHelp);
+        const body = document.createElement("div");
+        body.className = "optional-attachment-body";
+        body.appendChild(controls);
+        body.appendChild(meta);
+        item.appendChild(summary);
+        item.appendChild(body);
+      } else {
+        item.appendChild(itemTitle);
+        item.appendChild(itemHelp);
+        item.appendChild(controls);
+        item.appendChild(meta);
+      }
       list.appendChild(item);
     });
 
