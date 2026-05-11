@@ -322,12 +322,13 @@ The pipeline preserves enough structure to make solubility-aware compute-allocat
 
 The implemented active-learning loop uses approximately 50 AF2 calls in the bootstrap round rather than folding every candidate in a 90-candidate SoluProt-gated pool. For a multi-round campaign, Table 12 gives the implemented orchestration-level budget: the first round bootstraps the surrogate, and later rounds reuse the archived surrogate and evaluate only the surrogate-ranked Top-K candidates. Under this model, a four-round campaign spends 110 AF2 calls rather than 360, a 69% reduction. At an assumed 30 seconds per AF2 call on the production endpoint, this corresponds to approximately 55 minutes rather than 180 minutes of GPU time per target.
 
-| Per-round AF2 budget model | Without surrogate | Round 1 (with surrogate) | Rounds 2-4 (label reuse / archived surrogate) |
+| Budget model | Without surrogate | With active learning | Reduction |
 |---|---:|---:|---:|
-| AF2 evaluations | 90 | 30 + 20 = 50 | 20 |
-| Reduction vs no-surrogate | - | **44%** | **78%** |
+| Round 1 | 90 | 50 | 44% |
+| Rounds 2-4 total | 270 | 60 | 78% |
+| Four-round total | 360 | 110 | 69% |
 
-*Table 12. AF2 budget per round on a 90-candidate SoluProt-gated pool. Round 1 evaluates 30 K-means training candidates and 20 surrogate-selected candidates (50 total); rounds 2-4 reuse the trained surrogate and only evaluate the 20 top-ranked candidates each. Across a four-round campaign the total AF2 budget is 50 + 20 x 3 = 110 evaluations versus 90 x 4 = 360 without the surrogate, a 69% overall reduction.*
+*Table 12. AF2 budget model for a 90-candidate SoluProt-gated pool. Round 1 evaluates 30 K-means training candidates and 20 surrogate-selected candidates (50 total); rounds 2-4 reuse the archived surrogate and evaluate only the 20 top-ranked candidates per round. Across a four-round campaign, active learning reduces the AF2 budget from 360 to 110 evaluations, a 69% reduction and approximately 3.3x fewer AF2 calls/GPU time at fixed per-call runtime.*
 
 The representative 3RGK and 1LVM evolution runs in Section 3.8 use larger RFD3-enabled pools than the 90-candidate budget illustration, with 8,000 SoluProt-gated candidates per target. Their realized AF2 records were 94 and 49, respectively, because only the bootstrap and surrogate-selected candidates are sent to the oracle. These runs validate the implemented execution path and artifact capture; a larger paired campaign remains necessary to estimate biological hit-rate improvement from archived surrogate reuse.
 
