@@ -66,12 +66,12 @@ def arrow(ax, x1, y1, x2, y2, *, style="->", lw=1.2, color="#333", ls="-"):
     ax.add_patch(a)
 
 
-def lever_box(ax, x1, x2, y, text):
+def lever_box(ax, x1, x2, y, text, *, h=0.72, fs=8.3):
     w = x2 - x1
     rect = FancyBboxPatch(
         (x1, y),
         w,
-        0.85,
+        h,
         boxstyle="round,pad=0.04,rounding_size=0.12",
         facecolor=COLOR_DIVERSIFICATION_LEVER,
         edgecolor=EDGE,
@@ -81,12 +81,13 @@ def lever_box(ax, x1, x2, y, text):
     ax.add_patch(rect)
     ax.text(
         x1 + w / 2,
-        y + 0.42,
+        y + h / 2,
         text,
         ha="center",
         va="center",
-        fontsize=8.6,
+        fontsize=fs,
         color="#1d1d1d",
+        linespacing=1.18,
     )
 
 
@@ -124,9 +125,9 @@ def step_box(ax, x, y, w, h, title, body, color, *, title_fs=10, body_fs=8.2):
 
 
 def draw_pipeline_overview() -> Path:
-    fig, ax = plt.subplots(figsize=(13.0, 4.6))
-    ax.set_xlim(0, 13)
-    ax.set_ylim(0, 4.6)
+    fig, ax = plt.subplots(figsize=(13.8, 5.6))
+    ax.set_xlim(0, 13.8)
+    ax.set_ylim(0, 5.6)
     ax.axis("off")
 
     stages = [
@@ -140,12 +141,12 @@ def draw_pipeline_overview() -> Path:
     ]
 
     n = len(stages)
-    margin = 0.4
-    gap = 0.28
-    total_w = 13 - 2 * margin
+    margin = 0.55
+    gap = 0.34
+    total_w = 13.8 - 2 * margin
     box_w = (total_w - gap * (n - 1)) / n
-    box_h = 0.95
-    y = 3.0
+    box_h = 0.88
+    y = 3.55
 
     centers = []
     for i, (label, color, sub) in enumerate(stages):
@@ -172,8 +173,8 @@ def draw_pipeline_overview() -> Path:
             )
 
     ax.text(
-        6.5,
-        4.25,
+        6.9,
+        5.25,
         "Pipeline stage order",
         ha="center",
         va="center",
@@ -181,8 +182,8 @@ def draw_pipeline_overview() -> Path:
         fontweight="bold",
     )
     ax.text(
-        6.5,
-        3.95,
+        6.9,
+        4.92,
         "msa  \u2192  rfd3  \u2192  bioemu  \u2192  design  \u2192  soluprot  \u2192  af2  \u2192  novelty",
         ha="center",
         va="center",
@@ -191,8 +192,8 @@ def draw_pipeline_overview() -> Path:
         family="monospace",
     )
 
-    legend_x = 10.4
-    legend_y = 4.3
+    legend_x = 9.55
+    legend_y = 5.25
     swatch_w = 0.30
     swatch_h = 0.18
     items = [
@@ -201,7 +202,7 @@ def draw_pipeline_overview() -> Path:
         ("Neutral", COLOR_NEUTRAL_STAGE),
     ]
     for j, (lbl, col) in enumerate(items):
-        x = legend_x + j * 0.85
+        x = legend_x + j * 1.25
         rect = FancyBboxPatch(
             (x, legend_y - swatch_h / 2),
             swatch_w,
@@ -222,27 +223,29 @@ def draw_pipeline_overview() -> Path:
             color="#222",
         )
 
-    lever_y = 1.55
-
     rfd3_c, _, _ = centers[1]
     lever_box(
         ax,
         rfd3_c - 1.4,
         rfd3_c + 1.4,
-        lever_y,
+        2.35,
         "Across-backbone diversification (topology)\nRFD3 \u2014 de novo backbones, default 10",
+        h=0.62,
+        fs=8.1,
     )
-    arrow(ax, rfd3_c, lever_y + 0.45, rfd3_c, y - 0.05, lw=1.0, color="#558055")
+    arrow(ax, rfd3_c, 2.97, rfd3_c, y - 0.07, lw=1.0, color="#558055")
 
     bioemu_c, _, _ = centers[2]
     lever_box(
         ax,
         bioemu_c - 1.4,
         bioemu_c + 1.4,
-        lever_y - 1.0,
+        1.42,
         "Across-backbone diversification (conformation)\nBioEmu \u2014 ensemble, num_samples=10",
+        h=0.62,
+        fs=8.1,
     )
-    arrow(ax, bioemu_c, lever_y - 1.0 + 0.45, bioemu_c, y - 0.05, lw=1.0, color="#558055")
+    arrow(ax, bioemu_c, 2.04, bioemu_c, y - 0.07, lw=1.0, color="#558055")
 
     design_c, _, _ = centers[3]
     msa_c, _, _ = centers[0]
@@ -250,12 +253,14 @@ def draw_pipeline_overview() -> Path:
         ax,
         msa_c - 0.8,
         design_c + 0.8,
-        0.05,
+        0.35,
         "Within-backbone diversification (sequence)\n"
         "MSA conservation tiers [0.3, 0.5, 0.7] drive ProteinMPNN masking",
+        h=0.72,
+        fs=8.1,
     )
-    arrow(ax, msa_c, 0.05 + 0.45, msa_c, y - 0.05, lw=1.0, color="#558055", ls="--")
-    arrow(ax, design_c, 0.05 + 0.45, design_c, y - 0.05, lw=1.0, color="#558055", ls="--")
+    arrow(ax, msa_c, 1.07, msa_c, y - 0.07, lw=1.0, color="#558055", ls="--")
+    arrow(ax, design_c, 1.07, design_c, y - 0.07, lw=1.0, color="#558055", ls="--")
 
     out = FIG_DIR / "fig1_pipeline_overview.png"
     fig.savefig(out, dpi=220, bbox_inches="tight")
@@ -264,13 +269,13 @@ def draw_pipeline_overview() -> Path:
 
 
 def draw_active_learning_loop() -> Path:
-    fig, ax = plt.subplots(figsize=(13.2, 6.2))
-    ax.set_xlim(0, 13.2)
+    fig, ax = plt.subplots(figsize=(13.8, 6.2))
+    ax.set_xlim(0, 13.8)
     ax.set_ylim(0, 6.2)
     ax.axis("off")
 
     ax.text(
-        6.6,
+        6.9,
         5.78,
         "Active-learning loop \u2014 single run-evolution invocation",
         ha="center",
@@ -279,7 +284,7 @@ def draw_active_learning_loop() -> Path:
         fontweight="bold",
     )
     ax.text(
-        6.6,
+        6.9,
         5.45,
         "The diagram shows one implemented loop; multi-round reuse is an orchestration-level budget model.",
         ha="center",
@@ -289,13 +294,15 @@ def draw_active_learning_loop() -> Path:
     )
 
     box_h = 1.08
-    box_w = 2.55
-    col_x = 0.55
+    box_w = 2.28
+    y_top = 4.05
+    y_bottom = 2.25
+    step_x = [0.45, 3.05, 5.65, 8.25, 10.85]
 
     step_box(
         ax,
-        col_x,
-        4.05,
+        step_x[0],
+        y_top,
         box_w,
         box_h,
         "Step 1",
@@ -305,32 +312,44 @@ def draw_active_learning_loop() -> Path:
 
     step_box(
         ax,
-        col_x,
-        2.65,
+        step_x[1],
+        y_top,
         box_w,
         box_h,
         "SoluProt gate",
         "soluprot_cutoff = 0.5\n\u2192 ~90 candidates",
         COLOR_CHEAP_GATE_STAGE,
     )
-    arrow(ax, col_x + box_w / 2, 4.05, col_x + box_w / 2, 2.65 + box_h)
+    arrow(
+        ax,
+        step_x[0] + box_w,
+        y_top + box_h / 2,
+        step_x[1],
+        y_top + box_h / 2,
+    )
 
     step_box(
         ax,
-        col_x,
-        1.25,
+        step_x[2],
+        y_top,
         box_w,
         box_h,
         "Step 2",
-        "K-means selection\nESM-2 8M (320-D)\nN_TRAIN = 20",
+        "K-means selection\nESM-2 8M (320-D)\nN_TRAIN = 30",
         COLOR_LOOP_DATA,
     )
-    arrow(ax, col_x + box_w / 2, 2.65, col_x + box_w / 2, 1.25 + box_h)
+    arrow(
+        ax,
+        step_x[1] + box_w,
+        y_top + box_h / 2,
+        step_x[2],
+        y_top + box_h / 2,
+    )
 
     ax.text(
-        col_x + box_w / 2,
-        0.88,
-        "\u2192 20 training + ~70 unlabeled",
+        step_x[2] + box_w / 2,
+        y_top - 0.34,
+        "30 training + ~60 unlabeled",
         ha="center",
         va="center",
         fontsize=8.5,
@@ -338,51 +357,76 @@ def draw_active_learning_loop() -> Path:
         style="italic",
     )
 
-    mid_x = 4.65
     step_box(
         ax,
-        mid_x,
-        4.05,
+        step_x[3],
+        y_top,
         box_w,
         box_h,
         "Step 3",
-        "AF2 on training set\n20 AF2 calls\nlabel: best pLDDT",
+        "AF2 on training set\n30 AF2 calls\nlabel: pLDDT",
         COLOR_LOOP_AF2,
     )
-    arrow(ax, col_x + box_w, 1.25 + box_h / 2, mid_x, 4.05 + box_h / 2,
-          color="#555")
+    arrow(
+        ax,
+        step_x[2] + box_w,
+        y_top + box_h / 2,
+        step_x[3],
+        y_top + box_h / 2,
+    )
 
     step_box(
         ax,
-        mid_x,
-        2.25,
+        step_x[3],
+        y_bottom,
         box_w,
         box_h * 1.16,
         "Step 4",
-        "Surrogate fit + rank\nlocal model\n(default RF, swappable)\npredict on ~60 pool",
+        "Fit RF surrogate\nrank unlabeled pool\n~60 candidates\n(swappable model)",
         COLOR_LOOP_SURROGATE,
         body_fs=7.9,
     )
-    arrow(ax, mid_x + box_w / 2, 4.05, mid_x + box_w / 2, 2.25 + box_h * 1.16)
+    arrow(
+        ax,
+        step_x[3] + box_w / 2,
+        y_top,
+        step_x[3] + box_w / 2,
+        y_bottom + box_h * 1.16,
+    )
 
-    right_x = 8.95
+    arrow(
+        ax,
+        step_x[2] + box_w,
+        y_top + 0.08,
+        step_x[3],
+        y_bottom + box_h * 1.16 / 2,
+        lw=1.0,
+        color="#558055",
+        ls="--",
+    )
     step_box(
         ax,
-        right_x,
-        4.05,
+        step_x[4],
+        y_top,
         box_w,
         box_h,
         "Step 5",
         "AF2 on top-K\nTOP_K = 20\n20 AF2 calls",
         COLOR_LOOP_AF2,
     )
-    arrow(ax, mid_x + box_w, 2.25 + box_h * 1.16 / 2, right_x,
-          4.05 + box_h / 2, color="#555")
+    arrow(
+        ax,
+        step_x[3] + box_w,
+        y_bottom + box_h * 1.16 / 2,
+        step_x[4],
+        y_top + box_h / 2,
+        color="#555",
+    )
 
     step_box(
         ax,
-        right_x,
-        2.25,
+        step_x[4],
+        y_bottom,
         box_w,
         box_h * 1.16,
         "Step 6",
@@ -390,10 +434,16 @@ def draw_active_learning_loop() -> Path:
         COLOR_LOOP_DATA,
         body_fs=7.9,
     )
-    arrow(ax, right_x + box_w / 2, 4.05, right_x + box_w / 2, 2.25 + box_h * 1.16)
+    arrow(
+        ax,
+        step_x[4] + box_w / 2,
+        y_top,
+        step_x[4] + box_w / 2,
+        y_bottom + box_h * 1.16,
+    )
 
     ax.text(
-        6.6,
+        6.9,
         1.05,
         "Bootstrap round AF2 calls = 30 (training) + 20 (top-K) = 50",
         ha="center",
@@ -403,24 +453,13 @@ def draw_active_learning_loop() -> Path:
         color="#1d1d1d",
     )
     ax.text(
-        6.6,
+        6.9,
         0.58,
         "Without surrogate (AF2 every gated candidate): \u2248 90 calls per run  \u2192  ~44% reduction",
         ha="center",
         va="center",
         fontsize=9,
         color="#333",
-        style="italic",
-    )
-
-    ax.text(
-        mid_x + box_w + 0.05,
-        4.45,
-        "Surrogate replaces oracle\non the unlabeled pool",
-        ha="left",
-        va="center",
-        fontsize=8.0,
-        color="#558055",
         style="italic",
     )
 
