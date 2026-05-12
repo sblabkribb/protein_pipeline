@@ -81,7 +81,7 @@ def load_oidc_settings() -> OIDCSettings | None:
         return None
     audience = _env("PIPELINE_OIDC_AUDIENCE") or client_id
     scopes = _env("PIPELINE_OIDC_SCOPES") or "openid profile email"
-    provider_name = _env("PIPELINE_OIDC_PROVIDER_NAME") or "OIDC SSO"
+    provider_name = _env("PIPELINE_OIDC_PROVIDER_NAME") or "KBF SSO"
     jwks_url = _env("PIPELINE_OIDC_JWKS_URL")
     algorithms_raw = _env("PIPELINE_OIDC_ALGORITHMS") or "RS256"
     algorithms = tuple(item.strip() for item in algorithms_raw.split(",") if item.strip())

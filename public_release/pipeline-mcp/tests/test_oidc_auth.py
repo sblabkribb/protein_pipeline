@@ -44,25 +44,25 @@ def test_claims_to_user_maps_realm_admin_to_admin():
 
 def test_account_console_url_uses_realm_issuer():
     settings = OIDCSettings(
-        issuer="https://sso.localhost/realms/pipeline",
+        issuer="https://sso.k-biofoundrycopilot.duckdns.org/realms/kbf",
         client_id="protein-pipeline",
         audience="protein-pipeline",
         scopes="openid profile email",
-        provider_name="OIDC SSO",
+        provider_name="KBF SSO",
         jwks_url=None,
         algorithms=("RS256",),
     )
 
-    assert account_console_url(settings) == "https://sso.localhost/realms/pipeline/account/"
+    assert account_console_url(settings) == "https://sso.k-biofoundrycopilot.duckdns.org/realms/kbf/account/"
 
 
 def test_claims_match_expected_client_accepts_keycloak_azp_fallback():
     settings = OIDCSettings(
-        issuer="https://sso.localhost/realms/pipeline",
+        issuer="https://sso.k-biofoundrycopilot.duckdns.org/realms/kbf",
         client_id="protein-pipeline",
         audience="protein-pipeline",
         scopes="openid profile email",
-        provider_name="OIDC SSO",
+        provider_name="KBF SSO",
         jwks_url=None,
         algorithms=("RS256",),
     )
@@ -79,11 +79,11 @@ def test_claims_match_expected_client_accepts_keycloak_azp_fallback():
 
 def test_claims_match_expected_client_rejects_other_client():
     settings = OIDCSettings(
-        issuer="https://sso.localhost/realms/pipeline",
+        issuer="https://sso.k-biofoundrycopilot.duckdns.org/realms/kbf",
         client_id="protein-pipeline",
         audience="protein-pipeline",
         scopes="openid profile email",
-        provider_name="OIDC SSO",
+        provider_name="KBF SSO",
         jwks_url=None,
         algorithms=("RS256",),
     )
@@ -100,11 +100,11 @@ def test_claims_match_expected_client_rejects_other_client():
 
 def test_verify_oidc_token_uses_cached_metadata_when_upstream_fetch_temporarily_fails(monkeypatch):
     settings = OIDCSettings(
-        issuer="https://sso.localhost/realms/pipeline",
+        issuer="https://sso.k-biofoundrycopilot.duckdns.org/realms/kbf",
         client_id="protein-pipeline",
         audience="protein-pipeline",
         scopes="openid profile email",
-        provider_name="OIDC SSO",
+        provider_name="KBF SSO",
         jwks_url=None,
         algorithms=("RS256",),
     )
@@ -169,11 +169,11 @@ def test_verify_oidc_token_uses_cached_metadata_when_upstream_fetch_temporarily_
 
 def test_refresh_oidc_tokens_uses_refresh_token_grant(monkeypatch):
     settings = OIDCSettings(
-        issuer="https://sso.localhost/realms/pipeline",
+        issuer="https://sso.k-biofoundrycopilot.duckdns.org/realms/kbf",
         client_id="protein-pipeline",
         audience="protein-pipeline",
         scopes="openid profile email",
-        provider_name="OIDC SSO",
+        provider_name="KBF SSO",
         jwks_url=None,
         algorithms=("RS256",),
     )

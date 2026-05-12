@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-PYTHON_BIN="${PYTHON_BIN:-python3}"
-
-cd "$PROJECT_ROOT"
+cd /opt/protein_pipeline
 target="data/benchmark/cath_pilot_emb_640d.npy"
 log="logs/esm_ablation_after_640d.log"
 mkdir -p logs
@@ -22,5 +18,5 @@ while [[ ! -f "$target" ]]; do
 done
 
 echo "[watcher] $(date -Iseconds) $target ready, running ESM-size ablation ..." | tee -a "$log"
-"$PYTHON_BIN" scripts/benchmark/04_esm_size_ablation.py >> "$log" 2>&1
+/opt/protein_pipeline/venv/bin/python3 scripts/benchmark/04_esm_size_ablation.py >> "$log" 2>&1
 echo "[watcher] $(date -Iseconds) ESM-size ablation done" | tee -a "$log"

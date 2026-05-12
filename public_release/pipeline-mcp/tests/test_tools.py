@@ -198,8 +198,66 @@ print("ok")
             "pipeline.cath_get_job",
             "pipeline.cath_read_job_log",
             "pipeline.cath_stop_job",
+            "pipeline.cath_delete_job",
         }
         self.assertTrue(expected.issubset(defs.keys()))
+
+    def test_delete_managed_job_removes_only_job_record(self) -> None:
+        from pipeline_mcp.cath_ops import delete_managed_job
+        from pipeline_mcp.cath_ops import list_managed_jobs
+
+        with _tmpdir() as tmp:
+            workspace = Path(tmp)
+            outputs_root = workspace / "outputs"
+            job_root = workspace / "_ops" / "jobs" / "cath_batch_20260506_deadbeef"
+            output_run = outputs_root / "abl_be_example"
+            job_root.mkdir(parents=True)
+            output_run.mkdir(parents=True)
+            (job_root / "job.json").write_text(
+                json.dumps(
+                    {
+                        "job_id": "cath_batch_20260506_deadbeef",
+                        "kind": "cath_batch",
+                        "state": "cancelled",
+                        "created_at": "2026-05-06T00:00:00Z",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (output_run / "status.json").write_text(
+                json.dumps({"run_id": "abl_be_example", "state": "completed"}),
+                encoding="utf-8",
+            )
+
+            result = delete_managed_job(str(outputs_root), "cath_batch_20260506_deadbeef")
+
+            self.assertTrue(result["deleted"])
+            self.assertFalse(job_root.exists())
+            self.assertTrue(output_run.exists())
+            self.assertEqual(list_managed_jobs(str(outputs_root), limit=20), [])
+
+    def test_list_managed_jobs_backfills_missing_job_id_from_directory(self) -> None:
+        from pipeline_mcp.cath_ops import list_managed_jobs
+
+        with _tmpdir() as tmp:
+            workspace = Path(tmp)
+            outputs_root = workspace / "outputs"
+            job_root = workspace / "_ops" / "jobs" / "legacy_cancelled_job"
+            job_root.mkdir(parents=True)
+            (job_root / "job.json").write_text(
+                json.dumps(
+                    {
+                        "kind": "cath_batch",
+                        "state": "cancelled",
+                        "created_at": "2026-05-06T00:00:00Z",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            jobs = list_managed_jobs(str(outputs_root), limit=20)
+
+            self.assertEqual(jobs[0]["job_id"], "legacy_cancelled_job")
 
     def test_cath_batch_overview_reports_completed_running_and_failed_counts(self) -> None:
         with _tmpdir() as tmp:

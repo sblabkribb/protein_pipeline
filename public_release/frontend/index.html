@@ -3,21 +3,20 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>K-Biofoundry | Protein Pipeline Console</title>
+    <title>KBF Protein Solubility &amp; Stability Platform</title>
     <link rel="stylesheet" href="./styles.css?v=20260424_145300" />
   </head>
   <body>
-    <div class="bg-orb orb-a" aria-hidden="true"></div>
-    <div class="bg-orb orb-b" aria-hidden="true"></div>
     <div class="bg-grid" aria-hidden="true"></div>
 
     <header class="topbar">
       <div class="brand">
         <div class="brand-mark">KBF</div>
         <div class="brand-text">
-          <div class="brand-title">K-Biofoundry</div>
-          <div class="brand-subtitle" data-i18n="brand.subtitle">Protein Pipeline Console</div>
+          <div class="brand-title">KBF</div>
+          <div class="brand-subtitle" data-i18n="brand.subtitle">Protein Solubility &amp; Stability Platform</div>
         </div>
+        <div id="environmentBadge" class="environment-badge hidden" data-i18n="env.development">Development</div>
       </div>
       <div class="topbar-actions">
         <div class="lang-switch" role="group" aria-label="Language">
@@ -26,6 +25,7 @@
         </div>
         <button id="copilotOpenBtn" class="ghost" data-i18n="copilot.open">Copilot</button>
         <button id="helpBtn" class="ghost" data-i18n="action.help">Usage</button>
+        <button id="tutorialBtn" class="ghost hidden" type="button" data-i18n="action.tutorial">Tutorial</button>
         <button id="accountBtn" class="ghost hidden" data-i18n="action.account">Account</button>
         <button
           id="runpodAdminBtn"
@@ -87,8 +87,8 @@
         <div class="app-shell-frame">
           <aside id="appSidebar" class="app-sidebar">
             <div class="app-sidebar-head">
-              <div class="app-sidebar-kicker">K-Biofoundry</div>
-              <div class="app-sidebar-title" data-i18n="brand.subtitle">Protein Pipeline Console</div>
+              <div class="app-sidebar-kicker">KBF</div>
+              <div class="app-sidebar-title" data-i18n="brand.subtitle">Protein Solubility &amp; Stability Platform</div>
             </div>
             <nav class="app-sidebar-nav" role="tablist" aria-label="Console modes">
               <button
@@ -218,36 +218,33 @@
           <div class="tab-content-shell">
             <div class="panel panel-block home-shell">
               <div class="panel-header home-header">
-                <h2 data-i18n="home.title">Launch Workspace</h2>
-                <p data-i18n="home.desc">Choose how you want to start the next design cycle.</p>
+                <h2 data-i18n="home.title">Solubility/Stability Workspace</h2>
+                <p data-i18n="home.desc">Target design runs, current rounds, and result triage in one workspace.</p>
               </div>
-              <div class="home-card-grid">
-                <button class="home-mode-card" type="button" data-home-target="fast">
-                  <h3 data-i18n="home.card.fast.title">Fast</h3>
-                  <p data-i18n="home.card.fast.desc">
-                    Start from a PDB or FASTA with pipeline defaults chosen for you.
+              <div class="experiment-launchpad">
+                <button class="home-mode-card launchpad-primary" type="button" data-home-target="experiment">
+                  <span class="launchpad-eyebrow" data-i18n="home.launchpad.primary">Primary workflow</span>
+                  <h3 data-i18n="home.launchpad.newExperiment">New Experiment</h3>
+                  <p data-i18n="home.launchpad.newExperimentDesc">
+                    Choose Fast, Advanced, Evolution, or Workflow Studio based on the control you need.
                   </p>
                 </button>
-                <button class="home-mode-card" type="button" data-home-target="advanced">
-                  <h3 data-i18n="home.card.advanced.title">Advanced</h3>
-                  <p data-i18n="home.card.advanced.desc">
-                    Open the full configuration surface with all expert controls.
-                  </p>
-                </button>
-                <button class="home-mode-card" type="button" data-home-target="studio">
-                  <h3 data-i18n="home.card.studio.title">Studio</h3>
-                  <p data-i18n="home.card.studio.desc">
-                    Build and run a workflow stage by stage while watching the outputs.
-                  </p>
-                </button>
-                <button class="home-mode-card" type="button" data-home-target="evolution">
-                  <h3 data-i18n="home.card.evolution.title">Evolution</h3>
-                  <p data-i18n="home.card.evolution.desc">Autonomous multi-round sequence design pipeline.</p>
-                </button>
+                <div class="launchpad-secondary-grid">
+                  <button class="launchpad-action-card" type="button" data-home-target="monitor">
+                    <span class="launchpad-step">01</span>
+                    <h3 data-i18n="home.launchpad.loadRun">Load Existing Run</h3>
+                    <p data-i18n="home.launchpad.loadRunDesc">Resume monitoring from the current run list.</p>
+                  </button>
+                  <button class="launchpad-action-card" type="button" data-home-target="analyze">
+                    <span class="launchpad-step">02</span>
+                    <h3 data-i18n="home.launchpad.analyzeResults">Analyze Results</h3>
+                    <p data-i18n="home.launchpad.analyzeResultsDesc">Review ranked candidates and comparison outputs.</p>
+                  </button>
+                </div>
               </div>
               <div class="home-context-strip">
                 <div class="home-context-item home-context-item-select">
-                  <span data-i18n="home.context.project">Active Project</span>
+                  <span data-i18n="home.context.project">Current Project</span>
                   <select id="homeProjectSelector" class="run-selector">
                     <option value="" data-i18n="home.select.projectPlaceholder">Select project</option>
                   </select>
@@ -258,7 +255,7 @@
                   </div>
                 </div>
                 <div class="home-context-item home-context-item-select">
-                  <span data-i18n="home.context.round">Active Round</span>
+                  <span data-i18n="home.context.round">Current Round</span>
                   <select id="homeRoundSelector" class="run-selector">
                     <option value="" data-i18n="home.select.roundPlaceholder">Select round</option>
                   </select>
@@ -283,7 +280,7 @@
               </div>
               <div class="home-quick-actions">
                 <button id="homeContinueRoundBtn" class="ghost" type="button" data-i18n="home.action.continueRound">
-                  Continue Active Round
+                  Continue Current Round
                 </button>
                 <button id="homeOpenMonitorBtn" class="ghost" type="button" data-i18n="home.action.openMonitor">
                   Open Monitor
@@ -310,25 +307,40 @@
                   <div class="panel-header">
                     <h2 data-i18n="fast.title">Fast Launch</h2>
                     <p data-i18n="fast.desc">
-                      Paste a PDB or FASTA, keep the standard defaults, and launch without opening the full expert setup.
+                      Upload a FASTA/PDB file, or paste text if needed, then launch with standard defaults.
                     </p>
                   </div>
-                  <label class="fast-field">
-                    <span data-i18n="fast.input.label">Target Input</span>
-                    <small data-i18n="fast.input.help">Provide a raw PDB or FASTA sequence.</small>
-                    <textarea
-                      id="fastTargetInput"
-                      rows="10"
-                      placeholder="Paste PDB or FASTA here."
-                      data-i18n-placeholder="fast.input.placeholder"
-                    ></textarea>
-                  </label>
-                  <div class="fast-inline-actions">
+                  <div class="fast-upload-primary">
+                    <div>
+                      <span data-i18n="fast.input.label">FASTA/PDB file or text</span>
+                      <strong data-i18n="fast.upload.title">Upload target file</strong>
+                      <p data-i18n="fast.upload.desc">
+                        Use a PDB, FASTA, FA, or text file for the usual Fast launch path.
+                      </p>
+                    </div>
                     <input id="fastTargetFile" type="file" class="hidden" accept=".pdb,.ent,.fa,.fasta,.txt,.seq" />
                     <button id="fastLoadFileBtn" class="ghost" type="button" data-i18n="fast.action.loadFile">
-                      Load File
+                      Choose File
                     </button>
+                    <p id="fastTargetStatus" class="fast-target-status" data-i18n="fast.upload.statusEmpty">
+                      No target loaded yet.
+                    </p>
                   </div>
+                  <details id="fastPasteDetails" class="fast-paste-details">
+                    <summary data-i18n="fast.paste.summary">Paste FASTA/PDB text instead</summary>
+                    <label class="fast-field">
+                      <span data-i18n="fast.paste.label">Direct text input</span>
+                      <small data-i18n="fast.input.help">
+                        Use raw text only when you do not have a file.
+                      </small>
+                      <textarea
+                        id="fastTargetInput"
+                        rows="8"
+                        placeholder="Paste FASTA or PDB text here."
+                        data-i18n-placeholder="fast.input.placeholder"
+                      ></textarea>
+                    </label>
+                  </details>
                   <label class="fast-field">
                     <span data-i18n="fast.note.label">Run Notes</span>
                     <small data-i18n="fast.note.help">Optional notes copied into the run prompt.</small>
@@ -340,8 +352,8 @@
                     ></textarea>
                   </label>
                   <label class="fast-field">
-                    <span data-i18n="setup.customRunId.label">Custom Run ID</span>
-                    <small data-i18n="setup.customRunId.help">Leave empty for auto-generation.</small>
+                    <span data-i18n="setup.customRunId.label">Run name</span>
+                    <small data-i18n="setup.customRunId.help">Optional. Leave blank to create one automatically.</small>
                     <input id="fastCustomRunIdInput" type="text" placeholder="custom_run_01" />
                   </label>
                   <div class="fast-actions">
@@ -382,19 +394,19 @@
                   </label>
 
                   <!-- Literature-Driven Masking UI (Fast) -->
-                  <div class="field-group" style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-                    <label style="font-weight: 500; font-size: 0.85em; color: var(--text-color-muted); display: block; margin-bottom: 0.5rem;">Extract Constraints from Paper (PDF)</label>
-                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
-                      <input type="file" id="paperMaskInputFast" accept="application/pdf" style="display: none;" />
-                      <button type="button" class="btn" id="paperMaskUploadBtnFast" style="white-space: nowrap; font-size: 0.85em;">📄 Upload & Analyze</button>
-                      <span id="paperMaskStatusFast" class="status-subtitle" style="margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.75em;"></span>
+                  <div class="paper-mask-panel field-group paper-mask-panel-compact">
+                    <label class="paper-mask-label">Extract Constraints from Paper (PDF)</label>
+                    <div class="paper-mask-controls">
+                      <input class="paper-mask-input" type="file" id="paperMaskInputFast" accept="application/pdf" />
+                      <button type="button" class="ghost paper-mask-upload" id="paperMaskUploadBtnFast">Upload PDF</button>
+                      <span id="paperMaskStatusFast" class="status-subtitle paper-mask-status"></span>
                     </div>
-                    <div id="paperMaskReviewPanelFast" class="hidden" style="border: 1px solid var(--border-color); padding: 0.75rem; border-radius: 4px; background: var(--bg-color-alt); font-size: 0.9em;">
-                      <div class="status-subtitle" style="font-size: 0.8em;">AI Suggested Masks</div>
-                      <div id="paperMaskListFast" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 200px; overflow-y: auto; margin-bottom: 0.75rem;"></div>
-                      <div style="display: flex; justify-content: flex-end; gap: 0.4rem;">
-                        <button type="button" class="btn" id="paperMaskCancelBtnFast" style="font-size: 0.8em; padding: 2px 8px;">Cancel</button>
-                        <button type="button" class="btn primary" id="paperMaskApplyBtnFast" style="font-size: 0.8em; padding: 2px 8px;">Apply</button>
+                    <div id="paperMaskReviewPanelFast" class="paper-mask-review hidden">
+                      <div class="status-subtitle paper-mask-review-title">AI Suggested Masks</div>
+                      <div id="paperMaskListFast" class="paper-mask-list"></div>
+                      <div class="paper-mask-actions">
+                        <button type="button" class="ghost paper-mask-action" id="paperMaskCancelBtnFast">Cancel</button>
+                        <button type="button" class="primary paper-mask-action" id="paperMaskApplyBtnFast">Apply</button>
                       </div>
                     </div>
                   </div>
@@ -448,27 +460,38 @@
                 </div>
               </div>
 
-              <div class="setup-ux-grid">
-                <section class="setup-lane">
+              <div id="setupPrimaryLayout" class="setup-ux-grid setup-primary-layout">
+                <section class="setup-lane setup-lane-input">
                   <div class="setup-section-title">
                     <h3 data-i18n="setup.section.input">Input</h3>
-                    <p data-i18n="setup.section.inputDesc">Attach required files and enter optional notes.</p>
+                    <p data-i18n="setup.section.inputDesc">Start with the target. Checks, notes, and literature constraints are below.</p>
                   </div>
 
+                  <div id="questionInputStack" class="question-stack section-stack"></div>
+
                   <div class="composer">
-                    <div class="composer-row">
-                      <textarea
-                        id="promptInput"
-                        rows="3"
-                        placeholder="Optional notes for this run (no prompt required)."
-                        data-i18n-placeholder="setup.prompt.placeholder"
-                      ></textarea>
-                      <div class="composer-actions">
-                        <button id="checkBtn" class="ghost" data-i18n="setup.check">Check Advanced</button>
-                        <button id="planBtn" class="ghost" data-i18n="setup.reset">Reset Inputs</button>
+                    <div class="composer-actions advanced-primary-actions">
+                      <button id="checkBtn" class="ghost" data-i18n="setup.check">Check Advanced</button>
+                      <button id="planBtn" class="ghost" data-i18n="setup.reset">Reset Inputs</button>
+                    </div>
+                    <details id="advancedPromptDetails" class="advanced-prompt-details">
+                      <summary data-i18n="setup.prompt.summary">Optional notes or natural-language setup</summary>
+                      <label class="advanced-prompt-field">
+                        <span data-i18n="setup.prompt.label">Notes or setup instructions</span>
+                        <small data-i18n="setup.prompt.help">
+                          Leave this empty for normal step-by-step setup. Use it only to add notes or ask the system to infer settings from text.
+                        </small>
+                        <textarea
+                          id="promptInput"
+                          rows="3"
+                          placeholder="Optional notes for this run. Leave blank for normal setup."
+                          data-i18n-placeholder="setup.prompt.placeholder"
+                        ></textarea>
+                      </label>
+                      <div class="advanced-prompt-actions">
                         <button id="clearBtn" class="ghost" data-i18n="setup.clear">Clear Note</button>
                       </div>
-                    </div>
+                    </details>
                     <div class="status-subtitle run-subtitle">
                       <span data-i18n="setup.section.log">Activity Log</span>
                       <button id="clearMonitorMessages" class="ghost" data-i18n="monitor.clearLog">Clear</button>
@@ -476,59 +499,76 @@
                     <div id="messages" class="messages monitor-messages"></div>
                   </div>
 
-                  <div id="questionInputStack" class="question-stack section-stack"></div>
+                  <div
+                    id="advancedPaperMaskPanel"
+                    class="paper-mask-panel field-group paper-mask-panel-advanced paper-mask-panel-featured"
+                  >
+                    <div class="paper-mask-heading">
+                      <label class="paper-mask-label" data-i18n="setup.pdfAgent.label">
+                        Extract Literature Constraints (PDF)
+                      </label>
+                      <p class="paper-mask-help" data-i18n="setup.pdfAgent.help">
+                        Upload a paper when residues or mutation-sensitive regions should guide fixed-position choices.
+                      </p>
+                    </div>
+                    <div class="paper-mask-controls">
+                      <input class="paper-mask-input" type="file" id="paperMaskInputAdvanced" accept="application/pdf" />
+                      <button
+                        type="button"
+                        class="ghost paper-mask-upload"
+                        id="paperMaskUploadBtnAdvanced"
+                        data-i18n="setup.pdfAgent.upload"
+                      >
+                        Upload PDF
+                      </button>
+                      <span id="paperMaskStatusAdvanced" class="status-subtitle paper-mask-status"></span>
+                    </div>
+                    <div id="paperMaskReviewPanelAdvanced" class="paper-mask-review hidden">
+                      <div class="status-subtitle paper-mask-review-title">AI Suggested Masks</div>
+                      <div id="paperMaskListAdvanced" class="paper-mask-list"></div>
+                      <div class="paper-mask-actions">
+                        <button type="button" class="ghost paper-mask-action" id="paperMaskCancelBtnAdvanced">Cancel</button>
+                        <button type="button" class="primary paper-mask-action" id="paperMaskApplyBtnAdvanced">Apply</button>
+                      </div>
+                    </div>
+                  </div>
                 </section>
 
                 <section class="setup-lane setup-lane-execution">
                   <div class="setup-section-title">
-                    <h3 data-i18n="setup.section.execution">Execution Settings</h3>
+                    <h3 data-i18n="setup.section.execution">Step Setup</h3>
                     <p data-i18n="setup.section.executionDesc">
-                      Select run mode and configure pipeline options.
+                      Work through one step at a time.
                     </p>
                   </div>
 
-                  <!-- Literature-Driven Masking UI (Advanced) -->
-                  <div class="field-group" style="margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border-color);">
-                    <label style="font-weight: 500; font-size: 0.85em; color: var(--text-color-muted); display: block; margin-bottom: 0.5rem;">Extract Constraints from Paper (PDF)</label>
-                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
-                      <input type="file" id="paperMaskInputAdvanced" accept="application/pdf" style="display: none;" />
-                      <button type="button" class="btn" id="paperMaskUploadBtnAdvanced" style="white-space: nowrap; font-size: 0.85em;">📄 Upload & Analyze Paper</button>
-                      <span id="paperMaskStatusAdvanced" class="status-subtitle" style="margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.75em;"></span>
-                    </div>
-                    <div id="paperMaskReviewPanelAdvanced" class="hidden" style="border: 1px solid var(--border-color); padding: 0.75rem; border-radius: 4px; background: var(--bg-color-alt); font-size: 0.9em;">
-                      <div class="status-subtitle" style="font-size: 0.8em;">AI Suggested Masks</div>
-                      <div id="paperMaskListAdvanced" style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 200px; overflow-y: auto; margin-bottom: 0.75rem;"></div>
-                      <div style="display: flex; justify-content: flex-end; gap: 0.4rem;">
-                        <button type="button" class="btn" id="paperMaskCancelBtnAdvanced" style="font-size: 0.8em; padding: 2px 8px;">Cancel</button>
-                        <button type="button" class="btn primary" id="paperMaskApplyBtnAdvanced" style="font-size: 0.8em; padding: 2px 8px;">Apply</button>
+                  <div class="advanced-launch-frame">
+                    <div id="setupStepSummary" class="setup-step-summary hidden"></div>
+                    <div id="setupStepper" class="setup-stepper hidden">
+                      <div id="setupStepMeta" class="setup-step-meta"></div>
+                      <div id="setupStepDots" class="setup-step-dots"></div>
+                      <div class="setup-step-actions">
+                        <button id="setupStepPrev" class="ghost" type="button"></button>
+                        <button id="setupStepNext" class="ghost" type="button"></button>
                       </div>
                     </div>
-                  </div>
+                    <div id="questionConfigStack" class="question-stack section-stack"></div>
 
-                  <div id="setupStepper" class="setup-stepper hidden">
-                    <div id="setupStepMeta" class="setup-step-meta"></div>
-                    <div id="setupStepDots" class="setup-step-dots"></div>
-                    <div class="setup-step-actions">
-                      <button id="setupStepPrev" class="ghost" type="button"></button>
-                      <button id="setupStepNext" class="ghost" type="button"></button>
-                    </div>
-                  </div>
-                  <div id="questionConfigStack" class="question-stack section-stack"></div>
-                  
-                  <label class="fast-field" style="margin-top: 1rem;">
-                    <span data-i18n="setup.customRunId.label">Custom Run ID</span>
-                    <small data-i18n="setup.customRunId.help">Leave empty for auto-generation.</small>
-                    <input id="customRunIdInput" type="text" placeholder="custom_run_01" />
-                  </label>
+                    <label class="fast-field setup-custom-run-field hidden">
+                      <span data-i18n="setup.customRunId.label">Run name</span>
+                      <small data-i18n="setup.customRunId.help">Optional. Leave blank to create one automatically.</small>
+                      <input id="customRunIdInput" type="text" placeholder="custom_run_01" />
+                    </label>
 
-                  <div class="run-actions">
-                    <button id="runBtn" class="primary" disabled>Run</button>
-                    <div id="runHint" class="hint" data-i18n="setup.hint">
-                      Complete required inputs to enable execution.
+                    <div class="run-actions">
+                      <button id="runBtn" class="primary" disabled>Run</button>
+                      <div id="runHint" class="hint" data-i18n="setup.hint">
+                        Complete required inputs to enable execution.
+                      </div>
                     </div>
-                  </div>
-                  <div id="runInlineStatus" class="run-inline-status" data-i18n="setup.runStatus.empty">
-                    Run status: -
+                    <div id="runInlineStatus" class="run-inline-status" data-i18n="setup.runStatus.empty">
+                      Run status: -
+                    </div>
                   </div>
                 </section>
               </div>
@@ -566,8 +606,8 @@
                     ></textarea>
                   </label>
                   <label class="fast-field">
-                    <span data-i18n="setup.customRunId.label">Custom Run ID</span>
-                    <small data-i18n="setup.customRunId.help">Leave empty for auto-generation.</small>
+                    <span data-i18n="setup.customRunId.label">Run name</span>
+                    <small data-i18n="setup.customRunId.help">Optional. Leave blank to create one automatically.</small>
                     <input id="evolutionCustomRunIdInput" type="text" placeholder="custom_run_01" />
                   </label>
                   <div class="fast-inline-actions">
@@ -601,7 +641,7 @@
                     <span data-i18n="evolution.oracleSamples.label">Stage 3: Select Top K (Final AF2)</span>
                     <input id="evolutionOracleSamplesInput" type="number" min="1" step="1" value="20" />
                   </label>
-                  <div class="panel-header" style="margin-top: 1rem;">
+                  <div class="panel-header evolution-section-heading">
                     <h4 data-i18n="evolution.filtering.title">Filtering</h4>
                   </div>
                   <label class="fast-field">
@@ -625,7 +665,7 @@
                     <input id="evolutionRfd3TargetRmsdCutoffInput" type="number" min="0" step="0.01" value="2.0" />
                   </label>
 
-                  <div class="panel-header" style="margin-top: 1rem;">
+                  <div class="panel-header evolution-section-heading">
                     <h4 data-i18n="evolution.constraints.title">Constraints</h4>
                   </div>
                   <label class="fast-field">
@@ -638,21 +678,23 @@
                   </label>
 
                   <!-- Literature-Driven Masking UI -->
-                  <div class="field-group" style="margin-top: 1rem;">
-                    <label style="font-weight: 500; font-size: 0.85em; color: var(--text-color-muted); display: block; margin-bottom: 0.5rem;">Extract Constraints from Paper (PDF)</label>
-                    <div style="display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem;">
-                      <input type="file" id="paperMaskInput" accept="application/pdf" style="display: none;" />
-                      <button type="button" class="btn" id="paperMaskUploadBtn" style="white-space: nowrap;">📄 Upload & Analyze</button>
-                      <span id="paperMaskStatus" class="status-subtitle" style="margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></span>
+                  <div class="paper-mask-panel field-group">
+                    <label class="paper-mask-label">Extract Constraints from Paper (PDF)</label>
+                    <div class="paper-mask-controls">
+                      <input class="paper-mask-input" type="file" id="paperMaskInput" accept="application/pdf" />
+                      <button type="button" class="ghost paper-mask-upload" id="paperMaskUploadBtn">Upload PDF</button>
+                      <span id="paperMaskStatus" class="status-subtitle paper-mask-status"></span>
                     </div>
-                    <div id="paperMaskReviewPanel" class="hidden" style="border: 1px solid var(--border-color); padding: 1rem; border-radius: 4px; background: var(--bg-color-alt);">
-                      <div class="status-subtitle">AI Suggested Masks</div>
-                      <div id="paperMaskList" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 300px; overflow-y: auto; margin-bottom: 1rem;">
+                    <div id="paperMaskReviewPanel" class="paper-mask-review hidden">
+                      <div class="status-subtitle paper-mask-review-title">AI Suggested Masks</div>
+                      <div id="paperMaskList" class="paper-mask-list paper-mask-list-tall">
                         <!-- Items injected here -->
                       </div>
-                      <div style="display: flex; justify-content: flex-end; gap: 0.5rem;">
-                        <button type="button" class="btn" id="paperMaskCancelBtn">Cancel</button>
-                        <button type="button" class="btn primary" id="paperMaskApplyBtn">Apply Selected to Constraints</button>
+                      <div class="paper-mask-actions">
+                        <button type="button" class="ghost paper-mask-action" id="paperMaskCancelBtn">Cancel</button>
+                        <button type="button" class="primary paper-mask-action" id="paperMaskApplyBtn">
+                          Apply Selected to Constraints
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -768,7 +810,7 @@
             <div class="panel panel-block rounds-shell">
               <div class="panel-header">
                 <h2 data-i18n="rounds.title">Rounds Workspace</h2>
-                <p data-i18n="rounds.desc">Organize projects, active rounds, and linked runs in one place.</p>
+                <p data-i18n="rounds.desc">Organize projects, experiment rounds, and linked runs in one place.</p>
               </div>
               <div class="rounds-grid">
                 <section class="rounds-column">
@@ -811,7 +853,7 @@
                       <div>
                         <div class="status-subtitle" data-i18n="rounds.list">Rounds</div>
                         <p class="rounds-block-copy" data-i18n="rounds.rounds.desc">
-                          Keep each design-test-learn cycle grouped under the active project.
+                          Keep each design-test-learn cycle grouped under the current project.
                         </p>
                       </div>
                     </div>
@@ -1583,6 +1625,42 @@
       </div>
     </div>
 
+    <div id="experimentChoicePanel" class="overlay hidden" role="dialog" aria-modal="true" aria-labelledby="experimentChoiceHeading">
+      <div class="overlay-card experiment-choice-card">
+        <div class="overlay-header">
+          <div>
+            <h4 id="experimentChoiceHeading" data-i18n="home.experimentChoice.title">Choose Experiment Type</h4>
+            <p class="hint" data-i18n="home.experimentChoice.desc">
+              Start with the path that matches how much setup and review control you need.
+            </p>
+          </div>
+          <button id="experimentChoiceClose" class="ghost" type="button" data-i18n="common.close">Close</button>
+        </div>
+        <div class="experiment-choice-grid">
+          <button class="experiment-choice-btn" type="button" data-experiment-target="fast">
+            <span class="experiment-choice-kicker" data-i18n="home.experimentChoice.fast.kicker">Default path</span>
+            <strong data-i18n="home.experimentChoice.fast.title">Fast</strong>
+            <span data-i18n="home.experimentChoice.fast.desc">Upload a target file or paste text, then run standard defaults.</span>
+          </button>
+          <button class="experiment-choice-btn" type="button" data-experiment-target="advanced">
+            <span class="experiment-choice-kicker" data-i18n="home.experimentChoice.advanced.kicker">Guided setup</span>
+            <strong data-i18n="home.experimentChoice.advanced.title">Advanced</strong>
+            <span data-i18n="home.experimentChoice.advanced.desc">Step through input, workflow, criteria, expert options, and review.</span>
+          </button>
+          <button class="experiment-choice-btn" type="button" data-experiment-target="evolution">
+            <span class="experiment-choice-kicker" data-i18n="home.experimentChoice.evolution.kicker">Iterative design</span>
+            <strong data-i18n="home.experimentChoice.evolution.title">Evolution</strong>
+            <span data-i18n="home.experimentChoice.evolution.desc">Configure active-learning rounds and Top K selection.</span>
+          </button>
+          <button class="experiment-choice-btn" type="button" data-experiment-target="studio">
+            <span class="experiment-choice-kicker" data-i18n="home.experimentChoice.studio.kicker">Stage review</span>
+            <strong data-i18n="home.experimentChoice.studio.title">Workflow Studio</strong>
+            <span data-i18n="home.experimentChoice.studio.desc">Build or resume a staged workflow with checkpoints.</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div id="settingsPanel" class="overlay hidden" role="dialog" aria-modal="true">
       <div class="overlay-card settings-card">
         <div class="overlay-header">
@@ -1734,6 +1812,33 @@
             <ul>
               <li data-i18n="help.admin.step1">Admins can create users from the Admin button.</li>
             </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      id="tutorialOverlay"
+      class="tutorial-overlay hidden"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="tutorialStepTitle"
+    >
+      <div id="tutorialSpotlight" class="tutorial-spotlight" aria-hidden="true"></div>
+      <div id="tutorialCard" class="tutorial-card" role="document">
+        <div class="tutorial-card-head">
+          <div id="tutorialStepMeta" class="tutorial-step-meta"></div>
+          <button id="tutorialClose" class="ghost" type="button" data-i18n="common.close">Close</button>
+        </div>
+        <h4 id="tutorialStepTitle"></h4>
+        <p id="tutorialStepBody"></p>
+        <div id="tutorialStepHint" class="tutorial-step-hint"></div>
+        <div id="tutorialDots" class="tutorial-dots" aria-hidden="true"></div>
+        <div class="tutorial-actions">
+          <button id="tutorialSkip" class="ghost" type="button" data-i18n="tutorial.skip">Skip</button>
+          <div class="tutorial-step-actions">
+            <button id="tutorialPrev" class="ghost" type="button" data-i18n="tutorial.prev">Back</button>
+            <button id="tutorialNext" class="primary" type="button" data-i18n="tutorial.next">Next</button>
           </div>
         </div>
       </div>

@@ -21,7 +21,7 @@ import json
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path("/opt/protein_pipeline")
 CATH_OUTPUTS = PROJECT_ROOT / "cath_outputs"
 DATA_OUT = PROJECT_ROOT / "data" / "benchmark"
 OUT_CSV = DATA_OUT / "cath_pilot_dataset.csv"

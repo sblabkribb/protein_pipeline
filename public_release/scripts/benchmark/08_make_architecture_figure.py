@@ -22,7 +22,7 @@ import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path("/opt/protein_pipeline")
 OUT_PATH = PROJECT_ROOT / "figures" / "benchmark" / "fig1_architecture.png"
 
 

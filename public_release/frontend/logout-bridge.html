@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Pipeline Logout Bridge</title>
+    <title>KBF Logout Bridge</title>
   </head>
   <body>
     <script>
@@ -19,7 +19,7 @@
         function notify(ok) {
           var params = new URLSearchParams(window.location.search)
           var payload = {
-            type: 'pipeline:logout-bridge:complete',
+            type: 'kbf:logout-bridge:complete',
             requestId: String(params.get('request_id') || ''),
             ok: ok !== false,
             origin: window.location.origin,
@@ -53,17 +53,17 @@
         }
 
         try {
-          window.localStorage.removeItem('pipeline.user')
-          window.localStorage.removeItem('pipeline.token')
-          window.localStorage.removeItem('pipeline.idToken')
-          window.localStorage.setItem('pipeline.globalLogoutAt', String(Date.now()))
+          window.localStorage.removeItem('kbf.user')
+          window.localStorage.removeItem('kbf.token')
+          window.localStorage.removeItem('kbf.idToken')
+          window.localStorage.setItem('kbf.globalLogoutAt', String(Date.now()))
         } catch (_err) {
           // Ignore localStorage failures.
         }
 
         try {
-          window.sessionStorage.removeItem('pipeline.oidc.state')
-          window.sessionStorage.removeItem('pipeline.oidc.verifier')
+          window.sessionStorage.removeItem('kbf.oidc.state')
+          window.sessionStorage.removeItem('kbf.oidc.verifier')
         } catch (_err) {
           // Ignore sessionStorage failures.
         }

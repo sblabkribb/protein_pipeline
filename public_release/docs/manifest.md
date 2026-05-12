@@ -6,8 +6,10 @@
 - Backend tests: `pipeline-mcp/tests/`
 - Backend model artifacts: `pipeline-mcp/models/global_plddt_v1.pkl`,
   `pipeline-mcp/models/global_soluprot_v1.pkl`
-- Static frontend: `frontend/`
-- Benchmark scripts: `scripts/benchmark/`
+- Vite/Tailwind frontend source: `frontend/`
+- Benchmark scripts and release helper scripts: `scripts/benchmark/`,
+  `scripts/02_run_cath_batch.py`, `scripts/train_cath_surrogate.py`,
+  `scripts/run_managed_job.py`
 - Benchmark data and cached results: `data/benchmark/`
 - Representative direct/evolution case-study summaries: `data/case_studies/`
 - QC-filtered CATH benchmark summaries: `data/cath_curated/`
@@ -21,6 +23,8 @@
 - private `.env` files
 - Python virtual environments
 - frontend `node_modules`
+- frontend test harness from the private development repo
+- frontend build output (`frontend/dist/`)
 - runtime `outputs/` and `logs/`
 - full CATH run-output archive (`cath_outputs/`)
 - `pipeline-mcp/tests/_tmp/`

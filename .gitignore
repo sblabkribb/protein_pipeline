@@ -69,6 +69,7 @@ ENV/
 # --- Env / secrets ---
 .env
 .env.*
+!/public_release/pipeline-mcp/.env.example
 *.pem
 *.key
 

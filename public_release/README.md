@@ -12,8 +12,8 @@ environments.
 ## Contents
 
 - `pipeline-mcp/` - HTTP/MCP backend used by the pipeline UI and MCP clients.
-- `frontend/` - static browser UI for the local/server solubility-aware workflow.
-  It can be served by any static file server.
+- `frontend/` - Vite/Tailwind browser UI for the local/server
+  solubility-aware workflow. Build it before serving from a reverse proxy.
 - `scripts/benchmark/` - scripts used to prepare the CATH benchmark, train/test
   surrogate models, and regenerate paper tables/figures.
 - `data/benchmark/` - processed benchmark dataset, ESM embeddings, and benchmark
@@ -41,18 +41,28 @@ python -m pip install -r requirements.txt
 cp .env.example .env
 # Edit .env and fill RUNPOD_API_KEY, MMSEQS_ENDPOINT_ID, PROTEINMPNN_ENDPOINT_ID,
 # and at least one AF2/ColabFold backend.
-PYTHONPATH=src python -m pipeline_mcp.http_server --host 0.0.0.0 --port 18080
+PYTHONPATH=src python -m pipeline_mcp.http_server --host 127.0.0.1 --port 18080
 ```
 
 Start the frontend in another shell:
 
 ```bash
 cd frontend
-python3 -m http.server 5173 --bind 127.0.0.1
+npm ci
+npm run dev
 ```
 
 Then open `http://127.0.0.1:5173`. By default, the frontend points to
 `http://127.0.0.1:18080` when served from localhost.
+
+For a shared server, build the frontend and serve `frontend/dist` through Caddy
+or another HTTPS reverse proxy:
+
+```bash
+cd frontend
+npm ci
+npm run build
+```
 
 ## Authentication
 
@@ -67,7 +77,7 @@ are empty, the backend uses local auth only.
 ## RunPod / Remote Server Use
 
 Run the backend on the GPU/server side, keep RunPod credentials in
-`pipeline-mcp/.env`, and either:
+`pipeline-mcp/.env`, build the frontend, and either:
 
 - use SSH port forwarding from your local browser:
 
@@ -75,8 +85,9 @@ Run the backend on the GPU/server side, keep RunPod credentials in
 ssh -L 18080:127.0.0.1:18080 user@your-server
 ```
 
-- or expose the backend through your own HTTPS reverse proxy and set
-  `PIPELINE_CORS_ORIGINS` to the frontend origin.
+- or expose the frontend and backend through your own HTTPS reverse proxy.
+  Serve `frontend/dist` as static files and reverse proxy `/api/*` to the
+  backend on `127.0.0.1:18080`.
 
 Do not commit a filled `.env` file.
 

@@ -9,11 +9,11 @@ from pipeline_mcp.session_auth import SessionManager
 
 def _settings() -> OIDCSettings:
     return OIDCSettings(
-        issuer="https://sso.example.test/realms/pipeline",
+        issuer="https://sso.example.test/realms/kbf",
         client_id="protein-pipeline",
         audience="protein-pipeline",
         scopes="openid profile email",
-        provider_name="OIDC SSO",
+        provider_name="KBF SSO",
         jwks_url=None,
         algorithms=("RS256",),
     )
@@ -24,7 +24,7 @@ def test_session_manager_persists_local_sessions_across_reloads(tmp_path):
     manager = SessionManager(
         SessionConfig(
             store_path=store_path,
-            cookie_name="pipeline_session",
+            cookie_name="kbf_session",
             local_ttl_s=3600,
             oidc_refresh_leeway_s=60,
             oidc_fallback_ttl_s=300,
@@ -37,7 +37,7 @@ def test_session_manager_persists_local_sessions_across_reloads(tmp_path):
     reloaded = SessionManager(
         SessionConfig(
             store_path=store_path,
-            cookie_name="pipeline_session",
+            cookie_name="kbf_session",
             local_ttl_s=3600,
             oidc_refresh_leeway_s=60,
             oidc_fallback_ttl_s=300,
@@ -52,7 +52,7 @@ def test_session_manager_refreshes_oidc_sessions_before_expiry(tmp_path, monkeyp
     manager = SessionManager(
         SessionConfig(
             store_path=store_path,
-            cookie_name="pipeline_session",
+            cookie_name="kbf_session",
             local_ttl_s=3600,
             oidc_refresh_leeway_s=60,
             oidc_fallback_ttl_s=300,
@@ -115,7 +115,7 @@ def test_session_manager_drops_oidc_session_when_refresh_fails(tmp_path, monkeyp
     manager = SessionManager(
         SessionConfig(
             store_path=store_path,
-            cookie_name="pipeline_session",
+            cookie_name="kbf_session",
             local_ttl_s=3600,
             oidc_refresh_leeway_s=60,
             oidc_fallback_ttl_s=300,

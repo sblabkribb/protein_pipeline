@@ -39,7 +39,7 @@ class FakeRunPod(RunPodClient):
                     "idleTimeout": 5,
                     "executionTimeoutMs": 600000,
                     "flashBoot": True,
-                    "template": {"id": "tmpl-1", "name": "mmseqs-runpod", "imageName": "pipeline/mmseqs:latest"},
+                    "template": {"id": "tmpl-1", "name": "mmseqs-runpod", "imageName": "kbf/mmseqs:latest"},
                     "workers": worker_payload if include_workers else [],
                 },
                 {
@@ -54,7 +54,7 @@ class FakeRunPod(RunPodClient):
                     "idleTimeout": 10,
                     "executionTimeoutMs": 900000,
                     "flashBoot": False,
-                    "template": {"id": "tmpl-2", "name": "sandbox", "imageName": "pipeline/sandbox:latest"},
+                    "template": {"id": "tmpl-2", "name": "sandbox", "imageName": "kbf/sandbox:latest"},
                     "workers": [],
                 },
             ]

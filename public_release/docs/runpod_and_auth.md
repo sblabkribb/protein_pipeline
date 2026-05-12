@@ -3,7 +3,7 @@
 ## Recommended Deployment Pattern
 
 Keep the backend close to the GPU services and credentials. The browser UI can
-run locally or behind a simple static file server.
+run locally through Vite or behind a static file server after `npm run build`.
 
 For a private server:
 
@@ -17,13 +17,16 @@ From your laptop:
 ```bash
 ssh -L 18080:127.0.0.1:18080 user@your-server
 cd frontend
-python3 -m http.server 5173 --bind 127.0.0.1
+npm ci
+npm run dev
 ```
 
 Then open `http://127.0.0.1:5173`.
 
-For shared access, put the backend behind HTTPS and restrict
-`PIPELINE_CORS_ORIGINS` to the frontend origin instead of `*`.
+For shared access, run `npm run build`, serve `frontend/dist` over HTTPS, and
+reverse proxy `/api/*` to the backend. Restrict `PIPELINE_CORS_ORIGINS` to the
+frontend origin instead of `*` if the frontend and API are served from different
+origins.
 
 ## RunPod Images
 

@@ -7,7 +7,7 @@ Standalone static operations console for the RunPod Serverless endpoints used by
 Serve the existing frontend root:
 
 ```bash
-cd ../../frontend
+cd /opt/protein_pipeline/frontend
 python3 -m http.server 5173
 ```
 

@@ -30,7 +30,7 @@ import sys as _sys
 _sys.path.insert(0, str(Path(__file__).parent))
 from _selection import select_train_indices
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path("/opt/protein_pipeline")
 DATA_DIR = PROJECT_ROOT / "data" / "benchmark"
 RESULTS_DIR = DATA_DIR / "results"
 CSV_PATH = DATA_DIR / "cath_pilot_dataset.csv"

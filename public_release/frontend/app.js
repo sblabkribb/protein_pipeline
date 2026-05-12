@@ -138,6 +138,7 @@ const OIDC_VERIFIER_KEY = "kbf.oidc.verifier";
 
 const LANG_KEY = "kbf.lang";
 const LANG_OPTIONS = ["en", "ko"];
+const TUTORIAL_STORAGE_KEY = "kbf.tutorial.completed.v2";
 const REPORT_LANG_KEY = "kbf.reportLang";
 const REPORT_LANG_OPTIONS = ["auto", "en", "ko"];
 const WORKFLOW_PLAN_STORAGE_KEY = "kbf.workflowPlans";
@@ -160,6 +161,17 @@ const detachedResiduePickerToken = (() => {
     return "";
   }
 })();
+
+function resolveUiEnvironment(locationObj = window.location) {
+  const hostname = String(locationObj?.hostname || "").toLowerCase();
+  if (hostname === "dev-pipeline.k-biofoundrycopilot.duckdns.org" || hostname.startsWith("dev-pipeline.")) {
+    return "development";
+  }
+  if (hostname === "staging-pipeline.k-biofoundrycopilot.duckdns.org" || hostname.startsWith("staging-pipeline.")) {
+    return "staging";
+  }
+  return "production";
+}
 
 function loadLang() {
   const saved = localStorage.getItem(LANG_KEY);
@@ -748,12 +760,26 @@ const el = {
   loginBtn: document.getElementById("loginBtn"),
   ssoLoginBtn: document.getElementById("ssoLoginBtn"),
   loginError: document.getElementById("loginError"),
+  environmentBadge: document.getElementById("environmentBadge"),
   logoutBtn: document.getElementById("logoutBtn"),
   accountBtn: document.getElementById("accountBtn"),
   adminBtn: document.getElementById("adminBtn"),
   runpodAdminBtn: document.getElementById("runpodAdminBtn"),
   tabBtnCath: document.getElementById("tabBtnCath"),
   helpBtn: document.getElementById("helpBtn"),
+  tutorialBtn: document.getElementById("tutorialBtn"),
+  tutorialOverlay: document.getElementById("tutorialOverlay"),
+  tutorialSpotlight: document.getElementById("tutorialSpotlight"),
+  tutorialCard: document.getElementById("tutorialCard"),
+  tutorialStepMeta: document.getElementById("tutorialStepMeta"),
+  tutorialStepTitle: document.getElementById("tutorialStepTitle"),
+  tutorialStepBody: document.getElementById("tutorialStepBody"),
+  tutorialStepHint: document.getElementById("tutorialStepHint"),
+  tutorialDots: document.getElementById("tutorialDots"),
+  tutorialSkip: document.getElementById("tutorialSkip"),
+  tutorialPrev: document.getElementById("tutorialPrev"),
+  tutorialNext: document.getElementById("tutorialNext"),
+  tutorialClose: document.getElementById("tutorialClose"),
   copilotOpenBtn: document.getElementById("copilotOpenBtn"),
   copilotFabBtn: document.getElementById("copilotFabBtn"),
   chatArea: document.getElementById("chatArea"),
@@ -763,6 +789,7 @@ const el = {
   fastTargetInput: document.getElementById("fastTargetInput"),
   fastTargetFile: document.getElementById("fastTargetFile"),
   fastLoadFileBtn: document.getElementById("fastLoadFileBtn"),
+  fastTargetStatus: document.getElementById("fastTargetStatus"),
   fastPromptInput: document.getElementById("fastPromptInput"),
   fastSelectedTiers: document.getElementById("fastSelectedTiers"),
   fastTotalOutputInput: document.getElementById("fastTotalOutputInput"),
@@ -815,6 +842,8 @@ const el = {
   homeRoundStatusValue: document.getElementById("homeRoundStatusValue"),
   homeRunsValue: document.getElementById("homeRunsValue"),
   homeReportValue: document.getElementById("homeReportValue"),
+  experimentChoicePanel: document.getElementById("experimentChoicePanel"),
+  experimentChoiceClose: document.getElementById("experimentChoiceClose"),
   roundsProjectList: document.getElementById("roundsProjectList"),
   roundsList: document.getElementById("roundsList"),
   roundsDetail: document.getElementById("roundsDetail"),
@@ -866,7 +895,9 @@ const el = {
   customRunIdInput: document.getElementById("customRunIdInput"),
   fastCustomRunIdInput: document.getElementById("fastCustomRunIdInput"),
   evolutionCustomRunIdInput: document.getElementById("evolutionCustomRunIdInput"),
+  setupPrimaryLayout: document.getElementById("setupPrimaryLayout"),
   setupStepper: document.getElementById("setupStepper"),
+  setupStepSummary: document.getElementById("setupStepSummary"),
   setupStepMeta: document.getElementById("setupStepMeta"),
   setupStepDots: document.getElementById("setupStepDots"),
   setupStepPrev: document.getElementById("setupStepPrev"),
@@ -1081,6 +1112,17 @@ const el = {
   adminRunsToggle: document.getElementById("adminRunsToggle"),
   showAllRuns: document.getElementById("showAllRuns"),
 };
+
+function applyEnvironmentChrome() {
+  const uiEnvironment = resolveUiEnvironment();
+  document.body.dataset.environment = uiEnvironment;
+  if (el.environmentBadge) {
+    el.environmentBadge.classList.toggle("hidden", uiEnvironment === "production");
+    el.environmentBadge.dataset.i18n =
+      uiEnvironment === "staging" ? "env.staging" : "env.development";
+    el.environmentBadge.textContent = t(el.environmentBadge.dataset.i18n);
+  }
+}
 
 function persistHomeContextSelection(user = state.user) {
   try {
@@ -1916,12 +1958,121 @@ async function deleteCurrentRoundFromWorkspace() {
 
 const I18N = {
   en: {
-    "brand.subtitle": "Protein Pipeline Console",
+    "platform.name": "KBF Protein Solubility & Stability Platform",
+    "brand.subtitle": "Protein Solubility & Stability Platform",
+    "env.development": "Development",
+    "env.staging": "Staging",
     "action.admin": "Admin",
     "action.account": "Account",
     "action.settings": "Settings",
     "action.logout": "Logout",
     "action.help": "Usage",
+    "action.tutorial": "Tutorial",
+    "tutorial.stepMeta": "Step {current}/{total}",
+    "tutorial.skip": "Skip",
+    "tutorial.prev": "Back",
+    "tutorial.next": "Next",
+    "tutorial.finish": "Finish",
+    "tutorial.step.home.title": "Start from the workspace",
+    "tutorial.step.home.body":
+      "Use Home as the landing point. Before starting a new run, set the project and round so results are recorded in the right workspace.",
+    "tutorial.step.home.hint": "Project and round are not mandatory for a quick check, but they keep repeated optimization work traceable.",
+    "tutorial.step.experimentChoice.title": "Choose the right start path",
+    "tutorial.step.experimentChoice.body":
+      "After clicking New Experiment, choose the setup path that matches the work. Fast is for a standard run with minimal input. Advanced is the guided full setup. Evolution runs iterative search. Workflow Studio lets you inspect each stage before continuing.",
+    "tutorial.step.experimentChoice.hint":
+      "Use Fast for routine checks, Advanced for most planned runs, Evolution for repeated optimization, and Workflow Studio when stage-by-stage review matters.",
+    "tutorial.step.homeProject.title": "Create or select a project first",
+    "tutorial.step.homeProject.body":
+      "Projects group related targets, hypotheses, rounds, and reports. Create a project here or select an existing one before starting repeated work.",
+    "tutorial.step.homeProject.hint": "A project is the top-level campaign space. Use one project per target family or biological objective.",
+    "tutorial.step.homeRound.title": "Create rounds from Home",
+    "tutorial.step.homeRound.body":
+      "After choosing a project, create the round for this experiment cycle. Runs you start afterward are recorded under that project and round.",
+    "tutorial.step.homeRound.hint": "Use rounds before repeated optimization so hypotheses, selected candidates, and next-round notes stay easy to find.",
+    "tutorial.step.advanced.title": "Advanced is a guided setup",
+    "tutorial.step.advanced.body":
+      "Advanced collects target input, workflow path, candidate criteria, expert overrides, and final review as ordered steps.",
+    "tutorial.step.advanced.hint": "Use this when you need to tune conservation tiers, output counts, RFD3/BioEmu/AF2 gates, or fixed positions.",
+    "tutorial.step.advancedInput.title": "Start with the target input",
+    "tutorial.step.advancedInput.body":
+      "Step 1/5 is for the target sequence or structure. Paste or upload FASTA/PDB input here; Evolution (BO) is only an optional search toggle, not the run shape.",
+    "tutorial.step.advancedInput.hint": "If the target is missing, later workflow and review steps cannot launch a run.",
+    "tutorial.step.advancedWorkflow.title": "Workflow decides the run shape",
+    "tutorial.step.advancedWorkflow.body":
+      "Step 2/5 is where the run shape belongs. Choose the pipeline path, included stages, conservation levels, and whether to open a staged Workflow Studio session.",
+    "tutorial.step.advancedWorkflow.hint": "Use the full path for routine runs. Remove RFD3/BioEmu or open Studio when you want staged review or lower compute cost.",
+    "tutorial.step.advancedCriteria.title": "Criteria set the filters",
+    "tutorial.step.advancedCriteria.body":
+      "Step 3/5 controls candidate evaluation: output counts, SoluProt cutoff, AF2 pLDDT/RMSD gates, Relax, WT comparison, and ranking-related thresholds.",
+    "tutorial.step.advancedCriteria.hint": "Tight criteria reduce downstream workload; loose criteria keep more candidates for manual triage.",
+    "tutorial.step.advancedExpert.title": "Advanced options are overrides",
+    "tutorial.step.advancedExpert.body":
+      "Step 4/5 contains expert controls such as fixed residues, mask consensus, input-backbone gates, RFD3/BioEmu limits, and literature-derived masks.",
+    "tutorial.step.advancedExpert.hint": "Change these only when the target biology or prior evidence justifies overriding the defaults.",
+    "tutorial.step.advancedReview.title": "Review before launch",
+    "tutorial.step.advancedReview.body":
+      "Step 5/5 summarizes the selected mode, stages, target readiness, backbone sources, AF2 provider, Relax state, and conservation tiers before Run.",
+    "tutorial.step.advancedReview.hint": "Use this final screen to catch mismatched stages or missing target input before spending compute.",
+    "tutorial.step.pdfAgent.title": "PDF agent extracts constraints",
+    "tutorial.step.pdfAgent.body":
+      "Upload a paper PDF here when the literature mentions catalytic residues, binding-site positions, or mutation-sensitive regions. The agent proposes residues to keep fixed.",
+    "tutorial.step.pdfAgent.hint":
+      "Always review the proposed residues before applying them; the agent helps triage literature evidence, but the final mask is still your decision.",
+    "tutorial.step.evolution.title": "Evolution explores iterative designs",
+    "tutorial.step.evolution.body":
+      "Evolution starts from a target and searches candidate space across generated pools, oracle samples, and rounds.",
+    "tutorial.step.evolution.hint": "Use it after you understand the basic pipeline; the pool and round counts affect runtime and output size.",
+    "tutorial.step.evolutionSettings.title": "Evolution numbers control cost and selectivity",
+    "tutorial.step.evolutionSettings.body":
+      "Generation Pool Size is the candidate pool. K-Means Training Samples is the learning/training sample count. Select Top K is how many candidates receive final AF2 evaluation.",
+    "tutorial.step.evolutionSettings.hint":
+      "Larger pools explore more sequences but take longer. Increase Top K only when you want broader final validation; reduce it for quick screening.",
+    "tutorial.step.studio.title": "Studio resumes staged workflows",
+    "tutorial.step.studio.body":
+      "Studio is for step-by-step workflow sessions, checkpoint review, and continuing a run after inspecting intermediate results.",
+    "tutorial.step.studio.hint": "If a run pauses at a checkpoint, review it in Monitor or Studio before resuming.",
+    "tutorial.step.studioCheckpoint.title": "Pause, inspect, then continue",
+    "tutorial.step.studioCheckpoint.body":
+      "Run This Stage advances one selected stage. Stop Run pauses execution, Resume Run continues the same run, and Open Monitor shows artifacts and checkpoint context.",
+    "tutorial.step.studioCheckpoint.hint":
+      "Use Studio when you want to inspect MSA, RFD3, BioEmu, design, or AF2 outputs before spending compute on the next step.",
+    "tutorial.step.monitor.title": "Monitor tracks live runs",
+    "tutorial.step.monitor.body":
+      "Monitor shows stage state, ETA, artifacts, checkpoint actions, completeness, and current run context.",
+    "tutorial.step.monitor.hint": "Use Auto Poll while a run is active, then inspect artifacts before moving to analysis.",
+    "tutorial.step.monitorAgent.title": "Agent Panel explains stage decisions",
+    "tutorial.step.monitorAgent.body":
+      "The Agent Panel summarizes expert checks, recovery notes, and report links for the current run. Use it when a stage needs review or recovery.",
+    "tutorial.step.monitorAgent.hint":
+      "View Report opens the run summary. View Agent Report opens the agent's stage-by-stage reasoning and warnings.",
+    "tutorial.step.rounds.title": "Rounds organize experiments",
+    "tutorial.step.rounds.body":
+      "Rounds connect projects, hypotheses, linked run IDs, selected candidates, feedback, and next-round notes.",
+    "tutorial.step.rounds.hint": "Create a project and round before repeated optimization work so results stay traceable.",
+    "tutorial.step.analyze.title": "Analyze compares and ranks results",
+    "tutorial.step.analyze.body":
+      "Analyze brings together Compare Studio, run-to-run deltas, hit lists, charts, feedback, experiments, and report generation.",
+    "tutorial.step.analyze.hint": "Start with the hit list, then compare structures and generate a report after triage.",
+    "tutorial.step.analyzeHitList.title": "Hit List is the candidate shortlist",
+    "tutorial.step.analyzeHitList.body":
+      "Refresh the Hit List after loading a run. Score Cutoff filters weak candidates, Rows controls how many to show, and weights tune SoluProt, pLDDT, and RMSD importance.",
+    "tutorial.step.analyzeHitList.hint":
+      "Use Hit List first for triage, then open details or compare structures for the candidates that remain.",
+    "tutorial.step.report.title": "Reports consolidate the run",
+    "tutorial.step.report.body":
+      "Generate builds the markdown report, Rendered View previews it, Export Package bundles report assets, and Save stores your edited version.",
+    "tutorial.step.report.hint":
+      "Report language follows Settings. After generating, review the evidence score and artifact links before saving or exporting.",
+    "tutorial.step.copilot.title": "Copilot answers in context",
+    "tutorial.step.copilot.body":
+      "Copilot reads the current run context and can explain metrics, compare state, resume behavior, and practical next actions.",
+    "tutorial.step.copilot.hint":
+      "Use Copilot for interpretation and navigation help; use the main Run, Resume, Report, and Export buttons for irreversible actions.",
+    "tutorial.step.topbar.title": "Top menu controls",
+    "tutorial.step.topbar.body":
+      "Use KO/EN for language, Copilot for contextual help, Usage for the static guide, Tutorial to replay this tour, Settings for report language, and Logout when finished.",
+    "tutorial.step.topbar.hint": "Settings is only one item here. Most everyday navigation stays in the left tabs and Home workspace.",
     "tabs.home": "Home",
     "tabs.evolution": "Evolution",
     "tabs.fast": "Fast",
@@ -1932,8 +2083,29 @@ const I18N = {
     "tabs.cath": "CATH",
     "tabs.analyze": "Analyze",
     "tabs.mcp": "MCP",
-    "home.title": "Launch Workspace",
-    "home.desc": "Choose how you want to start the next design cycle.",
+    "home.title": "Solubility/Stability Workspace",
+    "home.desc": "Target design runs, current rounds, and result triage in one workspace.",
+    "home.launchpad.primary": "Primary workflow",
+    "home.launchpad.newExperiment": "New Experiment",
+    "home.launchpad.newExperimentDesc": "Choose Fast, Advanced, Evolution, or Workflow Studio based on the control you need.",
+    "home.launchpad.loadRun": "Load Existing Run",
+    "home.launchpad.loadRunDesc": "Resume monitoring from the current run list.",
+    "home.launchpad.analyzeResults": "Analyze Results",
+    "home.launchpad.analyzeResultsDesc": "Review ranked candidates and comparison outputs.",
+    "home.experimentChoice.title": "Choose experiment type",
+    "home.experimentChoice.desc": "Start with the path that matches how much setup and review control you need.",
+    "home.experimentChoice.fast.kicker": "Default path",
+    "home.experimentChoice.fast.title": "Fast",
+    "home.experimentChoice.fast.desc": "Upload a target file or paste text, then run standard defaults.",
+    "home.experimentChoice.advanced.kicker": "Guided setup",
+    "home.experimentChoice.advanced.title": "Advanced",
+    "home.experimentChoice.advanced.desc": "Step through input, workflow, criteria, expert options, and review.",
+    "home.experimentChoice.evolution.kicker": "Iterative design",
+    "home.experimentChoice.evolution.title": "Evolution",
+    "home.experimentChoice.evolution.desc": "Configure active-learning rounds and Top K selection.",
+    "home.experimentChoice.studio.kicker": "Stage review",
+    "home.experimentChoice.studio.title": "Workflow Studio",
+    "home.experimentChoice.studio.desc": "Build or resume a staged workflow with checkpoints.",
     "home.card.fast.title": "Fast",
     "home.card.fast.desc": "Start from a PDB or FASTA with pipeline defaults chosen for you.",
     "home.card.advanced.title": "Advanced",
@@ -1942,8 +2114,8 @@ const I18N = {
     "home.card.studio.desc": "Build and run a workflow stage by stage while watching the outputs.",
     "home.card.evolution.title": "Evolution",
     "home.card.evolution.desc": "Autonomous multi-round sequence design pipeline.",
-    "home.context.project": "Active Project",
-    "home.context.round": "Active Round",
+    "home.context.project": "Current Project",
+    "home.context.round": "Current Round",
     "home.context.roundStatus": "Round Status",
     "home.context.runs": "Runs in Progress",
     "home.context.report": "Recent Result",
@@ -1951,7 +2123,7 @@ const I18N = {
     "home.action.open": "Open",
     "home.action.createProject": "New Project",
     "home.action.createRound": "New Round",
-    "home.action.continueRound": "Continue Active Round",
+    "home.action.continueRound": "Continue Current Round",
     "home.action.openMonitor": "Open Monitor",
     "home.action.openAnalyze": "Open Analyze",
     "home.select.projectPlaceholder": "Select project",
@@ -1986,11 +2158,11 @@ const I18N = {
     "evolution.fixedPositionsExtra.label": "Fixed Positions Extra",
     "evolution.error.targetRequired": "Paste a PDB in Evolution before launching.",
     "rounds.title": "Rounds Workspace",
-    "rounds.desc": "Organize projects, active rounds, and linked runs in one place.",
+    "rounds.desc": "Organize projects, experiment rounds, and linked runs in one place.",
     "rounds.projects": "Projects",
     "rounds.projects.desc": "Create and select campaign spaces for each target.",
     "rounds.list": "Rounds",
-    "rounds.rounds.desc": "Keep each design-test-learn cycle grouped under the active project.",
+    "rounds.rounds.desc": "Keep each design-test-learn cycle grouped under the current project.",
     "rounds.empty.projects": "No projects yet. Create one to start tracking rounds.",
     "rounds.empty.projectSelection": "Select a project to view or create rounds.",
     "rounds.empty.rounds": "No rounds yet. Create one inside the selected project.",
@@ -2073,14 +2245,21 @@ const I18N = {
     "workspaceRecord.error.projectNameRequired": "Enter a project name.",
     "workspaceRecord.error.roundTitleRequired": "Enter a round title.",
     "fast.title": "Fast Launch",
-    "fast.desc": "Paste a PDB or FASTA, choose sequence conservation and total output count, then launch with standard defaults.",
-    "fast.input.label": "Target Input",
-    "fast.input.help": "Provide a raw PDB or FASTA sequence.",
-    "fast.input.placeholder": "Paste PDB or FASTA here.",
+    "fast.desc": "Upload a FASTA/PDB file, or paste text if needed, then choose conservation and output count for a standard run.",
+    "fast.input.label": "FASTA/PDB file or text",
+    "fast.upload.title": "Upload target file",
+    "fast.upload.desc": "Use a PDB, FASTA, FA, or text file for the usual Fast launch path.",
+    "fast.upload.statusEmpty": "No target loaded yet.",
+    "fast.upload.statusFile": "Loaded {name}.",
+    "fast.upload.statusText": "Text input ready.",
+    "fast.paste.summary": "Paste FASTA/PDB text instead",
+    "fast.paste.label": "Direct text input",
+    "fast.input.help": "Use raw text only when you do not have a file.",
+    "fast.input.placeholder": "Paste FASTA or PDB text here.",
     "fast.note.label": "Run Notes",
     "fast.note.help": "Optional notes copied into the run prompt.",
     "fast.note.placeholder": "Optional notes for this launch.",
-    "fast.action.loadFile": "Load File",
+    "fast.action.loadFile": "Choose File",
     "fast.action.reviewAdvanced": "Open Advanced",
     "fast.action.run": "Run Fast",
     "fast.options.title": "Launch Options",
@@ -2089,10 +2268,11 @@ const I18N = {
     "fast.totalOutput.label": "Total Output Sequences",
     "fast.totalOutput.help":
       "Target total ProteinMPNN designs across the selected sequence-conservation levels. PDB input uses RFD3 + BioEmu; FASTA input uses BioEmu only.",
-    "fast.error.targetRequired": "Paste a PDB or FASTA in Fast before launching.",
+    "fast.error.targetRequired": "Choose a FASTA/PDB file or paste target text before launching.",
     "fast.message.reviewReady":
       "Fast defaults were copied into Advanced. Adjust sequence conservation or counts before launching if needed.",
-    "fast.message.fileLoaded": "Loaded {name} into Fast target input.",
+    "fast.message.advancedOpened": "Advanced is open. Add a target in the Input step when you are ready.",
+    "fast.message.fileLoaded": "Loaded {name} into Fast target.",
     "copilot.open": "Copilot",
     "copilot.title": "Context Copilot",
     "copilot.desc": "Usage + interpretation helper using current run/screen data.",
@@ -2150,17 +2330,27 @@ const I18N = {
     "login.sso.submit": "Continue with KBF SSO",
     "login.sso.hint": "Use your KBF account. Password changes are managed in the SSO account page.",
     "setup.title": "Advanced Run Setup",
-    "setup.desc": "Choose a workflow, attach inputs, and launch the job from the full configuration surface.",
+    "setup.desc": "Choose a workflow, add the target files, and review the run before launch.",
     "setup.section.input": "Input",
-    "setup.section.inputDesc": "Attach required files and add optional context notes.",
-    "setup.section.execution": "Execution Settings",
-    "setup.section.executionDesc": "Select run mode and configure stage options.",
+    "setup.section.inputDesc": "Start with the target. Checks, notes, and literature constraints are below.",
+    "setup.section.execution": "Step Setup",
+    "setup.section.executionDesc": "Work through one step at a time.",
     "setup.section.monitor": "Monitoring",
     "setup.section.monitorDesc": "Keep progress and errors visible while preparing a run.",
     "setup.section.log": "Activity Log",
     "setup.section.logDesc": "Preflight and run messages appear here.",
     "setup.openMonitor": "Open Monitor",
-    "setup.prompt.placeholder": "Prompt or notes (key=value supported).",
+    "setup.prompt.summary": "Optional notes or natural-language setup",
+    "setup.prompt.label": "Notes or setup instructions",
+    "setup.prompt.help":
+      "Leave this empty for normal step-by-step setup. Use it only to add notes or ask the system to infer settings from text.",
+    "setup.prompt.placeholder": "Optional notes for this run. Leave blank for normal setup.",
+    "setup.customRunId.label": "Run name",
+    "setup.customRunId.help": "Optional. Leave blank to create one automatically.",
+    "setup.pdfAgent.label": "Extract Literature Constraints (PDF)",
+    "setup.pdfAgent.help":
+      "Upload a paper when residues or mutation-sensitive regions should guide fixed-position choices.",
+    "setup.pdfAgent.upload": "Upload PDF",
     "setup.check": "Check Advanced",
     "setup.reset": "Reset Inputs",
     "setup.clear": "Clear Note",
@@ -2179,17 +2369,17 @@ const I18N = {
     "setup.runStatus.line": "Run status: {id} · {stage} / {state} · {updated}",
     "setup.residuePicker.title": "Residue Picker (Optional)",
     "setup.residuePicker.help":
-      "Select residues from the sequence strip or 3D structure and append them to fixed_positions_extra. If target_pdb is missing, run once to create target.pdb ({af2Provider} target), then load it from the selected run.",
+      "If you uploaded a PDB, load it and choose residues. If you entered FASTA, first predict a 3D structure with {af2Provider}, then choose residues.",
     "setup.residuePicker.source": "Structure source: {source}",
     "setup.residuePicker.source.none": "none",
-    "setup.residuePicker.loadTargetInput": "Load target_input PDB",
-    "setup.residuePicker.loadRfd3Input": "Load rfd3_input_pdb",
-    "setup.residuePicker.loadRunTarget": "Load selected run target.pdb",
-    "setup.residuePicker.runAf2": "Run {af2Provider} from FASTA",
-    "setup.residuePicker.runAf2Running": "Running {af2Provider} to generate a target structure...",
+    "setup.residuePicker.loadTargetInput": "Load uploaded PDB",
+    "setup.residuePicker.loadRfd3Input": "Load RFD3 seed PDB",
+    "setup.residuePicker.loadRunTarget": "Load PDB from selected run",
+    "setup.residuePicker.runAf2": "Predict structure from FASTA",
+    "setup.residuePicker.runAf2Running": "Predicting the target structure with {af2Provider}...",
     "setup.residuePicker.runAf2NeedsFasta": "Attach a FASTA/sequence in target_input first.",
-    "setup.residuePicker.runAf2NoResult": "{af2Provider} completed but ranked_0.pdb was not found.",
-    "setup.residuePicker.runAf2Loaded": "{af2Provider} structure loaded from {run}:{path}",
+    "setup.residuePicker.runAf2NoResult": "Prediction finished, but no PDB structure was found.",
+    "setup.residuePicker.runAf2Loaded": "Predicted structure loaded from {run}:{path}",
     "setup.residuePicker.runAf2Failed": "{af2Provider} run failed: {error}",
     "setup.residuePicker.viewerPlaceholder": "Load a structure to start residue picking.",
     "setup.residuePicker.viewerUnavailable": "3D viewer unavailable.",
@@ -2199,9 +2389,12 @@ const I18N = {
     "setup.residuePicker.surfaceCutoffLabel": "Surface cutoff (A^2)",
     "setup.residuePicker.surfaceCutoffHelp": "PyMOL-style atom exposed-area threshold for Surface/Core classification. Default: 2.5",
     "setup.residuePicker.launcherHelp":
-      "Open the residue picker in a popup window. The larger workspace keeps the sequence strip and 3D structure linked, then writes back to fixed_positions_extra.",
+      "Open the residue workspace. PDB inputs can be selected directly; FASTA inputs can be converted to a 3D structure first.",
     "setup.residuePicker.launcherConserved":
       "Conserved presets only appear when a selected run already has MMseqs2/conservation outputs.",
+    "setup.residuePicker.launcherPdbReady": "PDB target ready. Open the picker to choose residues.",
+    "setup.residuePicker.launcherFastaReady": "FASTA target ready. Open the picker, predict a 3D structure, then choose residues.",
+    "setup.residuePicker.launcherMissingTarget": "Add FASTA or PDB input before using residue selection.",
     "setup.residuePicker.detached.title": "Residue Picker Popup",
     "setup.residuePicker.detached.desc":
       "Pick residues on the larger sequence strip or 3D structure, then send them back to {context}.",
@@ -2694,7 +2887,7 @@ const I18N = {
     "runs.deleteSuccess": "Deleted run: {id}",
     "question.runMode.label": "Run Mode",
     "question.runMode.help": "Choose what to run.",
-    "question.runMode.detail": "Each mode changes required input, runtime, and output depth.",
+    "question.runMode.detail": "Each mode changes what you need to provide, how long it may run, and how detailed the results will be.",
     "question.targetInput.label": "Target Input",
     "question.targetInput.help": "Provide target_pdb or target_fasta (raw text).",
     "question.startFrom.label": "Start From",
@@ -2723,18 +2916,18 @@ const I18N = {
       "Maximum allowed input-backbone RMSD (angstrom) for BioEmu samples after optional DSSP non-loop masking. default: 2.0 A.",
     "question.numSeqPerTier.label": "ProteinMPNN per Backbone",
     "question.numSeqPerTier.help": "Number of ProteinMPNN sequences to generate for each backbone within each sequence-conservation level.",
-    "question.evolutionMode.label": "Evolution Mode",
-    "question.evolutionMode.help": "Enable active-learning AF2 triage for sequence design.",
-    "question.evolutionPoolSize.label": "Evolution Initial Pool Size",
-    "question.evolutionPoolSize.help": "Total number of sequences to generate with ProteinMPNN initially (default 1000)",
-    "question.evolutionInitialSamples.label": "Evolution Training Samples (N)",
-    "question.evolutionInitialSamples.help": "Number of diverse sequences to pick via K-Means and evaluate with AF2 for training the surrogate model (default 30)",
-    "question.evolutionOracleSamples.label": "Evolution Select Top K (Final AF2)",
-    "question.evolutionOracleSamples.help": "Number of top-predicted sequences to validate with AF2 (default 20)",
-    "question.evolutionRounds.label": "Evolution Rounds",
-    "question.evolutionRounds.help": "Number of BO rounds.",
-    "question.evolutionSamplesPerRound.label": "Evolution Samples Per Round",
-    "question.evolutionSamplesPerRound.help": "Number of samples per BO round.",
+    "question.evolutionMode.label": "Use Evolution search",
+    "question.evolutionMode.help": "Turn this on only when you want the system to make and test several candidate batches.",
+    "question.evolutionPoolSize.label": "Candidate pool size",
+    "question.evolutionPoolSize.help": "How many sequence candidates to create before selecting the first test set.",
+    "question.evolutionInitialSamples.label": "First test set size",
+    "question.evolutionInitialSamples.help": "How many diverse candidates to evaluate first so the search can learn.",
+    "question.evolutionOracleSamples.label": "Final candidates to validate",
+    "question.evolutionOracleSamples.help": "How many top candidates receive final AF2 structure evaluation.",
+    "question.evolutionRounds.label": "Search rounds",
+    "question.evolutionRounds.help": "How many learning cycles to run.",
+    "question.evolutionSamplesPerRound.label": "Candidates per search round",
+    "question.evolutionSamplesPerRound.help": "How many candidates to test in each learning cycle.",
     "question.selectedTiers.label": "Sequence Conservation",
     "question.selectedTiers.help": "Choose which sequence-conservation levels to generate. Default: 30%, 50%, 70%.",
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} per Conservation Level (Top N)",
@@ -2877,12 +3070,36 @@ const I18N = {
     "advanced.rfd3Counts.hide": "Hide RFD3 Count Options",
     "choice.confirmRun.yes": "Yes, run",
     "choice.confirmRun.no": "Review first",
-    "setup.wizard.scope": "Scope",
     "setup.wizard.input": "Input",
-    "setup.wizard.options": "Options",
-    "setup.wizard.stepMeta": "Step {current}/{total}: {label}",
+    "setup.wizard.workflow": "Workflow",
+    "setup.wizard.criteria": "Criteria",
+    "setup.wizard.expert": "Expert",
+    "setup.wizard.review": "Review",
+    "setup.wizard.stepMeta": "Current step: {label}",
     "setup.wizard.prev": "Previous",
     "setup.wizard.next": "Next",
+    "setup.stepSummary.input.title": "Add the target first",
+    "setup.stepSummary.input.help": "Add the PDB or FASTA target, any needed files, optional notes, and paper-derived constraints.",
+    "setup.stepSummary.workflow.title": "Choose the workflow path",
+    "setup.stepSummary.workflow.help": "Pick the run mode, stage range, and major engines before tuning thresholds.",
+    "setup.stepSummary.criteria.title": "Set candidate criteria",
+    "setup.stepSummary.criteria.help": "Control conservation tiers, candidate counts, filters, and quality cutoffs in one place.",
+    "setup.stepSummary.expert.title": "Expert overrides",
+    "setup.stepSummary.expert.help": "Use only when you need RFD3 mode details, target RMSD gates, or fixed-position overrides.",
+    "setup.stepSummary.review.title": "Review and launch",
+    "setup.stepSummary.review.help": "Confirm the run shape and required inputs before submitting the job.",
+    "setup.review.title": "Review Run Setup",
+    "setup.review.mode": "Mode",
+    "setup.review.stages": "Stages",
+    "setup.review.input": "Input",
+    "setup.review.inputReady": "Target loaded",
+    "setup.review.inputMissing": "Target missing",
+    "setup.review.rfd3": "RFD3",
+    "setup.review.bioemu": "BioEmu",
+    "setup.review.af2": "AF2",
+    "setup.review.relax": "Relax",
+    "setup.review.tiers": "Conservation tiers",
+    "setup.review.none": "Not selected",
     "hint.none": "No missing inputs. You can run now.",
     "hint.ready": "All required inputs captured.",
     "hint.missing": "Missing required inputs.",
@@ -2890,10 +3107,16 @@ const I18N = {
     "hint.nextStep": "Move to the final step to launch the run.",
     "hint.running": "A run is already in progress.",
     "run.reset": "Inputs reset. Reconfirm selections and attachments.",
+    "setup.workflowBoard.title": "Workflow Controls",
+    "setup.workflowBoard.help": "Choose execution path and active pipeline stages.",
+    "setup.criteria.title": "Evaluation Criteria",
+    "setup.criteria.help": "Set candidate budgets, conservation tiers, filters, and quality thresholds.",
     "setup.options.title": "Core Option Board",
     "setup.options.help": "Review key execution options in one board.",
-    "setup.evolution.title": "Evolution (BO) Settings",
-    "setup.evolution.help": "Configure active-learning AF2 triage for automated sequence design.",
+    "setup.evolution.title": "Optional Evolution Search",
+    "setup.evolution.help": "Leave this off for a normal run. Turn it on when you want repeated candidate generation and evaluation.",
+    "setup.criteria.parameters.title": "Candidate Criteria",
+    "setup.criteria.parameters.help": "Tune sample counts and structural acceptance thresholds.",
     "setup.parameters.title": "Compact Parameter Board",
     "setup.parameters.help":
       "Tune key numeric settings in one place. BioEmu and RFD3 counts stay visible in Pipeline and Workflow modes.",
@@ -2911,6 +3134,8 @@ const I18N = {
     "setup.workflow.stageGuide": "Stage Guide",
     "setup.workflow.stageGuideHint": "Hover or focus a stage to view details.",
     "setup.workflow.stageGuideLabel": "Selected Stage",
+    "setup.workflow.settingsTitle": "Run Settings",
+    "setup.workflow.settingsHint": "Set conservation lanes and the main per-stage output limits before creating the Studio session.",
     "setup.workflow.controls": "Studio Flow",
     "setup.workflow.controlsHint": "Reruns, forks, and next-step decisions happen in Studio after you open the session.",
     "setup.workflow.launchTitle": "Create Session",
@@ -3151,12 +3376,120 @@ const I18N = {
     "health.ok": "OK",
   },
   ko: {
-    "brand.subtitle": "단백질 파이프라인 콘솔",
+    "platform.name": "KBF Protein Solubility & Stability Platform",
+    "brand.subtitle": "Protein Solubility & Stability Platform",
+    "env.development": "개발 환경",
+    "env.staging": "스테이징",
     "action.admin": "관리자",
     "action.account": "계정",
     "action.settings": "설정",
     "action.logout": "로그아웃",
     "action.help": "사용법",
+    "action.tutorial": "튜토리얼",
+    "tutorial.stepMeta": "{current}/{total} 단계",
+    "tutorial.skip": "건너뛰기",
+    "tutorial.prev": "이전",
+    "tutorial.next": "다음",
+    "tutorial.finish": "마침",
+    "tutorial.step.home.title": "워크스페이스에서 시작",
+    "tutorial.step.home.body":
+      "Home은 시작 지점입니다. 새 실행을 만들기 전에 프로젝트와 회차를 정하면 결과가 올바른 작업 공간에 기록됩니다.",
+    "tutorial.step.home.hint": "빠른 확인만 할 때는 필수는 아니지만, 반복 최적화 작업에서는 프로젝트와 회차를 먼저 정하는 것이 좋습니다.",
+    "tutorial.step.experimentChoice.title": "시작 경로를 고릅니다",
+    "tutorial.step.experimentChoice.body":
+      "새 실험을 누른 뒤 작업 방식에 맞는 경로를 고릅니다. 빠른 실행은 최소 입력으로 표준 실행을 시작합니다. 고급 설정은 전체 설정을 단계별로 확인합니다. Evolution은 반복 탐색용입니다. 스튜디오는 각 단계를 확인하고 이어 실행할 때 사용합니다.",
+    "tutorial.step.experimentChoice.hint":
+      "일상적인 확인은 빠른 실행, 계획된 실행은 고급 설정, 반복 최적화는 Evolution, 단계별 검토가 필요하면 스튜디오를 선택하세요.",
+    "tutorial.step.homeProject.title": "먼저 프로젝트를 만들거나 선택합니다",
+    "tutorial.step.homeProject.body":
+      "프로젝트는 관련 타깃, 가설, 라운드, 리포트를 묶는 상위 작업 공간입니다. 반복 작업을 시작하기 전에 여기서 프로젝트를 만들거나 기존 프로젝트를 선택하세요.",
+    "tutorial.step.homeProject.hint": "프로젝트는 캠페인 단위입니다. 타깃 계열이나 생물학적 목표별로 하나씩 두는 것이 좋습니다.",
+    "tutorial.step.homeRound.title": "Home에서 라운드를 만듭니다",
+    "tutorial.step.homeRound.body": "먼저 프로젝트를 고른 뒤 이번 실험 회차를 만듭니다. 이후 실행하는 작업은 그 프로젝트와 회차 아래에 기록됩니다.",
+    "tutorial.step.homeRound.hint": "반복 최적화 전 회차를 만들면 가설, 선택 후보, 다음 회차 메모를 찾기 쉽습니다.",
+    "tutorial.step.advanced.title": "고급 설정은 단계형 설정입니다",
+    "tutorial.step.advanced.body":
+      "고급 설정은 타깃 입력, 워크플로우 경로, 후보 평가 기준, 전문가 override, 최종 검토를 순서대로 모읍니다.",
+    "tutorial.step.advanced.hint": "보존도 티어, 출력 개수, RFD3/BioEmu/AF2 기준, 고정 위치를 조정해야 할 때 사용하세요.",
+    "tutorial.step.advancedInput.title": "먼저 타깃을 입력합니다",
+    "tutorial.step.advancedInput.body":
+      "1/5 입력 단계는 타깃 서열 또는 구조를 넣는 곳입니다. FASTA/PDB를 붙여넣거나 업로드하세요. Evolution (BO)는 선택적 탐색 toggle일 뿐 run 형태를 정하는 단계가 아닙니다.",
+    "tutorial.step.advancedInput.hint": "타깃이 없으면 뒤의 workflow와 검토 단계에서 run을 시작할 수 없습니다.",
+    "tutorial.step.advancedWorkflow.title": "워크플로우가 run 형태를 정합니다",
+    "tutorial.step.advancedWorkflow.body":
+      "2/5 워크플로우 단계에서 run 형태를 정합니다. 파이프라인 경로, 포함 단계, 보존율 구간, 단계별 Workflow Studio 세션 사용 여부를 고릅니다.",
+    "tutorial.step.advancedWorkflow.hint": "일반 실행은 전체 경로를 유지하세요. 단계별 검토나 compute 절약이 필요하면 RFD3/BioEmu를 빼거나 Studio를 사용합니다.",
+    "tutorial.step.advancedCriteria.title": "평가기준은 필터를 정합니다",
+    "tutorial.step.advancedCriteria.body":
+      "3/5 평가기준 단계에서는 후보 수, SoluProt cutoff, AF2 pLDDT/RMSD gate, Relax, WT 비교, ranking 관련 기준을 조정합니다.",
+    "tutorial.step.advancedCriteria.hint": "기준을 엄격하게 하면 downstream 부담이 줄고, 느슨하게 하면 수동 검토 후보가 더 많이 남습니다.",
+    "tutorial.step.advancedExpert.title": "고급 옵션은 override입니다",
+    "tutorial.step.advancedExpert.body":
+      "4/5 고급 옵션에는 고정 residue, mask consensus, input-backbone gate, RFD3/BioEmu 제한, 문헌 기반 mask가 들어갑니다.",
+    "tutorial.step.advancedExpert.hint": "타깃 생물학이나 기존 근거가 기본값을 바꿀 만큼 명확할 때 조정하세요.",
+    "tutorial.step.advancedReview.title": "실행 전 마지막 검토",
+    "tutorial.step.advancedReview.body":
+      "5/5 검토 단계에서는 선택한 모드, 실행 단계, 타깃 준비 상태, backbone source, AF2 provider, Relax, 보존율 구간을 실행 전에 확인합니다.",
+    "tutorial.step.advancedReview.hint": "compute를 쓰기 전에 단계 조합이나 타깃 입력 누락을 마지막으로 확인하세요.",
+    "tutorial.step.pdfAgent.title": "PDF agent가 제약 조건을 뽑습니다",
+    "tutorial.step.pdfAgent.body":
+      "논문 PDF에 catalytic residue, binding-site position, mutation-sensitive region이 언급되어 있으면 업로드하세요. Agent가 고정할 residue 후보를 제안합니다.",
+    "tutorial.step.pdfAgent.hint":
+      "적용 전에는 반드시 residue 후보를 검토하세요. Agent는 문헌 근거를 정리해주지만 최종 mask 결정은 사용자가 합니다.",
+    "tutorial.step.evolution.title": "Evolution은 반복 설계를 탐색합니다",
+    "tutorial.step.evolution.body":
+      "Evolution은 타깃에서 시작해 생성 pool, oracle sample, round를 거치며 후보 공간을 탐색합니다.",
+    "tutorial.step.evolution.hint": "기본 파이프라인을 이해한 뒤 사용하세요. pool과 round 수는 실행 시간과 출력 규모에 영향을 줍니다.",
+    "tutorial.step.evolutionSettings.title": "Evolution 숫자는 비용과 선별 강도를 정합니다",
+    "tutorial.step.evolutionSettings.body":
+      "Generation Pool Size는 후보 pool 크기입니다. K-Means Training Samples는 학습/훈련에 쓸 sample 수입니다. Select Top K는 최종 AF2 평가로 보낼 후보 수입니다.",
+    "tutorial.step.evolutionSettings.hint":
+      "pool이 크면 더 넓게 탐색하지만 오래 걸립니다. Top K는 최종 검증을 넓히고 싶을 때 늘리고, 빠른 screening에는 줄이세요.",
+    "tutorial.step.studio.title": "스튜디오는 단계별 워크플로우를 이어갑니다",
+    "tutorial.step.studio.body":
+      "스튜디오는 단계별 워크플로우 세션, 체크포인트 검토, 중간 결과 확인 후 이어 실행할 때 쓰는 공간입니다.",
+    "tutorial.step.studio.hint": "실행이 체크포인트에서 멈추면 Monitor나 Studio에서 검토한 뒤 재개하세요.",
+    "tutorial.step.studioCheckpoint.title": "멈추고 확인한 뒤 이어갑니다",
+    "tutorial.step.studioCheckpoint.body":
+      "Run This Stage는 선택한 단계를 진행합니다. Stop Run은 실행을 멈추고, Resume Run은 같은 run을 이어가며, Open Monitor는 산출물과 checkpoint 맥락을 보여줍니다.",
+    "tutorial.step.studioCheckpoint.hint":
+      "다음 단계에 compute를 쓰기 전에 MSA, RFD3, BioEmu, design, AF2 결과를 확인하고 싶을 때 Studio를 사용하세요.",
+    "tutorial.step.monitor.title": "Monitor는 실행 상태를 추적합니다",
+    "tutorial.step.monitor.body":
+      "Monitor에서는 단계 상태, 예상 시간, 산출물, 체크포인트 액션, completeness, 현재 실행 맥락을 확인합니다.",
+    "tutorial.step.monitor.hint": "실행 중에는 Auto Poll을 켜고, 완료 후에는 산출물을 확인한 뒤 분석으로 이동하세요.",
+    "tutorial.step.monitorAgent.title": "Agent Panel은 단계별 판단을 설명합니다",
+    "tutorial.step.monitorAgent.body":
+      "Agent Panel은 현재 run의 expert check, recovery note, report link를 정리합니다. 어떤 단계가 검토나 복구가 필요한지 볼 때 사용합니다.",
+    "tutorial.step.monitorAgent.hint":
+      "View Report는 run 요약을 열고, View Agent Report는 agent의 단계별 reasoning과 warning을 엽니다.",
+    "tutorial.step.rounds.title": "라운드는 실험을 정리합니다",
+    "tutorial.step.rounds.body":
+      "라운드는 프로젝트, 가설, 연결된 run ID, 선택 후보, 피드백, 다음 라운드 메모를 묶어 관리합니다.",
+    "tutorial.step.rounds.hint": "반복 최적화를 시작하기 전에 프로젝트와 라운드를 만들면 결과 추적이 쉬워집니다.",
+    "tutorial.step.analyze.title": "분석은 결과를 비교하고 순위를 매깁니다",
+    "tutorial.step.analyze.body":
+      "분석 화면은 Compare Studio, run-to-run 차이, hit list, 차트, 피드백, 실험 기록, 보고서 생성을 한곳에 모읍니다.",
+    "tutorial.step.analyze.hint": "먼저 hit list로 후보를 좁히고, 구조 비교를 본 뒤 보고서를 생성하세요.",
+    "tutorial.step.analyzeHitList.title": "Hit List는 후보 shortlist입니다",
+    "tutorial.step.analyzeHitList.body":
+      "run을 불러온 뒤 Hit List를 새로고침하세요. Score Cutoff는 약한 후보를 거르고, Rows는 표시 개수, weight는 SoluProt/pLDDT/RMSD 중요도를 조정합니다.",
+    "tutorial.step.analyzeHitList.hint":
+      "먼저 Hit List로 후보를 좁힌 뒤, 남은 후보의 detail을 열거나 구조 비교로 넘어가세요.",
+    "tutorial.step.report.title": "리포트는 run 결과를 모읍니다",
+    "tutorial.step.report.body":
+      "Generate는 markdown report를 만들고, Rendered View는 렌더링 미리보기를 열며, Export Package는 report asset을 묶고, Save는 수정본을 저장합니다.",
+    "tutorial.step.report.hint":
+      "리포트 언어는 Settings를 따릅니다. 생성 후 evidence score와 artifact link를 확인한 뒤 저장하거나 export하세요.",
+    "tutorial.step.copilot.title": "Copilot은 현재 맥락으로 답합니다",
+    "tutorial.step.copilot.body":
+      "Copilot은 현재 run 맥락을 읽고 metric 해석, compare 상태, resume 방식, 다음 행동을 설명해줍니다.",
+    "tutorial.step.copilot.hint":
+      "해석과 탐색 도움에는 Copilot을 쓰고, 실제 실행/재개/리포트/export는 각 화면의 전용 버튼으로 처리하세요.",
+    "tutorial.step.topbar.title": "상단 메뉴 안내",
+    "tutorial.step.topbar.body":
+      "KO/EN은 언어 변경, Copilot은 현재 화면 도움, 사용법은 고정 가이드, 튜토리얼은 이 안내 다시 보기, 설정은 리포트 언어, 로그아웃은 세션 종료에 사용합니다.",
+    "tutorial.step.topbar.hint": "설정은 상단 메뉴 중 하나입니다. 평소 작업 이동은 왼쪽 탭과 Home 화면에서 시작하세요.",
     "tabs.home": "홈",
     "tabs.evolution": "Evolution",
     "tabs.fast": "빠른 실행",
@@ -3167,8 +3500,29 @@ const I18N = {
     "tabs.cath": "CATH",
     "tabs.analyze": "분석",
     "tabs.mcp": "MCP",
-    "home.title": "실행 워크스페이스",
-    "home.desc": "다음 디자인 사이클을 어떻게 시작할지 선택하세요.",
+    "home.title": "용해도/안정성 워크스페이스",
+    "home.desc": "표적 설계 실행, 현재 회차, 결과 검토를 한 화면에서 다룹니다.",
+    "home.launchpad.primary": "기본 워크플로우",
+    "home.launchpad.newExperiment": "새 실험",
+    "home.launchpad.newExperimentDesc": "필요한 제어 수준에 따라 Fast, Advanced, Evolution, Workflow Studio 중 선택합니다.",
+    "home.launchpad.loadRun": "기존 실행 불러오기",
+    "home.launchpad.loadRunDesc": "현재 실행 목록에서 모니터링을 이어갑니다.",
+    "home.launchpad.analyzeResults": "결과 분석",
+    "home.launchpad.analyzeResultsDesc": "후보 순위와 비교 결과를 검토합니다.",
+    "home.experimentChoice.title": "실험 유형 선택",
+    "home.experimentChoice.desc": "필요한 설정 범위와 검토 수준에 맞는 시작 경로를 선택하세요.",
+    "home.experimentChoice.fast.kicker": "기본 경로",
+    "home.experimentChoice.fast.title": "Fast",
+    "home.experimentChoice.fast.desc": "타깃 파일을 올리거나 텍스트를 입력해 표준 기본값으로 바로 실행합니다.",
+    "home.experimentChoice.advanced.kicker": "단계형 설정",
+    "home.experimentChoice.advanced.title": "Advanced",
+    "home.experimentChoice.advanced.desc": "입력, 워크플로우, 평가기준, 고급 옵션, 검토를 순서대로 설정합니다.",
+    "home.experimentChoice.evolution.kicker": "반복 설계",
+    "home.experimentChoice.evolution.title": "Evolution",
+    "home.experimentChoice.evolution.desc": "학습 라운드와 Top K 선별 수를 조정해 반복 탐색합니다.",
+    "home.experimentChoice.studio.kicker": "단계별 검토",
+    "home.experimentChoice.studio.title": "Workflow Studio",
+    "home.experimentChoice.studio.desc": "체크포인트가 있는 단계별 워크플로우를 만들거나 이어 실행합니다.",
     "home.card.fast.title": "Fast",
     "home.card.fast.desc": "PDB 또는 FASTA만 넣으면 기본 파이프라인 설정으로 바로 시작합니다.",
     "home.card.advanced.title": "Advanced",
@@ -3177,8 +3531,8 @@ const I18N = {
     "home.card.studio.desc": "단계를 보면서 워크플로우를 직접 구성하고 실행합니다.",
     "home.card.evolution.title": "Evolution",
     "home.card.evolution.desc": "다라운드 자동 유도 진화 파이프라인을 실행합니다.",
-    "home.context.project": "활성 프로젝트",
-    "home.context.round": "활성 라운드",
+    "home.context.project": "현재 프로젝트",
+    "home.context.round": "현재 회차",
     "home.context.roundStatus": "라운드 상태",
     "home.context.runs": "진행 중 실행",
     "home.context.report": "최근 결과",
@@ -3186,7 +3540,7 @@ const I18N = {
     "home.action.open": "열기",
     "home.action.createProject": "새 프로젝트",
     "home.action.createRound": "새 라운드",
-    "home.action.continueRound": "활성 라운드 계속",
+    "home.action.continueRound": "현재 회차 계속",
     "home.action.openMonitor": "Monitor 열기",
     "home.action.openAnalyze": "Analyze 열기",
     "home.select.projectPlaceholder": "프로젝트 선택",
@@ -3221,11 +3575,11 @@ const I18N = {
     "evolution.fixedPositionsExtra.label": "고정 위치 추가 (Fixed Positions Extra)",
     "evolution.error.targetRequired": "진화를 시작하기 전에 PDB를 붙여넣으세요.",
     "rounds.title": "Rounds 워크스페이스",
-    "rounds.desc": "프로젝트, 활성 라운드, 연결된 run을 한 곳에서 정리합니다.",
+    "rounds.desc": "프로젝트, 실험 회차, 연결된 실행을 한 곳에서 정리합니다.",
     "rounds.projects": "프로젝트",
     "rounds.projects.desc": "타깃별 캠페인 공간을 만들고 선택합니다.",
     "rounds.list": "라운드",
-    "rounds.rounds.desc": "활성 프로젝트 아래에서 각 design-test-learn 사이클을 관리합니다.",
+    "rounds.rounds.desc": "현재 프로젝트 아래에서 각 설계-검증-학습 사이클을 관리합니다.",
     "rounds.empty.projects": "아직 프로젝트가 없습니다. 먼저 프로젝트를 생성하세요.",
     "rounds.empty.projectSelection": "라운드를 보거나 만들려면 먼저 프로젝트를 선택하세요.",
     "rounds.empty.rounds": "선택한 프로젝트에 아직 라운드가 없습니다.",
@@ -3307,14 +3661,21 @@ const I18N = {
     "workspaceRecord.error.projectNameRequired": "프로젝트 이름을 입력하세요.",
     "workspaceRecord.error.roundTitleRequired": "라운드 제목을 입력하세요.",
     "fast.title": "Fast 실행",
-    "fast.desc": "PDB 또는 FASTA를 붙여 넣고 서열 보존율과 총 출력 개수를 고른 뒤 표준 기본값으로 바로 실행합니다.",
-    "fast.input.label": "타깃 입력",
-    "fast.input.help": "원본 PDB 또는 FASTA 서열을 입력하세요.",
-    "fast.input.placeholder": "여기에 PDB 또는 FASTA를 붙여 넣으세요.",
+    "fast.desc": "FASTA/PDB 파일을 올리거나 필요할 때만 텍스트를 붙여넣고, 보존율과 출력 개수를 고른 뒤 표준 설정으로 실행합니다.",
+    "fast.input.label": "FASTA/PDB 파일 또는 텍스트",
+    "fast.upload.title": "타깃 파일 업로드",
+    "fast.upload.desc": "일반적인 Fast 실행은 PDB, FASTA, FA, TXT 파일을 선택해서 시작합니다.",
+    "fast.upload.statusEmpty": "아직 타깃이 없습니다.",
+    "fast.upload.statusFile": "{name} 파일을 불러왔습니다.",
+    "fast.upload.statusText": "텍스트 입력이 준비되었습니다.",
+    "fast.paste.summary": "FASTA/PDB 텍스트 직접 붙여넣기",
+    "fast.paste.label": "직접 입력",
+    "fast.input.help": "파일이 없을 때만 FASTA 또는 PDB 원문을 직접 붙여넣으세요.",
+    "fast.input.placeholder": "여기에 FASTA 또는 PDB 텍스트를 붙여넣으세요.",
     "fast.note.label": "실행 메모",
     "fast.note.help": "선택 메모이며 run prompt로 함께 복사됩니다.",
     "fast.note.placeholder": "이 실행에 대한 메모를 선택적으로 남기세요.",
-    "fast.action.loadFile": "파일 불러오기",
+    "fast.action.loadFile": "파일 선택",
     "fast.action.reviewAdvanced": "Advanced 열기",
     "fast.action.run": "Fast 실행",
     "fast.options.title": "실행 옵션",
@@ -3323,10 +3684,11 @@ const I18N = {
     "fast.totalOutput.label": "총 출력 서열 수",
     "fast.totalOutput.help":
       "선택한 서열 보존율 구간 전체에서 생성할 ProteinMPNN 서열 총량입니다. PDB 입력은 RFD3+BioEmu, FASTA 입력은 BioEmu 기준으로 계산합니다.",
-    "fast.error.targetRequired": "Fast 실행 전에 PDB 또는 FASTA를 붙여 넣으세요.",
+    "fast.error.targetRequired": "Fast 실행 전에 FASTA/PDB 파일을 선택하거나 타깃 텍스트를 붙여넣으세요.",
     "fast.message.reviewReady":
       "Fast 기본값을 Advanced로 복사했습니다. 필요하면 서열 보존율이나 개수를 조정한 뒤 실행하세요.",
-    "fast.message.fileLoaded": "{name} 파일을 Fast 타깃 입력에 불러왔습니다.",
+    "fast.message.advancedOpened": "Advanced를 열었습니다. 준비되면 Input 단계에서 타깃을 추가하세요.",
+    "fast.message.fileLoaded": "{name} 파일을 Fast 타깃으로 불러왔습니다.",
     "copilot.open": "Copilot",
     "copilot.title": "Context Copilot",
     "copilot.desc": "현재 run/화면 데이터를 바탕으로 사용법과 해석을 도와줍니다.",
@@ -3384,17 +3746,27 @@ const I18N = {
     "login.sso.submit": "KBF SSO로 계속",
     "login.sso.hint": "KBF 계정을 사용합니다. 비밀번호 변경은 SSO 계정 페이지에서 처리합니다.",
     "setup.title": "고급 실행 설정",
-    "setup.desc": "전체 설정 화면에서 워크플로를 선택하고 입력을 첨부해 실행하세요.",
+    "setup.desc": "워크플로우를 고르고, 타깃 파일을 넣은 뒤 실행 전 검토합니다.",
     "setup.section.input": "입력",
-    "setup.section.inputDesc": "필수 파일을 첨부하고 선택적으로 메모를 남기세요.",
-    "setup.section.execution": "실행 설정",
-    "setup.section.executionDesc": "실행 모드와 단계 옵션을 설정하세요.",
+    "setup.section.inputDesc": "먼저 타깃을 넣으세요. 설정 점검, 메모, 문헌 제약 조건은 아래에 있습니다.",
+    "setup.section.execution": "단계별 설정",
+    "setup.section.executionDesc": "한 단계씩 필요한 항목만 설정합니다.",
     "setup.section.monitor": "모니터링",
     "setup.section.monitorDesc": "실행 준비 중에도 진행률과 오류를 바로 확인합니다.",
     "setup.section.log": "활동 로그",
     "setup.section.logDesc": "사전 점검 및 실행 메시지를 확인합니다.",
     "setup.openMonitor": "모니터 열기",
-    "setup.prompt.placeholder": "프롬프트/메모 입력 (key=value 지원).",
+    "setup.prompt.summary": "선택 메모 또는 자연어 설정",
+    "setup.prompt.label": "메모 또는 설정 지시",
+    "setup.prompt.help":
+      "일반적인 단계별 설정에서는 비워두세요. 실행 메모를 남기거나 텍스트로 설정을 추론시키고 싶을 때만 사용합니다.",
+    "setup.prompt.placeholder": "선택 메모입니다. 일반 설정에서는 비워두세요.",
+    "setup.customRunId.label": "실행 이름",
+    "setup.customRunId.help": "선택 사항입니다. 비워두면 자동으로 만들어집니다.",
+    "setup.pdfAgent.label": "문헌 제약 조건 추출 (PDF)",
+    "setup.pdfAgent.help":
+      "논문에 고정해야 할 residue나 변이에 민감한 영역이 있을 때 업로드하세요.",
+    "setup.pdfAgent.upload": "PDF 업로드",
     "setup.check": "설정 점검",
     "setup.reset": "입력 초기화",
     "setup.clear": "메모 지우기",
@@ -3413,17 +3785,17 @@ const I18N = {
     "setup.runStatus.line": "실행 상태: {id} · {stage} / {state} · {updated}",
     "setup.residuePicker.title": "잔기 선택기 (선택)",
     "setup.residuePicker.help":
-      "서열 strip 또는 3D 구조에서 잔기를 선택해 fixed_positions_extra에 추가합니다. target_pdb가 없으면 먼저 1회 실행해 target.pdb({af2Provider} target)를 만든 뒤, 선택한 run에서 불러오세요.",
+      "PDB를 넣었다면 구조를 불러와 잔기를 고르세요. FASTA를 넣었다면 먼저 {af2Provider}로 3D 구조를 예측한 뒤 잔기를 선택합니다.",
     "setup.residuePicker.source": "구조 소스: {source}",
     "setup.residuePicker.source.none": "없음",
-    "setup.residuePicker.loadTargetInput": "target_input PDB 불러오기",
-    "setup.residuePicker.loadRfd3Input": "rfd3_input_pdb 불러오기",
-    "setup.residuePicker.loadRunTarget": "선택 run의 target.pdb 불러오기",
-    "setup.residuePicker.runAf2": "FASTA로 {af2Provider} 실행",
-    "setup.residuePicker.runAf2Running": "target 구조 생성을 위해 {af2Provider}를 실행 중입니다...",
+    "setup.residuePicker.loadTargetInput": "업로드한 PDB 불러오기",
+    "setup.residuePicker.loadRfd3Input": "RFD3 seed PDB 불러오기",
+    "setup.residuePicker.loadRunTarget": "선택한 run의 PDB 불러오기",
+    "setup.residuePicker.runAf2": "FASTA로 구조 예측",
+    "setup.residuePicker.runAf2Running": "{af2Provider}로 타깃 구조를 예측 중입니다...",
     "setup.residuePicker.runAf2NeedsFasta": "먼저 target_input에 FASTA/서열을 첨부하세요.",
-    "setup.residuePicker.runAf2NoResult": "{af2Provider}는 완료됐지만 ranked_0.pdb를 찾지 못했습니다.",
-    "setup.residuePicker.runAf2Loaded": "{run}:{path} 에서 {af2Provider} 구조를 불러왔습니다.",
+    "setup.residuePicker.runAf2NoResult": "구조 예측은 끝났지만 사용할 PDB 구조를 찾지 못했습니다.",
+    "setup.residuePicker.runAf2Loaded": "{run}:{path} 에서 예측 구조를 불러왔습니다.",
     "setup.residuePicker.runAf2Failed": "{af2Provider} 실행 실패: {error}",
     "setup.residuePicker.viewerPlaceholder": "잔기 선택을 시작하려면 구조를 불러오세요.",
     "setup.residuePicker.viewerUnavailable": "3D 뷰어를 사용할 수 없습니다.",
@@ -3433,9 +3805,12 @@ const I18N = {
     "setup.residuePicker.surfaceCutoffLabel": "Surface cutoff (A^2)",
     "setup.residuePicker.surfaceCutoffHelp": "PyMOL 방식의 원자 노출면적 기준으로 Surface/Core를 나눕니다. 기본값: 2.5",
     "setup.residuePicker.launcherHelp":
-      "잔기 선택기를 팝업창으로 엽니다. 넓은 워크스페이스에서 서열 strip과 3D 구조를 함께 보며 고른 뒤 fixed_positions_extra에 반영합니다.",
+      "잔기 선택 워크스페이스를 엽니다. PDB는 바로 고를 수 있고, FASTA는 먼저 3D 구조로 예측한 뒤 고릅니다.",
     "setup.residuePicker.launcherConserved":
       "Conserved preset은 선택한 run에 MMseqs2/conservation 결과가 있을 때만 표시됩니다.",
+    "setup.residuePicker.launcherPdbReady": "PDB 타깃이 준비되었습니다. 선택기를 열어 잔기를 고르세요.",
+    "setup.residuePicker.launcherFastaReady": "FASTA 타깃이 준비되었습니다. 선택기를 열고 3D 구조를 예측한 뒤 잔기를 고르세요.",
+    "setup.residuePicker.launcherMissingTarget": "잔기 선택을 쓰려면 먼저 FASTA 또는 PDB를 입력하세요.",
     "setup.residuePicker.detached.title": "잔기 선택 팝업",
     "setup.residuePicker.detached.desc":
       "넓은 서열 strip과 3D 구조에서 잔기를 고른 뒤 {context}에 바로 반영합니다.",
@@ -3927,7 +4302,7 @@ const I18N = {
     "runs.deleteSuccess": "실행 삭제됨: {id}",
     "question.runMode.label": "실행 모드",
     "question.runMode.help": "실행할 항목을 선택하세요.",
-    "question.runMode.detail": "모드에 따라 필요한 입력, 실행 시간, 출력 깊이가 달라집니다.",
+    "question.runMode.detail": "모드에 따라 필요한 입력, 실행 시간, 결과를 얼마나 자세히 만들지가 달라집니다.",
     "question.targetInput.label": "타깃 입력",
     "question.targetInput.help": "target_pdb 또는 target_fasta 원문을 입력하세요.",
     "question.startFrom.label": "시작 단계",
@@ -3957,18 +4332,18 @@ const I18N = {
       "선택적 DSSP non-loop masking 이후 BioEmu 샘플에 허용할 최대 input-backbone RMSD(Å)입니다. 기본값은 2.0 Å입니다.",
     "question.numSeqPerTier.label": "백본당 ProteinMPNN 생성 개수",
     "question.numSeqPerTier.help": "각 서열 보존율 구간에서 각 RFD3/BioEmu 백본마다 생성할 ProteinMPNN 서열 개수입니다.",
-    "question.evolutionMode.label": "에볼루션 모드",
-    "question.evolutionMode.help": "시퀀스 설계를 위해 베이지안 최적화(BO)를 활성화합니다.",
-    "question.evolutionPoolSize.label": "Evolution 생성 풀 크기",
-    "question.evolutionPoolSize.help": "ProteinMPNN으로 초기 생성할 총 서열 개수 (기본 1000)",
-    "question.evolutionInitialSamples.label": "Evolution 모델 학습 샘플 수 (N)",
-    "question.evolutionInitialSamples.help": "대리 모델을 훈련하기 위해 K-Means로 다양하게 뽑아 먼저 AF2를 돌릴 서열 개수 (기본 30)",
-    "question.evolutionOracleSamples.label": "Evolution Top K 선택 (최종 검증)",
-    "question.evolutionOracleSamples.help": "대리 모델이 예측한 서열 중 실제로 AF2를 돌릴 상위 서열 개수 (기본 20)",
-    "question.evolutionRounds.label": "에볼루션 라운드 수",
-    "question.evolutionRounds.help": "BO 라운드 수입니다.",
-    "question.evolutionSamplesPerRound.label": "라운드당 에볼루션 샘플 수",
-    "question.evolutionSamplesPerRound.help": "BO 라운드당 샘플 수입니다.",
+    "question.evolutionMode.label": "Evolution 탐색 사용",
+    "question.evolutionMode.help": "여러 후보 묶음을 만들고 평가하면서 탐색할 때만 켭니다. 일반 실행이면 Off로 둡니다.",
+    "question.evolutionPoolSize.label": "처음 만들 후보 수",
+    "question.evolutionPoolSize.help": "처음에 만들 서열 후보의 전체 개수입니다.",
+    "question.evolutionInitialSamples.label": "처음 평가할 후보 수",
+    "question.evolutionInitialSamples.help": "탐색 방향을 잡기 위해 먼저 평가할 다양한 후보 수입니다.",
+    "question.evolutionOracleSamples.label": "최종 검증 후보 수",
+    "question.evolutionOracleSamples.help": "마지막에 AF2 구조 평가까지 보낼 상위 후보 수입니다.",
+    "question.evolutionRounds.label": "탐색 반복 횟수",
+    "question.evolutionRounds.help": "후보를 만들고 평가하는 학습 사이클 수입니다.",
+    "question.evolutionSamplesPerRound.label": "반복마다 평가할 후보 수",
+    "question.evolutionSamplesPerRound.help": "각 탐색 사이클에서 새로 평가할 후보 수입니다.",
     "question.selectedTiers.label": "서열 보존율",
     "question.selectedTiers.help": "생성할 서열 보존율 구간을 선택하세요. 기본값은 30%, 50%, 70%입니다.",
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} 서열 보존율 구간당 실행 개수 (상위 N개)",
@@ -4111,12 +4486,36 @@ const I18N = {
     "advanced.rfd3Counts.hide": "RFD3 개수 옵션 숨기기",
     "choice.confirmRun.yes": "예, 실행",
     "choice.confirmRun.no": "검토 후",
-    "setup.wizard.scope": "범위 설정",
     "setup.wizard.input": "입력",
-    "setup.wizard.options": "옵션",
-    "setup.wizard.stepMeta": "{current}/{total} 단계: {label}",
+    "setup.wizard.workflow": "워크플로우",
+    "setup.wizard.criteria": "평가 기준",
+    "setup.wizard.expert": "고급 옵션",
+    "setup.wizard.review": "검토",
+    "setup.wizard.stepMeta": "현재 단계: {label}",
     "setup.wizard.prev": "이전",
     "setup.wizard.next": "다음",
+    "setup.stepSummary.input.title": "타깃 입력부터 시작",
+    "setup.stepSummary.input.help": "PDB 또는 FASTA 타깃, 필요한 첨부파일, 선택 메모, 논문 기반 제약 조건을 넣습니다.",
+    "setup.stepSummary.workflow.title": "워크플로우 경로 선택",
+    "setup.stepSummary.workflow.help": "컷오프를 조정하기 전에 실행 모드, 단계 범위, 주요 엔진을 먼저 정합니다.",
+    "setup.stepSummary.criteria.title": "후보 평가 기준 설정",
+    "setup.stepSummary.criteria.help": "보존도 티어, 후보 수, 필터, 품질 기준을 한 곳에서 조정합니다.",
+    "setup.stepSummary.expert.title": "전문가용 override",
+    "setup.stepSummary.expert.help": "RFD3 세부 모드, target RMSD gate, 고정 위치 override가 필요할 때만 사용합니다.",
+    "setup.stepSummary.review.title": "검토 후 실행",
+    "setup.stepSummary.review.help": "작업 형태와 필수 입력을 확인한 뒤 제출합니다.",
+    "setup.review.title": "실행 설정 검토",
+    "setup.review.mode": "모드",
+    "setup.review.stages": "단계",
+    "setup.review.input": "입력",
+    "setup.review.inputReady": "타깃 입력 완료",
+    "setup.review.inputMissing": "타깃 입력 없음",
+    "setup.review.rfd3": "RFD3",
+    "setup.review.bioemu": "BioEmu",
+    "setup.review.af2": "AF2",
+    "setup.review.relax": "Relax",
+    "setup.review.tiers": "보존도 tier",
+    "setup.review.none": "선택 없음",
     "hint.none": "누락된 입력이 없습니다. 지금 실행할 수 있습니다.",
     "hint.ready": "필수 입력이 모두 완료되었습니다.",
     "hint.missing": "필수 입력이 누락되었습니다.",
@@ -4124,10 +4523,16 @@ const I18N = {
     "hint.nextStep": "마지막 단계로 이동하면 실행할 수 있습니다.",
     "hint.running": "이미 실행 중인 작업이 있습니다.",
     "run.reset": "입력을 초기화했습니다. 선택과 첨부를 다시 확인하세요.",
+    "setup.workflowBoard.title": "워크플로우 제어",
+    "setup.workflowBoard.help": "실행 경로와 사용할 파이프라인 단계를 선택합니다.",
+    "setup.criteria.title": "평가 기준",
+    "setup.criteria.help": "후보 수, 보존도 티어, 필터, 품질 기준을 설정합니다.",
     "setup.options.title": "핵심 옵션 보드",
     "setup.options.help": "주요 실행 옵션을 한 보드에서 한 번에 확인하고 조정합니다.",
-    "setup.evolution.title": "Evolution (BO) 설정",
-    "setup.evolution.help": "베이지안 최적화(BO) 기반의 자동 서열 설계를 설정합니다.",
+    "setup.evolution.title": "Evolution 탐색 (선택)",
+    "setup.evolution.help": "일반 실행이면 끄고, 후보를 여러 번 만들고 평가하며 탐색할 때만 켭니다.",
+    "setup.criteria.parameters.title": "후보 평가 기준",
+    "setup.criteria.parameters.help": "샘플 수와 구조 품질 통과 기준을 조정합니다.",
     "setup.parameters.title": "핵심 파라미터 보드",
     "setup.parameters.help":
       "주요 숫자 파라미터를 한 카드에서 조정합니다. Pipeline/Workflow 모드에서는 BioEmu/RFD3 개수 설정을 항상 표시합니다.",
@@ -4145,6 +4550,8 @@ const I18N = {
     "setup.workflow.stageGuide": "단계 가이드",
     "setup.workflow.stageGuideHint": "단계에 마우스를 올리거나 포커스하면 설명이 표시됩니다.",
     "setup.workflow.stageGuideLabel": "선택 단계",
+    "setup.workflow.settingsTitle": "실행 설정",
+    "setup.workflow.settingsHint": "Studio 세션을 만들기 전에 보존율 lane과 단계별 주요 산출 개수를 정합니다.",
     "setup.workflow.controls": "Studio 흐름",
     "setup.workflow.controlsHint": "재실행, fork, 다음 단계 결정은 세션을 연 뒤 Studio에서 처리합니다.",
     "setup.workflow.launchTitle": "세션 생성",
@@ -4524,6 +4931,201 @@ let fastLauncherInitialized = false;
 let evolutionLauncherInitialized = false;
 let langInitialized = false;
 let copilotInitialized = false;
+let tutorialInitialized = false;
+let tutorialFirstVisitPrompted = false;
+let tutorialStepIndex = 0;
+let tutorialReturnTab = "home";
+
+const TUTORIAL_STEPS = [
+  {
+    id: "home",
+    tab: "home",
+    target: ".home-shell",
+    titleKey: "tutorial.step.home.title",
+    bodyKey: "tutorial.step.home.body",
+    hintKey: "tutorial.step.home.hint",
+  },
+  {
+    id: "homeProject",
+    tab: "home",
+    target: "#homeCreateProjectBtn",
+    titleKey: "tutorial.step.homeProject.title",
+    bodyKey: "tutorial.step.homeProject.body",
+    hintKey: "tutorial.step.homeProject.hint",
+  },
+  {
+    id: "homeRound",
+    tab: "home",
+    target: "#homeCreateRoundBtn",
+    titleKey: "tutorial.step.homeRound.title",
+    bodyKey: "tutorial.step.homeRound.body",
+    hintKey: "tutorial.step.homeRound.hint",
+  },
+  {
+    id: "experimentChoice",
+    tab: "home",
+    target: ".experiment-choice-grid",
+    titleKey: "tutorial.step.experimentChoice.title",
+    bodyKey: "tutorial.step.experimentChoice.body",
+    hintKey: "tutorial.step.experimentChoice.hint",
+  },
+  {
+    id: "advanced",
+    tab: "advanced",
+    target: ".advanced-launch-frame",
+    titleKey: "tutorial.step.advanced.title",
+    bodyKey: "tutorial.step.advanced.body",
+    hintKey: "tutorial.step.advanced.hint",
+  },
+  {
+    id: "advancedInput",
+    tab: "advanced",
+    setupStep: "input",
+    target: "#questionInputStack",
+    titleKey: "tutorial.step.advancedInput.title",
+    bodyKey: "tutorial.step.advancedInput.body",
+    hintKey: "tutorial.step.advancedInput.hint",
+  },
+  {
+    id: "pdfAgent",
+    tab: "advanced",
+    setupStep: "input",
+    target: "#advancedPaperMaskPanel",
+    titleKey: "tutorial.step.pdfAgent.title",
+    bodyKey: "tutorial.step.pdfAgent.body",
+    hintKey: "tutorial.step.pdfAgent.hint",
+  },
+  {
+    id: "advancedWorkflow",
+    tab: "advanced",
+    setupStep: "workflow",
+    target: "#questionConfigStack",
+    titleKey: "tutorial.step.advancedWorkflow.title",
+    bodyKey: "tutorial.step.advancedWorkflow.body",
+    hintKey: "tutorial.step.advancedWorkflow.hint",
+  },
+  {
+    id: "advancedCriteria",
+    tab: "advanced",
+    setupStep: "criteria",
+    target: "#questionConfigStack",
+    titleKey: "tutorial.step.advancedCriteria.title",
+    bodyKey: "tutorial.step.advancedCriteria.body",
+    hintKey: "tutorial.step.advancedCriteria.hint",
+  },
+  {
+    id: "advancedExpert",
+    tab: "advanced",
+    setupStep: "expert",
+    target: "#questionConfigStack",
+    titleKey: "tutorial.step.advancedExpert.title",
+    bodyKey: "tutorial.step.advancedExpert.body",
+    hintKey: "tutorial.step.advancedExpert.hint",
+  },
+  {
+    id: "advancedReview",
+    tab: "advanced",
+    setupStep: "review",
+    target: "#questionConfigStack",
+    titleKey: "tutorial.step.advancedReview.title",
+    bodyKey: "tutorial.step.advancedReview.body",
+    hintKey: "tutorial.step.advancedReview.hint",
+  },
+  {
+    id: "evolution",
+    tab: "evolution",
+    target: ".evolution-input-card",
+    titleKey: "tutorial.step.evolution.title",
+    bodyKey: "tutorial.step.evolution.body",
+    hintKey: "tutorial.step.evolution.hint",
+  },
+  {
+    id: "evolutionSettings",
+    tab: "evolution",
+    target: ".evolution-options-card",
+    titleKey: "tutorial.step.evolutionSettings.title",
+    bodyKey: "tutorial.step.evolutionSettings.body",
+    hintKey: "tutorial.step.evolutionSettings.hint",
+  },
+  {
+    id: "studio",
+    tab: "studio",
+    target: "#workflowStudioRoot",
+    titleKey: "tutorial.step.studio.title",
+    bodyKey: "tutorial.step.studio.body",
+    hintKey: "tutorial.step.studio.hint",
+  },
+  {
+    id: "studioCheckpoint",
+    tab: "studio",
+    target: ".studio-toolbar-actions",
+    titleKey: "tutorial.step.studioCheckpoint.title",
+    bodyKey: "tutorial.step.studioCheckpoint.body",
+    hintKey: "tutorial.step.studioCheckpoint.hint",
+  },
+  {
+    id: "monitor",
+    tab: "monitor",
+    target: ".monitor-summary-panel",
+    titleKey: "tutorial.step.monitor.title",
+    bodyKey: "tutorial.step.monitor.body",
+    hintKey: "tutorial.step.monitor.hint",
+  },
+  {
+    id: "monitorAgent",
+    tab: "monitor",
+    target: ".monitor-agent-panel",
+    titleKey: "tutorial.step.monitorAgent.title",
+    bodyKey: "tutorial.step.monitorAgent.body",
+    hintKey: "tutorial.step.monitorAgent.hint",
+  },
+  {
+    id: "rounds",
+    tab: "rounds",
+    target: ".rounds-shell",
+    titleKey: "tutorial.step.rounds.title",
+    bodyKey: "tutorial.step.rounds.body",
+    hintKey: "tutorial.step.rounds.hint",
+  },
+  {
+    id: "analyze",
+    tab: "analyze",
+    target: ".analyze-grid",
+    titleKey: "tutorial.step.analyze.title",
+    bodyKey: "tutorial.step.analyze.body",
+    hintKey: "tutorial.step.analyze.hint",
+  },
+  {
+    id: "analyzeHitList",
+    tab: "analyze",
+    target: ".analyze-hitlist",
+    titleKey: "tutorial.step.analyzeHitList.title",
+    bodyKey: "tutorial.step.analyzeHitList.body",
+    hintKey: "tutorial.step.analyzeHitList.hint",
+  },
+  {
+    id: "report",
+    tab: "analyze",
+    target: ".analyze-report",
+    titleKey: "tutorial.step.report.title",
+    bodyKey: "tutorial.step.report.body",
+    hintKey: "tutorial.step.report.hint",
+  },
+  {
+    id: "copilot",
+    target: "#copilotOpenBtn",
+    titleKey: "tutorial.step.copilot.title",
+    bodyKey: "tutorial.step.copilot.body",
+    hintKey: "tutorial.step.copilot.hint",
+  },
+  {
+    id: "topbarMenu",
+    target: ".topbar-actions",
+    titleKey: "tutorial.step.topbar.title",
+    bodyKey: "tutorial.step.topbar.body",
+    hintKey: "tutorial.step.topbar.hint",
+  },
+];
 
 const RUN_MODE_OPTIONS = [
   { labelKey: "runmode.pipeline", value: "pipeline" },
@@ -4539,11 +5141,54 @@ const RUN_MODE_OPTIONS = [
 
 const PIPELINE_STAGE_ORDER = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"];
 const SETUP_WIZARD_STEPS = [
-  { id: "scope", labelKey: "setup.wizard.scope" },
   { id: "input", labelKey: "setup.wizard.input" },
-  { id: "options", labelKey: "setup.wizard.options" },
+  { id: "workflow", labelKey: "setup.wizard.workflow" },
+  { id: "criteria", labelKey: "setup.wizard.criteria" },
+  { id: "expert", labelKey: "setup.wizard.expert" },
+  { id: "review", labelKey: "setup.wizard.review" },
 ];
-const ENABLE_SETUP_WIZARD = false;
+const ENABLE_SETUP_WIZARD = true;
+const SETUP_WORKFLOW_QUESTION_IDS = new Set([
+  "run_mode",
+  "start_from",
+  "stop_after",
+  "novelty_enabled",
+  "rfd3_use",
+  "bioemu_use",
+  "relax_enabled",
+  "af2_provider",
+  "evolution_mode",
+]);
+const SETUP_CRITERIA_QUESTION_IDS = new Set([
+  "selected_tiers",
+  "design_chains",
+  "num_seq_per_tier",
+  "af2_max_candidates_per_tier",
+  "af2_plddt_cutoff",
+  "af2_rmsd_cutoff",
+  "relax_score_per_residue_cutoff",
+  "bioemu_num_samples",
+  "bioemu_max_return_structures",
+  "bioemu_filter_samples",
+  "rfd3_max_return_designs",
+  "backbone_filter_use_dssp",
+  "pdb_strip_nonpositive_resseq",
+  "wt_compare",
+  "mask_consensus_apply",
+  "ligand_mask_use_original_target",
+  "evolution_pool_size",
+  "evolution_initial_samples",
+  "evolution_oracle_samples",
+  "evolution_rounds",
+  "evolution_samples_per_round",
+]);
+const SETUP_EXPERT_QUESTION_IDS = new Set([
+  "bioemu_target_rmsd_cutoff",
+  "bioemu_steering_config_text",
+  "rfd3_target_rmsd_cutoff",
+  "fixed_positions_extra",
+  "compare_rmsd_scope",
+]);
 
 function normalizePipelineStage(value, fallback = "") {
   let raw = String(value || "")
@@ -7772,9 +8417,20 @@ function setupWizardEnabled(questions) {
   return ENABLE_SETUP_WIZARD && state.runMode === "pipeline" && Array.isArray(questions) && questions.length > 0;
 }
 
+function activeSetupWizardStepIndex() {
+  const maxStep = SETUP_WIZARD_STEPS.length - 1;
+  const currentStep = Math.max(0, Math.min(maxStep, Number(state.setupStepIndex || 0)));
+  state.setupStepIndex = currentStep;
+  return currentStep;
+}
+
+function activeSetupWizardStepId() {
+  return SETUP_WIZARD_STEPS[activeSetupWizardStepIndex()]?.id || "input";
+}
+
 function questionSetupStepId(questionId) {
-  if (questionId === "run_mode" || questionId === "start_from" || questionId === "stop_after") {
-    return "scope";
+  if (questionId === "confirm_run") {
+    return "review";
   }
   if (
     questionId === "target_input" ||
@@ -7785,12 +8441,50 @@ function questionSetupStepId(questionId) {
   ) {
     return "input";
   }
-  return "options";
+  if (SETUP_EXPERT_QUESTION_IDS.has(questionId) || SETUP_RFD3_MODE_DETAIL_IDS.has(questionId)) {
+    return "expert";
+  }
+  if (SETUP_WORKFLOW_QUESTION_IDS.has(questionId)) {
+    return "workflow";
+  }
+  if (SETUP_CRITERIA_QUESTION_IDS.has(questionId)) {
+    return "criteria";
+  }
+  return "criteria";
+}
+
+function renderSetupStepSummary(stepId = activeSetupWizardStepId()) {
+  if (!el.setupStepSummary) return;
+  const normalizedStepId = String(stepId || "input").trim() || "input";
+  const titleKey = `setup.stepSummary.${normalizedStepId}.title`;
+  const helpKey = `setup.stepSummary.${normalizedStepId}.help`;
+
+  el.setupStepSummary.classList.remove("hidden");
+  el.setupStepSummary.dataset.step = normalizedStepId;
+  el.setupStepSummary.replaceChildren();
+
+  const title = document.createElement("div");
+  title.className = "setup-step-summary-title";
+  title.textContent = t(titleKey);
+
+  const help = document.createElement("div");
+  help.className = "setup-step-summary-help";
+  help.textContent = t(helpKey);
+
+  el.setupStepSummary.appendChild(title);
+  el.setupStepSummary.appendChild(help);
 }
 
 function isSetupWizardFinalStep() {
   const lastIndex = SETUP_WIZARD_STEPS.length - 1;
   return Number(state.setupStepIndex || 0) >= lastIndex;
+}
+
+function syncSetupCustomRunField(questions = state.plan?.questions || []) {
+  const field = el.customRunIdInput?.closest(".setup-custom-run-field");
+  if (!field) return;
+  const shouldShow = !setupWizardEnabled(questions) || isSetupWizardFinalStep();
+  field.classList.toggle("hidden", !shouldShow);
 }
 
 function renderSetupWizard(questions) {
@@ -7801,15 +8495,16 @@ function renderSetupWizard(questions) {
   if (!enabled) {
     state.setupStepIndex = 0;
     el.setupStepper.classList.add("hidden");
+    if (el.setupStepSummary) el.setupStepSummary.classList.add("hidden");
     return questions;
   }
 
   const maxStep = SETUP_WIZARD_STEPS.length - 1;
-  const currentStep = Math.max(0, Math.min(maxStep, Number(state.setupStepIndex || 0)));
-  state.setupStepIndex = currentStep;
-  const activeStepId = SETUP_WIZARD_STEPS[currentStep].id;
+  const currentStep = activeSetupWizardStepIndex();
+  const activeStepId = activeSetupWizardStepId();
 
   el.setupStepper.classList.remove("hidden");
+  renderSetupStepSummary(activeStepId);
   const label = t(SETUP_WIZARD_STEPS[currentStep].labelKey);
   el.setupStepMeta.textContent = t("setup.wizard.stepMeta", {
     current: currentStep + 1,
@@ -9274,12 +9969,21 @@ function addCopilotHistory(role, text) {
   renderCopilotMessages();
 }
 
-function submitCopilotPrompt(rawPrompt, intentHint = "") {
+async function submitCopilotPrompt(rawPrompt, intentHint = "") {
   const prompt = String(rawPrompt || "").trim();
   if (!prompt) return;
   addCopilotHistory("user", prompt);
-  addCopilotHistory("ai", generateCopilotReply(prompt, intentHint));
-  renderCopilotContext();
+  try {
+    const reply = await generateCopilotReply(prompt, intentHint);
+    addCopilotHistory("ai", reply);
+  } catch (err) {
+    const message = copilotIsKorean()
+      ? `Copilot 응답을 만들지 못했습니다: ${err?.message || String(err)}`
+      : `Copilot could not generate a reply: ${err?.message || String(err)}`;
+    addCopilotHistory("ai", message);
+  } finally {
+    renderCopilotContext();
+  }
 }
 
 function clearCopilotHistory() {
@@ -9385,7 +10089,7 @@ function initCopilot() {
   });
   if (el.copilotSendBtn) {
     el.copilotSendBtn.addEventListener("click", () => {
-      submitCopilotPrompt(el.copilotInput?.value || "");
+      void submitCopilotPrompt(el.copilotInput?.value || "");
       if (el.copilotInput) el.copilotInput.value = "";
     });
   }
@@ -9393,27 +10097,27 @@ function initCopilot() {
     el.copilotInput.addEventListener("keydown", (event) => {
       if (event.key !== "Enter") return;
       event.preventDefault();
-      submitCopilotPrompt(el.copilotInput.value || "");
+      void submitCopilotPrompt(el.copilotInput.value || "");
       el.copilotInput.value = "";
     });
   }
   if (el.copilotQuickUsage) {
-    el.copilotQuickUsage.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.usage"), "usage"));
+    el.copilotQuickUsage.addEventListener("click", () => void submitCopilotPrompt(t("copilot.quick.usage"), "usage"));
   }
   if (el.copilotQuickInterpret) {
-    el.copilotQuickInterpret.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.interpret"), "interpret"));
+    el.copilotQuickInterpret.addEventListener("click", () => void submitCopilotPrompt(t("copilot.quick.interpret"), "interpret"));
   }
   if (el.copilotQuickSummary) {
-    el.copilotQuickSummary.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.summary"), "summary"));
+    el.copilotQuickSummary.addEventListener("click", () => void submitCopilotPrompt(t("copilot.quick.summary"), "summary"));
   }
   if (el.copilotQuickCompare) {
-    el.copilotQuickCompare.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.compare"), "compare"));
+    el.copilotQuickCompare.addEventListener("click", () => void submitCopilotPrompt(t("copilot.quick.compare"), "compare"));
   }
   if (el.copilotQuickNext) {
-    el.copilotQuickNext.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.next"), "next"));
+    el.copilotQuickNext.addEventListener("click", () => void submitCopilotPrompt(t("copilot.quick.next"), "next"));
   }
   if (el.copilotQuickResume) {
-    el.copilotQuickResume.addEventListener("click", () => submitCopilotPrompt(t("copilot.quick.resume"), "resume"));
+    el.copilotQuickResume.addEventListener("click", () => void submitCopilotPrompt(t("copilot.quick.resume"), "resume"));
   }
   setCopilotDrawerOpen(false);
   copilotInitialized = true;
@@ -9559,6 +10263,9 @@ function setLanguage(lang) {
       void hydrateReportModalArtifactImages();
     }
   }
+  if (tutorialIsOpen()) {
+    renderTutorialStep();
+  }
 }
 
 function initLanguage() {
@@ -9628,6 +10335,220 @@ function setActiveTab(value) {
   }
 }
 
+function tutorialIsOpen() {
+  return Boolean(el.tutorialOverlay && !el.tutorialOverlay.classList.contains("hidden"));
+}
+
+function clampTutorialValue(value, min, max) {
+  if (max < min) return min;
+  return Math.max(min, Math.min(max, value));
+}
+
+function tutorialTargetElement(step) {
+  const target = step?.target ? document.querySelector(step.target) : null;
+  if (target instanceof HTMLElement) return target;
+  return el.appShell || document.body;
+}
+
+function positionTutorialElements(targetEl) {
+  if (!el.tutorialSpotlight || !el.tutorialCard) return;
+  const viewportPadding = 16;
+  const rect = targetEl?.getBoundingClientRect?.();
+  const hasTarget = rect && rect.width > 0 && rect.height > 0;
+
+  if (hasTarget) {
+    const spotlightPadding = 8;
+    const left = clampTutorialValue(rect.left - spotlightPadding, 8, window.innerWidth - 24);
+    const top = clampTutorialValue(rect.top - spotlightPadding, 8, window.innerHeight - 24);
+    const width = Math.min(rect.width + spotlightPadding * 2, window.innerWidth - left - 8);
+    const height = Math.min(rect.height + spotlightPadding * 2, window.innerHeight - top - 8);
+    Object.assign(el.tutorialSpotlight.style, {
+      left: `${left}px`,
+      top: `${top}px`,
+      width: `${width}px`,
+      height: `${height}px`,
+    });
+  } else {
+    Object.assign(el.tutorialSpotlight.style, {
+      left: "50%",
+      top: "50%",
+      width: "0px",
+      height: "0px",
+    });
+  }
+
+  const cardRect = el.tutorialCard.getBoundingClientRect();
+  const cardWidth = Math.min(cardRect.width || 420, window.innerWidth - viewportPadding * 2);
+  const cardHeight = Math.min(cardRect.height || 260, window.innerHeight - viewportPadding * 2);
+  let left = hasTarget ? rect.left : (window.innerWidth - cardWidth) / 2;
+  let top = hasTarget ? rect.bottom + 14 : (window.innerHeight - cardHeight) / 2;
+  if (hasTarget && top + cardHeight > window.innerHeight - viewportPadding) {
+    top = rect.top - cardHeight - 14;
+  }
+  if (top < viewportPadding) {
+    top = window.innerHeight - cardHeight - viewportPadding;
+  }
+  if (hasTarget && rect.left > window.innerWidth / 2) {
+    left = rect.right - cardWidth;
+  }
+  left = clampTutorialValue(left, viewportPadding, window.innerWidth - cardWidth - viewportPadding);
+  top = clampTutorialValue(top, viewportPadding, window.innerHeight - cardHeight - viewportPadding);
+  Object.assign(el.tutorialCard.style, {
+    left: `${left}px`,
+    top: `${top}px`,
+  });
+}
+
+function renderTutorialDots() {
+  if (!el.tutorialDots) return;
+  el.tutorialDots.replaceChildren();
+  TUTORIAL_STEPS.forEach((_step, index) => {
+    const dot = document.createElement("span");
+    dot.className = "tutorial-dot";
+    dot.classList.toggle("active", index === tutorialStepIndex);
+    el.tutorialDots.appendChild(dot);
+  });
+}
+
+function applyTutorialStepContext(step) {
+  if (step?.id === "experimentChoice") {
+    openExperimentChoicePanel({ focusFirst: false });
+    return;
+  }
+  closeExperimentChoicePanel();
+  const setupStep = String(step?.setupStep || "").trim();
+  if (!setupStep || step?.tab !== "advanced") return;
+  if (state.runMode !== "pipeline") {
+    setRunMode("pipeline", { render: false });
+  } else if (!state.plan || !Array.isArray(state.plan.questions) || !state.plan.questions.length) {
+    state.plan = buildManualPlan("pipeline");
+  }
+  const stepIndex = SETUP_WIZARD_STEPS.findIndex((item) => item.id === setupStep);
+  if (stepIndex < 0) return;
+  state.setupStepIndex = stepIndex;
+  renderQuestions(state.plan?.questions || []);
+  updateRunEligibility(state.plan?.questions || []);
+}
+
+function renderTutorialStep() {
+  if (!tutorialIsOpen()) return;
+  const step = TUTORIAL_STEPS[tutorialStepIndex] || TUTORIAL_STEPS[0];
+  if (!step) return;
+  if (step.tab) {
+    setActiveTab(step.tab);
+  }
+  applyTutorialStepContext(step);
+  const current = tutorialStepIndex + 1;
+  const total = TUTORIAL_STEPS.length;
+  if (el.tutorialStepMeta) {
+    el.tutorialStepMeta.textContent = t("tutorial.stepMeta", { current, total });
+  }
+  if (el.tutorialStepTitle) el.tutorialStepTitle.textContent = t(step.titleKey);
+  if (el.tutorialStepBody) el.tutorialStepBody.textContent = t(step.bodyKey);
+  if (el.tutorialStepHint) el.tutorialStepHint.textContent = t(step.hintKey);
+  if (el.tutorialPrev) el.tutorialPrev.disabled = tutorialStepIndex <= 0;
+  if (el.tutorialNext) {
+    el.tutorialNext.textContent = tutorialStepIndex >= TUTORIAL_STEPS.length - 1 ? t("tutorial.finish") : t("tutorial.next");
+  }
+  renderTutorialDots();
+  window.requestAnimationFrame(() => {
+    const targetEl = tutorialTargetElement(step);
+    targetEl?.scrollIntoView?.({ block: "center", inline: "center", behavior: "smooth" });
+    window.requestAnimationFrame(() => positionTutorialElements(targetEl));
+  });
+}
+
+function completeTutorial() {
+  try {
+    localStorage.setItem(TUTORIAL_STORAGE_KEY, "1");
+  } catch (_err) {
+    // Ignore localStorage quota/transient errors.
+  }
+}
+
+function closeTutorial({ complete = true, restoreTab = true } = {}) {
+  if (!el.tutorialOverlay) return;
+  if (complete) completeTutorial();
+  el.tutorialOverlay.classList.add("hidden");
+  document.body.classList.remove("tutorial-active");
+  if (restoreTab && tutorialReturnTab) {
+    setActiveTab(tutorialReturnTab);
+  }
+}
+
+function openTutorial({ startIndex = 0, restoreTab = true } = {}) {
+  if (!el.tutorialOverlay || !TUTORIAL_STEPS.length) return;
+  tutorialReturnTab = restoreTab ? activeTabId() : "";
+  tutorialStepIndex = clampTutorialValue(Number(startIndex) || 0, 0, TUTORIAL_STEPS.length - 1);
+  el.tutorialOverlay.classList.remove("hidden");
+  document.body.classList.add("tutorial-active");
+  renderTutorialStep();
+}
+
+function maybeShowTutorialOnFirstVisit() {
+  if (!el.tutorialOverlay || detachedResiduePickerToken) return;
+  if (tutorialFirstVisitPrompted) return;
+  if (localStorage.getItem(TUTORIAL_STORAGE_KEY) === "1") return;
+  tutorialFirstVisitPrompted = true;
+  window.setTimeout(() => {
+    if (el.appShell?.classList.contains("hidden")) return;
+    if (localStorage.getItem(TUTORIAL_STORAGE_KEY) === "1") return;
+    openTutorial({ restoreTab: true });
+  }, 450);
+}
+
+function handleTutorialKeydown(event) {
+  if (!tutorialIsOpen()) return;
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeTutorial({ complete: true });
+  }
+  if (event.key === "ArrowRight") {
+    event.preventDefault();
+    if (tutorialStepIndex >= TUTORIAL_STEPS.length - 1) {
+      closeTutorial({ complete: true });
+      return;
+    }
+    tutorialStepIndex += 1;
+    renderTutorialStep();
+  }
+  if (event.key === "ArrowLeft" && tutorialStepIndex > 0) {
+    event.preventDefault();
+    tutorialStepIndex -= 1;
+    renderTutorialStep();
+  }
+}
+
+function initTutorial() {
+  if (tutorialInitialized) return;
+  el.tutorialBtn?.addEventListener("click", () => openTutorial({ restoreTab: true }));
+  el.tutorialSkip?.addEventListener("click", () => closeTutorial({ complete: true }));
+  el.tutorialClose?.addEventListener("click", () => closeTutorial({ complete: true }));
+  el.tutorialPrev?.addEventListener("click", () => {
+    if (tutorialStepIndex <= 0) return;
+    tutorialStepIndex -= 1;
+    renderTutorialStep();
+  });
+  el.tutorialNext?.addEventListener("click", () => {
+    if (tutorialStepIndex >= TUTORIAL_STEPS.length - 1) {
+      closeTutorial({ complete: true });
+      return;
+    }
+    tutorialStepIndex += 1;
+    renderTutorialStep();
+  });
+  window.addEventListener("resize", () => {
+    if (tutorialIsOpen()) renderTutorialStep();
+  });
+  window.addEventListener("scroll", () => {
+    if (tutorialIsOpen()) {
+      positionTutorialElements(tutorialTargetElement(TUTORIAL_STEPS[tutorialStepIndex]));
+    }
+  }, true);
+  document.addEventListener("keydown", handleTutorialKeydown);
+  tutorialInitialized = true;
+}
+
 function openAdvancedWorkflowBuilder({ announce = true } = {}) {
   setRunMode("workflow", { render: false });
   setActiveTab("advanced");
@@ -9653,23 +10574,67 @@ async function createWorkflowStudioFromStudio({ selectedRunId = "" } = {}) {
   return session;
 }
 
+function openWorkflowStudioBuilderFromHome() {
+  setRunMode("workflow", { render: false });
+  setCurrentWorkflowStudioSessionId("");
+  state.studioBuilderOpen = true;
+  setActiveTab("studio");
+  renderWorkflowStudio();
+  setMessage(t("home.message.studioBuilderReady"), "ai");
+}
+
+function closeExperimentChoicePanel() {
+  if (!el.experimentChoicePanel) return;
+  el.experimentChoicePanel.classList.add("hidden");
+}
+
+function openExperimentChoicePanel({ focusFirst = true } = {}) {
+  if (!el.experimentChoicePanel) return;
+  el.experimentChoicePanel.classList.remove("hidden");
+  const firstChoice = el.experimentChoicePanel.querySelector("[data-experiment-target]");
+  if (focusFirst && firstChoice && typeof firstChoice.focus === "function") {
+    firstChoice.focus({ preventScroll: true });
+  }
+}
+
+function handleExperimentChoice(target) {
+  const normalizedTarget = String(target || "").trim();
+  if (!normalizedTarget) return;
+  closeExperimentChoicePanel();
+  if (normalizedTarget === "studio") {
+    openWorkflowStudioBuilderFromHome();
+    return;
+  }
+  if (["fast", "advanced", "evolution"].includes(normalizedTarget)) {
+    setActiveTab(normalizedTarget);
+  }
+}
+
 function initHomeLauncher() {
   if (homeLauncherInitialized) return;
   document.querySelectorAll("[data-home-target]").forEach((node) => {
     node.addEventListener("click", () => {
       const target = String(node.dataset.homeTarget || "").trim();
       if (!target) return;
+      if (target === "experiment") {
+        openExperimentChoicePanel();
+        return;
+      }
       if (target === "studio") {
-        setRunMode("workflow", { render: false });
-        setCurrentWorkflowStudioSessionId("");
-        state.studioBuilderOpen = true;
-        setActiveTab("studio");
-        renderWorkflowStudio();
-        setMessage(t("home.message.studioBuilderReady"), "ai");
+        openWorkflowStudioBuilderFromHome();
         return;
       }
       setActiveTab(target);
     });
+  });
+  document.querySelectorAll("[data-experiment-target]").forEach((node) => {
+    node.addEventListener("click", () => handleExperimentChoice(node.dataset.experimentTarget));
+  });
+  el.experimentChoiceClose?.addEventListener("click", closeExperimentChoicePanel);
+  el.experimentChoicePanel?.addEventListener("click", (event) => {
+    if (event.target === el.experimentChoicePanel) {
+      closeExperimentChoicePanel();
+    }
   });
   homeLauncherInitialized = true;
 }
@@ -9905,12 +10870,41 @@ function buildFastLaunchPresetFromUi() {
   });
 }
 
+function updateFastTargetStatus({ fileName = "" } = {}) {
+  if (!el.fastTargetStatus) return;
+  const targetInput = String(el.fastTargetInput?.value || "").trim();
+  if (fileName) {
+    el.fastTargetStatus.textContent = t("fast.upload.statusFile", { name: fileName });
+    return;
+  }
+  el.fastTargetStatus.textContent = targetInput ? t("fast.upload.statusText") : t("fast.upload.statusEmpty");
+}
+
+function openAdvancedFromFast() {
+  const targetInput = String(el.fastTargetInput?.value || "").trim();
+  if (targetInput) {
+    const preset = buildFastLaunchPresetFromUi();
+    applyFastLaunchPresetToState(preset);
+    setActiveTab("advanced");
+    setMessage(t("fast.message.reviewReady"), "ai");
+    return;
+  }
+
+  ensureManualPlan();
+  state.setupStepIndex = 0;
+  renderQuestions(state.plan?.questions || []);
+  updateRunEligibility(state.plan?.questions || []);
+  setActiveTab("advanced");
+  setMessage(t("fast.message.advancedOpened"), "ai");
+}
+
 async function loadFastTargetFile(file) {
   if (!file || typeof file.text !== "function") return;
   const text = await file.text();
   if (el.fastTargetInput) {
     el.fastTargetInput.value = String(text || "");
   }
+  updateFastTargetStatus({ fileName: file.name || "input" });
   setMessage(t("fast.message.fileLoaded", { name: file.name || "input" }), "ai");
 }
 
@@ -9936,17 +10930,11 @@ function initFastLauncher() {
     await loadFastTargetFile(file);
     event.target.value = "";
   });
+  el.fastTargetInput?.addEventListener("input", () => {
+    updateFastTargetStatus();
+  });
   el.fastOpenAdvancedBtn?.addEventListener("click", () => {
-    const targetInput = String(el.fastTargetInput?.value || "").trim();
-    if (!targetInput) {
-      setMessage(t("fast.error.targetRequired"), "ai");
-      setActiveTab("fast");
-      return;
-    }
-    const preset = buildFastLaunchPresetFromUi();
-    applyFastLaunchPresetToState(preset);
-    setActiveTab("advanced");
-    setMessage(t("fast.message.reviewReady"), "ai");
+    openAdvancedFromFast();
   });
   el.fastRunBtn?.addEventListener("click", async () => {
     const targetInput = String(el.fastTargetInput?.value || "").trim();
@@ -10046,6 +11034,9 @@ function showLogin() {
   if (el.settingsPanel) el.settingsPanel.classList.add("hidden");
   if (el.adminPanel) el.adminPanel.classList.add("hidden");
   if (el.helpPanel) el.helpPanel.classList.add("hidden");
+  if (el.tutorialBtn) el.tutorialBtn.classList.add("hidden");
+  if (el.tutorialOverlay) el.tutorialOverlay.classList.add("hidden");
+  document.body.classList.remove("tutorial-active");
 }
 
 function showChat() {
@@ -10060,9 +11051,12 @@ function showChat() {
   if (el.detachedResiduePickerRoot) el.detachedResiduePickerRoot.classList.add("hidden");
   if (el.appShell) el.appShell.classList.remove("hidden");
   if (el.chatArea) el.chatArea.classList.remove("hidden");
+  if (el.tutorialBtn) el.tutorialBtn.classList.remove("hidden");
   setUserBadge();
   ensureManualPlan();
   initTabs();
+  initTutorial();
+  maybeShowTutorialOnFirstVisit();
 }
 
 function updateAdminUI() {
@@ -12672,6 +13666,139 @@ function buildWorkflowDesignerCard({
   canvasBlock.appendChild(hint);
   canvasBlock.appendChild(orderHint);
 
+  const settingsBlock = document.createElement("section");
+  settingsBlock.className = "workflow-block workflow-settings-block";
+  const settingsTitle = document.createElement("div");
+  settingsTitle.className = "workflow-section-label";
+  settingsTitle.textContent = t("setup.workflow.settingsTitle");
+  const settingsHint = document.createElement("div");
+  settingsHint.className = "workflow-block-help";
+  settingsHint.textContent = t("setup.workflow.settingsHint");
+  const settingsGrid = document.createElement("div");
+  settingsGrid.className = "workflow-settings-grid";
+  const workflowQuestionParams = () => ({
+    af2Provider: af2ProviderName(state.answers.af2_provider || "colabfold", state.lang || "en"),
+  });
+  const workflowQuestionLabel = (id) => t(QUESTION_PRESETS[id]?.labelKey || id, workflowQuestionParams());
+  const workflowQuestionHelp = (id) => t(QUESTION_PRESETS[id]?.questionKey || "", workflowQuestionParams());
+  const clampWorkflowNumber = (value, fallback, { min = 0, integer = true } = {}) => {
+    const parsed = integer ? Number.parseInt(String(value ?? "").trim(), 10) : Number.parseFloat(String(value ?? "").trim());
+    if (!Number.isFinite(parsed)) return fallback;
+    return Math.max(min, parsed);
+  };
+  const appendWorkflowNumberSetting = (id, fallback, { min = 0, step = 1, integer = true } = {}) => {
+    state.answers[id] = clampWorkflowNumber(state.answers[id], fallback, { min, integer });
+    const field = document.createElement("label");
+    field.className = "workflow-setting-field";
+    const label = document.createElement("span");
+    label.className = "workflow-setting-label";
+    label.textContent = workflowQuestionLabel(id);
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = String(min);
+    input.step = String(step);
+    input.value = String(state.answers[id]);
+    input.addEventListener("input", () => {
+      const parsed = integer ? Number.parseInt(input.value, 10) : Number.parseFloat(input.value);
+      if (Number.isFinite(parsed)) state.answers[id] = Math.max(min, parsed);
+    });
+    input.addEventListener("change", () => {
+      state.answers[id] = clampWorkflowNumber(input.value, fallback, { min, integer });
+      input.value = String(state.answers[id]);
+    });
+    field.appendChild(label);
+    field.appendChild(input);
+    const helpText = workflowQuestionHelp(id);
+    if (helpText) {
+      const helpNode = document.createElement("span");
+      helpNode.className = "workflow-setting-help";
+      helpNode.textContent = helpText;
+      field.appendChild(helpNode);
+    }
+    settingsGrid.appendChild(field);
+  };
+  const appendWorkflowToggleSetting = (id, fallback = false) => {
+    if (typeof state.answers[id] !== "boolean") state.answers[id] = Boolean(fallback);
+    const field = document.createElement("label");
+    field.className = "workflow-setting-field workflow-setting-toggle";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = Boolean(state.answers[id]);
+    input.addEventListener("change", () => {
+      state.answers[id] = input.checked;
+    });
+    const label = document.createElement("span");
+    label.className = "workflow-setting-label";
+    label.textContent = workflowQuestionLabel(id);
+    field.appendChild(input);
+    field.appendChild(label);
+    settingsGrid.appendChild(field);
+  };
+
+  const tierField = document.createElement("div");
+  tierField.className = "workflow-setting-field workflow-tier-field";
+  const tierLabel = document.createElement("div");
+  tierLabel.className = "workflow-setting-label";
+  tierLabel.textContent = workflowQuestionLabel("selected_tiers");
+  const tierGroup = document.createElement("div");
+  tierGroup.className = "choice-group workflow-tier-choices";
+  state.answers.selected_tiers = normalizeSelectedTierValues(state.answers.selected_tiers, FAST_SELECTED_TIER_VALUES);
+  delete state.answers.conservation_tiers;
+  mirrorSetupRoutedAnswer("selected_tiers", [...state.answers.selected_tiers]);
+  FAST_SELECTED_TIER_VALUES.forEach((value) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "choice-btn workflow-tier-choice";
+    const isSelected = state.answers.selected_tiers.includes(value);
+    if (isSelected) btn.classList.add("selected");
+    btn.textContent = formatConservationTierValue(value);
+    btn.addEventListener("click", () => {
+      const next = new Set(state.answers.selected_tiers.map((item) => String(item)));
+      const key = String(value);
+      if (next.has(key)) {
+        if (next.size <= 1) return;
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      state.answers.selected_tiers = normalizeSelectedTierValues(
+        Array.from(next).map((item) => Number.parseFloat(item)),
+        state.answers.selected_tiers
+      );
+      mirrorSetupRoutedAnswer("selected_tiers", [...state.answers.selected_tiers]);
+      rerenderFn();
+    });
+    tierGroup.appendChild(btn);
+  });
+  const tierHelp = document.createElement("div");
+  tierHelp.className = "workflow-setting-help";
+  tierHelp.textContent = workflowQuestionHelp("selected_tiers");
+  tierField.appendChild(tierLabel);
+  tierField.appendChild(tierGroup);
+  tierField.appendChild(tierHelp);
+  settingsGrid.appendChild(tierField);
+
+  if (nodes.includes("rfd3")) {
+    appendWorkflowNumberSetting("rfd3_max_return_designs", 10, { min: 1, step: 1 });
+  }
+  if (nodes.includes("bioemu")) {
+    appendWorkflowNumberSetting("bioemu_num_samples", 20, { min: 1, step: 1 });
+    appendWorkflowNumberSetting("bioemu_max_return_structures", 10, { min: 1, step: 1 });
+  }
+  if (nodes.includes("design")) {
+    appendWorkflowNumberSetting("num_seq_per_tier", 2, { min: 1, step: 1 });
+  }
+  if (nodes.includes("af2")) {
+    appendWorkflowNumberSetting("af2_max_candidates_per_tier", 0, { min: 0, step: 1 });
+    appendWorkflowToggleSetting("relax_enabled", true);
+  }
+  if (nodes.includes("novelty")) {
+    appendWorkflowToggleSetting("wt_compare", true);
+  }
+  settingsBlock.appendChild(settingsTitle);
+  settingsBlock.appendChild(settingsHint);
+  settingsBlock.appendChild(settingsGrid);
+
   const controlsBlock = document.createElement("section");
   controlsBlock.className = "workflow-block";
   const controlsTitle = document.createElement("div");
@@ -12770,6 +13897,7 @@ function buildWorkflowDesignerCard({
 
   mainCol.appendChild(paletteBlock);
   mainCol.appendChild(canvasBlock);
+  mainCol.appendChild(settingsBlock);
   sideCol.appendChild(guideBlock);
   sideCol.appendChild(controlsBlock);
   sideCol.appendChild(summaryBlock);
@@ -12983,7 +14111,14 @@ function applyResiduePickerBaseStyle(viewer, colorMode = "secondary") {
   viewer.setStyle({}, { cartoon: { colorscheme: "ssPyMol" } });
 }
 
-function buildResiduePickerLauncherCard({ onOpenDetached, onResetSelection, sourceLabel = "", runId = "" } = {}) {
+function buildResiduePickerLauncherCard({
+  onOpenDetached,
+  onResetSelection,
+  sourceLabel = "",
+  runId = "",
+  hasTargetPdb = false,
+  hasTargetFasta = false,
+} = {}) {
   const card = document.createElement("div");
   card.className = "question-card residue-picker-launcher";
 
@@ -12998,6 +14133,14 @@ function buildResiduePickerLauncherCard({ onOpenDetached, onResetSelection, sour
   const conservedNote = document.createElement("div");
   conservedNote.className = "question-summary";
   conservedNote.textContent = t("setup.residuePicker.launcherConserved");
+
+  const flowHint = document.createElement("div");
+  flowHint.className = "question-summary residue-picker-flow-hint";
+  flowHint.textContent = hasTargetPdb
+    ? t("setup.residuePicker.launcherPdbReady")
+    : hasTargetFasta
+      ? t("setup.residuePicker.launcherFastaReady")
+      : t("setup.residuePicker.launcherMissingTarget");
 
   const source = document.createElement("div");
   source.className = "question-summary";
@@ -13036,6 +14179,7 @@ function buildResiduePickerLauncherCard({ onOpenDetached, onResetSelection, sour
 
   card.appendChild(title);
   card.appendChild(help);
+  card.appendChild(flowHint);
   card.appendChild(source);
   card.appendChild(conservedNote);
   card.appendChild(actionRow);
@@ -13942,6 +15086,74 @@ function renderChoiceButtons(container, options, currentValue, onSelect, { multi
   container.appendChild(group);
 }
 
+function renderSetupReviewCard(normalizedQuestions = []) {
+  const confirmQuestion = normalizedQuestions.find((q) => q?.id === "confirm_run");
+  if (state.answers.confirm_run === undefined) {
+    state.answers.confirm_run = confirmQuestion?.default !== undefined ? Boolean(confirmQuestion.default) : true;
+  }
+
+  const card = document.createElement("div");
+  card.className = "question-card setup-review-card";
+
+  const title = document.createElement("div");
+  title.className = "question-title";
+  title.textContent = t("setup.review.title");
+
+  const grid = document.createElement("div");
+  grid.className = "setup-review-grid";
+
+  const appendItem = (labelKey, value, { muted = false } = {}) => {
+    const item = document.createElement("div");
+    item.className = "setup-review-item";
+    if (muted) item.classList.add("muted");
+
+    const label = document.createElement("div");
+    label.className = "setup-review-label";
+    label.textContent = t(labelKey);
+
+    const text = document.createElement("div");
+    text.className = "setup-review-value";
+    text.textContent = String(value || t("setup.review.none"));
+
+    item.appendChild(label);
+    item.appendChild(text);
+    grid.appendChild(item);
+  };
+
+  const modeOption = RUN_MODE_OPTIONS.find((item) => item.value === state.runMode);
+  const startStage = normalizePipelineStage(state.answers.start_from || "msa", "msa");
+  const stopStage = normalizePipelineStage(state.answers.stop_after || "novelty", "novelty");
+  const stopLabel = stopStage === "novelty" ? t("stop.full") : formatStageLabel(stopStage);
+  const hasTargetInput = Boolean(
+    String(state.answers.target_input || state.answers.target_pdb || state.answers.target_fasta || "").trim()
+  );
+  const tierQuestion = normalizedQuestions.find((q) => q?.id === "selected_tiers");
+  const selectedTiers = currentSetupSelectedTiers(tierQuestion);
+  const rfd3Active = setupRunEnablesRfd3Stage();
+  const bioemuActive = state.answers.bioemu_use === true || ["bioemu", "design", "soluprot", "af2", "novelty"].includes(stopStage);
+  const relaxActive = state.answers.relax_enabled === true;
+
+  appendItem("setup.review.mode", modeOption?.labelKey ? t(modeOption.labelKey) : state.runMode);
+  appendItem("setup.review.stages", `${formatStageLabel(startStage)} -> ${stopLabel}`);
+  appendItem("setup.review.input", hasTargetInput ? t("setup.review.inputReady") : t("setup.review.inputMissing"), {
+    muted: !hasTargetInput,
+  });
+  appendItem("setup.review.rfd3", rfd3Active ? t("common.enabled") : t("common.disabled"));
+  appendItem("setup.review.bioemu", bioemuActive ? t("common.enabled") : t("common.disabled"));
+  appendItem("setup.review.af2", af2ProviderName(state.answers.af2_provider || "colabfold", state.lang || "en"));
+  appendItem("setup.review.relax", relaxActive ? t("common.enabled") : t("common.disabled"));
+  appendItem(
+    "setup.review.tiers",
+    selectedTiers.length
+      ? selectedTiers.map((value) => formatConservationTierValue(value)).join(", ")
+      : t("setup.review.none")
+  );
+
+  card.appendChild(title);
+  card.appendChild(grid);
+  return card;
+}
+
 function renderQuestions(questions) {
   const inputStack = el.questionInputStack || el.questionStack;
   const configStack = el.questionConfigStack || el.questionStack;
@@ -13960,7 +15172,10 @@ function renderQuestions(questions) {
   };
 
   if (!questions.length) {
+    if (el.setupPrimaryLayout) el.setupPrimaryLayout.dataset.activeStep = "idle";
     if (el.setupStepper) el.setupStepper.classList.add("hidden");
+    if (el.setupStepSummary) el.setupStepSummary.classList.add("hidden");
+    syncSetupCustomRunField([]);
     el.runBtn.disabled = false;
     el.runHint.textContent = t("hint.none");
     return;
@@ -13973,12 +15188,24 @@ function renderQuestions(questions) {
     normalizedQuestions.push(normalizeQuestion({ id: "compare_rmsd_scope" }));
   }
   const filteredVisibleQuestions = normalizedQuestions.filter((q) => questionVisibleForCurrentState(q));
+  syncSetupCustomRunField(filteredVisibleQuestions);
   const visibleQuestions = renderSetupWizard(filteredVisibleQuestions);
+  const setupWizardActive = setupWizardEnabled(filteredVisibleQuestions);
+  const setupWizardStepId = setupWizardActive ? activeSetupWizardStepId() : "";
+  if (el.setupPrimaryLayout) {
+    el.setupPrimaryLayout.dataset.activeStep = setupWizardStepId || "all";
+  }
   if (state.runMode === "pipeline") {
     if (!normalizePipelineStage(state.answers.start_from, "")) {
       state.answers.start_from = "msa";
     }
     syncStartStopStages();
+  }
+
+  if (setupWizardStepId === "review") {
+    appendConfigCard(renderSetupReviewCard(normalizedQuestions));
+    updateRunEligibility(normalizedQuestions);
+    return;
   }
 
   const fileQuestionIds = new Set([
@@ -14058,6 +15285,44 @@ function renderQuestions(questions) {
     return classes.join(" ");
   };
 
+  function makeOptionalSetupDetails(card, { defaultOpen = false } = {}) {
+    const details = document.createElement("details");
+    details.className = `${card.className || "question-card"} optional-setup-card`;
+    if (defaultOpen) details.open = true;
+
+    const directChildren = Array.from(card.children || []);
+    const titleNode = directChildren.find((node) => node.classList?.contains("question-title"));
+    const helpNode = directChildren.find((node) => node.classList?.contains("question-help"));
+
+    const summary = document.createElement("summary");
+    summary.className = "optional-setup-summary";
+
+    const summaryText = document.createElement("span");
+    summaryText.className = "optional-setup-title";
+    summaryText.textContent = titleNode?.textContent || t("setup.options.title");
+    summary.appendChild(summaryText);
+
+    if (helpNode?.textContent) {
+      const summaryHelp = document.createElement("span");
+      summaryHelp.className = "optional-setup-help";
+      summaryHelp.textContent = helpNode.textContent;
+      summary.appendChild(summaryHelp);
+    }
+
+    titleNode?.remove();
+    helpNode?.remove();
+
+    const body = document.createElement("div");
+    body.className = "optional-setup-body";
+    while (card.firstChild) {
+      body.appendChild(card.firstChild);
+    }
+
+    details.appendChild(summary);
+    details.appendChild(body);
+    return details;
+  }
+
   function renderSetupRfd3ModeDetailsCard(card, normalizedQuestions) {
     const fieldIds = setupRfd3ModeDetailIds();
     if (!fieldIds.length) return;
@@ -14096,7 +15361,7 @@ function renderQuestions(questions) {
 
     const createField = (question) => {
       const field = document.createElement("div");
-      field.className = "parameter-field option-field";
+      field.className = "parameter-field option-field expert-option";
 
       const label = document.createElement("div");
       label.className = "parameter-label";
@@ -14743,15 +16008,29 @@ function renderQuestions(questions) {
     };
 
     const card = document.createElement("div");
-    card.className = "question-card parameter-board option-board";
+    card.className =
+      "question-card parameter-board option-board" + (setupWizardStepId === "criteria" ? " criteria-board" : "");
+
+    const optionBoardTitleKey =
+      setupWizardStepId === "workflow"
+        ? "setup.workflowBoard.title"
+        : setupWizardStepId === "criteria"
+          ? "setup.criteria.title"
+          : "setup.options.title";
+    const optionBoardHelpKey =
+      setupWizardStepId === "workflow"
+        ? "setup.workflowBoard.help"
+        : setupWizardStepId === "criteria"
+          ? "setup.criteria.help"
+          : "setup.options.help";
 
     const title = document.createElement("div");
     title.className = "question-title";
-    title.textContent = t("setup.options.title");
+    title.textContent = t(optionBoardTitleKey);
 
     const help = document.createElement("div");
     help.className = "question-help";
-    help.textContent = t("setup.options.help");
+    help.textContent = t(optionBoardHelpKey);
 
     const grid = document.createElement("div");
     grid.className = "parameter-board-grid option-board-grid";
@@ -14994,11 +16273,20 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(card);
+    appendConfigCard(makeOptionalSetupDetails(card));
   };
 
+  const evolutionQuestionIds = new Set([
+    "evolution_mode",
+    "evolution_pool_size",
+    "evolution_initial_samples",
+    "evolution_oracle_samples",
+    "evolution_rounds",
+    "evolution_samples_per_round",
+  ]);
+
   const appendEvolutionBoard = () => {
-    const evolutionIds = ["evolution_mode", "evolution_pool_size", "evolution_initial_samples", "evolution_oracle_samples", "evolution_rounds", "evolution_samples_per_round"];
+    const evolutionIds = Array.from(evolutionQuestionIds);
     const evolutionQuestions = normalizedQuestions.filter((q) => evolutionIds.includes(q.id));
     if (!evolutionQuestions.length) return;
 
@@ -15081,11 +16369,13 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(card);
+    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
   };
 
   appendCompactOptionBoard();
-  appendEvolutionBoard();
+  if (setupWizardStepId === "workflow") {
+    appendEvolutionBoard();
+  }
 
   const bioemuCountQuestionIds = new Set(["bioemu_max_return_structures", "bioemu_num_samples"]);
   const rfd3CountQuestionIds = new Set(["rfd3_max_return_designs"]);
@@ -15164,15 +16454,20 @@ function renderQuestions(questions) {
   const appendCompactParameterBoard = (questionsForBoard) => {
     if (!questionsForBoard.length) return;
     const card = document.createElement("div");
-    card.className = "question-card parameter-board";
+    card.className = "question-card parameter-board" + (setupWizardStepId === "criteria" ? " criteria-board" : "");
+
+    const parameterBoardTitleKey =
+      setupWizardStepId === "criteria" ? "setup.criteria.parameters.title" : "setup.parameters.title";
+    const parameterBoardHelpKey =
+      setupWizardStepId === "criteria" ? "setup.criteria.parameters.help" : "setup.parameters.help";
 
     const title = document.createElement("div");
     title.className = "question-title";
-    title.textContent = t("setup.parameters.title");
+    title.textContent = t(parameterBoardTitleKey);
 
     const help = document.createElement("div");
     help.className = "question-help";
-    help.textContent = t("setup.parameters.help");
+    help.textContent = t(parameterBoardHelpKey);
 
     const grid = document.createElement("div");
     grid.className = "parameter-board-grid";
@@ -15279,7 +16574,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(card);
+    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
   };
 
   appendCompactParameterBoard(compactQuestions);
@@ -15302,7 +16597,7 @@ function renderQuestions(questions) {
 
     advancedConstraintQuestions.forEach((q) => {
       const field = document.createElement("div");
-      field.className = "parameter-field option-field" + (q.required ? " required" : "");
+      field.className = "parameter-field option-field expert-option" + (q.required ? " required" : "");
 
       const label = document.createElement("div");
       label.className = "parameter-label";
@@ -15369,12 +16664,13 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(card);
+    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
   };
 
   appendAdvancedConstraintBoard();
 
   const appendRfd3DetailBoard = () => {
+    if (setupWizardActive && setupWizardStepId !== "expert") return;
     const rfd3DetailRelevant =
       state.runMode === "rfd3" || setupRunEnablesRfd3Stage() || shouldShowSetupRfd3InputField();
     if (!rfd3DetailRelevant) return;
@@ -15392,7 +16688,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     renderSetupRfd3ModeDetailsCard(card, normalizedQuestions);
-    appendConfigCard(card);
+    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
   };
 
   appendRfd3DetailBoard();
@@ -15493,6 +16789,7 @@ function renderQuestions(questions) {
   const hiddenTextQuestionIds = new Set([
     ...compactQuestions.map((q) => q.id),
     ...advancedConstraintQuestions.map((q) => q.id),
+    ...evolutionQuestionIds,
   ]);
   textQuestions.forEach((q) => {
     if (hiddenTextQuestionIds.has(q.id) || SETUP_RFD3_MODE_DETAIL_IDS.has(q.id)) return;
@@ -15555,8 +16852,14 @@ function renderQuestions(questions) {
     }
 
     visibleFileQuestions.forEach((q) => {
-      const item = document.createElement("div");
-      item.className = "attachment-item" + (q.required ? " required" : "");
+      const safeFileId = String(q.id || "file").replace(/[^a-z0-9_-]+/gi, "-");
+      const isRfd3InputOverride = q.id === "rfd3_input_pdb" && state.runMode !== "rfd3";
+      const item = document.createElement(isRfd3InputOverride ? "details" : "div");
+      item.className = `attachment-item attachment-${safeFileId}` + (q.required ? " required" : "");
+      if (isRfd3InputOverride) {
+        item.className += " optional-attachment-item";
+        item.open = setupRfd3InputOverrideVisible() || Boolean(String(state.answers[q.id] || "").trim());
+      }
 
       const itemTitle = document.createElement("div");
       itemTitle.className = "attachment-title";
@@ -15820,10 +17123,23 @@ function renderQuestions(questions) {
       controls.appendChild(fileInput);
       controls.appendChild(clearBtn);
 
-      item.appendChild(itemTitle);
-      item.appendChild(itemHelp);
-      item.appendChild(controls);
-      item.appendChild(meta);
+      if (isRfd3InputOverride) {
+        const summary = document.createElement("summary");
+        summary.className = "optional-attachment-summary";
+        summary.appendChild(itemTitle);
+        summary.appendChild(itemHelp);
+        const body = document.createElement("div");
+        body.className = "optional-attachment-body";
+        body.appendChild(controls);
+        body.appendChild(meta);
+        item.appendChild(summary);
+        item.appendChild(body);
+      } else {
+        item.appendChild(itemTitle);
+        item.appendChild(itemHelp);
+        item.appendChild(controls);
+        item.appendChild(meta);
+      }
       list.appendChild(item);
     });
 
@@ -15844,6 +17160,8 @@ function renderQuestions(questions) {
     const pickerProvider = state.answers.af2_provider || "colabfold";
     const card = buildResiduePickerLauncherCard({
       runId: selectedRunIdForPicker,
+      hasTargetPdb: Boolean(String(targetPdbText || "").trim()),
+      hasTargetFasta: Boolean(String(targetFastaText || "").trim()),
       onResetSelection: () => {
         clearSetupFixedPositionsExtraState();
         renderQuestions(state.plan?.questions || []);
@@ -25230,6 +26548,7 @@ window.addEventListener("message", (event) => {
   }
 });
 
+applyEnvironmentChrome();
 initLanguage();
 initCopilot();
 
@@ -25370,21 +26689,41 @@ function renderPaperMaskReviewPanel(config) {
     const label = String(mask.label || "Constraint");
     const evidence = String(mask.evidence || "No evidence provided.");
     const confidence = String(mask.confidence || "high");
-    
-    const warningMarkup = confidence !== "high" ? `<span title="Sequence mismatch suspected" style="cursor:help;">⚠️</span>` : "";
 
     const item = document.createElement("div");
-    item.style.cssText = "display: flex; flex-direction: column; padding: 0.5rem; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-color); margin-bottom: 0.25rem;";
-    
-    item.innerHTML = `
-      <label style="display: flex; align-items: center; gap: 0.5rem; font-weight: 500; cursor: pointer;">
-        <input type="checkbox" checked data-mask-index="${index}" class="${config.checkboxClass}" />
-        <span>Chain ${escapeHtml(chain)}: ${resi} ${escapeHtml(resn)} - ${escapeHtml(label)} ${warningMarkup}</span>
-      </label>
-      <div style="margin-top: 0.25rem; font-size: 0.8em; color: var(--text-color-muted); padding-left: 1.5rem; line-height: 1.2;">
-        <em>"${escapeHtml(evidence)}"</em>
-      </div>
-    `;
+    item.className = "paper-mask-suggestion";
+
+    const row = document.createElement("label");
+    row.className = "paper-mask-suggestion-row";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = true;
+    checkbox.dataset.maskIndex = String(index);
+    checkbox.classList.add(config.checkboxClass);
+
+    const summary = document.createElement("span");
+    summary.className = "paper-mask-suggestion-summary";
+    summary.textContent = `Chain ${chain}: ${resi} ${resn} - ${label}`;
+
+    if (confidence !== "high") {
+      const warning = document.createElement("span");
+      warning.className = "paper-mask-warning";
+      warning.title = "Sequence mismatch suspected";
+      warning.textContent = "!";
+      summary.appendChild(warning);
+    }
+
+    const evidenceEl = document.createElement("div");
+    evidenceEl.className = "paper-mask-evidence";
+    const evidenceText = document.createElement("em");
+    evidenceText.textContent = `"${evidence}"`;
+    evidenceEl.appendChild(evidenceText);
+
+    row.appendChild(checkbox);
+    row.appendChild(summary);
+    item.appendChild(row);
+    item.appendChild(evidenceEl);
     listEl.appendChild(item);
   });
 }

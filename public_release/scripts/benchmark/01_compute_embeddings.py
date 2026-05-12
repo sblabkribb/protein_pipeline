@@ -24,7 +24,7 @@ import pandas as pd
 import torch
 from transformers import AutoTokenizer, EsmModel
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path("/opt/protein_pipeline")
 DATA_DIR = PROJECT_ROOT / "data" / "benchmark"
 CSV_PATH = DATA_DIR / "cath_pilot_dataset.csv"
 

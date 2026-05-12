@@ -32,9 +32,9 @@ import {
 } from "./lib.js";
 
 const STORAGE = {
-  apiBase: "pipeline.runpodAdmin.apiBase",
-  token: "pipeline.runpodAdmin.token",
-  periodPreset: "pipeline.runpodAdmin.periodPreset",
+  apiBase: "kbf.runpodAdmin.apiBase",
+  token: "kbf.runpodAdmin.token",
+  periodPreset: "kbf.runpodAdmin.periodPreset",
 };
 
 const state = {
@@ -903,7 +903,7 @@ async function refreshDashboard() {
 function handleApiError(error) {
   const rawMessage = String(error?.message || "Unknown error");
   const message = /RUNPOD_API_KEY was rejected by the RunPod API|401 Client Error: Unauthorized for url: https:\/\/rest\.runpod\.io/i.test(rawMessage)
-    ? "RunPod API key is invalid or expired. Update RUNPOD_API_KEY in ../../pipeline-mcp/.env and restart pipeline-mcp."
+    ? "RunPod API key is invalid or expired. Update RUNPOD_API_KEY in /opt/protein_pipeline/pipeline-mcp/.env and restart pipeline-mcp."
     : /RUNPOD_API_KEY does not have permission|403 Client Error: Forbidden for url: https:\/\/rest\.runpod\.io/i.test(rawMessage)
       ? "RunPod API key does not have permission for RunPod admin operations. Create a key with endpoint management/billing access and restart pipeline-mcp."
       : rawMessage;

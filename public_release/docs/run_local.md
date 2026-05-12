@@ -20,10 +20,10 @@ Edit `.env` before starting. The backend requires:
 - one AF2 backend: `COLABFOLD_ENDPOINT_ID`, `ALPHAFOLD2_ENDPOINT_ID`, `AF2_ENDPOINT_ID`, or `AF2_URL`
 - `PIPELINE_ADMIN_PASSWORD` for the initial local admin account
 
-Then start:
+Then start the backend:
 
 ```bash
-PYTHONPATH=src python -m pipeline_mcp.http_server --host 0.0.0.0 --port 18080
+PYTHONPATH=src python -m pipeline_mcp.http_server --host 127.0.0.1 --port 18080
 ```
 
 Health check:
@@ -43,11 +43,22 @@ Expected response:
 Run from `public_release/frontend`:
 
 ```bash
-python3 -m http.server 5173 --bind 127.0.0.1
+npm ci
+npm run dev
 ```
 
 Open `http://127.0.0.1:5173`. When the UI is served from localhost, it uses
 `http://127.0.0.1:18080` as the default API base.
+
+For a server/reverse-proxy deployment, build the static bundle instead:
+
+```bash
+npm ci
+npm run build
+```
+
+Serve `public_release/frontend/dist` through Caddy, Nginx, or another HTTPS
+reverse proxy, and route `/api/*` to the backend on `127.0.0.1:18080`.
 
 ## Active-Learning Evolution Dependencies
 

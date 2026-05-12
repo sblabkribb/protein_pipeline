@@ -1,7 +1,7 @@
-const MCP_ENDPOINT_URL = "http://127.0.0.1:18080/mcp";
+const MCP_ENDPOINT_URL = "https://pipeline.k-biofoundrycopilot.duckdns.org/mcp";
 const MCP_SERVER_NAME = "protein-pipeline";
-const TOKEN_PLACEHOLDER = "<OIDC_OR_LOCAL_ACCESS_TOKEN>";
-const TOKEN_PLACEHOLDER_HTML = "&lt;OIDC_OR_LOCAL_ACCESS_TOKEN&gt;";
+const TOKEN_PLACEHOLDER = "<KBF_SSO_ACCESS_TOKEN>";
+const TOKEN_PLACEHOLDER_HTML = "&lt;KBF_SSO_ACCESS_TOKEN&gt;";
 
 const GUIDE_COPY = {
   en: {
@@ -25,10 +25,10 @@ const GUIDE_COPY = {
       title: "3) How to get the token",
       description: "Choose the token source that matches your auth mode.",
       items: [
-        "<strong>Local auth mode</strong>: open browser devtools, go to <code>Local Storage</code>, and copy <code>pipeline.token</code>.",
-        `<strong>OIDC / OIDC SSO mode</strong>: sign in to a OIDC SSO-backed service, open the notebook service MCP page, then open browser devtools and inspect <code>Local Storage</code> &gt; <code>auth-storage</code>. Copy the <code>access_token</code> value and reuse it as <code>${TOKEN_PLACEHOLDER_HTML}</code> in <code>mcp.json</code>.`,
+        "<strong>Local auth mode</strong>: open browser devtools, go to <code>Local Storage</code>, and copy <code>kbf.token</code>.",
+        `<strong>OIDC / KBF SSO mode</strong>: sign in to a KBF SSO-backed service, open the notebook service MCP page, then open browser devtools and inspect <code>Local Storage</code> &gt; <code>auth-storage</code>. Copy the <code>access_token</code> value and reuse it as <code>${TOKEN_PLACEHOLDER_HTML}</code> in <code>mcp.json</code>.`,
       ],
-      note: "If you are signed in with SSO and <code>pipeline.token</code> is empty in this app, that is expected. The pipeline UI currently uses the server-side session cookie for the browser session, while VS Code MCP still requires a bearer token in <code>mcp.json</code>.",
+      note: "If you are signed in with SSO and <code>kbf.token</code> is empty in this app, that is expected. The pipeline UI currently uses the server-side session cookie for the browser session, while VS Code MCP still requires a bearer token in <code>mcp.json</code>.",
     },
     codex: {
       title: "4) Use it from Codex",
@@ -80,10 +80,10 @@ const GUIDE_COPY = {
       title: "3) 토큰 가져오기",
       description: "현재 인증 방식에 맞는 토큰 원본을 선택하세요.",
       items: [
-        "<strong>로컬 인증 모드</strong>: 브라우저 개발자 도구를 열고 <code>Local Storage</code>에서 <code>pipeline.token</code> 값을 복사하세요.",
-        `<strong>OIDC / OIDC SSO 모드</strong>: OIDC SSO가 적용된 서비스에 로그인한 뒤 notebook service MCP 페이지를 열고, 브라우저 개발자 도구에서 <code>Local Storage</code> &gt; <code>auth-storage</code>를 확인하세요. 그 안의 <code>access_token</code> 값을 복사해 VS Code 또는 Codex 설정의 <code>${TOKEN_PLACEHOLDER_HTML}</code> 자리에 넣으면 됩니다.`,
+        "<strong>로컬 인증 모드</strong>: 브라우저 개발자 도구를 열고 <code>Local Storage</code>에서 <code>kbf.token</code> 값을 복사하세요.",
+        `<strong>OIDC / KBF SSO 모드</strong>: KBF SSO가 적용된 서비스에 로그인한 뒤 notebook service MCP 페이지를 열고, 브라우저 개발자 도구에서 <code>Local Storage</code> &gt; <code>auth-storage</code>를 확인하세요. 그 안의 <code>access_token</code> 값을 복사해 VS Code 또는 Codex 설정의 <code>${TOKEN_PLACEHOLDER_HTML}</code> 자리에 넣으면 됩니다.`,
       ],
-      note: "SSO로 로그인한 상태에서 이 앱의 <code>pipeline.token</code>이 비어 있어도 정상입니다. 현재 pipeline UI는 브라우저 세션에서 서버측 세션 쿠키를 사용하고, VS Code와 Codex의 MCP 연결은 별도 bearer token을 저장해야 합니다.",
+      note: "SSO로 로그인한 상태에서 이 앱의 <code>kbf.token</code>이 비어 있어도 정상입니다. 현재 pipeline UI는 브라우저 세션에서 서버측 세션 쿠키를 사용하고, VS Code와 Codex의 MCP 연결은 별도 bearer token을 저장해야 합니다.",
     },
     codex: {
       title: "4) Codex에서 사용",

@@ -286,7 +286,7 @@ def load_session_manager() -> SessionManager:
     output_root = os.environ.get("PIPELINE_OUTPUT_ROOT", "outputs").strip() or "outputs"
     store_default = Path(output_root).resolve() / ".auth" / "sessions.json"
     store_path = Path(os.environ.get("PIPELINE_SESSION_STORE", str(store_default))).resolve()
-    cookie_name = str(os.environ.get("PIPELINE_SESSION_COOKIE_NAME", "pipeline_session") or "pipeline_session").strip() or "pipeline_session"
+    cookie_name = str(os.environ.get("PIPELINE_SESSION_COOKIE_NAME", "kbf_session") or "kbf_session").strip() or "kbf_session"
     local_ttl_s = _coerce_int(
         os.environ.get("PIPELINE_SESSION_TTL_S") or os.environ.get("PIPELINE_AUTH_TOKEN_TTL_S") or "86400",
         default=86400,

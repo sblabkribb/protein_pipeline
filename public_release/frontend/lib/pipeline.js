@@ -1106,8 +1106,8 @@ export function workflowStudioStorageKeysForUser(user = null) {
   const scope = workflowStudioUserScope(user);
   return {
     scope,
-    sessionsKey: scope ? `pipeline.workflowStudioSessions.${scope}` : "pipeline.workflowStudioSessions",
-    currentKey: scope ? `pipeline.workflowStudioCurrent.${scope}` : "pipeline.workflowStudioCurrent",
+    sessionsKey: scope ? `kbf.workflowStudioSessions.${scope}` : "kbf.workflowStudioSessions",
+    currentKey: scope ? `kbf.workflowStudioCurrent.${scope}` : "kbf.workflowStudioCurrent",
   };
 }
 
@@ -1788,6 +1788,26 @@ const WORKFLOW_STUDIO_FIELD_STAGE = Object.freeze(
     )
   )
 );
+
+function workflowStudioHasNodeScope(nodes) {
+  return Array.isArray(nodes) && nodes.some((node) => normalizeWorkflowStudioNode(node));
+}
+
+function workflowStudioNodesHaveBaseStage(nodes, stage) {
+  const target = normalizeStage(stage);
+  if (!target) return false;
+  return (Array.isArray(nodes) ? nodes : []).some((node) => {
+    const parsed = parseWorkflowStudioNode(node);
+    return (parsed?.baseStage || normalizeStage(node)) === target;
+  });
+}
+
+function clearWorkflowStudioStageFields(answers, stage, keepFields = []) {
+  const keep = new Set(keepFields);
+  (WORKFLOW_STUDIO_STAGE_FIELDS[stage] || []).forEach((fieldId) => {
+    if (!keep.has(fieldId)) delete answers[fieldId];
+  });
+}
 
 const WORKFLOW_STUDIO_EXISTING_OUTPUT_REQUIREMENTS = Object.freeze({
   soluprot: Object.freeze({
@@ -2601,6 +2621,8 @@ export function resolveRfd3ContigChoices({
 export function normalizeWorkflowStudioPayloadForComparison(payload, { nodes = [] } = {}) {
   let answers = cloneWorkflowValue(payload && typeof payload === "object" ? payload : {});
   delete answers.selected_tiers;
+  const hasNodeScope = workflowStudioHasNodeScope(nodes);
+  const hasBioEmuNode = workflowStudioNodesHaveBaseStage(nodes, "bioemu");
 
   const targetInput = String(answers.target_input || answers.target_pdb || answers.target_fasta || "").trim();
   delete answers.target_pdb;
@@ -2680,6 +2702,12 @@ export function normalizeWorkflowStudioPayloadForComparison(payload, { nodes = [
   if (typeof answers.bioemu_steering_config_text === "string" && !answers.bioemu_steering_config_text.trim()) {
     delete answers.bioemu_steering_config_text;
   }
+  if (hasNodeScope && (!hasBioEmuNode || answers.bioemu_use === false)) {
+    clearWorkflowStudioStageFields(answers, "bioemu", ["bioemu_use"]);
+    answers.bioemu_use = false;
+  } else if (hasNodeScope && hasBioEmuNode && answers.bioemu_use !== false) {
+    answers.bioemu_use = true;
+  }
   answers = sanitizeRfd3StructureBoundAnswers(answers, { mode: "workflow", nodes });
   const {
     rfd3Enabled,
@@ -2697,18 +2725,8 @@ export function normalizeWorkflowStudioPayloadForComparison(payload, { nodes = [
     answers.rfd3_input_pdb = String(effectiveRfd3Input).trim();
     answers.rfd3_use = true;
   } else {
-    delete answers.rfd3_input_pdb;
-    delete answers.rfd3_mode;
-    delete answers.rfd3_contig;
-    delete answers.rfd3_hotspots;
-    delete answers.rfd3_infer_ori_strategy;
-    delete answers.rfd3_is_non_loopy;
-    delete answers.rfd3_unindex;
-    delete answers.rfd3_length;
-    delete answers.rfd3_select_fixed_atoms;
-    delete answers.rfd3_partial_t;
-    delete answers.rfd3_inputs_text;
-    delete answers.rfd3_use;
+    clearWorkflowStudioStageFields(answers, "rfd3", ["rfd3_use"]);
+    answers.rfd3_use = false;
   }
   if (rfd3Enabled && rfd3Mode) {
     answers.rfd3_mode = rfd3Mode;

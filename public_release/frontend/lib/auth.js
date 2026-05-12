@@ -37,7 +37,7 @@ export function resolveDefaultApiBase({
   if (origin && origin !== "null") {
     return `${origin}/api`;
   }
-  return "http://127.0.0.1:18080";
+  return "https://pipeline.k-biofoundrycopilot.duckdns.org/api";
 }
 
 export function buildOidcRedirectUri({
