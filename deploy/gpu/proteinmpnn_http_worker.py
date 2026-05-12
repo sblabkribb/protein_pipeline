@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import importlib
 import importlib.util
 import json
 import os
@@ -35,7 +36,21 @@ def _load_handler():
     if spec is None or spec.loader is None:
         raise RuntimeError(f"Unable to load handler module from {handler_path}")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    serverless = None
+    original_start = None
+    try:
+        serverless = importlib.import_module("runpod.serverless")
+        original_start = getattr(serverless, "start", None)
+        # RunPod serverless handlers usually call start() at import time. For this
+        # HTTP worker we only need the handler callable, not the serverless loop.
+        serverless.start = lambda *_args, **_kwargs: None
+    except Exception:
+        serverless = None
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        if serverless is not None and original_start is not None:
+            serverless.start = original_start
     fn = getattr(module, "handler", None)
     if not callable(fn):
         raise RuntimeError(f"handler function not found in {handler_path}")
