@@ -1,6 +1,6 @@
 # Protein Pipeline 운영 가이드 (NCP)
 
-이 저장소의 `pipeline-mcp`는 파이프라인 오케스트레이터(HTTP tool server)이며, 실제 연산은 주로 RunPod 엔드포인트(MMseqs2/ProteinMPNN/AF2)를 호출합니다.
+이 저장소의 `pipeline-mcp`는 파이프라인 오케스트레이터(HTTP tool server)이며, 실제 연산은 주로 RunPod 엔드포인트(MMseqs2/ProteinMPNN/AF2)를 호출합니다. ProteinMPNN만 NCP GPU 서버로 옮길 때는 `docs/gpu_proteinmpnn_worker.md`를 따릅니다.
 
 ## 권장 포트
 - `18080`: `pipeline-mcp` HTTP 서버(Caddy가 `https://pipeline.k-biofoundrycopilot.duckdns.org/mcp`와 `/api/*`로 프록시)
@@ -11,9 +11,12 @@
 필수:
 - `RUNPOD_API_KEY`
 - `MMSEQS_ENDPOINT_ID`
-- `PROTEINMPNN_ENDPOINT_ID`
+- `PROTEINMPNN_ENDPOINT_ID` (`PROTEINMPNN_PROVIDER=runpod`일 때)
 
 선택:
+- `PROTEINMPNN_PROVIDER=gpu_http` (ProteinMPNN을 자체 GPU worker로 실행)
+- `PROTEINMPNN_GPU_URL` (`PROTEINMPNN_PROVIDER=gpu_http`일 때 필수)
+- `PROTEINMPNN_GPU_TOKEN` (GPU worker bearer token)
 - `ALPHAFOLD2_ENDPOINT_ID` (RunPod AF2 사용 시)
 - `AF2_URL` (RunPod AF2 미사용 시, 별도 AF2 HTTP 서버)
 - `SOLUPROT_URL` (SoluProt HTTP 서버; 미설정 시 soluprot 단계 자동 스킵)
