@@ -21,6 +21,7 @@ test("provider type aliases normalize to the registry contract", () => {
 test("provider update payload trims fields and never sends a blank token", () => {
   const payload = buildProviderUpdatePayload({
     modelKey: "proteinmpnn",
+    scope: "user",
     providerType: " http ",
     endpointId: " ep-123 ",
     baseUrl: " http://127.0.0.1:18101/ ",
@@ -31,6 +32,7 @@ test("provider update payload trims fields and never sends a blank token", () =>
 
   assert.deepEqual(payload, {
     model_key: "proteinmpnn",
+    scope: "user",
     provider: {
       provider_type: "http_api",
       endpoint_id: "ep-123",
@@ -54,6 +56,7 @@ test("provider health payload uses unsaved form values", () => {
 
   assert.deepEqual(payload, {
     model_key: "alphafold2",
+    scope: "global",
     provider: {
       provider_type: "http_api",
       endpoint_id: "old-runpod-endpoint",
@@ -111,6 +114,14 @@ test("model provider UI supports inline health status and adding custom models",
   assert.match(source, /pipeline\.model_provider_health",\s*payload/);
   assert.doesNotMatch(source, /modelProvidersStatus\.textContent = result\?\.ready/);
   assert.doesNotMatch(source, /modelProviderHealthBadge\(provider,\s*health/);
+});
+
+test("model provider UI uses provider type instead of a separate enabled checkbox", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.doesNotMatch(source, /data-model-provider-field="enabled"/);
+  assert.doesNotMatch(source, /modelProviders\.enabled/);
+  assert.doesNotMatch(source, /modelProviderFieldValue\(card,\s*"enabled"\)/);
 });
 
 test("topbar does not expose a separate account-console button", () => {

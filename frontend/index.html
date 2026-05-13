@@ -1726,6 +1726,18 @@
           </div>
         </div>
         <div id="modelProvidersStatus" class="hint"></div>
+        <div class="model-provider-scope-row">
+          <label>
+            <span data-i18n="modelProviders.scope">Settings scope</span>
+            <select id="modelProviderScope">
+              <option value="user" data-i18n="modelProviders.scope.user">My model settings</option>
+              <option value="global" data-i18n="modelProviders.scope.global">Global defaults</option>
+            </select>
+          </label>
+          <p class="hint" data-i18n="modelProviders.scope.help">
+            Global defaults apply to all users. My model settings apply only to your runs.
+          </p>
+        </div>
         <div id="modelProviderAddPanel" class="model-provider-add-panel hidden">
           <div class="model-provider-add-head">
             <div>

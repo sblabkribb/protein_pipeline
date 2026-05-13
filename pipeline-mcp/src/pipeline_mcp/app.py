@@ -33,8 +33,8 @@ from .model_providers import ModelProviderStore
 from .pipeline import PipelineRunner
 
 
-def _provider(store: ModelProviderStore, model_key: str) -> dict:
-    return store.get_effective(model_key, include_secret=True)
+def _provider(store: ModelProviderStore, model_key: str, provider_user: str | None = None) -> dict:
+    return store.get_effective(model_key, include_secret=True, user_id=provider_user)
 
 
 def _provider_is_http(provider: dict) -> bool:
@@ -45,7 +45,7 @@ def _provider_is_runpod(provider: dict) -> bool:
     return bool(provider.get("enabled", True)) and provider.get("provider_type") == "runpod" and bool(provider.get("endpoint_id"))
 
 
-def build_runner() -> PipelineRunner:
+def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
     cfg = load_config()
     provider_store = ModelProviderStore(cfg.output_root)
     runpod = RunPodClient(
@@ -53,7 +53,7 @@ def build_runner() -> PipelineRunner:
         ca_bundle=cfg.runpod.ca_bundle,
         skip_verify=cfg.runpod.skip_verify,
     )
-    mmseqs_provider = _provider(provider_store, "mmseqs")
+    mmseqs_provider = _provider(provider_store, "mmseqs", provider_user)
     if _provider_is_http(mmseqs_provider):
         mmseqs = LocalHTTPMMseqsClient(
             base_url=mmseqs_provider["base_url"],
@@ -64,7 +64,7 @@ def build_runner() -> PipelineRunner:
         mmseqs_endpoint_id = str(mmseqs_provider.get("endpoint_id") or cfg.runpod.mmseqs_endpoint_id)
         mmseqs = MMseqsClient(runpod=runpod, endpoint_id=mmseqs_endpoint_id)
 
-    proteinmpnn_provider = _provider(provider_store, "proteinmpnn")
+    proteinmpnn_provider = _provider(provider_store, "proteinmpnn", provider_user)
     if _provider_is_http(proteinmpnn_provider):
         proteinmpnn = ProteinMPNNClient(
             runpod=None,
@@ -89,7 +89,7 @@ def build_runner() -> PipelineRunner:
 
     soluprot = SoluProtClient(url=cfg.services.soluprot_url) if cfg.services.soluprot_url else None
     colabfold = None
-    colabfold_provider = _provider(provider_store, "colabfold")
+    colabfold_provider = _provider(provider_store, "colabfold", provider_user)
     if _provider_is_http(colabfold_provider):
         colabfold = LocalHTTPAlphaFold2Client(
             base_url=colabfold_provider["base_url"],
@@ -103,7 +103,7 @@ def build_runner() -> PipelineRunner:
         colabfold = AlphaFold2RunPodClient(runpod=runpod, endpoint_id=cfg.runpod.colabfold_endpoint_id)
 
     af2 = None
-    af2_provider = _provider(provider_store, "alphafold2")
+    af2_provider = _provider(provider_store, "alphafold2", provider_user)
     if _provider_is_http(af2_provider):
         af2 = LocalHTTPAlphaFold2Client(
             base_url=af2_provider["base_url"],
@@ -119,7 +119,7 @@ def build_runner() -> PipelineRunner:
         af2 = AlphaFold2Client(url=cfg.services.af2_url)
 
     rfd3 = None
-    rfd3_provider = _provider(provider_store, "rfd3")
+    rfd3_provider = _provider(provider_store, "rfd3", provider_user)
     if _provider_is_http(rfd3_provider):
         rfd3 = LocalHTTPRFD3Client(
             base_url=rfd3_provider["base_url"],
@@ -132,7 +132,7 @@ def build_runner() -> PipelineRunner:
         rfd3 = RFD3RunPodClient(runpod=runpod, endpoint_id=cfg.runpod.rfd3_endpoint_id)
 
     bioemu = None
-    bioemu_provider = _provider(provider_store, "bioemu")
+    bioemu_provider = _provider(provider_store, "bioemu", provider_user)
     if _provider_is_http(bioemu_provider):
         bioemu = LocalHTTPBioEmuClient(
             base_url=bioemu_provider["base_url"],
@@ -145,7 +145,7 @@ def build_runner() -> PipelineRunner:
         bioemu = BioEmuRunPodClient(runpod=runpod, endpoint_id=cfg.runpod.bioemu_endpoint_id)
 
     diffdock = None
-    diffdock_provider = _provider(provider_store, "diffdock")
+    diffdock_provider = _provider(provider_store, "diffdock", provider_user)
     if _provider_is_http(diffdock_provider):
         diffdock = LocalHTTPDiffDockClient(
             base_url=diffdock_provider["base_url"],
@@ -159,7 +159,7 @@ def build_runner() -> PipelineRunner:
 
     rosetta_relax = None
     rosetta_docker_bin = cfg.rosetta.docker_bin or shutil.which("docker")
-    rosetta_provider = _provider(provider_store, "rosetta_relax")
+    rosetta_provider = _provider(provider_store, "rosetta_relax", provider_user)
 
     if _provider_is_http(rosetta_provider):
         rosetta_relax = LocalHTTPRosettaRelaxClient(

@@ -82,6 +82,25 @@ def _read_timeout(value: object | None, default: float = 21600.0) -> float:
     return max(1.0, parsed)
 
 
+def _normalize_scope(value: object | None) -> str:
+    raw = str(value or "global").strip().lower().replace("-", "_")
+    if raw in {"global", "default", "admin"}:
+        return "global"
+    if raw in {"user", "personal", "mine"}:
+        return "user"
+    raise ValueError("scope must be one of: global, user")
+
+
+def _normalize_scope_user(value: object | None) -> str:
+    raw = str(value or "").strip().lower()
+    key = "".join(ch if ch.isalnum() else "_" for ch in raw).strip("_")
+    while "__" in key:
+        key = key.replace("__", "_")
+    if not key:
+        raise ValueError("user_id is required for user-scoped model providers")
+    return key[:96]
+
+
 class ModelProviderStore:
     def __init__(self, output_root: str | Path) -> None:
         self.output_root = Path(output_root)
@@ -89,21 +108,40 @@ class ModelProviderStore:
         self.path = self.root / "providers.json"
         self.secret_path = self.root / "secret.key"
 
-    def list_effective(self, *, include_secret: bool = False) -> list[dict[str, Any]]:
+    def list_effective(self, *, include_secret: bool = False, user_id: str | None = None) -> list[dict[str, Any]]:
         data = self._load()
-        providers = [self.get_effective(spec.key, include_secret=include_secret) for spec in MODEL_SPECS]
+        user_data = self._load_user(user_id) if user_id else {}
+        providers = [
+            self.get_effective(spec.key, include_secret=include_secret, user_id=user_id)
+            for spec in MODEL_SPECS
+        ]
         custom_keys = sorted(
-            key
-            for key, record in data.items()
-            if key not in MODEL_SPEC_BY_KEY and isinstance(record, dict) and bool(record.get("custom"))
+            {
+                key
+                for source in (data, user_data)
+                for key, record in source.items()
+                if key not in MODEL_SPEC_BY_KEY and isinstance(record, dict) and bool(record.get("custom"))
+            }
         )
-        providers.extend(self.get_effective(key, include_secret=include_secret) for key in custom_keys)
+        providers.extend(
+            self.get_effective(key, include_secret=include_secret, user_id=user_id)
+            for key in custom_keys
+        )
         return providers
 
-    def get_effective(self, model_key: str, *, include_secret: bool = False) -> dict[str, Any]:
+    def get_effective(
+        self,
+        model_key: str,
+        *,
+        include_secret: bool = False,
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
         key = self._normalize_model_key(model_key, allow_custom=True)
         data = self._load()
         stored = data.get(key)
+        user_key = _normalize_scope_user(user_id) if user_id else ""
+        user_data = self._load_user(user_key) if user_key else {}
+        user_stored = user_data.get(key)
         if key in MODEL_SPEC_BY_KEY:
             provider = self._env_provider(key)
         elif isinstance(stored, dict) and bool(stored.get("custom")):
@@ -118,23 +156,62 @@ class ModelProviderStore:
                 "timeout_s": 21600.0,
                 "source": "registry",
             }
+        elif isinstance(user_stored, dict) and bool(user_stored.get("custom")):
+            provider = {
+                "model_key": key,
+                "label": str(user_stored.get("label") or key).strip() or key,
+                "custom": True,
+                "provider_type": "disabled",
+                "enabled": False,
+                "endpoint_id": "",
+                "base_url": "",
+                "timeout_s": 21600.0,
+                "source": "user",
+            }
         else:
             raise ValueError(f"unknown model_key: {model_key}")
         if isinstance(stored, dict):
             provider.update(stored)
             provider["source"] = "registry"
+            provider["scope"] = "global"
+        else:
+            provider["scope"] = "global"
+        if isinstance(user_stored, dict):
+            provider.update(user_stored)
+            provider["source"] = "user"
+            provider["scope"] = "user"
+            provider["scope_user"] = user_key
         provider = self._normalize_record(key, provider)
         return self._public_record(provider, include_secret=include_secret)
 
-    def upsert(self, model_key: str, payload: dict[str, Any], *, actor: str = "") -> dict[str, Any]:
-        data = self._load()
+    def upsert(
+        self,
+        model_key: str,
+        payload: dict[str, Any],
+        *,
+        actor: str = "",
+        scope: str = "global",
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        target_scope = _normalize_scope(scope)
+        user_key = _normalize_scope_user(user_id) if target_scope == "user" else ""
+        data = self._load_for_scope(target_scope, user_key)
         key = self._normalize_model_key(model_key, allow_custom=True)
         custom_requested = bool(payload.get("custom")) or "label" in payload
         stored = data.get(key)
-        if key not in MODEL_SPEC_BY_KEY and not (custom_requested or (isinstance(stored, dict) and bool(stored.get("custom")))):
+        global_stored = self._load().get(key)
+        if key not in MODEL_SPEC_BY_KEY and not (
+            custom_requested
+            or (isinstance(stored, dict) and bool(stored.get("custom")))
+            or (isinstance(global_stored, dict) and bool(global_stored.get("custom")))
+        ):
             raise ValueError(f"unknown model_key: {model_key}")
-        if key in MODEL_SPEC_BY_KEY or isinstance(stored, dict):
-            current = self.get_effective(key, include_secret=True)
+        if key in MODEL_SPEC_BY_KEY or isinstance(stored, dict) or isinstance(global_stored, dict):
+            current = self.get_effective(
+                key,
+                include_secret=True,
+                user_id=user_key if target_scope == "user" else None,
+            )
         else:
             current = self._public_record(
                 self._normalize_record(
@@ -145,7 +222,9 @@ class ModelProviderStore:
                         "custom": True,
                         "provider_type": "disabled",
                         "enabled": False,
-                        "source": "registry",
+                        "source": "user" if target_scope == "user" else "registry",
+                        "scope": target_scope,
+                        "scope_user": user_key,
                     },
                 ),
                 include_secret=True,
@@ -163,12 +242,14 @@ class ModelProviderStore:
             "endpoint_id": payload.get("endpoint_id", current.get("endpoint_id", "")),
             "base_url": payload.get("base_url", current.get("base_url", "")),
             "timeout_s": payload.get("timeout_s", current.get("timeout_s", 21600.0)),
-            "source": "registry",
+            "source": "user" if target_scope == "user" else "registry",
+            "scope": target_scope,
+            "scope_user": user_key,
             "updated_by": str(actor or ""),
         }
         token = str(payload.get("token") if "token" in payload else current.get("token") or "").strip()
         normalized = self._normalize_record(key, next_record)
-        data = self._load()
+        data = self._load_for_scope(target_scope, user_key)
         stored = dict(normalized)
         if token:
             stored["token_encrypted"] = self._encrypt(token)
@@ -178,11 +259,17 @@ class ModelProviderStore:
             stored.pop("label", None)
         stored.pop("token", None)
         data[key] = stored
-        self._save(data)
-        return self.get_effective(key)
+        self._save_for_scope(target_scope, user_key, data)
+        return self.get_effective(key, user_id=user_key if target_scope == "user" else None)
 
-    def health(self, model_key: str, provider_override: dict[str, Any] | None = None) -> dict[str, Any]:
-        provider = self.get_effective(model_key, include_secret=True)
+    def health(
+        self,
+        model_key: str,
+        provider_override: dict[str, Any] | None = None,
+        *,
+        user_id: str | None = None,
+    ) -> dict[str, Any]:
+        provider = self.get_effective(model_key, include_secret=True, user_id=user_id)
         if isinstance(provider_override, dict):
             key = self._normalize_model_key(model_key, allow_custom=True)
             draft = dict(provider)
@@ -274,6 +361,8 @@ class ModelProviderStore:
             "base_url": _normalize_base_url(record.get("base_url")),
             "timeout_s": _read_timeout(record.get("timeout_s"), 21600.0),
             "source": str(record.get("source") or "registry"),
+            "scope": _normalize_scope(record.get("scope")),
+            "scope_user": str(record.get("scope_user") or "").strip(),
             "updated_by": str(record.get("updated_by") or ""),
             "token": token,
         }
@@ -297,10 +386,24 @@ class ModelProviderStore:
         return out
 
     def _load(self) -> dict[str, dict[str, Any]]:
-        if not self.path.exists():
+        return self._load_path(self.path)
+
+    def _load_user(self, user_id: str | None) -> dict[str, dict[str, Any]]:
+        if not user_id:
+            return {}
+        return self._load_path(self._user_path(_normalize_scope_user(user_id)))
+
+    def _load_for_scope(self, scope: str, user_key: str = "") -> dict[str, dict[str, Any]]:
+        target_scope = _normalize_scope(scope)
+        if target_scope == "user":
+            return self._load_user(user_key)
+        return self._load()
+
+    def _load_path(self, path: Path) -> dict[str, dict[str, Any]]:
+        if not path.exists():
             return {}
         try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
+            payload = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             return {}
         providers = payload.get("providers") if isinstance(payload, dict) else None
@@ -309,12 +412,25 @@ class ModelProviderStore:
         return {str(k): v for k, v in providers.items() if isinstance(v, dict)}
 
     def _save(self, providers: dict[str, dict[str, Any]]) -> None:
-        self.root.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps({"providers": providers}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        self._save_path(self.path, providers)
+
+    def _save_for_scope(self, scope: str, user_key: str, providers: dict[str, dict[str, Any]]) -> None:
+        target_scope = _normalize_scope(scope)
+        if target_scope == "user":
+            self._save_path(self._user_path(user_key), providers)
+            return
+        self._save(providers)
+
+    def _save_path(self, path: Path, providers: dict[str, dict[str, Any]]) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"providers": providers}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         try:
-            self.path.chmod(0o600)
+            path.chmod(0o600)
         except Exception:
             pass
+
+    def _user_path(self, user_key: str) -> Path:
+        return self.root / "users" / _normalize_scope_user(user_key) / "providers.json"
 
     def _fernet(self) -> Fernet:
         self.root.mkdir(parents=True, exist_ok=True)
@@ -340,9 +456,9 @@ class ModelProviderStore:
             return ""
 
 
-def build_provider_summary(store: ModelProviderStore) -> list[dict[str, Any]]:
+def build_provider_summary(store: ModelProviderStore, *, user_id: str | None = None) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for provider in store.list_effective():
+    for provider in store.list_effective(user_id=user_id):
         missing: list[str] = []
         if provider["provider_type"] == "runpod" and not provider.get("endpoint_id"):
             missing.append("endpoint_id")

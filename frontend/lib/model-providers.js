@@ -21,6 +21,12 @@ export function normalizeProviderType(value) {
   return PROVIDER_TYPE_ALIASES[raw] || "disabled";
 }
 
+export function normalizeProviderScope(value) {
+  const raw = trimText(value).toLowerCase().replace("-", "_");
+  if (["user", "personal", "mine"].includes(raw)) return "user";
+  return "global";
+}
+
 export function normalizeProviderBaseUrl(value) {
   const raw = trimText(value);
   return raw.replace(/\/+$/, "");
@@ -55,18 +61,19 @@ export function providerConfigured(provider) {
 
 export function buildProviderUpdatePayload({
   modelKey,
+  scope,
   providerType,
   endpointId,
   baseUrl,
   token,
-  enabled,
   timeoutS,
 }) {
+  const normalizedType = normalizeProviderType(providerType);
   const provider = {
-    provider_type: normalizeProviderType(providerType),
+    provider_type: normalizedType,
     endpoint_id: trimText(endpointId),
     base_url: normalizeProviderBaseUrl(baseUrl),
-    enabled: Boolean(enabled),
+    enabled: normalizedType !== "disabled",
   };
   const tokenText = trimText(token);
   if (tokenText) {
@@ -78,6 +85,7 @@ export function buildProviderUpdatePayload({
   }
   return {
     model_key: trimText(modelKey),
+    scope: normalizeProviderScope(scope),
     provider,
   };
 }

@@ -21,6 +21,7 @@ from .bio.fasta import parse_fasta
 from .bio.ligand_text import normalize_diffdock_ligand_inputs
 from .bio.sdf import append_ligand_pdb
 from .bio.sdf import sdf_to_pdb
+from .auth import AuthError
 from .cath_ops import job_kind_batch
 from .cath_ops import job_kind_train
 from .cath_ops import launch_cath_batch_job
@@ -3713,17 +3714,51 @@ def _model_provider_store(runner: PipelineRunner):
     return model_provider_store_from_env(getattr(runner, "output_root", None))
 
 
+def _model_provider_user(arguments: dict[str, Any]) -> dict[str, Any]:
+    return arguments.get("user") if isinstance(arguments.get("user"), dict) else {}
+
+
+def _model_provider_scope(arguments: dict[str, Any], user: dict[str, Any]) -> str:
+    provider = arguments.get("provider") if isinstance(arguments.get("provider"), dict) else {}
+    raw_scope = arguments.get("scope", provider.get("scope"))
+    if raw_scope is None:
+        role = str(user.get("role") or "")
+        return "global" if role in {"admin", "model_manager"} or not user else "user"
+    scope = str(raw_scope or "global").strip().lower().replace("-", "_")
+    if scope in {"global", "default", "admin"}:
+        return "global"
+    if scope in {"user", "personal", "mine"}:
+        return "user"
+    raise ValueError("scope must be one of: global, user")
+
+
+def _model_provider_user_id(user: dict[str, Any]) -> str:
+    return str(user.get("username") or "").strip()
+
+
+def _can_manage_global_model_providers(user: dict[str, Any]) -> bool:
+    return str(user.get("role") or "") in {"admin", "model_manager"}
+
+
 def _model_provider_list_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
     store = _model_provider_store(runner)
     include_health = _as_bool(arguments.get("include_health"), False)
-    providers = build_provider_summary(store)
+    user = _model_provider_user(arguments)
+    scope = _model_provider_scope(arguments, user)
+    user_id = _model_provider_user_id(user) if scope == "user" else None
+    providers = build_provider_summary(store, user_id=user_id)
     health: dict[str, Any] = {}
     if include_health:
         for provider in providers:
             model_key = str(provider.get("model_key") or "")
             if model_key:
-                health[model_key] = store.health(model_key)
-    return {"providers": providers, "health": health}
+                health[model_key] = store.health(model_key, user_id=user_id)
+    return {
+        "providers": providers,
+        "health": health,
+        "scope": scope,
+        "can_manage_global": _can_manage_global_model_providers(user),
+    }
 
 
 def _model_provider_update_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -3732,9 +3767,15 @@ def _model_provider_update_tool(runner: PipelineRunner, arguments: dict[str, Any
     provider = arguments.get("provider")
     if not isinstance(provider, dict):
         raise ValueError("provider must be an object")
-    user = arguments.get("user") if isinstance(arguments.get("user"), dict) else {}
+    user = _model_provider_user(arguments)
+    scope = _model_provider_scope(arguments, user)
+    user_id = _model_provider_user_id(user) if scope == "user" else None
+    if scope == "global" and user and not _can_manage_global_model_providers(user):
+        raise AuthError("model manager required")
+    if scope == "user" and not user_id:
+        raise AuthError("user required")
     actor = str(user.get("username") or "")
-    return {"provider": store.upsert(model_key, provider, actor=actor)}
+    return {"provider": store.upsert(model_key, provider, actor=actor, scope=scope, user_id=user_id), "scope": scope}
 
 
 def _model_provider_health_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
@@ -3743,7 +3784,10 @@ def _model_provider_health_tool(runner: PipelineRunner, arguments: dict[str, Any
     if not model_key:
         raise ValueError("model_key is required")
     provider = arguments.get("provider")
-    return store.health(model_key, provider if isinstance(provider, dict) else None)
+    user = _model_provider_user(arguments)
+    scope = _model_provider_scope(arguments, user)
+    user_id = _model_provider_user_id(user) if scope == "user" else None
+    return store.health(model_key, provider if isinstance(provider, dict) else None, user_id=user_id)
 
 
 def _cath_get_batch_overview_tool(

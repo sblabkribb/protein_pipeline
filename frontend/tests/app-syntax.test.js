@@ -370,7 +370,7 @@ test("frontend includes a localized first-run tutorial overlay", () => {
   assert.match(html, /id="tutorialSkip"/);
   assert.match(html, /id="tutorialNext"/);
 
-  assert.match(source, /const TUTORIAL_STORAGE_KEY = "kbf\.tutorial\.completed\.v2"/);
+  assert.match(source, /const TUTORIAL_STORAGE_KEY = "kbf\.tutorial\.completed\.v3"/);
   assert.match(source, /const TUTORIAL_STEPS = \[/);
   assert.match(source, /function maybeShowTutorialOnFirstVisit/);
   assert.match(source, /function openTutorial/);
@@ -415,8 +415,8 @@ test("tutorial covers expert workflow controls and downstream review tools", () 
   assert.match(source, /id: "topbarMenu"[\s\S]*?target: "\.topbar-actions"/m);
 
   assert.match(source, /function applyTutorialStepContext/);
-  assert.match(source, /if \(step\?\.id === "experimentChoice"\) \{\s*openExperimentChoicePanel\(\{ focusFirst: false \}\);\s*return;\s*\}/m);
-  assert.match(source, /closeExperimentChoicePanel\(\);\s*const setupStep = String\(step\?\.setupStep \|\| ""\)\.trim\(\);/m);
+  assert.match(source, /if \(step\?\.id === "experimentChoice"\) \{[\s\S]*?openExperimentChoicePanel\(\{ focusFirst: false \}\);[\s\S]*?return;\s*\}/m);
+  assert.match(source, /closeExperimentChoicePanel\(\);[\s\S]*?const setupStep = String\(step\?\.setupStep \|\| ""\)\.trim\(\);/m);
   assert.match(source, /state\.setupStepIndex = stepIndex;/);
   assert.match(source, /"tutorial\.step\.homeProject\.title"/);
   assert.match(source, /"tutorial\.step\.homeRound\.title"/);
@@ -433,6 +433,21 @@ test("tutorial covers expert workflow controls and downstream review tools", () 
   assert.match(source, /"tutorial\.step\.report\.title"/);
   assert.match(source, /"tutorial\.step\.copilot\.title"/);
   assert.match(source, /"tutorial\.step\.topbar\.title"/);
+});
+
+test("tutorial covers the updated model provider menu and custom model add flow", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(source, /id: "modelProviders"[\s\S]*?target: "\.model-providers-card"/m);
+  assert.match(source, /id: "modelProviderAdd"[\s\S]*?target: "#modelProviderAddPanel"/m);
+  assert.match(source, /"tutorial\.step\.modelProviders\.title"/);
+  assert.match(source, /"tutorial\.step\.modelProviderAdd\.title"/);
+  assert.match(source, /"tutorial\.step\.topbar\.body"[\s\S]*?Model Providers/);
+  assert.match(source, /"tutorial\.step\.topbar\.body"[\s\S]*?모델 연결/);
+  assert.match(source, /if \(step\?\.id === "modelProviders"\) \{/);
+  assert.match(source, /if \(step\?\.id === "modelProviderAdd"\) \{/);
+  assert.match(source, /openModelProvidersPanel\(\);/);
+  assert.match(source, /setModelProviderAddOpen\(true\);/);
 });
 
 test("copilot awaits async replies before adding them to chat history", () => {
