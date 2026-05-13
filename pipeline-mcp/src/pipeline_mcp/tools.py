@@ -66,6 +66,8 @@ from .storage import resolve_run_path
 from .storage import mark_cancel_requested
 from .report_scoring import compute_score
 from .report_scoring import scoring_config
+from .model_providers import model_provider_store_from_env
+from .model_providers import build_provider_summary
 from .runpod_admin import build_runpod_admin_service
 from .runpod_admin import sanitize_runpod_endpoint_patch
 from .storage import set_status
@@ -3705,6 +3707,42 @@ def _runpod_get_history_tool(
         end_time=end_time,
         limit=max(limit, 1),
     )
+
+
+def _model_provider_store(runner: PipelineRunner):
+    return model_provider_store_from_env(getattr(runner, "output_root", None))
+
+
+def _model_provider_list_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    store = _model_provider_store(runner)
+    include_health = _as_bool(arguments.get("include_health"), False)
+    providers = build_provider_summary(store)
+    health: dict[str, Any] = {}
+    if include_health:
+        for provider in providers:
+            model_key = str(provider.get("model_key") or "")
+            if model_key:
+                health[model_key] = store.health(model_key)
+    return {"providers": providers, "health": health}
+
+
+def _model_provider_update_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    store = _model_provider_store(runner)
+    model_key = str(arguments.get("model_key") or "").strip()
+    provider = arguments.get("provider")
+    if not isinstance(provider, dict):
+        raise ValueError("provider must be an object")
+    user = arguments.get("user") if isinstance(arguments.get("user"), dict) else {}
+    actor = str(user.get("username") or "")
+    return {"provider": store.upsert(model_key, provider, actor=actor)}
+
+
+def _model_provider_health_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    store = _model_provider_store(runner)
+    model_key = str(arguments.get("model_key") or "").strip()
+    if not model_key:
+        raise ValueError("model_key is required")
+    return store.health(model_key)
 
 
 def _cath_get_batch_overview_tool(
@@ -7971,6 +8009,49 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.model_provider_list",
+            "description": "List configured model providers across RunPod and HTTP API backends.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "include_health": {"type": "boolean"},
+                },
+            },
+        },
+        {
+            "name": "pipeline.model_provider_update",
+            "description": "Create or update a model provider entry.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "model_key": {"type": "string"},
+                    "provider": {
+                        "type": "object",
+                        "properties": {
+                            "provider_type": {"type": "string", "enum": ["runpod", "http_api", "disabled"]},
+                            "endpoint_id": {"type": "string"},
+                            "base_url": {"type": "string"},
+                            "token": {"type": "string"},
+                            "timeout_s": {"type": "number"},
+                            "enabled": {"type": "boolean"},
+                        },
+                    },
+                },
+                "required": ["model_key", "provider"],
+            },
+        },
+        {
+            "name": "pipeline.model_provider_health",
+            "description": "Run a health check against a model provider.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "model_key": {"type": "string"},
+                },
+                "required": ["model_key"],
+            },
+        },
+        {
             "name": "pipeline.agent_chat",
             "description": "Reasoning agent that analyzes run status and expert insights to answer user questions.",
             "inputSchema": {
@@ -8352,5 +8433,14 @@ class ToolDispatcher:
             return _runpod_list_billing_tool(self.runner, arguments)
         if name == "pipeline.runpod_get_history":
             return _runpod_get_history_tool(self.runner, arguments)
+
+        if name == "pipeline.model_provider_list":
+            return _model_provider_list_tool(self.runner, arguments)
+
+        if name == "pipeline.model_provider_update":
+            return _model_provider_update_tool(self.runner, arguments)
+
+        if name == "pipeline.model_provider_health":
+            return _model_provider_health_tool(self.runner, arguments)
 
         raise ValueError(f"Unknown tool: {name}")

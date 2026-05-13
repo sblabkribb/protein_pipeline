@@ -47,6 +47,12 @@ _ADMIN_ONLY_TOOLS = {
     "pipeline.runpod_get_history",
 }
 
+_MODEL_PROVIDER_TOOLS = {
+    "pipeline.model_provider_list",
+    "pipeline.model_provider_update",
+    "pipeline.model_provider_health",
+}
+
 _RUN_SCOPED_TOOLS = {
     "pipeline.status",
     "pipeline.list_artifacts",
@@ -311,17 +317,43 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception:
                     claims = None
                 if claims is not None:
-                    return claims_to_user(claims, client_id=self.oidc.client_id)
+                    return self._apply_external_user_policy(claims_to_user(claims, client_id=self.oidc.client_id))
         manager = self.sessions
         session_id = self._session_id_from_cookie()
         if manager is not None and session_id:
             user = manager.get_user(session_id, oidc_settings=self.oidc)
             if user is not None:
+                if str(user.get("auth_type") or "") == "oidc":
+                    return self._apply_external_user_policy(user)
                 return user
         return None
 
+    def _approval_required(self) -> bool:
+        return _env_true("PIPELINE_OIDC_APPROVAL_REQUIRED") or _env_true("PIPELINE_USER_APPROVAL_REQUIRED")
+
+    def _apply_external_user_policy(self, user: dict[str, Any]) -> dict[str, Any]:
+        auth = self.auth
+        if auth is not None and hasattr(auth, "resolve_external_user"):
+            default_status = "pending" if self._approval_required() else "approved"
+            return auth.resolve_external_user(user, default_status=default_status)
+        if self._approval_required() and str(user.get("role") or "") != "admin":
+            return {**user, "status": "pending"}
+        return {**user, "status": user.get("status") or "approved"}
+
     def _is_admin(self, user: dict[str, Any] | None) -> bool:
         return bool(user and str(user.get("role") or "") == "admin")
+
+    def _can_manage_models(self, user: dict[str, Any] | None) -> bool:
+        role = str((user or {}).get("role") or "")
+        return role in {"admin", "model_manager"}
+
+    def _user_is_approved(self, user: dict[str, Any] | None) -> bool:
+        if user is None:
+            return True
+        if self._is_admin(user):
+            return True
+        status = str(user.get("status") or "approved").strip().lower()
+        return status in {"", "approved", "active"}
 
     def _require_auth(self) -> dict[str, Any] | None:
         if not self._auth_enabled():
@@ -330,6 +362,9 @@ class Handler(BaseHTTPRequestHandler):
         if user is None:
             extra_headers = self._expire_session_cookie_headers() if self._session_id_from_cookie() else None
             self._json(401, {"ok": False, "error": "unauthorized"}, extra_headers=extra_headers)
+        elif not self._user_is_approved(user):
+            self._json(403, {"ok": False, "error": "approval required"})
+            return None
         elif _env_true("PIPELINE_REQUIRE_ADMIN") and not self._is_admin(user):
             self._json(403, {"ok": False, "error": "admin required"})
             return None
@@ -364,7 +399,12 @@ class Handler(BaseHTTPRequestHandler):
                 tools["tools"] = [
                     item
                     for item in entries
-                    if isinstance(item, dict) and str(item.get("name") or "") not in _ADMIN_ONLY_TOOLS
+                    if isinstance(item, dict)
+                    and str(item.get("name") or "") not in _ADMIN_ONLY_TOOLS
+                    and (
+                        str(item.get("name") or "") not in _MODEL_PROVIDER_TOOLS
+                        or self._can_manage_models(user)
+                    )
                 ]
         return tools
 
@@ -376,6 +416,8 @@ class Handler(BaseHTTPRequestHandler):
     ) -> dict[str, Any]:
         if name in _ADMIN_ONLY_TOOLS and user is not None and not self._is_admin(user):
             raise AuthError("admin required")
+        if name in _MODEL_PROVIDER_TOOLS and user is not None and not self._can_manage_models(user):
+            raise AuthError("model manager required")
         if name in _RUN_SCOPED_TOOLS:
             run_id = str(arguments.get("run_id") or "")
             if run_id:
@@ -571,7 +613,10 @@ class Handler(BaseHTTPRequestHandler):
                     code_verifier=code_verifier,
                 )
                 claims = claims_from_oidc_token_data(self.oidc, token_data)
-                user = claims_to_user(claims, client_id=self.oidc.client_id)
+                user = self._apply_external_user_policy(claims_to_user(claims, client_id=self.oidc.client_id))
+                if not self._user_is_approved(user):
+                    self._json(403, {"ok": False, "error": "approval required", "user": user})
+                    return
                 if _env_true("PIPELINE_REQUIRE_ADMIN") and not self._is_admin(user):
                     self._json(403, {"ok": False, "error": "admin required"})
                     return

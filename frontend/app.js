@@ -125,6 +125,14 @@ import {
 } from "./lib/auth.js?v=20260409_v7";
 import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=20260407_v6";
 import { renderMcpGuideMarkup } from "./lib/mcp-guide.js?v=20260407_v6";
+import {
+  buildProviderUpdatePayload,
+  normalizeProviderType,
+  providerConnectionSummary,
+  providerConfigured,
+  sortModelProviders,
+  visibleTokenLabel,
+} from "./lib/model-providers.js?v=20260513_v1";
 
 const defaultApiBase = resolveDefaultApiBase({
   origin: window.location.origin,
@@ -702,6 +710,9 @@ const state = {
   workflowStudioFieldErrorsBySession: {},
   workflowStudioChecksBySession: {},
   workflowStudioCheckTimersBySession: {},
+  modelProviders: [],
+  modelProviderHealthByKey: {},
+  modelProvidersLoading: false,
 };
 
 if (state.apiBase && state.apiBase !== normalizeApiBase(savedApiBase)) {
@@ -765,6 +776,10 @@ const el = {
   accountBtn: document.getElementById("accountBtn"),
   adminBtn: document.getElementById("adminBtn"),
   runpodAdminBtn: document.getElementById("runpodAdminBtn"),
+  modelProvidersPanel: document.getElementById("modelProvidersPanel"),
+  modelProvidersClose: document.getElementById("modelProvidersClose"),
+  modelProvidersList: document.getElementById("modelProvidersList"),
+  modelProvidersStatus: document.getElementById("modelProvidersStatus"),
   tabBtnCath: document.getElementById("tabBtnCath"),
   helpBtn: document.getElementById("helpBtn"),
   tutorialBtn: document.getElementById("tutorialBtn"),
@@ -2321,6 +2336,7 @@ const I18N = {
     "login.title": "Enter the Lab",
     "login.desc": "Identify yourself to separate runs and keep artifacts organized.",
     "login.sso.desc": "Sign in with KBF SSO to keep the same identity and permissions across services.",
+    "login.sso.descProvider": "Sign in with {provider}. New users may need administrator approval before using the console.",
     "login.loading": "Checking sign-in method...",
     "login.username": "Username",
     "login.username.placeholder": "e.g. hana.kim",
@@ -2328,6 +2344,7 @@ const I18N = {
     "login.password.placeholder": "••••••••",
     "login.submit": "Access Console",
     "login.sso.submit": "Continue with KBF SSO",
+    "login.sso.submitProvider": "Continue with {provider}",
     "login.sso.hint": "Use your KBF account. Password changes are managed in the SSO account page.",
     "setup.title": "Advanced Run Setup",
     "setup.desc": "Choose a workflow, add the target files, and review the run before launch.",
@@ -2759,7 +2776,34 @@ const I18N = {
     "settings.reportLang.hint": "Applies to run reports and agent reports.",
     "settings.health": "Health Check",
     "role.admin": "Admin",
+    "role.model_manager": "Model Manager",
     "role.user": "User",
+    "modelProviders.open": "Model Providers",
+    "modelProviders.title": "Model Providers",
+    "modelProviders.desc": "Register each model as RunPod, HTTP API, or disabled.",
+    "modelProviders.loading": "Loading model providers...",
+    "modelProviders.empty": "No model provider specs are available.",
+    "modelProviders.type": "Provider",
+    "modelProviders.type.runpod": "RunPod",
+    "modelProviders.type.http_api": "HTTP API",
+    "modelProviders.type.disabled": "Disabled",
+    "modelProviders.endpoint": "RunPod endpoint ID",
+    "modelProviders.baseUrl": "HTTP API URL",
+    "modelProviders.token": "API token",
+    "modelProviders.tokenHelp": "Leave blank to keep the saved token.",
+    "modelProviders.timeout": "Timeout (sec)",
+    "modelProviders.enabled": "Enabled",
+    "modelProviders.connection": "Connection",
+    "modelProviders.health": "Health",
+    "modelProviders.save": "Save",
+    "modelProviders.saved": "Saved {model}.",
+    "modelProviders.saveFailed": "Save failed: {error}",
+    "modelProviders.healthChecking": "Checking {model}...",
+    "modelProviders.healthReady": "Ready",
+    "modelProviders.healthNotReady": "Not ready",
+    "modelProviders.healthFailed": "Health check failed: {error}",
+    "modelProviders.configured": "Configured",
+    "modelProviders.notConfigured": "Not configured",
     "admin.title": "Admin: Create User",
     "admin.username": "New Username",
     "admin.username.placeholder": "new.user",
@@ -2767,6 +2811,7 @@ const I18N = {
     "admin.password.placeholder": "min 8 chars",
     "admin.role": "Role",
     "admin.role.user": "User",
+    "admin.role.modelManager": "Model Manager",
     "admin.role.admin": "Admin",
     "admin.create": "Create User",
     "help.title": "Usage Guide",
@@ -3737,6 +3782,7 @@ const I18N = {
     "login.title": "랩 입장",
     "login.desc": "실행을 구분하고 아티팩트를 정리하기 위해 계정을 확인합니다.",
     "login.sso.desc": "서비스 간 동일한 계정과 권한을 유지하려면 KBF SSO로 로그인하세요.",
+    "login.sso.descProvider": "{provider}로 로그인합니다. 신규 사용자는 관리자의 승인 후 콘솔을 사용할 수 있습니다.",
     "login.loading": "로그인 방식을 확인하는 중입니다...",
     "login.username": "사용자명",
     "login.username.placeholder": "예: hana.kim",
@@ -3744,6 +3790,7 @@ const I18N = {
     "login.password.placeholder": "••••••••",
     "login.submit": "콘솔 접속",
     "login.sso.submit": "KBF SSO로 계속",
+    "login.sso.submitProvider": "{provider}로 계속",
     "login.sso.hint": "KBF 계정을 사용합니다. 비밀번호 변경은 SSO 계정 페이지에서 처리합니다.",
     "setup.title": "고급 실행 설정",
     "setup.desc": "워크플로우를 고르고, 타깃 파일을 넣은 뒤 실행 전 검토합니다.",
@@ -4174,7 +4221,34 @@ const I18N = {
     "settings.reportLang.hint": "실행 리포트와 에이전트 리포트에 적용됩니다.",
     "settings.health": "헬스 체크",
     "role.admin": "관리자",
+    "role.model_manager": "모델 관리자",
     "role.user": "사용자",
+    "modelProviders.open": "모델 연결",
+    "modelProviders.title": "모델 연결 관리",
+    "modelProviders.desc": "각 모델을 RunPod, HTTP API, 비활성 중 하나로 연결합니다.",
+    "modelProviders.loading": "모델 연결 정보를 불러오는 중...",
+    "modelProviders.empty": "등록 가능한 모델 정보가 없습니다.",
+    "modelProviders.type": "연결 방식",
+    "modelProviders.type.runpod": "RunPod",
+    "modelProviders.type.http_api": "HTTP API",
+    "modelProviders.type.disabled": "비활성",
+    "modelProviders.endpoint": "RunPod endpoint ID",
+    "modelProviders.baseUrl": "HTTP API URL",
+    "modelProviders.token": "API 토큰",
+    "modelProviders.tokenHelp": "비워두면 저장된 토큰을 유지합니다.",
+    "modelProviders.timeout": "제한 시간(초)",
+    "modelProviders.enabled": "사용",
+    "modelProviders.connection": "현재 연결",
+    "modelProviders.health": "상태 확인",
+    "modelProviders.save": "저장",
+    "modelProviders.saved": "{model} 저장 완료.",
+    "modelProviders.saveFailed": "저장 실패: {error}",
+    "modelProviders.healthChecking": "{model} 상태 확인 중...",
+    "modelProviders.healthReady": "준비됨",
+    "modelProviders.healthNotReady": "준비 안 됨",
+    "modelProviders.healthFailed": "상태 확인 실패: {error}",
+    "modelProviders.configured": "설정됨",
+    "modelProviders.notConfigured": "미설정",
     "admin.title": "관리자: 사용자 생성",
     "admin.username": "새 사용자명",
     "admin.username.placeholder": "new.user",
@@ -4182,6 +4256,7 @@ const I18N = {
     "admin.password.placeholder": "최소 8자",
     "admin.role": "권한",
     "admin.role.user": "사용자",
+    "admin.role.modelManager": "모델 관리자",
     "admin.role.admin": "관리자",
     "admin.create": "사용자 생성",
     "help.title": "사용 가이드",
@@ -9227,6 +9302,15 @@ function syncLoginMode() {
   if (el.loginSsoDesc) el.loginSsoDesc.classList.toggle("hidden", loading || !useOidc);
   if (el.loginLocalForm) el.loginLocalForm.classList.toggle("hidden", loading || useOidc);
   if (el.loginSsoActions) el.loginSsoActions.classList.toggle("hidden", loading || !useOidc);
+  if (useOidc) {
+    const provider = String(state.oidcConfig?.provider_name || "KBF SSO").trim();
+    if (el.loginSsoDesc) {
+      el.loginSsoDesc.textContent = t("login.sso.descProvider", { provider });
+    }
+    if (el.ssoLoginBtn) {
+      el.ssoLoginBtn.textContent = t("login.sso.submitProvider", { provider });
+    }
+  }
   if (el.accountBtn) {
     const visible = !loading && useOidc && Boolean(state.user) && Boolean(state.oidcConfig?.account_url);
     el.accountBtn.classList.toggle("hidden", !visible);
@@ -10190,13 +10274,231 @@ function isHttp400Error(err) {
 function setUserBadge() {
   if (!state.user) return;
   const base = state.user.username || "user";
-  const roleKey = state.user.role === "admin" ? "role.admin" : "role.user";
+  const roleKey =
+    state.user.role === "admin"
+      ? "role.admin"
+      : state.user.role === "model_manager"
+        ? "role.model_manager"
+        : "role.user";
   el.userBadge.textContent = `${base} · ${t(roleKey)}`;
 }
 
 function renderMcpGuide() {
   if (!el.mcpGuidePanel) return;
   el.mcpGuidePanel.innerHTML = renderMcpGuideMarkup({ lang: state.lang });
+}
+
+function modelProviderTypeOption(value, current) {
+  const normalized = normalizeProviderType(value);
+  const selected = normalizeProviderType(current) === normalized ? " selected" : "";
+  return `<option value="${escapeAttr(normalized)}"${selected}>${escapeHtml(t(`modelProviders.type.${normalized}`))}</option>`;
+}
+
+function modelProviderHealthBadge(provider, health) {
+  if (health) {
+    const ready = Boolean(health.ready);
+    const label = ready ? t("modelProviders.healthReady") : t("modelProviders.healthNotReady");
+    const stateName = ready ? "completed" : "failed";
+    return `<span class="state-badge" data-state="${stateName}">${escapeHtml(label)}</span>`;
+  }
+  const configured = providerConfigured(provider);
+  const label = configured ? t("modelProviders.configured") : t("modelProviders.notConfigured");
+  const stateName = configured ? "running" : "cancelled";
+  return `<span class="state-badge" data-state="${stateName}">${escapeHtml(label)}</span>`;
+}
+
+function renderModelProviderCard(provider, health = null) {
+  const modelKey = String(provider?.model_key || "").trim();
+  const label = String(provider?.label || modelKey || "-").trim();
+  const providerType = normalizeProviderType(provider?.provider_type);
+  const timeout = Number.isFinite(Number(provider?.timeout_s)) ? Number(provider.timeout_s) : 21600;
+  return `
+    <section class="model-provider-card" data-model-provider-card data-model-provider="${escapeAttr(modelKey)}">
+      <div class="model-provider-head">
+        <div>
+          <div class="model-provider-key">${escapeHtml(modelKey)}</div>
+          <h5>${escapeHtml(label)}</h5>
+        </div>
+        ${modelProviderHealthBadge(provider, health)}
+      </div>
+      <div class="model-provider-summary">
+        <span>${escapeHtml(t("modelProviders.connection"))}</span>
+        <strong>${escapeHtml(providerConnectionSummary(provider))}</strong>
+      </div>
+      <div class="model-provider-grid">
+        <label>
+          <span>${escapeHtml(t("modelProviders.type"))}</span>
+          <select data-model-provider-field="provider_type">
+            ${modelProviderTypeOption("http_api", providerType)}
+            ${modelProviderTypeOption("runpod", providerType)}
+            ${modelProviderTypeOption("disabled", providerType)}
+          </select>
+        </label>
+        <label>
+          <span>${escapeHtml(t("modelProviders.endpoint"))}</span>
+          <input data-model-provider-field="endpoint_id" type="text" value="${escapeAttr(provider?.endpoint_id || "")}" />
+        </label>
+        <label class="model-provider-wide">
+          <span>${escapeHtml(t("modelProviders.baseUrl"))}</span>
+          <input data-model-provider-field="base_url" type="url" value="${escapeAttr(provider?.base_url || "")}" />
+        </label>
+        <label>
+          <span>${escapeHtml(t("modelProviders.token"))}</span>
+          <input
+            data-model-provider-field="token"
+            type="password"
+            autocomplete="new-password"
+            placeholder="${escapeAttr(visibleTokenLabel(provider) || t("modelProviders.tokenHelp"))}"
+          />
+        </label>
+        <label>
+          <span>${escapeHtml(t("modelProviders.timeout"))}</span>
+          <input data-model-provider-field="timeout_s" type="number" min="1" step="1" value="${escapeAttr(timeout)}" />
+        </label>
+        <label class="toggle model-provider-toggle">
+          <input data-model-provider-field="enabled" type="checkbox"${provider?.enabled ? " checked" : ""} />
+          <span>${escapeHtml(t("modelProviders.enabled"))}</span>
+        </label>
+      </div>
+      <div class="model-provider-actions">
+        <button class="ghost" type="button" data-model-provider-health="${escapeAttr(modelKey)}">${escapeHtml(
+          t("modelProviders.health")
+        )}</button>
+        <button class="primary" type="button" data-model-provider-save="${escapeAttr(modelKey)}">${escapeHtml(
+          t("modelProviders.save")
+        )}</button>
+      </div>
+    </section>
+  `;
+}
+
+function renderModelProviders() {
+  if (!el.modelProvidersList) return;
+  if (state.modelProvidersLoading) {
+    el.modelProvidersList.innerHTML = `<div class="placeholder">${escapeHtml(t("modelProviders.loading"))}</div>`;
+    return;
+  }
+  const providers = sortModelProviders(state.modelProviders);
+  if (!providers.length) {
+    el.modelProvidersList.innerHTML = `<div class="placeholder">${escapeHtml(t("modelProviders.empty"))}</div>`;
+    return;
+  }
+  el.modelProvidersList.innerHTML = providers
+    .map((provider) => renderModelProviderCard(provider, state.modelProviderHealthByKey?.[provider.model_key]))
+    .join("");
+  el.modelProvidersList.querySelectorAll("[data-model-provider-save]").forEach((button) => {
+    button.addEventListener("click", () => saveModelProvider(button.getAttribute("data-model-provider-save")));
+  });
+  el.modelProvidersList.querySelectorAll("[data-model-provider-health]").forEach((button) => {
+    button.addEventListener("click", () => checkModelProviderHealth(button.getAttribute("data-model-provider-health")));
+  });
+}
+
+function modelProviderCardForKey(modelKey) {
+  const key = String(modelKey || "").trim();
+  return Array.from(el.modelProvidersList?.querySelectorAll("[data-model-provider-card]") || []).find(
+    (node) => node.getAttribute("data-model-provider") === key
+  );
+}
+
+function modelProviderFieldValue(card, field) {
+  const node = card?.querySelector(`[data-model-provider-field="${field}"]`);
+  if (!node) return "";
+  if (node.type === "checkbox") return Boolean(node.checked);
+  return node.value;
+}
+
+async function refreshModelProviders({ includeHealth = false } = {}) {
+  if (!canManageModels()) return;
+  state.modelProvidersLoading = true;
+  if (el.modelProvidersStatus) el.modelProvidersStatus.textContent = t("modelProviders.loading");
+  renderModelProviders();
+  try {
+    const result = await apiCall("pipeline.model_provider_list", { include_health: Boolean(includeHealth) });
+    state.modelProviders = Array.isArray(result?.providers) ? result.providers : [];
+    state.modelProviderHealthByKey = result?.health && typeof result.health === "object" ? result.health : {};
+    if (el.modelProvidersStatus) el.modelProvidersStatus.textContent = "";
+  } catch (err) {
+    if (el.modelProvidersStatus) {
+      el.modelProvidersStatus.textContent = t("modelProviders.saveFailed", { error: err.message });
+    }
+  } finally {
+    state.modelProvidersLoading = false;
+    renderModelProviders();
+  }
+}
+
+function openModelProvidersPanel() {
+  if (!el.modelProvidersPanel || !canManageModels()) return;
+  el.modelProvidersPanel.classList.remove("hidden");
+  void refreshModelProviders({ includeHealth: false });
+}
+
+function closeModelProvidersPanel() {
+  if (!el.modelProvidersPanel) return;
+  el.modelProvidersPanel.classList.add("hidden");
+}
+
+async function saveModelProvider(modelKey) {
+  const card = modelProviderCardForKey(modelKey);
+  if (!card) return;
+  const payload = buildProviderUpdatePayload({
+    modelKey,
+    providerType: modelProviderFieldValue(card, "provider_type"),
+    endpointId: modelProviderFieldValue(card, "endpoint_id"),
+    baseUrl: modelProviderFieldValue(card, "base_url"),
+    token: modelProviderFieldValue(card, "token"),
+    timeoutS: modelProviderFieldValue(card, "timeout_s"),
+    enabled: modelProviderFieldValue(card, "enabled"),
+  });
+  try {
+    const result = await apiCall("pipeline.model_provider_update", payload);
+    const saved = result?.provider;
+    if (saved?.model_key) {
+      const index = state.modelProviders.findIndex((provider) => provider?.model_key === saved.model_key);
+      if (index >= 0) {
+        state.modelProviders.splice(index, 1, saved);
+      } else {
+        state.modelProviders.push(saved);
+      }
+    }
+    if (el.modelProvidersStatus) {
+      el.modelProvidersStatus.textContent = t("modelProviders.saved", {
+        model: saved?.label || saved?.model_key || modelKey,
+      });
+    }
+    renderModelProviders();
+  } catch (err) {
+    if (el.modelProvidersStatus) {
+      el.modelProvidersStatus.textContent = t("modelProviders.saveFailed", { error: err.message });
+    }
+  }
+}
+
+async function checkModelProviderHealth(modelKey) {
+  const key = String(modelKey || "").trim();
+  if (!key) return;
+  if (el.modelProvidersStatus) {
+    const provider = state.modelProviders.find((item) => item?.model_key === key);
+    el.modelProvidersStatus.textContent = t("modelProviders.healthChecking", {
+      model: provider?.label || key,
+    });
+  }
+  try {
+    const result = await apiCall("pipeline.model_provider_health", { model_key: key });
+    state.modelProviderHealthByKey = { ...(state.modelProviderHealthByKey || {}), [key]: result };
+    if (el.modelProvidersStatus) {
+      el.modelProvidersStatus.textContent = result?.ready
+        ? t("modelProviders.healthReady")
+        : t("modelProviders.healthNotReady");
+    }
+  } catch (err) {
+    if (el.modelProvidersStatus) {
+      el.modelProvidersStatus.textContent = t("modelProviders.healthFailed", { error: err.message });
+    }
+  } finally {
+    renderModelProviders();
+  }
 }
 
 function applyI18n() {
@@ -10211,6 +10513,7 @@ function applyI18n() {
   });
   renderHomeContextSelectors();
   renderMcpGuide();
+  renderModelProviders();
 }
 
 function updateLangButtons() {
@@ -11033,6 +11336,7 @@ function showLogin() {
   if (el.runpodAdminBtn) el.runpodAdminBtn.classList.add("hidden");
   if (el.settingsPanel) el.settingsPanel.classList.add("hidden");
   if (el.adminPanel) el.adminPanel.classList.add("hidden");
+  if (el.modelProvidersPanel) el.modelProvidersPanel.classList.add("hidden");
   if (el.helpPanel) el.helpPanel.classList.add("hidden");
   if (el.tutorialBtn) el.tutorialBtn.classList.add("hidden");
   if (el.tutorialOverlay) el.tutorialOverlay.classList.add("hidden");
@@ -11061,10 +11365,13 @@ function showChat() {
 
 function updateAdminUI() {
   const isAdmin = isAdminUser();
+  const canManageModelProviders = canManageModels();
   const useOidc = oidcEnabled();
+  if (el.runpodAdminBtn) {
+    el.runpodAdminBtn.classList.toggle("hidden", !canManageModelProviders);
+  }
   if (isAdmin) {
     if (el.adminBtn) el.adminBtn.classList.toggle("hidden", useOidc);
-    if (el.runpodAdminBtn) el.runpodAdminBtn.classList.remove("hidden");
     if (el.adminRunsToggle) el.adminRunsToggle.classList.remove("hidden");
     if (el.showAllRuns) el.showAllRuns.checked = true;
     if (el.tabBtnCath) el.tabBtnCath.classList.remove("hidden");
@@ -11074,7 +11381,6 @@ function updateAdminUI() {
     }
   } else {
     if (el.adminBtn) el.adminBtn.classList.add("hidden");
-    if (el.runpodAdminBtn) el.runpodAdminBtn.classList.add("hidden");
     if (el.adminPanel) el.adminPanel.classList.add("hidden");
     if (el.adminRunsToggle) el.adminRunsToggle.classList.add("hidden");
     if (el.tabBtnCath) el.tabBtnCath.classList.add("hidden");
@@ -11093,6 +11399,9 @@ function updateAdminUI() {
   }
   if (useOidc && el.adminPanel) {
     el.adminPanel.classList.add("hidden");
+  }
+  if (!canManageModelProviders && el.modelProvidersPanel) {
+    el.modelProvidersPanel.classList.add("hidden");
   }
 }
 
@@ -25402,6 +25711,11 @@ function isAdminUser() {
   return Boolean(state.user && state.user.role === "admin");
 }
 
+function canManageModels() {
+  const role = String(state.user?.role || "").trim();
+  return role === "admin" || role === "model_manager";
+}
+
 function renderCathJobLog() {
   if (!el.cathJobLog) return;
   const text = String(state.cathSelectedJobLog || "").trim();
@@ -26268,6 +26582,22 @@ if (el.reportLangSelect) {
 
 if (el.healthCheck) {
   el.healthCheck.addEventListener("click", healthCheck);
+}
+
+if (el.runpodAdminBtn && el.modelProvidersPanel) {
+  el.runpodAdminBtn.addEventListener("click", openModelProvidersPanel);
+}
+
+if (el.modelProvidersClose && el.modelProvidersPanel) {
+  el.modelProvidersClose.addEventListener("click", closeModelProvidersPanel);
+}
+
+if (el.modelProvidersPanel) {
+  el.modelProvidersPanel.addEventListener("click", (event) => {
+    if (event.target === el.modelProvidersPanel) {
+      closeModelProvidersPanel();
+    }
+  });
 }
 
 if (el.settingsPanel) {

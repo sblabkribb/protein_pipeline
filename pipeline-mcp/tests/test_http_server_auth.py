@@ -58,6 +58,43 @@ def test_require_auth_allows_admin_when_admin_required(monkeypatch):
     assert handler._require_auth() == user
 
 
+def test_model_provider_tools_allow_model_manager_but_not_user(monkeypatch):
+    handler = Handler.__new__(Handler)
+
+    assert handler._can_manage_models({"username": "admin", "role": "admin"}) is True
+    assert handler._can_manage_models({"username": "manager", "role": "model_manager"}) is True
+    assert handler._can_manage_models({"username": "user", "role": "user"}) is False
+
+    try:
+        handler._call_tool_for_user(
+            {"username": "user", "role": "user"},
+            "pipeline.model_provider_update",
+            {"model_key": "esmfold"},
+        )
+    except Exception as exc:
+        assert "model manager required" in str(exc)
+    else:
+        raise AssertionError("plain users must not update model providers")
+
+
+def test_pending_oidc_user_is_rejected(monkeypatch):
+    captured = {}
+
+    handler = Handler.__new__(Handler)
+    handler._auth_enabled = lambda: True
+    handler._require_user = lambda: {"username": "new.user@example.org", "role": "user", "status": "pending"}
+    handler._json = lambda status, payload, extra_headers=None: captured.update(  # noqa: ARG005
+        status=status,
+        payload=payload,
+    )
+
+    assert handler._require_auth() is None
+    assert captured == {
+        "status": 403,
+        "payload": {"ok": False, "error": "approval required"},
+    }
+
+
 def test_local_login_does_not_create_session_for_non_admin_when_admin_required(monkeypatch):
     captured = {}
 

@@ -31,9 +31,9 @@
           id="runpodAdminBtn"
           class="ghost hidden"
           type="button"
-          onclick="window.location.href = window.location.pathname.startsWith('/pipeline') ? '/pipeline/runpod-admin/' : '/runpod-admin/'"
+          data-i18n="modelProviders.open"
         >
-          RunPod Admin
+          Model Providers
         </button>
         <button id="adminBtn" class="ghost hidden" data-i18n="action.admin">Admin</button>
         <button id="settingsBtn" class="ghost" data-i18n="action.settings">Settings</button>
@@ -1712,6 +1712,22 @@
       </div>
     </div>
 
+    <div id="modelProvidersPanel" class="overlay hidden" role="dialog" aria-modal="true">
+      <div class="overlay-card model-providers-card">
+        <div class="overlay-header">
+          <div>
+            <h4 data-i18n="modelProviders.title">Model Providers</h4>
+            <p class="hint" data-i18n="modelProviders.desc">
+              Register each model as RunPod, HTTP API, or disabled.
+            </p>
+          </div>
+          <button id="modelProvidersClose" class="ghost" data-i18n="common.close">Close</button>
+        </div>
+        <div id="modelProvidersStatus" class="hint"></div>
+        <div id="modelProvidersList" class="model-provider-list"></div>
+      </div>
+    </div>
+
     <div id="adminPanel" class="overlay hidden" role="dialog" aria-modal="true">
       <div class="overlay-card admin-card">
         <div class="overlay-header">
@@ -1740,6 +1756,7 @@
           <span data-i18n="admin.role">Role</span>
           <select id="adminRole">
             <option value="user" data-i18n="admin.role.user">User</option>
+            <option value="model_manager" data-i18n="admin.role.modelManager">Model Manager</option>
             <option value="admin" data-i18n="admin.role.admin">Admin</option>
           </select>
         </label>

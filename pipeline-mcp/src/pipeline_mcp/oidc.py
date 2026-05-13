@@ -36,12 +36,18 @@ def _env(key: str) -> str | None:
 
 def _normalize_issuer(issuer: str) -> str:
     normalized = issuer.strip().rstrip("/")
+    if normalized.lower() in {"google", "google-oauth2", "google_oidc"}:
+        return "https://accounts.google.com"
     suffix = "/.well-known/openid-configuration"
     if normalized.endswith(suffix):
         normalized = normalized[: -len(suffix)].rstrip("/")
     if "://" not in normalized:
         normalized = f"https://{normalized}"
     return normalized
+
+
+def is_google_issuer(issuer: str) -> bool:
+    return _normalize_issuer(issuer) == "https://accounts.google.com"
 
 
 def _extract_audiences(claims: dict[str, Any]) -> set[str]:
@@ -81,12 +87,13 @@ def load_oidc_settings() -> OIDCSettings | None:
         return None
     audience = _env("PIPELINE_OIDC_AUDIENCE") or client_id
     scopes = _env("PIPELINE_OIDC_SCOPES") or "openid profile email"
-    provider_name = _env("PIPELINE_OIDC_PROVIDER_NAME") or "KBF SSO"
+    normalized_issuer = _normalize_issuer(issuer)
+    provider_name = _env("PIPELINE_OIDC_PROVIDER_NAME") or ("Google" if is_google_issuer(normalized_issuer) else "KBF SSO")
     jwks_url = _env("PIPELINE_OIDC_JWKS_URL")
     algorithms_raw = _env("PIPELINE_OIDC_ALGORITHMS") or "RS256"
     algorithms = tuple(item.strip() for item in algorithms_raw.split(",") if item.strip())
     return OIDCSettings(
-        issuer=_normalize_issuer(issuer),
+        issuer=normalized_issuer,
         client_id=client_id,
         audience=audience,
         scopes=scopes,
@@ -202,10 +209,16 @@ def claims_to_user(claims: dict[str, Any], client_id: str = "protein-pipeline") 
         raise ValueError("missing subject")
     roles = get_client_roles(claims, client_id)
     realm_roles = get_realm_roles(claims)
-    role = "admin" if "pipeline-admin" in roles or "realm-admin" in realm_roles else "user"
+    if "pipeline-admin" in roles or "realm-admin" in realm_roles:
+        role = "admin"
+    elif "pipeline-model-manager" in roles or "model-manager" in roles:
+        role = "model_manager"
+    else:
+        role = "user"
     return {
         "username": username,
         "role": role,
+        "status": "approved",
         "created_at": "",
         "run_prefix": safe_run_prefix(username),
         "subject": str(claims.get("sub") or ""),
