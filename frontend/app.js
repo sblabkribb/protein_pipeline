@@ -713,6 +713,8 @@ const state = {
   modelProviders: [],
   modelProviderHealthByKey: {},
   modelProvidersLoading: false,
+  adminUsers: [],
+  adminUsersLoading: false,
 };
 
 if (state.apiBase && state.apiBase !== normalizeApiBase(savedApiBase)) {
@@ -1124,6 +1126,8 @@ const el = {
   adminRole: document.getElementById("adminRole"),
   adminCreateUser: document.getElementById("adminCreateUser"),
   adminStatus: document.getElementById("adminStatus"),
+  adminRefreshUsers: document.getElementById("adminRefreshUsers"),
+  adminUserList: document.getElementById("adminUserList"),
   adminRunsToggle: document.getElementById("adminRunsToggle"),
   showAllRuns: document.getElementById("showAllRuns"),
 };
@@ -2814,6 +2818,20 @@ const I18N = {
     "admin.role.modelManager": "Model Manager",
     "admin.role.admin": "Admin",
     "admin.create": "Create User",
+    "admin.users.title": "User Approval",
+    "admin.users.desc": "Approve new Google/OIDC users and assign model-management rights.",
+    "admin.users.refresh": "Refresh",
+    "admin.users.loading": "Loading users...",
+    "admin.users.empty": "No users yet.",
+    "admin.users.email": "Email",
+    "admin.users.role": "Role",
+    "admin.users.status": "Status",
+    "admin.users.status.approved": "Approved",
+    "admin.users.status.pending": "Pending",
+    "admin.users.status.disabled": "Disabled",
+    "admin.users.save": "Save",
+    "admin.users.saved": "Saved {username}.",
+    "admin.users.failed": "User update failed: {error}",
     "help.title": "Usage Guide",
     "help.quick.title": "Quick Start",
     "help.quick.step1": "Advanced: choose Pipeline or Workflow Studio, attach target input, run preflight, then launch or open Studio.",
@@ -4259,6 +4277,20 @@ const I18N = {
     "admin.role.modelManager": "모델 관리자",
     "admin.role.admin": "관리자",
     "admin.create": "사용자 생성",
+    "admin.users.title": "사용자 승인",
+    "admin.users.desc": "새 Google/OIDC 사용자를 승인하고 모델 관리 권한을 지정합니다.",
+    "admin.users.refresh": "새로고침",
+    "admin.users.loading": "사용자 목록을 불러오는 중...",
+    "admin.users.empty": "아직 사용자가 없습니다.",
+    "admin.users.email": "이메일",
+    "admin.users.role": "권한",
+    "admin.users.status": "상태",
+    "admin.users.status.approved": "승인됨",
+    "admin.users.status.pending": "승인 대기",
+    "admin.users.status.disabled": "비활성",
+    "admin.users.save": "저장",
+    "admin.users.saved": "{username} 저장 완료.",
+    "admin.users.failed": "사용자 변경 실패: {error}",
     "help.title": "사용 가이드",
     "help.quick.title": "빠른 시작",
     "help.quick.step1": "Advanced: Pipeline 또는 Workflow Studio를 선택하고 target 입력을 첨부한 뒤 preflight 후 실행하거나 Studio를 엽니다.",
@@ -10501,6 +10533,128 @@ async function checkModelProviderHealth(modelKey) {
   }
 }
 
+function adminSelectOption(value, current, labelKeyPrefix) {
+  const selected = String(value) === String(current || "") ? " selected" : "";
+  return `<option value="${escapeAttr(value)}"${selected}>${escapeHtml(t(`${labelKeyPrefix}.${value}`))}</option>`;
+}
+
+function adminRoleOption(value, current) {
+  const labelKey =
+    value === "admin" ? "admin.role.admin" : value === "model_manager" ? "admin.role.modelManager" : "admin.role.user";
+  const selected = String(value) === String(current || "user") ? " selected" : "";
+  return `<option value="${escapeAttr(value)}"${selected}>${escapeHtml(t(labelKey))}</option>`;
+}
+
+function renderAdminUsers() {
+  if (!el.adminUserList) return;
+  if (state.adminUsersLoading) {
+    el.adminUserList.innerHTML = `<div class="placeholder">${escapeHtml(t("admin.users.loading"))}</div>`;
+    return;
+  }
+  const users = Array.isArray(state.adminUsers) ? state.adminUsers : [];
+  if (!users.length) {
+    el.adminUserList.innerHTML = `<div class="placeholder">${escapeHtml(t("admin.users.empty"))}</div>`;
+    return;
+  }
+  el.adminUserList.innerHTML = users
+    .map((user) => {
+      const username = String(user?.username || "").trim();
+      const role = String(user?.role || "user").trim();
+      const status = String(user?.status || "approved").trim();
+      const email = String(user?.email || user?.subject || "").trim();
+      return `
+        <section class="admin-user-row" data-admin-user="${escapeAttr(username)}">
+          <div class="admin-user-identity">
+            <strong>${escapeHtml(username || "-")}</strong>
+            <span>${escapeHtml(email || (user?.external ? "OIDC" : "local"))}</span>
+          </div>
+          <label>
+            <span>${escapeHtml(t("admin.users.role"))}</span>
+            <select data-admin-user-role>
+              ${adminRoleOption("user", role)}
+              ${adminRoleOption("model_manager", role)}
+              ${adminRoleOption("admin", role)}
+            </select>
+          </label>
+          <label>
+            <span>${escapeHtml(t("admin.users.status"))}</span>
+            <select data-admin-user-status>
+              ${adminSelectOption("pending", status, "admin.users.status")}
+              ${adminSelectOption("approved", status, "admin.users.status")}
+              ${adminSelectOption("disabled", status, "admin.users.status")}
+            </select>
+          </label>
+          <button class="ghost" type="button" data-admin-user-save="${escapeAttr(username)}">${escapeHtml(
+            t("admin.users.save")
+          )}</button>
+        </section>
+      `;
+    })
+    .join("");
+  el.adminUserList.querySelectorAll("[data-admin-user-save]").forEach((button) => {
+    button.addEventListener("click", () => updateAdminUser(button.getAttribute("data-admin-user-save")));
+  });
+}
+
+async function refreshAdminUsers() {
+  if (!isAdminUser() || !el.adminUserList) return;
+  state.adminUsersLoading = true;
+  renderAdminUsers();
+  try {
+    const res = await fetch(`${state.apiBase}/auth/list_users`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: "{}",
+    });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || !payload?.ok) {
+      throw new Error(payload?.error || `HTTP ${res.status}`);
+    }
+    state.adminUsers = Array.isArray(payload.users) ? payload.users : [];
+  } catch (err) {
+    if (el.adminStatus) {
+      el.adminStatus.textContent = t("admin.users.failed", { error: err.message });
+    }
+  } finally {
+    state.adminUsersLoading = false;
+    renderAdminUsers();
+  }
+}
+
+async function updateAdminUser(username) {
+  const key = String(username || "").trim();
+  const row = Array.from(el.adminUserList?.querySelectorAll("[data-admin-user]") || []).find(
+    (node) => node.getAttribute("data-admin-user") === key
+  );
+  if (!row) return;
+  const role = row.querySelector("[data-admin-user-role]")?.value || "user";
+  const status = row.querySelector("[data-admin-user-status]")?.value || "approved";
+  try {
+    const res = await fetch(`${state.apiBase}/auth/update_user`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ username: key, role, status }),
+    });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || !payload?.ok) {
+      throw new Error(payload?.error || `HTTP ${res.status}`);
+    }
+    const updated = payload.user;
+    const index = state.adminUsers.findIndex((user) => user?.username === updated?.username);
+    if (index >= 0) state.adminUsers.splice(index, 1, updated);
+    if (el.adminStatus) {
+      el.adminStatus.textContent = t("admin.users.saved", { username: updated?.username || key });
+    }
+    renderAdminUsers();
+  } catch (err) {
+    if (el.adminStatus) {
+      el.adminStatus.textContent = t("admin.users.failed", { error: err.message });
+    }
+  }
+}
+
 function applyI18n() {
   document.querySelectorAll("[data-i18n]").forEach((node) => {
     node.textContent = t(node.dataset.i18n);
@@ -10514,6 +10668,7 @@ function applyI18n() {
   renderHomeContextSelectors();
   renderMcpGuide();
   renderModelProviders();
+  renderAdminUsers();
 }
 
 function updateLangButtons() {
@@ -11366,12 +11521,11 @@ function showChat() {
 function updateAdminUI() {
   const isAdmin = isAdminUser();
   const canManageModelProviders = canManageModels();
-  const useOidc = oidcEnabled();
   if (el.runpodAdminBtn) {
     el.runpodAdminBtn.classList.toggle("hidden", !canManageModelProviders);
   }
   if (isAdmin) {
-    if (el.adminBtn) el.adminBtn.classList.toggle("hidden", useOidc);
+    if (el.adminBtn) el.adminBtn.classList.remove("hidden");
     if (el.adminRunsToggle) el.adminRunsToggle.classList.remove("hidden");
     if (el.showAllRuns) el.showAllRuns.checked = true;
     if (el.tabBtnCath) el.tabBtnCath.classList.remove("hidden");
@@ -11396,9 +11550,6 @@ function updateAdminUI() {
     if (activeTabId() === "cath") {
       setActiveTab("home");
     }
-  }
-  if (useOidc && el.adminPanel) {
-    el.adminPanel.classList.add("hidden");
   }
   if (!canManageModelProviders && el.modelProvidersPanel) {
     el.modelProvidersPanel.classList.add("hidden");
@@ -26147,6 +26298,7 @@ async function createUser() {
     el.adminStatus.textContent = t("auth.created", { username: payload.user.username });
     el.adminUsername.value = "";
     el.adminPassword.value = "";
+    await refreshAdminUsers();
   } catch (err) {
     el.adminStatus.textContent = err.message;
   }
@@ -26651,6 +26803,7 @@ if (el.reportModalDownload) {
 if (el.adminBtn && el.adminPanel) {
   el.adminBtn.addEventListener("click", () => {
     el.adminPanel.classList.remove("hidden");
+    void refreshAdminUsers();
   });
 }
 
@@ -26670,6 +26823,10 @@ if (el.adminPanel) {
 
 if (el.adminCreateUser) {
   el.adminCreateUser.addEventListener("click", createUser);
+}
+
+if (el.adminRefreshUsers) {
+  el.adminRefreshUsers.addEventListener("click", refreshAdminUsers);
 }
 
 if (el.showAllRuns) {

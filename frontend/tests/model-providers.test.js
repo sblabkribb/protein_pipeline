@@ -73,3 +73,15 @@ test("frontend exposes an in-app model provider manager instead of the legacy Ru
   assert.match(source, /pipeline\.model_provider_update/);
   assert.match(source, /pipeline\.model_provider_health/);
 });
+
+test("frontend admin panel exposes OIDC user approval controls", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(html, /id="adminUserList"/);
+  assert.match(html, /id="adminRefreshUsers"/);
+  assert.match(source, /\/auth\/list_users/);
+  assert.match(source, /\/auth\/update_user/);
+  assert.match(source, /data-admin-user-status/);
+  assert.match(source, /data-admin-user-role/);
+});

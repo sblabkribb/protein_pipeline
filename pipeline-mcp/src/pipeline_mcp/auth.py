@@ -94,6 +94,18 @@ class AuthManager:
         self.save()
         return _public_user(self.users[username])
 
+    def list_users(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for user in self.users.values():
+            public = _public_user(user)
+            if user.get("email"):
+                public["email"] = str(user.get("email") or "")
+            if user.get("subject"):
+                public["subject"] = str(user.get("subject") or "")
+            public["external"] = bool(user.get("external"))
+            rows.append(public)
+        return sorted(rows, key=lambda item: (str(item.get("role") or "") != "admin", str(item.get("username") or "")))
+
     def resolve_external_user(
         self,
         user: dict[str, Any],

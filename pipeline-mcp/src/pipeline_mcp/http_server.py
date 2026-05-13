@@ -658,6 +658,40 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 return
 
+            if route_path == "/auth/list_users":
+                auth = self.auth
+                if auth is None or not getattr(auth, "enabled", False):
+                    self._json(400, {"ok": False, "error": "auth disabled"})
+                    return
+                user = self._require_auth()
+                if user is None:
+                    return
+                if not self._is_admin(user):
+                    self._json(403, {"ok": False, "error": "admin required"})
+                    return
+                self._json(200, {"ok": True, "users": auth.list_users()})
+                return
+
+            if route_path == "/auth/update_user":
+                auth = self.auth
+                if auth is None or not getattr(auth, "enabled", False):
+                    self._json(400, {"ok": False, "error": "auth disabled"})
+                    return
+                user = self._require_auth()
+                if user is None:
+                    return
+                if not self._is_admin(user):
+                    self._json(403, {"ok": False, "error": "admin required"})
+                    return
+                body = self._read_json()
+                updated = auth.update_user(
+                    username=str(body.get("username") or "").strip(),
+                    role=str(body.get("role") or "").strip() or None,
+                    status=str(body.get("status") or "").strip() or None,
+                )
+                self._json(200, {"ok": True, "user": updated})
+                return
+
             if route_path == "/auth/create_user":
                 auth = self.auth
                 if auth is None or not getattr(auth, "enabled", False):

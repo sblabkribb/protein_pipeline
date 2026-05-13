@@ -5872,7 +5872,79 @@ textarea:focus-visible {
 }
 
 .admin-card {
-  width: min(440px, 100%);
+  width: min(760px, 100%);
+  max-height: min(820px, calc(100vh - 32px));
+  overflow: auto;
+}
+
+.admin-users-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.admin-users-head,
+.admin-user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-users-head {
+  align-items: flex-start;
+}
+
+.admin-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-user-row {
+  padding: 12px;
+  border: 1px solid rgba(16, 42, 45, 0.1);
+  border-radius: var(--radius-sm);
+  background: rgba(248, 250, 252, 0.76);
+}
+
+.admin-user-identity {
+  min-width: 0;
+  flex: 1;
+}
+
+.admin-user-identity strong,
+.admin-user-identity span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-user-identity span {
+  margin-top: 3px;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+
+.admin-user-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 128px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-user-row select {
+  width: 100%;
+  border: 1px solid rgba(16, 42, 45, 0.14);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  padding: 8px 10px;
+  font-size: 13px;
 }
 
 .model-providers-card {
@@ -6891,6 +6963,16 @@ textarea:focus-visible {
   .model-provider-summary strong {
     max-width: 100%;
     text-align: left;
+  }
+
+  .admin-users-head,
+  .admin-user-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-user-row label {
+    width: 100%;
   }
 
   .app-sidebar-nav {

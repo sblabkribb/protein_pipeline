@@ -95,6 +95,63 @@ def test_pending_oidc_user_is_rejected(monkeypatch):
     }
 
 
+def test_admin_can_list_and_update_users(monkeypatch):
+    captured = {}
+
+    class FakeAuth:
+        enabled = True
+
+        @staticmethod
+        def list_users():
+            return [{"username": "new.user@example.org", "role": "user", "status": "pending"}]
+
+        @staticmethod
+        def update_user(*, username, role=None, status=None):
+            assert username == "new.user@example.org"
+            assert role == "model_manager"
+            assert status == "approved"
+            return {"username": username, "role": role, "status": status}
+
+    monkeypatch.setattr(http_server, "_AUTH", FakeAuth(), raising=False)
+
+    handler = Handler.__new__(Handler)
+    handler.path = "/auth/list_users"
+    handler.headers = {}
+    handler._require_auth = lambda: {"username": "admin", "role": "admin", "status": "approved"}
+    handler._json = lambda status, payload, extra_headers=None: captured.update(  # noqa: ARG005
+        status=status,
+        payload=payload,
+    )
+    handler.log_error = lambda *args, **kwargs: None  # noqa: ARG005
+
+    handler.do_POST()
+
+    assert captured == {
+        "status": 200,
+        "payload": {
+            "ok": True,
+            "users": [{"username": "new.user@example.org", "role": "user", "status": "pending"}],
+        },
+    }
+
+    handler.path = "/auth/update_user"
+    handler._read_json = lambda: {
+        "username": "new.user@example.org",
+        "role": "model_manager",
+        "status": "approved",
+    }
+
+    handler.do_POST()
+
+    assert captured == {
+        "status": 200,
+        "payload": {
+            "ok": True,
+            "user": {"username": "new.user@example.org", "role": "model_manager", "status": "approved"},
+        },
+    }
+
+
 def test_local_login_does_not_create_session_for_non_admin_when_admin_required(monkeypatch):
     captured = {}
 
