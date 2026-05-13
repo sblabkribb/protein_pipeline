@@ -181,8 +181,15 @@ class ModelProviderStore:
         self._save(data)
         return self.get_effective(key)
 
-    def health(self, model_key: str) -> dict[str, Any]:
+    def health(self, model_key: str, provider_override: dict[str, Any] | None = None) -> dict[str, Any]:
         provider = self.get_effective(model_key, include_secret=True)
+        if isinstance(provider_override, dict):
+            key = self._normalize_model_key(model_key, allow_custom=True)
+            draft = dict(provider)
+            draft.update(provider_override)
+            draft["model_key"] = key
+            draft["source"] = "draft"
+            provider = self._public_record(self._normalize_record(key, draft), include_secret=True)
         if provider.get("provider_type") != "http_api":
             return {"ok": True, "ready": bool(provider.get("configured")), "provider": self._public_record(provider)}
         base_url = _normalize_base_url(provider.get("base_url"))

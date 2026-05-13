@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import {
+  buildProviderHealthPayload,
   buildProviderUpdatePayload,
   normalizeProviderType,
   providerConnectionSummary,
@@ -36,6 +37,29 @@ test("provider update payload trims fields and never sends a blank token", () =>
       base_url: "http://127.0.0.1:18101",
       enabled: true,
       timeout_s: 45,
+    },
+  });
+});
+
+test("provider health payload uses unsaved form values", () => {
+  const payload = buildProviderHealthPayload({
+    modelKey: "alphafold2",
+    providerType: "http_api",
+    endpointId: "old-runpod-endpoint",
+    baseUrl: " http://gpu.example:18161/ ",
+    token: "",
+    timeoutS: "30",
+    enabled: true,
+  });
+
+  assert.deepEqual(payload, {
+    model_key: "alphafold2",
+    provider: {
+      provider_type: "http_api",
+      endpoint_id: "old-runpod-endpoint",
+      base_url: "http://gpu.example:18161",
+      enabled: true,
+      timeout_s: 30,
     },
   });
 });
@@ -83,6 +107,8 @@ test("model provider UI supports inline health status and adding custom models",
   assert.match(source, /data-model-provider-action-status/);
   assert.match(source, /function saveCustomModelProvider/);
   assert.match(source, /custom:\s*true/);
+  assert.match(source, /buildProviderHealthPayload\(/);
+  assert.match(source, /pipeline\.model_provider_health",\s*payload/);
   assert.doesNotMatch(source, /modelProvidersStatus\.textContent = result\?\.ready/);
   assert.doesNotMatch(source, /modelProviderHealthBadge\(provider,\s*health/);
 });

@@ -82,6 +82,10 @@ export function buildProviderUpdatePayload({
   };
 }
 
+export function buildProviderHealthPayload(fields) {
+  return buildProviderUpdatePayload(fields);
+}
+
 export function sortModelProviders(providers) {
   return [...(Array.isArray(providers) ? providers : [])].sort((left, right) => {
     const leftOrder = Number.isFinite(left?.order) ? Number(left.order) : 999;

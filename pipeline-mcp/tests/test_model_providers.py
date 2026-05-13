@@ -74,6 +74,51 @@ def test_provider_tools_list_and_update_model_providers(tmp_path):
     assert updated["provider"]["provider_type"] == "http_api"
 
 
+def test_provider_health_can_check_unsaved_http_provider(tmp_path, monkeypatch):
+    store = ModelProviderStore(tmp_path)
+    store.upsert(
+        "alphafold2",
+        {
+            "provider_type": "runpod",
+            "endpoint_id": "saved-runpod",
+            "enabled": True,
+        },
+        actor="test",
+    )
+
+    calls = []
+
+    class _Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True, "ready": True, "model": "colabfold"}
+
+    def fake_get(url, headers=None, timeout=None):  # type: ignore[no-untyped-def]
+        calls.append({"url": url, "headers": headers, "timeout": timeout})
+        return _Response()
+
+    monkeypatch.setattr("pipeline_mcp.model_providers.requests.get", fake_get)
+
+    result = store.health(
+        "alphafold2",
+        {
+            "provider_type": "http_api",
+            "base_url": "http://gpu.example:18161/",
+            "timeout_s": 30,
+            "enabled": True,
+        },
+    )
+
+    assert result["ok"] is True
+    assert result["ready"] is True
+    assert result["provider"]["provider_type"] == "http_api"
+    assert result["provider"]["base_url"] == "http://gpu.example:18161"
+    assert calls == [{"url": "http://gpu.example:18161/healthz", "headers": {}, "timeout": 30.0}]
+    assert store.get_effective("alphafold2")["provider_type"] == "runpod"
+
+
 def test_build_provider_summary_marks_missing_required_fields(tmp_path):
     store = ModelProviderStore(tmp_path)
     store.upsert("rfd3", {"provider_type": "http_api", "enabled": True}, actor="admin")

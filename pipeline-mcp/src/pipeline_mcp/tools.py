@@ -3742,7 +3742,8 @@ def _model_provider_health_tool(runner: PipelineRunner, arguments: dict[str, Any
     model_key = str(arguments.get("model_key") or "").strip()
     if not model_key:
         raise ValueError("model_key is required")
-    return store.health(model_key)
+    provider = arguments.get("provider")
+    return store.health(model_key, provider if isinstance(provider, dict) else None)
 
 
 def _cath_get_batch_overview_tool(
@@ -8049,6 +8050,10 @@ def tool_definitions() -> list[dict[str, Any]]:
                 "type": "object",
                 "properties": {
                     "model_key": {"type": "string"},
+                    "provider": {
+                        "type": "object",
+                        "description": "Optional unsaved provider draft to check instead of the saved registry value.",
+                    },
                 },
                 "required": ["model_key"],
             },

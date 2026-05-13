@@ -126,6 +126,7 @@ import {
 import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=20260407_v6";
 import { renderMcpGuideMarkup } from "./lib/mcp-guide.js?v=20260407_v6";
 import {
+  buildProviderHealthPayload,
   buildProviderUpdatePayload,
   normalizeProviderType,
   providerConnectionSummary,
@@ -10612,10 +10613,22 @@ async function saveCustomModelProvider() {
 async function checkModelProviderHealth(modelKey) {
   const key = String(modelKey || "").trim();
   if (!key) return;
+  const card = modelProviderCardForKey(key);
+  const payload = card
+    ? buildProviderHealthPayload({
+        modelKey: key,
+        providerType: modelProviderFieldValue(card, "provider_type"),
+        endpointId: modelProviderFieldValue(card, "endpoint_id"),
+        baseUrl: modelProviderFieldValue(card, "base_url"),
+        token: modelProviderFieldValue(card, "token"),
+        timeoutS: modelProviderFieldValue(card, "timeout_s"),
+        enabled: modelProviderFieldValue(card, "enabled"),
+      })
+    : { model_key: key };
   state.modelProviderHealthByKey = { ...(state.modelProviderHealthByKey || {}), [key]: { loading: true } };
   renderModelProviders();
   try {
-    const result = await apiCall("pipeline.model_provider_health", { model_key: key });
+    const result = await apiCall("pipeline.model_provider_health", payload);
     state.modelProviderHealthByKey = { ...(state.modelProviderHealthByKey || {}), [key]: result };
   } catch (err) {
     state.modelProviderHealthByKey = {
