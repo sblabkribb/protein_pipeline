@@ -74,6 +74,28 @@ test("frontend exposes an in-app model provider manager instead of the legacy Ru
   assert.match(source, /pipeline\.model_provider_health/);
 });
 
+test("model provider UI supports inline health status and adding custom models", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(html, /id="modelProviderAddBtn"/);
+  assert.match(html, /id="modelProviderAddPanel"/);
+  assert.match(source, /data-model-provider-action-status/);
+  assert.match(source, /function saveCustomModelProvider/);
+  assert.match(source, /custom:\s*true/);
+  assert.doesNotMatch(source, /modelProvidersStatus\.textContent = result\?\.ready/);
+  assert.doesNotMatch(source, /modelProviderHealthBadge\(provider,\s*health/);
+});
+
+test("account console is only shown for real OIDC sessions", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+  const server = readFileSync(new URL("../../pipeline-mcp/src/pipeline_mcp/http_server.py", import.meta.url), "utf8");
+
+  assert.match(source, /sessionAuthType/);
+  assert.match(source, /state\.sessionAuthType === "oidc"/);
+  assert.match(server, /"session": self\._public_session_info\(\)/);
+});
+
 test("frontend admin panel exposes OIDC user approval controls", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");

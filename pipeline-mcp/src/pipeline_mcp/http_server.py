@@ -259,6 +259,20 @@ class Handler(BaseHTTPRequestHandler):
     def _session_id_from_cookie(self) -> str:
         return self._cookie_value(self._session_cookie_name())
 
+    def _public_session_info(self) -> dict[str, str]:
+        manager = self.sessions
+        session_id = self._session_id_from_cookie()
+        if manager is not None and session_id:
+            session = manager.get_session(session_id, oidc_settings=self.oidc)
+            if isinstance(session, dict):
+                auth_type = str(session.get("auth_type") or "").strip()
+                if auth_type:
+                    return {"auth_type": auth_type}
+        header = self.headers.get("Authorization") or ""
+        if header.startswith("Bearer "):
+            return {"auth_type": "token"}
+        return {"auth_type": ""}
+
     def _session_cookie_headers(self, session_id: str, *, max_age: int | None = None, clear: bool = False) -> list[tuple[str, str]]:
         cookie = SimpleCookie()
         name = self._session_cookie_name()
@@ -564,7 +578,7 @@ class Handler(BaseHTTPRequestHandler):
             user = self._require_auth()
             if user is None:
                 return
-            self._json(200, {"ok": True, "user": user})
+            self._json(200, {"ok": True, "user": user, "session": self._public_session_info()})
             return
         if route_path == "/healthz":
             self._json(200, {"ok": True})
@@ -595,7 +609,7 @@ class Handler(BaseHTTPRequestHandler):
                 if manager is not None and isinstance(user, dict):
                     session_id = manager.create_local_session(user)
                     extra_headers = self._session_cookie_headers(session_id, max_age=manager.cookie_max_age(session_id))
-                self._json(200, {"ok": True, **result}, extra_headers=extra_headers)
+                self._json(200, {"ok": True, **result, "session": {"auth_type": "local"}}, extra_headers=extra_headers)
                 return
 
             if route_path == "/auth/oidc/exchange":

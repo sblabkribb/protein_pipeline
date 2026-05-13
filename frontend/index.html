@@ -1721,9 +1721,64 @@
               Register each model as RunPod, HTTP API, or disabled.
             </p>
           </div>
-          <button id="modelProvidersClose" class="ghost" data-i18n="common.close">Close</button>
+          <div class="modal-actions">
+            <button id="modelProviderAddBtn" class="ghost" type="button" data-i18n="modelProviders.add.open">
+              Add Model
+            </button>
+            <button id="modelProvidersClose" class="ghost" data-i18n="common.close">Close</button>
+          </div>
         </div>
         <div id="modelProvidersStatus" class="hint"></div>
+        <div id="modelProviderAddPanel" class="model-provider-add-panel hidden">
+          <div class="model-provider-add-head">
+            <div>
+              <strong data-i18n="modelProviders.add.title">Add Custom Model</strong>
+              <p class="hint" data-i18n="modelProviders.add.desc">
+                Register a RunPod endpoint or HTTP API that can be reused by the platform.
+              </p>
+            </div>
+          </div>
+          <div class="model-provider-add-grid">
+            <label>
+              <span data-i18n="modelProviders.add.key">Model key</span>
+              <input id="modelProviderAddKey" type="text" placeholder="esmfold_large" />
+            </label>
+            <label>
+              <span data-i18n="modelProviders.add.label">Display name</span>
+              <input id="modelProviderAddLabel" type="text" placeholder="ESMFold Large" />
+            </label>
+            <label>
+              <span data-i18n="modelProviders.type">Provider</span>
+              <select id="modelProviderAddType">
+                <option value="http_api" data-i18n="modelProviders.type.http_api">HTTP API</option>
+                <option value="runpod" data-i18n="modelProviders.type.runpod">RunPod</option>
+                <option value="disabled" data-i18n="modelProviders.type.disabled">Disabled</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="modelProviders.endpoint">RunPod endpoint ID</span>
+              <input id="modelProviderAddEndpoint" type="text" />
+            </label>
+            <label class="model-provider-wide">
+              <span data-i18n="modelProviders.baseUrl">HTTP API URL</span>
+              <input id="modelProviderAddBaseUrl" type="url" placeholder="http://gpu.example:18162" />
+            </label>
+            <label>
+              <span data-i18n="modelProviders.token">API token</span>
+              <input id="modelProviderAddToken" type="password" autocomplete="new-password" />
+            </label>
+            <label>
+              <span data-i18n="modelProviders.timeout">Timeout (sec)</span>
+              <input id="modelProviderAddTimeout" type="number" min="1" step="1" value="21600" />
+            </label>
+          </div>
+          <div class="model-provider-add-actions">
+            <button id="modelProviderAddCancel" class="ghost" type="button" data-i18n="common.close">Close</button>
+            <button id="modelProviderAddSave" class="primary" type="button" data-i18n="modelProviders.add.save">
+              Add Model
+            </button>
+          </div>
+        </div>
         <div id="modelProvidersList" class="model-provider-list"></div>
       </div>
     </div>

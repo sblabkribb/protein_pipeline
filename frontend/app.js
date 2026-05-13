@@ -588,6 +588,7 @@ const initialHomeContext = loadHomeContextSelection(initialUser);
 const state = {
   apiBase: resolveApiBase(),
   user: initialUser,
+  sessionAuthType: "",
   token: localStorage.getItem("kbf.token") || "",
   idToken: localStorage.getItem(ID_TOKEN_KEY) || "",
   oidcConfig: null,
@@ -713,6 +714,7 @@ const state = {
   modelProviders: [],
   modelProviderHealthByKey: {},
   modelProvidersLoading: false,
+  modelProviderAddOpen: false,
   adminUsers: [],
   adminUsersLoading: false,
 };
@@ -782,6 +784,17 @@ const el = {
   modelProvidersClose: document.getElementById("modelProvidersClose"),
   modelProvidersList: document.getElementById("modelProvidersList"),
   modelProvidersStatus: document.getElementById("modelProvidersStatus"),
+  modelProviderAddBtn: document.getElementById("modelProviderAddBtn"),
+  modelProviderAddPanel: document.getElementById("modelProviderAddPanel"),
+  modelProviderAddKey: document.getElementById("modelProviderAddKey"),
+  modelProviderAddLabel: document.getElementById("modelProviderAddLabel"),
+  modelProviderAddType: document.getElementById("modelProviderAddType"),
+  modelProviderAddEndpoint: document.getElementById("modelProviderAddEndpoint"),
+  modelProviderAddBaseUrl: document.getElementById("modelProviderAddBaseUrl"),
+  modelProviderAddToken: document.getElementById("modelProviderAddToken"),
+  modelProviderAddTimeout: document.getElementById("modelProviderAddTimeout"),
+  modelProviderAddCancel: document.getElementById("modelProviderAddCancel"),
+  modelProviderAddSave: document.getElementById("modelProviderAddSave"),
   tabBtnCath: document.getElementById("tabBtnCath"),
   helpBtn: document.getElementById("helpBtn"),
   tutorialBtn: document.getElementById("tutorialBtn"),
@@ -2808,6 +2821,13 @@ const I18N = {
     "modelProviders.healthFailed": "Health check failed: {error}",
     "modelProviders.configured": "Configured",
     "modelProviders.notConfigured": "Not configured",
+    "modelProviders.add.open": "Add Model",
+    "modelProviders.add.title": "Add Custom Model",
+    "modelProviders.add.desc": "Register a RunPod endpoint or HTTP API that can be reused by the platform.",
+    "modelProviders.add.key": "Model key",
+    "modelProviders.add.label": "Display name",
+    "modelProviders.add.save": "Add Model",
+    "modelProviders.add.required": "Model key and display name are required.",
     "admin.title": "Admin: Create User",
     "admin.username": "New Username",
     "admin.username.placeholder": "new.user",
@@ -4267,6 +4287,13 @@ const I18N = {
     "modelProviders.healthFailed": "상태 확인 실패: {error}",
     "modelProviders.configured": "설정됨",
     "modelProviders.notConfigured": "미설정",
+    "modelProviders.add.open": "모델 추가",
+    "modelProviders.add.title": "커스텀 모델 추가",
+    "modelProviders.add.desc": "플랫폼에서 재사용할 RunPod endpoint 또는 HTTP API를 등록합니다.",
+    "modelProviders.add.key": "모델 키",
+    "modelProviders.add.label": "표시 이름",
+    "modelProviders.add.save": "모델 추가",
+    "modelProviders.add.required": "모델 키와 표시 이름을 입력하세요.",
     "admin.title": "관리자: 사용자 생성",
     "admin.username": "새 사용자명",
     "admin.username.placeholder": "new.user",
@@ -9211,6 +9238,7 @@ function clearSession() {
   localStorage.removeItem("kbf.token");
   localStorage.removeItem(ID_TOKEN_KEY);
   state.user = null;
+  state.sessionAuthType = "";
   state.token = "";
   state.idToken = "";
   state.projects = [];
@@ -9344,7 +9372,12 @@ function syncLoginMode() {
     }
   }
   if (el.accountBtn) {
-    const visible = !loading && useOidc && Boolean(state.user) && Boolean(state.oidcConfig?.account_url);
+    const visible =
+      !loading &&
+      useOidc &&
+      state.sessionAuthType === "oidc" &&
+      Boolean(state.user) &&
+      Boolean(state.oidcConfig?.account_url);
     el.accountBtn.classList.toggle("hidden", !visible);
   }
 }
@@ -9451,7 +9484,7 @@ async function bootstrapAuth() {
 
 function openAccountConsole() {
   const accountUrl = String(state.oidcConfig?.account_url || "").trim();
-  if (!accountUrl) return;
+  if (!accountUrl || state.sessionAuthType !== "oidc") return;
   window.location.assign(accountUrl);
 }
 
@@ -10326,17 +10359,32 @@ function modelProviderTypeOption(value, current) {
   return `<option value="${escapeAttr(normalized)}"${selected}>${escapeHtml(t(`modelProviders.type.${normalized}`))}</option>`;
 }
 
-function modelProviderHealthBadge(provider, health) {
-  if (health) {
-    const ready = Boolean(health.ready);
-    const label = ready ? t("modelProviders.healthReady") : t("modelProviders.healthNotReady");
-    const stateName = ready ? "completed" : "failed";
-    return `<span class="state-badge" data-state="${stateName}">${escapeHtml(label)}</span>`;
-  }
+function modelProviderHealthBadge(provider) {
   const configured = providerConfigured(provider);
   const label = configured ? t("modelProviders.configured") : t("modelProviders.notConfigured");
   const stateName = configured ? "running" : "cancelled";
   return `<span class="state-badge" data-state="${stateName}">${escapeHtml(label)}</span>`;
+}
+
+function modelProviderActionStatus(provider, health) {
+  if (!health) return "";
+  let label = "";
+  let stateName = "running";
+  if (health.loading) {
+    label = t("modelProviders.healthChecking", { model: provider?.label || provider?.model_key || "" });
+  } else if (health.error) {
+    label = t("modelProviders.healthFailed", { error: health.error });
+    stateName = "failed";
+  } else if (health.ready) {
+    label = t("modelProviders.healthReady");
+    stateName = "completed";
+  } else {
+    label = t("modelProviders.healthNotReady");
+    stateName = "failed";
+  }
+  return `<span class="model-provider-action-status" data-model-provider-action-status data-state="${stateName}">${escapeHtml(
+    label
+  )}</span>`;
 }
 
 function renderModelProviderCard(provider, health = null) {
@@ -10351,7 +10399,7 @@ function renderModelProviderCard(provider, health = null) {
           <div class="model-provider-key">${escapeHtml(modelKey)}</div>
           <h5>${escapeHtml(label)}</h5>
         </div>
-        ${modelProviderHealthBadge(provider, health)}
+        ${modelProviderHealthBadge(provider)}
       </div>
       <div class="model-provider-summary">
         <span>${escapeHtml(t("modelProviders.connection"))}</span>
@@ -10393,6 +10441,7 @@ function renderModelProviderCard(provider, health = null) {
         </label>
       </div>
       <div class="model-provider-actions">
+        ${modelProviderActionStatus(provider, health)}
         <button class="ghost" type="button" data-model-provider-health="${escapeAttr(modelKey)}">${escapeHtml(
           t("modelProviders.health")
         )}</button>
@@ -10463,12 +10512,35 @@ async function refreshModelProviders({ includeHealth = false } = {}) {
 function openModelProvidersPanel() {
   if (!el.modelProvidersPanel || !canManageModels()) return;
   el.modelProvidersPanel.classList.remove("hidden");
+  syncModelProviderAddPanel();
   void refreshModelProviders({ includeHealth: false });
 }
 
 function closeModelProvidersPanel() {
   if (!el.modelProvidersPanel) return;
+  state.modelProviderAddOpen = false;
+  syncModelProviderAddPanel();
   el.modelProvidersPanel.classList.add("hidden");
+}
+
+function syncModelProviderAddPanel() {
+  if (!el.modelProviderAddPanel) return;
+  el.modelProviderAddPanel.classList.toggle("hidden", !state.modelProviderAddOpen);
+}
+
+function resetModelProviderAddForm() {
+  if (el.modelProviderAddKey) el.modelProviderAddKey.value = "";
+  if (el.modelProviderAddLabel) el.modelProviderAddLabel.value = "";
+  if (el.modelProviderAddType) el.modelProviderAddType.value = "http_api";
+  if (el.modelProviderAddEndpoint) el.modelProviderAddEndpoint.value = "";
+  if (el.modelProviderAddBaseUrl) el.modelProviderAddBaseUrl.value = "";
+  if (el.modelProviderAddToken) el.modelProviderAddToken.value = "";
+  if (el.modelProviderAddTimeout) el.modelProviderAddTimeout.value = "21600";
+}
+
+function setModelProviderAddOpen(open) {
+  state.modelProviderAddOpen = Boolean(open);
+  syncModelProviderAddPanel();
 }
 
 async function saveModelProvider(modelKey) {
@@ -10507,27 +10579,67 @@ async function saveModelProvider(modelKey) {
   }
 }
 
+async function saveCustomModelProvider() {
+  const modelKey = String(el.modelProviderAddKey?.value || "").trim();
+  const label = String(el.modelProviderAddLabel?.value || "").trim();
+  if (!modelKey || !label) {
+    if (el.modelProvidersStatus) el.modelProvidersStatus.textContent = t("modelProviders.add.required");
+    return;
+  }
+  const providerType = normalizeProviderType(el.modelProviderAddType?.value);
+  const payload = buildProviderUpdatePayload({
+    modelKey,
+    providerType,
+    endpointId: el.modelProviderAddEndpoint?.value || "",
+    baseUrl: el.modelProviderAddBaseUrl?.value || "",
+    token: el.modelProviderAddToken?.value || "",
+    timeoutS: el.modelProviderAddTimeout?.value || "21600",
+    enabled: providerType !== "disabled",
+  });
+  payload.provider = {
+    ...payload.provider,
+    custom: true,
+    label,
+  };
+  try {
+    const result = await apiCall("pipeline.model_provider_update", payload);
+    const saved = result?.provider;
+    if (saved?.model_key) {
+      const index = state.modelProviders.findIndex((provider) => provider?.model_key === saved.model_key);
+      if (index >= 0) {
+        state.modelProviders.splice(index, 1, saved);
+      } else {
+        state.modelProviders.push(saved);
+      }
+    }
+    if (el.modelProvidersStatus) {
+      el.modelProvidersStatus.textContent = t("modelProviders.saved", {
+        model: saved?.label || saved?.model_key || modelKey,
+      });
+    }
+    resetModelProviderAddForm();
+    setModelProviderAddOpen(false);
+    renderModelProviders();
+  } catch (err) {
+    if (el.modelProvidersStatus) {
+      el.modelProvidersStatus.textContent = t("modelProviders.saveFailed", { error: err.message });
+    }
+  }
+}
+
 async function checkModelProviderHealth(modelKey) {
   const key = String(modelKey || "").trim();
   if (!key) return;
-  if (el.modelProvidersStatus) {
-    const provider = state.modelProviders.find((item) => item?.model_key === key);
-    el.modelProvidersStatus.textContent = t("modelProviders.healthChecking", {
-      model: provider?.label || key,
-    });
-  }
+  state.modelProviderHealthByKey = { ...(state.modelProviderHealthByKey || {}), [key]: { loading: true } };
+  renderModelProviders();
   try {
     const result = await apiCall("pipeline.model_provider_health", { model_key: key });
     state.modelProviderHealthByKey = { ...(state.modelProviderHealthByKey || {}), [key]: result };
-    if (el.modelProvidersStatus) {
-      el.modelProvidersStatus.textContent = result?.ready
-        ? t("modelProviders.healthReady")
-        : t("modelProviders.healthNotReady");
-    }
   } catch (err) {
-    if (el.modelProvidersStatus) {
-      el.modelProvidersStatus.textContent = t("modelProviders.healthFailed", { error: err.message });
-    }
+    state.modelProviderHealthByKey = {
+      ...(state.modelProviderHealthByKey || {}),
+      [key]: { ok: false, ready: false, error: err.message || t("error.api") },
+    };
   } finally {
     renderModelProviders();
   }
@@ -13247,6 +13359,7 @@ async function authLogin() {
     }
     state.token = payload.token;
     state.user = payload.user;
+    state.sessionAuthType = String(payload.session?.auth_type || "local").trim() || "local";
     saveToken(payload.token);
     saveUser(payload.user);
     reloadWorkflowStudioSessionsForUser(state.user);
@@ -13281,6 +13394,7 @@ async function loadSession() {
       throw new Error(failureMessage);
     }
     state.user = payload.user;
+    state.sessionAuthType = String(payload.session?.auth_type || "").trim();
     saveUser(payload.user);
     reloadWorkflowStudioSessionsForUser(state.user);
     showChat();
@@ -13295,6 +13409,7 @@ async function loadSession() {
     const cachedUser = state.user || loadUser();
     if (cachedUser) {
       state.user = cachedUser;
+      state.sessionAuthType = "";
       reloadWorkflowStudioSessionsForUser(state.user);
       showChat();
       updateAdminUI();
@@ -26741,12 +26856,34 @@ if (el.runpodAdminBtn && el.modelProvidersPanel) {
 }
 
 if (el.modelProvidersClose && el.modelProvidersPanel) {
-  el.modelProvidersClose.addEventListener("click", closeModelProvidersPanel);
+  el.modelProvidersClose.addEventListener("click", () => {
+    setModelProviderAddOpen(false);
+    closeModelProvidersPanel();
+  });
+}
+
+if (el.modelProviderAddBtn && el.modelProviderAddPanel) {
+  el.modelProviderAddBtn.addEventListener("click", () => {
+    setModelProviderAddOpen(!state.modelProviderAddOpen);
+  });
+}
+
+if (el.modelProviderAddCancel) {
+  el.modelProviderAddCancel.addEventListener("click", () => {
+    setModelProviderAddOpen(false);
+  });
+}
+
+if (el.modelProviderAddSave) {
+  el.modelProviderAddSave.addEventListener("click", () => {
+    void saveCustomModelProvider();
+  });
 }
 
 if (el.modelProvidersPanel) {
   el.modelProvidersPanel.addEventListener("click", (event) => {
     if (event.target === el.modelProvidersPanel) {
+      setModelProviderAddOpen(false);
       closeModelProvidersPanel();
     }
   });

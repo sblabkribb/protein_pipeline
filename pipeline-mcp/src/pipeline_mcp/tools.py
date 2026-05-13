@@ -8028,6 +8028,8 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "provider": {
                         "type": "object",
                         "properties": {
+                            "label": {"type": "string"},
+                            "custom": {"type": "boolean"},
                             "provider_type": {"type": "string", "enum": ["runpod", "http_api", "disabled"]},
                             "endpoint_id": {"type": "string"},
                             "base_url": {"type": "string"},

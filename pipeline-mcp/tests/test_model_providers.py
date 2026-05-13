@@ -83,3 +83,28 @@ def test_build_provider_summary_marks_missing_required_fields(tmp_path):
 
     assert rfd3["configured"] is False
     assert rfd3["missing"] == ["base_url"]
+
+
+def test_custom_model_provider_can_be_added_and_listed(tmp_path):
+    store = ModelProviderStore(tmp_path)
+
+    created = store.upsert(
+        "esmfold_large",
+        {
+            "custom": True,
+            "label": "ESMFold Large",
+            "provider_type": "http_api",
+            "base_url": "http://gpu.example:18162",
+            "enabled": True,
+        },
+        actor="admin",
+    )
+
+    assert created["model_key"] == "esmfold_large"
+    assert created["label"] == "ESMFold Large"
+    assert created["custom"] is True
+
+    listed = store.list_effective()
+    custom = next(row for row in listed if row["model_key"] == "esmfold_large")
+    assert custom["base_url"] == "http://gpu.example:18162"
+    assert custom["provider_type"] == "http_api"

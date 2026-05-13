@@ -205,6 +205,40 @@ def test_handler_accepts_api_prefixed_healthz_route():
     assert captured["payload"] == {"ok": True}
 
 
+def test_auth_me_returns_public_session_type(monkeypatch):
+    captured = {}
+
+    class FakeSessions:
+        config = type("Config", (), {"cookie_name": "kbf_session"})()
+
+        @staticmethod
+        def get_session(session_id, *, oidc_settings=None):  # noqa: ARG004
+            assert session_id == "sid"
+            return {"auth_type": "local"}
+
+    monkeypatch.setattr(http_server, "_SESSIONS", FakeSessions(), raising=False)
+
+    handler = Handler.__new__(Handler)
+    handler.path = "/auth/me"
+    handler.headers = {"Cookie": "kbf_session=sid"}
+    handler._require_auth = lambda: {"username": "admin", "role": "admin", "status": "approved"}
+    handler._json = lambda status, payload, extra_headers=None: captured.update(  # noqa: ARG005
+        status=status,
+        payload=payload,
+    )
+
+    handler.do_GET()
+
+    assert captured == {
+        "status": 200,
+        "payload": {
+            "ok": True,
+            "user": {"username": "admin", "role": "admin", "status": "approved"},
+            "session": {"auth_type": "local"},
+        },
+    }
+
+
 def test_handler_accepts_api_prefixed_tools_call_route():
     captured = {}
 

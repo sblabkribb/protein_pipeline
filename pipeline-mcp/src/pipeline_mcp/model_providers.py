@@ -90,12 +90,36 @@ class ModelProviderStore:
         self.secret_path = self.root / "secret.key"
 
     def list_effective(self, *, include_secret: bool = False) -> list[dict[str, Any]]:
-        return [self.get_effective(spec.key, include_secret=include_secret) for spec in MODEL_SPECS]
+        data = self._load()
+        providers = [self.get_effective(spec.key, include_secret=include_secret) for spec in MODEL_SPECS]
+        custom_keys = sorted(
+            key
+            for key, record in data.items()
+            if key not in MODEL_SPEC_BY_KEY and isinstance(record, dict) and bool(record.get("custom"))
+        )
+        providers.extend(self.get_effective(key, include_secret=include_secret) for key in custom_keys)
+        return providers
 
     def get_effective(self, model_key: str, *, include_secret: bool = False) -> dict[str, Any]:
-        key = self._normalize_model_key(model_key)
-        stored = self._load().get(key)
-        provider = self._env_provider(key)
+        key = self._normalize_model_key(model_key, allow_custom=True)
+        data = self._load()
+        stored = data.get(key)
+        if key in MODEL_SPEC_BY_KEY:
+            provider = self._env_provider(key)
+        elif isinstance(stored, dict) and bool(stored.get("custom")):
+            provider = {
+                "model_key": key,
+                "label": str(stored.get("label") or key).strip() or key,
+                "custom": True,
+                "provider_type": "disabled",
+                "enabled": False,
+                "endpoint_id": "",
+                "base_url": "",
+                "timeout_s": 21600.0,
+                "source": "registry",
+            }
+        else:
+            raise ValueError(f"unknown model_key: {model_key}")
         if isinstance(stored, dict):
             provider.update(stored)
             provider["source"] = "registry"
@@ -103,14 +127,37 @@ class ModelProviderStore:
         return self._public_record(provider, include_secret=include_secret)
 
     def upsert(self, model_key: str, payload: dict[str, Any], *, actor: str = "") -> dict[str, Any]:
-        key = self._normalize_model_key(model_key)
-        current = self.get_effective(key, include_secret=True)
+        data = self._load()
+        key = self._normalize_model_key(model_key, allow_custom=True)
+        custom_requested = bool(payload.get("custom")) or "label" in payload
+        stored = data.get(key)
+        if key not in MODEL_SPEC_BY_KEY and not (custom_requested or (isinstance(stored, dict) and bool(stored.get("custom")))):
+            raise ValueError(f"unknown model_key: {model_key}")
+        if key in MODEL_SPEC_BY_KEY or isinstance(stored, dict):
+            current = self.get_effective(key, include_secret=True)
+        else:
+            current = self._public_record(
+                self._normalize_record(
+                    key,
+                    {
+                        "model_key": key,
+                        "label": payload.get("label") or key,
+                        "custom": True,
+                        "provider_type": "disabled",
+                        "enabled": False,
+                        "source": "registry",
+                    },
+                ),
+                include_secret=True,
+            )
         requested_provider_type = payload.get("provider_type", current.get("provider_type"))
         default_enabled = current.get("enabled", True)
         if "provider_type" in payload:
             default_enabled = _normalize_provider_type(requested_provider_type) != "disabled"
         next_record = {
             "model_key": key,
+            "label": payload.get("label", current.get("label", key)),
+            "custom": bool(current.get("custom")) or key not in MODEL_SPEC_BY_KEY or bool(payload.get("custom")),
             "provider_type": requested_provider_type,
             "enabled": payload.get("enabled", default_enabled),
             "endpoint_id": payload.get("endpoint_id", current.get("endpoint_id", "")),
@@ -127,7 +174,8 @@ class ModelProviderStore:
             stored["token_encrypted"] = self._encrypt(token)
         else:
             stored.pop("token_encrypted", None)
-        stored.pop("label", None)
+        if not stored.get("custom"):
+            stored.pop("label", None)
         stored.pop("token", None)
         data[key] = stored
         self._save(data)
@@ -154,12 +202,16 @@ class ModelProviderStore:
         except Exception as exc:
             return {"ok": False, "ready": False, "error": str(exc), "provider": self._public_record(provider)}
 
-    def _normalize_model_key(self, model_key: str) -> str:
+    def _normalize_model_key(self, model_key: str, *, allow_custom: bool = False) -> str:
         key = str(model_key or "").strip().lower().replace("-", "_")
         aliases = {"relax": "rosetta_relax", "af2": "alphafold2", "rfdiffusion": "rfd3"}
         key = aliases.get(key, key)
-        if key not in MODEL_SPEC_BY_KEY:
+        if key in MODEL_SPEC_BY_KEY:
+            return key
+        if not allow_custom:
             raise ValueError(f"unknown model_key: {model_key}")
+        if not key or len(key) > 80 or not all(ch.isalnum() or ch == "_" for ch in key):
+            raise ValueError("model_key must use letters, numbers, underscores, or hyphens")
         return key
 
     def _env_provider(self, model_key: str) -> dict[str, Any]:
@@ -194,7 +246,9 @@ class ModelProviderStore:
         )
 
     def _normalize_record(self, model_key: str, record: dict[str, Any]) -> dict[str, Any]:
-        spec = MODEL_SPEC_BY_KEY[model_key]
+        spec = MODEL_SPEC_BY_KEY.get(model_key)
+        custom = bool(record.get("custom")) or spec is None
+        label = spec.label if spec is not None else str(record.get("label") or model_key).strip() or model_key
         provider_type = _normalize_provider_type(record.get("provider_type"))
         enabled = bool(record.get("enabled", provider_type != "disabled"))
         if not enabled:
@@ -205,7 +259,8 @@ class ModelProviderStore:
             token = self._decrypt(encrypted)
         out = {
             "model_key": model_key,
-            "label": spec.label,
+            "label": label,
+            "custom": custom,
             "provider_type": provider_type,
             "enabled": enabled,
             "endpoint_id": str(record.get("endpoint_id") or "").strip(),
