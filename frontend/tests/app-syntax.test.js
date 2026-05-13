@@ -290,7 +290,8 @@ test("advanced target input is prioritized and rfd3 override input is collapsed"
   assert.match(source, /const isRfd3InputOverride = q\.id === "rfd3_input_pdb" && state\.runMode !== "rfd3";/);
   assert.match(source, /document\.createElement\(isRfd3InputOverride \? "details" : "div"\)/);
   assert.match(source, /optional-attachment-item/);
-  assert.match(source, /item\.open = setupRfd3InputOverrideVisible\(\) \|\| Boolean\(String\(state\.answers\[q\.id\] \|\| ""\)\.trim\(\)\);/);
+  assert.match(source, /const defaultOpen = setupRfd3InputOverrideVisible\(\) \|\| Boolean\(String\(state\.answers\[q\.id\] \|\| ""\)\.trim\(\)\);/);
+  assert.match(source, /setupDetailsStateKey\(`attachment-\$\{safeFileId\}`,\s*\{\s*stepId: setupWizardStepId \|\| "input"\s*\}\)/);
   assert.match(source, /attachment-\$\{safeFileId\}/);
   assert.match(styles, /\.attachment-item\.attachment-target_input/);
   assert.match(styles, /\.optional-attachment-item/);
@@ -314,11 +315,26 @@ test("advanced optional setup boards are collapsed by default", () => {
   assert.match(source, /function makeOptionalSetupDetails/);
   assert.match(source, /document\.createElement\("details"\)/);
   assert.match(source, /optional-setup-card/);
-  assert.match(source, /appendConfigCard\(makeOptionalSetupDetails\(card\)\);/);
-  assert.match(source, /appendConfigCard\(makeOptionalSetupDetails\(card,\s*\{ defaultOpen: false \}\)\);/m);
+  assert.match(source, /appendConfigCard\(makeOptionalSetupDetails\(card,\s*\{\s*key: "options"\s*\}\)\);/);
+  assert.match(source, /appendConfigCard\(makeOptionalSetupDetails\(card,\s*\{\s*key: "parameters",\s*defaultOpen: false\s*\}\)\);/m);
   assert.match(styles, /\.optional-setup-card/);
   assert.match(styles, /\.optional-setup-summary/);
   assert.match(styles, /\.optional-setup-body/);
+});
+
+test("advanced optional setup boards preserve open state across rerenders", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(source, /setupDetailsOpenByKey:\s*\{\}/);
+  assert.match(source, /function setupDetailsStateKey\(/);
+  assert.match(source, /function rememberSetupDetailsOpen\(/);
+  assert.match(source, /details\.addEventListener\("toggle",\s*\(\)\s*=>\s*\{/);
+  assert.match(source, /readSetupDetailsOpen\(stateKey,\s*defaultOpen\)/);
+  assert.match(source, /makeOptionalSetupDetails\(card,\s*\{\s*key:\s*"options"/);
+  assert.match(source, /makeOptionalSetupDetails\(card,\s*\{\s*key:\s*"parameters"/);
+  assert.match(source, /makeOptionalSetupDetails\(card,\s*\{\s*key:\s*"constraints"/);
+  assert.match(source, /makeOptionalSetupDetails\(card,\s*\{\s*key:\s*"rfd3-detail"/);
+  assert.match(source, /makeOptionalSetupDetails\(card,\s*\{\s*key:\s*"evolution"/);
 });
 
 test("user-facing Korean tutorial copy avoids internal pipeline jargon", () => {

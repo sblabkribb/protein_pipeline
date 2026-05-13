@@ -718,6 +718,7 @@ const state = {
   modelProviderAddOpen: false,
   adminUsers: [],
   adminUsersLoading: false,
+  setupDetailsOpenByKey: {},
 };
 
 if (state.apiBase && state.apiBase !== normalizeApiBase(savedApiBase)) {
@@ -8560,6 +8561,41 @@ function activeSetupWizardStepId() {
   return SETUP_WIZARD_STEPS[activeSetupWizardStepIndex()]?.id || "input";
 }
 
+function setupDetailsStateKey(key, { stepId = activeSetupWizardStepId(), mode = state.runMode || "pipeline" } = {}) {
+  const normalizedKey = String(key || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const normalizedStep = String(stepId || "all")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-") || "all";
+  const normalizedMode = String(mode || "pipeline")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-") || "pipeline";
+  return `${normalizedMode}:${normalizedStep}:${normalizedKey || "details"}`;
+}
+
+function readSetupDetailsOpen(stateKey, defaultOpen = false) {
+  if (!state.setupDetailsOpenByKey || typeof state.setupDetailsOpenByKey !== "object") {
+    state.setupDetailsOpenByKey = {};
+  }
+  if (Object.prototype.hasOwnProperty.call(state.setupDetailsOpenByKey, stateKey)) {
+    return Boolean(state.setupDetailsOpenByKey[stateKey]);
+  }
+  return Boolean(defaultOpen);
+}
+
+function rememberSetupDetailsOpen(stateKey, open) {
+  if (!stateKey) return;
+  if (!state.setupDetailsOpenByKey || typeof state.setupDetailsOpenByKey !== "object") {
+    state.setupDetailsOpenByKey = {};
+  }
+  state.setupDetailsOpenByKey[stateKey] = Boolean(open);
+}
+
 function questionSetupStepId(questionId) {
   if (questionId === "confirm_run") {
     return "review";
@@ -15882,10 +15918,17 @@ function renderQuestions(questions) {
     return classes.join(" ");
   };
 
-  function makeOptionalSetupDetails(card, { defaultOpen = false } = {}) {
+  function makeOptionalSetupDetails(card, { defaultOpen = false, key = "" } = {}) {
     const details = document.createElement("details");
     details.className = `${card.className || "question-card"} optional-setup-card`;
-    if (defaultOpen) details.open = true;
+    const stateKey = setupDetailsStateKey(key || card.dataset?.setupDetailsKey || card.className || "setup-options", {
+      stepId: setupWizardStepId || "all",
+    });
+    details.dataset.setupDetailsKey = stateKey;
+    details.open = readSetupDetailsOpen(stateKey, defaultOpen);
+    details.addEventListener("toggle", () => {
+      rememberSetupDetailsOpen(stateKey, details.open);
+    });
 
     const directChildren = Array.from(card.children || []);
     const titleNode = directChildren.find((node) => node.classList?.contains("question-title"));
@@ -16870,7 +16913,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(makeOptionalSetupDetails(card));
+    appendConfigCard(makeOptionalSetupDetails(card, { key: "options" }));
   };
 
   const evolutionQuestionIds = new Set([
@@ -16966,7 +17009,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
+    appendConfigCard(makeOptionalSetupDetails(card, { key: "evolution", defaultOpen: false }));
   };
 
   appendCompactOptionBoard();
@@ -17171,7 +17214,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
+    appendConfigCard(makeOptionalSetupDetails(card, { key: "parameters", defaultOpen: false }));
   };
 
   appendCompactParameterBoard(compactQuestions);
@@ -17261,7 +17304,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
+    appendConfigCard(makeOptionalSetupDetails(card, { key: "constraints", defaultOpen: false }));
   };
 
   appendAdvancedConstraintBoard();
@@ -17285,7 +17328,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     renderSetupRfd3ModeDetailsCard(card, normalizedQuestions);
-    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
+    appendConfigCard(makeOptionalSetupDetails(card, { key: "rfd3-detail", defaultOpen: false }));
   };
 
   appendRfd3DetailBoard();
@@ -17455,7 +17498,13 @@ function renderQuestions(questions) {
       item.className = `attachment-item attachment-${safeFileId}` + (q.required ? " required" : "");
       if (isRfd3InputOverride) {
         item.className += " optional-attachment-item";
-        item.open = setupRfd3InputOverrideVisible() || Boolean(String(state.answers[q.id] || "").trim());
+        const defaultOpen = setupRfd3InputOverrideVisible() || Boolean(String(state.answers[q.id] || "").trim());
+        const stateKey = setupDetailsStateKey(`attachment-${safeFileId}`, { stepId: setupWizardStepId || "input" });
+        item.dataset.setupDetailsKey = stateKey;
+        item.open = readSetupDetailsOpen(stateKey, defaultOpen);
+        item.addEventListener("toggle", () => {
+          rememberSetupDetailsOpen(stateKey, item.open);
+        });
       }
 
       const itemTitle = document.createElement("div");
