@@ -27,6 +27,7 @@ from .clients.local_http import LocalHTTPBioEmuClient
 from .clients.local_http import LocalHTTPDiffDockClient
 from .clients.local_http import LocalHTTPMMseqsClient
 from .clients.local_http import LocalHTTPRFD3Client
+from .clients.local_http import LocalHTTPRosettaRelaxClient
 from .config import load_config
 from .model_providers import ModelProviderStore
 from .pipeline import PipelineRunner
@@ -158,8 +159,19 @@ def build_runner() -> PipelineRunner:
 
     rosetta_relax = None
     rosetta_docker_bin = cfg.rosetta.docker_bin or shutil.which("docker")
+    rosetta_provider = _provider(provider_store, "rosetta_relax")
 
-    if cfg.runpod.relax_endpoint_id:
+    if _provider_is_http(rosetta_provider):
+        rosetta_relax = LocalHTTPRosettaRelaxClient(
+            base_url=rosetta_provider["base_url"],
+            token=rosetta_provider.get("token") or None,
+            timeout_s=float(rosetta_provider.get("timeout_s") or cfg.rosetta.timeout_s),
+        )
+    elif _provider_is_runpod(rosetta_provider):
+        rosetta_relax = RosettaRelaxClient(
+            timeout_s=cfg.rosetta.timeout_s,
+        )  # Client picks up RUNPOD_RELAX_ENDPOINT_ID internally
+    elif cfg.runpod.relax_endpoint_id:
         rosetta_relax = RosettaRelaxClient(
             timeout_s=cfg.rosetta.timeout_s,
         )  # Client picks up RUNPOD_RELAX_ENDPOINT_ID internally

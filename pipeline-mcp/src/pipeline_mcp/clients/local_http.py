@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 from collections.abc import Callable
+from pathlib import Path
+import tempfile
 
 import requests
 
@@ -137,6 +139,113 @@ class LocalHTTPDiffDockClient:
             "selected_sdf_name": str(output.get("rank1_sdf") or output.get("sdf_path") or "rank1.sdf"),
             "sdf_text": str(output.get("sdf_text") or output.get("rank1_sdf_text") or ""),
         }
+
+
+@dataclass(frozen=True)
+class LocalHTTPRosettaRelaxClient:
+    base_url: str
+    token: str | None = None
+    timeout_s: float = 21600.0
+
+    def _call_relax(
+        self,
+        *,
+        target_id: str,
+        pdb_text: str,
+        nstruct: int = 1,
+        extra_flags: str | None = None,
+    ) -> dict[str, Any]:
+        output = LocalHttpRunClient(self.base_url, self.token, self.timeout_s).run(
+            {
+                "target_id": target_id,
+                "pdb_content": pdb_text,
+                "nstruct": max(1, int(nstruct or 1)),
+                "extra_flags": extra_flags or "",
+                "timeout_s": max(60, int(self.timeout_s)),
+            }
+        )
+        relaxed_pdb_text = str(
+            output.get("relaxed_pdb_content")
+            or output.get("best_pdb_text")
+            or output.get("pdb_content")
+            or ""
+        )
+        if not relaxed_pdb_text.strip():
+            raise RuntimeError(f"Local HTTP Rosetta relax returned no PDB content: {output}")
+        score_per_residue = float(output.get("score_per_res", output.get("score_per_residue", 0.0)) or 0.0)
+        return {
+            "relaxed_pdb_text": relaxed_pdb_text,
+            "score_per_residue": score_per_residue,
+        }
+
+    @staticmethod
+    def _ca_count(pdb_text: str) -> int:
+        return sum(
+            1
+            for line in pdb_text.splitlines()
+            if line.startswith("ATOM") and line[12:16].strip() == "CA"
+        )
+
+    def run(
+        self,
+        input_pdb: Path,
+        output_dir: Path,
+        nstruct: int = 1,
+        extra_flags: str | None = None,
+    ) -> dict[str, Any]:
+        input_pdb = Path(input_pdb)
+        output_dir = Path(output_dir)
+        output = self._call_relax(
+            target_id=input_pdb.stem,
+            pdb_text=input_pdb.read_text(encoding="utf-8"),
+            nstruct=nstruct,
+            extra_flags=extra_flags,
+        )
+        output_dir.mkdir(parents=True, exist_ok=True)
+        best_pdb_path = output_dir / f"{input_pdb.stem}_relaxed.pdb"
+        best_pdb_path.write_text(output["relaxed_pdb_text"], encoding="utf-8")
+        score_per_residue = float(output["score_per_residue"])
+        total_score = score_per_residue * max(self._ca_count(output["relaxed_pdb_text"]), 1)
+        score_path = output_dir / "score.sc"
+        score_path.write_text(
+            "SCORE: total_score description\n"
+            f"SCORE: {total_score} {best_pdb_path.stem}\n",
+            encoding="utf-8",
+        )
+        return {
+            "best_pdb": best_pdb_path,
+            "best_score": total_score,
+            "score_per_residue": score_per_residue,
+            "scorefile": score_path,
+        }
+
+    def relax(
+        self,
+        pdb_text: str,
+        nstruct: int = 1,
+        extra_flags: str | None = None,
+    ) -> dict[str, Any]:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmp_path = Path(tmpdir)
+            input_pdb = tmp_path / "input.pdb"
+            input_pdb.write_text(pdb_text, encoding="utf-8")
+            result = self.run(input_pdb, tmp_path / "output", nstruct, extra_flags)
+            best_pdb_path = result.get("best_pdb")
+            best_pdb_text = (
+                best_pdb_path.read_text(encoding="utf-8")
+                if isinstance(best_pdb_path, Path) and best_pdb_path.exists()
+                else ""
+            )
+            score_per_residue = float(result.get("score_per_residue") or 0.0)
+            total_score = score_per_residue * max(self._ca_count(best_pdb_text), 1)
+            return {
+                "best_pdb_text": best_pdb_text,
+                "total_score": total_score,
+                "delta_total_score": 0.0,
+                "input_total_score": 0.0,
+                "description": best_pdb_path.stem if isinstance(best_pdb_path, Path) else "",
+                "mode": "http_api",
+            }
 
 
 @dataclass(frozen=True)

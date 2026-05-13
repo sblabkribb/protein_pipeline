@@ -9,6 +9,7 @@ from pipeline_mcp.clients.local_http import LocalHTTPBioEmuClient
 from pipeline_mcp.clients.local_http import LocalHTTPDiffDockClient
 from pipeline_mcp.clients.local_http import LocalHTTPMMseqsClient
 from pipeline_mcp.clients.local_http import LocalHTTPRFD3Client
+from pipeline_mcp.clients.local_http import LocalHTTPRosettaRelaxClient
 from pipeline_mcp.model_providers import ModelProviderStore
 
 
@@ -20,6 +21,7 @@ def test_build_runner_uses_http_model_provider_registry(tmp_path):
         "rfd3": 18104,
         "diffdock": 18105,
         "colabfold": 18161,
+        "rosetta_relax": 18102,
     }.items():
         store.upsert(
             model_key,
@@ -47,8 +49,10 @@ def test_build_runner_uses_http_model_provider_registry(tmp_path):
     assert isinstance(runner.rfd3, LocalHTTPRFD3Client)
     assert isinstance(runner.diffdock, LocalHTTPDiffDockClient)
     assert isinstance(runner.colabfold, LocalHTTPAlphaFold2Client)
+    assert isinstance(runner.rosetta_relax, LocalHTTPRosettaRelaxClient)
     assert runner.mmseqs.base_url == "http://gpu.example:18106"
     assert runner.colabfold.base_url == "http://gpu.example:18161"
+    assert runner.rosetta_relax.base_url == "http://gpu.example:18102"
 
 
 def test_build_runner_registry_runpod_provider_overrides_legacy_proteinmpnn_env(tmp_path):
