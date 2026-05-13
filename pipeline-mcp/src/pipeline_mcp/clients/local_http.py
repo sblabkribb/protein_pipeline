@@ -23,7 +23,12 @@ class LocalHttpRunClient:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
 
-    def run(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def run(
+        self,
+        payload: dict[str, Any],
+        *,
+        on_job_id: Callable[[str], None] | None = None,
+    ) -> dict[str, Any]:
         response = requests.post(
             self.base_url.rstrip("/") + "/run",
             headers=self._headers(),
@@ -36,6 +41,9 @@ class LocalHttpRunClient:
             raise RuntimeError(f"Local HTTP model response invalid: {data!r}")
         if data.get("error"):
             raise RuntimeError(str(data.get("error")))
+        job_id = str(data.get("job_id") or "").strip()
+        if job_id and on_job_id is not None:
+            on_job_id(job_id)
         status = str(data.get("status") or "COMPLETED").upper()
         if status and status not in {"COMPLETED", "SUCCESS", "OK"}:
             raise RuntimeError(f"Local HTTP model job not completed: {data}")
@@ -107,7 +115,12 @@ class LocalHTTPBioEmuClient:
     timeout_s: float = 21600.0
 
     def sample(self, **kwargs: Any) -> dict[str, Any]:
-        return LocalHttpRunClient(self.base_url, self.token, self.timeout_s).run(dict(kwargs))
+        payload = dict(kwargs)
+        on_job_id = payload.pop("on_job_id", None)
+        return LocalHttpRunClient(self.base_url, self.token, self.timeout_s).run(
+            payload,
+            on_job_id=on_job_id if callable(on_job_id) else None,
+        )
 
 
 @dataclass(frozen=True)
@@ -117,7 +130,12 @@ class LocalHTTPRFD3Client:
     timeout_s: float = 21600.0
 
     def design(self, **kwargs: Any) -> dict[str, Any]:
-        return LocalHttpRunClient(self.base_url, self.token, self.timeout_s).run(dict(kwargs))
+        payload = dict(kwargs)
+        on_job_id = payload.pop("on_job_id", None)
+        return LocalHttpRunClient(self.base_url, self.token, self.timeout_s).run(
+            payload,
+            on_job_id=on_job_id if callable(on_job_id) else None,
+        )
 
 
 @dataclass(frozen=True)
@@ -127,7 +145,12 @@ class LocalHTTPDiffDockClient:
     timeout_s: float = 21600.0
 
     def dock(self, **kwargs: Any) -> dict[str, Any]:
-        output = LocalHttpRunClient(self.base_url, self.token, self.timeout_s).run(dict(kwargs))
+        payload = dict(kwargs)
+        on_job_id = payload.pop("on_job_id", None)
+        output = LocalHttpRunClient(self.base_url, self.token, self.timeout_s).run(
+            payload,
+            on_job_id=on_job_id if callable(on_job_id) else None,
+        )
         if "sdf_text" in output:
             return output
         if "selected_sdf_name" in output:
