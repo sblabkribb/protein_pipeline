@@ -777,7 +777,6 @@ const el = {
   loginError: document.getElementById("loginError"),
   environmentBadge: document.getElementById("environmentBadge"),
   logoutBtn: document.getElementById("logoutBtn"),
-  accountBtn: document.getElementById("accountBtn"),
   adminBtn: document.getElementById("adminBtn"),
   runpodAdminBtn: document.getElementById("runpodAdminBtn"),
   modelProvidersPanel: document.getElementById("modelProvidersPanel"),
@@ -1995,7 +1994,6 @@ const I18N = {
     "env.development": "Development",
     "env.staging": "Staging",
     "action.admin": "Admin",
-    "action.account": "Account",
     "action.settings": "Settings",
     "action.logout": "Logout",
     "action.help": "Usage",
@@ -3446,6 +3444,7 @@ const I18N = {
     "auth.required": "Username and password required.",
     "auth.loginFailed": "Login failed",
     "auth.sessionInvalid": "Session invalid",
+    "auth.sessionExpired": "Session expired. Please sign in again.",
     "auth.ssoUnavailable": "SSO is not available right now.",
     "auth.ssoConfigMissing": "SSO configuration is incomplete.",
     "auth.ssoCancelled": "SSO sign-in was cancelled.",
@@ -3464,7 +3463,6 @@ const I18N = {
     "env.development": "개발 환경",
     "env.staging": "스테이징",
     "action.admin": "관리자",
-    "action.account": "계정",
     "action.settings": "설정",
     "action.logout": "로그아웃",
     "action.help": "사용법",
@@ -4910,6 +4908,7 @@ const I18N = {
     "auth.required": "사용자명과 비밀번호가 필요합니다.",
     "auth.loginFailed": "로그인 실패",
     "auth.sessionInvalid": "세션이 유효하지 않습니다.",
+    "auth.sessionExpired": "세션이 만료되었습니다. 다시 로그인하세요.",
     "auth.ssoUnavailable": "지금은 SSO를 사용할 수 없습니다.",
     "auth.ssoConfigMissing": "SSO 설정이 완전하지 않습니다.",
     "auth.ssoCancelled": "SSO 로그인이 취소되었습니다.",
@@ -9371,15 +9370,6 @@ function syncLoginMode() {
       el.ssoLoginBtn.textContent = t("login.sso.submitProvider", { provider });
     }
   }
-  if (el.accountBtn) {
-    const visible =
-      !loading &&
-      useOidc &&
-      state.sessionAuthType === "oidc" &&
-      Boolean(state.user) &&
-      Boolean(state.oidcConfig?.account_url);
-    el.accountBtn.classList.toggle("hidden", !visible);
-  }
 }
 
 async function startOidcLogin() {
@@ -9480,12 +9470,6 @@ async function bootstrapAuth() {
     return;
   }
   showLogin();
-}
-
-function openAccountConsole() {
-  const accountUrl = String(state.oidcConfig?.account_url || "").trim();
-  if (!accountUrl || state.sessionAuthType !== "oidc") return;
-  window.location.assign(accountUrl);
 }
 
 async function logoutCurrentSession() {
@@ -13301,6 +13285,25 @@ function authHeaders() {
   return state.token ? { Authorization: `Bearer ${state.token}` } : {};
 }
 
+function isApiAuthFailure(status, payload) {
+  const error = String(payload?.error || "").trim().toLowerCase();
+  return Number(status) === 401 || error === "unauthorized";
+}
+
+function handleApiAuthFailure() {
+  clearSession();
+  state.modelProviders = [];
+  state.modelProviderHealthByKey = {};
+  state.modelProvidersLoading = false;
+  if (el.modelProvidersPanel) {
+    closeModelProvidersPanel();
+  }
+  showLogin();
+  if (el.loginError) {
+    el.loginError.textContent = t("auth.sessionExpired");
+  }
+}
+
 async function apiCall(name, args) {
   const res = await fetch(`${state.apiBase}/tools/call`, {
     method: "POST",
@@ -13310,6 +13313,10 @@ async function apiCall(name, args) {
   });
   const payload = await res.json().catch(() => null);
   if (!res.ok) {
+    if (isApiAuthFailure(res.status, payload)) {
+      handleApiAuthFailure();
+      throw new Error(t("auth.sessionExpired"));
+    }
     const msg = payload && typeof payload.error === "string" ? payload.error : `HTTP ${res.status}`;
     throw new Error(msg);
   }
@@ -13317,6 +13324,10 @@ async function apiCall(name, args) {
     throw new Error(t("error.api"));
   }
   if (!payload.ok) {
+    if (isApiAuthFailure(res.status, payload)) {
+      handleApiAuthFailure();
+      throw new Error(t("auth.sessionExpired"));
+    }
     throw new Error(payload.error || t("error.api"));
   }
   return payload.result;
@@ -26435,12 +26446,6 @@ if (el.ssoLoginBtn) {
 el.logoutBtn.addEventListener("click", () => {
   logoutCurrentSession();
 });
-
-if (el.accountBtn) {
-  el.accountBtn.addEventListener("click", () => {
-    openAccountConsole();
-  });
-}
 
 el.planBtn.addEventListener("click", resetInputs);
 

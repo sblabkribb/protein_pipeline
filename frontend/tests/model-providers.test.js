@@ -87,13 +87,21 @@ test("model provider UI supports inline health status and adding custom models",
   assert.doesNotMatch(source, /modelProviderHealthBadge\(provider,\s*health/);
 });
 
-test("account console is only shown for real OIDC sessions", () => {
+test("topbar does not expose a separate account-console button", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
-  const server = readFileSync(new URL("../../pipeline-mcp/src/pipeline_mcp/http_server.py", import.meta.url), "utf8");
 
-  assert.match(source, /sessionAuthType/);
-  assert.match(source, /state\.sessionAuthType === "oidc"/);
-  assert.match(server, /"session": self\._public_session_info\(\)/);
+  assert.doesNotMatch(html, /id="accountBtn"/);
+  assert.doesNotMatch(html, /data-i18n="action\.account"/);
+  assert.doesNotMatch(source, /openAccountConsole/);
+});
+
+test("model provider API auth failures are handled as session expiry", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(source, /function handleApiAuthFailure/);
+  assert.match(source, /showLogin\(\)/);
+  assert.match(source, /throw new Error\(t\("auth\.sessionExpired"\)\)/);
 });
 
 test("frontend admin panel exposes OIDC user approval controls", () => {
