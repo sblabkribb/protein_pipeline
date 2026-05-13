@@ -147,7 +147,7 @@ const OIDC_VERIFIER_KEY = "kbf.oidc.verifier";
 
 const LANG_KEY = "kbf.lang";
 const LANG_OPTIONS = ["en", "ko"];
-const TUTORIAL_STORAGE_KEY = "kbf.tutorial.completed.v2";
+const TUTORIAL_STORAGE_KEY = "kbf.tutorial.completed.v3";
 const REPORT_LANG_KEY = "kbf.reportLang";
 const REPORT_LANG_OPTIONS = ["auto", "en", "ko"];
 const WORKFLOW_PLAN_STORAGE_KEY = "kbf.workflowPlans";
@@ -2108,8 +2108,18 @@ const I18N = {
       "Use Copilot for interpretation and navigation help; use the main Run, Resume, Report, and Export buttons for irreversible actions.",
     "tutorial.step.topbar.title": "Top menu controls",
     "tutorial.step.topbar.body":
-      "Use KO/EN for language, Copilot for contextual help, Tutorial to replay this tour, and Logout when finished. Admin users also see management controls.",
+      "Use KO/EN for language, Copilot for contextual help, Tutorial to replay this tour, Model Providers for model endpoints and per-user/global settings, and Logout when finished. Admin users also see management controls.",
     "tutorial.step.topbar.hint": "Everyday navigation stays in the left tabs and Home workspace.",
+    "tutorial.step.modelProviders.title": "Model connections set where jobs run",
+    "tutorial.step.modelProviders.body":
+      "Open Model Providers from the top menu to choose RunPod, HTTP API, or Disabled for each model. The scope selector decides whether you edit your own run settings or the shared default.",
+    "tutorial.step.modelProviders.hint":
+      "Health Check uses the values currently in the form, so you can test an HTTP URL before saving it.",
+    "tutorial.step.modelProviderAdd.title": "Add reusable model endpoints",
+    "tutorial.step.modelProviderAdd.body":
+      "Use Add Model when a new ESMFold, diffusion, docking, or utility model is available. Enter a model key, display name, provider type, endpoint or HTTP URL, token, and timeout.",
+    "tutorial.step.modelProviderAdd.hint":
+      "Choose HTTP API for GPU-server services and RunPod for serverless endpoints. Choose Disabled to keep the model registered but unused.",
     "tabs.home": "Home",
     "tabs.evolution": "Evolution",
     "tabs.fast": "Fast",
@@ -3579,8 +3589,18 @@ const I18N = {
       "해석과 탐색 도움에는 Copilot을 쓰고, 실제 실행/재개/리포트/export는 각 화면의 전용 버튼으로 처리하세요.",
     "tutorial.step.topbar.title": "상단 메뉴 안내",
     "tutorial.step.topbar.body":
-      "KO/EN은 언어 변경, Copilot은 현재 화면 도움, 튜토리얼은 이 안내 다시 보기, 로그아웃은 세션 종료에 사용합니다. 관리자에게는 관리 메뉴가 추가로 보입니다.",
+      "KO/EN은 언어 변경, Copilot은 현재 화면 도움, 튜토리얼은 이 안내 다시 보기, 모델 연결은 모델 endpoint와 개인/전역 설정 관리, 로그아웃은 세션 종료에 사용합니다. 관리자에게는 관리 메뉴가 추가로 보입니다.",
     "tutorial.step.topbar.hint": "평소 작업 이동은 왼쪽 탭과 Home 화면에서 시작하세요.",
+    "tutorial.step.modelProviders.title": "모델 연결은 실행 위치를 정합니다",
+    "tutorial.step.modelProviders.body":
+      "상단 메뉴의 모델 연결에서 모델별 실행 위치를 정합니다. RunPod, HTTP API, 비활성 중 하나를 고르고, 설정 범위에서 내 실행만 바꿀지 전역 기본값을 바꿀지 선택합니다.",
+    "tutorial.step.modelProviders.hint":
+      "상태 확인은 현재 입력한 값을 기준으로 동작하므로 저장 전에도 HTTP URL을 시험할 수 있습니다.",
+    "tutorial.step.modelProviderAdd.title": "새 모델을 추가합니다",
+    "tutorial.step.modelProviderAdd.body":
+      "새 ESMFold, diffusion, docking, utility 모델을 붙일 때 모델 추가를 사용합니다. 모델 key, 표시 이름, 연결 방식, endpoint 또는 HTTP URL, token, timeout을 입력합니다.",
+    "tutorial.step.modelProviderAdd.hint":
+      "GPU 서버에 띄운 모델은 HTTP API, RunPod serverless는 RunPod를 선택하세요. 등록만 해두고 쓰지 않을 모델은 비활성으로 둡니다.",
     "tabs.home": "홈",
     "tabs.evolution": "Evolution",
     "tabs.fast": "빠른 실행",
@@ -5270,6 +5290,20 @@ const TUTORIAL_STEPS = [
     titleKey: "tutorial.step.topbar.title",
     bodyKey: "tutorial.step.topbar.body",
     hintKey: "tutorial.step.topbar.hint",
+  },
+  {
+    id: "modelProviders",
+    target: ".model-providers-card",
+    titleKey: "tutorial.step.modelProviders.title",
+    bodyKey: "tutorial.step.modelProviders.body",
+    hintKey: "tutorial.step.modelProviders.hint",
+  },
+  {
+    id: "modelProviderAdd",
+    target: "#modelProviderAddPanel",
+    titleKey: "tutorial.step.modelProviderAdd.title",
+    bodyKey: "tutorial.step.modelProviderAdd.body",
+    hintKey: "tutorial.step.modelProviderAdd.hint",
   },
 ];
 
@@ -11025,10 +11059,22 @@ function renderTutorialDots() {
 
 function applyTutorialStepContext(step) {
   if (step?.id === "experimentChoice") {
+    closeModelProvidersPanel();
     openExperimentChoicePanel({ focusFirst: false });
     return;
   }
   closeExperimentChoicePanel();
+  if (step?.id === "modelProviders") {
+    openModelProvidersPanel();
+    setModelProviderAddOpen(false);
+    return;
+  }
+  if (step?.id === "modelProviderAdd") {
+    openModelProvidersPanel();
+    setModelProviderAddOpen(true);
+    return;
+  }
+  closeModelProvidersPanel();
   const setupStep = String(step?.setupStep || "").trim();
   if (!setupStep || step?.tab !== "advanced") return;
   if (state.runMode !== "pipeline") {
@@ -11082,6 +11128,8 @@ function completeTutorial() {
 function closeTutorial({ complete = true, restoreTab = true } = {}) {
   if (!el.tutorialOverlay) return;
   if (complete) completeTutorial();
+  closeExperimentChoicePanel();
+  closeModelProvidersPanel();
   el.tutorialOverlay.classList.add("hidden");
   document.body.classList.remove("tutorial-active");
   if (restoreTab && tutorialReturnTab) {
