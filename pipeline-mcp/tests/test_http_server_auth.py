@@ -58,23 +58,48 @@ def test_require_auth_allows_admin_when_admin_required(monkeypatch):
     assert handler._require_auth() == user
 
 
-def test_model_provider_tools_allow_model_manager_but_not_user(monkeypatch):
+def test_model_provider_global_update_requires_model_manager_but_user_scope_is_allowed(monkeypatch):
     handler = Handler.__new__(Handler)
 
     assert handler._can_manage_models({"username": "admin", "role": "admin"}) is True
     assert handler._can_manage_models({"username": "manager", "role": "model_manager"}) is True
     assert handler._can_manage_models({"username": "user", "role": "user"}) is False
 
+    calls = []
+    monkeypatch.setattr(
+        http_server,
+        "_DISPATCHER",
+        type(
+        "FakeDispatcher",
+        (),
+        {
+            "call_tool": lambda _self, name, arguments: calls.append((name, arguments)) or {"ok": True},
+        },
+        )(),
+        raising=False,
+    )
+
     try:
         handler._call_tool_for_user(
             {"username": "user", "role": "user"},
             "pipeline.model_provider_update",
-            {"model_key": "esmfold"},
+            {"model_key": "esmfold", "scope": "global"},
         )
     except Exception as exc:
         assert "model manager required" in str(exc)
     else:
-        raise AssertionError("plain users must not update model providers")
+        raise AssertionError("plain users must not update global model providers")
+
+    out = handler._call_tool_for_user(
+        {"username": "user", "role": "user"},
+        "pipeline.model_provider_update",
+        {"model_key": "esmfold", "scope": "user", "provider": {"provider_type": "disabled"}},
+    )
+
+    assert out == {"ok": True}
+    assert calls[0][0] == "pipeline.model_provider_update"
+    assert calls[0][1]["scope"] == "user"
+    assert calls[0][1]["user"]["username"] == "user"
 
 
 def test_pending_oidc_user_is_rejected(monkeypatch):

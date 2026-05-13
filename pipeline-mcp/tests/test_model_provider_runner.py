@@ -79,3 +79,42 @@ def test_build_runner_registry_runpod_provider_overrides_legacy_proteinmpnn_env(
 
     assert runner.proteinmpnn.endpoint_id == "registry-proteinmpnn"
     assert runner.proteinmpnn.gpu_url is None
+
+
+def test_build_runner_uses_user_model_provider_override(tmp_path):
+    store = ModelProviderStore(tmp_path)
+    store.upsert(
+        "mmseqs",
+        {
+            "provider_type": "runpod",
+            "endpoint_id": "global-mmseqs",
+            "enabled": True,
+        },
+        actor="admin",
+        scope="global",
+    )
+    store.upsert(
+        "mmseqs",
+        {
+            "provider_type": "http_api",
+            "base_url": "http://alice-gpu.example:18106",
+            "enabled": True,
+        },
+        actor="alice",
+        scope="user",
+        user_id="alice",
+    )
+
+    env = {
+        "RUNPOD_API_KEY": "runpod-key",
+        "MMSEQS_ENDPOINT_ID": "env-mmseqs",
+        "PROTEINMPNN_ENDPOINT_ID": "env-proteinmpnn",
+        "PIPELINE_OUTPUT_ROOT": str(tmp_path),
+    }
+    with patch.dict(os.environ, env, clear=True):
+        global_runner = build_runner()
+        alice_runner = build_runner(provider_user="alice")
+
+    assert not isinstance(global_runner.mmseqs, LocalHTTPMMseqsClient)
+    assert isinstance(alice_runner.mmseqs, LocalHTTPMMseqsClient)
+    assert alice_runner.mmseqs.base_url == "http://alice-gpu.example:18106"

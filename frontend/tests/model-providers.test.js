@@ -21,6 +21,7 @@ test("provider type aliases normalize to the registry contract", () => {
 test("provider update payload trims fields and never sends a blank token", () => {
   const payload = buildProviderUpdatePayload({
     modelKey: "proteinmpnn",
+    scope: "user",
     providerType: " http ",
     endpointId: " ep-123 ",
     baseUrl: " http://127.0.0.1:18101/ ",
@@ -31,6 +32,7 @@ test("provider update payload trims fields and never sends a blank token", () =>
 
   assert.deepEqual(payload, {
     model_key: "proteinmpnn",
+    scope: "user",
     provider: {
       provider_type: "http_api",
       endpoint_id: "ep-123",
@@ -54,6 +56,7 @@ test("provider health payload uses unsaved form values", () => {
 
   assert.deepEqual(payload, {
     model_key: "alphafold2",
+    scope: "global",
     provider: {
       provider_type: "http_api",
       endpoint_id: "old-runpod-endpoint",

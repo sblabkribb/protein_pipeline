@@ -563,6 +563,11 @@ const initialWorkflowStudioSessionsById = loadWorkflowStudioSessionsById(initial
 const HOME_PROJECT_STORAGE_PREFIX = "kbf.currentProjectId";
 const HOME_ROUND_STORAGE_PREFIX = "kbf.currentRoundId";
 
+function canManageInitialModelDefaults(user) {
+  const role = String(user?.role || "").trim();
+  return role === "admin" || role === "model_manager";
+}
+
 function homeContextStorageKeysForUser(user = null) {
   const scope =
     String(user?.run_prefix || buildUserPrefix({ name: user?.username || "user" })).trim() || "default";
@@ -716,6 +721,7 @@ const state = {
   modelProviderHealthByKey: {},
   modelProvidersLoading: false,
   modelProviderAddOpen: false,
+  modelProviderScope: canManageInitialModelDefaults(initialUser) ? "global" : "user",
   adminUsers: [],
   adminUsersLoading: false,
   setupDetailsOpenByKey: {},
@@ -785,6 +791,7 @@ const el = {
   modelProvidersClose: document.getElementById("modelProvidersClose"),
   modelProvidersList: document.getElementById("modelProvidersList"),
   modelProvidersStatus: document.getElementById("modelProvidersStatus"),
+  modelProviderScope: document.getElementById("modelProviderScope"),
   modelProviderAddBtn: document.getElementById("modelProviderAddBtn"),
   modelProviderAddPanel: document.getElementById("modelProviderAddPanel"),
   modelProviderAddKey: document.getElementById("modelProviderAddKey"),
@@ -2819,6 +2826,10 @@ const I18N = {
     "modelProviders.healthFailed": "Health check failed: {error}",
     "modelProviders.configured": "Configured",
     "modelProviders.notConfigured": "Not configured",
+    "modelProviders.scope": "Settings scope",
+    "modelProviders.scope.global": "Global defaults",
+    "modelProviders.scope.user": "My model settings",
+    "modelProviders.scope.help": "Global defaults apply to all users. My model settings apply only to your runs.",
     "modelProviders.add.open": "Add Model",
     "modelProviders.add.title": "Add Custom Model",
     "modelProviders.add.desc": "Register a RunPod endpoint or HTTP API that can be reused by the platform.",
@@ -4285,6 +4296,10 @@ const I18N = {
     "modelProviders.healthFailed": "상태 확인 실패: {error}",
     "modelProviders.configured": "설정됨",
     "modelProviders.notConfigured": "미설정",
+    "modelProviders.scope": "설정 범위",
+    "modelProviders.scope.global": "전역 기본값",
+    "modelProviders.scope.user": "내 모델 설정",
+    "modelProviders.scope.help": "전역 기본값은 모든 사용자에게 적용되고, 내 모델 설정은 내 실행에만 적용됩니다.",
     "modelProviders.add.open": "모델 추가",
     "modelProviders.add.title": "커스텀 모델 추가",
     "modelProviders.add.desc": "플랫폼에서 재사용할 RunPod endpoint 또는 HTTP API를 등록합니다.",
@@ -10509,12 +10524,14 @@ function modelProviderFieldValue(card, field) {
 }
 
 async function refreshModelProviders({ includeHealth = false } = {}) {
-  if (!canManageModels()) return;
+  if (!canUseModelProviders()) return;
+  syncModelProviderScopeControl();
+  const scope = currentModelProviderScope();
   state.modelProvidersLoading = true;
   if (el.modelProvidersStatus) el.modelProvidersStatus.textContent = t("modelProviders.loading");
   renderModelProviders();
   try {
-    const result = await apiCall("pipeline.model_provider_list", { include_health: Boolean(includeHealth) });
+    const result = await apiCall("pipeline.model_provider_list", { include_health: Boolean(includeHealth), scope });
     state.modelProviders = Array.isArray(result?.providers) ? result.providers : [];
     state.modelProviderHealthByKey = result?.health && typeof result.health === "object" ? result.health : {};
     if (el.modelProvidersStatus) el.modelProvidersStatus.textContent = "";
@@ -10529,7 +10546,8 @@ async function refreshModelProviders({ includeHealth = false } = {}) {
 }
 
 function openModelProvidersPanel() {
-  if (!el.modelProvidersPanel || !canManageModels()) return;
+  if (!el.modelProvidersPanel || !canUseModelProviders()) return;
+  syncModelProviderScopeControl();
   el.modelProvidersPanel.classList.remove("hidden");
   syncModelProviderAddPanel();
   void refreshModelProviders({ includeHealth: false });
@@ -10567,6 +10585,7 @@ async function saveModelProvider(modelKey) {
   if (!card) return;
   const payload = buildProviderUpdatePayload({
     modelKey,
+    scope: currentModelProviderScope(),
     providerType: modelProviderFieldValue(card, "provider_type"),
     endpointId: modelProviderFieldValue(card, "endpoint_id"),
     baseUrl: modelProviderFieldValue(card, "base_url"),
@@ -10608,6 +10627,7 @@ async function saveCustomModelProvider() {
   const providerType = normalizeProviderType(el.modelProviderAddType?.value);
   const payload = buildProviderUpdatePayload({
     modelKey,
+    scope: currentModelProviderScope(),
     providerType,
     endpointId: el.modelProviderAddEndpoint?.value || "",
     baseUrl: el.modelProviderAddBaseUrl?.value || "",
@@ -10653,6 +10673,7 @@ async function checkModelProviderHealth(modelKey) {
   const payload = card
     ? buildProviderHealthPayload({
         modelKey: key,
+        scope: currentModelProviderScope(),
         providerType: modelProviderFieldValue(card, "provider_type"),
         endpointId: modelProviderFieldValue(card, "endpoint_id"),
         baseUrl: modelProviderFieldValue(card, "base_url"),
@@ -10660,7 +10681,7 @@ async function checkModelProviderHealth(modelKey) {
         timeoutS: modelProviderFieldValue(card, "timeout_s"),
         enabled: modelProviderFieldValue(card, "enabled"),
       })
-    : { model_key: key };
+    : { model_key: key, scope: currentModelProviderScope() };
   state.modelProviderHealthByKey = { ...(state.modelProviderHealthByKey || {}), [key]: { loading: true } };
   renderModelProviders();
   try {
@@ -11663,9 +11684,9 @@ function showChat() {
 
 function updateAdminUI() {
   const isAdmin = isAdminUser();
-  const canManageModelProviders = canManageModels();
+  const canUseModelProviderSettings = canUseModelProviders();
   if (el.runpodAdminBtn) {
-    el.runpodAdminBtn.classList.toggle("hidden", !canManageModelProviders);
+    el.runpodAdminBtn.classList.toggle("hidden", !canUseModelProviderSettings);
   }
   if (isAdmin) {
     if (el.adminBtn) el.adminBtn.classList.remove("hidden");
@@ -11694,9 +11715,7 @@ function updateAdminUI() {
       setActiveTab("home");
     }
   }
-  if (!canManageModelProviders && el.modelProvidersPanel) {
-    el.modelProvidersPanel.classList.add("hidden");
-  }
+  syncModelProviderScopeControl();
 }
 
 function buildManualPlan(mode) {
@@ -26053,6 +26072,28 @@ function canManageModels() {
   return role === "admin" || role === "model_manager";
 }
 
+function canUseModelProviders() {
+  return Boolean(state.user);
+}
+
+function currentModelProviderScope() {
+  const selected = String(el.modelProviderScope?.value || state.modelProviderScope || "user").trim();
+  if (!canManageModels()) return "user";
+  return selected === "global" ? "global" : "user";
+}
+
+function syncModelProviderScopeControl() {
+  if (!el.modelProviderScope) return;
+  if (!canManageModels()) {
+    state.modelProviderScope = "user";
+    el.modelProviderScope.value = "user";
+    el.modelProviderScope.disabled = true;
+    return;
+  }
+  el.modelProviderScope.disabled = false;
+  el.modelProviderScope.value = state.modelProviderScope === "user" ? "user" : "global";
+}
+
 function renderCathJobLog() {
   if (!el.cathJobLog) return;
   const text = String(state.cathSelectedJobLog || "").trim();
@@ -26920,6 +26961,14 @@ if (el.modelProvidersClose && el.modelProvidersPanel) {
 if (el.modelProviderAddBtn && el.modelProviderAddPanel) {
   el.modelProviderAddBtn.addEventListener("click", () => {
     setModelProviderAddOpen(!state.modelProviderAddOpen);
+  });
+}
+
+if (el.modelProviderScope) {
+  el.modelProviderScope.addEventListener("change", () => {
+    state.modelProviderScope = currentModelProviderScope();
+    state.modelProviderHealthByKey = {};
+    void refreshModelProviders({ includeHealth: false });
   });
 }
 

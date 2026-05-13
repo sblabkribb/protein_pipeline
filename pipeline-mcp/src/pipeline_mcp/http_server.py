@@ -47,10 +47,13 @@ _ADMIN_ONLY_TOOLS = {
     "pipeline.runpod_get_history",
 }
 
-_MODEL_PROVIDER_TOOLS = {
-    "pipeline.model_provider_list",
-    "pipeline.model_provider_update",
-    "pipeline.model_provider_health",
+_USER_PROVIDER_SCOPED_TOOLS = {
+    "pipeline.run",
+    "pipeline.preflight",
+    "pipeline.af2_predict",
+    "pipeline.run_af2",
+    "pipeline.run_diffdock",
+    "pipeline.run_from_prompt",
 }
 
 _RUN_SCOPED_TOOLS = {
@@ -361,6 +364,33 @@ class Handler(BaseHTTPRequestHandler):
         role = str((user or {}).get("role") or "")
         return role in {"admin", "model_manager"}
 
+    def _provider_scope_from_arguments(self, arguments: dict[str, Any], user: dict[str, Any] | None = None) -> str:
+        provider = arguments.get("provider") if isinstance(arguments.get("provider"), dict) else {}
+        raw = arguments.get("scope", provider.get("scope"))
+        if raw is None:
+            return "global" if self._can_manage_models(user) else "user"
+        scope = str(raw or "global").strip().lower().replace("-", "_")
+        if scope in {"global", "default", "admin"}:
+            return "global"
+        if scope in {"user", "personal", "mine"}:
+            return "user"
+        raise AuthError("scope must be one of: global, user")
+
+    def _user_context(self, user: dict[str, Any] | None) -> dict[str, str]:
+        return {
+            "username": str((user or {}).get("username") or ""),
+            "role": str((user or {}).get("role") or ""),
+            "run_prefix": safe_run_prefix(str((user or {}).get("username") or "user")),
+        }
+
+    def _dispatcher_for_tool(self, user: dict[str, Any] | None, name: str) -> ToolDispatcher:
+        dispatcher = self.dispatcher
+        if name in _USER_PROVIDER_SCOPED_TOOLS and user is not None and isinstance(dispatcher, ToolDispatcher):
+            from .app import build_runner
+
+            return ToolDispatcher(build_runner(provider_user=str(user.get("username") or "")))
+        return dispatcher
+
     def _user_is_approved(self, user: dict[str, Any] | None) -> bool:
         if user is None:
             return True
@@ -415,10 +445,6 @@ class Handler(BaseHTTPRequestHandler):
                     for item in entries
                     if isinstance(item, dict)
                     and str(item.get("name") or "") not in _ADMIN_ONLY_TOOLS
-                    and (
-                        str(item.get("name") or "") not in _MODEL_PROVIDER_TOOLS
-                        or self._can_manage_models(user)
-                    )
                 ]
         return tools
 
@@ -430,7 +456,12 @@ class Handler(BaseHTTPRequestHandler):
     ) -> dict[str, Any]:
         if name in _ADMIN_ONLY_TOOLS and user is not None and not self._is_admin(user):
             raise AuthError("admin required")
-        if name in _MODEL_PROVIDER_TOOLS and user is not None and not self._can_manage_models(user):
+        if (
+            name == "pipeline.model_provider_update"
+            and user is not None
+            and self._provider_scope_from_arguments(arguments, user) == "global"
+            and not self._can_manage_models(user)
+        ):
             raise AuthError("model manager required")
         if name in _RUN_SCOPED_TOOLS:
             run_id = str(arguments.get("run_id") or "")
@@ -464,16 +495,12 @@ class Handler(BaseHTTPRequestHandler):
             "pipeline.archive_round",
             "pipeline.restore_round",
             "pipeline.delete_round",
+            "pipeline.model_provider_list",
+            "pipeline.model_provider_update",
+            "pipeline.model_provider_health",
         } and user is not None:
-            arguments.setdefault(
-                "user",
-                {
-                    "username": str(user.get("username") or ""),
-                    "role": str(user.get("role") or ""),
-                    "run_prefix": safe_run_prefix(str(user.get("username") or "user")),
-                },
-            )
-        out = self.dispatcher.call_tool(name, arguments)
+            arguments.setdefault("user", self._user_context(user))
+        out = self._dispatcher_for_tool(user, name).call_tool(name, arguments)
         if name == "pipeline.list_runs" and user is not None and not self._is_admin(user):
             prefix = safe_run_prefix(str(user.get("username") or "user")) + "_"
             runs = out.get("runs") if isinstance(out, dict) else None

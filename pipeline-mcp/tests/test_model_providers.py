@@ -51,6 +51,44 @@ def test_model_provider_store_persists_http_provider_with_encrypted_token(tmp_pa
     assert effective["token"] == "worker-token"
 
 
+def test_user_override_does_not_change_global_default(tmp_path):
+    store = ModelProviderStore(tmp_path)
+    store.upsert(
+        "rfd3",
+        {
+            "provider_type": "runpod",
+            "endpoint_id": "global-rfd3",
+            "enabled": True,
+        },
+        actor="admin",
+        scope="global",
+    )
+    store.upsert(
+        "rfd3",
+        {
+            "provider_type": "http_api",
+            "base_url": "http://alice-gpu.example:18104",
+            "enabled": True,
+        },
+        actor="alice",
+        scope="user",
+        user_id="alice",
+    )
+
+    global_provider = store.get_effective("rfd3")
+    alice_provider = store.get_effective("rfd3", user_id="alice")
+    bob_provider = store.get_effective("rfd3", user_id="bob")
+
+    assert global_provider["provider_type"] == "runpod"
+    assert global_provider["endpoint_id"] == "global-rfd3"
+    assert alice_provider["provider_type"] == "http_api"
+    assert alice_provider["base_url"] == "http://alice-gpu.example:18104"
+    assert alice_provider["scope"] == "user"
+    assert alice_provider["scope_user"] == "alice"
+    assert bob_provider["provider_type"] == "runpod"
+    assert bob_provider["endpoint_id"] == "global-rfd3"
+
+
 def test_provider_tools_list_and_update_model_providers(tmp_path):
     runner = SimpleNamespace(output_root=str(tmp_path))
     dispatcher = ToolDispatcher(runner)  # type: ignore[arg-type]
