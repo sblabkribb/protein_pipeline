@@ -1,12 +1,26 @@
 from __future__ import annotations
 
-import runpy
+import ast
 from pathlib import Path
 
 from pipeline_mcp import pipeline
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _read_int_constant(path: Path, name: str) -> int:
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        if not any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
+            continue
+        value = ast.literal_eval(node.value)
+        if not isinstance(value, int):
+            raise AssertionError(f"{name} in {path} is not an int")
+        return value
+    raise AssertionError(f"{name} not found in {path}")
 
 
 def test_pipeline_gpu_http_worker_defaults_are_conservative(monkeypatch):
@@ -40,8 +54,7 @@ def test_cath_batch_defaults_start_with_two_target_workers():
         "scripts/02_run_cath_batch.py",
         "public_release/scripts/02_run_cath_batch.py",
     ):
-        namespace = runpy.run_path(str(REPO_ROOT / relative), run_name="__not_main__")
-        assert namespace["MAX_CONCURRENT_PIPELINES"] == 2
+        assert _read_int_constant(REPO_ROOT / relative, "MAX_CONCURRENT_PIPELINES") == 2
 
 
 def test_cath_ui_default_matches_batch_default():
