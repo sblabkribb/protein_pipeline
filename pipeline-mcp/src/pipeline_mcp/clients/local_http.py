@@ -1,14 +1,34 @@
 from __future__ import annotations
 
+import base64
 from dataclasses import dataclass
+import io
 from typing import Any
 from collections.abc import Callable
 from pathlib import Path
 import tempfile
+import zipfile
 
 import requests
 
 from ..models import SequenceRecord
+
+
+def _encode_text_file(name: str, content: str) -> dict[str, str]:
+    data = str(content or "").encode("utf-8", errors="replace")
+    return {"filename": name, "data_b64": base64.b64encode(data).decode("ascii")}
+
+
+def _select_rank1_sdf(names: list[str], complex_name: str | None) -> str | None:
+    candidates = [name for name in names if name.lower().endswith("/rank1.sdf") or name.lower().endswith("rank1.sdf")]
+    if complex_name:
+        preferred = [name for name in candidates if f"/{complex_name}/" in name or name.startswith(f"{complex_name}/")]
+        if preferred:
+            candidates = preferred
+    if not candidates:
+        return None
+    candidates.sort()
+    return candidates[0]
 
 
 @dataclass(frozen=True)
@@ -147,6 +167,44 @@ class LocalHTTPDiffDockClient:
     def dock(self, **kwargs: Any) -> dict[str, Any]:
         payload = dict(kwargs)
         on_job_id = payload.pop("on_job_id", None)
+        complex_name = str(payload.get("complex_name") or "complex")
+        if "protein_ligand_csv" not in payload:
+            protein_pdb = str(payload.pop("protein_pdb", "") or "")
+            ligand_smiles = payload.pop("ligand_smiles", None)
+            ligand_sdf = payload.pop("ligand_sdf", None)
+            if not protein_pdb.strip():
+                raise ValueError("DiffDock requires protein_pdb text")
+            if not (ligand_smiles or ligand_sdf):
+                raise ValueError("DiffDock requires ligand_smiles or ligand_sdf")
+            config = str(payload.get("config") or "default_inference_args.yaml")
+            out_dir = str(payload.get("out_dir") or "results/")
+            extra_args = str(payload.get("extra_args") or "")
+            protein_name = f"{complex_name}.pdb"
+            ligand_name = f"{complex_name}.sdf"
+            csv_name = "input_protein_ligand_info.csv"
+            ligand_desc = str(ligand_smiles) if ligand_smiles else f"inputs/{ligand_name}"
+            csv_text = "\n".join(
+                [
+                    "complex_name,protein_path,ligand_description,protein_sequence",
+                    f"{complex_name},inputs/{protein_name},{ligand_desc},",
+                ]
+            ) + "\n"
+            cmd = f"python3 -m inference --config {config} --protein_ligand_csv data/{csv_name} --out_dir {out_dir}"
+            if extra_args:
+                cmd = f"{cmd} {extra_args}".strip()
+            payload.update(
+                {
+                    "cmd": cmd,
+                    "protein_ligand_csv": _encode_text_file(csv_name, csv_text),
+                    "pdb_files": [_encode_text_file(protein_name, protein_pdb)],
+                    "sdf_files": [_encode_text_file(ligand_name, str(ligand_sdf))] if ligand_sdf else [],
+                    "data_dir": "data",
+                    "inputs_dir": "inputs",
+                    "out_dir": out_dir,
+                    "config": config,
+                    "extra_args": extra_args,
+                }
+            )
         output = LocalHttpRunClient(self.base_url, self.token, self.timeout_s).run(
             payload,
             on_job_id=on_job_id if callable(on_job_id) else None,
@@ -155,6 +213,20 @@ class LocalHTTPDiffDockClient:
             return output
         if "selected_sdf_name" in output:
             return output
+        zip_b64 = output.get("out_dir_zip_b64")
+        if isinstance(zip_b64, str) and zip_b64.strip():
+            zip_bytes = base64.b64decode(zip_b64)
+            with zipfile.ZipFile(io.BytesIO(zip_bytes), "r") as zf:
+                names = zf.namelist()
+                selected = _select_rank1_sdf(names, complex_name=complex_name)
+                if selected:
+                    return {
+                        "job_id": str(output.get("job_id") or ""),
+                        "output": output,
+                        "zip_bytes": zip_bytes,
+                        "selected_sdf_name": selected,
+                        "sdf_text": zf.read(selected).decode("utf-8", errors="replace"),
+                    }
         return {
             "job_id": str(output.get("job_id") or ""),
             "output": output,

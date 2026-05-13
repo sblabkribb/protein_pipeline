@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
+import io
 import json as json_module
+import zipfile
 
 from pipeline_mcp.clients.local_http import LocalHTTPBioEmuClient
 from pipeline_mcp.clients.local_http import LocalHTTPDiffDockClient
@@ -63,6 +66,10 @@ def test_local_http_bioemu_does_not_send_callback_in_json_payload(monkeypatch):
 def test_local_http_diffdock_does_not_send_callback_in_json_payload(monkeypatch):
     calls: list[dict] = []
     seen_job_ids: list[str] = []
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w") as zf:
+        zf.writestr("smoke_diffdock/rank1.sdf", "rank1 sdf text")
+    zip_b64 = base64.b64encode(zip_buffer.getvalue()).decode("ascii")
 
     def fake_post(url, headers=None, json=None, timeout=None):  # type: ignore[no-untyped-def]
         json_module.dumps(json)
@@ -71,7 +78,7 @@ def test_local_http_diffdock_does_not_send_callback_in_json_payload(monkeypatch)
             {
                 "status": "COMPLETED",
                 "job_id": "diffdock-local-job",
-                "output": {"sdf_text": "ligand"},
+                "output": {"returncode": 0, "out_dir_zip_b64": zip_b64},
             }
         )
 
@@ -80,9 +87,13 @@ def test_local_http_diffdock_does_not_send_callback_in_json_payload(monkeypatch)
     result = LocalHTTPDiffDockClient("http://gpu.example:18105").dock(
         protein_pdb="ATOM\n",
         ligand_smiles="CCO",
+        complex_name="smoke_diffdock",
         on_job_id=seen_job_ids.append,
     )
 
-    assert result["sdf_text"] == "ligand"
+    assert result["sdf_text"] == "rank1 sdf text"
+    assert result["selected_sdf_name"] == "smoke_diffdock/rank1.sdf"
+    assert "protein_ligand_csv" in calls[0]["input"]
+    assert calls[0]["input"]["pdb_files"][0]["filename"] == "smoke_diffdock.pdb"
     assert "on_job_id" not in calls[0]["input"]
     assert seen_job_ids == ["diffdock-local-job"]
