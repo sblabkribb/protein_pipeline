@@ -174,6 +174,17 @@ test("frontend exposes Tailwind-inspired platform color tokens", () => {
   assert.match(styles, /--state-success/);
 });
 
+test("topbar removes duplicated usage and settings controls", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.doesNotMatch(html, /id="helpBtn"/);
+  assert.doesNotMatch(html, /id="settingsBtn"/);
+  assert.doesNotMatch(source, /Usage for the static guide/);
+  assert.doesNotMatch(source, /Settings for report language/);
+  assert.doesNotMatch(source, /리포트 언어는 Settings/);
+});
+
 test("home screen is an experiment launchpad", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");

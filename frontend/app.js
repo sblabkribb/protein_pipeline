@@ -795,7 +795,6 @@ const el = {
   modelProviderAddCancel: document.getElementById("modelProviderAddCancel"),
   modelProviderAddSave: document.getElementById("modelProviderAddSave"),
   tabBtnCath: document.getElementById("tabBtnCath"),
-  helpBtn: document.getElementById("helpBtn"),
   tutorialBtn: document.getElementById("tutorialBtn"),
   tutorialOverlay: document.getElementById("tutorialOverlay"),
   tutorialSpotlight: document.getElementById("tutorialSpotlight"),
@@ -1105,7 +1104,6 @@ const el = {
   reportChartType: document.getElementById("reportChartType"),
   reportChartCanvas: document.getElementById("reportChartCanvas"),
   reportChartCaption: document.getElementById("reportChartCaption"),
-  settingsBtn: document.getElementById("settingsBtn"),
   settingsPanel: document.getElementById("settingsPanel"),
   settingsClose: document.getElementById("settingsClose"),
   apiBaseValue: document.getElementById("apiBaseValue"),
@@ -2093,7 +2091,7 @@ const I18N = {
     "tutorial.step.report.body":
       "Generate builds the markdown report, Rendered View previews it, Export Package bundles report assets, and Save stores your edited version.",
     "tutorial.step.report.hint":
-      "Report language follows Settings. After generating, review the evidence score and artifact links before saving or exporting.",
+      "Report language follows the current UI language. After generating, review the evidence score and artifact links before saving or exporting.",
     "tutorial.step.copilot.title": "Copilot answers in context",
     "tutorial.step.copilot.body":
       "Copilot reads the current run context and can explain metrics, compare state, resume behavior, and practical next actions.",
@@ -2101,8 +2099,8 @@ const I18N = {
       "Use Copilot for interpretation and navigation help; use the main Run, Resume, Report, and Export buttons for irreversible actions.",
     "tutorial.step.topbar.title": "Top menu controls",
     "tutorial.step.topbar.body":
-      "Use KO/EN for language, Copilot for contextual help, Usage for the static guide, Tutorial to replay this tour, Settings for report language, and Logout when finished.",
-    "tutorial.step.topbar.hint": "Settings is only one item here. Most everyday navigation stays in the left tabs and Home workspace.",
+      "Use KO/EN for language, Copilot for contextual help, Tutorial to replay this tour, and Logout when finished. Admin users also see management controls.",
+    "tutorial.step.topbar.hint": "Everyday navigation stays in the left tabs and Home workspace.",
     "tabs.home": "Home",
     "tabs.evolution": "Evolution",
     "tabs.fast": "Fast",
@@ -3561,7 +3559,7 @@ const I18N = {
     "tutorial.step.report.body":
       "Generate는 markdown report를 만들고, Rendered View는 렌더링 미리보기를 열며, Export Package는 report asset을 묶고, Save는 수정본을 저장합니다.",
     "tutorial.step.report.hint":
-      "리포트 언어는 Settings를 따릅니다. 생성 후 evidence score와 artifact link를 확인한 뒤 저장하거나 export하세요.",
+      "리포트 언어는 현재 UI 언어를 따릅니다. 생성 후 evidence score와 artifact link를 확인한 뒤 저장하거나 export하세요.",
     "tutorial.step.copilot.title": "Copilot은 현재 맥락으로 답합니다",
     "tutorial.step.copilot.body":
       "Copilot은 현재 run 맥락을 읽고 metric 해석, compare 상태, resume 방식, 다음 행동을 설명해줍니다.",
@@ -3569,8 +3567,8 @@ const I18N = {
       "해석과 탐색 도움에는 Copilot을 쓰고, 실제 실행/재개/리포트/export는 각 화면의 전용 버튼으로 처리하세요.",
     "tutorial.step.topbar.title": "상단 메뉴 안내",
     "tutorial.step.topbar.body":
-      "KO/EN은 언어 변경, Copilot은 현재 화면 도움, 사용법은 고정 가이드, 튜토리얼은 이 안내 다시 보기, 설정은 리포트 언어, 로그아웃은 세션 종료에 사용합니다.",
-    "tutorial.step.topbar.hint": "설정은 상단 메뉴 중 하나입니다. 평소 작업 이동은 왼쪽 탭과 Home 화면에서 시작하세요.",
+      "KO/EN은 언어 변경, Copilot은 현재 화면 도움, 튜토리얼은 이 안내 다시 보기, 로그아웃은 세션 종료에 사용합니다. 관리자에게는 관리 메뉴가 추가로 보입니다.",
+    "tutorial.step.topbar.hint": "평소 작업 이동은 왼쪽 탭과 Home 화면에서 시작하세요.",
     "tabs.home": "홈",
     "tabs.evolution": "Evolution",
     "tabs.fast": "빠른 실행",
@@ -26830,16 +26828,6 @@ if (el.artifactComparisonDetails) {
   });
 }
 
-if (el.settingsBtn && el.settingsPanel) {
-  el.settingsBtn.addEventListener("click", () => {
-    el.settingsPanel.classList.remove("hidden");
-    if (el.apiBaseValue) {
-      el.apiBaseValue.textContent = state.apiBase;
-    }
-    updateReportLangSelect();
-  });
-}
-
 if (el.settingsClose && el.settingsPanel) {
   el.settingsClose.addEventListener("click", () => {
     el.settingsPanel.classList.add("hidden");
@@ -26899,12 +26887,6 @@ if (el.settingsPanel) {
     if (event.target === el.settingsPanel) {
       el.settingsPanel.classList.add("hidden");
     }
-  });
-}
-
-if (el.helpBtn && el.helpPanel) {
-  el.helpBtn.addEventListener("click", () => {
-    el.helpPanel.classList.remove("hidden");
   });
 }
 
