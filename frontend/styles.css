@@ -6141,13 +6141,6 @@ textarea:focus-visible {
   grid-column: 1 / -1;
 }
 
-.model-provider-toggle {
-  align-self: end;
-  flex-direction: row !important;
-  align-items: center;
-  min-height: 42px;
-}
-
 .model-provider-actions {
   justify-content: flex-end;
   flex-wrap: wrap;

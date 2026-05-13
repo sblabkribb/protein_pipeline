@@ -116,6 +116,14 @@ test("model provider UI supports inline health status and adding custom models",
   assert.doesNotMatch(source, /modelProviderHealthBadge\(provider,\s*health/);
 });
 
+test("model provider UI uses provider type instead of a separate enabled checkbox", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.doesNotMatch(source, /data-model-provider-field="enabled"/);
+  assert.doesNotMatch(source, /modelProviders\.enabled/);
+  assert.doesNotMatch(source, /modelProviderFieldValue\(card,\s*"enabled"\)/);
+});
+
 test("topbar does not expose a separate account-console button", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");

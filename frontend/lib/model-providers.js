@@ -66,14 +66,14 @@ export function buildProviderUpdatePayload({
   endpointId,
   baseUrl,
   token,
-  enabled,
   timeoutS,
 }) {
+  const normalizedType = normalizeProviderType(providerType);
   const provider = {
-    provider_type: normalizeProviderType(providerType),
+    provider_type: normalizedType,
     endpoint_id: trimText(endpointId),
     base_url: normalizeProviderBaseUrl(baseUrl),
-    enabled: Boolean(enabled),
+    enabled: normalizedType !== "disabled",
   };
   const tokenText = trimText(token);
   if (tokenText) {

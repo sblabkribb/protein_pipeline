@@ -2814,7 +2814,6 @@ const I18N = {
     "modelProviders.token": "API token",
     "modelProviders.tokenHelp": "Leave blank to keep the saved token.",
     "modelProviders.timeout": "Timeout (sec)",
-    "modelProviders.enabled": "Enabled",
     "modelProviders.connection": "Connection",
     "modelProviders.health": "Health",
     "modelProviders.save": "Save",
@@ -4284,7 +4283,6 @@ const I18N = {
     "modelProviders.token": "API 토큰",
     "modelProviders.tokenHelp": "비워두면 저장된 토큰을 유지합니다.",
     "modelProviders.timeout": "제한 시간(초)",
-    "modelProviders.enabled": "사용",
     "modelProviders.connection": "현재 연결",
     "modelProviders.health": "상태 확인",
     "modelProviders.save": "저장",
@@ -10469,10 +10467,6 @@ function renderModelProviderCard(provider, health = null) {
           <span>${escapeHtml(t("modelProviders.timeout"))}</span>
           <input data-model-provider-field="timeout_s" type="number" min="1" step="1" value="${escapeAttr(timeout)}" />
         </label>
-        <label class="toggle model-provider-toggle">
-          <input data-model-provider-field="enabled" type="checkbox"${provider?.enabled ? " checked" : ""} />
-          <span>${escapeHtml(t("modelProviders.enabled"))}</span>
-        </label>
       </div>
       <div class="model-provider-actions">
         ${modelProviderActionStatus(provider, health)}
@@ -10591,7 +10585,6 @@ async function saveModelProvider(modelKey) {
     baseUrl: modelProviderFieldValue(card, "base_url"),
     token: modelProviderFieldValue(card, "token"),
     timeoutS: modelProviderFieldValue(card, "timeout_s"),
-    enabled: modelProviderFieldValue(card, "enabled"),
   });
   try {
     const result = await apiCall("pipeline.model_provider_update", payload);
@@ -10633,7 +10626,6 @@ async function saveCustomModelProvider() {
     baseUrl: el.modelProviderAddBaseUrl?.value || "",
     token: el.modelProviderAddToken?.value || "",
     timeoutS: el.modelProviderAddTimeout?.value || "21600",
-    enabled: providerType !== "disabled",
   });
   payload.provider = {
     ...payload.provider,
@@ -10679,7 +10671,6 @@ async function checkModelProviderHealth(modelKey) {
         baseUrl: modelProviderFieldValue(card, "base_url"),
         token: modelProviderFieldValue(card, "token"),
         timeoutS: modelProviderFieldValue(card, "timeout_s"),
-        enabled: modelProviderFieldValue(card, "enabled"),
       })
     : { model_key: key, scope: currentModelProviderScope() };
   state.modelProviderHealthByKey = { ...(state.modelProviderHealthByKey || {}), [key]: { loading: true } };
