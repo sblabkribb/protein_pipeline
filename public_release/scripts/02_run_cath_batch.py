@@ -30,8 +30,8 @@ mark_cancel_requested = None
 set_status = None
 ToolDispatcher = None
 
-# GPU 워커 6개 중 여유분 1개를 남기고 5개를 풀가동합니다.
-MAX_CONCURRENT_PIPELINES = 5
+# ColabFold GPU worker가 run 내부에서도 병렬 호출될 수 있으므로 보수적으로 시작합니다.
+MAX_CONCURRENT_PIPELINES = 2
 MAX_RETRIES_PER_TARGET = 3
 STALE_RUNNING_SECONDS = 30 * 60
 

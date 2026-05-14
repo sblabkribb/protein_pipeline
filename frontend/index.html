@@ -24,19 +24,16 @@
           <button class="lang-btn" data-lang="en">EN</button>
         </div>
         <button id="copilotOpenBtn" class="ghost" data-i18n="copilot.open">Copilot</button>
-        <button id="helpBtn" class="ghost" data-i18n="action.help">Usage</button>
         <button id="tutorialBtn" class="ghost hidden" type="button" data-i18n="action.tutorial">Tutorial</button>
-        <button id="accountBtn" class="ghost hidden" data-i18n="action.account">Account</button>
         <button
           id="runpodAdminBtn"
           class="ghost hidden"
           type="button"
-          onclick="window.location.href = window.location.pathname.startsWith('/pipeline') ? '/pipeline/runpod-admin/' : '/runpod-admin/'"
+          data-i18n="modelProviders.open"
         >
-          RunPod Admin
+          Model Providers
         </button>
         <button id="adminBtn" class="ghost hidden" data-i18n="action.admin">Admin</button>
-        <button id="settingsBtn" class="ghost" data-i18n="action.settings">Settings</button>
         <button id="logoutBtn" class="ghost" data-i18n="action.logout">Logout</button>
       </div>
     </header>
@@ -1102,7 +1099,7 @@
                   </label>
                   <label class="cath-inline-field">
                     <span data-i18n="cath.maxWorkers">Max workers</span>
-                    <input id="cathMaxWorkers" type="number" min="1" step="1" value="4" />
+                    <input id="cathMaxWorkers" type="number" min="1" step="1" value="2" />
                   </label>
                   <button id="cathRefreshBtn" class="ghost" data-i18n="cath.refresh">Refresh</button>
                 </div>
@@ -1712,6 +1709,89 @@
       </div>
     </div>
 
+    <div id="modelProvidersPanel" class="overlay hidden" role="dialog" aria-modal="true">
+      <div class="overlay-card model-providers-card">
+        <div class="overlay-header">
+          <div>
+            <h4 data-i18n="modelProviders.title">Model Providers</h4>
+            <p class="hint" data-i18n="modelProviders.desc">
+              Register each model as RunPod, HTTP API, or disabled.
+            </p>
+          </div>
+          <div class="modal-actions">
+            <button id="modelProviderAddBtn" class="ghost" type="button" data-i18n="modelProviders.add.open">
+              Add Model
+            </button>
+            <button id="modelProvidersClose" class="ghost" data-i18n="common.close">Close</button>
+          </div>
+        </div>
+        <div id="modelProvidersStatus" class="hint"></div>
+        <div class="model-provider-scope-row">
+          <label>
+            <span data-i18n="modelProviders.scope">Settings scope</span>
+            <select id="modelProviderScope">
+              <option value="user" data-i18n="modelProviders.scope.user">My model settings</option>
+              <option value="global" data-i18n="modelProviders.scope.global">Global defaults</option>
+            </select>
+          </label>
+          <p class="hint" data-i18n="modelProviders.scope.help">
+            Global defaults apply to all users. My model settings apply only to your runs.
+          </p>
+        </div>
+        <div id="modelProviderAddPanel" class="model-provider-add-panel hidden">
+          <div class="model-provider-add-head">
+            <div>
+              <strong data-i18n="modelProviders.add.title">Add Custom Model</strong>
+              <p class="hint" data-i18n="modelProviders.add.desc">
+                Register a RunPod endpoint or HTTP API that can be reused by the platform.
+              </p>
+            </div>
+          </div>
+          <div class="model-provider-add-grid">
+            <label>
+              <span data-i18n="modelProviders.add.key">Model key</span>
+              <input id="modelProviderAddKey" type="text" placeholder="esmfold_large" />
+            </label>
+            <label>
+              <span data-i18n="modelProviders.add.label">Display name</span>
+              <input id="modelProviderAddLabel" type="text" placeholder="ESMFold Large" />
+            </label>
+            <label>
+              <span data-i18n="modelProviders.type">Provider</span>
+              <select id="modelProviderAddType">
+                <option value="http_api" data-i18n="modelProviders.type.http_api">HTTP API</option>
+                <option value="runpod" data-i18n="modelProviders.type.runpod">RunPod</option>
+                <option value="disabled" data-i18n="modelProviders.type.disabled">Disabled</option>
+              </select>
+            </label>
+            <label>
+              <span data-i18n="modelProviders.endpoint">RunPod endpoint ID</span>
+              <input id="modelProviderAddEndpoint" type="text" />
+            </label>
+            <label class="model-provider-wide">
+              <span data-i18n="modelProviders.baseUrl">HTTP API URL</span>
+              <input id="modelProviderAddBaseUrl" type="url" placeholder="http://gpu.example:18162" />
+            </label>
+            <label>
+              <span data-i18n="modelProviders.token">API token</span>
+              <input id="modelProviderAddToken" type="password" autocomplete="new-password" />
+            </label>
+            <label>
+              <span data-i18n="modelProviders.timeout">Timeout (sec)</span>
+              <input id="modelProviderAddTimeout" type="number" min="1" step="1" value="21600" />
+            </label>
+          </div>
+          <div class="model-provider-add-actions">
+            <button id="modelProviderAddCancel" class="ghost" type="button" data-i18n="common.close">Close</button>
+            <button id="modelProviderAddSave" class="primary" type="button" data-i18n="modelProviders.add.save">
+              Add Model
+            </button>
+          </div>
+        </div>
+        <div id="modelProvidersList" class="model-provider-list"></div>
+      </div>
+    </div>
+
     <div id="adminPanel" class="overlay hidden" role="dialog" aria-modal="true">
       <div class="overlay-card admin-card">
         <div class="overlay-header">
@@ -1740,6 +1820,7 @@
           <span data-i18n="admin.role">Role</span>
           <select id="adminRole">
             <option value="user" data-i18n="admin.role.user">User</option>
+            <option value="model_manager" data-i18n="admin.role.modelManager">Model Manager</option>
             <option value="admin" data-i18n="admin.role.admin">Admin</option>
           </select>
         </label>
@@ -1747,6 +1828,19 @@
           <button id="adminCreateUser" class="primary" data-i18n="admin.create">Create User</button>
         </div>
         <div id="adminStatus" class="hint"></div>
+        <div class="panel-divider"></div>
+        <div class="admin-users-section">
+          <div class="admin-users-head">
+            <div>
+              <div class="status-subtitle" data-i18n="admin.users.title">User Approval</div>
+              <p class="hint" data-i18n="admin.users.desc">
+                Approve new Google/OIDC users and assign model-management rights.
+              </p>
+            </div>
+            <button id="adminRefreshUsers" class="ghost" type="button" data-i18n="admin.users.refresh">Refresh</button>
+          </div>
+          <div id="adminUserList" class="admin-user-list"></div>
+        </div>
       </div>
     </div>
 

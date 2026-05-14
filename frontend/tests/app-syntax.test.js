@@ -174,6 +174,17 @@ test("frontend exposes Tailwind-inspired platform color tokens", () => {
   assert.match(styles, /--state-success/);
 });
 
+test("topbar removes duplicated usage and settings controls", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.doesNotMatch(html, /id="helpBtn"/);
+  assert.doesNotMatch(html, /id="settingsBtn"/);
+  assert.doesNotMatch(source, /Usage for the static guide/);
+  assert.doesNotMatch(source, /Settings for report language/);
+  assert.doesNotMatch(source, /리포트 언어는 Settings/);
+});
+
 test("home screen is an experiment launchpad", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
@@ -279,7 +290,8 @@ test("advanced target input is prioritized and rfd3 override input is collapsed"
   assert.match(source, /const isRfd3InputOverride = q\.id === "rfd3_input_pdb" && state\.runMode !== "rfd3";/);
   assert.match(source, /document\.createElement\(isRfd3InputOverride \? "details" : "div"\)/);
   assert.match(source, /optional-attachment-item/);
-  assert.match(source, /item\.open = setupRfd3InputOverrideVisible\(\) \|\| Boolean\(String\(state\.answers\[q\.id\] \|\| ""\)\.trim\(\)\);/);
+  assert.match(source, /const defaultOpen = setupRfd3InputOverrideVisible\(\) \|\| Boolean\(String\(state\.answers\[q\.id\] \|\| ""\)\.trim\(\)\);/);
+  assert.match(source, /setupDetailsStateKey\(`attachment-\$\{safeFileId\}`,\s*\{\s*stepId: setupWizardStepId \|\| "input"\s*\}\)/);
   assert.match(source, /attachment-\$\{safeFileId\}/);
   assert.match(styles, /\.attachment-item\.attachment-target_input/);
   assert.match(styles, /\.optional-attachment-item/);
@@ -303,11 +315,26 @@ test("advanced optional setup boards are collapsed by default", () => {
   assert.match(source, /function makeOptionalSetupDetails/);
   assert.match(source, /document\.createElement\("details"\)/);
   assert.match(source, /optional-setup-card/);
-  assert.match(source, /appendConfigCard\(makeOptionalSetupDetails\(card\)\);/);
-  assert.match(source, /appendConfigCard\(makeOptionalSetupDetails\(card,\s*\{ defaultOpen: false \}\)\);/m);
+  assert.match(source, /appendConfigCard\(makeOptionalSetupDetails\(card,\s*\{\s*key: "options"\s*\}\)\);/);
+  assert.match(source, /appendConfigCard\(makeOptionalSetupDetails\(card,\s*\{\s*key: "parameters",\s*defaultOpen: false\s*\}\)\);/m);
   assert.match(styles, /\.optional-setup-card/);
   assert.match(styles, /\.optional-setup-summary/);
   assert.match(styles, /\.optional-setup-body/);
+});
+
+test("advanced optional setup boards preserve open state across rerenders", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(source, /setupDetailsOpenByKey:\s*\{\}/);
+  assert.match(source, /function setupDetailsStateKey\(/);
+  assert.match(source, /function rememberSetupDetailsOpen\(/);
+  assert.match(source, /details\.addEventListener\("toggle",\s*\(\)\s*=>\s*\{/);
+  assert.match(source, /readSetupDetailsOpen\(stateKey,\s*defaultOpen\)/);
+  assert.match(source, /makeOptionalSetupDetails\(card,\s*\{\s*key:\s*"options"/);
+  assert.match(source, /makeOptionalSetupDetails\(card,\s*\{\s*key:\s*"parameters"/);
+  assert.match(source, /makeOptionalSetupDetails\(card,\s*\{\s*key:\s*"constraints"/);
+  assert.match(source, /makeOptionalSetupDetails\(card,\s*\{\s*key:\s*"rfd3-detail"/);
+  assert.match(source, /makeOptionalSetupDetails\(card,\s*\{\s*key:\s*"evolution"/);
 });
 
 test("user-facing Korean tutorial copy avoids internal pipeline jargon", () => {
@@ -343,7 +370,7 @@ test("frontend includes a localized first-run tutorial overlay", () => {
   assert.match(html, /id="tutorialSkip"/);
   assert.match(html, /id="tutorialNext"/);
 
-  assert.match(source, /const TUTORIAL_STORAGE_KEY = "kbf\.tutorial\.completed\.v2"/);
+  assert.match(source, /const TUTORIAL_STORAGE_KEY = "kbf\.tutorial\.completed\.v3"/);
   assert.match(source, /const TUTORIAL_STEPS = \[/);
   assert.match(source, /function maybeShowTutorialOnFirstVisit/);
   assert.match(source, /function openTutorial/);
@@ -388,8 +415,8 @@ test("tutorial covers expert workflow controls and downstream review tools", () 
   assert.match(source, /id: "topbarMenu"[\s\S]*?target: "\.topbar-actions"/m);
 
   assert.match(source, /function applyTutorialStepContext/);
-  assert.match(source, /if \(step\?\.id === "experimentChoice"\) \{\s*openExperimentChoicePanel\(\{ focusFirst: false \}\);\s*return;\s*\}/m);
-  assert.match(source, /closeExperimentChoicePanel\(\);\s*const setupStep = String\(step\?\.setupStep \|\| ""\)\.trim\(\);/m);
+  assert.match(source, /if \(step\?\.id === "experimentChoice"\) \{[\s\S]*?openExperimentChoicePanel\(\{ focusFirst: false \}\);[\s\S]*?return;\s*\}/m);
+  assert.match(source, /closeExperimentChoicePanel\(\);[\s\S]*?const setupStep = String\(step\?\.setupStep \|\| ""\)\.trim\(\);/m);
   assert.match(source, /state\.setupStepIndex = stepIndex;/);
   assert.match(source, /"tutorial\.step\.homeProject\.title"/);
   assert.match(source, /"tutorial\.step\.homeRound\.title"/);
@@ -406,6 +433,21 @@ test("tutorial covers expert workflow controls and downstream review tools", () 
   assert.match(source, /"tutorial\.step\.report\.title"/);
   assert.match(source, /"tutorial\.step\.copilot\.title"/);
   assert.match(source, /"tutorial\.step\.topbar\.title"/);
+});
+
+test("tutorial covers the updated model provider menu and custom model add flow", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(source, /id: "modelProviders"[\s\S]*?target: "\.model-providers-card"/m);
+  assert.match(source, /id: "modelProviderAdd"[\s\S]*?target: "#modelProviderAddPanel"/m);
+  assert.match(source, /"tutorial\.step\.modelProviders\.title"/);
+  assert.match(source, /"tutorial\.step\.modelProviderAdd\.title"/);
+  assert.match(source, /"tutorial\.step\.topbar\.body"[\s\S]*?Model Providers/);
+  assert.match(source, /"tutorial\.step\.topbar\.body"[\s\S]*?모델 연결/);
+  assert.match(source, /if \(step\?\.id === "modelProviders"\) \{/);
+  assert.match(source, /if \(step\?\.id === "modelProviderAdd"\) \{/);
+  assert.match(source, /openModelProvidersPanel\(\);/);
+  assert.match(source, /setModelProviderAddOpen\(true\);/);
 });
 
 test("copilot awaits async replies before adding them to chat history", () => {

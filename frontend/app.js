@@ -75,6 +75,7 @@ import {
   workflowStudioLaneTiersFromSources,
   workflowStudioVisibleStageFields,
   withFixedPositionsExtra,
+  withHitListCompareArtifacts,
 } from "./lib/pipeline.js?v=20260506_tier_fix";
 import {
   analyzeChartViewOptions,
@@ -125,6 +126,15 @@ import {
 } from "./lib/auth.js?v=20260409_v7";
 import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=20260407_v6";
 import { renderMcpGuideMarkup } from "./lib/mcp-guide.js?v=20260407_v6";
+import {
+  buildProviderHealthPayload,
+  buildProviderUpdatePayload,
+  normalizeProviderType,
+  providerConnectionSummary,
+  providerConfigured,
+  sortModelProviders,
+  visibleTokenLabel,
+} from "./lib/model-providers.js?v=20260513_v1";
 
 const defaultApiBase = resolveDefaultApiBase({
   origin: window.location.origin,
@@ -138,7 +148,7 @@ const OIDC_VERIFIER_KEY = "kbf.oidc.verifier";
 
 const LANG_KEY = "kbf.lang";
 const LANG_OPTIONS = ["en", "ko"];
-const TUTORIAL_STORAGE_KEY = "kbf.tutorial.completed.v2";
+const TUTORIAL_STORAGE_KEY = "kbf.tutorial.completed.v3";
 const REPORT_LANG_KEY = "kbf.reportLang";
 const REPORT_LANG_OPTIONS = ["auto", "en", "ko"];
 const WORKFLOW_PLAN_STORAGE_KEY = "kbf.workflowPlans";
@@ -554,6 +564,11 @@ const initialWorkflowStudioSessionsById = loadWorkflowStudioSessionsById(initial
 const HOME_PROJECT_STORAGE_PREFIX = "kbf.currentProjectId";
 const HOME_ROUND_STORAGE_PREFIX = "kbf.currentRoundId";
 
+function canManageInitialModelDefaults(user) {
+  const role = String(user?.role || "").trim();
+  return role === "admin" || role === "model_manager";
+}
+
 function homeContextStorageKeysForUser(user = null) {
   const scope =
     String(user?.run_prefix || buildUserPrefix({ name: user?.username || "user" })).trim() || "default";
@@ -580,6 +595,7 @@ const initialHomeContext = loadHomeContextSelection(initialUser);
 const state = {
   apiBase: resolveApiBase(),
   user: initialUser,
+  sessionAuthType: "",
   token: localStorage.getItem("kbf.token") || "",
   idToken: localStorage.getItem(ID_TOKEN_KEY) || "",
   oidcConfig: null,
@@ -702,6 +718,14 @@ const state = {
   workflowStudioFieldErrorsBySession: {},
   workflowStudioChecksBySession: {},
   workflowStudioCheckTimersBySession: {},
+  modelProviders: [],
+  modelProviderHealthByKey: {},
+  modelProvidersLoading: false,
+  modelProviderAddOpen: false,
+  modelProviderScope: canManageInitialModelDefaults(initialUser) ? "global" : "user",
+  adminUsers: [],
+  adminUsersLoading: false,
+  setupDetailsOpenByKey: {},
 };
 
 if (state.apiBase && state.apiBase !== normalizeApiBase(savedApiBase)) {
@@ -762,11 +786,25 @@ const el = {
   loginError: document.getElementById("loginError"),
   environmentBadge: document.getElementById("environmentBadge"),
   logoutBtn: document.getElementById("logoutBtn"),
-  accountBtn: document.getElementById("accountBtn"),
   adminBtn: document.getElementById("adminBtn"),
   runpodAdminBtn: document.getElementById("runpodAdminBtn"),
+  modelProvidersPanel: document.getElementById("modelProvidersPanel"),
+  modelProvidersClose: document.getElementById("modelProvidersClose"),
+  modelProvidersList: document.getElementById("modelProvidersList"),
+  modelProvidersStatus: document.getElementById("modelProvidersStatus"),
+  modelProviderScope: document.getElementById("modelProviderScope"),
+  modelProviderAddBtn: document.getElementById("modelProviderAddBtn"),
+  modelProviderAddPanel: document.getElementById("modelProviderAddPanel"),
+  modelProviderAddKey: document.getElementById("modelProviderAddKey"),
+  modelProviderAddLabel: document.getElementById("modelProviderAddLabel"),
+  modelProviderAddType: document.getElementById("modelProviderAddType"),
+  modelProviderAddEndpoint: document.getElementById("modelProviderAddEndpoint"),
+  modelProviderAddBaseUrl: document.getElementById("modelProviderAddBaseUrl"),
+  modelProviderAddToken: document.getElementById("modelProviderAddToken"),
+  modelProviderAddTimeout: document.getElementById("modelProviderAddTimeout"),
+  modelProviderAddCancel: document.getElementById("modelProviderAddCancel"),
+  modelProviderAddSave: document.getElementById("modelProviderAddSave"),
   tabBtnCath: document.getElementById("tabBtnCath"),
-  helpBtn: document.getElementById("helpBtn"),
   tutorialBtn: document.getElementById("tutorialBtn"),
   tutorialOverlay: document.getElementById("tutorialOverlay"),
   tutorialSpotlight: document.getElementById("tutorialSpotlight"),
@@ -1076,7 +1114,6 @@ const el = {
   reportChartType: document.getElementById("reportChartType"),
   reportChartCanvas: document.getElementById("reportChartCanvas"),
   reportChartCaption: document.getElementById("reportChartCaption"),
-  settingsBtn: document.getElementById("settingsBtn"),
   settingsPanel: document.getElementById("settingsPanel"),
   settingsClose: document.getElementById("settingsClose"),
   apiBaseValue: document.getElementById("apiBaseValue"),
@@ -1109,6 +1146,8 @@ const el = {
   adminRole: document.getElementById("adminRole"),
   adminCreateUser: document.getElementById("adminCreateUser"),
   adminStatus: document.getElementById("adminStatus"),
+  adminRefreshUsers: document.getElementById("adminRefreshUsers"),
+  adminUserList: document.getElementById("adminUserList"),
   adminRunsToggle: document.getElementById("adminRunsToggle"),
   showAllRuns: document.getElementById("showAllRuns"),
 };
@@ -1963,7 +2002,6 @@ const I18N = {
     "env.development": "Development",
     "env.staging": "Staging",
     "action.admin": "Admin",
-    "action.account": "Account",
     "action.settings": "Settings",
     "action.logout": "Logout",
     "action.help": "Usage",
@@ -2041,9 +2079,9 @@ const I18N = {
     "tutorial.step.monitor.body":
       "Monitor shows stage state, ETA, artifacts, checkpoint actions, completeness, and current run context.",
     "tutorial.step.monitor.hint": "Use Auto Poll while a run is active, then inspect artifacts before moving to analysis.",
-    "tutorial.step.monitorAgent.title": "Agent Panel explains stage decisions",
+    "tutorial.step.monitorAgent.title": "Evidence Agent Panel explains stage decisions",
     "tutorial.step.monitorAgent.body":
-      "The Agent Panel summarizes expert checks, recovery notes, and report links for the current run. Use it when a stage needs review or recovery.",
+      "The Evidence Agent Panel summarizes structured expert checks, recovery notes, and report links for the current run. Use it when a stage needs review or recovery.",
     "tutorial.step.monitorAgent.hint":
       "View Report opens the run summary. View Agent Report opens the agent's stage-by-stage reasoning and warnings.",
     "tutorial.step.rounds.title": "Rounds organize experiments",
@@ -2063,7 +2101,7 @@ const I18N = {
     "tutorial.step.report.body":
       "Generate builds the markdown report, Rendered View previews it, Export Package bundles report assets, and Save stores your edited version.",
     "tutorial.step.report.hint":
-      "Report language follows Settings. After generating, review the evidence score and artifact links before saving or exporting.",
+      "Report language follows the current UI language. After generating, review the evidence score and artifact links before saving or exporting.",
     "tutorial.step.copilot.title": "Copilot answers in context",
     "tutorial.step.copilot.body":
       "Copilot reads the current run context and can explain metrics, compare state, resume behavior, and practical next actions.",
@@ -2071,8 +2109,18 @@ const I18N = {
       "Use Copilot for interpretation and navigation help; use the main Run, Resume, Report, and Export buttons for irreversible actions.",
     "tutorial.step.topbar.title": "Top menu controls",
     "tutorial.step.topbar.body":
-      "Use KO/EN for language, Copilot for contextual help, Usage for the static guide, Tutorial to replay this tour, Settings for report language, and Logout when finished.",
-    "tutorial.step.topbar.hint": "Settings is only one item here. Most everyday navigation stays in the left tabs and Home workspace.",
+      "Use KO/EN for language, Copilot for contextual help, Tutorial to replay this tour, Model Providers for model endpoints and per-user/global settings, and Logout when finished. Admin users also see management controls.",
+    "tutorial.step.topbar.hint": "Everyday navigation stays in the left tabs and Home workspace.",
+    "tutorial.step.modelProviders.title": "Model connections set where jobs run",
+    "tutorial.step.modelProviders.body":
+      "Open Model Providers from the top menu to choose RunPod, HTTP API, or Disabled for each model. The scope selector decides whether you edit your own run settings or the shared default.",
+    "tutorial.step.modelProviders.hint":
+      "Health Check uses the values currently in the form, so you can test an HTTP URL before saving it.",
+    "tutorial.step.modelProviderAdd.title": "Add reusable model endpoints",
+    "tutorial.step.modelProviderAdd.body":
+      "Use Add Model when a new ESMFold, diffusion, docking, or utility model is available. Enter a model key, display name, provider type, endpoint or HTTP URL, token, and timeout.",
+    "tutorial.step.modelProviderAdd.hint":
+      "Choose HTTP API for GPU-server services and RunPod for serverless endpoints. Choose Disabled to keep the model registered but unused.",
     "tabs.home": "Home",
     "tabs.evolution": "Evolution",
     "tabs.fast": "Fast",
@@ -2321,6 +2369,7 @@ const I18N = {
     "login.title": "Enter the Lab",
     "login.desc": "Identify yourself to separate runs and keep artifacts organized.",
     "login.sso.desc": "Sign in with KBF SSO to keep the same identity and permissions across services.",
+    "login.sso.descProvider": "Sign in with {provider}. New users may need administrator approval before using the console.",
     "login.loading": "Checking sign-in method...",
     "login.username": "Username",
     "login.username.placeholder": "e.g. hana.kim",
@@ -2328,6 +2377,7 @@ const I18N = {
     "login.password.placeholder": "••••••••",
     "login.submit": "Access Console",
     "login.sso.submit": "Continue with KBF SSO",
+    "login.sso.submitProvider": "Continue with {provider}",
     "login.sso.hint": "Use your KBF account. Password changes are managed in the SSO account page.",
     "setup.title": "Advanced Run Setup",
     "setup.desc": "Choose a workflow, add the target files, and review the run before launch.",
@@ -2527,8 +2577,8 @@ const I18N = {
     "cath.count.running": "Running",
     "cath.count.stopped": "Stopped",
     "cath.count.waiting": "Waiting",
-    "agent.title": "Agent Panel",
-    "agent.desc": "Stage-by-stage expert consensus and recovery notes.",
+    "agent.title": "Evidence Agent Panel",
+    "agent.desc": "Structured expert checks, recovery notes, and report links.",
     "agent.refresh": "Refresh",
     "agent.viewReport": "View Report",
     "agent.viewAgentReport": "View Agent Report",
@@ -2759,7 +2809,44 @@ const I18N = {
     "settings.reportLang.hint": "Applies to run reports and agent reports.",
     "settings.health": "Health Check",
     "role.admin": "Admin",
+    "role.model_manager": "Model Manager",
     "role.user": "User",
+    "modelProviders.open": "Model Providers",
+    "modelProviders.title": "Model Providers",
+    "modelProviders.desc": "Register each model as RunPod, HTTP API, or disabled.",
+    "modelProviders.loading": "Loading model providers...",
+    "modelProviders.empty": "No model provider specs are available.",
+    "modelProviders.type": "Provider",
+    "modelProviders.type.runpod": "RunPod",
+    "modelProviders.type.http_api": "HTTP API",
+    "modelProviders.type.disabled": "Disabled",
+    "modelProviders.endpoint": "RunPod endpoint ID",
+    "modelProviders.baseUrl": "HTTP API URL",
+    "modelProviders.token": "API token",
+    "modelProviders.tokenHelp": "Leave blank to keep the saved token.",
+    "modelProviders.timeout": "Timeout (sec)",
+    "modelProviders.connection": "Connection",
+    "modelProviders.health": "Health",
+    "modelProviders.save": "Save",
+    "modelProviders.saved": "Saved {model}.",
+    "modelProviders.saveFailed": "Save failed: {error}",
+    "modelProviders.healthChecking": "Checking {model}...",
+    "modelProviders.healthReady": "Ready",
+    "modelProviders.healthNotReady": "Not ready",
+    "modelProviders.healthFailed": "Health check failed: {error}",
+    "modelProviders.configured": "Configured",
+    "modelProviders.notConfigured": "Not configured",
+    "modelProviders.scope": "Settings scope",
+    "modelProviders.scope.global": "Global defaults",
+    "modelProviders.scope.user": "My model settings",
+    "modelProviders.scope.help": "Global defaults apply to all users. My model settings apply only to your runs.",
+    "modelProviders.add.open": "Add Model",
+    "modelProviders.add.title": "Add Custom Model",
+    "modelProviders.add.desc": "Register a RunPod endpoint or HTTP API that can be reused by the platform.",
+    "modelProviders.add.key": "Model key",
+    "modelProviders.add.label": "Display name",
+    "modelProviders.add.save": "Add Model",
+    "modelProviders.add.required": "Model key and display name are required.",
     "admin.title": "Admin: Create User",
     "admin.username": "New Username",
     "admin.username.placeholder": "new.user",
@@ -2767,8 +2854,23 @@ const I18N = {
     "admin.password.placeholder": "min 8 chars",
     "admin.role": "Role",
     "admin.role.user": "User",
+    "admin.role.modelManager": "Model Manager",
     "admin.role.admin": "Admin",
     "admin.create": "Create User",
+    "admin.users.title": "User Approval",
+    "admin.users.desc": "Approve new Google/OIDC users and assign model-management rights.",
+    "admin.users.refresh": "Refresh",
+    "admin.users.loading": "Loading users...",
+    "admin.users.empty": "No users yet.",
+    "admin.users.email": "Email",
+    "admin.users.role": "Role",
+    "admin.users.status": "Status",
+    "admin.users.status.approved": "Approved",
+    "admin.users.status.pending": "Pending",
+    "admin.users.status.disabled": "Disabled",
+    "admin.users.save": "Save",
+    "admin.users.saved": "Saved {username}.",
+    "admin.users.failed": "User update failed: {error}",
     "help.title": "Usage Guide",
     "help.quick.title": "Quick Start",
     "help.quick.step1": "Advanced: choose Pipeline or Workflow Studio, attach target input, run preflight, then launch or open Studio.",
@@ -3363,6 +3465,7 @@ const I18N = {
     "auth.required": "Username and password required.",
     "auth.loginFailed": "Login failed",
     "auth.sessionInvalid": "Session invalid",
+    "auth.sessionExpired": "Session expired. Please sign in again.",
     "auth.ssoUnavailable": "SSO is not available right now.",
     "auth.ssoConfigMissing": "SSO configuration is incomplete.",
     "auth.ssoCancelled": "SSO sign-in was cancelled.",
@@ -3381,7 +3484,6 @@ const I18N = {
     "env.development": "개발 환경",
     "env.staging": "스테이징",
     "action.admin": "관리자",
-    "action.account": "계정",
     "action.settings": "설정",
     "action.logout": "로그아웃",
     "action.help": "사용법",
@@ -3458,9 +3560,9 @@ const I18N = {
     "tutorial.step.monitor.body":
       "Monitor에서는 단계 상태, 예상 시간, 산출물, 체크포인트 액션, completeness, 현재 실행 맥락을 확인합니다.",
     "tutorial.step.monitor.hint": "실행 중에는 Auto Poll을 켜고, 완료 후에는 산출물을 확인한 뒤 분석으로 이동하세요.",
-    "tutorial.step.monitorAgent.title": "Agent Panel은 단계별 판단을 설명합니다",
+    "tutorial.step.monitorAgent.title": "근거 에이전트 패널은 단계별 판단을 설명합니다",
     "tutorial.step.monitorAgent.body":
-      "Agent Panel은 현재 run의 expert check, recovery note, report link를 정리합니다. 어떤 단계가 검토나 복구가 필요한지 볼 때 사용합니다.",
+      "근거 에이전트 패널은 현재 run의 전문가 검토, 복구 기록, 리포트 링크를 구조화해서 정리합니다. 어떤 단계가 검토나 복구가 필요한지 볼 때 사용합니다.",
     "tutorial.step.monitorAgent.hint":
       "View Report는 run 요약을 열고, View Agent Report는 agent의 단계별 reasoning과 warning을 엽니다.",
     "tutorial.step.rounds.title": "라운드는 실험을 정리합니다",
@@ -3480,7 +3582,7 @@ const I18N = {
     "tutorial.step.report.body":
       "Generate는 markdown report를 만들고, Rendered View는 렌더링 미리보기를 열며, Export Package는 report asset을 묶고, Save는 수정본을 저장합니다.",
     "tutorial.step.report.hint":
-      "리포트 언어는 Settings를 따릅니다. 생성 후 evidence score와 artifact link를 확인한 뒤 저장하거나 export하세요.",
+      "리포트 언어는 현재 UI 언어를 따릅니다. 생성 후 evidence score와 artifact link를 확인한 뒤 저장하거나 export하세요.",
     "tutorial.step.copilot.title": "Copilot은 현재 맥락으로 답합니다",
     "tutorial.step.copilot.body":
       "Copilot은 현재 run 맥락을 읽고 metric 해석, compare 상태, resume 방식, 다음 행동을 설명해줍니다.",
@@ -3488,8 +3590,18 @@ const I18N = {
       "해석과 탐색 도움에는 Copilot을 쓰고, 실제 실행/재개/리포트/export는 각 화면의 전용 버튼으로 처리하세요.",
     "tutorial.step.topbar.title": "상단 메뉴 안내",
     "tutorial.step.topbar.body":
-      "KO/EN은 언어 변경, Copilot은 현재 화면 도움, 사용법은 고정 가이드, 튜토리얼은 이 안내 다시 보기, 설정은 리포트 언어, 로그아웃은 세션 종료에 사용합니다.",
-    "tutorial.step.topbar.hint": "설정은 상단 메뉴 중 하나입니다. 평소 작업 이동은 왼쪽 탭과 Home 화면에서 시작하세요.",
+      "KO/EN은 언어 변경, Copilot은 현재 화면 도움, 튜토리얼은 이 안내 다시 보기, 모델 연결은 모델 endpoint와 개인/전역 설정 관리, 로그아웃은 세션 종료에 사용합니다. 관리자에게는 관리 메뉴가 추가로 보입니다.",
+    "tutorial.step.topbar.hint": "평소 작업 이동은 왼쪽 탭과 Home 화면에서 시작하세요.",
+    "tutorial.step.modelProviders.title": "모델 연결은 실행 위치를 정합니다",
+    "tutorial.step.modelProviders.body":
+      "상단 메뉴의 모델 연결에서 모델별 실행 위치를 정합니다. RunPod, HTTP API, 비활성 중 하나를 고르고, 설정 범위에서 내 실행만 바꿀지 전역 기본값을 바꿀지 선택합니다.",
+    "tutorial.step.modelProviders.hint":
+      "상태 확인은 현재 입력한 값을 기준으로 동작하므로 저장 전에도 HTTP URL을 시험할 수 있습니다.",
+    "tutorial.step.modelProviderAdd.title": "새 모델을 추가합니다",
+    "tutorial.step.modelProviderAdd.body":
+      "새 ESMFold, diffusion, docking, utility 모델을 붙일 때 모델 추가를 사용합니다. 모델 key, 표시 이름, 연결 방식, endpoint 또는 HTTP URL, token, timeout을 입력합니다.",
+    "tutorial.step.modelProviderAdd.hint":
+      "GPU 서버에 띄운 모델은 HTTP API, RunPod serverless는 RunPod를 선택하세요. 등록만 해두고 쓰지 않을 모델은 비활성으로 둡니다.",
     "tabs.home": "홈",
     "tabs.evolution": "Evolution",
     "tabs.fast": "빠른 실행",
@@ -3737,6 +3849,7 @@ const I18N = {
     "login.title": "랩 입장",
     "login.desc": "실행을 구분하고 아티팩트를 정리하기 위해 계정을 확인합니다.",
     "login.sso.desc": "서비스 간 동일한 계정과 권한을 유지하려면 KBF SSO로 로그인하세요.",
+    "login.sso.descProvider": "{provider}로 로그인합니다. 신규 사용자는 관리자의 승인 후 콘솔을 사용할 수 있습니다.",
     "login.loading": "로그인 방식을 확인하는 중입니다...",
     "login.username": "사용자명",
     "login.username.placeholder": "예: hana.kim",
@@ -3744,6 +3857,7 @@ const I18N = {
     "login.password.placeholder": "••••••••",
     "login.submit": "콘솔 접속",
     "login.sso.submit": "KBF SSO로 계속",
+    "login.sso.submitProvider": "{provider}로 계속",
     "login.sso.hint": "KBF 계정을 사용합니다. 비밀번호 변경은 SSO 계정 페이지에서 처리합니다.",
     "setup.title": "고급 실행 설정",
     "setup.desc": "워크플로우를 고르고, 타깃 파일을 넣은 뒤 실행 전 검토합니다.",
@@ -3943,8 +4057,8 @@ const I18N = {
     "cath.count.running": "실행 중",
     "cath.count.stopped": "정지",
     "cath.count.waiting": "대기",
-    "agent.title": "에이전트 패널",
-    "agent.desc": "단계별 전문가 합의와 복구 기록을 확인합니다.",
+    "agent.title": "근거 에이전트 패널",
+    "agent.desc": "단계별 근거 검토, 복구 기록, 리포트 링크를 확인합니다.",
     "agent.refresh": "새로고침",
     "agent.viewReport": "리포트 보기",
     "agent.viewAgentReport": "에이전트 리포트",
@@ -4174,7 +4288,44 @@ const I18N = {
     "settings.reportLang.hint": "실행 리포트와 에이전트 리포트에 적용됩니다.",
     "settings.health": "헬스 체크",
     "role.admin": "관리자",
+    "role.model_manager": "모델 관리자",
     "role.user": "사용자",
+    "modelProviders.open": "모델 연결",
+    "modelProviders.title": "모델 연결 관리",
+    "modelProviders.desc": "각 모델을 RunPod, HTTP API, 비활성 중 하나로 연결합니다.",
+    "modelProviders.loading": "모델 연결 정보를 불러오는 중...",
+    "modelProviders.empty": "등록 가능한 모델 정보가 없습니다.",
+    "modelProviders.type": "연결 방식",
+    "modelProviders.type.runpod": "RunPod",
+    "modelProviders.type.http_api": "HTTP API",
+    "modelProviders.type.disabled": "비활성",
+    "modelProviders.endpoint": "RunPod endpoint ID",
+    "modelProviders.baseUrl": "HTTP API URL",
+    "modelProviders.token": "API 토큰",
+    "modelProviders.tokenHelp": "비워두면 저장된 토큰을 유지합니다.",
+    "modelProviders.timeout": "제한 시간(초)",
+    "modelProviders.connection": "현재 연결",
+    "modelProviders.health": "상태 확인",
+    "modelProviders.save": "저장",
+    "modelProviders.saved": "{model} 저장 완료.",
+    "modelProviders.saveFailed": "저장 실패: {error}",
+    "modelProviders.healthChecking": "{model} 상태 확인 중...",
+    "modelProviders.healthReady": "준비됨",
+    "modelProviders.healthNotReady": "준비 안 됨",
+    "modelProviders.healthFailed": "상태 확인 실패: {error}",
+    "modelProviders.configured": "설정됨",
+    "modelProviders.notConfigured": "미설정",
+    "modelProviders.scope": "설정 범위",
+    "modelProviders.scope.global": "전역 기본값",
+    "modelProviders.scope.user": "내 모델 설정",
+    "modelProviders.scope.help": "전역 기본값은 모든 사용자에게 적용되고, 내 모델 설정은 내 실행에만 적용됩니다.",
+    "modelProviders.add.open": "모델 추가",
+    "modelProviders.add.title": "커스텀 모델 추가",
+    "modelProviders.add.desc": "플랫폼에서 재사용할 RunPod endpoint 또는 HTTP API를 등록합니다.",
+    "modelProviders.add.key": "모델 키",
+    "modelProviders.add.label": "표시 이름",
+    "modelProviders.add.save": "모델 추가",
+    "modelProviders.add.required": "모델 키와 표시 이름을 입력하세요.",
     "admin.title": "관리자: 사용자 생성",
     "admin.username": "새 사용자명",
     "admin.username.placeholder": "new.user",
@@ -4182,8 +4333,23 @@ const I18N = {
     "admin.password.placeholder": "최소 8자",
     "admin.role": "권한",
     "admin.role.user": "사용자",
+    "admin.role.modelManager": "모델 관리자",
     "admin.role.admin": "관리자",
     "admin.create": "사용자 생성",
+    "admin.users.title": "사용자 승인",
+    "admin.users.desc": "새 Google/OIDC 사용자를 승인하고 모델 관리 권한을 지정합니다.",
+    "admin.users.refresh": "새로고침",
+    "admin.users.loading": "사용자 목록을 불러오는 중...",
+    "admin.users.empty": "아직 사용자가 없습니다.",
+    "admin.users.email": "이메일",
+    "admin.users.role": "권한",
+    "admin.users.status": "상태",
+    "admin.users.status.approved": "승인됨",
+    "admin.users.status.pending": "승인 대기",
+    "admin.users.status.disabled": "비활성",
+    "admin.users.save": "저장",
+    "admin.users.saved": "{username} 저장 완료.",
+    "admin.users.failed": "사용자 변경 실패: {error}",
     "help.title": "사용 가이드",
     "help.quick.title": "빠른 시작",
     "help.quick.step1": "Advanced: Pipeline 또는 Workflow Studio를 선택하고 target 입력을 첨부한 뒤 preflight 후 실행하거나 Studio를 엽니다.",
@@ -4776,6 +4942,7 @@ const I18N = {
     "auth.required": "사용자명과 비밀번호가 필요합니다.",
     "auth.loginFailed": "로그인 실패",
     "auth.sessionInvalid": "세션이 유효하지 않습니다.",
+    "auth.sessionExpired": "세션이 만료되었습니다. 다시 로그인하세요.",
     "auth.ssoUnavailable": "지금은 SSO를 사용할 수 없습니다.",
     "auth.ssoConfigMissing": "SSO 설정이 완전하지 않습니다.",
     "auth.ssoCancelled": "SSO 로그인이 취소되었습니다.",
@@ -5124,6 +5291,20 @@ const TUTORIAL_STEPS = [
     titleKey: "tutorial.step.topbar.title",
     bodyKey: "tutorial.step.topbar.body",
     hintKey: "tutorial.step.topbar.hint",
+  },
+  {
+    id: "modelProviders",
+    target: ".model-providers-card",
+    titleKey: "tutorial.step.modelProviders.title",
+    bodyKey: "tutorial.step.modelProviders.body",
+    hintKey: "tutorial.step.modelProviders.hint",
+  },
+  {
+    id: "modelProviderAdd",
+    target: "#modelProviderAddPanel",
+    titleKey: "tutorial.step.modelProviderAdd.title",
+    bodyKey: "tutorial.step.modelProviderAdd.body",
+    hintKey: "tutorial.step.modelProviderAdd.hint",
   },
 ];
 
@@ -8428,6 +8609,41 @@ function activeSetupWizardStepId() {
   return SETUP_WIZARD_STEPS[activeSetupWizardStepIndex()]?.id || "input";
 }
 
+function setupDetailsStateKey(key, { stepId = activeSetupWizardStepId(), mode = state.runMode || "pipeline" } = {}) {
+  const normalizedKey = String(key || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const normalizedStep = String(stepId || "all")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-") || "all";
+  const normalizedMode = String(mode || "pipeline")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-") || "pipeline";
+  return `${normalizedMode}:${normalizedStep}:${normalizedKey || "details"}`;
+}
+
+function readSetupDetailsOpen(stateKey, defaultOpen = false) {
+  if (!state.setupDetailsOpenByKey || typeof state.setupDetailsOpenByKey !== "object") {
+    state.setupDetailsOpenByKey = {};
+  }
+  if (Object.prototype.hasOwnProperty.call(state.setupDetailsOpenByKey, stateKey)) {
+    return Boolean(state.setupDetailsOpenByKey[stateKey]);
+  }
+  return Boolean(defaultOpen);
+}
+
+function rememberSetupDetailsOpen(stateKey, open) {
+  if (!stateKey) return;
+  if (!state.setupDetailsOpenByKey || typeof state.setupDetailsOpenByKey !== "object") {
+    state.setupDetailsOpenByKey = {};
+  }
+  state.setupDetailsOpenByKey[stateKey] = Boolean(open);
+}
+
 function questionSetupStepId(questionId) {
   if (questionId === "confirm_run") {
     return "review";
@@ -9031,7 +9247,7 @@ const STAGE_LABELS = {
   wt_af2: { en: "WT ColabFold", ko: "WT ColabFold" },
   wt_relax: { en: "WT Relax", ko: "WT Relax" },
   evolution: { en: "Evolution", ko: "진화(Evolution)" },
-  agent: { en: "Agent Panel", ko: "에이전트 패널" },
+  agent: { en: "Evidence Agent Panel", ko: "근거 에이전트 패널" },
   misc: { en: "Misc", ko: "기타" },
 };
 
@@ -9104,6 +9320,7 @@ function clearSession() {
   localStorage.removeItem("kbf.token");
   localStorage.removeItem(ID_TOKEN_KEY);
   state.user = null;
+  state.sessionAuthType = "";
   state.token = "";
   state.idToken = "";
   state.projects = [];
@@ -9227,9 +9444,14 @@ function syncLoginMode() {
   if (el.loginSsoDesc) el.loginSsoDesc.classList.toggle("hidden", loading || !useOidc);
   if (el.loginLocalForm) el.loginLocalForm.classList.toggle("hidden", loading || useOidc);
   if (el.loginSsoActions) el.loginSsoActions.classList.toggle("hidden", loading || !useOidc);
-  if (el.accountBtn) {
-    const visible = !loading && useOidc && Boolean(state.user) && Boolean(state.oidcConfig?.account_url);
-    el.accountBtn.classList.toggle("hidden", !visible);
+  if (useOidc) {
+    const provider = String(state.oidcConfig?.provider_name || "KBF SSO").trim();
+    if (el.loginSsoDesc) {
+      el.loginSsoDesc.textContent = t("login.sso.descProvider", { provider });
+    }
+    if (el.ssoLoginBtn) {
+      el.ssoLoginBtn.textContent = t("login.sso.submitProvider", { provider });
+    }
   }
 }
 
@@ -9331,12 +9553,6 @@ async function bootstrapAuth() {
     return;
   }
   showLogin();
-}
-
-function openAccountConsole() {
-  const accountUrl = String(state.oidcConfig?.account_url || "").trim();
-  if (!accountUrl) return;
-  window.location.assign(accountUrl);
 }
 
 async function logoutCurrentSession() {
@@ -10190,13 +10406,443 @@ function isHttp400Error(err) {
 function setUserBadge() {
   if (!state.user) return;
   const base = state.user.username || "user";
-  const roleKey = state.user.role === "admin" ? "role.admin" : "role.user";
+  const roleKey =
+    state.user.role === "admin"
+      ? "role.admin"
+      : state.user.role === "model_manager"
+        ? "role.model_manager"
+        : "role.user";
   el.userBadge.textContent = `${base} · ${t(roleKey)}`;
 }
 
 function renderMcpGuide() {
   if (!el.mcpGuidePanel) return;
   el.mcpGuidePanel.innerHTML = renderMcpGuideMarkup({ lang: state.lang });
+}
+
+function modelProviderTypeOption(value, current) {
+  const normalized = normalizeProviderType(value);
+  const selected = normalizeProviderType(current) === normalized ? " selected" : "";
+  return `<option value="${escapeAttr(normalized)}"${selected}>${escapeHtml(t(`modelProviders.type.${normalized}`))}</option>`;
+}
+
+function modelProviderHealthBadge(provider) {
+  const configured = providerConfigured(provider);
+  const label = configured ? t("modelProviders.configured") : t("modelProviders.notConfigured");
+  const stateName = configured ? "running" : "cancelled";
+  return `<span class="state-badge" data-state="${stateName}">${escapeHtml(label)}</span>`;
+}
+
+function modelProviderActionStatus(provider, health) {
+  if (!health) return "";
+  let label = "";
+  let stateName = "running";
+  if (health.loading) {
+    label = t("modelProviders.healthChecking", { model: provider?.label || provider?.model_key || "" });
+  } else if (health.error) {
+    label = t("modelProviders.healthFailed", { error: health.error });
+    stateName = "failed";
+  } else if (health.ready) {
+    label = t("modelProviders.healthReady");
+    stateName = "completed";
+  } else {
+    label = t("modelProviders.healthNotReady");
+    stateName = "failed";
+  }
+  return `<span class="model-provider-action-status" data-model-provider-action-status data-state="${stateName}">${escapeHtml(
+    label
+  )}</span>`;
+}
+
+function renderModelProviderCard(provider, health = null) {
+  const modelKey = String(provider?.model_key || "").trim();
+  const label = String(provider?.label || modelKey || "-").trim();
+  const providerType = normalizeProviderType(provider?.provider_type);
+  const timeout = Number.isFinite(Number(provider?.timeout_s)) ? Number(provider.timeout_s) : 21600;
+  return `
+    <section class="model-provider-card" data-model-provider-card data-model-provider="${escapeAttr(modelKey)}">
+      <div class="model-provider-head">
+        <div>
+          <div class="model-provider-key">${escapeHtml(modelKey)}</div>
+          <h5>${escapeHtml(label)}</h5>
+        </div>
+        ${modelProviderHealthBadge(provider)}
+      </div>
+      <div class="model-provider-summary">
+        <span>${escapeHtml(t("modelProviders.connection"))}</span>
+        <strong>${escapeHtml(providerConnectionSummary(provider))}</strong>
+      </div>
+      <div class="model-provider-grid">
+        <label>
+          <span>${escapeHtml(t("modelProviders.type"))}</span>
+          <select data-model-provider-field="provider_type">
+            ${modelProviderTypeOption("http_api", providerType)}
+            ${modelProviderTypeOption("runpod", providerType)}
+            ${modelProviderTypeOption("disabled", providerType)}
+          </select>
+        </label>
+        <label>
+          <span>${escapeHtml(t("modelProviders.endpoint"))}</span>
+          <input data-model-provider-field="endpoint_id" type="text" value="${escapeAttr(provider?.endpoint_id || "")}" />
+        </label>
+        <label class="model-provider-wide">
+          <span>${escapeHtml(t("modelProviders.baseUrl"))}</span>
+          <input data-model-provider-field="base_url" type="url" value="${escapeAttr(provider?.base_url || "")}" />
+        </label>
+        <label>
+          <span>${escapeHtml(t("modelProviders.token"))}</span>
+          <input
+            data-model-provider-field="token"
+            type="password"
+            autocomplete="new-password"
+            placeholder="${escapeAttr(visibleTokenLabel(provider) || t("modelProviders.tokenHelp"))}"
+          />
+        </label>
+        <label>
+          <span>${escapeHtml(t("modelProviders.timeout"))}</span>
+          <input data-model-provider-field="timeout_s" type="number" min="1" step="1" value="${escapeAttr(timeout)}" />
+        </label>
+      </div>
+      <div class="model-provider-actions">
+        ${modelProviderActionStatus(provider, health)}
+        <button class="ghost" type="button" data-model-provider-health="${escapeAttr(modelKey)}">${escapeHtml(
+          t("modelProviders.health")
+        )}</button>
+        <button class="primary" type="button" data-model-provider-save="${escapeAttr(modelKey)}">${escapeHtml(
+          t("modelProviders.save")
+        )}</button>
+      </div>
+    </section>
+  `;
+}
+
+function renderModelProviders() {
+  if (!el.modelProvidersList) return;
+  if (state.modelProvidersLoading) {
+    el.modelProvidersList.innerHTML = `<div class="placeholder">${escapeHtml(t("modelProviders.loading"))}</div>`;
+    return;
+  }
+  const providers = sortModelProviders(state.modelProviders);
+  if (!providers.length) {
+    el.modelProvidersList.innerHTML = `<div class="placeholder">${escapeHtml(t("modelProviders.empty"))}</div>`;
+    return;
+  }
+  el.modelProvidersList.innerHTML = providers
+    .map((provider) => renderModelProviderCard(provider, state.modelProviderHealthByKey?.[provider.model_key]))
+    .join("");
+  el.modelProvidersList.querySelectorAll("[data-model-provider-save]").forEach((button) => {
+    button.addEventListener("click", () => saveModelProvider(button.getAttribute("data-model-provider-save")));
+  });
+  el.modelProvidersList.querySelectorAll("[data-model-provider-health]").forEach((button) => {
+    button.addEventListener("click", () => checkModelProviderHealth(button.getAttribute("data-model-provider-health")));
+  });
+}
+
+function modelProviderCardForKey(modelKey) {
+  const key = String(modelKey || "").trim();
+  return Array.from(el.modelProvidersList?.querySelectorAll("[data-model-provider-card]") || []).find(
+    (node) => node.getAttribute("data-model-provider") === key
+  );
+}
+
+function modelProviderFieldValue(card, field) {
+  const node = card?.querySelector(`[data-model-provider-field="${field}"]`);
+  if (!node) return "";
+  if (node.type === "checkbox") return Boolean(node.checked);
+  return node.value;
+}
+
+async function refreshModelProviders({ includeHealth = false } = {}) {
+  if (!canUseModelProviders()) return;
+  syncModelProviderScopeControl();
+  const scope = currentModelProviderScope();
+  state.modelProvidersLoading = true;
+  if (el.modelProvidersStatus) el.modelProvidersStatus.textContent = t("modelProviders.loading");
+  renderModelProviders();
+  try {
+    const result = await apiCall("pipeline.model_provider_list", { include_health: Boolean(includeHealth), scope });
+    state.modelProviders = Array.isArray(result?.providers) ? result.providers : [];
+    state.modelProviderHealthByKey = result?.health && typeof result.health === "object" ? result.health : {};
+    if (el.modelProvidersStatus) el.modelProvidersStatus.textContent = "";
+  } catch (err) {
+    if (el.modelProvidersStatus) {
+      el.modelProvidersStatus.textContent = t("modelProviders.saveFailed", { error: err.message });
+    }
+  } finally {
+    state.modelProvidersLoading = false;
+    renderModelProviders();
+  }
+}
+
+function openModelProvidersPanel() {
+  if (!el.modelProvidersPanel || !canUseModelProviders()) return;
+  syncModelProviderScopeControl();
+  el.modelProvidersPanel.classList.remove("hidden");
+  syncModelProviderAddPanel();
+  void refreshModelProviders({ includeHealth: false });
+}
+
+function closeModelProvidersPanel() {
+  if (!el.modelProvidersPanel) return;
+  state.modelProviderAddOpen = false;
+  syncModelProviderAddPanel();
+  el.modelProvidersPanel.classList.add("hidden");
+}
+
+function syncModelProviderAddPanel() {
+  if (!el.modelProviderAddPanel) return;
+  el.modelProviderAddPanel.classList.toggle("hidden", !state.modelProviderAddOpen);
+}
+
+function resetModelProviderAddForm() {
+  if (el.modelProviderAddKey) el.modelProviderAddKey.value = "";
+  if (el.modelProviderAddLabel) el.modelProviderAddLabel.value = "";
+  if (el.modelProviderAddType) el.modelProviderAddType.value = "http_api";
+  if (el.modelProviderAddEndpoint) el.modelProviderAddEndpoint.value = "";
+  if (el.modelProviderAddBaseUrl) el.modelProviderAddBaseUrl.value = "";
+  if (el.modelProviderAddToken) el.modelProviderAddToken.value = "";
+  if (el.modelProviderAddTimeout) el.modelProviderAddTimeout.value = "21600";
+}
+
+function setModelProviderAddOpen(open) {
+  state.modelProviderAddOpen = Boolean(open);
+  syncModelProviderAddPanel();
+}
+
+async function saveModelProvider(modelKey) {
+  const card = modelProviderCardForKey(modelKey);
+  if (!card) return;
+  const payload = buildProviderUpdatePayload({
+    modelKey,
+    scope: currentModelProviderScope(),
+    providerType: modelProviderFieldValue(card, "provider_type"),
+    endpointId: modelProviderFieldValue(card, "endpoint_id"),
+    baseUrl: modelProviderFieldValue(card, "base_url"),
+    token: modelProviderFieldValue(card, "token"),
+    timeoutS: modelProviderFieldValue(card, "timeout_s"),
+  });
+  try {
+    const result = await apiCall("pipeline.model_provider_update", payload);
+    const saved = result?.provider;
+    if (saved?.model_key) {
+      const index = state.modelProviders.findIndex((provider) => provider?.model_key === saved.model_key);
+      if (index >= 0) {
+        state.modelProviders.splice(index, 1, saved);
+      } else {
+        state.modelProviders.push(saved);
+      }
+    }
+    if (el.modelProvidersStatus) {
+      el.modelProvidersStatus.textContent = t("modelProviders.saved", {
+        model: saved?.label || saved?.model_key || modelKey,
+      });
+    }
+    renderModelProviders();
+  } catch (err) {
+    if (el.modelProvidersStatus) {
+      el.modelProvidersStatus.textContent = t("modelProviders.saveFailed", { error: err.message });
+    }
+  }
+}
+
+async function saveCustomModelProvider() {
+  const modelKey = String(el.modelProviderAddKey?.value || "").trim();
+  const label = String(el.modelProviderAddLabel?.value || "").trim();
+  if (!modelKey || !label) {
+    if (el.modelProvidersStatus) el.modelProvidersStatus.textContent = t("modelProviders.add.required");
+    return;
+  }
+  const providerType = normalizeProviderType(el.modelProviderAddType?.value);
+  const payload = buildProviderUpdatePayload({
+    modelKey,
+    scope: currentModelProviderScope(),
+    providerType,
+    endpointId: el.modelProviderAddEndpoint?.value || "",
+    baseUrl: el.modelProviderAddBaseUrl?.value || "",
+    token: el.modelProviderAddToken?.value || "",
+    timeoutS: el.modelProviderAddTimeout?.value || "21600",
+  });
+  payload.provider = {
+    ...payload.provider,
+    custom: true,
+    label,
+  };
+  try {
+    const result = await apiCall("pipeline.model_provider_update", payload);
+    const saved = result?.provider;
+    if (saved?.model_key) {
+      const index = state.modelProviders.findIndex((provider) => provider?.model_key === saved.model_key);
+      if (index >= 0) {
+        state.modelProviders.splice(index, 1, saved);
+      } else {
+        state.modelProviders.push(saved);
+      }
+    }
+    if (el.modelProvidersStatus) {
+      el.modelProvidersStatus.textContent = t("modelProviders.saved", {
+        model: saved?.label || saved?.model_key || modelKey,
+      });
+    }
+    resetModelProviderAddForm();
+    setModelProviderAddOpen(false);
+    renderModelProviders();
+  } catch (err) {
+    if (el.modelProvidersStatus) {
+      el.modelProvidersStatus.textContent = t("modelProviders.saveFailed", { error: err.message });
+    }
+  }
+}
+
+async function checkModelProviderHealth(modelKey) {
+  const key = String(modelKey || "").trim();
+  if (!key) return;
+  const card = modelProviderCardForKey(key);
+  const payload = card
+    ? buildProviderHealthPayload({
+        modelKey: key,
+        scope: currentModelProviderScope(),
+        providerType: modelProviderFieldValue(card, "provider_type"),
+        endpointId: modelProviderFieldValue(card, "endpoint_id"),
+        baseUrl: modelProviderFieldValue(card, "base_url"),
+        token: modelProviderFieldValue(card, "token"),
+        timeoutS: modelProviderFieldValue(card, "timeout_s"),
+      })
+    : { model_key: key, scope: currentModelProviderScope() };
+  state.modelProviderHealthByKey = { ...(state.modelProviderHealthByKey || {}), [key]: { loading: true } };
+  renderModelProviders();
+  try {
+    const result = await apiCall("pipeline.model_provider_health", payload);
+    state.modelProviderHealthByKey = { ...(state.modelProviderHealthByKey || {}), [key]: result };
+  } catch (err) {
+    state.modelProviderHealthByKey = {
+      ...(state.modelProviderHealthByKey || {}),
+      [key]: { ok: false, ready: false, error: err.message || t("error.api") },
+    };
+  } finally {
+    renderModelProviders();
+  }
+}
+
+function adminSelectOption(value, current, labelKeyPrefix) {
+  const selected = String(value) === String(current || "") ? " selected" : "";
+  return `<option value="${escapeAttr(value)}"${selected}>${escapeHtml(t(`${labelKeyPrefix}.${value}`))}</option>`;
+}
+
+function adminRoleOption(value, current) {
+  const labelKey =
+    value === "admin" ? "admin.role.admin" : value === "model_manager" ? "admin.role.modelManager" : "admin.role.user";
+  const selected = String(value) === String(current || "user") ? " selected" : "";
+  return `<option value="${escapeAttr(value)}"${selected}>${escapeHtml(t(labelKey))}</option>`;
+}
+
+function renderAdminUsers() {
+  if (!el.adminUserList) return;
+  if (state.adminUsersLoading) {
+    el.adminUserList.innerHTML = `<div class="placeholder">${escapeHtml(t("admin.users.loading"))}</div>`;
+    return;
+  }
+  const users = Array.isArray(state.adminUsers) ? state.adminUsers : [];
+  if (!users.length) {
+    el.adminUserList.innerHTML = `<div class="placeholder">${escapeHtml(t("admin.users.empty"))}</div>`;
+    return;
+  }
+  el.adminUserList.innerHTML = users
+    .map((user) => {
+      const username = String(user?.username || "").trim();
+      const role = String(user?.role || "user").trim();
+      const status = String(user?.status || "approved").trim();
+      const email = String(user?.email || user?.subject || "").trim();
+      return `
+        <section class="admin-user-row" data-admin-user="${escapeAttr(username)}">
+          <div class="admin-user-identity">
+            <strong>${escapeHtml(username || "-")}</strong>
+            <span>${escapeHtml(email || (user?.external ? "OIDC" : "local"))}</span>
+          </div>
+          <label>
+            <span>${escapeHtml(t("admin.users.role"))}</span>
+            <select data-admin-user-role>
+              ${adminRoleOption("user", role)}
+              ${adminRoleOption("model_manager", role)}
+              ${adminRoleOption("admin", role)}
+            </select>
+          </label>
+          <label>
+            <span>${escapeHtml(t("admin.users.status"))}</span>
+            <select data-admin-user-status>
+              ${adminSelectOption("pending", status, "admin.users.status")}
+              ${adminSelectOption("approved", status, "admin.users.status")}
+              ${adminSelectOption("disabled", status, "admin.users.status")}
+            </select>
+          </label>
+          <button class="ghost" type="button" data-admin-user-save="${escapeAttr(username)}">${escapeHtml(
+            t("admin.users.save")
+          )}</button>
+        </section>
+      `;
+    })
+    .join("");
+  el.adminUserList.querySelectorAll("[data-admin-user-save]").forEach((button) => {
+    button.addEventListener("click", () => updateAdminUser(button.getAttribute("data-admin-user-save")));
+  });
+}
+
+async function refreshAdminUsers() {
+  if (!isAdminUser() || !el.adminUserList) return;
+  state.adminUsersLoading = true;
+  renderAdminUsers();
+  try {
+    const res = await fetch(`${state.apiBase}/auth/list_users`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: "{}",
+    });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || !payload?.ok) {
+      throw new Error(payload?.error || `HTTP ${res.status}`);
+    }
+    state.adminUsers = Array.isArray(payload.users) ? payload.users : [];
+  } catch (err) {
+    if (el.adminStatus) {
+      el.adminStatus.textContent = t("admin.users.failed", { error: err.message });
+    }
+  } finally {
+    state.adminUsersLoading = false;
+    renderAdminUsers();
+  }
+}
+
+async function updateAdminUser(username) {
+  const key = String(username || "").trim();
+  const row = Array.from(el.adminUserList?.querySelectorAll("[data-admin-user]") || []).find(
+    (node) => node.getAttribute("data-admin-user") === key
+  );
+  if (!row) return;
+  const role = row.querySelector("[data-admin-user-role]")?.value || "user";
+  const status = row.querySelector("[data-admin-user-status]")?.value || "approved";
+  try {
+    const res = await fetch(`${state.apiBase}/auth/update_user`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ username: key, role, status }),
+    });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || !payload?.ok) {
+      throw new Error(payload?.error || `HTTP ${res.status}`);
+    }
+    const updated = payload.user;
+    const index = state.adminUsers.findIndex((user) => user?.username === updated?.username);
+    if (index >= 0) state.adminUsers.splice(index, 1, updated);
+    if (el.adminStatus) {
+      el.adminStatus.textContent = t("admin.users.saved", { username: updated?.username || key });
+    }
+    renderAdminUsers();
+  } catch (err) {
+    if (el.adminStatus) {
+      el.adminStatus.textContent = t("admin.users.failed", { error: err.message });
+    }
+  }
 }
 
 function applyI18n() {
@@ -10211,6 +10857,8 @@ function applyI18n() {
   });
   renderHomeContextSelectors();
   renderMcpGuide();
+  renderModelProviders();
+  renderAdminUsers();
 }
 
 function updateLangButtons() {
@@ -10412,10 +11060,22 @@ function renderTutorialDots() {
 
 function applyTutorialStepContext(step) {
   if (step?.id === "experimentChoice") {
+    closeModelProvidersPanel();
     openExperimentChoicePanel({ focusFirst: false });
     return;
   }
   closeExperimentChoicePanel();
+  if (step?.id === "modelProviders") {
+    openModelProvidersPanel();
+    setModelProviderAddOpen(false);
+    return;
+  }
+  if (step?.id === "modelProviderAdd") {
+    openModelProvidersPanel();
+    setModelProviderAddOpen(true);
+    return;
+  }
+  closeModelProvidersPanel();
   const setupStep = String(step?.setupStep || "").trim();
   if (!setupStep || step?.tab !== "advanced") return;
   if (state.runMode !== "pipeline") {
@@ -10469,6 +11129,8 @@ function completeTutorial() {
 function closeTutorial({ complete = true, restoreTab = true } = {}) {
   if (!el.tutorialOverlay) return;
   if (complete) completeTutorial();
+  closeExperimentChoicePanel();
+  closeModelProvidersPanel();
   el.tutorialOverlay.classList.add("hidden");
   document.body.classList.remove("tutorial-active");
   if (restoreTab && tutorialReturnTab) {
@@ -11033,6 +11695,7 @@ function showLogin() {
   if (el.runpodAdminBtn) el.runpodAdminBtn.classList.add("hidden");
   if (el.settingsPanel) el.settingsPanel.classList.add("hidden");
   if (el.adminPanel) el.adminPanel.classList.add("hidden");
+  if (el.modelProvidersPanel) el.modelProvidersPanel.classList.add("hidden");
   if (el.helpPanel) el.helpPanel.classList.add("hidden");
   if (el.tutorialBtn) el.tutorialBtn.classList.add("hidden");
   if (el.tutorialOverlay) el.tutorialOverlay.classList.add("hidden");
@@ -11061,10 +11724,12 @@ function showChat() {
 
 function updateAdminUI() {
   const isAdmin = isAdminUser();
-  const useOidc = oidcEnabled();
+  const canUseModelProviderSettings = canUseModelProviders();
+  if (el.runpodAdminBtn) {
+    el.runpodAdminBtn.classList.toggle("hidden", !canUseModelProviderSettings);
+  }
   if (isAdmin) {
-    if (el.adminBtn) el.adminBtn.classList.toggle("hidden", useOidc);
-    if (el.runpodAdminBtn) el.runpodAdminBtn.classList.remove("hidden");
+    if (el.adminBtn) el.adminBtn.classList.remove("hidden");
     if (el.adminRunsToggle) el.adminRunsToggle.classList.remove("hidden");
     if (el.showAllRuns) el.showAllRuns.checked = true;
     if (el.tabBtnCath) el.tabBtnCath.classList.remove("hidden");
@@ -11074,7 +11739,6 @@ function updateAdminUI() {
     }
   } else {
     if (el.adminBtn) el.adminBtn.classList.add("hidden");
-    if (el.runpodAdminBtn) el.runpodAdminBtn.classList.add("hidden");
     if (el.adminPanel) el.adminPanel.classList.add("hidden");
     if (el.adminRunsToggle) el.adminRunsToggle.classList.add("hidden");
     if (el.tabBtnCath) el.tabBtnCath.classList.add("hidden");
@@ -11091,9 +11755,7 @@ function updateAdminUI() {
       setActiveTab("home");
     }
   }
-  if (useOidc && el.adminPanel) {
-    el.adminPanel.classList.add("hidden");
-  }
+  syncModelProviderScopeControl();
 }
 
 function buildManualPlan(mode) {
@@ -12729,6 +13391,25 @@ function authHeaders() {
   return state.token ? { Authorization: `Bearer ${state.token}` } : {};
 }
 
+function isApiAuthFailure(status, payload) {
+  const error = String(payload?.error || "").trim().toLowerCase();
+  return Number(status) === 401 || error === "unauthorized";
+}
+
+function handleApiAuthFailure() {
+  clearSession();
+  state.modelProviders = [];
+  state.modelProviderHealthByKey = {};
+  state.modelProvidersLoading = false;
+  if (el.modelProvidersPanel) {
+    closeModelProvidersPanel();
+  }
+  showLogin();
+  if (el.loginError) {
+    el.loginError.textContent = t("auth.sessionExpired");
+  }
+}
+
 async function apiCall(name, args) {
   const res = await fetch(`${state.apiBase}/tools/call`, {
     method: "POST",
@@ -12738,6 +13419,10 @@ async function apiCall(name, args) {
   });
   const payload = await res.json().catch(() => null);
   if (!res.ok) {
+    if (isApiAuthFailure(res.status, payload)) {
+      handleApiAuthFailure();
+      throw new Error(t("auth.sessionExpired"));
+    }
     const msg = payload && typeof payload.error === "string" ? payload.error : `HTTP ${res.status}`;
     throw new Error(msg);
   }
@@ -12745,6 +13430,10 @@ async function apiCall(name, args) {
     throw new Error(t("error.api"));
   }
   if (!payload.ok) {
+    if (isApiAuthFailure(res.status, payload)) {
+      handleApiAuthFailure();
+      throw new Error(t("auth.sessionExpired"));
+    }
     throw new Error(payload.error || t("error.api"));
   }
   return payload.result;
@@ -12787,6 +13476,7 @@ async function authLogin() {
     }
     state.token = payload.token;
     state.user = payload.user;
+    state.sessionAuthType = String(payload.session?.auth_type || "local").trim() || "local";
     saveToken(payload.token);
     saveUser(payload.user);
     reloadWorkflowStudioSessionsForUser(state.user);
@@ -12821,6 +13511,7 @@ async function loadSession() {
       throw new Error(failureMessage);
     }
     state.user = payload.user;
+    state.sessionAuthType = String(payload.session?.auth_type || "").trim();
     saveUser(payload.user);
     reloadWorkflowStudioSessionsForUser(state.user);
     showChat();
@@ -12835,6 +13526,7 @@ async function loadSession() {
     const cachedUser = state.user || loadUser();
     if (cachedUser) {
       state.user = cachedUser;
+      state.sessionAuthType = "";
       reloadWorkflowStudioSessionsForUser(state.user);
       showChat();
       updateAdminUI();
@@ -13782,7 +14474,7 @@ function buildWorkflowDesignerCard({
     appendWorkflowNumberSetting("rfd3_max_return_designs", 10, { min: 1, step: 1 });
   }
   if (nodes.includes("bioemu")) {
-    appendWorkflowNumberSetting("bioemu_num_samples", 20, { min: 1, step: 1 });
+    appendWorkflowNumberSetting("bioemu_num_samples", 50, { min: 1, step: 1 });
     appendWorkflowNumberSetting("bioemu_max_return_structures", 10, { min: 1, step: 1 });
   }
   if (nodes.includes("design")) {
@@ -15285,10 +15977,17 @@ function renderQuestions(questions) {
     return classes.join(" ");
   };
 
-  function makeOptionalSetupDetails(card, { defaultOpen = false } = {}) {
+  function makeOptionalSetupDetails(card, { defaultOpen = false, key = "" } = {}) {
     const details = document.createElement("details");
     details.className = `${card.className || "question-card"} optional-setup-card`;
-    if (defaultOpen) details.open = true;
+    const stateKey = setupDetailsStateKey(key || card.dataset?.setupDetailsKey || card.className || "setup-options", {
+      stepId: setupWizardStepId || "all",
+    });
+    details.dataset.setupDetailsKey = stateKey;
+    details.open = readSetupDetailsOpen(stateKey, defaultOpen);
+    details.addEventListener("toggle", () => {
+      rememberSetupDetailsOpen(stateKey, details.open);
+    });
 
     const directChildren = Array.from(card.children || []);
     const titleNode = directChildren.find((node) => node.classList?.contains("question-title"));
@@ -16273,7 +16972,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(makeOptionalSetupDetails(card));
+    appendConfigCard(makeOptionalSetupDetails(card, { key: "options" }));
   };
 
   const evolutionQuestionIds = new Set([
@@ -16369,7 +17068,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
+    appendConfigCard(makeOptionalSetupDetails(card, { key: "evolution", defaultOpen: false }));
   };
 
   appendCompactOptionBoard();
@@ -16393,7 +17092,7 @@ function renderQuestions(questions) {
   const compactParameterPriority = {
     compare_rmsd_scope: 5,
     bioemu_max_return_structures: 10,
-    bioemu_num_samples: 20,
+    bioemu_num_samples: 50,
     rfd3_max_return_designs: 30,
     num_seq_per_tier: 40,
     af2_max_candidates_per_tier: 50,
@@ -16574,7 +17273,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
+    appendConfigCard(makeOptionalSetupDetails(card, { key: "parameters", defaultOpen: false }));
   };
 
   appendCompactParameterBoard(compactQuestions);
@@ -16664,7 +17363,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     card.appendChild(grid);
-    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
+    appendConfigCard(makeOptionalSetupDetails(card, { key: "constraints", defaultOpen: false }));
   };
 
   appendAdvancedConstraintBoard();
@@ -16688,7 +17387,7 @@ function renderQuestions(questions) {
     card.appendChild(title);
     card.appendChild(help);
     renderSetupRfd3ModeDetailsCard(card, normalizedQuestions);
-    appendConfigCard(makeOptionalSetupDetails(card, { defaultOpen: false }));
+    appendConfigCard(makeOptionalSetupDetails(card, { key: "rfd3-detail", defaultOpen: false }));
   };
 
   appendRfd3DetailBoard();
@@ -16858,7 +17557,13 @@ function renderQuestions(questions) {
       item.className = `attachment-item attachment-${safeFileId}` + (q.required ? " required" : "");
       if (isRfd3InputOverride) {
         item.className += " optional-attachment-item";
-        item.open = setupRfd3InputOverrideVisible() || Boolean(String(state.answers[q.id] || "").trim());
+        const defaultOpen = setupRfd3InputOverrideVisible() || Boolean(String(state.answers[q.id] || "").trim());
+        const stateKey = setupDetailsStateKey(`attachment-${safeFileId}`, { stepId: setupWizardStepId || "input" });
+        item.dataset.setupDetailsKey = stateKey;
+        item.open = readSetupDetailsOpen(stateKey, defaultOpen);
+        item.addEventListener("toggle", () => {
+          rememberSetupDetailsOpen(stateKey, item.open);
+        });
       }
 
       const itemTitle = document.createElement("div");
@@ -18930,7 +19635,8 @@ function compareStructureItemSort(left, right) {
 }
 
 function collectCompareStructureItems(items = state.artifacts) {
-  return (Array.isArray(items) ? items : [])
+  const compareItems = withHitListCompareArtifacts(items, state.hitListRows);
+  return compareItems
     .filter((item) => isStructureArtifactItem(item))
     .filter((item) => !shouldHideFromCompareStudio(item))
     .sort(compareStructureItemSort);
@@ -22219,12 +22925,15 @@ function renderComparePresetStrip(structureItems) {
   ).trim()}`;
 
   const activeVariantByGroup = new Map();
+  const defaultVariantByGroup = new Map();
   groups.forEach((group) => {
+    const variants = Array.isArray(group.variants) ? group.variants : [];
     const activeVariant =
-      (Array.isArray(group.variants) ? group.variants : []).find(
+      variants.find(
         (variant) => `${variant.leftPath}::${variant.rightPath}` === currentKey
       ) || null;
     activeVariantByGroup.set(group.id, activeVariant);
+    defaultVariantByGroup.set(group.id, variants[0] || null);
   });
 
   el.artifactComparePresets.innerHTML = `
@@ -22289,7 +22998,9 @@ function renderComparePresetStrip(structureItems) {
       const chosenVariantId =
         select instanceof HTMLSelectElement && select.value
           ? select.value
-          : activeVariantByGroup.get(groupId)?.id || "";
+          : activeVariantByGroup.get(groupId)?.id ||
+            defaultVariantByGroup.get(groupId)?.id ||
+            "";
       await applyVariant(chosenVariantId);
     });
   });
@@ -22298,7 +23009,6 @@ function renderComparePresetStrip(structureItems) {
     select.addEventListener("change", async () => {
       const groupId = String(select.getAttribute("data-compare-preset-group-select") || "").trim();
       if (!groupId || !(select instanceof HTMLSelectElement)) return;
-      if (!activeVariantByGroup.get(groupId)) return;
       await applyVariant(select.value);
     });
   });
@@ -24754,6 +25464,7 @@ async function refreshHitList() {
     state.hitListResult = null;
     state.hitListRows = [];
     renderHitList();
+    renderArtifactCompareSelects();
     return;
   }
   state.hitListWeights = readHitWeightsFromInputs();
@@ -24769,6 +25480,7 @@ async function refreshHitList() {
     state.hitListResult = result;
     state.hitListRows = Array.isArray(result?.rows) ? result.rows : [];
     renderHitList();
+    renderArtifactCompareSelects();
     if (state.artifactComparison && typeof state.artifactComparison === "object") {
       renderArtifactComparisonSummary(state.artifactComparison);
     }
@@ -24788,6 +25500,7 @@ async function refreshHitList() {
       el.hitListDetails.disabled = true;
     }
     renderCandidateCharts();
+    renderArtifactCompareSelects();
   }
 }
 
@@ -25402,6 +26115,33 @@ function isAdminUser() {
   return Boolean(state.user && state.user.role === "admin");
 }
 
+function canManageModels() {
+  const role = String(state.user?.role || "").trim();
+  return role === "admin" || role === "model_manager";
+}
+
+function canUseModelProviders() {
+  return Boolean(state.user);
+}
+
+function currentModelProviderScope() {
+  const selected = String(el.modelProviderScope?.value || state.modelProviderScope || "user").trim();
+  if (!canManageModels()) return "user";
+  return selected === "global" ? "global" : "user";
+}
+
+function syncModelProviderScopeControl() {
+  if (!el.modelProviderScope) return;
+  if (!canManageModels()) {
+    state.modelProviderScope = "user";
+    el.modelProviderScope.value = "user";
+    el.modelProviderScope.disabled = true;
+    return;
+  }
+  el.modelProviderScope.disabled = false;
+  el.modelProviderScope.value = state.modelProviderScope === "user" ? "user" : "global";
+}
+
 function renderCathJobLog() {
   if (!el.cathJobLog) return;
   const text = String(state.cathSelectedJobLog || "").trim();
@@ -25833,6 +26573,7 @@ async function createUser() {
     el.adminStatus.textContent = t("auth.created", { username: payload.user.username });
     el.adminUsername.value = "";
     el.adminPassword.value = "";
+    await refreshAdminUsers();
   } catch (err) {
     el.adminStatus.textContent = err.message;
   }
@@ -25854,12 +26595,6 @@ if (el.ssoLoginBtn) {
 el.logoutBtn.addEventListener("click", () => {
   logoutCurrentSession();
 });
-
-if (el.accountBtn) {
-  el.accountBtn.addEventListener("click", () => {
-    openAccountConsole();
-  });
-}
 
 el.planBtn.addEventListener("click", resetInputs);
 
@@ -26244,16 +26979,6 @@ if (el.artifactComparisonDetails) {
   });
 }
 
-if (el.settingsBtn && el.settingsPanel) {
-  el.settingsBtn.addEventListener("click", () => {
-    el.settingsPanel.classList.remove("hidden");
-    if (el.apiBaseValue) {
-      el.apiBaseValue.textContent = state.apiBase;
-    }
-    updateReportLangSelect();
-  });
-}
-
 if (el.settingsClose && el.settingsPanel) {
   el.settingsClose.addEventListener("click", () => {
     el.settingsPanel.classList.add("hidden");
@@ -26270,17 +26995,57 @@ if (el.healthCheck) {
   el.healthCheck.addEventListener("click", healthCheck);
 }
 
+if (el.runpodAdminBtn && el.modelProvidersPanel) {
+  el.runpodAdminBtn.addEventListener("click", openModelProvidersPanel);
+}
+
+if (el.modelProvidersClose && el.modelProvidersPanel) {
+  el.modelProvidersClose.addEventListener("click", () => {
+    setModelProviderAddOpen(false);
+    closeModelProvidersPanel();
+  });
+}
+
+if (el.modelProviderAddBtn && el.modelProviderAddPanel) {
+  el.modelProviderAddBtn.addEventListener("click", () => {
+    setModelProviderAddOpen(!state.modelProviderAddOpen);
+  });
+}
+
+if (el.modelProviderScope) {
+  el.modelProviderScope.addEventListener("change", () => {
+    state.modelProviderScope = currentModelProviderScope();
+    state.modelProviderHealthByKey = {};
+    void refreshModelProviders({ includeHealth: false });
+  });
+}
+
+if (el.modelProviderAddCancel) {
+  el.modelProviderAddCancel.addEventListener("click", () => {
+    setModelProviderAddOpen(false);
+  });
+}
+
+if (el.modelProviderAddSave) {
+  el.modelProviderAddSave.addEventListener("click", () => {
+    void saveCustomModelProvider();
+  });
+}
+
+if (el.modelProvidersPanel) {
+  el.modelProvidersPanel.addEventListener("click", (event) => {
+    if (event.target === el.modelProvidersPanel) {
+      setModelProviderAddOpen(false);
+      closeModelProvidersPanel();
+    }
+  });
+}
+
 if (el.settingsPanel) {
   el.settingsPanel.addEventListener("click", (event) => {
     if (event.target === el.settingsPanel) {
       el.settingsPanel.classList.add("hidden");
     }
-  });
-}
-
-if (el.helpBtn && el.helpPanel) {
-  el.helpBtn.addEventListener("click", () => {
-    el.helpPanel.classList.remove("hidden");
   });
 }
 
@@ -26321,6 +27086,7 @@ if (el.reportModalDownload) {
 if (el.adminBtn && el.adminPanel) {
   el.adminBtn.addEventListener("click", () => {
     el.adminPanel.classList.remove("hidden");
+    void refreshAdminUsers();
   });
 }
 
@@ -26340,6 +27106,10 @@ if (el.adminPanel) {
 
 if (el.adminCreateUser) {
   el.adminCreateUser.addEventListener("click", createUser);
+}
+
+if (el.adminRefreshUsers) {
+  el.adminRefreshUsers.addEventListener("click", refreshAdminUsers);
 }
 
 if (el.showAllRuns) {

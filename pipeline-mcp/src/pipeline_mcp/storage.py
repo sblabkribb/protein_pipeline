@@ -121,6 +121,10 @@ class RunPaths:
     def events_jsonl(self) -> Path:
         return self.root / "events.jsonl"
 
+    @property
+    def orchestration_trace_jsonl(self) -> Path:
+        return self.root / "orchestration_trace.jsonl"
+
 
 def init_run(output_root: str, run_id: str) -> RunPaths:
     root = ensure_dir(Path(output_root).resolve() / run_id)
@@ -170,6 +174,17 @@ def set_status(
         payload["detail"] = detail
     write_json(paths.status_json, payload)
     append_jsonl(paths.events_jsonl, {"kind": "status", **payload})
+    append_jsonl(
+        paths.orchestration_trace_jsonl,
+        {
+            "kind": "orchestration_trace",
+            "event_type": "stage_status",
+            "plane": "control",
+            "source": "pipeline_runner",
+            "created_at": payload["updated_at"],
+            **payload,
+        },
+    )
 
 
 _EVOLUTION_SUBRUN_RE = re.compile(

@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from typing import Any
 from collections.abc import Callable
 
+import requests
+
 from .runpod import RunPodClient
 from ..models import SequenceRecord
 
@@ -15,8 +17,11 @@ def _b64encode_text(text: str) -> str:
 
 @dataclass(frozen=True)
 class ProteinMPNNClient:
-    runpod: RunPodClient
-    endpoint_id: str
+    runpod: RunPodClient | None
+    endpoint_id: str | None
+    gpu_url: str | None = None
+    gpu_token: str | None = None
+    gpu_timeout_s: float = 60.0
 
     def design(
         self,
@@ -51,9 +56,18 @@ class ProteinMPNNClient:
         if fixed_positions is not None:
             payload["fixed_positions"] = fixed_positions
 
-        _, result = self.runpod.run_and_wait_with_job_id(self.endpoint_id, payload, on_job_id=on_job_id)
+        if self.gpu_url:
+            result = self._run_gpu_http(payload)
+        else:
+            if self.runpod is None or not self.endpoint_id:
+                raise RuntimeError("ProteinMPNN RunPod client is not configured")
+            _, result = self.runpod.run_and_wait_with_job_id(
+                self.endpoint_id,
+                payload,
+                on_job_id=on_job_id,
+            )
         if result.get("status") != "COMPLETED":
-            raise RuntimeError(f"ProteinMPNN RunPod job not completed: {result}")
+            raise RuntimeError(f"ProteinMPNN job not completed: {result}")
         output = result.get("output")
         if not isinstance(output, dict):
             raise RuntimeError(f"ProteinMPNN output missing/invalid: {result}")
@@ -86,3 +100,34 @@ class ProteinMPNNClient:
             )
 
         return native_rec, sample_recs, output
+
+    def _run_gpu_http(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if not self.gpu_url:
+            raise RuntimeError("ProteinMPNN GPU URL is not configured")
+        url = self.gpu_url.rstrip("/") + "/run"
+        headers = {"Content-Type": "application/json"}
+        if self.gpu_token:
+            headers["Authorization"] = f"Bearer {self.gpu_token}"
+        response = requests.post(
+            url,
+            headers=headers,
+            json={"input": payload},
+            timeout=self.gpu_timeout_s,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, dict):
+            raise RuntimeError(f"ProteinMPNN GPU response invalid: {data!r}")
+        if data.get("error"):
+            raise RuntimeError(f"ProteinMPNN GPU worker error: {data.get('error')}")
+        if "output" in data:
+            status = str(data.get("status") or "COMPLETED")
+            if status != "COMPLETED":
+                return data
+            output = data.get("output")
+            if not isinstance(output, dict):
+                raise RuntimeError(f"ProteinMPNN GPU output missing/invalid: {data}")
+            return {"status": "COMPLETED", "output": output}
+        if "native" in data and "samples" in data:
+            return {"status": "COMPLETED", "output": data}
+        raise RuntimeError(f"ProteinMPNN GPU output missing/invalid: {data}")

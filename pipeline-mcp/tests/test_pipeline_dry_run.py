@@ -169,6 +169,39 @@ class TestPipelineDryRun(unittest.TestCase):
         self.assertTrue(isinstance(summary, dict) and summary.get("mask_applied"))
         self.assertEqual(summary.get("mask_mode"), "dssp_non_loop_reference")
 
+    def test_filter_backbones_by_target_rmsd_remaps_single_chain_candidate(self) -> None:
+        reference = (
+            _pdb_atom(1, "CA", "ALA", "B", 1, 0.0, 0.0, 0.0, "C")
+            + _pdb_atom(2, "CA", "GLY", "B", 2, 1.0, 1.0, 0.0, "C")
+            + _pdb_atom(3, "CA", "SER", "B", 3, 2.0, 0.0, 0.5, "C")
+            + "END\n"
+        )
+        candidate = (
+            reference.replace(" B   1", " A   1")
+            .replace(" B   2", " A   2")
+            .replace(" B   3", " A   3")
+        )
+
+        accepted, summary = _filter_backbones_by_target_rmsd(
+            [{"id": "bioemu_001", "pdb_text": candidate}],
+            reference_pdb_text=reference,
+            chains=["B"],
+            cutoff=0.1,
+            source="bioemu",
+            use_dssp_non_loop=False,
+        )
+
+        self.assertEqual(len(accepted or []), 1)
+        self.assertAlmostEqual(
+            float((accepted or [])[0]["target_rmsd"]),
+            0.0,
+            places=6,
+        )
+        self.assertEqual(
+            (summary or {}).get("chain_remap_by_id"),
+            {"bioemu_001": {"from": "A", "to": "B", "reason": "single_chain_candidate"}},
+        )
+
     def test_effective_rfd3_mode_prefers_local_diversify_for_direct_input_pdb(
         self,
     ) -> None:
@@ -461,6 +494,7 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertTrue((out / "request.json").exists())
             self.assertTrue((out / "status.json").exists())
             self.assertTrue((out / "events.jsonl").exists())
+            self.assertTrue((out / "orchestration_trace.jsonl").exists())
             self.assertTrue((out / "msa" / "result.a3m").exists())
             self.assertTrue((out / "msa" / "quality.json").exists())
             self.assertTrue((out / "conservation.json").exists())
@@ -468,6 +502,27 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertTrue((out / "query_pdb_alignment.json").exists())
             self.assertTrue((out / "agent_panel.jsonl").exists())
             self.assertTrue((out / "agent_panel_report.md").exists())
+            trace_events = [
+                json.loads(line)
+                for line in (out / "orchestration_trace.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            self.assertTrue(
+                any(
+                    item.get("event_type") == "stage_status"
+                    and item.get("plane") == "control"
+                    for item in trace_events
+                )
+            )
+            self.assertTrue(
+                any(
+                    item.get("event_type") == "agent_verdict"
+                    and item.get("plane") == "evidence"
+                    for item in trace_events
+                )
+            )
 
             self.assertEqual(len(res.tiers), 2)
             for tier_result in res.tiers:
@@ -2584,7 +2639,7 @@ class TestPipelineDryRun(unittest.TestCase):
             )
             runner.run(req, run_id="bioemu_oversampled_defaults")
             self.assertIsNotNone(bioemu.kwargs)
-            self.assertEqual(bioemu.kwargs.get("num_samples"), 20)
+            self.assertEqual(bioemu.kwargs.get("num_samples"), 50)
             self.assertEqual(bioemu.kwargs.get("max_return_sample_pdbs"), 10)
             self.assertEqual(bioemu.kwargs.get("min_return_sample_pdbs"), 10)
 

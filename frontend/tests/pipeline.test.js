@@ -93,6 +93,7 @@ import {
   workflowStudioStageFields,
   workflowStudioVisibleStageFields,
   upsertWorkflowStudioStageStatus,
+  withHitListCompareArtifacts,
   withFixedPositionsExtra,
   workflowStudioSessionRunKey,
 } from "../lib/pipeline.js";
@@ -406,9 +407,79 @@ test("artifactMetaFromPath infers backbone ids and sources", () => {
   assert.equal(bioemuRanked.backboneId, "bioemu_topology");
   assert.equal(bioemuRanked.backboneSource, "bioemu");
 
+  const bioemuSample = artifactMetaFromPath("tiers/70/af2/bioemu_005_sample_2/ranked_0.pdb");
+  assert.equal(bioemuSample.backboneId, "bioemu_005");
+  assert.equal(bioemuSample.backboneSource, "bioemu");
+
+  const foundryRfd3Sample = artifactMetaFromPath(
+    "tiers/70/af2/rfd3_inputs_spec-1_0_model_1_sample_2/ranked_0.pdb"
+  );
+  assert.equal(foundryRfd3Sample.backboneId, "rfd3_inputs_spec-1_0_model_1");
+  assert.equal(foundryRfd3Sample.backboneSource, "rfd3");
+
   const stageDesign = artifactMetaFromPath("rfd3/designs/inputs_spec-1_0_model_0.pdb");
   assert.equal(stageDesign.backboneId, "inputs_spec-1_0_model_0");
   assert.equal(stageDesign.backboneSource, "rfd3");
+});
+
+test("withHitListCompareArtifacts adds AF2 ranked PDBs missing from artifact list", () => {
+  const artifacts = [
+    { type: "file", path: "wt/af2/ranked_0.pdb", size: 1000 },
+    { type: "file", path: "backbones/bioemu_005/target.pdb", size: 1000 },
+  ];
+  const rows = [
+    {
+      source: "bioemu",
+      tier: 0.7,
+      seq_id: "bioemu_005:sample_2",
+      af2_ranked_pdb_path: "tiers/70/af2/bioemu_005_sample_2/ranked_0.pdb",
+    },
+    {
+      source: "rfd3",
+      tier: 0.7,
+      seq_id: "rfd3_inputs_spec-1_0_model_1:sample_2",
+      af2_ranked_pdb_path: "tiers/70/af2/rfd3_inputs_spec-1_0_model_1_sample_2/ranked_0.pdb",
+    },
+  ];
+
+  const merged = withHitListCompareArtifacts(artifacts, rows);
+  assert.equal(merged.length, 4);
+  assert.deepEqual(
+    merged.slice(2).map((item) => ({ type: item.type, path: item.path, virtual: item.virtual })),
+    [
+      {
+        type: "file",
+        path: "tiers/70/af2/bioemu_005_sample_2/ranked_0.pdb",
+        virtual: true,
+      },
+      {
+        type: "file",
+        path: "tiers/70/af2/rfd3_inputs_spec-1_0_model_1_sample_2/ranked_0.pdb",
+        virtual: true,
+      },
+    ]
+  );
+
+  const deduped = withHitListCompareArtifacts(merged, rows);
+  assert.equal(deduped.length, 4);
+});
+
+test("refreshHitList rerenders compare selectors after hit-list PDBs load", () => {
+  const source = readFileSync(resolve("frontend/app.js"), "utf8");
+  assert.match(
+    source,
+    /state\.hitListRows = Array\.isArray\(result\?\.rows\) \? result\.rows : \[\];\s+renderHitList\(\);\s+renderArtifactCompareSelects\(\);/m
+  );
+});
+
+test("single-tier compare preset buttons apply the first variant without a dropdown", () => {
+  const source = readFileSync(resolve("frontend/app.js"), "utf8");
+  assert.match(source, /const defaultVariantByGroup = new Map\(\);/);
+  assert.match(source, /defaultVariantByGroup\.set\(group\.id, variants\[0\] \|\| null\);/);
+  assert.match(
+    source,
+    /activeVariantByGroup\.get\(groupId\)\?\.id \|\|\s+defaultVariantByGroup\.get\(groupId\)\?\.id \|\|\s+""/m
+  );
 });
 
 test("artifactMetaFromPath classifies compare references and source outputs", () => {

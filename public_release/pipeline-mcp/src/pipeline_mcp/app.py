@@ -34,7 +34,16 @@ def build_runner() -> PipelineRunner:
         skip_verify=cfg.runpod.skip_verify,
     )
     mmseqs = MMseqsClient(runpod=runpod, endpoint_id=cfg.runpod.mmseqs_endpoint_id)
-    proteinmpnn = ProteinMPNNClient(runpod=runpod, endpoint_id=cfg.runpod.proteinmpnn_endpoint_id)
+    if cfg.proteinmpnn.provider == "gpu_http":
+        proteinmpnn = ProteinMPNNClient(
+            runpod=None,
+            endpoint_id=None,
+            gpu_url=cfg.proteinmpnn.gpu_url,
+            gpu_token=cfg.proteinmpnn.gpu_token,
+            gpu_timeout_s=cfg.proteinmpnn.gpu_timeout_s,
+        )
+    else:
+        proteinmpnn = ProteinMPNNClient(runpod=runpod, endpoint_id=cfg.runpod.proteinmpnn_endpoint_id)
 
     soluprot = SoluProtClient(url=cfg.services.soluprot_url) if cfg.services.soluprot_url else None
     colabfold = None

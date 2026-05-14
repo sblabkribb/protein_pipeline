@@ -8,7 +8,7 @@ import os
 class RunPodConfig:
     api_key: str
     mmseqs_endpoint_id: str
-    proteinmpnn_endpoint_id: str
+    proteinmpnn_endpoint_id: str | None
     colabfold_endpoint_id: str | None
     alphafold2_endpoint_id: str | None
     bioemu_endpoint_id: str | None
@@ -17,6 +17,14 @@ class RunPodConfig:
     relax_endpoint_id: str | None
     ca_bundle: str | None
     skip_verify: bool
+
+
+@dataclass(frozen=True)
+class ProteinMPNNConfig:
+    provider: str
+    gpu_url: str | None
+    gpu_token: str | None
+    gpu_timeout_s: float
 
 
 @dataclass(frozen=True)
@@ -44,6 +52,7 @@ class GeminiConfig:
 @dataclass(frozen=True)
 class AppConfig:
     runpod: RunPodConfig
+    proteinmpnn: ProteinMPNNConfig
     services: ServiceConfig
     rosetta: RosettaConfig
     gemini: GeminiConfig
@@ -52,6 +61,15 @@ class AppConfig:
 
 def _env_true(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _proteinmpnn_provider() -> str:
+    value = os.environ.get("PROTEINMPNN_PROVIDER", "runpod").strip().lower() or "runpod"
+    if value in {"gpu", "http", "gpu-http"}:
+        return "gpu_http"
+    if value not in {"runpod", "gpu_http"}:
+        raise RuntimeError("PROTEINMPNN_PROVIDER must be one of: runpod, gpu_http")
+    return value
 
 
 def load_config() -> AppConfig:
@@ -63,9 +81,17 @@ def load_config() -> AppConfig:
     if not mmseqs_endpoint_id:
         raise RuntimeError("MMSEQS_ENDPOINT_ID is required")
 
-    proteinmpnn_endpoint_id = os.environ.get("PROTEINMPNN_ENDPOINT_ID", "").strip()
-    if not proteinmpnn_endpoint_id:
+    proteinmpnn_provider = _proteinmpnn_provider()
+    proteinmpnn_endpoint_id = os.environ.get("PROTEINMPNN_ENDPOINT_ID", "").strip() or None
+    proteinmpnn_gpu_url = os.environ.get("PROTEINMPNN_GPU_URL", "").strip() or None
+    proteinmpnn_gpu_token = os.environ.get("PROTEINMPNN_GPU_TOKEN", "").strip() or None
+    proteinmpnn_gpu_timeout_s = float(
+        os.environ.get("PROTEINMPNN_GPU_TIMEOUT_S", "21600").strip() or "21600"
+    )
+    if proteinmpnn_provider == "runpod" and not proteinmpnn_endpoint_id:
         raise RuntimeError("PROTEINMPNN_ENDPOINT_ID is required")
+    if proteinmpnn_provider == "gpu_http" and not proteinmpnn_gpu_url:
+        raise RuntimeError("PROTEINMPNN_GPU_URL is required when PROTEINMPNN_PROVIDER=gpu_http")
 
     colabfold_endpoint_id = (
         os.environ.get("COLABFOLD_ENDPOINT_ID", "").strip()
@@ -116,6 +142,12 @@ def load_config() -> AppConfig:
             ca_bundle=ca_bundle,
             skip_verify=bool(skip_verify),
         ),
+        proteinmpnn=ProteinMPNNConfig(
+            provider=proteinmpnn_provider,
+            gpu_url=proteinmpnn_gpu_url,
+            gpu_token=proteinmpnn_gpu_token,
+            gpu_timeout_s=proteinmpnn_gpu_timeout_s,
+        ),
         services=ServiceConfig(soluprot_url=soluprot_url, af2_url=af2_url),
         rosetta=RosettaConfig(
             docker_image=rosetta_docker_image,
@@ -131,4 +163,3 @@ def load_config() -> AppConfig:
         ),
         output_root=output_root,
     )
-

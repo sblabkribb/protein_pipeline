@@ -21,6 +21,7 @@ from .bio.fasta import parse_fasta
 from .bio.ligand_text import normalize_diffdock_ligand_inputs
 from .bio.sdf import append_ligand_pdb
 from .bio.sdf import sdf_to_pdb
+from .auth import AuthError
 from .cath_ops import job_kind_batch
 from .cath_ops import job_kind_train
 from .cath_ops import launch_cath_batch_job
@@ -38,6 +39,7 @@ from .pipeline import PipelineCancelled
 from .pipeline import _dummy_backbone_pdb
 from .pipeline import _normalize_af2_provider
 from .pipeline import _prepare_af2_sequence
+from .pipeline import _recommended_bioemu_max_attempted_structures
 from .pipeline import _recommended_bioemu_num_samples
 from .pipeline import _resolve_af2_model_preset
 from .pipeline import _split_multichain_sequence
@@ -66,6 +68,8 @@ from .storage import resolve_run_path
 from .storage import mark_cancel_requested
 from .report_scoring import compute_score
 from .report_scoring import scoring_config
+from .model_providers import model_provider_store_from_env
+from .model_providers import build_provider_summary
 from .runpod_admin import build_runpod_admin_service
 from .runpod_admin import sanitize_runpod_endpoint_patch
 from .storage import set_status
@@ -3707,6 +3711,86 @@ def _runpod_get_history_tool(
     )
 
 
+def _model_provider_store(runner: PipelineRunner):
+    return model_provider_store_from_env(getattr(runner, "output_root", None))
+
+
+def _model_provider_user(arguments: dict[str, Any]) -> dict[str, Any]:
+    return arguments.get("user") if isinstance(arguments.get("user"), dict) else {}
+
+
+def _model_provider_scope(arguments: dict[str, Any], user: dict[str, Any]) -> str:
+    provider = arguments.get("provider") if isinstance(arguments.get("provider"), dict) else {}
+    raw_scope = arguments.get("scope", provider.get("scope"))
+    if raw_scope is None:
+        role = str(user.get("role") or "")
+        return "global" if role in {"admin", "model_manager"} or not user else "user"
+    scope = str(raw_scope or "global").strip().lower().replace("-", "_")
+    if scope in {"global", "default", "admin"}:
+        return "global"
+    if scope in {"user", "personal", "mine"}:
+        return "user"
+    raise ValueError("scope must be one of: global, user")
+
+
+def _model_provider_user_id(user: dict[str, Any]) -> str:
+    return str(user.get("username") or "").strip()
+
+
+def _can_manage_global_model_providers(user: dict[str, Any]) -> bool:
+    return str(user.get("role") or "") in {"admin", "model_manager"}
+
+
+def _model_provider_list_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    store = _model_provider_store(runner)
+    include_health = _as_bool(arguments.get("include_health"), False)
+    user = _model_provider_user(arguments)
+    scope = _model_provider_scope(arguments, user)
+    user_id = _model_provider_user_id(user) if scope == "user" else None
+    providers = build_provider_summary(store, user_id=user_id)
+    health: dict[str, Any] = {}
+    if include_health:
+        for provider in providers:
+            model_key = str(provider.get("model_key") or "")
+            if model_key:
+                health[model_key] = store.health(model_key, user_id=user_id)
+    return {
+        "providers": providers,
+        "health": health,
+        "scope": scope,
+        "can_manage_global": _can_manage_global_model_providers(user),
+    }
+
+
+def _model_provider_update_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    store = _model_provider_store(runner)
+    model_key = str(arguments.get("model_key") or "").strip()
+    provider = arguments.get("provider")
+    if not isinstance(provider, dict):
+        raise ValueError("provider must be an object")
+    user = _model_provider_user(arguments)
+    scope = _model_provider_scope(arguments, user)
+    user_id = _model_provider_user_id(user) if scope == "user" else None
+    if scope == "global" and user and not _can_manage_global_model_providers(user):
+        raise AuthError("model manager required")
+    if scope == "user" and not user_id:
+        raise AuthError("user required")
+    actor = str(user.get("username") or "")
+    return {"provider": store.upsert(model_key, provider, actor=actor, scope=scope, user_id=user_id), "scope": scope}
+
+
+def _model_provider_health_tool(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
+    store = _model_provider_store(runner)
+    model_key = str(arguments.get("model_key") or "").strip()
+    if not model_key:
+        raise ValueError("model_key is required")
+    provider = arguments.get("provider")
+    user = _model_provider_user(arguments)
+    scope = _model_provider_scope(arguments, user)
+    user_id = _model_provider_user_id(user) if scope == "user" else None
+    return store.health(model_key, provider if isinstance(provider, dict) else None, user_id=user_id)
+
+
 def _cath_get_batch_overview_tool(
     runner: PipelineRunner,
     arguments: dict[str, Any],
@@ -6501,14 +6585,19 @@ def pipeline_request_from_args(
         if str(args.get("bioemu_max_attempted_structures") or "").strip()
         else None
     )
+    requested_return_count = max(1, int(bioemu_max_return_structures))
     if str(args.get("bioemu_num_samples") or "").strip():
         bioemu_num_samples = _as_int(
             args.get("bioemu_num_samples"), bioemu_max_return_structures
         )
     else:
-        requested_return_count = max(1, int(bioemu_max_return_structures))
         bioemu_num_samples = _recommended_bioemu_num_samples(
             requested_return_count, bioemu_filter_samples
+        )
+    if bioemu_max_attempted_structures is None:
+        bioemu_max_attempted_structures = _recommended_bioemu_max_attempted_structures(
+            requested_return_count,
+            bioemu_filter_samples,
         )
     bioemu_env = _as_dict_str(args.get("bioemu_env"), name="bioemu_env")
 
@@ -7971,6 +8060,55 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.model_provider_list",
+            "description": "List configured model providers across RunPod and HTTP API backends.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "include_health": {"type": "boolean"},
+                },
+            },
+        },
+        {
+            "name": "pipeline.model_provider_update",
+            "description": "Create or update a model provider entry.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "model_key": {"type": "string"},
+                    "provider": {
+                        "type": "object",
+                        "properties": {
+                            "label": {"type": "string"},
+                            "custom": {"type": "boolean"},
+                            "provider_type": {"type": "string", "enum": ["runpod", "http_api", "disabled"]},
+                            "endpoint_id": {"type": "string"},
+                            "base_url": {"type": "string"},
+                            "token": {"type": "string"},
+                            "timeout_s": {"type": "number"},
+                            "enabled": {"type": "boolean"},
+                        },
+                    },
+                },
+                "required": ["model_key", "provider"],
+            },
+        },
+        {
+            "name": "pipeline.model_provider_health",
+            "description": "Run a health check against a model provider.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "model_key": {"type": "string"},
+                    "provider": {
+                        "type": "object",
+                        "description": "Optional unsaved provider draft to check instead of the saved registry value.",
+                    },
+                },
+                "required": ["model_key"],
+            },
+        },
+        {
             "name": "pipeline.agent_chat",
             "description": "Reasoning agent that analyzes run status and expert insights to answer user questions.",
             "inputSchema": {
@@ -8352,5 +8490,14 @@ class ToolDispatcher:
             return _runpod_list_billing_tool(self.runner, arguments)
         if name == "pipeline.runpod_get_history":
             return _runpod_get_history_tool(self.runner, arguments)
+
+        if name == "pipeline.model_provider_list":
+            return _model_provider_list_tool(self.runner, arguments)
+
+        if name == "pipeline.model_provider_update":
+            return _model_provider_update_tool(self.runner, arguments)
+
+        if name == "pipeline.model_provider_health":
+            return _model_provider_health_tool(self.runner, arguments)
 
         raise ValueError(f"Unknown tool: {name}")
