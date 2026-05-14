@@ -75,6 +75,7 @@ import {
   workflowStudioLaneTiersFromSources,
   workflowStudioVisibleStageFields,
   withFixedPositionsExtra,
+  withHitListCompareArtifacts,
 } from "./lib/pipeline.js?v=20260506_tier_fix";
 import {
   analyzeChartViewOptions,
@@ -19634,7 +19635,8 @@ function compareStructureItemSort(left, right) {
 }
 
 function collectCompareStructureItems(items = state.artifacts) {
-  return (Array.isArray(items) ? items : [])
+  const compareItems = withHitListCompareArtifacts(items, state.hitListRows);
+  return compareItems
     .filter((item) => isStructureArtifactItem(item))
     .filter((item) => !shouldHideFromCompareStudio(item))
     .sort(compareStructureItemSort);
