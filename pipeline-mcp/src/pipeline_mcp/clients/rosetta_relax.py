@@ -75,6 +75,8 @@ class RosettaRelaxClient:
     relax_binary: str | None = None
     score_binary: str | None = None
     database_path: str | None = None
+    runpod_endpoint_id: str | None = None
+    runpod_api_key: str | None = None
     timeout_s: float = 60.0 * 60.0
     container_workdir: str = "/work"
     container_relax_binary: str = "/usr/local/bin/relax.default.linuxgccrelease"
@@ -83,18 +85,22 @@ class RosettaRelaxClient:
 
     @property
     def endpoint_id(self) -> str | None:
-        return os.getenv("RUNPOD_RELAX_ENDPOINT_ID")
+        return self.runpod_endpoint_id or os.getenv("RUNPOD_RELAX_ENDPOINT_ID")
+
+    @property
+    def api_key(self) -> str | None:
+        return self.runpod_api_key or os.getenv("RUNPOD_API_KEY")
 
     def is_configured(self) -> bool:
         # Now also checks for RunPod configuration
-        if os.getenv("RUNPOD_RELAX_ENDPOINT_ID"):
+        if self.endpoint_id:
             return True
         if self.relax_binary and self.score_binary and self.database_path:
             return True
         return bool(self.docker_bin and self.docker_image)
 
     def _mode(self) -> str:
-        if os.getenv("RUNPOD_RELAX_ENDPOINT_ID"):
+        if self.endpoint_id:
             return "runpod"
         if self.relax_binary and self.score_binary and self.database_path:
             return "binary"
@@ -170,9 +176,12 @@ class RosettaRelaxClient:
         
         if mode == "runpod":
             # --- SERVERLESS EXECUTION ---
-            endpoint_id = os.getenv("RUNPOD_RELAX_ENDPOINT_ID")
-            api_key = os.getenv("RUNPOD_API_KEY")
-            if not api_key: raise RuntimeError("RUNPOD_API_KEY is missing in environment")
+            endpoint_id = self.endpoint_id
+            api_key = self.api_key
+            if not endpoint_id:
+                raise RuntimeError("RUNPOD_RELAX_ENDPOINT_ID is missing in environment")
+            if not api_key:
+                raise RuntimeError("RUNPOD_API_KEY is missing in environment")
             
             with open(input_pdb, "r") as f:
                 pdb_content = f.read()

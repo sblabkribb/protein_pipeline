@@ -1773,7 +1773,7 @@
               <input id="modelProviderAddBaseUrl" type="url" placeholder="http://gpu.example:18162" />
             </label>
             <label>
-              <span data-i18n="modelProviders.token">API token</span>
+              <span data-i18n="modelProviders.credential">RunPod API key / HTTP token</span>
               <input id="modelProviderAddToken" type="password" autocomplete="new-password" />
             </label>
             <label>
@@ -1788,6 +1788,29 @@
             </button>
           </div>
         </div>
+        <details class="model-provider-guide" open>
+          <summary data-i18n="modelProviders.guide.title">Model registration guide</summary>
+          <div class="model-provider-guide-grid">
+            <section>
+              <strong data-i18n="modelProviders.guide.runpod.title">Use a RunPod image</strong>
+              <p data-i18n="modelProviders.guide.runpod.body">
+                Create a RunPod Serverless endpoint from the image, then enter the endpoint ID and RunPod API key here.
+              </p>
+            </section>
+            <section>
+              <strong data-i18n="modelProviders.guide.gpu.title">Register a GPU server API</strong>
+              <p data-i18n="modelProviders.guide.gpu.body">
+                Install or copy /opt/protein-model-api-registration on the GPU server, expose /healthz and /run, then paste the HTTP API URL here.
+              </p>
+            </section>
+            <section>
+              <strong data-i18n="modelProviders.guide.contract.title">Required API contract</strong>
+              <p data-i18n="modelProviders.guide.contract.body">
+                Workers should provide GET /healthz, POST /run, and optional POST /cancel with JSON inputs and outputs.
+              </p>
+            </section>
+          </div>
+        </details>
         <div id="modelProvidersList" class="model-provider-list"></div>
       </div>
     </div>
