@@ -1233,9 +1233,29 @@ function backboneIdFromPath(normalizedPath) {
 
   const af2RankedMatch = normalized.match(/(?:^|\/)tiers\/[^/]+\/af2\/([^/]+)\/ranked_\d+\.pdb$/);
   if (af2RankedMatch) {
-    return af2RankedMatch[1].replace(/_\d+$/, "");
+    const folder = af2RankedMatch[1];
+    const sampleStripped = folder.replace(/_sample_\d+$/i, "");
+    return sampleStripped !== folder ? sampleStripped : folder.replace(/_\d+$/, "");
   }
   return "";
+}
+
+export function withHitListCompareArtifacts(artifacts = [], rows = []) {
+  const out = (Array.isArray(artifacts) ? artifacts : []).filter(Boolean).map((item) => ({ ...item }));
+  const seen = new Set(out.map((item) => String(item?.path || "").trim()).filter(Boolean));
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const path = String(row?.af2_ranked_pdb_path || "").trim();
+    if (!path || seen.has(path) || !/\.pdb$/i.test(path)) return;
+    seen.add(path);
+    out.push({
+      type: "file",
+      path,
+      size: Number(row?.af2_ranked_pdb_size || 0) || 0,
+      virtual: true,
+      source: "hit_list",
+    });
+  });
+  return out;
 }
 
 export function backboneSourceIndexFromManifest(manifest) {
