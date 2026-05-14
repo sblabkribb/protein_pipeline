@@ -25,6 +25,16 @@ def test_model_provider_store_lists_env_fallbacks_and_masks_tokens(tmp_path, mon
     assert providers["bioemu"]["endpoint_id"] == "bioemu-runpod"
 
 
+def test_colabfold_url_env_alias_configures_http_provider(tmp_path, monkeypatch):
+    monkeypatch.setenv("COLABFOLD_URL", "http://gpu.example:18160/")
+
+    store = ModelProviderStore(tmp_path)
+    provider = store.get_effective("colabfold")
+
+    assert provider["provider_type"] == "http_api"
+    assert provider["base_url"] == "http://gpu.example:18160"
+
+
 def test_model_provider_store_persists_http_provider_with_encrypted_token(tmp_path):
     store = ModelProviderStore(tmp_path)
     saved = store.upsert(
