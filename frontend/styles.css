@@ -6100,6 +6100,10 @@ textarea:focus-visible {
   line-height: 1.5;
 }
 
+.model-provider-guide-action {
+  margin-top: 10px;
+}
+
 .model-provider-card {
   display: flex;
   flex-direction: column;
