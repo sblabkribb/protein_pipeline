@@ -6056,6 +6056,50 @@ textarea:focus-visible {
   flex-wrap: wrap;
 }
 
+.model-provider-guide {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(16, 42, 45, 0.1);
+  border-radius: var(--radius-sm);
+  background: rgba(248, 250, 252, 0.92);
+}
+
+.model-provider-guide summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.model-provider-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.model-provider-guide-grid section {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(15, 118, 110, 0.12);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.model-provider-guide-grid strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.model-provider-guide-grid p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .model-provider-card {
   display: flex;
   flex-direction: column;
@@ -7069,6 +7113,10 @@ textarea:focus-visible {
   }
 
   .model-provider-add-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .model-provider-guide-grid {
     grid-template-columns: 1fr;
   }
 

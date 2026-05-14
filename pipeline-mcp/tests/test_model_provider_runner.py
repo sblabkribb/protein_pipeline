@@ -62,6 +62,7 @@ def test_build_runner_registry_runpod_provider_overrides_legacy_proteinmpnn_env(
         {
             "provider_type": "runpod",
             "endpoint_id": "registry-proteinmpnn",
+            "token": "registry-runpod-key",
             "enabled": True,
         },
         actor="test",
@@ -79,6 +80,7 @@ def test_build_runner_registry_runpod_provider_overrides_legacy_proteinmpnn_env(
 
     assert runner.proteinmpnn.endpoint_id == "registry-proteinmpnn"
     assert runner.proteinmpnn.gpu_url is None
+    assert runner.proteinmpnn.runpod.api_key == "registry-runpod-key"
 
 
 def test_build_runner_uses_user_model_provider_override(tmp_path):

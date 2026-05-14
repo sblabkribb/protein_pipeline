@@ -45,6 +45,19 @@ def _provider_is_runpod(provider: dict) -> bool:
     return bool(provider.get("enabled", True)) and provider.get("provider_type") == "runpod" and bool(provider.get("endpoint_id"))
 
 
+def _runpod_for_provider(default_runpod: RunPodClient, provider: dict) -> RunPodClient:
+    api_key = str(provider.get("token") or "").strip()
+    if not api_key:
+        return default_runpod
+    return RunPodClient(
+        api_key=api_key,
+        ca_bundle=default_runpod.ca_bundle,
+        skip_verify=default_runpod.skip_verify,
+        timeout_s=default_runpod.timeout_s,
+        poll_interval_s=default_runpod.poll_interval_s,
+    )
+
+
 def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
     cfg = load_config()
     provider_store = ModelProviderStore(cfg.output_root)
@@ -62,7 +75,7 @@ def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
         )
     else:
         mmseqs_endpoint_id = str(mmseqs_provider.get("endpoint_id") or cfg.runpod.mmseqs_endpoint_id)
-        mmseqs = MMseqsClient(runpod=runpod, endpoint_id=mmseqs_endpoint_id)
+        mmseqs = MMseqsClient(runpod=_runpod_for_provider(runpod, mmseqs_provider), endpoint_id=mmseqs_endpoint_id)
 
     proteinmpnn_provider = _provider(provider_store, "proteinmpnn", provider_user)
     if _provider_is_http(proteinmpnn_provider):
@@ -74,7 +87,10 @@ def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
             gpu_timeout_s=float(proteinmpnn_provider.get("timeout_s") or 21600),
         )
     elif _provider_is_runpod(proteinmpnn_provider):
-        proteinmpnn = ProteinMPNNClient(runpod=runpod, endpoint_id=str(proteinmpnn_provider["endpoint_id"]))
+        proteinmpnn = ProteinMPNNClient(
+            runpod=_runpod_for_provider(runpod, proteinmpnn_provider),
+            endpoint_id=str(proteinmpnn_provider["endpoint_id"]),
+        )
     elif cfg.proteinmpnn.provider == "gpu_http":
         proteinmpnn = ProteinMPNNClient(
             runpod=None,
@@ -98,7 +114,10 @@ def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
             endpoint_id="local-http-colabfold",
         )
     elif _provider_is_runpod(colabfold_provider):
-        colabfold = AlphaFold2RunPodClient(runpod=runpod, endpoint_id=str(colabfold_provider["endpoint_id"]))
+        colabfold = AlphaFold2RunPodClient(
+            runpod=_runpod_for_provider(runpod, colabfold_provider),
+            endpoint_id=str(colabfold_provider["endpoint_id"]),
+        )
     elif cfg.runpod.colabfold_endpoint_id:
         colabfold = AlphaFold2RunPodClient(runpod=runpod, endpoint_id=cfg.runpod.colabfold_endpoint_id)
 
@@ -112,7 +131,10 @@ def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
             endpoint_id="local-http-af2",
         )
     elif _provider_is_runpod(af2_provider):
-        af2 = AlphaFold2RunPodClient(runpod=runpod, endpoint_id=str(af2_provider["endpoint_id"]))
+        af2 = AlphaFold2RunPodClient(
+            runpod=_runpod_for_provider(runpod, af2_provider),
+            endpoint_id=str(af2_provider["endpoint_id"]),
+        )
     elif cfg.runpod.alphafold2_endpoint_id:
         af2 = AlphaFold2RunPodClient(runpod=runpod, endpoint_id=cfg.runpod.alphafold2_endpoint_id)
     elif cfg.services.af2_url:
@@ -127,7 +149,10 @@ def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
             timeout_s=float(rfd3_provider.get("timeout_s") or 21600),
         )
     elif _provider_is_runpod(rfd3_provider):
-        rfd3 = RFD3RunPodClient(runpod=runpod, endpoint_id=str(rfd3_provider["endpoint_id"]))
+        rfd3 = RFD3RunPodClient(
+            runpod=_runpod_for_provider(runpod, rfd3_provider),
+            endpoint_id=str(rfd3_provider["endpoint_id"]),
+        )
     elif cfg.runpod.rfd3_endpoint_id:
         rfd3 = RFD3RunPodClient(runpod=runpod, endpoint_id=cfg.runpod.rfd3_endpoint_id)
 
@@ -140,7 +165,10 @@ def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
             timeout_s=float(bioemu_provider.get("timeout_s") or 21600),
         )
     elif _provider_is_runpod(bioemu_provider):
-        bioemu = BioEmuRunPodClient(runpod=runpod, endpoint_id=str(bioemu_provider["endpoint_id"]))
+        bioemu = BioEmuRunPodClient(
+            runpod=_runpod_for_provider(runpod, bioemu_provider),
+            endpoint_id=str(bioemu_provider["endpoint_id"]),
+        )
     elif cfg.runpod.bioemu_endpoint_id:
         bioemu = BioEmuRunPodClient(runpod=runpod, endpoint_id=cfg.runpod.bioemu_endpoint_id)
 
@@ -153,7 +181,10 @@ def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
             timeout_s=float(diffdock_provider.get("timeout_s") or 21600),
         )
     elif _provider_is_runpod(diffdock_provider):
-        diffdock = DiffDockRunPodClient(runpod=runpod, endpoint_id=str(diffdock_provider["endpoint_id"]))
+        diffdock = DiffDockRunPodClient(
+            runpod=_runpod_for_provider(runpod, diffdock_provider),
+            endpoint_id=str(diffdock_provider["endpoint_id"]),
+        )
     elif cfg.runpod.diffdock_endpoint_id:
         diffdock = DiffDockRunPodClient(runpod=runpod, endpoint_id=cfg.runpod.diffdock_endpoint_id)
 
@@ -169,12 +200,16 @@ def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
         )
     elif _provider_is_runpod(rosetta_provider):
         rosetta_relax = RosettaRelaxClient(
+            runpod_endpoint_id=str(rosetta_provider["endpoint_id"]),
+            runpod_api_key=str(rosetta_provider.get("token") or cfg.runpod.api_key),
             timeout_s=cfg.rosetta.timeout_s,
-        )  # Client picks up RUNPOD_RELAX_ENDPOINT_ID internally
+        )
     elif cfg.runpod.relax_endpoint_id:
         rosetta_relax = RosettaRelaxClient(
+            runpod_endpoint_id=cfg.runpod.relax_endpoint_id,
+            runpod_api_key=cfg.runpod.api_key,
             timeout_s=cfg.rosetta.timeout_s,
-        )  # Client picks up RUNPOD_RELAX_ENDPOINT_ID internally
+        )
     elif cfg.rosetta.relax_binary and cfg.rosetta.score_binary and cfg.rosetta.database_path:
         rosetta_relax = RosettaRelaxClient(
             relax_binary=cfg.rosetta.relax_binary,

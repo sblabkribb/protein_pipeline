@@ -107,6 +107,10 @@ test("model provider UI supports inline health status and adding custom models",
 
   assert.match(html, /id="modelProviderAddBtn"/);
   assert.match(html, /id="modelProviderAddPanel"/);
+  assert.match(html, /modelProviders\.credential/);
+  assert.match(html, /modelProviders\.guide\.title/);
+  assert.match(source, /modelProviderCredentialLabel/);
+  assert.match(source, /modelProviders\.runpodKey/);
   assert.match(source, /data-model-provider-action-status/);
   assert.match(source, /function saveCustomModelProvider/);
   assert.match(source, /custom:\s*true/);

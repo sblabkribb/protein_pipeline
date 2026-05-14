@@ -2823,7 +2823,12 @@ const I18N = {
     "modelProviders.endpoint": "RunPod endpoint ID",
     "modelProviders.baseUrl": "HTTP API URL",
     "modelProviders.token": "API token",
+    "modelProviders.credential": "RunPod API key / HTTP token",
+    "modelProviders.runpodKey": "RunPod API key",
+    "modelProviders.httpToken": "HTTP API token",
     "modelProviders.tokenHelp": "Leave blank to keep the saved token.",
+    "modelProviders.runpodKeyHelp": "Leave blank to keep the saved RunPod key.",
+    "modelProviders.httpTokenHelp": "Leave blank to keep the saved HTTP token.",
     "modelProviders.timeout": "Timeout (sec)",
     "modelProviders.connection": "Connection",
     "modelProviders.health": "Health",
@@ -2847,6 +2852,16 @@ const I18N = {
     "modelProviders.add.label": "Display name",
     "modelProviders.add.save": "Add Model",
     "modelProviders.add.required": "Model key and display name are required.",
+    "modelProviders.guide.title": "Model registration guide",
+    "modelProviders.guide.runpod.title": "Use a RunPod image",
+    "modelProviders.guide.runpod.body":
+      "Create a RunPod Serverless endpoint from the image, then enter the endpoint ID and RunPod API key here.",
+    "modelProviders.guide.gpu.title": "Register a GPU server API",
+    "modelProviders.guide.gpu.body":
+      "Install or copy /opt/protein-model-api-registration on the GPU server, expose /healthz and /run, then paste the HTTP API URL here.",
+    "modelProviders.guide.contract.title": "Required API contract",
+    "modelProviders.guide.contract.body":
+      "Workers should provide GET /healthz, POST /run, and optional POST /cancel with JSON inputs and outputs.",
     "admin.title": "Admin: Create User",
     "admin.username": "New Username",
     "admin.username.placeholder": "new.user",
@@ -4302,7 +4317,12 @@ const I18N = {
     "modelProviders.endpoint": "RunPod endpoint ID",
     "modelProviders.baseUrl": "HTTP API URL",
     "modelProviders.token": "API 토큰",
+    "modelProviders.credential": "RunPod API key / HTTP 토큰",
+    "modelProviders.runpodKey": "RunPod API key",
+    "modelProviders.httpToken": "HTTP API 토큰",
     "modelProviders.tokenHelp": "비워두면 저장된 토큰을 유지합니다.",
+    "modelProviders.runpodKeyHelp": "비워두면 저장된 RunPod key를 유지합니다.",
+    "modelProviders.httpTokenHelp": "비워두면 저장된 HTTP 토큰을 유지합니다.",
     "modelProviders.timeout": "제한 시간(초)",
     "modelProviders.connection": "현재 연결",
     "modelProviders.health": "상태 확인",
@@ -4326,6 +4346,16 @@ const I18N = {
     "modelProviders.add.label": "표시 이름",
     "modelProviders.add.save": "모델 추가",
     "modelProviders.add.required": "모델 키와 표시 이름을 입력하세요.",
+    "modelProviders.guide.title": "모델 등록 안내",
+    "modelProviders.guide.runpod.title": "RunPod 이미지 연결",
+    "modelProviders.guide.runpod.body":
+      "RunPod Serverless endpoint를 만든 뒤 endpoint ID와 RunPod API key를 여기에 입력합니다.",
+    "modelProviders.guide.gpu.title": "GPU 서버 API 등록",
+    "modelProviders.guide.gpu.body":
+      "GPU 서버에 /opt/protein-model-api-registration skill을 설치 또는 복사하고 /healthz, /run을 노출한 뒤 HTTP API URL을 여기에 붙입니다.",
+    "modelProviders.guide.contract.title": "필수 API 계약",
+    "modelProviders.guide.contract.body":
+      "worker는 GET /healthz, POST /run, 선택적으로 POST /cancel을 JSON 입출력으로 제공해야 합니다.",
     "admin.title": "관리자: 사용자 생성",
     "admin.username": "새 사용자명",
     "admin.username.placeholder": "new.user",
@@ -10454,6 +10484,22 @@ function modelProviderActionStatus(provider, health) {
   )}</span>`;
 }
 
+function modelProviderCredentialLabel(providerType) {
+  const normalized = normalizeProviderType(providerType);
+  if (normalized === "runpod") return t("modelProviders.runpodKey");
+  if (normalized === "http_api") return t("modelProviders.httpToken");
+  return t("modelProviders.credential");
+}
+
+function modelProviderCredentialHelp(provider, providerType) {
+  const visible = visibleTokenLabel(provider);
+  if (visible) return visible;
+  const normalized = normalizeProviderType(providerType);
+  if (normalized === "runpod") return t("modelProviders.runpodKeyHelp");
+  if (normalized === "http_api") return t("modelProviders.httpTokenHelp");
+  return t("modelProviders.tokenHelp");
+}
+
 function renderModelProviderCard(provider, health = null) {
   const modelKey = String(provider?.model_key || "").trim();
   const label = String(provider?.label || modelKey || "-").trim();
@@ -10490,12 +10536,12 @@ function renderModelProviderCard(provider, health = null) {
           <input data-model-provider-field="base_url" type="url" value="${escapeAttr(provider?.base_url || "")}" />
         </label>
         <label>
-          <span>${escapeHtml(t("modelProviders.token"))}</span>
+          <span data-model-provider-token-label>${escapeHtml(modelProviderCredentialLabel(providerType))}</span>
           <input
             data-model-provider-field="token"
             type="password"
             autocomplete="new-password"
-            placeholder="${escapeAttr(visibleTokenLabel(provider) || t("modelProviders.tokenHelp"))}"
+            placeholder="${escapeAttr(modelProviderCredentialHelp(provider, providerType))}"
           />
         </label>
         <label>
@@ -10535,6 +10581,16 @@ function renderModelProviders() {
   });
   el.modelProvidersList.querySelectorAll("[data-model-provider-health]").forEach((button) => {
     button.addEventListener("click", () => checkModelProviderHealth(button.getAttribute("data-model-provider-health")));
+  });
+  el.modelProvidersList.querySelectorAll('[data-model-provider-field="provider_type"]').forEach((select) => {
+    select.addEventListener("change", () => {
+      const card = select.closest("[data-model-provider-card]");
+      const tokenLabel = card?.querySelector("[data-model-provider-token-label]");
+      const tokenInput = card?.querySelector('[data-model-provider-field="token"]');
+      const providerType = select.value;
+      if (tokenLabel) tokenLabel.textContent = modelProviderCredentialLabel(providerType);
+      if (tokenInput && !tokenInput.value) tokenInput.placeholder = modelProviderCredentialHelp(null, providerType);
+    });
   });
 }
 
