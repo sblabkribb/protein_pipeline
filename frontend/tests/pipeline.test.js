@@ -464,6 +464,14 @@ test("withHitListCompareArtifacts adds AF2 ranked PDBs missing from artifact lis
   assert.equal(deduped.length, 4);
 });
 
+test("refreshHitList rerenders compare selectors after hit-list PDBs load", () => {
+  const source = readFileSync(resolve("frontend/app.js"), "utf8");
+  assert.match(
+    source,
+    /state\.hitListRows = Array\.isArray\(result\?\.rows\) \? result\.rows : \[\];\s+renderHitList\(\);\s+renderArtifactCompareSelects\(\);/m
+  );
+});
+
 test("artifactMetaFromPath classifies compare references and source outputs", () => {
   const inputRef = artifactMetaFromPath("target.original.pdb");
   assert.equal(inputRef.stage, "input_reference");
