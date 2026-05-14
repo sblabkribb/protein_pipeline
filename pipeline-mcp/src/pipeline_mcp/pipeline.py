@@ -90,6 +90,7 @@ _SUMMARY_ARTIFACTS = (
     "agent_panel_report.md",
     "agent_panel_report_ko.md",
     "agent_panel.jsonl",
+    "orchestration_trace.jsonl",
 )
 DEFAULT_AF2_MAX_WORKERS = 1
 DEFAULT_RELAX_MAX_WORKERS = 4

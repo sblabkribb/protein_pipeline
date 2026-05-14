@@ -461,6 +461,7 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertTrue((out / "request.json").exists())
             self.assertTrue((out / "status.json").exists())
             self.assertTrue((out / "events.jsonl").exists())
+            self.assertTrue((out / "orchestration_trace.jsonl").exists())
             self.assertTrue((out / "msa" / "result.a3m").exists())
             self.assertTrue((out / "msa" / "quality.json").exists())
             self.assertTrue((out / "conservation.json").exists())
@@ -468,6 +469,27 @@ class TestPipelineDryRun(unittest.TestCase):
             self.assertTrue((out / "query_pdb_alignment.json").exists())
             self.assertTrue((out / "agent_panel.jsonl").exists())
             self.assertTrue((out / "agent_panel_report.md").exists())
+            trace_events = [
+                json.loads(line)
+                for line in (out / "orchestration_trace.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+                if line.strip()
+            ]
+            self.assertTrue(
+                any(
+                    item.get("event_type") == "stage_status"
+                    and item.get("plane") == "control"
+                    for item in trace_events
+                )
+            )
+            self.assertTrue(
+                any(
+                    item.get("event_type") == "agent_verdict"
+                    and item.get("plane") == "evidence"
+                    for item in trace_events
+                )
+            )
 
             self.assertEqual(len(res.tiers), 2)
             for tier_result in res.tiers:

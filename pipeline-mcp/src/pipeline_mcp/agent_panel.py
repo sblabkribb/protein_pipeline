@@ -448,6 +448,29 @@ def emit_agent_panel_event(
         recovery=recovery,
     )
     append_run_event(output_root, run_id, filename="agent_panel.jsonl", payload=event)
+    consensus = event.get("consensus") if isinstance(event.get("consensus"), dict) else {}
+    agents = event.get("agents") if isinstance(event.get("agents"), list) else []
+    append_run_event(
+        output_root,
+        run_id,
+        filename="orchestration_trace.jsonl",
+        payload={
+            "kind": "orchestration_trace",
+            "event_type": "agent_verdict",
+            "plane": "evidence",
+            "source": "agent_panel",
+            "run_id": run_id,
+            "stage": stage,
+            "detail": detail,
+            "decision": consensus.get("decision"),
+            "confidence": consensus.get("confidence"),
+            "rationale": consensus.get("rationale"),
+            "error": error,
+            "recovery": recovery,
+            "agent_count": len(agents),
+            "created_at": event.get("created_at"),
+        },
+    )
     
     # Log to MLflow
     if mlflow is not None:

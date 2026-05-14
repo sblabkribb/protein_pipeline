@@ -90,6 +90,7 @@ _SUMMARY_ARTIFACTS = (
     "agent_panel_report.md",
     "agent_panel_report_ko.md",
     "agent_panel.jsonl",
+    "orchestration_trace.jsonl",
 )
 _PARTIAL_RERUN_IGNORED_FIELDS = {
     "project_id",

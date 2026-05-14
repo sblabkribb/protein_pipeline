@@ -2041,9 +2041,9 @@ const I18N = {
     "tutorial.step.monitor.body":
       "Monitor shows stage state, ETA, artifacts, checkpoint actions, completeness, and current run context.",
     "tutorial.step.monitor.hint": "Use Auto Poll while a run is active, then inspect artifacts before moving to analysis.",
-    "tutorial.step.monitorAgent.title": "Agent Panel explains stage decisions",
+    "tutorial.step.monitorAgent.title": "Evidence Agent Panel explains stage decisions",
     "tutorial.step.monitorAgent.body":
-      "The Agent Panel summarizes expert checks, recovery notes, and report links for the current run. Use it when a stage needs review or recovery.",
+      "The Evidence Agent Panel summarizes structured expert checks, recovery notes, and report links for the current run. Use it when a stage needs review or recovery.",
     "tutorial.step.monitorAgent.hint":
       "View Report opens the run summary. View Agent Report opens the agent's stage-by-stage reasoning and warnings.",
     "tutorial.step.rounds.title": "Rounds organize experiments",
@@ -2527,8 +2527,8 @@ const I18N = {
     "cath.count.running": "Running",
     "cath.count.stopped": "Stopped",
     "cath.count.waiting": "Waiting",
-    "agent.title": "Agent Panel",
-    "agent.desc": "Stage-by-stage expert consensus and recovery notes.",
+    "agent.title": "Evidence Agent Panel",
+    "agent.desc": "Structured expert checks, recovery notes, and report links.",
     "agent.refresh": "Refresh",
     "agent.viewReport": "View Report",
     "agent.viewAgentReport": "View Agent Report",
@@ -3458,9 +3458,9 @@ const I18N = {
     "tutorial.step.monitor.body":
       "Monitor에서는 단계 상태, 예상 시간, 산출물, 체크포인트 액션, completeness, 현재 실행 맥락을 확인합니다.",
     "tutorial.step.monitor.hint": "실행 중에는 Auto Poll을 켜고, 완료 후에는 산출물을 확인한 뒤 분석으로 이동하세요.",
-    "tutorial.step.monitorAgent.title": "Agent Panel은 단계별 판단을 설명합니다",
+    "tutorial.step.monitorAgent.title": "근거 에이전트 패널은 단계별 판단을 설명합니다",
     "tutorial.step.monitorAgent.body":
-      "Agent Panel은 현재 run의 expert check, recovery note, report link를 정리합니다. 어떤 단계가 검토나 복구가 필요한지 볼 때 사용합니다.",
+      "근거 에이전트 패널은 현재 run의 전문가 검토, 복구 기록, 리포트 링크를 구조화해서 정리합니다. 어떤 단계가 검토나 복구가 필요한지 볼 때 사용합니다.",
     "tutorial.step.monitorAgent.hint":
       "View Report는 run 요약을 열고, View Agent Report는 agent의 단계별 reasoning과 warning을 엽니다.",
     "tutorial.step.rounds.title": "라운드는 실험을 정리합니다",
@@ -3943,8 +3943,8 @@ const I18N = {
     "cath.count.running": "실행 중",
     "cath.count.stopped": "정지",
     "cath.count.waiting": "대기",
-    "agent.title": "에이전트 패널",
-    "agent.desc": "단계별 전문가 합의와 복구 기록을 확인합니다.",
+    "agent.title": "근거 에이전트 패널",
+    "agent.desc": "단계별 근거 검토, 복구 기록, 리포트 링크를 확인합니다.",
     "agent.refresh": "새로고침",
     "agent.viewReport": "리포트 보기",
     "agent.viewAgentReport": "에이전트 리포트",
@@ -9031,7 +9031,7 @@ const STAGE_LABELS = {
   wt_af2: { en: "WT ColabFold", ko: "WT ColabFold" },
   wt_relax: { en: "WT Relax", ko: "WT Relax" },
   evolution: { en: "Evolution", ko: "진화(Evolution)" },
-  agent: { en: "Agent Panel", ko: "에이전트 패널" },
+  agent: { en: "Evidence Agent Panel", ko: "근거 에이전트 패널" },
   misc: { en: "Misc", ko: "기타" },
 };
 
