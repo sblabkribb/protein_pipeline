@@ -25460,6 +25460,7 @@ async function refreshHitList() {
     state.hitListResult = null;
     state.hitListRows = [];
     renderHitList();
+    renderArtifactCompareSelects();
     return;
   }
   state.hitListWeights = readHitWeightsFromInputs();
@@ -25475,6 +25476,7 @@ async function refreshHitList() {
     state.hitListResult = result;
     state.hitListRows = Array.isArray(result?.rows) ? result.rows : [];
     renderHitList();
+    renderArtifactCompareSelects();
     if (state.artifactComparison && typeof state.artifactComparison === "object") {
       renderArtifactComparisonSummary(state.artifactComparison);
     }
@@ -25494,6 +25496,7 @@ async function refreshHitList() {
       el.hitListDetails.disabled = true;
     }
     renderCandidateCharts();
+    renderArtifactCompareSelects();
   }
 }
 
