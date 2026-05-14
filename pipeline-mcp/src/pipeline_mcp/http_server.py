@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
+import zipfile
 
 from .storage import new_run_id
 from .auth import AuthError
@@ -142,6 +145,23 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self._set_cors_headers()
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        for key, value in extra_headers or []:
+            self.send_header(key, value)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _binary(
+        self,
+        code: int,
+        data: bytes,
+        content_type: str,
+        *,
+        extra_headers: list[tuple[str, str]] | None = None,
+    ) -> None:
+        self.send_response(code)
+        self._set_cors_headers()
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
         for key, value in extra_headers or []:
             self.send_header(key, value)
@@ -530,6 +550,43 @@ class Handler(BaseHTTPRequestHandler):
             "isError": False,
         }
 
+    def _send_model_registration_skill_archive(self) -> None:
+        if self._auth_enabled():
+            user = self._require_auth()
+            if user is None:
+                return
+
+        raw_root = os.environ.get("PIPELINE_MODEL_REGISTRATION_SKILL_DIR", "/opt/protein-model-api-registration")
+        root = Path(raw_root).expanduser().resolve()
+        if not root.is_dir():
+            self._json(
+                404,
+                {
+                    "ok": False,
+                    "error": "model registration skill directory not found",
+                    "path": str(root),
+                },
+            )
+            return
+
+        buffer = io.BytesIO()
+        archive_root = Path("protein-model-api-registration")
+        with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for file_path in sorted(root.rglob("*")):
+                if not file_path.is_file():
+                    continue
+                archive.write(file_path, str(archive_root / file_path.relative_to(root)))
+
+        self._binary(
+            200,
+            buffer.getvalue(),
+            "application/zip",
+            extra_headers=[
+                ("Content-Disposition", 'attachment; filename="protein-model-api-registration.zip"'),
+                ("Cache-Control", "no-store"),
+            ],
+        )
+
     def _handle_mcp_rpc(self, body: dict[str, Any], user: dict[str, Any] | None) -> dict[str, Any]:
         request_id = body.get("id")
         method = body.get("method")
@@ -606,6 +663,9 @@ class Handler(BaseHTTPRequestHandler):
             if user is None:
                 return
             self._json(200, {"ok": True, "user": user, "session": self._public_session_info()})
+            return
+        if route_path == "/model_provider_skill.zip":
+            self._send_model_registration_skill_archive()
             return
         if route_path == "/healthz":
             self._json(200, {"ok": True})

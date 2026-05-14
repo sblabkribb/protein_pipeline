@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import io
+import zipfile
+
 from pipeline_mcp import http_server
 from pipeline_mcp.http_server import Handler
 from pipeline_mcp.session_auth import SessionConfig
@@ -228,6 +231,54 @@ def test_handler_accepts_api_prefixed_healthz_route():
 
     assert captured["status"] == 200
     assert captured["payload"] == {"ok": True}
+
+
+def test_model_registration_skill_archive_requires_login_when_auth_enabled():
+    captured = {}
+
+    handler = Handler.__new__(Handler)
+    handler.path = "/api/model_provider_skill.zip"
+    handler.headers = {}
+    handler._auth_enabled = lambda: True
+    handler._require_auth = lambda: captured.update(status=401) or None
+
+    handler.do_GET()
+
+    assert captured == {"status": 401}
+
+
+def test_model_registration_skill_archive_downloads_zip_for_signed_in_user(tmp_path, monkeypatch):
+    skill_root = tmp_path / "protein-model-api-registration"
+    skill_root.mkdir()
+    (skill_root / "SKILL.md").write_text("# Protein Model API Registration\n", encoding="utf-8")
+    (skill_root / "references").mkdir()
+    (skill_root / "references" / "current-local-services.md").write_text("18101 ProteinMPNN\n", encoding="utf-8")
+    monkeypatch.setenv("PIPELINE_MODEL_REGISTRATION_SKILL_DIR", str(skill_root))
+
+    sent = {"status": None, "headers": [], "ended": False}
+    handler = Handler.__new__(Handler)
+    handler.path = "/api/model_provider_skill.zip"
+    handler.headers = {}
+    handler.wfile = io.BytesIO()
+    handler._auth_enabled = lambda: True
+    handler._require_auth = lambda: {"username": "tester", "role": "user", "status": "approved"}
+    handler._set_cors_headers = lambda: None
+    handler.send_response = lambda status: sent.update(status=status)
+    handler.send_header = lambda key, value: sent["headers"].append((key, value))
+    handler.end_headers = lambda: sent.update(ended=True)
+
+    handler.do_GET()
+
+    assert sent["status"] == 200
+    assert sent["ended"] is True
+    headers = dict(sent["headers"])
+    assert headers["Content-Type"] == "application/zip"
+    assert "protein-model-api-registration.zip" in headers["Content-Disposition"]
+    with zipfile.ZipFile(io.BytesIO(handler.wfile.getvalue())) as archive:
+        assert set(archive.namelist()) == {
+            "protein-model-api-registration/SKILL.md",
+            "protein-model-api-registration/references/current-local-services.md",
+        }
 
 
 def test_auth_me_returns_public_session_type(monkeypatch):

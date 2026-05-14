@@ -1794,7 +1794,8 @@
             <section>
               <strong data-i18n="modelProviders.guide.runpod.title">Use a RunPod image</strong>
               <p data-i18n="modelProviders.guide.runpod.body">
-                Create a RunPod Serverless endpoint from the image, then enter the endpoint ID and RunPod API key here.
+                Create a RunPod Serverless endpoint from your DockerHub image, for example
+                mimikyou0607/proteinmpnn-runpod:latest, then enter the endpoint ID and RunPod API key here.
               </p>
             </section>
             <section>
@@ -1802,6 +1803,14 @@
               <p data-i18n="modelProviders.guide.gpu.body">
                 Install or copy /opt/protein-model-api-registration on the GPU server, expose /healthz and /run, then paste the HTTP API URL here.
               </p>
+              <button
+                id="modelProviderSkillDownload"
+                class="ghost model-provider-guide-action"
+                type="button"
+                data-i18n="modelProviders.guide.gpu.download"
+              >
+                Download GPU registration skill
+              </button>
             </section>
             <section>
               <strong data-i18n="modelProviders.guide.contract.title">Required API contract</strong>
