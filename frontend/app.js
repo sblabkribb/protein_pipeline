@@ -804,6 +804,7 @@ const el = {
   modelProviderAddTimeout: document.getElementById("modelProviderAddTimeout"),
   modelProviderAddCancel: document.getElementById("modelProviderAddCancel"),
   modelProviderAddSave: document.getElementById("modelProviderAddSave"),
+  modelProviderSkillDownload: document.getElementById("modelProviderSkillDownload"),
   tabBtnCath: document.getElementById("tabBtnCath"),
   tutorialBtn: document.getElementById("tutorialBtn"),
   tutorialOverlay: document.getElementById("tutorialOverlay"),
@@ -2855,10 +2856,13 @@ const I18N = {
     "modelProviders.guide.title": "Model registration guide",
     "modelProviders.guide.runpod.title": "Use a RunPod image",
     "modelProviders.guide.runpod.body":
-      "Create a RunPod Serverless endpoint from the image, then enter the endpoint ID and RunPod API key here.",
+      "Create a RunPod Serverless endpoint from your DockerHub image, for example mimikyou0607/proteinmpnn-runpod:latest, then enter the endpoint ID and RunPod API key here.",
     "modelProviders.guide.gpu.title": "Register a GPU server API",
     "modelProviders.guide.gpu.body":
       "Install or copy /opt/protein-model-api-registration on the GPU server, expose /healthz and /run, then paste the HTTP API URL here.",
+    "modelProviders.guide.gpu.download": "Download GPU registration skill",
+    "modelProviders.guide.gpu.downloadStarted": "Downloaded protein-model-api-registration.zip.",
+    "modelProviders.guide.gpu.downloadFailed": "Download failed: {error}",
     "modelProviders.guide.contract.title": "Required API contract",
     "modelProviders.guide.contract.body":
       "Workers should provide GET /healthz, POST /run, and optional POST /cancel with JSON inputs and outputs.",
@@ -4349,10 +4353,13 @@ const I18N = {
     "modelProviders.guide.title": "모델 등록 안내",
     "modelProviders.guide.runpod.title": "RunPod 이미지 연결",
     "modelProviders.guide.runpod.body":
-      "RunPod Serverless endpoint를 만든 뒤 endpoint ID와 RunPod API key를 여기에 입력합니다.",
+      "DockerHub에 올린 이미지(예: mimikyou0607/proteinmpnn-runpod:latest)로 RunPod Serverless endpoint를 만든 뒤 endpoint ID와 RunPod API key를 여기에 입력합니다.",
     "modelProviders.guide.gpu.title": "GPU 서버 API 등록",
     "modelProviders.guide.gpu.body":
       "GPU 서버에 /opt/protein-model-api-registration skill을 설치 또는 복사하고 /healthz, /run을 노출한 뒤 HTTP API URL을 여기에 붙입니다.",
+    "modelProviders.guide.gpu.download": "GPU 등록 skill 다운로드",
+    "modelProviders.guide.gpu.downloadStarted": "protein-model-api-registration.zip을 다운로드했습니다.",
+    "modelProviders.guide.gpu.downloadFailed": "다운로드 실패: {error}",
     "modelProviders.guide.contract.title": "필수 API 계약",
     "modelProviders.guide.contract.body":
       "worker는 GET /healthz, POST /run, 선택적으로 POST /cancel을 JSON 입출력으로 제공해야 합니다.",
@@ -10776,6 +10783,48 @@ async function checkModelProviderHealth(modelKey) {
     };
   } finally {
     renderModelProviders();
+  }
+}
+
+async function downloadModelRegistrationSkill() {
+  if (!el.modelProviderSkillDownload) return;
+  const previousLabel = el.modelProviderSkillDownload.textContent;
+  el.modelProviderSkillDownload.disabled = true;
+  try {
+    const response = await fetch(`${state.apiBase}/model_provider_skill.zip`, {
+      method: "GET",
+      credentials: "include",
+      headers: { ...authHeaders() },
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      if (isApiAuthFailure(response.status, payload)) {
+        handleApiAuthFailure();
+        throw new Error(t("auth.sessionExpired"));
+      }
+      throw new Error(payload?.error || `HTTP ${response.status}`);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "protein-model-api-registration.zip";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    if (el.modelProvidersStatus) {
+      el.modelProvidersStatus.textContent = t("modelProviders.guide.gpu.downloadStarted");
+    }
+  } catch (err) {
+    if (el.modelProvidersStatus) {
+      el.modelProvidersStatus.textContent = t("modelProviders.guide.gpu.downloadFailed", {
+        error: err.message || t("error.api"),
+      });
+    }
+  } finally {
+    el.modelProviderSkillDownload.disabled = false;
+    el.modelProviderSkillDownload.textContent = previousLabel;
   }
 }
 
@@ -27085,6 +27134,12 @@ if (el.modelProviderAddCancel) {
 if (el.modelProviderAddSave) {
   el.modelProviderAddSave.addEventListener("click", () => {
     void saveCustomModelProvider();
+  });
+}
+
+if (el.modelProviderSkillDownload) {
+  el.modelProviderSkillDownload.addEventListener("click", () => {
+    void downloadModelRegistrationSkill();
   });
 }
 
