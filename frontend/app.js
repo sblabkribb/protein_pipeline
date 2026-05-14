@@ -22925,12 +22925,15 @@ function renderComparePresetStrip(structureItems) {
   ).trim()}`;
 
   const activeVariantByGroup = new Map();
+  const defaultVariantByGroup = new Map();
   groups.forEach((group) => {
+    const variants = Array.isArray(group.variants) ? group.variants : [];
     const activeVariant =
-      (Array.isArray(group.variants) ? group.variants : []).find(
+      variants.find(
         (variant) => `${variant.leftPath}::${variant.rightPath}` === currentKey
       ) || null;
     activeVariantByGroup.set(group.id, activeVariant);
+    defaultVariantByGroup.set(group.id, variants[0] || null);
   });
 
   el.artifactComparePresets.innerHTML = `
@@ -22995,7 +22998,9 @@ function renderComparePresetStrip(structureItems) {
       const chosenVariantId =
         select instanceof HTMLSelectElement && select.value
           ? select.value
-          : activeVariantByGroup.get(groupId)?.id || "";
+          : activeVariantByGroup.get(groupId)?.id ||
+            defaultVariantByGroup.get(groupId)?.id ||
+            "";
       await applyVariant(chosenVariantId);
     });
   });
@@ -23004,7 +23009,6 @@ function renderComparePresetStrip(structureItems) {
     select.addEventListener("change", async () => {
       const groupId = String(select.getAttribute("data-compare-preset-group-select") || "").trim();
       if (!groupId || !(select instanceof HTMLSelectElement)) return;
-      if (!activeVariantByGroup.get(groupId)) return;
       await applyVariant(select.value);
     });
   });
