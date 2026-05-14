@@ -10,6 +10,8 @@ import requests
 from cryptography.fernet import Fernet
 from cryptography.fernet import InvalidToken
 
+from .clients.runpod import RunPodClient
+
 
 PROVIDER_TYPES = {"runpod", "http_api", "disabled"}
 
@@ -80,6 +82,10 @@ def _read_timeout(value: object | None, default: float = 21600.0) -> float:
     except (TypeError, ValueError):
         return float(default)
     return max(1.0, parsed)
+
+
+def _env_true(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def _normalize_scope(value: object | None) -> str:
@@ -277,7 +283,43 @@ class ModelProviderStore:
             draft["model_key"] = key
             draft["source"] = "draft"
             provider = self._public_record(self._normalize_record(key, draft), include_secret=True)
-        if provider.get("provider_type") != "http_api":
+        provider_type = provider.get("provider_type")
+        if provider_type == "runpod":
+            endpoint_id = str(provider.get("endpoint_id") or "").strip()
+            if not endpoint_id:
+                return {
+                    "ok": False,
+                    "ready": False,
+                    "error": "endpoint_id is required",
+                    "provider": self._public_record(provider),
+                }
+            api_key = str(provider.get("token") or os.environ.get("RUNPOD_API_KEY", "")).strip()
+            if not api_key:
+                return {
+                    "ok": False,
+                    "ready": False,
+                    "error": "RunPod API key is required",
+                    "provider": self._public_record(provider),
+                }
+            client = RunPodClient(
+                api_key=api_key,
+                ca_bundle=os.environ.get("RUNPOD_CA_BUNDLE") or None,
+                skip_verify=_env_true("RUNPOD_INSECURE"),
+                timeout_s=min(float(provider.get("timeout_s") or 30), 30.0),
+            )
+            try:
+                payload = client.health(endpoint_id)
+                if not isinstance(payload, dict):
+                    payload = {"raw": payload}
+                return {
+                    "ok": True,
+                    "ready": True,
+                    "health": payload,
+                    "provider": self._public_record(provider),
+                }
+            except Exception as exc:
+                return {"ok": False, "ready": False, "error": str(exc), "provider": self._public_record(provider)}
+        if provider_type != "http_api":
             return {"ok": True, "ready": bool(provider.get("configured")), "provider": self._public_record(provider)}
         base_url = _normalize_base_url(provider.get("base_url"))
         if not base_url:

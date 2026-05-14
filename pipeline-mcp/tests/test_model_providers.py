@@ -167,6 +167,39 @@ def test_provider_health_can_check_unsaved_http_provider(tmp_path, monkeypatch):
     assert store.get_effective("alphafold2")["provider_type"] == "runpod"
 
 
+def test_provider_health_can_check_unsaved_runpod_provider_with_draft_key(tmp_path, monkeypatch):
+    store = ModelProviderStore(tmp_path)
+    calls = []
+
+    class _RunPod:
+        def __init__(self, *, api_key, ca_bundle=None, skip_verify=False, timeout_s=60.0, poll_interval_s=2.0):
+            calls.append({"api_key": api_key, "timeout_s": timeout_s})
+
+        def health(self, endpoint_id):
+            calls[-1]["endpoint_id"] = endpoint_id
+            return {"ok": True, "workers": {"idle": 1}}
+
+    monkeypatch.setattr("pipeline_mcp.model_providers.RunPodClient", _RunPod)
+
+    result = store.health(
+        "rfd3",
+        {
+            "provider_type": "runpod",
+            "endpoint_id": "draft-rfd3",
+            "token": "draft-runpod-key",
+            "timeout_s": 45,
+            "enabled": True,
+        },
+    )
+
+    assert result["ok"] is True
+    assert result["ready"] is True
+    assert result["provider"]["provider_type"] == "runpod"
+    assert result["provider"]["endpoint_id"] == "draft-rfd3"
+    assert result["provider"]["token_configured"] is True
+    assert calls == [{"api_key": "draft-runpod-key", "timeout_s": 30.0, "endpoint_id": "draft-rfd3"}]
+
+
 def test_build_provider_summary_marks_missing_required_fields(tmp_path):
     store = ModelProviderStore(tmp_path)
     store.upsert("rfd3", {"provider_type": "http_api", "enabled": True}, actor="admin")
