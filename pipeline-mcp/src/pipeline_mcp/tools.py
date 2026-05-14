@@ -39,6 +39,7 @@ from .pipeline import PipelineCancelled
 from .pipeline import _dummy_backbone_pdb
 from .pipeline import _normalize_af2_provider
 from .pipeline import _prepare_af2_sequence
+from .pipeline import _recommended_bioemu_max_attempted_structures
 from .pipeline import _recommended_bioemu_num_samples
 from .pipeline import _resolve_af2_model_preset
 from .pipeline import _split_multichain_sequence
@@ -6584,14 +6585,19 @@ def pipeline_request_from_args(
         if str(args.get("bioemu_max_attempted_structures") or "").strip()
         else None
     )
+    requested_return_count = max(1, int(bioemu_max_return_structures))
     if str(args.get("bioemu_num_samples") or "").strip():
         bioemu_num_samples = _as_int(
             args.get("bioemu_num_samples"), bioemu_max_return_structures
         )
     else:
-        requested_return_count = max(1, int(bioemu_max_return_structures))
         bioemu_num_samples = _recommended_bioemu_num_samples(
             requested_return_count, bioemu_filter_samples
+        )
+    if bioemu_max_attempted_structures is None:
+        bioemu_max_attempted_structures = _recommended_bioemu_max_attempted_structures(
+            requested_return_count,
+            bioemu_filter_samples,
         )
     bioemu_env = _as_dict_str(args.get("bioemu_env"), name="bioemu_env")
 

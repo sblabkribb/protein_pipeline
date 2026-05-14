@@ -13782,7 +13782,7 @@ function buildWorkflowDesignerCard({
     appendWorkflowNumberSetting("rfd3_max_return_designs", 10, { min: 1, step: 1 });
   }
   if (nodes.includes("bioemu")) {
-    appendWorkflowNumberSetting("bioemu_num_samples", 20, { min: 1, step: 1 });
+    appendWorkflowNumberSetting("bioemu_num_samples", 50, { min: 1, step: 1 });
     appendWorkflowNumberSetting("bioemu_max_return_structures", 10, { min: 1, step: 1 });
   }
   if (nodes.includes("design")) {
@@ -16393,7 +16393,7 @@ function renderQuestions(questions) {
   const compactParameterPriority = {
     compare_rmsd_scope: 5,
     bioemu_max_return_structures: 10,
-    bioemu_num_samples: 20,
+    bioemu_num_samples: 50,
     rfd3_max_return_designs: 30,
     num_seq_per_tier: 40,
     af2_max_candidates_per_tier: 50,
