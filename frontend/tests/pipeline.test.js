@@ -472,6 +472,16 @@ test("refreshHitList rerenders compare selectors after hit-list PDBs load", () =
   );
 });
 
+test("single-tier compare preset buttons apply the first variant without a dropdown", () => {
+  const source = readFileSync(resolve("frontend/app.js"), "utf8");
+  assert.match(source, /const defaultVariantByGroup = new Map\(\);/);
+  assert.match(source, /defaultVariantByGroup\.set\(group\.id, variants\[0\] \|\| null\);/);
+  assert.match(
+    source,
+    /activeVariantByGroup\.get\(groupId\)\?\.id \|\|\s+defaultVariantByGroup\.get\(groupId\)\?\.id \|\|\s+""/m
+  );
+});
+
 test("artifactMetaFromPath classifies compare references and source outputs", () => {
   const inputRef = artifactMetaFromPath("target.original.pdb");
   assert.equal(inputRef.stage, "input_reference");
