@@ -1195,7 +1195,8 @@ print("ok")
             }
         )
         self.assertEqual(req.bioemu_max_return_structures, 10)
-        self.assertEqual(req.bioemu_num_samples, 20)
+        self.assertEqual(req.bioemu_num_samples, 50)
+        self.assertEqual(req.bioemu_max_attempted_structures, 200)
 
     def test_pipeline_request_defaults_bioemu_num_samples_to_return_count_when_filter_disabled(self) -> None:
         req = pipeline_request_from_args(

@@ -62,7 +62,7 @@ class PipelineRequest:
 
     bioemu_use: bool = False
     bioemu_sequence: str | None = None
-    bioemu_num_samples: int = 10
+    bioemu_num_samples: int = 50
     bioemu_batch_size_100: int | None = None
     bioemu_model_name: str = "bioemu-v1.1"
     bioemu_filter_samples: bool = True

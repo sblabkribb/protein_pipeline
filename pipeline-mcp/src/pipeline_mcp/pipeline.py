@@ -90,6 +90,7 @@ _SUMMARY_ARTIFACTS = (
     "agent_panel_report.md",
     "agent_panel_report_ko.md",
     "agent_panel.jsonl",
+    "orchestration_trace.jsonl",
 )
 DEFAULT_AF2_MAX_WORKERS = 1
 DEFAULT_RELAX_MAX_WORKERS = 4
@@ -850,7 +851,14 @@ def _recommended_bioemu_num_samples(
     requested_return_count: int, filter_samples: bool
 ) -> int:
     requested = max(1, int(requested_return_count or 1))
-    return requested * 2 if filter_samples else requested
+    return requested * 5 if filter_samples else requested
+
+
+def _recommended_bioemu_max_attempted_structures(
+    requested_return_count: int, filter_samples: bool
+) -> int:
+    requested = max(1, int(requested_return_count or 1))
+    return requested * 20 if filter_samples else requested
 
 
 def _bioemu_attempt_num_samples(
@@ -1816,6 +1824,66 @@ def _deduplicate_backbones_by_exact_ca(
     return unique, summary
 
 
+def _rewrite_pdb_chain_id(pdb_text: str, *, from_chain: str, to_chain: str) -> str:
+    source = str(from_chain or "").strip() or "_"
+    target = (str(to_chain or "").strip() or " ")[:1]
+    out_lines: list[str] = []
+    for raw in pdb_text.splitlines():
+        rec = raw[:6].strip().upper()
+        if rec not in {"ATOM", "HETATM", "TER"}:
+            out_lines.append(raw)
+            continue
+        line = raw
+        if len(line) < 22:
+            line = line.ljust(22)
+        chain_id = line[21:22].strip() or "_"
+        if chain_id == source:
+            line = f"{line[:21]}{target}{line[22:]}"
+        out_lines.append(line)
+    return "\n".join(out_lines) + ("\n" if pdb_text.endswith("\n") else "")
+
+
+def _remap_single_chain_candidate_for_target_gate(
+    pdb_text: str,
+    *,
+    target_chains: list[str] | None,
+) -> tuple[str, dict[str, str] | None]:
+    chains = [
+        str(chain_id).strip()
+        for chain_id in (target_chains or [])
+        if str(chain_id).strip()
+    ]
+    if len(chains) != 1 or len(chains[0]) != 1:
+        return pdb_text, None
+
+    seq_by_chain = sequence_by_chain(pdb_text)
+    candidate_chains = [
+        str(chain_id).strip()
+        for chain_id, seq in seq_by_chain.items()
+        if str(seq or "").strip()
+    ]
+    if len(candidate_chains) != 1:
+        return pdb_text, None
+
+    source_chain = candidate_chains[0]
+    target_chain = chains[0]
+    if source_chain == target_chain:
+        return pdb_text, None
+    if source_chain != "_" and len(source_chain) != 1:
+        return pdb_text, None
+
+    remapped = _rewrite_pdb_chain_id(
+        pdb_text,
+        from_chain=source_chain,
+        to_chain=target_chain,
+    )
+    return remapped, {
+        "from": source_chain,
+        "to": target_chain,
+        "reason": "single_chain_candidate",
+    }
+
+
 def _filter_backbones_by_target_rmsd(
     backbones: list[dict[str, Any]] | None,
     *,
@@ -1871,24 +1939,32 @@ def _filter_backbones_by_target_rmsd(
             "rejected_ids": [],
             "missing_rmsd_ids": [],
             "rmsd_by_id": {},
+            "chain_remap_by_id": {},
         }
 
     accepted: list[dict[str, Any]] = []
     rejected_ids: list[str] = []
     missing_rmsd_ids: list[str] = []
     rmsd_by_id: dict[str, float] = {}
+    chain_remap_by_id: dict[str, dict[str, str]] = {}
 
     for item in items:
         item_id = str(item.get("id") or "").strip()
         pdb_text = str(item.get("pdb_text") or "")
+        gate_pdb_text, chain_remap = _remap_single_chain_candidate_for_target_gate(
+            pdb_text,
+            target_chains=chain_list,
+        )
+        if item_id and chain_remap is not None:
+            chain_remap_by_id[item_id] = chain_remap
         bb_strip_nonpositive, bb_renumber, _ = _resolve_backbone_preprocess_options(
-            pdb_text=pdb_text,
+            pdb_text=gate_pdb_text,
             source=source,
             strip_nonpositive_resseq=strip_nonpositive_resseq,
             renumber_resseq_from_1=renumber_resseq_from_1,
         )
         prepared_pdb_text = _preprocess_pdb_text(
-            pdb_text,
+            gate_pdb_text,
             chains=chain_list,
             strip_nonpositive_resseq=bb_strip_nonpositive,
             renumber_resseq_from_1=bb_renumber,
@@ -1902,6 +1978,8 @@ def _filter_backbones_by_target_rmsd(
         if not isinstance(rmsd, (int, float)):
             entry = dict(item)
             entry["target_rmsd"] = None
+            if chain_remap is not None:
+                entry["target_rmsd_chain_remap"] = chain_remap
             if item_id:
                 missing_rmsd_ids.append(item_id)
                 rejected_ids.append(item_id)
@@ -1911,6 +1989,8 @@ def _filter_backbones_by_target_rmsd(
             rmsd_by_id[item_id] = rmsd_value
         entry = dict(item)
         entry["target_rmsd"] = rmsd_value
+        if chain_remap is not None:
+            entry["target_rmsd_chain_remap"] = chain_remap
         if rmsd_value <= float(cutoff):
             accepted.append(entry)
         elif item_id:
@@ -1938,6 +2018,7 @@ def _filter_backbones_by_target_rmsd(
         "rejected_ids": rejected_ids,
         "missing_rmsd_ids": missing_rmsd_ids,
         "rmsd_by_id": rmsd_by_id,
+        "chain_remap_by_id": chain_remap_by_id,
     }
     return accepted, summary
 
@@ -5019,7 +5100,10 @@ class PipelineRunner:
                     bioemu_max_return_structures,
                     int(
                         request.bioemu_max_attempted_structures
-                        or (bioemu_max_return_structures * 10)
+                        or _recommended_bioemu_max_attempted_structures(
+                            bioemu_max_return_structures,
+                            bioemu_filter_samples,
+                        )
                     ),
                 )
                 bioemu_env = (
@@ -5149,7 +5233,7 @@ class PipelineRunner:
                             "base_seed": bioemu_base_seed,
                             "steering_config_text": bioemu_steering_config_text,
                             "max_return_sample_pdbs": bioemu_max_return_structures,
-                            "min_return_sample_pdbs": 0,
+                            "min_return_sample_pdbs": bioemu_max_return_structures,
                             "env": bioemu_env,
                             "return_pdb": True,
                             "return_sample_pdbs": True,
@@ -5555,7 +5639,7 @@ class PipelineRunner:
                                         "base_seed": bioemu_base_seed,
                                         "steering_config_text": bioemu_steering_config_text,
                                         "max_return_structures": bioemu_max_return_structures,
-                                        "min_return_sample_pdbs": 0,
+                                        "min_return_sample_pdbs": bioemu_max_return_structures,
                                         "target_rmsd_cutoff": bioemu_target_rmsd_cutoff,
                                         "max_attempted_structures": bioemu_max_attempted_structures,
                                     },
@@ -5600,7 +5684,7 @@ class PipelineRunner:
                                         "base_seed": attempt_base_seed,
                                         "steering_config_text": bioemu_steering_config_text,
                                         "max_return_structures": requested_return_count,
-                                        "min_return_sample_pdbs": 0,
+                                        "min_return_sample_pdbs": requested_return_count,
                                         "target_rmsd_cutoff": bioemu_target_rmsd_cutoff,
                                         "max_attempted_structures": bioemu_max_attempted_structures,
                                     },
@@ -5625,7 +5709,7 @@ class PipelineRunner:
                                     return_pdb=True,
                                     return_sample_pdbs=True,
                                     max_return_sample_pdbs=requested_return_count,
-                                    min_return_sample_pdbs=0,
+                                    min_return_sample_pdbs=requested_return_count,
                                     resume_job_id=resume_job,
                                     on_job_id=_on_bioemu_job_id,
                                 )
@@ -5644,7 +5728,7 @@ class PipelineRunner:
                                     return_pdb=True,
                                     return_sample_pdbs=True,
                                     max_return_sample_pdbs=requested_return_count,
-                                    min_return_sample_pdbs=0,
+                                    min_return_sample_pdbs=requested_return_count,
                                     on_job_id=_on_bioemu_job_id,
                                 )
                             return bioemu_out, attempt_num_samples, attempt_base_seed
@@ -5675,7 +5759,13 @@ class PipelineRunner:
                                 materialized_count=len(parsed_samples),
                             )
                             if missing_sample_pdbs:
-                                if not bioemu_filter_samples or len(parsed_samples) == 0:
+                                if (
+                                    not bioemu_filter_samples
+                                    or len(parsed_samples) == 0
+                                    or not isinstance(
+                                        bioemu_out.get("sample_pdbs"), list
+                                    )
+                                ):
                                     raise BackboneContractError(missing_sample_pdbs)
                             raw_samples.extend(parsed_samples)
                             raw_sample_ids.update(
