@@ -1254,16 +1254,19 @@ test("hit list source keeps numeric headers aligned when relax column is rendere
   assert.match(cssSource, /\.hit-list-table thead th\.num\s*\{\s*text-align:\s*right;/);
 });
 
-test("bulk download toolbars expose select-all actions and compact styling", () => {
+test("bulk download toolbars expose one filtered-selection action and compact styling", () => {
   const appSource = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
   const cssSource = readFileSync(resolve(process.cwd(), "frontend/styles.css"), "utf-8");
 
-  assert.match(appSource, /data-action="select-hit-all"/);
-  assert.match(appSource, /data-artifact-bulk-action="select-all"/);
-  assert.match(appSource, /"analyze\.hitList\.bulk\.selectAll": "Select all"/);
-  assert.match(appSource, /"analyze\.hitList\.bulk\.selectAll": "전체 선택"/);
-  assert.match(appSource, /"artifacts\.bulk\.selectAll": "Select all"/);
-  assert.match(appSource, /"artifacts\.bulk\.selectAll": "전체 선택"/);
+  assert.doesNotMatch(appSource, /data-action="select-hit-all"/);
+  assert.doesNotMatch(appSource, /data-artifact-bulk-action="select-all"/);
+  assert.doesNotMatch(appSource, /bulk\.selectAll/);
+  assert.match(appSource, /data-action="select-hit-shown"/);
+  assert.match(appSource, /data-artifact-bulk-action="select-filtered"/);
+  assert.match(appSource, /"analyze\.hitList\.bulk\.selectShown": "Select filtered rows"/);
+  assert.match(appSource, /"analyze\.hitList\.bulk\.selectShown": "필터 결과 선택"/);
+  assert.match(appSource, /"artifacts\.bulk\.selectFiltered": "Select filtered files"/);
+  assert.match(appSource, /"artifacts\.bulk\.selectFiltered": "필터 결과 선택"/);
   assert.match(cssSource, /\.hit-list-bulk-actions button,\s*\.artifact-bulk-actions button\s*\{/);
   assert.match(cssSource, /min-height:\s*32px;/);
   assert.match(cssSource, /left:\s*0;/);
