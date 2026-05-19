@@ -2610,6 +2610,7 @@ const I18N = {
     "artifacts.downloading": "Downloading...",
     "artifacts.downloadFailed": "Download failed: {error}",
     "artifacts.bulk.selected": "{selected}/{total} selected",
+    "artifacts.bulk.selectAll": "Select all",
     "artifacts.bulk.selectFiltered": "Select filtered",
     "artifacts.bulk.clear": "Clear selection",
     "artifacts.bulk.downloadSelected": "Download selected ZIP",
@@ -3455,7 +3456,8 @@ const I18N = {
     "analyze.hitList.summary":
       "Showing {shown}/{filtered} candidates (total {total}), median score {score}.",
     "analyze.hitList.empty": "No candidates matched the cutoff.",
-    "analyze.hitList.bulk.selected": "{selected}/{shown} selected",
+    "analyze.hitList.bulk.selected": "{selected}/{total} selected",
+    "analyze.hitList.bulk.selectAll": "Select all",
     "analyze.hitList.bulk.selectShown": "Select shown",
     "analyze.hitList.bulk.clear": "Clear selection",
     "analyze.hitList.bulk.downloadFasta": "Download FASTA",
@@ -4120,6 +4122,7 @@ const I18N = {
     "artifacts.downloading": "다운로드 중...",
     "artifacts.downloadFailed": "다운로드 실패: {error}",
     "artifacts.bulk.selected": "{selected}/{total}개 선택",
+    "artifacts.bulk.selectAll": "전체 선택",
     "artifacts.bulk.selectFiltered": "필터 결과 선택",
     "artifacts.bulk.clear": "선택 해제",
     "artifacts.bulk.downloadSelected": "선택 ZIP 다운로드",
@@ -4962,7 +4965,8 @@ const I18N = {
     "analyze.hitList.summary":
       "{shown}/{filtered}개 표시 (전체 {total}), 중앙 점수 {score}",
     "analyze.hitList.empty": "컷오프 조건을 만족하는 후보가 없습니다.",
-    "analyze.hitList.bulk.selected": "{selected}/{shown}개 선택",
+    "analyze.hitList.bulk.selected": "{selected}/{total}개 선택",
+    "analyze.hitList.bulk.selectAll": "전체 선택",
     "analyze.hitList.bulk.selectShown": "표시 행 선택",
     "analyze.hitList.bulk.clear": "선택 해제",
     "analyze.hitList.bulk.downloadFasta": "FASTA 다운로드",
@@ -19325,6 +19329,7 @@ function renderArtifacts(list, view = "monitor") {
       selected: selectedPaths.size,
       total: filteredFiles.length,
     }))}</span>
+    <button type="button" class="ghost" data-artifact-bulk-action="select-all">${escapeHtml(t("artifacts.bulk.selectAll"))}</button>
     <button type="button" class="ghost" data-artifact-bulk-action="select-filtered">${escapeHtml(t("artifacts.bulk.selectFiltered"))}</button>
     <button type="button" class="ghost" data-artifact-bulk-action="clear">${escapeHtml(t("artifacts.bulk.clear"))}</button>
     <button type="button" class="primary" data-artifact-bulk-action="download">${escapeHtml(t("artifacts.bulk.downloadSelected"))}</button>
@@ -19334,6 +19339,16 @@ function renderArtifacts(list, view = "monitor") {
     const button = target?.closest("button[data-artifact-bulk-action]");
     if (!button) return;
     const action = button.dataset.artifactBulkAction;
+    if (action === "select-all") {
+      (Array.isArray(list) ? list : [])
+        .filter((item) => String(item?.type || "") === "file")
+        .forEach((item) => {
+          const path = String(item?.path || "").trim();
+          if (path) selectedPaths.add(path);
+        });
+      renderArtifacts(list, view);
+      return;
+    }
     if (action === "select-filtered") {
       filteredFiles.forEach((item) => {
         const path = String(item?.path || "").trim();
@@ -25674,8 +25689,9 @@ function renderHitList() {
     <div class="hit-list-bulk-actions">
       <span class="hit-list-bulk-count">${escapeHtml(t("analyze.hitList.bulk.selected", {
         selected: selectedRows.size,
-        shown: shown.length,
+        total: filtered.length,
       }))}</span>
+      <button type="button" class="ghost" data-action="select-hit-all">${escapeHtml(t("analyze.hitList.bulk.selectAll"))}</button>
       <button type="button" class="ghost" data-action="select-hit-shown">${escapeHtml(t("analyze.hitList.bulk.selectShown"))}</button>
       <button type="button" class="ghost" data-action="clear-hit-selection">${escapeHtml(t("analyze.hitList.bulk.clear"))}</button>
       <button type="button" class="ghost" data-action="download-hit-fasta">${escapeHtml(t("analyze.hitList.bulk.downloadFasta"))}</button>
@@ -27589,6 +27605,13 @@ if (el.hitListTable) {
         if (path) {
           await downloadArtifact({ type: "file", path, size: 5000000 }, { buttonEl: btn });
         }
+      } else if (action === "select-hit-all") {
+        const selected = hitListSelection();
+        filteredHitListRows({ applyLimit: false }).forEach((row) => {
+          const id = String(row?.seq_id || "").trim();
+          if (id) selected.add(id);
+        });
+        renderHitList();
       } else if (action === "select-hit-shown") {
         const selected = hitListSelection();
         const shown = filteredHitListRows({ applyLimit: false }).slice(0, Math.max(10, Math.min(500, Number(state.hitListLimit || 120))));
