@@ -1,0 +1,146 @@
+# Supplementary Material for RAPID
+
+## Supplementary Note 1. Status of the CATH Benchmark Refresh
+
+The main manuscript uses the current 23-target CATH artifact benchmark as component-level evidence for AF2-budgeted surrogate-triage design choices rather than as the final corrected-chain benchmark. That benchmark was generated before the final chain-selection fixes and is retained because it provides paired SoluProt and pLDDT records for surrogate and acquisition analyses. A corrected-chain refresh manifest has been generated at `public_release/data/benchmark/results/rapid_target_manifest.csv`. The manifest selects 40 CATH targets for re-screening and 8 targets for the four-arm structural-context ablation. The selected structural-context arms are the original target backbone, target plus BioEmu ensemble, selected RFD3 backbone, and RFD3 plus BioEmu ensemble.
+
+## Supplementary Note 2. Current CATH Artifact Corpus
+
+The pre-refresh CATH archive contains 73 completed CATH run directories. Twenty-three runs passed the QC rule requiring all three conservation tiers, at least 100 valid non-fallback amino-acid design sequences, and at least 100 positive pLDDT records. The included subset contains 2,737 paired SoluProt/pLDDT design rows. Excluded records are treated as input-compatibility or fallback-design artifacts under the previous pipeline contract, not as valid low-quality biological designs.
+
+![QC-filtered CATH artifact corpus](figures/benchmark/fig11_cath_curated_expansion.png)
+
+*Supplementary Figure S1. Target-level summary of the pre-refresh CATH artifact corpus. The figure shows target-level pLDDT and SoluProt heterogeneity after excluding fallback or input-incompatible outputs.*
+
+| Metric | Value |
+|---|---:|
+| Completed CATH runs parsed | 73 |
+| QC-included targets | 23 |
+| QC-excluded runs | 50 |
+| Valid paired design rows | 2,737 |
+| Positive pLDDT records | 2,737 |
+| SoluProt records | 2,737 |
+| Mean pLDDT | 91.91 |
+| Maximum pLDDT | 97.89 |
+| Mean SoluProt | 0.615 |
+| Maximum SoluProt | 0.971 |
+
+## Supplementary Note 3. Training-Set Selection
+
+The Random Forest selection-size ablation shows that K-means is most useful when AF2 labels are scarce. The K-means advantage is largest at N = 5 and N = 10 and becomes small near the production default N = 30. This supports using K-means as a cold-start safeguard rather than as a claim that K-means always dominates random selection at larger training budgets.
+
+![Selection-size ablation](figures/benchmark/fig3_selection_n_curves.png)
+
+*Supplementary Figure S2. Random Forest BO uplift Top-5 as a function of the number of AF2-labelled training examples. K-means selection provides its largest benefit in the low-label regime and converges with random selection near N = 30.*
+
+![Selection by surrogate family](figures/benchmark/fig4_selection_comparison.png)
+
+*Supplementary Figure S3. Effect of K-means versus random training-set selection at fixed N = 30 across surrogate families. The smaller differences at N = 30 support using K-means primarily as a bootstrap safeguard rather than as a universal advantage at all training sizes.*
+
+| N | Random RF pLDDT BO uplift Top-5 | K-means RF pLDDT BO uplift Top-5 | Delta |
+|---:|---:|---:|---:|
+| 5 | 0.254 | 0.350 | +0.097 (+38%) |
+| 10 | 0.327 | 0.390 | +0.063 (+19%) |
+| 20 | 0.418 | 0.468 | +0.050 (+12%) |
+| 30 | 0.459 | 0.456 | -0.003 (-1%) |
+| 50 | 0.459 | 0.484 | +0.025 (+5%) |
+| 80 | 0.454 | 0.490 | +0.036 (+8%) |
+
+## Supplementary Note 4. Surrogate Model Comparison
+
+At K-means N = 30, Random Forest gives the highest mean pLDDT BO uplift Top-5, while Ridge remains strongest for SoluProt ranking and recall-oriented metrics. The production recommendation is therefore score-specific: Random Forest is the conservative pLDDT acquisition default, and Ridge is retained when the operator prioritises SoluProt-related ranking or recall. The aggregate visualization is shown once in the main manuscript as Figure 3; the supplementary material reports the numerical model-level comparison to avoid duplicating the same figure.
+
+| Model | pLDDT BO uplift Top-5 | Delta vs RF | Holm-adjusted p vs RF | Cliff's delta |
+|---|---:|---:|---:|---:|
+| RF | 0.602 | - | - | - |
+| Ridge | 0.583 | -0.019 | 0.71 | +0.04 |
+| KNN | 0.572 | -0.030 | 0.51 | +0.05 |
+| XGBoost | 0.558 | -0.044 | 0.51 | +0.07 |
+| LightGBM | 0.549 | -0.053 | 0.046 | +0.05 |
+| GP-RBF | 0.326 | -0.276 | 0.00022 | +0.20 |
+| MLP | 0.185 | -0.417 | 1.6e-13 | +0.49 |
+| Random | 0.016 | -0.586 | 1.1e-11 | +0.47 |
+
+## Supplementary Note 5. Sample-Size Operating Point
+
+The N-ablation places N = 30 on a cost-efficient plateau. Increasing RF training labels from 30 to 80 requires approximately 2.7 times more AF2-labelled training examples but gives a modest additional pLDDT BO-uplift gain. The N = 30 default is therefore a conservative operating point for the bootstrap round.
+
+![Sample-size ablation](figures/benchmark/fig8_sample_size.png)
+
+*Supplementary Figure S5. Sample-size ablation for production-supported surrogate families. The vertical reference at N = 30 marks the operating point used in RAPID. The curves show diminishing returns beyond roughly 20-30 AF2-labelled examples, supporting N = 30 as a conservative default rather than an arbitrary setting.*
+
+| N_train | RF pLDDT BO uplift Top-5 | Percent of N = 80 | RF SoluProt BO uplift Top-5 | Percent of N = 80 |
+|---:|---:|---:|---:|---:|
+| 5 | 0.350 | 71.4% | 0.0140 | 62.1% |
+| 10 | 0.390 | 79.7% | 0.0155 | 69.1% |
+| 20 | 0.468 | 95.6% | 0.0199 | 88.5% |
+| 30 | 0.456 | 93.1% | 0.0202 | 89.8% |
+| 50 | 0.484 | 98.9% | 0.0213 | 94.5% |
+| 80 | 0.490 | 100.0% | 0.0225 | 100.0% |
+
+## Supplementary Note 6. Acquisition Bias and Diversity
+
+K-means training selection does not by itself remove acquisition bias. In the current artifact benchmark, RF-selected Top-K sets are more internally similar than the true Top-K sets, even when the bootstrap training set is selected by K-means. This means diversity control belongs at acquisition time if sequence diversity is an explicit design objective.
+
+![Acquisition-bias analysis](figures/benchmark/fig6_bias_analysis.png)
+
+*Supplementary Figure S6. Acquisition-bias analysis for RF at N = 30. K-means reduces identity to the best training sequence relative to random bootstrap selection, but surrogate-selected Top-K sets remain more internally similar than the true Top-K sets.*
+
+![Per-target surrogate heatmap](figures/benchmark/fig7_per_target_heatmap.png)
+
+*Supplementary Figure S7. Per-target BO uplift difference relative to Random Forest. The heatmap shows target-level winner switching that is obscured by aggregate means, supporting a configurable surrogate layer rather than a hard-coded single-model policy.*
+
+| Metric | Random training | K-means training | True optimal | Random Top-K |
+|---|---:|---:|---:|---:|
+| Top-5 overfit identity | 0.872 | 0.862 | 0.860 | - |
+| Top-5 internal identity | 0.898 | 0.891 | 0.866 | 0.828 |
+| Top-5 mean pLDDT | 92.51 | 92.51 | 93.09 | 91.95 |
+| Top-10 overfit identity | 0.870 | 0.859 | 0.854 | - |
+| Top-10 internal identity | 0.892 | 0.887 | 0.864 | 0.831 |
+| Top-10 mean pLDDT | 92.47 | 92.45 | 92.89 | 91.91 |
+
+## Supplementary Note 7. Rank-Mean Ensemble
+
+A rank-mean ensemble over RF, Ridge, LightGBM, and XGBoost gives the highest mean pLDDT BO uplift in the current artifact benchmark, but the gain over RF is small and does not remove acquisition diversity collapse. Rank-mean is therefore retained as an optional robustness layer rather than as the default surrogate.
+
+| Combination rule | pLDDT BO uplift Top-5 | SoluProt BO uplift Top-5 | Top-10 internal identity |
+|---|---:|---:|---:|
+| rank-mean ensemble | 0.622 | 0.0370 | 0.883 |
+| score-mean ensemble | 0.611 | 0.0377 | 0.881 |
+| RF | 0.602 | 0.0335 | 0.887 |
+| top-5 vote ensemble | 0.600 | 0.0363 | 0.880 |
+| Ridge | 0.583 | 0.0418 | 0.865 |
+| XGBoost | 0.558 | 0.0308 | 0.873 |
+| LightGBM | 0.549 | 0.0297 | 0.877 |
+
+## Supplementary Note 8. Representative Multi-Round Runs
+
+Two representative production-scale evolution runs verify the implemented multi-round path but are not treated as a paired biological benchmark. The 3RGK run used 30 K-means bootstrap labels and Top-K = 20; the 1LVM run used the same bootstrap size and Top-K = 5. Both runs generated four round-specific candidate pools with 2,000 SoluProt-gated candidates per round.
+
+| Target | Run ID | SoluProt-gated candidates | AF2 records | AF2 reduction vs folding all gated candidates | Top-K setting | Best phase | Best SoluProt | Best pLDDT | Best relax score |
+|---|---|---:|---:|---:|---:|---|---:|---:|---:|
+| 3RGK | `pys74631_kribb.re.kr_ev_3rgk` | 8,000 | 94 | 98.8% | 20 | R1 train | 0.794 | 97.05 | -3.13 |
+| 1LVM | `admin_20260430_064926_afb67369` | 8,000 | 49 | 99.4% | 5 | R3 top-k | 0.734 | 89.52 | -3.15 |
+
+## Supplementary Note 9. Structural-Context Pilot
+
+The completed structural-context pilot compares the original target backbone, one selected RFD3 backbone, and a three-backbone RFD3 ensemble across three CATH targets. It shows target-dependent tradeoffs and motivates the four-arm RAPID refresh, but it is not powered to claim a universal structural-generator advantage. The pilot visualization is shown once in the main manuscript as Figure 5; the supplementary material retains the numeric summary and protocol context rather than repeating the same image.
+
+| Arm | Designs per target | AF2 records per target | Top-5 pLDDT | Top-5 SoluProt |
+|---|---:|---:|---:|---:|
+| Single target backbone | 120 | 30 | 84.76 | 0.756 |
+| RFD3 selected backbone | 120 | 30 | 87.58 | 0.725 |
+| RFD3 ensemble, 3 backbones | 117 | 30 | 85.58 | 0.759 |
+
+## Supplementary Note 10. Execution Environment and RunPod Images
+
+The public release records Docker image tags for the RunPod-backed model stages, while endpoint IDs and API keys are excluded from the repository. Endpoint IDs are deployment-specific secrets and should be supplied through `.env` or server environment variables. For manuscript reproduction, image tags should be pinned for each benchmark run, and any image tagged as `latest` should be accompanied by a digest or release note before final archival.
+
+| Pipeline stage | Environment variable | Docker image |
+|---|---|---|
+| MMseqs2 MSA/search | `MMSEQS_ENDPOINT_ID` | `mimikyou0607/mmseqs-runpod:latest` |
+| ProteinMPNN sequence generation | `PROTEINMPNN_ENDPOINT_ID` | `mimikyou0607/proteinmpnn-runpod:latest` |
+| ColabFold/AF2 structure prediction | `COLABFOLD_ENDPOINT_ID` or `AF2_ENDPOINT_ID` | `mimikyou0607/colabfold-runpod:20260304_4` |
+| RFdiffusion3 backbone generation | `RFD3_ENDPOINT_ID` | `mimikyou0607/rfd3-runpod:260408-3` |
+| BioEmu ensemble sampling | `BIOEMU_ENDPOINT_ID` | `mimikyou0607/bioemu-runpod:latest` |
+| Rosetta Relax post-processing | `RUNPOD_RELAX_ENDPOINT_ID` | `mimikyou0607/relax_runpod:260428_1` |
