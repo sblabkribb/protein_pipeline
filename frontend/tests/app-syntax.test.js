@@ -377,6 +377,9 @@ test("advanced optional setup boards preserve open state across rerenders", () =
 test("advanced setup exposes surrogate triage as a separate AF2 budget mode", () => {
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
+  assert.match(source, /\{ labelKey: "runmode\.surrogate", value: "surrogate" \}/);
+  assert.match(source, /setup\.modeGuide\.surrogate/);
+  assert.match(source, /run\.label\.surrogate/);
   assert.match(source, /"question\.surrogateTriageEnabled\.label"/);
   assert.match(source, /surrogate_triage_enabled/);
   assert.match(source, /surrogate_triage_initial_samples/);

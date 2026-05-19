@@ -3412,6 +3412,7 @@ const I18N = {
     "setup.workflow.checkpoints": "Checkpoints: {stages}",
     "setup.workflow.checkpoints.none": "Checkpoints: none (run continuously)",
     "runmode.pipeline": "Full Pipeline",
+    "runmode.surrogate": "Surrogate Triage",
     "runmode.workflow": "Workflow Studio",
     "runmode.rfd3": "RFD3 (Backbone)",
     "runmode.bioemu": "BioEmu (Backbone)",
@@ -3422,6 +3423,8 @@ const I18N = {
     "runmode.diffdock": "DiffDock",
     "setup.modeGuide.title": "Mode Guide",
     "setup.modeGuide.pipeline": "Run the end-to-end pipeline through the final WT Diff stage.",
+    "setup.modeGuide.surrogate":
+      "Run the standard design path with RFD3/BioEmu/Relax off and AF2 surrogate triage on.",
     "setup.modeGuide.workflow":
       "Select stages in Advanced, then fill stage inputs and run step-by-step in Studio.",
     "setup.modeGuide.rfd3": "Run only RFD3 backbone generation.",
@@ -3439,6 +3442,7 @@ const I18N = {
     "stage.soluprot": "SoluProt",
     "stage.af2": "{af2Provider}",
     "run.label.pipeline": "Run Pipeline",
+    "run.label.surrogate": "Run Surrogate Triage",
     "run.label.workflow": "Open Studio",
     "run.label.rfd3": "Run RFD3",
     "run.label.bioemu": "Run BioEmu",
@@ -3448,6 +3452,7 @@ const I18N = {
     "run.label.af2": "Run {af2Provider}",
     "run.label.diffdock": "Run DiffDock",
     "mode.pipeline": "pipeline",
+    "mode.surrogate": "surrogate triage",
     "mode.workflow": "workflow",
     "mode.rfd3": "RFD3",
     "mode.bioemu": "BioEmu",
@@ -5002,6 +5007,7 @@ const I18N = {
     "setup.workflow.checkpoints": "체크포인트: {stages}",
     "setup.workflow.checkpoints.none": "체크포인트 없음 (중단 없이 연속 실행)",
     "runmode.pipeline": "전체 파이프라인",
+    "runmode.surrogate": "Surrogate Triage",
     "runmode.workflow": "Workflow Studio",
     "runmode.rfd3": "RFD3 (Backbone)",
     "runmode.bioemu": "BioEmu (Backbone)",
@@ -5012,6 +5018,8 @@ const I18N = {
     "runmode.diffdock": "DiffDock",
     "setup.modeGuide.title": "모드 가이드",
     "setup.modeGuide.pipeline": "마지막 WT Diff 단계까지 전체 파이프라인을 한 번에 실행합니다.",
+    "setup.modeGuide.surrogate":
+      "RFD3/BioEmu/Relax는 끄고 AF2 surrogate triage를 켠 표준 디자인 경로를 실행합니다.",
     "setup.modeGuide.workflow": "Advanced에서 단계 구성을 정한 뒤 Studio에서 단계별 입력과 실행을 진행합니다.",
     "setup.modeGuide.rfd3": "RFD3 백본 생성만 실행합니다.",
     "setup.modeGuide.bioemu": "BioEmu 백본 샘플링만 실행합니다.",
@@ -5028,6 +5036,7 @@ const I18N = {
     "stage.soluprot": "SoluProt",
     "stage.af2": "{af2Provider}",
     "run.label.pipeline": "파이프라인 실행",
+    "run.label.surrogate": "Surrogate Triage 실행",
     "run.label.workflow": "스튜디오 열기",
     "run.label.rfd3": "RFD3 실행",
     "run.label.bioemu": "BioEmu 실행",
@@ -5037,6 +5046,7 @@ const I18N = {
     "run.label.af2": "{af2Provider} 실행",
     "run.label.diffdock": "DiffDock 실행",
     "mode.pipeline": "파이프라인",
+    "mode.surrogate": "Surrogate Triage",
     "mode.workflow": "워크플로우",
     "mode.rfd3": "RFD3",
     "mode.bioemu": "BioEmu",
@@ -5584,6 +5594,7 @@ const TUTORIAL_STEPS = [
 
 const RUN_MODE_OPTIONS = [
   { labelKey: "runmode.pipeline", value: "pipeline" },
+  { labelKey: "runmode.surrogate", value: "surrogate" },
   { labelKey: "runmode.workflow", value: "workflow" },
   { labelKey: "runmode.rfd3", value: "rfd3" },
   { labelKey: "runmode.bioemu", value: "bioemu" },
@@ -12273,17 +12284,34 @@ function updateAdminUI() {
 }
 
 function buildManualPlan(mode) {
+  const surrogateRouted = {
+    start_from: "msa",
+    stop_after: "novelty",
+    novelty_enabled: true,
+    rfd3_use: false,
+    bioemu_use: false,
+    relax_enabled: false,
+    evolution_mode: false,
+    surrogate_triage_enabled: true,
+    surrogate_triage_initial_samples: 30,
+    surrogate_triage_top_k: 20,
+    surrogate_triage_model: "rf",
+    selected_tiers: [0.3, 0.5, 0.7],
+    num_seq_per_tier: 2,
+    af2_max_candidates_per_tier: 0,
+  };
+  const pipelineLikeMode = mode === "pipeline" || mode === "surrogate";
   const questions = [
     {
       id: "run_mode",
       labelKey: "question.runMode.label",
       questionKey: "question.runMode.help",
       required: true,
-      default: "pipeline",
+      default: mode === "surrogate" ? "surrogate" : "pipeline",
     },
   ];
 
-  if (mode === "pipeline") {
+  if (pipelineLikeMode) {
     questions.push(
       {
         id: "target_input",
@@ -12999,13 +13027,17 @@ function buildManualPlan(mode) {
     );
   }
 
-  return { routed_request: {}, questions };
+  return {
+    routed_request: mode === "surrogate" ? surrogateRouted : {},
+    questions,
+  };
 }
 
 function updateRunLabel() {
   if (!el.runBtn) return;
   const labels = {
     pipeline: "run.label.pipeline",
+    surrogate: "run.label.surrogate",
     workflow: "run.label.workflow",
     rfd3: "run.label.rfd3",
     bioemu: "run.label.bioemu",
@@ -18818,6 +18850,27 @@ function updateMonitorActionButtons() {
 
 function buildAnswerPayload(mode = state.runMode) {
   let answers = normalizeBioEmuCountFields({ ...state.answers }, { includeLegacyField: true });
+  if (mode === "surrogate") {
+    answers = {
+      ...answers,
+      start_from: answers.start_from || "msa",
+      stop_after: "novelty",
+      novelty_enabled: true,
+      rfd3_use: false,
+      bioemu_use: false,
+      relax_enabled: false,
+      evolution_mode: false,
+      surrogate_triage_enabled: true,
+      surrogate_triage_initial_samples: answers.surrogate_triage_initial_samples ?? 30,
+      surrogate_triage_top_k: answers.surrogate_triage_top_k ?? 20,
+      surrogate_triage_model: answers.surrogate_triage_model || "rf",
+      selected_tiers: Array.isArray(answers.selected_tiers) && answers.selected_tiers.length
+        ? answers.selected_tiers
+        : [0.3, 0.5, 0.7],
+      num_seq_per_tier: answers.num_seq_per_tier ?? 2,
+      af2_max_candidates_per_tier: answers.af2_max_candidates_per_tier ?? 0,
+    };
+  }
   if (answers.target_input && !answers.target_pdb && !answers.target_fasta) {
     if (mode === "diffdock") {
       answers.target_pdb = answers.target_input;
@@ -18855,7 +18908,7 @@ function buildAnswerPayload(mode = state.runMode) {
   });
   if (mode === "rfd3" || rfd3Enabled) {
     answers.rfd3_use = true;
-  } else if (mode === "pipeline" || mode === "workflow") {
+  } else if (mode === "pipeline" || mode === "workflow" || mode === "surrogate") {
     answers.rfd3_use = false;
   } else {
     delete answers.rfd3_use;
@@ -18870,7 +18923,7 @@ function buildAnswerPayload(mode = state.runMode) {
     }
   } else {
     delete answers.rfd3_input_pdb;
-    if (mode === "pipeline" || mode === "workflow") {
+    if (mode === "pipeline" || mode === "workflow" || mode === "surrogate") {
       delete answers.rfd3_mode;
       delete answers.rfd3_contig;
       delete answers.rfd3_hotspots;
@@ -18957,6 +19010,9 @@ function reconcileUserInputsIntoArgs(args) {
 }
 
 function filterAnswersForMode(mode, answers) {
+  if (mode === "surrogate") {
+    return filterAnswersForMode("pipeline", answers);
+  }
   const allow = {
     pipeline: [
       "target_fasta",
@@ -19134,6 +19190,22 @@ function filterAnswersForMode(mode, answers) {
 
 function buildRoutedForMode(mode) {
   if (mode === "pipeline") return { stop_after: "novelty", novelty_enabled: true };
+  if (mode === "surrogate") {
+    return {
+      start_from: "msa",
+      stop_after: "novelty",
+      novelty_enabled: true,
+      rfd3_use: false,
+      bioemu_use: false,
+      relax_enabled: false,
+      evolution_mode: false,
+      surrogate_triage_enabled: true,
+      surrogate_triage_initial_samples: 30,
+      surrogate_triage_top_k: 20,
+      surrogate_triage_model: "rf",
+      af2_max_candidates_per_tier: 0,
+    };
+  }
   if (mode === "rfd3") return { start_from: "rfd3", stop_after: "rfd3", rfd3_use: true };
   if (mode === "bioemu") return { start_from: "bioemu", stop_after: "bioemu", bioemu_use: true };
   if (mode === "msa") return { start_from: "msa", stop_after: "msa" };
@@ -19146,7 +19218,7 @@ function buildRoutedForMode(mode) {
 function mergeRoutedWithMode(mode, routed) {
   const base = buildRoutedForMode(mode);
   const merged = { ...base, ...(routed || {}) };
-  if (mode && mode !== "pipeline" && base.stop_after) {
+  if (mode && mode !== "pipeline" && mode !== "surrogate" && base.stop_after) {
     merged.stop_after = base.stop_after;
   }
   return merged;
@@ -19228,8 +19300,8 @@ async function runPreflight({ announce = true, mode: overrideMode = null, answer
   }
   delete rawAnswers.target_input;
   
-  const effectiveMode = mode === "workflow" ? "pipeline" : mode;
-  const preflightModes = new Set(["pipeline", "workflow", "rfd3", "bioemu", "msa", "design", "soluprot"]);
+  const effectiveMode = mode === "workflow" || mode === "surrogate" ? "pipeline" : mode;
+  const preflightModes = new Set(["pipeline", "surrogate", "workflow", "rfd3", "bioemu", "msa", "design", "soluprot"]);
   if (!preflightModes.has(mode)) {
     if (announce) {
       setMessage(t("preflight.unavailable", { mode: t(`mode.${mode}`) || mode }), "ai");
@@ -19365,7 +19437,7 @@ async function runPipeline(overrideAnswers = null) {
   if (!state.plan && !overrideAnswers) return;
   const prompt = el.promptInput.value.trim();
   const mode = (overrideAnswers ? "pipeline" : state.runMode) || "pipeline";
-  const effectiveMode = mode === "workflow" ? "pipeline" : mode;
+  const effectiveMode = mode === "workflow" || mode === "surrogate" ? "pipeline" : mode;
   let rawAnswers = overrideAnswers ? { ...overrideAnswers } : buildAnswerPayload(mode);
   
   if (rawAnswers.target_input && !rawAnswers.target_pdb && !rawAnswers.target_fasta) {
@@ -19395,7 +19467,7 @@ async function runPipeline(overrideAnswers = null) {
   }
   const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
   const requestedStartFrom = normalizePipelineStage(answers.start_from, "");
-  if (mode === "pipeline" && requestedStartFrom && requestedStartFrom !== "msa") {
+  if ((mode === "pipeline" || mode === "surrogate") && requestedStartFrom && requestedStartFrom !== "msa") {
     setMessage(t("hint.partialRun"), "ai");
     updateRunEligibility(state.plan?.questions || []);
     return;
@@ -19423,7 +19495,7 @@ async function runPipeline(overrideAnswers = null) {
   let args = {};
   let toolName = "pipeline.run";
 
-  if (["pipeline", "rfd3", "bioemu", "msa", "design", "soluprot"].includes(mode)) {
+  if (["pipeline", "surrogate", "rfd3", "bioemu", "msa", "design", "soluprot"].includes(mode)) {
     const pre = await runPreflight({ announce: true, mode, answers });
     if (!pre.ok) {
       return;
@@ -19435,7 +19507,7 @@ async function runPipeline(overrideAnswers = null) {
     return;
   }
 
-  if (["pipeline", "rfd3", "bioemu", "msa", "design", "soluprot"].includes(mode)) {
+  if (["pipeline", "surrogate", "rfd3", "bioemu", "msa", "design", "soluprot"].includes(mode)) {
     args = reconcileUserInputsIntoArgs(
       withProjectRoundContext(
         buildRunArguments({
