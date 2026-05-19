@@ -1778,13 +1778,18 @@ test("fast panel exposes reduced launch controls while advanced keeps the full s
   assert.match(source, /buildFastLaunchPreset\(/);
 });
 
-test("fast and residue picker copy describes upload-first and FASTA-to-structure flows", () => {
+test("fast and residue picker copy describes upload-first CIF/PDB/FASTA flows", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
   const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
 
-  assert.match(source, /"fast\.input\.label":\s*"FASTA\/PDB file or text"/);
-  assert.match(source, /"fast\.paste\.summary":\s*"Paste FASTA\/PDB text instead"/);
-  assert.match(source, /"fast\.input\.label":\s*"FASTA\/PDB 파일 또는 텍스트"/);
-  assert.match(source, /"fast\.paste\.summary":\s*"FASTA\/PDB 텍스트 직접 붙여넣기"/);
+  assert.match(html, /id="fastTargetFile"[^>]+accept="[^"]*\.cif[^"]*\.mmcif[^"]*\.bcif[^"]*"/);
+  assert.match(html, /Use a PDB, mmCIF, CIF, FASTA, FA, or text file/);
+  assert.match(source, /"fast\.input\.label":\s*"FASTA\/PDB\/mmCIF file or text"/);
+  assert.match(source, /"fast\.paste\.summary":\s*"Paste FASTA\/PDB\/mmCIF text instead"/);
+  assert.match(source, /"fast\.input\.label":\s*"FASTA\/PDB\/mmCIF 파일 또는 텍스트"/);
+  assert.match(source, /"fast\.paste\.summary":\s*"FASTA\/PDB\/mmCIF 텍스트 직접 붙여넣기"/);
+  assert.match(source, /"question\.targetInput\.help":\s*"Provide target structure \(PDB\/mmCIF\) or FASTA raw text\."/);
+  assert.match(source, /"question\.targetInput\.help":\s*"타깃 구조\(PDB\/mmCIF\) 또는 FASTA 원문을 입력하세요\."/);
   assert.match(source, /"setup\.residuePicker\.runAf2":\s*"Predict structure from FASTA"/);
   assert.match(source, /"setup\.residuePicker\.runAf2":\s*"FASTA로 구조 예측"/);
   assert.doesNotMatch(source, /test로 붙여|test input|sample target/i);
