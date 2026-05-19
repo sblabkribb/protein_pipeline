@@ -1303,6 +1303,24 @@ test("hit list source keeps numeric headers aligned when relax column is rendere
   assert.match(cssSource, /\.hit-list-table thead th\.num\s*\{\s*text-align:\s*right;/);
 });
 
+test("bulk download toolbars expose one filtered-selection action and compact styling", () => {
+  const appSource = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  const cssSource = readFileSync(resolve(process.cwd(), "frontend/styles.css"), "utf-8");
+
+  assert.doesNotMatch(appSource, /data-action="select-hit-all"/);
+  assert.doesNotMatch(appSource, /data-artifact-bulk-action="select-all"/);
+  assert.doesNotMatch(appSource, /bulk\.selectAll/);
+  assert.match(appSource, /data-action="select-hit-shown"/);
+  assert.match(appSource, /data-artifact-bulk-action="select-filtered"/);
+  assert.match(appSource, /"analyze\.hitList\.bulk\.selectShown": "Select filtered rows"/);
+  assert.match(appSource, /"analyze\.hitList\.bulk\.selectShown": "필터 결과 선택"/);
+  assert.match(appSource, /"artifacts\.bulk\.selectFiltered": "Select filtered files"/);
+  assert.match(appSource, /"artifacts\.bulk\.selectFiltered": "필터 결과 선택"/);
+  assert.match(cssSource, /\.hit-list-bulk-actions button,\s*\.artifact-bulk-actions button\s*\{/);
+  assert.match(cssSource, /min-height:\s*32px;/);
+  assert.match(cssSource, /left:\s*0;/);
+});
+
 test("buildWorkflowStudioEffectiveAnswers applies workflow defaults for untouched design and af2 counts", () => {
   const merged = buildWorkflowStudioEffectiveAnswers({
     headRequest: {
@@ -1812,13 +1830,18 @@ test("fast panel exposes reduced launch controls while advanced keeps the full s
   assert.match(source, /buildFastLaunchPreset\(/);
 });
 
-test("fast and residue picker copy describes upload-first and FASTA-to-structure flows", () => {
+test("fast and residue picker copy describes upload-first CIF/PDB/FASTA flows", () => {
+  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
   const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
 
-  assert.match(source, /"fast\.input\.label":\s*"FASTA\/PDB file or text"/);
-  assert.match(source, /"fast\.paste\.summary":\s*"Paste FASTA\/PDB text instead"/);
-  assert.match(source, /"fast\.input\.label":\s*"FASTA\/PDB 파일 또는 텍스트"/);
-  assert.match(source, /"fast\.paste\.summary":\s*"FASTA\/PDB 텍스트 직접 붙여넣기"/);
+  assert.match(html, /id="fastTargetFile"[^>]+accept="[^"]*\.cif[^"]*\.mmcif[^"]*\.bcif[^"]*"/);
+  assert.match(html, /Use a PDB, mmCIF, CIF, FASTA, FA, or text file/);
+  assert.match(source, /"fast\.input\.label":\s*"FASTA\/PDB\/mmCIF file or text"/);
+  assert.match(source, /"fast\.paste\.summary":\s*"Paste FASTA\/PDB\/mmCIF text instead"/);
+  assert.match(source, /"fast\.input\.label":\s*"FASTA\/PDB\/mmCIF 파일 또는 텍스트"/);
+  assert.match(source, /"fast\.paste\.summary":\s*"FASTA\/PDB\/mmCIF 텍스트 직접 붙여넣기"/);
+  assert.match(source, /"question\.targetInput\.help":\s*"Provide target structure \(PDB\/mmCIF\) or FASTA raw text\."/);
+  assert.match(source, /"question\.targetInput\.help":\s*"타깃 구조\(PDB\/mmCIF\) 또는 FASTA 원문을 입력하세요\."/);
   assert.match(source, /"setup\.residuePicker\.runAf2":\s*"Predict structure from FASTA"/);
   assert.match(source, /"setup\.residuePicker\.runAf2":\s*"FASTA로 구조 예측"/);
   assert.doesNotMatch(source, /test로 붙여|test input|sample target/i);

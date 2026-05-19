@@ -304,15 +304,15 @@
                   <div class="panel-header">
                     <h2 data-i18n="fast.title">Fast Launch</h2>
                     <p data-i18n="fast.desc">
-                      Upload a FASTA/PDB file, or paste text if needed, then launch with standard defaults.
+                      Upload a FASTA/PDB/mmCIF file, or paste text if needed, then launch with standard defaults.
                     </p>
                   </div>
                   <div class="fast-upload-primary">
                     <div>
-                      <span data-i18n="fast.input.label">FASTA/PDB file or text</span>
+                      <span data-i18n="fast.input.label">FASTA/PDB/mmCIF file or text</span>
                       <strong data-i18n="fast.upload.title">Upload target file</strong>
                       <p data-i18n="fast.upload.desc">
-                        Use a PDB, FASTA, FA, or text file for the usual Fast launch path.
+                        Use a PDB, mmCIF, CIF, FASTA, FA, or text file for the usual Fast launch path.
                       </p>
                     </div>
                     <input id="fastTargetFile" type="file" class="hidden" accept=".pdb,.ent,.cif,.mmcif,.bcif,.fa,.fasta,.txt,.seq" />
@@ -324,16 +324,16 @@
                     </p>
                   </div>
                   <details id="fastPasteDetails" class="fast-paste-details">
-                    <summary data-i18n="fast.paste.summary">Paste FASTA/PDB text instead</summary>
+                    <summary data-i18n="fast.paste.summary">Paste FASTA/PDB/mmCIF text instead</summary>
                     <label class="fast-field">
                       <span data-i18n="fast.paste.label">Direct text input</span>
                       <small data-i18n="fast.input.help">
-                        Use raw text only when you do not have a file.
+                        Use raw FASTA, PDB, or mmCIF text only when you do not have a file.
                       </small>
                       <textarea
                         id="fastTargetInput"
                         rows="8"
-                        placeholder="Paste FASTA or PDB text here."
+                        placeholder="Paste FASTA, PDB, or mmCIF text here."
                         data-i18n-placeholder="fast.input.placeholder"
                       ></textarea>
                     </label>
@@ -587,18 +587,18 @@
               <div class="panel-header">
                 <h2 data-i18n="evolution.title">Evolution Studio</h2>
                 <p data-i18n="evolution.desc">
-                  Upload a PDB and run the multi-round evolution pipeline with one click.
+                  Upload a PDB/mmCIF structure and run the multi-round evolution pipeline with one click.
                 </p>
               </div>
               <div class="evolution-grid">
                 <div class="evolution-input-card">
                   <label class="fast-field">
-                    <span data-i18n="evolution.input.label">Target PDB</span>
-                    <small data-i18n="evolution.input.help">Provide a PDB structure to evolve.</small>
+                    <span data-i18n="evolution.input.label">Target Structure</span>
+                    <small data-i18n="evolution.input.help">Provide a PDB or mmCIF structure to evolve.</small>
                     <textarea
                       id="evolutionTargetInput"
                       rows="10"
-                      placeholder="Paste PDB here."
+                      placeholder="Paste PDB or mmCIF here."
                       data-i18n-placeholder="evolution.input.placeholder"
                     ></textarea>
                   </label>

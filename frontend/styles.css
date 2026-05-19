@@ -5042,14 +5042,17 @@ textarea:focus-visible {
 .artifact-bulk-actions {
   position: sticky;
   top: 0;
+  left: 0;
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
-  padding: 10px;
+  width: max-content;
+  min-width: 100%;
+  padding: 8px 10px;
   border-bottom: 1px solid rgba(16, 42, 45, 0.08);
-  background: rgba(247, 251, 252, 0.96);
+  background: rgba(247, 251, 252, 0.98);
   backdrop-filter: blur(8px);
 }
 
@@ -5059,6 +5062,24 @@ textarea:focus-visible {
   font-weight: 700;
   color: var(--ink-soft);
   margin-right: auto;
+  padding: 6px 8px;
+}
+
+.hit-list-bulk-actions button,
+.artifact-bulk-actions button {
+  min-height: 32px;
+  padding: 6px 11px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.hit-list-bulk-actions button.primary,
+.artifact-bulk-actions button.primary {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
 }
 
 .hit-list-table {
