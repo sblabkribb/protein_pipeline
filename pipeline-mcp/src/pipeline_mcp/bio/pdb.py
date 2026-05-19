@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 import math
+import re
 
 
 _WATER_RESNAMES = {"HOH", "WAT", "H2O"}
@@ -77,6 +78,155 @@ def _parse_float(value: str, default: float = 0.0) -> float:
         return float(value.strip())
     except Exception:
         return default
+
+
+_CIF_TOKEN_RE = re.compile(
+    r"""
+    '(?:[^']|'')*'
+    |"(?:[^"]|"")*"
+    |(?:;[^\n]*(?:\n(?!;).*)*\n;)
+    |[^\s]+
+    """,
+    re.VERBOSE,
+)
+
+
+def looks_like_mmcif(text: str) -> bool:
+    raw = str(text or "").lstrip()
+    return raw.lower().startswith("data_") and "_atom_site." in raw
+
+
+def _clean_cif_token(value: str) -> str:
+    text = str(value or "")
+    if len(text) >= 2 and text[0] == "'" and text[-1] == "'":
+        return text[1:-1].replace("''", "'")
+    if len(text) >= 2 and text[0] == '"' and text[-1] == '"':
+        return text[1:-1].replace('""', '"')
+    if text.startswith(";") and text.endswith("\n;"):
+        return text[1:-2].strip("\n")
+    return text
+
+
+def _cif_tokens(text: str) -> list[str]:
+    return [_clean_cif_token(match.group(0)) for match in _CIF_TOKEN_RE.finditer(str(text or ""))]
+
+
+def _atom_site_loop(tokens: list[str]) -> tuple[list[str], list[list[str]]]:
+    idx = 0
+    while idx < len(tokens):
+        if tokens[idx].lower() != "loop_":
+            idx += 1
+            continue
+        idx += 1
+        headers: list[str] = []
+        while idx < len(tokens) and tokens[idx].startswith("_"):
+            headers.append(tokens[idx])
+            idx += 1
+        if not headers:
+            continue
+        lower_headers = [header.lower() for header in headers]
+        if not any(header.startswith("_atom_site.") for header in lower_headers):
+            # Skip row values for unrelated loops.
+            while idx < len(tokens) and tokens[idx].lower() != "loop_" and not tokens[idx].startswith("_"):
+                idx += 1
+            continue
+        width = len(headers)
+        rows: list[list[str]] = []
+        while idx < len(tokens) and tokens[idx].lower() != "loop_" and not tokens[idx].startswith("_"):
+            row = tokens[idx : idx + width]
+            if len(row) < width:
+                break
+            rows.append(row)
+            idx += width
+        return headers, rows
+    return [], []
+
+
+def _header_index(headers: list[str]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for index, header in enumerate(headers):
+        normalized = header.lower()
+        if normalized.startswith("_atom_site."):
+            normalized = normalized[len("_atom_site.") :]
+        out[normalized] = index
+    return out
+
+
+def _row_get(row: list[str], header_map: dict[str, int], *names: str, default: str = "") -> str:
+    for name in names:
+        index = header_map.get(name.lower())
+        if index is None or index >= len(row):
+            continue
+        value = str(row[index] or "").strip()
+        if value and value not in {".", "?"}:
+            return value
+    return default
+
+
+def _format_pdb_atom_name(atom_name: str, element: str) -> str:
+    atom = str(atom_name or "").strip().replace('"', "").replace("'", "")[:4]
+    elem = str(element or "").strip().upper()[:2]
+    if len(atom) < 4 and len(elem) == 1 and not atom.startswith(elem):
+        return f" {atom:<3}"[:4]
+    return f"{atom:<4}"[:4]
+
+
+def _pdb_resseq(value: str, fallback: int) -> int:
+    parsed = _parse_int(str(value or ""), default=0)
+    return parsed if parsed else fallback
+
+
+def mmcif_to_pdb(text: str) -> str:
+    tokens = _cif_tokens(text)
+    headers, rows = _atom_site_loop(tokens)
+    if not headers or not rows:
+        raise ValueError("mmCIF parse failed: _atom_site loop not found")
+    header_map = _header_index(headers)
+    out: list[str] = []
+    fallback_resseq_by_key: dict[tuple[str, str], int] = {}
+
+    for row_index, row in enumerate(rows, start=1):
+        record = _row_get(row, header_map, "group_pdb", default="ATOM").upper()
+        record = "HETATM" if record == "HETATM" else "ATOM"
+        serial = _parse_int(_row_get(row, header_map, "id"), row_index)
+        atom_name_raw = _row_get(row, header_map, "auth_atom_id", "label_atom_id", default="X")
+        element = _row_get(row, header_map, "type_symbol", default=atom_name_raw[:1]).upper()[:2]
+        atom_name = _format_pdb_atom_name(atom_name_raw, element)
+        altloc = _row_get(row, header_map, "label_alt_id", "pdbx_pdb_alt_id", default="")
+        altloc = "" if altloc in {".", "?"} else altloc[:1]
+        resname = _row_get(row, header_map, "auth_comp_id", "label_comp_id", default="UNK").upper()[:3]
+        chain = _row_get(row, header_map, "auth_asym_id", "label_asym_id", default="_")[:1] or "_"
+        seq_raw = _row_get(row, header_map, "auth_seq_id", "label_seq_id")
+        residue_key = (chain, seq_raw or str(row_index))
+        if residue_key not in fallback_resseq_by_key:
+            fallback_resseq_by_key[residue_key] = len(
+                [key for key in fallback_resseq_by_key if key[0] == chain]
+            ) + 1
+        resseq = _pdb_resseq(seq_raw, fallback_resseq_by_key[residue_key])
+        icode = _row_get(row, header_map, "pdbx_pdb_ins_code", "ins_code", default="")
+        icode = "" if icode in {".", "?"} else icode[:1]
+        x = _parse_float(_row_get(row, header_map, "cartn_x"))
+        y = _parse_float(_row_get(row, header_map, "cartn_y"))
+        z = _parse_float(_row_get(row, header_map, "cartn_z"))
+        occupancy = _parse_float(_row_get(row, header_map, "occupancy"), 1.0)
+        bfactor = _parse_float(_row_get(row, header_map, "b_iso_or_equiv"), 0.0)
+        out.append(
+            f"{record:<6}{serial % 100000:5d} {atom_name}{altloc:1}{resname:>3} {chain:1}"
+            f"{resseq:4d}{icode:1}   {x:8.3f}{y:8.3f}{z:8.3f}{occupancy:6.2f}{bfactor:6.2f}"
+            f"          {element:>2}\n"
+        )
+
+    if not out:
+        raise ValueError("mmCIF parse failed: no atom rows found")
+    out.append("END\n")
+    return "".join(out)
+
+
+def normalize_structure_text(text: str) -> str:
+    raw = str(text or "")
+    if not looks_like_mmcif(raw):
+        return raw
+    return mmcif_to_pdb(raw)
 
 
 def iter_atoms(pdb_text: str):

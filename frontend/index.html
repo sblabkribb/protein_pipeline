@@ -315,7 +315,7 @@
                         Use a PDB, FASTA, FA, or text file for the usual Fast launch path.
                       </p>
                     </div>
-                    <input id="fastTargetFile" type="file" class="hidden" accept=".pdb,.ent,.fa,.fasta,.txt,.seq" />
+                    <input id="fastTargetFile" type="file" class="hidden" accept=".pdb,.ent,.cif,.mmcif,.bcif,.fa,.fasta,.txt,.seq" />
                     <button id="fastLoadFileBtn" class="ghost" type="button" data-i18n="fast.action.loadFile">
                       Choose File
                     </button>
@@ -608,7 +608,7 @@
                     <input id="evolutionCustomRunIdInput" type="text" placeholder="custom_run_01" />
                   </label>
                   <div class="fast-inline-actions">
-                    <input id="evolutionTargetFile" type="file" class="hidden" accept=".pdb,.ent" />
+                    <input id="evolutionTargetFile" type="file" class="hidden" accept=".pdb,.ent,.cif,.mmcif,.bcif" />
                     <button id="evolutionLoadFileBtn" class="ghost" type="button" data-i18n="fast.action.loadFile">
                       Load File
                     </button>
@@ -629,6 +629,21 @@
                   <label class="fast-field">
                     <span data-i18n="evolution.poolSize.label">Stage 1: Generation Pool Size</span>
                     <input id="evolutionPoolSizeInput" type="number" min="10" step="10" value="1000" />
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="evolution.labelSource.label">Label source</span>
+                    <select id="evolutionLabelSourceInput">
+                      <option value="experimental" data-i18n="evolution.labelSource.experimental">Experimental feedback</option>
+                      <option value="in_silico_af2" data-i18n="evolution.labelSource.inSilicoAf2">In-silico AF2 legacy</option>
+                    </select>
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="evolution.objectiveMetric.label">Experimental objective metric</span>
+                    <input id="evolutionObjectiveMetricInput" type="text" value="activity" />
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="evolution.experimentSourceRunId.label">Experiment source run ID</span>
+                    <input id="evolutionExperimentSourceRunIdInput" type="text" placeholder="optional previous run ID" />
                   </label>
                   <label class="fast-field">
                     <span data-i18n="evolution.initialSamples.label">Stage 2: K-Means Training Samples</span>
@@ -1344,6 +1359,72 @@
                     <select id="experimentArtifact"></select>
                   </label>
                 </div>
+                <div class="form-row">
+                  <label>
+                    <span data-i18n="experiment.candidate">Candidate ID (optional)</span>
+                    <input
+                      id="experimentCandidateId"
+                      type="text"
+                      placeholder="e.g. evo_r1_0003"
+                      data-i18n-placeholder="experiment.candidate.placeholder"
+                    />
+                  </label>
+                  <label>
+                    <span data-i18n="experiment.sequence">Sequence ID (optional)</span>
+                    <input
+                      id="experimentSequenceId"
+                      type="text"
+                      placeholder="e.g. seq_001"
+                      data-i18n-placeholder="experiment.sequence.placeholder"
+                    />
+                  </label>
+                </div>
+                <div class="form-row">
+                  <label>
+                    <span data-i18n="experiment.metricName">Objective metric</span>
+                    <input
+                      id="experimentMetricName"
+                      type="text"
+                      value="activity"
+                      placeholder="activity"
+                      data-i18n-placeholder="experiment.metricName.placeholder"
+                    />
+                  </label>
+                  <label>
+                    <span data-i18n="experiment.metricValue">Metric value</span>
+                    <input
+                      id="experimentMetricValue"
+                      type="number"
+                      step="any"
+                      placeholder="0.0"
+                      data-i18n-placeholder="experiment.metricValue.placeholder"
+                    />
+                  </label>
+                </div>
+                <div class="form-row">
+                  <label>
+                    <span data-i18n="experiment.metricUnit">Metric unit (optional)</span>
+                    <input
+                      id="experimentMetricUnit"
+                      type="text"
+                      placeholder="e.g. RFU, mg/mL"
+                      data-i18n-placeholder="experiment.metricUnit.placeholder"
+                    />
+                  </label>
+                  <label>
+                    <span data-i18n="experiment.metricDirection">Metric direction</span>
+                    <select id="experimentMetricDirection"></select>
+                  </label>
+                </div>
+                <label>
+                  <span data-i18n="experiment.replicate">Replicate ID (optional)</span>
+                  <input
+                    id="experimentReplicateId"
+                    type="text"
+                    placeholder="replicate_1"
+                    data-i18n-placeholder="experiment.replicate.placeholder"
+                  />
+                </label>
                 <label>
                   <span data-i18n="experiment.metrics">Metrics (JSON, optional)</span>
                   <textarea

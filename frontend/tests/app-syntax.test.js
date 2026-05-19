@@ -337,6 +337,31 @@ test("advanced optional setup boards preserve open state across rerenders", () =
   assert.match(source, /makeOptionalSetupDetails\(card,\s*\{\s*key:\s*"evolution"/);
 });
 
+test("advanced setup exposes surrogate triage as a separate AF2 budget mode", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(source, /"question\.surrogateTriageEnabled\.label"/);
+  assert.match(source, /surrogate_triage_enabled/);
+  assert.match(source, /surrogate_triage_initial_samples/);
+  assert.match(source, /surrogate_triage_top_k/);
+  assert.match(source, /surrogate_triage_model/);
+  assert.match(source, /state\.answers\.rfd3_use = false;/);
+  assert.match(source, /state\.answers\.bioemu_use = false;/);
+});
+
+test("evolution setup defaults to experimental feedback label source", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(html, /id="evolutionLabelSourceInput"/);
+  assert.match(source, /evolution_label_source:\s*el\.evolutionLabelSourceInput/);
+  assert.match(source, /"question\.evolutionLabelSource\.label"/);
+  assert.match(source, /"experimental"/);
+  assert.match(source, /"in_silico_af2"/);
+  assert.match(source, /evolution_objective_metric/);
+  assert.match(source, /evolution_experiment_source_run_id/);
+});
+
 test("user-facing Korean tutorial copy avoids internal pipeline jargon", () => {
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 

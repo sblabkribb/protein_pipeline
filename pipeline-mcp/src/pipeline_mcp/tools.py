@@ -996,7 +996,7 @@ def _submit_feedback(
     comment = _as_text(arguments.get("comment")).strip() or None
     artifact_path = _as_text(arguments.get("artifact_path")).strip() or None
     stage = _as_text(arguments.get("stage")).strip().lower() or None
-    metrics = _as_metrics(arguments.get("metrics"))
+    metrics = _as_metrics(arguments.get("metrics")) or {}
     user = _normalize_user(arguments.get("user"))
 
     entry: dict[str, object] = {
@@ -1039,9 +1039,25 @@ def _submit_experiment(
     if result not in {"success", "fail", "inconclusive"}:
         raise ValueError("result must be one of: success, fail, inconclusive")
 
-    metrics = _as_metrics(arguments.get("metrics"))
+    metrics = _as_metrics(arguments.get("metrics")) or {}
     conditions = _as_text(arguments.get("conditions")).strip() or None
     sample_id = _as_text(arguments.get("sample_id")).strip() or None
+    candidate_id = _as_text(arguments.get("candidate_id")).strip() or None
+    sequence_id = _as_text(arguments.get("sequence_id")).strip() or None
+    metric_name = _as_text(arguments.get("metric_name")).strip() or None
+    metric_unit = _as_text(arguments.get("metric_unit")).strip() or None
+    metric_direction = (
+        _as_text(arguments.get("metric_direction")).strip().lower() or None
+    )
+    if metric_direction and metric_direction not in {"maximize", "minimize"}:
+        raise ValueError("metric_direction must be 'maximize' or 'minimize'")
+    metric_value = None
+    if arguments.get("metric_value") is not None:
+        metric_value = _as_float(arguments.get("metric_value"), 0.0)
+        if metric_name:
+            metrics = dict(metrics)
+            metrics.setdefault(metric_name, metric_value)
+    replicate_id = _as_text(arguments.get("replicate_id")).strip() or None
     artifact_path = _as_text(arguments.get("artifact_path")).strip() or None
     note = _as_text(arguments.get("note")).strip() or None
     user = _normalize_user(arguments.get("user"))
@@ -1054,6 +1070,13 @@ def _submit_experiment(
         "metrics": metrics,
         "conditions": conditions,
         "sample_id": sample_id,
+        "candidate_id": candidate_id,
+        "sequence_id": sequence_id,
+        "metric_name": metric_name,
+        "metric_value": metric_value,
+        "metric_unit": metric_unit,
+        "metric_direction": metric_direction,
+        "replicate_id": replicate_id,
         "artifact_path": artifact_path,
         "note": note,
         "user": user,
@@ -6477,10 +6500,34 @@ def pipeline_request_from_args(
     evolution_samples_per_round = _as_int(args.get("evolution_samples_per_round"), 20)
     evolution_pool_size = _as_int(args.get("evolution_pool_size"), 1000)
     evolution_oracle_samples = _as_int(args.get("evolution_oracle_samples"), 20)
+    evolution_label_source = (
+        _as_text(args.get("evolution_label_source")).strip().lower()
+        or "experimental"
+    )
+    if evolution_label_source in {"af2", "computational", "in_silico"}:
+        evolution_label_source = "in_silico_af2"
+    if evolution_label_source not in {"experimental", "in_silico_af2"}:
+        raise ValueError(
+            "evolution_label_source must be one of: experimental, in_silico_af2"
+        )
+    evolution_objective_metric = (
+        _as_text(args.get("evolution_objective_metric")).strip() or "activity"
+    )
+    evolution_experiment_source_run_id = (
+        _as_text(args.get("evolution_experiment_source_run_id")).strip() or None
+    )
     evolution_surrogate_model = (
         _as_text(args.get("evolution_surrogate_model")).strip() or "rf"
     )
     use_memory_bank = _as_bool(args.get("use_memory_bank"), False)
+    surrogate_triage_enabled = _as_bool(args.get("surrogate_triage_enabled"), False)
+    surrogate_triage_initial_samples = _as_int(
+        args.get("surrogate_triage_initial_samples"), 30
+    )
+    surrogate_triage_top_k = _as_int(args.get("surrogate_triage_top_k"), 20)
+    surrogate_triage_model = (
+        _as_text(args.get("surrogate_triage_model")).strip() or "rf"
+    )
     project_id = _as_text(args.get("project_id")).strip() or None
     round_id = _as_text(args.get("round_id")).strip() or None
     rfd3_inputs = _as_dict(args.get("rfd3_inputs"), name="rfd3_inputs")
@@ -6703,8 +6750,15 @@ def pipeline_request_from_args(
         evolution_samples_per_round=evolution_samples_per_round,
         evolution_pool_size=evolution_pool_size,
         evolution_oracle_samples=evolution_oracle_samples,
+        evolution_label_source=evolution_label_source,
+        evolution_objective_metric=evolution_objective_metric,
+        evolution_experiment_source_run_id=evolution_experiment_source_run_id,
         evolution_surrogate_model=evolution_surrogate_model,
         use_memory_bank=use_memory_bank,
+        surrogate_triage_enabled=surrogate_triage_enabled,
+        surrogate_triage_initial_samples=max(1, int(surrogate_triage_initial_samples)),
+        surrogate_triage_top_k=max(1, int(surrogate_triage_top_k)),
+        surrogate_triage_model=surrogate_triage_model,
         project_id=project_id,
         round_id=round_id,
         rfd3_use=rfd3_use,
@@ -7048,6 +7102,21 @@ def _pipeline_run_schema() -> dict[str, Any]:
                 "type": "integer",
                 "description": "Legacy alias for per-round samples; evolution_oracle_samples controls Top-K (default 20)",
             },
+            "evolution_label_source": {
+                "type": "string",
+                "enum": ["experimental", "in_silico_af2"],
+                "default": "experimental",
+                "description": "Label source for evolution mode. experimental recommends wet-lab candidates from recorded assay labels; in_silico_af2 preserves the legacy AF2-oracle loop.",
+            },
+            "evolution_objective_metric": {
+                "type": "string",
+                "default": "activity",
+                "description": "Metric name to use as the supervised objective when evolution_label_source='experimental'.",
+            },
+            "evolution_experiment_source_run_id": {
+                "type": "string",
+                "description": "Optional previous run_id whose experiments.jsonl should be used as labels for experimental evolution.",
+            },
             "evolution_surrogate_model": {
                 "type": "string",
                 "enum": ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
@@ -7057,6 +7126,27 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "use_memory_bank": {
                 "type": "boolean",
                 "description": "Use memory-bank candidate routing in evolution mode",
+            },
+            "surrogate_triage_enabled": {
+                "type": "boolean",
+                "default": False,
+                "description": "Use one-round surrogate triage in the standard pipeline to reduce AF2/ColabFold calls after SoluProt filtering.",
+            },
+            "surrogate_triage_initial_samples": {
+                "type": "integer",
+                "default": 30,
+                "description": "Number of diverse SoluProt-passed candidates to label with AF2 before fitting the surrogate triage model.",
+            },
+            "surrogate_triage_top_k": {
+                "type": "integer",
+                "default": 20,
+                "description": "Number of surrogate-ranked candidates to send to AF2 after the initial labelled set.",
+            },
+            "surrogate_triage_model": {
+                "type": "string",
+                "enum": ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
+                "default": "rf",
+                "description": "Surrogate model used by one-round standard-pipeline AF2 triage.",
             },
             "agent_panel_enabled": {"type": "boolean"},
             "auto_recover": {"type": "boolean"},
@@ -7346,6 +7436,16 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "metrics": {"type": "object"},
                     "conditions": {"type": "string"},
                     "sample_id": {"type": "string"},
+                    "candidate_id": {"type": "string"},
+                    "sequence_id": {"type": "string"},
+                    "metric_name": {"type": "string"},
+                    "metric_value": {"type": "number"},
+                    "metric_unit": {"type": "string"},
+                    "metric_direction": {
+                        "type": "string",
+                        "enum": ["maximize", "minimize"],
+                    },
+                    "replicate_id": {"type": "string"},
                     "artifact_path": {"type": "string"},
                     "note": {"type": "string"},
                     "user": {"type": "object"},

@@ -171,21 +171,47 @@ print("ok")
             {
                 "target_fasta": ">q1\nACDEFGHIK\n",
                 "evolution_mode": True,
+                "evolution_label_source": "in_silico_af2",
                 "evolution_surrogate_model": "xgboost",
                 "use_memory_bank": True,
+                "evolution_objective_metric": "soluble_yield",
+                "evolution_experiment_source_run_id": "round_1",
             }
         )
 
+        self.assertEqual(req.evolution_label_source, "in_silico_af2")
         self.assertEqual(req.evolution_surrogate_model, "xgboost")
+        self.assertEqual(req.evolution_objective_metric, "soluble_yield")
+        self.assertEqual(req.evolution_experiment_source_run_id, "round_1")
         self.assertTrue(req.use_memory_bank)
 
     def test_pipeline_run_schema_advertises_supported_evolution_surrogates(self) -> None:
         defs = {tool["name"]: tool for tool in tool_definitions()}
-        prop = defs["pipeline.run"]["inputSchema"]["properties"]["evolution_surrogate_model"]
+        props = defs["pipeline.run"]["inputSchema"]["properties"]
+        prop = props["evolution_surrogate_model"]
 
         self.assertEqual(prop["default"], "rf")
         self.assertEqual(
             prop["enum"], ["rf", "ridge", "lightgbm", "xgboost", "ensemble"]
+        )
+        self.assertEqual(props["evolution_label_source"]["default"], "experimental")
+        self.assertEqual(
+            props["evolution_label_source"]["enum"],
+            ["experimental", "in_silico_af2"],
+        )
+        self.assertEqual(props["evolution_objective_metric"]["default"], "activity")
+        self.assertEqual(props["evolution_experiment_source_run_id"]["type"], "string")
+
+    def test_pipeline_run_schema_advertises_surrogate_triage_mode(self) -> None:
+        defs = {tool["name"]: tool for tool in tool_definitions()}
+        props = defs["pipeline.run"]["inputSchema"]["properties"]
+
+        self.assertEqual(props["surrogate_triage_enabled"]["type"], "boolean")
+        self.assertEqual(props["surrogate_triage_initial_samples"]["default"], 30)
+        self.assertEqual(props["surrogate_triage_top_k"]["default"], 20)
+        self.assertEqual(
+            props["surrogate_triage_model"]["enum"],
+            ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
         )
 
     def test_tool_definitions_include_cath_ops_tools(self) -> None:
@@ -1483,10 +1509,26 @@ print("ok")
 
             dispatcher.call_tool(
                 "pipeline.submit_experiment",
-                {"run_id": run_id, "result": "success", "assay_type": "binding"},
+                {
+                    "run_id": run_id,
+                    "result": "success",
+                    "assay_type": "binding",
+                    "candidate_id": "target:s1",
+                    "sequence_id": "target:s1",
+                    "metric_name": "activity",
+                    "metric_value": 0.72,
+                    "metric_unit": "relative",
+                    "metric_direction": "maximize",
+                    "replicate_id": "rep1",
+                },
             )
             experiments = dispatcher.call_tool("pipeline.list_experiments", {"run_id": run_id, "limit": 5})
-            self.assertTrue(experiments.get("items"))
+            exp_items = experiments.get("items") or []
+            self.assertTrue(exp_items)
+            self.assertEqual(exp_items[0].get("candidate_id"), "target:s1")
+            self.assertEqual(exp_items[0].get("metric_name"), "activity")
+            self.assertEqual(exp_items[0].get("metric_value"), 0.72)
+            self.assertEqual(exp_items[0].get("metric_direction"), "maximize")
 
             report = dispatcher.call_tool("pipeline.generate_report", {"run_id": run_id})
             self.assertIn("report", report)

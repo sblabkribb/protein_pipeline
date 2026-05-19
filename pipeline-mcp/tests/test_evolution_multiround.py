@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from types import SimpleNamespace
+import csv
 
 import numpy as np
 
@@ -38,8 +39,13 @@ class _FakeRunner:
 
 def test_pipeline_request_defaults_to_paper_four_round_budget() -> None:
     assert PipelineRequest(target_fasta=">q\nACDE\n", target_pdb="").evolution_rounds == 4
+    assert (
+        PipelineRequest(target_fasta=">q\nACDE\n", target_pdb="").evolution_label_source
+        == "experimental"
+    )
     req = pipeline_request_from_args({"target_fasta": ">q\nACDE\n"})
     assert req.evolution_rounds == 4
+    assert req.evolution_label_source == "experimental"
 
 
 def test_run_evolution_executes_initial_training_then_topk_each_round(
@@ -83,6 +89,7 @@ def test_run_evolution_executes_initial_training_then_topk_each_round(
         target_fasta=">q\nACDEFGHIK\n",
         target_pdb="",
         evolution_mode=True,
+        evolution_label_source="in_silico_af2",
         evolution_initial_samples=3,
         evolution_oracle_samples=2,
         evolution_rounds=3,
@@ -119,3 +126,104 @@ def test_run_evolution_executes_initial_training_then_topk_each_round(
     assert phases.count("round_1_top_k") == 2
     assert phases.count("round_2_top_k") == 2
     assert phases.count("round_3_top_k") == 2
+
+
+def test_run_evolution_experimental_without_labels_requests_wetlab_candidates(
+    tmp_path, monkeypatch
+) -> None:
+    fake_torch = SimpleNamespace(
+        cuda=SimpleNamespace(is_available=lambda: False),
+        device=lambda name: name,
+    )
+    monkeypatch.setattr(evolution, "torch", fake_torch)
+    monkeypatch.setattr(evolution, "mlflow", None)
+    monkeypatch.setattr(evolution.ncp_storage, "sync_outputs", lambda run_id: None)
+
+    def fake_embeddings(sequences, device):
+        values = np.arange(len(sequences) * 2, dtype=np.float64).reshape(len(sequences), 2)
+        return values
+
+    monkeypatch.setattr(evolution, "get_esm_embeddings", fake_embeddings)
+
+    import pipeline_mcp.tools as tools
+
+    def fail_af2(*args, **kwargs):
+        raise AssertionError("experimental evolution must not call AF2")
+
+    monkeypatch.setattr(tools, "_run_af2_predict", fail_af2)
+
+    runner = _FakeRunner(tmp_path / "outputs")
+    request = PipelineRequest(
+        target_fasta=">q\nACDEFGHIK\n",
+        target_pdb="",
+        evolution_mode=True,
+        evolution_label_source="experimental",
+        evolution_initial_samples=3,
+        evolution_oracle_samples=2,
+        evolution_rounds=1,
+        evolution_pool_size=12,
+        soluprot_cutoff=0.1,
+    )
+
+    result = evolution.run_evolution(runner, request, "evo_exp_request")
+    root = Path(result.output_dir)
+    summary = json.loads((root / "summary.json").read_text())
+    request_csv = root / "evolution" / "experiment_request.csv"
+
+    assert request_csv.exists()
+    rows = list(csv.DictReader(request_csv.open()))
+    assert len(rows) == 3
+    assert summary["label_source"] == "experimental"
+    assert summary["evolution_mode"] == "experimental-feedback-active-learning"
+    assert summary["experimental_labels"]["count"] == 0
+    assert len(summary["requested_experiments"]) == 3
+
+
+def test_run_evolution_experimental_with_labels_recommends_next_candidates(
+    tmp_path, monkeypatch
+) -> None:
+    fake_torch = SimpleNamespace(
+        cuda=SimpleNamespace(is_available=lambda: False),
+        device=lambda name: name,
+    )
+    monkeypatch.setattr(evolution, "torch", fake_torch)
+    monkeypatch.setattr(evolution, "mlflow", None)
+    monkeypatch.setattr(evolution.ncp_storage, "sync_outputs", lambda run_id: None)
+
+    def fake_embeddings(sequences, device):
+        values = np.arange(len(sequences) * 2, dtype=np.float64).reshape(len(sequences), 2)
+        return values
+
+    monkeypatch.setattr(evolution, "get_esm_embeddings", fake_embeddings)
+
+    runner = _FakeRunner(tmp_path / "outputs")
+    source_paths = init_run(runner.output_root, "round_1")
+    experiments = [
+        {"sample_id": "r1_seq0", "metrics": {"activity": 0.2}, "result": "success"},
+        {"candidate_id": "r1_seq1", "metric_name": "activity", "metric_value": 0.8, "result": "success"},
+        {"sequence_id": "r1_seq2", "metrics": {"activity": 0.5}, "result": "success"},
+    ]
+    (source_paths.root / "experiments.jsonl").write_text(
+        "\n".join(json.dumps(item) for item in experiments) + "\n",
+        encoding="utf-8",
+    )
+    request = PipelineRequest(
+        target_fasta=">q\nACDEFGHIK\n",
+        target_pdb="",
+        evolution_mode=True,
+        evolution_label_source="experimental",
+        evolution_experiment_source_run_id="round_1",
+        evolution_objective_metric="activity",
+        evolution_initial_samples=3,
+        evolution_oracle_samples=2,
+        evolution_rounds=1,
+        evolution_pool_size=12,
+        soluprot_cutoff=0.1,
+    )
+
+    result = evolution.run_evolution(runner, request, "evo_exp_rank")
+    summary = json.loads((Path(result.output_dir) / "summary.json").read_text())
+
+    assert summary["experimental_labels"]["count"] == 3
+    assert len(summary["recommended_candidates"]) == 2
+    assert all(item["id"] not in {"r1_seq0", "r1_seq1", "r1_seq2"} for item in summary["recommended_candidates"])

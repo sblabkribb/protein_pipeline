@@ -26,6 +26,7 @@ import {
   artifactMetaFromPath,
   artifactMetaFromPathForManifest,
   artifactDownloadFilename,
+  buildStoredZipBytes,
   buildArtifactDownloadRequest,
   backboneSourceIndexFromManifest,
   buildWorkflowStudioFreshSessionSeed,
@@ -653,6 +654,27 @@ test("artifactDownloadFilename falls back to basename", () => {
   assert.equal(artifactDownloadFilename("report.md"), "report.md");
 });
 
+test("buildStoredZipBytes creates a zip archive for selected files", () => {
+  const zip = buildStoredZipBytes([
+    { name: "a/result.fasta", bytes: new TextEncoder().encode(">a\nACDE\n") },
+    { name: "b/ranked_0.pdb", text: "ATOM\nEND\n" },
+  ]);
+  assert.equal(zip[0], 0x50);
+  assert.equal(zip[1], 0x4b);
+  const text = new TextDecoder().decode(zip);
+  assert.match(text, /a\/result\.fasta/);
+  assert.match(text, /b\/ranked_0\.pdb/);
+  assert.match(text, />a\nACDE/);
+  assert.match(text, /ATOM\nEND/);
+});
+
+test("detectTargetKey treats mmCIF target text as structure input", () => {
+  assert.equal(
+    detectTargetKey("data_demo\n#\nloop_\n_atom_site.group_PDB\n_atom_site.id\nATOM 1\n"),
+    "target_pdb"
+  );
+});
+
 test("renderMcpGuideMarkup provides Korean token instructions for VS Code MCP", async () => {
   const mcpGuide = await import("../lib/mcp-guide.js").catch(() => null);
   assert.ok(mcpGuide && typeof mcpGuide.renderMcpGuideMarkup === "function");
@@ -731,6 +753,44 @@ test("buildRunArguments keeps false/zero values from answers", () => {
   assert.equal(args.bioemu_use, false);
   assert.equal(args.af2_max_candidates_per_tier, 0);
   assert.equal(args.af2_provider, "af2");
+});
+
+test("buildRunArguments preserves standard surrogate triage controls", () => {
+  const args = buildRunArguments({
+    prompt: "",
+    routed: { stop_after: "af2" },
+    answers: {
+      surrogate_triage_enabled: true,
+      surrogate_triage_initial_samples: 30,
+      surrogate_triage_top_k: 20,
+      surrogate_triage_model: "rf",
+    },
+    runId: "run_surrogate",
+  });
+  assert.equal(args.surrogate_triage_enabled, true);
+  assert.equal(args.surrogate_triage_initial_samples, 30);
+  assert.equal(args.surrogate_triage_top_k, 20);
+  assert.equal(args.surrogate_triage_model, "rf");
+  assert.equal(args.stop_after, "af2");
+});
+
+test("buildRunArguments preserves experimental evolution label controls", () => {
+  const args = buildRunArguments({
+    prompt: "",
+    routed: { stop_after: "novelty" },
+    answers: {
+      evolution_mode: true,
+      evolution_label_source: "experimental",
+      evolution_objective_metric: "soluble_yield",
+      evolution_experiment_source_run_id: "round_1",
+    },
+    runId: "run_evolution_experimental",
+  });
+  assert.equal(args.evolution_mode, true);
+  assert.equal(args.evolution_label_source, "experimental");
+  assert.equal(args.evolution_objective_metric, "soluble_yield");
+  assert.equal(args.evolution_experiment_source_run_id, "round_1");
+  assert.equal(args.stop_after, "novelty");
 });
 
 test("buildRunArguments preserves relax controls from answers", () => {
@@ -972,6 +1032,9 @@ test("workflowStudioStageFields exposes key fields per stage", () => {
     "mask_consensus_apply",
     "ligand_mask_use_original_target",
     "evolution_mode",
+    "evolution_label_source",
+    "evolution_objective_metric",
+    "evolution_experiment_source_run_id",
     "evolution_initial_samples",
     "evolution_rounds",
     "evolution_samples_per_round",
@@ -979,6 +1042,10 @@ test("workflowStudioStageFields exposes key fields per stage", () => {
   assert.deepEqual(workflowStudioStageFields("af2"), [
     "af2_provider",
     "af2_max_candidates_per_tier",
+    "surrogate_triage_enabled",
+    "surrogate_triage_initial_samples",
+    "surrogate_triage_top_k",
+    "surrogate_triage_model",
     "af2_plddt_cutoff",
     "af2_rmsd_cutoff",
     "relax_enabled",
@@ -1030,6 +1097,10 @@ test("workflowStudioVisibleStageFields keeps AF2 controls visible when RFD3 is d
     [
       "af2_provider",
       "af2_max_candidates_per_tier",
+      "surrogate_triage_enabled",
+      "surrogate_triage_initial_samples",
+      "surrogate_triage_top_k",
+      "surrogate_triage_model",
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
       "relax_enabled",

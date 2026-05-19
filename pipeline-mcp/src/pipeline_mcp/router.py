@@ -20,6 +20,13 @@ _PROMPT_KEY_ALIASES = {
     "top_k": "af2_top_k",
     "af2_n": "af2_max_candidates_per_tier",
     "af2_per_tier": "af2_max_candidates_per_tier",
+    "surrogate": "surrogate_triage_enabled",
+    "surrogate_triage": "surrogate_triage_enabled",
+    "surrogate_initial": "surrogate_triage_initial_samples",
+    "surrogate_train": "surrogate_triage_initial_samples",
+    "surrogate_topk": "surrogate_triage_top_k",
+    "surrogate_top_k": "surrogate_triage_top_k",
+    "surrogate_model": "surrogate_triage_model",
     "fold_provider": "af2_provider",
     "structure_provider": "af2_provider",
     "temp": "sampling_temp",
@@ -48,6 +55,7 @@ _PROMPT_BOOL_KEYS = {
     "surface_only",
     "bioemu_use",
     "ligand_mask_use_original_target",
+    "surrogate_triage_enabled",
 }
 _PROMPT_INT_KEYS = {
     "num_seq_per_tier",
@@ -64,6 +72,8 @@ _PROMPT_INT_KEYS = {
     "bioemu_base_seed",
     "bioemu_max_return_structures",
     "bioemu_max_attempted_structures",
+    "surrogate_triage_initial_samples",
+    "surrogate_triage_top_k",
     "conservation_cluster_cov_mode",
     "conservation_cluster_kmer_per_seq",
 }
@@ -133,6 +143,7 @@ _PROMPT_ALLOWED_KEYS = (
         "af2_max_template_date",
         "af2_extra_flags",
         "af2_provider",
+        "surrogate_triage_model",
         "mmseqs_target_db",
         "novelty_target_db",
         "query_pdb_policy",
