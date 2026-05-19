@@ -1512,6 +1512,159 @@ export function artifactDownloadFilename(path, fallback = "artifact.bin") {
   return parts[parts.length - 1] || fallback;
 }
 
+function encodeUtf8(text) {
+  return new TextEncoder().encode(String(text ?? ""));
+}
+
+const ZIP_CRC_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let crc = i;
+    for (let j = 0; j < 8; j += 1) {
+      crc = crc & 1 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1;
+    }
+    table[i] = crc >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes || []) {
+    crc = ZIP_CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function writeUint16(buffer, offset, value) {
+  buffer[offset] = value & 0xff;
+  buffer[offset + 1] = (value >>> 8) & 0xff;
+}
+
+function writeUint32(buffer, offset, value) {
+  buffer[offset] = value & 0xff;
+  buffer[offset + 1] = (value >>> 8) & 0xff;
+  buffer[offset + 2] = (value >>> 16) & 0xff;
+  buffer[offset + 3] = (value >>> 24) & 0xff;
+}
+
+function zipEntryName(name, index) {
+  const cleaned = String(name || "")
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .split("/")
+    .filter((part) => part && part !== "." && part !== "..")
+    .join("/");
+  return cleaned || `artifact-${index + 1}`;
+}
+
+function uniqueZipName(name, usedNames) {
+  const raw = String(name || "artifact").trim() || "artifact";
+  if (!usedNames.has(raw)) {
+    usedNames.add(raw);
+    return raw;
+  }
+  const dotIndex = raw.lastIndexOf(".");
+  const stem = dotIndex > 0 ? raw.slice(0, dotIndex) : raw;
+  const ext = dotIndex > 0 ? raw.slice(dotIndex) : "";
+  let next = "";
+  let count = 2;
+  do {
+    next = `${stem}-${count}${ext}`;
+    count += 1;
+  } while (usedNames.has(next));
+  usedNames.add(next);
+  return next;
+}
+
+export function buildStoredZipBytes(entries = []) {
+  const usedNames = new Set();
+  const normalized = (Array.isArray(entries) ? entries : [])
+    .map((entry, index) => {
+      const data =
+        entry?.bytes instanceof Uint8Array
+          ? entry.bytes
+          : entry?.bytes instanceof ArrayBuffer
+            ? new Uint8Array(entry.bytes)
+            : encodeUtf8(entry?.text ?? "");
+      const name = uniqueZipName(zipEntryName(entry?.name, index), usedNames);
+      const nameBytes = encodeUtf8(name);
+      return {
+        name,
+        nameBytes,
+        data,
+        crc: crc32(data),
+      };
+    })
+    .filter((entry) => entry.nameBytes.length > 0);
+
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  normalized.forEach((entry) => {
+    const local = new Uint8Array(30 + entry.nameBytes.length);
+    writeUint32(local, 0, 0x04034b50);
+    writeUint16(local, 4, 20);
+    writeUint16(local, 6, 0);
+    writeUint16(local, 8, 0);
+    writeUint16(local, 10, 0);
+    writeUint16(local, 12, 0);
+    writeUint32(local, 14, entry.crc);
+    writeUint32(local, 18, entry.data.length);
+    writeUint32(local, 22, entry.data.length);
+    writeUint16(local, 26, entry.nameBytes.length);
+    writeUint16(local, 28, 0);
+    local.set(entry.nameBytes, 30);
+    localParts.push(local, entry.data);
+
+    const central = new Uint8Array(46 + entry.nameBytes.length);
+    writeUint32(central, 0, 0x02014b50);
+    writeUint16(central, 4, 20);
+    writeUint16(central, 6, 20);
+    writeUint16(central, 8, 0);
+    writeUint16(central, 10, 0);
+    writeUint16(central, 12, 0);
+    writeUint16(central, 14, 0);
+    writeUint32(central, 16, entry.crc);
+    writeUint32(central, 20, entry.data.length);
+    writeUint32(central, 24, entry.data.length);
+    writeUint16(central, 28, entry.nameBytes.length);
+    writeUint16(central, 30, 0);
+    writeUint16(central, 32, 0);
+    writeUint16(central, 34, 0);
+    writeUint16(central, 36, 0);
+    writeUint32(central, 38, 0);
+    writeUint32(central, 42, offset);
+    central.set(entry.nameBytes, 46);
+    centralParts.push(central);
+
+    offset += local.length + entry.data.length;
+  });
+
+  const centralOffset = offset;
+  const centralSize = centralParts.reduce((sum, part) => sum + part.length, 0);
+  const end = new Uint8Array(22);
+  writeUint32(end, 0, 0x06054b50);
+  writeUint16(end, 4, 0);
+  writeUint16(end, 6, 0);
+  writeUint16(end, 8, normalized.length);
+  writeUint16(end, 10, normalized.length);
+  writeUint32(end, 12, centralSize);
+  writeUint32(end, 16, centralOffset);
+  writeUint16(end, 20, 0);
+
+  const parts = [...localParts, ...centralParts, end];
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(total);
+  let cursor = 0;
+  parts.forEach((part) => {
+    out.set(part, cursor);
+    cursor += part.length;
+  });
+  return out;
+}
+
 export function isBinaryPath(path) {
   return /\.(gz|zip|npy|npz|pt|bin)$/i.test(
     String(path || "")
@@ -1714,7 +1867,18 @@ export function buildFastLaunchPreset(draft = {}) {
 }
 
 const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
-  msa: Object.freeze(["target_input", "pdb_strip_nonpositive_resseq", "backbone_filter_use_dssp", "evolution_mode", "evolution_initial_samples", "evolution_rounds", "evolution_samples_per_round"]),
+  msa: Object.freeze([
+    "target_input",
+    "pdb_strip_nonpositive_resseq",
+    "backbone_filter_use_dssp",
+    "evolution_mode",
+    "evolution_label_source",
+    "evolution_objective_metric",
+    "evolution_experiment_source_run_id",
+    "evolution_initial_samples",
+    "evolution_rounds",
+    "evolution_samples_per_round",
+  ]),
   rfd3: Object.freeze([
     "rfd3_use",
     "rfd3_input_pdb",
@@ -1745,6 +1909,9 @@ const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
     "mask_consensus_apply",
     "ligand_mask_use_original_target",
     "evolution_mode",
+    "evolution_label_source",
+    "evolution_objective_metric",
+    "evolution_experiment_source_run_id",
     "evolution_initial_samples",
     "evolution_rounds",
     "evolution_samples_per_round",
@@ -1753,6 +1920,10 @@ const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
   af2: Object.freeze([
     "af2_provider",
     "af2_max_candidates_per_tier",
+    "surrogate_triage_enabled",
+    "surrogate_triage_initial_samples",
+    "surrogate_triage_top_k",
+    "surrogate_triage_model",
     "af2_plddt_cutoff",
     "af2_rmsd_cutoff",
     "relax_enabled",
@@ -1764,6 +1935,9 @@ const WORKFLOW_STUDIO_STAGE_DEFAULTS = Object.freeze({
   msa: Object.freeze({
     backbone_filter_use_dssp: true,
     evolution_mode: false,
+    evolution_label_source: "experimental",
+    evolution_objective_metric: "activity",
+    evolution_experiment_source_run_id: "",
     evolution_initial_samples: 30,
     evolution_rounds: 3,
     evolution_samples_per_round: 5,
@@ -1781,12 +1955,19 @@ const WORKFLOW_STUDIO_STAGE_DEFAULTS = Object.freeze({
   design: Object.freeze({
     num_seq_per_tier: 2,
     evolution_mode: false,
+    evolution_label_source: "experimental",
+    evolution_objective_metric: "activity",
+    evolution_experiment_source_run_id: "",
     evolution_initial_samples: 30,
     evolution_rounds: 3,
     evolution_samples_per_round: 5,
   }),
   af2: Object.freeze({
     af2_max_candidates_per_tier: 0,
+    surrogate_triage_enabled: false,
+    surrogate_triage_initial_samples: 30,
+    surrogate_triage_top_k: 20,
+    surrogate_triage_model: "rf",
     relax_enabled: true,
   }),
 });
@@ -1969,6 +2150,9 @@ export function workflowStudioVisibleStageFields(stage, { answers = {}, nodes = 
   if (baseStage === "design") {
     return fields.filter((fieldId) => {
       if (
+        fieldId === "evolution_label_source" ||
+        fieldId === "evolution_objective_metric" ||
+        fieldId === "evolution_experiment_source_run_id" ||
         fieldId === "evolution_initial_samples" ||
         fieldId === "evolution_rounds" ||
         fieldId === "evolution_samples_per_round"
@@ -2412,6 +2596,10 @@ export function inferRequestRunMode(payload) {
     hasMeaningfulValue(payload.ligand_mask_use_original_target) ||
     hasMeaningfulValue(payload.af2_plddt_cutoff) ||
     hasMeaningfulValue(payload.af2_rmsd_cutoff) ||
+    hasMeaningfulValue(payload.surrogate_triage_enabled) ||
+    hasMeaningfulValue(payload.surrogate_triage_initial_samples) ||
+    hasMeaningfulValue(payload.surrogate_triage_top_k) ||
+    hasMeaningfulValue(payload.surrogate_triage_model) ||
     hasMeaningfulValue(payload.relax_enabled) ||
     hasMeaningfulValue(payload.relax_score_per_residue_cutoff) ||
     hasMeaningfulValue(payload.conservation_mode) ||
@@ -2447,6 +2635,7 @@ export function detectTargetKey(text) {
   const firstLine = trimmed.split(/\r?\n/, 1)[0] || "";
   if (firstLine.startsWith(">")) return "target_fasta";
   if (/^(ATOM|HETATM)\b/.test(firstLine)) return "target_pdb";
+  if (/^data_/i.test(firstLine) && /_atom_site\./i.test(trimmed)) return "target_pdb";
   const lettersOnly = trimmed.replace(/\s+/g, "");
   if (/^[A-Za-z*.-]+$/.test(lettersOnly) && lettersOnly.length > 0) {
     return "target_fasta";

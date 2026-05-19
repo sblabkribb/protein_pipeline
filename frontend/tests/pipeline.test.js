@@ -1607,23 +1607,27 @@ test("RFD3 separate-input toggles also enable RFD3 in setup and studio", () => {
 });
 
 test("product shell exposes a sidebar with home, fast, and advanced entry points", () => {
-  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
-  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf-8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf-8");
 
   assert.match(html, /id="appSidebar"/);
   assert.match(html, /data-tab="home"/);
   assert.match(html, /data-tab="fast"/);
   assert.match(html, /data-tab="advanced"/);
+  assert.match(html, /data-tab="surrogate"/);
 
   assert.match(source, /"tabs\.home":/);
   assert.match(source, /"tabs\.fast":/);
   assert.match(source, /"tabs\.advanced":/);
-  assert.match(source, /const TAB_OPTIONS = \["home", "fast", "advanced", "evolution", "studio", "monitor", "rounds", "analyze", "mcp"\];/);
+  assert.match(
+    source,
+    /const TAB_OPTIONS = \["home", "fast", "advanced", "surrogate", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"\];/
+  );
 });
 
 test("sidebar prioritizes monitor before rounds in the execution navigation order", () => {
-  const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
-  const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf-8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf-8");
 
   const studioIdx = html.indexOf('id="tabBtnStudio"');
   const monitorIdx = html.indexOf('id="tabBtnMonitor"');
@@ -1634,7 +1638,21 @@ test("sidebar prioritizes monitor before rounds in the execution navigation orde
   assert.ok(monitorIdx > studioIdx);
   assert.ok(roundsIdx > monitorIdx);
   assert.ok(analyzeIdx > roundsIdx);
-  assert.match(source, /const TAB_OPTIONS = \["home", "fast", "advanced", "evolution", "studio", "monitor", "rounds", "analyze", "mcp"\];/);
+  assert.match(
+    source,
+    /const TAB_OPTIONS = \["home", "fast", "advanced", "surrogate", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"\];/
+  );
+});
+
+test("RAPID UI shows pLDDT and RMSD with one additional decimal place", () => {
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf-8");
+
+  assert.match(source, /const PLDDT_DISPLAY_DIGITS = 2;/);
+  assert.match(source, /const RMSD_DISPLAY_DIGITS = 3;/);
+  assert.match(source, /formatMetricValue\(row\.plddt,\s*PLDDT_DISPLAY_DIGITS,\s*false\)/);
+  assert.match(source, /formatMetricValue\(row\.rmsd,\s*RMSD_DISPLAY_DIGITS,\s*false\)/);
+  assert.match(source, /xDigits:\s*PLDDT_DISPLAY_DIGITS/);
+  assert.match(source, /yDigits:\s*RMSD_DISPLAY_DIGITS/);
 });
 
 test("home is the default launcher and its cards route into fast, advanced, and studio", () => {

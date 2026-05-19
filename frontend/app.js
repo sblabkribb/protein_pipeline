@@ -165,6 +165,8 @@ const RESIDUE_PICKER_RESET_MESSAGE_TYPE = "kbf.residuePicker.reset";
 const RESIDUE_PICKER_POPUP_WINDOW_NAME = "kbf_residue_picker";
 const RESIDUE_PICKER_REQUEST_REGISTRY_KEY = "__kbfResiduePickerRequests";
 const DEFAULT_WORKFLOW_STAGES = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"];
+const PLDDT_DISPLAY_DIGITS = 2;
+const RMSD_DISPLAY_DIGITS = 3;
 const detachedResiduePickerToken = (() => {
   try {
     return String(new URLSearchParams(window.location.search).get(RESIDUE_PICKER_DETACHED_QUERY_KEY) || "").trim();
@@ -840,6 +842,19 @@ const el = {
   fastTotalOutputInput: document.getElementById("fastTotalOutputInput"),
   fastRunBtn: document.getElementById("fastRunBtn"),
   fastOpenAdvancedBtn: document.getElementById("fastOpenAdvancedBtn"),
+  surrogateTargetInput: document.getElementById("surrogateTargetInput"),
+  surrogateTargetFile: document.getElementById("surrogateTargetFile"),
+  surrogateLoadFileBtn: document.getElementById("surrogateLoadFileBtn"),
+  surrogateOpenAdvancedBtn: document.getElementById("surrogateOpenAdvancedBtn"),
+  surrogateRunBtn: document.getElementById("surrogateRunBtn"),
+  surrogateCustomRunIdInput: document.getElementById("surrogateCustomRunIdInput"),
+  surrogateInitialSamplesInput: document.getElementById("surrogateInitialSamplesInput"),
+  surrogateTopKInput: document.getElementById("surrogateTopKInput"),
+  surrogateModelInput: document.getElementById("surrogateModelInput"),
+  surrogateAf2ProviderInput: document.getElementById("surrogateAf2ProviderInput"),
+  surrogateSoluprotCutoffInput: document.getElementById("surrogateSoluprotCutoffInput"),
+  surrogateAf2PlddtCutoffInput: document.getElementById("surrogateAf2PlddtCutoffInput"),
+  surrogateAf2RmsdCutoffInput: document.getElementById("surrogateAf2RmsdCutoffInput"),
   evolutionTargetInput: document.getElementById("evolutionTargetInput"),
   evolutionTargetFile: document.getElementById("evolutionTargetFile"),
   evolutionLoadFileBtn: document.getElementById("evolutionLoadFileBtn"),
@@ -2014,8 +2029,8 @@ async function deleteCurrentRoundFromWorkspace() {
 
 const I18N = {
   en: {
-    "platform.name": "KBF Protein Solubility & Stability Platform",
-    "brand.subtitle": "Protein Solubility & Stability Platform",
+    "platform.name": "RAPID Protein Design Platform",
+    "brand.subtitle": "Reproducible AI Pipeline for Integrated Design",
     "env.development": "Development",
     "env.staging": "Staging",
     "action.admin": "Admin",
@@ -2069,6 +2084,16 @@ const I18N = {
     "tutorial.step.advancedReview.body":
       "Step 5/5 summarizes the selected mode, stages, target readiness, backbone sources, AF2 provider, Relax state, and conservation tiers before Run.",
     "tutorial.step.advancedReview.hint": "Use this final screen to catch mismatched stages or missing target input before spending compute.",
+    "tutorial.step.surrogate.title": "Surrogate triage is a one-round budget mode",
+    "tutorial.step.surrogate.body":
+      "Use this tab when you want ProteinMPNN/SoluProt candidate generation with fewer final AF2 calls. RFD3 and BioEmu are disabled here so the benchmarked cost-saving path stays explicit.",
+    "tutorial.step.surrogate.hint":
+      "This is the mode described as AF2-budgeted surrogate triage. Use Evolution only when experimental labels will drive the next round.",
+    "tutorial.step.surrogateSettings.title": "Sample counts set the AF2 budget",
+    "tutorial.step.surrogateSettings.body":
+      "Training AF2 samples label the initial subset. The surrogate ranks the remaining candidates, and Top K controls how many final structures receive AF2/ColabFold evaluation.",
+    "tutorial.step.surrogateSettings.hint":
+      "The default 30 training and 20 Top K calls match the manuscript benchmark settings.",
     "tutorial.step.pdfAgent.title": "PDF agent extracts constraints",
     "tutorial.step.pdfAgent.body":
       "Upload a paper PDF here when the literature mentions catalytic residues, binding-site positions, or mutation-sensitive regions. The agent proposes residues to keep fixed.",
@@ -2076,11 +2101,11 @@ const I18N = {
       "Always review the proposed residues before applying them; the agent helps triage literature evidence, but the final mask is still your decision.",
     "tutorial.step.evolution.title": "Evolution explores iterative designs",
     "tutorial.step.evolution.body":
-      "Evolution starts from a target and searches candidate space across generated pools, oracle samples, and rounds.",
-    "tutorial.step.evolution.hint": "Use it after you understand the basic pipeline; the pool and round counts affect runtime and output size.",
+      "Evolution is for design-test-learn rounds. The first pass writes experiment_request.csv; after assays are recorded in Analyze > Experiment, the next pass uses those labels to write next_candidates.csv.",
+    "tutorial.step.evolution.hint": "Use it when experimental measurements are available or planned; use Surrogate for one-round in-silico budget triage.",
     "tutorial.step.evolutionSettings.title": "Evolution numbers control cost and selectivity",
     "tutorial.step.evolutionSettings.body":
-      "Generation Pool Size is the candidate pool. K-Means Training Samples is the learning/training sample count. Select Top K is how many candidates receive final AF2 evaluation.",
+      "Generation Pool Size is the candidate pool. Label source selects experimental feedback or legacy in-silico AF2 labels. Experiment source run ID tells RAPID where to reuse prior wet-lab metric values.",
     "tutorial.step.evolutionSettings.hint":
       "Larger pools explore more sequences but take longer. Increase Top K only when you want broader final validation; reduce it for quick screening.",
     "tutorial.step.studio.title": "Studio resumes staged workflows",
@@ -2139,6 +2164,7 @@ const I18N = {
     "tutorial.step.modelProviderAdd.hint":
       "Choose HTTP API for GPU-server services and RunPod for serverless endpoints. Choose Disabled to keep the model registered but unused.",
     "tabs.home": "Home",
+    "tabs.surrogate": "Surrogate",
     "tabs.evolution": "Evolution",
     "tabs.fast": "Fast",
     "tabs.advanced": "Advanced",
@@ -2152,7 +2178,7 @@ const I18N = {
     "home.desc": "Target design runs, current rounds, and result triage in one workspace.",
     "home.launchpad.primary": "Primary workflow",
     "home.launchpad.newExperiment": "New Experiment",
-    "home.launchpad.newExperimentDesc": "Choose Fast, Advanced, Evolution, or Workflow Studio based on the control you need.",
+    "home.launchpad.newExperimentDesc": "Choose Fast, Advanced, Surrogate, Evolution, or Workflow Studio based on the control you need.",
     "home.launchpad.loadRun": "Load Existing Run",
     "home.launchpad.loadRunDesc": "Resume monitoring from the current run list.",
     "home.launchpad.analyzeResults": "Analyze Results",
@@ -2165,6 +2191,9 @@ const I18N = {
     "home.experimentChoice.advanced.kicker": "Guided setup",
     "home.experimentChoice.advanced.title": "Advanced",
     "home.experimentChoice.advanced.desc": "Step through input, workflow, criteria, expert options, and review.",
+    "home.experimentChoice.surrogate.kicker": "Budget triage",
+    "home.experimentChoice.surrogate.title": "Surrogate",
+    "home.experimentChoice.surrogate.desc": "Use SoluProt, K-means, and a local surrogate to reduce final AF2 calls.",
     "home.experimentChoice.evolution.kicker": "Iterative design",
     "home.experimentChoice.evolution.title": "Evolution",
     "home.experimentChoice.evolution.desc": "Configure active-learning rounds and Top K selection.",
@@ -2179,6 +2208,25 @@ const I18N = {
     "home.card.studio.desc": "Build and run a workflow stage by stage while watching the outputs.",
     "home.card.evolution.title": "Evolution",
     "home.card.evolution.desc": "Autonomous multi-round sequence design pipeline.",
+    "surrogate.title": "AF2 Surrogate Triage",
+    "surrogate.desc":
+      "Run the standard ProteinMPNN/SoluProt path with a local surrogate that reduces final AF2/ColabFold calls.",
+    "surrogate.input.label": "Target Sequence or Structure",
+    "surrogate.input.help": "Provide FASTA, PDB, or mmCIF input for the budget-aware triage path.",
+    "surrogate.input.placeholder": "Paste FASTA, PDB, or mmCIF here.",
+    "surrogate.action.openAdvanced": "Review in Advanced",
+    "surrogate.action.run": "Start Surrogate Triage",
+    "surrogate.options.title": "Surrogate Settings",
+    "surrogate.options.desc":
+      "This mode disables RFD3 and BioEmu, generates the candidate pool from the input backbone/sequence, and spends AF2 only on the sampled training set plus Top K candidates.",
+    "surrogate.initialSamples.label": "Training AF2 samples",
+    "surrogate.topK.label": "Top K final AF2 candidates",
+    "surrogate.model.label": "Surrogate model",
+    "surrogate.note":
+      "Use Evolution only when experimental measurements are available or planned. Use this Surrogate tab when the goal is a one-round compute budget reduction.",
+    "surrogate.error.targetRequired": "Choose FASTA/PDB/mmCIF input before launching Surrogate Triage.",
+    "surrogate.message.fileLoaded": "Loaded {name} into Surrogate Triage.",
+    "surrogate.message.reviewReady": "Surrogate triage settings were copied into Advanced for review.",
     "home.context.project": "Current Project",
     "home.context.round": "Current Round",
     "home.context.roundStatus": "Round Status",
@@ -2211,6 +2259,8 @@ const I18N = {
     "evolution.action.run": "Start Evolution",
     "evolution.options.title": "Evolution Settings",
     "evolution.options.desc": "Configure experimental-feedback active learning or the legacy in-silico AF2 loop.",
+    "evolution.feedbackGuide":
+      "First run: RAPID writes evolution/experiment_request.csv. After wet-lab testing, enter candidate_id, metric_name, and metric_value in Analyze > Experiment. Next run: set Experiment source run ID to reuse those labels and write evolution/next_candidates.csv.",
     "evolution.poolSize.label": "Stage 1: Generation Pool Size",
     "evolution.labelSource.label": "Label source",
     "evolution.labelSource.experimental": "Experimental feedback",
@@ -3575,8 +3625,8 @@ const I18N = {
     "health.ok": "OK",
   },
   ko: {
-    "platform.name": "KBF Protein Solubility & Stability Platform",
-    "brand.subtitle": "Protein Solubility & Stability Platform",
+    "platform.name": "RAPID Protein Design Platform",
+    "brand.subtitle": "Reproducible AI Pipeline for Integrated Design",
     "env.development": "개발 환경",
     "env.staging": "스테이징",
     "action.admin": "관리자",
@@ -3629,6 +3679,15 @@ const I18N = {
     "tutorial.step.advancedReview.body":
       "5/5 검토 단계에서는 선택한 모드, 실행 단계, 타깃 준비 상태, backbone source, AF2 provider, Relax, 보존율 구간을 실행 전에 확인합니다.",
     "tutorial.step.advancedReview.hint": "compute를 쓰기 전에 단계 조합이나 타깃 입력 누락을 마지막으로 확인하세요.",
+    "tutorial.step.surrogate.title": "Surrogate triage는 1회 실행 예산 모드입니다",
+    "tutorial.step.surrogate.body":
+      "ProteinMPNN/SoluProt 후보 생성은 유지하되 최종 AF2 호출을 줄이고 싶을 때 이 탭을 사용합니다. 여기서는 논문에서 벤치마크한 비용 절감 경로가 명확하도록 RFD3와 BioEmu를 끕니다.",
+    "tutorial.step.surrogate.hint":
+      "논문의 AF2-budgeted surrogate triage에 해당하는 모드입니다. 실험 측정값으로 다음 라운드를 고를 때는 Evolution을 사용하세요.",
+    "tutorial.step.surrogateSettings.title": "샘플 수가 AF2 예산을 정합니다",
+    "tutorial.step.surrogateSettings.body":
+      "Training AF2 samples는 초기 학습셋을 라벨링합니다. 대리모델이 나머지 후보를 순위화하고, Top K가 최종 AF2/ColabFold 평가 수를 정합니다.",
+    "tutorial.step.surrogateSettings.hint": "기본값 30 training, 20 Top K는 논문 벤치마크 설정과 맞췄습니다.",
     "tutorial.step.pdfAgent.title": "PDF agent가 제약 조건을 뽑습니다",
     "tutorial.step.pdfAgent.body":
       "논문 PDF에 catalytic residue, binding-site position, mutation-sensitive region이 언급되어 있으면 업로드하세요. Agent가 고정할 residue 후보를 제안합니다.",
@@ -3636,11 +3695,11 @@ const I18N = {
       "적용 전에는 반드시 residue 후보를 검토하세요. Agent는 문헌 근거를 정리해주지만 최종 mask 결정은 사용자가 합니다.",
     "tutorial.step.evolution.title": "Evolution은 반복 설계를 탐색합니다",
     "tutorial.step.evolution.body":
-      "Evolution은 타깃에서 시작해 생성 pool, oracle sample, round를 거치며 후보 공간을 탐색합니다.",
-    "tutorial.step.evolution.hint": "기본 파이프라인을 이해한 뒤 사용하세요. pool과 round 수는 실행 시간과 출력 규모에 영향을 줍니다.",
+      "Evolution은 design-test-learn 회차를 위한 기능입니다. 첫 실행은 experiment_request.csv를 만들고, Analyze > Experiment에 assay 값을 기록한 뒤 다음 실행에서 그 라벨을 사용해 next_candidates.csv를 만듭니다.",
+    "tutorial.step.evolution.hint": "실험 측정값이 있거나 곧 만들 계획일 때 사용하세요. 1회 in-silico 비용 절감은 Surrogate 탭을 사용합니다.",
     "tutorial.step.evolutionSettings.title": "Evolution 숫자는 비용과 선별 강도를 정합니다",
     "tutorial.step.evolutionSettings.body":
-      "Generation Pool Size는 후보 pool 크기입니다. K-Means Training Samples는 학습/훈련에 쓸 sample 수입니다. Select Top K는 최종 AF2 평가로 보낼 후보 수입니다.",
+      "Generation Pool Size는 후보 pool 크기입니다. Label source는 실험 피드백과 legacy in-silico AF2 라벨 중 선택하고, Experiment source run ID는 이전 실험 측정값을 재사용할 run을 지정합니다.",
     "tutorial.step.evolutionSettings.hint":
       "pool이 크면 더 넓게 탐색하지만 오래 걸립니다. Top K는 최종 검증을 넓히고 싶을 때 늘리고, 빠른 screening에는 줄이세요.",
     "tutorial.step.studio.title": "스튜디오는 단계별 워크플로우를 이어갑니다",
@@ -3699,6 +3758,7 @@ const I18N = {
     "tutorial.step.modelProviderAdd.hint":
       "GPU 서버에 띄운 모델은 HTTP API, RunPod serverless는 RunPod를 선택하세요. 등록만 해두고 쓰지 않을 모델은 비활성으로 둡니다.",
     "tabs.home": "홈",
+    "tabs.surrogate": "Surrogate",
     "tabs.evolution": "Evolution",
     "tabs.fast": "빠른 실행",
     "tabs.advanced": "고급 설정",
@@ -3712,7 +3772,7 @@ const I18N = {
     "home.desc": "표적 설계 실행, 현재 회차, 결과 검토를 한 화면에서 다룹니다.",
     "home.launchpad.primary": "기본 워크플로우",
     "home.launchpad.newExperiment": "새 실험",
-    "home.launchpad.newExperimentDesc": "필요한 제어 수준에 따라 Fast, Advanced, Evolution, Workflow Studio 중 선택합니다.",
+    "home.launchpad.newExperimentDesc": "필요한 제어 수준에 따라 Fast, Advanced, Surrogate, Evolution, Workflow Studio 중 선택합니다.",
     "home.launchpad.loadRun": "기존 실행 불러오기",
     "home.launchpad.loadRunDesc": "현재 실행 목록에서 모니터링을 이어갑니다.",
     "home.launchpad.analyzeResults": "결과 분석",
@@ -3725,6 +3785,9 @@ const I18N = {
     "home.experimentChoice.advanced.kicker": "단계형 설정",
     "home.experimentChoice.advanced.title": "Advanced",
     "home.experimentChoice.advanced.desc": "입력, 워크플로우, 평가기준, 고급 옵션, 검토를 순서대로 설정합니다.",
+    "home.experimentChoice.surrogate.kicker": "예산 triage",
+    "home.experimentChoice.surrogate.title": "Surrogate",
+    "home.experimentChoice.surrogate.desc": "SoluProt, K-means, 대리모델로 최종 AF2 호출 수를 줄입니다.",
     "home.experimentChoice.evolution.kicker": "반복 설계",
     "home.experimentChoice.evolution.title": "Evolution",
     "home.experimentChoice.evolution.desc": "학습 라운드와 Top K 선별 수를 조정해 반복 탐색합니다.",
@@ -3739,6 +3802,24 @@ const I18N = {
     "home.card.studio.desc": "단계를 보면서 워크플로우를 직접 구성하고 실행합니다.",
     "home.card.evolution.title": "Evolution",
     "home.card.evolution.desc": "다라운드 자동 유도 진화 파이프라인을 실행합니다.",
+    "surrogate.title": "AF2 Surrogate Triage",
+    "surrogate.desc": "표준 ProteinMPNN/SoluProt 경로를 실행하되 대리모델로 최종 AF2/ColabFold 호출 수를 줄입니다.",
+    "surrogate.input.label": "타깃 서열 또는 구조",
+    "surrogate.input.help": "예산 절감 triage 경로에 사용할 FASTA, PDB, mmCIF 입력을 넣으세요.",
+    "surrogate.input.placeholder": "FASTA, PDB, mmCIF를 붙여넣으세요.",
+    "surrogate.action.openAdvanced": "Advanced에서 검토",
+    "surrogate.action.run": "Surrogate Triage 시작",
+    "surrogate.options.title": "대리모델 설정",
+    "surrogate.options.desc":
+      "이 모드는 RFD3와 BioEmu를 끄고 입력 백본/서열에서 후보 pool을 만든 뒤, 샘플링된 학습셋과 Top K 후보에만 AF2를 사용합니다.",
+    "surrogate.initialSamples.label": "학습용 AF2 샘플 수",
+    "surrogate.topK.label": "최종 AF2 Top K 후보 수",
+    "surrogate.model.label": "대리모델",
+    "surrogate.note":
+      "실험 측정값이 있거나 만들 계획이면 Evolution을 사용하세요. 1회 실행에서 compute budget을 줄이는 목적이면 이 Surrogate 탭을 사용합니다.",
+    "surrogate.error.targetRequired": "Surrogate Triage를 실행하려면 FASTA/PDB/mmCIF 입력을 넣으세요.",
+    "surrogate.message.fileLoaded": "{name} 파일을 Surrogate Triage에 불러왔습니다.",
+    "surrogate.message.reviewReady": "Surrogate triage 설정을 Advanced로 복사했습니다.",
     "home.context.project": "현재 프로젝트",
     "home.context.round": "현재 회차",
     "home.context.roundStatus": "라운드 상태",
@@ -3770,6 +3851,8 @@ const I18N = {
     "evolution.action.run": "진화 시작",
     "evolution.options.title": "진화 설정",
     "evolution.options.desc": "실험 피드백 active learning 또는 기존 in-silico AF2 loop를 설정합니다.",
+    "evolution.feedbackGuide":
+      "첫 실행: RAPID가 evolution/experiment_request.csv를 만듭니다. wet-lab 측정 후 Analyze > Experiment에서 candidate_id, metric_name, metric_value를 입력하세요. 다음 실행: Experiment source run ID를 지정하면 해당 라벨을 재사용해 evolution/next_candidates.csv를 만듭니다.",
     "evolution.poolSize.label": "Stage 1: 초기 생성 풀 크기",
     "evolution.labelSource.label": "라벨 소스",
     "evolution.labelSource.experimental": "실험 피드백",
@@ -5261,7 +5344,7 @@ function labelFromMap(value, map) {
 }
 
 const TAB_KEY = "kbf.activeTab";
-const TAB_OPTIONS = ["home", "fast", "advanced", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"];
+const TAB_OPTIONS = ["home", "fast", "advanced", "surrogate", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"];
 const tabButtons = Array.from(document.querySelectorAll("#appSidebar .tab-btn"));
 const tabPanels = Array.from(document.querySelectorAll("#appShell .tab-panel"));
 const langButtons = Array.from(document.querySelectorAll(".lang-btn"));
@@ -5269,6 +5352,7 @@ let tabsInitialized = false;
 let homeLauncherInitialized = false;
 let homeContextInitialized = false;
 let fastLauncherInitialized = false;
+let surrogateLauncherInitialized = false;
 let evolutionLauncherInitialized = false;
 let langInitialized = false;
 let copilotInitialized = false;
@@ -5371,6 +5455,22 @@ const TUTORIAL_STEPS = [
     titleKey: "tutorial.step.advancedReview.title",
     bodyKey: "tutorial.step.advancedReview.body",
     hintKey: "tutorial.step.advancedReview.hint",
+  },
+  {
+    id: "surrogate",
+    tab: "surrogate",
+    target: ".surrogate-input-card",
+    titleKey: "tutorial.step.surrogate.title",
+    bodyKey: "tutorial.step.surrogate.body",
+    hintKey: "tutorial.step.surrogate.hint",
+  },
+  {
+    id: "surrogateSettings",
+    tab: "surrogate",
+    target: ".surrogate-options-card",
+    titleKey: "tutorial.step.surrogateSettings.title",
+    bodyKey: "tutorial.step.surrogateSettings.body",
+    hintKey: "tutorial.step.surrogateSettings.hint",
   },
   {
     id: "evolution",
@@ -9982,7 +10082,7 @@ function copilotSummaryCards(snapshot = copilotSnapshot()) {
         : "Tracking execution state";
   const topValue = snapshot.topRow ? String(snapshot.topRow.seq_id || "-") : isKo ? "Hit List 대기" : "Hit List pending";
   const topMeta = snapshot.topRow
-    ? `score ${formatMetricValue(snapshot.topRow.score, 1)} · pLDDT ${formatMetricValue(snapshot.topRow.plddt, 1)} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)} · WT ${formatWtDifference(snapshot.topRow)}`
+    ? `score ${formatMetricValue(snapshot.topRow.score, 1)} · pLDDT ${formatMetricValue(snapshot.topRow.plddt, PLDDT_DISPLAY_DIGITS)} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, RMSD_DISPLAY_DIGITS)} · WT ${formatWtDifference(snapshot.topRow)}`
     : `${snapshot.rows.length} ${isKo ? "행" : "rows"} · ${snapshot.chartLabel}`;
   const compareValue = snapshot.compare.ready
     ? `${copilotShortArtifactLabel(snapshot.compare.leftPath)} vs ${copilotShortArtifactLabel(snapshot.compare.rightPath)}`
@@ -10132,8 +10232,8 @@ function copilotContextRows(snapshot = copilotSnapshot()) {
       label: isKo ? "Top 후보" : "Top Candidate",
       value: `${snapshot.topRow.seq_id || "-"} · score ${formatMetricValue(snapshot.topRow.score, 1)} · pLDDT ${formatMetricValue(
         snapshot.topRow.plddt,
-        1
-      )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}`,
+        PLDDT_DISPLAY_DIGITS
+      )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, RMSD_DISPLAY_DIGITS)}`,
     });
   }
   if (snapshot.funnel && Number(snapshot.funnel.af2_candidate_total || 0) > 0) {
@@ -10221,12 +10321,12 @@ function copilotInterpretReply(snapshot = copilotSnapshot()) {
       isKo
         ? `Top 후보 ${snapshot.topRow.seq_id || "-"}: score ${formatMetricValue(snapshot.topRow.score, 1)}, pLDDT ${formatMetricValue(
             snapshot.topRow.plddt,
-            1
-          )}, RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}, WT ${formatWtDifference(snapshot.topRow)}`
+            PLDDT_DISPLAY_DIGITS
+          )}, RMSD ${formatMetricValue(snapshot.topRow.rmsd, RMSD_DISPLAY_DIGITS)}, WT ${formatWtDifference(snapshot.topRow)}`
         : `Top candidate ${snapshot.topRow.seq_id || "-"}: score ${formatMetricValue(snapshot.topRow.score, 1)}, pLDDT ${formatMetricValue(
             snapshot.topRow.plddt,
-            1
-          )}, RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}, WT ${formatWtDifference(snapshot.topRow)}`
+            PLDDT_DISPLAY_DIGITS
+          )}, RMSD ${formatMetricValue(snapshot.topRow.rmsd, RMSD_DISPLAY_DIGITS)}, WT ${formatWtDifference(snapshot.topRow)}`
     );
   } else {
     lines.push(isKo ? "Hit List 데이터가 아직 없습니다." : "Hit List metrics are not available yet.");
@@ -10266,12 +10366,12 @@ function copilotSummaryReply(snapshot = copilotSnapshot()) {
       isKo
         ? `Top 후보: ${snapshot.topRow.seq_id || "-"} · score ${formatMetricValue(snapshot.topRow.score, 1)} · pLDDT ${formatMetricValue(
             snapshot.topRow.plddt,
-            1
-          )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}`
+            PLDDT_DISPLAY_DIGITS
+          )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, RMSD_DISPLAY_DIGITS)}`
         : `Top candidate: ${snapshot.topRow.seq_id || "-"} · score ${formatMetricValue(snapshot.topRow.score, 1)} · pLDDT ${formatMetricValue(
             snapshot.topRow.plddt,
-            1
-          )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}`
+            PLDDT_DISPLAY_DIGITS
+          )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, RMSD_DISPLAY_DIGITS)}`
     );
   } else {
     lines.push(isKo ? "Hit List는 아직 비어 있습니다." : "The Hit List is still empty.");
@@ -11567,7 +11667,7 @@ function handleExperimentChoice(target) {
     openWorkflowStudioBuilderFromHome();
     return;
   }
-  if (["fast", "advanced", "evolution"].includes(normalizedTarget)) {
+  if (["fast", "advanced", "surrogate", "evolution"].includes(normalizedTarget)) {
     setActiveTab(normalizedTarget);
   }
 }
@@ -11870,6 +11970,116 @@ async function loadFastTargetFile(file) {
   setMessage(t("fast.message.fileLoaded", { name: file.name || "input" }), "ai");
 }
 
+function readNumberInput(input, fallback, { min = null, max = null } = {}) {
+  const parsed = Number.parseFloat(String(input?.value ?? "").trim());
+  let value = Number.isFinite(parsed) ? parsed : fallback;
+  if (min !== null) value = Math.max(min, value);
+  if (max !== null) value = Math.min(max, value);
+  return value;
+}
+
+function readIntegerInput(input, fallback, { min = null, max = null } = {}) {
+  return Math.round(readNumberInput(input, fallback, { min, max }));
+}
+
+function buildSurrogateLaunchAnswers() {
+  const targetInput = String(el.surrogateTargetInput?.value || "").trim();
+  const answers = {
+    run_mode: "pipeline",
+    target_input: targetInput,
+    start_from: "msa",
+    stop_after: "novelty",
+    novelty_enabled: true,
+    wt_compare: true,
+    rfd3_use: false,
+    bioemu_use: false,
+    relax_enabled: false,
+    evolution_mode: false,
+    surrogate_triage_enabled: true,
+    surrogate_triage_initial_samples: readIntegerInput(el.surrogateInitialSamplesInput, 30, { min: 1 }),
+    surrogate_triage_top_k: readIntegerInput(el.surrogateTopKInput, 20, { min: 1 }),
+    surrogate_triage_model: String(el.surrogateModelInput?.value || "rf").trim() || "rf",
+    af2_provider: String(el.surrogateAf2ProviderInput?.value || "colabfold").trim() || "colabfold",
+    soluprot_cutoff: readNumberInput(el.surrogateSoluprotCutoffInput, 0.5, { min: 0, max: 1 }),
+    af2_plddt_cutoff: readNumberInput(el.surrogateAf2PlddtCutoffInput, 85, { min: 0, max: 100 }),
+    af2_rmsd_cutoff: readNumberInput(el.surrogateAf2RmsdCutoffInput, 2.0, { min: 0.001 }),
+    selected_tiers: FAST_SELECTED_TIER_VALUES,
+    num_seq_per_tier: 2,
+    af2_max_candidates_per_tier: 0,
+  };
+  return answers;
+}
+
+function applySurrogatePresetToAdvanced() {
+  ensureManualPlan();
+  state.answerMeta = {};
+  state.setupLoadedRequestRunId = "";
+  state.chainRanges = null;
+  resetSetupResiduePicker();
+  const answers = buildSurrogateLaunchAnswers();
+  state.runMode = "pipeline";
+  state.plan = {
+    ...buildManualPlan("pipeline"),
+    source: "surrogate",
+    routed_request: {
+      stop_after: "novelty",
+      novelty_enabled: true,
+      rfd3_use: false,
+      bioemu_use: false,
+      surrogate_triage_enabled: true,
+      selected_tiers: FAST_SELECTED_TIER_VALUES,
+    },
+  };
+  state.answers = {
+    ...answers,
+    confirm_run: true,
+  };
+  if (el.promptInput) {
+    el.promptInput.value = "Run AF2 surrogate triage with RFD3 and BioEmu disabled.";
+  }
+  state.setupStepIndex = Math.max(0, SETUP_WIZARD_STEPS.findIndex((step) => step.id === "workflow"));
+  updateRunLabel();
+  renderQuestions(state.plan.questions || []);
+  updateRunEligibility(state.plan.questions || []);
+  setActiveTab("advanced");
+  setMessage(t("surrogate.message.reviewReady"), "ai");
+}
+
+async function loadSurrogateTargetFile(file) {
+  if (!file || typeof file.text !== "function") return;
+  const text = await file.text();
+  if (el.surrogateTargetInput) {
+    el.surrogateTargetInput.value = String(text || "");
+  }
+  setMessage(t("surrogate.message.fileLoaded", { name: file.name || "input" }), "ai");
+}
+
+function initSurrogateLauncher() {
+  if (surrogateLauncherInitialized) return;
+  el.surrogateLoadFileBtn?.addEventListener("click", () => {
+    el.surrogateTargetFile?.click();
+  });
+  el.surrogateTargetFile?.addEventListener("change", async (event) => {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    await loadSurrogateTargetFile(file);
+    event.target.value = "";
+  });
+  el.surrogateOpenAdvancedBtn?.addEventListener("click", () => {
+    applySurrogatePresetToAdvanced();
+  });
+  el.surrogateRunBtn?.addEventListener("click", async () => {
+    const answers = buildSurrogateLaunchAnswers();
+    if (!String(answers.target_input || "").trim()) {
+      setMessage(t("surrogate.error.targetRequired"), "ai");
+      setActiveTab("surrogate");
+      return;
+    }
+    await runPipeline(answers);
+  });
+  surrogateLauncherInitialized = true;
+}
+
 function initFastLauncher() {
   if (fastLauncherInitialized) return;
   el.fastSelectedTiers?.querySelectorAll("[data-fast-tier]").forEach((button) => {
@@ -11983,6 +12193,7 @@ function initTabs() {
   initHomeContext();
   initEvolutionLauncher();
   initFastLauncher();
+  initSurrogateLauncher();
   const stored = localStorage.getItem(TAB_KEY);
   setActiveTab(stored || "home");
   void syncHomeProjectRoundContext({ preserveSelection: true });
@@ -19193,6 +19404,7 @@ async function runPipeline(overrideAnswers = null) {
   let customId = (
     el.customRunIdInput?.value?.trim() ||
     el.fastCustomRunIdInput?.value?.trim() ||
+    el.surrogateCustomRunIdInput?.value?.trim() ||
     el.evolutionCustomRunIdInput?.value?.trim() ||
     ""
   );
@@ -20698,8 +20910,8 @@ function buildComparisonDetailMarkdown(summary, runId) {
   lines.push("## WT vs Design");
   const wtRows = [
     { key: "soluprot", label: "SoluProt", digits: 3 },
-    { key: "plddt", label: "pLDDT", digits: 1 },
-    { key: "rmsd", label: "RMSD", digits: 2 },
+    { key: "plddt", label: "pLDDT", digits: PLDDT_DISPLAY_DIGITS },
+    { key: "rmsd", label: "RMSD", digits: RMSD_DISPLAY_DIGITS },
   ];
   if (showRelax) wtRows.push({ key: "relax", label: "Relax/res", digits: 3 });
   lines.push("| Metric | WT | Design median | Delta |");
@@ -20753,8 +20965,8 @@ function buildComparisonDetailMarkdown(summary, runId) {
     const relaxMedian = finiteNumber(bucket.relax_median) ?? finiteNumber(fallback.relax_median);
     lines.push(
       showRelax
-        ? `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${Number(bucket.relax_selected_total || 0)}/${Number(bucket.relax_candidate_total || 0)} (${formatPercentValue(bucket.relax_pass_rate)}) | ${formatMetricValue(plddtMedian, 1)} | ${formatMetricValue(rmsdMedian, 2)} | ${formatMetricValue(relaxMedian, 3)} |`
-        : `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${formatMetricValue(plddtMedian, 1)} | ${formatMetricValue(rmsdMedian, 2)} |`
+        ? `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${Number(bucket.relax_selected_total || 0)}/${Number(bucket.relax_candidate_total || 0)} (${formatPercentValue(bucket.relax_pass_rate)}) | ${formatMetricValue(plddtMedian, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(rmsdMedian, RMSD_DISPLAY_DIGITS)} | ${formatMetricValue(relaxMedian, 3)} |`
+        : `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${formatMetricValue(plddtMedian, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(rmsdMedian, RMSD_DISPLAY_DIGITS)} |`
     );
   });
   if (sourceUsageLines.length) {
@@ -20777,8 +20989,8 @@ function buildComparisonDetailMarkdown(summary, runId) {
       if (!row || typeof row !== "object") return;
       lines.push(
         showRelax
-          ? `| ${formatConservationTierValue(row.tier)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${Number(row.relax_selected_total || 0)}/${Number(row.relax_candidate_total || 0)} (${formatPercentValue(row.relax_pass_rate)}) | ${formatMetricValue(row.plddt_median, 1)} | ${formatMetricValue(row.rmsd_median, 2)} | ${formatMetricValue(row.relax_median, 3)} |`
-          : `| ${formatConservationTierValue(row.tier)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${formatMetricValue(row.plddt_median, 1)} | ${formatMetricValue(row.rmsd_median, 2)} |`
+          ? `| ${formatConservationTierValue(row.tier)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${Number(row.relax_selected_total || 0)}/${Number(row.relax_candidate_total || 0)} (${formatPercentValue(row.relax_pass_rate)}) | ${formatMetricValue(row.plddt_median, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd_median, RMSD_DISPLAY_DIGITS)} | ${formatMetricValue(row.relax_median, 3)} |`
+          : `| ${formatConservationTierValue(row.tier)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${formatMetricValue(row.plddt_median, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd_median, RMSD_DISPLAY_DIGITS)} |`
       );
     });
     lines.push("");
@@ -20848,8 +21060,8 @@ function renderArtifactComparisonSummary(summary) {
 
   const wtRows = [
     { key: "soluprot", label: "SoluProt", digits: 3 },
-    { key: "plddt", label: "pLDDT", digits: 1 },
-    { key: "rmsd", label: "RMSD", digits: 2 },
+    { key: "plddt", label: "pLDDT", digits: PLDDT_DISPLAY_DIGITS },
+    { key: "rmsd", label: "RMSD", digits: RMSD_DISPLAY_DIGITS },
   ];
   if (showRelax) wtRows.push({ key: "relax", label: "Relax/res", digits: 3 });
   const wtHasData = wtRows.some((row) => {
@@ -20923,12 +21135,12 @@ function renderArtifactComparisonSummary(summary) {
       const af2 = String(Number(bucket.af2_selected_total || 0));
       const plddt = formatMetricValue(
         finiteNumber(bucket.plddt_median) ?? finiteNumber(fallback.plddt_median),
-        1,
+        PLDDT_DISPLAY_DIGITS,
         false
       );
       const rmsd = formatMetricValue(
         finiteNumber(bucket.rmsd_median) ?? finiteNumber(fallback.rmsd_median),
-        2,
+        RMSD_DISPLAY_DIGITS,
         false
       );
       const relaxMedian = formatMetricValue(
@@ -20997,8 +21209,8 @@ function renderArtifactComparisonSummary(summary) {
                 )}</td>`
               : ""
           }
-          <td>${escapeHtml(formatMetricValue(finiteNumber(row?.plddt_median), 1, false))}</td>
-          <td>${escapeHtml(formatMetricValue(finiteNumber(row?.rmsd_median), 2, false))}</td>
+          <td>${escapeHtml(formatMetricValue(finiteNumber(row?.plddt_median), PLDDT_DISPLAY_DIGITS, false))}</td>
+          <td>${escapeHtml(formatMetricValue(finiteNumber(row?.rmsd_median), RMSD_DISPLAY_DIGITS, false))}</td>
           ${showRelax ? `<td>${escapeHtml(formatMetricValue(finiteNumber(row?.relax_median), 3, false))}</td>` : ""}
         </tr>
       `;
@@ -22493,8 +22705,8 @@ async function buildComparePredictionMeta(runId, meta, rawPath, af2Summary = nul
         provider,
         scope: af2PredictionScopeLabel("wt", provider),
         selectedLabel: "WT",
-        plddtLabel: plddt !== null ? formatMetricValue(plddt, 2, false) : "-",
-        rmsdLabel: rmsd !== null ? `${formatMetricValue(rmsd, 2, false)}A` : "-",
+        plddtLabel: plddt !== null ? formatMetricValue(plddt, PLDDT_DISPLAY_DIGITS, false) : "-",
+        rmsdLabel: rmsd !== null ? `${formatMetricValue(rmsd, RMSD_DISPLAY_DIGITS, false)}A` : "-",
         exact: true,
       };
     }
@@ -22519,8 +22731,8 @@ async function buildComparePredictionMeta(runId, meta, rawPath, af2Summary = nul
         provider: tierProvider,
         scope: af2PredictionScopeLabel("exact", tierProvider),
         selectedLabel: selected,
-        plddtLabel: exactPlddt !== null ? formatMetricValue(exactPlddt, 2, false) : "-",
-        rmsdLabel: exactRmsd !== null ? `${formatMetricValue(exactRmsd, 2, false)}A` : "-",
+        plddtLabel: exactPlddt !== null ? formatMetricValue(exactPlddt, PLDDT_DISPLAY_DIGITS, false) : "-",
+        rmsdLabel: exactRmsd !== null ? `${formatMetricValue(exactRmsd, RMSD_DISPLAY_DIGITS, false)}A` : "-",
         exact: true,
       };
     }
@@ -22535,9 +22747,9 @@ async function buildComparePredictionMeta(runId, meta, rawPath, af2Summary = nul
         scope: af2PredictionScopeLabel("tier", provider),
         selectedLabel: formatCompareAf2Selection(summary.selectedCount, summary.candidateCount),
         plddtLabel:
-          summary.plddtMedian !== null ? formatMetricValue(summary.plddtMedian, 2, false) : "-",
+          summary.plddtMedian !== null ? formatMetricValue(summary.plddtMedian, PLDDT_DISPLAY_DIGITS, false) : "-",
         rmsdLabel:
-          summary.rmsdMedian !== null ? `${formatMetricValue(summary.rmsdMedian, 2, false)}A` : "-",
+          summary.rmsdMedian !== null ? `${formatMetricValue(summary.rmsdMedian, RMSD_DISPLAY_DIGITS, false)}A` : "-",
         exact: false,
       };
     }
@@ -22552,9 +22764,9 @@ async function buildComparePredictionMeta(runId, meta, rawPath, af2Summary = nul
         scope: af2PredictionScopeLabel("backbone", provider),
         selectedLabel: formatCompareAf2Selection(summary.selectedCount, summary.candidateCount),
         plddtLabel:
-          summary.plddtMedian !== null ? formatMetricValue(summary.plddtMedian, 2, false) : "-",
+          summary.plddtMedian !== null ? formatMetricValue(summary.plddtMedian, PLDDT_DISPLAY_DIGITS, false) : "-",
         rmsdLabel:
-          summary.rmsdMedian !== null ? `${formatMetricValue(summary.rmsdMedian, 2, false)}A` : "-",
+          summary.rmsdMedian !== null ? `${formatMetricValue(summary.rmsdMedian, RMSD_DISPLAY_DIGITS, false)}A` : "-",
         exact: false,
       };
     }
@@ -22609,11 +22821,11 @@ async function buildComparePreviewCardData(
     fixedCount: Number.isFinite(fixedCount) ? String(fixedCount) : "-",
     wtDiff: wtDiff ? formatWtDifference(wtDiff) : "-",
     inputReferenceRmsd:
-      inputReferenceDiff && inputReferenceDiff.ok ? `${formatMetricValue(inputReferenceDiff.rmsd, 2, false)}A` : "-",
+      inputReferenceDiff && inputReferenceDiff.ok ? `${formatMetricValue(inputReferenceDiff.rmsd, RMSD_DISPLAY_DIGITS, false)}A` : "-",
     workingBackboneRmsd:
-      workingBackboneDiff && workingBackboneDiff.ok ? `${formatMetricValue(workingBackboneDiff.rmsd, 2, false)}A` : "-",
+      workingBackboneDiff && workingBackboneDiff.ok ? `${formatMetricValue(workingBackboneDiff.rmsd, RMSD_DISPLAY_DIGITS, false)}A` : "-",
     wtStructRmsd:
-      wtStructureDiff && wtStructureDiff.ok ? `${formatMetricValue(wtStructureDiff.rmsd, 2, false)}A` : "-",
+      wtStructureDiff && wtStructureDiff.ok ? `${formatMetricValue(wtStructureDiff.rmsd, RMSD_DISPLAY_DIGITS, false)}A` : "-",
     commonCa: wtStructureDiff && wtStructureDiff.ok ? String(Number(wtStructureDiff.commonCount || 0)) : "-",
     af2Scope: String(predictionMeta?.scope || "-"),
     af2Selected: String(predictionMeta?.selectedLabel || "-"),
@@ -25246,8 +25458,8 @@ function renderRunCompareSummary(result) {
   const showRelax = runCompareHasRelaxMetrics(result);
   const rows = [
     { key: "soluprot_median", label: "SoluProt", digits: 3, percent: false },
-    { key: "plddt_median", label: "pLDDT", digits: 1, percent: false },
-    { key: "rmsd_median", label: "RMSD", digits: 2, percent: false },
+    { key: "plddt_median", label: "pLDDT", digits: PLDDT_DISPLAY_DIGITS, percent: false },
+    { key: "rmsd_median", label: "RMSD", digits: RMSD_DISPLAY_DIGITS, percent: false },
     { key: "soluprot_pass_rate", label: "SoluProt pass", digits: 1, percent: true },
     { key: "af2_pass_rate", label: af2ProviderPassLabel(currentRunAf2Provider()), digits: 1, percent: true },
   ];
@@ -25303,8 +25515,8 @@ function buildRunCompareDetailsMarkdown(result) {
   lines.push("|---|---:|---:|---:|");
   const rows = [
     ["SoluProt median", "soluprot_median", 3, false],
-    ["pLDDT median", "plddt_median", 1, false],
-    ["RMSD median", "rmsd_median", 2, false],
+    ["pLDDT median", "plddt_median", PLDDT_DISPLAY_DIGITS, false],
+    ["RMSD median", "rmsd_median", RMSD_DISPLAY_DIGITS, false],
     ["SoluProt pass rate", "soluprot_pass_rate", 1, true],
     [`${af2ProviderPassLabel(currentRunAf2Provider())} rate`, "af2_pass_rate", 1, true],
     ["Backbone count", "backbone_count", 0, false],
@@ -25666,8 +25878,8 @@ function buildMetricScatter(
         `ID: ${p.seqId}`,
         `Src: ${p.source}`,
         `SoluProt: ${formatMetricValue(p.soluprot, 3, false)}`,
-        `pLDDT: ${formatMetricValue(p.plddt, 1, false)}`,
-        `RMSD: ${formatMetricValue(p.rmsd, 2, false)}`,
+        `pLDDT: ${formatMetricValue(p.plddt, PLDDT_DISPLAY_DIGITS, false)}`,
+        `RMSD: ${formatMetricValue(p.rmsd, RMSD_DISPLAY_DIGITS, false)}`,
         `Relax: ${formatMetricValue(p.relax, 3, false)}`,
       ].join(" | ");
 
@@ -25753,8 +25965,8 @@ function buildPlddtRmsdScatter(rows) {
     titleKey: "analyze.chart.option.plddtRmsd",
     xLabelKey: "analyze.chart.axis.plddt",
     yLabelKey: "analyze.chart.axis.rmsd",
-    xDigits: 1,
-    yDigits: 2,
+    xDigits: PLDDT_DISPLAY_DIGITS,
+    yDigits: RMSD_DISPLAY_DIGITS,
   });
 }
 
@@ -25767,7 +25979,7 @@ function buildPlddtRelaxScatter(rows) {
     titleKey: "analyze.chart.option.plddtRelax",
     xLabelKey: "analyze.chart.axis.plddt",
     yLabelKey: "analyze.chart.axis.relax",
-    xDigits: 1,
+    xDigits: PLDDT_DISPLAY_DIGITS,
     yDigits: 3,
   });
 }
@@ -25781,7 +25993,7 @@ function buildRmsdRelaxScatter(rows) {
     titleKey: "analyze.chart.option.rmsdRelax",
     xLabelKey: "analyze.chart.axis.rmsd",
     yLabelKey: "analyze.chart.axis.relax",
-    xDigits: 2,
+    xDigits: RMSD_DISPLAY_DIGITS,
     yDigits: 3,
   });
 }
@@ -26127,8 +26339,8 @@ function renderHitList() {
         <td class="num">${escapeHtml(formatConservationTierValue(row.tier))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.score, 1, false))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.soluprot, 3, false))}</td>
-        <td class="num">${escapeHtml(formatMetricValue(row.plddt, 1, false))}</td>
-        <td class="num">${escapeHtml(formatMetricValue(row.rmsd, 2, false))}</td>
+        <td class="num">${escapeHtml(formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS, false))}</td>
+        <td class="num">${escapeHtml(formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS, false))}</td>
         ${showRelax ? `<td class="num">${escapeHtml(formatMetricValue(row.relax, 3, false))}</td>` : ""}
         <td class="num">${escapeHtml(wtDiffLabel)}</td>
         <td>${escapeHtml(localizedYesNo(Boolean(row.af2_selected)))}</td>
@@ -26214,8 +26426,8 @@ function buildHitListDetailsMarkdown() {
   filtered.slice(0, maxRows).forEach((row) => {
     lines.push(
       showRelax
-        ? `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatMetricValue(row.relax, 3)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
-        : `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
+        ? `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${formatMetricValue(row.relax, 3)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
+        : `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
     );
   });
   lines.push("");
@@ -26574,7 +26786,7 @@ function buildStructureDiffSvg(structureDiff, leftPath, rightPath) {
       ].join("");
     })
     .join("");
-  const summary = `RMSD=${chartTickText(structureDiff.rmsd, 2)}A, P90=${chartTickText(
+  const summary = `RMSD=${chartTickText(structureDiff.rmsd, RMSD_DISPLAY_DIGITS)}A, P90=${chartTickText(
     structureDiff.p90Distance,
     2
   )}A, n=${Number(structureDiff.commonCount || 0)}`;
@@ -26738,8 +26950,8 @@ function buildReportHitListSection() {
   rows.slice(0, maxRows).forEach((row) => {
     lines.push(
       showRelax
-        ? `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatMetricValue(row.relax, 3)} | ${row.af2_selected ? "yes" : "no"} |`
-        : `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${row.af2_selected ? "yes" : "no"} |`
+        ? `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${formatMetricValue(row.relax, 3)} | ${row.af2_selected ? "yes" : "no"} |`
+        : `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${row.af2_selected ? "yes" : "no"} |`
     );
   });
   lines.push("");

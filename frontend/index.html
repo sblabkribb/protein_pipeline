@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>KBF Protein Solubility &amp; Stability Platform</title>
+    <title>RAPID Protein Design Platform</title>
     <link rel="stylesheet" href="./styles.css?v=20260424_145300" />
   </head>
   <body>
@@ -11,10 +11,10 @@
 
     <header class="topbar">
       <div class="brand">
-        <div class="brand-mark">KBF</div>
+        <div class="brand-mark">RAPID</div>
         <div class="brand-text">
-          <div class="brand-title">KBF</div>
-          <div class="brand-subtitle" data-i18n="brand.subtitle">Protein Solubility &amp; Stability Platform</div>
+          <div class="brand-title">RAPID</div>
+          <div class="brand-subtitle" data-i18n="brand.subtitle">Reproducible AI Pipeline for Integrated Design</div>
         </div>
         <div id="environmentBadge" class="environment-badge hidden" data-i18n="env.development">Development</div>
       </div>
@@ -84,8 +84,8 @@
         <div class="app-shell-frame">
           <aside id="appSidebar" class="app-sidebar">
             <div class="app-sidebar-head">
-              <div class="app-sidebar-kicker">KBF</div>
-              <div class="app-sidebar-title" data-i18n="brand.subtitle">Protein Solubility &amp; Stability Platform</div>
+              <div class="app-sidebar-kicker">RAPID</div>
+              <div class="app-sidebar-title" data-i18n="brand.subtitle">Reproducible AI Pipeline for Integrated Design</div>
             </div>
             <nav class="app-sidebar-nav" role="tablist" aria-label="Console modes">
               <button
@@ -120,6 +120,17 @@
                 data-i18n="tabs.advanced"
               >
                 Advanced
+              </button>
+              <button
+                id="tabBtnSurrogate"
+                class="tab-btn app-nav-btn"
+                role="tab"
+                aria-selected="false"
+                aria-controls="tab-surrogate"
+                data-tab="surrogate"
+                data-i18n="tabs.surrogate"
+              >
+                Surrogate
               </button>
               <button
                 id="tabBtnEvolution"
@@ -223,7 +234,7 @@
                   <span class="launchpad-eyebrow" data-i18n="home.launchpad.primary">Primary workflow</span>
                   <h3 data-i18n="home.launchpad.newExperiment">New Experiment</h3>
                   <p data-i18n="home.launchpad.newExperimentDesc">
-                    Choose Fast, Advanced, Evolution, or Workflow Studio based on the control you need.
+                    Choose Fast, Advanced, Surrogate, Evolution, or Workflow Studio based on the control you need.
                   </p>
                 </button>
                 <div class="launchpad-secondary-grid">
@@ -576,6 +587,106 @@
         </section>
 
         <section
+          id="tab-surrogate"
+          class="tab-panel"
+          data-tab="surrogate"
+          role="tabpanel"
+          aria-labelledby="tabBtnSurrogate"
+        >
+          <div class="tab-content-shell">
+            <div class="panel panel-block evolution-shell surrogate-shell">
+              <div class="panel-header">
+                <h2 data-i18n="surrogate.title">AF2 Surrogate Triage</h2>
+                <p data-i18n="surrogate.desc">
+                  Run the standard ProteinMPNN/SoluProt path with a local surrogate that reduces final AF2/ColabFold calls.
+                </p>
+              </div>
+              <div class="evolution-grid surrogate-grid">
+                <div class="evolution-input-card surrogate-input-card">
+                  <label class="fast-field">
+                    <span data-i18n="surrogate.input.label">Target Sequence or Structure</span>
+                    <small data-i18n="surrogate.input.help">Provide FASTA, PDB, or mmCIF input for the budget-aware triage path.</small>
+                    <textarea
+                      id="surrogateTargetInput"
+                      rows="10"
+                      placeholder="Paste FASTA, PDB, or mmCIF here."
+                      data-i18n-placeholder="surrogate.input.placeholder"
+                    ></textarea>
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="setup.customRunId.label">Run name</span>
+                    <small data-i18n="setup.customRunId.help">Optional. Leave blank to create one automatically.</small>
+                    <input id="surrogateCustomRunIdInput" type="text" placeholder="surrogate_triage_01" />
+                  </label>
+                  <div class="fast-inline-actions">
+                    <input id="surrogateTargetFile" type="file" class="hidden" accept=".pdb,.ent,.cif,.mmcif,.bcif,.fasta,.fa,.txt" />
+                    <button id="surrogateLoadFileBtn" class="ghost" type="button" data-i18n="fast.action.loadFile">
+                      Load File
+                    </button>
+                    <button id="surrogateOpenAdvancedBtn" class="ghost" type="button" data-i18n="surrogate.action.openAdvanced">
+                      Review in Advanced
+                    </button>
+                  </div>
+                  <div class="evolution-actions">
+                    <button id="surrogateRunBtn" class="primary" type="button" data-i18n="surrogate.action.run">
+                      Start Surrogate Triage
+                    </button>
+                  </div>
+                </div>
+                <aside class="evolution-options-card surrogate-options-card">
+                  <div class="panel-header">
+                    <h3 data-i18n="surrogate.options.title">Surrogate Settings</h3>
+                    <p data-i18n="surrogate.options.desc">
+                      This mode disables RFD3 and BioEmu, generates the candidate pool from the input backbone/sequence, and spends AF2 only on the sampled training set plus Top K candidates.
+                    </p>
+                  </div>
+                  <label class="fast-field">
+                    <span data-i18n="surrogate.initialSamples.label">Training AF2 samples</span>
+                    <input id="surrogateInitialSamplesInput" type="number" min="5" step="5" value="30" />
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="surrogate.topK.label">Top K final AF2 candidates</span>
+                    <input id="surrogateTopKInput" type="number" min="1" step="1" value="20" />
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="surrogate.model.label">Surrogate model</span>
+                    <select id="surrogateModelInput">
+                      <option value="rf" data-i18n="choice.surrogateModel.rf">Random Forest</option>
+                      <option value="ridge" data-i18n="choice.surrogateModel.ridge">Ridge</option>
+                      <option value="xgboost" data-i18n="choice.surrogateModel.xgboost">XGBoost</option>
+                      <option value="lightgbm" data-i18n="choice.surrogateModel.lightgbm">LightGBM</option>
+                      <option value="ensemble" data-i18n="choice.surrogateModel.ensemble">Rank-mean ensemble</option>
+                    </select>
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="question.af2Provider.label">Structure predictor</span>
+                    <select id="surrogateAf2ProviderInput">
+                      <option value="colabfold">ColabFold</option>
+                      <option value="alphafold2">AlphaFold2</option>
+                    </select>
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="question.soluprotCutoff.label">SoluProt cutoff</span>
+                    <input id="surrogateSoluprotCutoffInput" type="number" min="0" max="1" step="0.01" value="0.5" />
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="question.af2PlddtCutoff.label">pLDDT cutoff</span>
+                    <input id="surrogateAf2PlddtCutoffInput" type="number" min="0" max="100" step="0.1" value="85" />
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="question.af2RmsdCutoff.label">RMSD cutoff</span>
+                    <input id="surrogateAf2RmsdCutoffInput" type="number" min="0.01" step="0.001" value="2.0" />
+                  </label>
+                  <div class="choice-note" data-i18n="surrogate.note">
+                    Use Evolution only when experimental measurements are available or planned. Use this Surrogate tab when the goal is a one-round compute budget reduction.
+                  </div>
+                </aside>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section
           id="tab-evolution"
           class="tab-panel"
           data-tab="evolution"
@@ -625,6 +736,9 @@
                     <p data-i18n="evolution.options.desc">
                       Configure active-learning AF2 triage parameters for the evolution process.
                     </p>
+                  </div>
+                  <div id="evolutionFeedbackGuide" class="choice-note evolution-feedback-guide" data-i18n="evolution.feedbackGuide">
+                    First run: RAPID writes evolution/experiment_request.csv. After wet-lab testing, enter candidate_id, metric_name, and metric_value in Analyze &gt; Experiment. Next run: set Experiment source run ID to reuse those labels and write evolution/next_candidates.csv.
                   </div>
                   <label class="fast-field">
                     <span data-i18n="evolution.poolSize.label">Stage 1: Generation Pool Size</span>
@@ -1724,6 +1838,11 @@
             <span class="experiment-choice-kicker" data-i18n="home.experimentChoice.advanced.kicker">Guided setup</span>
             <strong data-i18n="home.experimentChoice.advanced.title">Advanced</strong>
             <span data-i18n="home.experimentChoice.advanced.desc">Step through input, workflow, criteria, expert options, and review.</span>
+          </button>
+          <button class="experiment-choice-btn" type="button" data-experiment-target="surrogate">
+            <span class="experiment-choice-kicker" data-i18n="home.experimentChoice.surrogate.kicker">Budget triage</span>
+            <strong data-i18n="home.experimentChoice.surrogate.title">Surrogate</strong>
+            <span data-i18n="home.experimentChoice.surrogate.desc">Use SoluProt, K-means, and a local surrogate to reduce final AF2 calls.</span>
           </button>
           <button class="experiment-choice-btn" type="button" data-experiment-target="evolution">
             <span class="experiment-choice-kicker" data-i18n="home.experimentChoice.evolution.kicker">Iterative design</span>

@@ -150,12 +150,14 @@ test("all primary tabs share fluid shell width and responsive grid rules", () =>
   assert.match(styles, /@media \(max-width:\s*1180px\)\s*\{[\s\S]*\.experiment-launchpad,\s*\.fast-grid,\s*\.evolution-grid,\s*\.rounds-grid,\s*\.monitor-grid,\s*\.analyze-grid,\s*\.studio-grid[\s\S]*grid-template-columns:\s*1fr;/m);
 });
 
-test("frontend uses solubility and stability platform branding", () => {
+test("frontend uses RAPID platform branding", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
-  assert.match(html, /KBF Protein Solubility &amp; Stability Platform/);
-  assert.match(source, /KBF Protein Solubility & Stability Platform/);
+  assert.match(html, /RAPID/);
+  assert.match(source, /RAPID Protein Design Platform/);
+  assert.match(source, /Reproducible AI Pipeline for Integrated Design/);
+  assert.doesNotMatch(html, /class="brand-title">KBF</);
   assert.doesNotMatch(html, /Protein Pipeline Console/);
 });
 
@@ -206,6 +208,7 @@ test("home new experiment opens a mode chooser instead of forcing fast launch", 
   assert.match(html, /id="experimentChoicePanel"/);
   assert.match(html, /data-experiment-target="fast"/);
   assert.match(html, /data-experiment-target="advanced"/);
+  assert.match(html, /data-experiment-target="surrogate"/);
   assert.match(html, /data-experiment-target="evolution"/);
   assert.match(html, /data-experiment-target="studio"/);
   assert.doesNotMatch(html, /class="home-mode-card launchpad-primary" type="button" data-home-target="fast"/);
@@ -213,6 +216,7 @@ test("home new experiment opens a mode chooser instead of forcing fast launch", 
   assert.match(source, /function openExperimentChoicePanel/);
   assert.match(source, /function handleExperimentChoice/);
   assert.match(source, /querySelectorAll\("\[data-experiment-target\]"\)/);
+  assert.match(source, /"home\.experimentChoice\.surrogate\.title"/);
   assert.match(source, /"home\.experimentChoice\.advanced\.title"/);
   assert.match(source, /"home\.experimentChoice\.studio\.desc"/);
   assert.match(styles, /\.experiment-choice-grid/);
@@ -221,6 +225,39 @@ test("home new experiment opens a mode chooser instead of forcing fast launch", 
   assert.match(styles, /@media \(min-width:\s*1040px\)\s*\{[\s\S]*\.experiment-choice-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\);/m);
   assert.match(styles, /\.experiment-choice-btn strong\s*\{[\s\S]*word-break:\s*keep-all;/m);
   assert.match(styles, /\.experiment-choice-card \.ghost\s*\{[\s\S]*white-space:\s*nowrap;/m);
+});
+
+test("surrogate triage is exposed as a first-class UI mode", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(html, /id="tabBtnSurrogate"/);
+  assert.match(html, /id="tab-surrogate"/);
+  assert.match(html, /id="surrogateTargetInput"/);
+  assert.match(html, /id="surrogateRunBtn"/);
+  assert.match(
+    source,
+    /const TAB_OPTIONS = \["home", "fast", "advanced", "surrogate", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"\];/
+  );
+  assert.match(source, /let surrogateLauncherInitialized = false;/);
+  assert.match(source, /function initSurrogateLauncher/);
+  assert.match(source, /surrogate_triage_enabled:\s*true/);
+  assert.match(source, /rfd3_use:\s*false/);
+  assert.match(source, /bioemu_use:\s*false/);
+  assert.match(source, /"tabs\.surrogate"/);
+  assert.match(source, /"surrogate\.title"/);
+});
+
+test("evolution UI explains experimental feedback handoff", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(html, /id="evolutionFeedbackGuide"/);
+  assert.match(source, /experiment_request\.csv/);
+  assert.match(source, /next_candidates\.csv/);
+  assert.match(source, /Analyze > Experiment/);
+  assert.match(source, /candidate_id/);
+  assert.match(source, /metric_value/);
 });
 
 test("advanced setup uses experiment builder steps", () => {

@@ -3,6 +3,7 @@ import {
   artifactMetaFromPathForManifest,
   artifactDownloadFilename,
   buildArtifactDownloadRequest,
+  buildStoredZipBytes,
   buildWorkflowProgressContext,
   backboneSourceIndexFromManifest,
   buildWorkflowStudioNodesFromRequest,
@@ -164,6 +165,8 @@ const RESIDUE_PICKER_RESET_MESSAGE_TYPE = "kbf.residuePicker.reset";
 const RESIDUE_PICKER_POPUP_WINDOW_NAME = "kbf_residue_picker";
 const RESIDUE_PICKER_REQUEST_REGISTRY_KEY = "__kbfResiduePickerRequests";
 const DEFAULT_WORKFLOW_STAGES = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"];
+const PLDDT_DISPLAY_DIGITS = 2;
+const RMSD_DISPLAY_DIGITS = 3;
 const detachedResiduePickerToken = (() => {
   try {
     return String(new URLSearchParams(window.location.search).get(RESIDUE_PICKER_DETACHED_QUERY_KEY) || "").trim();
@@ -640,6 +643,10 @@ const state = {
     monitor: createArtifactFilterState(),
     analyze: createArtifactFilterState(),
   },
+  artifactSelectionsByView: {
+    monitor: new Set(),
+    analyze: new Set(),
+  },
   artifactComparison: null,
   artifactComparisonRunId: "",
   monitorNeedsReport: false,
@@ -667,6 +674,7 @@ const state = {
   hitListCutoff: 0,
   hitListSort: { key: "score", order: "desc" },
   hitListSelectedSeqId: null,
+  hitListSelectedSeqIds: new Set(),
   hitListLimit: 120,
   chartView: "plddt_rmsd",
   hitListWeights: {
@@ -834,11 +842,27 @@ const el = {
   fastTotalOutputInput: document.getElementById("fastTotalOutputInput"),
   fastRunBtn: document.getElementById("fastRunBtn"),
   fastOpenAdvancedBtn: document.getElementById("fastOpenAdvancedBtn"),
+  surrogateTargetInput: document.getElementById("surrogateTargetInput"),
+  surrogateTargetFile: document.getElementById("surrogateTargetFile"),
+  surrogateLoadFileBtn: document.getElementById("surrogateLoadFileBtn"),
+  surrogateOpenAdvancedBtn: document.getElementById("surrogateOpenAdvancedBtn"),
+  surrogateRunBtn: document.getElementById("surrogateRunBtn"),
+  surrogateCustomRunIdInput: document.getElementById("surrogateCustomRunIdInput"),
+  surrogateInitialSamplesInput: document.getElementById("surrogateInitialSamplesInput"),
+  surrogateTopKInput: document.getElementById("surrogateTopKInput"),
+  surrogateModelInput: document.getElementById("surrogateModelInput"),
+  surrogateAf2ProviderInput: document.getElementById("surrogateAf2ProviderInput"),
+  surrogateSoluprotCutoffInput: document.getElementById("surrogateSoluprotCutoffInput"),
+  surrogateAf2PlddtCutoffInput: document.getElementById("surrogateAf2PlddtCutoffInput"),
+  surrogateAf2RmsdCutoffInput: document.getElementById("surrogateAf2RmsdCutoffInput"),
   evolutionTargetInput: document.getElementById("evolutionTargetInput"),
   evolutionTargetFile: document.getElementById("evolutionTargetFile"),
   evolutionLoadFileBtn: document.getElementById("evolutionLoadFileBtn"),
   evolutionRunBtn: document.getElementById("evolutionRunBtn"),
   evolutionPoolSizeInput: document.getElementById("evolutionPoolSizeInput"),
+  evolutionLabelSourceInput: document.getElementById("evolutionLabelSourceInput"),
+  evolutionObjectiveMetricInput: document.getElementById("evolutionObjectiveMetricInput"),
+  evolutionExperimentSourceRunIdInput: document.getElementById("evolutionExperimentSourceRunIdInput"),
   evolutionInitialSamplesInput: document.getElementById("evolutionInitialSamplesInput"),
   evolutionOracleSamplesInput: document.getElementById("evolutionOracleSamplesInput"),
   evolutionAf2PlddtCutoffInput: document.getElementById("evolutionAf2PlddtCutoffInput"),
@@ -1067,7 +1091,14 @@ const el = {
   experimentAssay: document.getElementById("experimentAssay"),
   experimentResult: document.getElementById("experimentResult"),
   experimentSampleId: document.getElementById("experimentSampleId"),
+  experimentCandidateId: document.getElementById("experimentCandidateId"),
+  experimentSequenceId: document.getElementById("experimentSequenceId"),
   experimentArtifact: document.getElementById("experimentArtifact"),
+  experimentMetricName: document.getElementById("experimentMetricName"),
+  experimentMetricValue: document.getElementById("experimentMetricValue"),
+  experimentMetricUnit: document.getElementById("experimentMetricUnit"),
+  experimentMetricDirection: document.getElementById("experimentMetricDirection"),
+  experimentReplicateId: document.getElementById("experimentReplicateId"),
   experimentMetrics: document.getElementById("experimentMetrics"),
   experimentConditions: document.getElementById("experimentConditions"),
   submitExperiment: document.getElementById("submitExperiment"),
@@ -1998,8 +2029,8 @@ async function deleteCurrentRoundFromWorkspace() {
 
 const I18N = {
   en: {
-    "platform.name": "KBF Protein Solubility & Stability Platform",
-    "brand.subtitle": "Protein Solubility & Stability Platform",
+    "platform.name": "RAPID Protein Design Platform",
+    "brand.subtitle": "Reproducible AI Pipeline for Integrated Design",
     "env.development": "Development",
     "env.staging": "Staging",
     "action.admin": "Admin",
@@ -2035,7 +2066,7 @@ const I18N = {
     "tutorial.step.advanced.hint": "Use this when you need to tune conservation tiers, output counts, RFD3/BioEmu/AF2 gates, or fixed positions.",
     "tutorial.step.advancedInput.title": "Start with the target input",
     "tutorial.step.advancedInput.body":
-      "Step 1/5 is for the target sequence or structure. Paste or upload FASTA/PDB input here; Evolution (BO) is only an optional search toggle, not the run shape.",
+      "Step 1/5 is for the target sequence or structure. Paste or upload FASTA/PDB/mmCIF input here; Evolution (BO) is only an optional search toggle, not the run shape.",
     "tutorial.step.advancedInput.hint": "If the target is missing, later workflow and review steps cannot launch a run.",
     "tutorial.step.advancedWorkflow.title": "Workflow decides the run shape",
     "tutorial.step.advancedWorkflow.body":
@@ -2053,6 +2084,16 @@ const I18N = {
     "tutorial.step.advancedReview.body":
       "Step 5/5 summarizes the selected mode, stages, target readiness, backbone sources, AF2 provider, Relax state, and conservation tiers before Run.",
     "tutorial.step.advancedReview.hint": "Use this final screen to catch mismatched stages or missing target input before spending compute.",
+    "tutorial.step.surrogate.title": "Surrogate triage is a one-round budget mode",
+    "tutorial.step.surrogate.body":
+      "Use this tab when you want ProteinMPNN/SoluProt candidate generation with fewer final AF2 calls. RFD3 and BioEmu are disabled here so the benchmarked cost-saving path stays explicit.",
+    "tutorial.step.surrogate.hint":
+      "This is the mode described as AF2-budgeted surrogate triage. Use Evolution only when experimental labels will drive the next round.",
+    "tutorial.step.surrogateSettings.title": "Sample counts set the AF2 budget",
+    "tutorial.step.surrogateSettings.body":
+      "Training AF2 samples label the initial subset. The surrogate ranks the remaining candidates, and Top K controls how many final structures receive AF2/ColabFold evaluation.",
+    "tutorial.step.surrogateSettings.hint":
+      "The default 30 training and 20 Top K calls match the manuscript benchmark settings.",
     "tutorial.step.pdfAgent.title": "PDF agent extracts constraints",
     "tutorial.step.pdfAgent.body":
       "Upload a paper PDF here when the literature mentions catalytic residues, binding-site positions, or mutation-sensitive regions. The agent proposes residues to keep fixed.",
@@ -2060,11 +2101,11 @@ const I18N = {
       "Always review the proposed residues before applying them; the agent helps triage literature evidence, but the final mask is still your decision.",
     "tutorial.step.evolution.title": "Evolution explores iterative designs",
     "tutorial.step.evolution.body":
-      "Evolution starts from a target and searches candidate space across generated pools, oracle samples, and rounds.",
-    "tutorial.step.evolution.hint": "Use it after you understand the basic pipeline; the pool and round counts affect runtime and output size.",
+      "Evolution is for design-test-learn rounds. The first pass writes experiment_request.csv; after assays are recorded in Analyze > Experiment, the next pass uses those labels to write next_candidates.csv.",
+    "tutorial.step.evolution.hint": "Use it when experimental measurements are available or planned; use Surrogate for one-round in-silico budget triage.",
     "tutorial.step.evolutionSettings.title": "Evolution numbers control cost and selectivity",
     "tutorial.step.evolutionSettings.body":
-      "Generation Pool Size is the candidate pool. K-Means Training Samples is the learning/training sample count. Select Top K is how many candidates receive final AF2 evaluation.",
+      "Generation Pool Size is the candidate pool. Label source selects experimental feedback or legacy in-silico AF2 labels. Experiment source run ID tells RAPID where to reuse prior wet-lab metric values.",
     "tutorial.step.evolutionSettings.hint":
       "Larger pools explore more sequences but take longer. Increase Top K only when you want broader final validation; reduce it for quick screening.",
     "tutorial.step.studio.title": "Studio resumes staged workflows",
@@ -2123,6 +2164,7 @@ const I18N = {
     "tutorial.step.modelProviderAdd.hint":
       "Choose HTTP API for GPU-server services and RunPod for serverless endpoints. Choose Disabled to keep the model registered but unused.",
     "tabs.home": "Home",
+    "tabs.surrogate": "Surrogate",
     "tabs.evolution": "Evolution",
     "tabs.fast": "Fast",
     "tabs.advanced": "Advanced",
@@ -2136,7 +2178,7 @@ const I18N = {
     "home.desc": "Target design runs, current rounds, and result triage in one workspace.",
     "home.launchpad.primary": "Primary workflow",
     "home.launchpad.newExperiment": "New Experiment",
-    "home.launchpad.newExperimentDesc": "Choose Fast, Advanced, Evolution, or Workflow Studio based on the control you need.",
+    "home.launchpad.newExperimentDesc": "Choose Fast, Advanced, Surrogate, Evolution, or Workflow Studio based on the control you need.",
     "home.launchpad.loadRun": "Load Existing Run",
     "home.launchpad.loadRunDesc": "Resume monitoring from the current run list.",
     "home.launchpad.analyzeResults": "Analyze Results",
@@ -2149,6 +2191,9 @@ const I18N = {
     "home.experimentChoice.advanced.kicker": "Guided setup",
     "home.experimentChoice.advanced.title": "Advanced",
     "home.experimentChoice.advanced.desc": "Step through input, workflow, criteria, expert options, and review.",
+    "home.experimentChoice.surrogate.kicker": "Budget triage",
+    "home.experimentChoice.surrogate.title": "Surrogate",
+    "home.experimentChoice.surrogate.desc": "Use SoluProt, K-means, and a local surrogate to reduce final AF2 calls.",
     "home.experimentChoice.evolution.kicker": "Iterative design",
     "home.experimentChoice.evolution.title": "Evolution",
     "home.experimentChoice.evolution.desc": "Configure active-learning rounds and Top K selection.",
@@ -2163,6 +2208,25 @@ const I18N = {
     "home.card.studio.desc": "Build and run a workflow stage by stage while watching the outputs.",
     "home.card.evolution.title": "Evolution",
     "home.card.evolution.desc": "Autonomous multi-round sequence design pipeline.",
+    "surrogate.title": "AF2 Surrogate Triage",
+    "surrogate.desc":
+      "Run the standard ProteinMPNN/SoluProt path with a local surrogate that reduces final AF2/ColabFold calls.",
+    "surrogate.input.label": "Target Sequence or Structure",
+    "surrogate.input.help": "Provide FASTA, PDB, or mmCIF input for the budget-aware triage path.",
+    "surrogate.input.placeholder": "Paste FASTA, PDB, or mmCIF here.",
+    "surrogate.action.openAdvanced": "Review in Advanced",
+    "surrogate.action.run": "Start Surrogate Triage",
+    "surrogate.options.title": "Surrogate Settings",
+    "surrogate.options.desc":
+      "This mode disables RFD3 and BioEmu, generates the candidate pool from the input backbone/sequence, and spends AF2 only on the sampled training set plus Top K candidates.",
+    "surrogate.initialSamples.label": "Training AF2 samples",
+    "surrogate.topK.label": "Top K final AF2 candidates",
+    "surrogate.model.label": "Surrogate model",
+    "surrogate.note":
+      "Use Evolution only when experimental measurements are available or planned. Use this Surrogate tab when the goal is a one-round compute budget reduction.",
+    "surrogate.error.targetRequired": "Choose FASTA/PDB/mmCIF input before launching Surrogate Triage.",
+    "surrogate.message.fileLoaded": "Loaded {name} into Surrogate Triage.",
+    "surrogate.message.reviewReady": "Surrogate triage settings were copied into Advanced for review.",
     "home.context.project": "Current Project",
     "home.context.round": "Current Round",
     "home.context.roundStatus": "Round Status",
@@ -2187,15 +2251,24 @@ const I18N = {
     "home.message.contextLoadFailed": "Failed to load projects or rounds: {error}",
     "home.error.projectRequired": "Select or create a project before creating a round.",
     "evolution.title": "Evolution Studio",
-    "evolution.desc": "Upload a PDB and run the multi-round evolution pipeline with one click.",
-    "evolution.input.label": "Target PDB",
-    "evolution.input.help": "Provide a PDB structure to evolve.",
-    "evolution.input.placeholder": "Paste PDB here.",
+    "evolution.desc":
+      "Upload a PDB/mmCIF structure and request active-learning candidates from experimental feedback or legacy AF2 labels.",
+    "evolution.input.label": "Target Structure",
+    "evolution.input.help": "Provide a PDB or mmCIF structure to evolve.",
+    "evolution.input.placeholder": "Paste PDB or mmCIF here.",
     "evolution.action.run": "Start Evolution",
     "evolution.options.title": "Evolution Settings",
-    "evolution.options.desc": "Configure active-learning AF2 triage parameters for the evolution process.",
+    "evolution.options.desc": "Configure experimental-feedback active learning or the legacy in-silico AF2 loop.",
+    "evolution.feedbackGuide":
+      "First run: RAPID writes evolution/experiment_request.csv. After wet-lab testing, enter candidate_id, metric_name, and metric_value in Analyze > Experiment. Next run: set Experiment source run ID to reuse those labels and write evolution/next_candidates.csv.",
     "evolution.poolSize.label": "Stage 1: Generation Pool Size",
-    "evolution.oracleSamples.label": "Stage 3: Oracle AF2 Samples",
+    "evolution.labelSource.label": "Label source",
+    "evolution.labelSource.experimental": "Experimental feedback",
+    "evolution.labelSource.inSilicoAf2": "In-silico AF2 legacy",
+    "evolution.objectiveMetric.label": "Experimental objective metric",
+    "evolution.experimentSourceRunId.label": "Experiment source run ID",
+    "evolution.initialSamples.label": "Stage 2: K-means experiment set",
+    "evolution.oracleSamples.label": "Stage 3: Recommended candidates",
     "evolution.filtering.title": "Filtering",
     "evolution.constraints.title": "Constraints",
     "evolution.af2PlddtCutoff.label": "ColabFold pLDDT Cutoff",
@@ -2294,17 +2367,17 @@ const I18N = {
     "workspaceRecord.error.projectNameRequired": "Enter a project name.",
     "workspaceRecord.error.roundTitleRequired": "Enter a round title.",
     "fast.title": "Fast Launch",
-    "fast.desc": "Upload a FASTA/PDB file, or paste text if needed, then choose conservation and output count for a standard run.",
-    "fast.input.label": "FASTA/PDB file or text",
+    "fast.desc": "Upload a FASTA/PDB/mmCIF file, or paste text if needed, then choose conservation and output count for a standard run.",
+    "fast.input.label": "FASTA/PDB/mmCIF file or text",
     "fast.upload.title": "Upload target file",
-    "fast.upload.desc": "Use a PDB, FASTA, FA, or text file for the usual Fast launch path.",
+    "fast.upload.desc": "Use a PDB, mmCIF, CIF, FASTA, FA, or text file for the usual Fast launch path.",
     "fast.upload.statusEmpty": "No target loaded yet.",
     "fast.upload.statusFile": "Loaded {name}.",
     "fast.upload.statusText": "Text input ready.",
-    "fast.paste.summary": "Paste FASTA/PDB text instead",
+    "fast.paste.summary": "Paste FASTA/PDB/mmCIF text instead",
     "fast.paste.label": "Direct text input",
-    "fast.input.help": "Use raw text only when you do not have a file.",
-    "fast.input.placeholder": "Paste FASTA or PDB text here.",
+    "fast.input.help": "Use raw FASTA, PDB, or mmCIF text only when you do not have a file.",
+    "fast.input.placeholder": "Paste FASTA, PDB, or mmCIF text here.",
     "fast.note.label": "Run Notes",
     "fast.note.help": "Optional notes copied into the run prompt.",
     "fast.note.placeholder": "Optional notes for this launch.",
@@ -2316,8 +2389,8 @@ const I18N = {
       "Fast keeps ProteinMPNN at 2 sequences per backbone and rounds backbone counts up to satisfy the total output target.",
     "fast.totalOutput.label": "Total Output Sequences",
     "fast.totalOutput.help":
-      "Target total ProteinMPNN designs across the selected sequence-conservation levels. PDB input uses RFD3 + BioEmu; FASTA input uses BioEmu only.",
-    "fast.error.targetRequired": "Choose a FASTA/PDB file or paste target text before launching.",
+      "Target total ProteinMPNN designs across the selected sequence-conservation levels. PDB/mmCIF input uses RFD3 + BioEmu; FASTA input uses BioEmu only.",
+    "fast.error.targetRequired": "Choose a FASTA/PDB/mmCIF file or paste target text before launching.",
     "fast.message.reviewReady":
       "Fast defaults were copied into Advanced. Adjust sequence conservation or counts before launching if needed.",
     "fast.message.advancedOpened": "Advanced is open. Add a target in the Input step when you are ready.",
@@ -2603,6 +2676,11 @@ const I18N = {
     "artifacts.download": "Download",
     "artifacts.downloading": "Downloading...",
     "artifacts.downloadFailed": "Download failed: {error}",
+    "artifacts.bulk.selected": "{selected}/{total} selected",
+    "artifacts.bulk.selectFiltered": "Select filtered files",
+    "artifacts.bulk.clear": "Clear selection",
+    "artifacts.bulk.downloadSelected": "Download selected ZIP",
+    "artifacts.bulk.noSelection": "Select artifacts to download.",
     "artifacts.monitorHint.title": "Compare moved to Analyze",
     "artifacts.monitorHint.desc":
       "Use the Analyze tab for 3D structure compare and report-based comparison summary.",
@@ -2752,7 +2830,22 @@ const I18N = {
     "experiment.result": "Result",
     "experiment.sample": "Sample ID (optional)",
     "experiment.sample.placeholder": "e.g. seq_001",
+    "experiment.candidate": "Candidate ID (optional)",
+    "experiment.candidate.placeholder": "e.g. evo_r1_0003",
+    "experiment.sequence": "Sequence ID (optional)",
+    "experiment.sequence.placeholder": "e.g. seq_001",
     "experiment.artifact": "Artifact (optional)",
+    "experiment.metricName": "Objective metric",
+    "experiment.metricName.placeholder": "activity",
+    "experiment.metricValue": "Metric value",
+    "experiment.metricValue.placeholder": "0.0",
+    "experiment.metricUnit": "Metric unit (optional)",
+    "experiment.metricUnit.placeholder": "e.g. RFU, mg/mL",
+    "experiment.metricDirection": "Metric direction",
+    "experiment.metricDirection.maximize": "Maximize",
+    "experiment.metricDirection.minimize": "Minimize",
+    "experiment.replicate": "Replicate ID (optional)",
+    "experiment.replicate.placeholder": "replicate_1",
     "experiment.metrics": "Metrics (JSON, optional)",
     "experiment.metrics.placeholder": "{\"kd_nM\": 12.5, \"t50_C\": 48}",
     "experiment.conditions": "Conditions / Notes",
@@ -3010,7 +3103,7 @@ const I18N = {
     "question.runMode.help": "Choose what to run.",
     "question.runMode.detail": "Each mode changes what you need to provide, how long it may run, and how detailed the results will be.",
     "question.targetInput.label": "Target Input",
-    "question.targetInput.help": "Provide target_pdb or target_fasta (raw text).",
+    "question.targetInput.help": "Provide target structure (PDB/mmCIF) or FASTA raw text.",
     "question.startFrom.label": "Start From",
     "question.startFrom.help": "Where to start? Reuses cached outputs before this stage when available.",
     "question.stopAfter.label": "Stop After",
@@ -3041,6 +3134,16 @@ const I18N = {
     "question.evolutionMode.help": "Turn this on only when you want the system to make and test several candidate batches.",
     "question.evolutionPoolSize.label": "Candidate pool size",
     "question.evolutionPoolSize.help": "How many sequence candidates to create before selecting the first test set.",
+    "question.evolutionLabelSource.label": "Evolution label source",
+    "question.evolutionLabelSource.help":
+      "Use experimental feedback for design-test-learn cycles, or keep the old AF2-labelled computational loop for legacy comparisons.",
+    "question.evolutionObjectiveMetric.label": "Experimental objective metric",
+    "question.evolutionObjectiveMetric.help": "Metric name to learn from in experiment records, such as activity, soluble_yield, or expression.",
+    "question.evolutionExperimentSourceRunId.label": "Experiment source run ID",
+    "question.evolutionExperimentSourceRunId.help":
+      "Optional previous run whose experiment records should be used as labels for the next recommendation step.",
+    "choice.evolutionLabelSource.experimental": "Experimental feedback",
+    "choice.evolutionLabelSource.inSilicoAf2": "In-silico AF2 legacy",
     "question.evolutionInitialSamples.label": "First test set size",
     "question.evolutionInitialSamples.help": "How many diverse candidates to evaluate first so the search can learn.",
     "question.evolutionOracleSamples.label": "Final candidates to validate",
@@ -3054,6 +3157,15 @@ const I18N = {
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} per Conservation Level (Top N)",
     "question.af2MaxCandidatesPerTier.help":
       "Run {af2Provider} only for top N SoluProt-passed designs per sequence-conservation level (ranked by SoluProt score, 0 = all).",
+    "question.surrogateTriageEnabled.label": "AF2 Surrogate Triage",
+    "question.surrogateTriageEnabled.help":
+      "Label a small diverse candidate set with {af2Provider}, fit a surrogate pLDDT model, then send only surrogate-ranked top candidates to {af2Provider}.",
+    "question.surrogateTriageInitialSamples.label": "Surrogate Training Set",
+    "question.surrogateTriageInitialSamples.help": "Diverse SoluProt-passed candidates labelled with {af2Provider} before fitting the surrogate.",
+    "question.surrogateTriageTopK.label": "Surrogate Top K",
+    "question.surrogateTriageTopK.help": "Additional surrogate-ranked candidates to validate with {af2Provider}.",
+    "question.surrogateTriageModel.label": "Surrogate Model",
+    "question.surrogateTriageModel.help": "Model used to rank candidates after the initial {af2Provider}-labelled set.",
     "question.af2PlddtCutoff.label": "{af2Provider} pLDDT Cutoff",
     "question.af2PlddtCutoff.help": "Minimum pLDDT threshold for {af2Provider} pass filtering (default: 85).",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD Cutoff",
@@ -3176,6 +3288,11 @@ const I18N = {
     "choice.compareRmsdScope.input": "Input only",
     "choice.compareRmsdScope.backbone": "Backbone only",
     "choice.compareRmsdScope.both": "Input + Backbone",
+    "choice.surrogateModel.rf": "Random forest",
+    "choice.surrogateModel.ridge": "Ridge",
+    "choice.surrogateModel.xgboost": "XGBoost",
+    "choice.surrogateModel.lightgbm": "LightGBM",
+    "choice.surrogateModel.ensemble": "Rank ensemble",
     "choice.rfd3Mode.localDiversify": "Local Diversify",
     "choice.rfd3Mode.legacyContig": "Legacy Contig",
     "choice.rfd3Mode.binder": "Binder",
@@ -3236,6 +3353,9 @@ const I18N = {
     "setup.options.help": "Review key execution options in one board.",
     "setup.evolution.title": "Optional Evolution Search",
     "setup.evolution.help": "Leave this off for a normal run. Turn it on when you want repeated candidate generation and evaluation.",
+    "setup.surrogate.title": "AF2 Surrogate Triage",
+    "setup.surrogate.help":
+      "Optional one-round AF2 budget mode for standard pipeline runs. It reduces structure-prediction calls without changing the upstream design steps.",
     "setup.criteria.parameters.title": "Candidate Criteria",
     "setup.criteria.parameters.help": "Tune sample counts and structural acceptance thresholds.",
     "setup.parameters.title": "Compact Parameter Board",
@@ -3444,6 +3564,13 @@ const I18N = {
     "analyze.hitList.summary":
       "Showing {shown}/{filtered} candidates (total {total}), median score {score}.",
     "analyze.hitList.empty": "No candidates matched the cutoff.",
+    "analyze.hitList.bulk.selected": "{selected}/{total} selected",
+    "analyze.hitList.bulk.selectShown": "Select filtered rows",
+    "analyze.hitList.bulk.clear": "Clear selection",
+    "analyze.hitList.bulk.downloadFasta": "Download FASTA",
+    "analyze.hitList.bulk.downloadPdb": "Download PDB ZIP",
+    "analyze.hitList.bulk.noSelection": "Select hit-list rows first.",
+    "analyze.hitList.bulk.noPdb": "Selected rows have no PDB artifacts.",
     "analyze.chart.select": "Chart",
     "analyze.chart.placeholder": "Run hit list to render candidate charts.",
     "analyze.chart.noData": "No numeric data for the selected chart in current filters.",
@@ -3498,8 +3625,8 @@ const I18N = {
     "health.ok": "OK",
   },
   ko: {
-    "platform.name": "KBF Protein Solubility & Stability Platform",
-    "brand.subtitle": "Protein Solubility & Stability Platform",
+    "platform.name": "RAPID Protein Design Platform",
+    "brand.subtitle": "Reproducible AI Pipeline for Integrated Design",
     "env.development": "개발 환경",
     "env.staging": "스테이징",
     "action.admin": "관리자",
@@ -3534,7 +3661,7 @@ const I18N = {
     "tutorial.step.advanced.hint": "보존도 티어, 출력 개수, RFD3/BioEmu/AF2 기준, 고정 위치를 조정해야 할 때 사용하세요.",
     "tutorial.step.advancedInput.title": "먼저 타깃을 입력합니다",
     "tutorial.step.advancedInput.body":
-      "1/5 입력 단계는 타깃 서열 또는 구조를 넣는 곳입니다. FASTA/PDB를 붙여넣거나 업로드하세요. Evolution (BO)는 선택적 탐색 toggle일 뿐 run 형태를 정하는 단계가 아닙니다.",
+      "1/5 입력 단계는 타깃 서열 또는 구조를 넣는 곳입니다. FASTA/PDB/mmCIF를 붙여넣거나 업로드하세요. Evolution (BO)는 선택적 탐색 toggle일 뿐 run 형태를 정하는 단계가 아닙니다.",
     "tutorial.step.advancedInput.hint": "타깃이 없으면 뒤의 workflow와 검토 단계에서 run을 시작할 수 없습니다.",
     "tutorial.step.advancedWorkflow.title": "워크플로우가 run 형태를 정합니다",
     "tutorial.step.advancedWorkflow.body":
@@ -3552,6 +3679,15 @@ const I18N = {
     "tutorial.step.advancedReview.body":
       "5/5 검토 단계에서는 선택한 모드, 실행 단계, 타깃 준비 상태, backbone source, AF2 provider, Relax, 보존율 구간을 실행 전에 확인합니다.",
     "tutorial.step.advancedReview.hint": "compute를 쓰기 전에 단계 조합이나 타깃 입력 누락을 마지막으로 확인하세요.",
+    "tutorial.step.surrogate.title": "Surrogate triage는 1회 실행 예산 모드입니다",
+    "tutorial.step.surrogate.body":
+      "ProteinMPNN/SoluProt 후보 생성은 유지하되 최종 AF2 호출을 줄이고 싶을 때 이 탭을 사용합니다. 여기서는 논문에서 벤치마크한 비용 절감 경로가 명확하도록 RFD3와 BioEmu를 끕니다.",
+    "tutorial.step.surrogate.hint":
+      "논문의 AF2-budgeted surrogate triage에 해당하는 모드입니다. 실험 측정값으로 다음 라운드를 고를 때는 Evolution을 사용하세요.",
+    "tutorial.step.surrogateSettings.title": "샘플 수가 AF2 예산을 정합니다",
+    "tutorial.step.surrogateSettings.body":
+      "Training AF2 samples는 초기 학습셋을 라벨링합니다. 대리모델이 나머지 후보를 순위화하고, Top K가 최종 AF2/ColabFold 평가 수를 정합니다.",
+    "tutorial.step.surrogateSettings.hint": "기본값 30 training, 20 Top K는 논문 벤치마크 설정과 맞췄습니다.",
     "tutorial.step.pdfAgent.title": "PDF agent가 제약 조건을 뽑습니다",
     "tutorial.step.pdfAgent.body":
       "논문 PDF에 catalytic residue, binding-site position, mutation-sensitive region이 언급되어 있으면 업로드하세요. Agent가 고정할 residue 후보를 제안합니다.",
@@ -3559,11 +3695,11 @@ const I18N = {
       "적용 전에는 반드시 residue 후보를 검토하세요. Agent는 문헌 근거를 정리해주지만 최종 mask 결정은 사용자가 합니다.",
     "tutorial.step.evolution.title": "Evolution은 반복 설계를 탐색합니다",
     "tutorial.step.evolution.body":
-      "Evolution은 타깃에서 시작해 생성 pool, oracle sample, round를 거치며 후보 공간을 탐색합니다.",
-    "tutorial.step.evolution.hint": "기본 파이프라인을 이해한 뒤 사용하세요. pool과 round 수는 실행 시간과 출력 규모에 영향을 줍니다.",
+      "Evolution은 design-test-learn 회차를 위한 기능입니다. 첫 실행은 experiment_request.csv를 만들고, Analyze > Experiment에 assay 값을 기록한 뒤 다음 실행에서 그 라벨을 사용해 next_candidates.csv를 만듭니다.",
+    "tutorial.step.evolution.hint": "실험 측정값이 있거나 곧 만들 계획일 때 사용하세요. 1회 in-silico 비용 절감은 Surrogate 탭을 사용합니다.",
     "tutorial.step.evolutionSettings.title": "Evolution 숫자는 비용과 선별 강도를 정합니다",
     "tutorial.step.evolutionSettings.body":
-      "Generation Pool Size는 후보 pool 크기입니다. K-Means Training Samples는 학습/훈련에 쓸 sample 수입니다. Select Top K는 최종 AF2 평가로 보낼 후보 수입니다.",
+      "Generation Pool Size는 후보 pool 크기입니다. Label source는 실험 피드백과 legacy in-silico AF2 라벨 중 선택하고, Experiment source run ID는 이전 실험 측정값을 재사용할 run을 지정합니다.",
     "tutorial.step.evolutionSettings.hint":
       "pool이 크면 더 넓게 탐색하지만 오래 걸립니다. Top K는 최종 검증을 넓히고 싶을 때 늘리고, 빠른 screening에는 줄이세요.",
     "tutorial.step.studio.title": "스튜디오는 단계별 워크플로우를 이어갑니다",
@@ -3622,6 +3758,7 @@ const I18N = {
     "tutorial.step.modelProviderAdd.hint":
       "GPU 서버에 띄운 모델은 HTTP API, RunPod serverless는 RunPod를 선택하세요. 등록만 해두고 쓰지 않을 모델은 비활성으로 둡니다.",
     "tabs.home": "홈",
+    "tabs.surrogate": "Surrogate",
     "tabs.evolution": "Evolution",
     "tabs.fast": "빠른 실행",
     "tabs.advanced": "고급 설정",
@@ -3635,7 +3772,7 @@ const I18N = {
     "home.desc": "표적 설계 실행, 현재 회차, 결과 검토를 한 화면에서 다룹니다.",
     "home.launchpad.primary": "기본 워크플로우",
     "home.launchpad.newExperiment": "새 실험",
-    "home.launchpad.newExperimentDesc": "필요한 제어 수준에 따라 Fast, Advanced, Evolution, Workflow Studio 중 선택합니다.",
+    "home.launchpad.newExperimentDesc": "필요한 제어 수준에 따라 Fast, Advanced, Surrogate, Evolution, Workflow Studio 중 선택합니다.",
     "home.launchpad.loadRun": "기존 실행 불러오기",
     "home.launchpad.loadRunDesc": "현재 실행 목록에서 모니터링을 이어갑니다.",
     "home.launchpad.analyzeResults": "결과 분석",
@@ -3648,6 +3785,9 @@ const I18N = {
     "home.experimentChoice.advanced.kicker": "단계형 설정",
     "home.experimentChoice.advanced.title": "Advanced",
     "home.experimentChoice.advanced.desc": "입력, 워크플로우, 평가기준, 고급 옵션, 검토를 순서대로 설정합니다.",
+    "home.experimentChoice.surrogate.kicker": "예산 triage",
+    "home.experimentChoice.surrogate.title": "Surrogate",
+    "home.experimentChoice.surrogate.desc": "SoluProt, K-means, 대리모델로 최종 AF2 호출 수를 줄입니다.",
     "home.experimentChoice.evolution.kicker": "반복 설계",
     "home.experimentChoice.evolution.title": "Evolution",
     "home.experimentChoice.evolution.desc": "학습 라운드와 Top K 선별 수를 조정해 반복 탐색합니다.",
@@ -3662,6 +3802,24 @@ const I18N = {
     "home.card.studio.desc": "단계를 보면서 워크플로우를 직접 구성하고 실행합니다.",
     "home.card.evolution.title": "Evolution",
     "home.card.evolution.desc": "다라운드 자동 유도 진화 파이프라인을 실행합니다.",
+    "surrogate.title": "AF2 Surrogate Triage",
+    "surrogate.desc": "표준 ProteinMPNN/SoluProt 경로를 실행하되 대리모델로 최종 AF2/ColabFold 호출 수를 줄입니다.",
+    "surrogate.input.label": "타깃 서열 또는 구조",
+    "surrogate.input.help": "예산 절감 triage 경로에 사용할 FASTA, PDB, mmCIF 입력을 넣으세요.",
+    "surrogate.input.placeholder": "FASTA, PDB, mmCIF를 붙여넣으세요.",
+    "surrogate.action.openAdvanced": "Advanced에서 검토",
+    "surrogate.action.run": "Surrogate Triage 시작",
+    "surrogate.options.title": "대리모델 설정",
+    "surrogate.options.desc":
+      "이 모드는 RFD3와 BioEmu를 끄고 입력 백본/서열에서 후보 pool을 만든 뒤, 샘플링된 학습셋과 Top K 후보에만 AF2를 사용합니다.",
+    "surrogate.initialSamples.label": "학습용 AF2 샘플 수",
+    "surrogate.topK.label": "최종 AF2 Top K 후보 수",
+    "surrogate.model.label": "대리모델",
+    "surrogate.note":
+      "실험 측정값이 있거나 만들 계획이면 Evolution을 사용하세요. 1회 실행에서 compute budget을 줄이는 목적이면 이 Surrogate 탭을 사용합니다.",
+    "surrogate.error.targetRequired": "Surrogate Triage를 실행하려면 FASTA/PDB/mmCIF 입력을 넣으세요.",
+    "surrogate.message.fileLoaded": "{name} 파일을 Surrogate Triage에 불러왔습니다.",
+    "surrogate.message.reviewReady": "Surrogate triage 설정을 Advanced로 복사했습니다.",
     "home.context.project": "현재 프로젝트",
     "home.context.round": "현재 회차",
     "home.context.roundStatus": "라운드 상태",
@@ -3686,15 +3844,23 @@ const I18N = {
     "home.message.contextLoadFailed": "프로젝트/라운드 목록을 불러오지 못했습니다: {error}",
     "home.error.projectRequired": "라운드를 만들기 전에 프로젝트를 선택하거나 생성하세요.",
     "evolution.title": "진화 스튜디오",
-    "evolution.desc": "PDB를 업로드하고 한 번의 클릭으로 다회차 진화 파이프라인을 실행하세요.",
-    "evolution.input.label": "대상 PDB",
-    "evolution.input.help": "진화시킬 PDB 구조를 제공하세요.",
-    "evolution.input.placeholder": "여기에 PDB를 붙여넣으세요.",
+    "evolution.desc": "PDB/mmCIF 구조를 업로드하고 실험 피드백 또는 기존 AF2 라벨 기반 active learning 후보를 요청합니다.",
+    "evolution.input.label": "타깃 구조",
+    "evolution.input.help": "진화시킬 PDB 또는 mmCIF 구조를 제공하세요.",
+    "evolution.input.placeholder": "여기에 PDB 또는 mmCIF를 붙여넣으세요.",
     "evolution.action.run": "진화 시작",
     "evolution.options.title": "진화 설정",
-    "evolution.options.desc": "진화 프로세스를 위한 3단계 메타-서로게이트 매개변수를 설정합니다.",
+    "evolution.options.desc": "실험 피드백 active learning 또는 기존 in-silico AF2 loop를 설정합니다.",
+    "evolution.feedbackGuide":
+      "첫 실행: RAPID가 evolution/experiment_request.csv를 만듭니다. wet-lab 측정 후 Analyze > Experiment에서 candidate_id, metric_name, metric_value를 입력하세요. 다음 실행: Experiment source run ID를 지정하면 해당 라벨을 재사용해 evolution/next_candidates.csv를 만듭니다.",
     "evolution.poolSize.label": "Stage 1: 초기 생성 풀 크기",
-    "evolution.oracleSamples.label": "Stage 3: 최종 AF2 검증 수",
+    "evolution.labelSource.label": "라벨 소스",
+    "evolution.labelSource.experimental": "실험 피드백",
+    "evolution.labelSource.inSilicoAf2": "In-silico AF2 기존 방식",
+    "evolution.objectiveMetric.label": "실험 objective metric",
+    "evolution.experimentSourceRunId.label": "실험 source run ID",
+    "evolution.initialSamples.label": "Stage 2: K-means 실험 후보",
+    "evolution.oracleSamples.label": "Stage 3: 추천 후보 수",
     "evolution.filtering.title": "필터링 (Filtering)",
     "evolution.constraints.title": "구조 제약 (Constraints)",
     "evolution.af2PlddtCutoff.label": "ColabFold pLDDT 컷오프",
@@ -3792,17 +3958,17 @@ const I18N = {
     "workspaceRecord.error.projectNameRequired": "프로젝트 이름을 입력하세요.",
     "workspaceRecord.error.roundTitleRequired": "라운드 제목을 입력하세요.",
     "fast.title": "Fast 실행",
-    "fast.desc": "FASTA/PDB 파일을 올리거나 필요할 때만 텍스트를 붙여넣고, 보존율과 출력 개수를 고른 뒤 표준 설정으로 실행합니다.",
-    "fast.input.label": "FASTA/PDB 파일 또는 텍스트",
+    "fast.desc": "FASTA/PDB/mmCIF 파일을 올리거나 필요할 때만 텍스트를 붙여넣고, 보존율과 출력 개수를 고른 뒤 표준 설정으로 실행합니다.",
+    "fast.input.label": "FASTA/PDB/mmCIF 파일 또는 텍스트",
     "fast.upload.title": "타깃 파일 업로드",
-    "fast.upload.desc": "일반적인 Fast 실행은 PDB, FASTA, FA, TXT 파일을 선택해서 시작합니다.",
+    "fast.upload.desc": "일반적인 Fast 실행은 PDB, mmCIF, CIF, FASTA, FA, TXT 파일을 선택해서 시작합니다.",
     "fast.upload.statusEmpty": "아직 타깃이 없습니다.",
     "fast.upload.statusFile": "{name} 파일을 불러왔습니다.",
     "fast.upload.statusText": "텍스트 입력이 준비되었습니다.",
-    "fast.paste.summary": "FASTA/PDB 텍스트 직접 붙여넣기",
+    "fast.paste.summary": "FASTA/PDB/mmCIF 텍스트 직접 붙여넣기",
     "fast.paste.label": "직접 입력",
-    "fast.input.help": "파일이 없을 때만 FASTA 또는 PDB 원문을 직접 붙여넣으세요.",
-    "fast.input.placeholder": "여기에 FASTA 또는 PDB 텍스트를 붙여넣으세요.",
+    "fast.input.help": "파일이 없을 때만 FASTA, PDB 또는 mmCIF 원문을 직접 붙여넣으세요.",
+    "fast.input.placeholder": "여기에 FASTA, PDB 또는 mmCIF 텍스트를 붙여넣으세요.",
     "fast.note.label": "실행 메모",
     "fast.note.help": "선택 메모이며 run prompt로 함께 복사됩니다.",
     "fast.note.placeholder": "이 실행에 대한 메모를 선택적으로 남기세요.",
@@ -3814,8 +3980,8 @@ const I18N = {
       "Fast는 백본당 ProteinMPNN 2개를 유지하고, 총 출력 목표에 맞춰 백본 개수를 올림 계산합니다.",
     "fast.totalOutput.label": "총 출력 서열 수",
     "fast.totalOutput.help":
-      "선택한 서열 보존율 구간 전체에서 생성할 ProteinMPNN 서열 총량입니다. PDB 입력은 RFD3+BioEmu, FASTA 입력은 BioEmu 기준으로 계산합니다.",
-    "fast.error.targetRequired": "Fast 실행 전에 FASTA/PDB 파일을 선택하거나 타깃 텍스트를 붙여넣으세요.",
+      "선택한 서열 보존율 구간 전체에서 생성할 ProteinMPNN 서열 총량입니다. PDB/mmCIF 입력은 RFD3+BioEmu, FASTA 입력은 BioEmu 기준으로 계산합니다.",
+    "fast.error.targetRequired": "Fast 실행 전에 FASTA/PDB/mmCIF 파일을 선택하거나 타깃 텍스트를 붙여넣으세요.",
     "fast.message.reviewReady":
       "Fast 기본값을 Advanced로 복사했습니다. 필요하면 서열 보존율이나 개수를 조정한 뒤 실행하세요.",
     "fast.message.advancedOpened": "Advanced를 열었습니다. 준비되면 Input 단계에서 타깃을 추가하세요.",
@@ -4101,6 +4267,11 @@ const I18N = {
     "artifacts.download": "다운로드",
     "artifacts.downloading": "다운로드 중...",
     "artifacts.downloadFailed": "다운로드 실패: {error}",
+    "artifacts.bulk.selected": "{selected}/{total}개 선택",
+    "artifacts.bulk.selectFiltered": "필터 결과 선택",
+    "artifacts.bulk.clear": "선택 해제",
+    "artifacts.bulk.downloadSelected": "선택 ZIP 다운로드",
+    "artifacts.bulk.noSelection": "다운로드할 아티팩트를 선택하세요.",
     "artifacts.monitorHint.title": "비교 기능은 Analyze 탭으로 이동",
     "artifacts.monitorHint.desc":
       "3D 구조 비교와 리포트 기반 비교 요약은 Analyze 탭에서 확인할 수 있습니다.",
@@ -4249,7 +4420,22 @@ const I18N = {
     "experiment.result": "결과",
     "experiment.sample": "샘플 ID (선택)",
     "experiment.sample.placeholder": "예: seq_001",
+    "experiment.candidate": "후보 ID (선택)",
+    "experiment.candidate.placeholder": "예: evo_r1_0003",
+    "experiment.sequence": "서열 ID (선택)",
+    "experiment.sequence.placeholder": "예: seq_001",
     "experiment.artifact": "아티팩트 (선택)",
+    "experiment.metricName": "Objective metric",
+    "experiment.metricName.placeholder": "activity",
+    "experiment.metricValue": "Metric 값",
+    "experiment.metricValue.placeholder": "0.0",
+    "experiment.metricUnit": "Metric 단위 (선택)",
+    "experiment.metricUnit.placeholder": "예: RFU, mg/mL",
+    "experiment.metricDirection": "Metric 방향",
+    "experiment.metricDirection.maximize": "클수록 좋음",
+    "experiment.metricDirection.minimize": "작을수록 좋음",
+    "experiment.replicate": "Replicate ID (선택)",
+    "experiment.replicate.placeholder": "replicate_1",
     "experiment.metrics": "지표 (JSON, 선택)",
     "experiment.metrics.placeholder": "{\"kd_nM\": 12.5, \"t50_C\": 48}",
     "experiment.conditions": "조건 / 노트",
@@ -4507,7 +4693,7 @@ const I18N = {
     "question.runMode.help": "실행할 항목을 선택하세요.",
     "question.runMode.detail": "모드에 따라 필요한 입력, 실행 시간, 결과를 얼마나 자세히 만들지가 달라집니다.",
     "question.targetInput.label": "타깃 입력",
-    "question.targetInput.help": "target_pdb 또는 target_fasta 원문을 입력하세요.",
+    "question.targetInput.help": "타깃 구조(PDB/mmCIF) 또는 FASTA 원문을 입력하세요.",
     "question.startFrom.label": "시작 단계",
     "question.startFrom.help": "어디부터 실행할까요? 가능하면 이전 단계 캐시를 재사용합니다.",
     "question.stopAfter.label": "중단 단계",
@@ -4539,6 +4725,16 @@ const I18N = {
     "question.evolutionMode.help": "여러 후보 묶음을 만들고 평가하면서 탐색할 때만 켭니다. 일반 실행이면 Off로 둡니다.",
     "question.evolutionPoolSize.label": "처음 만들 후보 수",
     "question.evolutionPoolSize.help": "처음에 만들 서열 후보의 전체 개수입니다.",
+    "question.evolutionLabelSource.label": "Evolution 라벨 소스",
+    "question.evolutionLabelSource.help":
+      "실험 피드백은 design-test-learn 회차에 사용하고, 기존 계산 비교에는 AF2 라벨 기반 loop를 사용합니다.",
+    "question.evolutionObjectiveMetric.label": "실험 objective metric",
+    "question.evolutionObjectiveMetric.help": "activity, soluble_yield, expression처럼 실험 기록에서 학습할 metric 이름입니다.",
+    "question.evolutionExperimentSourceRunId.label": "실험 source run ID",
+    "question.evolutionExperimentSourceRunId.help":
+      "다음 추천 단계의 라벨로 사용할 실험 기록이 들어 있는 이전 run ID입니다. 비워두면 현재 run의 기록만 확인합니다.",
+    "choice.evolutionLabelSource.experimental": "실험 피드백",
+    "choice.evolutionLabelSource.inSilicoAf2": "In-silico AF2 기존 방식",
     "question.evolutionInitialSamples.label": "처음 평가할 후보 수",
     "question.evolutionInitialSamples.help": "탐색 방향을 잡기 위해 먼저 평가할 다양한 후보 수입니다.",
     "question.evolutionOracleSamples.label": "최종 검증 후보 수",
@@ -4552,6 +4748,15 @@ const I18N = {
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} 서열 보존율 구간당 실행 개수 (상위 N개)",
     "question.af2MaxCandidatesPerTier.help":
       "각 서열 보존율 구간에서 SoluProt를 통과한 서열 중 상위 N개(점수 순)만 {af2Provider}를 실행합니다. 0이면 전체 실행.",
+    "question.surrogateTriageEnabled.label": "AF2 대리 모델 선별",
+    "question.surrogateTriageEnabled.help":
+      "다양한 후보 일부만 {af2Provider}로 먼저 평가하고, pLDDT 대리 모델로 나머지를 순위화해 상위 후보만 {af2Provider}로 보냅니다.",
+    "question.surrogateTriageInitialSamples.label": "대리 모델 학습 후보 수",
+    "question.surrogateTriageInitialSamples.help": "대리 모델을 맞추기 전에 {af2Provider}로 먼저 라벨링할 SoluProt 통과 후보 수입니다.",
+    "question.surrogateTriageTopK.label": "대리 모델 상위 K개",
+    "question.surrogateTriageTopK.help": "대리 모델 순위에서 추가로 {af2Provider} 검증까지 보낼 후보 수입니다.",
+    "question.surrogateTriageModel.label": "대리 모델",
+    "question.surrogateTriageModel.help": "초기 {af2Provider} 라벨 이후 후보 순위화에 사용할 모델입니다.",
     "question.af2PlddtCutoff.label": "{af2Provider} pLDDT 컷오프",
     "question.af2PlddtCutoff.help": "{af2Provider} 통과 필터링에 사용할 최소 pLDDT 임계값입니다. (기본값: 85)",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD 컷오프",
@@ -4674,6 +4879,11 @@ const I18N = {
     "choice.compareRmsdScope.input": "입력만",
     "choice.compareRmsdScope.backbone": "백본만",
     "choice.compareRmsdScope.both": "입력 + 백본",
+    "choice.surrogateModel.rf": "Random forest",
+    "choice.surrogateModel.ridge": "Ridge",
+    "choice.surrogateModel.xgboost": "XGBoost",
+    "choice.surrogateModel.lightgbm": "LightGBM",
+    "choice.surrogateModel.ensemble": "Rank ensemble",
     "choice.rfd3Mode.localDiversify": "Local Diversify",
     "choice.rfd3Mode.legacyContig": "Legacy Contig",
     "choice.rfd3Mode.binder": "Binder",
@@ -4734,6 +4944,9 @@ const I18N = {
     "setup.options.help": "주요 실행 옵션을 한 보드에서 한 번에 확인하고 조정합니다.",
     "setup.evolution.title": "Evolution 탐색 (선택)",
     "setup.evolution.help": "일반 실행이면 끄고, 후보를 여러 번 만들고 평가하며 탐색할 때만 켭니다.",
+    "setup.surrogate.title": "AF2 대리 모델 선별",
+    "setup.surrogate.help":
+      "표준 파이프라인에서 선택적으로 쓰는 1회성 AF2 예산 절감 모드입니다. 상위 디자인 단계는 그대로 두고 구조 예측 호출 수만 줄입니다.",
     "setup.criteria.parameters.title": "후보 평가 기준",
     "setup.criteria.parameters.help": "샘플 수와 구조 품질 통과 기준을 조정합니다.",
     "setup.parameters.title": "핵심 파라미터 보드",
@@ -4939,6 +5152,13 @@ const I18N = {
     "analyze.hitList.summary":
       "{shown}/{filtered}개 표시 (전체 {total}), 중앙 점수 {score}",
     "analyze.hitList.empty": "컷오프 조건을 만족하는 후보가 없습니다.",
+    "analyze.hitList.bulk.selected": "{selected}/{total}개 선택",
+    "analyze.hitList.bulk.selectShown": "필터 결과 선택",
+    "analyze.hitList.bulk.clear": "선택 해제",
+    "analyze.hitList.bulk.downloadFasta": "FASTA 다운로드",
+    "analyze.hitList.bulk.downloadPdb": "PDB ZIP 다운로드",
+    "analyze.hitList.bulk.noSelection": "먼저 Hit List 행을 선택하세요.",
+    "analyze.hitList.bulk.noPdb": "선택한 행에 PDB 아티팩트가 없습니다.",
     "analyze.chart.select": "차트",
     "analyze.chart.placeholder": "Hit List를 실행하면 후보 차트를 표시합니다.",
     "analyze.chart.noData": "현재 필터에서 선택한 차트를 그릴 수 있는 수치 데이터가 없습니다.",
@@ -5124,7 +5344,7 @@ function labelFromMap(value, map) {
 }
 
 const TAB_KEY = "kbf.activeTab";
-const TAB_OPTIONS = ["home", "fast", "advanced", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"];
+const TAB_OPTIONS = ["home", "fast", "advanced", "surrogate", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"];
 const tabButtons = Array.from(document.querySelectorAll("#appSidebar .tab-btn"));
 const tabPanels = Array.from(document.querySelectorAll("#appShell .tab-panel"));
 const langButtons = Array.from(document.querySelectorAll(".lang-btn"));
@@ -5132,6 +5352,7 @@ let tabsInitialized = false;
 let homeLauncherInitialized = false;
 let homeContextInitialized = false;
 let fastLauncherInitialized = false;
+let surrogateLauncherInitialized = false;
 let evolutionLauncherInitialized = false;
 let langInitialized = false;
 let copilotInitialized = false;
@@ -5234,6 +5455,22 @@ const TUTORIAL_STEPS = [
     titleKey: "tutorial.step.advancedReview.title",
     bodyKey: "tutorial.step.advancedReview.body",
     hintKey: "tutorial.step.advancedReview.hint",
+  },
+  {
+    id: "surrogate",
+    tab: "surrogate",
+    target: ".surrogate-input-card",
+    titleKey: "tutorial.step.surrogate.title",
+    bodyKey: "tutorial.step.surrogate.body",
+    hintKey: "tutorial.step.surrogate.hint",
+  },
+  {
+    id: "surrogateSettings",
+    tab: "surrogate",
+    target: ".surrogate-options-card",
+    titleKey: "tutorial.step.surrogateSettings.title",
+    bodyKey: "tutorial.step.surrogateSettings.body",
+    hintKey: "tutorial.step.surrogateSettings.hint",
   },
   {
     id: "evolution",
@@ -5376,12 +5613,16 @@ const SETUP_WORKFLOW_QUESTION_IDS = new Set([
   "relax_enabled",
   "af2_provider",
   "evolution_mode",
+  "surrogate_triage_enabled",
 ]);
 const SETUP_CRITERIA_QUESTION_IDS = new Set([
   "selected_tiers",
   "design_chains",
   "num_seq_per_tier",
   "af2_max_candidates_per_tier",
+  "surrogate_triage_initial_samples",
+  "surrogate_triage_top_k",
+  "surrogate_triage_model",
   "af2_plddt_cutoff",
   "af2_rmsd_cutoff",
   "relax_score_per_residue_cutoff",
@@ -6908,10 +7149,10 @@ function workflowStudioSummaryCards(session, preview) {
 
 function workflowStudioFieldAccept(fieldId) {
   if (fieldId === "target_input") {
-    return ".pdb,.ent,.fa,.fasta,.faa,.txt";
+    return ".pdb,.ent,.cif,.mmcif,.bcif,.fa,.fasta,.faa,.txt";
   }
   if (fieldId === "rfd3_input_pdb") {
-    return ".pdb,.ent,.txt";
+    return ".pdb,.ent,.cif,.mmcif,.bcif,.txt";
   }
   return ".txt";
 }
@@ -8869,6 +9110,26 @@ const QUESTION_PRESETS = {
     questionKey: "question.af2MaxCandidatesPerTier.help",
     default: 0,
   },
+  surrogate_triage_enabled: {
+    labelKey: "question.surrogateTriageEnabled.label",
+    questionKey: "question.surrogateTriageEnabled.help",
+    default: false,
+  },
+  surrogate_triage_initial_samples: {
+    labelKey: "question.surrogateTriageInitialSamples.label",
+    questionKey: "question.surrogateTriageInitialSamples.help",
+    default: 30,
+  },
+  surrogate_triage_top_k: {
+    labelKey: "question.surrogateTriageTopK.label",
+    questionKey: "question.surrogateTriageTopK.help",
+    default: 20,
+  },
+  surrogate_triage_model: {
+    labelKey: "question.surrogateTriageModel.label",
+    questionKey: "question.surrogateTriageModel.help",
+    default: "rf",
+  },
   af2_plddt_cutoff: {
     labelKey: "question.af2PlddtCutoff.label",
     questionKey: "question.af2PlddtCutoff.help",
@@ -9008,9 +9269,34 @@ const QUESTION_PRESETS = {
     questionKey: "question.evolutionMode.help",
     default: false,
   },
+  evolution_label_source: {
+    labelKey: "question.evolutionLabelSource.label",
+    questionKey: "question.evolutionLabelSource.help",
+    default: "experimental",
+  },
+  evolution_objective_metric: {
+    labelKey: "question.evolutionObjectiveMetric.label",
+    questionKey: "question.evolutionObjectiveMetric.help",
+    default: "activity",
+  },
+  evolution_experiment_source_run_id: {
+    labelKey: "question.evolutionExperimentSourceRunId.label",
+    questionKey: "question.evolutionExperimentSourceRunId.help",
+    default: "",
+  },
+  evolution_pool_size: {
+    labelKey: "question.evolutionPoolSize.label",
+    questionKey: "question.evolutionPoolSize.help",
+    default: 1000,
+  },
   evolution_initial_samples: {
     labelKey: "question.evolutionInitialSamples.label",
     questionKey: "question.evolutionInitialSamples.help",
+    default: 30,
+  },
+  evolution_oracle_samples: {
+    labelKey: "question.evolutionOracleSamples.label",
+    questionKey: "question.evolutionOracleSamples.help",
     default: 20,
   },
   evolution_rounds: {
@@ -9059,6 +9345,7 @@ const ANSWER_BOOL_KEYS = new Set([
   "relax_enabled",
   "confirm_run",
   "evolution_mode",
+  "surrogate_triage_enabled",
 ]);
 
 const ANSWER_INT_KEYS = new Set([
@@ -9078,6 +9365,8 @@ const ANSWER_INT_KEYS = new Set([
   "bioemu_num_samples",
   "bioemu_max_return_structures",
   "af2_max_candidates_per_tier",
+  "surrogate_triage_initial_samples",
+  "surrogate_triage_top_k",
   "conservation_cluster_cov_mode",
   "conservation_cluster_kmer_per_seq",
   "evolution_initial_samples",
@@ -9186,6 +9475,11 @@ const EXPERIMENT_RESULTS = [
   { labelKey: "experiment.result.success", value: "success" },
   { labelKey: "experiment.result.fail", value: "fail" },
   { labelKey: "experiment.result.inconclusive", value: "inconclusive" },
+];
+
+const EXPERIMENT_METRIC_DIRECTIONS = [
+  { labelKey: "experiment.metricDirection.maximize", value: "maximize" },
+  { labelKey: "experiment.metricDirection.minimize", value: "minimize" },
 ];
 
 const FEEDBACK_RATING_KEYS = {
@@ -9788,7 +10082,7 @@ function copilotSummaryCards(snapshot = copilotSnapshot()) {
         : "Tracking execution state";
   const topValue = snapshot.topRow ? String(snapshot.topRow.seq_id || "-") : isKo ? "Hit List 대기" : "Hit List pending";
   const topMeta = snapshot.topRow
-    ? `score ${formatMetricValue(snapshot.topRow.score, 1)} · pLDDT ${formatMetricValue(snapshot.topRow.plddt, 1)} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)} · WT ${formatWtDifference(snapshot.topRow)}`
+    ? `score ${formatMetricValue(snapshot.topRow.score, 1)} · pLDDT ${formatMetricValue(snapshot.topRow.plddt, PLDDT_DISPLAY_DIGITS)} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, RMSD_DISPLAY_DIGITS)} · WT ${formatWtDifference(snapshot.topRow)}`
     : `${snapshot.rows.length} ${isKo ? "행" : "rows"} · ${snapshot.chartLabel}`;
   const compareValue = snapshot.compare.ready
     ? `${copilotShortArtifactLabel(snapshot.compare.leftPath)} vs ${copilotShortArtifactLabel(snapshot.compare.rightPath)}`
@@ -9938,8 +10232,8 @@ function copilotContextRows(snapshot = copilotSnapshot()) {
       label: isKo ? "Top 후보" : "Top Candidate",
       value: `${snapshot.topRow.seq_id || "-"} · score ${formatMetricValue(snapshot.topRow.score, 1)} · pLDDT ${formatMetricValue(
         snapshot.topRow.plddt,
-        1
-      )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}`,
+        PLDDT_DISPLAY_DIGITS
+      )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, RMSD_DISPLAY_DIGITS)}`,
     });
   }
   if (snapshot.funnel && Number(snapshot.funnel.af2_candidate_total || 0) > 0) {
@@ -10027,12 +10321,12 @@ function copilotInterpretReply(snapshot = copilotSnapshot()) {
       isKo
         ? `Top 후보 ${snapshot.topRow.seq_id || "-"}: score ${formatMetricValue(snapshot.topRow.score, 1)}, pLDDT ${formatMetricValue(
             snapshot.topRow.plddt,
-            1
-          )}, RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}, WT ${formatWtDifference(snapshot.topRow)}`
+            PLDDT_DISPLAY_DIGITS
+          )}, RMSD ${formatMetricValue(snapshot.topRow.rmsd, RMSD_DISPLAY_DIGITS)}, WT ${formatWtDifference(snapshot.topRow)}`
         : `Top candidate ${snapshot.topRow.seq_id || "-"}: score ${formatMetricValue(snapshot.topRow.score, 1)}, pLDDT ${formatMetricValue(
             snapshot.topRow.plddt,
-            1
-          )}, RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}, WT ${formatWtDifference(snapshot.topRow)}`
+            PLDDT_DISPLAY_DIGITS
+          )}, RMSD ${formatMetricValue(snapshot.topRow.rmsd, RMSD_DISPLAY_DIGITS)}, WT ${formatWtDifference(snapshot.topRow)}`
     );
   } else {
     lines.push(isKo ? "Hit List 데이터가 아직 없습니다." : "Hit List metrics are not available yet.");
@@ -10072,12 +10366,12 @@ function copilotSummaryReply(snapshot = copilotSnapshot()) {
       isKo
         ? `Top 후보: ${snapshot.topRow.seq_id || "-"} · score ${formatMetricValue(snapshot.topRow.score, 1)} · pLDDT ${formatMetricValue(
             snapshot.topRow.plddt,
-            1
-          )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}`
+            PLDDT_DISPLAY_DIGITS
+          )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, RMSD_DISPLAY_DIGITS)}`
         : `Top candidate: ${snapshot.topRow.seq_id || "-"} · score ${formatMetricValue(snapshot.topRow.score, 1)} · pLDDT ${formatMetricValue(
             snapshot.topRow.plddt,
-            1
-          )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, 2)}`
+            PLDDT_DISPLAY_DIGITS
+          )} · RMSD ${formatMetricValue(snapshot.topRow.rmsd, RMSD_DISPLAY_DIGITS)}`
     );
   } else {
     lines.push(isKo ? "Hit List는 아직 비어 있습니다." : "The Hit List is still empty.");
@@ -10991,6 +11285,7 @@ function setLanguage(lang) {
   refillSelect(el.feedbackStage, FEEDBACK_STAGES, { includeEmpty: false });
   refillSelect(el.experimentAssay, EXPERIMENT_ASSAYS, { includeEmpty: false });
   refillSelect(el.experimentResult, EXPERIMENT_RESULTS, { includeEmpty: false });
+  refillSelect(el.experimentMetricDirection, EXPERIMENT_METRIC_DIRECTIONS, { includeEmpty: false });
   refreshArtifactSelects();
   renderArtifactComparisonSummary(state.artifactComparison);
   renderMonitorCompleteness(state.artifactComparison, state.hitListResult?.completeness || null);
@@ -11372,7 +11667,7 @@ function handleExperimentChoice(target) {
     openWorkflowStudioBuilderFromHome();
     return;
   }
-  if (["fast", "advanced", "evolution"].includes(normalizedTarget)) {
+  if (["fast", "advanced", "surrogate", "evolution"].includes(normalizedTarget)) {
     setActiveTab(normalizedTarget);
   }
 }
@@ -11675,6 +11970,116 @@ async function loadFastTargetFile(file) {
   setMessage(t("fast.message.fileLoaded", { name: file.name || "input" }), "ai");
 }
 
+function readNumberInput(input, fallback, { min = null, max = null } = {}) {
+  const parsed = Number.parseFloat(String(input?.value ?? "").trim());
+  let value = Number.isFinite(parsed) ? parsed : fallback;
+  if (min !== null) value = Math.max(min, value);
+  if (max !== null) value = Math.min(max, value);
+  return value;
+}
+
+function readIntegerInput(input, fallback, { min = null, max = null } = {}) {
+  return Math.round(readNumberInput(input, fallback, { min, max }));
+}
+
+function buildSurrogateLaunchAnswers() {
+  const targetInput = String(el.surrogateTargetInput?.value || "").trim();
+  const answers = {
+    run_mode: "pipeline",
+    target_input: targetInput,
+    start_from: "msa",
+    stop_after: "novelty",
+    novelty_enabled: true,
+    wt_compare: true,
+    rfd3_use: false,
+    bioemu_use: false,
+    relax_enabled: false,
+    evolution_mode: false,
+    surrogate_triage_enabled: true,
+    surrogate_triage_initial_samples: readIntegerInput(el.surrogateInitialSamplesInput, 30, { min: 1 }),
+    surrogate_triage_top_k: readIntegerInput(el.surrogateTopKInput, 20, { min: 1 }),
+    surrogate_triage_model: String(el.surrogateModelInput?.value || "rf").trim() || "rf",
+    af2_provider: String(el.surrogateAf2ProviderInput?.value || "colabfold").trim() || "colabfold",
+    soluprot_cutoff: readNumberInput(el.surrogateSoluprotCutoffInput, 0.5, { min: 0, max: 1 }),
+    af2_plddt_cutoff: readNumberInput(el.surrogateAf2PlddtCutoffInput, 85, { min: 0, max: 100 }),
+    af2_rmsd_cutoff: readNumberInput(el.surrogateAf2RmsdCutoffInput, 2.0, { min: 0.001 }),
+    selected_tiers: FAST_SELECTED_TIER_VALUES,
+    num_seq_per_tier: 2,
+    af2_max_candidates_per_tier: 0,
+  };
+  return answers;
+}
+
+function applySurrogatePresetToAdvanced() {
+  ensureManualPlan();
+  state.answerMeta = {};
+  state.setupLoadedRequestRunId = "";
+  state.chainRanges = null;
+  resetSetupResiduePicker();
+  const answers = buildSurrogateLaunchAnswers();
+  state.runMode = "pipeline";
+  state.plan = {
+    ...buildManualPlan("pipeline"),
+    source: "surrogate",
+    routed_request: {
+      stop_after: "novelty",
+      novelty_enabled: true,
+      rfd3_use: false,
+      bioemu_use: false,
+      surrogate_triage_enabled: true,
+      selected_tiers: FAST_SELECTED_TIER_VALUES,
+    },
+  };
+  state.answers = {
+    ...answers,
+    confirm_run: true,
+  };
+  if (el.promptInput) {
+    el.promptInput.value = "Run AF2 surrogate triage with RFD3 and BioEmu disabled.";
+  }
+  state.setupStepIndex = Math.max(0, SETUP_WIZARD_STEPS.findIndex((step) => step.id === "workflow"));
+  updateRunLabel();
+  renderQuestions(state.plan.questions || []);
+  updateRunEligibility(state.plan.questions || []);
+  setActiveTab("advanced");
+  setMessage(t("surrogate.message.reviewReady"), "ai");
+}
+
+async function loadSurrogateTargetFile(file) {
+  if (!file || typeof file.text !== "function") return;
+  const text = await file.text();
+  if (el.surrogateTargetInput) {
+    el.surrogateTargetInput.value = String(text || "");
+  }
+  setMessage(t("surrogate.message.fileLoaded", { name: file.name || "input" }), "ai");
+}
+
+function initSurrogateLauncher() {
+  if (surrogateLauncherInitialized) return;
+  el.surrogateLoadFileBtn?.addEventListener("click", () => {
+    el.surrogateTargetFile?.click();
+  });
+  el.surrogateTargetFile?.addEventListener("change", async (event) => {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    await loadSurrogateTargetFile(file);
+    event.target.value = "";
+  });
+  el.surrogateOpenAdvancedBtn?.addEventListener("click", () => {
+    applySurrogatePresetToAdvanced();
+  });
+  el.surrogateRunBtn?.addEventListener("click", async () => {
+    const answers = buildSurrogateLaunchAnswers();
+    if (!String(answers.target_input || "").trim()) {
+      setMessage(t("surrogate.error.targetRequired"), "ai");
+      setActiveTab("surrogate");
+      return;
+    }
+    await runPipeline(answers);
+  });
+  surrogateLauncherInitialized = true;
+}
+
 function initFastLauncher() {
   if (fastLauncherInitialized) return;
   el.fastSelectedTiers?.querySelectorAll("[data-fast-tier]").forEach((button) => {
@@ -11754,6 +12159,9 @@ function initEvolutionLauncher() {
       target_input: targetInput,
       evolution_mode: true,
       evolution_pool_size: Number.parseInt(el.evolutionPoolSizeInput?.value || "1000", 10),
+      evolution_label_source: el.evolutionLabelSourceInput?.value || "experimental",
+      evolution_objective_metric: String(el.evolutionObjectiveMetricInput?.value || "activity").trim() || "activity",
+      evolution_experiment_source_run_id: String(el.evolutionExperimentSourceRunIdInput?.value || "").trim(),
       evolution_initial_samples: Number.parseInt(el.evolutionInitialSamplesInput?.value || "30", 10),
       evolution_oracle_samples: Number.parseInt(el.evolutionOracleSamplesInput?.value || "20", 10),
       af2_plddt_cutoff: Number.parseFloat(el.evolutionAf2PlddtCutoffInput?.value || "85"),
@@ -11785,6 +12193,7 @@ function initTabs() {
   initHomeContext();
   initEvolutionLauncher();
   initFastLauncher();
+  initSurrogateLauncher();
   const stored = localStorage.getItem(TAB_KEY);
   setActiveTab(stored || "home");
   void syncHomeProjectRoundContext({ preserveSelection: true });
@@ -11973,6 +12382,34 @@ function buildManualPlan(mode) {
         default: 0,
       },
       {
+        id: "surrogate_triage_enabled",
+        labelKey: "question.surrogateTriageEnabled.label",
+        questionKey: "question.surrogateTriageEnabled.help",
+        required: false,
+        default: false,
+      },
+      {
+        id: "surrogate_triage_initial_samples",
+        labelKey: "question.surrogateTriageInitialSamples.label",
+        questionKey: "question.surrogateTriageInitialSamples.help",
+        required: false,
+        default: 30,
+      },
+      {
+        id: "surrogate_triage_top_k",
+        labelKey: "question.surrogateTriageTopK.label",
+        questionKey: "question.surrogateTriageTopK.help",
+        required: false,
+        default: 20,
+      },
+      {
+        id: "surrogate_triage_model",
+        labelKey: "question.surrogateTriageModel.label",
+        questionKey: "question.surrogateTriageModel.help",
+        required: false,
+        default: "rf",
+      },
+      {
         id: "af2_plddt_cutoff",
         labelKey: "question.af2PlddtCutoff.label",
         questionKey: "question.af2PlddtCutoff.help",
@@ -12030,6 +12467,27 @@ function buildManualPlan(mode) {
         question: "Initial sequences to generate in Stage 1.",
         required: false,
         default: 1000,
+      },
+      {
+        id: "evolution_label_source",
+        labelKey: "question.evolutionLabelSource.label",
+        questionKey: "question.evolutionLabelSource.help",
+        required: false,
+        default: "experimental",
+      },
+      {
+        id: "evolution_objective_metric",
+        labelKey: "question.evolutionObjectiveMetric.label",
+        questionKey: "question.evolutionObjectiveMetric.help",
+        required: false,
+        default: "activity",
+      },
+      {
+        id: "evolution_experiment_source_run_id",
+        labelKey: "question.evolutionExperimentSourceRunId.label",
+        questionKey: "question.evolutionExperimentSourceRunId.help",
+        required: false,
+        default: "",
       },
       {
         id: "evolution_initial_samples",
@@ -12393,6 +12851,27 @@ function buildManualPlan(mode) {
         default: 1000,
       },
       {
+        id: "evolution_label_source",
+        labelKey: "question.evolutionLabelSource.label",
+        questionKey: "question.evolutionLabelSource.help",
+        required: false,
+        default: "experimental",
+      },
+      {
+        id: "evolution_objective_metric",
+        labelKey: "question.evolutionObjectiveMetric.label",
+        questionKey: "question.evolutionObjectiveMetric.help",
+        required: false,
+        default: "activity",
+      },
+      {
+        id: "evolution_experiment_source_run_id",
+        labelKey: "question.evolutionExperimentSourceRunId.label",
+        questionKey: "question.evolutionExperimentSourceRunId.help",
+        required: false,
+        default: "",
+      },
+      {
         id: "evolution_initial_samples",
         labelKey: "question.evolutionInitialSamples.label",
         questionKey: "question.evolutionInitialSamples.help",
@@ -12726,6 +13205,7 @@ function initFeedbackUI() {
   fillSelect(el.feedbackStage, FEEDBACK_STAGES, { includeEmpty: false });
   fillSelect(el.experimentAssay, EXPERIMENT_ASSAYS, { includeEmpty: false });
   fillSelect(el.experimentResult, EXPERIMENT_RESULTS, { includeEmpty: false });
+  fillSelect(el.experimentMetricDirection, EXPERIMENT_METRIC_DIRECTIONS, { includeEmpty: false });
   refreshArtifactSelects();
 
   if (el.feedbackArtifact && el.feedbackStage) {
@@ -14323,7 +14803,7 @@ function buildWorkflowDesignerCard({
     targetInputLoadBtn.textContent = t("fast.action.loadFile");
     const targetInputFile = document.createElement("input");
     targetInputFile.type = "file";
-    targetInputFile.accept = ".pdb,.ent,.fa,.fasta,.txt,.seq";
+    targetInputFile.accept = ".pdb,.ent,.cif,.mmcif,.bcif,.fa,.fasta,.txt,.seq";
     targetInputFile.className = "hidden";
     targetInputActions.appendChild(targetInputLoadBtn);
     targetInputActions.appendChild(targetInputFile);
@@ -16337,7 +16817,12 @@ function renderQuestions(questions) {
   }
 
   choiceQuestions.forEach((q) => {
-    if (compactChoiceQuestionIds.has(q.id) || SETUP_RFD3_MODE_DETAIL_IDS.has(q.id) || q.id === "evolution_mode") return;
+    if (
+      compactChoiceQuestionIds.has(q.id) ||
+      SETUP_RFD3_MODE_DETAIL_IDS.has(q.id) ||
+      q.id === "evolution_mode" ||
+      q.id === "surrogate_triage_enabled"
+    ) return;
     const card = document.createElement("div");
     card.className = buildQuestionCardClass(q, q.id === "run_mode" ? ["run-mode-card"] : []);
 
@@ -17083,11 +17568,160 @@ function renderQuestions(questions) {
   const evolutionQuestionIds = new Set([
     "evolution_mode",
     "evolution_pool_size",
+    "evolution_label_source",
+    "evolution_objective_metric",
+    "evolution_experiment_source_run_id",
     "evolution_initial_samples",
     "evolution_oracle_samples",
     "evolution_rounds",
     "evolution_samples_per_round",
   ]);
+  const surrogateTriageQuestionIds = new Set([
+    "surrogate_triage_enabled",
+    "surrogate_triage_initial_samples",
+    "surrogate_triage_top_k",
+    "surrogate_triage_model",
+  ]);
+
+  const appendSurrogateTriageBoard = () => {
+    const surrogateIds = Array.from(surrogateTriageQuestionIds);
+    const surrogateQuestions = normalizedQuestions.filter((q) => surrogateIds.includes(q.id));
+    if (!surrogateQuestions.length) return;
+
+    const questionById = Object.fromEntries(surrogateQuestions.map((q) => [q.id, q]));
+    const questionParams = () => ({
+      af2Provider: af2ProviderName(state.answers.af2_provider || "colabfold", state.lang || "en"),
+    });
+    const questionLabel = (q) => t(q.labelKey, questionParams());
+    const questionHelp = (q) => t(q.questionKey, questionParams());
+
+    const card = document.createElement("div");
+    card.className = "question-card parameter-board surrogate-board";
+
+    const title = document.createElement("div");
+    title.className = "question-title";
+    title.textContent = t("setup.surrogate.title");
+
+    const help = document.createElement("div");
+    help.className = "question-help";
+    help.textContent = t("setup.surrogate.help");
+
+    const grid = document.createElement("div");
+    grid.className = "parameter-board-grid option-board-grid";
+
+    const modeQuestion = questionById.surrogate_triage_enabled;
+    if (modeQuestion) {
+      const field = document.createElement("div");
+      field.className = "parameter-field option-field";
+      const label = document.createElement("div");
+      label.className = "parameter-label";
+      label.textContent = questionLabel(modeQuestion);
+      const desc = document.createElement("div");
+      desc.className = "parameter-help";
+      desc.textContent = questionHelp(modeQuestion);
+      field.appendChild(label);
+      field.appendChild(desc);
+
+      let current = state.answers.surrogate_triage_enabled;
+      if (typeof current !== "boolean") {
+        current = Boolean(modeQuestion.default);
+        state.answers.surrogate_triage_enabled = current;
+      }
+
+      renderChoiceButtons(
+        field,
+        [
+          { label: "On", value: true },
+          { label: "Off", value: false },
+        ],
+        current,
+        (value) => {
+          state.answers.surrogate_triage_enabled = value;
+          if (value === true) {
+            state.answers.rfd3_use = false;
+            state.answers.bioemu_use = false;
+          }
+          updateRunEligibility(normalizedQuestions);
+          renderQuestions(state.plan?.questions || []);
+        },
+        { rerender: false }
+      );
+      grid.appendChild(field);
+    }
+
+    if (state.answers.surrogate_triage_enabled === true) {
+      ["surrogate_triage_initial_samples", "surrogate_triage_top_k"].forEach((id) => {
+        const q = questionById[id];
+        if (!q) return;
+        const field = document.createElement("label");
+        field.className = "parameter-field option-field";
+        const label = document.createElement("span");
+        label.className = "parameter-label";
+        label.textContent = questionLabel(q);
+        const desc = document.createElement("span");
+        desc.className = "parameter-help";
+        desc.textContent = questionHelp(q);
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = "1";
+        input.step = "1";
+        if (state.answers[id] === undefined || state.answers[id] === "") {
+          state.answers[id] = q.default;
+        }
+        input.value = String(state.answers[id]);
+        input.addEventListener("input", () => {
+          const parsed = Number.parseInt(input.value, 10);
+          if (Number.isFinite(parsed)) state.answers[id] = Math.max(1, parsed);
+          updateRunEligibility(normalizedQuestions);
+        });
+        field.appendChild(label);
+        field.appendChild(desc);
+        field.appendChild(input);
+        grid.appendChild(field);
+      });
+
+      const modelQuestion = questionById.surrogate_triage_model;
+      if (modelQuestion) {
+        const field = document.createElement("label");
+        field.className = "parameter-field option-field";
+        const label = document.createElement("span");
+        label.className = "parameter-label";
+        label.textContent = questionLabel(modelQuestion);
+        const desc = document.createElement("span");
+        desc.className = "parameter-help";
+        desc.textContent = questionHelp(modelQuestion);
+        const select = document.createElement("select");
+        const currentModel = String(state.answers.surrogate_triage_model || modelQuestion.default || "rf");
+        [
+          { labelKey: "choice.surrogateModel.rf", value: "rf" },
+          { labelKey: "choice.surrogateModel.ridge", value: "ridge" },
+          { labelKey: "choice.surrogateModel.xgboost", value: "xgboost" },
+          { labelKey: "choice.surrogateModel.lightgbm", value: "lightgbm" },
+          { labelKey: "choice.surrogateModel.ensemble", value: "ensemble" },
+        ].forEach((optionDef) => {
+          const option = document.createElement("option");
+          option.value = optionDef.value;
+          option.textContent = t(optionDef.labelKey);
+          if (currentModel === optionDef.value) option.selected = true;
+          select.appendChild(option);
+        });
+        state.answers.surrogate_triage_model = currentModel;
+        select.addEventListener("change", () => {
+          state.answers.surrogate_triage_model = select.value;
+          updateRunEligibility(normalizedQuestions);
+        });
+        field.appendChild(label);
+        field.appendChild(desc);
+        field.appendChild(select);
+        grid.appendChild(field);
+      }
+    }
+
+    card.appendChild(title);
+    card.appendChild(help);
+    card.appendChild(grid);
+    appendConfigCard(makeOptionalSetupDetails(card, { key: "surrogate", defaultOpen: false }));
+  };
 
   const appendEvolutionBoard = () => {
     const evolutionIds = Array.from(evolutionQuestionIds);
@@ -17153,18 +17787,49 @@ function renderQuestions(questions) {
 
         const inputWrap = document.createElement("div");
         inputWrap.className = "input-row";
-        const input = document.createElement("input");
-        input.type = "number";
-        input.step = "1";
         if (state.answers[q.id] === undefined) {
           state.answers[q.id] = q.default;
         }
-        input.value = state.answers[q.id];
-        input.addEventListener("input", () => {
-          state.answers[q.id] = parseInt(input.value, 10) || 0;
-          updateRunEligibility(normalizedQuestions);
-        });
-        inputWrap.appendChild(input);
+
+        if (q.id === "evolution_label_source") {
+          const select = document.createElement("select");
+          const currentSource = String(state.answers[q.id] || q.default || "experimental");
+          [
+            { labelKey: "choice.evolutionLabelSource.experimental", value: "experimental" },
+            { labelKey: "choice.evolutionLabelSource.inSilicoAf2", value: "in_silico_af2" },
+          ].forEach((optionDef) => {
+            const option = document.createElement("option");
+            option.value = optionDef.value;
+            option.textContent = t(optionDef.labelKey);
+            if (currentSource === optionDef.value) option.selected = true;
+            select.appendChild(option);
+          });
+          state.answers[q.id] = currentSource;
+          select.addEventListener("change", () => {
+            state.answers[q.id] = select.value;
+            updateRunEligibility(normalizedQuestions);
+          });
+          inputWrap.appendChild(select);
+        } else {
+          const input = document.createElement("input");
+          if (q.id === "evolution_objective_metric" || q.id === "evolution_experiment_source_run_id") {
+            input.type = "text";
+            input.value = String(state.answers[q.id] ?? q.default ?? "");
+            input.addEventListener("input", () => {
+              state.answers[q.id] = input.value.trim();
+              updateRunEligibility(normalizedQuestions);
+            });
+          } else {
+            input.type = "number";
+            input.step = "1";
+            input.value = state.answers[q.id];
+            input.addEventListener("input", () => {
+              state.answers[q.id] = parseInt(input.value, 10) || 0;
+              updateRunEligibility(normalizedQuestions);
+            });
+          }
+          inputWrap.appendChild(input);
+        }
         field.appendChild(inputWrap);
         grid.appendChild(field);
       });
@@ -17177,6 +17842,9 @@ function renderQuestions(questions) {
   };
 
   appendCompactOptionBoard();
+  if (setupWizardStepId === "workflow") {
+    appendSurrogateTriageBoard();
+  }
   if (setupWizardStepId === "workflow") {
     appendEvolutionBoard();
   }
@@ -17594,6 +18262,7 @@ function renderQuestions(questions) {
     ...compactQuestions.map((q) => q.id),
     ...advancedConstraintQuestions.map((q) => q.id),
     ...evolutionQuestionIds,
+    ...surrogateTriageQuestionIds,
   ]);
   textQuestions.forEach((q) => {
     if (hiddenTextQuestionIds.has(q.id) || SETUP_RFD3_MODE_DETAIL_IDS.has(q.id)) return;
@@ -18321,6 +18990,10 @@ function filterAnswersForMode(mode, answers) {
       "bioemu_target_rmsd_cutoff",
       "bioemu_steering_config_text",
       "af2_max_candidates_per_tier",
+      "surrogate_triage_enabled",
+      "surrogate_triage_initial_samples",
+      "surrogate_triage_top_k",
+      "surrogate_triage_model",
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
       "relax_enabled",
@@ -18333,6 +19006,9 @@ function filterAnswersForMode(mode, answers) {
       "stop_after",
       "evolution_mode",
       "evolution_pool_size",
+      "evolution_label_source",
+      "evolution_objective_metric",
+      "evolution_experiment_source_run_id",
       "evolution_initial_samples",
       "evolution_oracle_samples",
       "evolution_rounds",
@@ -18367,6 +19043,10 @@ function filterAnswersForMode(mode, answers) {
       "bioemu_target_rmsd_cutoff",
       "bioemu_steering_config_text",
       "af2_max_candidates_per_tier",
+      "surrogate_triage_enabled",
+      "surrogate_triage_initial_samples",
+      "surrogate_triage_top_k",
+      "surrogate_triage_model",
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
       "relax_enabled",
@@ -18379,6 +19059,9 @@ function filterAnswersForMode(mode, answers) {
       "stop_after",
       "evolution_mode",
       "evolution_pool_size",
+      "evolution_label_source",
+      "evolution_objective_metric",
+      "evolution_experiment_source_run_id",
       "evolution_initial_samples",
       "evolution_oracle_samples",
       "evolution_rounds",
@@ -18721,6 +19404,7 @@ async function runPipeline(overrideAnswers = null) {
   let customId = (
     el.customRunIdInput?.value?.trim() ||
     el.fastCustomRunIdInput?.value?.trim() ||
+    el.surrogateCustomRunIdInput?.value?.trim() ||
     el.evolutionCustomRunIdInput?.value?.trim() ||
     ""
   );
@@ -19194,6 +19878,34 @@ function artifactFiltersForView(view = "monitor") {
   return state.artifactFiltersByView[view];
 }
 
+function artifactSelectionForView(view = "monitor") {
+  if (!state.artifactSelectionsByView || typeof state.artifactSelectionsByView !== "object") {
+    state.artifactSelectionsByView = {};
+  }
+  if (!(state.artifactSelectionsByView[view] instanceof Set)) {
+    state.artifactSelectionsByView[view] = new Set();
+  }
+  return state.artifactSelectionsByView[view];
+}
+
+function artifactMapByPath(items = state.artifacts) {
+  const map = new Map();
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const path = String(item?.path || "").trim();
+    if (path) map.set(path, item);
+  });
+  return map;
+}
+
+function pruneArtifactSelection(view = "monitor", items = state.artifacts) {
+  const selected = artifactSelectionForView(view);
+  const paths = new Set((Array.isArray(items) ? items : []).map((item) => String(item?.path || "").trim()).filter(Boolean));
+  Array.from(selected).forEach((path) => {
+    if (!paths.has(path)) selected.delete(path);
+  });
+  return selected;
+}
+
 function renderAllArtifactViews(items = state.artifacts) {
   renderArtifactFilters(items, "monitor");
   renderArtifacts(items, "monitor");
@@ -19252,11 +19964,57 @@ function renderArtifacts(list, view = "monitor") {
     if (typeFilter !== "all" && String(type || "") !== String(typeFilter)) return false;
     return true;
   });
+  const selectedPaths = pruneArtifactSelection(view, list);
+  const filteredFiles = filtered.filter((item) => String(item?.type || "") === "file");
 
   if (!filtered.length) {
     listEl.innerHTML = `<div class="placeholder">${t("artifact.none")}</div>`;
     return;
   }
+
+  const toolbar = document.createElement("div");
+  toolbar.className = "artifact-bulk-actions";
+  toolbar.innerHTML = `
+    <span class="artifact-bulk-count">${escapeHtml(t("artifacts.bulk.selected", {
+      selected: selectedPaths.size,
+      total: filteredFiles.length,
+    }))}</span>
+    <button type="button" class="ghost" data-artifact-bulk-action="select-filtered">${escapeHtml(t("artifacts.bulk.selectFiltered"))}</button>
+    <button type="button" class="ghost" data-artifact-bulk-action="clear">${escapeHtml(t("artifacts.bulk.clear"))}</button>
+    <button type="button" class="primary" data-artifact-bulk-action="download">${escapeHtml(t("artifacts.bulk.downloadSelected"))}</button>
+  `;
+  toolbar.addEventListener("click", async (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const button = target?.closest("button[data-artifact-bulk-action]");
+    if (!button) return;
+    const action = button.dataset.artifactBulkAction;
+    if (action === "select-filtered") {
+      filteredFiles.forEach((item) => {
+        const path = String(item?.path || "").trim();
+        if (path) selectedPaths.add(path);
+      });
+      renderArtifacts(list, view);
+      return;
+    }
+    if (action === "clear") {
+      selectedPaths.clear();
+      renderArtifacts(list, view);
+      return;
+    }
+    if (action === "download") {
+      const byPath = artifactMapByPath(list);
+      const items = Array.from(selectedPaths).map((path) => byPath.get(path)).filter(Boolean);
+      if (!items.length) {
+        setMessage(t("artifacts.bulk.noSelection"), "ai");
+        return;
+      }
+      await downloadArtifactsAsZip(items, {
+        filename: `${state.currentRunId || "run"}_${view}_artifacts.zip`,
+        buttonEl: button,
+      });
+    }
+  });
+  listEl.appendChild(toolbar);
 
   const groups = new Map();
   filtered.forEach((item) => {
@@ -19282,8 +20040,9 @@ function renderArtifacts(list, view = "monitor") {
     const groupList = document.createElement("div");
     groupList.className = "artifact-group-list";
     items.forEach((item) => {
+      const itemPath = String(item?.path || "").trim();
       const div = document.createElement("div");
-      div.className = "artifact-item";
+      div.className = `artifact-item${selectedPaths.has(itemPath) ? " is-selected" : ""}`;
       const meta = artifactMetaForPath(item.path);
       const tier = meta.tier;
       const type = artifactTypeFromItem(item);
@@ -19297,12 +20056,27 @@ function renderArtifacts(list, view = "monitor") {
       }
       const displayPath = escapeHtml(displayArtifactPath(item.path));
       div.innerHTML = `
+        ${
+          String(item?.type || "") === "file"
+            ? `<label class="artifact-select-box" title="${escapeHtml(t("artifacts.bulk.selectFiltered"))}">
+                <input type="checkbox" data-artifact-select="${escapeHtml(itemPath)}" ${selectedPaths.has(itemPath) ? "checked" : ""} />
+              </label>`
+            : ""
+        }
         <div class="artifact-item-main">
           <span class="artifact-item-path">${displayPath}</span>
           <span class="artifact-meta">${tags.join("")}</span>
         </div>
         <div class="artifact-item-actions"></div>
       `;
+      const checkbox = div.querySelector("input[data-artifact-select]");
+      checkbox?.addEventListener("click", (event) => event.stopPropagation());
+      checkbox?.addEventListener("change", (event) => {
+        event.stopPropagation();
+        if (checkbox.checked) selectedPaths.add(itemPath);
+        else selectedPaths.delete(itemPath);
+        renderArtifacts(list, view);
+      });
       const actions = div.querySelector(".artifact-item-actions");
       if (actions && String(item?.type || "") === "file") {
         const downloadBtn = document.createElement("button");
@@ -20136,8 +20910,8 @@ function buildComparisonDetailMarkdown(summary, runId) {
   lines.push("## WT vs Design");
   const wtRows = [
     { key: "soluprot", label: "SoluProt", digits: 3 },
-    { key: "plddt", label: "pLDDT", digits: 1 },
-    { key: "rmsd", label: "RMSD", digits: 2 },
+    { key: "plddt", label: "pLDDT", digits: PLDDT_DISPLAY_DIGITS },
+    { key: "rmsd", label: "RMSD", digits: RMSD_DISPLAY_DIGITS },
   ];
   if (showRelax) wtRows.push({ key: "relax", label: "Relax/res", digits: 3 });
   lines.push("| Metric | WT | Design median | Delta |");
@@ -20191,8 +20965,8 @@ function buildComparisonDetailMarkdown(summary, runId) {
     const relaxMedian = finiteNumber(bucket.relax_median) ?? finiteNumber(fallback.relax_median);
     lines.push(
       showRelax
-        ? `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${Number(bucket.relax_selected_total || 0)}/${Number(bucket.relax_candidate_total || 0)} (${formatPercentValue(bucket.relax_pass_rate)}) | ${formatMetricValue(plddtMedian, 1)} | ${formatMetricValue(rmsdMedian, 2)} | ${formatMetricValue(relaxMedian, 3)} |`
-        : `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${formatMetricValue(plddtMedian, 1)} | ${formatMetricValue(rmsdMedian, 2)} |`
+        ? `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${Number(bucket.relax_selected_total || 0)}/${Number(bucket.relax_candidate_total || 0)} (${formatPercentValue(bucket.relax_pass_rate)}) | ${formatMetricValue(plddtMedian, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(rmsdMedian, RMSD_DISPLAY_DIGITS)} | ${formatMetricValue(relaxMedian, 3)} |`
+        : `| ${sourceLabel(key)} | ${Number(bucket.backbone_count || 0)} | ${Number(bucket.soluprot_passed || 0)}/${Number(bucket.soluprot_total || 0)} (${formatPercentValue(bucket.soluprot_pass_rate)}) | ${formatMetricValue(bucket.soluprot_median, 3)} | ${Number(bucket.af2_selected_total || 0)}/${Number(bucket.af2_candidate_total || 0)} (${formatPercentValue(bucket.af2_pass_rate)}) | ${formatMetricValue(plddtMedian, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(rmsdMedian, RMSD_DISPLAY_DIGITS)} |`
     );
   });
   if (sourceUsageLines.length) {
@@ -20215,8 +20989,8 @@ function buildComparisonDetailMarkdown(summary, runId) {
       if (!row || typeof row !== "object") return;
       lines.push(
         showRelax
-          ? `| ${formatConservationTierValue(row.tier)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${Number(row.relax_selected_total || 0)}/${Number(row.relax_candidate_total || 0)} (${formatPercentValue(row.relax_pass_rate)}) | ${formatMetricValue(row.plddt_median, 1)} | ${formatMetricValue(row.rmsd_median, 2)} | ${formatMetricValue(row.relax_median, 3)} |`
-          : `| ${formatConservationTierValue(row.tier)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${formatMetricValue(row.plddt_median, 1)} | ${formatMetricValue(row.rmsd_median, 2)} |`
+          ? `| ${formatConservationTierValue(row.tier)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${Number(row.relax_selected_total || 0)}/${Number(row.relax_candidate_total || 0)} (${formatPercentValue(row.relax_pass_rate)}) | ${formatMetricValue(row.plddt_median, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd_median, RMSD_DISPLAY_DIGITS)} | ${formatMetricValue(row.relax_median, 3)} |`
+          : `| ${formatConservationTierValue(row.tier)} | ${Number(row.design_total || 0)} | ${Number(row.soluprot_passed || 0)}/${Number(row.soluprot_total || 0)} (${formatPercentValue(row.soluprot_pass_rate)}) | ${Number(row.af2_selected_total || 0)}/${Number(row.af2_candidate_total || 0)} (${formatPercentValue(row.af2_pass_rate)}) | ${formatMetricValue(row.plddt_median, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd_median, RMSD_DISPLAY_DIGITS)} |`
       );
     });
     lines.push("");
@@ -20286,8 +21060,8 @@ function renderArtifactComparisonSummary(summary) {
 
   const wtRows = [
     { key: "soluprot", label: "SoluProt", digits: 3 },
-    { key: "plddt", label: "pLDDT", digits: 1 },
-    { key: "rmsd", label: "RMSD", digits: 2 },
+    { key: "plddt", label: "pLDDT", digits: PLDDT_DISPLAY_DIGITS },
+    { key: "rmsd", label: "RMSD", digits: RMSD_DISPLAY_DIGITS },
   ];
   if (showRelax) wtRows.push({ key: "relax", label: "Relax/res", digits: 3 });
   const wtHasData = wtRows.some((row) => {
@@ -20361,12 +21135,12 @@ function renderArtifactComparisonSummary(summary) {
       const af2 = String(Number(bucket.af2_selected_total || 0));
       const plddt = formatMetricValue(
         finiteNumber(bucket.plddt_median) ?? finiteNumber(fallback.plddt_median),
-        1,
+        PLDDT_DISPLAY_DIGITS,
         false
       );
       const rmsd = formatMetricValue(
         finiteNumber(bucket.rmsd_median) ?? finiteNumber(fallback.rmsd_median),
-        2,
+        RMSD_DISPLAY_DIGITS,
         false
       );
       const relaxMedian = formatMetricValue(
@@ -20435,8 +21209,8 @@ function renderArtifactComparisonSummary(summary) {
                 )}</td>`
               : ""
           }
-          <td>${escapeHtml(formatMetricValue(finiteNumber(row?.plddt_median), 1, false))}</td>
-          <td>${escapeHtml(formatMetricValue(finiteNumber(row?.rmsd_median), 2, false))}</td>
+          <td>${escapeHtml(formatMetricValue(finiteNumber(row?.plddt_median), PLDDT_DISPLAY_DIGITS, false))}</td>
+          <td>${escapeHtml(formatMetricValue(finiteNumber(row?.rmsd_median), RMSD_DISPLAY_DIGITS, false))}</td>
           ${showRelax ? `<td>${escapeHtml(formatMetricValue(finiteNumber(row?.relax_median), 3, false))}</td>` : ""}
         </tr>
       `;
@@ -21931,8 +22705,8 @@ async function buildComparePredictionMeta(runId, meta, rawPath, af2Summary = nul
         provider,
         scope: af2PredictionScopeLabel("wt", provider),
         selectedLabel: "WT",
-        plddtLabel: plddt !== null ? formatMetricValue(plddt, 2, false) : "-",
-        rmsdLabel: rmsd !== null ? `${formatMetricValue(rmsd, 2, false)}A` : "-",
+        plddtLabel: plddt !== null ? formatMetricValue(plddt, PLDDT_DISPLAY_DIGITS, false) : "-",
+        rmsdLabel: rmsd !== null ? `${formatMetricValue(rmsd, RMSD_DISPLAY_DIGITS, false)}A` : "-",
         exact: true,
       };
     }
@@ -21957,8 +22731,8 @@ async function buildComparePredictionMeta(runId, meta, rawPath, af2Summary = nul
         provider: tierProvider,
         scope: af2PredictionScopeLabel("exact", tierProvider),
         selectedLabel: selected,
-        plddtLabel: exactPlddt !== null ? formatMetricValue(exactPlddt, 2, false) : "-",
-        rmsdLabel: exactRmsd !== null ? `${formatMetricValue(exactRmsd, 2, false)}A` : "-",
+        plddtLabel: exactPlddt !== null ? formatMetricValue(exactPlddt, PLDDT_DISPLAY_DIGITS, false) : "-",
+        rmsdLabel: exactRmsd !== null ? `${formatMetricValue(exactRmsd, RMSD_DISPLAY_DIGITS, false)}A` : "-",
         exact: true,
       };
     }
@@ -21973,9 +22747,9 @@ async function buildComparePredictionMeta(runId, meta, rawPath, af2Summary = nul
         scope: af2PredictionScopeLabel("tier", provider),
         selectedLabel: formatCompareAf2Selection(summary.selectedCount, summary.candidateCount),
         plddtLabel:
-          summary.plddtMedian !== null ? formatMetricValue(summary.plddtMedian, 2, false) : "-",
+          summary.plddtMedian !== null ? formatMetricValue(summary.plddtMedian, PLDDT_DISPLAY_DIGITS, false) : "-",
         rmsdLabel:
-          summary.rmsdMedian !== null ? `${formatMetricValue(summary.rmsdMedian, 2, false)}A` : "-",
+          summary.rmsdMedian !== null ? `${formatMetricValue(summary.rmsdMedian, RMSD_DISPLAY_DIGITS, false)}A` : "-",
         exact: false,
       };
     }
@@ -21990,9 +22764,9 @@ async function buildComparePredictionMeta(runId, meta, rawPath, af2Summary = nul
         scope: af2PredictionScopeLabel("backbone", provider),
         selectedLabel: formatCompareAf2Selection(summary.selectedCount, summary.candidateCount),
         plddtLabel:
-          summary.plddtMedian !== null ? formatMetricValue(summary.plddtMedian, 2, false) : "-",
+          summary.plddtMedian !== null ? formatMetricValue(summary.plddtMedian, PLDDT_DISPLAY_DIGITS, false) : "-",
         rmsdLabel:
-          summary.rmsdMedian !== null ? `${formatMetricValue(summary.rmsdMedian, 2, false)}A` : "-",
+          summary.rmsdMedian !== null ? `${formatMetricValue(summary.rmsdMedian, RMSD_DISPLAY_DIGITS, false)}A` : "-",
         exact: false,
       };
     }
@@ -22047,11 +22821,11 @@ async function buildComparePreviewCardData(
     fixedCount: Number.isFinite(fixedCount) ? String(fixedCount) : "-",
     wtDiff: wtDiff ? formatWtDifference(wtDiff) : "-",
     inputReferenceRmsd:
-      inputReferenceDiff && inputReferenceDiff.ok ? `${formatMetricValue(inputReferenceDiff.rmsd, 2, false)}A` : "-",
+      inputReferenceDiff && inputReferenceDiff.ok ? `${formatMetricValue(inputReferenceDiff.rmsd, RMSD_DISPLAY_DIGITS, false)}A` : "-",
     workingBackboneRmsd:
-      workingBackboneDiff && workingBackboneDiff.ok ? `${formatMetricValue(workingBackboneDiff.rmsd, 2, false)}A` : "-",
+      workingBackboneDiff && workingBackboneDiff.ok ? `${formatMetricValue(workingBackboneDiff.rmsd, RMSD_DISPLAY_DIGITS, false)}A` : "-",
     wtStructRmsd:
-      wtStructureDiff && wtStructureDiff.ok ? `${formatMetricValue(wtStructureDiff.rmsd, 2, false)}A` : "-",
+      wtStructureDiff && wtStructureDiff.ok ? `${formatMetricValue(wtStructureDiff.rmsd, RMSD_DISPLAY_DIGITS, false)}A` : "-",
     commonCa: wtStructureDiff && wtStructureDiff.ok ? String(Number(wtStructureDiff.commonCount || 0)) : "-",
     af2Scope: String(predictionMeta?.scope || "-"),
     af2Selected: String(predictionMeta?.selectedLabel || "-"),
@@ -24334,6 +25108,13 @@ async function exportExperiments(format) {
       assay_type: item.assay_type || "",
       result: item.result || "",
       sample_id: item.sample_id || "",
+      candidate_id: item.candidate_id || "",
+      sequence_id: item.sequence_id || "",
+      metric_name: item.metric_name || "",
+      metric_value: item.metric_value ?? "",
+      metric_unit: item.metric_unit || "",
+      metric_direction: item.metric_direction || "",
+      replicate_id: item.replicate_id || "",
       artifact_path: item.artifact_path || "",
       metrics: item.metrics || "",
       conditions: item.conditions || "",
@@ -24347,6 +25128,13 @@ async function exportExperiments(format) {
       "assay_type",
       "result",
       "sample_id",
+      "candidate_id",
+      "sequence_id",
+      "metric_name",
+      "metric_value",
+      "metric_unit",
+      "metric_direction",
+      "replicate_id",
       "artifact_path",
       "metrics",
       "conditions",
@@ -24477,11 +25265,20 @@ async function submitExperiment() {
     if (el.experimentStatus) el.experimentStatus.textContent = metricsInput.__parse_error;
     return;
   }
+  const rawMetricValue = el.experimentMetricValue ? el.experimentMetricValue.value.trim() : "";
+  const parsedMetricValue = rawMetricValue === "" ? undefined : Number.parseFloat(rawMetricValue);
   const payload = {
     run_id: state.currentRunId,
     assay_type: el.experimentAssay ? el.experimentAssay.value : "other",
     result: el.experimentResult ? el.experimentResult.value : "inconclusive",
     sample_id: el.experimentSampleId ? el.experimentSampleId.value.trim() : "",
+    candidate_id: el.experimentCandidateId ? el.experimentCandidateId.value.trim() : "",
+    sequence_id: el.experimentSequenceId ? el.experimentSequenceId.value.trim() : "",
+    metric_name: el.experimentMetricName ? el.experimentMetricName.value.trim() : "",
+    metric_value: Number.isFinite(parsedMetricValue) ? parsedMetricValue : undefined,
+    metric_unit: el.experimentMetricUnit ? el.experimentMetricUnit.value.trim() : "",
+    metric_direction: el.experimentMetricDirection ? el.experimentMetricDirection.value : "maximize",
+    replicate_id: el.experimentReplicateId ? el.experimentReplicateId.value.trim() : "",
     artifact_path: el.experimentArtifact ? el.experimentArtifact.value.trim() : "",
     metrics: metricsInput || undefined,
     conditions: el.experimentConditions ? el.experimentConditions.value.trim() : "",
@@ -24492,6 +25289,11 @@ async function submitExperiment() {
     if (el.experimentMetrics) el.experimentMetrics.value = "";
     if (el.experimentConditions) el.experimentConditions.value = "";
     if (el.experimentSampleId) el.experimentSampleId.value = "";
+    if (el.experimentCandidateId) el.experimentCandidateId.value = "";
+    if (el.experimentSequenceId) el.experimentSequenceId.value = "";
+    if (el.experimentMetricValue) el.experimentMetricValue.value = "";
+    if (el.experimentMetricUnit) el.experimentMetricUnit.value = "";
+    if (el.experimentReplicateId) el.experimentReplicateId.value = "";
     await refreshExperiments();
     await loadReport();
   } catch (err) {
@@ -24521,7 +25323,13 @@ async function refreshExperiments() {
       div.className = "run-item";
       const resultLabel = labelFromMap(item.result, EXPERIMENT_RESULT_KEYS);
       const assay = labelFromMap(item.assay_type, EXPERIMENT_ASSAY_KEYS);
-      div.innerHTML = `<span>${assay}</span><span class="stage-tag">${resultLabel}</span>`;
+      const metric =
+        item.metric_name && item.metric_value !== undefined && item.metric_value !== null
+          ? `${escapeHtml(item.metric_name)}=${escapeHtml(item.metric_value)}`
+          : escapeHtml(resultLabel);
+      const candidate = item.candidate_id || item.sequence_id || item.sample_id || "";
+      const label = candidate ? `${escapeHtml(assay)} · ${escapeHtml(candidate)}` : escapeHtml(assay);
+      div.innerHTML = `<span>${label}</span><span class="stage-tag">${metric}</span>`;
       el.experimentList.appendChild(div);
     });
   } catch (err) {
@@ -24650,8 +25458,8 @@ function renderRunCompareSummary(result) {
   const showRelax = runCompareHasRelaxMetrics(result);
   const rows = [
     { key: "soluprot_median", label: "SoluProt", digits: 3, percent: false },
-    { key: "plddt_median", label: "pLDDT", digits: 1, percent: false },
-    { key: "rmsd_median", label: "RMSD", digits: 2, percent: false },
+    { key: "plddt_median", label: "pLDDT", digits: PLDDT_DISPLAY_DIGITS, percent: false },
+    { key: "rmsd_median", label: "RMSD", digits: RMSD_DISPLAY_DIGITS, percent: false },
     { key: "soluprot_pass_rate", label: "SoluProt pass", digits: 1, percent: true },
     { key: "af2_pass_rate", label: af2ProviderPassLabel(currentRunAf2Provider()), digits: 1, percent: true },
   ];
@@ -24707,8 +25515,8 @@ function buildRunCompareDetailsMarkdown(result) {
   lines.push("|---|---:|---:|---:|");
   const rows = [
     ["SoluProt median", "soluprot_median", 3, false],
-    ["pLDDT median", "plddt_median", 1, false],
-    ["RMSD median", "rmsd_median", 2, false],
+    ["pLDDT median", "plddt_median", PLDDT_DISPLAY_DIGITS, false],
+    ["RMSD median", "rmsd_median", RMSD_DISPLAY_DIGITS, false],
     ["SoluProt pass rate", "soluprot_pass_rate", 1, true],
     [`${af2ProviderPassLabel(currentRunAf2Provider())} rate`, "af2_pass_rate", 1, true],
     ["Backbone count", "backbone_count", 0, false],
@@ -25070,8 +25878,8 @@ function buildMetricScatter(
         `ID: ${p.seqId}`,
         `Src: ${p.source}`,
         `SoluProt: ${formatMetricValue(p.soluprot, 3, false)}`,
-        `pLDDT: ${formatMetricValue(p.plddt, 1, false)}`,
-        `RMSD: ${formatMetricValue(p.rmsd, 2, false)}`,
+        `pLDDT: ${formatMetricValue(p.plddt, PLDDT_DISPLAY_DIGITS, false)}`,
+        `RMSD: ${formatMetricValue(p.rmsd, RMSD_DISPLAY_DIGITS, false)}`,
         `Relax: ${formatMetricValue(p.relax, 3, false)}`,
       ].join(" | ");
 
@@ -25157,8 +25965,8 @@ function buildPlddtRmsdScatter(rows) {
     titleKey: "analyze.chart.option.plddtRmsd",
     xLabelKey: "analyze.chart.axis.plddt",
     yLabelKey: "analyze.chart.axis.rmsd",
-    xDigits: 1,
-    yDigits: 2,
+    xDigits: PLDDT_DISPLAY_DIGITS,
+    yDigits: RMSD_DISPLAY_DIGITS,
   });
 }
 
@@ -25171,7 +25979,7 @@ function buildPlddtRelaxScatter(rows) {
     titleKey: "analyze.chart.option.plddtRelax",
     xLabelKey: "analyze.chart.axis.plddt",
     yLabelKey: "analyze.chart.axis.relax",
-    xDigits: 1,
+    xDigits: PLDDT_DISPLAY_DIGITS,
     yDigits: 3,
   });
 }
@@ -25185,7 +25993,7 @@ function buildRmsdRelaxScatter(rows) {
     titleKey: "analyze.chart.option.rmsdRelax",
     xLabelKey: "analyze.chart.axis.rmsd",
     yLabelKey: "analyze.chart.axis.relax",
-    xDigits: 2,
+    xDigits: RMSD_DISPLAY_DIGITS,
     yDigits: 3,
   });
 }
@@ -25420,6 +26228,55 @@ function renderCandidateCharts() {
   }
 }
 
+function hitListSelection() {
+  if (!(state.hitListSelectedSeqIds instanceof Set)) {
+    state.hitListSelectedSeqIds = new Set();
+  }
+  return state.hitListSelectedSeqIds;
+}
+
+function pruneHitListSelection(rows = state.hitListRows) {
+  const selected = hitListSelection();
+  const ids = new Set((Array.isArray(rows) ? rows : []).map((row) => String(row?.seq_id || "")).filter(Boolean));
+  Array.from(selected).forEach((seqId) => {
+    if (!ids.has(seqId)) selected.delete(seqId);
+  });
+  return selected;
+}
+
+function selectedHitListRows() {
+  const selected = hitListSelection();
+  const byId = new Map((Array.isArray(state.hitListRows) ? state.hitListRows : []).map((row) => [String(row?.seq_id || ""), row]));
+  return Array.from(selected).map((seqId) => byId.get(seqId)).filter(Boolean);
+}
+
+function downloadSelectedHitListFasta() {
+  const rows = selectedHitListRows().filter((row) => String(row?.sequence || "").trim());
+  if (!rows.length) {
+    setMessage(t("analyze.hitList.bulk.noSelection"), "ai");
+    return;
+  }
+  const fasta = rows
+    .map((row) => `>${String(row.seq_id || "candidate")}\n${String(row.sequence || "").trim()}`)
+    .join("\n");
+  downloadTextFile(`${state.currentRunId || "run"}_hit_list_selected.fasta`, `${fasta}\n`);
+}
+
+async function downloadSelectedHitListPdb(buttonEl = null) {
+  const items = selectedHitListRows()
+    .map((row) => String(row?.af2_ranked_pdb_path || "").trim())
+    .filter(Boolean)
+    .map((path) => ({ type: "file", path, size: 5_000_000 }));
+  if (!items.length) {
+    setMessage(t("analyze.hitList.bulk.noPdb"), "ai");
+    return;
+  }
+  await downloadArtifactsAsZip(items, {
+    filename: `${state.currentRunId || "run"}_hit_list_pdbs.zip`,
+    buttonEl,
+  });
+}
+
 function renderHitList() {
   if (!el.hitListTable) return;
   if (!state.currentRunId) {
@@ -25439,6 +26296,7 @@ function renderHitList() {
   const limit = Math.max(10, Math.min(500, Number(state.hitListLimit || 120)));
   state.hitListLimit = limit;
   const shown = filtered.slice(0, limit);
+  const selectedRows = pruneHitListSelection(rows);
   const showRelax = hitListRelaxColumnEnabled(shown, state.hitListResult);
   if (el.hitListSummary) {
     el.hitListSummary.innerHTML = `<div class="score-pill">${escapeHtml(
@@ -25464,6 +26322,7 @@ function renderHitList() {
     .map((row, idx) => {
       const wtDiffLabel = formatWtDifference(row);
       const isSelected = state.hitListSelectedSeqId && String(row.seq_id) === String(state.hitListSelectedSeqId);
+      const seqId = String(row.seq_id || "");
       const classNames = [
         row.af2_selected ? "hit-list-row-pass" : "",
         row.plddt == null ? "hit-list-row-missing" : "",
@@ -25472,15 +26331,16 @@ function renderHitList() {
       ]
         .filter(Boolean)
         .join(" ");
-      return `<tr class="${classNames}" data-seq-id="${escapeHtml(String(row.seq_id || ""))}">
+      return `<tr class="${classNames}" data-seq-id="${escapeHtml(seqId)}">
+        <td class="hit-list-select"><input type="checkbox" data-action="toggle-hit-row" data-seq-id="${escapeHtml(seqId)}" ${selectedRows.has(seqId) ? "checked" : ""} /></td>
         <td class="num">${idx + 1}</td>
         <td>${escapeHtml(String(row.seq_id || "-"))}</td>
         <td>${escapeHtml(String(row.source || "-"))}</td>
         <td class="num">${escapeHtml(formatConservationTierValue(row.tier))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.score, 1, false))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.soluprot, 3, false))}</td>
-        <td class="num">${escapeHtml(formatMetricValue(row.plddt, 1, false))}</td>
-        <td class="num">${escapeHtml(formatMetricValue(row.rmsd, 2, false))}</td>
+        <td class="num">${escapeHtml(formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS, false))}</td>
+        <td class="num">${escapeHtml(formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS, false))}</td>
         ${showRelax ? `<td class="num">${escapeHtml(formatMetricValue(row.relax, 3, false))}</td>` : ""}
         <td class="num">${escapeHtml(wtDiffLabel)}</td>
         <td>${escapeHtml(localizedYesNo(Boolean(row.af2_selected)))}</td>
@@ -25499,9 +26359,20 @@ function renderHitList() {
   };
 
   el.hitListTable.innerHTML = `
+    <div class="hit-list-bulk-actions">
+      <span class="hit-list-bulk-count">${escapeHtml(t("analyze.hitList.bulk.selected", {
+        selected: selectedRows.size,
+        total: filtered.length,
+      }))}</span>
+      <button type="button" class="ghost" data-action="select-hit-shown">${escapeHtml(t("analyze.hitList.bulk.selectShown"))}</button>
+      <button type="button" class="ghost" data-action="clear-hit-selection">${escapeHtml(t("analyze.hitList.bulk.clear"))}</button>
+      <button type="button" class="ghost" data-action="download-hit-fasta">${escapeHtml(t("analyze.hitList.bulk.downloadFasta"))}</button>
+      <button type="button" class="primary" data-action="download-hit-pdb">${escapeHtml(t("analyze.hitList.bulk.downloadPdb"))}</button>
+    </div>
     <table class="hit-list-table">
       <thead>
         <tr>
+          <th class="hit-list-select"></th>
           <th class="num">#</th>
           <th data-sort="seq_id" class="${sortClass("seq_id")}">seq_id</th>
           <th data-sort="source" class="${sortClass("source")}">source</th>
@@ -25555,8 +26426,8 @@ function buildHitListDetailsMarkdown() {
   filtered.slice(0, maxRows).forEach((row) => {
     lines.push(
       showRelax
-        ? `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatMetricValue(row.relax, 3)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
-        : `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
+        ? `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${formatMetricValue(row.relax, 3)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
+        : `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
     );
   });
   lines.push("");
@@ -25565,6 +26436,7 @@ function buildHitListDetailsMarkdown() {
 
 async function refreshHitList() {
   state.hitListSelectedSeqId = null;
+  hitListSelection().clear();
   if (!state.currentRunId) {
     state.hitListResult = null;
     state.hitListRows = [];
@@ -25618,6 +26490,15 @@ function base64ToBlob(base64Text, contentType = "application/octet-stream") {
   return new Blob([bytes], { type: contentType });
 }
 
+function base64ToBytes(base64Text) {
+  const binary = atob(String(base64Text || ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
 function triggerBlobDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -25627,6 +26508,47 @@ function triggerBlobDownload(blob, filename) {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function downloadArtifactsAsZip(items, { filename = "artifacts.zip", buttonEl = null } = {}) {
+  if (!state.currentRunId) {
+    setMessage(t("export.selectRun"), "ai");
+    return;
+  }
+  const files = (Array.isArray(items) ? items : [])
+    .map((item) => ({ item, request: buildArtifactDownloadRequest(item) }))
+    .filter(({ request }) => request);
+  if (!files.length) {
+    setMessage(t("artifacts.bulk.noSelection"), "ai");
+    return;
+  }
+  const previousLabel = buttonEl ? buttonEl.textContent : "";
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.textContent = t("artifacts.downloading");
+  }
+  try {
+    const entries = [];
+    for (const { request } of files) {
+      const read = await apiCall("pipeline.read_artifact", {
+        run_id: state.currentRunId,
+        ...request,
+      });
+      entries.push({
+        name: request.path,
+        bytes: base64ToBytes(read?.base64 || ""),
+      });
+    }
+    const zipBytes = buildStoredZipBytes(entries);
+    triggerBlobDownload(new Blob([zipBytes], { type: "application/zip" }), filename);
+  } catch (err) {
+    setMessage(t("artifacts.downloadFailed", { error: err.message }), "ai");
+  } finally {
+    if (buttonEl) {
+      buttonEl.disabled = false;
+      buttonEl.textContent = previousLabel || t("artifacts.bulk.downloadSelected");
+    }
+  }
 }
 
 async function downloadArtifact(item, { buttonEl = null } = {}) {
@@ -25864,7 +26786,7 @@ function buildStructureDiffSvg(structureDiff, leftPath, rightPath) {
       ].join("");
     })
     .join("");
-  const summary = `RMSD=${chartTickText(structureDiff.rmsd, 2)}A, P90=${chartTickText(
+  const summary = `RMSD=${chartTickText(structureDiff.rmsd, RMSD_DISPLAY_DIGITS)}A, P90=${chartTickText(
     structureDiff.p90Distance,
     2
   )}A, n=${Number(structureDiff.commonCount || 0)}`;
@@ -26028,8 +26950,8 @@ function buildReportHitListSection() {
   rows.slice(0, maxRows).forEach((row) => {
     lines.push(
       showRelax
-        ? `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${formatMetricValue(row.relax, 3)} | ${row.af2_selected ? "yes" : "no"} |`
-        : `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, 1)} | ${formatMetricValue(row.rmsd, 2)} | ${row.af2_selected ? "yes" : "no"} |`
+        ? `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${formatMetricValue(row.relax, 3)} | ${row.af2_selected ? "yes" : "no"} |`
+        : `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${row.af2_selected ? "yes" : "no"} |`
     );
   });
   lines.push("");
@@ -27355,6 +28277,33 @@ if (el.hitListTable) {
         if (path) {
           await downloadArtifact({ type: "file", path, size: 5000000 }, { buttonEl: btn });
         }
+      } else if (action === "select-hit-shown") {
+        const selected = hitListSelection();
+        const shown = filteredHitListRows({ applyLimit: false }).slice(0, Math.max(10, Math.min(500, Number(state.hitListLimit || 120))));
+        shown.forEach((row) => {
+          const id = String(row?.seq_id || "").trim();
+          if (id) selected.add(id);
+        });
+        renderHitList();
+      } else if (action === "clear-hit-selection") {
+        hitListSelection().clear();
+        renderHitList();
+      } else if (action === "download-hit-fasta") {
+        downloadSelectedHitListFasta();
+      } else if (action === "download-hit-pdb") {
+        await downloadSelectedHitListPdb(btn);
+      }
+      return;
+    }
+
+    const checkbox = target.closest('input[data-action="toggle-hit-row"]');
+    if (checkbox) {
+      const seqId = String(checkbox.dataset.seqId || "").trim();
+      if (seqId) {
+        const selected = hitListSelection();
+        if (checkbox.checked) selected.add(seqId);
+        else selected.delete(seqId);
+        renderHitList();
       }
     }
   });
