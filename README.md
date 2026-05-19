@@ -1,6 +1,7 @@
-# protein_pipeline
+# RAPID
 
-MCP-enabled protein design pipeline and static console UI for staged protein design runs.
+RAPID is an MCP-enabled, artifact-preserving platform for staged
+solubility-aware protein redesign runs and static/local browser execution.
 
 ## Highlights
 - Pipeline and Workflow Studio execution modes in the frontend

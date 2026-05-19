@@ -6,6 +6,7 @@ from pipeline_mcp.oidc import OIDCSettings
 from pipeline_mcp.oidc import _claims_match_expected_client
 from pipeline_mcp.oidc import account_console_url
 from pipeline_mcp.oidc import claims_to_user
+from pipeline_mcp.oidc import is_google_issuer
 from pipeline_mcp.oidc import refresh_oidc_tokens
 from pipeline_mcp.oidc import verify_oidc_token
 
@@ -24,6 +25,7 @@ def test_claims_to_user_maps_pipeline_roles_and_identity():
 
     assert user["username"] == "tester@kribb.re.kr"
     assert user["role"] == "user"
+    assert user["status"] == "approved"
     assert user["run_prefix"] == "tester_kribb.re.kr"
 
 
@@ -40,6 +42,32 @@ def test_claims_to_user_maps_realm_admin_to_admin():
     user = claims_to_user(claims)
 
     assert user["role"] == "admin"
+
+
+def test_claims_to_user_maps_model_manager_role():
+    claims = {
+        "sub": "user-123",
+        "email": "manager@example.org",
+        "preferred_username": "manager@example.org",
+        "resource_access": {
+            "protein-pipeline": {"roles": ["pipeline-model-manager"]},
+        },
+    }
+
+    user = claims_to_user(claims, client_id="protein-pipeline")
+
+    assert user["role"] == "model_manager"
+
+
+def test_google_issuer_shorthand_is_detected(monkeypatch):
+    monkeypatch.setenv("PIPELINE_OIDC_ISSUER", "google")
+    monkeypatch.setenv("PIPELINE_OIDC_CLIENT_ID", "client-id.apps.googleusercontent.com")
+    settings = oidc.load_oidc_settings()
+
+    assert settings is not None
+    assert settings.issuer == "https://accounts.google.com"
+    assert settings.provider_name == "Google"
+    assert is_google_issuer(settings.issuer) is True
 
 
 def test_account_console_url_uses_realm_issuer():

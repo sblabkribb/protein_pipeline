@@ -92,6 +92,8 @@ _SUMMARY_ARTIFACTS = (
     "agent_panel.jsonl",
     "orchestration_trace.jsonl",
 )
+DEFAULT_AF2_MAX_WORKERS = 1
+DEFAULT_RELAX_MAX_WORKERS = 4
 _PARTIAL_RERUN_IGNORED_FIELDS = {
     "project_id",
     "round_id",
@@ -8622,7 +8624,7 @@ class PipelineRunner:
                                 af2_parallel_workers = _parallel_worker_limit(
                                     len(af2_inputs),
                                     env_name="PIPELINE_AF2_MAX_WORKERS",
-                                    default=4,
+                                    default=DEFAULT_AF2_MAX_WORKERS,
                                     hard_cap=12,
                                 )
                                 if af2_parallel_workers <= 1:
@@ -9154,7 +9156,7 @@ class PipelineRunner:
                                 relax_parallel_workers = _parallel_worker_limit(
                                     len(to_relax),
                                     env_name="PIPELINE_RELAX_MAX_WORKERS",
-                                    default=4,
+                                    default=DEFAULT_RELAX_MAX_WORKERS,
                                     hard_cap=12,
                                 )
                                 if not request.dry_run and rosetta_relax_client is None:

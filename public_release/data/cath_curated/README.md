@@ -1,7 +1,10 @@
-# Paper-Curated CATH Subset
+# Pre-Refresh CATH Artifact Subset
 
 This directory contains the QC-filtered subset of the expanded CATH execution
-archive that is suitable for manuscript-level analysis.
+archive used for component-level active-learning analysis in the RAPID
+manuscript draft. These data were generated before the final corrected-chain
+CATH refresh and should not be treated as the final population-level CATH
+benchmark.
 
 The raw archive contains 73 completed `cath_test_*` run directories. Some of
 those runs completed at the orchestration level but did not produce valid
@@ -20,7 +23,7 @@ QC inclusion rule:
 Current QC result:
 
 - raw completed run directories: 73
-- included publication-grade runs: 23
+- included QC-passing runs: 23
 - excluded runs: 50
 - curated design rows: 2,737
 - mean pLDDT: 91.906
@@ -35,5 +38,5 @@ Files:
 - `curated_summary.json`: aggregate counts and included/excluded run IDs
 - `run_qc_summary.csv`: QC metrics for all 73 completed run directories
 - `excluded_runs.csv`: excluded runs and exclusion reasons
-- `included_runs.txt`: run IDs retained for manuscript-level analysis
-- `excluded_runs.txt`: run IDs excluded from manuscript-level analysis
+- `included_runs.txt`: run IDs retained for component-level analysis
+- `excluded_runs.txt`: run IDs excluded from component-level analysis

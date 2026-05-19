@@ -24,7 +24,7 @@ from pipeline_mcp.models import PipelineRequest
 
 
 DEFAULT_TARGETS = ["1kvdD00", "3bukC01", "2wejA00"]
-DEFAULT_ARMS = ["single", "rfd3_single", "rfd3_ensemble3"]
+DEFAULT_ARMS = ["single", "bioemu", "rfd3_single", "rfd3_bioemu"]
 TIERS = [0.3, 0.5, 0.7]
 RESULTS_DIR = PROJECT_ROOT / "data" / "benchmark" / "results"
 FIG_DIR = PROJECT_ROOT / "figures" / "benchmark"
@@ -79,25 +79,75 @@ ARM_CONFIGS: dict[str, dict[str, Any]] = {
         "rfd3_use": False,
         "rfd3_use_ensemble": False,
         "rfd3_max_return_designs": 1,
+        "bioemu_use": False,
+        "bioemu_num_samples": 0,
+        "bioemu_max_return_structures": 0,
         "num_seq_per_tier": 40,
+    },
+    "bioemu": {
+        "label": "Target + BioEmu ensemble",
+        "rfd3_use": False,
+        "rfd3_use_ensemble": False,
+        "rfd3_max_return_designs": 1,
+        "bioemu_use": True,
+        "bioemu_num_samples": 10,
+        "bioemu_max_return_structures": 3,
+        # target + 3 BioEmu structures x 3 tiers x 10 designs = 120 designs.
+        "num_seq_per_tier": 10,
     },
     "rfd3_single": {
         "label": "RFD3 selected backbone",
         "rfd3_use": True,
         "rfd3_use_ensemble": False,
         "rfd3_max_return_designs": 1,
+        "bioemu_use": False,
+        "bioemu_num_samples": 0,
+        "bioemu_max_return_structures": 0,
         "num_seq_per_tier": 40,
+    },
+    "rfd3_bioemu": {
+        "label": "RFD3 + BioEmu ensemble",
+        "rfd3_use": True,
+        "rfd3_use_ensemble": False,
+        "rfd3_max_return_designs": 1,
+        "bioemu_use": True,
+        "bioemu_num_samples": 10,
+        "bioemu_max_return_structures": 3,
+        # 1 RFD3 + 3 BioEmu structures x 3 tiers x 10 designs = 120 designs.
+        "num_seq_per_tier": 10,
     },
     "rfd3_ensemble3": {
         "label": "RFD3 ensemble, 3 backbones",
         "rfd3_use": True,
         "rfd3_use_ensemble": True,
         "rfd3_max_return_designs": 3,
+        "bioemu_use": False,
+        "bioemu_num_samples": 0,
+        "bioemu_max_return_structures": 0,
         # 3 backbones x 3 tiers x 13 designs = 117 designs, close to the
         # 120-design budget used by the single-backbone arms.
         "num_seq_per_tier": 13,
     },
 }
+
+
+def _ordered_arms(observed: set[str]) -> list[str]:
+    order = list(DEFAULT_ARMS) + [
+        arm for arm in ARM_CONFIGS if arm not in set(DEFAULT_ARMS)
+    ]
+    return [arm for arm in order if arm in observed]
+
+
+def _planned_backbone_count(cfg: dict[str, Any]) -> int:
+    count = 0
+    if bool(cfg.get("rfd3_use")):
+        count += max(1, int(cfg.get("rfd3_max_return_designs") or 1))
+    else:
+        # In the pipeline, the input target is the backbone unless RFD3 supplies one.
+        count += 1
+    if bool(cfg.get("bioemu_use")):
+        count += max(1, int(cfg.get("bioemu_max_return_structures") or 1))
+    return max(1, count)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -127,8 +177,8 @@ def parse_fasta(text: str) -> list[dict[str, Any]]:
         nonlocal header, chunks
         if header is None:
             return
-        seq_id = header.split()[0]
         pieces = header.split("|")
+        seq_id = pieces[0].split()[0]
         meta: dict[str, str] = {}
         for piece in pieces[1:]:
             if "=" in piece:
@@ -162,6 +212,8 @@ def build_request(pdb_text: str, arm: str, *, seed: int) -> PipelineRequest:
     if arm not in ARM_CONFIGS:
         raise ValueError(f"unknown arm: {arm}")
     cfg = ARM_CONFIGS[arm]
+    bioemu_num_samples = int(cfg.get("bioemu_num_samples") or 0)
+    bioemu_max_return_structures = int(cfg.get("bioemu_max_return_structures") or 0)
     return PipelineRequest(
         target_fasta="",
         target_pdb=pdb_text,
@@ -170,7 +222,14 @@ def build_request(pdb_text: str, arm: str, *, seed: int) -> PipelineRequest:
         rfd3_max_return_designs=int(cfg["rfd3_max_return_designs"]),
         rfd3_partial_t=5.0,
         rfd3_target_rmsd_cutoff=2.0,
-        bioemu_use=False,
+        bioemu_use=bool(cfg.get("bioemu_use", False)),
+        bioemu_num_samples=bioemu_num_samples,
+        bioemu_max_return_structures=bioemu_max_return_structures,
+        bioemu_base_seed=int(seed),
+        bioemu_max_attempted_structures=max(
+            bioemu_num_samples,
+            bioemu_max_return_structures,
+        ),
         conservation_tiers=list(TIERS),
         ligand_mask_distance=6.0,
         ligand_mask_use_original_target=True,
@@ -240,12 +299,62 @@ def load_resume_request(run_dir: Path) -> PipelineRequest:
 
 
 def _target_to_pdb_path(target: str) -> Path:
-    name = target
-    if name.startswith("cath_test_"):
-        name = name.replace("cath_test_", "", 1)
+    raw = str(target or "").strip()
+    if not raw:
+        raise ValueError("target is required")
+    path = Path(raw)
+    if path.exists():
+        return path
+
+    subset_hint: str | None = None
+    name = raw
+    for subset in ("train", "val", "test"):
+        prefix = f"cath_{subset}_"
+        if name.startswith(prefix):
+            subset_hint = subset
+            name = name.replace(prefix, "", 1)
+            break
     if name.endswith(".pdb"):
-        return PROJECT_ROOT / "cath_test" / name
-    return PROJECT_ROOT / "cath_test" / f"{name}.pdb"
+        name = Path(name).stem
+
+    manifest_paths = [
+        PROJECT_ROOT / "data" / "benchmark" / "results" / "rapid_target_manifest.csv",
+        PROJECT_ROOT
+        / "public_release"
+        / "data"
+        / "benchmark"
+        / "results"
+        / "rapid_target_manifest.csv",
+    ]
+    for manifest_path in manifest_paths:
+        if not manifest_path.exists():
+            continue
+        try:
+            with manifest_path.open("r", encoding="utf-8", newline="") as handle:
+                for row in csv.DictReader(handle):
+                    if str(row.get("target") or "").strip() != name:
+                        continue
+                    split = str(row.get("split") or "").strip().lower()
+                    if subset_hint and split and split != subset_hint:
+                        continue
+                    local_candidate = PROJECT_ROOT / f"cath_{split}" / f"{name}.pdb"
+                    if split in {"train", "val", "test"} and local_candidate.exists():
+                        return local_candidate
+                    recorded = Path(str(row.get("pdb_path") or "").strip())
+                    if recorded.exists():
+                        return recorded
+        except Exception:
+            continue
+
+    subsets = [subset_hint] if subset_hint else ["test", "val", "train"]
+    for subset in subsets:
+        if not subset:
+            continue
+        candidate = PROJECT_ROOT / f"cath_{subset}" / f"{name}.pdb"
+        if candidate.exists():
+            return candidate
+    fallback_subset = subset_hint or "test"
+    return PROJECT_ROOT / f"cath_{fallback_subset}" / f"{name}.pdb"
 
 
 def _scores(path: Path) -> dict[str, float]:
@@ -462,7 +571,8 @@ def _paired_tests(summary_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     targets = sorted({str(row["target"]) for row in summary_rows})
     reps = sorted({int(row["replicate"]) for row in summary_rows})
     tests: list[dict[str, Any]] = []
-    for arm in [a for a in DEFAULT_ARMS if a != "single"]:
+    observed_arms = {str(row["arm"]) for row in summary_rows}
+    for arm in [a for a in _ordered_arms(observed_arms) if a != "single"]:
         for metric in metrics:
             diffs: list[float] = []
             for target in targets:
@@ -496,7 +606,7 @@ def _paired_tests(summary_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _write_latex_table(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
-    arm_order = [arm for arm in DEFAULT_ARMS if any(r["arm"] == arm for r in summary_rows)]
+    arm_order = _ordered_arms({str(r["arm"]) for r in summary_rows})
     lines = [
         "\\begin{tabular}{lrrrr}",
         "\\toprule",
@@ -527,7 +637,7 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
     import pandas as pd
 
     df = pd.DataFrame(summary_rows)
-    arm_order = [arm for arm in DEFAULT_ARMS if arm in set(df["arm"])]
+    arm_order = _ordered_arms(set(df["arm"]))
     labels = [ARM_CONFIGS[arm]["label"] for arm in arm_order]
     metrics = [
         ("top5_mean_plddt", "Top-5 mean pLDDT"),
@@ -535,6 +645,8 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
         ("mean_pairwise_identity", "Mean pairwise identity"),
     ]
     fig, axes = plt.subplots(1, 3, figsize=(11.0, 3.4))
+    palette = ["#8aa6c1", "#84a98c", "#d69f7e", "#b07aa1", "#9c755f", "#bab0ac"]
+    colors = [palette[i % len(palette)] for i in range(len(arm_order))]
     for ax, (metric, title) in zip(axes, metrics, strict=True):
         means = [
             float(df[df["arm"] == arm][metric].dropna().mean())
@@ -542,14 +654,14 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
             else float("nan")
             for arm in arm_order
         ]
-        ax.bar(labels, means, color=["#8aa6c1", "#d69f7e", "#84a98c"], edgecolor="#333")
+        ax.bar(labels, means, color=colors, edgecolor="#333")
         ax.set_title(title, fontsize=10)
         ax.tick_params(axis="x", rotation=25, labelsize=8)
         for i, value in enumerate(means):
             if math.isnan(value):
                 continue
             ax.text(i, value, f"{value:.2f}", ha="center", va="bottom", fontsize=8)
-    fig.suptitle("Backbone/ensemble ablation summary", fontsize=11, weight="bold")
+    fig.suptitle("Structural-context ablation summary", fontsize=11, weight="bold")
     fig.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=250, bbox_inches="tight")
@@ -574,6 +686,12 @@ def _run_manifest(targets: list[str], arms: list[str], replicates: list[int]) ->
         for arm in arms:
             for replicate in replicates:
                 cfg = ARM_CONFIGS[arm]
+                planned_backbones = _planned_backbone_count(cfg)
+                planned_designs = (
+                    planned_backbones
+                    * len(TIERS)
+                    * int(cfg["num_seq_per_tier"])
+                )
                 jobs.append(
                     {
                         "target": target,
@@ -583,9 +701,14 @@ def _run_manifest(targets: list[str], arms: list[str], replicates: list[int]) ->
                         "run_id": build_run_id(target, arm, replicate),
                         "pdb_path": str(_target_to_pdb_path(target)),
                         "num_seq_per_tier": cfg["num_seq_per_tier"],
+                        "planned_backbones": planned_backbones,
+                        "planned_designs": planned_designs,
                         "rfd3_use": cfg["rfd3_use"],
                         "rfd3_use_ensemble": cfg["rfd3_use_ensemble"],
                         "rfd3_max_return_designs": cfg["rfd3_max_return_designs"],
+                        "bioemu_use": cfg["bioemu_use"],
+                        "bioemu_num_samples": cfg["bioemu_num_samples"],
+                        "bioemu_max_return_structures": cfg["bioemu_max_return_structures"],
                         "af2_max_candidates_per_tier": 10,
                         "planned_max_af2": 30,
                     }

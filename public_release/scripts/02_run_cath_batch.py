@@ -14,8 +14,12 @@ import threading
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
-# Ensure imports work from project root
-project_root = Path("/opt/protein_pipeline")
+# Ensure imports work from the checked-out project root. PROTEIN_PIPELINE_ROOT can
+# override this for CI/CD deployments that promote the same tree across work,
+# dev, staging, and production directories.
+project_root = Path(
+    os.environ.get("PROTEIN_PIPELINE_ROOT") or Path(__file__).resolve().parents[1]
+).resolve()
 sys.path.append(str(project_root / "pipeline-mcp/src"))
 
 from dotenv import load_dotenv
@@ -168,7 +172,14 @@ def _target_fasta_for_cath(
     return f">{label}\n{seq}\n"
 
 
-def build_cath_request(pdb_content: str, target_id: str | None = None) -> PipelineRequest:
+def build_cath_request(
+    pdb_content: str,
+    target_id: str | None = None,
+    *,
+    num_seq_per_tier: int = 40,
+    af2_max_candidates_per_tier: int = 0,
+    af2_top_k: int = 0,
+) -> PipelineRequest:
     _ensure_pipeline_imports()
     normalized_pdb = _first_model_pdb_text(pdb_content)
     design_chain, target_sequence = _resolve_cath_design_chain(
@@ -192,12 +203,12 @@ def build_cath_request(pdb_content: str, target_id: str | None = None) -> Pipeli
         pdb_strip_nonpositive_resseq=True,
         pdb_renumber_resseq_from_1=True,
         bioemu_use=False,
-        num_seq_per_tier=40,
+        num_seq_per_tier=max(1, int(num_seq_per_tier)),
         sampling_temp=0.1,
         soluprot_cutoff=0.0,
         af2_provider="colabfold",
-        af2_max_candidates_per_tier=0,
-        af2_top_k=0,
+        af2_max_candidates_per_tier=max(0, int(af2_max_candidates_per_tier)),
+        af2_top_k=max(0, int(af2_top_k)),
         relax_enabled=False,
         novelty_enabled=False,
         wt_compare=False,
@@ -452,6 +463,9 @@ def process_target(
     *,
     keep_local: bool,
     stop_on_error: bool = False,
+    num_seq_per_tier: int = 40,
+    af2_max_candidates_per_tier: int = 0,
+    af2_top_k: int = 0,
 ) -> bool:
     global GLOBAL_STOP_EVENT
     if GLOBAL_STOP_EVENT:
@@ -491,7 +505,13 @@ def process_target(
             if GLOBAL_STOP_EVENT:
                 return False
             try:
-                request = build_cath_request(pdb_content, target_id=pdb_path.stem)
+                request = build_cath_request(
+                    pdb_content,
+                    target_id=pdb_path.stem,
+                    num_seq_per_tier=num_seq_per_tier,
+                    af2_max_candidates_per_tier=af2_max_candidates_per_tier,
+                    af2_top_k=af2_top_k,
+                )
 
                 runner.run(request, run_id=run_id)
 
@@ -556,6 +576,15 @@ def main():
         "--subset", type=str, required=True, choices=["train", "val", "test"]
     )
     parser.add_argument("--max-workers", type=int, default=MAX_CONCURRENT_PIPELINES)
+    parser.add_argument(
+        "--limit", type=int, default=0, help="Run only the first N targets after offset."
+    )
+    parser.add_argument(
+        "--offset", type=int, default=0, help="Skip this many targets before applying limit."
+    )
+    parser.add_argument("--num-seq-per-tier", type=int, default=40)
+    parser.add_argument("--af2-max-candidates-per-tier", type=int, default=0)
+    parser.add_argument("--af2-top-k", type=int, default=0)
     parser.add_argument("--keep-local", action="store_true")
     parser.add_argument(
         "--stop-on-error",
@@ -565,15 +594,29 @@ def main():
     args = parser.parse_args()
 
     targets_dir = project_root / f"cath_{args.subset}"
-    pdb_files = sorted(list(targets_dir.glob("*.pdb")))
+    pdb_files_all = sorted(list(targets_dir.glob("*.pdb")))
+    offset = max(0, int(args.offset or 0))
+    limit = max(0, int(args.limit or 0))
+    pdb_files = pdb_files_all[offset:]
+    if limit > 0:
+        pdb_files = pdb_files[:limit]
 
     log_paths = get_log_paths(args.subset)
     max_workers = max(1, int(args.max_workers or MAX_CONCURRENT_PIPELINES))
-    print(f"💎 배치 가동 (타겟: {len(pdb_files)}, 동시성: {max_workers})")
+    print(
+        f"💎 배치 가동 (타겟: {len(pdb_files)}/{len(pdb_files_all)}, "
+        f"offset={offset}, limit={limit or 'all'}, 동시성: {max_workers})"
+    )
     print(f"📝 성공 로그: {log_paths['success'].name}")
     print(f"📝 실패 로그: {log_paths['failed'].name}")
     print(f"🧷 keep_local={'yes' if args.keep_local else 'no'}")
     print(f"🛑 stop_on_error={'yes' if args.stop_on_error else 'no'}")
+    print(
+        "⚙️ pilot knobs: "
+        f"num_seq_per_tier={max(1, int(args.num_seq_per_tier or 40))}, "
+        f"af2_max_candidates_per_tier={max(0, int(args.af2_max_candidates_per_tier or 0))}, "
+        f"af2_top_k={max(0, int(args.af2_top_k or 0))}"
+    )
 
     batch_lock = acquire_cath_lock(
         f"batch_{args.subset}",
@@ -602,6 +645,11 @@ def main():
                         args.subset,
                         keep_local=bool(args.keep_local),
                         stop_on_error=bool(args.stop_on_error),
+                        num_seq_per_tier=max(1, int(args.num_seq_per_tier or 40)),
+                        af2_max_candidates_per_tier=max(
+                            0, int(args.af2_max_candidates_per_tier or 0)
+                        ),
+                        af2_top_k=max(0, int(args.af2_top_k or 0)),
                     ),
                     pdb_files,
                 )

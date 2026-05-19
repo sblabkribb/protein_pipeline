@@ -1,6 +1,6 @@
 # RunPod Admin UI
 
-Standalone static operations console for the RunPod Serverless endpoints used by `protein_pipeline`.
+Standalone static operations console for the RunPod Serverless endpoints used by RAPID.
 
 ## Access
 
@@ -19,7 +19,7 @@ http://127.0.0.1:5173/runpod-admin/
 
 ## What it does
 
-- Lists RunPod serverless endpoints and marks the ones wired into `protein_pipeline`
+- Lists RunPod serverless endpoints and marks the ones wired into RAPID
 - Shows current worker pods for the selected endpoint
 - Applies safe endpoint patches for GPU/scaling-related settings
 - Shows recent endpoint billing totals

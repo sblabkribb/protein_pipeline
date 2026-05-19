@@ -1,4 +1,4 @@
-# Data and Release Notes
+# RAPID Data and Release Notes
 
 ## Included Data
 
@@ -8,21 +8,24 @@ tables and figures:
 - processed benchmark table in `data/benchmark/cath_pilot_dataset.csv`
 - cached ESM-2 8M embeddings in `data/benchmark/cath_pilot_emb_320d.npy`
 - benchmark result files in `data/benchmark/results/`
+- corrected-chain refresh manifest in
+  `data/benchmark/results/rapid_target_manifest.csv`
 - representative 3RGK/1LVM direct and multi-round run summaries in
   `data/case_studies/`
-- QC-filtered CATH benchmark summaries in `data/cath_curated/`
+- QC-filtered pre-refresh CATH benchmark summaries in `data/cath_curated/`
 - raw lightweight summaries of the expanded 73-run CATH execution corpus in
   `data/cath_73/`
 - generated figures and LaTeX tables in `figures/benchmark/`
 
 The included benchmark and summary files are currently small enough for GitHub.
 The full expanded CATH archive under `/opt/protein_pipeline/cath_outputs`
-contains 73 completed run directories and is several gigabytes, so it should be
-deposited as a separate large artifact or S3-backed dataset rather than
-committed to the source repository. Paper-level analysis should use
-`data/cath_curated/`, which excludes fallback or input-incompatible runs. The
-package intentionally excludes runtime logs, temporary test outputs, Python
-environments, frontend `node_modules`, and private `.env` files.
+contains 73 completed pre-refresh run directories and is several gigabytes, so
+it should be deposited as a separate large artifact or S3-backed dataset rather
+than committed to the source repository. The included `data/cath_curated/`
+tables are retained for component-level active-learning analysis; population-
+level CATH claims should be refreshed from the corrected-chain manifest before
+submission. The package intentionally excludes runtime logs, temporary test
+outputs, Python environments, frontend `node_modules`, and private `.env` files.
 
 ## GitHub vs Separate Data Deposit
 

@@ -1,4 +1,4 @@
-# Release Manifest
+# RAPID Release Manifest
 
 ## Included
 
@@ -10,9 +10,10 @@
 - Benchmark scripts and release helper scripts: `scripts/benchmark/`,
   `scripts/02_run_cath_batch.py`, `scripts/train_cath_surrogate.py`,
   `scripts/run_managed_job.py`
-- Benchmark data and cached results: `data/benchmark/`
+- Benchmark data, cached results, and RAPID refresh manifest:
+  `data/benchmark/`
 - Representative direct/evolution case-study summaries: `data/case_studies/`
-- QC-filtered CATH benchmark summaries: `data/cath_curated/`
+- QC-filtered pre-refresh CATH benchmark summaries: `data/cath_curated/`
 - Raw expanded 73-run CATH archive summaries: `data/cath_73/`
 - Figures and tables: `figures/benchmark/`
 - Manuscript draft: `manuscript/`

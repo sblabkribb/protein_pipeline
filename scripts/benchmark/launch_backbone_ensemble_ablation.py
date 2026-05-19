@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch the backbone/ensemble ablation as a managed background job."""
+"""Launch the structural-context ablation as a managed background job."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from pipeline_mcp.cath_ops import _launch_helper
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Launch the backbone/ensemble ablation pilot in the background"
+        description="Launch the structural-context ablation in the background"
     )
     parser.add_argument("--targets", default=",".join(DEFAULT_TARGETS))
     parser.add_argument("--arms", default=",".join(DEFAULT_ARMS))
@@ -59,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     job = _launch_helper(
         str(Path(args.output_root).resolve()),
         kind="backbone_ensemble_ablation",
-        label=f"Backbone/ensemble ablation ({len(targets)} targets)",
+        label=f"Structural-context ablation ({len(targets)} targets)",
         command=command,
         metadata={
             "targets": targets,

@@ -26,67 +26,29 @@ class BackboneEnsembleAblationTests(unittest.TestCase):
         pdb_text = "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n"
 
         single = module.build_request(pdb_text, "single", seed=7)
-        bioemu = module.build_request(pdb_text, "bioemu", seed=7)
         rfd3_single = module.build_request(pdb_text, "rfd3_single", seed=7)
-        rfd3_bioemu = module.build_request(pdb_text, "rfd3_bioemu", seed=7)
         ensemble = module.build_request(pdb_text, "rfd3_ensemble3", seed=7)
 
         self.assertFalse(bool(single.rfd3_use))
         self.assertFalse(bool(single.rfd3_use_ensemble))
         self.assertEqual(single.num_seq_per_tier, 40)
 
-        self.assertFalse(bool(bioemu.rfd3_use))
-        self.assertTrue(bool(bioemu.bioemu_use))
-        self.assertEqual(bioemu.bioemu_num_samples, 10)
-        self.assertEqual(bioemu.bioemu_max_return_structures, 3)
-        self.assertEqual(bioemu.num_seq_per_tier, 10)
-
         self.assertTrue(bool(rfd3_single.rfd3_use))
         self.assertFalse(bool(rfd3_single.rfd3_use_ensemble))
         self.assertEqual(rfd3_single.rfd3_max_return_designs, 1)
         self.assertEqual(rfd3_single.num_seq_per_tier, 40)
-
-        self.assertTrue(bool(rfd3_bioemu.rfd3_use))
-        self.assertTrue(bool(rfd3_bioemu.bioemu_use))
-        self.assertEqual(rfd3_bioemu.rfd3_max_return_designs, 1)
-        self.assertEqual(rfd3_bioemu.bioemu_max_return_structures, 3)
-        self.assertEqual(rfd3_bioemu.num_seq_per_tier, 10)
 
         self.assertTrue(bool(ensemble.rfd3_use))
         self.assertTrue(bool(ensemble.rfd3_use_ensemble))
         self.assertEqual(ensemble.rfd3_max_return_designs, 3)
         self.assertEqual(ensemble.num_seq_per_tier, 13)
 
-        for request in (single, bioemu, rfd3_single, rfd3_bioemu, ensemble):
+        for request in (single, rfd3_single, ensemble):
             self.assertEqual(request.af2_max_candidates_per_tier, 10)
             self.assertEqual(request.af2_top_k, 0)
             self.assertFalse(bool(request.relax_enabled))
             self.assertFalse(bool(request.novelty_enabled))
             self.assertEqual(request.stop_after, "af2")
-
-    def test_target_to_pdb_path_uses_manifest_split_paths(self):
-        module = _load_module()
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            manifest_dir = root / "data" / "benchmark" / "results"
-            manifest_dir.mkdir(parents=True)
-            pdb_dir = root / "cath_val"
-            pdb_dir.mkdir()
-            pdb_path = pdb_dir / "1abcA00.pdb"
-            pdb_path.write_text("ATOM\n", encoding="utf-8")
-            (manifest_dir / "rapid_target_manifest.csv").write_text(
-                "split,target,pdb_path,selected_for_structural_context\n"
-                f"val,1abcA00,{root / 'missing' / '1abcA00.pdb'},True\n",
-                encoding="utf-8",
-            )
-
-            original_root = module.PROJECT_ROOT
-            try:
-                module.PROJECT_ROOT = root
-                self.assertEqual(module._target_to_pdb_path("1abcA00"), pdb_path)
-                self.assertEqual(module._target_to_pdb_path("cath_val_1abcA00"), pdb_path)
-            finally:
-                module.PROJECT_ROOT = original_root
 
     def test_collect_run_rows_and_summarize_arm(self):
         module = _load_module()

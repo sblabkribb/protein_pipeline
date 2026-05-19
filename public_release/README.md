@@ -1,8 +1,9 @@
-# Protein Pipeline Public Release
+# RAPID Public Release
 
-This folder is a compact public-release package for a solubility-aware protein
-redesign pipeline, active-learning evolution workflow, benchmark scripts,
-benchmark data, figures, and manuscript draft artifacts.
+This folder is a compact public-release package for RAPID, a reproducible
+artifact pipeline for solubility-aware protein redesign, active-learning
+evolution, benchmark scripts, benchmark data, figures, and manuscript draft
+artifacts.
 
 The package is organized to be runnable from a local machine, a lab server, or a
 GPU server such as RunPod. It does not include private `.env` files, API keys,
@@ -20,8 +21,11 @@ environments.
   result tables used for the manuscript.
 - `data/case_studies/` - compact 3RGK and 1LVM direct/evolution run summaries
   plus best-design PDBs for the representative multi-round traces.
-- `data/cath_curated/` - QC-filtered CATH benchmark table and inclusion/exclusion
-  reports for the publication-grade subset.
+- `data/benchmark/results/rapid_target_manifest.csv` - corrected-chain CATH
+  refresh manifest with 40 re-screening targets and 8 structural-context
+  ablation targets.
+- `data/cath_curated/` - QC-filtered pre-refresh CATH benchmark table and
+  inclusion/exclusion reports retained for component-level analysis.
 - `data/cath_73/` - raw lightweight summary tables for the expanded 73-run CATH
   execution corpus before paper-level QC.
 - `figures/benchmark/` - manuscript figures and LaTeX tables.
@@ -113,21 +117,24 @@ Full benchmark reruns are documented in `docs/reproduce_paper.md`. They can take
 substantially longer because ESM embedding generation and model comparisons are
 recomputed.
 
-The optional backbone/ensemble ablation is run through the live pipeline, not
+The optional structural-context ablation is run through the live pipeline, not
 from cached model tables. `scripts/benchmark/13_run_backbone_ensemble_ablation.py`
-defines the matched single-backbone, RFD3-single, and RFD3-ensemble arms;
-`scripts/benchmark/launch_backbone_ensemble_ablation.py` starts the pilot as a
-managed background job on a configured server.
+now defines matched single-backbone, BioEmu, RFD3-single, and RFD3+BioEmu arms;
+`rfd3_ensemble3` remains available as a supplementary arm. Use
+`scripts/benchmark/15_select_rapid_targets.py` to regenerate the corrected-chain
+target manifest, and `scripts/benchmark/launch_backbone_ensemble_ablation.py`
+to start the ablation as a managed background job on a configured server.
 
 Representative multi-round execution summaries used by the manuscript are under
 `data/case_studies/`. These are compact exports from completed production runs,
 not full `outputs/` directories.
 
-The expanded CATH archive contains 73 completed run directories, but not all are
-valid design outputs for manuscript analysis. QC excludes fallback or
-input-incompatible runs and retains 23 publication-grade targets with 2,737
-valid paired SoluProt/pLDDT records. The curated summaries are included under
-`data/cath_curated/`; raw 73-run summaries are under `data/cath_73/`. The full
+The expanded CATH archive contains 73 completed pre-refresh run directories, but
+not all are valid design outputs for manuscript analysis. QC excludes fallback
+or input-incompatible runs and retains 23 targets with 2,737 valid paired
+SoluProt/pLDDT records for component-level active-learning analysis. The final
+RAPID submission should replace population-level CATH statements with the
+corrected-chain refresh generated from `rapid_target_manifest.csv`. The full
 run-output archive is several gigabytes and should be deposited as a large
 release artifact or S3-backed dataset rather than committed to this source
 package.

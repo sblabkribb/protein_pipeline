@@ -1,4 +1,4 @@
-# Local Setup
+# RAPID Local Setup
 
 ## Backend
 

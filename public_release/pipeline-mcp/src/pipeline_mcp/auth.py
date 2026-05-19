@@ -52,6 +52,7 @@ class AuthManager:
         self.users[username] = {
             "username": username,
             "role": "admin",
+            "status": "approved",
             "password_hash": _hash_password(password),
             "created_at": _now_ts(),
         }
@@ -82,15 +83,69 @@ class AuthManager:
             raise AuthError("password must be at least 8 characters")
         if username in self.users:
             raise AuthError("user already exists")
-        role_value = "admin" if str(role).lower() == "admin" else "user"
+        role_value = _normalize_role(role)
         self.users[username] = {
             "username": username,
             "role": role_value,
+            "status": "approved",
             "password_hash": _hash_password(password),
             "created_at": _now_ts(),
         }
         self.save()
         return _public_user(self.users[username])
+
+    def list_users(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for user in self.users.values():
+            public = _public_user(user)
+            if user.get("email"):
+                public["email"] = str(user.get("email") or "")
+            if user.get("subject"):
+                public["subject"] = str(user.get("subject") or "")
+            public["external"] = bool(user.get("external"))
+            rows.append(public)
+        return sorted(rows, key=lambda item: (str(item.get("role") or "") != "admin", str(item.get("username") or "")))
+
+    def resolve_external_user(
+        self,
+        user: dict[str, Any],
+        *,
+        default_status: str = "approved",
+    ) -> dict[str, Any]:
+        username = str(user.get("username") or "").strip()
+        if not username:
+            return user
+        existing = self.users.get(username)
+        if existing is None:
+            status = "approved" if str(user.get("role") or "") == "admin" else str(default_status or "approved")
+            existing = {
+                "username": username,
+                "role": _normalize_role(user.get("role")),
+                "status": _normalize_status(status),
+                "created_at": _now_ts(),
+                "external": True,
+                "email": str(user.get("email") or ""),
+                "subject": str(user.get("subject") or ""),
+            }
+            self.users[username] = existing
+            self.save()
+        out = _public_user({**user, **existing})
+        if user.get("email"):
+            out["email"] = str(user.get("email") or "")
+        if user.get("subject"):
+            out["subject"] = str(user.get("subject") or "")
+        return out
+
+    def update_user(self, *, username: str, role: str | None = None, status: str | None = None) -> dict[str, Any]:
+        user = self.users.get(username)
+        if user is None:
+            raise AuthError("user not found")
+        if role is not None:
+            user["role"] = _normalize_role(role)
+        if status is not None:
+            user["status"] = _normalize_status(status)
+        self.save()
+        return _public_user(user)
 
 
 def _env_true(name: str) -> bool:
@@ -104,6 +159,20 @@ def _now_ts() -> str:
 def _validate_username(username: str) -> None:
     if not _USER_RE.match(username or ""):
         raise AuthError("username must be 3-32 chars of [a-zA-Z0-9._-]")
+
+
+def _normalize_role(role: object) -> str:
+    raw = str(role or "user").strip().lower().replace("-", "_")
+    if raw in {"admin", "model_manager", "user"}:
+        return raw
+    return "user"
+
+
+def _normalize_status(status: object) -> str:
+    raw = str(status or "approved").strip().lower().replace("-", "_")
+    if raw in {"approved", "pending", "disabled"}:
+        return raw
+    return "pending"
 
 
 def _b64url_encode(data: bytes) -> str:
@@ -187,7 +256,8 @@ def _public_user(user: dict[str, Any]) -> dict[str, Any]:
     username = str(user.get("username") or "")
     return {
         "username": username,
-        "role": str(user.get("role") or "user"),
+        "role": _normalize_role(user.get("role")),
+        "status": _normalize_status(user.get("status") or "approved"),
         "created_at": str(user.get("created_at") or ""),
         "run_prefix": safe_run_prefix(username),
     }

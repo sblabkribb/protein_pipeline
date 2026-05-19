@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
+import zipfile
 
 from .storage import new_run_id
 from .auth import AuthError
@@ -45,6 +48,15 @@ _ADMIN_ONLY_TOOLS = {
     "pipeline.runpod_update_endpoint",
     "pipeline.runpod_list_billing",
     "pipeline.runpod_get_history",
+}
+
+_USER_PROVIDER_SCOPED_TOOLS = {
+    "pipeline.run",
+    "pipeline.preflight",
+    "pipeline.af2_predict",
+    "pipeline.run_af2",
+    "pipeline.run_diffdock",
+    "pipeline.run_from_prompt",
 }
 
 _RUN_SCOPED_TOOLS = {
@@ -133,6 +145,23 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self._set_cors_headers()
         self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        for key, value in extra_headers or []:
+            self.send_header(key, value)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _binary(
+        self,
+        code: int,
+        data: bytes,
+        content_type: str,
+        *,
+        extra_headers: list[tuple[str, str]] | None = None,
+    ) -> None:
+        self.send_response(code)
+        self._set_cors_headers()
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
         for key, value in extra_headers or []:
             self.send_header(key, value)
@@ -253,6 +282,20 @@ class Handler(BaseHTTPRequestHandler):
     def _session_id_from_cookie(self) -> str:
         return self._cookie_value(self._session_cookie_name())
 
+    def _public_session_info(self) -> dict[str, str]:
+        manager = self.sessions
+        session_id = self._session_id_from_cookie()
+        if manager is not None and session_id:
+            session = manager.get_session(session_id, oidc_settings=self.oidc)
+            if isinstance(session, dict):
+                auth_type = str(session.get("auth_type") or "").strip()
+                if auth_type:
+                    return {"auth_type": auth_type}
+        header = self.headers.get("Authorization") or ""
+        if header.startswith("Bearer "):
+            return {"auth_type": "token"}
+        return {"auth_type": ""}
+
     def _session_cookie_headers(self, session_id: str, *, max_age: int | None = None, clear: bool = False) -> list[tuple[str, str]]:
         cookie = SimpleCookie()
         name = self._session_cookie_name()
@@ -311,17 +354,70 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception:
                     claims = None
                 if claims is not None:
-                    return claims_to_user(claims, client_id=self.oidc.client_id)
+                    return self._apply_external_user_policy(claims_to_user(claims, client_id=self.oidc.client_id))
         manager = self.sessions
         session_id = self._session_id_from_cookie()
         if manager is not None and session_id:
             user = manager.get_user(session_id, oidc_settings=self.oidc)
             if user is not None:
+                if str(user.get("auth_type") or "") == "oidc":
+                    return self._apply_external_user_policy(user)
                 return user
         return None
 
+    def _approval_required(self) -> bool:
+        return _env_true("PIPELINE_OIDC_APPROVAL_REQUIRED") or _env_true("PIPELINE_USER_APPROVAL_REQUIRED")
+
+    def _apply_external_user_policy(self, user: dict[str, Any]) -> dict[str, Any]:
+        auth = self.auth
+        if auth is not None and hasattr(auth, "resolve_external_user"):
+            default_status = "pending" if self._approval_required() else "approved"
+            return auth.resolve_external_user(user, default_status=default_status)
+        if self._approval_required() and str(user.get("role") or "") != "admin":
+            return {**user, "status": "pending"}
+        return {**user, "status": user.get("status") or "approved"}
+
     def _is_admin(self, user: dict[str, Any] | None) -> bool:
         return bool(user and str(user.get("role") or "") == "admin")
+
+    def _can_manage_models(self, user: dict[str, Any] | None) -> bool:
+        role = str((user or {}).get("role") or "")
+        return role in {"admin", "model_manager"}
+
+    def _provider_scope_from_arguments(self, arguments: dict[str, Any], user: dict[str, Any] | None = None) -> str:
+        provider = arguments.get("provider") if isinstance(arguments.get("provider"), dict) else {}
+        raw = arguments.get("scope", provider.get("scope"))
+        if raw is None:
+            return "global" if self._can_manage_models(user) else "user"
+        scope = str(raw or "global").strip().lower().replace("-", "_")
+        if scope in {"global", "default", "admin"}:
+            return "global"
+        if scope in {"user", "personal", "mine"}:
+            return "user"
+        raise AuthError("scope must be one of: global, user")
+
+    def _user_context(self, user: dict[str, Any] | None) -> dict[str, str]:
+        return {
+            "username": str((user or {}).get("username") or ""),
+            "role": str((user or {}).get("role") or ""),
+            "run_prefix": safe_run_prefix(str((user or {}).get("username") or "user")),
+        }
+
+    def _dispatcher_for_tool(self, user: dict[str, Any] | None, name: str) -> ToolDispatcher:
+        dispatcher = self.dispatcher
+        if name in _USER_PROVIDER_SCOPED_TOOLS and user is not None and isinstance(dispatcher, ToolDispatcher):
+            from .app import build_runner
+
+            return ToolDispatcher(build_runner(provider_user=str(user.get("username") or "")))
+        return dispatcher
+
+    def _user_is_approved(self, user: dict[str, Any] | None) -> bool:
+        if user is None:
+            return True
+        if self._is_admin(user):
+            return True
+        status = str(user.get("status") or "approved").strip().lower()
+        return status in {"", "approved", "active"}
 
     def _require_auth(self) -> dict[str, Any] | None:
         if not self._auth_enabled():
@@ -330,6 +426,9 @@ class Handler(BaseHTTPRequestHandler):
         if user is None:
             extra_headers = self._expire_session_cookie_headers() if self._session_id_from_cookie() else None
             self._json(401, {"ok": False, "error": "unauthorized"}, extra_headers=extra_headers)
+        elif not self._user_is_approved(user):
+            self._json(403, {"ok": False, "error": "approval required"})
+            return None
         elif _env_true("PIPELINE_REQUIRE_ADMIN") and not self._is_admin(user):
             self._json(403, {"ok": False, "error": "admin required"})
             return None
@@ -364,7 +463,8 @@ class Handler(BaseHTTPRequestHandler):
                 tools["tools"] = [
                     item
                     for item in entries
-                    if isinstance(item, dict) and str(item.get("name") or "") not in _ADMIN_ONLY_TOOLS
+                    if isinstance(item, dict)
+                    and str(item.get("name") or "") not in _ADMIN_ONLY_TOOLS
                 ]
         return tools
 
@@ -376,6 +476,13 @@ class Handler(BaseHTTPRequestHandler):
     ) -> dict[str, Any]:
         if name in _ADMIN_ONLY_TOOLS and user is not None and not self._is_admin(user):
             raise AuthError("admin required")
+        if (
+            name == "pipeline.model_provider_update"
+            and user is not None
+            and self._provider_scope_from_arguments(arguments, user) == "global"
+            and not self._can_manage_models(user)
+        ):
+            raise AuthError("model manager required")
         if name in _RUN_SCOPED_TOOLS:
             run_id = str(arguments.get("run_id") or "")
             if run_id:
@@ -408,16 +515,12 @@ class Handler(BaseHTTPRequestHandler):
             "pipeline.archive_round",
             "pipeline.restore_round",
             "pipeline.delete_round",
+            "pipeline.model_provider_list",
+            "pipeline.model_provider_update",
+            "pipeline.model_provider_health",
         } and user is not None:
-            arguments.setdefault(
-                "user",
-                {
-                    "username": str(user.get("username") or ""),
-                    "role": str(user.get("role") or ""),
-                    "run_prefix": safe_run_prefix(str(user.get("username") or "user")),
-                },
-            )
-        out = self.dispatcher.call_tool(name, arguments)
+            arguments.setdefault("user", self._user_context(user))
+        out = self._dispatcher_for_tool(user, name).call_tool(name, arguments)
         if name == "pipeline.list_runs" and user is not None and not self._is_admin(user):
             prefix = safe_run_prefix(str(user.get("username") or "user")) + "_"
             runs = out.get("runs") if isinstance(out, dict) else None
@@ -446,6 +549,43 @@ class Handler(BaseHTTPRequestHandler):
             "content": [{"type": "json", "json": result}],
             "isError": False,
         }
+
+    def _send_model_registration_skill_archive(self) -> None:
+        if self._auth_enabled():
+            user = self._require_auth()
+            if user is None:
+                return
+
+        raw_root = os.environ.get("PIPELINE_MODEL_REGISTRATION_SKILL_DIR", "/opt/protein-model-api-registration")
+        root = Path(raw_root).expanduser().resolve()
+        if not root.is_dir():
+            self._json(
+                404,
+                {
+                    "ok": False,
+                    "error": "model registration skill directory not found",
+                    "path": str(root),
+                },
+            )
+            return
+
+        buffer = io.BytesIO()
+        archive_root = Path("protein-model-api-registration")
+        with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for file_path in sorted(root.rglob("*")):
+                if not file_path.is_file():
+                    continue
+                archive.write(file_path, str(archive_root / file_path.relative_to(root)))
+
+        self._binary(
+            200,
+            buffer.getvalue(),
+            "application/zip",
+            extra_headers=[
+                ("Content-Disposition", 'attachment; filename="protein-model-api-registration.zip"'),
+                ("Cache-Control", "no-store"),
+            ],
+        )
 
     def _handle_mcp_rpc(self, body: dict[str, Any], user: dict[str, Any] | None) -> dict[str, Any]:
         request_id = body.get("id")
@@ -522,7 +662,10 @@ class Handler(BaseHTTPRequestHandler):
             user = self._require_auth()
             if user is None:
                 return
-            self._json(200, {"ok": True, "user": user})
+            self._json(200, {"ok": True, "user": user, "session": self._public_session_info()})
+            return
+        if route_path == "/model_provider_skill.zip":
+            self._send_model_registration_skill_archive()
             return
         if route_path == "/healthz":
             self._json(200, {"ok": True})
@@ -553,7 +696,7 @@ class Handler(BaseHTTPRequestHandler):
                 if manager is not None and isinstance(user, dict):
                     session_id = manager.create_local_session(user)
                     extra_headers = self._session_cookie_headers(session_id, max_age=manager.cookie_max_age(session_id))
-                self._json(200, {"ok": True, **result}, extra_headers=extra_headers)
+                self._json(200, {"ok": True, **result, "session": {"auth_type": "local"}}, extra_headers=extra_headers)
                 return
 
             if route_path == "/auth/oidc/exchange":
@@ -571,7 +714,10 @@ class Handler(BaseHTTPRequestHandler):
                     code_verifier=code_verifier,
                 )
                 claims = claims_from_oidc_token_data(self.oidc, token_data)
-                user = claims_to_user(claims, client_id=self.oidc.client_id)
+                user = self._apply_external_user_policy(claims_to_user(claims, client_id=self.oidc.client_id))
+                if not self._user_is_approved(user):
+                    self._json(403, {"ok": False, "error": "approval required", "user": user})
+                    return
                 if _env_true("PIPELINE_REQUIRE_ADMIN") and not self._is_admin(user):
                     self._json(403, {"ok": False, "error": "admin required"})
                     return
@@ -611,6 +757,40 @@ class Handler(BaseHTTPRequestHandler):
                     {"ok": True, "logout_url": logout_url},
                     extra_headers=self._expire_session_cookie_headers(),
                 )
+                return
+
+            if route_path == "/auth/list_users":
+                auth = self.auth
+                if auth is None or not getattr(auth, "enabled", False):
+                    self._json(400, {"ok": False, "error": "auth disabled"})
+                    return
+                user = self._require_auth()
+                if user is None:
+                    return
+                if not self._is_admin(user):
+                    self._json(403, {"ok": False, "error": "admin required"})
+                    return
+                self._json(200, {"ok": True, "users": auth.list_users()})
+                return
+
+            if route_path == "/auth/update_user":
+                auth = self.auth
+                if auth is None or not getattr(auth, "enabled", False):
+                    self._json(400, {"ok": False, "error": "auth disabled"})
+                    return
+                user = self._require_auth()
+                if user is None:
+                    return
+                if not self._is_admin(user):
+                    self._json(403, {"ok": False, "error": "admin required"})
+                    return
+                body = self._read_json()
+                updated = auth.update_user(
+                    username=str(body.get("username") or "").strip(),
+                    role=str(body.get("role") or "").strip() or None,
+                    status=str(body.get("status") or "").strip() or None,
+                )
+                self._json(200, {"ok": True, "user": updated})
                 return
 
             if route_path == "/auth/create_user":
