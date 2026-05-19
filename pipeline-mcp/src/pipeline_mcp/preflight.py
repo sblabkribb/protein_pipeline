@@ -5,6 +5,7 @@ from typing import Any
 
 from .bio.fasta import parse_fasta
 from .bio.pdb import ligand_atoms_present
+from .bio.pdb import normalize_structure_text
 from .bio.pdb import residues_by_chain
 from .bio.pdb import sequence_by_chain
 from .models import PipelineRequest
@@ -119,7 +120,7 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner, *, run_i
             )
 
     target_fasta = str(request.target_fasta or "").strip()
-    target_pdb = str(request.target_pdb or "").strip()
+    target_pdb = normalize_structure_text(str(request.target_pdb or "")).strip()
     has_target = bool(target_fasta or target_pdb)
     rfd3_active = _rfd3_active(request)
     bioemu_active = _bioemu_active(request)

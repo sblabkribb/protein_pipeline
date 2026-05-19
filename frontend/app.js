@@ -3,6 +3,7 @@ import {
   artifactMetaFromPathForManifest,
   artifactDownloadFilename,
   buildArtifactDownloadRequest,
+  buildStoredZipBytes,
   buildWorkflowProgressContext,
   backboneSourceIndexFromManifest,
   buildWorkflowStudioNodesFromRequest,
@@ -640,6 +641,10 @@ const state = {
     monitor: createArtifactFilterState(),
     analyze: createArtifactFilterState(),
   },
+  artifactSelectionsByView: {
+    monitor: new Set(),
+    analyze: new Set(),
+  },
   artifactComparison: null,
   artifactComparisonRunId: "",
   monitorNeedsReport: false,
@@ -667,6 +672,7 @@ const state = {
   hitListCutoff: 0,
   hitListSort: { key: "score", order: "desc" },
   hitListSelectedSeqId: null,
+  hitListSelectedSeqIds: new Set(),
   hitListLimit: 120,
   chartView: "plddt_rmsd",
   hitListWeights: {
@@ -2603,6 +2609,11 @@ const I18N = {
     "artifacts.download": "Download",
     "artifacts.downloading": "Downloading...",
     "artifacts.downloadFailed": "Download failed: {error}",
+    "artifacts.bulk.selected": "{selected}/{total} selected",
+    "artifacts.bulk.selectFiltered": "Select filtered",
+    "artifacts.bulk.clear": "Clear selection",
+    "artifacts.bulk.downloadSelected": "Download selected ZIP",
+    "artifacts.bulk.noSelection": "Select artifacts to download.",
     "artifacts.monitorHint.title": "Compare moved to Analyze",
     "artifacts.monitorHint.desc":
       "Use the Analyze tab for 3D structure compare and report-based comparison summary.",
@@ -3444,6 +3455,13 @@ const I18N = {
     "analyze.hitList.summary":
       "Showing {shown}/{filtered} candidates (total {total}), median score {score}.",
     "analyze.hitList.empty": "No candidates matched the cutoff.",
+    "analyze.hitList.bulk.selected": "{selected}/{shown} selected",
+    "analyze.hitList.bulk.selectShown": "Select shown",
+    "analyze.hitList.bulk.clear": "Clear selection",
+    "analyze.hitList.bulk.downloadFasta": "Download FASTA",
+    "analyze.hitList.bulk.downloadPdb": "Download PDB ZIP",
+    "analyze.hitList.bulk.noSelection": "Select hit-list rows first.",
+    "analyze.hitList.bulk.noPdb": "Selected rows have no PDB artifacts.",
     "analyze.chart.select": "Chart",
     "analyze.chart.placeholder": "Run hit list to render candidate charts.",
     "analyze.chart.noData": "No numeric data for the selected chart in current filters.",
@@ -4101,6 +4119,11 @@ const I18N = {
     "artifacts.download": "다운로드",
     "artifacts.downloading": "다운로드 중...",
     "artifacts.downloadFailed": "다운로드 실패: {error}",
+    "artifacts.bulk.selected": "{selected}/{total}개 선택",
+    "artifacts.bulk.selectFiltered": "필터 결과 선택",
+    "artifacts.bulk.clear": "선택 해제",
+    "artifacts.bulk.downloadSelected": "선택 ZIP 다운로드",
+    "artifacts.bulk.noSelection": "다운로드할 아티팩트를 선택하세요.",
     "artifacts.monitorHint.title": "비교 기능은 Analyze 탭으로 이동",
     "artifacts.monitorHint.desc":
       "3D 구조 비교와 리포트 기반 비교 요약은 Analyze 탭에서 확인할 수 있습니다.",
@@ -4939,6 +4962,13 @@ const I18N = {
     "analyze.hitList.summary":
       "{shown}/{filtered}개 표시 (전체 {total}), 중앙 점수 {score}",
     "analyze.hitList.empty": "컷오프 조건을 만족하는 후보가 없습니다.",
+    "analyze.hitList.bulk.selected": "{selected}/{shown}개 선택",
+    "analyze.hitList.bulk.selectShown": "표시 행 선택",
+    "analyze.hitList.bulk.clear": "선택 해제",
+    "analyze.hitList.bulk.downloadFasta": "FASTA 다운로드",
+    "analyze.hitList.bulk.downloadPdb": "PDB ZIP 다운로드",
+    "analyze.hitList.bulk.noSelection": "먼저 Hit List 행을 선택하세요.",
+    "analyze.hitList.bulk.noPdb": "선택한 행에 PDB 아티팩트가 없습니다.",
     "analyze.chart.select": "차트",
     "analyze.chart.placeholder": "Hit List를 실행하면 후보 차트를 표시합니다.",
     "analyze.chart.noData": "현재 필터에서 선택한 차트를 그릴 수 있는 수치 데이터가 없습니다.",
@@ -6908,10 +6938,10 @@ function workflowStudioSummaryCards(session, preview) {
 
 function workflowStudioFieldAccept(fieldId) {
   if (fieldId === "target_input") {
-    return ".pdb,.ent,.fa,.fasta,.faa,.txt";
+    return ".pdb,.ent,.cif,.mmcif,.bcif,.fa,.fasta,.faa,.txt";
   }
   if (fieldId === "rfd3_input_pdb") {
-    return ".pdb,.ent,.txt";
+    return ".pdb,.ent,.cif,.mmcif,.bcif,.txt";
   }
   return ".txt";
 }
@@ -14323,7 +14353,7 @@ function buildWorkflowDesignerCard({
     targetInputLoadBtn.textContent = t("fast.action.loadFile");
     const targetInputFile = document.createElement("input");
     targetInputFile.type = "file";
-    targetInputFile.accept = ".pdb,.ent,.fa,.fasta,.txt,.seq";
+    targetInputFile.accept = ".pdb,.ent,.cif,.mmcif,.bcif,.fa,.fasta,.txt,.seq";
     targetInputFile.className = "hidden";
     targetInputActions.appendChild(targetInputLoadBtn);
     targetInputActions.appendChild(targetInputFile);
@@ -19194,6 +19224,34 @@ function artifactFiltersForView(view = "monitor") {
   return state.artifactFiltersByView[view];
 }
 
+function artifactSelectionForView(view = "monitor") {
+  if (!state.artifactSelectionsByView || typeof state.artifactSelectionsByView !== "object") {
+    state.artifactSelectionsByView = {};
+  }
+  if (!(state.artifactSelectionsByView[view] instanceof Set)) {
+    state.artifactSelectionsByView[view] = new Set();
+  }
+  return state.artifactSelectionsByView[view];
+}
+
+function artifactMapByPath(items = state.artifacts) {
+  const map = new Map();
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const path = String(item?.path || "").trim();
+    if (path) map.set(path, item);
+  });
+  return map;
+}
+
+function pruneArtifactSelection(view = "monitor", items = state.artifacts) {
+  const selected = artifactSelectionForView(view);
+  const paths = new Set((Array.isArray(items) ? items : []).map((item) => String(item?.path || "").trim()).filter(Boolean));
+  Array.from(selected).forEach((path) => {
+    if (!paths.has(path)) selected.delete(path);
+  });
+  return selected;
+}
+
 function renderAllArtifactViews(items = state.artifacts) {
   renderArtifactFilters(items, "monitor");
   renderArtifacts(items, "monitor");
@@ -19252,11 +19310,57 @@ function renderArtifacts(list, view = "monitor") {
     if (typeFilter !== "all" && String(type || "") !== String(typeFilter)) return false;
     return true;
   });
+  const selectedPaths = pruneArtifactSelection(view, list);
+  const filteredFiles = filtered.filter((item) => String(item?.type || "") === "file");
 
   if (!filtered.length) {
     listEl.innerHTML = `<div class="placeholder">${t("artifact.none")}</div>`;
     return;
   }
+
+  const toolbar = document.createElement("div");
+  toolbar.className = "artifact-bulk-actions";
+  toolbar.innerHTML = `
+    <span class="artifact-bulk-count">${escapeHtml(t("artifacts.bulk.selected", {
+      selected: selectedPaths.size,
+      total: filteredFiles.length,
+    }))}</span>
+    <button type="button" class="ghost" data-artifact-bulk-action="select-filtered">${escapeHtml(t("artifacts.bulk.selectFiltered"))}</button>
+    <button type="button" class="ghost" data-artifact-bulk-action="clear">${escapeHtml(t("artifacts.bulk.clear"))}</button>
+    <button type="button" class="primary" data-artifact-bulk-action="download">${escapeHtml(t("artifacts.bulk.downloadSelected"))}</button>
+  `;
+  toolbar.addEventListener("click", async (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const button = target?.closest("button[data-artifact-bulk-action]");
+    if (!button) return;
+    const action = button.dataset.artifactBulkAction;
+    if (action === "select-filtered") {
+      filteredFiles.forEach((item) => {
+        const path = String(item?.path || "").trim();
+        if (path) selectedPaths.add(path);
+      });
+      renderArtifacts(list, view);
+      return;
+    }
+    if (action === "clear") {
+      selectedPaths.clear();
+      renderArtifacts(list, view);
+      return;
+    }
+    if (action === "download") {
+      const byPath = artifactMapByPath(list);
+      const items = Array.from(selectedPaths).map((path) => byPath.get(path)).filter(Boolean);
+      if (!items.length) {
+        setMessage(t("artifacts.bulk.noSelection"), "ai");
+        return;
+      }
+      await downloadArtifactsAsZip(items, {
+        filename: `${state.currentRunId || "run"}_${view}_artifacts.zip`,
+        buttonEl: button,
+      });
+    }
+  });
+  listEl.appendChild(toolbar);
 
   const groups = new Map();
   filtered.forEach((item) => {
@@ -19282,8 +19386,9 @@ function renderArtifacts(list, view = "monitor") {
     const groupList = document.createElement("div");
     groupList.className = "artifact-group-list";
     items.forEach((item) => {
+      const itemPath = String(item?.path || "").trim();
       const div = document.createElement("div");
-      div.className = "artifact-item";
+      div.className = `artifact-item${selectedPaths.has(itemPath) ? " is-selected" : ""}`;
       const meta = artifactMetaForPath(item.path);
       const tier = meta.tier;
       const type = artifactTypeFromItem(item);
@@ -19297,12 +19402,27 @@ function renderArtifacts(list, view = "monitor") {
       }
       const displayPath = escapeHtml(displayArtifactPath(item.path));
       div.innerHTML = `
+        ${
+          String(item?.type || "") === "file"
+            ? `<label class="artifact-select-box" title="${escapeHtml(t("artifacts.bulk.selectFiltered"))}">
+                <input type="checkbox" data-artifact-select="${escapeHtml(itemPath)}" ${selectedPaths.has(itemPath) ? "checked" : ""} />
+              </label>`
+            : ""
+        }
         <div class="artifact-item-main">
           <span class="artifact-item-path">${displayPath}</span>
           <span class="artifact-meta">${tags.join("")}</span>
         </div>
         <div class="artifact-item-actions"></div>
       `;
+      const checkbox = div.querySelector("input[data-artifact-select]");
+      checkbox?.addEventListener("click", (event) => event.stopPropagation());
+      checkbox?.addEventListener("change", (event) => {
+        event.stopPropagation();
+        if (checkbox.checked) selectedPaths.add(itemPath);
+        else selectedPaths.delete(itemPath);
+        renderArtifacts(list, view);
+      });
       const actions = div.querySelector(".artifact-item-actions");
       if (actions && String(item?.type || "") === "file") {
         const downloadBtn = document.createElement("button");
@@ -25420,6 +25540,55 @@ function renderCandidateCharts() {
   }
 }
 
+function hitListSelection() {
+  if (!(state.hitListSelectedSeqIds instanceof Set)) {
+    state.hitListSelectedSeqIds = new Set();
+  }
+  return state.hitListSelectedSeqIds;
+}
+
+function pruneHitListSelection(rows = state.hitListRows) {
+  const selected = hitListSelection();
+  const ids = new Set((Array.isArray(rows) ? rows : []).map((row) => String(row?.seq_id || "")).filter(Boolean));
+  Array.from(selected).forEach((seqId) => {
+    if (!ids.has(seqId)) selected.delete(seqId);
+  });
+  return selected;
+}
+
+function selectedHitListRows() {
+  const selected = hitListSelection();
+  const byId = new Map((Array.isArray(state.hitListRows) ? state.hitListRows : []).map((row) => [String(row?.seq_id || ""), row]));
+  return Array.from(selected).map((seqId) => byId.get(seqId)).filter(Boolean);
+}
+
+function downloadSelectedHitListFasta() {
+  const rows = selectedHitListRows().filter((row) => String(row?.sequence || "").trim());
+  if (!rows.length) {
+    setMessage(t("analyze.hitList.bulk.noSelection"), "ai");
+    return;
+  }
+  const fasta = rows
+    .map((row) => `>${String(row.seq_id || "candidate")}\n${String(row.sequence || "").trim()}`)
+    .join("\n");
+  downloadTextFile(`${state.currentRunId || "run"}_hit_list_selected.fasta`, `${fasta}\n`);
+}
+
+async function downloadSelectedHitListPdb(buttonEl = null) {
+  const items = selectedHitListRows()
+    .map((row) => String(row?.af2_ranked_pdb_path || "").trim())
+    .filter(Boolean)
+    .map((path) => ({ type: "file", path, size: 5_000_000 }));
+  if (!items.length) {
+    setMessage(t("analyze.hitList.bulk.noPdb"), "ai");
+    return;
+  }
+  await downloadArtifactsAsZip(items, {
+    filename: `${state.currentRunId || "run"}_hit_list_pdbs.zip`,
+    buttonEl,
+  });
+}
+
 function renderHitList() {
   if (!el.hitListTable) return;
   if (!state.currentRunId) {
@@ -25439,6 +25608,7 @@ function renderHitList() {
   const limit = Math.max(10, Math.min(500, Number(state.hitListLimit || 120)));
   state.hitListLimit = limit;
   const shown = filtered.slice(0, limit);
+  const selectedRows = pruneHitListSelection(rows);
   const showRelax = hitListRelaxColumnEnabled(shown, state.hitListResult);
   if (el.hitListSummary) {
     el.hitListSummary.innerHTML = `<div class="score-pill">${escapeHtml(
@@ -25464,6 +25634,7 @@ function renderHitList() {
     .map((row, idx) => {
       const wtDiffLabel = formatWtDifference(row);
       const isSelected = state.hitListSelectedSeqId && String(row.seq_id) === String(state.hitListSelectedSeqId);
+      const seqId = String(row.seq_id || "");
       const classNames = [
         row.af2_selected ? "hit-list-row-pass" : "",
         row.plddt == null ? "hit-list-row-missing" : "",
@@ -25472,7 +25643,8 @@ function renderHitList() {
       ]
         .filter(Boolean)
         .join(" ");
-      return `<tr class="${classNames}" data-seq-id="${escapeHtml(String(row.seq_id || ""))}">
+      return `<tr class="${classNames}" data-seq-id="${escapeHtml(seqId)}">
+        <td class="hit-list-select"><input type="checkbox" data-action="toggle-hit-row" data-seq-id="${escapeHtml(seqId)}" ${selectedRows.has(seqId) ? "checked" : ""} /></td>
         <td class="num">${idx + 1}</td>
         <td>${escapeHtml(String(row.seq_id || "-"))}</td>
         <td>${escapeHtml(String(row.source || "-"))}</td>
@@ -25499,9 +25671,20 @@ function renderHitList() {
   };
 
   el.hitListTable.innerHTML = `
+    <div class="hit-list-bulk-actions">
+      <span class="hit-list-bulk-count">${escapeHtml(t("analyze.hitList.bulk.selected", {
+        selected: selectedRows.size,
+        shown: shown.length,
+      }))}</span>
+      <button type="button" class="ghost" data-action="select-hit-shown">${escapeHtml(t("analyze.hitList.bulk.selectShown"))}</button>
+      <button type="button" class="ghost" data-action="clear-hit-selection">${escapeHtml(t("analyze.hitList.bulk.clear"))}</button>
+      <button type="button" class="ghost" data-action="download-hit-fasta">${escapeHtml(t("analyze.hitList.bulk.downloadFasta"))}</button>
+      <button type="button" class="primary" data-action="download-hit-pdb">${escapeHtml(t("analyze.hitList.bulk.downloadPdb"))}</button>
+    </div>
     <table class="hit-list-table">
       <thead>
         <tr>
+          <th class="hit-list-select"></th>
           <th class="num">#</th>
           <th data-sort="seq_id" class="${sortClass("seq_id")}">seq_id</th>
           <th data-sort="source" class="${sortClass("source")}">source</th>
@@ -25565,6 +25748,7 @@ function buildHitListDetailsMarkdown() {
 
 async function refreshHitList() {
   state.hitListSelectedSeqId = null;
+  hitListSelection().clear();
   if (!state.currentRunId) {
     state.hitListResult = null;
     state.hitListRows = [];
@@ -25618,6 +25802,15 @@ function base64ToBlob(base64Text, contentType = "application/octet-stream") {
   return new Blob([bytes], { type: contentType });
 }
 
+function base64ToBytes(base64Text) {
+  const binary = atob(String(base64Text || ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
 function triggerBlobDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -25627,6 +25820,47 @@ function triggerBlobDownload(blob, filename) {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+async function downloadArtifactsAsZip(items, { filename = "artifacts.zip", buttonEl = null } = {}) {
+  if (!state.currentRunId) {
+    setMessage(t("export.selectRun"), "ai");
+    return;
+  }
+  const files = (Array.isArray(items) ? items : [])
+    .map((item) => ({ item, request: buildArtifactDownloadRequest(item) }))
+    .filter(({ request }) => request);
+  if (!files.length) {
+    setMessage(t("artifacts.bulk.noSelection"), "ai");
+    return;
+  }
+  const previousLabel = buttonEl ? buttonEl.textContent : "";
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.textContent = t("artifacts.downloading");
+  }
+  try {
+    const entries = [];
+    for (const { request } of files) {
+      const read = await apiCall("pipeline.read_artifact", {
+        run_id: state.currentRunId,
+        ...request,
+      });
+      entries.push({
+        name: request.path,
+        bytes: base64ToBytes(read?.base64 || ""),
+      });
+    }
+    const zipBytes = buildStoredZipBytes(entries);
+    triggerBlobDownload(new Blob([zipBytes], { type: "application/zip" }), filename);
+  } catch (err) {
+    setMessage(t("artifacts.downloadFailed", { error: err.message }), "ai");
+  } finally {
+    if (buttonEl) {
+      buttonEl.disabled = false;
+      buttonEl.textContent = previousLabel || t("artifacts.bulk.downloadSelected");
+    }
+  }
 }
 
 async function downloadArtifact(item, { buttonEl = null } = {}) {
@@ -27355,6 +27589,33 @@ if (el.hitListTable) {
         if (path) {
           await downloadArtifact({ type: "file", path, size: 5000000 }, { buttonEl: btn });
         }
+      } else if (action === "select-hit-shown") {
+        const selected = hitListSelection();
+        const shown = filteredHitListRows({ applyLimit: false }).slice(0, Math.max(10, Math.min(500, Number(state.hitListLimit || 120))));
+        shown.forEach((row) => {
+          const id = String(row?.seq_id || "").trim();
+          if (id) selected.add(id);
+        });
+        renderHitList();
+      } else if (action === "clear-hit-selection") {
+        hitListSelection().clear();
+        renderHitList();
+      } else if (action === "download-hit-fasta") {
+        downloadSelectedHitListFasta();
+      } else if (action === "download-hit-pdb") {
+        await downloadSelectedHitListPdb(btn);
+      }
+      return;
+    }
+
+    const checkbox = target.closest('input[data-action="toggle-hit-row"]');
+    if (checkbox) {
+      const seqId = String(checkbox.dataset.seqId || "").trim();
+      if (seqId) {
+        const selected = hitListSelection();
+        if (checkbox.checked) selected.add(seqId);
+        else selected.delete(seqId);
+        renderHitList();
       }
     }
   });

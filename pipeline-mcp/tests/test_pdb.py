@@ -4,6 +4,7 @@ from pipeline_mcp.bio.pdb import ca_rmsd
 from pipeline_mcp.bio.pdb import dssp_non_loop_positions_by_chain
 from pipeline_mcp.bio.pdb import ligand_atoms_present
 from pipeline_mcp.bio.pdb import ligand_proximity_mask
+from pipeline_mcp.bio.pdb import mmcif_to_pdb
 from pipeline_mcp.bio.pdb import preprocess_pdb
 from pipeline_mcp.bio.pdb import sequence_by_chain
 from pipeline_mcp.bio.sdf import append_ligand_pdb
@@ -169,6 +170,39 @@ class TestPdbSequenceExtraction(unittest.TestCase):
         )
         seqs = sequence_by_chain(pdb)
         self.assertEqual(seqs, {"A": "AG"})
+
+    def test_mmcif_to_pdb_supports_target_sequence_extraction(self) -> None:
+        cif = """data_demo
+#
+loop_
+_atom_site.group_PDB
+_atom_site.id
+_atom_site.type_symbol
+_atom_site.label_atom_id
+_atom_site.label_alt_id
+_atom_site.label_comp_id
+_atom_site.label_asym_id
+_atom_site.label_entity_id
+_atom_site.label_seq_id
+_atom_site.pdbx_PDB_ins_code
+_atom_site.Cartn_x
+_atom_site.Cartn_y
+_atom_site.Cartn_z
+_atom_site.occupancy
+_atom_site.B_iso_or_equiv
+_atom_site.pdbx_formal_charge
+_atom_site.auth_seq_id
+_atom_site.auth_comp_id
+_atom_site.auth_asym_id
+_atom_site.auth_atom_id
+_atom_site.pdbx_PDB_model_num
+ATOM 1 C CA . ALA A 1 1 ? 0.000 0.000 0.000 1.00 20.00 ? 1 ALA A CA 1
+ATOM 2 C CA . CYS A 1 2 ? 1.000 0.000 0.000 1.00 20.00 ? 2 CYS A CA 1
+#
+"""
+        pdb = mmcif_to_pdb(cif)
+        self.assertIn("ATOM", pdb)
+        self.assertEqual(sequence_by_chain(pdb), {"A": "AC"})
 
 
 class TestPdbPreprocess(unittest.TestCase):

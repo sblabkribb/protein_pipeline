@@ -5038,6 +5038,29 @@ textarea:focus-visible {
   background: #fff;
 }
 
+.hit-list-bulk-actions,
+.artifact-bulk-actions {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px;
+  border-bottom: 1px solid rgba(16, 42, 45, 0.08);
+  background: rgba(247, 251, 252, 0.96);
+  backdrop-filter: blur(8px);
+}
+
+.hit-list-bulk-count,
+.artifact-bulk-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin-right: auto;
+}
+
 .hit-list-table {
   width: 100%;
   border-collapse: collapse;
@@ -5066,6 +5089,19 @@ textarea:focus-visible {
 .hit-list-table td.num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.hit-list-table th.hit-list-select,
+.hit-list-table td.hit-list-select {
+  width: 34px;
+  text-align: center;
+}
+
+.hit-list-table input[type="checkbox"],
+.artifact-select-box input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--teal);
 }
 
 .hit-list-row-pass {
@@ -5169,6 +5205,20 @@ textarea:focus-visible {
 
 .artifact-item:hover {
   border-color: rgba(15, 107, 111, 0.4);
+}
+
+.artifact-item.is-selected {
+  border-color: rgba(15, 122, 119, 0.45);
+  background: rgba(15, 122, 119, 0.06);
+}
+
+.artifact-select-box {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  cursor: pointer;
 }
 
 .artifact-item-main {

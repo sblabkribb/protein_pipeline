@@ -43,6 +43,7 @@ from .bio.pdb import ca_rmsd
 from .bio.pdb import dssp_non_loop_positions_by_chain
 from .bio.pdb import ligand_atoms_present
 from .bio.pdb import ligand_proximity_mask
+from .bio.pdb import normalize_structure_text
 from .bio.pdb import preprocess_pdb
 from .bio.pdb import residues_by_chain
 from .bio.pdb import sequence_by_chain
@@ -3328,12 +3329,17 @@ class PipelineRunner:
             msa_dir = _ensure_dir(paths.root / "msa")
             tiers_dir = _ensure_dir(paths.root / "tiers")
 
-            target_pdb_input_text = str(request.target_pdb or "")
+            target_pdb_input_text = normalize_structure_text(str(request.target_pdb or ""))
             target_pdb_text = target_pdb_input_text
             had_target_pdb_input = bool(target_pdb_text.strip())
-            rfd3_input_pdb_text = str(request.rfd3_input_pdb or "")
+            rfd3_input_pdb_text = normalize_structure_text(str(request.rfd3_input_pdb or ""))
             rfd3_active = _rfd3_active(request)
             rfd3_files = _rfd3_input_files(request) if rfd3_active else {}
+            if rfd3_files:
+                rfd3_files = {
+                    name: normalize_structure_text(str(content or ""))
+                    for name, content in rfd3_files.items()
+                }
             if (
                 rfd3_active
                 and not rfd3_files

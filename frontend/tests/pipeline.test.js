@@ -26,6 +26,7 @@ import {
   artifactMetaFromPath,
   artifactMetaFromPathForManifest,
   artifactDownloadFilename,
+  buildStoredZipBytes,
   buildArtifactDownloadRequest,
   backboneSourceIndexFromManifest,
   buildWorkflowStudioFreshSessionSeed,
@@ -651,6 +652,27 @@ test("artifactDownloadFilename falls back to basename", () => {
     "target.pdb"
   );
   assert.equal(artifactDownloadFilename("report.md"), "report.md");
+});
+
+test("buildStoredZipBytes creates a zip archive for selected files", () => {
+  const zip = buildStoredZipBytes([
+    { name: "a/result.fasta", bytes: new TextEncoder().encode(">a\nACDE\n") },
+    { name: "b/ranked_0.pdb", text: "ATOM\nEND\n" },
+  ]);
+  assert.equal(zip[0], 0x50);
+  assert.equal(zip[1], 0x4b);
+  const text = new TextDecoder().decode(zip);
+  assert.match(text, /a\/result\.fasta/);
+  assert.match(text, /b\/ranked_0\.pdb/);
+  assert.match(text, />a\nACDE/);
+  assert.match(text, /ATOM\nEND/);
+});
+
+test("detectTargetKey treats mmCIF target text as structure input", () => {
+  assert.equal(
+    detectTargetKey("data_demo\n#\nloop_\n_atom_site.group_PDB\n_atom_site.id\nATOM 1\n"),
+    "target_pdb"
+  );
 });
 
 test("renderMcpGuideMarkup provides Korean token instructions for VS Code MCP", async () => {
