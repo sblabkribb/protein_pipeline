@@ -865,6 +865,54 @@ body[data-environment="staging"] .topbar {
   color: var(--ink-soft);
 }
 
+.model-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 8px;
+}
+
+.model-choice-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 9px 10px;
+  border: 1px solid rgba(16, 42, 45, 0.14);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.86);
+  cursor: pointer;
+}
+
+.model-choice-card:hover,
+.model-choice-card:focus-within {
+  border-color: rgba(14, 116, 144, 0.42);
+  box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.1);
+}
+
+.model-choice-card input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--teal);
+}
+
+.model-choice-card span {
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.model-choice-ensemble {
+  border-color: rgba(14, 116, 144, 0.26);
+  background: rgba(240, 249, 255, 0.72);
+}
+
+.evolution-source-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.evolution-source-row button {
+  white-space: nowrap;
+}
+
 .fast-upload-primary {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -7249,6 +7297,10 @@ textarea:focus-visible {
   }
 
   .app-shell-frame {
+    grid-template-columns: 1fr;
+  }
+
+  .evolution-source-row {
     grid-template-columns: 1fr;
   }
 

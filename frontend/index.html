@@ -650,14 +650,36 @@
                   </label>
                   <label class="fast-field">
                     <span data-i18n="surrogate.model.label">Surrogate model</span>
-                    <select id="surrogateModelInput" multiple size="4" aria-describedby="surrogateModelHelp">
-                      <option value="rf" selected data-i18n="choice.surrogateModel.rf">Random Forest</option>
-                      <option value="ridge" data-i18n="choice.surrogateModel.ridge">Ridge</option>
-                      <option value="xgboost" data-i18n="choice.surrogateModel.xgboost">XGBoost</option>
-                      <option value="lightgbm" data-i18n="choice.surrogateModel.lightgbm">LightGBM</option>
-                    </select>
+                    <input id="surrogateModelInput" type="hidden" value="rf" />
+                    <div
+                      id="surrogateModelChoices"
+                      class="model-choice-grid"
+                      role="group"
+                      aria-describedby="surrogateModelHelp"
+                    >
+                      <label class="model-choice-card">
+                        <input type="checkbox" value="rf" data-surrogate-model-choice="rf" checked />
+                        <span data-i18n="choice.surrogateModel.rf">Random Forest</span>
+                      </label>
+                      <label class="model-choice-card">
+                        <input type="checkbox" value="ridge" data-surrogate-model-choice="ridge" />
+                        <span data-i18n="choice.surrogateModel.ridge">Ridge</span>
+                      </label>
+                      <label class="model-choice-card">
+                        <input type="checkbox" value="xgboost" data-surrogate-model-choice="xgboost" />
+                        <span data-i18n="choice.surrogateModel.xgboost">XGBoost</span>
+                      </label>
+                      <label class="model-choice-card">
+                        <input type="checkbox" value="lightgbm" data-surrogate-model-choice="lightgbm" />
+                        <span data-i18n="choice.surrogateModel.lightgbm">LightGBM</span>
+                      </label>
+                      <label class="model-choice-card model-choice-ensemble">
+                        <input type="checkbox" value="ensemble" data-surrogate-model-choice="ensemble" />
+                        <span data-i18n="choice.surrogateModel.ensemble">Rank ensemble</span>
+                      </label>
+                    </div>
                     <small id="surrogateModelHelp" data-i18n="surrogate.model.help">
-                      Select multiple models to use rank-mean acquisition with the same AF2-labelled training set.
+                      Select individual models, or choose Rank ensemble to use all supported models with one shared AF2-labelled training set.
                     </small>
                   </label>
                   <label class="fast-field">
@@ -759,7 +781,29 @@
                   </label>
                   <label class="fast-field">
                     <span data-i18n="evolution.experimentSourceRunId.label">Experiment source run ID</span>
-                    <input id="evolutionExperimentSourceRunIdInput" type="text" placeholder="optional previous run ID" />
+                    <div class="input-row two evolution-source-row">
+                      <input
+                        id="evolutionExperimentSourceRunIdInput"
+                        type="text"
+                        list="evolutionExperimentSourceRunIdOptions"
+                        placeholder="optional previous run ID"
+                      />
+                      <button
+                        id="evolutionExperimentSourceRefreshBtn"
+                        class="ghost"
+                        type="button"
+                        data-i18n="evolution.experimentSourceRunId.refresh"
+                      >
+                        Refresh runs
+                      </button>
+                    </div>
+                    <datalist id="evolutionExperimentSourceRunIdOptions"></datalist>
+                    <small
+                      id="evolutionExperimentSourceRunIdStatus"
+                      data-i18n="evolution.experimentSourceRunId.help"
+                    >
+                      Choose a previous run with recorded experiment labels, or type a run ID manually.
+                    </small>
                   </label>
                   <label class="fast-field">
                     <span data-i18n="evolution.initialSamples.label">Stage 2: K-Means Training Samples</span>

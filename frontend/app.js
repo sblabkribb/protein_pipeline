@@ -693,6 +693,10 @@ const state = {
   runs: [],
   runSearch: "",
   runSearchRefreshTimer: null,
+  evolutionExperimentSourceRuns: [],
+  evolutionExperimentSourceRunMeta: {},
+  evolutionExperimentSourceLoading: false,
+  evolutionExperimentSourceLoadFailed: false,
   runModeById: {},
   af2ProviderByRunId: {},
   progressByRunId: {},
@@ -854,6 +858,7 @@ const el = {
   surrogateInitialSamplesInput: document.getElementById("surrogateInitialSamplesInput"),
   surrogateTopKInput: document.getElementById("surrogateTopKInput"),
   surrogateModelInput: document.getElementById("surrogateModelInput"),
+  surrogateModelChoices: document.getElementById("surrogateModelChoices"),
   surrogateAf2ProviderInput: document.getElementById("surrogateAf2ProviderInput"),
   surrogateSoluprotCutoffInput: document.getElementById("surrogateSoluprotCutoffInput"),
   surrogateAf2PlddtCutoffInput: document.getElementById("surrogateAf2PlddtCutoffInput"),
@@ -866,6 +871,9 @@ const el = {
   evolutionLabelSourceInput: document.getElementById("evolutionLabelSourceInput"),
   evolutionObjectiveMetricInput: document.getElementById("evolutionObjectiveMetricInput"),
   evolutionExperimentSourceRunIdInput: document.getElementById("evolutionExperimentSourceRunIdInput"),
+  evolutionExperimentSourceRunIdOptions: document.getElementById("evolutionExperimentSourceRunIdOptions"),
+  evolutionExperimentSourceRefreshBtn: document.getElementById("evolutionExperimentSourceRefreshBtn"),
+  evolutionExperimentSourceRunIdStatus: document.getElementById("evolutionExperimentSourceRunIdStatus"),
   evolutionInitialSamplesInput: document.getElementById("evolutionInitialSamplesInput"),
   evolutionOracleSamplesInput: document.getElementById("evolutionOracleSamplesInput"),
   evolutionAf2PlddtCutoffInput: document.getElementById("evolutionAf2PlddtCutoffInput"),
@@ -2248,7 +2256,7 @@ const I18N = {
     "surrogate.topK.label": "Top K final AF2 candidates",
     "surrogate.model.label": "Surrogate model",
     "surrogate.model.help":
-      "Select more than one model to use rank-mean acquisition without increasing AF2 calls.",
+      "Select individual models, or choose Rank ensemble to use all supported models with one shared AF2-labelled training set.",
     "surrogate.note":
       "Use Evolution only when experimental measurements are available or planned. Use this Surrogate tab when the goal is a one-round compute budget reduction.",
     "surrogate.error.targetRequired": "Choose FASTA/PDB/mmCIF input before launching Surrogate Triage.",
@@ -2294,6 +2302,14 @@ const I18N = {
     "evolution.labelSource.inSilicoAf2": "In-silico AF2 legacy",
     "evolution.objectiveMetric.label": "Experimental objective metric",
     "evolution.experimentSourceRunId.label": "Experiment source run ID",
+    "evolution.experimentSourceRunId.help":
+      "Choose a previous run with recorded Analyze > Experiment labels, or type a run ID manually.",
+    "evolution.experimentSourceRunId.refresh": "Refresh runs",
+    "evolution.experimentSourceRunId.loading": "Loading run IDs...",
+    "evolution.experimentSourceRunId.loaded":
+      "{count} run IDs loaded. Runs with experiment labels are listed first when available.",
+    "evolution.experimentSourceRunId.failed":
+      "Run list unavailable; type a previous run ID manually.",
     "evolution.initialSamples.label": "Stage 2: K-means experiment set",
     "evolution.oracleSamples.label": "Stage 3: Recommended candidates",
     "evolution.filtering.title": "Filtering",
@@ -3869,7 +3885,8 @@ const I18N = {
     "surrogate.initialSamples.label": "학습용 AF2 샘플 수",
     "surrogate.topK.label": "최종 AF2 Top K 후보 수",
     "surrogate.model.label": "대리모델",
-    "surrogate.model.help": "여러 모델을 선택하면 같은 AF2 학습셋을 공유하고 rank-mean으로 Top K를 고릅니다.",
+    "surrogate.model.help":
+      "개별 모델을 선택하거나 Rank ensemble을 선택해 같은 AF2-labelled training set으로 지원 모델 전체를 함께 사용합니다.",
     "surrogate.note":
       "실험 측정값이 있거나 만들 계획이면 Evolution을 사용하세요. 1회 실행에서 compute budget을 줄이는 목적이면 이 Surrogate 탭을 사용합니다.",
     "surrogate.error.targetRequired": "Surrogate Triage를 실행하려면 FASTA/PDB/mmCIF 입력을 넣으세요.",
@@ -3914,6 +3931,14 @@ const I18N = {
     "evolution.labelSource.inSilicoAf2": "In-silico AF2 기존 방식",
     "evolution.objectiveMetric.label": "실험 objective metric",
     "evolution.experimentSourceRunId.label": "실험 source run ID",
+    "evolution.experimentSourceRunId.help":
+      "Analyze > Experiment 라벨이 기록된 이전 run을 고르거나 run ID를 직접 입력하세요.",
+    "evolution.experimentSourceRunId.refresh": "run 목록 새로고침",
+    "evolution.experimentSourceRunId.loading": "run ID를 불러오는 중...",
+    "evolution.experimentSourceRunId.loaded":
+      "{count}개 run ID를 불러왔습니다. 실험 라벨이 있는 run을 우선 표시합니다.",
+    "evolution.experimentSourceRunId.failed":
+      "run 목록을 불러오지 못했습니다. 이전 run ID를 직접 입력할 수 있습니다.",
     "evolution.initialSamples.label": "Stage 2: K-means 실험 후보",
     "evolution.oracleSamples.label": "Stage 3: 추천 후보 수",
     "evolution.filtering.title": "필터링 (Filtering)",
@@ -11479,6 +11504,9 @@ function setActiveTab(value) {
   if (next === "studio") {
     renderWorkflowStudio();
   }
+  if (next === "evolution") {
+    void refreshEvolutionExperimentSourceRunChoices();
+  }
   if (next === "cath" && isAdminUser()) {
     void refreshCathOps({ force: true });
   }
@@ -12194,14 +12222,53 @@ function readIntegerInput(input, fallback, { min = null, max = null } = {}) {
   return Math.round(readNumberInput(input, fallback, { min, max }));
 }
 
-function selectedSurrogateModelsFromInput(input) {
-  const selected = Array.from(input?.selectedOptions || []).map((option) => option.value);
-  return normalizeSurrogateModelSelection(selected.length ? selected : input?.value || "rf");
+function surrogateModelChoiceBoxes(container = el.surrogateModelChoices) {
+  return Array.from(container?.querySelectorAll("[data-surrogate-model-choice]") || []);
+}
+
+function selectedSurrogateModelsFromChoices(container = el.surrogateModelChoices) {
+  const boxes = surrogateModelChoiceBoxes(container);
+  const selected = boxes
+    .filter((box) => box.checked && box.dataset.surrogateModelChoice !== "ensemble")
+    .map((box) => box.dataset.surrogateModelChoice || box.value);
+  return normalizeSurrogateModelSelection(selected.length ? selected : el.surrogateModelInput?.value || "rf");
+}
+
+function syncSurrogateModelChoiceState({ changedValue = "" } = {}) {
+  const boxes = surrogateModelChoiceBoxes();
+  if (!boxes.length) return normalizeSurrogateModelSelection(el.surrogateModelInput?.value || "rf");
+  const modelBoxes = boxes.filter((box) => box.dataset.surrogateModelChoice !== "ensemble");
+  const ensembleBox = boxes.find((box) => box.dataset.surrogateModelChoice === "ensemble");
+  const allModelValues = normalizeSurrogateModelSelection("ensemble");
+
+  if (changedValue === "ensemble" && ensembleBox) {
+    modelBoxes.forEach((box) => {
+      box.checked = ensembleBox.checked;
+    });
+  }
+
+  if (!modelBoxes.some((box) => box.checked)) {
+    const defaultBox = modelBoxes.find((box) => box.dataset.surrogateModelChoice === "rf") || modelBoxes[0];
+    if (defaultBox) defaultBox.checked = true;
+  }
+
+  const selected = selectedSurrogateModelsFromChoices();
+  const selectedSet = new Set(selected);
+  modelBoxes.forEach((box) => {
+    box.checked = selectedSet.has(box.dataset.surrogateModelChoice || box.value);
+  });
+  if (ensembleBox) {
+    ensembleBox.checked = allModelValues.every((value) => selectedSet.has(value));
+  }
+  if (el.surrogateModelInput) {
+    el.surrogateModelInput.value = selected.join(",");
+  }
+  return selected;
 }
 
 function buildSurrogateLaunchAnswers() {
   const targetInput = String(el.surrogateTargetInput?.value || "").trim();
-  const selectedModels = selectedSurrogateModelsFromInput(el.surrogateModelInput);
+  const selectedModels = syncSurrogateModelChoiceState();
   const answers = {
     run_mode: "pipeline",
     target_input: targetInput,
@@ -12272,8 +12339,112 @@ async function loadSurrogateTargetFile(file) {
   setMessage(t("surrogate.message.fileLoaded", { name: file.name || "input" }), "ai");
 }
 
+function visibleRunIdsForCurrentUser(runs) {
+  let visible = Array.isArray(runs) ? [...runs] : [];
+  if (state.user?.role !== "admin" || !el.showAllRuns?.checked) {
+    const prefix = state.user?.run_prefix || buildUserPrefix({ name: state.user?.username || "user" });
+    visible = filterRunsByPrefix(visible, prefix);
+  }
+  return visible.map((runId) => String(runId || "").trim()).filter(Boolean);
+}
+
+function renderEvolutionExperimentSourceRunChoices() {
+  if (!el.evolutionExperimentSourceRunIdOptions) return;
+  el.evolutionExperimentSourceRunIdOptions.replaceChildren();
+  const choices = Array.isArray(state.evolutionExperimentSourceRuns)
+    ? state.evolutionExperimentSourceRuns
+    : [];
+  choices.forEach((item) => {
+    const runId = typeof item === "string" ? item : String(item.runId || "").trim();
+    if (!runId) return;
+    const meta = state.evolutionExperimentSourceRunMeta?.[runId] || {};
+    const count = Number(meta.experimentCount || 0);
+    const option = document.createElement("option");
+    option.value = runId;
+    option.label = count > 0 ? `${count}${meta.truncated ? "+" : ""} experiment label${count === 1 ? "" : "s"}` : "run";
+    el.evolutionExperimentSourceRunIdOptions.appendChild(option);
+  });
+  if (el.evolutionExperimentSourceRunIdStatus) {
+    if (state.evolutionExperimentSourceLoading) {
+      el.evolutionExperimentSourceRunIdStatus.textContent = t("evolution.experimentSourceRunId.loading");
+    } else if (state.evolutionExperimentSourceLoadFailed) {
+      el.evolutionExperimentSourceRunIdStatus.textContent = t("evolution.experimentSourceRunId.failed");
+    } else if (choices.length) {
+      el.evolutionExperimentSourceRunIdStatus.textContent = t("evolution.experimentSourceRunId.loaded", {
+        count: choices.length,
+      });
+    } else {
+      el.evolutionExperimentSourceRunIdStatus.textContent = t("evolution.experimentSourceRunId.help");
+    }
+  }
+}
+
+async function refreshEvolutionExperimentSourceRunChoices({ force = false } = {}) {
+  if (!state.user || state.evolutionExperimentSourceLoading) return;
+  if (!force && Array.isArray(state.evolutionExperimentSourceRuns) && state.evolutionExperimentSourceRuns.length) {
+    renderEvolutionExperimentSourceRunChoices();
+    return;
+  }
+  state.evolutionExperimentSourceLoading = true;
+  state.evolutionExperimentSourceLoadFailed = false;
+  renderEvolutionExperimentSourceRunChoices();
+  try {
+    const result = await apiCall("pipeline.list_runs", {
+      limit: 200,
+      query: "",
+      include_subruns: false,
+      include_cath: false,
+    });
+    const runIds = visibleRunIdsForCurrentUser(result.runs || []);
+    const meta = {};
+    await Promise.all(
+      runIds.slice(0, 80).map(async (runId) => {
+        try {
+          const experimentResult = await apiCall("pipeline.list_experiments", {
+            run_id: runId,
+            limit: 3,
+          });
+          const items = Array.isArray(experimentResult.items) ? experimentResult.items : [];
+          meta[runId] = {
+            experimentCount: items.length,
+            truncated: items.length >= 3,
+          };
+        } catch (_err) {
+          meta[runId] = { experimentCount: 0, truncated: false };
+        }
+      })
+    );
+    state.evolutionExperimentSourceRunMeta = meta;
+    state.evolutionExperimentSourceRuns = runIds
+      .map((runId, index) => ({
+        runId,
+        index,
+        experimentCount: Number(meta[runId]?.experimentCount || 0),
+      }))
+      .sort((left, right) => {
+        const leftHasLabels = left.experimentCount > 0 ? 1 : 0;
+        const rightHasLabels = right.experimentCount > 0 ? 1 : 0;
+        if (leftHasLabels !== rightHasLabels) return rightHasLabels - leftHasLabels;
+        if (left.experimentCount !== right.experimentCount) return right.experimentCount - left.experimentCount;
+        return left.index - right.index;
+      });
+  } catch (_err) {
+    state.evolutionExperimentSourceRuns = [];
+    state.evolutionExperimentSourceLoadFailed = true;
+  } finally {
+    state.evolutionExperimentSourceLoading = false;
+    renderEvolutionExperimentSourceRunChoices();
+  }
+}
+
 function initSurrogateLauncher() {
   if (surrogateLauncherInitialized) return;
+  surrogateModelChoiceBoxes().forEach((box) => {
+    box.addEventListener("change", () => {
+      syncSurrogateModelChoiceState({ changedValue: box.dataset.surrogateModelChoice || box.value });
+    });
+  });
+  syncSurrogateModelChoiceState();
   el.surrogateLoadFileBtn?.addEventListener("click", () => {
     el.surrogateTargetFile?.click();
   });
@@ -12355,6 +12526,10 @@ async function loadEvolutionTargetFile(file) {
 
 function initEvolutionLauncher() {
   if (evolutionLauncherInitialized) return;
+  el.evolutionExperimentSourceRefreshBtn?.addEventListener("click", () => {
+    void refreshEvolutionExperimentSourceRunChoices({ force: true });
+  });
+  void refreshEvolutionExperimentSourceRunChoices();
   el.evolutionLoadFileBtn?.addEventListener("click", () => {
     el.evolutionTargetFile?.click();
   });
@@ -17933,7 +18108,13 @@ function renderQuestions(questions) {
           state.answers.surrogate_triage_model || modelQuestion.default || "rf"
         );
         state.answers.surrogate_triage_model = surrogateModelPayload(currentModels);
+        const allSurrogateModels = normalizeSurrogateModelSelection("ensemble");
+        const currentModelSet = new Set(currentModels);
+        const displayModels = allSurrogateModels.every((value) => currentModelSet.has(value))
+          ? [...currentModels, "ensemble"]
+          : currentModels;
         const modelOptions = [
+          { labelKey: "choice.surrogateModel.ensemble", value: "ensemble" },
           { labelKey: "choice.surrogateModel.rf", value: "rf" },
           { labelKey: "choice.surrogateModel.ridge", value: "ridge" },
           { labelKey: "choice.surrogateModel.xgboost", value: "xgboost" },
@@ -17944,8 +18125,15 @@ function renderQuestions(questions) {
         }));
         field.appendChild(label);
         field.appendChild(desc);
-        renderChoiceButtons(field, modelOptions, currentModels, (value) => {
+        renderChoiceButtons(field, modelOptions, displayModels, (value) => {
           const current = normalizeSurrogateModelSelection(state.answers.surrogate_triage_model);
+          if (value === "ensemble") {
+            const currentSet = new Set(current);
+            const allSelected = allSurrogateModels.every((model) => currentSet.has(model));
+            state.answers.surrogate_triage_model = surrogateModelPayload(allSelected ? ["rf"] : allSurrogateModels);
+            updateRunEligibility(normalizedQuestions);
+            return;
+          }
           const next = new Set(current);
           if (next.has(value)) {
             if (next.size <= 1) return;
@@ -17955,7 +18143,7 @@ function renderQuestions(questions) {
           }
           state.answers.surrogate_triage_model = surrogateModelPayload(Array.from(next));
           updateRunEligibility(normalizedQuestions);
-        }, { multi: true, rerender: false });
+        }, { multi: true, rerender: true });
         grid.appendChild(field);
       }
     }
@@ -18016,6 +18204,7 @@ function renderQuestions(questions) {
     }
 
     if (state.answers.evolution_mode === true) {
+      void refreshEvolutionExperimentSourceRunChoices();
       evolutionQuestions.filter(q => q.id !== "evolution_mode").forEach(q => {
         const field = document.createElement("div");
         field.className = "parameter-field option-field";
@@ -18057,6 +18246,9 @@ function renderQuestions(questions) {
           const input = document.createElement("input");
           if (q.id === "evolution_objective_metric" || q.id === "evolution_experiment_source_run_id") {
             input.type = "text";
+            if (q.id === "evolution_experiment_source_run_id") {
+              input.setAttribute("list", "evolutionExperimentSourceRunIdOptions");
+            }
             input.value = String(state.answers[q.id] ?? q.default ?? "");
             input.addEventListener("input", () => {
               state.answers[q.id] = input.value.trim();

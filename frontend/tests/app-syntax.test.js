@@ -235,12 +235,17 @@ test("surrogate triage is exposed as a first-class UI mode", () => {
   assert.match(html, /id="tab-surrogate"/);
   assert.match(html, /id="surrogateTargetInput"/);
   assert.match(html, /id="surrogateRunBtn"/);
+  assert.match(html, /id="surrogateModelChoices"/);
+  assert.match(html, /data-surrogate-model-choice="ensemble"/);
+  assert.doesNotMatch(html, /id="surrogateModelInput"[^>]*multiple/);
   assert.match(
     source,
     /const TAB_OPTIONS = \["home", "fast", "advanced", "surrogate", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"\];/
   );
   assert.match(source, /let surrogateLauncherInitialized = false;/);
   assert.match(source, /function initSurrogateLauncher/);
+  assert.match(source, /function syncSurrogateModelChoiceState/);
+  assert.match(source, /function selectedSurrogateModelsFromChoices/);
   assert.match(source, /surrogate_triage_enabled:\s*true/);
   assert.match(source, /rfd3_use:\s*false/);
   assert.match(source, /bioemu_use:\s*false/);
@@ -253,6 +258,10 @@ test("evolution UI explains experimental feedback handoff", () => {
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
   assert.match(html, /id="evolutionFeedbackGuide"/);
+  assert.match(html, /id="evolutionExperimentSourceRunIdOptions"/);
+  assert.match(html, /id="evolutionExperimentSourceRefreshBtn"/);
+  assert.match(source, /function refreshEvolutionExperimentSourceRunChoices/);
+  assert.match(source, /function renderEvolutionExperimentSourceRunChoices/);
   assert.match(source, /experiment_request\.csv/);
   assert.match(source, /next_candidates\.csv/);
   assert.match(source, /Analyze > Experiment/);
