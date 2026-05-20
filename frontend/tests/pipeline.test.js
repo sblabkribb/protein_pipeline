@@ -98,6 +98,7 @@ import {
   withFixedPositionsExtra,
   workflowStudioSessionRunKey,
   normalizeSurrogateModelSelection,
+  normalizeSurrogateAcquisitionPolicy,
 } from "../lib/pipeline.js";
 import {
   aminoAcidPropertyInfo,
@@ -775,11 +776,40 @@ test("buildRunArguments preserves standard surrogate triage controls", () => {
   assert.equal(args.stop_after, "af2");
 });
 
+test("buildRunArguments preserves auto-CV surrogate acquisition controls", () => {
+  const args = buildRunArguments({
+    prompt: "",
+    routed: { stop_after: "af2" },
+    answers: {
+      surrogate_triage_enabled: true,
+      surrogate_triage_initial_samples: 30,
+      surrogate_triage_top_k: 20,
+      surrogate_triage_model: "auto",
+      surrogate_triage_comparator_models: ["rf", "ridge"],
+      surrogate_triage_ensemble_models: ["rf", "ridge"],
+      surrogate_triage_cv_folds: 5,
+    },
+    runId: "run_surrogate_auto",
+  });
+  assert.equal(args.surrogate_triage_model, "auto");
+  assert.deepEqual(args.surrogate_triage_comparator_models, ["rf", "ridge"]);
+  assert.deepEqual(args.surrogate_triage_ensemble_models, ["rf", "ridge"]);
+  assert.equal(args.surrogate_triage_cv_folds, 5);
+});
+
 test("normalizeSurrogateModelSelection keeps multiple surrogate models", () => {
   assert.deepEqual(normalizeSurrogateModelSelection(["rf", "ridge"]), ["rf", "ridge"]);
   assert.deepEqual(normalizeSurrogateModelSelection("rf,ridge"), ["rf", "ridge"]);
   assert.deepEqual(normalizeSurrogateModelSelection("ensemble"), ["rf", "ridge", "lightgbm", "xgboost"]);
   assert.deepEqual(normalizeSurrogateModelSelection(["bogus", "rf"]), ["rf"]);
+});
+
+test("normalizeSurrogateAcquisitionPolicy keeps auto and rank ensemble policies", () => {
+  assert.equal(normalizeSurrogateAcquisitionPolicy(""), "auto");
+  assert.equal(normalizeSurrogateAcquisitionPolicy("rf"), "rf");
+  assert.equal(normalizeSurrogateAcquisitionPolicy("rank_mean"), "ensemble");
+  assert.equal(normalizeSurrogateAcquisitionPolicy(["rf", "ridge"]), "ensemble");
+  assert.equal(normalizeSurrogateAcquisitionPolicy("bogus"), "auto");
 });
 
 test("buildRunArguments preserves experimental evolution label controls", () => {
@@ -1054,6 +1084,9 @@ test("workflowStudioStageFields exposes key fields per stage", () => {
     "surrogate_triage_initial_samples",
     "surrogate_triage_top_k",
     "surrogate_triage_model",
+    "surrogate_triage_comparator_models",
+    "surrogate_triage_ensemble_models",
+    "surrogate_triage_cv_folds",
     "af2_plddt_cutoff",
     "af2_rmsd_cutoff",
     "relax_enabled",
@@ -1109,6 +1142,9 @@ test("workflowStudioVisibleStageFields keeps AF2 controls visible when RFD3 is d
       "surrogate_triage_initial_samples",
       "surrogate_triage_top_k",
       "surrogate_triage_model",
+      "surrogate_triage_comparator_models",
+      "surrogate_triage_ensemble_models",
+      "surrogate_triage_cv_folds",
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
       "relax_enabled",

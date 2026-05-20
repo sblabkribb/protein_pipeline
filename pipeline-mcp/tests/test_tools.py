@@ -209,10 +209,20 @@ print("ok")
         self.assertEqual(props["surrogate_triage_enabled"]["type"], "boolean")
         self.assertEqual(props["surrogate_triage_initial_samples"]["default"], 30)
         self.assertEqual(props["surrogate_triage_top_k"]["default"], 20)
+        model_schema = props["surrogate_triage_model"]["oneOf"][0]
         self.assertEqual(
-            props["surrogate_triage_model"]["enum"],
-            ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
+            model_schema["enum"],
+            ["auto", "rf", "ridge", "lightgbm", "xgboost", "ensemble"],
         )
+        self.assertEqual(
+            props["surrogate_triage_comparator_models"]["default"],
+            ["rf", "ridge", "lightgbm", "xgboost"],
+        )
+        self.assertEqual(
+            props["surrogate_triage_ensemble_models"]["default"],
+            ["rf", "ridge", "lightgbm", "xgboost"],
+        )
+        self.assertEqual(props["surrogate_triage_cv_folds"]["default"], 5)
 
     def test_tool_definitions_include_cath_ops_tools(self) -> None:
         defs = {tool["name"]: tool for tool in tool_definitions()}

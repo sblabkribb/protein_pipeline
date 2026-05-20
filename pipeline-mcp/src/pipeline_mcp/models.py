@@ -34,7 +34,14 @@ class PipelineRequest:
     surrogate_triage_enabled: bool = False
     surrogate_triage_initial_samples: int = 30
     surrogate_triage_top_k: int = 20
-    surrogate_triage_model: str | list[str] = "rf"
+    surrogate_triage_model: str | list[str] = "auto"
+    surrogate_triage_comparator_models: str | list[str] = field(
+        default_factory=lambda: ["rf", "ridge", "lightgbm", "xgboost"]
+    )
+    surrogate_triage_ensemble_models: str | list[str] = field(
+        default_factory=lambda: ["rf", "ridge", "lightgbm", "xgboost"]
+    )
+    surrogate_triage_cv_folds: int = 5
     project_id: str | None = None
     round_id: str | None = None
 

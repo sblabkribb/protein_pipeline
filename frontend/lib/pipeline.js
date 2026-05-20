@@ -62,6 +62,20 @@ export function normalizeSurrogateModelSelection(value, fallback = ["rf"]) {
   return Array.isArray(fallback) && fallback.length ? [...fallback] : ["rf"];
 }
 
+export function normalizeSurrogateAcquisitionPolicy(value, fallback = "auto") {
+  const rawItems = Array.isArray(value) ? value : String(value ?? "").split(/[,;\n]+/);
+  const normalized = rawItems
+    .map((item) => String(item ?? "").trim().toLowerCase())
+    .filter(Boolean);
+  if (normalized.length > 1) return "ensemble";
+  const item = normalized[0] || String(fallback || "auto").trim().toLowerCase();
+  if (["rank_mean", "rank-mean", "rankmean", "all"].includes(item)) return "ensemble";
+  if (item === "auto" || item === "ensemble" || SURROGATE_MODEL_CHOICES.includes(item)) {
+    return item;
+  }
+  return "auto";
+}
+
 export function surrogateModelPayload(value) {
   const selected = normalizeSurrogateModelSelection(value);
   return selected.length === 1 ? selected[0] : selected;
@@ -1388,6 +1402,11 @@ export function artifactMetaFromPath(path) {
   ) {
     stage = "msa";
   } else if (
+    matchPath(normalized, /(?:^|\/)surrogate_triage(?:\/|$)/) ||
+    normalized.includes("surrogate_triage")
+  ) {
+    stage = "surrogate";
+  } else if (
     matchPath(normalized, /(?:^|\/)(?:novelty|novel)(?:\/|$)/) ||
     normalized.includes("novelty")
   ) {
@@ -1952,6 +1971,9 @@ const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
     "surrogate_triage_initial_samples",
     "surrogate_triage_top_k",
     "surrogate_triage_model",
+    "surrogate_triage_comparator_models",
+    "surrogate_triage_ensemble_models",
+    "surrogate_triage_cv_folds",
     "af2_plddt_cutoff",
     "af2_rmsd_cutoff",
     "relax_enabled",
@@ -1995,7 +2017,10 @@ const WORKFLOW_STUDIO_STAGE_DEFAULTS = Object.freeze({
     surrogate_triage_enabled: false,
     surrogate_triage_initial_samples: 30,
     surrogate_triage_top_k: 20,
-    surrogate_triage_model: "rf",
+    surrogate_triage_model: "auto",
+    surrogate_triage_comparator_models: ["rf", "ridge", "lightgbm", "xgboost"],
+    surrogate_triage_ensemble_models: ["rf", "ridge", "lightgbm", "xgboost"],
+    surrogate_triage_cv_folds: 5,
     relax_enabled: true,
   }),
 });

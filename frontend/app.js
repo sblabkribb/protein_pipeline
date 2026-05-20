@@ -42,6 +42,7 @@ import {
   normalizeBioEmuCountFields,
   normalizeConservationTier,
   normalizeRfd3Mode,
+  normalizeSurrogateAcquisitionPolicy,
   normalizeSurrogateModelSelection,
   normalizeWorkflowStudioPayloadForComparison,
   normalizeFixedPositionsExtraDraft,
@@ -857,8 +858,10 @@ const el = {
   surrogateCustomRunIdInput: document.getElementById("surrogateCustomRunIdInput"),
   surrogateInitialSamplesInput: document.getElementById("surrogateInitialSamplesInput"),
   surrogateTopKInput: document.getElementById("surrogateTopKInput"),
+  surrogateAcquisitionPolicyInput: document.getElementById("surrogateAcquisitionPolicyInput"),
   surrogateModelInput: document.getElementById("surrogateModelInput"),
   surrogateModelChoices: document.getElementById("surrogateModelChoices"),
+  surrogateEnsembleModelChoices: document.getElementById("surrogateEnsembleModelChoices"),
   surrogateAf2ProviderInput: document.getElementById("surrogateAf2ProviderInput"),
   surrogateSoluprotCutoffInput: document.getElementById("surrogateSoluprotCutoffInput"),
   surrogateAf2PlddtCutoffInput: document.getElementById("surrogateAf2PlddtCutoffInput"),
@@ -2255,8 +2258,15 @@ const I18N = {
     "surrogate.initialSamples.label": "Training AF2 samples",
     "surrogate.topK.label": "Top K final AF2 candidates",
     "surrogate.model.label": "Surrogate model",
+    "surrogate.acquisition.label": "Acquisition policy",
+    "surrogate.acquisition.help":
+      "Auto compares models on the AF2-labelled training set and uses one selected policy for Top K acquisition.",
+    "surrogate.comparators.label": "Comparator models",
+    "surrogate.ensembleMembers.label": "Rank ensemble members",
+    "surrogate.ensembleMembers.help":
+      "Used when Auto evaluates rank ensemble, or when Rank ensemble is forced as the acquisition policy.",
     "surrogate.model.help":
-      "Select individual models, or choose Rank ensemble to use all supported models with one shared AF2-labelled training set.",
+      "These models are compared and reported without expanding the final AF2 Top K budget.",
     "surrogate.note":
       "Use Evolution only when experimental measurements are available or planned. Use this Surrogate tab when the goal is a one-round compute budget reduction.",
     "surrogate.error.targetRequired": "Choose FASTA/PDB/mmCIF input before launching Surrogate Triage.",
@@ -3207,8 +3217,14 @@ const I18N = {
     "question.surrogateTriageInitialSamples.help": "Diverse SoluProt-passed candidates labelled with {af2Provider} before fitting the surrogate.",
     "question.surrogateTriageTopK.label": "Surrogate Top K",
     "question.surrogateTriageTopK.help": "Additional surrogate-ranked candidates to validate with {af2Provider}.",
-    "question.surrogateTriageModel.label": "Surrogate Model",
-    "question.surrogateTriageModel.help": "Model or model set used to rank candidates after the initial {af2Provider}-labelled set. Multiple selections use rank-mean acquisition.",
+    "question.surrogateTriageModel.label": "Acquisition Policy",
+    "question.surrogateTriageModel.help": "Auto selects one acquisition policy by internal CV on the initial {af2Provider}-labelled set. Manual policies are available for controlled runs.",
+    "question.surrogateTriageComparatorModels.label": "Comparator Models",
+    "question.surrogateTriageComparatorModels.help": "Models trained for comparison and reporting without expanding the final {af2Provider} Top K budget.",
+    "question.surrogateTriageEnsembleModels.label": "Rank Ensemble Members",
+    "question.surrogateTriageEnsembleModels.help": "Models included when Auto evaluates rank ensemble or when Rank ensemble is forced.",
+    "question.surrogateTriageCvFolds.label": "CV Folds",
+    "question.surrogateTriageCvFolds.help": "Internal folds used to select the acquisition policy from the labelled training set.",
     "question.af2PlddtCutoff.label": "{af2Provider} pLDDT Cutoff",
     "question.af2PlddtCutoff.help": "Minimum pLDDT threshold for {af2Provider} pass filtering (default: 85).",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD Cutoff",
@@ -3336,6 +3352,7 @@ const I18N = {
     "choice.surrogateModel.xgboost": "XGBoost",
     "choice.surrogateModel.lightgbm": "LightGBM",
     "choice.surrogateModel.ensemble": "Rank ensemble",
+    "choice.surrogatePolicy.auto": "Auto-select by CV",
     "choice.rfd3Mode.localDiversify": "Local Diversify",
     "choice.rfd3Mode.legacyContig": "Legacy Contig",
     "choice.rfd3Mode.binder": "Binder",
@@ -3885,8 +3902,15 @@ const I18N = {
     "surrogate.initialSamples.label": "학습용 AF2 샘플 수",
     "surrogate.topK.label": "최종 AF2 Top K 후보 수",
     "surrogate.model.label": "대리모델",
+    "surrogate.acquisition.label": "획득 정책",
+    "surrogate.acquisition.help":
+      "Auto는 AF2 라벨 학습셋 안에서 모델을 비교하고, 선택된 하나의 정책으로 Top K 후보만 검증합니다.",
+    "surrogate.comparators.label": "비교 모델",
+    "surrogate.ensembleMembers.label": "Rank ensemble 멤버",
+    "surrogate.ensembleMembers.help":
+      "Auto가 rank ensemble을 평가하거나 Rank ensemble을 강제 정책으로 선택할 때 사용합니다.",
     "surrogate.model.help":
-      "개별 모델을 선택하거나 Rank ensemble을 선택해 같은 AF2-labelled training set으로 지원 모델 전체를 함께 사용합니다.",
+      "이 모델들은 비교와 리포트에만 사용되며 최종 AF2 Top K 예산을 늘리지 않습니다.",
     "surrogate.note":
       "실험 측정값이 있거나 만들 계획이면 Evolution을 사용하세요. 1회 실행에서 compute budget을 줄이는 목적이면 이 Surrogate 탭을 사용합니다.",
     "surrogate.error.targetRequired": "Surrogate Triage를 실행하려면 FASTA/PDB/mmCIF 입력을 넣으세요.",
@@ -4835,8 +4859,14 @@ const I18N = {
     "question.surrogateTriageInitialSamples.help": "대리 모델을 맞추기 전에 {af2Provider}로 먼저 라벨링할 SoluProt 통과 후보 수입니다.",
     "question.surrogateTriageTopK.label": "대리 모델 상위 K개",
     "question.surrogateTriageTopK.help": "대리 모델 순위에서 추가로 {af2Provider} 검증까지 보낼 후보 수입니다.",
-    "question.surrogateTriageModel.label": "대리 모델",
-    "question.surrogateTriageModel.help": "초기 {af2Provider} 라벨 이후 후보 순위화에 사용할 모델입니다. 여러 개를 선택하면 rank-mean acquisition을 사용합니다.",
+    "question.surrogateTriageModel.label": "획득 정책",
+    "question.surrogateTriageModel.help": "Auto는 초기 {af2Provider} 라벨셋의 내부 CV로 하나의 후보 획득 정책을 선택합니다. 수동 정책은 controlled run에 사용합니다.",
+    "question.surrogateTriageComparatorModels.label": "비교 모델",
+    "question.surrogateTriageComparatorModels.help": "최종 {af2Provider} Top K 예산을 늘리지 않고 비교와 리포트용으로 학습할 모델입니다.",
+    "question.surrogateTriageEnsembleModels.label": "Rank ensemble 멤버",
+    "question.surrogateTriageEnsembleModels.help": "Auto가 rank ensemble을 평가하거나 Rank ensemble을 강제 정책으로 선택할 때 포함할 모델입니다.",
+    "question.surrogateTriageCvFolds.label": "CV fold 수",
+    "question.surrogateTriageCvFolds.help": "라벨링된 학습셋 안에서 획득 정책을 선택할 때 사용할 내부 CV fold 수입니다.",
     "question.af2PlddtCutoff.label": "{af2Provider} pLDDT 컷오프",
     "question.af2PlddtCutoff.help": "{af2Provider} 통과 필터링에 사용할 최소 pLDDT 임계값입니다. (기본값: 85)",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD 컷오프",
@@ -4964,6 +4994,7 @@ const I18N = {
     "choice.surrogateModel.xgboost": "XGBoost",
     "choice.surrogateModel.lightgbm": "LightGBM",
     "choice.surrogateModel.ensemble": "Rank ensemble",
+    "choice.surrogatePolicy.auto": "CV 기반 자동 선택",
     "choice.rfd3Mode.localDiversify": "Local Diversify",
     "choice.rfd3Mode.legacyContig": "Legacy Contig",
     "choice.rfd3Mode.binder": "Binder",
@@ -5769,6 +5800,9 @@ const SETUP_CRITERIA_QUESTION_IDS = new Set([
   "surrogate_triage_initial_samples",
   "surrogate_triage_top_k",
   "surrogate_triage_model",
+  "surrogate_triage_comparator_models",
+  "surrogate_triage_ensemble_models",
+  "surrogate_triage_cv_folds",
   "af2_plddt_cutoff",
   "af2_rmsd_cutoff",
   "relax_score_per_residue_cutoff",
@@ -9274,7 +9308,22 @@ const QUESTION_PRESETS = {
   surrogate_triage_model: {
     labelKey: "question.surrogateTriageModel.label",
     questionKey: "question.surrogateTriageModel.help",
-    default: "rf",
+    default: "auto",
+  },
+  surrogate_triage_comparator_models: {
+    labelKey: "question.surrogateTriageComparatorModels.label",
+    questionKey: "question.surrogateTriageComparatorModels.help",
+    default: ["rf", "ridge", "lightgbm", "xgboost"],
+  },
+  surrogate_triage_ensemble_models: {
+    labelKey: "question.surrogateTriageEnsembleModels.label",
+    questionKey: "question.surrogateTriageEnsembleModels.help",
+    default: ["rf", "ridge", "lightgbm", "xgboost"],
+  },
+  surrogate_triage_cv_folds: {
+    labelKey: "question.surrogateTriageCvFolds.label",
+    questionKey: "question.surrogateTriageCvFolds.help",
+    default: 5,
   },
   af2_plddt_cutoff: {
     labelKey: "question.af2PlddtCutoff.label",
@@ -9513,6 +9562,7 @@ const ANSWER_INT_KEYS = new Set([
   "af2_max_candidates_per_tier",
   "surrogate_triage_initial_samples",
   "surrogate_triage_top_k",
+  "surrogate_triage_cv_folds",
   "conservation_cluster_cov_mode",
   "conservation_cluster_kmer_per_seq",
   "evolution_initial_samples",
@@ -9691,6 +9741,7 @@ const ARTIFACT_STAGE_ORDER = [
   "mask_consensus",
   "design",
   "soluprot",
+  "surrogate",
   "af2",
   "novelty",
   "wt",
@@ -9715,6 +9766,7 @@ const STAGE_LABELS = {
   mask_consensus: { en: "Mask Consensus", ko: "마스킹 합의" },
   design: { en: "ProteinMPNN", ko: "ProteinMPNN" },
   soluprot: { en: "SoluProt", ko: "SoluProt" },
+  surrogate: { en: "Surrogate Triage", ko: "대리모델 선별" },
   af2: { en: "ColabFold", ko: "ColabFold" },
   relax: { en: "Relax", ko: "Relax" },
   novelty: { en: "WT Diff", ko: "WT Diff" },
@@ -12226,26 +12278,30 @@ function surrogateModelChoiceBoxes(container = el.surrogateModelChoices) {
   return Array.from(container?.querySelectorAll("[data-surrogate-model-choice]") || []);
 }
 
+function surrogateEnsembleModelChoiceBoxes(container = el.surrogateEnsembleModelChoices) {
+  return Array.from(container?.querySelectorAll("[data-surrogate-ensemble-model-choice]") || []);
+}
+
 function selectedSurrogateModelsFromChoices(container = el.surrogateModelChoices) {
   const boxes = surrogateModelChoiceBoxes(container);
   const selected = boxes
-    .filter((box) => box.checked && box.dataset.surrogateModelChoice !== "ensemble")
+    .filter((box) => box.checked)
     .map((box) => box.dataset.surrogateModelChoice || box.value);
   return normalizeSurrogateModelSelection(selected.length ? selected : el.surrogateModelInput?.value || "rf");
 }
 
-function syncSurrogateModelChoiceState({ changedValue = "" } = {}) {
+function selectedSurrogateEnsembleModelsFromChoices(container = el.surrogateEnsembleModelChoices) {
+  const boxes = surrogateEnsembleModelChoiceBoxes(container);
+  const selected = boxes
+    .filter((box) => box.checked)
+    .map((box) => box.dataset.surrogateEnsembleModelChoice || box.value);
+  return normalizeSurrogateModelSelection(selected.length ? selected : "ensemble");
+}
+
+function syncSurrogateModelChoiceState() {
   const boxes = surrogateModelChoiceBoxes();
   if (!boxes.length) return normalizeSurrogateModelSelection(el.surrogateModelInput?.value || "rf");
-  const modelBoxes = boxes.filter((box) => box.dataset.surrogateModelChoice !== "ensemble");
-  const ensembleBox = boxes.find((box) => box.dataset.surrogateModelChoice === "ensemble");
-  const allModelValues = normalizeSurrogateModelSelection("ensemble");
-
-  if (changedValue === "ensemble" && ensembleBox) {
-    modelBoxes.forEach((box) => {
-      box.checked = ensembleBox.checked;
-    });
-  }
+  const modelBoxes = boxes;
 
   if (!modelBoxes.some((box) => box.checked)) {
     const defaultBox = modelBoxes.find((box) => box.dataset.surrogateModelChoice === "rf") || modelBoxes[0];
@@ -12257,18 +12313,31 @@ function syncSurrogateModelChoiceState({ changedValue = "" } = {}) {
   modelBoxes.forEach((box) => {
     box.checked = selectedSet.has(box.dataset.surrogateModelChoice || box.value);
   });
-  if (ensembleBox) {
-    ensembleBox.checked = allModelValues.every((value) => selectedSet.has(value));
+  if (el.surrogateModelInput) el.surrogateModelInput.value = normalizeSurrogateAcquisitionPolicy(el.surrogateAcquisitionPolicyInput?.value || "auto");
+  return selected;
+}
+
+function syncSurrogateEnsembleModelChoiceState() {
+  const boxes = surrogateEnsembleModelChoiceBoxes();
+  if (!boxes.length) return normalizeSurrogateModelSelection("ensemble");
+  if (!boxes.some((box) => box.checked)) {
+    const defaultBox = boxes.find((box) => box.dataset.surrogateEnsembleModelChoice === "rf") || boxes[0];
+    if (defaultBox) defaultBox.checked = true;
   }
-  if (el.surrogateModelInput) {
-    el.surrogateModelInput.value = selected.join(",");
-  }
+  const selected = selectedSurrogateEnsembleModelsFromChoices();
+  const selectedSet = new Set(selected);
+  boxes.forEach((box) => {
+    box.checked = selectedSet.has(box.dataset.surrogateEnsembleModelChoice || box.value);
+  });
   return selected;
 }
 
 function buildSurrogateLaunchAnswers() {
   const targetInput = String(el.surrogateTargetInput?.value || "").trim();
-  const selectedModels = syncSurrogateModelChoiceState();
+  const acquisitionPolicy = normalizeSurrogateAcquisitionPolicy(el.surrogateAcquisitionPolicyInput?.value || "auto");
+  if (el.surrogateModelInput) el.surrogateModelInput.value = acquisitionPolicy;
+  const comparatorModels = syncSurrogateModelChoiceState();
+  const ensembleModels = syncSurrogateEnsembleModelChoiceState();
   const answers = {
     run_mode: "pipeline",
     target_input: targetInput,
@@ -12283,7 +12352,10 @@ function buildSurrogateLaunchAnswers() {
     surrogate_triage_enabled: true,
     surrogate_triage_initial_samples: readIntegerInput(el.surrogateInitialSamplesInput, 30, { min: 1 }),
     surrogate_triage_top_k: readIntegerInput(el.surrogateTopKInput, 20, { min: 1 }),
-    surrogate_triage_model: surrogateModelPayload(selectedModels),
+    surrogate_triage_model: acquisitionPolicy,
+    surrogate_triage_comparator_models: surrogateModelPayload(comparatorModels),
+    surrogate_triage_ensemble_models: surrogateModelPayload(ensembleModels),
+    surrogate_triage_cv_folds: 5,
     af2_provider: String(el.surrogateAf2ProviderInput?.value || "colabfold").trim() || "colabfold",
     soluprot_cutoff: readNumberInput(el.surrogateSoluprotCutoffInput, 0.5, { min: 0, max: 1 }),
     af2_plddt_cutoff: readNumberInput(el.surrogateAf2PlddtCutoffInput, 85, { min: 0, max: 100 }),
@@ -12439,12 +12511,23 @@ async function refreshEvolutionExperimentSourceRunChoices({ force = false } = {}
 
 function initSurrogateLauncher() {
   if (surrogateLauncherInitialized) return;
+  el.surrogateAcquisitionPolicyInput?.addEventListener("change", () => {
+    if (el.surrogateModelInput) {
+      el.surrogateModelInput.value = normalizeSurrogateAcquisitionPolicy(el.surrogateAcquisitionPolicyInput.value);
+    }
+  });
   surrogateModelChoiceBoxes().forEach((box) => {
     box.addEventListener("change", () => {
-      syncSurrogateModelChoiceState({ changedValue: box.dataset.surrogateModelChoice || box.value });
+      syncSurrogateModelChoiceState();
+    });
+  });
+  surrogateEnsembleModelChoiceBoxes().forEach((box) => {
+    box.addEventListener("change", () => {
+      syncSurrogateEnsembleModelChoiceState();
     });
   });
   syncSurrogateModelChoiceState();
+  syncSurrogateEnsembleModelChoiceState();
   el.surrogateLoadFileBtn?.addEventListener("click", () => {
     el.surrogateTargetFile?.click();
   });
@@ -12677,7 +12760,10 @@ function buildManualPlan(mode) {
     surrogate_triage_enabled: true,
     surrogate_triage_initial_samples: 30,
     surrogate_triage_top_k: 20,
-    surrogate_triage_model: "rf",
+    surrogate_triage_model: "auto",
+    surrogate_triage_comparator_models: ["rf", "ridge", "lightgbm", "xgboost"],
+    surrogate_triage_ensemble_models: ["rf", "ridge", "lightgbm", "xgboost"],
+    surrogate_triage_cv_folds: 5,
     selected_tiers: [0.3, 0.5, 0.7],
     num_seq_per_tier: 2,
     af2_max_candidates_per_tier: 0,
@@ -12817,7 +12903,28 @@ function buildManualPlan(mode) {
         labelKey: "question.surrogateTriageModel.label",
         questionKey: "question.surrogateTriageModel.help",
         required: false,
-        default: "rf",
+        default: "auto",
+      },
+      {
+        id: "surrogate_triage_comparator_models",
+        labelKey: "question.surrogateTriageComparatorModels.label",
+        questionKey: "question.surrogateTriageComparatorModels.help",
+        required: false,
+        default: ["rf", "ridge", "lightgbm", "xgboost"],
+      },
+      {
+        id: "surrogate_triage_ensemble_models",
+        labelKey: "question.surrogateTriageEnsembleModels.label",
+        questionKey: "question.surrogateTriageEnsembleModels.help",
+        required: false,
+        default: ["rf", "ridge", "lightgbm", "xgboost"],
+      },
+      {
+        id: "surrogate_triage_cv_folds",
+        labelKey: "question.surrogateTriageCvFolds.label",
+        questionKey: "question.surrogateTriageCvFolds.help",
+        required: false,
+        default: 5,
       },
       {
         id: "af2_plddt_cutoff",
@@ -17995,6 +18102,9 @@ function renderQuestions(questions) {
     "surrogate_triage_initial_samples",
     "surrogate_triage_top_k",
     "surrogate_triage_model",
+    "surrogate_triage_comparator_models",
+    "surrogate_triage_ensemble_models",
+    "surrogate_triage_cv_folds",
   ]);
 
   const appendSurrogateTriageBoard = () => {
@@ -18104,16 +18214,8 @@ function renderQuestions(questions) {
         const desc = document.createElement("span");
         desc.className = "parameter-help";
         desc.textContent = questionHelp(modelQuestion);
-        const currentModels = normalizeSurrogateModelSelection(
-          state.answers.surrogate_triage_model || modelQuestion.default || "rf"
-        );
-        state.answers.surrogate_triage_model = surrogateModelPayload(currentModels);
-        const allSurrogateModels = normalizeSurrogateModelSelection("ensemble");
-        const currentModelSet = new Set(currentModels);
-        const displayModels = allSurrogateModels.every((value) => currentModelSet.has(value))
-          ? [...currentModels, "ensemble"]
-          : currentModels;
         const modelOptions = [
+          { labelKey: "choice.surrogatePolicy.auto", value: "auto" },
           { labelKey: "choice.surrogateModel.ensemble", value: "ensemble" },
           { labelKey: "choice.surrogateModel.rf", value: "rf" },
           { labelKey: "choice.surrogateModel.ridge", value: "ridge" },
@@ -18125,15 +18227,49 @@ function renderQuestions(questions) {
         }));
         field.appendChild(label);
         field.appendChild(desc);
-        renderChoiceButtons(field, modelOptions, displayModels, (value) => {
-          const current = normalizeSurrogateModelSelection(state.answers.surrogate_triage_model);
-          if (value === "ensemble") {
-            const currentSet = new Set(current);
-            const allSelected = allSurrogateModels.every((model) => currentSet.has(model));
-            state.answers.surrogate_triage_model = surrogateModelPayload(allSelected ? ["rf"] : allSurrogateModels);
-            updateRunEligibility(normalizedQuestions);
-            return;
-          }
+        const currentPolicy = normalizeSurrogateAcquisitionPolicy(
+          state.answers.surrogate_triage_model || modelQuestion.default || "auto"
+        );
+        state.answers.surrogate_triage_model = currentPolicy;
+        renderChoiceButtons(field, modelOptions, currentPolicy, (value) => {
+          state.answers.surrogate_triage_model = normalizeSurrogateAcquisitionPolicy(value);
+          updateRunEligibility(normalizedQuestions);
+        }, { rerender: true });
+        grid.appendChild(field);
+      }
+
+      [
+        ["surrogate_triage_comparator_models", "choice.surrogateModel"],
+        ["surrogate_triage_ensemble_models", "choice.surrogateModel"],
+      ].forEach(([id]) => {
+        const q = questionById[id];
+        if (!q) return;
+        const field = document.createElement("div");
+        field.className = "parameter-field option-field";
+        const label = document.createElement("span");
+        label.className = "parameter-label";
+        label.textContent = questionLabel(q);
+        const desc = document.createElement("span");
+        desc.className = "parameter-help";
+        desc.textContent = questionHelp(q);
+        const currentModels = normalizeSurrogateModelSelection(
+          state.answers[id] || q.default || "ensemble",
+          normalizeSurrogateModelSelection("ensemble")
+        );
+        state.answers[id] = surrogateModelPayload(currentModels);
+        const modelOptions = [
+          { labelKey: "choice.surrogateModel.rf", value: "rf" },
+          { labelKey: "choice.surrogateModel.ridge", value: "ridge" },
+          { labelKey: "choice.surrogateModel.xgboost", value: "xgboost" },
+          { labelKey: "choice.surrogateModel.lightgbm", value: "lightgbm" },
+        ].map((optionDef) => ({
+          label: t(optionDef.labelKey),
+          value: optionDef.value,
+        }));
+        field.appendChild(label);
+        field.appendChild(desc);
+        renderChoiceButtons(field, modelOptions, currentModels, (value) => {
+          const current = normalizeSurrogateModelSelection(state.answers[id], normalizeSurrogateModelSelection("ensemble"));
           const next = new Set(current);
           if (next.has(value)) {
             if (next.size <= 1) return;
@@ -18141,9 +18277,38 @@ function renderQuestions(questions) {
           } else {
             next.add(value);
           }
-          state.answers.surrogate_triage_model = surrogateModelPayload(Array.from(next));
+          state.answers[id] = surrogateModelPayload(Array.from(next));
           updateRunEligibility(normalizedQuestions);
         }, { multi: true, rerender: true });
+        grid.appendChild(field);
+      });
+
+      const cvQuestion = questionById.surrogate_triage_cv_folds;
+      if (cvQuestion) {
+        const field = document.createElement("label");
+        field.className = "parameter-field option-field";
+        const label = document.createElement("span");
+        label.className = "parameter-label";
+        label.textContent = questionLabel(cvQuestion);
+        const desc = document.createElement("span");
+        desc.className = "parameter-help";
+        desc.textContent = questionHelp(cvQuestion);
+        const input = document.createElement("input");
+        input.type = "number";
+        input.min = "2";
+        input.step = "1";
+        if (state.answers.surrogate_triage_cv_folds === undefined || state.answers.surrogate_triage_cv_folds === "") {
+          state.answers.surrogate_triage_cv_folds = cvQuestion.default || 5;
+        }
+        input.value = String(state.answers.surrogate_triage_cv_folds);
+        input.addEventListener("input", () => {
+          const parsed = Number.parseInt(input.value, 10);
+          if (Number.isFinite(parsed)) state.answers.surrogate_triage_cv_folds = Math.max(2, parsed);
+          updateRunEligibility(normalizedQuestions);
+        });
+        field.appendChild(label);
+        field.appendChild(desc);
+        field.appendChild(input);
         grid.appendChild(field);
       }
     }
@@ -19266,7 +19431,12 @@ function buildAnswerPayload(mode = state.runMode) {
       surrogate_triage_enabled: true,
       surrogate_triage_initial_samples: answers.surrogate_triage_initial_samples ?? 30,
       surrogate_triage_top_k: answers.surrogate_triage_top_k ?? 20,
-      surrogate_triage_model: answers.surrogate_triage_model || "rf",
+      surrogate_triage_model: normalizeSurrogateAcquisitionPolicy(answers.surrogate_triage_model || "auto"),
+      surrogate_triage_comparator_models:
+        answers.surrogate_triage_comparator_models || ["rf", "ridge", "lightgbm", "xgboost"],
+      surrogate_triage_ensemble_models:
+        answers.surrogate_triage_ensemble_models || ["rf", "ridge", "lightgbm", "xgboost"],
+      surrogate_triage_cv_folds: answers.surrogate_triage_cv_folds ?? 5,
       selected_tiers: Array.isArray(answers.selected_tiers) && answers.selected_tiers.length
         ? answers.selected_tiers
         : [0.3, 0.5, 0.7],
@@ -19453,6 +19623,9 @@ function filterAnswersForMode(mode, answers) {
       "surrogate_triage_initial_samples",
       "surrogate_triage_top_k",
       "surrogate_triage_model",
+      "surrogate_triage_comparator_models",
+      "surrogate_triage_ensemble_models",
+      "surrogate_triage_cv_folds",
       "af2_plddt_cutoff",
       "af2_rmsd_cutoff",
       "relax_enabled",
@@ -19605,7 +19778,10 @@ function buildRoutedForMode(mode) {
       surrogate_triage_enabled: true,
       surrogate_triage_initial_samples: 30,
       surrogate_triage_top_k: 20,
-      surrogate_triage_model: "rf",
+      surrogate_triage_model: "auto",
+      surrogate_triage_comparator_models: ["rf", "ridge", "lightgbm", "xgboost"],
+      surrogate_triage_ensemble_models: ["rf", "ridge", "lightgbm", "xgboost"],
+      surrogate_triage_cv_folds: 5,
       af2_max_candidates_per_tier: 0,
     };
   }

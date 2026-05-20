@@ -4851,6 +4851,95 @@ def _append_top_hit_lines(
     lines.append("")
 
 
+def _collect_surrogate_triage_summaries(run_root: Path) -> list[dict[str, object]]:
+    tiers_root = run_root / "tiers"
+    if not tiers_root.exists():
+        return []
+    rows: list[dict[str, object]] = []
+    for model_selection_path in sorted(
+        tiers_root.glob("*/surrogate_triage/model_selection.json")
+    ):
+        payload = _load_json_file(model_selection_path)
+        if not isinstance(payload, dict):
+            continue
+        tier = str(payload.get("tier") or model_selection_path.parent.parent.name)
+        rows.append(
+            {
+                "tier": tier,
+                "selected_policy": payload.get("selected_policy") or "-",
+                "selection_strategy": payload.get("selection_strategy") or "-",
+                "requested_policy": payload.get("requested_policy") or "-",
+                "initial_samples": payload.get("initial_samples"),
+                "top_k": payload.get("top_k"),
+                "expected_af2_calls": payload.get("expected_af2_calls"),
+                "candidate_count_before_triage": payload.get(
+                    "candidate_count_before_triage"
+                ),
+                "candidate_count_after_budget": payload.get(
+                    "candidate_count_after_budget"
+                ),
+                "comparator_models": payload.get("comparator_models") or [],
+                "ensemble_models": payload.get("ensemble_models") or [],
+            }
+        )
+    return rows
+
+
+def _append_surrogate_triage_report_lines(
+    lines: list[str], *, run_root: Path, lang: str = "en"
+) -> None:
+    summaries = _collect_surrogate_triage_summaries(run_root)
+    if not summaries:
+        return
+    is_ko = str(lang).lower().startswith("ko")
+    lines.append("## 대리모델 선별" if is_ko else "## Surrogate Triage")
+    for item in summaries:
+        tier_label = _format_conservation_tier_label(
+            item.get("tier"), lang="ko" if is_ko else "en"
+        )
+        comparators = ", ".join(str(x) for x in item.get("comparator_models") or [])
+        ensemble = ", ".join(str(x) for x in item.get("ensemble_models") or [])
+        if is_ko:
+            lines.append(
+                "- "
+                f"{tier_label}: 선택 정책={item.get('selected_policy')}; "
+                f"선택 방식={item.get('selection_strategy')}; "
+                f"AF2 호출={item.get('expected_af2_calls')} "
+                f"(학습 {item.get('initial_samples')} + Top K {item.get('top_k')}); "
+                f"비교 모델={comparators or '-'}; ensemble 멤버={ensemble or '-'}."
+            )
+        else:
+            lines.append(
+                "- "
+                f"{tier_label}: selected policy={item.get('selected_policy')}; "
+                f"selection={item.get('selection_strategy')}; "
+                f"AF2 calls={item.get('expected_af2_calls')} "
+                f"(training {item.get('initial_samples')} + Top K {item.get('top_k')}); "
+                f"comparators={comparators or '-'}; ensemble members={ensemble or '-'}."
+            )
+        tier = str(item.get("tier") or "").strip()
+        if tier:
+            graph_path = f"tiers/{tier}/surrogate_triage/model_comparison.svg"
+            lines.append(
+                f"![대리모델 비교]({graph_path})"
+                if is_ko
+                else f"![Surrogate model comparison]({graph_path})"
+            )
+    if is_ko:
+        lines.append(
+            "- 관련 아티팩트: `surrogate_triage/model_selection.json`, "
+            "`cv_metrics.csv`, `model_comparison.svg`, `model_predictions.csv`, `feature_importance.csv`, "
+            "`models/*.pkl`."
+        )
+    else:
+        lines.append(
+            "- Artifacts: `surrogate_triage/model_selection.json`, "
+            "`cv_metrics.csv`, `model_comparison.svg`, `model_predictions.csv`, `feature_importance.csv`, "
+            "`models/*.pkl`."
+        )
+    lines.append("")
+
+
 def _build_report_text(
     *,
     run_id: str,
@@ -4980,6 +5069,7 @@ def _build_report_text(
     _append_report_snapshot_lines(
         lines, comparison_summary=comparison_summary, lang="en"
     )
+    _append_surrogate_triage_report_lines(lines, run_root=run_root, lang="en")
     if wt_metrics or (request and request.get("wt_compare")):
         lines.append("## WT Comparison")
         enabled = bool(request.get("wt_compare")) if request else False
@@ -5376,6 +5466,7 @@ def _build_report_text_ko(
     _append_report_snapshot_lines(
         lines, comparison_summary=comparison_summary, lang="ko"
     )
+    _append_surrogate_triage_report_lines(lines, run_root=run_root, lang="ko")
     if wt_metrics or (request and request.get("wt_compare")):
         lines.append("## WT 비교")
         enabled = bool(request.get("wt_compare")) if request else False
@@ -6431,6 +6522,11 @@ def _export_results_package(
                 for name in ["soluprot.json", "af2_scores.json", "novelty.tsv"]:
                     rel = f"tiers/{tier_name}/{name}"
                     _write_file_if_exists(zf, rel)
+                surrogate_dir = tier_dir / "surrogate_triage"
+                if surrogate_dir.exists() and surrogate_dir.is_dir():
+                    for path in sorted(p for p in surrogate_dir.rglob("*") if p.is_file()):
+                        rel = path.relative_to(run_root).as_posix()
+                        _write_file_if_exists(zf, rel)
 
         zf.writestr(
             "tables/hit_list_full.json",
@@ -6547,8 +6643,17 @@ def pipeline_request_from_args(
     )
     surrogate_triage_top_k = _as_int(args.get("surrogate_triage_top_k"), 20)
     surrogate_triage_model = _as_model_name_selection(
-        args.get("surrogate_triage_model"), default="rf"
+        args.get("surrogate_triage_model"), default="auto"
     )
+    surrogate_triage_comparator_models = _as_model_name_selection(
+        args.get("surrogate_triage_comparator_models"),
+        default="rf,ridge,lightgbm,xgboost",
+    )
+    surrogate_triage_ensemble_models = _as_model_name_selection(
+        args.get("surrogate_triage_ensemble_models"),
+        default="rf,ridge,lightgbm,xgboost",
+    )
+    surrogate_triage_cv_folds = _as_int(args.get("surrogate_triage_cv_folds"), 5)
     project_id = _as_text(args.get("project_id")).strip() or None
     round_id = _as_text(args.get("round_id")).strip() or None
     rfd3_inputs = _as_dict(args.get("rfd3_inputs"), name="rfd3_inputs")
@@ -6780,6 +6885,9 @@ def pipeline_request_from_args(
         surrogate_triage_initial_samples=max(1, int(surrogate_triage_initial_samples)),
         surrogate_triage_top_k=max(1, int(surrogate_triage_top_k)),
         surrogate_triage_model=surrogate_triage_model,
+        surrogate_triage_comparator_models=surrogate_triage_comparator_models,
+        surrogate_triage_ensemble_models=surrogate_triage_ensemble_models,
+        surrogate_triage_cv_folds=max(2, int(surrogate_triage_cv_folds)),
         project_id=project_id,
         round_id=round_id,
         rfd3_use=rfd3_use,
@@ -7167,6 +7275,24 @@ def _pipeline_run_schema() -> dict[str, Any]:
                 "oneOf": [
                     {
                         "type": "string",
+                        "enum": ["auto", "rf", "ridge", "lightgbm", "xgboost", "ensemble"],
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": ["auto", "rf", "ridge", "lightgbm", "xgboost", "ensemble"],
+                        },
+                        "minItems": 1,
+                    },
+                ],
+                "default": "auto",
+                "description": "Acquisition policy for one-round standard-pipeline AF2 triage. Auto selects the best policy by internal CV on the AF2-labelled training set.",
+            },
+            "surrogate_triage_comparator_models": {
+                "oneOf": [
+                    {
+                        "type": "string",
                         "enum": ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
                     },
                     {
@@ -7175,11 +7301,32 @@ def _pipeline_run_schema() -> dict[str, Any]:
                             "type": "string",
                             "enum": ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
                         },
-                        "minItems": 1,
                     },
                 ],
-                "default": "rf",
-                "description": "Surrogate model(s) used by one-round standard-pipeline AF2 triage. Multiple models share the same AF2-labelled bootstrap set and use rank-mean acquisition.",
+                "default": ["rf", "ridge", "lightgbm", "xgboost"],
+                "description": "Models trained for surrogate comparison artifacts without expanding AF2 validation.",
+            },
+            "surrogate_triage_ensemble_models": {
+                "oneOf": [
+                    {
+                        "type": "string",
+                        "enum": ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
+                        },
+                    },
+                ],
+                "default": ["rf", "ridge", "lightgbm", "xgboost"],
+                "description": "Concrete models used as members when the rank-mean ensemble policy is evaluated or selected.",
+            },
+            "surrogate_triage_cv_folds": {
+                "type": "integer",
+                "default": 5,
+                "description": "Internal cross-validation fold count used for auto surrogate acquisition selection.",
             },
             "agent_panel_enabled": {"type": "boolean"},
             "auto_recover": {"type": "boolean"},

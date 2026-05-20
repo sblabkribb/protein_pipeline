@@ -9,6 +9,7 @@ from pipeline_mcp import pipeline
 from pipeline_mcp.models import PipelineRequest
 from pipeline_mcp.models import SequenceRecord
 from pipeline_mcp.pipeline import PipelineRunner
+from pipeline_mcp.tools import ToolDispatcher
 from pipeline_mcp.tools import pipeline_request_from_args
 
 
@@ -89,6 +90,24 @@ def test_pipeline_request_from_args_accepts_multiple_surrogate_triage_models() -
     )
 
     assert req.surrogate_triage_model == ["rf", "ridge"]
+
+
+def test_pipeline_request_from_args_preserves_surrogate_auto_cv_options() -> None:
+    req = pipeline_request_from_args(
+        {
+            "target_fasta": ">q1\nACDEFGHIK\n",
+            "surrogate_triage_enabled": True,
+            "surrogate_triage_model": "auto",
+            "surrogate_triage_comparator_models": ["rf", "ridge"],
+            "surrogate_triage_ensemble_models": "rf,ridge",
+            "surrogate_triage_cv_folds": 3,
+        }
+    )
+
+    assert req.surrogate_triage_model == "auto"
+    assert req.surrogate_triage_comparator_models == ["rf", "ridge"]
+    assert req.surrogate_triage_ensemble_models == ["rf", "ridge"]
+    assert req.surrogate_triage_cv_folds == 3
 
 
 def test_pipeline_surrogate_triage_limits_af2_to_training_plus_topk(
@@ -183,3 +202,68 @@ def test_pipeline_surrogate_triage_rank_mean_for_multiple_models(
     assert triage["candidate_count_after_budget"] == 5
     assert len(triage["training_ids"]) == 3
     assert len(triage["selected_top_ids"]) == 2
+
+
+def test_pipeline_surrogate_triage_auto_cv_exports_analysis_artifacts(
+    tmp_path, monkeypatch
+) -> None:
+    def fake_embeddings(sequences, device=None):
+        values = np.arange(len(sequences) * 2, dtype=np.float64).reshape(len(sequences), 2)
+        values[:, 1] = values[:, 1] * 0.25
+        return values
+
+    monkeypatch.setattr(pipeline, "_surrogate_triage_embeddings", fake_embeddings)
+
+    runner = PipelineRunner(
+        output_root=str(tmp_path),
+        mmseqs=_FakeMmseqs(),
+        proteinmpnn=_FakeProteinMPNN(),
+        soluprot=None,
+        af2=_FakeAf2(),
+    )
+    req = PipelineRequest(
+        target_fasta=">q1\nACDEFGHIK\n",
+        target_pdb=_pdb_9mer(),
+        dry_run=False,
+        conservation_tiers=[0.3],
+        num_seq_per_tier=8,
+        soluprot_cutoff=0.0,
+        rfd3_use=False,
+        bioemu_use=False,
+        surrogate_triage_enabled=True,
+        surrogate_triage_initial_samples=3,
+        surrogate_triage_top_k=2,
+        surrogate_triage_model="auto",
+        surrogate_triage_comparator_models=["rf", "ridge"],
+        surrogate_triage_ensemble_models=["rf", "ridge"],
+        surrogate_triage_cv_folds=3,
+        af2_top_k=0,
+    )
+
+    result = runner.run(req, run_id="surrogate_triage_auto_cv")
+    tier_dir = Path(result.output_dir) / "tiers" / "30"
+    triage_dir = tier_dir / "surrogate_triage"
+    af2_scores = json.loads((tier_dir / "af2_scores.json").read_text())
+    triage = af2_scores["surrogate_triage"]
+
+    assert triage["selection_strategy"] == "auto_cv"
+    assert triage["selected_policy"]
+    assert triage["candidate_count_after_budget"] == 5
+    assert len(triage["training_ids"]) == 3
+    assert len(triage["selected_top_ids"]) == 2
+    assert (triage_dir / "model_selection.json").exists()
+    assert (triage_dir / "cv_metrics.csv").exists()
+    assert (triage_dir / "model_predictions.csv").exists()
+    assert (triage_dir / "model_comparison.svg").exists()
+    assert (triage_dir / "acquired_topk.csv").exists()
+    assert (triage_dir / "topk_overlap.csv").exists()
+    assert (triage_dir / "feature_importance.csv").exists()
+    assert any((triage_dir / "models").glob("*.pkl"))
+
+    report = ToolDispatcher(runner).call_tool(
+        "pipeline.generate_report", {"run_id": "surrogate_triage_auto_cv"}
+    )
+    assert "Surrogate Triage" in report["report"]
+    assert "selected policy" in report["report"]
+    assert "model_comparison.svg" in report["report"]
+    assert "대리모델 선별" in report["report_ko"]

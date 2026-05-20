@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import csv
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import as_completed
 from dataclasses import MISSING
@@ -9,9 +10,11 @@ from dataclasses import dataclass
 from dataclasses import fields
 import base64
 import hashlib
+import io
 import json
 import math
 import os
+import pickle
 import shutil
 import threading
 import time
@@ -536,9 +539,15 @@ def _surrogate_triage_training_indices(
 
 _SURROGATE_TRIAGE_ALLOWED_MODELS = ("rf", "ridge", "lightgbm", "xgboost")
 _SURROGATE_TRIAGE_ENSEMBLE_MODELS = ("rf", "ridge", "lightgbm", "xgboost")
+_SURROGATE_TRIAGE_POLICY_ALIASES = {
+    "rank_mean": "ensemble",
+    "rank-mean": "ensemble",
+    "rankmean": "ensemble",
+    "all": "ensemble",
+}
 
 
-def _normalize_surrogate_triage_models(value: object) -> list[str]:
+def _split_surrogate_triage_tokens(value: object, *, default: object = "") -> list[str]:
     raw_items: list[str] = []
     if isinstance(value, (list, tuple, set)):
         for item in value:
@@ -550,16 +559,27 @@ def _normalize_surrogate_triage_models(value: object) -> list[str]:
     else:
         raw_items.extend(
             part.strip().lower()
-            for part in re.split(r"[,;\n]+", str(value or "rf"))
+            for part in re.split(r"[,;\n]+", str(value or default or ""))
             if part.strip()
         )
-    if not raw_items:
-        raw_items = ["rf"]
+    return raw_items
 
+
+def _normalize_surrogate_triage_models(
+    value: object,
+    *,
+    default: object = "rf",
+) -> list[str]:
+    raw_items = _split_surrogate_triage_tokens(value, default=default)
+    if not raw_items:
+        raw_items = _split_surrogate_triage_tokens(default, default="rf") or ["rf"]
     expanded: list[str] = []
     for item in raw_items:
+        item = _SURROGATE_TRIAGE_POLICY_ALIASES.get(item, item)
         if item in {"ensemble", "rank_mean", "rank-mean", "rankmean"}:
             expanded.extend(_SURROGATE_TRIAGE_ENSEMBLE_MODELS)
+        elif item == "auto":
+            continue
         else:
             expanded.append(item)
 
@@ -572,7 +592,265 @@ def _normalize_surrogate_triage_models(value: object) -> list[str]:
             )
         if item not in out:
             out.append(item)
-    return out or ["rf"]
+    fallback = _split_surrogate_triage_tokens(default, default="rf") or ["rf"]
+    if out:
+        return out
+    return _normalize_surrogate_triage_models(fallback, default="rf")
+
+
+def _normalize_surrogate_triage_policy(
+    value: object,
+) -> tuple[str, list[str] | None]:
+    raw_items = _split_surrogate_triage_tokens(value, default="auto")
+    if not raw_items:
+        return "auto", None
+    if len(raw_items) > 1:
+        return "ensemble", _normalize_surrogate_triage_models(raw_items, default="rf")
+    item = _SURROGATE_TRIAGE_POLICY_ALIASES.get(raw_items[0], raw_items[0])
+    if item in _SURROGATE_TRIAGE_ALLOWED_MODELS:
+        return item, None
+    if item == "ensemble":
+        return "ensemble", None
+    if item == "auto":
+        return "auto", None
+    raise ValueError(
+        "surrogate_triage_model must be one of: auto, "
+        f"{', '.join(_SURROGATE_TRIAGE_ALLOWED_MODELS)}, ensemble"
+    )
+
+
+def _surrogate_policy_label(policy: str) -> str:
+    return "rank_ensemble" if str(policy).strip().lower() == "ensemble" else str(policy)
+
+
+def _numeric_or_none(value: object) -> float | None:
+    if isinstance(value, (int, float)) and math.isfinite(float(value)):
+        return float(value)
+    return None
+
+
+def _rank_values(values: Any) -> Any:
+    import numpy as np
+
+    arr = np.asarray(values, dtype=np.float64)
+    ranks = np.empty(len(arr), dtype=np.float64)
+    order = np.argsort(arr, kind="mergesort")
+    sorted_vals = arr[order]
+    start = 0
+    while start < len(arr):
+        end = start + 1
+        while end < len(arr) and sorted_vals[end] == sorted_vals[start]:
+            end += 1
+        avg_rank = (start + end - 1) / 2.0
+        ranks[order[start:end]] = avg_rank
+        start = end
+    return ranks
+
+
+def _safe_spearman(y_true: Any, y_pred: Any) -> float | None:
+    import numpy as np
+
+    y = np.asarray(y_true, dtype=np.float64)
+    pred = np.asarray(y_pred, dtype=np.float64)
+    mask = np.isfinite(y) & np.isfinite(pred)
+    if int(np.sum(mask)) < 2:
+        return None
+    yr = _rank_values(y[mask])
+    pr = _rank_values(pred[mask])
+    if float(np.std(yr)) == 0.0 or float(np.std(pr)) == 0.0:
+        return None
+    return float(np.corrcoef(yr, pr)[0, 1])
+
+
+def _safe_kendall_tau(y_true: Any, y_pred: Any) -> float | None:
+    import numpy as np
+
+    y = np.asarray(y_true, dtype=np.float64)
+    pred = np.asarray(y_pred, dtype=np.float64)
+    mask = np.isfinite(y) & np.isfinite(pred)
+    y = y[mask]
+    pred = pred[mask]
+    if len(y) < 2:
+        return None
+    concordant = 0
+    discordant = 0
+    for i in range(len(y) - 1):
+        for j in range(i + 1, len(y)):
+            dy = y[i] - y[j]
+            dp = pred[i] - pred[j]
+            if dy == 0 or dp == 0:
+                continue
+            if dy * dp > 0:
+                concordant += 1
+            else:
+                discordant += 1
+    denom = concordant + discordant
+    if denom <= 0:
+        return None
+    return float((concordant - discordant) / denom)
+
+
+def _top_quartile_precision(y_true: Any, y_pred: Any) -> tuple[float | None, float | None]:
+    import numpy as np
+
+    y = np.asarray(y_true, dtype=np.float64)
+    pred = np.asarray(y_pred, dtype=np.float64)
+    mask = np.isfinite(y) & np.isfinite(pred)
+    y = y[mask]
+    pred = pred[mask]
+    if len(y) < 2:
+        return None, None
+    k = max(1, int(math.ceil(len(y) * 0.25)))
+    true_top = set(np.argsort(y)[-k:].astype(int).tolist())
+    pred_top = set(np.argsort(pred)[-k:].astype(int).tolist())
+    precision = float(len(true_top & pred_top) / k)
+    expected = float(k / len(y))
+    enrichment = precision / expected if expected > 0 else None
+    return precision, enrichment
+
+
+def _surrogate_regression_metrics(y_true: Any, y_pred: Any) -> dict[str, float | None]:
+    import numpy as np
+
+    y = np.asarray(y_true, dtype=np.float64)
+    pred = np.asarray(y_pred, dtype=np.float64)
+    mask = np.isfinite(y) & np.isfinite(pred)
+    if int(np.sum(mask)) <= 0:
+        return {
+            "spearman": None,
+            "kendall": None,
+            "mae": None,
+            "rmse": None,
+            "top_quartile_precision": None,
+            "top_quartile_enrichment": None,
+        }
+    diff = pred[mask] - y[mask]
+    precision, enrichment = _top_quartile_precision(y[mask], pred[mask])
+    return {
+        "spearman": _safe_spearman(y[mask], pred[mask]),
+        "kendall": _safe_kendall_tau(y[mask], pred[mask]),
+        "mae": float(np.mean(np.abs(diff))),
+        "rmse": float(np.sqrt(np.mean(diff * diff))),
+        "top_quartile_precision": precision,
+        "top_quartile_enrichment": enrichment,
+    }
+
+
+def _csv_text(fieldnames: list[str], rows: list[dict[str, object]]) -> str:
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({name: row.get(name, "") for name in fieldnames})
+    return buf.getvalue()
+
+
+def _svg_escape(text: object) -> str:
+    return (
+        str(text if text is not None else "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _surrogate_model_comparison_svg(
+    rows: list[dict[str, object]], *, selected_policy: str
+) -> str:
+    plot_rows: list[tuple[str, float, bool]] = []
+    for row in rows:
+        policy = str(row.get("policy") or "").strip() or "model"
+        raw = _numeric_or_none(row.get("spearman"))
+        if raw is None:
+            raw = _numeric_or_none(row.get("selection_score"))
+        if raw is None:
+            raw = 0.0
+        plot_rows.append((policy, float(raw), policy == _surrogate_policy_label(selected_policy)))
+    if not plot_rows:
+        plot_rows = [("no_model", 0.0, False)]
+    width = 720
+    bar_h = 22
+    gap = 12
+    left = 170
+    right = 40
+    top = 58
+    bottom = 36
+    height = top + bottom + len(plot_rows) * (bar_h + gap)
+    values = [v for _, v, _ in plot_rows]
+    min_v = min(0.0, min(values))
+    max_v = max(0.0, max(values))
+    span = max(max_v - min_v, 1e-9)
+    axis_x = left + (0.0 - min_v) / span * (width - left - right)
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" role="img" aria-label="Surrogate model comparison">',
+        '<rect width="100%" height="100%" fill="#ffffff"/>',
+        '<text x="24" y="28" fill="#173b3f" font-size="16" font-family="Arial" font-weight="700">Surrogate model comparison</text>',
+        '<text x="24" y="46" fill="#4d6468" font-size="11" font-family="Arial">Internal CV metric; selected policy highlighted</text>',
+        f'<line x1="{axis_x:.1f}" y1="{top - 8}" x2="{axis_x:.1f}" y2="{height - bottom + 4}" stroke="#87999c" stroke-width="1"/>',
+    ]
+    for idx, (policy, value, selected) in enumerate(plot_rows):
+        y = top + idx * (bar_h + gap)
+        x0 = left + (min(0.0, value) - min_v) / span * (width - left - right)
+        x1 = left + (max(0.0, value) - min_v) / span * (width - left - right)
+        bar_x = min(x0, x1)
+        bar_w = max(abs(x1 - x0), 1.0)
+        color = "#0f7f7a" if selected else "#8eb6bf"
+        label = f"{policy}{' (selected)' if selected else ''}"
+        parts.extend(
+            [
+                f'<text x="{left - 12}" y="{y + 16}" text-anchor="end" fill="#243f43" font-size="12" font-family="Arial">{_svg_escape(label)}</text>',
+                f'<rect x="{bar_x:.1f}" y="{y}" width="{bar_w:.1f}" height="{bar_h}" rx="3" fill="{color}"/>',
+                f'<text x="{min(width - right, max(x0, x1) + 6):.1f}" y="{y + 15}" fill="#243f43" font-size="11" font-family="Arial">{value:.3f}</text>',
+            ]
+        )
+    parts.append("</svg>")
+    return "\n".join(parts) + "\n"
+
+
+def _write_pickle(path: Path, obj: object) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        pickle.dump(obj, handle)
+
+
+def _surrogate_feature_rows(
+    policy: str, model: object, *, member: str | None = None
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    estimator = model
+    if hasattr(model, "named_steps"):
+        try:
+            estimator = model.named_steps.get("model", model)
+        except Exception:
+            estimator = model
+    values = getattr(estimator, "feature_importances_", None)
+    metric = "importance"
+    if values is None:
+        values = getattr(estimator, "coef_", None)
+        metric = "coefficient"
+    if values is None:
+        return rows
+    try:
+        import numpy as np
+
+        arr = np.asarray(values, dtype=np.float64).reshape(-1)
+    except Exception:
+        return rows
+    for idx, raw in enumerate(arr):
+        if not math.isfinite(float(raw)):
+            continue
+        row: dict[str, object] = {
+            "policy": _surrogate_policy_label(policy),
+            "member": member or _surrogate_policy_label(policy),
+            "feature_index": idx,
+            "metric": metric,
+            "value": float(raw),
+            "abs_value": abs(float(raw)),
+        }
+        rows.append(row)
+    rows.sort(key=lambda item: float(item.get("abs_value") or 0.0), reverse=True)
+    return rows
 
 
 def _tier_key(tier: float) -> str:
@@ -8843,6 +9121,7 @@ class PipelineRunner:
                             import numpy as np
                             from .evolution import _RankMeanEnsemble
                             from .evolution import _make_surrogate
+                            from sklearn.model_selection import KFold
 
                             original_candidates = list(af2_candidates)
                             train_count = max(
@@ -8860,22 +9139,74 @@ class PipelineRunner:
                                 1,
                                 int(getattr(request, "surrogate_triage_top_k", 20) or 20),
                             )
-                            model_kinds = _normalize_surrogate_triage_models(
-                                getattr(request, "surrogate_triage_model", "rf")
+                            requested_policy, legacy_ensemble_members = (
+                                _normalize_surrogate_triage_policy(
+                                    getattr(request, "surrogate_triage_model", "auto")
+                                )
                             )
-                            model_label = ",".join(model_kinds)
+                            comparator_models = _normalize_surrogate_triage_models(
+                                getattr(
+                                    request,
+                                    "surrogate_triage_comparator_models",
+                                    _SURROGATE_TRIAGE_ALLOWED_MODELS,
+                                ),
+                                default=_SURROGATE_TRIAGE_ALLOWED_MODELS,
+                            )
+                            if legacy_ensemble_members:
+                                comparator_models = list(legacy_ensemble_members)
+                            ensemble_models = (
+                                legacy_ensemble_members
+                                if legacy_ensemble_members
+                                else _normalize_surrogate_triage_models(
+                                    getattr(
+                                        request,
+                                        "surrogate_triage_ensemble_models",
+                                        _SURROGATE_TRIAGE_ENSEMBLE_MODELS,
+                                    ),
+                                    default=_SURROGATE_TRIAGE_ENSEMBLE_MODELS,
+                                )
+                            )
+                            cv_folds = max(
+                                2,
+                                int(getattr(request, "surrogate_triage_cv_folds", 5) or 5),
+                            )
+                            report_policies: list[str] = []
+                            for kind in comparator_models:
+                                if kind not in report_policies:
+                                    report_policies.append(kind)
+                            if len(ensemble_models) >= 2 and "ensemble" not in report_policies:
+                                report_policies.append("ensemble")
+                            if requested_policy != "auto" and requested_policy not in report_policies:
+                                report_policies.append(requested_policy)
+
+                            def _make_policy_model(policy_name: str) -> object:
+                                if policy_name == "ensemble":
+                                    return _RankMeanEnsemble(
+                                        seed=42,
+                                        members=tuple(ensemble_models),
+                                    )
+                                return _make_surrogate(policy_name, seed=42)
+
                             selection_strategy = (
-                                "single_model"
-                                if len(model_kinds) == 1
-                                else "rank_mean_ensemble"
+                                "auto_cv"
+                                if requested_policy == "auto"
+                                else (
+                                    "rank_mean_ensemble"
+                                    if requested_policy == "ensemble"
+                                    else "single_model"
+                                )
                             )
                             surrogate_triage_metadata = {
                                 "enabled": True,
-                                "model": model_label,
-                                "models": model_kinds,
+                                "model": requested_policy,
+                                "models": comparator_models,
+                                "comparator_models": comparator_models,
+                                "ensemble_models": ensemble_models,
                                 "selection_strategy": selection_strategy,
+                                "requested_policy": requested_policy,
                                 "initial_samples": train_count,
                                 "top_k": top_count,
+                                "cv_folds": cv_folds,
                                 "candidate_count_before_triage": len(original_candidates),
                                 "skipped": False,
                             }
@@ -8917,21 +9248,153 @@ class PipelineRunner:
                                     ],
                                     dtype=np.float64,
                                 )
-                                if len(model_kinds) == 1:
-                                    model = _make_surrogate(model_kinds[0], seed=42)
-                                else:
-                                    model = _RankMeanEnsemble(
-                                        seed=42,
-                                        members=tuple(model_kinds),
+                                cv_rows: list[dict[str, object]] = []
+                                if len(y_train) >= 3:
+                                    folds = min(cv_folds, len(y_train))
+                                    splitter = KFold(
+                                        n_splits=folds,
+                                        shuffle=True,
+                                        random_state=int(getattr(request, "seed", 0) or 0)
+                                        + 137,
                                     )
-                                model.fit(X_train, y_train)
-                                fitted_models = list(
-                                    getattr(model, "fitted", {model_kinds[0]: model}).keys()
-                                )
-                                if not fitted_models:
+                                    for policy_name in report_policies:
+                                        oof = np.full(len(y_train), np.nan, dtype=np.float64)
+                                        error = ""
+                                        fitted = False
+                                        try:
+                                            for train_fold, val_fold in splitter.split(X_train):
+                                                if len(train_fold) < 1 or len(val_fold) < 1:
+                                                    continue
+                                                fold_model = _make_policy_model(policy_name)
+                                                fold_model.fit(
+                                                    X_train[train_fold], y_train[train_fold]
+                                                )
+                                                if (
+                                                    policy_name == "ensemble"
+                                                    and not getattr(fold_model, "fitted", {})
+                                                ):
+                                                    continue
+                                                oof[val_fold] = np.asarray(
+                                                    fold_model.predict(X_train[val_fold]),
+                                                    dtype=np.float64,
+                                                )
+                                                fitted = True
+                                        except Exception as exc:
+                                            error = str(exc)
+                                        metrics = _surrogate_regression_metrics(y_train, oof)
+                                        score = metrics.get("spearman")
+                                        if score is None and metrics.get("mae") is not None:
+                                            score = -float(metrics["mae"])
+                                        cv_rows.append(
+                                            {
+                                                "policy": _surrogate_policy_label(policy_name),
+                                                "status": "fitted" if fitted else "failed",
+                                                "selection_score": score
+                                                if score is not None
+                                                else "",
+                                                "spearman": metrics.get("spearman") or "",
+                                                "kendall": metrics.get("kendall") or "",
+                                                "mae": metrics.get("mae") or "",
+                                                "rmse": metrics.get("rmse") or "",
+                                                "top_quartile_precision": metrics.get(
+                                                    "top_quartile_precision"
+                                                )
+                                                or "",
+                                                "top_quartile_enrichment": metrics.get(
+                                                    "top_quartile_enrichment"
+                                                )
+                                                or "",
+                                                "n_labels": len(y_train),
+                                                "cv_folds": folds,
+                                                "error": error,
+                                            }
+                                        )
+                                else:
+                                    for policy_name in report_policies:
+                                        cv_rows.append(
+                                            {
+                                                "policy": _surrogate_policy_label(policy_name),
+                                                "status": "skipped",
+                                                "selection_score": "",
+                                                "spearman": "",
+                                                "kendall": "",
+                                                "mae": "",
+                                                "rmse": "",
+                                                "top_quartile_precision": "",
+                                                "top_quartile_enrichment": "",
+                                                "n_labels": len(y_train),
+                                                "cv_folds": 0,
+                                                "error": "at least three AF2 labels are required for CV",
+                                            }
+                                        )
+
+                                fitted_by_policy: dict[str, object] = {}
+                                fit_errors: dict[str, str] = {}
+                                for policy_name in report_policies:
+                                    try:
+                                        fitted_model = _make_policy_model(policy_name)
+                                        fitted_model.fit(X_train, y_train)
+                                        if (
+                                            policy_name == "ensemble"
+                                            and not getattr(fitted_model, "fitted", {})
+                                        ):
+                                            raise RuntimeError(
+                                                "rank ensemble has no fitted members"
+                                            )
+                                        fitted_by_policy[policy_name] = fitted_model
+                                    except Exception as exc:
+                                        fit_errors[_surrogate_policy_label(policy_name)] = str(
+                                            exc
+                                        )
+
+                                if not fitted_by_policy:
                                     raise RuntimeError(
                                         "surrogate triage could not fit any selected model"
                                     )
+                                if requested_policy == "auto":
+                                    scored_rows = [
+                                        row
+                                        for row in cv_rows
+                                        if row.get("status") == "fitted"
+                                        and _numeric_or_none(row.get("selection_score"))
+                                        is not None
+                                    ]
+                                    if scored_rows:
+                                        best_row = max(
+                                            scored_rows,
+                                            key=lambda row: (
+                                                float(row.get("selection_score") or -1e12),
+                                                -report_policies.index(
+                                                    "ensemble"
+                                                    if row.get("policy")
+                                                    == "rank_ensemble"
+                                                    else str(row.get("policy"))
+                                                )
+                                                if (
+                                                    "ensemble"
+                                                    if row.get("policy")
+                                                    == "rank_ensemble"
+                                                    else str(row.get("policy"))
+                                                )
+                                                in report_policies
+                                                else -999,
+                                            ),
+                                        )
+                                        selected_policy = (
+                                            "ensemble"
+                                            if best_row.get("policy") == "rank_ensemble"
+                                            else str(best_row.get("policy"))
+                                        )
+                                    else:
+                                        selected_policy = next(iter(fitted_by_policy.keys()))
+                                else:
+                                    selected_policy = requested_policy
+                                if selected_policy not in fitted_by_policy:
+                                    raise RuntimeError(
+                                        "surrogate triage selected policy could not be fitted: "
+                                        f"{_surrogate_policy_label(selected_policy)}"
+                                    )
+
                                 train_set = set(int(idx) for idx in train_idx)
                                 candidate_idx = np.asarray(
                                     [
@@ -8950,12 +9413,25 @@ class PipelineRunner:
                                         f"top {top_count}"
                                     ),
                                 )
-                                pred_plddt = np.asarray(
-                                    model.predict(embeddings[candidate_idx]),
+                                predictions_by_policy: dict[str, Any] = {}
+                                ranks_by_policy: dict[str, Any] = {}
+                                for policy_name, fitted_model in fitted_by_policy.items():
+                                    pred = np.asarray(
+                                        fitted_model.predict(embeddings),
+                                        dtype=np.float64,
+                                    )
+                                    predictions_by_policy[policy_name] = pred
+                                    ranks = np.empty(len(pred), dtype=int)
+                                    ranks[np.argsort(pred)[::-1]] = np.arange(
+                                        1, len(pred) + 1
+                                    )
+                                    ranks_by_policy[policy_name] = ranks
+                                acquisition_scores = np.asarray(
+                                    predictions_by_policy[selected_policy][candidate_idx],
                                     dtype=np.float64,
                                 )
-                                order = np.argsort(pred_plddt)[::-1][
-                                    : min(top_count, len(pred_plddt))
+                                order = np.argsort(acquisition_scores)[::-1][
+                                    : min(top_count, len(acquisition_scores))
                                 ]
                                 top_indices = [
                                     int(candidate_idx[int(local_idx)])
@@ -8965,6 +9441,205 @@ class PipelineRunner:
                                     original_candidates[int(idx)] for idx in top_indices
                                 ]
                                 _predict_and_cache(top_records)
+                                surrogate_dir = _ensure_dir(tier_dir / "surrogate_triage")
+                                model_dir = _ensure_dir(surrogate_dir / "models")
+                                saved_model_paths: dict[str, str] = {}
+                                for policy_name, fitted_model in fitted_by_policy.items():
+                                    rel_model_path = (
+                                        Path("surrogate_triage")
+                                        / "models"
+                                        / f"{_surrogate_policy_label(policy_name)}.pkl"
+                                    )
+                                    try:
+                                        _write_pickle(tier_dir / rel_model_path, fitted_model)
+                                        saved_model_paths[
+                                            _surrogate_policy_label(policy_name)
+                                        ] = str(rel_model_path)
+                                    except Exception as exc:
+                                        fit_errors[
+                                            f"{_surrogate_policy_label(policy_name)}_pickle"
+                                        ] = str(exc)
+
+                                top_set = {int(idx) for idx in top_indices}
+                                prediction_rows: list[dict[str, object]] = []
+                                for idx, rec in enumerate(original_candidates):
+                                    row: dict[str, object] = {
+                                        "seq_id": rec.id,
+                                        "split": "training"
+                                        if idx in train_set
+                                        else "unlabelled_pool",
+                                        "af2_label": cached_scores.get(rec.id, ""),
+                                        "acquired": "yes" if idx in top_set else "no",
+                                        "sequence": rec.sequence,
+                                    }
+                                    for policy_name, pred in predictions_by_policy.items():
+                                        label = _surrogate_policy_label(policy_name)
+                                        row[f"prediction_{label}"] = float(pred[idx])
+                                        row[f"rank_{label}"] = int(
+                                            ranks_by_policy[policy_name][idx]
+                                        )
+                                    prediction_rows.append(row)
+                                prediction_fields = [
+                                    "seq_id",
+                                    "split",
+                                    "af2_label",
+                                    "acquired",
+                                    "sequence",
+                                ]
+                                for policy_name in fitted_by_policy:
+                                    label = _surrogate_policy_label(policy_name)
+                                    prediction_fields.extend(
+                                        [f"prediction_{label}", f"rank_{label}"]
+                                    )
+                                _write_text(
+                                    surrogate_dir / "model_predictions.csv",
+                                    _csv_text(prediction_fields, prediction_rows),
+                                )
+
+                                acquired_rows = []
+                                for rank, idx in enumerate(top_indices, start=1):
+                                    rec = original_candidates[int(idx)]
+                                    acquired_rows.append(
+                                        {
+                                            "rank": rank,
+                                            "seq_id": rec.id,
+                                            "acquisition_policy": _surrogate_policy_label(
+                                                selected_policy
+                                            ),
+                                            "acquisition_score": float(
+                                                predictions_by_policy[selected_policy][
+                                                    int(idx)
+                                                ]
+                                            ),
+                                            "af2_label": cached_scores.get(rec.id, ""),
+                                            "sequence": rec.sequence,
+                                        }
+                                    )
+                                _write_text(
+                                    surrogate_dir / "acquired_topk.csv",
+                                    _csv_text(
+                                        [
+                                            "rank",
+                                            "seq_id",
+                                            "acquisition_policy",
+                                            "acquisition_score",
+                                            "af2_label",
+                                            "sequence",
+                                        ],
+                                        acquired_rows,
+                                    ),
+                                )
+
+                                policy_top_sets: dict[str, set[int]] = {}
+                                for policy_name, pred in predictions_by_policy.items():
+                                    pool_pred = np.asarray(pred[candidate_idx], dtype=np.float64)
+                                    pool_order = np.argsort(pool_pred)[::-1][
+                                        : min(top_count, len(pool_pred))
+                                    ]
+                                    policy_top_sets[policy_name] = {
+                                        int(candidate_idx[int(local_idx)])
+                                        for local_idx in pool_order
+                                    }
+                                acquisition_top = policy_top_sets.get(
+                                    selected_policy, set(top_indices)
+                                )
+                                overlap_rows = []
+                                for policy_name, indices in policy_top_sets.items():
+                                    union = acquisition_top | indices
+                                    overlap = acquisition_top & indices
+                                    overlap_rows.append(
+                                        {
+                                            "policy": _surrogate_policy_label(policy_name),
+                                            "top_k": top_count,
+                                            "overlap_with_acquisition": len(overlap),
+                                            "jaccard_with_acquisition": (
+                                                len(overlap) / len(union) if union else ""
+                                            ),
+                                        }
+                                    )
+                                _write_text(
+                                    surrogate_dir / "topk_overlap.csv",
+                                    _csv_text(
+                                        [
+                                            "policy",
+                                            "top_k",
+                                            "overlap_with_acquisition",
+                                            "jaccard_with_acquisition",
+                                        ],
+                                        overlap_rows,
+                                    ),
+                                )
+
+                                feature_rows: list[dict[str, object]] = []
+                                for policy_name, fitted_model in fitted_by_policy.items():
+                                    if policy_name == "ensemble":
+                                        for member_name, member_model in getattr(
+                                            fitted_model, "fitted", {}
+                                        ).items():
+                                            feature_rows.extend(
+                                                _surrogate_feature_rows(
+                                                    policy_name,
+                                                    member_model,
+                                                    member=str(member_name),
+                                                )
+                                            )
+                                    else:
+                                        feature_rows.extend(
+                                            _surrogate_feature_rows(
+                                                policy_name,
+                                                fitted_model,
+                                                member=policy_name,
+                                            )
+                                        )
+                                _write_text(
+                                    surrogate_dir / "feature_importance.csv",
+                                    _csv_text(
+                                        [
+                                            "policy",
+                                            "member",
+                                            "feature_index",
+                                            "metric",
+                                            "value",
+                                            "abs_value",
+                                        ],
+                                        feature_rows,
+                                    ),
+                                )
+                                for row in cv_rows:
+                                    row["selected_for_acquisition"] = (
+                                        "yes"
+                                        if row.get("policy")
+                                        == _surrogate_policy_label(selected_policy)
+                                        else "no"
+                                    )
+                                _write_text(
+                                    surrogate_dir / "cv_metrics.csv",
+                                    _csv_text(
+                                        [
+                                            "policy",
+                                            "status",
+                                            "selection_score",
+                                            "spearman",
+                                            "kendall",
+                                            "mae",
+                                            "rmse",
+                                            "top_quartile_precision",
+                                            "top_quartile_enrichment",
+                                            "n_labels",
+                                            "cv_folds",
+                                            "selected_for_acquisition",
+                                            "error",
+                                        ],
+                                        cv_rows,
+                                    ),
+                                )
+                                _write_text(
+                                    surrogate_dir / "model_comparison.svg",
+                                    _surrogate_model_comparison_svg(
+                                        cv_rows, selected_policy=selected_policy
+                                    ),
+                                )
+
                                 evaluated_order: list[str] = []
                                 for rec in [*train_records, *top_records]:
                                     if rec.id not in evaluated_order:
@@ -8984,16 +9659,97 @@ class PipelineRunner:
                                         "training_ids": [s.id for s in train_records],
                                         "selected_top_ids": [s.id for s in top_records],
                                         "evaluated_ids": candidate_ids,
-                                        "fitted_models": fitted_models,
+                                        "selected_policy": _surrogate_policy_label(
+                                            selected_policy
+                                        ),
+                                        "fitted_models": [
+                                            _surrogate_policy_label(policy_name)
+                                            for policy_name in fitted_by_policy.keys()
+                                        ],
+                                        "fit_errors": fit_errors,
                                         "candidate_count_after_triage": len(candidate_ids),
                                         "candidate_count_after_budget": len(candidate_ids),
-                                        "predicted_plddt": {
+                                        "expected_af2_calls": len(candidate_ids),
+                                        "predicted_score": {
                                             original_candidates[int(idx)].id: float(
-                                                pred_plddt[int(local_idx)]
+                                                acquisition_scores[int(local_idx)]
                                             )
                                             for local_idx, idx in zip(order, top_indices)
                                         },
+                                        "artifacts": {
+                                            "model_selection": str(
+                                                Path("tiers")
+                                                / tier_str
+                                                / "surrogate_triage"
+                                                / "model_selection.json"
+                                            ),
+                                            "cv_metrics": str(
+                                                Path("tiers")
+                                                / tier_str
+                                                / "surrogate_triage"
+                                                / "cv_metrics.csv"
+                                            ),
+                                            "model_predictions": str(
+                                                Path("tiers")
+                                                / tier_str
+                                                / "surrogate_triage"
+                                                / "model_predictions.csv"
+                                            ),
+                                            "model_comparison": str(
+                                                Path("tiers")
+                                                / tier_str
+                                                / "surrogate_triage"
+                                                / "model_comparison.svg"
+                                            ),
+                                            "acquired_topk": str(
+                                                Path("tiers")
+                                                / tier_str
+                                                / "surrogate_triage"
+                                                / "acquired_topk.csv"
+                                            ),
+                                            "topk_overlap": str(
+                                                Path("tiers")
+                                                / tier_str
+                                                / "surrogate_triage"
+                                                / "topk_overlap.csv"
+                                            ),
+                                            "feature_importance": str(
+                                                Path("tiers")
+                                                / tier_str
+                                                / "surrogate_triage"
+                                                / "feature_importance.csv"
+                                            ),
+                                            "models": saved_model_paths,
+                                        },
                                     }
+                                )
+                                model_selection_payload = {
+                                    "enabled": True,
+                                    "tier": tier_str,
+                                    "requested_policy": requested_policy,
+                                    "selection_strategy": selection_strategy,
+                                    "selected_policy": _surrogate_policy_label(
+                                        selected_policy
+                                    ),
+                                    "comparator_models": comparator_models,
+                                    "ensemble_models": ensemble_models,
+                                    "initial_samples": train_count,
+                                    "top_k": top_count,
+                                    "cv_folds": cv_folds,
+                                    "training_ids": [s.id for s in train_records],
+                                    "selected_top_ids": [s.id for s in top_records],
+                                    "evaluated_ids": candidate_ids,
+                                    "candidate_count_before_triage": len(
+                                        original_candidates
+                                    ),
+                                    "candidate_count_after_budget": len(candidate_ids),
+                                    "expected_af2_calls": len(candidate_ids),
+                                    "fit_errors": fit_errors,
+                                    "model_paths": saved_model_paths,
+                                }
+                                write_json(
+                                    surrogate_dir / "model_selection.json",
+                                    model_selection_payload,
                                 )
                                 af2_budget_applied = True
                             else:

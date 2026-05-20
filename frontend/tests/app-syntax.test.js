@@ -235,8 +235,10 @@ test("surrogate triage is exposed as a first-class UI mode", () => {
   assert.match(html, /id="tab-surrogate"/);
   assert.match(html, /id="surrogateTargetInput"/);
   assert.match(html, /id="surrogateRunBtn"/);
+  assert.match(html, /id="surrogateAcquisitionPolicyInput"/);
   assert.match(html, /id="surrogateModelChoices"/);
-  assert.match(html, /data-surrogate-model-choice="ensemble"/);
+  assert.match(html, /id="surrogateEnsembleModelChoices"/);
+  assert.match(html, /value="auto" data-i18n="choice\.surrogatePolicy\.auto"/);
   assert.doesNotMatch(html, /id="surrogateModelInput"[^>]*multiple/);
   assert.match(
     source,

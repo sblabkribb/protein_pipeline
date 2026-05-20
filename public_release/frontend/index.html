@@ -649,8 +649,22 @@
                     <input id="surrogateTopKInput" type="number" min="1" step="1" value="20" />
                   </label>
                   <label class="fast-field">
-                    <span data-i18n="surrogate.model.label">Surrogate model</span>
-                    <input id="surrogateModelInput" type="hidden" value="rf" />
+                    <span data-i18n="surrogate.acquisition.label">Acquisition policy</span>
+                    <select id="surrogateAcquisitionPolicyInput">
+                      <option value="auto" data-i18n="choice.surrogatePolicy.auto">Auto-select by CV</option>
+                      <option value="rf" data-i18n="choice.surrogateModel.rf">Random Forest</option>
+                      <option value="ridge" data-i18n="choice.surrogateModel.ridge">Ridge</option>
+                      <option value="xgboost" data-i18n="choice.surrogateModel.xgboost">XGBoost</option>
+                      <option value="lightgbm" data-i18n="choice.surrogateModel.lightgbm">LightGBM</option>
+                      <option value="ensemble" data-i18n="choice.surrogateModel.ensemble">Rank ensemble</option>
+                    </select>
+                    <input id="surrogateModelInput" type="hidden" value="auto" />
+                    <small data-i18n="surrogate.acquisition.help">
+                      Auto compares models on the AF2-labelled training set and uses one selected policy for Top K acquisition.
+                    </small>
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="surrogate.comparators.label">Comparator models</span>
                     <div
                       id="surrogateModelChoices"
                       class="model-choice-grid"
@@ -662,24 +676,49 @@
                         <span data-i18n="choice.surrogateModel.rf">Random Forest</span>
                       </label>
                       <label class="model-choice-card">
-                        <input type="checkbox" value="ridge" data-surrogate-model-choice="ridge" />
+                        <input type="checkbox" value="ridge" data-surrogate-model-choice="ridge" checked />
                         <span data-i18n="choice.surrogateModel.ridge">Ridge</span>
                       </label>
                       <label class="model-choice-card">
-                        <input type="checkbox" value="xgboost" data-surrogate-model-choice="xgboost" />
+                        <input type="checkbox" value="xgboost" data-surrogate-model-choice="xgboost" checked />
                         <span data-i18n="choice.surrogateModel.xgboost">XGBoost</span>
                       </label>
                       <label class="model-choice-card">
-                        <input type="checkbox" value="lightgbm" data-surrogate-model-choice="lightgbm" />
+                        <input type="checkbox" value="lightgbm" data-surrogate-model-choice="lightgbm" checked />
                         <span data-i18n="choice.surrogateModel.lightgbm">LightGBM</span>
-                      </label>
-                      <label class="model-choice-card model-choice-ensemble">
-                        <input type="checkbox" value="ensemble" data-surrogate-model-choice="ensemble" />
-                        <span data-i18n="choice.surrogateModel.ensemble">Rank ensemble</span>
                       </label>
                     </div>
                     <small id="surrogateModelHelp" data-i18n="surrogate.model.help">
-                      Select individual models, or choose Rank ensemble to use all supported models with one shared AF2-labelled training set.
+                      These models are compared and reported without expanding the final AF2 Top K budget.
+                    </small>
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="surrogate.ensembleMembers.label">Rank ensemble members</span>
+                    <div
+                      id="surrogateEnsembleModelChoices"
+                      class="model-choice-grid"
+                      role="group"
+                      aria-describedby="surrogateEnsembleModelHelp"
+                    >
+                      <label class="model-choice-card">
+                        <input type="checkbox" value="rf" data-surrogate-ensemble-model-choice="rf" checked />
+                        <span data-i18n="choice.surrogateModel.rf">Random Forest</span>
+                      </label>
+                      <label class="model-choice-card">
+                        <input type="checkbox" value="ridge" data-surrogate-ensemble-model-choice="ridge" checked />
+                        <span data-i18n="choice.surrogateModel.ridge">Ridge</span>
+                      </label>
+                      <label class="model-choice-card">
+                        <input type="checkbox" value="xgboost" data-surrogate-ensemble-model-choice="xgboost" checked />
+                        <span data-i18n="choice.surrogateModel.xgboost">XGBoost</span>
+                      </label>
+                      <label class="model-choice-card">
+                        <input type="checkbox" value="lightgbm" data-surrogate-ensemble-model-choice="lightgbm" checked />
+                        <span data-i18n="choice.surrogateModel.lightgbm">LightGBM</span>
+                      </label>
+                    </div>
+                    <small id="surrogateEnsembleModelHelp" data-i18n="surrogate.ensembleMembers.help">
+                      Used when Auto evaluates rank ensemble, or when Rank ensemble is forced as the acquisition policy.
                     </small>
                   </label>
                   <label class="fast-field">
