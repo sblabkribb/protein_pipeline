@@ -2261,12 +2261,12 @@ const I18N = {
     "surrogate.action.run": "Start Surrogate Triage",
     "surrogate.options.title": "Surrogate Settings",
     "surrogate.options.desc":
-      "This mode disables RFD3 and BioEmu, embeds the SoluProt-passing candidate pool with the configured ESM worker, and spends AF2 only on the sampled training set plus Top K candidates.",
+      "This mode disables RFD3 and BioEmu, pools candidates across conservation tiers, embeds them with the configured ESM worker, and spends AF2 only on the sampled training set plus Top K candidates.",
     "surrogate.initialSamples.label": "Training AF2 samples",
     "surrogate.topK.label": "Top K final AF2 candidates",
     "surrogate.numSeqPerTier.label": "ProteinMPNN candidates per tier",
     "surrogate.numSeqPerTier.help":
-      "Default 10000 assumes GPU-backed ESM embedding. AF2 remains capped by the training and Top K budgets.",
+      "Default 3333 per tier gives about 9999 multi-tier designs before the shared AF2 training and Top K budgets are spent.",
     "surrogate.model.label": "Surrogate model",
     "surrogate.acquisition.label": "Top K selection method",
     "surrogate.acquisition.help":
@@ -3239,6 +3239,8 @@ const I18N = {
     "question.surrogateTriageEnabled.label": "AF2 Surrogate Triage",
     "question.surrogateTriageEnabled.help":
       "Label a small diverse candidate set with {af2Provider}, fit a surrogate pLDDT model, then send only surrogate-ranked top candidates to {af2Provider}.",
+    "question.surrogateTriageScope.label": "Candidate pool",
+    "question.surrogateTriageScope.help": "Pooled tiers uses one shared {af2Provider} budget across the selected conservation tiers. Per tier repeats the budget separately inside each tier.",
     "question.surrogateTriageInitialSamples.label": "Surrogate Training Set",
     "question.surrogateTriageInitialSamples.help": "Diverse SoluProt-passed candidates labelled with {af2Provider} before fitting the surrogate.",
     "question.surrogateTriageTopK.label": "Surrogate Top K",
@@ -3379,6 +3381,8 @@ const I18N = {
     "choice.surrogateModel.lightgbm": "LightGBM",
     "choice.surrogateModel.ensemble": "Rank ensemble",
     "choice.surrogatePolicy.auto": "Choose by CV",
+    "choice.surrogateScope.pooled": "Pooled tiers",
+    "choice.surrogateScope.perTier": "Per tier",
     "choice.rfd3Mode.localDiversify": "Local Diversify",
     "choice.rfd3Mode.legacyContig": "Legacy Contig",
     "choice.rfd3Mode.binder": "Binder",
@@ -3924,12 +3928,12 @@ const I18N = {
     "surrogate.action.run": "Surrogate Triage 시작",
     "surrogate.options.title": "대리모델 설정",
     "surrogate.options.desc":
-      "이 모드는 RFD3와 BioEmu를 끄고 SoluProt 통과 후보 pool을 설정된 ESM worker로 embedding한 뒤, 샘플링된 학습셋과 Top K 후보에만 AF2를 사용합니다.",
+      "이 모드는 RFD3와 BioEmu를 끄고 보존율 구간 후보를 하나의 pool로 합친 뒤, 설정된 ESM worker로 embedding하고 학습셋과 Top K 후보에만 AF2를 사용합니다.",
     "surrogate.initialSamples.label": "학습용 AF2 샘플 수",
     "surrogate.topK.label": "최종 AF2 Top K 후보 수",
     "surrogate.numSeqPerTier.label": "보존율 구간별 ProteinMPNN 후보 수",
     "surrogate.numSeqPerTier.help":
-      "기본값 10000은 GPU 기반 ESM embedding을 전제로 합니다. AF2는 학습 샘플과 Top K 예산으로 제한됩니다.",
+      "기본값 3333은 세 보존율 구간에서 약 9999개 후보를 만들고, 전체 pool에 대해 AF2 학습 샘플과 Top K 예산을 한 번만 사용합니다.",
     "surrogate.model.label": "대리모델",
     "surrogate.acquisition.label": "Top K 선정 방법",
     "surrogate.acquisition.help":
@@ -4900,6 +4904,8 @@ const I18N = {
     "question.surrogateTriageEnabled.label": "AF2 대리 모델 선별",
     "question.surrogateTriageEnabled.help":
       "다양한 후보 일부만 {af2Provider}로 먼저 평가하고, pLDDT 대리 모델로 나머지를 순위화해 상위 후보만 {af2Provider}로 보냅니다.",
+    "question.surrogateTriageScope.label": "후보 pool",
+    "question.surrogateTriageScope.help": "구간 통합은 선택한 보존율 구간 전체에 {af2Provider} 예산을 한 번만 씁니다. 구간별은 각 구간 안에서 예산을 반복 적용합니다.",
     "question.surrogateTriageInitialSamples.label": "대리 모델 학습 후보 수",
     "question.surrogateTriageInitialSamples.help": "대리 모델을 맞추기 전에 {af2Provider}로 먼저 라벨링할 SoluProt 통과 후보 수입니다.",
     "question.surrogateTriageTopK.label": "대리 모델 상위 K개",
@@ -5040,6 +5046,8 @@ const I18N = {
     "choice.surrogateModel.lightgbm": "LightGBM",
     "choice.surrogateModel.ensemble": "Rank ensemble",
     "choice.surrogatePolicy.auto": "CV로 자동 선택",
+    "choice.surrogateScope.pooled": "구간 통합",
+    "choice.surrogateScope.perTier": "구간별",
     "choice.rfd3Mode.localDiversify": "Local Diversify",
     "choice.rfd3Mode.legacyContig": "Legacy Contig",
     "choice.rfd3Mode.binder": "Binder",
@@ -5828,12 +5836,14 @@ const SETUP_WORKFLOW_QUESTION_IDS = new Set([
   "af2_provider",
   "evolution_mode",
   "surrogate_triage_enabled",
+  "surrogate_triage_scope",
 ]);
 const SETUP_CRITERIA_QUESTION_IDS = new Set([
   "selected_tiers",
   "design_chains",
   "num_seq_per_tier",
   "af2_max_candidates_per_tier",
+  "surrogate_triage_scope",
   "surrogate_triage_initial_samples",
   "surrogate_triage_top_k",
   "surrogate_triage_model",
@@ -9332,6 +9342,11 @@ const QUESTION_PRESETS = {
     questionKey: "question.surrogateTriageEnabled.help",
     default: false,
   },
+  surrogate_triage_scope: {
+    labelKey: "question.surrogateTriageScope.label",
+    questionKey: "question.surrogateTriageScope.help",
+    default: "pooled_tiers",
+  },
   surrogate_triage_initial_samples: {
     labelKey: "question.surrogateTriageInitialSamples.label",
     questionKey: "question.surrogateTriageInitialSamples.help",
@@ -12371,7 +12386,7 @@ function syncSurrogateEnsembleModelChoiceState() {
 
 function surrogateCandidatePoolSize(initialSamples, topK, requested) {
   const minRequired = Math.max(1, Number(initialSamples || 0) + Number(topK || 0) + 1);
-  const parsed = Number.isFinite(Number(requested)) ? Math.round(Number(requested)) : 10000;
+  const parsed = Number.isFinite(Number(requested)) ? Math.round(Number(requested)) : 3333;
   return Math.max(minRequired, parsed, 1);
 }
 
@@ -12386,7 +12401,7 @@ function buildSurrogateLaunchAnswers() {
   const numSeqPerTier = surrogateCandidatePoolSize(
     initialSamples,
     topK,
-    readIntegerInput(el.surrogateNumSeqPerTierInput, 10000, { min: 1 })
+    readIntegerInput(el.surrogateNumSeqPerTierInput, 3333, { min: 1 })
   );
   if (el.surrogateNumSeqPerTierInput) {
     el.surrogateNumSeqPerTierInput.value = String(numSeqPerTier);
@@ -12403,6 +12418,7 @@ function buildSurrogateLaunchAnswers() {
     relax_enabled: false,
     evolution_mode: false,
     surrogate_triage_enabled: true,
+    surrogate_triage_scope: "pooled_tiers",
     surrogate_triage_initial_samples: initialSamples,
     surrogate_triage_top_k: topK,
     surrogate_triage_model: acquisitionPolicy,
@@ -13021,6 +13037,7 @@ function buildManualPlan(mode) {
     relax_enabled: false,
     evolution_mode: false,
     surrogate_triage_enabled: true,
+    surrogate_triage_scope: "pooled_tiers",
     surrogate_triage_initial_samples: 30,
     surrogate_triage_top_k: 20,
     surrogate_triage_model: "auto",
@@ -13028,7 +13045,7 @@ function buildManualPlan(mode) {
     surrogate_triage_ensemble_models: [],
     surrogate_triage_cv_folds: 5,
     selected_tiers: [0.3, 0.5, 0.7],
-    num_seq_per_tier: 10000,
+    num_seq_per_tier: 3333,
     af2_max_candidates_per_tier: 0,
   };
   const pipelineLikeMode = mode === "pipeline" || mode === "surrogate";
@@ -13148,6 +13165,13 @@ function buildManualPlan(mode) {
         default: false,
       },
       {
+        id: "surrogate_triage_scope",
+        labelKey: "question.surrogateTriageScope.label",
+        questionKey: "question.surrogateTriageScope.help",
+        required: false,
+        default: "pooled_tiers",
+      },
+      {
         id: "surrogate_triage_initial_samples",
         labelKey: "question.surrogateTriageInitialSamples.label",
         questionKey: "question.surrogateTriageInitialSamples.help",
@@ -13228,7 +13252,7 @@ function buildManualPlan(mode) {
         labelKey: "question.numSeqPerTier.label",
         questionKey: "question.numSeqPerTier.help",
         required: false,
-        default: mode === "surrogate" ? 10000 : 2,
+        default: mode === "surrogate" ? 3333 : 2,
       },
       {
         id: "evolution_mode",
@@ -18365,6 +18389,7 @@ function renderQuestions(questions) {
   ]);
   const surrogateTriageQuestionIds = new Set([
     "surrogate_triage_enabled",
+    "surrogate_triage_scope",
     "surrogate_triage_initial_samples",
     "surrogate_triage_top_k",
     "surrogate_triage_model",
@@ -18440,6 +18465,37 @@ function renderQuestions(questions) {
     }
 
     if (state.answers.surrogate_triage_enabled === true) {
+      const scopeQuestion = questionById.surrogate_triage_scope;
+      if (scopeQuestion) {
+        const field = document.createElement("div");
+        field.className = "parameter-field option-field";
+        const label = document.createElement("span");
+        label.className = "parameter-label";
+        label.textContent = questionLabel(scopeQuestion);
+        const desc = document.createElement("span");
+        desc.className = "parameter-help";
+        desc.textContent = questionHelp(scopeQuestion);
+        field.appendChild(label);
+        field.appendChild(desc);
+        const currentScope =
+          state.answers.surrogate_triage_scope || scopeQuestion.default || "pooled_tiers";
+        state.answers.surrogate_triage_scope = currentScope;
+        renderChoiceButtons(
+          field,
+          [
+            { label: t("choice.surrogateScope.pooled"), value: "pooled_tiers" },
+            { label: t("choice.surrogateScope.perTier"), value: "per_tier" },
+          ],
+          currentScope,
+          (value) => {
+            state.answers.surrogate_triage_scope = value;
+            updateRunEligibility(normalizedQuestions);
+          },
+          { rerender: false }
+        );
+        grid.appendChild(field);
+      }
+
       ["surrogate_triage_initial_samples", "surrogate_triage_top_k"].forEach((id) => {
         const q = questionById[id];
         if (!q) return;
@@ -19699,6 +19755,7 @@ function buildAnswerPayload(mode = state.runMode) {
       relax_enabled: false,
       evolution_mode: false,
       surrogate_triage_enabled: true,
+      surrogate_triage_scope: "pooled_tiers",
       surrogate_triage_initial_samples: surrogateInitialSamples,
       surrogate_triage_top_k: surrogateTopK,
       surrogate_triage_model: normalizeSurrogateAcquisitionPolicy(answers.surrogate_triage_model || "auto"),
@@ -19713,7 +19770,7 @@ function buildAnswerPayload(mode = state.runMode) {
       num_seq_per_tier: surrogateCandidatePoolSize(
         surrogateInitialSamples,
         surrogateTopK,
-        answers.num_seq_per_tier ?? 10000
+        answers.num_seq_per_tier ?? 3333
       ),
       af2_max_candidates_per_tier: answers.af2_max_candidates_per_tier ?? 0,
     };
@@ -19894,6 +19951,7 @@ function filterAnswersForMode(mode, answers) {
       "bioemu_steering_config_text",
       "af2_max_candidates_per_tier",
       "surrogate_triage_enabled",
+      "surrogate_triage_scope",
       "surrogate_triage_initial_samples",
       "surrogate_triage_top_k",
       "surrogate_triage_model",
@@ -20050,6 +20108,7 @@ function buildRoutedForMode(mode) {
       relax_enabled: false,
       evolution_mode: false,
       surrogate_triage_enabled: true,
+      surrogate_triage_scope: "pooled_tiers",
       surrogate_triage_initial_samples: 30,
       surrogate_triage_top_k: 20,
       surrogate_triage_model: "auto",

@@ -1972,6 +1972,7 @@ const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
     "af2_provider",
     "af2_max_candidates_per_tier",
     "surrogate_triage_enabled",
+    "surrogate_triage_scope",
     "surrogate_triage_initial_samples",
     "surrogate_triage_top_k",
     "surrogate_triage_model",
@@ -2019,6 +2020,7 @@ const WORKFLOW_STUDIO_STAGE_DEFAULTS = Object.freeze({
   af2: Object.freeze({
     af2_max_candidates_per_tier: 0,
     surrogate_triage_enabled: false,
+    surrogate_triage_scope: "per_tier",
     surrogate_triage_initial_samples: 30,
     surrogate_triage_top_k: 20,
     surrogate_triage_model: "auto",
@@ -2654,6 +2656,7 @@ export function inferRequestRunMode(payload) {
     hasMeaningfulValue(payload.af2_plddt_cutoff) ||
     hasMeaningfulValue(payload.af2_rmsd_cutoff) ||
     hasMeaningfulValue(payload.surrogate_triage_enabled) ||
+    hasMeaningfulValue(payload.surrogate_triage_scope) ||
     hasMeaningfulValue(payload.surrogate_triage_initial_samples) ||
     hasMeaningfulValue(payload.surrogate_triage_top_k) ||
     hasMeaningfulValue(payload.surrogate_triage_model) ||

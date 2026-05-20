@@ -236,7 +236,7 @@ test("surrogate triage is exposed as a first-class UI mode", () => {
   assert.match(html, /id="surrogateTargetInput"/);
   assert.match(html, /id="surrogateRunBtn"/);
   assert.match(html, /id="surrogateAcquisitionPolicyInput"/);
-  assert.match(html, /id="surrogateNumSeqPerTierInput"[^>]*value="10000"/);
+  assert.match(html, /id="surrogateNumSeqPerTierInput"[^>]*value="3333"/);
   assert.match(html, /id="surrogateModelChoices"/);
   assert.match(html, /id="surrogateEnsembleModelChoices"/);
   assert.match(html, /value="auto" data-i18n="choice\.surrogatePolicy\.auto"/);
@@ -255,8 +255,9 @@ test("surrogate triage is exposed as a first-class UI mode", () => {
   assert.match(source, /function selectedSurrogateModelsFromChoices/);
   assert.match(source, /function surrogateCandidatePoolSize/);
   assert.match(source, /surrogate_triage_enabled:\s*true/);
+  assert.match(source, /surrogate_triage_scope:\s*"pooled_tiers"/);
   assert.match(source, /num_seq_per_tier:\s*numSeqPerTier/);
-  assert.match(source, /num_seq_per_tier:\s*100/);
+  assert.match(source, /num_seq_per_tier:\s*3333/);
   assert.match(source, /rfd3_use:\s*false/);
   assert.match(source, /bioemu_use:\s*false/);
   assert.match(source, /"tabs\.surrogate"/);

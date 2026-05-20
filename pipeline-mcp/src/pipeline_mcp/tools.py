@@ -4854,10 +4854,34 @@ def _append_top_hit_lines(
 
 
 def _collect_surrogate_triage_summaries(run_root: Path) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    root_model_selection = run_root / "surrogate_triage" / "model_selection.json"
+    root_payload = _load_json_file(root_model_selection)
+    if isinstance(root_payload, dict):
+        rows.append(
+            {
+                "tier": "pooled_tiers",
+                "scope": root_payload.get("scope") or "pooled_tiers",
+                "selected_policy": root_payload.get("selected_policy") or "-",
+                "selection_strategy": root_payload.get("selection_strategy") or "-",
+                "requested_policy": root_payload.get("requested_policy") or "-",
+                "initial_samples": root_payload.get("initial_samples"),
+                "top_k": root_payload.get("top_k"),
+                "expected_af2_calls": root_payload.get("expected_af2_calls"),
+                "candidate_count_before_triage": root_payload.get(
+                    "candidate_count_before_triage"
+                ),
+                "candidate_count_after_budget": root_payload.get(
+                    "candidate_count_after_budget"
+                ),
+                "comparator_models": root_payload.get("comparator_models") or [],
+                "ensemble_models": root_payload.get("ensemble_models") or [],
+                "graph_path": "surrogate_triage/model_comparison.svg",
+            }
+        )
     tiers_root = run_root / "tiers"
     if not tiers_root.exists():
-        return []
-    rows: list[dict[str, object]] = []
+        return rows
     for model_selection_path in sorted(
         tiers_root.glob("*/surrogate_triage/model_selection.json")
     ):
@@ -4882,6 +4906,7 @@ def _collect_surrogate_triage_summaries(run_root: Path) -> list[dict[str, object
                 ),
                 "comparator_models": payload.get("comparator_models") or [],
                 "ensemble_models": payload.get("ensemble_models") or [],
+                "graph_path": f"tiers/{tier}/surrogate_triage/model_comparison.svg",
             }
         )
     return rows
@@ -4896,9 +4921,12 @@ def _append_surrogate_triage_report_lines(
     is_ko = str(lang).lower().startswith("ko")
     lines.append("## 대리모델 선별" if is_ko else "## Surrogate Triage")
     for item in summaries:
-        tier_label = _format_conservation_tier_label(
-            item.get("tier"), lang="ko" if is_ko else "en"
-        )
+        if str(item.get("scope") or "") == "pooled_tiers":
+            tier_label = "통합 tier" if is_ko else "Pooled tiers"
+        else:
+            tier_label = _format_conservation_tier_label(
+                item.get("tier"), lang="ko" if is_ko else "en"
+            )
         comparators = ", ".join(str(x) for x in item.get("comparator_models") or [])
         ensemble = ", ".join(str(x) for x in item.get("ensemble_models") or [])
         if is_ko:
@@ -4919,9 +4947,8 @@ def _append_surrogate_triage_report_lines(
                 f"(training {item.get('initial_samples')} + Top K {item.get('top_k')}); "
                 f"comparators={comparators or '-'}; ensemble members={ensemble or '-'}."
             )
-        tier = str(item.get("tier") or "").strip()
-        if tier:
-            graph_path = f"tiers/{tier}/surrogate_triage/model_comparison.svg"
+        graph_path = str(item.get("graph_path") or "").strip()
+        if graph_path:
             lines.append(
                 f"![대리모델 비교]({graph_path})"
                 if is_ko
@@ -6515,6 +6542,12 @@ def _export_results_package(
             zf.writestr("comparisons.json", _to_json_bytes(comparison_summary))
             included.append("comparisons.json")
 
+        root_surrogate_dir = run_root / "surrogate_triage"
+        if root_surrogate_dir.exists() and root_surrogate_dir.is_dir():
+            for path in sorted(p for p in root_surrogate_dir.rglob("*") if p.is_file()):
+                rel = path.relative_to(run_root).as_posix()
+                _write_file_if_exists(zf, rel)
+
         tiers_root = run_root / "tiers"
         if tiers_root.exists() and tiers_root.is_dir():
             for tier_dir in sorted(
@@ -6640,6 +6673,11 @@ def pipeline_request_from_args(
     )
     use_memory_bank = _as_bool(args.get("use_memory_bank"), False)
     surrogate_triage_enabled = _as_bool(args.get("surrogate_triage_enabled"), False)
+    surrogate_triage_scope = (
+        _as_text(args.get("surrogate_triage_scope")).strip().lower() or "per_tier"
+    )
+    if surrogate_triage_scope not in {"per_tier", "pooled_tiers"}:
+        raise ValueError("surrogate_triage_scope must be one of: per_tier, pooled_tiers")
     surrogate_triage_initial_samples = _as_int(
         args.get("surrogate_triage_initial_samples"), 30
     )
@@ -6884,6 +6922,7 @@ def pipeline_request_from_args(
         evolution_surrogate_model=evolution_surrogate_model,
         use_memory_bank=use_memory_bank,
         surrogate_triage_enabled=surrogate_triage_enabled,
+        surrogate_triage_scope=surrogate_triage_scope,
         surrogate_triage_initial_samples=max(1, int(surrogate_triage_initial_samples)),
         surrogate_triage_top_k=max(1, int(surrogate_triage_top_k)),
         surrogate_triage_model=surrogate_triage_model,
@@ -7262,6 +7301,12 @@ def _pipeline_run_schema() -> dict[str, Any]:
                 "type": "boolean",
                 "default": False,
                 "description": "Use one-round surrogate triage in the standard pipeline to reduce AF2/ColabFold calls after SoluProt filtering.",
+            },
+            "surrogate_triage_scope": {
+                "type": "string",
+                "enum": ["per_tier", "pooled_tiers"],
+                "default": "per_tier",
+                "description": "Apply the AF2 triage budget separately within each conservation tier or once across the pooled multi-tier candidate set.",
             },
             "surrogate_triage_initial_samples": {
                 "type": "integer",

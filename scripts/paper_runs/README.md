@@ -8,9 +8,10 @@ Use this directory for live data-generation jobs:
 
 1. `01_fetch_cath_s3_results.py` downloads completed CATH artifacts from NCP S3.
 2. `02_launch_structural_context_ablation.py` launches the 8-target structural-context ablation.
-3. `03_launch_surrogate_triage_budget.py` launches the AF2-budgeted surrogate-triage runs used for claim 2. Its manuscript default generates 10,000 candidates per tier, labels 30 diverse bootstrap candidates, evaluates 20 Top-K acquisitions, and uses the configured ESM embedding provider plus the RunPod ColabFold backend so AF2 job identifiers are visible. Its default Top-K selection method is Auto-CV over RF, Ridge, LightGBM, and XGBoost. Rank-mean ensemble is optional and is only evaluated when `--ensemble-models` is set or the policy is forced to `ensemble`.
+3. `03_launch_surrogate_triage_budget.py` launches the AF2-budgeted surrogate-triage runs used for claim 2. Its manuscript default generates 3,333 candidates in each 30%, 50%, and 70% conservation tier, pools the SoluProt-passing candidates across tiers, labels 30 diverse bootstrap candidates, evaluates 20 Top-K acquisitions, and uses the configured ESM embedding provider plus the RunPod ColabFold backend so AF2 job identifiers are visible. Its default Top-K selection method is Auto-CV over RF, Ridge, LightGBM, and XGBoost. Rank-mean ensemble is optional and is only evaluated when `--ensemble-models` is set or the policy is forced to `ensemble`.
 4. `03_launch_multiround_evolution.py` launches experimental-feedback or legacy in-silico evolution traces.
 5. `05_collect_surrogate_triage_budget.py` collects surrogate-triage AF2 budget summaries from completed runs.
+6. `06_run_pooled_surrogate_scaling.py` reuses completed CATH AF2 labels to test whether pooled surrogate labels improve held-out target-tier ranking over per-target calibration. The current ESM-plus-composition result is a negative/guardrail analysis, not a main performance claim.
 
 Keep reusable analysis and figure-generation code in `scripts/benchmark/`.
 Keep public, credential-free reproduction code in `public_release/scripts/`.

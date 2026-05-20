@@ -32,6 +32,7 @@ class PipelineRequest:
     evolution_surrogate_model: str = "rf"
     use_memory_bank: bool = False
     surrogate_triage_enabled: bool = False
+    surrogate_triage_scope: str = "per_tier"
     surrogate_triage_initial_samples: int = 30
     surrogate_triage_top_k: int = 20
     surrogate_triage_model: str | list[str] = "auto"

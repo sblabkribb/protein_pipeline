@@ -207,6 +207,10 @@ print("ok")
         props = defs["pipeline.run"]["inputSchema"]["properties"]
 
         self.assertEqual(props["surrogate_triage_enabled"]["type"], "boolean")
+        self.assertEqual(props["surrogate_triage_scope"]["default"], "per_tier")
+        self.assertEqual(
+            props["surrogate_triage_scope"]["enum"], ["per_tier", "pooled_tiers"]
+        )
         self.assertEqual(props["surrogate_triage_initial_samples"]["default"], 30)
         self.assertEqual(props["surrogate_triage_top_k"]["default"], 20)
         model_schema = props["surrogate_triage_model"]["oneOf"][0]

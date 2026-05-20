@@ -68,6 +68,7 @@ def test_pipeline_request_from_args_preserves_surrogate_triage_options() -> None
         {
             "target_fasta": ">q1\nACDEFGHIK\n",
             "surrogate_triage_enabled": True,
+            "surrogate_triage_scope": "pooled_tiers",
             "surrogate_triage_initial_samples": 12,
             "surrogate_triage_top_k": 7,
             "surrogate_triage_model": "ridge",
@@ -75,6 +76,7 @@ def test_pipeline_request_from_args_preserves_surrogate_triage_options() -> None
     )
 
     assert req.surrogate_triage_enabled is True
+    assert req.surrogate_triage_scope == "pooled_tiers"
     assert req.surrogate_triage_initial_samples == 12
     assert req.surrogate_triage_top_k == 7
     assert req.surrogate_triage_model == "ridge"
@@ -186,6 +188,73 @@ def test_pipeline_surrogate_triage_limits_af2_to_training_plus_topk(
     assert len(af2_scores["candidate_ids"]) == 5
     assert len(af2_scores["surrogate_triage"]["training_ids"]) == 3
     assert len(af2_scores["surrogate_triage"]["selected_top_ids"]) == 2
+
+
+def test_pipeline_pooled_tier_surrogate_triage_uses_one_global_af2_budget(
+    tmp_path, monkeypatch
+) -> None:
+    def fake_embeddings(sequences, device=None, provider=None):
+        values = np.arange(len(sequences) * 2, dtype=np.float64).reshape(len(sequences), 2)
+        values[:, 1] = values[:, 1] * 0.25
+        return values
+
+    monkeypatch.setattr(pipeline, "_surrogate_triage_embeddings", fake_embeddings)
+
+    runner = PipelineRunner(
+        output_root=str(tmp_path),
+        mmseqs=_FakeMmseqs(),
+        proteinmpnn=_FakeProteinMPNN(),
+        soluprot=None,
+        af2=_FakeAf2(),
+    )
+    req = PipelineRequest(
+        target_fasta=">q1\nACDEFGHIK\n",
+        target_pdb=_pdb_9mer(),
+        dry_run=False,
+        conservation_tiers=[0.3, 0.5, 0.7],
+        num_seq_per_tier=8,
+        soluprot_cutoff=0.0,
+        rfd3_use=False,
+        bioemu_use=False,
+        surrogate_triage_enabled=True,
+        surrogate_triage_scope="pooled_tiers",
+        surrogate_triage_initial_samples=3,
+        surrogate_triage_top_k=2,
+        surrogate_triage_model="rf",
+        af2_top_k=0,
+        novelty_enabled=False,
+    )
+
+    result = runner.run(req, run_id="surrogate_triage_pooled_tiers")
+    run_root = Path(result.output_dir)
+    pooled_selection = json.loads(
+        (run_root / "surrogate_triage" / "model_selection.json").read_text()
+    )
+    tier_payloads = [
+        json.loads((run_root / "tiers" / tier / "af2_scores.json").read_text())
+        for tier in ("30", "50", "70")
+    ]
+    evaluated_ids = [
+        seq_id
+        for payload in tier_payloads
+        for seq_id in payload["surrogate_triage"]["evaluated_ids"]
+    ]
+
+    assert pooled_selection["scope"] == "pooled_tiers"
+    assert pooled_selection["candidate_count_before_triage"] == 24
+    assert pooled_selection["expected_af2_calls"] == 5
+    assert sum(payload["candidate_count_after_budget"] for payload in tier_payloads) == 5
+    assert len(evaluated_ids) == 5
+    assert all(
+        payload["surrogate_triage"]["scope"] == "pooled_tiers"
+        for payload in tier_payloads
+    )
+
+    report = ToolDispatcher(runner).call_tool(
+        "pipeline.generate_report", {"run_id": "surrogate_triage_pooled_tiers"}
+    )
+    assert "Pooled tiers" in report["report"]
+    assert "surrogate_triage/model_comparison.svg" in report["report"]
 
 
 def test_pipeline_surrogate_triage_rank_mean_for_multiple_models(

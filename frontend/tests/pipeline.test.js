@@ -763,6 +763,7 @@ test("buildRunArguments preserves standard surrogate triage controls", () => {
     routed: { stop_after: "af2" },
     answers: {
       surrogate_triage_enabled: true,
+      surrogate_triage_scope: "pooled_tiers",
       surrogate_triage_initial_samples: 30,
       surrogate_triage_top_k: 20,
       surrogate_triage_model: "rf",
@@ -770,6 +771,7 @@ test("buildRunArguments preserves standard surrogate triage controls", () => {
     runId: "run_surrogate",
   });
   assert.equal(args.surrogate_triage_enabled, true);
+  assert.equal(args.surrogate_triage_scope, "pooled_tiers");
   assert.equal(args.surrogate_triage_initial_samples, 30);
   assert.equal(args.surrogate_triage_top_k, 20);
   assert.equal(args.surrogate_triage_model, "rf");

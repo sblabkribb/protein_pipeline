@@ -639,9 +639,9 @@
                   </label>
                   <label class="fast-field">
                     <span data-i18n="surrogate.numSeqPerTier.label">ProteinMPNN candidates per tier</span>
-                    <input id="surrogateNumSeqPerTierInput" type="number" min="1" step="1" value="10000" />
+                    <input id="surrogateNumSeqPerTierInput" type="number" min="1" step="1" value="3333" />
                     <small data-i18n="surrogate.numSeqPerTier.help">
-                      Default 10000 assumes GPU-backed ESM embedding. AF2 remains capped by the training and Top K budgets.
+                      Default 3333 per tier gives about 9999 multi-tier designs before the shared AF2 training and Top K budgets are spent.
                     </small>
                   </label>
                   <label class="fast-field">

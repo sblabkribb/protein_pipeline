@@ -195,6 +195,7 @@ _PARTIAL_RERUN_AF2_FIELDS = {
     "af2_top_k",
     "af2_sequence_ids",
     "surrogate_triage_enabled",
+    "surrogate_triage_scope",
     "surrogate_triage_initial_samples",
     "surrogate_triage_top_k",
     "surrogate_triage_model",
@@ -8194,6 +8195,897 @@ class PipelineRunner:
                 )
                 return native, samples
 
+            pooled_surrogate_enabled = (
+                bool(getattr(request, "surrogate_triage_enabled", False))
+                and str(
+                    getattr(request, "surrogate_triage_scope", "per_tier") or "per_tier"
+                ).strip().lower()
+                == "pooled_tiers"
+                and not request.af2_sequence_ids
+                and normalized_stop_after not in {"design", "soluprot"}
+            )
+            pooled_surrogate_contexts: list[dict[str, Any]] = []
+
+            def _run_pooled_tier_surrogate_triage(
+                contexts: list[dict[str, Any]],
+            ) -> None:
+                if not contexts:
+                    return
+                import numpy as np
+                from .evolution import _RankMeanEnsemble
+                from .evolution import _make_surrogate
+                from sklearn.model_selection import KFold
+
+                surrogate_dir = _ensure_dir(paths.root / "surrogate_triage")
+                model_dir = _ensure_dir(surrogate_dir / "models")
+                set_status(
+                    paths,
+                    stage="af2_pooled_tiers",
+                    state="running",
+                    detail="collecting pooled tier candidates",
+                )
+
+                pool_records: list[SequenceRecord] = []
+                pool_meta: dict[str, dict[str, Any]] = {}
+                for ctx in contexts:
+                    tier_str_local = str(ctx["tier_str"])
+                    for idx, rec in enumerate(ctx.get("passed") or [], start=1):
+                        source_id = str(rec.id)
+                        global_id = (
+                            f"tier{tier_str_local}_{idx:05d}_{_safe_id(source_id)}"
+                        )
+                        meta = dict(rec.meta) if isinstance(rec.meta, dict) else {}
+                        meta["tier"] = tier_str_local
+                        meta["source_id"] = source_id
+                        pooled = SequenceRecord(
+                            id=global_id,
+                            header=(
+                                f"{rec.header or source_id}|tier={tier_str_local}|"
+                                f"source_id={source_id}"
+                            ),
+                            sequence=rec.sequence,
+                            meta=meta,
+                        )
+                        pool_records.append(pooled)
+                        pool_meta[global_id] = {
+                            "tier": tier_str_local,
+                            "source_id": source_id,
+                            "record": rec,
+                            "tier_dir": ctx["tier_dir"],
+                            "context": ctx,
+                        }
+
+                train_count = max(
+                    1,
+                    int(getattr(request, "surrogate_triage_initial_samples", 30) or 30),
+                )
+                top_count = max(
+                    1, int(getattr(request, "surrogate_triage_top_k", 20) or 20)
+                )
+                requested_policy, legacy_ensemble_members = (
+                    _normalize_surrogate_triage_policy(
+                        getattr(request, "surrogate_triage_model", "auto")
+                    )
+                )
+                comparator_models = _normalize_surrogate_triage_models(
+                    getattr(
+                        request,
+                        "surrogate_triage_comparator_models",
+                        _SURROGATE_TRIAGE_ALLOWED_MODELS,
+                    ),
+                    default=_SURROGATE_TRIAGE_ALLOWED_MODELS,
+                )
+                if legacy_ensemble_members:
+                    comparator_models = list(legacy_ensemble_members)
+                ensemble_models = (
+                    list(legacy_ensemble_members)
+                    if legacy_ensemble_members
+                    else _normalize_surrogate_triage_models(
+                        getattr(request, "surrogate_triage_ensemble_models", []),
+                        default=[],
+                        allow_empty=True,
+                    )
+                )
+                if requested_policy == "ensemble" and len(ensemble_models) < 2:
+                    ensemble_models = list(_SURROGATE_TRIAGE_ENSEMBLE_MODELS)
+                cv_folds = max(
+                    2, int(getattr(request, "surrogate_triage_cv_folds", 5) or 5)
+                )
+                report_policies: list[str] = []
+                for kind in comparator_models:
+                    if kind not in report_policies:
+                        report_policies.append(kind)
+                if len(ensemble_models) >= 2 and "ensemble" not in report_policies:
+                    report_policies.append("ensemble")
+                if requested_policy != "auto" and requested_policy not in report_policies:
+                    report_policies.append(requested_policy)
+
+                def _make_policy_model(policy_name: str) -> object:
+                    if policy_name == "ensemble":
+                        return _RankMeanEnsemble(seed=42, members=tuple(ensemble_models))
+                    return _make_surrogate(policy_name, seed=42)
+
+                cached_scores: dict[str, float] = {}
+                af2_result: dict[str, object] = {}
+                partial_prediction_errors: dict[str, str] = {}
+                jobs_path = surrogate_dir / "runpod_jobs.json"
+                jobs: dict[str, str] = {} if request.force else _load_jobs_map(jobs_path)
+                jobs_lock = threading.Lock()
+
+                def _on_af2_job_id(seq_id: str, job_id: str) -> None:
+                    with jobs_lock:
+                        jobs[seq_id] = job_id
+                        payload: dict[str, object] = {
+                            "jobs": dict(jobs),
+                            "provider": af2_provider,
+                            "scope": "pooled_tiers",
+                        }
+                        if af2_endpoint_id:
+                            payload["endpoint_id"] = af2_endpoint_id
+                        write_json(jobs_path, payload)
+                        set_status(
+                            paths,
+                            stage="af2_pooled_tiers",
+                            state="running",
+                            detail=f"runpod_job_id={job_id} seq_id={seq_id}",
+                        )
+
+                def _predict_af2_batch(
+                    batch_inputs: list[SequenceRecord],
+                    *,
+                    resume_job_ids: dict[str, str] | None,
+                ) -> dict[str, object]:
+                    if af2_client is None:
+                        raise RuntimeError(
+                            f"{af2_provider_label} is required for this pipeline; {af2_provider_hint}"
+                        )
+                    try:
+                        return af2_client.predict(
+                            batch_inputs,
+                            model_preset=af2_model_preset,
+                            db_preset=request.af2_db_preset,
+                            max_template_date=request.af2_max_template_date,
+                            extra_flags=request.af2_extra_flags,
+                            on_job_id=_on_af2_job_id,
+                            resume_job_ids=resume_job_ids,
+                        )
+                    except TypeError:
+                        try:
+                            return af2_client.predict(
+                                batch_inputs,
+                                model_preset=af2_model_preset,
+                                db_preset=request.af2_db_preset,
+                                max_template_date=request.af2_max_template_date,
+                                extra_flags=request.af2_extra_flags,
+                                on_job_id=_on_af2_job_id,
+                            )
+                        except TypeError:
+                            return af2_client.predict(
+                                batch_inputs,
+                                model_preset=af2_model_preset,
+                                db_preset=request.af2_db_preset,
+                                max_template_date=request.af2_max_template_date,
+                                extra_flags=request.af2_extra_flags,
+                            )
+
+                def _predict_single_af2(seq_input: SequenceRecord) -> dict[str, object]:
+                    seq_resume_job_id = str(jobs.get(seq_input.id) or "").strip()
+                    seq_resume = (
+                        {seq_input.id: seq_resume_job_id} if seq_resume_job_id else None
+                    )
+                    return _predict_af2_batch([seq_input], resume_job_ids=seq_resume)
+
+                def _predict_and_cache(records: list[SequenceRecord]) -> None:
+                    to_predict = [rec for rec in records if rec.id not in cached_scores]
+                    if not to_predict:
+                        return
+                    if request.dry_run:
+                        batch_result = {
+                            s.id: {
+                                "best_plddt": (90.0 if (i % 2 == 0) else 80.0),
+                                "best_model": None,
+                                "ranking_debug": {},
+                                "ranked_0_pdb": None,
+                            }
+                            for i, s in enumerate(to_predict)
+                        }
+                    else:
+                        af2_inputs = [
+                            SequenceRecord(
+                                id=s.id,
+                                header=s.header,
+                                sequence=_prepare_af2_sequence(
+                                    s.sequence,
+                                    model_preset=af2_model_preset,
+                                    chain_ids=design_chains,
+                                ),
+                                meta=s.meta,
+                            )
+                            for s in to_predict
+                        ]
+                        af2_parallel_workers = _parallel_worker_limit(
+                            len(af2_inputs),
+                            env_name="PIPELINE_AF2_MAX_WORKERS",
+                            default=DEFAULT_AF2_MAX_WORKERS,
+                            hard_cap=12,
+                        )
+                        batch_result = {}
+                        if af2_parallel_workers <= 1:
+                            for seq_input in af2_inputs:
+                                _ensure_not_cancelled(stage="af2_pooled_tiers")
+                                try:
+                                    rec_payload = _predict_single_af2(seq_input)
+                                    if isinstance(rec_payload, dict):
+                                        batch_result.update(rec_payload)
+                                except Exception as exc:
+                                    if (
+                                        request.auto_recover
+                                        or af2_error_is_missing_pdb_outputs(str(exc))
+                                        or "executiontimeout" in str(exc).lower()
+                                    ):
+                                        partial_prediction_errors[seq_input.id] = str(exc)
+                                        continue
+                                    raise
+                        else:
+                            with ThreadPoolExecutor(
+                                max_workers=af2_parallel_workers
+                            ) as executor:
+                                future_map = {
+                                    executor.submit(_predict_single_af2, seq_input): seq_input.id
+                                    for seq_input in af2_inputs
+                                }
+                                for future in as_completed(future_map):
+                                    seq_id = future_map[future]
+                                    try:
+                                        rec_payload = future.result()
+                                        if isinstance(rec_payload, dict):
+                                            batch_result.update(rec_payload)
+                                    except Exception as exc:
+                                        if (
+                                            request.auto_recover
+                                            or af2_error_is_missing_pdb_outputs(str(exc))
+                                            or "executiontimeout" in str(exc).lower()
+                                        ):
+                                            partial_prediction_errors[seq_id] = str(exc)
+                                            continue
+                                        raise
+                        if partial_prediction_errors and not batch_result and not af2_result:
+                            raise RuntimeError(next(iter(partial_prediction_errors.values())))
+
+                    if isinstance(batch_result, dict):
+                        af2_result.update(batch_result)
+                    for seq in to_predict:
+                        rec_payload = (
+                            (batch_result or {}).get(seq.id, {})
+                            if isinstance(batch_result, dict)
+                            else {}
+                        )
+                        if not isinstance(rec_payload, dict):
+                            continue
+                        score = rec_payload.get("best_plddt")
+                        if isinstance(score, (int, float)):
+                            cached_scores[seq.id] = float(score)
+                        meta = pool_meta.get(seq.id) or {}
+                        tier_dir_local = Path(meta.get("tier_dir") or surrogate_dir)
+                        source_id = str(meta.get("source_id") or seq.id)
+                        seq_dir = _ensure_dir(tier_dir_local / "af2" / _safe_id(source_id))
+                        if isinstance(rec_payload.get("ranking_debug"), dict):
+                            write_json(
+                                seq_dir / "ranking_debug.json",
+                                rec_payload["ranking_debug"],
+                            )
+                        ranked0 = rec_payload.get("ranked_0_pdb")
+                        if isinstance(ranked0, str) and ranked0.strip():
+                            _write_text(seq_dir / "ranked_0.pdb", ranked0)
+                        write_json(
+                            seq_dir / "metrics.json",
+                            {
+                                "best_plddt": cached_scores.get(seq.id),
+                                "best_model": rec_payload.get("best_model"),
+                                "archive_name": rec_payload.get("archive_name"),
+                                "provider": af2_provider,
+                                "pooled_surrogate_id": seq.id,
+                            },
+                        )
+
+                selection_strategy = (
+                    "auto_cv"
+                    if requested_policy == "auto"
+                    else (
+                        "rank_mean_ensemble"
+                        if requested_policy == "ensemble"
+                        else "single_model"
+                    )
+                )
+                surrogate_triage_metadata: dict[str, object] = {
+                    "enabled": True,
+                    "scope": "pooled_tiers",
+                    "model": requested_policy,
+                    "models": comparator_models,
+                    "comparator_models": comparator_models,
+                    "ensemble_models": ensemble_models,
+                    "selection_strategy": selection_strategy,
+                    "requested_policy": requested_policy,
+                    "initial_samples": train_count,
+                    "top_k": top_count,
+                    "cv_folds": cv_folds,
+                    "candidate_count_before_triage": len(pool_records),
+                    "skipped": False,
+                }
+
+                evaluated_global_ids: list[str] = []
+                train_records: list[SequenceRecord] = []
+                top_records: list[SequenceRecord] = []
+                selected_policy = requested_policy
+                fitted_by_policy: dict[str, object] = {}
+                fit_errors: dict[str, str] = {}
+                cv_rows: list[dict[str, object]] = []
+                predictions_by_policy: dict[str, Any] = {}
+                ranks_by_policy: dict[str, Any] = {}
+                saved_model_paths: dict[str, str] = {}
+
+                if len(pool_records) > train_count + top_count:
+                    sequences = [s.sequence for s in pool_records]
+                    embeddings = _surrogate_triage_embeddings(
+                        sequences, provider=self.esm_embedding
+                    )
+                    train_idx = _surrogate_triage_training_indices(
+                        embeddings,
+                        train_count,
+                        seed=int(getattr(request, "seed", 0) or 0) + 42,
+                    )
+                    train_records = [pool_records[int(idx)] for idx in train_idx]
+                    set_status(
+                        paths,
+                        stage="af2_pooled_tiers",
+                        state="running",
+                        detail=f"surrogate_triage: labelling {train_count} pooled candidates",
+                    )
+                    _predict_and_cache(train_records)
+                    labelled_indices = [
+                        int(idx)
+                        for idx in train_idx
+                        if pool_records[int(idx)].id in cached_scores
+                    ]
+                    if not labelled_indices:
+                        raise RuntimeError(
+                            "pooled surrogate triage could not obtain AF2 labels for the training set"
+                        )
+                    X_train = embeddings[labelled_indices]
+                    y_train = np.asarray(
+                        [cached_scores[pool_records[int(idx)].id] for idx in labelled_indices],
+                        dtype=np.float64,
+                    )
+                    if len(y_train) >= 3:
+                        folds = min(cv_folds, len(y_train))
+                        splitter = KFold(
+                            n_splits=folds,
+                            shuffle=True,
+                            random_state=int(getattr(request, "seed", 0) or 0) + 137,
+                        )
+                        for policy_name in report_policies:
+                            oof = np.full(len(y_train), np.nan, dtype=np.float64)
+                            error = ""
+                            fitted = False
+                            try:
+                                for train_fold, val_fold in splitter.split(X_train):
+                                    if len(train_fold) < 1 or len(val_fold) < 1:
+                                        continue
+                                    fold_model = _make_policy_model(policy_name)
+                                    fold_model.fit(X_train[train_fold], y_train[train_fold])
+                                    if (
+                                        policy_name == "ensemble"
+                                        and not getattr(fold_model, "fitted", {})
+                                    ):
+                                        continue
+                                    oof[val_fold] = np.asarray(
+                                        fold_model.predict(X_train[val_fold]),
+                                        dtype=np.float64,
+                                    )
+                                    fitted = True
+                            except Exception as exc:
+                                error = str(exc)
+                            metrics = _surrogate_regression_metrics(y_train, oof)
+                            score = metrics.get("spearman")
+                            if score is None and metrics.get("mae") is not None:
+                                score = -float(metrics["mae"])
+                            cv_rows.append(
+                                {
+                                    "policy": _surrogate_policy_label(policy_name),
+                                    "status": "fitted" if fitted else "failed",
+                                    "selection_score": score if score is not None else "",
+                                    "spearman": metrics.get("spearman") or "",
+                                    "kendall": metrics.get("kendall") or "",
+                                    "mae": metrics.get("mae") or "",
+                                    "rmse": metrics.get("rmse") or "",
+                                    "top_quartile_precision": metrics.get(
+                                        "top_quartile_precision"
+                                    )
+                                    or "",
+                                    "top_quartile_enrichment": metrics.get(
+                                        "top_quartile_enrichment"
+                                    )
+                                    or "",
+                                    "n_labels": len(y_train),
+                                    "cv_folds": folds,
+                                    "error": error,
+                                }
+                            )
+                    else:
+                        for policy_name in report_policies:
+                            cv_rows.append(
+                                {
+                                    "policy": _surrogate_policy_label(policy_name),
+                                    "status": "skipped",
+                                    "selection_score": "",
+                                    "spearman": "",
+                                    "kendall": "",
+                                    "mae": "",
+                                    "rmse": "",
+                                    "top_quartile_precision": "",
+                                    "top_quartile_enrichment": "",
+                                    "n_labels": len(y_train),
+                                    "cv_folds": 0,
+                                    "error": "at least three AF2 labels are required for CV",
+                                }
+                            )
+
+                    for policy_name in report_policies:
+                        try:
+                            fitted_model = _make_policy_model(policy_name)
+                            fitted_model.fit(X_train, y_train)
+                            if (
+                                policy_name == "ensemble"
+                                and not getattr(fitted_model, "fitted", {})
+                            ):
+                                raise RuntimeError("rank ensemble has no fitted members")
+                            fitted_by_policy[policy_name] = fitted_model
+                        except Exception as exc:
+                            fit_errors[_surrogate_policy_label(policy_name)] = str(exc)
+                    if not fitted_by_policy:
+                        raise RuntimeError(
+                            "pooled surrogate triage could not fit any selected model"
+                        )
+                    if requested_policy == "auto":
+                        scored_rows = [
+                            row
+                            for row in cv_rows
+                            if row.get("status") == "fitted"
+                            and _numeric_or_none(row.get("selection_score")) is not None
+                        ]
+                        if scored_rows:
+                            best_row = max(
+                                scored_rows,
+                                key=lambda row: float(row.get("selection_score") or -1e12),
+                            )
+                            selected_policy = (
+                                "ensemble"
+                                if best_row.get("policy") == "rank_ensemble"
+                                else str(best_row.get("policy"))
+                            )
+                        else:
+                            selected_policy = next(iter(fitted_by_policy.keys()))
+                    if selected_policy not in fitted_by_policy:
+                        raise RuntimeError(
+                            "pooled surrogate triage selected policy could not be fitted: "
+                            f"{_surrogate_policy_label(selected_policy)}"
+                        )
+                    train_set = {int(idx) for idx in train_idx}
+                    candidate_idx = np.asarray(
+                        [idx for idx in range(len(pool_records)) if idx not in train_set],
+                        dtype=int,
+                    )
+                    predictions_by_policy = {}
+                    ranks_by_policy = {}
+                    for policy_name, fitted_model in fitted_by_policy.items():
+                        pred = np.asarray(fitted_model.predict(embeddings), dtype=np.float64)
+                        predictions_by_policy[policy_name] = pred
+                        ranks = np.empty(len(pred), dtype=int)
+                        ranks[np.argsort(pred)[::-1]] = np.arange(1, len(pred) + 1)
+                        ranks_by_policy[policy_name] = ranks
+                    acquisition_scores = np.asarray(
+                        predictions_by_policy[selected_policy][candidate_idx],
+                        dtype=np.float64,
+                    )
+                    order = np.argsort(acquisition_scores)[::-1][
+                        : min(top_count, len(acquisition_scores))
+                    ]
+                    top_indices = [int(candidate_idx[int(local_idx)]) for local_idx in order]
+                    top_records = [pool_records[int(idx)] for idx in top_indices]
+                    set_status(
+                        paths,
+                        stage="af2_pooled_tiers",
+                        state="running",
+                        detail=f"surrogate_triage: evaluating pooled top {top_count}",
+                    )
+                    _predict_and_cache(top_records)
+                    for policy_name, fitted_model in fitted_by_policy.items():
+                        rel_model_path = (
+                            Path("surrogate_triage")
+                            / "models"
+                            / f"{_surrogate_policy_label(policy_name)}.pkl"
+                        )
+                        try:
+                            _write_pickle(paths.root / rel_model_path, fitted_model)
+                            saved_model_paths[
+                                _surrogate_policy_label(policy_name)
+                            ] = str(rel_model_path)
+                        except Exception as exc:
+                            fit_errors[
+                                f"{_surrogate_policy_label(policy_name)}_pickle"
+                            ] = str(exc)
+                    evaluated_order: list[str] = []
+                    for rec in [*train_records, *top_records]:
+                        if rec.id not in evaluated_order:
+                            evaluated_order.append(rec.id)
+                    evaluated_global_ids = evaluated_order
+
+                    top_set = {int(idx) for idx in top_indices}
+                    train_idx_set = {int(idx) for idx in train_idx}
+                    prediction_rows: list[dict[str, object]] = []
+                    for idx, rec in enumerate(pool_records):
+                        meta = pool_meta.get(rec.id) or {}
+                        row: dict[str, object] = {
+                            "global_seq_id": rec.id,
+                            "tier": meta.get("tier", ""),
+                            "seq_id": meta.get("source_id", rec.id),
+                            "split": "training"
+                            if idx in train_idx_set
+                            else "unlabelled_pool",
+                            "af2_label": cached_scores.get(rec.id, ""),
+                            "acquired": "yes" if idx in top_set else "no",
+                            "sequence": rec.sequence,
+                        }
+                        for policy_name, pred in predictions_by_policy.items():
+                            label = _surrogate_policy_label(policy_name)
+                            row[f"prediction_{label}"] = float(pred[idx])
+                            row[f"rank_{label}"] = int(ranks_by_policy[policy_name][idx])
+                        prediction_rows.append(row)
+                    prediction_fields = [
+                        "global_seq_id",
+                        "tier",
+                        "seq_id",
+                        "split",
+                        "af2_label",
+                        "acquired",
+                        "sequence",
+                    ]
+                    for policy_name in fitted_by_policy:
+                        label = _surrogate_policy_label(policy_name)
+                        prediction_fields.extend([f"prediction_{label}", f"rank_{label}"])
+                    _write_text(
+                        surrogate_dir / "model_predictions.csv",
+                        _csv_text(prediction_fields, prediction_rows),
+                    )
+                    acquired_rows = []
+                    for rank, idx in enumerate(top_indices, start=1):
+                        rec = pool_records[int(idx)]
+                        meta = pool_meta.get(rec.id) or {}
+                        acquired_rows.append(
+                            {
+                                "rank": rank,
+                                "global_seq_id": rec.id,
+                                "tier": meta.get("tier", ""),
+                                "seq_id": meta.get("source_id", rec.id),
+                                "acquisition_policy": _surrogate_policy_label(
+                                    selected_policy
+                                ),
+                                "acquisition_score": float(
+                                    predictions_by_policy[selected_policy][int(idx)]
+                                ),
+                                "af2_label": cached_scores.get(rec.id, ""),
+                                "sequence": rec.sequence,
+                            }
+                        )
+                    _write_text(
+                        surrogate_dir / "acquired_topk.csv",
+                        _csv_text(
+                            [
+                                "rank",
+                                "global_seq_id",
+                                "tier",
+                                "seq_id",
+                                "acquisition_policy",
+                                "acquisition_score",
+                                "af2_label",
+                                "sequence",
+                            ],
+                            acquired_rows,
+                        ),
+                    )
+                    _write_text(
+                        surrogate_dir / "cv_metrics.csv",
+                        _csv_text(
+                            [
+                                "policy",
+                                "status",
+                                "selection_score",
+                                "spearman",
+                                "kendall",
+                                "mae",
+                                "rmse",
+                                "top_quartile_precision",
+                                "top_quartile_enrichment",
+                                "n_labels",
+                                "cv_folds",
+                                "error",
+                            ],
+                            cv_rows,
+                        ),
+                    )
+                    _write_text(
+                        surrogate_dir / "model_comparison.svg",
+                        _surrogate_model_comparison_svg(
+                            cv_rows, selected_policy=selected_policy
+                        ),
+                    )
+                    feature_rows: list[dict[str, object]] = []
+                    for policy_name, fitted_model in fitted_by_policy.items():
+                        if policy_name == "ensemble":
+                            for member_name, member_model in getattr(
+                                fitted_model, "fitted", {}
+                            ).items():
+                                feature_rows.extend(
+                                    _surrogate_feature_rows(
+                                        policy_name,
+                                        member_model,
+                                        member=str(member_name),
+                                    )
+                                )
+                        else:
+                            feature_rows.extend(
+                                _surrogate_feature_rows(
+                                    policy_name, fitted_model, member=policy_name
+                                )
+                            )
+                    _write_text(
+                        surrogate_dir / "feature_importance.csv",
+                        _csv_text(
+                            [
+                                "policy",
+                                "member",
+                                "feature_index",
+                                "metric",
+                                "value",
+                                "abs_value",
+                            ],
+                            feature_rows,
+                        ),
+                    )
+                else:
+                    surrogate_triage_metadata.update(
+                        {
+                            "skipped": True,
+                            "reason": "candidate_count_within_train_plus_top_k_budget",
+                        }
+                    )
+                    _predict_and_cache(pool_records)
+                    evaluated_global_ids = [rec.id for rec in pool_records]
+
+                if not evaluated_global_ids:
+                    evaluated_global_ids = [rec.id for rec in pool_records if rec.id in cached_scores]
+                evaluated_set = set(evaluated_global_ids)
+                training_ids = [rec.id for rec in train_records]
+                selected_top_ids = [rec.id for rec in top_records]
+                artifact_paths = {
+                    "model_selection": "surrogate_triage/model_selection.json",
+                    "cv_metrics": "surrogate_triage/cv_metrics.csv",
+                    "model_predictions": "surrogate_triage/model_predictions.csv",
+                    "model_comparison": "surrogate_triage/model_comparison.svg",
+                    "acquired_topk": "surrogate_triage/acquired_topk.csv",
+                    "feature_importance": "surrogate_triage/feature_importance.csv",
+                    "models": saved_model_paths,
+                }
+                surrogate_triage_metadata.update(
+                    {
+                        "training_ids": training_ids,
+                        "selected_top_ids": selected_top_ids,
+                        "evaluated_ids": evaluated_global_ids,
+                        "selected_policy": _surrogate_policy_label(selected_policy)
+                        if selected_policy
+                        else None,
+                        "fitted_models": [
+                            _surrogate_policy_label(policy_name)
+                            for policy_name in fitted_by_policy
+                        ],
+                        "fit_errors": fit_errors,
+                        "candidate_count_after_triage": len(evaluated_global_ids),
+                        "candidate_count_after_budget": len(evaluated_global_ids),
+                        "expected_af2_calls": len(evaluated_global_ids),
+                        "artifacts": artifact_paths,
+                    }
+                )
+                write_json(
+                    surrogate_dir / "model_selection.json",
+                    {
+                        **surrogate_triage_metadata,
+                        "scope": "pooled_tiers",
+                        "model_paths": saved_model_paths,
+                    },
+                )
+
+                selected_ids_by_tier: dict[str, list[str]] = {}
+                novelty_by_tier: dict[str, str] = {}
+                for ctx in contexts:
+                    tier_str_local = str(ctx["tier_str"])
+                    tier_dir_local = Path(ctx["tier_dir"])
+                    tier_af2_dir = _ensure_dir(tier_dir_local / "af2")
+                    tier_records: list[SequenceRecord] = []
+                    tier_global_ids: list[str] = []
+                    for global_id in evaluated_global_ids:
+                        meta = pool_meta.get(global_id) or {}
+                        if str(meta.get("tier") or "") != tier_str_local:
+                            continue
+                        source_record = meta.get("record")
+                        if isinstance(source_record, SequenceRecord):
+                            tier_records.append(source_record)
+                            tier_global_ids.append(global_id)
+                    tier_scores = {
+                        str(pool_meta[global_id]["source_id"]): float(cached_scores[global_id])
+                        for global_id in tier_global_ids
+                        if global_id in cached_scores and global_id in pool_meta
+                    }
+                    selected_pairs = [
+                        (seq_id, score)
+                        for seq_id, score in tier_scores.items()
+                        if score >= float(request.af2_plddt_cutoff)
+                    ]
+                    selected_pairs.sort(key=lambda item: item[1], reverse=True)
+                    af2_top_k = int(request.af2_top_k)
+                    if af2_top_k > 0:
+                        selected_pairs = selected_pairs[:af2_top_k]
+                    selected_ids = [seq_id for seq_id, _ in selected_pairs]
+                    selected_ids_by_tier[tier_str_local] = selected_ids
+                    selected_records = [
+                        rec for rec in tier_records if rec.id in set(selected_ids)
+                    ]
+                    _write_text(
+                        tier_dir_local / "af2_selected.fasta",
+                        to_fasta(
+                            [
+                                FastaRecord(
+                                    header=f"{s.id} {s.header}"
+                                    if s.header and not s.header.startswith(s.id)
+                                    else (s.header or s.id),
+                                    sequence=s.sequence,
+                                )
+                                for s in selected_records
+                            ]
+                        ),
+                    )
+                    tier_triage_metadata = {
+                        **surrogate_triage_metadata,
+                        "tier": tier_str_local,
+                        "tier_candidate_count_before_triage": len(ctx.get("passed") or []),
+                        "training_ids": [
+                            gid
+                            for gid in training_ids
+                            if str(pool_meta.get(gid, {}).get("tier") or "")
+                            == tier_str_local
+                        ],
+                        "selected_top_ids": [
+                            gid
+                            for gid in selected_top_ids
+                            if str(pool_meta.get(gid, {}).get("tier") or "")
+                            == tier_str_local
+                        ],
+                        "evaluated_ids": [rec.id for rec in tier_records],
+                        "evaluated_global_ids": tier_global_ids,
+                        "candidate_count_after_budget": len(tier_records),
+                    }
+                    write_json(
+                        tier_dir_local / "af2_scores.json",
+                        {
+                            "scores": tier_scores,
+                            "rmsd_scores": {},
+                            "target_rmsd_scores": {},
+                            "rmsd_reference_mode": _AF2_RMSD_REFERENCE_MODE_PARENT_BACKBONE,
+                            "candidate_ids": [rec.id for rec in tier_records],
+                            "candidate_count_before_budget": len(ctx.get("passed") or []),
+                            "candidate_count_after_budget": len(tier_records),
+                            "candidate_budget_applied": len(pool_records)
+                            > train_count + top_count,
+                            "surrogate_triage": tier_triage_metadata,
+                            "max_candidates_per_tier": int(
+                                getattr(request, "af2_max_candidates_per_tier", 0) or 0
+                            ),
+                            "cutoff": request.af2_plddt_cutoff,
+                            "rmsd_cutoff": request.af2_rmsd_cutoff,
+                            "rmsd_missing_ids": [rec.id for rec in tier_records],
+                            "failed_ids": sorted(partial_prediction_errors.keys()),
+                            "prediction_errors": partial_prediction_errors,
+                            "top_k": request.af2_top_k,
+                            "selected_ids": selected_ids,
+                            "model_preset": af2_model_preset,
+                            "db_preset": request.af2_db_preset,
+                            "max_template_date": request.af2_max_template_date,
+                            "provider": af2_provider,
+                        },
+                    )
+                    set_status(paths, stage=f"af2_{tier_str_local}", state="completed")
+
+                    novelty_tsv = None
+                    if novelty_enabled and selected_records:
+                        set_status(
+                            paths, stage=f"novelty_{tier_str_local}", state="running"
+                        )
+                        wt_sequence = _clean_protein_sequence(
+                            target_record.sequence if target_record is not None else ""
+                        )
+                        tsv_lines = [
+                            "\t".join(
+                                [
+                                    "query_id",
+                                    "wt_identity",
+                                    "wt_identity_pct",
+                                    "wt_diff_ratio",
+                                    "wt_diff_pct",
+                                    "wt_diff_count",
+                                    "compare_len",
+                                    "wt_length",
+                                    "design_length",
+                                ]
+                            )
+                        ]
+                        for sample in selected_records:
+                            stats = _sequence_difference_stats(wt_sequence, sample.sequence)
+                            if not isinstance(stats, dict):
+                                continue
+                            tsv_lines.append(
+                                "\t".join(
+                                    [
+                                        str(sample.id),
+                                        f"{float(stats.get('identity') or 0.0):.6f}",
+                                        f"{float(stats.get('identity_pct') or 0.0):.3f}",
+                                        f"{float(stats.get('diff_ratio') or 0.0):.6f}",
+                                        f"{float(stats.get('diff_pct') or 0.0):.3f}",
+                                        str(int(stats.get("diff_count") or 0)),
+                                        str(int(stats.get("compare_len") or 0)),
+                                        str(int(stats.get("wt_length") or 0)),
+                                        str(int(stats.get("design_length") or 0)),
+                                    ]
+                                )
+                            )
+                        novelty_tsv = "\n".join(tsv_lines) + "\n"
+                        _write_text(tier_dir_local / "novelty.tsv", novelty_tsv)
+                        write_json(
+                            tier_dir_local / "novelty.json",
+                            {
+                                "mode": "wt_sequence_diff",
+                                "wt_length": len(wt_sequence),
+                                "candidate_ids": [str(s.id) for s in selected_records],
+                                "pooled_surrogate_triage": True,
+                            },
+                        )
+                        set_status(
+                            paths, stage=f"novelty_{tier_str_local}", state="completed"
+                        )
+                    novelty_by_tier[tier_str_local] = novelty_tsv or ""
+
+                for ctx in contexts:
+                    tier_str_local = str(ctx["tier_str"])
+                    tier_results.append(
+                        TierResult(
+                            tier=float(ctx["tier"]),
+                            fixed_positions=ctx["fixed_positions_by_chain"],
+                            proteinmpnn_native=ctx["native"],
+                            proteinmpnn_samples=ctx["samples"],
+                            mutation_report_path=ctx["mutation_report_path"],
+                            mutations_by_position_tsv=ctx["mutations_by_position_tsv"],
+                            mutations_by_position_svg=ctx["mutations_by_position_svg"],
+                            mutations_by_sequence_tsv=ctx["mutations_by_sequence_tsv"],
+                            soluprot_scores=ctx["soluprot_scores"],
+                            passed_ids=ctx["passed_ids"],
+                            af2=af2_result,
+                            af2_selected_ids=selected_ids_by_tier.get(
+                                tier_str_local, []
+                            ),
+                            relax_selected_ids=None,
+                            novelty_tsv=novelty_by_tier.get(tier_str_local) or None,
+                        )
+                    )
+                set_status(paths, stage="af2_pooled_tiers", state="completed")
+
             for tier in active_tiers:
                 tier_str = _tier_key(tier)
                 _ensure_not_cancelled(stage=f"proteinmpnn_{tier_str}")
@@ -8791,6 +9683,26 @@ class PipelineRunner:
                             soluprot_scores=soluprot_scores,
                             passed_ids=passed_ids,
                         )
+                    )
+                    continue
+
+                if pooled_surrogate_enabled:
+                    pooled_surrogate_contexts.append(
+                        {
+                            "tier": tier,
+                            "tier_str": tier_str,
+                            "tier_dir": tier_dir,
+                            "fixed_positions_by_chain": fixed_positions_by_chain,
+                            "native": native,
+                            "samples": samples,
+                            "mutation_report_path": mutation_report_path,
+                            "mutations_by_position_tsv": mutations_by_position_tsv,
+                            "mutations_by_position_svg": mutations_by_position_svg,
+                            "mutations_by_sequence_tsv": mutations_by_sequence_tsv,
+                            "soluprot_scores": soluprot_scores,
+                            "passed_ids": passed_ids,
+                            "passed": list(passed),
+                        }
                     )
                     continue
 
@@ -10891,6 +11803,9 @@ class PipelineRunner:
                         novelty_tsv=novelty_tsv,
                     )
                 )
+
+            if pooled_surrogate_contexts:
+                _run_pooled_tier_surrogate_triage(pooled_surrogate_contexts)
 
             _ensure_not_cancelled(stage="done")
             result = PipelineResult(

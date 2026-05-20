@@ -122,6 +122,9 @@ substantially longer because ESM embedding generation and model comparisons are
 recomputed. For large surrogate-triage pools, configure the ESM embedding worker
 before rerunning the live scripts; otherwise RAPID falls back to local ESM
 embedding, which is slower and depends on the backend machine.
+The manuscript surrogate-triage launcher defaults to pooled conservation-tier
+triage: 3,333 ProteinMPNN candidates per 30%, 50%, and 70% tier, followed by one
+shared 30-label bootstrap and 20-candidate Top-K AF2 budget.
 
 The optional structural-context ablation is run through the live pipeline, not
 from cached model tables. `scripts/benchmark/13_run_backbone_ensemble_ablation.py`
@@ -144,6 +147,13 @@ corrected-chain refresh generated from `rapid_target_manifest.csv`. The full
 run-output archive is several gigabytes and should be deposited as a large
 release artifact or S3-backed dataset rather than committed to this source
 package.
+
+The completed CATH artifacts can also be reused for pooled surrogate-scaling
+checks with `scripts/benchmark/17_run_pooled_surrogate_scaling.py`. The cached
+ESM-plus-composition result included here is intentionally conservative: it did
+not show a stable pooled-model improvement over target-specific calibration, so
+pooled surrogate accumulation is documented as future modelling infrastructure
+rather than as a main performance claim.
 
 ## Data Policy
 

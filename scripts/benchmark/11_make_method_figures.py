@@ -286,7 +286,7 @@ def draw_active_learning_loop() -> Path:
     ax.text(
         6.9,
         5.45,
-        "One standard pipeline run: the surrogate reduces final AF2/ColabFold calls after SoluProt gating.",
+        "One standard pipeline run: conservation-tier candidates are pooled before one shared AF2/ColabFold triage budget.",
         ha="center",
         va="center",
         fontsize=8.8,
@@ -306,7 +306,7 @@ def draw_active_learning_loop() -> Path:
         box_w,
         box_h,
         "Step 1",
-        "Pool generation\nProteinMPNN\npool_size = 1000",
+        "Tiered design pool\nProteinMPNN\n3 × 3333 ≈ 9999",
         COLOR_LOOP_DATA,
     )
 
@@ -317,7 +317,7 @@ def draw_active_learning_loop() -> Path:
         box_w,
         box_h,
         "SoluProt gate",
-        "soluprot_cutoff = 0.5\n\u2192 ~90 candidates",
+        "soluprot_cutoff = 0.5\npool tiers together\n\u2192 P candidates",
         COLOR_CHEAP_GATE_STAGE,
     )
     arrow(
@@ -335,7 +335,7 @@ def draw_active_learning_loop() -> Path:
         box_w,
         box_h,
         "Step 2",
-        "K-means selection\nESM-2 8M (320-D)\nN_TRAIN = 30",
+        "K-means bootstrap\nESM-2 8M (320-D)\nN_TRAIN = 30",
         COLOR_LOOP_DATA,
     )
     arrow(
@@ -349,7 +349,7 @@ def draw_active_learning_loop() -> Path:
     ax.text(
         step_x[2] + box_w / 2,
         y_top - 0.34,
-        "30 training + ~60 unlabeled",
+        "30 labelled seeds + pooled unlabeled tier candidates",
         ha="center",
         va="center",
         fontsize=8.5,
@@ -382,7 +382,7 @@ def draw_active_learning_loop() -> Path:
         box_w,
         box_h * 1.16,
         "Step 4",
-        "Fit surrogate(s)\nRF default or rank-mean\nrank ~60 candidates",
+        "Fit and compare\nRF/Ridge/GBM policies\nrank pooled remainder",
         COLOR_LOOP_SURROGATE,
         body_fs=7.9,
     )
@@ -411,7 +411,7 @@ def draw_active_learning_loop() -> Path:
         box_w,
         box_h,
         "Step 5",
-        "AF2 on top-K\nTOP_K = 20\n20 AF2 calls",
+        "AF2 on pooled Top-K\nTOP_K = 20\n20 AF2 calls",
         COLOR_LOOP_AF2,
     )
     arrow(
@@ -445,7 +445,7 @@ def draw_active_learning_loop() -> Path:
     ax.text(
         6.9,
         1.05,
-        "Bootstrap round AF2 calls = 30 (training) + 20 (top-K) = 50",
+        "Pooled triage AF2 calls = 30 (training) + 20 (top-K) = 50",
         ha="center",
         va="center",
         fontsize=10,
@@ -455,7 +455,7 @@ def draw_active_learning_loop() -> Path:
     ax.text(
         6.9,
         0.58,
-        "Top-K=20 fixes final validation breadth; multiple surrogates share the same 30 AF2 labels",
+        "Full-folding baseline scales with P; RAPID keeps one shared AF2 budget across selected conservation tiers",
         ha="center",
         va="center",
         fontsize=9,
