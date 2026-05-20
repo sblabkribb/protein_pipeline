@@ -123,10 +123,26 @@ def test_pipeline_request_from_args_leaves_rank_ensemble_disabled_by_default() -
     assert req.surrogate_triage_ensemble_models == []
 
 
+def test_surrogate_triage_embeddings_use_configured_provider() -> None:
+    class _Provider:
+        def __init__(self) -> None:
+            self.sequences = None
+
+        def embed(self, sequences):  # type: ignore[no-untyped-def]
+            self.sequences = list(sequences)
+            return np.ones((len(sequences), 3), dtype=np.float32)
+
+    provider = _Provider()
+    embeddings = pipeline._surrogate_triage_embeddings(["ACD", "EFG"], provider=provider)
+
+    assert provider.sequences == ["ACD", "EFG"]
+    assert embeddings.shape == (2, 3)
+
+
 def test_pipeline_surrogate_triage_limits_af2_to_training_plus_topk(
     tmp_path, monkeypatch
 ) -> None:
-    def fake_embeddings(sequences, device=None):
+    def fake_embeddings(sequences, device=None, provider=None):
         values = np.arange(len(sequences) * 2, dtype=np.float64).reshape(len(sequences), 2)
         values[:, 1] = values[:, 1] * 0.25
         return values
@@ -175,7 +191,7 @@ def test_pipeline_surrogate_triage_limits_af2_to_training_plus_topk(
 def test_pipeline_surrogate_triage_rank_mean_for_multiple_models(
     tmp_path, monkeypatch
 ) -> None:
-    def fake_embeddings(sequences, device=None):
+    def fake_embeddings(sequences, device=None, provider=None):
         values = np.arange(len(sequences) * 2, dtype=np.float64).reshape(len(sequences), 2)
         values[:, 1] = values[:, 1] * 0.25
         return values
@@ -220,7 +236,7 @@ def test_pipeline_surrogate_triage_rank_mean_for_multiple_models(
 def test_pipeline_surrogate_triage_auto_cv_exports_analysis_artifacts(
     tmp_path, monkeypatch
 ) -> None:
-    def fake_embeddings(sequences, device=None):
+    def fake_embeddings(sequences, device=None, provider=None):
         values = np.arange(len(sequences) * 2, dtype=np.float64).reshape(len(sequences), 2)
         values[:, 1] = values[:, 1] * 0.25
         return values

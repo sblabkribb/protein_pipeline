@@ -23,6 +23,7 @@ def test_model_provider_store_lists_env_fallbacks_and_masks_tokens(tmp_path, mon
     assert "token" not in providers["proteinmpnn"]
     assert providers["bioemu"]["provider_type"] == "runpod"
     assert providers["bioemu"]["endpoint_id"] == "bioemu-runpod"
+    assert "esm_embedding" in providers
 
 
 def test_colabfold_url_env_alias_configures_http_provider(tmp_path, monkeypatch):
@@ -33,6 +34,20 @@ def test_colabfold_url_env_alias_configures_http_provider(tmp_path, monkeypatch)
 
     assert provider["provider_type"] == "http_api"
     assert provider["base_url"] == "http://gpu.example:18160"
+
+
+def test_esm_embedding_provider_env_can_prefer_runpod_when_url_also_exists(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("ESM_EMBEDDING_PROVIDER", "runpod")
+    monkeypatch.setenv("ESM_EMBEDDING_ENDPOINT_ID", "esm-runpod")
+    monkeypatch.setenv("ESM_EMBEDDING_URL", "http://gpu.example:18170/")
+
+    store = ModelProviderStore(tmp_path)
+    provider = store.get_effective("esm_embedding")
+
+    assert provider["provider_type"] == "runpod"
+    assert provider["endpoint_id"] == "esm-runpod"
 
 
 def test_model_provider_store_persists_http_provider_with_encrypted_token(tmp_path):
@@ -105,6 +120,7 @@ def test_provider_tools_list_and_update_model_providers(tmp_path):
 
     listed = dispatcher.call_tool("pipeline.model_provider_list", {})
     assert any(item["model_key"] == "esmfold" for item in listed["providers"])
+    assert any(item["model_key"] == "esm_embedding" for item in listed["providers"])
 
     updated = dispatcher.call_tool(
         "pipeline.model_provider_update",

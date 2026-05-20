@@ -262,19 +262,8 @@
                     </button>
                   </div>
                 </div>
-                <div class="home-context-item home-context-item-select">
-                  <span data-i18n="home.context.round">Current Round</span>
-                  <select id="homeRoundSelector" class="run-selector">
-                    <option value="" data-i18n="home.select.roundPlaceholder">Select round</option>
-                  </select>
-                  <div class="home-context-actions">
-                    <button id="homeCreateRoundBtn" class="ghost" type="button" data-i18n="home.action.createRound">
-                      New Round
-                    </button>
-                  </div>
-                </div>
                 <div class="home-context-item">
-                  <span data-i18n="home.context.roundStatus">Round Status</span>
+                  <span data-i18n="home.context.campaign">Evolution Campaign</span>
                   <strong id="homeRoundStatusValue" data-i18n="home.context.empty">Not connected yet</strong>
                 </div>
                 <div class="home-context-item">
@@ -288,7 +277,7 @@
               </div>
               <div class="home-quick-actions">
                 <button id="homeContinueRoundBtn" class="ghost" type="button" data-i18n="home.action.continueRound">
-                  Continue Current Round
+                  Continue Evolution
                 </button>
                 <button id="homeOpenMonitorBtn" class="ghost" type="button" data-i18n="home.action.openMonitor">
                   Open Monitor
@@ -598,7 +587,7 @@
               <div class="panel-header">
                 <h2 data-i18n="surrogate.title">AF2 Surrogate Triage</h2>
                 <p data-i18n="surrogate.desc">
-                  Run the standard ProteinMPNN/SoluProt path with a local surrogate that reduces final AF2/ColabFold calls.
+                  Run ProteinMPNN/SoluProt with GPU-backed ESM embedding and a fixed AF2/ColabFold acquisition budget.
                 </p>
               </div>
               <div class="evolution-grid surrogate-grid">
@@ -637,7 +626,7 @@
                   <div class="panel-header">
                     <h3 data-i18n="surrogate.options.title">Surrogate Settings</h3>
                     <p data-i18n="surrogate.options.desc">
-                      This mode disables RFD3 and BioEmu, generates the candidate pool from the input backbone/sequence, and spends AF2 only on the sampled training set plus Top K candidates.
+                      This mode disables RFD3 and BioEmu, embeds the SoluProt-passing candidate pool with the configured ESM worker, and spends AF2 only on the sampled training set plus Top K candidates.
                     </p>
                   </div>
                   <label class="fast-field">
@@ -647,6 +636,13 @@
                   <label class="fast-field">
                     <span data-i18n="surrogate.topK.label">Top K final AF2 candidates</span>
                     <input id="surrogateTopKInput" type="number" min="1" step="1" value="20" />
+                  </label>
+                  <label class="fast-field">
+                    <span data-i18n="surrogate.numSeqPerTier.label">ProteinMPNN candidates per tier</span>
+                    <input id="surrogateNumSeqPerTierInput" type="number" min="1" step="1" value="10000" />
+                    <small data-i18n="surrogate.numSeqPerTier.help">
+                      Default 10000 assumes GPU-backed ESM embedding. AF2 remains capped by the training and Top K budgets.
+                    </small>
                   </label>
                   <label class="fast-field">
                     <span data-i18n="surrogate.acquisition.label">Top K selection method</span>
@@ -800,32 +796,33 @@
                       Configure active-learning AF2 triage parameters for the evolution process.
                     </p>
                   </div>
-                  <div id="evolutionFeedbackGuide" class="choice-note evolution-feedback-guide" data-i18n="evolution.feedbackGuide">
-                    First run: RAPID writes evolution/experiment_request.csv. After wet-lab testing, enter candidate_id, metric_name, and metric_value in Analyze &gt; Experiment. Next run: choose the run ID that contains those measurements to write evolution/next_candidates.csv.
+                  <div id="evolutionFeedbackGuide" class="choice-note evolution-feedback-guide" data-i18n="evolution.feedbackGuide.experimental">
+                    Experiment-guided mode first chooses candidates to measure. After measured values are saved, the next run recommends candidates.
                   </div>
                   <label class="fast-field">
-                    <span data-i18n="evolution.poolSize.label">Stage 1: Generation Pool Size</span>
+                    <span data-i18n="evolution.poolSize.label">Candidate pool size</span>
                     <input id="evolutionPoolSizeInput" type="number" min="10" step="10" value="1000" />
                   </label>
                   <label class="fast-field">
-                    <span data-i18n="evolution.labelSource.label">Label source</span>
+                    <span data-i18n="evolution.labelSource.label">Candidate selection mode</span>
                     <select id="evolutionLabelSourceInput">
-                      <option value="experimental" data-i18n="evolution.labelSource.experimental">Experimental feedback</option>
-                      <option value="in_silico_af2" data-i18n="evolution.labelSource.inSilicoAf2">In-silico AF2 legacy</option>
+                      <option value="experimental" data-i18n="evolution.labelSource.experimental">Use experiment values</option>
+                      <option value="in_silico_af2" data-i18n="evolution.labelSource.inSilicoAf2">Test with AF2 scores</option>
                     </select>
                   </label>
-                  <label class="fast-field">
-                    <span data-i18n="evolution.objectiveMetric.label">Experimental objective metric</span>
+                  <label id="evolutionObjectiveMetricField" class="fast-field">
+                    <span data-i18n="evolution.objectiveMetric.label">Optimization metric</span>
                     <input id="evolutionObjectiveMetricInput" type="text" value="activity" />
                   </label>
-                  <label class="fast-field">
-                    <span data-i18n="evolution.experimentSourceRunId.label">Run ID with experiment values</span>
+                  <label id="evolutionExperimentSourceRunIdField" class="fast-field">
+                    <span data-i18n="evolution.experimentSourceRunId.label">Previous run with measurements</span>
                     <div class="input-row two evolution-source-row">
                       <input
                         id="evolutionExperimentSourceRunIdInput"
                         type="text"
                         list="evolutionExperimentSourceRunIdOptions"
                         placeholder="optional previous run ID"
+                        data-i18n-placeholder="evolution.experimentSourceRunId.placeholder"
                       />
                       <button
                         id="evolutionExperimentSourceRefreshBtn"
@@ -844,12 +841,111 @@
                       Choose a previous run with recorded experiment labels, or type a run ID manually.
                     </small>
                   </label>
+                  <div id="evolutionExperimentPanel" class="evolution-experiment-panel">
+                    <div class="panel-header evolution-section-heading">
+                      <h4 data-i18n="evolution.experiment.title">Experiment Values</h4>
+                      <p data-i18n="evolution.experiment.desc">
+                        Record wet-lab labels for the selected run without leaving Evolution.
+                      </p>
+                    </div>
+                    <div class="form-row">
+                      <label>
+                        <span data-i18n="experiment.assay">Assay type</span>
+                        <select id="evolutionExperimentAssay"></select>
+                      </label>
+                      <label>
+                        <span data-i18n="experiment.result">Result</span>
+                        <select id="evolutionExperimentResult"></select>
+                      </label>
+                    </div>
+                    <div class="form-row">
+                      <label>
+                        <span data-i18n="experiment.candidate">Candidate ID</span>
+                        <input
+                          id="evolutionExperimentCandidateId"
+                          type="text"
+                          placeholder="e.g. evo_r1_0003"
+                          data-i18n-placeholder="experiment.candidate.placeholder"
+                        />
+                      </label>
+                      <label>
+                        <span data-i18n="experiment.sequence">Sequence ID (optional)</span>
+                        <input
+                          id="evolutionExperimentSequenceId"
+                          type="text"
+                          placeholder="e.g. seq_001"
+                          data-i18n-placeholder="experiment.sequence.placeholder"
+                        />
+                      </label>
+                    </div>
+                    <div class="form-row">
+                      <label>
+                        <span data-i18n="experiment.metricName">Objective metric</span>
+                        <input
+                          id="evolutionExperimentMetricName"
+                          type="text"
+                          value="activity"
+                          placeholder="activity"
+                          data-i18n-placeholder="experiment.metricName.placeholder"
+                        />
+                      </label>
+                      <label>
+                        <span data-i18n="experiment.metricValue">Metric value</span>
+                        <input
+                          id="evolutionExperimentMetricValue"
+                          type="number"
+                          step="any"
+                          placeholder="0.0"
+                          data-i18n-placeholder="experiment.metricValue.placeholder"
+                        />
+                      </label>
+                    </div>
+                    <div class="form-row">
+                      <label>
+                        <span data-i18n="experiment.metricUnit">Metric unit (optional)</span>
+                        <input
+                          id="evolutionExperimentMetricUnit"
+                          type="text"
+                          placeholder="e.g. RFU, mg/mL"
+                          data-i18n-placeholder="experiment.metricUnit.placeholder"
+                        />
+                      </label>
+                      <label>
+                        <span data-i18n="experiment.metricDirection">Metric direction</span>
+                        <select id="evolutionExperimentMetricDirection"></select>
+                      </label>
+                    </div>
+                    <label>
+                      <span data-i18n="experiment.replicate">Replicate ID (optional)</span>
+                      <input
+                        id="evolutionExperimentReplicateId"
+                        type="text"
+                        placeholder="replicate_1"
+                        data-i18n-placeholder="experiment.replicate.placeholder"
+                      />
+                    </label>
+                    <label>
+                      <span data-i18n="experiment.conditions">Conditions / Notes</span>
+                      <textarea
+                        id="evolutionExperimentConditions"
+                        rows="2"
+                        placeholder="Buffer, temperature, assay details"
+                        data-i18n-placeholder="experiment.conditions.placeholder"
+                      ></textarea>
+                    </label>
+                    <button id="evolutionSubmitExperiment" class="primary" type="button" data-i18n="evolution.experiment.submit">
+                      Save Experiment Value
+                    </button>
+                    <div id="evolutionExperimentStatus" class="hint"></div>
+                    <div class="status-subtitle" data-i18n="evolution.experiment.recent">Recent Evolution Labels</div>
+                    <div id="evolutionExperimentList" class="run-list"></div>
+                  </div>
                   <label class="fast-field">
-                    <span data-i18n="evolution.initialSamples.label">Stage 2: K-Means Training Samples</span>
+                    <span data-i18n="evolution.initialSamples.label">First measurement set size</span>
                     <input id="evolutionInitialSamplesInput" type="number" min="10" step="5" value="30" />
                   </label>
                   <label class="fast-field">
-                    <span data-i18n="evolution.oracleSamples.label">Stage 3: Select Top K (Final AF2)</span>
+                    <span data-i18n="evolution.oracleSamples.label">Next recommendation count</span>
                     <input id="evolutionOracleSamplesInput" type="number" min="1" step="1" value="20" />
                   </label>
                   <div class="panel-header evolution-section-heading">

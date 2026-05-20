@@ -12,6 +12,7 @@ images below are the public images used for the packaged workflow.
 | RFdiffusion3 backbone generation | `RFD3_ENDPOINT_ID` | `mimikyou0607/rfd3-runpod:260408-3` |
 | BioEmu ensemble sampling | `BIOEMU_ENDPOINT_ID` | `mimikyou0607/bioemu-runpod:latest` |
 | Rosetta Relax post-processing | `RUNPOD_RELAX_ENDPOINT_ID` | `mimikyou0607/relax_runpod:260428_1` |
+| ESM-2 embedding for surrogate/evolution pools | `ESM_EMBEDDING_ENDPOINT_ID` | build from `workers/esm_embedding/` |
 
 ## Recommended Practice
 
@@ -33,4 +34,8 @@ COLABFOLD_ENDPOINT_ID=
 RFD3_ENDPOINT_ID=
 BIOEMU_ENDPOINT_ID=
 RUNPOD_RELAX_ENDPOINT_ID=
+ESM_EMBEDDING_ENDPOINT_ID=
 ```
+
+For a persistent self-hosted GPU worker instead of RunPod Serverless, set
+`ESM_EMBEDDING_URL` to the worker's `/embed` service base URL.

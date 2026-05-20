@@ -8,7 +8,7 @@ Use this directory for live data-generation jobs:
 
 1. `01_fetch_cath_s3_results.py` downloads completed CATH artifacts from NCP S3.
 2. `02_launch_structural_context_ablation.py` launches the 8-target structural-context ablation.
-3. `03_launch_surrogate_triage_budget.py` launches the AF2-budgeted surrogate-triage runs used for claim 2. Its default Top K selection method is Auto-CV over RF, Ridge, LightGBM, and XGBoost. Rank-mean ensemble is optional and is only evaluated when `--ensemble-models` is set or the policy is forced to `ensemble`.
+3. `03_launch_surrogate_triage_budget.py` launches the AF2-budgeted surrogate-triage runs used for claim 2. Its manuscript default generates 10,000 candidates per tier, labels 30 diverse bootstrap candidates, evaluates 20 Top-K acquisitions, and uses the configured ESM embedding provider plus the RunPod ColabFold backend so AF2 job identifiers are visible. Its default Top-K selection method is Auto-CV over RF, Ridge, LightGBM, and XGBoost. Rank-mean ensemble is optional and is only evaluated when `--ensemble-models` is set or the policy is forced to `ensemble`.
 4. `03_launch_multiround_evolution.py` launches experimental-feedback or legacy in-silico evolution traces.
 5. `05_collect_surrogate_triage_budget.py` collects surrogate-triage AF2 budget summaries from completed runs.
 

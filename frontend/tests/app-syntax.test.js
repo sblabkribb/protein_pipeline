@@ -236,6 +236,7 @@ test("surrogate triage is exposed as a first-class UI mode", () => {
   assert.match(html, /id="surrogateTargetInput"/);
   assert.match(html, /id="surrogateRunBtn"/);
   assert.match(html, /id="surrogateAcquisitionPolicyInput"/);
+  assert.match(html, /id="surrogateNumSeqPerTierInput"[^>]*value="10000"/);
   assert.match(html, /id="surrogateModelChoices"/);
   assert.match(html, /id="surrogateEnsembleModelChoices"/);
   assert.match(html, /value="auto" data-i18n="choice\.surrogatePolicy\.auto"/);
@@ -252,7 +253,10 @@ test("surrogate triage is exposed as a first-class UI mode", () => {
   assert.match(source, /function initSurrogateLauncher/);
   assert.match(source, /function syncSurrogateModelChoiceState/);
   assert.match(source, /function selectedSurrogateModelsFromChoices/);
+  assert.match(source, /function surrogateCandidatePoolSize/);
   assert.match(source, /surrogate_triage_enabled:\s*true/);
+  assert.match(source, /num_seq_per_tier:\s*numSeqPerTier/);
+  assert.match(source, /num_seq_per_tier:\s*100/);
   assert.match(source, /rfd3_use:\s*false/);
   assert.match(source, /bioemu_use:\s*false/);
   assert.match(source, /"tabs\.surrogate"/);
@@ -278,12 +282,12 @@ test("evolution UI records experimental feedback inside the evolution workflow",
   assert.match(source, /function renderEvolutionExperimentSourceRunChoices/);
   assert.match(source, /function submitEvolutionExperiment/);
   assert.match(source, /function refreshEvolutionExperiments/);
+  assert.match(source, /function updateEvolutionLabelSourceUi/);
   assert.match(source, /pipeline\.submit_experiment/);
-  assert.match(source, /experiment_request\.csv/);
-  assert.match(source, /next_candidates\.csv/);
-  assert.match(source, /Evolution records candidate_id/);
-  assert.match(source, /Evolution 탭에서 candidate_id/);
-  assert.match(source, /실험값을 연결할 실행/);
+  assert.match(source, /Experiment-guided mode first chooses candidates to measure/);
+  assert.match(source, /AF2-score test mode does not use wet-lab measurements/);
+  assert.match(source, /실험값 기반 추천은 먼저 측정할 후보를 고릅니다/);
+  assert.match(source, /후보 선정 방식/);
   assert.match(source, /candidate_id/);
   assert.match(source, /metric_value/);
 });

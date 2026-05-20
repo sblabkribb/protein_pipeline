@@ -493,7 +493,13 @@ def _sequence_feature_embeddings(sequences: list[str]) -> Any:
     return np.asarray(rows, dtype=np.float64)
 
 
-def _surrogate_triage_embeddings(sequences: list[str], device: object | None = None) -> Any:
+def _surrogate_triage_embeddings(
+    sequences: list[str],
+    device: object | None = None,
+    provider: Any | None = None,
+) -> Any:
+    if provider is not None:
+        return provider.embed(sequences)
     try:
         from . import evolution
 
@@ -3465,6 +3471,7 @@ class PipelineRunner:
     bioemu: Any | None = None
     diffdock: Any | None = None
     rosetta_relax: Any | None = None
+    esm_embedding: Any | None = None
     gemini: Any | None = None
 
     def run(
@@ -9229,7 +9236,10 @@ class PipelineRunner:
                                     ),
                                 )
                                 sequences = [s.sequence for s in original_candidates]
-                                embeddings = _surrogate_triage_embeddings(sequences)
+                                embeddings = _surrogate_triage_embeddings(
+                                    sequences,
+                                    provider=self.esm_embedding,
+                                )
                                 train_idx = _surrogate_triage_training_indices(
                                     embeddings,
                                     train_count,

@@ -115,7 +115,7 @@ A rank-mean ensemble over RF, Ridge, LightGBM, and XGBoost gives the highest mea
 
 ## Supplementary Note 8. Representative Surrogate-Budget Runs
 
-Two representative historical in-silico runs verify the implemented computational surrogate path but are not treated as a paired biological benchmark. They used AF2/pLDDT as a computational label source and therefore support the software and budget path, not experimental enrichment. The current paper-run script for claim 2 is `scripts/paper_runs/03_launch_surrogate_triage_budget.py`, which runs the standard pipeline with `evolution_mode=False`, `surrogate_triage_enabled=True`, RFD3/BioEmu/Relax disabled, and default `N_train = 30`, `Top-K = 20`. In the current implementation, `surrogate_triage_model="auto"` compares configured policies by internal CV on the bootstrap labels and records the selected policy under `tiers/<tier>/surrogate_triage/model_selection.json`.
+Two representative historical in-silico runs verify the implemented computational surrogate path but are not treated as a paired biological benchmark. They used AF2/pLDDT as a computational label source and therefore support the software and budget path, not experimental enrichment. The current paper-run script for claim 2 is `scripts/paper_runs/03_launch_surrogate_triage_budget.py`, which runs the standard pipeline with `evolution_mode=False`, `surrogate_triage_enabled=True`, RFD3/BioEmu/Relax disabled, and the manuscript operating point of 10,000 generated candidates per tier, `N_train = 30`, and `Top-K = 20`. In the current implementation, `surrogate_triage_model="auto"` compares configured policies by internal CV on the bootstrap labels and records the selected policy under `tiers/<tier>/surrogate_triage/model_selection.json`. The ESM-2 embedding stage can be delegated to a configured GPU worker through the `esm_embedding` model provider; if no provider is configured, RAPID falls back to the local ESM path and then to deterministic sequence-composition features unless strict ESM mode is requested. The live paper run uses the RunPod ColabFold backend by default so that job identifiers are recorded during AF2 evaluation.
 
 | Target | Run ID | SoluProt-gated candidates | AF2 records | AF2 reduction vs folding all gated candidates | Top-K setting | Best phase | Best SoluProt | Best pLDDT | Best relax score |
 |---|---|---:|---:|---:|---:|---|---:|---:|---:|
@@ -126,14 +126,14 @@ The Top-K default of 20 is an operating budget rather than a fitted hyperparamet
 
 ## Supplementary Note 9. Structural-Context Ablation
 
-The corrected-chain structural-context ablation compares the original target backbone, BioEmu conformational sampling, one selected RFD3 backbone, and RFD3+BioEmu across eight selected CATH targets. The single-backbone and RFD3 arms are evaluable for all eight targets. BioEmu-containing arms are evaluable for the four targets that passed the fixed 2.0 Å target-RMSD gate. The figure is shown once in the main manuscript as Figure 5; the supplementary material retains the numerical summary and BioEmu QC context rather than repeating the same image.
+The corrected-chain structural-context ablation compares the original target backbone, BioEmu conformational sampling, one selected RFD3 backbone, and RFD3+BioEmu across eight selected CATH targets. Because ProteinMPNN is conditioned on the supplied backbone, these arms test whether changing structural context perturbs the accessible sequence neighbourhood under matched masking and AF2 budgets. The single-backbone and RFD3 arms are evaluable for all eight targets. BioEmu-containing arms are evaluable for the four targets that passed the fixed 2.0 Å target-RMSD gate. The figure is shown once in the main manuscript as Figure 5; the supplementary material retains the numerical summary and BioEmu QC context rather than repeating the same image.
 
-| Arm | Designs per target | AF2 records per target | Top-5 pLDDT | Top-5 SoluProt |
-|---|---:|---:|---:|---:|
-| Single target backbone | 120 | 30 | 92.58 | 0.718 |
-| Target + BioEmu ensemble | 120 | 30 | 96.28 | 0.788 |
-| RFD3 selected backbone | 120 | 30 | 92.53 | 0.690 |
-| RFD3 + BioEmu ensemble | 120 | 30 | 95.44 | 0.734 |
+| Arm | Evaluable targets | Designs per target | AF2 records per target | Top-5 pLDDT | Top-5 SoluProt | Paired Top-5 pLDDT delta vs single |
+|---|---:|---:|---:|---:|---:|---:|
+| Single target backbone | 8 | 120 | 30 | 92.58 | 0.718 | reference |
+| Target + BioEmu ensemble | 4 | 120 | 30 | 96.28 | 0.788 | -0.14 |
+| RFD3 selected backbone | 8 | 120 | 30 | 92.53 | 0.690 | -0.05 |
+| RFD3 + BioEmu ensemble | 4 | 120 | 30 | 95.44 | 0.734 | -0.98 |
 
 ## Supplementary Note 10. BioEmu Target-RMSD Gate QC
 
@@ -160,6 +160,7 @@ The public release records Docker image tags for the RunPod-backed model stages,
 | RFdiffusion3 backbone generation | `RFD3_ENDPOINT_ID` | `mimikyou0607/rfd3-runpod:260408-3` |
 | BioEmu ensemble sampling | `BIOEMU_ENDPOINT_ID` | `mimikyou0607/bioemu-runpod:latest` |
 | Rosetta Relax post-processing | `RUNPOD_RELAX_ENDPOINT_ID` | `mimikyou0607/relax_runpod:260428_1` |
+| ESM embedding | `ESM_EMBEDDING_ENDPOINT_ID` | user-built from `workers/esm_embedding` |
 
 ## Supplementary Note 12. Software Interface and Deployment Scope
 

@@ -37,6 +37,7 @@ DEFAULT_TARGETS = (
     "cath_train_1a6jA00,"
     "cath_train_1a8rG01"
 )
+_HTTP_COLABFOLD_ENV = ("COLABFOLD_URL", "COLABFOLD_HTTP_URL", "COLABFOLD_GPU_URL")
 
 
 def _load_env(explicit: str | None = None) -> Path | None:
@@ -77,6 +78,63 @@ def _parse_models(text: str, *, default: str | list[str]) -> str | list[str]:
     return items[0] if len(items) == 1 else items
 
 
+def _parse_tiers(text: str) -> list[float] | None:
+    items = [item.strip() for item in re.split(r"[,;\n]+", str(text or "")) if item.strip()]
+    if not items:
+        return None
+    return [float(item) for item in items]
+
+
+def _run_state(run_dir: Path) -> str:
+    status_path = run_dir / "status.json"
+    if not status_path.exists():
+        return "unknown"
+    try:
+        payload = json.loads(status_path.read_text(encoding="utf-8"))
+    except Exception:
+        return "unknown"
+    return str(payload.get("state") or "").strip().lower() or "unknown"
+
+
+def _validate_budget_args(args: argparse.Namespace) -> None:
+    planned_pool = int(args.num_seq_per_tier)
+    budget = int(args.initial_samples) + int(args.top_k)
+    if planned_pool <= budget and not bool(args.allow_untriaged_small_pool):
+        raise ValueError(
+            "num_seq_per_tier must exceed initial_samples + top_k for the paper "
+            f"surrogate-triage run. Got num_seq_per_tier={planned_pool}, "
+            f"initial_samples={args.initial_samples}, top_k={args.top_k}. "
+            "Use --allow-untriaged-small-pool only for smoke tests."
+        )
+
+
+def _apply_af2_backend(args: argparse.Namespace) -> None:
+    backend = str(args.af2_backend or "auto").strip().lower()
+    if backend == "runpod":
+        for name in _HTTP_COLABFOLD_ENV:
+            os.environ.pop(name, None)
+    if int(args.pipeline_af2_max_workers or 0) > 0:
+        os.environ["PIPELINE_AF2_MAX_WORKERS"] = str(int(args.pipeline_af2_max_workers))
+
+
+def _validate_runner_backend(runner, *, requested_backend: str) -> str:
+    client = getattr(runner, "colabfold", None)
+    actual = type(client).__name__ if client is not None else "None"
+    requested = str(requested_backend or "auto").strip().lower()
+    if requested == "runpod" and actual != "AlphaFold2RunPodClient":
+        raise RuntimeError(
+            "af2_backend=runpod was requested, but ColabFold resolved to "
+            f"{actual}. Clear COLABFOLD_URL/COLABFOLD_HTTP_URL/COLABFOLD_GPU_URL "
+            "or configure COLABFOLD_ENDPOINT_ID."
+        )
+    if requested == "http" and actual != "LocalHTTPAlphaFold2Client":
+        raise RuntimeError(
+            "af2_backend=http was requested, but ColabFold did not resolve to "
+            "the local HTTP client. Configure COLABFOLD_URL or COLABFOLD_HTTP_URL."
+        )
+    return actual
+
+
 def _split_target(target: str) -> tuple[str | None, str]:
     for subset in ("train", "val", "test"):
         prefix = f"cath_{subset}_"
@@ -112,6 +170,7 @@ def _build_request(*, cath_module, pdb_path: Path, target_id: str, args: argpars
         af2_max_candidates_per_tier=0,
         af2_top_k=0,
     )
+    selected_tiers = _parse_tiers(args.selected_tiers)
     return replace(
         base,
         evolution_mode=False,
@@ -135,6 +194,7 @@ def _build_request(*, cath_module, pdb_path: Path, target_id: str, args: argpars
         af2_provider=str(args.af2_provider),
         af2_plddt_cutoff=float(args.af2_plddt_cutoff),
         af2_rmsd_cutoff=float(args.af2_rmsd_cutoff),
+        selected_tiers=selected_tiers,
         stop_after=str(args.stop_after),
         force=bool(args.force),
         auto_recover=True,
@@ -142,15 +202,24 @@ def _build_request(*, cath_module, pdb_path: Path, target_id: str, args: argpars
 
 
 def run_now(args: argparse.Namespace) -> int:
+    _validate_budget_args(args)
     env_file = _load_env(args.env_file)
     os.environ["PIPELINE_OUTPUT_ROOT"] = str(Path(args.output_root).resolve())
+    _apply_af2_backend(args)
     print(f"env_file={env_file or 'not found'}")
     print(f"output_root={os.environ['PIPELINE_OUTPUT_ROOT']}")
+    print(f"af2_backend={args.af2_backend}")
+    print(f"PIPELINE_AF2_MAX_WORKERS={os.environ.get('PIPELINE_AF2_MAX_WORKERS', '')}")
 
     source_root = Path(args.source_root).resolve()
     targets = _parse_targets(args.targets)
     cath_module = _load_cath_batch_module()
     runner = None if args.dry_run else build_runner()
+    if runner is not None:
+        actual_backend = _validate_runner_backend(
+            runner, requested_backend=str(args.af2_backend)
+        )
+        print(f"resolved_colabfold_client={actual_backend}")
     run_prefix = str(args.run_prefix or "").strip() or time.strftime(
         "paper_surrogate_%Y%m%d", time.gmtime()
     )
@@ -162,11 +231,20 @@ def run_now(args: argparse.Namespace) -> int:
         run_id = _safe_run_id(f"{run_prefix}_{target}")
         run_dir = Path(args.output_root).resolve() / run_id
         if run_dir.exists() and not args.force:
-            print(f"[skip] {run_id}: output exists")
-            launched.append(
-                {"target": target, "run_id": run_id, "status": "skipped_existing"}
-            )
-            continue
+            state = _run_state(run_dir)
+            if state == "completed":
+                print(f"[skip] {run_id}: completed output exists")
+                launched.append(
+                    {"target": target, "run_id": run_id, "status": "skipped_completed"}
+                )
+                continue
+            if not args.resume_existing:
+                raise RuntimeError(
+                    f"output exists but is not completed for {run_id} "
+                    f"(state={state}). Use a new --run-prefix, --resume-existing, "
+                    "or --force."
+                )
+            print(f"[resume] {run_id}: existing output state={state}")
         request = _build_request(
             cath_module=cath_module,
             pdb_path=pdb_path,
@@ -200,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--run-prefix", default=time.strftime("paper_surrogate_%Y%m%d", time.gmtime()))
     parser.add_argument("--initial-samples", type=int, default=30)
     parser.add_argument("--top-k", type=int, default=20)
-    parser.add_argument("--num-seq-per-tier", type=int, default=40)
+    parser.add_argument("--num-seq-per-tier", type=int, default=10000)
     parser.add_argument(
         "--surrogate-policy",
         "--surrogate-models",
@@ -217,12 +295,39 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cv-folds", type=int, default=5)
     parser.add_argument("--soluprot-cutoff", type=float, default=0.5)
     parser.add_argument("--af2-provider", default="colabfold")
+    parser.add_argument(
+        "--af2-backend",
+        choices=["runpod", "http", "auto"],
+        default="runpod",
+        help=(
+            "Provider backend for ColabFold. The paper run defaults to RunPod so "
+            "job ids are recorded and long HTTP /run requests cannot hide progress."
+        ),
+    )
+    parser.add_argument(
+        "--pipeline-af2-max-workers",
+        type=int,
+        default=8,
+        help="Temporary PIPELINE_AF2_MAX_WORKERS value for this managed paper run.",
+    )
     parser.add_argument("--af2-plddt-cutoff", type=float, default=85.0)
     parser.add_argument("--af2-rmsd-cutoff", type=float, default=2.0)
+    parser.add_argument(
+        "--selected-tiers",
+        default="",
+        help="Optional comma-separated conservation tiers for pilot runs, e.g. 0.3.",
+    )
     parser.add_argument("--stop-after", choices=["af2", "novelty"], default="af2")
+    parser.add_argument("--resume-existing", action="store_true")
+    parser.add_argument("--allow-untriaged-small-pool", action="store_true")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
+
+    try:
+        _validate_budget_args(args)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     if args.run_now:
         return run_now(args)
@@ -258,6 +363,10 @@ def main(argv: list[str] | None = None) -> int:
         str(args.soluprot_cutoff),
         "--af2-provider",
         str(args.af2_provider),
+        "--af2-backend",
+        str(args.af2_backend),
+        "--pipeline-af2-max-workers",
+        str(args.pipeline_af2_max_workers),
         "--af2-plddt-cutoff",
         str(args.af2_plddt_cutoff),
         "--af2-rmsd-cutoff",
@@ -267,7 +376,11 @@ def main(argv: list[str] | None = None) -> int:
     ]
     if str(args.ensemble_models or "").strip():
         command.extend(["--ensemble-models", str(args.ensemble_models)])
+    if str(args.selected_tiers or "").strip():
+        command.extend(["--selected-tiers", str(args.selected_tiers)])
     for flag, enabled in (
+        ("--resume-existing", args.resume_existing),
+        ("--allow-untriaged-small-pool", args.allow_untriaged_small_pool),
         ("--force", args.force),
         ("--dry-run", args.dry_run),
     ):
@@ -290,6 +403,9 @@ def main(argv: list[str] | None = None) -> int:
         "cv_folds": int(args.cv_folds),
         "soluprot_cutoff": float(args.soluprot_cutoff),
         "af2_provider": str(args.af2_provider),
+        "af2_backend": str(args.af2_backend),
+        "pipeline_af2_max_workers": int(args.pipeline_af2_max_workers),
+        "selected_tiers": str(args.selected_tiers),
         "stop_after": str(args.stop_after),
         "command": command,
     }

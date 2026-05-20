@@ -32,6 +32,7 @@ MODEL_SPECS: tuple[ModelSpec, ...] = (
     ModelSpec("colabfold", "ColabFold", ("COLABFOLD_ENDPOINT_ID", "COLABFOLD_RUNPOD_ENDPOINT_ID"), ("COLABFOLD_URL", "COLABFOLD_HTTP_URL", "COLABFOLD_GPU_URL"), ("COLABFOLD_HTTP_TOKEN",), ("COLABFOLD_HTTP_TIMEOUT_S",)),
     ModelSpec("alphafold2", "AlphaFold2", ("ALPHAFOLD2_ENDPOINT_ID", "AF2_ENDPOINT_ID", "ALPHAFOLD2_RUNPOD_ENDPOINT_ID"), ("AF2_URL", "ALPHAFOLD2_HTTP_URL"), ("AF2_HTTP_TOKEN", "ALPHAFOLD2_HTTP_TOKEN"), ("AF2_HTTP_TIMEOUT_S",)),
     ModelSpec("esmfold", "ESMFold", ("ESMFOLD_ENDPOINT_ID",), ("ESMFOLD_HTTP_URL", "ESMFOLD_URL"), ("ESMFOLD_HTTP_TOKEN",), ("ESMFOLD_HTTP_TIMEOUT_S",)),
+    ModelSpec("esm_embedding", "ESM Embedding", ("ESM_EMBEDDING_ENDPOINT_ID", "ESM2_ENDPOINT_ID"), ("ESM_EMBEDDING_URL", "ESM_EMBEDDING_HTTP_URL", "ESM2_HTTP_URL"), ("ESM_EMBEDDING_TOKEN", "ESM_EMBEDDING_HTTP_TOKEN"), ("ESM_EMBEDDING_TIMEOUT_S", "ESM_EMBEDDING_HTTP_TIMEOUT_S")),
     ModelSpec("rfd3", "RFD3", ("RFD3_ENDPOINT_ID",), ("RFD3_HTTP_URL", "RFD3_GPU_URL"), ("RFD3_HTTP_TOKEN",), ("RFD3_HTTP_TIMEOUT_S",)),
     ModelSpec("bioemu", "BioEmu", ("BIOEMU_ENDPOINT_ID",), ("BIOEMU_HTTP_URL", "BIOEMU_GPU_URL"), ("BIOEMU_HTTP_TOKEN",), ("BIOEMU_HTTP_TIMEOUT_S",)),
     ModelSpec("diffdock", "DiffDock", ("DIFFDOCK_ENDPOINT_ID",), ("DIFFDOCK_HTTP_URL", "DIFFDOCK_GPU_URL"), ("DIFFDOCK_HTTP_TOKEN",), ("DIFFDOCK_HTTP_TIMEOUT_S",)),
@@ -361,8 +362,12 @@ class ModelProviderStore:
             provider_type = "http_api"
         elif runpod_id:
             provider_type = "runpod"
-        if model_key == "proteinmpnn":
-            requested = os.environ.get("PROTEINMPNN_PROVIDER", "").strip().lower().replace("-", "_")
+        provider_env_name = {
+            "proteinmpnn": "PROTEINMPNN_PROVIDER",
+            "esm_embedding": "ESM_EMBEDDING_PROVIDER",
+        }.get(model_key, "")
+        if provider_env_name:
+            requested = os.environ.get(provider_env_name, "").strip().lower().replace("-", "_")
             if requested in {"gpu", "http", "gpu_http", "http_api"} and http_url:
                 provider_type = "http_api"
             elif requested == "runpod" and runpod_id:

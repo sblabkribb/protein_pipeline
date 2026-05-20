@@ -15,6 +15,8 @@ from .clients.alphafold2 import AlphaFold2Client
 from .clients.alphafold2_runpod import AlphaFold2RunPodClient
 from .clients.bioemu_runpod import BioEmuRunPodClient
 from .clients.diffdock_runpod import DiffDockRunPodClient
+from .clients.esm_embedding import ESMEmbeddingRunPodClient
+from .clients.esm_embedding import LocalHTTPESMEmbeddingClient
 from .clients.mmseqs import MMseqsClient
 from .clients.proteinmpnn import ProteinMPNNClient
 from .clients.rosetta_relax import RosettaRelaxClient
@@ -140,6 +142,20 @@ def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
     elif cfg.services.af2_url:
         af2 = AlphaFold2Client(url=cfg.services.af2_url)
 
+    esm_embedding = None
+    esm_embedding_provider = _provider(provider_store, "esm_embedding", provider_user)
+    if _provider_is_http(esm_embedding_provider):
+        esm_embedding = LocalHTTPESMEmbeddingClient(
+            base_url=esm_embedding_provider["base_url"],
+            token=esm_embedding_provider.get("token") or None,
+            timeout_s=float(esm_embedding_provider.get("timeout_s") or 21600),
+        )
+    elif _provider_is_runpod(esm_embedding_provider):
+        esm_embedding = ESMEmbeddingRunPodClient(
+            runpod=_runpod_for_provider(runpod, esm_embedding_provider),
+            endpoint_id=str(esm_embedding_provider["endpoint_id"]),
+        )
+
     rfd3 = None
     rfd3_provider = _provider(provider_store, "rfd3", provider_user)
     if _provider_is_http(rfd3_provider):
@@ -239,5 +255,6 @@ def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
         bioemu=bioemu,
         diffdock=diffdock,
         rosetta_relax=rosetta_relax,
+        esm_embedding=esm_embedding,
         gemini=gemini,
     )

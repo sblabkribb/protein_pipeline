@@ -227,3 +227,89 @@ def test_run_evolution_experimental_with_labels_recommends_next_candidates(
     assert summary["experimental_labels"]["count"] == 3
     assert len(summary["recommended_candidates"]) == 2
     assert all(item["id"] not in {"r1_seq0", "r1_seq1", "r1_seq2"} for item in summary["recommended_candidates"])
+
+
+def test_experimental_labels_preserve_raw_value_and_score_minimize_metrics(
+    tmp_path,
+) -> None:
+    output_root = tmp_path / "outputs"
+    source_paths = init_run(output_root, "round_1")
+    (source_paths.root / "experiments.jsonl").write_text(
+        json.dumps(
+            {
+                "candidate_id": "seq_a",
+                "metric_name": "ic50",
+                "metric_value": 12.5,
+                "metric_direction": "minimize",
+                "result": "success",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    labels = evolution._load_experimental_labels(str(output_root), ["round_1"], "ic50")
+
+    assert labels["seq_a"]["value"] == 12.5
+    assert labels["seq_a"]["metric_direction"] == "minimize"
+    assert labels["seq_a"]["selection_score"] == -12.5
+
+
+def test_run_evolution_experimental_reuses_labels_by_sequence_when_ids_change(
+    tmp_path, monkeypatch
+) -> None:
+    fake_torch = SimpleNamespace(
+        cuda=SimpleNamespace(is_available=lambda: False),
+        device=lambda name: name,
+    )
+    monkeypatch.setattr(evolution, "torch", fake_torch)
+    monkeypatch.setattr(evolution, "mlflow", None)
+    monkeypatch.setattr(evolution.ncp_storage, "sync_outputs", lambda run_id: None)
+
+    def fake_embeddings(sequences, device):
+        return np.arange(len(sequences) * 2, dtype=np.float64).reshape(len(sequences), 2)
+
+    monkeypatch.setattr(evolution, "get_esm_embeddings", fake_embeddings)
+
+    runner = _FakeRunner(tmp_path / "outputs")
+    source_paths = init_run(runner.output_root, "round_1")
+    request_csv = source_paths.root / "evolution" / "experiment_request.csv"
+    request_csv.parent.mkdir(parents=True, exist_ok=True)
+    request_csv.write_text(
+        "rank,candidate_id,sequence,soluprot,selection_reason,predicted_objective,label_value\n"
+        "1,old_seq0,ACDEFGHIK0,0.9,kmeans_bootstrap_experiment,,\n",
+        encoding="utf-8",
+    )
+    (source_paths.root / "experiments.jsonl").write_text(
+        json.dumps(
+            {
+                "candidate_id": "old_seq0",
+                "metric_name": "activity",
+                "metric_value": 0.8,
+                "metric_direction": "maximize",
+                "result": "success",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    request = PipelineRequest(
+        target_fasta=">q\nACDEFGHIK\n",
+        target_pdb="",
+        evolution_mode=True,
+        evolution_label_source="experimental",
+        evolution_experiment_source_run_id="round_1",
+        evolution_objective_metric="activity",
+        evolution_initial_samples=3,
+        evolution_oracle_samples=2,
+        evolution_rounds=1,
+        evolution_pool_size=12,
+        soluprot_cutoff=0.1,
+    )
+
+    result = evolution.run_evolution(runner, request, "evo_exp_sequence_match")
+    summary = json.loads((Path(result.output_dir) / "summary.json").read_text())
+
+    assert summary["experimental_labels"]["count"] == 1
+    assert summary["experimental_labels"]["items"][0]["id"] == "r1_seq0"
+    assert summary["experimental_labels"]["items"][0]["matched_by"] == "sequence"

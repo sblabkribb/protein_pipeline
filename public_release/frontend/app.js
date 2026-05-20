@@ -858,6 +858,7 @@ const el = {
   surrogateCustomRunIdInput: document.getElementById("surrogateCustomRunIdInput"),
   surrogateInitialSamplesInput: document.getElementById("surrogateInitialSamplesInput"),
   surrogateTopKInput: document.getElementById("surrogateTopKInput"),
+  surrogateNumSeqPerTierInput: document.getElementById("surrogateNumSeqPerTierInput"),
   surrogateAcquisitionPolicyInput: document.getElementById("surrogateAcquisitionPolicyInput"),
   surrogateModelInput: document.getElementById("surrogateModelInput"),
   surrogateModelChoices: document.getElementById("surrogateModelChoices"),
@@ -870,13 +871,30 @@ const el = {
   evolutionTargetFile: document.getElementById("evolutionTargetFile"),
   evolutionLoadFileBtn: document.getElementById("evolutionLoadFileBtn"),
   evolutionRunBtn: document.getElementById("evolutionRunBtn"),
+  evolutionFeedbackGuide: document.getElementById("evolutionFeedbackGuide"),
   evolutionPoolSizeInput: document.getElementById("evolutionPoolSizeInput"),
   evolutionLabelSourceInput: document.getElementById("evolutionLabelSourceInput"),
+  evolutionObjectiveMetricField: document.getElementById("evolutionObjectiveMetricField"),
   evolutionObjectiveMetricInput: document.getElementById("evolutionObjectiveMetricInput"),
+  evolutionExperimentSourceRunIdField: document.getElementById("evolutionExperimentSourceRunIdField"),
   evolutionExperimentSourceRunIdInput: document.getElementById("evolutionExperimentSourceRunIdInput"),
   evolutionExperimentSourceRunIdOptions: document.getElementById("evolutionExperimentSourceRunIdOptions"),
   evolutionExperimentSourceRefreshBtn: document.getElementById("evolutionExperimentSourceRefreshBtn"),
   evolutionExperimentSourceRunIdStatus: document.getElementById("evolutionExperimentSourceRunIdStatus"),
+  evolutionExperimentAssay: document.getElementById("evolutionExperimentAssay"),
+  evolutionExperimentResult: document.getElementById("evolutionExperimentResult"),
+  evolutionExperimentCandidateId: document.getElementById("evolutionExperimentCandidateId"),
+  evolutionExperimentSequenceId: document.getElementById("evolutionExperimentSequenceId"),
+  evolutionExperimentMetricName: document.getElementById("evolutionExperimentMetricName"),
+  evolutionExperimentMetricValue: document.getElementById("evolutionExperimentMetricValue"),
+  evolutionExperimentMetricUnit: document.getElementById("evolutionExperimentMetricUnit"),
+  evolutionExperimentMetricDirection: document.getElementById("evolutionExperimentMetricDirection"),
+  evolutionExperimentReplicateId: document.getElementById("evolutionExperimentReplicateId"),
+  evolutionExperimentConditions: document.getElementById("evolutionExperimentConditions"),
+  evolutionSubmitExperiment: document.getElementById("evolutionSubmitExperiment"),
+  evolutionExperimentStatus: document.getElementById("evolutionExperimentStatus"),
+  evolutionExperimentPanel: document.getElementById("evolutionExperimentPanel"),
+  evolutionExperimentList: document.getElementById("evolutionExperimentList"),
   evolutionInitialSamplesInput: document.getElementById("evolutionInitialSamplesInput"),
   evolutionOracleSamplesInput: document.getElementById("evolutionOracleSamplesInput"),
   evolutionAf2PlddtCutoffInput: document.getElementById("evolutionAf2PlddtCutoffInput"),
@@ -1541,26 +1559,11 @@ function renderHomeContextSelectors() {
     el.homeProjectSelector.innerHTML = options.join("");
     el.homeProjectSelector.value = projectId && projects.some((item) => String(item?.project_id || "").trim() === projectId) ? projectId : "";
   }
-  if (el.homeRoundSelector) {
-    const options = [`<option value="">${t("home.select.roundPlaceholder")}</option>`];
-    rounds.forEach((round) => {
-      const id = String(round?.round_id || "").trim();
-      if (!id) return;
-      const title = String(round?.title || id).trim();
-      options.push(`<option value="${escapeHtml(id)}">${escapeHtml(title)}</option>`);
-    });
-    el.homeRoundSelector.innerHTML = options.join("");
-    el.homeRoundSelector.value = roundId && rounds.some((item) => String(item?.round_id || "").trim() === roundId) ? roundId : "";
-    el.homeRoundSelector.disabled = !projectId;
-  }
-  if (el.homeCreateRoundBtn) {
-    el.homeCreateRoundBtn.disabled = !projectId;
-  }
   if (el.roundsShowArchived) {
     el.roundsShowArchived.checked = Boolean(state.roundsShowArchived);
   }
   if (el.homeContinueRoundBtn) {
-    el.homeContinueRoundBtn.disabled = !projectId || !roundId;
+    el.homeContinueRoundBtn.disabled = !projectId;
   }
   if (el.homeRunsValue) {
     const runningCount = (state.runs || []).filter(
@@ -1571,7 +1574,11 @@ function renderHomeContextSelectors() {
     );
   }
   if (el.homeRoundStatusValue) {
-    el.homeRoundStatusValue.textContent = roundRecord ? effectiveRoundStatusInfo(roundRecord).label : t("home.context.empty");
+    el.homeRoundStatusValue.textContent = !projectId
+      ? t("home.context.empty")
+      : roundRecord
+        ? effectiveRoundStatusInfo(roundRecord).label
+        : t("home.context.campaignAuto");
   }
   if (el.homeReportValue) {
     const runId = String(state.currentRunId || "").trim();
@@ -2081,8 +2088,8 @@ const I18N = {
     "tutorial.section.settings.desc": "Copilot, top menu, and model providers.",
     "tutorial.step.home.title": "Start from the workspace",
     "tutorial.step.home.body":
-      "Use Home as the landing point. Before starting a new run, set the project and round so results are recorded in the right workspace.",
-    "tutorial.step.home.hint": "Project and round are not mandatory for a quick check, but they keep repeated optimization work traceable.",
+      "Use Home as the landing point. Select or create a project first; Evolution manages its campaign round inside that project.",
+    "tutorial.step.home.hint": "A project keeps repeated optimization work traceable while round repair and manual edits stay in the Rounds tab.",
     "tutorial.step.experimentChoice.title": "Choose the right start path",
     "tutorial.step.experimentChoice.body":
       "After clicking New Experiment, choose the setup path that matches the work. Fast is for a standard run with minimal input. Advanced is the guided full setup. Evolution runs iterative search. Workflow Studio lets you inspect each stage before continuing.",
@@ -2137,11 +2144,11 @@ const I18N = {
       "Always review the proposed residues before applying them; the agent helps triage literature evidence, but the final mask is still your decision.",
     "tutorial.step.evolution.title": "Evolution explores iterative designs",
     "tutorial.step.evolution.body":
-      "Evolution is for design-test-learn rounds. The first pass writes experiment_request.csv; after assays are recorded in Analyze > Experiment, the next pass uses those labels to write next_candidates.csv.",
+      "Evolution is for design-test-learn rounds. Without measurements, it only chooses the first set of candidates to test; after measurements are saved, it learns from them and recommends the next set.",
     "tutorial.step.evolution.hint": "Use it when experimental measurements are available or planned; use Surrogate for one-round in-silico budget triage.",
     "tutorial.step.evolutionSettings.title": "Evolution numbers control cost and selectivity",
     "tutorial.step.evolutionSettings.body":
-      "Generation Pool Size is the candidate pool. Label source selects experimental feedback or legacy in-silico AF2 labels. Run ID with experiment values tells RAPID where to reuse prior wet-lab metric values.",
+      "Candidate selection mode chooses whether recommendations learn from measured experiment values or only test the computational AF2-score loop. Previous run with measurements tells RAPID where to reuse prior assay values.",
     "tutorial.step.evolutionSettings.hint":
       "Larger pools explore more sequences but take longer. Increase Top K only when you want broader final validation; reduce it for quick screening.",
     "tutorial.step.studio.title": "Studio resumes staged workflows",
@@ -2246,7 +2253,7 @@ const I18N = {
     "home.card.evolution.desc": "Autonomous multi-round sequence design pipeline.",
     "surrogate.title": "AF2 Surrogate Triage",
     "surrogate.desc":
-      "Run the standard ProteinMPNN/SoluProt path with a local surrogate that reduces final AF2/ColabFold calls.",
+      "Screen ProteinMPNN/SoluProt candidates with GPU-backed ESM embedding and a fixed AF2/ColabFold budget.",
     "surrogate.input.label": "Target Sequence or Structure",
     "surrogate.input.help": "Provide FASTA, PDB, or mmCIF input for the budget-aware triage path.",
     "surrogate.input.placeholder": "Paste FASTA, PDB, or mmCIF here.",
@@ -2254,19 +2261,22 @@ const I18N = {
     "surrogate.action.run": "Start Surrogate Triage",
     "surrogate.options.title": "Surrogate Settings",
     "surrogate.options.desc":
-      "This mode disables RFD3 and BioEmu, generates the candidate pool from the input backbone/sequence, and spends AF2 only on the sampled training set plus Top K candidates.",
+      "This mode disables RFD3 and BioEmu, embeds the SoluProt-passing candidate pool with the configured ESM worker, and spends AF2 only on the sampled training set plus Top K candidates.",
     "surrogate.initialSamples.label": "Training AF2 samples",
     "surrogate.topK.label": "Top K final AF2 candidates",
+    "surrogate.numSeqPerTier.label": "ProteinMPNN candidates per tier",
+    "surrogate.numSeqPerTier.help":
+      "Default 10000 assumes GPU-backed ESM embedding. AF2 remains capped by the training and Top K budgets.",
     "surrogate.model.label": "Surrogate model",
     "surrogate.acquisition.label": "Top K selection method",
     "surrogate.acquisition.help":
-      "RAPID labels training candidates with AF2, compares the checked models by cross-validation, then sends the best model's Top K candidates to AF2.",
+      "Choose by CV compares the checked models on the AF2-labelled training set and uses the best one for Top K. If you choose Random Forest, Ridge, XGBoost, LightGBM, or Rank ensemble, RAPID uses that method directly.",
     "surrogate.comparators.label": "Models to compare",
     "surrogate.ensembleMembers.label": "Optional rank ensemble",
     "surrogate.ensembleMembers.help":
       "Leave empty by default. Select members only when you also want RAPID to compare a rank-averaged ensemble.",
     "surrogate.model.help":
-      "RAPID compares these models on the same AF2-labelled training set. If the method is CV, the best model selects the final Top K.",
+      "These models are the candidate selectors for CV. A forced Top K method still runs its own report, but it does not use CV to switch models.",
     "surrogate.note":
       "Use Evolution only when experimental measurements are available or planned. Use this Surrogate tab when the goal is a one-round compute budget reduction.",
     "surrogate.error.targetRequired": "Choose FASTA/PDB/mmCIF input before launching Surrogate Triage.",
@@ -2275,13 +2285,15 @@ const I18N = {
     "home.context.project": "Current Project",
     "home.context.round": "Current Round",
     "home.context.roundStatus": "Round Status",
+    "home.context.campaign": "Evolution Campaign",
+    "home.context.campaignAuto": "Round is managed from Evolution",
     "home.context.runs": "Runs in Progress",
     "home.context.report": "Recent Result",
     "home.context.empty": "Not connected yet",
     "home.action.open": "Open",
     "home.action.createProject": "New Project",
     "home.action.createRound": "New Round",
-    "home.action.continueRound": "Continue Current Round",
+    "home.action.continueRound": "Continue Evolution",
     "home.action.openMonitor": "Open Monitor",
     "home.action.openAnalyze": "Open Analyze",
     "home.select.projectPlaceholder": "Select project",
@@ -2295,33 +2307,47 @@ const I18N = {
     "home.message.studioBuilderReady": "Workflow Studio builder is ready. Choose stages, then create the session.",
     "home.message.contextLoadFailed": "Failed to load projects or rounds: {error}",
     "home.error.projectRequired": "Select or create a project before creating a round.",
+    "evolution.error.projectRequired": "Select or create a project on Home before starting Evolution.",
     "evolution.title": "Evolution Studio",
     "evolution.desc":
-      "Upload a PDB/mmCIF structure and request active-learning candidates from experimental feedback or legacy AF2 labels.",
+      "Upload a PDB/mmCIF structure and choose candidates from experiment values or an AF2-score test loop.",
     "evolution.input.label": "Target Structure",
     "evolution.input.help": "Provide a PDB or mmCIF structure to evolve.",
     "evolution.input.placeholder": "Paste PDB or mmCIF here.",
     "evolution.action.run": "Start Evolution",
     "evolution.options.title": "Evolution Settings",
-    "evolution.options.desc": "Configure experimental-feedback active learning or the legacy in-silico AF2 loop.",
-    "evolution.feedbackGuide":
-      "First run: RAPID writes evolution/experiment_request.csv. After wet-lab testing, enter candidate_id, metric_name, and metric_value in Analyze > Experiment. Next run: choose the run ID that contains those measurements to write evolution/next_candidates.csv.",
-    "evolution.poolSize.label": "Stage 1: Generation Pool Size",
-    "evolution.labelSource.label": "Label source",
-    "evolution.labelSource.experimental": "Experimental feedback",
-    "evolution.labelSource.inSilicoAf2": "In-silico AF2 legacy",
-    "evolution.objectiveMetric.label": "Experimental objective metric",
-    "evolution.experimentSourceRunId.label": "Run ID with experiment values",
+    "evolution.options.desc": "Choose how RAPID selects the next candidates.",
+    "evolution.feedbackGuide.experimental":
+      "Experiment-guided mode first chooses candidates to measure. After measured values are saved, the next run recommends candidates.",
+    "evolution.feedbackGuide.inSilicoAf2":
+      "AF2-score test mode does not use wet-lab measurements. It uses AF2/pLDDT as a computational score to check the loop.",
+    "evolution.poolSize.label": "Candidate pool size",
+    "evolution.labelSource.label": "Candidate selection mode",
+    "evolution.labelSource.experimental": "Use experiment values",
+    "evolution.labelSource.inSilicoAf2": "Test with AF2 scores",
+    "evolution.objectiveMetric.label": "Optimization metric",
+    "evolution.experimentSourceRunId.label": "Previous run with measurements",
+    "evolution.experimentSourceRunId.placeholder": "optional previous run ID",
     "evolution.experimentSourceRunId.help":
-      "Choose a previous run with recorded Analyze > Experiment labels, or type a run ID manually.",
+      "Choose a previous run only when it already contains measured values.",
     "evolution.experimentSourceRunId.refresh": "Refresh runs",
     "evolution.experimentSourceRunId.loading": "Loading run IDs...",
     "evolution.experimentSourceRunId.loaded":
-      "{count} run IDs loaded. Runs with experiment labels are listed first when available.",
+      "{count} run IDs loaded. Runs with measured values are listed first when available.",
     "evolution.experimentSourceRunId.failed":
       "Run list unavailable; type a previous run ID manually.",
-    "evolution.initialSamples.label": "Stage 2: K-means experiment set",
-    "evolution.oracleSamples.label": "Stage 3: Recommended candidates",
+    "evolution.experiment.title": "Measured Values",
+    "evolution.experiment.desc": "Save assay results for candidates from this campaign. Future Evolution runs use them to train the recommendation model.",
+    "evolution.experiment.submit": "Save Experiment Value",
+    "evolution.experiment.recent": "Recent Measurements",
+    "evolution.experiment.noRun": "Choose a run with measurements or launch an Evolution run first.",
+    "evolution.experiment.runRequired": "Choose a run before saving experiment values.",
+    "evolution.experiment.candidateRequired": "Enter a candidate ID before saving the measured value.",
+    "evolution.experiment.metricRequired": "Enter the metric name and value before saving.",
+    "evolution.experiment.saved": "Saved experiment value for {id}.",
+    "evolution.experiment.failed": "Failed to save experiment value: {error}",
+    "evolution.initialSamples.label": "First measurement set size",
+    "evolution.oracleSamples.label": "Next recommendation count",
     "evolution.filtering.title": "Filtering",
     "evolution.constraints.title": "Constraints",
     "evolution.af2PlddtCutoff.label": "ColabFold pLDDT Cutoff",
@@ -3187,16 +3213,16 @@ const I18N = {
     "question.evolutionMode.help": "Turn this on only when you want the system to make and test several candidate batches.",
     "question.evolutionPoolSize.label": "Candidate pool size",
     "question.evolutionPoolSize.help": "How many sequence candidates to create before selecting the first test set.",
-    "question.evolutionLabelSource.label": "Evolution label source",
+    "question.evolutionLabelSource.label": "Candidate selection mode",
     "question.evolutionLabelSource.help":
-      "Use experimental feedback for design-test-learn cycles, or keep the old AF2-labelled computational loop for legacy comparisons.",
-    "question.evolutionObjectiveMetric.label": "Experimental objective metric",
+      "Use measured experiment values for design-test-learn recommendations, or use AF2 scores only as a computational test.",
+    "question.evolutionObjectiveMetric.label": "Optimization metric",
     "question.evolutionObjectiveMetric.help": "Metric name to learn from in experiment records, such as activity, soluble_yield, or expression.",
-    "question.evolutionExperimentSourceRunId.label": "Run ID with experiment values",
+    "question.evolutionExperimentSourceRunId.label": "Previous run with measurements",
     "question.evolutionExperimentSourceRunId.help":
-      "Optional previous run whose experiment records should be used as labels for the next recommendation step.",
-    "choice.evolutionLabelSource.experimental": "Experimental feedback",
-    "choice.evolutionLabelSource.inSilicoAf2": "In-silico AF2 legacy",
+      "Optional previous run whose measured values should be used for the next recommendation step.",
+    "choice.evolutionLabelSource.experimental": "Use experiment values",
+    "choice.evolutionLabelSource.inSilicoAf2": "Test with AF2 scores",
     "question.evolutionInitialSamples.label": "First test set size",
     "question.evolutionInitialSamples.help": "How many diverse candidates to evaluate first so the search can learn.",
     "question.evolutionOracleSamples.label": "Final candidates to validate",
@@ -3218,7 +3244,7 @@ const I18N = {
     "question.surrogateTriageTopK.label": "Surrogate Top K",
     "question.surrogateTriageTopK.help": "Additional surrogate-ranked candidates to validate with {af2Provider}.",
     "question.surrogateTriageModel.label": "Top K Selection Method",
-    "question.surrogateTriageModel.help": "CV chooses the model that best predicts the initial {af2Provider}-labelled set, then uses that model to pick final Top K candidates. You can also force one model.",
+    "question.surrogateTriageModel.help": "Choose by CV compares the selected models on the initial {af2Provider}-labelled set and uses the best one for Top K. A forced model uses that method directly.",
     "question.surrogateTriageComparatorModels.label": "Models to Compare",
     "question.surrogateTriageComparatorModels.help": "Models compared on the same initial {af2Provider}-labelled training set.",
     "question.surrogateTriageEnsembleModels.label": "Optional Rank Ensemble",
@@ -3728,8 +3754,8 @@ const I18N = {
     "tutorial.section.settings.desc": "Copilot, 상단 메뉴, 모델 연결.",
     "tutorial.step.home.title": "워크스페이스에서 시작",
     "tutorial.step.home.body":
-      "Home은 시작 지점입니다. 새 실행을 만들기 전에 프로젝트와 회차를 정하면 결과가 올바른 작업 공간에 기록됩니다.",
-    "tutorial.step.home.hint": "빠른 확인만 할 때는 필수는 아니지만, 반복 최적화 작업에서는 프로젝트와 회차를 먼저 정하는 것이 좋습니다.",
+      "Home은 시작 지점입니다. 먼저 프로젝트를 선택하거나 만들면 Evolution은 그 프로젝트 안에서 campaign round를 관리합니다.",
+    "tutorial.step.home.hint": "프로젝트는 반복 최적화 추적에 쓰고, 라운드 수정/복구 같은 고급 작업은 Rounds 탭에서 처리합니다.",
     "tutorial.step.experimentChoice.title": "시작 경로를 고릅니다",
     "tutorial.step.experimentChoice.body":
       "새 실험을 누른 뒤 작업 방식에 맞는 경로를 고릅니다. 빠른 실행은 최소 입력으로 표준 실행을 시작합니다. 고급 설정은 전체 설정을 단계별로 확인합니다. Evolution은 반복 탐색용입니다. 스튜디오는 각 단계를 확인하고 이어 실행할 때 사용합니다.",
@@ -3782,11 +3808,11 @@ const I18N = {
       "적용 전에는 반드시 residue 후보를 검토하세요. Agent는 문헌 근거를 정리해주지만 최종 mask 결정은 사용자가 합니다.",
     "tutorial.step.evolution.title": "Evolution은 반복 설계를 탐색합니다",
     "tutorial.step.evolution.body":
-      "Evolution은 설계-실험-학습 회차를 위한 기능입니다. 첫 실행은 experiment_request.csv를 만들고, 분석 > 실험에 측정값을 기록한 뒤 다음 실행에서 그 라벨을 사용해 next_candidates.csv를 만듭니다.",
+      "Evolution은 설계-실험-학습 회차를 위한 기능입니다. 측정값이 없으면 먼저 실험할 후보를 고르고, 측정값을 저장한 뒤에는 그 값을 학습해 다음 후보를 추천합니다.",
     "tutorial.step.evolution.hint": "실험 측정값이 있거나 곧 만들 계획일 때 사용하세요. 1회 in-silico 비용 절감은 Surrogate 탭을 사용합니다.",
     "tutorial.step.evolutionSettings.title": "Evolution 숫자는 비용과 선별 강도를 정합니다",
     "tutorial.step.evolutionSettings.body":
-      "초기 생성 풀 크기는 후보 pool 크기입니다. 라벨 소스는 실험 피드백과 기존 in-silico AF2 라벨 중 선택하고, 실험값을 가져올 run ID는 이전 측정값을 재사용할 run을 지정합니다.",
+      "후보 선정 방식은 실험 측정값으로 추천할지, AF2 점수로 계산 루프만 확인할지 정합니다. 이전 측정값이 있는 실행은 기존 assay 값을 다음 추천에 재사용할 때만 고릅니다.",
     "tutorial.step.evolutionSettings.hint":
       "pool이 크면 더 넓게 탐색하지만 오래 걸립니다. Top K는 최종 검증을 넓히고 싶을 때 늘리고, 빠른 screening에는 줄이세요.",
     "tutorial.step.studio.title": "스튜디오는 단계별 워크플로우를 이어갑니다",
@@ -3890,7 +3916,7 @@ const I18N = {
     "home.card.evolution.title": "Evolution",
     "home.card.evolution.desc": "다라운드 자동 유도 진화 파이프라인을 실행합니다.",
     "surrogate.title": "AF2 Surrogate Triage",
-    "surrogate.desc": "표준 ProteinMPNN/SoluProt 경로를 실행하되 대리모델로 최종 AF2/ColabFold 호출 수를 줄입니다.",
+    "surrogate.desc": "ProteinMPNN/SoluProt 후보를 GPU ESM embedding과 고정 AF2/ColabFold 예산으로 선별합니다.",
     "surrogate.input.label": "타깃 서열 또는 구조",
     "surrogate.input.help": "예산 절감 triage 경로에 사용할 FASTA, PDB, mmCIF 입력을 넣으세요.",
     "surrogate.input.placeholder": "FASTA, PDB, mmCIF를 붙여넣으세요.",
@@ -3898,19 +3924,22 @@ const I18N = {
     "surrogate.action.run": "Surrogate Triage 시작",
     "surrogate.options.title": "대리모델 설정",
     "surrogate.options.desc":
-      "이 모드는 RFD3와 BioEmu를 끄고 입력 백본/서열에서 후보 pool을 만든 뒤, 샘플링된 학습셋과 Top K 후보에만 AF2를 사용합니다.",
+      "이 모드는 RFD3와 BioEmu를 끄고 SoluProt 통과 후보 pool을 설정된 ESM worker로 embedding한 뒤, 샘플링된 학습셋과 Top K 후보에만 AF2를 사용합니다.",
     "surrogate.initialSamples.label": "학습용 AF2 샘플 수",
     "surrogate.topK.label": "최종 AF2 Top K 후보 수",
+    "surrogate.numSeqPerTier.label": "보존율 구간별 ProteinMPNN 후보 수",
+    "surrogate.numSeqPerTier.help":
+      "기본값 10000은 GPU 기반 ESM embedding을 전제로 합니다. AF2는 학습 샘플과 Top K 예산으로 제한됩니다.",
     "surrogate.model.label": "대리모델",
     "surrogate.acquisition.label": "Top K 선정 방법",
     "surrogate.acquisition.help":
-      "RAPID가 AF2로 학습 후보를 먼저 평가하고, 체크한 모델들을 교차검증으로 비교한 뒤 가장 나은 모델로 최종 Top K를 고릅니다.",
+      "CV 자동 선택은 AF2로 평가한 학습 후보에서 체크한 모델들을 비교하고 가장 나은 모델로 Top K를 고릅니다. Random Forest, Ridge, XGBoost, LightGBM, Rank ensemble 중 하나를 직접 고르면 RAPID는 그 방법으로 바로 Top K를 선정합니다.",
     "surrogate.comparators.label": "비교할 모델",
     "surrogate.ensembleMembers.label": "선택 사항: Rank ensemble 비교",
     "surrogate.ensembleMembers.help":
       "기본값은 사용 안 함입니다. 여러 모델 순위를 평균한 ensemble도 같이 비교하고 싶을 때만 멤버를 선택하세요.",
     "surrogate.model.help":
-      "같은 AF2 라벨 학습셋에서 이 모델들을 비교합니다. Top K 선정 방법이 CV 자동 선택이면 가장 성능이 좋은 모델 하나가 최종 Top K를 고릅니다.",
+      "CV 자동 선택에서 비교할 후보 모델입니다. Top K 선정 방법을 특정 모델로 고정하면 CV로 모델을 바꾸지 않고 해당 방법의 결과를 사용합니다.",
     "surrogate.note":
       "실험 측정값이 있거나 만들 계획이면 Evolution을 사용하세요. 1회 실행에서 compute budget을 줄이는 목적이면 이 Surrogate 탭을 사용합니다.",
     "surrogate.error.targetRequired": "Surrogate Triage를 실행하려면 FASTA/PDB/mmCIF 입력을 넣으세요.",
@@ -3919,13 +3948,15 @@ const I18N = {
     "home.context.project": "현재 프로젝트",
     "home.context.round": "현재 회차",
     "home.context.roundStatus": "라운드 상태",
+    "home.context.campaign": "Evolution 캠페인",
+    "home.context.campaignAuto": "Evolution에서 라운드를 관리합니다",
     "home.context.runs": "진행 중 실행",
     "home.context.report": "최근 결과",
     "home.context.empty": "아직 연결된 항목이 없습니다",
     "home.action.open": "열기",
     "home.action.createProject": "새 프로젝트",
     "home.action.createRound": "새 라운드",
-    "home.action.continueRound": "현재 회차 계속",
+    "home.action.continueRound": "Evolution 계속",
     "home.action.openMonitor": "Monitor 열기",
     "home.action.openAnalyze": "Analyze 열기",
     "home.select.projectPlaceholder": "프로젝트 선택",
@@ -3939,32 +3970,46 @@ const I18N = {
     "home.message.studioBuilderReady": "Workflow Studio 빌더를 준비했습니다. 단계를 고른 뒤 세션을 생성하세요.",
     "home.message.contextLoadFailed": "프로젝트/라운드 목록을 불러오지 못했습니다: {error}",
     "home.error.projectRequired": "라운드를 만들기 전에 프로젝트를 선택하거나 생성하세요.",
+    "evolution.error.projectRequired": "Evolution을 시작하기 전에 Home에서 프로젝트를 선택하거나 생성하세요.",
     "evolution.title": "진화 스튜디오",
-    "evolution.desc": "PDB/mmCIF 구조를 업로드하고 실험 피드백 또는 기존 AF2 라벨 기반 active learning 후보를 요청합니다.",
+    "evolution.desc": "PDB/mmCIF 구조를 업로드하고 실험값 기반 추천 또는 AF2 점수 테스트를 실행합니다.",
     "evolution.input.label": "타깃 구조",
     "evolution.input.help": "진화시킬 PDB 또는 mmCIF 구조를 제공하세요.",
     "evolution.input.placeholder": "여기에 PDB 또는 mmCIF를 붙여넣으세요.",
     "evolution.action.run": "진화 시작",
     "evolution.options.title": "진화 설정",
-    "evolution.options.desc": "실험 피드백 active learning 또는 기존 in-silico AF2 loop를 설정합니다.",
-    "evolution.feedbackGuide":
-      "첫 실행: RAPID가 evolution/experiment_request.csv에 실험 후보표를 만듭니다. 습식 실험 후 분석 > 실험에서 candidate_id, metric_name, metric_value를 기록하세요. 다음 실행: 실험값이 들어 있는 run ID를 선택하면 해당 라벨로 evolution/next_candidates.csv를 만듭니다.",
-    "evolution.poolSize.label": "Stage 1: 초기 생성 풀 크기",
-    "evolution.labelSource.label": "라벨 소스",
-    "evolution.labelSource.experimental": "실험 피드백",
-    "evolution.labelSource.inSilicoAf2": "In-silico AF2 기존 방식",
-    "evolution.objectiveMetric.label": "실험 objective metric",
-    "evolution.experimentSourceRunId.label": "실험값을 가져올 run ID",
+    "evolution.options.desc": "RAPID가 다음 후보를 고르는 방식을 정합니다.",
+    "evolution.feedbackGuide.experimental":
+      "실험값 기반 추천은 먼저 측정할 후보를 고릅니다. 측정값을 저장하면 다음 실행에서 추천 후보를 만듭니다.",
+    "evolution.feedbackGuide.inSilicoAf2":
+      "AF2 점수 테스트는 습식 실험값을 쓰지 않습니다. AF2/pLDDT를 계산 점수로 사용해 루프만 확인합니다.",
+    "evolution.poolSize.label": "후보 생성 수",
+    "evolution.labelSource.label": "후보 선정 방식",
+    "evolution.labelSource.experimental": "실험값으로 추천",
+    "evolution.labelSource.inSilicoAf2": "AF2 점수로 테스트",
+    "evolution.objectiveMetric.label": "최적화 지표",
+    "evolution.experimentSourceRunId.label": "이전 측정값 실행",
+    "evolution.experimentSourceRunId.placeholder": "선택: 이전 실행 ID",
     "evolution.experimentSourceRunId.help":
-      "분석 > 실험에 측정값이 기록된 이전 run을 고르거나 run ID를 직접 입력하세요.",
+      "측정값이 이미 들어 있는 실행을 다음 추천에 재사용할 때만 선택하세요.",
     "evolution.experimentSourceRunId.refresh": "run 목록 새로고침",
     "evolution.experimentSourceRunId.loading": "run ID를 불러오는 중...",
     "evolution.experimentSourceRunId.loaded":
-      "{count}개 run ID를 불러왔습니다. 실험 라벨이 있는 run을 우선 표시합니다.",
+      "{count}개 실행을 불러왔습니다. 측정값이 있는 실행을 우선 표시합니다.",
     "evolution.experimentSourceRunId.failed":
       "run 목록을 불러오지 못했습니다. 이전 run ID를 직접 입력할 수 있습니다.",
-    "evolution.initialSamples.label": "Stage 2: K-means 실험 후보",
-    "evolution.oracleSamples.label": "Stage 3: 추천 후보 수",
+    "evolution.experiment.title": "측정값 입력",
+    "evolution.experiment.desc": "이 캠페인의 후보 측정값을 저장합니다. 이후 Evolution 실행은 이 값을 학습해 다음 후보를 추천합니다.",
+    "evolution.experiment.submit": "실험값 저장",
+    "evolution.experiment.recent": "최근 측정값",
+    "evolution.experiment.noRun": "측정값이 있는 실행을 고르거나 Evolution 실행을 먼저 시작하세요.",
+    "evolution.experiment.runRequired": "실험값을 저장할 실행을 먼저 선택하세요.",
+    "evolution.experiment.candidateRequired": "측정값을 저장하려면 후보 ID를 입력하세요.",
+    "evolution.experiment.metricRequired": "측정 지표와 값을 입력하세요.",
+    "evolution.experiment.saved": "{id} 실험값을 저장했습니다.",
+    "evolution.experiment.failed": "실험값 저장 실패: {error}",
+    "evolution.initialSamples.label": "첫 측정 후보 수",
+    "evolution.oracleSamples.label": "다음 추천 후보 수",
     "evolution.filtering.title": "필터링 (Filtering)",
     "evolution.constraints.title": "구조 제약 (Constraints)",
     "evolution.af2PlddtCutoff.label": "ColabFold pLDDT 컷오프",
@@ -4829,20 +4874,20 @@ const I18N = {
     "question.evolutionMode.help": "여러 후보 묶음을 만들고 평가하면서 탐색할 때만 켭니다. 일반 실행이면 Off로 둡니다.",
     "question.evolutionPoolSize.label": "처음 만들 후보 수",
     "question.evolutionPoolSize.help": "처음에 만들 서열 후보의 전체 개수입니다.",
-    "question.evolutionLabelSource.label": "Evolution 라벨 소스",
+    "question.evolutionLabelSource.label": "후보 선정 방식",
     "question.evolutionLabelSource.help":
-      "실험 피드백은 design-test-learn 회차에 사용하고, 기존 계산 비교에는 AF2 라벨 기반 loop를 사용합니다.",
-    "question.evolutionObjectiveMetric.label": "실험 objective metric",
-    "question.evolutionObjectiveMetric.help": "activity, soluble_yield, expression처럼 실험 기록에서 학습할 metric 이름입니다.",
-    "question.evolutionExperimentSourceRunId.label": "실험 source run ID",
+      "실험 측정값으로 추천할지, AF2 점수로 계산 루프만 확인할지 정합니다.",
+    "question.evolutionObjectiveMetric.label": "최적화 지표",
+    "question.evolutionObjectiveMetric.help": "activity, soluble_yield, expression처럼 실험 기록에서 학습할 측정 지표 이름입니다.",
+    "question.evolutionExperimentSourceRunId.label": "이전 측정값 실행",
     "question.evolutionExperimentSourceRunId.help":
-      "다음 추천 단계의 라벨로 사용할 실험 기록이 들어 있는 이전 run ID입니다. 비워두면 현재 run의 기록만 확인합니다.",
-    "choice.evolutionLabelSource.experimental": "실험 피드백",
-    "choice.evolutionLabelSource.inSilicoAf2": "In-silico AF2 기존 방식",
-    "question.evolutionInitialSamples.label": "처음 평가할 후보 수",
-    "question.evolutionInitialSamples.help": "탐색 방향을 잡기 위해 먼저 평가할 다양한 후보 수입니다.",
-    "question.evolutionOracleSamples.label": "최종 검증 후보 수",
-    "question.evolutionOracleSamples.help": "마지막에 AF2 구조 평가까지 보낼 상위 후보 수입니다.",
+      "다음 추천에 재사용할 측정값이 들어 있는 이전 실행입니다. 비워두면 현재 실행의 기록만 확인합니다.",
+    "choice.evolutionLabelSource.experimental": "실험값으로 추천",
+    "choice.evolutionLabelSource.inSilicoAf2": "AF2 점수로 테스트",
+    "question.evolutionInitialSamples.label": "첫 측정 후보 수",
+    "question.evolutionInitialSamples.help": "모델이 학습할 첫 측정 후보 수입니다.",
+    "question.evolutionOracleSamples.label": "다음 추천 후보 수",
+    "question.evolutionOracleSamples.help": "측정값 학습 후 추천할 상위 후보 수입니다.",
     "question.evolutionRounds.label": "탐색 반복 횟수",
     "question.evolutionRounds.help": "후보를 만들고 평가하는 학습 사이클 수입니다.",
     "question.evolutionSamplesPerRound.label": "반복마다 평가할 후보 수",
@@ -4860,7 +4905,7 @@ const I18N = {
     "question.surrogateTriageTopK.label": "대리 모델 상위 K개",
     "question.surrogateTriageTopK.help": "대리 모델 순위에서 추가로 {af2Provider} 검증까지 보낼 후보 수입니다.",
     "question.surrogateTriageModel.label": "Top K 선정 방법",
-    "question.surrogateTriageModel.help": "CV 자동 선택은 초기 {af2Provider} 라벨셋에서 모델들을 비교한 뒤 최종 Top K를 고를 모델 하나를 선택합니다. 특정 모델로 고정할 수도 있습니다.",
+    "question.surrogateTriageModel.help": "CV 자동 선택은 초기 {af2Provider} 라벨셋에서 선택된 모델들을 비교하고 가장 나은 모델로 Top K를 고릅니다. 특정 모델로 고정하면 그 방법을 바로 사용합니다.",
     "question.surrogateTriageComparatorModels.label": "비교할 모델",
     "question.surrogateTriageComparatorModels.help": "초기 {af2Provider} 라벨셋에서 성능을 비교할 대리모델입니다.",
     "question.surrogateTriageEnsembleModels.label": "선택 사항: Rank ensemble 비교",
@@ -5496,14 +5541,6 @@ const TUTORIAL_STEPS = [
     titleKey: "tutorial.step.homeProject.title",
     bodyKey: "tutorial.step.homeProject.body",
     hintKey: "tutorial.step.homeProject.hint",
-  },
-  {
-    id: "homeRound",
-    tab: "home",
-    target: "#homeCreateRoundBtn",
-    titleKey: "tutorial.step.homeRound.title",
-    bodyKey: "tutorial.step.homeRound.body",
-    hintKey: "tutorial.step.homeRound.hint",
   },
   {
     id: "experimentChoice",
@@ -11456,6 +11493,7 @@ function applyI18n() {
   renderMcpGuide();
   renderModelProviders();
   renderAdminUsers();
+  updateEvolutionLabelSourceUi();
 }
 
 function updateLangButtons() {
@@ -11484,6 +11522,9 @@ function setLanguage(lang) {
   refillSelect(el.experimentAssay, EXPERIMENT_ASSAYS, { includeEmpty: false });
   refillSelect(el.experimentResult, EXPERIMENT_RESULTS, { includeEmpty: false });
   refillSelect(el.experimentMetricDirection, EXPERIMENT_METRIC_DIRECTIONS, { includeEmpty: false });
+  refillSelect(el.evolutionExperimentAssay, EXPERIMENT_ASSAYS, { includeEmpty: false });
+  refillSelect(el.evolutionExperimentResult, EXPERIMENT_RESULTS, { includeEmpty: false });
+  refillSelect(el.evolutionExperimentMetricDirection, EXPERIMENT_METRIC_DIRECTIONS, { includeEmpty: false });
   refreshArtifactSelects();
   renderArtifactComparisonSummary(state.artifactComparison);
   renderMonitorCompleteness(state.artifactComparison, state.hitListResult?.completeness || null);
@@ -12072,11 +12113,11 @@ function initHomeContext() {
     }
   });
   el.homeContinueRoundBtn?.addEventListener("click", () => {
-    if (!String(state.currentRoundId || "").trim()) {
-      setMessage(t("rounds.error.roundRequired"), "ai");
+    if (!String(state.currentProjectId || "").trim()) {
+      setMessage(t("evolution.error.projectRequired"), "ai");
       return;
     }
-    setActiveTab("rounds");
+    setActiveTab("evolution");
   });
   el.homeOpenMonitorBtn?.addEventListener("click", () => {
     setActiveTab("monitor");
@@ -12328,12 +12369,28 @@ function syncSurrogateEnsembleModelChoiceState() {
   return selected;
 }
 
+function surrogateCandidatePoolSize(initialSamples, topK, requested) {
+  const minRequired = Math.max(1, Number(initialSamples || 0) + Number(topK || 0) + 1);
+  const parsed = Number.isFinite(Number(requested)) ? Math.round(Number(requested)) : 10000;
+  return Math.max(minRequired, parsed, 1);
+}
+
 function buildSurrogateLaunchAnswers() {
   const targetInput = String(el.surrogateTargetInput?.value || "").trim();
   const acquisitionPolicy = normalizeSurrogateAcquisitionPolicy(el.surrogateAcquisitionPolicyInput?.value || "auto");
   if (el.surrogateModelInput) el.surrogateModelInput.value = acquisitionPolicy;
   const comparatorModels = syncSurrogateModelChoiceState();
   const ensembleModels = syncSurrogateEnsembleModelChoiceState();
+  const initialSamples = readIntegerInput(el.surrogateInitialSamplesInput, 30, { min: 1 });
+  const topK = readIntegerInput(el.surrogateTopKInput, 20, { min: 1 });
+  const numSeqPerTier = surrogateCandidatePoolSize(
+    initialSamples,
+    topK,
+    readIntegerInput(el.surrogateNumSeqPerTierInput, 10000, { min: 1 })
+  );
+  if (el.surrogateNumSeqPerTierInput) {
+    el.surrogateNumSeqPerTierInput.value = String(numSeqPerTier);
+  }
   const answers = {
     run_mode: "pipeline",
     target_input: targetInput,
@@ -12346,8 +12403,8 @@ function buildSurrogateLaunchAnswers() {
     relax_enabled: false,
     evolution_mode: false,
     surrogate_triage_enabled: true,
-    surrogate_triage_initial_samples: readIntegerInput(el.surrogateInitialSamplesInput, 30, { min: 1 }),
-    surrogate_triage_top_k: readIntegerInput(el.surrogateTopKInput, 20, { min: 1 }),
+    surrogate_triage_initial_samples: initialSamples,
+    surrogate_triage_top_k: topK,
     surrogate_triage_model: acquisitionPolicy,
     surrogate_triage_comparator_models: surrogateModelPayload(comparatorModels),
     surrogate_triage_ensemble_models: surrogateModelPayload(ensembleModels, []),
@@ -12357,7 +12414,7 @@ function buildSurrogateLaunchAnswers() {
     af2_plddt_cutoff: readNumberInput(el.surrogateAf2PlddtCutoffInput, 85, { min: 0, max: 100 }),
     af2_rmsd_cutoff: readNumberInput(el.surrogateAf2RmsdCutoffInput, 2.0, { min: 0.001 }),
     selected_tiers: FAST_SELECTED_TIER_VALUES,
-    num_seq_per_tier: 2,
+    num_seq_per_tier: numSeqPerTier,
     af2_max_candidates_per_tier: 0,
   };
   return answers;
@@ -12429,7 +12486,14 @@ function renderEvolutionExperimentSourceRunChoices() {
     const count = Number(meta.experimentCount || 0);
     const option = document.createElement("option");
     option.value = runId;
-    option.label = count > 0 ? `${count}${meta.truncated ? "+" : ""} experiment label${count === 1 ? "" : "s"}` : "run";
+    if (count > 0) {
+      option.label =
+        (state.lang || "en") === "ko"
+          ? `측정값 ${count}${meta.truncated ? "+" : ""}개`
+          : `${count}${meta.truncated ? "+" : ""} measured value${count === 1 ? "" : "s"}`;
+    } else {
+      option.label = (state.lang || "en") === "ko" ? "실행" : "run";
+    }
     el.evolutionExperimentSourceRunIdOptions.appendChild(option);
   });
   if (el.evolutionExperimentSourceRunIdStatus) {
@@ -12503,6 +12567,170 @@ async function refreshEvolutionExperimentSourceRunChoices({ force = false } = {}
     state.evolutionExperimentSourceLoading = false;
     renderEvolutionExperimentSourceRunChoices();
   }
+}
+
+function evolutionExperimentRunId() {
+  return (
+    String(el.evolutionExperimentSourceRunIdInput?.value || "").trim() ||
+    String(state.currentRunId || "").trim()
+  );
+}
+
+function renderExperimentItems(listEl, items, { emptyKey = "experiment.none" } = {}) {
+  if (!listEl) return;
+  const rows = Array.isArray(items) ? items : [];
+  if (!rows.length) {
+    listEl.innerHTML = `<div class="placeholder">${t(emptyKey)}</div>`;
+    return;
+  }
+  listEl.innerHTML = "";
+  rows.slice(0, 5).forEach((item) => {
+    const div = document.createElement("div");
+    div.className = "run-item";
+    const resultLabel = labelFromMap(item.result, EXPERIMENT_RESULT_KEYS);
+    const assay = labelFromMap(item.assay_type, EXPERIMENT_ASSAY_KEYS);
+    const metric =
+      item.metric_name && item.metric_value !== undefined && item.metric_value !== null
+        ? `${escapeHtml(item.metric_name)}=${escapeHtml(item.metric_value)}`
+        : escapeHtml(resultLabel);
+    const candidate = item.candidate_id || item.sequence_id || item.sample_id || "";
+    const label = candidate ? `${escapeHtml(assay)} · ${escapeHtml(candidate)}` : escapeHtml(assay);
+    div.innerHTML = `<span>${label}</span><span class="stage-tag">${metric}</span>`;
+    listEl.appendChild(div);
+  });
+}
+
+async function refreshEvolutionExperiments() {
+  if (!el.evolutionExperimentList) return;
+  const runId = evolutionExperimentRunId();
+  if (!runId) {
+    el.evolutionExperimentList.innerHTML = `<div class="placeholder">${t("evolution.experiment.noRun")}</div>`;
+    return;
+  }
+  try {
+    const result = await apiCall("pipeline.list_experiments", {
+      run_id: runId,
+      limit: 100,
+    });
+    renderExperimentItems(el.evolutionExperimentList, result.items || [], {
+      emptyKey: "experiment.none",
+    });
+  } catch (err) {
+    const msg = String(err.message || "");
+    if (msg.includes("run_id not found")) {
+      el.evolutionExperimentList.innerHTML = `<div class="placeholder">${t("evolution.experiment.noRun")}</div>`;
+    } else {
+      el.evolutionExperimentList.innerHTML = `<div class="placeholder">${t("experiment.loadFailed", {
+        error: err.message,
+      })}</div>`;
+    }
+  }
+}
+
+async function submitEvolutionExperiment() {
+  const runId = evolutionExperimentRunId();
+  if (!runId) {
+    if (el.evolutionExperimentStatus) el.evolutionExperimentStatus.textContent = t("evolution.experiment.runRequired");
+    return;
+  }
+  const candidateId = String(el.evolutionExperimentCandidateId?.value || "").trim();
+  if (!candidateId) {
+    if (el.evolutionExperimentStatus) {
+      el.evolutionExperimentStatus.textContent = t("evolution.experiment.candidateRequired");
+    }
+    return;
+  }
+  const metricName =
+    String(el.evolutionExperimentMetricName?.value || "").trim() ||
+    String(el.evolutionObjectiveMetricInput?.value || "").trim() ||
+    "activity";
+  const rawMetricValue = String(el.evolutionExperimentMetricValue?.value || "").trim();
+  const parsedMetricValue = rawMetricValue === "" ? undefined : Number.parseFloat(rawMetricValue);
+  if (!metricName || !Number.isFinite(parsedMetricValue)) {
+    if (el.evolutionExperimentStatus) {
+      el.evolutionExperimentStatus.textContent = t("evolution.experiment.metricRequired");
+    }
+    return;
+  }
+  const payload = {
+    run_id: runId,
+    assay_type: el.evolutionExperimentAssay ? el.evolutionExperimentAssay.value : "other",
+    result: el.evolutionExperimentResult ? el.evolutionExperimentResult.value : "success",
+    candidate_id: candidateId,
+    sequence_id: String(el.evolutionExperimentSequenceId?.value || "").trim(),
+    metric_name: metricName,
+    metric_value: parsedMetricValue,
+    metric_unit: String(el.evolutionExperimentMetricUnit?.value || "").trim(),
+    metric_direction: el.evolutionExperimentMetricDirection ? el.evolutionExperimentMetricDirection.value : "maximize",
+    replicate_id: String(el.evolutionExperimentReplicateId?.value || "").trim(),
+    conditions: String(el.evolutionExperimentConditions?.value || "").trim(),
+  };
+  try {
+    await apiCall("pipeline.submit_experiment", payload);
+    if (el.evolutionExperimentSourceRunIdInput) {
+      el.evolutionExperimentSourceRunIdInput.value = runId;
+    }
+    if (el.evolutionExperimentStatus) {
+      el.evolutionExperimentStatus.textContent = t("evolution.experiment.saved", { id: candidateId });
+    }
+    if (el.evolutionExperimentCandidateId) el.evolutionExperimentCandidateId.value = "";
+    if (el.evolutionExperimentSequenceId) el.evolutionExperimentSequenceId.value = "";
+    if (el.evolutionExperimentMetricValue) el.evolutionExperimentMetricValue.value = "";
+    if (el.evolutionExperimentMetricUnit) el.evolutionExperimentMetricUnit.value = "";
+    if (el.evolutionExperimentReplicateId) el.evolutionExperimentReplicateId.value = "";
+    if (el.evolutionExperimentConditions) el.evolutionExperimentConditions.value = "";
+    await refreshEvolutionExperiments();
+    await refreshEvolutionExperimentSourceRunChoices({ force: true });
+  } catch (err) {
+    if (el.evolutionExperimentStatus) {
+      el.evolutionExperimentStatus.textContent = t("evolution.experiment.failed", { error: err.message });
+    }
+  }
+}
+
+async function ensureEvolutionRoundContext() {
+  const projectId = String(state.currentProjectId || "").trim();
+  if (!projectId) return { projectId: "", roundId: "" };
+  let roundId = String(state.currentRoundId || "").trim();
+  const rounds = Array.isArray(state.roundsByProjectId?.[projectId]) ? state.roundsByProjectId[projectId] : [];
+  if (roundId && rounds.some((round) => String(round?.round_id || "").trim() === roundId)) {
+    return { projectId, roundId };
+  }
+  const activeRound =
+    rounds.find((round) => !["archived", "deleted"].includes(String(round?.status || "").trim().toLowerCase())) ||
+    rounds[0] ||
+    null;
+  if (activeRound) {
+    roundId = String(activeRound.round_id || "").trim();
+    state.currentRoundId = roundId;
+    persistHomeContextSelection();
+    renderHomeContextSelectors();
+    return { projectId, roundId };
+  }
+  const dateStamp = new Date().toISOString().slice(0, 10);
+  const saved = await apiCall("pipeline.save_round", {
+    project_id: projectId,
+    title: `Evolution campaign ${dateStamp}`,
+    goal: "Auto-managed RAPID evolution campaign.",
+    status: "active",
+  });
+  const round = saved?.round || {};
+  roundId = String(round.round_id || "").trim();
+  state.currentRoundId = roundId;
+  state.roundsByProjectId = {
+    ...(state.roundsByProjectId || {}),
+    [projectId]: [round, ...(Array.isArray(state.roundsByProjectId?.[projectId]) ? state.roundsByProjectId[projectId] : [])],
+  };
+  state.roundsWorkspaceByProjectId = {
+    ...(state.roundsWorkspaceByProjectId || {}),
+    [projectId]: [
+      round,
+      ...(Array.isArray(state.roundsWorkspaceByProjectId?.[projectId]) ? state.roundsWorkspaceByProjectId[projectId] : []),
+    ],
+  };
+  persistHomeContextSelection();
+  renderHomeContextSelectors();
+  return { projectId, roundId };
 }
 
 function initSurrogateLauncher() {
@@ -12603,12 +12831,37 @@ async function loadEvolutionTargetFile(file) {
   setMessage(t("fast.message.fileLoaded", { name: file.name || "input" }), "ai");
 }
 
+function updateEvolutionLabelSourceUi() {
+  const source = String(el.evolutionLabelSourceInput?.value || "experimental");
+  const usesExperimentValues = source !== "in_silico_af2";
+  if (el.evolutionFeedbackGuide) {
+    el.evolutionFeedbackGuide.textContent = usesExperimentValues
+      ? t("evolution.feedbackGuide.experimental")
+      : t("evolution.feedbackGuide.inSilicoAf2");
+  }
+  [el.evolutionObjectiveMetricField, el.evolutionExperimentSourceRunIdField, el.evolutionExperimentPanel].forEach((node) => {
+    if (!node) return;
+    node.classList.toggle("hidden", !usesExperimentValues);
+  });
+}
+
 function initEvolutionLauncher() {
   if (evolutionLauncherInitialized) return;
+  el.evolutionLabelSourceInput?.addEventListener("change", () => {
+    updateEvolutionLabelSourceUi();
+  });
   el.evolutionExperimentSourceRefreshBtn?.addEventListener("click", () => {
     void refreshEvolutionExperimentSourceRunChoices({ force: true });
   });
+  el.evolutionExperimentSourceRunIdInput?.addEventListener("change", () => {
+    void refreshEvolutionExperiments();
+  });
+  el.evolutionSubmitExperiment?.addEventListener("click", () => {
+    void submitEvolutionExperiment();
+  });
   void refreshEvolutionExperimentSourceRunChoices();
+  void refreshEvolutionExperiments();
+  updateEvolutionLabelSourceUi();
   el.evolutionLoadFileBtn?.addEventListener("click", () => {
     el.evolutionTargetFile?.click();
   });
@@ -12625,9 +12878,23 @@ function initEvolutionLauncher() {
       setActiveTab("evolution");
       return;
     }
+    let context = null;
+    try {
+      context = await ensureEvolutionRoundContext();
+    } catch (err) {
+      setMessage(t("home.message.contextLoadFailed", { error: err.message }), "ai");
+      return;
+    }
+    if (!context?.projectId || !context?.roundId) {
+      setMessage(t("evolution.error.projectRequired"), "ai");
+      setActiveTab("home");
+      return;
+    }
     
     const answers = {
       run_mode: "pipeline",
+      project_id: context.projectId,
+      round_id: context.roundId,
       target_input: targetInput,
       evolution_mode: true,
       evolution_pool_size: Number.parseInt(el.evolutionPoolSizeInput?.value || "1000", 10),
@@ -12761,7 +13028,7 @@ function buildManualPlan(mode) {
     surrogate_triage_ensemble_models: [],
     surrogate_triage_cv_folds: 5,
     selected_tiers: [0.3, 0.5, 0.7],
-    num_seq_per_tier: 2,
+    num_seq_per_tier: 10000,
     af2_max_candidates_per_tier: 0,
   };
   const pipelineLikeMode = mode === "pipeline" || mode === "surrogate";
@@ -12961,7 +13228,7 @@ function buildManualPlan(mode) {
         labelKey: "question.numSeqPerTier.label",
         questionKey: "question.numSeqPerTier.help",
         required: false,
-        default: 2,
+        default: mode === "surrogate" ? 10000 : 2,
       },
       {
         id: "evolution_mode",
@@ -13723,6 +13990,9 @@ function initFeedbackUI() {
   fillSelect(el.experimentAssay, EXPERIMENT_ASSAYS, { includeEmpty: false });
   fillSelect(el.experimentResult, EXPERIMENT_RESULTS, { includeEmpty: false });
   fillSelect(el.experimentMetricDirection, EXPERIMENT_METRIC_DIRECTIONS, { includeEmpty: false });
+  fillSelect(el.evolutionExperimentAssay, EXPERIMENT_ASSAYS, { includeEmpty: false });
+  fillSelect(el.evolutionExperimentResult, EXPERIMENT_RESULTS, { includeEmpty: false });
+  fillSelect(el.evolutionExperimentMetricDirection, EXPERIMENT_METRIC_DIRECTIONS, { includeEmpty: false });
   refreshArtifactSelects();
 
   if (el.feedbackArtifact && el.feedbackStage) {
@@ -19417,6 +19687,8 @@ function updateMonitorActionButtons() {
 function buildAnswerPayload(mode = state.runMode) {
   let answers = normalizeBioEmuCountFields({ ...state.answers }, { includeLegacyField: true });
   if (mode === "surrogate") {
+    const surrogateInitialSamples = Number(answers.surrogate_triage_initial_samples ?? 30);
+    const surrogateTopK = Number(answers.surrogate_triage_top_k ?? 20);
     answers = {
       ...answers,
       start_from: answers.start_from || "msa",
@@ -19427,8 +19699,8 @@ function buildAnswerPayload(mode = state.runMode) {
       relax_enabled: false,
       evolution_mode: false,
       surrogate_triage_enabled: true,
-      surrogate_triage_initial_samples: answers.surrogate_triage_initial_samples ?? 30,
-      surrogate_triage_top_k: answers.surrogate_triage_top_k ?? 20,
+      surrogate_triage_initial_samples: surrogateInitialSamples,
+      surrogate_triage_top_k: surrogateTopK,
       surrogate_triage_model: normalizeSurrogateAcquisitionPolicy(answers.surrogate_triage_model || "auto"),
       surrogate_triage_comparator_models:
         answers.surrogate_triage_comparator_models ?? ["rf", "ridge", "lightgbm", "xgboost"],
@@ -19438,7 +19710,11 @@ function buildAnswerPayload(mode = state.runMode) {
       selected_tiers: Array.isArray(answers.selected_tiers) && answers.selected_tiers.length
         ? answers.selected_tiers
         : [0.3, 0.5, 0.7],
-      num_seq_per_tier: answers.num_seq_per_tier ?? 2,
+      num_seq_per_tier: surrogateCandidatePoolSize(
+        surrogateInitialSamples,
+        surrogateTopK,
+        answers.num_seq_per_tier ?? 10000
+      ),
       af2_max_candidates_per_tier: answers.af2_max_candidates_per_tier ?? 0,
     };
   }
@@ -20131,6 +20407,10 @@ async function runPipeline(overrideAnswers = null) {
   const modeLabel = t(`mode.${mode}`) || mode;
   setMessage(t("run.launching", { mode: modeLabel, id: runId }), "ai");
   setCurrentRunId(runId);
+  if (answers.evolution_mode && el.evolutionExperimentSourceRunIdInput) {
+    el.evolutionExperimentSourceRunIdInput.value = runId;
+    void refreshEvolutionExperiments();
+  }
   state.autoAnalyzePendingByRunId[runId] = true;
   state.runningRunIds.add(runId);
   state.currentRunState = "running";
@@ -25962,25 +26242,7 @@ async function refreshExperiments() {
     const items = result.items || [];
     state.experimentCount = items.length;
     updateAnalyzeSummary();
-    if (!items.length) {
-      el.experimentList.innerHTML = `<div class="placeholder">${t("experiment.none")}</div>`;
-      return;
-    }
-    el.experimentList.innerHTML = "";
-    items.slice(0, 5).forEach((item) => {
-      const div = document.createElement("div");
-      div.className = "run-item";
-      const resultLabel = labelFromMap(item.result, EXPERIMENT_RESULT_KEYS);
-      const assay = labelFromMap(item.assay_type, EXPERIMENT_ASSAY_KEYS);
-      const metric =
-        item.metric_name && item.metric_value !== undefined && item.metric_value !== null
-          ? `${escapeHtml(item.metric_name)}=${escapeHtml(item.metric_value)}`
-          : escapeHtml(resultLabel);
-      const candidate = item.candidate_id || item.sequence_id || item.sample_id || "";
-      const label = candidate ? `${escapeHtml(assay)} · ${escapeHtml(candidate)}` : escapeHtml(assay);
-      div.innerHTML = `<span>${label}</span><span class="stage-tag">${metric}</span>`;
-      el.experimentList.appendChild(div);
-    });
+    renderExperimentItems(el.experimentList, items, { emptyKey: "experiment.none" });
   } catch (err) {
     const msg = String(err.message || "");
     if (msg.includes("run_id not found")) {

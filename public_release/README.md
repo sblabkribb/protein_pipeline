@@ -97,7 +97,11 @@ Do not commit a filled `.env` file.
 
 The RunPod endpoint images used by the packaged workflow are listed in
 `docs/runpod_images.md`. They include pinned images for MMseqs2, ProteinMPNN,
-ColabFold/AF2, RFD3, BioEmu, and Rosetta Relax.
+ColabFold/AF2, RFD3, BioEmu, and Rosetta Relax. The optional GPU ESM embedding
+worker used by surrogate triage is provided under `workers/esm_embedding/`; build
+and push that image for your own RunPod endpoint, then set
+`ESM_EMBEDDING_ENDPOINT_ID` in `pipeline-mcp/.env`. A self-hosted HTTP embedding
+service can be used instead by setting `ESM_EMBEDDING_URL`.
 
 ## Reproducing Paper Tables and Figures
 
@@ -115,7 +119,9 @@ bash scripts/reproduce_paper_tables_figures.sh
 
 Full benchmark reruns are documented in `docs/reproduce_paper.md`. They can take
 substantially longer because ESM embedding generation and model comparisons are
-recomputed.
+recomputed. For large surrogate-triage pools, configure the ESM embedding worker
+before rerunning the live scripts; otherwise RAPID falls back to local ESM
+embedding, which is slower and depends on the backend machine.
 
 The optional structural-context ablation is run through the live pipeline, not
 from cached model tables. `scripts/benchmark/13_run_backbone_ensemble_ablation.py`

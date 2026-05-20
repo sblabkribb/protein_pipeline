@@ -1,4 +1,6 @@
 import os
+import csv
+import hashlib
 import json
 import shutil
 import pickle
@@ -137,6 +139,221 @@ from .s3 import ncp_storage
 ESM_MODEL_NAME = "facebook/esm2_t6_8M_UR50D"
 
 
+def _normalize_label_source(value: object) -> str:
+    raw = str(value or "experimental").strip().lower().replace("-", "_")
+    if raw in {"af2", "computational", "in_silico"}:
+        raw = "in_silico_af2"
+    if raw not in {"experimental", "in_silico_af2"}:
+        raise ValueError(
+            "evolution_label_source must be one of: experimental, in_silico_af2"
+        )
+    return raw
+
+
+def _event_candidate_ids(entry: dict[str, object]) -> list[str]:
+    ids: list[str] = []
+    for key in ("candidate_id", "sequence_id", "sample_id"):
+        value = str(entry.get(key) or "").strip()
+        if value and value not in ids:
+            ids.append(value)
+    return ids
+
+
+def _normalize_metric_direction(value: object) -> str:
+    raw = str(value or "").strip().lower()
+    return raw if raw in {"maximize", "minimize"} else "maximize"
+
+
+def _normalized_sequence(value: object) -> str:
+    return "".join(str(value or "").split()).upper()
+
+
+def _sequence_label_key(value: object) -> str:
+    sequence = _normalized_sequence(value)
+    if not sequence:
+        return ""
+    return "sequence_sha256:" + hashlib.sha256(sequence.encode("utf-8")).hexdigest()
+
+
+def _candidate_sequence_label_keys(run_root: Path) -> dict[str, set[str]]:
+    keys_by_id: dict[str, set[str]] = {}
+
+    def add(candidate_id: object, sequence: object) -> None:
+        key = _sequence_label_key(sequence)
+        cid = str(candidate_id or "").strip()
+        if not cid or not key:
+            return
+        keys_by_id.setdefault(cid, set()).add(key)
+
+    for relative in (
+        Path("evolution") / "experiment_request.csv",
+        Path("evolution") / "next_candidates.csv",
+    ):
+        path = run_root / relative
+        if not path.exists():
+            continue
+        try:
+            with path.open("r", encoding="utf-8", newline="") as handle:
+                for row in csv.DictReader(handle):
+                    sequence = row.get("sequence")
+                    for id_key in ("candidate_id", "id", "sequence_id", "sample_id"):
+                        add(row.get(id_key), sequence)
+        except Exception:
+            continue
+
+    summary_path = run_root / "summary.json"
+    if summary_path.exists():
+        try:
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        except Exception:
+            summary = {}
+        for section in ("requested_experiments", "recommended_candidates"):
+            rows = summary.get(section) if isinstance(summary, dict) else None
+            if not isinstance(rows, list):
+                continue
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                sequence = row.get("sequence")
+                for id_key in ("candidate_id", "id", "sequence_id", "sample_id"):
+                    add(row.get(id_key), sequence)
+    return keys_by_id
+
+
+def _event_objective_label(
+    entry: dict[str, object], objective_metric: str
+) -> dict[str, object] | None:
+    metric = str(objective_metric or "activity").strip() or "activity"
+    metric_name = str(entry.get("metric_name") or "").strip()
+    if metric_name == metric and entry.get("metric_value") is not None:
+        try:
+            value = float(entry.get("metric_value"))
+        except Exception:
+            return None
+        direction = _normalize_metric_direction(entry.get("metric_direction"))
+        return {
+            "value": value,
+            "metric_direction": direction,
+            "selection_score": -value if direction == "minimize" else value,
+        }
+
+    metrics = entry.get("metrics")
+    if isinstance(metrics, dict) and metrics.get(metric) is not None:
+        try:
+            value = float(metrics.get(metric))
+        except Exception:
+            return None
+        direction = _normalize_metric_direction(entry.get("metric_direction"))
+        return {
+            "value": value,
+            "metric_direction": direction,
+            "selection_score": -value if direction == "minimize" else value,
+        }
+
+    result = str(entry.get("result") or "").strip().lower()
+    if result == "success":
+        return {"value": 1.0, "metric_direction": "maximize", "selection_score": 1.0}
+    if result == "fail":
+        return {"value": 0.0, "metric_direction": "maximize", "selection_score": 0.0}
+    if result == "inconclusive":
+        return {"value": 0.5, "metric_direction": "maximize", "selection_score": 0.5}
+    return None
+
+
+def _event_objective_value(entry: dict[str, object], objective_metric: str) -> float | None:
+    label = _event_objective_label(entry, objective_metric)
+    return None if label is None else float(label["value"])
+
+
+def _load_experimental_labels(
+    output_root: str,
+    run_ids: list[str],
+    objective_metric: str,
+) -> dict[str, dict[str, object]]:
+    labels: dict[str, dict[str, object]] = {}
+    seen_run_ids: set[str] = set()
+    for raw_run_id in run_ids:
+        run_id = str(raw_run_id or "").strip()
+        if not run_id or run_id in seen_run_ids:
+            continue
+        seen_run_ids.add(run_id)
+        run_root = resolve_run_path(output_root, run_id)
+        sequence_keys_by_id = _candidate_sequence_label_keys(run_root)
+        path = run_root / "experiments.jsonl"
+        if not path.exists():
+            continue
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+            except Exception:
+                continue
+            if not isinstance(entry, dict):
+                continue
+            objective_label = _event_objective_label(entry, objective_metric)
+            if objective_label is None:
+                continue
+            direct_sequence_keys = {
+                _sequence_label_key(entry.get("sequence")),
+                _sequence_label_key(entry.get("sequence_text")),
+            }
+            for key in ("sequence_hash", "sequence_sha256"):
+                raw_hash = str(entry.get(key) or "").strip()
+                if raw_hash:
+                    direct_sequence_keys.add(
+                        raw_hash
+                        if raw_hash.startswith("sequence_sha256:")
+                        else f"sequence_sha256:{raw_hash}"
+                    )
+            direct_sequence_keys.discard("")
+            for candidate_id in _event_candidate_ids(entry):
+                label_payload = {
+                    "candidate_id": candidate_id,
+                    "value": float(objective_label["value"]),
+                    "metric_direction": objective_label["metric_direction"],
+                    "selection_score": float(objective_label["selection_score"]),
+                    "source_run_id": run_id,
+                    "experiment_id": entry.get("id"),
+                    "assay_type": entry.get("assay_type"),
+                    "result": entry.get("result"),
+                    "objective_metric": objective_metric,
+                    "matched_by": "candidate_id",
+                }
+                labels[candidate_id] = label_payload
+                for sequence_key in sequence_keys_by_id.get(candidate_id, set()):
+                    labels[sequence_key] = {
+                        **label_payload,
+                        "matched_by": "sequence",
+                    }
+                for sequence_key in direct_sequence_keys:
+                    labels[sequence_key] = {
+                        **label_payload,
+                        "matched_by": "sequence",
+                    }
+    return labels
+
+
+def _write_candidate_csv(path: Path, rows: list[dict[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "rank",
+        "candidate_id",
+        "sequence",
+        "soluprot",
+        "selection_reason",
+        "predicted_objective",
+        "predicted_selection_score",
+        "metric_direction",
+        "label_value",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({key: row.get(key, "") for key in fieldnames})
+
+
 def _query_memory_bank(experts_dir: Path, target_pdb, X_pool, k: int = 3):
     if not experts_dir.exists():
         return None
@@ -202,6 +419,13 @@ def get_esm_embeddings(sequences, device):
             embeddings.append(mean_emb.cpu().numpy())
             
     return np.vstack(embeddings)
+
+
+def _embed_sequences_for_runner(runner, sequences: list[str], device):
+    provider = getattr(runner, "esm_embedding", None)
+    if provider is not None:
+        return provider.embed(sequences)
+    return get_esm_embeddings(sequences, device)
 
 
 def _append_subrun_manifest(parent_root: Path, entry: dict[str, object]) -> None:
@@ -292,6 +516,14 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
     rounds = max(1, int(getattr(request, "evolution_rounds", 4)))
     soluprot_cutoff = float(getattr(request, "soluprot_cutoff", 0.5))
     surrogate_kind = getattr(request, "evolution_surrogate_model", "rf")
+    label_source = _normalize_label_source(
+        getattr(request, "evolution_label_source", "experimental")
+    )
+    objective_metric = (
+        str(getattr(request, "evolution_objective_metric", "activity") or "activity")
+        .strip()
+        or "activity"
+    )
 
     evolution_dir = paths.root / "evolution"
     designs_dir = evolution_dir / "designs"
@@ -373,7 +605,7 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
             raise RuntimeError(f"Round {round_no} produced no candidate sequences")
 
         seq_texts = [all_seqs[sid] for sid in gated_seq_ids]
-        embeddings = get_esm_embeddings(seq_texts, device)
+        embeddings = _embed_sequences_for_runner(runner, seq_texts, device)
         pool_summary: dict[str, object] = {
             "round": round_no,
             "pool_run_id": pool_run_id,
@@ -410,6 +642,187 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
             padding = rng.choice(remaining, count - len(train_idx), replace=False)
             train_idx = np.concatenate([train_idx, padding])
         return np.asarray(train_idx, dtype=int)
+
+    if label_source == "experimental":
+        set_status(
+            paths,
+            stage="evolution",
+            state="running",
+            detail="Generating experimental active-learning candidate pool",
+        )
+        (
+            _pool_run_id,
+            all_seqs,
+            soluprot_scores,
+            gated_seq_ids,
+            embeddings,
+        ) = _generate_pool(1)
+
+        source_run_ids = [
+            str(getattr(request, "evolution_experiment_source_run_id", "") or ""),
+            run_id,
+        ]
+        experimental_labels = _load_experimental_labels(
+            runner.output_root, source_run_ids, objective_metric
+        )
+        labelled_indices: list[int] = []
+        y_values: list[float] = []
+        label_rows: list[dict[str, object]] = []
+        for idx, sid in enumerate(gated_seq_ids):
+            label = experimental_labels.get(sid)
+            matched_by = "candidate_id" if label else ""
+            if not label:
+                label = experimental_labels.get(_sequence_label_key(all_seqs[sid]))
+                matched_by = "sequence" if label else ""
+            if not label:
+                continue
+            labelled_indices.append(idx)
+            y_values.append(float(label.get("selection_score", label["value"])))
+            label_rows.append(
+                {
+                    "id": sid,
+                    "sequence": all_seqs[sid],
+                    "label_value": float(label["value"]),
+                    "selection_score": float(label.get("selection_score", label["value"])),
+                    "metric_direction": label.get("metric_direction", "maximize"),
+                    "matched_by": matched_by or label.get("matched_by", "candidate_id"),
+                    "source_candidate_id": label.get("candidate_id"),
+                    "source_run_id": label.get("source_run_id"),
+                    "experiment_id": label.get("experiment_id"),
+                    "soluprot": float(soluprot_scores.get(sid, 0.0)),
+                }
+            )
+
+        recommended_rows: list[dict[str, object]] = []
+        requested_rows: list[dict[str, object]] = []
+        if labelled_indices:
+            set_status(
+                paths,
+                stage="evolution",
+                state="running",
+                detail=(
+                    f"Training experimental surrogate on {len(labelled_indices)} "
+                    f"{objective_metric} labels"
+                ),
+            )
+            X_train = embeddings[np.asarray(labelled_indices, dtype=int)]
+            y_train = np.asarray(y_values, dtype=np.float64)
+            model = _make_surrogate(surrogate_kind, seed=42)
+            model.fit(X_train, y_train)
+            labelled_set = set(labelled_indices)
+            candidate_idx = np.asarray(
+                [idx for idx in range(len(gated_seq_ids)) if idx not in labelled_set],
+                dtype=int,
+            )
+            if len(candidate_idx):
+                pred = np.asarray(model.predict(embeddings[candidate_idx]), dtype=np.float64)
+                metric_directions = [
+                    str(row.get("metric_direction") or "maximize") for row in label_rows
+                ]
+                objective_direction = (
+                    "minimize" if "minimize" in metric_directions else "maximize"
+                )
+                order = np.argsort(pred)[::-1][: min(top_k, len(pred))]
+                for rank, local_idx in enumerate(order, start=1):
+                    idx = int(candidate_idx[int(local_idx)])
+                    sid = gated_seq_ids[idx]
+                    selection_score = float(pred[int(local_idx)])
+                    row = {
+                        "rank": rank,
+                        "candidate_id": sid,
+                        "id": sid,
+                        "sequence": all_seqs[sid],
+                        "soluprot": float(soluprot_scores.get(sid, 0.0)),
+                        "selection_reason": "experimental_surrogate_top_k",
+                        "predicted_objective": (
+                            -selection_score
+                            if objective_direction == "minimize"
+                            else selection_score
+                        ),
+                        "predicted_selection_score": selection_score,
+                        "metric_direction": objective_direction,
+                    }
+                    recommended_rows.append(row)
+            _write_candidate_csv(evolution_dir / "next_candidates.csv", recommended_rows)
+        else:
+            set_status(
+                paths,
+                stage="evolution",
+                state="running",
+                detail="No experimental labels found; selecting bootstrap candidates",
+            )
+            train_idx = _select_kmeans_indices(embeddings, n_train)
+            for rank, idx in enumerate(train_idx, start=1):
+                sid = gated_seq_ids[int(idx)]
+                requested_rows.append(
+                    {
+                        "rank": rank,
+                        "candidate_id": sid,
+                        "id": sid,
+                        "sequence": all_seqs[sid],
+                        "soluprot": float(soluprot_scores.get(sid, 0.0)),
+                        "selection_reason": "kmeans_bootstrap_experiment",
+                    }
+                )
+            _write_candidate_csv(evolution_dir / "experiment_request.csv", requested_rows)
+
+        summary = {
+            "run_id": run_id,
+            "evolution_mode": "experimental-feedback-active-learning",
+            "label_source": "experimental",
+            "objective_metric": objective_metric,
+            "metric_direction": (
+                "minimize"
+                if any(str(row.get("metric_direction")) == "minimize" for row in label_rows)
+                else "maximize"
+            ),
+            "surrogate_model": surrogate_kind,
+            "pool_statistics": {
+                "rounds": 1,
+                "initial": len(all_seqs),
+                "gated": len(gated_seq_ids),
+                "per_round": pool_summaries,
+            },
+            "experimental_labels": {
+                "count": len(label_rows),
+                "source_run_ids": [rid for rid in source_run_ids if rid],
+                "items": label_rows,
+            },
+            "requested_experiments": requested_rows,
+            "recommended_candidates": recommended_rows,
+            "artifact_paths": {
+                "experiment_request_csv": (
+                    "evolution/experiment_request.csv" if requested_rows else None
+                ),
+                "next_candidates_csv": (
+                    "evolution/next_candidates.csv" if recommended_rows else None
+                ),
+            },
+        }
+        write_json(paths.summary_json, summary)
+        set_status(
+            paths,
+            stage="evolution_waiting_for_experiments"
+            if requested_rows
+            else "evolution_recommendations_ready",
+            state="completed",
+        )
+        try:
+            ncp_storage.sync_outputs(run_id)
+        except Exception:
+            pass
+        return PipelineResult(
+            run_id=run_id,
+            output_dir=str(paths.root),
+            msa_a3m_path=None,
+            msa_filtered_a3m_path=None,
+            msa_tsv_path=None,
+            conservation_path=None,
+            ligand_mask_path=None,
+            surface_mask_path=None,
+            tiers=[],
+            errors=[],
+        )
 
     def _copy_optional_outputs(eval_run_id: str, sid: str) -> object | None:
         relax_score = None
