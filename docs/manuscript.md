@@ -64,7 +64,7 @@ This separation is important for biofoundry-scale workflows. The surrogate-triag
 
 ![AF2-budgeted surrogate triage](figures/benchmark/fig2_active_learning_loop.png)
 
-*Figure 2. AF2-budgeted surrogate triage. K-means selects a diverse AF2-labelled bootstrap set from SoluProt-passing candidates. RAPID compares local surrogate policies by internal cross-validation, refits the selected policy on all bootstrap labels, and reserves AF2/ColabFold for one Top-K acquisition set. Comparator models, rank-mean ensemble, feature summaries, fitted model files, and prediction tables are exported as artifacts without expanding the AF2 budget. Experimental-feedback evolution uses the same candidate and embedding contract but learns from user-recorded wet-lab objective values rather than treating AF2 as a biological oracle.*
+*Figure 2. AF2-budgeted surrogate triage. K-means selects a diverse AF2-labelled bootstrap set from SoluProt-passing candidates. RAPID compares configured local surrogate policies by internal cross-validation, refits the selected policy on all bootstrap labels, and reserves AF2/ColabFold for one Top-K acquisition set. Comparator-model metrics, optional rank-mean ensemble results, feature summaries, fitted model files, and prediction tables are exported as artifacts without expanding the AF2 budget. Experimental-feedback evolution uses the same candidate and embedding contract but learns from user-recorded wet-lab objective values rather than treating AF2 as a biological oracle.*
 
 ### 2.5 Current Artifact Benchmark and Statistical Analysis
 

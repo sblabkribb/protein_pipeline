@@ -2141,7 +2141,7 @@ const I18N = {
     "tutorial.step.evolution.hint": "Use it when experimental measurements are available or planned; use Surrogate for one-round in-silico budget triage.",
     "tutorial.step.evolutionSettings.title": "Evolution numbers control cost and selectivity",
     "tutorial.step.evolutionSettings.body":
-      "Generation Pool Size is the candidate pool. Label source selects experimental feedback or legacy in-silico AF2 labels. Experiment source run ID tells RAPID where to reuse prior wet-lab metric values.",
+      "Generation Pool Size is the candidate pool. Label source selects experimental feedback or legacy in-silico AF2 labels. Run ID with experiment values tells RAPID where to reuse prior wet-lab metric values.",
     "tutorial.step.evolutionSettings.hint":
       "Larger pools explore more sequences but take longer. Increase Top K only when you want broader final validation; reduce it for quick screening.",
     "tutorial.step.studio.title": "Studio resumes staged workflows",
@@ -2258,15 +2258,15 @@ const I18N = {
     "surrogate.initialSamples.label": "Training AF2 samples",
     "surrogate.topK.label": "Top K final AF2 candidates",
     "surrogate.model.label": "Surrogate model",
-    "surrogate.acquisition.label": "Acquisition policy",
+    "surrogate.acquisition.label": "Top K selection method",
     "surrogate.acquisition.help":
-      "Auto compares models on the AF2-labelled training set and uses one selected policy for Top K acquisition.",
-    "surrogate.comparators.label": "Comparator models",
-    "surrogate.ensembleMembers.label": "Rank ensemble members",
+      "RAPID labels training candidates with AF2, compares the checked models by cross-validation, then sends the best model's Top K candidates to AF2.",
+    "surrogate.comparators.label": "Models to compare",
+    "surrogate.ensembleMembers.label": "Optional rank ensemble",
     "surrogate.ensembleMembers.help":
-      "Used when Auto evaluates rank ensemble, or when Rank ensemble is forced as the acquisition policy.",
+      "Leave empty by default. Select members only when you also want RAPID to compare a rank-averaged ensemble.",
     "surrogate.model.help":
-      "These models are compared and reported without expanding the final AF2 Top K budget.",
+      "RAPID compares these models on the same AF2-labelled training set. If the method is CV, the best model selects the final Top K.",
     "surrogate.note":
       "Use Evolution only when experimental measurements are available or planned. Use this Surrogate tab when the goal is a one-round compute budget reduction.",
     "surrogate.error.targetRequired": "Choose FASTA/PDB/mmCIF input before launching Surrogate Triage.",
@@ -2305,13 +2305,13 @@ const I18N = {
     "evolution.options.title": "Evolution Settings",
     "evolution.options.desc": "Configure experimental-feedback active learning or the legacy in-silico AF2 loop.",
     "evolution.feedbackGuide":
-      "First run: RAPID writes evolution/experiment_request.csv. After wet-lab testing, enter candidate_id, metric_name, and metric_value in Analyze > Experiment. Next run: set Experiment source run ID to reuse those labels and write evolution/next_candidates.csv.",
+      "First run: RAPID writes evolution/experiment_request.csv. After wet-lab testing, enter candidate_id, metric_name, and metric_value in Analyze > Experiment. Next run: choose the run ID that contains those measurements to write evolution/next_candidates.csv.",
     "evolution.poolSize.label": "Stage 1: Generation Pool Size",
     "evolution.labelSource.label": "Label source",
     "evolution.labelSource.experimental": "Experimental feedback",
     "evolution.labelSource.inSilicoAf2": "In-silico AF2 legacy",
     "evolution.objectiveMetric.label": "Experimental objective metric",
-    "evolution.experimentSourceRunId.label": "Experiment source run ID",
+    "evolution.experimentSourceRunId.label": "Run ID with experiment values",
     "evolution.experimentSourceRunId.help":
       "Choose a previous run with recorded Analyze > Experiment labels, or type a run ID manually.",
     "evolution.experimentSourceRunId.refresh": "Refresh runs",
@@ -3192,7 +3192,7 @@ const I18N = {
       "Use experimental feedback for design-test-learn cycles, or keep the old AF2-labelled computational loop for legacy comparisons.",
     "question.evolutionObjectiveMetric.label": "Experimental objective metric",
     "question.evolutionObjectiveMetric.help": "Metric name to learn from in experiment records, such as activity, soluble_yield, or expression.",
-    "question.evolutionExperimentSourceRunId.label": "Experiment source run ID",
+    "question.evolutionExperimentSourceRunId.label": "Run ID with experiment values",
     "question.evolutionExperimentSourceRunId.help":
       "Optional previous run whose experiment records should be used as labels for the next recommendation step.",
     "choice.evolutionLabelSource.experimental": "Experimental feedback",
@@ -3217,14 +3217,14 @@ const I18N = {
     "question.surrogateTriageInitialSamples.help": "Diverse SoluProt-passed candidates labelled with {af2Provider} before fitting the surrogate.",
     "question.surrogateTriageTopK.label": "Surrogate Top K",
     "question.surrogateTriageTopK.help": "Additional surrogate-ranked candidates to validate with {af2Provider}.",
-    "question.surrogateTriageModel.label": "Acquisition Policy",
-    "question.surrogateTriageModel.help": "Auto selects one acquisition policy by internal CV on the initial {af2Provider}-labelled set. Manual policies are available for controlled runs.",
-    "question.surrogateTriageComparatorModels.label": "Comparator Models",
-    "question.surrogateTriageComparatorModels.help": "Models trained for comparison and reporting without expanding the final {af2Provider} Top K budget.",
-    "question.surrogateTriageEnsembleModels.label": "Rank Ensemble Members",
-    "question.surrogateTriageEnsembleModels.help": "Models included when Auto evaluates rank ensemble or when Rank ensemble is forced.",
+    "question.surrogateTriageModel.label": "Top K Selection Method",
+    "question.surrogateTriageModel.help": "CV chooses the model that best predicts the initial {af2Provider}-labelled set, then uses that model to pick final Top K candidates. You can also force one model.",
+    "question.surrogateTriageComparatorModels.label": "Models to Compare",
+    "question.surrogateTriageComparatorModels.help": "Models compared on the same initial {af2Provider}-labelled training set.",
+    "question.surrogateTriageEnsembleModels.label": "Optional Rank Ensemble",
+    "question.surrogateTriageEnsembleModels.help": "Leave empty unless you also want to compare a rank-averaged ensemble.",
     "question.surrogateTriageCvFolds.label": "CV Folds",
-    "question.surrogateTriageCvFolds.help": "Internal folds used to select the acquisition policy from the labelled training set.",
+    "question.surrogateTriageCvFolds.help": "Internal folds used to choose the Top K selection model from the labelled training set.",
     "question.af2PlddtCutoff.label": "{af2Provider} pLDDT Cutoff",
     "question.af2PlddtCutoff.help": "Minimum pLDDT threshold for {af2Provider} pass filtering (default: 85).",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD Cutoff",
@@ -3352,7 +3352,7 @@ const I18N = {
     "choice.surrogateModel.xgboost": "XGBoost",
     "choice.surrogateModel.lightgbm": "LightGBM",
     "choice.surrogateModel.ensemble": "Rank ensemble",
-    "choice.surrogatePolicy.auto": "Auto-select by CV",
+    "choice.surrogatePolicy.auto": "Choose by CV",
     "choice.rfd3Mode.localDiversify": "Local Diversify",
     "choice.rfd3Mode.legacyContig": "Legacy Contig",
     "choice.rfd3Mode.binder": "Binder",
@@ -3782,11 +3782,11 @@ const I18N = {
       "적용 전에는 반드시 residue 후보를 검토하세요. Agent는 문헌 근거를 정리해주지만 최종 mask 결정은 사용자가 합니다.",
     "tutorial.step.evolution.title": "Evolution은 반복 설계를 탐색합니다",
     "tutorial.step.evolution.body":
-      "Evolution은 design-test-learn 회차를 위한 기능입니다. 첫 실행은 experiment_request.csv를 만들고, Analyze > Experiment에 assay 값을 기록한 뒤 다음 실행에서 그 라벨을 사용해 next_candidates.csv를 만듭니다.",
+      "Evolution은 설계-실험-학습 회차를 위한 기능입니다. 첫 실행은 experiment_request.csv를 만들고, 분석 > 실험에 측정값을 기록한 뒤 다음 실행에서 그 라벨을 사용해 next_candidates.csv를 만듭니다.",
     "tutorial.step.evolution.hint": "실험 측정값이 있거나 곧 만들 계획일 때 사용하세요. 1회 in-silico 비용 절감은 Surrogate 탭을 사용합니다.",
     "tutorial.step.evolutionSettings.title": "Evolution 숫자는 비용과 선별 강도를 정합니다",
     "tutorial.step.evolutionSettings.body":
-      "Generation Pool Size는 후보 pool 크기입니다. Label source는 실험 피드백과 legacy in-silico AF2 라벨 중 선택하고, Experiment source run ID는 이전 실험 측정값을 재사용할 run을 지정합니다.",
+      "초기 생성 풀 크기는 후보 pool 크기입니다. 라벨 소스는 실험 피드백과 기존 in-silico AF2 라벨 중 선택하고, 실험값을 가져올 run ID는 이전 측정값을 재사용할 run을 지정합니다.",
     "tutorial.step.evolutionSettings.hint":
       "pool이 크면 더 넓게 탐색하지만 오래 걸립니다. Top K는 최종 검증을 넓히고 싶을 때 늘리고, 빠른 screening에는 줄이세요.",
     "tutorial.step.studio.title": "스튜디오는 단계별 워크플로우를 이어갑니다",
@@ -3902,15 +3902,15 @@ const I18N = {
     "surrogate.initialSamples.label": "학습용 AF2 샘플 수",
     "surrogate.topK.label": "최종 AF2 Top K 후보 수",
     "surrogate.model.label": "대리모델",
-    "surrogate.acquisition.label": "획득 정책",
+    "surrogate.acquisition.label": "Top K 선정 방법",
     "surrogate.acquisition.help":
-      "Auto는 AF2 라벨 학습셋 안에서 모델을 비교하고, 선택된 하나의 정책으로 Top K 후보만 검증합니다.",
-    "surrogate.comparators.label": "비교 모델",
-    "surrogate.ensembleMembers.label": "Rank ensemble 멤버",
+      "RAPID가 AF2로 학습 후보를 먼저 평가하고, 체크한 모델들을 교차검증으로 비교한 뒤 가장 나은 모델로 최종 Top K를 고릅니다.",
+    "surrogate.comparators.label": "비교할 모델",
+    "surrogate.ensembleMembers.label": "선택 사항: Rank ensemble 비교",
     "surrogate.ensembleMembers.help":
-      "Auto가 rank ensemble을 평가하거나 Rank ensemble을 강제 정책으로 선택할 때 사용합니다.",
+      "기본값은 사용 안 함입니다. 여러 모델 순위를 평균한 ensemble도 같이 비교하고 싶을 때만 멤버를 선택하세요.",
     "surrogate.model.help":
-      "이 모델들은 비교와 리포트에만 사용되며 최종 AF2 Top K 예산을 늘리지 않습니다.",
+      "같은 AF2 라벨 학습셋에서 이 모델들을 비교합니다. Top K 선정 방법이 CV 자동 선택이면 가장 성능이 좋은 모델 하나가 최종 Top K를 고릅니다.",
     "surrogate.note":
       "실험 측정값이 있거나 만들 계획이면 Evolution을 사용하세요. 1회 실행에서 compute budget을 줄이는 목적이면 이 Surrogate 탭을 사용합니다.",
     "surrogate.error.targetRequired": "Surrogate Triage를 실행하려면 FASTA/PDB/mmCIF 입력을 넣으세요.",
@@ -3948,15 +3948,15 @@ const I18N = {
     "evolution.options.title": "진화 설정",
     "evolution.options.desc": "실험 피드백 active learning 또는 기존 in-silico AF2 loop를 설정합니다.",
     "evolution.feedbackGuide":
-      "첫 실행: RAPID가 evolution/experiment_request.csv를 만듭니다. wet-lab 측정 후 Analyze > Experiment에서 candidate_id, metric_name, metric_value를 입력하세요. 다음 실행: Experiment source run ID를 지정하면 해당 라벨을 재사용해 evolution/next_candidates.csv를 만듭니다.",
+      "첫 실행: RAPID가 evolution/experiment_request.csv에 실험 후보표를 만듭니다. 습식 실험 후 분석 > 실험에서 candidate_id, metric_name, metric_value를 기록하세요. 다음 실행: 실험값이 들어 있는 run ID를 선택하면 해당 라벨로 evolution/next_candidates.csv를 만듭니다.",
     "evolution.poolSize.label": "Stage 1: 초기 생성 풀 크기",
     "evolution.labelSource.label": "라벨 소스",
     "evolution.labelSource.experimental": "실험 피드백",
     "evolution.labelSource.inSilicoAf2": "In-silico AF2 기존 방식",
     "evolution.objectiveMetric.label": "실험 objective metric",
-    "evolution.experimentSourceRunId.label": "실험 source run ID",
+    "evolution.experimentSourceRunId.label": "실험값을 가져올 run ID",
     "evolution.experimentSourceRunId.help":
-      "Analyze > Experiment 라벨이 기록된 이전 run을 고르거나 run ID를 직접 입력하세요.",
+      "분석 > 실험에 측정값이 기록된 이전 run을 고르거나 run ID를 직접 입력하세요.",
     "evolution.experimentSourceRunId.refresh": "run 목록 새로고침",
     "evolution.experimentSourceRunId.loading": "run ID를 불러오는 중...",
     "evolution.experimentSourceRunId.loaded":
@@ -4859,14 +4859,14 @@ const I18N = {
     "question.surrogateTriageInitialSamples.help": "대리 모델을 맞추기 전에 {af2Provider}로 먼저 라벨링할 SoluProt 통과 후보 수입니다.",
     "question.surrogateTriageTopK.label": "대리 모델 상위 K개",
     "question.surrogateTriageTopK.help": "대리 모델 순위에서 추가로 {af2Provider} 검증까지 보낼 후보 수입니다.",
-    "question.surrogateTriageModel.label": "획득 정책",
-    "question.surrogateTriageModel.help": "Auto는 초기 {af2Provider} 라벨셋의 내부 CV로 하나의 후보 획득 정책을 선택합니다. 수동 정책은 controlled run에 사용합니다.",
-    "question.surrogateTriageComparatorModels.label": "비교 모델",
-    "question.surrogateTriageComparatorModels.help": "최종 {af2Provider} Top K 예산을 늘리지 않고 비교와 리포트용으로 학습할 모델입니다.",
-    "question.surrogateTriageEnsembleModels.label": "Rank ensemble 멤버",
-    "question.surrogateTriageEnsembleModels.help": "Auto가 rank ensemble을 평가하거나 Rank ensemble을 강제 정책으로 선택할 때 포함할 모델입니다.",
+    "question.surrogateTriageModel.label": "Top K 선정 방법",
+    "question.surrogateTriageModel.help": "CV 자동 선택은 초기 {af2Provider} 라벨셋에서 모델들을 비교한 뒤 최종 Top K를 고를 모델 하나를 선택합니다. 특정 모델로 고정할 수도 있습니다.",
+    "question.surrogateTriageComparatorModels.label": "비교할 모델",
+    "question.surrogateTriageComparatorModels.help": "초기 {af2Provider} 라벨셋에서 성능을 비교할 대리모델입니다.",
+    "question.surrogateTriageEnsembleModels.label": "선택 사항: Rank ensemble 비교",
+    "question.surrogateTriageEnsembleModels.help": "여러 모델의 순위를 평균한 ensemble도 비교할 때만 선택합니다. 비워두면 ensemble은 평가하지 않습니다.",
     "question.surrogateTriageCvFolds.label": "CV fold 수",
-    "question.surrogateTriageCvFolds.help": "라벨링된 학습셋 안에서 획득 정책을 선택할 때 사용할 내부 CV fold 수입니다.",
+    "question.surrogateTriageCvFolds.help": "라벨링된 학습셋 안에서 Top K 선정 모델을 고를 때 사용할 내부 CV fold 수입니다.",
     "question.af2PlddtCutoff.label": "{af2Provider} pLDDT 컷오프",
     "question.af2PlddtCutoff.help": "{af2Provider} 통과 필터링에 사용할 최소 pLDDT 임계값입니다. (기본값: 85)",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD 컷오프",
@@ -4994,7 +4994,7 @@ const I18N = {
     "choice.surrogateModel.xgboost": "XGBoost",
     "choice.surrogateModel.lightgbm": "LightGBM",
     "choice.surrogateModel.ensemble": "Rank ensemble",
-    "choice.surrogatePolicy.auto": "CV 기반 자동 선택",
+    "choice.surrogatePolicy.auto": "CV로 자동 선택",
     "choice.rfd3Mode.localDiversify": "Local Diversify",
     "choice.rfd3Mode.legacyContig": "Legacy Contig",
     "choice.rfd3Mode.binder": "Binder",
@@ -9318,7 +9318,7 @@ const QUESTION_PRESETS = {
   surrogate_triage_ensemble_models: {
     labelKey: "question.surrogateTriageEnsembleModels.label",
     questionKey: "question.surrogateTriageEnsembleModels.help",
-    default: ["rf", "ridge", "lightgbm", "xgboost"],
+    default: [],
   },
   surrogate_triage_cv_folds: {
     labelKey: "question.surrogateTriageCvFolds.label",
@@ -12295,7 +12295,7 @@ function selectedSurrogateEnsembleModelsFromChoices(container = el.surrogateEnse
   const selected = boxes
     .filter((box) => box.checked)
     .map((box) => box.dataset.surrogateEnsembleModelChoice || box.value);
-  return normalizeSurrogateModelSelection(selected.length ? selected : "ensemble");
+  return normalizeSurrogateModelSelection(selected, []);
 }
 
 function syncSurrogateModelChoiceState() {
@@ -12319,11 +12319,7 @@ function syncSurrogateModelChoiceState() {
 
 function syncSurrogateEnsembleModelChoiceState() {
   const boxes = surrogateEnsembleModelChoiceBoxes();
-  if (!boxes.length) return normalizeSurrogateModelSelection("ensemble");
-  if (!boxes.some((box) => box.checked)) {
-    const defaultBox = boxes.find((box) => box.dataset.surrogateEnsembleModelChoice === "rf") || boxes[0];
-    if (defaultBox) defaultBox.checked = true;
-  }
+  if (!boxes.length) return [];
   const selected = selectedSurrogateEnsembleModelsFromChoices();
   const selectedSet = new Set(selected);
   boxes.forEach((box) => {
@@ -12354,7 +12350,7 @@ function buildSurrogateLaunchAnswers() {
     surrogate_triage_top_k: readIntegerInput(el.surrogateTopKInput, 20, { min: 1 }),
     surrogate_triage_model: acquisitionPolicy,
     surrogate_triage_comparator_models: surrogateModelPayload(comparatorModels),
-    surrogate_triage_ensemble_models: surrogateModelPayload(ensembleModels),
+    surrogate_triage_ensemble_models: surrogateModelPayload(ensembleModels, []),
     surrogate_triage_cv_folds: 5,
     af2_provider: String(el.surrogateAf2ProviderInput?.value || "colabfold").trim() || "colabfold",
     soluprot_cutoff: readNumberInput(el.surrogateSoluprotCutoffInput, 0.5, { min: 0, max: 1 }),
@@ -12762,7 +12758,7 @@ function buildManualPlan(mode) {
     surrogate_triage_top_k: 20,
     surrogate_triage_model: "auto",
     surrogate_triage_comparator_models: ["rf", "ridge", "lightgbm", "xgboost"],
-    surrogate_triage_ensemble_models: ["rf", "ridge", "lightgbm", "xgboost"],
+    surrogate_triage_ensemble_models: [],
     surrogate_triage_cv_folds: 5,
     selected_tiers: [0.3, 0.5, 0.7],
     num_seq_per_tier: 2,
@@ -12917,7 +12913,7 @@ function buildManualPlan(mode) {
         labelKey: "question.surrogateTriageEnsembleModels.label",
         questionKey: "question.surrogateTriageEnsembleModels.help",
         required: false,
-        default: ["rf", "ridge", "lightgbm", "xgboost"],
+        default: [],
       },
       {
         id: "surrogate_triage_cv_folds",
@@ -18244,6 +18240,8 @@ function renderQuestions(questions) {
       ].forEach(([id]) => {
         const q = questionById[id];
         if (!q) return;
+        const allowEmpty = id === "surrogate_triage_ensemble_models";
+        const defaultModels = allowEmpty ? [] : ["rf", "ridge", "lightgbm", "xgboost"];
         const field = document.createElement("div");
         field.className = "parameter-field option-field";
         const label = document.createElement("span");
@@ -18253,10 +18251,10 @@ function renderQuestions(questions) {
         desc.className = "parameter-help";
         desc.textContent = questionHelp(q);
         const currentModels = normalizeSurrogateModelSelection(
-          state.answers[id] || q.default || "ensemble",
-          normalizeSurrogateModelSelection("ensemble")
+          state.answers[id] !== undefined ? state.answers[id] : q.default,
+          defaultModels
         );
-        state.answers[id] = surrogateModelPayload(currentModels);
+        state.answers[id] = surrogateModelPayload(currentModels, defaultModels);
         const modelOptions = [
           { labelKey: "choice.surrogateModel.rf", value: "rf" },
           { labelKey: "choice.surrogateModel.ridge", value: "ridge" },
@@ -18269,15 +18267,15 @@ function renderQuestions(questions) {
         field.appendChild(label);
         field.appendChild(desc);
         renderChoiceButtons(field, modelOptions, currentModels, (value) => {
-          const current = normalizeSurrogateModelSelection(state.answers[id], normalizeSurrogateModelSelection("ensemble"));
+          const current = normalizeSurrogateModelSelection(state.answers[id], defaultModels);
           const next = new Set(current);
           if (next.has(value)) {
-            if (next.size <= 1) return;
+            if (!allowEmpty && next.size <= 1) return;
             next.delete(value);
           } else {
             next.add(value);
           }
-          state.answers[id] = surrogateModelPayload(Array.from(next));
+          state.answers[id] = surrogateModelPayload(Array.from(next), defaultModels);
           updateRunEligibility(normalizedQuestions);
         }, { multi: true, rerender: true });
         grid.appendChild(field);
@@ -19433,9 +19431,9 @@ function buildAnswerPayload(mode = state.runMode) {
       surrogate_triage_top_k: answers.surrogate_triage_top_k ?? 20,
       surrogate_triage_model: normalizeSurrogateAcquisitionPolicy(answers.surrogate_triage_model || "auto"),
       surrogate_triage_comparator_models:
-        answers.surrogate_triage_comparator_models || ["rf", "ridge", "lightgbm", "xgboost"],
+        answers.surrogate_triage_comparator_models ?? ["rf", "ridge", "lightgbm", "xgboost"],
       surrogate_triage_ensemble_models:
-        answers.surrogate_triage_ensemble_models || ["rf", "ridge", "lightgbm", "xgboost"],
+        answers.surrogate_triage_ensemble_models ?? [],
       surrogate_triage_cv_folds: answers.surrogate_triage_cv_folds ?? 5,
       selected_tiers: Array.isArray(answers.selected_tiers) && answers.selected_tiers.length
         ? answers.selected_tiers
@@ -19780,7 +19778,7 @@ function buildRoutedForMode(mode) {
       surrogate_triage_top_k: 20,
       surrogate_triage_model: "auto",
       surrogate_triage_comparator_models: ["rf", "ridge", "lightgbm", "xgboost"],
-      surrogate_triage_ensemble_models: ["rf", "ridge", "lightgbm", "xgboost"],
+      surrogate_triage_ensemble_models: [],
       surrogate_triage_cv_folds: 5,
       af2_max_candidates_per_tier: 0,
     };

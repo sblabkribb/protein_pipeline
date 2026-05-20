@@ -70,10 +70,10 @@ def _parse_targets(text: str) -> list[str]:
     return [item.strip() for item in str(text or "").split(",") if item.strip()]
 
 
-def _parse_models(text: str) -> str | list[str]:
+def _parse_models(text: str, *, default: str | list[str]) -> str | list[str]:
     items = [item.strip().lower() for item in re.split(r"[,;\n]+", str(text or "")) if item.strip()]
     if not items:
-        return "auto"
+        return list(default) if isinstance(default, list) else default
     return items[0] if len(items) == 1 else items
 
 
@@ -118,9 +118,12 @@ def _build_request(*, cath_module, pdb_path: Path, target_id: str, args: argpars
         surrogate_triage_enabled=True,
         surrogate_triage_initial_samples=int(args.initial_samples),
         surrogate_triage_top_k=int(args.top_k),
-        surrogate_triage_model=_parse_models(args.surrogate_policy),
-        surrogate_triage_comparator_models=_parse_models(args.comparator_models),
-        surrogate_triage_ensemble_models=_parse_models(args.ensemble_models),
+        surrogate_triage_model=_parse_models(args.surrogate_policy, default="auto"),
+        surrogate_triage_comparator_models=_parse_models(
+            args.comparator_models,
+            default=["rf", "ridge", "lightgbm", "xgboost"],
+        ),
+        surrogate_triage_ensemble_models=_parse_models(args.ensemble_models, default=[]),
         surrogate_triage_cv_folds=int(args.cv_folds),
         rfd3_use=False,
         bioemu_use=False,
@@ -204,13 +207,13 @@ def main(argv: list[str] | None = None) -> int:
         dest="surrogate_policy",
         default="auto",
         help=(
-            "Acquisition policy for final Top-K candidates. Use auto to select by "
+            "Top-K selection method for final candidates. Use auto to select by "
             "internal CV; rf/ridge/xgboost/lightgbm/ensemble force one policy. "
             "--surrogate-models is kept as a backward-compatible alias."
         ),
     )
     parser.add_argument("--comparator-models", default="rf,ridge,lightgbm,xgboost")
-    parser.add_argument("--ensemble-models", default="rf,ridge,lightgbm,xgboost")
+    parser.add_argument("--ensemble-models", default="")
     parser.add_argument("--cv-folds", type=int, default=5)
     parser.add_argument("--soluprot-cutoff", type=float, default=0.5)
     parser.add_argument("--af2-provider", default="colabfold")
@@ -249,8 +252,6 @@ def main(argv: list[str] | None = None) -> int:
         str(args.surrogate_policy),
         "--comparator-models",
         str(args.comparator_models),
-        "--ensemble-models",
-        str(args.ensemble_models),
         "--cv-folds",
         str(args.cv_folds),
         "--soluprot-cutoff",
@@ -264,6 +265,8 @@ def main(argv: list[str] | None = None) -> int:
         "--stop-after",
         str(args.stop_after),
     ]
+    if str(args.ensemble_models or "").strip():
+        command.extend(["--ensemble-models", str(args.ensemble_models)])
     for flag, enabled in (
         ("--force", args.force),
         ("--dry-run", args.dry_run),

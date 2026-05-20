@@ -569,9 +569,12 @@ def _normalize_surrogate_triage_models(
     value: object,
     *,
     default: object = "rf",
+    allow_empty: bool = False,
 ) -> list[str]:
     raw_items = _split_surrogate_triage_tokens(value, default=default)
     if not raw_items:
+        if allow_empty:
+            return []
         raw_items = _split_surrogate_triage_tokens(default, default="rf") or ["rf"]
     expanded: list[str] = []
     for item in raw_items:
@@ -595,6 +598,8 @@ def _normalize_surrogate_triage_models(
     fallback = _split_surrogate_triage_tokens(default, default="rf") or ["rf"]
     if out:
         return out
+    if allow_empty:
+        return []
     return _normalize_surrogate_triage_models(fallback, default="rf")
 
 
@@ -9155,17 +9160,20 @@ class PipelineRunner:
                             if legacy_ensemble_members:
                                 comparator_models = list(legacy_ensemble_members)
                             ensemble_models = (
-                                legacy_ensemble_members
+                                list(legacy_ensemble_members)
                                 if legacy_ensemble_members
                                 else _normalize_surrogate_triage_models(
                                     getattr(
                                         request,
                                         "surrogate_triage_ensemble_models",
-                                        _SURROGATE_TRIAGE_ENSEMBLE_MODELS,
+                                        [],
                                     ),
-                                    default=_SURROGATE_TRIAGE_ENSEMBLE_MODELS,
+                                    default=[],
+                                    allow_empty=True,
                                 )
                             )
+                            if requested_policy == "ensemble" and len(ensemble_models) < 2:
+                                ensemble_models = list(_SURROGATE_TRIAGE_ENSEMBLE_MODELS)
                             cv_folds = max(
                                 2,
                                 int(getattr(request, "surrogate_triage_cv_folds", 5) or 5),

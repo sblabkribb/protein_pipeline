@@ -38,9 +38,7 @@ class PipelineRequest:
     surrogate_triage_comparator_models: str | list[str] = field(
         default_factory=lambda: ["rf", "ridge", "lightgbm", "xgboost"]
     )
-    surrogate_triage_ensemble_models: str | list[str] = field(
-        default_factory=lambda: ["rf", "ridge", "lightgbm", "xgboost"]
-    )
+    surrogate_triage_ensemble_models: str | list[str] = field(default_factory=list)
     surrogate_triage_cv_folds: int = 5
     project_id: str | None = None
     round_id: str | None = None

@@ -110,6 +110,19 @@ def test_pipeline_request_from_args_preserves_surrogate_auto_cv_options() -> Non
     assert req.surrogate_triage_cv_folds == 3
 
 
+def test_pipeline_request_from_args_leaves_rank_ensemble_disabled_by_default() -> None:
+    req = pipeline_request_from_args(
+        {
+            "target_fasta": ">q1\nACDEFGHIK\n",
+            "surrogate_triage_enabled": True,
+            "surrogate_triage_model": "auto",
+        }
+    )
+
+    assert req.surrogate_triage_comparator_models == ["rf", "ridge", "lightgbm", "xgboost"]
+    assert req.surrogate_triage_ensemble_models == []
+
+
 def test_pipeline_surrogate_triage_limits_af2_to_training_plus_topk(
     tmp_path, monkeypatch
 ) -> None:

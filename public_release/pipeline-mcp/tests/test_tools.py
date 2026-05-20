@@ -220,7 +220,7 @@ print("ok")
         )
         self.assertEqual(
             props["surrogate_triage_ensemble_models"]["default"],
-            ["rf", "ridge", "lightgbm", "xgboost"],
+            [],
         )
         self.assertEqual(props["surrogate_triage_cv_folds"]["default"], 5)
 

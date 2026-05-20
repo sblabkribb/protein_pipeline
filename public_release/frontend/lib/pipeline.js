@@ -59,7 +59,11 @@ export function normalizeSurrogateModelSelection(value, fallback = ["rf"]) {
     }
   });
   if (selected.length) return selected;
-  return Array.isArray(fallback) && fallback.length ? [...fallback] : ["rf"];
+  if (Array.isArray(fallback)) {
+    return fallback.filter((item, index) => SURROGATE_MODEL_CHOICES.includes(item) && fallback.indexOf(item) === index);
+  }
+  const fallbackItems = normalizeSurrogateModelSelection(fallback, ["rf"]);
+  return fallbackItems.length ? fallbackItems : ["rf"];
 }
 
 export function normalizeSurrogateAcquisitionPolicy(value, fallback = "auto") {
@@ -76,8 +80,8 @@ export function normalizeSurrogateAcquisitionPolicy(value, fallback = "auto") {
   return "auto";
 }
 
-export function surrogateModelPayload(value) {
-  const selected = normalizeSurrogateModelSelection(value);
+export function surrogateModelPayload(value, fallback = ["rf"]) {
+  const selected = normalizeSurrogateModelSelection(value, fallback);
   return selected.length === 1 ? selected[0] : selected;
 }
 
@@ -2019,7 +2023,7 @@ const WORKFLOW_STUDIO_STAGE_DEFAULTS = Object.freeze({
     surrogate_triage_top_k: 20,
     surrogate_triage_model: "auto",
     surrogate_triage_comparator_models: ["rf", "ridge", "lightgbm", "xgboost"],
-    surrogate_triage_ensemble_models: ["rf", "ridge", "lightgbm", "xgboost"],
+    surrogate_triage_ensemble_models: [],
     surrogate_triage_cv_folds: 5,
     relax_enabled: true,
   }),

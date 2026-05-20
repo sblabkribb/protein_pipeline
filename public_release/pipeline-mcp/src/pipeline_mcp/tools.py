@@ -232,7 +232,9 @@ def _as_list_of_str(value: object | None) -> list[str] | None:
     return [str(value)]
 
 
-def _as_model_name_selection(value: object | None, *, default: str = "rf") -> str | list[str]:
+def _as_model_name_selection(
+    value: object | None, *, default: str | list[str] = "rf"
+) -> str | list[str]:
     if value is None:
         return default
     if isinstance(value, list):
@@ -6647,11 +6649,11 @@ def pipeline_request_from_args(
     )
     surrogate_triage_comparator_models = _as_model_name_selection(
         args.get("surrogate_triage_comparator_models"),
-        default="rf,ridge,lightgbm,xgboost",
+        default=["rf", "ridge", "lightgbm", "xgboost"],
     )
     surrogate_triage_ensemble_models = _as_model_name_selection(
         args.get("surrogate_triage_ensemble_models"),
-        default="rf,ridge,lightgbm,xgboost",
+        default=[],
     )
     surrogate_triage_cv_folds = _as_int(args.get("surrogate_triage_cv_folds"), 5)
     project_id = _as_text(args.get("project_id")).strip() or None
@@ -7287,41 +7289,41 @@ def _pipeline_run_schema() -> dict[str, Any]:
                     },
                 ],
                 "default": "auto",
-                "description": "Acquisition policy for one-round standard-pipeline AF2 triage. Auto selects the best policy by internal CV on the AF2-labelled training set.",
+                "description": "Top K selection method for one-round standard-pipeline AF2 triage. Auto selects the best model by internal CV on the AF2-labelled training set.",
             },
             "surrogate_triage_comparator_models": {
                 "oneOf": [
                     {
                         "type": "string",
-                        "enum": ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
+                        "enum": ["rf", "ridge", "lightgbm", "xgboost"],
                     },
                     {
                         "type": "array",
                         "items": {
                             "type": "string",
-                            "enum": ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
+                            "enum": ["rf", "ridge", "lightgbm", "xgboost"],
                         },
                     },
                 ],
                 "default": ["rf", "ridge", "lightgbm", "xgboost"],
-                "description": "Models trained for surrogate comparison artifacts without expanding AF2 validation.",
+                "description": "Models compared on the same AF2-labelled training set; the selected policy chooses final Top K candidates.",
             },
             "surrogate_triage_ensemble_models": {
                 "oneOf": [
                     {
                         "type": "string",
-                        "enum": ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
+                        "enum": ["rf", "ridge", "lightgbm", "xgboost"],
                     },
                     {
                         "type": "array",
                         "items": {
                             "type": "string",
-                            "enum": ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
+                            "enum": ["rf", "ridge", "lightgbm", "xgboost"],
                         },
                     },
                 ],
-                "default": ["rf", "ridge", "lightgbm", "xgboost"],
-                "description": "Concrete models used as members when the rank-mean ensemble policy is evaluated or selected.",
+                "default": [],
+                "description": "Optional rank-mean ensemble members. Leave empty to skip ensemble comparison unless surrogate_triage_model is explicitly ensemble.",
             },
             "surrogate_triage_cv_folds": {
                 "type": "integer",

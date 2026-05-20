@@ -802,6 +802,8 @@ test("normalizeSurrogateModelSelection keeps multiple surrogate models", () => {
   assert.deepEqual(normalizeSurrogateModelSelection("rf,ridge"), ["rf", "ridge"]);
   assert.deepEqual(normalizeSurrogateModelSelection("ensemble"), ["rf", "ridge", "lightgbm", "xgboost"]);
   assert.deepEqual(normalizeSurrogateModelSelection(["bogus", "rf"]), ["rf"]);
+  assert.deepEqual(normalizeSurrogateModelSelection([], []), []);
+  assert.deepEqual(normalizeSurrogateModelSelection("", []), []);
 });
 
 test("normalizeSurrogateAcquisitionPolicy keeps auto and rank ensemble policies", () => {

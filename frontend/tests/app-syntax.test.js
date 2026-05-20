@@ -240,6 +240,10 @@ test("surrogate triage is exposed as a first-class UI mode", () => {
   assert.match(html, /id="surrogateEnsembleModelChoices"/);
   assert.match(html, /value="auto" data-i18n="choice\.surrogatePolicy\.auto"/);
   assert.doesNotMatch(html, /id="surrogateModelInput"[^>]*multiple/);
+  assert.doesNotMatch(html, /data-surrogate-ensemble-model-choice="rf" checked/);
+  assert.doesNotMatch(html, /data-surrogate-ensemble-model-choice="ridge" checked/);
+  assert.doesNotMatch(html, /data-surrogate-ensemble-model-choice="xgboost" checked/);
+  assert.doesNotMatch(html, /data-surrogate-ensemble-model-choice="lightgbm" checked/);
   assert.match(
     source,
     /const TAB_OPTIONS = \["home", "fast", "advanced", "surrogate", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"\];/
@@ -253,6 +257,9 @@ test("surrogate triage is exposed as a first-class UI mode", () => {
   assert.match(source, /bioemu_use:\s*false/);
   assert.match(source, /"tabs\.surrogate"/);
   assert.match(source, /"surrogate\.title"/);
+  assert.match(source, /"surrogate\.acquisition\.label": "Top K selection method"/);
+  assert.match(source, /"surrogate\.acquisition\.label": "Top K 선정 방법"/);
+  assert.match(source, /"surrogate\.ensembleMembers\.help":\s*"기본값은 사용 안 함입니다/);
 });
 
 test("evolution UI explains experimental feedback handoff", () => {
@@ -267,6 +274,8 @@ test("evolution UI explains experimental feedback handoff", () => {
   assert.match(source, /experiment_request\.csv/);
   assert.match(source, /next_candidates\.csv/);
   assert.match(source, /Analyze > Experiment/);
+  assert.match(source, /분석 > 실험/);
+  assert.match(source, /실험값을 가져올 run ID/);
   assert.match(source, /candidate_id/);
   assert.match(source, /metric_value/);
 });
