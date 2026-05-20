@@ -68,7 +68,11 @@ def _rows_for_run(run_dir: Path) -> list[dict[str, object]]:
                 "run_id": run_dir.name,
                 "target": run_dir.name.split("_")[-1],
                 "tier": tier,
+                "requested_policy": triage.get("requested_policy") or triage.get("model") or "",
+                "selected_policy": triage.get("selected_policy") or "",
                 "surrogate_models": ",".join(triage.get("models") or [triage.get("model") or ""]),
+                "comparator_models": ",".join(triage.get("comparator_models") or triage.get("models") or []),
+                "ensemble_models": ",".join(triage.get("ensemble_models") or []),
                 "selection_strategy": triage.get("selection_strategy") or "",
                 "initial_samples": int(triage.get("initial_samples") or request.get("surrogate_triage_initial_samples") or 0),
                 "top_k": int(triage.get("top_k") or request.get("surrogate_triage_top_k") or 0),
@@ -93,7 +97,11 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
         "run_id",
         "target",
         "tier",
+        "requested_policy",
+        "selected_policy",
         "surrogate_models",
+        "comparator_models",
+        "ensemble_models",
         "selection_strategy",
         "initial_samples",
         "top_k",
@@ -124,13 +132,14 @@ def _write_table(path: Path, rows: list[dict[str, object]]) -> None:
     after = sum(int(row["candidate_count_after_triage"] or 0) for row in usable)
     reduction = (100.0 * (1.0 - after / before)) if before else 0.0
     models = sorted({str(row.get("surrogate_models") or "") for row in usable if row.get("surrogate_models")})
+    selected = sorted({str(row.get("selected_policy") or "") for row in usable if row.get("selected_policy")})
     text = "\n".join(
         [
-            r"\begin{tabular}{lrrrr}",
+            r"\begin{tabular}{llrrrr}",
             r"\toprule",
-            r"Models & Runs & Tiers & Without triage AF2 calls & With triage AF2 calls \\",
+            r"Comparator models & Selected policy & Runs & Tiers & Without triage AF2 calls & With triage AF2 calls \\",
             r"\midrule",
-            f"{', '.join(models) or '-'} & {n_runs} & {n_tiers} & {before} & {after} \\\\",
+            f"{', '.join(models) or '-'} & {', '.join(selected) or '-'} & {n_runs} & {n_tiers} & {before} & {after} \\\\",
             r"\bottomrule",
             r"\end{tabular}",
             "",

@@ -73,7 +73,7 @@ def _parse_targets(text: str) -> list[str]:
 def _parse_models(text: str) -> str | list[str]:
     items = [item.strip().lower() for item in re.split(r"[,;\n]+", str(text or "")) if item.strip()]
     if not items:
-        return "rf"
+        return "auto"
     return items[0] if len(items) == 1 else items
 
 
@@ -118,7 +118,10 @@ def _build_request(*, cath_module, pdb_path: Path, target_id: str, args: argpars
         surrogate_triage_enabled=True,
         surrogate_triage_initial_samples=int(args.initial_samples),
         surrogate_triage_top_k=int(args.top_k),
-        surrogate_triage_model=_parse_models(args.surrogate_models),
+        surrogate_triage_model=_parse_models(args.surrogate_policy),
+        surrogate_triage_comparator_models=_parse_models(args.comparator_models),
+        surrogate_triage_ensemble_models=_parse_models(args.ensemble_models),
+        surrogate_triage_cv_folds=int(args.cv_folds),
         rfd3_use=False,
         bioemu_use=False,
         relax_enabled=False,
@@ -170,7 +173,7 @@ def run_now(args: argparse.Namespace) -> int:
         print(
             f"[run] {run_id}: target={target} split={subset or '-'} "
             f"n_train={args.initial_samples} top_k={args.top_k} "
-            f"models={args.surrogate_models}"
+            f"policy={args.surrogate_policy} comparators={args.comparator_models}"
         )
         if args.dry_run:
             launched.append({"target": target, "run_id": run_id, "status": "dry_run"})
@@ -195,7 +198,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--initial-samples", type=int, default=30)
     parser.add_argument("--top-k", type=int, default=20)
     parser.add_argument("--num-seq-per-tier", type=int, default=40)
-    parser.add_argument("--surrogate-models", default="rf")
+    parser.add_argument(
+        "--surrogate-policy",
+        "--surrogate-models",
+        dest="surrogate_policy",
+        default="auto",
+        help=(
+            "Acquisition policy for final Top-K candidates. Use auto to select by "
+            "internal CV; rf/ridge/xgboost/lightgbm/ensemble force one policy. "
+            "--surrogate-models is kept as a backward-compatible alias."
+        ),
+    )
+    parser.add_argument("--comparator-models", default="rf,ridge,lightgbm,xgboost")
+    parser.add_argument("--ensemble-models", default="rf,ridge,lightgbm,xgboost")
+    parser.add_argument("--cv-folds", type=int, default=5)
     parser.add_argument("--soluprot-cutoff", type=float, default=0.5)
     parser.add_argument("--af2-provider", default="colabfold")
     parser.add_argument("--af2-plddt-cutoff", type=float, default=85.0)
@@ -229,8 +245,14 @@ def main(argv: list[str] | None = None) -> int:
         str(args.top_k),
         "--num-seq-per-tier",
         str(args.num_seq_per_tier),
-        "--surrogate-models",
-        str(args.surrogate_models),
+        "--surrogate-policy",
+        str(args.surrogate_policy),
+        "--comparator-models",
+        str(args.comparator_models),
+        "--ensemble-models",
+        str(args.ensemble_models),
+        "--cv-folds",
+        str(args.cv_folds),
         "--soluprot-cutoff",
         str(args.soluprot_cutoff),
         "--af2-provider",
@@ -259,7 +281,10 @@ def main(argv: list[str] | None = None) -> int:
         "initial_samples": int(args.initial_samples),
         "top_k": int(args.top_k),
         "num_seq_per_tier": int(args.num_seq_per_tier),
-        "surrogate_models": str(args.surrogate_models),
+        "surrogate_policy": str(args.surrogate_policy),
+        "comparator_models": str(args.comparator_models),
+        "ensemble_models": str(args.ensemble_models),
+        "cv_folds": int(args.cv_folds),
         "soluprot_cutoff": float(args.soluprot_cutoff),
         "af2_provider": str(args.af2_provider),
         "stop_after": str(args.stop_after),

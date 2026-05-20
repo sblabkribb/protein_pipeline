@@ -124,15 +124,16 @@ Two representative historical in-silico runs verify the implemented computationa
 
 The Top-K default of 20 is an operating budget rather than a fitted hyperparameter. It pairs with the N = 30 bootstrap setting to give 50 AF2 calls per target-tier decision point when the SoluProt-passing pool exceeds the budget. N = 30 is supported by the sample-size ablation, where additional labels beyond 30 provide diminishing returns in the current artifact benchmark; Top-K = 20 keeps enough candidates for manual review while making the AF2/ColabFold cost visible before a run is launched. Model-comparison artifacts are written to `surrogate_triage/cv_metrics.csv`, `model_comparison.svg`, `model_predictions.csv`, `topk_overlap.csv`, `feature_importance.csv`, `acquired_topk.csv`, and `models/*.pkl`, allowing the analysis tab or exported run package to audit why a policy was selected without repeating AF2 calls.
 
-## Supplementary Note 9. Structural-Context Pilot
+## Supplementary Note 9. Structural-Context Ablation
 
-The completed structural-context pilot compares the original target backbone, one selected RFD3 backbone, and a three-backbone RFD3 ensemble across three CATH targets. It shows target-dependent tradeoffs and motivates the four-arm RAPID refresh, but it is not powered to claim a universal structural-generator advantage. The pilot visualization is shown once in the main manuscript as Figure 5; the supplementary material retains the numeric summary and protocol context rather than repeating the same image.
+The corrected-chain structural-context ablation compares the original target backbone, BioEmu conformational sampling, one selected RFD3 backbone, and RFD3+BioEmu across eight selected CATH targets. The single-backbone and RFD3 arms are evaluable for all eight targets. BioEmu-containing arms are evaluable for the four targets that passed the fixed 2.0 Å target-RMSD gate. The figure is shown once in the main manuscript as Figure 5; the supplementary material retains the numerical summary and BioEmu QC context rather than repeating the same image.
 
 | Arm | Designs per target | AF2 records per target | Top-5 pLDDT | Top-5 SoluProt |
 |---|---:|---:|---:|---:|
-| Single target backbone | 120 | 30 | 84.76 | 0.756 |
-| RFD3 selected backbone | 120 | 30 | 87.58 | 0.725 |
-| RFD3 ensemble, 3 backbones | 117 | 30 | 85.58 | 0.759 |
+| Single target backbone | 120 | 30 | 92.58 | 0.718 |
+| Target + BioEmu ensemble | 120 | 30 | 96.28 | 0.788 |
+| RFD3 selected backbone | 120 | 30 | 92.53 | 0.690 |
+| RFD3 + BioEmu ensemble | 120 | 30 | 95.44 | 0.734 |
 
 ## Supplementary Note 10. BioEmu Target-RMSD Gate QC
 
