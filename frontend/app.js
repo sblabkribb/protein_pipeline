@@ -42,6 +42,7 @@ import {
   normalizeBioEmuCountFields,
   normalizeConservationTier,
   normalizeRfd3Mode,
+  normalizeSurrogateModelSelection,
   normalizeWorkflowStudioPayloadForComparison,
   normalizeFixedPositionsExtraDraft,
   normalizeRequestedRunId,
@@ -62,6 +63,7 @@ import {
   sanitizeName,
   shouldPollRunForTabChange,
   splitWorkflowStudioAnswers,
+  surrogateModelPayload,
   workflowStudioRetainedArtifactPath,
   workflowStudioOwnerFromUser,
   workflowStudioStorageKeysForUser,
@@ -819,6 +821,7 @@ const el = {
   tutorialSpotlight: document.getElementById("tutorialSpotlight"),
   tutorialCard: document.getElementById("tutorialCard"),
   tutorialStepMeta: document.getElementById("tutorialStepMeta"),
+  tutorialContents: document.getElementById("tutorialContents"),
   tutorialStepTitle: document.getElementById("tutorialStepTitle"),
   tutorialStepBody: document.getElementById("tutorialStepBody"),
   tutorialStepHint: document.getElementById("tutorialStepHint"),
@@ -2043,6 +2046,28 @@ const I18N = {
     "tutorial.prev": "Back",
     "tutorial.next": "Next",
     "tutorial.finish": "Finish",
+    "tutorial.contents.title": "Tutorial contents",
+    "tutorial.contents.body": "Choose the workflow area you want to review, or start the complete tour.",
+    "tutorial.contents.meta": "Choose a topic",
+    "tutorial.startFull": "Start full tour",
+    "tutorial.section.all.title": "Full tour",
+    "tutorial.section.all.desc": "Review the complete RAPID workflow.",
+    "tutorial.section.workspace.title": "Workspace",
+    "tutorial.section.workspace.desc": "Projects, rounds, and experiment entry points.",
+    "tutorial.section.advanced.title": "Advanced setup",
+    "tutorial.section.advanced.desc": "Target input, workflow, criteria, overrides, and review.",
+    "tutorial.section.surrogate.title": "Surrogate triage",
+    "tutorial.section.surrogate.desc": "AF2-budgeted candidate ranking.",
+    "tutorial.section.evolution.title": "Evolution",
+    "tutorial.section.evolution.desc": "Design-test-learn feedback rounds.",
+    "tutorial.section.studio.title": "Workflow Studio",
+    "tutorial.section.studio.desc": "Stage checkpoints and resume actions.",
+    "tutorial.section.monitor.title": "Monitor",
+    "tutorial.section.monitor.desc": "Live status, artifacts, and recovery context.",
+    "tutorial.section.analyze.title": "Analyze",
+    "tutorial.section.analyze.desc": "Hit lists, comparisons, reports, and feedback.",
+    "tutorial.section.settings.title": "Tools and models",
+    "tutorial.section.settings.desc": "Copilot, top menu, and model providers.",
     "tutorial.step.home.title": "Start from the workspace",
     "tutorial.step.home.body":
       "Use Home as the landing point. Before starting a new run, set the project and round so results are recorded in the right workspace.",
@@ -2091,7 +2116,7 @@ const I18N = {
       "This is the mode described as AF2-budgeted surrogate triage. Use Evolution only when experimental labels will drive the next round.",
     "tutorial.step.surrogateSettings.title": "Sample counts set the AF2 budget",
     "tutorial.step.surrogateSettings.body":
-      "Training AF2 samples label the initial subset. The surrogate ranks the remaining candidates, and Top K controls how many final structures receive AF2/ColabFold evaluation.",
+      "Training AF2 samples label the initial subset. The surrogate ranks the remaining candidates, and Top K controls how many final structures receive AF2/ColabFold evaluation. The 30 + 20 default fixes a 50-call budget per target for manuscript-style triage.",
     "tutorial.step.surrogateSettings.hint":
       "The default 30 training and 20 Top K calls match the manuscript benchmark settings.",
     "tutorial.step.pdfAgent.title": "PDF agent extracts constraints",
@@ -2222,6 +2247,8 @@ const I18N = {
     "surrogate.initialSamples.label": "Training AF2 samples",
     "surrogate.topK.label": "Top K final AF2 candidates",
     "surrogate.model.label": "Surrogate model",
+    "surrogate.model.help":
+      "Select more than one model to use rank-mean acquisition without increasing AF2 calls.",
     "surrogate.note":
       "Use Evolution only when experimental measurements are available or planned. Use this Surrogate tab when the goal is a one-round compute budget reduction.",
     "surrogate.error.targetRequired": "Choose FASTA/PDB/mmCIF input before launching Surrogate Triage.",
@@ -3165,7 +3192,7 @@ const I18N = {
     "question.surrogateTriageTopK.label": "Surrogate Top K",
     "question.surrogateTriageTopK.help": "Additional surrogate-ranked candidates to validate with {af2Provider}.",
     "question.surrogateTriageModel.label": "Surrogate Model",
-    "question.surrogateTriageModel.help": "Model used to rank candidates after the initial {af2Provider}-labelled set.",
+    "question.surrogateTriageModel.help": "Model or model set used to rank candidates after the initial {af2Provider}-labelled set. Multiple selections use rank-mean acquisition.",
     "question.af2PlddtCutoff.label": "{af2Provider} pLDDT Cutoff",
     "question.af2PlddtCutoff.help": "Minimum pLDDT threshold for {af2Provider} pass filtering (default: 85).",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD Cutoff",
@@ -3644,6 +3671,28 @@ const I18N = {
     "tutorial.prev": "이전",
     "tutorial.next": "다음",
     "tutorial.finish": "마침",
+    "tutorial.contents.title": "튜토리얼 목차",
+    "tutorial.contents.body": "다시 보고 싶은 작업 영역을 고르거나 전체 안내를 시작하세요.",
+    "tutorial.contents.meta": "주제 선택",
+    "tutorial.startFull": "전체 안내 시작",
+    "tutorial.section.all.title": "전체 안내",
+    "tutorial.section.all.desc": "RAPID workflow 전체를 순서대로 봅니다.",
+    "tutorial.section.workspace.title": "워크스페이스",
+    "tutorial.section.workspace.desc": "프로젝트, 라운드, 새 실험 시작 경로.",
+    "tutorial.section.advanced.title": "고급 설정",
+    "tutorial.section.advanced.desc": "타깃 입력, workflow, 평가기준, override, 검토.",
+    "tutorial.section.surrogate.title": "Surrogate triage",
+    "tutorial.section.surrogate.desc": "AF2 예산 기반 후보 순위화.",
+    "tutorial.section.evolution.title": "Evolution",
+    "tutorial.section.evolution.desc": "실험 피드백 기반 design-test-learn 회차.",
+    "tutorial.section.studio.title": "Workflow Studio",
+    "tutorial.section.studio.desc": "단계별 체크포인트와 이어 실행.",
+    "tutorial.section.monitor.title": "Monitor",
+    "tutorial.section.monitor.desc": "실시간 상태, 산출물, 복구 맥락.",
+    "tutorial.section.analyze.title": "분석",
+    "tutorial.section.analyze.desc": "Hit list, 비교, 리포트, 피드백.",
+    "tutorial.section.settings.title": "도구와 모델",
+    "tutorial.section.settings.desc": "Copilot, 상단 메뉴, 모델 연결.",
     "tutorial.step.home.title": "워크스페이스에서 시작",
     "tutorial.step.home.body":
       "Home은 시작 지점입니다. 새 실행을 만들기 전에 프로젝트와 회차를 정하면 결과가 올바른 작업 공간에 기록됩니다.",
@@ -3691,8 +3740,8 @@ const I18N = {
       "논문의 AF2-budgeted surrogate triage에 해당하는 모드입니다. 실험 측정값으로 다음 라운드를 고를 때는 Evolution을 사용하세요.",
     "tutorial.step.surrogateSettings.title": "샘플 수가 AF2 예산을 정합니다",
     "tutorial.step.surrogateSettings.body":
-      "Training AF2 samples는 초기 학습셋을 라벨링합니다. 대리모델이 나머지 후보를 순위화하고, Top K가 최종 AF2/ColabFold 평가 수를 정합니다.",
-    "tutorial.step.surrogateSettings.hint": "기본값 30 training, 20 Top K는 논문 벤치마크 설정과 맞췄습니다.",
+      "Training AF2 samples는 초기 학습셋을 라벨링합니다. 대리모델이 나머지 후보를 순위화하고, Top K가 최종 AF2/ColabFold 평가 수를 정합니다. 기본 30 + 20은 target당 50회 AF2 예산을 고정하기 위한 설정입니다.",
+    "tutorial.step.surrogateSettings.hint": "N=30은 표본 수 ablation에서 효율적인 plateau였고, Top K=20은 최종 후보 검토 폭과 GPU 예산의 균형점입니다.",
     "tutorial.step.pdfAgent.title": "PDF agent가 제약 조건을 뽑습니다",
     "tutorial.step.pdfAgent.body":
       "논문 PDF에 catalytic residue, binding-site position, mutation-sensitive region이 언급되어 있으면 업로드하세요. Agent가 고정할 residue 후보를 제안합니다.",
@@ -3820,6 +3869,7 @@ const I18N = {
     "surrogate.initialSamples.label": "학습용 AF2 샘플 수",
     "surrogate.topK.label": "최종 AF2 Top K 후보 수",
     "surrogate.model.label": "대리모델",
+    "surrogate.model.help": "여러 모델을 선택하면 같은 AF2 학습셋을 공유하고 rank-mean으로 Top K를 고릅니다.",
     "surrogate.note":
       "실험 측정값이 있거나 만들 계획이면 Evolution을 사용하세요. 1회 실행에서 compute budget을 줄이는 목적이면 이 Surrogate 탭을 사용합니다.",
     "surrogate.error.targetRequired": "Surrogate Triage를 실행하려면 FASTA/PDB/mmCIF 입력을 넣으세요.",
@@ -4761,7 +4811,7 @@ const I18N = {
     "question.surrogateTriageTopK.label": "대리 모델 상위 K개",
     "question.surrogateTriageTopK.help": "대리 모델 순위에서 추가로 {af2Provider} 검증까지 보낼 후보 수입니다.",
     "question.surrogateTriageModel.label": "대리 모델",
-    "question.surrogateTriageModel.help": "초기 {af2Provider} 라벨 이후 후보 순위화에 사용할 모델입니다.",
+    "question.surrogateTriageModel.help": "초기 {af2Provider} 라벨 이후 후보 순위화에 사용할 모델입니다. 여러 개를 선택하면 rank-mean acquisition을 사용합니다.",
     "question.af2PlddtCutoff.label": "{af2Provider} pLDDT 컷오프",
     "question.af2PlddtCutoff.help": "{af2Provider} 통과 필터링에 사용할 최소 pLDDT 임계값입니다. (기본값: 85)",
     "question.af2RmsdCutoff.label": "{af2Provider} RMSD 컷오프",
@@ -5369,6 +5419,9 @@ let copilotInitialized = false;
 let tutorialInitialized = false;
 let tutorialFirstVisitPrompted = false;
 let tutorialStepIndex = 0;
+let tutorialStepSequence = [];
+let tutorialMenuMode = false;
+let tutorialActiveSectionId = "all";
 let tutorialReturnTab = "home";
 
 const TUTORIAL_STEPS = [
@@ -5589,6 +5642,63 @@ const TUTORIAL_STEPS = [
     titleKey: "tutorial.step.modelProviderAdd.title",
     bodyKey: "tutorial.step.modelProviderAdd.body",
     hintKey: "tutorial.step.modelProviderAdd.hint",
+  },
+];
+
+const TUTORIAL_SECTIONS = [
+  {
+    id: "all",
+    titleKey: "tutorial.section.all.title",
+    descKey: "tutorial.section.all.desc",
+    stepIds: [],
+  },
+  {
+    id: "workspace",
+    titleKey: "tutorial.section.workspace.title",
+    descKey: "tutorial.section.workspace.desc",
+    stepIds: ["home", "homeProject", "homeRound", "experimentChoice"],
+  },
+  {
+    id: "advanced",
+    titleKey: "tutorial.section.advanced.title",
+    descKey: "tutorial.section.advanced.desc",
+    stepIds: ["advanced", "advancedInput", "pdfAgent", "advancedWorkflow", "advancedCriteria", "advancedExpert", "advancedReview"],
+  },
+  {
+    id: "surrogate",
+    titleKey: "tutorial.section.surrogate.title",
+    descKey: "tutorial.section.surrogate.desc",
+    stepIds: ["surrogate", "surrogateSettings"],
+  },
+  {
+    id: "evolution",
+    titleKey: "tutorial.section.evolution.title",
+    descKey: "tutorial.section.evolution.desc",
+    stepIds: ["evolution", "evolutionSettings"],
+  },
+  {
+    id: "studio",
+    titleKey: "tutorial.section.studio.title",
+    descKey: "tutorial.section.studio.desc",
+    stepIds: ["studio", "studioCheckpoint"],
+  },
+  {
+    id: "monitor",
+    titleKey: "tutorial.section.monitor.title",
+    descKey: "tutorial.section.monitor.desc",
+    stepIds: ["monitor", "monitorAgent"],
+  },
+  {
+    id: "analyze",
+    titleKey: "tutorial.section.analyze.title",
+    descKey: "tutorial.section.analyze.desc",
+    stepIds: ["rounds", "analyze", "analyzeHitList", "report"],
+  },
+  {
+    id: "settings",
+    titleKey: "tutorial.section.settings.title",
+    descKey: "tutorial.section.settings.desc",
+    stepIds: ["copilot", "topbarMenu", "modelProviders", "modelProviderAdd"],
   },
 ];
 
@@ -11409,6 +11519,47 @@ function tutorialTargetElement(step) {
   return el.appShell || document.body;
 }
 
+function tutorialSectionById(sectionId = "all") {
+  return TUTORIAL_SECTIONS.find((section) => section.id === sectionId) || TUTORIAL_SECTIONS[0];
+}
+
+function tutorialIndexesForSection(sectionId = "all") {
+  const section = tutorialSectionById(sectionId);
+  if (!section || section.id === "all" || !Array.isArray(section.stepIds) || !section.stepIds.length) {
+    return TUTORIAL_STEPS.map((_step, index) => index);
+  }
+  const wanted = new Set(section.stepIds);
+  const indexes = TUTORIAL_STEPS.reduce((acc, step, index) => {
+    if (wanted.has(step.id)) acc.push(index);
+    return acc;
+  }, []);
+  return indexes.length ? indexes : TUTORIAL_STEPS.map((_step, index) => index);
+}
+
+function currentTutorialSequence() {
+  return Array.isArray(tutorialStepSequence) && tutorialStepSequence.length
+    ? tutorialStepSequence
+    : tutorialIndexesForSection("all");
+}
+
+function currentTutorialStepAbsoluteIndex() {
+  const sequence = currentTutorialSequence();
+  return sequence[clampTutorialValue(tutorialStepIndex, 0, sequence.length - 1)] ?? 0;
+}
+
+function currentTutorialStep() {
+  return TUTORIAL_STEPS[currentTutorialStepAbsoluteIndex()] || TUTORIAL_STEPS[0];
+}
+
+function startTutorialSection(sectionId = "all", startIndex = 0) {
+  const section = tutorialSectionById(sectionId);
+  tutorialMenuMode = false;
+  tutorialActiveSectionId = section.id;
+  tutorialStepSequence = tutorialIndexesForSection(section.id);
+  tutorialStepIndex = clampTutorialValue(Number(startIndex) || 0, 0, tutorialStepSequence.length - 1);
+  renderTutorialStep();
+}
+
 function positionTutorialElements(targetEl) {
   if (!el.tutorialSpotlight || !el.tutorialCard) return;
   const viewportPadding = 16;
@@ -11461,11 +11612,33 @@ function positionTutorialElements(targetEl) {
 function renderTutorialDots() {
   if (!el.tutorialDots) return;
   el.tutorialDots.replaceChildren();
-  TUTORIAL_STEPS.forEach((_step, index) => {
+  currentTutorialSequence().forEach((_absoluteIndex, index) => {
     const dot = document.createElement("span");
     dot.className = "tutorial-dot";
     dot.classList.toggle("active", index === tutorialStepIndex);
     el.tutorialDots.appendChild(dot);
+  });
+}
+
+function renderTutorialContents() {
+  if (!el.tutorialContents) return;
+  el.tutorialContents.replaceChildren();
+  TUTORIAL_SECTIONS.forEach((section) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tutorial-content-btn";
+    btn.classList.toggle("active", section.id === tutorialActiveSectionId && !tutorialMenuMode);
+    btn.setAttribute("aria-pressed", section.id === tutorialActiveSectionId && !tutorialMenuMode ? "true" : "false");
+    const title = document.createElement("span");
+    title.className = "tutorial-content-title";
+    title.textContent = t(section.titleKey);
+    const desc = document.createElement("span");
+    desc.className = "tutorial-content-desc";
+    desc.textContent = t(section.descKey);
+    btn.appendChild(title);
+    btn.appendChild(desc);
+    btn.addEventListener("click", () => startTutorialSection(section.id, 0));
+    el.tutorialContents.appendChild(btn);
   });
 }
 
@@ -11503,14 +11676,30 @@ function applyTutorialStepContext(step) {
 
 function renderTutorialStep() {
   if (!tutorialIsOpen()) return;
-  const step = TUTORIAL_STEPS[tutorialStepIndex] || TUTORIAL_STEPS[0];
+  renderTutorialContents();
+  if (tutorialMenuMode) {
+    closeExperimentChoicePanel();
+    closeModelProvidersPanel();
+    el.tutorialOverlay?.classList.add("tutorial-menu-mode");
+    if (el.tutorialStepMeta) el.tutorialStepMeta.textContent = t("tutorial.contents.meta");
+    if (el.tutorialStepTitle) el.tutorialStepTitle.textContent = t("tutorial.contents.title");
+    if (el.tutorialStepBody) el.tutorialStepBody.textContent = t("tutorial.contents.body");
+    if (el.tutorialStepHint) el.tutorialStepHint.textContent = "";
+    if (el.tutorialPrev) el.tutorialPrev.disabled = true;
+    if (el.tutorialNext) el.tutorialNext.textContent = t("tutorial.startFull");
+    if (el.tutorialDots) el.tutorialDots.replaceChildren();
+    window.requestAnimationFrame(() => positionTutorialElements(null));
+    return;
+  }
+  el.tutorialOverlay?.classList.remove("tutorial-menu-mode");
+  const step = currentTutorialStep();
   if (!step) return;
   if (step.tab) {
     setActiveTab(step.tab);
   }
   applyTutorialStepContext(step);
   const current = tutorialStepIndex + 1;
-  const total = TUTORIAL_STEPS.length;
+  const total = currentTutorialSequence().length;
   if (el.tutorialStepMeta) {
     el.tutorialStepMeta.textContent = t("tutorial.stepMeta", { current, total });
   }
@@ -11519,7 +11708,7 @@ function renderTutorialStep() {
   if (el.tutorialStepHint) el.tutorialStepHint.textContent = t(step.hintKey);
   if (el.tutorialPrev) el.tutorialPrev.disabled = tutorialStepIndex <= 0;
   if (el.tutorialNext) {
-    el.tutorialNext.textContent = tutorialStepIndex >= TUTORIAL_STEPS.length - 1 ? t("tutorial.finish") : t("tutorial.next");
+    el.tutorialNext.textContent = tutorialStepIndex >= currentTutorialSequence().length - 1 ? t("tutorial.finish") : t("tutorial.next");
   }
   renderTutorialDots();
   window.requestAnimationFrame(() => {
@@ -11543,16 +11732,20 @@ function closeTutorial({ complete = true, restoreTab = true } = {}) {
   closeExperimentChoicePanel();
   closeModelProvidersPanel();
   el.tutorialOverlay.classList.add("hidden");
+  el.tutorialOverlay.classList.remove("tutorial-menu-mode");
   document.body.classList.remove("tutorial-active");
   if (restoreTab && tutorialReturnTab) {
     setActiveTab(tutorialReturnTab);
   }
 }
 
-function openTutorial({ startIndex = 0, restoreTab = true } = {}) {
+function openTutorial({ startIndex = 0, restoreTab = true, sectionId = "all", menuOnly = false } = {}) {
   if (!el.tutorialOverlay || !TUTORIAL_STEPS.length) return;
   tutorialReturnTab = restoreTab ? activeTabId() : "";
-  tutorialStepIndex = clampTutorialValue(Number(startIndex) || 0, 0, TUTORIAL_STEPS.length - 1);
+  tutorialMenuMode = Boolean(menuOnly);
+  tutorialActiveSectionId = tutorialMenuMode ? "" : tutorialSectionById(sectionId).id;
+  tutorialStepSequence = tutorialIndexesForSection(tutorialActiveSectionId || "all");
+  tutorialStepIndex = clampTutorialValue(Number(startIndex) || 0, 0, tutorialStepSequence.length - 1);
   el.tutorialOverlay.classList.remove("hidden");
   document.body.classList.add("tutorial-active");
   renderTutorialStep();
@@ -11578,7 +11771,11 @@ function handleTutorialKeydown(event) {
   }
   if (event.key === "ArrowRight") {
     event.preventDefault();
-    if (tutorialStepIndex >= TUTORIAL_STEPS.length - 1) {
+    if (tutorialMenuMode) {
+      startTutorialSection("all", 0);
+      return;
+    }
+    if (tutorialStepIndex >= currentTutorialSequence().length - 1) {
       closeTutorial({ complete: true });
       return;
     }
@@ -11594,7 +11791,7 @@ function handleTutorialKeydown(event) {
 
 function initTutorial() {
   if (tutorialInitialized) return;
-  el.tutorialBtn?.addEventListener("click", () => openTutorial({ restoreTab: true }));
+  el.tutorialBtn?.addEventListener("click", () => openTutorial({ restoreTab: true, menuOnly: true }));
   el.tutorialSkip?.addEventListener("click", () => closeTutorial({ complete: true }));
   el.tutorialClose?.addEventListener("click", () => closeTutorial({ complete: true }));
   el.tutorialPrev?.addEventListener("click", () => {
@@ -11603,7 +11800,11 @@ function initTutorial() {
     renderTutorialStep();
   });
   el.tutorialNext?.addEventListener("click", () => {
-    if (tutorialStepIndex >= TUTORIAL_STEPS.length - 1) {
+    if (tutorialMenuMode) {
+      startTutorialSection("all", 0);
+      return;
+    }
+    if (tutorialStepIndex >= currentTutorialSequence().length - 1) {
       closeTutorial({ complete: true });
       return;
     }
@@ -11615,7 +11816,7 @@ function initTutorial() {
   });
   window.addEventListener("scroll", () => {
     if (tutorialIsOpen()) {
-      positionTutorialElements(tutorialTargetElement(TUTORIAL_STEPS[tutorialStepIndex]));
+      positionTutorialElements(tutorialTargetElement(currentTutorialStep()));
     }
   }, true);
   document.addEventListener("keydown", handleTutorialKeydown);
@@ -11993,8 +12194,14 @@ function readIntegerInput(input, fallback, { min = null, max = null } = {}) {
   return Math.round(readNumberInput(input, fallback, { min, max }));
 }
 
+function selectedSurrogateModelsFromInput(input) {
+  const selected = Array.from(input?.selectedOptions || []).map((option) => option.value);
+  return normalizeSurrogateModelSelection(selected.length ? selected : input?.value || "rf");
+}
+
 function buildSurrogateLaunchAnswers() {
   const targetInput = String(el.surrogateTargetInput?.value || "").trim();
+  const selectedModels = selectedSurrogateModelsFromInput(el.surrogateModelInput);
   const answers = {
     run_mode: "pipeline",
     target_input: targetInput,
@@ -12009,7 +12216,7 @@ function buildSurrogateLaunchAnswers() {
     surrogate_triage_enabled: true,
     surrogate_triage_initial_samples: readIntegerInput(el.surrogateInitialSamplesInput, 30, { min: 1 }),
     surrogate_triage_top_k: readIntegerInput(el.surrogateTopKInput, 20, { min: 1 }),
-    surrogate_triage_model: String(el.surrogateModelInput?.value || "rf").trim() || "rf",
+    surrogate_triage_model: surrogateModelPayload(selectedModels),
     af2_provider: String(el.surrogateAf2ProviderInput?.value || "colabfold").trim() || "colabfold",
     soluprot_cutoff: readNumberInput(el.surrogateSoluprotCutoffInput, 0.5, { min: 0, max: 1 }),
     af2_plddt_cutoff: readNumberInput(el.surrogateAf2PlddtCutoffInput, 85, { min: 0, max: 100 }),
@@ -17714,7 +17921,7 @@ function renderQuestions(questions) {
 
       const modelQuestion = questionById.surrogate_triage_model;
       if (modelQuestion) {
-        const field = document.createElement("label");
+        const field = document.createElement("div");
         field.className = "parameter-field option-field";
         const label = document.createElement("span");
         label.className = "parameter-label";
@@ -17722,29 +17929,33 @@ function renderQuestions(questions) {
         const desc = document.createElement("span");
         desc.className = "parameter-help";
         desc.textContent = questionHelp(modelQuestion);
-        const select = document.createElement("select");
-        const currentModel = String(state.answers.surrogate_triage_model || modelQuestion.default || "rf");
-        [
+        const currentModels = normalizeSurrogateModelSelection(
+          state.answers.surrogate_triage_model || modelQuestion.default || "rf"
+        );
+        state.answers.surrogate_triage_model = surrogateModelPayload(currentModels);
+        const modelOptions = [
           { labelKey: "choice.surrogateModel.rf", value: "rf" },
           { labelKey: "choice.surrogateModel.ridge", value: "ridge" },
           { labelKey: "choice.surrogateModel.xgboost", value: "xgboost" },
           { labelKey: "choice.surrogateModel.lightgbm", value: "lightgbm" },
-          { labelKey: "choice.surrogateModel.ensemble", value: "ensemble" },
-        ].forEach((optionDef) => {
-          const option = document.createElement("option");
-          option.value = optionDef.value;
-          option.textContent = t(optionDef.labelKey);
-          if (currentModel === optionDef.value) option.selected = true;
-          select.appendChild(option);
-        });
-        state.answers.surrogate_triage_model = currentModel;
-        select.addEventListener("change", () => {
-          state.answers.surrogate_triage_model = select.value;
-          updateRunEligibility(normalizedQuestions);
-        });
+        ].map((optionDef) => ({
+          label: t(optionDef.labelKey),
+          value: optionDef.value,
+        }));
         field.appendChild(label);
         field.appendChild(desc);
-        field.appendChild(select);
+        renderChoiceButtons(field, modelOptions, currentModels, (value) => {
+          const current = normalizeSurrogateModelSelection(state.answers.surrogate_triage_model);
+          const next = new Set(current);
+          if (next.has(value)) {
+            if (next.size <= 1) return;
+            next.delete(value);
+          } else {
+            next.add(value);
+          }
+          state.answers.surrogate_triage_model = surrogateModelPayload(Array.from(next));
+          updateRunEligibility(normalizedQuestions);
+        }, { multi: true, rerender: false });
         grid.appendChild(field);
       }
     }

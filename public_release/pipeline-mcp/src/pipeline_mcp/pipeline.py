@@ -43,6 +43,7 @@ from .bio.pdb import ca_rmsd
 from .bio.pdb import dssp_non_loop_positions_by_chain
 from .bio.pdb import ligand_atoms_present
 from .bio.pdb import ligand_proximity_mask
+from .bio.pdb import normalize_structure_text
 from .bio.pdb import preprocess_pdb
 from .bio.pdb import residues_by_chain
 from .bio.pdb import sequence_by_chain
@@ -190,6 +191,10 @@ _PARTIAL_RERUN_AF2_FIELDS = {
     "af2_max_candidates_per_tier",
     "af2_top_k",
     "af2_sequence_ids",
+    "surrogate_triage_enabled",
+    "surrogate_triage_initial_samples",
+    "surrogate_triage_top_k",
+    "surrogate_triage_model",
     "relax_enabled",
     "relax_score_per_residue_cutoff",
     "relax_nstruct",
@@ -461,6 +466,113 @@ def _parallel_worker_limit(
             configured = default
     configured = max(1, min(int(configured), int(hard_cap)))
     return max(1, min(total, configured))
+
+
+def _sequence_feature_embeddings(sequences: list[str]) -> Any:
+    import numpy as np
+
+    amino_acids = "ACDEFGHIKLMNPQRSTVWY"
+    aa_index = {aa: idx for idx, aa in enumerate(amino_acids)}
+    rows: list[list[float]] = []
+    for seq in sequences:
+        clean = "".join(ch for ch in str(seq or "").upper() if ch.isalpha())
+        length = max(1, len(clean))
+        counts = [0.0] * len(amino_acids)
+        for ch in clean:
+            idx = aa_index.get(ch)
+            if idx is not None:
+                counts[idx] += 1.0
+        freqs = [count / float(length) for count in counts]
+        charged = sum(clean.count(ch) for ch in "DEKRH") / float(length)
+        hydrophobic = sum(clean.count(ch) for ch in "AILMFWVY") / float(length)
+        polar = sum(clean.count(ch) for ch in "STNQCY") / float(length)
+        rows.append([float(length), charged, hydrophobic, polar, *freqs])
+    return np.asarray(rows, dtype=np.float64)
+
+
+def _surrogate_triage_embeddings(sequences: list[str], device: object | None = None) -> Any:
+    try:
+        from . import evolution
+
+        if evolution.torch is None:
+            return _sequence_feature_embeddings(sequences)
+        resolved_device = device or evolution.torch.device(
+            "cuda" if evolution.torch.cuda.is_available() else "cpu"
+        )
+        return evolution.get_esm_embeddings(sequences, resolved_device)
+    except Exception as exc:
+        if os.environ.get("PIPELINE_SURROGATE_TRIAGE_REQUIRE_ESM", "").strip():
+            raise RuntimeError(f"surrogate triage embedding failed: {exc}") from exc
+        return _sequence_feature_embeddings(sequences)
+
+
+def _surrogate_triage_training_indices(
+    embeddings: Any,
+    count: int,
+    *,
+    seed: int = 42,
+) -> Any:
+    import numpy as np
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import pairwise_distances_argmin_min
+
+    n_candidates = int(len(embeddings))
+    selected_count = max(1, min(int(count), n_candidates))
+    if n_candidates <= selected_count:
+        return np.arange(n_candidates, dtype=int)
+
+    kmeans = KMeans(n_clusters=selected_count, random_state=seed, n_init=10)
+    kmeans.fit(embeddings)
+    closest_idx, _ = pairwise_distances_argmin_min(kmeans.cluster_centers_, embeddings)
+    train_idx = np.unique(closest_idx).astype(int)
+
+    if len(train_idx) < selected_count:
+        remaining = np.setdiff1d(np.arange(n_candidates), train_idx)
+        rng = np.random.default_rng(seed)
+        padding = rng.choice(remaining, selected_count - len(train_idx), replace=False)
+        train_idx = np.concatenate([train_idx, padding])
+    return np.asarray(train_idx, dtype=int)
+
+
+_SURROGATE_TRIAGE_ALLOWED_MODELS = ("rf", "ridge", "lightgbm", "xgboost")
+_SURROGATE_TRIAGE_ENSEMBLE_MODELS = ("rf", "ridge", "lightgbm", "xgboost")
+
+
+def _normalize_surrogate_triage_models(value: object) -> list[str]:
+    raw_items: list[str] = []
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            raw_items.extend(
+                part.strip().lower()
+                for part in re.split(r"[,;\n]+", str(item or ""))
+                if part.strip()
+            )
+    else:
+        raw_items.extend(
+            part.strip().lower()
+            for part in re.split(r"[,;\n]+", str(value or "rf"))
+            if part.strip()
+        )
+    if not raw_items:
+        raw_items = ["rf"]
+
+    expanded: list[str] = []
+    for item in raw_items:
+        if item in {"ensemble", "rank_mean", "rank-mean", "rankmean"}:
+            expanded.extend(_SURROGATE_TRIAGE_ENSEMBLE_MODELS)
+        else:
+            expanded.append(item)
+
+    out: list[str] = []
+    for item in expanded:
+        if item not in _SURROGATE_TRIAGE_ALLOWED_MODELS:
+            raise ValueError(
+                "surrogate_triage_model must contain only: "
+                f"{', '.join(_SURROGATE_TRIAGE_ALLOWED_MODELS)}, ensemble"
+            )
+        if item not in out:
+            out.append(item)
+    return out or ["rf"]
 
 
 def _tier_key(tier: float) -> str:
@@ -3328,12 +3440,17 @@ class PipelineRunner:
             msa_dir = _ensure_dir(paths.root / "msa")
             tiers_dir = _ensure_dir(paths.root / "tiers")
 
-            target_pdb_input_text = str(request.target_pdb or "")
+            target_pdb_input_text = normalize_structure_text(str(request.target_pdb or ""))
             target_pdb_text = target_pdb_input_text
             had_target_pdb_input = bool(target_pdb_text.strip())
-            rfd3_input_pdb_text = str(request.rfd3_input_pdb or "")
+            rfd3_input_pdb_text = normalize_structure_text(str(request.rfd3_input_pdb or ""))
             rfd3_active = _rfd3_active(request)
             rfd3_files = _rfd3_input_files(request) if rfd3_active else {}
+            if rfd3_files:
+                rfd3_files = {
+                    name: normalize_structure_text(str(content or ""))
+                    for name, content in rfd3_files.items()
+                }
             if (
                 rfd3_active
                 and not rfd3_files
@@ -8392,6 +8509,7 @@ class PipelineRunner:
                 relax_selected_ids: list[str] | None = None
                 af2_candidates = passed
                 af2_budget_applied = False
+                surrogate_triage_metadata: dict[str, object] | None = None
                 if request.af2_sequence_ids:
                     wanted = [
                         str(x).strip()
@@ -8509,19 +8627,101 @@ class PipelineRunner:
                             if wt_compare_reference_pdb_text.strip()
                             else ""
                         )
-                        to_predict = (
-                            list(af2_candidates)
-                            if request.force or not cached_ok
-                            else [
-                                s for s in af2_candidates if s.id not in cached_scores
-                            ]
-                        )
                         af2_result: dict[str, object] = {}
                         partial_prediction_errors: dict[str, str] = {}
+                        af2_predictions_requested = False
+                        jobs: dict[str, str] = (
+                            {} if request.force else _load_jobs_map(jobs_path)
+                        )
+                        jobs_lock = threading.Lock()
 
-                        if to_predict:
+                        def _on_af2_job_id(seq_id: str, job_id: str) -> None:
+                            with jobs_lock:
+                                jobs[seq_id] = job_id
+                                payload: dict[str, object] = {
+                                    "jobs": dict(jobs),
+                                    "provider": af2_provider,
+                                }
+                                if af2_endpoint_id:
+                                    payload["endpoint_id"] = af2_endpoint_id
+                                write_json(jobs_path, payload)
+                                set_status(
+                                    paths,
+                                    stage=f"af2_{tier_str}",
+                                    state="running",
+                                    detail=f"runpod_job_id={job_id} seq_id={seq_id}",
+                                )
+
+                        def _predict_af2_batch(
+                            batch_inputs: list[SequenceRecord],
+                            *,
+                            resume_job_ids: dict[str, str] | None,
+                        ) -> dict[str, object]:
+                            if af2_client is None:
+                                raise RuntimeError(
+                                    f"{af2_provider_label} is required for this pipeline; {af2_provider_hint}"
+                                )
+                            try:
+                                return af2_client.predict(
+                                    batch_inputs,
+                                    model_preset=af2_model_preset,
+                                    db_preset=request.af2_db_preset,
+                                    max_template_date=request.af2_max_template_date,
+                                    extra_flags=request.af2_extra_flags,
+                                    on_job_id=_on_af2_job_id,
+                                    resume_job_ids=resume_job_ids,
+                                )
+                            except TypeError:
+                                try:
+                                    return af2_client.predict(
+                                        batch_inputs,
+                                        model_preset=af2_model_preset,
+                                        db_preset=request.af2_db_preset,
+                                        max_template_date=request.af2_max_template_date,
+                                        extra_flags=request.af2_extra_flags,
+                                        on_job_id=_on_af2_job_id,
+                                    )
+                                except TypeError:
+                                    return af2_client.predict(
+                                        batch_inputs,
+                                        model_preset=af2_model_preset,
+                                        db_preset=request.af2_db_preset,
+                                        max_template_date=request.af2_max_template_date,
+                                        extra_flags=request.af2_extra_flags,
+                                    )
+
+                        def _predict_single_af2(
+                            seq_input: SequenceRecord,
+                        ) -> dict[str, object]:
+                            seq_resume_job_id = str(
+                                jobs.get(seq_input.id) or ""
+                            ).strip()
+                            seq_resume = (
+                                {seq_input.id: seq_resume_job_id}
+                                if seq_resume_job_id
+                                else None
+                            )
+                            return _predict_af2_batch(
+                                [seq_input], resume_job_ids=seq_resume
+                            )
+
+                        def _records_missing_scores(
+                            records: list[SequenceRecord],
+                        ) -> list[SequenceRecord]:
+                            if request.force or not cached_ok:
+                                return list(records)
+                            return [s for s in records if s.id not in cached_scores]
+
+                        def _predict_and_cache(
+                            records: list[SequenceRecord],
+                        ) -> None:
+                            nonlocal af2_predictions_requested
+                            to_predict = _records_missing_scores(list(records))
+                            if not to_predict:
+                                return
+                            af2_predictions_requested = True
                             if request.dry_run:
-                                af2_result = {
+                                batch_result = {
                                     s.id: {
                                         "best_plddt": (90.0 if (i % 2 == 0) else 80.0),
                                         "best_model": None,
@@ -8531,11 +8731,6 @@ class PipelineRunner:
                                     for i, s in enumerate(to_predict)
                                 }
                             else:
-                                if af2_client is None:
-                                    raise RuntimeError(
-                                        f"{af2_provider_label} is required for this pipeline; {af2_provider_hint}"
-                                    )
-
                                 af2_inputs = [
                                     SequenceRecord(
                                         id=s.id,
@@ -8550,89 +8745,19 @@ class PipelineRunner:
                                     for s in to_predict
                                 ]
 
-                                jobs: dict[str, str] = (
-                                    {} if request.force else _load_jobs_map(jobs_path)
-                                )
-                                jobs_lock = threading.Lock()
-
-                                def _on_af2_job_id(seq_id: str, job_id: str) -> None:
-                                    with jobs_lock:
-                                        jobs[seq_id] = job_id
-                                        payload: dict[str, object] = {
-                                            "jobs": dict(jobs),
-                                            "provider": af2_provider,
-                                        }
-                                        if af2_endpoint_id:
-                                            payload["endpoint_id"] = af2_endpoint_id
-                                        write_json(jobs_path, payload)
-                                        set_status(
-                                            paths,
-                                            stage=f"af2_{tier_str}",
-                                            state="running",
-                                            detail=f"runpod_job_id={job_id} seq_id={seq_id}",
-                                        )
-
-                                def _predict_af2_batch(
-                                    batch_inputs: list[SequenceRecord],
-                                    *,
-                                    resume_job_ids: dict[str, str] | None,
-                                ) -> dict[str, object]:
-                                    try:
-                                        return af2_client.predict(
-                                            batch_inputs,
-                                            model_preset=af2_model_preset,
-                                            db_preset=request.af2_db_preset,
-                                            max_template_date=request.af2_max_template_date,
-                                            extra_flags=request.af2_extra_flags,
-                                            on_job_id=_on_af2_job_id,
-                                            resume_job_ids=resume_job_ids,
-                                        )
-                                    except TypeError:
-                                        try:
-                                            return af2_client.predict(
-                                                batch_inputs,
-                                                model_preset=af2_model_preset,
-                                                db_preset=request.af2_db_preset,
-                                                max_template_date=request.af2_max_template_date,
-                                                extra_flags=request.af2_extra_flags,
-                                                on_job_id=_on_af2_job_id,
-                                            )
-                                        except TypeError:
-                                            return af2_client.predict(
-                                                batch_inputs,
-                                                model_preset=af2_model_preset,
-                                                db_preset=request.af2_db_preset,
-                                                max_template_date=request.af2_max_template_date,
-                                                extra_flags=request.af2_extra_flags,
-                                            )
-
-                                def _predict_single_af2(
-                                    seq_input: SequenceRecord,
-                                ) -> dict[str, object]:
-                                    seq_resume_job_id = str(
-                                        jobs.get(seq_input.id) or ""
-                                    ).strip()
-                                    seq_resume = (
-                                        {seq_input.id: seq_resume_job_id}
-                                        if seq_resume_job_id
-                                        else None
-                                    )
-                                    return _predict_af2_batch(
-                                        [seq_input], resume_job_ids=seq_resume
-                                    )
-
                                 af2_parallel_workers = _parallel_worker_limit(
                                     len(af2_inputs),
                                     env_name="PIPELINE_AF2_MAX_WORKERS",
                                     default=DEFAULT_AF2_MAX_WORKERS,
                                     hard_cap=12,
                                 )
+                                batch_result = {}
                                 if af2_parallel_workers <= 1:
                                     for seq_input in af2_inputs:
                                         try:
                                             rec = _predict_single_af2(seq_input)
                                             if isinstance(rec, dict):
-                                                af2_result.update(rec)
+                                                batch_result.update(rec)
                                         except Exception as exc:
                                             if (
                                                 request.auto_recover
@@ -8659,7 +8784,7 @@ class PipelineRunner:
                                             try:
                                                 rec = future.result()
                                                 if isinstance(rec, dict):
-                                                    af2_result.update(rec)
+                                                    batch_result.update(rec)
                                             except Exception as exc:
                                                 if (
                                                     request.auto_recover
@@ -8672,16 +8797,18 @@ class PipelineRunner:
                                                     continue
                                                 raise
 
-                                if partial_prediction_errors and not af2_result:
+                                if partial_prediction_errors and not batch_result and not af2_result:
                                     first_error = next(
                                         iter(partial_prediction_errors.values())
                                     )
                                     raise RuntimeError(first_error)
 
+                            if isinstance(batch_result, dict):
+                                af2_result.update(batch_result)
                             for seq in to_predict:
                                 rec = (
-                                    (af2_result or {}).get(seq.id, {})
-                                    if isinstance(af2_result, dict)
+                                    (batch_result or {}).get(seq.id, {})
+                                    if isinstance(batch_result, dict)
                                     else {}
                                 )
                                 if not isinstance(rec, dict):
@@ -8708,6 +8835,183 @@ class PipelineRunner:
                                         "provider": af2_provider,
                                     },
                                 )
+
+                        if (
+                            bool(getattr(request, "surrogate_triage_enabled", False))
+                            and not request.af2_sequence_ids
+                        ):
+                            import numpy as np
+                            from .evolution import _RankMeanEnsemble
+                            from .evolution import _make_surrogate
+
+                            original_candidates = list(af2_candidates)
+                            train_count = max(
+                                1,
+                                int(
+                                    getattr(
+                                        request,
+                                        "surrogate_triage_initial_samples",
+                                        30,
+                                    )
+                                    or 30
+                                ),
+                            )
+                            top_count = max(
+                                1,
+                                int(getattr(request, "surrogate_triage_top_k", 20) or 20),
+                            )
+                            model_kinds = _normalize_surrogate_triage_models(
+                                getattr(request, "surrogate_triage_model", "rf")
+                            )
+                            model_label = ",".join(model_kinds)
+                            selection_strategy = (
+                                "single_model"
+                                if len(model_kinds) == 1
+                                else "rank_mean_ensemble"
+                            )
+                            surrogate_triage_metadata = {
+                                "enabled": True,
+                                "model": model_label,
+                                "models": model_kinds,
+                                "selection_strategy": selection_strategy,
+                                "initial_samples": train_count,
+                                "top_k": top_count,
+                                "candidate_count_before_triage": len(original_candidates),
+                                "skipped": False,
+                            }
+                            if len(original_candidates) > train_count + top_count:
+                                set_status(
+                                    paths,
+                                    stage=f"af2_{tier_str}",
+                                    state="running",
+                                    detail=(
+                                        "surrogate_triage: labelling "
+                                        f"{train_count} diverse candidates"
+                                    ),
+                                )
+                                sequences = [s.sequence for s in original_candidates]
+                                embeddings = _surrogate_triage_embeddings(sequences)
+                                train_idx = _surrogate_triage_training_indices(
+                                    embeddings,
+                                    train_count,
+                                    seed=int(getattr(request, "seed", 0) or 0) + 42,
+                                )
+                                train_records = [
+                                    original_candidates[int(idx)] for idx in train_idx
+                                ]
+                                _predict_and_cache(train_records)
+                                labelled_indices = [
+                                    int(idx)
+                                    for idx in train_idx
+                                    if original_candidates[int(idx)].id in cached_scores
+                                ]
+                                if not labelled_indices:
+                                    raise RuntimeError(
+                                        "surrogate triage could not obtain AF2 labels for the training set"
+                                    )
+                                X_train = embeddings[labelled_indices]
+                                y_train = np.asarray(
+                                    [
+                                        cached_scores[original_candidates[int(idx)].id]
+                                        for idx in labelled_indices
+                                    ],
+                                    dtype=np.float64,
+                                )
+                                if len(model_kinds) == 1:
+                                    model = _make_surrogate(model_kinds[0], seed=42)
+                                else:
+                                    model = _RankMeanEnsemble(
+                                        seed=42,
+                                        members=tuple(model_kinds),
+                                    )
+                                model.fit(X_train, y_train)
+                                fitted_models = list(
+                                    getattr(model, "fitted", {model_kinds[0]: model}).keys()
+                                )
+                                if not fitted_models:
+                                    raise RuntimeError(
+                                        "surrogate triage could not fit any selected model"
+                                    )
+                                train_set = set(int(idx) for idx in train_idx)
+                                candidate_idx = np.asarray(
+                                    [
+                                        idx
+                                        for idx in range(len(original_candidates))
+                                        if idx not in train_set
+                                    ],
+                                    dtype=int,
+                                )
+                                set_status(
+                                    paths,
+                                    stage=f"af2_{tier_str}",
+                                    state="running",
+                                    detail=(
+                                        "surrogate_triage: ranking pool and evaluating "
+                                        f"top {top_count}"
+                                    ),
+                                )
+                                pred_plddt = np.asarray(
+                                    model.predict(embeddings[candidate_idx]),
+                                    dtype=np.float64,
+                                )
+                                order = np.argsort(pred_plddt)[::-1][
+                                    : min(top_count, len(pred_plddt))
+                                ]
+                                top_indices = [
+                                    int(candidate_idx[int(local_idx)])
+                                    for local_idx in order
+                                ]
+                                top_records = [
+                                    original_candidates[int(idx)] for idx in top_indices
+                                ]
+                                _predict_and_cache(top_records)
+                                evaluated_order: list[str] = []
+                                for rec in [*train_records, *top_records]:
+                                    if rec.id not in evaluated_order:
+                                        evaluated_order.append(rec.id)
+                                evaluated_set = set(evaluated_order)
+                                af2_candidates = [
+                                    s for s in original_candidates if s.id in evaluated_set
+                                ]
+                                candidate_ids = [s.id for s in af2_candidates]
+                                candidate_records_by_id = {
+                                    str(record.id): record
+                                    for record in af2_candidates
+                                    if str(record.id).strip()
+                                }
+                                surrogate_triage_metadata.update(
+                                    {
+                                        "training_ids": [s.id for s in train_records],
+                                        "selected_top_ids": [s.id for s in top_records],
+                                        "evaluated_ids": candidate_ids,
+                                        "fitted_models": fitted_models,
+                                        "candidate_count_after_triage": len(candidate_ids),
+                                        "candidate_count_after_budget": len(candidate_ids),
+                                        "predicted_plddt": {
+                                            original_candidates[int(idx)].id: float(
+                                                pred_plddt[int(local_idx)]
+                                            )
+                                            for local_idx, idx in zip(order, top_indices)
+                                        },
+                                    }
+                                )
+                                af2_budget_applied = True
+                            else:
+                                surrogate_triage_metadata.update(
+                                    {
+                                        "skipped": True,
+                                        "reason": "candidate_count_within_train_plus_top_k_budget",
+                                        "training_ids": [],
+                                        "selected_top_ids": [],
+                                        "evaluated_ids": candidate_ids,
+                                        "fitted_models": [],
+                                        "candidate_count_after_triage": len(candidate_ids),
+                                        "candidate_count_after_budget": len(candidate_ids),
+                                    }
+                                )
+                                _predict_and_cache(list(af2_candidates))
+                        else:
+                            _predict_and_cache(list(af2_candidates))
 
                         # Log AlphaFold2 results to MLflow
                         if mlflow is not None:
@@ -8898,6 +9202,8 @@ class PipelineRunner:
                                 "candidate_count_before_budget": af2_candidates_before_budget,
                                 "candidate_count_after_budget": len(candidate_ids),
                                 "candidate_budget_applied": af2_budget_applied,
+                                "surrogate_triage": surrogate_triage_metadata
+                                or {"enabled": False},
                                 "max_candidates_per_tier": int(
                                     getattr(request, "af2_max_candidates_per_tier", 0)
                                     or 0
@@ -8914,7 +9220,9 @@ class PipelineRunner:
                                 "max_template_date": request.af2_max_template_date,
                                 "provider": af2_provider,
                                 "cached": (
-                                    not to_predict and cached_ok and not request.force
+                                    not af2_predictions_requested
+                                    and cached_ok
+                                    and not request.force
                                 ),
                             },
                         )
@@ -8923,7 +9231,11 @@ class PipelineRunner:
                             stage=f"af2_{tier_str}",
                             state="completed",
                             detail="cached"
-                            if (not to_predict and cached_ok and not request.force)
+                            if (
+                                not af2_predictions_requested
+                                and cached_ok
+                                and not request.force
+                            )
                             else None,
                         )
                     except Exception as exc:
@@ -8978,6 +9290,8 @@ class PipelineRunner:
                                 "candidate_count_before_budget": af2_candidates_before_budget,
                                 "candidate_count_after_budget": len(candidate_ids),
                                 "candidate_budget_applied": af2_budget_applied,
+                                "surrogate_triage": surrogate_triage_metadata
+                                or {"enabled": False},
                                 "max_candidates_per_tier": int(
                                     getattr(request, "af2_max_candidates_per_tier", 0)
                                     or 0

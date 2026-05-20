@@ -534,6 +534,47 @@ def _surrogate_triage_training_indices(
     return np.asarray(train_idx, dtype=int)
 
 
+_SURROGATE_TRIAGE_ALLOWED_MODELS = ("rf", "ridge", "lightgbm", "xgboost")
+_SURROGATE_TRIAGE_ENSEMBLE_MODELS = ("rf", "ridge", "lightgbm", "xgboost")
+
+
+def _normalize_surrogate_triage_models(value: object) -> list[str]:
+    raw_items: list[str] = []
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            raw_items.extend(
+                part.strip().lower()
+                for part in re.split(r"[,;\n]+", str(item or ""))
+                if part.strip()
+            )
+    else:
+        raw_items.extend(
+            part.strip().lower()
+            for part in re.split(r"[,;\n]+", str(value or "rf"))
+            if part.strip()
+        )
+    if not raw_items:
+        raw_items = ["rf"]
+
+    expanded: list[str] = []
+    for item in raw_items:
+        if item in {"ensemble", "rank_mean", "rank-mean", "rankmean"}:
+            expanded.extend(_SURROGATE_TRIAGE_ENSEMBLE_MODELS)
+        else:
+            expanded.append(item)
+
+    out: list[str] = []
+    for item in expanded:
+        if item not in _SURROGATE_TRIAGE_ALLOWED_MODELS:
+            raise ValueError(
+                "surrogate_triage_model must contain only: "
+                f"{', '.join(_SURROGATE_TRIAGE_ALLOWED_MODELS)}, ensemble"
+            )
+        if item not in out:
+            out.append(item)
+    return out or ["rf"]
+
+
 def _tier_key(tier: float) -> str:
     return f"{int(round(float(tier) * 100.0))}"
 
@@ -8800,6 +8841,7 @@ class PipelineRunner:
                             and not request.af2_sequence_ids
                         ):
                             import numpy as np
+                            from .evolution import _RankMeanEnsemble
                             from .evolution import _make_surrogate
 
                             original_candidates = list(af2_candidates)
@@ -8818,14 +8860,20 @@ class PipelineRunner:
                                 1,
                                 int(getattr(request, "surrogate_triage_top_k", 20) or 20),
                             )
-                            model_kind = (
-                                str(getattr(request, "surrogate_triage_model", "rf") or "rf")
-                                .strip()
-                                .lower()
+                            model_kinds = _normalize_surrogate_triage_models(
+                                getattr(request, "surrogate_triage_model", "rf")
+                            )
+                            model_label = ",".join(model_kinds)
+                            selection_strategy = (
+                                "single_model"
+                                if len(model_kinds) == 1
+                                else "rank_mean_ensemble"
                             )
                             surrogate_triage_metadata = {
                                 "enabled": True,
-                                "model": model_kind,
+                                "model": model_label,
+                                "models": model_kinds,
+                                "selection_strategy": selection_strategy,
                                 "initial_samples": train_count,
                                 "top_k": top_count,
                                 "candidate_count_before_triage": len(original_candidates),
@@ -8869,8 +8917,21 @@ class PipelineRunner:
                                     ],
                                     dtype=np.float64,
                                 )
-                                model = _make_surrogate(model_kind, seed=42)
+                                if len(model_kinds) == 1:
+                                    model = _make_surrogate(model_kinds[0], seed=42)
+                                else:
+                                    model = _RankMeanEnsemble(
+                                        seed=42,
+                                        members=tuple(model_kinds),
+                                    )
                                 model.fit(X_train, y_train)
+                                fitted_models = list(
+                                    getattr(model, "fitted", {model_kinds[0]: model}).keys()
+                                )
+                                if not fitted_models:
+                                    raise RuntimeError(
+                                        "surrogate triage could not fit any selected model"
+                                    )
                                 train_set = set(int(idx) for idx in train_idx)
                                 candidate_idx = np.asarray(
                                     [
@@ -8923,7 +8984,9 @@ class PipelineRunner:
                                         "training_ids": [s.id for s in train_records],
                                         "selected_top_ids": [s.id for s in top_records],
                                         "evaluated_ids": candidate_ids,
+                                        "fitted_models": fitted_models,
                                         "candidate_count_after_triage": len(candidate_ids),
+                                        "candidate_count_after_budget": len(candidate_ids),
                                         "predicted_plddt": {
                                             original_candidates[int(idx)].id: float(
                                                 pred_plddt[int(local_idx)]
@@ -8941,7 +9004,9 @@ class PipelineRunner:
                                         "training_ids": [],
                                         "selected_top_ids": [],
                                         "evaluated_ids": candidate_ids,
+                                        "fitted_models": [],
                                         "candidate_count_after_triage": len(candidate_ids),
+                                        "candidate_count_after_budget": len(candidate_ids),
                                     }
                                 )
                                 _predict_and_cache(list(af2_candidates))

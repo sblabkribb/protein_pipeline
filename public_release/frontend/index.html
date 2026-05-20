@@ -650,13 +650,15 @@
                   </label>
                   <label class="fast-field">
                     <span data-i18n="surrogate.model.label">Surrogate model</span>
-                    <select id="surrogateModelInput">
-                      <option value="rf" data-i18n="choice.surrogateModel.rf">Random Forest</option>
+                    <select id="surrogateModelInput" multiple size="4" aria-describedby="surrogateModelHelp">
+                      <option value="rf" selected data-i18n="choice.surrogateModel.rf">Random Forest</option>
                       <option value="ridge" data-i18n="choice.surrogateModel.ridge">Ridge</option>
                       <option value="xgboost" data-i18n="choice.surrogateModel.xgboost">XGBoost</option>
                       <option value="lightgbm" data-i18n="choice.surrogateModel.lightgbm">LightGBM</option>
-                      <option value="ensemble" data-i18n="choice.surrogateModel.ensemble">Rank-mean ensemble</option>
                     </select>
+                    <small id="surrogateModelHelp" data-i18n="surrogate.model.help">
+                      Select multiple models to use rank-mean acquisition with the same AF2-labelled training set.
+                    </small>
                   </label>
                   <label class="fast-field">
                     <span data-i18n="question.af2Provider.label">Structure predictor</span>
@@ -2156,6 +2158,11 @@
           <div id="tutorialStepMeta" class="tutorial-step-meta"></div>
           <button id="tutorialClose" class="ghost" type="button" data-i18n="common.close">Close</button>
         </div>
+        <div
+          id="tutorialContents"
+          class="tutorial-contents"
+          aria-label="Tutorial contents"
+        ></div>
         <h4 id="tutorialStepTitle"></h4>
         <p id="tutorialStepBody"></p>
         <div id="tutorialStepHint" class="tutorial-step-hint"></div>

@@ -101,7 +101,7 @@ K-means training selection does not by itself remove acquisition bias. In the cu
 
 ## Supplementary Note 7. Rank-Mean Ensemble
 
-A rank-mean ensemble over RF, Ridge, LightGBM, and XGBoost gives the highest mean pLDDT BO uplift in the current artifact benchmark, but the gain over RF is small and does not remove acquisition diversity collapse. Rank-mean is therefore retained as an optional robustness layer rather than as the default surrogate.
+A rank-mean ensemble over RF, Ridge, LightGBM, and XGBoost gives the highest mean pLDDT BO uplift in the current artifact benchmark, but the gain over RF is small and does not remove acquisition diversity collapse. Rank-mean is therefore retained as an optional robustness layer rather than as the default surrogate. In the RAPID interface, selecting multiple surrogate families uses this rank-mean rule on the same AF2-labelled bootstrap set, so the number of AF2/ColabFold calls remains `N_train + Top-K` rather than increasing with the number of selected models.
 
 | Combination rule | pLDDT BO uplift Top-5 | SoluProt BO uplift Top-5 | Top-10 internal identity |
 |---|---:|---:|---:|
@@ -113,14 +113,16 @@ A rank-mean ensemble over RF, Ridge, LightGBM, and XGBoost gives the highest mea
 | XGBoost | 0.558 | 0.0308 | 0.873 |
 | LightGBM | 0.549 | 0.0297 | 0.877 |
 
-## Supplementary Note 8. Representative Multi-Round Runs
+## Supplementary Note 8. Representative Surrogate-Budget Runs
 
-Two representative production-scale evolution runs verify the implemented multi-round path but are not treated as a paired biological benchmark. The 3RGK run used 30 K-means bootstrap labels and Top-K = 20; the 1LVM run used the same bootstrap size and Top-K = 5. Both runs generated four round-specific candidate pools with 2,000 SoluProt-gated candidates per round.
+Two representative historical in-silico runs verify the implemented computational surrogate path but are not treated as a paired biological benchmark. They used AF2/pLDDT as a computational label source and therefore support the software and budget path, not experimental enrichment. The current paper-run script for claim 2 is `scripts/paper_runs/03_launch_surrogate_triage_budget.py`, which runs the standard pipeline with `evolution_mode=False`, `surrogate_triage_enabled=True`, RFD3/BioEmu/Relax disabled, and default `N_train = 30`, `Top-K = 20`.
 
 | Target | Run ID | SoluProt-gated candidates | AF2 records | AF2 reduction vs folding all gated candidates | Top-K setting | Best phase | Best SoluProt | Best pLDDT | Best relax score |
 |---|---|---:|---:|---:|---:|---|---:|---:|---:|
 | 3RGK | `pys74631_kribb.re.kr_ev_3rgk` | 8,000 | 94 | 98.8% | 20 | R1 train | 0.794 | 97.05 | -3.13 |
 | 1LVM | `admin_20260430_064926_afb67369` | 8,000 | 49 | 99.4% | 5 | R3 top-k | 0.734 | 89.52 | -3.15 |
+
+The Top-K default of 20 is an operating budget rather than a fitted hyperparameter. It pairs with the N = 30 bootstrap setting to give 50 AF2 calls per target-tier decision point when the SoluProt-passing pool exceeds the budget. N = 30 is supported by the sample-size ablation, where additional labels beyond 30 provide diminishing returns in the current artifact benchmark; Top-K = 20 keeps enough candidates for manual review while making the AF2/ColabFold cost visible before a run is launched.
 
 ## Supplementary Note 9. Structural-Context Pilot
 
@@ -132,7 +134,20 @@ The completed structural-context pilot compares the original target backbone, on
 | RFD3 selected backbone | 120 | 30 | 87.58 | 0.725 |
 | RFD3 ensemble, 3 backbones | 117 | 30 | 85.58 | 0.759 |
 
-## Supplementary Note 10. Execution Environment and RunPod Images
+## Supplementary Note 10. BioEmu Target-RMSD Gate QC
+
+BioEmu-containing structural-context arms were required to satisfy the same 2.0 Å target-RMSD gate used in the primary four-arm refresh. This gate is part of the artifact contract: a BioEmu arm is quantitatively evaluable only when the requested near-target conformers are recovered. Initial BioEmu runs for four targets did not recover three accepted conformers within the 10-attempt budget. These cases are therefore treated as not evaluable for BioEmu-based score comparison, rather than as zero-valued design outcomes. A sensitivity rerun increases the BioEmu sampling and maximum-attempt budgets to 30 while preserving the 2.0 Å acceptance gate.
+
+| Target | BioEmu accepted/attempted | BioEmu min RMSD (Å) | RFD3+BioEmu accepted/attempted | RFD3+BioEmu min RMSD (Å) | Primary handling |
+|---|---:|---:|---:|---:|---|
+| 1h6wA03 | 0/10 | 22.664 | 0/10 | 22.664 | Not evaluable |
+| 2auaB01 | 0/10 | 8.051 | 0/10 | 8.051 | Not evaluable |
+| 3jvoG00 | 0/10 | 2.887 | 0/10 | 3.219 | Not evaluable |
+| 3twkA01 | 0/10 | 4.976 | 0/10 | 4.976 | Not evaluable |
+
+*Supplementary Table S8. BioEmu target-RMSD gate failures in the initial four-arm structural-context refresh. The table reports the initial 10-attempt BioEmu runs only. The sensitivity rerun changes the sampling budget but keeps the acceptance gate fixed, avoiding post-hoc relaxation of the structural-quality criterion.*
+
+## Supplementary Note 11. Execution Environment and RunPod Images
 
 The public release records Docker image tags for the RunPod-backed model stages, while endpoint IDs and API keys are excluded from the repository. Endpoint IDs are deployment-specific secrets and should be supplied through `.env` or server environment variables. For manuscript reproduction, image tags should be pinned for each benchmark run, and any image tagged as `latest` should be accompanied by a digest or release note before final archival.
 
@@ -144,3 +159,9 @@ The public release records Docker image tags for the RunPod-backed model stages,
 | RFdiffusion3 backbone generation | `RFD3_ENDPOINT_ID` | `mimikyou0607/rfd3-runpod:260408-3` |
 | BioEmu ensemble sampling | `BIOEMU_ENDPOINT_ID` | `mimikyou0607/bioemu-runpod:latest` |
 | Rosetta Relax post-processing | `RUNPOD_RELAX_ENDPOINT_ID` | `mimikyou0607/relax_runpod:260428_1` |
+
+## Supplementary Note 12. Software Interface and Deployment Scope
+
+RAPID is distributed with a static browser interface served by the backend API. The interface is not treated as a separate scientific contribution in the main manuscript; its role is to make the run-scoped artifact contract accessible during local or server-based operation. Basic mode exposes the default solubility-aware multiple-mutant redesign workflow with a compact set of output-size and threshold controls. Advanced mode exposes start and stop points, optional RFD3 and BioEmu stages, masking controls, AF2/ColabFold budget parameters, provider choices, surrogate-triage mode, and experimental-feedback evolution records. These controls map to the same request fields stored in each run directory, so analyses can be reproduced from the resulting artifacts without depending on the browser state.
+
+The intended deployment model is local or server-side execution by the user, including GPU-backed RunPod endpoints configured through environment variables. Runtime `.env` files, endpoint identifiers, API keys, and raw logs are excluded from the public release. The browser interface therefore documents and exposes the reproducibility contract, but the manuscript's empirical claims are based on stored artifacts and benchmark scripts rather than on user-interface behaviour.

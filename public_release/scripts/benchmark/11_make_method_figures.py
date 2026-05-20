@@ -277,7 +277,7 @@ def draw_active_learning_loop() -> Path:
     ax.text(
         6.9,
         5.78,
-        "Active-learning loop \u2014 single run-evolution invocation",
+        "AF2-budgeted surrogate triage",
         ha="center",
         va="center",
         fontsize=12.5,
@@ -286,7 +286,7 @@ def draw_active_learning_loop() -> Path:
     ax.text(
         6.9,
         5.45,
-        "The diagram shows one implemented loop; multi-round reuse is an orchestration-level budget model.",
+        "One standard pipeline run: the surrogate reduces final AF2/ColabFold calls after SoluProt gating.",
         ha="center",
         va="center",
         fontsize=8.8,
@@ -382,7 +382,7 @@ def draw_active_learning_loop() -> Path:
         box_w,
         box_h * 1.16,
         "Step 4",
-        "Fit RF surrogate\nrank unlabeled pool\n~60 candidates\n(swappable model)",
+        "Fit surrogate(s)\nRF default or rank-mean\nrank ~60 candidates",
         COLOR_LOOP_SURROGATE,
         body_fs=7.9,
     )
@@ -455,7 +455,7 @@ def draw_active_learning_loop() -> Path:
     ax.text(
         6.9,
         0.58,
-        "Without surrogate (AF2 every gated candidate): \u2248 90 calls per run  \u2192  ~44% reduction",
+        "Top-K=20 fixes final validation breadth; multiple surrogates share the same 30 AF2 labels",
         ha="center",
         va="center",
         fontsize=9,

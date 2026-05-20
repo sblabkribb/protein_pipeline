@@ -430,6 +430,7 @@ test("frontend includes a localized first-run tutorial overlay", () => {
 
   assert.match(html, /id="tutorialBtn"/);
   assert.match(html, /id="tutorialOverlay"/);
+  assert.match(html, /id="tutorialContents"/);
   assert.match(html, /id="tutorialSpotlight"/);
   assert.match(html, /id="tutorialStepTitle"/);
   assert.match(html, /id="tutorialSkip"/);
@@ -437,9 +438,14 @@ test("frontend includes a localized first-run tutorial overlay", () => {
 
   assert.match(source, /const TUTORIAL_STORAGE_KEY = "kbf\.tutorial\.completed\.v3"/);
   assert.match(source, /const TUTORIAL_STEPS = \[/);
+  assert.match(source, /const TUTORIAL_SECTIONS = \[/);
+  assert.match(source, /function startTutorialSection/);
+  assert.match(source, /function renderTutorialContents/);
   assert.match(source, /function maybeShowTutorialOnFirstVisit/);
   assert.match(source, /function openTutorial/);
   assert.match(source, /"action\.tutorial"/);
+  assert.match(source, /"tutorial\.contents\.title"/);
+  assert.match(source, /"tutorial\.section\.surrogate\.title"/);
   assert.match(source, /"tutorial\.step\.topbar\.title"/);
   assert.match(source, /"tutorial\.step\.evolution\.title"/);
   assert.match(source, /"tutorial\.step\.studio\.title"/);
@@ -448,6 +454,9 @@ test("frontend includes a localized first-run tutorial overlay", () => {
 
   assert.match(styles, /\.tutorial-overlay/);
   assert.match(styles, /\.tutorial-spotlight/);
+  assert.match(styles, /\.tutorial-contents/);
+  assert.match(styles, /\.tutorial-content-btn/);
+  assert.match(styles, /\.tutorial-menu-mode/);
   assert.match(styles, /\.tutorial-card/);
 });
 

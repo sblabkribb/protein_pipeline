@@ -36,8 +36,36 @@ const RUN_PROGRESS_PLANS = Object.freeze({
 
 export const DEFAULT_ARTIFACT_COMPARE_MODE = "sequence";
 export const DEFAULT_ARTIFACT_LIST_LIMIT = 5000;
+export const SURROGATE_MODEL_CHOICES = Object.freeze(["rf", "ridge", "lightgbm", "xgboost"]);
 const HIDDEN_TARGET_RMSD_GATE_FIELDS = Object.freeze([]);
 const FRONTEND_ONLY_SETUP_FIELDS = Object.freeze(["compare_rmsd_scope"]);
+
+export function normalizeSurrogateModelSelection(value, fallback = ["rf"]) {
+  const rawItems = Array.isArray(value) ? value : String(value ?? "").split(/[,;\n]+/);
+  const expanded = [];
+  rawItems.forEach((item) => {
+    const normalized = String(item ?? "").trim().toLowerCase();
+    if (!normalized) return;
+    if (["ensemble", "rank_mean", "rank-mean", "rankmean"].includes(normalized)) {
+      expanded.push(...SURROGATE_MODEL_CHOICES);
+    } else {
+      expanded.push(normalized);
+    }
+  });
+  const selected = [];
+  expanded.forEach((item) => {
+    if (SURROGATE_MODEL_CHOICES.includes(item) && !selected.includes(item)) {
+      selected.push(item);
+    }
+  });
+  if (selected.length) return selected;
+  return Array.isArray(fallback) && fallback.length ? [...fallback] : ["rf"];
+}
+
+export function surrogateModelPayload(value) {
+  const selected = normalizeSurrogateModelSelection(value);
+  return selected.length === 1 ? selected[0] : selected;
+}
 
 function normalizeCompareRmsdScope(value) {
   const normalized = String(value || "")

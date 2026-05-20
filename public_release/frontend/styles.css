@@ -1965,6 +1965,10 @@ select {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.66);
 }
 
+select[multiple] {
+  min-height: 132px;
+}
+
 textarea {
   resize: vertical;
   min-height: 80px;
@@ -3759,6 +3763,10 @@ textarea:focus-visible {
   display: none;
 }
 
+.tutorial-overlay.tutorial-menu-mode .tutorial-spotlight {
+  display: none;
+}
+
 .tutorial-spotlight {
   position: fixed;
   z-index: 41;
@@ -3774,7 +3782,7 @@ textarea:focus-visible {
 .tutorial-card {
   position: fixed;
   z-index: 42;
-  width: min(430px, calc(100vw - 32px));
+  width: min(560px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
   overflow: auto;
   display: flex;
@@ -3785,6 +3793,16 @@ textarea:focus-visible {
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.26);
+}
+
+.tutorial-overlay.tutorial-menu-mode .tutorial-card {
+  left: 50% !important;
+  top: 50% !important;
+  transform: translate(-50%, -50%);
+}
+
+.tutorial-overlay:not(.tutorial-menu-mode) .tutorial-card {
+  transform: none;
 }
 
 .tutorial-card-head,
@@ -3806,6 +3824,63 @@ textarea:focus-visible {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+.tutorial-contents {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid rgba(51, 65, 85, 0.12);
+  border-radius: var(--radius-sm);
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.tutorial-overlay:not(.tutorial-menu-mode) .tutorial-contents {
+  display: none;
+}
+
+.tutorial-content-btn {
+  min-height: 74px;
+  padding: 10px;
+  border: 1px solid rgba(51, 65, 85, 0.14);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tutorial-content-btn:hover,
+.tutorial-content-btn:focus-visible {
+  border-color: rgba(14, 116, 144, 0.42);
+  box-shadow: 0 0 0 3px rgba(14, 116, 144, 0.12);
+  outline: none;
+}
+
+.tutorial-content-btn.active {
+  border-color: rgba(14, 116, 144, 0.72);
+  background: rgba(240, 249, 255, 0.92);
+}
+
+.tutorial-content-title {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.tutorial-content-desc {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.tutorial-overlay.tutorial-menu-mode .tutorial-dots,
+.tutorial-overlay.tutorial-menu-mode .tutorial-step-hint {
+  display: none;
 }
 
 .tutorial-card h4 {
@@ -5038,6 +5113,50 @@ textarea:focus-visible {
   background: #fff;
 }
 
+.hit-list-bulk-actions,
+.artifact-bulk-actions {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  width: max-content;
+  min-width: 100%;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(16, 42, 45, 0.08);
+  background: rgba(247, 251, 252, 0.98);
+  backdrop-filter: blur(8px);
+}
+
+.hit-list-bulk-count,
+.artifact-bulk-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin-right: auto;
+  padding: 6px 8px;
+}
+
+.hit-list-bulk-actions button,
+.artifact-bulk-actions button {
+  min-height: 32px;
+  padding: 6px 11px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: none;
+}
+
+.hit-list-bulk-actions button.primary,
+.artifact-bulk-actions button.primary {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+
 .hit-list-table {
   width: 100%;
   border-collapse: collapse;
@@ -5066,6 +5185,19 @@ textarea:focus-visible {
 .hit-list-table td.num {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.hit-list-table th.hit-list-select,
+.hit-list-table td.hit-list-select {
+  width: 34px;
+  text-align: center;
+}
+
+.hit-list-table input[type="checkbox"],
+.artifact-select-box input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--teal);
 }
 
 .hit-list-row-pass {
@@ -5169,6 +5301,20 @@ textarea:focus-visible {
 
 .artifact-item:hover {
   border-color: rgba(15, 107, 111, 0.4);
+}
+
+.artifact-item.is-selected {
+  border-color: rgba(15, 122, 119, 0.45);
+  background: rgba(15, 122, 119, 0.06);
+}
+
+.artifact-select-box {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  cursor: pointer;
 }
 
 .artifact-item-main {
@@ -7087,6 +7233,10 @@ textarea:focus-visible {
 }
 
 @media (max-width: 720px) {
+  .tutorial-contents {
+    grid-template-columns: 1fr;
+  }
+
   .topbar {
     padding: 18px 20px;
     flex-direction: column;

@@ -16,6 +16,7 @@ rfd3-runpod/
 /data/
 /logs/*
 !/logs/.gitkeep
+/_ops/
 /_ops/jobs/
 /batch_success_*.csv
 /batch_failed_*.csv

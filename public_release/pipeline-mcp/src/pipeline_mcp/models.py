@@ -26,8 +26,15 @@ class PipelineRequest:
     evolution_samples_per_round: int = 20
     evolution_pool_size: int = 1000
     evolution_oracle_samples: int = 20
+    evolution_label_source: str = "experimental"
+    evolution_objective_metric: str = "activity"
+    evolution_experiment_source_run_id: str | None = None
     evolution_surrogate_model: str = "rf"
     use_memory_bank: bool = False
+    surrogate_triage_enabled: bool = False
+    surrogate_triage_initial_samples: int = 30
+    surrogate_triage_top_k: int = 20
+    surrogate_triage_model: str | list[str] = "rf"
     project_id: str | None = None
     round_id: str | None = None
 

@@ -97,6 +97,7 @@ import {
   withHitListCompareArtifacts,
   withFixedPositionsExtra,
   workflowStudioSessionRunKey,
+  normalizeSurrogateModelSelection,
 } from "../lib/pipeline.js";
 import {
   aminoAcidPropertyInfo,
@@ -772,6 +773,13 @@ test("buildRunArguments preserves standard surrogate triage controls", () => {
   assert.equal(args.surrogate_triage_top_k, 20);
   assert.equal(args.surrogate_triage_model, "rf");
   assert.equal(args.stop_after, "af2");
+});
+
+test("normalizeSurrogateModelSelection keeps multiple surrogate models", () => {
+  assert.deepEqual(normalizeSurrogateModelSelection(["rf", "ridge"]), ["rf", "ridge"]);
+  assert.deepEqual(normalizeSurrogateModelSelection("rf,ridge"), ["rf", "ridge"]);
+  assert.deepEqual(normalizeSurrogateModelSelection("ensemble"), ["rf", "ridge", "lightgbm", "xgboost"]);
+  assert.deepEqual(normalizeSurrogateModelSelection(["bogus", "rf"]), ["rf"]);
 });
 
 test("buildRunArguments preserves experimental evolution label controls", () => {

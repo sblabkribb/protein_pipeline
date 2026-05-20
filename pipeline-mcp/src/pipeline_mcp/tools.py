@@ -232,6 +232,27 @@ def _as_list_of_str(value: object | None) -> list[str] | None:
     return [str(value)]
 
 
+def _as_model_name_selection(value: object | None, *, default: str = "rf") -> str | list[str]:
+    if value is None:
+        return default
+    if isinstance(value, list):
+        items: list[str] = []
+        for item in value:
+            items.extend(
+                part.strip()
+                for part in re.split(r"[,;\n]+", _as_text(item))
+                if part.strip()
+            )
+        return items or default
+    text = _as_text(value).strip()
+    if not text:
+        return default
+    parts = [part.strip() for part in re.split(r"[,;\n]+", text) if part.strip()]
+    if len(parts) > 1:
+        return parts
+    return parts[0] if parts else default
+
+
 def _as_list_of_float(value: object | None) -> list[float] | None:
     if value is None:
         return None
@@ -6525,8 +6546,8 @@ def pipeline_request_from_args(
         args.get("surrogate_triage_initial_samples"), 30
     )
     surrogate_triage_top_k = _as_int(args.get("surrogate_triage_top_k"), 20)
-    surrogate_triage_model = (
-        _as_text(args.get("surrogate_triage_model")).strip() or "rf"
+    surrogate_triage_model = _as_model_name_selection(
+        args.get("surrogate_triage_model"), default="rf"
     )
     project_id = _as_text(args.get("project_id")).strip() or None
     round_id = _as_text(args.get("round_id")).strip() or None
@@ -7143,10 +7164,22 @@ def _pipeline_run_schema() -> dict[str, Any]:
                 "description": "Number of surrogate-ranked candidates to send to AF2 after the initial labelled set.",
             },
             "surrogate_triage_model": {
-                "type": "string",
-                "enum": ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
+                "oneOf": [
+                    {
+                        "type": "string",
+                        "enum": ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "enum": ["rf", "ridge", "lightgbm", "xgboost", "ensemble"],
+                        },
+                        "minItems": 1,
+                    },
+                ],
                 "default": "rf",
-                "description": "Surrogate model used by one-round standard-pipeline AF2 triage.",
+                "description": "Surrogate model(s) used by one-round standard-pipeline AF2 triage. Multiple models share the same AF2-labelled bootstrap set and use rank-mean acquisition.",
             },
             "agent_panel_enabled": {"type": "boolean"},
             "auto_recover": {"type": "boolean"},

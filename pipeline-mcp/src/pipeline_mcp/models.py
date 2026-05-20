@@ -34,7 +34,7 @@ class PipelineRequest:
     surrogate_triage_enabled: bool = False
     surrogate_triage_initial_samples: int = 30
     surrogate_triage_top_k: int = 20
-    surrogate_triage_model: str = "rf"
+    surrogate_triage_model: str | list[str] = "rf"
     project_id: str | None = None
     round_id: str | None = None
 
