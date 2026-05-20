@@ -1225,6 +1225,20 @@ body[data-environment="staging"] .topbar {
   flex-wrap: wrap;
 }
 
+.evolution-experiment-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(16, 42, 45, 0.1);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.evolution-experiment-panel .panel-header {
+  margin-bottom: 0;
+}
+
 .rounds-shell {
   min-height: 460px;
 }

@@ -262,19 +262,8 @@
                     </button>
                   </div>
                 </div>
-                <div class="home-context-item home-context-item-select">
-                  <span data-i18n="home.context.round">Current Round</span>
-                  <select id="homeRoundSelector" class="run-selector">
-                    <option value="" data-i18n="home.select.roundPlaceholder">Select round</option>
-                  </select>
-                  <div class="home-context-actions">
-                    <button id="homeCreateRoundBtn" class="ghost" type="button" data-i18n="home.action.createRound">
-                      New Round
-                    </button>
-                  </div>
-                </div>
                 <div class="home-context-item">
-                  <span data-i18n="home.context.roundStatus">Round Status</span>
+                  <span data-i18n="home.context.campaign">Evolution Campaign</span>
                   <strong id="homeRoundStatusValue" data-i18n="home.context.empty">Not connected yet</strong>
                 </div>
                 <div class="home-context-item">
@@ -288,7 +277,7 @@
               </div>
               <div class="home-quick-actions">
                 <button id="homeContinueRoundBtn" class="ghost" type="button" data-i18n="home.action.continueRound">
-                  Continue Current Round
+                  Continue Evolution
                 </button>
                 <button id="homeOpenMonitorBtn" class="ghost" type="button" data-i18n="home.action.openMonitor">
                   Open Monitor
@@ -801,7 +790,7 @@
                     </p>
                   </div>
                   <div id="evolutionFeedbackGuide" class="choice-note evolution-feedback-guide" data-i18n="evolution.feedbackGuide">
-                    First run: RAPID writes evolution/experiment_request.csv. After wet-lab testing, enter candidate_id, metric_name, and metric_value in Analyze &gt; Experiment. Next run: choose the run ID that contains those measurements to write evolution/next_candidates.csv.
+                    First run: RAPID writes evolution/experiment_request.csv. Evolution records candidate_id, metric_name, and metric_value here after wet-lab testing. Next run: choose the run that contains those measurements to write evolution/next_candidates.csv.
                   </div>
                   <label class="fast-field">
                     <span data-i18n="evolution.poolSize.label">Stage 1: Generation Pool Size</span>
@@ -844,6 +833,105 @@
                       Choose a previous run with recorded experiment labels, or type a run ID manually.
                     </small>
                   </label>
+                  <div class="evolution-experiment-panel">
+                    <div class="panel-header evolution-section-heading">
+                      <h4 data-i18n="evolution.experiment.title">Experiment Values</h4>
+                      <p data-i18n="evolution.experiment.desc">
+                        Record wet-lab labels for the selected run without leaving Evolution.
+                      </p>
+                    </div>
+                    <div class="form-row">
+                      <label>
+                        <span data-i18n="experiment.assay">Assay type</span>
+                        <select id="evolutionExperimentAssay"></select>
+                      </label>
+                      <label>
+                        <span data-i18n="experiment.result">Result</span>
+                        <select id="evolutionExperimentResult"></select>
+                      </label>
+                    </div>
+                    <div class="form-row">
+                      <label>
+                        <span data-i18n="experiment.candidate">Candidate ID</span>
+                        <input
+                          id="evolutionExperimentCandidateId"
+                          type="text"
+                          placeholder="e.g. evo_r1_0003"
+                          data-i18n-placeholder="experiment.candidate.placeholder"
+                        />
+                      </label>
+                      <label>
+                        <span data-i18n="experiment.sequence">Sequence ID (optional)</span>
+                        <input
+                          id="evolutionExperimentSequenceId"
+                          type="text"
+                          placeholder="e.g. seq_001"
+                          data-i18n-placeholder="experiment.sequence.placeholder"
+                        />
+                      </label>
+                    </div>
+                    <div class="form-row">
+                      <label>
+                        <span data-i18n="experiment.metricName">Objective metric</span>
+                        <input
+                          id="evolutionExperimentMetricName"
+                          type="text"
+                          value="activity"
+                          placeholder="activity"
+                          data-i18n-placeholder="experiment.metricName.placeholder"
+                        />
+                      </label>
+                      <label>
+                        <span data-i18n="experiment.metricValue">Metric value</span>
+                        <input
+                          id="evolutionExperimentMetricValue"
+                          type="number"
+                          step="any"
+                          placeholder="0.0"
+                          data-i18n-placeholder="experiment.metricValue.placeholder"
+                        />
+                      </label>
+                    </div>
+                    <div class="form-row">
+                      <label>
+                        <span data-i18n="experiment.metricUnit">Metric unit (optional)</span>
+                        <input
+                          id="evolutionExperimentMetricUnit"
+                          type="text"
+                          placeholder="e.g. RFU, mg/mL"
+                          data-i18n-placeholder="experiment.metricUnit.placeholder"
+                        />
+                      </label>
+                      <label>
+                        <span data-i18n="experiment.metricDirection">Metric direction</span>
+                        <select id="evolutionExperimentMetricDirection"></select>
+                      </label>
+                    </div>
+                    <label>
+                      <span data-i18n="experiment.replicate">Replicate ID (optional)</span>
+                      <input
+                        id="evolutionExperimentReplicateId"
+                        type="text"
+                        placeholder="replicate_1"
+                        data-i18n-placeholder="experiment.replicate.placeholder"
+                      />
+                    </label>
+                    <label>
+                      <span data-i18n="experiment.conditions">Conditions / Notes</span>
+                      <textarea
+                        id="evolutionExperimentConditions"
+                        rows="2"
+                        placeholder="Buffer, temperature, assay details"
+                        data-i18n-placeholder="experiment.conditions.placeholder"
+                      ></textarea>
+                    </label>
+                    <button id="evolutionSubmitExperiment" class="primary" type="button" data-i18n="evolution.experiment.submit">
+                      Save Experiment Value
+                    </button>
+                    <div id="evolutionExperimentStatus" class="hint"></div>
+                    <div class="status-subtitle" data-i18n="evolution.experiment.recent">Recent Evolution Labels</div>
+                    <div id="evolutionExperimentList" class="run-list"></div>
+                  </div>
                   <label class="fast-field">
                     <span data-i18n="evolution.initialSamples.label">Stage 2: K-Means Training Samples</span>
                     <input id="evolutionInitialSamplesInput" type="number" min="10" step="5" value="30" />

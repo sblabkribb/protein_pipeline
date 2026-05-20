@@ -1942,28 +1942,29 @@ test("fast preset application clears stale setup state before writing fast answe
   assert.match(source, /function applyFastLaunchPresetToState\(preset\) \{[\s\S]*?resetSetupResiduePicker\(\);/m);
 });
 
-test("home exposes project and round selectors with create actions", () => {
+test("home exposes project selection only while rounds remain in the advanced workspace", () => {
   const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
   const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
 
   assert.match(html, /id="homeProjectSelector"/);
-  assert.match(html, /id="homeRoundSelector"/);
   assert.match(html, /id="homeCreateProjectBtn"/);
-  assert.match(html, /id="homeCreateRoundBtn"/);
+  assert.doesNotMatch(html, /id="homeRoundSelector"/);
+  assert.doesNotMatch(html, /id="homeCreateRoundBtn"/);
+  assert.match(html, /id="roundsCreateRoundBtn"/);
   assert.match(source, /pipeline\.list_projects/);
   assert.match(source, /pipeline\.list_rounds/);
   assert.match(source, /pipeline\.save_project/);
   assert.match(source, /pipeline\.save_round/);
 });
 
-test("home exposes quick actions for continuing the round and opening monitor/analyze", () => {
+test("home exposes quick actions for continuing evolution and opening monitor/analyze", () => {
   const html = readFileSync(resolve(process.cwd(), "frontend/index.html"), "utf-8");
   const source = readFileSync(resolve(process.cwd(), "frontend/app.js"), "utf-8");
 
   assert.match(html, /id="homeContinueRoundBtn"/);
   assert.match(html, /id="homeOpenMonitorBtn"/);
   assert.match(html, /id="homeOpenAnalyzeBtn"/);
-  assert.match(source, /homeContinueRoundBtn\?\.addEventListener\("click",[\s\S]*?setActiveTab\("rounds"\)/m);
+  assert.match(source, /homeContinueRoundBtn\?\.addEventListener\("click",[\s\S]*?setActiveTab\("evolution"\)/m);
   assert.match(source, /homeOpenMonitorBtn\?\.addEventListener\("click",[\s\S]*?setActiveTab\("monitor"\)/m);
   assert.match(source, /homeOpenAnalyzeBtn\?\.addEventListener\("click",[\s\S]*?setActiveTab\("analyze"\)/m);
 });

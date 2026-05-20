@@ -259,23 +259,31 @@ test("surrogate triage is exposed as a first-class UI mode", () => {
   assert.match(source, /"surrogate\.title"/);
   assert.match(source, /"surrogate\.acquisition\.label": "Top K selection method"/);
   assert.match(source, /"surrogate\.acquisition\.label": "Top K 선정 방법"/);
+  assert.match(source, /If you choose Random Forest, Ridge, XGBoost, LightGBM, or Rank ensemble/);
+  assert.match(source, /Random Forest, Ridge, XGBoost, LightGBM, Rank ensemble 중 하나를 직접 고르면/);
   assert.match(source, /"surrogate\.ensembleMembers\.help":\s*"기본값은 사용 안 함입니다/);
 });
 
-test("evolution UI explains experimental feedback handoff", () => {
+test("evolution UI records experimental feedback inside the evolution workflow", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
   assert.match(html, /id="evolutionFeedbackGuide"/);
   assert.match(html, /id="evolutionExperimentSourceRunIdOptions"/);
   assert.match(html, /id="evolutionExperimentSourceRefreshBtn"/);
+  assert.match(html, /id="evolutionExperimentMetricValue"/);
+  assert.match(html, /id="evolutionSubmitExperiment"/);
+  assert.match(html, /id="evolutionExperimentList"/);
   assert.match(source, /function refreshEvolutionExperimentSourceRunChoices/);
   assert.match(source, /function renderEvolutionExperimentSourceRunChoices/);
+  assert.match(source, /function submitEvolutionExperiment/);
+  assert.match(source, /function refreshEvolutionExperiments/);
+  assert.match(source, /pipeline\.submit_experiment/);
   assert.match(source, /experiment_request\.csv/);
   assert.match(source, /next_candidates\.csv/);
-  assert.match(source, /Analyze > Experiment/);
-  assert.match(source, /분석 > 실험/);
-  assert.match(source, /실험값을 가져올 run ID/);
+  assert.match(source, /Evolution records candidate_id/);
+  assert.match(source, /Evolution 탭에서 candidate_id/);
+  assert.match(source, /실험값을 연결할 실행/);
   assert.match(source, /candidate_id/);
   assert.match(source, /metric_value/);
 });
@@ -484,15 +492,15 @@ test("tutorial covers expert workflow controls and downstream review tools", () 
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
   assert.match(source, /id: "homeProject"/);
-  assert.match(source, /id: "homeRound"/);
   assert.match(source, /id: "experimentChoice"/);
   assert.match(source, /id: "home"[\s\S]*?target: "\.home-shell"/m);
-  assert.match(source, /id: "home"[\s\S]*?id: "homeProject"[\s\S]*?id: "homeRound"[\s\S]*?id: "experimentChoice"/m);
+  assert.match(source, /id: "home"[\s\S]*?id: "homeProject"[\s\S]*?id: "experimentChoice"/m);
   assert.match(source, /id: "experimentChoice"[\s\S]*?target: "\.experiment-choice-grid"/m);
   assert.match(source, /"tutorial\.step\.experimentChoice\.title"/);
   assert.match(source, /"tutorial\.step\.experimentChoice\.title": "Choose the right start path"/);
   assert.match(source, /"tutorial\.step\.experimentChoice\.title": "시작 경로를 고릅니다"/);
-  assert.match(source, /id: "homeProject"[\s\S]*?target: "#homeCreateProjectBtn"[\s\S]*?id: "homeRound"[\s\S]*?target: "#homeCreateRoundBtn"/m);
+  assert.doesNotMatch(source, /id: "homeRound"/);
+  assert.doesNotMatch(source, /target: "#homeCreateRoundBtn"/);
   assert.match(source, /id: "advancedInput"[\s\S]*?setupStep: "input"/m);
   assert.match(source, /id: "advancedInput"[\s\S]*?id: "pdfAgent"[\s\S]*?id: "advancedWorkflow"/m);
   assert.match(source, /id: "advancedWorkflow"[\s\S]*?setupStep: "workflow"/m);
