@@ -34,14 +34,42 @@ fi
 
 cd "$deploy_path"
 git remote set-url origin "$repo_url"
+git fetch --tags origin
 
-if [[ -n "$(git status --porcelain --untracked-files=no)" ]]; then
-  echo "Refusing to deploy over tracked local modifications in $deploy_path." >&2
-  git status --short
-  exit 3
+dirty_status="$(git status --porcelain --untracked-files=no)"
+if [[ -n "$dirty_status" ]]; then
+  mapfile -t dirty_files < <(
+    {
+      git diff --name-only
+      git diff --name-only --cached
+    } | sort -u
+  )
+
+  safe_to_overwrite="true"
+  for dirty_file in "${dirty_files[@]}"; do
+    if [[ ! -f "$dirty_file" ]]; then
+      safe_to_overwrite="false"
+      break
+    fi
+    if ! git cat-file -e "${sha}:${dirty_file}" 2>/dev/null; then
+      safe_to_overwrite="false"
+      break
+    fi
+    if ! cmp -s "$dirty_file" <(git show "${sha}:${dirty_file}"); then
+      safe_to_overwrite="false"
+      break
+    fi
+  done
+
+  if [[ "$safe_to_overwrite" != "true" ]]; then
+    echo "Refusing to deploy over tracked local modifications in $deploy_path." >&2
+    git status --short
+    exit 3
+  fi
+
+  echo "Tracked local modifications already match ${sha}; continuing."
 fi
 
-git fetch --tags origin
 git checkout --force "$sha"
 git clean -fd
 
