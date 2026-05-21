@@ -2240,6 +2240,208 @@ print("ok")
             self.assertIn(path, paths)
 
 
+    def test_get_hit_list_defaults_to_surrogate_evaluated_candidates(self) -> None:
+        with _tmpdir() as tmp:
+            run_id = "surrogate_hit_list"
+            run_root = Path(tmp) / run_id
+            tier_dir = run_root / "tiers" / "30"
+            triage_dir = run_root / "surrogate_triage"
+            (tier_dir / "af2" / "target_sample_1").mkdir(parents=True, exist_ok=True)
+            (tier_dir / "af2" / "target_sample_2").mkdir(parents=True, exist_ok=True)
+            triage_dir.mkdir(parents=True, exist_ok=True)
+
+            (run_root / "request.json").write_text(
+                json.dumps(
+                    {
+                        "target_fasta": ">wt\nACDE\n",
+                        "surrogate_triage_enabled": True,
+                        "surrogate_triage_model": "auto",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            samples = [
+                {"id": "target:sample_1", "sequence": "ACDF", "meta": {"backbone_source": "target"}},
+                {"id": "target:sample_2", "sequence": "ACDG", "meta": {"backbone_source": "target"}},
+                {"id": "target:sample_3", "sequence": "ACDH", "meta": {"backbone_source": "target"}},
+            ]
+            (run_root / "summary.json").write_text(
+                json.dumps({"tiers": [{"tier": 0.3, "proteinmpnn_samples": samples}]}),
+                encoding="utf-8",
+            )
+            (tier_dir / "soluprot.json").write_text(
+                json.dumps(
+                    {
+                        "scores": {
+                            "target:sample_1": 0.71,
+                            "target:sample_2": 0.81,
+                            "target:sample_3": 0.91,
+                        },
+                        "passed_ids": ["target:sample_1", "target:sample_2", "target:sample_3"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (tier_dir / "af2_scores.json").write_text(
+                json.dumps(
+                    {
+                        "scores": {"target:sample_1": 88.0, "target:sample_2": 91.0},
+                        "candidate_ids": ["target:sample_1", "target:sample_2"],
+                        "selected_ids": ["target:sample_1", "target:sample_2"],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            for sample_id in ["target_sample_1", "target_sample_2"]:
+                (tier_dir / "af2" / sample_id / "ranked_0.pdb").write_text(
+                    "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n",
+                    encoding="utf-8",
+                )
+
+            (triage_dir / "model_selection.json").write_text(
+                json.dumps(
+                    {
+                        "enabled": True,
+                        "model": "auto",
+                        "models": ["rf", "ridge"],
+                        "comparator_models": ["rf", "ridge"],
+                        "selection_strategy": "auto_cv",
+                        "initial_samples": 1,
+                        "top_k": 1,
+                        "training_ids": ["tier30_00001_target_sample_1"],
+                        "selected_top_ids": ["tier30_00002_target_sample_2"],
+                        "evaluated_ids": [
+                            "tier30_00001_target_sample_1",
+                            "tier30_00002_target_sample_2",
+                        ],
+                        "selected_policy": "ridge",
+                        "fitted_models": ["rf", "ridge"],
+                        "candidate_count_before_triage": 3,
+                        "candidate_count_after_triage": 2,
+                        "expected_af2_calls": 2,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (triage_dir / "cv_metrics.csv").write_text(
+                "policy,status,selection_score,spearman,mae,n_labels,cv_folds,error\n"
+                "rf,fitted,0.2,0.2,0.5,2,2,\n"
+                "ridge,fitted,0.8,0.8,0.1,2,2,\n",
+                encoding="utf-8",
+            )
+            (triage_dir / "model_predictions.csv").write_text(
+                "global_seq_id,tier,seq_id,split,af2_label,acquired,sequence,prediction_rf,rank_rf,prediction_ridge,rank_ridge\n"
+                "tier30_00001_target_sample_1,30,target:sample_1,training,88.0,no,ACDF,88.1,2,88.0,2\n"
+                "tier30_00002_target_sample_2,30,target:sample_2,unlabelled_pool,91.0,yes,ACDG,89.0,1,91.2,1\n"
+                "tier30_00003_target_sample_3,30,target:sample_3,unlabelled_pool,,no,ACDH,88.5,3,88.6,3\n",
+                encoding="utf-8",
+            )
+            (triage_dir / "acquired_topk.csv").write_text(
+                "rank,global_seq_id,tier,seq_id,acquisition_policy,acquisition_score,af2_label,sequence\n"
+                "1,tier30_00002_target_sample_2,30,target:sample_2,ridge,91.2,91.0,ACDG\n",
+                encoding="utf-8",
+            )
+
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            hit_list = dispatcher.call_tool(
+                "pipeline.get_hit_list",
+                {"run_id": run_id, "limit": 50, "min_score": 0.0},
+            )
+
+            triage = hit_list.get("surrogate_triage") or {}
+            self.assertEqual(triage.get("selected_policy"), "ridge")
+            self.assertEqual(triage.get("selected_top_count"), 1)
+            self.assertEqual(len(triage.get("cv_metrics") or []), 2)
+            top_rows = triage.get("top_rows") or []
+            self.assertEqual(top_rows[0].get("seq_id"), "target:sample_2")
+            self.assertEqual(top_rows[0].get("acquisition_policy"), "ridge")
+
+            rows = hit_list.get("rows") or []
+            self.assertEqual(len(rows), 2)
+            roles = {row.get("seq_id"): row.get("surrogate_role") for row in rows}
+            self.assertEqual(roles.get("target:sample_1"), "training")
+            self.assertEqual(roles.get("target:sample_2"), "top_k")
+            top = next(row for row in rows if row.get("seq_id") == "target:sample_2")
+            self.assertEqual(top.get("source"), "surrogate")
+            self.assertEqual(top.get("backbone_source"), "other")
+            self.assertEqual(top.get("surrogate_rank"), 1)
+            self.assertEqual(top.get("surrogate_selected_model"), "ridge")
+
+
+    def test_get_hit_list_reads_evolution_evaluated_samples(self) -> None:
+        with _tmpdir() as tmp:
+            run_id = "evolution_hit_list"
+            run_root = Path(tmp) / run_id
+            designs_dir = run_root / "evolution" / "designs"
+            designs_dir.mkdir(parents=True, exist_ok=True)
+            (run_root / "summary.json").write_text(
+                json.dumps(
+                    {
+                        "run_id": run_id,
+                        "evolution_mode": "multi-round-local-active-learning-kmeans",
+                        "surrogate_model": "rf",
+                        "budget_model": {
+                            "with_surrogate": 2,
+                            "without_surrogate": 100,
+                            "actual_evaluated": 2,
+                        },
+                        "evaluated_samples": [
+                            {
+                                "id": "rfd3_spec-1_0_model_4:82",
+                                "round": 1,
+                                "phase": "round_1_top_k",
+                                "plddt": 90.0,
+                                "soluprot": 0.8,
+                                "relax_score": -3.1,
+                                "predicted_plddt": 89.5,
+                                "selection_rank": 1,
+                            },
+                            {
+                                "id": "rfd3_spec-1_0_model_1:37",
+                                "round": 1,
+                                "phase": "round_1_train",
+                                "plddt": 88.0,
+                                "soluprot": 0.7,
+                                "relax_score": -2.9,
+                            },
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (designs_dir / "rfd3_spec-1_0_model_4:82_relaxed.pdb").write_text(
+                "ATOM      1  CA  ALA A   1       0.000   0.000   0.000  1.00 20.00           C\n",
+                encoding="utf-8",
+            )
+            (designs_dir / "rfd3_spec-1_0_model_1:37.pdb").write_text(
+                "ATOM      1  CA  ALA A   1       1.000   0.000   0.000  1.00 20.00           C\n",
+                encoding="utf-8",
+            )
+
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None)
+            dispatcher = ToolDispatcher(runner)
+            hit_list = dispatcher.call_tool(
+                "pipeline.get_hit_list",
+                {"run_id": run_id, "limit": 50, "min_score": 0.0},
+            )
+
+            rows = hit_list.get("rows") or []
+            self.assertEqual(hit_list.get("total_rows"), 2)
+            self.assertEqual(len(rows), 2)
+            self.assertIsNone(hit_list.get("surrogate_triage"))
+            self.assertEqual(rows[0].get("seq_id"), "rfd3_spec-1_0_model_4:82")
+            self.assertEqual(rows[0].get("source"), "evolution")
+            self.assertEqual(rows[0].get("evolution_phase"), "round_1_top_k")
+            self.assertEqual(rows[0].get("evolution_selection_rank"), 1)
+            self.assertEqual(
+                rows[0].get("af2_ranked_pdb_path"),
+                "evolution/designs/rfd3_spec-1_0_model_4:82_relaxed.pdb",
+            )
+            self.assertEqual(
+                rows[1].get("af2_ranked_pdb_path"),
+                "evolution/designs/rfd3_spec-1_0_model_1:37.pdb",
+            )
 
 
     def test_get_hit_list_uses_target_pdb_for_wt_difference_metrics(self) -> None:

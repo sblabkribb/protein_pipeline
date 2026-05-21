@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from dataclasses import asdict
 from dataclasses import replace
 import copy
+import csv
 import base64
 import json
 import os
@@ -6382,6 +6383,454 @@ def _build_hit_list_rows(
     return rows
 
 
+def _first_csv_float(row: dict[str, object], keys: tuple[str, ...]) -> float | None:
+    for key in keys:
+        if key in row:
+            value = _csv_float_or_none(row.get(key))
+            if value is not None:
+                return value
+    return None
+
+
+def _first_csv_int(row: dict[str, object], keys: tuple[str, ...]) -> int | None:
+    for key in keys:
+        if key in row:
+            value = _csv_int_or_none(row.get(key))
+            if value is not None:
+                return value
+    return None
+
+
+def _evolution_design_artifact_path(run_root: Path, seq_id: str) -> str | None:
+    if not seq_id:
+        return None
+    designs_dir = run_root / "evolution" / "designs"
+    for suffix in ("_relaxed.pdb", ".pdb"):
+        candidate = designs_dir / f"{seq_id}{suffix}"
+        if candidate.exists() and candidate.is_file():
+            return f"evolution/designs/{seq_id}{suffix}"
+    return None
+
+
+def _build_evolution_hit_list_rows(
+    *,
+    run_root: Path,
+    summary: dict[str, object] | None,
+    weights: dict[str, float],
+    rmsd_ref: float,
+) -> list[dict[str, object]]:
+    if not isinstance(summary, dict) or not summary.get("evolution_mode"):
+        return []
+    samples = summary.get("evaluated_samples")
+    if not isinstance(samples, list):
+        return []
+
+    scored_weight_keys = ("soluprot", "plddt", "rmsd")
+    total_weight = float(
+        sum(max(0.0, float(weights.get(key, 0.0))) for key in scored_weight_keys)
+    )
+    rows: list[dict[str, object]] = []
+    surrogate_model = str(summary.get("surrogate_model") or "").strip() or None
+    for sample in samples:
+        if not isinstance(sample, dict):
+            continue
+        seq_id = str(sample.get("id") or sample.get("seq_id") or "").strip()
+        if not seq_id:
+            continue
+        plddt = _first_csv_float(sample, ("plddt", "af2_label", "score"))
+        soluprot = _first_csv_float(sample, ("soluprot", "soluprot_score"))
+        rmsd = _first_csv_float(sample, ("rmsd", "rmsd_ca", "backbone_rmsd"))
+        relax_score = _first_csv_float(sample, ("relax_score", "relax", "score_per_residue"))
+        predicted_plddt = _first_csv_float(sample, ("predicted_plddt", "prediction", "acquisition_score"))
+        round_num = _first_csv_int(sample, ("round", "evolution_round"))
+        selection_rank = _first_csv_int(sample, ("selection_rank", "rank"))
+
+        component_scores: dict[str, float] = {}
+        if soluprot is not None:
+            component_scores["soluprot"] = _clamp01(soluprot)
+        if plddt is not None:
+            component_scores["plddt"] = _clamp01(plddt / 100.0)
+        if rmsd is not None:
+            component_scores["rmsd"] = 1.0 - _clamp01(rmsd / max(1e-6, float(rmsd_ref)))
+
+        used_weight = 0.0
+        weighted_sum = 0.0
+        for key in scored_weight_keys:
+            score = component_scores.get(key)
+            if score is None:
+                continue
+            weight = max(0.0, float(weights.get(key, 0.0)))
+            if weight <= 0.0:
+                continue
+            used_weight += weight
+            weighted_sum += weight * score
+        score_norm = (weighted_sum / used_weight) if used_weight > 0 else None
+        coverage = (used_weight / total_weight) if total_weight > 0 else 0.0
+        composite_score = (score_norm * 100.0 * coverage) if score_norm is not None else None
+        phase = str(sample.get("phase") or "").strip()
+
+        rows.append(
+            {
+                "seq_id": seq_id,
+                "tier": None,
+                "source": "evolution",
+                "sequence": str(sample.get("sequence") or "").strip(),
+                "soluprot": soluprot,
+                "plddt": plddt,
+                "rmsd": rmsd,
+                "rmsd_target": None,
+                "relax": relax_score,
+                "wt_identity": None,
+                "wt_identity_pct": None,
+                "wt_diff_count": None,
+                "wt_compare_len": None,
+                "wt_diff_ratio": None,
+                "wt_diff_pct": None,
+                "novelty": None,
+                "soluprot_passed": soluprot is not None,
+                "af2_candidate": True,
+                "af2_selected": plddt is not None,
+                "relax_selected": relax_score is not None,
+                "component_scores": component_scores,
+                "score_norm": score_norm,
+                "score": composite_score,
+                "coverage": coverage,
+                "af2_ranked_pdb_path": _evolution_design_artifact_path(run_root, seq_id),
+                "evolution_round": round_num,
+                "evolution_phase": phase or None,
+                "evolution_selection_rank": selection_rank,
+                "evolution_surrogate_model": surrogate_model,
+                "evolution_predicted_plddt": predicted_plddt,
+            }
+        )
+
+    rows.sort(
+        key=lambda row: (
+            row.get("score") is not None,
+            float(row.get("score") or 0.0),
+            float(row.get("plddt") or 0.0),
+            -float(row.get("rmsd") or 0.0),
+            float(row.get("soluprot") or 0.0),
+        ),
+        reverse=True,
+    )
+    for idx, row in enumerate(rows, start=1):
+        row["rank"] = idx
+    return rows
+
+
+def _read_csv_dict_rows(path: Path) -> list[dict[str, str]]:
+    if not path.exists() or not path.is_file():
+        return []
+    try:
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            return [dict(row) for row in csv.DictReader(handle)]
+    except Exception:
+        return []
+
+
+def _csv_float_or_none(value: object) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except Exception:
+        return None
+
+
+def _csv_int_or_none(value: object) -> int | None:
+    num = _csv_float_or_none(value)
+    if num is None:
+        return None
+    try:
+        return int(num)
+    except Exception:
+        return None
+
+
+def _csv_bool(value: object) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    text = str(value or "").strip().lower()
+    if text in {"1", "true", "yes", "y", "on"}:
+        return True
+    if text in {"0", "false", "no", "n", "off"}:
+        return False
+    return None
+
+
+def _surrogate_tier_key(value: object) -> str:
+    text = str(value if value is not None else "").strip()
+    if not text:
+        return ""
+    try:
+        num = float(text)
+    except Exception:
+        return text
+    if num <= 1.0:
+        return _tier_key(num)
+    if abs(num - round(num)) < 1e-9:
+        return str(int(round(num)))
+    return str(num).rstrip("0").rstrip(".")
+
+
+def _surrogate_row_key(tier: object, seq_id: object) -> tuple[str, str]:
+    return (_surrogate_tier_key(tier), str(seq_id or "").strip())
+
+
+def _normalize_surrogate_cv_row(row: dict[str, str]) -> dict[str, object]:
+    out: dict[str, object] = {}
+    for key, value in row.items():
+        key_text = str(key or "").strip()
+        if not key_text:
+            continue
+        if key_text in {
+            "selection_score",
+            "spearman",
+            "kendall",
+            "mae",
+            "rmse",
+            "top_quartile_precision",
+            "top_quartile_enrichment",
+        }:
+            out[key_text] = _csv_float_or_none(value)
+        elif key_text in {"n_labels", "cv_folds"}:
+            out[key_text] = _csv_int_or_none(value)
+        else:
+            out[key_text] = value
+    return out
+
+
+def _normalize_surrogate_top_row(row: dict[str, str]) -> dict[str, object]:
+    out: dict[str, object] = {}
+    for key, value in row.items():
+        key_text = str(key or "").strip()
+        if not key_text:
+            continue
+        if key_text in {"rank"}:
+            out[key_text] = _csv_int_or_none(value)
+        elif key_text in {"tier"}:
+            out[key_text] = _csv_float_or_none(value)
+        elif key_text in {"acquisition_score", "af2_label"}:
+            out[key_text] = _csv_float_or_none(value)
+        else:
+            out[key_text] = value
+    return out
+
+
+def _surrogate_models_from_prediction_header(rows: list[dict[str, str]]) -> list[str]:
+    seen: list[str] = []
+    if not rows:
+        return seen
+    for key in rows[0].keys():
+        key_text = str(key or "").strip()
+        if key_text.startswith("prediction_"):
+            model = key_text.removeprefix("prediction_")
+            if model and model not in seen:
+                seen.append(model)
+    return seen
+
+
+def _load_surrogate_triage_context(run_root: Path) -> dict[str, object] | None:
+    triage_dir = run_root / "surrogate_triage"
+    selection_path = triage_dir / "model_selection.json"
+    selection = _load_json_file(selection_path)
+    if not isinstance(selection, dict):
+        return None
+
+    training_ids = {
+        str(item or "").strip()
+        for item in selection.get("training_ids", [])
+        if str(item or "").strip()
+    }
+    selected_top_ids = {
+        str(item or "").strip()
+        for item in selection.get("selected_top_ids", [])
+        if str(item or "").strip()
+    }
+    evaluated_ids = {
+        str(item or "").strip()
+        for item in selection.get("evaluated_ids", [])
+        if str(item or "").strip()
+    }
+
+    cv_metrics = [
+        _normalize_surrogate_cv_row(row)
+        for row in _read_csv_dict_rows(triage_dir / "cv_metrics.csv")
+    ]
+    top_rows = [
+        _normalize_surrogate_top_row(row)
+        for row in _read_csv_dict_rows(triage_dir / "acquired_topk.csv")
+    ]
+    prediction_rows = _read_csv_dict_rows(triage_dir / "model_predictions.csv")
+    selected_policy = str(selection.get("selected_policy") or selection.get("model") or "").strip()
+    prediction_models = _surrogate_models_from_prediction_header(prediction_rows)
+    row_meta_by_key: dict[tuple[str, str], dict[str, object]] = {}
+
+    selected_top_key_by_global: dict[str, int | None] = {}
+    for top_row in top_rows:
+        global_id = str(top_row.get("global_seq_id") or "").strip()
+        if global_id:
+            selected_top_key_by_global[global_id] = (
+                int(top_row["rank"]) if isinstance(top_row.get("rank"), int) else None
+            )
+        key = _surrogate_row_key(top_row.get("tier"), top_row.get("seq_id"))
+        if not key[0] or not key[1]:
+            continue
+        meta = row_meta_by_key.setdefault(key, {})
+        meta.update(
+            {
+                "surrogate_role": "top_k",
+                "surrogate_rank": top_row.get("rank"),
+                "surrogate_global_seq_id": top_row.get("global_seq_id"),
+                "surrogate_acquisition_policy": top_row.get("acquisition_policy"),
+                "surrogate_acquisition_score": top_row.get("acquisition_score"),
+                "surrogate_af2_label": top_row.get("af2_label"),
+                "surrogate_selected_model": selected_policy or top_row.get("acquisition_policy"),
+            }
+        )
+
+    ids_to_keep = set(training_ids) | set(selected_top_ids) | set(evaluated_ids)
+    for pred_row in prediction_rows:
+        global_id = str(pred_row.get("global_seq_id") or "").strip()
+        acquired = _csv_bool(pred_row.get("acquired")) is True
+        if ids_to_keep and global_id not in ids_to_keep and not acquired:
+            continue
+        key = _surrogate_row_key(pred_row.get("tier"), pred_row.get("seq_id"))
+        if not key[0] or not key[1]:
+            continue
+        meta = row_meta_by_key.setdefault(key, {})
+        split = str(pred_row.get("split") or "").strip()
+        role = str(meta.get("surrogate_role") or "").strip()
+        if not role:
+            if global_id in selected_top_ids or acquired:
+                role = "top_k"
+            elif global_id in training_ids or split == "training":
+                role = "training"
+            elif evaluated_ids and global_id in evaluated_ids:
+                role = "evaluated"
+        if role:
+            meta["surrogate_role"] = role
+        meta["surrogate_global_seq_id"] = global_id
+        meta["surrogate_split"] = split
+        meta["surrogate_acquired"] = acquired
+        meta["surrogate_af2_label"] = _csv_float_or_none(pred_row.get("af2_label"))
+        meta["surrogate_selected_model"] = selected_policy
+        if selected_policy:
+            meta["surrogate_selected_prediction"] = _csv_float_or_none(
+                pred_row.get(f"prediction_{selected_policy}")
+            )
+            meta["surrogate_selected_rank"] = _csv_int_or_none(
+                pred_row.get(f"rank_{selected_policy}")
+            )
+        for model in prediction_models:
+            prediction = _csv_float_or_none(pred_row.get(f"prediction_{model}"))
+            rank = _csv_int_or_none(pred_row.get(f"rank_{model}"))
+            if prediction is not None:
+                meta[f"surrogate_prediction_{model}"] = prediction
+            if rank is not None:
+                meta[f"surrogate_rank_{model}"] = rank
+        if meta.get("surrogate_rank") is None and global_id in selected_top_key_by_global:
+            meta["surrogate_rank"] = selected_top_key_by_global.get(global_id)
+
+    role_counts: dict[str, int] = {}
+    for meta in row_meta_by_key.values():
+        role = str(meta.get("surrogate_role") or "").strip()
+        if role:
+            role_counts[role] = role_counts.get(role, 0) + 1
+
+    public = {
+        "enabled": bool(selection.get("enabled", True)),
+        "model": selection.get("model"),
+        "requested_policy": selection.get("model"),
+        "selected_policy": selected_policy,
+        "selection_strategy": selection.get("selection_strategy"),
+        "models": selection.get("models") if isinstance(selection.get("models"), list) else prediction_models,
+        "comparator_models": selection.get("comparator_models")
+        if isinstance(selection.get("comparator_models"), list)
+        else [],
+        "ensemble_models": selection.get("ensemble_models")
+        if isinstance(selection.get("ensemble_models"), list)
+        else [],
+        "fitted_models": selection.get("fitted_models")
+        if isinstance(selection.get("fitted_models"), list)
+        else [],
+        "fit_errors": selection.get("fit_errors") if isinstance(selection.get("fit_errors"), dict) else {},
+        "initial_samples": selection.get("initial_samples"),
+        "top_k": selection.get("top_k"),
+        "cv_folds": selection.get("cv_folds"),
+        "candidate_count_before_triage": selection.get("candidate_count_before_triage"),
+        "candidate_count_after_triage": selection.get("candidate_count_after_triage"),
+        "candidate_count_after_budget": selection.get("candidate_count_after_budget"),
+        "expected_af2_calls": selection.get("expected_af2_calls"),
+        "training_count": len(training_ids) or role_counts.get("training", 0),
+        "selected_top_count": len(selected_top_ids) or len(top_rows) or role_counts.get("top_k", 0),
+        "evaluated_count": len(evaluated_ids)
+        or sum(role_counts.get(role, 0) for role in ("top_k", "training", "evaluated")),
+        "cv_metrics": cv_metrics,
+        "top_rows": top_rows[:200],
+        "artifacts": {
+            "model_selection": "surrogate_triage/model_selection.json",
+            "cv_metrics": "surrogate_triage/cv_metrics.csv",
+            "model_predictions": "surrogate_triage/model_predictions.csv",
+            "acquired_topk": "surrogate_triage/acquired_topk.csv",
+            "model_comparison": "surrogate_triage/model_comparison.svg",
+        },
+    }
+    return {"public": public, "row_meta_by_key": row_meta_by_key}
+
+
+def _apply_surrogate_triage_to_hit_rows(
+    rows: list[dict[str, object]],
+    context: dict[str, object] | None,
+    *,
+    include_surrogate_pool: bool = False,
+) -> list[dict[str, object]]:
+    if not context:
+        return rows
+    raw_meta = context.get("row_meta_by_key")
+    if not isinstance(raw_meta, dict) or not raw_meta:
+        return rows
+    keep_roles = {"top_k", "training", "evaluated"}
+    out: list[dict[str, object]] = []
+    for row in rows:
+        key = _surrogate_row_key(row.get("tier"), row.get("seq_id"))
+        meta = raw_meta.get(key)
+        if not isinstance(meta, dict):
+            if include_surrogate_pool:
+                out.append(row)
+            continue
+        annotated = dict(row)
+        annotated["backbone_source"] = row.get("source")
+        annotated.update(meta)
+        if str(annotated.get("surrogate_role") or "") in keep_roles:
+            annotated["source"] = "surrogate"
+        if include_surrogate_pool or str(annotated.get("surrogate_role") or "") in keep_roles:
+            out.append(annotated)
+
+    def sort_key(row: dict[str, object]) -> tuple[int, int, float, float, float]:
+        role = str(row.get("surrogate_role") or "")
+        role_order = {"top_k": 0, "training": 1, "evaluated": 2}.get(role, 3)
+        surrogate_rank = row.get("surrogate_rank")
+        rank_num = int(surrogate_rank) if isinstance(surrogate_rank, int) else 10**9
+        prediction = (
+            float(row.get("surrogate_selected_prediction"))
+            if isinstance(row.get("surrogate_selected_prediction"), (int, float))
+            else float(row.get("score") or -1.0)
+        )
+        plddt = float(row.get("plddt") or -1.0)
+        score = float(row.get("score") or -1.0)
+        return (role_order, rank_num, -prediction, -plddt, -score)
+
+    out.sort(key=sort_key)
+    for idx, row in enumerate(out, start=1):
+        row["rank"] = idx
+    return out
+
+
 def _hit_list_stats(rows: list[dict[str, object]]) -> dict[str, object]:
     score_values = [
         float(row["score"])
@@ -6441,6 +6890,19 @@ def _get_hit_list(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
         weights=weights,
         rmsd_ref=rmsd_ref,
     )
+    if not rows:
+        rows = _build_evolution_hit_list_rows(
+            run_root=root,
+            summary=summary,
+            weights=weights,
+            rmsd_ref=rmsd_ref,
+        )
+    surrogate_context = _load_surrogate_triage_context(root)
+    rows = _apply_surrogate_triage_to_hit_rows(
+        rows,
+        surrogate_context,
+        include_surrogate_pool=_as_bool(arguments.get("include_surrogate_pool"), False),
+    )
     filtered = [
         row
         for row in rows
@@ -6465,6 +6927,9 @@ def _get_hit_list(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str
         "rows": sliced,
         "stats": _hit_list_stats(filtered),
         "completeness": _completeness_flags(comparison_summary),
+        "surrogate_triage": surrogate_context.get("public")
+        if isinstance(surrogate_context, dict)
+        else None,
     }
 
 

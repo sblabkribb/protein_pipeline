@@ -269,6 +269,22 @@ test("surrogate triage is exposed as a first-class UI mode", () => {
   assert.match(source, /"surrogate\.ensembleMembers\.help":\s*"기본값은 사용 안 함입니다/);
 });
 
+test("analyze tab renders surrogate model selection and comparison summaries", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
+
+  assert.match(html, /id="surrogateTriageSummary"/);
+  assert.match(source, /function renderSurrogateTriageSummary/);
+  assert.match(source, /surrogate_triage/);
+  assert.match(source, /surrogate_selected_model/);
+  assert.match(source, /"analyze\.surrogate\.selectedModel"/);
+  assert.match(source, /"analyze\.chart\.option\.plddtSoluprot"/);
+  assert.match(source, /if \(source === "surrogate"\) return "Surrogate";/);
+  assert.match(source, /if \(source === "evolution"\) return "Evolution";/);
+  assert.match(source, /raw === "evolution"/);
+  assert.match(source, /evolution:\s*"#7c3aed"/);
+});
+
 test("evolution UI records experimental feedback inside the evolution workflow", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");

@@ -3694,6 +3694,16 @@ test("analyzeChartViewOptions exposes relax scatter views only when relax metric
   );
 });
 
+test("analyzeChartViewOptions exposes pLDDT versus SoluProt when RMSD is absent", () => {
+  assert.deepEqual(
+    analyzeChartViewOptions({
+      rows: [{ seq_id: "a", plddt: 89.2, rmsd: null, soluprot: 0.73 }],
+      summary: {},
+    }).map((option) => option.id),
+    ["plddt_rmsd", "plddt_soluprot", "score_hist", "tier_pass"]
+  );
+});
+
 test("copilotIntentFromPrompt detects metric term questions", () => {
   assert.equal(copilotIntentFromPrompt("WT CF RMSD 이 무슨 의미야"), "term");
 });

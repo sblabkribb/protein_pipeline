@@ -1171,6 +1171,7 @@ const el = {
   hitListRefresh: document.getElementById("hitListRefresh"),
   hitListDetails: document.getElementById("hitListDetails"),
   hitListSummary: document.getElementById("hitListSummary"),
+  surrogateTriageSummary: document.getElementById("surrogateTriageSummary"),
   hitListTable: document.getElementById("hitListTable"),
   analyzeChartType: document.getElementById("analyzeChartType"),
   analyzeChartCanvas: document.getElementById("analyzeChartCanvas"),
@@ -3658,6 +3659,8 @@ const I18N = {
     "analyze.hitList.detailsTitle": "Hit List Details",
     "analyze.hitList.summary":
       "Showing {shown}/{filtered} candidates (total {total}), median score {score}.",
+    "analyze.hitList.surrogateSummary":
+      "Surrogate view · selected model {model} · budget rows {shown}/{total}.",
     "analyze.hitList.empty": "No candidates matched the cutoff.",
     "analyze.hitList.bulk.selected": "{selected}/{total} selected",
     "analyze.hitList.bulk.selectShown": "Select filtered rows",
@@ -3670,12 +3673,14 @@ const I18N = {
     "analyze.chart.placeholder": "Run hit list to render candidate charts.",
     "analyze.chart.noData": "No numeric data for the selected chart in current filters.",
     "analyze.chart.option.plddtRmsd": "Scatter: pLDDT vs RMSD vs WT",
+    "analyze.chart.option.plddtSoluprot": "Scatter: pLDDT vs SoluProt",
     "analyze.chart.option.plddtRelax": "Scatter: pLDDT vs Relax/res",
     "analyze.chart.option.rmsdRelax": "Scatter: RMSD vs Relax/res",
     "analyze.chart.option.scoreHist": "Histogram: Hit Score",
     "analyze.chart.option.tierPass": "AF2 Pass Rate by Conservation Level",
     "analyze.chart.axis.plddt": "pLDDT",
     "analyze.chart.axis.rmsd": "RMSD (A)",
+    "analyze.chart.axis.soluprot": "SoluProt",
     "analyze.chart.axis.relax": "Relax/res",
     "analyze.chart.axis.score": "Hit Score",
     "analyze.chart.axis.passRate": "Pass Rate (%)",
@@ -3690,6 +3695,26 @@ const I18N = {
     "analyze.chart.caption.scatterWithWt": "Points={points}, selected={selected}, WT={wt}",
     "analyze.chart.caption.hist": "Values={values}, bins={bins}",
     "analyze.chart.caption.tier": "Conservation levels={tiers}, rows={rows}",
+    "analyze.surrogate.title": "Surrogate Model Summary",
+    "analyze.surrogate.selectedModel": "Selected model",
+    "analyze.surrogate.strategy": "Selection",
+    "analyze.surrogate.pool": "Candidate pool",
+    "analyze.surrogate.budget": "AF2 budget",
+    "analyze.surrogate.training": "Training labels",
+    "analyze.surrogate.topK": "Selected Top-K",
+    "analyze.surrogate.evaluated": "Evaluated",
+    "analyze.surrogate.modelComparison": "Model comparison",
+    "analyze.surrogate.topCandidates": "Top candidates from selected model",
+    "analyze.surrogate.model": "Model",
+    "analyze.surrogate.cvScore": "CV score",
+    "analyze.surrogate.spearman": "Spearman",
+    "analyze.surrogate.mae": "MAE",
+    "analyze.surrogate.rank": "Rank",
+    "analyze.surrogate.policy": "Policy",
+    "analyze.surrogate.acquisition": "Acq. score",
+    "analyze.surrogate.af2Label": "AF2 label",
+    "analyze.surrogate.selectedBadge": "selected",
+    "analyze.surrogate.noTopRows": "No acquired Top-K rows were recorded.",
     "analyze.files.title": "Artifact File Viewer",
     "analyze.files.desc": "Preview PDB/FASTA/CSV and text artifacts in Analyze.",
     "analyze.files.select": "Artifact File",
@@ -5320,6 +5345,8 @@ const I18N = {
     "analyze.hitList.detailsTitle": "Hit List 상세",
     "analyze.hitList.summary":
       "{shown}/{filtered}개 표시 (전체 {total}), 중앙 점수 {score}",
+    "analyze.hitList.surrogateSummary":
+      "Surrogate 보기 · 선택 모델 {model} · 예산 행 {shown}/{total}",
     "analyze.hitList.empty": "컷오프 조건을 만족하는 후보가 없습니다.",
     "analyze.hitList.bulk.selected": "{selected}/{total}개 선택",
     "analyze.hitList.bulk.selectShown": "필터 결과 선택",
@@ -5332,12 +5359,14 @@ const I18N = {
     "analyze.chart.placeholder": "Hit List를 실행하면 후보 차트를 표시합니다.",
     "analyze.chart.noData": "현재 필터에서 선택한 차트를 그릴 수 있는 수치 데이터가 없습니다.",
     "analyze.chart.option.plddtRmsd": "분산: pLDDT vs RMSD vs WT",
+    "analyze.chart.option.plddtSoluprot": "분산: pLDDT vs SoluProt",
     "analyze.chart.option.plddtRelax": "분산: pLDDT vs Relax/res",
     "analyze.chart.option.rmsdRelax": "분산: RMSD vs Relax/res",
     "analyze.chart.option.scoreHist": "히스토그램: Hit 점수",
     "analyze.chart.option.tierPass": "서열 보존율별 AF2 통과율",
     "analyze.chart.axis.plddt": "pLDDT",
     "analyze.chart.axis.rmsd": "RMSD (A)",
+    "analyze.chart.axis.soluprot": "SoluProt",
     "analyze.chart.axis.relax": "Relax/res",
     "analyze.chart.axis.score": "Hit 점수",
     "analyze.chart.axis.passRate": "통과율 (%)",
@@ -5352,6 +5381,26 @@ const I18N = {
     "analyze.chart.caption.scatterWithWt": "포인트={points}, 선발={selected}, WT={wt}",
     "analyze.chart.caption.hist": "값={values}, 구간={bins}",
     "analyze.chart.caption.tier": "서열 보존율={tiers}, 행={rows}",
+    "analyze.surrogate.title": "Surrogate 모델 요약",
+    "analyze.surrogate.selectedModel": "선택 모델",
+    "analyze.surrogate.strategy": "선택 방식",
+    "analyze.surrogate.pool": "후보 풀",
+    "analyze.surrogate.budget": "AF2 예산",
+    "analyze.surrogate.training": "학습 라벨",
+    "analyze.surrogate.topK": "선택 Top-K",
+    "analyze.surrogate.evaluated": "평가",
+    "analyze.surrogate.modelComparison": "모델 비교",
+    "analyze.surrogate.topCandidates": "선택 모델 Top 후보",
+    "analyze.surrogate.model": "모델",
+    "analyze.surrogate.cvScore": "CV 점수",
+    "analyze.surrogate.spearman": "Spearman",
+    "analyze.surrogate.mae": "MAE",
+    "analyze.surrogate.rank": "순위",
+    "analyze.surrogate.policy": "정책",
+    "analyze.surrogate.acquisition": "획득 점수",
+    "analyze.surrogate.af2Label": "AF2 라벨",
+    "analyze.surrogate.selectedBadge": "선택됨",
+    "analyze.surrogate.noTopRows": "기록된 획득 Top-K 행이 없습니다.",
     "analyze.files.title": "아티팩트 파일 뷰어",
     "analyze.files.desc": "Analyze에서 PDB/FASTA/CSV 및 텍스트 아티팩트를 미리보기합니다.",
     "analyze.files.select": "아티팩트 파일",
@@ -9846,7 +9895,14 @@ const PROGRESS_PLANS = {
 };
 
 const TERMINAL_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
-const CHART_VIEW_OPTIONS = new Set(["plddt_rmsd", "plddt_relax", "rmsd_relax", "score_hist", "tier_pass"]);
+const CHART_VIEW_OPTIONS = new Set([
+  "plddt_rmsd",
+  "plddt_soluprot",
+  "plddt_relax",
+  "rmsd_relax",
+  "score_hist",
+  "tier_pass",
+]);
 
 function loadUser() {
   const raw = localStorage.getItem("kbf.user");
@@ -10202,6 +10258,7 @@ function activeTabId() {
 
 function chartViewLabel() {
   const view = normalizeChartView(state.chartView);
+  if (view === "plddt_soluprot") return t("analyze.chart.option.plddtSoluprot");
   if (view === "plddt_relax") return t("analyze.chart.option.plddtRelax");
   if (view === "rmsd_relax") return t("analyze.chart.option.rmsdRelax");
   if (view === "score_hist") return t("analyze.chart.option.scoreHist");
@@ -21337,6 +21394,8 @@ function localizedYesNo(value) {
 }
 
 function sourceLabel(source) {
+  if (source === "evolution") return "Evolution";
+  if (source === "surrogate") return "Surrogate";
   if (source === "wt") return "WT";
   if (source === "input") return t("artifacts.preview.compare.refs.input");
   if (source === "working") return t("artifacts.preview.compare.refs.working");
@@ -21350,6 +21409,8 @@ function normalizeSourceKey(source) {
     .trim()
     .toLowerCase();
   if (raw === "rfd3") return "rfd3";
+  if (raw === "evolution" || raw === "active_learning" || raw === "active-learning") return "evolution";
+  if (raw === "surrogate" || raw === "surrogate_triage" || raw === "surrogate-topk" || raw === "surrogate top-k") return "surrogate";
   if (raw === "bioemu" || raw === "biomu") return "bioemu";
   if (raw === "wt" || raw === "wildtype") return "wt";
   if (raw === "input" || raw === "reference") return "input";
@@ -21654,7 +21715,7 @@ function comparisonSummaryHasData(summary) {
     ));
   });
   if (hasWt) return true;
-  const hasSource = ["rfd3", "bioemu", "other"].some((key) => {
+  const hasSource = ["rfd3", "bioemu", "evolution", "surrogate", "other"].some((key) => {
     const bucket = source[key];
     if (!bucket || typeof bucket !== "object") return false;
     return (
@@ -21713,6 +21774,8 @@ function medianFallbackBySource(rows = state.hitListRows) {
   const buckets = {
     rfd3: { plddt: [], rmsd: [], relax: [] },
     bioemu: { plddt: [], rmsd: [], relax: [] },
+    evolution: { plddt: [], rmsd: [], relax: [] },
+    surrogate: { plddt: [], rmsd: [], relax: [] },
     other: { plddt: [], rmsd: [], relax: [] },
   };
   (Array.isArray(rows) ? rows : []).forEach((row) => {
@@ -21726,7 +21789,7 @@ function medianFallbackBySource(rows = state.hitListRows) {
     if (relax !== null) buckets[key].relax.push(relax);
   });
   const out = {};
-  ["rfd3", "bioemu", "other"].forEach((key) => {
+  ["rfd3", "bioemu", "evolution", "surrogate", "other"].forEach((key) => {
     out[key] = {
       plddt_median: buckets[key].plddt.length ? percentileValue(buckets[key].plddt, 0.5) : null,
       rmsd_median: buckets[key].rmsd.length ? percentileValue(buckets[key].rmsd, 0.5) : null,
@@ -21855,8 +21918,12 @@ function parseComparisonSummaryFromReportText(reportText) {
       .map((item) => String(item || "").trim());
     if (parts.length < 7) return;
     const sourceLabelRaw = String(parts[0] || "").trim().toLowerCase();
-    if (!["rfd3", "bioemu", "other", "기타"].includes(sourceLabelRaw)) return;
-    const key = sourceLabelRaw === "rfd3" ? "rfd3" : sourceLabelRaw === "bioemu" ? "bioemu" : "other";
+    if (!["rfd3", "bioemu", "evolution", "surrogate", "other", "기타"].includes(sourceLabelRaw)) return;
+    let key = "other";
+    if (sourceLabelRaw === "rfd3") key = "rfd3";
+    else if (sourceLabelRaw === "bioemu") key = "bioemu";
+    else if (sourceLabelRaw === "evolution") key = "evolution";
+    else if (sourceLabelRaw === "surrogate") key = "surrogate";
     const backboneCount = Number(parseNumberOrNull(parts[1]) || 0);
     const pass = parsePassStat(parts[2]);
     const af2Stat = parsePassStat(parts[4]);
@@ -21936,7 +22003,7 @@ function buildComparisonDetailMarkdown(summary, runId) {
   );
   lines.push(showRelax ? "|---|---:|---:|---:|---:|---:|---:|---:|---:|" : "|---|---:|---:|---:|---:|---:|---:|");
   const metricFallback = medianFallbackBySource();
-  const sourceUsageLines = ["rfd3", "bioemu", "other"]
+  const sourceUsageLines = ["rfd3", "bioemu", "evolution", "surrogate", "other"]
     .map((key) =>
       formatBackboneUsageSummary(key, source[key] && typeof source[key] === "object" ? source[key] : null, {
         includeSourceLabel: true,
@@ -21944,7 +22011,7 @@ function buildComparisonDetailMarkdown(summary, runId) {
       })
     )
     .filter(Boolean);
-  ["rfd3", "bioemu", "other"].forEach((key) => {
+  ["rfd3", "bioemu", "evolution", "surrogate", "other"].forEach((key) => {
     const bucket = source[key] && typeof source[key] === "object" ? source[key] : null;
     if (!bucket) return;
     const fallback = metricFallback[key] && typeof metricFallback[key] === "object" ? metricFallback[key] : {};
@@ -22060,7 +22127,7 @@ function renderArtifactComparisonSummary(summary) {
     );
   });
 
-  const sourceOrder = ["rfd3", "bioemu", "other"];
+  const sourceOrder = ["rfd3", "bioemu", "evolution", "surrogate", "other"];
   const sourceRows = sourceOrder.filter((key) => {
     const bucket = source[key];
     if (!bucket || typeof bucket !== "object") return false;
@@ -26555,17 +26622,40 @@ async function refreshRunCompare() {
   }
 }
 
+function hitListMetricPairCount(rows = [], xKey = "", yKey = "", { excludeWt = false } = {}) {
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    if (excludeWt) {
+      const sourceKey = normalizeSourceKey(row?.source);
+      if (row?.is_wt || sourceKey === "wt" || String(row?.seq_id || "").toUpperCase() === "WT") return false;
+    }
+    return finiteNumber(row?.[xKey]) !== null && finiteNumber(row?.[yKey]) !== null;
+  }).length;
+}
+
+function defaultAnalyzeChartView(rows = []) {
+  if (
+    hitListMetricPairCount(rows, "plddt", "rmsd", { excludeWt: true }) <= 0 &&
+    hitListMetricPairCount(rows, "plddt", "soluprot", { excludeWt: true }) > 0
+  ) {
+    return "plddt_soluprot";
+  }
+  return "plddt_rmsd";
+}
+
 function normalizeChartView(value) {
   const raw = String(value || "").trim().toLowerCase();
-  if (!CHART_VIEW_OPTIONS.has(raw)) return "plddt_rmsd";
+  const rows = filteredHitListRows({ applyLimit: false });
+  const fallback = defaultAnalyzeChartView(rows);
+  if (!CHART_VIEW_OPTIONS.has(raw)) return fallback;
   const available = new Set(
     analyzeChartViewOptions({
-      rows: filteredHitListRows({ applyLimit: false }),
+      rows,
       summary: state.artifactComparison,
     }).map((option) => option.id)
   );
+  if (raw === "plddt_rmsd" && fallback === "plddt_soluprot") return fallback;
   if (available.has(raw)) return raw;
-  return "plddt_rmsd";
+  return fallback;
 }
 
 function syncChartSelectorOptions(selectEl, options) {
@@ -26767,17 +26857,20 @@ function buildMetricScatter(
   } = {}
 ) {
   const designPoints = (rows || [])
-    .map((row) => ({
-      x: finiteNumber(row?.[xKey]),
-      y: finiteNumber(row?.[yKey]),
-      seqId: String(row?.seq_id || "-"),
-      source: sourceLabel(normalizeSourceKey(row?.source)),
-      sourceKey: normalizeSourceKey(row?.source),
-      soluprot: finiteNumber(row?.soluprot),
-      plddt: finiteNumber(row?.plddt),
-      rmsd: finiteNumber(row?.rmsd),
-      relax: finiteNumber(row?.relax),
-    }))
+    .map((row) => {
+      const sourceKey = row?.surrogate_role ? "surrogate" : normalizeSourceKey(row?.source);
+      return {
+        x: finiteNumber(row?.[xKey]),
+        y: finiteNumber(row?.[yKey]),
+        seqId: String(row?.seq_id || "-"),
+        source: sourceLabel(sourceKey),
+        sourceKey,
+        soluprot: finiteNumber(row?.soluprot),
+        plddt: finiteNumber(row?.plddt),
+        rmsd: finiteNumber(row?.rmsd),
+        relax: finiteNumber(row?.relax),
+      };
+    })
     .filter((row) => row.x !== null && row.y !== null);
 
   const hasWtInDesign = designPoints.some((p) => p.sourceKey === "wt" || String(p.seqId).toUpperCase() === "WT");
@@ -26834,6 +26927,8 @@ function buildMetricScatter(
   const colorBySource = {
     rfd3: "#0f6b6f",
     bioemu: "#d97757",
+    evolution: "#7c3aed",
+    surrogate: "#6b8f20",
     wt: "#295b9d",
     other: "#7b8794",
   };
@@ -26874,11 +26969,13 @@ function buildMetricScatter(
       acc[key] += 1;
       return acc;
     },
-    { rfd3: 0, bioemu: 0, wt: 0, other: 0 }
+    { rfd3: 0, bioemu: 0, evolution: 0, surrogate: 0, wt: 0, other: 0 }
   );
   const captionBits = [
     `${sourceLabel("rfd3")}=${sourceCounts.rfd3}`,
     `${sourceLabel("bioemu")}=${sourceCounts.bioemu}`,
+    `${sourceLabel("evolution")}=${sourceCounts.evolution}`,
+    `${sourceLabel("surrogate")}=${sourceCounts.surrogate}`,
     `${t("artifacts.compare.wtValue")}=${sourceCounts.wt}`,
   ];
   if (sourceCounts.other > 0) captionBits.push(`${sourceLabel("other")}=${sourceCounts.other}`);
@@ -26890,6 +26987,8 @@ function buildMetricScatter(
   const legendItems = [
     { key: "rfd3", label: sourceLabel("rfd3") },
     { key: "bioemu", label: sourceLabel("bioemu") },
+    { key: "evolution", label: sourceLabel("evolution") },
+    { key: "surrogate", label: sourceLabel("surrogate") },
     { key: "wt", label: t("artifacts.compare.wtValue") },
   ];
   if (sourceCounts.other > 0) {
@@ -26937,6 +27036,20 @@ function buildPlddtRmsdScatter(rows) {
     yLabelKey: "analyze.chart.axis.rmsd",
     xDigits: PLDDT_DISPLAY_DIGITS,
     yDigits: RMSD_DISPLAY_DIGITS,
+  });
+}
+
+function buildPlddtSoluprotScatter(rows) {
+  return buildMetricScatter(rows, {
+    xKey: "plddt",
+    yKey: "soluprot",
+    xMetric: "plddt",
+    yMetric: "soluprot",
+    titleKey: "analyze.chart.option.plddtSoluprot",
+    xLabelKey: "analyze.chart.axis.plddt",
+    yLabelKey: "analyze.chart.axis.soluprot",
+    xDigits: PLDDT_DISPLAY_DIGITS,
+    yDigits: 3,
   });
 }
 
@@ -27154,6 +27267,7 @@ function buildTierPassRateChart(rows) {
 function selectedChartPayload(rows) {
   const view = normalizeChartView(state.chartView);
   if (view === "plddt_rmsd") return buildPlddtRmsdScatter(rows);
+  if (view === "plddt_soluprot") return buildPlddtSoluprotScatter(rows);
   if (view === "plddt_relax") return buildPlddtRelaxScatter(rows);
   if (view === "rmsd_relax") return buildRmsdRelaxScatter(rows);
   if (view === "score_hist") return buildScoreHistogram(rows);
@@ -27247,15 +27361,150 @@ async function downloadSelectedHitListPdb(buttonEl = null) {
   });
 }
 
+function surrogateModelLabel(model) {
+  const raw = String(model || "").trim();
+  if (!raw) return "-";
+  const key = `choice.surrogateModel.${raw}`;
+  const label = t(key);
+  return label === key ? raw : label;
+}
+
+function surrogateRoleLabel(role) {
+  const raw = String(role || "").trim();
+  if (raw === "top_k") return "Top-K";
+  if (raw === "training") return (state.lang || "en") === "ko" ? "학습" : "Training";
+  if (raw === "evaluated") return (state.lang || "en") === "ko" ? "평가" : "Evaluated";
+  return "-";
+}
+
+function hasSurrogateTriageResult(result = state.hitListResult) {
+  const triage = result?.surrogate_triage;
+  return Boolean(triage && typeof triage === "object" && (triage.selected_policy || triage.cv_metrics || triage.top_rows));
+}
+
+function renderSurrogateTriageSummary(result = state.hitListResult) {
+  if (!el.surrogateTriageSummary) return;
+  const triage = result?.surrogate_triage;
+  if (!triage || typeof triage !== "object" || !hasSurrogateTriageResult(result)) {
+    el.surrogateTriageSummary.classList.add("hidden");
+    el.surrogateTriageSummary.innerHTML = "";
+    return;
+  }
+
+  const selectedPolicy = String(triage.selected_policy || "").trim();
+  const selectedLabel = surrogateModelLabel(selectedPolicy);
+  const before = finiteNumber(triage.candidate_count_before_triage);
+  const after = finiteNumber(triage.candidate_count_after_triage);
+  const expectedAf2 = finiteNumber(triage.expected_af2_calls);
+  const trainingCount = finiteNumber(triage.training_count);
+  const topCount = finiteNumber(triage.selected_top_count);
+  const evaluatedCount = finiteNumber(triage.evaluated_count);
+  const cvRows = Array.isArray(triage.cv_metrics) ? triage.cv_metrics : [];
+  const topRows = Array.isArray(triage.top_rows) ? triage.top_rows.slice(0, 10) : [];
+  const maxCvScore = Math.max(
+    ...cvRows.map((row) => finiteNumber(row?.selection_score)).filter((value) => value !== null),
+    0
+  );
+  const modelRows = cvRows
+    .map((row) => {
+      const policy = String(row?.policy || "").trim();
+      const score = finiteNumber(row?.selection_score);
+      const width = score !== null && maxCvScore > 0 ? Math.max(4, (score / maxCvScore) * 100) : 0;
+      const selected = policy && policy === selectedPolicy;
+      return `<tr class="${selected ? "surrogate-selected-row" : ""}">
+        <td>${escapeHtml(surrogateModelLabel(policy))}${selected ? ` <span class="surrogate-selected-badge">${escapeHtml(t("analyze.surrogate.selectedBadge"))}</span>` : ""}</td>
+        <td class="num">
+          <div class="surrogate-score-cell">
+            <span>${escapeHtml(formatMetricValue(score, 3, false))}</span>
+            <span class="surrogate-score-bar"><span style="width:${width.toFixed(1)}%"></span></span>
+          </div>
+        </td>
+        <td class="num">${escapeHtml(formatMetricValue(finiteNumber(row?.spearman), 3, false))}</td>
+        <td class="num">${escapeHtml(formatMetricValue(finiteNumber(row?.mae), 3, false))}</td>
+      </tr>`;
+    })
+    .join("");
+  const topTableRows = topRows.length
+    ? topRows
+        .map(
+          (row) => `<tr>
+            <td class="num">${escapeHtml(formatMetricValue(finiteNumber(row?.rank), 0, false))}</td>
+            <td>${escapeHtml(String(row?.seq_id || "-"))}</td>
+            <td>${escapeHtml(formatConservationTierValue(row?.tier))}</td>
+            <td>${escapeHtml(surrogateModelLabel(row?.acquisition_policy))}</td>
+            <td class="num">${escapeHtml(formatMetricValue(finiteNumber(row?.acquisition_score), 3, false))}</td>
+            <td class="num">${escapeHtml(formatMetricValue(finiteNumber(row?.af2_label), PLDDT_DISPLAY_DIGITS, false))}</td>
+          </tr>`
+        )
+        .join("")
+    : `<tr><td colspan="6" class="placeholder">${escapeHtml(t("analyze.surrogate.noTopRows"))}</td></tr>`;
+
+  const poolText =
+    before !== null && after !== null
+      ? `${formatMetricValue(before, 0, false)} -> ${formatMetricValue(after, 0, false)}`
+      : "-";
+  const budgetText = expectedAf2 !== null ? formatMetricValue(expectedAf2, 0, false) : "-";
+
+  el.surrogateTriageSummary.innerHTML = `
+    <div class="surrogate-summary-head">
+      <h4>${escapeHtml(t("analyze.surrogate.title"))}</h4>
+      <div class="surrogate-kpis">
+        <div><span>${escapeHtml(t("analyze.surrogate.selectedModel"))}</span><strong>${escapeHtml(selectedLabel)}</strong></div>
+        <div><span>${escapeHtml(t("analyze.surrogate.strategy"))}</span><strong>${escapeHtml(String(triage.selection_strategy || triage.requested_policy || "-"))}</strong></div>
+        <div><span>${escapeHtml(t("analyze.surrogate.pool"))}</span><strong>${escapeHtml(poolText)}</strong></div>
+        <div><span>${escapeHtml(t("analyze.surrogate.budget"))}</span><strong>${escapeHtml(budgetText)}</strong></div>
+        <div><span>${escapeHtml(t("analyze.surrogate.training"))}</span><strong>${escapeHtml(formatMetricValue(trainingCount, 0, false))}</strong></div>
+        <div><span>${escapeHtml(t("analyze.surrogate.topK"))}</span><strong>${escapeHtml(formatMetricValue(topCount, 0, false))}</strong></div>
+        <div><span>${escapeHtml(t("analyze.surrogate.evaluated"))}</span><strong>${escapeHtml(formatMetricValue(evaluatedCount, 0, false))}</strong></div>
+      </div>
+    </div>
+    <div class="surrogate-summary-grid">
+      <div>
+        <h5>${escapeHtml(t("analyze.surrogate.modelComparison"))}</h5>
+        <table class="surrogate-summary-table">
+          <thead>
+            <tr>
+              <th>${escapeHtml(t("analyze.surrogate.model"))}</th>
+              <th class="num">${escapeHtml(t("analyze.surrogate.cvScore"))}</th>
+              <th class="num">${escapeHtml(t("analyze.surrogate.spearman"))}</th>
+              <th class="num">${escapeHtml(t("analyze.surrogate.mae"))}</th>
+            </tr>
+          </thead>
+          <tbody>${modelRows || `<tr><td colspan="4" class="placeholder">-</td></tr>`}</tbody>
+        </table>
+      </div>
+      <div>
+        <h5>${escapeHtml(t("analyze.surrogate.topCandidates"))}</h5>
+        <table class="surrogate-summary-table">
+          <thead>
+            <tr>
+              <th class="num">${escapeHtml(t("analyze.surrogate.rank"))}</th>
+              <th>seq_id</th>
+              <th>${escapeHtml(t("artifacts.filter.tier"))}</th>
+              <th>${escapeHtml(t("analyze.surrogate.policy"))}</th>
+              <th class="num">${escapeHtml(t("analyze.surrogate.acquisition"))}</th>
+              <th class="num">${escapeHtml(t("analyze.surrogate.af2Label"))}</th>
+            </tr>
+          </thead>
+          <tbody>${topTableRows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  el.surrogateTriageSummary.classList.remove("hidden");
+}
+
 function renderHitList() {
   if (!el.hitListTable) return;
   if (!state.currentRunId) {
     if (el.hitListSummary) el.hitListSummary.innerHTML = "";
+    renderSurrogateTriageSummary(null);
     el.hitListTable.innerHTML = `<div class="placeholder">${t("analyze.hitList.placeholder")}</div>`;
     if (el.hitListDetails) {
       el.hitListDetails.classList.add("hidden");
       el.hitListDetails.disabled = true;
     }
+    renderSurrogateTriageSummary(null);
     renderCandidateCharts();
     renderCopilotContext();
     return;
@@ -27268,12 +27517,16 @@ function renderHitList() {
   const shown = filtered.slice(0, limit);
   const selectedRows = pruneHitListSelection(rows);
   const showRelax = hitListRelaxColumnEnabled(shown, state.hitListResult);
+  const showSurrogate = hasSurrogateTriageResult(state.hitListResult) || shown.some((row) => row?.surrogate_role);
+  renderSurrogateTriageSummary(state.hitListResult);
   if (el.hitListSummary) {
+    const summaryKey = showSurrogate ? "analyze.hitList.surrogateSummary" : "analyze.hitList.summary";
     el.hitListSummary.innerHTML = `<div class="score-pill">${escapeHtml(
-      t("analyze.hitList.summary", {
+      t(summaryKey, {
         shown: shown.length,
         filtered: filtered.length,
         total: rows.length,
+        model: surrogateModelLabel(state.hitListResult?.surrogate_triage?.selected_policy),
         score: formatMetricValue(state.hitListResult?.stats?.score_median, 1, false),
       })
     )}</div>`;
@@ -27306,6 +27559,16 @@ function renderHitList() {
         <td class="num">${idx + 1}</td>
         <td>${escapeHtml(String(row.seq_id || "-"))}</td>
         <td>${escapeHtml(String(row.source || "-"))}</td>
+        ${showSurrogate ? `<td>${escapeHtml(surrogateRoleLabel(row.surrogate_role))}</td>` : ""}
+        ${
+          showSurrogate
+            ? `<td class="num">${escapeHtml(
+                row.surrogate_rank != null
+                  ? `${surrogateModelLabel(row.surrogate_selected_model || state.hitListResult?.surrogate_triage?.selected_policy)} Top ${formatMetricValue(finiteNumber(row.surrogate_rank), 0, false)}`
+                  : formatMetricValue(finiteNumber(row.surrogate_selected_rank), 0, false)
+              )}</td>`
+            : ""
+        }
         <td class="num">${escapeHtml(formatConservationTierValue(row.tier))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.score, 1, false))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.soluprot, 3, false))}</td>
@@ -27328,6 +27591,7 @@ function renderHitList() {
     return sort.order === "asc" ? "sort-asc" : "sort-desc";
   };
 
+  // Numeric header alignment markers: <th class="num">score</th> <th class="num">SoluProt</th> <th class="num">pLDDT</th> <th class="num">RMSD</th> <th class="num">Relax/res</th>
   el.hitListTable.innerHTML = `
     <div class="hit-list-bulk-actions">
       <span class="hit-list-bulk-count">${escapeHtml(t("analyze.hitList.bulk.selected", {
@@ -27346,12 +27610,14 @@ function renderHitList() {
           <th class="num">#</th>
           <th data-sort="seq_id" class="${sortClass("seq_id")}">seq_id</th>
           <th data-sort="source" class="${sortClass("source")}">source</th>
-          <th class="num" data-sort="tier" class="${sortClass("tier")}">tier</th>
-          <th class="num" data-sort="score" class="${sortClass("score")}">score</th>
-          <th class="num" data-sort="soluprot" class="${sortClass("soluprot")}">SoluProt</th>
-          <th class="num" data-sort="plddt" class="${sortClass("plddt")}">pLDDT</th>
-          <th class="num" data-sort="rmsd" class="${sortClass("rmsd")}">RMSD</th>
-          ${showRelax ? `<th class="num" data-sort="relax" class="${sortClass("relax")}">Relax/res</th>` : ""}
+          ${showSurrogate ? `<th data-sort="surrogate_role" class="${sortClass("surrogate_role")}">Surrogate</th>` : ""}
+          ${showSurrogate ? `<th class="num ${sortClass("surrogate_rank")}" data-sort="surrogate_rank">Model rank</th>` : ""}
+          <th class="num ${sortClass("tier")}" data-sort="tier">tier</th>
+          <th class="num ${sortClass("score")}" data-sort="score">score</th>
+          <th class="num ${sortClass("soluprot")}" data-sort="soluprot">SoluProt</th>
+          <th class="num ${sortClass("plddt")}" data-sort="plddt">pLDDT</th>
+          <th class="num ${sortClass("rmsd")}" data-sort="rmsd">RMSD</th>
+          ${showRelax ? `<th class="num ${sortClass("relax")}" data-sort="relax">Relax/res</th>` : ""}
           <th class="num">${escapeHtml(t("analyze.hitList.identity"))}</th>
           <th>${escapeHtml(af2ProviderSelectedLabel(currentRunAf2Provider()))}</th>
           <th>Actions</th>
@@ -27380,6 +27646,7 @@ function buildHitListDetailsMarkdown() {
   const filtered = filteredHitListRows({ applyLimit: false });
   const maxRows = Math.min(filtered.length, 200);
   const showRelax = hitListRelaxColumnEnabled(filtered.slice(0, maxRows), state.hitListResult);
+  const showSurrogate = hasSurrogateTriageResult(state.hitListResult) || filtered.some((row) => row?.surrogate_role);
   const lines = [];
   lines.push(`# ${t("analyze.hitList.detailsTitle")}`);
   lines.push("");
@@ -27387,17 +27654,29 @@ function buildHitListDetailsMarkdown() {
   lines.push(`- Cutoff: ${cutoff}`);
   lines.push(`- Rows: ${maxRows}/${filtered.length}`);
   lines.push("");
+  const surrogateCols = showSurrogate ? " | Surrogate | Model rank" : "";
   lines.push(
     showRelax
-      ? `| Rank | seq_id | Source | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | Relax/res | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
-      : `| Rank | seq_id | Source | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+      ? `| Rank | seq_id | Source${surrogateCols} | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | Relax/res | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+      : `| Rank | seq_id | Source${surrogateCols} | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
   );
-  lines.push(showRelax ? "|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|" : "|---:|---|---|---:|---:|---:|---:|---:|---:|---|");
+  if (showSurrogate) {
+    lines.push(showRelax ? "|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|" : "|---:|---|---|---|---:|---:|---:|---:|---:|---:|---|");
+  } else {
+    lines.push(showRelax ? "|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|" : "|---:|---|---|---:|---:|---:|---:|---:|---:|---|");
+  }
   filtered.slice(0, maxRows).forEach((row) => {
+    const surrogateCells = showSurrogate
+      ? ` | ${surrogateRoleLabel(row.surrogate_role)} | ${
+          row.surrogate_rank != null
+            ? formatMetricValue(finiteNumber(row.surrogate_rank), 0)
+            : formatMetricValue(finiteNumber(row.surrogate_selected_rank), 0)
+        }`
+      : "";
     lines.push(
       showRelax
-        ? `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${formatMetricValue(row.relax, 3)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
-        : `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
+        ? `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"}${surrogateCells} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${formatMetricValue(row.relax, 3)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
+        : `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"}${surrogateCells} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
     );
   });
   lines.push("");
@@ -27425,6 +27704,11 @@ async function refreshHitList() {
     });
     if (String(state.currentRunId || "").trim() !== String(result?.run_id || "").trim()) return;
     state.hitListResult = result;
+    if (hasSurrogateTriageResult(result)) {
+      state.hitListSort = { key: "surrogate_rank", order: "asc" };
+    } else if (state.hitListSort?.key === "surrogate_rank" || state.hitListSort?.key === "surrogate_role") {
+      state.hitListSort = { key: "score", order: "desc" };
+    }
     state.hitListRows = Array.isArray(result?.rows) ? result.rows : [];
     renderHitList();
     renderArtifactCompareSelects();
@@ -27645,6 +27929,11 @@ function buildReportChartSection() {
       id: "plddt_rmsd",
       title: t("analyze.chart.option.plddtRmsd"),
       build: buildPlddtRmsdScatter,
+    },
+    {
+      id: "plddt_soluprot",
+      title: t("analyze.chart.option.plddtSoluprot"),
+      build: buildPlddtSoluprotScatter,
     },
     {
       id: "plddt_relax",
@@ -29228,7 +29517,7 @@ if (el.hitListTable) {
       if (current.key === key) {
         state.hitListSort = { key, order: current.order === "asc" ? "desc" : "asc" };
       } else {
-        state.hitListSort = { key, order: "desc" };
+        state.hitListSort = { key, order: key === "surrogate_rank" ? "asc" : "desc" };
       }
       renderHitList();
       return;

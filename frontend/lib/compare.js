@@ -77,6 +77,7 @@ function compareProviderLabel(provider = "colabfold") {
 
 const BASE_ANALYZE_CHART_VIEW_OPTIONS = Object.freeze([
   Object.freeze({ id: "plddt_rmsd", labelKey: "analyze.chart.option.plddtRmsd" }),
+  Object.freeze({ id: "plddt_soluprot", labelKey: "analyze.chart.option.plddtSoluprot" }),
   Object.freeze({ id: "score_hist", labelKey: "analyze.chart.option.scoreHist" }),
   Object.freeze({ id: "tier_pass", labelKey: "analyze.chart.option.tierPass" }),
 ]);
@@ -135,16 +136,25 @@ export function hitListHasRelaxMetrics(rows = []) {
   return (Array.isArray(rows) ? rows : []).some((row) => finiteMetricNumber(row?.relax) !== null);
 }
 
+function hitListHasMetricPair(rows = [], xKey = "", yKey = "") {
+  return (Array.isArray(rows) ? rows : []).some(
+    (row) => finiteMetricNumber(row?.[xKey]) !== null && finiteMetricNumber(row?.[yKey]) !== null
+  );
+}
+
 export function hitListRelaxColumnEnabled(rows = [], result = {}) {
   return hitListHasRelaxMetrics(rows) || result?.relax_enabled === true;
 }
 
 export function analyzeChartViewOptions({ rows = [], summary = {} } = {}) {
   const options = [BASE_ANALYZE_CHART_VIEW_OPTIONS[0]];
+  if (hitListHasMetricPair(rows, "plddt", "soluprot")) {
+    options.push(BASE_ANALYZE_CHART_VIEW_OPTIONS[1]);
+  }
   if (hitListHasRelaxMetrics(rows) || comparisonSummaryHasRelaxMetrics(summary)) {
     options.push(...RELAX_ANALYZE_CHART_VIEW_OPTIONS);
   }
-  options.push(...BASE_ANALYZE_CHART_VIEW_OPTIONS.slice(1));
+  options.push(...BASE_ANALYZE_CHART_VIEW_OPTIONS.slice(2));
   return options.map((option) => ({ ...option }));
 }
 
