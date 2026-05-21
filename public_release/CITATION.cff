@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software or benchmark data, please cite the associated manuscript and this repository."
-title: "Reproducible solubility-aware active-learning protein redesign pipeline"
-version: "0.1.0"
-date-released: "2026-04-30"
+title: "RAPID: Reproducible AI Pipeline for Integrated Design"
+version: "0.2.22"
+date-released: "2026-05-21"
 authors:
   - name: "TODO: add manuscript authors"

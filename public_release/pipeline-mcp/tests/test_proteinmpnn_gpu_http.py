@@ -77,7 +77,7 @@ class ProteinMPNNGpuHttpConfigTest(unittest.TestCase):
             "RUNPOD_API_KEY": "runpod-key",
             "MMSEQS_ENDPOINT_ID": "mmseqs-endpoint",
             "PROTEINMPNN_PROVIDER": "gpu_http",
-            "PROTEINMPNN_GPU_URL": "http://211.188.35.221:18101",
+            "PROTEINMPNN_GPU_URL": "http://proteinmpnn-gpu.example.org:18101",
             "PROTEINMPNN_GPU_TOKEN": "worker-secret",
             "PROTEINMPNN_GPU_TIMEOUT_S": "456",
         }
@@ -86,7 +86,7 @@ class ProteinMPNNGpuHttpConfigTest(unittest.TestCase):
 
         self.assertEqual(cfg.proteinmpnn.provider, "gpu_http")
         self.assertIsNone(cfg.runpod.proteinmpnn_endpoint_id)
-        self.assertEqual(cfg.proteinmpnn.gpu_url, "http://211.188.35.221:18101")
+        self.assertEqual(cfg.proteinmpnn.gpu_url, "http://proteinmpnn-gpu.example.org:18101")
         self.assertEqual(cfg.proteinmpnn.gpu_token, "worker-secret")
         self.assertEqual(cfg.proteinmpnn.gpu_timeout_s, 456.0)
 

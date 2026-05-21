@@ -4,6 +4,7 @@
 
 Keep the backend close to the GPU services and credentials. The browser UI can
 run locally through Vite or behind a static file server after `npm run build`.
+Do not expose development or staging routes without authentication.
 
 For a private server:
 
@@ -26,7 +27,7 @@ Then open `http://127.0.0.1:5173`.
 For shared access, run `npm run build`, serve `frontend/dist` over HTTPS, and
 reverse proxy `/api/*` to the backend. Restrict `PIPELINE_CORS_ORIGINS` to the
 frontend origin instead of `*` if the frontend and API are served from different
-origins.
+origins. See `deployment_security.md` before publishing any hosted URL.
 
 ## RunPod Images
 
@@ -67,3 +68,7 @@ own identity provider.
 RunPod keys, S3 keys, OIDC client secrets, and admin passwords must remain in
 `.env` or the server environment. They should not be embedded in the frontend,
 benchmark CSV files, or manuscript artifacts.
+
+RunPod endpoint IDs are not as sensitive as API keys, but they still describe
+private infrastructure and should stay out of the public package unless the
+endpoint is intentionally public and cost-controlled.

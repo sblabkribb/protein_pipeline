@@ -125,57 +125,59 @@ def step_box(ax, x, y, w, h, title, body, color, *, title_fs=10, body_fs=8.2):
 
 
 def draw_pipeline_overview() -> Path:
-    fig, ax = plt.subplots(figsize=(13.8, 5.6))
+    fig, ax = plt.subplots(figsize=(13.8, 7.2))
     ax.set_xlim(0, 13.8)
-    ax.set_ylim(0, 5.6)
+    ax.set_ylim(0, 7.2)
     ax.axis("off")
 
-    stages = [
-        ("MSA",      COLOR_CHEAP_GATE_STAGE, "MMseqs2"),
-        ("RFD3",     COLOR_HEAVY_GPU_STAGE,  "RFdiffusion"),
-        ("BioEmu",   COLOR_HEAVY_GPU_STAGE,  "Conf. ensemble"),
-        ("design",   COLOR_NEUTRAL_STAGE,    "ProteinMPNN"),
-        ("SoluProt", COLOR_CHEAP_GATE_STAGE, "Developability"),
-        ("AF2",      COLOR_HEAVY_GPU_STAGE,  "ColabFold"),
-        ("novelty",  COLOR_NEUTRAL_STAGE,    "Compare/score"),
-    ]
-
-    n = len(stages)
-    margin = 0.55
-    gap = 0.34
-    total_w = 13.8 - 2 * margin
-    box_w = (total_w - gap * (n - 1)) / n
-    box_h = 0.88
-    y = 3.55
-
-    centers = []
-    for i, (label, color, sub) in enumerate(stages):
-        x = margin + i * (box_w + gap)
-        stage_box(ax, x, y, box_w, box_h, label, color, fs=11)
+    def labeled_box(
+        x,
+        y,
+        w,
+        h,
+        title,
+        body,
+        color,
+        *,
+        title_fs=9.2,
+        body_fs=7.5,
+        lw=1.05,
+    ):
+        rect = FancyBboxPatch(
+            (x, y),
+            w,
+            h,
+            boxstyle="round,pad=0.05,rounding_size=0.12",
+            facecolor=color,
+            edgecolor=EDGE,
+            linewidth=lw,
+        )
+        ax.add_patch(rect)
         ax.text(
-            x + box_w / 2,
-            y - 0.22,
-            sub,
+            x + w / 2,
+            y + h - 0.17,
+            title,
             ha="center",
             va="top",
-            fontsize=8,
-            color="#444",
-            style="italic",
+            fontsize=title_fs,
+            fontweight="bold",
+            color="#1f2933",
         )
-        centers.append((x + box_w / 2, x, x + box_w))
-        if i < n - 1:
-            arrow(
-                ax,
-                x + box_w + 0.02,
-                y + box_h / 2,
-                x + box_w + gap - 0.02,
-                y + box_h / 2,
-            )
+        ax.text(
+            x + w / 2,
+            y + h * 0.42,
+            body,
+            ha="center",
+            va="center",
+            fontsize=body_fs,
+            color="#263238",
+            linespacing=1.2,
+        )
 
     ax.text(
         6.9,
-        5.25,
-        "Pipeline stage order",
+        6.88,
+        "RAPID provenance-centered redesign substrate",
         ha="center",
         va="center",
         fontsize=12.5,
@@ -183,84 +185,151 @@ def draw_pipeline_overview() -> Path:
     )
     ax.text(
         6.9,
-        4.92,
-        "msa  \u2192  rfd3  \u2192  bioemu  \u2192  design  \u2192  soluprot  \u2192  af2  \u2192  novelty",
+        6.55,
+        "The linear stage order is one operational view; the scientific unit is the reusable run_id-centered artifact record.",
         ha="center",
         va="center",
-        fontsize=9.5,
-        color="#333",
-        family="monospace",
+        fontsize=8.7,
+        color="#4b5563",
     )
 
-    legend_x = 9.55
-    legend_y = 5.25
-    swatch_w = 0.30
-    swatch_h = 0.18
+    stages = [
+        ("MMseqs2", "MSA /\nconstraints", COLOR_CHEAP_GATE_STAGE),
+        ("RFD3", "backbone\ncontext", COLOR_HEAVY_GPU_STAGE),
+        ("BioEmu", "ensemble\ncontext", COLOR_HEAVY_GPU_STAGE),
+        ("ProteinMPNN", "multiple-mutant\nlibrary", COLOR_NEUTRAL_STAGE),
+        ("SoluProt", "cheap soluble-\nexpression gate", COLOR_CHEAP_GATE_STAGE),
+        ("AF2/ColabFold", "structural\nconfidence", COLOR_HEAVY_GPU_STAGE),
+        ("Novelty", "compare /\nscore", COLOR_NEUTRAL_STAGE),
+    ]
+    sx0 = 0.45
+    sy = 5.48
+    sw = 1.55
+    sgap = 0.34
+    sh = 0.68
+    for i, (title, body, color) in enumerate(stages):
+        x = sx0 + i * (sw + sgap)
+        labeled_box(x, sy, sw, sh, title, body, color, title_fs=7.8, body_fs=6.5)
+        if i < len(stages) - 1:
+            arrow(ax, x + sw + 0.02, sy + sh / 2, x + sw + sgap - 0.02, sy + sh / 2, lw=0.9)
+
+    ax.text(
+        0.52,
+        5.18,
+        "Replaceable stage modules",
+        ha="left",
+        va="center",
+        fontsize=8.2,
+        color="#4b5563",
+        fontweight="bold",
+    )
+
+    labeled_box(
+        0.65,
+        3.55,
+        2.0,
+        0.92,
+        "Input target",
+        "FASTA / PDB\ncampaign settings\noperator constraints",
+        "#F7F3E8",
+        title_fs=8.8,
+        body_fs=7.1,
+    )
+    labeled_box(
+        4.15,
+        2.88,
+        5.55,
+        2.12,
+        "Run-scoped artifact store",
+        "run_id = provenance anchor\nrequest.json + stage outputs\nstatus + trace + QC\nmetrics + experiment records\nfinal summary",
+        "#E9EEF7",
+        title_fs=10.4,
+        body_fs=7.8,
+        lw=1.25,
+    )
+    arrow(ax, 2.65, 4.01, 4.15, 4.01, lw=1.1)
+    arrow(ax, 7.85, sy, 7.85, 5.02, lw=1.0, color="#4b5563", ls="--")
+    ax.text(
+        8.05,
+        5.18,
+        "writes standardized outputs",
+        ha="left",
+        va="center",
+        fontsize=7.0,
+        color="#4b5563",
+        style="italic",
+    )
+
+    action_y = 0.98
+    action_h = 1.12
+    action_w = 2.45
+    action_x = [0.52, 3.48, 6.44, 9.40]
+    actions = [
+        ("Safe rerun path", "restart from valid\nstored artifacts\nwithout unsafe reuse", "#DFF2F1"),
+        ("Retrospective analysis", "rebuild surrogate,\nscaling, variance, and\nQC analyses", "#D8EBC8"),
+        ("Experiment feedback", "assay labels enter\nexperiments.jsonl\nfor next candidates", "#FFF0C8"),
+        ("Model replacement", "swap any stage\nbackend if artifact\nfields stay compatible", "#F7D6CE"),
+    ]
+    for x, (title, body, color) in zip(action_x, actions):
+        lw = 1.25 if title in {"Retrospective analysis", "Experiment feedback"} else 1.05
+        title_fs = 8.9 if title in {"Retrospective analysis", "Experiment feedback"} else 8.5
+        labeled_box(x, action_y, action_w, action_h, title, body, color, title_fs=title_fs, body_fs=6.9, lw=lw)
+        arrow(ax, 6.95, 2.88, x + action_w / 2, action_y + action_h + 0.02, lw=1.05 if title in {"Retrospective analysis", "Experiment feedback"} else 0.95)
+
+    arrow(
+        ax,
+        action_x[2] + action_w / 2,
+        action_y + action_h,
+        2.65,
+        4.01,
+        lw=1.35,
+        color="#8A6D00",
+        ls="--",
+    )
+    ax.text(
+        4.65,
+        2.40,
+        "next design-test-learn cycle",
+        ha="center",
+        va="center",
+        fontsize=7.4,
+        color="#6b5500",
+        style="italic",
+        bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.85, "pad": 1.5},
+    )
+
+    ax.text(
+        0.68,
+        0.44,
+        "Key distinction: RAPID preserves provenance and reusable records, so completed runs become a substrate for rerun, analysis, feedback, and backend replacement.",
+        ha="left",
+        va="center",
+        fontsize=7.4,
+        color="#4b5563",
+    )
+
+    legend_x = 10.9
+    legend_y = 6.88
+    swatch_w = 0.25
+    swatch_h = 0.15
     items = [
-        ("Heavy GPU", COLOR_HEAVY_GPU_STAGE),
-        ("Cheap gate", COLOR_CHEAP_GATE_STAGE),
-        ("Neutral", COLOR_NEUTRAL_STAGE),
+        ("GPU-heavy", COLOR_HEAVY_GPU_STAGE),
+        ("cheap gate", COLOR_CHEAP_GATE_STAGE),
+        ("neutral", COLOR_NEUTRAL_STAGE),
     ]
     for j, (lbl, col) in enumerate(items):
-        x = legend_x + j * 1.25
+        x = legend_x + j * 0.92
         rect = FancyBboxPatch(
             (x, legend_y - swatch_h / 2),
             swatch_w,
             swatch_h,
-            boxstyle="round,pad=0.005,rounding_size=0.04",
+            boxstyle="round,pad=0.004,rounding_size=0.035",
             facecolor=col,
             edgecolor=EDGE,
-            linewidth=0.8,
+            linewidth=0.7,
         )
         ax.add_patch(rect)
-        ax.text(
-            x + swatch_w + 0.05,
-            legend_y,
-            lbl,
-            ha="left",
-            va="center",
-            fontsize=7.5,
-            color="#222",
-        )
-
-    rfd3_c, _, _ = centers[1]
-    lever_box(
-        ax,
-        rfd3_c - 1.4,
-        rfd3_c + 1.4,
-        2.35,
-        "Across-backbone diversification (topology)\nRFD3 \u2014 de novo backbones, default 10",
-        h=0.62,
-        fs=8.1,
-    )
-    arrow(ax, rfd3_c, 2.97, rfd3_c, y - 0.07, lw=1.0, color="#558055")
-
-    bioemu_c, _, _ = centers[2]
-    lever_box(
-        ax,
-        bioemu_c - 1.4,
-        bioemu_c + 1.4,
-        1.42,
-        "Across-backbone diversification (conformation)\nBioEmu \u2014 ensemble, num_samples=10",
-        h=0.62,
-        fs=8.1,
-    )
-    arrow(ax, bioemu_c, 2.04, bioemu_c, y - 0.07, lw=1.0, color="#558055")
-
-    design_c, _, _ = centers[3]
-    msa_c, _, _ = centers[0]
-    lever_box(
-        ax,
-        msa_c - 0.8,
-        design_c + 0.8,
-        0.35,
-        "Within-backbone diversification (sequence)\n"
-        "MSA conservation tiers [0.3, 0.5, 0.7] drive ProteinMPNN masking",
-        h=0.72,
-        fs=8.1,
-    )
-    arrow(ax, msa_c, 1.07, msa_c, y - 0.07, lw=1.0, color="#558055", ls="--")
-    arrow(ax, design_c, 1.07, design_c, y - 0.07, lw=1.0, color="#558055", ls="--")
+        ax.text(x + swatch_w + 0.035, legend_y, lbl, ha="left", va="center", fontsize=6.6)
 
     out = FIG_DIR / "fig1_pipeline_overview.png"
     fig.savefig(out, dpi=220, bbox_inches="tight")

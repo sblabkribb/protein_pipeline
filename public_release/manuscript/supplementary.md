@@ -2,7 +2,7 @@
 
 ## Supplementary Note 1. Status of the CATH Benchmark Refresh
 
-The main manuscript uses the current 23-target CATH artifact benchmark as component-level evidence for AF2-budgeted surrogate-triage design choices rather than as the final corrected-chain benchmark. That benchmark was generated before the final chain-selection fixes and is retained because it provides paired SoluProt and pLDDT records for surrogate and acquisition analyses. A corrected-chain refresh manifest has been generated at `public_release/data/benchmark/results/rapid_target_manifest.csv`. The manifest selects 40 CATH targets for re-screening and 8 targets for the four-arm structural-context ablation. The selected structural-context arms are the original target backbone, target plus BioEmu ensemble, selected RFD3 backbone, and RFD3 plus BioEmu ensemble.
+The main manuscript uses the current 23-target CATH artifact benchmark as component-level evidence for structure-prediction-budgeted surrogate-triage design choices rather than as the final corrected-chain benchmark. That benchmark was generated before the final chain-selection fixes and is retained because it provides paired SoluProt and pLDDT records for surrogate and acquisition analyses. A corrected-chain refresh manifest has been generated at `public_release/data/benchmark/results/rapid_target_manifest.csv`. The manifest selects 40 CATH targets for re-screening and 8 targets for the four-arm structural-context ablation. The selected structural-context arms are the original target backbone, target plus BioEmu ensemble, selected RFD3 backbone, and RFD3 plus BioEmu ensemble.
 
 ## Supplementary Note 2. Current CATH Artifact Corpus
 
@@ -67,7 +67,7 @@ The N-ablation places N = 30 on a cost-efficient plateau. Increasing RF training
 
 ![Sample-size ablation](figures/benchmark/fig8_sample_size.png)
 
-*Supplementary Figure S5. Sample-size ablation for production-supported surrogate families. The vertical reference at N = 30 marks the operating point used in RAPID. The curves show diminishing returns beyond roughly 20-30 AF2-labelled examples, supporting N = 30 as a conservative default rather than an arbitrary setting.*
+*Supplementary Figure S4. Sample-size ablation for production-supported surrogate families. The vertical reference at N = 30 marks the operating point used in RAPID. The curves show diminishing returns beyond roughly 20-30 AF2-labelled examples, supporting N = 30 as a conservative default rather than an arbitrary setting.*
 
 | N_train | RF pLDDT BO uplift Top-5 | Percent of N = 80 | RF SoluProt BO uplift Top-5 | Percent of N = 80 |
 |---:|---:|---:|---:|---:|
@@ -80,15 +80,17 @@ The N-ablation places N = 30 on a cost-efficient plateau. Increasing RF training
 
 ## Supplementary Note 6. Acquisition Bias and Diversity
 
-K-means training selection does not by itself remove acquisition bias. In the current artifact benchmark, RF-selected Top-K sets are more internally similar than the true Top-K sets, even when the bootstrap training set is selected by K-means. This means diversity control belongs at acquisition time if sequence diversity is an explicit design objective.
+K-means training selection does not by itself remove acquisition bias. In the current artifact benchmark, RF-selected Top-K sets are more internally similar than the true Top-K sets, even when the bootstrap training set is selected by K-means. At N = 30, the K-means-trained RF Top-5 set had an internal identity of 0.891, compared with 0.866 for the true Top-5 set, and the corresponding Top-10 values were 0.887 and 0.864. This means diversity control belongs at acquisition time if sequence diversity is an explicit design objective.
+
+Future acquisition policies can address this without increasing the AF2 budget by changing which candidates enter the fixed Top-K set. Candidate mechanisms include determinantal point processes over ESM-2 embeddings, max-min distance filtering after surrogate ranking, and cluster-balanced Top-K selection in which high-scoring candidates are drawn from multiple embedding-space clusters rather than from one local neighbourhood [26]. Because RAPID isolates acquisition as a modular triage-selection layer, these policies can be evaluated by changing the candidate-selection component while keeping the same candidate pool, feature table, surrogate-training loop, and artifact contract. These policies are not evaluated in the present benchmark, so they are treated as planned diversity-preserving acquisition variants rather than as current performance claims.
 
 ![Acquisition-bias analysis](figures/benchmark/fig6_bias_analysis.png)
 
-*Supplementary Figure S6. Acquisition-bias analysis for RF at N = 30. K-means reduces identity to the best training sequence relative to random bootstrap selection, but surrogate-selected Top-K sets remain more internally similar than the true Top-K sets.*
+*Supplementary Figure S5. Acquisition-bias analysis for RF at N = 30. K-means reduces identity to the best training sequence relative to random bootstrap selection, but surrogate-selected Top-K sets remain more internally similar than the true Top-K sets.*
 
 ![Per-target surrogate heatmap](figures/benchmark/fig7_per_target_heatmap.png)
 
-*Supplementary Figure S7. Per-target BO uplift difference relative to Random Forest. The heatmap shows target-level winner switching that is obscured by aggregate means, supporting a configurable surrogate layer rather than a hard-coded single-model policy.*
+*Supplementary Figure S6. Per-target BO uplift difference relative to Random Forest. The heatmap shows target-level winner switching that is obscured by aggregate means, supporting a configurable surrogate layer rather than a hard-coded single-model policy.*
 
 | Metric | Random training | K-means training | True optimal | Random Top-K |
 |---|---:|---:|---:|---:|
@@ -115,12 +117,18 @@ A rank-mean ensemble over RF, Ridge, LightGBM, and XGBoost gives the highest mea
 
 ## Supplementary Note 8. Representative Surrogate-Budget Runs
 
-Two representative historical in-silico runs verify the implemented computational surrogate path but are not treated as a paired biological benchmark. They used AF2/pLDDT as a computational label source and therefore support the software and budget path, not experimental enrichment. The current paper-run script for claim 2 is `scripts/paper_runs/03_launch_surrogate_triage_budget.py`, which runs the standard pipeline with `evolution_mode=False`, `surrogate_triage_enabled=True`, `surrogate_triage_scope="pooled_tiers"`, RFD3/BioEmu/Relax disabled, and the manuscript operating point of 3,333 generated candidates per 30/50/70% conservation tier, `N_train = 30`, and `Top-K = 20`. In the current implementation, `surrogate_triage_model="auto"` compares configured policies by internal CV on the bootstrap labels and records the selected policy under `surrogate_triage/model_selection.json`; per-tier AF2 score files point back to the same pooled selection artifact. The ESM-2 embedding stage can be delegated to a configured GPU worker through the `esm_embedding` model provider; if no provider is configured, RAPID falls back to the local ESM path and then to deterministic sequence-composition features unless strict ESM mode is requested. The live paper run uses the RunPod ColabFold backend by default so that job identifiers are recorded during AF2 evaluation.
+The current strict paper run verifies the implemented surrogate-triage path under the manuscript operating point. The runner is `scripts/paper_runs/03_launch_surrogate_triage_budget.py`, which executes the standard pipeline with `evolution_mode=False`, `surrogate_triage_enabled=True`, `surrogate_triage_scope="pooled_tiers"`, RFD3/BioEmu/Relax disabled, and 3,333 generated ProteinMPNN candidates per 30/50/70% conservation tier. For each target, RAPID spends `N_train = 30` AF2/ColabFold calls on K-means bootstrap labels and `Top-K = 20` calls on surrogate-selected acquisitions. In the current implementation, `surrogate_triage_model="auto"` compares configured policies by internal CV on the bootstrap labels and records the selected policy under `surrogate_triage/model_selection.json`; per-tier AF2 score files point back to the same pooled selection artifact. The strict paper run used the GPU ESM embedding provider and disabled fallback sequence recovery, so the reported candidates were produced by ProteinMPNN rather than by deterministic recovery logic.
 
-| Target | Run ID | SoluProt-gated candidates | AF2 records | AF2 reduction vs folding all gated candidates | Top-K setting | Best phase | Best SoluProt | Best pLDDT | Best relax score |
-|---|---|---:|---:|---:|---:|---|---:|---:|---:|
-| 3RGK | `pys74631_kribb.re.kr_ev_3rgk` | 8,000 | 94 | 98.8% | 20 | R1 train | 0.794 | 97.05 | -3.13 |
-| 1LVM | `admin_20260430_064926_afb67369` | 8,000 | 49 | 99.4% | 5 | R3 top-k | 0.734 | 89.52 | -3.15 |
+| Target | Run ID | Candidates entering triage | AF2 records | Reduction vs folding all candidates | Selected policy | Bootstrap labels | Top-K acquisitions |
+|---|---|---:|---:|---:|---|---:|---:|
+| 1a6jA00 | `paper_surrogate_pooled9999_strict_20260520_cath_train_1a6jA00` | 9,954 | 50 | 99.5% | Ridge | 30 | 20 |
+| 1a8rG01 | `paper_surrogate_pooled9999_strict_20260520_cath_train_1a8rG01` | 9,999 | 50 | 99.5% | Ridge | 30 | 20 |
+| 1a19A00 | `paper_surrogate_pooled9999_strict_20260520_cath_val_1a19A00` | 9,999 | 50 | 99.5% | RF | 30 | 20 |
+| 1advA02 | `paper_surrogate_pooled9999_strict_20260520_cath_val_1advA02` | 9,999 | 50 | 99.5% | RF | 30 | 20 |
+| 1h6wA03 | `paper_surrogate_pooled9999_strict_20260520_cath_val_1h6wA03` | 9,995 | 50 | 99.5% | Ridge | 30 | 20 |
+| Aggregate | - | 49,946 | 250 | 99.5% | RF/Ridge | 150 | 100 |
+
+Earlier 3RGK and 1LVM in-silico traces are retained only as historical implementation traces. They verified pool generation, SoluProt gating, ESM embedding, K-means bootstrap labelling, surrogate ranking, AF2 acquisition, and final design selection, but they used different candidate counts and Top-K settings and are not treated as the current operating evidence.
 
 The Top-K default of 20 is an operating budget rather than a fitted hyperparameter. It pairs with the N = 30 bootstrap setting to give 50 AF2 calls per pooled target decision point when the SoluProt-passing pool exceeds the budget. N = 30 is supported by the sample-size ablation, where additional labels beyond 30 provide diminishing returns in the current artifact benchmark; Top-K = 20 keeps enough candidates for manual review while making the AF2/ColabFold cost visible before a run is launched. Model-comparison artifacts are written to `surrogate_triage/cv_metrics.csv`, `model_comparison.svg`, `model_predictions.csv`, `feature_importance.csv`, `acquired_topk.csv`, and `models/*.pkl`, allowing the analysis tab or exported run package to audit why a policy was selected without repeating AF2 calls.
 
@@ -128,13 +136,15 @@ The Top-K default of 20 is an operating budget rather than a fitted hyperparamet
 
 The completed CATH archive was also used to test whether accumulated surrogate labels already justify replacing RAPID's per-target surrogate with a pooled model. This analysis is framed as a guardrail for the production default, not as evidence that label accumulation is uninformative. RAPID currently uses lightweight per-run calibration because each target, backbone context, and conservation tier can change the sequence-quality relationship seen by the surrogate. If a pooled model were already stable under these conditions, it would support replacing per-run Auto-CV with a transferable surrogate. If not, the result supports the current decision to keep the production path adaptive and run-specific while continuing to store labels for future modelling.
 
-This retrospective analysis parsed 4,392 AF2-labelled designs from the completed CATH outputs. After excluding target-tier units with fewer than 35 positive pLDDT labels, 107 target-tier units from 38 targets remained evaluable. For each target-tier unit, 30 designs were used as the target calibration set and the remaining designs were held out. Candidate features used the same ESM-2 8M mean embedding family used by RAPID surrogate triage, concatenated with sequence-composition and ProteinMPNN metadata features. Labels were centered within each target-tier training set before fitting a ridge residual surrogate, so pooled data had to improve within-target ranking rather than merely learn target-level pLDDT offsets.
+Several biological and modelling factors could explain the absence of monotonic scaling. Sequence length changes the number of jointly mutated positions and the dimensionality of the design problem. Fold class and structural topology can alter which substitutions preserve packing or secondary-structure compatibility. Intrinsic disorder or low-complexity tendency may weaken the relationship between sequence embedding and folded-structure confidence. MSA depth and conservation pattern affect both the residue mask and the distribution of ProteinMPNN proposals. Finally, single-backbone, RFD3, and BioEmu contexts can shift the local sequence-quality landscape even for the same target. The present analysis did not decompose these factors individually, but it shows why a future transferable model should be target-conditioned rather than simply larger.
+
+This retrospective analysis parsed 4,392 AF2-labelled designs from the completed CATH outputs. After excluding target-tier units with fewer than 35 positive pLDDT labels, 107 target-tier units from 38 targets remained evaluable. For each target-tier unit, 30 designs were used as the target calibration set and the remaining designs were held out. Candidate features used the same ESM-2 8M mean embedding family used by RAPID surrogate triage, concatenated with sequence-composition and ProteinMPNN metadata features. Labels were centered within each target-tier training set before fitting a ridge residual surrogate, so pooled data had to improve within-target ranking rather than merely learn target-level pLDDT offsets. However, centering the labels does not remove all heterogeneity: unnormalized feature distributions across different sequence lengths and target families can still introduce embedding-space shifts, reinforcing that a future transferable model should be explicitly target-conditioned rather than simply larger.
 
 The result did not support a monotonic pooled-model improvement. Target-only calibration gave a mean held-out top-3 regret of 0.351 pLDDT. Adding labels from 10 external pooled targets reduced the mean regret to 0.320 pLDDT, but this improvement was not stable as the pool increased: the mean regret was 0.347 with 20 pooled targets and 0.357 with 30 pooled targets. Mean MAE also did not improve over the target-only baseline. The paired win rate for pooled-plus-target calibration was approximately 35% across pool sizes. RAPID therefore stores pooled surrogate labels and fitted-model artifacts for future cross-target modelling, but the present manuscript keeps the production default as target-specific calibration with per-run Auto-CV rather than claiming that a pooled surrogate has already improved generalization. In practical terms, the analysis supports a staged learning strategy: current RAPID runs perform local surrogate orchestration; subsequent campaigns should accumulate AF2 labels, assay labels, paired rankings, target metadata, and structural-context annotations as a preference dataset; only after sufficient labelled coverage should a target-conditioned preference model be evaluated as a transferable predictor.
 
 ![Pooled surrogate scaling](figures/benchmark/fig9_pooled_surrogate_scaling_esm.png)
 
-*Supplementary Figure S8. Retrospective pooled-surrogate scaling from completed CATH artifacts. Lower values are better for both held-out MAE and top-3 regret. The ESM-plus-composition ridge residual model did not show a monotonic benefit from adding more pooled targets, supporting the decision to keep per-run adaptive calibration as the production default while treating accumulated labels as a future preference-modelling substrate.*
+*Supplementary Figure S7. Retrospective pooled-surrogate scaling from completed CATH artifacts. Lower values are better for both held-out MAE and top-3 regret. The ESM-plus-composition ridge residual model did not show a monotonic benefit from adding more pooled targets, supporting the decision to keep per-run adaptive calibration as the production default while treating accumulated labels as a future preference-modelling substrate.*
 
 | Training source | Pooled targets | Evaluable units | Mean MAE | Mean Top-3 regret | Median Spearman |
 |---|---:|---:|---:|---:|---:|
@@ -143,9 +153,37 @@ The result did not support a monotonic pooled-model improvement. Target-only cal
 | Pooled prior + target calibration | 20 | 107 | 0.412 | 0.347 | 0.067 |
 | Pooled prior + target calibration | 30 | 107 | 0.408 | 0.357 | 0.139 |
 
-*Supplementary Table S8. Pooled surrogate scaling summary. The non-monotonic regret and unchanged or worse MAE indicate that the current completed CATH artifact set is useful for testing pooled-model infrastructure and label accumulation, but not yet sufficient to support a pooled-surrogate performance claim.*
+*Pooled surrogate scaling summary. The non-monotonic regret and unchanged or worse MAE indicate that the current completed CATH artifact set is useful for testing pooled-model infrastructure and label accumulation, but not yet sufficient to support a pooled-surrogate performance claim.*
 
-## Supplementary Note 10. Structural-Context Ablation
+## Supplementary Note 10. Illustrative Experimental-Feedback Evolution Trace
+
+The following trace is a schema demonstration, not a wet-lab validation result. It shows how a biofoundry operator would connect RAPID's computational shortlist to assay feedback and the next candidate recommendation step. In the first pass, RAPID writes an `experiment_request.csv` file after candidate generation and SoluProt/AF2 triage. The file contains stable identifiers that can be used on a plate map, in a cloning queue, or in an assay information system.
+
+| candidate_id | sequence_id | proposed_sequence | design_tier | predicted_solubility | predicted_plddt | requested_metric |
+|---|---|---|---|---:|---:|---|
+| `ev_round1_0001` | `seq_0001` | `EXAMPLESEQAA...` | 0.5 | 0.73 | 91.4 | soluble_expression |
+| `ev_round1_0002` | `seq_0002` | `EXAMPLESEQBB...` | 0.7 | 0.69 | 88.6 | soluble_expression |
+| `ev_round1_0003` | `seq_0003` | `EXAMPLESEQCC...` | 0.3 | 0.76 | 86.9 | soluble_expression |
+
+After expression or solubility screening, the operator records measured outcomes in `experiments.jsonl` through the RAPID interface or API. The metric direction is stored with the value so that higher-is-better and lower-is-better assays can be handled consistently. In practical laboratory or biofoundry settings, expression failures, contaminated samples, and high-noise assay dropouts can be represented in the same record using explicit quality flags, failure notes, or pre-specified penalized fallback values; these records remain auditable and can be excluded or down-weighted by later analysis rules. A schematic JSONL record is shown below.
+
+```json
+{"candidate_id":"ev_round1_0001","sequence_id":"seq_0001","metric_name":"soluble_expression","metric_value":0.64,"metric_unit":"relative_yield","metric_direction":"maximize","replicate_id":"replicate_1","condition":"37C expression screen"}
+{"candidate_id":"ev_round1_0002","sequence_id":"seq_0002","metric_name":"soluble_expression","metric_value":0.28,"metric_unit":"relative_yield","metric_direction":"maximize","replicate_id":"replicate_1","condition":"37C expression screen"}
+{"candidate_id":"ev_round1_0003","sequence_id":"seq_0003","metric_name":"soluble_expression","metric_value":0.71,"metric_unit":"relative_yield","metric_direction":"maximize","replicate_id":"replicate_1","condition":"37C expression screen"}
+```
+
+When the next experimental-feedback evolution run is launched with `metric_name=soluble_expression`, RAPID trains a local surrogate on the labelled records and writes `next_candidates.csv`. The output is a recommendation table for the next design-test-learn cycle, not evidence of enrichment until the proposed candidates are experimentally evaluated.
+
+| next_candidate_id | parent_candidate_id | acquisition_reason | predicted_metric | diversity_cluster | recommended_action |
+|---|---|---|---:|---:|---|
+| `ev_round2_0001` | `ev_round1_0003` | high predicted metric near best measured sequence | 0.74 | 2 | build/test |
+| `ev_round2_0002` | `ev_round1_0001` | high predicted metric with distinct embedding cluster | 0.69 | 5 | build/test |
+| `ev_round2_0003` | `ev_round1_0003` | exploratory variant preserving assay-favourable context | 0.66 | 8 | optional |
+
+This illustrative trace clarifies the boundary between the present computational benchmark and future wet-lab operation. RAPID provides the artifact and identifier contract needed for experimental feedback, but the present manuscript does not claim that this synthetic trace demonstrates biological improvement.
+
+## Supplementary Note 11. Structural-Context Ablation
 
 The corrected-chain structural-context ablation compares the original target backbone, BioEmu conformational sampling, one selected RFD3 backbone, and RFD3+BioEmu across eight selected CATH targets. Because ProteinMPNN is conditioned on the supplied backbone, these arms test whether changing structural context perturbs the accessible sequence neighbourhood under matched masking and AF2 budgets. The single-backbone and RFD3 arms are evaluable for all eight targets. BioEmu-containing arms are evaluable for the four targets that passed the fixed 2.0 Å target-RMSD gate. The figure is shown once in the main manuscript as Figure 5; the supplementary material retains the numerical summary and BioEmu QC context rather than repeating the same image.
 
@@ -156,7 +194,7 @@ The corrected-chain structural-context ablation compares the original target bac
 | RFD3 selected backbone | 8 | 120 | 30 | 92.53 | 0.690 | -0.05 |
 | RFD3 + BioEmu ensemble | 4 | 120 | 30 | 95.44 | 0.734 | -0.98 |
 
-## Supplementary Note 11. BioEmu Target-RMSD Gate QC
+## Supplementary Note 12. BioEmu Target-RMSD Gate QC
 
 BioEmu-containing structural-context arms were required to satisfy the same 2.0 Å target-RMSD gate used in the primary four-arm refresh. This gate is part of the artifact contract: a BioEmu arm is quantitatively evaluable only when the requested near-target conformers are recovered. Initial BioEmu runs for four targets did not recover three accepted conformers within the 10-attempt budget. These cases are therefore treated as not evaluable for BioEmu-based score comparison, rather than as zero-valued design outcomes. A sensitivity rerun increases the BioEmu sampling and maximum-attempt budgets to 30 while preserving the 2.0 Å acceptance gate.
 
@@ -167,9 +205,9 @@ BioEmu-containing structural-context arms were required to satisfy the same 2.0 
 | 3jvoG00 | 0/10 | 2.887 | 0/10 | 3.219 | Not evaluable |
 | 3twkA01 | 0/10 | 4.976 | 0/10 | 4.976 | Not evaluable |
 
-*Supplementary Table S9. BioEmu target-RMSD gate failures in the initial four-arm structural-context refresh. The table reports the initial 10-attempt BioEmu runs only. The sensitivity rerun changes the sampling budget but keeps the acceptance gate fixed, avoiding post-hoc relaxation of the structural-quality criterion.*
+*BioEmu target-RMSD gate failures in the initial four-arm structural-context refresh. The table reports the initial 10-attempt BioEmu runs only. The sensitivity rerun changes the sampling budget but keeps the acceptance gate fixed, avoiding post-hoc relaxation of the structural-quality criterion.*
 
-## Supplementary Note 12. Execution Environment and RunPod Images
+## Supplementary Note 13. Execution Environment and RunPod Images
 
 The public release records Docker image tags for the RunPod-backed model stages, while endpoint IDs and API keys are excluded from the repository. Endpoint IDs are deployment-specific secrets and should be supplied through `.env` or server environment variables. For manuscript reproduction, image tags should be pinned for each benchmark run, and any image tagged as `latest` should be accompanied by a digest or release note before final archival.
 
@@ -183,7 +221,7 @@ The public release records Docker image tags for the RunPod-backed model stages,
 | Rosetta Relax post-processing | `RUNPOD_RELAX_ENDPOINT_ID` | `mimikyou0607/relax_runpod:260428_1` |
 | ESM embedding | `ESM_EMBEDDING_ENDPOINT_ID` | user-built from `workers/esm_embedding` |
 
-## Supplementary Note 13. Software Interface and Deployment Scope
+## Supplementary Note 14. Software Interface and Deployment Scope
 
 RAPID is distributed with a static browser interface served by the backend API. The interface is not treated as a separate scientific contribution in the main manuscript; its role is to make the run-scoped artifact contract accessible during local or server-based operation. Basic mode exposes the default solubility-aware multiple-mutant redesign workflow with a compact set of output-size and threshold controls. Advanced mode exposes start and stop points, optional RFD3 and BioEmu stages, masking controls, AF2/ColabFold budget parameters, provider choices, surrogate-triage mode, Auto-CV acquisition-policy selection, comparator-model settings, and experimental-feedback evolution records. These controls map to the same request fields stored in each run directory, so analyses can be reproduced from the resulting artifacts without depending on the browser state.
 

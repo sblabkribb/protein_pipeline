@@ -41,6 +41,8 @@ rfd3-runpod/
 *.a3m
 *.tsv
 *.pdf
+!/figures/benchmark/*.pdf
+!/public_release/figures/benchmark/*.pdf
 *.json
 !/frontend/package-lock.json
 /af2_wt_*_job.json

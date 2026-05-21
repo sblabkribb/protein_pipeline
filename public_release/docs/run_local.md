@@ -60,15 +60,17 @@ npm run build
 Serve `public_release/frontend/dist` through Caddy, Nginx, or another HTTPS
 reverse proxy, and route `/api/*` to the backend on `127.0.0.1:18080`.
 
-## Active-Learning Evolution Dependencies
+## Surrogate and Experimental-Feedback Dependencies
 
-Evolution mode embeds candidate sequences with ESM-2 and can use optional
-surrogate families. Install the benchmark/ML extras if you will run evolution
-locally:
+Surrogate triage embeds candidate sequences with ESM-2 and can use optional
+surrogate families. Experimental-feedback evolution reuses measured labels and
+does not require AF2 labels unless the operator chooses to generate them through
+another run. Install the benchmark/ML extras if you will run surrogate triage or
+local experimental-feedback recommendation:
 
 ```bash
 python -m pip install -r ../requirements-benchmark.txt
 ```
 
 The pipeline can still call remote MMseqs2, ProteinMPNN, ColabFold/AF2, RFD3,
-BioEmu, and Rosetta endpoints through RunPod.
+BioEmu, Rosetta, and ESM embedding workers through RunPod or HTTP providers.

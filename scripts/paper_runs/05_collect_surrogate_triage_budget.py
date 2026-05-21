@@ -126,10 +126,19 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
 def _write_table(path: Path, rows: list[dict[str, object]]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     usable = [row for row in rows if not row.get("skipped") and row.get("candidate_count_before_triage")]
-    n_runs = len({row["run_id"] for row in usable})
+    by_run: dict[str, list[dict[str, object]]] = {}
+    for row in usable:
+        by_run.setdefault(str(row["run_id"]), []).append(row)
+    n_runs = len(by_run)
     n_tiers = len(usable)
-    before = sum(int(row["candidate_count_before_triage"] or 0) for row in usable)
-    after = sum(int(row["candidate_count_after_triage"] or 0) for row in usable)
+    before = 0
+    after = 0
+    for run_rows in by_run.values():
+        # Pooled triage writes the same pre-triage pool size into each tier score
+        # file. Count it once per run, while summing the tier-specific evaluated
+        # AF2 records after triage.
+        before += max(int(row["candidate_count_before_triage"] or 0) for row in run_rows)
+        after += sum(int(row["candidate_count_after_triage"] or 0) for row in run_rows)
     reduction = (100.0 * (1.0 - after / before)) if before else 0.0
     models = sorted({str(row.get("surrogate_models") or "") for row in usable if row.get("surrogate_models")})
     selected = sorted({str(row.get("selected_policy") or "") for row in usable if row.get("selected_policy")})

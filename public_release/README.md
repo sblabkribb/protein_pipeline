@@ -1,14 +1,18 @@
 # RAPID Public Release
 
-This folder is a compact public-release package for RAPID, a reproducible
-artifact pipeline for solubility-aware protein redesign, active-learning
-evolution, benchmark scripts, benchmark data, figures, and manuscript draft
-artifacts.
+RAPID is a reproducible AI pipeline for integrated protein redesign. It records
+each run through a stable artifact contract so users can rerun failed stages,
+replace model backends, audit benchmark results, and connect computational
+candidate generation to later experimental feedback.
 
-The package is organized to be runnable from a local machine, a lab server, or a
-GPU server such as RunPod. It does not include private `.env` files, API keys,
-runtime logs, temporary test output, `node_modules`, or Python virtual
-environments.
+This folder is the public-release package for RAPID. It contains the portable
+backend, browser UI, benchmark scripts, compact benchmark data, manuscript
+figures/tables, and setup documentation needed to run RAPID on a local machine,
+lab server, or GPU-backed remote server.
+
+It does not include private `.env` files, API keys, runtime logs, temporary test
+output, `node_modules`, Python virtual environments, full output archives, or
+private hosted-service configuration.
 
 ## Contents
 
@@ -32,6 +36,25 @@ environments.
 - `manuscript/` - markdown and Word versions of the current manuscript draft.
 - `docs/` - setup, reproduction, data, and release notes.
 
+## Public Package vs Hosted Service
+
+This package is intended for self-hosted use. External users should clone the
+repository, copy `pipeline-mcp/.env.example` to `.env`, provide their own
+RunPod/S3/auth settings, and run RAPID on their own local or server
+environment.
+
+Development and staging URLs are not part of the public interface. If you run
+hosted environments, use the following boundary:
+
+- `dev`: private maintainer environment only; protect with VPN, IP allowlist,
+  or reverse-proxy authentication.
+- `staging`: private reviewer/tester environment only; do not publish it in a
+  manuscript, README, or release notes.
+- `production`: public only after authentication, job quotas, RunPod cost
+  controls, and abuse monitoring are configured.
+
+See `docs/deployment_security.md` for the recommended access-control checklist.
+
 ## Quick Start
 
 Start the backend:
@@ -43,7 +66,7 @@ python3 -m venv .venv
 python -m pip install -U pip
 python -m pip install -r requirements.txt
 cp .env.example .env
-# Edit .env and fill RUNPOD_API_KEY, MMSEQS_ENDPOINT_ID, PROTEINMPNN_ENDPOINT_ID,
+# Edit .env and fill RUNPOD_API_KEY, ProteinMPNN, MMseqs2,
 # and at least one AF2/ColabFold backend.
 PYTHONPATH=src python -m pipeline_mcp.http_server --host 127.0.0.1 --port 18080
 ```
@@ -60,7 +83,8 @@ Then open `http://127.0.0.1:5173`. By default, the frontend points to
 `http://127.0.0.1:18080` when served from localhost.
 
 For a shared server, build the frontend and serve `frontend/dist` through Caddy
-or another HTTPS reverse proxy:
+or another HTTPS reverse proxy. Keep the backend bound to `127.0.0.1` and expose
+only the reverse-proxy route:
 
 ```bash
 cd frontend
@@ -155,6 +179,17 @@ not show a stable pooled-model improvement over target-specific calibration, so
 pooled surrogate accumulation is documented as future modelling infrastructure
 rather than as a main performance claim.
 
+## CI/CD Boundary
+
+The public package is source-controlled with the main RAPID repository. The
+deployment workflow promotes exact Git SHAs by environment: `dev`/`develop`
+branches deploy to development, `staging` deploys to staging, and `v*` tags
+deploy to production. This package should therefore be committed with the same
+SHA as the backend/frontend code it documents.
+
+Do not commit environment-specific `.env` files. CI/CD should inject secrets
+from GitHub Environments or server-local files, not from `public_release/`.
+
 ## Data Policy
 
 The included benchmark data and summary tables are small enough for normal
@@ -166,4 +201,5 @@ private `.env` files outside Git.
 ## Before Making the Repository Public
 
 See `docs/release_checklist.md`. At minimum, choose a license, fill the
-`CITATION.cff` author fields, verify the `.env` scan, and tag a release.
+`CITATION.cff` author fields, protect non-production hosted URLs, verify the
+secret scan, and tag a release.

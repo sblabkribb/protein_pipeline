@@ -205,7 +205,7 @@ def _build_request(*, cath_module, pdb_path: Path, target_id: str, args: argpars
         selected_tiers=selected_tiers,
         stop_after=str(args.stop_after),
         force=bool(args.force),
-        auto_recover=True,
+        auto_recover=False,
     )
 
 
