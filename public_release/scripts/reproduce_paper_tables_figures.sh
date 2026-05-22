@@ -14,6 +14,7 @@ cd "$PROJECT_ROOT"
 "$PYTHON_BIN" scripts/benchmark/10_ensemble_benchmark.py
 "$PYTHON_BIN" scripts/benchmark/11_make_method_figures.py
 "$PYTHON_BIN" scripts/benchmark/12_make_cath_curated_figure.py
+"$PYTHON_BIN" scripts/benchmark/18_make_surrogate_triage_budget_figure.py
 if [[ -d /opt/protein_pipeline/cath_outputs ]]; then
   "$PYTHON_BIN" scripts/benchmark/17_run_pooled_surrogate_scaling.py \
     --cath-root /opt/protein_pipeline/cath_outputs \

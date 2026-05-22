@@ -149,6 +149,12 @@ embedding, which is slower and depends on the backend machine.
 The manuscript surrogate-triage launcher defaults to pooled conservation-tier
 triage: 3,333 ProteinMPNN candidates per 30%, 50%, and 70% tier, followed by one
 shared 30-label bootstrap and 20-candidate Top-K AF2 budget.
+The cached strict five-target surrogate-triage result is summarized by
+`scripts/benchmark/18_make_surrogate_triage_budget_figure.py`, which uses the
+run-level budget table, cross-validation metrics, acquired Top-K outcomes, and
+WT reference baselines stored under `data/benchmark/results/`. The WT baselines
+are plotted for interpretation only and are not included in the 250 candidate
+AF2/ColabFold records used for the budget-reduction calculation.
 
 The optional structural-context ablation is run through the live pipeline, not
 from cached model tables. `scripts/benchmark/13_run_backbone_ensemble_ablation.py`

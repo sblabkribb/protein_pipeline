@@ -117,9 +117,74 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> None:
         "summary_best_design",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         for row in rows:
+            writer.writerow(row)
+
+
+def _run_summary_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    usable = [row for row in rows if not row.get("skipped") and row.get("candidate_count_before_triage")]
+    by_run: dict[str, list[dict[str, object]]] = {}
+    for row in usable:
+        by_run.setdefault(str(row["run_id"]), []).append(row)
+
+    summaries: list[dict[str, object]] = []
+    for run_id in sorted(by_run):
+        run_rows = by_run[run_id]
+        before = max(int(row["candidate_count_before_triage"] or 0) for row in run_rows)
+        after = sum(int(row["candidate_count_after_triage"] or 0) for row in run_rows)
+        reduction = (1.0 - after / before) if before else None
+        status_values = {str(row.get("status_state") or "") for row in run_rows}
+        summaries.append(
+            {
+                "run_id": run_id,
+                "target": str(run_rows[0].get("target") or ""),
+                "tiers": ",".join(sorted(str(row.get("tier") or "") for row in run_rows)),
+                "requested_policy": ",".join(sorted({str(row.get("requested_policy") or "") for row in run_rows if row.get("requested_policy")})),
+                "selected_policy": ",".join(sorted({str(row.get("selected_policy") or "") for row in run_rows if row.get("selected_policy")})),
+                "surrogate_models": ",".join(sorted({str(row.get("surrogate_models") or "") for row in run_rows if row.get("surrogate_models")})),
+                "comparator_models": ",".join(sorted({str(row.get("comparator_models") or "") for row in run_rows if row.get("comparator_models")})),
+                "selection_strategy": ",".join(sorted({str(row.get("selection_strategy") or "") for row in run_rows if row.get("selection_strategy")})),
+                "initial_samples": max(int(row.get("initial_samples") or 0) for row in run_rows),
+                "top_k": max(int(row.get("top_k") or 0) for row in run_rows),
+                "candidate_count_before_triage": before,
+                "af2_records": after,
+                "af2_reduction_fraction": reduction,
+                "af2_reduction_percent": (100.0 * reduction) if reduction is not None else None,
+                "bootstrap_labels": sum(int(row.get("training_count") or 0) for row in run_rows),
+                "top_k_acquisitions": sum(int(row.get("selected_top_count") or 0) for row in run_rows),
+                "status_state": "completed" if status_values == {"completed"} else ",".join(sorted(status_values)),
+            }
+        )
+    return summaries
+
+
+def _write_run_csv(path: Path, rows: list[dict[str, object]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = [
+        "run_id",
+        "target",
+        "tiers",
+        "requested_policy",
+        "selected_policy",
+        "surrogate_models",
+        "comparator_models",
+        "selection_strategy",
+        "initial_samples",
+        "top_k",
+        "candidate_count_before_triage",
+        "af2_records",
+        "af2_reduction_fraction",
+        "af2_reduction_percent",
+        "bootstrap_labels",
+        "top_k_acquisitions",
+        "status_state",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, lineterminator="\n")
+        writer.writeheader()
+        for row in _run_summary_rows(rows):
             writer.writerow(row)
 
 
@@ -168,6 +233,10 @@ def main(argv: list[str] | None = None) -> int:
         default=str(DEFAULT_RESULTS / "surrogate_triage_budget_summary.csv"),
     )
     parser.add_argument(
+        "--run-csv-out",
+        default=str(DEFAULT_RESULTS / "surrogate_triage_budget_run_summary.csv"),
+    )
+    parser.add_argument(
         "--table-out",
         default=str(DEFAULT_FIGURES / "table5_surrogate_triage_budget.tex"),
     )
@@ -180,6 +249,7 @@ def main(argv: list[str] | None = None) -> int:
     for run_dir in run_dirs:
         rows.extend(_rows_for_run(run_dir))
     _write_csv(Path(args.csv_out), rows)
+    _write_run_csv(Path(args.run_csv_out), rows)
     _write_table(Path(args.table_out), rows)
     print(
         json.dumps(
@@ -187,6 +257,7 @@ def main(argv: list[str] | None = None) -> int:
                 "runs": len({row["run_id"] for row in rows}),
                 "tiers": len(rows),
                 "csv": str(Path(args.csv_out)),
+                "run_csv": str(Path(args.run_csv_out)),
                 "table": str(Path(args.table_out)),
             },
             ensure_ascii=False,

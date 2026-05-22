@@ -634,34 +634,114 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
     if not summary_rows:
         return
     import matplotlib.pyplot as plt
+    import numpy as np
     import pandas as pd
 
     df = pd.DataFrame(summary_rows)
     arm_order = _ordered_arms(set(df["arm"]))
-    labels = [ARM_CONFIGS[arm]["label"] for arm in arm_order]
+    labels = {
+        "single": "Single",
+        "bioemu": "BioEmu",
+        "rfd3_single": "RFD3",
+        "rfd3_bioemu": "RFD3+\nBioEmu",
+        "rfd3_ensemble3": "RFD3\nensemble",
+    }
+    xlabels = [labels.get(arm, ARM_CONFIGS[arm]["label"]) for arm in arm_order]
     metrics = [
-        ("top5_mean_plddt", "Top-5 mean pLDDT"),
-        ("top5_mean_soluprot", "Top-5 mean SoluProt"),
-        ("mean_pairwise_identity", "Mean pairwise identity"),
+        ("max_plddt", "Upper-tail pLDDT (max)", "{:.1f}", "higher"),
+        ("max_soluprot", "Upper-tail SoluProt (max)", "{:.3f}", "higher"),
+        (
+            "mean_pairwise_identity",
+            "Mean pairwise identity\n(lower = more diverse)",
+            "{:.3f}",
+            "lower",
+        ),
     ]
-    fig, axes = plt.subplots(1, 3, figsize=(11.0, 3.4))
-    palette = ["#8aa6c1", "#84a98c", "#d69f7e", "#b07aa1", "#9c755f", "#bab0ac"]
+    fig, axes = plt.subplots(1, 3, figsize=(11.8, 3.7))
+    palette = ["#b8c0c8", "#86b79a", "#d6a06f", "#b58ac0", "#9c755f", "#bab0ac"]
     colors = [palette[i % len(palette)] for i in range(len(arm_order))]
-    for ax, (metric, title) in zip(axes, metrics, strict=True):
-        means = [
-            float(df[df["arm"] == arm][metric].dropna().mean())
-            if metric in df
-            else float("nan")
-            for arm in arm_order
-        ]
-        ax.bar(labels, means, color=colors, edgecolor="#333")
-        ax.set_title(title, fontsize=10)
-        ax.tick_params(axis="x", rotation=25, labelsize=8)
-        for i, value in enumerate(means):
-            if math.isnan(value):
+    for ax, (metric, title, value_fmt, direction) in zip(axes, metrics, strict=True):
+        values_by_arm: list[list[float]] = []
+        for arm in arm_order:
+            vals = pd.to_numeric(df[df["arm"] == arm][metric], errors="coerce").dropna()
+            values_by_arm.append([float(v) for v in vals])
+
+        bp = ax.boxplot(
+            values_by_arm,
+            positions=list(range(len(arm_order))),
+            widths=0.55,
+            patch_artist=True,
+            showfliers=False,
+            medianprops={"color": "#333333", "linewidth": 1.2},
+            whiskerprops={"color": "#555555", "linewidth": 1.0},
+            capprops={"color": "#555555", "linewidth": 1.0},
+            boxprops={"edgecolor": "#444444", "linewidth": 1.0},
+        )
+        for patch, color in zip(bp["boxes"], colors, strict=True):
+            patch.set_facecolor(color)
+            patch.set_alpha(0.65)
+
+        for i, vals in enumerate(values_by_arm):
+            if not vals:
                 continue
-            ax.text(i, value, f"{value:.2f}", ha="center", va="bottom", fontsize=8)
-    fig.suptitle("Structural-context ablation summary", fontsize=11, weight="bold")
+            offsets = np.linspace(-0.12, 0.12, len(vals)) if len(vals) > 1 else [0.0]
+            ax.scatter(
+                [i + float(offset) for offset in offsets],
+                vals,
+                color="#222222",
+                s=18,
+                alpha=0.85,
+                linewidth=0,
+                zorder=3,
+            )
+            tail_value = min(vals) if direction == "lower" else max(vals)
+            va = "top" if direction == "lower" else "bottom"
+            y_pad = -0.01 if direction == "lower" else 0.01
+            ax.text(
+                i,
+                tail_value + y_pad * max(abs(tail_value), 1),
+                value_fmt.format(tail_value),
+                ha="center",
+                va=va,
+                fontsize=7,
+                color="#333333",
+            )
+
+        all_values = [value for vals in values_by_arm for value in vals]
+        if all_values:
+            y_min = min(all_values)
+            y_max = max(all_values)
+            span = max(y_max - y_min, 1e-6)
+            if direction == "lower":
+                ax.set_ylim(y_min - 0.18 * span, y_max + 0.10 * span)
+            else:
+                ax.set_ylim(y_min - 0.10 * span, y_max + 0.18 * span)
+
+        if "single" in arm_order:
+            single_values = values_by_arm[arm_order.index("single")]
+            if single_values:
+                single_median = float(np.median(single_values))
+                ax.axhline(
+                    single_median,
+                    color="#777777",
+                    linestyle="--",
+                    linewidth=0.9,
+                    alpha=0.7,
+                    label="single median",
+                )
+                ax.legend(loc="best", fontsize=7, frameon=True)
+        ax.set_title(title, fontsize=10)
+        ax.set_xticks(list(range(len(arm_order))))
+        ax.set_xticklabels(xlabels, fontsize=8)
+        ax.grid(axis="y", color="#dddddd", linewidth=0.8, alpha=0.8)
+        ax.set_axisbelow(True)
+        for spine in ("top", "right"):
+            ax.spines[spine].set_visible(False)
+    fig.suptitle(
+        "Structural-context ablation: upper-tail and diversity view",
+        fontsize=11,
+        weight="bold",
+    )
     fig.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=250, bbox_inches="tight")
