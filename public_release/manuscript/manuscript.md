@@ -24,7 +24,7 @@ RAPID represents each redesign campaign as a run-scoped orchestration record rat
 
 Each run stores its typed request, stage outputs, status records, trace events, quality-control summaries, experiment records, and final summaries under a stable run identifier. Downstream analyses consume shared artifact fields rather than model-specific folders, which is the basis for partial reruns, retrospective benchmark reconstruction, and backend replacement. The local browser interface exposes the same run identifiers and request fields as the backend, but the scientific claims are based on the stored artifacts rather than on the interface itself.
 
-![RAPID artifact orchestration](figures/benchmark/figure1.png)
+![RAPID run_id-centered redesign substrate](figures/benchmark/figure1.png)
 
 *Figure 1. RAPID run_id-centered redesign substrate. The linear stage order is only one operational view. The central contribution is the run-scoped artifact contract, which preserves requests, provenance records, stage outputs, surrogate labels, AF2 evaluations, experiment records, and final summaries under stable run identifiers. Structural-context exploration, resource-aware surrogate triage, and experimental-feedback evolution all consume and update the same reusable artifact layer. This architecture supports safe reruns, retrospective analysis, backend replacement, and future preference-dataset accumulation without treating RAPID as a simple linear wrapper over model calls.*
 
