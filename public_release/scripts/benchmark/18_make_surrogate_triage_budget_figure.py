@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import numpy as np
 import pandas as pd
 
@@ -193,16 +194,8 @@ def _format_int(value: float) -> str:
 
 
 def _add_panel_label(ax: plt.Axes, label: str) -> None:
-    ax.text(
-        -0.12,
-        1.08,
-        label,
-        transform=ax.transAxes,
-        fontsize=11,
-        fontweight="bold",
-        va="top",
-        ha="left",
-    )
+    # Panel labels are added in figure coordinates after layout adjustment.
+    return
 
 
 def make_figure(
@@ -233,8 +226,8 @@ def make_figure(
         }
     )
 
-    fig = plt.figure(figsize=(7.2, 5.6))
-    gs = fig.add_gridspec(2, 2, hspace=0.48, wspace=0.34)
+    fig = plt.figure(figsize=(7.7, 5.75))
+    gs = fig.add_gridspec(2, 2, hspace=0.62, wspace=0.38)
 
     ax_a = fig.add_subplot(gs[0, 0])
     ax_b = fig.add_subplot(gs[0, 1])
@@ -277,18 +270,19 @@ def make_figure(
     for i, (_, row) in enumerate(run_df.iterrows()):
         ax_b.text(
             i,
-            row["evaluated_fraction_percent"] + 0.025,
-            f"{row['af2_records']:.0f}/{row['candidate_count_before_triage']:.0f}",
+            row["evaluated_fraction_percent"] + 0.035,
+            f"{row['af2_records']:.0f}/\n{_format_int(float(row['candidate_count_before_triage']))}",
             ha="center",
             va="bottom",
             fontsize=6.5,
-            rotation=90,
+            rotation=0,
+            linespacing=0.9,
         )
     ax_b.set_xticks(x)
     ax_b.set_xticklabels(run_df["target"], rotation=35, ha="right")
     ax_b.set_ylim(0, max(0.65, run_df["evaluated_fraction_percent"].max() * 1.35))
-    ax_b.set_ylabel("Evaluated candidates (%)")
-    ax_b.set_title("Target-level evaluated fraction")
+    ax_b.set_ylabel("AF2-evaluated share of triage pool (%)")
+    ax_b.set_title("Per-target validation budget\n(AF2 records / triage candidates)")
     _add_panel_label(ax_b, "B")
 
     # Panel C: internal CV ranking signal for fitted policies.
@@ -297,8 +291,9 @@ def make_figure(
     cv_plot["target"] = cv_plot["target"].astype(str)
     cv_plot["spearman"] = pd.to_numeric(cv_plot["spearman"], errors="coerce")
     selected = dict(zip(run_df["target"].astype(str), run_df["selected_policy"].astype(str)))
-    offsets = {"rf": -0.08, "ridge": 0.08}
+    offsets = {"rf": -0.16, "ridge": 0.16}
     colors = {"rf": PALETTE["teal"], "ridge": PALETTE["orange"]}
+    markers = {"rf": "o", "ridge": "s"}
     for policy in ["rf", "ridge"]:
         sub = cv_plot[cv_plot["policy"].astype(str).eq(policy)]
         y_values = []
@@ -312,7 +307,7 @@ def make_figure(
             x_values,
             y_values,
             s=36,
-            label=policy.upper() if policy == "rf" else "Ridge",
+            marker=markers[policy],
             color=colors[policy],
             edgecolor=PALETTE["dark"],
             linewidth=0.4,
@@ -335,17 +330,14 @@ def make_figure(
     ax_c.axhline(0, color=PALETTE["gray"], linewidth=0.8, linestyle="--")
     ax_c.set_xticks(np.arange(len(target_order)))
     ax_c.set_xticklabels(target_order, rotation=35, ha="right")
-    ax_c.set_ylabel("CV Spearman on bootstrap labels")
-    ax_c.set_title("Auto-CV policy selection")
-    ax_c.legend(frameon=False, loc="upper left", ncol=2)
-    ax_c.text(
-        0.02,
-        0.02,
-        "Open circle = selected policy",
-        transform=ax_c.transAxes,
-        color=PALETTE["gray"],
-        fontsize=7,
-    )
+    ax_c.set_ylabel("CV Spearman on 30 bootstrap labels")
+    ax_c.set_title("Policy selection from bootstrap labels")
+    ax_c.set_ylim(-0.24, 1.10)
+    policy_handles = [
+        Line2D([0], [0], marker="o", linestyle="None", markerfacecolor=colors["rf"], markeredgecolor=PALETTE["dark"], markersize=5.2, label="RF"),
+        Line2D([0], [0], marker="s", linestyle="None", markerfacecolor=colors["ridge"], markeredgecolor=PALETTE["dark"], markersize=5.2, label="Ridge"),
+        Line2D([0], [0], marker="o", linestyle="None", markerfacecolor="none", markeredgecolor=PALETTE["dark"], markeredgewidth=1.3, markersize=7.8, label="selected policy"),
+    ]
     _add_panel_label(ax_c, "C")
 
     # Panel D: selected candidates relative to the WT baseline.
@@ -361,6 +353,8 @@ def make_figure(
     topk_plot = topk_plot.join(merged_wt, on="target")
     topk_plot = topk_plot.dropna(subset=["af2_label", "soluprot", "wt_plddt", "wt_soluprot"])
     wt_plot = wt_plot[wt_plot["target"].isin(target_order)].dropna(subset=["wt_plddt", "wt_soluprot"])
+    candidate_handles: list[Line2D] = []
+    candidate_summary = "WT comparison unavailable."
     if topk_plot.empty or wt_plot.empty:
         ax_d.text(0.5, 0.5, "WT comparison unavailable", ha="center", va="center")
         ax_d.set_axis_off()
@@ -391,7 +385,7 @@ def make_figure(
                 alpha=0.68,
                 edgecolor="white",
                 linewidth=0.25,
-                label="Above WT on both",
+                label="Above WT both",
                 zorder=3,
             )
         ax_d.scatter(
@@ -402,7 +396,7 @@ def make_figure(
             color=PALETTE["blue"],
             edgecolor=PALETTE["dark"],
             linewidth=0.8,
-            label="WT baseline",
+            label="WT",
             zorder=4,
         )
         improved_both = 0
@@ -414,23 +408,58 @@ def make_figure(
                 improved_both += 1
         ax_d.axvline(0, color=PALETTE["gray"], linewidth=0.8, linestyle="--", zorder=1)
         ax_d.axhline(0, color=PALETTE["gray"], linewidth=0.8, linestyle="--", zorder=1)
-        ax_d.set_xlabel("Delta pLDDT vs WT")
-        ax_d.set_ylabel("Delta SoluProt vs WT")
-        ax_d.set_title("Selected candidates relative to WT")
-        ax_d.legend(frameon=False, loc="lower right")
-        ax_d.text(
-            0.02,
-            0.94,
-            f"{improved_both}/{len(target_order)} targets with an above-WT selected candidate",
-            transform=ax_d.transAxes,
-            color=PALETTE["gray"],
-            fontsize=6.8,
-            va="top",
-            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.78, "pad": 1.5},
+        ax_d.set_xlabel("Delta pLDDT vs target-matched WT")
+        ax_d.set_ylabel("Delta SoluProt vs target-matched WT")
+        ax_d.set_title("Selected Top-K relative to WT")
+        candidate_handles = [
+            Line2D([0], [0], marker="o", linestyle="None", markerfacecolor=PALETTE["light_gray"], markeredgecolor="white", markersize=5.0, label="Selected Top-K"),
+            Line2D([0], [0], marker="o", linestyle="None", markerfacecolor=PALETTE["teal"], markeredgecolor="white", markersize=5.0, label="Above WT both"),
+            Line2D([0], [0], marker="D", linestyle="None", markerfacecolor=PALETTE["blue"], markeredgecolor=PALETTE["dark"], markersize=6.2, label="WT"),
+        ]
+        candidate_summary = (
+            f"{int(improves_both.sum())}/{len(topk_plot)} selected candidates and "
+            f"{improved_both}/{len(target_order)} targets are above WT on both proxies."
         )
     _add_panel_label(ax_d, "D")
 
-    fig.suptitle("Surrogate triage reduces structure-prediction use under a fixed validation budget", y=0.985, fontsize=11, fontweight="bold")
+    fig.suptitle("Surrogate triage reduces structure-prediction use under a fixed validation budget", y=0.965, fontsize=10.8, fontweight="bold")
+    fig.subplots_adjust(left=0.10, right=0.98, top=0.88, bottom=0.19)
+
+    for label, ax in [("A", ax_a), ("B", ax_b), ("C", ax_c), ("D", ax_d)]:
+        pos = ax.get_position()
+        fig.text(
+            pos.x0 - 0.040,
+            pos.y1 + 0.010,
+            label,
+            fontsize=11,
+            fontweight="bold",
+            ha="left",
+            va="bottom",
+        )
+
+    c_pos = ax_c.get_position()
+    fig.legend(
+        handles=policy_handles,
+        frameon=False,
+        loc="upper center",
+        bbox_to_anchor=(c_pos.x0 + c_pos.width / 2, c_pos.y0 - 0.055),
+        ncol=3,
+        handlelength=1.0,
+        handletextpad=0.35,
+        columnspacing=0.8,
+    )
+    if candidate_handles:
+        d_pos = ax_d.get_position()
+        fig.legend(
+            handles=candidate_handles,
+            frameon=False,
+            loc="upper center",
+            bbox_to_anchor=(d_pos.x0 + d_pos.width / 2, d_pos.y0 - 0.055),
+            ncol=3,
+            handlelength=1.0,
+            handletextpad=0.35,
+            columnspacing=0.8,
+        )
     output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output, dpi=350, bbox_inches="tight")
     fig.savefig(output.with_suffix(".pdf"), bbox_inches="tight")

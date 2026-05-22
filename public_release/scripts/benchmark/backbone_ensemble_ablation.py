@@ -623,7 +623,7 @@ def _write_latex_table(summary_rows: list[dict[str, Any]], out_path: Path) -> No
         plddt = _mean([float(r["top5_mean_plddt"]) for r in rows if r.get("top5_mean_plddt") not in (None, "")])
         solu = _mean([float(r["top5_mean_soluprot"]) for r in rows if r.get("top5_mean_soluprot") not in (None, "")])
         lines.append(
-            f"{label} & {designs:.1f} & {af2:.1f} & {plddt:.2f} & {solu:.3f} \\\\"
+            f"{label} & {int(round(designs))} & {int(round(af2))} & {plddt:.2f} & {solu:.3f} \\\\"
         )
     lines.extend(["\\bottomrule", "\\end{tabular}", ""])
     out_path.parent.mkdir(parents=True, exist_ok=True)

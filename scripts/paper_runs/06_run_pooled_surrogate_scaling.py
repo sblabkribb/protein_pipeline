@@ -493,6 +493,7 @@ def _write_table(path: Path, summary_rows: list[dict[str, Any]], *, pool_sizes: 
         for row in summary_rows
         if row["strategy"] in {"target_only", "pooled_plus_target"}
         and int(row["pool_size_targets"]) in set(pool_sizes)
+        and not (row["strategy"] == "target_only" and int(row["pool_size_targets"]) != min(pool_sizes))
     ]
     lines = [
         r"\begin{tabular}{llrrrr}",

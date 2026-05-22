@@ -125,12 +125,12 @@ def step_box(ax, x, y, w, h, title, body, color, *, title_fs=10, body_fs=8.2):
 
 
 def draw_pipeline_overview() -> Path:
-    fig, ax = plt.subplots(figsize=(13.8, 7.2))
-    ax.set_xlim(0, 13.8)
-    ax.set_ylim(0, 7.2)
+    fig, ax = plt.subplots(figsize=(12.8, 6.2))
+    ax.set_xlim(0, 12.8)
+    ax.set_ylim(0, 6.2)
     ax.axis("off")
 
-    def labeled_box(
+    def box(
         x,
         y,
         w,
@@ -139,9 +139,13 @@ def draw_pipeline_overview() -> Path:
         body,
         color,
         *,
-        title_fs=9.2,
-        body_fs=7.5,
+        title_fs=8.0,
+        body_fs=6.7,
         lw=1.05,
+        ls="-",
+        ha="center",
+        title_y=0.68,
+        body_y=0.32,
     ):
         rect = FancyBboxPatch(
             (x, y),
@@ -151,23 +155,24 @@ def draw_pipeline_overview() -> Path:
             facecolor=color,
             edgecolor=EDGE,
             linewidth=lw,
+            linestyle=ls,
         )
         ax.add_patch(rect)
         ax.text(
-            x + w / 2,
-            y + h - 0.17,
+            x + (0.16 if ha == "left" else w / 2),
+            y + h * title_y,
             title,
-            ha="center",
-            va="top",
+            ha=ha,
+            va="center",
             fontsize=title_fs,
             fontweight="bold",
             color="#1f2933",
         )
         ax.text(
-            x + w / 2,
-            y + h * 0.42,
+            x + (0.16 if ha == "left" else w / 2),
+            y + h * body_y,
             body,
-            ha="center",
+            ha=ha,
             va="center",
             fontsize=body_fs,
             color="#263238",
@@ -175,164 +180,198 @@ def draw_pipeline_overview() -> Path:
         )
 
     ax.text(
-        6.9,
-        6.88,
-        "RAPID provenance-centered redesign substrate",
+        6.4,
+        5.88,
+        "RAPID run_id-centered redesign substrate",
         ha="center",
         va="center",
         fontsize=12.5,
         fontweight="bold",
     )
     ax.text(
-        6.9,
-        6.55,
-        "The linear stage order is one operational view; the scientific unit is the reusable run_id-centered artifact record.",
+        6.4,
+        5.56,
+        "Structural-context exploration, surrogate triage, and experimental-feedback evolution use the same run-scoped artifact contract.",
         ha="center",
         va="center",
-        fontsize=8.7,
+        fontsize=8.0,
         color="#4b5563",
     )
 
-    stages = [
-        ("MMseqs2", "MSA /\nconstraints", COLOR_CHEAP_GATE_STAGE),
-        ("RFD3", "backbone\ncontext", COLOR_HEAVY_GPU_STAGE),
-        ("BioEmu", "ensemble\ncontext", COLOR_HEAVY_GPU_STAGE),
-        ("ProteinMPNN", "multiple-mutant\nlibrary", COLOR_NEUTRAL_STAGE),
-        ("SoluProt", "cheap soluble-\nexpression gate", COLOR_CHEAP_GATE_STAGE),
-        ("AF2/ColabFold", "structural\nconfidence", COLOR_HEAVY_GPU_STAGE),
-        ("Novelty", "compare /\nscore", COLOR_NEUTRAL_STAGE),
+    modules = [
+        ("Input and context", "MMseqs2; optional RFD3/BioEmu", "#F7D6CE", "--"),
+        ("Design and filtering", "ProteinMPNN; SoluProt", COLOR_CHEAP_GATE_STAGE, "-"),
+        ("Evaluation and reporting", "AF2/ColabFold; novelty", COLOR_NEUTRAL_STAGE, "-"),
     ]
-    sx0 = 0.45
-    sy = 5.48
-    sw = 1.55
-    sgap = 0.34
-    sh = 0.68
-    for i, (title, body, color) in enumerate(stages):
-        x = sx0 + i * (sw + sgap)
-        labeled_box(x, sy, sw, sh, title, body, color, title_fs=7.8, body_fs=6.5)
-        if i < len(stages) - 1:
-            arrow(ax, x + sw + 0.02, sy + sh / 2, x + sw + sgap - 0.02, sy + sh / 2, lw=0.9)
-
     ax.text(
-        0.52,
-        5.18,
-        "Replaceable stage modules",
+        0.55,
+        5.10,
+        "Replaceable computational modules",
         ha="left",
         va="center",
-        fontsize=8.2,
+        fontsize=8.1,
         color="#4b5563",
         fontweight="bold",
     )
+    module_y = 4.42
+    module_w = 2.10
+    module_h = 0.48
+    module_gap = 0.24
+    module_x0 = 0.75
+    for i, (title, body, color, ls) in enumerate(modules):
+        x = module_x0 + i * (module_w + module_gap)
+        box(x, module_y, module_w, module_h, title, body, color, title_fs=6.8, body_fs=5.6, lw=0.8, ls=ls)
+        if i < len(modules) - 1:
+            arrow(ax, x + module_w + 0.02, module_y + module_h / 2, x + module_w + module_gap - 0.02, module_y + module_h / 2, lw=0.65, color="#6b7280")
 
-    labeled_box(
-        0.65,
-        3.55,
-        2.0,
-        0.92,
-        "Input target",
-        "FASTA / PDB\ncampaign settings\noperator constraints",
-        "#F7F3E8",
-        title_fs=8.8,
-        body_fs=7.1,
+    store_x, store_y, store_w, store_h = 2.40, 1.45, 5.55, 2.60
+    store = FancyBboxPatch(
+        (store_x, store_y),
+        store_w,
+        store_h,
+        boxstyle="round,pad=0.07,rounding_size=0.16",
+        facecolor="#E9EEF7",
+        edgecolor="#1f2933",
+        linewidth=1.45,
     )
-    labeled_box(
-        4.15,
-        2.88,
-        5.55,
-        2.12,
-        "Run-scoped artifact store",
-        "run_id = provenance anchor\nrequest.json + stage outputs\nstatus + trace + QC\nmetrics + experiment records\nfinal summary",
-        "#E9EEF7",
-        title_fs=10.4,
-        body_fs=7.8,
-        lw=1.25,
-    )
-    arrow(ax, 2.65, 4.01, 4.15, 4.01, lw=1.1)
-    arrow(ax, 7.85, sy, 7.85, 5.02, lw=1.0, color="#4b5563", ls="--")
+    ax.add_patch(store)
     ax.text(
-        8.05,
-        5.18,
-        "writes standardized outputs",
+        store_x + store_w / 2,
+        store_y + store_h - 0.28,
+        "run-scoped artifact contract",
+        ha="center",
+        va="top",
+        fontsize=10.6,
+        fontweight="bold",
+        color="#19324d",
+    )
+    run_pill = FancyBboxPatch(
+        (store_x + store_w / 2 - 0.62, store_y + store_h - 0.80),
+        1.38,
+        0.34,
+        boxstyle="round,pad=0.03,rounding_size=0.12",
+        facecolor="white",
+        edgecolor="#6b7280",
+        linewidth=0.9,
+    )
+    ax.add_patch(run_pill)
+    ax.text(
+        store_x + store_w / 2,
+        store_y + store_h - 0.61,
+        "run_id",
+        ha="center",
+        va="center",
+        fontsize=8.4,
+        fontweight="bold",
+        color="#1f2933",
+    )
+
+    artifacts = [
+        ("request", "operator inputs"),
+        ("provenance records", "run status / trace"),
+        ("stage outputs", "PDB / FASTA / scores"),
+        ("surrogate labels", "bootstrap / predictions"),
+        ("AF2 evaluations", "pLDDT / structure files"),
+        ("experiment records", "assay labels"),
+        ("model artifacts", "features / fitted models"),
+        ("final summary", "ranked candidates"),
+    ]
+    art_w, art_h = 1.95, 0.38
+    for idx, (name, detail) in enumerate(artifacts):
+        col = idx % 2
+        row = idx // 2
+        x = store_x + 0.42 + col * 2.62
+        y = store_y + store_h - 1.16 - row * 0.46
+        rect = FancyBboxPatch(
+            (x, y),
+            art_w,
+            art_h,
+            boxstyle="round,pad=0.03,rounding_size=0.06",
+            facecolor="white",
+            edgecolor="#9aa7b8",
+            linewidth=0.65,
+        )
+        ax.add_patch(rect)
+        ax.text(x + 0.10, y + art_h * 0.63, name, ha="left", va="center", fontsize=6.2, fontweight="bold", color="#263238")
+        ax.text(x + 0.10, y + art_h * 0.25, detail, ha="left", va="center", fontsize=5.3, color="#4b5563")
+
+    arrow(ax, module_x0 + module_w * 1.55 + module_gap, module_y - 0.05, store_x + store_w / 2, store_y + store_h + 0.10, lw=1.0, color="#5b6470")
+    ax.text(
+        store_x + store_w / 2 + 0.25,
+        4.24,
+        "typed artifacts",
+        ha="left",
+        va="center",
+        fontsize=6.4,
+        color="#4b5563",
+        style="italic",
+    )
+
+    right_x = 8.65
+    right_w = 3.45
+    outputs = [
+        (
+            4.20,
+            "Structural-context exploration",
+            "single / RFD3 / BioEmu contexts\ncandidate distribution analyses",
+            "#D8EBC8",
+            "#4f7d3a",
+        ),
+        (
+            3.08,
+            "Resource-aware surrogate triage",
+            "surrogate labels + fixed\nAF2 validation budget",
+            "#DFF2F1",
+            "#0F766E",
+        ),
+        (
+            1.96,
+            "Experimental-feedback evolution",
+            "assay outcomes update\nfuture preference records",
+            "#FFF0C8",
+            "#8A6D00",
+        ),
+        (
+            0.84,
+            "Rerun, analysis, replacement",
+            "safe reruns; retrospective analysis\nbackend/provider swaps",
+            "#F7D6CE",
+            "#B45309",
+        ),
+    ]
+    for y, title, body, color, arrow_color in outputs:
+        box(
+            right_x,
+            y,
+            right_w,
+            0.72,
+            title,
+            body,
+            color,
+            title_fs=7.9,
+            body_fs=6.2,
+            lw=1.05,
+            ha="left",
+            title_y=0.70,
+            body_y=0.34,
+        )
+        arrow(ax, store_x + store_w + 0.10, y + 0.36, right_x - 0.10, y + 0.36, lw=1.0, color=arrow_color)
+
+    arrow(ax, right_x - 0.10, 2.08, store_x + store_w - 0.20, store_y + 0.30, lw=1.0, color="#8A6D00", ls="--")
+    ax.text(
+        0.58,
+        0.42,
+        "The linear workflow is only the execution order; the persistent unit is the run_id-centered redesign record.",
         ha="left",
         va="center",
         fontsize=7.0,
         color="#4b5563",
-        style="italic",
     )
-
-    action_y = 0.98
-    action_h = 1.12
-    action_w = 2.45
-    action_x = [0.52, 3.48, 6.44, 9.40]
-    actions = [
-        ("Safe rerun path", "restart from valid\nstored artifacts\nwithout unsafe reuse", "#DFF2F1"),
-        ("Retrospective analysis", "rebuild surrogate,\nscaling, variance, and\nQC analyses", "#D8EBC8"),
-        ("Experiment feedback", "assay labels enter\nexperiments.jsonl\nfor next candidates", "#FFF0C8"),
-        ("Model replacement", "swap any stage\nbackend if artifact\nfields stay compatible", "#F7D6CE"),
-    ]
-    for x, (title, body, color) in zip(action_x, actions):
-        lw = 1.25 if title in {"Retrospective analysis", "Experiment feedback"} else 1.05
-        title_fs = 8.9 if title in {"Retrospective analysis", "Experiment feedback"} else 8.5
-        labeled_box(x, action_y, action_w, action_h, title, body, color, title_fs=title_fs, body_fs=6.9, lw=lw)
-        arrow(ax, 6.95, 2.88, x + action_w / 2, action_y + action_h + 0.02, lw=1.05 if title in {"Retrospective analysis", "Experiment feedback"} else 0.95)
-
-    arrow(
-        ax,
-        action_x[2] + action_w / 2,
-        action_y + action_h,
-        2.65,
-        4.01,
-        lw=1.35,
-        color="#8A6D00",
-        ls="--",
-    )
-    ax.text(
-        4.65,
-        2.40,
-        "next design-test-learn cycle",
-        ha="center",
-        va="center",
-        fontsize=7.4,
-        color="#6b5500",
-        style="italic",
-        bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.85, "pad": 1.5},
-    )
-
-    ax.text(
-        0.68,
-        0.44,
-        "Key distinction: RAPID preserves provenance and reusable records, so completed runs become a substrate for rerun, analysis, feedback, and backend replacement.",
-        ha="left",
-        va="center",
-        fontsize=7.4,
-        color="#4b5563",
-    )
-
-    legend_x = 10.9
-    legend_y = 6.88
-    swatch_w = 0.25
-    swatch_h = 0.15
-    items = [
-        ("GPU-heavy", COLOR_HEAVY_GPU_STAGE),
-        ("cheap gate", COLOR_CHEAP_GATE_STAGE),
-        ("neutral", COLOR_NEUTRAL_STAGE),
-    ]
-    for j, (lbl, col) in enumerate(items):
-        x = legend_x + j * 0.92
-        rect = FancyBboxPatch(
-            (x, legend_y - swatch_h / 2),
-            swatch_w,
-            swatch_h,
-            boxstyle="round,pad=0.004,rounding_size=0.035",
-            facecolor=col,
-            edgecolor=EDGE,
-            linewidth=0.7,
-        )
-        ax.add_patch(rect)
-        ax.text(x + swatch_w + 0.035, legend_y, lbl, ha="left", va="center", fontsize=6.6)
 
     out = FIG_DIR / "fig1_pipeline_overview.png"
-    fig.savefig(out, dpi=220, bbox_inches="tight")
+    FIG_DIR.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=300, bbox_inches="tight")
+    fig.savefig(out.with_suffix(".pdf"), bbox_inches="tight")
     plt.close(fig)
     return out
 

@@ -207,17 +207,19 @@ def _write_table(path: Path, rows: list[dict[str, object]]) -> None:
     reduction = (100.0 * (1.0 - after / before)) if before else 0.0
     models = sorted({str(row.get("surrogate_models") or "") for row in usable if row.get("surrogate_models")})
     selected = sorted({str(row.get("selected_policy") or "") for row in usable if row.get("selected_policy")})
+    model_text = ", ".join(model.replace(",", ", ") for model in models) or "-"
+    selected_text = ", ".join(selected) or "-"
     text = "\n".join(
         [
-            r"\begin{tabular}{llrrrr}",
+            r"\begin{tabular}{llrrrrr}",
             r"\toprule",
-            r"Comparator models & Selected policy & Runs & Tiers & Without triage AF2 calls & With triage AF2 calls \\",
+            r"Comparator models & Selected policy & Runs & Tiers & Triage candidates & AF2 records & Reduction \\",
             r"\midrule",
-            f"{', '.join(models) or '-'} & {', '.join(selected) or '-'} & {n_runs} & {n_tiers} & {before} & {after} \\\\",
+            f"{model_text} & {selected_text} & {n_runs} & {n_tiers} & {before:,} & {after:,} & {reduction:.1f}\\% \\\\",
             r"\bottomrule",
             r"\end{tabular}",
             "",
-            f"% AF2 reduction: {reduction:.1f}%",
+            "% Reduction is relative to folding every candidate entering surrogate triage.",
         ]
     )
     path.write_text(text + "\n", encoding="utf-8")

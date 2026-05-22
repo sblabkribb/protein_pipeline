@@ -1,9 +1,9 @@
-\begin{tabular}{llrrrr}
+\begin{tabular}{llrrrrr}
 \toprule
-Comparator models & Selected policy & Runs & Tiers & Without triage AF2 calls & With triage AF2 calls \\
+Comparator models & Selected policy & Runs & Tiers & Triage candidates & AF2 records & Reduction \\
 \midrule
-rf,ridge,lightgbm,xgboost & rf, ridge & 5 & 15 & 49946 & 250 \\
+rf, ridge, lightgbm, xgboost & rf, ridge & 5 & 15 & 49,946 & 250 & 99.5\% \\
 \bottomrule
 \end{tabular}
 
-% AF2 reduction: 99.5%
+% Reduction is relative to folding every candidate entering surrogate triage.
