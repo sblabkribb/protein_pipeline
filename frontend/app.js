@@ -2115,8 +2115,8 @@ const I18N = {
     "tutorial.step.advancedWorkflow.title": "Workflow decides the run shape",
     "tutorial.step.advancedWorkflow.body":
       "Step 2/5 is where the run shape belongs. Choose the pipeline path, included stages, conservation levels, AF2 budget triage, and whether to open a staged Workflow Studio session.",
-    "tutorial.step.advancedWorkflow.hint": "Use the full path for routine runs. Turn AF2 Budget Triage on when the candidate pool is large and final structure-prediction calls should be capped.",
-    "tutorial.step.advancedSurrogate.title": "Surrogate triage caps expensive AF2 calls",
+    "tutorial.step.advancedWorkflow.hint": "Use the full path for routine runs. Turn Surrogate AF2 Budget Triage on when the candidate pool is large and final structure-prediction calls should be capped.",
+    "tutorial.step.advancedSurrogate.title": "Surrogate AF2 triage caps expensive calls",
     "tutorial.step.advancedSurrogate.body":
       "AF2 Budget Triage runs after SoluProt. RAPID labels a small diverse bootstrap set with AF2/ColabFold, compares surrogate models, and sends only the selected Top K candidates to final AF2/ColabFold validation. It does not automatically disable RFD3 or BioEmu.",
     "tutorial.step.advancedSurrogate.hint":
@@ -2151,7 +2151,7 @@ const I18N = {
     "tutorial.step.evolution.title": "Evolution explores iterative designs",
     "tutorial.step.evolution.body":
       "Evolution is for design-test-learn rounds. Without measurements, it only chooses the first set of candidates to test; after measurements are saved, it learns from them and recommends the next set.",
-    "tutorial.step.evolution.hint": "Use it when experimental measurements are available or planned; use AF2 Budget Triage in Advanced for one-round in-silico budget reduction.",
+    "tutorial.step.evolution.hint": "Use it when experimental measurements are available or planned; use Surrogate AF2 Budget Triage in Advanced for one-round in-silico budget reduction.",
     "tutorial.step.evolutionSettings.title": "Evolution numbers control cost and selectivity",
     "tutorial.step.evolutionSettings.body":
       "Candidate selection mode chooses whether recommendations learn from measured experiment values or only test the computational AF2-score loop. Previous run with measurements tells RAPID where to reuse prior assay values.",
@@ -2159,7 +2159,7 @@ const I18N = {
       "Larger pools explore more sequences but take longer. Increase Top K only when you want broader final validation; reduce it for quick screening.",
     "tutorial.step.studio.title": "Studio resumes staged workflows",
     "tutorial.step.studio.body":
-      "Studio is for step-by-step workflow sessions, checkpoint review, and continuing a run after inspecting intermediate results. When the workflow includes AF2, the same AF2 Budget Triage switch is available in Studio.",
+      "Studio is for step-by-step workflow sessions, checkpoint review, and continuing a run after inspecting intermediate results. When the workflow includes AF2, the same Surrogate AF2 Budget Triage switch is available in Studio.",
     "tutorial.step.studio.hint": "If a run pauses at a checkpoint, review it in Monitor or Studio before resuming. Open the AF2 stage to adjust surrogate triage before spending structure-prediction budget.",
     "tutorial.step.studioCheckpoint.title": "Pause, inspect, then continue",
     "tutorial.step.studioCheckpoint.body":
@@ -3242,7 +3242,7 @@ const I18N = {
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} per Conservation Level (Top N)",
     "question.af2MaxCandidatesPerTier.help":
       "Run {af2Provider} only for top N SoluProt-passed designs per sequence-conservation level (ranked by SoluProt score, 0 = all).",
-    "question.surrogateTriageEnabled.label": "AF2 Budget Triage",
+    "question.surrogateTriageEnabled.label": "Surrogate AF2 Budget Triage",
     "question.surrogateTriageEnabled.help":
       "Turn on the post-SoluProt budget layer. RAPID labels a small diverse candidate set with {af2Provider}, fits a surrogate pLDDT model, then sends only surrogate-ranked top candidates to {af2Provider}. This does not force RFD3 or BioEmu off.",
     "question.surrogateTriageScope.label": "Candidate pool",
@@ -3449,7 +3449,7 @@ const I18N = {
     "setup.options.help": "Review key execution options in one board.",
     "setup.evolution.title": "Optional Evolution Search",
     "setup.evolution.help": "Leave this off for a normal run. Turn it on when you want repeated candidate generation and evaluation.",
-    "setup.surrogate.title": "AF2 Budget Triage",
+    "setup.surrogate.title": "Surrogate AF2 Budget Triage",
     "setup.surrogate.help":
       "Optional post-SoluProt budget layer for pipeline runs. It reduces structure-prediction calls while leaving upstream RFD3, BioEmu, and design options under user control.",
     "setup.criteria.parameters.title": "Candidate Criteria",
@@ -3815,11 +3815,11 @@ const I18N = {
     "tutorial.step.advancedInput.hint": "타깃이 없으면 뒤의 workflow와 검토 단계에서 run을 시작할 수 없습니다.",
     "tutorial.step.advancedWorkflow.title": "워크플로우가 run 형태를 정합니다",
     "tutorial.step.advancedWorkflow.body":
-      "2/5 워크플로우 단계에서 run 형태를 정합니다. 파이프라인 경로, 포함 단계, 보존율 구간, AF2 예산 선별, 단계별 Workflow Studio 세션 사용 여부를 고릅니다.",
-    "tutorial.step.advancedWorkflow.hint": "일반 실행은 전체 경로를 유지하세요. 후보 pool이 크고 최종 구조 예측 호출 수를 제한해야 할 때 AF2 예산 선별을 켭니다.",
-    "tutorial.step.advancedSurrogate.title": "Surrogate triage는 비싼 AF2 호출을 제한합니다",
+      "2/5 워크플로우 단계에서 run 형태를 정합니다. 파이프라인 경로, 포함 단계, 보존율 구간, 대리모델 기반 AF2 예산 선별, 단계별 Workflow Studio 세션 사용 여부를 고릅니다.",
+    "tutorial.step.advancedWorkflow.hint": "일반 실행은 전체 경로를 유지하세요. 후보 pool이 크고 최종 구조 예측 호출 수를 제한해야 할 때 대리모델 기반 AF2 예산 선별을 켭니다.",
+    "tutorial.step.advancedSurrogate.title": "대리모델 기반 AF2 선별은 비싼 호출을 제한합니다",
     "tutorial.step.advancedSurrogate.body":
-      "AF2 예산 선별은 SoluProt 이후에 적용됩니다. RAPID가 다양한 bootstrap 후보 일부만 AF2/ColabFold로 라벨링하고, 대리모델들을 비교한 뒤 선택된 Top K 후보만 최종 AF2/ColabFold 검증으로 보냅니다. 이 옵션은 RFD3나 BioEmu를 자동으로 끄지 않습니다.",
+      "대리모델 기반 AF2 예산 선별은 SoluProt 이후에 적용됩니다. RAPID가 다양한 bootstrap 후보 일부만 AF2/ColabFold로 라벨링하고, 대리모델들을 비교한 뒤 선택된 Top K 후보만 최종 AF2/ColabFold 검증으로 보냅니다. 이 옵션은 RFD3나 BioEmu를 자동으로 끄지 않습니다.",
     "tutorial.step.advancedSurrogate.hint":
       "논문식 예산 선별은 구간 통합 30 + 20 기본값과 큰 ProteinMPNN pool을 사용하세요. 구조 맥락 탐색이 필요하면 RFD3/BioEmu 스위치는 별도로 조정합니다.",
     "tutorial.step.advancedCriteria.title": "평가기준은 필터를 정합니다",
@@ -3851,7 +3851,7 @@ const I18N = {
     "tutorial.step.evolution.title": "Evolution은 반복 설계를 탐색합니다",
     "tutorial.step.evolution.body":
       "Evolution은 설계-실험-학습 회차를 위한 기능입니다. 측정값이 없으면 먼저 실험할 후보를 고르고, 측정값을 저장한 뒤에는 그 값을 학습해 다음 후보를 추천합니다.",
-    "tutorial.step.evolution.hint": "실험 측정값이 있거나 곧 만들 계획일 때 사용하세요. 1회 in-silico 비용 절감은 Advanced의 AF2 예산 선별을 사용합니다.",
+    "tutorial.step.evolution.hint": "실험 측정값이 있거나 곧 만들 계획일 때 사용하세요. 1회 in-silico 비용 절감은 Advanced의 대리모델 기반 AF2 예산 선별을 사용합니다.",
     "tutorial.step.evolutionSettings.title": "Evolution 숫자는 비용과 선별 강도를 정합니다",
     "tutorial.step.evolutionSettings.body":
       "후보 선정 방식은 실험 측정값으로 추천할지, AF2 점수로 계산 루프만 확인할지 정합니다. 이전 측정값이 있는 실행은 기존 assay 값을 다음 추천에 재사용할 때만 고릅니다.",
@@ -3859,13 +3859,13 @@ const I18N = {
       "pool이 크면 더 넓게 탐색하지만 오래 걸립니다. Top K는 최종 검증을 넓히고 싶을 때 늘리고, 빠른 screening에는 줄이세요.",
     "tutorial.step.studio.title": "스튜디오는 단계별 워크플로우를 이어갑니다",
     "tutorial.step.studio.body":
-      "스튜디오는 단계별 워크플로우 세션, 체크포인트 검토, 중간 결과 확인 후 이어 실행할 때 쓰는 공간입니다. 워크플로우에 AF2가 포함되면 같은 AF2 예산 선별 스위치를 Studio에서도 조정할 수 있습니다.",
+      "스튜디오는 단계별 워크플로우 세션, 체크포인트 검토, 중간 결과 확인 후 이어 실행할 때 쓰는 공간입니다. 워크플로우에 AF2가 포함되면 같은 대리모델 기반 AF2 예산 선별 스위치를 Studio에서도 조정할 수 있습니다.",
     "tutorial.step.studio.hint": "실행이 체크포인트에서 멈추면 Monitor나 Studio에서 검토한 뒤 재개하세요. 구조 예측 예산을 쓰기 전에 AF2 단계에서 surrogate triage를 조정할 수 있습니다.",
     "tutorial.step.studioCheckpoint.title": "멈추고 확인한 뒤 이어갑니다",
     "tutorial.step.studioCheckpoint.body":
       "Run This Stage는 선택한 단계를 진행합니다. Stop Run은 실행을 멈추고, Resume Run은 같은 run을 이어가며, Open Monitor는 산출물과 checkpoint 맥락을 보여줍니다.",
     "tutorial.step.studioCheckpoint.hint":
-      "다음 단계에 compute를 쓰기 전에 MSA, RFD3, BioEmu, design, AF2 결과를 확인하거나 AF2 예산 선별을 켜고 끌 때 Studio를 사용하세요.",
+      "다음 단계에 compute를 쓰기 전에 MSA, RFD3, BioEmu, design, AF2 결과를 확인하거나 대리모델 기반 AF2 예산 선별을 켜고 끌 때 Studio를 사용하세요.",
     "tutorial.step.monitor.title": "Monitor는 실행 상태를 추적합니다",
     "tutorial.step.monitor.body":
       "Monitor에서는 단계 상태, 예상 시간, 산출물, 체크포인트 액션, completeness, 현재 실행 맥락을 확인합니다.",
@@ -4939,7 +4939,7 @@ const I18N = {
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} 서열 보존율 구간당 실행 개수 (상위 N개)",
     "question.af2MaxCandidatesPerTier.help":
       "각 서열 보존율 구간에서 SoluProt를 통과한 서열 중 상위 N개(점수 순)만 {af2Provider}를 실행합니다. 0이면 전체 실행.",
-    "question.surrogateTriageEnabled.label": "AF2 예산 선별",
+    "question.surrogateTriageEnabled.label": "대리모델 기반 AF2 예산 선별",
     "question.surrogateTriageEnabled.help":
       "SoluProt 이후 예산 절감 layer를 켭니다. 다양한 후보 일부만 {af2Provider}로 먼저 평가하고, pLDDT 대리모델로 나머지를 순위화해 상위 후보만 {af2Provider}로 보냅니다. 이 설정은 RFD3나 BioEmu를 자동으로 끄지 않습니다.",
     "question.surrogateTriageScope.label": "후보 pool",
@@ -5146,7 +5146,7 @@ const I18N = {
     "setup.options.help": "주요 실행 옵션을 한 보드에서 한 번에 확인하고 조정합니다.",
     "setup.evolution.title": "Evolution 탐색 (선택)",
     "setup.evolution.help": "일반 실행이면 끄고, 후보를 여러 번 만들고 평가하며 탐색할 때만 켭니다.",
-    "setup.surrogate.title": "AF2 예산 선별",
+    "setup.surrogate.title": "대리모델 기반 AF2 예산 선별",
     "setup.surrogate.help":
       "파이프라인 실행에서 선택적으로 쓰는 SoluProt 이후 예산 절감 layer입니다. 구조 예측 호출 수를 줄이면서 RFD3, BioEmu, design 옵션은 사용자가 그대로 조정할 수 있습니다.",
     "setup.criteria.parameters.title": "후보 평가 기준",
