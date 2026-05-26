@@ -409,6 +409,9 @@ test("advanced setup exposes surrogate triage as a switchable AF2 budget layer",
   assert.match(source, /const RUN_MODE_PRIMARY_OPTIONS = \[/);
   assert.match(source, /\{ labelKey: "runmode\.standalone", value: "standalone" \}/);
   assert.match(source, /const RUN_MODE_STANDALONE_OPTIONS = RUN_MODE_OPTIONS\.filter/);
+  assert.match(source, /"tutorial\.step\.advancedSurrogate\.title"/);
+  assert.match(source, /appendWorkflowToggleSetting\("surrogate_triage_enabled", false\)/);
+  assert.match(source, /applySurrogateBudgetDefaultsToAnswers\(state\.answers\)/);
   assert.match(source, /"question\.surrogateTriageEnabled\.label"/);
   assert.match(source, /surrogate_triage_enabled/);
   assert.match(source, /surrogate_triage_initial_samples/);

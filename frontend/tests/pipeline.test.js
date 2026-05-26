@@ -1078,6 +1078,7 @@ test("workflowStudioStageFields exposes key fields per stage", () => {
     "af2_provider",
     "af2_max_candidates_per_tier",
     "surrogate_triage_enabled",
+    "surrogate_triage_scope",
     "surrogate_triage_initial_samples",
     "surrogate_triage_top_k",
     "surrogate_triage_model",
@@ -1136,6 +1137,24 @@ test("workflowStudioVisibleStageFields keeps AF2 controls visible when RFD3 is d
       "af2_provider",
       "af2_max_candidates_per_tier",
       "surrogate_triage_enabled",
+      "af2_plddt_cutoff",
+      "af2_rmsd_cutoff",
+      "relax_enabled",
+    ]
+  );
+  assert.deepEqual(
+    workflowStudioVisibleStageFields("af2_30", {
+      answers: {
+        rfd3_use: false,
+        surrogate_triage_enabled: true,
+      },
+      nodes: ["msa", "bioemu", "proteinmpnn_30", "soluprot_30", "af2_30"],
+    }),
+    [
+      "af2_provider",
+      "af2_max_candidates_per_tier",
+      "surrogate_triage_enabled",
+      "surrogate_triage_scope",
       "surrogate_triage_initial_samples",
       "surrogate_triage_top_k",
       "surrogate_triage_model",

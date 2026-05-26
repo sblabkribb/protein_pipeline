@@ -1922,13 +1922,6 @@ const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
     "target_input",
     "pdb_strip_nonpositive_resseq",
     "backbone_filter_use_dssp",
-    "evolution_mode",
-    "evolution_label_source",
-    "evolution_objective_metric",
-    "evolution_experiment_source_run_id",
-    "evolution_initial_samples",
-    "evolution_rounds",
-    "evolution_samples_per_round",
   ]),
   rfd3: Object.freeze([
     "rfd3_use",
@@ -1959,13 +1952,6 @@ const WORKFLOW_STUDIO_STAGE_FIELDS = Object.freeze({
     "num_seq_per_tier",
     "mask_consensus_apply",
     "ligand_mask_use_original_target",
-    "evolution_mode",
-    "evolution_label_source",
-    "evolution_objective_metric",
-    "evolution_experiment_source_run_id",
-    "evolution_initial_samples",
-    "evolution_rounds",
-    "evolution_samples_per_round",
   ]),
   soluprot: Object.freeze(["soluprot_cutoff"]),
   af2: Object.freeze([
@@ -2217,6 +2203,18 @@ export function workflowStudioVisibleStageFields(stage, { answers = {}, nodes = 
         fieldId === "evolution_samples_per_round"
       ) {
         return answers.evolution_mode === true;
+      }
+      return true;
+    });
+  }
+  if (baseStage === "af2") {
+    return fields.filter((fieldId) => {
+      if (
+        fieldId.startsWith("surrogate_triage_") &&
+        fieldId !== "surrogate_triage_enabled" &&
+        answers.surrogate_triage_enabled !== true
+      ) {
+        return false;
       }
       return true;
     });
