@@ -1836,6 +1836,21 @@ function positiveIntegerOrDefault(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function booleanFromSource(value, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (value === undefined || value === null || value === "") return Boolean(fallback);
+  const normalized = String(value).trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return Boolean(fallback);
+}
+
+function surrogateCandidatePoolSize(initialSamples, topK, requested) {
+  const minRequired = Math.max(1, Number(initialSamples || 0) + Number(topK || 0) + 1);
+  const parsed = Number.isFinite(Number(requested)) ? Math.round(Number(requested)) : 3333;
+  return Math.max(minRequired, parsed, 1);
+}
+
 export function withProjectRoundContext(args = {}, context = {}) {
   const next = args && typeof args === "object" && !Array.isArray(args) ? { ...args } : {};
   const source = context && typeof context === "object" && !Array.isArray(context) ? context : {};
@@ -1864,7 +1879,16 @@ export function buildFastLaunchPreset(draft = {}) {
   const stopAfter = normalizeStage(source.stop_after) || "novelty";
   const noveltyEnabled = stopAfter === "novelty";
   const selectedTiers = normalizeSelectedTiers(source.selected_tiers ?? source.conservation_tiers);
-  const numSeqPerTier = positiveIntegerOrDefault(source.num_seq_per_tier, 2);
+  const surrogateEnabled = booleanFromSource(source.surrogate_triage_enabled, false);
+  const surrogateInitialSamples = positiveIntegerOrDefault(source.surrogate_triage_initial_samples, 30);
+  const surrogateTopK = positiveIntegerOrDefault(source.surrogate_triage_top_k, 20);
+  const requestedNumSeqPerTier =
+    source.num_seq_per_tier === undefined || source.num_seq_per_tier === null || source.num_seq_per_tier === ""
+      ? undefined
+      : positiveIntegerOrDefault(source.num_seq_per_tier, 2);
+  const numSeqPerTier = surrogateEnabled
+    ? surrogateCandidatePoolSize(surrogateInitialSamples, surrogateTopK, requestedNumSeqPerTier ?? 3333)
+    : requestedNumSeqPerTier ?? 2;
   const totalOutputSequences = positiveIntegerOrDefault(source.total_output_sequences, 120);
   const rfd3Enabled = source.rfd3_use !== false;
   const bioemuEnabled = source.bioemu_use !== false;
@@ -1900,6 +1924,25 @@ export function buildFastLaunchPreset(draft = {}) {
       relax_enabled: source.relax_enabled !== false,
       selected_tiers: selectedTiers,
       num_seq_per_tier: numSeqPerTier,
+      ...(surrogateEnabled
+        ? {
+            surrogate_triage_enabled: true,
+            surrogate_triage_scope: source.surrogate_triage_scope || "pooled_tiers",
+            surrogate_triage_initial_samples: surrogateInitialSamples,
+            surrogate_triage_top_k: surrogateTopK,
+            surrogate_triage_model: normalizeSurrogateAcquisitionPolicy(source.surrogate_triage_model || "auto"),
+            surrogate_triage_comparator_models: surrogateModelPayload(
+              source.surrogate_triage_comparator_models || SURROGATE_MODEL_CHOICES,
+              SURROGATE_MODEL_CHOICES
+            ),
+            surrogate_triage_ensemble_models: surrogateModelPayload(
+              source.surrogate_triage_ensemble_models || [],
+              []
+            ),
+            surrogate_triage_cv_folds: positiveIntegerOrDefault(source.surrogate_triage_cv_folds, 5),
+            af2_max_candidates_per_tier: 0,
+          }
+        : { surrogate_triage_enabled: false }),
     },
     { includeLegacyField: true }
   );
@@ -1912,6 +1955,7 @@ export function buildFastLaunchPreset(draft = {}) {
       novelty_enabled: noveltyEnabled,
       bioemu_use: bioemuEnabled,
       rfd3_use: rfd3Enabled,
+      surrogate_triage_enabled: surrogateEnabled,
       selected_tiers: selectedTiers,
     },
   };

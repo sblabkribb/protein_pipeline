@@ -865,6 +865,21 @@ body[data-environment="staging"] .topbar {
   color: var(--ink-soft);
 }
 
+.fast-toggle-field {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.fast-toggle {
+  justify-content: flex-start;
+  width: fit-content;
+  max-width: 100%;
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .model-choice-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));

@@ -1904,10 +1904,37 @@ test("fast panel exposes reduced launch controls while advanced keeps the full s
   assert.match(html, /id="fastOpenAdvancedBtn"/);
   assert.match(html, /id="fastSelectedTiers"/);
   assert.match(html, /id="fastTotalOutputInput"/);
+  assert.match(html, /id="fastSurrogateTriageToggle"/);
   assert.doesNotMatch(html, /fast-review-card/);
   assert.doesNotMatch(html, /Default Pipeline Review|기본 파이프라인 검토/);
   assert.match(html, /id="tab-advanced"/);
   assert.match(source, /buildFastLaunchPreset\(/);
+});
+
+test("buildFastLaunchPreset can enable surrogate AF2 budget triage from Fast", () => {
+  const preset = buildFastLaunchPreset({
+    target_input: ">target\nACDEFGHIK",
+    selected_tiers: [0.3, 0.5, 0.7],
+    surrogate_triage_enabled: true,
+  });
+  const args = buildRunArguments({
+    prompt: preset.prompt,
+    routed: preset.routed,
+    answers: preset.answers,
+    runId: "fast_surrogate",
+  });
+
+  assert.equal(preset.answers.surrogate_triage_enabled, true);
+  assert.equal(preset.answers.surrogate_triage_scope, "pooled_tiers");
+  assert.equal(preset.answers.surrogate_triage_initial_samples, 30);
+  assert.equal(preset.answers.surrogate_triage_top_k, 20);
+  assert.equal(preset.answers.surrogate_triage_model, "auto");
+  assert.deepEqual(preset.answers.surrogate_triage_comparator_models, ["rf", "ridge", "lightgbm", "xgboost"]);
+  assert.equal(preset.answers.af2_max_candidates_per_tier, 0);
+  assert.equal(preset.answers.num_seq_per_tier, 3333);
+  assert.equal(preset.routed.surrogate_triage_enabled, true);
+  assert.equal(args.surrogate_triage_enabled, true);
+  assert.equal(args.num_seq_per_tier, 3333);
 });
 
 test("fast and residue picker copy describes upload-first CIF/PDB/FASTA flows", () => {

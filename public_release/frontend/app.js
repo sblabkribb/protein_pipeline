@@ -848,6 +848,7 @@ const el = {
   fastPromptInput: document.getElementById("fastPromptInput"),
   fastSelectedTiers: document.getElementById("fastSelectedTiers"),
   fastTotalOutputInput: document.getElementById("fastTotalOutputInput"),
+  fastSurrogateTriageToggle: document.getElementById("fastSurrogateTriageToggle"),
   fastRunBtn: document.getElementById("fastRunBtn"),
   fastOpenAdvancedBtn: document.getElementById("fastOpenAdvancedBtn"),
   surrogateTargetInput: document.getElementById("surrogateTargetInput"),
@@ -2075,8 +2076,8 @@ const I18N = {
     "tutorial.section.workspace.desc": "Projects, rounds, and experiment entry points.",
     "tutorial.section.advanced.title": "Advanced setup",
     "tutorial.section.advanced.desc": "Target input, workflow, criteria, overrides, and review.",
-    "tutorial.section.surrogate.title": "Surrogate triage",
-    "tutorial.section.surrogate.desc": "AF2-budgeted candidate ranking.",
+    "tutorial.section.surrogate.title": "Surrogate AF2 triage",
+    "tutorial.section.surrogate.desc": "Budgeted AF2/ColabFold candidate ranking.",
     "tutorial.section.evolution.title": "Evolution",
     "tutorial.section.evolution.desc": "Design-test-learn feedback rounds.",
     "tutorial.section.studio.title": "Workflow Studio",
@@ -2475,6 +2476,10 @@ const I18N = {
     "fast.totalOutput.label": "Total Output Sequences",
     "fast.totalOutput.help":
       "Target total ProteinMPNN designs across the selected sequence-conservation levels. PDB/mmCIF input uses RFD3 + BioEmu; FASTA input uses BioEmu only.",
+    "fast.surrogate.label": "Surrogate AF2 Budget Triage",
+    "fast.surrogate.help":
+      "Optional. Use the manuscript-style surrogate setting for larger pools: pooled tiers, 30 bootstrap labels, and 20 final Top-K AF2/ColabFold validations.",
+    "fast.surrogate.toggle": "Use surrogate triage",
     "fast.error.targetRequired": "Choose a FASTA/PDB/mmCIF file or paste target text before launching.",
     "fast.message.reviewReady":
       "Fast defaults were copied into Advanced. Adjust sequence conservation or counts before launching if needed.",
@@ -3777,8 +3782,8 @@ const I18N = {
     "tutorial.section.workspace.desc": "프로젝트, 라운드, 새 실험 시작 경로.",
     "tutorial.section.advanced.title": "고급 설정",
     "tutorial.section.advanced.desc": "타깃 입력, workflow, 평가기준, override, 검토.",
-    "tutorial.section.surrogate.title": "Surrogate triage",
-    "tutorial.section.surrogate.desc": "AF2 예산 기반 후보 순위화.",
+    "tutorial.section.surrogate.title": "대리모델 AF2 선별",
+    "tutorial.section.surrogate.desc": "AF2/ColabFold 예산 기반 후보 순위화.",
     "tutorial.section.evolution.title": "Evolution",
     "tutorial.section.evolution.desc": "실험 피드백 기반 design-test-learn 회차.",
     "tutorial.section.studio.title": "Workflow Studio",
@@ -4172,6 +4177,10 @@ const I18N = {
     "fast.totalOutput.label": "총 출력 서열 수",
     "fast.totalOutput.help":
       "선택한 서열 보존율 구간 전체에서 생성할 ProteinMPNN 서열 총량입니다. PDB/mmCIF 입력은 RFD3+BioEmu, FASTA 입력은 BioEmu 기준으로 계산합니다.",
+    "fast.surrogate.label": "대리모델 기반 AF2 예산 선별",
+    "fast.surrogate.help":
+      "선택 기능입니다. 큰 후보 pool에서 논문식 기본값(구간 통합, bootstrap 30개, 최종 Top-K 20개 AF2/ColabFold 검증)을 사용합니다.",
+    "fast.surrogate.toggle": "대리모델 선별 사용",
     "fast.error.targetRequired": "Fast 실행 전에 FASTA/PDB/mmCIF 파일을 선택하거나 타깃 텍스트를 붙여넣으세요.",
     "fast.message.reviewReady":
       "Fast 기본값을 Advanced로 복사했습니다. 필요하면 서열 보존율이나 개수를 조정한 뒤 실행하세요.",
@@ -5667,6 +5676,15 @@ const TUTORIAL_STEPS = [
     hintKey: "tutorial.step.advancedSurrogate.hint",
   },
   {
+    id: "surrogateSettings",
+    tab: "advanced",
+    setupStep: "workflow",
+    target: ".surrogate-board .parameter-board-grid",
+    titleKey: "tutorial.step.surrogateSettings.title",
+    bodyKey: "tutorial.step.surrogateSettings.body",
+    hintKey: "tutorial.step.surrogateSettings.hint",
+  },
+  {
     id: "advancedCriteria",
     tab: "advanced",
     setupStep: "criteria",
@@ -5821,6 +5839,12 @@ const TUTORIAL_SECTIONS = [
     titleKey: "tutorial.section.advanced.title",
     descKey: "tutorial.section.advanced.desc",
     stepIds: ["advanced", "advancedInput", "pdfAgent", "advancedWorkflow", "advancedSurrogate", "advancedCriteria", "advancedExpert", "advancedReview"],
+  },
+  {
+    id: "surrogate",
+    titleKey: "tutorial.section.surrogate.title",
+    descKey: "tutorial.section.surrogate.desc",
+    stepIds: ["advancedSurrogate", "surrogateSettings"],
   },
   {
     id: "evolution",
@@ -11931,7 +11955,7 @@ function applyTutorialStepContext(step) {
   if (stepIndex < 0) return;
   state.setupStepIndex = stepIndex;
   renderQuestions(state.plan?.questions || []);
-  if (step?.id === "advancedSurrogate") {
+  if (step?.id === "advancedSurrogate" || step?.id === "surrogateSettings") {
     const details = document.querySelector(".surrogate-board.optional-setup-card");
     if (details instanceof HTMLDetailsElement) {
       details.open = true;
@@ -12411,6 +12435,7 @@ function buildFastLaunchPresetFromUi() {
     prompt: String(el.fastPromptInput?.value || "").trim(),
     selected_tiers: readFastSelectedTiers(),
     total_output_sequences: Number.parseInt(String(el.fastTotalOutputInput?.value || "").trim(), 10),
+    surrogate_triage_enabled: Boolean(el.fastSurrogateTriageToggle?.checked),
   });
 }
 

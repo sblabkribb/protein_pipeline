@@ -478,6 +478,10 @@ test("frontend includes a localized first-run tutorial overlay", () => {
   assert.match(source, /"tutorial\.contents\.title"/);
   assert.match(source, /"tutorial\.step\.topbar\.title"/);
   assert.match(source, /"tutorial\.step\.evolution\.title"/);
+  assert.match(source, /"tutorial\.section\.surrogate\.title"/);
+  assert.match(source, /"tutorial\.step\.advancedSurrogate\.title"/);
+  assert.match(source, /"tutorial\.step\.surrogateSettings\.title"/);
+  assert.match(source, /id:\s*"surrogate"[\s\S]*stepIds:\s*\["advancedSurrogate",\s*"surrogateSettings"\]/m);
   assert.match(source, /"tutorial\.step\.studio\.title"/);
   assert.match(source, /"tutorial\.step\.rounds\.title"/);
   assert.match(source, /"tutorial\.step\.analyze\.title"/);
