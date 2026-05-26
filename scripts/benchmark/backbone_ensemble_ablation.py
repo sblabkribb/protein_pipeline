@@ -54,14 +54,19 @@ SUMMARY_FIELDS = [
     "n_backbones_observed",
     "backbone_sources",
     "mean_plddt",
+    "std_plddt",
+    "range_plddt",
     "max_plddt",
     "top5_mean_plddt",
     "plddt_pass_rate_85",
     "mean_soluprot",
+    "std_soluprot",
+    "range_soluprot",
     "max_soluprot",
     "top5_mean_soluprot",
     "soluprot_pass_rate_0_5",
     "mean_pairwise_identity",
+    "mean_pairwise_diversity",
 ]
 PAIRED_FIELDS = [
     "comparison",
@@ -426,6 +431,16 @@ def _max(values: list[float]) -> float | None:
     return float(max(clean)) if clean else None
 
 
+def _std(values: list[float]) -> float | None:
+    clean = [float(v) for v in values if v is not None and not math.isnan(float(v))]
+    return float(statistics.pstdev(clean)) if len(clean) >= 2 else None
+
+
+def _range(values: list[float]) -> float | None:
+    clean = [float(v) for v in values if v is not None and not math.isnan(float(v))]
+    return float(max(clean) - min(clean)) if len(clean) >= 2 else None
+
+
 def _top_mean(values: list[float], top_k: int) -> float | None:
     clean = sorted(
         [float(v) for v in values if v is not None and not math.isnan(float(v))],
@@ -456,6 +471,9 @@ def summarize_group(rows: list[dict[str, Any]], *, top_k: int = 5) -> dict[str, 
     sources = sorted({str(r.get("backbone_source") or "") for r in rows if r.get("backbone_source")})
     backbone_ids = sorted({str(r.get("backbone_id") or "") for r in rows if r.get("backbone_id")})
     top_label = f"top{int(top_k)}"
+    mean_identity = pairwise_identity(
+        [str(r.get("sequence") or "") for r in rows]
+    )
     return {
         "n_designs": len(rows),
         "n_plddt": len(plddt),
@@ -463,6 +481,8 @@ def summarize_group(rows: list[dict[str, Any]], *, top_k: int = 5) -> dict[str, 
         "n_backbones_observed": len(backbone_ids),
         "backbone_sources": ";".join(sources),
         "mean_plddt": _mean(plddt),
+        "std_plddt": _std(plddt),
+        "range_plddt": _range(plddt),
         "max_plddt": _max(plddt),
         f"{top_label}_mean_plddt": _top_mean(plddt, top_k),
         "plddt_pass_rate_85": (
@@ -471,6 +491,8 @@ def summarize_group(rows: list[dict[str, Any]], *, top_k: int = 5) -> dict[str, 
             else None
         ),
         "mean_soluprot": _mean(soluprot),
+        "std_soluprot": _std(soluprot),
+        "range_soluprot": _range(soluprot),
         "max_soluprot": _max(soluprot),
         f"{top_label}_mean_soluprot": _top_mean(soluprot, top_k),
         "soluprot_pass_rate_0_5": (
@@ -478,8 +500,9 @@ def summarize_group(rows: list[dict[str, Any]], *, top_k: int = 5) -> dict[str, 
             if soluprot
             else None
         ),
-        "mean_pairwise_identity": pairwise_identity(
-            [str(r.get("sequence") or "") for r in rows]
+        "mean_pairwise_identity": mean_identity,
+        "mean_pairwise_diversity": (
+            float(1.0 - mean_identity) if mean_identity is not None else None
         ),
     }
 
@@ -555,14 +578,19 @@ def _paired_tests(summary_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         wilcoxon = None
     metrics = [
         "mean_plddt",
+        "std_plddt",
+        "range_plddt",
         "max_plddt",
         "top5_mean_plddt",
         "plddt_pass_rate_85",
         "mean_soluprot",
+        "std_soluprot",
+        "range_soluprot",
         "max_soluprot",
         "top5_mean_soluprot",
         "soluprot_pass_rate_0_5",
         "mean_pairwise_identity",
+        "mean_pairwise_diversity",
     ]
     by_key = {
         (str(row["target"]), int(row["replicate"]), str(row["arm"])): row
@@ -610,7 +638,7 @@ def _write_latex_table(summary_rows: list[dict[str, Any]], out_path: Path) -> No
     lines = [
         "\\begin{tabular}{lrrrr}",
         "\\toprule",
-        "Arm & Designs & AF2 records & Top-5 pLDDT & Top-5 SoluProt \\\\",
+        "Arm & Targets & pLDDT range & SoluProt range & Pairwise diversity \\\\",
         "\\midrule",
     ]
     for arm in arm_order:
@@ -618,12 +646,12 @@ def _write_latex_table(summary_rows: list[dict[str, Any]], out_path: Path) -> No
         if not rows:
             continue
         label = ARM_CONFIGS.get(arm, {}).get("label", arm)
-        designs = _mean([float(r["n_designs"]) for r in rows])
-        af2 = _mean([float(r["n_plddt"]) for r in rows])
-        plddt = _mean([float(r["top5_mean_plddt"]) for r in rows if r.get("top5_mean_plddt") not in (None, "")])
-        solu = _mean([float(r["top5_mean_soluprot"]) for r in rows if r.get("top5_mean_soluprot") not in (None, "")])
+        n_targets = len({str(r["target"]) for r in rows})
+        plddt = _mean([float(r["range_plddt"]) for r in rows if r.get("range_plddt") not in (None, "")])
+        solu = _mean([float(r["range_soluprot"]) for r in rows if r.get("range_soluprot") not in (None, "")])
+        diversity = _mean([float(r["mean_pairwise_diversity"]) for r in rows if r.get("mean_pairwise_diversity") not in (None, "")])
         lines.append(
-            f"{label} & {int(round(designs))} & {int(round(af2))} & {plddt:.2f} & {solu:.3f} \\\\"
+            f"{label} & {n_targets} & {plddt:.2f} & {solu:.3f} & {diversity:.3f} \\\\"
         )
     lines.extend(["\\bottomrule", "\\end{tabular}", ""])
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -646,29 +674,97 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
         "rfd3_bioemu": "RFD3+\nBioEmu",
         "rfd3_ensemble3": "RFD3\nensemble",
     }
-    xlabels = [labels.get(arm, ARM_CONFIGS[arm]["label"]) for arm in arm_order]
-    metrics = [
-        ("max_plddt", "Upper-tail pLDDT (max)", "{:.1f}", "higher"),
-        ("max_soluprot", "Upper-tail SoluProt (max)", "{:.3f}", "higher"),
+    xlabels = [labels.get(arm, ARM_CONFIGS.get(arm, {}).get("label", arm)) for arm in arm_order]
+    base = df[df["arm"] == "single"].copy()
+    base_by_key = {
+        (str(row["target"]), int(row["replicate"])): row
+        for _, row in base.iterrows()
+    }
+
+    metric_specs = [
+        ("range_plddt", "pLDDT candidate-pool spread", "pLDDT range"),
+        ("range_soluprot", "SoluProt candidate-pool spread", "SoluProt range"),
         (
-            "mean_pairwise_identity",
-            "Mean pairwise identity\n(lower = more diverse)",
-            "{:.3f}",
-            "lower",
+            "mean_pairwise_diversity",
+            "Sequence-pool diversity",
+            "Mean pairwise diversity",
         ),
     ]
-    fig, axes = plt.subplots(1, 3, figsize=(11.8, 3.7))
-    palette = ["#b8c0c8", "#86b79a", "#d6a06f", "#b58ac0", "#9c755f", "#bab0ac"]
-    colors = [palette[i % len(palette)] for i in range(len(arm_order))]
-    for ax, (metric, title, value_fmt, direction) in zip(axes, metrics, strict=True):
-        values_by_arm: list[list[float]] = []
-        for arm in arm_order:
-            vals = pd.to_numeric(df[df["arm"] == arm][metric], errors="coerce").dropna()
-            values_by_arm.append([float(v) for v in vals])
+    absolute_by_metric: dict[str, dict[str, list[float]]] = {
+        metric: {arm: [] for arm in arm_order} for metric, _, _ in metric_specs
+    }
+    for arm in arm_order:
+        comp = df[df["arm"] == arm]
+        for metric, _, _ in metric_specs:
+            values: list[float] = []
+            if metric not in comp:
+                absolute_by_metric[metric][arm] = values
+                continue
+            for value in comp[metric].tolist():
+                if value in (None, ""):
+                    continue
+                try:
+                    value_f = float(value)
+                except Exception:
+                    continue
+                if np.isnan(value_f):
+                    continue
+                values.append(value_f)
+            absolute_by_metric[metric][arm] = values
 
+    comparison_arms = [arm for arm in arm_order if arm != "single"]
+    delta_by_metric: dict[str, dict[str, list[float]]] = {
+        metric: {arm: [] for arm in comparison_arms} for metric, _, _ in metric_specs
+    }
+    paired_counts: dict[str, dict[str, tuple[int, int]]] = {
+        metric: {arm: (0, 0) for arm in comparison_arms} for metric, _, _ in metric_specs
+    }
+    for arm in comparison_arms:
+        comp = df[df["arm"] == arm]
+        for metric, _, _ in metric_specs:
+            values: list[float] = []
+            for _, row in comp.iterrows():
+                key = (str(row["target"]), int(row["replicate"]))
+                base_row = base_by_key.get(key)
+                if base_row is None:
+                    continue
+                left = base_row.get(metric)
+                right = row.get(metric)
+                if left in (None, "") or right in (None, ""):
+                    continue
+                try:
+                    delta = float(right) - float(left)
+                except Exception:
+                    continue
+                if np.isnan(delta):
+                    continue
+                values.append(delta)
+            delta_by_metric[metric][arm] = values
+            paired_counts[metric][arm] = (sum(1 for value in values if value > 0), len(values))
+
+    fig, axes = plt.subplots(2, 2, figsize=(9.2, 6.7))
+    axes_flat = axes.flatten()
+    palette = {
+        "single": "#BDBDBD",
+        "bioemu": "#009E73",
+        "rfd3_single": "#E69F00",
+        "rfd3_bioemu": "#0072B2",
+        "rfd3_ensemble3": "#CC79A7",
+    }
+    for panel_idx, (ax, (metric, title, ylabel)) in enumerate(
+        zip(axes_flat[:3], metric_specs, strict=True)
+    ):
+        values_by_arm = [absolute_by_metric[metric][arm] for arm in arm_order]
+        nonempty_positions = [i for i, vals in enumerate(values_by_arm) if vals]
+        if not nonempty_positions:
+            ax.text(0.5, 0.5, "No evaluable data", ha="center", va="center")
+            continue
+
+        plot_values = [values_by_arm[i] for i in nonempty_positions]
+        plot_positions = nonempty_positions
         bp = ax.boxplot(
-            values_by_arm,
-            positions=list(range(len(arm_order))),
+            plot_values,
+            positions=plot_positions,
             widths=0.55,
             patch_artist=True,
             showfliers=False,
@@ -677,8 +773,9 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
             capprops={"color": "#555555", "linewidth": 1.0},
             boxprops={"edgecolor": "#444444", "linewidth": 1.0},
         )
-        for patch, color in zip(bp["boxes"], colors, strict=True):
-            patch.set_facecolor(color)
+        for patch, pos in zip(bp["boxes"], plot_positions, strict=True):
+            arm = arm_order[pos]
+            patch.set_facecolor(palette.get(arm, "#999999"))
             patch.set_alpha(0.65)
 
         for i, vals in enumerate(values_by_arm):
@@ -694,57 +791,95 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
                 linewidth=0,
                 zorder=3,
             )
-            tail_value = min(vals) if direction == "lower" else max(vals)
-            va = "top" if direction == "lower" else "bottom"
-            y_pad = -0.01 if direction == "lower" else 0.01
-            ax.text(
-                i,
-                tail_value + y_pad * max(abs(tail_value), 1),
-                value_fmt.format(tail_value),
-                ha="center",
-                va=va,
-                fontsize=7,
-                color="#333333",
-            )
+            y_values = [value for vals_ in values_by_arm for value in vals_]
+            span = max(max(y_values) - min(y_values), 1e-6) if y_values else 1.0
+            y_top = max(vals) + 0.08 * span
+            ax.text(i, y_top, f"n={len(vals)}", ha="center", va="bottom", fontsize=7)
 
         all_values = [value for vals in values_by_arm for value in vals]
         if all_values:
             y_min = min(all_values)
             y_max = max(all_values)
             span = max(y_max - y_min, 1e-6)
-            if direction == "lower":
-                ax.set_ylim(y_min - 0.18 * span, y_max + 0.10 * span)
-            else:
-                ax.set_ylim(y_min - 0.10 * span, y_max + 0.18 * span)
-
-        if "single" in arm_order:
-            single_values = values_by_arm[arm_order.index("single")]
-            if single_values:
-                single_median = float(np.median(single_values))
-                ax.axhline(
-                    single_median,
-                    color="#777777",
-                    linestyle="--",
-                    linewidth=0.9,
-                    alpha=0.7,
-                    label="single median",
-                )
-                ax.legend(loc="best", fontsize=7, frameon=True)
-        ax.set_title(title, fontsize=10)
+            ax.set_ylim(y_min - 0.15 * span, y_max + 0.28 * span)
+        ax.set_title(title, fontsize=10, pad=8)
+        ax.set_ylabel(ylabel, fontsize=9)
         ax.set_xticks(list(range(len(arm_order))))
         ax.set_xticklabels(xlabels, fontsize=8)
         ax.grid(axis="y", color="#dddddd", linewidth=0.8, alpha=0.8)
         ax.set_axisbelow(True)
         for spine in ("top", "right"):
             ax.spines[spine].set_visible(False)
+
+    ax = axes_flat[3]
+    support_metrics = [
+        ("range_plddt", "pLDDT\nspread"),
+        ("range_soluprot", "SoluProt\nspread"),
+        ("mean_pairwise_diversity", "Sequence\ndiversity"),
+    ]
+    x = np.arange(len(support_metrics))
+    width = 0.22 if len(comparison_arms) > 2 else 0.28
+    offsets = np.linspace(
+        -width * (len(comparison_arms) - 1) / 2,
+        width * (len(comparison_arms) - 1) / 2,
+        len(comparison_arms),
+    )
+    for offset, arm in zip(offsets, comparison_arms, strict=True):
+        heights = []
+        labels_on_bars = []
+        for metric, _ in support_metrics:
+            positive, total = paired_counts[metric][arm]
+            heights.append((positive / total) if total else 0.0)
+            labels_on_bars.append(f"{positive}/{total}" if total else "0/0")
+        bars = ax.bar(
+            x + offset,
+            heights,
+            width=width,
+            color=palette.get(arm, "#999999"),
+            alpha=0.78,
+            label=labels.get(arm, arm),
+            edgecolor="#333333",
+            linewidth=0.4,
+        )
+        for bar, label in zip(bars, labels_on_bars, strict=True):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                min(bar.get_height() + 0.035, 1.05),
+                label,
+                ha="center",
+                va="bottom",
+                fontsize=7,
+            )
+    ax.set_title("Paired increases relative to Single", fontsize=10, pad=8)
+    ax.set_ylabel("Fraction of paired targets", fontsize=9)
+    ax.set_xticks(x)
+    ax.set_xticklabels([label for _, label in support_metrics], fontsize=8)
+    ax.set_ylim(0, 1.15)
+    ax.grid(axis="y", color="#dddddd", linewidth=0.8, alpha=0.8)
+    ax.set_axisbelow(True)
+    for spine in ("top", "right"):
+        ax.spines[spine].set_visible(False)
+    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), fontsize=7, frameon=False)
+
+    for label, ax_ in zip(["A", "B", "C", "D"], axes_flat, strict=True):
+        ax_.text(
+            -0.16,
+            1.08,
+            label,
+            transform=ax_.transAxes,
+            fontsize=12,
+            fontweight="bold",
+            va="top",
+        )
     fig.suptitle(
-        "Structural-context ablation: upper-tail and diversity view",
+        "Structural-context ablation: context-dependent candidate-pool shifts",
         fontsize=11,
         weight="bold",
     )
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 0.93, 0.95))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=250, bbox_inches="tight")
+    fig.savefig(out_path.with_suffix(".pdf"), bbox_inches="tight")
     plt.close(fig)
 
 

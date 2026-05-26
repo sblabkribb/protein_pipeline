@@ -185,18 +185,18 @@ When labels for the requested objective are present, RAPID trains a local surrog
 
 ## Supplementary Note 11. Structural-Context Ablation
 
-The corrected-chain structural-context ablation compares the original target backbone, BioEmu conformational sampling, one selected RFD3 backbone, and RFD3+BioEmu across eight selected CATH targets. Because ProteinMPNN is conditioned on the supplied backbone, these arms test whether changing structural context perturbs the accessible sequence neighbourhood under matched masking and AF2 budgets. The single-backbone and RFD3 arms are evaluable for all eight targets. BioEmu-containing arms are evaluable for the four targets that passed the fixed 2.0 Å target-RMSD gate. The main text summarizes this claim in Figure 3 as an upper-tail and diversity analysis rather than as an aggregate-mean model ranking.
+The corrected-chain structural-context ablation compares the original target backbone, BioEmu conformational sampling, one selected RFD3 backbone, and RFD3+BioEmu across eight selected CATH targets. Because ProteinMPNN is conditioned on the supplied backbone, these arms test whether changing structural context perturbs the accessible sequence neighbourhood under matched masking and AF2 budgets. The single-backbone and RFD3 arms are evaluable for all eight targets. BioEmu-containing arms are evaluable for the four targets that passed the fixed 2.0 Å target-RMSD gate. The main text summarizes this claim in Figure 3 as a distribution-spread and diversity analysis rather than as an aggregate-mean or upper-tail model ranking.
 
-The paired view supports this interpretation. RFD3 increased the maximum pLDDT relative to the single-backbone arm in four of eight targets, with a largest paired gain of 3.14 pLDDT, but its mean Top-5 pLDDT delta was -0.05. BioEmu-containing arms reduced mean pairwise sequence identity in every evaluable paired comparison (mean deltas -0.105 for BioEmu and -0.128 for RFD3+BioEmu) and improved the SoluProt upper tail in three of four BioEmu-evaluable targets. These data support structural-context allocation as a way to alter the candidate distribution and its upper tail, not as evidence that any structural-context module is universally superior.
+The paired view supports this interpretation. RFD3 increased pLDDT range relative to the single-backbone arm in six of eight targets, but increased SoluProt range in only one of eight targets and sequence diversity in three of eight targets. BioEmu increased pLDDT range and mean pairwise sequence diversity in all four evaluable paired targets and increased SoluProt range in three of four targets. RFD3+BioEmu increased pLDDT range and sequence diversity in all four evaluable paired targets, but increased SoluProt range in two of four targets. These data support structural-context allocation as a way to alter candidate-pool spread and diversity, not as evidence that any structural-context module is universally superior.
 
 The table below retains the numerical summary and BioEmu QC context.
 
-| Arm | Evaluable targets | Designs per target | AF2 records per target | Top-5 pLDDT | Top-5 SoluProt | Paired Top-5 pLDDT delta vs single |
-|---|---:|---:|---:|---:|---:|---:|
-| Single target backbone | 8 | 120 | 30 | 92.58 | 0.718 | reference |
-| Target + BioEmu ensemble | 4 | 120 | 30 | 96.28 | 0.788 | -0.14 |
-| RFD3 selected backbone | 8 | 120 | 30 | 92.53 | 0.690 | -0.05 |
-| RFD3 + BioEmu ensemble | 4 | 120 | 30 | 95.44 | 0.734 | -0.98 |
+| Arm | Evaluable targets | Mean pLDDT range | Mean SoluProt range | Mean pairwise diversity |
+|---|---:|---:|---:|---:|
+| Single target backbone | 8 | 2.52 | 0.131 | 0.125 |
+| Target + BioEmu ensemble | 4 | 4.66 | 0.199 | 0.296 |
+| RFD3 selected backbone | 8 | 3.59 | 0.125 | 0.136 |
+| RFD3 + BioEmu ensemble | 4 | 5.02 | 0.209 | 0.319 |
 
 ## Supplementary Note 12. BioEmu Target-RMSD Gate QC
 
