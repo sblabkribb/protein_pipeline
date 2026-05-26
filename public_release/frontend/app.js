@@ -1171,6 +1171,7 @@ const el = {
   hitListRefresh: document.getElementById("hitListRefresh"),
   hitListDetails: document.getElementById("hitListDetails"),
   hitListSummary: document.getElementById("hitListSummary"),
+  surrogateTriageSummary: document.getElementById("surrogateTriageSummary"),
   hitListTable: document.getElementById("hitListTable"),
   analyzeChartType: document.getElementById("analyzeChartType"),
   analyzeChartCanvas: document.getElementById("analyzeChartCanvas"),
@@ -2127,11 +2128,11 @@ const I18N = {
     "tutorial.step.advancedReview.body":
       "Step 5/5 summarizes the selected mode, stages, target readiness, backbone sources, AF2 provider, Relax state, and conservation tiers before Run.",
     "tutorial.step.advancedReview.hint": "Use this final screen to catch mismatched stages or missing target input before spending compute.",
-    "tutorial.step.surrogate.title": "Surrogate triage is a one-round budget mode",
+    "tutorial.step.surrogate.title": "Surrogate triage is a pipeline budget layer",
     "tutorial.step.surrogate.body":
-      "Use this tab when you want ProteinMPNN/SoluProt candidate generation with fewer final AF2 calls. RFD3 and BioEmu are disabled here so the benchmarked cost-saving path stays explicit.",
+      "Use this tab when you want the RAPID pipeline to generate ProteinMPNN/SoluProt candidates but spend AF2/ColabFold only on a labelled bootstrap set and the selected Top K. Review in Advanced to combine the same triage layer with RFD3 or BioEmu structural-context stages.",
     "tutorial.step.surrogate.hint":
-      "This is the mode described as AF2-budgeted surrogate triage. Use Evolution only when experimental labels will drive the next round.",
+      "The manuscript budget benchmark used the original backbone to isolate cost reduction; the deployed pipeline can keep or disable structural-context stages.",
     "tutorial.step.surrogateSettings.title": "Sample counts set the AF2 budget",
     "tutorial.step.surrogateSettings.body":
       "Training AF2 samples label the initial subset. The surrogate ranks the remaining candidates, and Top K controls how many final structures receive AF2/ColabFold evaluation. The 30 + 20 default fixes a 50-call budget per target for manuscript-style triage.",
@@ -2221,7 +2222,7 @@ const I18N = {
     "home.desc": "Target design runs, current rounds, and result triage in one workspace.",
     "home.launchpad.primary": "Primary workflow",
     "home.launchpad.newExperiment": "New Experiment",
-    "home.launchpad.newExperimentDesc": "Choose Fast, Advanced, Surrogate, Evolution, or Workflow Studio based on the control you need.",
+    "home.launchpad.newExperimentDesc": "Choose Fast, Advanced, Pipeline + Surrogate, Evolution, or Workflow Studio based on the control you need.",
     "home.launchpad.loadRun": "Load Existing Run",
     "home.launchpad.loadRunDesc": "Resume monitoring from the current run list.",
     "home.launchpad.analyzeResults": "Analyze Results",
@@ -2235,8 +2236,8 @@ const I18N = {
     "home.experimentChoice.advanced.title": "Advanced",
     "home.experimentChoice.advanced.desc": "Step through input, workflow, criteria, expert options, and review.",
     "home.experimentChoice.surrogate.kicker": "Budget triage",
-    "home.experimentChoice.surrogate.title": "Surrogate",
-    "home.experimentChoice.surrogate.desc": "Use SoluProt, K-means, and a local surrogate to reduce final AF2 calls.",
+    "home.experimentChoice.surrogate.title": "Pipeline + Surrogate",
+    "home.experimentChoice.surrogate.desc": "Enable AF2-budgeted surrogate triage inside the RAPID pipeline. Advanced review can add RFD3 or BioEmu.",
     "home.experimentChoice.evolution.kicker": "Iterative design",
     "home.experimentChoice.evolution.title": "Evolution",
     "home.experimentChoice.evolution.desc": "Configure active-learning rounds and Top K selection.",
@@ -2251,17 +2252,17 @@ const I18N = {
     "home.card.studio.desc": "Build and run a workflow stage by stage while watching the outputs.",
     "home.card.evolution.title": "Evolution",
     "home.card.evolution.desc": "Autonomous multi-round sequence design pipeline.",
-    "surrogate.title": "AF2 Surrogate Triage",
+    "surrogate.title": "Pipeline Surrogate Triage",
     "surrogate.desc":
-      "Screen ProteinMPNN/SoluProt candidates with GPU-backed ESM embedding and a fixed AF2/ColabFold budget.",
+      "Screen RAPID pipeline candidates with GPU-backed ESM embedding and a fixed AF2/ColabFold budget.",
     "surrogate.input.label": "Target Sequence or Structure",
     "surrogate.input.help": "Provide FASTA, PDB, or mmCIF input for the budget-aware triage path.",
     "surrogate.input.placeholder": "Paste FASTA, PDB, or mmCIF here.",
-    "surrogate.action.openAdvanced": "Review in Advanced",
-    "surrogate.action.run": "Start Surrogate Triage",
+    "surrogate.action.openAdvanced": "Configure in Advanced",
+    "surrogate.action.run": "Start Budget Triage",
     "surrogate.options.title": "Surrogate Settings",
     "surrogate.options.desc":
-      "This mode disables RFD3 and BioEmu, pools candidates across conservation tiers, embeds them with the configured ESM worker, and spends AF2 only on the sampled training set plus Top K candidates.",
+      "Surrogate triage is an on/off layer in the RAPID pipeline. It pools SoluProt-passing candidates across conservation tiers, embeds them with the configured ESM worker, and spends AF2 only on the sampled training set plus Top K candidates. Use Advanced to keep or disable upstream RFD3/BioEmu stages.",
     "surrogate.initialSamples.label": "Training AF2 samples",
     "surrogate.topK.label": "Top K final AF2 candidates",
     "surrogate.numSeqPerTier.label": "ProteinMPNN candidates per tier",
@@ -2278,7 +2279,7 @@ const I18N = {
     "surrogate.model.help":
       "These models are the candidate selectors for CV. A forced Top K method still runs its own report, but it does not use CV to switch models.",
     "surrogate.note":
-      "Use Evolution only when experimental measurements are available or planned. Use this Surrogate tab when the goal is a one-round compute budget reduction.",
+      "Use Evolution only when experimental measurements are available or planned. This tab starts the original-backbone budget preset; use Advanced when the same triage layer should run after RFD3 or BioEmu.",
     "surrogate.error.targetRequired": "Choose FASTA/PDB/mmCIF input before launching Surrogate Triage.",
     "surrogate.message.fileLoaded": "Loaded {name} into Surrogate Triage.",
     "surrogate.message.reviewReady": "Surrogate triage settings were copied into Advanced for review.",
@@ -3236,9 +3237,9 @@ const I18N = {
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} per Conservation Level (Top N)",
     "question.af2MaxCandidatesPerTier.help":
       "Run {af2Provider} only for top N SoluProt-passed designs per sequence-conservation level (ranked by SoluProt score, 0 = all).",
-    "question.surrogateTriageEnabled.label": "AF2 Surrogate Triage",
+    "question.surrogateTriageEnabled.label": "AF2 Budget Triage",
     "question.surrogateTriageEnabled.help":
-      "Label a small diverse candidate set with {af2Provider}, fit a surrogate pLDDT model, then send only surrogate-ranked top candidates to {af2Provider}.",
+      "Turn on the post-SoluProt budget layer. RAPID labels a small diverse candidate set with {af2Provider}, fits a surrogate pLDDT model, then sends only surrogate-ranked top candidates to {af2Provider}. This does not force RFD3 or BioEmu off.",
     "question.surrogateTriageScope.label": "Candidate pool",
     "question.surrogateTriageScope.help": "Pooled tiers uses one shared {af2Provider} budget across the selected conservation tiers. Per tier repeats the budget separately inside each tier.",
     "question.surrogateTriageInitialSamples.label": "Surrogate Training Set",
@@ -3443,9 +3444,9 @@ const I18N = {
     "setup.options.help": "Review key execution options in one board.",
     "setup.evolution.title": "Optional Evolution Search",
     "setup.evolution.help": "Leave this off for a normal run. Turn it on when you want repeated candidate generation and evaluation.",
-    "setup.surrogate.title": "AF2 Surrogate Triage",
+    "setup.surrogate.title": "AF2 Budget Triage",
     "setup.surrogate.help":
-      "Optional one-round AF2 budget mode for standard pipeline runs. It reduces structure-prediction calls without changing the upstream design steps.",
+      "Optional post-SoluProt budget layer for pipeline runs. It reduces structure-prediction calls while leaving upstream RFD3, BioEmu, and design options under user control.",
     "setup.criteria.parameters.title": "Candidate Criteria",
     "setup.criteria.parameters.help": "Tune sample counts and structural acceptance thresholds.",
     "setup.parameters.title": "Compact Parameter Board",
@@ -3502,7 +3503,7 @@ const I18N = {
     "setup.workflow.checkpoints": "Checkpoints: {stages}",
     "setup.workflow.checkpoints.none": "Checkpoints: none (run continuously)",
     "runmode.pipeline": "Full Pipeline",
-    "runmode.surrogate": "Surrogate Triage",
+    "runmode.surrogate": "Pipeline + Surrogate",
     "runmode.workflow": "Workflow Studio",
     "runmode.rfd3": "RFD3 (Backbone)",
     "runmode.bioemu": "BioEmu (Backbone)",
@@ -3514,7 +3515,7 @@ const I18N = {
     "setup.modeGuide.title": "Mode Guide",
     "setup.modeGuide.pipeline": "Run the end-to-end pipeline through the final WT Diff stage.",
     "setup.modeGuide.surrogate":
-      "Run the standard design path with RFD3/BioEmu/Relax off and AF2 surrogate triage on.",
+      "Run the RAPID pipeline with AF2 surrogate triage enabled. RFD3, BioEmu, and Relax remain normal pipeline options.",
     "setup.modeGuide.workflow":
       "Select stages in Advanced, then fill stage inputs and run step-by-step in Studio.",
     "setup.modeGuide.rfd3": "Run only RFD3 backbone generation.",
@@ -3532,7 +3533,7 @@ const I18N = {
     "stage.soluprot": "SoluProt",
     "stage.af2": "{af2Provider}",
     "run.label.pipeline": "Run Pipeline",
-    "run.label.surrogate": "Run Surrogate Triage",
+    "run.label.surrogate": "Run Pipeline + Surrogate",
     "run.label.workflow": "Open Studio",
     "run.label.rfd3": "Run RFD3",
     "run.label.bioemu": "Run BioEmu",
@@ -3658,6 +3659,8 @@ const I18N = {
     "analyze.hitList.detailsTitle": "Hit List Details",
     "analyze.hitList.summary":
       "Showing {shown}/{filtered} candidates (total {total}), median score {score}.",
+    "analyze.hitList.surrogateSummary":
+      "Surrogate view · selected model {model} · budget rows {shown}/{total}.",
     "analyze.hitList.empty": "No candidates matched the cutoff.",
     "analyze.hitList.bulk.selected": "{selected}/{total} selected",
     "analyze.hitList.bulk.selectShown": "Select filtered rows",
@@ -3670,12 +3673,14 @@ const I18N = {
     "analyze.chart.placeholder": "Run hit list to render candidate charts.",
     "analyze.chart.noData": "No numeric data for the selected chart in current filters.",
     "analyze.chart.option.plddtRmsd": "Scatter: pLDDT vs RMSD vs WT",
+    "analyze.chart.option.plddtSoluprot": "Scatter: pLDDT vs SoluProt",
     "analyze.chart.option.plddtRelax": "Scatter: pLDDT vs Relax/res",
     "analyze.chart.option.rmsdRelax": "Scatter: RMSD vs Relax/res",
     "analyze.chart.option.scoreHist": "Histogram: Hit Score",
     "analyze.chart.option.tierPass": "AF2 Pass Rate by Conservation Level",
     "analyze.chart.axis.plddt": "pLDDT",
     "analyze.chart.axis.rmsd": "RMSD (A)",
+    "analyze.chart.axis.soluprot": "SoluProt",
     "analyze.chart.axis.relax": "Relax/res",
     "analyze.chart.axis.score": "Hit Score",
     "analyze.chart.axis.passRate": "Pass Rate (%)",
@@ -3690,6 +3695,26 @@ const I18N = {
     "analyze.chart.caption.scatterWithWt": "Points={points}, selected={selected}, WT={wt}",
     "analyze.chart.caption.hist": "Values={values}, bins={bins}",
     "analyze.chart.caption.tier": "Conservation levels={tiers}, rows={rows}",
+    "analyze.surrogate.title": "Surrogate Model Summary",
+    "analyze.surrogate.selectedModel": "Selected model",
+    "analyze.surrogate.strategy": "Selection",
+    "analyze.surrogate.pool": "Candidate pool",
+    "analyze.surrogate.budget": "AF2 budget",
+    "analyze.surrogate.training": "Training labels",
+    "analyze.surrogate.topK": "Selected Top-K",
+    "analyze.surrogate.evaluated": "Evaluated",
+    "analyze.surrogate.modelComparison": "Model comparison",
+    "analyze.surrogate.topCandidates": "Top candidates from selected model",
+    "analyze.surrogate.model": "Model",
+    "analyze.surrogate.cvScore": "CV score",
+    "analyze.surrogate.spearman": "Spearman",
+    "analyze.surrogate.mae": "MAE",
+    "analyze.surrogate.rank": "Rank",
+    "analyze.surrogate.policy": "Policy",
+    "analyze.surrogate.acquisition": "Acq. score",
+    "analyze.surrogate.af2Label": "AF2 label",
+    "analyze.surrogate.selectedBadge": "selected",
+    "analyze.surrogate.noTopRows": "No acquired Top-K rows were recorded.",
     "analyze.files.title": "Artifact File Viewer",
     "analyze.files.desc": "Preview PDB/FASTA/CSV and text artifacts in Analyze.",
     "analyze.files.select": "Artifact File",
@@ -3796,11 +3821,11 @@ const I18N = {
     "tutorial.step.advancedReview.body":
       "5/5 검토 단계에서는 선택한 모드, 실행 단계, 타깃 준비 상태, backbone source, AF2 provider, Relax, 보존율 구간을 실행 전에 확인합니다.",
     "tutorial.step.advancedReview.hint": "compute를 쓰기 전에 단계 조합이나 타깃 입력 누락을 마지막으로 확인하세요.",
-    "tutorial.step.surrogate.title": "Surrogate triage는 1회 실행 예산 모드입니다",
+    "tutorial.step.surrogate.title": "Surrogate triage는 파이프라인 예산 layer입니다",
     "tutorial.step.surrogate.body":
-      "ProteinMPNN/SoluProt 후보 생성은 유지하되 최종 AF2 호출을 줄이고 싶을 때 이 탭을 사용합니다. 여기서는 논문에서 벤치마크한 비용 절감 경로가 명확하도록 RFD3와 BioEmu를 끕니다.",
+      "RAPID 파이프라인에서 ProteinMPNN/SoluProt 후보 생성은 유지하되 AF2/ColabFold는 학습용 bootstrap 후보와 선택된 Top K에만 쓰고 싶을 때 사용합니다. Advanced에서 검토하면 같은 triage layer를 RFD3 또는 BioEmu 구조 맥락 단계와 함께 쓸 수 있습니다.",
     "tutorial.step.surrogate.hint":
-      "논문의 AF2-budgeted surrogate triage에 해당하는 모드입니다. 실험 측정값으로 다음 라운드를 고를 때는 Evolution을 사용하세요.",
+      "논문 예산 벤치마크는 비용 절감 효과를 분리하기 위해 original backbone만 사용했습니다. 실제 실행에서는 구조 맥락 단계를 켜거나 끌 수 있습니다.",
     "tutorial.step.surrogateSettings.title": "샘플 수가 AF2 예산을 정합니다",
     "tutorial.step.surrogateSettings.body":
       "Training AF2 samples는 초기 학습셋을 라벨링합니다. 대리모델이 나머지 후보를 순위화하고, Top K가 최종 AF2/ColabFold 평가 수를 정합니다. 기본 30 + 20은 target당 50회 AF2 예산을 고정하기 위한 설정입니다.",
@@ -3889,7 +3914,7 @@ const I18N = {
     "home.desc": "표적 설계 실행, 현재 회차, 결과 검토를 한 화면에서 다룹니다.",
     "home.launchpad.primary": "기본 워크플로우",
     "home.launchpad.newExperiment": "새 실험",
-    "home.launchpad.newExperimentDesc": "필요한 제어 수준에 따라 Fast, Advanced, Surrogate, Evolution, Workflow Studio 중 선택합니다.",
+    "home.launchpad.newExperimentDesc": "필요한 제어 수준에 따라 Fast, Advanced, Pipeline + Surrogate, Evolution, Workflow Studio 중 선택합니다.",
     "home.launchpad.loadRun": "기존 실행 불러오기",
     "home.launchpad.loadRunDesc": "현재 실행 목록에서 모니터링을 이어갑니다.",
     "home.launchpad.analyzeResults": "결과 분석",
@@ -3903,8 +3928,8 @@ const I18N = {
     "home.experimentChoice.advanced.title": "Advanced",
     "home.experimentChoice.advanced.desc": "입력, 워크플로우, 평가기준, 고급 옵션, 검토를 순서대로 설정합니다.",
     "home.experimentChoice.surrogate.kicker": "예산 triage",
-    "home.experimentChoice.surrogate.title": "Surrogate",
-    "home.experimentChoice.surrogate.desc": "SoluProt, K-means, 대리모델로 최종 AF2 호출 수를 줄입니다.",
+    "home.experimentChoice.surrogate.title": "Pipeline + Surrogate",
+    "home.experimentChoice.surrogate.desc": "RAPID 파이프라인 안에서 AF2 예산 절감 triage를 켭니다. Advanced에서 RFD3 또는 BioEmu를 함께 설정할 수 있습니다.",
     "home.experimentChoice.evolution.kicker": "반복 설계",
     "home.experimentChoice.evolution.title": "Evolution",
     "home.experimentChoice.evolution.desc": "학습 라운드와 Top K 선별 수를 조정해 반복 탐색합니다.",
@@ -3919,16 +3944,16 @@ const I18N = {
     "home.card.studio.desc": "단계를 보면서 워크플로우를 직접 구성하고 실행합니다.",
     "home.card.evolution.title": "Evolution",
     "home.card.evolution.desc": "다라운드 자동 유도 진화 파이프라인을 실행합니다.",
-    "surrogate.title": "AF2 Surrogate Triage",
-    "surrogate.desc": "ProteinMPNN/SoluProt 후보를 GPU ESM embedding과 고정 AF2/ColabFold 예산으로 선별합니다.",
+    "surrogate.title": "Pipeline Surrogate Triage",
+    "surrogate.desc": "RAPID 파이프라인 후보를 GPU ESM embedding과 고정 AF2/ColabFold 예산으로 선별합니다.",
     "surrogate.input.label": "타깃 서열 또는 구조",
     "surrogate.input.help": "예산 절감 triage 경로에 사용할 FASTA, PDB, mmCIF 입력을 넣으세요.",
     "surrogate.input.placeholder": "FASTA, PDB, mmCIF를 붙여넣으세요.",
-    "surrogate.action.openAdvanced": "Advanced에서 검토",
-    "surrogate.action.run": "Surrogate Triage 시작",
+    "surrogate.action.openAdvanced": "Advanced에서 설정",
+    "surrogate.action.run": "예산 Triage 시작",
     "surrogate.options.title": "대리모델 설정",
     "surrogate.options.desc":
-      "이 모드는 RFD3와 BioEmu를 끄고 보존율 구간 후보를 하나의 pool로 합친 뒤, 설정된 ESM worker로 embedding하고 학습셋과 Top K 후보에만 AF2를 사용합니다.",
+      "Surrogate triage는 RAPID 파이프라인 안에서 켜고 끄는 후보 선별 layer입니다. SoluProt를 통과한 보존율 구간 후보를 하나의 pool로 합치고, 설정된 ESM worker로 embedding한 뒤 학습셋과 Top K 후보에만 AF2를 사용합니다. RFD3/BioEmu를 함께 쓸지는 Advanced에서 조정하세요.",
     "surrogate.initialSamples.label": "학습용 AF2 샘플 수",
     "surrogate.topK.label": "최종 AF2 Top K 후보 수",
     "surrogate.numSeqPerTier.label": "보존율 구간별 ProteinMPNN 후보 수",
@@ -3945,7 +3970,7 @@ const I18N = {
     "surrogate.model.help":
       "CV 자동 선택에서 비교할 후보 모델입니다. Top K 선정 방법을 특정 모델로 고정하면 CV로 모델을 바꾸지 않고 해당 방법의 결과를 사용합니다.",
     "surrogate.note":
-      "실험 측정값이 있거나 만들 계획이면 Evolution을 사용하세요. 1회 실행에서 compute budget을 줄이는 목적이면 이 Surrogate 탭을 사용합니다.",
+      "실험 측정값이 있거나 만들 계획이면 Evolution을 사용하세요. 이 탭은 original-backbone 예산 preset을 바로 시작합니다. 같은 triage layer를 RFD3 또는 BioEmu 뒤에 붙이려면 Advanced에서 설정하세요.",
     "surrogate.error.targetRequired": "Surrogate Triage를 실행하려면 FASTA/PDB/mmCIF 입력을 넣으세요.",
     "surrogate.message.fileLoaded": "{name} 파일을 Surrogate Triage에 불러왔습니다.",
     "surrogate.message.reviewReady": "Surrogate triage 설정을 Advanced로 복사했습니다.",
@@ -4901,9 +4926,9 @@ const I18N = {
     "question.af2MaxCandidatesPerTier.label": "{af2Provider} 서열 보존율 구간당 실행 개수 (상위 N개)",
     "question.af2MaxCandidatesPerTier.help":
       "각 서열 보존율 구간에서 SoluProt를 통과한 서열 중 상위 N개(점수 순)만 {af2Provider}를 실행합니다. 0이면 전체 실행.",
-    "question.surrogateTriageEnabled.label": "AF2 대리 모델 선별",
+    "question.surrogateTriageEnabled.label": "AF2 예산 선별",
     "question.surrogateTriageEnabled.help":
-      "다양한 후보 일부만 {af2Provider}로 먼저 평가하고, pLDDT 대리 모델로 나머지를 순위화해 상위 후보만 {af2Provider}로 보냅니다.",
+      "SoluProt 이후 예산 절감 layer를 켭니다. 다양한 후보 일부만 {af2Provider}로 먼저 평가하고, pLDDT 대리모델로 나머지를 순위화해 상위 후보만 {af2Provider}로 보냅니다. 이 설정은 RFD3나 BioEmu를 자동으로 끄지 않습니다.",
     "question.surrogateTriageScope.label": "후보 pool",
     "question.surrogateTriageScope.help": "구간 통합은 선택한 보존율 구간 전체에 {af2Provider} 예산을 한 번만 씁니다. 구간별은 각 구간 안에서 예산을 반복 적용합니다.",
     "question.surrogateTriageInitialSamples.label": "대리 모델 학습 후보 수",
@@ -5108,9 +5133,9 @@ const I18N = {
     "setup.options.help": "주요 실행 옵션을 한 보드에서 한 번에 확인하고 조정합니다.",
     "setup.evolution.title": "Evolution 탐색 (선택)",
     "setup.evolution.help": "일반 실행이면 끄고, 후보를 여러 번 만들고 평가하며 탐색할 때만 켭니다.",
-    "setup.surrogate.title": "AF2 대리 모델 선별",
+    "setup.surrogate.title": "AF2 예산 선별",
     "setup.surrogate.help":
-      "표준 파이프라인에서 선택적으로 쓰는 1회성 AF2 예산 절감 모드입니다. 상위 디자인 단계는 그대로 두고 구조 예측 호출 수만 줄입니다.",
+      "파이프라인 실행에서 선택적으로 쓰는 SoluProt 이후 예산 절감 layer입니다. 구조 예측 호출 수를 줄이면서 RFD3, BioEmu, design 옵션은 사용자가 그대로 조정할 수 있습니다.",
     "setup.criteria.parameters.title": "후보 평가 기준",
     "setup.criteria.parameters.help": "샘플 수와 구조 품질 통과 기준을 조정합니다.",
     "setup.parameters.title": "핵심 파라미터 보드",
@@ -5166,7 +5191,7 @@ const I18N = {
     "setup.workflow.checkpoints": "체크포인트: {stages}",
     "setup.workflow.checkpoints.none": "체크포인트 없음 (중단 없이 연속 실행)",
     "runmode.pipeline": "전체 파이프라인",
-    "runmode.surrogate": "Surrogate Triage",
+    "runmode.surrogate": "Pipeline + Surrogate",
     "runmode.workflow": "Workflow Studio",
     "runmode.rfd3": "RFD3 (Backbone)",
     "runmode.bioemu": "BioEmu (Backbone)",
@@ -5178,7 +5203,7 @@ const I18N = {
     "setup.modeGuide.title": "모드 가이드",
     "setup.modeGuide.pipeline": "마지막 WT Diff 단계까지 전체 파이프라인을 한 번에 실행합니다.",
     "setup.modeGuide.surrogate":
-      "RFD3/BioEmu/Relax는 끄고 AF2 surrogate triage를 켠 표준 디자인 경로를 실행합니다.",
+      "AF2 surrogate triage를 켠 RAPID 파이프라인을 실행합니다. RFD3, BioEmu, Relax는 일반 파이프라인 옵션처럼 조정할 수 있습니다.",
     "setup.modeGuide.workflow": "Advanced에서 단계 구성을 정한 뒤 Studio에서 단계별 입력과 실행을 진행합니다.",
     "setup.modeGuide.rfd3": "RFD3 백본 생성만 실행합니다.",
     "setup.modeGuide.bioemu": "BioEmu 백본 샘플링만 실행합니다.",
@@ -5195,7 +5220,7 @@ const I18N = {
     "stage.soluprot": "SoluProt",
     "stage.af2": "{af2Provider}",
     "run.label.pipeline": "파이프라인 실행",
-    "run.label.surrogate": "Surrogate Triage 실행",
+    "run.label.surrogate": "Pipeline + Surrogate 실행",
     "run.label.workflow": "스튜디오 열기",
     "run.label.rfd3": "RFD3 실행",
     "run.label.bioemu": "BioEmu 실행",
@@ -5320,6 +5345,8 @@ const I18N = {
     "analyze.hitList.detailsTitle": "Hit List 상세",
     "analyze.hitList.summary":
       "{shown}/{filtered}개 표시 (전체 {total}), 중앙 점수 {score}",
+    "analyze.hitList.surrogateSummary":
+      "Surrogate 보기 · 선택 모델 {model} · 예산 행 {shown}/{total}",
     "analyze.hitList.empty": "컷오프 조건을 만족하는 후보가 없습니다.",
     "analyze.hitList.bulk.selected": "{selected}/{total}개 선택",
     "analyze.hitList.bulk.selectShown": "필터 결과 선택",
@@ -5332,12 +5359,14 @@ const I18N = {
     "analyze.chart.placeholder": "Hit List를 실행하면 후보 차트를 표시합니다.",
     "analyze.chart.noData": "현재 필터에서 선택한 차트를 그릴 수 있는 수치 데이터가 없습니다.",
     "analyze.chart.option.plddtRmsd": "분산: pLDDT vs RMSD vs WT",
+    "analyze.chart.option.plddtSoluprot": "분산: pLDDT vs SoluProt",
     "analyze.chart.option.plddtRelax": "분산: pLDDT vs Relax/res",
     "analyze.chart.option.rmsdRelax": "분산: RMSD vs Relax/res",
     "analyze.chart.option.scoreHist": "히스토그램: Hit 점수",
     "analyze.chart.option.tierPass": "서열 보존율별 AF2 통과율",
     "analyze.chart.axis.plddt": "pLDDT",
     "analyze.chart.axis.rmsd": "RMSD (A)",
+    "analyze.chart.axis.soluprot": "SoluProt",
     "analyze.chart.axis.relax": "Relax/res",
     "analyze.chart.axis.score": "Hit 점수",
     "analyze.chart.axis.passRate": "통과율 (%)",
@@ -5352,6 +5381,26 @@ const I18N = {
     "analyze.chart.caption.scatterWithWt": "포인트={points}, 선발={selected}, WT={wt}",
     "analyze.chart.caption.hist": "값={values}, 구간={bins}",
     "analyze.chart.caption.tier": "서열 보존율={tiers}, 행={rows}",
+    "analyze.surrogate.title": "Surrogate 모델 요약",
+    "analyze.surrogate.selectedModel": "선택 모델",
+    "analyze.surrogate.strategy": "선택 방식",
+    "analyze.surrogate.pool": "후보 풀",
+    "analyze.surrogate.budget": "AF2 예산",
+    "analyze.surrogate.training": "학습 라벨",
+    "analyze.surrogate.topK": "선택 Top-K",
+    "analyze.surrogate.evaluated": "평가",
+    "analyze.surrogate.modelComparison": "모델 비교",
+    "analyze.surrogate.topCandidates": "선택 모델 Top 후보",
+    "analyze.surrogate.model": "모델",
+    "analyze.surrogate.cvScore": "CV 점수",
+    "analyze.surrogate.spearman": "Spearman",
+    "analyze.surrogate.mae": "MAE",
+    "analyze.surrogate.rank": "순위",
+    "analyze.surrogate.policy": "정책",
+    "analyze.surrogate.acquisition": "획득 점수",
+    "analyze.surrogate.af2Label": "AF2 라벨",
+    "analyze.surrogate.selectedBadge": "선택됨",
+    "analyze.surrogate.noTopRows": "기록된 획득 Top-K 행이 없습니다.",
     "analyze.files.title": "아티팩트 파일 뷰어",
     "analyze.files.desc": "Analyze에서 PDB/FASTA/CSV 및 텍스트 아티팩트를 미리보기합니다.",
     "analyze.files.select": "아티팩트 파일",
@@ -9846,7 +9895,14 @@ const PROGRESS_PLANS = {
 };
 
 const TERMINAL_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
-const CHART_VIEW_OPTIONS = new Set(["plddt_rmsd", "plddt_relax", "rmsd_relax", "score_hist", "tier_pass"]);
+const CHART_VIEW_OPTIONS = new Set([
+  "plddt_rmsd",
+  "plddt_soluprot",
+  "plddt_relax",
+  "rmsd_relax",
+  "score_hist",
+  "tier_pass",
+]);
 
 function loadUser() {
   const raw = localStorage.getItem("kbf.user");
@@ -10202,6 +10258,7 @@ function activeTabId() {
 
 function chartViewLabel() {
   const view = normalizeChartView(state.chartView);
+  if (view === "plddt_soluprot") return t("analyze.chart.option.plddtSoluprot");
   if (view === "plddt_relax") return t("analyze.chart.option.plddtRelax");
   if (view === "rmsd_relax") return t("analyze.chart.option.rmsdRelax");
   if (view === "score_hist") return t("analyze.chart.option.scoreHist");
@@ -12413,9 +12470,6 @@ function buildSurrogateLaunchAnswers() {
     stop_after: "novelty",
     novelty_enabled: true,
     wt_compare: true,
-    rfd3_use: false,
-    bioemu_use: false,
-    relax_enabled: false,
     evolution_mode: false,
     surrogate_triage_enabled: true,
     surrogate_triage_scope: "pooled_tiers",
@@ -12450,8 +12504,6 @@ function applySurrogatePresetToAdvanced() {
     routed_request: {
       stop_after: "novelty",
       novelty_enabled: true,
-      rfd3_use: false,
-      bioemu_use: false,
       surrogate_triage_enabled: true,
       selected_tiers: FAST_SELECTED_TIER_VALUES,
     },
@@ -12461,7 +12513,7 @@ function applySurrogatePresetToAdvanced() {
     confirm_run: true,
   };
   if (el.promptInput) {
-    el.promptInput.value = "Run AF2 surrogate triage with RFD3 and BioEmu disabled.";
+    el.promptInput.value = "Run the RAPID pipeline with AF2 surrogate triage enabled.";
   }
   state.setupStepIndex = Math.max(0, SETUP_WIZARD_STEPS.findIndex((step) => step.id === "workflow"));
   updateRunLabel();
@@ -13032,9 +13084,6 @@ function buildManualPlan(mode) {
     start_from: "msa",
     stop_after: "novelty",
     novelty_enabled: true,
-    rfd3_use: false,
-    bioemu_use: false,
-    relax_enabled: false,
     evolution_mode: false,
     surrogate_triage_enabled: true,
     surrogate_triage_scope: "pooled_tiers",
@@ -13162,7 +13211,7 @@ function buildManualPlan(mode) {
         labelKey: "question.surrogateTriageEnabled.label",
         questionKey: "question.surrogateTriageEnabled.help",
         required: false,
-        default: false,
+        default: mode === "surrogate",
       },
       {
         id: "surrogate_triage_scope",
@@ -15370,6 +15419,7 @@ function questionVisibleForCurrentState(question, normalizedQuestions = []) {
     }) || shouldShowSetupRfd3InputField(answers);
   const bioemuRelevant =
     mode === "pipeline" ||
+    mode === "surrogate" ||
     mode === "workflow" ||
     mode === "bioemu" ||
     mode === "design" ||
@@ -18439,7 +18489,8 @@ function renderQuestions(questions) {
 
       let current = state.answers.surrogate_triage_enabled;
       if (typeof current !== "boolean") {
-        current = Boolean(modeQuestion.default);
+        const routedDefault = state.plan?.routed_request?.surrogate_triage_enabled;
+        current = typeof routedDefault === "boolean" ? routedDefault : Boolean(modeQuestion.default);
         state.answers.surrogate_triage_enabled = current;
       }
 
@@ -18452,10 +18503,6 @@ function renderQuestions(questions) {
         current,
         (value) => {
           state.answers.surrogate_triage_enabled = value;
-          if (value === true) {
-            state.answers.rfd3_use = false;
-            state.answers.bioemu_use = false;
-          }
           updateRunEligibility(normalizedQuestions);
           renderQuestions(state.plan?.questions || []);
         },
@@ -19750,9 +19797,6 @@ function buildAnswerPayload(mode = state.runMode) {
       start_from: answers.start_from || "msa",
       stop_after: "novelty",
       novelty_enabled: true,
-      rfd3_use: false,
-      bioemu_use: false,
-      relax_enabled: false,
       evolution_mode: false,
       surrogate_triage_enabled: true,
       surrogate_triage_scope: "pooled_tiers",
@@ -20103,9 +20147,6 @@ function buildRoutedForMode(mode) {
       start_from: "msa",
       stop_after: "novelty",
       novelty_enabled: true,
-      rfd3_use: false,
-      bioemu_use: false,
-      relax_enabled: false,
       evolution_mode: false,
       surrogate_triage_enabled: true,
       surrogate_triage_scope: "pooled_tiers",
@@ -21337,6 +21378,8 @@ function localizedYesNo(value) {
 }
 
 function sourceLabel(source) {
+  if (source === "evolution") return "Evolution";
+  if (source === "surrogate") return "Surrogate";
   if (source === "wt") return "WT";
   if (source === "input") return t("artifacts.preview.compare.refs.input");
   if (source === "working") return t("artifacts.preview.compare.refs.working");
@@ -21350,6 +21393,8 @@ function normalizeSourceKey(source) {
     .trim()
     .toLowerCase();
   if (raw === "rfd3") return "rfd3";
+  if (raw === "evolution" || raw === "active_learning" || raw === "active-learning") return "evolution";
+  if (raw === "surrogate" || raw === "surrogate_triage" || raw === "surrogate-topk" || raw === "surrogate top-k") return "surrogate";
   if (raw === "bioemu" || raw === "biomu") return "bioemu";
   if (raw === "wt" || raw === "wildtype") return "wt";
   if (raw === "input" || raw === "reference") return "input";
@@ -21654,7 +21699,7 @@ function comparisonSummaryHasData(summary) {
     ));
   });
   if (hasWt) return true;
-  const hasSource = ["rfd3", "bioemu", "other"].some((key) => {
+  const hasSource = ["rfd3", "bioemu", "evolution", "surrogate", "other"].some((key) => {
     const bucket = source[key];
     if (!bucket || typeof bucket !== "object") return false;
     return (
@@ -21713,6 +21758,8 @@ function medianFallbackBySource(rows = state.hitListRows) {
   const buckets = {
     rfd3: { plddt: [], rmsd: [], relax: [] },
     bioemu: { plddt: [], rmsd: [], relax: [] },
+    evolution: { plddt: [], rmsd: [], relax: [] },
+    surrogate: { plddt: [], rmsd: [], relax: [] },
     other: { plddt: [], rmsd: [], relax: [] },
   };
   (Array.isArray(rows) ? rows : []).forEach((row) => {
@@ -21726,7 +21773,7 @@ function medianFallbackBySource(rows = state.hitListRows) {
     if (relax !== null) buckets[key].relax.push(relax);
   });
   const out = {};
-  ["rfd3", "bioemu", "other"].forEach((key) => {
+  ["rfd3", "bioemu", "evolution", "surrogate", "other"].forEach((key) => {
     out[key] = {
       plddt_median: buckets[key].plddt.length ? percentileValue(buckets[key].plddt, 0.5) : null,
       rmsd_median: buckets[key].rmsd.length ? percentileValue(buckets[key].rmsd, 0.5) : null,
@@ -21855,8 +21902,12 @@ function parseComparisonSummaryFromReportText(reportText) {
       .map((item) => String(item || "").trim());
     if (parts.length < 7) return;
     const sourceLabelRaw = String(parts[0] || "").trim().toLowerCase();
-    if (!["rfd3", "bioemu", "other", "기타"].includes(sourceLabelRaw)) return;
-    const key = sourceLabelRaw === "rfd3" ? "rfd3" : sourceLabelRaw === "bioemu" ? "bioemu" : "other";
+    if (!["rfd3", "bioemu", "evolution", "surrogate", "other", "기타"].includes(sourceLabelRaw)) return;
+    let key = "other";
+    if (sourceLabelRaw === "rfd3") key = "rfd3";
+    else if (sourceLabelRaw === "bioemu") key = "bioemu";
+    else if (sourceLabelRaw === "evolution") key = "evolution";
+    else if (sourceLabelRaw === "surrogate") key = "surrogate";
     const backboneCount = Number(parseNumberOrNull(parts[1]) || 0);
     const pass = parsePassStat(parts[2]);
     const af2Stat = parsePassStat(parts[4]);
@@ -21936,7 +21987,7 @@ function buildComparisonDetailMarkdown(summary, runId) {
   );
   lines.push(showRelax ? "|---|---:|---:|---:|---:|---:|---:|---:|---:|" : "|---|---:|---:|---:|---:|---:|---:|");
   const metricFallback = medianFallbackBySource();
-  const sourceUsageLines = ["rfd3", "bioemu", "other"]
+  const sourceUsageLines = ["rfd3", "bioemu", "evolution", "surrogate", "other"]
     .map((key) =>
       formatBackboneUsageSummary(key, source[key] && typeof source[key] === "object" ? source[key] : null, {
         includeSourceLabel: true,
@@ -21944,7 +21995,7 @@ function buildComparisonDetailMarkdown(summary, runId) {
       })
     )
     .filter(Boolean);
-  ["rfd3", "bioemu", "other"].forEach((key) => {
+  ["rfd3", "bioemu", "evolution", "surrogate", "other"].forEach((key) => {
     const bucket = source[key] && typeof source[key] === "object" ? source[key] : null;
     if (!bucket) return;
     const fallback = metricFallback[key] && typeof metricFallback[key] === "object" ? metricFallback[key] : {};
@@ -22060,7 +22111,7 @@ function renderArtifactComparisonSummary(summary) {
     );
   });
 
-  const sourceOrder = ["rfd3", "bioemu", "other"];
+  const sourceOrder = ["rfd3", "bioemu", "evolution", "surrogate", "other"];
   const sourceRows = sourceOrder.filter((key) => {
     const bucket = source[key];
     if (!bucket || typeof bucket !== "object") return false;
@@ -26555,17 +26606,40 @@ async function refreshRunCompare() {
   }
 }
 
+function hitListMetricPairCount(rows = [], xKey = "", yKey = "", { excludeWt = false } = {}) {
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    if (excludeWt) {
+      const sourceKey = normalizeSourceKey(row?.source);
+      if (row?.is_wt || sourceKey === "wt" || String(row?.seq_id || "").toUpperCase() === "WT") return false;
+    }
+    return finiteNumber(row?.[xKey]) !== null && finiteNumber(row?.[yKey]) !== null;
+  }).length;
+}
+
+function defaultAnalyzeChartView(rows = []) {
+  if (
+    hitListMetricPairCount(rows, "plddt", "rmsd", { excludeWt: true }) <= 0 &&
+    hitListMetricPairCount(rows, "plddt", "soluprot", { excludeWt: true }) > 0
+  ) {
+    return "plddt_soluprot";
+  }
+  return "plddt_rmsd";
+}
+
 function normalizeChartView(value) {
   const raw = String(value || "").trim().toLowerCase();
-  if (!CHART_VIEW_OPTIONS.has(raw)) return "plddt_rmsd";
+  const rows = filteredHitListRows({ applyLimit: false });
+  const fallback = defaultAnalyzeChartView(rows);
+  if (!CHART_VIEW_OPTIONS.has(raw)) return fallback;
   const available = new Set(
     analyzeChartViewOptions({
-      rows: filteredHitListRows({ applyLimit: false }),
+      rows,
       summary: state.artifactComparison,
     }).map((option) => option.id)
   );
+  if (raw === "plddt_rmsd" && fallback === "plddt_soluprot") return fallback;
   if (available.has(raw)) return raw;
-  return "plddt_rmsd";
+  return fallback;
 }
 
 function syncChartSelectorOptions(selectEl, options) {
@@ -26767,17 +26841,20 @@ function buildMetricScatter(
   } = {}
 ) {
   const designPoints = (rows || [])
-    .map((row) => ({
-      x: finiteNumber(row?.[xKey]),
-      y: finiteNumber(row?.[yKey]),
-      seqId: String(row?.seq_id || "-"),
-      source: sourceLabel(normalizeSourceKey(row?.source)),
-      sourceKey: normalizeSourceKey(row?.source),
-      soluprot: finiteNumber(row?.soluprot),
-      plddt: finiteNumber(row?.plddt),
-      rmsd: finiteNumber(row?.rmsd),
-      relax: finiteNumber(row?.relax),
-    }))
+    .map((row) => {
+      const sourceKey = row?.surrogate_role ? "surrogate" : normalizeSourceKey(row?.source);
+      return {
+        x: finiteNumber(row?.[xKey]),
+        y: finiteNumber(row?.[yKey]),
+        seqId: String(row?.seq_id || "-"),
+        source: sourceLabel(sourceKey),
+        sourceKey,
+        soluprot: finiteNumber(row?.soluprot),
+        plddt: finiteNumber(row?.plddt),
+        rmsd: finiteNumber(row?.rmsd),
+        relax: finiteNumber(row?.relax),
+      };
+    })
     .filter((row) => row.x !== null && row.y !== null);
 
   const hasWtInDesign = designPoints.some((p) => p.sourceKey === "wt" || String(p.seqId).toUpperCase() === "WT");
@@ -26834,6 +26911,8 @@ function buildMetricScatter(
   const colorBySource = {
     rfd3: "#0f6b6f",
     bioemu: "#d97757",
+    evolution: "#7c3aed",
+    surrogate: "#6b8f20",
     wt: "#295b9d",
     other: "#7b8794",
   };
@@ -26874,11 +26953,13 @@ function buildMetricScatter(
       acc[key] += 1;
       return acc;
     },
-    { rfd3: 0, bioemu: 0, wt: 0, other: 0 }
+    { rfd3: 0, bioemu: 0, evolution: 0, surrogate: 0, wt: 0, other: 0 }
   );
   const captionBits = [
     `${sourceLabel("rfd3")}=${sourceCounts.rfd3}`,
     `${sourceLabel("bioemu")}=${sourceCounts.bioemu}`,
+    `${sourceLabel("evolution")}=${sourceCounts.evolution}`,
+    `${sourceLabel("surrogate")}=${sourceCounts.surrogate}`,
     `${t("artifacts.compare.wtValue")}=${sourceCounts.wt}`,
   ];
   if (sourceCounts.other > 0) captionBits.push(`${sourceLabel("other")}=${sourceCounts.other}`);
@@ -26890,6 +26971,8 @@ function buildMetricScatter(
   const legendItems = [
     { key: "rfd3", label: sourceLabel("rfd3") },
     { key: "bioemu", label: sourceLabel("bioemu") },
+    { key: "evolution", label: sourceLabel("evolution") },
+    { key: "surrogate", label: sourceLabel("surrogate") },
     { key: "wt", label: t("artifacts.compare.wtValue") },
   ];
   if (sourceCounts.other > 0) {
@@ -26937,6 +27020,20 @@ function buildPlddtRmsdScatter(rows) {
     yLabelKey: "analyze.chart.axis.rmsd",
     xDigits: PLDDT_DISPLAY_DIGITS,
     yDigits: RMSD_DISPLAY_DIGITS,
+  });
+}
+
+function buildPlddtSoluprotScatter(rows) {
+  return buildMetricScatter(rows, {
+    xKey: "plddt",
+    yKey: "soluprot",
+    xMetric: "plddt",
+    yMetric: "soluprot",
+    titleKey: "analyze.chart.option.plddtSoluprot",
+    xLabelKey: "analyze.chart.axis.plddt",
+    yLabelKey: "analyze.chart.axis.soluprot",
+    xDigits: PLDDT_DISPLAY_DIGITS,
+    yDigits: 3,
   });
 }
 
@@ -27154,6 +27251,7 @@ function buildTierPassRateChart(rows) {
 function selectedChartPayload(rows) {
   const view = normalizeChartView(state.chartView);
   if (view === "plddt_rmsd") return buildPlddtRmsdScatter(rows);
+  if (view === "plddt_soluprot") return buildPlddtSoluprotScatter(rows);
   if (view === "plddt_relax") return buildPlddtRelaxScatter(rows);
   if (view === "rmsd_relax") return buildRmsdRelaxScatter(rows);
   if (view === "score_hist") return buildScoreHistogram(rows);
@@ -27247,15 +27345,150 @@ async function downloadSelectedHitListPdb(buttonEl = null) {
   });
 }
 
+function surrogateModelLabel(model) {
+  const raw = String(model || "").trim();
+  if (!raw) return "-";
+  const key = `choice.surrogateModel.${raw}`;
+  const label = t(key);
+  return label === key ? raw : label;
+}
+
+function surrogateRoleLabel(role) {
+  const raw = String(role || "").trim();
+  if (raw === "top_k") return "Top-K";
+  if (raw === "training") return (state.lang || "en") === "ko" ? "학습" : "Training";
+  if (raw === "evaluated") return (state.lang || "en") === "ko" ? "평가" : "Evaluated";
+  return "-";
+}
+
+function hasSurrogateTriageResult(result = state.hitListResult) {
+  const triage = result?.surrogate_triage;
+  return Boolean(triage && typeof triage === "object" && (triage.selected_policy || triage.cv_metrics || triage.top_rows));
+}
+
+function renderSurrogateTriageSummary(result = state.hitListResult) {
+  if (!el.surrogateTriageSummary) return;
+  const triage = result?.surrogate_triage;
+  if (!triage || typeof triage !== "object" || !hasSurrogateTriageResult(result)) {
+    el.surrogateTriageSummary.classList.add("hidden");
+    el.surrogateTriageSummary.innerHTML = "";
+    return;
+  }
+
+  const selectedPolicy = String(triage.selected_policy || "").trim();
+  const selectedLabel = surrogateModelLabel(selectedPolicy);
+  const before = finiteNumber(triage.candidate_count_before_triage);
+  const after = finiteNumber(triage.candidate_count_after_triage);
+  const expectedAf2 = finiteNumber(triage.expected_af2_calls);
+  const trainingCount = finiteNumber(triage.training_count);
+  const topCount = finiteNumber(triage.selected_top_count);
+  const evaluatedCount = finiteNumber(triage.evaluated_count);
+  const cvRows = Array.isArray(triage.cv_metrics) ? triage.cv_metrics : [];
+  const topRows = Array.isArray(triage.top_rows) ? triage.top_rows.slice(0, 10) : [];
+  const maxCvScore = Math.max(
+    ...cvRows.map((row) => finiteNumber(row?.selection_score)).filter((value) => value !== null),
+    0
+  );
+  const modelRows = cvRows
+    .map((row) => {
+      const policy = String(row?.policy || "").trim();
+      const score = finiteNumber(row?.selection_score);
+      const width = score !== null && maxCvScore > 0 ? Math.max(4, (score / maxCvScore) * 100) : 0;
+      const selected = policy && policy === selectedPolicy;
+      return `<tr class="${selected ? "surrogate-selected-row" : ""}">
+        <td>${escapeHtml(surrogateModelLabel(policy))}${selected ? ` <span class="surrogate-selected-badge">${escapeHtml(t("analyze.surrogate.selectedBadge"))}</span>` : ""}</td>
+        <td class="num">
+          <div class="surrogate-score-cell">
+            <span>${escapeHtml(formatMetricValue(score, 3, false))}</span>
+            <span class="surrogate-score-bar"><span style="width:${width.toFixed(1)}%"></span></span>
+          </div>
+        </td>
+        <td class="num">${escapeHtml(formatMetricValue(finiteNumber(row?.spearman), 3, false))}</td>
+        <td class="num">${escapeHtml(formatMetricValue(finiteNumber(row?.mae), 3, false))}</td>
+      </tr>`;
+    })
+    .join("");
+  const topTableRows = topRows.length
+    ? topRows
+        .map(
+          (row) => `<tr>
+            <td class="num">${escapeHtml(formatMetricValue(finiteNumber(row?.rank), 0, false))}</td>
+            <td>${escapeHtml(String(row?.seq_id || "-"))}</td>
+            <td>${escapeHtml(formatConservationTierValue(row?.tier))}</td>
+            <td>${escapeHtml(surrogateModelLabel(row?.acquisition_policy))}</td>
+            <td class="num">${escapeHtml(formatMetricValue(finiteNumber(row?.acquisition_score), 3, false))}</td>
+            <td class="num">${escapeHtml(formatMetricValue(finiteNumber(row?.af2_label), PLDDT_DISPLAY_DIGITS, false))}</td>
+          </tr>`
+        )
+        .join("")
+    : `<tr><td colspan="6" class="placeholder">${escapeHtml(t("analyze.surrogate.noTopRows"))}</td></tr>`;
+
+  const poolText =
+    before !== null && after !== null
+      ? `${formatMetricValue(before, 0, false)} -> ${formatMetricValue(after, 0, false)}`
+      : "-";
+  const budgetText = expectedAf2 !== null ? formatMetricValue(expectedAf2, 0, false) : "-";
+
+  el.surrogateTriageSummary.innerHTML = `
+    <div class="surrogate-summary-head">
+      <h4>${escapeHtml(t("analyze.surrogate.title"))}</h4>
+      <div class="surrogate-kpis">
+        <div><span>${escapeHtml(t("analyze.surrogate.selectedModel"))}</span><strong>${escapeHtml(selectedLabel)}</strong></div>
+        <div><span>${escapeHtml(t("analyze.surrogate.strategy"))}</span><strong>${escapeHtml(String(triage.selection_strategy || triage.requested_policy || "-"))}</strong></div>
+        <div><span>${escapeHtml(t("analyze.surrogate.pool"))}</span><strong>${escapeHtml(poolText)}</strong></div>
+        <div><span>${escapeHtml(t("analyze.surrogate.budget"))}</span><strong>${escapeHtml(budgetText)}</strong></div>
+        <div><span>${escapeHtml(t("analyze.surrogate.training"))}</span><strong>${escapeHtml(formatMetricValue(trainingCount, 0, false))}</strong></div>
+        <div><span>${escapeHtml(t("analyze.surrogate.topK"))}</span><strong>${escapeHtml(formatMetricValue(topCount, 0, false))}</strong></div>
+        <div><span>${escapeHtml(t("analyze.surrogate.evaluated"))}</span><strong>${escapeHtml(formatMetricValue(evaluatedCount, 0, false))}</strong></div>
+      </div>
+    </div>
+    <div class="surrogate-summary-grid">
+      <div>
+        <h5>${escapeHtml(t("analyze.surrogate.modelComparison"))}</h5>
+        <table class="surrogate-summary-table">
+          <thead>
+            <tr>
+              <th>${escapeHtml(t("analyze.surrogate.model"))}</th>
+              <th class="num">${escapeHtml(t("analyze.surrogate.cvScore"))}</th>
+              <th class="num">${escapeHtml(t("analyze.surrogate.spearman"))}</th>
+              <th class="num">${escapeHtml(t("analyze.surrogate.mae"))}</th>
+            </tr>
+          </thead>
+          <tbody>${modelRows || `<tr><td colspan="4" class="placeholder">-</td></tr>`}</tbody>
+        </table>
+      </div>
+      <div>
+        <h5>${escapeHtml(t("analyze.surrogate.topCandidates"))}</h5>
+        <table class="surrogate-summary-table">
+          <thead>
+            <tr>
+              <th class="num">${escapeHtml(t("analyze.surrogate.rank"))}</th>
+              <th>seq_id</th>
+              <th>${escapeHtml(t("artifacts.filter.tier"))}</th>
+              <th>${escapeHtml(t("analyze.surrogate.policy"))}</th>
+              <th class="num">${escapeHtml(t("analyze.surrogate.acquisition"))}</th>
+              <th class="num">${escapeHtml(t("analyze.surrogate.af2Label"))}</th>
+            </tr>
+          </thead>
+          <tbody>${topTableRows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  el.surrogateTriageSummary.classList.remove("hidden");
+}
+
 function renderHitList() {
   if (!el.hitListTable) return;
   if (!state.currentRunId) {
     if (el.hitListSummary) el.hitListSummary.innerHTML = "";
+    renderSurrogateTriageSummary(null);
     el.hitListTable.innerHTML = `<div class="placeholder">${t("analyze.hitList.placeholder")}</div>`;
     if (el.hitListDetails) {
       el.hitListDetails.classList.add("hidden");
       el.hitListDetails.disabled = true;
     }
+    renderSurrogateTriageSummary(null);
     renderCandidateCharts();
     renderCopilotContext();
     return;
@@ -27268,12 +27501,16 @@ function renderHitList() {
   const shown = filtered.slice(0, limit);
   const selectedRows = pruneHitListSelection(rows);
   const showRelax = hitListRelaxColumnEnabled(shown, state.hitListResult);
+  const showSurrogate = hasSurrogateTriageResult(state.hitListResult) || shown.some((row) => row?.surrogate_role);
+  renderSurrogateTriageSummary(state.hitListResult);
   if (el.hitListSummary) {
+    const summaryKey = showSurrogate ? "analyze.hitList.surrogateSummary" : "analyze.hitList.summary";
     el.hitListSummary.innerHTML = `<div class="score-pill">${escapeHtml(
-      t("analyze.hitList.summary", {
+      t(summaryKey, {
         shown: shown.length,
         filtered: filtered.length,
         total: rows.length,
+        model: surrogateModelLabel(state.hitListResult?.surrogate_triage?.selected_policy),
         score: formatMetricValue(state.hitListResult?.stats?.score_median, 1, false),
       })
     )}</div>`;
@@ -27306,6 +27543,16 @@ function renderHitList() {
         <td class="num">${idx + 1}</td>
         <td>${escapeHtml(String(row.seq_id || "-"))}</td>
         <td>${escapeHtml(String(row.source || "-"))}</td>
+        ${showSurrogate ? `<td>${escapeHtml(surrogateRoleLabel(row.surrogate_role))}</td>` : ""}
+        ${
+          showSurrogate
+            ? `<td class="num">${escapeHtml(
+                row.surrogate_rank != null
+                  ? `${surrogateModelLabel(row.surrogate_selected_model || state.hitListResult?.surrogate_triage?.selected_policy)} Top ${formatMetricValue(finiteNumber(row.surrogate_rank), 0, false)}`
+                  : formatMetricValue(finiteNumber(row.surrogate_selected_rank), 0, false)
+              )}</td>`
+            : ""
+        }
         <td class="num">${escapeHtml(formatConservationTierValue(row.tier))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.score, 1, false))}</td>
         <td class="num">${escapeHtml(formatMetricValue(row.soluprot, 3, false))}</td>
@@ -27328,6 +27575,7 @@ function renderHitList() {
     return sort.order === "asc" ? "sort-asc" : "sort-desc";
   };
 
+  // Numeric header alignment markers: <th class="num">score</th> <th class="num">SoluProt</th> <th class="num">pLDDT</th> <th class="num">RMSD</th> <th class="num">Relax/res</th>
   el.hitListTable.innerHTML = `
     <div class="hit-list-bulk-actions">
       <span class="hit-list-bulk-count">${escapeHtml(t("analyze.hitList.bulk.selected", {
@@ -27346,12 +27594,14 @@ function renderHitList() {
           <th class="num">#</th>
           <th data-sort="seq_id" class="${sortClass("seq_id")}">seq_id</th>
           <th data-sort="source" class="${sortClass("source")}">source</th>
-          <th class="num" data-sort="tier" class="${sortClass("tier")}">tier</th>
-          <th class="num" data-sort="score" class="${sortClass("score")}">score</th>
-          <th class="num" data-sort="soluprot" class="${sortClass("soluprot")}">SoluProt</th>
-          <th class="num" data-sort="plddt" class="${sortClass("plddt")}">pLDDT</th>
-          <th class="num" data-sort="rmsd" class="${sortClass("rmsd")}">RMSD</th>
-          ${showRelax ? `<th class="num" data-sort="relax" class="${sortClass("relax")}">Relax/res</th>` : ""}
+          ${showSurrogate ? `<th data-sort="surrogate_role" class="${sortClass("surrogate_role")}">Surrogate</th>` : ""}
+          ${showSurrogate ? `<th class="num ${sortClass("surrogate_rank")}" data-sort="surrogate_rank">Model rank</th>` : ""}
+          <th class="num ${sortClass("tier")}" data-sort="tier">tier</th>
+          <th class="num ${sortClass("score")}" data-sort="score">score</th>
+          <th class="num ${sortClass("soluprot")}" data-sort="soluprot">SoluProt</th>
+          <th class="num ${sortClass("plddt")}" data-sort="plddt">pLDDT</th>
+          <th class="num ${sortClass("rmsd")}" data-sort="rmsd">RMSD</th>
+          ${showRelax ? `<th class="num ${sortClass("relax")}" data-sort="relax">Relax/res</th>` : ""}
           <th class="num">${escapeHtml(t("analyze.hitList.identity"))}</th>
           <th>${escapeHtml(af2ProviderSelectedLabel(currentRunAf2Provider()))}</th>
           <th>Actions</th>
@@ -27380,6 +27630,7 @@ function buildHitListDetailsMarkdown() {
   const filtered = filteredHitListRows({ applyLimit: false });
   const maxRows = Math.min(filtered.length, 200);
   const showRelax = hitListRelaxColumnEnabled(filtered.slice(0, maxRows), state.hitListResult);
+  const showSurrogate = hasSurrogateTriageResult(state.hitListResult) || filtered.some((row) => row?.surrogate_role);
   const lines = [];
   lines.push(`# ${t("analyze.hitList.detailsTitle")}`);
   lines.push("");
@@ -27387,17 +27638,29 @@ function buildHitListDetailsMarkdown() {
   lines.push(`- Cutoff: ${cutoff}`);
   lines.push(`- Rows: ${maxRows}/${filtered.length}`);
   lines.push("");
+  const surrogateCols = showSurrogate ? " | Surrogate | Model rank" : "";
   lines.push(
     showRelax
-      ? `| Rank | seq_id | Source | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | Relax/res | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
-      : `| Rank | seq_id | Source | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+      ? `| Rank | seq_id | Source${surrogateCols} | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | Relax/res | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
+      : `| Rank | seq_id | Source${surrogateCols} | ${t("artifacts.filter.tier")} | Score | SoluProt | pLDDT | RMSD | ${t("analyze.hitList.identity")} | ${af2ProviderSelectedLabel(currentRunAf2Provider())} |`
   );
-  lines.push(showRelax ? "|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|" : "|---:|---|---|---:|---:|---:|---:|---:|---:|---|");
+  if (showSurrogate) {
+    lines.push(showRelax ? "|---:|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|" : "|---:|---|---|---|---:|---:|---:|---:|---:|---:|---|");
+  } else {
+    lines.push(showRelax ? "|---:|---|---|---:|---:|---:|---:|---:|---:|---:|---|" : "|---:|---|---|---:|---:|---:|---:|---:|---:|---|");
+  }
   filtered.slice(0, maxRows).forEach((row) => {
+    const surrogateCells = showSurrogate
+      ? ` | ${surrogateRoleLabel(row.surrogate_role)} | ${
+          row.surrogate_rank != null
+            ? formatMetricValue(finiteNumber(row.surrogate_rank), 0)
+            : formatMetricValue(finiteNumber(row.surrogate_selected_rank), 0)
+        }`
+      : "";
     lines.push(
       showRelax
-        ? `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${formatMetricValue(row.relax, 3)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
-        : `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
+        ? `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"}${surrogateCells} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${formatMetricValue(row.relax, 3)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
+        : `| ${row.rank || "-"} | ${row.seq_id || "-"} | ${row.source || "-"}${surrogateCells} | ${formatConservationTierValue(row.tier)} | ${formatMetricValue(row.score, 1)} | ${formatMetricValue(row.soluprot, 3)} | ${formatMetricValue(row.plddt, PLDDT_DISPLAY_DIGITS)} | ${formatMetricValue(row.rmsd, RMSD_DISPLAY_DIGITS)} | ${formatWtDifference(row)} | ${row.af2_selected ? "yes" : "no"} |`
     );
   });
   lines.push("");
@@ -27425,6 +27688,11 @@ async function refreshHitList() {
     });
     if (String(state.currentRunId || "").trim() !== String(result?.run_id || "").trim()) return;
     state.hitListResult = result;
+    if (hasSurrogateTriageResult(result)) {
+      state.hitListSort = { key: "surrogate_rank", order: "asc" };
+    } else if (state.hitListSort?.key === "surrogate_rank" || state.hitListSort?.key === "surrogate_role") {
+      state.hitListSort = { key: "score", order: "desc" };
+    }
     state.hitListRows = Array.isArray(result?.rows) ? result.rows : [];
     renderHitList();
     renderArtifactCompareSelects();
@@ -27645,6 +27913,11 @@ function buildReportChartSection() {
       id: "plddt_rmsd",
       title: t("analyze.chart.option.plddtRmsd"),
       build: buildPlddtRmsdScatter,
+    },
+    {
+      id: "plddt_soluprot",
+      title: t("analyze.chart.option.plddtSoluprot"),
+      build: buildPlddtSoluprotScatter,
     },
     {
       id: "plddt_relax",
@@ -29228,7 +29501,7 @@ if (el.hitListTable) {
       if (current.key === key) {
         state.hitListSort = { key, order: current.order === "asc" ? "desc" : "asc" };
       } else {
-        state.hitListSort = { key, order: "desc" };
+        state.hitListSort = { key, order: key === "surrogate_rank" ? "asc" : "desc" };
       }
       renderHitList();
       return;

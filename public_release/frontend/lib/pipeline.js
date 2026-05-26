@@ -2726,7 +2726,7 @@ export function runUsesRfd3Stage({ mode = "", answers = {}, nodes = [] } = {}) {
       return (parsed?.baseStage || normalizeStage(node)) === "rfd3";
     });
   }
-  if (normalizedMode === "pipeline") {
+  if (normalizedMode === "pipeline" || normalizedMode === "surrogate") {
     return stageRangeIncludes(answers?.start_from || "msa", answers?.stop_after || "novelty", "rfd3");
   }
   return false;

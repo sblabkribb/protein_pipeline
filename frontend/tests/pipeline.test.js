@@ -2293,6 +2293,17 @@ test("runUsesRfd3Stage tracks whether current execution path includes rfd3", () 
   );
   assert.equal(
     runUsesRfd3Stage({
+      mode: "surrogate",
+      answers: {
+        target_input: "ATOM      1  N",
+        start_from: "msa",
+        stop_after: "novelty",
+      },
+    }),
+    true
+  );
+  assert.equal(
+    runUsesRfd3Stage({
       mode: "workflow",
       answers: {
         target_input: "ATOM      1  N",

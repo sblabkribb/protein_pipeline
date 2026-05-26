@@ -227,7 +227,7 @@ test("home new experiment opens a mode chooser instead of forcing fast launch", 
   assert.match(styles, /\.experiment-choice-card \.ghost\s*\{[\s\S]*white-space:\s*nowrap;/m);
 });
 
-test("surrogate triage is exposed as a first-class UI mode", () => {
+test("surrogate triage is exposed as a first-class pipeline budget layer", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
@@ -258,8 +258,8 @@ test("surrogate triage is exposed as a first-class UI mode", () => {
   assert.match(source, /surrogate_triage_scope:\s*"pooled_tiers"/);
   assert.match(source, /num_seq_per_tier:\s*numSeqPerTier/);
   assert.match(source, /num_seq_per_tier:\s*3333/);
-  assert.match(source, /rfd3_use:\s*false/);
-  assert.match(source, /bioemu_use:\s*false/);
+  assert.doesNotMatch(source, /rfd3_use:\s*false/);
+  assert.doesNotMatch(source, /bioemu_use:\s*false/);
   assert.match(source, /"tabs\.surrogate"/);
   assert.match(source, /"surrogate\.title"/);
   assert.match(source, /"surrogate\.acquisition\.label": "Top K selection method"/);
@@ -423,7 +423,7 @@ test("advanced optional setup boards preserve open state across rerenders", () =
   assert.match(source, /makeOptionalSetupDetails\(card,\s*\{\s*key:\s*"evolution"/);
 });
 
-test("advanced setup exposes surrogate triage as a separate AF2 budget mode", () => {
+test("advanced setup exposes surrogate triage as a switchable AF2 budget layer", () => {
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
   assert.match(source, /\{ labelKey: "runmode\.surrogate", value: "surrogate" \}/);
@@ -434,8 +434,7 @@ test("advanced setup exposes surrogate triage as a separate AF2 budget mode", ()
   assert.match(source, /surrogate_triage_initial_samples/);
   assert.match(source, /surrogate_triage_top_k/);
   assert.match(source, /surrogate_triage_model/);
-  assert.match(source, /state\.answers\.rfd3_use = false;/);
-  assert.match(source, /state\.answers\.bioemu_use = false;/);
+  assert.doesNotMatch(source, /state\.answers\.rfd3_use = false;\s*state\.answers\.bioemu_use = false;/);
 });
 
 test("evolution setup defaults to experimental feedback label source", () => {
