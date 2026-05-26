@@ -664,6 +664,7 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
+    from matplotlib.patches import Patch
 
     df = pd.DataFrame(summary_rows)
     arm_order = _ordered_arms(set(df["arm"]))
@@ -687,7 +688,7 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
         (
             "mean_pairwise_diversity",
             "Sequence-pool diversity",
-            "Mean pairwise diversity",
+            "Mean pairwise diversity\n(higher = lower identity)",
         ),
     ]
     absolute_by_metric: dict[str, dict[str, list[float]]] = {
@@ -751,6 +752,23 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
         "rfd3_bioemu": "#0072B2",
         "rfd3_ensemble3": "#CC79A7",
     }
+    legend_handles = [
+        Patch(
+            facecolor=palette.get(arm, "#999999"),
+            edgecolor="#333333",
+            alpha=0.78,
+            label=labels.get(arm, arm).replace("\n", " "),
+        )
+        for arm in arm_order
+    ]
+    fig.legend(
+        handles=legend_handles,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 0.925),
+        ncol=min(len(legend_handles), 4),
+        fontsize=8,
+        frameon=False,
+    )
     for panel_idx, (ax, (metric, title, ylabel)) in enumerate(
         zip(axes_flat[:3], metric_specs, strict=True)
     ):
@@ -850,8 +868,8 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
                 va="bottom",
                 fontsize=7,
             )
-    ax.set_title("Paired increases relative to Single", fontsize=10, pad=8)
-    ax.set_ylabel("Fraction of paired targets", fontsize=9)
+    ax.set_title("Positive paired shifts vs Single", fontsize=10, pad=8)
+    ax.set_ylabel("Fraction of evaluable\npaired targets", fontsize=9)
     ax.set_xticks(x)
     ax.set_xticklabels([label for _, label in support_metrics], fontsize=8)
     ax.set_ylim(0, 1.15)
@@ -859,7 +877,6 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
     ax.set_axisbelow(True)
     for spine in ("top", "right"):
         ax.spines[spine].set_visible(False)
-    ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1.0), fontsize=7, frameon=False)
 
     for label, ax_ in zip(["A", "B", "C", "D"], axes_flat, strict=True):
         ax_.text(
@@ -876,7 +893,7 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
         fontsize=11,
         weight="bold",
     )
-    fig.tight_layout(rect=(0, 0, 0.93, 0.95))
+    fig.tight_layout(rect=(0, 0, 1.0, 0.89))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=250, bbox_inches="tight")
     fig.savefig(out_path.with_suffix(".pdf"), bbox_inches="tight")
