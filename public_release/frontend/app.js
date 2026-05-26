@@ -5562,7 +5562,7 @@ function labelFromMap(value, map) {
 }
 
 const TAB_KEY = "kbf.activeTab";
-const TAB_OPTIONS = ["home", "fast", "advanced", "surrogate", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"];
+const TAB_OPTIONS = ["home", "fast", "advanced", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"];
 const tabButtons = Array.from(document.querySelectorAll("#appSidebar .tab-btn"));
 const tabPanels = Array.from(document.querySelectorAll("#appShell .tab-panel"));
 const langButtons = Array.from(document.querySelectorAll(".lang-btn"));
@@ -5668,22 +5668,6 @@ const TUTORIAL_STEPS = [
     titleKey: "tutorial.step.advancedReview.title",
     bodyKey: "tutorial.step.advancedReview.body",
     hintKey: "tutorial.step.advancedReview.hint",
-  },
-  {
-    id: "surrogate",
-    tab: "surrogate",
-    target: ".surrogate-input-card",
-    titleKey: "tutorial.step.surrogate.title",
-    bodyKey: "tutorial.step.surrogate.body",
-    hintKey: "tutorial.step.surrogate.hint",
-  },
-  {
-    id: "surrogateSettings",
-    tab: "surrogate",
-    target: ".surrogate-options-card",
-    titleKey: "tutorial.step.surrogateSettings.title",
-    bodyKey: "tutorial.step.surrogateSettings.body",
-    hintKey: "tutorial.step.surrogateSettings.hint",
   },
   {
     id: "evolution",
@@ -5815,12 +5799,6 @@ const TUTORIAL_SECTIONS = [
     stepIds: ["advanced", "advancedInput", "pdfAgent", "advancedWorkflow", "advancedCriteria", "advancedExpert", "advancedReview"],
   },
   {
-    id: "surrogate",
-    titleKey: "tutorial.section.surrogate.title",
-    descKey: "tutorial.section.surrogate.desc",
-    stepIds: ["surrogate", "surrogateSettings"],
-  },
-  {
     id: "evolution",
     titleKey: "tutorial.section.evolution.title",
     descKey: "tutorial.section.evolution.desc",
@@ -5854,7 +5832,6 @@ const TUTORIAL_SECTIONS = [
 
 const RUN_MODE_OPTIONS = [
   { labelKey: "runmode.pipeline", value: "pipeline" },
-  { labelKey: "runmode.surrogate", value: "surrogate" },
   { labelKey: "runmode.workflow", value: "workflow" },
   { labelKey: "runmode.rfd3", value: "rfd3" },
   { labelKey: "runmode.bioemu", value: "bioemu" },
@@ -5883,7 +5860,6 @@ const SETUP_WORKFLOW_QUESTION_IDS = new Set([
   "bioemu_use",
   "relax_enabled",
   "af2_provider",
-  "evolution_mode",
   "surrogate_triage_enabled",
   "surrogate_triage_scope",
 ]);
@@ -5911,11 +5887,6 @@ const SETUP_CRITERIA_QUESTION_IDS = new Set([
   "wt_compare",
   "mask_consensus_apply",
   "ligand_mask_use_original_target",
-  "evolution_pool_size",
-  "evolution_initial_samples",
-  "evolution_oracle_samples",
-  "evolution_rounds",
-  "evolution_samples_per_round",
 ]);
 const SETUP_EXPERT_QUESTION_IDS = new Set([
   "bioemu_target_rmsd_cutoff",
@@ -12072,7 +12043,11 @@ function handleExperimentChoice(target) {
     openWorkflowStudioBuilderFromHome();
     return;
   }
-  if (["fast", "advanced", "surrogate", "evolution"].includes(normalizedTarget)) {
+  if (normalizedTarget === "surrogate") {
+    applySurrogatePresetToAdvanced();
+    return;
+  }
+  if (["fast", "advanced", "evolution"].includes(normalizedTarget)) {
     setActiveTab(normalizedTarget);
   }
 }
@@ -12836,7 +12811,7 @@ function initSurrogateLauncher() {
     const answers = buildSurrogateLaunchAnswers();
     if (!String(answers.target_input || "").trim()) {
       setMessage(t("surrogate.error.targetRequired"), "ai");
-      setActiveTab("surrogate");
+      applySurrogatePresetToAdvanced();
       return;
     }
     await runPipeline(answers);
@@ -13303,81 +13278,6 @@ function buildManualPlan(mode) {
         required: false,
         default: mode === "surrogate" ? 3333 : 2,
       },
-      {
-        id: "evolution_mode",
-        labelKey: "question.evolutionMode.label",
-        questionKey: "question.evolutionMode.help",
-        label: "Evolution Mode",
-        question: "Enable active-learning AF2 triage for sequence design.",
-        required: false,
-        default: false,
-      },
-      {
-        id: "evolution_pool_size",
-        labelKey: "question.evolutionPoolSize.label",
-        questionKey: "question.evolutionPoolSize.help",
-        label: "Evolution Pool Size",
-        question: "Initial sequences to generate in Stage 1.",
-        required: false,
-        default: 1000,
-      },
-      {
-        id: "evolution_label_source",
-        labelKey: "question.evolutionLabelSource.label",
-        questionKey: "question.evolutionLabelSource.help",
-        required: false,
-        default: "experimental",
-      },
-      {
-        id: "evolution_objective_metric",
-        labelKey: "question.evolutionObjectiveMetric.label",
-        questionKey: "question.evolutionObjectiveMetric.help",
-        required: false,
-        default: "activity",
-      },
-      {
-        id: "evolution_experiment_source_run_id",
-        labelKey: "question.evolutionExperimentSourceRunId.label",
-        questionKey: "question.evolutionExperimentSourceRunId.help",
-        required: false,
-        default: "",
-      },
-      {
-        id: "evolution_initial_samples",
-        labelKey: "question.evolutionInitialSamples.label",
-        questionKey: "question.evolutionInitialSamples.help",
-        label: "Evolution Oracle Budget",
-        question: "Number of initial samples for AF2 training.",
-        required: false,
-        default: 30,
-      },
-      {
-        id: "evolution_oracle_samples",
-        labelKey: "question.evolutionOracleSamples.label",
-        questionKey: "question.evolutionOracleSamples.help",
-        label: "Evolution Top K",
-        question: "Top candidates to validate with AF2.",
-        required: false,
-        default: 20,
-      },
-      {
-        id: "evolution_rounds",
-        labelKey: "question.evolutionRounds.label",
-        questionKey: "question.evolutionRounds.help",
-        label: "Evolution Rounds",
-        question: "Number of BO rounds.",
-        required: false,
-        default: 3,
-      },
-      {
-        id: "evolution_samples_per_round",
-        labelKey: "question.evolutionSamplesPerRound.label",
-        questionKey: "question.evolutionSamplesPerRound.help",
-        label: "Evolution Samples Per Round",
-        question: "Number of samples per BO round.",
-        required: false,
-        default: 5,
-      },
 
       {
         id: "selected_tiers",
@@ -13684,81 +13584,6 @@ function buildManualPlan(mode) {
       {
         id: "bioemu_steering_config_text",
         required: false,
-      },
-      {
-        id: "evolution_mode",
-        labelKey: "question.evolutionMode.label",
-        questionKey: "question.evolutionMode.help",
-        label: "Evolution Mode",
-        question: "Enable active-learning AF2 triage for sequence design.",
-        required: false,
-        default: false,
-      },
-      {
-        id: "evolution_pool_size",
-        labelKey: "question.evolutionPoolSize.label",
-        questionKey: "question.evolutionPoolSize.help",
-        label: "Evolution Pool Size",
-        question: "Initial sequences to generate in Stage 1.",
-        required: false,
-        default: 1000,
-      },
-      {
-        id: "evolution_label_source",
-        labelKey: "question.evolutionLabelSource.label",
-        questionKey: "question.evolutionLabelSource.help",
-        required: false,
-        default: "experimental",
-      },
-      {
-        id: "evolution_objective_metric",
-        labelKey: "question.evolutionObjectiveMetric.label",
-        questionKey: "question.evolutionObjectiveMetric.help",
-        required: false,
-        default: "activity",
-      },
-      {
-        id: "evolution_experiment_source_run_id",
-        labelKey: "question.evolutionExperimentSourceRunId.label",
-        questionKey: "question.evolutionExperimentSourceRunId.help",
-        required: false,
-        default: "",
-      },
-      {
-        id: "evolution_initial_samples",
-        labelKey: "question.evolutionInitialSamples.label",
-        questionKey: "question.evolutionInitialSamples.help",
-        label: "Evolution Oracle Budget",
-        question: "Number of initial samples for AF2 training.",
-        required: false,
-        default: 30,
-      },
-      {
-        id: "evolution_oracle_samples",
-        labelKey: "question.evolutionOracleSamples.label",
-        questionKey: "question.evolutionOracleSamples.help",
-        label: "Evolution Top K",
-        question: "Top candidates to validate with AF2.",
-        required: false,
-        default: 20,
-      },
-      {
-        id: "evolution_rounds",
-        labelKey: "question.evolutionRounds.label",
-        questionKey: "question.evolutionRounds.help",
-        label: "Evolution Rounds",
-        question: "Number of BO rounds.",
-        required: false,
-        default: 3,
-      },
-      {
-        id: "evolution_samples_per_round",
-        labelKey: "question.evolutionSamplesPerRound.label",
-        questionKey: "question.evolutionSamplesPerRound.help",
-        label: "Evolution Samples Per Round",
-        question: "Number of samples per BO round.",
-        required: false,
-        default: 5,
       },
     );
   }
@@ -18815,9 +18640,6 @@ function renderQuestions(questions) {
   appendCompactOptionBoard();
   if (setupWizardStepId === "workflow") {
     appendSurrogateTriageBoard();
-  }
-  if (setupWizardStepId === "workflow") {
-    appendEvolutionBoard();
   }
 
   const bioemuCountQuestionIds = new Set(["bioemu_max_return_structures", "bioemu_num_samples"]);

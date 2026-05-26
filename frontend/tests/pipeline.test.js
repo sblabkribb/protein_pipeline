@@ -1073,13 +1073,6 @@ test("workflowStudioStageFields exposes key fields per stage", () => {
     "num_seq_per_tier",
     "mask_consensus_apply",
     "ligand_mask_use_original_target",
-    "evolution_mode",
-    "evolution_label_source",
-    "evolution_objective_metric",
-    "evolution_experiment_source_run_id",
-    "evolution_initial_samples",
-    "evolution_rounds",
-    "evolution_samples_per_round",
   ]);
   assert.deepEqual(workflowStudioStageFields("af2"), [
     "af2_provider",
@@ -1662,14 +1655,14 @@ test("product shell exposes a sidebar with home, fast, and advanced entry points
   assert.match(html, /data-tab="home"/);
   assert.match(html, /data-tab="fast"/);
   assert.match(html, /data-tab="advanced"/);
-  assert.match(html, /data-tab="surrogate"/);
+  assert.doesNotMatch(html, /data-tab="surrogate"/);
 
   assert.match(source, /"tabs\.home":/);
   assert.match(source, /"tabs\.fast":/);
   assert.match(source, /"tabs\.advanced":/);
   assert.match(
     source,
-    /const TAB_OPTIONS = \["home", "fast", "advanced", "surrogate", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"\];/
+    /const TAB_OPTIONS = \["home", "fast", "advanced", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"\];/
   );
 });
 
@@ -1688,7 +1681,7 @@ test("sidebar prioritizes monitor before rounds in the execution navigation orde
   assert.ok(analyzeIdx > roundsIdx);
   assert.match(
     source,
-    /const TAB_OPTIONS = \["home", "fast", "advanced", "surrogate", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"\];/
+    /const TAB_OPTIONS = \["home", "fast", "advanced", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"\];/
   );
 });
 
@@ -2138,7 +2131,7 @@ test("rounds layout separates creation and management actions into dedicated row
   assert.match(source, /renderRoundsWorkspace\(\);/);
   assert.match(
     source,
-    /const TAB_OPTIONS = \["home", "fast", "advanced", "evolution", "studio", "monitor", "rounds", "analyze", "mcp"\];/
+    /const TAB_OPTIONS = \["home", "fast", "advanced", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"\];/
   );
   assert.match(
     source,

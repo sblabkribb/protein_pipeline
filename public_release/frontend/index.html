@@ -122,17 +122,6 @@
                 Advanced
               </button>
               <button
-                id="tabBtnSurrogate"
-                class="tab-btn app-nav-btn"
-                role="tab"
-                aria-selected="false"
-                aria-controls="tab-surrogate"
-                data-tab="surrogate"
-                data-i18n="tabs.surrogate"
-              >
-                Surrogate
-              </button>
-              <button
                 id="tabBtnEvolution"
                 class="tab-btn app-nav-btn"
                 role="tab"
@@ -576,11 +565,11 @@
         </section>
 
         <section
-          id="tab-surrogate"
-          class="tab-panel"
-          data-tab="surrogate"
+          id="surrogate-advanced-preset-template"
+          class="tab-panel hidden"
+          data-template="surrogate"
           role="tabpanel"
-          aria-labelledby="tabBtnSurrogate"
+          aria-hidden="true"
         >
           <div class="tab-content-shell">
             <div class="panel panel-block evolution-shell surrogate-shell">
@@ -1895,6 +1884,7 @@
                   </div>
                 </div>
                 <div id="hitListSummary" class="score-row score-row-compact"></div>
+                <div id="surrogateTriageSummary" class="surrogate-triage-summary hidden"></div>
                 <div class="chart-explorer">
                   <div class="chart-explorer-head">
                     <label>
@@ -1902,6 +1892,9 @@
                       <select id="analyzeChartType" class="artifact-select">
                         <option value="plddt_rmsd" data-i18n="analyze.chart.option.plddtRmsd">
                           Scatter: pLDDT vs RMSD
+                        </option>
+                        <option value="plddt_soluprot" data-i18n="analyze.chart.option.plddtSoluprot">
+                          Scatter: pLDDT vs SoluProt
                         </option>
                         <option value="score_hist" data-i18n="analyze.chart.option.scoreHist">
                           Histogram: Hit Score

@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Launch manuscript AF2-budgeted surrogate-triage runs.
 
-This script is the paper-facing compute-saving path. It runs the standard
-RAPID design pipeline with RFD3, BioEmu, Relax, and experimental evolution
-disabled, then enables one-round surrogate triage before AF2/ColabFold.
+This script is the paper-facing compute-saving path. By default it runs the
+original-backbone RAPID design pipeline with RFD3, BioEmu, Relax, and
+experimental evolution disabled, then enables one-round surrogate triage before
+AF2/ColabFold. Optional structural-context flags can be used for supplementary
+compatibility runs that combine RFD3 and/or BioEmu with the same surrogate
+triage budget.
 """
 
 from __future__ import annotations
@@ -192,9 +195,15 @@ def _build_request(*, cath_module, pdb_path: Path, target_id: str, args: argpars
         ),
         surrogate_triage_ensemble_models=_parse_models(args.ensemble_models, default=[]),
         surrogate_triage_cv_folds=int(args.cv_folds),
-        rfd3_use=False,
-        bioemu_use=False,
-        relax_enabled=False,
+        rfd3_use=bool(args.rfd3_use),
+        rfd3_max_return_designs=max(1, int(args.rfd3_max_return_designs)),
+        rfd3_target_rmsd_cutoff=float(args.rfd3_target_rmsd_cutoff),
+        bioemu_use=bool(args.bioemu_use),
+        bioemu_num_samples=max(1, int(args.bioemu_num_samples)),
+        bioemu_max_return_structures=max(1, int(args.bioemu_max_return_structures)),
+        bioemu_filter_samples=bool(args.bioemu_filter_samples),
+        bioemu_target_rmsd_cutoff=float(args.bioemu_target_rmsd_cutoff),
+        relax_enabled=bool(args.relax_enabled),
         novelty_enabled=(str(args.stop_after).lower() == "novelty"),
         wt_compare=False,
         agent_panel_enabled=False,
@@ -263,7 +272,8 @@ def run_now(args: argparse.Namespace) -> int:
             f"[run] {run_id}: target={target} split={subset or '-'} "
             f"n_train={args.initial_samples} top_k={args.top_k} "
             f"scope={args.surrogate_scope} policy={args.surrogate_policy} "
-            f"comparators={args.comparator_models}"
+            f"comparators={args.comparator_models} "
+            f"rfd3={int(bool(args.rfd3_use))} bioemu={int(bool(args.bioemu_use))}"
         )
         if args.dry_run:
             launched.append({"target": target, "run_id": run_id, "status": "dry_run"})
@@ -331,6 +341,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--af2-plddt-cutoff", type=float, default=85.0)
     parser.add_argument("--af2-rmsd-cutoff", type=float, default=2.0)
     parser.add_argument(
+        "--rfd3-use",
+        action="store_true",
+        help="Enable RFD3 before ProteinMPNN for structural-context surrogate compatibility runs.",
+    )
+    parser.add_argument("--rfd3-max-return-designs", type=int, default=10)
+    parser.add_argument("--rfd3-target-rmsd-cutoff", type=float, default=2.0)
+    parser.add_argument(
+        "--bioemu-use",
+        action="store_true",
+        help="Enable BioEmu before ProteinMPNN for structural-context surrogate compatibility runs.",
+    )
+    parser.add_argument("--bioemu-num-samples", type=int, default=50)
+    parser.add_argument("--bioemu-max-return-structures", type=int, default=10)
+    parser.add_argument("--bioemu-target-rmsd-cutoff", type=float, default=2.0)
+    parser.add_argument("--bioemu-filter-samples", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--relax-enabled", action="store_true")
+    parser.add_argument(
         "--selected-tiers",
         default="",
         help="Optional comma-separated conservation tiers for pilot runs, e.g. 0.3.",
@@ -394,6 +421,27 @@ def main(argv: list[str] | None = None) -> int:
         "--stop-after",
         str(args.stop_after),
     ]
+    if args.rfd3_use:
+        command.append("--rfd3-use")
+    command.extend([
+        "--rfd3-max-return-designs",
+        str(args.rfd3_max_return_designs),
+        "--rfd3-target-rmsd-cutoff",
+        str(args.rfd3_target_rmsd_cutoff),
+    ])
+    if args.bioemu_use:
+        command.append("--bioemu-use")
+    command.extend([
+        "--bioemu-num-samples",
+        str(args.bioemu_num_samples),
+        "--bioemu-max-return-structures",
+        str(args.bioemu_max_return_structures),
+        "--bioemu-target-rmsd-cutoff",
+        str(args.bioemu_target_rmsd_cutoff),
+    ])
+    command.append("--bioemu-filter-samples" if args.bioemu_filter_samples else "--no-bioemu-filter-samples")
+    if args.relax_enabled:
+        command.append("--relax-enabled")
     if str(args.ensemble_models or "").strip():
         command.extend(["--ensemble-models", str(args.ensemble_models)])
     if str(args.selected_tiers or "").strip():
@@ -426,6 +474,15 @@ def main(argv: list[str] | None = None) -> int:
         "af2_provider": str(args.af2_provider),
         "af2_backend": str(args.af2_backend),
         "pipeline_af2_max_workers": int(args.pipeline_af2_max_workers),
+        "rfd3_use": bool(args.rfd3_use),
+        "rfd3_max_return_designs": int(args.rfd3_max_return_designs),
+        "rfd3_target_rmsd_cutoff": float(args.rfd3_target_rmsd_cutoff),
+        "bioemu_use": bool(args.bioemu_use),
+        "bioemu_num_samples": int(args.bioemu_num_samples),
+        "bioemu_max_return_structures": int(args.bioemu_max_return_structures),
+        "bioemu_filter_samples": bool(args.bioemu_filter_samples),
+        "bioemu_target_rmsd_cutoff": float(args.bioemu_target_rmsd_cutoff),
+        "relax_enabled": bool(args.relax_enabled),
         "selected_tiers": str(args.selected_tiers),
         "stop_after": str(args.stop_after),
         "command": command,

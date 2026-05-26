@@ -227,46 +227,26 @@ test("home new experiment opens a mode chooser instead of forcing fast launch", 
   assert.match(styles, /\.experiment-choice-card \.ghost\s*\{[\s\S]*white-space:\s*nowrap;/m);
 });
 
-test("surrogate triage is exposed as a first-class pipeline budget layer", () => {
+test("surrogate triage is exposed through Advanced instead of a standalone sidebar tab", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
-  assert.match(html, /id="tabBtnSurrogate"/);
-  assert.match(html, /id="tab-surrogate"/);
-  assert.match(html, /id="surrogateTargetInput"/);
-  assert.match(html, /id="surrogateRunBtn"/);
-  assert.match(html, /id="surrogateAcquisitionPolicyInput"/);
-  assert.match(html, /id="surrogateNumSeqPerTierInput"[^>]*value="3333"/);
-  assert.match(html, /id="surrogateModelChoices"/);
-  assert.match(html, /id="surrogateEnsembleModelChoices"/);
-  assert.match(html, /value="auto" data-i18n="choice\.surrogatePolicy\.auto"/);
-  assert.doesNotMatch(html, /id="surrogateModelInput"[^>]*multiple/);
-  assert.doesNotMatch(html, /data-surrogate-ensemble-model-choice="rf" checked/);
-  assert.doesNotMatch(html, /data-surrogate-ensemble-model-choice="ridge" checked/);
-  assert.doesNotMatch(html, /data-surrogate-ensemble-model-choice="xgboost" checked/);
-  assert.doesNotMatch(html, /data-surrogate-ensemble-model-choice="lightgbm" checked/);
+  assert.doesNotMatch(html, /id="tabBtnSurrogate"/);
+  assert.doesNotMatch(html, /id="tab-surrogate"/);
+  assert.match(html, /data-experiment-target="surrogate"/);
   assert.match(
     source,
-    /const TAB_OPTIONS = \["home", "fast", "advanced", "surrogate", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"\];/
+    /const TAB_OPTIONS = \["home", "fast", "advanced", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"\];/
   );
-  assert.match(source, /let surrogateLauncherInitialized = false;/);
-  assert.match(source, /function initSurrogateLauncher/);
-  assert.match(source, /function syncSurrogateModelChoiceState/);
-  assert.match(source, /function selectedSurrogateModelsFromChoices/);
-  assert.match(source, /function surrogateCandidatePoolSize/);
+  assert.match(source, /applySurrogatePresetToAdvanced\(\);/);
+  assert.match(source, /appendSurrogateTriageBoard\(\);/);
   assert.match(source, /surrogate_triage_enabled:\s*true/);
   assert.match(source, /surrogate_triage_scope:\s*"pooled_tiers"/);
-  assert.match(source, /num_seq_per_tier:\s*numSeqPerTier/);
   assert.match(source, /num_seq_per_tier:\s*3333/);
   assert.doesNotMatch(source, /rfd3_use:\s*false/);
   assert.doesNotMatch(source, /bioemu_use:\s*false/);
-  assert.match(source, /"tabs\.surrogate"/);
-  assert.match(source, /"surrogate\.title"/);
-  assert.match(source, /"surrogate\.acquisition\.label": "Top K selection method"/);
-  assert.match(source, /"surrogate\.acquisition\.label": "Top K 선정 방법"/);
   assert.match(source, /If you choose Random Forest, Ridge, XGBoost, LightGBM, or Rank ensemble/);
   assert.match(source, /Random Forest, Ridge, XGBoost, LightGBM, Rank ensemble 중 하나를 직접 고르면/);
-  assert.match(source, /"surrogate\.ensembleMembers\.help":\s*"기본값은 사용 안 함입니다/);
 });
 
 test("analyze tab renders surrogate model selection and comparison summaries", () => {
@@ -383,13 +363,12 @@ test("advanced target input is prioritized and rfd3 override input is collapsed"
   assert.match(styles, /\.optional-attachment-item/);
 });
 
-test("advanced evolution controls live in workflow setup, not the input step", () => {
+test("advanced setup does not expose evolution controls inside normal pipeline runs", () => {
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
-  assert.match(source, /if \(setupWizardStepId === "workflow"\) \{\s*appendEvolutionBoard\(\);\s*\}/m);
-  assert.match(source, /"setup\.evolution\.title": "Optional Evolution Search"/);
-  assert.match(source, /"setup\.evolution\.title": "Evolution 탐색 \(선택\)"/);
+  assert.doesNotMatch(source, /if \(setupWizardStepId === "workflow"\) \{\s*appendEvolutionBoard\(\);\s*\}/m);
+  assert.match(html, /id="tab-evolution"/);
   assert.match(source, /"setup\.customRunId\.label"/);
   assert.doesNotMatch(html, /Custom Run ID/);
 });
@@ -426,9 +405,7 @@ test("advanced optional setup boards preserve open state across rerenders", () =
 test("advanced setup exposes surrogate triage as a switchable AF2 budget layer", () => {
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
-  assert.match(source, /\{ labelKey: "runmode\.surrogate", value: "surrogate" \}/);
-  assert.match(source, /setup\.modeGuide\.surrogate/);
-  assert.match(source, /run\.label\.surrogate/);
+  assert.doesNotMatch(source, /RUN_MODE_OPTIONS[\s\S]*\{ labelKey: "runmode\.surrogate", value: "surrogate" \}/);
   assert.match(source, /"question\.surrogateTriageEnabled\.label"/);
   assert.match(source, /surrogate_triage_enabled/);
   assert.match(source, /surrogate_triage_initial_samples/);
@@ -493,7 +470,6 @@ test("frontend includes a localized first-run tutorial overlay", () => {
   assert.match(source, /function openTutorial/);
   assert.match(source, /"action\.tutorial"/);
   assert.match(source, /"tutorial\.contents\.title"/);
-  assert.match(source, /"tutorial\.section\.surrogate\.title"/);
   assert.match(source, /"tutorial\.step\.topbar\.title"/);
   assert.match(source, /"tutorial\.step\.evolution\.title"/);
   assert.match(source, /"tutorial\.step\.studio\.title"/);
