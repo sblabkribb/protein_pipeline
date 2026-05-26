@@ -406,6 +406,9 @@ test("advanced setup exposes surrogate triage as a switchable AF2 budget layer",
   const source = readFileSync(new URL("../app.js", import.meta.url), "utf8");
 
   assert.doesNotMatch(source, /RUN_MODE_OPTIONS[\s\S]*\{ labelKey: "runmode\.surrogate", value: "surrogate" \}/);
+  assert.match(source, /const RUN_MODE_PRIMARY_OPTIONS = \[/);
+  assert.match(source, /\{ labelKey: "runmode\.standalone", value: "standalone" \}/);
+  assert.match(source, /const RUN_MODE_STANDALONE_OPTIONS = RUN_MODE_OPTIONS\.filter/);
   assert.match(source, /"question\.surrogateTriageEnabled\.label"/);
   assert.match(source, /surrogate_triage_enabled/);
   assert.match(source, /surrogate_triage_initial_samples/);

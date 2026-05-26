@@ -3505,6 +3505,7 @@ const I18N = {
     "runmode.pipeline": "Full Pipeline",
     "runmode.surrogate": "Pipeline + Surrogate",
     "runmode.workflow": "Workflow Studio",
+    "runmode.standalone": "Single Stage",
     "runmode.rfd3": "RFD3 (Backbone)",
     "runmode.bioemu": "BioEmu (Backbone)",
     "runmode.msa": "MSA (MMseqs2)",
@@ -3518,6 +3519,8 @@ const I18N = {
       "Run the RAPID pipeline with AF2 surrogate triage enabled. RFD3, BioEmu, and Relax remain normal pipeline options.",
     "setup.modeGuide.workflow":
       "Select stages in Advanced, then fill stage inputs and run step-by-step in Studio.",
+    "setup.modeGuide.standalone":
+      "Open individual tools only when you need to debug or rerun one computational stage.",
     "setup.modeGuide.rfd3": "Run only RFD3 backbone generation.",
     "setup.modeGuide.bioemu": "Run only BioEmu backbone sampling.",
     "setup.modeGuide.msa": "Run only MSA/MMseqs retrieval and cache preparation.",
@@ -5193,6 +5196,7 @@ const I18N = {
     "runmode.pipeline": "전체 파이프라인",
     "runmode.surrogate": "Pipeline + Surrogate",
     "runmode.workflow": "Workflow Studio",
+    "runmode.standalone": "단독 모드",
     "runmode.rfd3": "RFD3 (Backbone)",
     "runmode.bioemu": "BioEmu (Backbone)",
     "runmode.msa": "MSA (MMseqs2)",
@@ -5205,6 +5209,7 @@ const I18N = {
     "setup.modeGuide.surrogate":
       "AF2 surrogate triage를 켠 RAPID 파이프라인을 실행합니다. RFD3, BioEmu, Relax는 일반 파이프라인 옵션처럼 조정할 수 있습니다.",
     "setup.modeGuide.workflow": "Advanced에서 단계 구성을 정한 뒤 Studio에서 단계별 입력과 실행을 진행합니다.",
+    "setup.modeGuide.standalone": "특정 계산 단계만 디버깅하거나 재실행할 때 사용하는 단독 실행 모드입니다.",
     "setup.modeGuide.rfd3": "RFD3 백본 생성만 실행합니다.",
     "setup.modeGuide.bioemu": "BioEmu 백본 샘플링만 실행합니다.",
     "setup.modeGuide.msa": "MSA/MMseqs 탐색과 캐시 준비만 실행합니다.",
@@ -5841,6 +5846,15 @@ const RUN_MODE_OPTIONS = [
   { labelKey: "runmode.af2", value: "af2" },
   { labelKey: "runmode.diffdock", value: "diffdock" },
 ];
+const STANDALONE_RUN_MODE_VALUES = new Set(["rfd3", "bioemu", "msa", "design", "soluprot", "af2", "diffdock"]);
+const RUN_MODE_PRIMARY_OPTIONS = [
+  { labelKey: "runmode.pipeline", value: "pipeline" },
+  { labelKey: "runmode.workflow", value: "workflow" },
+  { labelKey: "runmode.standalone", value: "standalone" },
+];
+const RUN_MODE_STANDALONE_OPTIONS = RUN_MODE_OPTIONS.filter((option) =>
+  STANDALONE_RUN_MODE_VALUES.has(option.value)
+);
 
 const PIPELINE_STAGE_ORDER = ["msa", "rfd3", "bioemu", "design", "soluprot", "af2", "novelty"];
 const SETUP_WIZARD_STEPS = [
@@ -13702,7 +13716,8 @@ function updateRunLabel() {
 }
 
 function setRunMode(mode, { render = true } = {}) {
-  const normalized = RUN_MODE_OPTIONS.find((opt) => opt.value === mode)?.value || "pipeline";
+  const requested = mode === "standalone" ? "rfd3" : mode;
+  const normalized = RUN_MODE_OPTIONS.find((opt) => opt.value === requested)?.value || "pipeline";
   state.runMode = normalized;
   state.setupStepIndex = 0;
   if (normalized === "workflow") {
@@ -17525,10 +17540,37 @@ function renderQuestions(questions) {
 
     if (q.id === "run_mode") {
       const current = state.runMode || q.default || "pipeline";
-      renderChoiceButtons(card, RUN_MODE_OPTIONS, current, (value) => {
-        setRunMode(value, { render: false });
-        updateRunEligibility(normalizedQuestions);
-      });
+      const primaryCurrent = STANDALONE_RUN_MODE_VALUES.has(current) ? "standalone" : current;
+      renderChoiceButtons(
+        card,
+        RUN_MODE_PRIMARY_OPTIONS,
+        primaryCurrent,
+        (value) => {
+          const nextMode = value === "standalone"
+            ? (STANDALONE_RUN_MODE_VALUES.has(current) ? current : "rfd3")
+            : value;
+          setRunMode(nextMode, { render: false });
+          updateRunEligibility(normalizedQuestions);
+        }
+      );
+      if (primaryCurrent === "standalone") {
+        const standalonePanel = document.createElement("div");
+        standalonePanel.className = "standalone-mode-panel";
+        const standaloneTitle = document.createElement("div");
+        standaloneTitle.className = "standalone-mode-title";
+        standaloneTitle.textContent = t("runmode.standalone");
+        standalonePanel.appendChild(standaloneTitle);
+        renderChoiceButtons(
+          standalonePanel,
+          RUN_MODE_STANDALONE_OPTIONS,
+          current,
+          (value) => {
+            setRunMode(value, { render: false });
+            updateRunEligibility(normalizedQuestions);
+          }
+        );
+        card.appendChild(standalonePanel);
+      }
       const detail = document.createElement("div");
       detail.className = "question-summary";
       detail.textContent = t("question.runMode.detail");

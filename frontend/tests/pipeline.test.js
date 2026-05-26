@@ -1664,6 +1664,8 @@ test("product shell exposes a sidebar with home, fast, and advanced entry points
     source,
     /const TAB_OPTIONS = \["home", "fast", "advanced", "evolution", "studio", "monitor", "cath", "rounds", "analyze", "mcp"\];/
   );
+  assert.match(source, /const RUN_MODE_PRIMARY_OPTIONS = \[[\s\S]*"runmode\.pipeline"[\s\S]*"runmode\.workflow"[\s\S]*"runmode\.standalone"/);
+  assert.match(source, /const STANDALONE_RUN_MODE_VALUES = new Set\(\["rfd3", "bioemu", "msa", "design", "soluprot", "af2", "diffdock"\]\);/);
 });
 
 test("sidebar prioritizes monitor before rounds in the execution navigation order", () => {
