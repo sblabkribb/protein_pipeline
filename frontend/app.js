@@ -2094,9 +2094,9 @@ const I18N = {
     "tutorial.step.home.hint": "A project keeps repeated optimization work traceable while round repair and manual edits stay in the Rounds tab.",
     "tutorial.step.experimentChoice.title": "Choose the right start path",
     "tutorial.step.experimentChoice.body":
-      "After clicking New Experiment, choose the setup path that matches the work. Fast is for a standard run with minimal input. Advanced is the guided full setup. Evolution runs iterative search. Workflow Studio lets you inspect each stage before continuing.",
+      "After clicking New Experiment, choose the setup path that matches the work. Fast is for a standard run with minimal input. Advanced is the guided full setup. Pipeline + Surrogate opens Advanced with AF2-budgeted surrogate triage already turned on — useful when the candidate pool is large and you want to cap expensive AF2/ColabFold calls. Evolution runs iterative search. Workflow Studio lets you inspect each stage before continuing.",
     "tutorial.step.experimentChoice.hint":
-      "Use Fast for routine checks, Advanced for most planned runs, Evolution for repeated optimization, and Workflow Studio when stage-by-stage review matters.",
+      "Use Fast for routine checks, Advanced for most planned runs, Pipeline + Surrogate to bound the AF2 budget, Evolution for repeated optimization, and Workflow Studio when stage-by-stage review matters.",
     "tutorial.step.homeProject.title": "Create or select a project first",
     "tutorial.step.homeProject.body":
       "Projects group related targets, hypotheses, rounds, and reports. Create a project here or select an existing one before starting repeated work.",
@@ -3803,9 +3803,9 @@ const I18N = {
     "tutorial.step.home.hint": "프로젝트는 반복 최적화 추적에 쓰고, 라운드 수정/복구 같은 고급 작업은 Rounds 탭에서 처리합니다.",
     "tutorial.step.experimentChoice.title": "시작 경로를 고릅니다",
     "tutorial.step.experimentChoice.body":
-      "새 실험을 누른 뒤 작업 방식에 맞는 경로를 고릅니다. 빠른 실행은 최소 입력으로 표준 실행을 시작합니다. 고급 설정은 전체 설정을 단계별로 확인합니다. Evolution은 반복 탐색용입니다. 스튜디오는 각 단계를 확인하고 이어 실행할 때 사용합니다.",
+      "새 실험을 누른 뒤 작업 방식에 맞는 경로를 고릅니다. 빠른 실행은 최소 입력으로 표준 실행을 시작합니다. 고급 설정은 전체 설정을 단계별로 확인합니다. Pipeline + Surrogate는 대리모델 기반 AF2 예산 선별이 미리 켜진 고급 설정을 엽니다. 후보 pool이 커서 비싼 AF2/ColabFold 호출 수를 제한해야 할 때 쓰세요. Evolution은 반복 탐색용입니다. 스튜디오는 각 단계를 확인하고 이어 실행할 때 사용합니다.",
     "tutorial.step.experimentChoice.hint":
-      "일상적인 확인은 빠른 실행, 계획된 실행은 고급 설정, 반복 최적화는 Evolution, 단계별 검토가 필요하면 스튜디오를 선택하세요.",
+      "일상적인 확인은 빠른 실행, 계획된 실행은 고급 설정, AF2 예산을 제한할 때는 Pipeline + Surrogate, 반복 최적화는 Evolution, 단계별 검토가 필요하면 스튜디오를 선택하세요.",
     "tutorial.step.homeProject.title": "먼저 프로젝트를 만들거나 선택합니다",
     "tutorial.step.homeProject.body":
       "프로젝트는 관련 타깃, 가설, 라운드, 리포트를 묶는 상위 작업 공간입니다. 반복 작업을 시작하기 전에 여기서 프로젝트를 만들거나 기존 프로젝트를 선택하세요.",
