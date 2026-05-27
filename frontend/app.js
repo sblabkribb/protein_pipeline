@@ -2111,8 +2111,8 @@ const I18N = {
     "tutorial.step.advanced.hint": "Use this when you need to tune conservation tiers, output counts, RFD3/BioEmu/AF2 gates, or fixed positions.",
     "tutorial.step.advancedInput.title": "Start with the target input",
     "tutorial.step.advancedInput.body":
-      "Step 1/5 is for the target sequence or structure. Paste or upload FASTA/PDB/mmCIF input here; Evolution (BO) is only an optional search toggle, not the run shape.",
-    "tutorial.step.advancedInput.hint": "If the target is missing, later workflow and review steps cannot launch a run.",
+      "Step 1/5 is for the target sequence or structure. Paste or upload FASTA/PDB/mmCIF input here. For DiffDock runs, also supply the ligand (SMILES or SDF) and the protein PDB used for docking. The optional Residue Picker lets you mark fixed, disallowed, or hotspot residues on the structure. Evolution (BO) is only an optional search toggle, not the run shape.",
+    "tutorial.step.advancedInput.hint": "If the target is missing, later workflow and review steps cannot launch a run. DiffDock additionally needs a ligand; the residue picker is optional.",
     "tutorial.step.advancedWorkflow.title": "Workflow decides the run shape",
     "tutorial.step.advancedWorkflow.body":
       "Step 2/5 is where the run shape belongs. Choose the pipeline path, included stages, conservation levels, AF2 budget triage, and whether to open a staged Workflow Studio session.",
@@ -2243,7 +2243,7 @@ const I18N = {
     "home.experimentChoice.advanced.desc": "Step through input, workflow, criteria, expert options, and review.",
     "home.experimentChoice.surrogate.kicker": "Budget triage",
     "home.experimentChoice.surrogate.title": "Pipeline + Surrogate",
-    "home.experimentChoice.surrogate.desc": "Enable AF2-budgeted surrogate triage inside the RAPID pipeline. Advanced review can add RFD3 or BioEmu.",
+    "home.experimentChoice.surrogate.desc": "Open Advanced with AF2-budgeted surrogate triage already turned on. You still start at the target input step and can add RFD3 or BioEmu before launch.",
     "home.experimentChoice.evolution.kicker": "Iterative design",
     "home.experimentChoice.evolution.title": "Evolution",
     "home.experimentChoice.evolution.desc": "Configure active-learning rounds and Top K selection.",
@@ -2289,6 +2289,7 @@ const I18N = {
     "surrogate.error.targetRequired": "Choose FASTA/PDB/mmCIF input before launching Surrogate Triage.",
     "surrogate.message.fileLoaded": "Loaded {name} into Surrogate Triage.",
     "surrogate.message.reviewReady": "Surrogate triage settings were copied into Advanced for review.",
+    "surrogate.message.presetReady": "Surrogate AF2 triage is preselected. Start with target input in step 1/5, then continue through workflow and review.",
     "home.context.project": "Current Project",
     "home.context.round": "Current Round",
     "home.context.roundStatus": "Round Status",
@@ -3818,8 +3819,8 @@ const I18N = {
     "tutorial.step.advanced.hint": "보존도 티어, 출력 개수, RFD3/BioEmu/AF2 기준, 고정 위치를 조정해야 할 때 사용하세요.",
     "tutorial.step.advancedInput.title": "먼저 타깃을 입력합니다",
     "tutorial.step.advancedInput.body":
-      "1/5 입력 단계는 타깃 서열 또는 구조를 넣는 곳입니다. FASTA/PDB/mmCIF를 붙여넣거나 업로드하세요. Evolution (BO)는 선택적 탐색 toggle일 뿐 run 형태를 정하는 단계가 아닙니다.",
-    "tutorial.step.advancedInput.hint": "타깃이 없으면 뒤의 workflow와 검토 단계에서 run을 시작할 수 없습니다.",
+      "1/5 입력 단계는 타깃 서열 또는 구조를 넣는 곳입니다. FASTA/PDB/mmCIF를 붙여넣거나 업로드하세요. DiffDock 실행을 위해서는 도킹할 리간드(SMILES 또는 SDF)와 단백질 PDB도 함께 넣어야 합니다. 잔기 선택기(선택)는 구조 위에서 고정/금지/핫스팟 잔기를 골라 mask를 만드는 도구입니다. Evolution (BO)는 선택적 탐색 toggle일 뿐 run 형태를 정하는 단계가 아닙니다.",
+    "tutorial.step.advancedInput.hint": "타깃이 없으면 뒤의 workflow와 검토 단계에서 run을 시작할 수 없습니다. DiffDock은 리간드도 함께 입력하고, 잔기 선택기는 필요할 때만 사용합니다.",
     "tutorial.step.advancedWorkflow.title": "워크플로우가 run 형태를 정합니다",
     "tutorial.step.advancedWorkflow.body":
       "2/5 워크플로우 단계에서 run 형태를 정합니다. 파이프라인 경로, 포함 단계, 보존율 구간, 대리모델 기반 AF2 예산 선별, 단계별 Workflow Studio 세션 사용 여부를 고릅니다.",
@@ -3949,7 +3950,7 @@ const I18N = {
     "home.experimentChoice.advanced.desc": "입력, 워크플로우, 평가기준, 고급 옵션, 검토를 순서대로 설정합니다.",
     "home.experimentChoice.surrogate.kicker": "예산 triage",
     "home.experimentChoice.surrogate.title": "Pipeline + Surrogate",
-    "home.experimentChoice.surrogate.desc": "RAPID 파이프라인 안에서 AF2 예산 절감 triage를 켭니다. Advanced에서 RFD3 또는 BioEmu를 함께 설정할 수 있습니다.",
+    "home.experimentChoice.surrogate.desc": "AF2 예산 절감 triage가 미리 켜진 Advanced 설정을 엽니다. 타깃 입력 단계부터 시작하며, 필요하면 RFD3나 BioEmu도 함께 켤 수 있습니다.",
     "home.experimentChoice.evolution.kicker": "반복 설계",
     "home.experimentChoice.evolution.title": "Evolution",
     "home.experimentChoice.evolution.desc": "학습 라운드와 Top K 선별 수를 조정해 반복 탐색합니다.",
@@ -3994,6 +3995,7 @@ const I18N = {
     "surrogate.error.targetRequired": "Surrogate Triage를 실행하려면 FASTA/PDB/mmCIF 입력을 넣으세요.",
     "surrogate.message.fileLoaded": "{name} 파일을 Surrogate Triage에 불러왔습니다.",
     "surrogate.message.reviewReady": "Surrogate triage 설정을 Advanced로 복사했습니다.",
+    "surrogate.message.presetReady": "Surrogate AF2 triage가 미리 켜졌습니다. 1/5 입력 단계에서 타깃을 먼저 넣고 워크플로우와 검토 단계를 이어 진행하세요.",
     "home.context.project": "현재 프로젝트",
     "home.context.round": "현재 회차",
     "home.context.roundStatus": "라운드 상태",
@@ -11958,6 +11960,9 @@ function applyTutorialStepContext(step) {
   const stepIndex = SETUP_WIZARD_STEPS.findIndex((item) => item.id === setupStep);
   if (stepIndex < 0) return;
   state.setupStepIndex = stepIndex;
+  if (step?.id === "surrogateSettings" && state.answers.surrogate_triage_enabled !== true) {
+    applySurrogateBudgetDefaultsToAnswers(state.answers);
+  }
   renderQuestions(state.plan?.questions || []);
   if (step?.id === "advancedSurrogate" || step?.id === "surrogateSettings") {
     const details = document.querySelector(".surrogate-board.optional-setup-card");
@@ -12644,19 +12649,17 @@ function applySurrogatePresetToAdvanced() {
       selected_tiers: FAST_SELECTED_TIER_VALUES,
     },
   };
-  state.answers = {
-    ...answers,
-    confirm_run: true,
-  };
+  state.answers = { ...answers };
+  delete state.answers.confirm_run;
   if (el.promptInput) {
     el.promptInput.value = "Run the RAPID pipeline with AF2 surrogate triage enabled.";
   }
-  state.setupStepIndex = Math.max(0, SETUP_WIZARD_STEPS.findIndex((step) => step.id === "workflow"));
+  state.setupStepIndex = Math.max(0, SETUP_WIZARD_STEPS.findIndex((step) => step.id === "input"));
   updateRunLabel();
   renderQuestions(state.plan.questions || []);
   updateRunEligibility(state.plan.questions || []);
   setActiveTab("advanced");
-  setMessage(t("surrogate.message.reviewReady"), "ai");
+  setMessage(t("surrogate.message.presetReady"), "ai");
 }
 
 async function loadSurrogateTargetFile(file) {
