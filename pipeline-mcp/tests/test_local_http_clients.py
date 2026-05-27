@@ -7,7 +7,9 @@ import zipfile
 
 from pipeline_mcp.clients.local_http import LocalHTTPBioEmuClient
 from pipeline_mcp.clients.local_http import LocalHTTPDiffDockClient
+from pipeline_mcp.clients.local_http import LocalHTTPAlphaFold2Client
 from pipeline_mcp.clients.local_http import LocalHTTPRFD3Client
+from pipeline_mcp.models import SequenceRecord
 
 
 class _Response:
@@ -40,6 +42,41 @@ def test_local_http_rfd3_does_not_send_callback_in_json_payload(monkeypatch):
     assert result["selected_pdb"] == "ATOM\n"
     assert "on_job_id" not in calls[0]["input"]
     assert seen_job_ids == ["rfd3-local-job"]
+
+
+def test_local_http_af2_omits_inline_archive_payloads_from_results(monkeypatch):
+    def fake_post(url, headers=None, json=None, timeout=None):  # type: ignore[no-untyped-def]
+        json_module.dumps(json)
+        return _Response(
+            {
+                "status": "COMPLETED",
+                "job_id": "af2-local-job",
+                "output": {
+                    "results": {
+                        "seq1": {
+                            "best_plddt": 91.0,
+                            "ranked_0_pdb": "MODEL 1\nENDMDL\n",
+                            "archive_base64": "abc123",
+                            "archives": [
+                                {"name": "alphafold_results.tar.gz", "base64": "def456"}
+                            ],
+                        }
+                    }
+                },
+            }
+        )
+
+    monkeypatch.setattr("pipeline_mcp.clients.local_http.requests.post", fake_post)
+
+    result = LocalHTTPAlphaFold2Client("http://gpu.example:18160").predict(
+        [SequenceRecord(id="seq1", sequence="ACDE")]
+    )
+
+    record = result["seq1"]
+    assert record["best_plddt"] == 91.0
+    assert record["ranked_0_pdb"] == "MODEL 1\nENDMDL\n"
+    assert record["archive_base64"]["omitted"] is True
+    assert record["archives"][0]["base64"]["omitted"] is True
 
 
 def test_local_http_bioemu_does_not_send_callback_in_json_payload(monkeypatch):

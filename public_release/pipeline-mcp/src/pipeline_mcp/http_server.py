@@ -4,15 +4,18 @@ import argparse
 import io
 import json
 import os
+import shutil
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote
 from urllib.parse import urlencode
 import zipfile
 
 from .storage import new_run_id
+from .storage import resolve_run_path
 from .auth import AuthError
 from .auth import load_auth_manager
 from .auth import safe_run_prefix
@@ -63,6 +66,7 @@ _RUN_SCOPED_TOOLS = {
     "pipeline.status",
     "pipeline.list_artifacts",
     "pipeline.read_artifact",
+    "pipeline.export_results_package",
     "pipeline.save_workflow_session",
     "pipeline.get_workflow_session",
     "pipeline.delete_run",
@@ -167,6 +171,26 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header(key, value)
         self.end_headers()
         self.wfile.write(data)
+
+    def _file_download(
+        self,
+        path: Path,
+        content_type: str,
+        *,
+        filename: str,
+        extra_headers: list[tuple[str, str]] | None = None,
+    ) -> None:
+        size = path.stat().st_size
+        self.send_response(200)
+        self._set_cors_headers()
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(size))
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        for key, value in extra_headers or []:
+            self.send_header(key, value)
+        self.end_headers()
+        with path.open("rb") as source:
+            shutil.copyfileobj(source, self.wfile, length=1024 * 1024)
 
     def _read_chunked(self) -> bytes:
         body = bytearray()
@@ -587,6 +611,66 @@ class Handler(BaseHTTPRequestHandler):
             ],
         )
 
+    def _send_run_export_archive(self) -> None:
+        route_path = self._route_path()
+        prefix = "/runs/"
+        marker = "/exports/"
+        if not route_path.startswith(prefix) or marker not in route_path[len(prefix) :]:
+            self._json(404, {"error": "not found"})
+            return
+
+        run_part, filename_part = route_path[len(prefix) :].split(marker, 1)
+        run_id = unquote(run_part)
+        filename = unquote(filename_part)
+        if not run_id or not filename:
+            self._json(400, {"ok": False, "error": "run_id and filename are required"})
+            return
+        if not all(ch.isalnum() or ch in "._-" for ch in filename):
+            self._json(400, {"ok": False, "error": "invalid export filename"})
+            return
+        if "/" in filename or "\\" in filename or filename in {".", ".."}:
+            self._json(400, {"ok": False, "error": "invalid export filename"})
+            return
+        if not filename.lower().endswith(".zip"):
+            self._json(400, {"ok": False, "error": "export filename must be a zip"})
+            return
+
+        user = None
+        if self._auth_enabled():
+            user = self._require_auth()
+            if user is None:
+                return
+
+        try:
+            self._enforce_run_access(user, run_id)
+            run_root = resolve_run_path(self.dispatcher.runner.output_root, run_id)
+        except AuthError as exc:
+            self._json(403, {"ok": False, "error": str(exc)})
+            return
+        except ValueError as exc:
+            self._json(400, {"ok": False, "error": str(exc)})
+            return
+
+        if not run_root.exists():
+            self._json(404, {"ok": False, "error": "run_id not found"})
+            return
+
+        export_dir = (run_root / "exports").resolve()
+        target = (export_dir / filename).resolve()
+        if target.parent != export_dir:
+            self._json(400, {"ok": False, "error": "invalid export filename"})
+            return
+        if not target.is_file():
+            self._json(404, {"ok": False, "error": "export package not found"})
+            return
+
+        self._file_download(
+            target,
+            "application/zip",
+            filename=filename,
+            extra_headers=[("Cache-Control", "no-store")],
+        )
+
     def _handle_mcp_rpc(self, body: dict[str, Any], user: dict[str, Any] | None) -> dict[str, Any]:
         request_id = body.get("id")
         method = body.get("method")
@@ -666,6 +750,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if route_path == "/model_provider_skill.zip":
             self._send_model_registration_skill_archive()
+            return
+        if route_path.startswith("/runs/") and "/exports/" in route_path:
+            self._send_run_export_archive()
             return
         if route_path == "/healthz":
             self._json(200, {"ok": True})

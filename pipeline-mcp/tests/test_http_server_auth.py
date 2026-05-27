@@ -281,6 +281,44 @@ def test_model_registration_skill_archive_downloads_zip_for_signed_in_user(tmp_p
         }
 
 
+def test_run_export_archive_downloads_zip_for_signed_in_owner(tmp_path, monkeypatch):
+    run_id = "tester_20260527_090000_abc12345"
+    export_dir = tmp_path / run_id / "exports"
+    export_dir.mkdir(parents=True)
+    package_path = export_dir / "result_package_test.zip"
+    package_path.write_bytes(b"zip bytes")
+
+    runner = type("FakeRunner", (), {"output_root": str(tmp_path)})()
+    dispatcher = type("FakeDispatcher", (), {"runner": runner})()
+    monkeypatch.setattr(http_server, "_DISPATCHER", dispatcher, raising=False)
+
+    sent = {"status": None, "headers": [], "ended": False}
+    handler = Handler.__new__(Handler)
+    handler.path = f"/api/runs/{run_id}/exports/{package_path.name}"
+    handler.headers = {}
+    handler.wfile = io.BytesIO()
+    handler._auth_enabled = lambda: True
+    handler._require_auth = lambda: {
+        "username": "tester",
+        "role": "user",
+        "status": "approved",
+    }
+    handler._set_cors_headers = lambda: None
+    handler.send_response = lambda status: sent.update(status=status)
+    handler.send_header = lambda key, value: sent["headers"].append((key, value))
+    handler.end_headers = lambda: sent.update(ended=True)
+
+    handler.do_GET()
+
+    assert sent["status"] == 200
+    assert sent["ended"] is True
+    headers = dict(sent["headers"])
+    assert headers["Content-Type"] == "application/zip"
+    assert headers["Content-Length"] == str(package_path.stat().st_size)
+    assert package_path.name in headers["Content-Disposition"]
+    assert handler.wfile.getvalue() == b"zip bytes"
+
+
 def test_auth_me_returns_public_session_type(monkeypatch):
     captured = {}
 

@@ -27799,6 +27799,35 @@ function triggerBlobDownload(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+function apiDownloadUrl(path) {
+  const raw = String(path || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const base = String(state.apiBase || "").replace(/\/+$/, "");
+  const suffix = raw.startsWith("/") ? raw : `/${raw}`;
+  return `${base}${suffix}`;
+}
+
+async function downloadApiBlob(path, filename, contentType = "application/octet-stream") {
+  const url = apiDownloadUrl(path);
+  if (!url) throw new Error("download URL missing");
+  const response = await fetch(url, {
+    method: "GET",
+    credentials: "include",
+    headers: { ...authHeaders() },
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    if (isApiAuthFailure(response.status, payload)) {
+      handleApiAuthFailure();
+      throw new Error(t("auth.sessionExpired"));
+    }
+    throw new Error(payload?.error || `HTTP ${response.status}`);
+  }
+  const blob = await response.blob();
+  triggerBlobDownload(blob.type ? blob : new Blob([blob], { type: contentType }), filename);
+}
+
 async function downloadArtifactsAsZip(items, { filename = "artifacts.zip", buttonEl = null } = {}) {
   if (!state.currentRunId) {
     setMessage(t("export.selectRun"), "ai");
@@ -27883,15 +27912,20 @@ async function exportRunPackage() {
     });
     const packagePath = String(packageInfo?.path || "").trim();
     if (!packagePath) throw new Error("package path missing");
-    const read = await apiCall("pipeline.read_artifact", {
-      run_id: state.currentRunId,
-      path: packagePath,
-      max_bytes: Math.max(2_000_000, Number(packageInfo?.size_bytes || 0) + 1024),
-      base64: true,
-    });
     const filename = packagePath.split("/").pop() || `${state.currentRunId}_results.zip`;
-    const blob = base64ToBlob(read?.base64 || "", "application/zip");
-    triggerBlobDownload(blob, filename);
+    const downloadUrl = String(packageInfo?.download_url || "").trim();
+    if (downloadUrl) {
+      await downloadApiBlob(downloadUrl, filename, "application/zip");
+    } else {
+      const read = await apiCall("pipeline.read_artifact", {
+        run_id: state.currentRunId,
+        path: packagePath,
+        max_bytes: Math.max(2_000_000, Number(packageInfo?.size_bytes || 0) + 1024),
+        base64: true,
+      });
+      const blob = base64ToBlob(read?.base64 || "", "application/zip");
+      triggerBlobDownload(blob, filename);
+    }
     if (el.reportStatus) {
       el.reportStatus.textContent = `Exported ${filename} (${Number(packageInfo?.size_bytes || 0)} bytes)`;
     }

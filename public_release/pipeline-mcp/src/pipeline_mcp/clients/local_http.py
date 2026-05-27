@@ -19,6 +19,32 @@ def _encode_text_file(name: str, content: str) -> dict[str, str]:
     return {"filename": name, "data_b64": base64.b64encode(data).decode("ascii")}
 
 
+def _omitted_inline_payload(value: object) -> dict[str, object]:
+    return {
+        "omitted": True,
+        "reason": "large inline archive payload",
+        "chars": len(value) if isinstance(value, str) else None,
+    }
+
+
+def _strip_inline_archive_payloads(value: object, *, key: str = "") -> object:
+    if isinstance(value, dict):
+        out: dict[str, object] = {}
+        for item_key, item_value in value.items():
+            item_key_text = str(item_key)
+            lower = item_key_text.lower()
+            if lower in {"archive_base64", "base64"} or lower.endswith(("_base64", "_b64")):
+                out[item_key_text] = _omitted_inline_payload(item_value)
+            else:
+                out[item_key_text] = _strip_inline_archive_payloads(
+                    item_value, key=item_key_text
+                )
+        return out
+    if isinstance(value, list):
+        return [_strip_inline_archive_payloads(item, key=key) for item in value]
+    return value
+
+
 def _select_rank1_sdf(names: list[str], complex_name: str | None) -> str | None:
     candidates = [name for name in names if name.lower().endswith("/rank1.sdf") or name.lower().endswith("rank1.sdf")]
     if complex_name:
@@ -366,7 +392,10 @@ class LocalHTTPAlphaFold2Client:
                 on_job_id(seq.id, job_id)
         results = output.get("results") if isinstance(output.get("results"), dict) else output
         if all(seq.id in results for seq in sequences):
-            return results
+            stripped = _strip_inline_archive_payloads(results)
+            return stripped if isinstance(stripped, dict) else results
         if len(sequences) == 1 and ("ranked_0_pdb" in output or "best_plddt" in output):
-            return {sequences[0].id: output}
-        return results
+            stripped = _strip_inline_archive_payloads(output)
+            return {sequences[0].id: stripped if isinstance(stripped, dict) else output}
+        stripped = _strip_inline_archive_payloads(results)
+        return stripped if isinstance(stripped, dict) else results

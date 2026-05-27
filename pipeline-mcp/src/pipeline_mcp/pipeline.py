@@ -887,6 +887,57 @@ def _safe_json(obj: object) -> object:
         return str(obj)
 
 
+_SUMMARY_INLINE_OMIT_KEYS = {
+    "archive_base64",
+    "base64",
+    "ranked_0_pdb",
+    "unrelaxed_pdb",
+    "pdb_text",
+    "cif_gz_base64",
+    "out_dir_zip_b64",
+    "zip_b64",
+    "a3m_gz_b64",
+    "embeddings_npz_b64",
+}
+_SUMMARY_INLINE_OMIT_SUFFIXES = ("_base64", "_b64")
+_SUMMARY_MAX_INLINE_STRING_CHARS = 1_000_000
+
+
+def _summary_omitted_value(value: object) -> dict[str, object]:
+    return {
+        "omitted": True,
+        "reason": "large inline payload stored as artifact output",
+        "chars": len(value) if isinstance(value, str) else None,
+    }
+
+
+def _strip_large_inline_payloads(value: object, *, key: str = "") -> object:
+    normalized_key = str(key or "").strip().lower()
+    if isinstance(value, dict):
+        return {
+            str(item_key): _strip_large_inline_payloads(item_value, key=str(item_key))
+            for item_key, item_value in value.items()
+        }
+    if isinstance(value, list):
+        return [_strip_large_inline_payloads(item) for item in value]
+    if isinstance(value, tuple):
+        return [_strip_large_inline_payloads(item) for item in value]
+    if isinstance(value, str):
+        if (
+            normalized_key in _SUMMARY_INLINE_OMIT_KEYS
+            or normalized_key.endswith(_SUMMARY_INLINE_OMIT_SUFFIXES)
+            or len(value) > _SUMMARY_MAX_INLINE_STRING_CHARS
+        ):
+            return _summary_omitted_value(value)
+    return value
+
+
+def _summary_json_payload(result: PipelineResult) -> dict[str, object]:
+    payload = asdict(result)
+    stripped = _strip_large_inline_payloads(payload)
+    return stripped if isinstance(stripped, dict) else payload
+
+
 def _stable_payload_hash(payload: Any) -> str:
     try:
         text = json.dumps(
@@ -4241,7 +4292,7 @@ class PipelineRunner:
                         tiers=[],
                         errors=errors,
                     )
-                    write_json(paths.summary_json, asdict(result))
+                    write_json(paths.summary_json, _summary_json_payload(result))
                     set_status(paths, stage="done", state="completed")
                     return result
                 conservation, cons_recovered, cons_error, cons_recovery = (
@@ -5440,7 +5491,7 @@ class PipelineRunner:
                         tiers=[],
                         errors=errors,
                     )
-                    write_json(paths.summary_json, asdict(result))
+                    write_json(paths.summary_json, _summary_json_payload(result))
                     set_status(paths, stage="done", state="completed")
                     return result
 
@@ -6316,7 +6367,7 @@ class PipelineRunner:
                         tiers=[],
                         errors=[],
                     )
-                    write_json(paths.summary_json, asdict(result))
+                    write_json(paths.summary_json, _summary_json_payload(result))
                     set_status(paths, stage="done", state="completed")
                     return result
 
@@ -6508,7 +6559,7 @@ class PipelineRunner:
                         tiers=[],
                         errors=errors,
                     )
-                    write_json(paths.summary_json, asdict(result))
+                    write_json(paths.summary_json, _summary_json_payload(result))
                     set_status(paths, stage="done", state="completed")
                     return result
                 conservation, cons_recovered, cons_error, cons_recovery = (
@@ -11820,7 +11871,7 @@ class PipelineRunner:
                 tiers=tier_results,
                 errors=errors,
             )
-            write_json(paths.summary_json, asdict(result))
+            write_json(paths.summary_json, _summary_json_payload(result))
             if request.agent_panel_enabled:
                 try:
                     write_agent_panel_report(self.output_root, run_id)
@@ -11843,7 +11894,7 @@ class PipelineRunner:
                 tiers=tier_results,
                 errors=errors,
             )
-            write_json(paths.summary_json, asdict(result))
+            write_json(paths.summary_json, _summary_json_payload(result))
             if request.agent_panel_enabled:
                 try:
                     write_agent_panel_report(self.output_root, run_id)
@@ -11865,7 +11916,7 @@ class PipelineRunner:
                 tiers=tier_results,
                 errors=errors,
             )
-            write_json(paths.summary_json, asdict(result))
+            write_json(paths.summary_json, _summary_json_payload(result))
             if request.agent_panel_enabled:
                 try:
                     write_agent_panel_report(self.output_root, run_id)
@@ -11887,7 +11938,7 @@ class PipelineRunner:
                 tiers=tier_results,
                 errors=errors,
             )
-            write_json(paths.summary_json, asdict(result))
+            write_json(paths.summary_json, _summary_json_payload(result))
             if request.agent_panel_enabled:
                 try:
                     write_agent_panel_report(self.output_root, run_id)

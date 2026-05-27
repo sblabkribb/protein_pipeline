@@ -6944,6 +6944,49 @@ def _to_json_bytes(payload: object) -> bytes:
     return (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
 
+_EXPORT_INLINE_OMIT_KEYS = {
+    "archive_base64",
+    "base64",
+    "ranked_0_pdb",
+    "unrelaxed_pdb",
+    "pdb_text",
+    "cif_gz_base64",
+    "out_dir_zip_b64",
+    "zip_b64",
+    "a3m_gz_b64",
+    "embeddings_npz_b64",
+}
+_EXPORT_INLINE_OMIT_SUFFIXES = ("_base64", "_b64")
+_EXPORT_MAX_INLINE_STRING_CHARS = 1_000_000
+
+
+def _omit_export_inline_payload(value: object) -> dict[str, object]:
+    return {
+        "omitted": True,
+        "reason": "large inline payload stored as artifact output",
+        "chars": len(value) if isinstance(value, str) else None,
+    }
+
+
+def _strip_export_inline_payloads(value: object, *, key: str = "") -> object:
+    normalized_key = str(key or "").strip().lower()
+    if isinstance(value, dict):
+        return {
+            str(item_key): _strip_export_inline_payloads(item_value, key=str(item_key))
+            for item_key, item_value in value.items()
+        }
+    if isinstance(value, list):
+        return [_strip_export_inline_payloads(item) for item in value]
+    if isinstance(value, str):
+        if (
+            normalized_key in _EXPORT_INLINE_OMIT_KEYS
+            or normalized_key.endswith(_EXPORT_INLINE_OMIT_SUFFIXES)
+            or len(value) > _EXPORT_MAX_INLINE_STRING_CHARS
+        ):
+            return _omit_export_inline_payload(value)
+    return value
+
+
 def _export_results_package(
     runner: PipelineRunner, arguments: dict[str, Any]
 ) -> dict[str, Any]:
@@ -6994,7 +7037,6 @@ def _export_results_package(
             "report.md",
             "report_ko.md",
             "comparisons.json",
-            "summary.json",
             "request.json",
             "status.json",
             "backbones.json",
@@ -7006,6 +7048,11 @@ def _export_results_package(
         if "comparisons.json" not in included:
             zf.writestr("comparisons.json", _to_json_bytes(comparison_summary))
             included.append("comparisons.json")
+        if isinstance(summary, dict):
+            zf.writestr(
+                "summary.json", _to_json_bytes(_strip_export_inline_payloads(summary))
+            )
+            included.append("summary.json")
 
         root_surrogate_dir = run_root / "surrogate_triage"
         if root_surrogate_dir.exists() and root_surrogate_dir.is_dir():
@@ -7099,6 +7146,8 @@ def _export_results_package(
     return {
         "run_id": run_id,
         "path": rel_path,
+        "filename": zip_name,
+        "download_url": f"/runs/{run_id}/exports/{zip_name}",
         "size_bytes": zip_path.stat().st_size,
         "included_count": len(included),
         "include_top_n": include_top_n,
