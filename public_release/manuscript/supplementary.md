@@ -185,28 +185,34 @@ When labels for the requested objective are present, RAPID trains a local surrog
 
 ## Supplementary Note 11. Structural-Context Ablation
 
-The corrected-chain structural-context ablation compares the original target backbone, BioEmu conformational sampling, one selected RFD3 backbone, and RFD3+BioEmu across eight selected CATH targets. Because ProteinMPNN is conditioned on the supplied backbone, these arms test whether changing structural context perturbs the accessible sequence neighbourhood under matched masking and AF2 budgets. The single-backbone and RFD3 arms are evaluable for all eight targets. BioEmu-containing arms are evaluable for the four targets that passed the fixed 2.0 Å target-RMSD gate. The main text summarizes this claim in Figure 3 as a distribution-spread and diversity analysis rather than as an aggregate-mean or upper-tail model ranking.
+The corrected-chain structural-context ablation compares the original target backbone, BioEmu conformational sampling, one selected RFD3 backbone, and RFD3+BioEmu across 18 selected CATH targets. Because ProteinMPNN is conditioned on the supplied backbone, these arms test whether changing structural context perturbs the accessible sequence neighbourhood under matched masking and AF2 budgets. The single-backbone and RFD3 arms are evaluable for all 18 targets. BioEmu is evaluable for nine targets and RFD3+BioEmu for eight targets — those that passed the fixed 2.0 Å target-RMSD gate. The main text summarizes this claim in Figure 3 as a distribution-spread and diversity analysis rather than as an aggregate-mean or upper-tail model ranking.
 
-The paired view supports this interpretation. RFD3 increased pLDDT range relative to the single-backbone arm in six of eight targets, but increased SoluProt range in only one of eight targets and sequence diversity in three of eight targets. BioEmu increased pLDDT range and mean pairwise sequence diversity in all four evaluable paired targets and increased SoluProt range in three of four targets. RFD3+BioEmu increased pLDDT range and sequence diversity in all four evaluable paired targets, but increased SoluProt range in two of four targets. These data support structural-context allocation as a way to alter candidate-pool spread and diversity, not as evidence that any structural-context module is universally superior.
+The paired view supports this interpretation. RFD3 increased pLDDT range relative to the single-backbone arm in 14 of 18 targets (Wilcoxon p = 0.002), increased SoluProt range in 9 of 18 targets, and increased sequence diversity in 9 of 18 targets (Wilcoxon p = 0.010). BioEmu increased pLDDT range and mean pairwise sequence diversity in all nine evaluable paired targets (Wilcoxon p = 0.004 for both) and increased SoluProt range in 8 of 9 targets (Wilcoxon p = 0.008). RFD3+BioEmu increased pLDDT range and sequence diversity in all eight evaluable paired targets (Wilcoxon p = 0.008 for both), and increased SoluProt range in 6 of 8 targets. These data support structural-context allocation as a way to alter candidate-pool spread and diversity, not as evidence that any structural-context module is universally superior.
 
 The table below retains the numerical summary and BioEmu QC context.
 
 | Arm | Evaluable targets | Mean pLDDT range | Mean SoluProt range | Mean pairwise diversity |
 |---|---:|---:|---:|---:|
-| Single target backbone | 8 | 2.52 | 0.131 | 0.125 |
-| Target + BioEmu ensemble | 4 | 4.66 | 0.199 | 0.296 |
-| RFD3 selected backbone | 8 | 3.59 | 0.125 | 0.136 |
-| RFD3 + BioEmu ensemble | 4 | 5.02 | 0.209 | 0.319 |
+| Single target backbone | 18 | 2.99 | 0.146 | 0.147 |
+| Target + BioEmu ensemble | 9 | 3.82 | 0.226 | 0.294 |
+| RFD3 selected backbone | 18 | 4.66 | 0.163 | 0.167 |
+| RFD3 + BioEmu ensemble | 8 | 3.80 | 0.256 | 0.310 |
 
 ## Supplementary Note 12. BioEmu Target-RMSD Gate QC
 
-BioEmu-containing structural-context arms were required to satisfy the same 2.0 Å target-RMSD gate used in the primary four-arm refresh. This gate is part of the artifact contract: a BioEmu arm is quantitatively evaluable only when the requested near-target conformers are recovered. Initial BioEmu runs for four targets did not recover three accepted conformers within the 10-attempt budget. These cases are therefore treated as not evaluable for BioEmu-based score comparison, rather than as zero-valued design outcomes. A sensitivity rerun increases the BioEmu sampling and maximum-attempt budgets to 30 while preserving the 2.0 Å acceptance gate.
+BioEmu-containing structural-context arms were required to satisfy the same 2.0 Å target-RMSD gate used in the primary four-arm refresh. This gate is part of the artifact contract: a BioEmu arm is quantitatively evaluable only when the requested near-target conformers are recovered. Across the expanded 18-target ablation, eight targets did not recover any conformer under the 2.0 Å cutoff within the 10-attempt BioEmu budget, and one additional target (1iieA00) was non-evaluable due to a separate BioEmu backend failure rather than the RMSD gate. RFD3+BioEmu was additionally non-evaluable for 1a6jA00, where the RFD3-conditioned BioEmu samples drifted further from the target backbone. These cases are therefore treated as not evaluable for BioEmu-based score comparison, rather than as zero-valued design outcomes. A sensitivity rerun increases the BioEmu sampling and maximum-attempt budgets to 30 while preserving the 2.0 Å acceptance gate.
 
 | Target | BioEmu accepted/attempted | BioEmu min RMSD (Å) | RFD3+BioEmu accepted/attempted | RFD3+BioEmu min RMSD (Å) | Primary handling |
 |---|---:|---:|---:|---:|---|
+| 1a6jA00 | 3/6 | 1.615 | 0/10 | 12.241 | RFD3+BioEmu not evaluable |
+| 1agrE02 | 0/10 | 4.229 | 0/10 | 4.229 | Not evaluable |
+| 1b12B02 | 0/10 | 2.993 | 0/10 | 2.993 | Not evaluable |
 | 1h6wA03 | 0/10 | 22.664 | 0/10 | 22.664 | Not evaluable |
+| 1hufA00 | 0/10 | 3.478 | 0/10 | 3.478 | Not evaluable |
+| 1iieA00 | backend failure | n/a | backend failure | n/a | Not evaluable (BioEmu endpoint error) |
+| 1j5uA01 | 0/10 | 5.393 | 0/10 | 5.393 | Not evaluable |
 | 2auaB01 | 0/10 | 8.051 | 0/10 | 8.051 | Not evaluable |
 | 3jvoG00 | 0/10 | 2.887 | 0/10 | 3.219 | Not evaluable |
 | 3twkA01 | 0/10 | 4.976 | 0/10 | 4.976 | Not evaluable |
 
-*BioEmu target-RMSD gate failures in the initial four-arm structural-context refresh. The table reports the initial 10-attempt BioEmu runs only. The sensitivity rerun changes the sampling budget but keeps the acceptance gate fixed, avoiding post-hoc relaxation of the structural-quality criterion.*
+*BioEmu target-RMSD gate outcomes for the non-evaluable arms in the expanded 18-target structural-context refresh. The 1a6jA00 row reports BioEmu alone as evaluable and only the RFD3-conditioned variant as failed; 1iieA00 was excluded from BioEmu-based scoring because of a separate RunPod backend error rather than a structural quality decision. The table reports the initial 10-attempt BioEmu runs only. The sensitivity rerun changes the sampling budget but keeps the acceptance gate fixed, avoiding post-hoc relaxation of the structural-quality criterion.*
