@@ -865,19 +865,23 @@ body[data-environment="staging"] .topbar {
   color: var(--ink-soft);
 }
 
-.fast-toggle-field {
+.fast-surrogate-field {
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94)),
+    color-mix(in oklch, var(--action-primary) 5%, white);
 }
 
-.fast-toggle {
-  justify-content: flex-start;
+.fast-surrogate-toggle {
   width: fit-content;
   max-width: 100%;
-  color: var(--ink);
-  font-weight: 700;
+}
+
+.attachment-item.diffdock-skipped .file-controls,
+.attachment-item.diffdock-skipped .attachment-meta {
+  display: none;
 }
 
 .model-choice-grid {

@@ -378,15 +378,15 @@
                     </small>
                     <input id="fastTotalOutputInput" type="number" min="1" step="1" value="120" />
                   </label>
-                  <div class="fast-field fast-toggle-field">
+                  <div class="fast-field fast-surrogate-field">
                     <span data-i18n="fast.surrogate.label">Surrogate AF2 Budget Triage</span>
                     <small data-i18n="fast.surrogate.help">
                       Optional. Use a surrogate model to select the final AF2/ColabFold Top K from a larger candidate pool.
                     </small>
-                    <label class="toggle fast-toggle">
-                      <input id="fastSurrogateTriageToggle" type="checkbox" />
-                      <span data-i18n="fast.surrogate.toggle">Use surrogate triage</span>
-                    </label>
+                    <div id="fastSurrogateTriageToggle" class="choice-group fast-surrogate-toggle" role="group" aria-label="Surrogate AF2 Budget Triage">
+                      <button type="button" class="choice-btn selected" data-fast-surrogate="false" aria-pressed="true" data-i18n="common.off">Off</button>
+                      <button type="button" class="choice-btn" data-fast-surrogate="true" aria-pressed="false" data-i18n="common.on">On</button>
+                    </div>
                   </div>
 
                   <!-- Literature-Driven Masking UI (Fast) -->

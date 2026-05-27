@@ -354,6 +354,7 @@ test("advanced target input is prioritized and rfd3 override input is collapsed"
 
   assert.match(source, /const safeFileId = String\(q\.id \|\| "file"\)\.replace\(/);
   assert.match(source, /const isRfd3InputOverride = q\.id === "rfd3_input_pdb" && state\.runMode !== "rfd3";/);
+  assert.match(source, /const showSetupRfd3InputItem =\s*state\.runMode === "rfd3" \|\|[\s\S]*setupRfd3InputOverrideVisible\(\) \|\|[\s\S]*state\.answers\.rfd3_input_pdb/m);
   assert.match(source, /document\.createElement\(isRfd3InputOverride \? "details" : "div"\)/);
   assert.match(source, /optional-attachment-item/);
   assert.match(source, /const defaultOpen = setupRfd3InputOverrideVisible\(\) \|\| Boolean\(String\(state\.answers\[q\.id\] \|\| ""\)\.trim\(\)\);/);

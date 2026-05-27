@@ -3095,6 +3095,8 @@ const I18N = {
     "common.none": "None",
     "common.enabled": "Enabled",
     "common.disabled": "Disabled",
+    "common.on": "On",
+    "common.off": "Off",
     "common.score": "Score",
     "common.evidence": "Evidence",
     "common.recommendation": "Recommendation",
@@ -4795,6 +4797,8 @@ const I18N = {
     "common.none": "없음",
     "common.enabled": "활성",
     "common.disabled": "비활성",
+    "common.on": "사용",
+    "common.off": "사용 안 함",
     "common.score": "점수",
     "common.evidence": "근거",
     "common.recommendation": "추천",
@@ -12430,12 +12434,14 @@ function currentSetupSelectedTiers(question = null) {
 }
 
 function buildFastLaunchPresetFromUi() {
+  const surrogateEnabled =
+    el.fastSurrogateTriageToggle?.querySelector('[data-fast-surrogate="true"]')?.classList.contains("selected") === true;
   return buildFastLaunchPreset({
     target_input: String(el.fastTargetInput?.value || "").trim(),
     prompt: String(el.fastPromptInput?.value || "").trim(),
     selected_tiers: readFastSelectedTiers(),
     total_output_sequences: Number.parseInt(String(el.fastTotalOutputInput?.value || "").trim(), 10),
-    surrogate_triage_enabled: Boolean(el.fastSurrogateTriageToggle?.checked),
+    surrogate_triage_enabled: surrogateEnabled,
   });
 }
 
@@ -12976,6 +12982,13 @@ function initSurrogateLauncher() {
 
 function initFastLauncher() {
   if (fastLauncherInitialized) return;
+  const setFastSurrogateToggle = (enabled) => {
+    el.fastSurrogateTriageToggle?.querySelectorAll("[data-fast-surrogate]").forEach((button) => {
+      const selected = button.getAttribute("data-fast-surrogate") === String(Boolean(enabled));
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+    });
+  };
   el.fastSelectedTiers?.querySelectorAll("[data-fast-tier]").forEach((button) => {
     const selected = button.classList.contains("selected");
     button.setAttribute("aria-pressed", selected ? "true" : "false");
@@ -12985,6 +12998,12 @@ function initFastLauncher() {
       if (isSelected && selectedCount <= 1) return;
       button.classList.toggle("selected", !isSelected);
       button.setAttribute("aria-pressed", isSelected ? "false" : "true");
+    });
+  });
+  setFastSurrogateToggle(false);
+  el.fastSurrogateTriageToggle?.querySelectorAll("[data-fast-surrogate]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setFastSurrogateToggle(button.getAttribute("data-fast-surrogate") === "true");
     });
   });
   el.fastLoadFileBtn?.addEventListener("click", () => {
@@ -19269,7 +19288,10 @@ function renderQuestions(questions) {
 
   const setupTargetPdbText = getTargetInputPdbText();
   const setupRfd3Active = setupRunUsesRfd3Stage();
-  const showSetupRfd3InputItem = shouldShowSetupRfd3InputField();
+  const showSetupRfd3InputItem =
+    state.runMode === "rfd3" ||
+    setupRfd3InputOverrideVisible() ||
+    Boolean(String(state.answers.rfd3_input_pdb || "").trim());
   const visibleFileQuestions = fileQuestions.filter(
     (q) => q.id !== "rfd3_input_pdb" || showSetupRfd3InputItem
   );
@@ -19392,11 +19414,13 @@ function renderQuestions(questions) {
           if (mode === "use") {
             useBtn.classList.add("selected");
             skipBtn.classList.remove("selected");
+            item.classList.remove("diffdock-skipped");
             fileInput.disabled = false;
             selectBtn.disabled = false;
           } else {
             useBtn.classList.remove("selected");
             skipBtn.classList.add("selected");
+            item.classList.add("diffdock-skipped");
             fileInput.value = "";
             fileInput.disabled = true;
             selectBtn.disabled = true;

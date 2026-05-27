@@ -1905,6 +1905,8 @@ test("fast panel exposes reduced launch controls while advanced keeps the full s
   assert.match(html, /id="fastSelectedTiers"/);
   assert.match(html, /id="fastTotalOutputInput"/);
   assert.match(html, /id="fastSurrogateTriageToggle"/);
+  assert.match(html, /data-fast-surrogate="false"[\s\S]*data-fast-surrogate="true"/);
+  assert.doesNotMatch(html, /id="fastSurrogateTriageToggle" type="checkbox"/);
   assert.doesNotMatch(html, /fast-review-card/);
   assert.doesNotMatch(html, /Default Pipeline Review|기본 파이프라인 검토/);
   assert.match(html, /id="tab-advanced"/);
