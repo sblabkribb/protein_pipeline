@@ -17,6 +17,8 @@ import zipfile
 from typing import Any
 from typing import Callable
 
+from .af2_utils import af2_error_is_missing_pdb_outputs
+from .af2_utils import af2_error_is_server_failure
 from .bio.fasta import FastaRecord
 from .bio.fasta import parse_fasta
 from .bio.ligand_text import normalize_diffdock_ligand_inputs
@@ -569,6 +571,11 @@ def _run_af2_predict(
         if arguments.get("af2_extra_flags")
         else None
     )
+    # Per-sequence iteration is the safe default for multi-record FASTA: a
+    # single worker 5xx on one sequence no longer kills the whole batch.
+    # Callers that want a true batch request can pass af2_batch_size>1.
+    af2_batch_size = max(1, _as_int(arguments.get("af2_batch_size"), 1))
+    auto_recover = _as_bool(arguments.get("auto_recover"), True)
 
     normalized_run_id = (
         normalize_run_id(str(run_id)) if run_id is not None else new_run_id("af2")
@@ -629,29 +636,61 @@ def _run_af2_predict(
                     "ranking_debug": {},
                     "ranked_0_pdb": _dummy_backbone_pdb(seq, chain_id="A"),
                 }
+            chunk_failures: dict[str, str] = {}
         else:
             if af2_client is None:
                 raise RuntimeError(
                     "ColabFold/AlphaFold2 is not configured. "
                     "Set COLABFOLD_ENDPOINT_ID (default provider) or ALPHAFOLD2_ENDPOINT_ID/AF2_URL."
                 )
-            try:
-                results = af2_client.predict(
-                    seq_records,
-                    model_preset=resolved_preset,
-                    db_preset=db_preset,
-                    max_template_date=max_template_date,
-                    extra_flags=extra_flags,
-                    on_job_id=_on_job_id,
+
+            results: dict[str, Any] = {}
+            chunk_failures: dict[str, str] = {}
+            total = len(seq_records)
+            for chunk_start in range(0, total, af2_batch_size):
+                chunk = seq_records[chunk_start : chunk_start + af2_batch_size]
+                set_status(
+                    paths,
+                    stage="af2",
+                    state="running",
+                    detail=f"[{chunk_start + 1}/{total}] {chunk[0].id}"
+                    + (f"+{len(chunk) - 1}" if len(chunk) > 1 else ""),
                 )
-            except TypeError:
-                results = af2_client.predict(
-                    seq_records,
-                    model_preset=resolved_preset,
-                    db_preset=db_preset,
-                    max_template_date=max_template_date,
-                    extra_flags=extra_flags,
-                )
+                try:
+                    try:
+                        chunk_results = af2_client.predict(
+                            chunk,
+                            model_preset=resolved_preset,
+                            db_preset=db_preset,
+                            max_template_date=max_template_date,
+                            extra_flags=extra_flags,
+                            on_job_id=_on_job_id,
+                        )
+                    except TypeError:
+                        chunk_results = af2_client.predict(
+                            chunk,
+                            model_preset=resolved_preset,
+                            db_preset=db_preset,
+                            max_template_date=max_template_date,
+                            extra_flags=extra_flags,
+                        )
+                except Exception as exc:
+                    msg = str(exc)
+                    recoverable = (
+                        af2_error_is_server_failure(msg)
+                        or af2_error_is_missing_pdb_outputs(msg)
+                        or "executiontimeout" in msg.lower()
+                    )
+                    if auto_recover and recoverable:
+                        for rec in chunk:
+                            chunk_failures[rec.id] = msg
+                        continue
+                    raise
+                if not isinstance(chunk_results, dict):
+                    raise RuntimeError(
+                        f"{provider_label} output invalid: {type(chunk_results).__name__}"
+                    )
+                results.update(chunk_results)
 
         if not isinstance(results, dict):
             raise RuntimeError(
@@ -660,8 +699,24 @@ def _run_af2_predict(
 
         summary_results: dict[str, dict[str, Any]] = {}
         for rec in seq_records:
+            if rec.id in chunk_failures:
+                # Record the per-sequence failure but keep iterating.
+                seq_dir = ensure_dir(af2_dir / _safe_id(rec.id))
+                write_json(
+                    seq_dir / "error.json",
+                    {"error": chunk_failures[rec.id], "provider": effective_provider},
+                )
+                continue
             payload = results.get(rec.id)
             if not isinstance(payload, dict):
+                if auto_recover:
+                    chunk_failures[rec.id] = "predictor returned no record"
+                    seq_dir = ensure_dir(af2_dir / _safe_id(rec.id))
+                    write_json(
+                        seq_dir / "error.json",
+                        {"error": "predictor returned no record", "provider": effective_provider},
+                    )
+                    continue
                 raise RuntimeError(
                     f"{provider_label} output missing record for {rec.id}"
                 )
@@ -672,6 +727,14 @@ def _run_af2_predict(
                 or payload.get("pdb_text")
             )
             if not isinstance(ranked0, str) or not ranked0.strip():
+                if auto_recover:
+                    chunk_failures[rec.id] = "missing ranked_0.pdb"
+                    seq_dir = ensure_dir(af2_dir / _safe_id(rec.id))
+                    write_json(
+                        seq_dir / "error.json",
+                        {"error": "missing ranked_0.pdb", "provider": effective_provider},
+                    )
+                    continue
                 raise RuntimeError(
                     f"{provider_label} output missing ranked_0.pdb for {rec.id}"
                 )
@@ -702,9 +765,20 @@ def _run_af2_predict(
             "af2_model_preset": resolved_preset,
             "af2_provider": effective_provider,
             "af2_provider_requested": requested_provider,
+            "completed_count": len(summary_results),
+            "failed_count": len(chunk_failures),
+            "total_count": len(seq_records),
+            "failures": chunk_failures,
+            "af2_batch_size": af2_batch_size,
+            "auto_recover": auto_recover,
         }
         write_json(paths.summary_json, _safe_json(summary))
-        set_status(paths, stage="done", state="completed")
+        done_detail = (
+            f"completed={len(summary_results)}/{len(seq_records)} failed={len(chunk_failures)}"
+            if chunk_failures
+            else None
+        )
+        set_status(paths, stage="done", state="completed", detail=done_detail)
         return {
             "run_id": normalized_run_id,
             "output_dir": str(paths.root),
