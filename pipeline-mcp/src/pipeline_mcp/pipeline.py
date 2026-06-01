@@ -28,6 +28,7 @@ from typing import Any
 from collections.abc import Callable
 
 from .af2_utils import af2_error_is_missing_pdb_outputs
+from .af2_utils import af2_error_is_server_failure
 from .af2_utils import af2_payload_has_missing_pdb_failure
 from .agent_panel import emit_agent_panel_event
 from .agent_panel import write_agent_panel_report
@@ -6443,22 +6444,44 @@ class PipelineRunner:
                         meta=target_seqrec.meta,
                     )
                     try:
-                        af2_out = af2_client.predict(
-                            [target_af2_input],
-                            model_preset=target_af2_preset,
-                            db_preset=request.af2_db_preset,
-                            max_template_date=request.af2_max_template_date,
-                            extra_flags=request.af2_extra_flags,
-                            on_job_id=_on_target_job_id,
-                        )
-                    except TypeError:
-                        af2_out = af2_client.predict(
-                            [target_af2_input],
-                            model_preset=target_af2_preset,
-                            db_preset=request.af2_db_preset,
-                            max_template_date=request.af2_max_template_date,
-                            extra_flags=request.af2_extra_flags,
-                        )
+                        try:
+                            af2_out = af2_client.predict(
+                                [target_af2_input],
+                                model_preset=target_af2_preset,
+                                db_preset=request.af2_db_preset,
+                                max_template_date=request.af2_max_template_date,
+                                extra_flags=request.af2_extra_flags,
+                                on_job_id=_on_target_job_id,
+                            )
+                        except TypeError:
+                            af2_out = af2_client.predict(
+                                [target_af2_input],
+                                model_preset=target_af2_preset,
+                                db_preset=request.af2_db_preset,
+                                max_template_date=request.af2_max_template_date,
+                                extra_flags=request.af2_extra_flags,
+                            )
+                    except Exception as exc:
+                        # Worker-side 5xx on the target prediction would otherwise
+                        # kill the whole run. With auto_recover, treat this as a
+                        # missing target structure and let the pipeline fail
+                        # explicitly only if downstream code actually requires
+                        # the predicted target PDB.
+                        if request.auto_recover and (
+                            af2_error_is_server_failure(str(exc))
+                            or af2_error_is_missing_pdb_outputs(str(exc))
+                            or "executiontimeout" in str(exc).lower()
+                        ):
+                            set_status(
+                                paths,
+                                stage="af2_target",
+                                state="failed_recovered",
+                                detail=f"target prediction skipped after recoverable error: {str(exc)[:240]}",
+                            )
+                            raise RuntimeError(
+                                f"target_pdb is missing; provide target_pdb because {af2_provider_label} target prediction failed with a recoverable error: {exc}"
+                            ) from exc
+                        raise
 
                     rec = af2_out.get("target") if isinstance(af2_out, dict) else None
                     if not isinstance(rec, dict):
@@ -8473,6 +8496,7 @@ class PipelineRunner:
                                         request.auto_recover
                                         or af2_error_is_missing_pdb_outputs(str(exc))
                                         or "executiontimeout" in str(exc).lower()
+                                        or af2_error_is_server_failure(str(exc))
                                     ):
                                         partial_prediction_errors[seq_input.id] = str(exc)
                                         continue
@@ -8496,6 +8520,7 @@ class PipelineRunner:
                                             request.auto_recover
                                             or af2_error_is_missing_pdb_outputs(str(exc))
                                             or "executiontimeout" in str(exc).lower()
+                                            or af2_error_is_server_failure(str(exc))
                                         ):
                                             partial_prediction_errors[seq_id] = str(exc)
                                             continue
@@ -10016,6 +10041,7 @@ class PipelineRunner:
                                                 request.auto_recover
                                                 or af2_error_is_missing_pdb_outputs(str(exc))
                                                 or "executiontimeout" in str(exc).lower()
+                                                or af2_error_is_server_failure(str(exc))
                                             ):
                                                 partial_prediction_errors[seq_input.id] = (
                                                     str(exc)
@@ -10043,6 +10069,7 @@ class PipelineRunner:
                                                     request.auto_recover
                                                     or af2_error_is_missing_pdb_outputs(str(exc))
                                                     or "executiontimeout" in str(exc).lower()
+                                                    or af2_error_is_server_failure(str(exc))
                                                 ):
                                                     partial_prediction_errors[seq_id] = (
                                                         str(exc)
