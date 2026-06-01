@@ -863,7 +863,15 @@ def run_evolution(runner, request: PipelineRequest, run_id: str) -> PipelineResu
                     "af2_provider": request.af2_provider,
                 },
             )
-            af2_data = res.get("summary", {}).get("af2", {}).get(sid, {})
+            af2_summary = res.get("summary", {})
+            # _run_af2_predict now records per-sequence 5xx/missing-pdb failures
+            # in `failures` instead of raising. Evolution treats a failed AF2 the
+            # same as before — exclude the sample from the round rather than
+            # training the surrogate on a fake plddt=0.0 label.
+            if sid in (af2_summary.get("failures") or {}):
+                print(f"Oracle skip for {phase} sample {sid}: AF2 failed ({af2_summary['failures'][sid][:160]})")
+                return None
+            af2_data = af2_summary.get("af2", {}).get(sid, {})
             plddt = float(af2_data.get("best_plddt", 0.0) or 0.0)
             relax_score = _copy_optional_outputs(eval_run_id, sid)
             row: dict[str, object] = {
