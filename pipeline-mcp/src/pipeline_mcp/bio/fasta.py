@@ -18,6 +18,16 @@ class FastaRecord:
         if not h:
             return "seq"
 
+        # UniProt standard format: ">db|accession|name ..." where db ∈ {sp, tr}.
+        # The first pipe-segment alone ("sp" or "tr") is not unique across entries,
+        # so use db_accession to keep IDs distinct.
+        pipe_parts = h.split("|")
+        first_pipe = pipe_parts[0].strip().lower()
+        if first_pipe in ("sp", "tr") and len(pipe_parts) >= 2:
+            accession = pipe_parts[1].split()[0].strip()
+            if accession:
+                return f"{first_pipe}_{accession}"
+
         # Take everything before the first pipe
         base = h.split("|", 1)[0].strip()
 
