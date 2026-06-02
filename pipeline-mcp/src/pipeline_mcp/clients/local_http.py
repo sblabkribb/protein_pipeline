@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass
 import io
+import os
+import threading
 from typing import Any
 from collections.abc import Callable
 from pathlib import Path
@@ -12,6 +14,49 @@ import zipfile
 import requests
 
 from ..models import SequenceRecord
+
+
+def _colabfold_max_concurrency() -> int:
+    """Per-process cap on concurrent ColabFold/AF2 HTTP requests.
+
+    The shared ColabFold gateway exposes a fixed number of GPU worker slots
+    (currently 4). Callers can fan out predict() across many threads (e.g. a
+    per-target ThreadPoolExecutor nested inside a multi-target launcher), and
+    the product of those two parallelism factors can far exceed the worker
+    count. Flooding the gateway with more in-flight requests than it can serve
+    only deepens its FIFO queue and, if a caller is killed mid-flight, leaves
+    orphaned upstream jobs holding slots. Capping concurrency here keeps the
+    client polite regardless of how callers parallelize.
+
+    Configurable via COLABFOLD_MAX_CONCURRENCY (default 4 = worker count).
+    A value <= 0 disables throttling.
+    """
+    raw = os.environ.get("COLABFOLD_MAX_CONCURRENCY", "").strip()
+    if not raw:
+        return 4
+    try:
+        return int(raw)
+    except ValueError:
+        return 4
+
+
+_COLABFOLD_SEMAPHORE: threading.BoundedSemaphore | None = None
+_COLABFOLD_SEMAPHORE_LOCK = threading.Lock()
+_COLABFOLD_SEMAPHORE_LIMIT = 0
+
+
+def _colabfold_gate() -> "threading.BoundedSemaphore | None":
+    """Return the process-wide ColabFold concurrency gate, or None if disabled."""
+    global _COLABFOLD_SEMAPHORE, _COLABFOLD_SEMAPHORE_LIMIT
+    limit = _colabfold_max_concurrency()
+    if limit <= 0:
+        return None
+    if _COLABFOLD_SEMAPHORE is None or _COLABFOLD_SEMAPHORE_LIMIT != limit:
+        with _COLABFOLD_SEMAPHORE_LOCK:
+            if _COLABFOLD_SEMAPHORE is None or _COLABFOLD_SEMAPHORE_LIMIT != limit:
+                _COLABFOLD_SEMAPHORE = threading.BoundedSemaphore(limit)
+                _COLABFOLD_SEMAPHORE_LIMIT = limit
+    return _COLABFOLD_SEMAPHORE
 
 
 def _encode_text_file(name: str, content: str) -> dict[str, str]:
@@ -385,7 +430,12 @@ class LocalHTTPAlphaFold2Client:
             "alphafold_extra_flags": extra_flags,
             "resume_job_ids": resume_job_ids or {},
         }
-        output = LocalHttpRunClient(self.base_url, self.token, self.timeout_s).run(payload)
+        gate = _colabfold_gate()
+        if gate is None:
+            output = LocalHttpRunClient(self.base_url, self.token, self.timeout_s).run(payload)
+        else:
+            with gate:
+                output = LocalHttpRunClient(self.base_url, self.token, self.timeout_s).run(payload)
         job_id = str(output.get("job_id") or "").strip()
         if job_id and on_job_id:
             for seq in sequences:
