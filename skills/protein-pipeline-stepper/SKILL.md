@@ -40,7 +40,7 @@ has the connection + execution instructions locally.
 - Never pass file paths as `target_fasta` / `target_pdb` / `rfd3_input_pdb`. Read the file contents and pass the raw text.
 - Before calling `pipeline.run` for a `run_id`, call `pipeline.status(run_id)`:
   - If `state=running`, do not call `pipeline.run` again. Poll `pipeline.status` until completion/failure.
-  - If `state=failed` (or similar), stop and report the error details.
+  - If `state=failed` (or similar), stop and report the error details, then diagnose and propose a corrected command (see "Result validation & self-correction"). Do not re-run without user confirmation.
 - If a `pipeline.run` call times out in the client, assume the remote job may still be running; switch to polling with `pipeline.status`.
 
 ## Workflow (Stage Runner)
@@ -153,6 +153,23 @@ Run one model on its own (no full pipeline) when you only need a single computat
 - This mirrors the web app's standalone ("Single Stage") run mode.
 
 Gate and poll standalone runs the same way as staged runs: call `pipeline.status(run_id)` first; if `state=running`, poll instead of calling `pipeline.run`/the standalone tool again.
+
+## Result validation & self-correction
+
+A command can be wrong (bad params, wrong inputs) even when it "succeeds." Validate before and after, and propose fixes — but never silently re-run expensive jobs.
+
+**Before running:** for a non-trivial or first-time command, call `pipeline.preflight` (validates inputs/config without running) and fix anything it flags before calling `pipeline.run`.
+
+**After running, sanity-check the result:**
+- Check `pipeline.status(run_id)` state plus the run's `summary.json`/`status.json`.
+- Watch for implausible or empty outputs: 0 designs, empty MSA, pLDDT/solubility far outside expected ranges, or a stage that "succeeded" with no artifacts.
+
+**If a stage failed or a result looks wrong:**
+1. Diagnose — read the error details / `status.json` / `summary.json` and identify the likely cause (wrong `stop_after`, missing input, bad `rfd3_contig`, wrong `design_chains`, a file passed as a path instead of its contents, etc.).
+2. Propose a corrected command — state exactly what you would change and why.
+3. **Do not re-run automatically.** Ask the user to confirm before re-running, especially for GPU stages (`rfd3`, `af2`, `design`, `diffdock`). Re-run only after confirmation, using `force=true` (to override cached artifacts) or a fresh `run_id`.
+
+This keeps a human in the loop for cost while still letting the AI catch and explain mistakes.
 
 ## Output Expectations
 
