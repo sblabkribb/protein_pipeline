@@ -1,5 +1,16 @@
-const MCP_ENDPOINT_URL = "https://pipeline.k-biofoundrycopilot.duckdns.org/mcp";
+const MCP_DEFAULT_ENDPOINT_URL = "https://rapid.kbiofoundry.kr/mcp";
+const MCP_ENDPOINT_TOKEN = "__MCP_ENDPOINT__";
 const MCP_SERVER_NAME = "protein-pipeline";
+
+export function resolveMcpEndpointUrl({
+  origin = typeof window !== "undefined" ? window.location.origin : "",
+} = {}) {
+  const normalized = String(origin || "").trim().replace(/\/$/, "");
+  if (normalized && normalized !== "null") {
+    return `${normalized}/mcp`;
+  }
+  return MCP_DEFAULT_ENDPOINT_URL;
+}
 const TOKEN_PLACEHOLDER = "<KBF_SSO_ACCESS_TOKEN>";
 const TOKEN_PLACEHOLDER_HTML = "&lt;KBF_SSO_ACCESS_TOKEN&gt;";
 
@@ -11,7 +22,7 @@ const GUIDE_COPY = {
       title: "1) Remote MCP endpoint",
       description: "Public HTTP MCP endpoint for the pipeline service.",
       items: [
-        `<strong>URL</strong>: <code>${MCP_ENDPOINT_URL}</code>`,
+        `<strong>URL</strong>: <code>${MCP_ENDPOINT_TOKEN}</code>`,
         `<strong>Header</strong>: <code>Authorization: Bearer ${TOKEN_PLACEHOLDER_HTML}</code>`,
         "Non-admin users only see allowed tools, and run-scoped tools only work for their own <code>run_id</code> values.",
       ],
@@ -28,6 +39,8 @@ const GUIDE_COPY = {
       downloadButton: "Download skill",
       autoNote:
         "One click fills your bearer token into the mcp.json above and copies it. The token is a short-lived sign-in token — if MCP calls start failing, click again to refresh it.",
+      installNote:
+        "To use the downloaded skill: unzip it and put the <code>protein-pipeline-stepper/</code> folder in your agent's skills directory (Claude Code: <code>~/.claude/skills/</code>), then reload/restart the client so it discovers the skill.",
       items: [
         "<strong>Local auth mode</strong>: open browser devtools, go to <code>Local Storage</code>, and copy <code>kbf.token</code>.",
         `<strong>OIDC / KBF SSO mode</strong>: sign in to a KBF SSO-backed service, open the notebook service MCP page, then open browser devtools and inspect <code>Local Storage</code> &gt; <code>auth-storage</code>. Copy the <code>access_token</code> value and reuse it as <code>${TOKEN_PLACEHOLDER_HTML}</code> in <code>mcp.json</code>.`,
@@ -39,7 +52,7 @@ const GUIDE_COPY = {
       description: "Codex can use the same endpoint and Authorization header as VS Code.",
       steps: [
         `Add an MCP server named <code>${MCP_SERVER_NAME}</code> in your Codex client.`,
-        `Set the server URL to <code>${MCP_ENDPOINT_URL}</code>.`,
+        `Set the server URL to <code>${MCP_ENDPOINT_TOKEN}</code>.`,
         `Store <code>Authorization: Bearer ${TOKEN_PLACEHOLDER_HTML}</code> with the server configuration.`,
         "Explicitly mention MCP in your prompt so the tool call is unambiguous.",
       ],
@@ -73,7 +86,7 @@ const GUIDE_COPY = {
       title: "1) 원격 MCP 엔드포인트",
       description: "파이프라인 서비스용 공용 HTTP MCP endpoint입니다.",
       items: [
-        `<strong>URL</strong>: <code>${MCP_ENDPOINT_URL}</code>`,
+        `<strong>URL</strong>: <code>${MCP_ENDPOINT_TOKEN}</code>`,
         `<strong>헤더</strong>: <code>Authorization: Bearer ${TOKEN_PLACEHOLDER_HTML}</code>`,
         "일반 사용자는 허용된 도구만 볼 수 있고, run 범위 도구는 자신의 <code>run_id</code>에 대해서만 동작합니다.",
       ],
@@ -89,6 +102,8 @@ const GUIDE_COPY = {
       downloadButton: "skill 다운로드",
       autoNote:
         "버튼 한 번이면 위 mcp.json에 bearer 토큰을 채워 클립보드에 복사합니다. 이 토큰은 수명이 짧은 로그인 토큰이라, MCP 호출이 실패하기 시작하면 다시 눌러 갱신하세요.",
+      installNote:
+        "다운로드한 skill 사용법: 압축을 풀어 <code>protein-pipeline-stepper/</code> 폴더를 에이전트의 skills 디렉터리(Claude Code: <code>~/.claude/skills/</code>)에 넣고, 클라이언트를 새로고침/재시작하면 인식됩니다.",
       items: [
         "<strong>로컬 인증 모드</strong>: 브라우저 개발자 도구를 열고 <code>Local Storage</code>에서 <code>kbf.token</code> 값을 복사하세요.",
         `<strong>OIDC / KBF SSO 모드</strong>: KBF SSO가 적용된 서비스에 로그인한 뒤 notebook service MCP 페이지를 열고, 브라우저 개발자 도구에서 <code>Local Storage</code> &gt; <code>auth-storage</code>를 확인하세요. 그 안의 <code>access_token</code> 값을 복사해 VS Code 또는 Codex 설정의 <code>${TOKEN_PLACEHOLDER_HTML}</code> 자리에 넣으면 됩니다.`,
@@ -100,7 +115,7 @@ const GUIDE_COPY = {
       description: "Codex도 VS Code와 같은 endpoint와 Authorization 헤더를 사용하면 됩니다.",
       steps: [
         `<code>${MCP_SERVER_NAME}</code> 라는 이름으로 MCP 서버를 추가합니다.`,
-        `URL은 <code>${MCP_ENDPOINT_URL}</code> 를 사용합니다.`,
+        `URL은 <code>${MCP_ENDPOINT_TOKEN}</code> 를 사용합니다.`,
         `<code>Authorization: Bearer ${TOKEN_PLACEHOLDER_HTML}</code> 헤더를 함께 저장합니다.`,
         "질문할 때는 MCP 사용을 직접 적어 도구 호출이 분명하게 보이게 합니다.",
       ],
@@ -150,13 +165,13 @@ function renderCodeBlock(text) {
   return `<pre class="mcp-guide-code"><code>${escapeHtml(text)}</code></pre>`;
 }
 
-function buildMcpJsonSnippet() {
+function buildMcpJsonSnippet(endpointUrl = resolveMcpEndpointUrl()) {
   return JSON.stringify(
     {
       servers: {
         [MCP_SERVER_NAME]: {
           type: "http",
-          url: MCP_ENDPOINT_URL,
+          url: endpointUrl,
           headers: {
             Authorization: `Bearer ${TOKEN_PLACEHOLDER}`,
           },
@@ -168,9 +183,9 @@ function buildMcpJsonSnippet() {
   );
 }
 
-export function buildMcpJsonSnippetWithToken(token) {
+export function buildMcpJsonSnippetWithToken(token, endpointUrl = resolveMcpEndpointUrl()) {
   const safe = String(token == null ? "" : token);
-  return buildMcpJsonSnippet().replaceAll(TOKEN_PLACEHOLDER, safe);
+  return buildMcpJsonSnippet(endpointUrl).replaceAll(TOKEN_PLACEHOLDER, safe);
 }
 
 function buildPromptSnippet(examples = []) {
@@ -181,9 +196,9 @@ function guideCopyFor(lang = "en") {
   return GUIDE_COPY[lang] || GUIDE_COPY.en;
 }
 
-export function renderMcpGuideMarkup({ lang = "en" } = {}) {
+export function renderMcpGuideMarkup({ lang = "en", endpointUrl = resolveMcpEndpointUrl() } = {}) {
   const copy = guideCopyFor(lang);
-  return `
+  const markup = `
     <div class="panel-header">
       <h3>${copy.title}</h3>
       <p>${copy.description}</p>
@@ -203,7 +218,7 @@ export function renderMcpGuideMarkup({ lang = "en" } = {}) {
           <h3>${copy.config.title}</h3>
           <p>${copy.config.description}</p>
         </div>
-        ${renderCodeBlock(buildMcpJsonSnippet())}
+        ${renderCodeBlock(buildMcpJsonSnippet(endpointUrl))}
       </div>
 
       <div class="status-card mcp-guide-card span-2">
@@ -217,6 +232,7 @@ export function renderMcpGuideMarkup({ lang = "en" } = {}) {
           <span id="mcpGuideStatus" class="mcp-guide-status" role="status"></span>
         </div>
         <div class="mcp-guide-note">${copy.token.autoNote}</div>
+        <div class="mcp-guide-note">${copy.token.installNote}</div>
         ${renderList(copy.token.items)}
         <div class="mcp-guide-note">${copy.token.note}</div>
       </div>
@@ -246,4 +262,5 @@ export function renderMcpGuideMarkup({ lang = "en" } = {}) {
       </div>
     </div>
   `;
+  return markup.replaceAll(MCP_ENDPOINT_TOKEN, escapeHtml(endpointUrl));
 }
