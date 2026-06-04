@@ -2232,6 +2232,7 @@ const I18N = {
     "mcp.skill.downloading": "Preparing skill download…",
     "mcp.skill.downloaded": "Skill download started.",
     "mcp.skill.failed": "Skill download failed: {error}",
+    "mcp.skill.signIn": "Please sign in first, then download again.",
     "home.title": "Solubility/Stability Workspace",
     "home.desc": "Target design runs, current rounds, and result triage in one workspace.",
     "home.launchpad.primary": "Primary workflow",
@@ -3947,6 +3948,7 @@ const I18N = {
     "mcp.skill.downloading": "skill 다운로드를 준비 중…",
     "mcp.skill.downloaded": "skill 다운로드를 시작했습니다.",
     "mcp.skill.failed": "skill 다운로드 실패: {error}",
+    "mcp.skill.signIn": "먼저 로그인한 뒤 다시 다운로드해 주세요.",
     "home.title": "용해도/안정성 워크스페이스",
     "home.desc": "표적 설계 실행, 현재 회차, 결과 검토를 한 화면에서 다룹니다.",
     "home.launchpad.primary": "기본 워크플로우",
@@ -11596,7 +11598,7 @@ async function downloadPipelineSkill() {
       const payload = await response.json().catch(() => null);
       if (isApiAuthFailure(response.status, payload)) {
         handleApiAuthFailure();
-        setMcpGuideStatus(t("mcp.token.signIn"));
+        setMcpGuideStatus(t("mcp.skill.signIn"));
         return;
       }
       throw new Error(payload?.error || `HTTP ${response.status}`);

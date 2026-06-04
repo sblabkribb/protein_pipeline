@@ -443,6 +443,43 @@ def test_mcp_token_requires_auth_when_enabled(monkeypatch):
     assert captured.get("status") != 200
 
 
+def test_mcp_token_mints_local_token_for_authenticated_user(monkeypatch):
+    from pipeline_mcp import http_server
+    from pipeline_mcp.http_server import Handler
+
+    class _Auth:
+        enabled = True
+
+        def issue_token(self, user):
+            return {"token": "LOCAL-TKN", "expires_at": 4242}
+
+    class _Sessions:
+        def get_session(self, session_id, *, oidc_settings=None):
+            return {"auth_type": "local", "user": {"username": "bob"}}
+
+    monkeypatch.setattr(http_server, "_AUTH", _Auth(), raising=False)
+    monkeypatch.setattr(http_server, "_OIDC", None, raising=False)
+    monkeypatch.setattr(http_server, "_SESSIONS", _Sessions(), raising=False)
+
+    captured = {}
+    handler = Handler.__new__(Handler)
+    handler._auth_enabled = lambda: True
+    handler._require_auth = lambda: {"username": "bob", "role": "user"}
+    handler._session_id_from_cookie = lambda: "sid-local"
+    handler._json = lambda status, payload, extra_headers=None: captured.update(
+        status=status, payload=payload, extra_headers=extra_headers
+    )
+
+    handler._send_mcp_token()
+
+    assert captured["status"] == 200
+    assert captured["payload"]["ok"] is True
+    assert captured["payload"]["token"] == "LOCAL-TKN"
+    assert captured["payload"]["auth_type"] == "local"
+    assert captured["payload"]["expires_at"] == 4242
+    assert ("Cache-Control", "no-store") in (captured["extra_headers"] or [])
+
+
 def test_pipeline_skill_archive_contains_skill_md(tmp_path, monkeypatch):
     from pipeline_mcp import http_server
     from pipeline_mcp.http_server import Handler
