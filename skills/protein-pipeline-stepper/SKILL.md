@@ -1,6 +1,6 @@
 ---
 name: protein-pipeline-stepper
-description: Stepwise execution of the protein-pipeline via MCP (pipeline.run/pipeline.status) with safe polling, run_id reuse, stop_after staging, and duplicate-job avoidance. Use when you need staged RFD3/MMseqs2/ProteinMPNN/SoluProt/AF2 runs and want output paths (not narrative summaries).
+description: Connect to and run the protein-pipeline via MCP. Covers one-click token setup (mcp.json) for VS Code/Codex, plus stepwise pipeline.run/pipeline.status execution with safe polling, run_id reuse, stop_after staging, and duplicate-job avoidance. Use when connecting the protein-pipeline MCP server or running staged RFD3/MMseqs2/ProteinMPNN/SoluProt/AF2 jobs and you want output paths (not narrative summaries).
 ---
 
 # Protein Pipeline Stepper
@@ -8,6 +8,25 @@ description: Stepwise execution of the protein-pipeline via MCP (pipeline.run/pi
 ## Overview
 
 Run the protein pipeline in deterministic stages via MCP tools and return the output paths required for the next step.
+
+## Connecting (MCP auth)
+
+Before running anything, the MCP server `protein-pipeline` must be reachable and authenticated.
+
+1. Open the protein-pipeline web app and sign in (local login or KBF SSO).
+2. Go to the **MCP** tab and click **Copy mcp.json with my token**. This copies a
+   ready-to-paste `mcp.json` with your bearer token already filled in — you do not
+   need to open browser devtools.
+3. Add it to your client:
+   - **VS Code:** run **MCP: Open User Configuration** and paste into `mcp.json`.
+   - **Codex:** add an MCP server named `protein-pipeline` with the same URL and the
+     `Authorization: Bearer <token>` header.
+4. The token is a short-lived SSO/login token. When MCP calls start failing with an
+   auth error (401), return to the MCP tab and click the button again to refresh the
+   token in your `mcp.json`.
+
+You can also download this skill from the MCP tab (**Download skill**) so your client
+has the connection + execution instructions locally.
 
 ## Prerequisites
 
