@@ -24,6 +24,10 @@ const GUIDE_COPY = {
     token: {
       title: "3) How to get the token",
       description: "Choose the token source that matches your auth mode.",
+      copyButton: "Copy mcp.json with my token",
+      downloadButton: "Download skill",
+      autoNote:
+        "One click fills your bearer token into the mcp.json above and copies it. The token is a short-lived sign-in token — if MCP calls start failing, click again to refresh it.",
       items: [
         "<strong>Local auth mode</strong>: open browser devtools, go to <code>Local Storage</code>, and copy <code>kbf.token</code>.",
         `<strong>OIDC / KBF SSO mode</strong>: sign in to a KBF SSO-backed service, open the notebook service MCP page, then open browser devtools and inspect <code>Local Storage</code> &gt; <code>auth-storage</code>. Copy the <code>access_token</code> value and reuse it as <code>${TOKEN_PLACEHOLDER_HTML}</code> in <code>mcp.json</code>.`,
@@ -79,6 +83,10 @@ const GUIDE_COPY = {
     token: {
       title: "3) 토큰 가져오기",
       description: "현재 인증 방식에 맞는 토큰 원본을 선택하세요.",
+      copyButton: "내 토큰으로 mcp.json 복사",
+      downloadButton: "skill 다운로드",
+      autoNote:
+        "버튼 한 번이면 위 mcp.json에 bearer 토큰을 채워 클립보드에 복사합니다. 이 토큰은 수명이 짧은 로그인 토큰이라, MCP 호출이 실패하기 시작하면 다시 눌러 갱신하세요.",
       items: [
         "<strong>로컬 인증 모드</strong>: 브라우저 개발자 도구를 열고 <code>Local Storage</code>에서 <code>kbf.token</code> 값을 복사하세요.",
         `<strong>OIDC / KBF SSO 모드</strong>: KBF SSO가 적용된 서비스에 로그인한 뒤 notebook service MCP 페이지를 열고, 브라우저 개발자 도구에서 <code>Local Storage</code> &gt; <code>auth-storage</code>를 확인하세요. 그 안의 <code>access_token</code> 값을 복사해 VS Code 또는 Codex 설정의 <code>${TOKEN_PLACEHOLDER_HTML}</code> 자리에 넣으면 됩니다.`,
@@ -156,6 +164,11 @@ function buildMcpJsonSnippet() {
   );
 }
 
+export function buildMcpJsonSnippetWithToken(token) {
+  const safe = String(token == null ? "" : token);
+  return buildMcpJsonSnippet().replaceAll(TOKEN_PLACEHOLDER, safe);
+}
+
 function buildPromptSnippet(examples = []) {
   return examples.join("\n\n");
 }
@@ -194,6 +207,12 @@ export function renderMcpGuideMarkup({ lang = "en" } = {}) {
           <h3>${copy.token.title}</h3>
           <p>${copy.token.description}</p>
         </div>
+        <div class="mcp-guide-actions">
+          <button type="button" id="mcpTokenCopyBtn" class="btn-primary">${copy.token.copyButton}</button>
+          <button type="button" id="mcpSkillDownloadBtn" class="btn-secondary">${copy.token.downloadButton}</button>
+          <span id="mcpGuideStatus" class="mcp-guide-status" role="status"></span>
+        </div>
+        <div class="mcp-guide-note">${copy.token.autoNote}</div>
         ${renderList(copy.token.items)}
         <div class="mcp-guide-note">${copy.token.note}</div>
       </div>
