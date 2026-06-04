@@ -441,3 +441,31 @@ def test_mcp_token_requires_auth_when_enabled(monkeypatch):
 
     handler._send_mcp_token()
     assert captured.get("status") != 200
+
+
+def test_pipeline_skill_archive_contains_skill_md(tmp_path, monkeypatch):
+    from pipeline_mcp import http_server
+    from pipeline_mcp.http_server import Handler
+
+    skill_dir = tmp_path / "protein-pipeline-stepper"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text("# Protein Pipeline Stepper\n", encoding="utf-8")
+    monkeypatch.setenv("PIPELINE_STEPPER_SKILL_DIR", str(skill_dir))
+
+    monkeypatch.setattr(http_server, "_AUTH", None, raising=False)
+    monkeypatch.setattr(http_server, "_OIDC", None, raising=False)
+    monkeypatch.setattr(http_server, "_SESSIONS", None, raising=False)
+
+    captured = {}
+    handler = Handler.__new__(Handler)
+    handler.headers = {}
+    handler._binary = lambda status, body, content_type, extra_headers=None: captured.update(
+        status=status, body=body, content_type=content_type, extra_headers=extra_headers
+    )
+
+    handler._send_pipeline_skill_archive()
+
+    assert captured["status"] == 200
+    assert captured["content_type"] == "application/zip"
+    names = zipfile.ZipFile(io.BytesIO(captured["body"])).namelist()
+    assert "protein-pipeline-stepper/SKILL.md" in names

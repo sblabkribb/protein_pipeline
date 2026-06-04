@@ -663,6 +663,46 @@ class Handler(BaseHTTPRequestHandler):
             ],
         )
 
+    def _send_pipeline_skill_archive(self) -> None:
+        if self._auth_enabled():
+            user = self._require_auth()
+            if user is None:
+                return
+
+        default_dir = str(
+            (Path(__file__).resolve().parents[3] / "skills" / "protein-pipeline-stepper")
+        )
+        raw_root = os.environ.get("PIPELINE_STEPPER_SKILL_DIR", default_dir)
+        root = Path(raw_root).expanduser().resolve()
+        if not root.is_dir():
+            self._json(
+                404,
+                {
+                    "ok": False,
+                    "error": "pipeline skill directory not found",
+                    "path": str(root),
+                },
+            )
+            return
+
+        buffer = io.BytesIO()
+        archive_root = Path("protein-pipeline-stepper")
+        with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            for file_path in sorted(root.rglob("*")):
+                if not file_path.is_file():
+                    continue
+                archive.write(file_path, str(archive_root / file_path.relative_to(root)))
+
+        self._binary(
+            200,
+            buffer.getvalue(),
+            "application/zip",
+            extra_headers=[
+                ("Content-Disposition", 'attachment; filename="protein-pipeline-stepper.zip"'),
+                ("Cache-Control", "no-store"),
+            ],
+        )
+
     def _send_run_export_archive(self) -> None:
         route_path = self._route_path()
         prefix = "/runs/"
@@ -805,6 +845,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if route_path == "/model_provider_skill.zip":
             self._send_model_registration_skill_archive()
+            return
+        if route_path == "/pipeline_skill.zip":
+            self._send_pipeline_skill_archive()
             return
         if route_path.startswith("/runs/") and "/exports/" in route_path:
             self._send_run_export_archive()
