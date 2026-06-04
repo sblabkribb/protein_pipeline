@@ -40,3 +40,27 @@ def test_external_users_can_be_listed_and_approved(tmp_path):
     )
     assert approved["role"] == "model_manager"
     assert approved["status"] == "approved"
+
+
+def test_issue_token_round_trips_through_verify(tmp_path):
+    from pipeline_mcp.auth import AuthManager, AuthConfig
+
+    manager = AuthManager(
+        config=AuthConfig(
+            enabled=True,
+            store_path=tmp_path / "users.json",
+            secret_path=tmp_path / "secret.bin",
+            token_ttl_s=3600,
+        ),
+        users={},
+        secret=b"test-secret-for-issue",
+    )
+    created = manager.create_user(username="carol", password="pw123456", role="user")
+
+    issued = manager.issue_token(created)
+    assert issued["token"]
+    assert issued["expires_at"] > 0
+
+    verified = manager.verify_token(issued["token"])
+    assert verified is not None
+    assert verified["username"] == "carol"

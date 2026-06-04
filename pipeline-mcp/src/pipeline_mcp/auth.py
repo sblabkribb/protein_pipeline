@@ -67,6 +67,18 @@ class AuthManager:
         token = _issue_token(self.secret, username=username, role=str(user.get("role") or "user"), ttl_s=self.config.token_ttl_s)
         return {"token": token, "user": _public_user(user)}
 
+    def issue_token(self, user: dict[str, Any]) -> dict[str, Any]:
+        """Mint a fresh bearer token for an already-authenticated user.
+
+        Used by the one-click MCP token endpoint for local-auth sessions,
+        where the original login token is not stored server-side.
+        """
+        username = str(user.get("username") or "")
+        role = str(user.get("role") or "user")
+        ttl_s = int(self.config.token_ttl_s)
+        token = _issue_token(self.secret, username=username, role=role, ttl_s=ttl_s)
+        return {"token": token, "expires_at": int(time.time()) + max(0, ttl_s)}
+
     def verify_token(self, token: str) -> dict[str, Any] | None:
         payload = _verify_token(self.secret, token)
         if payload is None:
