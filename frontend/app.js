@@ -129,7 +129,7 @@ import {
   resolveDefaultApiBase,
 } from "./lib/auth.js?v=20260409_v7";
 import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=20260407_v6";
-import { renderMcpGuideMarkup } from "./lib/mcp-guide.js?v=20260407_v6";
+import { renderMcpGuideMarkup, buildMcpJsonSnippetWithToken } from "./lib/mcp-guide.js?v=20260604_v7";
 import {
   buildProviderHealthPayload,
   buildProviderUpdatePayload,
@@ -2224,6 +2224,14 @@ const I18N = {
     "tabs.cath": "CATH",
     "tabs.analyze": "Analyze",
     "tabs.mcp": "MCP",
+    "mcp.token.fetching": "Fetching your token…",
+    "mcp.token.copied": "Copied mcp.json with your token to the clipboard.",
+    "mcp.token.copiedExpires": "Copied mcp.json — token expires in ~{mins} min. Click again to refresh.",
+    "mcp.token.signIn": "Please sign in first, then click again.",
+    "mcp.token.failed": "Could not get a token: {error}",
+    "mcp.skill.downloading": "Preparing skill download…",
+    "mcp.skill.downloaded": "Skill download started.",
+    "mcp.skill.failed": "Skill download failed: {error}",
     "home.title": "Solubility/Stability Workspace",
     "home.desc": "Target design runs, current rounds, and result triage in one workspace.",
     "home.launchpad.primary": "Primary workflow",
@@ -3931,6 +3939,14 @@ const I18N = {
     "tabs.cath": "CATH",
     "tabs.analyze": "분석",
     "tabs.mcp": "MCP",
+    "mcp.token.fetching": "토큰을 가져오는 중…",
+    "mcp.token.copied": "토큰이 채워진 mcp.json을 클립보드에 복사했습니다.",
+    "mcp.token.copiedExpires": "mcp.json 복사 완료 — 토큰은 약 {mins}분 뒤 만료됩니다. 만료되면 다시 누르세요.",
+    "mcp.token.signIn": "먼저 로그인한 뒤 다시 눌러 주세요.",
+    "mcp.token.failed": "토큰을 가져오지 못했습니다: {error}",
+    "mcp.skill.downloading": "skill 다운로드를 준비 중…",
+    "mcp.skill.downloaded": "skill 다운로드를 시작했습니다.",
+    "mcp.skill.failed": "skill 다운로드 실패: {error}",
     "home.title": "용해도/안정성 워크스페이스",
     "home.desc": "표적 설계 실행, 현재 회차, 결과 검토를 한 화면에서 다룹니다.",
     "home.launchpad.primary": "기본 워크플로우",
@@ -11153,6 +11169,10 @@ function setUserBadge() {
 function renderMcpGuide() {
   if (!el.mcpGuidePanel) return;
   el.mcpGuidePanel.innerHTML = renderMcpGuideMarkup({ lang: state.lang });
+  const copyBtn = el.mcpGuidePanel.querySelector("#mcpTokenCopyBtn");
+  if (copyBtn) copyBtn.addEventListener("click", () => void copyMcpJsonWithToken());
+  const skillBtn = el.mcpGuidePanel.querySelector("#mcpSkillDownloadBtn");
+  if (skillBtn) skillBtn.addEventListener("click", () => void downloadPipelineSkill());
 }
 
 function modelProviderTypeOption(value, current) {
@@ -11523,6 +11543,76 @@ async function downloadModelRegistrationSkill() {
   } finally {
     el.modelProviderSkillDownload.disabled = false;
     el.modelProviderSkillDownload.textContent = previousLabel;
+  }
+}
+
+function setMcpGuideStatus(message) {
+  const node = el.mcpGuidePanel ? el.mcpGuidePanel.querySelector("#mcpGuideStatus") : null;
+  if (node) node.textContent = message || "";
+}
+
+async function copyMcpJsonWithToken() {
+  setMcpGuideStatus(t("mcp.token.fetching"));
+  try {
+    const response = await fetch(`${state.apiBase}/auth/mcp_token`, {
+      method: "GET",
+      credentials: "include",
+      headers: { ...authHeaders() },
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      if (isApiAuthFailure(response.status, payload)) {
+        handleApiAuthFailure();
+        setMcpGuideStatus(t("mcp.token.signIn"));
+        return;
+      }
+      throw new Error(payload?.error || `HTTP ${response.status}`);
+    }
+    const token = String(payload?.token || "");
+    if (!token) throw new Error(payload?.error || "no token");
+    const snippet = buildMcpJsonSnippetWithToken(token);
+    await navigator.clipboard.writeText(snippet);
+    const expiresAt = Number(payload?.expires_at || 0);
+    if (expiresAt > 0) {
+      const mins = Math.max(1, Math.round((expiresAt * 1000 - Date.now()) / 60000));
+      setMcpGuideStatus(t("mcp.token.copiedExpires", { mins }));
+    } else {
+      setMcpGuideStatus(t("mcp.token.copied"));
+    }
+  } catch (err) {
+    setMcpGuideStatus(t("mcp.token.failed", { error: err.message || t("error.api") }));
+  }
+}
+
+async function downloadPipelineSkill() {
+  setMcpGuideStatus(t("mcp.skill.downloading"));
+  try {
+    const response = await fetch(`${state.apiBase}/pipeline_skill.zip`, {
+      method: "GET",
+      credentials: "include",
+      headers: { ...authHeaders() },
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null);
+      if (isApiAuthFailure(response.status, payload)) {
+        handleApiAuthFailure();
+        setMcpGuideStatus(t("mcp.token.signIn"));
+        return;
+      }
+      throw new Error(payload?.error || `HTTP ${response.status}`);
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "protein-pipeline-stepper.zip";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setMcpGuideStatus(t("mcp.skill.downloaded"));
+  } catch (err) {
+    setMcpGuideStatus(t("mcp.skill.failed", { error: err.message || t("error.api") }));
   }
 }
 
