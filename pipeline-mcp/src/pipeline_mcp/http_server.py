@@ -574,6 +574,58 @@ class Handler(BaseHTTPRequestHandler):
             "isError": False,
         }
 
+    def _send_mcp_token(self) -> None:
+        user = None
+        if self._auth_enabled():
+            user = self._require_auth()
+            if user is None:
+                return  # 401/403 already emitted by _require_auth
+
+        token = ""
+        auth_type = ""
+        expires_at = 0
+
+        manager = self.sessions
+        session_id = self._session_id_from_cookie()
+        if manager is not None and session_id:
+            session = manager.get_session(session_id, oidc_settings=self.oidc)
+            if isinstance(session, dict):
+                auth_type = str(session.get("auth_type") or "")
+                if auth_type == "oidc":
+                    token, expires_at = manager.get_oidc_access_token(
+                        session_id, oidc_settings=self.oidc
+                    )
+
+        if not token:
+            auth = self.auth
+            if (
+                auth is not None
+                and getattr(auth, "enabled", False)
+                and isinstance(user, dict)
+            ):
+                issued = auth.issue_token(user)
+                token = str(issued.get("token") or "")
+                expires_at = int(issued.get("expires_at") or 0)
+                auth_type = auth_type or "local"
+
+        if not token:
+            self._json(
+                409,
+                {"ok": False, "error": "no MCP token available for this session"},
+            )
+            return
+
+        self._json(
+            200,
+            {
+                "ok": True,
+                "token": token,
+                "auth_type": auth_type or "local",
+                "expires_at": int(expires_at or 0),
+            },
+            extra_headers=[("Cache-Control", "no-store")],
+        )
+
     def _send_model_registration_skill_archive(self) -> None:
         if self._auth_enabled():
             user = self._require_auth()
@@ -747,6 +799,9 @@ class Handler(BaseHTTPRequestHandler):
             if user is None:
                 return
             self._json(200, {"ok": True, "user": user, "session": self._public_session_info()})
+            return
+        if route_path == "/auth/mcp_token":
+            self._send_mcp_token()
             return
         if route_path == "/model_provider_skill.zip":
             self._send_model_registration_skill_archive()

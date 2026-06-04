@@ -379,3 +379,65 @@ def test_handler_accepts_api_prefixed_tools_call_route():
         "ok": True,
         "result": {"name": "pipeline.list_runs", "arguments": {"limit": 1}},
     }
+
+
+def test_mcp_token_returns_oidc_access_token(tmp_path, monkeypatch):
+    import time
+    from pipeline_mcp import http_server
+    from pipeline_mcp.http_server import Handler
+    from pipeline_mcp.session_auth import SessionConfig, SessionManager
+
+    manager = SessionManager(
+        SessionConfig(
+            store_path=tmp_path / "sessions.json",
+            cookie_name="kbf_session",
+            local_ttl_s=3600,
+            oidc_refresh_leeway_s=60,
+            oidc_fallback_ttl_s=300,
+        )
+    )
+    exp = int(time.time()) + 1800
+    sid = "sess-oidc"
+    manager._sessions[sid] = {
+        "auth_type": "oidc",
+        "user": {"username": "alice", "role": "user"},
+        "created_at": int(time.time()),
+        "updated_at": int(time.time()),
+        "expires_at": exp,
+        "oidc": {"access_token": "AT-XYZ", "access_expires_at": exp},
+    }
+
+    monkeypatch.setattr(http_server, "_AUTH", None, raising=False)
+    monkeypatch.setattr(http_server, "_OIDC", None, raising=False)
+    monkeypatch.setattr(http_server, "_SESSIONS", manager, raising=False)
+
+    captured = {}
+    handler = Handler.__new__(Handler)
+    handler.headers = {"Cookie": f"kbf_session={sid}"}
+    handler._json = lambda status, payload, extra_headers=None: captured.update(
+        status=status, payload=payload, extra_headers=extra_headers
+    )
+
+    handler._send_mcp_token()
+
+    assert captured["status"] == 200
+    assert captured["payload"]["ok"] is True
+    assert captured["payload"]["token"] == "AT-XYZ"
+    assert captured["payload"]["auth_type"] == "oidc"
+    assert captured["payload"]["expires_at"] == exp
+    assert ("Cache-Control", "no-store") in (captured["extra_headers"] or [])
+
+
+def test_mcp_token_requires_auth_when_enabled(monkeypatch):
+    from pipeline_mcp.http_server import Handler
+
+    captured = {}
+    handler = Handler.__new__(Handler)
+    handler._auth_enabled = lambda: True
+    handler._require_auth = lambda: None  # simulates unauthorized (401 already emitted)
+    handler._json = lambda status, payload, extra_headers=None: captured.update(
+        status=status, payload=payload
+    )
+
+    handler._send_mcp_token()
+    assert captured.get("status") != 200
