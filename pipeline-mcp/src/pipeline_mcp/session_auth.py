@@ -145,6 +145,27 @@ class SessionManager:
             return ""
         return str(oidc.get("id_token") or "").strip()
 
+    def get_oidc_access_token(
+        self, session_id: str, *, oidc_settings: "OIDCSettings | None" = None
+    ) -> tuple[str, int]:
+        """Return (access_token, access_expires_at_epoch) for an OIDC session.
+
+        Refreshes the session first when oidc_settings is provided so the
+        returned access token is as fresh as the stored refresh token allows.
+        Returns ("", 0) for non-OIDC sessions or when no access token exists.
+        """
+        session = self.get_session(session_id, oidc_settings=oidc_settings)
+        if not isinstance(session, dict):
+            return "", 0
+        if str(session.get("auth_type") or "") != "oidc":
+            return "", 0
+        oidc = session.get("oidc")
+        if not isinstance(oidc, dict):
+            return "", 0
+        token = str(oidc.get("access_token") or "").strip()
+        expires_at = _coerce_int(oidc.get("access_expires_at"))
+        return token, expires_at
+
     def _maybe_refresh_oidc_session(
         self,
         session_id: str,

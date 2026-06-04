@@ -151,3 +151,50 @@ def test_session_manager_drops_oidc_session_when_refresh_fails(tmp_path, monkeyp
 
     payload = json.loads(store_path.read_text(encoding="utf-8"))
     assert payload["sessions"] == {}
+
+
+def test_get_oidc_access_token_returns_token_and_expiry(tmp_path):
+    from pipeline_mcp.session_auth import SessionConfig, SessionManager
+
+    manager = SessionManager(
+        SessionConfig(
+            store_path=tmp_path / "sessions.json",
+            cookie_name="kbf_session",
+            local_ttl_s=3600,
+            oidc_refresh_leeway_s=60,
+            oidc_fallback_ttl_s=300,
+        )
+    )
+    import time
+    sid = "sess-oidc"
+    exp = int(time.time()) + 1800
+    manager._sessions[sid] = {
+        "auth_type": "oidc",
+        "user": {"username": "alice", "role": "user"},
+        "created_at": int(time.time()),
+        "updated_at": int(time.time()),
+        "expires_at": exp,
+        "oidc": {"access_token": "AT-123", "access_expires_at": exp},
+    }
+
+    token, expires_at = manager.get_oidc_access_token(sid)
+    assert token == "AT-123"
+    assert expires_at == exp
+
+
+def test_get_oidc_access_token_empty_for_local_session(tmp_path):
+    from pipeline_mcp.session_auth import SessionConfig, SessionManager
+
+    manager = SessionManager(
+        SessionConfig(
+            store_path=tmp_path / "sessions.json",
+            cookie_name="kbf_session",
+            local_ttl_s=3600,
+            oidc_refresh_leeway_s=60,
+            oidc_fallback_ttl_s=300,
+        )
+    )
+    sid = manager.create_local_session({"username": "bob", "role": "user"})
+    token, expires_at = manager.get_oidc_access_token(sid)
+    assert token == ""
+    assert expires_at == 0
