@@ -133,6 +133,27 @@ Use these argument shapes when calling `pipeline.run`:
   - `af2_top_k=20`
   - `af2_sequence_ids=["1"]` (run AF2 only for selected design ids to save time)
 
+## Single-model / standalone execution
+
+Run one model on its own (no full pipeline) when you only need a single computation. There are three ways:
+
+### Standalone AlphaFold2/ColabFold — `pipeline.af2_predict`
+- Required: one of `target_fasta` or `target_pdb` (raw text, not a file path).
+- Optional: `af2_provider` (`colabfold` or `af2`), `af2_model_preset`, `af2_db_preset`, `af2_extra_flags`, `run_id`, `dry_run`.
+- Use when you just want a structure prediction for one or more sequences.
+
+### Standalone DiffDock — `pipeline.diffdock`
+- Required: one of `protein_pdb` or `target_pdb` (raw text), plus a ligand via `diffdock_ligand_smiles` or `diffdock_ligand_sdf`.
+- Optional: `complex_name`, `diffdock_extra_args`, `run_id`, `dry_run`.
+- Use when you just want a docking pose, independent of any design run.
+
+### A single pipeline stage — `pipeline.run` with `stop_after`
+- To run exactly one stage and stop, call `pipeline.run` with `stop_after` set to that stage (`rfd3`, `msa`, `design`, `soluprot`, or `af2`) and a stable `run_id`.
+- The pipeline reuses cached artifacts from earlier stages; if none exist it runs only the prerequisites needed for that stage.
+- This mirrors the web app's standalone ("Single Stage") run mode.
+
+Gate and poll standalone runs the same way as staged runs: call `pipeline.status(run_id)` first; if `state=running`, poll instead of calling `pipeline.run`/the standalone tool again.
+
 ## Output Expectations
 
 - Always return `output_dir` and any stage-specific paths from the tool result.
