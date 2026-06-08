@@ -22,7 +22,9 @@ const GUIDE_COPY = {
       step1Title: "1) Download the skill",
       step1Desc: "Download the protein-pipeline-stepper skill and save the zip (e.g. to your Downloads). Your AI will install it in the next step.",
       step2Title: "2) Paste one prompt — the AI sets up the rest",
-      step2Desc: "Copy this master prompt (your token is filled in automatically on copy) and paste it to your AI. It installs the skill, registers the protein-pipeline MCP server, asks you to restart the client if needed, then runs your analysis.",
+      step2Desc: "Copy this master prompt — a long-lived API key is generated and filled in automatically (no token refresh). Paste it to your AI: it installs the skill, registers the protein-pipeline MCP server, asks you to restart the client if needed, then runs your analysis.",
+      masterNote:
+        "Copying generates a long-lived API key (default 90 days) and embeds it — so setup and long jobs never hit a token-expiry. Revoke it anytime under Advanced › API keys.",
       masterPrompt:
         `You are my coding agent with shell access. Set up and use the protein-pipeline pipeline:\n\n1. Install the skill: I downloaded \`protein-pipeline-stepper.zip\` (check my Downloads). Unzip it and put the \`protein-pipeline-stepper/\` folder in your skills directory (e.g. ~/.claude/skills/).\n2. Register an MCP server named \`protein-pipeline\` using your client's mechanism (VS Code mcp.json, \`codex mcp add\`, etc.):\n   - type: HTTP (streamable)\n   - URL: ${MCP_ENDPOINT_TOKEN}\n   - Header: Authorization: Bearer ${TOKEN_PLACEHOLDER}\n3. If the new skill or MCP server is not picked up, tell me to restart/reload the client, then continue once I confirm.\n4. Then, using the protein-pipeline-stepper skill, do this analysis:\n\n«describe your analysis task, e.g. run standalone ColabFold on this FASTA: ...»\n\nFor a full pipeline run, first ask me (in one message) whether to use defaults or advanced options and whether to enable surrogate triage, then proceed with my answers. Follow the skill: reuse one stable run_id, check pipeline.status before running, poll long-running jobs instead of re-running, pass file contents (not paths), and if a result looks wrong or fails, diagnose and ask me before re-running.`,
       masterPromptButton: "Copy master prompt (with my token)",
@@ -107,7 +109,9 @@ const GUIDE_COPY = {
       step1Title: "1) 스킬 다운로드",
       step1Desc: "protein-pipeline-stepper 스킬 zip을 받아 저장하세요(예: 다운로드 폴더). 설치는 다음 단계에서 AI가 합니다.",
       step2Title: "2) 프롬프트 하나만 붙여넣기 — 나머지는 AI가",
-      step2Desc: "이 마스터 프롬프트를 복사(누르면 토큰이 자동으로 채워집니다)해서 AI에 붙여넣으세요. AI가 스킬을 설치하고 protein-pipeline MCP 서버를 등록하며, 필요하면 재시작을 요청한 뒤 분석을 수행합니다.",
+      step2Desc: "이 마스터 프롬프트를 복사하면 장수명 API key가 자동 생성되어 채워집니다(토큰 갱신 불필요). AI에 붙여넣으면 스킬을 설치하고 protein-pipeline MCP 서버를 등록하며, 필요하면 재시작을 요청한 뒤 분석을 수행합니다.",
+      masterNote:
+        "복사하면 장수명 API key(기본 90일)가 생성되어 박힙니다 — 그래서 설정·장시간 작업 중 토큰 만료가 없습니다. 필요하면 고급 › API keys에서 언제든 취소하세요.",
       masterPrompt:
         `너는 셸 접근 권한이 있는 내 코딩 에이전트야. protein-pipeline 파이프라인을 설정하고 사용해:\n\n1. 스킬 설치: 내가 \`protein-pipeline-stepper.zip\`을 다운로드했어(다운로드 폴더 확인). 압축을 풀어 \`protein-pipeline-stepper/\` 폴더를 네 skills 디렉터리(예: ~/.claude/skills/)에 넣어.\n2. \`protein-pipeline\` 이름으로 MCP 서버를 네 클라이언트 방식(VS Code mcp.json, \`codex mcp add\` 등)으로 등록해:\n   - 종류: HTTP (streamable)\n   - URL: ${MCP_ENDPOINT_TOKEN}\n   - 헤더: Authorization: Bearer ${TOKEN_PLACEHOLDER}\n3. 새 스킬이나 MCP 서버가 인식되지 않으면, 나에게 클라이언트를 재시작/새로고침하라고 말하고, 내가 확인하면 계속해.\n4. 그런 다음 protein-pipeline-stepper 스킬로 다음 분석을 해줘:\n\n《분석 작업을 설명, 예: 이 FASTA로 ColabFold 단독 실행: ...》\n\n전체 파이프라인을 돌릴 때는, 먼저 기본 옵션으로 할지 고급 옵션을 설정할지, surrogate triage를 켤지 한 메시지로 물어보고, 내 답에 따라 진행해. 스킬 규칙을 지켜: run_id 하나 재사용, 실행 전 pipeline.status 확인, 오래 걸리는 작업은 재실행 말고 폴링, 파일은 경로 대신 내용 전달, 결과가 이상하거나 실패하면 진단 후 재실행 전 나에게 확인.`,
       masterPromptButton: "마스터 프롬프트 복사 (내 토큰 포함)",
@@ -273,7 +277,7 @@ export function renderMcpGuideMarkup({ lang = "en", endpointUrl = resolveMcpEndp
           <button type="button" id="mcpMasterPromptCopyBtn" class="btn-primary">${copy.flow.masterPromptButton}</button>
           <span id="mcpGuideStatus" class="mcp-guide-status" role="status"></span>
         </div>
-        <div class="mcp-guide-note">${copy.token.autoNote}</div>
+        <div class="mcp-guide-note">${copy.flow.masterNote}</div>
       </div>
     </div>
 

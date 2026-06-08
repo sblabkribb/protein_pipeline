@@ -129,7 +129,7 @@ import {
   resolveDefaultApiBase,
 } from "./lib/auth.js?v=20260409_v7";
 import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=20260407_v6";
-import { renderMcpGuideMarkup, buildMcpJsonSnippetWithToken, fillMasterPromptToken } from "./lib/mcp-guide.js?v=20260608_v8";
+import { renderMcpGuideMarkup, buildMcpJsonSnippetWithToken, fillMasterPromptToken } from "./lib/mcp-guide.js?v=20260608_v9";
 import {
   buildProviderHealthPayload,
   buildProviderUpdatePayload,
@@ -2233,8 +2233,9 @@ const I18N = {
     "mcp.skill.downloaded": "Skill download started.",
     "mcp.skill.failed": "Skill download failed: {error}",
     "mcp.skill.signIn": "Please sign in first, then download again.",
-    "mcp.prompt.copied": "Master prompt copied (token filled in) — paste it into your AI and replace the task placeholder.",
-    "mcp.prompt.copiedExpires": "Master prompt copied with your token — paste it into your AI. Token expires in ~{mins} min; copy again if setup takes longer.",
+    "mcp.prompt.creating": "Creating a long-lived key and copying the prompt…",
+    "mcp.prompt.copiedKey": "Master prompt copied with a long-lived API key — paste it into your AI and replace the task placeholder. (Revoke under Advanced › API keys if needed.)",
+    "mcp.prompt.signIn": "Please sign in first, then copy again.",
     "mcp.prompt.failed": "Could not copy the prompt: {error}",
     "mcp.keys.creating": "Creating API key…",
     "mcp.keys.createdStatus": "API key created and copied — it is shown only once.",
@@ -3967,8 +3968,9 @@ const I18N = {
     "mcp.skill.downloaded": "skill 다운로드를 시작했습니다.",
     "mcp.skill.failed": "skill 다운로드 실패: {error}",
     "mcp.skill.signIn": "먼저 로그인한 뒤 다시 다운로드해 주세요.",
-    "mcp.prompt.copied": "마스터 프롬프트를 복사했습니다(토큰 포함) — AI에 붙여넣고 작업 부분만 바꾸세요.",
-    "mcp.prompt.copiedExpires": "토큰이 채워진 마스터 프롬프트를 복사했습니다 — AI에 붙여넣으세요. 토큰은 약 {mins}분 뒤 만료되니, 설정이 더 걸리면 다시 복사하세요.",
+    "mcp.prompt.creating": "장수명 key를 생성하고 프롬프트를 복사하는 중…",
+    "mcp.prompt.copiedKey": "장수명 API key가 담긴 마스터 프롬프트를 복사했습니다 — AI에 붙여넣고 작업 부분만 바꾸세요. (필요하면 고급 › API keys에서 취소)",
+    "mcp.prompt.signIn": "먼저 로그인한 뒤 다시 복사해 주세요.",
     "mcp.prompt.failed": "프롬프트를 복사하지 못했습니다: {error}",
     "mcp.keys.creating": "API key 발급 중…",
     "mcp.keys.createdStatus": "API key를 발급해 복사했습니다 — 한 번만 표시됩니다.",
@@ -11717,18 +11719,20 @@ async function copyMcpMasterPrompt() {
   const node = el.mcpGuidePanel ? el.mcpGuidePanel.querySelector("#mcpMasterPromptText") : null;
   const template = node ? node.textContent || "" : "";
   if (!template.trim()) return;
-  setMcpGuideStatus(t("mcp.token.fetching"));
+  setMcpGuideStatus(t("mcp.prompt.creating"));
   try {
-    const response = await fetch(`${state.apiBase}/auth/mcp_token`, {
-      method: "GET",
+    // Mint a long-lived API key (PAT) so the embedded token never needs refreshing.
+    const response = await fetch(`${state.apiBase}/auth/mcp_keys`, {
+      method: "POST",
       credentials: "include",
-      headers: { ...authHeaders() },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ label: "master-prompt", ttl_days: 90 }),
     });
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
       if (isApiAuthFailure(response.status, payload)) {
         handleApiAuthFailure();
-        setMcpGuideStatus(t("mcp.token.signIn"));
+        setMcpGuideStatus(t("mcp.prompt.signIn"));
         return;
       }
       throw new Error(payload?.error || `HTTP ${response.status}`);
@@ -11736,13 +11740,8 @@ async function copyMcpMasterPrompt() {
     const token = String(payload?.token || "");
     if (!token) throw new Error(payload?.error || "no token");
     await navigator.clipboard.writeText(fillMasterPromptToken(template, token));
-    const expiresAt = Number(payload?.expires_at || 0);
-    if (expiresAt > 0) {
-      const mins = Math.max(1, Math.round((expiresAt * 1000 - Date.now()) / 60000));
-      setMcpGuideStatus(t("mcp.prompt.copiedExpires", { mins }));
-    } else {
-      setMcpGuideStatus(t("mcp.prompt.copied"));
-    }
+    setMcpGuideStatus(t("mcp.prompt.copiedKey"));
+    void refreshMcpKeys();
   } catch (err) {
     setMcpGuideStatus(t("mcp.prompt.failed", { error: err.message || t("error.api") }));
   }
