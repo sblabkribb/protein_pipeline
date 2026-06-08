@@ -25,6 +25,17 @@ Before running anything, the MCP server `protein-pipeline` must be reachable and
    auth error (401), return to the MCP tab and click the button again to refresh the
    token in your `mcp.json`.
 
+**Long-running jobs and token expiry.** The bearer token is a *snapshot* of the
+SSO access token; it does not auto-refresh, and the SSO access-token lifetime is
+typically only a few minutes. Long jobs (ColabFold/AF2, RFD3, DiffDock) keep
+running **server-side** regardless — they are async, and the `run_id`, artifacts,
+and `status.json` persist. But your **polling** calls will start returning 401 once
+the token expires mid-job. When that happens: re-fetch the token (re-click **Copy
+mcp.json with my token**, update your `mcp.json` / env var), then resume
+`pipeline.status(run_id)` polling on the **same `run_id`** — do not start a
+duplicate run. (A client with real OAuth refresh avoids this entirely; that is a
+planned follow-up.)
+
 You can also download this skill from the MCP tab (**Download skill**) so your client
 has the connection + execution instructions locally.
 
@@ -144,12 +155,17 @@ Run one model on its own (no full pipeline) when you only need a single computat
 | MSA (MMseqs2) | `pipeline.run` with `stop_after="msa"` and `target_fasta` or `target_pdb` |
 | ProteinMPNN | `pipeline.run` with `stop_after="design"` and `target_pdb` |
 | SoluProt | `pipeline.run` with `stop_after="soluprot"` and `target_pdb` (or `target_fasta` + AF2 configured) |
-| ColabFold / AlphaFold2 | `pipeline.af2_predict` (standalone) **or** `pipeline.run` with `stop_after="af2"` |
-| DiffDock | `pipeline.diffdock` (standalone) — `protein_pdb`/`target_pdb` + ligand `diffdock_ligand_smiles`/`diffdock_ligand_sdf` |
+| ColabFold / AlphaFold2 | `pipeline.run_af2` or `pipeline.af2_predict` (standalone), **or** `pipeline.run` with `stop_after="af2"` |
+| DiffDock | `pipeline.diffdock` or `pipeline.run_diffdock` (standalone) |
 
 ### Dedicated standalone tools
-- **`pipeline.af2_predict`** — AF2/ColabFold structure prediction. Required: one of `target_fasta`/`target_pdb`. Optional: `af2_provider` (`colabfold`/`af2`), `af2_model_preset`, `af2_db_preset`, `af2_extra_flags`, `run_id`, `dry_run`.
-- **`pipeline.diffdock`** — docking. Required: one of `protein_pdb`/`target_pdb` plus a ligand (`diffdock_ligand_smiles` or `diffdock_ligand_sdf`). Optional: `complex_name`, `diffdock_extra_args`, `run_id`, `dry_run`.
+
+There are **two AF2 tools and two DiffDock tools** with different input field names — do not mix them up. Call `tools/list` if unsure, then match the schema exactly:
+
+- **`pipeline.run_af2`** — AF2/ColabFold from a plain sequence. Input: `fasta` **or** `sequence` (note: `fasta`, *not* `target_fasta`). Optional: `af2_provider` (`colabfold`/`af2`), `af2_chain_ids` (array), `af2_model_preset` (e.g. `multimer` for multi-chain), `sequence_id`, `run_id`, `force`, `dry_run`. Best when you already have a sequence/FASTA.
+- **`pipeline.af2_predict`** — AF2/ColabFold from pipeline-style inputs. Input: `target_fasta` **or** `target_pdb`. Optional: `af2_provider`, `af2_model_preset`, `af2_db_preset`, `af2_extra_flags`, `run_id`, `dry_run`. Best when your input is a `target_pdb`/`target_fasta` you'd also feed the pipeline.
+- **`pipeline.run_diffdock`** — docking, lighter args. Input: `protein_pdb` + `ligand_smiles`. Optional: `run_id`, `force`, `dry_run`.
+- **`pipeline.diffdock`** — docking, pipeline-style args. Input: `protein_pdb`/`target_pdb` + `diffdock_ligand_smiles`/`diffdock_ligand_sdf` (also accepts `ligand_smiles`/`ligand_sdf`). Optional: `complex_name`, `diffdock_extra_args`, `run_id`, `dry_run`.
 
 ### Single stage via `pipeline.run` + `stop_after`
 - Set `stop_after` to exactly one of `rfd3`, `bioemu`, `msa`, `design`, `soluprot`, `af2` and pass a stable `run_id`. The pipeline runs only that stage's prerequisites and stops.
