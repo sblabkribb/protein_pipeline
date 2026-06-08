@@ -20,6 +20,21 @@ test("pipeline MCP tab is Korean-first and includes VS Code plus Codex guidance"
   });
 });
 
+test("MCP tab leads with a 3-step flow and a copyable master prompt, advanced collapsed", () => {
+  return import("../lib/mcp-guide.js").then((mcpGuide) => {
+    const html = mcpGuide.renderMcpGuideMarkup({ lang: "ko", endpointUrl: "https://x.test/mcp" });
+    // Master prompt block + copy button.
+    assert.equal(html.includes('id="mcpMasterPromptText"'), true);
+    assert.equal(html.includes('id="mcpMasterPromptCopyBtn"'), true);
+    assert.equal(html.includes("protein-pipeline-stepper"), true);
+    // Detailed setup is tucked into a collapsible <details>.
+    assert.equal(html.includes("<details"), true);
+    assert.equal(html.includes("<summary>"), true);
+    // The old detailed cards still exist (inside advanced).
+    assert.equal(html.includes("질문 예시"), true);
+  });
+});
+
 test("renderMcpGuideMarkup uses the given endpoint URL everywhere (no stale prod host)", () => {
   return import("../lib/mcp-guide.js").then((mcpGuide) => {
     const html = mcpGuide.renderMcpGuideMarkup({

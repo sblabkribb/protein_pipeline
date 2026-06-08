@@ -16,8 +16,20 @@ const TOKEN_PLACEHOLDER_HTML = "&lt;KBF_SSO_ACCESS_TOKEN&gt;";
 
 const GUIDE_COPY = {
   en: {
-    title: "MCP guide",
-    description: "Connect the shared protein pipeline MCP endpoint from VS Code or Codex without opening raw backend ports.",
+    title: "Connect your AI to the pipeline",
+    description: "Three steps: give your AI client the connection, the skill, and one prompt — then it does the rest, from MCP connection to analysis.",
+    flow: {
+      step1Title: "1) Connection",
+      step1Desc: "Sign in, then copy a ready-to-paste mcp.json with your token and paste it into your AI client (VS Code / Codex / Claude).",
+      step2Title: "2) Skill",
+      step2Desc: "Download the protein-pipeline-stepper skill (it includes the connection + execution rules) and place it in your agent's skills directory.",
+      step3Title: "3) Tell your AI",
+      step3Desc: "Copy this master prompt, replace «your analysis task», and send it. The AI connects via MCP and runs the analysis following the skill.",
+      masterPrompt:
+        "Use the protein-pipeline-stepper skill. The protein-pipeline MCP server is already configured in my client — connect to it, then do this analysis:\n\n«describe your analysis task, e.g. run standalone ColabFold on this FASTA: ...»\n\nFollow the skill: reuse one stable run_id, check pipeline.status before running, poll long-running jobs instead of re-running, pass file contents (not paths), and if a result looks wrong or fails, diagnose and ask me before re-running.",
+      masterPromptButton: "Copy master prompt",
+      advancedSummary: "Advanced setup (endpoint URL, manual mcp.json, VS Code / Codex steps, verify, prompt examples)",
+    },
     endpoint: {
       title: "1) Remote MCP endpoint",
       description: "Public HTTP MCP endpoint for the pipeline service.",
@@ -80,8 +92,20 @@ const GUIDE_COPY = {
     },
   },
   ko: {
-    title: "MCP 가이드",
-    description: "원시 백엔드 포트를 직접 열지 않고 VS Code와 Codex에서 공용 protein pipeline MCP endpoint에 연결합니다.",
+    title: "AI를 파이프라인에 연결",
+    description: "세 단계면 됩니다 — AI 클라이언트에 연결·스킬·프롬프트 하나만 주면, MCP 연결부터 분석까지 AI가 알아서 합니다.",
+    flow: {
+      step1Title: "1) 연결",
+      step1Desc: "로그인한 뒤 토큰이 채워진 mcp.json을 복사해 AI 클라이언트(VS Code / Codex / Claude)에 붙여넣으세요.",
+      step2Title: "2) 스킬",
+      step2Desc: "protein-pipeline-stepper 스킬을 다운로드(연결+실행 규칙 포함)해서 에이전트의 skills 디렉터리에 넣으세요.",
+      step3Title: "3) AI에게 명령",
+      step3Desc: "이 마스터 프롬프트를 복사하고 《분석 작업》 부분만 바꿔 보내세요. AI가 MCP로 연결해 스킬에 따라 분석을 수행합니다.",
+      masterPrompt:
+        "protein-pipeline-stepper 스킬을 사용해. protein-pipeline MCP 서버는 내 클라이언트에 이미 설정돼 있어 — 거기에 연결한 뒤 다음 분석을 해줘:\n\n《분석 작업을 설명, 예: 이 FASTA로 ColabFold 단독 실행: ...》\n\n스킬 규칙을 지켜: run_id 하나를 재사용하고, 실행 전 pipeline.status로 확인하고, 오래 걸리는 작업은 재실행 말고 폴링하고, 파일은 경로 대신 내용을 전달하고, 결과가 이상하거나 실패하면 진단한 뒤 재실행 전에 나에게 확인해.",
+      masterPromptButton: "마스터 프롬프트 복사",
+      advancedSummary: "고급 설정 (엔드포인트 URL · 수동 mcp.json · VS Code / Codex 단계 · 검증 · 프롬프트 예시)",
+    },
     endpoint: {
       title: "1) 원격 MCP 엔드포인트",
       description: "파이프라인 서비스용 공용 HTTP MCP endpoint입니다.",
@@ -207,60 +231,92 @@ export function renderMcpGuideMarkup({ lang = "en", endpointUrl = resolveMcpEndp
     <div class="tab-grid monitor-grid mcp-guide-grid">
       <div class="status-card mcp-guide-card">
         <div class="panel-header small">
-          <h3>${copy.endpoint.title}</h3>
-          <p>${copy.endpoint.description}</p>
+          <h3>${copy.flow.step1Title}</h3>
+          <p>${copy.flow.step1Desc}</p>
         </div>
-        ${renderList(copy.endpoint.items)}
+        <div class="mcp-guide-actions">
+          <button type="button" id="mcpTokenCopyBtn" class="btn-primary">${copy.token.copyButton}</button>
+        </div>
+        <div class="mcp-guide-note">${copy.token.autoNote}</div>
       </div>
 
       <div class="status-card mcp-guide-card">
         <div class="panel-header small">
-          <h3>${copy.config.title}</h3>
-          <p>${copy.config.description}</p>
+          <h3>${copy.flow.step2Title}</h3>
+          <p>${copy.flow.step2Desc}</p>
         </div>
-        ${renderCodeBlock(buildMcpJsonSnippet(endpointUrl))}
+        <div class="mcp-guide-actions">
+          <button type="button" id="mcpSkillDownloadBtn" class="btn-secondary">${copy.token.downloadButton}</button>
+        </div>
+        <div class="mcp-guide-note">${copy.token.installNote}</div>
       </div>
 
       <div class="status-card mcp-guide-card span-2">
         <div class="panel-header small">
-          <h3>${copy.token.title}</h3>
-          <p>${copy.token.description}</p>
+          <h3>${copy.flow.step3Title}</h3>
+          <p>${copy.flow.step3Desc}</p>
         </div>
+        <pre class="mcp-guide-code" id="mcpMasterPromptText"><code>${escapeHtml(copy.flow.masterPrompt)}</code></pre>
         <div class="mcp-guide-actions">
-          <button type="button" id="mcpTokenCopyBtn" class="btn-primary">${copy.token.copyButton}</button>
-          <button type="button" id="mcpSkillDownloadBtn" class="btn-secondary">${copy.token.downloadButton}</button>
+          <button type="button" id="mcpMasterPromptCopyBtn" class="btn-primary">${copy.flow.masterPromptButton}</button>
           <span id="mcpGuideStatus" class="mcp-guide-status" role="status"></span>
         </div>
-        <div class="mcp-guide-note">${copy.token.autoNote}</div>
-        <div class="mcp-guide-note">${copy.token.installNote}</div>
-        ${renderList(copy.token.items)}
-        <div class="mcp-guide-note">${copy.token.note}</div>
-      </div>
-
-      <div class="status-card mcp-guide-card">
-        <div class="panel-header small">
-          <h3>${copy.codex.title}</h3>
-          <p>${copy.codex.description}</p>
-        </div>
-        ${renderSteps(copy.codex.steps)}
-      </div>
-
-      <div class="status-card mcp-guide-card">
-        <div class="panel-header small">
-          <h3>${copy.verify.title}</h3>
-          <p>${copy.verify.description}</p>
-        </div>
-        ${renderSteps(copy.verify.steps)}
-      </div>
-
-      <div class="status-card mcp-guide-card">
-        <div class="panel-header small">
-          <h3>${copy.prompts.title}</h3>
-          <p>${copy.prompts.description}</p>
-        </div>
-        ${renderCodeBlock(buildPromptSnippet(copy.prompts.examples))}
       </div>
     </div>
+
+    <details class="mcp-guide-advanced">
+      <summary>${copy.flow.advancedSummary}</summary>
+      <div class="tab-grid monitor-grid mcp-guide-grid">
+        <div class="status-card mcp-guide-card">
+          <div class="panel-header small">
+            <h3>${copy.endpoint.title}</h3>
+            <p>${copy.endpoint.description}</p>
+          </div>
+          ${renderList(copy.endpoint.items)}
+        </div>
+
+        <div class="status-card mcp-guide-card">
+          <div class="panel-header small">
+            <h3>${copy.config.title}</h3>
+            <p>${copy.config.description}</p>
+          </div>
+          ${renderCodeBlock(buildMcpJsonSnippet(endpointUrl))}
+        </div>
+
+        <div class="status-card mcp-guide-card span-2">
+          <div class="panel-header small">
+            <h3>${copy.token.title}</h3>
+            <p>${copy.token.description}</p>
+          </div>
+          ${renderList(copy.token.items)}
+          <div class="mcp-guide-note">${copy.token.note}</div>
+        </div>
+
+        <div class="status-card mcp-guide-card">
+          <div class="panel-header small">
+            <h3>${copy.codex.title}</h3>
+            <p>${copy.codex.description}</p>
+          </div>
+          ${renderSteps(copy.codex.steps)}
+        </div>
+
+        <div class="status-card mcp-guide-card">
+          <div class="panel-header small">
+            <h3>${copy.verify.title}</h3>
+            <p>${copy.verify.description}</p>
+          </div>
+          ${renderSteps(copy.verify.steps)}
+        </div>
+
+        <div class="status-card mcp-guide-card">
+          <div class="panel-header small">
+            <h3>${copy.prompts.title}</h3>
+            <p>${copy.prompts.description}</p>
+          </div>
+          ${renderCodeBlock(buildPromptSnippet(copy.prompts.examples))}
+        </div>
+      </div>
+    </details>
   `;
   return markup.replaceAll(MCP_ENDPOINT_TOKEN, escapeHtml(endpointUrl));
 }

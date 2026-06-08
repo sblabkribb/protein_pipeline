@@ -1573,6 +1573,36 @@ body[data-environment="staging"] .topbar {
   border: 1px solid rgba(11, 111, 123, 0.12);
 }
 
+.mcp-guide-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.mcp-guide-status {
+  font-size: 13px;
+  color: var(--muted, #5a6b6e);
+}
+
+.mcp-guide-advanced {
+  margin-top: 18px;
+  border-top: 1px solid rgba(11, 111, 123, 0.12);
+  padding-top: 12px;
+}
+
+.mcp-guide-advanced > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink);
+  padding: 8px 4px;
+  list-style: revert;
+}
+
+.mcp-guide-advanced[open] > summary {
+  margin-bottom: 12px;
+}
+
 .mcp-guide-steps {
   margin: 0;
   padding-left: 18px;

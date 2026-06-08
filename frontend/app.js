@@ -2233,6 +2233,8 @@ const I18N = {
     "mcp.skill.downloaded": "Skill download started.",
     "mcp.skill.failed": "Skill download failed: {error}",
     "mcp.skill.signIn": "Please sign in first, then download again.",
+    "mcp.prompt.copied": "Master prompt copied — paste it into your AI and replace the task placeholder.",
+    "mcp.prompt.failed": "Could not copy the prompt: {error}",
     "home.title": "Solubility/Stability Workspace",
     "home.desc": "Target design runs, current rounds, and result triage in one workspace.",
     "home.launchpad.primary": "Primary workflow",
@@ -3949,6 +3951,8 @@ const I18N = {
     "mcp.skill.downloaded": "skill 다운로드를 시작했습니다.",
     "mcp.skill.failed": "skill 다운로드 실패: {error}",
     "mcp.skill.signIn": "먼저 로그인한 뒤 다시 다운로드해 주세요.",
+    "mcp.prompt.copied": "마스터 프롬프트를 복사했습니다 — AI에 붙여넣고 작업 부분만 바꾸세요.",
+    "mcp.prompt.failed": "프롬프트를 복사하지 못했습니다: {error}",
     "home.title": "용해도/안정성 워크스페이스",
     "home.desc": "표적 설계 실행, 현재 회차, 결과 검토를 한 화면에서 다룹니다.",
     "home.launchpad.primary": "기본 워크플로우",
@@ -11175,6 +11179,8 @@ function renderMcpGuide() {
   if (copyBtn) copyBtn.addEventListener("click", () => void copyMcpJsonWithToken());
   const skillBtn = el.mcpGuidePanel.querySelector("#mcpSkillDownloadBtn");
   if (skillBtn) skillBtn.addEventListener("click", () => void downloadPipelineSkill());
+  const promptBtn = el.mcpGuidePanel.querySelector("#mcpMasterPromptCopyBtn");
+  if (promptBtn) promptBtn.addEventListener("click", () => void copyMcpMasterPrompt());
 }
 
 function modelProviderTypeOption(value, current) {
@@ -11551,6 +11557,18 @@ async function downloadModelRegistrationSkill() {
 function setMcpGuideStatus(message) {
   const node = el.mcpGuidePanel ? el.mcpGuidePanel.querySelector("#mcpGuideStatus") : null;
   if (node) node.textContent = message || "";
+}
+
+async function copyMcpMasterPrompt() {
+  const node = el.mcpGuidePanel ? el.mcpGuidePanel.querySelector("#mcpMasterPromptText") : null;
+  const text = node ? node.textContent || "" : "";
+  if (!text.trim()) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    setMcpGuideStatus(t("mcp.prompt.copied"));
+  } catch (err) {
+    setMcpGuideStatus(t("mcp.prompt.failed", { error: err.message || t("error.api") }));
+  }
 }
 
 async function copyMcpJsonWithToken() {
