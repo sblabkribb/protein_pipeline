@@ -1603,6 +1603,25 @@ body[data-environment="staging"] .topbar {
   margin-bottom: 12px;
 }
 
+.mcp-guide-input {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(11, 111, 123, 0.25);
+  font-size: 13px;
+}
+
+.mcp-key-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(11, 111, 123, 0.12);
+  font-size: 13px;
+}
+
 .mcp-guide-steps {
   margin: 0;
   padding-left: 18px;

@@ -2236,6 +2236,21 @@ const I18N = {
     "mcp.prompt.copied": "Master prompt copied (token filled in) — paste it into your AI and replace the task placeholder.",
     "mcp.prompt.copiedExpires": "Master prompt copied with your token — paste it into your AI. Token expires in ~{mins} min; copy again if setup takes longer.",
     "mcp.prompt.failed": "Could not copy the prompt: {error}",
+    "mcp.keys.creating": "Creating API key…",
+    "mcp.keys.createdStatus": "API key created and copied — it is shown only once.",
+    "mcp.keys.createFailed": "Could not create the key: {error}",
+    "mcp.keys.signIn": "Please sign in first.",
+    "mcp.keys.revoking": "Revoking…",
+    "mcp.keys.revoked": "API key revoked.",
+    "mcp.keys.revokeFailed": "Could not revoke the key: {error}",
+    "mcp.keys.newPrefix": "New key (copied — shown once, paste it as your mcp.json Bearer token):",
+    "mcp.keys.empty": "No API keys yet.",
+    "mcp.keys.revoke": "Revoke",
+    "mcp.keys.never": "no expiry",
+    "mcp.keys.noLabel": "(no label)",
+    "mcp.keys.lblCreated": "created",
+    "mcp.keys.lblExpires": "expires",
+    "mcp.keys.lblUsed": "last used",
     "home.title": "Solubility/Stability Workspace",
     "home.desc": "Target design runs, current rounds, and result triage in one workspace.",
     "home.launchpad.primary": "Primary workflow",
@@ -3955,6 +3970,21 @@ const I18N = {
     "mcp.prompt.copied": "마스터 프롬프트를 복사했습니다(토큰 포함) — AI에 붙여넣고 작업 부분만 바꾸세요.",
     "mcp.prompt.copiedExpires": "토큰이 채워진 마스터 프롬프트를 복사했습니다 — AI에 붙여넣으세요. 토큰은 약 {mins}분 뒤 만료되니, 설정이 더 걸리면 다시 복사하세요.",
     "mcp.prompt.failed": "프롬프트를 복사하지 못했습니다: {error}",
+    "mcp.keys.creating": "API key 발급 중…",
+    "mcp.keys.createdStatus": "API key를 발급해 복사했습니다 — 한 번만 표시됩니다.",
+    "mcp.keys.createFailed": "key 발급 실패: {error}",
+    "mcp.keys.signIn": "먼저 로그인해 주세요.",
+    "mcp.keys.revoking": "취소 중…",
+    "mcp.keys.revoked": "API key를 취소했습니다.",
+    "mcp.keys.revokeFailed": "key 취소 실패: {error}",
+    "mcp.keys.newPrefix": "새 key (복사됨 — 한 번만 표시, mcp.json의 Bearer 토큰 자리에 넣으세요):",
+    "mcp.keys.empty": "아직 API key가 없습니다.",
+    "mcp.keys.revoke": "취소",
+    "mcp.keys.never": "만료 없음",
+    "mcp.keys.noLabel": "(라벨 없음)",
+    "mcp.keys.lblCreated": "발급",
+    "mcp.keys.lblExpires": "만료",
+    "mcp.keys.lblUsed": "최근 사용",
     "home.title": "용해도/안정성 워크스페이스",
     "home.desc": "표적 설계 실행, 현재 회차, 결과 검토를 한 화면에서 다룹니다.",
     "home.launchpad.primary": "기본 워크플로우",
@@ -11183,6 +11213,128 @@ function renderMcpGuide() {
   if (skillBtn) skillBtn.addEventListener("click", () => void downloadPipelineSkill());
   const promptBtn = el.mcpGuidePanel.querySelector("#mcpMasterPromptCopyBtn");
   if (promptBtn) promptBtn.addEventListener("click", () => void copyMcpMasterPrompt());
+  const keyCreateBtn = el.mcpGuidePanel.querySelector("#mcpKeyCreateBtn");
+  if (keyCreateBtn) {
+    keyCreateBtn.addEventListener("click", () => void createMcpKey());
+    void refreshMcpKeys();
+  }
+}
+
+function mcpKeysQuery(selector) {
+  return el.mcpGuidePanel ? el.mcpGuidePanel.querySelector(selector) : null;
+}
+
+function setMcpKeyStatus(message) {
+  const node = mcpKeysQuery("#mcpKeyStatus");
+  if (node) node.textContent = message || "";
+}
+
+function formatMcpKeyDate(epoch, fallback) {
+  if (!epoch) return fallback;
+  try {
+    return new Date(Number(epoch) * 1000).toLocaleDateString();
+  } catch (err) {
+    return fallback;
+  }
+}
+
+function renderMcpKeyRow(key) {
+  const label = key.label ? escapeHtml(key.label) : t("mcp.keys.noLabel");
+  const created = formatMcpKeyDate(key.created_at, "-");
+  const expires = formatMcpKeyDate(key.expires_at, t("mcp.keys.never"));
+  const used = formatMcpKeyDate(key.last_used, "-");
+  return `<div class="mcp-key-row"><span><strong>${label}</strong> · ${t("mcp.keys.lblCreated")} ${created} · ${t("mcp.keys.lblExpires")} ${expires} · ${t("mcp.keys.lblUsed")} ${used}</span><button type="button" class="btn-secondary mcp-key-revoke" data-id="${escapeAttr(key.id)}">${t("mcp.keys.revoke")}</button></div>`;
+}
+
+async function refreshMcpKeys() {
+  const list = mcpKeysQuery("#mcpKeysList");
+  if (!list) return;
+  try {
+    const response = await fetch(`${state.apiBase}/auth/mcp_keys`, {
+      method: "GET",
+      credentials: "include",
+      headers: { ...authHeaders() },
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      // Do not trigger logout on a passive tab render; just leave the list empty.
+      if (isApiAuthFailure(response.status, payload)) {
+        list.innerHTML = "";
+        return;
+      }
+      throw new Error(payload?.error || `HTTP ${response.status}`);
+    }
+    const keys = Array.isArray(payload?.keys) ? payload.keys : [];
+    list.innerHTML = keys.length
+      ? keys.map(renderMcpKeyRow).join("")
+      : `<div class="mcp-guide-status">${t("mcp.keys.empty")}</div>`;
+    list.querySelectorAll(".mcp-key-revoke").forEach((btn) => {
+      btn.addEventListener("click", () => void revokeMcpKey(btn.getAttribute("data-id")));
+    });
+  } catch (err) {
+    /* keep whatever was shown */
+  }
+}
+
+async function createMcpKey() {
+  const label = (mcpKeysQuery("#mcpKeyLabel")?.value || "").trim();
+  const ttl = mcpKeysQuery("#mcpKeyTtl")?.value ?? "90";
+  setMcpKeyStatus(t("mcp.keys.creating"));
+  try {
+    const response = await fetch(`${state.apiBase}/auth/mcp_keys`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ label, ttl_days: Number(ttl) }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      if (isApiAuthFailure(response.status, payload)) {
+        handleApiAuthFailure();
+        setMcpKeyStatus(t("mcp.keys.signIn"));
+        return;
+      }
+      throw new Error(payload?.error || `HTTP ${response.status}`);
+    }
+    const token = String(payload?.token || "");
+    const newNode = mcpKeysQuery("#mcpKeyNew");
+    if (newNode && token) {
+      newNode.hidden = false;
+      newNode.textContent = `${t("mcp.keys.newPrefix")}\n${token}`;
+      try {
+        await navigator.clipboard.writeText(token);
+      } catch (err) {
+        /* clipboard optional */
+      }
+    }
+    const labelNode = mcpKeysQuery("#mcpKeyLabel");
+    if (labelNode) labelNode.value = "";
+    setMcpKeyStatus(t("mcp.keys.createdStatus"));
+    void refreshMcpKeys();
+  } catch (err) {
+    setMcpKeyStatus(t("mcp.keys.createFailed", { error: err.message || t("error.api") }));
+  }
+}
+
+async function revokeMcpKey(id) {
+  if (!id) return;
+  setMcpKeyStatus(t("mcp.keys.revoking"));
+  try {
+    const response = await fetch(`${state.apiBase}/auth/mcp_keys/revoke`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...authHeaders() },
+      body: JSON.stringify({ id }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok && !isApiAuthFailure(response.status, payload)) {
+      throw new Error(payload?.error || `HTTP ${response.status}`);
+    }
+    setMcpKeyStatus(t("mcp.keys.revoked"));
+    void refreshMcpKeys();
+  } catch (err) {
+    setMcpKeyStatus(t("mcp.keys.revokeFailed", { error: err.message || t("error.api") }));
+  }
 }
 
 function modelProviderTypeOption(value, current) {

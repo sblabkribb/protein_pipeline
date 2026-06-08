@@ -41,6 +41,16 @@ test("MCP tab: skill download + one master prompt that registers MCP (token plac
   });
 });
 
+test("Advanced section exposes the API-keys (PAT) card", () => {
+  return import("../lib/mcp-guide.js").then((mcpGuide) => {
+    const html = mcpGuide.renderMcpGuideMarkup({ lang: "ko", endpointUrl: "https://x.test/mcp" });
+    assert.equal(html.includes('id="mcpKeyCreateBtn"'), true);
+    assert.equal(html.includes('id="mcpKeysList"'), true);
+    assert.equal(html.includes('id="mcpKeyTtl"'), true);
+    assert.equal(html.includes("API key"), true);
+  });
+});
+
 test("fillMasterPromptToken replaces the bearer-token placeholder", () => {
   return import("../lib/mcp-guide.js").then((mcpGuide) => {
     const out = mcpGuide.fillMasterPromptToken("...Authorization: Bearer <KBF_SSO_ACCESS_TOKEN> ...", "TKN.abc.123");

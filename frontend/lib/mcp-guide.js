@@ -26,7 +26,18 @@ const GUIDE_COPY = {
       masterPrompt:
         `You are my coding agent with shell access. Set up and use the protein-pipeline pipeline:\n\n1. Install the skill: I downloaded \`protein-pipeline-stepper.zip\` (check my Downloads). Unzip it and put the \`protein-pipeline-stepper/\` folder in your skills directory (e.g. ~/.claude/skills/).\n2. Register an MCP server named \`protein-pipeline\` using your client's mechanism (VS Code mcp.json, \`codex mcp add\`, etc.):\n   - type: HTTP (streamable)\n   - URL: ${MCP_ENDPOINT_TOKEN}\n   - Header: Authorization: Bearer ${TOKEN_PLACEHOLDER}\n3. If the new skill or MCP server is not picked up, tell me to restart/reload the client, then continue once I confirm.\n4. Then, using the protein-pipeline-stepper skill, do this analysis:\n\n«describe your analysis task, e.g. run standalone ColabFold on this FASTA: ...»\n\nFor a full pipeline run, first ask me (in one message) whether to use defaults or advanced options and whether to enable surrogate triage, then proceed with my answers. Follow the skill: reuse one stable run_id, check pipeline.status before running, poll long-running jobs instead of re-running, pass file contents (not paths), and if a result looks wrong or fails, diagnose and ask me before re-running.`,
       masterPromptButton: "Copy master prompt (with my token)",
-      advancedSummary: "Advanced / manual setup (copy mcp.json with token, endpoint URL, VS Code / Codex steps, verify, prompt examples)",
+      advancedSummary: "Advanced / manual setup (API keys, copy mcp.json with token, endpoint URL, VS Code / Codex steps, verify, prompt examples)",
+    },
+    keys: {
+      title: "API keys (no token refresh)",
+      desc: "Create a long-lived API key to use instead of the short-lived sign-in token — ideal for long jobs and clients like Codex. Use it as the Bearer token in your mcp.json. Shown once; revoke anytime.",
+      labelPlaceholder: "Label (e.g. my-laptop)",
+      createBtn: "Create API key",
+      never: "No expiry",
+      newPrefix: "New key (copied — shown once):",
+      empty: "No API keys yet.",
+      revoke: "Revoke",
+      note: "Keep API keys secret — anyone with the key can act as you (within your run scope). Revoke unused keys.",
     },
     endpoint: {
       title: "1) Remote MCP endpoint",
@@ -100,7 +111,18 @@ const GUIDE_COPY = {
       masterPrompt:
         `너는 셸 접근 권한이 있는 내 코딩 에이전트야. protein-pipeline 파이프라인을 설정하고 사용해:\n\n1. 스킬 설치: 내가 \`protein-pipeline-stepper.zip\`을 다운로드했어(다운로드 폴더 확인). 압축을 풀어 \`protein-pipeline-stepper/\` 폴더를 네 skills 디렉터리(예: ~/.claude/skills/)에 넣어.\n2. \`protein-pipeline\` 이름으로 MCP 서버를 네 클라이언트 방식(VS Code mcp.json, \`codex mcp add\` 등)으로 등록해:\n   - 종류: HTTP (streamable)\n   - URL: ${MCP_ENDPOINT_TOKEN}\n   - 헤더: Authorization: Bearer ${TOKEN_PLACEHOLDER}\n3. 새 스킬이나 MCP 서버가 인식되지 않으면, 나에게 클라이언트를 재시작/새로고침하라고 말하고, 내가 확인하면 계속해.\n4. 그런 다음 protein-pipeline-stepper 스킬로 다음 분석을 해줘:\n\n《분석 작업을 설명, 예: 이 FASTA로 ColabFold 단독 실행: ...》\n\n전체 파이프라인을 돌릴 때는, 먼저 기본 옵션으로 할지 고급 옵션을 설정할지, surrogate triage를 켤지 한 메시지로 물어보고, 내 답에 따라 진행해. 스킬 규칙을 지켜: run_id 하나 재사용, 실행 전 pipeline.status 확인, 오래 걸리는 작업은 재실행 말고 폴링, 파일은 경로 대신 내용 전달, 결과가 이상하거나 실패하면 진단 후 재실행 전 나에게 확인.`,
       masterPromptButton: "마스터 프롬프트 복사 (내 토큰 포함)",
-      advancedSummary: "고급 / 수동 설정 (토큰 mcp.json 복사 · 엔드포인트 URL · VS Code / Codex 단계 · 검증 · 프롬프트 예시)",
+      advancedSummary: "고급 / 수동 설정 (API key · 토큰 mcp.json 복사 · 엔드포인트 URL · VS Code / Codex 단계 · 검증 · 프롬프트 예시)",
+    },
+    keys: {
+      title: "API key (토큰 갱신 불필요)",
+      desc: "짧은 로그인 토큰 대신 쓸 수 있는 장수명 API key를 만듭니다 — 장시간 작업이나 Codex 같은 클라이언트에 적합합니다. mcp.json의 Bearer 토큰 자리에 넣으세요. 한 번만 표시되며 언제든 취소할 수 있습니다.",
+      labelPlaceholder: "라벨 (예: my-laptop)",
+      createBtn: "API key 발급",
+      never: "만료 없음",
+      newPrefix: "새 key (복사됨 — 한 번만 표시):",
+      empty: "아직 API key가 없습니다.",
+      revoke: "취소",
+      note: "API key는 비밀로 보관하세요 — key를 가진 사람은 당신 권한(run 범위 내)으로 행동할 수 있습니다. 안 쓰는 key는 취소하세요.",
     },
     endpoint: {
       title: "1) 원격 MCP 엔드포인트",
@@ -258,6 +280,27 @@ export function renderMcpGuideMarkup({ lang = "en", endpointUrl = resolveMcpEndp
     <details class="mcp-guide-advanced">
       <summary>${copy.flow.advancedSummary}</summary>
       <div class="tab-grid monitor-grid mcp-guide-grid">
+        <div class="status-card mcp-guide-card span-2">
+          <div class="panel-header small">
+            <h3>${copy.keys.title}</h3>
+            <p>${copy.keys.desc}</p>
+          </div>
+          <div class="mcp-guide-actions">
+            <input type="text" id="mcpKeyLabel" class="mcp-guide-input" placeholder="${escapeHtml(copy.keys.labelPlaceholder)}" />
+            <select id="mcpKeyTtl" class="mcp-guide-input">
+              <option value="90">90d</option>
+              <option value="30">30d</option>
+              <option value="365">365d</option>
+              <option value="0">${copy.keys.never}</option>
+            </select>
+            <button type="button" id="mcpKeyCreateBtn" class="btn-primary">${copy.keys.createBtn}</button>
+            <span id="mcpKeyStatus" class="mcp-guide-status" role="status"></span>
+          </div>
+          <pre class="mcp-guide-code" id="mcpKeyNew" hidden></pre>
+          <div id="mcpKeysList" class="mcp-guide-list"></div>
+          <div class="mcp-guide-note">${copy.keys.note}</div>
+        </div>
+
         <div class="status-card mcp-guide-card">
           <div class="panel-header small">
             <h3>${copy.endpoint.title}</h3>
