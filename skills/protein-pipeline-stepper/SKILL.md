@@ -14,27 +14,22 @@ Run the protein pipeline in deterministic stages via MCP tools and return the ou
 Before running anything, the MCP server `protein-pipeline` must be reachable and authenticated.
 
 1. Open the protein-pipeline web app and sign in (local login or KBF SSO).
-2. Go to the **MCP** tab and click **Copy mcp.json with my token**. This copies a
-   ready-to-paste `mcp.json` with your bearer token already filled in — you do not
-   need to open browser devtools.
-3. Add it to your client:
+2. Get a bearer token for `mcp.json`. **Recommended: a long-lived API key** — it does not expire, so there is no refreshing:
+   - On the **MCP** tab open **Advanced › API keys**, create a key (default 90 days, revocable), and copy it once; **or**
+   - Use the MCP tab's **master prompt** (step 2) — copying it generates and embeds a long-lived key automatically.
+   - Quick alternative: **Copy mcp.json with my token** gives a ready-to-paste `mcp.json`, but that token is the **short-lived** SSO token (expires in minutes).
+3. Add it to your client (either token type goes in the same place):
    - **VS Code:** run **MCP: Open User Configuration** and paste into `mcp.json`.
-   - **Codex:** add an MCP server named `protein-pipeline` with the same URL and the
+   - **Codex:** add an MCP server named `protein-pipeline` with the URL and the
      `Authorization: Bearer <token>` header.
-4. The token is a short-lived SSO/login token. When MCP calls start failing with an
-   auth error (401), return to the MCP tab and click the button again to refresh the
-   token in your `mcp.json`.
 
-**Long-running jobs and token expiry.** The bearer token is a *snapshot* of the
-SSO access token; it does not auto-refresh, and the SSO access-token lifetime is
-typically only a few minutes. Long jobs (ColabFold/AF2, RFD3, DiffDock) keep
-running **server-side** regardless — they are async, and the `run_id`, artifacts,
-and `status.json` persist. But your **polling** calls will start returning 401 once
-the token expires mid-job. When that happens: re-fetch the token (re-click **Copy
-mcp.json with my token**, update your `mcp.json` / env var), then resume
-`pipeline.status(run_id)` polling on the **same `run_id`** — do not start a
-duplicate run. (A client with real OAuth refresh avoids this entirely; that is a
-planned follow-up.)
+**Long-running jobs.** Prefer the long-lived **API key** — the compute job runs
+async **server-side** and your polling keeps working with no re-auth. If you used
+the short-lived SSO token instead, it expires after a few minutes: the job (and its
+`run_id`/artifacts/`status.json`) keeps running, but **polling returns 401** until
+you re-fetch the token; then resume `pipeline.status(run_id)` polling on the **same
+`run_id`** — do not start a duplicate run. Switching to an API key avoids this
+entirely.
 
 You can also download this skill from the MCP tab (**Download skill**) so your client
 has the connection + execution instructions locally.
