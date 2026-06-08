@@ -89,6 +89,24 @@ Accept "defaults" as a valid answer to everything. After the user answers, **ech
   - stage-specific file paths from the result (e.g., `msa_a3m_path`, `msa_tsv_path`)
   - the next recommended stage (if the user asked to continue)
 
+## Stage-by-stage review (Studio-style checkpoints)
+
+Mirror the web app's **Workflow Studio**: run one stage, **stop, show the result, and let the user decide** before the next stage — don't silently chain the whole pipeline.
+
+After each stage completes, **pause and report a short checkpoint**, then wait for the user:
+
+1. **Summarize the result** — read the stage's key outputs and present them concisely (not just paths):
+   - Use `pipeline.read_artifact` on `summary.json` / `status.json`, and `pipeline.list_artifacts` for the produced files.
+   - Stage-specific signal: MSA → depth/`msa_*` paths; design → number of sequences per tier; soluprot → solubility scores; **af2 → `pipeline.get_hit_list`** (pLDDT/top hits); compare runs with `pipeline.compare_runs`; full write-up with `pipeline.generate_report`.
+2. **Sanity-check** it (see "Result validation & self-correction") and flag anything implausible.
+3. **Offer the Studio choices** and wait for the answer:
+   - **Move forward** to the next stage (name it, e.g. `design` → `soluprot`),
+   - **Rerun this stage** with adjusted parameters (re-run the same `run_id` with `force=true`),
+   - **Adjust and stop**, or **stop here / done**.
+4. Proceed only on the user's choice; reuse the **same `run_id`** so completed stages stay cached.
+
+Exception: if the user explicitly asked up front to run several stages back-to-back without stopping, honor that — but still post a one-line checkpoint after each stage so they can interrupt. For a long-running stage, poll `pipeline.status` to completion **before** presenting the checkpoint (do not re-run).
+
 ## Stage Templates (Arguments)
 
 Use these argument shapes when calling `pipeline.run`:
