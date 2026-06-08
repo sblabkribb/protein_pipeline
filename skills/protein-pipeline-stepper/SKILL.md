@@ -180,6 +180,15 @@ There are **two AF2 tools and two DiffDock tools** with different input field na
 - **`pipeline.run_diffdock`** — docking, lighter args. Input: `protein_pdb` + `ligand_smiles`. Optional: `run_id`, `force`, `dry_run`.
 - **`pipeline.diffdock`** — docking, pipeline-style args. Input: `protein_pdb`/`target_pdb` + `diffdock_ligand_smiles`/`diffdock_ligand_sdf` (also accepts `ligand_smiles`/`ligand_sdf`). Optional: `complex_name`, `diffdock_extra_args`, `run_id`, `dry_run`.
 
+### Multi-chain / complex (multimer) AF2 input
+
+For an AF2/ColabFold **complex** (more than one chain), the pipeline splits chains on `/` — **not** ColabFold's `:` notation. So:
+
+- Join the chains in **one** record with `/`: `SEQ_A/SEQ_B` (FASTA: `>NAME` then `SEQ_A/SEQ_B`), and set `af2_model_preset="multimer"`.
+- Do **not** use `:` as the API separator — that is ColabFold-doc notation, not the pipeline's input format. Passing `:` will not be interpreted as a chain break.
+- A **monomer** preset with a `/`-separated multi-chain sequence is rejected — either pass a single chain, or switch to `multimer`.
+- With `multimer`, the number of `/`-separated chains must match `af2_chain_ids` / `design_chains` (e.g. `["A","B"]`).
+
 ### Single stage via `pipeline.run` + `stop_after`
 - Set `stop_after` to exactly one of `rfd3`, `bioemu`, `msa`, `design`, `soluprot`, `af2` and pass a stable `run_id`. The pipeline runs only that stage's prerequisites and stops.
 - **RFD3 and BioEmu must be explicitly enabled** with `rfd3_use=true` / `bioemu_use=true`; otherwise `stop_after` for that stage is rejected.
