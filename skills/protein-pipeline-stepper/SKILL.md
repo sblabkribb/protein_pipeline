@@ -135,24 +135,28 @@ Use these argument shapes when calling `pipeline.run`:
 
 ## Single-model / standalone execution
 
-Run one model on its own (no full pipeline) when you only need a single computation. There are three ways:
+Run one model on its own (no full pipeline) when you only need a single computation. **Every standalone ("Single Stage") mode in the web app maps to an MCP call** — two have dedicated tools, the rest run through `pipeline.run` with `stop_after` set to a single stage:
 
-### Standalone AlphaFold2/ColabFold — `pipeline.af2_predict`
-- Required: one of `target_fasta` or `target_pdb` (raw text, not a file path).
-- Optional: `af2_provider` (`colabfold` or `af2`), `af2_model_preset`, `af2_db_preset`, `af2_extra_flags`, `run_id`, `dry_run`.
-- Use when you just want a structure prediction for one or more sequences.
+| Standalone model | MCP call |
+| --- | --- |
+| RFD3 (backbone) | `pipeline.run` with `stop_after="rfd3"`, `rfd3_use=true`, and RFD3 inputs (`rfd3_input_pdb` + `rfd3_contig`, or `rfd3_inputs`/`rfd3_inputs_text`) |
+| BioEmu (backbone) | `pipeline.run` with `stop_after="bioemu"`, `bioemu_use=true`, and a `target_pdb`/`target_fasta` |
+| MSA (MMseqs2) | `pipeline.run` with `stop_after="msa"` and `target_fasta` or `target_pdb` |
+| ProteinMPNN | `pipeline.run` with `stop_after="design"` and `target_pdb` |
+| SoluProt | `pipeline.run` with `stop_after="soluprot"` and `target_pdb` (or `target_fasta` + AF2 configured) |
+| ColabFold / AlphaFold2 | `pipeline.af2_predict` (standalone) **or** `pipeline.run` with `stop_after="af2"` |
+| DiffDock | `pipeline.diffdock` (standalone) — `protein_pdb`/`target_pdb` + ligand `diffdock_ligand_smiles`/`diffdock_ligand_sdf` |
 
-### Standalone DiffDock — `pipeline.diffdock`
-- Required: one of `protein_pdb` or `target_pdb` (raw text), plus a ligand via `diffdock_ligand_smiles` or `diffdock_ligand_sdf`.
-- Optional: `complex_name`, `diffdock_extra_args`, `run_id`, `dry_run`.
-- Use when you just want a docking pose, independent of any design run.
+### Dedicated standalone tools
+- **`pipeline.af2_predict`** — AF2/ColabFold structure prediction. Required: one of `target_fasta`/`target_pdb`. Optional: `af2_provider` (`colabfold`/`af2`), `af2_model_preset`, `af2_db_preset`, `af2_extra_flags`, `run_id`, `dry_run`.
+- **`pipeline.diffdock`** — docking. Required: one of `protein_pdb`/`target_pdb` plus a ligand (`diffdock_ligand_smiles` or `diffdock_ligand_sdf`). Optional: `complex_name`, `diffdock_extra_args`, `run_id`, `dry_run`.
 
-### A single pipeline stage — `pipeline.run` with `stop_after`
-- To run exactly one stage and stop, call `pipeline.run` with `stop_after` set to that stage (`rfd3`, `msa`, `design`, `soluprot`, or `af2`) and a stable `run_id`.
-- The pipeline reuses cached artifacts from earlier stages; if none exist it runs only the prerequisites needed for that stage.
-- This mirrors the web app's standalone ("Single Stage") run mode.
+### Single stage via `pipeline.run` + `stop_after`
+- Set `stop_after` to exactly one of `rfd3`, `bioemu`, `msa`, `design`, `soluprot`, `af2` and pass a stable `run_id`. The pipeline runs only that stage's prerequisites and stops.
+- **RFD3 and BioEmu must be explicitly enabled** with `rfd3_use=true` / `bioemu_use=true`; otherwise `stop_after` for that stage is rejected.
+- Cached artifacts from earlier stages are reused; pass `force=true` to recompute.
 
-Gate and poll standalone runs the same way as staged runs: call `pipeline.status(run_id)` first; if `state=running`, poll instead of calling `pipeline.run`/the standalone tool again.
+Always pass raw file **contents** (not paths) for `target_pdb`/`target_fasta`/`rfd3_input_pdb`. Gate and poll standalone runs like staged runs: call `pipeline.status(run_id)` first; if `state=running`, poll instead of calling `pipeline.run`/the standalone tool again.
 
 ## Result validation & self-correction
 
