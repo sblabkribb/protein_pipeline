@@ -129,7 +129,7 @@ import {
   resolveDefaultApiBase,
 } from "./lib/auth.js?v=20260409_v7";
 import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=20260407_v6";
-import { renderMcpGuideMarkup, buildMcpJsonSnippetWithToken } from "./lib/mcp-guide.js?v=20260604_v7";
+import { renderMcpGuideMarkup, buildMcpJsonSnippetWithToken, fillMasterPromptToken } from "./lib/mcp-guide.js?v=20260608_v8";
 import {
   buildProviderHealthPayload,
   buildProviderUpdatePayload,
@@ -2233,7 +2233,8 @@ const I18N = {
     "mcp.skill.downloaded": "Skill download started.",
     "mcp.skill.failed": "Skill download failed: {error}",
     "mcp.skill.signIn": "Please sign in first, then download again.",
-    "mcp.prompt.copied": "Master prompt copied — paste it into your AI and replace the task placeholder.",
+    "mcp.prompt.copied": "Master prompt copied (token filled in) — paste it into your AI and replace the task placeholder.",
+    "mcp.prompt.copiedExpires": "Master prompt copied with your token — paste it into your AI. Token expires in ~{mins} min; copy again if setup takes longer.",
     "mcp.prompt.failed": "Could not copy the prompt: {error}",
     "home.title": "Solubility/Stability Workspace",
     "home.desc": "Target design runs, current rounds, and result triage in one workspace.",
@@ -3951,7 +3952,8 @@ const I18N = {
     "mcp.skill.downloaded": "skill 다운로드를 시작했습니다.",
     "mcp.skill.failed": "skill 다운로드 실패: {error}",
     "mcp.skill.signIn": "먼저 로그인한 뒤 다시 다운로드해 주세요.",
-    "mcp.prompt.copied": "마스터 프롬프트를 복사했습니다 — AI에 붙여넣고 작업 부분만 바꾸세요.",
+    "mcp.prompt.copied": "마스터 프롬프트를 복사했습니다(토큰 포함) — AI에 붙여넣고 작업 부분만 바꾸세요.",
+    "mcp.prompt.copiedExpires": "토큰이 채워진 마스터 프롬프트를 복사했습니다 — AI에 붙여넣으세요. 토큰은 약 {mins}분 뒤 만료되니, 설정이 더 걸리면 다시 복사하세요.",
     "mcp.prompt.failed": "프롬프트를 복사하지 못했습니다: {error}",
     "home.title": "용해도/안정성 워크스페이스",
     "home.desc": "표적 설계 실행, 현재 회차, 결과 검토를 한 화면에서 다룹니다.",
@@ -11561,11 +11563,34 @@ function setMcpGuideStatus(message) {
 
 async function copyMcpMasterPrompt() {
   const node = el.mcpGuidePanel ? el.mcpGuidePanel.querySelector("#mcpMasterPromptText") : null;
-  const text = node ? node.textContent || "" : "";
-  if (!text.trim()) return;
+  const template = node ? node.textContent || "" : "";
+  if (!template.trim()) return;
+  setMcpGuideStatus(t("mcp.token.fetching"));
   try {
-    await navigator.clipboard.writeText(text);
-    setMcpGuideStatus(t("mcp.prompt.copied"));
+    const response = await fetch(`${state.apiBase}/auth/mcp_token`, {
+      method: "GET",
+      credentials: "include",
+      headers: { ...authHeaders() },
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      if (isApiAuthFailure(response.status, payload)) {
+        handleApiAuthFailure();
+        setMcpGuideStatus(t("mcp.token.signIn"));
+        return;
+      }
+      throw new Error(payload?.error || `HTTP ${response.status}`);
+    }
+    const token = String(payload?.token || "");
+    if (!token) throw new Error(payload?.error || "no token");
+    await navigator.clipboard.writeText(fillMasterPromptToken(template, token));
+    const expiresAt = Number(payload?.expires_at || 0);
+    if (expiresAt > 0) {
+      const mins = Math.max(1, Math.round((expiresAt * 1000 - Date.now()) / 60000));
+      setMcpGuideStatus(t("mcp.prompt.copiedExpires", { mins }));
+    } else {
+      setMcpGuideStatus(t("mcp.prompt.copied"));
+    }
   } catch (err) {
     setMcpGuideStatus(t("mcp.prompt.failed", { error: err.message || t("error.api") }));
   }

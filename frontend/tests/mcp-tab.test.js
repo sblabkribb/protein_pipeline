@@ -20,18 +20,32 @@ test("pipeline MCP tab is Korean-first and includes VS Code plus Codex guidance"
   });
 });
 
-test("MCP tab leads with a 3-step flow and a copyable master prompt, advanced collapsed", () => {
+test("MCP tab: skill download + one master prompt that registers MCP (token placeholder + restart), advanced collapsed", () => {
   return import("../lib/mcp-guide.js").then((mcpGuide) => {
     const html = mcpGuide.renderMcpGuideMarkup({ lang: "ko", endpointUrl: "https://x.test/mcp" });
-    // Master prompt block + copy button.
+    // Primary flow: skill download + master prompt.
+    assert.equal(html.includes('id="mcpSkillDownloadBtn"'), true);
     assert.equal(html.includes('id="mcpMasterPromptText"'), true);
     assert.equal(html.includes('id="mcpMasterPromptCopyBtn"'), true);
-    assert.equal(html.includes("protein-pipeline-stepper"), true);
-    // Detailed setup is tucked into a collapsible <details>.
+    // The master prompt instructs the AI to register the MCP server itself...
+    assert.equal(html.includes("Authorization: Bearer"), true);
+    assert.equal(html.includes("https://x.test/mcp"), true);
+    // ...with a token placeholder that gets filled on copy (shown escaped in the <pre>).
+    assert.equal(html.includes("KBF_SSO_ACCESS_TOKEN"), true);
+    // ...and mentions restarting the client.
+    assert.equal(html.includes("재시작"), true);
+    // Detailed/manual setup is tucked into a collapsible <details> (incl. manual token copy).
     assert.equal(html.includes("<details"), true);
-    assert.equal(html.includes("<summary>"), true);
-    // The old detailed cards still exist (inside advanced).
+    assert.equal(html.includes('id="mcpTokenCopyBtn"'), true);
     assert.equal(html.includes("질문 예시"), true);
+  });
+});
+
+test("fillMasterPromptToken replaces the bearer-token placeholder", () => {
+  return import("../lib/mcp-guide.js").then((mcpGuide) => {
+    const out = mcpGuide.fillMasterPromptToken("...Authorization: Bearer <KBF_SSO_ACCESS_TOKEN> ...", "TKN.abc.123");
+    assert.equal(out.includes("Bearer TKN.abc.123"), true);
+    assert.equal(out.includes("<KBF_SSO_ACCESS_TOKEN>"), false);
   });
 });
 

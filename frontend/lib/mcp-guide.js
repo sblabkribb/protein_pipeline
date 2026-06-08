@@ -19,16 +19,14 @@ const GUIDE_COPY = {
     title: "Connect your AI to the pipeline",
     description: "Three steps: give your AI client the connection, the skill, and one prompt — then it does the rest, from MCP connection to analysis.",
     flow: {
-      step1Title: "1) Connection",
-      step1Desc: "Sign in, then copy a ready-to-paste mcp.json with your token and paste it into your AI client (VS Code / Codex / Claude).",
-      step2Title: "2) Skill",
-      step2Desc: "Download the protein-pipeline-stepper skill (it includes the connection + execution rules) and place it in your agent's skills directory.",
-      step3Title: "3) Tell your AI",
-      step3Desc: "Copy this master prompt, replace «your analysis task», and send it. The AI connects via MCP and runs the analysis following the skill.",
+      step1Title: "1) Download the skill",
+      step1Desc: "Download the protein-pipeline-stepper skill and save the zip (e.g. to your Downloads). Your AI will install it in the next step.",
+      step2Title: "2) Paste one prompt — the AI sets up the rest",
+      step2Desc: "Copy this master prompt (your token is filled in automatically on copy) and paste it to your AI. It installs the skill, registers the protein-pipeline MCP server, asks you to restart the client if needed, then runs your analysis.",
       masterPrompt:
-        "Use the protein-pipeline-stepper skill. The protein-pipeline MCP server is already configured in my client — connect to it, then do this analysis:\n\n«describe your analysis task, e.g. run standalone ColabFold on this FASTA: ...»\n\nFor a full pipeline run, first ask me (in one message) whether to use defaults or advanced options and whether to enable surrogate triage, then proceed with my answers. Follow the skill: reuse one stable run_id, check pipeline.status before running, poll long-running jobs instead of re-running, pass file contents (not paths), and if a result looks wrong or fails, diagnose and ask me before re-running.",
-      masterPromptButton: "Copy master prompt",
-      advancedSummary: "Advanced setup (endpoint URL, manual mcp.json, VS Code / Codex steps, verify, prompt examples)",
+        `You are my coding agent with shell access. Set up and use the protein-pipeline pipeline:\n\n1. Install the skill: I downloaded \`protein-pipeline-stepper.zip\` (check my Downloads). Unzip it and put the \`protein-pipeline-stepper/\` folder in your skills directory (e.g. ~/.claude/skills/).\n2. Register an MCP server named \`protein-pipeline\` using your client's mechanism (VS Code mcp.json, \`codex mcp add\`, etc.):\n   - type: HTTP (streamable)\n   - URL: ${MCP_ENDPOINT_TOKEN}\n   - Header: Authorization: Bearer ${TOKEN_PLACEHOLDER}\n3. If the new skill or MCP server is not picked up, tell me to restart/reload the client, then continue once I confirm.\n4. Then, using the protein-pipeline-stepper skill, do this analysis:\n\n«describe your analysis task, e.g. run standalone ColabFold on this FASTA: ...»\n\nFor a full pipeline run, first ask me (in one message) whether to use defaults or advanced options and whether to enable surrogate triage, then proceed with my answers. Follow the skill: reuse one stable run_id, check pipeline.status before running, poll long-running jobs instead of re-running, pass file contents (not paths), and if a result looks wrong or fails, diagnose and ask me before re-running.`,
+      masterPromptButton: "Copy master prompt (with my token)",
+      advancedSummary: "Advanced / manual setup (copy mcp.json with token, endpoint URL, VS Code / Codex steps, verify, prompt examples)",
     },
     endpoint: {
       title: "1) Remote MCP endpoint",
@@ -93,18 +91,16 @@ const GUIDE_COPY = {
   },
   ko: {
     title: "AI를 파이프라인에 연결",
-    description: "세 단계면 됩니다 — AI 클라이언트에 연결·스킬·프롬프트 하나만 주면, MCP 연결부터 분석까지 AI가 알아서 합니다.",
+    description: "두 단계면 됩니다 — skill을 받고, 토큰이 담긴 마스터 프롬프트 하나만 AI에 붙여넣으면 skill 등록·MCP 서버 등록·분석까지 AI가 알아서 합니다.",
     flow: {
-      step1Title: "1) 연결",
-      step1Desc: "로그인한 뒤 토큰이 채워진 mcp.json을 복사해 AI 클라이언트(VS Code / Codex / Claude)에 붙여넣으세요.",
-      step2Title: "2) 스킬",
-      step2Desc: "protein-pipeline-stepper 스킬을 다운로드(연결+실행 규칙 포함)해서 에이전트의 skills 디렉터리에 넣으세요.",
-      step3Title: "3) AI에게 명령",
-      step3Desc: "이 마스터 프롬프트를 복사하고 《분석 작업》 부분만 바꿔 보내세요. AI가 MCP로 연결해 스킬에 따라 분석을 수행합니다.",
+      step1Title: "1) 스킬 다운로드",
+      step1Desc: "protein-pipeline-stepper 스킬 zip을 받아 저장하세요(예: 다운로드 폴더). 설치는 다음 단계에서 AI가 합니다.",
+      step2Title: "2) 프롬프트 하나만 붙여넣기 — 나머지는 AI가",
+      step2Desc: "이 마스터 프롬프트를 복사(누르면 토큰이 자동으로 채워집니다)해서 AI에 붙여넣으세요. AI가 스킬을 설치하고 protein-pipeline MCP 서버를 등록하며, 필요하면 재시작을 요청한 뒤 분석을 수행합니다.",
       masterPrompt:
-        "protein-pipeline-stepper 스킬을 사용해. protein-pipeline MCP 서버는 내 클라이언트에 이미 설정돼 있어 — 거기에 연결한 뒤 다음 분석을 해줘:\n\n《분석 작업을 설명, 예: 이 FASTA로 ColabFold 단독 실행: ...》\n\n전체 파이프라인을 돌릴 때는, 먼저 기본 옵션으로 할지 고급 옵션을 설정할지, surrogate triage를 켤지 한 메시지로 나에게 물어보고, 내 답에 따라 진행해. 스킬 규칙을 지켜: run_id 하나를 재사용하고, 실행 전 pipeline.status로 확인하고, 오래 걸리는 작업은 재실행 말고 폴링하고, 파일은 경로 대신 내용을 전달하고, 결과가 이상하거나 실패하면 진단한 뒤 재실행 전에 나에게 확인해.",
-      masterPromptButton: "마스터 프롬프트 복사",
-      advancedSummary: "고급 설정 (엔드포인트 URL · 수동 mcp.json · VS Code / Codex 단계 · 검증 · 프롬프트 예시)",
+        `너는 셸 접근 권한이 있는 내 코딩 에이전트야. protein-pipeline 파이프라인을 설정하고 사용해:\n\n1. 스킬 설치: 내가 \`protein-pipeline-stepper.zip\`을 다운로드했어(다운로드 폴더 확인). 압축을 풀어 \`protein-pipeline-stepper/\` 폴더를 네 skills 디렉터리(예: ~/.claude/skills/)에 넣어.\n2. \`protein-pipeline\` 이름으로 MCP 서버를 네 클라이언트 방식(VS Code mcp.json, \`codex mcp add\` 등)으로 등록해:\n   - 종류: HTTP (streamable)\n   - URL: ${MCP_ENDPOINT_TOKEN}\n   - 헤더: Authorization: Bearer ${TOKEN_PLACEHOLDER}\n3. 새 스킬이나 MCP 서버가 인식되지 않으면, 나에게 클라이언트를 재시작/새로고침하라고 말하고, 내가 확인하면 계속해.\n4. 그런 다음 protein-pipeline-stepper 스킬로 다음 분석을 해줘:\n\n《분석 작업을 설명, 예: 이 FASTA로 ColabFold 단독 실행: ...》\n\n전체 파이프라인을 돌릴 때는, 먼저 기본 옵션으로 할지 고급 옵션을 설정할지, surrogate triage를 켤지 한 메시지로 물어보고, 내 답에 따라 진행해. 스킬 규칙을 지켜: run_id 하나 재사용, 실행 전 pipeline.status 확인, 오래 걸리는 작업은 재실행 말고 폴링, 파일은 경로 대신 내용 전달, 결과가 이상하거나 실패하면 진단 후 재실행 전 나에게 확인.`,
+      masterPromptButton: "마스터 프롬프트 복사 (내 토큰 포함)",
+      advancedSummary: "고급 / 수동 설정 (토큰 mcp.json 복사 · 엔드포인트 URL · VS Code / Codex 단계 · 검증 · 프롬프트 예시)",
     },
     endpoint: {
       title: "1) 원격 MCP 엔드포인트",
@@ -212,6 +208,11 @@ export function buildMcpJsonSnippetWithToken(token, endpointUrl = resolveMcpEndp
   return buildMcpJsonSnippet(endpointUrl).replaceAll(TOKEN_PLACEHOLDER, safe);
 }
 
+export function fillMasterPromptToken(text, token) {
+  const safe = String(token == null ? "" : token);
+  return String(text || "").replaceAll(TOKEN_PLACEHOLDER, safe);
+}
+
 function buildPromptSnippet(examples = []) {
   return examples.join("\n\n");
 }
@@ -235,17 +236,6 @@ export function renderMcpGuideMarkup({ lang = "en", endpointUrl = resolveMcpEndp
           <p>${copy.flow.step1Desc}</p>
         </div>
         <div class="mcp-guide-actions">
-          <button type="button" id="mcpTokenCopyBtn" class="btn-primary">${copy.token.copyButton}</button>
-        </div>
-        <div class="mcp-guide-note">${copy.token.autoNote}</div>
-      </div>
-
-      <div class="status-card mcp-guide-card">
-        <div class="panel-header small">
-          <h3>${copy.flow.step2Title}</h3>
-          <p>${copy.flow.step2Desc}</p>
-        </div>
-        <div class="mcp-guide-actions">
           <button type="button" id="mcpSkillDownloadBtn" class="btn-secondary">${copy.token.downloadButton}</button>
         </div>
         <div class="mcp-guide-note">${copy.token.installNote}</div>
@@ -253,14 +243,15 @@ export function renderMcpGuideMarkup({ lang = "en", endpointUrl = resolveMcpEndp
 
       <div class="status-card mcp-guide-card span-2">
         <div class="panel-header small">
-          <h3>${copy.flow.step3Title}</h3>
-          <p>${copy.flow.step3Desc}</p>
+          <h3>${copy.flow.step2Title}</h3>
+          <p>${copy.flow.step2Desc}</p>
         </div>
         <pre class="mcp-guide-code" id="mcpMasterPromptText"><code>${escapeHtml(copy.flow.masterPrompt)}</code></pre>
         <div class="mcp-guide-actions">
           <button type="button" id="mcpMasterPromptCopyBtn" class="btn-primary">${copy.flow.masterPromptButton}</button>
           <span id="mcpGuideStatus" class="mcp-guide-status" role="status"></span>
         </div>
+        <div class="mcp-guide-note">${copy.token.autoNote}</div>
       </div>
     </div>
 
@@ -281,6 +272,9 @@ export function renderMcpGuideMarkup({ lang = "en", endpointUrl = resolveMcpEndp
             <p>${copy.config.description}</p>
           </div>
           ${renderCodeBlock(buildMcpJsonSnippet(endpointUrl))}
+          <div class="mcp-guide-actions">
+            <button type="button" id="mcpTokenCopyBtn" class="btn-secondary">${copy.token.copyButton}</button>
+          </div>
         </div>
 
         <div class="status-card mcp-guide-card span-2">
