@@ -26,7 +26,7 @@ const GUIDE_COPY = {
       step3Title: "3) Tell your AI",
       step3Desc: "Copy this master prompt, replace «your analysis task», and send it. The AI connects via MCP and runs the analysis following the skill.",
       masterPrompt:
-        "Use the protein-pipeline-stepper skill. The protein-pipeline MCP server is already configured in my client — connect to it, then do this analysis:\n\n«describe your analysis task, e.g. run standalone ColabFold on this FASTA: ...»\n\nFollow the skill: reuse one stable run_id, check pipeline.status before running, poll long-running jobs instead of re-running, pass file contents (not paths), and if a result looks wrong or fails, diagnose and ask me before re-running.",
+        "Use the protein-pipeline-stepper skill. The protein-pipeline MCP server is already configured in my client — connect to it, then do this analysis:\n\n«describe your analysis task, e.g. run standalone ColabFold on this FASTA: ...»\n\nFor a full pipeline run, first ask me (in one message) whether to use defaults or advanced options and whether to enable surrogate triage, then proceed with my answers. Follow the skill: reuse one stable run_id, check pipeline.status before running, poll long-running jobs instead of re-running, pass file contents (not paths), and if a result looks wrong or fails, diagnose and ask me before re-running.",
       masterPromptButton: "Copy master prompt",
       advancedSummary: "Advanced setup (endpoint URL, manual mcp.json, VS Code / Codex steps, verify, prompt examples)",
     },
@@ -102,7 +102,7 @@ const GUIDE_COPY = {
       step3Title: "3) AI에게 명령",
       step3Desc: "이 마스터 프롬프트를 복사하고 《분석 작업》 부분만 바꿔 보내세요. AI가 MCP로 연결해 스킬에 따라 분석을 수행합니다.",
       masterPrompt:
-        "protein-pipeline-stepper 스킬을 사용해. protein-pipeline MCP 서버는 내 클라이언트에 이미 설정돼 있어 — 거기에 연결한 뒤 다음 분석을 해줘:\n\n《분석 작업을 설명, 예: 이 FASTA로 ColabFold 단독 실행: ...》\n\n스킬 규칙을 지켜: run_id 하나를 재사용하고, 실행 전 pipeline.status로 확인하고, 오래 걸리는 작업은 재실행 말고 폴링하고, 파일은 경로 대신 내용을 전달하고, 결과가 이상하거나 실패하면 진단한 뒤 재실행 전에 나에게 확인해.",
+        "protein-pipeline-stepper 스킬을 사용해. protein-pipeline MCP 서버는 내 클라이언트에 이미 설정돼 있어 — 거기에 연결한 뒤 다음 분석을 해줘:\n\n《분석 작업을 설명, 예: 이 FASTA로 ColabFold 단독 실행: ...》\n\n전체 파이프라인을 돌릴 때는, 먼저 기본 옵션으로 할지 고급 옵션을 설정할지, surrogate triage를 켤지 한 메시지로 나에게 물어보고, 내 답에 따라 진행해. 스킬 규칙을 지켜: run_id 하나를 재사용하고, 실행 전 pipeline.status로 확인하고, 오래 걸리는 작업은 재실행 말고 폴링하고, 파일은 경로 대신 내용을 전달하고, 결과가 이상하거나 실패하면 진단한 뒤 재실행 전에 나에게 확인해.",
       masterPromptButton: "마스터 프롬프트 복사",
       advancedSummary: "고급 설정 (엔드포인트 URL · 수동 mcp.json · VS Code / Codex 단계 · 검증 · 프롬프트 예시)",
     },

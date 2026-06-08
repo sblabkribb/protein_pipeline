@@ -56,7 +56,20 @@ has the connection + execution instructions locally.
 
 ## Workflow (Stage Runner)
 
-If the user wants interactive prompting, call `pipeline.plan_from_prompt` first and use its `questions` to ask for missing inputs before calling `pipeline.run`.
+### Interactive setup — ask before a full run
+
+For a **full pipeline run** (not a single stage the user already fully specified), do not silently assume everything. First call `pipeline.plan_from_prompt` with the user's request to detect missing inputs/questions, then ask a short, concrete set of questions in **one** message and wait for answers before calling `pipeline.run`:
+
+1. **Defaults or advanced?** — "Run with sensible defaults, or set advanced options?"
+2. **Surrogate triage?** — "Use the surrogate model to triage candidates before AF2 (`surrogate_triage_enabled=true`)? It screens designs with a fast surrogate and runs AF2 only on the top ones — cheaper/faster, slightly less exhaustive." If yes and they want control, offer `surrogate_triage_top_k`, `surrogate_triage_initial_samples`, `surrogate_triage_model`.
+3. **Missing required inputs** surfaced by `plan_from_prompt` `questions` (target sequence/PDB, RFD3 inputs, ligand, etc.).
+4. If **advanced**, offer the main knobs with their defaults:
+   - MSA: `mmseqs_target_db` (uniref90), `mmseqs_max_seqs` (3000)
+   - Design: `conservation_tiers` ([0.3, 0.5, 0.7]), `num_seq_per_tier` (16), `sampling_temp`
+   - SoluProt: `soluprot_cutoff` (0.5)
+   - AF2: `af2_plddt_cutoff` (85), `af2_top_k` (20), `af2_sequence_ids`
+
+Accept "defaults" as a valid answer to everything. After the user answers, **echo back the final settings** (including `surrogate_triage_enabled` and any advanced knobs) and then call `pipeline.run` with exactly those. Don't re-ask on later stages of the same `run_id` unless the user changes scope. For a single standalone stage the user already specified, skip the questions and run it directly.
 
 1) Collect inputs
 - Require: one of `target_fasta` or `target_pdb` **or** RFD3 inputs (raw text, not a file path).
