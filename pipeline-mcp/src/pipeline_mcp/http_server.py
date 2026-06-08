@@ -28,6 +28,8 @@ from .oidc import load_oidc_settings
 from .oidc import verify_oidc_token
 from .runpod_metrics import ensure_runpod_metrics_collector
 from .session_auth import load_session_manager
+from .pat_store import load_pat_store
+from .pat_store import looks_like_pat
 from .tools import ToolDispatcher
 
 
@@ -35,6 +37,7 @@ _DISPATCHER: ToolDispatcher | None = None
 _AUTH = None
 _OIDC = None
 _SESSIONS = None
+_PAT_KEYS = None
 _ALLOW_ALL_ORIGINS = True
 _ALLOWED_ORIGINS: set[str] = set()
 _ADMIN_ONLY_TOOLS = {
@@ -118,6 +121,10 @@ class Handler(BaseHTTPRequestHandler):
     @property
     def sessions(self):
         return _SESSIONS
+
+    @property
+    def pat_keys(self):
+        return _PAT_KEYS
 
     def _auth_enabled(self) -> bool:
         auth = self.auth
@@ -367,6 +374,11 @@ class Handler(BaseHTTPRequestHandler):
         if header.startswith("Bearer "):
             token = header.removeprefix("Bearer ").strip()
         if token:
+            pat_store = self.pat_keys
+            if pat_store is not None and looks_like_pat(token):
+                pat_user = pat_store.verify(token)
+                if pat_user is not None:
+                    return pat_user
             auth = self.auth
             if auth is not None and getattr(auth, "enabled", False):
                 user = auth.verify_token(token)
@@ -626,6 +638,50 @@ class Handler(BaseHTTPRequestHandler):
             extra_headers=[("Cache-Control", "no-store")],
         )
 
+    def _require_pat_user(self) -> dict[str, Any] | None:
+        if not self._auth_enabled():
+            self._json(400, {"ok": False, "error": "authentication required to manage API keys"})
+            return None
+        return self._require_auth()  # emits 401/403 and returns None if not authorized
+
+    def _send_mcp_keys_list(self) -> None:
+        user = self._require_pat_user()
+        if user is None:
+            return
+        store = self.pat_keys
+        keys = store.list_keys(str(user.get("username") or "")) if store is not None else []
+        self._json(200, {"ok": True, "keys": keys}, extra_headers=[("Cache-Control", "no-store")])
+
+    def _create_mcp_key(self) -> None:
+        user = self._require_pat_user()
+        if user is None:
+            return
+        store = self.pat_keys
+        if store is None:
+            self._json(503, {"ok": False, "error": "API keys unavailable"})
+            return
+        body = self._read_json()
+        label = str(body.get("label") or "")
+        raw_ttl = body.get("ttl_days")
+        try:
+            ttl_days = (
+                int(raw_ttl) if raw_ttl is not None and str(raw_ttl).strip() != "" else None
+            )
+        except (TypeError, ValueError):
+            ttl_days = None
+        created = store.create_key(user, label=label, ttl_days=ttl_days)
+        self._json(200, {"ok": True, **created}, extra_headers=[("Cache-Control", "no-store")])
+
+    def _revoke_mcp_key(self) -> None:
+        user = self._require_pat_user()
+        if user is None:
+            return
+        store = self.pat_keys
+        body = self._read_json()
+        key_id = str(body.get("id") or "")
+        ok = store.revoke(str(user.get("username") or ""), key_id) if store is not None else False
+        self._json(200 if ok else 404, {"ok": ok})
+
     def _send_model_registration_skill_archive(self) -> None:
         if self._auth_enabled():
             user = self._require_auth()
@@ -843,6 +899,9 @@ class Handler(BaseHTTPRequestHandler):
         if route_path == "/auth/mcp_token":
             self._send_mcp_token()
             return
+        if route_path == "/auth/mcp_keys":
+            self._send_mcp_keys_list()
+            return
         if route_path == "/model_provider_skill.zip":
             self._send_model_registration_skill_archive()
             return
@@ -920,6 +979,13 @@ class Handler(BaseHTTPRequestHandler):
                     },
                     extra_headers=extra_headers,
                 )
+                return
+
+            if route_path == "/auth/mcp_keys":
+                self._create_mcp_key()
+                return
+            if route_path == "/auth/mcp_keys/revoke":
+                self._revoke_mcp_key()
                 return
 
             if route_path == "/auth/logout":
@@ -1048,6 +1114,8 @@ def main(argv: list[str] | None = None) -> None:
     _OIDC = load_oidc_settings()
     global _SESSIONS
     _SESSIONS = load_session_manager()
+    global _PAT_KEYS
+    _PAT_KEYS = load_pat_store()
     _init_cors()
 
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)

@@ -506,3 +506,95 @@ def test_pipeline_skill_archive_contains_skill_md(tmp_path, monkeypatch):
     assert captured["content_type"] == "application/zip"
     names = zipfile.ZipFile(io.BytesIO(captured["body"])).namelist()
     assert "protein-pipeline-stepper/SKILL.md" in names
+
+
+def _pat_store(tmp_path):
+    from pipeline_mcp.pat_store import PatStore, PatConfig
+
+    return PatStore(PatConfig(store_path=tmp_path / "mcp_keys.json", default_ttl_days=90))
+
+
+def test_require_user_accepts_valid_pat(tmp_path, monkeypatch):
+    from pipeline_mcp import http_server
+    from pipeline_mcp.http_server import Handler
+
+    store = _pat_store(tmp_path)
+    created = store.create_key({"username": "alice", "role": "user"}, label="t")
+
+    monkeypatch.setattr(http_server, "_AUTH", None, raising=False)
+    monkeypatch.setattr(http_server, "_OIDC", None, raising=False)
+    monkeypatch.setattr(http_server, "_SESSIONS", None, raising=False)
+    monkeypatch.setattr(http_server, "_PAT_KEYS", store, raising=False)
+
+    handler = Handler.__new__(Handler)
+    handler.headers = {"Authorization": f"Bearer {created['token']}"}
+    assert handler._require_user() == {"username": "alice", "role": "user", "auth_type": "pat"}
+
+
+def test_require_user_rejects_bad_pat(tmp_path, monkeypatch):
+    from pipeline_mcp import http_server
+    from pipeline_mcp.http_server import Handler
+
+    store = _pat_store(tmp_path)
+    monkeypatch.setattr(http_server, "_AUTH", None, raising=False)
+    monkeypatch.setattr(http_server, "_OIDC", None, raising=False)
+    monkeypatch.setattr(http_server, "_SESSIONS", None, raising=False)
+    monkeypatch.setattr(http_server, "_PAT_KEYS", store, raising=False)
+
+    handler = Handler.__new__(Handler)
+    handler.headers = {"Authorization": "Bearer kbfpat_nope"}
+    assert handler._require_user() is None
+
+
+def test_create_list_revoke_mcp_key(tmp_path, monkeypatch):
+    from pipeline_mcp import http_server
+    from pipeline_mcp.http_server import Handler
+
+    store = _pat_store(tmp_path)
+    monkeypatch.setattr(http_server, "_PAT_KEYS", store, raising=False)
+
+    def make_handler(body):
+        captured = {}
+        handler = Handler.__new__(Handler)
+        handler._auth_enabled = lambda: True
+        handler._require_auth = lambda: {"username": "bob", "role": "user"}
+        handler._read_json = lambda: body
+        handler._json = lambda status, payload, extra_headers=None: captured.update(
+            status=status, payload=payload, extra_headers=extra_headers
+        )
+        return handler, captured
+
+    # create
+    h, cap = make_handler({"label": "laptop", "ttl_days": 30})
+    h._create_mcp_key()
+    assert cap["status"] == 200
+    token = cap["payload"]["token"]
+    key_id = cap["payload"]["id"]
+    assert token.startswith("kbfpat_")
+    assert cap["payload"]["label"] == "laptop"
+    assert ("Cache-Control", "no-store") in (cap["extra_headers"] or [])
+    assert store.verify(token)["username"] == "bob"
+
+    # list (no token leaked)
+    h, cap = make_handler({})
+    h._send_mcp_keys_list()
+    assert cap["status"] == 200
+    assert [k["id"] for k in cap["payload"]["keys"]] == [key_id]
+    assert "token" not in cap["payload"]["keys"][0]
+
+    # revoke
+    h, cap = make_handler({"id": key_id})
+    h._revoke_mcp_key()
+    assert cap["status"] == 200 and cap["payload"]["ok"] is True
+    assert store.verify(token) is None
+
+
+def test_create_mcp_key_requires_auth_enabled(monkeypatch):
+    from pipeline_mcp.http_server import Handler
+
+    captured = {}
+    handler = Handler.__new__(Handler)
+    handler._auth_enabled = lambda: False
+    handler._json = lambda status, payload, extra_headers=None: captured.update(status=status, payload=payload)
+    handler._create_mcp_key()
+    assert captured["status"] == 400
