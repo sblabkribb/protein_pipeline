@@ -581,10 +581,19 @@ class Handler(BaseHTTPRequestHandler):
         return {"jsonrpc": "2.0", "id": request_id, "error": error}
 
     def _mcp_tool_result(self, result: dict[str, Any]) -> dict[str, Any]:
-        return {
-            "content": [{"type": "json", "json": result}],
+        # MCP tool results must use a standard content type. The non-standard
+        # {"type": "json", ...} block is rejected by strict clients (VS Code,
+        # the mcp SDK) with "Unexpected response type". Return the serialized
+        # JSON in a text block (accepted everywhere) plus structuredContent for
+        # clients that consume machine-readable output — the spec-recommended pair.
+        text = json.dumps(result, ensure_ascii=False, indent=2, default=str)
+        payload: dict[str, Any] = {
+            "content": [{"type": "text", "text": text}],
             "isError": False,
         }
+        if isinstance(result, dict):
+            payload["structuredContent"] = result
+        return payload
 
     def _send_mcp_token(self) -> None:
         user = None

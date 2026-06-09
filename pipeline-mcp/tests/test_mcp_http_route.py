@@ -119,7 +119,7 @@ def test_mcp_tools_call_injects_run_id_for_non_admin(monkeypatch):
             },
         )
     ]
-    assert captured["payload"]["result"]["content"][0]["json"]["arguments"]["run_id"] == "tester_example.org_job"
+    assert captured["payload"]["result"]["structuredContent"]["arguments"]["run_id"] == "tester_example.org_job"
 
 
 def test_mcp_tools_call_normalizes_custom_run_id_for_non_admin(monkeypatch):
@@ -163,7 +163,7 @@ def test_mcp_tools_call_normalizes_custom_run_id_for_non_admin(monkeypatch):
         )
     ]
     assert (
-        captured["payload"]["result"]["content"][0]["json"]["arguments"]["run_id"]
+        captured["payload"]["result"]["structuredContent"]["arguments"]["run_id"]
         == "tester_example.org_full_pipeline"
     )
 
@@ -358,3 +358,22 @@ def test_mcp_tools_call_injects_user_for_round_restore_tools(monkeypatch):
             },
         )
     ]
+
+
+def test_mcp_tool_result_uses_standard_mcp_content_type():
+    """tools/call results must use a standard MCP content type (text), not the
+    non-standard type:'json' that strict clients (VS Code, mcp SDK) reject."""
+    import json as _json
+
+    from pipeline_mcp.http_server import Handler
+
+    handler = Handler.__new__(Handler)
+    payload = {"ok": True, "run_id": "x", "n": 2}
+    out = handler._mcp_tool_result(payload)
+
+    block = out["content"][0]
+    assert block["type"] == "text"
+    assert "json" not in block  # the invalid {"type":"json","json":...} shape is gone
+    assert _json.loads(block["text"]) == payload  # serialized JSON in the text block
+    assert out["structuredContent"] == payload  # machine-readable structured result
+    assert out["isError"] is False
