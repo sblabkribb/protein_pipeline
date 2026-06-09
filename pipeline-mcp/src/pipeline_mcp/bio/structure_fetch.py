@@ -12,7 +12,7 @@ avoid SSRF against internal services.
 from __future__ import annotations
 
 import re
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -40,13 +40,36 @@ def _is_raw_structure(text: str) -> bool:
     return upper.startswith(("ATOM", "HETATM", "HEADER", "MODEL", "CRYST"))
 
 
-def _fetch(url: str, timeout_s: float) -> str:
-    resp = requests.get(url, timeout=timeout_s)
-    resp.raise_for_status()
-    body = resp.text or ""
-    if not body.strip():
-        raise ValueError(f"fetched structure is empty: {url}")
-    return body
+_MAX_REDIRECTS = 5
+
+
+def _host_allowed(url: str, allowed_hosts: frozenset[str]) -> bool:
+    return (urlparse(url).hostname or "").lower() in allowed_hosts
+
+
+def _fetch(url: str, timeout_s: float, allowed_hosts: frozenset[str]) -> str:
+    # Follow redirects manually so the host allowlist is re-applied to every
+    # hop: an allowlisted host could otherwise 30x-redirect to an internal
+    # address and bypass the SSRF guard.
+    current = url
+    for _ in range(_MAX_REDIRECTS + 1):
+        resp = requests.get(current, timeout=timeout_s, allow_redirects=False)
+        if resp.is_redirect or resp.is_permanent_redirect:
+            location = resp.headers.get("Location") or ""
+            nxt = urljoin(current, location)
+            if not _host_allowed(nxt, allowed_hosts):
+                raise ValueError(
+                    f"structure fetch redirected to disallowed host: "
+                    f"{(urlparse(nxt).hostname or '')!r}"
+                )
+            current = nxt
+            continue
+        resp.raise_for_status()
+        body = resp.text or ""
+        if not body.strip():
+            raise ValueError(f"fetched structure is empty: {url}")
+        return body
+    raise ValueError(f"too many redirects fetching structure: {url}")
 
 
 def resolve_structure_input(
@@ -63,12 +86,18 @@ def resolve_structure_input(
     if not text or _is_raw_structure(text):
         return value
     if looks_like_pdb_id(text):
-        return _fetch(_RCSB_DOWNLOAD.format(text.upper()), timeout_s)
+        # RCSB host is always permitted for a bare ID, regardless of the
+        # caller's URL allowlist; redirects are still re-validated against it.
+        return _fetch(
+            _RCSB_DOWNLOAD.format(text.upper()),
+            timeout_s,
+            allowed_hosts | {"files.rcsb.org"},
+        )
     low = text.lower()
     if low.startswith(("http://", "https://")):
         host = (urlparse(text).hostname or "").lower()
         if host in allowed_hosts:
-            return _fetch(text, timeout_s)
+            return _fetch(text, timeout_s, allowed_hosts)
         raise ValueError(
             f"structure URL host not allowed: {host!r} "
             f"(allowed: {', '.join(sorted(allowed_hosts))})"

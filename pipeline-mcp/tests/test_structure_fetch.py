@@ -7,9 +7,12 @@ from pipeline_mcp.bio.structure_fetch import resolve_structure_input
 
 
 class _Resp:
-    def __init__(self, text, status=200):
+    def __init__(self, text, status=200, location=None):
         self.text = text
         self._status = status
+        self.headers = {"Location": location} if location else {}
+        self.is_redirect = location is not None
+        self.is_permanent_redirect = False
 
     def raise_for_status(self):
         if self._status >= 400:
@@ -17,7 +20,7 @@ class _Resp:
 
 
 def _mock_get(monkeypatch, recorder):
-    def _get(url, timeout=None):
+    def _get(url, timeout=None, allow_redirects=True):
         recorder.append(url)
         return _Resp("HEADER fetched\nATOM  ...\n")
     monkeypatch.setattr(structure_fetch.requests, "get", _get)
@@ -63,6 +66,42 @@ def test_disallowed_url_rejected_ssrf(monkeypatch):
     with pytest.raises(ValueError):
         resolve_structure_input("https://evil.example.com/x.pdb")
     assert calls == []  # never fetched a disallowed host
+
+
+def test_redirect_to_disallowed_host_rejected(monkeypatch):
+    # An allowlisted host that 30x-redirects to an internal address must not
+    # bypass the allowlist (SSRF redirect bypass).
+    calls = []
+
+    def _get(url, timeout=None, allow_redirects=True):
+        calls.append(url)
+        if url == "https://files.rcsb.org/download/1ABC.pdb":
+            return _Resp("", status=302, location="http://169.254.169.254/latest")
+        return _Resp("HEADER fetched\n")
+
+    monkeypatch.setattr(structure_fetch.requests, "get", _get)
+    with pytest.raises(ValueError):
+        resolve_structure_input("1ABC")
+    # never followed the redirect to the internal host
+    assert "http://169.254.169.254/latest" not in calls
+
+
+def test_redirect_to_allowed_host_followed(monkeypatch):
+    calls = []
+
+    def _get(url, timeout=None, allow_redirects=True):
+        calls.append(url)
+        if url == "https://files.rcsb.org/download/1ABC.pdb":
+            return _Resp(
+                "", status=302,
+                location="https://files.wwpdb.org/download/1ABC.pdb",
+            )
+        return _Resp("HEADER fetched\nATOM\n")
+
+    monkeypatch.setattr(structure_fetch.requests, "get", _get)
+    out = resolve_structure_input("1ABC")
+    assert out.startswith("HEADER fetched")
+    assert calls[-1] == "https://files.wwpdb.org/download/1ABC.pdb"
 
 
 def test_empty_and_non_id_passthrough(monkeypatch):
