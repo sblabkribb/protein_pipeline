@@ -86,3 +86,18 @@ Thumbs.db
 # --- docs ---
 manuscript (5).docx
 manuscript (5).md
+
+# Internal dev artifacts — kept on disk / worker, not published to the repo.
+# (Public setup/reproduction/architecture docs in docs/ stay tracked.)
+/docs/plans/
+/docs/superpowers/
+/docs/2026-04-15-meta-surrogate-prototype-results/
+/docs/2026-04-24-meta-surrogate-bias-analysis-ko.md
+/docs/veo_video_scenario.md
+/docs/veo_video_scenario_slides.md
+/docs/project_intake_system_paper.md
+# Binary manuscript exports — Markdown sources stay tracked.
+/docs/manuscript.docx
+/docs/supplementary.docx
+# Superseded figure assets.
+/figures/benchmark/_legacy/
