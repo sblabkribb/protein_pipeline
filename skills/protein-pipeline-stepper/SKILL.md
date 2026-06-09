@@ -148,6 +148,26 @@ Use these argument shapes when calling `pipeline.run`:
     - `diffdock_ligand_smiles` **or** `diffdock_ligand_sdf`
     - DiffDock will run automatically before ligand masking and uses the rank1 pose **only for ligand mask** (ProteinMPNN/AF2 inputs remain the original PDB).
 
+### Ligand & residue selection (the UI 3D picker, via MCP)
+
+AF2/ColabFold itself does not take a ligand — "ligand selection" here is the **design-stage masking** that keeps the binding pocket fixed while ProteinMPNN redesigns the rest. The web app's 3D picker just sets the parameters below; over MCP, set them directly and **make it easy by detecting the ligand for the user**:
+
+1. **Auto-detect the ligand.** Before design, read the `target_pdb` `HETATM` records and list the candidate ligand residue names (ignore water `HOH`/`WAT` and ions unless relevant). If there is one obvious ligand, propose it; otherwise ask the user in one line which to protect. The user should never need to hunt through the PDB.
+2. **Map their answer to parameters:**
+
+| Goal (what the UI picker does) | MCP parameter |
+| --- | --- |
+| Protect a HETATM ligand and its pocket | `ligand_resnames=["HEM", ...]` + `ligand_mask_distance=6.0` |
+| Substrate is a separate ATOM chain (enzyme-substrate) | `ligand_atom_chains=["B"]` (keep it out of `design_chains`) |
+| **Design only surface-exposed residues** | `surface_only=true` (tune `surface_min_rel`=0.2, `surface_min_abs`=10.0) |
+| Fix exact residues you choose | `fixed_positions_extra={"A":[57,102,195]}` |
+| Choose which chain(s) to mutate | `design_chains=["A"]` |
+| Dock a *new* ligand, then mask around its pose | `diffdock_ligand_smiles` / `diffdock_ligand_sdf` (DiffDock runs first; pose used for masking only) |
+
+3. **For fine visual selection** (e.g. hand-picking a pocket, or *core* / *interface* regions), the web app's 3D residue picker is the better tool — point the user there and have them paste the resulting residue list back as `fixed_positions_extra`. Surface selection and ligand masking are fully doable over MCP with the parameters above; explicit `core`/`interface` presets are UI-only for now.
+
+Always confirm the final selection (ligand resnames, masked chains, surface/fixed positions) back to the user before running design.
+
 ### Preset: Paper-Parity Enzyme+Substrate (PDB input)
 - Use when the “ligand/substrate” is modeled as a separate `ATOM` chain (common for enzyme-substrate complexes).
 - Set `design_chains` to the chain(s) you mutate; set `ligand_atom_chains` to substrate chain(s).
