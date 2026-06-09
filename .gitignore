@@ -101,3 +101,9 @@ manuscript (5).md
 /docs/supplementary.docx
 # Superseded figure assets.
 /figures/benchmark/_legacy/
+
+# Agent / dev tooling — local only, not published.
+/.claude/
+/.agents/
+/AGENT.md
+/todo.md
