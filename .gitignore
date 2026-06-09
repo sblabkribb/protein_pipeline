@@ -24,6 +24,7 @@ rfd3-runpod/
 
 # --- Local scratch / artifacts ---
 /tmp/
+/.codex
 /pipeline-mcp/tests/_tmp/
 /pytest-cache-files-*/
 /pipeline-mcp/pytest-cache-files-*/
