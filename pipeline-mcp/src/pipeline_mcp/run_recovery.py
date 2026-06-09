@@ -96,13 +96,32 @@ def find_resumable_runs(
     return [name for _updated, name in candidates[: max(0, max_runs)]]
 
 
+def _clear_running_state(status_path: Path) -> None:
+    """Flip an orphaned run's ``state`` out of "running" so pipeline.run's
+    duplicate-job guard allows the resume. Safe because the run is orphaned
+    (no live process is writing status.json)."""
+    try:
+        status = json.loads(status_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    if isinstance(status, dict) and str(status.get("state") or "").strip().lower() == "running":
+        status["state"] = "interrupted"
+        try:
+            status_path.write_text(json.dumps(status), encoding="utf-8")
+        except OSError:
+            pass
+
+
 def _resume_one(dispatcher: Any, output_root: Path, run_id: str) -> None:
     try:
-        request_path = output_root / run_id / "request.json"
-        payload = json.loads(request_path.read_text(encoding="utf-8"))
+        run_dir = output_root / run_id
+        payload = json.loads((run_dir / "request.json").read_text(encoding="utf-8"))
         if not isinstance(payload, dict):
             print(f"[run-recovery] skip {run_id}: request.json is not an object", flush=True)
             return
+        # pipeline.run refuses a run whose status is still "running" (dup guard),
+        # which is exactly the orphaned state — clear it before replaying.
+        _clear_running_state(run_dir / "status.json")
         payload["run_id"] = run_id
         print(f"[run-recovery] resuming run_id={run_id}", flush=True)
         dispatcher.call_tool("pipeline.run", payload)
