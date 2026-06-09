@@ -25,6 +25,7 @@ from .bio.ligand_text import normalize_diffdock_ligand_inputs
 from .bio.residue_exposure import classify_residues as _classify_residues
 from .bio.sdf import append_ligand_pdb
 from .bio.sdf import sdf_to_pdb
+from .bio.structure_fetch import resolve_structure_input
 from .auth import AuthError
 from .cath_ops import job_kind_batch
 from .cath_ops import job_kind_train
@@ -558,7 +559,7 @@ def _run_af2_predict(
 ) -> dict[str, Any]:
     run_id = arguments.get("run_id")
     target_fasta = _as_text(arguments.get("target_fasta"))
-    target_pdb = _as_text(arguments.get("target_pdb"))
+    target_pdb = _as_text(resolve_structure_input(arguments.get("target_pdb")))
     dry_run = _as_bool(arguments.get("dry_run"), False)
     requested_provider = _as_af2_provider(arguments.get("af2_provider"), "colabfold")
     af2_client, effective_provider = _select_af2_client(runner, requested_provider)
@@ -798,8 +799,8 @@ def _run_af2_predict(
 
 def _run_diffdock(runner: PipelineRunner, arguments: dict[str, Any]) -> dict[str, Any]:
     run_id = arguments.get("run_id")
-    protein_pdb = _as_text(arguments.get("protein_pdb")) or _as_text(
-        arguments.get("target_pdb")
+    protein_pdb = _as_text(resolve_structure_input(arguments.get("protein_pdb"))) or _as_text(
+        resolve_structure_input(arguments.get("target_pdb"))
     )
     ligand_smiles = _as_text(arguments.get("diffdock_ligand_smiles")) or _as_text(
         arguments.get("ligand_smiles")
@@ -7234,7 +7235,7 @@ def pipeline_request_from_args(
     args: dict[str, Any], *, strict_target: bool = True
 ) -> PipelineRequest:
     target_fasta = _as_text(args.get("target_fasta"))
-    target_pdb = _as_text(args.get("target_pdb"))
+    target_pdb = _as_text(resolve_structure_input(args.get("target_pdb")))
     evolution_mode = _as_bool(args.get("evolution_mode"), False)
     evolution_initial_samples = _as_int(args.get("evolution_initial_samples"), 30)
     evolution_rounds = _as_int(args.get("evolution_rounds"), 4)
@@ -7291,7 +7292,7 @@ def pipeline_request_from_args(
     rfd3_input_files = _as_dict_str(
         args.get("rfd3_input_files"), name="rfd3_input_files"
     )
-    rfd3_input_pdb = _as_text(args.get("rfd3_input_pdb")).strip() or None
+    rfd3_input_pdb = _as_text(resolve_structure_input(args.get("rfd3_input_pdb"))).strip() or None
     rfd3_use_raw = args.get("rfd3_use")
     rfd3_mode = _as_text(args.get("rfd3_mode")).strip() or None
     rfd3_hotspots = _as_str_or_list(args.get("rfd3_hotspots"))

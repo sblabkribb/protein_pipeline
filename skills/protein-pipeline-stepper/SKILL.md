@@ -43,7 +43,7 @@ has the connection + execution instructions locally.
 ## Non-Negotiable Rules
 
 - Always reuse a stable `run_id` across stages. If the user does not supply one, create one with only `[a-zA-Z0-9_.-]` and no spaces.
-- Never pass file paths as `target_fasta` / `target_pdb` / `rfd3_input_pdb`. Read the file contents and pass the raw text.
+- Never pass file paths as `target_fasta` / `target_pdb` / `rfd3_input_pdb`. Read the file contents and pass the raw text. **Shortcut for PDB inputs:** instead of raw text you may pass a 4-character **PDB ID** (e.g. `4KL5`) or an **RCSB/AlphaFold URL** for `target_pdb` / `rfd3_input_pdb` (and `protein_pdb`); the server fetches it — use this to avoid sending large PDB text. (Local/edited PDBs still need raw contents.)
 - Before calling `pipeline.run` for a `run_id`, call `pipeline.status(run_id)`:
   - If `state=running`, do not call `pipeline.run` again. Poll `pipeline.status` until completion/failure.
   - If `state=failed` (or similar), stop and report the error details, then diagnose and propose a corrected command (see "Result validation & self-correction"). Do not re-run without user confirmation.
