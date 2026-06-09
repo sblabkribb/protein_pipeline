@@ -10306,8 +10306,62 @@ async function finishOidcLogin(code, callbackState) {
   await loadSession();
 }
 
+const RUN_DEEPLINK_PARAM = "run";
+const RUN_DEEPLINK_STASH_KEY = "kbf_pending_run_deeplink";
+let runDeepLinkConsumed = false;
+
+// Capture a ?run=<id> deep-link (e.g. opened from an MCP tool result) before
+// any auth redirect can strip the query, and stash it so it survives the OIDC
+// round-trip. The param is removed from the visible URL immediately.
+function stashRunDeepLinkFromUrl() {
+  let runId = "";
+  try {
+    runId = String(new URLSearchParams(window.location.search).get(RUN_DEEPLINK_PARAM) || "").trim();
+  } catch (_err) {
+    runId = "";
+  }
+  if (!runId) return;
+  try {
+    window.sessionStorage.setItem(RUN_DEEPLINK_STASH_KEY, runId);
+  } catch (_err) {
+    /* sessionStorage may be unavailable; deep-link is best-effort */
+  }
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.delete(RUN_DEEPLINK_PARAM);
+    window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+  } catch (_err) {
+    /* ignore */
+  }
+}
+
+// Once authenticated, open the stashed run in the Monitor tab and start polling.
+async function consumeRunDeepLink() {
+  if (runDeepLinkConsumed) return;
+  let runId = "";
+  try {
+    runId = String(window.sessionStorage.getItem(RUN_DEEPLINK_STASH_KEY) || "").trim();
+  } catch (_err) {
+    runId = "";
+  }
+  if (!runId) return;
+  runDeepLinkConsumed = true;
+  try {
+    window.sessionStorage.removeItem(RUN_DEEPLINK_STASH_KEY);
+  } catch (_err) {
+    /* ignore */
+  }
+  setActiveTab("monitor");
+  try {
+    await handleRunSelectorChange(runId);
+  } catch (_err) {
+    /* run may not be visible to this user; leave Monitor tab open */
+  }
+}
+
 async function bootstrapAuth() {
   state.authBootstrapPending = true;
+  stashRunDeepLinkFromUrl();
   syncLoginMode();
   state.oidcConfig = await fetchOidcConfig();
   state.authBootstrapPending = false;
@@ -15217,6 +15271,7 @@ async function authLogin() {
     showChat();
     updateAdminUI();
     refreshRuns();
+    consumeRunDeepLink();
   } catch (err) {
     el.loginError.textContent = err.message;
   }
@@ -15251,6 +15306,7 @@ async function loadSession() {
     showChat();
     updateAdminUI();
     refreshRuns();
+    consumeRunDeepLink();
   } catch (err) {
     if (shouldClearStoredSession({ status: failureStatus, error: failureMessage || err?.message })) {
       clearSession();

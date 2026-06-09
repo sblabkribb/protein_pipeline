@@ -10,6 +10,7 @@ from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 from urllib.parse import unquote
 from urllib.parse import urlencode
 import zipfile
@@ -605,7 +606,55 @@ class Handler(BaseHTTPRequestHandler):
             runs = out.get("runs") if isinstance(out, dict) else None
             if isinstance(runs, list):
                 out["runs"] = [r for r in runs if str(r).startswith(prefix)]
+        self._attach_run_ui_url(name, out)
         return out
+
+    def _public_base_url(self) -> str:
+        """Best-effort public origin of this server, env-aware.
+
+        Honours an explicit ``PIPELINE_PUBLIC_BASE_URL`` override, else derives
+        scheme + host from the request (respecting reverse-proxy forwarding
+        headers) so dev/staging/prod each emit their own correct origin.
+        """
+        override = str(os.environ.get("PIPELINE_PUBLIC_BASE_URL") or "").strip()
+        if override:
+            return override.rstrip("/")
+        host = str(
+            self.headers.get("X-Forwarded-Host")
+            or self.headers.get("Host")
+            or ""
+        ).split(",", 1)[0].strip()
+        if not host:
+            return ""
+        proto = "https" if self._request_is_secure() else "http"
+        return f"{proto}://{host}"
+
+    def _run_ui_url(self, run_id: str) -> str | None:
+        run_id = str(run_id or "").strip()
+        if not run_id:
+            return None
+        base = self._public_base_url()
+        if not base:
+            return None
+        return f"{base}/?run={quote(run_id, safe='')}"
+
+    def _attach_run_ui_url(self, name: str, out: Any) -> None:
+        """Add a ``ui_url`` deep-link to run-producing tool results so an MCP
+        client can point the user at the live web view of the run."""
+        if not isinstance(out, dict) or "ui_url" in out:
+            return
+        if name not in {
+            "pipeline.run",
+            "pipeline.run_from_prompt",
+            "pipeline.preflight",
+            "pipeline.status",
+            "pipeline.cancel_run",
+        }:
+            return
+        run_id = out.get("run_id") or out.get("head_run_id")
+        url = self._run_ui_url(str(run_id or ""))
+        if url:
+            out["ui_url"] = url
 
     def _mcp_success(self, request_id: str | int | None, result: dict[str, Any]) -> dict[str, Any]:
         return {"jsonrpc": "2.0", "id": request_id, "result": result}

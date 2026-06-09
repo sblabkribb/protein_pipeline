@@ -115,6 +115,8 @@ After each stage completes, **pause and report a short checkpoint**, then wait f
    - **Adjust and stop**, or **stop here / done**.
 4. Proceed only on the user's choice; reuse the **same `run_id`** so completed stages stay cached.
 
+**Share the web view.** `pipeline.run`/`pipeline.status` results include a `ui_url` field (e.g. `https://rapid.kbiofoundry.kr/?run=<run_id>`) that opens this run live in the web app — 3D structures, pLDDT plots, and artifact downloads that a text summary can't show. When you report a checkpoint, give the user this link: *"View it visually here: <ui_url>"*. It opens straight to the Monitor tab for that run (they sign in once if needed).
+
 Exception: if the user explicitly asked up front to run several stages back-to-back without stopping, honor that — but still post a one-line checkpoint after each stage so they can interrupt. For a long-running stage, poll `pipeline.status` to completion **before** presenting the checkpoint (do not re-run).
 
 ## Stage Templates (Arguments)

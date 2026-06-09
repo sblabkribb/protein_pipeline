@@ -360,6 +360,46 @@ def test_mcp_tools_call_injects_user_for_round_restore_tools(monkeypatch):
     ]
 
 
+def test_attach_run_ui_url_injects_deeplink():
+    """Run-producing tool results carry a ui_url deep-link to the web view."""
+    handler = Handler.__new__(Handler)
+    handler.headers = {"Host": "rapid.kbiofoundry.kr", "X-Forwarded-Proto": "https"}
+    out = {"run_id": "tester_job", "state": "running"}
+    handler._attach_run_ui_url("pipeline.run", out)
+    assert out["ui_url"] == "https://rapid.kbiofoundry.kr/?run=tester_job"
+
+
+def test_attach_run_ui_url_uses_head_run_id_fallback():
+    handler = Handler.__new__(Handler)
+    handler.headers = {"Host": "dev-pipeline.duckdns.org", "X-Forwarded-Proto": "https"}
+    out = {"head_run_id": "u_head"}
+    handler._attach_run_ui_url("pipeline.status", out)
+    assert out["ui_url"] == "https://dev-pipeline.duckdns.org/?run=u_head"
+
+
+def test_attach_run_ui_url_skips_non_run_tools():
+    handler = Handler.__new__(Handler)
+    handler.headers = {"Host": "rapid.kbiofoundry.kr", "X-Forwarded-Proto": "https"}
+    out = {"run_id": "a"}
+    handler._attach_run_ui_url("pipeline.read_artifact", out)
+    assert "ui_url" not in out
+
+
+def test_attach_run_ui_url_noop_without_run_id():
+    handler = Handler.__new__(Handler)
+    handler.headers = {"Host": "rapid.kbiofoundry.kr", "X-Forwarded-Proto": "https"}
+    out = {"ok": True}
+    handler._attach_run_ui_url("pipeline.run", out)
+    assert "ui_url" not in out
+
+
+def test_public_base_url_env_override(monkeypatch):
+    handler = Handler.__new__(Handler)
+    handler.headers = {"Host": "internal:8080"}
+    monkeypatch.setenv("PIPELINE_PUBLIC_BASE_URL", "https://rapid.kbiofoundry.kr/")
+    assert handler._public_base_url() == "https://rapid.kbiofoundry.kr"
+
+
 def test_mcp_tool_result_uses_standard_mcp_content_type():
     """tools/call results must use a standard MCP content type (text), not the
     non-standard type:'json' that strict clients (VS Code, mcp SDK) reject."""
