@@ -598,3 +598,50 @@ def test_create_mcp_key_requires_auth_enabled(monkeypatch):
     handler._json = lambda status, payload, extra_headers=None: captured.update(status=status, payload=payload)
     handler._create_mcp_key()
     assert captured["status"] == 400
+
+
+def test_mcp_tool_list_hides_management_but_keeps_execution(monkeypatch):
+    from pipeline_mcp import http_server
+    from pipeline_mcp.http_server import Handler
+
+    class _Disp:
+        def list_tools(self):
+            return {"tools": [{"name": n} for n in [
+                "pipeline.run", "pipeline.preflight", "pipeline.status",
+                "pipeline.classify_residues", "pipeline.get_hit_list", "pipeline.cancel_run",
+                "pipeline.save_project", "pipeline.agent_chat",
+                "pipeline.model_provider_list", "pipeline.list_feedback",
+                "pipeline.cath_list_jobs", "pipeline.runpod_get_history",
+            ]]}
+
+    monkeypatch.setattr(http_server, "_DISPATCHER", _Disp(), raising=False)
+    monkeypatch.delenv("PIPELINE_MCP_FULL_TOOL_LIST", raising=False)
+    h = Handler.__new__(Handler)
+    names = [t["name"] for t in h._list_tools_for_user({"username": "u", "role": "user"})["tools"]]
+    # execution + monitor + analyze stay visible
+    for keep in ("pipeline.run", "pipeline.preflight", "pipeline.status",
+                 "pipeline.classify_residues", "pipeline.get_hit_list", "pipeline.cancel_run"):
+        assert keep in names, keep
+    # management/UI hidden
+    for hide in ("pipeline.save_project", "pipeline.agent_chat",
+                 "pipeline.model_provider_list", "pipeline.list_feedback"):
+        assert hide not in names, hide
+    # admin-only hidden from non-admin
+    assert "pipeline.cath_list_jobs" not in names
+    assert "pipeline.runpod_get_history" not in names
+
+
+def test_mcp_full_tool_list_env_shows_everything(monkeypatch):
+    from pipeline_mcp import http_server
+    from pipeline_mcp.http_server import Handler
+
+    class _Disp:
+        def list_tools(self):
+            return {"tools": [{"name": n} for n in
+                               ["pipeline.run", "pipeline.save_project", "pipeline.cath_list_jobs"]]}
+
+    monkeypatch.setenv("PIPELINE_MCP_FULL_TOOL_LIST", "1")
+    monkeypatch.setattr(http_server, "_DISPATCHER", _Disp(), raising=False)
+    h = Handler.__new__(Handler)
+    names = [t["name"] for t in h._list_tools_for_user({"username": "a", "role": "admin"})["tools"]]
+    assert names == ["pipeline.run", "pipeline.save_project", "pipeline.cath_list_jobs"]

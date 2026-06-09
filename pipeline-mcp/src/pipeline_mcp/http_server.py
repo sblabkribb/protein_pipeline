@@ -65,6 +65,40 @@ _USER_PROVIDER_SCOPED_TOOLS = {
     "pipeline.run_from_prompt",
 }
 
+# Management / web-UI tools hidden from the MCP `tools/list` so the core
+# run + monitor + analyze tools always fit under MCP clients' tool-count
+# limits (some clients silently drop tools when the list is large). These
+# remain fully callable — they are just not advertised in the MCP list.
+# Set PIPELINE_MCP_FULL_TOOL_LIST=1 to advertise everything.
+_MCP_LIST_HIDDEN_TOOLS = {
+    "pipeline.save_project",
+    "pipeline.list_projects",
+    "pipeline.get_project",
+    "pipeline.archive_project",
+    "pipeline.delete_project",
+    "pipeline.restore_project",
+    "pipeline.save_round",
+    "pipeline.list_rounds",
+    "pipeline.get_round",
+    "pipeline.archive_round",
+    "pipeline.restore_round",
+    "pipeline.delete_round",
+    "pipeline.save_workflow_session",
+    "pipeline.get_workflow_session",
+    "pipeline.save_report",
+    "pipeline.get_report",
+    "pipeline.submit_feedback",
+    "pipeline.list_feedback",
+    "pipeline.submit_experiment",
+    "pipeline.list_experiments",
+    "pipeline.list_agent_events",
+    "pipeline.agent_chat",
+    "pipeline.analyze_paper_for_masking",
+    "pipeline.model_provider_list",
+    "pipeline.model_provider_update",
+    "pipeline.model_provider_health",
+}
+
 _RUN_SCOPED_TOOLS = {
     "pipeline.status",
     "pipeline.list_artifacts",
@@ -493,15 +527,24 @@ class Handler(BaseHTTPRequestHandler):
 
     def _list_tools_for_user(self, user: dict[str, Any] | None) -> dict[str, Any]:
         tools = self.dispatcher.list_tools()
-        if user is not None and not self._is_admin(user):
-            entries = tools.get("tools") if isinstance(tools, dict) else None
-            if isinstance(entries, list):
-                tools["tools"] = [
-                    item
-                    for item in entries
-                    if isinstance(item, dict)
-                    and str(item.get("name") or "") not in _ADMIN_ONLY_TOOLS
-                ]
+        entries = tools.get("tools") if isinstance(tools, dict) else None
+        if not isinstance(entries, list):
+            return tools
+        full_list = _env_true("PIPELINE_MCP_FULL_TOOL_LIST")
+        is_admin = self._is_admin(user)
+
+        def _visible(name: str) -> bool:
+            if not full_list and name in _MCP_LIST_HIDDEN_TOOLS:
+                return False
+            if user is not None and not is_admin and name in _ADMIN_ONLY_TOOLS:
+                return False
+            return True
+
+        tools["tools"] = [
+            item
+            for item in entries
+            if isinstance(item, dict) and _visible(str(item.get("name") or ""))
+        ]
         return tools
 
     def _call_tool_for_user(
