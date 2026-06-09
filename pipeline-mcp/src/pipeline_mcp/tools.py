@@ -22,6 +22,7 @@ from .af2_utils import af2_error_is_server_failure
 from .bio.fasta import FastaRecord
 from .bio.fasta import parse_fasta
 from .bio.ligand_text import normalize_diffdock_ligand_inputs
+from .bio.residue_exposure import classify_residues as _classify_residues
 from .bio.sdf import append_ligand_pdb
 from .bio.sdf import sdf_to_pdb
 from .auth import AuthError
@@ -8113,6 +8114,39 @@ def tool_definitions() -> list[dict[str, Any]]:
             "inputSchema": copy.deepcopy(run_schema),
         },
         {
+            "name": "pipeline.classify_residues",
+            "description": (
+                "Classify residues as surface/core/interface (matches the web app's 3D picker) "
+                "for region-based design selection."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "target_pdb": {
+                        "type": "string",
+                        "description": "Raw PDB file text (ATOM/HETATM records).",
+                    },
+                    "surface_area_cutoff": {
+                        "type": "number",
+                        "description": "Exposed-area threshold (Å²) above which a residue is surface. Default 2.5.",
+                    },
+                    "probe_radius": {
+                        "type": "number",
+                        "description": "Solvent probe radius (Å) for SASA. Default 1.4.",
+                    },
+                    "surface_max_neighbors": {
+                        "type": "integer",
+                        "description": "Fallback: residues with ≤ this many spatial neighbours → surface. Default 3.",
+                    },
+                    "core_min_neighbors": {
+                        "type": "integer",
+                        "description": "Fallback: residues with ≥ this many spatial neighbours → core. Default 8.",
+                    },
+                },
+                "required": ["target_pdb"],
+            },
+        },
+        {
             "name": "pipeline.af2_predict",
             "description": "Run ColabFold/AlphaFold2 on input FASTA/sequence (standalone).",
             "inputSchema": {
@@ -9106,6 +9140,21 @@ class ToolDispatcher:
             return preflight_request(
                 req, self.runner, run_id=str(arguments.get("run_id") or "") or None
             )
+
+        if name == "pipeline.classify_residues":
+            target_pdb = _as_text(arguments.get("target_pdb"))
+            if not target_pdb.strip():
+                raise ValueError("target_pdb is required")
+            kwargs: dict[str, Any] = {}
+            if arguments.get("surface_area_cutoff") is not None:
+                kwargs["surface_area_cutoff"] = float(arguments["surface_area_cutoff"])
+            if arguments.get("probe_radius") is not None:
+                kwargs["probe_radius"] = float(arguments["probe_radius"])
+            if arguments.get("surface_max_neighbors") is not None:
+                kwargs["surface_max_neighbors"] = int(arguments["surface_max_neighbors"])
+            if arguments.get("core_min_neighbors") is not None:
+                kwargs["core_min_neighbors"] = int(arguments["core_min_neighbors"])
+            return _classify_residues(target_pdb, **kwargs)
 
         if name == "pipeline.af2_predict":
             return _run_af2_predict(self.runner, arguments)
