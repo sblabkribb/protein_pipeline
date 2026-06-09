@@ -51,6 +51,16 @@ has the connection + execution instructions locally.
 
 ## Workflow (Stage Runner)
 
+### First, pick a run mode
+
+Unless the user already said exactly what to run, ask **one** question up front — which mode:
+
+1. **Full pipeline run (recommended default)** — run all stages to a result. The AI still posts a one-line checkpoint after each stage so the user can interrupt.
+2. **Studio (stage-by-stage)** — run one stage, then **stop and wait** for the user to review and decide (move forward / rerun / stop) before the next. Best for careful, exploratory, or cost-sensitive work. (See "Stage-by-stage review".)
+3. **Single model (standalone)** — run just one model, no pipeline. **Most common: RFD3** (backbone generation) and **ColabFold/AF2** (structure prediction) — suggest these first. Also available: MSA (MMseqs2), ProteinMPNN, SoluProt, DiffDock, BioEmu. (See "Single-model / standalone execution".)
+
+Recommend **Full pipeline** for a typical "run my analysis" request, **Studio** when they want to inspect/tune between stages, **Single model** when they only need one computation. Then continue with the questions below (full/studio) or run the chosen standalone tool directly.
+
 ### Interactive setup — ask before a full run
 
 For a **full pipeline run** (not a single stage the user already fully specified), do not silently assume everything. First call `pipeline.plan_from_prompt` with the user's request to detect missing inputs/questions, then ask a short, concrete set of questions in **one** message and wait for answers before calling `pipeline.run`:
@@ -160,11 +170,12 @@ AF2/ColabFold itself does not take a ligand — "ligand selection" here is the *
 | Protect a HETATM ligand and its pocket | `ligand_resnames=["HEM", ...]` + `ligand_mask_distance=6.0` |
 | Substrate is a separate ATOM chain (enzyme-substrate) | `ligand_atom_chains=["B"]` (keep it out of `design_chains`) |
 | **Design only surface-exposed residues** | `surface_only=true` (tune `surface_min_rel`=0.2, `surface_min_abs`=10.0) |
+| Pick a region (surface / core / interface), like the UI | `pipeline.classify_residues(target_pdb)` → choose a region → pass as `fixed_positions_extra` |
 | Fix exact residues you choose | `fixed_positions_extra={"A":[57,102,195]}` |
 | Choose which chain(s) to mutate | `design_chains=["A"]` |
 | Dock a *new* ligand, then mask around its pose | `diffdock_ligand_smiles` / `diffdock_ligand_sdf` (DiffDock runs first; pose used for masking only) |
 
-3. **For fine visual selection** (e.g. hand-picking a pocket, or *core* / *interface* regions), the web app's 3D residue picker is the better tool — point the user there and have them paste the resulting residue list back as `fixed_positions_extra`. Surface selection and ligand masking are fully doable over MCP with the parameters above; explicit `core`/`interface` presets are UI-only for now.
+3. **Region presets — surface / core / interface (over MCP).** Call `pipeline.classify_residues` with the `target_pdb` (optional `surface_area_cutoff`, default 2.5) — it returns `{surface, core, interface, counts}` per chain, **matching the web app's 3D-picker numbers** (same SASA + cutoff). Show the counts (e.g. "surface 225 / core 57 / interface 19"), let the user pick a region, and pass those residues as `fixed_positions_extra` (or restrict design to them). Surface alone can also use the server preset `surface_only=true`. Only fine **visual** hand-picking of an exact pocket still benefits from the web app's 3D viewer.
 
 Always confirm the final selection (ligand resnames, masked chains, surface/fixed positions) back to the user before running design.
 
