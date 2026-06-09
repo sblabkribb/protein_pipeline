@@ -2,7 +2,7 @@
 
 ## Supplementary Note 1. Status of the CATH Benchmark Refresh
 
-The main manuscript uses the corrected-chain CATH artifact refresh as the component-level evidence base for structure-prediction-budgeted surrogate-triage design choices. The refresh applies the corrected chain-selection contract introduced after the original pre-refresh archive and is mirrored under `public_data/benchmark/results/rapid_target_manifest.csv`. The released structural-context analysis summarizes 18 selected CATH targets under the original target backbone and selected RFD3 backbone arms, with BioEmu-containing arms included only when they passed the fixed target-RMSD QC gate. The selected structural-context arms are the original target backbone, target plus BioEmu ensemble, selected RFD3 backbone, and RFD3 plus BioEmu ensemble.
+The main manuscript uses the corrected-chain CATH artifact refresh as the component-level evidence base for structure-prediction-budgeted surrogate-triage design choices. The refresh applies the corrected chain-selection contract introduced after the original pre-refresh archive and is mirrored under `public_data/benchmark/results/rapid_target_manifest.csv`. The released structural-context analysis summarizes 18 selected CATH targets under the original target backbone and selected RFdiffusion-derived (RFD3) backbone arms, with BioEmu-containing arms included only when they passed the fixed target-RMSD QC gate. The selected structural-context arms are the original target backbone, target plus BioEmu ensemble, selected RFD3 backbone, and RFD3 plus BioEmu ensemble.
 
 ## Supplementary Note 2. Current CATH Artifact Corpus
 
@@ -148,7 +148,7 @@ The WT reference values used in Figure 2D are shown below. These baselines were 
 | 1advA02 | 90.37 | 0.529 | yes |
 | 1h6wA03 | 81.54 | 0.593 | yes |
 
-Earlier 3RGK and 1LVM traces are retained as implementation examples only; they used different candidate counts and Top-K settings and are not part of the current operating evidence. The Top-K default of 20 is an operating budget rather than a fitted hyperparameter. Together with the N = 30 bootstrap setting, it gives 50 AF2 calls per pooled target decision point when the SoluProt-passing pool exceeds the budget.
+Earlier 3RGK and 1LVM traces are retained as implementation examples only; they used different candidate counts and Top-K settings and are not part of the current operating evidence. The Top-K default of 20 is an operating budget rather than a fitted hyperparameter. Together with the N = 30 bootstrap setting, it gives 50 AF2 calls per pooled target decision point when the SoluProt-scored pool exceeds the budget.
 
 ## Supplementary Note 9. Pooled Surrogate Scaling as a Guardrail Analysis
 
