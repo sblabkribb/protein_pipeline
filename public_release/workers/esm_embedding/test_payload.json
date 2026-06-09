@@ -1,9 +1,0 @@
-{
-  "model_name": "facebook/esm2_t6_8M_UR50D",
-  "batch_size": 16,
-  "max_length": 1024,
-  "sequences": [
-    {"id": "seq_1", "sequence": "ACDEFGHIKLMNPQRSTVWY"},
-    {"id": "seq_2", "sequence": "MKTAYIAKQRQISFVKSHFSRQDILDLWIYHTQGYFP"}
-  ]
-}

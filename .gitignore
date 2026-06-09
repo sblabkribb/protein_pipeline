@@ -42,17 +42,14 @@ rfd3-runpod/
 *.tsv
 *.pdf
 !/figures/benchmark/*.pdf
-!/public_release/figures/benchmark/*.pdf
 *.json
 !/frontend/package-lock.json
 /af2_wt_*_job.json
 
 # --- Public release package allowlist ---
-!/public_release/**/*.json
-!/public_release/**/*.fasta
-!/public_release/**/*.pdb
-!/public_release/pipeline-mcp/.env.example
-/public_release/cath_outputs/
+!/public_data/**/*.json
+!/public_data/**/*.fasta
+!/public_data/**/*.pdb
 
 # --- Python ---
 __pycache__/
@@ -72,7 +69,6 @@ ENV/
 # --- Env / secrets ---
 .env
 .env.*
-!/public_release/pipeline-mcp/.env.example
 *.pem
 *.key
 
