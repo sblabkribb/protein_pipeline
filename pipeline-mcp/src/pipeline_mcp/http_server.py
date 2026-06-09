@@ -1127,6 +1127,14 @@ def main(argv: list[str] | None = None) -> None:
     _PAT_KEYS = load_pat_store()
     _init_cors()
 
+    # Resume runs orphaned by a previous restart (re-attach to recorded job_ids).
+    try:
+        from .run_recovery import start_run_recovery
+
+        start_run_recovery(_DISPATCHER, runner.output_root)
+    except Exception as exc:  # noqa: BLE001 - recovery must never block startup
+        print(f"[run-recovery] startup hook failed: {exc}", flush=True)
+
     httpd = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"listening: http://{args.host}:{args.port}", flush=True)
     httpd.serve_forever()
