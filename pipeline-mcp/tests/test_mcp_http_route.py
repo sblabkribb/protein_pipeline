@@ -400,6 +400,17 @@ def test_public_base_url_env_override(monkeypatch):
     assert handler._public_base_url() == "https://rapid.kbiofoundry.kr"
 
 
+def test_handler_speaks_http_1_1_for_expect_100_continue():
+    """The handler must be HTTP/1.1 so it answers `Expect: 100-continue`. An
+    HTTP/1.0 server never sends the 100 interim response, deadlocking large
+    request-body uploads (e.g. a raw PDB as target_pdb) behind the proxy."""
+    from pipeline_mcp.http_server import Handler
+
+    assert Handler.protocol_version == "HTTP/1.1"
+    # idle keep-alive connections must be reaped so handler threads don't pile up
+    assert getattr(Handler, "timeout", None)
+
+
 def test_advertised_tool_schemas_are_strict_client_safe():
     """Strict function-calling clients (OpenAI strict mode, some MCP clients)
     require each tool's top-level inputSchema to be type:object with no

@@ -38,7 +38,7 @@ has the connection + execution instructions locally.
 
 - Use the MCP server named `protein-pipeline` (it must expose `pipeline.run`, `pipeline.status`, `pipeline.list_runs`).
   - If available, also use `pipeline.list_artifacts` and `pipeline.read_artifact` to fetch intermediate files without asking for filesystem access.
-- Treat `pipeline.run` as potentially long-running; prefer staged execution with `stop_after`.
+- Treat `pipeline.run` as potentially long-running. **A single `pipeline.run` call with no `stop_after` runs the whole pipeline server-side** (MSA → RFD3/BioEmu → ProteinMPNN → SoluProt → AF2 → novelty), exactly like the web app's full run; `stop_after` only changes *where it stops*. Use `stop_after` for **Studio** stage checkpoints or **standalone** single stages — do **not** chain a full run into many per-stage calls from the client.
 
 ## Non-Negotiable Rules
 
@@ -55,7 +55,7 @@ has the connection + execution instructions locally.
 
 Unless the user already said exactly what to run, ask **one** question up front — which mode:
 
-1. **Full pipeline run (recommended default)** — run all stages to a result. The AI still posts a one-line checkpoint after each stage so the user can interrupt.
+1. **Full pipeline run (recommended default)** — **one `pipeline.run` call without `stop_after`**; the server runs every stage to a final result (same as the web app's full run). Poll `pipeline.status` to completion and report stage progress *from the status* as it advances — do **not** split a full run into per-stage `stop_after` calls.
 2. **Studio (stage-by-stage)** — run one stage, then **stop and wait** for the user to review and decide (move forward / rerun / stop) before the next. Best for careful, exploratory, or cost-sensitive work. (See "Stage-by-stage review".)
 3. **Single model (standalone)** — run just one model, no pipeline. **Most common: RFD3** (backbone generation) and **ColabFold/AF2** (structure prediction) — suggest these first. Also available: MSA (MMseqs2), ProteinMPNN, SoluProt, DiffDock, BioEmu. (See "Single-model / standalone execution".)
 
@@ -92,16 +92,18 @@ Accept "defaults" as a valid answer to everything. After the user answers, **ech
 - If `found=true` and not running: proceed to the requested stage with `pipeline.run` (it will reuse cached artifacts unless `force=true`).
 - If `state=running` looks stale (e.g., long time since `updated_at` and you know nothing is running), you may proceed with `pipeline.run` to resume, or use a new `run_id`.
 
-3) Execute one stage at a time
-- Call `pipeline.run` with `stop_after` set to the stage you want to complete.
-- After completion, return:
+3) Execute — by mode
+- **Full run (default):** call `pipeline.run` **once with no `stop_after`** — the server runs MSA → … → AF2 → novelty internally. Then poll `pipeline.status` to completion and report the final outputs; surface per-stage progress *from the status* while polling. This matches the web app's full run; **do not issue per-stage `stop_after` calls**.
+- **Studio (stage-by-stage):** call `pipeline.run` with `stop_after` set to a single stage, then stop and report a checkpoint before the next (see "Stage-by-stage review"). One stage per call, on user confirmation.
+- **Standalone:** a single `stop_after` stage or a dedicated tool (see "Single-model / standalone execution").
+- After each call, return:
   - `output_dir`
   - stage-specific file paths from the result (e.g., `msa_a3m_path`, `msa_tsv_path`)
-  - the next recommended stage (if the user asked to continue)
+  - (Studio) the next recommended stage
 
 ## Stage-by-stage review (Studio-style checkpoints)
 
-Mirror the web app's **Workflow Studio**: run one stage, **stop, show the result, and let the user decide** before the next stage — don't silently chain the whole pipeline.
+**This section applies to Studio mode only.** Mirror the web app's **Workflow Studio**: run one stage, **stop, show the result, and let the user decide** before the next stage — don't silently chain stages. (A **full run** is the opposite: one `pipeline.run` call does chain every stage server-side — that's expected, not something to split up.)
 
 After each stage completes, **pause and report a short checkpoint**, then wait for the user:
 

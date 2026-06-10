@@ -136,6 +136,16 @@ def _init_cors() -> None:
 
 
 class Handler(BaseHTTPRequestHandler):
+    # Speak HTTP/1.1 so the server answers `Expect: 100-continue`. curl (and the
+    # Caddy reverse proxy) send `Expect: 100-continue` before uploading a larger
+    # request body (e.g. a raw PDB as `target_pdb`); an HTTP/1.0 server never
+    # sends the "100 Continue" interim response, so the proxy/client waits for it
+    # while the server waits for the body — a deadlock that hangs large MCP
+    # requests (small ones don't trigger Expect, so they worked). All responses
+    # set Content-Length, so HTTP/1.1 keep-alive is safe; `timeout` closes idle
+    # keep-alive connections so handler threads don't accumulate.
+    protocol_version = "HTTP/1.1"
+    timeout = 65
     _MAX_BODY_BYTES = 50 * 1024 * 1024
     _MAX_CHUNK_LINE_BYTES = 1024
 
