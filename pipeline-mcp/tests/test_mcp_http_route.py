@@ -400,6 +400,42 @@ def test_public_base_url_env_override(monkeypatch):
     assert handler._public_base_url() == "https://rapid.kbiofoundry.kr"
 
 
+def test_advertised_tool_schemas_are_strict_client_safe():
+    """Strict function-calling clients (OpenAI strict mode, some MCP clients)
+    require each tool's top-level inputSchema to be type:object with no
+    top-level oneOf/anyOf/allOf/not. list_tools() must not advertise those."""
+    from pipeline_mcp.tools import sanitize_tool_for_strict_clients, tool_definitions
+
+    forbidden = {"oneOf", "anyOf", "allOf", "not"}
+    advertised = [sanitize_tool_for_strict_clients(t) for t in tool_definitions()]
+    offenders = {
+        t["name"]: sorted(forbidden & set(t["inputSchema"].keys()))
+        for t in advertised
+        if t["inputSchema"].get("type") != "object"
+        or (forbidden & set(t["inputSchema"].keys()))
+    }
+    assert offenders == {}, f"top-level forbidden schema keys: {offenders}"
+
+
+def test_sanitizer_folds_anyof_required_into_description():
+    from pipeline_mcp.tools import sanitize_tool_for_strict_clients
+
+    tool = {
+        "name": "pipeline.af2_predict",
+        "description": "Run AF2.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"target_fasta": {"type": "string"}, "target_pdb": {"type": "string"}},
+            "anyOf": [{"required": ["target_fasta"]}, {"required": ["target_pdb"]}],
+        },
+    }
+    out = sanitize_tool_for_strict_clients(tool)
+    assert "anyOf" not in out["inputSchema"]
+    assert "Provide at least one of: target_fasta, target_pdb." in out["description"]
+    # nested property schemas are untouched
+    assert out["inputSchema"]["properties"]["target_fasta"] == {"type": "string"}
+
+
 def test_mcp_tool_result_uses_standard_mcp_content_type():
     """tools/call results must use a standard MCP content type (text), not the
     non-standard type:'json' that strict clients (VS Code, mcp SDK) reject."""

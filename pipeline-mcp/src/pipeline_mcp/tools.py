@@ -8089,6 +8089,45 @@ def _analyze_paper_for_masking(
         raise RuntimeError(f"Agent failed to process the document: {str(e)}")
 
 
+def sanitize_tool_for_strict_clients(tool: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of ``tool`` whose inputSchema is safe for strict
+    function-calling clients (e.g. OpenAI strict mode, some MCP clients),
+    which require the top-level schema to be ``type: object`` and reject
+    top-level ``oneOf``/``anyOf``/``allOf``/``not``.
+
+    Several tools express "provide one of these inputs" as a top-level
+    ``anyOf: [{required: [...]}, ...]``. We drop that keyword and fold the
+    requirement into the tool description so the constraint is still
+    communicated (the tool functions validate the inputs at run time).
+    """
+    schema = tool.get("inputSchema")
+    if not isinstance(schema, dict):
+        return tool
+    new_schema = dict(schema)
+    new_schema.setdefault("type", "object")
+    notes: list[str] = []
+    for key in ("anyOf", "oneOf"):
+        clause = new_schema.pop(key, None)
+        if isinstance(clause, list):
+            fields: list[str] = []
+            for sub in clause:
+                if isinstance(sub, dict):
+                    for field in sub.get("required") or []:
+                        if field not in fields:
+                            fields.append(field)
+            if fields:
+                verb = "exactly one" if key == "oneOf" else "at least one"
+                notes.append(f"Provide {verb} of: {', '.join(fields)}.")
+    new_schema.pop("allOf", None)
+    new_schema.pop("not", None)
+    out = dict(tool)
+    out["inputSchema"] = new_schema
+    if notes:
+        desc = str(out.get("description") or "").rstrip()
+        out["description"] = (desc + " " if desc else "") + " ".join(notes)
+    return out
+
+
 def tool_definitions() -> list[dict[str, Any]]:
     run_schema = _pipeline_run_schema()
     return [
@@ -9079,7 +9118,7 @@ class ToolDispatcher:
     runner: PipelineRunner
 
     def list_tools(self) -> dict[str, Any]:
-        return {"tools": tool_definitions()}
+        return {"tools": [sanitize_tool_for_strict_clients(t) for t in tool_definitions()]}
 
     def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if name == "pipeline.analyze_paper_for_masking":
