@@ -326,8 +326,7 @@ def _target_to_pdb_path(target: str) -> Path:
     manifest_paths = [
         PROJECT_ROOT / "data" / "benchmark" / "results" / "rapid_target_manifest.csv",
         PROJECT_ROOT
-        / "public_release"
-        / "data"
+        / "public_data"
         / "benchmark"
         / "results"
         / "rapid_target_manifest.csv",

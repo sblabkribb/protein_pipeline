@@ -16,4 +16,4 @@ Use this directory for live data-generation jobs:
 8. `06_run_pooled_surrogate_scaling.py` reuses completed CATH AF2 labels to test whether pooled surrogate labels improve held-out target-tier ranking over per-target calibration. The current ESM-plus-composition result is a negative/guardrail analysis, not a main performance claim.
 
 Keep reusable analysis and figure-generation code in `scripts/benchmark/`.
-Keep public, credential-free reproduction code in `public_release/scripts/`.
+Keep public, credential-free reproduction code in `scripts/`.

@@ -25,7 +25,7 @@ def _input_paths() -> tuple[Path, Path]:
     data_dir = _first_existing(
         [
             PROJECT_ROOT / "data" / "cath_curated",
-            PROJECT_ROOT / "public_release" / "data" / "cath_curated",
+            PROJECT_ROOT / "public_data" / "cath_curated",
             PROJECT_ROOT / "cath_outputs" / "paper_curated",
         ]
     )

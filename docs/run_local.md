@@ -2,7 +2,7 @@
 
 ## Backend
 
-Run commands from the `public_release/pipeline-mcp` directory:
+Run commands from the `pipeline-mcp` directory:
 
 ```bash
 python3 -m venv .venv
@@ -40,7 +40,7 @@ Expected response:
 
 ## Frontend
 
-Run from `public_release/frontend`:
+Run from `frontend`:
 
 ```bash
 npm ci
@@ -57,7 +57,7 @@ npm ci
 npm run build
 ```
 
-Serve `public_release/frontend/dist` through Caddy, Nginx, or another HTTPS
+Serve `frontend/dist` through Caddy, Nginx, or another HTTPS
 reverse proxy, and route `/api/*` to the backend on `127.0.0.1:18080`.
 
 ## Surrogate and Experimental-Feedback Dependencies

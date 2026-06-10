@@ -47,8 +47,7 @@ def _manifest_path(explicit: str | None = None) -> Path:
     for candidate in (
         PROJECT_ROOT / "data" / "benchmark" / "results" / "rapid_target_manifest.csv",
         PROJECT_ROOT
-        / "public_release"
-        / "data"
+        / "public_data"
         / "benchmark"
         / "results"
         / "rapid_target_manifest.csv",

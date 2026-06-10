@@ -86,8 +86,8 @@ Before a production URL is advertised, configure:
 Before publishing a release package, run:
 
 ```bash
-rg -n "(RUNPOD_API_KEY=.+|ENDPOINT_ID=.+|AWS_SECRET|SECRET_KEY=.+|PRIVATE KEY|\\bAKIA[0-9A-Z]{16}\\b)" public_release
-find public_release -type d \( -name node_modules -o -name .pytest_cache -o -name __pycache__ -o -name dist \)
+rg -n "(RUNPOD_API_KEY=.+|ENDPOINT_ID=.+|AWS_SECRET|SECRET_KEY=.+|PRIVATE KEY|\\bAKIA[0-9A-Z]{16}\\b)" .
+find . -type d \( -name node_modules -o -name .pytest_cache -o -name __pycache__ -o -name dist \)
 ```
 
 The first command should return only placeholders or documentation examples.

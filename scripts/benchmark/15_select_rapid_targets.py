@@ -233,8 +233,8 @@ def main(argv: list[str] | None = None) -> int:
         "--completed-csv",
         action="append",
         default=[
-            str(PROJECT_ROOT / "public_release" / "data" / "cath_73" / "cath_73_per_target_summary.csv"),
-            str(PROJECT_ROOT / "public_release" / "data" / "cath_curated" / "curated_per_target_summary.csv"),
+            str(PROJECT_ROOT / "public_data" / "cath_73" / "cath_73_per_target_summary.csv"),
+            str(PROJECT_ROOT / "public_data" / "cath_curated" / "curated_per_target_summary.csv"),
         ],
     )
     parser.add_argument(

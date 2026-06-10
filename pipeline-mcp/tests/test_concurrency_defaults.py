@@ -52,7 +52,6 @@ def test_pipeline_gpu_http_worker_defaults_are_conservative(monkeypatch):
 def test_cath_batch_defaults_start_with_two_target_workers():
     for relative in (
         "scripts/02_run_cath_batch.py",
-        "public_release/scripts/02_run_cath_batch.py",
     ):
         assert _read_int_constant(REPO_ROOT / relative, "MAX_CONCURRENT_PIPELINES") == 2
 

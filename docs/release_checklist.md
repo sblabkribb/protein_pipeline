@@ -13,7 +13,7 @@ Before pushing this folder to GitHub:
 6. Run a generated-file scan:
 
 ```bash
-find public_release -type d \( -name node_modules -o -name .pytest_cache -o -name __pycache__ -o -name dist \)
+find . -type d \( -name node_modules -o -name .pytest_cache -o -name __pycache__ -o -name dist \)
 ```
 
 The command should print no paths.
@@ -21,8 +21,8 @@ The command should print no paths.
 7. Run a secret/path scan:
 
 ```bash
-rg -n "(RUNPOD_API_KEY=.+|ENDPOINT_ID=.+|AWS_SECRET|SECRET_KEY=.+|PRIVATE KEY|\\bAKIA[0-9A-Z]{16}\\b)" public_release
-rg -n "(rapid-dev|rapid-staging|211\\.188\\.)" public_release
+rg -n "(RUNPOD_API_KEY=.+|ENDPOINT_ID=.+|AWS_SECRET|SECRET_KEY=.+|PRIVATE KEY|\\bAKIA[0-9A-Z]{16}\\b)" .
+rg -n "(rapid-dev|rapid-staging|211\\.188\\.)" .
 ```
 
 Also run your normal secret scanner, for example GitHub secret scanning,
