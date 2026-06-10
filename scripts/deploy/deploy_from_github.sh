@@ -85,6 +85,26 @@ if [[ -f frontend/package-lock.json ]]; then
   npm --prefix frontend run build
 fi
 
+# Regenerate the downloadable skill bundle so the statically served
+# /pipeline_skill.zip stays in sync with skills/. `git clean -fd` above removes
+# untracked artifacts, so this zip (not tracked in git) must be rebuilt on every
+# deploy. The web app's download button fetches via the /api backend and was
+# always live; this keeps the direct static URL current too.
+venv/bin/python3 - <<'PY'
+import io, zipfile
+from pathlib import Path
+
+root = Path("skills/protein-pipeline-stepper")
+if root.is_dir():
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for fp in sorted(root.rglob("*")):
+            if fp.is_file():
+                archive.write(fp, str(Path("protein-pipeline-stepper") / fp.relative_to(root)))
+    Path("frontend/pipeline_skill.zip").write_bytes(buf.getvalue())
+    print("regenerated frontend/pipeline_skill.zip from skills/protein-pipeline-stepper")
+PY
+
 if [[ "$(id -u)" -eq 0 ]]; then
   systemctl restart "$service_name"
 else
