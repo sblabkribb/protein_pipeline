@@ -19,9 +19,10 @@ from __future__ import annotations
 import csv
 import json
 import sys
+import os
 from pathlib import Path
 
-PROJECT_ROOT = Path("/opt/protein_pipeline")
+PROJECT_ROOT = Path(os.environ.get("PROTEIN_PIPELINE_ROOT") or Path(__file__).resolve().parents[2]).resolve()
 CATH_OUTPUTS = PROJECT_ROOT / "cath_outputs"
 DATA_OUT = PROJECT_ROOT / "data" / "benchmark"
 OUT_CSV = DATA_OUT / "cath_pilot_dataset.csv"

@@ -16,13 +16,14 @@ Arrows show data + control flow; dashed boxes mark the swappable boundary.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 
-PROJECT_ROOT = Path("/opt/protein_pipeline")
+PROJECT_ROOT = Path(os.environ.get("PROTEIN_PIPELINE_ROOT") or Path(__file__).resolve().parents[2]).resolve()
 OUT_PATH = PROJECT_ROOT / "figures" / "benchmark" / "fig1_architecture.png"
 
 

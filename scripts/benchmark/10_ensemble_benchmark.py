@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import sys
 import warnings
+import os
 from pathlib import Path
 
 import numpy as np
@@ -40,7 +41,7 @@ import xgboost as xgb
 sys.path.insert(0, str(Path(__file__).parent))
 from _selection import select_train_indices
 
-PROJECT_ROOT = Path("/opt/protein_pipeline")
+PROJECT_ROOT = Path(os.environ.get("PROTEIN_PIPELINE_ROOT") or Path(__file__).resolve().parents[2]).resolve()
 DATA_DIR = PROJECT_ROOT / "data" / "benchmark"
 RESULTS_DIR = DATA_DIR / "results"
 

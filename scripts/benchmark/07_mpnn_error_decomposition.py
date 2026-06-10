@@ -26,6 +26,7 @@ Outputs:
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -33,7 +34,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-PROJECT_ROOT = Path("/opt/protein_pipeline")
+PROJECT_ROOT = Path(os.environ.get("PROTEIN_PIPELINE_ROOT") or Path(__file__).resolve().parents[2]).resolve()
 DATA_DIR = PROJECT_ROOT / "data" / "benchmark"
 RESULTS_DIR = DATA_DIR / "results"
 FIG_DIR = PROJECT_ROOT / "figures" / "benchmark"

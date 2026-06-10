@@ -17,6 +17,7 @@ The script is idempotent. Re-running overwrites all artifacts.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -24,7 +25,7 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
-PROJECT_ROOT = Path("/opt/protein_pipeline")
+PROJECT_ROOT = Path(os.environ.get("PROTEIN_PIPELINE_ROOT") or Path(__file__).resolve().parents[2]).resolve()
 RESULTS_DIR = PROJECT_ROOT / "data" / "benchmark" / "results"
 FIG_DIR = PROJECT_ROOT / "figures" / "benchmark"
 CSV_PATH = PROJECT_ROOT / "data" / "benchmark" / "cath_pilot_dataset.csv"

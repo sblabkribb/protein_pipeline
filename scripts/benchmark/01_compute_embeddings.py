@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+import os
 from pathlib import Path
 
 import numpy as np
@@ -24,7 +25,7 @@ import pandas as pd
 import torch
 from transformers import AutoTokenizer, EsmModel
 
-PROJECT_ROOT = Path("/opt/protein_pipeline")
+PROJECT_ROOT = Path(os.environ.get("PROTEIN_PIPELINE_ROOT") or Path(__file__).resolve().parents[2]).resolve()
 DATA_DIR = PROJECT_ROOT / "data" / "benchmark"
 CSV_PATH = DATA_DIR / "cath_pilot_dataset.csv"
 

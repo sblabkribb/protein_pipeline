@@ -16,13 +16,14 @@ structure that a naive observation-level bootstrap would ignore.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from scipy import stats
 
-PROJECT_ROOT = Path("/opt/protein_pipeline")
+PROJECT_ROOT = Path(os.environ.get("PROTEIN_PIPELINE_ROOT") or Path(__file__).resolve().parents[2]).resolve()
 RESULTS_DIR = PROJECT_ROOT / "data" / "benchmark" / "results"
 
 EXP1 = RESULTS_DIR / "exp1_model_comparison.parquet"

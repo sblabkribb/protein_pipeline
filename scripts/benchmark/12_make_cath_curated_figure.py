@@ -32,6 +32,14 @@ def _input_paths() -> tuple[Path, Path]:
     return data_dir / "curated_per_target_summary.csv", data_dir / "curated_summary.json"
 
 
+def _figure_title(summary: dict) -> str:
+    return (
+        f"QC-filtered CATH benchmark corpus: "
+        f"{int(summary['n_included_runs']):,} targets, "
+        f"{int(summary['n_design_rows']):,} valid paired designs"
+    )
+
+
 def _write_summary_table(summary: dict, out_path: Path) -> None:
     rows = [
         ("Completed CATH runs parsed", f"{int(summary['n_total_completed_dirs']):,}"),
@@ -104,7 +112,7 @@ def main() -> None:
     ax2.tick_params(axis="y", length=0, labelleft=False)
 
     fig.suptitle(
-        "QC-filtered CATH benchmark corpus: 23 targets, 2,737 valid paired designs",
+        _figure_title(summary),
         fontsize=11,
         weight="bold",
         y=0.985,
