@@ -244,45 +244,48 @@ def make_figure(
     )
     ax_a.set_xscale("log")
     ax_a.set_xlabel("AF2/ColabFold evaluations (log scale)")
-    ax_a.set_title("Structure-prediction budget")
+    ax_a.set_title("AF2/ColabFold calls under fixed triage budget")
     for bar, value in zip(bars, [total_before, total_after]):
         ax_a.text(value * 1.12, bar.get_y() + bar.get_height() / 2, _format_int(value), va="center")
     ax_a.text(
         0.03,
         0.08,
-        f"{reduction:.1f}% fewer calls",
+        f"{100.0 - reduction:.1f}% evaluated\nunder fold-all accounting",
         transform=ax_a.transAxes,
         color=PALETTE["teal"],
         fontweight="bold",
     )
     _add_panel_label(ax_a, "A")
 
-    # Panel B: target-level fraction evaluated.
-    run_df["evaluated_fraction_percent"] = 100.0 * run_df["af2_records"] / run_df["candidate_count_before_triage"]
-    x = np.arange(len(run_df))
-    ax_b.bar(
-        x,
-        run_df["evaluated_fraction_percent"],
-        color=PALETTE["blue"],
-        edgecolor=PALETTE["dark"],
-        linewidth=0.6,
-    )
-    for i, (_, row) in enumerate(run_df.iterrows()):
-        ax_b.text(
-            i,
-            row["evaluated_fraction_percent"] + 0.035,
-            f"{row['af2_records']:.0f}/\n{_format_int(float(row['candidate_count_before_triage']))}",
-            ha="center",
-            va="bottom",
-            fontsize=6.5,
-            rotation=0,
-            linespacing=0.9,
-        )
-    ax_b.set_xticks(x)
-    ax_b.set_xticklabels(run_df["target"], rotation=35, ha="right")
-    ax_b.set_ylim(0, max(0.65, run_df["evaluated_fraction_percent"].max() * 1.35))
-    ax_b.set_ylabel("AF2-evaluated share of triage pool (%)")
-    ax_b.set_title("Per-target validation budget\n(AF2 records / triage candidates)")
+    # Panel B: retrospective Top-5 recall (fully labeled 77-target benchmark).
+    # Separate from the strict five-target operating benchmark in A/C/D — here the
+    # held-out pool is fully labeled, so Top-5 recall is measurable. Values from
+    # the surrogate-family comparison (Supplementary Note 4).
+    recall_csv = DEFAULT_RESULTS / "summary_exp1_models.csv"
+    recall = {}
+    if recall_csv.exists():
+        mc = pd.read_csv(recall_csv)
+        mc = mc[(mc["selection"] == "kmeans") & (mc["metric"] == "top5_recall")]
+        for _, r in mc.iterrows():
+            recall[(str(r["surrogate"]), str(r["model"]))] = float(r["mean"])
+    # Best surrogate per objective + random baseline
+    groups = [
+        ("pLDDT", "RF",    recall.get(("plddt", "RF"), 0.131),    recall.get(("plddt", "Random"), 0.055)),
+        ("SoluProt", "Ridge", recall.get(("soluprot", "Ridge"), 0.703), recall.get(("soluprot", "Random"), 0.051)),
+    ]
+    xb = np.arange(len(groups)); wb = 0.36
+    for j, (obj, surro, sval, rval) in enumerate(groups):
+        ax_b.bar(xb[j] - wb/2, sval, wb, color=PALETTE["teal"], edgecolor=PALETTE["dark"],
+                 linewidth=0.6, label=("surrogate" if j == 0 else None))
+        ax_b.bar(xb[j] + wb/2, rval, wb, color=PALETTE["light_gray"], edgecolor=PALETTE["gray"],
+                 linewidth=0.6, label=("random" if j == 0 else None))
+        ax_b.text(xb[j] - wb/2, sval + 0.01, f"{surro}\n{sval:.2f}", ha="center", va="bottom", fontsize=6.5, linespacing=0.9)
+        ax_b.text(xb[j] + wb/2, rval + 0.01, f"random\n{rval:.2f}", ha="center", va="bottom", fontsize=6.5, linespacing=0.9)
+    ax_b.set_xticks(xb)
+    ax_b.set_xticklabels([g[0] for g in groups])
+    ax_b.set_ylim(0, 0.9)
+    ax_b.set_ylabel("Top-5 recall")
+    ax_b.set_title("Retrospective Top-5 recall\nin fully labeled CATH pools")
     _add_panel_label(ax_b, "B")
 
     # Panel C: internal CV ranking signal for fitted policies.
@@ -422,7 +425,7 @@ def make_figure(
         )
     _add_panel_label(ax_d, "D")
 
-    fig.suptitle("Surrogate triage reduces structure-prediction use under a fixed validation budget", y=0.965, fontsize=10.8, fontweight="bold")
+    fig.suptitle("Fixed-budget surrogate triage under fold-all accounting", y=0.965, fontsize=10.8, fontweight="bold")
     fig.subplots_adjust(left=0.10, right=0.98, top=0.88, bottom=0.19)
 
     for label, ax in [("A", ax_a), ("B", ax_b), ("C", ax_c), ("D", ax_d)]:

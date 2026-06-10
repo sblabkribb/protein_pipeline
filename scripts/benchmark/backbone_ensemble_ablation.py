@@ -231,6 +231,7 @@ def build_request(pdb_text: str, arm: str, *, seed: int) -> PipelineRequest:
         bioemu_num_samples=bioemu_num_samples,
         bioemu_max_return_structures=bioemu_max_return_structures,
         bioemu_base_seed=int(seed),
+        bioemu_batch_size_100=1,
         bioemu_max_attempted_structures=max(
             bioemu_num_samples,
             bioemu_max_return_structures,
@@ -895,7 +896,7 @@ def _make_figure(summary_rows: list[dict[str, Any]], out_path: Path) -> None:
     )
     fig.tight_layout(rect=(0, 0, 1.0, 0.89))
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_path, dpi=250, bbox_inches="tight")
+    fig.savefig(out_path, dpi=300, bbox_inches="tight")
     fig.savefig(out_path.with_suffix(".pdf"), bbox_inches="tight")
     plt.close(fig)
 
