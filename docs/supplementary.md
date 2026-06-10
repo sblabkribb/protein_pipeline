@@ -2,7 +2,7 @@
 
 ## Supplementary Note 1. Status of the CATH Benchmark Refresh
 
-The main manuscript uses the corrected-chain CATH artifact refresh as the component-level evidence base for structure-prediction-budgeted surrogate-triage design choices. The refresh applies the corrected chain-selection contract introduced after the original pre-refresh archive and is mirrored under `public_data/benchmark/results/rapid_target_manifest.csv`. The released structural-context analysis summarizes 18 selected CATH targets under the original target backbone and selected RFdiffusion-derived (RFD3) backbone arms, with BioEmu-containing arms included only when they passed the fixed target-RMSD QC gate. The selected structural-context arms are the original target backbone, target plus BioEmu ensemble, selected RFD3 backbone, and RFD3 plus BioEmu ensemble.
+The main manuscript uses the corrected-chain CATH artifact refresh as the component-level evidence base for structure-prediction-budgeted surrogate-triage design choices. The refresh applies the corrected chain-selection contract introduced after the original pre-refresh archive and is mirrored under `public_data/benchmark/results/rapid_target_manifest.csv`. The released structural-context analysis summarizes 18 selected CATH targets under the original target backbone and selected RFdiffusion3 (RFD3) backbone arms, with BioEmu-containing arms included only when they passed the fixed target-RMSD QC gate. The selected structural-context arms are the original target backbone, target plus BioEmu ensemble, selected RFD3 backbone, and RFD3 plus BioEmu ensemble.
 
 ## Supplementary Note 2. Current CATH Artifact Corpus
 
