@@ -88,7 +88,7 @@ The N-ablation places N = 30 on a cost-efficient plateau. Increasing RF training
 
 K-means training selection does not by itself remove acquisition bias. In the corrected-chain refresh, RF-selected Top-K sets remain more internally similar than the true Top-K sets, even when the bootstrap training set is selected by K-means. At N = 30, the K-means-trained RF Top-5 set had an internal identity of 0.888, compared with 0.863 for the true Top-5 set, and the corresponding Top-10 values were 0.885 and 0.865. This means diversity control belongs at acquisition time if sequence diversity is an explicit design objective.
 
-Future diversity-aware acquisition policies, such as max-min filtering or cluster-balanced Top-K selection over ESM-2 embeddings, should be evaluated as acquisition-stage changes rather than as current performance claims [26].
+Future diversity-aware acquisition policies, such as max-min filtering or cluster-balanced Top-K selection over ESM-2 embeddings, should be evaluated as acquisition-stage changes rather than as current performance claims [23].
 
 ![Acquisition-bias analysis](../figures/benchmark/fig6_bias_analysis.png)
 
@@ -225,4 +225,4 @@ BioEmu-containing structural-context arms were required to satisfy the same 2.0 
 
 ## Supplementary References
 
-[26] Kulesza, A., & Taskar, B. (2012). Determinantal Point Processes for Machine Learning. *Foundations and Trends in Machine Learning*, 5(2-3), 123-286. doi:10.1561/2200000044
+[23] Kulesza, A., & Taskar, B. (2012). Determinantal Point Processes for Machine Learning. *Foundations and Trends in Machine Learning*, 5(2-3), 123-286. doi:10.1561/2200000044
