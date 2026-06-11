@@ -5,6 +5,8 @@ import io
 import json as json_module
 import zipfile
 
+import pytest
+
 from pipeline_mcp.clients.local_http import LocalHTTPBioEmuClient
 from pipeline_mcp.clients.local_http import LocalHTTPDiffDockClient
 from pipeline_mcp.clients.local_http import LocalHTTPAlphaFold2Client
@@ -13,8 +15,10 @@ from pipeline_mcp.models import SequenceRecord
 
 
 class _Response:
-    def __init__(self, payload: dict):
+    def __init__(self, payload: dict, status_code: int = 200, text: str = ""):
         self._payload = payload
+        self.status_code = status_code
+        self.text = text
 
     def raise_for_status(self) -> None:
         return None
@@ -98,6 +102,51 @@ def test_local_http_bioemu_does_not_send_callback_in_json_payload(monkeypatch):
     assert result["samples"] == []
     assert "on_job_id" not in calls[0]["input"]
     assert seen_job_ids == ["bioemu-local-job"]
+
+
+def test_local_http_surfaces_worker_error_body_on_500(monkeypatch):
+    # Worker returns its real failure as JSON even with HTTP 500. The client must
+    # raise that detail, not the opaque "500 Server Error ... for url" that
+    # raise_for_status() would produce (which reads like a GPU outage).
+    def fake_post(url, headers=None, json=None, timeout=None):  # type: ignore[no-untyped-def]
+        return _Response(
+            {
+                "ok": False,
+                "status": "FAILED",
+                "error": "Sequence contains non-valid protein character: X",
+                "traceback": "AssertionError: ...",
+            },
+            status_code=500,
+        )
+
+    monkeypatch.setattr("pipeline_mcp.clients.local_http.requests.post", fake_post)
+
+    with pytest.raises(RuntimeError) as excinfo:
+        LocalHTTPRFD3Client("http://gpu.example:18104").design(inputs={"s": {}})
+
+    message = str(excinfo.value)
+    assert "Sequence contains non-valid protein character: X" in message
+    assert "HTTP 500" in message
+
+
+def test_local_http_bioemu_rejects_non_iupac_sequence_before_dispatch(monkeypatch):
+    posted: list = []
+
+    def fake_post(url, headers=None, json=None, timeout=None):  # type: ignore[no-untyped-def]
+        posted.append(json)
+        return _Response({"status": "COMPLETED", "output": {"samples": []}})
+
+    monkeypatch.setattr("pipeline_mcp.clients.local_http.requests.post", fake_post)
+
+    with pytest.raises(ValueError) as excinfo:
+        LocalHTTPBioEmuClient("http://gpu.example:18103").sample(sequence="ACDEXGHIK")
+
+    message = str(excinfo.value)
+    assert "BioEmu" in message
+    assert "'X'" in message or "X" in message
+    assert "position(s) 5" in message
+    # Must fail fast without ever reaching the GPU worker.
+    assert posted == []
 
 
 def test_local_http_diffdock_does_not_send_callback_in_json_payload(monkeypatch):
