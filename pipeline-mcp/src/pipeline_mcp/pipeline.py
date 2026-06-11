@@ -2611,16 +2611,22 @@ def _resolve_pipeline_chain_strategy(
                         best_score = score
                         best_chain = chain_id
                 if best_chain:
+                    _multi = len(protein_seq_by_chain) > 1
                     auto_chain_note = (
-                        f"auto_design_chains={best_chain} "
-                        "(target_fasta empty; query alignment)"
+                        (f"WARNING: {len(protein_seq_by_chain)} protein chains "
+                         f"({','.join(sorted(protein_seq_by_chain))}) present; " if _multi else "")
+                        + f"auto-selected chain {best_chain} (target_fasta empty; query alignment)"
+                        + ("; pass design_chains to override" if _multi else "")
                     )
             if best_chain is None and protein_seq_by_chain:
                 best_chain, _ = _best_protein_chain_from_sequences(protein_seq_by_chain)
                 if best_chain:
+                    _multi = len(protein_seq_by_chain) > 1
                     auto_chain_note = (
-                        f"auto_design_chains={best_chain} "
-                        "(target_fasta empty; protein-chain heuristic)"
+                        (f"WARNING: {len(protein_seq_by_chain)} protein chains "
+                         f"({','.join(sorted(protein_seq_by_chain))}) present; " if _multi else "")
+                        + f"auto-selected chain {best_chain} (target_fasta empty; longest-protein-chain heuristic)"
+                        + ("; pass design_chains to override" if _multi else "")
                     )
             if best_chain:
                 requested_chains = [best_chain]

@@ -192,6 +192,25 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner, *, run_i
         except Exception as exc:
             errors.append(f"target_pdb parse failed: {exc}")
 
+    # A multi-chain or multi-model target_pdb is reduced to a single design chain;
+    # surface that here (relaxed policy: auto-select but warn) so it is visible
+    # both in the UI and to MCP callers via pipeline.preflight.
+    if target_pdb and pdb_chains and len(pdb_chains) > 1:
+        if not request.design_chains and not str(request.target_fasta or "").strip():
+            warnings.append(
+                f"target_pdb has {len(pdb_chains)} chains ({', '.join(pdb_chains)}) but no "
+                "design_chains or target_fasta; one chain will be auto-selected (longest "
+                "protein chain). Set design_chains to choose the intended chain/domain."
+            )
+    if target_pdb:
+        n_models = sum(1 for line in target_pdb.splitlines() if line[:5] == "MODEL")
+        if n_models > 1:
+            warnings.append(
+                f"target_pdb contains {n_models} models (e.g. an NMR ensemble); multi-model "
+                "input is not supported and can corrupt the extracted sequence — upload a "
+                "single-model structure."
+            )
+
     if target_pdb and (request.ligand_resnames or request.ligand_atom_chains):
         try:
             has_ligand = ligand_atoms_present(
