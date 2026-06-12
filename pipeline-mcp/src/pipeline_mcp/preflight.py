@@ -202,14 +202,16 @@ def preflight_request(request: PipelineRequest, runner: PipelineRunner, *, run_i
                 "design_chains or target_fasta; one chain will be auto-selected (longest "
                 "protein chain). Set design_chains to choose the intended chain/domain."
             )
-    if target_pdb:
-        n_models = sum(1 for line in target_pdb.splitlines() if line[:5] == "MODEL")
-        if n_models > 1:
-            warnings.append(
-                f"target_pdb contains {n_models} models (e.g. an NMR ensemble); multi-model "
-                "input is not supported and can corrupt the extracted sequence — upload a "
-                "single-model structure."
-            )
+    # Detect multi-model (NMR) input on the raw text: normalize_structure_text has
+    # already reduced target_pdb to the first model, so count on request.target_pdb.
+    raw_models = sum(
+        1 for line in str(request.target_pdb or "").splitlines() if line[:5] == "MODEL"
+    )
+    if raw_models > 1:
+        warnings.append(
+            f"target_pdb contains {raw_models} models (e.g. an NMR ensemble); only the "
+            "first model is used."
+        )
 
     if target_pdb and (request.ligand_resnames or request.ligand_atom_chains):
         try:

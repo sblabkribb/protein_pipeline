@@ -183,7 +183,7 @@ AF2/ColabFold itself does not take a ligand — "ligand selection" here is the *
 
 Always confirm the final selection (ligand resnames, masked chains, surface/fixed positions) back to the user before running design.
 
-**Multi-chain / multi-model targets.** A multi-chain `target_pdb` is reduced to ONE design chain (the pipeline does not model the complex). If the user gives a multi-chain PDB without `design_chains` or a `target_fasta`, `pipeline.preflight` returns a warning and the run records `chain_strategy` with an auto-selected chain (longest protein chain). **Surface that warning and the auto-selected chain to the user, and confirm it is the intended chain/domain before a full run** — set `design_chains=[...]` to override. Likewise, if preflight flags a multi-model (NMR) `target_pdb`, ask the user for a single-model structure (multi-model input can corrupt the extracted sequence).
+**Multi-chain / multi-model targets.** A multi-chain `target_pdb` is reduced to ONE design chain (the pipeline does not model the complex). If the user gives a multi-chain PDB without `design_chains` or a `target_fasta`, `pipeline.preflight` returns a warning and the run records `chain_strategy` with an auto-selected chain (longest protein chain). **Surface that warning and the auto-selected chain to the user, and confirm it is the intended chain/domain before a full run** — set `design_chains=[...]` to override. A multi-model (NMR) `target_pdb` is automatically reduced to its first model (preflight notes this); mention it so the user can confirm the first model is the intended one.
 
 ### Preset: Paper-Parity Enzyme+Substrate (PDB input)
 - Use when the “ligand/substrate” is modeled as a separate `ATOM` chain (common for enzyme-substrate complexes).

@@ -57,3 +57,17 @@ def test_preflight_warns_on_multimodel_nmr():
     out = preflight_request(req, _runner())
     warns = " ".join(out.get("warnings", []))
     assert "2 models" in warns
+
+
+def test_strip_to_first_model_keeps_only_model_1():
+    from pipeline_mcp.bio.pdb import strip_to_first_model, residues_by_chain
+    out = strip_to_first_model(_TWO_MODEL)
+    # only model 1's atoms remain -> chain A has 2 residues, not 4
+    res = residues_by_chain(out)
+    assert len(res.get("A", [])) == 2
+    assert out.count("ATOM") == 2
+
+
+def test_strip_to_first_model_passthrough_single_model():
+    from pipeline_mcp.bio.pdb import strip_to_first_model
+    assert strip_to_first_model(_TWO_CHAIN) == _TWO_CHAIN

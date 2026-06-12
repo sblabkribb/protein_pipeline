@@ -222,11 +222,38 @@ def mmcif_to_pdb(text: str) -> str:
     return "".join(out)
 
 
+def strip_to_first_model(pdb_text: str) -> str:
+    """Keep only the first MODEL of a multi-model PDB (e.g. an NMR ensemble).
+
+    Multi-model input would otherwise be read as one concatenated chain -- e.g. a
+    75-residue domain across 20 NMR models becomes a 1500-residue sequence --
+    corrupting downstream sequence extraction. Single-model or model-less input is
+    returned unchanged.
+    """
+    lines = pdb_text.splitlines(keepends=True)
+    if not any(line[:5] == "MODEL" for line in lines):
+        return pdb_text
+    out: list[str] = []
+    model_count = 0
+    for line in lines:
+        rec = line[:6].strip().upper()
+        if rec == "MODEL":
+            model_count += 1
+            if model_count >= 2:
+                break
+            out.append(line)
+            continue
+        if rec == "ENDMDL":
+            out.append(line)
+            break
+        out.append(line)
+    return "".join(out)
+
+
 def normalize_structure_text(text: str) -> str:
     raw = str(text or "")
-    if not looks_like_mmcif(raw):
-        return raw
-    return mmcif_to_pdb(raw)
+    pdb = mmcif_to_pdb(raw) if looks_like_mmcif(raw) else raw
+    return strip_to_first_model(pdb)
 
 
 def iter_atoms(pdb_text: str):
