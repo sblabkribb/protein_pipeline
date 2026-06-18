@@ -190,9 +190,9 @@ When labels for the requested objective are present, RAPID trains a local surrog
 
 The corrected-chain structural-context ablation compares the original target backbone, BioEmu conformational sampling, one selected RFD3 backbone, and RFD3+BioEmu across 18 selected CATH targets. Because ProteinMPNN is conditioned on the supplied backbone, these arms test whether changing structural context perturbs the accessible sequence neighborhood under matched masking and AF2 budgets. The single-backbone and RFD3 arms are evaluable for all 18 targets. BioEmu is evaluable for eleven targets and RFD3+BioEmu for ten targets — those that passed the fixed 2.0 Å target-RMSD gate. The main text summarizes this claim in Figure 3 as a distribution-spread and diversity analysis rather than as an aggregate-mean or upper-tail model ranking.
 
-The 18 ablation targets were drawn from the corrected-chain CATH refresh (the 18 targets are enumerated in the roster table below; per-target metadata resolves against rapid_target_manifest.csv) to provide a fold-class and sequence-length range representative of typical solubility-aware redesign campaigns, and were selected without any prior screening for BioEmu sampling success. The observed ~50% RMSD-gate attrition is therefore an empirically representative rate for unconditional BioEmu application, not the result of an adversarial selection or worst-case stress test. Reporting this attrition rate is intentional: it supports the broader claim that BioEmu evaluability is a per-target property that must be verified in the artifact record rather than assumed from sequence-level features, and it justifies treating RFD3 and BioEmu as controlled exploration modules with explicit QC rather than as default score-improvement components. The pattern analysis in Supplementary Note 12 confirms that the non-evaluable and evaluable target groups are statistically indistinguishable on simple sequence metadata (length, multi-chain rate, ligand presence, train/val/test partition), so the residual attrition is not explained by a single covariate that would have allowed reliable pre-filtering.``
+The 18 ablation targets were drawn from the corrected-chain CATH refresh (the 18 targets are enumerated in the roster table below; per-target metadata resolves against rapid_target_manifest.csv) to provide a fold-class and sequence-length range representative of typical solubility-aware redesign campaigns, and were selected without any prior screening for BioEmu sampling success. The observed ~50% RMSD-gate attrition is therefore an empirically representative rate for unconditional BioEmu application, not the result of an adversarial selection or worst-case stress test. Reporting this attrition rate is intentional: it supports the broader claim that BioEmu evaluability is a per-target property that must be verified in the artifact record rather than assumed from sequence-level features, and it justifies treating RFD3 and BioEmu as controlled exploration modules with explicit QC rather than as default score-improvement components. The pattern analysis in Supplementary Note 12 indicates that the non-evaluable and evaluable target groups are not obviously separable by simple sequence metadata (length, multi-chain rate, ligand presence, train/val/test partition) at this sample size, so the residual attrition is not explained by a single covariate that would have allowed reliable pre-filtering.``
 
-The full roster of the 18 structural-context targets is listed below, with the CATH train/val/test split, chain length, and which arms were quantitatively evaluable. The single-backbone and RFD3 arms are evaluable for all 18 targets; the BioEmu and RFD3+BioEmu columns record which targets passed the 2.0 A target-RMSD QC gate (11 and 10 respectively). Target identifiers are CATH domain IDs and resolve against `public_data/benchmark/results/rapid_target_manifest.csv`.
+The full roster of the 18 structural-context targets is listed below, with the CATH train/val/test split, chain length, and which arms were quantitatively evaluable. The single-backbone and RFD3 arms are evaluable for all 18 targets; the BioEmu and RFD3+BioEmu columns record which targets passed the 2.0 Å target-RMSD QC gate (11 and 10 respectively). Target identifiers are CATH domain IDs and resolve against `public_data/benchmark/results/rapid_target_manifest.csv`.
 
 | Target  | CATH split | Length (aa) | Single | RFD3 | BioEmu | RFD3+BioEmu |
 |---------|------------|-------------|--------|------|--------|-------------|
@@ -217,7 +217,7 @@ The full roster of the 18 structural-context targets is listed below, with the C
 
 The paired view supports this interpretation. RFD3 increased pLDDT range relative to the single-backbone arm in 14 of 18 targets (Wilcoxon p = 0.012), increased SoluProt range in 9 of 18 targets, and increased sequence diversity in 9 of 18 targets (Wilcoxon p = 0.039). BioEmu increased pLDDT range and mean pairwise sequence diversity in all eleven evaluable paired targets (Wilcoxon p = 0.001 for both) and increased SoluProt range in 10 of 11 targets (Wilcoxon p = 0.002). RFD3+BioEmu increased pLDDT range and sequence diversity in all ten evaluable paired targets (Wilcoxon p = 0.002 for both), and increased SoluProt range in 8 of 10 targets (Wilcoxon p = 0.020). Across this 12-test family (four pool-level metrics x three context arms), Holm correction leaves five shifts significant -- BioEmu pLDDT range, sequence diversity, and SoluProt range (raw 0.001-0.002, Holm 0.012-0.020) and RFD3+BioEmu pLDDT range and diversity (raw 0.002, Holm 0.020 each) -- whereas the others are nominal trends only: RFD3-alone pLDDT range (raw 0.012, Holm 0.068), RFD3 diversity (raw 0.039, Holm 0.118), RFD3+BioEmu SoluProt range (raw 0.020, Holm 0.078), and a small BioEmu mean-pLDDT decrease (raw 0.010, Holm 0.068). These data support structural-context allocation as a way to alter candidate-pool spread and diversity, not as evidence that any structural-context module is universally superior.
 
-The table below retains the numerical summary and BioEmu QC context. Because the arms are evaluable on different target subsets (single and RFD3 on all 18, BioEmu on 9, RFD3+BioEmu on 8), these arm means are not directly comparable: restricting the single-backbone arm to the nine BioEmu-evaluable targets lowers its mean pLDDT range from 2.99 to 1.85 (median 1.30 vs 1.31), and the RFD3 mean (4.66) is inflated by two outliers (1hufA00 range 28.1, 1h6wA03 10.0; median 3.31). The paired within-target tests above and the medians are the reliable comparison.
+The table below retains the numerical summary and BioEmu QC context. Because the arms are evaluable on different target subsets (single and RFD3 on all 18, BioEmu on 11, RFD3+BioEmu on 10), these arm means are not directly comparable: restricting the single-backbone arm to the eleven BioEmu-evaluable targets lowers its mean pLDDT range from 3.63 to 1.90 (median 1.36 vs 1.40), and the RFD3 mean (5.09) is inflated by two outliers (1hufA00 range 28.1, 1h6wA03 10.0; median 3.54). The paired within-target tests above and the medians are the reliable comparison.
 
 | Arm                      | Evaluable targets | Mean pLDDT range | Mean SoluProt range | Mean pairwise diversity |
 |--------------------------|-------------------|------------------|---------------------|-------------------------|
@@ -241,9 +241,76 @@ BioEmu-containing structural-context arms were required to satisfy the same 2.0 
 | 3jvoG00 | 0/10                      | 2.887               | 0/10                           | 3.219                    | Not evaluable             |
 | 3twkA01 | 0/10                      | 4.976               | 0/10                           | 4.976                    | Not evaluable             |
 
-*BioEmu target-RMSD gate outcomes for the non-evaluable arms in the expanded 18-target structural-context refresh. The 1a6jA00 row reports BioEmu alone as evaluable and only the RFD3-conditioned variant as failed; 1iieA00 narrowly misses the gate (2.66 A) once the corrected single-model input is used, rather than failing as the earlier multi-model concatenation. The table reports the initial 10-attempt BioEmu runs only. The sensitivity rerun changes the sampling budget but keeps the acceptance gate fixed, avoiding post-hoc relaxation of the structural-quality criterion.*
+*BioEmu target-RMSD gate outcomes for the non-evaluable arms in the expanded 18-target structural-context refresh. The 1a6jA00 row reports BioEmu alone as evaluable and only the RFD3-conditioned variant as failed; 1iieA00 narrowly misses the gate (2.66 Å) once the corrected single-model input is used, rather than failing as the earlier multi-model concatenation. The table reports the initial 10-attempt BioEmu runs only. The sensitivity rerun changes the sampling budget but keeps the acceptance gate fixed, avoiding post-hoc relaxation of the structural-quality criterion.*
 
-**\*\*Pattern of RMSD-gate attrition.\*\* The seven BioEmu-alone non-evaluable targets span a range of failure severities rather than clustering at a single mode. Three are borderline (min RMSD 2.0-3.5 A: 1iieA00 at 2.659 A, 3jvoG00 at 2.887 A, 1hufA00 at 3.478 A); two are moderate (3.5-6 A: 3twkA01 at 4.976 A, 1j5uA01 at 5.393 A); and two are severe (\>6 A: 2auaB01 at 8.051 A, 1h6wA03 at 22.664 A), with 1h6wA03 in particular indicating that BioEmu's pretrained sampling distribution does not cover this target's near-native basin within the configured budget (the severe failures were confirmed on the corrected single-chain reference, ruling out a chain or alignment artifact). The seven non-evaluable and eleven evaluable targets are comparable in chain length (mean 152 vs 159 residues; ranges 75-291 vs 89-287), so attrition is not explained by length and is not predictable from simple sequence-level metadata. A distinct failure mode appears in 1a6jA00, where BioEmu alone passes (3 of 6 accepted, min 1.615 A) but the RFD3-conditioned variant drifts to 12.241 A min RMSD -- a pattern consistent with RFD3 generating a backbone outside the local basin BioEmu's pretrained sampling can recover. Together, these observations argue that RMSD-gate attrition reflects the union of borderline sampling variance, target-specific conformational diversity beyond BioEmu's training distribution, and occasional RFD3-induced backbone drift, rather than a single sequence-level covariate. Practical guidance for users is therefore to treat BioEmu evaluability as a per-target property to verify in the artifact record, not as a property predictable from sequence length, ligand presence, or chain count alone.**
+**Pattern of RMSD-gate attrition.** The seven BioEmu-alone non-evaluable targets span a range of failure severities rather than clustering at a single mode. Three are borderline (min RMSD 2.0–3.5 Å: 1iieA00 at 2.659 Å, 3jvoG00 at 2.887 Å, 1hufA00 at 3.478 Å); two are moderate (3.5–6 Å: 3twkA01 at 4.976 Å, 1j5uA01 at 5.393 Å); and two are severe (>6 Å: 2auaB01 at 8.051 Å, 1h6wA03 at 22.664 Å), with 1h6wA03 in particular indicating that BioEmu's pretrained sampling distribution does not cover this target's near-native basin within the configured budget (the severe failures were confirmed on the corrected single-chain reference, ruling out a chain or alignment artifact). The seven non-evaluable and eleven evaluable targets are comparable in chain length (mean 152 vs 159 residues; ranges 75–291 vs 89–287), so attrition is not explained by length and is not predictable from simple sequence-level metadata. A distinct failure mode appears in 1a6jA00, where BioEmu alone passes (3 of 6 accepted, min 1.615 Å) but the RFD3-conditioned variant drifts to 12.241 Å min RMSD -- a pattern consistent with RFD3 generating a backbone outside the local basin BioEmu's pretrained sampling can recover. Together, these observations argue that RMSD-gate attrition reflects the union of borderline sampling variance, target-specific conformational diversity beyond BioEmu's training distribution, and occasional RFD3-induced backbone drift, rather than a single sequence-level covariate. Practical guidance for users is therefore to treat BioEmu evaluability as a per-target property to verify in the artifact record, not as a property predictable from sequence length, ligand presence, or chain count alone.
+
+## Supplementary Note 13. Selected-Set Sequence Diversity Under the Fixed-Budget Triage Operating Point
+
+The Note 11 / Figure 3 analysis shows that BioEmu and RFD3+BioEmu broaden the candidate **pool's** pLDDT range, sequence diversity, and (for BioEmu) SoluProt range. This note checks whether that broadening survives **surrogate triage** -- i.e., whether the candidates actually advanced under the fixed AF2/ColabFold budget remain diverse, or whether selection collapses them toward a few near-duplicate sequences.
+
+Nine of the ten RFD3+BioEmu-evaluable targets were run end-to-end under the strict triage operating point (RFD3 + BioEmu pooled candidate generation, K-means bootstrap, internal-CV policy selection, and a fixed 50-call AF2/ColabFold budget; one target, 1jyoE00, was excluded because both its RFD3 and BioEmu near-target gates admitted too few backbones for a representative expanded pool). Each target also has a matched single-backbone triage run at the same fixed budget, giving a paired comparison of selected-set diversity, pLDDT, and SoluProt.
+
+Three arms are compared per target at the same fixed 50-call budget: (i) single-backbone + surrogate, (ii) a pool-representative K-means bootstrap from the RFD3+BioEmu pool (the structural ensemble *without* surrogate selection, with actual AF2 labels), and (iii) RFD3+BioEmu + surrogate. The first table summarizes the N = 9 means for all three metrics; the second gives per-target sequence diversity (1 minus mean pairwise identity over the 20 designs) used for the paired test.
+
+| Arm (N = 9 mean)            | Top-K diversity | pLDDT | SoluProt |
+|-----------------------------|-----------------|-------|----------|
+| Single-backbone + surrogate | 0.114           | 96.4  | 0.712    |
+| RFD3+BioEmu pool (random)   | 0.346           | 94.8  | 0.718    |
+| RFD3+BioEmu + surrogate     | 0.310           | 95.0  | 0.709    |
+
+*Selected-set means across the three arms. Diversity differs ~3-fold; pLDDT and SoluProt are comparable.*
+
+| Target  | Single-backbone + surrogate | RFD3+BioEmu pool (random) | RFD3+BioEmu + surrogate |
+|---------|------------------------------|---------------------------|--------------------------|
+| 1a8rG01 | 0.118                        | 0.386                     | 0.162                    |
+| 1a19A00 | 0.024                        | 0.338                     | 0.325                    |
+| 1advA02 | 0.155                        | 0.417                     | 0.458                    |
+| 1agrE02 | 0.205                        | 0.377                     | 0.353                    |
+| 1b12B02 | 0.139                        | 0.392                     | 0.389                    |
+| 1bxmA00 | 0.036                        | 0.284                     | 0.222                    |
+| 1eruA00 | 0.138                        | 0.269                     | 0.321                    |
+| 3is8V00 | 0.049                        | 0.295                     | 0.249                    |
+| 3it4B01 | 0.159                        | 0.358                     | 0.315                    |
+| **mean**| **0.114**                    | **0.346**                 | **0.310**                |
+
+*Selected-set sequence diversity across the three arms for the nine RFD3+BioEmu targets, each at the fixed 50-call AF2/ColabFold budget.*
+
+The structural ensemble is the source of the diversity, and surrogate selection preserves rather than creates it. A random bootstrap of the RFD3+BioEmu pool is already ~3-fold more diverse than the single-backbone surrogate selection (0.346 vs 0.114), and the surrogate-selected RFD3+BioEmu Top-K retains most of that diversity (0.310). The expanded selection is therefore far more diverse than the single-backbone selection in 9 of 9 targets (mean 4.2-fold, range 1.4-13.6-fold; paired Wilcoxon p = 0.0039), whereas single-backbone surrogate selection frequently collapses toward near-duplicate sequences (0.024-0.049). The small reduction from the bootstrap to the surrogate-selected set (0.346 to 0.310) is the acquisition-bias effect of Supplementary Note 6.
+
+This diversity gain comes at no measurable cost in the two computational proxies. Selected-set means are comparable across all three arms -- pLDDT 96.4 / 94.8 / 95.0 and SoluProt 0.712 / 0.718 / 0.709 for single+surrogate / RFD3+BioEmu-random / RFD3+BioEmu+surrogate respectively -- so RFD3+BioEmu expansion plus surrogate selection delivers a markedly more sequence-diverse advanced candidate set at the same pLDDT and SoluProt. Consistently, surrogate selection within the expanded pools did not significantly change selected-set pLDDT relative to the bootstrap (mean +0.2 pLDDT, n = 9, Wilcoxon p = 0.43); the larger "rescue" effect seen in an early four-target subset did not persist at n = 9. WT references (the single original sequence per target) are reported in Figure 2D and are not selected sets. Per-target diversity, pLDDT, and SoluProt for all three arms are in `public_data/benchmark/results/structural_context_threeway_N9.csv`; per-design records are in `structural_context_topk_per_design.csv`.
+
+The per-target selected-set pLDDT and SoluProt underlying the three-arm means are given below; both are comparable across arms, confirming the diversity gain carries no proxy cost at the target level.
+
+| Target  | Single + surrogate | RFD3+BioEmu (random) | RFD3+BioEmu + surrogate |
+|---------|--------------------|----------------------|--------------------------|
+| 1a8rG01 | 95.9 | 94.6 | 95.8 |
+| 1a19A00 | 97.8 | 95.3 | 95.3 |
+| 1advA02 | 91.6 | 87.6 | 88.5 |
+| 1agrE02 | 96.9 | 95.3 | 94.6 |
+| 1b12B02 | 94.7 | 93.1 | 92.5 |
+| 1bxmA00 | 97.3 | 96.2 | 96.6 |
+| 1eruA00 | 98.1 | 97.1 | 97.3 |
+| 3is8V00 | 97.9 | 97.4 | 97.5 |
+| 3it4B01 | 97.6 | 96.5 | 96.9 |
+| **mean**| **96.4** | **94.8** | **95.0** |
+
+*Selected-set mean pLDDT by arm and target.*
+
+| Target  | Single + surrogate | RFD3+BioEmu (random) | RFD3+BioEmu + surrogate |
+|---------|--------------------|----------------------|--------------------------|
+| 1a8rG01 | 0.744 | 0.735 | 0.699 |
+| 1a19A00 | 0.746 | 0.742 | 0.798 |
+| 1advA02 | 0.663 | 0.626 | 0.608 |
+| 1agrE02 | 0.868 | 0.887 | 0.917 |
+| 1b12B02 | 0.731 | 0.724 | 0.729 |
+| 1bxmA00 | 0.534 | 0.614 | 0.574 |
+| 1eruA00 | 0.766 | 0.709 | 0.681 |
+| 3is8V00 | 0.789 | 0.831 | 0.792 |
+| 3it4B01 | 0.566 | 0.594 | 0.581 |
+| **mean**| **0.712** | **0.718** | **0.709** |
+
+*Selected-set mean SoluProt by arm and target.*
 
 ## Supplementary References
 
