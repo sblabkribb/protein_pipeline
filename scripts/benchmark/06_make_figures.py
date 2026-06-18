@@ -115,33 +115,46 @@ def fig2_model_comparison() -> None:
 
 def fig2b_selection_comparison() -> None:
     """K-Means vs Random selection effect on each model's BO uplift Top-5."""
-    if not SELECTION_CMP.exists():
-        print(f"[skip] {SELECTION_CMP} missing")
+    if not EXP1.exists():
+        print(f"[skip] {EXP1} missing")
         return
-    df = pd.read_csv(SELECTION_CMP)
-    df = df[df["metric"] == "bo_uplift_top5"]
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    df = pd.read_parquet(EXP1)
+    rng = np.random.default_rng(20260618)
 
+    def _mean_ci(sub):
+        """Target-clustered bootstrap mean + 95% CI of bo_uplift_top5."""
+        per_t = sub.groupby("target")["bo_uplift_top5"].mean().to_numpy()
+        if len(per_t) == 0:
+            return 0.0, 0.0, 0.0
+        m = float(per_t.mean())
+        boots = [per_t[rng.integers(0, len(per_t), len(per_t))].mean() for _ in range(1000)]
+        lo, hi = np.percentile(boots, [2.5, 97.5])
+        return m, max(0.0, m - lo), max(0.0, hi - m)
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    width = 0.35
     for ax, surrogate in zip(axes, ["plddt", "soluprot"]):
-        sub = df[df["surrogate"] == surrogate].copy()
-        sub["model"] = pd.Categorical(sub["model"], categories=MODEL_ORDER, ordered=True)
-        sub = sub.sort_values("model")
-        x = np.arange(len(sub))
-        width = 0.35
-        ax.bar(x - width / 2, sub["random_mean"], width, label="Random",
-               color="#bbbbbb", edgecolor="black", linewidth=0.6)
-        ax.bar(x + width / 2, sub["kmeans_mean"], width, label="K-Means",
-               color="#1f77b4", edgecolor="black", linewidth=0.6)
+        x = np.arange(len(MODEL_ORDER))
+        for off, sel, col, lab in [(-width / 2, "random", "#bbbbbb", "Random"),
+                                   (width / 2, "kmeans", "#1f77b4", "K-Means")]:
+            means, elo, ehi = [], [], []
+            for mdl in MODEL_ORDER:
+                sub = df[(df.surrogate == surrogate) & (df.selection == sel) & (df.model == mdl)]
+                m, lo, hi = _mean_ci(sub)
+                means.append(m); elo.append(lo); ehi.append(hi)
+            ax.bar(x + off, means, width, yerr=[elo, ehi], capsize=2.5, label=lab,
+                   color=col, edgecolor="black", linewidth=0.6, error_kw=dict(lw=0.8))
         ax.set_xticks(x)
-        ax.set_xticklabels(sub["model"], rotation=20, ha="right")
+        ax.set_xticklabels(MODEL_ORDER, rotation=20, ha="right")
         ax.set_ylabel("BO uplift (Top-5)")
         ax.set_title(SURROGATE_LABEL[surrogate])
         ax.axhline(0, color="black", linewidth=0.6)
 
     axes[0].legend(loc="upper right", fontsize=9)
     fig.suptitle(
-        "Random vs K-Means training-set selection (N=30, BO uplift Top-5)",
-        fontsize=12, y=1.02,
+        "Random vs K-Means training-set selection (N=30, BO uplift Top-5; "
+        "error bars 95% target-clustered bootstrap CI)",
+        fontsize=11, y=1.02,
     )
     fig.tight_layout()
     out = FIG_DIR / "fig4_selection_comparison.png"
@@ -224,37 +237,46 @@ def fig3b_selection_n_curves() -> None:
 
 def fig5_per_target_heatmap() -> None:
     """Per-target BO uplift Top-5 difference vs RF, K-Means selection only."""
+    import numpy as np
     df = pd.read_parquet(EXP1)
     if "selection" in df.columns:
         df = df[df["selection"] == PRIMARY_SELECTION]
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-
-    for ax, surrogate in zip(axes, ["plddt", "soluprot"]):
+    cols = [m for m in MODEL_ORDER if m != "RF"]
+    # consistent alphabetical target order across both panels (cross-referenceable)
+    pivots = {}
+    n_targets = 0
+    for surrogate in ["plddt", "soluprot"]:
         sub = df[df.surrogate == surrogate]
         rf = sub[sub["model"] == "RF"].groupby("target")["bo_uplift_top5"].mean()
         pivot = sub.groupby(["target", "model"])["bo_uplift_top5"].mean().unstack("model")
-        pivot = pivot.subtract(rf, axis=0)
-        pivot = pivot.drop(columns=["RF"], errors="ignore").reindex(
-            columns=[m for m in MODEL_ORDER if m != "RF"]
-        )
+        pivot = pivot.subtract(rf, axis=0).drop(columns=["RF"], errors="ignore").reindex(columns=cols)
+        pivots[surrogate] = pivot
+        n_targets = max(n_targets, pivot.shape[0])
+
+    # tall enough that all targets are legible; no per-cell text (collides at 77 rows)
+    height = max(9.0, 0.17 * n_targets + 1.5)
+    fig, axes = plt.subplots(1, 2, figsize=(13, height))
+    for ax, surrogate in zip(axes, ["plddt", "soluprot"]):
+        pivot = pivots[surrogate]
+        # robust symmetric color limits so a few extreme targets do not wash out the rest
+        vmax = float(np.nanpercentile(np.abs(pivot.to_numpy()), 92)) or 1.0
         sns.heatmap(
-            pivot,
-            annot=True,
-            fmt=".2f" if surrogate == "plddt" else ".3f",
-            center=0,
-            cmap="RdBu_r",
-            ax=ax,
-            cbar_kws={"label": "BO uplift diff vs RF"},
+            pivot, annot=False, center=0, vmin=-vmax, vmax=vmax,
+            cmap="RdBu_r", ax=ax,
+            cbar_kws={"label": "BO uplift diff vs RF (color clipped at 92nd pct)"},
         )
         ax.set_title(SURROGATE_LABEL[surrogate])
         ax.set_ylabel("CATH target")
         ax.set_xlabel("model")
+        ax.tick_params(axis="y", labelsize=6.5)
+        ax.tick_params(axis="x", labelsize=9)
+        plt.setp(ax.get_yticklabels(), rotation=0)
 
-    fig.suptitle("Per-target BO uplift relative to RF (positive = model beats RF)",
-                 fontsize=12, y=1.02)
+    fig.suptitle("Per-target BO uplift Top-5 relative to RF (positive = model beats RF)",
+                 fontsize=12, y=1.005)
     fig.tight_layout()
     out = FIG_DIR / "fig7_per_target_heatmap.png"
-    fig.savefig(out, bbox_inches="tight")
+    fig.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved {out}")
 
