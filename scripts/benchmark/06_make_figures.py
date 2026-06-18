@@ -396,8 +396,11 @@ def fig4_esm_size() -> None:
                     df[(df.surrogate == surrogate) & (df.embedding == emb)]
                     .groupby("target")[metric]
                     .mean()
+                    .dropna()
                     .to_numpy()
                 )
+                if per_target.size == 0:
+                    continue
                 rng = np.random.default_rng(20260427)
                 idx = rng.integers(0, per_target.size, size=(1000, per_target.size))
                 boots = per_target[idx].mean(axis=1)

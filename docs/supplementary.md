@@ -345,6 +345,27 @@ The same three-arm comparison was repeated on an independent set of five real so
 
 The same pattern holds on these application-relevant targets: the RFD3+BioEmu pool is the source of the diversity (0.329) and surrogate selection preserves it (0.322), both well above the single-backbone selection (0.189), which is more diverse for the expanded selection in all five enzymes (mean 1.7-fold), at comparable pLDDT (95.9 / 94.7 / 94.8 for single / pool / surrogate) and with SoluProt comparable-to-improved (0.627 / 0.634 / 0.672). Because N = 5, the paired Wilcoxon p-value is 0.0625 -- the smallest value attainable at this sample size, reached only because the direction is unanimous (5 of 5) -- so this set is treated as a directional, independent corroboration on real solubility-engineering enzymes rather than as an independently powered significance test. Per-enzyme values are in `public_data/benchmark/results/solu_monomer_threeway/monomer_threeway_per_target.csv` (means in `monomer_threeway_means.csv`).
 
+## Supplementary Note 14. ESM-2 Embedding-Size Ablation
+
+The production surrogate featurizes candidates with mean-pooled ESM-2 8M (esm2_t6_8M_UR50D, 320-D) embeddings. To test whether a larger language model would improve surrogate ranking, the same Random Forest surrogate was retrained at the production operating point (N = 30 K-means bootstrap, five seeds) on the identical 77-target paired held-out pools using 320-D ESM-2 8M versus 640-D ESM-2 150M (esm2_t30_150M_UR50D) embeddings. Because both featurizations reuse the existing AF2/ColabFold and SoluProt labels, no new structure prediction was required.
+
+| Objective | Metric | ESM-2 8M (320-D) | ESM-2 150M (640-D) | Δ | Paired Wilcoxon p |
+|-----------|--------|------------------|--------------------|--------|-------------------|
+| pLDDT     | Spearman ρ      | 0.414 | 0.427 | +0.013 | 0.42   |
+| pLDDT     | Top-5 recall    | 0.443 | 0.448 | +0.005 | 0.62   |
+| pLDDT     | BO uplift Top-5 | 1.124 | 1.150 | +0.025 | 0.70   |
+| SoluProt  | Spearman ρ      | 0.762 | 0.795 | +0.032 | 0.0004 |
+| SoluProt  | Top-5 recall    | 0.672 | 0.704 | +0.032 | 0.015  |
+| SoluProt  | BO uplift Top-5 | 0.039 | 0.040 | +0.001 | 0.031  |
+
+*Per-target paired comparison (Random Forest, N = 30, five seeds) of 8M versus 150M ESM-2 embeddings on the 77-target benchmark. n = 68-77 targets per row; targets with an undefined rank correlation are dropped from the Spearman rows.*
+
+![ESM-2 embedding-size ablation](../figures/benchmark/fig9_esm_size.png)
+
+*Supplementary Figure S11. ESM-2 8M (320-D) versus 150M (640-D) embedding ablation for the Random Forest surrogate at N = 30 (Spearman, Top-5 recall, BO uplift Top-5; error bars are 95% target-clustered bootstrap confidence intervals).*
+
+The 18-fold larger ESM-2 150M model left pLDDT-surrogate quality statistically unchanged (all three pLDDT metrics p >= 0.42) and produced only a small SoluProt rank-correlation and recall gain (Spearman 0.76 to 0.79 and Top-5 recall 0.67 to 0.70; paired p = 0.0004 and 0.015) that did not translate into a meaningful change in the BO-uplift acquisition metric that governs the triage budget (SoluProt BO uplift 0.039 to 0.040). The 8M model is therefore retained as the resource-aware default: the larger embedding does not improve the harder pLDDT objective and yields only a marginal SoluProt ranking gain at substantially higher featurization cost.
+
 ## Supplementary References
 
 [S1] Kulesza, A., & Taskar, B. (2012). Determinantal Point Processes for Machine Learning. *Foundations and Trends in Machine Learning*, 5(2-3), 123-286. doi:10.1561/2200000044
