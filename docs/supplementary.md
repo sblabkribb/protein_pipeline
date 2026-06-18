@@ -318,24 +318,24 @@ The per-target selected-set pLDDT and SoluProt underlying the three-arm means ar
 
 ### Independent real-enzyme corroboration (five solubility-engineering monomers)
 
-The same three-arm comparison was repeated on an independent set of five real solubility/expression-problem enzymes drawn from a separate curated benchmark (IsPETase/5XJH, DhaA/1CQW, TEV protease/1LVM, CALB/1TCA, and HRP-C/1ATJ; all single-chain monomers, redesigned at the 50% conservation tier). These targets share no overlap with the nine CATH targets above and were each run through the same single-backbone and RFD3+BioEmu pipelines; the selected sets are the surrogate-selected, AF2-folded designs and the pool arm is the full RFD3+BioEmu SoluProt pool. No new structure prediction was performed -- all values are extracted from the already-completed runs.
+The same three-arm comparison was repeated on an independent set of five real solubility/expression-problem enzymes drawn from a separate curated benchmark (IsPETase/5XJH, DhaA/1CQW, TEV protease/1LVM, CALB/1TCA, and HRP-C/1ATJ; all single-chain monomers, redesigned at the 50% conservation tier). These targets share no overlap with the nine CATH targets above and were each run through the same single-backbone and RFD3+BioEmu pipelines; the selected sets are the surrogate-selected Top-K (af2_selected) and the pool arm is the full RFD3+BioEmu candidate pool. The pool's pLDDT is taken from its pool-representative K-means bootstrap -- the folded designs that are not in the Top-K -- which carries real AF2 labels, the same construction used for the N=9 random arm. No new structure prediction was performed -- all values are extracted from the already-completed runs.
 
 | Arm (N = 5 mean)            | Top-K diversity | SoluProt | pLDDT |
 |-----------------------------|-----------------|----------|-------|
-| Single-backbone + surrogate | 0.178           | 0.631    | 95.9  |
-| RFD3+BioEmu pool (random)   | 0.329           | 0.634    | --    |
-| RFD3+BioEmu + surrogate     | 0.309           | 0.677    | 94.8  |
+| Single-backbone + surrogate | 0.189           | 0.627    | 95.9  |
+| RFD3+BioEmu pool (random)   | 0.329           | 0.634    | 94.7  |
+| RFD3+BioEmu + surrogate     | 0.322           | 0.672    | 94.8  |
 
-*Five-enzyme means. The pool arm's pLDDT is omitted because only the surrogate-selected designs were AF2-folded in these runs (the pool's folded subset is the selected set itself); diversity and SoluProt use the full pool.*
+*Five-enzyme means. Diversity and SoluProt for the pool arm are measured over the full candidate pool; its pLDDT is the mean over the pool-representative K-means bootstrap (folded designs not in the Top-K), a genuine pool pLDDT distinct from the surrogate-selected set.*
 
 | Enzyme (PDB)     | Single + surrogate | RFD3+BioEmu pool (random) | RFD3+BioEmu + surrogate |
 |------------------|--------------------|---------------------------|--------------------------|
-| HRP-C (1ATJ)     | 0.197              | 0.326                     | 0.288                    |
-| DhaA (1CQW)      | 0.165              | 0.316                     | 0.299                    |
-| TEV (1LVM)       | 0.196              | 0.371                     | 0.357                    |
-| CALB (1TCA)      | 0.168              | 0.316                     | 0.302                    |
-| IsPETase (5XJH)  | 0.167              | 0.317                     | 0.302                    |
-| **mean**         | **0.178**          | **0.329**                 | **0.309**                |
+| HRP-C (1ATJ)     | 0.207              | 0.326                     | 0.303                    |
+| DhaA (1CQW)      | 0.173              | 0.316                     | 0.316                    |
+| TEV (1LVM)       | 0.208              | 0.371                     | 0.363                    |
+| CALB (1TCA)      | 0.178              | 0.316                     | 0.310                    |
+| IsPETase (5XJH)  | 0.180              | 0.317                     | 0.315                    |
+| **mean**         | **0.189**          | **0.329**                 | **0.322**                |
 
 *Selected-set sequence diversity by arm for the five enzymes.*
 
@@ -343,7 +343,7 @@ The same three-arm comparison was repeated on an independent set of five real so
 
 *Supplementary Figure S10. Structural-context three-arm comparison on the five solubility-engineering monomer enzymes, shown as box-and-whisker distributions with per-enzyme points and single-to-surrogate paired lines. The diversity gain (single-backbone low; RFD3+BioEmu pool and surrogate-selected high) reproduces in all five enzymes at comparable pLDDT and maintained-or-improved SoluProt.*
 
-The same pattern holds on these application-relevant targets: the RFD3+BioEmu pool is the source of the diversity (0.329) and surrogate selection preserves it (0.309), both well above the single-backbone selection (0.178), which is more diverse for the expanded selection in all five enzymes (mean 1.7-fold), at comparable pLDDT (95.9 vs 94.8) and with SoluProt maintained or slightly improved (0.631 to 0.677). Because N = 5, the paired Wilcoxon p-value is 0.0625 -- the smallest value attainable at this sample size, reached only because the direction is unanimous (5 of 5) -- so this set is treated as a directional, independent corroboration on real solubility-engineering enzymes rather than as an independently powered significance test. The pLDDT comparison is reported for the two AF2-folded selected arms only, for the reason noted above. Per-enzyme values are in `public_data/benchmark/results/solu_monomer_threeway/monomer_threeway_per_target.csv` (means in `monomer_threeway_means.csv`).
+The same pattern holds on these application-relevant targets: the RFD3+BioEmu pool is the source of the diversity (0.329) and surrogate selection preserves it (0.322), both well above the single-backbone selection (0.189), which is more diverse for the expanded selection in all five enzymes (mean 1.7-fold), at comparable pLDDT (95.9 / 94.7 / 94.8 for single / pool / surrogate) and with SoluProt comparable-to-improved (0.627 / 0.634 / 0.672). Because N = 5, the paired Wilcoxon p-value is 0.0625 -- the smallest value attainable at this sample size, reached only because the direction is unanimous (5 of 5) -- so this set is treated as a directional, independent corroboration on real solubility-engineering enzymes rather than as an independently powered significance test. Per-enzyme values are in `public_data/benchmark/results/solu_monomer_threeway/monomer_threeway_per_target.csv` (means in `monomer_threeway_means.csv`).
 
 ## Supplementary References
 

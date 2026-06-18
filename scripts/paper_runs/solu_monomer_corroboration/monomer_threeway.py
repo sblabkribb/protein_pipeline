@@ -47,22 +47,34 @@ def _norm(k: str) -> str:
     return k[len("target:"):] if k.startswith("target:") else k
 
 
+def _read_fasta(p: Path):
+    out, sid = {}, None
+    if p.exists():
+        for line in p.read_text().splitlines():
+            if line.startswith(">"):
+                sid = line[1:].split()[0]
+                out[sid] = ""
+            elif sid is not None:
+                out[sid] += line.strip()
+    return {k: v for k, v in out.items() if v and "input" not in k.lower()}
+
+
 def _load_tier(run_dir: Path, tier: str):
     d = run_dir / "tiers" / tier
     sp = json.loads((d / "soluprot.json").read_text()).get("scores", {}) if (d / "soluprot.json").exists() else {}
     af = json.loads((d / "af2_scores.json").read_text()).get("scores", {}) if (d / "af2_scores.json").exists() else {}
-    seqs = {}
-    fa = d / "designs.fasta"
-    if fa.exists():
-        sid = None
-        for line in fa.read_text().splitlines():
-            if line.startswith(">"):
-                sid = line[1:].split()[0]
-            elif sid is not None:
-                seqs[sid] = seqs.get(sid, "") + line.strip()
-    # drop the wildtype/input row if present
-    seqs = {k: v for k, v in seqs.items() if v and "input" not in k.lower()}
-    return sp, af, seqs
+    designs = _read_fasta(d / "designs.fasta")        # all pool designs: id -> seq
+    sel = _read_fasta(d / "af2_selected.fasta")       # surrogate-selected Top-K: id -> seq
+    return sp, af, designs, sel
+
+
+def _mkey(cid: str, dct: dict):
+    """Match a canonical id to a score dict that may key on 'target:<id>' or '<id>'."""
+    if cid in dct:
+        return cid
+    if ("target:" + cid) in dct:
+        return "target:" + cid
+    return None
 
 
 def _mean_pairwise_diversity(seqs):
@@ -83,23 +95,40 @@ def _mean_pairwise_diversity(seqs):
 
 
 def _agg(run_dir: Path, which: str):
-    """which='selected' -> AF2-folded surrogate set; 'pool' -> full soluprot pool.
+    """which='selected' -> surrogate-selected Top-K (af2_selected.fasta).
+    which='pool' -> the structural-context pool WITHOUT surrogate selection:
+      diversity and SoluProt are measured over the full candidate pool (every
+      SoluProt-scored design, the cleanest "pool" estimate), while pLDDT is
+      measured over the pool-representative K-means bootstrap -- the folded
+      designs that are NOT in the Top-K -- since only that subset carries real
+      AF2 labels. This gives the pool arm a genuine pLDDT distinct from the
+      selected set, matching the N=9 CATH analysis.
     Returns dict(diversity, soluprot_mean, plddt_mean, n_seq, n_plddt)."""
     seqlist, sols, plddts = [], [], []
     for t in TIERS:
-        sp, af, seqs = _load_tier(run_dir, t)
-        ids = list(af.keys()) if which == "selected" else list(sp.keys())
-        for k in ids:
-            seq = seqs.get(_norm(k))
-            if seq:
-                seqlist.append(seq)
-            if k in sp:
+        sp, af, designs, sel = _load_tier(run_dir, t)
+        sel_canon = {_norm(h) for h in sel}
+        if which == "selected":
+            for h, seq in sel.items():
+                cid = _norm(h)
+                if seq:
+                    seqlist.append(seq)
+                ks = _mkey(cid, sp)
+                if ks:
+                    sols.append(sp[ks])
+                ka = _mkey(cid, af)
+                if ka:
+                    plddts.append(af[ka])
+        else:  # pool: full pool for diversity/SoluProt, bootstrap (folded non-Top-K) for pLDDT
+            for k in sp:
+                cid = _norm(k)
                 sols.append(sp[k])
-            # pLDDT only for the surrogate-selected (AF2-folded) arm. The ensemble
-            # pool's only folded designs ARE the selected set, so a "pool pLDDT"
-            # would merely duplicate ens_surr; report it as N/A instead.
-            if which == "selected" and k in af:
-                plddts.append(af[k])
+                seq = designs.get(cid) or designs.get(k)
+                if seq:
+                    seqlist.append(seq)
+            for k, pl in af.items():           # bootstrap = folded but not Top-K
+                if _norm(k) not in sel_canon:
+                    plddts.append(pl)
     return {
         "diversity": _mean_pairwise_diversity(seqlist),
         "soluprot_mean": statistics.mean(sols) if sols else float("nan"),
@@ -179,39 +208,8 @@ def main():
     print(f"  diversity ens_surr vs single_surr: {npos}/{len(TARGETS)} up, "
           f"mean {ratio:.2f}x, paired Wilcoxon p={pdiv:.4f}")
     print(f"  wrote {p1}\n  wrote {p2}")
-
-    # ---- figure: 3 panels ----
-    plt.rcParams.update({"font.size": 10, "axes.spines.top": False, "axes.spines.right": False})
-    C = {"single_surr": "#2D70B8", "ens_pool": "#9CB3C9", "ens_surr": "#2F8F5B"}
-    LAB = {"single_surr": "Single + surrogate", "ens_pool": "RFD3+BioEmu pool (random)",
-           "ens_surr": "RFD3+BioEmu + surrogate"}
-    xlabels = [ENZYME[t] for t in TARGETS] + ["MEAN"]
-    x = np.arange(len(xlabels))
-    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.0))
-
-    def panel(ax, key, title, arms, ylabel):
-        nb = len(arms)
-        w = 0.8 / nb
-        for bi, arm in enumerate(arms):
-            vals = [rows[t][arm][key] for t in TARGETS]
-            vals.append(statistics.mean([v for v in vals if v == v]))
-            ax.bar(x + (bi - (nb - 1) / 2) * w, vals, w, color=C[arm], label=LAB[arm], edgecolor="white", linewidth=0.5)
-        ax.set_xticks(x); ax.set_xticklabels(xlabels, rotation=30, ha="right", fontsize=8.5)
-        ax.set_title(title, fontsize=11, fontweight="bold")
-        ax.set_ylabel(ylabel, fontsize=9)
-        ax.axvline(len(TARGETS) - 0.5, color="#cccccc", ls="--", lw=0.8)
-
-    panel(axes[0], "diversity", "Top-K sequence diversity", ARMS, "mean pairwise diversity")
-    panel(axes[1], "soluprot_mean", "SoluProt (selected mean)", ARMS, "mean SoluProt")
-    panel(axes[2], "plddt_mean", "pLDDT (AF2-folded mean)", ["single_surr", "ens_surr"], "mean pLDDT")
-    axes[0].legend(loc="upper left", fontsize=7.5, frameon=False)
-    fig.suptitle("Structural-context 3-arm comparison — 5 Solu_pipeline_benchmark monomer enzymes "
-                 f"(N=5; diversity {npos}/5 up, {ratio:.1f}×, p={pdiv:.3f})",
-                 fontsize=11, fontweight="bold")
-    fig.tight_layout(rect=[0, 0, 1, 0.96])
-    for ext in ("png", "pdf"):
-        fig.savefig(FIG_DIR / f"fig_solu_monomer_threeway.{ext}", dpi=200, bbox_inches="tight")
-    print(f"  wrote {FIG_DIR/'fig_solu_monomer_threeway.png'}")
+    # The distribution figure (box-and-whisker) is generated separately by
+    # scripts/paper_runs/make_threeway_distribution_figures.py from these CSVs.
 
 
 if __name__ == "__main__":

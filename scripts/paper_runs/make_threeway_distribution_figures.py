@@ -83,15 +83,14 @@ def fig_monomer():
     col = lambda arm, k: np.array([float(by[arm][e][k]) for e in enz])
     div = [col("single_surr", "diversity"), col("ens_pool", "diversity"), col("ens_surr", "diversity")]
     so = [col("single_surr", "soluprot_mean"), col("ens_pool", "soluprot_mean"), col("ens_surr", "soluprot_mean")]
-    pl = [col("single_surr", "plddt_mean"), col("ens_surr", "plddt_mean")]
+    pl = [col("single_surr", "plddt_mean"), col("ens_pool", "plddt_mean"), col("ens_surr", "plddt_mean")]
     labs3 = ["Single\n+surrogate", "RFD3+BioEmu\npool (random)", "RFD3+BioEmu\n+surrogate"]
     cols3 = [C["single"], C["pool"], C["surr"]]
     fig, ax = plt.subplots(1, 3, figsize=(12.5, 4.3))
     _box_strip(ax[0], div, labs3, cols3, "Top-K sequence diversity", "mean pairwise diversity",
                paired_from=0, paired_to=2, seed=1)
     _box_strip(ax[1], so, labs3, cols3, "Selected-set SoluProt", "mean SoluProt", seed=2)
-    _box_strip(ax[2], pl, ["Single\n+surrogate", "RFD3+BioEmu\n+surrogate"], [C["single"], C["surr"]],
-               "Selected-set pLDDT (folded)", "mean pLDDT", paired_from=0, paired_to=1, seed=3)
+    _box_strip(ax[2], pl, labs3, cols3, "pLDDT (pool = bootstrap labels)", "mean pLDDT", seed=3)
     fig.suptitle("Structural-context three-arm comparison — 5 Solu_pipeline_benchmark monomer enzymes "
                  "(diversity 5/5 up, 1.7x, paired Wilcoxon p=0.0625)", fontsize=10.5, fontweight="bold")
     fig.tight_layout(rect=[0, 0, 1, 0.95])
