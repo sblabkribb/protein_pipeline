@@ -81,13 +81,13 @@ def main() -> None:
             "axes.spines.right": False,
             "axes.labelsize": 9,
             "xtick.labelsize": 8,
-            "ytick.labelsize": 7,
+            "ytick.labelsize": 8,
         }
     )
     fig, (ax1, ax2) = plt.subplots(
         1,
         2,
-        figsize=(8.8, 6.0),
+        figsize=(9.5, 13.0),
         sharey=True,
         gridspec_kw={"width_ratios": [1.15, 1.0], "wspace": 0.08},
     )

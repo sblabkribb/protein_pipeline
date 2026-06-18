@@ -95,7 +95,10 @@ def _agg(run_dir: Path, which: str):
                 seqlist.append(seq)
             if k in sp:
                 sols.append(sp[k])
-            if k in af:
+            # pLDDT only for the surrogate-selected (AF2-folded) arm. The ensemble
+            # pool's only folded designs ARE the selected set, so a "pool pLDDT"
+            # would merely duplicate ens_surr; report it as N/A instead.
+            if which == "selected" and k in af:
                 plddts.append(af[k])
     return {
         "diversity": _mean_pairwise_diversity(seqlist),
@@ -132,8 +135,10 @@ def main():
                             m["n_seq"], m["n_plddt"]])
 
     # ---- means CSV ----
-    means = {arm: {k: statistics.mean([rows[t][arm][k] for t in TARGETS
-                                       if rows[t][arm][k] == rows[t][arm][k]])
+    def _safemean(vals):
+        vals = [v for v in vals if v == v]  # drop NaN
+        return statistics.mean(vals) if vals else float("nan")
+    means = {arm: {k: _safemean([rows[t][arm][k] for t in TARGETS])
                    for k in ("diversity", "soluprot_mean", "plddt_mean")}
              for arm in ARMS}
     p2 = OUT_DIR / "monomer_threeway_means.csv"
@@ -141,8 +146,10 @@ def main():
         w = csv.writer(f)
         w.writerow(["arm", "diversity", "soluprot_mean", "plddt_mean"])
         for arm in ARMS:
+            pl = means[arm]["plddt_mean"]
             w.writerow([arm, f"{means[arm]['diversity']:.4f}",
-                        f"{means[arm]['soluprot_mean']:.4f}", f"{means[arm]['plddt_mean']:.2f}"])
+                        f"{means[arm]['soluprot_mean']:.4f}",
+                        "" if pl != pl else f"{pl:.2f}"])  # blank for N/A pool pLDDT
 
     # ---- paired Wilcoxon (ens_surr vs single_surr), diversity ----
     def wilcoxon_exact(pairs):
