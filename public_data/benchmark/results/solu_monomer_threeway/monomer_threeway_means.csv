@@ -1,0 +1,4 @@
+arm,diversity,soluprot_mean,plddt_mean
+single_surr,0.1784,0.6312,95.94
+ens_pool,0.3291,0.6342,94.80
+ens_surr,0.3094,0.6769,94.80

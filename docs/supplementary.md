@@ -276,6 +276,10 @@ Three arms are compared per target at the same fixed 50-call budget: (i) single-
 
 *Selected-set sequence diversity across the three arms for the nine RFD3+BioEmu targets, each at the fixed 50-call AF2/ColabFold budget.*
 
+![Structural-context three-arm comparison across the nine CATH targets, shown as box-and-whisker distributions with per-target points and single-to-surrogate paired lines (diversity, pLDDT, SoluProt)](../figures/benchmark/fig13_structural_context_threeway_N9.png)
+
+The box-and-whisker panels above show the per-target distribution behind the three-arm means: the diversity boxes separate cleanly (single-backbone low, both RFD3+BioEmu arms high, with the paired lines rising in all nine targets), whereas the pLDDT and SoluProt boxes overlap across arms, confirming the diversity gain carries no proxy cost.
+
 The structural ensemble is the source of the diversity, and surrogate selection preserves rather than creates it. A random bootstrap of the RFD3+BioEmu pool is already ~3-fold more diverse than the single-backbone surrogate selection (0.346 vs 0.114), and the surrogate-selected RFD3+BioEmu Top-K retains most of that diversity (0.310). The expanded selection is therefore far more diverse than the single-backbone selection in 9 of 9 targets (mean 4.2-fold, range 1.4-13.6-fold; paired Wilcoxon p = 0.0039), whereas single-backbone surrogate selection frequently collapses toward near-duplicate sequences (0.024-0.049). The small reduction from the bootstrap to the surrogate-selected set (0.346 to 0.310) is the acquisition-bias effect of Supplementary Note 6.
 
 This diversity gain comes at no measurable cost in the two computational proxies. Selected-set means are comparable across all three arms -- pLDDT 96.4 / 94.8 / 95.0 and SoluProt 0.712 / 0.718 / 0.709 for single+surrogate / RFD3+BioEmu-random / RFD3+BioEmu+surrogate respectively -- so RFD3+BioEmu expansion plus surrogate selection delivers a markedly more sequence-diverse advanced candidate set at the same pLDDT and SoluProt. Consistently, surrogate selection within the expanded pools did not significantly change selected-set pLDDT relative to the bootstrap (mean +0.2 pLDDT, n = 9, Wilcoxon p = 0.43); the larger "rescue" effect seen in an early four-target subset did not persist at n = 9. WT references (the single original sequence per target) are reported in Figure 2D and are not selected sets. Per-target diversity, pLDDT, and SoluProt for all three arms are in `public_data/benchmark/results/structural_context_threeway_N9.csv`; per-design records are in `structural_context_topk_per_design.csv`.
@@ -311,6 +315,33 @@ The per-target selected-set pLDDT and SoluProt underlying the three-arm means ar
 | **mean**| **0.712** | **0.718** | **0.709** |
 
 *Selected-set mean SoluProt by arm and target.*
+
+### Independent real-enzyme corroboration (five solubility-engineering monomers)
+
+The same three-arm comparison was repeated on an independent set of five real solubility/expression-problem enzymes drawn from a separate curated benchmark (IsPETase/5XJH, DhaA/1CQW, TEV protease/1LVM, CALB/1TCA, and HRP-C/1ATJ; all single-chain monomers, redesigned at the 50% conservation tier). These targets share no overlap with the nine CATH targets above and were each run through the same single-backbone and RFD3+BioEmu pipelines; the selected sets are the surrogate-selected, AF2-folded designs and the pool arm is the full RFD3+BioEmu SoluProt pool. No new structure prediction was performed -- all values are extracted from the already-completed runs.
+
+| Arm (N = 5 mean)            | Top-K diversity | SoluProt | pLDDT |
+|-----------------------------|-----------------|----------|-------|
+| Single-backbone + surrogate | 0.178           | 0.631    | 95.9  |
+| RFD3+BioEmu pool (random)   | 0.329           | 0.634    | --    |
+| RFD3+BioEmu + surrogate     | 0.309           | 0.677    | 94.8  |
+
+*Five-enzyme means. The pool arm's pLDDT is omitted because only the surrogate-selected designs were AF2-folded in these runs (the pool's folded subset is the selected set itself); diversity and SoluProt use the full pool.*
+
+| Enzyme (PDB)     | Single + surrogate | RFD3+BioEmu pool (random) | RFD3+BioEmu + surrogate |
+|------------------|--------------------|---------------------------|--------------------------|
+| HRP-C (1ATJ)     | 0.197              | 0.326                     | 0.288                    |
+| DhaA (1CQW)      | 0.165              | 0.316                     | 0.299                    |
+| TEV (1LVM)       | 0.196              | 0.371                     | 0.357                    |
+| CALB (1TCA)      | 0.168              | 0.316                     | 0.302                    |
+| IsPETase (5XJH)  | 0.167              | 0.317                     | 0.302                    |
+| **mean**         | **0.178**          | **0.329**                 | **0.309**                |
+
+*Selected-set sequence diversity by arm for the five enzymes.*
+
+![Structural-context three-arm comparison on five solubility-engineering monomer enzymes](../figures/benchmark/fig_solu_monomer_threeway.png)
+
+The same pattern holds on these application-relevant targets: the RFD3+BioEmu pool is the source of the diversity (0.329) and surrogate selection preserves it (0.309), both well above the single-backbone selection (0.178), which is more diverse for the expanded selection in all five enzymes (mean 1.7-fold), at comparable pLDDT (95.9 vs 94.8) and with SoluProt maintained or slightly improved (0.631 to 0.677). Because N = 5, the paired Wilcoxon p-value is 0.0625 -- the smallest value attainable at this sample size, reached only because the direction is unanimous (5 of 5) -- so this set is treated as a directional, independent corroboration on real solubility-engineering enzymes rather than as an independently powered significance test. The pLDDT comparison is reported for the two AF2-folded selected arms only, for the reason noted above. Per-enzyme values are in `public_data/benchmark/results/solu_monomer_threeway/monomer_threeway_per_target.csv` (means in `monomer_threeway_means.csv`).
 
 ## Supplementary References
 
