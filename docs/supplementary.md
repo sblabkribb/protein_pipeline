@@ -25,17 +25,38 @@ The corrected-chain CATH refresh archive contains 115 completed CATH run directo
 | Mean SoluProt                                  | 0.663 |
 | Maximum SoluProt                               | 0.976 |
 
-## Supplementary Note 3. Training-Set Selection
+## Supplementary Note 3. ESM-2 Embedding-Size Ablation
+
+The production surrogate featurizes candidates with mean-pooled ESM-2 8M (esm2_t6_8M_UR50D, 320-D) embeddings. To test whether a larger language model would improve surrogate ranking, the surrogate-family benchmark protocol of Supplementary Note 5 (Random Forest, K-means N = 30 bootstrap, five seeds, with all remaining candidates as the held-out pool on the 77-target paired benchmark) was rerun with the embedding as the only changed variable: 320-D ESM-2 8M versus 640-D ESM-2 150M (esm2_t30_150M_UR50D). Both featurizations reuse the existing AF2/ColabFold and SoluProt labels, so no new structure prediction was required, and the 8M arm reproduces the Note 5 Random Forest baseline exactly (pLDDT Top-5 recall 0.131, SoluProt Top-5 recall 0.489); absolute values are therefore directly comparable to Note 5. p-values are paired Wilcoxon signed-rank, Holm-corrected across the six tested metrics.
+
+| Objective | Metric | ESM-2 8M (320-D) | ESM-2 150M (640-D) | Δ | Wilcoxon p | Holm p |
+|-----------|--------|------------------|--------------------|--------|------------|--------|
+| pLDDT     | Spearman ρ      | 0.426 | 0.435 | +0.009 | 0.27   | 0.55  |
+| pLDDT     | Top-5 recall    | 0.131 | 0.138 | +0.007 | 0.72   | 0.72  |
+| pLDDT     | BO uplift Top-5 | 1.055 | 1.209 | +0.154 | 0.11   | 0.43  |
+| SoluProt  | Spearman ρ      | 0.783 | 0.815 | +0.032 | 0.0008 | 0.005 |
+| SoluProt  | Top-5 recall    | 0.489 | 0.523 | +0.034 | 0.087  | 0.43  |
+| SoluProt  | BO uplift Top-5 | 0.052 | 0.054 | +0.002 | 0.16   | 0.49  |
+
+*Per-target paired comparison (Random Forest, N = 30, five seeds, Supplementary Note 5 protocol) of 8M versus 150M ESM-2 embeddings on the 77-target benchmark. n = 68-77 targets per row; Spearman rows drop targets with an undefined rank correlation. p-values are Holm-corrected across the six metrics.*
+
+![ESM-2 embedding-size ablation](../figures/benchmark/fig9_esm_size.png)
+
+*Supplementary Figure S2. ESM-2 8M (320-D) versus 150M (640-D) embedding ablation for the Random Forest surrogate at N = 30 under the Note 5 protocol (Spearman, Top-5 recall, BO uplift Top-5; error bars are 95% target-clustered bootstrap confidence intervals).*
+
+After Holm correction across the six metrics, the only surviving difference is a small SoluProt rank-correlation gain (Spearman 0.78 to 0.82, Holm p = 0.005); the 150M embedding did not significantly change any pLDDT metric, nor the SoluProt Top-5 recall or BO-uplift acquisition metrics that govern the triage budget (all Holm p >= 0.43). The 8M model is therefore retained as the resource-aware default: an 18-fold larger embedding does not improve the harder pLDDT objective and yields only a marginal, single-metric SoluProt rank-correlation gain at substantially higher featurization cost.
+
+## Supplementary Note 4. Training-Set Selection
 
 In the corrected-chain CATH refresh, K-means and random bootstrap selection give comparable Random Forest BO uplift Top-5 across all N values tested. The K-means advantage observed at low N in the earlier, smaller artifact corpus does not persist in this larger corrected-chain refresh, where broader candidate-pool diversity reduces the selection-strategy gap. K-means remains the production default as a deterministic bootstrap-selection safeguard, although the present corpus does not show a consistent acquisition advantage over random bootstrap selection.
 
 ![Selection-size ablation](../figures/benchmark/fig3_selection_n_curves.png)
 
-*Supplementary Figure S2. Random Forest BO uplift Top-5 as a function of the number of AF2-labeled training examples in the corrected-chain refresh. K-means and random selection track each other across the full N range.*
+*Supplementary Figure S3. Random Forest BO uplift Top-5 as a function of the number of AF2-labeled training examples in the corrected-chain refresh. K-means and random selection track each other across the full N range.*
 
 ![Selection by surrogate family](../figures/benchmark/fig4_selection_comparison.png)
 
-*Supplementary Figure S3. K-means versus random training-set selection at fixed N = 30 across surrogate families in the corrected-chain refresh. Error bars are 95% target-clustered bootstrap confidence intervals; the Random and K-means intervals overlap for every model, so within-family differences are small relative to between-family differences, supporting K-means as a stable bootstrap baseline rather than a universal acquisition advantage.*
+*Supplementary Figure S4. K-means versus random training-set selection at fixed N = 30 across surrogate families in the corrected-chain refresh. Error bars are 95% target-clustered bootstrap confidence intervals; the Random and K-means intervals overlap for every model, so within-family differences are small relative to between-family differences, supporting K-means as a stable bootstrap baseline rather than a universal acquisition advantage.*
 
 | N   | Random RF pLDDT BO uplift Top-5 | K-means RF pLDDT BO uplift Top-5 | Delta        |
 |-----|---------------------------------|----------------------------------|--------------|
@@ -46,13 +67,13 @@ In the corrected-chain CATH refresh, K-means and random bootstrap selection give
 | 50  | 1.187                           | 1.165                            | -0.022 (-2%) |
 | 80  | 1.237                           | 1.185                            | -0.053 (-4%) |
 
-## Supplementary Note 4. Surrogate Model Comparison
+## Supplementary Note 5. Surrogate Model Comparison
 
-The surrogate-family benchmark was run on the fully labeled artifact pool used to choose the production operating point, rather than on the later strict 9,999-candidate triage runs. In this retrospective benchmark, each target-tier unit contained approximately 120 ProteinMPNN designs with SoluProt scores and AF2/ColabFold pLDDT records where available. Thirty candidates were selected by K-means as the bootstrap-labeled set, and the remaining labeled candidates were held out to evaluate whether each model could recover high-scoring designs from the same local candidate pool. This analysis is therefore a model-family benchmark for acquisition behavior; it is separate from the main-text surrogate-triage budget result, where only 30 bootstrap candidates and 20 acquired candidates are folded for each target. Supplementary Notes 4, 5, and 7 use different resampling protocols, training-budget axes, and pool compositions; absolute BO-uplift values should therefore be compared only within a note. (Notes 4 and 7 do share the same full-corpus RF pLDDT BO uplift of 1.055; the different value in Notes 3 and 5, 1.124, comes from the N-ablation resampling rather than a discrepancy.)
+The surrogate-family benchmark was run on the fully labeled artifact pool used to choose the production operating point, rather than on the later strict 9,999-candidate triage runs. In this retrospective benchmark, each target-tier unit contained approximately 120 ProteinMPNN designs with SoluProt scores and AF2/ColabFold pLDDT records where available. Thirty candidates were selected by K-means as the bootstrap-labeled set, and the remaining labeled candidates were held out to evaluate whether each model could recover high-scoring designs from the same local candidate pool. This analysis is therefore a model-family benchmark for acquisition behavior; it is separate from the main-text surrogate-triage budget result, where only 30 bootstrap candidates and 20 acquired candidates are folded for each target. Supplementary Notes 5, 6, and 8 use different resampling protocols, training-budget axes, and pool compositions; absolute BO-uplift values should therefore be compared only within a note. (Notes 4 and 7 do share the same full-corpus RF pLDDT BO uplift of 1.055; the different value in Notes 3 and 5, 1.124, comes from the N-ablation resampling rather than a discrepancy.)
 
 ![Surrogate model comparison](../figures/benchmark/fig5_model_comparison.png)
 
-*Supplementary Figure S4. Retrospective surrogate-family comparison at K-means N = 30. The benchmark uses fully labeled target-tier candidate pools to compare model ranking and acquisition behavior for pLDDT and SoluProt objectives. It supports a configurable acquisition layer rather than a universal single-model rule.*
+*Supplementary Figure S5. Retrospective surrogate-family comparison at K-means N = 30. The benchmark uses fully labeled target-tier candidate pools to compare model ranking and acquisition behavior for pLDDT and SoluProt objectives. It supports a configurable acquisition layer rather than a universal single-model rule.*
 
 At K-means N = 30, Random Forest gives the highest mean pLDDT BO uplift Top-5 among the individual models shown here, whereas Ridge is strongest for SoluProt ranking and recall-oriented metrics. The production recommendation is therefore score-specific: Random Forest is a conservative pLDDT acquisition reference, and Ridge is retained when the operator prioritizes SoluProt-related ranking or recall. The implemented RAPID default treats these models as comparator policies: they are evaluated on the initial AF2-labeled bootstrap set, the selected acquisition policy is refit on all bootstrap labels, and only that policy’s Top-K is sent to AF2. With target-clustered bootstrap 95% confidence intervals, Ridge SoluProt Top-5 recall is 0.703 (0.664-0.743) and RF pLDDT Top-5 recall is 0.131 (0.106-0.156), versus random 0.051 (0.042-0.060) and 0.055 (0.046-0.064) respectively. Paired Wilcoxon tests with Holm correction show that even the conservative RF reference beats random on both objectives (SoluProt p = 2.0e-54, Cliff's delta 0.84; pLDDT p = 4.1e-13, Cliff's delta 0.26); for SoluProt ranking, Ridge additionally outperforms RF (RF-versus-Ridge Cliff's delta = -0.42, favouring Ridge). The main text summarizes the run-level budget and selected-candidate outcomes in Figure 2; the table below reports the numerical model-level comparison.
 
@@ -67,13 +88,13 @@ At K-means N = 30, Random Forest gives the highest mean pLDDT BO uplift Top-5 am
 | MLP      | 0.080              | 0.070              | 0.220                 | 0.133                 | 0.194                 | 0.011                    |
 | Random   | -0.009             | 0.055              | -0.017                | 0.004                 | 0.051                 | 0.000                    |
 
-## Supplementary Note 5. Sample-Size Operating Point
+## Supplementary Note 6. Sample-Size Operating Point
 
-The N-ablation places N = 30 on a cost-efficient plateau. Increasing RF training labels from 30 to 80 requires approximately 2.7 times more AF2-labeled training examples but gives a modest additional pLDDT BO-uplift gain. The N = 30 default is therefore a conservative operating point for the bootstrap round. As noted in Supplementary Note 4, absolute BO-uplift values reported in this note use a different resampling protocol from Notes 4 and 7 and are not directly comparable across notes.
+The N-ablation places N = 30 on a cost-efficient plateau. Increasing RF training labels from 30 to 80 requires approximately 2.7 times more AF2-labeled training examples but gives a modest additional pLDDT BO-uplift gain. The N = 30 default is therefore a conservative operating point for the bootstrap round. As noted in Supplementary Note 5, absolute BO-uplift values reported in this note use a different resampling protocol from Notes 4 and 7 and are not directly comparable across notes.
 
 ![Sample-size ablation](../figures/benchmark/fig8_sample_size.png)
 
-*Supplementary Figure S5. Sample-size ablation for production-supported surrogate families. The vertical reference at N = 30 marks the operating point used in RAPID. The curves show diminishing returns beyond roughly 20-30 AF2-labeled examples, supporting N = 30 as a conservative default rather than an arbitrary setting.*
+*Supplementary Figure S6. Sample-size ablation for production-supported surrogate families. The vertical reference at N = 30 marks the operating point used in RAPID. The curves show diminishing returns beyond roughly 20-30 AF2-labeled examples, supporting N = 30 as a conservative default rather than an arbitrary setting.*
 
 | N_train | RF pLDDT BO uplift Top-5 | Percent of N = 80 | RF SoluProt BO uplift Top-5 | Percent of N = 80 |
 |---------|--------------------------|-------------------|-----------------------------|-------------------|
@@ -84,7 +105,7 @@ The N-ablation places N = 30 on a cost-efficient plateau. Increasing RF training
 | 50      | 1.165                    | 98.3%             | 0.0403                      | 97.6%             |
 | 80      | 1.185                    | 100.0%            | 0.0413                      | 100.0%            |
 
-## Supplementary Note 6. Acquisition Bias and Diversity
+## Supplementary Note 7. Acquisition Bias and Diversity
 
 K-means training selection does not by itself remove acquisition bias. In the corrected-chain refresh, RF-selected Top-K sets remain more internally similar than the true Top-K sets, even when the bootstrap training set is selected by K-means. At N = 30, the K-means-trained RF Top-5 set had an internal identity of 0.888, compared with 0.863 for the true Top-5 set, and the corresponding Top-10 values were 0.885 and 0.865. This means diversity control belongs at acquisition time if sequence diversity is an explicit design objective.
 
@@ -92,11 +113,11 @@ Future diversity-aware acquisition policies, such as max-min filtering or cluste
 
 ![Acquisition-bias analysis](../figures/benchmark/fig6_bias_analysis.png)
 
-*Supplementary Figure S6. Acquisition-bias analysis for RF at N = 30. K-means reduces identity to the best training sequence relative to random bootstrap selection, but surrogate-selected Top-K sets remain more internally similar than the true Top-K sets.*
+*Supplementary Figure S7. Acquisition-bias analysis for RF at N = 30. K-means reduces identity to the best training sequence relative to random bootstrap selection, but surrogate-selected Top-K sets remain more internally similar than the true Top-K sets.*
 
 ![Per-target surrogate heatmap](../figures/benchmark/fig7_per_target_heatmap.png)
 
-*Supplementary Figure S7. Per-target BO uplift difference relative to Random Forest. Rows are the 77 CATH targets and columns are the non-RF surrogate families; red indicates a family beating RF on that target and blue indicates worse-than-RF. The diverging color scale is clipped at the 92nd percentile of absolute differences and per-cell values are omitted so all targets remain legible. The heatmap shows target-level winner switching that is obscured by aggregate means, supporting a configurable surrogate layer rather than a hard-coded single-model policy.*
+*Supplementary Figure S8. Per-target BO uplift difference relative to Random Forest. Rows are the 77 CATH targets and columns are the non-RF surrogate families; red indicates a family beating RF on that target and blue indicates worse-than-RF. The diverging color scale is clipped at the 92nd percentile of absolute differences and per-cell values are omitted so all targets remain legible. The heatmap shows target-level winner switching that is obscured by aggregate means, supporting a configurable surrogate layer rather than a hard-coded single-model policy.*
 
 | Metric                   | Random training | K-means training | True optimal | Random Top-K |
 |--------------------------|-----------------|------------------|--------------|--------------|
@@ -107,9 +128,9 @@ Future diversity-aware acquisition policies, such as max-min filtering or cluste
 | Top-10 internal identity | 0.889           | 0.885            | 0.865        | 0.822        |
 | Top-10 mean pLDDT        | 88.05           | 88.04            | 89.02        | 86.94        |
 
-## Supplementary Note 7. Rank-Mean Ensemble
+## Supplementary Note 8. Rank-Mean Ensemble
 
-In the corrected-chain refresh with the expanded 77-target corpus, RF alone gives the highest mean pLDDT BO uplift (1.055), narrowly above the rank-mean and score-mean ensembles (1.030 and 1.019). As noted in Supplementary Note 4, BO-uplift values reported here use the full 77-target corpus and are not directly comparable with the per-target-tier values in Note 4 or the N-ablation in Note 5. The ensembles still produce slightly higher SoluProt BO uplift (rank-mean 0.062, score-mean 0.063 vs RF 0.059) and trim Top-10 internal identity by ~0.004, but none of the ensemble combinations removes acquisition diversity collapse. Rank-mean is therefore retained as an optional robustness layer rather than as a universal default. In RAPID, Auto-CV compares the configured individual models by default; the rank-mean ensemble is added only when the operator explicitly selects ensemble members or forces the ensemble policy. RAPID distinguishes comparator models from the acquisition policy: comparator predictions, CV metrics, model-selection summaries, feature-importance or coefficient tables, and fitted model files are exported for audit, but only one selected policy contributes the final Top-K AF2 acquisitions. The number of AF2/ColabFold calls therefore remains `N_train + Top-K` unless the operator explicitly increases the validation budget.
+In the corrected-chain refresh with the expanded 77-target corpus, RF alone gives the highest mean pLDDT BO uplift (1.055), narrowly above the rank-mean and score-mean ensembles (1.030 and 1.019). As noted in Supplementary Note 5, BO-uplift values reported here use the full 77-target corpus and are not directly comparable with the per-target-tier values in Note 5 or the N-ablation in Note 6. The ensembles still produce slightly higher SoluProt BO uplift (rank-mean 0.062, score-mean 0.063 vs RF 0.059) and trim Top-10 internal identity by ~0.004, but none of the ensemble combinations removes acquisition diversity collapse. Rank-mean is therefore retained as an optional robustness layer rather than as a universal default. In RAPID, Auto-CV compares the configured individual models by default; the rank-mean ensemble is added only when the operator explicitly selects ensemble members or forces the ensemble policy. RAPID distinguishes comparator models from the acquisition policy: comparator predictions, CV metrics, model-selection summaries, feature-importance or coefficient tables, and fitted model files are exported for audit, but only one selected policy contributes the final Top-K AF2 acquisitions. The number of AF2/ColabFold calls therefore remains `N_train + Top-K` unless the operator explicitly increases the validation budget.
 
 | Combination rule    | pLDDT BO uplift Top-5 | SoluProt BO uplift Top-5 | Top-10 internal identity |
 |---------------------|-----------------------|--------------------------|--------------------------|
@@ -121,7 +142,7 @@ In the corrected-chain refresh with the expanded 77-target corpus, RF alone give
 | LightGBM            | 0.921                 | 0.0556                   | 0.874                    |
 | XGBoost             | 0.909                 | 0.0552                   | 0.871                    |
 
-## Supplementary Note 8. Representative Surrogate-Budget Runs
+## Supplementary Note 9. Representative Surrogate-Budget Runs
 
 Implementation-specific details that are too granular for the main Methods are collected here. This includes the paper-run launcher, exact request switches, exported CSV views, and run identifiers used to reconstruct the strict surrogate-budget benchmark.
 
@@ -150,7 +171,7 @@ The WT reference values used in Figure 2D are shown below. These baselines were 
 
 Earlier 3RGK and 1LVM traces are retained as implementation examples only; they used different candidate counts and Top-K settings and are not part of the current operating evidence. The Top-K default of 20 is an operating budget rather than a fitted hyperparameter. Together with the N = 30 bootstrap setting, it gives 50 AF2 calls per pooled target decision point when the SoluProt-scored pool exceeds the budget.
 
-## Supplementary Note 9. Pooled Surrogate Scaling as a Guardrail Analysis
+## Supplementary Note 10. Pooled Surrogate Scaling as a Guardrail Analysis
 
 The completed CATH archive was also used to test whether accumulated surrogate labels already justify replacing RAPID’s per-target surrogate with a pooled model. This analysis is framed as a guardrail for the production default, not as a conclusion that accumulated labels lack value. RAPID currently uses lightweight per-run calibration because each target, backbone context, and conservation tier can change the sequence-quality relationship seen by the surrogate. If a pooled model were already stable under these conditions, it would support replacing per-run Auto-CV with a transferable surrogate. If not, the result supports the current decision to keep the production path adaptive and run-specific while continuing to store labels for future modeling.
 
@@ -162,7 +183,7 @@ The result did not support a monotonic pooled-model improvement. Target-only cal
 
 ![Pooled surrogate scaling](../figures/benchmark/fig9_pooled_surrogate_scaling.png)
 
-*Supplementary Figure S8. Retrospective pooled-surrogate scaling from completed CATH artifacts. Lower values are better for both held-out MAE and top-3 regret. The plotted model is the composition-plus-ProteinMPNN-metadata ridge residual model (no ESM-2 features; `pooled_surrogate_scaling_summary.csv`): adding more pooled targets did not produce a monotonic benefit and the pooled+target strategy stayed worse than the target-only baseline, supporting the decision to keep per-run adaptive calibration as the production default while treating accumulated labels as a future preference-modeling substrate. The same absence of a pooling benefit holds for the ESM-2 8M-augmented featurization variant (`pooled_surrogate_scaling_summary_esm.csv`), so the conclusion is not specific to the feature set.*
+*Supplementary Figure S9. Retrospective pooled-surrogate scaling from completed CATH artifacts. Lower values are better for both held-out MAE and top-3 regret. The plotted model is the composition-plus-ProteinMPNN-metadata ridge residual model (no ESM-2 features; `pooled_surrogate_scaling_summary.csv`): adding more pooled targets did not produce a monotonic benefit and the pooled+target strategy stayed worse than the target-only baseline, supporting the decision to keep per-run adaptive calibration as the production default while treating accumulated labels as a future preference-modeling substrate. The same absence of a pooling benefit holds for the ESM-2 8M-augmented featurization variant (`pooled_surrogate_scaling_summary_esm.csv`), so the conclusion is not specific to the feature set.*
 
 | Training source                   | Pooled targets | Evaluable units | Mean MAE | Mean Top-3 regret | Median Spearman |
 |-----------------------------------|----------------|-----------------|----------|-------------------|-----------------|
@@ -174,7 +195,7 @@ The result did not support a monotonic pooled-model improvement. Target-only cal
 
 *Pooled surrogate scaling summary. The non-monotonic regret and unchanged or worse MAE indicate that the current completed CATH artifact set is useful for testing pooled-model infrastructure and label accumulation, but not yet sufficient to support a pooled-surrogate performance claim.*
 
-## Supplementary Note 10. Experimental-Feedback Evolution Schema
+## Supplementary Note 11. Experimental-Feedback Evolution Schema
 
 The experimental-feedback evolution mode is included to define the data boundary between computational shortlisting and future assay-guided redesign. It is not used as evidence of experimental enrichment in the present manuscript. RAPID writes an `experiment_request.csv` after candidate generation and triage, and assay outcomes can later be recorded with stable candidate identifiers, metric names, values, units, metric direction, replicate identifiers, assay conditions, and optional quality flags.
 
@@ -186,11 +207,11 @@ The experimental-feedback evolution mode is included to define the data boundary
 
 When labels for the requested objective are present, RAPID trains a local surrogate on the labeled records and writes `next_candidates.csv` for the next design-test-learn cycle. This output is a recommendation table, not a biological validation result.
 
-## Supplementary Note 11. Structural-Context Ablation
+## Supplementary Note 12. Structural-Context Ablation
 
 The corrected-chain structural-context ablation compares the original target backbone, BioEmu conformational sampling, one selected RFD3 backbone, and RFD3+BioEmu across 18 selected CATH targets. Because ProteinMPNN is conditioned on the supplied backbone, these arms test whether changing structural context perturbs the accessible sequence neighborhood under matched masking and AF2 budgets. The single-backbone and RFD3 arms are evaluable for all 18 targets. BioEmu is evaluable for eleven targets and RFD3+BioEmu for ten targets — those that passed the fixed 2.0 Å target-RMSD gate. The main text summarizes this claim in Figure 3 as a distribution-spread and diversity analysis rather than as an aggregate-mean or upper-tail model ranking.
 
-The 18 ablation targets were drawn from the corrected-chain CATH refresh (the 18 targets are enumerated in the roster table below; per-target metadata resolves against rapid_target_manifest.csv) to provide a fold-class and sequence-length range representative of typical solubility-aware redesign campaigns, and were selected without any prior screening for BioEmu sampling success. The observed RMSD-gate attrition (~39-44%: 7 of 18 targets for BioEmu alone and 8 of 18 for RFD3+BioEmu, measured on corrected single-chain references) is therefore an empirically representative rate for unconditional application of BioEmu-containing contexts, not the result of an adversarial selection or worst-case stress test. Reporting this attrition rate is intentional: it supports the broader claim that BioEmu evaluability is a per-target property that must be verified in the artifact record rather than assumed from sequence-level features, and it justifies treating RFD3 and BioEmu as controlled exploration modules with explicit QC rather than as default score-improvement components. The pattern analysis in Supplementary Note 12 indicates that the non-evaluable and evaluable target groups are not obviously separable by simple sequence metadata (length, multi-chain rate, ligand presence, train/val/test partition) at this sample size, so the residual attrition is not explained by a single covariate that would have allowed reliable pre-filtering.
+The 18 ablation targets were drawn from the corrected-chain CATH refresh (the 18 targets are enumerated in the roster table below; per-target metadata resolves against rapid_target_manifest.csv) to provide a fold-class and sequence-length range representative of typical solubility-aware redesign campaigns, and were selected without any prior screening for BioEmu sampling success. The observed RMSD-gate attrition (~39-44%: 7 of 18 targets for BioEmu alone and 8 of 18 for RFD3+BioEmu, measured on corrected single-chain references) is therefore an empirically representative rate for unconditional application of BioEmu-containing contexts, not the result of an adversarial selection or worst-case stress test. Reporting this attrition rate is intentional: it supports the broader claim that BioEmu evaluability is a per-target property that must be verified in the artifact record rather than assumed from sequence-level features, and it justifies treating RFD3 and BioEmu as controlled exploration modules with explicit QC rather than as default score-improvement components. The pattern analysis in Supplementary Note 13 indicates that the non-evaluable and evaluable target groups are not obviously separable by simple sequence metadata (length, multi-chain rate, ligand presence, train/val/test partition) at this sample size, so the residual attrition is not explained by a single covariate that would have allowed reliable pre-filtering.
 
 The full roster of the 18 structural-context targets is listed below, with the CATH train/val/test split, chain length, and which arms were quantitatively evaluable. The single-backbone and RFD3 arms are evaluable for all 18 targets; the BioEmu and RFD3+BioEmu columns record which targets passed the 2.0 Å target-RMSD QC gate (11 and 10 respectively). Target identifiers are CATH domain IDs and resolve against `public_data/benchmark/results/rapid_target_manifest.csv`.
 
@@ -226,7 +247,7 @@ The table below retains the numerical summary and BioEmu QC context. Because the
 | RFD3 selected backbone   | 18                | 5.09             | 0.173               | 0.182                   |
 | RFD3 + BioEmu ensemble   | 10                | 3.98             | 0.241               | 0.316                   |
 
-## Supplementary Note 12. BioEmu Target-RMSD Gate QC
+## Supplementary Note 13. BioEmu Target-RMSD Gate QC
 
 BioEmu-containing structural-context arms were required to satisfy the same 2.0 Å target-RMSD gate used in the primary four-arm refresh. This gate is part of the artifact contract: a BioEmu arm is quantitatively evaluable only when the requested near-target conformers are recovered. Across the expanded 18-target ablation, seven targets did not recover a near-target conformer under the 2.0 Å cutoff within the 10-attempt BioEmu budget. One of these, 1iieA00, was previously recorded as a backend execution failure caused by a multi-model (NMR) concatenation; with the corrected single-model input it runs but narrowly misses the gate at 2.66 Å min RMSD. RFD3+BioEmu was additionally non-evaluable for 1a6jA00, where the RFD3-conditioned BioEmu samples drifted further from the target backbone. These cases are therefore treated as not evaluable for BioEmu-based score comparison, rather than as zero-valued design outcomes. A sensitivity rerun increases the BioEmu sampling and maximum-attempt budgets to 30 while preserving the 2.0 Å acceptance gate. For operational use this motivates a tiered handling of attrition: borderline targets (min RMSD ~2.0-3.5 Å) are the most likely to be recovered by escalating the BioEmu sampling and maximum-attempt budget (for example from 10 to 30) rather than by relaxing the RMSD gate, whereas severe failures (>6 Å, e.g. 1h6wA03) are unlikely to be rescued by additional sampling within a practical budget and are better handled by falling back to the single-backbone or RFD3 context for that target.
 
@@ -245,9 +266,9 @@ BioEmu-containing structural-context arms were required to satisfy the same 2.0 
 
 **Pattern of RMSD-gate attrition.** The seven BioEmu-alone non-evaluable targets span a range of failure severities rather than clustering at a single mode. Three are borderline (min RMSD 2.0–3.5 Å: 1iieA00 at 2.659 Å, 3jvoG00 at 2.887 Å, 1hufA00 at 3.478 Å); two are moderate (3.5–6 Å: 3twkA01 at 4.976 Å, 1j5uA01 at 5.393 Å); and two are severe (>6 Å: 2auaB01 at 8.051 Å, 1h6wA03 at 22.664 Å), with 1h6wA03 in particular indicating that BioEmu's pretrained sampling distribution does not cover this target's near-native basin within the configured budget (the severe failures were confirmed on the corrected single-chain reference, ruling out a chain or alignment artifact). The seven non-evaluable and eleven evaluable targets are comparable in chain length (mean 152 vs 159 residues; ranges 75–291 vs 89–287), so attrition is not explained by length and is not predictable from simple sequence-level metadata. A distinct failure mode appears in 1a6jA00, where BioEmu alone passes (3 of 6 accepted, min 1.615 Å) but the RFD3-conditioned variant drifts to 12.241 Å min RMSD -- a pattern consistent with RFD3 generating a backbone outside the local basin BioEmu's pretrained sampling can recover. Together, these observations argue that RMSD-gate attrition reflects the union of borderline sampling variance, target-specific conformational diversity beyond BioEmu's training distribution, and occasional RFD3-induced backbone drift, rather than a single sequence-level covariate. Practical guidance for users is therefore to treat BioEmu evaluability as a per-target property to verify in the artifact record, not as a property predictable from sequence length, ligand presence, or chain count alone.
 
-## Supplementary Note 13. Selected-Set Sequence Diversity Under the Fixed-Budget Triage Operating Point
+## Supplementary Note 14. Selected-Set Sequence Diversity Under the Fixed-Budget Triage Operating Point
 
-The Note 11 / Figure 3 analysis shows that BioEmu and RFD3+BioEmu broaden the candidate **pool's** pLDDT range, sequence diversity, and (for BioEmu) SoluProt range. This note checks whether that broadening survives **surrogate triage** -- i.e., whether the candidates actually advanced under the fixed AF2/ColabFold budget remain diverse, or whether selection collapses them toward a few near-duplicate sequences.
+The Note 12 / Figure 3 analysis shows that BioEmu and RFD3+BioEmu broaden the candidate **pool's** pLDDT range, sequence diversity, and (for BioEmu) SoluProt range. This note checks whether that broadening survives **surrogate triage** -- i.e., whether the candidates actually advanced under the fixed AF2/ColabFold budget remain diverse, or whether selection collapses them toward a few near-duplicate sequences.
 
 Nine of the ten RFD3+BioEmu-evaluable targets were run end-to-end under the strict triage operating point (RFD3 + BioEmu pooled candidate generation, K-means bootstrap, internal-CV policy selection, and a fixed 50-call AF2/ColabFold budget; one target, 1jyoE00, was excluded because both its RFD3 and BioEmu near-target gates admitted too few backbones for a representative expanded pool). Each target also has a matched single-backbone triage run at the same fixed budget, giving a paired comparison of selected-set diversity, pLDDT, and SoluProt.
 
@@ -278,7 +299,7 @@ Three arms are compared per target at the same fixed 50-call budget: (i) single-
 
 These three-arm distributions are shown as box-and-whisker plots with per-target points in main-text Figure 4: the diversity boxes separate cleanly (single-backbone low, both RFD3+BioEmu arms high) while the pLDDT and SoluProt boxes overlap across arms.
 
-The structural ensemble is the source of the diversity, and surrogate selection preserves rather than creates it. A random bootstrap of the RFD3+BioEmu pool is already ~3-fold more diverse than the single-backbone surrogate selection (0.346 vs 0.114), and the surrogate-selected RFD3+BioEmu Top-K retains most of that diversity (0.310). The expanded selection is therefore far more diverse than the single-backbone selection in 9 of 9 targets (mean 4.2-fold, range 1.4-13.6-fold; paired Wilcoxon p = 0.0039), whereas single-backbone surrogate selection frequently collapses toward near-duplicate sequences (0.024-0.049). The small reduction from the bootstrap to the surrogate-selected set (0.346 to 0.310) is the acquisition-bias effect of Supplementary Note 6.
+The structural ensemble is the source of the diversity, and surrogate selection preserves rather than creates it. A random bootstrap of the RFD3+BioEmu pool is already ~3-fold more diverse than the single-backbone surrogate selection (0.346 vs 0.114), and the surrogate-selected RFD3+BioEmu Top-K retains most of that diversity (0.310). The expanded selection is therefore far more diverse than the single-backbone selection in 9 of 9 targets (mean 4.2-fold, range 1.4-13.6-fold; paired Wilcoxon p = 0.0039), whereas single-backbone surrogate selection frequently collapses toward near-duplicate sequences (0.024-0.049). The small reduction from the bootstrap to the surrogate-selected set (0.346 to 0.310) is the acquisition-bias effect of Supplementary Note 7.
 
 This diversity gain comes with comparable selected-set pLDDT and SoluProt means. Selected-set means are comparable across all three arms -- pLDDT 96.4 / 94.8 / 95.0 and SoluProt 0.712 / 0.718 / 0.709 for single+surrogate / RFD3+BioEmu-random / RFD3+BioEmu+surrogate respectively -- so RFD3+BioEmu expansion plus surrogate selection delivers a markedly more sequence-diverse advanced candidate set at comparable selected-set pLDDT and SoluProt means. Consistently, surrogate selection within the expanded pools did not significantly change selected-set pLDDT relative to the bootstrap (mean +0.2 pLDDT, n = 9, Wilcoxon p = 0.43); the larger "rescue" effect seen in an early four-target subset did not persist at n = 9. WT references (the single original sequence per target) are reported in Figure 2D and are not selected sets. Per-target diversity, pLDDT, and SoluProt for all three arms are in `public_data/benchmark/results/structural_context_threeway_N9.csv`; per-design records are in `structural_context_topk_per_design.csv`.
 
@@ -339,30 +360,9 @@ The same three-arm comparison was repeated on an independent set of five real so
 
 ![Structural-context three-arm comparison on five solubility-engineering monomer enzymes](../figures/benchmark/fig_solu_monomer_threeway.png)
 
-*Supplementary Figure S9. Structural-context three-arm comparison on the five solubility-engineering monomer enzymes, shown as box-and-whisker distributions with per-enzyme points. The diversity gain (single-backbone low; RFD3+BioEmu pool and surrogate-selected high) reproduces in all five enzymes at comparable pLDDT and maintained-or-improved SoluProt.*
+*Supplementary Figure S10. Structural-context three-arm comparison on the five solubility-engineering monomer enzymes, shown as box-and-whisker distributions with per-enzyme points. The diversity gain (single-backbone low; RFD3+BioEmu pool and surrogate-selected high) reproduces in all five enzymes at comparable pLDDT and maintained-or-improved SoluProt.*
 
 The same pattern holds on these application-relevant targets: the RFD3+BioEmu pool is the source of the diversity (0.329) and surrogate selection preserves it (0.322), both well above the single-backbone selection (0.189), which is more diverse for the expanded selection in all five enzymes (mean 1.7-fold), at comparable pLDDT (95.9 / 94.7 / 94.8 for single / pool / surrogate) and with SoluProt comparable-to-improved (0.627 / 0.634 / 0.672). Because N = 5, the paired Wilcoxon p-value is 0.0625 -- the smallest value attainable at this sample size, reached only because the direction is unanimous (5 of 5) -- so this set is treated as a directional, independent corroboration on real solubility-engineering enzymes rather than as an independently powered significance test. Per-enzyme values are in `public_data/benchmark/results/solu_monomer_threeway/monomer_threeway_per_target.csv` (means in `monomer_threeway_means.csv`).
-
-## Supplementary Note 14. ESM-2 Embedding-Size Ablation
-
-The production surrogate featurizes candidates with mean-pooled ESM-2 8M (esm2_t6_8M_UR50D, 320-D) embeddings. To test whether a larger language model would improve surrogate ranking, the surrogate-family benchmark protocol of Supplementary Note 4 (Random Forest, K-means N = 30 bootstrap, five seeds, with all remaining candidates as the held-out pool on the 77-target paired benchmark) was rerun with the embedding as the only changed variable: 320-D ESM-2 8M versus 640-D ESM-2 150M (esm2_t30_150M_UR50D). Both featurizations reuse the existing AF2/ColabFold and SoluProt labels, so no new structure prediction was required, and the 8M arm reproduces the Note 4 Random Forest baseline exactly (pLDDT Top-5 recall 0.131, SoluProt Top-5 recall 0.489); absolute values are therefore directly comparable to Note 4. p-values are paired Wilcoxon signed-rank, Holm-corrected across the six tested metrics.
-
-| Objective | Metric | ESM-2 8M (320-D) | ESM-2 150M (640-D) | Δ | Wilcoxon p | Holm p |
-|-----------|--------|------------------|--------------------|--------|------------|--------|
-| pLDDT     | Spearman ρ      | 0.426 | 0.435 | +0.009 | 0.27   | 0.55  |
-| pLDDT     | Top-5 recall    | 0.131 | 0.138 | +0.007 | 0.72   | 0.72  |
-| pLDDT     | BO uplift Top-5 | 1.055 | 1.209 | +0.154 | 0.11   | 0.43  |
-| SoluProt  | Spearman ρ      | 0.783 | 0.815 | +0.032 | 0.0008 | 0.005 |
-| SoluProt  | Top-5 recall    | 0.489 | 0.523 | +0.034 | 0.087  | 0.43  |
-| SoluProt  | BO uplift Top-5 | 0.052 | 0.054 | +0.002 | 0.16   | 0.49  |
-
-*Per-target paired comparison (Random Forest, N = 30, five seeds, Supplementary Note 4 protocol) of 8M versus 150M ESM-2 embeddings on the 77-target benchmark. n = 68-77 targets per row; Spearman rows drop targets with an undefined rank correlation. p-values are Holm-corrected across the six metrics.*
-
-![ESM-2 embedding-size ablation](../figures/benchmark/fig9_esm_size.png)
-
-*Supplementary Figure S10. ESM-2 8M (320-D) versus 150M (640-D) embedding ablation for the Random Forest surrogate at N = 30 under the Note 4 protocol (Spearman, Top-5 recall, BO uplift Top-5; error bars are 95% target-clustered bootstrap confidence intervals).*
-
-After Holm correction across the six metrics, the only surviving difference is a small SoluProt rank-correlation gain (Spearman 0.78 to 0.82, Holm p = 0.005); the 150M embedding did not significantly change any pLDDT metric, nor the SoluProt Top-5 recall or BO-uplift acquisition metrics that govern the triage budget (all Holm p >= 0.43). The 8M model is therefore retained as the resource-aware default: an 18-fold larger embedding does not improve the harder pLDDT objective and yields only a marginal, single-metric SoluProt rank-correlation gain at substantially higher featurization cost.
 
 ## Supplementary References
 
