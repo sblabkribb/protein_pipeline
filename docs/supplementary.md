@@ -276,9 +276,7 @@ Three arms are compared per target at the same fixed 50-call budget: (i) single-
 
 *Selected-set sequence diversity across the three arms for the nine RFD3+BioEmu targets, each at the fixed 50-call AF2/ColabFold budget.*
 
-![Structural-context three-arm comparison across the nine CATH targets, shown as box-and-whisker distributions with per-target points and single-to-surrogate paired lines (diversity, pLDDT, SoluProt)](../figures/benchmark/fig13_structural_context_threeway_N9.png)
-
-*Supplementary Figure S9. Structural-context three-arm comparison across the nine CATH targets, shown as box-and-whisker distributions with per-target points and single-to-surrogate paired lines (diversity, pLDDT, SoluProt). The diversity boxes separate cleanly (single-backbone low, both RFD3+BioEmu arms high, with the paired lines rising in all nine targets), whereas the pLDDT and SoluProt boxes overlap across arms, with the two proxy means comparable across arms.*
+These three-arm distributions are shown as box-and-whisker plots with per-target points in main-text Figure 4: the diversity boxes separate cleanly (single-backbone low, both RFD3+BioEmu arms high) while the pLDDT and SoluProt boxes overlap across arms.
 
 The structural ensemble is the source of the diversity, and surrogate selection preserves rather than creates it. A random bootstrap of the RFD3+BioEmu pool is already ~3-fold more diverse than the single-backbone surrogate selection (0.346 vs 0.114), and the surrogate-selected RFD3+BioEmu Top-K retains most of that diversity (0.310). The expanded selection is therefore far more diverse than the single-backbone selection in 9 of 9 targets (mean 4.2-fold, range 1.4-13.6-fold; paired Wilcoxon p = 0.0039), whereas single-backbone surrogate selection frequently collapses toward near-duplicate sequences (0.024-0.049). The small reduction from the bootstrap to the surrogate-selected set (0.346 to 0.310) is the acquisition-bias effect of Supplementary Note 6.
 
@@ -341,7 +339,7 @@ The same three-arm comparison was repeated on an independent set of five real so
 
 ![Structural-context three-arm comparison on five solubility-engineering monomer enzymes](../figures/benchmark/fig_solu_monomer_threeway.png)
 
-*Supplementary Figure S10. Structural-context three-arm comparison on the five solubility-engineering monomer enzymes, shown as box-and-whisker distributions with per-enzyme points and single-to-surrogate paired lines. The diversity gain (single-backbone low; RFD3+BioEmu pool and surrogate-selected high) reproduces in all five enzymes at comparable pLDDT and maintained-or-improved SoluProt.*
+*Supplementary Figure S9. Structural-context three-arm comparison on the five solubility-engineering monomer enzymes, shown as box-and-whisker distributions with per-enzyme points. The diversity gain (single-backbone low; RFD3+BioEmu pool and surrogate-selected high) reproduces in all five enzymes at comparable pLDDT and maintained-or-improved SoluProt.*
 
 The same pattern holds on these application-relevant targets: the RFD3+BioEmu pool is the source of the diversity (0.329) and surrogate selection preserves it (0.322), both well above the single-backbone selection (0.189), which is more diverse for the expanded selection in all five enzymes (mean 1.7-fold), at comparable pLDDT (95.9 / 94.7 / 94.8 for single / pool / surrogate) and with SoluProt comparable-to-improved (0.627 / 0.634 / 0.672). Because N = 5, the paired Wilcoxon p-value is 0.0625 -- the smallest value attainable at this sample size, reached only because the direction is unanimous (5 of 5) -- so this set is treated as a directional, independent corroboration on real solubility-engineering enzymes rather than as an independently powered significance test. Per-enzyme values are in `public_data/benchmark/results/solu_monomer_threeway/monomer_threeway_per_target.csv` (means in `monomer_threeway_means.csv`).
 
@@ -362,7 +360,7 @@ The production surrogate featurizes candidates with mean-pooled ESM-2 8M (esm2_t
 
 ![ESM-2 embedding-size ablation](../figures/benchmark/fig9_esm_size.png)
 
-*Supplementary Figure S11. ESM-2 8M (320-D) versus 150M (640-D) embedding ablation for the Random Forest surrogate at N = 30 under the Note 4 protocol (Spearman, Top-5 recall, BO uplift Top-5; error bars are 95% target-clustered bootstrap confidence intervals).*
+*Supplementary Figure S10. ESM-2 8M (320-D) versus 150M (640-D) embedding ablation for the Random Forest surrogate at N = 30 under the Note 4 protocol (Spearman, Top-5 recall, BO uplift Top-5; error bars are 95% target-clustered bootstrap confidence intervals).*
 
 After Holm correction across the six metrics, the only surviving difference is a small SoluProt rank-correlation gain (Spearman 0.78 to 0.82, Holm p = 0.005); the 150M embedding did not significantly change any pLDDT metric, nor the SoluProt Top-5 recall or BO-uplift acquisition metrics that govern the triage budget (all Holm p >= 0.43). The 8M model is therefore retained as the resource-aware default: an 18-fold larger embedding does not improve the harder pLDDT objective and yields only a marginal, single-metric SoluProt rank-correlation gain at substantially higher featurization cost.
 

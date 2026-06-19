@@ -30,24 +30,12 @@ def _box_strip(ax, series, labels, colors, title, ylabel, paired_from=None, pair
     for patch, col in zip(bp["boxes"], colors):
         patch.set_facecolor(col); patch.set_alpha(0.45); patch.set_edgecolor(col)
     rng = np.random.default_rng(seed)
-    # paired lines (between two specified arm indices) drawn first, behind points
-    if paired_from is not None and paired_to is not None:
-        xj = {}
-        for idx in (paired_from, paired_to):
-            xj[idx] = pos[idx] + rng.uniform(-0.08, 0.08, size=len(series[idx]))
-        for k in range(len(series[paired_from])):
-            ax.plot([xj[paired_from][k], xj[paired_to][k]],
-                    [series[paired_from][k], series[paired_to][k]],
-                    color="#bbbbbb", lw=0.7, zorder=1)
-        for idx in (paired_from, paired_to):
-            ax.scatter(xj[idx], series[idx], s=22, color=colors[idx],
-                       edgecolor="white", linewidth=0.5, zorder=3)
-        others = [i for i in range(len(series)) if i not in (paired_from, paired_to)]
-    else:
-        others = list(range(len(series)))
-    for idx in others:
-        xj = pos[idx] + rng.uniform(-0.1, 0.1, size=len(series[idx]))
-        ax.scatter(xj, series[idx], s=22, color=colors[idx], edgecolor="white", linewidth=0.5, zorder=3)
+    # individual targets as jittered points only (no connecting lines, for a cleaner look;
+    # the paired result is reported via the title/caption statistics)
+    for idx in range(len(series)):
+        xj = pos[idx] + rng.uniform(-0.10, 0.10, size=len(series[idx]))
+        ax.scatter(xj, series[idx], s=24, color=colors[idx], edgecolor="white",
+                   linewidth=0.5, zorder=3, alpha=0.9)
     ax.set_xticks(pos); ax.set_xticklabels(labels, rotation=18, ha="right", fontsize=8.5)
     ax.set_title(title, fontsize=11, fontweight="bold"); ax.set_ylabel(ylabel, fontsize=9)
     ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
