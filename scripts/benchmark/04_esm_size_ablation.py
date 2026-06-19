@@ -101,28 +101,25 @@ def main() -> int:
             indices = df.index[mask].to_numpy()
             y_full = sub[surrogate].to_numpy(dtype=np.float64)
             n_avail = len(sub)
-            if n_avail < N_TRAIN + HOLDOUT:
+            if n_avail < N_TRAIN + 5:
                 continue
 
             for seed in SEEDS:
-                rng = np.random.default_rng(seed)
-                perm = rng.permutation(n_avail)
-                test_idx = perm[-HOLDOUT:]
-                pool_idx = perm[:-HOLDOUT]
-                y_te = y_full[test_idx]
-
                 for label, emb in embeddings_by_label.items():
                     X = emb[indices]
-                    X_pool = X[pool_idx]
-                    local_train = select_train_indices(
-                        X_pool, N_TRAIN, seed, SELECTION
-                    )
-                    train_idx = pool_idx[local_train]
-                    X_tr = X[train_idx]
-                    X_te = X[test_idx]
-                    y_tr = y_full[train_idx]
-                    if np.std(y_tr) < 1e-8:
-                        continue
+                    # Match the Supplementary Note 4 protocol exactly: K-means selects
+                    # the N=30 training set in the embedding space and ALL remaining
+                    # candidates form the held-out pool, so absolute recall / BO uplift
+                    # are directly comparable to Note 4 (embedding is the only variable).
+                    tr = select_train_indices(X, N_TRAIN, seed, SELECTION)
+                    te = np.setdiff1d(np.arange(n_avail), tr)
+                    X_tr = X[tr]
+                    X_te = X[te]
+                    y_tr = y_full[tr]
+                    y_te = y_full[te]
+                    # No low-variance skip here: Supplementary Note 4 (02) keeps every
+                    # target (recall/BO are still defined, Spearman becomes NaN), so we
+                    # match it for an identical 8M baseline.
                     rf = RandomForestRegressor(
                         n_estimators=100, random_state=seed, n_jobs=1
                     )

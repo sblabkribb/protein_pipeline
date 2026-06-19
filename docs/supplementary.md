@@ -347,24 +347,24 @@ The same pattern holds on these application-relevant targets: the RFD3+BioEmu po
 
 ## Supplementary Note 14. ESM-2 Embedding-Size Ablation
 
-The production surrogate featurizes candidates with mean-pooled ESM-2 8M (esm2_t6_8M_UR50D, 320-D) embeddings. To test whether a larger language model would improve surrogate ranking, the same Random Forest surrogate was retrained at the production operating point (N = 30 K-means bootstrap, five seeds) on the identical 77-target paired held-out pools using 320-D ESM-2 8M versus 640-D ESM-2 150M (esm2_t30_150M_UR50D) embeddings. Because both featurizations reuse the existing AF2/ColabFold and SoluProt labels, no new structure prediction was required.
+The production surrogate featurizes candidates with mean-pooled ESM-2 8M (esm2_t6_8M_UR50D, 320-D) embeddings. To test whether a larger language model would improve surrogate ranking, the surrogate-family benchmark protocol of Supplementary Note 4 (Random Forest, K-means N = 30 bootstrap, five seeds, with all remaining candidates as the held-out pool on the 77-target paired benchmark) was rerun with the embedding as the only changed variable: 320-D ESM-2 8M versus 640-D ESM-2 150M (esm2_t30_150M_UR50D). Both featurizations reuse the existing AF2/ColabFold and SoluProt labels, so no new structure prediction was required, and the 8M arm reproduces the Note 4 Random Forest baseline exactly (pLDDT Top-5 recall 0.131, SoluProt Top-5 recall 0.489); absolute values are therefore directly comparable to Note 4. p-values are paired Wilcoxon signed-rank, Holm-corrected across the six tested metrics.
 
-| Objective | Metric | ESM-2 8M (320-D) | ESM-2 150M (640-D) | Δ | Paired Wilcoxon p |
-|-----------|--------|------------------|--------------------|--------|-------------------|
-| pLDDT     | Spearman ρ      | 0.414 | 0.427 | +0.013 | 0.42   |
-| pLDDT     | Top-5 recall    | 0.443 | 0.448 | +0.005 | 0.62   |
-| pLDDT     | BO uplift Top-5 | 1.124 | 1.150 | +0.025 | 0.70   |
-| SoluProt  | Spearman ρ      | 0.762 | 0.795 | +0.032 | 0.0004 |
-| SoluProt  | Top-5 recall    | 0.672 | 0.704 | +0.032 | 0.015  |
-| SoluProt  | BO uplift Top-5 | 0.039 | 0.040 | +0.001 | 0.031  |
+| Objective | Metric | ESM-2 8M (320-D) | ESM-2 150M (640-D) | Δ | Wilcoxon p | Holm p |
+|-----------|--------|------------------|--------------------|--------|------------|--------|
+| pLDDT     | Spearman ρ      | 0.426 | 0.435 | +0.009 | 0.27   | 0.55  |
+| pLDDT     | Top-5 recall    | 0.131 | 0.138 | +0.007 | 0.72   | 0.72  |
+| pLDDT     | BO uplift Top-5 | 1.055 | 1.209 | +0.154 | 0.11   | 0.43  |
+| SoluProt  | Spearman ρ      | 0.783 | 0.815 | +0.032 | 0.0008 | 0.005 |
+| SoluProt  | Top-5 recall    | 0.489 | 0.523 | +0.034 | 0.087  | 0.43  |
+| SoluProt  | BO uplift Top-5 | 0.052 | 0.054 | +0.002 | 0.16   | 0.49  |
 
-*Per-target paired comparison (Random Forest, N = 30, five seeds) of 8M versus 150M ESM-2 embeddings on the 77-target benchmark. n = 68-77 targets per row; targets with an undefined rank correlation are dropped from the Spearman rows.*
+*Per-target paired comparison (Random Forest, N = 30, five seeds, Supplementary Note 4 protocol) of 8M versus 150M ESM-2 embeddings on the 77-target benchmark. n = 68-77 targets per row; Spearman rows drop targets with an undefined rank correlation. p-values are Holm-corrected across the six metrics.*
 
 ![ESM-2 embedding-size ablation](../figures/benchmark/fig9_esm_size.png)
 
-*Supplementary Figure S11. ESM-2 8M (320-D) versus 150M (640-D) embedding ablation for the Random Forest surrogate at N = 30 (Spearman, Top-5 recall, BO uplift Top-5; error bars are 95% target-clustered bootstrap confidence intervals).*
+*Supplementary Figure S11. ESM-2 8M (320-D) versus 150M (640-D) embedding ablation for the Random Forest surrogate at N = 30 under the Note 4 protocol (Spearman, Top-5 recall, BO uplift Top-5; error bars are 95% target-clustered bootstrap confidence intervals).*
 
-The 18-fold larger ESM-2 150M model left pLDDT-surrogate quality statistically unchanged (all three pLDDT metrics p >= 0.42) and produced only a small SoluProt rank-correlation and recall gain (Spearman 0.76 to 0.79 and Top-5 recall 0.67 to 0.70; paired p = 0.0004 and 0.015) that did not translate into a meaningful change in the BO-uplift acquisition metric that governs the triage budget (SoluProt BO uplift 0.039 to 0.040). The 8M model is therefore retained as the resource-aware default: the larger embedding does not improve the harder pLDDT objective and yields only a marginal SoluProt ranking gain at substantially higher featurization cost.
+After Holm correction across the six metrics, the only surviving difference is a small SoluProt rank-correlation gain (Spearman 0.78 to 0.82, Holm p = 0.005); the 150M embedding did not significantly change any pLDDT metric, nor the SoluProt Top-5 recall or BO-uplift acquisition metrics that govern the triage budget (all Holm p >= 0.43). The 8M model is therefore retained as the resource-aware default: an 18-fold larger embedding does not improve the harder pLDDT objective and yields only a marginal, single-metric SoluProt rank-correlation gain at substantially higher featurization cost.
 
 ## Supplementary References
 
