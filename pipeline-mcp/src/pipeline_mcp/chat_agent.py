@@ -202,5 +202,45 @@ def _openai_complete(model, key, messages, tools, system, timeout):
     return {"text": text, "tool_calls": calls}
 
 
-def _gemini_complete(model, key, messages, tools, system, timeout):  # implemented in Task 4
-    raise NotImplementedError
+def _to_gemini_contents(messages):
+    out = []
+    for m in messages:
+        role = m.get("role")
+        if role == "user":
+            out.append({"role": "user", "parts": [{"text": str(m.get("content") or "")}]})
+        elif role == "assistant":
+            parts = []
+            if m.get("content"):
+                parts.append({"text": str(m["content"])})
+            for tc in m.get("tool_calls") or []:
+                parts.append({"functionCall": {"name": tc.get("name"), "args": tc.get("args") or {}}})
+            out.append({"role": "model", "parts": parts or [{"text": ""}]})
+        elif role == "tool":
+            out.append({"role": "user", "parts": [{"functionResponse": {
+                "name": m.get("name"), "response": {"result": m.get("content")}}}]})
+    return out
+
+
+def _gemini_complete(model, key, messages, tools, system, timeout):
+    body = {
+        "contents": _to_gemini_contents(messages),
+        "tools": [{"function_declarations": [{"name": t["name"], "description": t["description"],
+                   "parameters": t["parameters"]} for t in tools]}],
+    }
+    if system:
+        body["system_instruction"] = {"parts": [{"text": system}]}
+    url = (f"https://generativelanguage.googleapis.com/v1beta/models/{model}"
+           f":generateContent?key={key}")
+    data = _post_json(url, {"content-type": "application/json"}, body, timeout)
+    cand = (data.get("candidates") or [{}])[0]
+    parts = ((cand.get("content") or {}).get("parts")) or []
+    text = ""
+    calls = []
+    for i, p in enumerate(parts):
+        if "text" in p:
+            text += p.get("text") or ""
+        fc = p.get("functionCall")
+        if fc:
+            calls.append({"id": f"{fc.get('name')}-{i}", "name": fc.get("name"),
+                          "args": fc.get("args") or {}})
+    return {"text": text, "tool_calls": calls}
