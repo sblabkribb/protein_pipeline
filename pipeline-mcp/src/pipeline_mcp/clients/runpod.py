@@ -39,6 +39,10 @@ class RunPodClient:
     skip_verify: bool = False
     timeout_s: float = 60.0
     poll_interval_s: float = 2.0
+    # Optional best-effort hook fired with (endpoint_id, job_data) when a job
+    # reaches COMPLETED; used to record stage durations for queue-ETA. Never
+    # allowed to affect the job result (errors are swallowed).
+    on_job_complete: Callable[[str, dict[str, Any]], None] | None = None
 
     def _raise_for_status(self, response: requests.Response) -> None:
         try:
@@ -155,6 +159,11 @@ class RunPodClient:
                 continue
             status = data.get("status") or data.get("state")
             if status in {"COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED", "CANCELLED", "TIMED_OUT"}:
+                if status == "COMPLETED" and self.on_job_complete is not None:
+                    try:
+                        self.on_job_complete(endpoint_id, data)
+                    except Exception:
+                        pass
                 return data
             elapsed = time.monotonic() - start
             if elapsed > 60 * 60 * 6:
