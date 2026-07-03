@@ -12147,6 +12147,9 @@ function initChatProviderSettings() {
       const models = (res && res.models) || [];
       setModelOptions(models, cfg.model);
       if (models.length) {
+        // Persisted model may not be in the freshly loaded list (e.g. after a
+        // provider switch); fall back to the first model rather than blanking it.
+        if (!modelSel.value) modelSel.value = models[0].id;
         cfg.model = modelSel.value;
         saveChatConfig(cfg);
       }
