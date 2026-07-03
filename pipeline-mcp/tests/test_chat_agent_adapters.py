@@ -49,3 +49,34 @@ def test_anthropic_serializes_tool_turns(monkeypatch):
     tr = body_msgs[2]["content"][0]
     assert tr["type"] == "tool_result" and tr["tool_use_id"] == "tu1"
     assert json.loads(tr["content"]) == {"state": "running"}
+
+
+def test_openai_builds_request_and_parses(monkeypatch):
+    cap = _capture_post(monkeypatch, FakeResp(200, {"choices": [{"message": {
+        "content": "hello",
+        "tool_calls": [{"id": "c1", "type": "function",
+                        "function": {"name": "pipeline.queue_eta",
+                                     "arguments": "{\"run_id\": \"r2\"}"}}],
+    }}]}))
+    out = ca._openai_complete("gpt-x", "sk", [{"role": "user", "content": "eta?"}],
+                              ca.tool_specs(), "SYS", 60.0)
+    assert out["text"] == "hello"
+    assert out["tool_calls"] == [{"id": "c1", "name": "pipeline.queue_eta", "args": {"run_id": "r2"}}]
+    assert cap["url"] == "https://api.openai.com/v1/chat/completions"
+    assert cap["headers"].get("Authorization") == "Bearer sk"
+    assert cap["body"]["messages"][0] == {"role": "system", "content": "SYS"}
+    assert cap["body"]["tools"][0]["type"] == "function"
+
+
+def test_openai_serializes_tool_turns(monkeypatch):
+    cap = _capture_post(monkeypatch, FakeResp(200, {"choices": [{"message": {"content": "done"}}]}))
+    msgs = [
+        {"role": "user", "content": "eta?"},
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "c1", "name": "pipeline.queue_eta", "args": {}}]},
+        {"role": "tool", "tool_call_id": "c1", "name": "pipeline.queue_eta", "content": {"wait_s": 30}},
+    ]
+    out = ca._openai_complete("m", "k", msgs, ca.tool_specs(), None, 60.0)
+    assert out["text"] == "done"
+    body_msgs = cap["body"]["messages"]
+    assert body_msgs[-1]["role"] == "tool" and body_msgs[-1]["tool_call_id"] == "c1"
+    assert body_msgs[-2]["tool_calls"][0]["function"]["name"] == "pipeline.queue_eta"

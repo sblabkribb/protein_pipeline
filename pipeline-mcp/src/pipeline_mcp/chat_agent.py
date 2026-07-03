@@ -154,8 +154,52 @@ def _anthropic_complete(model, key, messages, tools, system, timeout):
     return {"text": text, "tool_calls": calls}
 
 
-def _openai_complete(model, key, messages, tools, system, timeout):  # implemented in Task 3
-    raise NotImplementedError
+def _to_openai_messages(messages, system):
+    out = []
+    if system:
+        out.append({"role": "system", "content": system})
+    for m in messages:
+        role = m.get("role")
+        if role == "user":
+            out.append({"role": "user", "content": str(m.get("content") or "")})
+        elif role == "assistant":
+            msg = {"role": "assistant", "content": m.get("content") or None}
+            tcs = m.get("tool_calls") or []
+            if tcs:
+                msg["tool_calls"] = [{"id": tc.get("id") or tc.get("name"), "type": "function",
+                                      "function": {"name": tc.get("name"),
+                                                   "arguments": json.dumps(tc.get("args") or {})}}
+                                     for tc in tcs]
+            out.append(msg)
+        elif role == "tool":
+            out.append({"role": "tool", "tool_call_id": m.get("tool_call_id") or m.get("name"),
+                        "content": json.dumps(m.get("content"))})
+    return out
+
+
+def _openai_complete(model, key, messages, tools, system, timeout):
+    body = {
+        "model": model,
+        "messages": _to_openai_messages(messages, system),
+        "tools": [{"type": "function", "function": {"name": t["name"],
+                   "description": t["description"], "parameters": t["parameters"]}} for t in tools],
+        "tool_choice": "auto",
+    }
+    data = _post_json("https://api.openai.com/v1/chat/completions",
+                      {"Authorization": f"Bearer {key}", "content-type": "application/json"},
+                      body, timeout)
+    choice = (data.get("choices") or [{}])[0]
+    msg = choice.get("message") or {}
+    text = msg.get("content") or ""
+    calls = []
+    for tc in msg.get("tool_calls") or []:
+        fn = tc.get("function") or {}
+        try:
+            args = json.loads(fn.get("arguments") or "{}")
+        except ValueError:
+            args = {}
+        calls.append({"id": tc.get("id"), "name": fn.get("name"), "args": args})
+    return {"text": text, "tool_calls": calls}
 
 
 def _gemini_complete(model, key, messages, tools, system, timeout):  # implemented in Task 4
