@@ -1207,6 +1207,37 @@ class Handler(BaseHTTPRequestHandler):
             self._json(status, {"ok": False, "error": str(exc)})
 
 
+def _bootstrap_queue_durations(runner) -> None:
+    """One-time seed of the queue-ETA duration store from historical run events,
+    so ETA works before any new job completes. Best-effort; never blocks startup."""
+    try:
+        from .config import load_config
+        from .queue_stats import QueueStatsStore, bootstrap_from_events
+
+        store = QueueStatsStore(runner.output_root)
+        if not store.is_empty():
+            return
+        rp = load_config().runpod
+
+        def _event_endpoint(stage: str) -> str | None:
+            s = str(stage or "").lower()
+            if "mmseqs" in s or "msa" in s or "novelty" in s:
+                return rp.mmseqs_endpoint_id
+            if "rfd3" in s:
+                return rp.rfd3_endpoint_id
+            if "bioemu" in s:
+                return rp.bioemu_endpoint_id
+            if "mpnn" in s or s == "design":
+                return rp.proteinmpnn_endpoint_id
+            if "af2" in s or "colabfold" in s or "alphafold" in s:
+                return rp.alphafold2_endpoint_id or rp.colabfold_endpoint_id
+            return None
+
+        bootstrap_from_events(runner.output_root, _event_endpoint)
+    except Exception:
+        pass
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="0.0.0.0")
@@ -1217,6 +1248,7 @@ def main(argv: list[str] | None = None) -> None:
 
     runner = build_runner()
     ensure_runpod_metrics_collector(runner)
+    _bootstrap_queue_durations(runner)
     global _DISPATCHER
     _DISPATCHER = ToolDispatcher(runner)
     global _AUTH
