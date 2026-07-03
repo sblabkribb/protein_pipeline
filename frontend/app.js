@@ -135,7 +135,13 @@ import {
   PROVIDERS,
   loadChatConfig,
   saveChatConfig,
+  chatConfigReady,
 } from "./lib/chat-providers.js?v=20260703_v1";
+import {
+  buildChatSendPayload,
+  parseChatSendResult,
+  navigateActions,
+} from "./lib/chat-agent.js?v=20260703_v1";
 import {
   buildProviderHealthPayload,
   buildProviderUpdatePayload,
@@ -10993,7 +10999,27 @@ function copilotResumeReply(snapshot = copilotSnapshot()) {
     : "`Resume Run` reads request.json and relaunches with the same run_id.\nWith `force=false`, existing artifacts are reused and missing stages continue.";
 }
 
-function generateCopilotReply(prompt, intentHint = "") {
+async function generateCopilotReply(prompt, intentHint = "") {
+  const cfg = loadChatConfig();
+  if (chatConfigReady(cfg)) {
+    try {
+      const history = Array.isArray(state.copilotHistory) ? state.copilotHistory : [];
+      const payload = buildChatSendPayload(cfg, history, copilotSnapshot());
+      const res = await apiCall("chat.send", payload);
+      const { reply, actions, error } = parseChatSendResult(res);
+      if (error) {
+        return error.kind === "auth"
+          ? "API key is not valid."
+          : `Assistant is unavailable: ${error.message || ""}`;
+      }
+      for (const a of navigateActions(actions)) {
+        setActiveTab(a.page);
+      }
+      return reply || "";
+    } catch (_e) {
+      return "Could not reach the assistant.";
+    }
+  }
   return buildCopilotReply({
     prompt,
     intentHint,
