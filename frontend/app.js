@@ -132,6 +132,11 @@ import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=
 import { renderMcpGuideMarkup, buildMcpJsonSnippetWithToken, fillMasterPromptToken } from "./lib/mcp-guide.js?v=20260609_v11";
 import { renderQueueEta } from "./lib/queue-eta.js?v=20260703_v2";
 import {
+  PROVIDERS,
+  loadChatConfig,
+  saveChatConfig,
+} from "./lib/chat-providers.js?v=20260703_v1";
+import {
   buildProviderHealthPayload,
   buildProviderUpdatePayload,
   normalizeProviderType,
@@ -12063,6 +12068,93 @@ function setLanguage(lang) {
   if (tutorialIsOpen()) {
     renderTutorialStep();
   }
+}
+
+function initChatProviderSettings() {
+  const providerSel = document.getElementById("chatProviderSelect");
+  const keyInput = document.getElementById("chatProviderKey");
+  const loadBtn = document.getElementById("chatLoadModelsBtn");
+  const modelSel = document.getElementById("chatModelSelect");
+  const statusEl = document.getElementById("chatProviderStatus");
+  if (!providerSel || !keyInput || !loadBtn || !modelSel) return;
+
+  const cfg = loadChatConfig();
+
+  providerSel.innerHTML = "";
+  for (const p of PROVIDERS) {
+    const opt = document.createElement("option");
+    opt.value = p.id;
+    opt.textContent = p.label;
+    providerSel.appendChild(opt);
+  }
+
+  function setModelOptions(models, selected) {
+    modelSel.innerHTML = "";
+    for (const m of models) {
+      const opt = document.createElement("option");
+      opt.value = m.id;
+      opt.textContent = m.label || m.id;
+      modelSel.appendChild(opt);
+    }
+    if (selected) modelSel.value = selected;
+  }
+
+  function hydrate() {
+    providerSel.value = cfg.provider;
+    keyInput.value = (cfg.keys && cfg.keys[cfg.provider]) || "";
+    if (cfg.model) setModelOptions([{ id: cfg.model, label: cfg.model }], cfg.model);
+    else setModelOptions([]);
+  }
+  hydrate();
+
+  providerSel.addEventListener("change", () => {
+    cfg.provider = providerSel.value;
+    saveChatConfig(cfg);
+    hydrate();
+    if (statusEl) statusEl.textContent = "";
+  });
+
+  keyInput.addEventListener("change", () => {
+    cfg.keys = cfg.keys || {};
+    cfg.keys[cfg.provider] = keyInput.value.trim();
+    saveChatConfig(cfg);
+  });
+
+  modelSel.addEventListener("change", () => {
+    cfg.model = modelSel.value;
+    saveChatConfig(cfg);
+  });
+
+  loadBtn.addEventListener("click", async () => {
+    const provider = providerSel.value;
+    const apiKey = keyInput.value.trim();
+    cfg.keys = cfg.keys || {};
+    cfg.keys[provider] = apiKey;
+    saveChatConfig(cfg);
+    if (statusEl) statusEl.textContent = "Loading…";
+    try {
+      const res = await apiCall("chat.list_models", { provider, api_key: apiKey });
+      if (res && res.error) {
+        const kind = res.error.kind;
+        if (statusEl) {
+          statusEl.textContent =
+            kind === "auth"
+              ? "API key is not valid."
+              : `Could not load models: ${res.error.message || ""}`;
+        }
+        return;
+      }
+      const models = (res && res.models) || [];
+      setModelOptions(models, cfg.model);
+      if (models.length) {
+        cfg.model = modelSel.value;
+        saveChatConfig(cfg);
+      }
+      if (statusEl) statusEl.textContent = `${models.length} models loaded.`;
+    } catch (_e) {
+      if (statusEl) statusEl.textContent = "Could not reach the server.";
+    }
+  });
 }
 
 function initLanguage() {
@@ -30074,6 +30166,7 @@ window.addEventListener("message", (event) => {
 applyEnvironmentChrome();
 initLanguage();
 initCopilot();
+initChatProviderSettings();
 
 void bootstrapAuth();
 
