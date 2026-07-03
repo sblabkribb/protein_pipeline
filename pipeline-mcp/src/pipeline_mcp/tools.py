@@ -84,7 +84,9 @@ from .storage import write_json
 from .queue_eta import estimate_run_eta
 from .queue_eta import estimate_stage_eta
 from .queue_stats import QueueStatsStore
+from .runpod_metrics import get_runpod_metrics_store
 from .runpod_metrics import latest_health
+from .config import load_config as _load_config_for_eta
 
 
 def compute_queue_eta(*, output_root, store, remaining_stages: list[dict]) -> dict:
@@ -115,6 +117,43 @@ def compute_queue_eta(*, output_root, store, remaining_stages: list[dict]) -> di
             }
         )
     return estimate_run_eta(per_stage)
+
+
+def _queue_eta_tool(runner, arguments: dict) -> dict:
+    """MCP handler for pipeline.queue_eta.
+
+    Resolves the run's remaining pipeline stages (from its status) to RunPod
+    endpoints, then returns an approximate per-stage + whole-run ETA. With no
+    run_id (or an unknown stage) it reports all RunPod-backed stages.
+    """
+    from .pipeline import _PIPELINE_STAGE_ORDER  # deferred: avoid import cycle
+
+    run_id = str((arguments or {}).get("run_id") or "").strip()
+    rp = _load_config_for_eta().runpod
+    stage_ep = {
+        "msa": rp.mmseqs_endpoint_id,
+        "rfd3": rp.rfd3_endpoint_id,
+        "bioemu": rp.bioemu_endpoint_id,
+        "design": rp.proteinmpnn_endpoint_id,
+        "af2": rp.alphafold2_endpoint_id or rp.colabfold_endpoint_id,
+        "novelty": rp.mmseqs_endpoint_id,
+    }
+    current = None
+    if run_id:
+        status = load_status(runner.output_root, run_id) or {}
+        current = str(status.get("stage") or "").strip().lower() or None
+    order = list(_PIPELINE_STAGE_ORDER)
+    stages = order[order.index(current):] if current in order else order
+    remaining = [
+        {"stage": s, "endpoint_id": stage_ep[s]} for s in stages if stage_ep.get(s)
+    ]
+    store = get_runpod_metrics_store(runner.output_root)
+    out = compute_queue_eta(
+        output_root=runner.output_root, store=store, remaining_stages=remaining
+    )
+    out["run_id"] = run_id or None
+    out["current_stage"] = current
+    return out
 
 
 def _env_true(name: str) -> bool:
@@ -9146,6 +9185,16 @@ def tool_definitions() -> list[dict[str, Any]]:
                 "required": ["run_id", "prompt"],
             },
         },
+        {
+            "name": "pipeline.queue_eta",
+            "description": "Approximate worker-queue ETA (jobs ahead, estimated wait/finish) for a run's remaining pipeline stages. Times are approximate; missing data degrades to counts only.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string", "description": "Optional run id; if omitted, reports all RunPod-backed stages."},
+                },
+            },
+        },
     ]
 
 
@@ -9539,5 +9588,8 @@ class ToolDispatcher:
 
         if name == "pipeline.model_provider_health":
             return _model_provider_health_tool(self.runner, arguments)
+
+        if name == "pipeline.queue_eta":
+            return _queue_eta_tool(self.runner, arguments)
 
         raise ValueError(f"Unknown tool: {name}")
