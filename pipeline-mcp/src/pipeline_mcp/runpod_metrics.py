@@ -6,6 +6,7 @@ from datetime import UTC
 from datetime import datetime
 from datetime import timedelta
 from pathlib import Path
+import json
 import sqlite3
 import threading
 from time import monotonic
@@ -161,6 +162,30 @@ def _normalize_health_sample(endpoint_id: str, payload: dict[str, Any], *, sourc
         "failed": _int_value(jobs.get("failed")),
         "retried": _int_value(jobs.get("retried")),
         "mode": source_mode,
+    }
+
+
+def latest_health(store: "RunPodMetricsStore", endpoint_id: str) -> dict[str, Any] | None:
+    """Return the most recent normalized health sample for an endpoint, or None.
+
+    Reads the ``health:<endpoint>`` state key persisted by the collector loop.
+    Used by the queue-ETA tool to get live queued/running/workers counts.
+    """
+    raw = store.get_state(f"health:{endpoint_id}", "")
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    return {
+        "endpoint_id": endpoint_id,
+        "queued": _int_value(data.get("queued")),
+        "running": _int_value(data.get("running")),
+        "workers": _int_value(data.get("workers")),
+        "t": data.get("t"),
     }
 
 
@@ -519,7 +544,9 @@ class RunPodMetricsCollector(threading.Thread):
             try:
                 payload = runpod.health(endpoint_id)
                 if isinstance(payload, dict):
-                    samples.append(_normalize_health_sample(endpoint_id, payload, source_mode="collector"))
+                    sample = _normalize_health_sample(endpoint_id, payload, source_mode="collector")
+                    samples.append(sample)
+                    self.store.set_state(f"health:{endpoint_id}", json.dumps(sample))
             except Exception as exc:
                 self.store.set_state("usage_error", str(exc))
         if samples:
