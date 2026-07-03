@@ -117,6 +117,8 @@ def _to_anthropic_messages(messages):
         if role == "user":
             out.append({"role": "user", "content": [{"type": "text", "text": str(m.get("content") or "")}]})
         elif role == "assistant":
+            if not m.get("content") and not (m.get("tool_calls") or []):
+                continue
             content = []
             if m.get("content"):
                 content.append({"type": "text", "text": str(m["content"])})
@@ -163,6 +165,8 @@ def _to_openai_messages(messages, system):
         if role == "user":
             out.append({"role": "user", "content": str(m.get("content") or "")})
         elif role == "assistant":
+            if not m.get("content") and not (m.get("tool_calls") or []):
+                continue
             msg = {"role": "assistant", "content": m.get("content") or None}
             tcs = m.get("tool_calls") or []
             if tcs:
@@ -209,6 +213,8 @@ def _to_gemini_contents(messages):
         if role == "user":
             out.append({"role": "user", "parts": [{"text": str(m.get("content") or "")}]})
         elif role == "assistant":
+            if not m.get("content") and not (m.get("tool_calls") or []):
+                continue
             parts = []
             if m.get("content"):
                 parts.append({"text": str(m["content"])})

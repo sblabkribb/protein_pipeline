@@ -111,3 +111,43 @@ def test_gemini_serializes_tool_turns(monkeypatch):
     assert contents[1]["parts"][0]["functionCall"]["name"] == "pipeline.status"
     fr = contents[2]["parts"][0]["functionResponse"]
     assert fr["name"] == "pipeline.status" and fr["response"] == {"result": {"state": "done"}}
+
+
+def test_anthropic_skips_empty_assistant_turn(monkeypatch):
+    cap = _capture_post(monkeypatch, FakeResp(200, {"content": [{"type": "text", "text": "ok"}]}))
+    msgs = [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": ""},          # empty, no tool_calls
+        {"role": "user", "content": "still there?"},
+    ]
+    ca._anthropic_complete("m", "k", msgs, ca.tool_specs(), None, 60.0)
+    roles = [m["role"] for m in cap["body"]["messages"]]
+    assert roles == ["user", "user"]                    # empty assistant dropped
+    for m in cap["body"]["messages"]:
+        for block in m["content"]:
+            if block.get("type") == "text":
+                assert block["text"] != ""              # no empty text block
+
+
+def test_gemini_skips_empty_assistant_turn(monkeypatch):
+    cap = _capture_post(monkeypatch, FakeResp(200, {"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}))
+    msgs = [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": ""},
+        {"role": "user", "content": "again"},
+    ]
+    ca._gemini_complete("m", "k", msgs, ca.tool_specs(), None, 60.0)
+    roles = [c["role"] for c in cap["body"]["contents"]]
+    assert roles == ["user", "user"]
+
+
+def test_openai_skips_empty_assistant_turn(monkeypatch):
+    cap = _capture_post(monkeypatch, FakeResp(200, {"choices": [{"message": {"content": "ok"}}]}))
+    msgs = [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": ""},
+        {"role": "user", "content": "again"},
+    ]
+    ca._openai_complete("m", "k", msgs, ca.tool_specs(), None, 60.0)
+    roles = [m["role"] for m in cap["body"]["messages"] if m["role"] != "system"]
+    assert roles == ["user", "user"]
