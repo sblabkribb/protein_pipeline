@@ -2069,26 +2069,6 @@
             Applies to run reports and agent reports.
           </div>
         </div>
-        <div class="settings-section">
-          <h3>AI Chatbot</h3>
-          <label>
-            <span>Provider</span>
-            <select id="chatProviderSelect"></select>
-          </label>
-          <label>
-            <span>API key</span>
-            <input id="chatProviderKey" type="password" autocomplete="off"
-                   placeholder="stored in this browser only" />
-          </label>
-          <div class="settings-actions">
-            <button id="chatLoadModelsBtn" class="ghost" type="button">Load models</button>
-          </div>
-          <label>
-            <span>Model</span>
-            <select id="chatModelSelect"></select>
-          </label>
-          <div id="chatProviderStatus" class="hint" aria-live="polite"></div>
-        </div>
         <div class="settings-actions">
           <button id="healthCheck" class="ghost" data-i18n="settings.health">Health Check</button>
         </div>
@@ -2393,6 +2373,26 @@
         </div>
       </div>
       <div class="copilot-body">
+        <details class="copilot-section copilot-panel chat-ai-settings">
+          <summary>AI Assistant settings</summary>
+          <label>
+            <span>Provider</span>
+            <select id="chatProviderSelect"></select>
+          </label>
+          <label>
+            <span>API key</span>
+            <input id="chatProviderKey" type="password" autocomplete="off"
+                   placeholder="stored in this browser only" />
+          </label>
+          <div class="copilot-header-actions">
+            <button id="chatLoadModelsBtn" class="ghost" type="button">Load models</button>
+          </div>
+          <label>
+            <span>Model</span>
+            <select id="chatModelSelect"></select>
+          </label>
+          <div id="chatProviderStatus" class="status-subtitle" aria-live="polite"></div>
+        </details>
         <div class="copilot-section">
           <div class="status-subtitle" data-i18n="copilot.summary.title">Live Snapshot</div>
           <div id="copilotSummary" class="copilot-summary">
