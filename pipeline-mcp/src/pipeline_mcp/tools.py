@@ -81,6 +81,42 @@ from .storage import set_status
 from .storage import write_json
 
 
+from .queue_eta import estimate_run_eta
+from .queue_eta import estimate_stage_eta
+from .queue_stats import QueueStatsStore
+from .runpod_metrics import latest_health
+
+
+def compute_queue_eta(*, output_root, store, remaining_stages: list[dict]) -> dict:
+    """Combine live endpoint health with EWMA durations into a run ETA.
+
+    ``remaining_stages`` is a list of ``{"stage", "endpoint_id"}``. For each,
+    read latest health (queued/running/workers) and average duration, then
+    estimate wait/finish. Missing duration -> that stage is a counts-only
+    fallback. Returns the ``estimate_run_eta`` shape (per_stage + run summary).
+    """
+    stats = QueueStatsStore(output_root)
+    per_stage: list[dict] = []
+    for st in remaining_stages:
+        eid = st["endpoint_id"]
+        h = latest_health(store, eid)
+        est = estimate_stage_eta(
+            jobs_ahead=(h["queued"] if h else 0),
+            workers=(h["workers"] if h else 0),
+            avg_duration_s=stats.avg_duration(eid),
+        )
+        per_stage.append(
+            {
+                "stage": st["stage"],
+                "endpoint_id": eid,
+                "queued": (h["queued"] if h else None),
+                "running": (h["running"] if h else None),
+                **est,
+            }
+        )
+    return estimate_run_eta(per_stage)
+
+
 def _env_true(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "y", "on"}
 
