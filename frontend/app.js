@@ -130,6 +130,7 @@ import {
 } from "./lib/auth.js?v=20260409_v7";
 import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=20260407_v6";
 import { renderMcpGuideMarkup, buildMcpJsonSnippetWithToken, fillMasterPromptToken } from "./lib/mcp-guide.js?v=20260609_v11";
+import { renderQueueEta } from "./lib/queue-eta.js?v=20260703_v1";
 import {
   buildProviderHealthPayload,
   buildProviderUpdatePayload,
@@ -15140,6 +15141,24 @@ function shouldAutoRefreshArtifacts(runId = state.currentRunId) {
   return false;
 }
 
+async function updateQueueEta(runId) {
+  const cardEl = document.getElementById("queueEtaCard");
+  if (!cardEl) return;
+  try {
+    const payload = await apiCall("pipeline.queue_eta", { run_id: runId });
+    const html = renderQueueEta(payload, (state && state.lang) || "ko");
+    if (html) {
+      cardEl.textContent = html;
+      cardEl.hidden = false;
+    } else {
+      cardEl.hidden = true;
+    }
+  } catch (_err) {
+    // ETA is a best-effort overlay; never disrupt polling.
+    cardEl.hidden = true;
+  }
+}
+
 async function pollCurrentRun({ includeArtifacts = "auto" } = {}) {
   const studioRunId =
     activeTabId() === "studio" ? String(workflowStudioActionRunId(workflowStudioSessionForId()) || "").trim() : "";
@@ -15156,6 +15175,7 @@ async function pollCurrentRun({ includeArtifacts = "auto" } = {}) {
   if (state.pollCyclePromise) return state.pollCyclePromise;
   state.pollCyclePromise = (async () => {
     await pollStatus(runId);
+    await updateQueueEta(runId);
     await refreshAgentPanel();
     if (activeTabId() === "cath" && isAdminUser()) {
       await refreshCathOps();
