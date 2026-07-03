@@ -10,8 +10,6 @@ import re
 
 import requests
 
-CHAT_PROVIDERS = ("anthropic", "openai", "gemini")
-
 _ALIASES = {
     "anthropic": "anthropic", "claude": "anthropic",
     "openai": "openai", "gpt": "openai", "codex": "openai",
@@ -57,16 +55,23 @@ def _get(url: str, headers: dict, timeout: float) -> dict:
 
 
 def _anthropic_models(api_key: str, timeout: float) -> list[dict]:
-    data = _get(
-        "https://api.anthropic.com/v1/models",
-        {"x-api-key": api_key, "anthropic-version": "2023-06-01"},
-        timeout,
-    )
+    headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01"}
     out: list[dict] = []
-    for m in data.get("data", []):
-        mid = str((m or {}).get("id") or "").strip()
-        if mid:
-            out.append({"id": mid, "label": str(m.get("display_name") or mid)})
+    after: str | None = None
+    for _ in range(50):  # safety cap against a runaway cursor
+        url = "https://api.anthropic.com/v1/models?limit=1000"
+        if after:
+            url += f"&after_id={after}"
+        data = _get(url, headers, timeout)
+        for m in data.get("data", []):
+            mid = str((m or {}).get("id") or "").strip()
+            if mid:
+                out.append({"id": mid, "label": str(m.get("display_name") or mid)})
+        if not data.get("has_more"):
+            break
+        after = str(data.get("last_id") or "").strip() or None
+        if after is None:
+            break
     return out
 
 
@@ -89,20 +94,25 @@ def _openai_models(api_key: str, timeout: float) -> list[dict]:
 
 
 def _gemini_models(api_key: str, timeout: float) -> list[dict]:
-    data = _get(
-        f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}",
-        {},
-        timeout,
-    )
+    base = "https://generativelanguage.googleapis.com/v1beta/models"
     out: list[dict] = []
-    for m in data.get("models", []):
-        methods = (m or {}).get("supportedGenerationMethods") or []
-        if "generateContent" not in methods:
-            continue
-        name = str(m.get("name") or "").strip()
-        mid = name[len("models/"):] if name.startswith("models/") else name
-        if mid:
-            out.append({"id": mid, "label": str(m.get("displayName") or mid)})
+    token: str | None = None
+    for _ in range(50):  # safety cap against a runaway cursor
+        url = f"{base}?key={api_key}&pageSize=1000"
+        if token:
+            url += f"&pageToken={token}"
+        data = _get(url, {}, timeout)
+        for m in data.get("models", []):
+            methods = (m or {}).get("supportedGenerationMethods") or []
+            if "generateContent" not in methods:
+                continue
+            name = str(m.get("name") or "").strip()
+            mid = name[len("models/"):] if name.startswith("models/") else name
+            if mid:
+                out.append({"id": mid, "label": str(m.get("displayName") or mid)})
+        token = str(data.get("nextPageToken") or "").strip() or None
+        if token is None:
+            break
     return out
 
 
