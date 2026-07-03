@@ -6,6 +6,8 @@ hardcoded host. No key is stored or logged; the key is used only for the request
 """
 from __future__ import annotations
 
+import re
+
 import requests
 
 CHAT_PROVIDERS = ("anthropic", "openai", "gemini")
@@ -41,7 +43,8 @@ def _get(url: str, headers: dict, timeout: float) -> dict:
     try:
         resp = requests.get(url, headers=headers, timeout=timeout)
     except requests.RequestException as exc:
-        raise ChatProviderError("upstream", f"request failed: {exc}") from exc
+        detail = re.sub(r"key=[^&\s]+", "key=***", str(exc))
+        raise ChatProviderError("upstream", f"request failed: {detail}") from exc
     if resp.status_code in (401, 403):
         raise ChatProviderError("auth", "provider rejected the API key")
     if resp.status_code >= 400:

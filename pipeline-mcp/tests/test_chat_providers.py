@@ -94,3 +94,15 @@ def test_empty_key_no_network(monkeypatch):
 def test_provider_aliases(monkeypatch):
     _patch_get(monkeypatch, FakeResp(200, {"data": [{"id": "gpt-4o"}]}))
     assert list_chat_models("codex", "sk")[0]["id"] == "gpt-4o"
+
+
+def test_gemini_network_error_does_not_leak_key(monkeypatch):
+    secret = "AIzaSecretKey123"
+    _patch_get(monkeypatch, cp.requests.RequestException(
+        f"HTTPSConnectionPool: Max retries exceeded with url: "
+        f"/v1beta/models?key={secret} (Caused by ...)"))
+    with pytest.raises(ChatProviderError) as exc:
+        list_chat_models("gemini", secret)
+    assert exc.value.kind == "upstream"
+    assert secret not in exc.value.message
+    assert secret not in str(exc.value)
