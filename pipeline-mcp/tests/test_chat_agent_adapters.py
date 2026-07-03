@@ -80,3 +80,34 @@ def test_openai_serializes_tool_turns(monkeypatch):
     body_msgs = cap["body"]["messages"]
     assert body_msgs[-1]["role"] == "tool" and body_msgs[-1]["tool_call_id"] == "c1"
     assert body_msgs[-2]["tool_calls"][0]["function"]["name"] == "pipeline.queue_eta"
+
+
+def test_gemini_builds_request_and_parses(monkeypatch):
+    cap = _capture_post(monkeypatch, FakeResp(200, {"candidates": [{"content": {"parts": [
+        {"text": "sure"},
+        {"functionCall": {"name": "navigate", "args": {"page": "fast"}}},
+    ]}}]}))
+    out = ca._gemini_complete("gemini-x", "gk", [{"role": "user", "content": "run"}],
+                              ca.tool_specs(), "SYS", 60.0)
+    assert out["text"] == "sure"
+    assert out["tool_calls"][0]["name"] == "navigate"
+    assert out["tool_calls"][0]["args"] == {"page": "fast"}
+    assert cap["url"].startswith("https://generativelanguage.googleapis.com/v1beta/models/gemini-x:generateContent?key=")
+    assert cap["body"]["system_instruction"]["parts"][0]["text"] == "SYS"
+    assert cap["body"]["tools"][0]["function_declarations"]
+
+
+def test_gemini_serializes_tool_turns(monkeypatch):
+    cap = _capture_post(monkeypatch, FakeResp(200, {"candidates": [{"content": {"parts": [{"text": "done"}]}}]}))
+    msgs = [
+        {"role": "user", "content": "status"},
+        {"role": "assistant", "content": "", "tool_calls": [{"id": "pipeline.status-0", "name": "pipeline.status", "args": {}}]},
+        {"role": "tool", "tool_call_id": "pipeline.status-0", "name": "pipeline.status", "content": {"state": "done"}},
+    ]
+    out = ca._gemini_complete("m", "k", msgs, ca.tool_specs(), None, 60.0)
+    assert out["text"] == "done"
+    contents = cap["body"]["contents"]
+    assert contents[1]["role"] == "model"
+    assert contents[1]["parts"][0]["functionCall"]["name"] == "pipeline.status"
+    fr = contents[2]["parts"][0]["functionResponse"]
+    assert fr["name"] == "pipeline.status" and fr["response"] == {"result": {"state": "done"}}
