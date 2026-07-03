@@ -130,7 +130,7 @@ import {
 } from "./lib/auth.js?v=20260409_v7";
 import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=20260407_v6";
 import { renderMcpGuideMarkup, buildMcpJsonSnippetWithToken, fillMasterPromptToken } from "./lib/mcp-guide.js?v=20260609_v11";
-import { renderQueueEta } from "./lib/queue-eta.js?v=20260703_v1";
+import { renderQueueEta } from "./lib/queue-eta.js?v=20260703_v2";
 import {
   buildProviderHealthPayload,
   buildProviderUpdatePayload,
