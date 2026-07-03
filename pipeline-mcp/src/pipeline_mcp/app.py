@@ -30,6 +30,7 @@ from .clients.local_http import LocalHTTPDiffDockClient
 from .clients.local_http import LocalHTTPMMseqsClient
 from .clients.local_http import LocalHTTPRFD3Client
 from .clients.local_http import LocalHTTPRosettaRelaxClient
+from .queue_eta_hook import record_job_duration
 from .config import load_config
 from .model_providers import ModelProviderStore
 from .pipeline import PipelineRunner
@@ -57,6 +58,7 @@ def _runpod_for_provider(default_runpod: RunPodClient, provider: dict) -> RunPod
         skip_verify=default_runpod.skip_verify,
         timeout_s=default_runpod.timeout_s,
         poll_interval_s=default_runpod.poll_interval_s,
+        on_job_complete=default_runpod.on_job_complete,
     )
 
 
@@ -67,6 +69,7 @@ def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
         api_key=cfg.runpod.api_key,
         ca_bundle=cfg.runpod.ca_bundle,
         skip_verify=cfg.runpod.skip_verify,
+        on_job_complete=lambda eid, data: record_job_duration(cfg.output_root, eid, data),
     )
     mmseqs_provider = _provider(provider_store, "mmseqs", provider_user)
     if _provider_is_http(mmseqs_provider):
