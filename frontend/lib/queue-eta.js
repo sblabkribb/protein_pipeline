@@ -18,13 +18,21 @@ export function renderQueueEta(payload, lang = "ko") {
   if (!payload || typeof payload !== "object") return "";
   const ko = String(lang || "").startsWith("ko");
   const perStage = Array.isArray(payload.per_stage) ? payload.per_stage : [];
+  // Health counts are null until the RunPod metrics collector samples once.
+  // Treat "no health at all" differently from a genuine zero-depth queue.
+  const hasHealth = perStage.some(
+    (s) => s.queued != null || s.running != null,
+  );
   const queued = perStage.reduce((a, s) => a + (Number(s.queued) || 0), 0);
   const running = perStage.reduce((a, s) => a + (Number(s.running) || 0), 0);
 
   if (payload.fallback || payload.est_finish_s == null) {
+    if (!hasHealth) {
+      return ko ? "대기열 정보 수집 중…" : "queue info updating…";
+    }
     return ko
-      ? `대기 ${queued} · 실행 ${running} (예상 시간 산출 불가)`
-      : `queued ${queued} · running ${running} (estimate unavailable)`;
+      ? `대기 ${queued} · 실행 ${running} (예상 시간 준비 중)`
+      : `queued ${queued} · running ${running} (estimate pending)`;
   }
 
   const mins = etaMinutes(payload.est_finish_s);

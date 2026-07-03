@@ -27,14 +27,24 @@ test("renderQueueEta normal shows stage, jobs ahead, minutes, approx", () => {
   assert.match(html, /근사/);
 });
 
-test("renderQueueEta fallback shows counts only, no time", () => {
+test("renderQueueEta fallback with health shows counts, no time", () => {
   const html = renderQueueEta(
     { est_finish_s: null, fallback: true,
       per_stage: [{ stage: "msa", queued: 5, running: 0 }] },
     "ko",
   );
   assert.match(html, /대기 5/);
-  assert.match(html, /산출 불가/);
+  assert.match(html, /준비 중/);
+});
+
+test("renderQueueEta with no health data shows collecting, not zero", () => {
+  const html = renderQueueEta(
+    { est_finish_s: null, fallback: true,
+      per_stage: [{ stage: "msa", queued: null, running: null }] },
+    "ko",
+  );
+  assert.match(html, /수집 중/);
+  assert.doesNotMatch(html, /대기 0/);
 });
 
 test("renderQueueEta handles empty payload", () => {
