@@ -83,6 +83,7 @@ from .storage import write_json
 
 from .queue_eta import estimate_run_eta
 from .queue_eta import estimate_stage_eta
+from .chat_providers import ChatProviderError, list_chat_models
 from .queue_stats import QueueStatsStore
 from .runpod_metrics import get_runpod_metrics_store
 from .runpod_metrics import latest_health
@@ -154,6 +155,18 @@ def _queue_eta_tool(runner, arguments: dict) -> dict:
     out["run_id"] = run_id or None
     out["current_stage"] = current
     return out
+
+
+def _chat_list_models_tool(runner, arguments: dict) -> dict:
+    """MCP handler for chat.list_models. The api_key is used transiently to call
+    the provider and is never stored or logged."""
+    provider = str(arguments.get("provider") or "").strip()
+    api_key = str(arguments.get("api_key") or "").strip()
+    try:
+        models = list_chat_models(provider, api_key)
+    except ChatProviderError as exc:
+        return {"error": {"kind": exc.kind, "message": exc.message}, "provider": provider}
+    return {"provider": provider, "models": models}
 
 
 def _env_true(name: str) -> bool:
@@ -9195,6 +9208,18 @@ def tool_definitions() -> list[dict[str, Any]]:
                 },
             },
         },
+        {
+            "name": "chat.list_models",
+            "description": "List chat-capable models for an LLM provider using a user-supplied API key. The key is used only for this request and is not stored.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "provider": {"type": "string", "description": "anthropic | openai | gemini"},
+                    "api_key": {"type": "string", "description": "provider API key (browser-held)"},
+                },
+                "required": ["provider", "api_key"],
+            },
+        },
     ]
 
 
@@ -9591,5 +9616,8 @@ class ToolDispatcher:
 
         if name == "pipeline.queue_eta":
             return _queue_eta_tool(self.runner, arguments)
+
+        if name == "chat.list_models":
+            return _chat_list_models_tool(self.runner, arguments)
 
         raise ValueError(f"Unknown tool: {name}")
