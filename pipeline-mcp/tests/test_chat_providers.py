@@ -24,6 +24,20 @@ def _patch_get(monkeypatch, resp, capture=None):
     monkeypatch.setattr(cp.requests, "get", fake_get)
 
 
+def _patch_get_seq(monkeypatch, responses):
+    """Return responses[0], responses[1], ... on successive calls; record urls."""
+    calls = {"urls": []}
+    seq = list(responses)
+    def fake_get(url, headers=None, timeout=None):
+        calls["urls"].append(url)
+        resp = seq.pop(0)
+        if isinstance(resp, Exception):
+            raise resp
+        return resp
+    monkeypatch.setattr(cp.requests, "get", fake_get)
+    return calls
+
+
 def test_anthropic_maps_id_and_display_name(monkeypatch):
     cap = {}
     _patch_get(monkeypatch, FakeResp(200, {"data": [
@@ -106,3 +120,41 @@ def test_gemini_network_error_does_not_leak_key(monkeypatch):
     assert exc.value.kind == "upstream"
     assert secret not in exc.value.message
     assert secret not in str(exc.value)
+
+
+def test_anthropic_paginates(monkeypatch):
+    calls = _patch_get_seq(monkeypatch, [
+        FakeResp(200, {"data": [{"id": "a", "display_name": "A"}],
+                       "has_more": True, "last_id": "a"}),
+        FakeResp(200, {"data": [{"id": "b", "display_name": "B"}],
+                       "has_more": False}),
+    ])
+    ids = [m["id"] for m in list_chat_models("anthropic", "k")]
+    assert ids == ["a", "b"]
+    assert any("after_id=a" in u for u in calls["urls"])
+    assert calls["urls"][0].startswith("https://api.anthropic.com/v1/models")
+
+
+def test_gemini_paginates(monkeypatch):
+    calls = _patch_get_seq(monkeypatch, [
+        FakeResp(200, {"models": [{"name": "models/g1", "displayName": "G1",
+                       "supportedGenerationMethods": ["generateContent"]}],
+                       "nextPageToken": "tok"}),
+        FakeResp(200, {"models": [{"name": "models/g2", "displayName": "G2",
+                       "supportedGenerationMethods": ["generateContent"]}]}),
+    ])
+    ids = [m["id"] for m in list_chat_models("gemini", "k")]
+    assert ids == ["g1", "g2"]
+    assert any("pageToken=tok" in u for u in calls["urls"])
+
+
+def test_dedup_by_id(monkeypatch):
+    _patch_get(monkeypatch, FakeResp(200, {"data": [
+        {"id": "gpt-4o"}, {"id": "gpt-4o"},
+    ]}))
+    assert [m["id"] for m in list_chat_models("openai", "k")] == ["gpt-4o"]
+
+
+def test_label_falls_back_to_id(monkeypatch):
+    _patch_get(monkeypatch, FakeResp(200, {"data": [{"id": "claude-x"}]}))
+    assert list_chat_models("anthropic", "k") == [{"id": "claude-x", "label": "claude-x"}]
