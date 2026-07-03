@@ -110,8 +110,48 @@ def _complete(provider, model, api_key, messages, tools, *, system=None, timeout
     return _gemini_complete(model, key, messages, tools, system, timeout)
 
 
-def _anthropic_complete(model, key, messages, tools, system, timeout):  # implemented in Task 2
-    raise NotImplementedError
+def _to_anthropic_messages(messages):
+    out = []
+    for m in messages:
+        role = m.get("role")
+        if role == "user":
+            out.append({"role": "user", "content": [{"type": "text", "text": str(m.get("content") or "")}]})
+        elif role == "assistant":
+            content = []
+            if m.get("content"):
+                content.append({"type": "text", "text": str(m["content"])})
+            for tc in m.get("tool_calls") or []:
+                content.append({"type": "tool_use", "id": tc.get("id") or tc.get("name"),
+                                "name": tc.get("name"), "input": tc.get("args") or {}})
+            out.append({"role": "assistant", "content": content or [{"type": "text", "text": ""}]})
+        elif role == "tool":
+            out.append({"role": "user", "content": [{"type": "tool_result",
+                        "tool_use_id": m.get("tool_call_id") or m.get("name"),
+                        "content": json.dumps(m.get("content"))}]})
+    return out
+
+
+def _anthropic_complete(model, key, messages, tools, system, timeout):
+    body = {
+        "model": model, "max_tokens": 1024,
+        "messages": _to_anthropic_messages(messages),
+        "tools": [{"name": t["name"], "description": t["description"],
+                   "input_schema": t["parameters"]} for t in tools],
+    }
+    if system:
+        body["system"] = system
+    data = _post_json("https://api.anthropic.com/v1/messages",
+                      {"x-api-key": key, "anthropic-version": "2023-06-01",
+                       "content-type": "application/json"}, body, timeout)
+    text = ""
+    calls = []
+    for block in data.get("content") or []:
+        if block.get("type") == "text":
+            text += block.get("text") or ""
+        elif block.get("type") == "tool_use":
+            calls.append({"id": block.get("id"), "name": block.get("name"),
+                          "args": block.get("input") or {}})
+    return {"text": text, "tool_calls": calls}
 
 
 def _openai_complete(model, key, messages, tools, system, timeout):  # implemented in Task 3
