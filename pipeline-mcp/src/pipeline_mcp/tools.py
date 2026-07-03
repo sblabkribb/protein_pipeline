@@ -84,6 +84,7 @@ from .storage import write_json
 from .queue_eta import estimate_run_eta
 from .queue_eta import estimate_stage_eta
 from .chat_providers import ChatProviderError, list_chat_models
+from .chat_agent import run_chat_turn
 from .queue_stats import QueueStatsStore
 from .runpod_metrics import get_runpod_metrics_store
 from .runpod_metrics import latest_health
@@ -167,6 +168,55 @@ def _chat_list_models_tool(runner, arguments: dict) -> dict:
     except ChatProviderError as exc:
         return {"error": {"kind": exc.kind, "message": exc.message}, "provider": provider}
     return {"provider": provider, "models": models}
+
+
+_CHAT_READ_ALLOWLIST = {"pipeline.status", "pipeline.queue_eta",
+                        "pipeline.list_runs", "pipeline.list_artifacts"}
+
+
+def _build_chat_system_prompt(context: dict) -> str:
+    tab = str((context or {}).get("tab") or "").strip() or "unknown"
+    run_id = str((context or {}).get("run_id") or "").strip()
+    lines = [
+        "You are the RAPID protein-design assistant embedded in the web app.",
+        "Help the user understand run state and results, and guide them to the right page.",
+        "You can read run state with the provided tools (status, queue_eta, list_runs, list_artifacts).",
+        "To help the user START a run, call navigate to the relevant page (e.g. 'fast' or 'advanced'); "
+        "the user launches the run themselves with the run button — you never start runs directly.",
+        "Be concise. Reply in the user's language.",
+        f"Current page tab: {tab}.",
+    ]
+    if run_id:
+        lines.append(f"Currently selected run_id: {run_id}.")
+    return "\n".join(lines)
+
+
+def _chat_send_tool(runner, arguments: dict) -> dict:
+    """MCP handler for chat.send. Runs the agent loop; read tools execute server-side
+    through an allowlisted dispatcher. The api_key is transient and never stored/logged."""
+    provider = str(arguments.get("provider") or "").strip()
+    model = str(arguments.get("model") or "").strip()
+    api_key = str(arguments.get("api_key") or "").strip()
+    messages = arguments.get("messages") or []
+    context = arguments.get("context") or {}
+    system = _build_chat_system_prompt(context)
+
+    dispatcher = ToolDispatcher(runner)
+
+    def tool_executor(name, args):
+        if name not in _CHAT_READ_ALLOWLIST:
+            return {"error": "tool not available"}
+        try:
+            return dispatcher.call_tool(name, args or {})
+        except Exception as exc:  # never leak a stack to the model
+            return {"error": str(exc)}
+
+    try:
+        out = run_chat_turn(provider, model, api_key, messages, tool_executor, system=system)
+    except ChatProviderError as exc:
+        return {"error": {"kind": exc.kind, "message": exc.message}, "provider": provider}
+    return {"provider": provider, "model": model,
+            "reply": out.get("reply", ""), "actions": out.get("actions", [])}
 
 
 def _env_true(name: str) -> bool:
@@ -9220,6 +9270,21 @@ def tool_definitions() -> list[dict[str, Any]]:
                 "required": ["provider", "api_key"],
             },
         },
+        {
+            "name": "chat.send",
+            "description": "Run one chatbot turn: the assistant may read run state and return a navigate action. Uses a user-supplied API key (browser-held), used only for this request.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "provider": {"type": "string", "description": "anthropic | openai | gemini"},
+                    "model": {"type": "string"},
+                    "api_key": {"type": "string"},
+                    "messages": {"type": "array", "description": "neutral chat history [{role,content}]"},
+                    "context": {"type": "object", "description": "UI context {tab, run_id}"},
+                },
+                "required": ["provider", "model", "api_key", "messages"],
+            },
+        },
     ]
 
 
@@ -9619,5 +9684,8 @@ class ToolDispatcher:
 
         if name == "chat.list_models":
             return _chat_list_models_tool(self.runner, arguments)
+
+        if name == "chat.send":
+            return _chat_send_tool(self.runner, arguments)
 
         raise ValueError(f"Unknown tool: {name}")
