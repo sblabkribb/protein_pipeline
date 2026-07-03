@@ -1,0 +1,92 @@
+"""Persist chatbot file/folder attachments and summarize them for the model.
+
+Attachments arrive as [{name, base64}] (name may be a relative path for folders).
+Saved under <output_root>/_chat_uploads/<session_id>/<sanitized relpath>. Path
+traversal is neutralized; per-file and per-request size caps are enforced.
+"""
+from __future__ import annotations
+
+import base64
+import binascii
+from pathlib import Path
+from uuid import uuid4
+
+_MAX_FILE_BYTES = 10 * 1024 * 1024      # 10 MB per file
+_MAX_TOTAL_BYTES = 50 * 1024 * 1024     # 50 MB per request
+_TEXT_EXT = {".txt", ".fasta", ".fa", ".faa", ".seq", ".pdb", ".cif", ".csv",
+             ".tsv", ".json", ".md", ".a3m", ".sto", ".log", ".yaml", ".yml"}
+_PREVIEW_CHARS = 2000
+
+
+def _sanitize_relpath(name: str) -> Path:
+    raw = str(name or "").replace("\\", "/").strip().lstrip("./")
+    parts = [p for p in raw.split("/") if p and p != ".."]
+    if not parts:
+        parts = [f"upload-{uuid4().hex}"]
+    return Path(*parts)
+
+
+def _session_dir(output_root, session_id) -> Path:
+    sid = "".join(c if (c.isalnum() or c in "-_") else "_"
+                  for c in str(session_id or "").strip())[:80] or "default"
+    return Path(output_root) / "_chat_uploads" / sid
+
+
+def _text_preview(rel: Path, data: bytes):
+    if rel.suffix.lower() not in _TEXT_EXT:
+        return None
+    return data.decode("utf-8", errors="replace")[:_PREVIEW_CHARS]
+
+
+def save_chat_attachments(output_root, session_id, attachments) -> list[dict]:
+    """Save [{name, base64}] and return [{name, size, preview?}]."""
+    saved: list[dict] = []
+    total = 0
+    base = _session_dir(output_root, session_id)
+    for att in attachments or []:
+        name = str((att or {}).get("name") or "").strip()
+        b64 = str((att or {}).get("base64") or "")
+        if not name or not b64:
+            continue
+        try:
+            data = base64.b64decode(b64, validate=True)
+        except (binascii.Error, ValueError):
+            continue
+        if len(data) > _MAX_FILE_BYTES:
+            continue
+        total += len(data)
+        if total > _MAX_TOTAL_BYTES:
+            break
+        rel = _sanitize_relpath(name)
+        target = base / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        entry = {"name": str(rel).replace("\\", "/"), "size": len(data)}
+        preview = _text_preview(rel, data)
+        if preview is not None:
+            entry["preview"] = preview
+        saved.append(entry)
+    return saved
+
+
+def list_chat_attachments(output_root, session_id) -> list[dict]:
+    base = _session_dir(output_root, session_id)
+    out: list[dict] = []
+    if not base.exists():
+        return out
+    for p in sorted(base.rglob("*")):
+        if p.is_file():
+            out.append({"name": str(p.relative_to(base)).replace("\\", "/"),
+                        "size": p.stat().st_size})
+    return out
+
+
+def attachment_prompt_note(saved: list[dict]) -> str:
+    if not saved:
+        return ""
+    lines = ["The user attached these files (saved on the server):"]
+    for s in saved:
+        lines.append(f"- {s['name']} ({s.get('size', 0)} bytes)")
+        if s.get("preview"):
+            lines.append(f"  preview:\n{s['preview']}")
+    return "\n".join(lines)
