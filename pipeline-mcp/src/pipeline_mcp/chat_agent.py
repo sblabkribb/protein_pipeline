@@ -44,6 +44,24 @@ def tool_specs() -> list[dict]:
                                         "properties": {"attachment": {"type": "string"}}},
                         },
                         "required": ["page"]}},
+        {"name": "configure_advanced",
+         "description": "Recommend and pre-fill core Advanced parameters for the user to review, then "
+         "they click the run button (you never start the run). Provide 'answers' with any of: "
+         "num_seq_per_tier (int 1-8, ProteinMPNN sequences per backbone), bioemu_use (bool, enable BioEmu), "
+         "bioemu_num_samples (int 1-50), surrogate_triage_enabled (bool). Include prefill "
+         "{\"attachment\": \"<file name>\"} to also load an attached target.",
+         "parameters": {"type": "object",
+                        "properties": {
+                            "answers": {"type": "object", "properties": {
+                                "num_seq_per_tier": {"type": "integer"},
+                                "bioemu_use": {"type": "boolean"},
+                                "bioemu_num_samples": {"type": "integer"},
+                                "surrogate_triage_enabled": {"type": "boolean"},
+                            }},
+                            "prefill": {"type": "object",
+                                        "properties": {"attachment": {"type": "string"}}},
+                        },
+                        "required": ["answers"]}},
     ]
 
 
@@ -78,6 +96,15 @@ def run_chat_turn(provider, model, api_key, messages, tool_executor, *,
                 actions.append(action)
                 msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
                              "content": {"ok": True, "navigated": page}})
+                stop = True
+            elif name == "configure_advanced":
+                action = {"type": "configure",
+                          "answers": args.get("answers") if isinstance(args.get("answers"), dict) else {}}
+                if isinstance(args.get("prefill"), dict):
+                    action["prefill"] = args["prefill"]
+                actions.append(action)
+                msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
+                             "content": {"ok": True, "configured": list(action["answers"].keys())}})
                 stop = True
             elif name in READ_TOOLS:
                 out = tool_executor(name, args)

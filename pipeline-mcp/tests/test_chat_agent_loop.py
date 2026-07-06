@@ -109,3 +109,21 @@ def test_navigate_without_prefill_has_no_key(monkeypatch):
     ])
     out = run_chat_turn("openai", "m", "k", [{"role": "user", "content": "go"}], lambda n, a: {})
     assert out["actions"] == [{"type": "navigate", "page": "monitor"}]
+
+
+def test_configure_advanced_collects_action(monkeypatch):
+    _fake_complete(monkeypatch, [
+        {"text": "Filled recommended values on Advanced.",
+         "tool_calls": [{"id": "c1", "name": "configure_advanced",
+                         "args": {"answers": {"num_seq_per_tier": 4, "bioemu_use": True},
+                                  "prefill": {"attachment": "4KL5.pdb"}}}]},
+    ])
+    out = run_chat_turn("openai", "m", "k", [{"role": "user", "content": "fill params"}], lambda n, a: {})
+    assert out["actions"] == [{"type": "configure",
+                               "answers": {"num_seq_per_tier": 4, "bioemu_use": True},
+                               "prefill": {"attachment": "4KL5.pdb"}}]
+
+
+def test_configure_advanced_in_tool_specs():
+    names = {s["name"] for s in ca.tool_specs()}
+    assert "configure_advanced" in names
