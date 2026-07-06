@@ -142,6 +142,8 @@ import {
   buildChatSendPayload,
   parseChatSendResult,
   navigateActions,
+  sanitizeAdvancedAnswers,
+  configureActions,
 } from "./lib/chat-agent.js?v=20260703_v1";
 import {
   getChatSessionId,
@@ -11046,6 +11048,34 @@ function applyChatNavigate(action) {
   }
 }
 
+function applyChatConfigure(action) {
+  if (!action || action.type !== "configure") return;
+  // 1) load the attached target (if any) so it carries into Advanced
+  const prefill = action.prefill;
+  if (prefill && prefill.attachment && el.fastTargetInput) {
+    const att = (lastSentChatAttachments || []).concat(pendingChatAttachments || [])
+      .find((a) => a && a.name === prefill.attachment);
+    if (att && att.base64 && /\.(fasta|fa|faa|seq|pdb|cif|txt)$/i.test(prefill.attachment)) {
+      try { el.fastTargetInput.value = decodeURIComponent(escape(atob(att.base64))); } catch (_e) {}
+    }
+  }
+  // 2) set up the Advanced plan (carries the Fast target across), or a manual plan
+  if (typeof openAdvancedFromFast === "function") {
+    openAdvancedFromFast();
+  } else {
+    setActiveTab("advanced");
+  }
+  // 3) merge sanitized recommended answers into the Advanced form and re-render
+  const answers = sanitizeAdvancedAnswers(action.answers);
+  if (Object.keys(answers).length && state.plan) {
+    state.answers = { ...(state.answers || {}), ...answers };
+    try {
+      renderQuestions(state.plan.questions || []);
+      updateRunEligibility(state.plan.questions || []);
+    } catch (_e) { /* render guard */ }
+  }
+}
+
 async function generateCopilotReply(prompt, intentHint = "") {
   const cfg = loadChatConfig();
   if (chatConfigReady(cfg)) {
@@ -11065,6 +11095,9 @@ async function generateCopilotReply(prompt, intentHint = "") {
       }
       for (const a of navigateActions(actions)) {
         applyChatNavigate(a);
+      }
+      for (const a of configureActions(actions)) {
+        applyChatConfigure(a);
       }
       return reply || "";
     } catch (_e) {
