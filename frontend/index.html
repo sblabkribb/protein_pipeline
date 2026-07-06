@@ -2429,7 +2429,12 @@
           <div id="copilotMessages" class="copilot-messages"></div>
         </div>
       </div>
+      <div class="copilot-attachments" id="copilotAttachments"></div>
       <div class="copilot-input-row">
+        <input id="copilotFileInput" type="file" multiple hidden />
+        <input id="copilotFolderInput" type="file" webkitdirectory directory multiple hidden />
+        <button id="copilotAttachBtn" class="ghost" type="button" title="Attach files">📎</button>
+        <button id="copilotAttachFolderBtn" class="ghost" type="button" title="Attach a folder">📁</button>
         <input
           id="copilotInput"
           type="text"
