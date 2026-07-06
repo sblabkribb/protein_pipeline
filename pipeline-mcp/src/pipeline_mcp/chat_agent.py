@@ -62,6 +62,12 @@ def tool_specs() -> list[dict]:
                                         "properties": {"attachment": {"type": "string"}}},
                         },
                         "required": ["answers"]}},
+        {"name": "run_pipeline",
+         "description": "Offer the user a one-click Run button in the chat to start the pipeline. Call "
+         "this ONLY when the user explicitly asks to start/run it (e.g. 'run it', '실행해줘', '돌려줘'). "
+         "It does NOT start the run — the user presses the button. Make sure the target and parameters "
+         "are set first (call configure_advanced in the same turn when needed).",
+         "parameters": {"type": "object", "properties": {}}},
     ]
 
 
@@ -118,6 +124,16 @@ def run_chat_turn(provider, model, api_key, messages, tool_executor, *,
                 msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
                              "content": {"ok": True, "configured": list(answers.keys()),
                                          "note": "values pre-filled on Advanced; now explain each value and WHY, in text"}})
+            elif name == "run_pipeline":
+                if not client_action_taken:
+                    actions.append({"type": "run"})
+                    client_action_taken = True
+                    msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
+                                 "content": {"ok": True, "note": "A Run button was shown to the user; tell them to press it. You did NOT start the run."}})
+                else:
+                    msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
+                                 "content": {"ok": True, "note": "already offered; explain in text"}})
+                continue
             elif name in READ_TOOLS:
                 out = tool_executor(name, args)
                 msgs.append({"role": "tool", "tool_call_id": cid, "name": name, "content": out})
