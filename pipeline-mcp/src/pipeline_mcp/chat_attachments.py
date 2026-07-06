@@ -138,6 +138,30 @@ def summarize_structure(name: str, text: str) -> str | None:
     return None
 
 
+_TARGET_PRIORITY = (".pdb", ".ent", ".cif", ".mmcif", ".fasta", ".fa", ".faa", ".seq")
+
+
+def primary_target_text(output_root, session_id, *, max_chars: int = 2_000_000) -> str | None:
+    """Decoded text of the session's primary target file (structure/sequence first),
+    so the frontend can pre-fill the target even if the browser lost the upload."""
+    base = _session_dir(output_root, session_id)
+    if not base.exists():
+        return None
+    files = [p for p in sorted(base.rglob("*")) if p.is_file()]
+
+    def rank(p: Path) -> int:
+        ext = p.suffix.lower()
+        return _TARGET_PRIORITY.index(ext) if ext in _TARGET_PRIORITY else len(_TARGET_PRIORITY)
+
+    for p in sorted(files, key=rank):
+        if p.suffix.lower() in _TEXT_EXT:
+            try:
+                return p.read_bytes().decode("utf-8", errors="replace")[:max_chars]
+            except OSError:
+                continue
+    return None
+
+
 def session_attachment_context(output_root, session_id, *, max_files: int = 3,
                                preview_chars: int = 1200) -> str:
     """Context block for ALL files saved in the session (not just this turn), so the

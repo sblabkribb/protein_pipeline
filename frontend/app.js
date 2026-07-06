@@ -11025,14 +11025,19 @@ function applyChatNavigate(action) {
   const page = action.page;
   const prefill = action.prefill;
   const wantsPrefill =
-    prefill && prefill.attachment && (page === "fast" || page === "advanced") && el.fastTargetInput;
+    (page === "fast" || page === "advanced") && el.fastTargetInput &&
+    (action.target_text || (prefill && prefill.attachment));
   if (wantsPrefill) {
-    const att = (lastSentChatAttachments || []).concat(pendingChatAttachments || [])
-      .find((a) => a && a.name === prefill.attachment);
-    const textExt = /\.(fasta|fa|faa|seq|pdb|cif|txt)$/i.test(prefill.attachment);
-    if (att && att.base64 && textExt) {
+    let text = action.target_text ? String(action.target_text) : "";
+    if (!text && prefill && prefill.attachment) {
+      const att = (lastSentChatAttachments || []).concat(pendingChatAttachments || [])
+        .find((a) => a && a.name === prefill.attachment);
+      if (att && att.base64 && /\.(fasta|fa|faa|seq|pdb|cif|txt)$/i.test(prefill.attachment)) {
+        try { text = decodeURIComponent(escape(atob(att.base64))); } catch (_e) { text = ""; }
+      }
+    }
+    if (text) {
       try {
-        const text = decodeURIComponent(escape(atob(att.base64)));
         el.fastTargetInput.value = text;
         // Reveal the normally-collapsed paste box so the user can SEE the target.
         const pasteDetails = document.getElementById("fastPasteDetails");
@@ -11062,9 +11067,12 @@ function applyChatNavigate(action) {
 
 function applyChatConfigure(action) {
   if (!action || action.type !== "configure") return;
-  // 1) load the attached target (if any) so it carries into Advanced
+  // 1) load the attached target so it carries into Advanced. Prefer the server-
+  // provided target_text (survives browser refresh); fall back to in-memory upload.
   const prefill = action.prefill;
-  if (prefill && prefill.attachment && el.fastTargetInput) {
+  if (el.fastTargetInput && action.target_text) {
+    el.fastTargetInput.value = String(action.target_text);
+  } else if (prefill && prefill.attachment && el.fastTargetInput) {
     const att = (lastSentChatAttachments || []).concat(pendingChatAttachments || [])
       .find((a) => a && a.name === prefill.attachment);
     if (att && att.base64 && /\.(fasta|fa|faa|seq|pdb|cif|txt)$/i.test(prefill.attachment)) {

@@ -71,3 +71,23 @@ def test_chat_send_injects_saved_attachment_on_followup(monkeypatch, tmp_path):
     })
     last_user = [m for m in captured["messages"] if m["role"] == "user"][-1]
     assert "chains: A, B" in last_user["content"]
+
+
+def test_chat_send_attaches_target_text_to_configure(monkeypatch, tmp_path):
+    from pipeline_mcp.chat_attachments import save_chat_attachments
+
+    class R:
+        output_root = str(tmp_path)
+
+    def fake_run(provider, model, api_key, messages, tool_executor, *, system=None, **kw):
+        return {"reply": "ok", "actions": [{"type": "configure", "answers": {}}], "steps": 1}
+
+    monkeypatch.setattr(tools, "run_chat_turn", fake_run)
+    save_chat_attachments(str(tmp_path), "tt", [{"name": "t.fasta", "base64": _b64(b">a\nACDEFG")}])
+    out = tools._chat_send_tool(R(), {
+        "provider": "openai", "model": "m", "api_key": "k",
+        "messages": [{"role": "user", "content": "fill and run"}],
+        "session_id": "tt",
+    })
+    cfg = [a for a in out["actions"] if a["type"] == "configure"][0]
+    assert cfg["target_text"].startswith(">a")

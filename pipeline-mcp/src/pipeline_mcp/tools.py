@@ -86,7 +86,8 @@ from .queue_eta import estimate_stage_eta
 from .chat_providers import ChatProviderError, list_chat_models
 from .chat_agent import run_chat_turn
 from .chat_attachments import (
-    list_chat_attachments, save_chat_attachments, session_attachment_context)
+    list_chat_attachments, primary_target_text, save_chat_attachments,
+    session_attachment_context)
 from .queue_stats import QueueStatsStore
 from .runpod_metrics import get_runpod_metrics_store
 from .runpod_metrics import latest_health
@@ -275,9 +276,18 @@ def _chat_send_tool(runner, arguments: dict) -> dict:
     except ChatProviderError as exc:
         return {"error": {"kind": exc.kind, "message": exc.message},
                 "provider": provider, "saved": saved}
+    acts = out.get("actions", [])
+    # Attach the saved target's content to configure/navigate actions so the
+    # frontend can pre-fill the target even if the browser lost the upload
+    # (e.g. after a hard refresh). Resolved once from server-side storage.
+    if acts and session_id:
+        tgt = primary_target_text(runner.output_root, session_id)
+        if tgt:
+            for a in acts:
+                if isinstance(a, dict) and a.get("type") in ("configure", "navigate"):
+                    a["target_text"] = tgt
     return {"provider": provider, "model": model,
-            "reply": out.get("reply", ""), "actions": out.get("actions", []),
-            "saved": saved}
+            "reply": out.get("reply", ""), "actions": acts, "saved": saved}
 
 
 def _chat_list_attachments_tool(runner, arguments: dict) -> dict:

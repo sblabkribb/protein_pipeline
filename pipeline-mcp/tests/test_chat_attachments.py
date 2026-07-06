@@ -97,3 +97,13 @@ def test_session_attachment_context_includes_summary(tmp_path):
     assert "4kl5.pdb" in ctx
     assert "chains: A, B" in ctx
     assert ctx == "" or "cannot browse external" in ctx  # guidance present when non-empty
+
+
+def test_primary_target_text_prefers_structure(tmp_path):
+    from pipeline_mcp.chat_attachments import save_chat_attachments, primary_target_text
+    save_chat_attachments(tmp_path, "pt", [
+        {"name": "notes.txt", "base64": _b64(b"hello notes")},
+        {"name": "4kl5.pdb", "base64": _b64(_PDB_TEXT.encode())},
+    ])
+    txt = primary_target_text(tmp_path, "pt")
+    assert txt is not None and txt.startswith("TITLE") and "MET" in txt  # the .pdb, not notes.txt
