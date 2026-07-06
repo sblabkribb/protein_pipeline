@@ -133,6 +133,12 @@ import { renderMcpGuideMarkup, buildMcpJsonSnippetWithToken, fillMasterPromptTok
 import { renderQueueEta } from "./lib/queue-eta.js?v=20260703_v2";
 import { renderMarkdown as renderChatMarkdown } from "./lib/md.js?v=20260703_v1";
 import {
+  loadConversations,
+  upsertConversation,
+  deleteConversation,
+  newConversationId,
+} from "./lib/chat-conversations.js?v=20260706_v1";
+import {
   PROVIDERS,
   loadChatConfig,
   saveChatConfig,
@@ -1215,6 +1221,9 @@ const el = {
   copilotDrawer: document.getElementById("copilotDrawer"),
   copilotCloseBtn: document.getElementById("copilotCloseBtn"),
   copilotClearBtn: document.getElementById("copilotClearBtn"),
+  copilotNewChatBtn: document.getElementById("copilotNewChatBtn"),
+  copilotConvSelect: document.getElementById("copilotConvSelect"),
+  copilotDeleteConvBtn: document.getElementById("copilotDeleteConvBtn"),
   copilotSummary: document.getElementById("copilotSummary"),
   copilotContext: document.getElementById("copilotContext"),
   copilotActions: document.getElementById("copilotActions"),
@@ -11182,6 +11191,7 @@ async function submitCopilotPrompt(rawPrompt, intentHint = "") {
   } finally {
     state.copilotLoading = false;
     renderCopilotContext();
+    persistActiveConversation();
   }
 }
 
@@ -11189,6 +11199,67 @@ function clearCopilotHistory() {
   state.copilotHistory = [];
   renderCopilotMessages();
   ensureCopilotWelcome();
+}
+
+function renderCopilotConvSelect() {
+  const sel = el.copilotConvSelect;
+  if (!sel) return;
+  const list = loadConversations();
+  const label = copilotIsKorean() ? `대화 목록 (${list.length})` : `Conversations (${list.length})`;
+  sel.innerHTML = "";
+  const head = document.createElement("option");
+  head.value = "";
+  head.textContent = label;
+  sel.appendChild(head);
+  list.forEach((c) => {
+    const opt = document.createElement("option");
+    opt.value = c.id;
+    opt.textContent = c.title || c.id;
+    sel.appendChild(opt);
+  });
+  sel.value = state.activeConvId || "";
+}
+
+function persistActiveConversation() {
+  const history = Array.isArray(state.copilotHistory) ? state.copilotHistory : [];
+  // don't save an empty/welcome-only conversation
+  const hasUser = history.some((m) => m && m.role === "user");
+  if (!hasUser) return;
+  if (!state.activeConvId) state.activeConvId = newConversationId();
+  upsertConversation(state.activeConvId, history);
+  renderCopilotConvSelect();
+}
+
+function startNewCopilotChat() {
+  persistActiveConversation();
+  state.activeConvId = null;
+  state.copilotHistory = [];
+  renderCopilotMessages();
+  ensureCopilotWelcome();
+  renderCopilotConvSelect();
+}
+
+function loadCopilotConversation(id) {
+  if (!id) return;
+  const conv = loadConversations().find((c) => c.id === id);
+  if (!conv) return;
+  state.activeConvId = id;
+  state.copilotHistory = Array.isArray(conv.messages) ? conv.messages.slice() : [];
+  renderCopilotMessages();
+  renderCopilotConvSelect();
+}
+
+function deleteActiveCopilotConversation() {
+  const id = state.activeConvId || (el.copilotConvSelect && el.copilotConvSelect.value);
+  if (!id) return;
+  deleteConversation(id);
+  if (state.activeConvId === id) {
+    state.activeConvId = null;
+    state.copilotHistory = [];
+    renderCopilotMessages();
+    ensureCopilotWelcome();
+  }
+  renderCopilotConvSelect();
 }
 
 function ensureCopilotWelcome() {
@@ -11265,6 +11336,7 @@ function setCopilotDrawerOpen(open) {
 }
 
 function initCopilot() {
+  state.activeConvId = state.activeConvId || null;
   renderCopilotContext();
   renderCopilotMessages();
   if (copilotInitialized) return;
@@ -11283,6 +11355,14 @@ function initCopilot() {
   if (el.copilotClearBtn) {
     el.copilotClearBtn.addEventListener("click", () => clearCopilotHistory());
   }
+  if (el.copilotNewChatBtn) el.copilotNewChatBtn.addEventListener("click", startNewCopilotChat);
+  if (el.copilotDeleteConvBtn) el.copilotDeleteConvBtn.addEventListener("click", deleteActiveCopilotConversation);
+  if (el.copilotConvSelect)
+    el.copilotConvSelect.addEventListener("change", () => {
+      const v = el.copilotConvSelect.value;
+      if (v) loadCopilotConversation(v);
+    });
+  renderCopilotConvSelect();
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") setCopilotDrawerOpen(false);
   });
