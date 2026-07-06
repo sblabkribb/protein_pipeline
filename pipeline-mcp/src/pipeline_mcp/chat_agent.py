@@ -80,7 +80,7 @@ def run_chat_turn(provider, model, api_key, messages, tool_executor, *,
     reply = ""
     steps = 0
     specs = tool_specs()
-    client_action_taken = False
+    taken: set[str] = set()
     for steps in range(1, max_steps + 1):
         result = _complete(provider, model, api_key, msgs, specs, system=system, timeout=timeout)
         reply = result.get("text") or reply
@@ -93,7 +93,7 @@ def run_chat_turn(provider, model, api_key, messages, tool_executor, *,
             args = call.get("args") or {}
             cid = call.get("id") or name
             if name == "navigate":
-                if client_action_taken:
+                if "navigate" in taken:
                     msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
                                  "content": {"ok": True,
                                              "note": "already handled; now explain to the user in text"}})
@@ -105,12 +105,12 @@ def run_chat_turn(provider, model, api_key, messages, tool_executor, *,
                 if isinstance(args.get("prefill"), dict):
                     action["prefill"] = args["prefill"]
                 actions.append(action)
-                client_action_taken = True
+                taken.add("navigate")
                 msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
                              "content": {"ok": True, "navigated": page,
                                          "note": "navigation done; now explain the next steps to the user in text"}})
             elif name == "configure_advanced":
-                if client_action_taken:
+                if "configure" in taken:
                     msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
                                  "content": {"ok": True,
                                              "note": "already configured; now explain the values and reasons in text"}})
@@ -120,14 +120,14 @@ def run_chat_turn(provider, model, api_key, messages, tool_executor, *,
                 if isinstance(args.get("prefill"), dict):
                     action["prefill"] = args["prefill"]
                 actions.append(action)
-                client_action_taken = True
+                taken.add("configure")
                 msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
                              "content": {"ok": True, "configured": list(answers.keys()),
                                          "note": "values pre-filled on Advanced; now explain each value and WHY, in text"}})
             elif name == "run_pipeline":
-                if not client_action_taken:
+                if "run" not in taken:
                     actions.append({"type": "run"})
-                    client_action_taken = True
+                    taken.add("run")
                     msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
                                  "content": {"ok": True, "note": "A Run button was shown to the user; tell them to press it. You did NOT start the run."}})
                 else:

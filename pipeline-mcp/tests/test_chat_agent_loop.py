@@ -159,3 +159,18 @@ def test_run_pipeline_collects_action(monkeypatch):
 
 def test_run_pipeline_in_tool_specs():
     assert "run_pipeline" in {s["name"] for s in ca.tool_specs()}
+
+
+def test_configure_and_run_in_one_turn(monkeypatch):
+    _fake_complete(monkeypatch, [
+        {"text": "Setting up and offering Run.",
+         "tool_calls": [
+             {"id": "c1", "name": "configure_advanced", "args": {"answers": {"num_seq_per_tier": 8}}},
+             {"id": "r1", "name": "run_pipeline", "args": {}},
+         ]},
+        {"text": "Ready. Press Run now.", "tool_calls": []},
+    ])
+    out = run_chat_turn("openai", "m", "k", [{"role": "user", "content": "fill and run"}], lambda n, a: {})
+    assert {"type": "configure", "answers": {"num_seq_per_tier": 8}} in out["actions"]
+    assert {"type": "run"} in out["actions"]
+    assert out["reply"] == "Ready. Press Run now."
