@@ -145,3 +145,17 @@ def test_client_action_returns_followup_explanation(monkeypatch):
     assert out["actions"] == [{"type": "configure", "answers": {"num_seq_per_tier": 4}}]
     assert out["reply"] == "num_seq_per_tier=4 balances diversity and cost."
     assert out["steps"] == 2
+
+
+def test_run_pipeline_collects_action(monkeypatch):
+    _fake_complete(monkeypatch, [
+        {"text": "Ready — press Run now.",
+         "tool_calls": [{"id": "r1", "name": "run_pipeline", "args": {}}]},
+        {"text": "The Run now button is ready.", "tool_calls": []},
+    ])
+    out = run_chat_turn("openai", "m", "k", [{"role": "user", "content": "run it"}], lambda n, a: {})
+    assert {"type": "run"} in out["actions"]
+
+
+def test_run_pipeline_in_tool_specs():
+    assert "run_pipeline" in {s["name"] for s in ca.tool_specs()}

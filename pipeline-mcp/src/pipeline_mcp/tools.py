@@ -217,6 +217,10 @@ def _build_chat_system_prompt(context: dict) -> str:
         "and the user's goal; if the goal is unknown, use sensible defaults and say so), and note any key "
         "parameters left at their defaults. Then tell the user the values are pre-filled on the Advanced "
         "page to review and that they click the run button to start. You never start the run yourself.",
+        "When the user explicitly asks to START or run the pipeline (e.g. 'run it', '실행해줘', '돌려줘'), "
+        "call run_pipeline (after configure_advanced if parameters still need setting in the same turn). "
+        "This shows a one-click Run button in the chat; tell the user to press the '▶ 지금 실행 / Run now' "
+        "button. You never start the run yourself.",
         "When the user asks about the attached target, use the attached file content and summary "
         "provided in the conversation (title, chains, ligands, sequence) to describe it directly — do "
         "not say you cannot open the file. You cannot browse external websites; if the user wants an "
