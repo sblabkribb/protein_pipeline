@@ -47,3 +47,11 @@ test("NAVIGABLE_PAGES matches the backend enum", () => {
   assert.deepEqual(NAVIGABLE_PAGES,
     ["home", "fast", "advanced", "evolution", "studio", "monitor", "rounds", "analyze"]);
 });
+
+test("navigateActions preserves prefill", () => {
+  const a = navigateActions([
+    { type: "navigate", page: "fast", prefill: { attachment: "seq.fasta" } },
+    { type: "navigate", page: "bogus", prefill: { attachment: "x" } },
+  ]);
+  assert.deepEqual(a, [{ type: "navigate", page: "fast", prefill: { attachment: "seq.fasta" } }]);
+});
