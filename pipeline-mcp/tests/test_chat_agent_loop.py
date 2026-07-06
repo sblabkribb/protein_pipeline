@@ -32,6 +32,7 @@ def test_navigate_collects_action_and_stops(monkeypatch):
     _fake_complete(monkeypatch, [
         {"text": "Taking you to the Fast page.",
          "tool_calls": [{"id": "n1", "name": "navigate", "args": {"page": "fast"}}]},
+        {"text": "Now on Fast. Click Run Fast to start.", "tool_calls": []},
     ])
     called = {"n": 0}
     def executor(name, args):
@@ -39,13 +40,14 @@ def test_navigate_collects_action_and_stops(monkeypatch):
         return {}
     out = run_chat_turn("openai", "m", "k", [{"role": "user", "content": "start a run"}], executor)
     assert out["actions"] == [{"type": "navigate", "page": "fast"}]
-    assert out["reply"] == "Taking you to the Fast page."
+    assert out["reply"] == "Now on Fast. Click Run Fast to start."
     assert called["n"] == 0
 
 
 def test_navigate_invalid_page_coerced_home(monkeypatch):
     _fake_complete(monkeypatch, [
         {"text": "ok", "tool_calls": [{"id": "n1", "name": "navigate", "args": {"page": "bogus"}}]},
+        {"text": "done", "tool_calls": []},
     ])
     out = run_chat_turn("gemini", "m", "k", [{"role": "user", "content": "go"}], lambda n, a: {})
     assert out["actions"] == [{"type": "navigate", "page": "home"}]
@@ -97,6 +99,7 @@ def test_navigate_passes_prefill_through(monkeypatch):
         {"text": "Opening Fast with your file.",
          "tool_calls": [{"id": "n1", "name": "navigate",
                          "args": {"page": "fast", "prefill": {"attachment": "seq.fasta"}}}]},
+        {"text": "Opened Fast with your target.", "tool_calls": []},
     ])
     out = run_chat_turn("openai", "m", "k", [{"role": "user", "content": "run this"}], lambda n, a: {})
     assert out["actions"] == [{"type": "navigate", "page": "fast",
@@ -106,6 +109,7 @@ def test_navigate_passes_prefill_through(monkeypatch):
 def test_navigate_without_prefill_has_no_key(monkeypatch):
     _fake_complete(monkeypatch, [
         {"text": "ok", "tool_calls": [{"id": "n1", "name": "navigate", "args": {"page": "monitor"}}]},
+        {"text": "done", "tool_calls": []},
     ])
     out = run_chat_turn("openai", "m", "k", [{"role": "user", "content": "go"}], lambda n, a: {})
     assert out["actions"] == [{"type": "navigate", "page": "monitor"}]
@@ -117,6 +121,7 @@ def test_configure_advanced_collects_action(monkeypatch):
          "tool_calls": [{"id": "c1", "name": "configure_advanced",
                          "args": {"answers": {"num_seq_per_tier": 4, "bioemu_use": True},
                                   "prefill": {"attachment": "4KL5.pdb"}}}]},
+        {"text": "Set num_seq_per_tier=4 and enabled BioEmu.", "tool_calls": []},
     ])
     out = run_chat_turn("openai", "m", "k", [{"role": "user", "content": "fill params"}], lambda n, a: {})
     assert out["actions"] == [{"type": "configure",
@@ -127,3 +132,16 @@ def test_configure_advanced_collects_action(monkeypatch):
 def test_configure_advanced_in_tool_specs():
     names = {s["name"] for s in ca.tool_specs()}
     assert "configure_advanced" in names
+
+
+def test_client_action_returns_followup_explanation(monkeypatch):
+    _fake_complete(monkeypatch, [
+        {"text": "I will set them.",
+         "tool_calls": [{"id": "c1", "name": "configure_advanced",
+                         "args": {"answers": {"num_seq_per_tier": 4}}}]},
+        {"text": "num_seq_per_tier=4 balances diversity and cost.", "tool_calls": []},
+    ])
+    out = run_chat_turn("openai", "m", "k", [{"role": "user", "content": "fill"}], lambda n, a: {})
+    assert out["actions"] == [{"type": "configure", "answers": {"num_seq_per_tier": 4}}]
+    assert out["reply"] == "num_seq_per_tier=4 balances diversity and cost."
+    assert out["steps"] == 2
