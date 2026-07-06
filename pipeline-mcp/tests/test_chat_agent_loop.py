@@ -82,3 +82,22 @@ def test_tool_specs_shape():
     assert "pipeline.status" in names
     for s in specs:
         assert set(s) >= {"name", "description", "parameters"}
+
+
+def test_navigate_passes_prefill_through(monkeypatch):
+    _fake_complete(monkeypatch, [
+        {"text": "Opening Fast with your file.",
+         "tool_calls": [{"id": "n1", "name": "navigate",
+                         "args": {"page": "fast", "prefill": {"attachment": "seq.fasta"}}}]},
+    ])
+    out = run_chat_turn("openai", "m", "k", [{"role": "user", "content": "run this"}], lambda n, a: {})
+    assert out["actions"] == [{"type": "navigate", "page": "fast",
+                               "prefill": {"attachment": "seq.fasta"}}]
+
+
+def test_navigate_without_prefill_has_no_key(monkeypatch):
+    _fake_complete(monkeypatch, [
+        {"text": "ok", "tool_calls": [{"id": "n1", "name": "navigate", "args": {"page": "monitor"}}]},
+    ])
+    out = run_chat_turn("openai", "m", "k", [{"role": "user", "content": "go"}], lambda n, a: {})
+    assert out["actions"] == [{"type": "navigate", "page": "monitor"}]
