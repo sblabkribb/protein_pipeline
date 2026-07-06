@@ -100,6 +100,7 @@ _MCP_LIST_HIDDEN_TOOLS = {
     "pipeline.model_provider_health",
     "chat.list_models",
     "chat.send",
+    "chat.list_attachments",
 }
 
 _RUN_SCOPED_TOOLS = {

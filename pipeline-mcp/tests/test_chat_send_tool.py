@@ -27,7 +27,7 @@ def test_chat_send_error_shape(monkeypatch):
     out = tools._chat_send_tool(object(), {"provider": "anthropic", "model": "m",
                                            "api_key": "bad", "messages": []})
     assert out == {"error": {"kind": "auth", "message": "provider rejected the API key"},
-                   "provider": "anthropic"}
+                   "provider": "anthropic", "saved": []}
 
 
 def test_chat_send_executor_allowlist(monkeypatch):
