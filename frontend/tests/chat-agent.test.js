@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const { buildChatSendPayload, parseChatSendResult, navigateActions, NAVIGABLE_PAGES } =
+const { buildChatSendPayload, parseChatSendResult, navigateActions, NAVIGABLE_PAGES, sanitizeAdvancedAnswers, configureActions } =
   await import("../lib/chat-agent.js");
 
 test("buildChatSendPayload maps cfg/history/snapshot", () => {
@@ -54,4 +54,32 @@ test("navigateActions preserves prefill", () => {
     { type: "navigate", page: "bogus", prefill: { attachment: "x" } },
   ]);
   assert.deepEqual(a, [{ type: "navigate", page: "fast", prefill: { attachment: "seq.fasta" } }]);
+});
+
+test("sanitizeAdvancedAnswers keeps only allowlisted, typed, clamped values", () => {
+  const out = sanitizeAdvancedAnswers({
+    num_seq_per_tier: 99,        // clamp to 8
+    bioemu_use: true,
+    bioemu_num_samples: 0,       // clamp to 1
+    surrogate_triage_enabled: "yes", // coerce truthy -> true
+    injected_bad_key: "x",       // dropped
+  });
+  assert.deepEqual(out, {
+    num_seq_per_tier: 8,
+    bioemu_use: true,
+    bioemu_num_samples: 1,
+    surrogate_triage_enabled: true,
+  });
+  assert.deepEqual(sanitizeAdvancedAnswers(null), {});
+  assert.deepEqual(sanitizeAdvancedAnswers({ num_seq_per_tier: "abc" }), {}); // non-numeric dropped
+});
+
+test("configureActions extracts configure actions with sanitized answers", () => {
+  const a = configureActions([
+    { type: "configure", answers: { num_seq_per_tier: 4, bad: 1 }, prefill: { attachment: "x.pdb" } },
+    { type: "navigate", page: "fast" },
+  ]);
+  assert.deepEqual(a, [
+    { type: "configure", answers: { num_seq_per_tier: 4 }, prefill: { attachment: "x.pdb" } },
+  ]);
 });
