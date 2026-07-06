@@ -2393,37 +2393,40 @@
           </label>
           <div id="chatProviderStatus" class="status-subtitle" aria-live="polite"></div>
         </details>
-        <div class="copilot-section">
-          <div class="status-subtitle" data-i18n="copilot.summary.title">Live Snapshot</div>
-          <div id="copilotSummary" class="copilot-summary">
-            <div class="placeholder" data-i18n="copilot.summary.empty">Open a run to build the live snapshot.</div>
-          </div>
-        </div>
-        <div class="copilot-section copilot-section-grid">
-          <div class="copilot-panel">
-            <div class="status-subtitle" data-i18n="copilot.context.title">Current Context</div>
-            <div id="copilotContext" class="copilot-context">
-              <div class="placeholder" data-i18n="copilot.context.empty">Select a run to load context.</div>
+        <details class="copilot-section copilot-panel copilot-context-panel">
+          <summary>Run context &amp; quick prompts</summary>
+          <div class="copilot-section">
+            <div class="status-subtitle" data-i18n="copilot.summary.title">Live Snapshot</div>
+            <div id="copilotSummary" class="copilot-summary">
+              <div class="placeholder" data-i18n="copilot.summary.empty">Open a run to build the live snapshot.</div>
             </div>
           </div>
-          <div class="copilot-panel">
-            <div class="status-subtitle" data-i18n="copilot.actions.title">Suggested Actions</div>
-            <div id="copilotActions" class="copilot-actions">
-              <div class="placeholder" data-i18n="copilot.actions.empty">Select a run to unlock in-place actions.</div>
+          <div class="copilot-section copilot-section-grid">
+            <div class="copilot-panel">
+              <div class="status-subtitle" data-i18n="copilot.context.title">Current Context</div>
+              <div id="copilotContext" class="copilot-context">
+                <div class="placeholder" data-i18n="copilot.context.empty">Select a run to load context.</div>
+              </div>
+            </div>
+            <div class="copilot-panel">
+              <div class="status-subtitle" data-i18n="copilot.actions.title">Suggested Actions</div>
+              <div id="copilotActions" class="copilot-actions">
+                <div class="placeholder" data-i18n="copilot.actions.empty">Select a run to unlock in-place actions.</div>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="copilot-section copilot-panel">
-          <div class="status-subtitle" data-i18n="copilot.quick.title">Quick Prompts</div>
-          <div class="copilot-quick">
-            <button id="copilotQuickUsage" class="ghost" data-i18n="copilot.quick.usage">How to use this page?</button>
-            <button id="copilotQuickInterpret" class="ghost" data-i18n="copilot.quick.interpret">Interpret current metrics</button>
-            <button id="copilotQuickSummary" class="ghost" data-i18n="copilot.quick.summary">Summarize this run</button>
-            <button id="copilotQuickCompare" class="ghost" data-i18n="copilot.quick.compare">Explain compare state</button>
-            <button id="copilotQuickNext" class="ghost" data-i18n="copilot.quick.next">What should I do next?</button>
-            <button id="copilotQuickResume" class="ghost" data-i18n="copilot.quick.resume">How does resume work?</button>
+          <div class="copilot-section copilot-panel">
+            <div class="status-subtitle" data-i18n="copilot.quick.title">Quick Prompts</div>
+            <div class="copilot-quick">
+              <button id="copilotQuickUsage" class="ghost" data-i18n="copilot.quick.usage">How to use this page?</button>
+              <button id="copilotQuickInterpret" class="ghost" data-i18n="copilot.quick.interpret">Interpret current metrics</button>
+              <button id="copilotQuickSummary" class="ghost" data-i18n="copilot.quick.summary">Summarize this run</button>
+              <button id="copilotQuickCompare" class="ghost" data-i18n="copilot.quick.compare">Explain compare state</button>
+              <button id="copilotQuickNext" class="ghost" data-i18n="copilot.quick.next">What should I do next?</button>
+              <button id="copilotQuickResume" class="ghost" data-i18n="copilot.quick.resume">How does resume work?</button>
+            </div>
           </div>
-        </div>
+        </details>
         <div class="copilot-section copilot-panel copilot-chat-panel">
           <div class="status-subtitle" data-i18n="copilot.conversation.title">Conversation</div>
           <div id="copilotMessages" class="copilot-messages"></div>

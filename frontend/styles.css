@@ -7718,3 +7718,8 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+.copilot-context-panel > summary,
+.chat-ai-settings > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.copilot-chat-panel { flex: 1 1 auto; }
+.copilot-messages { min-height: 320px; }
