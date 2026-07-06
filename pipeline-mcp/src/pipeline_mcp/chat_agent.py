@@ -34,9 +34,15 @@ def tool_specs() -> list[dict]:
         {"name": "pipeline.list_artifacts", "description": "List a run's output artifacts.",
          "parameters": run_id},
         {"name": "navigate", "description": "Take the user to a workspace page. "
-         "Use this to guide the user to start a run (they click the run button themselves).",
+         "Use this to guide the user to start a run (they click the run button themselves). "
+         "To run an attached file, navigate to 'fast' with prefill={\"attachment\": \"<the file name>\"} "
+         "so the file is pre-loaded as the target; the user then clicks Run.",
          "parameters": {"type": "object",
-                        "properties": {"page": {"type": "string", "enum": list(NAVIGATE_PAGES)}},
+                        "properties": {
+                            "page": {"type": "string", "enum": list(NAVIGATE_PAGES)},
+                            "prefill": {"type": "object",
+                                        "properties": {"attachment": {"type": "string"}}},
+                        },
                         "required": ["page"]}},
     ]
 
@@ -66,7 +72,10 @@ def run_chat_turn(provider, model, api_key, messages, tool_executor, *,
                 page = str(args.get("page") or "").strip().lower()
                 if page not in NAVIGATE_PAGES:
                     page = "home"
-                actions.append({"type": "navigate", "page": page})
+                action = {"type": "navigate", "page": page}
+                if isinstance(args.get("prefill"), dict):
+                    action["prefill"] = args["prefill"]
+                actions.append(action)
                 msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
                              "content": {"ok": True, "navigated": page}})
                 stop = True

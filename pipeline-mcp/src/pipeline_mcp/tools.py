@@ -185,6 +185,8 @@ def _build_chat_system_prompt(context: dict) -> str:
         "You can read run state with the provided tools (status, queue_eta, list_runs, list_artifacts).",
         "To help the user START a run, call navigate to the relevant page (e.g. 'fast' or 'advanced'); "
         "the user launches the run themselves with the run button — you never start runs directly.",
+        "If the user attached a file and wants to run/analyze it, call navigate with page 'fast' "
+        "and prefill {\"attachment\": \"<the attached file name>\"} so it is pre-filled as the target.",
         "Be concise. Reply in the user's language.",
         f"Current page tab: {tab}.",
     ]
