@@ -11016,12 +11016,26 @@ function applyChatNavigate(action) {
       try {
         const text = decodeURIComponent(escape(atob(att.base64)));
         el.fastTargetInput.value = text;
-        el.fastTargetInput.dispatchEvent(new Event("input", { bubbles: true }));
-        if (el.fastTargetStatus) el.fastTargetStatus.textContent = `Loaded ${prefill.attachment} from chat`;
-      } catch (_e) { /* binary/decoding issue — just navigate */ }
+        // Reveal the normally-collapsed paste box so the user can SEE the loaded
+        // target, and use the canonical status helper for a clear "Loaded ...".
+        const pasteDetails = document.getElementById("fastPasteDetails");
+        if (pasteDetails) pasteDetails.open = true;
+        if (typeof updateFastTargetStatus === "function") {
+          updateFastTargetStatus({ fileName: prefill.attachment });
+        } else if (el.fastTargetStatus) {
+          el.fastTargetStatus.textContent = `Loaded ${prefill.attachment}`;
+        }
+      } catch (_e) { /* binary/decoding issue -- just navigate */ }
     }
   }
   setActiveTab(action.page);
+  // After landing on Fast (esp. with a prefilled target), bring the Run button
+  // into view so "click Run" is actionable, not a hunt.
+  if (action.page === "fast" && el.fastRunBtn) {
+    try {
+      el.fastRunBtn.scrollIntoView({ behavior: "smooth", block: "center" });
+    } catch (_e) { /* older browsers */ }
+  }
 }
 
 async function generateCopilotReply(prompt, intentHint = "") {
