@@ -172,8 +172,16 @@ def _chat_list_models_tool(runner, arguments: dict) -> dict:
     return {"provider": provider, "models": models}
 
 
-_CHAT_READ_ALLOWLIST = {"pipeline.status", "pipeline.queue_eta",
-                        "pipeline.list_runs", "pipeline.list_artifacts"}
+# The chatbot exposes dot-free tool names to LLM providers (Anthropic/OpenAI
+# reject "." in tool names with a 400). Map each wire name back to its real,
+# dotted MCP tool name for server-side dispatch. This map is also the allowlist:
+# a name not present here is refused without dispatch.
+_CHAT_TOOL_MAP = {
+    "pipeline_status": "pipeline.status",
+    "pipeline_queue_eta": "pipeline.queue_eta",
+    "pipeline_list_runs": "pipeline.list_runs",
+    "pipeline_list_artifacts": "pipeline.list_artifacts",
+}
 
 
 def _build_chat_system_prompt(context: dict) -> str:
@@ -221,10 +229,11 @@ def _chat_send_tool(runner, arguments: dict) -> dict:
     dispatcher = ToolDispatcher(runner)
 
     def tool_executor(name, args):
-        if name not in _CHAT_READ_ALLOWLIST:
+        real = _CHAT_TOOL_MAP.get(name)
+        if not real:
             return {"error": "tool not available"}
         try:
-            return dispatcher.call_tool(name, args or {})
+            return dispatcher.call_tool(real, args or {})
         except Exception as exc:  # never leak a stack to the model
             return {"error": str(exc)}
 

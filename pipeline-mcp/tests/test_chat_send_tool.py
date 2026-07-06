@@ -42,6 +42,8 @@ def test_chat_send_executor_allowlist(monkeypatch):
     tools._chat_send_tool(object(), {"provider": "openai", "model": "m", "api_key": "k",
                                      "messages": []})
     executor = holder["executor"]
-    assert executor("pipeline.delete_run", {}) == {"error": "tool not available"}
-    assert executor("pipeline.status", {"run_id": "r1"}) == {"ok": True}
+    # the model sees dot-free wire names; unknown/non-read → refused, never dispatched
+    assert executor("pipeline_delete_run", {}) == {"error": "tool not available"}
+    # a read wire name maps to the dotted MCP tool name for dispatch
+    assert executor("pipeline_status", {"run_id": "r1"}) == {"ok": True}
     assert dispatched["names"] == ["pipeline.status"]

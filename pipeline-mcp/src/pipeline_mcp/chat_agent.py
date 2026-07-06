@@ -14,8 +14,8 @@ import requests
 
 from .chat_providers import ChatProviderError, _normalize_provider
 
-READ_TOOLS = ("pipeline.status", "pipeline.queue_eta",
-              "pipeline.list_runs", "pipeline.list_artifacts")
+READ_TOOLS = ("pipeline_status", "pipeline_queue_eta",
+              "pipeline_list_runs", "pipeline_list_artifacts")
 NAVIGATE_PAGES = ("home", "fast", "advanced", "evolution",
                   "studio", "monitor", "rounds", "analyze")
 
@@ -25,13 +25,13 @@ def tool_specs() -> list[dict]:
     run_id = {"type": "object", "properties": {"run_id": {"type": "string",
               "description": "run id; optional, defaults to the latest run"}}}
     return [
-        {"name": "pipeline.status", "description": "Get the state/stage of a run.",
+        {"name": "pipeline_status", "description": "Get the state/stage of a run.",
          "parameters": run_id},
-        {"name": "pipeline.queue_eta", "description": "Approximate worker-queue wait/finish ETA for a run.",
+        {"name": "pipeline_queue_eta", "description": "Approximate worker-queue wait/finish ETA for a run.",
          "parameters": run_id},
-        {"name": "pipeline.list_runs", "description": "List recent runs.",
+        {"name": "pipeline_list_runs", "description": "List recent runs.",
          "parameters": {"type": "object", "properties": {"limit": {"type": "integer"}}}},
-        {"name": "pipeline.list_artifacts", "description": "List a run's output artifacts.",
+        {"name": "pipeline_list_artifacts", "description": "List a run's output artifacts.",
          "parameters": run_id},
         {"name": "navigate", "description": "Take the user to a workspace page. "
          "Use this to guide the user to start a run (they click the run button themselves). "
@@ -99,7 +99,15 @@ def _post_json(url: str, headers: dict, body: dict, timeout: float) -> dict:
     if resp.status_code in (401, 403):
         raise ChatProviderError("auth", "provider rejected the API key")
     if resp.status_code >= 400:
-        raise ChatProviderError("upstream", f"provider returned HTTP {resp.status_code}")
+        body = ""
+        try:
+            body = re.sub(r"key=[^&\s]+", "key=***", resp.text or "")[:300]
+        except Exception:
+            body = ""
+        detail = f"provider returned HTTP {resp.status_code}"
+        if body:
+            detail = f"{detail}: {body}"
+        raise ChatProviderError("upstream", detail)
     try:
         data = resp.json()
     except ValueError as exc:
