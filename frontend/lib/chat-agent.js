@@ -68,6 +68,7 @@ export function configureActions(actions) {
     .map((a) => {
       const clean = { type: "configure", answers: sanitizeAdvancedAnswers(a.answers) };
       if (a.prefill && a.prefill.attachment) clean.prefill = { attachment: a.prefill.attachment };
+      if (typeof a.target_text === "string" && a.target_text) clean.target_text = a.target_text;
       return clean;
     });
 }
