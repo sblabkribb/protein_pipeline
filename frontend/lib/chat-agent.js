@@ -39,3 +39,31 @@ export function navigateActions(actions) {
     (a) => a && a.type === "navigate" && NAVIGABLE_PAGES.includes(a.page),
   );
 }
+
+const _ADV_INT = { num_seq_per_tier: [1, 8], bioemu_num_samples: [1, 50] };
+const _ADV_BOOL = ["bioemu_use", "surrogate_triage_enabled"];
+
+export function sanitizeAdvancedAnswers(answers) {
+  const src = answers && typeof answers === "object" ? answers : {};
+  const out = {};
+  for (const [k, [lo, hi]] of Object.entries(_ADV_INT)) {
+    if (k in src) {
+      const n = Number(src[k]);
+      if (Number.isFinite(n)) out[k] = Math.min(hi, Math.max(lo, Math.round(n)));
+    }
+  }
+  for (const k of _ADV_BOOL) {
+    if (k in src) out[k] = Boolean(src[k]);
+  }
+  return out;
+}
+
+export function configureActions(actions) {
+  return (Array.isArray(actions) ? actions : [])
+    .filter((a) => a && a.type === "configure")
+    .map((a) => {
+      const clean = { type: "configure", answers: sanitizeAdvancedAnswers(a.answers) };
+      if (a.prefill && a.prefill.attachment) clean.prefill = { attachment: a.prefill.attachment };
+      return clean;
+    });
+}
