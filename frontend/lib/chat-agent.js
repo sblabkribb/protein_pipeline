@@ -58,6 +58,10 @@ export function sanitizeAdvancedAnswers(answers) {
   return out;
 }
 
+export function runActions(actions) {
+  return (Array.isArray(actions) ? actions : []).filter((a) => a && a.type === "run");
+}
+
 export function configureActions(actions) {
   return (Array.isArray(actions) ? actions : [])
     .filter((a) => a && a.type === "configure")

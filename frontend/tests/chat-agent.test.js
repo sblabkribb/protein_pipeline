@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const { buildChatSendPayload, parseChatSendResult, navigateActions, NAVIGABLE_PAGES, sanitizeAdvancedAnswers, configureActions } =
+const { buildChatSendPayload, parseChatSendResult, navigateActions, NAVIGABLE_PAGES, sanitizeAdvancedAnswers, configureActions, runActions } =
   await import("../lib/chat-agent.js");
 
 test("buildChatSendPayload maps cfg/history/snapshot", () => {
@@ -82,4 +82,9 @@ test("configureActions extracts configure actions with sanitized answers", () =>
   assert.deepEqual(a, [
     { type: "configure", answers: { num_seq_per_tier: 4 }, prefill: { attachment: "x.pdb" } },
   ]);
+});
+
+test("runActions extracts run actions", () => {
+  const a = runActions([{ type: "run" }, { type: "navigate", page: "fast" }, { type: "run" }]);
+  assert.deepEqual(a, [{ type: "run" }, { type: "run" }]);
 });
