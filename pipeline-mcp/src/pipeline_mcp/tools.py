@@ -208,11 +208,15 @@ def _build_chat_system_prompt(context: dict) -> str:
         f"opened to verify), Fast uses standard defaults, and they click the '{run_label}' button to start.",
         "When you navigate to 'advanced', tell the user their target is carried over and to fill the "
         "parameters in the Input/Workflow/Criteria/Advanced-options steps, then Review and launch.",
-        "If the user asks you to fill in or recommend parameters for them, call configure_advanced with "
-        "'answers' set to recommended values for the core params (num_seq_per_tier, bioemu_use, "
-        "bioemu_num_samples, surrogate_triage_enabled), and include prefill {\"attachment\": name} when a "
-        "file is attached. Briefly say why you chose those values, tell the user they are pre-filled on "
-        "Advanced for review, and that they should check each step and click the run button. Never start the run.",
+        "If the user asks you to recommend or fill parameters: IMMEDIATELY call configure_advanced with "
+        "concrete numeric/boolean values for the core params (num_seq_per_tier, bioemu_use, "
+        "bioemu_num_samples, surrogate_triage_enabled); include prefill {\"attachment\": name} when a file "
+        "is attached. Do NOT just promise to fill them, do NOT ask for more info first, and do NOT reply "
+        "with only 'I'll fill it in'. In the SAME message as the tool call, WRITE OUT the explanation: "
+        "list each parameter you set with its exact value and one sentence on WHY (tie it to the target "
+        "and the user's goal; if the goal is unknown, use sensible defaults and say so), and note any key "
+        "parameters left at their defaults. Then tell the user the values are pre-filled on the Advanced "
+        "page to review and that they click the run button to start. You never start the run yourself.",
         f"Reply in {reply_lang}, matching the current UI language. Refer to buttons/labels in {reply_lang}.",
         f"Current page tab: {tab}. UI language: {reply_lang}.",
     ]
