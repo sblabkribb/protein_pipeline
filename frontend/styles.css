@@ -7725,3 +7725,6 @@ textarea:focus-visible {
 .copilot-messages { min-height: 320px; }
 
 .copilot-bubble-loading { opacity: 0.7; font-style: italic; }
+
+.copilot-conversations { display: flex; gap: 6px; align-items: center; padding: 4px 12px; }
+.copilot-conv-select { flex: 1 1 auto; min-width: 0; }
