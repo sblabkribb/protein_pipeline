@@ -131,6 +131,7 @@ import {
 import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=20260407_v6";
 import { renderMcpGuideMarkup, buildMcpJsonSnippetWithToken, fillMasterPromptToken } from "./lib/mcp-guide.js?v=20260609_v11";
 import { renderQueueEta } from "./lib/queue-eta.js?v=20260703_v2";
+import { renderMarkdown as renderChatMarkdown } from "./lib/md.js?v=20260703_v1";
 import {
   PROVIDERS,
   loadChatConfig,
@@ -11004,6 +11005,25 @@ function copilotResumeReply(snapshot = copilotSnapshot()) {
     : "`Resume Run` reads request.json and relaunches with the same run_id.\nWith `force=false`, existing artifacts are reused and missing stages continue.";
 }
 
+function applyChatNavigate(action) {
+  if (!action || action.type !== "navigate") return;
+  const prefill = action.prefill;
+  if (prefill && prefill.attachment && action.page === "fast" && el.fastTargetInput) {
+    const att = (lastSentChatAttachments || []).concat(pendingChatAttachments || [])
+      .find((a) => a && a.name === prefill.attachment);
+    const textExt = /\.(fasta|fa|faa|seq|pdb|cif|txt)$/i.test(prefill.attachment);
+    if (att && att.base64 && textExt) {
+      try {
+        const text = decodeURIComponent(escape(atob(att.base64)));
+        el.fastTargetInput.value = text;
+        el.fastTargetInput.dispatchEvent(new Event("input", { bubbles: true }));
+        if (el.fastTargetStatus) el.fastTargetStatus.textContent = `Loaded ${prefill.attachment} from chat`;
+      } catch (_e) { /* binary/decoding issue — just navigate */ }
+    }
+  }
+  setActiveTab(action.page);
+}
+
 async function generateCopilotReply(prompt, intentHint = "") {
   const cfg = loadChatConfig();
   if (chatConfigReady(cfg)) {
@@ -11011,6 +11031,7 @@ async function generateCopilotReply(prompt, intentHint = "") {
       const history = Array.isArray(state.copilotHistory) ? state.copilotHistory : [];
       let payload = buildChatSendPayload(cfg, history, copilotSnapshot());
       payload = withAttachments(payload, pendingChatAttachments, getChatSessionId());
+      lastSentChatAttachments = pendingChatAttachments.slice();
       pendingChatAttachments = [];
       renderPendingAttachments();
       const res = await apiCall("chat.send", payload);
@@ -11021,7 +11042,7 @@ async function generateCopilotReply(prompt, intentHint = "") {
           : `Assistant is unavailable: ${error.message || ""}`;
       }
       for (const a of navigateActions(actions)) {
-        setActiveTab(a.page);
+        applyChatNavigate(a);
       }
       return reply || "";
     } catch (_e) {
@@ -11049,7 +11070,11 @@ function renderCopilotMessages() {
     meta.textContent = role === "user" ? t("copilot.role.user") : t("copilot.role.ai");
     const bubble = document.createElement("div");
     bubble.className = "copilot-bubble";
-    bubble.innerHTML = escapeHtml(item?.text || "").replace(/\n/g, "<br />");
+    if (role === "ai") {
+      bubble.innerHTML = renderChatMarkdown(item?.text || "");
+    } else {
+      bubble.innerHTML = escapeHtml(item?.text || "").replace(/\n/g, "<br />");
+    }
     wrap.appendChild(meta);
     wrap.appendChild(bubble);
     el.copilotMessages.appendChild(wrap);
@@ -12105,6 +12130,7 @@ function setLanguage(lang) {
 }
 
 let pendingChatAttachments = [];
+let lastSentChatAttachments = [];
 
 function renderPendingAttachments() {
   const box = document.getElementById("copilotAttachments");
