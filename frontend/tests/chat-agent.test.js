@@ -76,11 +76,13 @@ test("sanitizeAdvancedAnswers keeps only allowlisted, typed, clamped values", ()
 
 test("configureActions extracts configure actions with sanitized answers", () => {
   const a = configureActions([
-    { type: "configure", answers: { num_seq_per_tier: 4, bad: 1 }, prefill: { attachment: "x.pdb" } },
+    { type: "configure", answers: { num_seq_per_tier: 4, bad: 1 }, prefill: { attachment: "x.pdb" },
+      target_text: ">a\nACDEFG" },
     { type: "navigate", page: "fast" },
   ]);
   assert.deepEqual(a, [
-    { type: "configure", answers: { num_seq_per_tier: 4 }, prefill: { attachment: "x.pdb" } },
+    { type: "configure", answers: { num_seq_per_tier: 4 }, prefill: { attachment: "x.pdb" },
+      target_text: ">a\nACDEFG" },
   ]);
 });
 
