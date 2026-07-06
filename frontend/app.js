@@ -11101,6 +11101,19 @@ function renderCopilotMessages() {
     wrap.appendChild(bubble);
     el.copilotMessages.appendChild(wrap);
   });
+  if (state.copilotLoading) {
+    const wrap = document.createElement("div");
+    wrap.className = "copilot-message ai copilot-loading";
+    const meta = document.createElement("div");
+    meta.className = "copilot-message-meta";
+    meta.textContent = t("copilot.role.ai");
+    const bubble = document.createElement("div");
+    bubble.className = "copilot-bubble copilot-bubble-loading";
+    bubble.textContent = copilotIsKorean() ? "생성 중…" : "Generating…";
+    wrap.appendChild(meta);
+    wrap.appendChild(bubble);
+    el.copilotMessages.appendChild(wrap);
+  }
   el.copilotMessages.scrollTop = el.copilotMessages.scrollHeight;
 }
 
@@ -11121,15 +11134,20 @@ async function submitCopilotPrompt(rawPrompt, intentHint = "") {
   const prompt = String(rawPrompt || "").trim();
   if (!prompt) return;
   addCopilotHistory("user", prompt);
+  state.copilotLoading = true;
+  renderCopilotMessages();
   try {
     const reply = await generateCopilotReply(prompt, intentHint);
+    state.copilotLoading = false;
     addCopilotHistory("ai", reply);
   } catch (err) {
+    state.copilotLoading = false;
     const message = copilotIsKorean()
       ? `Copilot 응답을 만들지 못했습니다: ${err?.message || String(err)}`
       : `Copilot could not generate a reply: ${err?.message || String(err)}`;
     addCopilotHistory("ai", message);
   } finally {
+    state.copilotLoading = false;
     renderCopilotContext();
   }
 }
