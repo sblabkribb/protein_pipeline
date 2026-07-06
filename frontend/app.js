@@ -10540,6 +10540,7 @@ function copilotSnapshot() {
   const topRow = rows.length ? rows[0] : null;
   return {
     tab: activeTabId(),
+    lang: state.lang || "en",
     runId,
     stage,
     runState,
@@ -11007,8 +11008,11 @@ function copilotResumeReply(snapshot = copilotSnapshot()) {
 
 function applyChatNavigate(action) {
   if (!action || action.type !== "navigate") return;
+  const page = action.page;
   const prefill = action.prefill;
-  if (prefill && prefill.attachment && action.page === "fast" && el.fastTargetInput) {
+  const wantsPrefill =
+    prefill && prefill.attachment && (page === "fast" || page === "advanced") && el.fastTargetInput;
+  if (wantsPrefill) {
     const att = (lastSentChatAttachments || []).concat(pendingChatAttachments || [])
       .find((a) => a && a.name === prefill.attachment);
     const textExt = /\.(fasta|fa|faa|seq|pdb|cif|txt)$/i.test(prefill.attachment);
@@ -11016,8 +11020,7 @@ function applyChatNavigate(action) {
       try {
         const text = decodeURIComponent(escape(atob(att.base64)));
         el.fastTargetInput.value = text;
-        // Reveal the normally-collapsed paste box so the user can SEE the loaded
-        // target, and use the canonical status helper for a clear "Loaded ...".
+        // Reveal the normally-collapsed paste box so the user can SEE the target.
         const pasteDetails = document.getElementById("fastPasteDetails");
         if (pasteDetails) pasteDetails.open = true;
         if (typeof updateFastTargetStatus === "function") {
@@ -11025,13 +11028,18 @@ function applyChatNavigate(action) {
         } else if (el.fastTargetStatus) {
           el.fastTargetStatus.textContent = `Loaded ${prefill.attachment}`;
         }
-      } catch (_e) { /* binary/decoding issue -- just navigate */ }
+        // Advanced = parameter-input flow. Carry the target into Advanced via the
+        // existing Fast->Advanced bridge (it switches the tab itself).
+        if (page === "advanced" && typeof openAdvancedFromFast === "function") {
+          openAdvancedFromFast();
+          return;
+        }
+      } catch (_e) { /* binary/decoding issue -- fall through to plain navigate */ }
     }
   }
-  setActiveTab(action.page);
-  // After landing on Fast (esp. with a prefilled target), bring the Run button
-  // into view so "click Run" is actionable, not a hunt.
-  if (action.page === "fast" && el.fastRunBtn) {
+  setActiveTab(page);
+  // On Fast, bring the Run button into view so "click Run" is actionable.
+  if (page === "fast" && el.fastRunBtn) {
     try {
       el.fastRunBtn.scrollIntoView({ behavior: "smooth", block: "center" });
     } catch (_e) { /* older browsers */ }

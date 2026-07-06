@@ -19,6 +19,7 @@ export function buildChatSendPayload(cfg, history, snapshot) {
     context: {
       tab: (snapshot && snapshot.tab) || "",
       run_id: (snapshot && (snapshot.runId || snapshot.run_id)) || "",
+      lang: (snapshot && snapshot.lang) || "en",
     },
   };
 }
