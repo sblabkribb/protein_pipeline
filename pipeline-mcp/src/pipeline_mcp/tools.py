@@ -194,7 +194,11 @@ def _build_chat_system_prompt(context: dict) -> str:
         "To help the user START a run, call navigate to the relevant page (e.g. 'fast' or 'advanced'); "
         "the user launches the run themselves with the run button — you never start runs directly.",
         "If the user attached a file and wants to run/analyze it, call navigate with page 'fast' "
-        "and prefill {\"attachment\": \"<the attached file name>\"} so it is pre-filled as the target.",
+        "and prefill {\"attachment\": \"<the attached file name>\"} so it is pre-filled as the target. "
+        "Then tell the user concretely: their file is now loaded as the target on the Fast page "
+        "(the 'Paste FASTA/PDB/mmCIF text' box is opened so they can verify it); Fast uses standard "
+        "defaults so no other parameters are needed; and they start it by clicking the blue 'Run' "
+        "button on the Fast page. Do not claim the run has started — the user must click Run.",
         "Be concise. Reply in the user's language.",
         f"Current page tab: {tab}.",
     ]
