@@ -90,3 +90,78 @@ def attachment_prompt_note(saved: list[dict]) -> str:
         if s.get("preview"):
             lines.append(f"  preview:\n{s['preview']}")
     return "\n".join(lines)
+
+
+_STRUCT_EXT = {".pdb", ".ent", ".cif", ".mmcif"}
+
+
+def summarize_structure(name: str, text: str) -> str | None:
+    """Best-effort one-line summary of a structure file: title, chain IDs, ligands.
+    PDB/ENT parsed by column; CIF returns the title only (best-effort)."""
+    ext = Path(name).suffix.lower()
+    if ext not in _STRUCT_EXT:
+        return None
+    lines = str(text or "").splitlines()
+    if ext in {".pdb", ".ent"}:
+        title_parts: list[str] = []
+        chains: list[str] = []
+        seen: set[str] = set()
+        ligands: set[str] = set()
+        for ln in lines[:200000]:
+            rec = ln[:6].strip()
+            if rec == "TITLE":
+                title_parts.append(ln[10:].strip())
+            elif rec in ("ATOM", "HETATM"):
+                ch = ln[21:22].strip()
+                if ch and ch not in seen:
+                    seen.add(ch)
+                    chains.append(ch)
+                if rec == "HETATM":
+                    res = ln[17:20].strip()
+                    if res and res not in ("HOH", "WAT"):
+                        ligands.add(res)
+        parts: list[str] = []
+        title = " ".join(title_parts).strip()
+        if title:
+            parts.append(f"title: {title}")
+        if chains:
+            parts.append(f"chains: {', '.join(chains)}")
+        if ligands:
+            parts.append(f"ligands/hetero: {', '.join(sorted(ligands))}")
+        return "; ".join(parts) if parts else None
+    # .cif / .mmcif: best-effort title only
+    for ln in lines[:5000]:
+        low = ln.strip().lower()
+        if low.startswith("_struct.title"):
+            rest = ln.strip()[len("_struct.title"):].strip().strip("'\"")
+            return f"title: {rest}" if rest else None
+    return None
+
+
+def session_attachment_context(output_root, session_id, *, max_files: int = 3,
+                               preview_chars: int = 1200) -> str:
+    """Context block for ALL files saved in the session (not just this turn), so the
+    assistant can describe the attached target on any turn. Includes a structure
+    summary (chains/title/ligands) and a truncated preview for text files."""
+    base = _session_dir(output_root, session_id)
+    if not base.exists():
+        return ""
+    files = [p for p in sorted(base.rglob("*")) if p.is_file()][:max_files]
+    if not files:
+        return ""
+    out = ["The user attached these files this session. You CAN read the content and "
+           "summary below to describe the target (title, chains, ligands, sequence). "
+           "You cannot browse external websites (e.g. RCSB)."]
+    for p in files:
+        rel = str(p.relative_to(base)).replace("\\", "/")
+        out.append(f"- {rel} ({p.stat().st_size} bytes)")
+        try:
+            text = p.read_bytes().decode("utf-8", errors="replace")
+        except OSError:
+            continue
+        summ = summarize_structure(rel, text)
+        if summ:
+            out.append(f"  summary: {summ}")
+        if Path(rel).suffix.lower() in _TEXT_EXT:
+            out.append("  preview:\n" + text[:preview_chars])
+    return "\n".join(out)
