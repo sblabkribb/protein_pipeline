@@ -85,6 +85,8 @@ from .queue_eta import estimate_run_eta
 from .queue_eta import estimate_stage_eta
 from .chat_providers import ChatProviderError, list_chat_models
 from .chat_agent import run_chat_turn
+from .chat_attachments import (
+    attachment_prompt_note, list_chat_attachments, save_chat_attachments)
 from .queue_stats import QueueStatsStore
 from .runpod_metrics import get_runpod_metrics_store
 from .runpod_metrics import latest_health
@@ -197,9 +199,22 @@ def _chat_send_tool(runner, arguments: dict) -> dict:
     provider = str(arguments.get("provider") or "").strip()
     model = str(arguments.get("model") or "").strip()
     api_key = str(arguments.get("api_key") or "").strip()
-    messages = arguments.get("messages") or []
+    messages = list(arguments.get("messages") or [])
     context = arguments.get("context") or {}
+    session_id = str(arguments.get("session_id") or "").strip()
+    attachments = arguments.get("attachments") or []
     system = _build_chat_system_prompt(context)
+
+    saved = []
+    if attachments and session_id:
+        saved = save_chat_attachments(runner.output_root, session_id, attachments)
+        note = attachment_prompt_note(saved)
+        if note:
+            messages = [dict(m) for m in messages]
+            for m in reversed(messages):
+                if m.get("role") == "user":
+                    m["content"] = f"{m.get('content') or ''}\n\n{note}"
+                    break
 
     dispatcher = ToolDispatcher(runner)
 
@@ -214,9 +229,18 @@ def _chat_send_tool(runner, arguments: dict) -> dict:
     try:
         out = run_chat_turn(provider, model, api_key, messages, tool_executor, system=system)
     except ChatProviderError as exc:
-        return {"error": {"kind": exc.kind, "message": exc.message}, "provider": provider}
+        return {"error": {"kind": exc.kind, "message": exc.message},
+                "provider": provider, "saved": saved}
     return {"provider": provider, "model": model,
-            "reply": out.get("reply", ""), "actions": out.get("actions", [])}
+            "reply": out.get("reply", ""), "actions": out.get("actions", []),
+            "saved": saved}
+
+
+def _chat_list_attachments_tool(runner, arguments: dict) -> dict:
+    session_id = str(arguments.get("session_id") or "").strip()
+    if not session_id:
+        return {"attachments": []}
+    return {"attachments": list_chat_attachments(runner.output_root, session_id)}
 
 
 def _env_true(name: str) -> bool:
@@ -9281,8 +9305,19 @@ def tool_definitions() -> list[dict[str, Any]]:
                     "api_key": {"type": "string"},
                     "messages": {"type": "array", "description": "neutral chat history [{role,content}]"},
                     "context": {"type": "object", "description": "UI context {tab, run_id}"},
+                    "attachments": {"type": "array", "description": "[{name, base64}] attached files"},
+                    "session_id": {"type": "string", "description": "browser chat session id"},
                 },
                 "required": ["provider", "model", "api_key", "messages"],
+            },
+        },
+        {
+            "name": "chat.list_attachments",
+            "description": "List files the user previously attached in this chat session (saved on the server).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {"session_id": {"type": "string"}},
+                "required": ["session_id"],
             },
         },
     ]
@@ -9687,5 +9722,8 @@ class ToolDispatcher:
 
         if name == "chat.send":
             return _chat_send_tool(self.runner, arguments)
+
+        if name == "chat.list_attachments":
+            return _chat_list_attachments_tool(self.runner, arguments)
 
         raise ValueError(f"Unknown tool: {name}")
