@@ -143,6 +143,11 @@ import {
   navigateActions,
 } from "./lib/chat-agent.js?v=20260703_v1";
 import {
+  getChatSessionId,
+  attachmentChipLabel,
+  withAttachments,
+} from "./lib/chat-attachments.js?v=20260703_v1";
+import {
   buildProviderHealthPayload,
   buildProviderUpdatePayload,
   normalizeProviderType,
@@ -11004,7 +11009,10 @@ async function generateCopilotReply(prompt, intentHint = "") {
   if (chatConfigReady(cfg)) {
     try {
       const history = Array.isArray(state.copilotHistory) ? state.copilotHistory : [];
-      const payload = buildChatSendPayload(cfg, history, copilotSnapshot());
+      let payload = buildChatSendPayload(cfg, history, copilotSnapshot());
+      payload = withAttachments(payload, pendingChatAttachments, getChatSessionId());
+      pendingChatAttachments = [];
+      renderPendingAttachments();
       const res = await apiCall("chat.send", payload);
       const { reply, actions, error } = parseChatSendResult(res);
       if (error) {
@@ -12093,6 +12101,70 @@ function setLanguage(lang) {
   }
   if (tutorialIsOpen()) {
     renderTutorialStep();
+  }
+}
+
+let pendingChatAttachments = [];
+
+function renderPendingAttachments() {
+  const box = document.getElementById("copilotAttachments");
+  if (!box) return;
+  box.innerHTML = "";
+  pendingChatAttachments.forEach((a, i) => {
+    const chip = document.createElement("span");
+    chip.className = "copilot-attach-chip";
+    chip.textContent = attachmentChipLabel(a);
+    const x = document.createElement("button");
+    x.type = "button";
+    x.className = "ghost";
+    x.textContent = "×";
+    x.addEventListener("click", () => {
+      pendingChatAttachments.splice(i, 1);
+      renderPendingAttachments();
+    });
+    chip.appendChild(x);
+    box.appendChild(chip);
+  });
+}
+
+function readFileToAttachment(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = String(reader.result || "");
+      const base64 = res.includes(",") ? res.split(",")[1] : res;
+      resolve({
+        name: file.webkitRelativePath || file.name,
+        base64,
+        size: file.size,
+      });
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function addChatFiles(fileList) {
+  const files = Array.from(fileList || []);
+  for (const f of files) {
+    const att = await readFileToAttachment(f);
+    if (att) pendingChatAttachments.push(att);
+  }
+  renderPendingAttachments();
+}
+
+function initChatAttachments() {
+  const attachBtn = document.getElementById("copilotAttachBtn");
+  const folderBtn = document.getElementById("copilotAttachFolderBtn");
+  const fileInput = document.getElementById("copilotFileInput");
+  const folderInput = document.getElementById("copilotFolderInput");
+  if (attachBtn && fileInput) {
+    attachBtn.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", () => { addChatFiles(fileInput.files); fileInput.value = ""; });
+  }
+  if (folderBtn && folderInput) {
+    folderBtn.addEventListener("click", () => folderInput.click());
+    folderInput.addEventListener("change", () => { addChatFiles(folderInput.files); folderInput.value = ""; });
   }
 }
 
@@ -30196,6 +30268,7 @@ applyEnvironmentChrome();
 initLanguage();
 initCopilot();
 initChatProviderSettings();
+initChatAttachments();
 
 void bootstrapAuth();
 
