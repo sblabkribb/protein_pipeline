@@ -43,3 +43,31 @@ def test_chat_list_attachments_tool(tmp_path):
     save_chat_attachments(str(tmp_path), "s2", [{"name": "a.txt", "base64": _b64(b"hi")}])
     out = tools._chat_list_attachments_tool(R(), {"session_id": "s2"})
     assert out["attachments"][0]["name"] == "a.txt"
+
+
+def test_chat_send_injects_saved_attachment_on_followup(monkeypatch, tmp_path):
+    from pipeline_mcp.chat_attachments import save_chat_attachments
+    captured = {}
+
+    class R:
+        output_root = str(tmp_path)
+
+    def fake_run(provider, model, api_key, messages, tool_executor, *, system=None, **kw):
+        captured["messages"] = messages
+        return {"reply": "ok", "actions": [], "steps": 1}
+
+    monkeypatch.setattr(tools, "run_chat_turn", fake_run)
+    pdb = "\n".join([
+        "TITLE     NPU DNAE INTEIN",
+        ("ATOM".ljust(6) + " " * 11)[:17] + "MET" + " " + "A",
+        ("ATOM".ljust(6) + " " * 11)[:17] + "GLY" + " " + "B",
+    ])
+    save_chat_attachments(str(tmp_path), "sf", [{"name": "4kl5.pdb", "base64": _b64(pdb.encode())}])
+    # follow-up turn: NO new attachments, but the saved one must be injected
+    tools._chat_send_tool(R(), {
+        "provider": "openai", "model": "m", "api_key": "k",
+        "messages": [{"role": "user", "content": "describe the target"}],
+        "session_id": "sf",
+    })
+    last_user = [m for m in captured["messages"] if m["role"] == "user"][-1]
+    assert "chains: A, B" in last_user["content"]

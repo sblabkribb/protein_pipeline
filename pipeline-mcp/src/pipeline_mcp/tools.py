@@ -86,7 +86,7 @@ from .queue_eta import estimate_stage_eta
 from .chat_providers import ChatProviderError, list_chat_models
 from .chat_agent import run_chat_turn
 from .chat_attachments import (
-    attachment_prompt_note, list_chat_attachments, save_chat_attachments)
+    list_chat_attachments, save_chat_attachments, session_attachment_context)
 from .queue_stats import QueueStatsStore
 from .runpod_metrics import get_runpod_metrics_store
 from .runpod_metrics import latest_health
@@ -217,6 +217,10 @@ def _build_chat_system_prompt(context: dict) -> str:
         "and the user's goal; if the goal is unknown, use sensible defaults and say so), and note any key "
         "parameters left at their defaults. Then tell the user the values are pre-filled on the Advanced "
         "page to review and that they click the run button to start. You never start the run yourself.",
+        "When the user asks about the attached target, use the attached file content and summary "
+        "provided in the conversation (title, chains, ligands, sequence) to describe it directly — do "
+        "not say you cannot open the file. You cannot browse external websites; if the user wants an "
+        "RCSB lookup by PDB ID, give them the URL https://www.rcsb.org/structure/<ID>.",
         f"Reply in {reply_lang}, matching the current UI language. Refer to buttons/labels in {reply_lang}.",
         f"Current page tab: {tab}. UI language: {reply_lang}.",
     ]
@@ -240,12 +244,15 @@ def _chat_send_tool(runner, arguments: dict) -> dict:
     saved = []
     if attachments and session_id:
         saved = save_chat_attachments(runner.output_root, session_id, attachments)
-        note = attachment_prompt_note(saved)
-        if note:
+    # Inject the content/summary of ALL files saved this session (not just this
+    # turn) so the assistant can describe the attached target on any follow-up.
+    if session_id:
+        ctx = session_attachment_context(runner.output_root, session_id)
+        if ctx:
             messages = [dict(m) for m in messages]
             for m in reversed(messages):
                 if m.get("role") == "user":
-                    m["content"] = f"{m.get('content') or ''}\n\n{note}"
+                    m["content"] = f"{m.get('content') or ''}\n\n{ctx}"
                     break
 
     dispatcher = ToolDispatcher(runner)

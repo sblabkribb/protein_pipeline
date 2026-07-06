@@ -60,3 +60,40 @@ def test_attachment_prompt_note():
     note = attachment_prompt_note([{"name": "seq.fasta", "size": 8, "preview": ">a\nACDEFG"}])
     assert "seq.fasta" in note and "ACDEFG" in note
     assert attachment_prompt_note([]) == ""
+
+
+def _pdb(rec, res, chain):
+    # place resName at cols 18-20 (idx 17:20) and chain ID at col 22 (idx 21)
+    return (rec.ljust(6) + " " * 11)[:17] + res.ljust(3)[:3] + " " + chain[:1]
+
+
+_PDB_TEXT = "\n".join([
+    "TITLE     NPU DNAE INTEIN",
+    _pdb("ATOM", "MET", "A"),
+    _pdb("ATOM", "ALA", "A"),
+    _pdb("ATOM", "GLY", "B"),
+    _pdb("HETATM", "HOH", "A"),
+    _pdb("HETATM", "HEM", "B"),
+])
+
+
+def test_summarize_structure_pdb():
+    from pipeline_mcp.chat_attachments import summarize_structure
+    summ = summarize_structure("4kl5.pdb", _PDB_TEXT)
+    assert "title: NPU DNAE INTEIN" in summ
+    assert "chains: A, B" in summ
+    assert "HEM" in summ and "HOH" not in summ  # water excluded
+
+
+def test_summarize_structure_ignores_non_structure():
+    from pipeline_mcp.chat_attachments import summarize_structure
+    assert summarize_structure("a.txt", "hello") is None
+
+
+def test_session_attachment_context_includes_summary(tmp_path):
+    from pipeline_mcp.chat_attachments import save_chat_attachments, session_attachment_context
+    save_chat_attachments(tmp_path, "s9", [{"name": "4kl5.pdb", "base64": _b64(_PDB_TEXT.encode())}])
+    ctx = session_attachment_context(tmp_path, "s9")
+    assert "4kl5.pdb" in ctx
+    assert "chains: A, B" in ctx
+    assert ctx == "" or "cannot browse external" in ctx  # guidance present when non-empty
