@@ -187,20 +187,29 @@ _CHAT_TOOL_MAP = {
 def _build_chat_system_prompt(context: dict) -> str:
     tab = str((context or {}).get("tab") or "").strip() or "unknown"
     run_id = str((context or {}).get("run_id") or "").strip()
+    lang = str((context or {}).get("lang") or "").strip().lower()
+    is_ko = lang.startswith("ko")
+    reply_lang = "Korean" if is_ko else "English"
+    run_label = "Fast 실행" if is_ko else "Run Fast"
     lines = [
         "You are the RAPID protein-design assistant embedded in the web app.",
         "Help the user understand run state and results, and guide them to the right page.",
         "You can read run state with the provided tools (status, queue_eta, list_runs, list_artifacts).",
-        "To help the user START a run, call navigate to the relevant page (e.g. 'fast' or 'advanced'); "
-        "the user launches the run themselves with the run button — you never start runs directly.",
-        "If the user attached a file and wants to run/analyze it, call navigate with page 'fast' "
-        "and prefill {\"attachment\": \"<the attached file name>\"} so it is pre-filled as the target. "
-        "Then tell the user concretely: their file is now loaded as the target on the Fast page "
-        "(the 'Paste FASTA/PDB/mmCIF text' box is opened so they can verify it); Fast uses standard "
-        "defaults so no other parameters are needed; and they start it by clicking the blue 'Run' "
-        "button on the Fast page. Do not claim the run has started — the user must click Run.",
-        "Be concise. Reply in the user's language.",
-        f"Current page tab: {tab}.",
+        "There are two launch pages: 'fast' runs with standard defaults and needs only a target "
+        "(no other parameters); 'advanced' is the step-by-step page where the user inputs and adjusts "
+        "parameters (Input -> Workflow -> Criteria -> Advanced options -> Review).",
+        "Route by intent: if the user just wants to run with defaults, navigate to 'fast'. If the user "
+        "wants to INPUT/SET/ADJUST parameters, asks how to configure, or asks about parameters, navigate "
+        "to 'advanced' (NOT fast) and explain the step order above.",
+        "You never start runs yourself — the user launches from the page. Do not claim a run has started.",
+        "If the user attached a file, include prefill {\"attachment\": \"<the attached file name>\"} in the "
+        "navigate call so the file is pre-loaded as the target on whichever page you choose (fast or advanced).",
+        f"When you navigate to 'fast', tell the user: the file is loaded as the target (the paste box is "
+        f"opened to verify), Fast uses standard defaults, and they click the '{run_label}' button to start.",
+        "When you navigate to 'advanced', tell the user their target is carried over and to fill the "
+        "parameters in the Input/Workflow/Criteria/Advanced-options steps, then Review and launch.",
+        f"Reply in {reply_lang}, matching the current UI language. Refer to buttons/labels in {reply_lang}.",
+        f"Current page tab: {tab}. UI language: {reply_lang}.",
     ]
     if run_id:
         lines.append(f"Currently selected run_id: {run_id}.")

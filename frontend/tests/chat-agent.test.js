@@ -10,7 +10,7 @@ test("buildChatSendPayload maps cfg/history/snapshot", () => {
     { role: "user", text: "hi" },
     { role: "ai", text: "hello" },
   ];
-  const p = buildChatSendPayload(cfg, history, { tab: "monitor", runId: "r1" });
+  const p = buildChatSendPayload(cfg, history, { tab: "monitor", runId: "r1", lang: "ko" });
   assert.equal(p.provider, "openai");
   assert.equal(p.model, "gpt-4o");
   assert.equal(p.api_key, "sk");
@@ -18,7 +18,7 @@ test("buildChatSendPayload maps cfg/history/snapshot", () => {
     { role: "user", content: "hi" },
     { role: "assistant", content: "hello" },
   ]);
-  assert.deepEqual(p.context, { tab: "monitor", run_id: "r1" });
+  assert.deepEqual(p.context, { tab: "monitor", run_id: "r1", lang: "ko" });
 });
 
 test("parseChatSendResult extracts reply + actions", () => {
