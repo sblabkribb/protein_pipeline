@@ -131,19 +131,19 @@ import {
 import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=20260407_v6";
 import { renderMcpGuideMarkup, buildMcpJsonSnippetWithToken, fillMasterPromptToken } from "./lib/mcp-guide.js?v=20260609_v11";
 import { renderQueueEta } from "./lib/queue-eta.js?v=20260703_v2";
-import { renderMarkdown as renderChatMarkdown } from "./lib/md.js?v=20260703_v1";
+import { renderMarkdown as renderChatMarkdown } from "./lib/md.js?v=20260706_v2";
 import {
   loadConversations,
   upsertConversation,
   deleteConversation,
   newConversationId,
-} from "./lib/chat-conversations.js?v=20260706_v1";
+} from "./lib/chat-conversations.js?v=20260706_v2";
 import {
   PROVIDERS,
   loadChatConfig,
   saveChatConfig,
   chatConfigReady,
-} from "./lib/chat-providers.js?v=20260703_v1";
+} from "./lib/chat-providers.js?v=20260706_v2";
 import {
   buildChatSendPayload,
   parseChatSendResult,
@@ -151,12 +151,12 @@ import {
   sanitizeAdvancedAnswers,
   configureActions,
   runActions,
-} from "./lib/chat-agent.js?v=20260703_v1";
+} from "./lib/chat-agent.js?v=20260706_v2";
 import {
   getChatSessionId,
   attachmentChipLabel,
   withAttachments,
-} from "./lib/chat-attachments.js?v=20260703_v1";
+} from "./lib/chat-attachments.js?v=20260706_v2";
 import {
   buildProviderHealthPayload,
   buildProviderUpdatePayload,
