@@ -151,3 +151,20 @@ def test_openai_skips_empty_assistant_turn(monkeypatch):
     ca._openai_complete("m", "k", msgs, ca.tool_specs(), None, 60.0)
     roles = [m["role"] for m in cap["body"]["messages"] if m["role"] != "system"]
     assert roles == ["user", "user"]
+
+
+def test_post_json_surfaces_provider_error_body(monkeypatch):
+    import pytest
+    from pipeline_mcp.chat_agent import ChatProviderError, _post_json
+
+    class R:
+        status_code = 400
+        text = "tools[0].function.name does not match '^[a-zA-Z0-9_-]+$'"
+        def json(self):
+            return {}
+
+    monkeypatch.setattr(ca.requests, "post", lambda *a, **k: R())
+    with pytest.raises(ChatProviderError) as exc:
+        _post_json("https://api.example.com", {}, {}, 5.0)
+    assert exc.value.kind == "upstream"
+    assert "does not match" in exc.value.message  # provider reason surfaced

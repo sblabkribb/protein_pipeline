@@ -15,7 +15,7 @@ def _fake_complete(monkeypatch, scripted):
 
 def test_read_tool_round_trip(monkeypatch):
     _fake_complete(monkeypatch, [
-        {"text": "", "tool_calls": [{"id": "t1", "name": "pipeline.status", "args": {"run_id": "r1"}}]},
+        {"text": "", "tool_calls": [{"id": "t1", "name": "pipeline_status", "args": {"run_id": "r1"}}]},
         {"text": "Run r1 is running at the design stage.", "tool_calls": []},
     ])
     seen = {}
@@ -25,7 +25,7 @@ def test_read_tool_round_trip(monkeypatch):
     out = run_chat_turn("anthropic", "m", "k", [{"role": "user", "content": "status?"}], executor)
     assert out["reply"] == "Run r1 is running at the design stage."
     assert out["actions"] == []
-    assert seen == {"name": "pipeline.status", "args": {"run_id": "r1"}}
+    assert seen == {"name": "pipeline_status", "args": {"run_id": "r1"}}
 
 
 def test_navigate_collects_action_and_stops(monkeypatch):
@@ -53,7 +53,7 @@ def test_navigate_invalid_page_coerced_home(monkeypatch):
 
 def test_unknown_tool_feeds_error_and_continues(monkeypatch):
     _fake_complete(monkeypatch, [
-        {"text": "", "tool_calls": [{"id": "x1", "name": "pipeline.delete_run", "args": {}}]},
+        {"text": "", "tool_calls": [{"id": "x1", "name": "pipeline_delete_run", "args": {}}]},
         {"text": "I cannot do that.", "tool_calls": []},
     ])
     called = {"n": 0}
@@ -67,7 +67,7 @@ def test_unknown_tool_feeds_error_and_continues(monkeypatch):
 
 def test_max_steps_cap(monkeypatch):
     _fake_complete(monkeypatch, [
-        {"text": "", "tool_calls": [{"id": "t", "name": "pipeline.status", "args": {}}]}
+        {"text": "", "tool_calls": [{"id": "t", "name": "pipeline_status", "args": {}}]}
     ] * 10)
     out = run_chat_turn("openai", "m", "k", [{"role": "user", "content": "loop"}],
                         lambda n, a: {"state": "x"}, max_steps=3)
@@ -79,9 +79,17 @@ def test_tool_specs_shape():
     specs = ca.tool_specs()
     names = {s["name"] for s in specs}
     assert "navigate" in names
-    assert "pipeline.status" in names
+    assert "pipeline_status" in names
     for s in specs:
         assert set(s) >= {"name", "description", "parameters"}
+
+
+def test_tool_names_have_no_dots():
+    # Anthropic and OpenAI reject tool/function names containing "." (400).
+    for s in ca.tool_specs():
+        assert "." not in s["name"], f"tool name must be dot-free for providers: {s['name']}"
+    for name in ca.READ_TOOLS:
+        assert "." not in name
 
 
 def test_navigate_passes_prefill_through(monkeypatch):
