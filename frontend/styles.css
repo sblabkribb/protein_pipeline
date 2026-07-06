@@ -7728,3 +7728,5 @@ textarea:focus-visible {
 
 .copilot-conversations { display: flex; gap: 6px; align-items: center; padding: 4px 12px; }
 .copilot-conv-select { flex: 1 1 auto; min-width: 0; }
+.copilot-run-action { padding: 4px 12px; }
+.copilot-run-action .primary { width: 100%; }

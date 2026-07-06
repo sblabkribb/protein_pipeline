@@ -150,6 +150,7 @@ import {
   navigateActions,
   sanitizeAdvancedAnswers,
   configureActions,
+  runActions,
 } from "./lib/chat-agent.js?v=20260703_v1";
 import {
   getChatSessionId,
@@ -1223,6 +1224,8 @@ const el = {
   copilotClearBtn: document.getElementById("copilotClearBtn"),
   copilotNewChatBtn: document.getElementById("copilotNewChatBtn"),
   copilotConvSelect: document.getElementById("copilotConvSelect"),
+  copilotRunAction: document.getElementById("copilotRunAction"),
+  copilotRunNowBtn: document.getElementById("copilotRunNowBtn"),
   copilotDeleteConvBtn: document.getElementById("copilotDeleteConvBtn"),
   copilotSummary: document.getElementById("copilotSummary"),
   copilotContext: document.getElementById("copilotContext"),
@@ -11085,6 +11088,40 @@ function applyChatConfigure(action) {
   }
 }
 
+function showChatRunAction() {
+  if (!el.copilotRunAction) return;
+  if (el.copilotRunNowBtn) el.copilotRunNowBtn.textContent = copilotIsKorean() ? "▶ 지금 실행" : "▶ Run now";
+  el.copilotRunAction.hidden = false;
+}
+
+function hideChatRunAction() {
+  if (el.copilotRunAction) el.copilotRunAction.hidden = true;
+}
+
+function performChatRun() {
+  hideChatRunAction();
+  // Prefer the Advanced review run when configured & enabled; else Fast.
+  if (el.runBtn && !el.runBtn.disabled) {
+    setActiveTab("advanced");
+    el.runBtn.click();
+    return;
+  }
+  const fastTarget = String(el.fastTargetInput && el.fastTargetInput.value || "").trim();
+  if (el.fastRunBtn && fastTarget) {
+    setActiveTab("fast");
+    el.fastRunBtn.click();
+    return;
+  }
+  addCopilotHistory("ai", copilotIsKorean()
+    ? "실행 준비가 안 됐어요 — 타깃과 필수 파라미터를 먼저 채워주세요."
+    : "Not ready to run — set the target and required parameters first.");
+}
+
+function applyChatRun(action) {
+  if (!action || action.type !== "run") return;
+  showChatRunAction();
+}
+
 async function generateCopilotReply(prompt, intentHint = "") {
   const cfg = loadChatConfig();
   if (chatConfigReady(cfg)) {
@@ -11107,6 +11144,9 @@ async function generateCopilotReply(prompt, intentHint = "") {
       }
       for (const a of configureActions(actions)) {
         applyChatConfigure(a);
+      }
+      for (const a of runActions(actions)) {
+        applyChatRun(a);
       }
       return reply || "";
     } catch (_e) {
@@ -11176,6 +11216,7 @@ async function submitCopilotPrompt(rawPrompt, intentHint = "") {
   const prompt = String(rawPrompt || "").trim();
   if (!prompt) return;
   addCopilotHistory("user", prompt);
+  hideChatRunAction();
   state.copilotLoading = true;
   renderCopilotMessages();
   try {
@@ -11196,6 +11237,7 @@ async function submitCopilotPrompt(rawPrompt, intentHint = "") {
 }
 
 function clearCopilotHistory() {
+  hideChatRunAction();
   state.copilotHistory = [];
   renderCopilotMessages();
   ensureCopilotWelcome();
@@ -11231,6 +11273,7 @@ function persistActiveConversation() {
 }
 
 function startNewCopilotChat() {
+  hideChatRunAction();
   persistActiveConversation();
   state.activeConvId = null;
   state.copilotHistory = [];
@@ -11356,6 +11399,7 @@ function initCopilot() {
     el.copilotClearBtn.addEventListener("click", () => clearCopilotHistory());
   }
   if (el.copilotNewChatBtn) el.copilotNewChatBtn.addEventListener("click", startNewCopilotChat);
+  if (el.copilotRunNowBtn) el.copilotRunNowBtn.addEventListener("click", performChatRun);
   if (el.copilotDeleteConvBtn) el.copilotDeleteConvBtn.addEventListener("click", deleteActiveCopilotConversation);
   if (el.copilotConvSelect)
     el.copilotConvSelect.addEventListener("change", () => {
