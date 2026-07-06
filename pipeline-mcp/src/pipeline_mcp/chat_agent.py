@@ -74,6 +74,7 @@ def run_chat_turn(provider, model, api_key, messages, tool_executor, *,
     reply = ""
     steps = 0
     specs = tool_specs()
+    client_action_taken = False
     for steps in range(1, max_steps + 1):
         result = _complete(provider, model, api_key, msgs, specs, system=system, timeout=timeout)
         reply = result.get("text") or reply
@@ -81,12 +82,16 @@ def run_chat_turn(provider, model, api_key, messages, tool_executor, *,
         if not tool_calls:
             return {"reply": reply, "actions": actions, "steps": steps}
         msgs.append({"role": "assistant", "content": result.get("text") or "", "tool_calls": tool_calls})
-        stop = False
         for call in tool_calls:
             name = str(call.get("name") or "")
             args = call.get("args") or {}
             cid = call.get("id") or name
             if name == "navigate":
+                if client_action_taken:
+                    msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
+                                 "content": {"ok": True,
+                                             "note": "already handled; now explain to the user in text"}})
+                    continue
                 page = str(args.get("page") or "").strip().lower()
                 if page not in NAVIGATE_PAGES:
                     page = "home"
@@ -94,26 +99,33 @@ def run_chat_turn(provider, model, api_key, messages, tool_executor, *,
                 if isinstance(args.get("prefill"), dict):
                     action["prefill"] = args["prefill"]
                 actions.append(action)
+                client_action_taken = True
                 msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
-                             "content": {"ok": True, "navigated": page}})
-                stop = True
+                             "content": {"ok": True, "navigated": page,
+                                         "note": "navigation done; now explain the next steps to the user in text"}})
             elif name == "configure_advanced":
-                action = {"type": "configure",
-                          "answers": args.get("answers") if isinstance(args.get("answers"), dict) else {}}
+                if client_action_taken:
+                    msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
+                                 "content": {"ok": True,
+                                             "note": "already configured; now explain the values and reasons in text"}})
+                    continue
+                answers = args.get("answers") if isinstance(args.get("answers"), dict) else {}
+                action = {"type": "configure", "answers": answers}
                 if isinstance(args.get("prefill"), dict):
                     action["prefill"] = args["prefill"]
                 actions.append(action)
+                client_action_taken = True
                 msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
-                             "content": {"ok": True, "configured": list(action["answers"].keys())}})
-                stop = True
+                             "content": {"ok": True, "configured": list(answers.keys()),
+                                         "note": "values pre-filled on Advanced; now explain each value and WHY, in text"}})
             elif name in READ_TOOLS:
                 out = tool_executor(name, args)
                 msgs.append({"role": "tool", "tool_call_id": cid, "name": name, "content": out})
             else:
                 msgs.append({"role": "tool", "tool_call_id": cid, "name": name,
                              "content": {"error": "tool not available"}})
-        if stop:
-            return {"reply": reply, "actions": actions, "steps": steps}
+        # Do NOT stop after a client action: continue so the model produces its
+        # explanation turn (it explains AFTER seeing the tool result). Bounded by max_steps.
     return {"reply": reply or "(stopped after the step limit)", "actions": actions, "steps": steps}
 
 
