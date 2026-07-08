@@ -22,8 +22,13 @@ _LOCAL_LLM_MODEL = "LGAI-EXAONE/EXAONE-4.5-33B-AWQ"
 
 
 def _local_llm_base() -> str:
-    """Base URL for the local LLM (env LOCAL_LLM_URL, falling back to default)."""
-    return (os.environ.get("LOCAL_LLM_URL") or _LOCAL_LLM_DEFAULT).rstrip("/")
+    """Base URL for the local LLM (env LOCAL_LLM_URL, falling back to default).
+    Only http/https URLs are accepted; production should point this at an https
+    (TLS-terminated) endpoint — plaintext http is for in-cluster/dev use only."""
+    base = (os.environ.get("LOCAL_LLM_URL") or _LOCAL_LLM_DEFAULT).rstrip("/")
+    if not base.startswith(("http://", "https://")):
+        raise ChatProviderError("upstream", "LOCAL_LLM_URL must be an http(s) URL")
+    return base
 
 READ_TOOLS = ("pipeline_status", "pipeline_queue_eta",
               "pipeline_list_runs", "pipeline_list_artifacts")
@@ -302,13 +307,23 @@ def _openai_complete(model, key, messages, tools, system, timeout):
 
 def _exaone_complete(model, messages, tools, system, timeout):
     """Local EXAONE (vLLM, OpenAI-compatible, keyless). Strips reasoning-model
-    <think>...</think> chain-of-thought from the user-facing reply text."""
+    chain-of-thought from the user-facing reply text."""
     out = _openai_style_complete(
         model or os.environ.get("LOCAL_LLM_MODEL") or _LOCAL_LLM_MODEL,
         "", messages, tools, system, timeout, base_url=_local_llm_base())
-    out["text"] = re.sub(r"<think>.*?</think>", "", out.get("text") or "",
-                         flags=re.DOTALL).strip()
+    out["text"] = _strip_reasoning(out.get("text") or "")
     return out
+
+
+def _strip_reasoning(text: str) -> str:
+    """EXAONE emits chain-of-thought before its answer. It may be wrapped in
+    <think>...</think>, or emitted as leading reasoning terminated by a lone
+    </think> with no opening tag. Keep only the text after the final </think>,
+    then drop any residual <think>...</think> pairs."""
+    if "</think>" in text:
+        text = text.rsplit("</think>", 1)[1]
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    return text.strip()
 
 
 def _to_gemini_contents(messages):
