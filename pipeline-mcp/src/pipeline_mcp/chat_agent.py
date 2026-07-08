@@ -317,9 +317,9 @@ def _exaone_complete(model, messages, tools, system, timeout):
     # a single completion under concurrent GPU load doesn't trip the caller's
     # short default (which caused "Read timed out (read timeout=60.0)").
     try:
-        local_timeout = float(os.environ.get("LOCAL_LLM_TIMEOUT_S") or 180.0)
+        local_timeout = float(os.environ.get("LOCAL_LLM_TIMEOUT_S") or 300.0)
     except ValueError:
-        local_timeout = 180.0
+        local_timeout = 300.0
     local_timeout = max(float(timeout or 0), local_timeout)
     out = _openai_style_complete(
         served, "", messages, tools, system, local_timeout, base_url=_local_llm_base())
