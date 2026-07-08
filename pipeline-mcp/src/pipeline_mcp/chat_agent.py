@@ -312,8 +312,17 @@ def _exaone_complete(model, messages, tools, system, timeout):
     id that the local endpoint would 404 on) and always use the configured
     served model. Strips reasoning-model chain-of-thought from the reply."""
     served = os.environ.get("LOCAL_LLM_MODEL") or _LOCAL_LLM_MODEL
+    # The local 33B model shares a GPU with the folding workers and is far
+    # slower than the elastic commercial APIs; give it a larger read timeout so
+    # a single completion under concurrent GPU load doesn't trip the caller's
+    # short default (which caused "Read timed out (read timeout=60.0)").
+    try:
+        local_timeout = float(os.environ.get("LOCAL_LLM_TIMEOUT_S") or 180.0)
+    except ValueError:
+        local_timeout = 180.0
+    local_timeout = max(float(timeout or 0), local_timeout)
     out = _openai_style_complete(
-        served, "", messages, tools, system, timeout, base_url=_local_llm_base())
+        served, "", messages, tools, system, local_timeout, base_url=_local_llm_base())
     out["text"] = _strip_reasoning(out.get("text") or "")
     return out
 
