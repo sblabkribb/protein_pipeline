@@ -137,13 +137,14 @@ import {
   upsertConversation,
   deleteConversation,
   newConversationId,
-} from "./lib/chat-conversations.js?v=20260706_v2";
+} from "./lib/chat-conversations.js?v=20260708_v3";
 import {
   PROVIDERS,
   loadChatConfig,
   saveChatConfig,
   chatConfigReady,
-} from "./lib/chat-providers.js?v=20260706_v2";
+  providerIsKeyless,
+} from "./lib/chat-providers.js?v=20260708_v3";
 import {
   buildChatSendPayload,
   parseChatSendResult,
@@ -151,12 +152,12 @@ import {
   sanitizeAdvancedAnswers,
   configureActions,
   runActions,
-} from "./lib/chat-agent.js?v=20260706_v2";
+} from "./lib/chat-agent.js?v=20260708_v3";
 import {
   getChatSessionId,
   attachmentChipLabel,
   withAttachments,
-} from "./lib/chat-attachments.js?v=20260706_v2";
+} from "./lib/chat-attachments.js?v=20260708_v3";
 import {
   buildProviderHealthPayload,
   buildProviderUpdatePayload,
@@ -12402,6 +12403,7 @@ function initChatAttachments() {
 function initChatProviderSettings() {
   const providerSel = document.getElementById("chatProviderSelect");
   const keyInput = document.getElementById("chatProviderKey");
+  const keyRow = document.getElementById("chatProviderKeyRow");
   const loadBtn = document.getElementById("chatLoadModelsBtn");
   const modelSel = document.getElementById("chatModelSelect");
   const statusEl = document.getElementById("chatProviderStatus");
@@ -12430,7 +12432,10 @@ function initChatProviderSettings() {
 
   function hydrate() {
     providerSel.value = cfg.provider;
-    keyInput.value = (cfg.keys && cfg.keys[cfg.provider]) || "";
+    // Keyless providers (local EXAONE) need no API key — hide the key input.
+    const keyless = providerIsKeyless(cfg.provider);
+    if (keyRow) keyRow.style.display = keyless ? "none" : "";
+    keyInput.value = keyless ? "" : ((cfg.keys && cfg.keys[cfg.provider]) || "");
     if (cfg.model) setModelOptions([{ id: cfg.model, label: cfg.model }], cfg.model);
     else setModelOptions([]);
   }

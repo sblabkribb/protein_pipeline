@@ -8,11 +8,22 @@ API keys are used transiently and never logged (errors are redacted).
 from __future__ import annotations
 
 import json
+import os
 import re
 
 import requests
 
 from .chat_providers import ChatProviderError, _normalize_provider
+
+# Self-hosted local LLM (EXAONE via vLLM, OpenAI-compatible, no auth). Configurable
+# via env; defaults point at the verified in-cluster endpoint / served model id.
+_LOCAL_LLM_DEFAULT = "http://211.188.35.221:8000/v1"
+_LOCAL_LLM_MODEL = "LGAI-EXAONE/EXAONE-4.5-33B-AWQ"
+
+
+def _local_llm_base() -> str:
+    """Base URL for the local LLM (env LOCAL_LLM_URL, falling back to default)."""
+    return (os.environ.get("LOCAL_LLM_URL") or _LOCAL_LLM_DEFAULT).rstrip("/")
 
 READ_TOOLS = ("pipeline_status", "pipeline_queue_eta",
               "pipeline_list_runs", "pipeline_list_artifacts")
@@ -172,6 +183,9 @@ def _post_json(url: str, headers: dict, body: dict, timeout: float) -> dict:
 
 def _complete(provider, model, api_key, messages, tools, *, system=None, timeout=60.0) -> dict:
     canonical = _normalize_provider(provider)
+    # Local EXAONE needs no API key — route it before the key requirement below.
+    if canonical == "exaone":
+        return _exaone_complete(model, messages, tools, system, timeout)
     key = str(api_key or "").strip()
     if not key:
         raise ChatProviderError("auth", "API key is required")
@@ -253,7 +267,9 @@ def _to_openai_messages(messages, system):
     return out
 
 
-def _openai_complete(model, key, messages, tools, system, timeout):
+def _openai_style_complete(model, key, messages, tools, system, timeout, *, base_url):
+    """Shared OpenAI wire-format completion. Sends an Authorization header only
+    when `key` is non-empty (the local EXAONE endpoint requires no auth)."""
     body = {
         "model": model,
         "messages": _to_openai_messages(messages, system),
@@ -261,9 +277,10 @@ def _openai_complete(model, key, messages, tools, system, timeout):
                    "description": t["description"], "parameters": t["parameters"]}} for t in tools],
         "tool_choice": "auto",
     }
-    data = _post_json("https://api.openai.com/v1/chat/completions",
-                      {"Authorization": f"Bearer {key}", "content-type": "application/json"},
-                      body, timeout)
+    headers = {"content-type": "application/json"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    data = _post_json(base_url.rstrip("/") + "/chat/completions", headers, body, timeout)
     choice = (data.get("choices") or [{}])[0]
     msg = choice.get("message") or {}
     text = msg.get("content") or ""
@@ -276,6 +293,22 @@ def _openai_complete(model, key, messages, tools, system, timeout):
             args = {}
         calls.append({"id": tc.get("id"), "name": fn.get("name"), "args": args})
     return {"text": text, "tool_calls": calls}
+
+
+def _openai_complete(model, key, messages, tools, system, timeout):
+    return _openai_style_complete(model, key, messages, tools, system, timeout,
+                                  base_url="https://api.openai.com/v1")
+
+
+def _exaone_complete(model, messages, tools, system, timeout):
+    """Local EXAONE (vLLM, OpenAI-compatible, keyless). Strips reasoning-model
+    <think>...</think> chain-of-thought from the user-facing reply text."""
+    out = _openai_style_complete(
+        model or os.environ.get("LOCAL_LLM_MODEL") or _LOCAL_LLM_MODEL,
+        "", messages, tools, system, timeout, base_url=_local_llm_base())
+    out["text"] = re.sub(r"<think>.*?</think>", "", out.get("text") or "",
+                         flags=re.DOTALL).strip()
+    return out
 
 
 def _to_gemini_contents(messages):

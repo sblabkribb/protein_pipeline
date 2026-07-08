@@ -9,17 +9,35 @@ globalThis.localStorage = {
   removeItem: (k) => store.delete(k),
 };
 
-const { PROVIDERS, loadChatConfig, saveChatConfig, chatConfigReady, providerLabel } =
-  await import("../lib/chat-providers.js");
+const {
+  PROVIDERS,
+  DEFAULT_PROVIDER,
+  providerIsKeyless,
+  loadChatConfig,
+  saveChatConfig,
+  chatConfigReady,
+  providerLabel,
+} = await import("../lib/chat-providers.js");
 
-test("PROVIDERS lists the three providers", () => {
-  assert.deepEqual(PROVIDERS.map((p) => p.id), ["anthropic", "openai", "gemini"]);
+test("PROVIDERS lists exaone (default, keyless) plus the three commercial providers", () => {
+  assert.deepEqual(PROVIDERS.map((p) => p.id), ["exaone", "anthropic", "openai", "gemini"]);
+  assert.equal(DEFAULT_PROVIDER, "exaone");
+  const exaone = PROVIDERS.find((p) => p.id === "exaone");
+  assert.equal(exaone.keyless, true);
+  assert.match(exaone.label, /EXAONE/);
 });
 
-test("loadChatConfig defaults on empty storage", () => {
+test("providerIsKeyless is true for exaone/local and false for commercial", () => {
+  assert.equal(providerIsKeyless("exaone"), true);
+  assert.equal(providerIsKeyless("local"), true);
+  assert.equal(providerIsKeyless("anthropic"), false);
+  assert.equal(providerIsKeyless("openai"), false);
+});
+
+test("loadChatConfig defaults to exaone on empty storage", () => {
   store.clear();
   const cfg = loadChatConfig();
-  assert.equal(cfg.provider, "anthropic");
+  assert.equal(cfg.provider, "exaone");
   assert.equal(cfg.model, "");
   assert.deepEqual(cfg.keys, {});
 });
@@ -28,7 +46,7 @@ test("loadChatConfig tolerates corrupt storage", () => {
   store.clear();
   store.set("rapid.chat.config.v1", "{not json");
   const cfg = loadChatConfig();
-  assert.equal(cfg.provider, "anthropic");
+  assert.equal(cfg.provider, "exaone");
 });
 
 test("saveChatConfig round-trips", () => {
@@ -40,13 +58,21 @@ test("saveChatConfig round-trips", () => {
   assert.equal(cfg.keys.openai, "sk");
 });
 
-test("chatConfigReady requires provider, its key, and a model", () => {
+test("chatConfigReady requires provider, its key, and a model for commercial providers", () => {
   assert.equal(chatConfigReady({ provider: "openai", model: "", keys: { openai: "sk" } }), false);
   assert.equal(chatConfigReady({ provider: "openai", model: "gpt-4o", keys: {} }), false);
   assert.equal(chatConfigReady({ provider: "openai", model: "gpt-4o", keys: { openai: "sk" } }), true);
 });
 
+test("chatConfigReady is true for exaone with NO key and NO model", () => {
+  // EXAONE works out-of-the-box: keyless, server supplies the default model.
+  assert.equal(chatConfigReady({ provider: "exaone", model: "", keys: {} }), true);
+  assert.equal(chatConfigReady({ provider: "exaone" }), true);
+  assert.equal(chatConfigReady({ provider: "local", keys: {} }), true);
+});
+
 test("providerLabel maps id to label and falls back to id", () => {
   assert.equal(providerLabel("anthropic"), "Claude");
+  assert.equal(providerLabel("exaone"), "RAPID Local EXAONE (no key)");
   assert.equal(providerLabel("mystery"), "mystery");
 });

@@ -18,3 +18,16 @@ def test_tool_returns_error_shape(monkeypatch):
     out = tools._chat_list_models_tool(None, {"provider": "anthropic", "api_key": "bad"})
     assert out == {"error": {"kind": "auth", "message": "provider rejected the API key"},
                    "provider": "anthropic"}
+
+
+def test_exaone_lists_models_with_empty_key(monkeypatch):
+    seen = {}
+    def fake(provider, api_key):
+        seen["provider"] = provider
+        seen["api_key"] = api_key
+        return [{"id": "LGAI-EXAONE/EXAONE-4.5-33B-AWQ", "label": "LGAI-EXAONE/EXAONE-4.5-33B-AWQ"}]
+    monkeypatch.setattr(tools, "list_chat_models", fake)
+    out = tools._chat_list_models_tool(None, {"provider": "exaone", "api_key": ""})
+    assert out["provider"] == "exaone"
+    assert out["models"][0]["id"] == "LGAI-EXAONE/EXAONE-4.5-33B-AWQ"
+    assert seen == {"provider": "exaone", "api_key": ""}  # empty key allowed

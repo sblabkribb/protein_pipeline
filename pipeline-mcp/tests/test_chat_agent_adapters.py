@@ -153,6 +153,55 @@ def test_openai_skips_empty_assistant_turn(monkeypatch):
     assert roles == ["user", "user"]
 
 
+def test_exaone_routes_to_local_endpoint_no_auth(monkeypatch):
+    cap = _capture_post(monkeypatch, FakeResp(200, {"choices": [{"message": {
+        "content": "hi there",
+        "tool_calls": [{"id": "c1", "type": "function",
+                        "function": {"name": "pipeline.status",
+                                     "arguments": "{\"run_id\": \"r9\"}"}}],
+    }}]}))
+    monkeypatch.setenv("LOCAL_LLM_URL", "http://local-host:8000/v1")
+    monkeypatch.setenv("LOCAL_LLM_MODEL", "EXAONE-TEST")
+    # No api_key is required for exaone; _complete must route before the key check.
+    out = ca._complete("exaone", "", "ignored-key", [{"role": "user", "content": "status?"}],
+                       ca.tool_specs(), system="SYS", timeout=60.0)
+    assert out["text"] == "hi there"
+    assert out["tool_calls"] == [{"id": "c1", "name": "pipeline.status", "args": {"run_id": "r9"}}]
+    assert cap["url"] == "http://local-host:8000/v1/chat/completions"
+    # keyless: NO Authorization header ever sent to the local endpoint
+    assert "Authorization" not in cap["headers"]
+    assert cap["body"]["model"] == "EXAONE-TEST"
+
+
+def test_exaone_defaults_model_when_unset(monkeypatch):
+    cap = _capture_post(monkeypatch, FakeResp(200, {"choices": [{"message": {"content": "ok"}}]}))
+    monkeypatch.delenv("LOCAL_LLM_URL", raising=False)
+    monkeypatch.delenv("LOCAL_LLM_MODEL", raising=False)
+    out = ca._exaone_complete("", [{"role": "user", "content": "hi"}], ca.tool_specs(), None, 60.0)
+    assert out["text"] == "ok"
+    assert cap["url"] == ca._LOCAL_LLM_DEFAULT.rstrip("/") + "/chat/completions"
+    assert cap["body"]["model"] == ca._LOCAL_LLM_MODEL
+
+
+def test_exaone_strips_think_chain_of_thought(monkeypatch):
+    _capture_post(monkeypatch, FakeResp(200, {"choices": [{"message": {
+        "content": "<think>let me reason\nabout this</think>The answer is 42.",
+    }}]}))
+    out = ca._exaone_complete("m", [{"role": "user", "content": "q"}], ca.tool_specs(), None, 60.0)
+    assert out["text"] == "The answer is 42."
+    assert "<think>" not in out["text"] and "reason" not in out["text"]
+
+
+def test_openai_style_complete_sends_auth_only_with_key(monkeypatch):
+    cap = _capture_post(monkeypatch, FakeResp(200, {"choices": [{"message": {"content": "x"}}]}))
+    ca._openai_style_complete("m", "", [{"role": "user", "content": "hi"}],
+                              ca.tool_specs(), None, 60.0, base_url="http://h/v1")
+    assert "Authorization" not in cap["headers"]
+    ca._openai_style_complete("m", "sk", [{"role": "user", "content": "hi"}],
+                              ca.tool_specs(), None, 60.0, base_url="http://h/v1")
+    assert cap["headers"].get("Authorization") == "Bearer sk"
+
+
 def test_post_json_surfaces_provider_error_body(monkeypatch):
     import pytest
     from pipeline_mcp.chat_agent import ChatProviderError, _post_json

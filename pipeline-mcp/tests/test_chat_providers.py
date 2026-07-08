@@ -158,3 +158,33 @@ def test_dedup_by_id(monkeypatch):
 def test_label_falls_back_to_id(monkeypatch):
     _patch_get(monkeypatch, FakeResp(200, {"data": [{"id": "claude-x"}]}))
     assert list_chat_models("anthropic", "k") == [{"id": "claude-x", "label": "claude-x"}]
+
+
+def test_exaone_lists_served_models_without_key(monkeypatch):
+    cap = {}
+    monkeypatch.setenv("LOCAL_LLM_URL", "http://local-host:8000/v1")
+    _patch_get(monkeypatch, FakeResp(200, {"data": [
+        {"id": "LGAI-EXAONE/EXAONE-4.5-33B-AWQ"},
+    ]}), cap)
+    # empty api_key is fine for exaone (must NOT raise auth)
+    models = list_chat_models("exaone", "")
+    assert models == [{"id": "LGAI-EXAONE/EXAONE-4.5-33B-AWQ",
+                       "label": "LGAI-EXAONE/EXAONE-4.5-33B-AWQ"}]
+    assert cap["url"] == "http://local-host:8000/v1/models"
+    assert "Authorization" not in cap["headers"]
+    assert "x-api-key" not in cap["headers"]
+
+
+def test_local_alias_maps_to_exaone(monkeypatch):
+    monkeypatch.delenv("LOCAL_LLM_URL", raising=False)
+    _patch_get(monkeypatch, FakeResp(200, {"data": [{"id": "m1"}]}))
+    assert list_chat_models("local", "")[0]["id"] == "m1"
+
+
+def test_keyed_provider_still_requires_key(monkeypatch):
+    def boom(*a, **k):
+        raise AssertionError("should not call network")
+    monkeypatch.setattr(cp.requests, "get", boom)
+    with pytest.raises(ChatProviderError) as exc:
+        list_chat_models("openai", "")
+    assert exc.value.kind == "auth"

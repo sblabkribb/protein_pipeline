@@ -1,16 +1,27 @@
 // Browser-only config + storage for the AI chatbot provider/model selection.
 // Keys live here in localStorage and are sent to the server only per chat request.
 
+// "exaone" is the self-hosted local LLM: it needs NO API key and is the default
+// so the chatbot works out-of-the-box. Commercial providers stay opt-in (BYO key).
 export const PROVIDERS = [
+  { id: "exaone", label: "RAPID Local EXAONE (no key)", keyless: true },
   { id: "anthropic", label: "Claude" },
   { id: "openai", label: "OpenAI (Codex)" },
   { id: "gemini", label: "Gemini" },
 ];
 
+export const DEFAULT_PROVIDER = "exaone";
+
 const STORAGE_KEY = "rapid.chat.config.v1";
 
+// True when the provider needs no API key (local EXAONE / "local" alias).
+export function providerIsKeyless(id) {
+  const found = PROVIDERS.find((p) => p.id === id);
+  return Boolean(found && found.keyless) || id === "local";
+}
+
 function defaults() {
-  return { provider: "anthropic", model: "", keys: {} };
+  return { provider: DEFAULT_PROVIDER, model: "", keys: {} };
 }
 
 export function loadChatConfig() {
@@ -20,7 +31,7 @@ export function loadChatConfig() {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return defaults();
     return {
-      provider: typeof parsed.provider === "string" ? parsed.provider : "anthropic",
+      provider: typeof parsed.provider === "string" ? parsed.provider : DEFAULT_PROVIDER,
       model: typeof parsed.model === "string" ? parsed.model : "",
       keys: parsed.keys && typeof parsed.keys === "object" ? parsed.keys : {},
     };
@@ -31,7 +42,7 @@ export function loadChatConfig() {
 
 export function saveChatConfig(cfg) {
   const safe = {
-    provider: (cfg && cfg.provider) || "anthropic",
+    provider: (cfg && cfg.provider) || DEFAULT_PROVIDER,
     model: (cfg && cfg.model) || "",
     keys: (cfg && cfg.keys && typeof cfg.keys === "object") ? cfg.keys : {},
   };
@@ -45,6 +56,9 @@ export function saveChatConfig(cfg) {
 
 export function chatConfigReady(cfg) {
   if (!cfg || typeof cfg !== "object") return false;
+  // Keyless providers (EXAONE) are ready with just a provider — no key needed,
+  // and the server supplies a default model when none is chosen.
+  if (providerIsKeyless(cfg.provider)) return Boolean(cfg.provider);
   const key = cfg.keys && cfg.keys[cfg.provider];
   return Boolean(cfg.provider && key && cfg.model);
 }

@@ -161,6 +161,43 @@ def test_run_pipeline_in_tool_specs():
     assert "run_pipeline" in {s["name"] for s in ca.tool_specs()}
 
 
+def test_run_chat_turn_routes_exaone_no_key(monkeypatch):
+    # End-to-end through the real _complete: exaone must reach the local endpoint
+    # with NO Authorization header and no api_key, and parse tool_calls.
+    class FakeResp:
+        status_code = 200
+        def json(self):
+            return {"choices": [{"message": {
+                "content": "<think>reasoning</think>Run r1 is running.",
+                "tool_calls": [{"id": "c1", "type": "function",
+                                "function": {"name": "pipeline_status",
+                                             "arguments": "{\"run_id\": \"r1\"}"}}],
+            }}]}
+    cap = {}
+    def fake_post(url, headers=None, json=None, timeout=None):
+        cap.setdefault("urls", []).append(url)
+        cap.setdefault("headers", []).append(headers or {})
+        # second call: model replies without tool calls to end the loop
+        if len(cap["urls"]) >= 2:
+            class Done:
+                status_code = 200
+                def json(self):
+                    return {"choices": [{"message": {"content": "Run r1 is running."}}]}
+            return Done()
+        return FakeResp()
+    monkeypatch.setattr(ca.requests, "post", fake_post)
+    monkeypatch.setenv("LOCAL_LLM_URL", "http://local-host:8000/v1")
+    seen = {}
+    def executor(name, args):
+        seen["name"] = name; seen["args"] = args
+        return {"state": "running"}
+    out = run_chat_turn("exaone", "", "", [{"role": "user", "content": "status?"}], executor)
+    assert out["reply"] == "Run r1 is running."
+    assert seen == {"name": "pipeline_status", "args": {"run_id": "r1"}}
+    assert all(u == "http://local-host:8000/v1/chat/completions" for u in cap["urls"])
+    assert all("Authorization" not in h for h in cap["headers"])
+
+
 def test_configure_and_run_in_one_turn(monkeypatch):
     _fake_complete(monkeypatch, [
         {"text": "Setting up and offering Run.",

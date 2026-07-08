@@ -83,7 +83,7 @@ from .storage import write_json
 
 from .queue_eta import estimate_run_eta
 from .queue_eta import estimate_stage_eta
-from .chat_providers import ChatProviderError, list_chat_models
+from .chat_providers import ChatProviderError, list_chat_models, _normalize_provider
 from .chat_agent import run_chat_turn
 from .chat_attachments import (
     list_chat_attachments, primary_target_text, save_chat_attachments,
@@ -161,9 +161,42 @@ def _queue_eta_tool(runner, arguments: dict) -> dict:
     return out
 
 
+def _is_exaone_provider(provider: str) -> bool:
+    """True when the request targets the keyless local EXAONE provider."""
+    try:
+        return _normalize_provider(provider) == "exaone"
+    except ChatProviderError:
+        return False
+
+
+# Sliding-window rate limit for the keyless EXAONE path only. The commercial
+# providers are self-limited by the user's own API key/quota, but EXAONE is
+# server-funded and unauthenticated, so we cap requests per chat session (with a
+# coarse global fallback when no session id is supplied) to prevent abuse.
+# Limits are read lazily from env (LOCAL_LLM_RATE_MAX requests per
+# LOCAL_LLM_RATE_WINDOW seconds) since the _env_* helpers are defined below.
+_exaone_rate_hits: dict[str, list[float]] = {}
+
+
+def _exaone_rate_ok(session_id: str) -> bool:
+    """In-process sliding-window limiter. Returns False when the caller exceeds
+    the configured request budget within the window (per session, global fallback)."""
+    max_hits = _env_int("LOCAL_LLM_RATE_MAX", 20)
+    window = _env_float("LOCAL_LLM_RATE_WINDOW", 60.0)
+    bucket = session_id or "__global__"
+    now = time.monotonic()
+    hits = [t for t in _exaone_rate_hits.get(bucket, []) if now - t < window]
+    if len(hits) >= max_hits:
+        _exaone_rate_hits[bucket] = hits
+        return False
+    hits.append(now)
+    _exaone_rate_hits[bucket] = hits
+    return True
+
+
 def _chat_list_models_tool(runner, arguments: dict) -> dict:
     """MCP handler for chat.list_models. The api_key is used transiently to call
-    the provider and is never stored or logged."""
+    the provider and is never stored or logged. EXAONE needs no key."""
     provider = str(arguments.get("provider") or "").strip()
     api_key = str(arguments.get("api_key") or "").strip()
     try:
@@ -245,6 +278,14 @@ def _chat_send_tool(runner, arguments: dict) -> dict:
     session_id = str(arguments.get("session_id") or "").strip()
     attachments = arguments.get("attachments") or []
     system = _build_chat_system_prompt(context)
+
+    # Rate-limit the keyless EXAONE path (server-funded, unauthenticated). Return
+    # the same error shape used for provider errors so the frontend renders it.
+    if _is_exaone_provider(provider) and not _exaone_rate_ok(session_id):
+        return {"error": {"kind": "upstream",
+                          "message": "Too many requests to the local assistant. "
+                                     "Please wait a moment and try again."},
+                "provider": provider, "saved": []}
 
     saved = []
     if attachments and session_id:
@@ -9338,31 +9379,31 @@ def tool_definitions() -> list[dict[str, Any]]:
         },
         {
             "name": "chat.list_models",
-            "description": "List chat-capable models for an LLM provider using a user-supplied API key. The key is used only for this request and is not stored.",
+            "description": "List chat-capable models for an LLM provider. Commercial providers use a user-supplied API key (used only for this request, never stored); the local 'exaone' provider needs no key.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "provider": {"type": "string", "description": "anthropic | openai | gemini"},
-                    "api_key": {"type": "string", "description": "provider API key (browser-held)"},
+                    "provider": {"type": "string", "description": "anthropic | openai | gemini | exaone (local, no key)"},
+                    "api_key": {"type": "string", "description": "provider API key (browser-held); omit/empty for exaone"},
                 },
-                "required": ["provider", "api_key"],
+                "required": ["provider"],
             },
         },
         {
             "name": "chat.send",
-            "description": "Run one chatbot turn: the assistant may read run state and return a navigate action. Uses a user-supplied API key (browser-held), used only for this request.",
+            "description": "Run one chatbot turn: the assistant may read run state and return a navigate action. Commercial providers use a user-supplied API key (browser-held, per-request only); the local 'exaone' provider needs no key.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "provider": {"type": "string", "description": "anthropic | openai | gemini"},
-                    "model": {"type": "string"},
-                    "api_key": {"type": "string"},
+                    "provider": {"type": "string", "description": "anthropic | openai | gemini | exaone (local, no key)"},
+                    "model": {"type": "string", "description": "model id; optional for exaone (uses the served default)"},
+                    "api_key": {"type": "string", "description": "provider API key; omit/empty for exaone"},
                     "messages": {"type": "array", "description": "neutral chat history [{role,content}]"},
                     "context": {"type": "object", "description": "UI context {tab, run_id}"},
                     "attachments": {"type": "array", "description": "[{name, base64}] attached files"},
                     "session_id": {"type": "string", "description": "browser chat session id"},
                 },
-                "required": ["provider", "model", "api_key", "messages"],
+                "required": ["provider", "messages"],
             },
         },
         {

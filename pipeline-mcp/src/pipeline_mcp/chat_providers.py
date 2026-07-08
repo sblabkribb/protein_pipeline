@@ -6,6 +6,7 @@ hardcoded host. No key is stored or logged; the key is used only for the request
 """
 from __future__ import annotations
 
+import os
 import re
 
 import requests
@@ -14,7 +15,17 @@ _ALIASES = {
     "anthropic": "anthropic", "claude": "anthropic",
     "openai": "openai", "gpt": "openai", "codex": "openai",
     "gemini": "gemini", "google": "gemini",
+    "exaone": "exaone", "local": "exaone",
 }
+
+# Self-hosted local LLM (EXAONE via vLLM, OpenAI-compatible, no auth). Configurable
+# via env; defaults match chat_agent's constants.
+_LOCAL_LLM_DEFAULT = "http://211.188.35.221:8000/v1"
+_LOCAL_LLM_MODEL = "LGAI-EXAONE/EXAONE-4.5-33B-AWQ"
+
+
+def _local_llm_base() -> str:
+    return (os.environ.get("LOCAL_LLM_URL") or _LOCAL_LLM_DEFAULT).rstrip("/")
 
 # OpenAI /v1/models returns non-chat models too; drop these by id substring.
 _OPENAI_EXCLUDE = ("embedding", "whisper", "tts", "dall-e", "moderation",
@@ -116,9 +127,25 @@ def _gemini_models(api_key: str, timeout: float) -> list[dict]:
     return out
 
 
+def _exaone_models(timeout: float) -> list[dict]:
+    """List the local EXAONE server's served model id(s). No key/auth required."""
+    data = _get(_local_llm_base() + "/models", {}, timeout)
+    out: list[dict] = []
+    for m in data.get("data", []):
+        mid = str((m or {}).get("id") or "").strip()
+        if mid:
+            out.append({"id": mid, "label": mid})
+    return out
+
+
 def list_chat_models(provider: str, api_key: str, *, timeout: float = 15.0) -> list[dict]:
     """Return chat-capable models as sorted, de-duplicated [{"id","label"}]."""
     canonical = _normalize_provider(provider)
+    # Local EXAONE needs no API key — list its served models without auth.
+    if canonical == "exaone":
+        rows = _exaone_models(timeout)
+        dedup = {r["id"]: r for r in rows}
+        return sorted(dedup.values(), key=lambda r: r["id"])
     key = str(api_key or "").strip()
     if not key:
         raise ChatProviderError("auth", "API key is required")
