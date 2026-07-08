@@ -306,11 +306,14 @@ def _openai_complete(model, key, messages, tools, system, timeout):
 
 
 def _exaone_complete(model, messages, tools, system, timeout):
-    """Local EXAONE (vLLM, OpenAI-compatible, keyless). Strips reasoning-model
-    chain-of-thought from the user-facing reply text."""
+    """Local EXAONE (vLLM, OpenAI-compatible, keyless). The endpoint serves a
+    single model, so ignore any client-supplied model id (it may be a stale
+    value carried over from a previously-selected provider, e.g. a Claude/GPT
+    id that the local endpoint would 404 on) and always use the configured
+    served model. Strips reasoning-model chain-of-thought from the reply."""
+    served = os.environ.get("LOCAL_LLM_MODEL") or _LOCAL_LLM_MODEL
     out = _openai_style_complete(
-        model or os.environ.get("LOCAL_LLM_MODEL") or _LOCAL_LLM_MODEL,
-        "", messages, tools, system, timeout, base_url=_local_llm_base())
+        served, "", messages, tools, system, timeout, base_url=_local_llm_base())
     out["text"] = _strip_reasoning(out.get("text") or "")
     return out
 

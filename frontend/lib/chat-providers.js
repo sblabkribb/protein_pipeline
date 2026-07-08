@@ -30,9 +30,15 @@ export function loadChatConfig() {
     if (!raw) return defaults();
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return defaults();
+    const provider = typeof parsed.provider === "string" ? parsed.provider : DEFAULT_PROVIDER;
+    let model = typeof parsed.model === "string" ? parsed.model : "";
+    // Keyless providers (local EXAONE) serve a single model; drop any stale
+    // model id carried over from a previously-selected commercial provider so
+    // it is never sent to the local endpoint.
+    if (providerIsKeyless(provider)) model = "";
     return {
-      provider: typeof parsed.provider === "string" ? parsed.provider : DEFAULT_PROVIDER,
-      model: typeof parsed.model === "string" ? parsed.model : "",
+      provider,
+      model,
       keys: parsed.keys && typeof parsed.keys === "object" ? parsed.keys : {},
     };
   } catch (_e) {
