@@ -81,6 +81,9 @@ test("per-user isolation: two accounts get disjoint conversation lists", () => {
 
 test("anonymous / no user falls back to the bare (unsuffixed) key", () => {
   store.clear();
+  // Steady state (legacy one-time carry-over already done): a signed-in account
+  // must NOT absorb a later anonymous user's bare-key chats.
+  store.set("rapid.chat.legacyMigrated.v1", "1");
   setChatScope(null);
   upsertConversation("anon", [{ role: "user", text: "hi" }], 1);
   assert.ok(store.has("rapid.chat.conversations.v1"));
@@ -91,4 +94,21 @@ test("anonymous / no user falls back to the bare (unsuffixed) key", () => {
 
   setChatScope(null);
   assert.deepEqual(loadConversations().map((c) => c.id), ["anon"]);
+});
+
+test("one-time legacy carry-over: first signed-in account inherits global chats, others do not", () => {
+  store.clear();
+  // Pre-namespacing (shared) history under the bare key.
+  store.set(
+    "rapid.chat.conversations.v1",
+    JSON.stringify([{ id: "old", title: "old", messages: [{ role: "user", text: "old" }], updatedAt: 1 }]),
+  );
+  setChatScope({ username: "alice", run_prefix: "alice" });
+  assert.deepEqual(loadConversations().map((c) => c.id), ["old"]); // alice keeps her chats
+  assert.equal(store.has("rapid.chat.conversations.v1"), false); // global removed
+  assert.ok(store.has("rapid.chat.legacyMigrated.v1")); // one-time flag set
+
+  setChatScope({ username: "bob", run_prefix: "bob" });
+  assert.deepEqual(loadConversations(), []); // a different account does NOT inherit
+  setChatScope(null);
 });
