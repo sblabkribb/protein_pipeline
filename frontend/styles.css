@@ -3833,6 +3833,34 @@ textarea:focus-visible {
   border: 1px solid rgba(244, 185, 74, 0.35);
 }
 
+/* Example conversation preview inside a tutorial step */
+.tutorial-step-example {
+  margin: 10px 0 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(15, 107, 111, 0.18);
+  border-radius: 12px;
+  background: rgba(15, 107, 111, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tutorial-step-example-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+.tutorial-step-example .copilot-message {
+  display: flex;
+}
+.tutorial-step-example .copilot-message.user {
+  justify-content: flex-end;
+}
+.tutorial-step-example .copilot-bubble {
+  max-width: 92%;
+}
+
 .copilot-input-row {
   display: flex;
   gap: 10px;

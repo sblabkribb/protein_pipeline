@@ -862,6 +862,7 @@ const el = {
   tutorialContents: document.getElementById("tutorialContents"),
   tutorialStepTitle: document.getElementById("tutorialStepTitle"),
   tutorialStepBody: document.getElementById("tutorialStepBody"),
+  tutorialStepExample: document.getElementById("tutorialStepExample"),
   tutorialStepHint: document.getElementById("tutorialStepHint"),
   tutorialDots: document.getElementById("tutorialDots"),
   tutorialSkip: document.getElementById("tutorialSkip"),
@@ -2235,9 +2236,13 @@ const I18N = {
       "Report language follows the current UI language. After generating, review the evidence score and artifact links before saving or exporting.",
     "tutorial.step.copilot.title": "AI Assistant answers in context",
     "tutorial.step.copilot.body":
-      "The built-in AI Assistant works with no API key (local EXAONE): it reads the current run context and can explain the target, recommend parameters, and even start runs. Try the quick prompt \"Briefly explain the target\".",
+      "The built-in AI Assistant works out-of-the-box with no API key (local EXAONE). You can also switch to Claude, OpenAI, or Gemini with your own API key. It reads the current run context and can explain the target, recommend parameters, and even start runs — for example:",
+    "tutorial.step.copilot.exampleQ": "Briefly explain the target",
+    "tutorial.step.copilot.exampleA":
+      "This target is the NpuDnaE intein crystal structure (4KL5): chains A and B, ligands CIT and GOL — an engineered split intein used for protein splicing.",
+    "tutorial.example.label": "Example",
     "tutorial.step.copilot.hint":
-      "Use Copilot for interpretation and navigation help; use the main Run, Resume, Report, and Export buttons for irreversible actions.",
+      "The built-in EXAONE is the default; open Model Providers to add your own Claude/OpenAI/Gemini key. Use the main Run, Resume, Report, and Export buttons for irreversible actions.",
     "tutorial.step.topbar.title": "Top menu controls",
     "tutorial.step.topbar.body":
       "Use KO/EN for language, Copilot for contextual help, Tutorial to replay this tour, Model Providers for model endpoints and per-user/global settings, and Logout when finished. Admin users also see management controls.",
@@ -3971,9 +3976,13 @@ const I18N = {
       "리포트 언어는 현재 UI 언어를 따릅니다. 생성 후 evidence score와 artifact link를 확인한 뒤 저장하거나 export하세요.",
     "tutorial.step.copilot.title": "AI 어시스턴트는 현재 맥락으로 답합니다",
     "tutorial.step.copilot.body":
-      "내장 AI 어시스턴트는 API 키 없이(로컬 EXAONE) 동작합니다. 현재 run 맥락을 읽어 타겟 설명, 파라미터 추천, 실행 시작까지 도와줍니다. 빠른 질문 \"타겟 간단히 설명\"을 눌러 보세요.",
+      "내장 AI 어시스턴트는 API 키 없이(로컬 EXAONE) 바로 쓸 수 있고, 원하면 Claude·OpenAI·Gemini를 본인 API 키로 선택해 쓸 수도 있습니다. 현재 run 맥락을 읽어 타겟 설명·파라미터 추천·실행 시작까지 도와줍니다. 예시:",
+    "tutorial.step.copilot.exampleQ": "타겟 간단히 설명",
+    "tutorial.step.copilot.exampleA":
+      "이 타겟은 NpuDnaE 인테인 결정 구조(4KL5)입니다. 사슬 A·B, 리간드 CIT·GOL을 포함하며, 단백질 스플라이싱에 쓰이는 조작된 스플릿 인테인입니다.",
+    "tutorial.example.label": "예시",
     "tutorial.step.copilot.hint":
-      "해석과 탐색 도움에는 Copilot을 쓰고, 실제 실행/재개/리포트/export는 각 화면의 전용 버튼으로 처리하세요.",
+      "기본은 내장 EXAONE이며, 상단 '모델 연결'에서 Claude/OpenAI/Gemini 키를 추가하면 그 모델도 쓸 수 있습니다. 실제 실행/재개/리포트/export는 각 화면의 전용 버튼으로 처리하세요.",
     "tutorial.step.topbar.title": "상단 메뉴 안내",
     "tutorial.step.topbar.body":
       "KO/EN은 언어 변경, Copilot은 현재 화면 도움, 튜토리얼은 이 안내 다시 보기, 모델 연결은 모델 endpoint와 개인/전역 설정 관리, 로그아웃은 세션 종료에 사용합니다. 관리자에게는 관리 메뉴가 추가로 보입니다.",
@@ -5900,6 +5909,10 @@ const TUTORIAL_STEPS = [
     titleKey: "tutorial.step.copilot.title",
     bodyKey: "tutorial.step.copilot.body",
     hintKey: "tutorial.step.copilot.hint",
+    example: [
+      { role: "user", key: "tutorial.step.copilot.exampleQ" },
+      { role: "ai", key: "tutorial.step.copilot.exampleA" },
+    ],
   },
   {
     id: "topbarMenu",
@@ -12769,6 +12782,33 @@ function applyTutorialStepContext(step) {
   updateRunEligibility(state.plan?.questions || []);
 }
 
+function renderTutorialExample(step) {
+  const box = el.tutorialStepExample;
+  if (!box) return;
+  const turns = Array.isArray(step?.example) ? step.example : null;
+  if (!turns || !turns.length) {
+    box.hidden = true;
+    box.replaceChildren();
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  const label = document.createElement("div");
+  label.className = "tutorial-step-example-label";
+  label.textContent = t("tutorial.example.label");
+  frag.appendChild(label);
+  turns.forEach((turn) => {
+    const row = document.createElement("div");
+    row.className = `copilot-message ${turn.role === "user" ? "user" : "ai"}`;
+    const bubble = document.createElement("div");
+    bubble.className = "copilot-bubble";
+    bubble.textContent = t(turn.key);
+    row.appendChild(bubble);
+    frag.appendChild(row);
+  });
+  box.replaceChildren(frag);
+  box.hidden = false;
+}
+
 function renderTutorialStep() {
   if (!tutorialIsOpen()) return;
   renderTutorialContents();
@@ -12779,6 +12819,7 @@ function renderTutorialStep() {
     if (el.tutorialStepMeta) el.tutorialStepMeta.textContent = t("tutorial.contents.meta");
     if (el.tutorialStepTitle) el.tutorialStepTitle.textContent = t("tutorial.contents.title");
     if (el.tutorialStepBody) el.tutorialStepBody.textContent = t("tutorial.contents.body");
+    if (el.tutorialStepExample) { el.tutorialStepExample.hidden = true; el.tutorialStepExample.replaceChildren(); }
     if (el.tutorialStepHint) el.tutorialStepHint.textContent = "";
     if (el.tutorialPrev) el.tutorialPrev.disabled = true;
     if (el.tutorialNext) el.tutorialNext.textContent = t("tutorial.startFull");
@@ -12800,6 +12841,7 @@ function renderTutorialStep() {
   }
   if (el.tutorialStepTitle) el.tutorialStepTitle.textContent = t(step.titleKey);
   if (el.tutorialStepBody) el.tutorialStepBody.textContent = t(step.bodyKey);
+  renderTutorialExample(step);
   if (el.tutorialStepHint) el.tutorialStepHint.textContent = t(step.hintKey);
   if (el.tutorialPrev) el.tutorialPrev.disabled = tutorialStepIndex <= 0;
   if (el.tutorialNext) {
