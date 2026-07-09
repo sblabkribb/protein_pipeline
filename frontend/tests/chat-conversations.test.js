@@ -11,6 +11,7 @@ globalThis.localStorage = {
 const {
   loadConversations, upsertConversation, deleteConversation, conversationTitle, newConversationId,
 } = await import("../lib/chat-conversations.js");
+const { setChatScope } = await import("../lib/chat-scope.js");
 
 test("empty by default", () => {
   store.clear();
@@ -52,4 +53,42 @@ test("caps at 30 newest", () => {
   for (let i = 0; i < 35; i++) upsertConversation(`c${i}`, [{ role: "user", text: `m${i}` }], i);
   assert.equal(loadConversations().length, 30);
   assert.equal(loadConversations()[0].id, "c34");
+});
+
+test("per-user isolation: two accounts get disjoint conversation lists", () => {
+  store.clear();
+  setChatScope({ run_prefix: "alice" });
+  upsertConversation("a", [{ role: "user", text: "alice secret" }], 1);
+  assert.deepEqual(loadConversations().map((c) => c.id), ["a"]);
+
+  // Switching users must NOT reveal the other account's chats.
+  setChatScope({ run_prefix: "bob" });
+  assert.deepEqual(loadConversations(), []);
+  upsertConversation("b", [{ role: "user", text: "bob secret" }], 2);
+  assert.deepEqual(loadConversations().map((c) => c.id), ["b"]);
+
+  // Alice's data is intact and unchanged when we switch back.
+  setChatScope({ run_prefix: "alice" });
+  assert.deepEqual(loadConversations().map((c) => c.id), ["a"]);
+  assert.equal(loadConversations()[0].title, "alice secret");
+
+  // Distinct backing keys under the two scopes.
+  assert.ok(store.has("rapid.chat.conversations.v1::alice"));
+  assert.ok(store.has("rapid.chat.conversations.v1::bob"));
+
+  setChatScope(null);
+});
+
+test("anonymous / no user falls back to the bare (unsuffixed) key", () => {
+  store.clear();
+  setChatScope(null);
+  upsertConversation("anon", [{ role: "user", text: "hi" }], 1);
+  assert.ok(store.has("rapid.chat.conversations.v1"));
+
+  // username-only user derives a stable suffix and is isolated from anonymous.
+  setChatScope({ username: "carol" });
+  assert.deepEqual(loadConversations(), []);
+
+  setChatScope(null);
+  assert.deepEqual(loadConversations().map((c) => c.id), ["anon"]);
 });

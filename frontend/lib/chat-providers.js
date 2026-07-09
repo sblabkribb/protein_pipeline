@@ -1,6 +1,8 @@
 // Browser-only config + storage for the AI chatbot provider/model selection.
 // Keys live here in localStorage and are sent to the server only per chat request.
 
+import { scopedKey } from "./chat-scope.js";
+
 // "exaone" is the self-hosted local LLM: it needs NO API key and is the default
 // so the chatbot works out-of-the-box. Commercial providers stay opt-in (BYO key).
 export const PROVIDERS = [
@@ -26,7 +28,7 @@ function defaults() {
 
 export function loadChatConfig() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(scopedKey(STORAGE_KEY));
     if (!raw) return defaults();
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object") return defaults();
@@ -53,7 +55,7 @@ export function saveChatConfig(cfg) {
     keys: (cfg && cfg.keys && typeof cfg.keys === "object") ? cfg.keys : {},
   };
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(safe));
+    localStorage.setItem(scopedKey(STORAGE_KEY), JSON.stringify(safe));
   } catch (_e) {
     /* storage full / disabled — non-fatal */
   }

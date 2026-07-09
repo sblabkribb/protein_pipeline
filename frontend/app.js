@@ -132,6 +132,7 @@ import { buildPopupWindowFeatures, openPopupWindow } from "./lib/windowing.js?v=
 import { renderMcpGuideMarkup, buildMcpJsonSnippetWithToken, fillMasterPromptToken } from "./lib/mcp-guide.js?v=20260609_v11";
 import { renderQueueEta } from "./lib/queue-eta.js?v=20260703_v2";
 import { renderMarkdown as renderChatMarkdown } from "./lib/md.js?v=20260706_v2";
+import { setChatScope } from "./lib/chat-scope.js?v=20260709_v1";
 import {
   loadConversations,
   upsertConversation,
@@ -594,6 +595,10 @@ function loadCurrentWorkflowStudioSessionId(user = null, sessionsById = {}) {
 }
 
 const initialUser = loadUser();
+// Namespace the chatbot's browser storage (conversations, attachment session,
+// provider config incl. API keys) to the resolved account so a shared browser
+// never leaks one account's chats/keys to another. Refreshed on account change.
+setChatScope(initialUser);
 const initialWorkflowStudioSessionsById = loadWorkflowStudioSessionsById(initialUser);
 const HOME_PROJECT_STORAGE_PREFIX = "kbf.currentProjectId";
 const HOME_ROUND_STORAGE_PREFIX = "kbf.currentRoundId";
@@ -1240,6 +1245,7 @@ const el = {
   copilotQuickCompare: document.getElementById("copilotQuickCompare"),
   copilotQuickNext: document.getElementById("copilotQuickNext"),
   copilotQuickResume: document.getElementById("copilotQuickResume"),
+  copilotQuickTarget: document.getElementById("copilotQuickTarget"),
   adminUsername: document.getElementById("adminUsername"),
   adminPassword: document.getElementById("adminPassword"),
   adminRole: document.getElementById("adminRole"),
@@ -2227,9 +2233,9 @@ const I18N = {
       "Generate builds the markdown report, Rendered View previews it, Export Package bundles report assets, and Save stores your edited version.",
     "tutorial.step.report.hint":
       "Report language follows the current UI language. After generating, review the evidence score and artifact links before saving or exporting.",
-    "tutorial.step.copilot.title": "Copilot answers in context",
+    "tutorial.step.copilot.title": "AI Assistant answers in context",
     "tutorial.step.copilot.body":
-      "Copilot reads the current run context and can explain metrics, compare state, resume behavior, and practical next actions.",
+      "The built-in AI Assistant works with no API key (local EXAONE): it reads the current run context and can explain the target, recommend parameters, and even start runs. Try the quick prompt \"Briefly explain the target\".",
     "tutorial.step.copilot.hint":
       "Use Copilot for interpretation and navigation help; use the main Run, Resume, Report, and Export buttons for irreversible actions.",
     "tutorial.step.topbar.title": "Top menu controls",
@@ -2559,6 +2565,7 @@ const I18N = {
     "copilot.quick.compare": "Explain compare state",
     "copilot.quick.next": "What should I do next?",
     "copilot.quick.resume": "How does resume work?",
+    "copilot.quick.target": "Briefly explain the target",
     "copilot.summary.title": "Live Snapshot",
     "copilot.summary.empty": "Open a run to build the live snapshot.",
     "copilot.actions.title": "Suggested Actions",
@@ -3962,9 +3969,9 @@ const I18N = {
       "Generate는 markdown report를 만들고, Rendered View는 렌더링 미리보기를 열며, Export Package는 report asset을 묶고, Save는 수정본을 저장합니다.",
     "tutorial.step.report.hint":
       "리포트 언어는 현재 UI 언어를 따릅니다. 생성 후 evidence score와 artifact link를 확인한 뒤 저장하거나 export하세요.",
-    "tutorial.step.copilot.title": "Copilot은 현재 맥락으로 답합니다",
+    "tutorial.step.copilot.title": "AI 어시스턴트는 현재 맥락으로 답합니다",
     "tutorial.step.copilot.body":
-      "Copilot은 현재 run 맥락을 읽고 metric 해석, compare 상태, resume 방식, 다음 행동을 설명해줍니다.",
+      "내장 AI 어시스턴트는 API 키 없이(로컬 EXAONE) 동작합니다. 현재 run 맥락을 읽어 타겟 설명, 파라미터 추천, 실행 시작까지 도와줍니다. 빠른 질문 \"타겟 간단히 설명\"을 눌러 보세요.",
     "tutorial.step.copilot.hint":
       "해석과 탐색 도움에는 Copilot을 쓰고, 실제 실행/재개/리포트/export는 각 화면의 전용 버튼으로 처리하세요.",
     "tutorial.step.topbar.title": "상단 메뉴 안내",
@@ -4291,6 +4298,7 @@ const I18N = {
     "copilot.quick.compare": "비교 상태 설명",
     "copilot.quick.next": "다음에 뭘 할까?",
     "copilot.quick.resume": "재시작은 어떻게 해?",
+    "copilot.quick.target": "타겟 간단히 설명",
     "copilot.summary.title": "라이브 스냅샷",
     "copilot.summary.empty": "run을 열면 현재 상태 스냅샷을 구성합니다.",
     "copilot.actions.title": "추천 액션",
@@ -10120,6 +10128,20 @@ function saveIdToken(token) {
   localStorage.removeItem(ID_TOKEN_KEY);
 }
 
+// Re-scope the chatbot's browser storage to `user` and refresh the chat UI so a
+// newly-resolved account never sees the previous account's conversations. Mirrors
+// reloadWorkflowStudioSessionsForUser for the per-user chat storage.
+function reloadChatScopeForUser(user = state.user) {
+  setChatScope(user);
+  state.activeConvId = null;
+  state.copilotHistory = [];
+  if (copilotInitialized) {
+    renderCopilotMessages();
+    ensureCopilotWelcome();
+  }
+  renderCopilotConvSelect();
+}
+
 function reloadWorkflowStudioSessionsForUser(user = state.user) {
   state.workflowStudioSessionsById = loadWorkflowStudioSessionsById(user);
   state.currentWorkflowStudioSessionId = loadCurrentWorkflowStudioSessionId(user, state.workflowStudioSessionsById);
@@ -10164,6 +10186,7 @@ function clearSession() {
     }
   });
   state.workflowStudioCheckTimersBySession = {};
+  reloadChatScopeForUser(null);
   renderHomeContextSelectors();
 }
 
@@ -11450,6 +11473,9 @@ function initCopilot() {
   }
   if (el.copilotQuickResume) {
     el.copilotQuickResume.addEventListener("click", () => void submitCopilotPrompt(t("copilot.quick.resume"), "resume"));
+  }
+  if (el.copilotQuickTarget) {
+    el.copilotQuickTarget.addEventListener("click", () => void submitCopilotPrompt(t("copilot.quick.target"), "target"));
   }
   setCopilotDrawerOpen(false);
   copilotInitialized = true;
@@ -15717,6 +15743,7 @@ async function authLogin() {
     saveToken(payload.token);
     saveUser(payload.user);
     reloadWorkflowStudioSessionsForUser(state.user);
+    reloadChatScopeForUser(state.user);
     showChat();
     updateAdminUI();
     refreshRuns();
@@ -15752,6 +15779,7 @@ async function loadSession() {
     state.sessionAuthType = String(payload.session?.auth_type || "").trim();
     saveUser(payload.user);
     reloadWorkflowStudioSessionsForUser(state.user);
+    reloadChatScopeForUser(state.user);
     showChat();
     updateAdminUI();
     refreshRuns();
@@ -15767,6 +15795,7 @@ async function loadSession() {
       state.user = cachedUser;
       state.sessionAuthType = "";
       reloadWorkflowStudioSessionsForUser(state.user);
+      reloadChatScopeForUser(state.user);
       showChat();
       updateAdminUI();
       return;

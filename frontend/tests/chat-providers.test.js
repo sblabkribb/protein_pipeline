@@ -18,6 +18,7 @@ const {
   chatConfigReady,
   providerLabel,
 } = await import("../lib/chat-providers.js");
+const { setChatScope } = await import("../lib/chat-scope.js");
 
 test("PROVIDERS lists exaone (default, keyless) plus the three commercial providers", () => {
   assert.deepEqual(PROVIDERS.map((p) => p.id), ["exaone", "anthropic", "openai", "gemini"]);
@@ -75,4 +76,30 @@ test("providerLabel maps id to label and falls back to id", () => {
   assert.equal(providerLabel("anthropic"), "Claude");
   assert.equal(providerLabel("exaone"), "RAPID Local EXAONE (no key)");
   assert.equal(providerLabel("mystery"), "mystery");
+});
+
+test("per-user isolation: API keys/config do not leak across accounts", () => {
+  store.clear();
+  setChatScope({ run_prefix: "alice" });
+  saveChatConfig({ provider: "openai", model: "gpt-4o", keys: { openai: "sk-alice" } });
+
+  // A different account starts from clean defaults — never sees alice's key.
+  setChatScope({ run_prefix: "bob" });
+  const bob = loadChatConfig();
+  assert.equal(bob.provider, "exaone");
+  assert.deepEqual(bob.keys, {});
+  saveChatConfig({ provider: "anthropic", model: "claude", keys: { anthropic: "sk-bob" } });
+
+  // Switching back restores alice's own config intact.
+  setChatScope({ run_prefix: "alice" });
+  const alice = loadChatConfig();
+  assert.equal(alice.provider, "openai");
+  assert.equal(alice.keys.openai, "sk-alice");
+
+  // Distinct backing keys per scope; anonymous uses the bare key.
+  assert.ok(store.has("rapid.chat.config.v1::alice"));
+  assert.ok(store.has("rapid.chat.config.v1::bob"));
+  assert.equal(store.has("rapid.chat.config.v1"), false);
+
+  setChatScope(null);
 });

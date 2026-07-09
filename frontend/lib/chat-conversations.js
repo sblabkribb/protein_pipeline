@@ -1,12 +1,14 @@
 // Browser-stored copilot conversation history (BMP-style). No DOM/network.
 // A conversation: { id, title, messages:[{role:"user"|"ai", text}], updatedAt }.
 
+import { scopedKey } from "./chat-scope.js";
+
 const KEY = "rapid.chat.conversations.v1";
 const MAX = 30;
 
 export function loadConversations() {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(scopedKey(KEY));
     const parsed = raw ? JSON.parse(raw) : [];
     return Array.isArray(parsed) ? parsed : [];
   } catch (_e) {
@@ -19,7 +21,7 @@ function persist(list) {
     const trimmed = [...list]
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
       .slice(0, MAX);
-    localStorage.setItem(KEY, JSON.stringify(trimmed));
+    localStorage.setItem(scopedKey(KEY), JSON.stringify(trimmed));
     return trimmed;
   } catch (_e) {
     return list;
