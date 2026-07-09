@@ -21,6 +21,19 @@ export function getChatSessionId() {
   }
 }
 
+// Rotate the attachment session so a new conversation starts with a clean
+// server-side upload set. Without this, previously-uploaded files (e.g. an old
+// 4KL5.pdb) keep getting injected into every later turn — even a brand-new chat
+// with nothing attached.
+export function resetChatSessionId() {
+  try {
+    localStorage.removeItem(scopedKey(SESSION_KEY));
+  } catch (_e) {
+    /* non-fatal */
+  }
+  return getChatSessionId();
+}
+
 export function attachmentChipLabel(a) {
   const kb = Math.round(((a && a.size) || 0) / 1024);
   return `${(a && a.name) || "file"} (${kb} KB)`;

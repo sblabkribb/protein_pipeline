@@ -156,6 +156,7 @@ import {
 } from "./lib/chat-agent.js?v=20260708_v3";
 import {
   getChatSessionId,
+  resetChatSessionId,
   attachmentChipLabel,
   withAttachments,
 } from "./lib/chat-attachments.js?v=20260708_v3";
@@ -11322,6 +11323,13 @@ function startNewCopilotChat() {
   persistActiveConversation();
   state.activeConvId = null;
   state.copilotHistory = [];
+  // Fresh chat = fresh attachment session: rotate the session id and clear any
+  // pending/sent attachments so previously-uploaded files are NOT re-injected
+  // into the new conversation.
+  resetChatSessionId();
+  pendingChatAttachments = [];
+  lastSentChatAttachments = [];
+  renderPendingAttachments();
   renderCopilotMessages();
   ensureCopilotWelcome();
   renderCopilotConvSelect();
