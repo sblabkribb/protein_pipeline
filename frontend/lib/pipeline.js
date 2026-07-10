@@ -2069,6 +2069,7 @@ const WORKFLOW_STUDIO_IGNORED_FIELDS = new Set([
   "confirm_run",
   "questions",
   "missing",
+  "compare_rmsd_scope",
 ]);
 
 const WORKFLOW_STUDIO_FIELD_STAGE = Object.freeze(
