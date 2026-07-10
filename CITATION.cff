@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: "If you use this software or benchmark data, please cite the associated manuscript and this archived release."
 title: "RAPID: A Reproducible Pipeline for Solubility-Oriented Protein Redesign with Resource-Aware Surrogate Triage"
-version: "1.0.24"
+version: "1.0.25"
 date-released: "2026-07-10"
 license: MIT
 repository-code: "https://github.com/sblabkribb/protein_pipeline"

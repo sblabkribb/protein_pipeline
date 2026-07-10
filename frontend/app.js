@@ -80,7 +80,7 @@ import {
   workflowStudioVisibleStageFields,
   withFixedPositionsExtra,
   withHitListCompareArtifacts,
-} from "./lib/pipeline.js?v=20260506_tier_fix";
+} from "./lib/pipeline.js?v=20260710_studio_skip";
 import {
   analyzeChartViewOptions,
   buildCompareMetaTooltip,
