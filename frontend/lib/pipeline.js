@@ -2080,6 +2080,20 @@ const WORKFLOW_STUDIO_FIELD_STAGE = Object.freeze(
   )
 );
 
+// Optional backbone stages carry an explicit on/off flag. When such a stage is
+// switched off it will not run, so changes to its fields (including the toggle
+// itself) must not pull the studio restart point back to that stage.
+const WORKFLOW_STUDIO_STAGE_USE_FLAGS = Object.freeze({
+  rfd3: "rfd3_use",
+  bioemu: "bioemu_use",
+});
+
+function workflowStudioStageDisabledInPayload(stage, payload) {
+  const flag = WORKFLOW_STUDIO_STAGE_USE_FLAGS[stage];
+  if (!flag) return false;
+  return payload && typeof payload === "object" && payload[flag] === false;
+}
+
 function workflowStudioHasNodeScope(nodes) {
   return Array.isArray(nodes) && nodes.some((node) => normalizeWorkflowStudioNode(node));
 }
@@ -2451,6 +2465,11 @@ export function minimumWorkflowStudioStartStage({ previousPayload, nextPayload, 
   let earliestIndex = STAGE_ORDER.indexOf(target);
   changed.forEach((key) => {
     const owner = WORKFLOW_STUDIO_FIELD_STAGE[key];
+    // A stage that is disabled in the new payload will not run, so field
+    // changes it owns (including its own on/off toggle) should not pull the
+    // restart point back to it. This lets Studio skip a middle stage instead
+    // of forcing a re-run of the very stage the user just turned off.
+    if (owner && workflowStudioStageDisabledInPayload(owner, nextPayload)) return;
     const idx = owner ? STAGE_ORDER.indexOf(owner) : 0;
     if (idx >= 0 && idx < earliestIndex) {
       earliestIndex = idx;

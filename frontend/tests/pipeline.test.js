@@ -2558,6 +2558,40 @@ test("minimumWorkflowStudioStartStage returns earliest affected stage", () => {
   );
 });
 
+test("minimumWorkflowStudioStartStage does not restart from a stage being skipped", () => {
+  const nodes = ["msa", "rfd3", "bioemu", "proteinmpnn_70", "soluprot_70", "af2_70"];
+  const previousPayload = normalizeWorkflowStudioPayloadForComparison(
+    {
+      target_input: "ATOM",
+      rfd3_use: true,
+      rfd3_input_pdb: "SEED",
+      bioemu_use: true,
+      bioemu_num_samples: 20,
+      bioemu_max_return_structures: 10,
+    },
+    { nodes }
+  );
+  const nextPayload = normalizeWorkflowStudioPayloadForComparison(
+    {
+      target_input: "ATOM",
+      rfd3_use: true,
+      rfd3_input_pdb: "SEED",
+      bioemu_use: false,
+    },
+    { nodes }
+  );
+  // Turning BioEmu off is a "skip", not an upstream input change; running
+  // ProteinMPNN must not force a restart from BioEmu.
+  assert.equal(
+    minimumWorkflowStudioStartStage({
+      previousPayload,
+      nextPayload,
+      targetStage: "proteinmpnn_70",
+    }),
+    "design"
+  );
+});
+
 test("workflowStudioDependencyStatus blocks downstream stages without current-run upstream outputs", () => {
   const soluprot = workflowStudioDependencyStatus({
     targetStage: "soluprot",
