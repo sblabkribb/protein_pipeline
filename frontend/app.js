@@ -189,6 +189,13 @@ const WORKFLOW_PLAN_STORAGE_KEY = "kbf.workflowPlans";
 const WORKFLOW_STUDIO_STORAGE_KEY = "kbf.workflowStudioSessions";
 const WORKFLOW_STUDIO_CURRENT_KEY = "kbf.workflowStudioCurrent";
 const WORKFLOW_STUDIO_SESSION_PATH = "workflow_studio/session.json";
+// Optional backbone stages that can be excluded from a Studio run. Toggling the
+// rail control writes the stage's on/off flag into stage_drafts so the run is
+// submitted with e.g. bioemu_use=false and the backend skips the stage.
+const STUDIO_STAGE_USE_FLAGS = Object.freeze({
+  rfd3: "rfd3_use",
+  bioemu: "bioemu_use",
+});
 const RESIDUE_PICKER_DETACHED_QUERY_KEY = "residue_picker";
 const RESIDUE_PICKER_REQUEST_STORAGE_KEY_PREFIX = "kbf.residuePicker.request.";
 const RESIDUE_PICKER_RESULT_STORAGE_KEY_PREFIX = "kbf.residuePicker.result.";
@@ -3235,6 +3242,10 @@ const I18N = {
     "studio.status.canceled": "Cancelled",
     "studio.status.stopped": "Stopped",
     "studio.status.skipped": "Skipped",
+    "studio.status.excluded": "Excluded",
+    "studio.stage.exclude": "Exclude",
+    "studio.stage.include": "Include",
+    "studio.stage.toggleHint": "Toggle whether this stage runs. Excluded stages are skipped; downstream stages use the remaining backbones.",
     "studio.validation.title": "Stage Check",
     "studio.validation.loading": "Checking this stage against backend rules.",
     "studio.validation.syncRun": "Loading outputs for the selected run. Stage readiness will update in a moment.",
@@ -4971,6 +4982,10 @@ const I18N = {
     "studio.status.canceled": "취소",
     "studio.status.stopped": "중지",
     "studio.status.skipped": "건너뜀",
+    "studio.status.excluded": "제외됨",
+    "studio.stage.exclude": "제외",
+    "studio.stage.include": "포함",
+    "studio.stage.toggleHint": "이 단계를 실행에서 제외/포함합니다. 제외하면 그 단계는 건너뛰고, 이후 단계는 남은 백본으로 진행합니다.",
     "studio.validation.title": "단계 점검",
     "studio.validation.loading": "이 단계를 백엔드 규칙으로 확인하고 있습니다.",
     "studio.validation.syncRun": "선택된 run의 결과 파일을 불러오는 중입니다. 잠시 후 실행 가능 상태가 갱신됩니다.",
@@ -8493,25 +8508,40 @@ function renderWorkflowStudio() {
   if (el.studioRunBtn) {
     el.studioRunBtn.disabled = !session || state.runSubmitting || workflowStudioRunActive(session) || hasBlockingIssues;
   }
+  const mergedAnswers = workflowStudioDraftAnswers(session);
   const stageButtons = (Array.isArray(session.nodes) ? session.nodes : []).map((stage) => {
     const stageState = workflowStudioStageState(session, stage);
     const active = stage === activeStage;
     const runId = String(session.stage_run_ids?.[stage] || "").trim();
+    const baseStage = workflowStudioNodeBaseStage(stage, "") || stage;
+    const useFlag = STUDIO_STAGE_USE_FLAGS[baseStage];
+    const excluded = useFlag ? mergedAnswers[useFlag] === false : false;
+    const badge = excluded
+      ? `<span class="studio-badge excluded">${escapeHtml(t("studio.status.excluded"))}</span>`
+      : `<span class="studio-badge ${escapeAttr(stageState)}">${escapeHtml(t(`studio.status.${stageState}`))}</span>`;
+    const toggle = useFlag
+      ? `<span
+          class="studio-stage-toggle${excluded ? " excluded" : ""}"
+          role="button"
+          tabindex="0"
+          data-studio-toggle="${escapeAttr(baseStage)}"
+          title="${escapeAttr(t("studio.stage.toggleHint"))}"
+        >${escapeHtml(excluded ? t("studio.stage.include") : t("studio.stage.exclude"))}</span>`
+      : "";
     return `
       <button
         type="button"
-        class="studio-stage-btn ${escapeAttr(stageState)}${active ? " active" : ""}"
+        class="studio-stage-btn ${escapeAttr(stageState)}${active ? " active" : ""}${excluded ? " excluded" : ""}"
         data-studio-stage="${escapeAttr(stage)}"
       >
         <span class="studio-stage-title">
           <span>${escapeHtml(formatStageLabel(stage))}</span>
-          <span class="studio-badge ${escapeAttr(stageState)}">${escapeHtml(t(`studio.status.${stageState}`))}</span>
+          <span class="studio-stage-badges">${toggle}${badge}</span>
         </span>
         <span class="studio-stage-meta">${escapeHtml(runId || "-")}</span>
       </button>
     `;
   }).join("");
-  const mergedAnswers = workflowStudioDraftAnswers(session);
   const studioTargetPdbText = targetInputPdbText(mergedAnswers);
   const showStudioRfd3InputField = shouldShowRfd3InputPdbField({
     mode: "workflow",
@@ -8911,6 +8941,35 @@ function renderWorkflowStudio() {
       session.updated_at = new Date().toISOString();
       upsertWorkflowStudioSession(session);
       renderWorkflowStudio();
+    });
+  });
+  Array.from(el.workflowStudioRoot.querySelectorAll("[data-studio-toggle]")).forEach((toggle) => {
+    const applyToggle = (event) => {
+      event.stopPropagation();
+      const baseStage = String(toggle.getAttribute("data-studio-toggle") || "").trim();
+      const useFlag = STUDIO_STAGE_USE_FLAGS[baseStage];
+      if (!useFlag) return;
+      const current = workflowStudioSessionForId(session.session_id);
+      if (!current) return;
+      if (!current.stage_drafts[baseStage]) current.stage_drafts[baseStage] = {};
+      const currentlyExcluded = workflowStudioDraftAnswers(current)[useFlag] === false;
+      // Excluding writes the false flag; re-including clears it so stage defaults apply again.
+      if (currentlyExcluded) {
+        delete current.stage_drafts[baseStage][useFlag];
+        current.stage_drafts[baseStage][useFlag] = true;
+      } else {
+        current.stage_drafts[baseStage][useFlag] = false;
+      }
+      current.updated_at = new Date().toISOString();
+      upsertWorkflowStudioSession(current);
+      renderWorkflowStudio();
+    };
+    toggle.addEventListener("click", applyToggle);
+    toggle.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        applyToggle(event);
+      }
     });
   });
   Array.from(el.workflowStudioRoot.querySelectorAll("[data-studio-artifact-select]")).forEach((select) => {

@@ -7105,12 +7105,61 @@ textarea:focus-visible {
   background: rgba(214, 177, 77, 0.08);
 }
 
+.studio-stage-btn.excluded {
+  border-color: rgba(16, 42, 45, 0.14);
+  background: rgba(16, 42, 45, 0.04);
+  opacity: 0.72;
+}
+
+.studio-stage-btn.excluded .studio-stage-title > span:first-child {
+  text-decoration: line-through;
+  text-decoration-color: rgba(16, 42, 45, 0.4);
+}
+
 .studio-stage-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
   font-weight: 600;
+}
+
+.studio-stage-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.studio-stage-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  border: 1px solid rgba(208, 99, 79, 0.32);
+  background: rgba(208, 99, 79, 0.08);
+  color: var(--state-fail);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.studio-stage-toggle:hover {
+  background: rgba(208, 99, 79, 0.16);
+}
+
+.studio-stage-toggle.excluded {
+  border-color: rgba(47, 158, 68, 0.32);
+  background: rgba(47, 158, 68, 0.08);
+  color: var(--state-done);
+}
+
+.studio-stage-toggle.excluded:hover {
+  background: rgba(47, 158, 68, 0.16);
 }
 
 .studio-stage-meta {
@@ -7516,6 +7565,11 @@ textarea:focus-visible {
 .studio-badge.skipped {
   background: rgba(214, 177, 77, 0.16);
   color: #8a6a00;
+}
+
+.studio-badge.excluded {
+  background: rgba(16, 42, 45, 0.1);
+  color: var(--ink-soft);
 }
 
 .studio-badge.failed {
