@@ -2070,6 +2070,13 @@ const WORKFLOW_STUDIO_IGNORED_FIELDS = new Set([
   "questions",
   "missing",
   "compare_rmsd_scope",
+  // Legacy mirror of bioemu_num_samples. normalizeBioEmuCountFields back-fills
+  // it to num_samples when absent, while an explicit studio default (10) gets
+  // stripped — so a head_request without it (→ derived num_samples) vs a draft
+  // with the default (→ stripped) produces a phantom diff that wrongly restarts
+  // the pipeline from BioEmu. bioemu_num_samples is the real knob and stays
+  // compared; exclude this legacy field from change detection.
+  "bioemu_max_return_structures",
 ]);
 
 const WORKFLOW_STUDIO_FIELD_STAGE = Object.freeze(

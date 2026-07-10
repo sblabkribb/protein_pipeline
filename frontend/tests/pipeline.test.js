@@ -2592,6 +2592,37 @@ test("minimumWorkflowStudioStartStage does not restart from a stage being skippe
   );
 });
 
+test("minimumWorkflowStudioStartStage ignores the legacy bioemu_max_return_structures diff", () => {
+  const nodes = ["msa", "rfd3", "bioemu", "proteinmpnn_30", "soluprot_30", "af2_30"];
+  // Head request from an earlier step: num_samples set, no max_return.
+  // normalizeBioEmuCountFields back-fills max_return := num_samples (50).
+  const previousPayload = normalizeWorkflowStudioPayloadForComparison(
+    { target_input: "ATOM", bioemu_use: true, bioemu_num_samples: 50 },
+    { nodes }
+  );
+  // Draft carries the studio default max_return (10), which strips out.
+  const nextPayload = normalizeWorkflowStudioPayloadForComparison(
+    { target_input: "ATOM", bioemu_use: true, bioemu_num_samples: 50, bioemu_max_return_structures: 10 },
+    { nodes }
+  );
+  // The only raw difference is the legacy mirror field; it must not force a
+  // BioEmu restart when the user runs ProteinMPNN on completed backbones.
+  assert.deepEqual(workflowStudioChangedFields(previousPayload, nextPayload), []);
+  assert.equal(
+    minimumWorkflowStudioStartStage({ previousPayload, nextPayload, targetStage: "proteinmpnn_30" }),
+    "design"
+  );
+  // A genuine bioemu_num_samples change still restarts from BioEmu.
+  const changedNext = normalizeWorkflowStudioPayloadForComparison(
+    { target_input: "ATOM", bioemu_use: true, bioemu_num_samples: 120 },
+    { nodes }
+  );
+  assert.equal(
+    minimumWorkflowStudioStartStage({ previousPayload, nextPayload: changedNext, targetStage: "proteinmpnn_30" }),
+    "bioemu"
+  );
+});
+
 test("workflowStudioDependencyStatus blocks downstream stages without current-run upstream outputs", () => {
   const soluprot = workflowStudioDependencyStatus({
     targetStage: "soluprot",
