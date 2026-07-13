@@ -13038,10 +13038,16 @@ function openAdvancedWorkflowBuilder({ announce = true } = {}) {
 }
 
 async function createWorkflowStudioFromStudio({ selectedRunId = "" } = {}) {
+  // Snapshot the designer plan BEFORE setRunMode("workflow") runs — that call
+  // rebuilds state.workflowDesigner from defaults, which would otherwise wipe
+  // the user's stage selection (e.g. a removed BioEmu) and recreate the session
+  // with the full default pipeline.
+  const workflowPlan = buildWorkflowPlanFromDesigner();
   setRunMode("workflow", { render: false });
   setActiveTab("studio");
   const session = await openWorkflowStudioFromSetup({
     prompt: "",
+    workflowPlan,
     selectedRunId: String(selectedRunId || "").trim(),
   });
   if (!session) {
