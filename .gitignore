@@ -107,3 +107,7 @@ manuscript (5).md
 /.agents/
 /AGENT.md
 /todo.md
+
+# /promote SSO session (never commit)
+.claude/promote/
+*.storageState.json
