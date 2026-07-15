@@ -18,6 +18,7 @@ environments:
   prod:
     trigger: tag
     ref: main
+    source: staging   # ladder: prod promotes the staging-verified commit, not dev
     bump_version: CITATION.cff
     local_health: http://127.0.0.1:18080/healthz
     external_url: https://PROD-HOST-PLACEHOLDER             # FILL IN
