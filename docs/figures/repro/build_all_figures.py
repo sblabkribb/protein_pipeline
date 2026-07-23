@@ -19,6 +19,7 @@ GENERATORS = [
     ("Figure 2E (baselines vs learned)", "make_fig2E_baseline.py"),
     ("Figure 4  (three-arm diversity)",  "make_fig4_threeway_matched.py"),
     ("Figure 5  (ensemble diversity)",   "analyze_S14.py"),
+    ("Supp S10  (5-enzyme three-arm)",   "make_figS10_monomer_matched.py"),
     ("Supp S13  (sequence-space cov.)",  "big_sweep.py"),
 ]
 

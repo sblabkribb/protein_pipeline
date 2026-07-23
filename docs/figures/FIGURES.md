@@ -18,9 +18,10 @@
 
 | 보충 | 생성 스크립트 | 출력 | 상태 |
 |---|---|---|---|
+| **S10** (5-효소 3-arm 비교) | `repro/make_figS10_monomer_matched.py` | `figS10_monomer_matched.png` | ✅ 재현 (Fig3/4 house style로 통일) |
 | **S13** (서열공간 커버리지) | `repro/big_sweep.py` | `supp_figS13_sequence_space_coverage.png` | ✅ 재현 |
 | **S11** (오케스트레이션 구현 상세) | `../../scripts/benchmark/08_make_architecture_figure.py` (추정) | `figures/benchmark/fig1_architecture.png` | ⚠️ 확인 필요 |
-| **S1–S10, S12** | `../../scripts/benchmark/06_make_figures.py · 11_make_method_figures.py · 12_make_cath_curated_figure.py` 등 | `figures/benchmark/` | ⚠️ 개별 확인 필요 |
+| **S1–S9, S12** | `../../scripts/benchmark/06_make_figures.py · 11_make_method_figures.py · 12_make_cath_curated_figure.py` 등 | `figures/benchmark/` | ⚠️ 개별 확인 필요 |
 
 ## docx 임베딩 매핑 (manuscript_KR_BiB_final_v3.docx)
 
