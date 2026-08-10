@@ -151,6 +151,10 @@ def validate_protein_sequence(sequence: str, *, model: str) -> None:
         )
 
 
+_TERMINAL_OK = {"COMPLETED", "SUCCESS", "OK"}
+_TERMINAL_PENDING = {"PENDING", "RUNNING"}
+
+
 @dataclass(frozen=True)
 class LocalHttpRunClient:
     base_url: str
@@ -163,19 +167,7 @@ class LocalHttpRunClient:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
 
-    def run(
-        self,
-        payload: dict[str, Any],
-        *,
-        on_job_id: Callable[[str], None] | None = None,
-    ) -> dict[str, Any]:
-        endpoint = self.base_url.rstrip("/") + "/run"
-        response = requests.post(
-            endpoint,
-            headers=self._headers(),
-            json={"input": payload},
-            timeout=float(self.timeout_s),
-        )
+    def _parse_response(self, response: Any, endpoint: str) -> dict[str, Any]:
         status_code = getattr(response, "status_code", 200) or 200
         if status_code >= 400:
             # GPU workers return their real failure (e.g. an input-validation
@@ -191,16 +183,96 @@ class LocalHttpRunClient:
             raise RuntimeError(f"Local HTTP model response invalid: {data!r}")
         if data.get("error"):
             raise RuntimeError(str(data.get("error")))
-        job_id = str(data.get("job_id") or "").strip()
-        if job_id and on_job_id is not None:
-            on_job_id(job_id)
-        status = str(data.get("status") or "COMPLETED").upper()
-        if status and status not in {"COMPLETED", "SUCCESS", "OK"}:
-            raise RuntimeError(f"Local HTTP model job not completed: {data}")
+        return data
+
+    @staticmethod
+    def _extract_output(data: dict[str, Any]) -> dict[str, Any]:
         output = data.get("output")
         if isinstance(output, dict):
             return output
         return data
+
+    def run(
+        self,
+        payload: dict[str, Any],
+        *,
+        on_job_id: Callable[[str], None] | None = None,
+    ) -> dict[str, Any]:
+        """Submit payload and return its output, tolerating both worker styles:
+
+        old (synchronous) workers answer /run with the final COMPLETED result
+        directly; current workers answer with PENDING immediately and the
+        actual work runs in the background, polled via GET /status?id=<id>.
+
+        Polling (rather than one HTTP call held open for the whole run) is the
+        point: a job that legitimately takes tens of minutes (e.g. BioEmu's or
+        AlphaFold3's own compute) can outlast an idle-connection timeout on
+        some network path between here and the worker. When that happened with
+        one long-held POST, the worker finished and tried to reply, but the
+        connection was already silently gone -- the result was computed and
+        then lost, and the caller hung until its own timeout fired. Each poll
+        is short-lived, so a dropped connection just costs one retry, not the
+        whole job.
+        """
+        endpoint = self.base_url.rstrip("/") + "/run"
+        submit_timeout = min(float(self.timeout_s), 60.0)
+        response = requests.post(
+            endpoint,
+            headers=self._headers(),
+            json={"input": payload},
+            timeout=submit_timeout,
+        )
+        data = self._parse_response(response, endpoint)
+        job_id = str(data.get("id") or data.get("job_id") or "").strip()
+        if job_id and on_job_id is not None:
+            on_job_id(job_id)
+        status = str(data.get("status") or "COMPLETED").upper()
+        if status in _TERMINAL_OK:
+            return self._extract_output(data)
+        if status in _TERMINAL_PENDING:
+            if not job_id:
+                raise RuntimeError(f"{endpoint} accepted the job but returned no id to poll: {data}")
+            return self._poll(job_id)
+        raise RuntimeError(f"Local HTTP model job not completed: {data}")
+
+    def _poll(self, job_id: str) -> dict[str, Any]:
+        import time
+
+        status_endpoint = self.base_url.rstrip("/") + "/status"
+        deadline = time.monotonic() + float(self.timeout_s)
+        poll_interval = min(15.0, max(2.0, float(self.timeout_s) / 200))
+        consecutive_errors = 0
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(
+                    f"{status_endpoint}?id={job_id} did not complete within {self.timeout_s}s"
+                )
+            try:
+                response = requests.get(
+                    status_endpoint,
+                    headers=self._headers(),
+                    params={"id": job_id},
+                    timeout=30.0,
+                )
+            except requests.RequestException as exc:
+                consecutive_errors += 1
+                if consecutive_errors > 5:
+                    raise RuntimeError(
+                        f"{status_endpoint}?id={job_id}: repeated polling failures: {exc}"
+                    ) from exc
+                time.sleep(min(poll_interval, max(0.0, remaining)))
+                continue
+            consecutive_errors = 0
+            data = self._parse_response(response, status_endpoint)
+            status = str(data.get("status") or "").upper()
+            if status in _TERMINAL_OK:
+                return self._extract_output(data)
+            if status == "FAILED":
+                raise RuntimeError(str(data.get("error") or f"job {job_id} failed"))
+            if status == "NOT_FOUND":
+                raise RuntimeError(f"job {job_id} not found by worker (it may have restarted)")
+            time.sleep(min(poll_interval, max(0.0, remaining)))
 
 
 @dataclass(frozen=True)

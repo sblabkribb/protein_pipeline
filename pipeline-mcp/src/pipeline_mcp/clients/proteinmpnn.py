@@ -6,8 +6,7 @@ import os
 from typing import Any
 from collections.abc import Callable
 
-import requests
-
+from .local_http import LocalHttpRunClient
 from .runpod import RunPodClient
 from ..models import SequenceRecord
 
@@ -195,7 +194,7 @@ class ProteinMPNNClient:
         on_job_id: Callable[[str], None] | None = None,
     ) -> dict[str, Any]:
         if self.gpu_url:
-            return self._run_gpu_http(payload)
+            return self._run_gpu_http(payload, on_job_id=on_job_id)
         if self.runpod is None or not self.endpoint_id:
             raise RuntimeError("ProteinMPNN RunPod client is not configured")
         _, result = self.runpod.run_and_wait_with_job_id(
@@ -243,33 +242,22 @@ class ProteinMPNNClient:
 
         return native_rec, sample_recs, output
 
-    def _run_gpu_http(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _run_gpu_http(
+        self,
+        payload: dict[str, Any],
+        *,
+        on_job_id: Callable[[str], None] | None = None,
+    ) -> dict[str, Any]:
         if not self.gpu_url:
             raise RuntimeError("ProteinMPNN GPU URL is not configured")
-        url = self.gpu_url.rstrip("/") + "/run"
-        headers = {"Content-Type": "application/json"}
-        if self.gpu_token:
-            headers["Authorization"] = f"Bearer {self.gpu_token}"
-        response = requests.post(
-            url,
-            headers=headers,
-            json={"input": payload},
-            timeout=self.gpu_timeout_s,
-        )
-        response.raise_for_status()
-        data = response.json()
-        if not isinstance(data, dict):
-            raise RuntimeError(f"ProteinMPNN GPU response invalid: {data!r}")
-        if data.get("error"):
-            raise RuntimeError(f"ProteinMPNN GPU worker error: {data.get('error')}")
-        if "output" in data:
-            status = str(data.get("status") or "COMPLETED")
-            if status != "COMPLETED":
-                return data
-            output = data.get("output")
-            if not isinstance(output, dict):
-                raise RuntimeError(f"ProteinMPNN GPU output missing/invalid: {data}")
-            return {"status": "COMPLETED", "output": output}
-        if "native" in data and "samples" in data:
-            return {"status": "COMPLETED", "output": data}
-        raise RuntimeError(f"ProteinMPNN GPU output missing/invalid: {data}")
+        # LocalHttpRunClient submits and, if the worker answers PENDING/RUNNING
+        # (the current async pattern -- see http_worker_jobs.py on bop), polls
+        # GET .../status?id=<job_id> to completion instead of holding one
+        # connection open; a worker that still answers /run synchronously
+        # short-circuits exactly as before.
+        output = LocalHttpRunClient(
+            self.gpu_url, self.gpu_token, self.gpu_timeout_s
+        ).run(payload, on_job_id=on_job_id)
+        if not isinstance(output, dict):
+            raise RuntimeError(f"ProteinMPNN GPU output missing/invalid: {output!r}")
+        return {"status": "COMPLETED", "output": output}
