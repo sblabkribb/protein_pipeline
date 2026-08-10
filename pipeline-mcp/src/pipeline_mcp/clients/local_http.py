@@ -215,12 +215,18 @@ class LocalHttpRunClient:
         whole job.
         """
         endpoint = self.base_url.rstrip("/") + "/run"
-        submit_timeout = min(float(self.timeout_s), 60.0)
+        # Workers not yet migrated to the async pattern (ColabFold, ESMFold,
+        # MMseqs, ANARCII, binder_score) don't answer /run until the job is
+        # actually done, which can take far longer than a short fixed
+        # timeout -- this call must be able to hold open for the caller's
+        # full configured budget, exactly like it did before polling existed.
+        # Async workers still return almost instantly, so a large timeout
+        # here costs nothing for them.
         response = requests.post(
             endpoint,
             headers=self._headers(),
             json={"input": payload},
-            timeout=submit_timeout,
+            timeout=float(self.timeout_s),
         )
         data = self._parse_response(response, endpoint)
         job_id = str(data.get("id") or data.get("job_id") or "").strip()

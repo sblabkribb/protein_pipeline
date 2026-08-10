@@ -66,10 +66,10 @@ class ProteinMPNNGpuHttpClientTest(unittest.TestCase):
         self.assertEqual(raw["native"]["sequence"], "AAA")
         self.assertEqual(calls[0]["url"], "http://gpu.internal:18101/run")
         self.assertEqual(calls[0]["headers"]["Authorization"], "Bearer worker-secret")
-        # The initial submit is capped at 60s regardless of gpu_timeout_s (123s
-        # here) -- LocalHttpRunClient only needs enough time for the worker to
-        # accept the job; gpu_timeout_s bounds the overall poll budget instead.
-        self.assertEqual(calls[0]["timeout"], 60.0)
+        # The submit call uses the caller's full configured timeout, since a
+        # worker not yet migrated to the async pattern won't answer /run
+        # until the job is actually done.
+        self.assertEqual(calls[0]["timeout"], 123.0)
         sent_input = calls[0]["json"]["input"]
         self.assertEqual(sent_input["pdb_name"], "target")
         self.assertEqual(sent_input["fixed_positions"], {"A": [1, 2]})
