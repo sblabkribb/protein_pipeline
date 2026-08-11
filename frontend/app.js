@@ -682,6 +682,7 @@ const state = {
   artifacts: [],
   artifactRefreshAtByRunId: {},
   artifactRefreshStatusKeyByRunId: {},
+  terminalArtifactRefreshCountByRunId: {},
   artifactMetaByPath: {},
   artifactFiltersByView: {
     monitor: createArtifactFilterState(),
@@ -15687,8 +15688,18 @@ function artifactRefreshStatusKeyForRun(runId = state.currentRunId) {
 function markArtifactsRefreshed(runId = state.currentRunId) {
   const key = String(runId || "").trim();
   if (!key) return;
+  const newStatusKey = artifactRefreshStatusKeyForRun(key);
+  const previousStatusKey = String(state.artifactRefreshStatusKeyByRunId?.[key] || "");
+  if (newStatusKey !== previousStatusKey) {
+    // A fresh transition (including the one into terminal) gets its own
+    // full catch-up retry budget -- see shouldAutoRefreshArtifacts().
+    state.terminalArtifactRefreshCountByRunId[key] = 0;
+  } else if (isTerminalRunState()) {
+    state.terminalArtifactRefreshCountByRunId[key] =
+      Number(state.terminalArtifactRefreshCountByRunId[key] || 0) + 1;
+  }
   state.artifactRefreshAtByRunId[key] = Date.now();
-  state.artifactRefreshStatusKeyByRunId[key] = artifactRefreshStatusKeyForRun(key);
+  state.artifactRefreshStatusKeyByRunId[key] = newStatusKey;
 }
 
 function isTerminalRunState(stateText = currentRunStateText()) {
@@ -15707,8 +15718,19 @@ function shouldAutoRefreshArtifacts(runId = state.currentRunId) {
   const previousStatusKey = String(state.artifactRefreshStatusKeyByRunId?.[key] || "");
   if (currentStatusKey && currentStatusKey !== previousStatusKey) return true;
   const lastRefreshAt = Number(state.artifactRefreshAtByRunId?.[key] || 0);
-  if (!isTerminalRunState() && Date.now() - lastRefreshAt >= 15000) return true;
-  return false;
+  if (!isTerminalRunState()) return Date.now() - lastRefreshAt >= 15000;
+  // The status key stops changing the moment a run goes terminal, so the
+  // one refresh from the transition above is normally the last one this
+  // run ever gets. If that refresh raced the backend still writing the
+  // checkpoint's artifact manifest (a real race: "run marked completed"
+  // and "artifact files fully written" are not the same instant), the
+  // Workflow Review Gate is left showing stale/incomplete results forever
+  // -- nothing would ever trigger another fetch short of a page reload.
+  // Allow a few short-interval catch-up refreshes right after going
+  // terminal to close that window.
+  const terminalRetries = Number(state.terminalArtifactRefreshCountByRunId?.[key] || 0);
+  if (terminalRetries >= 3) return false;
+  return Date.now() - lastRefreshAt >= 5000;
 }
 
 async function updateQueueEta(runId) {
@@ -15754,6 +15776,17 @@ async function pollCurrentRun({ includeArtifacts = "auto" } = {}) {
       includeArtifacts === true || (includeArtifacts === "auto" && shouldAutoRefreshArtifacts(runId));
     if (shouldRefresh) {
       await refreshArtifacts({ runId });
+      // The hit list was never wired into the recurring poll at all -- it
+      // was only ever (re-)fetched from one-shot code paths like selecting
+      // a run or clicking the manual refresh button, so new candidates
+      // that became available while the user was just watching Monitor
+      // never showed up without a full page reload. Reuse the artifact
+      // refresh's own gating (status-key transitions, periodic fallback,
+      // and the terminal-state catch-up retries) rather than adding a
+      // second, separately-tuned cadence.
+      if (runId === String(state.currentRunId || "").trim()) {
+        await refreshHitList();
+      }
     }
   })()
     .catch((err) => {

@@ -475,6 +475,33 @@ test("refreshHitList rerenders compare selectors after hit-list PDBs load", () =
   );
 });
 
+test("pollCurrentRun refreshes the hit list whenever it refreshes artifacts", () => {
+  // refreshHitList used to be reachable only from one-shot code paths (run
+  // selection, the manual refresh button) -- never from the recurring
+  // 5s poll, so hit-list rows that became available while a run was just
+  // being watched in Monitor never appeared without a full page reload.
+  const source = readFileSync(resolve("frontend/app.js"), "utf8");
+  const fnStart = source.indexOf("async function pollCurrentRun(");
+  assert.notEqual(fnStart, -1);
+  const fnBody = source.slice(fnStart, source.indexOf("\n}", fnStart));
+  assert.match(fnBody, /await refreshHitList\(\);/);
+});
+
+test("shouldAutoRefreshArtifacts allows a few catch-up refreshes right after a run goes terminal", () => {
+  // The status key stops changing once a run is terminal, so the single
+  // refresh from that transition used to be the last one a run ever got --
+  // if it raced the backend still writing the checkpoint's artifact
+  // manifest, the Workflow Review Gate was stuck showing stale/incomplete
+  // results with nothing left to retry short of a page reload.
+  const source = readFileSync(resolve("frontend/app.js"), "utf8");
+  assert.match(source, /terminalArtifactRefreshCountByRunId/);
+  const fnStart = source.indexOf("function shouldAutoRefreshArtifacts(");
+  assert.notEqual(fnStart, -1);
+  const fnBody = source.slice(fnStart, source.indexOf("\n}", fnStart));
+  assert.match(fnBody, /terminalRetries >= 3/);
+  assert.match(fnBody, /Date\.now\(\) - lastRefreshAt >= 5000/);
+});
+
 test("single-tier compare preset buttons apply the first variant without a dropdown", () => {
   const source = readFileSync(resolve("frontend/app.js"), "utf8");
   assert.match(source, /const defaultVariantByGroup = new Map\(\);/);
