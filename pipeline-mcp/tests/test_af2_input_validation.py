@@ -22,10 +22,11 @@ class TestAF2InputValidation(unittest.TestCase):
             del os.environ["PIPELINE_AF2_MONOMER_FIRST_CHAIN"]
         self.assertEqual(out, "ACD")
 
-    def test_multimer_converts_chain_delimiter_to_multifasta(self) -> None:
+    def test_multimer_converts_chain_delimiter_to_colon(self) -> None:
+        # The worker only understands ':' for a complex; see
+        # tests/test_af2_multimer_chain_delimiter.py for the full contract.
         out = _prepare_af2_sequence("ACD/EF", model_preset="multimer", chain_ids=["A", "B"])
-        self.assertNotIn("/", out)
-        self.assertIn("\n>B\nEF", out)
+        self.assertEqual(out, "ACD:EF")
 
 
 if __name__ == "__main__":

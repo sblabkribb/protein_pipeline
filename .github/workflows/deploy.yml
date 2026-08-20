@@ -51,6 +51,9 @@ jobs:
           PYTHONPATH: pipeline-mcp/src
         run: |
           pytest \
+            pipeline-mcp/tests/test_af2_input_validation.py \
+            pipeline-mcp/tests/test_af2_multimer_chain_delimiter.py \
+            pipeline-mcp/tests/test_af2_multimer_run_af2_tool.py \
             pipeline-mcp/tests/test_http_server_auth.py \
             pipeline-mcp/tests/test_mcp_http_route.py \
             pipeline-mcp/tests/test_oidc_auth.py \

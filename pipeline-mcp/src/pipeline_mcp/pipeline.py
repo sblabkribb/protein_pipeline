@@ -2658,6 +2658,11 @@ def _resolve_pipeline_chain_strategy(
     )
 
 
+# ColabFold reads a ':'-joined sequence as a complex and auto-selects the
+# multimer model. This is the only multi-chain form the worker understands.
+_AF2_MULTIMER_CHAIN_DELIMITER = ":"
+
+
 def _normalize_af2_provider(value: object | None) -> str:
     raw = str(value or "").strip().lower()
     if raw in {"af2", "alphafold", "alphafold2"}:
@@ -2857,6 +2862,7 @@ def _validate_af2_chain_sequences(
     *,
     model_preset: str,
     chain_ids: list[str] | None,
+    chain_ids_param: str = "design_chains",
 ) -> list[str]:
     raw = re.sub(r"\s+", "", str(seq or ""))
     if not raw:
@@ -2909,9 +2915,9 @@ def _validate_af2_chain_sequences(
         used_ids = (chain_ids or [])[: min(2, len(chain_ids or []))]
         raise ValueError(
             "AF2 input validation failed: monomer preset cannot accept multi-chain sequence separated by '/'. "
-            f"found_chains={len(chains)} chain_ids={used_ids or None}. "
-            "Fix: (1) run as multimer: set af2_model_preset='multimer' and design_chains=['A','B',...], "
-            "or (2) run as monomer on a single chain: set design_chains=['A'] so ProteinMPNN/ligand mask/fixed positions "
+            f"found_chains={len(chains)} {chain_ids_param}={used_ids or None}. "
+            f"Fix: (1) run as multimer: set af2_model_preset='multimer' and {chain_ids_param}=['A','B',...], "
+            f"or (2) run as monomer on a single chain: set {chain_ids_param}=['A'] so ProteinMPNN/ligand mask/fixed positions "
             "are computed for one chain consistently. "
             "If you really want to evaluate only the first chain in monomer mode, set PIPELINE_AF2_MONOMER_FIRST_CHAIN=1."
         )
@@ -2923,10 +2929,10 @@ def _validate_af2_chain_sequences(
         and len(chains) != len(chain_ids)
     ):
         raise ValueError(
-            "AF2 input validation failed: multimer preset expects the number of chains to match design_chains. "
-            f"design_chains={chain_ids} found_chains={len(chains)}. "
-            "Fix: ensure ProteinMPNN outputs chains in 'A/B/...' order matching design_chains, "
-            "or set af2_model_preset='monomer' and design_chains=['A']."
+            f"AF2 input validation failed: multimer preset expects the number of chains to match {chain_ids_param}. "
+            f"{chain_ids_param}={chain_ids} found_chains={len(chains)}. "
+            f"Fix: pass one chain id per chain in 'A/B/...' order matching {chain_ids_param}, "
+            f"or set af2_model_preset='monomer' and {chain_ids_param}=['A']."
         )
 
     if preset.startswith("monomer") and len(chains) > 1:
@@ -2936,29 +2942,43 @@ def _validate_af2_chain_sequences(
 
 
 def _prepare_af2_sequence(
-    seq: str, *, model_preset: str, chain_ids: list[str] | None
+    seq: str,
+    *,
+    model_preset: str,
+    chain_ids: list[str] | None,
+    provider: str = _AF2_PROVIDER_COLABFOLD,
+    chain_ids_param: str = "design_chains",
 ) -> str:
+    """Build the single `sequence` string the AF2/ColabFold worker consumes.
+
+    A multimer is handed to ColabFold as ':'-joined chains, which is the
+    delimiter the worker keys on to select the multimer model. Nothing else may
+    appear in this string: the worker keeps only letters, so an embedded FASTA
+    header such as '>chain_2' would survive as the residues C,H,A,I,N and fuse
+    the chains into one polypeptide while the run still reported success.
+    """
     preset = str(model_preset or "").strip() or "monomer"
     chains = _validate_af2_chain_sequences(
-        seq, model_preset=preset, chain_ids=chain_ids
+        seq,
+        model_preset=preset,
+        chain_ids=chain_ids,
+        chain_ids_param=chain_ids_param,
     )
     if not chains:
         raise ValueError("AF2 input validation failed: empty sequence after validation")
 
-    if _is_monomer_preset(preset):
+    if len(chains) == 1 or not _is_multimer_preset(preset):
         return chains[0]
 
-    if not _is_multimer_preset(preset):
-        return chains[0]
+    if _normalize_af2_provider(provider) != _AF2_PROVIDER_COLABFOLD:
+        raise ValueError(
+            "AF2 input validation failed: the stock AlphaFold2 worker does not accept "
+            f"a multi-chain sequence on this path. found_chains={len(chains)}. "
+            "Fix: set af2_provider='colabfold' so the chains are folded as a complex, "
+            "or fold a single chain with af2_model_preset='monomer'."
+        )
 
-    out = chains[0]
-    for idx, chain_seq in enumerate(chains[1:], start=1):
-        label = None
-        if chain_ids and idx < len(chain_ids):
-            label = str(chain_ids[idx]).strip() or None
-        label = label or f"chain_{idx + 1}"
-        out += f"\n>{label}\n{chain_seq}"
-    return out
+    return _AF2_MULTIMER_CHAIN_DELIMITER.join(chains)
 
 
 def _first_chain_sequence(seq: str) -> str:
@@ -6446,6 +6466,7 @@ class PipelineRunner:
                             target_seqrec.sequence,
                             model_preset=target_af2_preset,
                             chain_ids=None,
+                            provider=af2_provider,
                         ),
                         meta=target_seqrec.meta,
                     )
@@ -7280,6 +7301,7 @@ class PipelineRunner:
                                 wt_seq,
                                 model_preset=wt_af2_model_preset,
                                 chain_ids=design_chains,
+                                provider=af2_provider,
                             )
                             seqrec = SequenceRecord(
                                 id="wt",
@@ -8478,6 +8500,7 @@ class PipelineRunner:
                                     s.sequence,
                                     model_preset=af2_model_preset,
                                     chain_ids=design_chains,
+                                    provider=af2_provider,
                                 ),
                                 meta=s.meta,
                             )
@@ -10023,6 +10046,7 @@ class PipelineRunner:
                                             s.sequence,
                                             model_preset=af2_model_preset,
                                             chain_ids=design_chains,
+                                            provider=af2_provider,
                                         ),
                                         meta=s.meta,
                                     )

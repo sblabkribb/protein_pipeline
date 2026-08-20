@@ -22,6 +22,8 @@ from .af2_utils import af2_error_is_server_failure
 from .bio.fasta import FastaRecord
 from .bio.fasta import parse_fasta
 from .bio.ligand_text import normalize_diffdock_ligand_inputs
+from .bio.pdb import normalize_structure_text
+from .bio.pdb import residues_by_chain
 from .bio.residue_exposure import classify_residues as _classify_residues
 from .bio.sdf import append_ligand_pdb
 from .bio.sdf import sdf_to_pdb
@@ -41,6 +43,7 @@ from .models import PipelineRequest
 from .models import SequenceRecord
 from .pipeline import PipelineRunner
 from .pipeline import PipelineCancelled
+from .pipeline import _AF2_MULTIMER_CHAIN_DELIMITER
 from .pipeline import _dummy_backbone_pdb
 from .pipeline import _normalize_af2_provider
 from .pipeline import _prepare_af2_sequence
@@ -676,11 +679,42 @@ def _parse_fasta_or_sequence(text: str) -> list[FastaRecord]:
     return [FastaRecord(header="sequence", sequence=seq)]
 
 
+def _prepared_chain_count(prepared_sequence: str) -> int:
+    """Number of chains in a worker-ready AF2 sequence."""
+    return str(prepared_sequence or "").count(_AF2_MULTIMER_CHAIN_DELIMITER) + 1
+
+
+def _multimer_output_chain_error(
+    pdb_text: str, *, model_preset: str, expected_chains: int
+) -> str | None:
+    """Reject a multimer prediction that came back as one fused chain.
+
+    A complex whose ranked_0.pdb carries fewer chains than were requested is
+    not a complex: the worker folded the chains as a single polypeptide.
+    Reporting that as a completed run is exactly how a chain-delimiter
+    regression stays invisible behind a high pLDDT.
+    """
+    if expected_chains < 2:
+        return None
+    if not str(model_preset or "").strip().lower().startswith("multimer"):
+        return None
+    found = len(residues_by_chain(normalize_structure_text(pdb_text)))
+    if found >= expected_chains:
+        return None
+    return (
+        f"multimer output validation failed: predicted structure has {found} chain(s) "
+        f"but {expected_chains} were requested. The worker folded the chains as one "
+        "fused polypeptide, so this structure is not a complex."
+    )
+
+
 def _af2_records_from_inputs(
     *,
     target_fasta: str,
     target_pdb: str,
     model_preset: str,
+    chain_ids: list[str] | None = None,
+    provider: str = "colabfold",
 ) -> tuple[list[SequenceRecord], str]:
     if target_fasta.strip():
         fasta_records = _parse_fasta_or_sequence(target_fasta)
@@ -698,7 +732,11 @@ def _af2_records_from_inputs(
     seq_records: list[SequenceRecord] = []
     for rec in fasta_records:
         prepared = _prepare_af2_sequence(
-            rec.sequence, model_preset=resolved_preset, chain_ids=None
+            rec.sequence,
+            model_preset=resolved_preset,
+            chain_ids=chain_ids,
+            provider=provider,
+            chain_ids_param="af2_chain_ids",
         )
         seq_records.append(
             SequenceRecord(id=rec.id, sequence=prepared, header=rec.header, meta={})
@@ -835,6 +873,8 @@ def _run_af2_predict(
     # Callers that want a true batch request can pass af2_batch_size>1.
     af2_batch_size = max(1, _as_int(arguments.get("af2_batch_size"), 1))
     auto_recover = _as_bool(arguments.get("auto_recover"), True)
+    af2_chain_ids = _as_list_of_str(arguments.get("af2_chain_ids"))
+    sequence_id = str(arguments.get("sequence_id") or "").strip() or None
 
     normalized_run_id = (
         normalize_run_id(str(run_id)) if run_id is not None else new_run_id("af2")
@@ -851,6 +891,8 @@ def _run_af2_predict(
         "af2_extra_flags": extra_flags,
         "af2_provider": requested_provider,
         "af2_provider_effective": effective_provider,
+        "af2_chain_ids": af2_chain_ids,
+        "sequence_id": sequence_id,
         "dry_run": dry_run,
     }
     write_json(paths.request_json, _safe_json(request_payload))
@@ -873,27 +915,47 @@ def _run_af2_predict(
             target_fasta=target_fasta,
             target_pdb=target_pdb,
             model_preset=requested_preset,
+            chain_ids=af2_chain_ids,
+            provider=effective_provider,
         )
 
         if dry_run:
 
-            def _first_chain(seq: str) -> str:
-                raw = str(seq or "").strip()
-                if "\n>" in raw:
-                    raw = raw.split("\n>", 1)[0]
-                if "/" in raw:
-                    raw = raw.split("/", 1)[0]
-                cleaned = "".join(ch for ch in raw if ch.isalpha())
-                return cleaned or "A"
+            def _preview_chains(seq: str) -> list[str]:
+                parts = [
+                    "".join(ch for ch in part if ch.isalpha())
+                    for part in str(seq or "").split(_AF2_MULTIMER_CHAIN_DELIMITER)
+                ]
+                return [part for part in parts if part] or ["A"]
+
+            def _preview_chain_id(index: int) -> str:
+                if af2_chain_ids and index < len(af2_chain_ids):
+                    label = str(af2_chain_ids[index]).strip()
+                    if label:
+                        return label[0]
+                return chr(ord("A") + index) if index < 26 else "Z"
 
             results = {}
             for rec in seq_records:
-                seq = _first_chain(rec.sequence)
+                # Preview every chain, not just the first: a one-chain preview
+                # of a multimer is what a fused prediction looks like.
+                chains = _preview_chains(rec.sequence)
+                body: list[str] = []
+                for index, chain_seq in enumerate(chains):
+                    chain_pdb = _dummy_backbone_pdb(
+                        chain_seq, chain_id=_preview_chain_id(index)
+                    )
+                    body.extend(
+                        line
+                        for line in chain_pdb.splitlines()
+                        if line.strip() and line.strip() != "END"
+                    )
+                body.append("END")
                 results[rec.id] = {
                     "best_plddt": 90.0,
                     "best_model": None,
                     "ranking_debug": {},
-                    "ranked_0_pdb": _dummy_backbone_pdb(seq, chain_id="A"),
+                    "ranked_0_pdb": "\n".join(body) + "\n",
                 }
             chunk_failures: dict[str, str] = {}
         else:
@@ -1000,6 +1062,20 @@ def _run_af2_predict(
 
             seq_dir = ensure_dir(af2_dir / _safe_id(rec.id))
             _write_text(seq_dir / "ranked_0.pdb", ranked0)
+            chain_error = _multimer_output_chain_error(
+                ranked0,
+                model_preset=resolved_preset,
+                expected_chains=_prepared_chain_count(rec.sequence),
+            )
+            if chain_error:
+                if not auto_recover:
+                    raise RuntimeError(f"{provider_label}: {chain_error}")
+                chunk_failures[rec.id] = chain_error
+                write_json(
+                    seq_dir / "error.json",
+                    {"error": chain_error, "provider": effective_provider},
+                )
+                continue
             if isinstance(payload.get("ranking_debug"), dict):
                 write_json(seq_dir / "ranking_debug.json", payload["ranking_debug"])
             write_json(
@@ -8740,12 +8816,23 @@ def tool_definitions() -> list[dict[str, Any]]:
                         "description": "Single sequence (non-FASTA).",
                     },
                     "sequence_id": {"type": "string"},
-                    "af2_model_preset": {"type": "string"},
+                    "af2_model_preset": {
+                        "type": "string",
+                        "description": "auto | monomer | multimer. Use 'multimer' for a complex, with the chains joined by '/' in the input sequence.",
+                    },
                     "af2_db_preset": {"type": "string"},
                     "af2_max_template_date": {"type": "string"},
                     "af2_extra_flags": {"type": "string"},
-                    "af2_provider": {"type": "string", "enum": ["colabfold", "af2"]},
-                    "af2_chain_ids": {"type": "array", "items": {"type": "string"}},
+                    "af2_provider": {
+                        "type": "string",
+                        "enum": ["colabfold", "af2"],
+                        "description": "Multimer requires 'colabfold'; the stock AlphaFold2 worker rejects a multi-chain sequence here.",
+                    },
+                    "af2_chain_ids": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Chain ids in the same order as the '/'-separated chains. The count must match, or the run is rejected.",
+                    },
                     "run_id": {"type": "string"},
                     "force": {"type": "boolean"},
                     "dry_run": {"type": "boolean"},

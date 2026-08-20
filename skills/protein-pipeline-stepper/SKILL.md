@@ -237,7 +237,10 @@ For an AF2/ColabFold **complex** (more than one chain), the pipeline splits chai
 - Join the chains in **one** record with `/`: `SEQ_A/SEQ_B` (FASTA: `>NAME` then `SEQ_A/SEQ_B`), and set `af2_model_preset="multimer"`.
 - Do **not** use `:` as the API separator — that is ColabFold-doc notation, not the pipeline's input format. Passing `:` will not be interpreted as a chain break.
 - A **monomer** preset with a `/`-separated multi-chain sequence is rejected — either pass a single chain, or switch to `multimer`.
-- With `multimer`, the number of `/`-separated chains must match `af2_chain_ids` / `design_chains` (e.g. `["A","B"]`).
+- With `multimer`, the number of `/`-separated chains must match `af2_chain_ids` (`pipeline.run_af2`) or `design_chains` (`pipeline.run`), e.g. `["A","B"]`. A count mismatch is rejected before any GPU time is spent.
+- A multimer needs `af2_provider="colabfold"` (the default). The stock AlphaFold2 worker cannot take a complex on this path and now rejects it instead of folding the chains into one fused polypeptide.
+- The predicted structure is checked after the run: if a multimer comes back with fewer chains than requested, the sequence is reported as **failed** (`failed_count`, `af2/<id>/error.json`) rather than counted as a success. A high `best_plddt` on a fused single chain is not a valid complex.
+- `dry_run` previews one dummy chain per requested chain, so the chain count can be confirmed before spending GPU time.
 
 ### Single stage via `pipeline.run` + `stop_after`
 - Set `stop_after` to exactly one of `rfd3`, `bioemu`, `msa`, `design`, `soluprot`, `af2` and pass a stable `run_id`. The pipeline runs only that stage's prerequisites and stops.
