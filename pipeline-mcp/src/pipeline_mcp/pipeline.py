@@ -3953,6 +3953,10 @@ class PipelineRunner:
                 _write_text(paths.root / "target.fasta", target_query_fasta)
 
                 set_status(paths, stage="mmseqs_msa", state="running")
+                # Checked immediately before the job is handed to a worker. The
+                # stage-level check only runs at stage boundaries, so without this a
+                # cancelled run keeps submitting the rest of the loop's candidates.
+                _ensure_not_cancelled(stage="msa")
                 msa_tsv_text, a3m_text = self._get_msa(
                     target_query_fasta,
                     msa_dir,
@@ -4924,6 +4928,10 @@ class PipelineRunner:
                             resume_job: str | None = None,
                             primary_attempt: bool = False,
                         ) -> dict[str, Any]:
+                            # Checked immediately before the job is handed to a worker. The
+                            # stage-level check only runs at stage boundaries, so without this a
+                            # cancelled run keeps submitting the rest of the loop's candidates.
+                            _ensure_not_cancelled(stage="rfd3")
                             attempt_cli_args = _inject_rfd3_cli_defaults(
                                 request.rfd3_cli_args, max_designs=requested_designs
                             )
@@ -6472,6 +6480,10 @@ class PipelineRunner:
                     )
                     try:
                         try:
+                            # Checked immediately before the job is handed to a worker. The
+                            # stage-level check only runs at stage boundaries, so without this a
+                            # cancelled run keeps submitting the rest of the loop's candidates.
+                            _ensure_not_cancelled(stage="af2_target")
                             af2_out = af2_client.predict(
                                 [target_af2_input],
                                 model_preset=target_af2_preset,
@@ -7349,6 +7361,10 @@ class PipelineRunner:
                                 )
 
                             try:
+                                # Checked immediately before the job is handed to a worker. The
+                                # stage-level check only runs at stage boundaries, so without this a
+                                # cancelled run keeps submitting the rest of the loop's candidates.
+                                _ensure_not_cancelled(stage="af2_wt")
                                 af2_out = af2_client.predict(
                                     [seqrec],
                                     model_preset=wt_af2_model_preset,
@@ -7476,6 +7492,10 @@ class PipelineRunner:
                                     "reason": "Rosetta relax is not configured",
                                 }
                             else:
+                                # Checked immediately before the job is handed to a worker. The
+                                # stage-level check only runs at stage boundaries, so without this a
+                                # cancelled run keeps submitting the rest of the loop's candidates.
+                                _ensure_not_cancelled(stage="relax_wt")
                                 relax_result = rosetta_relax_client.relax(
                                     wt_ranked_pdb,
                                     nstruct=max(
@@ -8437,6 +8457,10 @@ class PipelineRunner:
                     *,
                     resume_job_ids: dict[str, str] | None,
                 ) -> dict[str, object]:
+                    # Checked immediately before the job is handed to a worker. The
+                    # stage-level check only runs at stage boundaries, so without this a
+                    # cancelled run keeps submitting the rest of the loop's candidates.
+                    _ensure_not_cancelled(stage="af2_pooled_tiers")
                     if af2_client is None:
                         raise RuntimeError(
                             f"{af2_provider_label} is required for this pipeline; {af2_provider_hint}"
@@ -9325,6 +9349,10 @@ class PipelineRunner:
                         write_json(
                             tier_dir / "fixed_positions.json", fixed_positions_by_chain
                         )
+                    # Checked immediately before the job is handed to a worker. The
+                    # stage-level check only runs at stage boundaries, so without this a
+                    # cancelled run keeps submitting the rest of the loop's candidates.
+                    _ensure_not_cancelled(stage=f"proteinmpnn_{tier_str}")
 
                     (native, samples), mpnn_recovered, mpnn_err, mpnn_rec = (
                         _recover_stage(
@@ -9964,6 +9992,10 @@ class PipelineRunner:
                             *,
                             resume_job_ids: dict[str, str] | None,
                         ) -> dict[str, object]:
+                            # Checked immediately before the job is handed to a worker. The
+                            # stage-level check only runs at stage boundaries, so without this a
+                            # cancelled run keeps submitting the rest of the loop's candidates.
+                            _ensure_not_cancelled(stage=f"af2_{tier_str}")
                             if af2_client is None:
                                 raise RuntimeError(
                                     f"{af2_provider_label} is required for this pipeline; {af2_provider_hint}"
@@ -11275,6 +11307,10 @@ class PipelineRunner:
                                 def _run_relax_for_sequence(
                                     seq: SequenceRecord,
                                 ) -> dict[str, object]:
+                                    # Checked immediately before the job is handed to a worker. The
+                                    # stage-level check only runs at stage boundaries, so without this a
+                                    # cancelled run keeps submitting the rest of the loop's candidates.
+                                    _ensure_not_cancelled(stage=f"relax_{tier_str}")
                                     seq_dir = _ensure_dir(relax_dir / _safe_id(seq.id))
                                     if request.dry_run:
                                         seq_index = int(

@@ -58,7 +58,8 @@ jobs:
             pipeline-mcp/tests/test_mcp_http_route.py \
             pipeline-mcp/tests/test_oidc_auth.py \
             pipeline-mcp/tests/test_session_auth.py \
-            pipeline-mcp/tests/test_runpod_admin.py
+            pipeline-mcp/tests/test_runpod_admin.py \
+            pipeline-mcp/tests/test_pipeline_cancel_midstage.py
 
       - name: Run frontend deployment checks
         run: |
