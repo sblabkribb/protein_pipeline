@@ -21397,6 +21397,8 @@ async function runPreflight({ announce = true, mode: overrideMode = null, answer
 }
 
 async function runPipeline(overrideAnswers = null) {
+  // A click handler passes the event object as the first argument; normalize
+  // it away before anything reads it as answers.
   if (
     overrideAnswers &&
     typeof overrideAnswers === "object" &&
@@ -21405,10 +21407,29 @@ async function runPipeline(overrideAnswers = null) {
   ) {
     overrideAnswers = null;
   }
+  // Hold the submitting flag for the WHOLE submission. It used to be read here
+  // but only ever set by the studio path, so Quick Start and Advanced Setup
+  // were unguarded: a slow first submit (an MMseqs MSA can occupy the pipeline
+  // for a minute) left the button live and every further click created another
+  // run - 8 duplicates in 11s on 2026-08-30. updateRunEligibility() already
+  // disables el.runBtn off this flag, so setting it also greys the button out.
   if (state.runSubmitting) {
     setMessage(t("run.alreadyRunning"), "ai");
     return;
   }
+  state.runSubmitting = true;
+  updateRunEligibility(state.plan?.questions || []);
+  updateMonitorActionButtons();
+  try {
+    return await runPipelineSubmit(overrideAnswers);
+  } finally {
+    state.runSubmitting = false;
+    updateRunEligibility(state.plan?.questions || []);
+    updateMonitorActionButtons();
+  }
+}
+
+async function runPipelineSubmit(overrideAnswers = null) {
   if (!state.plan && !overrideAnswers) return;
   const prompt = el.promptInput.value.trim();
   const mode = (overrideAnswers ? "pipeline" : state.runMode) || "pipeline";
