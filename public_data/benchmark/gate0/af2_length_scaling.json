@@ -1,0 +1,45 @@
+{
+  "points": [
+    {
+      "target": "2kjfA00",
+      "length": 60,
+      "status": "ok",
+      "best_plddt": 61.65566666666667,
+      "elapsed_s": 62.7
+    },
+    {
+      "target": "3qr8A02",
+      "length": 154,
+      "status": "ok",
+      "best_plddt": 94.02668831168832,
+      "elapsed_s": 142.8
+    },
+    {
+      "target": "2kdoA01",
+      "length": 252,
+      "status": "ok",
+      "best_plddt": 77.94595238095239,
+      "elapsed_s": 121.3
+    },
+    {
+      "target": "2ab8A02",
+      "length": 351,
+      "status": "ok",
+      "best_plddt": 93.39156695156696,
+      "elapsed_s": 299.2
+    }
+  ],
+  "fit": {
+    "exponent": 0.748,
+    "coefficient": 2.890344,
+    "n_points": 4,
+    "model": "elapsed_s = coefficient * length^exponent"
+  },
+  "predicted_s": {
+    "60": 61.8,
+    "123": 105.7,
+    "254": 181.9,
+    "416": 263.0,
+    "619": 354.1
+  }
+}
