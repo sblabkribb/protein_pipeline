@@ -107,3 +107,7 @@ manuscript (5).md
 /.agents/
 /AGENT.md
 /todo.md
+
+# CATH 원본 분류 파일(43MB)은 추적하지 않는다.
+# 재현에 필요한 것은 sha256 과 파생 매핑(rapid_target_superfamily.json)이다.
+/public_data/cath/cath-domain-list.txt

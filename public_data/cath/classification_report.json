@@ -1,0 +1,34 @@
+{
+  "source_url": "http://download.cathdb.info/cath/releases/latest-release/cath-classification-data/cath-domain-list.txt",
+  "sha256": "2f87544bb8844ff37ad1d9348dfe0a23a7c9e4837e0d207733935148e088cc81",
+  "classification_entries": 601328,
+  "targets_referenced": 1472,
+  "targets_resolved": 1472,
+  "unresolved": [],
+  "grouping": {
+    "class": {
+      "depth": 1,
+      "groups": 5,
+      "largest_group": 634,
+      "singletons": 0
+    },
+    "architecture": {
+      "depth": 2,
+      "groups": 43,
+      "largest_group": 290,
+      "singletons": 13
+    },
+    "topology": {
+      "depth": 3,
+      "groups": 1472,
+      "largest_group": 1,
+      "singletons": 1472
+    },
+    "superfamily": {
+      "depth": 4,
+      "groups": 1472,
+      "largest_group": 1,
+      "singletons": 1472
+    }
+  }
+}
