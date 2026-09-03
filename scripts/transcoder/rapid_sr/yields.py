@@ -33,13 +33,22 @@ def _ratio(flags: list[bool]) -> float | None:
     return (sum(flags) / len(flags)) if flags else None
 
 
+def backbone_key(rec: DesignRecord) -> str:
+    """백본을 전역에서 유일하게 식별하는 키.
+
+    `backbone_id` 는 run 안에서만 고유하다. CATH run 은 전부 `target` 을 쓰므로
+    id 로만 묶으면 서로 다른 타겟의 백본이 하나로 합쳐진다.
+    """
+    return f"{rec.target_id}|{rec.backbone_source}|{rec.backbone_id}"
+
+
 def backbone_yields(records: Iterable[DesignRecord]) -> dict[str, dict[str, object]]:
     grouped: dict[str, list[DesignRecord]] = defaultdict(list)
     for rec in records:
-        grouped[rec.backbone_id].append(rec)
+        grouped[backbone_key(rec)].append(rec)
 
     out: dict[str, dict[str, object]] = {}
-    for backbone_id, recs in grouped.items():
+    for key, recs in grouped.items():
         solu_flags = [f for f in (_soluprot_pass(r) for r in recs) if f is not None]
         struct_flags = [f for f in (_structural_pass(r) for r in recs) if f is not None]
         joint_flags = [
@@ -51,8 +60,9 @@ def backbone_yields(records: Iterable[DesignRecord]) -> dict[str, dict[str, obje
         regimes = {r.label_regime for r in recs}
         regime = next(iter(regimes)) if len(regimes) == 1 else "mixed"
 
-        out[backbone_id] = {
-            "backbone_id": backbone_id,
+        out[key] = {
+            "backbone_key": key,
+            "backbone_id": recs[0].backbone_id,
             "backbone_source": recs[0].backbone_source,
             "target_id": recs[0].target_id,
             "n_sequences": len(recs),
