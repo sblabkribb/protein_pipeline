@@ -81,7 +81,8 @@ class BackboneYieldTests(unittest.TestCase):
     def test_fingerprint_carries_thresholds_and_sequence_count(self):
         fp = protocol_fingerprint()
         self.assertEqual(fp["thresholds"]["plddt_min"], 85.0)
-        self.assertEqual(fp["sequences_per_backbone"], 40)
+        self.assertEqual(fp["sequences_per_backbone"], 20)
+        self.assertEqual(fp["af2_calls_per_run"], 100)
         self.assertIn("mpnn_settings", fp)
 
 
