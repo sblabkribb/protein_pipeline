@@ -1,0 +1,43 @@
+{
+  "source_csv": "/opt/protein_pipeline-work/public_data/benchmark/results/backbone_ensemble_ablation_sequences.csv",
+  "metrics": {
+    "soluprot": {
+      "var_target": 0.013691039988369893,
+      "var_backbone": 0.0011186021134308968,
+      "var_design": 0.002555869729321405,
+      "var_total": 0.017365511831122196,
+      "icc_backbone": 0.0644151536856032,
+      "icc_target": 0.7884040575085745,
+      "n_rows": 6840,
+      "n_backbones": 72,
+      "n_targets": 18,
+      "icc_backbone_ci95": [
+        0.024403983799645278,
+        0.08924526685885614
+      ],
+      "n_boot": 500,
+      "metric": "soluprot",
+      "label_regime": "complete",
+      "is_censored": false
+    },
+    "plddt": {
+      "var_target": 37.21443765565296,
+      "var_backbone": 3.6951867220172803,
+      "var_design": 2.6110380392438945,
+      "var_total": 43.520662416914135,
+      "icc_backbone": 0.08490649077485457,
+      "icc_target": 0.8550981439379405,
+      "n_rows": 1705,
+      "n_backbones": 68,
+      "n_targets": 18,
+      "icc_backbone_ci95": [
+        0.006614829897759669,
+        0.09955691967640938
+      ],
+      "n_boot": 500,
+      "metric": "plddt",
+      "label_regime": "af2_after_soluprot_filter",
+      "is_censored": true
+    }
+  }
+}
