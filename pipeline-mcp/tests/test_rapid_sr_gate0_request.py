@@ -58,6 +58,19 @@ class Gate0RequestTests(unittest.TestCase):
         req = build_gate0_request(PDB, "rfd3", seed=0)
         self.assertEqual(req.conservation_tiers, [0.5])
 
+    def test_af2_keeps_msa_because_single_sequence_destroys_plddt(self):
+        """실측(04f_af2_msa_mode_probe): single-sequence 는 1.41배 빠른 대신
+        pLDDT 가 87.0 -> 65.8 로 21점 떨어진다. 게이트 0 의 구조 통과 기준이
+        pLDDT >= 85 이므로 그러면 yield 라벨이 전부 0 이 된다."""
+        req = build_gate0_request(PDB, "rfd3", seed=0)
+        self.assertIsNone(req.af2_extra_flags)
+
+    def test_af2_flags_are_recorded_in_the_fingerprint(self):
+        from rapid_sr.protocol import protocol_fingerprint
+        # AF2 설정이 다르면 pLDDT 를 다른 데이터와 섞을 수 없다.
+        self.assertIn("af2_extra_flags", protocol_fingerprint())
+        self.assertIsNone(protocol_fingerprint()["af2_extra_flags"])
+
     def test_af2_budget_per_run_is_bounded(self):
         from rapid_sr.protocol import protocol_fingerprint
         # 백본 수 x 서열 수 x tier 수 = run 당 AF2 호출 수

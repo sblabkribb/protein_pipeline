@@ -1,0 +1,106 @@
+{
+  "per_arm": {
+    "full_dbs": {
+      "n": 4,
+      "mean_elapsed_s": 91.0,
+      "mean_plddt": 87.02
+    },
+    "single_sequence": {
+      "n": 4,
+      "mean_elapsed_s": 64.5,
+      "mean_plddt": 65.75
+    }
+  },
+  "replicates": [
+    {
+      "arms": [
+        {
+          "name": "full_dbs",
+          "extra_flags": null,
+          "status": "ok",
+          "best_plddt": 86.99967741935482,
+          "elapsed_s": 92.2
+        },
+        {
+          "name": "single_sequence",
+          "extra_flags": "--msa-mode single_sequence",
+          "status": "ok",
+          "best_plddt": 65.62225806451613,
+          "elapsed_s": 64.4
+        }
+      ],
+      "speedup": 1.43,
+      "saved_s": 27.8,
+      "sequence_id": "rfd3_inputs_spec-1_0_model_0:fallback_001",
+      "sequence_length": 62
+    },
+    {
+      "arms": [
+        {
+          "name": "full_dbs",
+          "extra_flags": null,
+          "status": "ok",
+          "best_plddt": 87.07177419354838,
+          "elapsed_s": 88.4
+        },
+        {
+          "name": "single_sequence",
+          "extra_flags": "--msa-mode single_sequence",
+          "status": "ok",
+          "best_plddt": 65.62225806451613,
+          "elapsed_s": 63.9
+        }
+      ],
+      "speedup": 1.38,
+      "saved_s": 24.5,
+      "sequence_id": "rfd3_inputs_spec-1_0_model_0:fallback_002",
+      "sequence_length": 62
+    },
+    {
+      "arms": [
+        {
+          "name": "full_dbs",
+          "extra_flags": null,
+          "status": "ok",
+          "best_plddt": 86.99354838709678,
+          "elapsed_s": 89.4
+        },
+        {
+          "name": "single_sequence",
+          "extra_flags": "--msa-mode single_sequence",
+          "status": "ok",
+          "best_plddt": 65.80596774193548,
+          "elapsed_s": 64.2
+        }
+      ],
+      "speedup": 1.39,
+      "saved_s": 25.2,
+      "sequence_id": "rfd3_inputs_spec-1_0_model_0:fallback_003",
+      "sequence_length": 62
+    },
+    {
+      "arms": [
+        {
+          "name": "full_dbs",
+          "extra_flags": null,
+          "status": "ok",
+          "best_plddt": 87.01903225806453,
+          "elapsed_s": 93.9
+        },
+        {
+          "name": "single_sequence",
+          "extra_flags": "--msa-mode single_sequence",
+          "status": "ok",
+          "best_plddt": 65.93967741935484,
+          "elapsed_s": 65.3
+        }
+      ],
+      "speedup": 1.44,
+      "saved_s": 28.6,
+      "sequence_id": "rfd3_inputs_spec-1_0_model_0:fallback_004",
+      "sequence_length": 62
+    }
+  ],
+  "speedup": 1.41,
+  "plddt_delta": -21.27
+}

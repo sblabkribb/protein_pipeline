@@ -38,6 +38,24 @@ GATE0_TIERS = [0.5]
 # run 당 생성할 백본 수. run 당 AF2 = 5 x 20 x 1 = 100 회.
 GATE0_BACKBONES_PER_RUN = 5
 
+# AF2 실행 설정: 기본(full_dbs) 을 쓴다. single-sequence 로 바꾸지 않는다.
+#
+# `scripts/phase1_memory_bank/README.md` 는 "ProteinMPNN 설계 서열은 자연계에
+# 없으므로 MSA 가 무의미하다"고 적고 있어 single-sequence 가 큰 비용 절감이 될
+# 것으로 보였다. 실측(`04f_af2_msa_mode_probe.py`, 유휴 워커, 62aa 설계 4개)은
+# 그 예상을 뒤집었다.
+#
+#   full_dbs         91.0s  pLDDT 87.02
+#   single_sequence  64.5s  pLDDT 65.75
+#   -> 1.41배 빨라지는 대신 pLDDT 가 21.3점 떨어진다
+#
+# 게이트 0 의 구조 통과 기준이 pLDDT >= 85 이므로 single-sequence 로는 거의
+# 모든 설계가 탈락해 yield 라벨이 전부 0 이 된다. 29% 시간 절감으로 살 수 없는
+# 손실이다. 또한 기존 CATH 라벨이 full_dbs 로 생성되어 있어 섞을 수도 없다.
+#
+# 결과 원본: `public_data/benchmark/gate0/af2_msa_mode_probe.json`
+GATE0_AF2_EXTRA_FLAGS: str | None = None
+
 
 def protocol_fingerprint() -> dict[str, object]:
     """artifact 에 그대로 실릴 프로토콜 스냅숏."""
@@ -50,4 +68,6 @@ def protocol_fingerprint() -> dict[str, object]:
         "af2_calls_per_run": (
             GATE0_BACKBONES_PER_RUN * GATE0_SEQUENCES_PER_BACKBONE * len(GATE0_TIERS)
         ),
+        # AF2 설정이 다르면 pLDDT 를 다른 데이터와 섞을 수 없다. 지문에 남긴다.
+        "af2_extra_flags": GATE0_AF2_EXTRA_FLAGS,
     }
