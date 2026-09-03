@@ -1,8 +1,15 @@
 """CATH run 디렉터리를 DesignRecord 로 읽는다.
 
-설계 3.2: `af2_scores.json` 의 pLDDT `0` 은 값이 아니라 인프라 실패다.
-`prediction_errors` 에 `executionTimeout exceeded` 가 남고, 실패 후보의 id 는
-`target:fallback_NNN` 형식이다. 0 을 그대로 학습에 넣으면 모델이 실패 예측기가 된다.
+두 종류의 오염을 걸러낸다.
+
+1. **ProteinMPNN 퇴화 unit (설계 3.2).** MPNN 이 실패하면
+   `pipeline.py:8231` 이 `fallback_NNN` 샘플을 `num_seq_per_tier` 개 만드는데
+   전부 **동일한 야생형 서열**이다. 설계가 아니므로 unit 째로 버린다.
+   로컬 CATH 미러에서 이런 행이 15,120 중 5,280(34.9%)이었고, SoluProt 점수는
+   정상적으로 붙어 있어 그대로 두면 동일 서열 수천 행이 학습에 들어간다.
+
+2. **AF2 결측.** pLDDT `0` 은 값이 아니라 미수행/실패다. SoluProt·RMSD 의 0 은
+   유효값이므로 구분해서 다룬다.
 """
 
 from __future__ import annotations
@@ -57,6 +64,22 @@ def _normalize_design_id(raw_id: str, *, backbone_id: str) -> str:
     return text if ":" in text else f"{backbone_id}:{text}"
 
 
+def _is_degenerate_unit(samples: list[dict]) -> bool:
+    """ProteinMPNN 이 설계를 못 만들고 야생형 복사본만 낸 unit 인가.
+
+    두 신호를 함께 본다. 로컬 CATH 미러 378 unit 에서 두 판정은 완전히
+    일치했지만(불일치 0), id 명명 규칙이 바뀌어도 잡히도록 서열 중복도 본다.
+    서열이 하나뿐인 unit 은 중복이 아니라 표본이 작은 것이므로 제외한다.
+    """
+    if not samples:
+        return False
+    ids = [str(sample.get("id") or "") for sample in samples]
+    if ids and all(name.startswith("fallback_") for name in ids):
+        return True
+    sequences = {str(sample.get("sequence") or "") for sample in samples}
+    return len(samples) > 1 and len(sequences) == 1
+
+
 def _float_or_none(value: object) -> float | None:
     """SoluProt/RMSD 용. 0.0 은 유효값이므로 보존한다."""
     return float(value) if isinstance(value, (int, float)) else None
@@ -82,12 +105,15 @@ def load_cath_run(run_dir: Path) -> list[DesignRecord]:
         af2 = _load_json(tier_dir / "af2_scores.json")
         solu = _load_json(tier_dir / "soluprot.json").get("scores") or {}
         mpnn = _load_json(tier_dir / "proteinmpnn.json")
+        samples = [s for s in (mpnn.get("samples") or []) if s.get("id") is not None]
+        if _is_degenerate_unit(samples):
+            # 설계가 아니라 야생형 복사본이다. 마스킹이 아니라 통째로 버린다.
+            continue
         seqs = {
             _normalize_design_id(sample.get("id"), backbone_id=backbone_id): str(
                 sample.get("sequence") or ""
             )
-            for sample in (mpnn.get("samples") or [])
-            if sample.get("id") is not None
+            for sample in samples
         }
 
         plddt_scores = af2.get("scores") or {}

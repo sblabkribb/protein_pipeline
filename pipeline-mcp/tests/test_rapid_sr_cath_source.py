@@ -134,6 +134,59 @@ class CathSourceTests(unittest.TestCase):
             self.assertEqual(recs[0].design_id, "target:1")
             self.assertEqual(recs[0].sequence, "MKT")
 
+    def test_proteinmpnn_fallback_unit_is_dropped_entirely(self):
+        """ProteinMPNN 이 실패하면 pipeline.py:8231 이 `fallback_NNN` 샘플을
+        num_seq_per_tier 개 만드는데, 전부 **동일한 야생형 서열**이다. 설계가
+        아니므로 마스킹이 아니라 통째로 버려야 한다. SoluProt 점수는 정상적으로
+        붙어 있어서 남겨두면 동일 서열 수천 행이 학습 데이터에 들어간다."""
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "cath_test_8fbkA00"
+            wt = "MKTAYIAKQR"
+            _write_tier(
+                run / "tiers" / "30",
+                plddt={"target:fallback_001": 91.0, "target:fallback_002": 91.0},
+                soluprot={"target:fallback_001": 0.7, "target:fallback_002": 0.7},
+                seqs={"fallback_001": wt, "fallback_002": wt},
+            )
+            self.assertEqual(load_cath_run(run), [])
+
+    def test_degenerate_unit_without_fallback_ids_is_also_dropped(self):
+        """id 규칙이 바뀌어도 잡히도록 서열 중복으로도 판정한다."""
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "cath_test_9dupA00"
+            wt = "MKTAYIAKQR"
+            _write_tier(
+                run / "tiers" / "30",
+                plddt={"target:1": 90.0, "target:2": 90.0},
+                soluprot={"target:1": 0.7, "target:2": 0.7},
+                seqs={"1": wt, "2": wt},
+            )
+            self.assertEqual(load_cath_run(run), [])
+
+    def test_only_the_degenerate_tier_is_dropped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "cath_test_7mixA00"
+            wt = "MKTAYIAKQR"
+            _write_tier(run / "tiers" / "30",
+                        plddt={"target:fallback_001": 90.0},
+                        soluprot={"target:fallback_001": 0.7},
+                        seqs={"fallback_001": wt})
+            _write_tier(run / "tiers" / "50",
+                        plddt={"target:1": 95.0, "target:2": 93.0},
+                        soluprot={"target:1": 0.8, "target:2": 0.6},
+                        seqs={"1": "MKTA", "2": "MKTC"})
+            recs = load_cath_run(run)
+            self.assertEqual({r.tier for r in recs}, {"50"})
+            self.assertEqual(len(recs), 2)
+
+    def test_single_design_unit_is_not_treated_as_degenerate(self):
+        """서열이 하나뿐인 unit 은 중복이 아니라 표본이 작은 것이다."""
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "cath_test_6oneA00"
+            _write_tier(run / "tiers" / "30", plddt={"target:1": 90.0},
+                        soluprot={"target:1": 0.7}, seqs={"1": "MKTA"})
+            self.assertEqual(len(load_cath_run(run)), 1)
+
     def test_rmsd_is_carried_through(self):
         with tempfile.TemporaryDirectory() as tmp:
             run = Path(tmp) / "cath_test_5aaaA00"
