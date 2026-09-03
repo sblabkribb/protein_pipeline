@@ -183,3 +183,72 @@ def test_local_http_diffdock_does_not_send_callback_in_json_payload(monkeypatch)
     assert calls[0]["input"]["pdb_files"][0]["filename"] == "smoke_diffdock.pdb"
     assert "on_job_id" not in calls[0]["input"]
     assert seen_job_ids == ["diffdock-local-job"]
+
+
+def test_local_http_polls_status_when_worker_returns_pending(monkeypatch):
+    """비동기 워커(RFD3/AF3 등)는 POST /run 이 항상 {"id":..., "status":"PENDING"}
+    을 돌려주고 GET /status?id=... 폴링을 요구한다. 폴링하지 않으면 파이프라인이
+    곧바로 fallback 백본으로 떨어진다."""
+    status_params: list[dict] = []
+    seen_job_ids: list[str] = []
+
+    def fake_post(url, headers=None, json=None, timeout=None):  # type: ignore[no-untyped-def]
+        return _Response({"id": "job-1", "status": "PENDING"})
+
+    def fake_get(url, headers=None, params=None, timeout=None):  # type: ignore[no-untyped-def]
+        status_params.append({"url": url, "params": params})
+        if len(status_params) < 3:
+            return _Response({"id": "job-1", "status": "RUNNING"})
+        output = {"selected_pdb": "ATOM\n"}
+        return _Response({"id": "job-1", "status": "COMPLETED", "output": output, **output})
+
+    monkeypatch.setattr("pipeline_mcp.clients.local_http.requests.post", fake_post)
+    monkeypatch.setattr("pipeline_mcp.clients.local_http.requests.get", fake_get)
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+
+    result = LocalHTTPRFD3Client("http://gpu.example:18104").design(
+        inputs={"spec-1": {"contig": "A1-10"}},
+        on_job_id=seen_job_ids.append,
+    )
+
+    assert result["selected_pdb"] == "ATOM\n"
+    assert len(status_params) == 3
+    assert status_params[0]["url"].endswith("/status")
+    assert status_params[0]["params"] == {"id": "job-1"}
+    # 비동기 워커는 job_id 가 아니라 id 키로 작업 식별자를 돌려준다.
+    assert seen_job_ids == ["job-1"]
+
+
+def test_local_http_raises_worker_error_on_failed_job(monkeypatch):
+    def fake_post(url, headers=None, json=None, timeout=None):  # type: ignore[no-untyped-def]
+        return _Response({"id": "job-2", "status": "PENDING"})
+
+    def fake_get(url, headers=None, params=None, timeout=None):  # type: ignore[no-untyped-def]
+        return _Response({"id": "job-2", "status": "FAILED", "error": "contig invalid"})
+
+    monkeypatch.setattr("pipeline_mcp.clients.local_http.requests.post", fake_post)
+    monkeypatch.setattr("pipeline_mcp.clients.local_http.requests.get", fake_get)
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+
+    with pytest.raises(RuntimeError, match="contig invalid"):
+        LocalHTTPRFD3Client("http://gpu.example:18104").design(
+            inputs={"spec-1": {"contig": "A1-10"}}
+        )
+
+
+def test_local_http_synchronous_worker_still_returns_without_polling(monkeypatch):
+    """동기 응답을 주는 기존 워커의 동작은 바뀌지 않아야 한다."""
+    def fake_post(url, headers=None, json=None, timeout=None):  # type: ignore[no-untyped-def]
+        return _Response({"status": "COMPLETED", "job_id": "sync-1",
+                          "output": {"selected_pdb": "ATOM\n"}})
+
+    def fail_get(url, headers=None, params=None, timeout=None):  # type: ignore[no-untyped-def]
+        raise AssertionError("synchronous response must not trigger polling")
+
+    monkeypatch.setattr("pipeline_mcp.clients.local_http.requests.post", fake_post)
+    monkeypatch.setattr("pipeline_mcp.clients.local_http.requests.get", fail_get)
+
+    result = LocalHTTPRFD3Client("http://gpu.example:18104").design(
+        inputs={"spec-1": {"contig": "A1-10"}}
+    )
+    assert result["selected_pdb"] == "ATOM\n"
