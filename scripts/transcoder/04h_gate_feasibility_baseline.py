@@ -22,6 +22,7 @@ from rapid_sr.cath_source import load_cath_run  # noqa: E402
 from rapid_sr.records import DesignRecord  # noqa: E402
 
 AA = "ACDEFGHIKLMNPQRSTVWY"
+FEATURE_SETS = ("composition", "esm", "esm_plus_composition")
 
 
 def featurize(sequence: str):
@@ -34,6 +35,33 @@ def featurize(sequence: str):
     hydrophobic = sum(clean.count(c) for c in "AILMFWVY") / length
     polar = sum(clean.count(c) for c in "STNQCY") / length
     return np.asarray([float(length), charged, hydrophobic, polar, *counts])
+
+
+def esm_embeddings(sequences: list[str], *, url: str, batch: int = 64):
+    """BOP 의 ESM 임베딩 워커(esm2_t6_8M)로 평균 풀링 임베딩을 받는다."""
+    import numpy as np
+
+    sys.path.insert(0, str(PROJECT_ROOT / "pipeline-mcp" / "src"))
+    from pipeline_mcp.clients.esm_embedding import LocalHTTPESMEmbeddingClient
+
+    client = LocalHTTPESMEmbeddingClient(url, None, 3600.0)
+    chunks = []
+    for start in range(0, len(sequences), batch):
+        chunks.append(client.embed(sequences[start:start + batch]))
+        print(f"    esm {min(start + batch, len(sequences))}/{len(sequences)}", flush=True)
+    return np.vstack(chunks)
+
+
+def build_features(records, *, feature_set: str, esm_url: str):
+    import numpy as np
+
+    comp = np.vstack([featurize(r.sequence) for r in records])
+    if feature_set == "composition":
+        return comp
+    emb = esm_embeddings([r.sequence for r in records], url=esm_url)
+    if feature_set == "esm":
+        return emb
+    return np.hstack([emb, comp])
 
 
 def spearman(a, b) -> float | None:
@@ -63,14 +91,37 @@ def top_k_regret(y_true, y_pred, k: int = 5) -> float | None:
     return float((y_true.max() - y_true[picked].max()) / spread)
 
 
-def evaluate(records: list[DesignRecord], metric: str, *, seed: int = 0) -> dict:
+def make_model(kind: str, seed: int):
+    """학습기. arm 간 비교가 공정하려면 특징만 바꾸고 학습기는 고정해야 한다."""
+    if kind == "ridge":
+        import numpy as np
+        from sklearn.linear_model import RidgeCV
+
+        return RidgeCV(alphas=np.logspace(-2, 4, 13))
+    if kind == "rf":
+        from sklearn.ensemble import RandomForestRegressor
+
+        return RandomForestRegressor(
+            n_estimators=200, random_state=seed, n_jobs=-1, min_samples_leaf=2
+        )
+    raise ValueError(f"unknown model {kind!r}; expected ridge or rf")
+
+
+def evaluate(
+    records: list[DesignRecord], metric: str, *, seed: int = 0,
+    feature_set: str = "composition", esm_url: str = "",
+    model_kind: str = "ridge", features=None,
+) -> dict:
     """leave-one-target-out. 타겟 내부 순위 지표만 본다."""
     import numpy as np
-    from sklearn.ensemble import RandomForestRegressor
 
     usable = [r for r in records if getattr(r, metric) is not None and r.sequence]
     targets = sorted({r.target_id for r in usable})
-    x_all = np.vstack([featurize(r.sequence) for r in usable])
+    x_all = (
+        features
+        if features is not None
+        else build_features(usable, feature_set=feature_set, esm_url=esm_url)
+    )
     y_all = np.asarray([float(getattr(r, metric)) for r in usable])
     t_all = np.asarray([r.target_id for r in usable])
 
@@ -79,11 +130,14 @@ def evaluate(records: list[DesignRecord], metric: str, *, seed: int = 0) -> dict
         test = t_all == target
         if test.sum() < 5 or (~test).sum() < 50:
             continue
-        model = RandomForestRegressor(
-            n_estimators=200, random_state=seed, n_jobs=-1, min_samples_leaf=2
-        )
-        model.fit(x_all[~test], y_all[~test])
-        pred = model.predict(x_all[test])
+        model = make_model(model_kind, seed)
+        # Ridge 는 스케일에 민감하므로 학습 폴드 기준으로만 표준화한다.
+        train_x = x_all[~test]
+        mu = train_x.mean(axis=0)
+        sigma = train_x.std(axis=0)
+        sigma[sigma == 0] = 1.0
+        model.fit((train_x - mu) / sigma, y_all[~test])
+        pred = model.predict((x_all[test] - mu) / sigma)
         truth = y_all[test]
         # 타겟 평균만 아는 예측기: 타겟 안에서는 상수라 순위 정보가 0 이다.
         per_target.append({
@@ -104,6 +158,8 @@ def evaluate(records: list[DesignRecord], metric: str, *, seed: int = 0) -> dict
             boot.append(float(np.mean(rng.choice(arr, size=arr.size, replace=True))))
     return {
         "metric": metric,
+        "feature_set": feature_set,
+        "model": model_kind,
         "n_designs": int(len(usable)),
         "n_targets_evaluated": len(per_target),
         "mean_within_target_spearman": round(float(np.mean(rhos)), 4) if rhos else None,
@@ -127,6 +183,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cath-dir", default=str(PROJECT_ROOT / "cath_outputs_s3"))
     parser.add_argument("--metrics", default="soluprot,plddt_af2")
+    parser.add_argument("--features", default="composition",
+                        help=",".join(FEATURE_SETS))
+    parser.add_argument("--esm-url", default="http://211.188.35.221:18170")
+    parser.add_argument("--model", default="ridge", choices=["ridge", "rf"])
     parser.add_argument(
         "--out",
         default=str(PROJECT_ROOT / "public_data" / "benchmark" / "gate0"
@@ -139,17 +199,24 @@ def main(argv: list[str] | None = None) -> int:
         records.extend(load_cath_run(run))
 
     report = {"n_records": len(records), "results": {}}
-    for metric in [m.strip() for m in args.metrics.split(",") if m.strip()]:
-        result = evaluate(records, metric)
-        report["results"][metric] = result
-        print(
-            f"{metric:11s} n={result['n_designs']:5d} targets={result['n_targets_evaluated']:3d} "
-            f"| within-target rho={result['mean_within_target_spearman']} "
-            f"CI{result['spearman_ci95']} "
-            f"| pos_frac={result['frac_targets_positive_rho']} "
-            f"| top5_regret={result['mean_top5_regret']} "
-            f"| median within-target sd={result['median_within_target_sd']}"
-        )
+    for feature_set in [f.strip() for f in args.features.split(",") if f.strip()]:
+        if feature_set not in FEATURE_SETS:
+            raise SystemExit(f"unknown feature set {feature_set!r}; expected {FEATURE_SETS}")
+        for metric in [m.strip() for m in args.metrics.split(",") if m.strip()]:
+            result = evaluate(
+                records, metric, feature_set=feature_set,
+                esm_url=args.esm_url, model_kind=args.model,
+            )
+            report["results"][f"{feature_set}:{metric}"] = result
+            print(f"[{feature_set}]", end=" ")
+            print(
+                f"{metric:11s} n={result['n_designs']:5d} targets={result['n_targets_evaluated']:3d} "
+                f"| rho={result['mean_within_target_spearman']} "
+                f"CI{result['spearman_ci95']} "
+                f"| pos_frac={result['frac_targets_positive_rho']} "
+                f"| top5_regret={result['mean_top5_regret']} "
+                f"| median within-target sd={result['median_within_target_sd']}"
+            )
 
     Path(args.out).write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"\nwrote {args.out}")
