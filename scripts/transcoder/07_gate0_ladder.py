@@ -89,6 +89,29 @@ def fit_predict(x_train, y_train, w_train, x_test, *, kind: str):
     return model.predict_proba(xte)[:, 1]
 
 
+def paired_difference(per_repeat_a, per_repeat_b, *, seed=0):
+    """같은 split 에서 잰 두 arm 의 차이에 대한 부트스트랩 CI.
+
+    "각자의 CI 가 안 겹친다"는 우월성의 증거로 약하다. 같은 fold 에서 짝지어
+    차이를 재야 split 변동이 상쇄된다.
+    """
+    a = np.asarray(per_repeat_a, dtype=float)
+    b = np.asarray(per_repeat_b, dtype=float)
+    n = min(a.size, b.size)
+    if n < 3:
+        return None
+    diff = a[:n] - b[:n]
+    rng = np.random.default_rng(seed)
+    boot = [rng.choice(diff, diff.size, replace=True).mean() for _ in range(4000)]
+    low, high = float(np.percentile(boot, 2.5)), float(np.percentile(boot, 97.5))
+    return {
+        "mean_difference": round(float(diff.mean()), 4),
+        "ci95": [round(low, 4), round(high, 4)],
+        "excludes_zero": bool(low > 0 or high < 0),
+        "n_paired_repeats": int(n),
+    }
+
+
 def evaluate(X, y, w, groups, sources, *, kind, n_splits=5, n_repeats=10, seed=0):
     from scipy.stats import spearmanr
     from sklearn.metrics import roc_auc_score
@@ -125,6 +148,8 @@ def evaluate(X, y, w, groups, sources, *, kind, n_splits=5, n_repeats=10, seed=0
 
     return {
         "n_backbones": int(valid.sum()),
+        "per_repeat_spearman": [round(v, 4) for v in rhos],
+        "per_repeat_auc": [round(v, 4) for v in aucs],
         "spearman": round(float(np.mean(rhos)), 4) if rhos else None,
         "spearman_ci95": ci(rhos),
         "auc": round(float(np.mean(aucs)), 4) if aucs else None,
@@ -209,6 +234,26 @@ def main(argv: list[str] | None = None) -> int:
                  if ws else "")
         print(f"{name:28s} dim={X.shape[1]:5d} rho={res['spearman']} CI{res['spearman_ci95']} "
               f"auc={res['auc']} CI{res['auc_ci95']} mae={res['mae']}{extra}", flush=True)
+
+    # 같은 split 에서 짝지은 차이. 각자 CI 비교보다 강한 근거다.
+    if "C_raw_mpnn_encoder" in report["arms"]:
+        report["paired_differences"] = {}
+        c = report["arms"]["C_raw_mpnn_encoder"]
+        print()
+        for other in ("A_source_mean", "B_structural_descriptors", "D_encoder_plus_descriptors"):
+            if other not in report["arms"]:
+                continue
+            o = report["arms"][other]
+            entry = {
+                "spearman": paired_difference(c["per_repeat_spearman"], o["per_repeat_spearman"]),
+                "auc": paired_difference(c["per_repeat_auc"], o["per_repeat_auc"]),
+            }
+            report["paired_differences"][f"C_minus_{other}"] = entry
+            for metric, res in entry.items():
+                if res:
+                    mark = "유의" if res["excludes_zero"] else "불확실"
+                    print(f"  paired C - {other:26s} {metric:8s} "
+                          f"diff={res['mean_difference']:+.4f} CI{res['ci95']} [{mark}]")
 
     Path(args.out).write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"\nwrote {args.out}")

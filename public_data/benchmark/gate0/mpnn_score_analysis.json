@@ -1,0 +1,118 @@
+{
+  "n_designs": 10360,
+  "n_targets": 88,
+  "temperatures_observed": [
+    0.1
+  ],
+  "note": "T \uc5d0 \ubcc0\uc774\uac00 \uc5c6\uc73c\uba74 temperature \ud6a8\uacfc\ub294 \uae30\uc874 \ub370\uc774\ud130\ub85c \ub2f5\ud560 \uc218 \uc5c6\ub2e4.",
+  "within_target": {
+    "score->soluprot": {
+      "n_targets": 87,
+      "mean_rho": -0.1473,
+      "ci95": [
+        -0.2369,
+        -0.0593
+      ],
+      "frac_positive": 0.379
+    },
+    "score->plddt_af2": {
+      "n_targets": 86,
+      "mean_rho": 0.1208,
+      "ci95": [
+        0.0312,
+        0.2038
+      ],
+      "frac_positive": 0.593
+    },
+    "score->structural_pass": {
+      "n_targets": 22,
+      "mean_rho": 0.0409,
+      "ci95": [
+        -0.0644,
+        0.1466
+      ],
+      "frac_positive": 0.591
+    },
+    "score->joint_pass": {
+      "n_targets": 23,
+      "mean_rho": 0.0216,
+      "ci95": [
+        -0.0993,
+        0.1322
+      ],
+      "frac_positive": 0.609
+    },
+    "global_score->soluprot": {
+      "n_targets": 87,
+      "mean_rho": -0.1558,
+      "ci95": [
+        -0.2519,
+        -0.0642
+      ],
+      "frac_positive": 0.391
+    },
+    "global_score->plddt_af2": {
+      "n_targets": 86,
+      "mean_rho": 0.1526,
+      "ci95": [
+        0.0626,
+        0.2443
+      ],
+      "frac_positive": 0.628
+    },
+    "global_score->structural_pass": {
+      "n_targets": 22,
+      "mean_rho": 0.084,
+      "ci95": [
+        -0.0255,
+        0.1834
+      ],
+      "frac_positive": 0.682
+    },
+    "global_score->joint_pass": {
+      "n_targets": 23,
+      "mean_rho": 0.0593,
+      "ci95": [
+        -0.0677,
+        0.1716
+      ],
+      "frac_positive": 0.696
+    },
+    "seq_recovery->soluprot": {
+      "n_targets": 87,
+      "mean_rho": 0.0917,
+      "ci95": [
+        0.0213,
+        0.1654
+      ],
+      "frac_positive": 0.609
+    },
+    "seq_recovery->plddt_af2": {
+      "n_targets": 86,
+      "mean_rho": -0.0681,
+      "ci95": [
+        -0.1381,
+        0.0046
+      ],
+      "frac_positive": 0.442
+    },
+    "seq_recovery->structural_pass": {
+      "n_targets": 22,
+      "mean_rho": 0.0169,
+      "ci95": [
+        -0.0905,
+        0.1183
+      ],
+      "frac_positive": 0.591
+    },
+    "seq_recovery->joint_pass": {
+      "n_targets": 23,
+      "mean_rho": 0.0292,
+      "ci95": [
+        -0.0828,
+        0.1391
+      ],
+      "frac_positive": 0.565
+    }
+  }
+}
