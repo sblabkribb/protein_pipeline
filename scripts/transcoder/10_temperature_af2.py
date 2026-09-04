@@ -61,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--n-per-condition", type=int, default=8)
     parser.add_argument("--offset", type=int, default=0, help="2단계에서는 8 로 준다")
     parser.add_argument("--out", default=str(base / "temperature_sweep" / "af2_stage1.csv"))
+    parser.add_argument("--limit", type=int, default=0,
+                        help="스모크용. 앞에서 이만큼만 폴딩한다.")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
@@ -77,6 +79,9 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"온도별 표본이 불균형하다: {dict(per_temp)}")
     if args.dry_run:
         return 0
+    if args.limit > 0:
+        picked = picked[: args.limit]
+        print(f"[smoke] limit={args.limit}", flush=True)
 
     with open(args.labels, newline="", encoding="utf-8") as handle:
         pdb_of = {r["backbone_key"]: r["pdb_file"] for r in csv.DictReader(handle)}
