@@ -1,0 +1,80 @@
+{
+  "target": "af2_structural_pass_yield",
+  "n_backbones": 77,
+  "n_targets": 61,
+  "by_source": {
+    "rfd3": 20,
+    "target": 57
+  },
+  "protocol": "repeated grouped 5-fold by target_id, out-of-fold predictions, binomial head weighted by n",
+  "arms": {
+    "A_source_mean": {
+      "n_backbones": 77,
+      "spearman": 0.2309,
+      "spearman_ci95": [
+        0.1937,
+        0.263
+      ],
+      "auc": 0.6346,
+      "auc_ci95": [
+        0.6199,
+        0.6488
+      ],
+      "mae": 0.3636,
+      "n_repeats": 10,
+      "loso": {
+        "rfd3": {
+          "n_test": 20,
+          "spearman": null
+        },
+        "target": {
+          "n_test": 57,
+          "spearman": null
+        }
+      },
+      "feature_dim": 2
+    },
+    "B_structural_descriptors": {
+      "n_backbones": 77,
+      "spearman": 0.3736,
+      "spearman_ci95": [
+        0.3474,
+        0.4022
+      ],
+      "auc": 0.7093,
+      "auc_ci95": [
+        0.6913,
+        0.727
+      ],
+      "mae": 0.3518,
+      "n_repeats": 10,
+      "loso": {
+        "rfd3": {
+          "n_test": 20,
+          "spearman": 0.3649
+        },
+        "target": {
+          "n_test": 57,
+          "spearman": 0.1847
+        }
+      },
+      "feature_dim": 10,
+      "within_source": {
+        "n_backbones": 57,
+        "spearman": 0.3168,
+        "spearman_ci95": [
+          0.2472,
+          0.37
+        ],
+        "auc": 0.681,
+        "auc_ci95": [
+          0.6409,
+          0.7126
+        ],
+        "mae": 0.3635,
+        "n_repeats": 10,
+        "source": "target"
+      }
+    }
+  }
+}
