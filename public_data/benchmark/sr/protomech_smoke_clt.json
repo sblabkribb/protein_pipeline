@@ -1,0 +1,43 @@
+{
+  "model_type": "clt",
+  "n_sequences": 10,
+  "latent_shapes_per_layer": [
+    [
+      2600,
+      3200
+    ],
+    [
+      2600,
+      3200
+    ],
+    [
+      2600,
+      3200
+    ],
+    [
+      2600,
+      3200
+    ],
+    [
+      2600,
+      3200
+    ],
+    [
+      2600,
+      3200
+    ]
+  ],
+  "pooled_feature_dim": 19200,
+  "mean_L0_per_residue_per_layer": [
+    16.0,
+    16.0,
+    16.0,
+    16.0,
+    16.0,
+    16.0
+  ],
+  "pooled_nonzero_fraction": 0.1197,
+  "extract_s_total": 0.61,
+  "extract_s_per_sequence": 0.061,
+  "device": "cuda:1"
+}

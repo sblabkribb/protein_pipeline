@@ -1,0 +1,66 @@
+{
+  "protocol": "Ridge(alpha=100), leave-one-target-out, 82 CATH targets, 9840 designs",
+  "primary_metric": "mean within-target Spearman on AF2 pLDDT",
+  "arms": [
+    {
+      "features": "composition",
+      "dim": 24,
+      "plddt_rho": 0.0474,
+      "plddt_ci95": [
+        -0.0145,
+        0.1086
+      ],
+      "plddt_pos_frac": 0.549,
+      "plddt_top5_regret": 0.2704,
+      "soluprot_rho": 0.9828
+    },
+    {
+      "features": "esm2-8M mean",
+      "dim": 320,
+      "plddt_rho": 0.0213,
+      "plddt_ci95": [
+        -0.0416,
+        0.0822
+      ],
+      "plddt_pos_frac": 0.561,
+      "plddt_top5_regret": 0.2307,
+      "soluprot_rho": 0.8939
+    },
+    {
+      "features": "esm + composition",
+      "dim": 344,
+      "plddt_rho": 0.0135,
+      "plddt_ci95": [
+        -0.046,
+        0.0731
+      ],
+      "plddt_pos_frac": 0.476,
+      "plddt_top5_regret": 0.252,
+      "soluprot_rho": 0.9525
+    },
+    {
+      "features": "ProtoMech PLT",
+      "dim": "5680/19200",
+      "plddt_rho": 0.0076,
+      "plddt_ci95": [
+        -0.0471,
+        0.063
+      ],
+      "plddt_pos_frac": 0.561,
+      "plddt_top5_regret": 0.2604,
+      "soluprot_rho": 0.8939
+    },
+    {
+      "features": "ProtoMech CLT",
+      "dim": "5744/19200",
+      "plddt_rho": -0.0301,
+      "plddt_ci95": [
+        -0.09,
+        0.0301
+      ],
+      "plddt_pos_frac": 0.463,
+      "plddt_top5_regret": 0.2608,
+      "soluprot_rho": 0.9041
+    }
+  ]
+}
