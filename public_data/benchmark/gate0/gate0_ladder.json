@@ -10,18 +10,18 @@
   "arms": {
     "A_source_mean": {
       "n_backbones": 77,
-      "spearman": 0.2309,
+      "spearman": 0.2216,
       "spearman_ci95": [
-        0.1937,
-        0.263
+        0.1994,
+        0.2418
       ],
-      "auc": 0.6346,
+      "auc": 0.623,
       "auc_ci95": [
-        0.6199,
-        0.6488
+        0.6128,
+        0.6334
       ],
-      "mae": 0.3636,
-      "n_repeats": 10,
+      "mae": 0.3644,
+      "n_repeats": 20,
       "loso": {
         "rfd3": {
           "n_test": 20,
@@ -36,18 +36,18 @@
     },
     "B_structural_descriptors": {
       "n_backbones": 77,
-      "spearman": 0.3736,
+      "spearman": 0.3757,
       "spearman_ci95": [
-        0.3474,
-        0.4022
+        0.3524,
+        0.3968
       ],
-      "auc": 0.7093,
+      "auc": 0.7131,
       "auc_ci95": [
-        0.6913,
-        0.727
+        0.7008,
+        0.7246
       ],
-      "mae": 0.3518,
-      "n_repeats": 10,
+      "mae": 0.349,
+      "n_repeats": 20,
       "loso": {
         "rfd3": {
           "n_test": 20,
@@ -61,18 +61,102 @@
       "feature_dim": 10,
       "within_source": {
         "n_backbones": 57,
-        "spearman": 0.3168,
+        "spearman": 0.3056,
         "spearman_ci95": [
-          0.2472,
-          0.37
+          0.2656,
+          0.3417
         ],
-        "auc": 0.681,
+        "auc": 0.6747,
         "auc_ci95": [
-          0.6409,
-          0.7126
+          0.651,
+          0.6964
         ],
-        "mae": 0.3635,
-        "n_repeats": 10,
+        "mae": 0.3645,
+        "n_repeats": 20,
+        "source": "target"
+      }
+    },
+    "C_raw_mpnn_encoder": {
+      "n_backbones": 77,
+      "spearman": 0.4329,
+      "spearman_ci95": [
+        0.4051,
+        0.4586
+      ],
+      "auc": 0.7559,
+      "auc_ci95": [
+        0.7418,
+        0.7703
+      ],
+      "mae": 0.2795,
+      "n_repeats": 20,
+      "loso": {
+        "rfd3": {
+          "n_test": 20,
+          "spearman": -0.2541
+        },
+        "target": {
+          "n_test": 57,
+          "spearman": 0.3136
+        }
+      },
+      "feature_dim": 384,
+      "within_source": {
+        "n_backbones": 57,
+        "spearman": 0.3827,
+        "spearman_ci95": [
+          0.3505,
+          0.4155
+        ],
+        "auc": 0.7066,
+        "auc_ci95": [
+          0.6858,
+          0.7258
+        ],
+        "mae": 0.2981,
+        "n_repeats": 20,
+        "source": "target"
+      }
+    },
+    "D_encoder_plus_descriptors": {
+      "n_backbones": 77,
+      "spearman": 0.3861,
+      "spearman_ci95": [
+        0.3559,
+        0.4141
+      ],
+      "auc": 0.7411,
+      "auc_ci95": [
+        0.7252,
+        0.7557
+      ],
+      "mae": 0.2927,
+      "n_repeats": 20,
+      "loso": {
+        "rfd3": {
+          "n_test": 20,
+          "spearman": -0.3431
+        },
+        "target": {
+          "n_test": 57,
+          "spearman": 0.3292
+        }
+      },
+      "feature_dim": 394,
+      "within_source": {
+        "n_backbones": 57,
+        "spearman": 0.3675,
+        "spearman_ci95": [
+          0.3369,
+          0.3994
+        ],
+        "auc": 0.7088,
+        "auc_ci95": [
+          0.6893,
+          0.728
+        ],
+        "mae": 0.2951,
+        "n_repeats": 20,
         "source": "target"
       }
     }

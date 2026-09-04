@@ -1,0 +1,30 @@
+{
+  "arm": "C_raw_mpnn_encoder",
+  "points": [
+    {
+      "n_targets": 21,
+      "n_backbones": 27,
+      "auc": 0.6712625
+    },
+    {
+      "n_targets": 30,
+      "n_backbones": 37,
+      "auc": 0.704325
+    },
+    {
+      "n_targets": 43,
+      "n_backbones": 54,
+      "auc": 0.7429625
+    },
+    {
+      "n_targets": 52,
+      "n_backbones": 65,
+      "auc": 0.7202500000000001
+    },
+    {
+      "n_targets": 61,
+      "n_backbones": 77,
+      "auc": 0.7464124999999999
+    }
+  ]
+}
