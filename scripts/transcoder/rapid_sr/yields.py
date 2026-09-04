@@ -10,7 +10,10 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Iterable
 
-from .protocol import GATE0_THRESHOLDS
+from .protocol import (
+    GATE0_THRESHOLDS,
+    GATE0_TOPUP_YIELD_RANGE,
+)
 from .records import DesignRecord
 
 
@@ -31,6 +34,18 @@ def _structural_pass(rec: DesignRecord) -> bool | None:
 
 def _ratio(flags: list[bool]) -> float | None:
     return (sum(flags) / len(flags)) if flags else None
+
+
+def needs_topup(structural_yield: float | None) -> bool:
+    """2단 생성에서 서열을 더 붙일 백본인가 (설계 6.1b).
+
+    yield 가 0 이나 1 에 가까우면 표본을 늘려도 판정이 바뀌지 않는다. 애매한
+    구간에만 예산을 더 쓴다. 라벨이 없으면 판정할 수 없으므로 보강하지 않는다.
+    """
+    if structural_yield is None:
+        return False
+    low, high = GATE0_TOPUP_YIELD_RANGE
+    return low <= float(structural_yield) <= high
 
 
 def backbone_key(rec: DesignRecord) -> str:
@@ -73,5 +88,6 @@ def backbone_yields(records: Iterable[DesignRecord]) -> dict[str, dict[str, obje
             "label_regime": regime,
             # 설계 3.5: 절단 표본의 구조 yield 는 편향되어 있다.
             "structural_yield_is_biased": regime != "af2_all_candidates",
+            "needs_topup": needs_topup(_ratio(struct_flags)),
         }
     return out

@@ -21,16 +21,24 @@ GATE0_MPNN_SETTINGS = {
     "batch_size": 1,
 }
 
-# 백본당 생성할 서열 수. 백본 간 동일해야 yield 비교가 성립한다.
+# 백본당 1차 생성 서열 수. 백본 간 동일해야 yield 비교가 성립한다.
 #
 # 예산 근거: AF2 호출 수 = (백본 수) x (백본당 서열 수) x (tier 수).
 # `num_seq_per_tier` 는 파이프라인에서 **백본당** 값이므로
 # (백본 10 x 서열 40 x tier 3) 은 run 당 1,200 폴딩이 되어 비현실적이다.
 # 게이트 0 의 라벨은 백본 단위 yield 이고 tier 는 별개의 설계 축이므로
 # 단일 tier 로 고정해 비용을 1/3 로 줄인다.
-# 서열 20개면 비율 추정 표준오차는 p=0.5 에서 약 0.11 이다. 첫 learning curve 에는
-# 충분하고, 포화 판정 후 필요하면 늘린다.
-GATE0_SEQUENCES_PER_BACKBONE = 20
+#
+# 게이트 0 의 유효 표본은 서열 수가 아니라 **독립 백본 수**다. 같은 백본에서 서열을
+# 더 뽑아도 백본 N 은 늘지 않는다. 그래서 1차로 16개만 돌려 백본 수를 빨리 늘리고,
+# yield 가 애매한 백본만 16개를 더해 32개로 만든다(2단 생성).
+#
+# n=16 이면 비율 추정 표준오차가 p=0.5 에서 약 0.125, n=32 면 약 0.088 이다.
+GATE0_SEQUENCES_PER_BACKBONE = 16
+
+# 2차 보강 대상 판정 구간. 이 안에 들면 애매한 백본으로 보고 16개를 더 생성한다.
+GATE0_TOPUP_YIELD_RANGE = (0.25, 0.75)
+GATE0_TOPUP_SEQUENCES = 16
 
 # 게이트 0 은 단일 tier 로 설계 프로토콜을 고정한다. tier 비교는 SP2 의 축이다.
 GATE0_TIERS = [0.5]
@@ -63,6 +71,8 @@ def protocol_fingerprint() -> dict[str, object]:
         "thresholds": dict(GATE0_THRESHOLDS),
         "mpnn_settings": dict(GATE0_MPNN_SETTINGS),
         "sequences_per_backbone": GATE0_SEQUENCES_PER_BACKBONE,
+        "topup_sequences": GATE0_TOPUP_SEQUENCES,
+        "topup_yield_range": list(GATE0_TOPUP_YIELD_RANGE),
         "tiers": list(GATE0_TIERS),
         "backbones_per_run": GATE0_BACKBONES_PER_RUN,
         "af2_calls_per_run": (

@@ -74,7 +74,7 @@ class Gate0RequestTests(unittest.TestCase):
     def test_af2_budget_per_run_is_bounded(self):
         from rapid_sr.protocol import protocol_fingerprint
         # 백본 수 x 서열 수 x tier 수 = run 당 AF2 호출 수
-        self.assertEqual(protocol_fingerprint()["af2_calls_per_run"], 100)
+        self.assertEqual(protocol_fingerprint()["af2_calls_per_run"], 80)
 
 
 if __name__ == "__main__":

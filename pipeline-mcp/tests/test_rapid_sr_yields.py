@@ -103,6 +103,28 @@ class BackboneYieldTests(unittest.TestCase):
         self.assertEqual(out[key]["backbone_id"], "bb_0")
         self.assertEqual(out[key]["backbone_key"], "t1|rfd3|bb_0")
 
+    def test_topup_flag_marks_only_ambiguous_backbones(self):
+        """yield 가 0 이나 1 에 가까우면 표본을 늘려도 판정이 안 바뀐다.
+        애매한 구간에만 2차 생성 예산을 쓴다."""
+        from rapid_sr.yields import needs_topup
+        self.assertFalse(needs_topup(0.0))
+        self.assertFalse(needs_topup(0.1))
+        self.assertTrue(needs_topup(0.25))
+        self.assertTrue(needs_topup(0.5))
+        self.assertTrue(needs_topup(0.75))
+        self.assertFalse(needs_topup(0.9))
+        self.assertFalse(needs_topup(1.0))
+
+    def test_topup_not_requested_without_labels(self):
+        from rapid_sr.yields import needs_topup
+        self.assertFalse(needs_topup(None))
+
+    def test_backbone_row_carries_topup_flag(self):
+        recs = [_rec("bb9", 0.9, 90.0, 1.0), _rec("bb9", 0.9, 40.0, 9.0)]
+        out = backbone_yields(recs)["t1|rfd3|bb9"]
+        self.assertAlmostEqual(out["af2_structural_pass_yield"], 0.5)
+        self.assertTrue(out["needs_topup"])
+
     def test_thresholds_match_documented_defaults(self):
         self.assertEqual(GATE0_THRESHOLDS["soluprot_min"], 0.5)
         self.assertEqual(GATE0_THRESHOLDS["plddt_min"], 85.0)
@@ -111,8 +133,9 @@ class BackboneYieldTests(unittest.TestCase):
     def test_fingerprint_carries_thresholds_and_sequence_count(self):
         fp = protocol_fingerprint()
         self.assertEqual(fp["thresholds"]["plddt_min"], 85.0)
-        self.assertEqual(fp["sequences_per_backbone"], 20)
-        self.assertEqual(fp["af2_calls_per_run"], 100)
+        self.assertEqual(fp["sequences_per_backbone"], 16)
+        self.assertEqual(fp["topup_sequences"], 16)
+        self.assertEqual(fp["af2_calls_per_run"], 80)
         self.assertIn("mpnn_settings", fp)
 
 

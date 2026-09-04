@@ -34,8 +34,8 @@ class CampaignTests(unittest.TestCase):
         module = _load()
         manifest = module.build_manifest(wave=1, targets=["2wejA00"], arms=["rfd3"], seed=0)
         self.assertEqual(manifest["protocol"]["thresholds"]["plddt_min"], 85.0)
-        self.assertEqual(manifest["protocol"]["sequences_per_backbone"], 20)
-        self.assertEqual(manifest["protocol"]["af2_calls_per_run"], 100)
+        self.assertEqual(manifest["protocol"]["sequences_per_backbone"], 16)
+        self.assertEqual(manifest["protocol"]["af2_calls_per_run"], 80)
         self.assertEqual(manifest["wave"], 1)
 
     def test_plan_runs_skips_targets_without_pdb(self):
