@@ -105,6 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         entry = {
             "sequence_id": row["sequence_id"], "backbone_key": row["backbone_key"],
             "target_id": row["target_id"], "temperature": row["temperature"],
+            "backbone_source": row.get("backbone_source", "target"),
             "soluprot": row.get("soluprot"), "global_score": row.get("global_score"),
         }
         try:
@@ -123,7 +124,8 @@ def main(argv: list[str] | None = None) -> int:
         existing.append(entry)
 
         fields = ["sequence_id", "backbone_key", "target_id", "temperature",
-                  "soluprot", "global_score", "plddt", "rmsd", "status", "error"]
+                  "backbone_source", "soluprot", "global_score",
+                  "plddt", "rmsd", "status", "error"]
         with open(out_path, "w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
             writer.writeheader()
