@@ -197,6 +197,51 @@ function renderEvidencePanel(plan) {
   }
 }
 
+const REASON_LABEL = {
+  evidence_is_assumption_only: "근거가 가정뿐",
+  evidence_partially_assumption: "일부만 측정으로 뒷받침",
+  objective_not_measurable: "평가 불가한 목표",
+};
+
+// 설명은 LLM 이 만든 산문이고 근거가 아니다. 근거 패널과 분리해서 보여준다.
+async function explainPlan(plan) {
+  const box = document.getElementById("explainBox");
+  const text = document.getElementById("explainText");
+  const badge = document.getElementById("explainSource");
+  const host = document.getElementById("questions");
+  try {
+    const result = await callTool("pipeline.explain_plan", { plan });
+    if (result && result.error) throw new Error(result.error);
+    text.textContent = result.explanation || "";
+    badge.textContent = result.explanation_is_generated
+      ? `LLM 생성 (${result.explanation_source})`
+      : "LLM 미설정 · 계획 요약";
+    host.innerHTML = "";
+    for (const item of result.questions || []) {
+      const node = document.createElement("div");
+      node.className = "q";
+      if (item.field) {
+        const field = document.createElement("span");
+        field.className = "qfield";
+        field.textContent = item.field;
+        node.appendChild(field);
+      }
+      node.appendChild(document.createTextNode(item.question || ""));
+      const why = document.createElement("span");
+      why.className = "qwhy";
+      why.textContent = REASON_LABEL[item.reason] || item.reason || "";
+      node.appendChild(why);
+      host.appendChild(node);
+    }
+    box.classList.remove("hidden");
+  } catch (error) {
+    text.textContent = `설명을 가져오지 못했습니다: ${error.message}`;
+    badge.textContent = "실패";
+    host.innerHTML = "";
+    box.classList.remove("hidden");
+  }
+}
+
 const state = { plan: null, edits: {} };
 
 async function generatePlan() {
@@ -226,6 +271,7 @@ async function generatePlan() {
     }
     host.classList.remove("empty");
     renderEvidencePanel(plan);
+    await explainPlan(plan);
 
     const reviewState = document.getElementById("reviewState");
     reviewState.textContent = `결정 ${(plan.decisions || []).length}건 · 수정 가능 ${(plan.editable_fields || []).length}건`;
@@ -238,6 +284,10 @@ async function generatePlan() {
     status.className = "status bad";
     status.textContent = `실패: ${error.message}`;
     document.getElementById("reviewState").textContent = "계획 생성 실패";
+    // 401 은 설정 문제가 아니라 로그인 문제다. 무엇을 해야 하는지 알려준다.
+    if (/unauthorized|401/i.test(error.message)) {
+      document.getElementById("authHint").classList.remove("hidden");
+    }
   } finally {
     button.disabled = false;
   }

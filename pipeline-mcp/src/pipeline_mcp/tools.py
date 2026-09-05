@@ -8807,6 +8807,20 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.explain_plan",
+            "description": (
+                "Explain a plan in plain language and ask what the user wants to change. "
+                "The questions are derived from the plan itself (decisions resting on "
+                "assumptions, objectives RAPID cannot measure), not written by the model, "
+                "so they stay grounded even when no LLM is configured."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {"plan": {"type": "object"}},
+                "required": ["plan"],
+            },
+        },
+        {
             "name": "pipeline.approve_plan",
             "description": (
                 "Apply human edits to a plan and convert it into PipelineRequest overrides. "
@@ -9553,6 +9567,40 @@ class ToolDispatcher:
 
         if name == "pipeline.export_results_package":
             return _export_results_package(self.runner, arguments)
+
+        if name == "pipeline.explain_plan":
+            from .objective_planner import (
+                EXPLAIN_SYSTEM_INSTRUCTION, build_explain_prompt,
+                fallback_explanation, suggest_questions,
+            )
+
+            plan = arguments.get("plan")
+            if not isinstance(plan, dict):
+                return {"error": "plan must be an object"}
+            questions = suggest_questions(plan)
+            gemini = getattr(self.runner, "gemini", None)
+            explanation = None
+            source = "fallback"
+            if gemini is not None and getattr(gemini, "is_available", lambda: False)():
+                try:
+                    explanation = gemini.chat(
+                        EXPLAIN_SYSTEM_INSTRUCTION, build_explain_prompt(plan)
+                    )
+                    source = "llm"
+                except Exception as exc:
+                    explanation = None
+                    source = f"llm_failed: {type(exc).__name__}"
+            if not explanation:
+                explanation = fallback_explanation(plan)
+                if source == "fallback":
+                    source = "fallback"
+            return {
+                "explanation": explanation,
+                # 설명은 생성된 산문이다. 근거와 같은 칸에 두면 안 된다.
+                "explanation_source": source,
+                "explanation_is_generated": source.startswith("llm"),
+                "questions": questions,
+            }
 
         if name == "pipeline.approve_plan":
             from .objective_planner import apply_edits, plan_to_request_overrides
