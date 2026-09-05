@@ -4,6 +4,8 @@
 // 만든 계획을 그리고, 사람이 고친 값을 되돌려줄 뿐이다. 근거 문구를 프런트에서
 // 지어내면 근거 추적이 깨지므로 서버가 준 것만 표시한다.
 
+import { resolveDefaultApiBase } from "./lib/auth.js";
+
 const OBJECTIVES = [
   { key: "solubility", label: "용해도", value: 0.4 },
   { key: "structural_preservation", label: "구조 보존", value: 0.4 },
@@ -20,8 +22,15 @@ const KIND_LABEL = {
   assumption: "가정",
 };
 
+// 기존 앱과 같은 규칙을 쓴다. 빈 문자열로 두면 /tools/call 을 원점 기준으로 호출하는데,
+// 배포 환경의 리버스 프록시는 /api/* 만 백엔드로 보내므로 그대로 404 가 난다.
 function apiBase() {
-  return (localStorage.getItem("kbf.apiBase") || "").replace(/\/+$/, "") || "";
+  const saved = (localStorage.getItem("kbf.apiBase") || "").replace(/\/+$/, "");
+  if (saved && !/localhost|127\.0\.0\.1/.test(saved)) return saved;
+  return resolveDefaultApiBase({
+    origin: window.location.origin,
+    pathname: window.location.pathname,
+  }).replace(/\/+$/, "");
 }
 
 function authHeaders() {

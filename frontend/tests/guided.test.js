@@ -60,3 +60,10 @@ test("approval does not run the pipeline", () => {
   assert.ok(!source.includes("pipeline.run"), "the review screen must not launch runs");
   assert.ok(html.includes("실행은 아직 하지 않습니다"));
 });
+
+test("api base follows the shared resolver instead of an empty origin", () => {
+  // 빈 apiBase 로 두면 /tools/call 이 원점으로 나가는데, 배포 환경의 프록시는
+  // /api/* 만 백엔드로 보내므로 조용히 404 가 된다.
+  assert.ok(source.includes("resolveDefaultApiBase"), "must reuse the shared resolver");
+  assert.ok(!/return\s*"";/.test(source), "apiBase must not fall back to an empty string");
+});
