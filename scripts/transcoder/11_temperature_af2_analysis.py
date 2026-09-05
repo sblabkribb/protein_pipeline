@@ -69,17 +69,71 @@ def diagnose_uncertainty(diffs, yields_ref, yields_alt, n_per_condition: int) ->
     }
 
 
+#: 판정을 내리려면 최소 이만큼의 백본이 실제로 움직여야 한다. 바닥/천장에 붙어
+#: 있는 백본은 온도를 바꿔도 값이 변할 수 없으므로 "차이 0" 이 합의가 아니다.
+MIN_INFORMATIVE_BACKBONES = 8
+
+
+def is_saturated(values, *, low: float = 0.0, high: float = 1.0, tol: float = 1e-9) -> bool:
+    """이 백본이 모든 조건에서 척도의 바닥이나 천장에 붙어 있는가.
+
+    포화된 백본의 조건 간 차이는 항상 정확히 0 이다. 그 0 을 "온도가 영향을 주지
+    않았다" 는 증거로 세면, 답을 못 하는 실험이 답을 한 것처럼 보인다. 중간값에
+    붙어 있는 것(예: 늘 0.5)은 포화가 아니라 그냥 변화가 없는 것이므로 제외하지
+    않는다 - 그쪽은 진짜 정보다.
+    """
+    vals = [float(v) for v in values if v is not None]
+    if not vals:
+        return False
+    return all(abs(v - low) <= tol for v in vals) or all(abs(v - high) <= tol for v in vals)
+
+
+def count_informative(per_backbone: dict) -> dict:
+    """전체 백본 수와, 그중 실제로 정보를 주는 수를 따로 센다."""
+    total = len(per_backbone)
+    saturated = sum(1 for values in per_backbone.values() if is_saturated(values))
+    return {
+        "n_backbones": total,
+        "n_saturated": saturated,
+        "n_informative": total - saturated,
+        "saturated_fraction": round(saturated / total, 4) if total else None,
+    }
+
+
 def decide_next_step(entry: dict, *, ci_width_target: float = CI_WIDTH_TARGET) -> str:
     """1단계 480 이후 무엇을 할지.
 
     구간이 넓다고 무조건 서열을 늘리지 않는다. 백본 수가 병목이면 같은 백본에서
     서열을 더 뽑아도 구간이 좁아지지 않으므로 신규 백본으로 확장해야 한다.
+
+    두 가지를 구간 폭보다 먼저 본다.
+
+    1. **포화.** 480 폴드 결과에서 15 개 백본 중 12 개가 모든 온도에서 0.000
+       이거나 1.000 이었다. 그 12 개의 차이 0 이 구간을 좁혀 stop_no_effect 가
+       나왔지만, 실제로 온도에 반응할 수 있었던 백본은 3 개뿐이다.
+    2. **경계에 걸친 구간.** 백본별 차이가 1/8 격자 위에 있으면 부트스트랩
+       분위수도 격자 위에 놓인다. T=0.2 의 97.5 분위수는 정확히 0.0000 이었는데
+       0 보다 큰 질량은 0.000 이었다. 그것은 귀무가 아니라 작은 음의 효과다.
     """
     ci = entry.get("ci95")
     if not ci:
         return "expand_backbones"
+
+    saturation = entry.get("saturation")
+    if saturation and saturation.get("n_informative") is not None:
+        if int(saturation["n_informative"]) < MIN_INFORMATIVE_BACKBONES:
+            return "expand_backbones"
+
+    above = entry.get("prob_above_zero")
+    below = entry.get("prob_below_zero")
+    one_sided_mass_only = (
+        above is not None and below is not None
+        and (float(above) == 0.0 or float(below) == 0.0)
+        and not entry.get("excludes_zero")
+    )
+
     width = float(ci[1]) - float(ci[0])
-    if width <= ci_width_target:
+    if width <= ci_width_target and not one_sided_mass_only:
         return "stop_effect_confirmed" if entry.get("excludes_zero") else "stop_no_effect"
     verdict = (entry.get("uncertainty") or {}).get("verdict")
     return "add_second_half" if verdict == "sequence_limited" else "expand_backbones"
@@ -142,7 +196,32 @@ def paired_yield_difference(rows: list[dict], temp: str, field: str) -> dict:
     out["uncertainty"] = diagnose_uncertainty(
         diffs, refs, alts, int(np.median(counts)) if counts else 0
     )
+    # 이 대조에서 실제로 움직일 수 있었던 백본이 몇 개인가. 바닥/천장에 붙은
+    # 백본의 차이 0 은 합의가 아니라 정보 부재다.
+    out["saturation"] = count_informative({
+        backbone: [refs[i], alts[i]] for i, backbone in enumerate(backbones)
+    })
+    # 분위수만으로는 "0 에 닿았다" 와 "0 을 품는다" 를 구별할 수 없다. 격자형
+    # 통계량에서는 그 둘이 전혀 다른 결론이므로 꼬리 질량을 함께 보고한다.
+    out.update(_tail_masses(values, backbones))
     return out
+
+
+def _tail_masses(values: np.ndarray, clusters, *, n_boot: int = 20000, seed: int = 0) -> dict:
+    """부트스트랩 분포에서 0 위/아래의 질량. 나머지는 정확히 0 인 재표집이다."""
+    rng = np.random.default_rng(seed)
+    n = len(values)
+    means = np.array([values[rng.integers(0, n, n)].mean() for _ in range(n_boot)])
+    return {
+        "prob_above_zero": round(float((means > 0).mean()), 4),
+        "prob_below_zero": round(float((means < 0).mean()), 4),
+        "prob_exactly_zero": round(float((means == 0).mean()), 4),
+        "tail_mass_note": (
+            "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, "
+            "분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 "
+            "'0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다."
+        ),
+    }
 
 
 def stratify_by_source(rows: list[dict], temps: list[str]) -> dict:
@@ -210,8 +289,11 @@ def main(argv: list[str] | None = None) -> int:
             report["comparisons"][f"{label}@T{temp}"] = res
             ci = res.get("ci95")
             unc = res.get("uncertainty") or {}
+            sat = res.get("saturation") or {}
             print(f"  T={temp}: diff={res.get('point')} CI{ci} "
-                  f"clusters={res.get('n_backbones_paired')} "
+                  f"clusters={res.get('n_backbones_paired')}"
+                  f"(정보 {sat.get('n_informative')}/{sat.get('n_backbones')}) "
+                  f"P(>0)={res.get('prob_above_zero')} P(<0)={res.get('prob_below_zero')} "
                   f"frac_backbone={unc.get('fraction_backbone')} "
                   f"({unc.get('verdict')}) -> {res['next_step']}")
 

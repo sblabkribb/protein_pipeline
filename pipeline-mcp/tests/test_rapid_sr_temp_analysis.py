@@ -174,3 +174,101 @@ class SourceStratificationTests(unittest.TestCase):
             row.pop("backbone_source")
         out = module.stratify_by_source(rows, ["0.1", "0.3"])
         self.assertEqual(set(out["sources"]), {"target", "rfd3"})
+
+
+class SaturationTests(unittest.TestCase):
+    """포화된 백본은 온도 질문에 답하지 못한다.
+
+    structural_yield 가 모든 온도에서 0.000 이거나 1.000 인 백본은 차이가
+    구조적으로 0 이다. 그 0 을 "온도가 영향 없다는 증거" 로 세면, 답을 못 하는
+    실험이 답을 한 것처럼 보인다. 실제로 480 폴드 결과에서 15 개 백본 중 12 개가
+    포화였고(9 개는 전부 0, 3 개는 전부 1), 판정은 stop_no_effect 로 나왔다.
+    """
+
+    def test_a_backbone_at_the_floor_in_every_condition_is_saturated(self):
+        self.assertTrue(_load().is_saturated([0.0, 0.0, 0.0, 0.0]))
+
+    def test_a_backbone_at_the_ceiling_in_every_condition_is_saturated(self):
+        self.assertTrue(_load().is_saturated([1.0, 1.0, 1.0, 1.0]))
+
+    def test_a_backbone_that_moves_at_all_is_informative(self):
+        self.assertFalse(_load().is_saturated([1.0, 0.875, 1.0, 1.0]))
+
+    def test_a_constant_mid_value_is_not_saturated(self):
+        """0.5 에 붙어 있는 것은 바닥/천장이 아니라 그냥 변화가 없는 것이다."""
+        self.assertFalse(_load().is_saturated([0.5, 0.5, 0.5, 0.5]))
+
+    def test_informative_clusters_are_counted_separately_from_total(self):
+        per_backbone = {
+            "flat_low": [0.0, 0.0], "flat_high": [1.0, 1.0],
+            "moves": [0.75, 0.5],
+        }
+        counts = _load().count_informative(per_backbone)
+        self.assertEqual(counts["n_backbones"], 3)
+        self.assertEqual(counts["n_informative"], 1)
+        self.assertEqual(counts["n_saturated"], 2)
+
+    def test_a_verdict_needs_enough_informative_clusters_not_just_clusters(self):
+        entry = {
+            "ci95": [-0.05, 0.0], "excludes_zero": False,
+            "uncertainty": {"verdict": "sequence_limited"},
+            "saturation": {"n_backbones": 15, "n_informative": 3, "n_saturated": 12},
+        }
+        self.assertEqual(_load().decide_next_step(entry), "expand_backbones")
+
+    def test_the_same_interval_stops_when_the_clusters_are_informative(self):
+        entry = {
+            "ci95": [-0.05, 0.0], "excludes_zero": False,
+            "uncertainty": {"verdict": "sequence_limited"},
+            "saturation": {"n_backbones": 15, "n_informative": 15, "n_saturated": 0},
+        }
+        self.assertEqual(_load().decide_next_step(entry), "stop_no_effect")
+
+    def test_saturation_is_ignored_when_it_was_not_measured(self):
+        """예전 리포트에는 saturation 항목이 없다. 없다고 판정을 바꾸지 않는다."""
+        entry = {"ci95": [-0.05, 0.0], "excludes_zero": False,
+                 "uncertainty": {"verdict": "sequence_limited"}}
+        self.assertEqual(_load().decide_next_step(entry), "stop_no_effect")
+
+
+class BoundaryIntervalTests(unittest.TestCase):
+    """구간 끝이 정확히 0 인 것과 0 을 품는 것은 다르다.
+
+    백본별 차이가 1/8 격자 위에 있으면 부트스트랩 분포도 격자 위에 놓인다.
+    T=0.2 의 97.5 분위수는 정확히 0.0000 이었지만 0 보다 큰 질량은 0.000 이었다.
+    "CI 가 0 을 포함하므로 효과 없음" 은 그 경우 틀린 독해다.
+    """
+
+    def test_an_interval_touching_zero_from_below_is_not_a_null_result(self):
+        entry = {"ci95": [-0.0917, 0.0], "excludes_zero": False,
+                 "prob_above_zero": 0.0, "prob_below_zero": 0.966,
+                 "uncertainty": {"verdict": "sequence_limited"}}
+        self.assertNotEqual(_load().decide_next_step(entry), "stop_no_effect")
+
+    def test_an_interval_with_real_mass_on_both_sides_is_a_null_result(self):
+        entry = {"ci95": [-0.0333, 0.0167], "excludes_zero": False,
+                 "prob_above_zero": 0.184, "prob_below_zero": 0.612,
+                 "uncertainty": {"verdict": "sequence_limited"}}
+        self.assertEqual(_load().decide_next_step(entry), "stop_no_effect")
+
+    def test_tail_probabilities_are_reported_when_a_bootstrap_ran(self):
+        rows = _rows_for_two_temperatures()
+        result = _load().paired_yield_difference(rows, "0.2", "_structural")
+        self.assertIn("prob_above_zero", result)
+        self.assertIn("prob_below_zero", result)
+        total = result["prob_above_zero"] + result["prob_below_zero"]
+        self.assertLessEqual(total, 1.0 + 1e-9)
+
+
+def _rows_for_two_temperatures():
+    rows = []
+    for index in range(6):
+        for temp, plddt in (("0.1", 95.0), ("0.2", 95.0 if index < 4 else 50.0)):
+            for seq in range(4):
+                rows.append({
+                    "backbone_key": f"bb{index}", "temperature": temp,
+                    "_structural": 1.0 if plddt > 85 else 0.0,
+                    "_joint": 1.0 if plddt > 85 else 0.0,
+                    "_soluprot": 0.7,
+                })
+    return rows
