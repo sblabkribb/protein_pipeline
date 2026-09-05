@@ -58,7 +58,32 @@ test("warnings from the server are surfaced, not swallowed", () => {
 
 test("approval does not run the pipeline", () => {
   assert.ok(!source.includes("pipeline.run"), "the review screen must not launch runs");
-  assert.ok(html.includes("실행은 아직 하지 않습니다"));
+  assert.ok(html.includes("실행하지 않습니다"), "the page must say it does not run");
+});
+
+test("all three steps are visible before a plan exists", () => {
+  // 카드를 hidden 으로 시작하면 로그인 전 사용자에게는 미구현으로 보인다.
+  assert.ok(!/id="planCard"[^>]*hidden/.test(html));
+  assert.ok(!/id="applyCard"[^>]*hidden/.test(html));
+  assert.ok(html.includes("계획 검토"));
+  assert.ok(html.includes("승인"));
+});
+
+test("approve stays disabled until a plan is generated", () => {
+  assert.ok(/id="approveBtn"[^>]*disabled/.test(html), "approve must start disabled");
+  assert.ok(source.includes('getElementById("approveBtn").disabled = false'),
+            "approve is enabled only after a plan arrives");
+});
+
+test("stage costs shown in the sidebar are measured, not invented", () => {
+  assert.ok(source.includes("AUC 0.725"), "gate 0 chip must cite the measured AUC");
+  assert.ok(source.includes("91s / fold"), "AF2 chip must cite the measured fold time");
+  assert.ok(source.includes("미구현"), "unbuilt stages must be marked as such");
+});
+
+test("the evidence panel aggregates server-provided evidence only", () => {
+  assert.ok(source.includes("renderEvidencePanel"));
+  assert.ok(source.includes("decision.evidence"));
 });
 
 test("api base follows the shared resolver instead of an empty origin", () => {

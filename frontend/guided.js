@@ -16,6 +16,15 @@ const OBJECTIVES = [
   { key: "developability", label: "개발가능성", value: 0 },
 ];
 
+// 좌측에 보여줄 평가 단계와 실측 비용. 값을 지어내지 않는다 — 전부 측정된 것이다.
+const STAGES = [
+  { name: "Gate 0 · 타겟 선별", cost: "AUC 0.725", on: true },
+  { name: "ProteinMPNN 생성", cost: "초 단위", on: true },
+  { name: "Gate 1 · SoluProt", cost: "초 단위", on: true },
+  { name: "Gate 2 · AF2/ColabFold", cost: "91s / fold", on: true },
+  { name: "활성 평가 플러그인", cost: "미구현", on: false },
+];
+
 const KIND_LABEL = {
   internal_measurement: "측정",
   literature: "문헌",
@@ -51,6 +60,19 @@ async function callTool(name, args) {
     throw new Error(message);
   }
   return payload;
+}
+
+function renderStages(host) {
+  if (!host) return;
+  host.innerHTML = "";
+  for (const stage of STAGES) {
+    const row = document.createElement("div");
+    row.className = "stage";
+    row.innerHTML =
+      `<span class="dot${stage.on ? "" : " off"}"></span>` +
+      `<span>${stage.name}</span><span class="chip">${stage.cost}</span>`;
+    host.appendChild(row);
+  }
 }
 
 function renderWeights(host) {
@@ -152,6 +174,29 @@ function decisionNode(decision, edits) {
   return box;
 }
 
+function renderEvidencePanel(plan) {
+  const host = document.getElementById("evidenceList");
+  if (!host) return;
+  host.innerHTML = "";
+  host.classList.remove("empty");
+  let count = 0;
+  for (const decision of plan.decisions || []) {
+    for (const ev of decision.evidence || []) {
+      const node = evidenceNode(ev);
+      const who = document.createElement("span");
+      who.className = "src";
+      who.textContent = `결정: ${decision.field}`;
+      node.appendChild(who);
+      host.appendChild(node);
+      count += 1;
+    }
+  }
+  if (!count) {
+    host.classList.add("empty");
+    host.textContent = "근거가 없습니다.";
+  }
+}
+
 const state = { plan: null, edits: {} };
 
 async function generatePlan() {
@@ -179,11 +224,20 @@ async function generatePlan() {
     for (const decision of plan.decisions || []) {
       host.appendChild(decisionNode(decision, state.edits));
     }
-    document.getElementById("planCard").classList.remove("hidden");
-    document.getElementById("applyCard").classList.remove("hidden");
-    status.textContent = `결정 ${(plan.decisions || []).length}건 · 수정 가능 ${(plan.editable_fields || []).length}건`;
+    host.classList.remove("empty");
+    renderEvidencePanel(plan);
+
+    const reviewState = document.getElementById("reviewState");
+    reviewState.textContent = `결정 ${(plan.decisions || []).length}건 · 수정 가능 ${(plan.editable_fields || []).length}건`;
+    reviewState.classList.add("ready");
+    document.getElementById("approveState").textContent = "검토 후 승인 가능";
+    document.getElementById("approveBtn").disabled = false;
+    status.className = "status";
+    status.textContent = "";
   } catch (error) {
+    status.className = "status bad";
     status.textContent = `실패: ${error.message}`;
+    document.getElementById("reviewState").textContent = "계획 생성 실패";
   } finally {
     button.disabled = false;
   }
@@ -197,13 +251,28 @@ async function approve() {
       edits: state.edits,
     });
     if (result && result.error) throw new Error(result.error);
+    out.classList.remove("empty");
     out.textContent = JSON.stringify(result, null, 2);
+    const approveState = document.getElementById("approveState");
+    approveState.textContent = "승인됨 · 실행하지 않음";
+    approveState.classList.add("ready");
   } catch (error) {
+    out.classList.remove("empty");
     out.textContent = `실패: ${error.message}`;
   }
 }
 
 renderWeights(document.getElementById("weights"));
+renderStages(document.getElementById("stages"));
+
+for (const tab of document.querySelectorAll(".tab")) {
+  tab.addEventListener("click", () => {
+    for (const other of document.querySelectorAll(".tab")) other.classList.remove("is-active");
+    tab.classList.add("is-active");
+    for (const panel of document.querySelectorAll(".panel")) panel.classList.add("hidden");
+    document.getElementById(`panel-${tab.dataset.panel}`).classList.remove("hidden");
+  });
+}
 document.getElementById("planBtn").addEventListener("click", generatePlan);
 document.getElementById("approveBtn").addEventListener("click", approve);
 

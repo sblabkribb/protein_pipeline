@@ -7812,3 +7812,11 @@ textarea:focus-visible {
 .copilot-conv-select { flex: 1 1 auto; min-width: 0; }
 .copilot-run-action { padding: 4px 12px; }
 .copilot-run-action .primary { width: 100%; }
+
+
+/* 목표 기반 설계 진입 링크. 탭 버튼과 같은 모양이되 라우팅이 아니라 별도 페이지로 간다. */
+.app-nav-link {
+  display: block;
+  text-decoration: none;
+  margin-bottom: 6px;
+}
