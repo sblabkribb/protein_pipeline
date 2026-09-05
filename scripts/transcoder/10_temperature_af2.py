@@ -14,8 +14,10 @@ import argparse
 import csv
 import json
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 import sys
+import threading
 import time
 
 import numpy as np
@@ -27,8 +29,58 @@ sys.path.insert(0, str(PROJECT_ROOT / "pipeline-mcp" / "src"))
 from pipeline_mcp.clients.local_http import LocalHTTPAlphaFold2Client  # noqa: E402
 from pipeline_mcp.models import SequenceRecord  # noqa: E402
 
+from pipeline_mcp.bio.pdb import ca_rmsd, dssp_non_loop_positions_by_chain  # noqa: E402
 from rapid_sr.clustered import kabsch_rmsd  # noqa: E402
 from rapid_sr.descriptors import ca_coords  # noqa: E402
+
+#: 게이트 0 캠페인이 쓰는 RMSD 정의. pipeline.py 는 부모 백본을 기준으로
+#: DSSP non-loop 위치에서만 CA RMSD 를 잰다. GATE0_THRESHOLDS['rmsd_max'] = 2.0
+#: 은 그 정의 위에서 정해진 값이다.
+#:
+#: 같은 AF2 모델(1bg5A03, 254 잔기, non-loop 85 개)에서 측정한 차이:
+#:     kabsch, 파일 순서, 전체 CA    22.6 A
+#:     ca_rmsd, resnum, 전체 위치    37.7 A
+#:     ca_rmsd, resnum, non-loop      1.32 A
+#: 1 차 온도 패널은 첫 번째 정의에 2.0 A 임계값을 적용했고, 그래서 loop 가 많은
+#: 백본은 어떤 설계도 통과하지 못해 structural_yield 가 통째로 0 이 되었다.
+RMSD_METHOD = "ca_rmsd_dssp_non_loop"
+
+OUTPUT_FIELDS = [
+    "sequence_id", "backbone_key", "target_id", "temperature",
+    "backbone_source", "soluprot", "global_score",
+    "plddt", "rmsd", "rmsd_all_ca", "rmsd_all_positions",
+    "rmsd_method", "rmsd_n_positions", "status", "error",
+]
+
+
+def rmsd_against_reference(model_pdb_text, non_loop_positions, *, reference_text,
+                           reference_ca=None) -> dict:
+    """세 가지 RMSD 를 전부 기록한다.
+
+    `rmsd` 만 임계값 판정에 쓰고 나머지는 출처 기록이다. 정의가 바뀌면 다시
+    폴딩해야 하는 상황을 만들지 않기 위해서다 - 1 차 패널은 PDB 를 저장하지
+    않아서 정의를 고치는 데 480 폴드를 다시 돌려야 했다.
+
+    non-loop 위치가 하나도 없으면 캠페인과 같은 값을 낼 수 없으므로 `rmsd` 를
+    비워 둔다. 다른 정의로 대신 채우면 임계값이 조용히 다른 것을 뜻하게 된다.
+    """
+    out = {
+        "rmsd": None, "rmsd_all_ca": None, "rmsd_all_positions": None,
+        "rmsd_method": RMSD_METHOD,
+        "rmsd_n_positions": sum(len(v) for v in (non_loop_positions or {}).values()),
+    }
+    if not model_pdb_text or not reference_text:
+        return out
+    if non_loop_positions:
+        value = ca_rmsd(reference_text, model_pdb_text, include_positions=non_loop_positions)
+        if isinstance(value, (int, float)):
+            out["rmsd"] = round(float(value), 4)
+    value = ca_rmsd(reference_text, model_pdb_text)
+    if isinstance(value, (int, float)):
+        out["rmsd_all_positions"] = round(float(value), 4)
+    if reference_ca is not None and getattr(reference_ca, "size", 0):
+        out["rmsd_all_ca"] = round(kabsch_rmsd(ca_coords(model_pdb_text), reference_ca), 4)
+    return out
 
 
 def select_paired(rows: list[dict], *, n_per_condition: int, offset: int) -> list[dict]:
@@ -61,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--n-per-condition", type=int, default=8)
     parser.add_argument("--offset", type=int, default=0, help="2단계에서는 8 로 준다")
     parser.add_argument("--out", default=str(base / "temperature_sweep" / "af2_stage1.csv"))
+    parser.add_argument("--workers", type=int, default=4,
+                        help="ColabFold 워커 수에 맞춘다. 직렬이면 워커 하나만 쓴다.")
     parser.add_argument("--limit", type=int, default=0,
                         help="스모크용. 앞에서 이만큼만 폴딩한다.")
     parser.add_argument("--dry-run", action="store_true")
@@ -85,9 +139,14 @@ def main(argv: list[str] | None = None) -> int:
 
     with open(args.labels, newline="", encoding="utf-8") as handle:
         pdb_of = {r["backbone_key"]: r["pdb_file"] for r in csv.DictReader(handle)}
-    backbone_ca = {
-        key: ca_coords((Path(args.pdb_dir) / name).read_text(encoding="utf-8", errors="replace"))
+    backbone_text = {
+        key: (Path(args.pdb_dir) / name).read_text(encoding="utf-8", errors="replace")
         for key, name in pdb_of.items()
+    }
+    backbone_ca = {key: ca_coords(text) for key, text in backbone_text.items()}
+    # DSSP 는 백본마다 한 번만 돈다. 폴드마다 다시 돌리면 896 번 헛돈다.
+    backbone_non_loop = {
+        key: dssp_non_loop_positions_by_chain(text) for key, text in backbone_text.items()
     }
 
     client = LocalHTTPAlphaFold2Client(args.colabfold_url, None, 7200.0)
@@ -101,12 +160,11 @@ def main(argv: list[str] | None = None) -> int:
     else:
         existing = []
 
-    started = time.monotonic()
-    for index, row in enumerate(picked, start=1):
-        if row["sequence_id"] in done:
-            continue
+    pending = [r for r in picked if r["sequence_id"] not in done]
+    print(f"pending={len(pending)} workers={args.workers}", flush=True)
+
+    def fold(row: dict) -> dict:
         safe = row["sequence_id"].replace("|", "_")
-        record = SequenceRecord(id=safe, sequence=row["sequence"])
         entry = {
             "sequence_id": row["sequence_id"], "backbone_key": row["backbone_key"],
             "target_id": row["target_id"], "temperature": row["temperature"],
@@ -114,29 +172,49 @@ def main(argv: list[str] | None = None) -> int:
             "soluprot": row.get("soluprot"), "global_score": row.get("global_score"),
         }
         try:
-            result = client.predict([record])
+            result = client.predict([SequenceRecord(id=safe, sequence=row["sequence"])])
             payload = result.get(safe) if isinstance(result, dict) else None
             payload = payload if isinstance(payload, dict) else {}
             entry["plddt"] = payload.get("best_plddt")
             pdb_text = payload.get("ranked_0_pdb") or payload.get("pdb") or ""
-            reference = backbone_ca.get(row["backbone_key"])
-            if pdb_text and reference is not None and reference.size:
-                entry["rmsd"] = round(kabsch_rmsd(ca_coords(pdb_text), reference), 4)
+            key = row["backbone_key"]
+            entry.update(rmsd_against_reference(
+                pdb_text, backbone_non_loop.get(key),
+                reference_text=backbone_text.get(key, ""),
+                reference_ca=backbone_ca.get(key),
+            ))
             entry["status"] = "ok"
         except Exception as exc:
             entry["status"] = "failed"
             entry["error"] = f"{type(exc).__name__}: {exc}"[:200]
-        existing.append(entry)
+        return entry
 
-        fields = ["sequence_id", "backbone_key", "target_id", "temperature",
-                  "backbone_source", "soluprot", "global_score",
-                  "plddt", "rmsd", "status", "error"]
+    fields = OUTPUT_FIELDS
+
+    def flush() -> None:
         with open(out_path, "w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore")
             writer.writeheader()
             writer.writerows(existing)
-        if index % 20 == 0:
-            print(f"  {index}/{len(picked)} ({time.monotonic()-started:.0f}s)", flush=True)
+
+    # ColabFold 워커가 4개이므로 직렬로 돌리면 하나만 쓴다. 클라이언트 안에
+    # 동시성 게이트가 있어 워커 수를 넘겨도 큐에서 조절된다.
+    started = time.monotonic()
+    lock = threading.Lock()
+    completed = 0
+    with ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
+        futures = {pool.submit(fold, row): row for row in pending}
+        for future in as_completed(futures):
+            entry = future.result()
+            with lock:
+                existing.append(entry)
+                completed += 1
+                flush()
+                if completed % 20 == 0 or completed == len(pending):
+                    rate = (time.monotonic() - started) / completed
+                    left = (len(pending) - completed) * rate / 60
+                    print(f"  {completed}/{len(pending)} "
+                          f"({time.monotonic()-started:.0f}s, ~{left:.0f}min left)", flush=True)
 
     print(f"\nwrote {out_path} rows={len(existing)}")
     return 0

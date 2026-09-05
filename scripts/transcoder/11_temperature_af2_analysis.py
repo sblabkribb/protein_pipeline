@@ -26,6 +26,10 @@ from rapid_sr.clustered import clustered_bootstrap  # noqa: E402
 from rapid_sr.protocol import GATE0_THRESHOLDS  # noqa: E402
 
 REFERENCE_T = "0.1"
+#: 재표집 단위. 1 차 패널은 백본 하나가 곧 타겟 하나였지만, informative 패널은
+#: 한 타겟에서 최대 3 개의 백본을 뽑으므로 타겟이 클러스터다. 백본으로
+#: 재표집하면 독립 클러스터를 실제보다 많이 세어 구간을 과장한다.
+DEFAULT_CLUSTER_UNIT = "backbone_key"
 # 효과가 명확하다고 부르기 위한 최소 구간 정밀도.
 CI_WIDTH_TARGET = 0.10
 # 이 비율 이상이 백본 간 변동이면 서열을 더 뽑아도 구간이 좁아지지 않는다.
@@ -169,13 +173,18 @@ def annotate(rows: list[dict]) -> list[dict]:
     return rows
 
 
-def paired_yield_difference(rows: list[dict], temp: str, field: str) -> dict:
-    """백본별로 (temp 의 yield) - (기준 T 의 yield) 를 구하고 백본 단위로 재표집."""
+def paired_yield_difference(rows: list[dict], temp: str, field: str, *,
+                            cluster_unit: str = DEFAULT_CLUSTER_UNIT) -> dict:
+    """단위별로 (temp 의 yield) - (기준 T 의 yield) 를 구하고 그 단위로 재표집.
+
+    `cluster_unit` 은 데이터 구조가 정한다. 백본이 타겟 안에 중첩되어 있으면
+    타겟이 클러스터이고, 백본으로 재표집하면 구간이 부당하게 좁아진다.
+    """
     by = defaultdict(lambda: defaultdict(list))
     for row in rows:
         value = row.get(field)
         if value is not None:
-            by[row["backbone_key"]][row["temperature"]].append(float(value))
+            by[row[cluster_unit]][row["temperature"]].append(float(value))
 
     backbones, diffs, refs, alts, counts = [], [], [], [], []
     for backbone, per_temp in by.items():
@@ -189,10 +198,19 @@ def paired_yield_difference(rows: list[dict], temp: str, field: str) -> dict:
         alts.append(alt)
         counts.append(min(len(per_temp[REFERENCE_T]), len(per_temp[temp])))
     if len(diffs) < 3:
-        return {"point": None, "ci95": None, "n_clusters": len(diffs)}
+        # CI 는 못 내지만 무엇을 몇 개로 세려 했는지는 남긴다. 그래야 호출자가
+        # "구간이 없다" 와 "클러스터가 부족했다" 를 구별한다.
+        return {
+            "point": round(float(np.mean(diffs)), 4) if diffs else None,
+            "ci95": None, "n_clusters": len(diffs),
+            "cluster_unit": cluster_unit, "n_clusters_resampled": len(diffs),
+            "insufficient_clusters": True,
+        }
     values = np.asarray(diffs)
     out = clustered_bootstrap(backbones, lambda idx: float(values[idx].mean()))
     out["n_backbones_paired"] = len(diffs)
+    out["cluster_unit"] = cluster_unit
+    out["n_clusters_resampled"] = len(diffs)
     out["uncertainty"] = diagnose_uncertainty(
         diffs, refs, alts, int(np.median(counts)) if counts else 0
     )
@@ -205,6 +223,30 @@ def paired_yield_difference(rows: list[dict], temp: str, field: str) -> dict:
     # 통계량에서는 그 둘이 전혀 다른 결론이므로 꼬리 질량을 함께 보고한다.
     out.update(_tail_masses(values, backbones))
     return out
+
+
+def build_report_header(*, panel: str, cluster_unit: str, selection_scope: str) -> dict:
+    """리포트가 자기 적용 범위를 스스로 말하게 한다.
+
+    informative 패널은 baseline yield 가 중간인 백본만 담는다. 거기서 나온 온도
+    효과를 전체 백본 집단의 평균으로 읽으면, 선택된 부분집단의 조건부 효과를
+    모집단 효과로 바꿔치기하는 것이다.
+    """
+    return {
+        "panel": panel,
+        "bootstrap_cluster_unit": cluster_unit,
+        "selection_scope": selection_scope,
+        "selection_scope_unknown": not bool(selection_scope),
+        "interpretation": (
+            "This is a conditional effect within the selected backbone subpopulation, "
+            "not a population-average temperature effect. "
+            "선택된 부분집단 안에서의 조건부 효과이며 전체 백본 집단의 평균 효과가 아니다."
+            if selection_scope else
+            "Selection scope was not recorded for this panel, so the conditional/marginal "
+            "distinction cannot be made. 선정 범위가 기록되지 않아 조건부인지 주변부인지 "
+            "구별할 수 없다."
+        ),
+    }
 
 
 def _tail_masses(values: np.ndarray, clusters, *, n_boot: int = 20000, seed: int = 0) -> dict:
@@ -255,6 +297,13 @@ def main(argv: list[str] | None = None) -> int:
     base = PROJECT_ROOT / "public_data" / "benchmark" / "gate0" / "temperature_sweep"
     parser.add_argument("--af2", default=str(base / "af2_stage1.csv"))
     parser.add_argument("--out", default=str(base / "af2_analysis.json"))
+    parser.add_argument("--cluster-unit", default=DEFAULT_CLUSTER_UNIT,
+                        choices=["backbone_key", "target_id"],
+                        help="백본이 타겟 안에 중첩되면 target_id 로 재표집해야 한다.")
+    parser.add_argument("--panel", default="panel1_unfiltered",
+                        help="리포트에 남길 패널 이름. 두 패널을 섞어 보고하지 않기 위해서다.")
+    parser.add_argument("--panel-manifest", default="",
+                        help="동결된 선정 manifest. 있으면 적용 범위를 리포트에 옮겨 적는다.")
     args = parser.parse_args(argv)
 
     rows = annotate(load(Path(args.af2)))
@@ -262,8 +311,16 @@ def main(argv: list[str] | None = None) -> int:
     print(f"folded={len(rows)} temperatures={temps} "
           f"backbones={len({r['backbone_key'] for r in rows})}\n")
 
+    scope = ""
+    if args.panel_manifest:
+        manifest = json.loads(Path(args.panel_manifest).read_text(encoding="utf-8"))
+        scope = manifest.get("interpretation_scope", "")
     report = {"n_folded": len(rows), "reference_temperature": REFERENCE_T,
               "ci_width_target": CI_WIDTH_TARGET, "per_temperature": {}, "comparisons": {}}
+    report.update(build_report_header(panel=args.panel, cluster_unit=args.cluster_unit,
+                                      selection_scope=scope))
+    print(f"panel={args.panel} cluster_unit={args.cluster_unit}"
+          + (f"\n적용 범위: {scope}" if scope else ""))
 
     print(f"{'T':>6s} {'n':>5s} {'structural_yield':>17s} {'joint_yield':>12s} {'SoluProt':>10s}")
     for temp in temps:
@@ -284,7 +341,7 @@ def main(argv: list[str] | None = None) -> int:
         for temp in temps:
             if temp == REFERENCE_T:
                 continue
-            res = paired_yield_difference(rows, temp, field)
+            res = paired_yield_difference(rows, temp, field, cluster_unit=args.cluster_unit)
             res["next_step"] = decide_next_step(res)
             report["comparisons"][f"{label}@T{temp}"] = res
             ci = res.get("ci95")

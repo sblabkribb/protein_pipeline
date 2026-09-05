@@ -38,6 +38,9 @@ import statistics
 DEFAULT_PRIOR_MEAN = 0.5
 DEFAULT_PRIOR_STRENGTH = 2.0
 
+#: 생성 조건 탐색 보너스의 기본 가중치. 조건을 바꿔봐야 알 수 있는 것에만 쓴다.
+DEFAULT_ETA_CONDITION_EXPLORATION = 0.5
+
 #: arm 이 타겟 사후분포를 사전분포로 받을 때의 세기. 크면 형제끼리 강하게
 #: 묶이고(=풀링이 세고), 작으면 arm 이 독립에 가까워진다.
 DEFAULT_POOLING_STRENGTH = 4.0
@@ -80,6 +83,21 @@ class BetaPosterior:
 
     def copy(self) -> "BetaPosterior":
         return BetaPosterior(alpha=self.alpha, beta=self.beta)
+
+
+def movability(p: float) -> float:
+    """이 백본의 yield 가 조건을 바꿨을 때 움직일 수 있는 여지. 0..1.
+
+    `4·p(1-p)` 는 베르누이 분산을 최대값 0.25 로 나눈 것이다. p=0.5 에서 1,
+    p=0 이나 1 에서 0 이 된다.
+
+    왜 이것이 필요한가. 1 차 온도 패널의 15 개 백본 중 12 개가 모든 온도에서
+    yield 0.000 또는 1.000 이었다. 그 백본에서 온도를 비교하는 것은 정보가
+    0 이다 - 조건이 무엇이든 결과가 같은 값에 붙어 있기 때문이다. 그런데도
+    예산의 80% 가 거기로 갔다. movability 는 그 낭비를 점수 안에서 막는다.
+    """
+    p = min(max(float(p), 0.0), 1.0)
+    return 4.0 * p * (1.0 - p)
 
 
 @dataclass(frozen=True)
@@ -207,12 +225,21 @@ class HierarchicalAllocator(_Policy):
         beta_uncertainty: float = 0.5,
         gamma_diversity: float = 0.2,
         lambda_cost: float = 0.1,
+        eta_condition_exploration: float = DEFAULT_ETA_CONDITION_EXPLORATION,
+        reference_condition: str | None = None,
     ) -> None:
         super().__init__(arms, seed=seed)
         self.pooling_strength = float(pooling_strength)
         self.beta_uncertainty = float(beta_uncertainty)
         self.gamma_diversity = float(gamma_diversity)
         self.lambda_cost = float(lambda_cost)
+        self.eta_condition_exploration = float(eta_condition_exploration)
+        #: 생산 기본 조건. 이것과 다른 조건을 쓰는 arm 만 '조건 탐색' 이다.
+        #: 지정하지 않으면 조건 탐색이라는 개념 자체가 없으므로 항이 꺼진다.
+        self.reference_condition = reference_condition
+        self._by_backbone: dict[tuple[str, str], list[str]] = {}
+        for key, arm in self.arms.items():
+            self._by_backbone.setdefault((arm.target_id, arm.backbone_id), []).append(key)
 
         self._targets = {
             arm.target_id: BetaPosterior.from_prior(mean=prior_mean, strength=prior_strength)
@@ -266,6 +293,52 @@ class HierarchicalAllocator(_Policy):
     def posterior_mean(self, arm_key: str) -> float:
         return self.posterior(arm_key).mean
 
+    def backbone_posterior(self, arm_key: str) -> BetaPosterior:
+        """이 백본의 모든 조건을 합친 사후분포.
+
+        조건 하나에서 우연히 0/8 이 나왔다고 백본이 바닥이라고 판단하면, 그
+        백본은 다시는 탐색되지 않는다. movability 는 백본 수준에서 잰다.
+        """
+        arm = self.arms[arm_key]
+        siblings = self._by_backbone[(arm.target_id, arm.backbone_id)]
+        successes = sum(self._observed[key][0] for key in siblings)
+        trials = sum(self._observed[key][1] for key in siblings)
+        target = self._targets[arm.target_id]
+        post = BetaPosterior.from_prior(mean=target.mean, strength=self.pooling_strength)
+        post.update(successes=successes, trials=trials)
+        return post
+
+    def exploration_bonus(self, arm_key: str) -> float:
+        """조건을 바꿔보는 데 쓰는 값어치.
+
+        기준 조건은 탐색이 아니므로 0 이다. 그 외에는 백본이 움직일 수 있는
+        여지(movability)와 이 조건에 대한 불확실성의 곱이다. 둘 중 하나라도
+        0 이면 배울 것이 없다.
+        """
+        if self.eta_condition_exploration == 0.0 or self.reference_condition is None:
+            return 0.0
+        if self.arms[arm_key].condition == self.reference_condition:
+            return 0.0
+        return (
+            self.eta_condition_exploration
+            * movability(self.backbone_posterior(arm_key).mean)
+            * self.posterior(arm_key).sd
+        )
+
+    def score_parts(self, arm_key: str, *, selected=()) -> dict:
+        """점수를 항별로 돌려준다. 왜 이 arm 에 예산을 썼는지 설명하기 위해서다."""
+        arm = self.arms[arm_key]
+        post = self.posterior(arm_key)
+        return {
+            "posterior_mean": post.mean,
+            "uncertainty": self.beta_uncertainty * post.sd,
+            "diversity": -self.gamma_diversity * self._diversity_term(arm, selected),
+            "cost": -self.lambda_cost * self._cost_term(arm),
+            "condition_exploration": self.exploration_bonus(arm_key),
+            "movability": movability(self.backbone_posterior(arm_key).mean),
+            "is_reference_condition": arm.condition == self.reference_condition,
+        }
+
     # ---- 점수 ---------------------------------------------------------------
 
     def _build_cost_scale(self) -> float | None:
@@ -306,6 +379,7 @@ class HierarchicalAllocator(_Policy):
             + self.beta_uncertainty * post.sd
             - self.gamma_diversity * self._diversity_term(arm, selected)
             - self.lambda_cost * self._cost_term(arm)
+            + self.exploration_bonus(arm_key)
         )
 
     # ---- 배분 ---------------------------------------------------------------

@@ -519,3 +519,104 @@ class ClusteredUncertaintyTests(unittest.TestCase):
         truth = {a.key: 0.5 for a in arms}
         with self.assertRaises(ValueError):
             self.run(arms, truth=truth, budget=8, batch_size=4, n_boot=10, seed=0)
+
+
+class ConditionExplorationTests(unittest.TestCase):
+    """생성 조건 탐색 예산은 움직일 수 있는 백본에만 써야 한다.
+
+    1 차 온도 패널이 이것을 비싸게 가르쳐 주었다. 15 개 백본 중 12 개가 모든
+    온도에서 yield 0.000 또는 1.000 이었고, 그 백본들에 쓴 폴드 384 개는 온도에
+    대해 아무것도 알려주지 못했다. yield 가 바닥이나 천장에 붙어 있으면 조건을
+    바꿔도 결과가 움직일 수 없으므로, 그 백본에서 조건을 비교하는 것은 정의상
+    정보가 0 이다.
+
+    그래서 점수에 항을 하나 더한다.
+
+        A(b,g) = p̂ + β·U + γ·D − λ·C + η·E
+        E = 0                        g 가 기준 조건이면 (그건 탐색이 아니다)
+          = movability(b) · U        아니면
+        movability(b) = 4·p̄(1−p̄)    백본 수준 사후평균에서, 0.5 에서 최대
+    """
+
+    def _arms_with_conditions(self, targets=("t0", "t1")):
+        return [
+            Arm(target_id=t, backbone_id=f"{t}_bb", condition=c, cost_seconds=180.0)
+            for t in targets for c in ("T0.05", "T0.1", "T0.2", "T0.3")
+        ]
+
+    def _alloc(self, **kwargs):
+        from rapid_sr.allocation import HierarchicalAllocator as H
+        defaults = dict(beta_uncertainty=0.0, gamma_diversity=0.0, lambda_cost=0.0,
+                        eta_condition_exploration=1.0, reference_condition="T0.1")
+        defaults.update(kwargs)
+        return H(self._arms_with_conditions(), **defaults)
+
+    def test_movability_peaks_at_a_half_and_vanishes_at_the_extremes(self):
+        from rapid_sr.allocation import movability
+        self.assertAlmostEqual(movability(0.5), 1.0, places=6)
+        self.assertAlmostEqual(movability(0.0), 0.0, places=6)
+        self.assertAlmostEqual(movability(1.0), 0.0, places=6)
+        self.assertAlmostEqual(movability(0.1), movability(0.9), places=9)
+
+    def test_a_floor_backbone_gets_almost_no_exploration_bonus(self):
+        alloc = self._alloc()
+        alloc.observe("t0|t0_bb|T0.1", successes=0, trials=40)
+        self.assertLess(alloc.exploration_bonus("t0|t0_bb|T0.3"), 0.02)
+
+    def test_a_ceiling_backbone_gets_almost_no_exploration_bonus(self):
+        alloc = self._alloc()
+        alloc.observe("t0|t0_bb|T0.1", successes=40, trials=40)
+        self.assertLess(alloc.exploration_bonus("t0|t0_bb|T0.3"), 0.02)
+
+    def test_a_mid_yield_backbone_gets_the_largest_exploration_bonus(self):
+        alloc = self._alloc()
+        alloc.observe("t0|t0_bb|T0.1", successes=20, trials=40)
+        alloc.observe("t1|t1_bb|T0.1", successes=0, trials=40)
+        self.assertGreater(alloc.exploration_bonus("t0|t0_bb|T0.3"),
+                           alloc.exploration_bonus("t1|t1_bb|T0.3"))
+
+    def test_the_reference_condition_is_not_exploration(self):
+        alloc = self._alloc()
+        alloc.observe("t0|t0_bb|T0.1", successes=20, trials=40)
+        self.assertEqual(alloc.exploration_bonus("t0|t0_bb|T0.1"), 0.0)
+
+    def test_movability_uses_the_backbone_level_estimate_not_one_condition(self):
+        """한 조건에서 우연히 0/8 이 나왔다고 백본이 바닥이라고 판단하면 안 된다."""
+        alloc = self._alloc()
+        alloc.observe("t0|t0_bb|T0.3", successes=0, trials=8)
+        alloc.observe("t0|t0_bb|T0.1", successes=8, trials=8)
+        alloc.observe("t0|t0_bb|T0.2", successes=4, trials=8)
+        self.assertGreater(alloc.exploration_bonus("t0|t0_bb|T0.05"), 0.05)
+
+    def test_exploration_budget_concentrates_on_the_movable_backbone(self):
+        alloc = self._alloc(beta_uncertainty=0.3)
+        alloc.observe("t0|t0_bb|T0.1", successes=20, trials=40)   # 중간
+        alloc.observe("t1|t1_bb|T0.1", successes=0, trials=40)    # 바닥
+        picks = alloc.allocate(budget=20)
+        explore = [k for k in picks if not k.endswith("|T0.1")]
+        movable = [k for k in explore if k.startswith("t0|")]
+        self.assertGreater(len(movable), len(explore) - len(movable),
+                           f"탐색 예산이 움직일 수 없는 백본으로 샜다: {explore}")
+
+    def test_turning_the_term_off_restores_the_previous_scores(self):
+        off = self._alloc(eta_condition_exploration=0.0)
+        off.observe("t0|t0_bb|T0.1", successes=20, trials=40)
+        self.assertEqual(off.exploration_bonus("t0|t0_bb|T0.3"), 0.0)
+
+    def test_without_a_reference_condition_nothing_counts_as_exploration(self):
+        alloc = self._alloc(reference_condition=None)
+        alloc.observe("t0|t0_bb|T0.1", successes=20, trials=40)
+        self.assertEqual(alloc.exploration_bonus("t0|t0_bb|T0.3"), 0.0)
+
+    def test_an_unobserved_backbone_is_treated_as_movable(self):
+        """아직 안 본 백본을 바닥이라고 가정하면 영영 안 보게 된다."""
+        alloc = self._alloc()
+        self.assertGreater(alloc.exploration_bonus("t0|t0_bb|T0.3"), 0.0)
+
+    def test_the_policy_records_why_it_spent_on_a_condition(self):
+        alloc = self._alloc()
+        alloc.observe("t0|t0_bb|T0.1", successes=20, trials=40)
+        parts = alloc.score_parts("t0|t0_bb|T0.3")
+        for key in ("posterior_mean", "uncertainty", "diversity", "cost",
+                    "condition_exploration", "movability"):
+            self.assertIn(key, parts)

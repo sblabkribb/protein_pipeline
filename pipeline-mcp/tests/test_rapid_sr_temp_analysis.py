@@ -272,3 +272,80 @@ def _rows_for_two_temperatures():
                     "_soluprot": 0.7,
                 })
     return rows
+
+
+class ClusterUnitTests(unittest.TestCase):
+    """재표집 단위는 데이터 구조가 정한다.
+
+    1 차 패널은 백본 15 개가 곧 타겟 15 개여서 backbone_key 로 재표집해도 같았다.
+    2 차 패널은 한 타겟에서 최대 3 개의 백본을 뽑으므로, 백본으로 재표집하면
+    독립 클러스터를 실제보다 많이 세게 된다 - 포화 오류와 같은 종류의 과장이다.
+    """
+
+    def _nested_rows(self):
+        rows = []
+        for target in ("tA", "tB", "tC", "tD"):
+            for bb in range(3):
+                for temp in ("0.1", "0.2"):
+                    for seq in range(4):
+                        rows.append({
+                            "backbone_key": f"{target}|bb{bb}", "target_id": target,
+                            "temperature": temp,
+                            "_structural": 1.0 if (temp == "0.1" or seq < 2) else 0.0,
+                            "_joint": 1.0 if (temp == "0.1" or seq < 2) else 0.0,
+                            "_soluprot": 0.7,
+                        })
+        return rows
+
+    def test_clustering_by_target_reports_the_target_count(self):
+        module = _load()
+        result = module.paired_yield_difference(
+            self._nested_rows(), "0.2", "_structural", cluster_unit="target_id")
+        self.assertEqual(result["n_clusters_resampled"], 4)
+        self.assertEqual(result["cluster_unit"], "target_id")
+
+    def test_clustering_by_backbone_reports_the_backbone_count(self):
+        module = _load()
+        result = module.paired_yield_difference(
+            self._nested_rows(), "0.2", "_structural", cluster_unit="backbone_key")
+        self.assertEqual(result["n_clusters_resampled"], 12)
+
+    def test_nesting_makes_the_target_interval_wider_than_the_backbone_one(self):
+        """중첩을 무시하면 구간이 좁아진다. 좁아지는 쪽이 틀린 쪽이다."""
+        module = _load()
+        rows = self._nested_rows()
+        # 타겟마다 효과 크기를 다르게 만들어 타겟 간 이질성을 넣는다.
+        for r in rows:
+            if r["target_id"] in ("tB", "tD") and r["temperature"] == "0.2":
+                r["_structural"] = 1.0
+                r["_joint"] = 1.0
+        by_bb = module.paired_yield_difference(rows, "0.2", "_structural",
+                                               cluster_unit="backbone_key")
+        by_tg = module.paired_yield_difference(rows, "0.2", "_structural",
+                                               cluster_unit="target_id")
+        width = lambda r: r["ci95"][1] - r["ci95"][0]  # noqa: E731
+        self.assertGreaterEqual(width(by_tg), width(by_bb))
+
+    def test_the_default_cluster_unit_is_stated_not_implicit(self):
+        module = _load()
+        self.assertIn(module.DEFAULT_CLUSTER_UNIT, {"backbone_key", "target_id"})
+
+
+class PanelScopeTests(unittest.TestCase):
+    """중간-yield 패널의 결과는 전체 백본 집단의 평균 효과가 아니다."""
+
+    def test_the_report_carries_an_interpretation_scope(self):
+        module = _load()
+        report = module.build_report_header(panel="panel2_informative",
+                                            cluster_unit="target_id",
+                                            selection_scope="mid-yield only")
+        self.assertEqual(report["panel"], "panel2_informative")
+        self.assertIn("conditional", report["interpretation"].lower())
+        self.assertEqual(report["selection_scope"], "mid-yield only")
+
+    def test_a_panel_without_a_stated_scope_says_so(self):
+        module = _load()
+        report = module.build_report_header(panel="panel1", cluster_unit="backbone_key",
+                                            selection_scope="")
+        self.assertIn("selection_scope", report)
+        self.assertTrue(report["selection_scope_unknown"])

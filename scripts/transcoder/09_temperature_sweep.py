@@ -63,6 +63,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pdb-dir", default=str(base / "backbones" / "pdb"))
     parser.add_argument("--targets-file", default="", help="이 타겟만 사용")
     parser.add_argument("--source", default="target", help="사용할 backbone_source")
+    parser.add_argument("--panel-manifest", default="",
+                        help="동결된 panel manifest 의 backbone_key 목록만 사용한다. "
+                             "주면 --targets-file/--source 보다 우선한다.")
     parser.add_argument("--mpnn-url", default="http://211.188.35.221:18101")
     parser.add_argument("--soluprot-url", default="http://127.0.0.1:18081/score")
     parser.add_argument("--n-sequences", type=int, default=GATE0_SEQUENCES_PER_BACKBONE)
@@ -79,8 +82,22 @@ def main(argv: list[str] | None = None) -> int:
         }
 
     with open(args.labels, newline="", encoding="utf-8") as handle:
+        all_rows = list(csv.DictReader(handle))
+
+    if args.panel_manifest:
+        # 동결된 목록을 그대로 따른다. 여기서 다시 거르면 동결의 의미가 없다.
+        manifest = json.loads(Path(args.panel_manifest).read_text(encoding="utf-8"))
+        keys = [entry["backbone_key"] for entry in manifest["backbones"]]
+        by_key = {r["backbone_key"]: r for r in all_rows}
+        missing = [k for k in keys if k not in by_key]
+        if missing:
+            raise SystemExit(f"manifest 의 백본이 labels 에 없다: {missing}")
+        rows = [by_key[k] for k in keys]
+        print(f"panel manifest: {args.panel_manifest} "
+              f"({manifest.get('n_selected')} 개, seed={manifest.get('seed')})", flush=True)
+    else:
         rows = [
-            r for r in csv.DictReader(handle)
+            r for r in all_rows
             if r["backbone_source"] == args.source
             and (wanted is None or r["target_id"] in wanted)
         ]
