@@ -87,6 +87,11 @@
               <div class="app-sidebar-kicker">RAPID</div>
               <div class="app-sidebar-title" data-i18n="brand.subtitle">Reproducible AI Pipeline for Integrated Design</div>
             </div>
+            <!-- 목표 기반 설계는 별도 최소 화면이다. 탭이 아니라 링크로 두어
+                 기존 탭 로직(app.js)을 건드리지 않는다. -->
+            <a class="app-nav-btn app-nav-link" href="./guided.html">
+              목표 기반 설계 <span aria-hidden="true">&rarr;</span>
+            </a>
             <nav class="app-sidebar-nav" role="tablist" aria-label="Console modes">
               <button
                 id="tabBtnHome"

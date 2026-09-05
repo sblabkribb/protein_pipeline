@@ -7,38 +7,89 @@
     <link rel="stylesheet" href="./guided.css" />
   </head>
   <body>
-    <header>
-      <h1>RAPID 목표 기반 설계</h1>
-      <p class="sub">목표만 정하면 나머지는 자동으로 계획됩니다. 실행 전에 사람이 검토하고 고칩니다.</p>
+    <header class="topbar">
+      <div class="brand"><b>RAPID</b> <span>Objective-first Protein Redesign</span></div>
+      <div class="badges">
+        <span class="badge" id="badgeGate">gate0 target-level</span>
+        <span class="badge" id="badgeAf2">AF2 verification kept</span>
+        <a class="badge link" href="./index.html">기존 화면</a>
+      </div>
     </header>
 
-    <main>
-      <section class="card">
-        <h2>1. 목표</h2>
-        <p class="hint">가중치는 상대값입니다. 합이 1이 아니어도 자동으로 정규화됩니다.</p>
-        <div id="weights"></div>
+    <main class="layout">
+      <aside class="side">
+        <section class="block">
+          <h3>목표</h3>
+          <p class="note">가중치는 상대값입니다. 합이 1이 아니어도 정규화됩니다.</p>
+          <div id="weights"></div>
+        </section>
 
-        <h3>제약 (절대 조건)</h3>
-        <p class="hint">가중치와 달리 다른 점수로 상쇄되지 않습니다.</p>
-        <label>RMSD 상한 (Å) <input id="rmsdMax" type="number" step="0.1" value="2.0" /></label>
-        <label>AF2 예산 (호출 수) <input id="af2Budget" type="number" step="10" value="500" /></label>
+        <section class="block">
+          <h3>제약 <span class="tag">절대 조건</span></h3>
+          <p class="note">가중치와 달리 다른 점수로 상쇄되지 않습니다.</p>
+          <label>RMSD 상한 (Å)<input id="rmsdMax" type="number" step="0.1" value="2.0" /></label>
+          <label>AF2 예산 (호출)<input id="af2Budget" type="number" step="10" value="500" /></label>
+        </section>
 
-        <button id="planBtn" class="primary">계획 생성</button>
-        <span id="planStatus" class="status"></span>
+        <section class="block">
+          <h3>평가 단계</h3>
+          <div id="stages"></div>
+        </section>
+      </aside>
+
+      <section class="center">
+        <div class="goalbox">
+          <h2>설계 목표</h2>
+          <p class="note">
+            좌측에서 목표를 정하면 RAPID가 모델과 파라미터를 고르고, 각 선택의 근거를 함께 제시합니다.
+            실행 전에 사람이 검토하고 고칩니다.
+          </p>
+          <button id="planBtn" class="primary">계획 생성</button>
+          <span id="planStatus" class="status"></span>
+        </div>
+
+        <div class="stepwrap">
+          <div class="stephead">
+            <h2>계획 검토</h2>
+            <span class="stepstate" id="reviewState">계획 생성 대기</span>
+          </div>
+          <div id="warnings"></div>
+          <div id="decisions" class="empty">계획을 생성하면 결정과 근거가 여기 표시됩니다.</div>
+        </div>
+
+        <div class="stepwrap">
+          <div class="stephead">
+            <h2>승인</h2>
+            <span class="stepstate" id="approveState">검토 대기</span>
+          </div>
+          <p class="note">승인하면 파이프라인 요청으로 변환됩니다. 이 화면은 실행하지 않습니다.</p>
+          <button id="approveBtn" class="primary" disabled>승인하고 요청 만들기</button>
+          <pre id="requestOut" class="empty">아직 승인하지 않았습니다.</pre>
+        </div>
       </section>
 
-      <section class="card hidden" id="planCard">
-        <h2>2. 계획 검토</h2>
-        <div id="warnings"></div>
-        <div id="decisions"></div>
-      </section>
-
-      <section class="card hidden" id="applyCard">
-        <h2>3. 승인</h2>
-        <p class="hint">승인하면 아래 파이프라인 요청으로 변환됩니다. 실행은 아직 하지 않습니다.</p>
-        <button id="approveBtn" class="primary">승인하고 요청 만들기</button>
-        <pre id="requestOut"></pre>
-      </section>
+      <aside class="side right">
+        <div class="tabs">
+          <button class="tab is-active" data-panel="evidence">근거</button>
+          <button class="tab" data-panel="policy">정책</button>
+        </div>
+        <div id="panel-evidence" class="panel">
+          <p class="note">결정에 붙은 근거가 모두 여기 모입니다.</p>
+          <div id="evidenceList" class="empty">계획 생성 후 표시됩니다.</div>
+        </div>
+        <div id="panel-policy" class="panel hidden">
+          <div class="policy">
+            <b>고정된 결정</b>
+            <p>측정 결과가 반대를 지지하는 항목은 편집할 수 없습니다. 편집을 시도하면 거부하고 그 사실을 돌려줍니다.</p>
+            <b>평가 못 하는 목표</b>
+            <p>RAPID가 아직 측정하지 못하는 목표는 가중치를 받아도 경고로 표시합니다. 조용히 무시하지 않습니다.</p>
+            <b>근거 종류</b>
+            <p><span class="kind kind-internal_measurement">측정</span> 우리 실험값 ·
+               <span class="kind kind-literature">문헌</span> 출판된 근거 ·
+               <span class="kind kind-assumption">가정</span> 근거 없음</p>
+          </div>
+        </div>
+      </aside>
     </main>
 
     <script type="module" src="./guided.js"></script>
