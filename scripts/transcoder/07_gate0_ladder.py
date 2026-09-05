@@ -174,6 +174,53 @@ def leave_one_source_out(X, y, w, sources, *, kind):
     return out
 
 
+def cross_source_matrix(X, y, w, groups, sources, *, kind, seed=0):
+    """소스별 within / cross 전이 행렬 (게이트 G0b).
+
+    "MPNN 인코더가 source-independent 한 백본 품질을 배웠는가"가 질문이다.
+    within-source 는 타겟 group split 으로, cross-source 는 한 소스를 통째로
+    학습해 다른 소스에서 평가한다.
+    """
+    from scipy.stats import spearmanr
+    from sklearn.metrics import roc_auc_score
+
+    uniq = sorted(set(sources))
+    out: dict[str, dict] = {}
+    for train_src in uniq:
+        for test_src in uniq:
+            train = sources == train_src
+            test = sources == test_src
+            key = f"{train_src}->{test_src}"
+            if train_src == test_src:
+                # 같은 소스 안에서는 타겟 그룹으로 나눠야 누출이 없다.
+                if train.sum() < 20:
+                    out[key] = {"skipped": "n<20", "n": int(train.sum())}
+                    continue
+                res = evaluate(X[train], y[train], w[train], groups[train],
+                               sources[train], kind=kind, n_repeats=10, seed=seed)
+                out[key] = {"n_train": int(train.sum()), "n_test": int(train.sum()),
+                            "spearman": res["spearman"], "auc": res["auc"],
+                            "mode": "grouped_cv"}
+                continue
+            if train.sum() < 20 or test.sum() < 8:
+                out[key] = {"skipped": "too few", "n_train": int(train.sum()),
+                            "n_test": int(test.sum())}
+                continue
+            pred = fit_predict(X[train], y[train], w[train], X[test], kind=kind)
+            truth = y[test]
+            rho = spearmanr(truth, pred).statistic if len(set(truth)) > 1 else float("nan")
+            binary = (truth >= 0.5).astype(int)
+            auc = (float(roc_auc_score(binary, pred))
+                   if len(set(binary)) == 2 else None)
+            out[key] = {
+                "n_train": int(train.sum()), "n_test": int(test.sum()),
+                "spearman": None if rho != rho else round(float(rho), 4),
+                "auc": round(auc, 4) if auc is not None else None,
+                "mode": "transfer",
+            }
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     base = PROJECT_ROOT / "public_data" / "benchmark" / "gate0" / "backbones"
@@ -234,6 +281,22 @@ def main(argv: list[str] | None = None) -> int:
                  if ws else "")
         print(f"{name:28s} dim={X.shape[1]:5d} rho={res['spearman']} CI{res['spearman_ci95']} "
               f"auc={res['auc']} CI{res['auc_ci95']} mae={res['mae']}{extra}", flush=True)
+
+    if len(set(sources)) >= 2:
+        print("\n=== cross-source 전이 (G0b) ===")
+        report["cross_source"] = {}
+        for name, (X, kind) in arms.items():
+            if name == "A_source_mean":
+                continue
+            matrix = cross_source_matrix(X, y, w, groups, sources, kind=kind)
+            report["cross_source"][name] = matrix
+            print(f"  {name}")
+            for key, res in matrix.items():
+                if res.get("skipped"):
+                    print(f"    {key:22s} skip ({res['skipped']})")
+                else:
+                    print(f"    {key:22s} rho={res['spearman']} auc={res['auc']} "
+                          f"({res['mode']}, n_test={res['n_test']})")
 
     # 같은 split 에서 짝지은 차이. 각자 CI 비교보다 강한 근거다.
     if "C_raw_mpnn_encoder" in report["arms"]:

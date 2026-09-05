@@ -311,3 +311,46 @@ class StructureCriteriaTests(unittest.TestCase):
         self.assertIn("expected_af2_folds", manifest)
         self.assertIn("expected_af2_worker_seconds", manifest)
         self.assertEqual(manifest["expected_af2_folds"], 4 * 4 * 8)
+
+
+class NonLoopCriterionTests(unittest.TestCase):
+    """RMSD 를 잴 구조 위치가 충분해야 structural endpoint 가 뜻을 갖는다.
+
+    캠페인 정의는 DSSP non-loop 위치에서만 CA RMSD 를 잰다. 그 위치가 4 개뿐인
+    백본(1mkcA00, 43 잔기 중 4 개)에서 2.0 A 판정은 구조 일치가 아니라 Kabsch
+    정합의 자유도를 재는 것에 가깝다 - 정합에만 6 자유도가 들어간다.
+
+    이 저장소의 후보에서 non-loop 개수는 4, 12, 12 다음이 39 로 뚝 끊긴다.
+    그래서 임계값을 13 에서 39 사이 어디에 두어도 같은 패널이 나온다. 20 은
+    그 간격의 한가운데다.
+    """
+
+    def _info(self, mapping):
+        return lambda row: mapping[row["backbone_key"]]
+
+    def test_a_backbone_with_too_few_non_loop_positions_is_excluded(self):
+        rows = [_row("thin", "t1", "target", 0.5, 0.5), _row("solid", "t2", "target", 0.5, 0.5)]
+        info = self._info({
+            "thin": {"n_chains": 1, "n_residues": 43, "n_non_loop": 4},
+            "solid": {"n_chains": 1, "n_residues": 90, "n_non_loop": 45},
+        })
+        keys = [r["backbone_key"] for r in eligible_backbones(rows, structure_info=info)]
+        self.assertEqual(keys, ["solid"])
+
+    def test_the_threshold_is_declared(self):
+        self.assertIn("min_non_loop_positions", SELECTION_CRITERIA)
+
+    def test_missing_non_loop_information_does_not_silently_pass(self):
+        """정보를 안 주면 거르지 않는다. 하지만 0 으로 오해해서도 안 된다."""
+        rows = [_row("a", "t1", "target", 0.5, 0.5)]
+        info = self._info({"a": {"n_chains": 1, "n_residues": 90}})
+        self.assertEqual(len(eligible_backbones(rows, structure_info=info)), 1)
+
+    def test_manifest_records_the_non_loop_count(self):
+        rows = [_row(f"a{i}", f"t{i}", "target", 0.4 + 0.05 * i, 0.4 + 0.05 * i) for i in range(3)]
+        info = self._info({f"a{i}": {"n_chains": 1, "n_residues": 90, "n_non_loop": 45}
+                           for i in range(3)})
+        picked = select_panel(rows, target_size=3, seed=0, structure_info=info)
+        manifest = build_manifest(picked, source_path=Path("l.csv"), seed=0, source_sha256="x")
+        for entry in manifest["backbones"]:
+            self.assertEqual(entry["n_non_loop_positions"], 45)

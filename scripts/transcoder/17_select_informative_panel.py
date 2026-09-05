@@ -23,7 +23,9 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "scripts" / "transcoder"))
+sys.path.insert(0, str(PROJECT_ROOT / "pipeline-mcp" / "src"))
 
+from pipeline_mcp.bio.pdb import dssp_non_loop_positions_by_chain  # noqa: E402
 from rapid_sr.descriptors import ca_coords  # noqa: E402
 from rapid_sr.panel import (  # noqa: E402
     SELECTION_CRITERIA, build_manifest, eligible_backbones, select_panel,
@@ -43,6 +45,10 @@ def structure_reader(pdb_dir: Path):
                 "n_residues": len(ca_coords(text)),
                 "n_chains": len({line[21] for line in text.splitlines()
                                  if line.startswith("ATOM")}),
+                # 캠페인 RMSD 가 실제로 쓰는 위치 수. 이것이 적으면 structural
+                # endpoint 는 판정할 대상이 없다.
+                "n_non_loop": sum(
+                    len(v) for v in dssp_non_loop_positions_by_chain(text).values()),
             }
         return cache[key]
 
@@ -78,7 +84,8 @@ def main(argv=None) -> int:
     pool = eligible_backbones(rows, structure_info=structure)
     print(f"전체 {len(rows)} · 적격 {len(pool)} "
           f"(baseline joint·structural 둘 다 (0,1), n>={SELECTION_CRITERIA['min_sequences_with_af2']}, "
-          f"단일 사슬, <={SELECTION_CRITERIA['max_residues']} 잔기)")
+          f"단일 사슬, <={SELECTION_CRITERIA['max_residues']} 잔기, "
+          f"non-loop>={SELECTION_CRITERIA['min_non_loop_positions']})")
 
     picked = select_panel(rows, target_size=args.size, seed=args.seed,
                           structure_info=structure)
@@ -112,11 +119,12 @@ def main(argv=None) -> int:
     print(f"  AF2 예상 {manifest['expected_af2_folds']} 폴드 · "
           f"워커 1개 기준 {manifest['expected_af2_worker_seconds'] / 3600:.1f} 시간")
     print(f"  예상 정보 백본 {manifest['expected_informative_backbones']}/{manifest['n_selected']}")
-    print(f"\n{'backbone':50s} {'src':>7s} {'joint':>7s} {'struct':>7s} {'aa':>5s} {'band':>4s}")
+    print(f"\n{'backbone':50s} {'src':>7s} {'joint':>7s} {'struct':>7s} {'aa':>5s} {'nl':>4s} {'band':>4s}")
     for entry in sorted(manifest["backbones"], key=lambda e: (e["yield_band"], e["backbone_key"])):
         print(f"{entry['backbone_key']:50s} {entry['backbone_source']:>7s} "
               f"{entry['baseline_joint_yield']:>7.3f} {entry['baseline_structural_yield']:>7.3f} "
-              f"{entry['n_residues'] or 0:>5d} {entry['yield_band']:>4d}")
+              f"{entry['n_residues'] or 0:>5d} {entry['n_non_loop_positions'] or 0:>4d} "
+              f"{entry['yield_band']:>4d}")
     print(f"\n동결: {args.out}")
     return 0
 

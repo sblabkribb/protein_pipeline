@@ -20,6 +20,7 @@ if str(PIPELINE_SRC) not in sys.path:
 from pipeline_mcp.models import PipelineRequest  # noqa: E402
 
 from .protocol import (  # noqa: E402
+    GATE0_AF2_EXTRA_FLAGS,
     GATE0_BACKBONES_PER_RUN,
     GATE0_MPNN_SETTINGS,
     GATE0_SEQUENCES_PER_BACKBONE,
@@ -84,6 +85,7 @@ def build_gate0_request(pdb_text: str, arm: str, *, seed: int) -> PipelineReques
         af2_provider="colabfold",
         af2_max_candidates_per_tier=0,
         af2_top_k=0,
+        af2_extra_flags=GATE0_AF2_EXTRA_FLAGS,
         relax_enabled=False,
         novelty_enabled=False,
         wt_compare=False,

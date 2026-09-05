@@ -43,11 +43,14 @@ SELECTION_CRITERIA = {
     #: 서열 4 개에서 나온 0.25 는 1/4 이다. yield 를 '중간' 이라 부르려면 그
     #: 추정이 표본 하나에 좌우되지 않을 만큼의 서열이 있어야 한다.
     "min_sequences_with_af2": 16,
-    #: 17 개 타겟 중 6 개가 적격 백본을 3 개 이상 갖고 있어서, cap 2 는 상한을
-    #: 23 으로 묶어 요청 범위(24-30) 아래로 떨어뜨린다. cap 3 은 28 을 낸다.
-    #: 타겟 수는 어차피 17 이 상한이므로 이 완화는 클러스터를 늘리지 않고
-    #: 타겟 안의 반복만 늘린다 - 그 사실을 manifest 에 적는다.
-    "max_per_target": 3,
+    #: 구조 기준까지 걸고 나면 적격 백본은 33 개, 타겟은 10 개다. 10 개 타겟에서
+    #: cap 2 는 16 개, cap 3 은 21 개, cap 4 는 26 개를 낸다. 요청 범위(24-30)에
+    #: 들어가려면 4 가 필요하다.
+    #:
+    #: 이 완화는 독립 클러스터를 늘리지 않는다 - 타겟은 여전히 10 개이고, 그것이
+    #: 추론을 지배하는 수다. 늘어나는 것은 타겟 안의 반복뿐이다. manifest 의
+    #: n_effective_clusters 가 그 사실을 남긴다.
+    "max_per_target": 4,
     #: 이 실험은 서열 하나를 단량체로 접는다. 다중 사슬 기준 구조에는 그 폴드를
     #: 맞춰볼 대상이 없고, RMSD 임계값도 의미를 잃는다. 구조에서만 나오는
     #: 기준이므로 온도 결과와 무관하다.
@@ -56,6 +59,11 @@ SELECTION_CRITERIA = {
     #: 400 잔기면 백본 하나에 약 2.3 시간이다. 첫 동결에서 3428 잔기짜리가 뽑혀
     #: MPNN 호출이 타임아웃났다.
     "max_residues": 400,
+    #: 캠페인의 RMSD 는 DSSP non-loop 위치에서만 잰다. 그 위치가 너무 적으면
+    #: 2.0 A 판정이 구조 일치가 아니라 Kabsch 정합의 자유도를 재게 된다.
+    #: 이 저장소 후보의 non-loop 개수는 4, 12, 12 다음이 39 라 임계값을 13-39
+    #: 사이 어디에 두어도 같은 패널이 나온다.
+    "min_non_loop_positions": 20,
     "yield_bands": [list(band) for band in YIELD_BANDS],
     "balances": ["yield_band", "backbone_source", "target_id"],
     "forbidden_inputs": ["global_score", "temperature", "af2_stage1", "sweep"],
@@ -119,6 +127,11 @@ def eligible_backbones(rows, *, criteria: dict | None = None, structure_info=Non
             if spec.get("single_chain_only") and int(info.get("n_chains", 1)) != 1:
                 continue
             if int(info.get("n_residues", 0)) > int(spec["max_residues"]):
+                continue
+            # 정보를 주지 않았으면 거르지 않는다. 없는 값을 0 으로 읽으면 전부
+            # 탈락시키게 된다.
+            non_loop = info.get("n_non_loop")
+            if non_loop is not None and int(non_loop) < int(spec["min_non_loop_positions"]):
                 continue
         joint = _float_or_none(row.get("joint_pass_yield"))
         struct = _float_or_none(row.get("af2_structural_pass_yield"))
@@ -243,6 +256,8 @@ def build_manifest(picked, *, source_path: Path, seed: int, source_sha256: str) 
             "saturation_risk": round(saturation_risk(joint), 4) if joint is not None else None,
             "n_residues": int((row.get("_structure") or {}).get("n_residues", 0)) or None,
             "n_chains": int((row.get("_structure") or {}).get("n_chains", 0)) or None,
+            "n_non_loop_positions": (
+                int((row.get("_structure") or {}).get("n_non_loop", 0)) or None),
         })
 
     def distribution(key):
