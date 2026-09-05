@@ -8912,6 +8912,45 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.plan_from_objective",
+            "description": (
+                "Turn a design objective into a reviewable plan. Every decision carries "
+                "evidence provenance (internal_measurement | literature | assumption). "
+                "Returns the plan only; nothing runs until the plan is approved."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "weights": {
+                        "type": "object",
+                        "description": "Soft objectives, 0..1 each (solubility, structural_preservation, stability, activity, aggregation, developability, diversity).",
+                    },
+                    "constraints": {
+                        "type": "object",
+                        "description": "Hard constraints, kept separate from weights (e.g. rmsd_max, mutation_max).",
+                    },
+                    "budget": {"type": "object", "description": "e.g. {\"af2_calls\": 500}"},
+                },
+                "required": ["weights"],
+            },
+        },
+        {
+            "name": "pipeline.approve_plan",
+            "description": (
+                "Apply human edits to a plan and convert it into PipelineRequest overrides. "
+                "Edits to locked fields are rejected and reported. Decisions with no request "
+                "field are reported as unmapped rather than dropped. Does not run anything."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "plan": {"type": "object"},
+                    "edits": {"type": "object"},
+                },
+                "required": ["plan"],
+            },
+        },
+        {
             "name": "pipeline.plan_from_prompt",
             "description": "Route a natural-language prompt and return missing inputs/questions without running.",
             "inputSchema": {
@@ -9642,6 +9681,39 @@ class ToolDispatcher:
 
         if name == "pipeline.export_results_package":
             return _export_results_package(self.runner, arguments)
+
+        if name == "pipeline.plan_from_objective":
+            from .objective_planner import Objective, build_plan
+
+            weights = arguments.get("weights") or {}
+            if not isinstance(weights, dict):
+                raise ValueError("weights must be an object")
+            try:
+                objective = Objective(
+                    weights={k: float(v) for k, v in weights.items()},
+                    constraints=dict(arguments.get("constraints") or {}),
+                    budget={k: int(v) for k, v in (arguments.get("budget") or {}).items()},
+                )
+            except ValueError as exc:
+                # 사용자 입력 오류는 서버 오류가 아니라 되돌려줄 메시지다.
+                return {"error": str(exc)}
+            return build_plan(objective)
+
+        if name == "pipeline.approve_plan":
+            from .objective_planner import apply_edits, plan_to_request_overrides
+
+            plan = arguments.get("plan")
+            if not isinstance(plan, dict):
+                return {"error": "plan must be an object"}
+            edited = apply_edits(plan, dict(arguments.get("edits") or {}))
+            converted = plan_to_request_overrides(edited)
+            return {
+                "approved_plan": edited,
+                "request_overrides": converted["request_overrides"],
+                "unmapped_decisions": converted["unmapped_decisions"],
+                "rejected_edits": edited.get("rejected_edits", []),
+                "applied_edits": edited.get("applied_edits", {}),
+            }
 
         if name == "pipeline.plan_from_prompt":
             prompt = str(arguments.get("prompt") or "")
