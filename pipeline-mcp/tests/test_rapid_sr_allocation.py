@@ -465,3 +465,57 @@ class SimulationTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClusteredUncertaintyTests(unittest.TestCase):
+    """불확실성은 타겟 재표집에서 와야 한다.
+
+    yield 가 0 또는 1 로 양극화되어 있으면 라벨 뽑기에 무작위성이 거의 없다.
+    실제로 200 회 반복이 전부 같은 값을 냈다. 그 위에서 계산한 CI 는 "다른
+    타겟에서도 성립하는가" 라는 질문에 아무 답도 하지 않는다. 타겟을 클러스터로
+    보고 재표집해야 그 질문에 답한다.
+    """
+
+    def setUp(self):
+        from rapid_sr.allocation import clustered_policy_bootstrap
+        self.run = clustered_policy_bootstrap
+
+    def _fixture(self, n_targets=8):
+        arms = _arms(n_targets=n_targets, n_backbones=2, conditions=("T0.1",))
+        truth = {a.key: (0.9 if int(a.target_id[3:]) % 2 == 0 else 0.05) for a in arms}
+        return arms, truth
+
+    def test_reports_a_ci_over_resampled_targets(self):
+        arms, truth = self._fixture()
+        out = self.run(arms, truth=truth, budget=40, batch_size=8, n_boot=40, seed=0)
+        low, high = out["vs_static_best_ci95"]
+        self.assertLess(low, high, "타겟 재표집 CI 가 한 점으로 붕괴하면 안 된다")
+
+    def test_the_clustered_ci_is_wider_than_the_repeat_ci(self):
+        """타겟 간 이질성을 반영하면 CI 는 넓어져야 한다. 좁아지면 뭔가 틀렸다."""
+        arms, truth = self._fixture()
+        clustered = self.run(arms, truth=truth, budget=40, batch_size=8, n_boot=60, seed=0)
+        repeats = simulate(arms, truth=truth, budget=40, batch_size=8, seed=0, repeats=60,
+                           surrogate_auc=0.725)["rapid_adaptive"]
+        c_low, c_high = clustered["vs_static_best_ci95"]
+        r_low, r_high = repeats["vs_static_best_ci95"]
+        self.assertGreater(c_high - c_low, r_high - r_low)
+
+    def test_resampling_keeps_whole_targets_together(self):
+        """타겟 하나를 뽑으면 그 타겟의 arm 이 전부 따라와야 한다."""
+        arms, truth = self._fixture(n_targets=6)
+        out = self.run(arms, truth=truth, budget=24, batch_size=6, n_boot=20, seed=0)
+        for draw in out["resampled_target_counts"]:
+            self.assertEqual(sum(draw.values()), 6)
+
+    def test_it_is_deterministic_for_a_seed(self):
+        arms, truth = self._fixture()
+        a = self.run(arms, truth=truth, budget=24, batch_size=6, n_boot=20, seed=2)
+        b = self.run(arms, truth=truth, budget=24, batch_size=6, n_boot=20, seed=2)
+        self.assertEqual(a["vs_static_best_ci95"], b["vs_static_best_ci95"])
+
+    def test_it_refuses_to_run_with_too_few_targets_to_resample(self):
+        arms = _arms(n_targets=1, n_backbones=2, conditions=("T0.1",))
+        truth = {a.key: 0.5 for a in arms}
+        with self.assertRaises(ValueError):
+            self.run(arms, truth=truth, budget=8, batch_size=4, n_boot=10, seed=0)

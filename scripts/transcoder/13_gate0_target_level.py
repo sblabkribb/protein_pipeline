@@ -64,8 +64,14 @@ def aggregate_to_target(rows: list[dict], features: np.ndarray) -> dict:
     }
 
 
-def evaluate_target_level(X, y, w, *, kind="binomial", n_splits=5, n_repeats=20, seed=0):
-    """타겟 단위 반복 K-fold. 타겟이 곧 그룹이므로 별도 group 처리가 필요 없다."""
+def evaluate_target_level(X, y, w, *, kind="binomial", n_splits=5, n_repeats=20, seed=0,
+                          collect_oof=False):
+    """타겟 단위 반복 K-fold. 타겟이 곧 그룹이므로 별도 group 처리가 필요 없다.
+
+    `collect_oof=True` 면 반복별 out-of-fold 예측을 함께 돌려준다. 그 예측은 해당
+    타겟의 라벨을 보지 않고 만들어진 것이므로, 예산 배분 시뮬레이션의 대리모형
+    으로 그대로 쓸 수 있다 - 합성 AUC 를 가정하지 않아도 된다.
+    """
     from scipy.stats import spearmanr
     from sklearn.linear_model import LogisticRegression
     from sklearn.metrics import roc_auc_score
@@ -73,6 +79,7 @@ def evaluate_target_level(X, y, w, *, kind="binomial", n_splits=5, n_repeats=20,
     n = len(y)
     binary = (y >= 0.5).astype(int)
     rhos, aucs = [], []
+    oof_repeats: list[list[float]] = []
     for rep in range(n_repeats):
         rng = np.random.default_rng(seed + rep)
         order = rng.permutation(n)
@@ -105,6 +112,8 @@ def evaluate_target_level(X, y, w, *, kind="binomial", n_splits=5, n_repeats=20,
             rhos.append(float(rho))
         if len(set(binary)) == 2:
             aucs.append(float(roc_auc_score(binary, preds)))
+        if collect_oof:
+            oof_repeats.append([float(v) for v in preds])
 
     def ci(values):
         if not values:
@@ -115,13 +124,18 @@ def evaluate_target_level(X, y, w, *, kind="binomial", n_splits=5, n_repeats=20,
         return [round(float(np.percentile(boot, 2.5)), 4),
                 round(float(np.percentile(boot, 97.5)), 4)]
 
-    return {
+    out = {
         "n_targets": int(n),
         "spearman": round(float(np.mean(rhos)), 4) if rhos else None,
         "spearman_ci95": ci(rhos), "per_repeat_spearman": rhos,
         "auc": round(float(np.mean(aucs)), 4) if aucs else None,
         "auc_ci95": ci(aucs), "per_repeat_auc": aucs,
     }
+    if collect_oof and oof_repeats:
+        # 반복 평균. 한 반복의 예측만 쓰면 폴드 분할 하나에 결과가 좌우된다.
+        out["oof_mean"] = [round(float(v), 6) for v in np.mean(oof_repeats, axis=0)]
+        out["oof_n_repeats"] = len(oof_repeats)
+    return out
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -131,6 +145,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pdb-dir", default=str(base / "backbones" / "pdb"))
     parser.add_argument("--encoder-features", default=str(base / "backbones" / "mpnn_encoder.npy"))
     parser.add_argument("--out", default=str(base / "gate0_target_level.json"))
+    parser.add_argument("--export-oof", default="",
+                        help="C 팔의 out-of-fold 타겟 예측을 이 JSON 으로 내보낸다. "
+                             "예산 배분 시뮬레이션의 대리모형으로 쓴다.")
     args = parser.parse_args(argv)
 
     with open(args.labels, newline="", encoding="utf-8") as handle:
@@ -155,8 +172,25 @@ def main(argv: list[str] | None = None) -> int:
         alive = (X != 0).any(0) & (X.std(0) > 0)
         if alive.sum():
             X = X[:, alive]
-        res = evaluate_target_level(X, agg["y"], agg["w"], kind=kind)
+        res = evaluate_target_level(
+            X, agg["y"], agg["w"], kind=kind,
+            collect_oof=bool(args.export_oof) and name == "C_raw_mpnn_encoder",
+        )
         res["feature_dim"] = int(X.shape[1])
+        if res.get("oof_mean"):
+            oof_export = {
+                "arm": name,
+                "auc": res["auc"], "auc_ci95": res["auc_ci95"],
+                "n_repeats": res["oof_n_repeats"],
+                "note": ("각 타겟의 예측은 그 타겟이 테스트 폴드에 있을 때 만들어진 것이다. "
+                         "따라서 이 점수를 대리모형으로 쓰면 해당 타겟의 라벨을 보지 않은 "
+                         "예측을 쓰는 것이 된다."),
+                "scores": {
+                    target: score for target, score in zip(agg["targets"], res["oof_mean"])
+                },
+            }
+        # 예측 벡터는 리포트를 크게 만들 뿐이라 별도 파일로만 내보낸다.
+        res.pop("oof_mean", None)
         report["arms"][name] = res
         report.setdefault("n_targets", res["n_targets"])
         print(f"{name:30s} {res['n_targets']:>8d} {str(res['spearman']):>8s} "
@@ -190,6 +224,10 @@ def main(argv: list[str] | None = None) -> int:
 
     Path(args.out).write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(f"\nwrote {args.out}")
+    if args.export_oof:
+        Path(args.export_oof).write_text(
+            json.dumps(oof_export, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"wrote {args.export_oof} ({len(oof_export['scores'])} targets)")
     return 0
 
 

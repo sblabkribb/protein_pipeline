@@ -38,7 +38,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "scripts" / "transcoder"))
 sys.path.insert(0, str(PROJECT_ROOT / "pipeline-mcp" / "src"))
 
-from rapid_sr.allocation import Arm, simulate  # noqa: E402
+from rapid_sr.allocation import Arm, clustered_policy_bootstrap, simulate  # noqa: E402
 
 LABELS = PROJECT_ROOT / "public_data" / "benchmark" / "gate0" / "backbones" / "backbone_labels.csv"
 PDB_DIR = PROJECT_ROOT / "public_data" / "benchmark" / "gate0" / "backbones" / "pdb"
@@ -102,7 +102,12 @@ def main(argv=None) -> int:
     parser.add_argument("--repeats", type=int, default=200)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--surrogate-auc", type=float, default=MEASURED_GATE0_AUC)
+    parser.add_argument("--surrogate-oof", type=Path, default=None,
+                        help="13_gate0_target_level.py --export-oof 가 만든 파일. 주면 합성 "
+                             "대리모형 대신 실제 out-of-fold 인코더 예측을 쓴다.")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
+    parser.add_argument("--clustered-boot", type=int, default=200,
+                        help="타겟 클러스터 부트스트랩 횟수. 0 이면 건너뛴다.")
     args = parser.parse_args(argv)
 
     rows = list(csv.DictReader(args.labels.open(encoding="utf-8")))
@@ -121,8 +126,27 @@ def main(argv=None) -> int:
     print(f"AF2 비용 추정 가능 {len(known_cost)}/{len(arms)} · "
           f"중앙값 {statistics.median(known_cost):.0f}s" if known_cost else "AF2 비용 미상")
 
+    surrogate_scores = None
+    surrogate_source = f"synthetic at AUC {args.surrogate_auc}"
+    if args.surrogate_oof:
+        payload = json.loads(args.surrogate_oof.read_text(encoding="utf-8"))
+        by_target = payload["scores"]
+        missing = sorted({a.target_id for a in arms} - set(by_target))
+        if missing:
+            # 점수가 없는 타겟을 중앙값으로 채우면 없는 정보를 지어내는 것이다.
+            print(f"OOF 점수 없는 타겟 {len(missing)} 개의 arm 을 제외한다", file=sys.stderr)
+            arms = [a for a in arms if a.target_id in by_target]
+            truth = {a.key: truth[a.key] for a in arms}
+        surrogate_scores = {a.key: float(by_target[a.target_id]) for a in arms}
+        surrogate_source = (
+            f"{args.surrogate_oof.name} · out-of-fold 인코더 예측 "
+            f"(보고된 AUC {payload.get('auc')}, {payload.get('n_repeats')} 반복 평균)"
+        )
+        print(f"대리모형: {surrogate_source}")
+
     out = {
         "labels": str(args.labels.relative_to(PROJECT_ROOT)),
+        "surrogate_source": surrogate_source,
         "yield_field": args.yield_field,
         "n_arms": len(arms),
         "n_targets": len({a.target_id for a in arms}),
@@ -136,6 +160,12 @@ def main(argv=None) -> int:
             "1.0 인 백본을 한 번 잡으면 이후 모든 뽑기가 결정적으로 성공하므로, 반복 간 "
             "분산이 거의 0 이 되고 CI 가 실제보다 좁아진다. 절대 수치가 아니라 정책 간 "
             "순서를 읽어야 한다."
+        ),
+        "aggregation_baseline_note": (
+            "--surrogate-oof 를 쓰면 대리모형이 이미 타겟 하나당 점수 하나이므로 타겟 집계가 "
+            "항등이 되고, static_topk_target_agg 는 static_topk_measured_auc 와 같아진다. "
+            "그 둘이 같은 값으로 나오는 것은 버그가 아니라 이 대리모형이 이미 타겟 수준이라는 뜻이다. "
+            "합성 대리모형(--surrogate-auc)은 arm 수준 잡음을 갖고 있어 두 대조군이 갈린다."
         ),
         "baseline_note": (
             "static 대조군은 두 가지를 함께 돌린다. arm 수준 원점수를 쓰는 것과, 적응 "
@@ -156,7 +186,9 @@ def main(argv=None) -> int:
         batch = args.batch_size or max(1, budget // 10)
         result = simulate(
             arms, truth=truth, budget=budget, batch_size=batch,
-            seed=args.seed, repeats=args.repeats, surrogate_auc=args.surrogate_auc,
+            seed=args.seed, repeats=args.repeats,
+            surrogate_auc=args.surrogate_auc,
+            measured_surrogate_scores=surrogate_scores,
         )
         out["budgets"][str(budget)] = {"batch_size": batch, "policies": result}
 
@@ -179,6 +211,29 @@ def main(argv=None) -> int:
             verdict = "우세" if low > 0 else ("열세" if high < 0 else "구별 안 됨")
             print(f"  → {caption}: {headline[label]:+.2f} "
                   f"[{low:+.2f}, {high:+.2f}] — {verdict}")
+
+    if args.clustered_boot:
+        # 반복 재실행 CI 는 이 데이터에서 거의 0 폭이다 (yield 가 0/1 에 몰려 있어
+        # 라벨 뽑기에 무작위성이 없다). 실제로 물어야 할 것은 "다른 타겟에서도
+        # 성립하는가" 이므로 타겟을 클러스터로 재표집한다.
+        print(f"\n타겟 클러스터 부트스트랩 ({args.clustered_boot} 회)")
+        out["clustered_bootstrap"] = {}
+        for budget in [int(b) for b in args.budgets.split(",") if b.strip()]:
+            batch = args.batch_size or max(1, budget // 10)
+            block = clustered_policy_bootstrap(
+                arms, truth=truth, budget=budget, batch_size=batch,
+                n_boot=args.clustered_boot, seed=args.seed,
+                surrogate_auc=args.surrogate_auc,
+                measured_surrogate_scores=surrogate_scores,
+            )
+            # 재표집 내역은 크고 재현 가능하므로 아티팩트에 넣지 않는다.
+            block.pop("resampled_target_counts", None)
+            out["clustered_bootstrap"][str(budget)] = block
+            low, high = block["vs_static_best_ci95"]
+            verdict = "우세" if low > 0 else ("열세" if high < 0 else "구별 안 됨")
+            print(f"  예산 {budget:4d}: 적응 {block['rapid_adaptive']:7.2f} "
+                  f"vs static {block['reference_successes']:7.2f} → "
+                  f"{block['vs_static_best']:+7.2f} [{low:+.2f}, {high:+.2f}] — {verdict}")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(json.dumps(out, indent=2, ensure_ascii=False), encoding="utf-8")

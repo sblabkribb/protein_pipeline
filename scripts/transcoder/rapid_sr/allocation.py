@@ -416,6 +416,7 @@ def simulate(
     repeats: int = 1,
     surrogate_scores: dict[str, float] | None = None,
     surrogate_auc: float | None = None,
+    measured_surrogate_scores: dict[str, float] | None = None,
     static_k_grid=None,
     success_threshold: float = 0.5,
     use_gate0_prior: bool = True,
@@ -449,8 +450,15 @@ def simulate(
     labels = {arm.key: int(truth[arm.key] >= success_threshold) for arm in arms}
     measured_surrogate = None
     target_agg_surrogate = None
-    if surrogate_auc is not None and 0 < sum(labels.values()) < len(labels):
+    if measured_surrogate_scores is not None:
+        # 실제 out-of-fold 예측. 합성 AUC 가정을 쓰지 않는다.
+        missing = [arm.key for arm in arms if arm.key not in measured_surrogate_scores]
+        if missing:
+            raise ValueError(f"대리모형 점수가 없는 arm: {missing[:5]}")
+        measured_surrogate = dict(measured_surrogate_scores)
+    elif surrogate_auc is not None and 0 < sum(labels.values()) < len(labels):
         measured_surrogate = surrogate_with_auc(labels, auc=surrogate_auc, seed=seed)
+    if measured_surrogate is not None:
         # 적응 정책의 사전분포와 **똑같은** 신호를 static 대조군에도 준다. 그래야
         # 남는 차이가 온라인 갱신에서 온 것이라고 말할 수 있다.
         target_agg_surrogate = _target_aggregated(arms, measured_surrogate)
@@ -562,3 +570,107 @@ def simulate(
         out["rapid_adaptive"][f"{label}_ci95"] = _bootstrap_ci(diffs, seed=seed)
         out["rapid_adaptive"][f"{label}_reference"] = reference
     return out
+
+
+def clustered_policy_bootstrap(
+    arms,
+    *,
+    truth: dict[str, float],
+    budget: int,
+    batch_size: int,
+    n_boot: int = 200,
+    seed: int = 0,
+    surrogate_auc: float | None = 0.7247,
+    measured_surrogate_scores: dict[str, float] | None = None,
+    reference: str = "static_topk_measured_auc_best",
+) -> dict:
+    """타겟을 클러스터로 보고 재표집해 정책 차이의 CI 를 낸다.
+
+    왜 반복 재실행만으로는 부족한가. 이 데이터의 yield 는 0 또는 1 에 몰려 있어서
+    라벨 뽑기에 사실상 무작위성이 없다 - 200 회 반복이 전부 같은 값을 냈다. 그
+    위에서 계산한 CI 는 "시뮬레이션을 다시 돌리면 얼마나 달라지는가" 를 재는데,
+    아무도 그것을 묻지 않는다. 물어야 할 것은 **다른 타겟에서도 성립하는가** 이고,
+    그러려면 타겟을 통째로 재표집해야 한다.
+
+    설계는 배열이 아니라 타겟 단위다. 한 타겟이 뽑히면 그 타겟의 백본과 설계가
+    전부 따라온다 - 타겟 안의 관측은 독립이 아니기 때문이다.
+    """
+    targets = sorted({arm.target_id for arm in arms})
+    if len(targets) < 2:
+        raise ValueError(f"타겟이 {len(targets)} 개면 재표집할 것이 없다")
+    if n_boot < 2:
+        raise ValueError("n_boot 는 2 이상이어야 한다")
+
+    by_target: dict[str, list] = {}
+    for arm in arms:
+        by_target.setdefault(arm.target_id, []).append(arm)
+
+    rng = random.Random(seed)
+    diffs: list[float] = []
+    adaptive_values: list[float] = []
+    reference_values: list[float] = []
+    counts: list[dict[str, int]] = []
+
+    for draw in range(n_boot):
+        picked = [targets[rng.randrange(len(targets))] for _ in targets]
+        counts.append({target: picked.count(target) for target in set(picked)})
+        # 같은 타겟이 두 번 뽑히면 arm key 가 겹친다. 복제본마다 접미사를 붙여
+        # 별개의 arm 으로 둔다 - 그것이 복원추출의 의미다.
+        resampled = []
+        resampled_truth = {}
+        for copy_index, target in enumerate(picked):
+            for arm in by_target[target]:
+                clone = Arm(
+                    target_id=f"{target}#{copy_index}",
+                    backbone_id=arm.backbone_id,
+                    condition=arm.condition,
+                    cost_seconds=arm.cost_seconds,
+                )
+                resampled.append(clone)
+                resampled_truth[clone.key] = truth[arm.key]
+        surrogate = None
+        if measured_surrogate_scores is not None:
+            surrogate = {}
+            for copy_index, target in enumerate(picked):
+                for arm in by_target[target]:
+                    clone_key = f"{target}#{copy_index}|{arm.backbone_id}|{arm.condition}"
+                    surrogate[clone_key] = measured_surrogate_scores[arm.key]
+        result = simulate(
+            resampled, truth=resampled_truth, budget=budget, batch_size=batch_size,
+            seed=seed * 7919 + draw, repeats=1,
+            surrogate_auc=surrogate_auc, measured_surrogate_scores=surrogate,
+        )
+        adaptive = result["rapid_adaptive"]["successes"]
+        other = result.get(reference, {}).get("successes")
+        adaptive_values.append(adaptive)
+        if other is not None:
+            reference_values.append(other)
+            diffs.append(adaptive - other)
+
+    def summarise(values):
+        if not values:
+            return None
+        ordered = sorted(values)
+        lo = ordered[max(0, int(0.025 * len(ordered)))]
+        hi = ordered[min(len(ordered) - 1, int(0.975 * len(ordered)))]
+        return [round(float(lo), 4), round(float(hi), 4)]
+
+    return {
+        "n_targets": len(targets),
+        "n_boot": n_boot,
+        "budget": budget,
+        "reference": reference,
+        "rapid_adaptive": round(statistics.fmean(adaptive_values), 4),
+        "rapid_adaptive_ci95": summarise(adaptive_values),
+        "reference_successes": round(statistics.fmean(reference_values), 4) if reference_values else None,
+        "reference_ci95": summarise(reference_values),
+        "vs_static_best": round(statistics.fmean(diffs), 4) if diffs else None,
+        "vs_static_best_ci95": summarise(diffs),
+        "excludes_zero": bool(diffs) and (summarise(diffs)[0] > 0 or summarise(diffs)[1] < 0),
+        "resampled_target_counts": counts,
+        "note": (
+            "CI 는 타겟을 클러스터로 복원추출해서 얻은 것이다. 같은 타겟이 여러 번 "
+            "뽑히면 그 복제본은 별개의 arm 집합으로 취급된다. 이 CI 는 '다른 타겟 "
+            "집합에서도 성립하는가' 에 답하며, 시뮬레이션 재실행 분산과는 다른 것이다."
+        ),
+    }

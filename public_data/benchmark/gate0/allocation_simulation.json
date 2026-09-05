@@ -1,11 +1,13 @@
 {
   "labels": "public_data/benchmark/gate0/backbones/backbone_labels.csv",
+  "surrogate_source": "synthetic at AUC 0.7247",
   "yield_field": "joint_pass_yield",
   "n_arms": 157,
   "n_targets": 62,
   "surrogate_auc": 0.7247,
   "surrogate_note": "대리모형은 게이트 0 실측 타겟 수준 AUC 로 합성한 것이다. 실제 인코더 점수를 쓰면 같은 데이터로 학습·평가하게 되어 누출이 생긴다.",
   "variance_note": "yield 분포가 양극단이다 (0 인 백본 58 개, 1 인 백본 55 개). yield 가 정확히 1.0 인 백본을 한 번 잡으면 이후 모든 뽑기가 결정적으로 성공하므로, 반복 간 분산이 거의 0 이 되고 CI 가 실제보다 좁아진다. 절대 수치가 아니라 정책 간 순서를 읽어야 한다.",
+  "aggregation_baseline_note": "--surrogate-oof 를 쓰면 대리모형이 이미 타겟 하나당 점수 하나이므로 타겟 집계가 항등이 되고, static_topk_target_agg 는 static_topk_measured_auc 와 같아진다. 그 둘이 같은 값으로 나오는 것은 버그가 아니라 이 대리모형이 이미 타겟 수준이라는 뜻이다. 합성 대리모형(--surrogate-auc)은 arm 수준 잡음을 갖고 있어 두 대조군이 갈린다.",
   "baseline_note": "static 대조군은 두 가지를 함께 돌린다. arm 수준 원점수를 쓰는 것과, 적응 정책의 사전분포와 같은 타겟 수준 집계를 쓰는 것이다. 후자와의 차이가 순수한 온라인 갱신의 이득이고, 두 차이의 간격이 타겟 집계 전처리의 몫이다. 두 대조군 모두 k 를 사후적으로 가장 좋았던 값으로 고른다 - 대조군에 주는 이점이다.",
   "truth_note": "관측된 yield 를 truth 로 쓴다. 정책 간 비교에는 공정하지만 절대 수치를 실제 실행의 기대값으로 읽으면 안 된다.",
   "repeats": 200,
