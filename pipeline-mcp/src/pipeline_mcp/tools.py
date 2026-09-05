@@ -8784,6 +8784,39 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.list_models",
+            "description": (
+                "List the models RAPID can route to and which design purpose selects "
+                "which of them. Every entry carries cost provenance (measured | reported "
+                "| unmeasured) and two separate flags: `executable` (a client exists here) "
+                "and `validated` (this repository has measured that route). A cost that "
+                "was never measured returns no number, and its stage is listed under "
+                "`unknown_stages` rather than counted as zero."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "purpose": {
+                        "type": "string",
+                        "description": "Return only this design purpose's route.",
+                    },
+                    "objectives": {
+                        "type": "array", "items": {"type": "string"},
+                        "description": "Return purposes covering these objectives, most coverage first.",
+                    },
+                    "n_designs": {"type": "integer", "description": "Designs to cost out."},
+                    "length_aa": {"type": "integer", "description": "Sequence length, for length-scaled stages."},
+                    "check_liveness": {
+                        "type": "boolean",
+                        "description": (
+                            "Also probe each worker's /healthz. Off by default. The probe "
+                            "never overwrites declared availability - it is reported beside it."
+                        ),
+                    },
+                },
+            },
+        },
+        {
             "name": "pipeline.plan_from_objective",
             "description": (
                 "Turn a design objective into a reviewable plan. Every decision carries "
@@ -8801,7 +8834,15 @@ def tool_definitions() -> list[dict[str, Any]]:
                         "type": "object",
                         "description": "Hard constraints, kept separate from weights (e.g. rmsd_max, mutation_max).",
                     },
-                    "budget": {"type": "object", "description": "e.g. {\"af2_calls\": 500}"},
+                    "budget": {"type": "object", "description": "e.g. {\"designs\": 40, \"length_aa\": 200, \"af2_calls\": 500}"},
+                    "purpose": {
+                        "type": "string",
+                        "description": (
+                            "Design purpose. This, not the weights, decides which models run. "
+                            "See pipeline.list_models. Defaults to monomer_solubility_redesign, "
+                            "the only fully measured route."
+                        ),
+                    },
                 },
                 "required": ["weights"],
             },
@@ -9618,6 +9659,51 @@ class ToolDispatcher:
                 "applied_edits": edited.get("applied_edits", {}),
             }
 
+        if name == "pipeline.list_models":
+            from .model_routing import UnknownPurposeError, load_registry
+
+            registry = load_registry()
+            n_designs = int(arguments.get("n_designs") or 0)
+            length_raw = arguments.get("length_aa")
+            length_aa = int(length_raw) if length_raw else None
+
+            requested = str(arguments.get("purpose") or "").strip()
+            objectives = [str(o) for o in (arguments.get("objectives") or [])]
+            if requested:
+                try:
+                    routes = (registry.route(requested),)
+                except UnknownPurposeError as exc:
+                    return {"error": str(exc)}
+            elif objectives:
+                routes = registry.purposes_for_objectives(objectives)
+            else:
+                routes = registry.routes()
+
+            purposes = []
+            for route in routes:
+                item = route.to_dict()
+                if n_designs:
+                    item["cost_estimate"] = route.cost_estimate(
+                        n_designs=n_designs, length_aa=length_aa
+                    )
+                purposes.append(item)
+
+            out = {
+                "policy_version": registry.policy_version,
+                "freeze_state": registry.freeze_state,
+                "purposes": purposes,
+                "models": {k: v.to_dict() for k, v in registry.models.items()},
+                "measurable_objectives": sorted(registry.measurable_objectives()),
+                "runnable_but_unvalidated_objectives": sorted(
+                    registry.measurable_objectives(include_unvalidated=True)
+                    - registry.measurable_objectives()
+                ),
+            }
+            if arguments.get("check_liveness"):
+                # 선언된 가용성 옆에 놓을 뿐, 덮어쓰지 않는다.
+                out["liveness"] = registry.probe_liveness()
+            return out
+
         if name == "pipeline.plan_from_objective":
             from .objective_planner import Objective, build_plan
 
@@ -9629,6 +9715,7 @@ class ToolDispatcher:
                     weights={k: float(v) for k, v in weights.items()},
                     constraints=dict(arguments.get("constraints") or {}),
                     budget={k: int(v) for k, v in (arguments.get("budget") or {}).items()},
+                    **({"purpose": str(arguments["purpose"])} if arguments.get("purpose") else {}),
                 )
             except ValueError as exc:
                 # 사용자 입력 오류는 서버 오류가 아니라 되돌려줄 메시지다.

@@ -71,14 +71,45 @@ test("all three steps are visible before a plan exists", () => {
 
 test("approve stays disabled until a plan is generated", () => {
   assert.ok(/id="approveBtn"[^>]*disabled/.test(html), "approve must start disabled");
-  assert.ok(source.includes('getElementById("approveBtn").disabled = false'),
-            "approve is enabled only after a plan arrives");
+  assert.ok(source.includes('getElementById("approveBtn").disabled = !approvable'),
+            "approve is enabled only after an approvable plan arrives");
 });
 
-test("stage costs shown in the sidebar are measured, not invented", () => {
-  assert.ok(source.includes("AUC 0.725"), "gate 0 chip must cite the measured AUC");
-  assert.ok(source.includes("91s / fold"), "AF2 chip must cite the measured fold time");
-  assert.ok(source.includes("미구현"), "unbuilt stages must be marked as such");
+test("a route the server cannot run is not approvable", () => {
+  // 실행할 수 없는 경로에 승인 버튼을 열어두면 사용자는 무언가 시작됐다고 믿는다.
+  assert.ok(source.includes("plan.approvable"), "must read the server's approvable flag");
+});
+
+test("stage costs come from the server, never hard-coded in the browser", () => {
+  // 프런트에 숫자를 박아두면 실측이 갱신돼도 화면만 옛 값을 계속 보여준다.
+  // 실제로 62 잔기 프로브에서 나온 "91s / fold" 가 59-274 잔기 백본 옆에 붙어 있었다.
+  // 주석으로 남기는 것은 기록이고, 값으로 쓰는 것이 문제다. 후자만 막는다.
+  const code = source.replace(/^\s*\/\/.*$/gm, "");
+  assert.ok(!/91s/.test(code), "the 62-residue probe figure must not be a value in the code");
+  assert.ok(!/cost:\s*["'`]/.test(code), "cost chips must not be string literals");
+  assert.ok(!/const STAGES\s*=/.test(code), "the stage list must not be a browser constant");
+  assert.ok(source.includes("pipeline.list_models"), "stages must come from the model registry");
+  assert.ok(source.includes("cost_estimate"), "cost chips must come from the server estimate");
+});
+
+test("an unmeasured cost is shown as unmeasured, not as zero", () => {
+  assert.ok(source.includes("미측정"), "unmeasured stages must be labelled");
+  assert.ok(source.includes("unknown_stages"), "the total must exclude unmeasured stages");
+  assert.ok(/하한/.test(source), "the total must say it is a lower bound");
+});
+
+test("runnable and validated are shown as separate facts", () => {
+  // 돌아간다는 것과 측정했다는 것은 다르다. 한 칸에 합치면 구분이 사라진다.
+  assert.ok(source.includes("stage.validated"), "must read the per-stage validated flag");
+  assert.ok(source.includes("미검증"), "unvalidated stages must be badged");
+  assert.ok(source.includes("model.runnable"), "the dot must reflect runnability");
+  const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
+  assert.ok(css.includes(".warnchip"), "the unvalidated badge needs its own style");
+});
+
+test("the design purpose is selectable and decides the route", () => {
+  assert.ok(html.includes('id="purpose"'), "the page needs a purpose selector");
+  assert.ok(source.includes("purpose: document.getElementById"), "the plan request must carry it");
 });
 
 test("the evidence panel aggregates server-provided evidence only", () => {

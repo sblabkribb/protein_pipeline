@@ -16,14 +16,10 @@ const OBJECTIVES = [
   { key: "developability", label: "개발가능성", value: 0 },
 ];
 
-// 좌측에 보여줄 평가 단계와 실측 비용. 값을 지어내지 않는다 — 전부 측정된 것이다.
-const STAGES = [
-  { name: "Gate 0 · 타겟 선별", cost: "AUC 0.725", on: true },
-  { name: "ProteinMPNN 생성", cost: "초 단위", on: true },
-  { name: "Gate 1 · SoluProt", cost: "초 단위", on: true },
-  { name: "Gate 2 · AF2/ColabFold", cost: "91s / fold", on: true },
-  { name: "활성 평가 플러그인", cost: "미구현", on: false },
-];
+// 평가 단계는 서버의 모델 레지스트리에서 온다. 프런트에 박아두면 실측값이
+// 바뀌었을 때 화면만 옛날 숫자를 계속 보여준다 — 실제로 그렇게 해서 62 잔기
+// 프로브에서 나온 "91s / fold" 가 59-274 잔기 백본 옆에 붙어 있었다.
+const registry = { models: {}, purposes: [], loaded: false };
 
 const KIND_LABEL = {
   internal_measurement: "측정",
@@ -62,17 +58,138 @@ async function callTool(name, args) {
   return payload;
 }
 
-function renderStages(host) {
+function formatSeconds(value) {
+  if (value == null) return "미측정";
+  if (value < 90) return `${value.toFixed(1)}s`;
+  if (value < 5400) return `${(value / 60).toFixed(1)}분`;
+  return `${(value / 3600).toFixed(2)}시간`;
+}
+
+// 스테이지 한 줄. 점 색은 "돌아가는가", 칩은 "얼마나 드는가", 배지는 "검증됐는가".
+// 세 가지가 서로 다른 사실이라서 한 칸에 합치지 않는다.
+function stageRow(stage, model, costEntry) {
+  const row = document.createElement("div");
+  row.className = "stage";
+
+  const dot = document.createElement("span");
+  dot.className = `dot${model && model.runnable ? "" : " off"}`;
+  row.appendChild(dot);
+
+  const label = document.createElement("span");
+  label.textContent = `${stage.stage} · ${model ? model.display_name : stage.model_id}`;
+  row.appendChild(label);
+
+  if (!stage.validated) {
+    const badge = document.createElement("span");
+    badge.className = "chip warnchip";
+    badge.textContent = "미검증";
+    badge.title = "이 경로에서 측정된 적이 없습니다. 돌아가는 것과 맞는 것은 다릅니다.";
+    row.appendChild(badge);
+  }
+
+  const chip = document.createElement("span");
+  chip.className = "chip";
+  if (costEntry && costEntry.seconds != null) {
+    chip.textContent = formatSeconds(costEntry.seconds);
+    const parts = [`출처: ${costEntry.source || "-"}`];
+    if (model && model.cost && model.cost.scope) parts.push(`범위: ${model.cost.scope}`);
+    if (costEntry.client_overhead_seconds != null) {
+      parts.push(`클라이언트 폴링 추가 ${costEntry.client_overhead_seconds}s/호출`);
+    }
+    chip.title = parts.join("\n");
+  } else {
+    chip.textContent = "미측정";
+    chip.title = (costEntry && costEntry.reason) || "측정된 비용이 없습니다. 0초가 아닙니다.";
+  }
+  row.appendChild(chip);
+
+  // Gate 0 의 AUC 처럼 스테이지가 성능 측정을 갖고 있으면 같이 보여준다.
+  if (model && model.performance && model.performance.value != null) {
+    const perf = document.createElement("span");
+    perf.className = "chip";
+    perf.textContent = `${model.performance.metric} ${model.performance.value}`;
+    perf.title = `출처: ${model.performance.source || "-"}`;
+    row.appendChild(perf);
+  }
+  return row;
+}
+
+function renderStages(host, route) {
   if (!host) return;
   host.innerHTML = "";
-  for (const stage of STAGES) {
-    const row = document.createElement("div");
-    row.className = "stage";
-    row.innerHTML =
-      `<span class="dot${stage.on ? "" : " off"}"></span>` +
-      `<span>${stage.name}</span><span class="chip">${stage.cost}</span>`;
-    host.appendChild(row);
+  const total = document.getElementById("costTotal");
+  if (!route) {
+    host.textContent = "설계 목적을 고르면 단계가 표시됩니다.";
+    if (total) total.textContent = "";
+    return;
   }
+  const costByStage = {};
+  for (const entry of (route.cost_estimate && route.cost_estimate.breakdown) || []) {
+    costByStage[entry.stage] = entry;
+  }
+  for (const stage of route.stages || []) {
+    host.appendChild(stageRow(stage, registry.models[stage.model_id], costByStage[stage.stage]));
+  }
+  if (total) {
+    const est = route.cost_estimate;
+    if (!est) {
+      total.textContent = "";
+    } else {
+      const unknown = est.unknown_stages || [];
+      total.textContent =
+        `측정된 합계 ${formatSeconds(est.known_seconds)}` +
+        (unknown.length ? ` · 미측정 ${unknown.length}단계 제외 (하한값)` : " · 전 단계 측정됨");
+    }
+  }
+}
+
+async function loadRegistry() {
+  const select = document.getElementById("purpose");
+  try {
+    const out = await callTool("pipeline.list_models", {
+      n_designs: Number(document.getElementById("nDesigns").value) || 16,
+      length_aa: Number(document.getElementById("lengthAa").value) || 200,
+    });
+    if (out && out.error) throw new Error(out.error);
+    registry.models = out.models || {};
+    registry.purposes = out.purposes || [];
+    registry.loaded = true;
+    select.innerHTML = "";
+    for (const route of registry.purposes) {
+      const option = document.createElement("option");
+      option.value = route.purpose;
+      // 실행할 수 없는 경로도 목록에 남긴다. 숨기면 사용자는 왜 없는지 모른다.
+      option.textContent = route.display_name_ko + (route.executable ? "" : " — 실행 불가");
+      select.appendChild(option);
+    }
+    onPurposeChange();
+  } catch (error) {
+    select.innerHTML = "";
+    document.getElementById("purposeNote").textContent =
+      `모델 목록을 가져오지 못했습니다: ${error.message}`;
+    renderStages(document.getElementById("stages"), null);
+  }
+}
+
+function currentRoute() {
+  const value = document.getElementById("purpose").value;
+  return registry.purposes.find((route) => route.purpose === value) || null;
+}
+
+function onPurposeChange() {
+  const route = currentRoute();
+  const note = document.getElementById("purposeNote");
+  renderStages(document.getElementById("stages"), route);
+  if (!route) { note.textContent = ""; return; }
+  const lines = [route.description || ""];
+  if (!route.executable) lines.push(route.blocked_reason || "");
+  else if (!route.validated) {
+    lines.push(`검증되지 않은 단계: ${(route.unvalidated_stages || []).join(", ")}`);
+  }
+  if (route.referral) lines.push(route.referral);
+  if (route.caveat) lines.push(route.caveat);
+  note.textContent = lines.filter(Boolean).join(" ");
+  document.getElementById("planBtn").disabled = false;
 }
 
 function renderWeights(host) {
@@ -96,9 +213,14 @@ function collectObjective() {
     if (value > 0) weights[slider.dataset.key] = value;
   }
   return {
+    purpose: document.getElementById("purpose").value || undefined,
     weights,
     constraints: { rmsd_max: Number(document.getElementById("rmsdMax").value) },
-    budget: { af2_calls: Number(document.getElementById("af2Budget").value) },
+    budget: {
+      af2_calls: Number(document.getElementById("af2Budget").value),
+      designs: Number(document.getElementById("nDesigns").value),
+      length_aa: Number(document.getElementById("lengthAa").value),
+    },
   };
 }
 
@@ -201,6 +323,7 @@ const REASON_LABEL = {
   evidence_is_assumption_only: "근거가 가정뿐",
   evidence_partially_assumption: "일부만 측정으로 뒷받침",
   objective_not_measurable: "평가 불가한 목표",
+  objective_not_covered_by_purpose: "목적이 이 목표를 포함하지 않음",
 };
 
 // 설명은 LLM 이 만든 산문이고 근거가 아니다. 근거 패널과 분리해서 보여준다.
@@ -276,8 +399,13 @@ async function generatePlan() {
     const reviewState = document.getElementById("reviewState");
     reviewState.textContent = `결정 ${(plan.decisions || []).length}건 · 수정 가능 ${(plan.editable_fields || []).length}건`;
     reviewState.classList.add("ready");
-    document.getElementById("approveState").textContent = "검토 후 승인 가능";
-    document.getElementById("approveBtn").disabled = false;
+    // 실행조차 못 하는 경로를 승인 버튼 뒤에 두지 않는다.
+    const approvable = plan.approvable !== false;
+    document.getElementById("approveState").textContent = approvable
+      ? "검토 후 승인 가능"
+      : "이 경로는 여기서 실행할 수 없어 승인할 수 없습니다";
+    document.getElementById("approveBtn").disabled = !approvable;
+    if (plan.route) renderStages(document.getElementById("stages"), plan.route);
     status.className = "status";
     status.textContent = "";
   } catch (error) {
@@ -313,7 +441,12 @@ async function approve() {
 }
 
 renderWeights(document.getElementById("weights"));
-renderStages(document.getElementById("stages"));
+renderStages(document.getElementById("stages"), null);
+document.getElementById("purpose").addEventListener("change", onPurposeChange);
+for (const id of ["nDesigns", "lengthAa"]) {
+  document.getElementById(id).addEventListener("change", loadRegistry);
+}
+loadRegistry();
 
 for (const tab of document.querySelectorAll(".tab")) {
   tab.addEventListener("click", () => {
@@ -326,4 +459,4 @@ for (const tab of document.querySelectorAll(".tab")) {
 document.getElementById("planBtn").addEventListener("click", generatePlan);
 document.getElementById("approveBtn").addEventListener("click", approve);
 
-export { collectObjective, decisionNode, evidenceNode };
+export { collectObjective, decisionNode, evidenceNode, formatSeconds, stageRow };

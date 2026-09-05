@@ -1,0 +1,154 @@
+{
+  "measured_utc": "2026-09-05T14:48:00Z",
+  "host": "211.188.35.221",
+  "counts": [
+    1,
+    4,
+    16
+  ],
+  "repeats": 3,
+  "note": "기울기가 서열당 한계비용, 절편이 호출 고정비다. 한 번의 호출을 재서 나누면 둘이 섞인다. AF2 는 여기서 재지 않는다 - 길이 적합이 이미 있고, 측정을 위해 다른 캠페인의 워커를 밀어내지 않는다.",
+  "proteinmpnn": {
+    "backbone": "16vpA00__target__target.pdb",
+    "length_aa": 311,
+    "poll_interval_s": 0.2,
+    "points": [
+      {
+        "num_seq": 1,
+        "repeat": 0,
+        "elapsed_s": 2.877,
+        "status": "ok"
+      },
+      {
+        "num_seq": 1,
+        "repeat": 1,
+        "elapsed_s": 2.885,
+        "status": "ok"
+      },
+      {
+        "num_seq": 1,
+        "repeat": 2,
+        "elapsed_s": 2.873,
+        "status": "ok"
+      },
+      {
+        "num_seq": 4,
+        "repeat": 0,
+        "elapsed_s": 4.709,
+        "status": "ok"
+      },
+      {
+        "num_seq": 4,
+        "repeat": 1,
+        "elapsed_s": 4.516,
+        "status": "ok"
+      },
+      {
+        "num_seq": 4,
+        "repeat": 2,
+        "elapsed_s": 4.308,
+        "status": "ok"
+      },
+      {
+        "num_seq": 16,
+        "repeat": 0,
+        "elapsed_s": 10.863,
+        "status": "ok"
+      },
+      {
+        "num_seq": 16,
+        "repeat": 1,
+        "elapsed_s": 11.463,
+        "status": "ok"
+      },
+      {
+        "num_seq": 16,
+        "repeat": 2,
+        "elapsed_s": 11.266,
+        "status": "ok"
+      }
+    ],
+    "fit": {
+      "model": "elapsed_s = intercept + slope * num_seq",
+      "intercept_s": 2.298,
+      "slope_s_per_unit": 0.5602,
+      "n_distinct_x": 3,
+      "medians": {
+        "1": 2.88,
+        "4": 4.52,
+        "16": 11.27
+      }
+    },
+    "production_client_floor_s": 9.0,
+    "production_client_note": "LocalHttpRunClient 의 폴링 간격은 timeout_s/200 로 계산되어 기본 설정에서 9.0 초다. 그보다 빨리 끝나는 호출도 9.0 초로 관측된다. 워커 시간이 아니라 클라이언트가 만드는 비용이다."
+  },
+  "esm2_embedding": {
+    "points": [
+      {
+        "num_seq": 1,
+        "repeat": 0,
+        "elapsed_s": 0.01,
+        "status": "ok"
+      },
+      {
+        "num_seq": 1,
+        "repeat": 1,
+        "elapsed_s": 0.01,
+        "status": "ok"
+      },
+      {
+        "num_seq": 1,
+        "repeat": 2,
+        "elapsed_s": 0.01,
+        "status": "ok"
+      },
+      {
+        "num_seq": 4,
+        "repeat": 0,
+        "elapsed_s": 0.01,
+        "status": "ok"
+      },
+      {
+        "num_seq": 4,
+        "repeat": 1,
+        "elapsed_s": 0.01,
+        "status": "ok"
+      },
+      {
+        "num_seq": 4,
+        "repeat": 2,
+        "elapsed_s": 0.01,
+        "status": "ok"
+      },
+      {
+        "num_seq": 16,
+        "repeat": 0,
+        "elapsed_s": 0.03,
+        "status": "ok"
+      },
+      {
+        "num_seq": 16,
+        "repeat": 1,
+        "elapsed_s": 0.02,
+        "status": "ok"
+      },
+      {
+        "num_seq": 16,
+        "repeat": 2,
+        "elapsed_s": 0.01,
+        "status": "ok"
+      }
+    ],
+    "fit": {
+      "model": "elapsed_s = intercept + slope * num_seq",
+      "intercept_s": 0.008,
+      "slope_s_per_unit": 0.0007,
+      "n_distinct_x": 3,
+      "medians": {
+        "1": 0.01,
+        "4": 0.01,
+        "16": 0.02
+      }
+    }
+  }
+}

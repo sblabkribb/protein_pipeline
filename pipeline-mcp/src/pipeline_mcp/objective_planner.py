@@ -13,12 +13,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field, asdict
 
 # 근거의 종류. 측정과 문헌과 가정을 섞어 부르지 않는다.
+from .model_routing import UnknownPurposeError, load_registry
+
 EVIDENCE_KINDS = ("internal_measurement", "literature", "assumption")
 
 KNOWN_OBJECTIVES = (
     "solubility", "structural_preservation", "stability", "activity",
-    "aggregation", "developability", "diversity",
+    "aggregation", "developability", "diversity", "binding",
 )
+
+#: 목적을 말하지 않은 요청이 받는 경로. 유일하게 게이트 0/1/2 가 전부 측정된
+#: 경로이므로, 짐작이 필요할 때는 가장 검증된 쪽으로 짐작한다.
+DEFAULT_PURPOSE = "monomer_solubility_redesign"
 
 
 @dataclass(frozen=True)
@@ -70,8 +76,14 @@ class Objective:
     weights: dict[str, float] = field(default_factory=dict)
     constraints: dict[str, object] = field(default_factory=dict)
     budget: dict[str, int] = field(default_factory=dict)
+    #: 설계 목적. 어떤 모델을 쓸지는 가중치가 아니라 이것이 정한다.
+    purpose: str = DEFAULT_PURPOSE
 
     def __post_init__(self) -> None:
+        try:
+            load_registry().route(self.purpose)
+        except UnknownPurposeError as exc:
+            raise ValueError(str(exc)) from None
         unknown = sorted(set(self.weights) - set(KNOWN_OBJECTIVES))
         if unknown:
             raise ValueError(f"알 수 없는 objective: {unknown}. 지원: {list(KNOWN_OBJECTIVES)}")
@@ -86,20 +98,35 @@ class Objective:
         return {k: round(float(v) / total, 4) for k, v in self.weights.items()}
 
     def unsupported(self) -> list[str]:
-        """현재 RAPID 가 실제로 평가하지 못하는 목표.
+        """현재 RAPID 가 실제로 **검증된 방법으로** 평가하지 못하는 목표.
 
         가중치를 받아놓고 조용히 무시하면 사용자는 반영된 줄 안다.
+
+        하드코딩된 목록이 아니라 레지스트리에서 읽는다. 평가자를 하나 붙이면
+        여기가 같이 움직여야 하고, 반대로 평가자를 붙였다는 이유만으로
+        '측정 가능' 이 되어서도 안 된다 - 그래서 검증된 것만 센다.
         """
-        measurable = {"solubility", "structural_preservation", "diversity"}
+        registry = load_registry()
+        measurable = set(registry.measurable_objectives())
+        # diversity 는 서열 통계로 직접 계산하므로 모델 평가자가 없다.
+        measurable.add("diversity")
         return sorted(set(self.weights) - measurable)
+
+    def wired_but_unvalidated(self) -> list[str]:
+        """돌릴 평가자는 있는데 RAPID 가 검증하지 않은 목표."""
+        registry = load_registry()
+        runnable = set(registry.measurable_objectives(include_unvalidated=True))
+        return sorted((set(self.weights) & runnable) - set(registry.measurable_objectives()))
 
     def to_dict(self) -> dict:
         return {
+            "purpose": self.purpose,
             "weights": dict(self.weights),
             "normalized_weights": self.normalized_weights(),
             "constraints": dict(self.constraints),
             "budget": dict(self.budget),
             "unsupported_objectives": self.unsupported(),
+            "wired_but_unvalidated_objectives": self.wired_but_unvalidated(),
         }
 
 
@@ -116,12 +143,36 @@ def _literature(statement: str, source: str) -> Evidence:
     return Evidence(kind="literature", statement=statement, source=source)
 
 
+def _purpose_decision(route) -> Decision:
+    """어떤 모델을 쓸지는 목적이 정한다. 그 선택 자체가 근거를 져야 한다."""
+    stage_summary = " → ".join(f"{s.stage}:{s.model_id}" for s in route.stages)
+    evidence = [Evidence(**item) for item in route.evidence()]
+    if not evidence:
+        evidence = [Evidence(
+            kind="assumption",
+            statement=f"{route.purpose} 경로의 스테이지에 기록된 측정이 없다.",
+        )]
+    return Decision(
+        field_name="design_purpose",
+        value=route.purpose,
+        rationale=(
+            f"{route.display_name_ko}: {route.description} "
+            f"경로 = {stage_summary}. "
+            + ("이 경로는 여기서 실행 가능하다." if route.executable else route.blocked_reason)
+        ),
+        evidence=tuple(evidence),
+    )
+
+
 def build_plan(objective: Objective) -> dict:
     """목표에서 계획을 만든다. 목표가 바꾸는 것과 안 바꾸는 것을 분리한다."""
     weights = objective.normalized_weights()
     wants_diversity = weights.get("diversity", 0.0) >= 0.2
+    registry = load_registry()
+    route = registry.route(objective.purpose)
 
     decisions: list[Decision] = [
+        _purpose_decision(route),
         Decision(
             field_name="gate0_routing_unit", value="target",
             rationale="검증된 라우팅 단위는 백본이 아니라 타겟이다. native 백본은 "
@@ -212,18 +263,48 @@ def build_plan(objective: Objective) -> dict:
             ),
         ))
 
+    n_designs = int(objective.budget.get("designs") or 0)
+    length_aa = objective.budget.get("length_aa")
+
+    warnings: list[str] = []
+    for name in objective.unsupported():
+        if name in objective.wired_but_unvalidated():
+            evaluators = ", ".join(
+                m.display_name for m in registry.evaluators_for(name, include_unvalidated=True)
+            )
+            warnings.append(
+                f"'{name}' 은 평가자({evaluators})가 붙어 있어 실행은 되지만 RAPID 안에서 "
+                f"검증된 적이 없다. 돌아간다는 것과 맞는다는 것은 다르다."
+            )
+        else:
+            warnings.append(
+                f"'{name}' 은 현재 RAPID 가 평가하지 못한다. 가중치를 받아도 반영되지 않는다."
+            )
+    if not route.executable:
+        warnings.append(route.blocked_reason)
+    elif not route.validated:
+        stages = ", ".join(s.stage for s in route.unvalidated_stages)
+        warnings.append(
+            f"이 경로는 실행 가능하지만 검증되지 않은 스테이지가 있다: {stages}. "
+            f"결과를 RAPID 가 측정한 성능으로 읽으면 안 된다."
+        )
+
     plan = {
         "objective": objective.to_dict(),
+        "route": route.to_dict(),
+        "cost_estimate": route.cost_estimate(
+            n_designs=n_designs or 1,
+            length_aa=int(length_aa) if length_aa else None,
+        ),
         "decisions": [d.to_dict() for d in decisions],
         "review_required": True,
+        # 실행조차 못 하는 경로를 승인 버튼 뒤에 두지 않는다.
+        "approvable": route.executable,
         "editable_fields": [d.field_name for d in decisions if d.editable],
         "locked_fields": [d.field_name for d in decisions if not d.editable],
     }
-    if objective.unsupported():
-        plan["warnings"] = [
-            f"'{name}' 은 현재 RAPID 가 평가하지 못한다. 가중치를 받아도 반영되지 않는다."
-            for name in objective.unsupported()
-        ]
+    if warnings:
+        plan["warnings"] = warnings
     return plan
 
 
@@ -312,6 +393,10 @@ def suggest_questions(plan: dict) -> list[dict]:
         name = str(decision.get("field"))
         if name in locked:
             continue
+        # 목적은 _purpose_questions 가 선택지까지 붙여서 한 번만 묻는다. 여기서도
+        # 물으면 같은 필드에 대해 답할 수 없는 질문이 하나 더 생긴다.
+        if name == "design_purpose":
+            continue
         kinds = {e.get("kind") for e in decision.get("evidence", [])}
         if kinds and kinds <= {"assumption"}:
             questions.append({
@@ -332,7 +417,44 @@ def suggest_questions(plan: dict) -> list[dict]:
             "field": "", "question": f"{warning} 이 목표를 계속 두시겠습니까?",
             "reason": "objective_not_measurable",
         })
+    questions.extend(_purpose_questions(plan))
     return questions
+
+
+def _purpose_questions(plan: dict) -> list[dict]:
+    """지금 경로가 못 재는 목표가 있으면, 그것을 재는 목적을 제안한다.
+
+    자동으로 갈아타지 않는다. 목적을 바꾸면 어떤 모델이 도는지가 통째로 바뀌고,
+    그 결정은 사람이 해야 한다. 선택지는 레지스트리에서 결정적으로 뽑는다.
+    """
+    objective = plan.get("objective") or {}
+    route = plan.get("route") or {}
+    uncovered = sorted(set(objective.get("weights") or {}) - set(route.get("objectives") or ()))
+    if not uncovered:
+        return []
+    registry = load_registry()
+    options = [
+        candidate.purpose
+        for candidate in registry.purposes_for_objectives(uncovered)
+        if candidate.purpose != route.get("purpose")
+    ]
+    if not options:
+        return []
+    labels = ", ".join(
+        f"{registry.route(p).display_name_ko}({p})"
+        + ("" if registry.route(p).executable else " — 여기서 실행 불가")
+        for p in options
+    )
+    return [{
+        "field": "design_purpose",
+        "question": (
+            f"현재 목적 '{route.get('purpose')}' 은 {', '.join(uncovered)} 을 경로에 포함하지 "
+            f"않습니다. 목적을 바꾸시겠습니까? 후보: {labels}"
+        ),
+        "reason": "objective_not_covered_by_purpose",
+        "options": options,
+        "uncovered_objectives": uncovered,
+    }]
 
 
 def build_explain_prompt(plan: dict) -> str:

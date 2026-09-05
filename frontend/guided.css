@@ -43,6 +43,14 @@ output { width:34px; text-align:right; color:var(--dim); font-family:ui-monospac
 .dot { width:7px; height:7px; border-radius:50%; background:var(--ok); flex:0 0 auto; }
 .dot.off { background:#3d4655; }
 .chip { margin-left:auto; font-size:11px; color:var(--dim); font-family:ui-monospace,Menlo,monospace; }
+/* 한 줄에 칩이 여럿일 때 첫 칩만 오른쪽으로 밀고 나머지는 붙는다. */
+.stage .chip ~ .chip { margin-left:6px; }
+/* '미검증' 은 비용이 아니라 경고다. 같은 회색으로 두면 눈에 안 띈다. */
+.warnchip { color:#e0a44a; border:1px solid #5a4623; border-radius:3px; padding:0 4px; }
+.side select {
+  width:100%; margin:4px 0 6px; padding:6px 8px; font-size:13px;
+  color:var(--fg); background:#141922; border:1px solid #2a3240; border-radius:4px;
+}
 
 .goalbox, .stepwrap { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:18px; margin-bottom:16px; }
 .stephead { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }

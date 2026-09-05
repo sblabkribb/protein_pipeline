@@ -19,6 +19,13 @@
     <main class="layout">
       <aside class="side">
         <section class="block">
+          <h3>설계 목적</h3>
+          <p class="note">어떤 모델이 도는지는 가중치가 아니라 목적이 정합니다.</p>
+          <select id="purpose"></select>
+          <div id="purposeNote" class="note"></div>
+        </section>
+
+        <section class="block">
           <h3>목표</h3>
           <p class="note">가중치는 상대값입니다. 합이 1이 아니어도 정규화됩니다.</p>
           <div id="weights"></div>
@@ -29,11 +36,18 @@
           <p class="note">가중치와 달리 다른 점수로 상쇄되지 않습니다.</p>
           <label>RMSD 상한 (Å)<input id="rmsdMax" type="number" step="0.1" value="2.0" /></label>
           <label>AF2 예산 (호출)<input id="af2Budget" type="number" step="10" value="500" /></label>
+          <label>설계 수<input id="nDesigns" type="number" step="8" value="16" /></label>
+          <label>서열 길이 (aa)<input id="lengthAa" type="number" step="10" value="200" /></label>
         </section>
 
         <section class="block">
           <h3>평가 단계</h3>
+          <p class="note">
+            비용은 측정된 것만 숫자로 표시합니다. 측정하지 않은 단계는
+            <span class="chip">미측정</span>이며 0초가 아닙니다.
+          </p>
           <div id="stages"></div>
+          <div id="costTotal" class="note"></div>
         </section>
       </aside>
 
