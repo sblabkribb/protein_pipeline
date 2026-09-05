@@ -109,3 +109,46 @@ class EditTests(unittest.TestCase):
         edited = apply_edits(plan, {"soluprot_cutoff": 0.7})
         cutoff = next(d for d in edited["decisions"] if d["field"] == "soluprot_cutoff")
         self.assertTrue(cutoff["evidence"])
+
+
+class ExplainTests(unittest.TestCase):
+    def test_questions_target_decisions_that_rest_on_assumptions(self):
+        from pipeline_mcp.objective_planner import suggest_questions
+        plan = build_plan(Objective(weights={"solubility": 0.5, "diversity": 0.5}))
+        fields = {q["field"] for q in suggest_questions(plan)}
+        # sampling_temp 은 구조 품질 근거가 아직 가정이다.
+        self.assertIn("sampling_temp", fields)
+
+    def test_locked_decisions_are_never_asked_about(self):
+        from pipeline_mcp.objective_planner import suggest_questions
+        plan = build_plan(Objective(weights={"solubility": 1.0}))
+        fields = {q["field"] for q in suggest_questions(plan)}
+        self.assertNotIn("af2_verification", fields)
+        self.assertNotIn("gate0_routing_unit", fields)
+
+    def test_unmeasurable_objective_becomes_a_question(self):
+        from pipeline_mcp.objective_planner import suggest_questions
+        plan = build_plan(Objective(weights={"solubility": 0.5, "activity": 0.5}))
+        reasons = {q["reason"] for q in suggest_questions(plan)}
+        self.assertIn("objective_not_measurable", reasons)
+
+    def test_prompt_carries_only_plan_content(self):
+        from pipeline_mcp.objective_planner import build_explain_prompt
+        plan = build_plan(Objective(weights={"solubility": 1.0}))
+        prompt = build_explain_prompt(plan)
+        for decision in plan["decisions"]:
+            self.assertIn(str(decision["field"]), prompt)
+        self.assertIn("근거(", prompt)
+
+    def test_system_instruction_forbids_inventing_citations(self):
+        from pipeline_mcp.objective_planner import EXPLAIN_SYSTEM_INSTRUCTION
+        lowered = EXPLAIN_SYSTEM_INSTRUCTION.lower()
+        self.assertIn("do not invent", lowered)
+        self.assertIn("assumption", lowered)
+
+    def test_fallback_counts_the_plan_instead_of_inventing_prose(self):
+        from pipeline_mcp.objective_planner import fallback_explanation
+        plan = build_plan(Objective(weights={"solubility": 0.5, "diversity": 0.5}))
+        text = fallback_explanation(plan)
+        self.assertIn("sampling_temp", text)
+        self.assertIn("LLM 설명이 설정되지 않아", text)

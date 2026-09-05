@@ -92,3 +92,24 @@ test("api base follows the shared resolver instead of an empty origin", () => {
   assert.ok(source.includes("resolveDefaultApiBase"), "must reuse the shared resolver");
   assert.ok(!/return\s*"";/.test(source), "apiBase must not fall back to an empty string");
 });
+
+test("the LLM explanation is kept separate from evidence", () => {
+  // 생성된 산문이 측정 근거처럼 보이면 출처 추적이 무의미해진다.
+  assert.ok(source.includes("pipeline.explain_plan"));
+  assert.ok(source.includes("explanation_is_generated"), "must show whether an LLM wrote it");
+  assert.ok(html.includes('id="explainBox"'));
+  const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
+  assert.ok(css.includes(".explain"), "explanation needs its own visual treatment");
+  assert.ok(css.includes(".genbadge"), "generated text needs a badge");
+});
+
+test("questions come from the server, not composed in the browser", () => {
+  assert.ok(source.includes("result.questions"));
+  assert.ok(!/question\s*:\s*["'`]/.test(source), "questions must not be written client-side");
+});
+
+test("an unauthorized failure tells the user to log in", () => {
+  assert.ok(source.includes("unauthorized"), "must detect the auth failure");
+  assert.ok(html.includes('id="authHint"'));
+  assert.ok(html.includes("로그인이 필요합니다"));
+});

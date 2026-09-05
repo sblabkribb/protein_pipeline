@@ -283,3 +283,93 @@ def apply_edits(plan: dict, edits: dict) -> dict:
     if rejected:
         out["rejected_edits"] = sorted(rejected)
     return out
+
+
+# LLM 에게 주는 지시. 계획에 없는 근거를 만들어내지 못하게 범위를 좁힌다.
+EXPLAIN_SYSTEM_INSTRUCTION = (
+    "You explain an already-made protein design plan to a scientist, in Korean.\n"
+    "Rules you must follow:\n"
+    "1. Explain ONLY the decisions and evidence given to you. Do not add facts, "
+    "numbers, citations, or mechanisms that are not in the input.\n"
+    "2. If a decision rests on an assumption rather than a measurement, say so "
+    "plainly.\n"
+    "3. Do not claim a decision is validated when its evidence is an assumption.\n"
+    "4. Be concise: at most 6 sentences.\n"
+    "5. Do not invent PubMed IDs, DOIs, or dataset names."
+)
+
+
+def suggest_questions(plan: dict) -> list[dict]:
+    """무엇을 물어볼지 계획에서 직접 고른다.
+
+    LLM 에게 질문을 짓게 하면 근거 없는 항목을 물어볼 수 있다. 대신 계획 안에서
+    **실제로 불확실한 지점**을 고른다: 근거가 가정뿐인 편집 가능한 결정, 그리고
+    평가하지 못하는 목표.
+    """
+    questions: list[dict] = []
+    locked = set(plan.get("locked_fields") or [])
+    for decision in plan.get("decisions", []):
+        name = str(decision.get("field"))
+        if name in locked:
+            continue
+        kinds = {e.get("kind") for e in decision.get("evidence", [])}
+        if kinds and kinds <= {"assumption"}:
+            questions.append({
+                "field": name,
+                "question": f"'{name}' 는 측정 근거 없이 정한 값입니다. "
+                            f"현재 {decision.get('value')} 로 두시겠습니까?",
+                "reason": "evidence_is_assumption_only",
+            })
+        elif "assumption" in kinds:
+            questions.append({
+                "field": name,
+                "question": f"'{name}' 는 일부만 측정으로 뒷받침됩니다. "
+                            f"{decision.get('value')} 를 유지할지 확인이 필요합니다.",
+                "reason": "evidence_partially_assumption",
+            })
+    for warning in plan.get("warnings", []):
+        questions.append({
+            "field": "", "question": f"{warning} 이 목표를 계속 두시겠습니까?",
+            "reason": "objective_not_measurable",
+        })
+    return questions
+
+
+def build_explain_prompt(plan: dict) -> str:
+    """LLM 에 넘길 사용자 프롬프트. 계획 내용만 담는다."""
+    lines = ["다음은 이미 확정된 설계 계획입니다. 사용자에게 설명해 주세요.", ""]
+    objective = plan.get("objective") or {}
+    if objective.get("normalized_weights"):
+        lines.append(f"목표 가중치: {objective['normalized_weights']}")
+    if objective.get("constraints"):
+        lines.append(f"절대 제약: {objective['constraints']}")
+    lines.append("")
+    for decision in plan.get("decisions", []):
+        lines.append(f"- {decision.get('field')} = {decision.get('value')}"
+                     f"{' (고정)' if not decision.get('editable') else ''}")
+        lines.append(f"  이유: {decision.get('rationale')}")
+        for ev in decision.get("evidence", []):
+            source = f" [출처 {ev.get('source')}]" if ev.get("source") else ""
+            lines.append(f"  근거({ev.get('kind')}): {ev.get('statement')}{source}")
+    for warning in plan.get("warnings", []):
+        lines.append(f"- 경고: {warning}")
+    return "\n".join(lines)
+
+
+def fallback_explanation(plan: dict) -> str:
+    """LLM 이 없을 때. 지어내지 않고 계획을 세어서 말한다."""
+    decisions = plan.get("decisions", [])
+    assumption_fields = [
+        d.get("field") for d in decisions
+        if any(e.get("kind") == "assumption" for e in d.get("evidence", []))
+    ]
+    parts = [
+        f"결정 {len(decisions)}건 중 {len(plan.get('locked_fields') or [])}건은 "
+        f"측정 결과가 반대를 지지해 고정되어 있습니다."
+    ]
+    if assumption_fields:
+        parts.append("가정에 기대는 결정: " + ", ".join(str(f) for f in assumption_fields) + ".")
+    if plan.get("warnings"):
+        parts.append(f"평가할 수 없는 목표가 {len(plan['warnings'])}건 있습니다.")
+    parts.append("LLM 설명이 설정되지 않아 계획 요약만 표시합니다.")
+    return " ".join(parts)
