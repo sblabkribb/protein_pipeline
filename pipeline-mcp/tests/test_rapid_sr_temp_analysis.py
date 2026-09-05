@@ -349,3 +349,84 @@ class PanelScopeTests(unittest.TestCase):
                                             selection_scope="")
         self.assertIn("selection_scope", report)
         self.assertTrue(report["selection_scope_unknown"])
+
+
+class DominanceTests(unittest.TestCase):
+    """조건 하나를 제거하려면 근거의 문턱을 넘어야 한다.
+
+    T=0.2 는 1 차 패널에서 두 primary endpoint 모두 음의 차이였고 0 위의 부트스트랩
+    질량이 0.000 이었다. 그러나 정보를 주는 클러스터가 3 개뿐이었으므로 그것만으로
+    arm 을 없앨 수는 없다. 제거는 자동이 아니라 명시적 결정이고, 이 함수는 그
+    결정에 필요한 조건이 충족됐는지만 답한다.
+    """
+
+    def _entry(self, point, above=0.0, informative=12, excludes_zero=False):
+        return {
+            "point": point, "ci95": [point - 0.05, point + 0.01],
+            "excludes_zero": excludes_zero, "prob_above_zero": above,
+            "saturation": {"n_informative": informative, "n_backbones": informative},
+        }
+
+    def _report(self, **overrides):
+        base = {
+            "comparisons": {
+                "structural_yield@T0.2": self._entry(-0.04),
+                "joint_yield@T0.2": self._entry(-0.04),
+                "structural_yield@T0.3": self._entry(-0.005, above=0.30),
+                "joint_yield@T0.3": self._entry(-0.005, above=0.29),
+            },
+        }
+        base["comparisons"].update(overrides)
+        return base
+
+    def test_a_condition_losing_on_both_primaries_is_flagged(self):
+        module = _load()
+        out = module.condition_dominance(self._report())
+        self.assertIn("0.2", out["dominated"])
+
+    def test_a_condition_with_mass_above_zero_is_not_flagged(self):
+        module = _load()
+        out = module.condition_dominance(self._report())
+        self.assertNotIn("0.3", out["dominated"])
+
+    def test_losing_on_only_one_primary_is_not_enough(self):
+        module = _load()
+        out = module.condition_dominance(self._report(**{
+            "joint_yield@T0.2": self._entry(0.01, above=0.6)}))
+        self.assertNotIn("0.2", out["dominated"])
+
+    def test_too_few_informative_clusters_blocks_the_flag(self):
+        module = _load()
+        out = module.condition_dominance(self._report(**{
+            "structural_yield@T0.2": self._entry(-0.04, informative=3),
+            "joint_yield@T0.2": self._entry(-0.04, informative=3)}))
+        self.assertNotIn("0.2", out["dominated"])
+        self.assertIn("0.2", out["insufficient_evidence"])
+
+    def test_the_reference_condition_can_never_be_dominated(self):
+        module = _load()
+        out = module.condition_dominance(self._report())
+        self.assertNotIn(module.REFERENCE_T, out["dominated"])
+
+    def test_the_result_never_prunes_by_itself(self):
+        """이 함수는 판단만 한다. 제거는 사람이 하는 별도의 결정이다."""
+        module = _load()
+        out = module.condition_dominance(self._report())
+        self.assertFalse(out["pruned"])
+        self.assertIn("recommendation", out)
+
+    def test_evidence_is_returned_for_each_verdict(self):
+        module = _load()
+        out = module.condition_dominance(self._report())
+        self.assertIn("0.2", out["evidence"])
+        for endpoint in ("structural_yield", "joint_yield"):
+            self.assertIn(endpoint, out["evidence"]["0.2"])
+
+    def test_two_panels_must_agree_before_a_condition_is_dominated(self):
+        module = _load()
+        agree = module.condition_dominance(self._report(), other_panel=self._report())
+        self.assertIn("0.2", agree["dominated"])
+        disagree = module.condition_dominance(self._report(), other_panel=self._report(**{
+            "structural_yield@T0.2": self._entry(0.03, above=0.9)}))
+        self.assertNotIn("0.2", disagree["dominated"])
+        self.assertIn("0.2", disagree["panels_disagree"])

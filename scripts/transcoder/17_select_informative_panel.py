@@ -24,10 +24,29 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PROJECT_ROOT / "scripts" / "transcoder"))
 
+from rapid_sr.descriptors import ca_coords  # noqa: E402
 from rapid_sr.panel import (  # noqa: E402
     SELECTION_CRITERIA, build_manifest, eligible_backbones, select_panel,
     sha256_of, write_manifest, yield_band,
 )
+
+
+def structure_reader(pdb_dir: Path):
+    """백본 PDB 에서 사슬 수와 잔기 수를 읽는다. 백본당 한 번만 읽고 캐싱한다."""
+    cache: dict[str, dict] = {}
+
+    def read(row) -> dict:
+        key = row["backbone_key"]
+        if key not in cache:
+            text = (pdb_dir / row["pdb_file"]).read_text(encoding="utf-8", errors="replace")
+            cache[key] = {
+                "n_residues": len(ca_coords(text)),
+                "n_chains": len({line[21] for line in text.splitlines()
+                                 if line.startswith("ATOM")}),
+            }
+        return cache[key]
+
+    return read
 
 BASE = PROJECT_ROOT / "public_data" / "benchmark" / "gate0"
 DEFAULT_LABELS = BASE / "backbones" / "backbone_labels.csv"
@@ -37,6 +56,7 @@ DEFAULT_OUT = BASE / "temperature_panel2" / "panel_manifest.json"
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--labels", type=Path, default=DEFAULT_LABELS)
+    parser.add_argument("--pdb-dir", type=Path, default=BASE / "backbones" / "pdb")
     parser.add_argument("--size", type=int, default=27, help="24-30 사이를 권장한다.")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT)
@@ -54,11 +74,14 @@ def main(argv=None) -> int:
         return 2
 
     rows = list(csv.DictReader(args.labels.open(encoding="utf-8")))
-    pool = eligible_backbones(rows)
+    structure = structure_reader(args.pdb_dir)
+    pool = eligible_backbones(rows, structure_info=structure)
     print(f"전체 {len(rows)} · 적격 {len(pool)} "
-          f"(baseline joint·structural 둘 다 (0,1), n>={SELECTION_CRITERIA['min_sequences_with_af2']})")
+          f"(baseline joint·structural 둘 다 (0,1), n>={SELECTION_CRITERIA['min_sequences_with_af2']}, "
+          f"단일 사슬, <={SELECTION_CRITERIA['max_residues']} 잔기)")
 
-    picked = select_panel(rows, target_size=args.size, seed=args.seed)
+    picked = select_panel(rows, target_size=args.size, seed=args.seed,
+                          structure_info=structure)
     if not 24 <= len(picked) <= 30:
         print(f"경고: 선정 {len(picked)} 개는 권장 범위 24-30 밖이다. "
               f"적격 후보가 부족하면 이것이 최선이다.", file=sys.stderr)
@@ -86,11 +109,14 @@ def main(argv=None) -> int:
     if manifest.get("previous_panel_overlap"):
         print(f"  1차 패널과 겹침 {len(manifest['previous_panel_overlap'])} 개: "
               f"{manifest['previous_panel_overlap']}")
-    print(f"\n{'backbone':34s} {'src':>7s} {'joint':>7s} {'struct':>7s} {'n':>4s} {'band':>4s}")
+    print(f"  AF2 예상 {manifest['expected_af2_folds']} 폴드 · "
+          f"워커 1개 기준 {manifest['expected_af2_worker_seconds'] / 3600:.1f} 시간")
+    print(f"  예상 정보 백본 {manifest['expected_informative_backbones']}/{manifest['n_selected']}")
+    print(f"\n{'backbone':50s} {'src':>7s} {'joint':>7s} {'struct':>7s} {'aa':>5s} {'band':>4s}")
     for entry in sorted(manifest["backbones"], key=lambda e: (e["yield_band"], e["backbone_key"])):
-        print(f"{entry['backbone_key']:34s} {entry['backbone_source']:>7s} "
+        print(f"{entry['backbone_key']:50s} {entry['backbone_source']:>7s} "
               f"{entry['baseline_joint_yield']:>7.3f} {entry['baseline_structural_yield']:>7.3f} "
-              f"{entry['n_sequences_with_af2']:>4d} {entry['yield_band']:>4d}")
+              f"{entry['n_residues'] or 0:>5d} {entry['yield_band']:>4d}")
     print(f"\n동결: {args.out}")
     return 0
 

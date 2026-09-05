@@ -225,6 +225,105 @@ def paired_yield_difference(rows: list[dict], temp: str, field: str, *,
     return out
 
 
+#: primary endpoint. 둘 다 져야 dominated 후보가 된다. 하나만 지는 것은 잡음과
+#: 구별되지 않는다.
+PRIMARY_ENDPOINTS = ("structural_yield", "joint_yield")
+
+#: dominated 판정에 필요한 최소 정보 클러스터 수. 1 차 패널의 T=0.2 는 두
+#: endpoint 모두 음이었고 0 위 질량이 0 이었지만 정보 클러스터가 3 개였다.
+#: 그 정도 근거로 arm 을 없애면, 없앤 뒤에는 되돌릴 데이터가 생기지 않는다.
+MIN_CLUSTERS_FOR_DOMINANCE = 8
+
+
+def condition_dominance(report: dict, *, other_panel: dict | None = None,
+                        min_clusters: int = MIN_CLUSTERS_FOR_DOMINANCE) -> dict:
+    """어떤 생성 조건이 기준 조건에 일관되게 지는지 판단한다.
+
+    이 함수는 **제거하지 않는다**. 제거는 사람이 내리는 별도의 결정이고, 여기서는
+    그 결정에 필요한 조건이 충족됐는지만 답한다. 조건 하나를 없애면 그 조건에
+    대한 데이터는 더 이상 생기지 않으므로, 되돌릴 수 없는 쪽으로 기운다.
+
+    dominated 로 부르려면 전부 만족해야 한다.
+
+    1. 두 primary endpoint 모두에서 기준 조건보다 점추정이 낮다.
+    2. 두 endpoint 모두 부트스트랩 질량이 0 위에 없다 (또는 CI 가 0 을 제외한다).
+    3. 정보를 주는 클러스터가 `min_clusters` 이상이다.
+    4. 두 번째 패널을 주면 그 패널도 같은 방향이어야 한다.
+    """
+    def read(source, endpoint, temp):
+        return (source.get("comparisons") or {}).get(f"{endpoint}@T{temp}")
+
+    temps = sorted({
+        key.split("@T", 1)[1]
+        for key in (report.get("comparisons") or {})
+        if "@T" in key
+    })
+
+    dominated, insufficient, disagree, evidence = [], [], [], {}
+    for temp in temps:
+        if temp == REFERENCE_T:
+            continue
+        entries = {e: read(report, e, temp) for e in PRIMARY_ENDPOINTS}
+        if any(entry is None for entry in entries.values()):
+            continue
+        evidence[temp] = {
+            endpoint: {
+                "point": entry.get("point"),
+                "ci95": entry.get("ci95"),
+                "prob_above_zero": entry.get("prob_above_zero"),
+                "n_informative": (entry.get("saturation") or {}).get("n_informative"),
+            }
+            for endpoint, entry in entries.items()
+        }
+
+        clusters = [
+            (entry.get("saturation") or {}).get("n_informative") or 0
+            for entry in entries.values()
+        ]
+        if min(clusters) < min_clusters:
+            insufficient.append(temp)
+            continue
+
+        def loses(entry):
+            point = entry.get("point")
+            if point is None or point >= 0:
+                return False
+            above = entry.get("prob_above_zero")
+            # CI 가 0 을 제외하거나, 격자 때문에 0 에 닿기만 하고 위쪽 질량이 없거나.
+            return bool(entry.get("excludes_zero")) or (above is not None and above == 0.0)
+
+        if not all(loses(entry) for entry in entries.values()):
+            continue
+
+        if other_panel is not None:
+            others = {e: read(other_panel, e, temp) for e in PRIMARY_ENDPOINTS}
+            evidence[temp]["other_panel"] = {
+                endpoint: (entry or {}).get("point") for endpoint, entry in others.items()
+            }
+            if any(entry is None or (entry.get("point") or 0) >= 0 for entry in others.values()):
+                disagree.append(temp)
+                continue
+
+        dominated.append(temp)
+
+    return {
+        "reference_temperature": REFERENCE_T,
+        "min_clusters_for_dominance": min_clusters,
+        "dominated": dominated,
+        "insufficient_evidence": insufficient,
+        "panels_disagree": disagree,
+        "evidence": evidence,
+        #: 이 함수는 후보만 낸다. 실제 제거는 정책 설정에서 명시적으로 한다.
+        "pruned": [],
+        "recommendation": (
+            f"조건 {dominated} 는 제거 검토 대상이다. 제거는 자동으로 하지 않는다 - "
+            f"없애면 그 조건의 데이터가 더 생기지 않으므로 되돌릴 수 없다."
+            if dominated else
+            "제거 기준을 넘은 조건이 없다."
+        ),
+    }
+
+
 def build_report_header(*, panel: str, cluster_unit: str, selection_scope: str) -> dict:
     """리포트가 자기 적용 범위를 스스로 말하게 한다.
 
@@ -302,6 +401,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="백본이 타겟 안에 중첩되면 target_id 로 재표집해야 한다.")
     parser.add_argument("--panel", default="panel1_unfiltered",
                         help="리포트에 남길 패널 이름. 두 패널을 섞어 보고하지 않기 위해서다.")
+    parser.add_argument("--compare-panel", default="",
+                        help="다른 패널의 af2_analysis.json. 주면 두 패널이 같은 방향일 때만 "
+                             "조건을 dominated 로 부른다.")
     parser.add_argument("--panel-manifest", default="",
                         help="동결된 선정 manifest. 있으면 적용 범위를 리포트에 옮겨 적는다.")
     args = parser.parse_args(argv)
@@ -353,6 +455,20 @@ def main(argv: list[str] | None = None) -> int:
                   f"P(>0)={res.get('prob_above_zero')} P(<0)={res.get('prob_below_zero')} "
                   f"frac_backbone={unc.get('fraction_backbone')} "
                   f"({unc.get('verdict')}) -> {res['next_step']}")
+
+    other = None
+    if args.compare_panel:
+        other = json.loads(Path(args.compare_panel).read_text(encoding="utf-8"))
+    report["condition_dominance"] = condition_dominance(report, other_panel=other)
+    dom = report["condition_dominance"]
+    print(f"\n=== 조건 지배 판정 (기준 T={REFERENCE_T}) ===")
+    print(f"  제거 검토 대상: {dom['dominated'] or '없음'}")
+    if dom["insufficient_evidence"]:
+        print(f"  근거 부족(정보 클러스터 < {dom['min_clusters_for_dominance']}): "
+              f"{dom['insufficient_evidence']}")
+    if dom["panels_disagree"]:
+        print(f"  패널 간 불일치: {dom['panels_disagree']}")
+    print(f"  {dom['recommendation']}")
 
     report["by_source"] = stratify_by_source(rows, temps)
     if not report["by_source"].get("available"):

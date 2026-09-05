@@ -258,3 +258,56 @@ class SaturationRiskTests(unittest.TestCase):
             self.assertIn("saturation_risk", entry)
         self.assertIn("expected_saturated_backbones", manifest)
         self.assertIn("expected_informative_backbones", manifest)
+
+
+class StructureCriteriaTests(unittest.TestCase):
+    """구조 자체로 판단하는 기준. 온도 결과와 무관하므로 선정에 써도 된다.
+
+    첫 동결에서 16 사슬 3428 잔기짜리 조립체가 뽑혔다. 이 실험은 서열 하나를
+    단량체로 접으므로, 다중 사슬 기준 구조에는 RMSD 를 잴 대상 자체가 없다.
+    MPNN 호출도 60 초 타임아웃에서 터졌다.
+    """
+
+    def _info(self, mapping):
+        return lambda row: mapping[row["backbone_key"]]
+
+    def test_a_multi_chain_reference_is_excluded(self):
+        rows = [_row("mono", "t1", "target", 0.5, 0.5), _row("multi", "t2", "target", 0.5, 0.5)]
+        info = self._info({"mono": {"n_chains": 1, "n_residues": 100},
+                           "multi": {"n_chains": 7, "n_residues": 900}})
+        keys = [r["backbone_key"] for r in eligible_backbones(rows, structure_info=info)]
+        self.assertEqual(keys, ["mono"])
+
+    def test_an_oversized_backbone_is_excluded(self):
+        rows = [_row("small", "t1", "target", 0.5, 0.5), _row("huge", "t2", "target", 0.5, 0.5)]
+        info = self._info({"small": {"n_chains": 1, "n_residues": 200},
+                           "huge": {"n_chains": 1, "n_residues": 3000}})
+        keys = [r["backbone_key"] for r in eligible_backbones(rows, structure_info=info)]
+        self.assertEqual(keys, ["small"])
+
+    def test_the_limits_are_declared_in_the_criteria(self):
+        self.assertIn("single_chain_only", SELECTION_CRITERIA)
+        self.assertIn("max_residues", SELECTION_CRITERIA)
+
+    def test_without_structure_info_the_structural_filter_is_skipped_not_guessed(self):
+        rows = [_row("a", "t1", "target", 0.5, 0.5)]
+        self.assertEqual(len(eligible_backbones(rows)), 1)
+
+    def test_manifest_records_the_structure_of_each_selected_backbone(self):
+        rows = [_row(f"a{i}", f"t{i}", "target", 0.4 + 0.05 * i, 0.4 + 0.05 * i) for i in range(4)]
+        info = self._info({f"a{i}": {"n_chains": 1, "n_residues": 100 + i} for i in range(4)})
+        picked = select_panel(rows, target_size=4, seed=0, structure_info=info)
+        manifest = build_manifest(picked, source_path=Path("l.csv"), seed=0, source_sha256="x")
+        for entry in manifest["backbones"]:
+            self.assertIn("n_residues", entry)
+            self.assertIn("n_chains", entry)
+
+    def test_manifest_reports_the_expected_af2_cost(self):
+        """896 폴드를 돌리기 전에 얼마나 걸리는지 알아야 한다."""
+        rows = [_row(f"a{i}", f"t{i}", "target", 0.4 + 0.05 * i, 0.4 + 0.05 * i) for i in range(4)]
+        info = self._info({f"a{i}": {"n_chains": 1, "n_residues": 200} for i in range(4)})
+        picked = select_panel(rows, target_size=4, seed=0, structure_info=info)
+        manifest = build_manifest(picked, source_path=Path("l.csv"), seed=0, source_sha256="x")
+        self.assertIn("expected_af2_folds", manifest)
+        self.assertIn("expected_af2_worker_seconds", manifest)
+        self.assertEqual(manifest["expected_af2_folds"], 4 * 4 * 8)

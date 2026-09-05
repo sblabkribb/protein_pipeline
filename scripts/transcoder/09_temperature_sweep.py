@@ -67,6 +67,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="동결된 panel manifest 의 backbone_key 목록만 사용한다. "
                              "주면 --targets-file/--source 보다 우선한다.")
     parser.add_argument("--mpnn-url", default="http://211.188.35.221:18101")
+    parser.add_argument("--mpnn-timeout", type=float, default=900.0,
+                        help="클라이언트 기본값 60 초는 긴 백본에서 터진다. "
+                             "폴링 간격은 timeout/200 이므로 900 이면 4.5 초다.")
     parser.add_argument("--soluprot-url", default="http://127.0.0.1:18081/score")
     parser.add_argument("--n-sequences", type=int, default=GATE0_SEQUENCES_PER_BACKBONE)
     parser.add_argument("--temperatures", default=",".join(str(t) for t in TEMPERATURES))
@@ -104,7 +107,8 @@ def main(argv: list[str] | None = None) -> int:
     temps = [float(t) for t in args.temperatures.split(",") if t.strip()]
     print(f"backbones={len(rows)} temperatures={temps} n_seq={args.n_sequences}", flush=True)
 
-    mpnn = ProteinMPNNClient(runpod=None, endpoint_id=None, gpu_url=args.mpnn_url)
+    mpnn = ProteinMPNNClient(runpod=None, endpoint_id=None, gpu_url=args.mpnn_url,
+                             gpu_timeout_s=float(args.mpnn_timeout))
     soluprot = SoluProtClient(url=args.soluprot_url)
 
     out_dir = Path(args.out_dir)

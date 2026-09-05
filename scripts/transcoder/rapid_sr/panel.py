@@ -48,6 +48,14 @@ SELECTION_CRITERIA = {
     #: 타겟 수는 어차피 17 이 상한이므로 이 완화는 클러스터를 늘리지 않고
     #: 타겟 안의 반복만 늘린다 - 그 사실을 manifest 에 적는다.
     "max_per_target": 3,
+    #: 이 실험은 서열 하나를 단량체로 접는다. 다중 사슬 기준 구조에는 그 폴드를
+    #: 맞춰볼 대상이 없고, RMSD 임계값도 의미를 잃는다. 구조에서만 나오는
+    #: 기준이므로 온도 결과와 무관하다.
+    "single_chain_only": True,
+    #: AF2 비용은 대략 2.890 * L^0.748 초다. 백본당 8 서열 x 4 조건 = 32 폴드이므로
+    #: 400 잔기면 백본 하나에 약 2.3 시간이다. 첫 동결에서 3428 잔기짜리가 뽑혀
+    #: MPNN 호출이 타임아웃났다.
+    "max_residues": 400,
     "yield_bands": [list(band) for band in YIELD_BANDS],
     "balances": ["yield_band", "backbone_source", "target_id"],
     "forbidden_inputs": ["global_score", "temperature", "af2_stage1", "sweep"],
@@ -96,12 +104,22 @@ def _float_or_none(raw) -> float | None:
         return None
 
 
-def eligible_backbones(rows, *, criteria: dict | None = None) -> list[dict]:
-    """baseline 만 보고 움직일 수 있는 백본을 고른다. 순서는 입력 순서를 지킨다."""
+def eligible_backbones(rows, *, criteria: dict | None = None, structure_info=None) -> list[dict]:
+    """baseline 과 구조만 보고 움직일 수 있는 백본을 고른다. 입력 순서를 지킨다.
+
+    `structure_info(row) -> {"n_chains": int, "n_residues": int}` 를 주면 사슬 수와
+    크기로도 거른다. 주지 않으면 그 기준은 건너뛴다 - 없는 정보를 추측하지 않는다.
+    """
     spec = criteria or SELECTION_CRITERIA
     minimum = int(spec["min_sequences_with_af2"])
     out = []
     for row in rows:
+        if structure_info is not None:
+            info = structure_info(row) or {}
+            if spec.get("single_chain_only") and int(info.get("n_chains", 1)) != 1:
+                continue
+            if int(info.get("n_residues", 0)) > int(spec["max_residues"]):
+                continue
         joint = _float_or_none(row.get("joint_pass_yield"))
         struct = _float_or_none(row.get("af2_structural_pass_yield"))
         n = _float_or_none(row.get("n_sequences_with_af2"))
@@ -124,6 +142,7 @@ def select_panel(
     seed: int = 0,
     criteria: dict | None = None,
     forbid_columns: tuple[str, ...] = (),
+    structure_info=None,
 ) -> list[dict]:
     """밴드 → 소스 → 타겟 순으로 라운드로빈해서 패널을 고른다.
 
@@ -139,9 +158,12 @@ def select_panel(
             )
 
     spec = criteria or SELECTION_CRITERIA
-    pool = eligible_backbones(rows, criteria=spec)
+    pool = eligible_backbones(rows, criteria=spec, structure_info=structure_info)
     if not pool:
         return []
+    if structure_info is not None:
+        for row in pool:
+            row.setdefault("_structure", structure_info(row) or {})
 
     max_per_target = int(spec["max_per_target"])
 
@@ -219,6 +241,8 @@ def build_manifest(picked, *, source_path: Path, seed: int, source_sha256: str) 
             "n_sequences_with_af2": int(float(row.get("n_sequences_with_af2") or 0)),
             "yield_band": yield_band(joint),
             "saturation_risk": round(saturation_risk(joint), 4) if joint is not None else None,
+            "n_residues": int((row.get("_structure") or {}).get("n_residues", 0)) or None,
+            "n_chains": int((row.get("_structure") or {}).get("n_chains", 0)) or None,
         })
 
     def distribution(key):
@@ -253,6 +277,14 @@ def build_manifest(picked, *, source_path: Path, seed: int, source_sha256: str) 
             "1 차 패널은 백본 15 개가 곧 타겟 15 개여서 backbone_key 로 재표집해도 "
             "같았다. 이 패널은 한 타겟에서 최대 3 개를 뽑으므로 target_id 로 "
             "재표집해야 한다."
+        ),
+        "expected_af2_folds": len(entries) * 4 * 8,
+        "expected_af2_worker_seconds": round(sum(
+            4 * 8 * 2.890344 * (e["n_residues"] ** 0.748)
+            for e in entries if e.get("n_residues")), 0),
+        "af2_cost_note": (
+            "폴드당 2.890344 * L^0.748 초 (af2_length_scaling.json 적합). 워커 4 개를 "
+            "쓰면 실측 실효 속도는 그보다 빠르다."
         ),
         "expected_saturated_backbones": round(
             sum(e["saturation_risk"] or 0.0 for e in entries), 2),

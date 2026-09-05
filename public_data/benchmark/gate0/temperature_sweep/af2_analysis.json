@@ -40,6 +40,8 @@
       "n_clusters": 15,
       "n_boot": 4000,
       "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
       "uncertainty": {
         "observed_variance": 0.003274,
         "sequence_sampling_variance": 0.005859,
@@ -71,6 +73,8 @@
       "n_clusters": 15,
       "n_boot": 4000,
       "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
       "uncertainty": {
         "observed_variance": 0.008185,
         "sequence_sampling_variance": 0.007943,
@@ -102,6 +106,8 @@
       "n_clusters": 15,
       "n_boot": 4000,
       "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
       "uncertainty": {
         "observed_variance": 0.004167,
         "sequence_sampling_variance": 0.005469,
@@ -133,6 +139,8 @@
       "n_clusters": 15,
       "n_boot": 4000,
       "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
       "uncertainty": {
         "observed_variance": 0.004167,
         "sequence_sampling_variance": 0.009375,
@@ -164,6 +172,8 @@
       "n_clusters": 15,
       "n_boot": 4000,
       "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
       "uncertainty": {
         "observed_variance": 0.008185,
         "sequence_sampling_variance": 0.011068,
@@ -195,6 +205,8 @@
       "n_clusters": 15,
       "n_boot": 4000,
       "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
       "uncertainty": {
         "observed_variance": 0.00997,
         "sequence_sampling_variance": 0.007682,
@@ -226,6 +238,8 @@
       "n_clusters": 15,
       "n_boot": 4000,
       "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
       "uncertainty": {
         "observed_variance": 0.001637,
         "sequence_sampling_variance": 0.043411,
@@ -257,6 +271,8 @@
       "n_clusters": 15,
       "n_boot": 4000,
       "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
       "uncertainty": {
         "observed_variance": 0.001727,
         "sequence_sampling_variance": 0.045195,
@@ -288,6 +304,8 @@
       "n_clusters": 15,
       "n_boot": 4000,
       "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
       "uncertainty": {
         "observed_variance": 0.00279,
         "sequence_sampling_variance": 0.044817,
@@ -308,6 +326,86 @@
       "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
       "next_step": "stop_no_effect"
     }
+  },
+  "panel": "panel1_unfiltered",
+  "bootstrap_cluster_unit": "backbone_key",
+  "selection_scope": "",
+  "selection_scope_unknown": true,
+  "interpretation": "Selection scope was not recorded for this panel, so the conditional/marginal distinction cannot be made. \uc120\uc815 \ubc94\uc704\uac00 \uae30\ub85d\ub418\uc9c0 \uc54a\uc544 \uc870\uac74\ubd80\uc778\uc9c0 \uc8fc\ubcc0\ubd80\uc778\uc9c0 \uad6c\ubcc4\ud560 \uc218 \uc5c6\ub2e4.",
+  "condition_dominance": {
+    "reference_temperature": "0.1",
+    "min_clusters_for_dominance": 8,
+    "dominated": [],
+    "insufficient_evidence": [
+      "0.05",
+      "0.2",
+      "0.3"
+    ],
+    "panels_disagree": [],
+    "evidence": {
+      "0.05": {
+        "structural_yield": {
+          "point": -0.0083,
+          "ci95": [
+            -0.0333,
+            0.0167
+          ],
+          "prob_above_zero": 0.1845,
+          "n_informative": 3
+        },
+        "joint_yield": {
+          "point": -0.0167,
+          "ci95": [
+            -0.05,
+            0.0167
+          ],
+          "prob_above_zero": 0.0927,
+          "n_informative": 4
+        }
+      },
+      "0.2": {
+        "structural_yield": {
+          "point": -0.0417,
+          "ci95": [
+            -0.0917,
+            0.0
+          ],
+          "prob_above_zero": 0.0,
+          "n_informative": 3
+        },
+        "joint_yield": {
+          "point": -0.0417,
+          "ci95": [
+            -0.0917,
+            0.0
+          ],
+          "prob_above_zero": 0.0,
+          "n_informative": 4
+        }
+      },
+      "0.3": {
+        "structural_yield": {
+          "point": -0.0167,
+          "ci95": [
+            -0.05,
+            0.0
+          ],
+          "prob_above_zero": 0.0,
+          "n_informative": 2
+        },
+        "joint_yield": {
+          "point": -0.0083,
+          "ci95": [
+            -0.0583,
+            0.0417
+          ],
+          "prob_above_zero": 0.2934,
+          "n_informative": 3
+        }
+      }
+    },
+    "pruned": [],
+    "recommendation": "\uc81c\uac70 \uae30\uc900\uc744 \ub118\uc740 \uc870\uac74\uc774 \uc5c6\ub2e4."
   },
   "by_source": {
     "available": false,

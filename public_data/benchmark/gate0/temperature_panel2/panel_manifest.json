@@ -14,6 +14,8 @@
     "exclude_saturated": "joint 와 structural 이 모두 (0,1) 열린 구간에 있어야 한다",
     "min_sequences_with_af2": 16,
     "max_per_target": 3,
+    "single_chain_only": true,
+    "max_residues": 400,
     "yield_bands": [
       [
         0.0,
@@ -54,12 +56,15 @@
   ],
   "selection_excludes": "온도 sweep 결과와 global_score 는 선정에 쓰이지 않았다. 선정은 게이트 0 캠페인의 baseline yield 만 본다.",
   "interpretation_scope": "이 패널은 baseline yield 가 중간인 백본만 담는다. 따라서 여기서 나온 온도 효과는 전체 백본 집단의 평균 효과가 아니라, 온도가 영향을 줄 수 있는 중간-yield 영역에서의 조건부 효과다.",
-  "n_selected": 28,
-  "n_effective_clusters": 17,
+  "n_selected": 24,
+  "n_effective_clusters": 13,
   "bootstrap_cluster_unit": "target_id",
   "cluster_note": "1 차 패널은 백본 15 개가 곧 타겟 15 개여서 backbone_key 로 재표집해도 같았다. 이 패널은 한 타겟에서 최대 3 개를 뽑으므로 target_id 로 재표집해야 한다.",
-  "expected_saturated_backbones": 1.85,
-  "expected_informative_backbones": 26.15,
+  "expected_af2_folds": 768,
+  "expected_af2_worker_seconds": 76891.0,
+  "af2_cost_note": "폴드당 2.890344 * L^0.748 초 (af2_length_scaling.json 적합). 워커 4 개를 쓰면 실측 실효 속도는 그보다 빠르다.",
+  "expected_saturated_backbones": 1.84,
+  "expected_informative_backbones": 22.16,
   "saturation_risk_note": "8 서열 x 4 조건에서 전부 실패하거나 전부 성공할 확률. 설계 간 독립을 가정하므로 실제 위험의 하한이다.",
   "backbones": [
     {
@@ -71,7 +76,9 @@
       "baseline_structural_yield": 0.0625,
       "n_sequences_with_af2": 16,
       "yield_band": 0,
-      "saturation_risk": 0.1268
+      "saturation_risk": 0.1268,
+      "n_residues": 59,
+      "n_chains": 1
     },
     {
       "backbone_key": "1hufA00|rfd3|rfd3_inputs_spec-1_0_model_1",
@@ -82,7 +89,9 @@
       "baseline_structural_yield": 0.4375,
       "n_sequences_with_af2": 16,
       "yield_band": 1,
-      "saturation_risk": 0.0
+      "saturation_risk": 0.0,
+      "n_residues": 123,
+      "n_chains": 1
     },
     {
       "backbone_key": "1b5aA00|target|target",
@@ -93,7 +102,9 @@
       "baseline_structural_yield": 0.5357142857142857,
       "n_sequences_with_af2": 56,
       "yield_band": 2,
-      "saturation_risk": 0.0
+      "saturation_risk": 0.0,
+      "n_residues": 94,
+      "n_chains": 1
     },
     {
       "backbone_key": "1jygA00|bioemu|bioemu_000",
@@ -104,7 +115,9 @@
       "baseline_structural_yield": 0.9375,
       "n_sequences_with_af2": 16,
       "yield_band": 3,
-      "saturation_risk": 0.1268
+      "saturation_risk": 0.1268,
+      "n_residues": 69,
+      "n_chains": 1
     },
     {
       "backbone_key": "1koyA00|rfd3|rfd3_inputs_spec-1_0_model_0",
@@ -115,7 +128,9 @@
       "baseline_structural_yield": 0.1,
       "n_sequences_with_af2": 20,
       "yield_band": 0,
-      "saturation_risk": 0.0343
+      "saturation_risk": 0.0343,
+      "n_residues": 62,
+      "n_chains": 1
     },
     {
       "backbone_key": "2jneA00|rfd3|rfd3_inputs_spec-1_0_model_0_retry_1_1",
@@ -126,7 +141,9 @@
       "baseline_structural_yield": 0.9,
       "n_sequences_with_af2": 20,
       "yield_band": 1,
-      "saturation_risk": 0.0
+      "saturation_risk": 0.0,
+      "n_residues": 71,
+      "n_chains": 1
     },
     {
       "backbone_key": "1b8xA03|target|target",
@@ -137,7 +154,9 @@
       "baseline_structural_yield": 0.7,
       "n_sequences_with_af2": 40,
       "yield_band": 2,
-      "saturation_risk": 0.0
+      "saturation_risk": 0.0,
+      "n_residues": 260,
+      "n_chains": 1
     },
     {
       "backbone_key": "1b5aA00|bioemu|bioemu_003",
@@ -148,95 +167,9 @@
       "baseline_structural_yield": 0.9375,
       "n_sequences_with_af2": 16,
       "yield_band": 3,
-      "saturation_risk": 0.1268
-    },
-    {
-      "backbone_key": "1h38A01|target|target",
-      "target_id": "1h38A01",
-      "backbone_source": "target",
-      "pdb_file": "1h38A01__target__target.pdb",
-      "baseline_joint_yield": 0.125,
-      "baseline_structural_yield": 0.125,
-      "n_sequences_with_af2": 40,
-      "yield_band": 0,
-      "saturation_risk": 0.0139
-    },
-    {
-      "backbone_key": "2kjfA00|rfd3|rfd3_inputs_spec-1_0_model_4",
-      "target_id": "2kjfA00",
-      "backbone_source": "rfd3",
-      "pdb_file": "2kjfA00__rfd3__rfd3_inputs_spec-1_0_model_4.pdb",
-      "baseline_joint_yield": 0.45,
-      "baseline_structural_yield": 0.6,
-      "n_sequences_with_af2": 20,
-      "yield_band": 1,
-      "saturation_risk": 0.0
-    },
-    {
-      "backbone_key": "1jygA00|bioemu|bioemu_002",
-      "target_id": "1jygA00",
-      "backbone_source": "bioemu",
-      "pdb_file": "1jygA00__bioemu__bioemu_002.pdb",
-      "baseline_joint_yield": 0.5625,
-      "baseline_structural_yield": 0.5625,
-      "n_sequences_with_af2": 16,
-      "yield_band": 2,
-      "saturation_risk": 0.0
-    },
-    {
-      "backbone_key": "1af7A01|target|target",
-      "target_id": "1af7A01",
-      "backbone_source": "target",
-      "pdb_file": "1af7A01__target__target.pdb",
-      "baseline_joint_yield": 0.975,
-      "baseline_structural_yield": 0.975,
-      "n_sequences_with_af2": 40,
-      "yield_band": 3,
-      "saturation_risk": 0.4448
-    },
-    {
-      "backbone_key": "1hufA00|rfd3|rfd3_inputs_spec-1_0_model_1_retry_1_2",
-      "target_id": "1hufA00",
-      "backbone_source": "rfd3",
-      "pdb_file": "1hufA00__rfd3__rfd3_inputs_spec-1_0_model_1_retry_1_2.pdb",
-      "baseline_joint_yield": 0.25,
-      "baseline_structural_yield": 0.25,
-      "n_sequences_with_af2": 16,
-      "yield_band": 0,
-      "saturation_risk": 0.0001
-    },
-    {
-      "backbone_key": "2jneA00|rfd3|rfd3_inputs_spec-1_0_model_4",
-      "target_id": "2jneA00",
-      "backbone_source": "rfd3",
-      "pdb_file": "2jneA00__rfd3__rfd3_inputs_spec-1_0_model_4.pdb",
-      "baseline_joint_yield": 0.5,
-      "baseline_structural_yield": 0.85,
-      "n_sequences_with_af2": 20,
-      "yield_band": 1,
-      "saturation_risk": 0.0
-    },
-    {
-      "backbone_key": "1jygA00|bioemu|bioemu_003",
-      "target_id": "1jygA00",
-      "backbone_source": "bioemu",
-      "pdb_file": "1jygA00__bioemu__bioemu_003.pdb",
-      "baseline_joint_yield": 0.625,
-      "baseline_structural_yield": 0.625,
-      "n_sequences_with_af2": 16,
-      "yield_band": 2,
-      "saturation_risk": 0.0
-    },
-    {
-      "backbone_key": "1b7eA01|target|target",
-      "target_id": "1b7eA01",
-      "backbone_source": "target",
-      "pdb_file": "1b7eA01__target__target.pdb",
-      "baseline_joint_yield": 0.975,
-      "baseline_structural_yield": 0.975,
-      "n_sequences_with_af2": 40,
-      "yield_band": 3,
-      "saturation_risk": 0.4448
+      "saturation_risk": 0.1268,
+      "n_residues": 94,
+      "n_chains": 1
     },
     {
       "backbone_key": "1mkcA00|target|target",
@@ -247,62 +180,100 @@
       "baseline_structural_yield": 0.05,
       "n_sequences_with_af2": 40,
       "yield_band": 0,
-      "saturation_risk": 0.1937
+      "saturation_risk": 0.1937,
+      "n_residues": 43,
+      "n_chains": 1
     },
     {
-      "backbone_key": "1koyA00|rfd3|rfd3_inputs_spec-1_0_model_1",
-      "target_id": "1koyA00",
+      "backbone_key": "2kjfA00|rfd3|rfd3_inputs_spec-1_0_model_4",
+      "target_id": "2kjfA00",
       "backbone_source": "rfd3",
-      "pdb_file": "1koyA00__rfd3__rfd3_inputs_spec-1_0_model_1.pdb",
-      "baseline_joint_yield": 0.7,
-      "baseline_structural_yield": 0.7,
+      "pdb_file": "2kjfA00__rfd3__rfd3_inputs_spec-1_0_model_4.pdb",
+      "baseline_joint_yield": 0.45,
+      "baseline_structural_yield": 0.6,
       "n_sequences_with_af2": 20,
-      "yield_band": 2,
-      "saturation_risk": 0.0
+      "yield_band": 1,
+      "saturation_risk": 0.0,
+      "n_residues": 60,
+      "n_chains": 1
     },
     {
-      "backbone_key": "1b5aA00|bioemu|bioemu_004",
-      "target_id": "1b5aA00",
+      "backbone_key": "1jygA00|bioemu|bioemu_002",
+      "target_id": "1jygA00",
       "backbone_source": "bioemu",
-      "pdb_file": "1b5aA00__bioemu__bioemu_004.pdb",
-      "baseline_joint_yield": 0.9375,
-      "baseline_structural_yield": 0.9375,
+      "pdb_file": "1jygA00__bioemu__bioemu_002.pdb",
+      "baseline_joint_yield": 0.5625,
+      "baseline_structural_yield": 0.5625,
       "n_sequences_with_af2": 16,
-      "yield_band": 3,
-      "saturation_risk": 0.1268
+      "yield_band": 2,
+      "saturation_risk": 0.0,
+      "n_residues": 69,
+      "n_chains": 1
     },
     {
-      "backbone_key": "1hufA00|rfd3|rfd3_inputs_spec-1_0_model_4",
+      "backbone_key": "1af7A01|target|target",
+      "target_id": "1af7A01",
+      "backbone_source": "target",
+      "pdb_file": "1af7A01__target__target.pdb",
+      "baseline_joint_yield": 0.975,
+      "baseline_structural_yield": 0.975,
+      "n_sequences_with_af2": 40,
+      "yield_band": 3,
+      "saturation_risk": 0.4448,
+      "n_residues": 274,
+      "n_chains": 1
+    },
+    {
+      "backbone_key": "1hufA00|rfd3|rfd3_inputs_spec-1_0_model_1_retry_1_2",
       "target_id": "1hufA00",
       "backbone_source": "rfd3",
-      "pdb_file": "1hufA00__rfd3__rfd3_inputs_spec-1_0_model_4.pdb",
+      "pdb_file": "1hufA00__rfd3__rfd3_inputs_spec-1_0_model_1_retry_1_2.pdb",
       "baseline_joint_yield": 0.25,
       "baseline_structural_yield": 0.25,
       "n_sequences_with_af2": 16,
       "yield_band": 0,
-      "saturation_risk": 0.0001
+      "saturation_risk": 0.0001,
+      "n_residues": 123,
+      "n_chains": 1
     },
     {
-      "backbone_key": "1bx8A00|target|target",
-      "target_id": "1bx8A00",
-      "backbone_source": "target",
-      "pdb_file": "1bx8A00__target__target.pdb",
-      "baseline_joint_yield": 0.65,
-      "baseline_structural_yield": 0.65,
-      "n_sequences_with_af2": 40,
+      "backbone_key": "2jneA00|rfd3|rfd3_inputs_spec-1_0_model_4",
+      "target_id": "2jneA00",
+      "backbone_source": "rfd3",
+      "pdb_file": "2jneA00__rfd3__rfd3_inputs_spec-1_0_model_4.pdb",
+      "baseline_joint_yield": 0.5,
+      "baseline_structural_yield": 0.85,
+      "n_sequences_with_af2": 20,
+      "yield_band": 1,
+      "saturation_risk": 0.0,
+      "n_residues": 71,
+      "n_chains": 1
+    },
+    {
+      "backbone_key": "1jygA00|bioemu|bioemu_003",
+      "target_id": "1jygA00",
+      "backbone_source": "bioemu",
+      "pdb_file": "1jygA00__bioemu__bioemu_003.pdb",
+      "baseline_joint_yield": 0.625,
+      "baseline_structural_yield": 0.625,
+      "n_sequences_with_af2": 16,
       "yield_band": 2,
-      "saturation_risk": 0.0
+      "saturation_risk": 0.0,
+      "n_residues": 69,
+      "n_chains": 1
     },
     {
-      "backbone_key": "1ohgC01|target|target",
-      "target_id": "1ohgC01",
+      "backbone_key": "1b7eA01|target|target",
+      "target_id": "1b7eA01",
       "backbone_source": "target",
-      "pdb_file": "1ohgC01__target__target.pdb",
-      "baseline_joint_yield": 0.8,
-      "baseline_structural_yield": 0.8,
+      "pdb_file": "1b7eA01__target__target.pdb",
+      "baseline_joint_yield": 0.975,
+      "baseline_structural_yield": 0.975,
       "n_sequences_with_af2": 40,
       "yield_band": 3,
-      "saturation_risk": 0.0008
+      "saturation_risk": 0.4448,
+      "n_residues": 372,
+      "n_chains": 1
     },
     {
       "backbone_key": "1koyA00|rfd3|rfd3_inputs_spec-1_0_model_2",
@@ -313,18 +284,61 @@
       "baseline_structural_yield": 0.15,
       "n_sequences_with_af2": 20,
       "yield_band": 0,
-      "saturation_risk": 0.0055
+      "saturation_risk": 0.0055,
+      "n_residues": 62,
+      "n_chains": 1
     },
     {
-      "backbone_key": "1e1hB02|target|target",
-      "target_id": "1e1hB02",
+      "backbone_key": "1bx8A00|target|target",
+      "target_id": "1bx8A00",
       "backbone_source": "target",
-      "pdb_file": "1e1hB02__target__target.pdb",
-      "baseline_joint_yield": 0.525,
-      "baseline_structural_yield": 0.525,
+      "pdb_file": "1bx8A00__target__target.pdb",
+      "baseline_joint_yield": 0.65,
+      "baseline_structural_yield": 0.65,
       "n_sequences_with_af2": 40,
       "yield_band": 2,
-      "saturation_risk": 0.0
+      "saturation_risk": 0.0,
+      "n_residues": 49,
+      "n_chains": 1
+    },
+    {
+      "backbone_key": "1b5aA00|bioemu|bioemu_004",
+      "target_id": "1b5aA00",
+      "backbone_source": "bioemu",
+      "pdb_file": "1b5aA00__bioemu__bioemu_004.pdb",
+      "baseline_joint_yield": 0.9375,
+      "baseline_structural_yield": 0.9375,
+      "n_sequences_with_af2": 16,
+      "yield_band": 3,
+      "saturation_risk": 0.1268,
+      "n_residues": 94,
+      "n_chains": 1
+    },
+    {
+      "backbone_key": "1hufA00|rfd3|rfd3_inputs_spec-1_0_model_4",
+      "target_id": "1hufA00",
+      "backbone_source": "rfd3",
+      "pdb_file": "1hufA00__rfd3__rfd3_inputs_spec-1_0_model_4.pdb",
+      "baseline_joint_yield": 0.25,
+      "baseline_structural_yield": 0.25,
+      "n_sequences_with_af2": 16,
+      "yield_band": 0,
+      "saturation_risk": 0.0001,
+      "n_residues": 123,
+      "n_chains": 1
+    },
+    {
+      "backbone_key": "1koyA00|rfd3|rfd3_inputs_spec-1_0_model_1",
+      "target_id": "1koyA00",
+      "backbone_source": "rfd3",
+      "pdb_file": "1koyA00__rfd3__rfd3_inputs_spec-1_0_model_1.pdb",
+      "baseline_joint_yield": 0.7,
+      "baseline_structural_yield": 0.7,
+      "n_sequences_with_af2": 20,
+      "yield_band": 2,
+      "saturation_risk": 0.0,
+      "n_residues": 62,
+      "n_chains": 1
     },
     {
       "backbone_key": "2wejA00|rfd3|rfd3_inputs_spec-1_0_model_4",
@@ -335,7 +349,9 @@
       "baseline_structural_yield": 0.875,
       "n_sequences_with_af2": 16,
       "yield_band": 3,
-      "saturation_risk": 0.0139
+      "saturation_risk": 0.0139,
+      "n_residues": 258,
+      "n_chains": 1
     },
     {
       "backbone_key": "2jneA00|rfd3|rfd3_inputs_spec-1_0_model_1",
@@ -346,18 +362,9 @@
       "baseline_structural_yield": 0.9,
       "n_sequences_with_af2": 20,
       "yield_band": 0,
-      "saturation_risk": 0.1937
-    },
-    {
-      "backbone_key": "3bukC01|target|target",
-      "target_id": "3bukC01",
-      "backbone_source": "target",
-      "pdb_file": "3bukC01__target__target.pdb",
-      "baseline_joint_yield": 0.65625,
-      "baseline_structural_yield": 0.65625,
-      "n_sequences_with_af2": 32,
-      "yield_band": 2,
-      "saturation_risk": 0.0
+      "saturation_risk": 0.1937,
+      "n_residues": 71,
+      "n_chains": 1
     },
     {
       "backbone_key": "1af7A01|rfd3|rfd3_inputs_spec-1_0_model_2",
@@ -368,19 +375,21 @@
       "baseline_structural_yield": 0.8125,
       "n_sequences_with_af2": 16,
       "yield_band": 3,
-      "saturation_risk": 0.0013
+      "saturation_risk": 0.0013,
+      "n_residues": 274,
+      "n_chains": 1
     }
   ],
   "band_distribution": {
-    "0": 8,
+    "0": 7,
     "1": 4,
-    "2": 8,
-    "3": 8
+    "2": 6,
+    "3": 7
   },
   "source_distribution": {
     "bioemu": 6,
     "rfd3": 12,
-    "target": 10
+    "target": 6
   },
   "target_distribution": {
     "1af7A01": 2,
@@ -388,18 +397,14 @@
     "1b7eA01": 1,
     "1b8xA03": 1,
     "1bx8A00": 1,
-    "1e1hB02": 1,
     "1e9tA00": 1,
-    "1h38A01": 1,
     "1hufA00": 3,
     "1jygA00": 3,
     "1koyA00": 3,
     "1mkcA00": 1,
-    "1ohgC01": 1,
     "2jneA00": 3,
     "2kjfA00": 1,
-    "2wejA00": 1,
-    "3bukC01": 1
+    "2wejA00": 1
   },
   "previous_panel_overlap": [
     "1af7A01|target|target",
