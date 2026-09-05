@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RAPID — 목표 기반 설계</title>
+    <link rel="stylesheet" href="./guided.css" />
+  </head>
+  <body>
+    <header>
+      <h1>RAPID 목표 기반 설계</h1>
+      <p class="sub">목표만 정하면 나머지는 자동으로 계획됩니다. 실행 전에 사람이 검토하고 고칩니다.</p>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>1. 목표</h2>
+        <p class="hint">가중치는 상대값입니다. 합이 1이 아니어도 자동으로 정규화됩니다.</p>
+        <div id="weights"></div>
+
+        <h3>제약 (절대 조건)</h3>
+        <p class="hint">가중치와 달리 다른 점수로 상쇄되지 않습니다.</p>
+        <label>RMSD 상한 (Å) <input id="rmsdMax" type="number" step="0.1" value="2.0" /></label>
+        <label>AF2 예산 (호출 수) <input id="af2Budget" type="number" step="10" value="500" /></label>
+
+        <button id="planBtn" class="primary">계획 생성</button>
+        <span id="planStatus" class="status"></span>
+      </section>
+
+      <section class="card hidden" id="planCard">
+        <h2>2. 계획 검토</h2>
+        <div id="warnings"></div>
+        <div id="decisions"></div>
+      </section>
+
+      <section class="card hidden" id="applyCard">
+        <h2>3. 승인</h2>
+        <p class="hint">승인하면 아래 파이프라인 요청으로 변환됩니다. 실행은 아직 하지 않습니다.</p>
+        <button id="approveBtn" class="primary">승인하고 요청 만들기</button>
+        <pre id="requestOut"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="./guided.js"></script>
+  </body>
+</html>
