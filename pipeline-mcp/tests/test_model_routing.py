@@ -541,3 +541,24 @@ class AccessPathTests(unittest.TestCase):
         route = self.reg.route("monomer_solubility_redesign")
         self.assertEqual([s for s in route.stages if s.requires_design_policy], [])
         self.assertEqual(route.blockers["design_policy"], [])
+
+    def test_the_declared_purpose_order_survives_the_json_mirror(self):
+        """선언 순서는 의미를 갖는다 - 화면이 첫 번째를 기본으로 고른다.
+
+        미러를 sort_keys 로 쓰는 바람에 알파벳순이 되어, 실행조차 못 하는
+        antibody_design 이 맨 앞에 왔고 화면의 기본 선택이 그것이 되었다.
+        """
+        from pipeline_mcp.model_routing import REGISTRY_JSON_PATH, REGISTRY_PATH, read_yaml_source
+        import importlib.util
+        import json
+
+        if importlib.util.find_spec("yaml") is None:
+            self.skipTest("PyYAML 이 없으면 원본 순서를 읽을 수 없다")
+        source = read_yaml_source(REGISTRY_PATH)
+        mirror = json.loads(REGISTRY_JSON_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(list(mirror["purposes"]), list(source["purposes"]))
+
+    def test_the_first_purpose_is_one_that_can_actually_run(self):
+        first = self.reg.routes()[0]
+        self.assertTrue(first.executable, f"{first.purpose} 가 기본인데 실행할 수 없다")
+        self.assertTrue(first.validated, f"{first.purpose} 가 기본인데 검증되지 않았다")

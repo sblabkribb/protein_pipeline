@@ -1,736 +1,736 @@
 {
+  "schema": "rapid.model_registry/1",
+  "policy_version": "MODEL_REGISTRY_V1",
+  "version": "V1",
+  "created_utc": "2026-09-05",
+  "freeze": {
+    "state": "draft",
+    "change_requires": "A cost or performance number may only be edited together with the artifact path that produced it. Adding a model requires its availability to be justified by a client that exists in THIS repository, not by the worker being reachable."
+  },
   "availability_values": [
     "production",
     "wired_unvalidated",
     "not_wired",
     "not_deployed"
   ],
-  "created_utc": "2026-09-05",
-  "freeze": {
-    "change_requires": "A cost or performance number may only be edited together with the artifact path that produced it. Adding a model requires its availability to be justified by a client that exists in THIS repository, not by the worker being reachable.",
-    "state": "draft"
+  "registry_access": {
+    "portal_mcp_integration": "client_built",
+    "portal_mcp_client": "clients/portal_mcp.py",
+    "portal_mcp_configuration": "RAPID_PORTAL_MCP_URL 과 RAPID_PORTAL_MCP_TOKEN 을 .env 로 준다. 기본 URL 을 두지 않는 이유는, 잘못된 기본값이 있으면 \"설정하지 않았다\" 가 \"연결에 실패했다\" 로 둔갑하기 때문이다.",
+    "portal_mcp_note": "포털 MCP 는 list_models / run_model / run_chain / job_status / job_result 를 제공하고 antifold, anarcii, alphafold3 를 포함한다. 그 경로를 붙이면 세 모델에 대한 전송 문제는 사라진다. 사라지지 않는 것은 설계 정책이다 - 포털은 AntiFold 의 region 토큰을 검증할 뿐 어느 영역을 열지 결정하지 않으며, regions 를 비우면 IMGT 영역 전체가 샘플링되어 아무도 승인하지 않은 framework 위치가 바뀐다."
   },
   "models": {
-    "alphafold3": {
-      "access": {
-        "direct_client": false,
-        "portal_mcp": true
-      },
-      "availability": "not_wired",
-      "blocked_note": "The worker is reachable and reports its weights and databases ready, but this repository has no AF3 client. A route that needs AF3 is reported as blocked here rather than silently downgraded to ColabFold, which cannot fold a complex the same way.",
-      "client": "",
-      "cost": {
-        "provenance": "unmeasured",
-        "unit": "s/fold"
-      },
-      "display_name": "AlphaFold3",
-      "endpoint": "bop:18110",
-      "measures": [
-        "structural_preservation",
-        "binding"
+    "mmseqs2": {
+      "display_name": "MMseqs2",
+      "role": "msa",
+      "endpoint": "bop:18106",
+      "replicas": [
+        "bop:18106",
+        "bop:18107"
       ],
-      "metric_note": "For a complex, never use global ipTM: it is inflated by native intra-chain pairing. Use the chain-pair block and ipSAE as the interface metric.",
-      "role": "structure_validator"
-    },
-    "anarcii": {
+      "availability": "production",
       "access": {
-        "direct_client": false,
+        "direct_client": true,
         "portal_mcp": true
       },
-      "availability": "not_wired",
-      "client": "",
+      "client": "clients/mmseqs.py",
+      "measures": [],
       "cost": {
         "provenance": "unmeasured",
-        "unit": "s/sequence"
-      },
-      "display_name": "ANARCII",
-      "endpoint": "bop:18109",
-      "measures": [],
-      "role": "antibody_numbering"
+        "unit": "s/target",
+        "note": "Not timed in this repository. The GPU replica (18107) and the CPU replica (18106) have different profiles and were never separated in a measurement, so no single number would be honest."
+      }
     },
-    "antifold": {
+    "rfd3": {
+      "display_name": "RFdiffusion / RFD3",
+      "role": "backbone_generator",
+      "endpoint": "bop:18104",
+      "availability": "production",
       "access": {
-        "direct_client": false,
+        "direct_client": true,
         "portal_mcp": true
       },
-      "availability": "not_wired",
-      "blocked_note": "Antibody-specific inverse folder, reachable on BOP. Not wired here. The antibody design arms, their masks and their mutation caps live in the antigen pipeline's ROUTER_POLICY_V1.1; this registry does not restate that policy.",
-      "client": "",
+      "client": "clients/local_http.py, clients/rfd3_runpod.py",
+      "measures": [
+        "diversity"
+      ],
+      "worker_concurrency": 2,
       "cost": {
         "provenance": "unmeasured",
-        "unit": "s/design"
+        "unit": "s/backbone",
+        "note": "Not isolated. The Gate 0 wave-2 artifact records a WHOLE-RUN wall clock (median 4720 s over 14 successful runs, range 872-12514 s) that also covers MSA, ProteinMPNN, SoluProt and a serially-executed AF2 stage, so it cannot be attributed to RFD3. The route-level number is recorded on the purpose, not here."
       },
-      "display_name": "AntiFold",
-      "endpoint": "bop:18111",
-      "measures": [],
-      "role": "sequence_designer"
+      "notes": "Gate 0 measured RFD3 backbones at target level; see the gate0 ladder for the yield it produced relative to native and BioEmu backbones."
     },
-    "binder_score": {
+    "bioemu": {
+      "display_name": "BioEmu",
+      "role": "conformational_ensemble",
+      "endpoint": "bop:18103",
+      "availability": "production",
+      "access": {
+        "direct_client": true,
+        "portal_mcp": true
+      },
+      "client": "clients/local_http.py, clients/bioemu_runpod.py",
+      "measures": [
+        "diversity"
+      ],
+      "worker_concurrency": 2,
+      "cost": {
+        "provenance": "unmeasured",
+        "unit": "s/backbone",
+        "note": "Not isolated, same reason as RFD3. Wave-3 whole-run wall clock was a median 8952 s over 4 successful runs, with 4 of 8 runs failing the 2.0 A acceptance cutoff."
+      },
+      "known_limitation": "bioemu_target_rmsd_cutoff = 2.0 A rejected 4 of 8 Gate 0 BioEmu runs, one of which accepted 0 of 25 samples. The cutoff needs relaxing before BioEmu is used as a Gate 0 backbone source at scale."
+    },
+    "proteinmpnn": {
+      "display_name": "ProteinMPNN",
+      "role": "sequence_designer",
+      "endpoint": "bop:18101",
+      "availability": "production",
+      "access": {
+        "direct_client": true,
+        "portal_mcp": true
+      },
+      "client": "clients/proteinmpnn.py",
+      "measures": [],
+      "worker_concurrency": 4,
+      "checkpoint": {
+        "model_name": "v_48_020",
+        "use_soluble_model": true,
+        "sampling_temp": 0.1,
+        "pinned_at": "rapid_sr/protocol.py GATE0_MPNN_SETTINGS; the Gate 0 protocol fixes these so backbones are compared under identical generation conditions."
+      },
+      "cost": {
+        "provenance": "measured",
+        "value": 0.5602,
+        "unit": "s/design",
+        "scope": "Marginal cost per designed sequence on a 311-residue backbone (16vpA00), soluble v_48_020, T=0.1, batch_size 1, GPU 1. Fitted on medians of 3 repeats at n = 1, 4, 16 (2.88 s, 4.52 s, 11.27 s), giving 2.298 s of fixed per-CALL cost plus this per-sequence slope. The two are reported separately because dividing a single call by its sequence count folds the fixed cost into the marginal one. Length dependence was NOT measured: one backbone only.",
+        "source": "public_data/benchmark/gate0/model_cost_probe.json",
+        "model": {
+          "kind": "affine",
+          "variable": "n_designs",
+          "intercept": 2.298,
+          "slope": 0.5602
+        }
+      },
+      "client_overhead": {
+        "provenance": "measured",
+        "value": 9.0,
+        "unit": "s/call",
+        "scope": "LocalHttpRunClient computes its status-poll interval as min(15, max(2, timeout_s/200)), which is 9.0 s at the 1800 s timeout the pipeline uses. A call that finishes in 2.9 s is therefore observed as 9.0 s, and a 11.3 s call as 18.0 s. This is the client's cost, not the model's; the measurement above polls at 0.2 s to separate them.",
+        "source": "public_data/benchmark/gate0/model_cost_probe.json",
+        "implication": "On the Gate 0 protocol (16 sequences per backbone, one call per backbone) the floor adds ~6.7 s per backbone, ~40% on top of the worker's 11.3 s. Reducing the poll interval is a cheaper throughput win than any model change, and it was invisible until worker time and client time were measured apart."
+      },
+      "notes": "The ProteinMPNN ENCODER is sequence-independent - h_V starts at zeros and is updated only by geometric edges - so its representation is computable once per backbone and reused across all sequences from that backbone. That is what makes it usable as a Gate 0 feature at target-routing cost."
+    },
+    "mpnn_encoder": {
+      "display_name": "ProteinMPNN encoder representation (Gate 0 feature)",
+      "role": "representation",
+      "endpoint": "",
+      "availability": "production",
       "access": {
         "direct_client": true,
         "portal_mcp": false
       },
-      "availability": "wired_unvalidated",
-      "client": "clients/binder_score.py",
-      "cost": {
-        "provenance": "unmeasured",
-        "unit": "s/complex"
-      },
-      "default_metric": "ipsae",
-      "display_name": "ipSAE binder score",
-      "endpoint": "bop:18108",
-      "measures": [
-        "binding"
-      ],
-      "role": "interface_scorer",
-      "validation_status": "Post-fold: it scores a complex that a validator already produced, so it does not compete with the pre-fold stages. Never benchmarked inside RAPID.",
-      "worker_concurrency": 8
-    },
-    "bioemu": {
-      "access": {
-        "direct_client": true,
-        "portal_mcp": true
-      },
-      "availability": "production",
-      "client": "clients/local_http.py, clients/bioemu_runpod.py",
-      "cost": {
-        "note": "Not isolated, same reason as RFD3. Wave-3 whole-run wall clock was a median 8952 s over 4 successful runs, with 4 of 8 runs failing the 2.0 A acceptance cutoff.",
-        "provenance": "unmeasured",
-        "unit": "s/backbone"
-      },
-      "display_name": "BioEmu",
-      "endpoint": "bop:18103",
-      "known_limitation": "bioemu_target_rmsd_cutoff = 2.0 A rejected 4 of 8 Gate 0 BioEmu runs, one of which accepted 0 of 25 samples. The cutoff needs relaxing before BioEmu is used as a Gate 0 backbone source at scale.",
-      "measures": [
-        "diversity"
-      ],
-      "role": "conformational_ensemble",
-      "worker_concurrency": 2
-    },
-    "boltz2": {
-      "access": {
-        "direct_client": false,
-        "portal_mcp": true
-      },
-      "availability": "not_wired",
-      "blocked_note": "Reachable on BOP; folds ':'-joined complexes and returns pair_chains_iptm, so it could give an interface confidence without an AF3 call. No client here.",
-      "client": "",
-      "cost": {
-        "provenance": "unmeasured",
-        "unit": "s/fold"
-      },
-      "display_name": "Boltz-2",
-      "endpoint": "bop:18112",
-      "measures": [
-        "structural_preservation",
-        "binding"
-      ],
-      "role": "structure_validator"
-    },
-    "colabfold": {
-      "access": {
-        "direct_client": true,
-        "portal_mcp": true
-      },
-      "availability": "production",
-      "caveat": "AF2 pLDDT is a model confidence, not ground truth. It is used here as a consistent, expensive verification signal, never described as a measurement of the designed protein.",
-      "client": "clients/alphafold2.py, clients/alphafold2_runpod.py",
-      "cost": {
-        "model": {
-          "coefficient": 2.890344,
-          "exponent": 0.748,
-          "kind": "power_law",
-          "n_points": 4,
-          "variable": "length_aa"
-        },
-        "provenance": "measured",
-        "scope": "Reference length 254 aa, one worker. Fitted on 4 folds spanning 60-351 aa (60 aa -> 62.7 s, 154 aa -> 142.8 s, 252 aa -> 121.3 s, 351 aa -> 299.2 s). With the 4-worker pool the observed EFFECTIVE rate over the 480-fold temperature sweep was ~46.6 s/fold. Do not quote the 62.7 s figure as a general per-fold cost: it is the 60-residue end of this fit.",
-        "source": "public_data/benchmark/gate0/af2_length_scaling.json",
-        "unit": "s/fold",
-        "value": 181.9
-      },
-      "display_name": "ColabFold / AlphaFold2",
-      "endpoint": "bop:18160",
+      "client": "scripts/transcoder/rapid_sr/",
       "measures": [
         "structural_preservation"
       ],
-      "rejected_option": {
-        "name": "single-sequence mode (no MSA)",
-        "result": "1.41x faster but mean pLDDT fell 87.02 -> 65.75, which would zero out every yield at the >=85 threshold. Measured and rejected, not assumed.",
-        "source": "public_data/benchmark/gate0/af2_msa_mode_probe.json"
+      "cost": {
+        "provenance": "measured",
+        "value": 0.0,
+        "unit": "s/design",
+        "scope": "Amortised to zero per design: one encoder pass per BACKBONE is reused by every sequence designed from it, and the pass is already paid by the ProteinMPNN call that generates those sequences.",
+        "source": "scripts/transcoder/rapid_sr/protocol.py"
       },
+      "performance": {
+        "metric": "target_level_auc",
+        "value": 0.7247,
+        "ci95": [
+          0.7088,
+          0.7397
+        ],
+        "n_targets": 62,
+        "n_backbones": 157,
+        "comparator": "+0.0725 AUC (95% CI 0.0499-0.0957, paired over the same splits) above the 10-dimensional structural-descriptor baseline; +0.3202 (0.2866-0.3523) above the per-source mean.",
+        "source": "public_data/benchmark/gate0/gate0_target_level.json",
+        "caveat": "This is TARGET-level routing. Within-target ranking of individual designs from the same backbone was measured and did not work; do not read this AUC as a per-design score."
+      }
+    },
+    "esm2_embedding": {
+      "display_name": "ESM2-8M embedding",
+      "role": "representation",
+      "endpoint": "bop:18170",
+      "availability": "production",
+      "access": {
+        "direct_client": true,
+        "portal_mcp": false
+      },
+      "client": "clients/esm_embedding.py",
+      "measures": [],
+      "checkpoint": {
+        "model_name": "facebook/esm2_t6_8M_UR50D",
+        "pinned_at": "reported by the worker's /healthz"
+      },
+      "cost": {
+        "provenance": "measured",
+        "value": 0.0007,
+        "unit": "s/sequence",
+        "scope": "77-residue sequence, batches of 1/4/16, 3 repeats each; whole-batch wall clock was 0.01-0.03 s, so the per-sequence slope is at the edge of what this probe can resolve. Read it as \"below 1 ms/sequence at this length\", not as a precise value. Longer sequences were not measured.",
+        "source": "public_data/benchmark/gate0/model_cost_probe.json",
+        "model": {
+          "kind": "affine",
+          "variable": "n_designs",
+          "intercept": 0.008,
+          "slope": 0.0007
+        }
+      },
+      "negative_result": "Five arms of sequence-only surrogates over ESM2 representations (raw embedding, pooled sparse dictionary, pretrained CLT and PLT latents, and a trained head) all produced paired differences whose CIs include zero on the task of ranking ProteinMPNN designs from a FIXED backbone by AF2 pLDDT. The sequence axis is closed for that task. This does not say ESM representations carry no structural information in general."
+    },
+    "soluprot": {
+      "display_name": "SoluProt",
+      "role": "cheap_filter",
+      "endpoint": "in-process",
+      "availability": "production",
+      "access": {
+        "direct_client": true,
+        "portal_mcp": false
+      },
+      "client": "clients/soluprot.py",
+      "measures": [
+        "solubility"
+      ],
+      "threshold": {
+        "pass_at": 0.5,
+        "pinned_at": "rapid_sr/protocol.py GATE0_THRESHOLDS.soluprot_min"
+      },
+      "cost": {
+        "provenance": "unmeasured",
+        "unit": "s/sequence",
+        "note": "Runs in-process and is cheap relative to folding, but was never timed."
+      }
+    },
+    "colabfold": {
+      "display_name": "ColabFold / AlphaFold2",
+      "role": "structure_validator",
+      "endpoint": "bop:18160",
       "replicas": [
         "bop:18161",
         "bop:18163",
         "bop:18164",
         "bop:18165"
       ],
-      "role": "structure_validator",
-      "thresholds": {
-        "pinned_at": "rapid_sr/protocol.py GATE0_THRESHOLDS",
-        "plddt_min": 85.0,
-        "rmsd_max": 2.0
-      },
-      "worker_concurrency": 4
-    },
-    "diffdock": {
+      "availability": "production",
       "access": {
         "direct_client": true,
         "portal_mcp": true
       },
-      "availability": "wired_unvalidated",
-      "client": "clients/diffdock_runpod.py",
-      "cost": {
-        "provenance": "unmeasured",
-        "unit": "s/pose"
-      },
-      "display_name": "DiffDock",
-      "endpoint": "bop:18105",
+      "client": "clients/alphafold2.py, clients/alphafold2_runpod.py",
       "measures": [
-        "binding"
+        "structural_preservation"
       ],
-      "role": "ligand_docking",
-      "validation_status": "A RunPod client exists; the BOP worker at 18105 is reachable. Neither has been exercised from a RAPID route."
-    },
-    "esm2_embedding": {
-      "access": {
-        "direct_client": true,
-        "portal_mcp": false
+      "worker_concurrency": 4,
+      "thresholds": {
+        "plddt_min": 85.0,
+        "rmsd_max": 2.0,
+        "pinned_at": "rapid_sr/protocol.py GATE0_THRESHOLDS"
       },
-      "availability": "production",
-      "checkpoint": {
-        "model_name": "facebook/esm2_t6_8M_UR50D",
-        "pinned_at": "reported by the worker's /healthz"
-      },
-      "client": "clients/esm_embedding.py",
       "cost": {
-        "model": {
-          "intercept": 0.008,
-          "kind": "affine",
-          "slope": 0.0007,
-          "variable": "n_designs"
-        },
         "provenance": "measured",
-        "scope": "77-residue sequence, batches of 1/4/16, 3 repeats each; whole-batch wall clock was 0.01-0.03 s, so the per-sequence slope is at the edge of what this probe can resolve. Read it as \"below 1 ms/sequence at this length\", not as a precise value. Longer sequences were not measured.",
-        "source": "public_data/benchmark/gate0/model_cost_probe.json",
-        "unit": "s/sequence",
-        "value": 0.0007
+        "value": 181.9,
+        "unit": "s/fold",
+        "scope": "Reference length 254 aa, one worker. Fitted on 4 folds spanning 60-351 aa (60 aa -> 62.7 s, 154 aa -> 142.8 s, 252 aa -> 121.3 s, 351 aa -> 299.2 s). With the 4-worker pool the observed EFFECTIVE rate over the 480-fold temperature sweep was ~46.6 s/fold. Do not quote the 62.7 s figure as a general per-fold cost: it is the 60-residue end of this fit.",
+        "source": "public_data/benchmark/gate0/af2_length_scaling.json",
+        "model": {
+          "kind": "power_law",
+          "variable": "length_aa",
+          "coefficient": 2.890344,
+          "exponent": 0.748,
+          "n_points": 4
+        }
       },
-      "display_name": "ESM2-8M embedding",
-      "endpoint": "bop:18170",
-      "measures": [],
-      "negative_result": "Five arms of sequence-only surrogates over ESM2 representations (raw embedding, pooled sparse dictionary, pretrained CLT and PLT latents, and a trained head) all produced paired differences whose CIs include zero on the task of ranking ProteinMPNN designs from a FIXED backbone by AF2 pLDDT. The sequence axis is closed for that task. This does not say ESM representations carry no structural information in general.",
-      "role": "representation"
+      "rejected_option": {
+        "name": "single-sequence mode (no MSA)",
+        "result": "1.41x faster but mean pLDDT fell 87.02 -> 65.75, which would zero out every yield at the >=85 threshold. Measured and rejected, not assumed.",
+        "source": "public_data/benchmark/gate0/af2_msa_mode_probe.json"
+      },
+      "caveat": "AF2 pLDDT is a model confidence, not ground truth. It is used here as a consistent, expensive verification signal, never described as a measurement of the designed protein."
     },
-    "esmfold": {
+    "alphafold3": {
+      "display_name": "AlphaFold3",
+      "role": "structure_validator",
+      "endpoint": "bop:18110",
+      "availability": "not_wired",
       "access": {
         "direct_client": false,
         "portal_mcp": true
       },
-      "availability": "not_wired",
-      "blocked_note": "Reachable on BOP (facebook/esmfold_v1) but no client exists here.",
       "client": "",
+      "measures": [
+        "structural_preservation",
+        "binding"
+      ],
       "cost": {
         "provenance": "unmeasured",
         "unit": "s/fold"
       },
-      "display_name": "ESMFold",
-      "endpoint": "bop:18162",
-      "measures": [
-        "structural_preservation"
-      ],
-      "role": "structure_validator"
+      "blocked_note": "The worker is reachable and reports its weights and databases ready, but this repository has no AF3 client. A route that needs AF3 is reported as blocked here rather than silently downgraded to ColabFold, which cannot fold a complex the same way.",
+      "metric_note": "For a complex, never use global ipTM: it is inflated by native intra-chain pairing. Use the chain-pair block and ipSAE as the interface metric."
     },
-    "mmseqs2": {
+    "esmfold": {
+      "display_name": "ESMFold",
+      "role": "structure_validator",
+      "endpoint": "bop:18162",
+      "availability": "not_wired",
       "access": {
-        "direct_client": true,
+        "direct_client": false,
         "portal_mcp": true
       },
-      "availability": "production",
-      "client": "clients/mmseqs.py",
-      "cost": {
-        "note": "Not timed in this repository. The GPU replica (18107) and the CPU replica (18106) have different profiles and were never separated in a measurement, so no single number would be honest.",
-        "provenance": "unmeasured",
-        "unit": "s/target"
-      },
-      "display_name": "MMseqs2",
-      "endpoint": "bop:18106",
-      "measures": [],
-      "replicas": [
-        "bop:18106",
-        "bop:18107"
-      ],
-      "role": "msa"
-    },
-    "mpnn_encoder": {
-      "access": {
-        "direct_client": true,
-        "portal_mcp": false
-      },
-      "availability": "production",
-      "client": "scripts/transcoder/rapid_sr/",
-      "cost": {
-        "provenance": "measured",
-        "scope": "Amortised to zero per design: one encoder pass per BACKBONE is reused by every sequence designed from it, and the pass is already paid by the ProteinMPNN call that generates those sequences.",
-        "source": "scripts/transcoder/rapid_sr/protocol.py",
-        "unit": "s/design",
-        "value": 0.0
-      },
-      "display_name": "ProteinMPNN encoder representation (Gate 0 feature)",
-      "endpoint": "",
+      "client": "",
       "measures": [
         "structural_preservation"
       ],
-      "performance": {
-        "caveat": "This is TARGET-level routing. Within-target ranking of individual designs from the same backbone was measured and did not work; do not read this AUC as a per-design score.",
-        "ci95": [
-          0.7088,
-          0.7397
-        ],
-        "comparator": "+0.0725 AUC (95% CI 0.0499-0.0957, paired over the same splits) above the 10-dimensional structural-descriptor baseline; +0.3202 (0.2866-0.3523) above the per-source mean.",
-        "metric": "target_level_auc",
-        "n_backbones": 157,
-        "n_targets": 62,
-        "source": "public_data/benchmark/gate0/gate0_target_level.json",
-        "value": 0.7247
+      "cost": {
+        "provenance": "unmeasured",
+        "unit": "s/fold"
       },
-      "role": "representation"
+      "blocked_note": "Reachable on BOP (facebook/esmfold_v1) but no client exists here."
+    },
+    "boltz2": {
+      "display_name": "Boltz-2",
+      "role": "structure_validator",
+      "endpoint": "bop:18112",
+      "availability": "not_wired",
+      "access": {
+        "direct_client": false,
+        "portal_mcp": true
+      },
+      "client": "",
+      "measures": [
+        "structural_preservation",
+        "binding"
+      ],
+      "cost": {
+        "provenance": "unmeasured",
+        "unit": "s/fold"
+      },
+      "blocked_note": "Reachable on BOP; folds ':'-joined complexes and returns pair_chains_iptm, so it could give an interface confidence without an AF3 call. No client here."
     },
     "ppiformer_ddg": {
+      "display_name": "PPIformer ddG",
+      "role": "interface_scorer",
+      "endpoint": "bop:18113",
+      "availability": "wired_unvalidated",
       "access": {
         "direct_client": true,
         "portal_mcp": false
       },
-      "availability": "wired_unvalidated",
       "client": "clients/affinity.py",
-      "cost": {
-        "note": "The worker serialises predictions behind a process-wide lock, so throughput comes from running several worker processes, not from client threads. Not timed here.",
-        "provenance": "unmeasured",
-        "unit": "s/candidate"
-      },
-      "display_name": "PPIformer ddG",
-      "endpoint": "bop:18113",
       "measures": [
         "binding"
       ],
-      "provenance_requirement": "The client fails closed unless the worker returns model, version and checkpoint_hashes, so the running checkpoint is recorded per run rather than asserted in this file.",
-      "role": "interface_scorer",
-      "validation_status": "Never benchmarked inside RAPID. It is a pre-fold interface scorer: it runs on every candidate before the expensive validator, and it predicts no structure.",
-      "worker_concurrency": 1
-    },
-    "proteinmpnn": {
-      "access": {
-        "direct_client": true,
-        "portal_mcp": true
-      },
-      "availability": "production",
-      "checkpoint": {
-        "model_name": "v_48_020",
-        "pinned_at": "rapid_sr/protocol.py GATE0_MPNN_SETTINGS; the Gate 0 protocol fixes these so backbones are compared under identical generation conditions.",
-        "sampling_temp": 0.1,
-        "use_soluble_model": true
-      },
-      "client": "clients/proteinmpnn.py",
-      "client_overhead": {
-        "implication": "On the Gate 0 protocol (16 sequences per backbone, one call per backbone) the floor adds ~6.7 s per backbone, ~40% on top of the worker's 11.3 s. Reducing the poll interval is a cheaper throughput win than any model change, and it was invisible until worker time and client time were measured apart.",
-        "provenance": "measured",
-        "scope": "LocalHttpRunClient computes its status-poll interval as min(15, max(2, timeout_s/200)), which is 9.0 s at the 1800 s timeout the pipeline uses. A call that finishes in 2.9 s is therefore observed as 9.0 s, and a 11.3 s call as 18.0 s. This is the client's cost, not the model's; the measurement above polls at 0.2 s to separate them.",
-        "source": "public_data/benchmark/gate0/model_cost_probe.json",
-        "unit": "s/call",
-        "value": 9.0
-      },
+      "worker_concurrency": 1,
       "cost": {
-        "model": {
-          "intercept": 2.298,
-          "kind": "affine",
-          "slope": 0.5602,
-          "variable": "n_designs"
-        },
-        "provenance": "measured",
-        "scope": "Marginal cost per designed sequence on a 311-residue backbone (16vpA00), soluble v_48_020, T=0.1, batch_size 1, GPU 1. Fitted on medians of 3 repeats at n = 1, 4, 16 (2.88 s, 4.52 s, 11.27 s), giving 2.298 s of fixed per-CALL cost plus this per-sequence slope. The two are reported separately because dividing a single call by its sequence count folds the fixed cost into the marginal one. Length dependence was NOT measured: one backbone only.",
-        "source": "public_data/benchmark/gate0/model_cost_probe.json",
-        "unit": "s/design",
-        "value": 0.5602
-      },
-      "display_name": "ProteinMPNN",
-      "endpoint": "bop:18101",
-      "measures": [],
-      "notes": "The ProteinMPNN ENCODER is sequence-independent - h_V starts at zeros and is updated only by geometric edges - so its representation is computable once per backbone and reused across all sequences from that backbone. That is what makes it usable as a Gate 0 feature at target-routing cost.",
-      "role": "sequence_designer",
-      "worker_concurrency": 4
-    },
-    "rfd3": {
-      "access": {
-        "direct_client": true,
-        "portal_mcp": true
-      },
-      "availability": "production",
-      "client": "clients/local_http.py, clients/rfd3_runpod.py",
-      "cost": {
-        "note": "Not isolated. The Gate 0 wave-2 artifact records a WHOLE-RUN wall clock (median 4720 s over 14 successful runs, range 872-12514 s) that also covers MSA, ProteinMPNN, SoluProt and a serially-executed AF2 stage, so it cannot be attributed to RFD3. The route-level number is recorded on the purpose, not here.",
         "provenance": "unmeasured",
-        "unit": "s/backbone"
+        "unit": "s/candidate",
+        "note": "The worker serialises predictions behind a process-wide lock, so throughput comes from running several worker processes, not from client threads. Not timed here."
       },
-      "display_name": "RFdiffusion / RFD3",
-      "endpoint": "bop:18104",
-      "measures": [
-        "diversity"
-      ],
-      "notes": "Gate 0 measured RFD3 backbones at target level; see the gate0 ladder for the yield it produced relative to native and BioEmu backbones.",
-      "role": "backbone_generator",
-      "worker_concurrency": 2
+      "validation_status": "Never benchmarked inside RAPID. It is a pre-fold interface scorer: it runs on every candidate before the expensive validator, and it predicts no structure.",
+      "provenance_requirement": "The client fails closed unless the worker returns model, version and checkpoint_hashes, so the running checkpoint is recorded per run rather than asserted in this file."
     },
-    "rosetta_relax": {
+    "binder_score": {
+      "display_name": "ipSAE binder score",
+      "role": "interface_scorer",
+      "endpoint": "bop:18108",
+      "availability": "wired_unvalidated",
       "access": {
         "direct_client": true,
         "portal_mcp": false
       },
+      "client": "clients/binder_score.py",
+      "measures": [
+        "binding"
+      ],
+      "worker_concurrency": 8,
+      "default_metric": "ipsae",
+      "cost": {
+        "provenance": "unmeasured",
+        "unit": "s/complex"
+      },
+      "validation_status": "Post-fold: it scores a complex that a validator already produced, so it does not compete with the pre-fold stages. Never benchmarked inside RAPID."
+    },
+    "antifold": {
+      "display_name": "AntiFold",
+      "role": "sequence_designer",
+      "endpoint": "bop:18111",
+      "availability": "not_wired",
+      "access": {
+        "direct_client": false,
+        "portal_mcp": true
+      },
+      "client": "",
+      "measures": [],
+      "cost": {
+        "provenance": "unmeasured",
+        "unit": "s/design"
+      },
+      "blocked_note": "Antibody-specific inverse folder, reachable on BOP. Not wired here. The antibody design arms, their masks and their mutation caps live in the antigen pipeline's ROUTER_POLICY_V1.1; this registry does not restate that policy."
+    },
+    "anarcii": {
+      "display_name": "ANARCII",
+      "role": "antibody_numbering",
+      "endpoint": "bop:18109",
+      "availability": "not_wired",
+      "access": {
+        "direct_client": false,
+        "portal_mcp": true
+      },
+      "client": "",
+      "measures": [],
+      "cost": {
+        "provenance": "unmeasured",
+        "unit": "s/sequence"
+      }
+    },
+    "diffdock": {
+      "display_name": "DiffDock",
+      "role": "ligand_docking",
+      "endpoint": "bop:18105",
       "availability": "wired_unvalidated",
+      "access": {
+        "direct_client": true,
+        "portal_mcp": true
+      },
+      "client": "clients/diffdock_runpod.py",
+      "measures": [
+        "binding"
+      ],
+      "cost": {
+        "provenance": "unmeasured",
+        "unit": "s/pose"
+      },
+      "validation_status": "A RunPod client exists; the BOP worker at 18105 is reachable. Neither has been exercised from a RAPID route."
+    },
+    "rosetta_relax": {
+      "display_name": "Rosetta relax",
+      "role": "refinement",
+      "endpoint": "bop:18102",
+      "availability": "wired_unvalidated",
+      "access": {
+        "direct_client": true,
+        "portal_mcp": false
+      },
       "client": "clients/rosetta_relax.py",
+      "measures": [],
+      "worker_concurrency": 8,
       "cost": {
         "provenance": "unmeasured",
         "unit": "s/structure"
-      },
-      "display_name": "Rosetta relax",
-      "endpoint": "bop:18102",
-      "measures": [],
-      "role": "refinement",
-      "worker_concurrency": 8
-    },
-    "soluprot": {
-      "access": {
-        "direct_client": true,
-        "portal_mcp": false
-      },
-      "availability": "production",
-      "client": "clients/soluprot.py",
-      "cost": {
-        "note": "Runs in-process and is cheap relative to folding, but was never timed.",
-        "provenance": "unmeasured",
-        "unit": "s/sequence"
-      },
-      "display_name": "SoluProt",
-      "endpoint": "in-process",
-      "measures": [
-        "solubility"
-      ],
-      "role": "cheap_filter",
-      "threshold": {
-        "pass_at": 0.5,
-        "pinned_at": "rapid_sr/protocol.py GATE0_THRESHOLDS.soluprot_min"
       }
     }
   },
-  "policy_version": "MODEL_REGISTRY_V1",
   "purposes": {
+    "monomer_solubility_redesign": {
+      "display_name_en": "Soluble monomer redesign",
+      "display_name_ko": "가용성 단량체 재설계",
+      "description": "Redesign an existing monomer for solubility while preserving its fold. This is the path Gate 0, Gate 1 and Gate 2 were measured on.",
+      "objectives": [
+        "solubility",
+        "structural_preservation",
+        "diversity"
+      ],
+      "stages": [
+        {
+          "stage": "gate0_routing",
+          "model_id": "mpnn_encoder",
+          "gate": "gate0",
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "sequence_design",
+          "model_id": "proteinmpnn",
+          "gate": null,
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "cheap_filter",
+          "model_id": "soluprot",
+          "gate": "gate1",
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "structure_verify",
+          "model_id": "colabfold",
+          "gate": "gate2",
+          "required": true,
+          "validated": true
+        }
+      ],
+      "cost_driver": "colabfold"
+    },
+    "de_novo_backbone_design": {
+      "display_name_en": "De novo backbone design",
+      "display_name_ko": "신규 백본 설계",
+      "description": "Generate new backbones with RFD3, then design and verify sequences on them.",
+      "objectives": [
+        "solubility",
+        "structural_preservation",
+        "diversity"
+      ],
+      "stages": [
+        {
+          "stage": "backbone_generate",
+          "model_id": "rfd3",
+          "gate": null,
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "gate0_routing",
+          "model_id": "mpnn_encoder",
+          "gate": "gate0",
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "sequence_design",
+          "model_id": "proteinmpnn",
+          "gate": null,
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "cheap_filter",
+          "model_id": "soluprot",
+          "gate": "gate1",
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "structure_verify",
+          "model_id": "colabfold",
+          "gate": "gate2",
+          "required": true,
+          "validated": true
+        }
+      ],
+      "cost_driver": "colabfold",
+      "observed_run_cost": {
+        "provenance": "measured",
+        "value": 4720.4,
+        "unit": "s/run",
+        "statistic": "median",
+        "scope": "Gate 0 wave 2: 14 successful whole-pipeline runs (MSA + RFD3 + ProteinMPNN + SoluProt + AF2), range 872-12514 s, 1 failure. AF2 ran SERIALLY because pipeline.py defaults DEFAULT_AF2_MAX_WORKERS to 1; setting PIPELINE_AF2_MAX_WORKERS=4 changes this number and it has not been re-measured under that setting.",
+        "source": "public_data/benchmark/gate0/wave_02_results.json"
+      }
+    },
+    "conformational_ensemble_redesign": {
+      "display_name_en": "Ensemble-based redesign",
+      "display_name_ko": "구조 앙상블 기반 재설계",
+      "description": "Sample conformations with BioEmu and design against the ensemble rather than a single static backbone.",
+      "objectives": [
+        "solubility",
+        "structural_preservation",
+        "diversity"
+      ],
+      "stages": [
+        {
+          "stage": "backbone_generate",
+          "model_id": "bioemu",
+          "gate": null,
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "gate0_routing",
+          "model_id": "mpnn_encoder",
+          "gate": "gate0",
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "sequence_design",
+          "model_id": "proteinmpnn",
+          "gate": null,
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "cheap_filter",
+          "model_id": "soluprot",
+          "gate": "gate1",
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "structure_verify",
+          "model_id": "colabfold",
+          "gate": "gate2",
+          "required": true,
+          "validated": true
+        }
+      ],
+      "cost_driver": "colabfold",
+      "observed_run_cost": {
+        "provenance": "measured",
+        "value": 8952.0,
+        "unit": "s/run",
+        "statistic": "median",
+        "scope": "Gate 0 wave 3: 4 successful whole-pipeline runs, range 5907-13031 s. Four further runs failed, so this median describes the runs that survived the acceptance cutoff and understates the cost of obtaining a usable backbone.",
+        "source": "public_data/benchmark/gate0/wave_03_results.json"
+      },
+      "caveat": "The 2.0 A BioEmu acceptance cutoff currently rejects half the runs. Treat this route's backbone yield as cutoff-limited until that is re-tuned."
+    },
+    "protein_binder_design": {
+      "display_name_en": "Protein binder design",
+      "display_name_ko": "단백질 바인더 설계",
+      "description": "Design a binder against a protein target. Adds two interface stages the monomer route does not have: a pre-fold ddG screen and a post-fold interface confidence score.",
+      "objectives": [
+        "binding",
+        "solubility",
+        "structural_preservation"
+      ],
+      "stages": [
+        {
+          "stage": "backbone_generate",
+          "model_id": "rfd3",
+          "gate": null,
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "gate0_routing",
+          "model_id": "mpnn_encoder",
+          "gate": "gate0",
+          "required": true,
+          "validated": false
+        },
+        {
+          "stage": "sequence_design",
+          "model_id": "proteinmpnn",
+          "gate": null,
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "cheap_filter",
+          "model_id": "soluprot",
+          "gate": "gate1",
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "interface_screen",
+          "model_id": "ppiformer_ddg",
+          "gate": "gate1",
+          "required": true,
+          "validated": false
+        },
+        {
+          "stage": "structure_verify",
+          "model_id": "colabfold",
+          "gate": "gate2",
+          "required": true,
+          "validated": true
+        },
+        {
+          "stage": "interface_score",
+          "model_id": "binder_score",
+          "gate": "gate2",
+          "required": true,
+          "validated": false
+        }
+      ],
+      "cost_driver": "colabfold",
+      "caveat": "Gate 0's AUC was measured on MONOMER structural yield. Whether the same encoder representation routes binder targets is untested, which is why that stage is marked unvalidated on this route and not on the monomer route.",
+      "preferred_validator_note": "AF3 or Boltz-2 would fold the complex directly and give a chain-pair interface confidence. Neither has a client here, so this route verifies with ColabFold and scores the interface separately. That is a real limitation, not a design choice."
+    },
     "antibody_design": {
-      "cost_driver": "alphafold3",
-      "description": "Epitope-conditioned antibody design. Declared so a request for it gets an honest answer instead of being served by the monomer route.",
       "display_name_en": "Antibody design",
       "display_name_ko": "항체 설계",
+      "description": "Epitope-conditioned antibody design. Declared so a request for it gets an honest answer instead of being served by the monomer route.",
       "objectives": [
         "binding",
         "developability"
       ],
-      "referral": "This route is not runnable here. The antibody design arms, the CDR/framework masks and the mutation caps are defined and exercised in the antigen pipeline's ROUTER_POLICY_V1.1. Route an antibody request there rather than approximating it with RAPID's monomer path, which has no concept of a framework position.",
       "stages": [
         {
-          "gate": "gate0",
-          "model_id": "anarcii",
-          "required": true,
           "stage": "numbering",
-          "validated": false
-        },
-        {
-          "gate": null,
-          "model_id": "rfd3",
+          "model_id": "anarcii",
+          "gate": "gate0",
           "required": true,
-          "requires_design_policy": "백본이 움직여도 되는 잔기 범위. CDR only 와 interface contact FR 은 다른 arm 이다.",
-          "stage": "backbone_generate",
           "validated": false
         },
         {
+          "stage": "backbone_generate",
+          "model_id": "rfd3",
           "gate": null,
+          "required": true,
+          "validated": false,
+          "requires_design_policy": "백본이 움직여도 되는 잔기 범위. CDR only 와 interface contact FR 은 다른 arm 이다."
+        },
+        {
+          "stage": "sequence_design",
           "model_id": "antifold",
+          "gate": null,
           "required": true,
-          "requires_design_policy": "CDR/framework 마스크와 변이 상한. 비우면 IMGT 영역 전체가 바뀐다.",
-          "stage": "sequence_design",
-          "validated": false
+          "validated": false,
+          "requires_design_policy": "CDR/framework 마스크와 변이 상한. 비우면 IMGT 영역 전체가 바뀐다."
         },
         {
-          "gate": "gate1",
-          "model_id": "ppiformer_ddg",
-          "required": true,
           "stage": "interface_screen",
+          "model_id": "ppiformer_ddg",
+          "gate": "gate1",
+          "required": true,
           "validated": false
         },
         {
-          "gate": "gate2",
+          "stage": "structure_verify",
           "model_id": "alphafold3",
+          "gate": "gate2",
           "required": true,
-          "stage": "structure_verify",
           "validated": false
         },
         {
-          "gate": "gate2",
-          "model_id": "binder_score",
-          "required": true,
           "stage": "interface_score",
-          "validated": false
-        }
-      ]
-    },
-    "conformational_ensemble_redesign": {
-      "caveat": "The 2.0 A BioEmu acceptance cutoff currently rejects half the runs. Treat this route's backbone yield as cutoff-limited until that is re-tuned.",
-      "cost_driver": "colabfold",
-      "description": "Sample conformations with BioEmu and design against the ensemble rather than a single static backbone.",
-      "display_name_en": "Ensemble-based redesign",
-      "display_name_ko": "구조 앙상블 기반 재설계",
-      "objectives": [
-        "solubility",
-        "structural_preservation",
-        "diversity"
-      ],
-      "observed_run_cost": {
-        "provenance": "measured",
-        "scope": "Gate 0 wave 3: 4 successful whole-pipeline runs, range 5907-13031 s. Four further runs failed, so this median describes the runs that survived the acceptance cutoff and understates the cost of obtaining a usable backbone.",
-        "source": "public_data/benchmark/gate0/wave_03_results.json",
-        "statistic": "median",
-        "unit": "s/run",
-        "value": 8952.0
-      },
-      "stages": [
-        {
-          "gate": null,
-          "model_id": "bioemu",
-          "required": true,
-          "stage": "backbone_generate",
-          "validated": true
-        },
-        {
-          "gate": "gate0",
-          "model_id": "mpnn_encoder",
-          "required": true,
-          "stage": "gate0_routing",
-          "validated": true
-        },
-        {
-          "gate": null,
-          "model_id": "proteinmpnn",
-          "required": true,
-          "stage": "sequence_design",
-          "validated": true
-        },
-        {
-          "gate": "gate1",
-          "model_id": "soluprot",
-          "required": true,
-          "stage": "cheap_filter",
-          "validated": true
-        },
-        {
-          "gate": "gate2",
-          "model_id": "colabfold",
-          "required": true,
-          "stage": "structure_verify",
-          "validated": true
-        }
-      ]
-    },
-    "de_novo_backbone_design": {
-      "cost_driver": "colabfold",
-      "description": "Generate new backbones with RFD3, then design and verify sequences on them.",
-      "display_name_en": "De novo backbone design",
-      "display_name_ko": "신규 백본 설계",
-      "objectives": [
-        "solubility",
-        "structural_preservation",
-        "diversity"
-      ],
-      "observed_run_cost": {
-        "provenance": "measured",
-        "scope": "Gate 0 wave 2: 14 successful whole-pipeline runs (MSA + RFD3 + ProteinMPNN + SoluProt + AF2), range 872-12514 s, 1 failure. AF2 ran SERIALLY because pipeline.py defaults DEFAULT_AF2_MAX_WORKERS to 1; setting PIPELINE_AF2_MAX_WORKERS=4 changes this number and it has not been re-measured under that setting.",
-        "source": "public_data/benchmark/gate0/wave_02_results.json",
-        "statistic": "median",
-        "unit": "s/run",
-        "value": 4720.4
-      },
-      "stages": [
-        {
-          "gate": null,
-          "model_id": "rfd3",
-          "required": true,
-          "stage": "backbone_generate",
-          "validated": true
-        },
-        {
-          "gate": "gate0",
-          "model_id": "mpnn_encoder",
-          "required": true,
-          "stage": "gate0_routing",
-          "validated": true
-        },
-        {
-          "gate": null,
-          "model_id": "proteinmpnn",
-          "required": true,
-          "stage": "sequence_design",
-          "validated": true
-        },
-        {
-          "gate": "gate1",
-          "model_id": "soluprot",
-          "required": true,
-          "stage": "cheap_filter",
-          "validated": true
-        },
-        {
-          "gate": "gate2",
-          "model_id": "colabfold",
-          "required": true,
-          "stage": "structure_verify",
-          "validated": true
-        }
-      ]
-    },
-    "monomer_solubility_redesign": {
-      "cost_driver": "colabfold",
-      "description": "Redesign an existing monomer for solubility while preserving its fold. This is the path Gate 0, Gate 1 and Gate 2 were measured on.",
-      "display_name_en": "Soluble monomer redesign",
-      "display_name_ko": "가용성 단량체 재설계",
-      "objectives": [
-        "solubility",
-        "structural_preservation",
-        "diversity"
-      ],
-      "stages": [
-        {
-          "gate": "gate0",
-          "model_id": "mpnn_encoder",
-          "required": true,
-          "stage": "gate0_routing",
-          "validated": true
-        },
-        {
-          "gate": null,
-          "model_id": "proteinmpnn",
-          "required": true,
-          "stage": "sequence_design",
-          "validated": true
-        },
-        {
-          "gate": "gate1",
-          "model_id": "soluprot",
-          "required": true,
-          "stage": "cheap_filter",
-          "validated": true
-        },
-        {
-          "gate": "gate2",
-          "model_id": "colabfold",
-          "required": true,
-          "stage": "structure_verify",
-          "validated": true
-        }
-      ]
-    },
-    "protein_binder_design": {
-      "caveat": "Gate 0's AUC was measured on MONOMER structural yield. Whether the same encoder representation routes binder targets is untested, which is why that stage is marked unvalidated on this route and not on the monomer route.",
-      "cost_driver": "colabfold",
-      "description": "Design a binder against a protein target. Adds two interface stages the monomer route does not have: a pre-fold ddG screen and a post-fold interface confidence score.",
-      "display_name_en": "Protein binder design",
-      "display_name_ko": "단백질 바인더 설계",
-      "objectives": [
-        "binding",
-        "solubility",
-        "structural_preservation"
-      ],
-      "preferred_validator_note": "AF3 or Boltz-2 would fold the complex directly and give a chain-pair interface confidence. Neither has a client here, so this route verifies with ColabFold and scores the interface separately. That is a real limitation, not a design choice.",
-      "stages": [
-        {
-          "gate": null,
-          "model_id": "rfd3",
-          "required": true,
-          "stage": "backbone_generate",
-          "validated": true
-        },
-        {
-          "gate": "gate0",
-          "model_id": "mpnn_encoder",
-          "required": true,
-          "stage": "gate0_routing",
-          "validated": false
-        },
-        {
-          "gate": null,
-          "model_id": "proteinmpnn",
-          "required": true,
-          "stage": "sequence_design",
-          "validated": true
-        },
-        {
-          "gate": "gate1",
-          "model_id": "soluprot",
-          "required": true,
-          "stage": "cheap_filter",
-          "validated": true
-        },
-        {
-          "gate": "gate1",
-          "model_id": "ppiformer_ddg",
-          "required": true,
-          "stage": "interface_screen",
-          "validated": false
-        },
-        {
-          "gate": "gate2",
-          "model_id": "colabfold",
-          "required": true,
-          "stage": "structure_verify",
-          "validated": true
-        },
-        {
-          "gate": "gate2",
           "model_id": "binder_score",
+          "gate": "gate2",
           "required": true,
-          "stage": "interface_score",
           "validated": false
         }
-      ]
+      ],
+      "cost_driver": "alphafold3",
+      "referral": "This route is not runnable here. The antibody design arms, the CDR/framework masks and the mutation caps are defined and exercised in the antigen pipeline's ROUTER_POLICY_V1.1. Route an antibody request there rather than approximating it with RAPID's monomer path, which has no concept of a framework position."
     },
     "small_molecule_binding": {
-      "caveat": "Docking scores are not affinities and RAPID has never calibrated them against any measurement. Use this route to generate poses, not to rank candidates.",
-      "cost_driver": "diffdock",
-      "description": "Dock a small molecule against a designed or native structure.",
       "display_name_en": "Small-molecule binding",
       "display_name_ko": "저분자 결합",
+      "description": "Dock a small molecule against a designed or native structure.",
       "objectives": [
         "binding"
       ],
       "stages": [
         {
-          "gate": "gate2",
-          "model_id": "colabfold",
-          "required": true,
           "stage": "structure_verify",
+          "model_id": "colabfold",
+          "gate": "gate2",
+          "required": true,
           "validated": true
         },
         {
-          "gate": "gate2",
-          "model_id": "diffdock",
-          "required": true,
           "stage": "docking",
+          "model_id": "diffdock",
+          "gate": "gate2",
+          "required": true,
           "validated": false
         }
-      ]
+      ],
+      "cost_driver": "diffdock",
+      "caveat": "Docking scores are not affinities and RAPID has never calibrated them against any measurement. Use this route to generate poses, not to rank candidates."
     }
-  },
-  "registry_access": {
-    "portal_mcp_client": "clients/portal_mcp.py",
-    "portal_mcp_configuration": "RAPID_PORTAL_MCP_URL 과 RAPID_PORTAL_MCP_TOKEN 을 .env 로 준다. 기본 URL 을 두지 않는 이유는, 잘못된 기본값이 있으면 \"설정하지 않았다\" 가 \"연결에 실패했다\" 로 둔갑하기 때문이다.",
-    "portal_mcp_integration": "client_built",
-    "portal_mcp_note": "포털 MCP 는 list_models / run_model / run_chain / job_status / job_result 를 제공하고 antifold, anarcii, alphafold3 를 포함한다. 그 경로를 붙이면 세 모델에 대한 전송 문제는 사라진다. 사라지지 않는 것은 설계 정책이다 - 포털은 AntiFold 의 region 토큰을 검증할 뿐 어느 영역을 열지 결정하지 않으며, regions 를 비우면 IMGT 영역 전체가 샘플링되어 아무도 승인하지 않은 framework 위치가 바뀐다."
-  },
-  "schema": "rapid.model_registry/1",
-  "version": "V1"
+  }
 }

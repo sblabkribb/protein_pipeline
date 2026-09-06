@@ -442,3 +442,38 @@ test("a run without a status file still shows its artifacts", () => {
   assert.ok(!/^\s*return;/m.test(guard.slice(0, guard.indexOf("loadArtifacts"))),
             "the missing-status branch must not return early");
 });
+
+test("panes can be resized, by pointer and by keyboard", () => {
+  // 3D 를 볼 때와 계획을 읽을 때 필요한 폭이 다르다. 고정 폭이면 둘 중 하나는
+  // 늘 좁다. 드래그만 지원하면 키보드 사용자는 폭을 바꿀 수 없다.
+  assert.ok(html.includes('data-splitter="left"') && html.includes('data-splitter="right"'));
+  assert.ok(/role="separator"/.test(html));
+  assert.ok(/tabindex="0"/.test(html), "splitters must be focusable");
+  assert.ok(source.includes("ArrowLeft") && source.includes("ArrowRight"));
+  assert.ok(/localStorage\.setItem\(PANE_KEY/.test(source), "widths must survive a reload");
+});
+
+test("a structure can be opened full screen", () => {
+  assert.ok(html.includes('id="stage"'));
+  assert.ok(source.includes("openStage"));
+  assert.ok(/Escape/.test(source), "the overlay must close on Escape");
+});
+
+test("3D failure falls back to the file contents", () => {
+  // WebGL 은 원격 데스크톱이나 GPU 차단 목록에서 없을 수 있다. 그때 파일을
+  // 못 여는 것이 아니라 그리지 못하는 것이다.
+  const fn = source.slice(source.indexOf("function render3d("));
+  assert.ok(/try\s*{/.test(fn), "createViewer can throw");
+  assert.ok(/artifacttext/.test(fn), "the text must still be shown");
+});
+
+test("no error message can end up as undefined", () => {
+  assert.ok(source.includes("function errorText("));
+  // errorText 안의 error.message 는 정의 그 자체이므로 제외한다.
+  const code = source.replace(/function errorText\([\s\S]*?\n}/, "");
+  assert.ok(!/error\.message/.test(code), "use errorText, which handles non-Errors");
+});
+
+test("the default purpose is chosen by capability, not by list order", () => {
+  assert.ok(/r\.executable && r\.validated/.test(source));
+});

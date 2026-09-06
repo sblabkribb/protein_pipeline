@@ -69,8 +69,8 @@ body {
 .badge.link:hover { background: color-mix(in oklch, var(--action) 8%, transparent); }
 
 .layout {
-  display: grid; grid-template-columns: 264px minmax(0, 1fr) 340px;
-  min-height: calc(100vh - 57px);
+  display: grid; grid-template-columns: 264px 6px minmax(0, 1fr) 6px 340px;
+  height: calc(100vh - 57px);
 }
 .side { padding: 20px 18px; overflow-y: auto; background: var(--muted); border-right: 1px solid var(--rule); }
 .side.right { border-right: 0; border-left: 1px solid var(--rule); }
@@ -78,8 +78,9 @@ body {
 
 /* 화면이 좁아지면 레일을 접어 세로로 쌓는다. */
 @media (max-width: 1100px) {
-  .layout { grid-template-columns: 1fr; }
+  .layout { grid-template-columns: 1fr !important; height: auto; }
   .side, .side.right { border: 0; border-bottom: 1px solid var(--rule); }
+  .splitter { display: none; }
 }
 
 h2 {
@@ -331,3 +332,73 @@ textarea:focus { background: var(--panel); }
 .brand b { letter-spacing: -.01em; }
 #whoami { border: 0; color: var(--body); }
 button.badge.link { cursor: pointer; background: transparent; font: inherit; font-size: 12px; }
+
+/* --- 분할선 --------------------------------------------------------------
+   3D 결과를 볼 때와 계획을 읽을 때 필요한 폭이 다르다. 고정 폭이면 둘 중
+   하나는 늘 좁다. */
+.splitter {
+  position: relative; cursor: col-resize; background: var(--rule);
+  transition: background .12s ease;
+}
+.splitter::after {
+  content: ""; position: absolute; inset: 0 -4px;   /* 잡기 쉬운 히트 영역 */
+}
+.splitter:hover { background: var(--action); }
+/* 초점 링을 지우지 않는다. 키보드로 폭을 조절하려면 어디에 있는지 보여야 한다. */
+.splitter:focus-visible { background: var(--action); outline: 2px solid var(--action); outline-offset: 1px; }
+body.dragging { cursor: col-resize; user-select: none; }
+body.dragging iframe, body.dragging canvas { pointer-events: none; }
+
+/* --- 단계 행: 이름 · 모델 · 상태 · 비용 ---------------------------------- */
+.sname { flex: 0 0 auto; color: var(--ink); }
+.smodel { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          color: var(--quiet); font-size: 12.5px; }
+
+/* 좌측 설명은 접어 둔다. 펼치기 전에는 두 줄까지만 보인다. */
+.side .note > span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+                     overflow: hidden; }
+.side .rationale { white-space: pre-wrap; font-size: 12.5px; }
+
+/* --- 비용 구성 -----------------------------------------------------------
+   화면의 일은 "이만큼 쓸 값어치가 있는가" 를 판단하게 하는 것이다. 비용이
+   어디로 가는지가 표의 마지막 열이 아니라 형태로 보여야 한다.
+   측정하지 않은 구간은 빗금이다 - 0 폭이면 공짜로 보이고, 임의 폭을 주면
+   없는 측정을 지어내는 것이 된다. */
+.costwrap { margin: 4px 0 22px; }
+.costbar { display: flex; gap: 3px; height: 62px; }
+.costpart {
+  flex: 1 1 0; min-width: 62px; display: flex; flex-direction: column; justify-content: flex-end;
+  gap: 2px; padding: 8px 10px; border-radius: 8px; overflow: hidden;
+  background: color-mix(in oklch, var(--action) 12%, var(--panel));
+  border: 1px solid color-mix(in oklch, var(--action) 22%, transparent);
+}
+.costpart.is-unknown {
+  border-style: dashed; border-color: var(--rule); background: repeating-linear-gradient(
+    -45deg, var(--muted) 0 6px, var(--panel) 6px 12px);
+}
+.costlabel { font-size: 11px; color: var(--quiet); white-space: nowrap;
+             overflow: hidden; text-overflow: ellipsis; }
+.costvalue { font-size: 13px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.costpart.is-unknown .costvalue { color: var(--quiet); font-weight: 500; }
+.costnote { margin: 8px 0 0; font-size: 12px; color: var(--quiet); }
+
+/* --- 구조를 화면 가득 -----------------------------------------------------
+   이 화면에서 가장 볼 만한 것이 340px 레일에 갇혀 있을 이유가 없다. 접힘을
+   읽으려면 크기가 필요하다. */
+.stage-overlay {
+  position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column;
+  background: color-mix(in oklch, var(--canvas) 92%, transparent);
+  backdrop-filter: blur(6px);
+}
+.stagehead {
+  display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+  border-bottom: 1px solid var(--rule); background: var(--panel);
+}
+.stagetitle {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; color: var(--quiet);
+}
+.stagebody { flex: 1; min-height: 0; padding: 20px; }
+.viewer3d-lg { height: 100%; border-radius: 12px; }
+.previewhead { display: flex; align-items: center; gap: 10px; }
+.previewhead > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }

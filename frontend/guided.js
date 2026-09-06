@@ -119,6 +119,23 @@ async function callTool(name, args) {
   return unwrapToolResponse({ ok: res.ok, status: res.status, payload });
 }
 
+// 파이프라인 내부 키를 그대로 보여주면 읽는 사람이 번역을 해야 한다.
+const STAGE_LABEL = {
+  gate0_routing: "게이트 0 · 타겟 선별",
+  backbone_generate: "백본 생성",
+  sequence_design: "서열 설계",
+  cheap_filter: "가용성 필터",
+  interface_screen: "인터페이스 선별",
+  structure_verify: "구조 검증",
+  interface_score: "인터페이스 점수",
+  numbering: "항체 넘버링",
+  docking: "도킹",
+};
+
+function stageLabel(stage) {
+  return STAGE_LABEL[stage] || stage;
+}
+
 function formatSeconds(value) {
   if (value == null) return "미측정";
   if (value < 90) return `${value.toFixed(1)}s`;
@@ -132,13 +149,13 @@ function stageRow(stage, model, costEntry) {
   const row = document.createElement("div");
   row.className = "stage";
 
-  const dot = document.createElement("span");
-  dot.className = `dot${model && model.runnable ? "" : " off"}`;
-  row.appendChild(dot);
+  const bullet = document.createElement("span");
+  bullet.className = `dot${model && model.runnable ? "" : " off"}`;
+  row.appendChild(bullet);
 
-  const label = document.createElement("span");
-  label.textContent = `${stage.stage} · ${model ? model.display_name : stage.model_id}`;
-  row.appendChild(label);
+  // 파이프라인 내부 키를 그대로 보여주면 읽는 사람이 번역을 해야 한다.
+  row.appendChild(el("span", "sname", stageLabel(stage.stage)));
+  row.appendChild(el("span", "smodel", model ? model.display_name : stage.model_id));
 
   if (!stage.validated) {
     const badge = document.createElement("span");
@@ -173,6 +190,45 @@ function stageRow(stage, model, costEntry) {
     row.appendChild(perf);
   }
   return row;
+}
+
+// 이 화면의 일은 "GPU 시간을 쓸 값어치가 있는가" 를 판단하게 하는 것이다.
+// 그래서 비용이 어디로 가는지를 표로만 두지 않고 한눈에 보이게 그린다.
+// 측정하지 않은 단계는 폭이 아니라 빗금으로 표시한다 - 0 으로 그리면 공짜처럼
+// 보이고, 임의의 폭을 주면 없는 측정을 지어내는 것이다.
+function renderCostBar(host, route) {
+  host.replaceChildren();
+  const est = route && route.cost_estimate;
+  if (!est) return;
+  const known = (est.breakdown || []).filter((b) => b.seconds != null && b.seconds > 0);
+  const unknown = (est.breakdown || []).filter((b) => b.seconds == null);
+  if (!known.length && !unknown.length) return;
+
+  const total = known.reduce((sum, b) => sum + b.seconds, 0);
+  const bar = el("div", "costbar");
+  for (const entry of known) {
+    const part = el("div", "costpart");
+    part.style.flexGrow = String(entry.seconds);
+    part.title = `${stageLabel(entry.stage)} · ${formatSeconds(entry.seconds)} · 출처 ${entry.source || "-"}`;
+    part.appendChild(el("span", "costlabel", stageLabel(entry.stage)));
+    part.appendChild(el("span", "costvalue", formatSeconds(entry.seconds)));
+    bar.appendChild(part);
+  }
+  for (const entry of unknown) {
+    const part = el("div", "costpart is-unknown");
+    part.style.flexGrow = "0.6";
+    part.title = `${stageLabel(entry.stage)} · 측정된 비용 없음`;
+    part.appendChild(el("span", "costlabel", stageLabel(entry.stage)));
+    part.appendChild(el("span", "costvalue", "미측정"));
+    bar.appendChild(part);
+  }
+  host.appendChild(bar);
+
+  const caption = el("p", "costnote",
+    total > 0
+      ? `측정된 비용 ${formatSeconds(total)}. 빗금 구간은 재지 않아 합계에 들어가지 않았습니다.`
+      : "이 경로에는 측정된 비용이 없습니다.");
+  host.appendChild(caption);
 }
 
 function renderStages(host, route) {
@@ -223,15 +279,21 @@ async function loadRegistry() {
       option.textContent = route.display_name_ko + (route.executable ? "" : " — 실행 불가");
       select.appendChild(option);
     }
+    // 기본 선택은 목록의 첫 항목이 아니라 **실제로 돌릴 수 있고 검증된** 경로다.
+    // 순서에 기대면 레지스트리 순서가 바뀔 때 조용히 실행 불가 경로가 잡힌다.
+    const preferred = registry.purposes.find((r) => r.executable && r.validated)
+      || registry.purposes.find((r) => r.executable)
+      || registry.purposes[0];
+    if (preferred) select.value = preferred.purpose;
     renderConnections(out.connections);
     renderTemplates();
     onPurposeChange();
   } catch (error) {
     select.innerHTML = "";
     document.getElementById("templates").textContent =
-      `설계 목적을 불러오지 못했습니다: ${error.message}`;
+      `설계 목적을 불러오지 못했습니다: ${errorText(error)}`;
     document.getElementById("purposeNote").textContent =
-      `모델 목록을 가져오지 못했습니다: ${error.message}`;
+      `모델 목록을 가져오지 못했습니다: ${errorText(error)}`;
     renderStages(document.getElementById("stages"), null);
   }
 }
@@ -257,7 +319,7 @@ function renderTemplates() {
     const marks = document.createElement("span");
     marks.className = "cardmarks";
     if (!route.executable) {
-      marks.appendChild(mark("실행 불가", "bad", route.blocked_reason));
+      marks.appendChild(mark("실행 불가", "bad", "고르면 왜 실행할 수 없는지 아래에 나옵니다."));
     } else if (!route.validated) {
       marks.appendChild(mark("미검증", "warn",
         `검증되지 않은 단계: ${(route.unvalidated_stages || []).join(", ")}`));
@@ -325,6 +387,13 @@ const runState = { runId: "", artifacts: [] };
 //: 넣으면 빈 캔버스가 나오고, 사용자는 파일이 비었다고 생각한다.
 const STRUCTURE_FORMATS = { pdb: "pdb", cif: "cif", mmcif: "cif", ent: "pdb", sdf: "sdf" };
 
+// 던져진 것이 Error 가 아닐 수 있다. 메시지가 없으면 그 사실을 말한다.
+function errorText(error) {
+  if (!error) return "알 수 없는 오류";
+  if (typeof error === "string") return error;
+  return (error && error.message) || String(error) || "알 수 없는 오류";
+}
+
 function formatBytes(size) {
   if (size == null) return "";
   if (size < 1024) return `${size} B`;
@@ -361,7 +430,7 @@ async function loadRuns() {
     }
   } catch (error) {
     select.replaceChildren(new Option("불러오지 못했습니다", ""));
-    setRunStatus(`실행 목록을 불러오지 못했습니다: ${error.message}`);
+    setRunStatus(`실행 목록을 불러오지 못했습니다: ${errorText(error)}`);
   } finally {
     button.disabled = false;
   }
@@ -417,7 +486,7 @@ async function loadRunStatus(runId) {
     await loadArtifacts(runId);
     showPanel("artifacts");
   } catch (error) {
-    setRunStatus(`상태를 불러오지 못했습니다: ${error.message}`);
+    setRunStatus(`상태를 불러오지 못했습니다: ${errorText(error)}`);
   }
 }
 
@@ -479,7 +548,7 @@ async function loadArtifacts(runId) {
     }
   } catch (error) {
     host.classList.add("empty");
-    host.textContent = `산출물을 불러오지 못했습니다: ${error.message}`;
+    host.textContent = `산출물을 불러오지 못했습니다: ${errorText(error)}`;
   }
 }
 
@@ -493,16 +562,22 @@ async function openArtifact(runId, path, format, maxBytes) {
     });
     if (out && out.error) throw new Error(out.error);
     const text = out.text != null ? String(out.text) : "";
-    preview.innerHTML = "";
+    preview.replaceChildren();
 
-    const head = document.createElement("div");
-    head.className = "previewhead";
-    head.textContent = path;
+    const head = el("div", "previewhead");
+    head.appendChild(el("span", "", path));
+    if (format) {
+      // 이 화면에서 가장 볼 만한 것이 340px 레일에 갇혀 있을 이유가 없다.
+      const zoom = document.createElement("button");
+      zoom.type = "button";
+      zoom.className = "ghost";
+      zoom.textContent = "크게 보기";
+      zoom.addEventListener("click", () => openStage(path, text, format));
+      head.appendChild(zoom);
+    }
     preview.appendChild(head);
 
-    // read_artifact 는 max_bytes 로 자른다. 잘렸다고 말하지 않으면 사용자는
-    // 파일이 그게 전부인 줄 안다.
-    // 잘렸다고만 말하고 끝내면 막다른 길이다. 이 화면 안에서 이어 읽게 한다.
+    // read_artifact 는 max_bytes 로 자른다. 잘렸다고만 말하고 끝내면 막다른 길이다. 이 화면 안에서 이어 읽게 한다.
     if (out.truncated) {
       const warn = el("div", "warn", `내용이 잘렸습니다 (${formatBytes(cap)}까지). `);
       const more = document.createElement("button");
@@ -523,30 +598,54 @@ async function openArtifact(runId, path, format, maxBytes) {
       preview.appendChild(pre);
     }
   } catch (error) {
-    preview.textContent = `산출물을 읽지 못했습니다: ${error.message}`;
+    // "undefined" 로 끝나는 오류 메시지는 아무것도 알려주지 않는다.
+    preview.replaceChildren(el("div", "warn",
+      `산출물을 읽지 못했습니다: ${errorText(error)}`));
   }
 }
 
-function render3d(text, format, host) {
+// 3D 는 WebGL 을 쓴다. 원격 데스크톱이나 GPU 차단 목록에 걸린 브라우저에서는
+// 컨텍스트 생성 자체가 실패한다. 그때 파일을 못 여는 것이 아니라 그리지만
+// 못 하는 것이므로, 내용은 텍스트로라도 보여준다.
+// 구조를 화면 가득 띄운다. 레일 안의 작은 뷰포트로는 접힘을 읽을 수 없다.
+function openStage(path, text, format) {
+  const stage = document.getElementById("stage");
+  const body = document.getElementById("stageBody");
+  document.getElementById("stageTitle").textContent = path;
+  body.replaceChildren();
+  stage.classList.remove("hidden");
+  render3d(text, format, body, "viewer3d viewer3d-lg");
+  stage.querySelector(".stageclose").focus();
+}
+
+function closeStage() {
+  document.getElementById("stage").classList.add("hidden");
+  document.getElementById("stageBody").replaceChildren();
+}
+
+function render3d(text, format, host, viewerClass) {
+  const fallback = (reason) => {
+    host.appendChild(el("div", "warn", `${reason} 대신 원문을 표시합니다.`));
+    host.appendChild(el("pre", "artifacttext", text));
+  };
   if (!window.$3Dmol) {
-    const note = document.createElement("div");
-    note.className = "warn";
-    note.textContent = "3D 뷰어를 불러오지 못했습니다.";
-    host.appendChild(note);
+    fallback("3D 뷰어를 불러오지 못했습니다.");
     return;
   }
-  const container = document.createElement("div");
-  container.className = "viewer3d";
+  const container = el("div", viewerClass || "viewer3d");
   host.appendChild(container);
-  const viewer = window.$3Dmol.createViewer(container, { backgroundColor: "#0f141c" });
-  viewer.addModel(text, format);
-  if (format === "sdf") {
-    viewer.setStyle({}, { stick: { radius: 0.15 } });
-  } else {
-    viewer.setStyle({}, { cartoon: { color: "spectrum" } });
+  try {
+    const viewer = window.$3Dmol.createViewer(container, { backgroundColor: "#12161d" });
+    viewer.addModel(text, format);
+    viewer.setStyle({}, format === "sdf"
+      ? { stick: { radius: 0.15 } }
+      : { cartoon: { color: "spectrum" } });
+    viewer.zoomTo();
+    viewer.render();
+  } catch (error) {
+    container.remove();
+    fallback(`3D 를 그릴 수 없습니다 (${errorText(error)}).`);
   }
-  viewer.zoomTo();
-  viewer.render();
 }
 
 async function probeWorkers() {
@@ -573,7 +672,7 @@ async function probeWorkers() {
     }
   } catch (error) {
     host.classList.add("empty");
-    host.textContent = `확인하지 못했습니다: ${error.message}`;
+    host.textContent = `확인하지 못했습니다: ${errorText(error)}`;
   } finally {
     button.disabled = false;
   }
@@ -588,20 +687,45 @@ function onPurposeChange() {
   const route = currentRoute();
   const note = document.getElementById("purposeNote");
   renderStages(document.getElementById("stages"), route);
+  renderCostBar(document.getElementById("costBar"), route);
   if (typeof showStep === "function" && registry.loaded) showStep(2);
   if (!route) { note.textContent = ""; return; }
   // 실행 가능 여부와 검증 여부는 목적 카드의 배지가 말한다. 여기서는 그 경로가
   // 무엇인지와, 배지로 담기지 않는 단서만 적는다.
-  const lines = [route.description || "", route.referral || "", route.caveat || ""];
-  note.textContent = lines.filter(Boolean).join(" ");
+  // 설명·안내·주의를 한 덩어리로 쏟으면 좌측이 글 벽이 된다. 요약만 보이고
+  // 전문은 펼쳐서 본다.
+  note.replaceChildren();
+  if (route.description) note.appendChild(el("span", "", route.description));
+  const extra = [route.referral, route.caveat, route.blocked_reason].filter(Boolean).join("\n\n");
+  if (extra) {
+    const more = document.createElement("details");
+    more.className = "evidence";
+    more.appendChild(el("summary", "", route.executable ? "이 경로에 대한 주의" : "왜 실행할 수 없나"));
+    more.appendChild(el("p", "rationale", extra));
+    note.appendChild(more);
+  }
   document.getElementById("planBtn").disabled = false;
 }
 
 function renderWeights(host) {
-  host.innerHTML = "";
-  for (const item of OBJECTIVES) {
+  host.replaceChildren();
+  // 목표 일곱 개를 늘 펼쳐두면 좌측이 슬라이더 벽이 되고, 그중 넷은 대개 0 이다.
+  const active = OBJECTIVES.filter((item) => item.value > 0);
+  const rest = OBJECTIVES.filter((item) => item.value <= 0);
+  const more = document.createElement("details");
+  more.className = "evidence";
+  more.appendChild(el("summary", "", `다른 목표 ${rest.length}개`));
+  for (const item of active) host.appendChild(weightRow(item));
+  for (const item of rest) more.appendChild(weightRow(item));
+  if (rest.length) host.appendChild(more);
+}
+
+function weightRow(item) {
+  {
     const row = document.createElement("label");
+    row.htmlFor = `w_${item.key}`;
     const slider = document.createElement("input");
+    slider.id = `w_${item.key}`;
     slider.type = "range";
     slider.min = "0";
     slider.max = "1";
@@ -611,7 +735,7 @@ function renderWeights(host) {
     const out = el("output", "", item.value.toFixed(2));
     row.append(document.createTextNode(`${item.label} `), slider, out);
     slider.addEventListener("input", () => { out.textContent = Number(slider.value).toFixed(2); });
-    host.appendChild(row);
+    return row;
   }
 }
 
@@ -744,7 +868,7 @@ async function explainPlan(plan) {
     }
     box.classList.remove("hidden");
   } catch (error) {
-    text.textContent = `설명을 가져오지 못했습니다: ${error.message}`;
+    text.textContent = `설명을 가져오지 못했습니다: ${errorText(error)}`;
     badge.textContent = "실패";
     host.innerHTML = "";
     box.classList.remove("hidden");
@@ -787,7 +911,7 @@ async function startRun() {
       showPanel("runs");
     }
   } catch (error) {
-    note.textContent = `실행하지 못했습니다: ${error.message}`;
+    note.textContent = `실행하지 못했습니다: ${errorText(error)}`;
   } finally {
     button.disabled = false;
   }
@@ -836,10 +960,10 @@ async function generatePlan() {
     status.textContent = "";
   } catch (error) {
     status.className = "status bad";
-    status.textContent = `실패: ${error.message}`;
+    status.textContent = `실패: ${errorText(error)}`;
     document.getElementById("reviewState").textContent = "계획 생성 실패";
     // 401 은 설정 문제가 아니라 로그인 문제다. 무엇을 해야 하는지 알려준다.
-    if (/unauthorized|401/i.test(error.message)) {
+    if (/unauthorized|401/i.test(errorText(error))) {
       document.getElementById("authHint").classList.remove("hidden");
       setSignedOut("세션이 만료되었습니다. 다시 로그인하세요.");
     }
@@ -865,7 +989,70 @@ async function approve() {
     approveState.classList.add("ready");
   } catch (error) {
     out.classList.remove("empty");
-    out.textContent = `실패: ${error.message}`;
+    out.textContent = `실패: ${errorText(error)}`;
+  }
+}
+
+// --- 화면 비율 -------------------------------------------------------------
+//
+// 세 열의 폭을 드래그로 바꾸고 그 값을 기억한다. 3D 결과를 볼 때와 계획을 읽을
+// 때 필요한 폭이 다른데, 고정 폭이면 둘 중 하나는 늘 좁다.
+
+const PANE_KEY = "kbf.guided.panes";
+const PANE_MIN = 200;
+const PANE_DEFAULT = { left: 264, right: 340 };
+
+function readPanes() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PANE_KEY) || "null");
+    if (saved && Number(saved.left) > 0 && Number(saved.right) > 0) return saved;
+  } catch { /* 저장값이 깨졌으면 기본값을 쓴다 */ }
+  return { ...PANE_DEFAULT };
+}
+
+function applyPanes(panes) {
+  document.querySelector(".layout").style.gridTemplateColumns =
+    `${panes.left}px 6px minmax(0, 1fr) 6px ${panes.right}px`;
+}
+
+function initSplitters() {
+  const layout = document.querySelector(".layout");
+  const panes = readPanes();
+  applyPanes(panes);
+
+  const clamp = (value) => Math.max(PANE_MIN, Math.min(value, layout.clientWidth - PANE_MIN * 2));
+
+  for (const handle of document.querySelectorAll(".splitter")) {
+    const side = handle.dataset.splitter;
+
+    const drag = (event) => {
+      const rect = layout.getBoundingClientRect();
+      panes[side] = clamp(side === "left" ? event.clientX - rect.left : rect.right - event.clientX);
+      applyPanes(panes);
+    };
+    const stop = () => {
+      document.removeEventListener("pointermove", drag);
+      document.removeEventListener("pointerup", stop);
+      document.body.classList.remove("dragging");
+      localStorage.setItem(PANE_KEY, JSON.stringify(panes));
+    };
+    handle.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      document.body.classList.add("dragging");
+      document.addEventListener("pointermove", drag);
+      document.addEventListener("pointerup", stop);
+    });
+    // 드래그는 키보드로 못 한다. 방향키로 같은 일을 할 수 있어야 한다.
+    handle.addEventListener("keydown", (event) => {
+      const step = event.shiftKey ? 40 : 12;
+      if (event.key === "ArrowLeft") panes[side] = clamp(panes[side] + (side === "right" ? step : -step));
+      else if (event.key === "ArrowRight") panes[side] = clamp(panes[side] + (side === "right" ? -step : step));
+      else if (event.key !== "Home") return;
+      if (event.key === "Home") panes[side] = PANE_DEFAULT[side];
+      event.preventDefault();
+      applyPanes(panes);
+      localStorage.setItem(PANE_KEY, JSON.stringify(panes));
+    });
   }
 }
 
@@ -874,6 +1061,7 @@ function boot() {
   loadRuns();
 }
 
+initSplitters();
 renderWeights(document.getElementById("weights"));
 renderStages(document.getElementById("stages"), null);
 document.getElementById("purpose").addEventListener("change", onPurposeChange);
@@ -912,6 +1100,10 @@ for (const tab of document.querySelectorAll(".tab")) {
   tab.addEventListener("click", () => showPanel(tab.dataset.panel));
 }
 
+document.getElementById("stageClose").addEventListener("click", closeStage);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeStage();
+});
 document.getElementById("probeBtn").addEventListener("click", probeWorkers);
 document.getElementById("runRefreshBtn").addEventListener("click", loadRuns);
 document.getElementById("runSelect").addEventListener("change", (event) => {

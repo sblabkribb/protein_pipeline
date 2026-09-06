@@ -64,6 +64,8 @@
         </section>
       </aside>
 
+      <div class="splitter" data-splitter="left" role="separator" aria-orientation="vertical" aria-label="왼쪽 폭 조절" tabindex="0"></div>
+
       <section class="center">
         <nav class="stepnav" aria-label="계획 단계">
           <button class="stepbtn is-active" data-step="1"><span class="stepno">1</span>목표</button>
@@ -89,6 +91,7 @@
             <p class="note">
               측정한 비용만 숫자로 적습니다. 재지 않은 단계는 <b>미측정</b>이며 0초가 아닙니다.
             </p>
+            <div id="costBar" class="costwrap"></div>
             <div id="stages" class="stages">목적을 고르면 단계가 표시됩니다.</div>
           </li>
 
@@ -122,6 +125,8 @@
         </ol>
       </section>
 
+      <div class="splitter" data-splitter="right" role="separator" aria-orientation="vertical" aria-label="오른쪽 폭 조절" tabindex="0"></div>
+
       <aside class="side right">
         <nav class="tabs" aria-label="결과 보기">
           <button class="tab is-active" data-panel="runs">실행</button>
@@ -149,6 +154,14 @@
         </section>
       </aside>
     </main>
+
+    <div id="stage" class="stage-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="stageTitle">
+      <header class="stagehead">
+        <span id="stageTitle" class="stagetitle"></span>
+        <button id="stageClose" class="ghost stageclose" type="button">닫기 (Esc)</button>
+      </header>
+      <div id="stageBody" class="stagebody"></div>
+    </div>
 
     <script type="module" src="./guided.js"></script>
   </body>

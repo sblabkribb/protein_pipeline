@@ -35,7 +35,10 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     source = read_yaml_source(args.yaml)
-    rendered = json.dumps(source, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+    # 키를 정렬하면 안 된다. purposes 의 선언 순서는 의미를 갖는다 - 가장 검증된
+    # 경로가 먼저 오고, 화면은 그 순서를 기본 선택에 쓴다. 정렬하면 알파벳순이
+    # 되어 실행조차 못 하는 antibody_design 이 맨 앞에 온다.
+    rendered = json.dumps(source, indent=2, ensure_ascii=False) + "\n"
 
     if args.check:
         current = args.json.read_text(encoding="utf-8") if args.json.exists() else ""
