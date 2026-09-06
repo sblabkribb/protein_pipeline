@@ -6,8 +6,14 @@
     <title>RAPID — 목표 기반 설계</title>
     <link rel="stylesheet" href="./guided.css" />
     <!-- 기존 화면과 같은 뷰어를 쓴다. 다른 라이브러리를 쓰면 같은 구조가 두
-         가지로 보이고, 어느 쪽이 맞는지 판단할 근거가 없어진다. -->
-    <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"></script>
+         가지로 보이고, 어느 쪽이 맞는지 판단할 근거가 없어진다.
+         integrity 해시는 jsdelivr 과 unpkg 에서 각각 받아 바이트가 같은 것을
+         확인한 뒤 계산했다. 한 곳에서만 받아 고정하면, 이미 오염된 응답을
+         고정하게 될 수 있다. -->
+    <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"
+            integrity="sha384-gCVNmzC8IyU7AmfDiNbHLpM9ac5VhQb2mfDURiTqHrnEcI2qp/JsQVeeEd3sLdfq"
+            crossorigin="anonymous"
+            referrerpolicy="no-referrer"></script>
   </head>
   <body>
     <header class="topbar">

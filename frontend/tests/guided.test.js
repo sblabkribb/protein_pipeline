@@ -257,3 +257,13 @@ test("the text helper only ever sets textContent", () => {
 test("run status values are set as text", () => {
   assert.ok(source.includes("function el("), "a text-only element helper keeps this consistent");
 });
+
+test("the 3D viewer is loaded with subresource integrity", () => {
+  // CDN 응답이 바뀌면 사용자 세션 안에서 임의 코드가 실행된다. 버전 고정만으로는
+  // 막지 못한다 - 같은 URL 이 다른 바이트를 줄 수 있기 때문이다.
+  const tag = html.match(/<script[^>]*3Dmol-min\.js[^>]*>/s);
+  assert.ok(tag, "the page must load 3Dmol");
+  assert.ok(/integrity="sha384-/.test(tag[0]), "3Dmol must be pinned by hash");
+  assert.ok(/crossorigin="anonymous"/.test(tag[0]), "SRI needs CORS to be enforced");
+  assert.ok(/3dmol@\d+\.\d+\.\d+\//.test(tag[0]), "the version must be exact, not a range");
+});
