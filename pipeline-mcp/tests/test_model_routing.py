@@ -562,3 +562,52 @@ class AccessPathTests(unittest.TestCase):
         first = self.reg.routes()[0]
         self.assertTrue(first.executable, f"{first.purpose} 가 기본인데 실행할 수 없다")
         self.assertTrue(first.validated, f"{first.purpose} 가 기본인데 검증되지 않았다")
+
+
+class ObjectiveStatusTests(unittest.TestCase):
+    """목표마다 "왜 못 재는가" 가 다르다. 한 문장으로 뭉뚱그리면 틀린다.
+
+    stability / aggregation / developability / activity 를 모두 "RAPID 가
+    평가하지 못한다" 로 묶어 보여줬는데, 셋은 모델을 붙이면 되는 문제이고
+    하나는 그렇지 않다. 사용자는 당연히 "모델 가져오면 되는 것 아니냐" 고
+    물었고 그 말이 대체로 맞았다.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.reg = load_registry()
+
+    def test_every_known_objective_has_a_declared_status(self):
+        from pipeline_mcp.objective_planner import KNOWN_OBJECTIVES
+
+        for objective in KNOWN_OBJECTIVES:
+            self.assertIn(objective, self.reg.objective_status, objective)
+
+    def test_each_status_names_a_reason_category(self):
+        allowed = {"measured", "evaluator_unvalidated", "evaluator_not_wired",
+                   "no_evaluator_available", "needs_experimental_labels"}
+        for objective, entry in self.reg.objective_status.items():
+            self.assertIn(entry["status"], allowed, objective)
+            self.assertTrue(entry["detail"], objective)
+
+    def test_stability_is_unvalidated_rather_than_impossible(self):
+        """Rosetta relax 는 BOP 에 있고 클라이언트도 있다. 없는 것이 아니다."""
+        entry = self.reg.objective_status["stability"]
+        self.assertEqual(entry["status"], "evaluator_unvalidated")
+        self.assertIn("rosetta_relax", entry["evaluators"])
+
+    def test_activity_is_not_a_missing_model_problem(self):
+        """활성은 타겟마다 다른 실험이 필요하다. 설치로 풀리지 않는다."""
+        entry = self.reg.objective_status["activity"]
+        self.assertEqual(entry["status"], "needs_experimental_labels")
+        self.assertNotIn("install", entry["detail"].lower())
+
+    def test_a_status_that_is_fixable_says_what_would_fix_it(self):
+        for objective, entry in self.reg.objective_status.items():
+            if entry["status"] in {"evaluator_unvalidated", "evaluator_not_wired"}:
+                self.assertTrue(entry.get("to_enable"), objective)
+
+    def test_measured_objectives_agree_with_the_evaluator_map(self):
+        for objective in self.reg.measurable_objectives():
+            self.assertEqual(self.reg.objective_status[objective]["status"], "measured",
+                             objective)

@@ -112,3 +112,41 @@ class PurposeSuggestionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ObjectiveWarningTests(unittest.TestCase):
+    """경고가 목표마다 왜 못 재는지를 말해야 한다.
+
+    넷을 모두 "RAPID 가 평가하지 못한다" 로 묶어 보여줬더니, 모델을 붙이면
+    되는 것과 데이터가 없어서 안 되는 것이 같아 보였다.
+    """
+
+    def _warnings(self, objective):
+        plan = build_plan(Objective(weights={objective: 1.0, "solubility": 0.5}))
+        return [w for w in plan.get("warnings", []) if objective in w]
+
+    def test_stability_says_the_evaluator_exists_but_is_unvalidated(self):
+        text = " ".join(self._warnings("stability"))
+        self.assertIn("Rosetta", text)
+        self.assertNotIn("평가하지 못한다", text)
+
+    def test_aggregation_says_what_would_wire_it_up(self):
+        text = " ".join(self._warnings("aggregation"))
+        self.assertTrue(text)
+        self.assertIn("이식", text)
+
+    def test_activity_is_not_described_as_a_wiring_problem(self):
+        text = " ".join(self._warnings("activity"))
+        self.assertIn("assay", text.lower() + text)
+        self.assertNotIn("이식", text)
+
+    def test_a_measurable_objective_produces_no_warning(self):
+        self.assertEqual(self._warnings("solubility"), [])
+
+    def test_every_warning_names_its_reason_category(self):
+        plan = build_plan(Objective(weights={
+            "stability": 1.0, "activity": 1.0, "aggregation": 1.0, "developability": 1.0}))
+        self.assertEqual(len(plan["warnings"]), 4)
+        for entry in plan["objective_status"]:
+            self.assertIn("status", entry)
+            self.assertIn("objective", entry)

@@ -266,20 +266,33 @@ def build_plan(objective: Objective) -> dict:
     n_designs = int(objective.budget.get("designs") or 0)
     length_aa = objective.budget.get("length_aa")
 
+    # 목표마다 못 재는 이유가 다르다. 하나로 뭉뚱그리면 모델을 붙이면 되는 것과
+    # 데이터가 없어서 안 되는 것이 같아 보인다.
     warnings: list[str] = []
+    status_rows: list[dict] = []
     for name in objective.unsupported():
-        if name in objective.wired_but_unvalidated():
-            evaluators = ", ".join(
+        entry = dict(registry.objective_status.get(name) or {})
+        status = entry.get("status", "no_evaluator_available")
+        detail = entry.get("detail", "")
+        to_enable = entry.get("to_enable", "")
+        status_rows.append({"objective": name, **entry})
+
+        if status == "evaluator_unvalidated":
+            names = ", ".join(
                 m.display_name for m in registry.evaluators_for(name, include_unvalidated=True)
-            )
-            warnings.append(
-                f"'{name}' 은 평가자({evaluators})가 붙어 있어 실행은 되지만 RAPID 안에서 "
-                f"검증된 적이 없다. 돌아간다는 것과 맞는다는 것은 다르다."
-            )
+            ) or ", ".join(entry.get("evaluators") or [])
+            message = (f"'{name}': 평가자({names})가 붙어 있고 부를 수 있다. "
+                       f"RAPID 가 검증하지 않았을 뿐이다. {detail}")
+        elif status == "evaluator_not_wired":
+            message = f"'{name}': 쓸 수 있는 구현이 있지만 여기에 배선되지 않았다. {detail}"
+        elif status == "needs_experimental_labels":
+            message = (f"'{name}': 모델을 붙여서 풀리는 문제가 아니다. {detail}")
         else:
-            warnings.append(
-                f"'{name}' 은 현재 RAPID 가 평가하지 못한다. 가중치를 받아도 반영되지 않는다."
-            )
+            message = (f"'{name}': 쓸 만한 평가자를 아직 찾지 못했다. "
+                       f"가중치를 받아도 반영되지 않는다.")
+        if to_enable:
+            message += f" 활성화하려면: {to_enable}"
+        warnings.append(message)
     if not route.executable:
         warnings.append(route.blocked_reason)
     elif not route.validated:
@@ -305,6 +318,8 @@ def build_plan(objective: Objective) -> dict:
     }
     if warnings:
         plan["warnings"] = warnings
+    if status_rows:
+        plan["objective_status"] = status_rows
     return plan
 
 

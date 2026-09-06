@@ -422,12 +422,72 @@
         "portal_mcp": false
       },
       "client": "clients/rosetta_relax.py",
-      "measures": [],
+      "measures": [
+        "stability"
+      ],
+      "metric_caveat": "total_score (REU) 는 접힘 에너지의 대용이지 ddG 가 아니다. 절대 REU 는 서로 다른 단백질 사이에서 비교되지 않는다 - 잔기 수에 대략 비례하기 때문이다. 같은 백본의 설계들 사이에서 상대 비교로만 뜻이 있고, 그 비교조차 RAPID 가 아직 어떤 라벨에도 맞춰본 적이 없다.",
       "worker_concurrency": 8,
       "cost": {
         "provenance": "unmeasured",
         "unit": "s/structure"
       }
+    }
+  },
+  "objective_status": {
+    "solubility": {
+      "status": "measured",
+      "evaluators": [
+        "soluprot"
+      ],
+      "detail": "SoluProt 이 게이트 1 에서 임계값 0.5 로 돌고 있고, 그 통과율이 게이트 0 라벨의 일부다."
+    },
+    "structural_preservation": {
+      "status": "measured",
+      "evaluators": [
+        "mpnn_encoder",
+        "colabfold"
+      ],
+      "detail": "ColabFold pLDDT 와 동결 정의의 non-loop RMSD 로 잰다. AF2 신뢰도는 측정이 아니라 모델 신뢰도라는 단서는 colabfold 항목에 적혀 있다."
+    },
+    "diversity": {
+      "status": "measured",
+      "evaluators": [],
+      "detail": "서열 통계로 직접 계산한다 (위치 엔트로피, 쌍별 거리). 모델 평가자가 필요 없어서 evaluators 가 비어 있다."
+    },
+    "binding": {
+      "status": "evaluator_unvalidated",
+      "evaluators": [
+        "ppiformer_ddg",
+        "binder_score",
+        "diffdock"
+      ],
+      "detail": "PPIformer ddG 와 ipSAE 클라이언트가 붙어 있고 워커도 살아 있다. RAPID 가 어떤 결합 라벨에도 맞춰본 적이 없어서 검증되지 않았다.",
+      "to_enable": "결합 라벨이 있는 코호트에서 두 지표를 맞춰보고, 게이트로 쓸 임계값을 정한다."
+    },
+    "stability": {
+      "status": "evaluator_unvalidated",
+      "evaluators": [
+        "rosetta_relax"
+      ],
+      "detail": "Rosetta relax 가 bop:18102 에서 돌고 클라이언트도 있다. total_score (REU) 를 내는데 그것은 ddG 가 아니고, 절대 REU 는 잔기 수에 비례해서 단백질 사이 비교가 되지 않는다. 같은 백본 안의 상대 비교로만 뜻이 있다.",
+      "to_enable": "같은 백본에서 나온 설계들 사이의 REU 차이가 알려진 안정성 순위와 맞는지 확인한다. ddG 가 필요하면 ThermoMPNN 류를 따로 들여야 한다."
+    },
+    "aggregation": {
+      "status": "evaluator_not_wired",
+      "evaluators": [],
+      "detail": "antigen 파이프라인에 소수성 패치와 저전하 창을 찾는 구현이 있다 (antibody_developability.py). 여기에는 클라이언트도 이식본도 없다.",
+      "to_enable": "그 계산을 이식한다. 항체 문맥에서 만들어진 휴리스틱이라, 단량체에 쓰려면 임계값을 다시 정해야 한다."
+    },
+    "developability": {
+      "status": "evaluator_not_wired",
+      "evaluators": [],
+      "detail": "antigen 파이프라인의 net charge shift 와 isomerization/oxidation 모티프 검사가 해당한다. 다만 그 지표들은 **항체 전용** 으로 정의되어 있어서 단량체 재설계에 그대로 옮기면 뜻이 달라진다.",
+      "to_enable": "항체 경로에서는 이식으로 충분하다. 단량체에 쓰려면 무엇을 developability 라 부를지부터 정해야 한다."
+    },
+    "activity": {
+      "status": "needs_experimental_labels",
+      "evaluators": [],
+      "detail": "활성은 타겟마다 다른 실험으로 정의된다 - 효소 회전수, 결합 저해, 형광. 어떤 모델을 붙여도 그 타겟의 assay 라벨 없이는 맞춰볼 대상이 없다. 이것은 배선이 아니라 데이터의 문제이고, 사양에도 활성 라벨을 지어내지 않는다고 적혀 있다."
     }
   },
   "purposes": {

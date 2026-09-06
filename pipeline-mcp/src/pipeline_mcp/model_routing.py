@@ -344,6 +344,9 @@ class ModelRegistry:
     freeze_state: str
     models: Mapping[str, ModelEntry]
     registry_access: Mapping[str, object] = field(default_factory=dict)
+    #: 목표마다 왜 못 재는지. 하나로 뭉뚱그리면 모델을 붙이면 되는 것과
+    #: 그렇지 않은 것이 같아 보인다.
+    objective_status: Mapping[str, dict] = field(default_factory=dict)
     _purposes: Mapping[str, Route] = field(repr=False, default_factory=dict)
 
     @property
@@ -653,6 +656,7 @@ def load_registry(path: str | Path | None = None, *, use_cache: bool = True) -> 
         freeze_state=str((raw.get("freeze") or {}).get("state", "draft")),
         models=models,
         registry_access=dict(raw.get("registry_access") or {}),
+        objective_status={k: dict(v) for k, v in (raw.get("objective_status") or {}).items()},
         _purposes=purposes,
     )
     if use_cache:
