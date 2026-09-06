@@ -45,6 +45,9 @@ rfd3-runpod/
 !/figures/benchmark/*.pdf
 *.json
 !/frontend/package-lock.json
+# 모델 레지스트리의 런타임 미러. 산출물이 아니라 배포되어야 하는 소스다 -
+# 이 파일이 없으면 서비스가 YAML 로 넘어가고 PyYAML 없는 환경에서 죽는다.
+!/pipeline-mcp/src/pipeline_mcp/model_registry/*.json
 /af2_wt_*_job.json
 
 # --- Public release package allowlist ---

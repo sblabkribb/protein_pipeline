@@ -336,3 +336,133 @@ class CostModelTests(unittest.TestCase):
         by_stage = {b["stage"]: b for b in estimate["breakdown"]}
         self.assertAlmostEqual(by_stage["sequence_design"]["seconds"], 2.298 + 0.5602 * 16, places=1)
         self.assertAlmostEqual(by_stage["structure_verify"]["seconds"], 181.9 * 16, delta=5)
+
+
+class RuntimeDependencyTests(unittest.TestCase):
+    """서비스는 PyYAML 없이도 레지스트리를 읽을 수 있어야 한다.
+
+    dev 배포에서 `No module named 'yaml'` 로 guided 화면 전체가 죽었다. 모델
+    목록만이 아니라 objective_planner 가 model_routing 을 import 하므로
+    plan_from_objective / explain_plan / approve_plan 까지 같이 내려갔다.
+
+    배포는 파일 복사 + systemd 재시작이고 중간에 pip install 단계가 없다. 그런
+    경로에 서드파티 파서 의존을 넣으면, 그 라이브러리가 우연히 있는 환경에서만
+    동작한다 - 실제로 prod venv 에는 있었고 dev venv 에는 없었다.
+
+    그래서 런타임 소스는 JSON 이다. YAML 은 사람이 쓰는 원본이고 그 주석이
+    문서다. PyYAML 이 있는 환경에서는 둘이 어긋났는지 확인한다.
+    """
+
+    #: PyYAML 을 못 찾게 만든 하위 인터프리터에서 돌린다. 같은 프로세스에서
+    #: importlib.reload 로 흉내내면 클래스 정체성이 갈라져 다른 테스트를
+    #: 오염시키고, 무엇보다 배포 환경을 그대로 재현하지 못한다.
+    _BLOCK_YAML = (
+        "import sys\n"
+        "class _NoYaml:\n"
+        "    def find_module(self, name, path=None):\n"
+        "        if name == 'yaml':\n"
+        "            raise ModuleNotFoundError(\"No module named 'yaml'\")\n"
+        "        return None\n"
+        "sys.meta_path.insert(0, _NoYaml())\n"
+        "sys.path.insert(0, %r)\n"
+    )
+
+    def _run_without_yaml(self, body: str):
+        import subprocess
+
+        src = str(PROJECT_ROOT / "pipeline-mcp" / "src")
+        script = (self._BLOCK_YAML % src) + body
+        result = subprocess.run(
+            [sys.executable, "-c", script], capture_output=True, text=True, timeout=120,
+        )
+        self.assertEqual(result.returncode, 0,
+                         f"PyYAML 없는 환경에서 실패했다\nstdout: {result.stdout}\n"
+                         f"stderr: {result.stderr}")
+        return result.stdout.strip()
+
+    def test_the_registry_loads_without_pyyaml(self):
+        out = self._run_without_yaml(
+            "from pipeline_mcp.model_routing import load_registry\n"
+            "r = load_registry()\n"
+            "print(len(r.models), len(r.purposes))\n"
+        )
+        models, purposes = (int(x) for x in out.split())
+        self.assertGreater(models, 0)
+        self.assertGreater(purposes, 0)
+
+    def test_the_module_does_not_import_yaml_at_top_level(self):
+        source = (PROJECT_ROOT / "pipeline-mcp" / "src" / "pipeline_mcp"
+                  / "model_routing.py").read_text(encoding="utf-8")
+        top_level = [l for l in source.splitlines() if l.startswith("import yaml")]
+        self.assertEqual(top_level, [],
+                         "최상위 import 는 배포 환경에서 모듈 전체를 못 쓰게 만든다")
+
+    def test_the_json_mirror_exists_beside_the_yaml_source(self):
+        from pipeline_mcp.model_routing import REGISTRY_JSON_PATH, REGISTRY_PATH
+
+        self.assertTrue(REGISTRY_PATH.exists())
+        self.assertTrue(REGISTRY_JSON_PATH.exists(),
+                        "JSON 미러가 없으면 PyYAML 없는 환경에서 서비스가 죽는다")
+
+    def test_the_json_mirror_matches_the_yaml_source(self):
+        """YAML 을 고치고 미러를 다시 만들지 않으면 런타임이 옛 값을 읽는다."""
+        yaml = __import__("importlib").util.find_spec("yaml")
+        if yaml is None:
+            self.skipTest("PyYAML 이 없는 환경에서는 대조할 원본을 읽을 수 없다")
+        from pipeline_mcp.model_routing import REGISTRY_JSON_PATH, REGISTRY_PATH, read_yaml_source
+        import json
+
+        self.assertEqual(read_yaml_source(REGISTRY_PATH),
+                         json.loads(REGISTRY_JSON_PATH.read_text(encoding="utf-8")),
+                         "MODEL_REGISTRY_V1.json 이 YAML 과 어긋났다. "
+                         "scripts/transcoder/19_sync_model_registry.py 로 다시 생성한다")
+
+    def test_drift_is_detected_when_pyyaml_is_available(self):
+        from pipeline_mcp.model_routing import registry_drift
+
+        self.assertEqual(registry_drift(), [])
+
+    def test_the_whole_guided_flow_works_without_pyyaml(self):
+        """guided 화면을 죽인 실제 경로. 세 툴이 모두 model_routing 을 거친다."""
+        out = self._run_without_yaml(
+            "from pipeline_mcp.objective_planner import Objective, build_plan, "
+            "suggest_questions, apply_edits, plan_to_request_overrides\n"
+            "plan = build_plan(Objective(weights={'solubility': 1.0}))\n"
+            "suggest_questions(plan)\n"
+            "plan_to_request_overrides(apply_edits(plan, {}))\n"
+            "print(len(plan['decisions']), plan['route']['purpose'])\n"
+        )
+        count, purpose = out.split()
+        self.assertGreater(int(count), 0)
+        self.assertEqual(purpose, "monomer_solubility_redesign")
+
+    def test_the_list_models_tool_answers_without_pyyaml(self):
+        out = self._run_without_yaml(
+            "from pipeline_mcp import tools\n"
+            "d = tools.ToolDispatcher(type('R', (), {'gemini': None})())\n"
+            "r = d.call_tool('pipeline.list_models', {})\n"
+            "print(r['policy_version'], len(r['purposes']))\n"
+        )
+        version, purposes = out.split()
+        self.assertTrue(version)
+        self.assertGreater(int(purposes), 0)
+
+    def test_the_json_mirror_is_tracked_and_not_gitignored(self):
+        """미러가 배포되지 않으면 서비스는 YAML 로 넘어가고 dev 에서 다시 죽는다.
+
+        저장소는 `*.json` 을 통째로 무시하고 예외를 열거한다. 미러는 산출물이
+        아니라 소스이므로 그 예외 목록에 있어야 한다.
+        """
+        import subprocess
+
+        from pipeline_mcp.model_routing import REGISTRY_JSON_PATH
+
+        # check-ignore 는 부정 규칙에 걸려도 0 을 돌려주므로 쓸 수 없다. 실제로
+        # 필요한 속성은 "추적되고 있다" 이고, 그것을 그대로 묻는다.
+        result = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", str(REGISTRY_JSON_PATH)],
+            cwd=PROJECT_ROOT, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0,
+                         f"미러가 추적되지 않는다 - 배포에 포함되지 않는다: "
+                         f"{result.stderr.strip()}")

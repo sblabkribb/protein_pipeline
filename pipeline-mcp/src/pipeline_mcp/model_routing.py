@@ -23,9 +23,18 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 import json
 import urllib.request
 
-import yaml
+_REGISTRY_DIR = Path(__file__).resolve().parent / "model_registry"
 
-REGISTRY_PATH = Path(__file__).resolve().parent / "model_registry" / "MODEL_REGISTRY_V1.yaml"
+#: 사람이 쓰는 원본. 이 파일의 주석이 레지스트리의 문서다.
+REGISTRY_PATH = _REGISTRY_DIR / "MODEL_REGISTRY_V1.yaml"
+
+#: 런타임이 실제로 읽는 파일. 표준 라이브러리만으로 읽을 수 있다.
+#:
+#: 왜 JSON 을 따로 두는가. 배포는 파일 복사 + systemd 재시작이고 그 사이에
+#: pip install 단계가 없다. 그런 경로에 서드파티 파서 의존을 넣으면 그
+#: 라이브러리가 우연히 있는 환경에서만 동작한다 - 실제로 prod venv 에는 PyYAML
+#: 이 있었고 dev venv 에는 없어서, guided 화면의 세 툴이 전부 죽었다.
+REGISTRY_JSON_PATH = _REGISTRY_DIR / "MODEL_REGISTRY_V1.json"
 
 ROLES = (
     "msa",
@@ -528,14 +537,61 @@ def _build_route(purpose: str, raw: Mapping[str, Any], models: Mapping[str, Mode
     )
 
 
+def read_yaml_source(path: str | Path) -> dict:
+    """YAML 원본을 읽는다. PyYAML 이 필요하므로 런타임 경로에서는 쓰지 않는다."""
+    import yaml  # noqa: PLC0415 - 여기서만 필요한 선택적 의존성
+
+    return yaml.safe_load(Path(path).read_text(encoding="utf-8")) or {}
+
+
+def registry_drift(yaml_path: Path | None = None, json_path: Path | None = None) -> list[str]:
+    """JSON 미러가 YAML 원본과 어긋난 최상위 키를 돌려준다.
+
+    PyYAML 이 없으면 대조할 원본을 읽을 수 없으므로 빈 목록을 돌려준다 - 그
+    환경에서는 JSON 이 유일한 진실이고, 어긋남은 원본이 있는 곳에서 잡는다.
+    """
+    yaml_file = Path(yaml_path or REGISTRY_PATH)
+    json_file = Path(json_path or REGISTRY_JSON_PATH)
+    if not yaml_file.exists() or not json_file.exists():
+        return []
+    try:
+        source = read_yaml_source(yaml_file)
+    except ModuleNotFoundError:
+        return []
+    mirror = json.loads(json_file.read_text(encoding="utf-8"))
+    keys = set(source) | set(mirror)
+    return sorted(key for key in keys if source.get(key) != mirror.get(key))
+
+
+def _read_registry_document(path: Path | None) -> dict:
+    """레지스트리 문서를 읽는다. 표준 라이브러리만으로 되는 경로를 먼저 쓴다."""
+    if path is not None:
+        resolved = Path(path)
+        if resolved.suffix == ".json":
+            return json.loads(resolved.read_text(encoding="utf-8"))
+        return read_yaml_source(resolved)
+    if REGISTRY_JSON_PATH.exists():
+        return json.loads(REGISTRY_JSON_PATH.read_text(encoding="utf-8"))
+    # 미러가 없으면 원본을 읽어본다. PyYAML 이 없으면 여기서 실패하는데, 그
+    # 메시지는 무엇을 해야 하는지 말해야 한다.
+    try:
+        return read_yaml_source(REGISTRY_PATH)
+    except ModuleNotFoundError as exc:
+        raise RegistryError(
+            f"{REGISTRY_JSON_PATH.name} 이 없고 PyYAML 도 없어서 모델 레지스트리를 "
+            f"읽을 수 없다. scripts/transcoder/19_sync_model_registry.py 로 JSON "
+            f"미러를 만들어 함께 배포한다."
+        ) from exc
+
+
 _CACHE: dict[Path, ModelRegistry] = {}
 
 
 def load_registry(path: str | Path | None = None, *, use_cache: bool = True) -> ModelRegistry:
-    resolved = Path(path) if path else REGISTRY_PATH
+    resolved = Path(path) if path else REGISTRY_JSON_PATH
     if use_cache and resolved in _CACHE:
         return _CACHE[resolved]
-    raw = yaml.safe_load(resolved.read_text(encoding="utf-8")) or {}
+    raw = _read_registry_document(Path(path) if path else None)
 
     models = {
         model_id: _build_model(model_id, spec)
