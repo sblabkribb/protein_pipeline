@@ -385,8 +385,12 @@ async function loadRunStatus(runId) {
   try {
     const out = await callTool("pipeline.status", { run_id: runId });
     if (out && out.error) throw new Error(out.error);
+    // 상태와 산출물은 별개다. status.json 이 없는 실행에도 결과 파일은 있다
+    // (예: test_relax_out 은 상태 파일 없이 .pdb 를 갖고 있다).
     if (out.found === false) {
-      setRunStatus(`${runId} 의 상태 파일이 없습니다.`);
+      setRunStatus(`${runId}: 상태 파일이 없습니다. 산출물은 아래에서 볼 수 있습니다.`);
+      await loadArtifacts(runId);
+      showPanel("artifacts");
       return;
     }
     // 실제 값은 status 안에 들어 있다. 최상위에서 읽으면 전부 "-" 가 된다.
@@ -441,7 +445,9 @@ async function loadArtifacts(runId) {
     // list_artifacts 는 파일과 디렉터리를 함께 돌려준다. msa 와 tiers 는
     // 디렉터리이고, 그것을 read_artifact 에 넘기면 실패한다. 디렉터리는 읽는
     // 대상이 아니라 그 아래를 묶는 제목으로 쓴다.
-    const files = items.filter((item) => String(item.type || "file") !== "directory");
+    // 서버는 디렉터리를 type "dir" 로 준다. 이름을 짐작해 제외하는 대신 파일만
+    // 허용한다 - 새 type 이 생겨도 읽을 수 없는 것을 누르게 되지 않는다.
+    const files = items.filter((item) => String(item.type || "file") === "file");
     if (!files.length) {
       host.classList.add("empty");
       host.textContent = "이 실행에는 읽을 수 있는 파일이 없습니다.";

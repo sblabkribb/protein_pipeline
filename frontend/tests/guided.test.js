@@ -423,3 +423,22 @@ test("a truncated artifact can be read further from here", () => {
   assert.ok(/두 배로 더 읽기/.test(source));
   assert.ok(/openArtifact\(runId, path, format, cap \* 2\)/.test(source));
 });
+
+test("directories are excluded by allowlisting files, not by guessing a name", () => {
+  // list_artifacts 는 type 을 "dir" 로 준다. "directory" 를 제외하도록 짐작해서
+  // 썼더니 msa 와 tiers 가 그대로 목록에 남았고, 누르면 "artifact is not a
+  // file" 이 났다. 새 type 이 생겨도 안전하도록 파일만 허용한다.
+  assert.ok(/=== "file"/.test(source), "files must be allowlisted");
+  assert.ok(!/!== "directory"/.test(source), "do not exclude a guessed type name");
+});
+
+test("a run without a status file still shows its artifacts", () => {
+  // test_relax_out 에는 status.json 이 없지만 .pdb 를 포함한 산출물이 있다.
+  // 상태를 못 읽었다고 결과까지 막으면 볼 수 있는 것을 못 보게 된다.
+  const fn = source.slice(source.indexOf("async function loadRunStatus("),
+                          source.indexOf("async function loadArtifacts("));
+  const guard = fn.slice(fn.indexOf("found === false"));
+  assert.ok(/loadArtifacts/.test(guard), "artifacts must load even with no status");
+  assert.ok(!/^\s*return;/m.test(guard.slice(0, guard.indexOf("loadArtifacts"))),
+            "the missing-status branch must not return early");
+});
