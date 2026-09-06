@@ -726,7 +726,9 @@
     }
   },
   "registry_access": {
-    "portal_mcp_integration": "not_built",
+    "portal_mcp_client": "clients/portal_mcp.py",
+    "portal_mcp_configuration": "RAPID_PORTAL_MCP_URL 과 RAPID_PORTAL_MCP_TOKEN 을 .env 로 준다. 기본 URL 을 두지 않는 이유는, 잘못된 기본값이 있으면 \"설정하지 않았다\" 가 \"연결에 실패했다\" 로 둔갑하기 때문이다.",
+    "portal_mcp_integration": "client_built",
     "portal_mcp_note": "포털 MCP 는 list_models / run_model / run_chain / job_status / job_result 를 제공하고 antifold, anarcii, alphafold3 를 포함한다. 그 경로를 붙이면 세 모델에 대한 전송 문제는 사라진다. 사라지지 않는 것은 설계 정책이다 - 포털은 AntiFold 의 region 토큰을 검증할 뿐 어느 영역을 열지 결정하지 않으며, regions 를 비우면 IMGT 영역 전체가 샘플링되어 아무도 승인하지 않은 framework 위치가 바뀐다."
   },
   "schema": "rapid.model_registry/1",

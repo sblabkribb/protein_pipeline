@@ -102,3 +102,27 @@ pre.empty { font-family:inherit; }
 .q { border-left:2px solid #45375e; padding:6px 0 6px 9px; margin:7px 0; font-size:12.5px; }
 .q .qfield { font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#8fb6ea; margin-right:6px; }
 .q .qwhy { display:block; color:var(--dim); font-size:11px; margin-top:2px; }
+
+/* --- 좌측 레일: 템플릿 / 스킬 / 연결 --- */
+.cards { display:flex; flex-direction:column; gap:6px; }
+.card {
+  display:flex; align-items:center; gap:8px; width:100%; text-align:left;
+  padding:8px 10px; font-size:13px; cursor:pointer;
+  color:var(--fg); background:#141922; border:1px solid #2a3240; border-radius:5px;
+}
+.card:hover { border-color:#3a4658; }
+.card.is-active { border-color:#4c7dd0; background:#182231; }
+.cardtitle { flex:1; }
+.cardmarks { display:flex; gap:4px; flex:0 0 auto; }
+/* 상태 표시는 세 가지뿐이다: 검증됨 / 미검증 / 실행 불가. 색으로 구분한다. */
+.mark { font-size:10px; padding:1px 5px; border-radius:3px; border:1px solid; }
+.mark-ok   { color:#5fbf7f; border-color:#2f5a3d; }
+.mark-warn { color:#e0a44a; border-color:#5a4623; }
+.mark-bad  { color:#d4726a; border-color:#5c3230; }
+.skill { display:flex; align-items:center; gap:8px; margin:5px 0; font-size:13px; }
+.ghost {
+  padding:5px 10px; font-size:12px; cursor:pointer;
+  color:var(--fg); background:transparent; border:1px solid #2a3240; border-radius:4px;
+}
+.ghost:hover { border-color:#3a4658; }
+.ghost:disabled { opacity:.5; cursor:default; }

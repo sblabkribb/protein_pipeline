@@ -9699,9 +9699,39 @@ class ToolDispatcher:
                     - registry.measurable_objectives()
                 ),
             }
+            # 화면의 '연결' 블록. 설정하지 않은 것과 연결에 실패한 것은 다르다.
+            from .clients.portal_mcp import portal_config_from_env
+
+            portal = portal_config_from_env()
+            unlocks = sorted(
+                model_id for model_id, model in registry.models.items()
+                if (model.extra.get("access") or {}).get("portal_mcp")
+                and not (model.extra.get("access") or {}).get("direct_client")
+            )
+            out["connections"] = {
+                "bop_workers": {
+                    "declared": sum(1 for m in registry.models.values()
+                                    if m.endpoint.startswith("bop:")),
+                    "reachable": None,
+                    "note": "check_liveness=true 를 주면 실제 도달 여부를 함께 확인한다.",
+                },
+                "portal_mcp": {
+                    **portal,
+                    "integration": registry.registry_access.get(
+                        "portal_mcp_integration", "unknown"),
+                    "would_unlock": unlocks,
+                    "still_blocked_note": (
+                        "포털을 붙이면 위 모델에 대한 전송 문제는 사라진다. 항체 경로는 "
+                        "그래도 열리지 않는다 - 어느 영역을 열지 정하는 design_policy 가 "
+                        "없기 때문이고, 그것은 배선으로 풀리지 않는다."
+                    ),
+                },
+            }
             if arguments.get("check_liveness"):
                 # 선언된 가용성 옆에 놓을 뿐, 덮어쓰지 않는다.
                 out["liveness"] = registry.probe_liveness()
+                out["connections"]["bop_workers"]["reachable"] = sum(
+                    1 for v in out["liveness"].values() if v.get("reachable"))
             return out
 
         if name == "pipeline.plan_from_objective":

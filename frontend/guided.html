@@ -19,10 +19,17 @@
     <main class="layout">
       <aside class="side">
         <section class="block">
-          <h3>설계 목적</h3>
+          <h3>템플릿</h3>
           <p class="note">어떤 모델이 도는지는 가중치가 아니라 목적이 정합니다.</p>
-          <select id="purpose"></select>
+          <div id="templates" class="cards">불러오는 중…</div>
+          <select id="purpose" class="hidden" aria-hidden="true"></select>
           <div id="purposeNote" class="note"></div>
+        </section>
+
+        <section class="block">
+          <h3>스킬</h3>
+          <p class="note">이 경로에 적용되는 RAPID 기능과 그 근거입니다.</p>
+          <div id="skills" class="cards"></div>
         </section>
 
         <section class="block">
@@ -41,13 +48,19 @@
         </section>
 
         <section class="block">
-          <h3>평가 단계</h3>
+          <h3>모델 <span class="tag" id="modelCount"></span></h3>
           <p class="note">
             비용은 측정된 것만 숫자로 표시합니다. 측정하지 않은 단계는
             <span class="chip">미측정</span>이며 0초가 아닙니다.
           </p>
           <div id="stages"></div>
           <div id="costTotal" class="note"></div>
+        </section>
+
+        <section class="block">
+          <h3>연결</h3>
+          <p class="note">설정하지 않은 것과 연결에 실패한 것은 다릅니다.</p>
+          <div id="connections" class="cards"></div>
         </section>
       </aside>
 
@@ -95,10 +108,21 @@
 
       <aside class="side right">
         <div class="tabs">
-          <button class="tab is-active" data-panel="evidence">근거</button>
+          <button class="tab is-active" data-panel="analysis">분석</button>
+          <button class="tab" data-panel="monitor">모니터</button>
+          <button class="tab" data-panel="evidence">근거</button>
           <button class="tab" data-panel="policy">정책</button>
         </div>
-        <div id="panel-evidence" class="panel">
+        <div id="panel-analysis" class="panel">
+          <p class="note">이 경로에서 측정된 값입니다. 측정하지 않은 것은 숫자로 적지 않습니다.</p>
+          <div id="analysisList" class="empty">계획 생성 후 표시됩니다.</div>
+        </div>
+        <div id="panel-monitor" class="panel hidden">
+          <p class="note">BOP 워커 상태입니다. 선언된 가용성과 실제 도달 여부는 다릅니다.</p>
+          <button id="probeBtn" class="ghost">지금 확인</button>
+          <div id="monitorList" class="empty">확인을 누르면 표시됩니다.</div>
+        </div>
+        <div id="panel-evidence" class="panel hidden">
           <p class="note">결정에 붙은 근거가 모두 여기 모입니다.</p>
           <div id="evidenceList" class="empty">계획 생성 후 표시됩니다.</div>
         </div>

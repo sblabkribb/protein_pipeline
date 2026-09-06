@@ -152,3 +152,47 @@ test("tool responses are unwrapped instead of handed over as the envelope", () =
   assert.ok(source.includes("unwrapToolResponse"), "must unwrap the response envelope");
   assert.ok(!/return payload;\s*\n}/.test(source), "must not return the raw envelope");
 });
+
+test("the left rail carries templates, skills, models and connections", () => {
+  for (const id of ["templates", "skills", "stages", "connections"]) {
+    assert.ok(html.includes(`id="${id}"`), `left rail needs #${id}`);
+  }
+  assert.ok(/<h3>템플릿<\/h3>/.test(html));
+  assert.ok(/<h3>스킬<\/h3>/.test(html));
+  assert.ok(/<h3>연결<\/h3>/.test(html));
+});
+
+test("the right rail carries analysis and monitor beside evidence and policy", () => {
+  for (const panel of ["analysis", "monitor", "evidence", "policy"]) {
+    assert.ok(html.includes(`data-panel="${panel}"`), `right rail needs ${panel} tab`);
+    assert.ok(html.includes(`id="panel-${panel}"`), `right rail needs ${panel} panel`);
+  }
+});
+
+test("template cards show whether a route is executable and validated", () => {
+  // 목적을 고르는 시점에 무엇이 돌고 무엇이 검증됐는지 보여야 한다.
+  assert.ok(source.includes("renderTemplates"));
+  assert.ok(source.includes("route.executable"));
+  assert.ok(source.includes("route.validated"));
+});
+
+test("skills are derived from the route, not hard-coded", () => {
+  assert.ok(source.includes("renderSkills"));
+  assert.ok(source.includes("stage.requires_design_policy"),
+            "a stage needing a design policy must surface as an unmet skill");
+  assert.ok(!/const SKILLS\s*=/.test(source), "the skill list must not be a browser constant");
+});
+
+test("connections separate not-configured from unreachable", () => {
+  assert.ok(source.includes("renderConnections"));
+  assert.ok(source.includes("portal.configured"));
+  assert.ok(source.includes("미설정"), "an unconfigured portal must say so, not look down");
+});
+
+test("the monitor probes liveness on demand rather than on every load", () => {
+  // 페이지를 열 때마다 워커 16개를 두드리면 공유 서버에 부담이 된다.
+  assert.ok(source.includes("check_liveness: true"));
+  assert.ok(source.includes("probeBtn"));
+  assert.ok(!/loadRegistry[\s\S]{0,400}check_liveness/.test(source),
+            "liveness must not be probed during the initial load");
+});

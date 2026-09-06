@@ -63,7 +63,12 @@ availability_values: [production, wired_unvalidated, not_wired, not_deployed]
 # 후자는 아직 만들지 않았으므로 not_built 로 적는다 - 있는 척하면 계획이
 # 실행되지 않는데도 승인 버튼이 열린다.
 registry_access:
-  portal_mcp_integration: not_built
+  portal_mcp_integration: client_built
+  portal_mcp_client: clients/portal_mcp.py
+  portal_mcp_configuration: >-
+    RAPID_PORTAL_MCP_URL 과 RAPID_PORTAL_MCP_TOKEN 을 .env 로 준다. 기본 URL 을
+    두지 않는 이유는, 잘못된 기본값이 있으면 "설정하지 않았다" 가 "연결에
+    실패했다" 로 둔갑하기 때문이다.
   portal_mcp_note: >-
     포털 MCP 는 list_models / run_model / run_chain / job_status / job_result 를
     제공하고 antifold, anarcii, alphafold3 를 포함한다. 그 경로를 붙이면 세 모델에

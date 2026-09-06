@@ -500,10 +500,21 @@ class AccessPathTests(unittest.TestCase):
             self.assertFalse(access["direct_client"], model_id)
             self.assertTrue(access["portal_mcp"], model_id)
 
-    def test_portal_access_is_not_claimed_as_built_until_it_is(self):
+    def test_the_portal_integration_state_is_declared(self):
         """포털이 모델을 노출한다는 사실과, RAPID 가 그것을 호출할 수 있다는 것은 다르다."""
-        self.assertIn("portal_mcp_integration", self.reg.registry_access)
-        self.assertEqual(self.reg.registry_access["portal_mcp_integration"], "not_built")
+        state = self.reg.registry_access["portal_mcp_integration"]
+        self.assertIn(state, {"not_built", "client_built"})
+
+    def test_a_built_client_does_not_make_portal_only_models_runnable(self):
+        """클라이언트가 있다고 곧 쓸 수 있는 것은 아니다 - 설정이 있어야 한다.
+
+        레지스트리는 정적 선언이므로 여기서 runnable 로 바꾸면, 설정하지 않은
+        환경에서도 승인 버튼이 열린다. 실제 사용 가능 여부는 런타임 연결 정보로
+        따로 보고한다.
+        """
+        for model_id in ("antifold", "anarcii", "alphafold3"):
+            self.assertFalse(self.reg.is_runnable(model_id), model_id)
+            self.assertEqual(self.reg.models[model_id].availability, "not_wired")
 
     def test_a_blocked_route_separates_transport_from_design_policy(self):
         route = self.reg.route("antibody_design")

@@ -161,12 +161,226 @@ async function loadRegistry() {
       option.textContent = route.display_name_ko + (route.executable ? "" : " — 실행 불가");
       select.appendChild(option);
     }
+    document.getElementById("modelCount").textContent =
+      `${Object.keys(registry.models).length}개`;
+    renderConnections(out.connections);
+    renderTemplates();
     onPurposeChange();
   } catch (error) {
     select.innerHTML = "";
+    document.getElementById("templates").textContent =
+      `설계 목적을 불러오지 못했습니다: ${error.message}`;
     document.getElementById("purposeNote").textContent =
       `모델 목록을 가져오지 못했습니다: ${error.message}`;
     renderStages(document.getElementById("stages"), null);
+  }
+}
+
+// 템플릿 카드. 드롭다운을 카드로 바꾼 이유는, 목적마다 무엇이 돌고 무엇이
+// 검증됐는지가 선택 시점에 보여야 하기 때문이다.
+function renderTemplates() {
+  const host = document.getElementById("templates");
+  const select = document.getElementById("purpose");
+  host.innerHTML = "";
+  if (!registry.purposes.length) {
+    host.textContent = "설계 목적을 불러오지 못했습니다.";
+    return;
+  }
+  for (const route of registry.purposes) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "card" + (route.purpose === select.value ? " is-active" : "");
+    card.dataset.purpose = route.purpose;
+
+    const title = document.createElement("span");
+    title.className = "cardtitle";
+    title.textContent = route.display_name_ko;
+    card.appendChild(title);
+
+    const marks = document.createElement("span");
+    marks.className = "cardmarks";
+    if (!route.executable) {
+      marks.appendChild(mark("실행 불가", "bad", route.blocked_reason));
+    } else if (!route.validated) {
+      marks.appendChild(mark("미검증", "warn",
+        `검증되지 않은 단계: ${(route.unvalidated_stages || []).join(", ")}`));
+    } else {
+      marks.appendChild(mark("검증됨", "ok", "이 경로의 모든 단계가 측정되었습니다."));
+    }
+    card.appendChild(marks);
+
+    card.addEventListener("click", () => {
+      select.value = route.purpose;
+      onPurposeChange();
+      renderTemplates();
+    });
+    host.appendChild(card);
+  }
+}
+
+function mark(text, kind, title) {
+  const node = document.createElement("span");
+  node.className = `mark mark-${kind}`;
+  node.textContent = text;
+  if (title) node.title = title;
+  return node;
+}
+
+// 스킬은 이 경로에 실제로 적용되는 RAPID 기능이다. 하드코딩하지 않고 경로의
+// 스테이지와 모델의 측정값에서 끌어온다 - 없는 기능을 있다고 적지 않기 위해서다.
+function renderSkills(route) {
+  const host = document.getElementById("skills");
+  host.innerHTML = "";
+  if (!route) return;
+  const items = [];
+  for (const stage of route.stages || []) {
+    const model = registry.models[stage.model_id];
+    if (!model) continue;
+    if (stage.gate === "gate0") {
+      items.push({
+        name: "Gate 0 라우팅",
+        detail: model.performance
+          ? `${model.performance.metric} ${model.performance.value}`
+          : "측정값 없음",
+        validated: stage.validated,
+        title: (model.performance && model.performance.source) || "",
+      });
+    }
+    if (stage.requires_design_policy) {
+      items.push({
+        name: `${stage.stage} 설계 정책 필요`,
+        detail: "미보유",
+        validated: false,
+        title: stage.requires_design_policy,
+      });
+    }
+  }
+  if (!items.length) {
+    host.textContent = "이 경로에 별도 스킬이 없습니다.";
+    return;
+  }
+  for (const item of items) {
+    const row = document.createElement("div");
+    row.className = "skill";
+    row.title = item.title || "";
+    row.innerHTML = `<span class="dot${item.validated ? "" : " off"}"></span><span>${item.name}</span>`;
+    const chip = document.createElement("span");
+    chip.className = "chip";
+    chip.textContent = item.detail;
+    row.appendChild(chip);
+    host.appendChild(row);
+  }
+}
+
+function renderConnections(connections) {
+  const host = document.getElementById("connections");
+  host.innerHTML = "";
+  if (!connections) return;
+
+  const bop = connections.bop_workers || {};
+  const bopRow = document.createElement("div");
+  bopRow.className = "skill";
+  const reach = bop.reachable == null ? "미확인" : `${bop.reachable}/${bop.declared} 도달`;
+  bopRow.innerHTML = `<span class="dot${bop.reachable == null ? " off" : ""}"></span>` +
+    `<span>BOP 워커 ${bop.declared ?? "?"}</span><span class="chip">${reach}</span>`;
+  bopRow.title = bop.note || "";
+  host.appendChild(bopRow);
+
+  const portal = connections.portal_mcp || {};
+  const portalRow = document.createElement("div");
+  portalRow.className = "skill";
+  const state = portal.configured ? "설정됨" : `미설정 (${(portal.missing || []).join(", ")})`;
+  portalRow.innerHTML = `<span class="dot${portal.configured ? "" : " off"}"></span>` +
+    `<span>포털 MCP</span><span class="chip">${state}</span>`;
+  portalRow.title = [portal.still_blocked_note,
+                     portal.would_unlock && portal.would_unlock.length
+                       ? `열리는 모델: ${portal.would_unlock.join(", ")}` : ""]
+    .filter(Boolean).join("\n");
+  host.appendChild(portalRow);
+
+  if (!portal.configured) {
+    const hint = document.createElement("div");
+    hint.className = "note";
+    hint.textContent = `${portal.url_env} / ${portal.token_env} 를 설정하면 ` +
+      `${(portal.would_unlock || []).length}개 모델에 닿습니다. ` +
+      `항체 경로는 설계 정책이 없어 그래도 열리지 않습니다.`;
+    host.appendChild(hint);
+  }
+}
+
+function renderAnalysis(route) {
+  const host = document.getElementById("analysisList");
+  host.innerHTML = "";
+  if (!route) {
+    host.classList.add("empty");
+    host.textContent = "계획 생성 후 표시됩니다.";
+    return;
+  }
+  host.classList.remove("empty");
+  let count = 0;
+  for (const stage of route.stages || []) {
+    const model = registry.models[stage.model_id];
+    if (!model || !model.performance || model.performance.value == null) continue;
+    const perf = model.performance;
+    const node = document.createElement("div");
+    node.className = "ev";
+    const label = document.createElement("span");
+    label.className = "kind kind-internal_measurement";
+    label.textContent = "측정";
+    node.appendChild(label);
+    const ci = perf.ci95 ? ` (95% CI ${perf.ci95[0]}–${perf.ci95[1]})` : "";
+    node.appendChild(document.createTextNode(
+      `${model.display_name} · ${perf.metric} ${perf.value}${ci}`));
+    if (perf.source) {
+      const src = document.createElement("span");
+      src.className = "src";
+      src.textContent = `출처: ${perf.source}`;
+      node.appendChild(src);
+    }
+    if (perf.caveat) {
+      const caveat = document.createElement("span");
+      caveat.className = "src";
+      caveat.textContent = perf.caveat;
+      node.appendChild(caveat);
+    }
+    host.appendChild(node);
+    count += 1;
+  }
+  if (!count) {
+    host.classList.add("empty");
+    host.textContent = "이 경로에는 기록된 측정값이 없습니다.";
+  }
+}
+
+async function probeWorkers() {
+  const host = document.getElementById("monitorList");
+  const button = document.getElementById("probeBtn");
+  button.disabled = true;
+  host.classList.remove("empty");
+  host.textContent = "확인 중…";
+  try {
+    const out = await callTool("pipeline.list_models", { check_liveness: true });
+    if (out && out.error) throw new Error(out.error);
+    host.innerHTML = "";
+    const entries = Object.entries(out.liveness || {});
+    for (const [id, info] of entries.sort((a, b) => a[0].localeCompare(b[0]))) {
+      const row = document.createElement("div");
+      row.className = "skill";
+      row.title = info.error || `선언: ${info.declared_availability}`;
+      row.innerHTML = `<span class="dot${info.reachable ? "" : " off"}"></span>` +
+        `<span>${id}</span><span class="chip">${info.endpoint}</span>`;
+      host.appendChild(row);
+    }
+    renderConnections(out.connections);
+    if (!entries.length) {
+      host.classList.add("empty");
+      host.textContent = "확인할 엔드포인트가 없습니다.";
+    }
+  } catch (error) {
+    host.classList.add("empty");
+    host.textContent = `확인하지 못했습니다: ${error.message}`;
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -188,6 +402,8 @@ function onPurposeChange() {
   if (route.referral) lines.push(route.referral);
   if (route.caveat) lines.push(route.caveat);
   note.textContent = lines.filter(Boolean).join(" ");
+  renderSkills(route);
+  renderAnalysis(route);
   document.getElementById("planBtn").disabled = false;
 }
 
@@ -455,6 +671,7 @@ for (const tab of document.querySelectorAll(".tab")) {
     document.getElementById(`panel-${tab.dataset.panel}`).classList.remove("hidden");
   });
 }
+document.getElementById("probeBtn").addEventListener("click", probeWorkers);
 document.getElementById("planBtn").addEventListener("click", generatePlan);
 document.getElementById("approveBtn").addEventListener("click", approve);
 
