@@ -22,6 +22,20 @@ const OBJECTIVES = [
 // 프로브에서 나온 "91s / fold" 가 59-274 잔기 백본 옆에 붙어 있었다.
 const registry = { models: {}, purposes: [], loaded: false };
 
+// 값은 textContent 로만 넣는다. 아티팩트 경로와 실행 상태는 서버에서 오고,
+// 산출물 경로에는 사용자가 정한 이름(run id, design id)이 섞인다. 그 이름을
+// innerHTML 로 넣으면 안에 든 마크업이 실행된다.
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = String(text);
+  return node;
+}
+
+function dot(on) {
+  return el("span", `dot${on ? "" : " off"}`);
+}
+
 const KIND_LABEL = {
   internal_measurement: "측정",
   literature: "문헌",
@@ -192,10 +206,7 @@ function renderTemplates() {
     card.className = "card" + (route.purpose === select.value ? " is-active" : "");
     card.dataset.purpose = route.purpose;
 
-    const title = document.createElement("span");
-    title.className = "cardtitle";
-    title.textContent = route.display_name_ko;
-    card.appendChild(title);
+    card.appendChild(el("span", "cardtitle", route.display_name_ko));
 
     const marks = document.createElement("span");
     marks.className = "cardmarks";
@@ -263,11 +274,7 @@ function renderSkills(route) {
     const row = document.createElement("div");
     row.className = "skill";
     row.title = item.title || "";
-    row.innerHTML = `<span class="dot${item.validated ? "" : " off"}"></span><span>${item.name}</span>`;
-    const chip = document.createElement("span");
-    chip.className = "chip";
-    chip.textContent = item.detail;
-    row.appendChild(chip);
+    row.append(dot(item.validated), el("span", "", item.name), el("span", "chip", item.detail));
     host.appendChild(row);
   }
 }
@@ -278,20 +285,18 @@ function renderConnections(connections) {
   if (!connections) return;
 
   const bop = connections.bop_workers || {};
-  const bopRow = document.createElement("div");
-  bopRow.className = "skill";
+  const bopRow = el("div", "skill");
   const reach = bop.reachable == null ? "미확인" : `${bop.reachable}/${bop.declared} 도달`;
-  bopRow.innerHTML = `<span class="dot${bop.reachable == null ? " off" : ""}"></span>` +
-    `<span>BOP 워커 ${bop.declared ?? "?"}</span><span class="chip">${reach}</span>`;
+  bopRow.append(dot(bop.reachable != null),
+                el("span", "", `BOP 워커 ${bop.declared ?? "?"}`),
+                el("span", "chip", reach));
   bopRow.title = bop.note || "";
   host.appendChild(bopRow);
 
   const portal = connections.portal_mcp || {};
-  const portalRow = document.createElement("div");
-  portalRow.className = "skill";
+  const portalRow = el("div", "skill");
   const state = portal.configured ? "설정됨" : `미설정 (${(portal.missing || []).join(", ")})`;
-  portalRow.innerHTML = `<span class="dot${portal.configured ? "" : " off"}"></span>` +
-    `<span>포털 MCP</span><span class="chip">${state}</span>`;
+  portalRow.append(dot(portal.configured), el("span", "", "포털 MCP"), el("span", "chip", state));
   portalRow.title = [portal.still_blocked_note,
                      portal.would_unlock && portal.would_unlock.length
                        ? `열리는 모델: ${portal.would_unlock.join(", ")}` : ""]
@@ -334,7 +339,7 @@ async function loadRuns() {
     const runs = out.runs || out.items || [];
     select.innerHTML = "";
     if (!runs.length) {
-      select.innerHTML = `<option value="">실행이 없습니다</option>`;
+      select.replaceChildren(new Option("실행이 없습니다", ""));
       setRunStatus("실행이 없습니다.");
       return;
     }
@@ -345,7 +350,7 @@ async function loadRuns() {
       select.appendChild(new Option(label, id));
     }
   } catch (error) {
-    select.innerHTML = `<option value="">불러오지 못했습니다</option>`;
+    select.replaceChildren(new Option("불러오지 못했습니다", ""));
     setRunStatus(`실행 목록을 불러오지 못했습니다: ${error.message}`);
   } finally {
     button.disabled = false;
@@ -379,9 +384,8 @@ async function loadRunStatus(runId) {
       ["갱신", out.updated_at || out.updated || "-"],
     ];
     for (const [label, value] of rows) {
-      const row = document.createElement("div");
-      row.className = "skill";
-      row.innerHTML = `<span>${label}</span><span class="chip">${value}</span>`;
+      const row = el("div", "skill");
+      row.append(el("span", "", label), el("span", "chip", value));
       host.appendChild(row);
     }
     if (out.error_summary) {
@@ -419,11 +423,10 @@ async function loadArtifacts(runId) {
       row.type = "button";
       row.className = "artifact";
       const format = isStructureArtifact(path);
-      row.innerHTML = `<span class="apath">${path}</span>`;
-      const chip = document.createElement("span");
-      chip.className = "chip";
-      chip.textContent = format ? "3D" : (item.size != null ? `${item.size}B` : "텍스트");
-      row.appendChild(chip);
+      row.append(
+        el("span", "apath", path),
+        el("span", "chip", format ? "3D" : (item.size != null ? `${item.size}B` : "텍스트")),
+      );
       row.addEventListener("click", () => openArtifact(runId, path, format));
       host.appendChild(row);
     }
@@ -505,11 +508,9 @@ async function probeWorkers() {
     host.innerHTML = "";
     const entries = Object.entries(out.liveness || {});
     for (const [id, info] of entries.sort((a, b) => a[0].localeCompare(b[0]))) {
-      const row = document.createElement("div");
-      row.className = "skill";
+      const row = el("div", "skill");
       row.title = info.error || `선언: ${info.declared_availability}`;
-      row.innerHTML = `<span class="dot${info.reachable ? "" : " off"}"></span>` +
-        `<span>${id}</span><span class="chip">${info.endpoint}</span>`;
+      row.append(dot(info.reachable), el("span", "", id), el("span", "chip", info.endpoint));
       host.appendChild(row);
     }
     renderConnections(out.connections);
@@ -551,11 +552,15 @@ function renderWeights(host) {
   host.innerHTML = "";
   for (const item of OBJECTIVES) {
     const row = document.createElement("label");
-    row.innerHTML =
-      `${item.label} <input type="range" min="0" max="1" step="0.05" value="${item.value}" data-key="${item.key}" />` +
-      `<output>${item.value.toFixed(2)}</output>`;
-    const slider = row.querySelector("input");
-    const out = row.querySelector("output");
+    const slider = document.createElement("input");
+    slider.type = "range";
+    slider.min = "0";
+    slider.max = "1";
+    slider.step = "0.05";
+    slider.value = String(item.value);
+    slider.dataset.key = item.key;
+    const out = el("output", "", item.value.toFixed(2));
+    row.append(document.createTextNode(`${item.label} `), slider, out);
     slider.addEventListener("input", () => { out.textContent = Number(slider.value).toFixed(2); });
     host.appendChild(row);
   }

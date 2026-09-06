@@ -231,3 +231,29 @@ test("a truncated artifact says it was truncated", () => {
 test("an empty run list is reported as empty, not as a failure", () => {
   assert.ok(/실행이 없습니다|no runs/i.test(source));
 });
+
+test("no server value is ever interpolated into innerHTML", () => {
+  // 아티팩트 경로와 실행 상태는 서버에서 오고, 산출물 경로에는 사용자가 정한
+  // 이름(run id, design id)이 섞인다. 템플릿 문자열로 innerHTML 을 만들면
+  // 그 이름 안의 마크업이 실행된다. textContent 로만 넣는다.
+  const offenders = source
+    .split("\n")
+    .map((line, index) => [index + 1, line])
+    .filter(([, line]) => /innerHTML\s*=\s*[`'"].*\$\{/.test(line));
+  assert.deepEqual(offenders, [], `interpolated innerHTML at lines ${offenders.map(([n]) => n)}`);
+});
+
+test("the artifact path goes through the text-only helper", () => {
+  assert.ok(/el\("span", "apath", path\)/.test(source),
+            "the path must be passed as text, never assembled into markup");
+});
+
+test("the text helper only ever sets textContent", () => {
+  const helper = source.slice(source.indexOf("function el("), source.indexOf("function dot("));
+  assert.ok(helper.includes("textContent"));
+  assert.ok(!helper.includes("innerHTML"), "the helper must not have an escape hatch");
+});
+
+test("run status values are set as text", () => {
+  assert.ok(source.includes("function el("), "a text-only element helper keeps this consistent");
+});
