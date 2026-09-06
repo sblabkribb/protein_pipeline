@@ -390,6 +390,28 @@ def _tail_masses(values: np.ndarray, clusters, *, n_boot: int = 20000, seed: int
     }
 
 
+def structural_conclusions_allowed(rows) -> dict:
+    """이 파일에서 구조 endpoint 로 결론을 낼 수 있는가.
+
+    파일에 도장을 찍어도 스크립트가 그것을 읽지 않으면, 다음에 누군가 그 파일을
+    넣고 무효한 숫자를 다시 얻는다. 그래서 여기서 막는다 - RMSD 를 거치지 않는
+    endpoint 는 계속 읽을 수 있다.
+    """
+    info = rmsd_provenance(rows)
+    if info["matches_frozen_definition"]:
+        return {"allowed": True, "reason": "", "provenance": info, "still_readable": []}
+    return {
+        "allowed": False,
+        "reason": (
+            f"이 파일의 RMSD 는 폐기된 correspondence({info['method']})로 계산되었다. "
+            f"structural_yield 와 joint_yield 로 결론을 내면 안 된다."
+        ),
+        "provenance": info,
+        "still_readable": ["soluprot (연속·통과율)", "plddt (연속)",
+                           "positional_entropy", "mean_pairwise_distance"],
+    }
+
+
 def rmsd_provenance(rows) -> dict:
     """이 파일의 rmsd 컬럼이 어떤 정의로 계산되었는지 확인한다.
 
@@ -397,11 +419,37 @@ def rmsd_provenance(rows) -> dict:
     kabsch 값이고 동결 정의와 다르다. 표시하지 않으면 연속 endpoint 로 읽을 때
     구조 일치의 변화로 오해된다.
     """
+    # 동결된 대응은 접힌 서열 순서다. 그 값은 rmsd_nonloop_order 컬럼에 있고,
+    # correspondence 컬럼이 폴드마다 어느 관례가 쓰였는지 말한다.
+    if any(str(r.get("rmsd_nonloop_order") or "").strip() for r in rows):
+        seen = sorted({str(r.get("correspondence") or "").strip()
+                       for r in rows if str(r.get("correspondence") or "").strip()})
+        refused = [c for c in seen if c.startswith("refused")]
+        return {
+            "method": "folded_sequence_order",
+            "methods_seen": seen,
+            "frozen_method": "folded_sequence_order",
+            "matches_frozen_definition": True,
+            "note": (f"대응을 세울 수 없어 값이 빈 폴드가 있다: {len(refused)} 종류"
+                     if refused else ""),
+        }
+
     methods = sorted({
         str(r.get("rmsd_method") or "").strip()
         for r in rows if str(r.get("rmsd_method") or "").strip()
     })
-    frozen = STRUCTURAL_METRIC_V1["rmsd"]["method"]
+    frozen = "folded_sequence_order"
+    if methods == ["ca_rmsd_dssp_non_loop"]:
+        # 마스크는 맞았지만 잔기 번호로 짝지은 값이다. 157 개 백본 중 36 개에서
+        # 대응이 밀렸다.
+        return {
+            "method": "ca_rmsd_dssp_non_loop_resnum",
+            "methods_seen": methods,
+            "frozen_method": frozen,
+            "matches_frozen_definition": False,
+            "note": ("non-loop 마스크는 맞지만 대응이 resnum 이다. CATH 오프셋 백본에서 "
+                     "프레임이 밀린 값이므로 구조 결론에 쓸 수 없다."),
+        }
     if not methods:
         return {
             "method": "unknown_legacy", "methods_seen": [],
@@ -525,6 +573,13 @@ def main(argv: list[str] | None = None) -> int:
     print(f"panel={args.panel} cluster_unit={args.cluster_unit}"
           + (f"\n적용 범위: {scope}" if scope else ""))
 
+    gate = structural_conclusions_allowed(rows)
+    report["structural_conclusions"] = gate
+    if not gate["allowed"]:
+        print(f"\n[무효] {gate['reason']}")
+        print(f"        계속 읽을 수 있는 것: {', '.join(gate['still_readable'])}")
+        print("        아래 structural_yield / joint_yield 는 참고용이며 결론에 쓰지 않는다.\n")
+
     print(f"{'T':>6s} {'n':>5s} {'structural_yield':>17s} {'joint_yield':>12s} {'SoluProt':>10s}")
     for temp in temps:
         subset = [r for r in rows if r["temperature"] == temp]
@@ -608,6 +663,14 @@ def main(argv: list[str] | None = None) -> int:
             for key, value in entry.items():
                 if isinstance(value, dict) and value.get("ci95"):
                     print(f"    {key}: diff={value['point']} CI{value['ci95']}")
+
+    if not gate["allowed"]:
+        report["verdict"] = "invalid_metric"
+        print("\nprimary endpoint 종합 판정: 내리지 않는다 — 폐기된 correspondence")
+        args_out = Path(args.out)
+        args_out.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+        print(f"wrote {args_out}")
+        return 0
 
     steps = {v["next_step"] for k, v in report["comparisons"].items()
              if k.startswith(("structural_yield", "joint_yield"))}

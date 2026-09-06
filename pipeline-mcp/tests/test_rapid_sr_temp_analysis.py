@@ -517,11 +517,14 @@ class MetricProvenanceTests(unittest.TestCase):
         self.assertEqual(info["method"], "unknown_legacy")
         self.assertFalse(info["matches_frozen_definition"])
 
-    def test_a_file_with_the_frozen_method_is_accepted(self):
+    def test_the_resnum_method_is_no_longer_the_frozen_one(self):
+        # 한때 이것이 동결 정의였다. CATH 오프셋에서 대응이 밀린다는 것이
+        # 밝혀져 폐기되었고, 그 사실이 여기 남아 있어야 한다.
         module = _load()
         info = module.rmsd_provenance(
             [{"sequence_id": "a", "rmsd": "1.0", "rmsd_method": "ca_rmsd_dssp_non_loop"}])
-        self.assertTrue(info["matches_frozen_definition"])
+        self.assertFalse(info["matches_frozen_definition"])
+        self.assertEqual(info["frozen_method"], "folded_sequence_order")
 
     def test_a_mixed_file_is_rejected_rather_than_averaged(self):
         module = _load()
@@ -569,3 +572,50 @@ class PanelUsageTests(unittest.TestCase):
                                             cluster_unit="backbone_key",
                                             selection_scope="")
         self.assertEqual(header["panel_role"], "unfiltered")
+
+
+class InvalidatedInputTests(unittest.TestCase):
+    """폐기된 대응으로 만든 파일에서 구조 결론을 내지 못하게 한다.
+
+    파일에 도장을 찍어도 스크립트가 그것을 읽지 않으면, 다음에 누군가 그
+    파일을 넣고 분석을 돌려 무효한 숫자를 다시 얻는다.
+    """
+
+    def test_the_old_resnum_method_is_no_longer_accepted(self):
+        module = _load()
+        info = module.rmsd_provenance([{"rmsd_method": "ca_rmsd_dssp_non_loop"}])
+        self.assertFalse(info["matches_frozen_definition"])
+        self.assertIn("resnum", info["note"].lower() + info["note"])
+
+    def test_the_order_based_column_is_accepted(self):
+        module = _load()
+        info = module.rmsd_provenance([
+            {"rmsd_nonloop_order": "1.57", "correspondence": "file_order"}])
+        self.assertTrue(info["matches_frozen_definition"])
+        self.assertEqual(info["method"], "folded_sequence_order")
+
+    def test_a_legacy_file_is_still_flagged(self):
+        module = _load()
+        self.assertFalse(
+            module.rmsd_provenance([{"rmsd": "2.0"}])["matches_frozen_definition"])
+
+    def test_structural_endpoints_are_refused_on_an_invalidated_file(self):
+        module = _load()
+        rows = [{"backbone_key": f"b{i}", "target_id": f"t{i}", "temperature": t,
+                 "rmsd_method": "ca_rmsd_dssp_non_loop", "plddt": 90.0, "rmsd": 1.0,
+                 "_structural": 1.0, "_joint": 1.0, "_soluprot": 0.7}
+                for i in range(4) for t in ("0.1", "0.2")]
+        gate = module.structural_conclusions_allowed(rows)
+        self.assertFalse(gate["allowed"])
+        self.assertIn("correspondence", gate["reason"])
+
+    def test_structural_endpoints_are_allowed_on_a_current_file(self):
+        module = _load()
+        rows = [{"rmsd_nonloop_order": "1.0", "correspondence": "file_order"}]
+        self.assertTrue(module.structural_conclusions_allowed(rows)["allowed"])
+
+    def test_the_gate_names_which_endpoints_remain_readable(self):
+        module = _load()
+        gate = module.structural_conclusions_allowed([{"rmsd_method": "ca_rmsd_dssp_non_loop"}])
+        self.assertIn("soluprot", " ".join(gate["still_readable"]))
+        self.assertIn("plddt", " ".join(gate["still_readable"]))

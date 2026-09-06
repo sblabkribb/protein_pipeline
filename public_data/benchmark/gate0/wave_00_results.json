@@ -1,0 +1,11 @@
+[
+  {
+    "run_id": "gate0_w0_rfd3_1koyA00",
+    "target": "1koyA00",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_train/1koyA00.pdb",
+    "started_at": "2026-09-04T04:43:34+0900",
+    "status": "ok",
+    "elapsed_s": 4972.0
+  }
+]

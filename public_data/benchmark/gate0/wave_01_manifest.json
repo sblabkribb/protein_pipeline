@@ -1,0 +1,68 @@
+{
+  "wave": 1,
+  "targets": [
+    "2kjfA00",
+    "1xjhA00",
+    "1sohA00",
+    "1n4yA00",
+    "2jneA00"
+  ],
+  "arms": [
+    "rfd3"
+  ],
+  "seed": 0,
+  "protocol": {
+    "thresholds": {
+      "soluprot_min": 0.5,
+      "plddt_min": 85.0,
+      "rmsd_max": 2.0
+    },
+    "mpnn_settings": {
+      "use_soluble_model": true,
+      "model_name": "v_48_020",
+      "sampling_temp": 0.1,
+      "seed": 0,
+      "batch_size": 1
+    },
+    "sequences_per_backbone": 20,
+    "tiers": [
+      0.5
+    ],
+    "backbones_per_run": 5,
+    "af2_calls_per_run": 100,
+    "af2_extra_flags": null
+  },
+  "created_at": "2026-09-04T10:14:15+0900",
+  "planned_runs": [
+    {
+      "run_id": "gate0_w1_rfd3_2kjfA00",
+      "target": "2kjfA00",
+      "arm": "rfd3",
+      "pdb_path": "/opt/protein_pipeline/cath_train/2kjfA00.pdb"
+    },
+    {
+      "run_id": "gate0_w1_rfd3_1xjhA00",
+      "target": "1xjhA00",
+      "arm": "rfd3",
+      "pdb_path": "/opt/protein_pipeline/cath_train/1xjhA00.pdb"
+    },
+    {
+      "run_id": "gate0_w1_rfd3_1sohA00",
+      "target": "1sohA00",
+      "arm": "rfd3",
+      "pdb_path": "/opt/protein_pipeline/cath_train/1sohA00.pdb"
+    },
+    {
+      "run_id": "gate0_w1_rfd3_1n4yA00",
+      "target": "1n4yA00",
+      "arm": "rfd3",
+      "pdb_path": "/opt/protein_pipeline/cath_train/1n4yA00.pdb"
+    },
+    {
+      "run_id": "gate0_w1_rfd3_2jneA00",
+      "target": "2jneA00",
+      "arm": "rfd3",
+      "pdb_path": "/opt/protein_pipeline/cath_train/2jneA00.pdb"
+    }
+  ]
+}

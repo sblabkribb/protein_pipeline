@@ -1,4 +1,36 @@
 {
+  "_metric_status": {
+    "status": "invalid",
+    "correspondence": "kabsch_all_ca_file_order",
+    "reason": "structural_yield 와 joint_yield 로 낸 온도 결론은 폐기된 correspondence 에 기대고 있다. 포화 진단과 expand_backbones 판정도 그 위에서 나왔다.",
+    "still_valid": [
+      "soluprot 연속 endpoint",
+      "pLDDT 연속 endpoint"
+    ],
+    "replaced_by": "corrected metric 으로 재계산 후 다시 생성",
+    "artifact": "temperature_sweep/af2_analysis.json",
+    "valid_correspondence_now": "folded_sequence_order",
+    "correspondence_history": {
+      "kabsch_all_ca_file_order": {
+        "valid": false,
+        "used_until": "2026-09-06",
+        "defect": "전체 CA 를 파일 순서로 짝지었다. 대응 자체는 대체로 맞았지만 loop 와 말단이 포함되어, non-loop 에서 정해진 2.0 A 임계값이 다른 것을 뜻했다.",
+        "evidence": "1bg5A03 의 같은 모델에서 전체 CA 22.6 A 대 non-loop 1.32 A. loop 가 많은 백본은 어떤 설계도 통과하지 못했다."
+      },
+      "ca_rmsd_dssp_non_loop_resnum": {
+        "valid": false,
+        "used_until": "2026-09-06",
+        "defect": "마스크는 맞았지만 잔기 번호로 짝지었다. CATH 도메인은 잘려 나온 사슬의 번호를 유지하고 AF2 는 1..N 을 쓰므로, 오프셋 백본에서 대응이 통째로 밀리거나(1af7A01) 아예 비었다(1bctA00). 157 개 중 36 개가 해당한다.",
+        "evidence": "같은 모델(pLDDT 92.97)에서 번호 대응 29.01 A 대 순서 대응 1.57 A. 1eruA00 처럼 1 번에서 시작하는 백본은 0.33 A 로 양쪽이 같다."
+      },
+      "folded_sequence_order": {
+        "valid": true,
+        "adopted": "2026-09-06",
+        "defect": "",
+        "evidence": "12 폴드(오프셋 6, 비오프셋 6)에서 번호 이동 불변, fail-closed, 두 변형 저장, 중첩 시각 확인까지 통과. structural_metric_verification.json."
+      }
+    }
+  },
   "n_folded": 480,
   "reference_temperature": "0.1",
   "ci_width_target": 0.1,
@@ -59,7 +91,7 @@
       "prob_above_zero": 0.1845,
       "prob_below_zero": 0.6122,
       "prob_exactly_zero": 0.2033,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다.",
       "next_step": "expand_backbones"
     },
     "structural_yield@T0.2": {
@@ -92,7 +124,7 @@
       "prob_above_zero": 0.0,
       "prob_below_zero": 0.9661,
       "prob_exactly_zero": 0.0339,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다.",
       "next_step": "expand_backbones"
     },
     "structural_yield@T0.3": {
@@ -125,7 +157,7 @@
       "prob_above_zero": 0.0,
       "prob_below_zero": 0.6504,
       "prob_exactly_zero": 0.3496,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다.",
       "next_step": "expand_backbones"
     },
     "joint_yield@T0.05": {
@@ -158,7 +190,7 @@
       "prob_above_zero": 0.0927,
       "prob_below_zero": 0.7824,
       "prob_exactly_zero": 0.1249,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다.",
       "next_step": "expand_backbones"
     },
     "joint_yield@T0.2": {
@@ -191,7 +223,7 @@
       "prob_above_zero": 0.0,
       "prob_below_zero": 0.9661,
       "prob_exactly_zero": 0.0339,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다.",
       "next_step": "expand_backbones"
     },
     "joint_yield@T0.3": {
@@ -224,7 +256,7 @@
       "prob_above_zero": 0.2934,
       "prob_below_zero": 0.5616,
       "prob_exactly_zero": 0.1449,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다.",
       "next_step": "expand_backbones"
     },
     "soluprot@T0.05": {
@@ -257,7 +289,7 @@
       "prob_above_zero": 0.3538,
       "prob_below_zero": 0.6462,
       "prob_exactly_zero": 0.0,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다.",
       "next_step": "stop_no_effect"
     },
     "soluprot@T0.2": {
@@ -290,7 +322,7 @@
       "prob_above_zero": 0.0198,
       "prob_below_zero": 0.9802,
       "prob_exactly_zero": 0.0,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다.",
       "next_step": "stop_effect_confirmed"
     },
     "soluprot@T0.3": {
@@ -323,15 +355,36 @@
       "prob_above_zero": 0.2092,
       "prob_below_zero": 0.7909,
       "prob_exactly_zero": 0.0,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다.",
       "next_step": "stop_no_effect"
     }
   },
   "panel": "panel1_unfiltered",
+  "panel_role": "unfiltered",
+  "valid_for_policy_performance_claims": false,
+  "policy_validation_requires": "Unseen targets whose baseline yield is not known in advance, driven from an initial probe online. 선정에 쓰지 않은 새 타겟에서, baseline yield 를 미리 모르는 채로 초기 probe 부터 실제 온라인 방식으로 돌려야 정책 성능 주장이 성립한다.",
   "bootstrap_cluster_unit": "backbone_key",
   "selection_scope": "",
   "selection_scope_unknown": true,
-  "interpretation": "Selection scope was not recorded for this panel, so the conditional/marginal distinction cannot be made. \uc120\uc815 \ubc94\uc704\uac00 \uae30\ub85d\ub418\uc9c0 \uc54a\uc544 \uc870\uac74\ubd80\uc778\uc9c0 \uc8fc\ubcc0\ubd80\uc778\uc9c0 \uad6c\ubcc4\ud560 \uc218 \uc5c6\ub2e4.",
+  "frozen_metric_id": "gate0_structural_v1",
+  "interpretation": "Selection scope was not recorded for this panel, so the conditional/marginal distinction cannot be made. 선정 범위가 기록되지 않아 조건부인지 주변부인지 구별할 수 없다.",
+  "structural_conclusions": {
+    "allowed": false,
+    "reason": "이 파일의 RMSD 는 폐기된 correspondence(unknown_legacy)로 계산되었다. structural_yield 와 joint_yield 로 결론을 내면 안 된다.",
+    "provenance": {
+      "method": "unknown_legacy",
+      "methods_seen": [],
+      "frozen_method": "folded_sequence_order",
+      "matches_frozen_definition": false,
+      "note": "rmsd_method 컬럼이 없다. 이 파일은 동결 정의 이전에 만들어졌고 rmsd 컬럼은 전체 CA kabsch 값이다. 동결 정의의 연속값으로 읽으면 안 된다."
+    },
+    "still_readable": [
+      "soluprot (연속·통과율)",
+      "plddt (연속)",
+      "positional_entropy",
+      "mean_pairwise_distance"
+    ]
+  },
   "condition_dominance": {
     "reference_temperature": "0.1",
     "min_clusters_for_dominance": 8,
@@ -405,7 +458,14 @@
       }
     },
     "pruned": [],
-    "recommendation": "\uc81c\uac70 \uae30\uc900\uc744 \ub118\uc740 \uc870\uac74\uc774 \uc5c6\ub2e4."
+    "recommendation": "제거 기준을 넘은 조건이 없다."
+  },
+  "rmsd_provenance": {
+    "method": "unknown_legacy",
+    "methods_seen": [],
+    "frozen_method": "folded_sequence_order",
+    "matches_frozen_definition": false,
+    "note": "rmsd_method 컬럼이 없다. 이 파일은 동결 정의 이전에 만들어졌고 rmsd 컬럼은 전체 CA kabsch 값이다. 동결 정의의 연속값으로 읽으면 안 된다."
   },
   "continuous": {
     "plddt@T0.05": {
@@ -424,7 +484,7 @@
       "prob_above_zero": 0.329,
       "prob_below_zero": 0.6711,
       "prob_exactly_zero": 0.0,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다."
     },
     "plddt@T0.2": {
       "point": -1.2068,
@@ -442,7 +502,7 @@
       "prob_above_zero": 0.0006,
       "prob_below_zero": 0.9993,
       "prob_exactly_zero": 0.0,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다."
     },
     "plddt@T0.3": {
       "point": -1.0844,
@@ -460,61 +520,14 @@
       "prob_above_zero": 0.0321,
       "prob_below_zero": 0.9679,
       "prob_exactly_zero": 0.0,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다."
     },
-    "rmsd@T0.05": {
-      "point": 0.148,
-      "ci95": [
-        -0.4124,
-        0.6803
-      ],
-      "excludes_zero": false,
-      "ci_width": 1.0928,
-      "n_clusters": 15,
-      "n_boot": 4000,
-      "cluster_unit": "backbone_key",
-      "n_clusters_resampled": 15,
-      "endpoint_kind": "continuous",
-      "prob_above_zero": 0.7059,
-      "prob_below_zero": 0.2941,
-      "prob_exactly_zero": 0.0,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
-    },
-    "rmsd@T0.2": {
-      "point": -0.0297,
-      "ci95": [
-        -0.6032,
-        0.5336
-      ],
-      "excludes_zero": false,
-      "ci_width": 1.1368,
-      "n_clusters": 15,
-      "n_boot": 4000,
-      "cluster_unit": "backbone_key",
-      "n_clusters_resampled": 15,
-      "endpoint_kind": "continuous",
-      "prob_above_zero": 0.4611,
-      "prob_below_zero": 0.539,
-      "prob_exactly_zero": 0.0,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
-    },
-    "rmsd@T0.3": {
-      "point": -0.4019,
-      "ci95": [
-        -1.6143,
-        0.7388
-      ],
-      "excludes_zero": false,
-      "ci_width": 2.3531,
-      "n_clusters": 15,
-      "n_boot": 4000,
-      "cluster_unit": "backbone_key",
-      "n_clusters_resampled": 15,
-      "endpoint_kind": "continuous",
-      "prob_above_zero": 0.2472,
-      "prob_below_zero": 0.7528,
-      "prob_exactly_zero": 0.0,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    "rmsd_skipped": {
+      "method": "unknown_legacy",
+      "methods_seen": [],
+      "frozen_method": "folded_sequence_order",
+      "matches_frozen_definition": false,
+      "note": "rmsd_method 컬럼이 없다. 이 파일은 동결 정의 이전에 만들어졌고 rmsd 컬럼은 전체 CA kabsch 값이다. 동결 정의의 연속값으로 읽으면 안 된다."
     },
     "soluprot@T0.05": {
       "point": -0.0043,
@@ -532,7 +545,7 @@
       "prob_above_zero": 0.3538,
       "prob_below_zero": 0.6462,
       "prob_exactly_zero": 0.0,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다."
     },
     "soluprot@T0.2": {
       "point": -0.0194,
@@ -550,7 +563,7 @@
       "prob_above_zero": 0.0198,
       "prob_below_zero": 0.9802,
       "prob_exactly_zero": 0.0,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다."
     },
     "soluprot@T0.3": {
       "point": -0.0106,
@@ -568,7 +581,7 @@
       "prob_above_zero": 0.2092,
       "prob_below_zero": 0.7909,
       "prob_exactly_zero": 0.0,
-      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+      "tail_mass_note": "백본별 차이가 1/n 격자 위에 있으면 부트스트랩 평균도 격자 위에 놓여, 분위수 끝이 정확히 0 이 될 수 있다. 그 경우 'CI 가 0 을 포함' 은 '0 보다 큰 결과가 나올 수 있다' 를 뜻하지 않는다."
     }
   },
   "by_source": {
@@ -576,7 +589,7 @@
     "sources": [
       "target"
     ],
-    "note": "\uc18c\uc2a4\uac00 \ud558\ub098\ubfd0\uc774\ub77c \uce35\ud654 \ubd88\uac00. wave 2/3 \ubc31\ubcf8\uc73c\ub85c sweep \ud655\uc7a5 \ud544\uc694."
+    "note": "소스가 하나뿐이라 층화 불가. wave 2/3 백본으로 sweep 확장 필요."
   },
-  "overall_next_step": "expand_backbones"
+  "verdict": "invalid_metric"
 }

@@ -1,0 +1,138 @@
+[
+  {
+    "run_id": "gate0_w2_rfd3_1e9tA00",
+    "target": "1e9tA00",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_test/1e9tA00.pdb",
+    "started_at": "2026-09-04T15:04:06+0900",
+    "status": "ok",
+    "elapsed_s": 12513.6
+  },
+  {
+    "run_id": "gate0_w2_rfd3_1bctA00",
+    "target": "1bctA00",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_test/1bctA00.pdb",
+    "started_at": "2026-09-04T18:32:39+0900",
+    "status": "ok",
+    "elapsed_s": 8676.0
+  },
+  {
+    "run_id": "gate0_w2_rfd3_1jygA00",
+    "target": "1jygA00",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_test/1jygA00.pdb",
+    "started_at": "2026-09-04T20:57:15+0900",
+    "status": "ok",
+    "elapsed_s": 4963.8
+  },
+  {
+    "run_id": "gate0_w2_rfd3_1l5cA00",
+    "target": "1l5cA00",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_test/1l5cA00.pdb",
+    "started_at": "2026-09-04T22:19:59+0900",
+    "status": "ok",
+    "elapsed_s": 1730.4
+  },
+  {
+    "run_id": "gate0_w2_rfd3_1b5aA00",
+    "target": "1b5aA00",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_train/1b5aA00.pdb",
+    "started_at": "2026-09-04T22:48:50+0900",
+    "status": "ok",
+    "elapsed_s": 7969.7
+  },
+  {
+    "run_id": "gate0_w2_rfd3_1o8rA00",
+    "target": "1o8rA00",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_val/1o8rA00.pdb",
+    "started_at": "2026-09-05T01:01:39+0900",
+    "status": "ok",
+    "elapsed_s": 1299.6
+  },
+  {
+    "run_id": "gate0_w2_rfd3_1bxmA00",
+    "target": "1bxmA00",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_val/1bxmA00.pdb",
+    "started_at": "2026-09-05T01:23:19+0900",
+    "status": "ok",
+    "elapsed_s": 9121.1
+  },
+  {
+    "run_id": "gate0_w2_rfd3_1eruA00",
+    "target": "1eruA00",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_val/1eruA00.pdb",
+    "started_at": "2026-09-05T03:55:20+0900",
+    "status": "ok",
+    "elapsed_s": 4830.5
+  },
+  {
+    "run_id": "gate0_w2_rfd3_1nr3A00",
+    "target": "1nr3A00",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_val/1nr3A00.pdb",
+    "started_at": "2026-09-05T05:15:50+0900",
+    "status": "ok",
+    "elapsed_s": 871.8
+  },
+  {
+    "run_id": "gate0_w2_rfd3_1hufA00",
+    "target": "1hufA00",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_val/1hufA00.pdb",
+    "started_at": "2026-09-05T05:30:22+0900",
+    "status": "ok",
+    "elapsed_s": 3688.0
+  },
+  {
+    "run_id": "gate0_w2_rfd3_1ktuA00",
+    "target": "1ktuA00",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_val/1ktuA00.pdb",
+    "started_at": "2026-09-05T06:31:50+0900",
+    "status": "failed",
+    "error": "BackboneContractError: RFD3 target RMSD gate accepted only 1 backbone(s) for requested 5. Rejected 14 backbone(s) above cutoff 2.000A.",
+    "elapsed_s": 135.9
+  },
+  {
+    "run_id": "gate0_w2_rfd3_1bg5A03",
+    "target": "1bg5A03",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_train/1bg5A03.pdb",
+    "started_at": "2026-09-05T06:34:06+0900",
+    "status": "ok",
+    "elapsed_s": 5337.1
+  },
+  {
+    "run_id": "gate0_w2_rfd3_2wejA00",
+    "target": "2wejA00",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_test/2wejA00.pdb",
+    "started_at": "2026-09-05T08:03:03+0900",
+    "status": "ok",
+    "elapsed_s": 4610.3
+  },
+  {
+    "run_id": "gate0_w2_rfd3_1c8zA00",
+    "target": "1c8zA00",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_train/1c8zA00.pdb",
+    "started_at": "2026-09-05T09:19:54+0900",
+    "status": "ok",
+    "elapsed_s": 3937.0
+  },
+  {
+    "run_id": "gate0_w2_rfd3_1af7A01",
+    "target": "1af7A01",
+    "arm": "rfd3",
+    "pdb_path": "/opt/protein_pipeline/cath_train/1af7A01.pdb",
+    "started_at": "2026-09-05T10:25:31+0900",
+    "status": "ok",
+    "elapsed_s": 4533.8
+  }
+]
