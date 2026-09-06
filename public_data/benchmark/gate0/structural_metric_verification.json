@@ -1,0 +1,596 @@
+{
+  "metric": "sequence_order + reference_dssp_non_loop + kabsch_ca",
+  "af2_settings": {
+    "model_preset": "monomer",
+    "db_preset": "full_dbs",
+    "max_template_date": "2020-05-14",
+    "extra_flags": null,
+    "reproducibility_reference": "af2_reproducibility.json: 같은 서열 재실행의 |delta pLDDT| 평균 0.006, 최대 0.011 (n=3). 타겟 내부 SD 0.556 대비 무시할 수준이지만 n 이 작다."
+  },
+  "code_sha": "68238c0ab0ebf85499a4470dbdf8b030e4863085",
+  "folds": [
+    {
+      "backbone_key": "1af7A01|target|target",
+      "sequence_id": "1af7A01|target|target|T0.1|0",
+      "reference_start_resnum": 11,
+      "n_reference_ca": 274,
+      "n_model_ca": 274,
+      "designed_length": 274,
+      "n_non_loop": 167,
+      "non_loop_indices_head": [
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "plddt": 92.97722627737225,
+      "designed_sequence_length": 274,
+      "x_placeholders": 0,
+      "correspondence": "file_order",
+      "rmsd_nonloop_order": 1.569464720351677,
+      "rmsd_all_ca_order": 2.4281,
+      "check_1_offset_invariance": {
+        "passed": true,
+        "baseline": 1.569465,
+        "shifted": {
+          "-5": 1.569465,
+          "7": 1.569465,
+          "162": 1.569465,
+          "1000": 1.569465
+        },
+        "note": "좌표가 같고 번호만 다르면 값이 변하면 안 된다."
+      },
+      "check_3_fail_closed": {
+        "passed": true,
+        "outcomes": {
+          "model_one_short": "거부: 모델 길이 273 이 서열(274)과도 비-X 잔기(274)와도 다르다",
+          "model_two_short": "거부: 모델 길이 272 이 서열(274)과도 비-X 잔기(274)와도 다르다",
+          "sequence_from_another_backbone": "거부: 서열의 비-X 잔기 271 개가 기준 잔기 274 개와 다르다. 이 서열은 이 백본의 것이 아니다.",
+          "too_few_masked_positions": "None"
+        },
+        "note": "잘라 쓰면 뒤쪽이 어긋난 채로 숫자가 나온다. 거부해야 한다."
+      },
+      "superposition_pdb": "public_data/benchmark/gate0/metric_verification_pdb/1af7A01_target_target_superposed.pdb"
+    },
+    {
+      "backbone_key": "1bctA00|target|target",
+      "sequence_id": "1bctA00|target|target|T0.1|0",
+      "reference_start_resnum": 163,
+      "n_reference_ca": 69,
+      "n_model_ca": 69,
+      "designed_length": 69,
+      "n_non_loop": 60,
+      "non_loop_indices_head": [
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "plddt": 95.80246376811594,
+      "designed_sequence_length": 69,
+      "x_placeholders": 0,
+      "correspondence": "file_order",
+      "rmsd_nonloop_order": 11.127177219068706,
+      "rmsd_all_ca_order": 11.7287,
+      "check_1_offset_invariance": {
+        "passed": true,
+        "baseline": 11.127177,
+        "shifted": {
+          "-5": 11.127177,
+          "7": 11.127177,
+          "162": 11.127177,
+          "1000": 11.127177
+        },
+        "note": "좌표가 같고 번호만 다르면 값이 변하면 안 된다."
+      },
+      "check_3_fail_closed": {
+        "passed": true,
+        "outcomes": {
+          "model_one_short": "거부: 모델 길이 68 이 서열(69)과도 비-X 잔기(69)와도 다르다",
+          "model_two_short": "거부: 모델 길이 67 이 서열(69)과도 비-X 잔기(69)와도 다르다",
+          "sequence_from_another_backbone": "거부: 서열의 비-X 잔기 66 개가 기준 잔기 69 개와 다르다. 이 서열은 이 백본의 것이 아니다.",
+          "too_few_masked_positions": "None"
+        },
+        "note": "잘라 쓰면 뒤쪽이 어긋난 채로 숫자가 나온다. 거부해야 한다."
+      },
+      "superposition_pdb": "public_data/benchmark/gate0/metric_verification_pdb/1bctA00_target_target_superposed.pdb"
+    },
+    {
+      "backbone_key": "1bxmA00|target|target",
+      "sequence_id": "1bxmA00|target|target|T0.1|0",
+      "reference_start_resnum": -1,
+      "n_reference_ca": 99,
+      "n_model_ca": 99,
+      "designed_length": 100,
+      "n_non_loop": 65,
+      "non_loop_indices_head": [
+        2,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11
+      ],
+      "plddt": 96.1777,
+      "designed_sequence_length": 100,
+      "x_placeholders": 1,
+      "correspondence": "file_order",
+      "rmsd_nonloop_order": 0.5502604716033638,
+      "rmsd_all_ca_order": 0.8054,
+      "check_1_offset_invariance": {
+        "passed": true,
+        "baseline": 0.55026,
+        "shifted": {
+          "-5": 0.55026,
+          "7": 0.55026,
+          "162": 0.55026,
+          "1000": 0.55026
+        },
+        "note": "좌표가 같고 번호만 다르면 값이 변하면 안 된다."
+      },
+      "check_3_fail_closed": {
+        "passed": true,
+        "outcomes": {
+          "model_one_short": "거부: 모델 길이 98 이 서열(100)과도 비-X 잔기(99)와도 다르다",
+          "model_two_short": "거부: 모델 길이 97 이 서열(100)과도 비-X 잔기(99)와도 다르다",
+          "sequence_from_another_backbone": "거부: 서열의 비-X 잔기 96 개가 기준 잔기 99 개와 다르다. 이 서열은 이 백본의 것이 아니다.",
+          "too_few_masked_positions": "None"
+        },
+        "note": "잘라 쓰면 뒤쪽이 어긋난 채로 숫자가 나온다. 거부해야 한다."
+      },
+      "superposition_pdb": "public_data/benchmark/gate0/metric_verification_pdb/1bxmA00_target_target_superposed.pdb"
+    },
+    {
+      "backbone_key": "1c8zA00|target|target",
+      "sequence_id": "1c8zA00|target|target|T0.1|0",
+      "reference_start_resnum": 241,
+      "n_reference_ca": 265,
+      "n_model_ca": 265,
+      "designed_length": 265,
+      "n_non_loop": 130,
+      "non_loop_indices_head": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        16,
+        23
+      ],
+      "plddt": 92.20796226415095,
+      "designed_sequence_length": 265,
+      "x_placeholders": 0,
+      "correspondence": "file_order",
+      "rmsd_nonloop_order": 0.5722550700157663,
+      "rmsd_all_ca_order": 1.5248,
+      "check_1_offset_invariance": {
+        "passed": true,
+        "baseline": 0.572255,
+        "shifted": {
+          "-5": 0.572255,
+          "7": 0.572255,
+          "162": 0.572255,
+          "1000": 0.572255
+        },
+        "note": "좌표가 같고 번호만 다르면 값이 변하면 안 된다."
+      },
+      "check_3_fail_closed": {
+        "passed": true,
+        "outcomes": {
+          "model_one_short": "거부: 모델 길이 264 이 서열(265)과도 비-X 잔기(265)와도 다르다",
+          "model_two_short": "거부: 모델 길이 263 이 서열(265)과도 비-X 잔기(265)와도 다르다",
+          "sequence_from_another_backbone": "거부: 서열의 비-X 잔기 262 개가 기준 잔기 265 개와 다르다. 이 서열은 이 백본의 것이 아니다.",
+          "too_few_masked_positions": "None"
+        },
+        "note": "잘라 쓰면 뒤쪽이 어긋난 채로 숫자가 나온다. 거부해야 한다."
+      },
+      "superposition_pdb": "public_data/benchmark/gate0/metric_verification_pdb/1c8zA00_target_target_superposed.pdb"
+    },
+    {
+      "backbone_key": "1hufA00|target|target",
+      "sequence_id": "1hufA00|target|target|T0.1|0",
+      "reference_start_resnum": 3,
+      "n_reference_ca": 123,
+      "n_model_ca": 123,
+      "designed_length": 123,
+      "n_non_loop": 80,
+      "non_loop_indices_head": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "plddt": 89.03471544715447,
+      "designed_sequence_length": 123,
+      "x_placeholders": 0,
+      "correspondence": "file_order",
+      "rmsd_nonloop_order": 0.5322656822578455,
+      "rmsd_all_ca_order": 0.5803,
+      "check_1_offset_invariance": {
+        "passed": true,
+        "baseline": 0.532266,
+        "shifted": {
+          "-5": 0.532266,
+          "7": 0.532266,
+          "162": 0.532266,
+          "1000": 0.532266
+        },
+        "note": "좌표가 같고 번호만 다르면 값이 변하면 안 된다."
+      },
+      "check_3_fail_closed": {
+        "passed": true,
+        "outcomes": {
+          "model_one_short": "거부: 모델 길이 122 이 서열(123)과도 비-X 잔기(123)와도 다르다",
+          "model_two_short": "거부: 모델 길이 121 이 서열(123)과도 비-X 잔기(123)와도 다르다",
+          "sequence_from_another_backbone": "거부: 서열의 비-X 잔기 120 개가 기준 잔기 123 개와 다르다. 이 서열은 이 백본의 것이 아니다.",
+          "too_few_masked_positions": "None"
+        },
+        "note": "잘라 쓰면 뒤쪽이 어긋난 채로 숫자가 나온다. 거부해야 한다."
+      }
+    },
+    {
+      "backbone_key": "2wejA00|target|target",
+      "sequence_id": "2wejA00|target|target|T0.1|0",
+      "reference_start_resnum": 3,
+      "n_reference_ca": 258,
+      "n_model_ca": 258,
+      "designed_length": 259,
+      "n_non_loop": 117,
+      "non_loop_indices_head": [
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        18
+      ],
+      "plddt": 95.63683397683397,
+      "designed_sequence_length": 259,
+      "x_placeholders": 1,
+      "correspondence": "file_order",
+      "rmsd_nonloop_order": 0.5094986039935859,
+      "rmsd_all_ca_order": 0.6568,
+      "check_1_offset_invariance": {
+        "passed": true,
+        "baseline": 0.509499,
+        "shifted": {
+          "-5": 0.509499,
+          "7": 0.509499,
+          "162": 0.509499,
+          "1000": 0.509499
+        },
+        "note": "좌표가 같고 번호만 다르면 값이 변하면 안 된다."
+      },
+      "check_3_fail_closed": {
+        "passed": true,
+        "outcomes": {
+          "model_one_short": "거부: 모델 길이 257 이 서열(259)과도 비-X 잔기(258)와도 다르다",
+          "model_two_short": "거부: 모델 길이 256 이 서열(259)과도 비-X 잔기(258)와도 다르다",
+          "sequence_from_another_backbone": "거부: 서열의 비-X 잔기 255 개가 기준 잔기 258 개와 다르다. 이 서열은 이 백본의 것이 아니다.",
+          "too_few_masked_positions": "None"
+        },
+        "note": "잘라 쓰면 뒤쪽이 어긋난 채로 숫자가 나온다. 거부해야 한다."
+      }
+    },
+    {
+      "backbone_key": "1b5aA00|target|target",
+      "sequence_id": "1b5aA00|target|target|T0.1|0",
+      "reference_start_resnum": 1,
+      "n_reference_ca": 94,
+      "n_model_ca": 94,
+      "designed_length": 94,
+      "n_non_loop": 46,
+      "non_loop_indices_head": [
+        5,
+        6,
+        8,
+        9,
+        10,
+        11,
+        15,
+        16
+      ],
+      "plddt": 83.34074468085106,
+      "designed_sequence_length": 94,
+      "x_placeholders": 0,
+      "correspondence": "file_order",
+      "rmsd_nonloop_order": 1.3923498408607162,
+      "rmsd_all_ca_order": 3.5881,
+      "check_1_offset_invariance": {
+        "passed": true,
+        "baseline": 1.39235,
+        "shifted": {
+          "-5": 1.39235,
+          "7": 1.39235,
+          "162": 1.39235,
+          "1000": 1.39235
+        },
+        "note": "좌표가 같고 번호만 다르면 값이 변하면 안 된다."
+      },
+      "check_3_fail_closed": {
+        "passed": true,
+        "outcomes": {
+          "model_one_short": "거부: 모델 길이 93 이 서열(94)과도 비-X 잔기(94)와도 다르다",
+          "model_two_short": "거부: 모델 길이 92 이 서열(94)과도 비-X 잔기(94)와도 다르다",
+          "sequence_from_another_backbone": "거부: 서열의 비-X 잔기 91 개가 기준 잔기 94 개와 다르다. 이 서열은 이 백본의 것이 아니다.",
+          "too_few_masked_positions": "None"
+        },
+        "note": "잘라 쓰면 뒤쪽이 어긋난 채로 숫자가 나온다. 거부해야 한다."
+      }
+    },
+    {
+      "backbone_key": "1bg5A03|target|target",
+      "sequence_id": "1bg5A03|target|target|T0.1|0",
+      "reference_start_resnum": 1,
+      "n_reference_ca": 254,
+      "n_model_ca": 254,
+      "designed_length": 254,
+      "n_non_loop": 85,
+      "non_loop_indices_head": [
+        3,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "plddt": 82.7717716535433,
+      "designed_sequence_length": 254,
+      "x_placeholders": 0,
+      "correspondence": "file_order",
+      "rmsd_nonloop_order": 1.5010412011466268,
+      "rmsd_all_ca_order": 23.7766,
+      "check_1_offset_invariance": {
+        "passed": true,
+        "baseline": 1.501041,
+        "shifted": {
+          "-5": 1.501041,
+          "7": 1.501041,
+          "162": 1.501041,
+          "1000": 1.501041
+        },
+        "note": "좌표가 같고 번호만 다르면 값이 변하면 안 된다."
+      },
+      "check_3_fail_closed": {
+        "passed": true,
+        "outcomes": {
+          "model_one_short": "거부: 모델 길이 253 이 서열(254)과도 비-X 잔기(254)와도 다르다",
+          "model_two_short": "거부: 모델 길이 252 이 서열(254)과도 비-X 잔기(254)와도 다르다",
+          "sequence_from_another_backbone": "거부: 서열의 비-X 잔기 251 개가 기준 잔기 254 개와 다르다. 이 서열은 이 백본의 것이 아니다.",
+          "too_few_masked_positions": "None"
+        },
+        "note": "잘라 쓰면 뒤쪽이 어긋난 채로 숫자가 나온다. 거부해야 한다."
+      }
+    },
+    {
+      "backbone_key": "1e9tA00|target|target",
+      "sequence_id": "1e9tA00|target|target|T0.1|0",
+      "reference_start_resnum": 1,
+      "n_reference_ca": 59,
+      "n_model_ca": 59,
+      "designed_length": 59,
+      "n_non_loop": 6,
+      "non_loop_indices_head": [
+        30,
+        31,
+        32,
+        33,
+        36,
+        48
+      ],
+      "plddt": 50.41474576271186,
+      "designed_sequence_length": 59,
+      "x_placeholders": 0,
+      "correspondence": "file_order",
+      "rmsd_nonloop_order": 4.840469781111353,
+      "rmsd_all_ca_order": 11.7382,
+      "check_1_offset_invariance": {
+        "passed": true,
+        "baseline": 4.84047,
+        "shifted": {
+          "-5": 4.84047,
+          "7": 4.84047,
+          "162": 4.84047,
+          "1000": 4.84047
+        },
+        "note": "좌표가 같고 번호만 다르면 값이 변하면 안 된다."
+      },
+      "check_3_fail_closed": {
+        "passed": true,
+        "outcomes": {
+          "model_one_short": "거부: 모델 길이 58 이 서열(59)과도 비-X 잔기(59)와도 다르다",
+          "model_two_short": "거부: 모델 길이 57 이 서열(59)과도 비-X 잔기(59)와도 다르다",
+          "sequence_from_another_backbone": "거부: 서열의 비-X 잔기 56 개가 기준 잔기 59 개와 다르다. 이 서열은 이 백본의 것이 아니다.",
+          "too_few_masked_positions": "None"
+        },
+        "note": "잘라 쓰면 뒤쪽이 어긋난 채로 숫자가 나온다. 거부해야 한다."
+      }
+    },
+    {
+      "backbone_key": "1eruA00|target|target",
+      "sequence_id": "1eruA00|target|target|T0.1|0",
+      "reference_start_resnum": 1,
+      "n_reference_ca": 105,
+      "n_model_ca": 105,
+      "designed_length": 105,
+      "n_non_loop": 72,
+      "non_loop_indices_head": [
+        1,
+        2,
+        3,
+        4,
+        7,
+        8,
+        9,
+        10
+      ],
+      "plddt": 96.96171428571428,
+      "designed_sequence_length": 105,
+      "x_placeholders": 0,
+      "correspondence": "file_order",
+      "rmsd_nonloop_order": 0.327423109223696,
+      "rmsd_all_ca_order": 0.3945,
+      "check_1_offset_invariance": {
+        "passed": true,
+        "baseline": 0.327423,
+        "shifted": {
+          "-5": 0.327423,
+          "7": 0.327423,
+          "162": 0.327423,
+          "1000": 0.327423
+        },
+        "note": "좌표가 같고 번호만 다르면 값이 변하면 안 된다."
+      },
+      "check_3_fail_closed": {
+        "passed": true,
+        "outcomes": {
+          "model_one_short": "거부: 모델 길이 104 이 서열(105)과도 비-X 잔기(105)와도 다르다",
+          "model_two_short": "거부: 모델 길이 103 이 서열(105)과도 비-X 잔기(105)와도 다르다",
+          "sequence_from_another_backbone": "거부: 서열의 비-X 잔기 102 개가 기준 잔기 105 개와 다르다. 이 서열은 이 백본의 것이 아니다.",
+          "too_few_masked_positions": "None"
+        },
+        "note": "잘라 쓰면 뒤쪽이 어긋난 채로 숫자가 나온다. 거부해야 한다."
+      }
+    },
+    {
+      "backbone_key": "1jygA00|target|target",
+      "sequence_id": "1jygA00|target|target|T0.1|0",
+      "reference_start_resnum": 1,
+      "n_reference_ca": 69,
+      "n_model_ca": 69,
+      "designed_length": 69,
+      "n_non_loop": 44,
+      "non_loop_indices_head": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16
+      ],
+      "plddt": 82.3759420289855,
+      "designed_sequence_length": 69,
+      "x_placeholders": 0,
+      "correspondence": "file_order",
+      "rmsd_nonloop_order": 0.8751411859209234,
+      "rmsd_all_ca_order": 5.38,
+      "check_1_offset_invariance": {
+        "passed": true,
+        "baseline": 0.875141,
+        "shifted": {
+          "-5": 0.875141,
+          "7": 0.875141,
+          "162": 0.875141,
+          "1000": 0.875141
+        },
+        "note": "좌표가 같고 번호만 다르면 값이 변하면 안 된다."
+      },
+      "check_3_fail_closed": {
+        "passed": true,
+        "outcomes": {
+          "model_one_short": "거부: 모델 길이 68 이 서열(69)과도 비-X 잔기(69)와도 다르다",
+          "model_two_short": "거부: 모델 길이 67 이 서열(69)과도 비-X 잔기(69)와도 다르다",
+          "sequence_from_another_backbone": "거부: 서열의 비-X 잔기 66 개가 기준 잔기 69 개와 다르다. 이 서열은 이 백본의 것이 아니다.",
+          "too_few_masked_positions": "None"
+        },
+        "note": "잘라 쓰면 뒤쪽이 어긋난 채로 숫자가 나온다. 거부해야 한다."
+      }
+    },
+    {
+      "backbone_key": "1ktuA00|target|target",
+      "sequence_id": "1ktuA00|target|target|T0.1|0",
+      "reference_start_resnum": 1,
+      "n_reference_ca": 143,
+      "n_model_ca": 143,
+      "designed_length": 143,
+      "n_non_loop": 66,
+      "non_loop_indices_head": [
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
+      "plddt": 56.2372027972028,
+      "designed_sequence_length": 143,
+      "x_placeholders": 0,
+      "correspondence": "file_order",
+      "rmsd_nonloop_order": 3.1818425473452616,
+      "rmsd_all_ca_order": 5.6758,
+      "check_1_offset_invariance": {
+        "passed": true,
+        "baseline": 3.181843,
+        "shifted": {
+          "-5": 3.181843,
+          "7": 3.181843,
+          "162": 3.181843,
+          "1000": 3.181843
+        },
+        "note": "좌표가 같고 번호만 다르면 값이 변하면 안 된다."
+      },
+      "check_3_fail_closed": {
+        "passed": true,
+        "outcomes": {
+          "model_one_short": "거부: 모델 길이 142 이 서열(143)과도 비-X 잔기(143)와도 다르다",
+          "model_two_short": "거부: 모델 길이 141 이 서열(143)과도 비-X 잔기(143)와도 다르다",
+          "sequence_from_another_backbone": "거부: 서열의 비-X 잔기 140 개가 기준 잔기 143 개와 다르다. 이 서열은 이 백본의 것이 아니다.",
+          "too_few_masked_positions": "None"
+        },
+        "note": "잘라 쓰면 뒤쪽이 어긋난 채로 숫자가 나온다. 거부해야 한다."
+      }
+    }
+  ],
+  "checks": {
+    "1_offset_invariance": true,
+    "3_fail_closed": true,
+    "4_both_variants_stored": true,
+    "2_offset_case_sane": true
+  },
+  "offset_rmsd": [
+    1.569,
+    11.127,
+    0.55,
+    0.572,
+    0.532,
+    0.509
+  ],
+  "aligned_rmsd": [
+    1.392,
+    1.501,
+    4.84,
+    0.327,
+    0.875,
+    3.182
+  ],
+  "visual_check_pending": [
+    "public_data/benchmark/gate0/metric_verification_pdb/1af7A01_target_target_superposed.pdb",
+    "public_data/benchmark/gate0/metric_verification_pdb/1bctA00_target_target_superposed.pdb",
+    "public_data/benchmark/gate0/metric_verification_pdb/1bxmA00_target_target_superposed.pdb",
+    "public_data/benchmark/gate0/metric_verification_pdb/1c8zA00_target_target_superposed.pdb"
+  ],
+  "all_programmatic_checks_passed": true
+}

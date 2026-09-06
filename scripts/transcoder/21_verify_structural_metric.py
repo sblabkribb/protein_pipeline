@@ -43,7 +43,8 @@ from rapid_sr.clustered import kabsch_rmsd  # noqa: E402
 from rapid_sr.descriptors import ca_coords  # noqa: E402
 from rapid_sr.protocol import AF2_SETTINGS_V1  # noqa: E402
 from rapid_sr.structural import (  # noqa: E402
-    ca_records, non_loop_indices, positional_non_loop_rmsd,
+    ca_records, designed_length, model_positions, non_loop_indices,
+    positional_non_loop_rmsd, sequence_indices,
 )
 
 BASE = PROJECT_ROOT / "public_data" / "benchmark" / "gate0"
@@ -82,8 +83,8 @@ def drop_residue(pdb_text: str, index: int) -> str:
     return "\n".join(out) + "\n"
 
 
-def check_offset_invariance(reference: str, model: str, mask) -> dict:
-    base = positional_non_loop_rmsd(reference, model, mask)
+def check_offset_invariance(reference: str, model: str, mask, sequence: str) -> dict:
+    base = positional_non_loop_rmsd(reference, model, mask, sequence=sequence)
     results = {}
     for offset in (-5, 7, 162, 1000):
         shifted = renumber(reference, offset)
@@ -104,32 +105,51 @@ def check_offset_invariance(reference: str, model: str, mask) -> dict:
     }
 
 
-def check_fail_closed(reference: str, model: str, mask) -> dict:
+def check_fail_closed(reference: str, model: str, mask, sequence: str) -> dict:
+    """대응을 세울 수 없을 때 잘라 쓰지 않고 거부하는지."""
     outcomes = {}
-    try:
-        positional_non_loop_rmsd(reference, drop_residue(model, 3), mask)
-        outcomes["model_missing_residue"] = "값을 돌려줬다"
-    except ValueError as exc:
-        outcomes["model_missing_residue"] = f"거부: {exc}"
-    try:
-        positional_non_loop_rmsd(drop_residue(reference, 3), model, mask)
-        outcomes["reference_missing_residue"] = "값을 돌려줬다"
-    except ValueError as exc:
-        outcomes["reference_missing_residue"] = f"거부: {exc}"
-    thin = positional_non_loop_rmsd(reference, model, {"A": {(1, ""), (2, "")}})
+    for name, ref, mdl, seq in (
+        ("model_one_short", reference, drop_residue(model, 3), sequence),
+        ("model_two_short", reference, drop_residue(drop_residue(model, 3), 4), sequence),
+        ("sequence_from_another_backbone", reference, model, sequence[:-3]),
+    ):
+        try:
+            positional_non_loop_rmsd(ref, mdl, mask, sequence=seq)
+            outcomes[name] = "값을 돌려줬다"
+        except ValueError as exc:
+            outcomes[name] = f"거부: {str(exc)[:60]}"
+    thin = positional_non_loop_rmsd(reference, model, {"A": {(1, ""), (2, "")}},
+                                    sequence=sequence)
     outcomes["too_few_masked_positions"] = "None" if thin is None else f"값 {thin}"
-    ok = (all(v.startswith("거부") for k, v in outcomes.items() if "missing" in k)
+    ok = (all(v.startswith("거부") for k, v in outcomes.items()
+              if k != "too_few_masked_positions")
           and outcomes["too_few_masked_positions"] == "None")
     return {"passed": bool(ok), "outcomes": outcomes,
             "note": "잘라 쓰면 뒤쪽이 어긋난 채로 숫자가 나온다. 거부해야 한다."}
 
 
-def superpose_pdb(reference: str, model: str, keep: list[int]) -> str:
+def _all_ca_order_rmsd(reference: str, model: str, sequence: str) -> float | None:
+    """전체 CA, 서열 인덱스 대응. 마스크만 빼고 primary 와 같은 대응을 쓴다."""
+    records = ca_records(reference)
+    if not records:
+        return None
+    try:
+        positions = model_positions(reference, model, sequence=sequence)
+    except ValueError:
+        return None
+    a = ca_coords(reference)
+    b = ca_coords(model)
+    return round(float(kabsch_rmsd(b[positions], a)), 4)
+
+
+def superpose_pdb(reference: str, model: str, keep: list[int], positions: list[int]) -> str:
     """모델을 기준에 겹쳐 하나의 PDB 로 만든다. 검사 5 에서 눈으로 확인한다."""
     import numpy as np
 
+    seq_index = sequence_indices(reference)
     a_all, b_all = ca_coords(reference), ca_coords(model)
-    a, b = a_all[keep], b_all[keep]
+    a = a_all[keep]
+    b = b_all[[positions[i] for i in keep]]
     ca, cb = a.mean(axis=0), b.mean(axis=0)
     u, _s, vt = np.linalg.svd((a - ca).T @ (b - cb))
     d = np.sign(np.linalg.det(u @ vt))
@@ -210,17 +230,28 @@ def main(argv=None) -> int:
             "reference_start_resnum": start_of(key),
             "n_reference_ca": len(ca_records(reference)),
             "n_model_ca": len(ca_records(model)),
+            "designed_length": designed_length(reference),
             "n_non_loop": len(keep),
             "non_loop_indices_head": keep[:8],
             "plddt": payload.get("best_plddt"),
-            "rmsd_nonloop_order": positional_non_loop_rmsd(reference, model, mask),
-            "rmsd_all_ca_order": round(kabsch_rmsd(ca_coords(model), ca_coords(reference)), 4),
-            "check_1_offset_invariance": check_offset_invariance(reference, model, mask),
-            "check_3_fail_closed": check_fail_closed(reference, model, mask),
+            "designed_sequence_length": len(row["sequence"]),
+            "x_placeholders": row["sequence"].count("X"),
+            "correspondence": ("file_order" if len(ca_records(model)) == len(ca_records(reference))
+                               else "numbering_span"),
+            "rmsd_nonloop_order": positional_non_loop_rmsd(
+                reference, model, mask, sequence=row["sequence"]),
+            "rmsd_all_ca_order": _all_ca_order_rmsd(reference, model, row["sequence"]),
+            "check_1_offset_invariance": check_offset_invariance(
+                reference, model, mask, row["sequence"]),
+            "check_3_fail_closed": check_fail_closed(
+                reference, model, mask, row["sequence"]),
         }
         if index < args.visual:
             path = args.pdb_out / f"{key.replace('|', '_')}_superposed.pdb"
-            path.write_text(superpose_pdb(reference, model, keep), encoding="utf-8")
+            path.write_text(
+                superpose_pdb(reference, model, keep,
+                              model_positions(reference, model, sequence=row["sequence"])),
+                encoding="utf-8")
             entry["superposition_pdb"] = str(path.relative_to(PROJECT_ROOT))
         report["folds"].append(entry)
         v = entry["rmsd_nonloop_order"]

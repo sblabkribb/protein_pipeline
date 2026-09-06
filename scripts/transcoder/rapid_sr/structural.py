@@ -48,6 +48,10 @@ class CaRecord:
 def ca_records(pdb_text: str) -> list[CaRecord]:
     """CA 원자를 파일 순서 그대로 읽는다. 순서가 곧 대응이다."""
     out: list[CaRecord] = []
+    # 대체 위치(altLoc)는 한 잔기가 두 벌로 기록된 것이다. 그대로 세면 잔기 수가
+    # 부풀어 모델과 길이가 달라진다 - 1c8zA00 은 CA 284 개에 고유 잔기 265 개다.
+    # 첫 벌만 남긴다.
+    seen: set[tuple[str, int, str]] = set()
     for line in (pdb_text or "").splitlines():
         # HETATM 은 받지 않는다. "CA" 는 알파탄소이기도 하고 칼슘이기도 하며,
         # 리간드도 CA 라는 이름의 원자를 가질 수 있다 (1af7A01 의 SAH 가 그렇다).
@@ -61,8 +65,41 @@ def ca_records(pdb_text: str) -> list[CaRecord]:
             resnum = int(line[22:26])
         except ValueError:
             continue
+        key = (line[21], resnum, line[26].strip())
+        if key in seen:
+            continue
+        seen.add(key)
         out.append(CaRecord(len(out), line[21], resnum, line[26].strip(), xyz))
     return out
+
+
+def sequence_indices(reference_pdb: str) -> list[int]:
+    """각 기준 CA 가 **설계 서열에서** 차지하는 인덱스.
+
+    ProteinMPNN 은 파일 순서가 아니라 잔기 번호 구간 전체에 걸쳐 서열을 만들고,
+    빠진 자리를 X 로 채운다. 확인된 예: 1bxmA00 은 잔기 -1..98 에서 0 번이 없어
+    서열이 100 자이고 X 가 인덱스 1 에, 2wejA00 은 3..261 에서 126 번이 없어
+    259 자이고 X 가 인덱스 123 에 있다.
+
+    그러므로 인덱스는 `잔기번호 - 최소잔기번호` 다. 이 값은 번호를 통째로 옮겨도
+    변하지 않으므로, CATH 오프셋과 무관하다.
+    """
+    records = ca_records(reference_pdb)
+    if not records:
+        return []
+    chains = {r.chain for r in records}
+    if len(chains) > 1:
+        # 여러 사슬은 ProteinMPNN 이 어떤 순서로 이어 붙였는지 알아야 한다.
+        # 짐작하면 그 순간 대응이 틀린다.
+        raise ValueError(f"여러 사슬({sorted(chains)})의 서열 인덱스는 짐작할 수 없다")
+    base = min(r.resnum for r in records)
+    return [r.resnum - base for r in records]
+
+
+def designed_length(reference_pdb: str) -> int:
+    """이 백본에서 나온 설계 서열의 길이. 빈 자리를 포함한 번호 구간의 폭이다."""
+    indices = sequence_indices(reference_pdb)
+    return (max(indices) + 1) if indices else 0
 
 
 def non_loop_indices(reference_pdb: str, non_loop) -> list[int]:
@@ -82,7 +119,48 @@ def non_loop_indices(reference_pdb: str, non_loop) -> list[int]:
     ]
 
 
-def positional_non_loop_rmsd(reference_pdb: str, model_pdb: str, non_loop) -> float | None:
+def model_positions(reference_pdb: str, model_pdb: str, *, sequence: str | None = None) -> list[int]:
+    """기준의 각 CA 에 대응하는 모델 인덱스.
+
+    두 가지 관례가 섞여 있다. ProteinMPNN 은 번호 구간 전체에 서열을 만들고 빈
+    자리를 X 로 채우지만, AF2 는 그 X 를 빼고 접는다 - 1bxmA00 은 서열 100 자
+    (X 1 개)인데 모델은 99 잔기로 돌아왔다.
+
+    서열을 주면 정확히 정해진다: X 가 아닌 자리들이 순서대로 기준 잔기에
+    대응하고, 모델 길이가 그 개수면 파일 순서, 서열 전체 길이면 구간 인덱스다.
+    서열이 없으면 길이로 판별하고, 어느 쪽도 아니면 거부한다 - 짐작해서 맞추면
+    그 뒤가 통째로 밀린 채 그럴듯한 숫자가 나온다.
+    """
+    records = ca_records(reference_pdb)
+    model_n = len(ca_records(model_pdb))
+    span = designed_length(reference_pdb)
+
+    if sequence is not None:
+        kept = sum(1 for residue in sequence if residue != "X")
+        if kept != len(records):
+            raise ValueError(
+                f"서열의 비-X 잔기 {kept} 개가 기준 잔기 {len(records)} 개와 다르다. "
+                f"이 서열은 이 백본의 것이 아니다."
+            )
+        if model_n == kept:
+            return list(range(len(records)))
+        if model_n == len(sequence):
+            return sequence_indices(reference_pdb)
+        raise ValueError(
+            f"모델 길이 {model_n} 이 서열({len(sequence)})과도 비-X 잔기({kept})와도 다르다"
+        )
+
+    if model_n == len(records):
+        return list(range(len(records)))
+    if model_n == span:
+        return sequence_indices(reference_pdb)
+    raise ValueError(
+        f"모델 길이 {model_n} 이 기준 잔기({len(records)})와도 번호 구간({span})과도 다르다"
+    )
+
+
+def positional_non_loop_rmsd(reference_pdb: str, model_pdb: str, non_loop,
+                             *, sequence: str | None = None) -> float | None:
     """기준의 non-loop 위치에서, 순서로 짝지은 CA RMSD.
 
     길이가 다르면 거부한다. 앞쪽 공통 길이만 잘라 쓰면 뒤쪽이 어긋난 채로
@@ -95,16 +173,13 @@ def positional_non_loop_rmsd(reference_pdb: str, model_pdb: str, non_loop) -> fl
     model = ca_records(model_pdb)
     if not reference or not model:
         return None
-    if len(reference) != len(model):
-        raise ValueError(
-            f"순서로 짝지으려면 잔기 수가 같아야 한다: 기준 {len(reference)}, 모델 {len(model)}"
-        )
-    keep = non_loop_indices(reference_pdb, non_loop)
-    if len(keep) < MIN_MASKED_POSITIONS:
+    positions = model_positions(reference_pdb, model_pdb, sequence=sequence)
+    keep_rows = non_loop_indices(reference_pdb, non_loop)
+    if len(keep_rows) < MIN_MASKED_POSITIONS:
         return None
 
-    a = np.array([reference[i].xyz for i in keep], dtype=float)
-    b = np.array([model[i].xyz for i in keep], dtype=float)
+    a = np.array([reference[i].xyz for i in keep_rows], dtype=float)
+    b = np.array([model[positions[i]].xyz for i in keep_rows], dtype=float)
     a -= a.mean(axis=0)
     b -= b.mean(axis=0)
     u, _s, vt = np.linalg.svd(a.T @ b)
