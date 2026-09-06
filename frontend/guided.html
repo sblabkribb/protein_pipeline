@@ -77,10 +77,20 @@
           <li class="step" data-step="1">
             <h2>목표</h2>
             <p class="note">좌측에서 목적과 목표를 정하면 RAPID가 모델과 파라미터를 고릅니다.</p>
-            <label class="field" for="targetFasta">타겟 서열
+            <div class="field">
+              <div class="fieldhead">
+                <label for="targetFasta">타겟 서열</label>
+                <div class="actions">
+                  <input id="targetFile" type="file" class="visually-hidden"
+                         accept=".fasta,.fa,.faa,.seq,.txt,.pdb,.cif" />
+                  <button id="targetFileBtn" class="ghost" type="button">파일 선택</button>
+                  <button id="targetClearBtn" class="ghost" type="button">지우기</button>
+                </div>
+              </div>
               <textarea id="targetFasta" rows="4" spellcheck="false"
-                        placeholder="MKTAYIAKQRQISFVKSHFSRQ… 또는 FASTA 붙여넣기"></textarea>
-            </label>
+                        placeholder="MKTAYIAKQRQISFVKSHFSRQ… 붙여넣거나 FASTA·PDB 파일을 고르세요"></textarea>
+              <p id="targetNote" class="note" role="status" aria-live="polite"></p>
+            </div>
             <button id="planBtn" class="primary">계획 생성</button>
             <span id="planStatus" class="status" role="status" aria-live="polite"></span>
             <div id="authHint" class="callout coral hidden">세션이 만료되었습니다. 다시 로그인하세요.</div>
@@ -107,6 +117,41 @@
               <div id="questions"></div>
             </div>
             <div id="decisions" class="empty">계획을 생성하면 결정과 근거가 여기 표시됩니다.</div>
+
+            <section class="discuss" id="discuss" hidden>
+              <div class="discusshead">
+                <h3>계획에 대해 물어보기</h3>
+                <details class="evidence llmsetup">
+                  <summary id="llmSummary">LLM: 서버 연결</summary>
+                  <label for="llmProvider">제공자
+                    <select id="llmProvider">
+                      <option value="">서버에 연결된 것 사용</option>
+                      <option value="anthropic">Anthropic</option>
+                      <option value="openai">OpenAI</option>
+                      <option value="gemini">Gemini</option>
+                    </select>
+                  </label>
+                  <label for="llmKey">API 키
+                    <input id="llmKey" type="password" autocomplete="off"
+                           placeholder="브라우저에만 보관됩니다" />
+                  </label>
+                  <div class="actions">
+                    <button id="llmLoadBtn" class="ghost" type="button">모델 불러오기</button>
+                  </div>
+                  <label for="llmModel">모델
+                    <select id="llmModel"><option value="">먼저 모델을 불러오세요</option></select>
+                  </label>
+                  <p class="note">키는 이 브라우저에만 있고 서버에 저장되지 않습니다.</p>
+                </details>
+              </div>
+              <div id="chatLog" class="chatlog empty">계획에 대해 궁금한 것을 물어보세요.</div>
+              <div id="proposals" class="proposals"></div>
+              <form id="chatForm" class="chatform">
+                <label class="visually-hidden" for="chatInput">질문</label>
+                <input id="chatInput" placeholder="예: 온도를 0.3으로 올리면 무엇이 달라지나요?" />
+                <button id="chatSend" class="primary" type="submit">보내기</button>
+              </form>
+            </section>
           </li>
 
           <li class="step hidden" data-step="4">

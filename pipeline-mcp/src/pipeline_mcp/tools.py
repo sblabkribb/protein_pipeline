@@ -8862,6 +8862,28 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.discuss_plan",
+            "description": (
+                "Refine a plan by conversation. The model answers from the plan and its "
+                "evidence only, and cannot change anything: any change it wants is "
+                "returned as a PROPOSAL, split into edits that would apply and edits "
+                "the system rejects because the field is locked by a measurement. "
+                "Applying them still goes through pipeline.approve_plan."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "plan": {"type": "object"},
+                    "messages": {
+                        "type": "array",
+                        "description": "conversation so far, [{role, content}]",
+                        "items": {"type": "object"},
+                    },
+                },
+                "required": ["plan"],
+            },
+        },
+        {
             "name": "pipeline.approve_plan",
             "description": (
                 "Apply human edits to a plan and convert it into PipelineRequest overrides. "
@@ -9641,6 +9663,62 @@ class ToolDispatcher:
                 "explanation_source": source,
                 "explanation_is_generated": source.startswith("llm"),
                 "questions": questions,
+            }
+
+        if name == "pipeline.discuss_plan":
+            from .objective_planner import (
+                DISCUSS_SYSTEM_INSTRUCTION, build_discussion_prompt,
+                parse_discussion_reply,
+            )
+
+            plan = arguments.get("plan")
+            if not isinstance(plan, dict):
+                return {"error": "plan must be an object"}
+            messages = [m for m in (arguments.get("messages") or []) if isinstance(m, dict)]
+
+            gemini = getattr(self.runner, "gemini", None)
+            reply_source = "llm_unavailable"
+            raw = ""
+            if gemini is not None and getattr(gemini, "is_available", lambda: False)():
+                try:
+                    raw = gemini.chat(
+                        DISCUSS_SYSTEM_INSTRUCTION, build_discussion_prompt(plan, messages)
+                    )
+                    reply_source = "llm"
+                except Exception as exc:  # noqa: BLE001
+                    reply_source = f"llm_failed: {type(exc).__name__}"
+
+            parsed = parse_discussion_reply(raw)
+            # 고정 필드는 여기서 갈라낸다. 제안된 것과 반영될 수 있는 것이 다를 수
+            # 있고, 그 차이가 사용자에게 보여야 한다.
+            locked = set(plan.get("locked_fields") or [])
+            editable = set(plan.get("editable_fields") or [])
+            applicable, rejected = {}, {}
+            for field_name, value in (parsed["proposed_edits"] or {}).items():
+                if field_name in locked or field_name not in editable:
+                    rejected[field_name] = {
+                        "value": value,
+                        "reason": ("측정 결과가 반대를 지지해 고정된 필드다"
+                                   if field_name in locked else "계획에 없는 필드다"),
+                    }
+                else:
+                    applicable[field_name] = value
+
+            return {
+                "plan": plan,
+                "reply": parsed["reply"] or (
+                    "LLM 이 설정되지 않아 답변할 수 없습니다. 계획과 근거는 그대로 보실 수 있습니다."
+                    if reply_source == "llm_unavailable" else ""),
+                # 생성된 산문이다. 근거와 같은 칸에 두지 않는다.
+                "reply_is_generated": reply_source == "llm",
+                "reply_source": reply_source,
+                "applicable_edits": applicable,
+                "rejected_edits": rejected,
+                "parse_warning": parsed["parse_warning"],
+                "note": (
+                    "제안일 뿐이다. 적용은 pipeline.approve_plan 을 지나가고, 거기서 "
+                    "고정 필드는 다시 한 번 거부된다."
+                ),
             }
 
         if name == "pipeline.approve_plan":

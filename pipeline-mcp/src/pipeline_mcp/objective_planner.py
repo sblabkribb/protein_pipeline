@@ -11,6 +11,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
+import json
+import re
 
 # 근거의 종류. 측정과 문헌과 가정을 섞어 부르지 않는다.
 from .model_routing import UnknownPurposeError, load_registry
@@ -393,6 +395,88 @@ EXPLAIN_SYSTEM_INSTRUCTION = (
     "4. Be concise: at most 6 sentences.\n"
     "5. Do not invent PubMed IDs, DOIs, or dataset names."
 )
+
+
+DISCUSS_SYSTEM_INSTRUCTION = (
+    "You help a scientist refine an already-made protein design plan, in Korean.\n"
+    "Rules you must follow:\n"
+    "1. Answer only from the plan and its evidence. Do not add facts, numbers, "
+    "citations, or mechanisms that are not in the input. 근거 없는 주장을 만들지 "
+    "말고, 모르면 모른다고 말한다.\n"
+    "2. Never invent measurements, PubMed IDs, DOIs, or dataset names. "
+    "존재하지 않는 근거를 지어내지 않는다.\n"
+    "3. If a decision rests on an assumption rather than a measurement, say so.\n"
+    "4. You cannot change the plan. If you think a value should change, end your "
+    "reply with a fenced json block:\n"
+    "```json\n{\"proposed_edits\": {\"field_name\": value}}\n```\n"
+    "Only propose fields listed as editable. Locked fields are locked because a "
+    "measurement contradicts changing them; you may argue about one, but the "
+    "system will reject the edit.\n"
+    "5. Be concise: at most 6 sentences before the json block."
+)
+
+
+def build_discussion_prompt(plan: dict, messages) -> str:
+    """대화용 프롬프트. 계획 내용과 지금까지의 대화만 담는다."""
+    lines = ["다음은 이미 확정된 설계 계획입니다.", ""]
+    objective = plan.get("objective") or {}
+    if objective.get("normalized_weights"):
+        lines.append(f"목표 가중치: {objective['normalized_weights']}")
+    route = plan.get("route") or {}
+    if route.get("purpose"):
+        lines.append(f"설계 목적: {route['purpose']} "
+                     f"(실행 가능 {route.get('executable')}, 검증됨 {route.get('validated')})")
+    lines.append("")
+    for decision in plan.get("decisions", []):
+        editable = "수정 가능" if decision.get("editable") else "고정"
+        lines.append(f"- {decision.get('field')} = {decision.get('value')} [{editable}]")
+        lines.append(f"  이유: {decision.get('rationale')}")
+        for ev in decision.get("evidence", []):
+            source = f" [출처 {ev.get('source')}]" if ev.get("source") else ""
+            lines.append(f"  근거({ev.get('kind')}): {ev.get('statement')}{source}")
+    for warning in plan.get("warnings", []):
+        lines.append(f"- 경고: {warning}")
+
+    lines.append("")
+    lines.append(f"수정 가능 필드: {plan.get('editable_fields') or []}")
+    lines.append(f"고정 필드(편집 거부됨): {plan.get('locked_fields') or []}")
+    lines.append("")
+    lines.append("대화:")
+    for message in messages or []:
+        role = "사용자" if message.get("role") == "user" else "도우미"
+        lines.append(f"{role}: {message.get('content', '')}")
+    return "\n".join(lines)
+
+
+def parse_discussion_reply(text: str) -> dict:
+    """답변에서 산문과 제안된 수정을 분리한다.
+
+    수정을 곧바로 적용하지 않는 이유는, 이 저장소가 지켜온 규칙이 코드에 있기
+    때문이다 - 고정 필드는 편집을 거부하고, 결정에는 근거가 있어야 한다. LLM 이
+    계획을 직접 고치면 그 규칙을 우회하게 된다.
+    """
+    raw = str(text or "")
+    edits: dict = {}
+    warning = ""
+    match = re.search(r"```json\s*(.*?)```", raw, re.DOTALL)
+    prose = raw
+    if match:
+        prose = (raw[: match.start()] + raw[match.end():]).strip()
+        try:
+            block = json.loads(match.group(1))
+        except (json.JSONDecodeError, TypeError):
+            warning = "제안된 수정을 JSON 으로 읽을 수 없어 버렸다. 지어내지 않는다."
+        else:
+            candidate = block.get("proposed_edits") if isinstance(block, dict) else None
+            if isinstance(candidate, dict):
+                edits = candidate
+            elif candidate is not None:
+                warning = "proposed_edits 가 객체가 아니라 무시했다."
+    return {
+        "reply": prose or raw.strip(),
+        "proposed_edits": edits,
+        "parse_warning": warning,
+    }
 
 
 def suggest_questions(plan: dict) -> list[dict]:

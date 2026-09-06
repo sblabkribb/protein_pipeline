@@ -875,7 +875,189 @@ async function explainPlan(plan) {
   }
 }
 
-const state = { plan: null, edits: {}, overrides: null };
+const state = { plan: null, edits: {}, overrides: null, chat: [], llm: {} };
+
+// --- 계획 대화 --------------------------------------------------------------
+//
+// LLM 은 제안만 한다. 적용은 승인 단계의 apply_edits 를 지나가고 거기서 고정
+// 필드가 거부된다. 대화가 그 규칙을 우회하면, 근거 없는 결정을 만들 수 없다는
+// 이 저장소의 규칙이 대화 한 번으로 무너진다.
+
+function appendChat(role, text, generated) {
+  const log = document.getElementById("chatLog");
+  log.classList.remove("empty");
+  const node = el("div", `msg msg-${role}`);
+  node.appendChild(el("span", "who", role === "user" ? "나" : "도우미"));
+  node.appendChild(el("p", "", text));
+  if (role === "assistant") {
+    node.appendChild(el("span", "src",
+      generated ? "LLM 이 생성한 설명입니다. 근거가 아닙니다." : "LLM 미설정 · 계획 요약"));
+  }
+  log.appendChild(node);
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderProposals(applicable, rejected) {
+  const host = document.getElementById("proposals");
+  host.replaceChildren();
+  for (const [field, value] of Object.entries(applicable || {})) {
+    const row = el("div", "proposal");
+    row.append(el("span", "name", field), el("span", "chip", String(value)));
+    const apply = document.createElement("button");
+    apply.type = "button";
+    apply.className = "ghost";
+    apply.textContent = "이 수정 적용";
+    apply.addEventListener("click", () => {
+      state.edits[field] = value;
+      const input = [...document.querySelectorAll("#decisions .decision")]
+        .map((box) => box.querySelector(".name"))
+        .find((name) => name && name.textContent === field);
+      if (input) input.closest(".decision").querySelector("input").value = String(value);
+      row.replaceChildren(el("span", "name", field),
+                          el("span", "chip", `${value} 적용됨`));
+    });
+    row.appendChild(apply);
+    host.appendChild(row);
+  }
+  for (const [field, info] of Object.entries(rejected || {})) {
+    const row = el("div", "proposal is-rejected");
+    row.append(el("span", "name", field),
+               el("span", "chip", String(info.value)),
+               el("span", "src", `거부됨 — ${info.reason}`));
+    host.appendChild(row);
+  }
+}
+
+async function sendChat(question) {
+  if (!state.plan) {
+    appendChat("assistant", "먼저 계획을 생성하세요.", false);
+    return;
+  }
+  state.chat.push({ role: "user", content: question });
+  appendChat("user", question, false);
+  const input = document.getElementById("chatInput");
+  const button = document.getElementById("chatSend");
+  input.disabled = button.disabled = true;
+  try {
+    const out = await callTool("pipeline.discuss_plan", {
+      plan: state.plan, messages: state.chat,
+      ...(state.llm.provider ? {
+        provider: state.llm.provider, model: state.llm.model, api_key: state.llm.key,
+      } : {}),
+    });
+    if (out && out.error) throw new Error(out.error);
+    state.chat.push({ role: "assistant", content: out.reply || "" });
+    appendChat("assistant", out.reply || "", out.reply_is_generated);
+    if (out.parse_warning) appendChat("assistant", out.parse_warning, false);
+    renderProposals(out.applicable_edits, out.rejected_edits);
+  } catch (error) {
+    appendChat("assistant", `답변하지 못했습니다: ${errorText(error)}`, false);
+  } finally {
+    input.disabled = button.disabled = false;
+    input.value = "";
+    input.focus();
+  }
+}
+
+async function loadLlmModels() {
+  const provider = document.getElementById("llmProvider").value;
+  const key = document.getElementById("llmKey").value.trim();
+  const select = document.getElementById("llmModel");
+  const summary = document.getElementById("llmSummary");
+  if (!provider) {
+    state.llm = {};
+    summary.textContent = "LLM: 서버 연결";
+    select.replaceChildren(new Option("서버에 연결된 것 사용", ""));
+    return;
+  }
+  if (!key) {
+    summary.textContent = "LLM: API 키가 필요합니다";
+    return;
+  }
+  try {
+    const out = await callTool("chat.list_models", { provider, api_key: key });
+    if (out && out.error) throw new Error(out.error.message || out.error);
+    select.replaceChildren();
+    for (const model of out.models || []) {
+      const id = typeof model === "string" ? model : String(model.id || model.name || "");
+      if (id) select.appendChild(new Option(id, id));
+    }
+    state.llm = { provider, key, model: select.value };
+    summary.textContent = `LLM: ${provider} · ${select.value || "모델 미선택"}`;
+  } catch (error) {
+    summary.textContent = `LLM: 모델을 불러오지 못했습니다 (${errorText(error)})`;
+  }
+}
+
+// --- 타겟 파일 --------------------------------------------------------------
+//
+// FASTA 는 헤더를 빼고 서열만, PDB/mmCIF 는 CA 잔기에서 서열을 읽는다. 붙여넣기
+// 만 지원하면 사용자는 매번 다른 도구로 변환해 와야 한다.
+
+const THREE_TO_ONE = {
+  ALA:"A", ARG:"R", ASN:"N", ASP:"D", CYS:"C", GLN:"Q", GLU:"E", GLY:"G",
+  HIS:"H", ILE:"I", LEU:"L", LYS:"K", MET:"M", PHE:"F", PRO:"P", SER:"S",
+  THR:"T", TRP:"W", TYR:"Y", VAL:"V", MSE:"M",
+};
+
+function sequenceFromFasta(text) {
+  const lines = text.split(/\r?\n/);
+  const records = [];
+  let current = null;
+  for (const line of lines) {
+    if (line.startsWith(">")) {
+      current = { name: line.slice(1).trim(), seq: "" };
+      records.push(current);
+    } else if (current) {
+      current.seq += line.trim();
+    }
+  }
+  if (!records.length) {
+    // 헤더가 없으면 파일 전체를 서열로 본다.
+    return { seq: text.replace(/[^A-Za-z]/g, ""), name: "", count: 1 };
+  }
+  return { seq: records[0].seq.replace(/[^A-Za-z]/g, ""), name: records[0].name,
+           count: records.length };
+}
+
+function sequenceFromStructure(text) {
+  // ATOM 의 CA 만 읽는다. HETATM 의 CA 는 알파탄소가 아니라 칼슘이거나 리간드
+  // 원자일 수 있다 - 구조 지표에서 같은 함정을 이미 겪었다.
+  const seen = new Set();
+  let seq = "";
+  let chain = "";
+  for (const line of text.split(/\r?\n/)) {
+    if (!line.startsWith("ATOM")) continue;
+    if (line.slice(12, 16).trim() !== "CA") continue;
+    const ch = line[21];
+    if (!chain) chain = ch;
+    if (ch !== chain) break;          // 첫 사슬만 쓴다
+    const key = line.slice(21, 27);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    seq += THREE_TO_ONE[line.slice(17, 20).trim().toUpperCase()] || "X";
+  }
+  return { seq, name: chain ? `chain ${chain}` : "", count: 1 };
+}
+
+async function loadTargetFile(file) {
+  const note = document.getElementById("targetNote");
+  const text = await file.text();
+  const isStructure = /\.(pdb|ent|cif|mmcif)$/i.test(file.name)
+    || /^(ATOM|HEADER|data_)/m.test(text);
+  const parsed = isStructure ? sequenceFromStructure(text) : sequenceFromFasta(text);
+  if (!parsed.seq) {
+    note.textContent = `${file.name} 에서 서열을 찾지 못했습니다.`;
+    return;
+  }
+  if (/X/.test(parsed.seq)) {
+    note.textContent = `${file.name}: 표준 아미노산이 아닌 잔기를 X 로 두었습니다. 확인하세요.`;
+  } else {
+    note.textContent = `${file.name}${parsed.name ? ` · ${parsed.name}` : ""} · ${parsed.seq.length} aa`
+      + (parsed.count > 1 ? ` · 서열 ${parsed.count}개 중 첫 번째만 사용` : "");
+  }
+  document.getElementById("targetFasta").value = parsed.seq;
+}
 
 function targetFasta() {
   return document.getElementById("targetFasta").value.trim();
@@ -955,6 +1137,13 @@ async function generatePlan() {
       : "이 경로는 여기서 실행할 수 없어 승인할 수 없습니다";
     document.getElementById("approveBtn").disabled = !approvable;
     showStep(3);
+    document.getElementById("discuss").hidden = false;
+    state.chat = [];
+    const log = document.getElementById("chatLog");
+    log.replaceChildren();
+    log.classList.add("empty");
+    log.textContent = "계획에 대해 궁금한 것을 물어보세요.";
+    document.getElementById("proposals").replaceChildren();
     if (plan.route) renderStages(document.getElementById("stages"), plan.route);
     status.className = "status";
     status.textContent = "";
@@ -1112,6 +1301,32 @@ document.getElementById("runSelect").addEventListener("change", (event) => {
 document.getElementById("planBtn").addEventListener("click", generatePlan);
 document.getElementById("approveBtn").addEventListener("click", approve);
 document.getElementById("runBtn").addEventListener("click", startRun);
+document.getElementById("chatForm").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const question = document.getElementById("chatInput").value.trim();
+  if (question) sendChat(question);
+});
+document.getElementById("llmLoadBtn").addEventListener("click", loadLlmModels);
+document.getElementById("llmProvider").addEventListener("change", loadLlmModels);
+document.getElementById("llmModel").addEventListener("change", (event) => {
+  state.llm.model = event.target.value;
+  document.getElementById("llmSummary").textContent =
+    `LLM: ${state.llm.provider} · ${event.target.value}`;
+});
+document.getElementById("targetFileBtn").addEventListener("click", () => {
+  document.getElementById("targetFile").click();
+});
+document.getElementById("targetFile").addEventListener("change", (event) => {
+  const file = event.target.files && event.target.files[0];
+  if (file) loadTargetFile(file).catch((error) => {
+    document.getElementById("targetNote").textContent = `파일을 읽지 못했습니다: ${errorText(error)}`;
+  });
+});
+document.getElementById("targetClearBtn").addEventListener("click", () => {
+  document.getElementById("targetFasta").value = "";
+  document.getElementById("targetFile").value = "";
+  document.getElementById("targetNote").textContent = "";
+});
 document.getElementById("logoutBtn").addEventListener("click", signOut);
 document.getElementById("loginForm").addEventListener("submit", async (event) => {
   event.preventDefault();

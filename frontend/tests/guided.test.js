@@ -470,10 +470,61 @@ test("3D failure falls back to the file contents", () => {
 test("no error message can end up as undefined", () => {
   assert.ok(source.includes("function errorText("));
   // errorText 안의 error.message 는 정의 그 자체이므로 제외한다.
-  const code = source.replace(/function errorText\([\s\S]*?\n}/, "");
-  assert.ok(!/error\.message/.test(code), "use errorText, which handles non-Errors");
+  // errorText 의 정의와, 서버가 돌려준 오류 객체(out.error.message)는 제외한다.
+  // 규칙은 "던져진 것에 .message 를 직접 쓰지 말라" 이다.
+  const code = source
+    .replace(/function errorText\([\s\S]*?\n}/, "")
+    .replace(/out\.error\.message/g, "");
+  assert.ok(!/\berror\.message/.test(code), "use errorText, which handles non-Errors");
 });
 
 test("the default purpose is chosen by capability, not by list order", () => {
   assert.ok(/r\.executable && r\.validated/.test(source));
+});
+
+test("a target can be loaded from a file, not only pasted", () => {
+  assert.ok(html.includes('id="targetFile"'));
+  assert.ok(/accept="[^"]*\.fasta/.test(html));
+  assert.ok(source.includes("sequenceFromFasta") && source.includes("sequenceFromStructure"));
+});
+
+test("structure files are read from ATOM CA only", () => {
+  // HETATM 의 CA 는 알파탄소가 아니라 칼슘이거나 리간드 원자일 수 있다.
+  const fn = source
+    .slice(source.indexOf("function sequenceFromStructure("),
+           source.indexOf("async function loadTargetFile("))
+    .replace(/^\s*\/\/.*$/gm, "");
+  assert.ok(/startsWith\("ATOM"\)/.test(fn));
+  assert.ok(!/HETATM/.test(fn), "HETATM must not be read as a residue");
+});
+
+test("a file with more than one sequence says which one it used", () => {
+  assert.ok(/첫 번째만 사용/.test(source));
+});
+
+test("the plan can be discussed and the model only proposes", () => {
+  assert.ok(html.includes('id="chatForm"'));
+  assert.ok(source.includes("pipeline.discuss_plan"));
+  // 대화가 계획을 직접 고치면, 고정 필드를 지키는 규칙이 대화 한 번으로 무너진다.
+  const fn = source.slice(source.indexOf("async function sendChat("),
+                          source.indexOf("async function loadLlmModels("));
+  assert.ok(!/state\.plan\.decisions/.test(fn), "chat must not mutate the plan");
+  assert.ok(source.includes("applicable_edits") && source.includes("rejected_edits"));
+});
+
+test("rejected proposals are shown without an apply button", () => {
+  assert.ok(/is-rejected/.test(source));
+  const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
+  assert.ok(css.includes(".proposal.is-rejected"));
+});
+
+test("the LLM can be the server's or the user's own key", () => {
+  assert.ok(html.includes('id="llmProvider"') && html.includes('id="llmKey"'));
+  assert.ok(source.includes("chat.list_models"), "the user must be able to list their models");
+  assert.ok(/브라우저에만/.test(html), "the page must say where the key lives");
+});
+
+test("a generated reply is labelled as generated", () => {
+  assert.ok(source.includes("reply_is_generated"));
+  assert.ok(/근거가 아닙니다/.test(source));
 });
