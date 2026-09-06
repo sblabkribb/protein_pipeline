@@ -53,6 +53,54 @@ function apiBase() {
   }).replace(/\/+$/, "");
 }
 
+// --- 세션 -----------------------------------------------------------------
+//
+// 이 화면만으로 쓸 수 있어야 하므로 로그인을 여기서 한다. 토큰 키는 기존 앱과
+// 같은 "kbf.token" 이다 - 다른 키를 쓰면 두 화면이 서로의 세션을 모른다.
+
+function setSignedIn(user) {
+  document.getElementById("loginGate").classList.add("hidden");
+  document.getElementById("workspace").classList.remove("hidden");
+  document.getElementById("whoami").textContent = user || "";
+}
+
+function setSignedOut(message) {
+  document.getElementById("loginGate").classList.remove("hidden");
+  document.getElementById("workspace").classList.add("hidden");
+  if (message) document.getElementById("loginError").textContent = message;
+}
+
+async function signIn(username, password) {
+  const res = await fetch(`${apiBase()}/auth/login`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const payload = await res.json().catch(() => null);
+  if (!res.ok || !payload || !payload.ok) {
+    throw new Error((payload && payload.error) || `로그인 실패 (HTTP ${res.status})`);
+  }
+  localStorage.setItem("kbf.token", payload.token || "");
+  if (payload.user) localStorage.setItem("kbf.user", JSON.stringify(payload.user));
+  return payload.user;
+}
+
+function signOut() {
+  localStorage.removeItem("kbf.token");
+  localStorage.removeItem("kbf.user");
+  setSignedOut("");
+}
+
+function storedUserName() {
+  try {
+    const raw = JSON.parse(localStorage.getItem("kbf.user") || "null");
+    return raw ? String(raw.username || raw.name || raw.id || "") : "";
+  } catch {
+    return "";
+  }
+}
+
 function authHeaders() {
   const token = localStorage.getItem("kbf.token");
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -419,7 +467,7 @@ async function loadArtifacts(runId) {
           el("span", "apath", name),
           el("span", "chip", format ? "3D" : formatBytes(item.size)),
         );
-        row.addEventListener("click", () => openArtifact(runId, path, format));
+          row.addEventListener("click", () => openArtifact(runId, path, format));
         host.appendChild(row);
       }
     }
@@ -429,12 +477,13 @@ async function loadArtifacts(runId) {
   }
 }
 
-async function openArtifact(runId, path, format) {
+async function openArtifact(runId, path, format, maxBytes) {
   const preview = document.getElementById("artifactPreview");
-  preview.innerHTML = "불러오는 중…";
+  preview.replaceChildren(el("div", "empty", "불러오는 중…"));
+  const cap = maxBytes || (format ? 4000000 : 200000);
   try {
     const out = await callTool("pipeline.read_artifact", {
-      run_id: runId, path, max_bytes: format ? 4000000 : 200000,
+      run_id: runId, path, max_bytes: cap,
     });
     if (out && out.error) throw new Error(out.error);
     const text = out.text != null ? String(out.text) : "";
@@ -447,10 +496,15 @@ async function openArtifact(runId, path, format) {
 
     // read_artifact 는 max_bytes 로 자른다. 잘렸다고 말하지 않으면 사용자는
     // 파일이 그게 전부인 줄 안다.
+    // 잘렸다고만 말하고 끝내면 막다른 길이다. 이 화면 안에서 이어 읽게 한다.
     if (out.truncated) {
-      const warn = document.createElement("div");
-      warn.className = "warn";
-      warn.textContent = "내용이 잘렸습니다. 전체는 기존 화면에서 내려받으세요.";
+      const warn = el("div", "warn", `내용이 잘렸습니다 (${formatBytes(cap)}까지). `);
+      const more = document.createElement("button");
+      more.type = "button";
+      more.className = "ghost";
+      more.textContent = "두 배로 더 읽기";
+      more.addEventListener("click", () => openArtifact(runId, path, format, cap * 2));
+      warn.appendChild(more);
       preview.appendChild(warn);
     }
 
@@ -691,7 +745,47 @@ async function explainPlan(plan) {
   }
 }
 
-const state = { plan: null, edits: {} };
+const state = { plan: null, edits: {}, overrides: null };
+
+function targetFasta() {
+  return document.getElementById("targetFasta").value.trim();
+}
+
+async function startRun() {
+  const note = document.getElementById("runNote");
+  const button = document.getElementById("runBtn");
+  const fasta = targetFasta();
+  if (!fasta) {
+    note.textContent = "타겟 서열을 입력해야 실행할 수 있습니다.";
+    return;
+  }
+  // 실행은 되돌릴 수 없다. 무엇이 시작되는지 먼저 말하고 확인을 받는다.
+  const route = currentRoute();
+  const summary = route ? route.display_name_ko : "선택한 경로";
+  if (!window.confirm(`${summary} 경로로 실행을 시작합니다. 계속할까요?`)) return;
+
+  button.disabled = true;
+  note.textContent = "실행을 시작하는 중…";
+  try {
+    const out = await callTool("pipeline.run", {
+      target_fasta: fasta,
+      ...(state.overrides || {}),
+    });
+    if (out && out.error) throw new Error(out.error);
+    const runId = String(out.run_id || out.id || "");
+    note.textContent = runId ? `실행 ${runId} 를 시작했습니다.` : "실행을 시작했습니다.";
+    if (runId) {
+      await loadRuns();
+      document.getElementById("runSelect").value = runId;
+      await loadRunStatus(runId);
+      showPanel("runs");
+    }
+  } catch (error) {
+    note.textContent = `실행하지 못했습니다: ${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
 
 async function generatePlan() {
   const status = document.getElementById("planStatus");
@@ -741,6 +835,7 @@ async function generatePlan() {
     // 401 은 설정 문제가 아니라 로그인 문제다. 무엇을 해야 하는지 알려준다.
     if (/unauthorized|401/i.test(error.message)) {
       document.getElementById("authHint").classList.remove("hidden");
+      setSignedOut("세션이 만료되었습니다. 다시 로그인하세요.");
     }
   } finally {
     button.disabled = false;
@@ -757,13 +852,20 @@ async function approve() {
     if (result && result.error) throw new Error(result.error);
     out.classList.remove("empty");
     out.textContent = JSON.stringify(result, null, 2);
+    state.overrides = result.request_overrides || {};
+    document.getElementById("runBtn").disabled = false;
     const approveState = document.getElementById("approveState");
-    approveState.textContent = "승인됨 · 실행하지 않음";
+    approveState.textContent = "승인됨";
     approveState.classList.add("ready");
   } catch (error) {
     out.classList.remove("empty");
     out.textContent = `실패: ${error.message}`;
   }
+}
+
+function boot() {
+  loadRegistry();
+  loadRuns();
 }
 
 renderWeights(document.getElementById("weights"));
@@ -772,7 +874,6 @@ document.getElementById("purpose").addEventListener("change", onPurposeChange);
 for (const id of ["nDesigns", "lengthAa"]) {
   document.getElementById(id).addEventListener("change", loadRegistry);
 }
-loadRegistry();
 
 // 한 번에 한 단계만 보여준다. 네 단계를 세로로 이어붙이면 아래로 계속 읽어야
 // 하고, 지금 어디에 있는지도 알기 어렵다.
@@ -810,8 +911,35 @@ document.getElementById("runRefreshBtn").addEventListener("click", loadRuns);
 document.getElementById("runSelect").addEventListener("change", (event) => {
   loadRunStatus(event.target.value);
 });
-loadRuns();
 document.getElementById("planBtn").addEventListener("click", generatePlan);
 document.getElementById("approveBtn").addEventListener("click", approve);
+document.getElementById("runBtn").addEventListener("click", startRun);
+document.getElementById("logoutBtn").addEventListener("click", signOut);
+document.getElementById("loginForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = document.getElementById("loginBtn");
+  const error = document.getElementById("loginError");
+  error.textContent = "";
+  button.disabled = true;
+  try {
+    const user = await signIn(
+      document.getElementById("loginUser").value.trim(),
+      document.getElementById("loginPass").value,
+    );
+    setSignedIn((user && (user.username || user.name)) || storedUserName());
+    boot();
+  } catch (err) {
+    error.textContent = err.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+
+if (localStorage.getItem("kbf.token")) {
+  setSignedIn(storedUserName());
+  boot();
+} else {
+  setSignedOut("");
+}
 
 export { collectObjective, decisionNode, evidenceNode, formatSeconds, stageRow };

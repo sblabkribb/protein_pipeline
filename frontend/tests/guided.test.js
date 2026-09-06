@@ -56,9 +56,14 @@ test("warnings from the server are surfaced, not swallowed", () => {
   assert.ok(html.includes('id="warnings"'));
 });
 
-test("approval does not run the pipeline", () => {
-  assert.ok(!source.includes("pipeline.run"), "the review screen must not launch runs");
-  assert.ok(html.includes("실행하지 않습니다"), "the page must say it does not run");
+test("approving and running are separate, deliberate actions", () => {
+  // 이 화면만으로 쓸 수 있어야 하므로 실행도 여기서 한다. 다만 승인 버튼이
+  // 실행하지는 않는다 - 실행은 별도 버튼이고, 시작 전에 확인을 받는다.
+  const approveFn = source.slice(source.indexOf("async function approve("),
+                                 source.indexOf("function boot("));
+  assert.ok(!approveFn.includes("pipeline.run"), "approve must not launch by itself");
+  assert.ok(/window\.confirm/.test(source), "starting a run needs confirmation");
+  assert.ok(/runBtn"\)\.disabled = false/.test(source), "run unlocks only after approval");
 });
 
 test("every step is reachable before a plan exists", () => {
@@ -124,7 +129,7 @@ test("api base follows the shared resolver instead of an empty origin", () => {
   // /api/* 만 백엔드로 보내므로 조용히 404 가 된다.
   assert.ok(source.includes("resolveDefaultApiBase"), "must reuse the shared resolver");
   const fn = source.slice(source.indexOf("function apiBase("),
-                          source.indexOf("function authHeaders("));
+                          source.indexOf("function setSignedIn("));
   assert.ok(!/return\s*"";/.test(fn), "apiBase must not fall back to an empty string");
 });
 
@@ -143,10 +148,10 @@ test("questions come from the server, not composed in the browser", () => {
   assert.ok(!/question\s*:\s*["'`]/.test(source), "questions must not be written client-side");
 });
 
-test("an unauthorized failure tells the user to log in", () => {
+test("an unauthorized failure returns the user to the login gate", () => {
   assert.ok(source.includes("unauthorized"), "must detect the auth failure");
   assert.ok(html.includes('id="authHint"'));
-  assert.ok(html.includes("로그인이 필요합니다"));
+  assert.ok(/setSignedOut\("세션이 만료/.test(source), "a 401 must return to the gate");
 });
 
 test("tool responses are unwrapped instead of handed over as the envelope", () => {
@@ -370,4 +375,51 @@ test("the results rail is tabbed rather than stacked", () => {
   for (const panel of ["runs", "artifacts", "connections"]) {
     assert.ok(html.includes(`data-panel="${panel}"`), `right rail needs the ${panel} tab`);
   }
+});
+
+test("the screen can log in on its own", () => {
+  // "기존 화면에서 로그인하고 오세요" 는 이 화면만으로 쓸 수 없다는 뜻이었다.
+  assert.ok(html.includes('id="loginGate"'), "a login gate must exist here");
+  assert.ok(html.includes('id="loginUser"') && html.includes('id="loginPass"'));
+  assert.ok(source.includes("/auth/login"), "must call the same login endpoint as the app");
+  assert.ok(source.includes('"kbf.token"'), "must store the token the app also reads");
+});
+
+test("logging out is possible without leaving the screen", () => {
+  assert.ok(html.includes('id="logoutBtn"'));
+  assert.ok(/removeItem\("kbf\.token"\)/.test(source));
+});
+
+test("a target sequence can be entered, because a run needs one", () => {
+  // pipeline.run 은 target_fasta 를 받는다. 입력이 없으면 이 화면은 계획만
+  // 만들고 아무것도 실행할 수 없다.
+  assert.ok(html.includes('id="targetFasta"'));
+  assert.ok(source.includes("target_fasta"));
+});
+
+test("approving can actually start the run", () => {
+  assert.ok(source.includes('"pipeline.run"'), "approve must be able to launch");
+  assert.ok(html.includes('id="runBtn"'));
+});
+
+test("running is guarded so it cannot fire without a target", () => {
+  // 실행은 되돌릴 수 없다. 타겟 없이 눌리면 안 된다.
+  assert.ok(/타겟 서열을 입력/.test(source));
+});
+
+test("the login gate hides the workspace instead of overlaying a broken one", () => {
+  assert.ok(/id="loginGate"[^>]*class="[^"]*gate/.test(html));
+});
+
+test("the screen never sends the user to the old one", () => {
+  // guided 만으로 쓸 수 있어야 한다. "기존 화면에서 하세요" 는 그 반대다.
+  const code = source.replace(/^\s*\/\/.*$/gm, "");
+  assert.ok(!/기존 화면/.test(code), "no dead ends back to index.html");
+  assert.ok(!/index\.html/.test(html.replace(/<!--[\s\S]*?-->/g, "")),
+            "the page must not link back to the old screen");
+});
+
+test("a truncated artifact can be read further from here", () => {
+  assert.ok(/두 배로 더 읽기/.test(source));
+  assert.ok(/openArtifact\(runId, path, format, cap \* 2\)/.test(source));
 });
