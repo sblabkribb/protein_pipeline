@@ -5,6 +5,7 @@
 // 지어내면 근거 추적이 깨지므로 서버가 준 것만 표시한다.
 
 import { resolveDefaultApiBase } from "./lib/auth.js";
+import { unwrapToolResponse } from "./lib/tool-call.js";
 
 const OBJECTIVES = [
   { key: "solubility", label: "용해도", value: 0.4 },
@@ -51,11 +52,9 @@ async function callTool(name, args) {
     body: JSON.stringify({ name, arguments: args || {} }),
   });
   const payload = await res.json().catch(() => null);
-  if (!res.ok) {
-    const message = payload && typeof payload.error === "string" ? payload.error : `HTTP ${res.status}`;
-    throw new Error(message);
-  }
-  return payload;
+  // 봉투를 벗겨서 도구 결과만 돌려준다. 봉투를 그대로 넘기면 호출자가 보는
+  // 모든 필드가 undefined 가 되고, 200 응답이라 오류도 뜨지 않는다.
+  return unwrapToolResponse({ ok: res.ok, status: res.status, payload });
 }
 
 function formatSeconds(value) {

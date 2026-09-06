@@ -144,3 +144,11 @@ test("an unauthorized failure tells the user to log in", () => {
   assert.ok(html.includes('id="authHint"'));
   assert.ok(html.includes("로그인이 필요합니다"));
 });
+
+test("tool responses are unwrapped instead of handed over as the envelope", () => {
+  // 서버는 {"ok": true, "result": {...}} 로 감싼다. 봉투를 그대로 쓰면
+  // out.purposes 와 plan.decisions 가 undefined 가 되고, 200 응답이라
+  // 오류도 없이 드롭다운과 계획 검토가 비어버린다.
+  assert.ok(source.includes("unwrapToolResponse"), "must unwrap the response envelope");
+  assert.ok(!/return payload;\s*\n}/.test(source), "must not return the raw envelope");
+});
