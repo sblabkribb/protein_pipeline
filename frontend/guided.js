@@ -130,7 +130,7 @@ function stageRow(stage, model, costEntry) {
 function renderStages(host, route) {
   if (!host) return;
   host.innerHTML = "";
-  const total = document.getElementById("costTotal");
+  const total = document.getElementById("routeMeta");
   if (!route) {
     host.textContent = "설계 목적을 고르면 단계가 표시됩니다.";
     if (total) total.textContent = "";
@@ -151,7 +151,7 @@ function renderStages(host, route) {
       const unknown = est.unknown_stages || [];
       total.textContent =
         `측정된 합계 ${formatSeconds(est.known_seconds)}` +
-        (unknown.length ? ` · 미측정 ${unknown.length}단계 제외 (하한값)` : " · 전 단계 측정됨");
+        (unknown.length ? ` · ${unknown.length}단계 미측정이라 하한값` : " · 전 단계 측정됨");
     }
   }
 }
@@ -175,8 +175,6 @@ async function loadRegistry() {
       option.textContent = route.display_name_ko + (route.executable ? "" : " — 실행 불가");
       select.appendChild(option);
     }
-    document.getElementById("modelCount").textContent =
-      `${Object.keys(registry.models).length}개`;
     renderConnections(out.connections);
     renderTemplates();
     onPurposeChange();
@@ -237,48 +235,6 @@ function mark(text, kind, title) {
   return node;
 }
 
-// 스킬은 이 경로에 실제로 적용되는 RAPID 기능이다. 하드코딩하지 않고 경로의
-// 스테이지와 모델의 측정값에서 끌어온다 - 없는 기능을 있다고 적지 않기 위해서다.
-function renderSkills(route) {
-  const host = document.getElementById("skills");
-  host.innerHTML = "";
-  if (!route) return;
-  const items = [];
-  for (const stage of route.stages || []) {
-    const model = registry.models[stage.model_id];
-    if (!model) continue;
-    if (stage.gate === "gate0") {
-      items.push({
-        name: "Gate 0 라우팅",
-        detail: model.performance
-          ? `${model.performance.metric} ${model.performance.value}`
-          : "측정값 없음",
-        validated: stage.validated,
-        title: (model.performance && model.performance.source) || "",
-      });
-    }
-    if (stage.requires_design_policy) {
-      items.push({
-        name: `${stage.stage} 설계 정책 필요`,
-        detail: "미보유",
-        validated: false,
-        title: stage.requires_design_policy,
-      });
-    }
-  }
-  if (!items.length) {
-    host.textContent = "이 경로에 별도 스킬이 없습니다.";
-    return;
-  }
-  for (const item of items) {
-    const row = document.createElement("div");
-    row.className = "skill";
-    row.title = item.title || "";
-    row.append(dot(item.validated), el("span", "", item.name), el("span", "chip", item.detail));
-    host.appendChild(row);
-  }
-}
-
 function renderConnections(connections) {
   const host = document.getElementById("connections");
   host.innerHTML = "";
@@ -304,12 +260,9 @@ function renderConnections(connections) {
   host.appendChild(portalRow);
 
   if (!portal.configured) {
-    const hint = document.createElement("div");
-    hint.className = "note";
-    hint.textContent = `${portal.url_env} / ${portal.token_env} 를 설정하면 ` +
-      `${(portal.would_unlock || []).length}개 모델에 닿습니다. ` +
-      `항체 경로는 설계 정책이 없어 그래도 열리지 않습니다.`;
-    host.appendChild(hint);
+    host.appendChild(el("p", "note",
+      `${portal.url_env} / ${portal.token_env} 를 설정하면 ` +
+      `${(portal.would_unlock || []).length}개 모델에 닿습니다.`));
   }
 }
 
@@ -536,15 +489,10 @@ function onPurposeChange() {
   const note = document.getElementById("purposeNote");
   renderStages(document.getElementById("stages"), route);
   if (!route) { note.textContent = ""; return; }
-  const lines = [route.description || ""];
-  if (!route.executable) lines.push(route.blocked_reason || "");
-  else if (!route.validated) {
-    lines.push(`검증되지 않은 단계: ${(route.unvalidated_stages || []).join(", ")}`);
-  }
-  if (route.referral) lines.push(route.referral);
-  if (route.caveat) lines.push(route.caveat);
+  // 실행 가능 여부와 검증 여부는 목적 카드의 배지가 말한다. 여기서는 그 경로가
+  // 무엇인지와, 배지로 담기지 않는 단서만 적는다.
+  const lines = [route.description || "", route.referral || "", route.caveat || ""];
   note.textContent = lines.filter(Boolean).join(" ");
-  renderSkills(route);
   document.getElementById("planBtn").disabled = false;
 }
 
@@ -656,29 +604,6 @@ function decisionNode(decision, edits) {
   return box;
 }
 
-function renderEvidencePanel(plan) {
-  const host = document.getElementById("evidenceList");
-  if (!host) return;
-  host.innerHTML = "";
-  host.classList.remove("empty");
-  let count = 0;
-  for (const decision of plan.decisions || []) {
-    for (const ev of decision.evidence || []) {
-      const node = evidenceNode(ev);
-      const who = document.createElement("span");
-      who.className = "src";
-      who.textContent = `결정: ${decision.field}`;
-      node.appendChild(who);
-      host.appendChild(node);
-      count += 1;
-    }
-  }
-  if (!count) {
-    host.classList.add("empty");
-    host.textContent = "근거가 없습니다.";
-  }
-}
-
 const REASON_LABEL = {
   evidence_is_assumption_only: "근거가 가정뿐",
   evidence_partially_assumption: "일부만 측정으로 뒷받침",
@@ -753,7 +678,6 @@ async function generatePlan() {
       host.appendChild(decisionNode(decision, state.edits));
     }
     host.classList.remove("empty");
-    renderEvidencePanel(plan);
     await explainPlan(plan);
 
     const reviewState = document.getElementById("reviewState");
@@ -808,14 +732,6 @@ for (const id of ["nDesigns", "lengthAa"]) {
 }
 loadRegistry();
 
-for (const tab of document.querySelectorAll(".tab")) {
-  tab.addEventListener("click", () => {
-    for (const other of document.querySelectorAll(".tab")) other.classList.remove("is-active");
-    tab.classList.add("is-active");
-    for (const panel of document.querySelectorAll(".panel")) panel.classList.add("hidden");
-    document.getElementById(`panel-${tab.dataset.panel}`).classList.remove("hidden");
-  });
-}
 document.getElementById("probeBtn").addEventListener("click", probeWorkers);
 document.getElementById("runRefreshBtn").addEventListener("click", loadRuns);
 document.getElementById("runSelect").addEventListener("change", (event) => {

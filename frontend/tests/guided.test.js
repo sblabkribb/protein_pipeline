@@ -61,12 +61,11 @@ test("approval does not run the pipeline", () => {
   assert.ok(html.includes("실행하지 않습니다"), "the page must say it does not run");
 });
 
-test("all three steps are visible before a plan exists", () => {
-  // 카드를 hidden 으로 시작하면 로그인 전 사용자에게는 미구현으로 보인다.
-  assert.ok(!/id="planCard"[^>]*hidden/.test(html));
-  assert.ok(!/id="applyCard"[^>]*hidden/.test(html));
-  assert.ok(html.includes("계획 검토"));
-  assert.ok(html.includes("승인"));
+test("every step is visible before a plan exists", () => {
+  // 단계를 hidden 으로 시작하면 로그인 전 사용자에게는 미구현으로 보인다.
+  const steps = html.match(/<li class="step">/g) || [];
+  assert.equal(steps.length, 4);
+  assert.ok(!/<li class="step"[^>]*hidden/.test(html));
 });
 
 test("approve stays disabled until a plan is generated", () => {
@@ -112,9 +111,11 @@ test("the design purpose is selectable and decides the route", () => {
   assert.ok(source.includes("purpose: document.getElementById"), "the plan request must carry it");
 });
 
-test("the evidence panel aggregates server-provided evidence only", () => {
-  assert.ok(source.includes("renderEvidencePanel"));
+test("evidence comes from the server and sits with its decision", () => {
+  // 별도 근거 패널은 같은 목록을 두 번 그려서 없앴다. 근거가 서버에서 온다는
+  // 계약은 그대로다.
   assert.ok(source.includes("decision.evidence"));
+  assert.ok(source.includes("evidenceNode"));
 });
 
 test("api base follows the shared resolver instead of an empty origin", () => {
@@ -153,20 +154,31 @@ test("tool responses are unwrapped instead of handed over as the envelope", () =
   assert.ok(!/return payload;\s*\n}/.test(source), "must not return the raw envelope");
 });
 
-test("the left rail carries templates, skills, models and connections", () => {
-  for (const id of ["templates", "skills", "stages", "connections"]) {
-    assert.ok(html.includes(`id="${id}"`), `left rail needs #${id}`);
-  }
-  assert.ok(/<h3>템플릿<\/h3>/.test(html));
-  assert.ok(/<h3>스킬<\/h3>/.test(html));
-  assert.ok(/<h3>연결<\/h3>/.test(html));
+test("each fact is rendered in exactly one place", () => {
+  // 예전에는 근거가 결정 안과 우측 패널에 두 번, 경로 상태가 카드·안내문·단계
+  // 목록·경고까지 네 곳에 나왔다. 같은 사실이 여러 곳에 있으면 어긋났을 때
+  // 어느 쪽이 맞는지 판단할 근거가 없다.
+  assert.ok(!source.includes("renderEvidencePanel"),
+            "evidence belongs inside its decision, once");
+  assert.ok(!source.includes("renderSkills"),
+            "skills duplicated the stage list; both came from route.stages");
+  assert.equal((source.match(/blocked_reason/g) || []).length, 1,
+               "the blocked reason belongs on the template card badge only");
 });
 
-test("the right rail carries analysis and monitor beside evidence and policy", () => {
-  for (const panel of ["analysis", "monitor", "evidence", "policy"]) {
-    assert.ok(html.includes(`data-panel="${panel}"`), `right rail needs ${panel} tab`);
-    assert.ok(html.includes(`id="panel-${panel}"`), `right rail needs ${panel} panel`);
+test("the layout is three rails: intent, plan, results", () => {
+  for (const id of ["templates", "weights", "stages", "decisions", "runSelect",
+                    "artifactList", "connections"]) {
+    assert.ok(html.includes(`id="${id}"`), `layout needs #${id}`);
   }
+  assert.ok(!html.includes('data-panel='), "tabs hid the results behind a click");
+});
+
+test("the plan reads as a numbered sequence because the flow is gated", () => {
+  // 번호는 장식이 아니다. 생성 전에 검토할 수 없고 검토 전에 승인할 수 없다.
+  const steps = [...html.matchAll(/<span class="stepno" aria-hidden="true">(\d)<\/span>([^<]+)/g)];
+  assert.deepEqual(steps.map((m) => m[1]), ["1", "2", "3", "4"]);
+  assert.deepEqual(steps.map((m) => m[2]), ["목표", "경로", "검토", "승인"]);
 });
 
 test("template cards show whether a route is executable and validated", () => {
@@ -176,11 +188,46 @@ test("template cards show whether a route is executable and validated", () => {
   assert.ok(source.includes("route.validated"));
 });
 
-test("skills are derived from the route, not hard-coded", () => {
-  assert.ok(source.includes("renderSkills"));
-  assert.ok(source.includes("stage.requires_design_policy"),
-            "a stage needing a design policy must surface as an unmet skill");
-  assert.ok(!/const SKILLS\s*=/.test(source), "the skill list must not be a browser constant");
+test("the screen shares the product's design tokens instead of its own palette", () => {
+  // 이 화면은 어두운 GitHub 팔레트 복제였다. 같은 제품인데 다른 물건처럼 보였다.
+  const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
+  assert.ok(css.includes("Instrument Sans"), "must use the product's typeface");
+  assert.ok(css.includes("oklch("), "must use the product's colour space");
+  assert.ok(!/#0d1117|#131a24|#3b82f6/.test(css), "the GitHub-clone palette must be gone");
+});
+
+test("colour carries evidence strength and nothing else", () => {
+  const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
+  for (const token of ["--measured", "--assumed", "--absent"]) {
+    assert.ok(css.includes(token), `the evidence scale needs ${token}`);
+  }
+});
+
+test("numbers line up for comparison", () => {
+  // CI 와 비용을 눈으로 대조하는 화면이다.
+  const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
+  assert.ok(css.includes("tabular-nums"));
+});
+
+test("keyboard focus stays visible", () => {
+  const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
+  assert.ok(css.includes(":focus-visible"));
+  assert.ok(!/outline:\s*none/.test(css), "focus must never be removed without a replacement");
+});
+
+test("every input has a label and reduced motion is respected", () => {
+  // 가이드라인은 <label> 또는 aria-label 을 요구한다. purpose 는 카드가 조작하는
+  // 숨은 셀렉트라 aria-label 쪽이 맞다.
+  for (const id of ["rmsdMax", "nDesigns", "lengthAa", "af2Budget", "runSelect"]) {
+    assert.ok(new RegExp(`for="${id}"`).test(html), `#${id} needs a label`);
+  }
+  assert.ok(/id="purpose"[^>]*aria-label=/.test(html), "#purpose needs an accessible name");
+  const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
+  assert.ok(css.includes("prefers-reduced-motion"));
+});
+
+test("async regions announce themselves", () => {
+  assert.ok((html.match(/aria-live="polite"/g) || []).length >= 2);
 });
 
 test("connections separate not-configured from unreachable", () => {
@@ -266,4 +313,25 @@ test("the 3D viewer is loaded with subresource integrity", () => {
   assert.ok(/integrity="sha384-/.test(tag[0]), "3Dmol must be pinned by hash");
   assert.ok(/crossorigin="anonymous"/.test(tag[0]), "SRI needs CORS to be enforced");
   assert.ok(/3dmol@\d+\.\d+\.\d+\//.test(tag[0]), "the version must be exact, not a range");
+});
+
+test("badge text clears WCAG AA against the light canvas", () => {
+  // 본체의 amber 는 흰 배경에서 3.06:1, coral 은 3.46:1 이라 작은 글자에 못 쓴다.
+  // 테두리용과 글자용을 나누고, 글자용은 계산해서 4.5 를 넘긴 값이다.
+  const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
+  for (const token of ["--measured-ink", "--assumed-ink", "--absent-ink"]) {
+    assert.ok(css.includes(token), `text needs ${token}`);
+  }
+  for (const rule of [".mark-warn", ".mark-bad", ".kind-assumption"]) {
+    const block = css.slice(css.indexOf(rule), css.indexOf(rule) + 200);
+    assert.ok(/color: var\(--[a-z]+-ink\)/.test(block), `${rule} must use the text-safe token`);
+  }
+});
+
+test("the steps are not four identical cards", () => {
+  // 같은 모서리·같은 테두리의 카드 묶음은 내용의 위계를 지운다.
+  const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
+  const step = css.slice(css.indexOf("\n.step {"), css.indexOf("\n.step {") + 160);
+  assert.ok(!/border-radius/.test(step) && !/border: 1px/.test(step),
+            "steps should read as a sequence, not as a card kit");
 });
