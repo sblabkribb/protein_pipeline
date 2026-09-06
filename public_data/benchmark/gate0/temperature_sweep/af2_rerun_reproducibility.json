@@ -1,0 +1,101 @@
+{
+  "af2_settings": {
+    "model_preset": "monomer",
+    "db_preset": "full_dbs",
+    "max_template_date": "2020-05-14",
+    "extra_flags": null,
+    "reproducibility_reference": "af2_reproducibility.json: 같은 서열 재실행의 |delta pLDDT| 평균 0.006, 최대 0.011 (n=3). 타겟 내부 SD 0.556 대비 무시할 수준이지만 n 이 작다."
+  },
+  "settings_not_controlled": [
+    "random seed (ColabFold worker owns it)",
+    "num_recycles",
+    "MSA pipeline version and database snapshot"
+  ],
+  "bar": {
+    "plddt_tolerance": 0.5,
+    "max_gate_flip_fraction": 0.02,
+    "rationale": "허용 오차 0.5 는 타겟 내부 pLDDT SD 0.556 에서 왔다. 게이트 뒤집힘 2% 는 임계값 근처 서열이 통과율을 흔드는 정도를 제한한다."
+  },
+  "n_only_in_old": 4,
+  "n_only_in_new": 7,
+  "plddt": {
+    "n_compared": 469,
+    "mean_abs_delta": 0.1203,
+    "max_abs_delta": 3.5742,
+    "n_gate_flips": 1,
+    "gate_flip_fraction": 0.0021,
+    "largest_deltas": [
+      {
+        "sequence_id": "1nr3A00|target|target|T0.2|2",
+        "old_plddt": 50.82598360655738,
+        "new_plddt": 54.400163934426224,
+        "abs_delta": 3.5742
+      },
+      {
+        "sequence_id": "1hufA00|target|target|T0.05|2",
+        "old_plddt": 81.47089430894309,
+        "new_plddt": 78.33804878048781,
+        "abs_delta": 3.1328
+      },
+      {
+        "sequence_id": "1ktuA00|target|target|T0.1|3",
+        "old_plddt": 47.70167832167832,
+        "new_plddt": 49.983636363636364,
+        "abs_delta": 2.282
+      },
+      {
+        "sequence_id": "1ktuA00|target|target|T0.05|6",
+        "old_plddt": 43.635874125874125,
+        "new_plddt": 45.28867132867133,
+        "abs_delta": 1.6528
+      },
+      {
+        "sequence_id": "1bg5A03|target|target|T0.2|0",
+        "old_plddt": 84.84181102362204,
+        "new_plddt": 86.3257874015748,
+        "abs_delta": 1.484
+      },
+      {
+        "sequence_id": "1bg5A03|target|target|T0.05|6",
+        "old_plddt": 80.51511811023622,
+        "new_plddt": 79.20519685039369,
+        "abs_delta": 1.3099
+      },
+      {
+        "sequence_id": "1ktuA00|target|target|T0.2|7",
+        "old_plddt": 50.91517482517482,
+        "new_plddt": 52.00699300699301,
+        "abs_delta": 1.0918
+      },
+      {
+        "sequence_id": "1jygA00|target|target|T0.3|1",
+        "old_plddt": 78.13376811594202,
+        "new_plddt": 79.1904347826087,
+        "abs_delta": 1.0567
+      },
+      {
+        "sequence_id": "1bg5A03|target|target|T0.2|2",
+        "old_plddt": 79.00114173228347,
+        "new_plddt": 78.01015748031497,
+        "abs_delta": 0.991
+      },
+      {
+        "sequence_id": "1e9tA00|target|target|T0.2|6",
+        "old_plddt": 61.165084745762705,
+        "new_plddt": 60.269152542372886,
+        "abs_delta": 0.8959
+      }
+    ]
+  },
+  "attribution": {
+    "unchanged": 191,
+    "metric_definition_only": 245,
+    "prediction_only": 0,
+    "confounded": 33
+  },
+  "attribution_note": "통과 여부가 바뀐 서열을 원인별로 나눈다. metric_definition_only 는 RMSD 판정만 뒤집힌 것, prediction_only 는 pLDDT 판정만 뒤집힌 것, confounded 는 둘 다 움직였거나 어느 쪽으로도 설명되지 않는 것이다.",
+  "prediction_reproduced": false,
+  "verdict": "pLDDT 가 재현되지 않았다. 지표 정의 변경과 AF2 run-to-run 차이가 섞여 있으므로 통과율 변화를 정의 변경만으로 설명하면 안 된다.",
+  "old_file": "public_data/benchmark/gate0/temperature_sweep/af2_stage1.csv",
+  "new_file": "public_data/benchmark/gate0/temperature_sweep/af2_stage1_rmsd_fixed.csv"
+}

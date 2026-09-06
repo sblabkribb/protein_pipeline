@@ -412,6 +412,30 @@
       },
       "validation_status": "A RunPod client exists; the BOP worker at 18105 is reachable. Neither has been exercised from a RAPID route."
     },
+    "sequence_liabilities": {
+      "display_name": "Sequence liabilities (aggregation / developability)",
+      "role": "cheap_filter",
+      "endpoint": "",
+      "availability": "wired_unvalidated",
+      "access": {
+        "direct_client": true,
+        "portal_mcp": false
+      },
+      "client": "scripts/transcoder/rapid_sr/liabilities.py",
+      "measures": [
+        "aggregation",
+        "developability"
+      ],
+      "cost": {
+        "provenance": "measured",
+        "value": 0.0,
+        "unit": "s/sequence",
+        "scope": "서열만 읽는 창 통계라 폴딩이나 워커 호출이 없다. 측정 가능한 시간이 나오지 않을 만큼 싸다.",
+        "source": "scripts/transcoder/rapid_sr/liabilities.py"
+      },
+      "metric_caveat": "휴리스틱이다. Kyte-Doolittle 소수성과 전하로 만든 5 잔기 창 통계이고, 어떤 응집 측정에도 맞춰본 적이 없다. 임계값(창 5, 소수성 2.0, 전하 1.0)은 항체 문맥에서 정해졌으므로 단량체에 그대로 옮기면 근거가 따라오지 않는다. 그래서 값만 기록하고 통과/탈락을 정하지 않는다 - calibrated 는 false 다.",
+      "ported_from": "antigen_pipeline antibody_developability.py"
+    },
     "rosetta_relax": {
       "display_name": "Rosetta relax",
       "role": "refinement",
@@ -473,16 +497,20 @@
       "to_enable": "같은 백본에서 나온 설계들 사이의 REU 차이가 알려진 안정성 순위와 맞는지 확인한다. ddG 가 필요하면 ThermoMPNN 류를 따로 들여야 한다."
     },
     "aggregation": {
-      "status": "evaluator_not_wired",
-      "evaluators": [],
-      "detail": "antigen 파이프라인에 소수성 패치와 저전하 창을 찾는 구현이 있다 (antibody_developability.py). 여기에는 클라이언트도 이식본도 없다.",
-      "to_enable": "그 계산을 이식한다. 항체 문맥에서 만들어진 휴리스틱이라, 단량체에 쓰려면 임계값을 다시 정해야 한다."
+      "status": "evaluator_unvalidated",
+      "evaluators": [
+        "sequence_liabilities"
+      ],
+      "detail": "소수성 패치와 저전하 창을 찾는 계산을 antigen 파이프라인에서 이식했다. 값은 나오지만 어떤 응집 측정에도 맞춰본 적이 없고, 임계값은 항체 문맥에서 정해진 것이다. 그래서 통과/탈락을 정하지 않는다.",
+      "to_enable": "응집이 측정된 코호트에서 aggregation_prone_fraction 이 그 측정과 같은 방향인지 확인하고, 단량체용 임계값을 정한다."
     },
     "developability": {
-      "status": "evaluator_not_wired",
-      "evaluators": [],
-      "detail": "antigen 파이프라인의 net charge shift 와 isomerization/oxidation 모티프 검사가 해당한다. 다만 그 지표들은 **항체 전용** 으로 정의되어 있어서 단량체 재설계에 그대로 옮기면 뜻이 달라진다.",
-      "to_enable": "항체 경로에서는 이식으로 충분하다. 단량체에 쓰려면 무엇을 developability 라 부를지부터 정해야 한다."
+      "status": "evaluator_unvalidated",
+      "evaluators": [
+        "sequence_liabilities"
+      ],
+      "detail": "순전하와 isomerisation / oxidation / free cysteine 모티프를 이식했다. 다만 이 지표들은 항체를 염두에 두고 정의된 것이라, 단량체 재설계에서 무엇을 developability 라 부를지는 아직 정하지 않았다.",
+      "to_enable": "항체 경로에서는 이식만으로 쓸 수 있다. 단량체에서는 어떤 성질을 developability 로 셀지 먼저 정의한다."
     },
     "activity": {
       "status": "needs_experimental_labels",
