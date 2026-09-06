@@ -38,6 +38,15 @@ import statistics
 DEFAULT_PRIOR_MEAN = 0.5
 DEFAULT_PRIOR_STRENGTH = 2.0
 
+#: 판단을 내리기 전에 필요한 최소 probe 서열 수. 2/2 에서 나온 p_hat=1.0 으로
+#: 백본을 판정하면 대부분 틀린다. 새 타겟에서 실제로 지불할 수 있는 크기이면서
+#: 비율 추정이 의미를 갖기 시작하는 지점이다.
+MIN_PROBE_SEQUENCES = 4
+
+#: 이 아래면 조건을 바꿔도 배울 것이 거의 없다고 보고 탐색 예산을 주지 않는다.
+#: movability = 4p(1-p) 이므로 0.2 는 p 가 약 0.05 또는 0.95 인 지점이다.
+MOVABILITY_FLOOR = 0.2
+
 #: 생성 조건 탐색 보너스의 기본 가중치. 조건을 바꿔봐야 알 수 있는 것에만 쓴다.
 DEFAULT_ETA_CONDITION_EXPLORATION = 0.5
 
@@ -307,6 +316,71 @@ class HierarchicalAllocator(_Policy):
         post = BetaPosterior.from_prior(mean=target.mean, strength=self.pooling_strength)
         post.update(successes=successes, trials=trials)
         return post
+
+    def probe_state(self, target_id: str, backbone_id: str) -> dict:
+        """이 백본에 대해 **지금까지 관측한 것만으로** 아는 상태.
+
+        개발 데이터에는 백본마다 56 서열까지 돌린 baseline yield 가 있지만, 새
+        타겟에는 그것이 없다. 정책이 그 값을 쓰면 "compute 를 아꼈다" 는 주장이
+        무너진다. 그래서 여기서 나오는 p_hat 은 Gate 0 사전분포와 실제 probe
+        관측에서만 온다.
+        """
+        keys = self._by_backbone.get((target_id, backbone_id))
+        if keys is None:
+            raise KeyError(f"등록되지 않은 백본: {target_id}|{backbone_id}")
+        successes = sum(self._observed[key][0] for key in keys)
+        trials = sum(self._observed[key][1] for key in keys)
+        post = self.backbone_posterior(keys[0])
+        return {
+            "target_id": target_id,
+            "backbone_id": backbone_id,
+            "n_observed": trials,
+            "n_successes": successes,
+            "p_hat": round(post.mean, 4),
+            "uncertainty": round(post.sd, 4),
+            "movability": round(movability(post.mean), 4),
+            "source": "probe" if trials else "prior_only",
+            "information_used": ["gate0_prior", "observed_probes"],
+        }
+
+    def set_backbone_true_yield(self, *args, **kwargs):
+        """존재하지 않는다. 이 이름으로 부르는 것 자체가 설계 위반이다.
+
+        개발 데이터의 baseline yield 를 정책에 주입하면 새 타겟에서는 쓸 수 없는
+        정보로 결정을 내리게 된다. 정책은 `observe` 로 들어온 관측만 본다.
+        """
+        raise TypeError(
+            "정책에 참값 yield 를 주입할 수 없다. 새 타겟에서 쓸 수 있는 것은 "
+            "Gate 0 사전분포와 실제 probe 관측뿐이므로 observe() 를 쓴다."
+        )
+
+    def next_action(self, target_id: str, backbone_id: str) -> dict:
+        """이 백본에 다음 계산을 무엇으로 쓸지. probe 상태만 보고 정한다.
+
+            Gate 0 prior -> 초기 probe -> p_hat, uncertainty
+            -> movability -> 다음 계산 선택
+
+        순서가 중요하다. probe 가 얇으면 판정하지 않고 서열을 더 뽑는다 - 2/2 에서
+        나온 p_hat 으로 백본을 버리면 되돌릴 수 없다.
+        """
+        state = self.probe_state(target_id, backbone_id)
+        if state["n_observed"] < MIN_PROBE_SEQUENCES:
+            action, why = ("probe_more_sequences",
+                           f"관측 {state['n_observed']} 개는 판정하기에 얇다 "
+                           f"(최소 {MIN_PROBE_SEQUENCES}).")
+        elif state["movability"] < MOVABILITY_FLOOR:
+            if state["p_hat"] >= 0.5:
+                action, why = ("verify_with_af2",
+                               "이미 높은 수율에 붙어 있다. 조건을 바꿔 배울 것이 없다.")
+            else:
+                action, why = ("abandon_backbone",
+                               "바닥에 붙어 있다. 조건을 바꿔도 움직일 여지가 없다.")
+        else:
+            action, why = ("explore_generation_condition",
+                           "중간 수율이라 조건을 바꾸면 결과가 움직일 수 있다.")
+        return {**state, "action": action, "reason": why,
+                "movability_floor": MOVABILITY_FLOOR,
+                "min_probe_sequences": MIN_PROBE_SEQUENCES}
 
     def exploration_bonus(self, arm_key: str) -> float:
         """조건을 바꿔보는 데 쓰는 값어치.

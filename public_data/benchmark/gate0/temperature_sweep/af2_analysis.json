@@ -407,6 +407,170 @@
     "pruned": [],
     "recommendation": "\uc81c\uac70 \uae30\uc900\uc744 \ub118\uc740 \uc870\uac74\uc774 \uc5c6\ub2e4."
   },
+  "continuous": {
+    "plddt@T0.05": {
+      "point": -0.2646,
+      "ci95": [
+        -1.481,
+        0.9604
+      ],
+      "excludes_zero": false,
+      "ci_width": 2.4414,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.329,
+      "prob_below_zero": 0.6711,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "plddt@T0.2": {
+      "point": -1.2068,
+      "ci95": [
+        -2.152,
+        -0.3642
+      ],
+      "excludes_zero": true,
+      "ci_width": 1.7878,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.0006,
+      "prob_below_zero": 0.9993,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "plddt@T0.3": {
+      "point": -1.0844,
+      "ci95": [
+        -2.4871,
+        0.0768
+      ],
+      "excludes_zero": false,
+      "ci_width": 2.564,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.0321,
+      "prob_below_zero": 0.9679,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "rmsd@T0.05": {
+      "point": 0.148,
+      "ci95": [
+        -0.4124,
+        0.6803
+      ],
+      "excludes_zero": false,
+      "ci_width": 1.0928,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.7059,
+      "prob_below_zero": 0.2941,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "rmsd@T0.2": {
+      "point": -0.0297,
+      "ci95": [
+        -0.6032,
+        0.5336
+      ],
+      "excludes_zero": false,
+      "ci_width": 1.1368,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.4611,
+      "prob_below_zero": 0.539,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "rmsd@T0.3": {
+      "point": -0.4019,
+      "ci95": [
+        -1.6143,
+        0.7388
+      ],
+      "excludes_zero": false,
+      "ci_width": 2.3531,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.2472,
+      "prob_below_zero": 0.7528,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "soluprot@T0.05": {
+      "point": -0.0043,
+      "ci95": [
+        -0.0259,
+        0.0147
+      ],
+      "excludes_zero": false,
+      "ci_width": 0.0406,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.3538,
+      "prob_below_zero": 0.6462,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "soluprot@T0.2": {
+      "point": -0.0194,
+      "ci95": [
+        -0.0414,
+        -0.0007
+      ],
+      "excludes_zero": true,
+      "ci_width": 0.0407,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.0198,
+      "prob_below_zero": 0.9802,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "soluprot@T0.3": {
+      "point": -0.0106,
+      "ci95": [
+        -0.0358,
+        0.0153
+      ],
+      "excludes_zero": false,
+      "ci_width": 0.051,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.2092,
+      "prob_below_zero": 0.7909,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    }
+  },
   "by_source": {
     "available": false,
     "sources": [

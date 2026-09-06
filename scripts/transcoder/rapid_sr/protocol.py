@@ -12,6 +12,80 @@ GATE0_THRESHOLDS = {
     "rmsd_max": 2.0,
 }
 
+# 구조 판정 지표의 동결 정의.
+#
+# 같은 임계값을 서로 다른 정의에 적용하면 결과가 조용히 뒤집힌다. 게이트 0
+# 캠페인은 DSSP non-loop 위치에서, 1 차 온도 패널은 전체 CA 에서 RMSD 를 재면서
+# 둘 다 2.0 A 를 적용했고, loop 가 많은 백본은 어떤 설계도 통과할 수 없었다.
+# 같은 AF2 모델 여덟 개(1bg5A03, 254 잔기, non-loop 85 개)에서:
+#
+#     kabsch, 파일 순서, 전체 CA    13.3 - 22.8 A
+#     ca_rmsd, resnum, 전체 위치    35.5 - 37.7 A
+#     ca_rmsd, resnum, non-loop      1.15 - 1.86 A
+#
+# 확인된 것은 두 지표가 서로 다른 구조 영역을 잰다는 것이다. non-loop 는 이차구조
+# 코어를, 전체 CA 는 loop 와 말단까지 포함한다. 그 유연 영역의 편차가 전체 CA 값을
+# 지배한다. 정렬 오류였다면 resnum 매칭이 값을 줄였어야 하는데 오히려 늘었다.
+#
+# 이 정의가 유일한 출처다. Gate 0 와 sweep 이 같은 상수를 읽는다.
+STRUCTURAL_METRIC_V1 = {
+    "metric_id": "gate0_structural_v1",
+    "frozen": True,
+    "rmsd": {
+        "method": "ca_rmsd_dssp_non_loop",
+        "reference": "parent_backbone_input_pdb",
+        # 마스크는 **기준 백본** 에서 뽑는다. AF2 출력에서 뽑으면 서열마다 다른
+        # 위치를 재게 되어, 온도 비교가 지표 변화와 섞인다.
+        "mask_source": "reference_backbone",
+        "mask_scope": "once_per_backbone_applied_to_all_sequences_and_conditions",
+        "pairing": "residue_number_and_insertion_code_per_chain",
+        "superposition": "kabsch_ca",
+        "cutoff_angstrom": 2.0,
+    },
+    "plddt": {"source": "best_plddt", "cutoff": 85.0},
+    # 이진 통과 여부만 보면 0/1 포화에서 정보를 통째로 잃는다. 연속값을 함께
+    # 기록해 같은 데이터에서 더 많은 것을 읽는다.
+    "secondary_metrics": [
+        {"name": "rmsd", "kind": "continuous",
+         "note": "동결 정의의 연속값. 임계값 통과 여부보다 정보가 많다."},
+        {"name": "plddt", "kind": "continuous", "note": "AF2 신뢰도. 측정이 아니다."},
+        {"name": "soluprot", "kind": "continuous",
+         "note": "가용성 예측 점수. 통과율과 달리 포화되지 않는다."},
+        {"name": "rmsd_all_ca", "kind": "continuous",
+         "note": "전체 CA, 파일 순서 정합. 유연 영역이 얼마나 벌어졌는지를 잰다."},
+        {"name": "rmsd_all_positions", "kind": "continuous",
+         "note": "전체 위치, resnum 정합. 위와 정합 방식만 다르다."},
+        {"name": "positional_entropy", "kind": "continuous",
+         "note": "생성 다양성. 값싼 단계에서 이미 측정된다."},
+    ],
+    "why_frozen": (
+        "게이트 0 와 온도 패널이 같은 2.0 A 임계값을 서로 다른 RMSD 정의에 "
+        "적용했다. non-loop 정의와 전체 CA 정의는 다른 구조 영역을 재며, 그 차이는 "
+        "loop 와 말단의 편차가 지배한다."
+    ),
+}
+
+# AF2 예측 설정. 재실행이 '재측정' 이 되려면 예측 조건이 같아야 한다.
+#
+# 클라이언트 기본값에 기대면 기본값이 바뀔 때 두 실행이 조용히 갈리고, RMSD 정의
+# 수정과 run-to-run 차이가 섞인다. 그래서 여기에 못박고 실행마다 기록한다.
+AF2_SETTINGS_V1 = {
+    "model_preset": "monomer",
+    "db_preset": "full_dbs",
+    "max_template_date": "2020-05-14",
+    "extra_flags": None,
+    # 워커가 소유하는 것. 우리가 고정한다고 주장하지 않는다 - 기록만 한다.
+    "not_controlled_here": [
+        "random seed (ColabFold worker owns it)",
+        "num_recycles",
+        "MSA pipeline version and database snapshot",
+    ],
+    "reproducibility_reference": (
+        "af2_reproducibility.json: 같은 서열 재실행의 |delta pLDDT| 평균 0.006, "
+        "최대 0.011 (n=3). 타겟 내부 SD 0.556 대비 무시할 수준이지만 n 이 작다."
+    ),
+}
+
 # 모든 백본에서 동일해야 하는 ProteinMPNN 설정.
 GATE0_MPNN_SETTINGS = {
     "use_soluble_model": True,

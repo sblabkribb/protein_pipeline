@@ -620,3 +620,100 @@ class ConditionExplorationTests(unittest.TestCase):
         for key in ("posterior_mean", "uncertainty", "diversity", "cost",
                     "condition_exploration", "movability"):
             self.assertIn(key, parts)
+
+
+class ProbeDrivenMovabilityTests(unittest.TestCase):
+    """movability 의 p 는 새 타겟에서 얻을 수 있는 정보에서만 나와야 한다.
+
+    개발 데이터에서는 백본마다 baseline yield 를 56 서열까지 돌려서 알고 있다.
+    그 값을 정책에 넣으면 새 타겟에서는 존재하지 않는 정보를 쓰는 것이고,
+    "compute 를 아꼈다" 는 주장이 무너진다.
+
+    실제 순서:
+        Gate 0 prior -> 초기 4-8 probe -> p_hat, uncertainty
+        -> movability -> 다음 계산(온도 / 서열 추가 / 새 백본 / AF2) 선택
+    """
+
+    def _arms(self):
+        return [
+            Arm(target_id="t0", backbone_id="bb", condition=c, cost_seconds=180.0)
+            for c in ("T0.05", "T0.1", "T0.2", "T0.3")
+        ]
+
+    def test_a_fresh_allocator_has_no_baseline_yield_to_lean_on(self):
+        from rapid_sr.allocation import HierarchicalAllocator as H
+
+        alloc = H(self._arms(), reference_condition="T0.1")
+        state = alloc.probe_state("t0", "bb")
+        self.assertEqual(state["n_observed"], 0)
+        self.assertEqual(state["source"], "prior_only")
+
+    def test_after_a_probe_the_estimate_comes_from_the_probe(self):
+        from rapid_sr.allocation import HierarchicalAllocator as H
+
+        alloc = H(self._arms(), reference_condition="T0.1")
+        alloc.observe("t0|bb|T0.1", successes=3, trials=8)
+        state = alloc.probe_state("t0", "bb")
+        self.assertEqual(state["n_observed"], 8)
+        self.assertEqual(state["source"], "probe")
+        self.assertGreater(state["movability"], 0.5)
+
+    def test_the_policy_refuses_to_take_an_externally_supplied_true_yield(self):
+        """개발 데이터의 baseline yield 를 정책에 주입하지 못하게 막는다."""
+        from rapid_sr.allocation import HierarchicalAllocator as H
+
+        alloc = H(self._arms(), reference_condition="T0.1")
+        with self.assertRaises(TypeError):
+            alloc.set_backbone_true_yield("t0", "bb", 0.5)
+
+    def test_the_next_action_is_chosen_from_probe_state_not_from_labels(self):
+        from rapid_sr.allocation import HierarchicalAllocator as H
+
+        alloc = H(self._arms(), reference_condition="T0.1")
+        alloc.observe("t0|bb|T0.1", successes=4, trials=8)
+        action = alloc.next_action("t0", "bb")
+        self.assertIn(action["action"], {
+            "probe_more_sequences", "explore_generation_condition",
+            "verify_with_af2", "abandon_backbone",
+        })
+        self.assertIn("p_hat", action)
+        self.assertIn("movability", action)
+
+    def test_a_backbone_that_probes_all_zero_is_not_given_condition_budget(self):
+        from rapid_sr.allocation import HierarchicalAllocator as H
+
+        alloc = H(self._arms(), reference_condition="T0.1")
+        alloc.observe("t0|bb|T0.1", successes=0, trials=8)
+        action = alloc.next_action("t0", "bb")
+        self.assertNotEqual(action["action"], "explore_generation_condition")
+
+    def test_a_mid_yield_probe_earns_condition_exploration(self):
+        from rapid_sr.allocation import HierarchicalAllocator as H
+
+        alloc = H(self._arms(), reference_condition="T0.1")
+        alloc.observe("t0|bb|T0.1", successes=4, trials=8)
+        self.assertEqual(alloc.next_action("t0", "bb")["action"],
+                         "explore_generation_condition")
+
+    def test_a_thin_probe_asks_for_more_sequences_before_deciding(self):
+        from rapid_sr.allocation import HierarchicalAllocator as H
+
+        alloc = H(self._arms(), reference_condition="T0.1")
+        alloc.observe("t0|bb|T0.1", successes=1, trials=2)
+        self.assertEqual(alloc.next_action("t0", "bb")["action"], "probe_more_sequences")
+
+    def test_the_minimum_probe_size_is_declared(self):
+        from rapid_sr.allocation import MIN_PROBE_SEQUENCES
+
+        self.assertGreaterEqual(MIN_PROBE_SEQUENCES, 4)
+        self.assertLessEqual(MIN_PROBE_SEQUENCES, 8)
+
+    def test_the_action_records_what_information_it_used(self):
+        """새 타겟에서 쓸 수 없는 정보가 섞였는지 나중에 검증할 수 있어야 한다."""
+        from rapid_sr.allocation import HierarchicalAllocator as H
+
+        alloc = H(self._arms(), reference_condition="T0.1")
+        alloc.observe("t0|bb|T0.1", successes=4, trials=8)
+        action = alloc.next_action("t0", "bb")
+        self.assertEqual(sorted(action["information_used"]),
+                         ["gate0_prior", "observed_probes"])

@@ -23,13 +23,26 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from rapid_sr.clustered import clustered_bootstrap  # noqa: E402
-from rapid_sr.protocol import GATE0_THRESHOLDS  # noqa: E402
+from rapid_sr.protocol import GATE0_THRESHOLDS, STRUCTURAL_METRIC_V1  # noqa: E402
 
 REFERENCE_T = "0.1"
 #: 재표집 단위. 1 차 패널은 백본 하나가 곧 타겟 하나였지만, informative 패널은
 #: 한 타겟에서 최대 3 개의 백본을 뽑으므로 타겟이 클러스터다. 백본으로
 #: 재표집하면 독립 클러스터를 실제보다 많이 세어 구간을 과장한다.
 DEFAULT_CLUSTER_UNIT = "backbone_key"
+
+#: 이진 통과율과 나란히 보는 연속 endpoint. 같은 480 폴드에서 pLDDT 는 68-97 로
+#: 흩어져 있었는데 structural_yield 는 15 개 중 12 개가 0.000 또는 1.000 이었다.
+#: 연속값에는 바닥/천장이 없으므로 포화로 정보를 잃지 않는다.
+CONTINUOUS_ENDPOINTS = ("plddt", "rmsd", "_soluprot")
+
+#: 소스별 결론을 확정적으로 부르기 위한 최소 백본 수. 확장 패널의 BioEmu 는
+#: 4 개뿐이라 그 아래다.
+MIN_BACKBONES_FOR_CONFIRMATORY_SOURCE = 5
+
+
+def min_backbones_for_confirmatory_source() -> int:
+    return MIN_BACKBONES_FOR_CONFIRMATORY_SOURCE
 # 효과가 명확하다고 부르기 위한 최소 구간 정밀도.
 CI_WIDTH_TARGET = 0.10
 # 이 비율 이상이 백본 간 변동이면 서열을 더 뽑아도 구간이 좁아지지 않는다.
@@ -331,11 +344,23 @@ def build_report_header(*, panel: str, cluster_unit: str, selection_scope: str) 
     효과를 전체 백본 집단의 평균으로 읽으면, 선택된 부분집단의 조건부 효과를
     모집단 효과로 바꿔치기하는 것이다.
     """
+    # 선정에 yield 를 썼으면 개발용 패널이다. 그 패널로 정책 성능을 주장하면
+    # 정책이 잘 통할 백본을 미리 골라놓고 잘 통한다고 말하는 것이 된다.
+    developed_on_yield = bool(selection_scope)
     return {
         "panel": panel,
+        "panel_role": "development" if developed_on_yield else "unfiltered",
+        "valid_for_policy_performance_claims": False,
+        "policy_validation_requires": (
+            "Unseen targets whose baseline yield is not known in advance, driven from an "
+            "initial probe online. 선정에 쓰지 않은 새 타겟에서, baseline yield 를 미리 "
+            "모르는 채로 초기 probe 부터 실제 온라인 방식으로 돌려야 정책 성능 주장이 "
+            "성립한다."
+        ),
         "bootstrap_cluster_unit": cluster_unit,
         "selection_scope": selection_scope,
         "selection_scope_unknown": not bool(selection_scope),
+        "frozen_metric_id": STRUCTURAL_METRIC_V1["metric_id"],
         "interpretation": (
             "This is a conditional effect within the selected backbone subpopulation, "
             "not a population-average temperature effect. "
@@ -365,6 +390,77 @@ def _tail_masses(values: np.ndarray, clusters, *, n_boot: int = 20000, seed: int
     }
 
 
+def rmsd_provenance(rows) -> dict:
+    """이 파일의 rmsd 컬럼이 어떤 정의로 계산되었는지 확인한다.
+
+    1 차 패널의 원본 CSV 에는 rmsd_method 컬럼이 없다. 그 파일의 rmsd 는 전체 CA
+    kabsch 값이고 동결 정의와 다르다. 표시하지 않으면 연속 endpoint 로 읽을 때
+    구조 일치의 변화로 오해된다.
+    """
+    methods = sorted({
+        str(r.get("rmsd_method") or "").strip()
+        for r in rows if str(r.get("rmsd_method") or "").strip()
+    })
+    frozen = STRUCTURAL_METRIC_V1["rmsd"]["method"]
+    if not methods:
+        return {
+            "method": "unknown_legacy", "methods_seen": [],
+            "frozen_method": frozen, "matches_frozen_definition": False,
+            "note": ("rmsd_method 컬럼이 없다. 이 파일은 동결 정의 이전에 만들어졌고 "
+                     "rmsd 컬럼은 전체 CA kabsch 값이다. 동결 정의의 연속값으로 "
+                     "읽으면 안 된다."),
+        }
+    return {
+        "method": methods[0] if len(methods) == 1 else "mixed",
+        "methods_seen": methods,
+        "frozen_method": frozen,
+        "matches_frozen_definition": methods == [frozen],
+        "note": ("" if methods == [frozen] else
+                 "동결 정의와 다르거나 여러 정의가 섞여 있다. rmsd 를 endpoint 로 "
+                 "쓰기 전에 같은 정의로 다시 계산해야 한다."),
+    }
+
+
+def paired_continuous_difference(rows: list[dict], temp: str, field: str, *,
+                                 cluster_unit: str = DEFAULT_CLUSTER_UNIT) -> dict:
+    """연속 endpoint 의 짝지은 차이. 이진 통과율과 같은 클러스터 단위로 잰다.
+
+    포화 계산을 하지 않는다 - 연속값에는 바닥도 천장도 없으므로 "움직일 수 없는
+    관측" 이라는 개념이 적용되지 않는다. 그래서 이진 endpoint 가 0/1 에 깔려도
+    이쪽은 여전히 정보를 준다.
+    """
+    by = defaultdict(lambda: defaultdict(list))
+    for row in rows:
+        value = row.get(field)
+        if value is None or value == "":
+            continue
+        try:
+            by[row[cluster_unit]][row["temperature"]].append(float(value))
+        except (TypeError, ValueError):
+            continue
+
+    clusters, diffs = [], []
+    for cluster, per_temp in by.items():
+        if REFERENCE_T not in per_temp or temp not in per_temp:
+            continue
+        clusters.append(cluster)
+        diffs.append(float(np.mean(per_temp[temp])) - float(np.mean(per_temp[REFERENCE_T])))
+
+    if len(diffs) < 3:
+        return {"point": round(float(np.mean(diffs)), 4) if diffs else None,
+                "ci95": None, "cluster_unit": cluster_unit,
+                "n_clusters_resampled": len(diffs), "insufficient_clusters": True,
+                "endpoint_kind": "continuous"}
+
+    values = np.asarray(diffs)
+    out = clustered_bootstrap(clusters, lambda idx: float(values[idx].mean()))
+    out["cluster_unit"] = cluster_unit
+    out["n_clusters_resampled"] = len(diffs)
+    out["endpoint_kind"] = "continuous"
+    out.update(_tail_masses(values, clusters))
+    return out
+
+
 def stratify_by_source(rows: list[dict], temps: list[str]) -> dict:
     """온도 효과가 백본 소스에 따라 달라지는지 본다.
 
@@ -378,9 +474,14 @@ def stratify_by_source(rows: list[dict], temps: list[str]) -> dict:
     out: dict[str, object] = {"available": True, "sources": sources, "per_source": {}}
     for source in sources:
         subset = [r for r in rows if r.get("backbone_source", "target") == source]
+        n_backbones = len({r["backbone_key"] for r in subset})
         entry: dict[str, object] = {
             "n_folds": len(subset),
-            "n_backbones": len({r["backbone_key"] for r in subset}),
+            "n_backbones": n_backbones,
+            # 백본이 몇 개 안 되는 소스의 결론은 탐색적이다. 확장 패널의 BioEmu 는
+            # 4 개이고, 그 넷이 어느 방향으로 움직이든 확정적 결론이 될 수 없다.
+            "exploratory_only": n_backbones < MIN_BACKBONES_FOR_CONFIRMATORY_SOURCE,
+            "min_backbones_for_confirmatory": MIN_BACKBONES_FOR_CONFIRMATORY_SOURCE,
         }
         for temp in temps:
             if temp == REFERENCE_T:
@@ -470,13 +571,40 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  패널 간 불일치: {dom['panels_disagree']}")
     print(f"  {dom['recommendation']}")
 
+    # 연속 endpoint. 이진 통과율이 0/1 에 깔려도 여기서는 정보가 남는다.
+    provenance = rmsd_provenance(rows)
+    report["rmsd_provenance"] = provenance
+    print("\n=== 연속 endpoint (secondary) ===")
+    if not provenance["matches_frozen_definition"]:
+        print(f"  [주의] rmsd 컬럼: {provenance['note']}")
+    report["continuous"] = {}
+    for field in CONTINUOUS_ENDPOINTS:
+        label = field.lstrip("_")
+        if field == "rmsd" and not provenance["matches_frozen_definition"]:
+            # 다른 정의로 잰 값을 동결 지표인 척 보고하지 않는다.
+            report["continuous"]["rmsd_skipped"] = provenance
+            print("\nrmsd: 동결 정의가 아니므로 건너뛴다")
+            continue
+        print(f"\n{label}")
+        for temp in temps:
+            if temp == REFERENCE_T:
+                continue
+            res = paired_continuous_difference(rows, temp, field,
+                                               cluster_unit=args.cluster_unit)
+            report["continuous"][f"{label}@T{temp}"] = res
+            print(f"  T={temp}: diff={res.get('point')} CI{res.get('ci95')} "
+                  f"clusters={res.get('n_clusters_resampled')} "
+                  f"P(>0)={res.get('prob_above_zero')} P(<0)={res.get('prob_below_zero')}")
+
     report["by_source"] = stratify_by_source(rows, temps)
     if not report["by_source"].get("available"):
         print(f"\n소스 층화: {report['by_source']['note']}")
     else:
         print("\n=== 소스별 온도 효과 ===")
         for source, entry in report["by_source"]["per_source"].items():
-            print(f"  {source}: backbones={entry['n_backbones']} folds={entry['n_folds']}")
+            scope = " [탐색적 — 백본 부족]" if entry.get("exploratory_only") else ""
+            print(f"  {source}: backbones={entry['n_backbones']} "
+                  f"folds={entry['n_folds']}{scope}")
             for key, value in entry.items():
                 if isinstance(value, dict) and value.get("ci95"):
                     print(f"    {key}: diff={value['point']} CI{value['ci95']}")

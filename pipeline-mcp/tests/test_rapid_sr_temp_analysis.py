@@ -430,3 +430,142 @@ class DominanceTests(unittest.TestCase):
             "structural_yield@T0.2": self._entry(0.03, above=0.9)}))
         self.assertNotIn("0.2", disagree["dominated"])
         self.assertIn("0.2", disagree["panels_disagree"])
+
+
+class ContinuousEndpointTests(unittest.TestCase):
+    """이진 통과율만 보면 0/1 포화에서 정보를 통째로 잃는다.
+
+    같은 480 폴드에서 pLDDT 는 68-97 로 흩어져 있었는데 structural_yield 는 15 개
+    백본 중 12 개가 0.000 또는 1.000 이었다. 연속 endpoint 를 함께 보면 그
+    포화 아래에 있던 변화를 읽을 수 있다.
+    """
+
+    def _rows(self):
+        rows = []
+        for target in ("tA", "tB", "tC", "tD"):
+            for temp, plddt, rmsd in (("0.1", 95.0, 1.0), ("0.2", 90.0, 1.5)):
+                for _ in range(4):
+                    rows.append({
+                        "backbone_key": f"{target}|bb", "target_id": target,
+                        "temperature": temp, "plddt": plddt, "rmsd": rmsd,
+                        "_soluprot": 0.7, "_structural": 1.0, "_joint": 1.0,
+                    })
+        return rows
+
+    def test_a_continuous_endpoint_is_compared_the_same_paired_way(self):
+        module = _load()
+        out = module.paired_continuous_difference(
+            self._rows(), "0.2", "plddt", cluster_unit="target_id")
+        self.assertAlmostEqual(out["point"], -5.0, places=6)
+        self.assertEqual(out["cluster_unit"], "target_id")
+
+    def test_a_continuous_endpoint_has_no_saturation_problem(self):
+        """연속값은 바닥/천장이 없으므로 포화 개념이 적용되지 않는다."""
+        module = _load()
+        out = module.paired_continuous_difference(
+            self._rows(), "0.2", "plddt", cluster_unit="target_id")
+        self.assertNotIn("saturation", out)
+        self.assertEqual(out["endpoint_kind"], "continuous")
+
+    def test_the_declared_continuous_endpoints_are_all_analysed(self):
+        module = _load()
+        self.assertIn("plddt", module.CONTINUOUS_ENDPOINTS)
+        self.assertIn("rmsd", module.CONTINUOUS_ENDPOINTS)
+        self.assertIn("_soluprot", module.CONTINUOUS_ENDPOINTS)
+
+    def test_a_missing_value_is_skipped_not_read_as_zero(self):
+        module = _load()
+        rows = self._rows()
+        rows[0]["plddt"] = None
+        out = module.paired_continuous_difference(
+            rows, "0.2", "plddt", cluster_unit="target_id")
+        self.assertEqual(out["n_clusters_resampled"], 4)
+
+
+class SourceStratificationScopeTests(unittest.TestCase):
+    """BioEmu 백본이 4 개뿐이다. 소스별 결론은 탐색적이다."""
+
+    def test_a_thin_source_is_marked_exploratory(self):
+        module = _load()
+        out = module.stratify_by_source(
+            [{"backbone_key": f"b{i}", "target_id": f"t{i}", "backbone_source": src,
+              "temperature": temp, "_structural": 1.0, "_joint": 1.0, "_soluprot": 0.7}
+             for src, n in (("rfd3", 16), ("bioemu", 4))
+             for i in range(n) for temp in ("0.1", "0.2")],
+            ["0.1", "0.2"])
+        self.assertTrue(out["available"])
+        self.assertTrue(out["per_source"]["bioemu"]["exploratory_only"])
+        self.assertFalse(out["per_source"]["rfd3"]["exploratory_only"])
+
+    def test_the_threshold_for_exploratory_is_declared(self):
+        module = _load()
+        self.assertIn("min_backbones_for_confirmatory_source", dir(module))
+        self.assertGreaterEqual(module.min_backbones_for_confirmatory_source(), 5)
+
+
+class MetricProvenanceTests(unittest.TestCase):
+    """어떤 RMSD 정의로 잰 파일인지 리포트가 스스로 말해야 한다.
+
+    1 차 패널의 원본 CSV 는 전체 CA kabsch 로 잰 값을 `rmsd` 컬럼에 담고 있다.
+    그것을 동결 정의의 연속값으로 읽으면 -0.03 A 같은 숫자를 구조 일치의 변화로
+    오해하게 된다.
+    """
+
+    def test_a_file_without_the_method_column_is_flagged_as_legacy(self):
+        module = _load()
+        info = module.rmsd_provenance([{"sequence_id": "a", "rmsd": "1.0"}])
+        self.assertEqual(info["method"], "unknown_legacy")
+        self.assertFalse(info["matches_frozen_definition"])
+
+    def test_a_file_with_the_frozen_method_is_accepted(self):
+        module = _load()
+        info = module.rmsd_provenance(
+            [{"sequence_id": "a", "rmsd": "1.0", "rmsd_method": "ca_rmsd_dssp_non_loop"}])
+        self.assertTrue(info["matches_frozen_definition"])
+
+    def test_a_mixed_file_is_rejected_rather_than_averaged(self):
+        module = _load()
+        info = module.rmsd_provenance([
+            {"rmsd_method": "ca_rmsd_dssp_non_loop"},
+            {"rmsd_method": "kabsch_all_ca"},
+        ])
+        self.assertFalse(info["matches_frozen_definition"])
+        self.assertEqual(sorted(info["methods_seen"]), ["ca_rmsd_dssp_non_loop", "kabsch_all_ca"])
+
+    def test_the_report_carries_the_provenance(self):
+        module = _load()
+        header = module.build_report_header(panel="p", cluster_unit="target_id",
+                                            selection_scope="s")
+        self.assertIn("frozen_metric_id", header)
+
+
+class PanelUsageTests(unittest.TestCase):
+    """이 패널로 무엇을 주장할 수 있고 무엇은 안 되는지 리포트가 말해야 한다.
+
+    baseline yield 를 보고 중간-yield 백본을 골랐다. 그래서 온도의 조건부 효과를
+    보는 데는 맞지만, 같은 패널로 "RAPID 가 compute 를 아낀다" 까지 주장하면
+    선택 편향이 생긴다 - 정책이 잘 작동할 백본을 미리 골라놓은 것이기 때문이다.
+    """
+
+    def test_the_report_states_it_is_a_development_panel(self):
+        module = _load()
+        header = module.build_report_header(panel="panel2_informative",
+                                            cluster_unit="target_id",
+                                            selection_scope="mid-yield only")
+        self.assertEqual(header["panel_role"], "development")
+        self.assertFalse(header["valid_for_policy_performance_claims"])
+
+    def test_the_report_names_what_would_be_a_valid_test(self):
+        module = _load()
+        header = module.build_report_header(panel="panel2_informative",
+                                            cluster_unit="target_id",
+                                            selection_scope="mid-yield only")
+        self.assertIn("unseen", header["policy_validation_requires"].lower())
+        self.assertIn("probe", header["policy_validation_requires"].lower())
+
+    def test_a_panel_selected_without_yield_filtering_is_not_marked_development(self):
+        module = _load()
+        header = module.build_report_header(panel="panel1_unfiltered",
+                                            cluster_unit="backbone_key",
+                                            selection_scope="")
+        self.assertEqual(header["panel_role"], "unfiltered")

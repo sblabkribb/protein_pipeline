@@ -31,6 +31,7 @@ from pipeline_mcp.models import SequenceRecord  # noqa: E402
 
 from pipeline_mcp.bio.pdb import ca_rmsd, dssp_non_loop_positions_by_chain  # noqa: E402
 from rapid_sr.clustered import kabsch_rmsd  # noqa: E402
+from rapid_sr.protocol import AF2_SETTINGS_V1, STRUCTURAL_METRIC_V1  # noqa: E402
 from rapid_sr.descriptors import ca_coords  # noqa: E402
 
 #: 게이트 0 캠페인이 쓰는 RMSD 정의. pipeline.py 는 부모 백본을 기준으로
@@ -41,15 +42,21 @@ from rapid_sr.descriptors import ca_coords  # noqa: E402
 #:     kabsch, 파일 순서, 전체 CA    22.6 A
 #:     ca_rmsd, resnum, 전체 위치    37.7 A
 #:     ca_rmsd, resnum, non-loop      1.32 A
-#: 1 차 온도 패널은 첫 번째 정의에 2.0 A 임계값을 적용했고, 그래서 loop 가 많은
-#: 백본은 어떤 설계도 통과하지 못해 structural_yield 가 통째로 0 이 되었다.
-RMSD_METHOD = "ca_rmsd_dssp_non_loop"
+#: 이것은 정렬 오류가 아니다 - 정렬 오류였다면 resnum 매칭이 값을 줄였어야 하는데
+#: 오히려 늘었다. 두 지표가 서로 다른 구조 영역을 재는 것이고, 그 차이는 loop 와
+#: 말단의 편차가 지배한다. 1 차 온도 패널은 첫 번째 정의에 2.0 A 임계값을
+#: 적용했고, 그래서 loop 가 많은 백본은 어떤 설계도 통과하지 못했다.
+RMSD_METHOD = STRUCTURAL_METRIC_V1["rmsd"]["method"]
 
 OUTPUT_FIELDS = [
     "sequence_id", "backbone_key", "target_id", "temperature",
     "backbone_source", "soluprot", "global_score",
     "plddt", "rmsd", "rmsd_all_ca", "rmsd_all_positions",
-    "rmsd_method", "rmsd_n_positions", "status", "error",
+    "rmsd_method", "rmsd_n_positions",
+    # 어떤 예측 설정으로 얻은 값인지 행마다 남긴다. 두 실행을 비교할 때
+    # "정의를 바꿨다" 와 "예측 조건이 달랐다" 를 구별해야 하기 때문이다.
+    "af2_model_preset", "af2_db_preset", "af2_max_template_date",
+    "status", "error",
 ]
 
 
@@ -170,9 +177,20 @@ def main(argv: list[str] | None = None) -> int:
             "target_id": row["target_id"], "temperature": row["temperature"],
             "backbone_source": row.get("backbone_source", "target"),
             "soluprot": row.get("soluprot"), "global_score": row.get("global_score"),
+            "af2_model_preset": AF2_SETTINGS_V1["model_preset"],
+            "af2_db_preset": AF2_SETTINGS_V1["db_preset"],
+            "af2_max_template_date": AF2_SETTINGS_V1["max_template_date"],
         }
         try:
-            result = client.predict([SequenceRecord(id=safe, sequence=row["sequence"])])
+            # 클라이언트 기본값에 기대지 않고 명시적으로 넘긴다. 기본값이 바뀌면
+            # 두 실행이 조용히 갈리고, RMSD 정의 수정과 run-to-run 차이가 섞인다.
+            result = client.predict(
+                [SequenceRecord(id=safe, sequence=row["sequence"])],
+                model_preset=str(AF2_SETTINGS_V1["model_preset"]),
+                db_preset=str(AF2_SETTINGS_V1["db_preset"]),
+                max_template_date=str(AF2_SETTINGS_V1["max_template_date"]),
+                extra_flags=AF2_SETTINGS_V1["extra_flags"],
+            )
             payload = result.get(safe) if isinstance(result, dict) else None
             payload = payload if isinstance(payload, dict) else {}
             entry["plddt"] = payload.get("best_plddt")
