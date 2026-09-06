@@ -53,6 +53,24 @@ freeze:
 #   not_deployed      - no worker anywhere we can reach.
 availability_values: [production, wired_unvalidated, not_wired, not_deployed]
 
+# 모델에 닿는 경로. availability 와는 다른 축이다.
+#
+#   direct_client - 이 저장소에 클라이언트가 있다.
+#   portal_mcp    - bio model portal 의 MCP 가 그 모델을 노출한다. 클라이언트를
+#                   따로 쓰지 않고 run_model / run_chain 으로 부를 수 있다.
+#
+# 포털이 모델을 노출한다는 사실과 RAPID 가 그것을 호출할 수 있다는 것은 다르다.
+# 후자는 아직 만들지 않았으므로 not_built 로 적는다 - 있는 척하면 계획이
+# 실행되지 않는데도 승인 버튼이 열린다.
+registry_access:
+  portal_mcp_integration: not_built
+  portal_mcp_note: >-
+    포털 MCP 는 list_models / run_model / run_chain / job_status / job_result 를
+    제공하고 antifold, anarcii, alphafold3 를 포함한다. 그 경로를 붙이면 세 모델에
+    대한 전송 문제는 사라진다. 사라지지 않는 것은 설계 정책이다 - 포털은 AntiFold 의
+    region 토큰을 검증할 뿐 어느 영역을 열지 결정하지 않으며, regions 를 비우면
+    IMGT 영역 전체가 샘플링되어 아무도 승인하지 않은 framework 위치가 바뀐다.
+
 models:
 
   mmseqs2:
@@ -61,6 +79,9 @@ models:
     endpoint: bop:18106
     replicas: [bop:18106, bop:18107]
     availability: production
+    access:
+      direct_client: true
+      portal_mcp: true
     client: clients/mmseqs.py
     measures: []
     cost:
@@ -76,6 +97,9 @@ models:
     role: backbone_generator
     endpoint: bop:18104
     availability: production
+    access:
+      direct_client: true
+      portal_mcp: true
     client: clients/local_http.py, clients/rfd3_runpod.py
     measures: [diversity]
     worker_concurrency: 2
@@ -97,6 +121,9 @@ models:
     role: conformational_ensemble
     endpoint: bop:18103
     availability: production
+    access:
+      direct_client: true
+      portal_mcp: true
     client: clients/local_http.py, clients/bioemu_runpod.py
     measures: [diversity]
     worker_concurrency: 2
@@ -117,6 +144,9 @@ models:
     role: sequence_designer
     endpoint: bop:18101
     availability: production
+    access:
+      direct_client: true
+      portal_mcp: true
     client: clients/proteinmpnn.py
     measures: []
     worker_concurrency: 4
@@ -173,6 +203,9 @@ models:
     role: representation
     endpoint: ""
     availability: production
+    access:
+      direct_client: true
+      portal_mcp: false
     client: scripts/transcoder/rapid_sr/
     measures: [structural_preservation]
     cost:
@@ -205,6 +238,9 @@ models:
     role: representation
     endpoint: bop:18170
     availability: production
+    access:
+      direct_client: true
+      portal_mcp: false
     client: clients/esm_embedding.py
     measures: []
     checkpoint:
@@ -238,6 +274,9 @@ models:
     role: cheap_filter
     endpoint: in-process
     availability: production
+    access:
+      direct_client: true
+      portal_mcp: false
     client: clients/soluprot.py
     measures: [solubility]
     threshold:
@@ -254,6 +293,9 @@ models:
     endpoint: bop:18160
     replicas: [bop:18161, bop:18163, bop:18164, bop:18165]
     availability: production
+    access:
+      direct_client: true
+      portal_mcp: true
     client: clients/alphafold2.py, clients/alphafold2_runpod.py
     measures: [structural_preservation]
     worker_concurrency: 4
@@ -294,6 +336,9 @@ models:
     role: structure_validator
     endpoint: bop:18110
     availability: not_wired
+    access:
+      direct_client: false
+      portal_mcp: true
     client: ""
     measures: [structural_preservation, binding]
     cost:
@@ -313,6 +358,9 @@ models:
     role: structure_validator
     endpoint: bop:18162
     availability: not_wired
+    access:
+      direct_client: false
+      portal_mcp: true
     client: ""
     measures: [structural_preservation]
     cost:
@@ -326,6 +374,9 @@ models:
     role: structure_validator
     endpoint: bop:18112
     availability: not_wired
+    access:
+      direct_client: false
+      portal_mcp: true
     client: ""
     measures: [structural_preservation, binding]
     cost:
@@ -340,6 +391,9 @@ models:
     role: interface_scorer
     endpoint: bop:18113
     availability: wired_unvalidated
+    access:
+      direct_client: true
+      portal_mcp: false
     client: clients/affinity.py
     measures: [binding]
     worker_concurrency: 1
@@ -363,6 +417,9 @@ models:
     role: interface_scorer
     endpoint: bop:18108
     availability: wired_unvalidated
+    access:
+      direct_client: true
+      portal_mcp: false
     client: clients/binder_score.py
     measures: [binding]
     worker_concurrency: 8
@@ -379,6 +436,9 @@ models:
     role: sequence_designer
     endpoint: bop:18111
     availability: not_wired
+    access:
+      direct_client: false
+      portal_mcp: true
     client: ""
     measures: []
     cost:
@@ -394,6 +454,9 @@ models:
     role: antibody_numbering
     endpoint: bop:18109
     availability: not_wired
+    access:
+      direct_client: false
+      portal_mcp: true
     client: ""
     measures: []
     cost:
@@ -405,6 +468,9 @@ models:
     role: ligand_docking
     endpoint: bop:18105
     availability: wired_unvalidated
+    access:
+      direct_client: true
+      portal_mcp: true
     client: clients/diffdock_runpod.py
     measures: [binding]
     cost:
@@ -419,6 +485,9 @@ models:
     role: refinement
     endpoint: bop:18102
     availability: wired_unvalidated
+    access:
+      direct_client: true
+      portal_mcp: false
     client: clients/rosetta_relax.py
     measures: []
     worker_concurrency: 8
@@ -541,8 +610,10 @@ purposes:
     objectives: [binding, developability]
     stages:
       - {stage: numbering,          model_id: anarcii,       gate: gate0, required: true,  validated: false}
-      - {stage: backbone_generate,  model_id: rfd3,          gate: null,  required: true,  validated: false}
-      - {stage: sequence_design,    model_id: antifold,      gate: null,  required: true,  validated: false}
+      - {stage: backbone_generate,  model_id: rfd3,          gate: null,  required: true,  validated: false,
+         requires_design_policy: "백본이 움직여도 되는 잔기 범위. CDR only 와 interface contact FR 은 다른 arm 이다."}
+      - {stage: sequence_design,    model_id: antifold,      gate: null,  required: true,  validated: false,
+         requires_design_policy: "CDR/framework 마스크와 변이 상한. 비우면 IMGT 영역 전체가 바뀐다."}
       - {stage: interface_screen,   model_id: ppiformer_ddg, gate: gate1, required: true,  validated: false}
       - {stage: structure_verify,   model_id: alphafold3,    gate: gate2, required: true,  validated: false}
       - {stage: interface_score,    model_id: binder_score,  gate: gate2, required: true,  validated: false}

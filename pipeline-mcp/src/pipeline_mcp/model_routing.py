@@ -183,11 +183,15 @@ class RouteStage:
     required: bool
     validated: bool
     gate: str | None = None
+    #: 이 스테이지를 돌리려면 모델에 닿는 것만으로 부족하고, 무엇을 바꿔도 되는지
+    #: 정하는 정책이 있어야 한다. 빈 문자열이면 그런 정책이 필요 없다는 뜻이다.
+    requires_design_policy: str = ""
 
     def to_dict(self) -> dict:
         return {
             "stage": self.stage, "model_id": self.model_id, "gate": self.gate,
             "required": self.required, "validated": self.validated,
+            "requires_design_policy": self.requires_design_policy,
         }
 
 
@@ -201,6 +205,10 @@ class Route:
     stages: tuple[RouteStage, ...]
     executable: bool
     blocked_reason: str
+    #: 막힌 이유를 종류별로 나눈다. transport 는 모델에 닿을 수 없는 것,
+    #: design_policy 는 닿을 수 있어도 무엇을 바꿔도 되는지 모르는 것이다.
+    #: 전자는 배선으로 풀리고 후자는 풀리지 않는다.
+    blockers: Mapping[str, list]
     cost_driver: str
     _models: Mapping[str, ModelEntry] = field(repr=False, default_factory=dict)
     extra: Mapping[str, Any] = field(default_factory=dict, repr=False)
@@ -316,6 +324,7 @@ class Route:
             "executable": self.executable,
             "validated": self.validated,
             "blocked_reason": self.blocked_reason,
+            "blockers": {k: list(v) for k, v in self.blockers.items()},
             "unvalidated_stages": [s.stage for s in self.unvalidated_stages],
             "cost_driver": self.cost_driver,
         }
@@ -334,6 +343,7 @@ class ModelRegistry:
     version: str
     freeze_state: str
     models: Mapping[str, ModelEntry]
+    registry_access: Mapping[str, object] = field(default_factory=dict)
     _purposes: Mapping[str, Route] = field(repr=False, default_factory=dict)
 
     @property
@@ -505,22 +515,52 @@ def _build_route(purpose: str, raw: Mapping[str, Any], models: Mapping[str, Mode
             required=bool(item.get("required", True)),
             validated=bool(item.get("validated", False)),
             gate=str(gate) if gate else None,
+            requires_design_policy=str(item.get("requires_design_policy", "")),
         ))
     gates = [_GATE_ORDER[s.gate] for s in stages if s.gate]
     if gates != sorted(gates):
         raise RegistryError(f"{purpose}: 게이트 순서가 뒤집혔다 — 비싼 검증이 싼 필터보다 먼저 온다")
 
-    blocking = [s for s in stages if s.required and not models[s.model_id].runnable]
-    if blocking:
+    transport = [s for s in stages if s.required and not models[s.model_id].runnable]
+    policy = [s for s in stages if s.required and s.requires_design_policy]
+    blockers = {
+        "transport": [
+            {"stage": s.stage, "model_id": s.model_id,
+             "availability": models[s.model_id].availability,
+             "access": dict(models[s.model_id].extra.get("access") or {})}
+            for s in transport
+        ],
+        "design_policy": [
+            {"stage": s.stage, "model_id": s.model_id,
+             "requirement": s.requires_design_policy}
+            for s in policy
+        ],
+    }
+
+    parts = []
+    if transport:
         detail = ", ".join(
-            f"{s.stage}: {s.model_id} ({models[s.model_id].availability})" for s in blocking
+            f"{s.stage}: {s.model_id} ({models[s.model_id].availability})" for s in transport
         )
-        reason = (
-            f"이 경로는 여기서 실행할 수 없다. 필요한 모델에 클라이언트가 없다 — {detail}. "
-            "다른 모델로 대체하지 않는다."
+        reachable = [
+            s.model_id for s in transport
+            if (models[s.model_id].extra.get("access") or {}).get("portal_mcp")
+        ]
+        parts.append(
+            f"필요한 모델을 여기서 호출할 수 없다 — {detail}."
+            + (f" 이 중 {', '.join(reachable)} 은 bio model portal MCP 가 노출하므로 "
+               f"그 경로를 붙이면 전송 문제는 사라진다." if reachable else "")
         )
-    else:
-        reason = ""
+    if policy:
+        detail = "; ".join(f"{s.stage}: {s.requires_design_policy}" for s in policy)
+        parts.append(
+            f"모델에 닿아도 실행할 수 없다. 무엇을 바꿔도 되는지 정하는 설계 정책이 "
+            f"없다 — {detail} 이 정책은 배선으로 풀리지 않는다."
+        )
+    reason = " ".join(parts)
+    if reason:
+        reason += " 다른 모델로 대체하지 않는다."
+    blocking = transport or policy
 
     return Route(
         purpose=purpose,
@@ -531,6 +571,7 @@ def _build_route(purpose: str, raw: Mapping[str, Any], models: Mapping[str, Mode
         stages=tuple(stages),
         executable=not blocking,
         blocked_reason=reason,
+        blockers=blockers,
         cost_driver=str(raw.get("cost_driver", "")),
         _models=models,
         extra={k: v for k, v in raw.items() if k not in _KNOWN_PURPOSE_KEYS},
@@ -611,6 +652,7 @@ def load_registry(path: str | Path | None = None, *, use_cache: bool = True) -> 
         version=str(raw.get("version", "")),
         freeze_state=str((raw.get("freeze") or {}).get("state", "draft")),
         models=models,
+        registry_access=dict(raw.get("registry_access") or {}),
         _purposes=purposes,
     )
     if use_cache:

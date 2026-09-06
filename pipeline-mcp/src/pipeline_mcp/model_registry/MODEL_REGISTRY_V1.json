@@ -12,6 +12,10 @@
   },
   "models": {
     "alphafold3": {
+      "access": {
+        "direct_client": false,
+        "portal_mcp": true
+      },
       "availability": "not_wired",
       "blocked_note": "The worker is reachable and reports its weights and databases ready, but this repository has no AF3 client. A route that needs AF3 is reported as blocked here rather than silently downgraded to ColabFold, which cannot fold a complex the same way.",
       "client": "",
@@ -29,6 +33,10 @@
       "role": "structure_validator"
     },
     "anarcii": {
+      "access": {
+        "direct_client": false,
+        "portal_mcp": true
+      },
       "availability": "not_wired",
       "client": "",
       "cost": {
@@ -41,6 +49,10 @@
       "role": "antibody_numbering"
     },
     "antifold": {
+      "access": {
+        "direct_client": false,
+        "portal_mcp": true
+      },
       "availability": "not_wired",
       "blocked_note": "Antibody-specific inverse folder, reachable on BOP. Not wired here. The antibody design arms, their masks and their mutation caps live in the antigen pipeline's ROUTER_POLICY_V1.1; this registry does not restate that policy.",
       "client": "",
@@ -54,6 +66,10 @@
       "role": "sequence_designer"
     },
     "binder_score": {
+      "access": {
+        "direct_client": true,
+        "portal_mcp": false
+      },
       "availability": "wired_unvalidated",
       "client": "clients/binder_score.py",
       "cost": {
@@ -71,6 +87,10 @@
       "worker_concurrency": 8
     },
     "bioemu": {
+      "access": {
+        "direct_client": true,
+        "portal_mcp": true
+      },
       "availability": "production",
       "client": "clients/local_http.py, clients/bioemu_runpod.py",
       "cost": {
@@ -88,6 +108,10 @@
       "worker_concurrency": 2
     },
     "boltz2": {
+      "access": {
+        "direct_client": false,
+        "portal_mcp": true
+      },
       "availability": "not_wired",
       "blocked_note": "Reachable on BOP; folds ':'-joined complexes and returns pair_chains_iptm, so it could give an interface confidence without an AF3 call. No client here.",
       "client": "",
@@ -104,6 +128,10 @@
       "role": "structure_validator"
     },
     "colabfold": {
+      "access": {
+        "direct_client": true,
+        "portal_mcp": true
+      },
       "availability": "production",
       "caveat": "AF2 pLDDT is a model confidence, not ground truth. It is used here as a consistent, expensive verification signal, never described as a measurement of the designed protein.",
       "client": "clients/alphafold2.py, clients/alphafold2_runpod.py",
@@ -146,6 +174,10 @@
       "worker_concurrency": 4
     },
     "diffdock": {
+      "access": {
+        "direct_client": true,
+        "portal_mcp": true
+      },
       "availability": "wired_unvalidated",
       "client": "clients/diffdock_runpod.py",
       "cost": {
@@ -161,6 +193,10 @@
       "validation_status": "A RunPod client exists; the BOP worker at 18105 is reachable. Neither has been exercised from a RAPID route."
     },
     "esm2_embedding": {
+      "access": {
+        "direct_client": true,
+        "portal_mcp": false
+      },
       "availability": "production",
       "checkpoint": {
         "model_name": "facebook/esm2_t6_8M_UR50D",
@@ -187,6 +223,10 @@
       "role": "representation"
     },
     "esmfold": {
+      "access": {
+        "direct_client": false,
+        "portal_mcp": true
+      },
       "availability": "not_wired",
       "blocked_note": "Reachable on BOP (facebook/esmfold_v1) but no client exists here.",
       "client": "",
@@ -202,6 +242,10 @@
       "role": "structure_validator"
     },
     "mmseqs2": {
+      "access": {
+        "direct_client": true,
+        "portal_mcp": true
+      },
       "availability": "production",
       "client": "clients/mmseqs.py",
       "cost": {
@@ -219,6 +263,10 @@
       "role": "msa"
     },
     "mpnn_encoder": {
+      "access": {
+        "direct_client": true,
+        "portal_mcp": false
+      },
       "availability": "production",
       "client": "scripts/transcoder/rapid_sr/",
       "cost": {
@@ -249,6 +297,10 @@
       "role": "representation"
     },
     "ppiformer_ddg": {
+      "access": {
+        "direct_client": true,
+        "portal_mcp": false
+      },
       "availability": "wired_unvalidated",
       "client": "clients/affinity.py",
       "cost": {
@@ -267,6 +319,10 @@
       "worker_concurrency": 1
     },
     "proteinmpnn": {
+      "access": {
+        "direct_client": true,
+        "portal_mcp": true
+      },
       "availability": "production",
       "checkpoint": {
         "model_name": "v_48_020",
@@ -304,6 +360,10 @@
       "worker_concurrency": 4
     },
     "rfd3": {
+      "access": {
+        "direct_client": true,
+        "portal_mcp": true
+      },
       "availability": "production",
       "client": "clients/local_http.py, clients/rfd3_runpod.py",
       "cost": {
@@ -321,6 +381,10 @@
       "worker_concurrency": 2
     },
     "rosetta_relax": {
+      "access": {
+        "direct_client": true,
+        "portal_mcp": false
+      },
       "availability": "wired_unvalidated",
       "client": "clients/rosetta_relax.py",
       "cost": {
@@ -334,6 +398,10 @@
       "worker_concurrency": 8
     },
     "soluprot": {
+      "access": {
+        "direct_client": true,
+        "portal_mcp": false
+      },
       "availability": "production",
       "client": "clients/soluprot.py",
       "cost": {
@@ -377,6 +445,7 @@
           "gate": null,
           "model_id": "rfd3",
           "required": true,
+          "requires_design_policy": "백본이 움직여도 되는 잔기 범위. CDR only 와 interface contact FR 은 다른 arm 이다.",
           "stage": "backbone_generate",
           "validated": false
         },
@@ -384,6 +453,7 @@
           "gate": null,
           "model_id": "antifold",
           "required": true,
+          "requires_design_policy": "CDR/framework 마스크와 변이 상한. 비우면 IMGT 영역 전체가 바뀐다.",
           "stage": "sequence_design",
           "validated": false
         },
@@ -654,6 +724,10 @@
         }
       ]
     }
+  },
+  "registry_access": {
+    "portal_mcp_integration": "not_built",
+    "portal_mcp_note": "포털 MCP 는 list_models / run_model / run_chain / job_status / job_result 를 제공하고 antifold, anarcii, alphafold3 를 포함한다. 그 경로를 붙이면 세 모델에 대한 전송 문제는 사라진다. 사라지지 않는 것은 설계 정책이다 - 포털은 AntiFold 의 region 토큰을 검증할 뿐 어느 영역을 열지 결정하지 않으며, regions 를 비우면 IMGT 영역 전체가 샘플링되어 아무도 승인하지 않은 framework 위치가 바뀐다."
   },
   "schema": "rapid.model_registry/1",
   "version": "V1"

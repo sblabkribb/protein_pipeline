@@ -466,3 +466,67 @@ class RuntimeDependencyTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0,
                          f"미러가 추적되지 않는다 - 배포에 포함되지 않는다: "
                          f"{result.stderr.strip()}")
+
+
+class AccessPathTests(unittest.TestCase):
+    """모델에 닿는 경로와, 그 모델을 쓸 정책이 있는지는 다른 문제다.
+
+    "이 경로는 실행할 수 없다 - 필요한 모델에 클라이언트가 없다" 는 답이
+    불완전했다. bio model portal MCP 는 antifold / anarcii / alphafold3 를 전부
+    노출하므로, 그 MCP 를 호출할 수 있게 되면 클라이언트 없이도 모델에 닿는다.
+
+    그렇다고 항체 경로가 실행 가능해지지는 않는다. 포털은 AntiFold 의 region
+    토큰을 검증할 뿐 **어느 영역을 열지 결정해주지 않는다**. regions 를 비우면
+    AntiFold 는 IMGT 영역 전체를 샘플링해서 아무도 승인하지 않은 framework
+    위치를 바꾼다. 그 결정이 설계 정책이고, RAPID 에는 없다.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.reg = load_registry()
+
+    def test_every_model_declares_how_it_can_be_reached(self):
+        for model in self.reg.models.values():
+            self.assertIn("access", model.extra, model.model_id)
+            for key in ("direct_client", "portal_mcp"):
+                self.assertIn(key, model.extra["access"], f"{model.model_id}.{key}")
+
+    def test_a_model_with_a_client_says_so(self):
+        self.assertTrue(self.reg.models["proteinmpnn"].extra["access"]["direct_client"])
+
+    def test_the_antibody_models_are_reachable_through_the_portal(self):
+        for model_id in ("antifold", "anarcii", "alphafold3"):
+            access = self.reg.models[model_id].extra["access"]
+            self.assertFalse(access["direct_client"], model_id)
+            self.assertTrue(access["portal_mcp"], model_id)
+
+    def test_portal_access_is_not_claimed_as_built_until_it_is(self):
+        """포털이 모델을 노출한다는 사실과, RAPID 가 그것을 호출할 수 있다는 것은 다르다."""
+        self.assertIn("portal_mcp_integration", self.reg.registry_access)
+        self.assertEqual(self.reg.registry_access["portal_mcp_integration"], "not_built")
+
+    def test_a_blocked_route_separates_transport_from_design_policy(self):
+        route = self.reg.route("antibody_design")
+        self.assertFalse(route.executable)
+        self.assertIn("transport", route.blockers)
+        self.assertIn("design_policy", route.blockers)
+
+    def test_the_antibody_route_is_blocked_by_policy_not_only_by_transport(self):
+        """전송만 뚫어도 열리지 않는다는 것이 요점이다."""
+        route = self.reg.route("antibody_design")
+        self.assertTrue(route.blockers["design_policy"],
+                        "마스크 정책 없이 AntiFold 를 돌리면 framework 를 건드린다")
+
+    def test_the_blocked_reason_names_the_design_policy(self):
+        reason = self.reg.route("antibody_design").blocked_reason
+        self.assertIn("정책", reason)
+
+    def test_a_stage_needing_a_design_policy_is_marked(self):
+        route = self.reg.route("antibody_design")
+        needs = [s.stage for s in route.stages if s.requires_design_policy]
+        self.assertIn("sequence_design", needs)
+
+    def test_the_monomer_route_needs_no_design_policy(self):
+        route = self.reg.route("monomer_solubility_redesign")
+        self.assertEqual([s for s in route.stages if s.requires_design_policy], [])
+        self.assertEqual(route.blockers["design_policy"], [])
