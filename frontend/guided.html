@@ -53,9 +53,15 @@
       </aside>
 
       <section class="center">
+        <nav class="stepnav" aria-label="계획 단계">
+          <button class="stepbtn is-active" data-step="1"><span class="stepno">1</span>목표</button>
+          <button class="stepbtn" data-step="2"><span class="stepno">2</span>경로<span class="stepmeta" id="routeMeta"></span></button>
+          <button class="stepbtn" data-step="3"><span class="stepno">3</span>검토<span class="stepmeta" id="reviewState"></span></button>
+          <button class="stepbtn" data-step="4"><span class="stepno">4</span>승인<span class="stepmeta" id="approveState"></span></button>
+        </nav>
         <ol class="steps">
-          <li class="step">
-            <h2><span class="stepno" aria-hidden="true">1</span>목표</h2>
+          <li class="step" data-step="1">
+            <h2>목표</h2>
             <p class="note">좌측에서 목적과 목표를 정하면 RAPID가 모델과 파라미터를 고릅니다.</p>
             <button id="planBtn" class="primary">계획 생성</button>
             <span id="planStatus" class="status" role="status" aria-live="polite"></span>
@@ -64,16 +70,16 @@
             </div>
           </li>
 
-          <li class="step">
-            <h2><span class="stepno" aria-hidden="true">2</span>경로<span id="routeMeta" class="meta"></span></h2>
+          <li class="step hidden" data-step="2">
+            <h2>경로</h2>
             <p class="note">
               측정한 비용만 숫자로 적습니다. 재지 않은 단계는 <b>미측정</b>이며 0초가 아닙니다.
             </p>
             <div id="stages" class="stages">목적을 고르면 단계가 표시됩니다.</div>
           </li>
 
-          <li class="step">
-            <h2><span class="stepno" aria-hidden="true">3</span>검토<span id="reviewState" class="meta">계획 생성 대기</span></h2>
+          <li class="step hidden" data-step="3">
+            <h2>검토</h2>
             <div id="warnings"></div>
             <div id="explainBox" class="explain hidden">
               <div class="explainhead">
@@ -86,8 +92,8 @@
             <div id="decisions" class="empty">계획을 생성하면 결정과 근거가 여기 표시됩니다.</div>
           </li>
 
-          <li class="step">
-            <h2><span class="stepno" aria-hidden="true">4</span>승인<span id="approveState" class="meta">검토 대기</span></h2>
+          <li class="step hidden" data-step="4">
+            <h2>승인</h2>
             <p class="note">승인하면 파이프라인 요청으로 바뀝니다. 이 화면은 실행하지 않습니다.</p>
             <button id="approveBtn" class="primary" disabled>승인하고 요청 만들기</button>
             <pre id="requestOut" class="empty">아직 승인하지 않았습니다.</pre>
@@ -96,8 +102,12 @@
       </section>
 
       <aside class="side right">
-        <section class="block">
-          <h3>실행</h3>
+        <nav class="tabs" aria-label="결과 보기">
+          <button class="tab is-active" data-panel="runs">실행</button>
+          <button class="tab" data-panel="artifacts">결과</button>
+          <button class="tab" data-panel="connections">연결</button>
+        </nav>
+        <section class="block panel" data-panelfor="runs">
           <div class="monitorhead">
             <label class="visually-hidden" for="runSelect">실행 선택</label>
             <select id="runSelect"><option value="">실행을 불러오세요</option></select>
@@ -106,14 +116,12 @@
           <div id="runStatus" class="empty" role="status" aria-live="polite">실행을 고르면 상태가 표시됩니다.</div>
         </section>
 
-        <section class="block">
-          <h3>결과</h3>
+        <section class="block panel hidden" data-panelfor="artifacts">
           <div id="artifactList" class="empty">실행을 고르면 산출물이 표시됩니다.</div>
           <div id="artifactPreview" class="preview"></div>
         </section>
 
-        <section class="block">
-          <h3>연결</h3>
+        <section class="block panel hidden" data-panelfor="connections">
           <div id="connections" class="conns"></div>
           <button id="probeBtn" class="ghost">워커 확인</button>
           <div id="monitorList" class="empty">확인을 누르면 표시됩니다.</div>

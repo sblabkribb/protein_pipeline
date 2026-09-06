@@ -61,11 +61,12 @@ test("approval does not run the pipeline", () => {
   assert.ok(html.includes("실행하지 않습니다"), "the page must say it does not run");
 });
 
-test("every step is visible before a plan exists", () => {
-  // 단계를 hidden 으로 시작하면 로그인 전 사용자에게는 미구현으로 보인다.
-  const steps = html.match(/<li class="step">/g) || [];
-  assert.equal(steps.length, 4);
-  assert.ok(!/<li class="step"[^>]*hidden/.test(html));
+test("every step is reachable before a plan exists", () => {
+  // 단계를 감추는 것은 괜찮지만 도달할 수 없으면 안 된다. 로그인 전 사용자에게
+  // 미구현으로 보이면 안 되므로, 네 단계 모두 버튼으로 열려 있어야 한다.
+  const buttons = html.match(/<button class="stepbtn[^"]*" data-step="\d"/g) || [];
+  assert.equal(buttons.length, 4);
+  assert.ok(!/<button class="stepbtn[^>]*disabled/.test(html), "steps must not start disabled");
 });
 
 test("approve stays disabled until a plan is generated", () => {
@@ -122,7 +123,9 @@ test("api base follows the shared resolver instead of an empty origin", () => {
   // 빈 apiBase 로 두면 /tools/call 이 원점으로 나가는데, 배포 환경의 프록시는
   // /api/* 만 백엔드로 보내므로 조용히 404 가 된다.
   assert.ok(source.includes("resolveDefaultApiBase"), "must reuse the shared resolver");
-  assert.ok(!/return\s*"";/.test(source), "apiBase must not fall back to an empty string");
+  const fn = source.slice(source.indexOf("function apiBase("),
+                          source.indexOf("function authHeaders("));
+  assert.ok(!/return\s*"";/.test(fn), "apiBase must not fall back to an empty string");
 });
 
 test("the LLM explanation is kept separate from evidence", () => {
@@ -171,12 +174,12 @@ test("the layout is three rails: intent, plan, results", () => {
                     "artifactList", "connections"]) {
     assert.ok(html.includes(`id="${id}"`), `layout needs #${id}`);
   }
-  assert.ok(!html.includes('data-panel='), "tabs hid the results behind a click");
+  assert.ok(html.includes('data-panel='), "results are grouped into tabs so the rail stays short");
 });
 
 test("the plan reads as a numbered sequence because the flow is gated", () => {
   // 번호는 장식이 아니다. 생성 전에 검토할 수 없고 검토 전에 승인할 수 없다.
-  const steps = [...html.matchAll(/<span class="stepno" aria-hidden="true">(\d)<\/span>([^<]+)/g)];
+  const steps = [...html.matchAll(/data-step="(\d)"><span class="stepno">\d<\/span>([^<]+)/g)];
   assert.deepEqual(steps.map((m) => m[1]), ["1", "2", "3", "4"]);
   assert.deepEqual(steps.map((m) => m[2]), ["목표", "경로", "검토", "승인"]);
 });
@@ -290,9 +293,10 @@ test("no server value is ever interpolated into innerHTML", () => {
   assert.deepEqual(offenders, [], `interpolated innerHTML at lines ${offenders.map(([n]) => n)}`);
 });
 
-test("the artifact path goes through the text-only helper", () => {
-  assert.ok(/el\("span", "apath", path\)/.test(source),
-            "the path must be passed as text, never assembled into markup");
+test("the artifact name goes through the text-only helper", () => {
+  assert.ok(/el\("span", "apath", name\)/.test(source),
+            "the name must be passed as text, never assembled into markup");
+  assert.ok(/row\.title = path/.test(source), "the full path belongs in the tooltip");
 });
 
 test("the text helper only ever sets textContent", () => {
@@ -334,4 +338,36 @@ test("the steps are not four identical cards", () => {
   const step = css.slice(css.indexOf("\n.step {"), css.indexOf("\n.step {") + 160);
   assert.ok(!/border-radius/.test(step) && !/border: 1px/.test(step),
             "steps should read as a sequence, not as a card kit");
+});
+
+test("directories are not offered as readable artifacts", () => {
+  // list_artifacts 는 파일과 디렉터리를 함께 돌려준다 (type 필드). msa 와 tiers 는
+  // 디렉터리이고, 그것을 read_artifact 에 넘기면 실패한다 - 사용자가 본
+  // "msa, tiers 를 못 불러온다" 가 이것이다.
+  assert.ok(source.includes('item.type'), "the artifact type must be inspected");
+  assert.ok(/directory|dir\b/.test(source), "directories need their own handling");
+});
+
+test("run status is read from the nested status object", () => {
+  // pipeline.status 는 {run_id, found, status:{stage,state,updated_at}} 를 돌려준다.
+  // 최상위에서 읽으면 모든 값이 "-" 로 나온다.
+  assert.ok(/out\.status\b/.test(source), "the fields live under .status");
+  assert.ok(source.includes("found"), "a missing run must be told apart from an empty one");
+});
+
+test("artifacts are listed as deep as the main app lists them", () => {
+  // 서버 기본값은 max_depth 4 이고 app.js 는 6 을 쓴다. 기본값에 기대면 깊은
+  // 산출물이 조용히 빠진다.
+  assert.ok(/max_depth:\s*6/.test(source));
+});
+
+test("the plan reads as clickable steps rather than one long scroll", () => {
+  assert.ok(html.includes('data-step="1"'), "steps must be selectable");
+  assert.ok(source.includes("showStep"));
+});
+
+test("the results rail is tabbed rather than stacked", () => {
+  for (const panel of ["runs", "artifacts", "connections"]) {
+    assert.ok(html.includes(`data-panel="${panel}"`), `right rail needs the ${panel} tab`);
+  }
 });

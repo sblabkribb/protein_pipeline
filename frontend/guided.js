@@ -277,6 +277,13 @@ const runState = { runId: "", artifacts: [] };
 //: 넣으면 빈 캔버스가 나오고, 사용자는 파일이 비었다고 생각한다.
 const STRUCTURE_FORMATS = { pdb: "pdb", cif: "cif", mmcif: "cif", ent: "pdb", sdf: "sdf" };
 
+function formatBytes(size) {
+  if (size == null) return "";
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function isStructureArtifact(path) {
   const ext = String(path || "").toLowerCase().split(".").pop();
   return Object.prototype.hasOwnProperty.call(STRUCTURE_FORMATS, ext) ? STRUCTURE_FORMATS[ext] : "";
@@ -298,9 +305,11 @@ async function loadRuns() {
     }
     select.appendChild(new Option("실행을 고르세요", ""));
     for (const run of runs) {
-      const id = String(run.run_id || run.id || run);
-      const label = run.stage ? `${id} · ${run.stage}` : id;
-      select.appendChild(new Option(label, id));
+      // list_runs 는 문자열 목록을 돌려준다. 객체로 오는 배포본도 있어 둘 다 받는다.
+      const id = typeof run === "string" ? run : String(run.run_id || run.id || "");
+      if (!id) continue;
+      const stage = typeof run === "object" ? run.stage : "";
+      select.appendChild(new Option(stage ? `${id} · ${stage}` : id, id));
     }
   } catch (error) {
     select.replaceChildren(new Option("불러오지 못했습니다", ""));
@@ -328,26 +337,33 @@ async function loadRunStatus(runId) {
   try {
     const out = await callTool("pipeline.status", { run_id: runId });
     if (out && out.error) throw new Error(out.error);
+    if (out.found === false) {
+      setRunStatus(`${runId} 의 상태 파일이 없습니다.`);
+      return;
+    }
+    // 실제 값은 status 안에 들어 있다. 최상위에서 읽으면 전부 "-" 가 된다.
+    const info = (out && typeof out.status === "object" && out.status) || out;
     host.classList.remove("empty");
-    host.innerHTML = "";
+    host.replaceChildren();
     const rows = [
       ["실행", runId],
-      ["단계", out.stage || out.current_stage || "-"],
-      ["상태", out.state || out.status || "-"],
-      ["갱신", out.updated_at || out.updated || "-"],
+      ["단계", info.stage || "-"],
+      ["상태", info.state || "-"],
+      ["갱신", info.updated_at || "-"],
     ];
     for (const [label, value] of rows) {
       const row = el("div", "skill");
       row.append(el("span", "", label), el("span", "chip", value));
       host.appendChild(row);
     }
-    if (out.error_summary) {
+    if (info.error_summary) {
       const warn = document.createElement("div");
       warn.className = "warn";
-      warn.textContent = String(out.error_summary);
+      warn.textContent = String(info.error_summary);
       host.appendChild(warn);
     }
     await loadArtifacts(runId);
+    showPanel("artifacts");
   } catch (error) {
     setRunStatus(`상태를 불러오지 못했습니다: ${error.message}`);
   }
@@ -359,7 +375,11 @@ async function loadArtifacts(runId) {
   host.textContent = "불러오는 중…";
   document.getElementById("artifactPreview").innerHTML = "";
   try {
-    const out = await callTool("pipeline.list_artifacts", { run_id: runId, limit: 200 });
+    // 서버 기본값은 max_depth 4 다. app.js 는 6 을 쓰고, 기본값에 기대면 깊은
+    // 산출물이 조용히 빠진다.
+    const out = await callTool("pipeline.list_artifacts", {
+      run_id: runId, max_depth: 6, limit: 400,
+    });
     if (out && out.error) throw new Error(out.error);
     const items = out.artifacts || out.items || [];
     runState.artifacts = items;
@@ -370,18 +390,38 @@ async function loadArtifacts(runId) {
       return;
     }
     host.classList.remove("empty");
-    for (const item of items) {
+    // list_artifacts 는 파일과 디렉터리를 함께 돌려준다. msa 와 tiers 는
+    // 디렉터리이고, 그것을 read_artifact 에 넘기면 실패한다. 디렉터리는 읽는
+    // 대상이 아니라 그 아래를 묶는 제목으로 쓴다.
+    const files = items.filter((item) => String(item.type || "file") !== "directory");
+    if (!files.length) {
+      host.classList.add("empty");
+      host.textContent = "이 실행에는 읽을 수 있는 파일이 없습니다.";
+      return;
+    }
+    const groups = new Map();
+    for (const item of files) {
       const path = String(item.path || item.name || item);
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "artifact";
-      const format = isStructureArtifact(path);
-      row.append(
-        el("span", "apath", path),
-        el("span", "chip", format ? "3D" : (item.size != null ? `${item.size}B` : "텍스트")),
-      );
-      row.addEventListener("click", () => openArtifact(runId, path, format));
-      host.appendChild(row);
+      const slash = path.lastIndexOf("/");
+      const folder = slash < 0 ? "" : path.slice(0, slash);
+      if (!groups.has(folder)) groups.set(folder, []);
+      groups.get(folder).push({ item, path, name: slash < 0 ? path : path.slice(slash + 1) });
+    }
+    for (const folder of [...groups.keys()].sort()) {
+      if (folder) host.appendChild(el("div", "afolder", folder));
+      for (const { item, path, name } of groups.get(folder)) {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "artifact";
+        const format = isStructureArtifact(path);
+        row.title = path;
+        row.append(
+          el("span", "apath", name),
+          el("span", "chip", format ? "3D" : formatBytes(item.size)),
+        );
+        row.addEventListener("click", () => openArtifact(runId, path, format));
+        host.appendChild(row);
+      }
     }
   } catch (error) {
     host.classList.add("empty");
@@ -488,6 +528,7 @@ function onPurposeChange() {
   const route = currentRoute();
   const note = document.getElementById("purposeNote");
   renderStages(document.getElementById("stages"), route);
+  if (typeof showStep === "function" && registry.loaded) showStep(2);
   if (!route) { note.textContent = ""; return; }
   // 실행 가능 여부와 검증 여부는 목적 카드의 배지가 말한다. 여기서는 그 경로가
   // 무엇인지와, 배지로 담기지 않는 단서만 적는다.
@@ -689,6 +730,7 @@ async function generatePlan() {
       ? "검토 후 승인 가능"
       : "이 경로는 여기서 실행할 수 없어 승인할 수 없습니다";
     document.getElementById("approveBtn").disabled = !approvable;
+    showStep(3);
     if (plan.route) renderStages(document.getElementById("stages"), plan.route);
     status.className = "status";
     status.textContent = "";
@@ -731,6 +773,37 @@ for (const id of ["nDesigns", "lengthAa"]) {
   document.getElementById(id).addEventListener("change", loadRegistry);
 }
 loadRegistry();
+
+// 한 번에 한 단계만 보여준다. 네 단계를 세로로 이어붙이면 아래로 계속 읽어야
+// 하고, 지금 어디에 있는지도 알기 어렵다.
+function showStep(step) {
+  for (const node of document.querySelectorAll(".step")) {
+    node.classList.toggle("hidden", node.dataset.step !== String(step));
+  }
+  for (const button of document.querySelectorAll(".stepbtn")) {
+    const active = button.dataset.step === String(step);
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-current", active ? "step" : "false");
+  }
+}
+
+function showPanel(name) {
+  for (const node of document.querySelectorAll(".panel[data-panelfor]")) {
+    node.classList.toggle("hidden", node.dataset.panelfor !== name);
+  }
+  for (const tab of document.querySelectorAll(".tab")) {
+    const active = tab.dataset.panel === name;
+    tab.classList.toggle("is-active", active);
+    tab.setAttribute("aria-selected", String(active));
+  }
+}
+
+for (const button of document.querySelectorAll(".stepbtn")) {
+  button.addEventListener("click", () => showStep(button.dataset.step));
+}
+for (const tab of document.querySelectorAll(".tab")) {
+  tab.addEventListener("click", () => showPanel(tab.dataset.panel));
+}
 
 document.getElementById("probeBtn").addEventListener("click", probeWorkers);
 document.getElementById("runRefreshBtn").addEventListener("click", loadRuns);
