@@ -34,7 +34,7 @@ DEFAULT_CLUSTER_UNIT = "backbone_key"
 #: 이진 통과율과 나란히 보는 연속 endpoint. 같은 480 폴드에서 pLDDT 는 68-97 로
 #: 흩어져 있었는데 structural_yield 는 15 개 중 12 개가 0.000 또는 1.000 이었다.
 #: 연속값에는 바닥/천장이 없으므로 포화로 정보를 잃지 않는다.
-CONTINUOUS_ENDPOINTS = ("plddt", "rmsd", "_soluprot")
+CONTINUOUS_ENDPOINTS = ("plddt", "rmsd_nonloop_order", "_soluprot")
 
 #: 소스별 결론을 확정적으로 부르기 위한 최소 백본 수. 확장 패널의 BioEmu 는
 #: 4 개뿐이라 그 아래다.
@@ -169,9 +169,28 @@ def _num(row, key):
         return None
 
 
+#: 동결된 지표가 쓰는 컬럼. 재폴딩 결과는 여기에 값을 쓴다.
+FROZEN_RMSD_COLUMN = "rmsd_nonloop_order"
+
+
+def _structural_rmsd(row) -> tuple[float | None, str]:
+    """구조 판정에 쓸 RMSD 와 그것을 어디서 읽었는지.
+
+    새 컬럼이 있으면 그것만 쓴다. 비어 있어도 옛 컬럼으로 넘어가지 않는다 -
+    대응을 세우지 못한 폴드를 폐기된 값으로 채우면 그 자리가 조용히 되살아난다.
+    """
+    if FROZEN_RMSD_COLUMN in row:
+        return _num(row, FROZEN_RMSD_COLUMN), FROZEN_RMSD_COLUMN
+    if "rmsd" in row:
+        return _num(row, "rmsd"), "rmsd_legacy"
+    return None, "none"
+
+
 def annotate(rows: list[dict]) -> list[dict]:
     for row in rows:
-        plddt, rmsd, solu = _num(row, "plddt"), _num(row, "rmsd"), _num(row, "soluprot")
+        plddt, solu = _num(row, "plddt"), _num(row, "soluprot")
+        rmsd, source = _structural_rmsd(row)
+        row["_rmsd_source"] = source
         structural = (
             None if plddt is None or rmsd is None
             else float(plddt >= GATE0_THRESHOLDS["plddt_min"]
@@ -635,7 +654,7 @@ def main(argv: list[str] | None = None) -> int:
     report["continuous"] = {}
     for field in CONTINUOUS_ENDPOINTS:
         label = field.lstrip("_")
-        if field == "rmsd" and not provenance["matches_frozen_definition"]:
+        if field == FROZEN_RMSD_COLUMN and not provenance["matches_frozen_definition"]:
             # 다른 정의로 잰 값을 동결 지표인 척 보고하지 않는다.
             report["continuous"]["rmsd_skipped"] = provenance
             print("\nrmsd: 동결 정의가 아니므로 건너뛴다")

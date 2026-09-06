@@ -470,7 +470,9 @@ class ContinuousEndpointTests(unittest.TestCase):
     def test_the_declared_continuous_endpoints_are_all_analysed(self):
         module = _load()
         self.assertIn("plddt", module.CONTINUOUS_ENDPOINTS)
-        self.assertIn("rmsd", module.CONTINUOUS_ENDPOINTS)
+        # 연속 endpoint 도 동결된 컬럼을 본다. 옛 rmsd 컬럼이 아니다.
+        self.assertIn(module.FROZEN_RMSD_COLUMN, module.CONTINUOUS_ENDPOINTS)
+        self.assertNotIn("rmsd", module.CONTINUOUS_ENDPOINTS)
         self.assertIn("_soluprot", module.CONTINUOUS_ENDPOINTS)
 
     def test_a_missing_value_is_skipped_not_read_as_zero(self):
@@ -619,3 +621,40 @@ class InvalidatedInputTests(unittest.TestCase):
         gate = module.structural_conclusions_allowed([{"rmsd_method": "ca_rmsd_dssp_non_loop"}])
         self.assertIn("soluprot", " ".join(gate["still_readable"]))
         self.assertIn("plddt", " ".join(gate["still_readable"]))
+
+
+class MetricColumnTests(unittest.TestCase):
+    """어느 컬럼에서 구조값을 읽는가.
+
+    재폴딩 결과는 rmsd_nonloop_order 에 값을 쓴다. annotate 가 옛 rmsd 컬럼만
+    보면 새 파일에서 전부 None 이 되고, 반대로 새 컬럼이 없을 때 옛 컬럼으로
+    조용히 넘어가면 폐기된 지표가 되살아난다.
+    """
+
+    def test_the_frozen_column_is_used_when_present(self):
+        module = _load()
+        rows = module.annotate([{"plddt": "90", "rmsd_nonloop_order": "1.0",
+                                 "soluprot": "0.8", "rmsd": "99"}])
+        # 옛 컬럼이 99 여도 통과여야 한다 - 새 컬럼을 읽었다는 뜻이다.
+        self.assertEqual(rows[0]["_structural"], 1.0)
+        self.assertEqual(rows[0]["_rmsd_source"], "rmsd_nonloop_order")
+
+    def test_a_legacy_file_still_computes_but_is_labelled(self):
+        module = _load()
+        rows = module.annotate([{"plddt": "90", "rmsd": "1.0", "soluprot": "0.8"}])
+        self.assertEqual(rows[0]["_structural"], 1.0)
+        self.assertEqual(rows[0]["_rmsd_source"], "rmsd_legacy")
+
+    def test_a_row_with_neither_column_has_no_structural_value(self):
+        module = _load()
+        rows = module.annotate([{"plddt": "90", "soluprot": "0.8"}])
+        self.assertIsNone(rows[0]["_structural"])
+        self.assertEqual(rows[0]["_rmsd_source"], "none")
+
+    def test_an_empty_frozen_column_does_not_fall_back_to_the_legacy_one(self):
+        """대응을 세우지 못해 값이 빈 폴드를 옛 값으로 채우면 안 된다."""
+        module = _load()
+        rows = module.annotate([{"plddt": "90", "rmsd_nonloop_order": "",
+                                 "rmsd": "1.0", "soluprot": "0.8"}])
+        self.assertIsNone(rows[0]["_structural"])
+        self.assertEqual(rows[0]["_rmsd_source"], "rmsd_nonloop_order")
