@@ -126,3 +126,23 @@ pre.empty { font-family:inherit; }
 }
 .ghost:hover { border-color:#3a4658; }
 .ghost:disabled { opacity:.5; cursor:default; }
+
+/* --- 우측 레일: 모니터 / 분석 --- */
+.monitorhead { display:flex; gap:6px; align-items:center; margin-bottom:8px; }
+.monitorhead select { flex:1; }
+.artifact {
+  display:flex; align-items:center; gap:8px; width:100%; text-align:left;
+  padding:5px 8px; margin:3px 0; font-size:12px; cursor:pointer;
+  color:var(--fg); background:transparent; border:1px solid #232b38; border-radius:4px;
+  font-family:ui-monospace,Menlo,monospace;
+}
+.artifact:hover { border-color:#3a4658; background:#141922; }
+/* 긴 경로는 앞이 아니라 뒤가 중요하다. 끝을 자르면 파일명이 사라진다. */
+.apath { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; direction:rtl; text-align:left; }
+.preview { margin-top:10px; }
+.previewhead { font-size:11px; color:var(--dim); margin-bottom:6px; word-break:break-all; }
+.viewer3d { position:relative; width:100%; height:280px; border:1px solid #232b38; border-radius:5px; }
+.artifacttext {
+  max-height:320px; overflow:auto; padding:8px; font-size:11px; line-height:1.5;
+  background:#0f141c; border:1px solid #232b38; border-radius:5px; white-space:pre-wrap;
+}

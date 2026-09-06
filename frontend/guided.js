@@ -308,48 +308,189 @@ function renderConnections(connections) {
   }
 }
 
-function renderAnalysis(route) {
-  const host = document.getElementById("analysisList");
-  host.innerHTML = "";
-  if (!route) {
-    host.classList.add("empty");
-    host.textContent = "계획 생성 후 표시됩니다.";
+// --- 모니터 / 분석 --------------------------------------------------------
+//
+// 기존 RAPID 화면이 쓰는 도구를 그대로 쓴다. 여기서 별도의 요약을 만들면 같은
+// 사실이 두 곳에서 갈라지고, 어느 쪽이 맞는지 판단할 근거가 없어진다.
+
+const runState = { runId: "", artifacts: [] };
+
+//: 3D 로 그릴 수 있는 형식. 그 외에는 텍스트로 보여준다 - 뷰어에 아무 파일이나
+//: 넣으면 빈 캔버스가 나오고, 사용자는 파일이 비었다고 생각한다.
+const STRUCTURE_FORMATS = { pdb: "pdb", cif: "cif", mmcif: "cif", ent: "pdb", sdf: "sdf" };
+
+function isStructureArtifact(path) {
+  const ext = String(path || "").toLowerCase().split(".").pop();
+  return Object.prototype.hasOwnProperty.call(STRUCTURE_FORMATS, ext) ? STRUCTURE_FORMATS[ext] : "";
+}
+
+async function loadRuns() {
+  const select = document.getElementById("runSelect");
+  const button = document.getElementById("runRefreshBtn");
+  button.disabled = true;
+  try {
+    const out = await callTool("pipeline.list_runs", { limit: 30 });
+    if (out && out.error) throw new Error(out.error);
+    const runs = out.runs || out.items || [];
+    select.innerHTML = "";
+    if (!runs.length) {
+      select.innerHTML = `<option value="">실행이 없습니다</option>`;
+      setRunStatus("실행이 없습니다.");
+      return;
+    }
+    select.appendChild(new Option("실행을 고르세요", ""));
+    for (const run of runs) {
+      const id = String(run.run_id || run.id || run);
+      const label = run.stage ? `${id} · ${run.stage}` : id;
+      select.appendChild(new Option(label, id));
+    }
+  } catch (error) {
+    select.innerHTML = `<option value="">불러오지 못했습니다</option>`;
+    setRunStatus(`실행 목록을 불러오지 못했습니다: ${error.message}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function setRunStatus(text) {
+  const host = document.getElementById("runStatus");
+  host.classList.add("empty");
+  host.textContent = text;
+}
+
+async function loadRunStatus(runId) {
+  const host = document.getElementById("runStatus");
+  runState.runId = runId;
+  if (!runId) {
+    setRunStatus("실행을 고르면 상태가 표시됩니다.");
     return;
   }
-  host.classList.remove("empty");
-  let count = 0;
-  for (const stage of route.stages || []) {
-    const model = registry.models[stage.model_id];
-    if (!model || !model.performance || model.performance.value == null) continue;
-    const perf = model.performance;
-    const node = document.createElement("div");
-    node.className = "ev";
-    const label = document.createElement("span");
-    label.className = "kind kind-internal_measurement";
-    label.textContent = "측정";
-    node.appendChild(label);
-    const ci = perf.ci95 ? ` (95% CI ${perf.ci95[0]}–${perf.ci95[1]})` : "";
-    node.appendChild(document.createTextNode(
-      `${model.display_name} · ${perf.metric} ${perf.value}${ci}`));
-    if (perf.source) {
-      const src = document.createElement("span");
-      src.className = "src";
-      src.textContent = `출처: ${perf.source}`;
-      node.appendChild(src);
+  host.classList.add("empty");
+  host.textContent = "불러오는 중…";
+  try {
+    const out = await callTool("pipeline.status", { run_id: runId });
+    if (out && out.error) throw new Error(out.error);
+    host.classList.remove("empty");
+    host.innerHTML = "";
+    const rows = [
+      ["실행", runId],
+      ["단계", out.stage || out.current_stage || "-"],
+      ["상태", out.state || out.status || "-"],
+      ["갱신", out.updated_at || out.updated || "-"],
+    ];
+    for (const [label, value] of rows) {
+      const row = document.createElement("div");
+      row.className = "skill";
+      row.innerHTML = `<span>${label}</span><span class="chip">${value}</span>`;
+      host.appendChild(row);
     }
-    if (perf.caveat) {
-      const caveat = document.createElement("span");
-      caveat.className = "src";
-      caveat.textContent = perf.caveat;
-      node.appendChild(caveat);
+    if (out.error_summary) {
+      const warn = document.createElement("div");
+      warn.className = "warn";
+      warn.textContent = String(out.error_summary);
+      host.appendChild(warn);
     }
-    host.appendChild(node);
-    count += 1;
+    await loadArtifacts(runId);
+  } catch (error) {
+    setRunStatus(`상태를 불러오지 못했습니다: ${error.message}`);
   }
-  if (!count) {
+}
+
+async function loadArtifacts(runId) {
+  const host = document.getElementById("artifactList");
+  host.classList.add("empty");
+  host.textContent = "불러오는 중…";
+  document.getElementById("artifactPreview").innerHTML = "";
+  try {
+    const out = await callTool("pipeline.list_artifacts", { run_id: runId, limit: 200 });
+    if (out && out.error) throw new Error(out.error);
+    const items = out.artifacts || out.items || [];
+    runState.artifacts = items;
+    host.innerHTML = "";
+    if (!items.length) {
+      host.classList.add("empty");
+      host.textContent = "이 실행에는 산출물이 없습니다.";
+      return;
+    }
+    host.classList.remove("empty");
+    for (const item of items) {
+      const path = String(item.path || item.name || item);
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "artifact";
+      const format = isStructureArtifact(path);
+      row.innerHTML = `<span class="apath">${path}</span>`;
+      const chip = document.createElement("span");
+      chip.className = "chip";
+      chip.textContent = format ? "3D" : (item.size != null ? `${item.size}B` : "텍스트");
+      row.appendChild(chip);
+      row.addEventListener("click", () => openArtifact(runId, path, format));
+      host.appendChild(row);
+    }
+  } catch (error) {
     host.classList.add("empty");
-    host.textContent = "이 경로에는 기록된 측정값이 없습니다.";
+    host.textContent = `산출물을 불러오지 못했습니다: ${error.message}`;
   }
+}
+
+async function openArtifact(runId, path, format) {
+  const preview = document.getElementById("artifactPreview");
+  preview.innerHTML = "불러오는 중…";
+  try {
+    const out = await callTool("pipeline.read_artifact", {
+      run_id: runId, path, max_bytes: format ? 4000000 : 200000,
+    });
+    if (out && out.error) throw new Error(out.error);
+    const text = out.text != null ? String(out.text) : "";
+    preview.innerHTML = "";
+
+    const head = document.createElement("div");
+    head.className = "previewhead";
+    head.textContent = path;
+    preview.appendChild(head);
+
+    // read_artifact 는 max_bytes 로 자른다. 잘렸다고 말하지 않으면 사용자는
+    // 파일이 그게 전부인 줄 안다.
+    if (out.truncated) {
+      const warn = document.createElement("div");
+      warn.className = "warn";
+      warn.textContent = "내용이 잘렸습니다. 전체는 기존 화면에서 내려받으세요.";
+      preview.appendChild(warn);
+    }
+
+    if (format && text) {
+      render3d(text, format, preview);
+    } else {
+      const pre = document.createElement("pre");
+      pre.className = "artifacttext";
+      pre.textContent = text || "(빈 파일)";
+      preview.appendChild(pre);
+    }
+  } catch (error) {
+    preview.textContent = `산출물을 읽지 못했습니다: ${error.message}`;
+  }
+}
+
+function render3d(text, format, host) {
+  if (!window.$3Dmol) {
+    const note = document.createElement("div");
+    note.className = "warn";
+    note.textContent = "3D 뷰어를 불러오지 못했습니다.";
+    host.appendChild(note);
+    return;
+  }
+  const container = document.createElement("div");
+  container.className = "viewer3d";
+  host.appendChild(container);
+  const viewer = window.$3Dmol.createViewer(container, { backgroundColor: "#0f141c" });
+  viewer.addModel(text, format);
+  if (format === "sdf") {
+    viewer.setStyle({}, { stick: { radius: 0.15 } });
+  } else {
+    viewer.setStyle({}, { cartoon: { color: "spectrum" } });
+  }
+  viewer.zoomTo();
+  viewer.render();
 }
 
 async function probeWorkers() {
@@ -403,7 +544,6 @@ function onPurposeChange() {
   if (route.caveat) lines.push(route.caveat);
   note.textContent = lines.filter(Boolean).join(" ");
   renderSkills(route);
-  renderAnalysis(route);
   document.getElementById("planBtn").disabled = false;
 }
 
@@ -672,6 +812,11 @@ for (const tab of document.querySelectorAll(".tab")) {
   });
 }
 document.getElementById("probeBtn").addEventListener("click", probeWorkers);
+document.getElementById("runRefreshBtn").addEventListener("click", loadRuns);
+document.getElementById("runSelect").addEventListener("change", (event) => {
+  loadRunStatus(event.target.value);
+});
+loadRuns();
 document.getElementById("planBtn").addEventListener("click", generatePlan);
 document.getElementById("approveBtn").addEventListener("click", approve);
 

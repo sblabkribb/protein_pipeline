@@ -196,3 +196,38 @@ test("the monitor probes liveness on demand rather than on every load", () => {
   assert.ok(!/loadRegistry[\s\S]{0,400}check_liveness/.test(source),
             "liveness must not be probed during the initial load");
 });
+
+test("the monitor uses the pipeline's own run tools, not a summary of its own", () => {
+  // 기존 RAPID 의 모니터가 쓰는 도구를 그대로 쓴다. 새로 요약을 만들면
+  // 같은 사실이 두 곳에서 갈라진다.
+  assert.ok(source.includes("pipeline.list_runs"));
+  assert.ok(source.includes("pipeline.status"));
+  assert.ok(html.includes('id="runSelect"'));
+  assert.ok(html.includes('id="runStatus"'));
+});
+
+test("analysis lists a run's artifacts and reads them", () => {
+  assert.ok(source.includes("pipeline.list_artifacts"));
+  assert.ok(source.includes("pipeline.read_artifact"));
+  assert.ok(html.includes('id="artifactList"'));
+});
+
+test("structure artifacts render in 3D with the same library the app uses", () => {
+  assert.ok(html.includes("3Dmol"), "the page must load 3Dmol");
+  assert.ok(source.includes("$3Dmol"), "structures must render, not just download");
+  assert.ok(/cartoon/.test(source), "protein structures need a cartoon representation");
+});
+
+test("a non-structure artifact is shown as text rather than fed to the viewer", () => {
+  assert.ok(source.includes("isStructureArtifact"));
+});
+
+test("a truncated artifact says it was truncated", () => {
+  // read_artifact 는 max_bytes 로 자른다. 잘렸다고 말하지 않으면 사용자는
+  // 파일이 그게 전부인 줄 안다.
+  assert.ok(/truncated|잘렸/.test(source));
+});
+
+test("an empty run list is reported as empty, not as a failure", () => {
+  assert.ok(/실행이 없습니다|no runs/i.test(source));
+});
