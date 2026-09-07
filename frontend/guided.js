@@ -62,6 +62,11 @@ import {
   beginEdit, cancelEdit, currentEdit,
 } from "./guided/skills.js";
 import { renderAgentsTab, requestAgentEvents } from "./guided/agents.js";
+import {
+  renderProjectsTab, requestProjects, requestRounds,
+  projectCardModels, roundRowModels,
+  expandedProjectId, toggleExpanded, storeProjects, storeRounds, setRoundsLoading,
+} from "./guided/projects.js";
 import { el } from "./guided/dom.js";
 import { shouldRestoreStoredSession } from "./lib/auth.js";
 
@@ -571,7 +576,7 @@ function startFromPurpose(purpose) {
 // 실행 선택·폴링·계획 흐름을 건드리지 않는다.
 
 export const SIDE_TAB_KEY = "kbf.guided.sidetab";
-const SIDE_TAB_NAMES = ["runs", "templates", "models", "connections", "skills", "agents"];
+const SIDE_TAB_NAMES = ["runs", "templates", "models", "connections", "skills", "agents", "projects"];
 let sideTabWired = false;
 
 export function showSideTab(name) {
@@ -587,6 +592,7 @@ export function showSideTab(name) {
   document.getElementById("sideConnections").classList.toggle("hidden", wanted !== "connections");
   document.getElementById("sideSkills").classList.toggle("hidden", wanted !== "skills");
   document.getElementById("sideAgents").classList.toggle("hidden", wanted !== "agents");
+  document.getElementById("sideProjects").classList.toggle("hidden", wanted !== "projects");
   localStorage.setItem(SIDE_TAB_KEY, wanted);
   if (wanted === "templates" && typeof window.__templatesTabLoad === "function") {
     window.__templatesTabLoad();
@@ -602,6 +608,9 @@ export function showSideTab(name) {
   }
   if (wanted === "agents" && typeof window.__agentsTabLoad === "function") {
     window.__agentsTabLoad();
+  }
+  if (wanted === "projects" && typeof window.__projectsTabLoad === "function") {
+    window.__projectsTabLoad();
   }
 }
 
@@ -811,6 +820,48 @@ if (typeof document !== "undefined") {
     }).catch((error) => {
       delete host.dataset.loading;
       renderAgentsTab(host, { state: "error", message: `에이전트 판정을 확인하지 못했습니다: ${errorText(error)}` });
+    });
+  };
+
+  // 프로젝트 탭은 읽기 전용 탐색이다. 다른 탭 훅과 같은 첫 진입 1회 로드·중복
+  // 억제·force 규칙이고, 카드의 "라운드 보기" 는 __projectsExpand 로 드릴다운한다.
+  // 다른 탭 훅과 마찬가지로 initSideTabs 의 탭 복원이 부를 수 있으니 먼저 정의한다.
+  window.__projectsTabLoad = (force = false) => {
+    const host = document.getElementById("sideProjects");
+    if (host.dataset.loaded && !force) return;   // 첫 진입 1회 로드
+    if (host.dataset.loading) return;            // 중복 요청 억제
+    host.dataset.loading = "1";
+    renderProjectsTab(host, { state: "loading" });
+    requestProjects().then((payload) => {
+      host.dataset.loaded = "1";
+      delete host.dataset.loading;
+      storeProjects(projectCardModels((payload && payload.projects) || []));
+      renderProjectsTab(host, { state: "done" });
+    }).catch((error) => {
+      delete host.dataset.loading;
+      renderProjectsTab(host, { state: "error", message: `프로젝트를 불러오지 못했습니다: ${errorText(error)}` });
+    });
+  };
+  window.__projectsExpand = (projectId) => {
+    const host = document.getElementById("sideProjects");
+    const id = toggleExpanded(projectId);
+    // 폈으면 라운드 상태를 새로 시작한다. 접으면 라운드 상태도 비운다 —
+    // 낡은 프로젝트의 라운드가 다음 펼침에 남으면 근거가 섞인다.
+    storeRounds([]);
+    setRoundsLoading(Boolean(id));
+    renderProjectsTab(host, { state: "done" });
+    if (!id) return;
+    requestRounds(id).then((payload) => {
+      // 기다리는 사이 접었거나 다른 프로젝트를 폈으면 버린다 - 낡은 라운드를
+      // 지금 펼친 카드 아래에 두면 출처가 섞인다.
+      if (expandedProjectId() !== id) return;
+      setRoundsLoading(false);
+      storeRounds(roundRowModels((payload && payload.rounds) || []));
+      renderProjectsTab(host, { state: "done" });
+    }).catch((error) => {
+      if (expandedProjectId() !== id) return;
+      setRoundsLoading(false);
+      host.prepend(el("p", "warn", `라운드를 불러오지 못했습니다: ${errorText(error)}`));
     });
   };
 
