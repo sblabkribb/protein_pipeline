@@ -71,7 +71,7 @@ class TestSkillsStore(unittest.TestCase):
         expert = next(e for e in EXPERTS if e.id == "solubility")
         system = plan_council._expert_system(expert)
         self.assertIn("사용자 헌장", system)
-        self.assertIn("OUTPUT", system)  # COUNCIL_OUTPUT_CONTRACT 는 유지
+        self.assertIn(plan_council.COUNCIL_OUTPUT_CONTRACT, system)  # 계약 유지
 
     def test_ask_expert_uses_user_charter(self) -> None:
         self._mk_skill("solubility", {"charter": "사용자 헌장"})
@@ -87,7 +87,7 @@ class TestSkillsStore(unittest.TestCase):
 
         plan_council._ask_expert(FakeGemini(), {}, expert)
         self.assertIn("사용자 헌장", seen["system"])
-        self.assertIn("OUTPUT", seen["system"])
+        self.assertIn(plan_council.COUNCIL_OUTPUT_CONTRACT, seen["system"])
 
     def test_ask_expert_broken_user_file_falls_back(self) -> None:
         self._mk_skill("solubility", "{")

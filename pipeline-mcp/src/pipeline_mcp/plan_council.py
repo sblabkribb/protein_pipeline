@@ -43,7 +43,7 @@ class Expert:
 
 
 COUNCIL_OUTPUT_CONTRACT = (
-    "OUTPUT CONTRACT — 출력 계약: 마지막에 fenced json block 하나만 남긴다.\n"
+    "출력 계약: 마지막에 fenced json block 하나만 남긴다.\n"
     "```json\n"
     "{\"verdict\": \"ok\" | \"warn\" | \"block\", \"reasons\": [\"…\"], "
     "\"suggestions\": [{\"field\": \"필드명\", \"value\": 값, \"rationale\": \"…\", "
