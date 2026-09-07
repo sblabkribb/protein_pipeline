@@ -76,6 +76,13 @@ body {
 .side.right { border-right: 0; border-left: 1px solid var(--rule); }
 .center { padding: 22px 30px 72px; overflow-y: auto; }
 
+/* --- 좌측 탭 -------------------------------------------------------------- */
+.sidetabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin-bottom: 14px; }
+.sidetab { font: inherit; font-size: 13px; padding: 7px 10px; cursor: pointer; color: var(--quiet);
+  background: transparent; border: 0; border-bottom: 2px solid transparent; }
+.sidetab:hover { color: var(--ink); }
+.sidetab.active { color: var(--ink); border-bottom-color: var(--action); }
+
 /* 화면이 좁아지면 레일을 접어 세로로 쌓는다. */
 @media (max-width: 1100px) {
   .layout { grid-template-columns: 1fr !important; height: auto; }

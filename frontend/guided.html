@@ -33,22 +33,29 @@
 
     <main class="layout hidden" id="workspace">
       <aside class="side">
-        <section class="block">
-          <h3>실행</h3>
-          <button id="newDesignBtn" class="ghost newrun" type="button">＋ 새 설계</button>
-          <div id="runList" class="runlist empty">실행을 불러오는 중…</div>
-        </section>
-        <section class="block">
-          <h3>운영</h3>
-          <nav class="oplinks" aria-label="운영">
-            <a href="./index.html">기존 콘솔(전체 기능)</a>
-            <a href="./index.html" data-op="runpod">RunPod Admin</a>
-            <a href="./index.html" data-op="mcp">MCP 설정</a>
-          </nav>
-          <div id="connections" class="conns"></div>
-          <button id="probeBtn" class="ghost">워커 확인</button>
-          <div id="monitorList" class="empty">확인을 누르면 표시됩니다.</div>
-        </section>
+        <nav class="sidetabs" role="tablist" aria-label="좌측 패널">
+          <button class="sidetab active" data-sidetab="runs" role="tab" aria-selected="true" type="button">실행 목록</button>
+          <button class="sidetab" data-sidetab="models" role="tab" aria-selected="false" type="button">모델</button>
+        </nav>
+        <div id="sideRuns">
+          <section class="block">
+            <h3>실행</h3>
+            <button id="newDesignBtn" class="ghost newrun" type="button">＋ 새 설계</button>
+            <div id="runList" class="runlist empty">실행을 불러오는 중…</div>
+          </section>
+          <section class="block">
+            <h3>운영</h3>
+            <nav class="oplinks" aria-label="운영">
+              <a href="./index.html">기존 콘솔(전체 기능)</a>
+              <a href="./index.html" data-op="runpod">RunPod Admin</a>
+              <a href="./index.html" data-op="mcp">MCP 설정</a>
+            </nav>
+            <div id="connections" class="conns"></div>
+            <button id="probeBtn" class="ghost">워커 확인</button>
+            <div id="monitorList" class="empty">확인을 누르면 표시됩니다.</div>
+          </section>
+        </div>
+        <div id="sideModels" class="hidden modelstab" role="tabpanel"></div>
       </aside>
 
       <div class="splitter" data-splitter="left" role="separator" aria-orientation="vertical" aria-label="왼쪽 폭 조절" tabindex="0"></div>

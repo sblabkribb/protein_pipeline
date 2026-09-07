@@ -532,6 +532,41 @@ export function showPanel(name) {
   if (name === "structure") onStructurePanelRevealed();
 }
 
+// --- 좌측 탭 ---------------------------------------------------------------
+//
+// 좌측 탭은 기능 패널을 갈아끼운다. 중앙·우측 워크플로와는 무관하다 -
+// 실행 선택·폴링·계획 흐름을 건드리지 않는다.
+
+export const SIDE_TAB_KEY = "kbf.guided.sidetab";
+const SIDE_TAB_NAMES = ["runs", "models"];
+let sideTabWired = false;
+
+export function showSideTab(name) {
+  const wanted = SIDE_TAB_NAMES.includes(name) ? name : "runs";
+  for (const tab of document.querySelectorAll(".sidetab")) {
+    const on = tab.dataset.sidetab === wanted;
+    tab.classList.toggle("active", on);
+    tab.setAttribute("aria-selected", String(on));
+  }
+  document.getElementById("sideRuns").classList.toggle("hidden", wanted !== "runs");
+  document.getElementById("sideModels").classList.toggle("hidden", wanted !== "models");
+  localStorage.setItem(SIDE_TAB_KEY, wanted);
+  if (wanted === "models" && typeof window.__modelsTabLoad === "function") {
+    window.__modelsTabLoad();
+  }
+}
+
+function initSideTabs() {
+  if (sideTabWired) return;
+  sideTabWired = true;
+  for (const tab of document.querySelectorAll(".sidetab")) {
+    tab.addEventListener("click", () => showSideTab(tab.dataset.sidetab));
+  }
+  let saved = null;
+  try { saved = localStorage.getItem(SIDE_TAB_KEY); } catch { /* 저장값이 깨졌으면 기본값 */ }
+  showSideTab(saved || "runs");
+}
+
 // facade 는 모듈 최상위에서 DOM 을 만진다 (dom.js 머리글의 함정과 같다). 이
 // 모듈은 monitor.js 의 순환 import 를 타고 node 테스트까지 평가되므로, 브라우저
 // 밖에서는 배선을 건너뛴다. 함수 선언과 export 는 그대로 남는다.
@@ -572,6 +607,7 @@ if (typeof document !== "undefined") {
     });
   }
   initLiteratureSearch();
+  initSideTabs();
 
   renderWeights(document.getElementById("weights"));
   renderStages(document.getElementById("stages"), null);
