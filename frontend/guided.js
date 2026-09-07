@@ -256,6 +256,13 @@ function targetFasta() {
 
 // 재선택 세대 토큰. 두 번 빠르게 누르면 await 사이에 낡은 실행의 상태가 새
 // 실행 화면에 그려질 수 있다 - await 뒤에서 세대가 어긋나면 그만둔다.
+// 실행을 바꾸면 리포트도 함께 비운다. A 실행의 리포트가 B 실행 화면에 남아
+// 있으면 B 의 결과처럼 읽힌다. 다시 만들거나 불러오면 채워진다.
+function clearReportView() {
+  document.getElementById("reportView").replaceChildren(
+    el("p", "note", "리포트를 만들거나 불러올 수 있습니다."));
+}
+
 let selectGen = 0;
 async function selectRun(runId) {
   if (!runId) return;
@@ -266,6 +273,7 @@ async function selectRun(runId) {
   // 실행의 마지막 상태도 여기서 함께 지운다 - 새 실행에 옛 상태를 붙이지 않는다.
   lastKnown = { state: "", stage: "" };
   updateTopbarChips({ runId });
+  clearReportView();
   const status = await loadRunStatus(runId, { isStale: () => gen !== selectGen });
   if (status === "stale") return;   // 낡은 응답은 그리지도, 폴링도 시작하지 않는다
   // Results 탭은 Run 상태 다음에 따로 채운다. 퍼널은 loadRunStatus 가 방금
@@ -539,16 +547,22 @@ if (typeof document !== "undefined") {
   document.getElementById("reportGenBtn").addEventListener("click", async () => {
     const runId = runState.runId;
     if (!runId) return;
+    // 클릭 시점의 세대. compareBtn 과 같은 규칙이다 - 기다리는 사이 다른 실행을
+    // 고르면 어느 쪽에도 그리지 않는다.
+    const gen = selectGen;
     const button = document.getElementById("reportGenBtn");
     button.disabled = true;
     try {
-      const gen = await generateReport(runId);
-      if (gen && gen.error) throw new Error(gen.error);
+      const genOut = await generateReport(runId);
+      if (gen !== selectGen) return;
+      if (genOut && genOut.error) throw new Error(genOut.error);
       const out = await getReport(runId);
+      if (gen !== selectGen) return;
       if (out && out.error) throw new Error(out.error);
       renderReport(document.getElementById("reportView"),
         out.report_ko || out.report || out.markdown || out.text || "");
     } catch (error) {
+      if (gen !== selectGen) return;
       setRunStatus(`리포트를 만들지 못했습니다: ${errorText(error)}`);
     } finally {
       button.disabled = false;
@@ -557,12 +571,15 @@ if (typeof document !== "undefined") {
   document.getElementById("reportLoadBtn").addEventListener("click", async () => {
     const runId = runState.runId;
     if (!runId) return;
+    const gen = selectGen;
     try {
       const out = await getReport(runId);
+      if (gen !== selectGen) return;
       if (out && out.error) throw new Error(out.error);
       renderReport(document.getElementById("reportView"),
         out.report_ko || out.report || out.markdown || out.text || "");
     } catch (error) {
+      if (gen !== selectGen) return;
       setRunStatus(`리포트를 불러오지 못했습니다: ${errorText(error)}`);
     }
   });

@@ -45,3 +45,11 @@ test("loadRunStatus is staleness-aware so a slow older response cannot repaint",
   assert.ok(/isStale\(\)\s*(return|;)/.test(src) || src.includes("if (isStale()) return;"),
             "must bail before painting when stale");
 });
+
+test("the artifact preview bails on stale reads instead of painting", () => {
+  const src = readFileSync(new URL("../guided/monitor.js", import.meta.url), "utf8");
+  assert.ok(/openArtifact\(runId, path, format, maxBytes, \{ isStale/.test(src),
+            "openArtifact must take the staleness predicate");
+  assert.ok(/openArtifact\(runId, path, format, null, \{ isStale \}\)/.test(src),
+            "artifact rows must thread the staleness predicate through");
+});

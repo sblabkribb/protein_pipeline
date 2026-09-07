@@ -147,7 +147,7 @@ async function loadArtifacts(runId, { isStale = () => false } = {}) {
           el("span", "apath", name),
           el("span", "chip", format ? "3D" : formatBytes(item.size)),
         );
-          row.addEventListener("click", () => openArtifact(runId, path, format));
+          row.addEventListener("click", () => openArtifact(runId, path, format, null, { isStale }));
         host.appendChild(row);
       }
     }
@@ -158,7 +158,11 @@ async function loadArtifacts(runId, { isStale = () => false } = {}) {
   }
 }
 
-async function openArtifact(runId, path, format, maxBytes) {
+// isStale 은 loadArtifacts 가 전달하는 세대 검사다. 실행을 바꾼 뒤에도 그 전에
+// 시작된 read_artifact 는 도착한다 - 낡은 세대면 미리 보기를 덧그리지 않고 조용히
+// 끝낸다. 행 클릭은 행이 속한 실행이 화면에 있을 때만 일어나지만, await 사이에
+// 화면이 바뀔 수는 있다.
+async function openArtifact(runId, path, format, maxBytes, { isStale = () => false } = {}) {
   const preview = document.getElementById("artifactPreview");
   preview.replaceChildren(el("div", "empty", "불러오는 중…"));
   const cap = maxBytes || (format ? 4000000 : 200000);
@@ -166,6 +170,7 @@ async function openArtifact(runId, path, format, maxBytes) {
     const out = await callTool("pipeline.read_artifact", {
       run_id: runId, path, max_bytes: cap,
     });
+    if (isStale()) return;
     if (out && out.error) throw new Error(out.error);
     const text = out.text != null ? String(out.text) : "";
     preview.replaceChildren();
@@ -190,7 +195,7 @@ async function openArtifact(runId, path, format, maxBytes) {
       more.type = "button";
       more.className = "ghost";
       more.textContent = "두 배로 더 읽기";
-      more.addEventListener("click", () => openArtifact(runId, path, format, cap * 2));
+      more.addEventListener("click", () => openArtifact(runId, path, format, cap * 2, { isStale }));
       warn.appendChild(more);
       preview.appendChild(warn);
     }
@@ -204,6 +209,7 @@ async function openArtifact(runId, path, format, maxBytes) {
       preview.appendChild(pre);
     }
   } catch (error) {
+    if (isStale()) return;
     // "undefined" 로 끝나는 오류 메시지는 아무것도 알려주지 않는다.
     preview.replaceChildren(el("div", "warn",
       `산출물을 읽지 못했습니다: ${errorText(error)}`));

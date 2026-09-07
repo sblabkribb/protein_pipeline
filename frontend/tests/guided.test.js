@@ -428,7 +428,7 @@ test("links to the old console are confined to the ops nav", () => {
 
 test("a truncated artifact can be read further from here", () => {
   assert.ok(/두 배로 더 읽기/.test(source));
-  assert.ok(/openArtifact\(runId, path, format, cap \* 2\)/.test(source));
+  assert.ok(/openArtifact\(runId, path, format, cap \* 2(, \{ isStale \})?\)/.test(source));
 });
 
 test("directories are excluded by allowlisting files, not by guessing a name", () => {
