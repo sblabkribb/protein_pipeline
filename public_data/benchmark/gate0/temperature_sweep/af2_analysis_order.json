@@ -1,0 +1,609 @@
+{
+  "n_folded": 480,
+  "reference_temperature": "0.1",
+  "ci_width_target": 0.1,
+  "per_temperature": {
+    "0.05": {
+      "n": 120,
+      "structural_yield": 0.3917,
+      "joint_yield": 0.3667,
+      "soluprot": 0.7244
+    },
+    "0.1": {
+      "n": 120,
+      "structural_yield": 0.425,
+      "joint_yield": 0.4083,
+      "soluprot": 0.7286
+    },
+    "0.2": {
+      "n": 120,
+      "structural_yield": 0.4,
+      "joint_yield": 0.3833,
+      "soluprot": 0.7092
+    },
+    "0.3": {
+      "n": 120,
+      "structural_yield": 0.4333,
+      "joint_yield": 0.425,
+      "soluprot": 0.718
+    }
+  },
+  "comparisons": {
+    "structural_yield@T0.05": {
+      "point": -0.0333,
+      "ci95": [
+        -0.075,
+        0.0
+      ],
+      "excludes_zero": false,
+      "ci_width": 0.075,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "uncertainty": {
+        "observed_variance": 0.005506,
+        "sequence_sampling_variance": 0.007812,
+        "backbone_variance": 0.0,
+        "fraction_backbone": 0.0,
+        "verdict": "sequence_limited",
+        "n_backbones": 15
+      },
+      "saturation": {
+        "n_backbones": 15,
+        "n_saturated": 11,
+        "n_informative": 4,
+        "saturated_fraction": 0.7333
+      },
+      "prob_above_zero": 0.0,
+      "prob_below_zero": 0.9631,
+      "prob_exactly_zero": 0.0369,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "next_step": "expand_backbones"
+    },
+    "structural_yield@T0.2": {
+      "point": -0.025,
+      "ci95": [
+        -0.075,
+        0.0167
+      ],
+      "excludes_zero": false,
+      "ci_width": 0.0917,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "uncertainty": {
+        "observed_variance": 0.007143,
+        "sequence_sampling_variance": 0.009766,
+        "backbone_variance": 0.0,
+        "fraction_backbone": 0.0,
+        "verdict": "sequence_limited",
+        "n_backbones": 15
+      },
+      "saturation": {
+        "n_backbones": 15,
+        "n_saturated": 11,
+        "n_informative": 4,
+        "saturated_fraction": 0.7333
+      },
+      "prob_above_zero": 0.0701,
+      "prob_below_zero": 0.8402,
+      "prob_exactly_zero": 0.0897,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "next_step": "expand_backbones"
+    },
+    "structural_yield@T0.3": {
+      "point": 0.0083,
+      "ci95": [
+        -0.0667,
+        0.0667
+      ],
+      "excludes_zero": false,
+      "ci_width": 0.1333,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "uncertainty": {
+        "observed_variance": 0.016667,
+        "sequence_sampling_variance": 0.008464,
+        "backbone_variance": 0.008203,
+        "fraction_backbone": 0.4922,
+        "verdict": "sequence_limited",
+        "n_backbones": 15
+      },
+      "saturation": {
+        "n_backbones": 15,
+        "n_saturated": 11,
+        "n_informative": 4,
+        "saturated_fraction": 0.7333
+      },
+      "prob_above_zero": 0.574,
+      "prob_below_zero": 0.3292,
+      "prob_exactly_zero": 0.0968,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "next_step": "expand_backbones"
+    },
+    "joint_yield@T0.05": {
+      "point": -0.0417,
+      "ci95": [
+        -0.0833,
+        -0.0083
+      ],
+      "excludes_zero": true,
+      "ci_width": 0.075,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "uncertainty": {
+        "observed_variance": 0.005952,
+        "sequence_sampling_variance": 0.011328,
+        "backbone_variance": 0.0,
+        "fraction_backbone": 0.0,
+        "verdict": "sequence_limited",
+        "n_backbones": 15
+      },
+      "saturation": {
+        "n_backbones": 15,
+        "n_saturated": 10,
+        "n_informative": 5,
+        "saturated_fraction": 0.6667
+      },
+      "prob_above_zero": 0.0,
+      "prob_below_zero": 0.9889,
+      "prob_exactly_zero": 0.0111,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "next_step": "expand_backbones"
+    },
+    "joint_yield@T0.2": {
+      "point": -0.025,
+      "ci95": [
+        -0.075,
+        0.0167
+      ],
+      "excludes_zero": false,
+      "ci_width": 0.0917,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "uncertainty": {
+        "observed_variance": 0.007143,
+        "sequence_sampling_variance": 0.012891,
+        "backbone_variance": 0.0,
+        "fraction_backbone": 0.0,
+        "verdict": "sequence_limited",
+        "n_backbones": 15
+      },
+      "saturation": {
+        "n_backbones": 15,
+        "n_saturated": 10,
+        "n_informative": 5,
+        "saturated_fraction": 0.6667
+      },
+      "prob_above_zero": 0.0701,
+      "prob_below_zero": 0.8402,
+      "prob_exactly_zero": 0.0897,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "next_step": "expand_backbones"
+    },
+    "joint_yield@T0.3": {
+      "point": 0.0167,
+      "ci95": [
+        -0.0583,
+        0.075
+      ],
+      "excludes_zero": false,
+      "ci_width": 0.1333,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "uncertainty": {
+        "observed_variance": 0.01756,
+        "sequence_sampling_variance": 0.010937,
+        "backbone_variance": 0.006622,
+        "fraction_backbone": 0.3771,
+        "verdict": "sequence_limited",
+        "n_backbones": 15
+      },
+      "saturation": {
+        "n_backbones": 15,
+        "n_saturated": 10,
+        "n_informative": 5,
+        "saturated_fraction": 0.6667
+      },
+      "prob_above_zero": 0.6658,
+      "prob_below_zero": 0.255,
+      "prob_exactly_zero": 0.0791,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "next_step": "expand_backbones"
+    },
+    "soluprot@T0.05": {
+      "point": -0.0043,
+      "ci95": [
+        -0.0259,
+        0.0147
+      ],
+      "excludes_zero": false,
+      "ci_width": 0.0406,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "uncertainty": {
+        "observed_variance": 0.001637,
+        "sequence_sampling_variance": 0.043411,
+        "backbone_variance": 0.0,
+        "fraction_backbone": 0.0,
+        "verdict": "sequence_limited",
+        "n_backbones": 15
+      },
+      "saturation": {
+        "n_backbones": 15,
+        "n_saturated": 0,
+        "n_informative": 15,
+        "saturated_fraction": 0.0
+      },
+      "prob_above_zero": 0.3538,
+      "prob_below_zero": 0.6462,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "next_step": "stop_no_effect"
+    },
+    "soluprot@T0.2": {
+      "point": -0.0194,
+      "ci95": [
+        -0.0414,
+        -0.0007
+      ],
+      "excludes_zero": true,
+      "ci_width": 0.0407,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "uncertainty": {
+        "observed_variance": 0.001727,
+        "sequence_sampling_variance": 0.045195,
+        "backbone_variance": 0.0,
+        "fraction_backbone": 0.0,
+        "verdict": "sequence_limited",
+        "n_backbones": 15
+      },
+      "saturation": {
+        "n_backbones": 15,
+        "n_saturated": 0,
+        "n_informative": 15,
+        "saturated_fraction": 0.0
+      },
+      "prob_above_zero": 0.0198,
+      "prob_below_zero": 0.9802,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "next_step": "stop_effect_confirmed"
+    },
+    "soluprot@T0.3": {
+      "point": -0.0106,
+      "ci95": [
+        -0.0358,
+        0.0153
+      ],
+      "excludes_zero": false,
+      "ci_width": 0.051,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "n_backbones_paired": 15,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "uncertainty": {
+        "observed_variance": 0.00279,
+        "sequence_sampling_variance": 0.044817,
+        "backbone_variance": 0.0,
+        "fraction_backbone": 0.0,
+        "verdict": "sequence_limited",
+        "n_backbones": 15
+      },
+      "saturation": {
+        "n_backbones": 15,
+        "n_saturated": 0,
+        "n_informative": 15,
+        "saturated_fraction": 0.0
+      },
+      "prob_above_zero": 0.2092,
+      "prob_below_zero": 0.7909,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4.",
+      "next_step": "stop_no_effect"
+    }
+  },
+  "panel": "panel1_unfiltered",
+  "panel_role": "unfiltered",
+  "valid_for_policy_performance_claims": false,
+  "policy_validation_requires": "Unseen targets whose baseline yield is not known in advance, driven from an initial probe online. \uc120\uc815\uc5d0 \uc4f0\uc9c0 \uc54a\uc740 \uc0c8 \ud0c0\uac9f\uc5d0\uc11c, baseline yield \ub97c \ubbf8\ub9ac \ubaa8\ub974\ub294 \ucc44\ub85c \ucd08\uae30 probe \ubd80\ud130 \uc2e4\uc81c \uc628\ub77c\uc778 \ubc29\uc2dd\uc73c\ub85c \ub3cc\ub824\uc57c \uc815\ucc45 \uc131\ub2a5 \uc8fc\uc7a5\uc774 \uc131\ub9bd\ud55c\ub2e4.",
+  "bootstrap_cluster_unit": "backbone_key",
+  "selection_scope": "",
+  "selection_scope_unknown": true,
+  "frozen_metric_id": "gate0_structural_v1",
+  "interpretation": "Selection scope was not recorded for this panel, so the conditional/marginal distinction cannot be made. \uc120\uc815 \ubc94\uc704\uac00 \uae30\ub85d\ub418\uc9c0 \uc54a\uc544 \uc870\uac74\ubd80\uc778\uc9c0 \uc8fc\ubcc0\ubd80\uc778\uc9c0 \uad6c\ubcc4\ud560 \uc218 \uc5c6\ub2e4.",
+  "structural_conclusions": {
+    "allowed": true,
+    "reason": "",
+    "provenance": {
+      "method": "folded_sequence_order",
+      "methods_seen": [
+        "file_order"
+      ],
+      "frozen_method": "folded_sequence_order",
+      "matches_frozen_definition": true,
+      "note": ""
+    },
+    "still_readable": []
+  },
+  "condition_dominance": {
+    "reference_temperature": "0.1",
+    "min_clusters_for_dominance": 8,
+    "dominated": [],
+    "insufficient_evidence": [
+      "0.05",
+      "0.2",
+      "0.3"
+    ],
+    "panels_disagree": [],
+    "evidence": {
+      "0.05": {
+        "structural_yield": {
+          "point": -0.0333,
+          "ci95": [
+            -0.075,
+            0.0
+          ],
+          "prob_above_zero": 0.0,
+          "n_informative": 4
+        },
+        "joint_yield": {
+          "point": -0.0417,
+          "ci95": [
+            -0.0833,
+            -0.0083
+          ],
+          "prob_above_zero": 0.0,
+          "n_informative": 5
+        }
+      },
+      "0.2": {
+        "structural_yield": {
+          "point": -0.025,
+          "ci95": [
+            -0.075,
+            0.0167
+          ],
+          "prob_above_zero": 0.0701,
+          "n_informative": 4
+        },
+        "joint_yield": {
+          "point": -0.025,
+          "ci95": [
+            -0.075,
+            0.0167
+          ],
+          "prob_above_zero": 0.0701,
+          "n_informative": 5
+        }
+      },
+      "0.3": {
+        "structural_yield": {
+          "point": 0.0083,
+          "ci95": [
+            -0.0667,
+            0.0667
+          ],
+          "prob_above_zero": 0.574,
+          "n_informative": 4
+        },
+        "joint_yield": {
+          "point": 0.0167,
+          "ci95": [
+            -0.0583,
+            0.075
+          ],
+          "prob_above_zero": 0.6658,
+          "n_informative": 5
+        }
+      }
+    },
+    "pruned": [],
+    "recommendation": "\uc81c\uac70 \uae30\uc900\uc744 \ub118\uc740 \uc870\uac74\uc774 \uc5c6\ub2e4."
+  },
+  "rmsd_provenance": {
+    "method": "folded_sequence_order",
+    "methods_seen": [
+      "file_order"
+    ],
+    "frozen_method": "folded_sequence_order",
+    "matches_frozen_definition": true,
+    "note": ""
+  },
+  "continuous": {
+    "plddt@T0.05": {
+      "point": -0.3176,
+      "ci95": [
+        -1.4921,
+        0.9107
+      ],
+      "excludes_zero": false,
+      "ci_width": 2.4028,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.2921,
+      "prob_below_zero": 0.7079,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "plddt@T0.2": {
+      "point": -1.1942,
+      "ci95": [
+        -2.0754,
+        -0.3894
+      ],
+      "excludes_zero": true,
+      "ci_width": 1.686,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.0004,
+      "prob_below_zero": 0.9996,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "plddt@T0.3": {
+      "point": -1.0107,
+      "ci95": [
+        -2.4452,
+        0.1975
+      ],
+      "excludes_zero": false,
+      "ci_width": 2.6427,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.0528,
+      "prob_below_zero": 0.9472,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "rmsd_nonloop_order@T0.05": {
+      "point": 0.1486,
+      "ci95": [
+        -0.332,
+        0.6855
+      ],
+      "excludes_zero": false,
+      "ci_width": 1.0176,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.7113,
+      "prob_below_zero": 0.2887,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "rmsd_nonloop_order@T0.2": {
+      "point": -0.2071,
+      "ci95": [
+        -0.814,
+        0.3157
+      ],
+      "excludes_zero": false,
+      "ci_width": 1.1297,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.2383,
+      "prob_below_zero": 0.7617,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "rmsd_nonloop_order@T0.3": {
+      "point": 0.1786,
+      "ci95": [
+        -0.3998,
+        0.9538
+      ],
+      "excludes_zero": false,
+      "ci_width": 1.3536,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.6576,
+      "prob_below_zero": 0.3423,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "soluprot@T0.05": {
+      "point": -0.0043,
+      "ci95": [
+        -0.0259,
+        0.0147
+      ],
+      "excludes_zero": false,
+      "ci_width": 0.0406,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.3538,
+      "prob_below_zero": 0.6462,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "soluprot@T0.2": {
+      "point": -0.0194,
+      "ci95": [
+        -0.0414,
+        -0.0007
+      ],
+      "excludes_zero": true,
+      "ci_width": 0.0407,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.0198,
+      "prob_below_zero": 0.9802,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    },
+    "soluprot@T0.3": {
+      "point": -0.0106,
+      "ci95": [
+        -0.0358,
+        0.0153
+      ],
+      "excludes_zero": false,
+      "ci_width": 0.051,
+      "n_clusters": 15,
+      "n_boot": 4000,
+      "cluster_unit": "backbone_key",
+      "n_clusters_resampled": 15,
+      "endpoint_kind": "continuous",
+      "prob_above_zero": 0.2092,
+      "prob_below_zero": 0.7909,
+      "prob_exactly_zero": 0.0,
+      "tail_mass_note": "\ubc31\ubcf8\ubcc4 \ucc28\uc774\uac00 1/n \uaca9\uc790 \uc704\uc5d0 \uc788\uc73c\uba74 \ubd80\ud2b8\uc2a4\ud2b8\ub7a9 \ud3c9\uade0\ub3c4 \uaca9\uc790 \uc704\uc5d0 \ub193\uc5ec, \ubd84\uc704\uc218 \ub05d\uc774 \uc815\ud655\ud788 0 \uc774 \ub420 \uc218 \uc788\ub2e4. \uadf8 \uacbd\uc6b0 'CI \uac00 0 \uc744 \ud3ec\ud568' \uc740 '0 \ubcf4\ub2e4 \ud070 \uacb0\uacfc\uac00 \ub098\uc62c \uc218 \uc788\ub2e4' \ub97c \ub73b\ud558\uc9c0 \uc54a\ub294\ub2e4."
+    }
+  },
+  "by_source": {
+    "available": false,
+    "sources": [
+      "target"
+    ],
+    "note": "\uc18c\uc2a4\uac00 \ud558\ub098\ubfd0\uc774\ub77c \uce35\ud654 \ubd88\uac00. wave 2/3 \ubc31\ubcf8\uc73c\ub85c sweep \ud655\uc7a5 \ud544\uc694."
+  },
+  "overall_next_step": "expand_backbones"
+}

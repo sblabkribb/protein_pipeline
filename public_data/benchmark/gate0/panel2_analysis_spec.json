@@ -1,0 +1,28 @@
+{
+  "purpose": "패널 2 분석 파라미터를 패널 1 결과를 보기 전에 고정한다",
+  "frozen_utc": "2026-09-07T03:13:20Z",
+  "why": "패널 1 판정을 본 뒤 패널 2 분석 방식을 고르면 그 판정이 사후에 설계를 오염시킨다. 백본 선정에서 온도 결과를 배제한 것과 같은 이유다.",
+  "panel1": {
+    "af2": "public_data/benchmark/gate0/temperature_sweep/af2_order_metric.csv",
+    "cluster_unit": "backbone_key",
+    "panel": "panel1_unfiltered",
+    "out": "public_data/benchmark/gate0/temperature_sweep/af2_analysis_order.json"
+  },
+  "panel2": {
+    "af2": "public_data/benchmark/gate0/temperature_panel2/af2_order_metric.csv",
+    "cluster_unit": "target_id",
+    "panel": "panel2_informative",
+    "panel_manifest": "public_data/benchmark/gate0/temperature_panel2/panel_manifest.json",
+    "compare_panel": "public_data/benchmark/gate0/temperature_sweep/af2_analysis_order.json",
+    "out": "public_data/benchmark/gate0/temperature_panel2/af2_analysis_order.json"
+  },
+  "decision_rules_fixed_in_advance": {
+    "primary_endpoint": "rmsd_nonloop_order (동결된 대응) 기준 structural_yield + joint_yield",
+    "continuous_endpoints": "rmsd_nonloop_order, rmsd_all_ca_order, plddt, soluprot 를 연속값으로 함께 본다",
+    "min_informative_clusters": 8,
+    "T02_pruning": "패널 1과 패널 2가 모두 informative cluster >= 8 에서 T=0.1 대비 열세를 보일 때만 dominated arm 으로 표시한다. 한쪽만으로는 제거하지 않는다.",
+    "interpretation": "패널 2는 중간-yield 영역의 conditional effect 다. 전체 백본 population 의 평균 온도 효과로 해석하지 않는다.",
+    "bioemu": "n=4 이므로 source 별 결론은 exploratory 로만 보고한다",
+    "threshold": "rmsd_max=2.0 A 는 2026-01-28 부터 쓰인 관례값이다. 이 패널에서 재최적화하지 않는다."
+  }
+}
