@@ -1,5 +1,7 @@
 // frontend/guided/plan.js — 목표·경로·계획 검토/승인 렌더링. DOM 을 그리고 서버 도구를 호출한다.
 import { callTool, errorText } from "./api.js";
+// el 은 dom.js 에서 온다. 여기서 재노출해 monitor 등 기존 import 경로를 유지한다.
+import { el } from "./dom.js";
 // 순환 import: facade 와 상호 참조. 함수 선언이라 hoisting 으로 안전하되,
 // 모듈 최상위에서 호출하지 말 것.
 import { setSignedOut, showStep } from "../guided.js";
@@ -18,16 +20,6 @@ const OBJECTIVES = [
 // 바뀌었을 때 화면만 옛날 숫자를 계속 보여준다 — 실제로 그렇게 해서 62 잔기
 // 프로브에서 나온 "91s / fold" 가 59-274 잔기 백본 옆에 붙어 있었다.
 const registry = { models: {}, purposes: [], loaded: false };
-
-// 값은 textContent 로만 넣는다. 아티팩트 경로와 실행 상태는 서버에서 오고,
-// 산출물 경로에는 사용자가 정한 이름(run id, design id)이 섞인다. 그 이름을
-// innerHTML 로 넣으면 안에 든 마크업이 실행된다.
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text != null) node.textContent = String(text);
-  return node;
-}
 
 function dot(on) {
   return el("span", `dot${on ? "" : " off"}`);

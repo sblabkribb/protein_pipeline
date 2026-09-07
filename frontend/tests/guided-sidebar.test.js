@@ -12,3 +12,13 @@ test("runItemLabel shows the stage chip and state", () => {
   assert.equal(runItemLabel({ run_id: "r1", stage: "af2_50", state: "running" }), "af2_50 · running");
   assert.equal(runItemLabel({ run_id: "r1" }), "idle");
 });
+
+test("normalizeRuns tolerates id-less objects, null entries and non-arrays", () => {
+  assert.deepEqual(normalizeRuns([{ id: "run_x" }]).map((r) => r.run_id), ["run_x"]);
+  assert.deepEqual(normalizeRuns([null]), []);
+  assert.deepEqual(normalizeRuns("nope"), []);
+});
+
+test("runItemLabel falls back to state alone", () => {
+  assert.equal(runItemLabel({ state: "done" }), "done");
+});

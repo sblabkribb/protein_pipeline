@@ -8,7 +8,7 @@ import { join } from "node:path";
 const sources = [
   new URL("../guided.js", import.meta.url),
   ...[
-    "api.js", "plan.js", "monitor.js", "sidebar.js", "results.js",
+    "api.js", "dom.js", "plan.js", "monitor.js", "sidebar.js", "results.js",
     "evidence.js", "structure.js",
   ].map((name) => new URL(`../guided/${name}`, import.meta.url)),
 ];
