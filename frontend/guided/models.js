@@ -1,40 +1,105 @@
 // frontend/guided/models.js — 모델 탭. 레지스트리(목적 경로·목표 평가 상태·모델
 // 카탈로그)를 pipeline.list_models 로 읽어 보여준다. 정적 데이터라 탭 첫 진입
-// 1회 로드 후 캐시한다. 목적 목록을 프런트에 박지 않는다 - 레지스트리가 진실이다.
+// 1회 로드 후 캐시한다. 목적 목록도 목표 상태도 프런트에 박지 않는다 - 레지스트리가
+// 진실이고, objective_status 가 응답에 그대로 내려온다 (tools.py).
 import { callTool } from "./api.js";
 import { el } from "./dom.js";
 
-// 목표 어휘는 플랫폼이 아는 것(da 뒤 objective_planner.KNOWN_OBJECTIVES)과 같다.
-// 목적 목록과 달리 목표는 화면이 세 상태를 판정하려면 후보가 필요하다 - 레지스트리가
-// 말하지 않은 목표는 평가자 없음(none)으로 보인다.
-const KNOWN_OBJECTIVES = [
-  "solubility", "structural_preservation", "stability", "activity",
-  "aggregation", "developability", "diversity", "binding",
-];
+// 레지스트리 objective_status 의 다섯 상태. 판정은 백엔드 레지스트리가 하고
+// 여기서는 말만 바꾼다 - 프런트가 상태를 추측하면 레지스트리와 갈라진다.
+const STATUS_LABEL = {
+  measured: ["okchip", "측정됨"],
+  evaluator_unvalidated: ["warnchip", "평가자 있음 · 미검증"],
+  evaluator_not_wired: ["warnchip", "구현 있음 · 미배선"],
+  needs_experimental_labels: ["chip", "실험 라벨 필요"],
+  no_evaluator_available: ["chip", "평가자 없음"],
+};
+
+// objective_status 가 없는 구 페이로드용 3분류 폴백. measurable/unvalidated 집합만
+// 있을 때의 옛 분류이고, 어휘 미러는 넣지 않는다 - 응답이 말한 목표만 보인다.
+const FALLBACK_LABEL = {
+  measured: ["okchip", "측정됨"],
+  unvalidated: ["warnchip", "평가자 있으나 미검증"],
+  none: ["chip", "평가자 없음"],
+};
+
+// evaluators 는 JSON 배열이 정상이지만, 낡은 직렬화에서는 파이썬 repr 문자열
+// ("['a', 'b']")로 흘러들 수 있다. [ 로 시작하면 JSON 파싱을 시도하고, 실패하면
+// 쉼표로 나눈다 - 손에 잡히는 것은 전부 평가자 이름으로 보인다.
+function parseEvaluators(raw) {
+  if (Array.isArray(raw)) return raw.map((v) => String(v).trim()).filter(Boolean);
+  const text = String(raw ?? "").trim();
+  if (!text) return [];
+  if (text.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        return parsed.map((v) => String(v).trim()).filter(Boolean);
+      }
+    } catch {
+      // JSON 이 아니면 아래의 쉼표 분해로 떨어진다.
+    }
+  }
+  return text.replace(/[[\]"']/g, "").split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function objectiveRows(data) {
+  const status = data.objective_status;
+  if (status && typeof status === "object" && Object.keys(status).length) {
+    return Object.entries(status).map(([key, raw]) => {
+      const entry = raw && typeof raw === "object" ? raw : {};
+      const [cls, label] = STATUS_LABEL[entry.status]
+        || ["chip", String(entry.status || "평가자 없음")];
+      return {
+        key: String(key),
+        status: String(entry.status || ""),
+        state: String(entry.status || ""),
+        cls,
+        label,
+        evaluators: parseEvaluators(entry.evaluators),
+        detail: String(entry.detail || ""),
+        toEnable: String(entry.to_enable || ""),
+      };
+    });
+  }
+  const measured = new Set(data.measurable_objectives || []);
+  const unvalidated = new Set(data.runnable_but_unvalidated_objectives || []);
+  return [...new Set([...measured, ...unvalidated])].map((key) => {
+    const state = measured.has(key) ? "measured" : "unvalidated";
+    const [cls, label] = FALLBACK_LABEL[state];
+    return {
+      key: String(key), status: state, state, cls, label,
+      evaluators: [], detail: "", toEnable: "",
+    };
+  });
+}
+
+function purposeRows(data) {
+  return (Array.isArray(data.purposes) ? data.purposes : [])
+    .filter((p) => p && typeof p === "object")
+    .map((p) => ({
+      purpose: String(p.purpose || ""),
+      executable: Boolean(p.executable),
+      validated: Boolean(p.validated),
+      // 왜 미검증인지는 스테이지가 말한다. 상한 8 - 경로가 길어도 카드가 좁은
+      // 레일을 먹지 않게. 모양은 route dict 의 stages[]. 그대로 온다.
+      stages: (Array.isArray(p.stages) ? p.stages : [])
+        .filter((s) => s && typeof s === "object")
+        .slice(0, 8)
+        .map((s) => ({
+          stage: String(s.stage || ""),
+          modelId: String(s.model_id || ""),
+          validated: Boolean(s.validated),
+        }))
+        .filter((s) => s.stage || s.modelId),
+    }));
+}
 
 export function modelsTabModels(payload) {
   const data = payload && typeof payload === "object" ? payload : {};
-  const measured = new Set(data.measurable_objectives || []);
-  const unvalidated = new Set(data.runnable_but_unvalidated_objectives || []);
-  // 레지스트리가 목표에 대해 말한 경우에만 어휘를 채운다. 응답이 없거나 비어 있으면
-  // 아무것도 지어내지 않는다 - 빈 화면은 곧 "불러온 것이 없다"의 뜻이다.
-  const spoke = Array.isArray(data.measurable_objectives)
-    || Array.isArray(data.runnable_but_unvalidated_objectives);
-  const vocabulary = spoke ? [...KNOWN_OBJECTIVES] : [];
-  const keys = [...new Set([...vocabulary, ...measured, ...unvalidated])];
   return {
-    purposes: (Array.isArray(data.purposes) ? data.purposes : [])
-      .filter((p) => p && typeof p === "object")
-      .map((p) => ({
-        purpose: String(p.purpose || ""),
-        executable: Boolean(p.executable),
-        validated: Boolean(p.validated),
-      })),
-    objectives: keys.map((key) => ({
-      key: String(key),
-      state: measured.has(key) ? "measured"
-        : unvalidated.has(key) ? "unvalidated" : "none",
-    })),
+    purposes: purposeRows(data),
+    objectives: objectiveRows(data),
     models: Object.entries(data.models || {}).map(([id, m]) => {
       const item = m && typeof m === "object" ? m : {};
       // ModelEntry.to_dict() 는 extra 를 상위로 평탄화해 보낸다 (model_routing.py).
@@ -85,6 +150,17 @@ export function renderModels(host, { state = "idle", model = null, message = "" 
     else if (purpose.executable) head.appendChild(el("span", "warnchip", "실행 가능·미검증"));
     else head.appendChild(el("span", "badchip", "실행 불가"));
     row.appendChild(head);
+    if (purpose.stages.length) {
+      // 목적이 왜 미검증인지는 스테이지가 안다. 미검증 스테이지에 warn 점.
+      const line = el("div", "stagesline");
+      for (const stage of purpose.stages) {
+        const chip = el("span", "chip", stage.stage
+          ? `${stage.stage}(${stage.modelId})` : stage.modelId);
+        if (!stage.validated) chip.appendChild(el("span", "sdot warn"));
+        line.appendChild(chip);
+      }
+      row.appendChild(line);
+    }
     host.appendChild(row);
   }
 
@@ -93,10 +169,15 @@ export function renderModels(host, { state = "idle", model = null, message = "" 
     const row = el("div", "skill");
     const head = el("div", "cardtitle");
     head.appendChild(el("span", "name", objective.key));
-    if (objective.state === "measured") head.appendChild(el("span", "okchip", "측정됨"));
-    else if (objective.state === "unvalidated") head.appendChild(el("span", "warnchip", "평가자 있으나 미검증"));
-    else head.appendChild(el("span", "chip", "평가자 없음"));
+    head.appendChild(el("span", objective.cls, objective.label));
     row.appendChild(head);
+    for (const evaluator of objective.evaluators) {
+      row.appendChild(el("span", "chip", evaluator));
+    }
+    if (objective.detail) row.appendChild(el("p", "note", objective.detail));
+    if (objective.toEnable) {
+      row.appendChild(el("p", "note", "활성화하려면: " + objective.toEnable));
+    }
     host.appendChild(row);
   }
 

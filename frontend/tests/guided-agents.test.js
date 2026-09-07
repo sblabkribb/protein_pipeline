@@ -63,6 +63,18 @@ test("renderAgentsTab paints event cards with stage and chips", () => {
   assert.ok(html.includes("· 해석 1"), "interpretations render as prefixed note lines");
 });
 
+test("event cards paint detail and actions as kv rows", () => {
+  const host = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
+  renderAgentsTab(host, { state: "done", events: EVENTS, runId: "run_x" });
+  const html = JSON.stringify(host.children);
+  assert.ok(html.includes('"className":"kv"'), "detail/actions use the kv grid");
+  assert.ok(html.includes("상세") && html.includes("tier1 완료"), "detail row is labeled and filled");
+  assert.ok(html.includes("조치") && html.includes("다시 시도"), "actions row joins into one value");
+  // 상태 헤더와 판정 칩은 유지된다.
+  assert.ok(html.includes("현재"));
+  assert.ok(html.includes("okchip") || html.includes("badchip"));
+});
+
 test("renderAgentsTab paints no-run, loading, error and empty states", () => {
   const make = () => ({ children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } });
   const h0 = make(); renderAgentsTab(h0, { state: "no-run" });

@@ -63,14 +63,31 @@ export function renderConnectionsTab(host, { state = "idle", data = null, messag
   for (const row of rows) {
     const card = el("div", "skill");
     const head = el("div", "cardtitle");
+    // 도달 점. 칩의 글자보다 먼저 읽힌다 - 초록/빨강은 실측, 글자는 근거다.
+    head.appendChild(el("span", "sdot " + (row.reachable ? "ok" : "bad")));
     head.appendChild(el("span", "name", row.id));
     head.appendChild(el("span", row.reachable ? "okchip" : "badchip", row.reachable ? "도달" : "도달 불가"));
     if (row.ready === true) head.appendChild(el("span", "okchip", "준비됨"));
     if (row.ready === false) head.appendChild(el("span", "warnchip", "미준비"));
     if (row.mismatch) head.appendChild(el("span", "warnchip", "모델 불일치"));
     card.appendChild(head);
-    const meta = [row.endpoint, row.declared && `선언 ${row.declared}`, row.error].filter(Boolean).join(" · ");
-    if (meta) card.appendChild(el("p", "note", meta));
+    // Ditto 의 kv 행. 설정하지 않은 것과 연결에 실패한 것은 다르므로, 비어 있는
+    // 값은 행째로 생략한다 - 자리를 메우기 위한 빈 말을 넣지 않는다.
+    const kv = document.createElement("dl");
+    kv.className = "kv";
+    if (row.endpoint) {
+      kv.appendChild(el("dt", "", "엔드포인트"));
+      kv.appendChild(el("dd", "", row.endpoint));
+    }
+    if (row.declared) {
+      kv.appendChild(el("dt", "", "선언"));
+      kv.appendChild(el("dd", "", row.declared));
+    }
+    if (row.error) {
+      kv.appendChild(el("dt", "", "오류"));
+      kv.appendChild(el("dd", "", row.error));
+    }
+    if (kv.children.length) card.appendChild(kv);
     host.appendChild(card);
   }
 

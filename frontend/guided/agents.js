@@ -129,7 +129,18 @@ export function renderAgentsTab(host, { state = "idle", events = [], runId = "",
     for (const line of model.interpretations) {
       card.appendChild(el("p", "note", `· ${line}`));
     }
-    if (model.detail) card.appendChild(el("p", "note", model.detail));
+    // 상세와 조치는 kv 행으로 - 라벨은 잔잔히, 값은 모노. 있는 것만 그린다.
+    const kv = document.createElement("dl");
+    kv.className = "kv";
+    if (model.detail) {
+      kv.appendChild(el("dt", "", "상세"));
+      kv.appendChild(el("dd", "", model.detail));
+    }
+    if (model.actions.length) {
+      kv.appendChild(el("dt", "", "조치"));
+      kv.appendChild(el("dd", "", model.actions.join(", ")));
+    }
+    if (kv.children.length) card.appendChild(kv);
     if (model.error) card.appendChild(el("p", "warn", model.error));
     host.appendChild(card);
   }

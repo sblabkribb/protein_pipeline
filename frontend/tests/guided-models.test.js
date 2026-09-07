@@ -16,6 +16,7 @@ globalThis.document ??= {
 
 const { modelsTabModels, renderModels } = await import("../guided/models.js");
 
+// objective_status 없는 구 페이로드 - 폴백 경로와 모델 평탄화를 검증한다.
 const PAYLOAD = {
   purposes: [
     { purpose: "monomer_solubility_redesign", executable: true, validated: true },
@@ -33,18 +34,79 @@ const PAYLOAD = {
   runnable_but_unvalidated_objectives: ["stability", "developability"],
 };
 
-test("modelsTabModels classifies objectives into three states", () => {
+// 레지스트리 objective_status 가 내려오는 페이로드. evaluators 에 파이썬 repr
+// 문자열을 일부러 섞어 낡은 직렬화도 흡수하는지 본다.
+const STATUS_PAYLOAD = {
+  purposes: [
+    { purpose: "monomer_solubility_redesign", executable: true, validated: true,
+      stages: [
+        { stage: "msa", model_id: "mmseqs2", validated: true },
+        { stage: "soluprot", model_id: "soluprot", validated: false },
+      ] },
+  ],
+  models: {},
+  objective_status: {
+    solubility: { status: "measured", evaluators: ["soluprot"],
+                  detail: "SoluProt 이 게이트 1 에서 돈다." },
+    binding: { status: "evaluator_unvalidated", evaluators: "['ppiformer_ddg', 'diffdock']",
+               detail: "결합 라벨에 맞춰본 적 없다.",
+               to_enable: "결합 라벨 코호트에서 두 지표를 맞춰본다." },
+    aggregation: { status: "needs_experimental_labels", evaluators: [],
+                   detail: "응집 라벨이 필요하다." },
+    developability: { status: "evaluator_not_wired", evaluators: "", detail: "" },
+    activity: { status: "no_evaluator_available" },
+  },
+};
+
+test("objective_status drives the five honest states", () => {
+  const model = modelsTabModels(STATUS_PAYLOAD);
+  const byKey = Object.fromEntries(model.objectives.map((o) => [o.key, o]));
+  assert.equal(byKey.solubility.status, "measured");
+  assert.equal(byKey.solubility.cls, "okchip");
+  assert.equal(byKey.solubility.label, "측정됨");
+  assert.deepEqual(byKey.solubility.evaluators, ["soluprot"]);
+  assert.equal(byKey.binding.status, "evaluator_unvalidated");
+  assert.equal(byKey.binding.cls, "warnchip");
+  assert.equal(byKey.binding.label, "평가자 있음 · 미검증");
+  // 파이썬 repr 문자열("['ppiformer_ddg', 'diffdock']")에서 이름을 복원한다.
+  assert.deepEqual(byKey.binding.evaluators, ["ppiformer_ddg", "diffdock"]);
+  assert.equal(byKey.binding.toEnable, "결합 라벨 코호트에서 두 지표를 맞춰본다.");
+  assert.equal(byKey.aggregation.cls, "chip");
+  assert.equal(byKey.aggregation.label, "실험 라벨 필요");
+  assert.equal(byKey.developability.cls, "warnchip");
+  assert.equal(byKey.developability.label, "구현 있음 · 미배선");
+  assert.equal(byKey.activity.cls, "chip");
+  assert.equal(byKey.activity.label, "평가자 없음");
+  assert.deepEqual(byKey.activity.evaluators, []);
+});
+
+test("renderModels paints detail, to_enable and evaluator chips", () => {
+  const host = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
+  renderModels(host, { state: "done", model: modelsTabModels(STATUS_PAYLOAD) });
+  const html = JSON.stringify(host.children);
+  assert.ok(html.includes("측정됨") && html.includes("평가자 있음 · 미검증"));
+  assert.ok(html.includes("SoluProt 이 게이트 1 에서 돈다."), "detail renders as a note");
+  assert.ok(html.includes("활성화하려면: 결합 라벨 코호트에서 두 지표를 맞춰본다."),
+            "to_enable renders as an activation note");
+  assert.ok(html.includes("ppiformer_ddg") && html.includes("diffdock"),
+            "evaluators render as chips");
+  assert.ok(html.includes("soluprot"));
+});
+
+test("fallback without objective_status keeps the measured/unvalidated split", () => {
   const model = modelsTabModels(PAYLOAD);
   const byKey = Object.fromEntries(model.objectives.map((o) => [o.key, o.state]));
   assert.equal(byKey.solubility, "measured");
   assert.equal(byKey.stability, "unvalidated");
-  assert.equal(byKey.activity, "none");
-  assert.ok(model.purposes[0].validated);
+  // 어휘 미러는 없다 - 응답이 말한 목표만 보인다. 말하지 않은 목표를 지어내면
+  // 화면이 레지스트리와 갈라진다.
+  assert.ok(!("activity" in byKey), "no vocabulary mirror");
   // 접근 정보는 평탄화된 item.access 로 온다 (ModelEntry.to_dict). 포털 전용만
   // 포털 칩이 붙고, direct_client 도 열려 있으면 칩이 없다.
   assert.equal(model.models[1].portalOnly, true);
   assert.equal(model.models[2].portalOnly, false);
   assert.equal(model.models[0].portalOnly, false);
+  assert.ok(model.purposes[0].validated);
 });
 
 test("modelsTabModels absorbs missing fields", () => {
@@ -52,6 +114,32 @@ test("modelsTabModels absorbs missing fields", () => {
   assert.deepEqual(model.purposes, []);
   assert.deepEqual(model.objectives, []);
   assert.deepEqual(model.models, []);
+});
+
+test("purpose stages are capped at eight and tolerant of junk", () => {
+  const many = {
+    purposes: [{
+      purpose: "long_path",
+      stages: Array.from({ length: 12 }, (_, i) => (
+        { stage: `s${i}`, model_id: `m${i}`, validated: i % 2 === 0 })),
+    }],
+  };
+  const stages = modelsTabModels(many).purposes[0].stages;
+  assert.equal(stages.length, 8);
+  assert.equal(stages[0].modelId, "m0");
+  assert.equal(stages[0].validated, true);
+  assert.equal(stages[1].validated, false);
+  assert.deepEqual(modelsTabModels({ purposes: [{ stages: "junk" }] }).purposes[0].stages, []);
+  assert.deepEqual(modelsTabModels({ purposes: [{ stages: [null, 3] }] }).purposes[0].stages, []);
+});
+
+test("renderModels paints the stages line with warn dots on unvalidated stages", () => {
+  const host = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
+  renderModels(host, { state: "done", model: modelsTabModels(STATUS_PAYLOAD) });
+  const html = JSON.stringify(host.children);
+  assert.ok(html.includes("msa(mmseqs2)"), "stage chips show stage(model)");
+  assert.ok(html.includes("soluprot(soluprot)"));
+  assert.ok(html.includes("sdot warn"), "unvalidated stages carry a warn dot");
 });
 
 test("renderModels paints purpose cards, objective chips and model rows", () => {

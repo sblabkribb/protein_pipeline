@@ -52,6 +52,21 @@ test("renderConnectionsTab paints rows with state chips and sections", () => {
   assert.ok(html.includes("다시 실측"), "done state offers a re-probe button");
 });
 
+test("endpoint rows paint kv detail rows and a reachability dot", () => {
+  const host = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
+  renderConnectionsTab(host, { state: "done", data: { liveness: LIVENESS } });
+  const html = JSON.stringify(host.children);
+  assert.ok(html.includes('"className":"kv"'), "endpoint detail uses the kv grid");
+  assert.ok(html.includes("엔드포인트") && html.includes("bop:18115"));
+  assert.ok(html.includes("선언") && html.includes("always_on"));
+  assert.ok(html.includes("오류") && html.includes("timeout"), "errors surface in their own row");
+  assert.ok(html.includes('"className":"sdot ok"') && html.includes('"className":"sdot bad"'),
+            "the head dot encodes the measured reachability");
+  // 빈 값은 행째로 생략한다 - af3 는 오류가 있고, 준비 칩은 없다.
+  const af3 = host.children.find((c) => JSON.stringify(c).includes("timeout"));
+  assert.ok(af3, "af3 card rendered");
+});
+
 test("renderConnectionsTab paints loading, error-with-retry and empty states", () => {
   const make = () => ({ children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } });
   const h0 = make(); renderConnectionsTab(h0, { state: "loading" });

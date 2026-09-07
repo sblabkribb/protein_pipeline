@@ -71,8 +71,15 @@ export function renderSkillsTab(host, { state = "idle", skills = [], message = "
     head.appendChild(el("span", "name", model.name));
     if (model.source === "user") head.appendChild(el("span", "warnchip", "사용자 편집"));
     else head.appendChild(el("span", "chip", "빌트인"));
-    if (model.updatedUtc) head.appendChild(el("span", "chip", model.updatedUtc));
     card.appendChild(head);
+    // 마지막 수정은 칩이 아니라 kv 행으로 - 값이 모이는 자리는 모노로 읽는다.
+    if (model.updatedUtc) {
+      const kv = document.createElement("dl");
+      kv.className = "kv";
+      kv.appendChild(el("dt", "", "마지막 수정"));
+      kv.appendChild(el("dd", "", model.updatedUtc));
+      card.appendChild(kv);
+    }
 
     if (editId === model.id) {
       // 편집 중인 카드는 헌장 대신 textarea 폼으로 바뀐다. 값은 textContent 가

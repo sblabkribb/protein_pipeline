@@ -44,6 +44,16 @@ test("renderSkillsTab paints cards with source chips and charter text", () => {
   assert.ok(html.includes("2026-09-07"));
 });
 
+test("updated_utc renders as a kv row, not a chip", () => {
+  const host = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
+  renderSkillsTab(host, { state: "done", skills: SKILLS });
+  const html = JSON.stringify(host.children);
+  assert.ok(html.includes('"className":"kv"'), "updated_utc uses the kv grid");
+  assert.ok(html.includes("마지막 수정"), "kv row is labeled 마지막 수정");
+  // 출처 칩은 유지된다.
+  assert.ok(html.includes("warnchip") && html.includes("chip"));
+});
+
 test("renderSkillsTab editing card renders a textarea with save and cancel", () => {
   const host = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
   renderSkillsTab(host, { state: "done", skills: SKILLS, editingId: "stability" });
