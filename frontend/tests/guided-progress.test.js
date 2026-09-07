@@ -38,3 +38,10 @@ test("the poll loop invalidates stale ticks and stops on terminal states", () =>
   assert.ok(src.includes("gen !== poll.gen"), "tick must bail when superseded");
   assert.ok(src.includes('"done", "failed", "cancelled"'), "terminal states must stop polling");
 });
+
+test("loadRunStatus is staleness-aware so a slow older response cannot repaint", () => {
+  const src = readFileSync(new URL("../guided/monitor.js", import.meta.url), "utf8");
+  assert.ok(src.includes("isStale"), "loadRunStatus must accept a staleness predicate");
+  assert.ok(/isStale\(\)\s*(return|;)/.test(src) || src.includes("if (isStale()) return;"),
+            "must bail before painting when stale");
+});

@@ -154,8 +154,8 @@ async function selectRun(runId) {
   if (!runId) return;
   const gen = ++selectGen;
   stopPolling();
-  await loadRunStatus(runId);
-  if (gen !== selectGen) return;    // await 사이에 다른 실행이 선택됨
+  const status = await loadRunStatus(runId, { isStale: () => gen !== selectGen });
+  if (status === "stale") return;   // 낡은 응답은 그리지도, 폴링도 시작하지 않는다
   startPolling(runId, {
     onTick: (info) => {
       if (gen !== selectGen) return;

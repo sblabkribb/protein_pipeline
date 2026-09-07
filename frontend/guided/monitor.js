@@ -36,7 +36,10 @@ function setRunStatus(text) {
   host.textContent = text;
 }
 
-async function loadRunStatus(runId) {
+// isStale 은 facade 가 건네는 세대 검사다. 두 번 빠르게 누르면 느린 옛 응답이
+// 늦게 도착해 새 실행 화면을 덧그릴 수 있다 - await 마다 물어보고, 낡았으면
+// 아무것도 그리지 않고 "stale" 로 돌아온다.
+export async function loadRunStatus(runId, { isStale = () => false } = {}) {
   const host = document.getElementById("runStatus");
   runState.runId = runId;
   if (!runId) {
@@ -47,12 +50,14 @@ async function loadRunStatus(runId) {
   host.textContent = "불러오는 중…";
   try {
     const out = await callTool("pipeline.status", { run_id: runId });
+    if (isStale()) return "stale";
     if (out && out.error) throw new Error(out.error);
     // 상태와 산출물은 별개다. status.json 이 없는 실행에도 결과 파일은 있다
     // (예: test_relax_out 은 상태 파일 없이 .pdb 를 갖고 있다).
     if (out.found === false) {
       setRunStatus(`${runId}: 상태 파일이 없습니다. 산출물은 아래에서 볼 수 있습니다.`);
-      await loadArtifacts(runId);
+      await loadArtifacts(runId, { isStale });
+      if (isStale()) return "stale";
       showPanel("run");
       return;
     }
@@ -80,14 +85,16 @@ async function loadRunStatus(runId) {
     renderRunProgress(info);
     const actions = document.getElementById("runActions");
     if (actions) actions.classList.remove("hidden");
-    await loadArtifacts(runId);
+    await loadArtifacts(runId, { isStale });
+    if (isStale()) return "stale";
     showPanel("run");
   } catch (error) {
+    if (isStale()) return "stale";
     setRunStatus(`상태를 불러오지 못했습니다: ${errorText(error)}`);
   }
 }
 
-async function loadArtifacts(runId) {
+async function loadArtifacts(runId, { isStale = () => false } = {}) {
   const host = document.getElementById("artifactList");
   host.classList.add("empty");
   host.textContent = "불러오는 중…";
@@ -98,6 +105,7 @@ async function loadArtifacts(runId) {
     const out = await callTool("pipeline.list_artifacts", {
       run_id: runId, max_depth: 6, limit: 400,
     });
+    if (isStale()) return;
     if (out && out.error) throw new Error(out.error);
     const items = out.artifacts || out.items || [];
     runState.artifacts = items;
@@ -292,6 +300,8 @@ const STAGE_ALIASES = {
   proteinmpnn: "design",
   wt_baseline: "wt", wt_soluprot: "wt", wt_af2: "wt", wt_relax: "wt", wt_diff: "wt",
   ligand_mask: "masking", pdb_preprocess: "masking", query_pdb_check: "masking",
+  surface_mask: "masking", mask_consensus: "masking",
+  af2_pooled_tiers: "af2",
 };
 
 export function mapStatusStageToStep(stage) {
@@ -396,4 +406,4 @@ export function renderReport(host, markdown) {
   host.innerHTML = renderMarkdown(String(markdown || ""));
 }
 
-export { closeStage, loadRunStatus, loadArtifacts, probeWorkers, runState, setRunStatus };
+export { closeStage, loadArtifacts, probeWorkers, runState, setRunStatus };
