@@ -286,13 +286,20 @@ export function nextPollDelayMs(consecutiveFailures, isActive) {
   return isActive ? POLL_ACTIVE_MS : POLL_IDLE_MS;
 }
 
-const STAGE_ALIASES = { wt_diff: "wt", init: "msa" };
+const STAGE_ALIASES = {
+  init: "msa", mmseqs_msa: "msa",
+  rfd3: "backbone", bioemu: "backbone", af2_target: "af2",
+  proteinmpnn: "design",
+  wt_baseline: "wt", wt_soluprot: "wt", wt_af2: "wt", wt_relax: "wt", wt_diff: "wt",
+  ligand_mask: "masking", pdb_preprocess: "masking", query_pdb_check: "masking",
+};
 
 export function mapStatusStageToStep(stage) {
   const raw = String(stage || "").trim();
   if (!raw) return "";
   if (STAGE_ALIASES[raw]) return STAGE_ALIASES[raw];
-  return raw.replace(/_[0-9]+$/, "");   // design_50 -> design
+  const stripped = raw.replace(/_[0-9]+$/, "");
+  return STAGE_ALIASES[stripped] || stripped;   // proteinmpnn_50 -> proteinmpnn -> design
 }
 
 export function stageProgressPercent(stage, state, steps) {
@@ -304,9 +311,12 @@ export function stageProgressPercent(stage, state, steps) {
 
 // 폴링 상태. 실행이 끝나거나 실패가 3회 연속되면 멈춘다 - 조용히 계속 도는
 // 타이머는 사용자가 탭을 닫은 뒤에도 서버를 두드린다.
-const poll = { runId: "", timer: 0, failures: 0, active: false };
+// gen 은 재선택을 세는 토큰이다. stopPolling 이 올리면 await 사이에 걸린 낡은
+// tick 은 전부 무효가 된다 - 옛 실행의 상태가 새 실행 화면에 덧그려지는 것을 막는다.
+const poll = { runId: "", timer: 0, failures: 0, active: false, gen: 0 };
 
 export function stopPolling() {
+  poll.gen += 1;                       // 진행 중인 tick 을 전부 무효화
   if (poll.timer) clearTimeout(poll.timer);
   poll.timer = 0;
   poll.runId = "";
@@ -314,12 +324,15 @@ export function stopPolling() {
 
 export function startPolling(runId, { onTick } = {}) {
   stopPolling();
+  const gen = poll.gen;
   poll.runId = runId;
   poll.failures = 0;
   poll.active = true;
   const tick = async () => {
+    if (gen !== poll.gen) return;                       // 재선택됨 - 낡은 tick
     try {
-      const out = await callTool("pipeline.status", { run_id: poll.runId });
+      const out = await callTool("pipeline.status", { run_id: runId });
+      if (gen !== poll.gen) return;                     // await 사이에 재선택됨
       if (out && out.error) throw new Error(out.error);
       poll.failures = 0;
       const info = (out && typeof out.status === "object" && out.status) || out;
@@ -328,6 +341,7 @@ export function startPolling(runId, { onTick } = {}) {
       if (onTick) onTick(info);
       if (done) { stopPolling(); return; }
     } catch {
+      if (gen !== poll.gen) return;
       poll.failures += 1;
       if (poll.failures >= POLL_MAX_FAILURES) {
         poll.active = false;
@@ -336,11 +350,17 @@ export function startPolling(runId, { onTick } = {}) {
         return;
       }
     }
+    if (gen !== poll.gen) return;
     const delay = nextPollDelayMs(poll.failures, poll.active);
     if (delay > 0) poll.timer = setTimeout(tick, delay);
   };
   poll.timer = setTimeout(tick, POLL_ACTIVE_MS);
 }
+
+// 이 화면의 요청 모양은 고정되어 있다 (pipeline 전체, novelty·wt 비교 포함).
+// tick 마다 다시 계산하면 같은 배열이 계속 만들어질 뿐이다.
+const RUN_PROGRESS_STEPS = progressStepsForRequest({ mode: "pipeline", noveltyEnabled: true, wtCompare: true })
+  .filter((step) => step !== "done");
 
 export function renderRunProgress(info) {
   const wrap = document.getElementById("runProgress");
@@ -351,9 +371,7 @@ export function renderRunProgress(info) {
     wrap.classList.add("hidden");
     return;
   }
-  const steps = progressStepsForRequest({ mode: "pipeline", noveltyEnabled: true, wtCompare: true })
-    .filter((step) => step !== "done");
-  const percent = stageProgressPercent(info.stage, info.state, steps);
+  const percent = stageProgressPercent(info.stage, info.state, RUN_PROGRESS_STEPS);
   wrap.classList.remove("hidden");
   fill.style.width = `${percent}%`;
   wrap.setAttribute("aria-valuenow", String(percent));

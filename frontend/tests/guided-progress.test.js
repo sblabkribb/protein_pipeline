@@ -1,12 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { mapStatusStageToStep, stageProgressPercent, nextPollDelayMs } from "../guided/monitor.js";
 
-test("tier-suffixed status stages map to their base step", () => {
+test("backend status stages map to the progress plan's steps", () => {
   assert.equal(mapStatusStageToStep("af2_50"), "af2");
   assert.equal(mapStatusStageToStep("relax_30"), "relax");
   assert.equal(mapStatusStageToStep("wt_diff"), "wt");
   assert.equal(mapStatusStageToStep("init"), "msa");
+  assert.equal(mapStatusStageToStep("mmseqs_msa"), "msa");
+  assert.equal(mapStatusStageToStep("rfd3"), "backbone");
+  assert.equal(mapStatusStageToStep("bioemu"), "backbone");
+  assert.equal(mapStatusStageToStep("proteinmpnn_50"), "design");
+  assert.equal(mapStatusStageToStep("af2_target"), "af2");
+  assert.equal(mapStatusStageToStep("wt_relax"), "wt");
+  assert.equal(mapStatusStageToStep("ligand_mask"), "masking");
 });
 
 test("progress percent walks the request's step plan", () => {
@@ -22,4 +30,11 @@ test("polling backs off by activity and stops after repeated failures", () => {
   assert.equal(nextPollDelayMs(0, false), 30000);
   assert.equal(nextPollDelayMs(2, true), 5000);
   assert.equal(nextPollDelayMs(3, true), 0);
+});
+
+test("the poll loop invalidates stale ticks and stops on terminal states", () => {
+  const src = readFileSync(new URL("../guided/monitor.js", import.meta.url), "utf8");
+  assert.ok(src.includes("poll.gen += 1"), "stopPolling must invalidate in-flight ticks");
+  assert.ok(src.includes("gen !== poll.gen"), "tick must bail when superseded");
+  assert.ok(src.includes('"done", "failed", "cancelled"'), "terminal states must stop polling");
 });

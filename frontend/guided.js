@@ -147,15 +147,21 @@ function targetFasta() {
   return document.getElementById("targetFasta").value.trim();
 }
 
+// 재선택 세대 토큰. 두 번 빠르게 누르면 await 사이에 낡은 실행의 상태가 새
+// 실행 화면에 그려질 수 있다 - await 뒤에서 세대가 어긋나면 그만둔다.
+let selectGen = 0;
 async function selectRun(runId) {
   if (!runId) return;
+  const gen = ++selectGen;
   stopPolling();
   await loadRunStatus(runId);
+  if (gen !== selectGen) return;    // await 사이에 다른 실행이 선택됨
   startPolling(runId, {
     onTick: (info) => {
+      if (gen !== selectGen) return;
       // 상태 재조회 없이도 Run 탭이 살아 움직인다. 아티팩트는 상태가 바뀔 때만.
       renderRunProgress(info);
-      if (info.state === "done" || info.state === "failed") loadArtifacts(runId);
+      if (info.state === "done" || info.state === "failed" || info.state === "cancelled") loadArtifacts(runId);
     },
   });
 }
@@ -264,19 +270,6 @@ function boot() {
   loadRunList(selectRun);
 }
 
-// facade 는 모듈 최상위에서 DOM 을 만진다 (dom.js 머리글의 함정과 같다). 이
-// 모듈은 monitor.js 의 순환 import 를 타고 node 테스트까지 평가되므로, 브라우저
-// 밖에서는 배선을 건너뛴다. 함수 선언과 export 는 그대로 남는다.
-if (typeof document !== "undefined") {
-  initSplitters();
-  renderWeights(document.getElementById("weights"));
-  renderStages(document.getElementById("stages"), null);
-  document.getElementById("purpose").addEventListener("change", onPurposeChange);
-  for (const id of ["nDesigns", "lengthAa"]) {
-    document.getElementById(id).addEventListener("change", loadRegistry);
-  }
-}
-
 // 마법사 단계 버튼은 사라졌다. 남은 역할은 하나다 - 계획이 생기기 전까지
 // 검토·승인 섹션을 감춰 둔다.
 export function showStep() {
@@ -294,7 +287,18 @@ export function showPanel(name) {
   }
 }
 
+// facade 는 모듈 최상위에서 DOM 을 만진다 (dom.js 머리글의 함정과 같다). 이
+// 모듈은 monitor.js 의 순환 import 를 타고 node 테스트까지 평가되므로, 브라우저
+// 밖에서는 배선을 건너뛴다. 함수 선언과 export 는 그대로 남는다.
 if (typeof document !== "undefined") {
+  initSplitters();
+  renderWeights(document.getElementById("weights"));
+  renderStages(document.getElementById("stages"), null);
+  document.getElementById("purpose").addEventListener("change", onPurposeChange);
+  for (const id of ["nDesigns", "lengthAa"]) {
+    document.getElementById(id).addEventListener("change", loadRegistry);
+  }
+
   for (const tab of document.querySelectorAll(".tab")) {
     tab.addEventListener("click", () => showPanel(tab.dataset.panel));
   }
@@ -334,44 +338,48 @@ if (typeof document !== "undefined") {
     document.getElementById("targetNote").textContent = "";
   });
   document.getElementById("logoutBtn").addEventListener("click", signOut);
-document.getElementById("cancelRunBtn").addEventListener("click", async () => {
-  const runId = runState.runId;
-  if (!runId) return;
-  if (!window.confirm(`${runId} 실행을 취소할까요? 시작된 스테이지는 되돌릴 수 없습니다.`)) return;
-  try {
-    await cancelRun(runId);
-    await loadRunStatus(runId);
-  } catch (error) {
-    setRunStatus(`취소하지 못했습니다: ${errorText(error)}`);
-  }
-});
-document.getElementById("reportGenBtn").addEventListener("click", async () => {
-  const runId = runState.runId;
-  if (!runId) return;
-  const button = document.getElementById("reportGenBtn");
-  button.disabled = true;
-  try {
-    await generateReport(runId);
-    const out = await getReport(runId);
-    if (out && out.error) throw new Error(out.error);
-    renderReport(document.getElementById("reportView"), out.report || out.markdown || out.text || "");
-  } catch (error) {
-    setRunStatus(`리포트를 만들지 못했습니다: ${errorText(error)}`);
-  } finally {
-    button.disabled = false;
-  }
-});
-document.getElementById("reportLoadBtn").addEventListener("click", async () => {
-  const runId = runState.runId;
-  if (!runId) return;
-  try {
-    const out = await getReport(runId);
-    if (out && out.error) throw new Error(out.error);
-    renderReport(document.getElementById("reportView"), out.report || out.markdown || out.text || "");
-  } catch (error) {
-    setRunStatus(`리포트를 불러오지 못했습니다: ${errorText(error)}`);
-  }
-});
+  document.getElementById("cancelRunBtn").addEventListener("click", async () => {
+    const runId = runState.runId;
+    if (!runId) return;
+    if (!window.confirm(`${runId} 실행을 취소할까요? 시작된 스테이지는 되돌릴 수 없습니다.`)) return;
+    try {
+      const out = await cancelRun(runId);
+      if (out && out.error) throw new Error(out.error);
+      await loadRunStatus(runId);
+    } catch (error) {
+      setRunStatus(`취소하지 못했습니다: ${errorText(error)}`);
+    }
+  });
+  document.getElementById("reportGenBtn").addEventListener("click", async () => {
+    const runId = runState.runId;
+    if (!runId) return;
+    const button = document.getElementById("reportGenBtn");
+    button.disabled = true;
+    try {
+      const gen = await generateReport(runId);
+      if (gen && gen.error) throw new Error(gen.error);
+      const out = await getReport(runId);
+      if (out && out.error) throw new Error(out.error);
+      renderReport(document.getElementById("reportView"),
+        out.report_ko || out.report || out.markdown || out.text || "");
+    } catch (error) {
+      setRunStatus(`리포트를 만들지 못했습니다: ${errorText(error)}`);
+    } finally {
+      button.disabled = false;
+    }
+  });
+  document.getElementById("reportLoadBtn").addEventListener("click", async () => {
+    const runId = runState.runId;
+    if (!runId) return;
+    try {
+      const out = await getReport(runId);
+      if (out && out.error) throw new Error(out.error);
+      renderReport(document.getElementById("reportView"),
+        out.report_ko || out.report || out.markdown || out.text || "");
+    } catch (error) {
+      setRunStatus(`리포트를 불러오지 못했습니다: ${errorText(error)}`);
+    }
+  });
   document.getElementById("newDesignBtn").addEventListener("click", () => {
     highlightRun("");
     document.getElementById("objectiveSection").scrollIntoView({ behavior: "smooth" });
