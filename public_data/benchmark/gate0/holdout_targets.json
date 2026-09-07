@@ -1,0 +1,256 @@
+{
+  "purpose": "적응적 할당 정책의 전향적 검증용 홀드아웃 타겟",
+  "frozen_utc": "2026-09-07T05:44:52Z",
+  "seed": 20260907,
+  "code_sha": "5ae77d5387ebd68943da3b1808f4ad3381cc047a",
+  "eligibility": {
+    "chains": 1,
+    "min_length": 50,
+    "max_length": 400
+  },
+  "strata": [
+    {
+      "label": "50-150",
+      "low": 50,
+      "high": 150
+    },
+    {
+      "label": "150-250",
+      "low": 150,
+      "high": 250
+    },
+    {
+      "label": "250-400",
+      "low": 250,
+      "high": 401
+    }
+  ],
+  "selection_inputs": [
+    "적격성",
+    "길이"
+  ],
+  "selection_excluded_inputs": [
+    "게이트 0 사전분포 점수 (정책의 런타임 입력이므로 선정에 쓰지 않는다)",
+    "실측 yield (이 후보들은 게이트 0 을 통과한 적이 없어 존재하지 않는다)"
+  ],
+  "leakage_argument": {
+    "superfamily_overlap_with_gate0": 0,
+    "encoder": "게이트 0 특징은 저자 배포 ProteinMPNN v_48_020.pt 로 뽑았고 이 저장소가 학습시키지 않았다",
+    "readout_head": "판독 헤드는 62 타겟에 적합되어 있다. 홀드아웃 타겟의 라벨은 보지 않으므로 배포 조건과 같다.",
+    "caveat": "ProteinMPNN 자체는 저자가 PDB 로 사전학습했다. 이 CATH 도메인들도 그 안에 있을 것이다. 기존 62 타겟도 같은 조건이라 홀드아웃에만 유리하게 작용하지 않지만, 논문에 적어야 한다."
+  },
+  "pool": {
+    "n_eligible": 234,
+    "by_split": {
+      "cath_test": 15,
+      "cath_val": 24,
+      "cath_train": 195
+    },
+    "by_stratum": {
+      "50-150": 96,
+      "150-250": 54,
+      "250-400": 84
+    },
+    "split_note": "cath_train/val/test 는 앞선 연구의 split 이다. 게이트 0 의 62 타겟이 이미 세 split 에 19/19/24 로 걸쳐 있어 지금은 기능하지 않고, 인코더가 이 저장소에서 학습되지 않았으므로 셋을 합쳐 뽑는다."
+  },
+  "selected": [
+    {
+      "domain": "1vsrA00",
+      "split": "cath_train",
+      "length": 134,
+      "superfamily": "3.40.960.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1vsrA00.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "1sp0A00",
+      "split": "cath_val",
+      "length": 131,
+      "superfamily": "2.60.370.10",
+      "pdb": "/opt/protein_pipeline/cath_val/1sp0A00.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "2iayA00",
+      "split": "cath_train",
+      "length": 110,
+      "superfamily": "3.30.1820.10",
+      "pdb": "/opt/protein_pipeline/cath_train/2iayA00.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "1tm9A00",
+      "split": "cath_train",
+      "length": 137,
+      "superfamily": "1.10.3960.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1tm9A00.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "2jo7A00",
+      "split": "cath_train",
+      "length": 224,
+      "superfamily": "1.10.4170.10",
+      "pdb": "/opt/protein_pipeline/cath_train/2jo7A00.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "3es1A01",
+      "split": "cath_test",
+      "length": 160,
+      "superfamily": "2.20.70.150",
+      "pdb": "/opt/protein_pipeline/cath_test/3es1A01.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "2jokA01",
+      "split": "cath_train",
+      "length": 184,
+      "superfamily": "1.10.4120.10",
+      "pdb": "/opt/protein_pipeline/cath_train/2jokA01.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "3h7eA02",
+      "split": "cath_train",
+      "length": 220,
+      "superfamily": "3.90.1490.10",
+      "pdb": "/opt/protein_pipeline/cath_train/3h7eA02.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "1vprA02",
+      "split": "cath_train",
+      "length": 344,
+      "superfamily": "4.10.1310.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1vprA02.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    },
+    {
+      "domain": "3bqwA01",
+      "split": "cath_train",
+      "length": 347,
+      "superfamily": "3.15.30.10",
+      "pdb": "/opt/protein_pipeline/cath_train/3bqwA01.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    },
+    {
+      "domain": "5fwaA02",
+      "split": "cath_train",
+      "length": 339,
+      "superfamily": "2.70.160.11",
+      "pdb": "/opt/protein_pipeline/cath_train/5fwaA02.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    },
+    {
+      "domain": "2pgsA03",
+      "split": "cath_train",
+      "length": 382,
+      "superfamily": "1.10.3410.10",
+      "pdb": "/opt/protein_pipeline/cath_train/2pgsA03.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    }
+  ],
+  "reserve": [
+    {
+      "domain": "5pc8A00",
+      "split": "cath_train",
+      "length": 115,
+      "superfamily": "1.20.920.10",
+      "pdb": "/opt/protein_pipeline/cath_train/5pc8A00.pdb",
+      "stratum": "50-150",
+      "role": "reserve",
+      "reserve_rank": 1
+    },
+    {
+      "domain": "2yruA01",
+      "split": "cath_test",
+      "length": 118,
+      "superfamily": "1.20.940.10",
+      "pdb": "/opt/protein_pipeline/cath_test/2yruA01.pdb",
+      "stratum": "50-150",
+      "role": "reserve",
+      "reserve_rank": 2
+    },
+    {
+      "domain": "1sh6A02",
+      "split": "cath_train",
+      "length": 230,
+      "superfamily": "1.10.418.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1sh6A02.pdb",
+      "stratum": "150-250",
+      "role": "reserve",
+      "reserve_rank": 1
+    },
+    {
+      "domain": "2je2A00",
+      "split": "cath_val",
+      "length": 157,
+      "superfamily": "3.50.70.20",
+      "pdb": "/opt/protein_pipeline/cath_val/2je2A00.pdb",
+      "stratum": "150-250",
+      "role": "reserve",
+      "reserve_rank": 2
+    },
+    {
+      "domain": "5xpdA02",
+      "split": "cath_test",
+      "length": 269,
+      "superfamily": "2.20.28.10",
+      "pdb": "/opt/protein_pipeline/cath_test/5xpdA02.pdb",
+      "stratum": "250-400",
+      "role": "reserve",
+      "reserve_rank": 1
+    },
+    {
+      "domain": "3f2pA01",
+      "split": "cath_train",
+      "length": 316,
+      "superfamily": "3.10.170.10",
+      "pdb": "/opt/protein_pipeline/cath_train/3f2pA01.pdb",
+      "stratum": "250-400",
+      "role": "reserve",
+      "reserve_rank": 2
+    }
+  ],
+  "backbone_plan": {
+    "n_per_target": 6,
+    "composition": {
+      "target": 1,
+      "rfd3": 5
+    },
+    "frozen_utc": "2026-09-07T06:08:45Z",
+    "why_this_composition": [
+      "개발에서 가장 흔한 구성과 정확히 같다. 62 타겟 중 7 개, 개발 20 타겟 중 7 개가 {target:1, rfd3:5} 였다. 홀드아웃이 개발과 같은 regime 이어야 비교가 정책에 대한 것이 되고 백본 생성 설정 변경에 대한 것이 되지 않는다.",
+      "native 는 타겟당 하나뿐이다. CATH 도메인 구조 자체이므로 6 개로 늘릴 수 없다. 따라서 6 개 구성은 1 + 5 가 유일한 자연스러운 형태다.",
+      "source 는 정책의 차원이 아니다. allocation.py 는 backbone_source 를 읽지 않는다 (유일한 'source' 문자열은 probe/prior_only 출처 표기이고 무관하다). 따라서 source 는 검정 대상이 아니라 균형을 맞출 잡음 인자다."
+    ],
+    "why_not_bioemu": [
+      "코퍼스 전체에서 BioEmu 는 4 타겟뿐이고 이미 exploratory 로만 보고하기로 했다.",
+      "wave-3 에서 8 개 실행 중 4 개가 2.0 A 수용 기준에 미달했다. 실패율 50% 이면 12 타겟에 약 24 회 시도가 필요하다.",
+      "타겟당 2 개만 넣으면 개발이 쓴 5 개와 다른 regime 이 되어, 주 실험에 한 번도 특성화되지 않은 인자를 추가하게 된다.",
+      "source 선택 자체를 주장하려면 별도 arm 으로 나중에 붙인다."
+    ],
+    "generation_cost": {
+      "provenance": "unmeasured",
+      "anchor": "게이트 0 wave-2 의 전체 실행 wall clock 중앙값 4720 s (성공 14 회, 범위 872-12514 s). MSA, ProteinMPNN, SoluProt, 폴딩을 모두 포함하므로 RFD3 단독 비용이 아니다.",
+      "note": "홀드아웃 12 타겟 생성은 이 중앙값 기준 약 16 시간으로 잡되, 범위가 넓어 확정 예측이 아니다."
+    },
+    "acceptance": {
+      "rule": "게이트 0 와 같은 기준을 쓴다. 백본이 기준에 미달하면 그 타겟은 예비 타겟으로 교체하고, 선정 목록을 다시 뽑지 않는다.",
+      "note": "bioemu_target_rmsd_cutoff 2.0 A 는 게이트 0 에서 완화가 필요하다고 이미 기록되어 있다. RFD3 에 같은 문제가 있는지는 확인하지 않았다."
+    }
+  }
+}
