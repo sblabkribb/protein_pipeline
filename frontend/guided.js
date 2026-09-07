@@ -46,6 +46,7 @@ import {
   loadLiabilities,
   renderEvidence,
 } from "./guided/evidence.js";
+import { initStructureTab, refreshStructure } from "./guided/structure.js";
 import { el } from "./guided/dom.js";
 
 // --- 세션 -----------------------------------------------------------------
@@ -184,6 +185,16 @@ async function selectRun(runId) {
     if (gen !== selectGen) return;
     document.getElementById("evidenceView").replaceChildren(
       el("p", "warn", `근거를 불러오지 못했습니다: ${errorText(error)}`));
+  });
+  // Structure 탭도 같은 자리에서 채운다. PDB 는 산출물 읽기라 느릴 수 있으므로
+  // structure 쪽 await 마다 같은 isStale 술어로 낡은 세대를 막는다.
+  refreshStructure(runId, {
+    isStale: () => gen !== selectGen,
+    artifacts: runState.artifacts || [],
+  }).catch((error) => {
+    if (gen !== selectGen) return;
+    document.getElementById("structureViewer").replaceChildren(
+      el("p", "warn", `구조를 불러오지 못했습니다: ${errorText(error)}`));
   });
   startPolling(runId, {
     onTick: (info) => {
@@ -356,6 +367,7 @@ export function showPanel(name) {
 // 밖에서는 배선을 건너뛴다. 함수 선언과 export 는 그대로 남는다.
 if (typeof document !== "undefined") {
   initSplitters();
+  initStructureTab();
   renderWeights(document.getElementById("weights"));
   renderStages(document.getElementById("stages"), null);
   document.getElementById("purpose").addEventListener("change", onPurposeChange);

@@ -194,7 +194,10 @@
         </section>
 
         <section class="block panel hidden" data-panelfor="structure">
-          <div id="structureFiles" class="empty">구조 파일(.pdb/.cif/.sdf)이 여기 나열됩니다.</div>
+          <label class="visually-hidden" for="structureFiles">구조 파일</label>
+          <select id="structureFiles" class="empty">
+            <option>구조 파일(.pdb)이 여기 나열됩니다.</option>
+          </select>
           <div id="structureViewer" class="preview"></div>
           <div id="residueStrip" class="residuestrip"></div>
           <p class="note">잔기를 누르면 3D 뷰에서 하이라이트됩니다. 선택 목록은 설계 제약으로 쓸 수 있습니다.</p>
