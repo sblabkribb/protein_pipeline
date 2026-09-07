@@ -393,6 +393,9 @@ async function startRun() {
 const PANE_KEY = "kbf.guided.panes";
 const PANE_MIN = 200;
 const PANE_DEFAULT = { left: 264, right: 340 };
+const PANE_DEFAULT_NARROW = { left: 232, right: 300 };
+const SPLITTER_TOTAL_PX = 12;
+const CENTER_MIN_PX = 360;
 
 function readPanes() {
   try {
@@ -407,9 +410,41 @@ function applyPanes(panes) {
     `${panes.left}px 6px minmax(0, 1fr) 6px ${panes.right}px`;
 }
 
+// 저장된 폭은 화면이 바뀌면 무의미해진다. 중앙 패널은 항상 CENTER_MIN_PX 를
+// 보장한다 - 넓은 모니터에서 넓힌 레일이 노트북 절반 창에서 중앙을 짜부뜨린
+// 적이 있다. 초과분은 두 레일의 현재 폭 비율로 나눠 차감한다.
+export function clampPanes(panes, layoutWidth) {
+  const width = Number(layoutWidth) || 0;
+  const left = Math.max(PANE_MIN, Number(panes?.left) || PANE_MIN);
+  const right = Math.max(PANE_MIN, Number(panes?.right) || PANE_MIN);
+  if (width <= 1100) return { left, right };   // 스택 모드가 CSS 로 덮는다
+  const budget = width - SPLITTER_TOTAL_PX - CENTER_MIN_PX;
+  const total = left + right;
+  if (total <= budget) return { left, right };
+  const excess = total - budget;
+  const share = total > 0 ? left / total : 0.5;
+  let newLeft = left - excess * share;
+  let newRight = right - excess * (1 - share);
+  // 하한에 닿은 쪽은 고정하고 남은 초과분을 다른 쪽에서 더 뺀다.
+  if (newRight < PANE_MIN) {
+    newLeft = Math.max(PANE_MIN, budget - PANE_MIN);
+    newRight = PANE_MIN;
+  } else if (newLeft < PANE_MIN) {
+    newLeft = PANE_MIN;
+    newRight = Math.max(PANE_MIN, budget - PANE_MIN);
+  }
+  return { left: Math.round(newLeft), right: Math.round(newRight) };
+}
+
+export function choosePaneDefault(width, saved) {
+  if (saved && Number(saved.left) > 0 && Number(saved.right) > 0) return saved;
+  if (width > 1100 && width <= 1280) return { ...PANE_DEFAULT_NARROW };
+  return { ...PANE_DEFAULT };
+}
+
 function initSplitters() {
   const layout = document.querySelector(".layout");
-  const panes = readPanes();
+  let panes = clampPanes(choosePaneDefault(layout.clientWidth, readPanes()), layout.clientWidth);
   applyPanes(panes);
 
   const clamp = (value) => Math.max(PANE_MIN, Math.min(value, layout.clientWidth - PANE_MIN * 2));
@@ -446,6 +481,17 @@ function initSplitters() {
       localStorage.setItem(PANE_KEY, JSON.stringify(panes));
     });
   }
+
+  // 창 크기가 변하면 저장된 폭을 다시 클램프한다. 저장값은 건드리지 않는다 -
+  // 창을 다시 넓히면 사용자가 정한 폭으로 돌아간다.
+  let resizeTimer = 0;
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      panes = clampPanes(panes, layout.clientWidth);
+      applyPanes(panes);
+    }, 100);
+  });
 }
 
 function boot() {
