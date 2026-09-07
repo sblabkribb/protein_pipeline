@@ -39,3 +39,10 @@ export async function callTool(name, args) {
   // 모든 필드가 undefined 가 되고, 200 응답이라 오류도 뜨지 않는다.
   return unwrapToolResponse({ ok: res.ok, status: res.status, payload });
 }
+
+// 던져진 것이 Error 가 아닐 수 있다. 메시지가 없으면 그 사실을 말한다.
+export function errorText(error) {
+  if (!error) return "알 수 없는 오류";
+  if (typeof error === "string") return error;
+  return (error && error.message) || String(error) || "알 수 없는 오류";
+}

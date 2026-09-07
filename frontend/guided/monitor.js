@@ -1,6 +1,8 @@
 // frontend/guided/monitor.js — 실행 상태·산출물·연결/워커 점검.
-import { callTool } from "./api.js";
+import { callTool, errorText } from "./api.js";
 import { el, dot, renderConnections } from "./plan.js";
+// 순환 import: facade 와 상호 참조. 함수 선언이라 hoisting 으로 안전하되,
+// 모듈 최상위에서 호출하지 말 것.
 import { showPanel } from "../guided.js";
 
 // --- 모니터 / 분석 --------------------------------------------------------
@@ -13,13 +15,6 @@ const runState = { runId: "", artifacts: [] };
 //: 3D 로 그릴 수 있는 형식. 그 외에는 텍스트로 보여준다 - 뷰어에 아무 파일이나
 //: 넣으면 빈 캔버스가 나오고, 사용자는 파일이 비었다고 생각한다.
 const STRUCTURE_FORMATS = { pdb: "pdb", cif: "cif", mmcif: "cif", ent: "pdb", sdf: "sdf" };
-
-// 던져진 것이 Error 가 아닐 수 있다. 메시지가 없으면 그 사실을 말한다.
-function errorText(error) {
-  if (!error) return "알 수 없는 오류";
-  if (typeof error === "string") return error;
-  return (error && error.message) || String(error) || "알 수 없는 오류";
-}
 
 function formatBytes(size) {
   if (size == null) return "";
@@ -275,4 +270,4 @@ async function probeWorkers() {
   }
 }
 
-export { errorText, formatBytes, isStructureArtifact, loadRunStatus, loadArtifacts, openArtifact, openStage, closeStage, render3d, probeWorkers, runState, setRunStatus };
+export { closeStage, loadRunStatus, probeWorkers };

@@ -1,6 +1,7 @@
 // frontend/guided/plan.js — 목표·경로·계획 검토/승인 렌더링. DOM 을 그리고 서버 도구를 호출한다.
-import { callTool } from "./api.js";
-import { errorText } from "./monitor.js";
+import { callTool, errorText } from "./api.js";
+// 순환 import: facade 와 상호 참조. 함수 선언이라 hoisting 으로 안전하되,
+// 모듈 최상위에서 호출하지 말 것.
 import { setSignedOut, showStep } from "../guided.js";
 
 const OBJECTIVES = [
@@ -688,4 +689,4 @@ async function approve() {
   }
 }
 
-export { OBJECTIVES, registry, state, loadRegistry, renderTemplates, onPurposeChange, renderWeights, collectObjective, generatePlan, approve, sendChat, appendChat, decisionNode, evidenceNode, formatSeconds, stageRow, renderStages, renderCostBar, currentRoute, renderConnections, explainPlan, loadLlmModels, el, dot };
+export { currentRoute, loadRegistry, onPurposeChange, renderWeights, renderStages, state, generatePlan, approve, sendChat, loadLlmModels, collectObjective, decisionNode, evidenceNode, formatSeconds, stageRow, el, dot, renderConnections };

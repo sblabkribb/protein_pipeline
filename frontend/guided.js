@@ -4,7 +4,7 @@
 // 만든 계획을 그리고, 사람이 고친 값을 되돌려줄 뿐이다. 근거 문구를 프런트에서
 // 지어내면 근거 추적이 깨지므로 서버가 준 것만 표시한다.
 
-import { apiBase, callTool, storedUserName } from "./guided/api.js";
+import { apiBase, callTool, errorText, storedUserName } from "./guided/api.js";
 import {
   currentRoute,
   loadRegistry,
@@ -17,7 +17,7 @@ import {
   sendChat,
   loadLlmModels,
 } from "./guided/plan.js";
-import { closeStage, errorText, loadRunStatus, probeWorkers } from "./guided/monitor.js";
+import { closeStage, loadRunStatus, probeWorkers } from "./guided/monitor.js";
 
 // --- 세션 -----------------------------------------------------------------
 //

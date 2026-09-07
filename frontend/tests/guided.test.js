@@ -16,6 +16,10 @@ const present = sources.filter((url) => existsSync(url));
 const source = present.map((url) => readFileSync(url, "utf8")).join("\n");
 const html = readFileSync(new URL("../guided.html", import.meta.url), "utf8");
 
+for (const name of ["api.js", "plan.js", "monitor.js"]) {
+  assert.ok(present.some((u) => u.href.endsWith(`/${name}`)), `${name} must exist and be concatenated`);
+}
+
 test("guided sources parse as ES modules", () => {
   for (const url of present) {
     const tempDir = mkdtempSync(join(tmpdir(), "kbf-guided-check-"));
