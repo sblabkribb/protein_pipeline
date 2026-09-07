@@ -48,6 +48,7 @@ ROLES = (
     "ligand_docking",
     "antibody_numbering",
     "refinement",
+    "stability_evaluator",
 )
 
 COST_PROVENANCE = ("measured", "reported", "unmeasured")

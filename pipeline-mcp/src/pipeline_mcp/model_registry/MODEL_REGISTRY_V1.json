@@ -421,7 +421,7 @@
         "direct_client": true,
         "portal_mcp": false
       },
-      "client": "scripts/transcoder/rapid_sr/liabilities.py",
+      "client": "pipeline_mcp/sequence_liabilities.py",
       "measures": [
         "aggregation",
         "developability"
@@ -431,9 +431,10 @@
         "value": 0.0,
         "unit": "s/sequence",
         "scope": "서열만 읽는 창 통계라 폴딩이나 워커 호출이 없다. 측정 가능한 시간이 나오지 않을 만큼 싸다.",
-        "source": "scripts/transcoder/rapid_sr/liabilities.py"
+        "source": "pipeline-mcp/src/pipeline_mcp/sequence_liabilities.py"
       },
-      "metric_caveat": "휴리스틱이다. Kyte-Doolittle 소수성과 전하로 만든 5 잔기 창 통계이고, 어떤 응집 측정에도 맞춰본 적이 없다. 임계값(창 5, 소수성 2.0, 전하 1.0)은 항체 문맥에서 정해졌으므로 단량체에 그대로 옮기면 근거가 따라오지 않는다. 그래서 값만 기록하고 통과/탈락을 정하지 않는다 - calibrated 는 false 다.",
+      "metric_caveat": "휴리스틱이다. Kyte-Doolittle 소수성과 전하로 만든 5 잔기 창 통계이고, 어떤 응집 측정에도 맞춰본 적이 없다. 창 통계의 임계값(창 5, 소수성 2.0, 전하 1.0)은 항체 문맥에서 정해졌다.",
+      "gate_note": "파이프라인이 soluprot 통과 직후 설계마다 값을 기록하고, 운영 판단으로 임시 게이트를 돌린다. 게이트 상한(max_hydrophobic_patch 2.5, aggregation_prone_fraction 0.10, free_cysteine 0, NG+DG 모티프 2)은 측정 코호트 없이 정한 초기값이고 PIPELINE_AGGREGATION_GATE_* / PIPELINE_DEVELOPABILITY_GATE_* 환경변수와 PIPELINE_LIABILITY_GATE=0 로 조정/해제할 수 있다. calibrated 는 false 다.",
       "ported_from": "antigen_pipeline antibody_developability.py"
     },
     "rosetta_relax": {
@@ -450,7 +451,29 @@
         "stability"
       ],
       "metric_caveat": "total_score (REU) 는 접힘 에너지의 대용이지 ddG 가 아니다. 절대 REU 는 서로 다른 단백질 사이에서 비교되지 않는다 - 잔기 수에 대략 비례하기 때문이다. 같은 백본의 설계들 사이에서 상대 비교로만 뜻이 있고, 그 비교조차 RAPID 가 아직 어떤 라벨에도 맞춰본 적이 없다.",
+      "wiring_note": "relax_enabled 실행에서 설계마다 total_score 를 기록하고, WT relax 가 먼저 끝났으면 같은 백본 안의 delta_reu_vs_wt 를 함께 기록한다 (comparability: same_backbone_only). 이 delta 는 게이트로 쓰지 않는다.",
       "worker_concurrency": 8,
+      "cost": {
+        "provenance": "unmeasured",
+        "unit": "s/structure"
+      }
+    },
+    "thermomp_ddg": {
+      "display_name": "ThermoMPNN ddG",
+      "role": "stability_evaluator",
+      "endpoint": "bop:18114",
+      "availability": "wired_unvalidated",
+      "access": {
+        "direct_client": true,
+        "portal_mcp": true
+      },
+      "client": "clients/thermomp.py",
+      "measures": [
+        "stability"
+      ],
+      "metric_caveat": "ThermoMPNN (Kuhlman-Lab, MIT) 은 구조에서 단일 점변이의 ΔΔG (kcal/mol, 양수 = 불안정화) 를 예측한다. FireProtDB/MegaScale 코호트로 학습됐고, de-novo 백본이나 다중 변이 설계에는 맞춰본 적이 없다. 다중 변이에는 단일-변이 예측의 가법 합을 기록하는데 에피스테이시스를 무시한다.",
+      "wiring_note": "relax_enabled 실행에서 AF2 구조가 있는 설계에 대해 native 대비 변이 목록을 만들어 워커(bop:18114, deploy/gpu/thermomp_ddg_http_worker.py)로 돌리고 per-mutation ΔΔG 와 가법 합을 relax 아티팩트에 기록한다. 게이트로 쓰지 않는다.",
+      "worker_concurrency": 4,
       "cost": {
         "provenance": "unmeasured",
         "unit": "s/structure"
@@ -491,26 +514,27 @@
     "stability": {
       "status": "evaluator_unvalidated",
       "evaluators": [
-        "rosetta_relax"
+        "rosetta_relax",
+        "thermomp_ddg"
       ],
-      "detail": "Rosetta relax 가 bop:18102 에서 돌고 클라이언트도 있다. total_score (REU) 를 내는데 그것은 ddG 가 아니고, 절대 REU 는 잔기 수에 비례해서 단백질 사이 비교가 되지 않는다. 같은 백본 안의 상대 비교로만 뜻이 있다.",
-      "to_enable": "같은 백본에서 나온 설계들 사이의 REU 차이가 알려진 안정성 순위와 맞는지 확인한다. ddG 가 필요하면 ThermoMPNN 류를 따로 들여야 한다."
+      "detail": "두 평가자가 배선되어 있다. Rosetta relax 는 bop:18102 에서 돌고 설계마다 total_score (REU) 를 기록하며, WT relax 가 같은 실행에서 먼저 끝났으면 같은 백본 안의 delta_reu_vs_wt 를 함께 기록한다. ThermoMPNN 은 bop:18114 에서 단일-변이 ΔΔG (kcal/mol) 를 내고 다중 변이는 가법 합으로 기록한다. 다만 둘 다 RAPID 가 어떤 안정성 라벨에도 맞춰본 적이 없어 검증되지 않았고, 절대 REU 는 잔기 수에 비례해서 단백질 사이 비교가 되지 않는다.",
+      "to_enable": "같은 백본에서 나온 설계들의 REU 차이와 ThermoMPNN ΔΔG 가 알려진 안정성 순위와 맞는지 코호트에서 확인한다. 확인 전까지 이 값들은 기록 전용이고 게이트로 쓰지 않는다."
     },
     "aggregation": {
       "status": "evaluator_unvalidated",
       "evaluators": [
         "sequence_liabilities"
       ],
-      "detail": "소수성 패치와 저전하 창을 찾는 계산을 antigen 파이프라인에서 이식했다. 값은 나오지만 어떤 응집 측정에도 맞춰본 적이 없고, 임계값은 항체 문맥에서 정해진 것이다. 그래서 통과/탈락을 정하지 않는다.",
-      "to_enable": "응집이 측정된 코호트에서 aggregation_prone_fraction 이 그 측정과 같은 방향인지 확인하고, 단량체용 임계값을 정한다."
+      "detail": "소수성 패치와 저전하 창 계산을 antigen 파이프라인에서 이식해 파이프라인에 배선했다 (pipeline_mcp/sequence_liabilities.py). soluprot 통과 직후 설계마다 값을 기록하고, 운영 판단으로 임시 게이트를 돌린다 - 상한 (patch 2.5, fraction 0.10) 은 측정에 맞춘 것이 아니라 항체 문맥 상속값에서 정한 초기값이고 환경변수로 조정하거나 PIPELINE_LIABILITY_GATE=0 으로 끌 수 있다. calibrated 는 false 다.",
+      "to_enable": "응집이 측정된 코호트에서 aggregation_prone_fraction 이 그 측정과 같은 방향인지 확인하고, 단량체용 임계값을 다시 정해 calibrated 를 true 로 바꾼다."
     },
     "developability": {
       "status": "evaluator_unvalidated",
       "evaluators": [
         "sequence_liabilities"
       ],
-      "detail": "순전하와 isomerisation / oxidation / free cysteine 모티프를 이식했다. 다만 이 지표들은 항체를 염두에 두고 정의된 것이라, 단량체 재설계에서 무엇을 developability 라 부를지는 아직 정하지 않았다.",
-      "to_enable": "항체 경로에서는 이식만으로 쓸 수 있다. 단량체에서는 어떤 성질을 developability 로 셀지 먼저 정의한다."
+      "detail": "순전하와 isomerisation / oxidation / free cysteine 모티프를 이식해 같은 게이트에 넣었다. free_cysteine 과 NG+DG 모티프 상한은 임시값이다. 다만 이 지표들은 항체를 염두에 두고 정의된 것이라, 단량체 재설계에서 무엇을 developability 라 부를지는 아직 정하지 않았다.",
+      "to_enable": "항체 경로에서는 이식만으로 쓸 수 있다. 단량체에서는 어떤 성질을 developability 로 셀지 먼저 정의하고, 그 정의에 맞춰 임계값을 다시 정한다."
     },
     "activity": {
       "status": "needs_experimental_labels",

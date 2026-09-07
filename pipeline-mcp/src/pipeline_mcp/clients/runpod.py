@@ -39,10 +39,22 @@ class RunPodClient:
     skip_verify: bool = False
     timeout_s: float = 60.0
     poll_interval_s: float = 2.0
+    # Job API base override. RunPod 호환 게이트웨이(bio_model_portal 등)를
+    # 쓸 때 https://biomodel.kbiofoundry.kr/v2 같은 base 를 넣는다. None 이면
+    # RUNPOD_API_BASE 환경변수, 그것도 없으면 공식 RunPod API.
+    api_base: str | None = None
     # Optional best-effort hook fired with (endpoint_id, job_data) when a job
     # reaches COMPLETED; used to record stage durations for queue-ETA. Never
     # allowed to affect the job result (errors are swallowed).
     on_job_complete: Callable[[str, dict[str, Any]], None] | None = None
+
+    def _job_api_base(self) -> str:
+        if self.api_base:
+            return self.api_base.rstrip("/")
+        env_base = os.getenv("RUNPOD_API_BASE", "").strip()
+        if env_base:
+            return env_base.rstrip("/")
+        return _RUNPOD_JOB_API_BASE
 
     def _raise_for_status(self, response: requests.Response) -> None:
         try:
@@ -80,7 +92,7 @@ class RunPodClient:
         return response.json()
 
     def run(self, endpoint_id: str, input_payload: dict[str, Any]) -> str:
-        url = f"{_RUNPOD_JOB_API_BASE}/{endpoint_id}/run"
+        url = f"{self._job_api_base()}/{endpoint_id}/run"
         r = requests.post(
             url,
             headers=self._headers(),
@@ -96,7 +108,7 @@ class RunPodClient:
         return str(job_id)
 
     def status(self, endpoint_id: str, job_id: str) -> dict[str, Any]:
-        url = f"{_RUNPOD_JOB_API_BASE}/{endpoint_id}/status/{job_id}"
+        url = f"{self._job_api_base()}/{endpoint_id}/status/{job_id}"
         r = requests.get(
             url,
             headers=self._headers(),
@@ -110,7 +122,7 @@ class RunPodClient:
         return data
 
     def cancel(self, endpoint_id: str, job_id: str) -> dict[str, Any]:
-        url = f"{_RUNPOD_JOB_API_BASE}/{endpoint_id}/cancel/{job_id}"
+        url = f"{self._job_api_base()}/{endpoint_id}/cancel/{job_id}"
         r = requests.post(
             url,
             headers=self._headers(),
@@ -124,7 +136,7 @@ class RunPodClient:
         return data
 
     def health(self, endpoint_id: str) -> dict[str, Any]:
-        url = f"{_RUNPOD_JOB_API_BASE}/{endpoint_id}/health"
+        url = f"{self._job_api_base()}/{endpoint_id}/health"
         r = requests.get(
             url,
             headers=self._headers(),

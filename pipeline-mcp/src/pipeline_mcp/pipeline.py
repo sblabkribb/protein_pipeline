@@ -52,12 +52,16 @@ from .bio.pdb import preprocess_pdb
 from .bio.pdb import residues_by_chain
 from .bio.pdb import sequence_by_chain
 from .bio.pdb import surface_positions_by_chain
+from .bio.pdb import _AA3_TO_AA1
 from .bio.sequence import filter_records_by_pi
 from .bio.sdf import append_ligand_pdb
 from .bio.sdf import sdf_to_pdb
+from .sequence_liabilities import summarize_gate
+from .sequence_liabilities import liability_gate_report
 from .clients.mmseqs import MMseqsClient
 from .clients.proteinmpnn import ProteinMPNNClient
 from .clients.soluprot import SoluProtClient
+from .clients.thermomp import LocalHTTPThermoMPNNClient
 from .models import PipelineRequest
 from .models import PipelineResult
 from .models import SequenceRecord
@@ -3530,6 +3534,7 @@ class PipelineRunner:
     bioemu: Any | None = None
     diffdock: Any | None = None
     rosetta_relax: Any | None = None
+    thermomp: LocalHTTPThermoMPNNClient | None = None
     esm_embedding: Any | None = None
     gemini: Any | None = None
 
@@ -9722,6 +9727,53 @@ class PipelineRunner:
                         },
                     )
 
+                # 응집/개발가능성 게이트. 서열만 읽는 휴리스틱이라 공짜이고,
+                # soluprot 통과 직후에 한 번 돈다. 임계값은 임시값이므로 리포트에
+                # thresholds 와 calibrated: false 가 함께 기록된다.
+                liability_summary: dict[str, object] | None = None
+                liability_error: str | None = None
+                try:
+                    liability_reports = [
+                        {**liability_gate_report(s.sequence), "id": s.id}
+                        for s in passed
+                    ]
+                    liability_summary = summarize_gate(liability_reports)
+                    write_json(
+                        tier_dir / "liabilities.json",
+                        {
+                            "summary": liability_summary,
+                            "thresholds": (
+                                liability_reports[0]["gate"]["thresholds"]
+                                if liability_reports
+                                else None
+                            ),
+                            "sequences": liability_reports,
+                        },
+                    )
+                    if liability_summary.get("enabled") and liability_summary.get("failed"):
+                        failed_ids = {
+                            r["id"] for r in liability_reports
+                            if r.get("gate", {}).get("passed") is False
+                        }
+                        passed = [s for s in passed if s.id not in failed_ids]
+                        passed_ids = (
+                            [sid for sid in (passed_ids or []) if sid not in failed_ids]
+                            if passed_ids is not None
+                            else [s.id for s in passed]
+                        )
+                except Exception as exc:
+                    # 게이트 계산이 실패해도 설계를 잃지 않는다. 기록만 남긴다.
+                    liability_error = f"liability gate failed: {exc}"
+                    errors.append(f"liabilities_{tier_str}: {liability_error}")
+                    liability_summary = {
+                        "gate_id": "sequence_liability_gate_v1",
+                        "error": liability_error,
+                    }
+                    write_json(
+                        tier_dir / "liabilities.json",
+                        {"summary": liability_summary, "sequences": []},
+                    )
+
                 passed = _monomerize_records(passed, af2_model_preset)
                 if samples:
                     _write_text(
@@ -11113,6 +11165,8 @@ class PipelineRunner:
                             cached_score_per_residue: dict[str, float] = {}
                             cached_total_scores: dict[str, float] = {}
                             cached_delta_total_scores: dict[str, float] = {}
+                            cached_delta_reu_vs_wt: dict[str, float] = {}
+                            cached_thermomp: dict[str, dict[str, object]] = {}
                             partial_relax_errors: dict[str, str] = {}
                             cached_mode: str | None = None
                             cached_ok = False
@@ -11165,6 +11219,18 @@ class PipelineRunner:
                                     )
                                     else None
                                 )
+                                raw_delta_reu_vs_wt = (
+                                    cached.get("delta_reu_vs_wt")
+                                    if isinstance(cached, dict)
+                                    and isinstance(cached.get("delta_reu_vs_wt"), dict)
+                                    else None
+                                )
+                                raw_thermomp = (
+                                    cached.get("thermomp")
+                                    if isinstance(cached, dict)
+                                    and isinstance(cached.get("thermomp"), dict)
+                                    else None
+                                )
                                 raw_errors = (
                                     cached.get("errors")
                                     if isinstance(cached, dict)
@@ -11210,6 +11276,18 @@ class PipelineRunner:
                                             for k, v in raw_delta_total_scores.items()
                                             if isinstance(v, (int, float))
                                         }
+                                    if isinstance(raw_delta_reu_vs_wt, dict):
+                                        cached_delta_reu_vs_wt = {
+                                            str(k): float(v)
+                                            for k, v in raw_delta_reu_vs_wt.items()
+                                            if isinstance(v, (int, float))
+                                        }
+                                    if isinstance(raw_thermomp, dict):
+                                        cached_thermomp = {
+                                            str(k): dict(v)
+                                            for k, v in raw_thermomp.items()
+                                            if isinstance(v, dict)
+                                        }
                                     if isinstance(raw_errors, dict):
                                         partial_relax_errors = {
                                             str(k): str(v)
@@ -11231,6 +11309,95 @@ class PipelineRunner:
                                 ]
                             )
                             relax_mode = cached_mode
+
+                            # 안정성 상대 비교(같은 백본 한정). WT relax 가 같은
+                            # 실행에서 먼저 끝났으면 WT total_score (REU) 를 읽는다.
+                            # 절대 REU 는 잔기 수에 비례하므로 서로 다른 단백질
+                            # 사이 비교에는 쓸 수 없고, 이 delta 역시 RAPID 가
+                            # 어떤 안정성 라벨에도 맞춰본 적 없는 미검증 값이다.
+                            wt_relax_total_score: float | None = None
+                            wt_relax_metrics_path = (
+                                paths.root / "wt" / "relax" / "metrics.json"
+                            )
+                            try:
+                                wt_relax_metrics = (
+                                    json.loads(
+                                        wt_relax_metrics_path.read_text(encoding="utf-8")
+                                    )
+                                    if wt_relax_metrics_path.exists()
+                                    else None
+                                )
+                            except Exception:
+                                wt_relax_metrics = None
+                            if isinstance(wt_relax_metrics, dict):
+                                raw_wt_score = wt_relax_metrics.get("total_score")
+                                if isinstance(raw_wt_score, (int, float)):
+                                    wt_relax_total_score = float(raw_wt_score)
+
+                            def _design_mutations_vs_native(
+                                seq: SequenceRecord,
+                                design_pdb_text: str,
+                            ) -> dict[str, object]:
+                                """설계 구조 좌표계로 native 와의 차이를 뽑는다.
+
+                                같은 백본에서 나온 설계라 길이가 같고 위치가 1:1로
+                                대응한다. ThermoMPNN 은 한 사슬만 본다 - 다사슬
+                                설계는 skipped_multi_chain 으로 기록하고 넘어간다.
+                                """
+                                native_rec = native
+                                if native_rec is None or not str(
+                                    native_rec.sequence or ""
+                                ).strip():
+                                    return {"skipped": True, "reason": "native_unavailable"}
+                                wt_chain_seqs = _split_multichain_sequence(
+                                    native_rec.sequence
+                                )
+                                if len(wt_chain_seqs) != 1:
+                                    return {
+                                        "skipped": True,
+                                        "reason": "skipped_multi_chain",
+                                    }
+                                wt_chain_seq = wt_chain_seqs[0]
+                                design_residues = residues_by_chain(str(design_pdb_text))
+                                if len(design_residues) != 1:
+                                    return {
+                                        "skipped": True,
+                                        "reason": "skipped_multi_chain",
+                                    }
+                                chain_id, residue_list = next(
+                                    iter(design_residues.items())
+                                )
+                                design_seq = "".join(
+                                    _AA3_TO_AA1.get(r.resname.upper(), "X")
+                                    for r in residue_list
+                                )
+                                if len(design_seq) != len(wt_chain_seq):
+                                    return {
+                                        "skipped": True,
+                                        "reason": "length_mismatch",
+                                    }
+                                if "X" in design_seq or "X" in wt_chain_seq:
+                                    return {
+                                        "skipped": True,
+                                        "reason": "unknown_residue_in_alignment",
+                                    }
+                                mutations: list[str] = []
+                                for idx, residues_entry in enumerate(residue_list):
+                                    wt_aa = wt_chain_seq[idx].upper()
+                                    mut_aa = design_seq[idx]
+                                    if wt_aa == mut_aa or wt_aa == "X" or mut_aa == "X":
+                                        continue
+                                    # ThermoMPNN 표기 "W123A" = (native AA)(설계 PDB
+                                    # resseq)(설계 AA). 사슬은 별도 인자로 넘긴다.
+                                    mutations.append(
+                                        f"{wt_aa}{residues_entry.resseq}{mut_aa}"
+                                    )
+                                return {
+                                    "skipped": False,
+                                    "chain": chain_id,
+                                    "wt_sequence": wt_chain_seq,
+                                    "mutations": mutations,
+                                }
 
                             if to_relax:
                                 candidate_index_by_id = {
@@ -11359,6 +11526,71 @@ class PipelineRunner:
                                         )
                                         else None
                                     )
+                                    delta_reu_vs_wt = (
+                                        total_score - wt_relax_total_score
+                                        if (
+                                            wt_relax_total_score is not None
+                                            and total_score is not None
+                                        )
+                                        else None
+                                    )
+
+                                    thermomp_payload: dict[str, object] | None = None
+                                    if self.thermomp is not None:
+                                        try:
+                                            mutation_info = _design_mutations_vs_native(
+                                                seq, pdb_text
+                                            )
+                                            if mutation_info.get("skipped"):
+                                                thermomp_payload = {
+                                                    "skipped": True,
+                                                    "reason": mutation_info.get("reason"),
+                                                }
+                                            elif not mutation_info.get("mutations"):
+                                                thermomp_payload = {
+                                                    "skipped": True,
+                                                    "reason": "no_mutations_vs_native",
+                                                }
+                                            else:
+                                                thermomp_output = self.thermomp.predict(
+                                                    pdb_text=pdb_text,
+                                                    target_id=str(seq.id),
+                                                    chain=str(
+                                                        mutation_info.get("chain") or ""
+                                                    )
+                                                    or None,
+                                                    mutations=list(
+                                                        mutation_info.get("mutations")
+                                                        or []
+                                                    ),
+                                                    wt_sequence=str(
+                                                        mutation_info.get("wt_sequence")
+                                                        or ""
+                                                    )
+                                                    or None,
+                                                )
+                                                thermomp_payload = {
+                                                    "mutations": list(
+                                                        mutation_info.get("mutations")
+                                                        or []
+                                                    ),
+                                                    "chain": mutation_info.get("chain"),
+                                                    "additive_ddg_kcal_mol": (
+                                                        thermomp_output.get(
+                                                            "additive_ddg_kcal_mol"
+                                                        )
+                                                    ),
+                                                    "per_mutation": (
+                                                        thermomp_output.get("mutations")
+                                                    ),
+                                                    "note": (
+                                                        "단일-변이 ΔΔG 의 가법 합. "
+                                                        "에피스테이시스 무시, 미검증."
+                                                    ),
+                                                }
+                                        except Exception as thermomp_exc:
+                                            thermomp_payload = {"error": str(thermomp_exc)}
+
                                     _write_text(
                                         seq_dir / "relaxed_best.pdb",
                                         str(relax_result.get("best_pdb_text") or ""),
@@ -11371,6 +11603,13 @@ class PipelineRunner:
                                             ),
                                             "total_score": total_score,
                                             "delta_total_score": delta_total_score,
+                                            "delta_reu_vs_wt": delta_reu_vs_wt,
+                                            "delta_reu_comparability": (
+                                                "same_backbone_only"
+                                                if delta_reu_vs_wt is not None
+                                                else None
+                                            ),
+                                            "thermomp": thermomp_payload,
                                             "input_total_score": (
                                                 float(
                                                     relax_result.get(
@@ -11419,6 +11658,8 @@ class PipelineRunner:
                                         ),
                                         "total_score": total_score,
                                         "delta_total_score": delta_total_score,
+                                        "delta_reu_vs_wt": delta_reu_vs_wt,
+                                        "thermomp": thermomp_payload,
                                         "mode": str(relax_result.get("mode") or "").strip()
                                         or None,
                                     }
@@ -11446,6 +11687,14 @@ class PipelineRunner:
                                         cached_delta_total_scores[seq_id] = float(
                                             delta_total_score
                                         )
+                                    delta_reu_vs_wt = relax_entry.get("delta_reu_vs_wt")
+                                    if isinstance(delta_reu_vs_wt, (int, float)):
+                                        cached_delta_reu_vs_wt[seq_id] = float(
+                                            delta_reu_vs_wt
+                                        )
+                                    thermomp_payload = relax_entry.get("thermomp")
+                                    if isinstance(thermomp_payload, dict):
+                                        cached_thermomp[seq_id] = thermomp_payload
                                     mode_value = str(
                                         relax_entry.get("mode") or ""
                                     ).strip()
@@ -11535,6 +11784,14 @@ class PipelineRunner:
                                     "score_per_residue": cached_score_per_residue,
                                     "total_scores": cached_total_scores,
                                     "delta_total_scores": cached_delta_total_scores,
+                                    "delta_reu_vs_wt": cached_delta_reu_vs_wt,
+                                    "delta_reu_comparability": (
+                                        "same_backbone_only"
+                                        if wt_relax_total_score is not None
+                                        else None
+                                    ),
+                                    "wt_total_score": wt_relax_total_score,
+                                    "thermomp": cached_thermomp,
                                     "candidate_ids": candidate_ids,
                                     "selected_ids": relax_selected_ids,
                                     "cutoff": request.relax_score_per_residue_cutoff,
@@ -11605,7 +11862,11 @@ class PipelineRunner:
                                 {
                                     "score_per_residue": {},
                                     "total_scores": {},
-                                    "delta_total_scores": {},
+                                "delta_total_scores": {},
+                                "delta_reu_vs_wt": {},
+                                "thermomp": {},
+                                    "delta_reu_vs_wt": {},
+                                    "thermomp": {},
                                     "candidate_ids": [s.id for s in relax_candidates],
                                     "selected_ids": relax_selected_ids,
                                     "cutoff": request.relax_score_per_residue_cutoff,

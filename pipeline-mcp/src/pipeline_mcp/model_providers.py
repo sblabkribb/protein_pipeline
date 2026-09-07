@@ -37,6 +37,7 @@ MODEL_SPECS: tuple[ModelSpec, ...] = (
     ModelSpec("bioemu", "BioEmu", ("BIOEMU_ENDPOINT_ID",), ("BIOEMU_HTTP_URL", "BIOEMU_GPU_URL"), ("BIOEMU_HTTP_TOKEN",), ("BIOEMU_HTTP_TIMEOUT_S",)),
     ModelSpec("diffdock", "DiffDock", ("DIFFDOCK_ENDPOINT_ID",), ("DIFFDOCK_HTTP_URL", "DIFFDOCK_GPU_URL"), ("DIFFDOCK_HTTP_TOKEN",), ("DIFFDOCK_HTTP_TIMEOUT_S",)),
     ModelSpec("rosetta_relax", "Rosetta Relax", ("RUNPOD_RELAX_ENDPOINT_ID",), ("ROSETTA_RELAX_HTTP_URL", "RELAX_HTTP_URL"), ("ROSETTA_RELAX_HTTP_TOKEN",), ("ROSETTA_RELAX_HTTP_TIMEOUT_S",)),
+    ModelSpec("thermomp", "ThermoMPNN ddG", ("THERMOMP_ENDPOINT_ID",), ("THERMOMP_HTTP_URL",), ("THERMOMP_HTTP_TOKEN",), ("THERMOMP_HTTP_TIMEOUT_S",)),
 )
 
 
@@ -248,6 +249,7 @@ class ModelProviderStore:
             "enabled": payload.get("enabled", default_enabled),
             "endpoint_id": payload.get("endpoint_id", current.get("endpoint_id", "")),
             "base_url": payload.get("base_url", current.get("base_url", "")),
+            "api_base": payload.get("api_base", current.get("api_base", "")),
             "timeout_s": payload.get("timeout_s", current.get("timeout_s", 21600.0)),
             "source": "user" if target_scope == "user" else "registry",
             "scope": target_scope,
@@ -379,6 +381,7 @@ class ModelProviderStore:
                 "provider_type": provider_type,
                 "endpoint_id": runpod_id,
                 "base_url": http_url,
+                "api_base": os.getenv("RUNPOD_API_BASE", "").strip(),
                 "token": token,
                 "timeout_s": timeout or 21600,
                 "enabled": provider_type != "disabled",
@@ -406,6 +409,7 @@ class ModelProviderStore:
             "enabled": enabled,
             "endpoint_id": str(record.get("endpoint_id") or "").strip(),
             "base_url": _normalize_base_url(record.get("base_url")),
+            "api_base": _normalize_base_url(record.get("api_base")),
             "timeout_s": _read_timeout(record.get("timeout_s"), 21600.0),
             "source": str(record.get("source") or "registry"),
             "scope": _normalize_scope(record.get("scope")),
@@ -513,6 +517,17 @@ def build_provider_summary(store: ModelProviderStore, *, user_id: str | None = N
             missing.append("base_url")
         rows.append({**provider, "missing": missing, "configured": not missing and bool(provider.get("configured"))})
     return rows
+
+
+def provider_api_base(provider: dict[str, Any]) -> str:
+    """RunPod 호환 provider 의 job API base. 저장값 → 환경변수 → 공식 API."""
+    stored = str(provider.get("api_base") or "").strip()
+    if stored:
+        return stored.rstrip("/")
+    env_base = os.getenv("RUNPOD_API_BASE", "").strip()
+    if env_base:
+        return env_base.rstrip("/")
+    return "https://api.runpod.ai/v2"
 
 
 def model_provider_store_from_env(output_root: str | Path | None = None) -> ModelProviderStore:

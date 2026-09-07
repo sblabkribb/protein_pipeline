@@ -1,9 +1,28 @@
 import base64
 import gzip
 import json
+import os
 from pathlib import Path
 
 import numpy as np
+
+# 이 스위트는 liability 게이트 이전 설계 수를 고정한다. 게이트 동작 자체는
+# test_pipeline_liability_gate.py 가 검증한다.
+_GATE_ENV = "PIPELINE_LIABILITY_GATE"
+
+
+def setUpModule() -> None:
+    global _GATE_ENV_WAS_SET
+    _GATE_ENV_WAS_SET = os.environ.get(_GATE_ENV)
+    os.environ[_GATE_ENV] = "0"
+
+
+def tearDownModule() -> None:
+    if _GATE_ENV_WAS_SET is None:
+        os.environ.pop(_GATE_ENV, None)
+    else:
+        os.environ[_GATE_ENV] = _GATE_ENV_WAS_SET
+
 
 from pipeline_mcp import pipeline
 from pipeline_mcp.models import PipelineRequest

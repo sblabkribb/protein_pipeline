@@ -30,9 +30,11 @@ from .clients.local_http import LocalHTTPDiffDockClient
 from .clients.local_http import LocalHTTPMMseqsClient
 from .clients.local_http import LocalHTTPRFD3Client
 from .clients.local_http import LocalHTTPRosettaRelaxClient
+from .clients.thermomp import LocalHTTPThermoMPNNClient
 from .queue_eta_hook import record_job_duration
 from .config import load_config
 from .model_providers import ModelProviderStore
+from .model_providers import provider_api_base
 from .pipeline import PipelineRunner
 
 
@@ -50,6 +52,19 @@ def _provider_is_runpod(provider: dict) -> bool:
 
 def _runpod_for_provider(default_runpod: RunPodClient, provider: dict) -> RunPodClient:
     api_key = str(provider.get("token") or "").strip()
+    api_base = provider_api_base(provider)
+    if api_base.rstrip("/") != "https://api.runpod.ai/v2":
+        # RunPod 호환 게이트웨이(bio_model_portal 등) 경유. 토큰이 없으면
+        # 게이트웨이 인증이 깨지므로 기본 클라이언트로 두지 않고 명시한다.
+        return RunPodClient(
+            api_key=api_key or default_runpod.api_key,
+            ca_bundle=default_runpod.ca_bundle,
+            skip_verify=default_runpod.skip_verify,
+            timeout_s=default_runpod.timeout_s,
+            poll_interval_s=default_runpod.poll_interval_s,
+            on_job_complete=default_runpod.on_job_complete,
+            api_base=api_base,
+        )
     if not api_key:
         return default_runpod
     return RunPodClient(
@@ -242,7 +257,23 @@ def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
             docker_image=cfg.rosetta.docker_image or "rosettacommons/rosetta:latest",
             timeout_s=cfg.rosetta.timeout_s,
         )
-    
+
+    thermomp = None
+    thermomp_provider = _provider(provider_store, "thermomp", provider_user)
+    if _provider_is_http(thermomp_provider):
+        thermomp = LocalHTTPThermoMPNNClient(
+            base_url=thermomp_provider["base_url"],
+            token=thermomp_provider.get("token") or None,
+            timeout_s=float(thermomp_provider.get("timeout_s") or 3600),
+        )
+    elif _provider_is_runpod(thermomp_provider):
+        # RunPod 호환 게이트웨이(예: bio_model_portal) 경유.
+        thermomp = LocalHTTPThermoMPNNClient(
+            base_url=f"{provider_api_base(thermomp_provider)}/{thermomp_provider['endpoint_id']}",
+            token=str(thermomp_provider.get("token") or "").strip() or None,
+            timeout_s=float(thermomp_provider.get("timeout_s") or 3600),
+        )
+
     gemini = None
     if cfg.gemini.api_key:
         gemini = GeminiClient(api_key=cfg.gemini.api_key, model_name=cfg.gemini.model_name)
@@ -258,6 +289,7 @@ def build_runner(*, provider_user: str | None = None) -> PipelineRunner:
         bioemu=bioemu,
         diffdock=diffdock,
         rosetta_relax=rosetta_relax,
+        thermomp=thermomp,
         esm_embedding=esm_embedding,
         gemini=gemini,
     )

@@ -49,6 +49,8 @@ Common optional:
 - `ALPHAFOLD2_ENDPOINT_ID`
 - `AF2_URL`
 - `SOLUPROT_URL`
+- `THERMOMP_HTTP_URL` (ThermoMPNN ddG worker; stability evaluator, bop:18114)
+- `RUNPOD_API_BASE` (RunPod 호환 게이트웨이 base, 예: bio_model_portal gateway)
 - `PIPELINE_OUTPUT_ROOT`
 
 ## Core MCP tools

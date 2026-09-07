@@ -1,5 +1,9 @@
 """서열에서 직접 읽는 응집·개발가능성 지표.
 
+논문 재현용 사본. 파이프라인의 진실은
+``pipeline-mcp/src/pipeline_mcp/sequence_liabilities.py`` 이고, 테스트가 두
+사본의 일치를 고정한다 (test_sequence_liabilities.py::test_repro_copy_matches).
+
 antigen 파이프라인의 antibody_developability.py 에서 옮겨 왔다. 계산은 같고,
 옮기면서 두 가지를 분명히 한다.
 

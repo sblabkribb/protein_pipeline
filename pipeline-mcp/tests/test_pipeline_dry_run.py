@@ -1,10 +1,31 @@
 import base64
 import gzip
 import json
+import os
 import unittest
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
+
+# 이 스위트는 liability 게이트가 없던 시절 아티팩트 집합을 고정한다. 게이트는
+# 서열만 보는 결정적 필터라 dry-run 합성 설계도 그대로 탈락시킨다 - 그 동작은
+# test_pipeline_liability_gate.py 가 따로 검증한다. 모듈 안에서만 끄고,
+# 다른 모듈로 새지 않게 tearDownModule 에서 되돌린다.
+_GATE_ENV = "PIPELINE_LIABILITY_GATE"
+
+
+def setUpModule() -> None:
+    global _GATE_ENV_WAS_SET
+    _GATE_ENV_WAS_SET = os.environ.get(_GATE_ENV)
+    os.environ[_GATE_ENV] = "0"
+
+
+def tearDownModule() -> None:
+    if _GATE_ENV_WAS_SET is None:
+        os.environ.pop(_GATE_ENV, None)
+    else:
+        os.environ[_GATE_ENV] = _GATE_ENV_WAS_SET
+
 
 from pipeline_mcp.bio.pdb import ca_rmsd
 from pipeline_mcp.bio.pdb import residues_by_chain
