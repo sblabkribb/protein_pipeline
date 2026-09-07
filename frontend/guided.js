@@ -161,7 +161,9 @@ async function selectRun(runId) {
       if (gen !== selectGen) return;
       // 상태 재조회 없이도 Run 탭이 살아 움직인다. 아티팩트는 상태가 바뀔 때만.
       renderRunProgress(info);
-      if (info.state === "done" || info.state === "failed" || info.state === "cancelled") loadArtifacts(runId);
+      if (info.state === "done" || info.state === "failed" || info.state === "cancelled") {
+        loadArtifacts(runId, { isStale: () => gen !== selectGen });
+      }
     },
   });
 }

@@ -152,6 +152,7 @@ async function loadArtifacts(runId, { isStale = () => false } = {}) {
       }
     }
   } catch (error) {
+    if (isStale()) return;
     host.classList.add("empty");
     host.textContent = `산출물을 불러오지 못했습니다: ${errorText(error)}`;
   }
