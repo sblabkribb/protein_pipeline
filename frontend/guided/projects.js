@@ -135,9 +135,9 @@ export function renderProjectsTab(host, { state = "idle", projects = null, messa
       const text = [row.id, row.createdUtc.slice(0, 10), row.title].filter(Boolean).join(" · ");
       item.appendChild(el("span", "", text || "-"));
       // 보관된 라운드는 라벨 칩으로 말한다 - 프로젝트 카드의 보관됨과 같은 근거
-      // (status === "archived")이므로 프런트가 판단을 덧붙이지 않는다.
+      // (status === "archived")이고 같은 칩 모양(warnchip)을 쓴다.
       if (String(row.status || "").trim().toLowerCase() === "archived") {
-        item.appendChild(el("span", "chip", "보관됨"));
+        item.appendChild(el("span", "warnchip", "보관됨"));
       }
       for (const runId of row.runIds) item.appendChild(el("span", "chip", runId));
       host.appendChild(item);

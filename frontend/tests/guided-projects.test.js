@@ -62,6 +62,8 @@ test("an archived round renders the 보관됨 chip, an active round does not", (
   const html = JSON.stringify(host.children);
   assert.ok(html.includes("r9"), "the round row is rendered");
   assert.ok(html.includes("보관됨"), "archived round carries the 보관됨 chip");
+  assert.ok(html.includes("warnchip"),
+            "round chip uses the same class as the project card's 보관됨");
 
   const plain = make();
   renderProjectsTab(plain, { state: "done", projects: active, expandedId: "p1",

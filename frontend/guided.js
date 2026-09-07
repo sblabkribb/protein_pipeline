@@ -61,7 +61,7 @@ import {
   paintSkillsTab, requestSkills, saveSkill, resetSkill,
   beginEdit, cancelEdit, currentEdit,
 } from "./guided/skills.js";
-import { renderAgentsTab, requestAgentEvents } from "./guided/agents.js";
+import { renderAgentsTab, requestAgentEvents, rememberAgentEvents, currentAgentEvents } from "./guided/agents.js";
 import {
   renderProjectsTab, requestProjects, requestRounds,
   projectCardModels, roundRowModels,
@@ -333,6 +333,20 @@ async function selectRun(runId) {
       lastKnown.state = info.poll_stalled ? "stalled" : info.state;
       if (info.stage) lastKnown.stage = info.stage;
       updateTopbarChips({ runId, state: lastKnown.state, stage: lastKnown.stage });
+      // 에이전트 탭이 열려 있고 아직 이 실행을 보고 있으면, tick 마다 헤더의
+      // 현재 상태를 다시 그린다. 판정 목록은 마지막 성공 읽기의 것을 그대로
+      // 쓴다 - tick 마다 이벤트를 다시 읽지 않는다. 읽는 중이면 건드리지 않고,
+      // 멈춘 tick(poll_stalled)은 서버 상태가 아니므로 헤더도 갱신하지 않는다.
+      if (document.querySelector(".sidetab.active")?.dataset.sidetab === "agents"
+          && runState.runId === runId && !info.poll_stalled) {
+        const agentsHost = document.getElementById("sideAgents");
+        if (agentsHost && !agentsHost.dataset.loading) {
+          const cached = currentAgentEvents(runId);
+          renderAgentsTab(agentsHost, cached.length
+            ? { state: "done", events: cached, runId, status: info }
+            : { state: "empty", runId, status: info });
+        }
+      }
       if (info.state === "done" || info.state === "failed" || info.state === "cancelled") {
         loadArtifacts(runId, { isStale: () => gen !== selectGen });
       }
@@ -818,6 +832,8 @@ if (typeof document !== "undefined") {
       if (runState.runId !== runId) return;
       const events = out.events || out.items || [];
       host.dataset.loadedFor = runId;
+      // 폴링 tick 이 헤더만 다시 그릴 때 쓰는 판정 목록. 성공 읽기만 기록한다.
+      rememberAgentEvents(runId, events);
       renderAgentsTab(host, events.length ? { state: "done", events, runId } : { state: "empty", runId });
     }).catch((error) => {
       delete host.dataset.loading;

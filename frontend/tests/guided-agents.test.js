@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 // document 가 있으면 모듈 최상위에서 배선을 시작하므로, 스텁을 만들기 전에 모듈을
 // 먼저 적재해야 한다 - 가드가 브라우저 밖 배선을 건너뛴다. 스텁은 렌더 시점의
 // document.createElement 를 위해 그 뒤에 둔다.
-const { agentEventModels, renderAgentsTab } = await import("../guided/agents.js");
+const { agentEventModels, renderAgentsTab, rememberAgentEvents, currentAgentEvents } = await import("../guided/agents.js");
 
 globalThis.document ??= {
   createElement(tag) {
@@ -106,6 +106,26 @@ test("renderAgentsTab paints a current-status header from the live run state", (
   renderAgentsTab(failed, { state: "done", events: EVENTS, runId: "run_x",
                             status: { stage: "af2_50", state: "failed" } });
   assert.ok(JSON.stringify(failed.children).includes("실패"), "failed state renders as 실패");
+
+  const cancelled = make();
+  renderAgentsTab(cancelled, { state: "done", events: EVENTS, runId: "run_x",
+                               status: { stage: "af2_50", state: "cancelled" } });
+  assert.ok(JSON.stringify(cancelled.children).includes("취소됨"), "cancelled state renders as 취소됨");
+});
+
+test("rememberAgentEvents keeps the last successful read per run", () => {
+  rememberAgentEvents("run_a", EVENTS);
+  assert.deepEqual(currentAgentEvents("run_a"), EVENTS);
+  // 다른 실행을 물으면 빈 목록 - 낡은 실행의 판정이 새 실행의 헤더에 그려지지 않게.
+  assert.deepEqual(currentAgentEvents("run_b"), []);
+});
+
+test("the facade repaints the agents header from cached events on ticks", () => {
+  const src = readFileSync(new URL("../guided.js", import.meta.url), "utf8");
+  assert.ok(src.includes("currentAgentEvents"), "onTick repaint reads the cached events");
+  assert.ok(src.includes("rememberAgentEvents"), "successful loads must remember the events");
+  assert.ok(src.includes('dataset.sidetab === "agents"'),
+            "repaint only while the agents tab is active");
 });
 
 test("agents header falls back to 상태 없음 when the run has no status yet", () => {

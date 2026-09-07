@@ -28,6 +28,22 @@ export function agentEventModels(events) {
   });
 }
 
+// 마지막으로 성공한 판정 읽기. facade 가 성공 응답에서 기록하고, 폴링 tick 이
+// 헤더를 다시 그릴 때 같은 실행의 판정인지 가리는 근거로 쓴다. 다른 실행을
+// 물으면 빈 목록을 돌려준다 - 낡은 실행의 판정이 새 실행 화면에 그려지지 않게.
+let lastEvents = [];
+let lastRunId = "";
+
+export function rememberAgentEvents(runId, events) {
+  lastRunId = String(runId || "");
+  lastEvents = Array.isArray(events) ? events : [];
+  return lastEvents;
+}
+
+export function currentAgentEvents(runId) {
+  return String(runId || "") === lastRunId ? lastEvents : [];
+}
+
 // 판정 칩. 서버의 decision 이 유일한 근거다 - 프런트가 성공·실패를 재해석하지
 // 않는다. error 가 붙은 행은 decision 이 recover 인 것이 보통이지만, 두 근거가
 // 어긋나도 error 를 먼저 말한다.
@@ -40,12 +56,14 @@ function decisionChip(model) {
 }
 
 // 실행 상태 칩. 모르는 상태는 받은 값 그대로 보인다 - 프런트가 상태를 새로
-// 해석하면 Run 탭과 말이 갈라진다.
+// 해석하면 Run 탭과 말이 갈라진다. cancelled 는 상태 해석이 아니라 번역이다 -
+// 상단바 칩과 같은 말을 하게 한다.
 function runStateChip(state) {
   const key = String(state || "").trim().toLowerCase();
   if (key === "done" || key === "completed") return { cls: "okchip", label: "완료" };
   if (key === "running") return { cls: "warnchip", label: "진행 중" };
   if (key === "failed" || key === "error") return { cls: "badchip", label: "실패" };
+  if (key === "cancelled") return { cls: "chip", label: "취소됨" };
   return { cls: "chip", label: key || "-" };
 }
 
