@@ -21,6 +21,7 @@ import {
   closeStage,
   loadRunStatus,
   loadArtifacts,
+  mapStatusStageToStep,
   probeWorkers,
   runState,
   setRunStatus,
@@ -52,6 +53,7 @@ import {
   refreshStructure,
 } from "./guided/structure.js";
 import { el } from "./guided/dom.js";
+import { shouldRestoreStoredSession } from "./lib/auth.js";
 
 // --- 세션 -----------------------------------------------------------------
 //
@@ -62,12 +64,14 @@ function setSignedIn(user) {
   document.getElementById("loginGate").classList.add("hidden");
   document.getElementById("workspace").classList.remove("hidden");
   document.getElementById("whoami").textContent = user || "";
+  updateTopbarChips({ runId: runState.runId });   // 세션 칩을 지금 사용자로 맞춘다
 }
 
 export function setSignedOut(message) {
   document.getElementById("loginGate").classList.remove("hidden");
   document.getElementById("workspace").classList.add("hidden");
   if (message) document.getElementById("loginError").textContent = message;
+  updateTopbarChips({ runId: runState.runId });   // 만료·로그아웃도 칩에 그대로 비친다
 }
 
 async function signIn(username, password) {
@@ -90,6 +94,72 @@ function signOut() {
   localStorage.removeItem("kbf.token");
   localStorage.removeItem("kbf.user");
   setSignedOut("");
+}
+
+// --- 상단바 칩 -------------------------------------------------------------
+//
+// 상단바에는 지금 보고 있는 실행과 세션이 늘 보인다. 문구와 색은 서버가 준
+// state 에서만 온다 - 프런트가 상태를 새로 해석하면 Run 탭과 말이 갈라진다.
+
+// 파이프라인 상태 → 칩 문구 + 상태 클래스. stalled 는 서버 상태가 아니라 폴링이
+// 3회 연속 실패해 멈춘 프런트 쪽 상태다. 모르는 상태는 받은 값 그대로 보인다.
+const RUN_CHIP_STATES = {
+  running: { label: "실행 중", cls: "" },
+  done: { label: "완료", cls: "okchip" },
+  failed: { label: "실패", cls: "badchip" },
+  cancelled: { label: "취소됨", cls: "" },
+  stalled: { label: "폴링 중단", cls: "warnchip" },
+};
+
+export function chipLabel(state) {
+  const key = String(state || "").trim().toLowerCase();
+  return RUN_CHIP_STATES[key] || { label: key || "-", cls: "" };
+}
+
+// 칩 내용을 DOM 없이 계산한다. 단계 칩은 monitor.js 의 스테이지 사상을 재사용하고,
+// 세션 칩은 lib/auth.js 의 세션 복원 판정을 따른다. 비용 칩은 일부러 없다 - 비용은
+// 출처(측정 범위)가 붙는 값이라 계획 카드의 cost bar 에서만 보여준다 (스펙의
+// provenance 규칙).
+export function topbarChipModels({ runId, state, stage, user, signedIn } = {}) {
+  const chip = chipLabel(state);
+  const name = String(user || "").trim();
+  const models = [{ text: String(runId || "").trim() || "-", cls: "", title: "현재 실행" }];
+  if (String(stage || "").trim()) {
+    models.push({ text: String(mapStatusStageToStep(stage)), cls: "", title: "단계" });
+  }
+  models.push({ text: chip.label, cls: chip.cls, title: "실행 상태" });
+  models.push({
+    text: signedIn ? (name ? `세션 · ${name}` : "세션 있음") : "로그아웃됨",
+    cls: "",
+    title: "세션",
+  });
+  return models;
+}
+
+function paintTopbarChips(models) {
+  const host = document.getElementById("topbarChips");
+  if (!host) return;
+  host.replaceChildren();
+  for (const { text, cls, title } of models) {
+    const node = document.createElement("span");
+    node.className = cls ? `chip ${cls}` : "chip";
+    node.textContent = text;
+    node.title = title;
+    host.appendChild(node);
+  }
+}
+
+// 칩 갱신은 이 함수 하나로만 한다. 낡은 응답 검사는 호출자의 세대 가드(selectRun
+// 의 onTick)가 이미 하므로 여기서 다시 하지 않는다 - 이중 가드는 어긋났을 때
+// 원인을 두 곳으로 흩는다.
+function updateTopbarChips({ runId, state, stage } = {}) {
+  paintTopbarChips(topbarChipModels({
+    runId,
+    state,
+    stage,
+    user: storedUserName(),
+    signedIn: shouldRestoreStoredSession({ token: localStorage.getItem("kbf.token") }),
+  }));
 }
 
 // --- 타겟 파일 --------------------------------------------------------------
@@ -173,6 +243,9 @@ async function selectRun(runId) {
   if (!runId) return;
   const gen = ++selectGen;
   stopPolling();
+  // 칩은 await 앞에서 먼저 비친다 - 느린 상태 조회를 기다리는 동안에도 어떤
+  // 실행을 보고 있는지는 틀리면 안 된다. 상태는 아직 모르므로 비운다.
+  updateTopbarChips({ runId });
   const status = await loadRunStatus(runId, { isStale: () => gen !== selectGen });
   if (status === "stale") return;   // 낡은 응답은 그리지도, 폴링도 시작하지 않는다
   // Results 탭은 Run 상태 다음에 따로 채운다. 퍼널은 loadRunStatus 가 방금
@@ -205,6 +278,13 @@ async function selectRun(runId) {
       if (gen !== selectGen) return;
       // 상태 재조회 없이도 Run 탭이 살아 움직인다. 아티팩트는 상태가 바뀔 때만.
       renderRunProgress(info);
+      // 칩도 같은 tick 의 정보로 갱신한다. 폴링이 멈췄으면 서버 상태 대신 멈췄다는
+      // 사실을 칩으로 말한다 - 마지막 상태를 살아 있는 것처럼 보이면 안 된다.
+      updateTopbarChips({
+        runId,
+        state: info.poll_stalled ? "stalled" : info.state,
+        stage: info.stage,
+      });
       if (info.state === "done" || info.state === "failed" || info.state === "cancelled") {
         loadArtifacts(runId, { isStale: () => gen !== selectGen });
       }
@@ -430,6 +510,9 @@ if (typeof document !== "undefined") {
       const out = await cancelRun(runId);
       if (out && out.error) throw new Error(out.error);
       await loadRunStatus(runId);
+      // 취소가 받아들여졌다. 다음 tick 이 서버 상태를 확인해 주기 전에도 칩은
+      // 곧바로 취소됨을 비춘다 - 서버가 달리 말하면 tick 이 되돌린다.
+      updateTopbarChips({ runId, state: "cancelled" });
     } catch (error) {
       setRunStatus(`취소하지 못했습니다: ${errorText(error)}`);
     }

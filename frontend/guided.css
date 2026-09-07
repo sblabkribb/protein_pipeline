@@ -189,6 +189,10 @@ button { touch-action: manipulation; }
 .chip { flex: 0 0 auto; font-size: 12px; color: var(--quiet); }
 .stage .chip ~ .chip { margin-left: 8px; }
 .warnchip { color: var(--assumed-ink); border: 1px solid color-mix(in oklch, var(--assumed) 45%, transparent); border-radius: 999px; padding: 0 7px; }
+/* 상단바 실행 상태 칩. 색은 근거 체계를 따른다 - 완료는 측정(measured),
+   실패는 차단(absent), 폴링 중단은 미검증(assumed)이다. */
+.okchip { color: var(--measured-ink); border: 1px solid color-mix(in oklch, var(--measured) 40%, transparent); border-radius: 999px; padding: 0 7px; }
+.badchip { color: var(--absent-ink); border: 1px solid color-mix(in oklch, var(--absent) 45%, transparent); border-radius: 999px; padding: 0 7px; }
 
 /* --- 검토 ---------------------------------------------------------------- */
 .status { margin-left: 10px; font-size: 12px; color: var(--quiet); }
