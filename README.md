@@ -72,6 +72,15 @@ Analysis and reporting:
 - `pipeline.get_report`
 - `pipeline.save_report`
 
+Planning and evidence:
+- `pipeline.plan_from_objective`
+- `pipeline.approve_plan`
+- `pipeline.plan_council` — five LLM experts review a plan in parallel
+- `pipeline.list_council_skills` / `pipeline.save_council_skill` / `pipeline.reset_council_skill` — user-overridable expert charters
+- `pipeline.search_literature` — read-only Europe PMC reference search
+- `pipeline.list_models` — model registry, purposes and (optionally) live endpoint checks
+- `pipeline.list_projects` / `pipeline.list_rounds` — read-only project navigation
+
 Inspection and operations:
 - `pipeline.status`
 - `pipeline.list_runs`

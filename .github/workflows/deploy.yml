@@ -55,7 +55,10 @@ jobs:
             pipeline-mcp/tests/test_mcp_http_route.py \
             pipeline-mcp/tests/test_oidc_auth.py \
             pipeline-mcp/tests/test_session_auth.py \
-            pipeline-mcp/tests/test_runpod_admin.py
+            pipeline-mcp/tests/test_runpod_admin.py \
+            pipeline-mcp/tests/test_plan_council.py \
+            pipeline-mcp/tests/test_council_skills.py \
+            pipeline-mcp/tests/test_literature.py
 
       - name: Run frontend deployment checks
         run: |
@@ -64,6 +67,23 @@ jobs:
             frontend/tests/app-syntax.test.js \
             frontend/tests/auth-session.test.js \
             frontend/tests/auth.test.js \
+            frontend/tests/guided.test.js \
+            frontend/tests/guided-topbar.test.js \
+            frontend/tests/guided-sidebar.test.js \
+            frontend/tests/guided-progress.test.js \
+            frontend/tests/guided-results.test.js \
+            frontend/tests/guided-evidence.test.js \
+            frontend/tests/guided-structure.test.js \
+            frontend/tests/guided-council.test.js \
+            frontend/tests/guided-layout.test.js \
+            frontend/tests/guided-literature.test.js \
+            frontend/tests/guided-side-tabs.test.js \
+            frontend/tests/guided-models.test.js \
+            frontend/tests/guided-connections.test.js \
+            frontend/tests/guided-skills.test.js \
+            frontend/tests/guided-agents.test.js \
+            frontend/tests/guided-templates.test.js \
+            frontend/tests/guided-projects.test.js \
             frontend/tests/login-bootstrap.test.js \
             frontend/tests/mcp-tab.test.js \
             frontend/tests/runpod-admin.test.js
