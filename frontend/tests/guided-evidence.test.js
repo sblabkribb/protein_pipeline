@@ -138,13 +138,26 @@ test("buildLiabilityRows tolerates missing halves", () => {
 
 test("liabilitySummary reads the tier summary and defaults to honest zeros", () => {
   assert.deepEqual(liabilitySummary({ summary: { evaluated: 4, failed: 1 } }),
-    { evaluated: 4, failed: 1, enabled: false, calibrated: false });
-  assert.deepEqual(liabilitySummary(null), { evaluated: 0, failed: 0, enabled: false, calibrated: false });
+    { evaluated: 4, failed: 1, enabled: false, calibrated: false, error: null });
+  assert.deepEqual(liabilitySummary(null),
+    { evaluated: 0, failed: 0, enabled: false, calibrated: false, error: null });
+  // 게이트 계산 실패의 fallback 형태 (pipeline.py:9768). 이것을 enabled:false 로
+  // 읽으면 "검사했는데 꺼져 있다"가 되어 거짓말이다 - 오류는 별도 필드로 노출한다.
+  assert.deepEqual(
+    liabilitySummary({
+      summary: { gate_id: "sequence_liability_gate_v1", error: "liability gate failed: boom" },
+    }),
+    {
+      evaluated: 0, failed: 0, enabled: false, calibrated: false,
+      error: "liability gate failed: boom",
+    },
+  );
 });
 
-test("liabilityArtifactPaths finds tier liabilities, including per-backbone runs", () => {
-  // 멀티백본 실행은 backbones/<이름>/tiers/<티어>/ 아래에 둔다 (pipeline.py).
-  // 정규식은 루트 tiers/ 와 같은 티어 키로 묶는다 - 퍼널(tierArtifactPaths)과 같은 타협.
+test("liabilityArtifactPaths finds tier liabilities; nesting stays forward-compatible", () => {
+  // 백엔드는 오늘 루트 tiers/<티어>/liabilities.json 에만 쓴다 (pipeline.py:9742 -
+  // bb_tier_dir 은 liabilities 를 받지 않는다). 정규식은 백엔드가 중첩 경로
+  // (backbones/<이름>/tiers/...)를 쓰더라도 유지된다 - 현재 백엔드는 루트만 씀.
   const tiers = liabilityArtifactPaths([
     { type: "file", path: "tiers/50/liabilities.json" },
     { type: "file", path: "backbones/bb1/tiers/30/liabilities.json" },

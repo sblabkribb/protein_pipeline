@@ -70,12 +70,17 @@ export function liabilitySummary(payload) {
     failed: Number(summary.failed) || 0,
     enabled: summary.enabled === true,
     calibrated: summary.calibrated === true,
+    // 게이트 계산이 실패하면 백엔드는 {gate_id, error} 만 남긴다 (pipeline.py:9768).
+    // 그것을 enabled:false 로 읽으면 "검사했는데 꺼져 있다"는 거짓말이 되므로
+    // 오류는 별도 필드로 노출한다.
+    error: typeof summary.error === "string" && summary.error ? summary.error : null,
   };
 }
 
-// list_artifacts 결과에서 티어별 liabilities.json 경로를 모은다. 멀티백본 실행은
-// backbones/<이름>/tiers/<티어>/ 아래에 두는데, 같은 티어 키로 묶는다 - 퍼널
-// (results.js tierArtifactPaths)이 이미 선택한 타협이다.
+// list_artifacts 결과에서 티어별 liabilities.json 경로를 모은다. 백엔드는 오늘
+// 루트 tiers/<티어>/liabilities.json 에만 쓴다 (pipeline.py:9742 - bb_tier_dir 은
+// liabilities 를 받지 않는다). 정규식이 중첩 경로(backbones/<이름>/tiers/...)까지
+// 받는 것은 미래 호환용이다 - 백엔드가 중첩을 쓰게 되면 같은 티어 키로 묶인다.
 export function liabilityArtifactPaths(artifacts) {
   const tiers = new Map();
   for (const item of Array.isArray(artifacts) ? artifacts : []) {
@@ -214,8 +219,13 @@ export function renderEvidence(host, { conservation, liabilities } = {}) {
     for (const entry of tierList) {
       host.appendChild(el("div", "afolder", `tiers/${entry.tier}`));
       const summary = liabilitySummary(entry.payload);
-      host.appendChild(el("p", "note",
-        `평가 ${summary.evaluated} · 탈락 ${summary.failed}${summary.enabled ? "" : " · 게이트 비활성"}`));
+      // 게이트가 실패한 티어는 "비활성"이 아니라 오류라고 말한다. 전체 이유는
+      // 풍선글자로 남긴다 - 요약 줄을 백엔드 로그로 채우면 읽을 수가 없다.
+      const note = el("p", "note",
+        `평가 ${summary.evaluated} · 탈락 ${summary.failed}`
+        + (summary.error ? " · 게이트 오류" : summary.enabled ? "" : " · 게이트 비활성"));
+      if (summary.error) note.title = summary.error;
+      host.appendChild(note);
       host.appendChild(renderLiabilityRowsTable(buildLiabilityRows(entry.payload)));
     }
   }

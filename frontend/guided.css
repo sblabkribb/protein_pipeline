@@ -480,5 +480,7 @@ body.dragging iframe, body.dragging canvas { pointer-events: none; }
 .conservstrip i.low { background: var(--absent); opacity: 1; }
 .evlows { margin: 4px 0 0; }
 .evlows .chip { margin: 2px 6px 0 0; }
+.evmeta { display: flex; flex-wrap: wrap; gap: 4px 8px; margin: 0 0 8px; }
+.evmeta .chip { margin: 0; }
 .evidencelinks { display: flex; flex-direction: column; }
 .actions .danger { color: var(--absent-ink); border-color: color-mix(in oklch, var(--absent) 45%, transparent); }
