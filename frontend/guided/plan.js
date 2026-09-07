@@ -1,5 +1,6 @@
 // frontend/guided/plan.js — 목표·경로·계획 검토/승인 렌더링. DOM 을 그리고 서버 도구를 호출한다.
 import { callTool, errorText } from "./api.js";
+import { renderCouncil, requestCouncil } from "./council.js";
 // el 은 dom.js 에서 온다. 여기서 재노출해 monitor 등 기존 import 경로를 유지한다.
 import { el } from "./dom.js";
 // 순환 import: facade 와 상호 참조. 함수 선언이라 hoisting 으로 안전하되,
@@ -472,7 +473,9 @@ async function explainPlan(plan) {
   }
 }
 
-const state = { plan: null, edits: {}, overrides: null, chat: [], llm: {} };
+const state = { plan: null, edits: {}, overrides: null, chat: [], llm: {},
+                councilGen: 0, councilApplicable: {}, councilRejected: {},
+                chatApplicable: {}, chatRejected: {} };
 
 // --- 계획 대화 --------------------------------------------------------------
 //
@@ -546,7 +549,9 @@ async function sendChat(question) {
     state.chat.push({ role: "assistant", content: out.reply || "" });
     appendChat("assistant", out.reply || "", out.reply_is_generated);
     if (out.parse_warning) appendChat("assistant", out.parse_warning, false);
-    renderProposals(out.applicable_edits, out.rejected_edits);
+    state.chatApplicable = out.applicable_edits || {};
+    state.chatRejected = out.rejected_edits || {};
+    renderProposals(...currentProposals());
   } catch (error) {
     appendChat("assistant", `답변하지 못했습니다: ${errorText(error)}`, false);
   } finally {
@@ -631,6 +636,7 @@ async function generatePlan() {
     log.classList.add("empty");
     log.textContent = "계획에 대해 궁금한 것을 물어보세요.";
     document.getElementById("proposals").replaceChildren();
+    fireCouncil(plan);
     if (plan.route) renderStages(document.getElementById("stages"), plan.route);
     status.className = "status";
     status.textContent = "";
@@ -646,6 +652,36 @@ async function generatePlan() {
   } finally {
     button.disabled = false;
   }
+}
+
+// 계획이 생기면 곧바로 전문가 협의회를 돌린다. 계획 렌더를 막지 않는다 -
+// 협의회는 도착하는 대로 판정 카드와 제안을 채운다. 재생성되면 세대가 바뀌어
+// 늦게 도착한 옛 판정은 버린다.
+function fireCouncil(plan) {
+  const host = document.getElementById("councilBox");
+  const gen = ++state.councilGen;
+  state.councilApplicable = {};
+  state.councilRejected = {};
+  state.chatApplicable = {};
+  state.chatRejected = {};
+  renderCouncil(host, [], { pending: true });
+  requestCouncil(plan).then((out) => {
+    if (gen !== state.councilGen) return;
+    state.councilApplicable = out.applicable_edits || {};
+    state.councilRejected = out.rejected_edits || {};
+    renderCouncil(host, out.council || [], { notes: out.notes || [] });
+    renderProposals(...currentProposals());
+  }).catch((error) => {
+    if (gen !== state.councilGen) return;
+    renderCouncil(host, [], { notes: [`전문가 검토에 실패했습니다: ${errorText(error)}`] });
+  });
+}
+
+function currentProposals() {
+  return [
+    { ...(state.councilApplicable || {}), ...(state.chatApplicable || {}) },
+    { ...(state.councilRejected || {}), ...(state.chatRejected || {}) },
+  ];
 }
 
 async function approve() {
