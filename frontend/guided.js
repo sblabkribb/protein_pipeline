@@ -55,6 +55,10 @@ import {
 import { renderLiterature, requestLiterature } from "./guided/literature.js";
 import { renderModels, requestModels, modelsTabModels } from "./guided/models.js";
 import { renderConnectionsTab, requestConnections } from "./guided/connections.js";
+import {
+  paintSkillsTab, requestSkills, saveSkill, resetSkill,
+  beginEdit, cancelEdit, currentEdit,
+} from "./guided/skills.js";
 import { el } from "./guided/dom.js";
 import { shouldRestoreStoredSession } from "./lib/auth.js";
 
@@ -540,7 +544,7 @@ export function showPanel(name) {
 // 실행 선택·폴링·계획 흐름을 건드리지 않는다.
 
 export const SIDE_TAB_KEY = "kbf.guided.sidetab";
-const SIDE_TAB_NAMES = ["runs", "models", "connections"];
+const SIDE_TAB_NAMES = ["runs", "models", "connections", "skills"];
 let sideTabWired = false;
 
 export function showSideTab(name) {
@@ -553,12 +557,16 @@ export function showSideTab(name) {
   document.getElementById("sideRuns").classList.toggle("hidden", wanted !== "runs");
   document.getElementById("sideModels").classList.toggle("hidden", wanted !== "models");
   document.getElementById("sideConnections").classList.toggle("hidden", wanted !== "connections");
+  document.getElementById("sideSkills").classList.toggle("hidden", wanted !== "skills");
   localStorage.setItem(SIDE_TAB_KEY, wanted);
   if (wanted === "models" && typeof window.__modelsTabLoad === "function") {
     window.__modelsTabLoad();
   }
   if (wanted === "connections" && typeof window.__connectionsTabLoad === "function") {
     window.__connectionsTabLoad();
+  }
+  if (wanted === "skills" && typeof window.__skillsTabLoad === "function") {
+    window.__skillsTabLoad();
   }
 }
 
@@ -651,6 +659,66 @@ if (typeof document !== "undefined") {
       delete host.dataset.loading;
       renderConnectionsTab(host, { state: "error", message: `확인하지 못했습니다: ${errorText(error)}` });
     });
+  };
+
+  // 스킬 탭은 헌장 편집이므로 저장·초기화 후 force 재로드로 최신 상태를 유지한다.
+  // 다른 탭 훅과 마찬가지로 initSideTabs 의 탭 복원이 부를 수 있으니 먼저 정의한다.
+  let skillsLoading = false;
+  async function loadSkills(force = false) {
+    const host = document.getElementById("sideSkills");
+    if (host.dataset.loaded && !force) return;   // 첫 진입 1회 로드
+    if (host.dataset.loading || skillsLoading) return;   // 중복 요청 억제
+    host.dataset.loading = "1";
+    skillsLoading = true;
+    paintSkillsTab(host, { state: "loading" });
+    try {
+      const out = await requestSkills();
+      host.dataset.loaded = "1";
+      delete host.dataset.loading;
+      skillsLoading = false;
+      paintSkillsTab(host, { state: "done", skills: out.skills || [] });
+    } catch (error) {
+      delete host.dataset.loading;
+      skillsLoading = false;
+      paintSkillsTab(host, { state: "error", message: `스킬을 불러오지 못했습니다: ${errorText(error)}` });
+    }
+  }
+
+  window.__skillsTabLoad = loadSkills;
+  window.__skillsEdit = (id) => {
+    // 편집 클릭 시 최신 헌장을 다시 읽어 그 카드만 textarea 폼으로 다시 그린다.
+    const host = document.getElementById("sideSkills");
+    return requestSkills().then((payload) => {
+      const skill = (payload.skills || []).find((s) => s.expert_id === id);
+      beginEdit(id, skill ? skill.charter : "");
+      paintSkillsTab(host, { state: "done", skills: payload.skills || [] });
+    }).catch(() => {});
+  };
+  window.__skillsSave = async () => {
+    const host = document.getElementById("sideSkills");
+    const textarea = host.querySelector("textarea");
+    const edit = currentEdit();
+    if (!textarea || !edit.editingId) return;
+    textarea.disabled = true;
+    try {
+      await saveSkill(edit.editingId, textarea.value);
+      cancelEdit();
+      await loadSkills(true);
+    } catch (error) {
+      textarea.disabled = false;
+      host.prepend(el("p", "warn", `헌장을 저장하지 못했습니다: ${errorText(error)}`));
+    }
+  };
+  window.__skillsCancel = () => {
+    cancelEdit();
+    loadSkills(true);
+  };
+  window.__skillsReset = async (id) => {
+    try {
+      await resetSkill(id);
+    } finally {
+      await loadSkills(true);
+    }
   };
 
   initSideTabs();
