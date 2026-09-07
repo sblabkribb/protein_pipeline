@@ -35,6 +35,102 @@ from rapid_sr.gate0_request import build_gate0_request  # noqa: E402
 from rapid_sr.protocol import protocol_fingerprint  # noqa: E402
 
 BASE = PROJECT_ROOT / "public_data" / "benchmark" / "gate0"
+#: 재번호한 타겟을 두는 자리. RFD3 에 준 것과 native 기준 구조가 같아야 한다.
+STAGED = BASE / "holdout_targets_pdb"
+
+
+def first_model_only(pdb_text: str) -> tuple[str, int]:
+    """다중 모델 파일에서 첫 모델만 남긴다.
+
+    CATH 파일 중 일부는 NMR 앙상블이다. 홀드아웃 18 타겟 중 4 개가 그렇고
+    (1tm9A00 26 모델, 2jokA01 20 모델, 2jo7A00 10 모델, 2yruA01 20 모델),
+    1tm9A00 은 137 잔기인데 ATOM 이 56,836 줄이다. 모델 구분자를 잃으면 같은
+    잔기가 26 번 겹쳐 한 사슬이 되고, RFD3 는 UnindexFlaggedTokens 단계에서
+    죽는다. 2jo7A00 이 RMSD 수용 게이트에서 15 개 중 14 개를 기각당한 것도
+    앙상블에 맞춰 재려 했기 때문이고, 임계값 문제가 아니었다.
+
+    선정 기준의 길이 계산은 잔기번호의 집합을 세므로 앙상블도 정상 단일 사슬로
+    보였다. 그래서 적격성으로는 걸러지지 않았다 - 여기서 처리한다.
+    """
+    lines = pdb_text.splitlines()
+    n_models = sum(1 for line in lines if line.startswith("MODEL "))
+    if n_models <= 1:
+        return pdb_text, n_models
+    kept, inside = [], False
+    for line in lines:
+        if line.startswith("MODEL "):
+            if inside:
+                break
+            inside = True
+            continue
+        if line.startswith("ENDMDL"):
+            break
+        if inside:
+            kept.append(line)
+        else:
+            kept.append(line)  # 헤더는 남긴다
+    return "\n".join(kept) + "\n", n_models
+
+
+def drop_ca_less_atoms(pdb_text: str) -> str:
+    """CA 가 없는 잔기의 ATOM 줄과 HETATM 을 버린다. 나머지는 그대로 둔다.
+
+    RFD3 는 contig 를 잔기번호 범위 하나로 받는데, 원자는 있고 CA 는 없는 잔기가
+    번호에 끼면 contig 가 원자 배열에 없는 잔기를 가리켜 검증에서 죽는다
+    (2iayA00: contig A3-113 인데 A28 이 없다).
+
+    재번호만으로는 부족하다. preprocess_pdb 는 ATOM/HETATM 잔기 전부에 번호를
+    매기므로 CA 없는 잔기가 남아 있으면 CA 서열의 빈틈이 그대로 남는다
+    (2pgsA03: 빈틈 54 -> 10). 먼저 걸러야 0 이 된다.
+
+    헤더는 남기되, 원자 번호나 개수를 참조하는 레코드는 버린다. 처음에 ATOM/TER
+    만 남겼다가 MODEL/ENDMDL 이 사라져 NMR 앙상블 세 개를 망가뜨렸고, 그 다음에는
+    헤더를 전부 남겼다가 CONECT 가 지워진 HETATM 원자를 가리켜 RFD3 가
+    `IndexError: index 1099 is out of bounds for axis 0 with size 1098` 로 죽었다.
+    """
+    with_ca = {
+        (line[21], line[22:27])
+        for line in pdb_text.splitlines()
+        if line.startswith("ATOM") and line[12:16].strip() == "CA"
+    }
+    #: 원자 번호나 개수를 참조하므로, HETATM 을 지우면 매달린 참조가 된다.
+    dangling = {"CONECT", "LINK", "SITE", "HET", "HETNAM", "HETSYN", "FORMUL",
+                "MASTER", "SSBOND", "MODRES", "ANISOU"}
+    kept = []
+    for line in pdb_text.splitlines():
+        record = line[:6].strip().upper()
+        if record == "ATOM":
+            if (line[21], line[22:27]) in with_ca:
+                kept.append(line)
+        elif record == "HETATM" or record in dangling:
+            continue
+        else:
+            kept.append(line)
+    return "\n".join(kept) + "\n"
+
+
+def stage_target(pdb_path: Path, domain: str) -> tuple[Path, dict]:
+    """타겟을 걸러 1..N 연속 번호로 다시 쓰고, 그 파일을 쓴다."""
+    from pipeline_mcp.bio.pdb import preprocess_pdb
+
+    raw = pdb_path.read_text(encoding="utf-8", errors="replace")
+    single, n_models = first_model_only(raw)
+    filtered = drop_ca_less_atoms(single)
+    processed, _mapping = preprocess_pdb(
+        filtered, strip_nonpositive_resseq=True, renumber_resseq_from_1=True)
+
+    def ca_stats(text: str) -> dict:
+        nums = sorted({int(line[22:26]) for line in text.splitlines()
+                       if line.startswith("ATOM") and line[12:16].strip() == "CA"})
+        return {"n_residues": len(nums), "first": nums[0], "last": nums[-1],
+                "gaps": (nums[-1] - nums[0] + 1) - len(nums)}
+
+    STAGED.mkdir(parents=True, exist_ok=True)
+    out = STAGED / f"{domain}.pdb"
+    out.write_text(processed, encoding="utf-8")
+    return out, {"source_pdb": str(pdb_path), "staged_pdb": str(out),
+                 "n_models": n_models, "took_first_model": n_models > 1,
+                 "before": ca_stats(raw), "after": ca_stats(processed)}
 
 
 def main(argv=None) -> int:
@@ -47,6 +143,9 @@ def main(argv=None) -> int:
     parser.add_argument("--use-reserve", type=int, default=0,
                         help="선정 타겟이 실패했을 때 쓸 예비 개수. 기본 0 - "
                              "실패 목록을 먼저 보고 사람이 정한다.")
+    parser.add_argument("--force", action="store_true",
+                        help="designs 가 이미 있어도 다시 만든다. 전처리를 바꿨을 때 "
+                             "12 개가 같은 경로로 만들어지도록 쓴다.")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
@@ -68,6 +167,18 @@ def main(argv=None) -> int:
         "composition": dict(plan["composition"]),
         "stop_after": "rfd3",
         "start_from": "rfd3",
+        "target_preprocess": {
+            "steps": ["다중 모델이면 첫 모델만", "CA 없는 잔기의 ATOM 과 HETATM 제거",
+                      "strip_nonpositive_resseq", "renumber_resseq_from_1"],
+            "why": ("RFD3 contig 는 잔기번호 범위 하나다. CA 없는 잔기가 번호에 "
+                    "끼면 contig 가 원자 배열에 없는 잔기를 가리켜 검증에서 죽는다. "
+                    "12 타겟 전부 같은 전처리를 거친다 - 일부만 바꾸면 생성 경로가 "
+                    "섞여 교란이 된다."),
+            "staged_dir": str(STAGED.relative_to(PROJECT_ROOT)),
+            "metric_note": ("동결된 지표는 서열 순서로 대응하므로 기준 구조의 잔기번호가 "
+                            "바뀌어도 RMSD 는 변하지 않는다. native 기준 구조는 "
+                            "staged_pdb 를 쓴다 - 설계가 실제로 올라간 구조다."),
+        },
         "why_skip_msa": (
             "RFD3 는 타겟 구조에 조건을 걸고 MSA 를 읽지 않는다. 첫 시도에서 "
             "mmseqs_msa 단계에 50 분 동안 멈춰 있었고 (mmseqs 프로세스는 없었다) "
@@ -106,7 +217,7 @@ def main(argv=None) -> int:
         run_id = f"holdout_{row['domain']}_rfd3"
         # 이미 다 만든 타겟을 다시 돌리면 성공한 백본을 덮어쓸 위험만 있다.
         have = designs_for(row["domain"])
-        if have >= want:
+        if have >= want and not args.force:
             print(f"[{index}/{len(targets)}] {run_id}: designs {have} 이미 있음, "
                   f"건너뜀", flush=True)
             report["runs"].append({"domain": row["domain"], "stratum": row["stratum"],
@@ -114,11 +225,13 @@ def main(argv=None) -> int:
                                    "status": "ok", "n_designs": have,
                                    "skipped": True})
             continue
-        pdb_text = Path(row["pdb"]).read_text(encoding="utf-8", errors="replace")
+        staged, prep = stage_target(Path(row["pdb"]), row["domain"])
+        pdb_text = staged.read_text(encoding="utf-8")
         request = build_gate0_request(pdb_text, "rfd3", seed=args.seed,
                                       stop_after="rfd3", start_from="rfd3")
         record = {"domain": row["domain"], "stratum": row["stratum"],
                   "length": row["length"], "run_id": run_id,
+                  "preprocess": prep,
                   "started_at": time.strftime("%Y-%m-%dT%H:%M:%S%z")}
         started = time.time()
         print(f"[{index}/{len(targets)}] {run_id} ({row['length']} 잔기)", flush=True)

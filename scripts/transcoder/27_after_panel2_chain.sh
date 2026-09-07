@@ -7,7 +7,7 @@ set -uo pipefail
 cd /opt/protein_pipeline-work
 
 REFOLD_PID="${1:?재폴딩 PID}"
-GEN_PID="${2:?백본 생성 PID}"
+GEN_PID="${2:-}"   # 더 이상 기다리지 않는다. 예비 생성을 체인 안에서 돌린다.
 B=public_data/benchmark/gate0
 
 wait_for () {  # $1=pid $2=이름
@@ -15,7 +15,7 @@ wait_for () {  # $1=pid $2=이름
   echo "[$(date +%H:%M)] $2 종료 (pid $1)"
 }
 
-echo "[$(date +%H:%M)] 대기 시작 · 재폴딩 $REFOLD_PID · 생성 $GEN_PID"
+echo "[$(date +%H:%M)] 대기 시작 · 재폴딩 $REFOLD_PID"
 wait_for "$REFOLD_PID" "재폴딩"
 
 echo
@@ -48,9 +48,19 @@ python3 scripts/transcoder/28_archive_fold_artifacts.py \
 echo "보관 종료 코드 $?"
 
 echo
-wait_for "$GEN_PID" "백본 생성"
+echo "=============== 홀드아웃 예비 백본 생성 ==============="
+# 재폴딩과 병행하면 ColabFold 가 CPU 에 묶여 있어 3 배 느려진다
+# (54 -> 164 s/폴드). 그래서 재폴딩이 끝난 뒤에 돌린다.
+python3 scripts/transcoder/25_generate_holdout_backbones.py --use-reserve 6
+echo "예비 생성 종료 코드 $?"
+
 echo
-echo "=============== 홀드아웃 격자 6 x 24 x 12 ==============="
+echo "=============== 홀드아웃 타겟 확정 (4/4/4) ==============="
+python3 scripts/transcoder/29_resolve_holdout_targets.py --write
+echo "확정 종료 코드 $?"
+
+echo
+echo "=============== 홀드아웃 격자 ==============="
 python3 scripts/transcoder/26_holdout_grid.py --workers 4
 echo "격자 종료 코드 $?"
 
