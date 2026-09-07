@@ -38,23 +38,23 @@
 `tools.py`에 등록. 입력:
 
 ```
-{ plan: object,            # plan_from_objective 출력 그대로
-  provider?: str, model?: str, api_key?: str,   # discuss_plan과 동일한 선택적 LLM 지정
+{ plan: object,   # plan_from_objective 출력 그대로
   lang?: "ko"|"en" }
 ```
 
-LLM 호출 경로는 `discuss_plan`이 쓰는 것과 동일한 `chat_agent` 완료 함수를 재사용(도구 루프 불필요, 단발 완료 + JSON 파싱). provider 미지정이면 서버 기본 연결을 쓰고, 그것도 없으면 B5의 생략 응답.
+LLM 호출 경로는 `discuss_plan`과 **동일한 `runner.gemini.chat(system, prompt)`**(GeminiClient, 서버 API 키)를 재사용한다. `GeminiClient.chat`은 동기 블로킹이므로 5개 전문가 호출은 `concurrent.futures.ThreadPoolExecutor(max_workers=5)`로 병렬화한다. gemini 미설정(`is_available()` False)이면 B5의 생략 응답. 프론트의 provider/model/api_key 선택기는 이 도구와 무관(서버 연결만 사용).
 
 ### B2. 전문가 5인 — 정의와 소유 필드
 
-| id | 이름 | 소유 필드(제안 권한) |
-|---|---|---|
-| `solubility` | 용해도·응집 전문가 | weights.{solubility, aggregation, developability}, soluprot 관련 constraints |
-| `stability` | 안정성 전문가 | weights.stability, WT 비교 관련 설정 |
-| `structure` | 구조 보존·결합 전문가 | weights.{structural_preservation, binding}, RMSD/fixed-position 관련 constraints |
-| `design_space` | 설계 공간·예산 전문가 | weights.diversity, budget(설계 수·티어·비용), sampling_temp |
-| `experiment` | 실험 실현성 전문가 | 모티프·리아빌리티 관련 constraints, developability |
+| id | 이름 | 검토 범위(가중치) | 소유 필드(제안 권한, editable decision 필드만) |
+|---|---|---|---|
+| `solubility` | 용해도·응집 전문가 | solubility, aggregation | use_soluble_model, soluprot_cutoff |
+| `stability` | 안정성 전문가 | stability | (없음 — 판정과 reasons로만 기여) |
+| `structure` | 구조 보존·결합 전문가 | structural_preservation, binding | af2_verification |
+| `design_space` | 설계 공간·예산 전문가 | diversity, budget(설계 수·티어·비용) | sequences_per_backbone, sampling_temp, gate0_feature |
+| `experiment` | 실험 실현성 전문가 | developability, 모티프·리아빌리티 | (없음 — 판정과 reasons로만 기여) |
 
+- 가중치는 `apply_edits`가 decision 필드만 반영하므로 **제안 대상이 아니다** — 전문가는 자기 검토 범위의 가중치 문제를 verdict/reasons로 지적한다.
 - 각 전문가의 시스템 프롬프트(헌장)는 자기 역할·검토 관점·출력 JSON 계약을 명시. 모든 전문가에게 동일한 사용자 메시지(계획 JSON + 자기 소유 필드 목록)를 보낸다.
 - 5개 호출 **병렬** 실행. 개별 타임아웃 30초.
 
@@ -71,11 +71,12 @@ LLM 호출 경로는 `discuss_plan`이 쓰는 것과 동일한 `chat_agent` 완�
 
 ### B4. 검증·병합 (`objective_planner` 규칙 재사용)
 
-- JSON 파싱: 코드펜스 제거 등 `discuss_plan`의 기존 파싱 보조 재사용. 실패 시 그 전문가 `unavailable` + 원문 일부(접이식, 프런트에서 처리할 수 있게 `raw_excerpt` 포함).
+- JSON 파싱: 코드펜스 제거 — `parse_discussion_reply`와 같은 방식(`re.search(r"```json\s*(.*?)```", raw, re.DOTALL)`). 실패 시 그 전문가 `unavailable` + 원문 일부(`raw_excerpt`, 프런트에서 접이식 표시).
+- `GeminiClient.chat`은 예외 대신 `"Error communicating with Gemini: …"` 문자열을 돌려주므로, 이 접두어가 보이면 그 전문가 `error` 상태.
 - Evidence 검증: `Evidence` 규칙 그대로 — kind 허용값, 측정/문헌 근거에 source 필수. 위반 suggestion은 `rejected_edits`로.
-- **소유권 강제**: suggestion.field가 그 전문가의 소유 필드가 아니면 `rejected_edits`에 "소유권 위반" 사유로 분류.
-- 값 검증: weights는 0..1, 알 수 없는 objective → 거부. 나머지는 plan 필드별 기존 검증(`plan_from_objective`가 최종적으로 다시 검증하므로 이중 방어).
-- 통과한 suggestion만 `applicable_edits`(기존 discuss_plan 계약과 동일한 형태)로 반환.
+- **소유권 강제**: suggestion.field가 그 전문가의 소유 decision 필드가 아니거나 `editable_fields`에 없으면 `rejected_edits`에 사유 표기로 분류.
+- 값 검증: `soluprot_cutoff`은 0..1, `sequences_per_backbone`/`sampling_temp`는 양수 — 범위 밖은 거부. 최종 방어는 `approve_plan`의 기존 검증(이중 방어).
+- 통과한 suggestion만 `applicable_edits`(discuss_plan 계약과 동일한 `{field: value}` 형태)로 반환.
 
 ### B5. 출력 계약
 
