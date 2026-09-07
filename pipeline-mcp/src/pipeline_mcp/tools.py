@@ -8900,6 +8900,45 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.list_council_skills",
+            "description": (
+                "List the five plan-council expert charters, marking which are "
+                "user-overridden."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+        {
+            "name": "pipeline.save_council_skill",
+            "description": (
+                "Override the builtin charter for one council expert. Applies from "
+                "the next council run. 8000-char cap."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "expert_id": {"type": "string"},
+                    "charter": {"type": "string"},
+                },
+                "required": ["expert_id", "charter"],
+            },
+        },
+        {
+            "name": "pipeline.reset_council_skill",
+            "description": (
+                "Remove the user charter; the builtin charter applies again."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "expert_id": {"type": "string"},
+                },
+                "required": ["expert_id"],
+            },
+        },
+        {
             "name": "pipeline.search_literature",
             "description": (
                 "Read-only Europe PMC literature search. Published sources are "
@@ -9760,7 +9799,23 @@ class ToolDispatcher:
             plan = arguments.get("plan")
             if not isinstance(plan, dict):
                 return {"error": "plan must be an object"}
-            return run_council(plan, getattr(self.runner, "gemini", None))
+            return run_council(plan, getattr(self.runner, "gemini", None),
+                               output_root=self.runner.output_root)
+
+        if name == "pipeline.list_council_skills":
+            from .plan_council import list_council_skills
+            return list_council_skills(self.runner.output_root)
+
+        if name == "pipeline.save_council_skill":
+            from .plan_council import save_council_skill
+            return save_council_skill(str(arguments.get("expert_id") or ""),
+                                      str(arguments.get("charter") or ""),
+                                      self.runner.output_root)
+
+        if name == "pipeline.reset_council_skill":
+            from .plan_council import reset_council_skill
+            return reset_council_skill(str(arguments.get("expert_id") or ""),
+                                       self.runner.output_root)
 
         if name == "pipeline.search_literature":
             from .literature import search_literature

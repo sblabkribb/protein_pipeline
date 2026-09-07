@@ -16,8 +16,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
+from pathlib import Path
 
 from .objective_planner import Evidence
 
@@ -40,7 +43,7 @@ class Expert:
 
 
 COUNCIL_OUTPUT_CONTRACT = (
-    "출력 계약: 마지막에 fenced json block 하나만 남긴다.\n"
+    "OUTPUT CONTRACT — 출력 계약: 마지막에 fenced json block 하나만 남긴다.\n"
     "```json\n"
     "{\"verdict\": \"ok\" | \"warn\" | \"block\", \"reasons\": [\"…\"], "
     "\"suggestions\": [{\"field\": \"필드명\", \"value\": 값, \"rationale\": \"…\", "
@@ -97,6 +100,90 @@ EXPERTS = (
     Expert("experiment", "실험 실현성 전문가", _EXPERT_EXPERIMENT,
            decision_fields=(), weight_scope=("developability",)),
 )
+
+
+SKILL_DIRNAME = "_council_skills"
+CHARTER_MAX_CHARS = 8000
+
+
+def user_charter_root() -> Path:
+    """사용자 헌장 저장소 루트. 테스트가 패치하는 유일한 지점."""
+    try:
+        from .config import load_config  # noqa: PLC0415
+        return Path(load_config().output_root)
+    except Exception:  # noqa: BLE001 — 자격 증명이 없는 환경에서도 council 을 막지 않는다
+        return Path(os.environ.get("PIPELINE_OUTPUT_ROOT") or "outputs")
+
+
+def user_charter_path(expert_id: str, output_root: str | Path | None = None) -> Path:
+    root = Path(output_root) if output_root else user_charter_root()
+    return root / SKILL_DIRNAME / f"{expert_id}.json"
+
+
+def _read_user_charter(expert_id: str, output_root: str | Path | None = None) -> dict | None:
+    """깨진 파일은 없는 것과 같다 - builtin 으로 폴백한다."""
+    try:
+        payload = json.loads(
+            user_charter_path(expert_id, output_root).read_text(encoding="utf-8")
+        )
+    except (OSError, ValueError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    charter = str(payload.get("charter") or "").strip()
+    if not charter:
+        return None
+    return {"charter": charter, "updated_utc": str(payload.get("updated_utc") or "")}
+
+
+def charter_for(expert: Expert, output_root: str | Path | None = None) -> str:
+    payload = _read_user_charter(expert.id, output_root)
+    return payload["charter"] if payload else expert.charter
+
+
+def _expert_system(expert: Expert, output_root: str | Path | None = None) -> str:
+    return charter_for(expert, output_root) + "\n\n" + COUNCIL_OUTPUT_CONTRACT
+
+
+def list_council_skills(output_root: str | Path | None = None) -> dict:
+    skills = []
+    for expert in EXPERTS:
+        payload = _read_user_charter(expert.id, output_root)
+        row = {"expert_id": expert.id, "name": expert.name,
+               "source": "user" if payload else "builtin",
+               "charter": payload["charter"] if payload else expert.charter}
+        if payload and payload["updated_utc"]:
+            row["updated_utc"] = payload["updated_utc"]
+        skills.append(row)
+    return {"skills": skills}
+
+
+def save_council_skill(expert_id: str, charter: str,
+                       output_root: str | Path | None = None) -> dict:
+    if expert_id not in {e.id for e in EXPERTS}:
+        return {"error": f"알 수 없는 전문가: {expert_id}"}
+    charter = str(charter or "").strip()
+    if not charter:
+        return {"error": "charter is required"}
+    if len(charter) > CHARTER_MAX_CHARS:
+        return {"error": f"charter must be at most {CHARTER_MAX_CHARS} chars"}
+    path = user_charter_path(expert_id, output_root)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "charter": charter,
+        "updated_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }, ensure_ascii=False), encoding="utf-8")
+    return {"expert_id": expert_id, "source": "user"}
+
+
+def reset_council_skill(expert_id: str, output_root: str | Path | None = None) -> dict:
+    if expert_id not in {e.id for e in EXPERTS}:
+        return {"error": f"알 수 없는 전문가: {expert_id}"}
+    try:
+        user_charter_path(expert_id, output_root).unlink()
+    except OSError:
+        pass
+    return {"expert_id": expert_id, "source": "builtin"}
 
 
 def build_expert_prompt(plan: dict, expert: Expert) -> str:
@@ -214,9 +301,10 @@ def review_suggestions(plan: dict, expert: Expert, suggestions) -> tuple[dict, d
     return applicable, rejected
 
 
-def _ask_expert(gemini, plan: dict, expert: Expert) -> dict:
+def _ask_expert(gemini, plan: dict, expert: Expert, *,
+                output_root: str | Path | None = None) -> dict:
     # 헌장이 출력 계약을 포함해야 한다는 스펙 B2 — 계약 텍스트는 모듈 상수로 관리한다.
-    system = expert.charter + "\n\n" + COUNCIL_OUTPUT_CONTRACT
+    system = _expert_system(expert, output_root)
     raw = str(gemini.chat(system, build_expert_prompt(plan, expert)))
     base = {"expert_id": expert.id, "name": expert.name, "verdict": "", "reasons": [],
             "suggestions_count": 0, "applicable": {}, "rejected": {}}
@@ -235,7 +323,8 @@ def _ask_expert(gemini, plan: dict, expert: Expert) -> dict:
                if parsed["parse_error"] else {})}
 
 
-def run_council(plan: dict, gemini, *, timeout: float = EXPERT_TIMEOUT_SECONDS) -> dict:
+def run_council(plan: dict, gemini, *, timeout: float = EXPERT_TIMEOUT_SECONDS,
+                output_root: str | Path | None = None) -> dict:
     """전문가 5인을 병렬로 돌린다. gemini 가 없으면 생략. 실패가 계획을 막지 않는다."""
     if gemini is None or not getattr(gemini, "is_available", lambda: False)():
         return {"council": [], "applicable_edits": {}, "rejected_edits": {},
@@ -245,7 +334,8 @@ def run_council(plan: dict, gemini, *, timeout: float = EXPERT_TIMEOUT_SECONDS) 
     rejected_edits: dict = {}
     notes: list[str] = []
     pool = ThreadPoolExecutor(max_workers=len(EXPERTS))
-    futures = {pool.submit(_ask_expert, gemini, plan, expert): expert for expert in EXPERTS}
+    futures = {pool.submit(_ask_expert, gemini, plan, expert, output_root=output_root):
+               expert for expert in EXPERTS}
     try:
         for future in as_completed(futures, timeout=timeout):
             expert = futures[future]
