@@ -433,7 +433,7 @@ body.dragging iframe, body.dragging canvas { pointer-events: none; }
 
 .proposals { margin: 10px 0; display: grid; gap: 6px; }
 .councilbox { display: grid; gap: 8px; margin-top: 6px; }
-.councilbox .skill { padding: 10px 12px; }
+.councilbox .skill { display: block; padding: 10px 12px; }
 .proposal {
   display: flex; align-items: center; gap: 10px; padding: 8px 11px; font-size: 13px;
   background: color-mix(in oklch, var(--action) 6%, var(--panel));

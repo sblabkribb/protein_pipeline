@@ -475,7 +475,7 @@ async function explainPlan(plan) {
 
 const state = { plan: null, edits: {}, overrides: null, chat: [], llm: {},
                 councilGen: 0, councilApplicable: {}, councilRejected: {},
-                chatApplicable: {}, chatRejected: {} };
+                chatGen: 0, chatApplicable: {}, chatRejected: {} };
 
 // --- 계획 대화 --------------------------------------------------------------
 //
@@ -538,6 +538,7 @@ async function sendChat(question) {
   const input = document.getElementById("chatInput");
   const button = document.getElementById("chatSend");
   input.disabled = button.disabled = true;
+  const gen = state.chatGen;
   try {
     const out = await callTool("pipeline.discuss_plan", {
       plan: state.plan, messages: state.chat,
@@ -546,6 +547,8 @@ async function sendChat(question) {
       } : {}),
     });
     if (out && out.error) throw new Error(out.error);
+    // 재생성된 계획에는 옛 계획의 대화·제안이 스며들지 않게 한다.
+    if (gen !== state.chatGen) return;
     state.chat.push({ role: "assistant", content: out.reply || "" });
     appendChat("assistant", out.reply || "", out.reply_is_generated);
     if (out.parse_warning) appendChat("assistant", out.parse_warning, false);
@@ -631,6 +634,7 @@ async function generatePlan() {
     showStep(3);
     document.getElementById("discuss").hidden = false;
     state.chat = [];
+    state.chatGen += 1;
     const log = document.getElementById("chatLog");
     log.replaceChildren();
     log.classList.add("empty");
@@ -678,10 +682,15 @@ function fireCouncil(plan) {
 }
 
 function currentProposals() {
-  return [
-    { ...(state.councilApplicable || {}), ...(state.chatApplicable || {}) },
-    { ...(state.councilRejected || {}), ...(state.chatRejected || {}) },
-  ];
+  const applicable = {
+    ...(state.councilApplicable || {}), ...(state.chatApplicable || {}),
+  };
+  const rejected = {
+    ...(state.councilRejected || {}), ...(state.chatRejected || {}),
+  };
+  // 나중에 거부된 필드가 여전히 적용 행으로 남아 있으면 사용자를 오도한다.
+  for (const field of Object.keys(rejected)) delete applicable[field];
+  return [applicable, rejected];
 }
 
 async function approve() {

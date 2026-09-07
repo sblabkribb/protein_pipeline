@@ -3,8 +3,8 @@
 import { callTool } from "./api.js";
 import { el } from "./dom.js";
 
-export const VERDICT_LABEL = { ok: "적합", warn: "경고", block: "차단" };
-export const VERDICT_CHIP = { ok: "okchip", warn: "warnchip", block: "badchip" };
+const VERDICT_LABEL = { ok: "적합", warn: "경고", block: "차단" };
+const VERDICT_CHIP = { ok: "okchip", warn: "warnchip", block: "badchip" };
 
 export function councilCardModels(council) {
   const rows = Array.isArray(council) ? council : [];
