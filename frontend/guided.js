@@ -41,6 +41,11 @@ import {
   loadCompare,
   summarizeCompare,
 } from "./guided/results.js";
+import {
+  loadConservation,
+  loadLiabilities,
+  renderEvidence,
+} from "./guided/evidence.js";
 import { el } from "./guided/dom.js";
 
 // --- 세션 -----------------------------------------------------------------
@@ -173,6 +178,13 @@ async function selectRun(runId) {
     document.getElementById("hitList").replaceChildren(
       el("p", "note", `결과를 불러오지 못했습니다: ${errorText(error)}`));
   });
+  // Evidence 탭도 Results 와 같은 자리에서 따로 채운다. 보존도·리알리티는 산출물
+  // 읽기라 느릴 수 있으므로, await 뒤에서 같은 isStale 술어로 낡은 세대를 막는다.
+  refreshEvidence(runId, { isStale: () => gen !== selectGen }).catch((error) => {
+    if (gen !== selectGen) return;
+    document.getElementById("evidenceView").replaceChildren(
+      el("p", "warn", `근거를 불러오지 못했습니다: ${errorText(error)}`));
+  });
   startPolling(runId, {
     onTick: (info) => {
       if (gen !== selectGen) return;
@@ -192,6 +204,18 @@ async function refreshResults(runId, { isStale = () => false } = {}) {
   const hits = await loadHitList(runId);
   if (isStale()) return;
   renderHitList(document.getElementById("hitList"), hits);
+}
+
+// 근거는 두 산출물(보존도, 리알리티)에서 오며 서로 독립적이다. 병렬로 읽고 한
+// 번만 검사한다 - 둘 중 하나만 낡았을 수는 없다 (같은 세대 토큰을 쓴다).
+// 없는 산출물은 loader 가 null 로 돌려주고 renderEvidence 가 빈 상태를 그린다.
+async function refreshEvidence(runId, { isStale = () => false } = {}) {
+  const [conservation, liabilities] = await Promise.all([
+    loadConservation(runId),
+    loadLiabilities(runId, runState.artifacts || []),
+  ]);
+  if (isStale()) return;
+  renderEvidence(document.getElementById("evidenceView"), { conservation, liabilities });
 }
 
 // 비교 기준 드롭다운은 실행 목록이 바뀔 때마다 다시 채운다. 사용자가 고른 값을
