@@ -541,9 +541,11 @@ if (typeof document !== "undefined") {
 
   // 문헌 검색은 실행과 무관하다 - 런 전환 리셋 대상이 아니므로 Evidence 패널의
   // evidenceView 형제로 두고 여기서 한 번만 연결한다.
+  let literatureGen = 0;
   async function runLiteratureSearch() {
     const host = document.getElementById("literatureBox");
     const query = document.getElementById("literatureInput").value.trim();
+    const gen = ++literatureGen;
     if (!query) {
       renderLiterature(host, { state: "idle" });
       return;
@@ -551,9 +553,11 @@ if (typeof document !== "undefined") {
     renderLiterature(host, { state: "loading" });
     try {
       const out = await requestLiterature(query);
+      if (gen !== literatureGen) return;   // 재검색됨 - 늦게 도착한 결과는 버린다
       const items = Array.isArray(out.items) ? out.items : [];
       renderLiterature(host, items.length ? { state: "done", items } : { state: "empty" });
     } catch (error) {
+      if (gen !== literatureGen) return;
       renderLiterature(host, { state: "error", message: `문헌을 찾지 못했습니다: ${errorText(error)}` });
     }
   }

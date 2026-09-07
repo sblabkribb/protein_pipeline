@@ -70,4 +70,5 @@ test("the facade wires the search form once", () => {
   assert.ok(src.includes("function initLiteratureSearch"));
   assert.ok(src.includes("initLiteratureSearch();"));
   assert.ok(src.includes("literatureForm"));
+  assert.ok(src.includes("literatureGen"), "re-search must discard stale results");
 });

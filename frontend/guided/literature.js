@@ -37,7 +37,7 @@ export function renderLiterature(host, { state = "idle", items = [], message = "
     for (const model of literatureRowModels(items)) {
       const card = el("div", "skill");
       const head = el("div", "cardtitle");
-      if (model.url) {
+      if (model.url && model.url.startsWith("https://")) {
         // identifier 에서 조립된 서버 URL 만 연다 - 임의 href 는 받지 않는다.
         const link = document.createElement("a");
         link.href = model.url;
