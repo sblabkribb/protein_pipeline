@@ -9,6 +9,7 @@ import {
   currentRoute,
   loadRegistry,
   onPurposeChange,
+  renderTemplates,
   renderWeights,
   renderStages,
   state,
@@ -53,6 +54,7 @@ import {
   refreshStructure,
 } from "./guided/structure.js";
 import { renderLiterature, requestLiterature } from "./guided/literature.js";
+import { renderTemplatesTab, requestTemplates, templateCardModels } from "./guided/templates.js";
 import { renderModels, requestModels, modelsTabModels } from "./guided/models.js";
 import { renderConnectionsTab, requestConnections } from "./guided/connections.js";
 import {
@@ -546,13 +548,30 @@ export function showPanel(name) {
   if (name === "structure") onStructurePanelRevealed();
 }
 
+// 템플릿 탭의 진입 액션. 중앙 목표 섹션의 목적을 바꾸고 그 섹션으로 점프한다 —
+// 목적 선택 로직은 중앙 목적 카드의 것(onPurposeChange + 카드 하이라이트 갱신)을
+// 그대로 재사용한다. 검토 섹션은 계획이 생길 때 plan.js 가 showStep 으로 열어
+// 준다. 목표 섹션은 중앙에 항상 보이므로 패널 전환 없려 스크롤로 데려간다.
+function startFromPurpose(purpose) {
+  const select = document.getElementById("purpose");
+  if (select) {
+    select.value = String(purpose || "");
+    onPurposeChange();
+    renderTemplates();
+  }
+  const section = document.getElementById("objectiveSection");
+  if (section && typeof section.scrollIntoView === "function") {
+    section.scrollIntoView({ behavior: "smooth" });
+  }
+}
+
 // --- 좌측 탭 ---------------------------------------------------------------
 //
 // 좌측 탭은 기능 패널을 갈아끼운다. 중앙·우측 워크플로와는 무관하다 -
 // 실행 선택·폴링·계획 흐름을 건드리지 않는다.
 
 export const SIDE_TAB_KEY = "kbf.guided.sidetab";
-const SIDE_TAB_NAMES = ["runs", "models", "connections", "skills", "agents"];
+const SIDE_TAB_NAMES = ["runs", "templates", "models", "connections", "skills", "agents"];
 let sideTabWired = false;
 
 export function showSideTab(name) {
@@ -563,11 +582,15 @@ export function showSideTab(name) {
     tab.setAttribute("aria-selected", String(on));
   }
   document.getElementById("sideRuns").classList.toggle("hidden", wanted !== "runs");
+  document.getElementById("sideTemplates").classList.toggle("hidden", wanted !== "templates");
   document.getElementById("sideModels").classList.toggle("hidden", wanted !== "models");
   document.getElementById("sideConnections").classList.toggle("hidden", wanted !== "connections");
   document.getElementById("sideSkills").classList.toggle("hidden", wanted !== "skills");
   document.getElementById("sideAgents").classList.toggle("hidden", wanted !== "agents");
   localStorage.setItem(SIDE_TAB_KEY, wanted);
+  if (wanted === "templates" && typeof window.__templatesTabLoad === "function") {
+    window.__templatesTabLoad();
+  }
   if (wanted === "models" && typeof window.__modelsTabLoad === "function") {
     window.__modelsTabLoad();
   }
@@ -633,6 +656,28 @@ if (typeof document !== "undefined") {
     });
   }
   initLiteratureSearch();
+
+  // 템플릿 탭은 모델 탭과 같은 list_models 를 쓰지만 카드의 행동("이 목적으로
+  // 시작")이 다르다. 첫 진입 1회 로드·중복 억제·force 재시도 규칙은 모델 탭과
+  // 같다. initSideTabs 의 탭 복원이 이 훅을 부를 수 있으니 먼저 정의한다.
+  window.__templatesTabLoad = (force = false) => {
+    const host = document.getElementById("sideTemplates");
+    if (host.dataset.loaded && !force) return;   // 첫 진입 1회 로드
+    if (host.dataset.loading) return;            // 중복 요청 억제
+    host.dataset.loading = "1";
+    renderTemplatesTab(host, { state: "loading" });
+    requestTemplates().then((payload) => {
+      host.dataset.loaded = "1";
+      delete host.dataset.loading;
+      renderTemplatesTab(host, { state: "done", model: templateCardModels(payload) });
+    }).catch((error) => {
+      delete host.dataset.loading;
+      renderTemplatesTab(host, { state: "error", message: `템플릿을 불러오지 못했습니다: ${errorText(error)}` });
+    });
+  };
+  window.__templatesStart = (purpose) => {
+    startFromPurpose(purpose);
+  };
 
   // 모델 탭은 정적 레지스트리라 첫 진입에 한 번만 읽는다. showSideTab 이 탭이
   // 열릴 때 부르는 훅이다. force 는 실패 화면의 "다시 시도" 가 쓴다.

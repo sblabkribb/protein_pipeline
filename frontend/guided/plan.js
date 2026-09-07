@@ -714,4 +714,4 @@ async function approve() {
   }
 }
 
-export { currentRoute, loadRegistry, onPurposeChange, renderWeights, renderStages, state, generatePlan, approve, sendChat, loadLlmModels, collectObjective, decisionNode, evidenceNode, formatSeconds, stageRow, el, dot, renderConnections };
+export { currentRoute, loadRegistry, onPurposeChange, renderTemplates, renderWeights, renderStages, state, generatePlan, approve, sendChat, loadLlmModels, collectObjective, decisionNode, evidenceNode, formatSeconds, stageRow, el, dot, renderConnections };
