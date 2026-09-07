@@ -252,5 +252,173 @@
       "rule": "게이트 0 와 같은 기준을 쓴다. 백본이 기준에 미달하면 그 타겟은 예비 타겟으로 교체하고, 선정 목록을 다시 뽑지 않는다.",
       "note": "bioemu_target_rmsd_cutoff 2.0 A 는 게이트 0 에서 완화가 필요하다고 이미 기록되어 있다. RFD3 에 같은 문제가 있는지는 확인하지 않았다."
     }
+  },
+  "resolved": {
+    "rule": "freeze 한 교체 규칙을 그대로 따랐다 - 실패한 선정 타겟을 같은 층의 예비로 순서대로 교체하고, 목록을 다시 뽑지 않았다.",
+    "n_targets": 11,
+    "by_stratum": {
+      "50-150": 4,
+      "150-250": 3,
+      "250-400": 4
+    },
+    "targets": [
+      {
+        "domain": "1sh6A02",
+        "split": "cath_train",
+        "length": 230,
+        "superfamily": "1.10.418.10",
+        "pdb": "/opt/protein_pipeline/cath_train/1sh6A02.pdb",
+        "stratum": "150-250",
+        "role": "reserve_substitute",
+        "reserve_rank": 1,
+        "replaces": "2jo7A00"
+      },
+      {
+        "domain": "2je2A00",
+        "split": "cath_val",
+        "length": 157,
+        "superfamily": "3.50.70.20",
+        "pdb": "/opt/protein_pipeline/cath_val/2je2A00.pdb",
+        "stratum": "150-250",
+        "role": "reserve_substitute",
+        "reserve_rank": 2,
+        "replaces": "3es1A01"
+      },
+      {
+        "domain": "2jokA01",
+        "split": "cath_train",
+        "length": 184,
+        "superfamily": "1.10.4120.10",
+        "pdb": "/opt/protein_pipeline/cath_train/2jokA01.pdb",
+        "stratum": "150-250",
+        "role": "selected"
+      },
+      {
+        "domain": "3bqwA01",
+        "split": "cath_train",
+        "length": 347,
+        "superfamily": "3.15.30.10",
+        "pdb": "/opt/protein_pipeline/cath_train/3bqwA01.pdb",
+        "stratum": "250-400",
+        "role": "selected"
+      },
+      {
+        "domain": "3f2pA01",
+        "split": "cath_train",
+        "length": 316,
+        "superfamily": "3.10.170.10",
+        "pdb": "/opt/protein_pipeline/cath_train/3f2pA01.pdb",
+        "stratum": "250-400",
+        "role": "reserve_substitute",
+        "reserve_rank": 2,
+        "replaces": "2pgsA03"
+      },
+      {
+        "domain": "5fwaA02",
+        "split": "cath_train",
+        "length": 339,
+        "superfamily": "2.70.160.11",
+        "pdb": "/opt/protein_pipeline/cath_train/5fwaA02.pdb",
+        "stratum": "250-400",
+        "role": "selected"
+      },
+      {
+        "domain": "5xpdA02",
+        "split": "cath_test",
+        "length": 269,
+        "superfamily": "2.20.28.10",
+        "pdb": "/opt/protein_pipeline/cath_test/5xpdA02.pdb",
+        "stratum": "250-400",
+        "role": "reserve_substitute",
+        "reserve_rank": 1,
+        "replaces": "1vprA02"
+      },
+      {
+        "domain": "1sp0A00",
+        "split": "cath_val",
+        "length": 131,
+        "superfamily": "2.60.370.10",
+        "pdb": "/opt/protein_pipeline/cath_val/1sp0A00.pdb",
+        "stratum": "50-150",
+        "role": "selected"
+      },
+      {
+        "domain": "1tm9A00",
+        "split": "cath_train",
+        "length": 137,
+        "superfamily": "1.10.3960.10",
+        "pdb": "/opt/protein_pipeline/cath_train/1tm9A00.pdb",
+        "stratum": "50-150",
+        "role": "selected"
+      },
+      {
+        "domain": "1vsrA00",
+        "split": "cath_train",
+        "length": 134,
+        "superfamily": "3.40.960.10",
+        "pdb": "/opt/protein_pipeline/cath_train/1vsrA00.pdb",
+        "stratum": "50-150",
+        "role": "selected"
+      },
+      {
+        "domain": "5pc8A00",
+        "split": "cath_train",
+        "length": 115,
+        "superfamily": "1.20.920.10",
+        "pdb": "/opt/protein_pipeline/cath_train/5pc8A00.pdb",
+        "stratum": "50-150",
+        "role": "reserve_substitute",
+        "reserve_rank": 1,
+        "replaces": "2iayA00"
+      }
+    ],
+    "dropped": [
+      {
+        "domain": "1vprA02",
+        "stratum": "250-400",
+        "n_designs": 0
+      },
+      {
+        "domain": "2iayA00",
+        "stratum": "50-150",
+        "n_designs": 0
+      },
+      {
+        "domain": "2jo7A00",
+        "stratum": "150-250",
+        "n_designs": 1
+      },
+      {
+        "domain": "2pgsA03",
+        "stratum": "250-400",
+        "n_designs": 0
+      },
+      {
+        "domain": "3es1A01",
+        "stratum": "150-250",
+        "n_designs": 0
+      },
+      {
+        "domain": "3h7eA02",
+        "stratum": "150-250",
+        "n_designs": 0
+      }
+    ],
+    "unused_reserve": [
+      {
+        "domain": "2yruA01",
+        "stratum": "50-150"
+      }
+    ],
+    "failure_analysis": {
+      "gapped_complete": "1/6 (2je2A00 만 성공)",
+      "gapfree_complete": "11/12",
+      "note": "잔기번호 빈틈은 실패를 강하게 예측하지만 결정적이지는 않다. 선정 12 개에서는 빈틈 5 개가 모두 실패해 1:1 로 보였으나, 예비 2je2A00 (빈틈 13) 이 5 개를 만들어 반례가 됐다.",
+      "modes": {
+        "contig_validation": "RFD3 가 받은 contig 가 구조에 없는 잔기를 가리킨다 (예: A28 not found in atom array). 빈틈 타겟에서 나온다.",
+        "target_rmsd_gate": "생성한 백본이 2.0 A 수용 컷오프를 넘어 버려진다 (2jo7A00: 15 개 중 14 개 기각)."
+      },
+      "runner_status_unreliable": "runner 가 state=completed 를 보고해도 designs 가 0 일 수 있다. 오류는 summary.json 의 errors 에만 있었다. 그래서 designs 파일 수로 판정하도록 고쳤다."
+    }
   }
 }

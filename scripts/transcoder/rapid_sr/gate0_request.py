@@ -50,12 +50,18 @@ _ARM_BACKBONE_CONFIG: dict[str, dict[str, int | bool]] = {
 
 
 def build_gate0_request(pdb_text: str, arm: str, *, seed: int,
-                        stop_after: str = "af2") -> PipelineRequest:
+                        stop_after: str = "af2",
+                        start_from: str | None = None) -> PipelineRequest:
     """게이트 0 의 고정 요청을 만든다.
 
     `stop_after` 기본값은 캠페인이 쓴 "af2" 다. 백본만 만들고 멈추려면 "rfd3" 을
     준다 - 홀드아웃 백본 생성이 그 경로를 쓴다. 기본값을 바꾸지 않으므로 62 타겟
     캠페인의 요청은 그대로다.
+
+    `start_from="rfd3"` 는 MSA 를 건너뛴다. RFD3 는 타겟 구조에 조건을 걸고
+    MSA 를 읽지 않으므로, 백본만 만들 때 MSA 는 순수한 낭비다. 실제로 홀드아웃
+    1 단계의 첫 실행이 mmseqs_msa 에서 50 분 동안 멈춰 있었고 mmseqs 프로세스는
+    아예 없었다. 기본값은 None 이라 캠페인 경로는 그대로다.
     """
     if arm not in GATE0_ARMS:
         raise ValueError(f"unknown gate0 arm: {arm!r}; expected one of {GATE0_ARMS}")
@@ -98,6 +104,7 @@ def build_gate0_request(pdb_text: str, arm: str, *, seed: int,
         wt_compare=False,
         agent_panel_enabled=False,
         stop_after=stop_after,
+        start_from=start_from,
         force=False,
         auto_recover=True,
     )

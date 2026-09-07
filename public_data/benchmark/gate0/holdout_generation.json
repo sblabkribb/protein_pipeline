@@ -1,0 +1,225 @@
+{
+  "phase": "1_backbone_generation",
+  "holdout_spec": "public_data/benchmark/gate0/holdout_targets.json",
+  "composition": {
+    "target": 1,
+    "rfd3": 5
+  },
+  "stop_after": "rfd3",
+  "start_from": "rfd3",
+  "why_skip_msa": "RFD3 는 타겟 구조에 조건을 걸고 MSA 를 읽지 않는다. 첫 시도에서 mmseqs_msa 단계에 50 분 동안 멈춰 있었고 (mmseqs 프로세스는 없었다) MSA 산출물은 비어 있었다. 백본만 만드는 데 MSA 는 낭비다.",
+  "why_stop_after_rfd3": "격자를 따로 채우므로 표준 실행의 16 폴드를 내지 않는다. ColabFold 를 쓰지 않아 다른 폴딩과 경합하지 않는다.",
+  "seed": 20260907,
+  "protocol_fingerprint": {
+    "thresholds": {
+      "soluprot_min": 0.5,
+      "plddt_min": 85.0,
+      "rmsd_max": 2.0
+    },
+    "mpnn_settings": {
+      "use_soluble_model": true,
+      "model_name": "v_48_020",
+      "sampling_temp": 0.1,
+      "seed": 0,
+      "batch_size": 1
+    },
+    "sequences_per_backbone": 16,
+    "topup_sequences": 16,
+    "topup_yield_range": [
+      0.25,
+      0.75
+    ],
+    "tiers": [
+      0.5
+    ],
+    "backbones_per_run": 5,
+    "af2_calls_per_run": 80,
+    "af2_extra_flags": null
+  },
+  "started_utc": "2026-09-07T07:28:46Z",
+  "runs": [
+    {
+      "domain": "1vsrA00",
+      "stratum": "50-150",
+      "length": 134,
+      "run_id": "holdout_1vsrA00_rfd3",
+      "status": "ok",
+      "n_designs": 5,
+      "skipped": true
+    },
+    {
+      "domain": "1sp0A00",
+      "stratum": "50-150",
+      "length": 131,
+      "run_id": "holdout_1sp0A00_rfd3",
+      "status": "ok",
+      "n_designs": 5,
+      "skipped": true
+    },
+    {
+      "domain": "2iayA00",
+      "stratum": "50-150",
+      "length": 110,
+      "run_id": "holdout_2iayA00_rfd3",
+      "started_at": "2026-09-07T16:28:47+0900",
+      "n_designs": 0,
+      "status": "failed",
+      "error": "designs 0/5 - runner 는 완료를 보고했다. summary.json 의 errors 를 본다.",
+      "elapsed_s": 15.1
+    },
+    {
+      "domain": "1tm9A00",
+      "stratum": "50-150",
+      "length": 137,
+      "run_id": "holdout_1tm9A00_rfd3",
+      "status": "ok",
+      "n_designs": 5,
+      "skipped": true
+    },
+    {
+      "domain": "2jo7A00",
+      "stratum": "150-250",
+      "length": 224,
+      "run_id": "holdout_2jo7A00_rfd3",
+      "started_at": "2026-09-07T16:29:02+0900",
+      "error": "BackboneContractError: RFD3 target RMSD gate accepted only 1 backbone(s) for requested 5. Rejected 14 backbone(s) above cutoff 2.000A.",
+      "n_designs": 1,
+      "status": "failed",
+      "elapsed_s": 121.8
+    },
+    {
+      "domain": "3es1A01",
+      "stratum": "150-250",
+      "length": 160,
+      "run_id": "holdout_3es1A01_rfd3",
+      "started_at": "2026-09-07T16:31:04+0900",
+      "n_designs": 0,
+      "status": "failed",
+      "error": "designs 0/5 - runner 는 완료를 보고했다. summary.json 의 errors 를 본다.",
+      "elapsed_s": 15.1
+    },
+    {
+      "domain": "2jokA01",
+      "stratum": "150-250",
+      "length": 184,
+      "run_id": "holdout_2jokA01_rfd3",
+      "status": "ok",
+      "n_designs": 5,
+      "skipped": true
+    },
+    {
+      "domain": "3h7eA02",
+      "stratum": "150-250",
+      "length": 220,
+      "run_id": "holdout_3h7eA02_rfd3",
+      "started_at": "2026-09-07T16:31:19+0900",
+      "n_designs": 0,
+      "status": "failed",
+      "error": "designs 0/5 - runner 는 완료를 보고했다. summary.json 의 errors 를 본다.",
+      "elapsed_s": 15.1
+    },
+    {
+      "domain": "1vprA02",
+      "stratum": "250-400",
+      "length": 344,
+      "run_id": "holdout_1vprA02_rfd3",
+      "started_at": "2026-09-07T16:31:34+0900",
+      "n_designs": 0,
+      "status": "failed",
+      "error": "designs 0/5 - runner 는 완료를 보고했다. summary.json 의 errors 를 본다.",
+      "elapsed_s": 15.1
+    },
+    {
+      "domain": "3bqwA01",
+      "stratum": "250-400",
+      "length": 347,
+      "run_id": "holdout_3bqwA01_rfd3",
+      "status": "ok",
+      "n_designs": 5,
+      "skipped": true
+    },
+    {
+      "domain": "5fwaA02",
+      "stratum": "250-400",
+      "length": 339,
+      "run_id": "holdout_5fwaA02_rfd3",
+      "status": "ok",
+      "n_designs": 5,
+      "skipped": true
+    },
+    {
+      "domain": "2pgsA03",
+      "stratum": "250-400",
+      "length": 382,
+      "run_id": "holdout_2pgsA03_rfd3",
+      "started_at": "2026-09-07T16:31:49+0900",
+      "n_designs": 0,
+      "status": "failed",
+      "error": "designs 0/5 - runner 는 완료를 보고했다. summary.json 의 errors 를 본다.",
+      "elapsed_s": 15.1
+    },
+    {
+      "domain": "5pc8A00",
+      "stratum": "50-150",
+      "length": 115,
+      "run_id": "holdout_5pc8A00_rfd3",
+      "started_at": "2026-09-07T16:32:04+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 30.1
+    },
+    {
+      "domain": "2yruA01",
+      "stratum": "50-150",
+      "length": 118,
+      "run_id": "holdout_2yruA01_rfd3",
+      "started_at": "2026-09-07T16:32:34+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 30.2
+    },
+    {
+      "domain": "1sh6A02",
+      "stratum": "150-250",
+      "length": 230,
+      "run_id": "holdout_1sh6A02_rfd3",
+      "started_at": "2026-09-07T16:33:04+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 30.3
+    },
+    {
+      "domain": "2je2A00",
+      "stratum": "150-250",
+      "length": 157,
+      "run_id": "holdout_2je2A00_rfd3",
+      "started_at": "2026-09-07T16:33:35+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 211.6
+    },
+    {
+      "domain": "5xpdA02",
+      "stratum": "250-400",
+      "length": 269,
+      "run_id": "holdout_5xpdA02_rfd3",
+      "started_at": "2026-09-07T16:37:06+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 60.6
+    },
+    {
+      "domain": "3f2pA01",
+      "stratum": "250-400",
+      "length": 316,
+      "run_id": "holdout_3f2pA01_rfd3",
+      "started_at": "2026-09-07T16:38:07+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 45.4
+    }
+  ],
+  "finished_utc": "2026-09-07T07:38:52Z",
+  "n_ok": 12,
+  "n_failed": 6
+}

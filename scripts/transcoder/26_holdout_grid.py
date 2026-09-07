@@ -71,17 +71,27 @@ def collect_backbones(holdout: dict, generation: dict, output_root: Path) -> lis
     """
     ok_runs = {r["domain"] for r in generation.get("runs", [])
                if r.get("status") == "ok"}
+    # selected 가 아니라 resolved 를 쓴다. 실패한 타겟은 freeze 한 규칙대로
+    # 같은 층의 예비로 교체되어 있고, 그 목록이 resolved 다.
+    resolved = holdout.get("resolved")
+    if not resolved:
+        raise SystemExit(
+            "holdout_targets.json 에 resolved 가 없다. 백본 생성 결과로 타겟을 "
+            "확정한 뒤 격자를 돌린다 - selected 를 그대로 쓰면 백본이 없는 타겟을 "
+            "격자에 넣게 된다."
+        )
     backbones, incomplete = [], []
-    for row in holdout["selected"]:
+    for row in resolved["targets"]:
         domain = row["domain"]
         found = [{"backbone_key": f"{domain}|target|target", "target_id": domain,
                   "backbone_source": "target", "pdb_path": row["pdb"]}]
         if domain in ok_runs:
-            run_dir = output_root / f"holdout_{domain}_rfd3"
-            for index, pdb in enumerate(sorted(run_dir.rglob("*.pdb"))):
-                if "rfd3" not in str(pdb).lower():
-                    continue
-                found.append({"backbone_key": f"{domain}|rfd3|{index}",
+            # 캠페인이 쓰는 자리와 같다 (06_export_gate0_backbones.py:47).
+            # rglob 으로 훑으면 selected.pdb, raw_designs/, input_files/ 까지
+            # 잡혀 5 개가 12 개가 된다.
+            designs = output_root / f"holdout_{domain}_rfd3" / "rfd3" / "designs"
+            for pdb in sorted(designs.glob("*.pdb")):
+                found.append({"backbone_key": f"{domain}|rfd3|{pdb.stem}",
                               "target_id": domain, "backbone_source": "rfd3",
                               "pdb_path": str(pdb)})
         expected = 1 + int(holdout["backbone_plan"]["composition"]["rfd3"])
@@ -196,6 +206,9 @@ def main(argv=None) -> int:
     parser.add_argument("--soluprot-url", default="http://127.0.0.1:18081/score")
     parser.add_argument("--mpnn-timeout", type=float, default=1800.0)
     parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--min-complete-targets", type=int, default=8,
+                        help="백본이 6 개 다 있는 타겟이 이보다 적으면 거부한다. "
+                             "분석 spec 의 최소 정보 클러스터 수와 같다.")
     parser.add_argument("--skip-generation", action="store_true",
                         help="sequences.csv 가 이미 있으면 서열 생성을 건너뛴다")
     args = parser.parse_args(argv)
@@ -213,6 +226,19 @@ def main(argv=None) -> int:
         print("구성이 안 맞는 타겟 (조용히 줄이지 않는다):")
         for row in incomplete:
             print(f"  {row['domain']}: {row['found']}/{row['expected']}")
+
+    # 백본 생성이 실패한 채로 격자를 돌리면 native 만 접고 몇 시간을 태운다.
+    # 분석이 성립하지 않을 조합이면 아예 시작하지 않는다.
+    n_targets = len({bb["target_id"] for bb in backbones})
+    complete = n_targets - len(incomplete)
+    if complete < args.min_complete_targets:
+        raise SystemExit(
+            f"백본 6 개가 다 있는 타겟이 {complete} 개뿐이다 "
+            f"(최소 {args.min_complete_targets}). 1 단계를 먼저 마치거나 "
+            f"예비 타겟으로 교체한다 (25_... --use-reserve N). "
+            f"이 상태로 격자를 돌리면 분석이 성립하지 않는다."
+        )
+    print(f"백본 6 개가 온전한 타겟 {complete}/{n_targets}")
 
     seq_csv = GRID / "sequences.csv"
     if args.skip_generation and seq_csv.exists():
