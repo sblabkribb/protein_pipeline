@@ -54,6 +54,7 @@ import {
 } from "./guided/structure.js";
 import { renderLiterature, requestLiterature } from "./guided/literature.js";
 import { renderModels, requestModels, modelsTabModels } from "./guided/models.js";
+import { renderConnectionsTab, requestConnections } from "./guided/connections.js";
 import { el } from "./guided/dom.js";
 import { shouldRestoreStoredSession } from "./lib/auth.js";
 
@@ -539,7 +540,7 @@ export function showPanel(name) {
 // 실행 선택·폴링·계획 흐름을 건드리지 않는다.
 
 export const SIDE_TAB_KEY = "kbf.guided.sidetab";
-const SIDE_TAB_NAMES = ["runs", "models"];
+const SIDE_TAB_NAMES = ["runs", "models", "connections"];
 let sideTabWired = false;
 
 export function showSideTab(name) {
@@ -551,9 +552,13 @@ export function showSideTab(name) {
   }
   document.getElementById("sideRuns").classList.toggle("hidden", wanted !== "runs");
   document.getElementById("sideModels").classList.toggle("hidden", wanted !== "models");
+  document.getElementById("sideConnections").classList.toggle("hidden", wanted !== "connections");
   localStorage.setItem(SIDE_TAB_KEY, wanted);
   if (wanted === "models" && typeof window.__modelsTabLoad === "function") {
     window.__modelsTabLoad();
+  }
+  if (wanted === "connections" && typeof window.__connectionsTabLoad === "function") {
+    window.__connectionsTabLoad();
   }
 }
 
@@ -626,6 +631,25 @@ if (typeof document !== "undefined") {
     }).catch((error) => {
       delete host.dataset.loading;
       renderModels(host, { state: "error", message: `레지스트리를 불러오지 못했습니다: ${errorText(error)}` });
+    });
+  };
+
+  // 연결 탭은 레지스트리와 달리 매번 실측이 바뀔 수 있지만 탭 진입 비용이
+  // 크므로 첫 진입 1회 로드로 충분하다. force 는 실패 화면의 "다시 시도" 가 쓴다.
+  // models 탭 훅과 마찬가지로 initSideTabs 의 탭 복원이 부를 수 있으니 먼저 정의한다.
+  window.__connectionsTabLoad = (force = false) => {
+    const host = document.getElementById("sideConnections");
+    if (host.dataset.loaded && !force) return;   // 첫 진입 1회 로드
+    if (host.dataset.loading) return;            // 중복 요청 억제
+    host.dataset.loading = "1";
+    renderConnectionsTab(host, { state: "loading" });
+    requestConnections().then((payload) => {
+      host.dataset.loaded = "1";
+      delete host.dataset.loading;
+      renderConnectionsTab(host, { state: "done", data: payload });
+    }).catch((error) => {
+      delete host.dataset.loading;
+      renderConnectionsTab(host, { state: "error", message: `확인하지 못했습니다: ${errorText(error)}` });
     });
   };
 
