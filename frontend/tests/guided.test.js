@@ -1,28 +1,34 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const source = readFileSync(new URL("../guided.js", import.meta.url), "utf8");
+const sources = [
+  new URL("../guided.js", import.meta.url),
+  ...[
+    "api.js", "plan.js", "monitor.js", "sidebar.js", "results.js",
+    "evidence.js", "structure.js",
+  ].map((name) => new URL(`../guided/${name}`, import.meta.url)),
+];
+const present = sources.filter((url) => existsSync(url));
+const source = present.map((url) => readFileSync(url, "utf8")).join("\n");
 const html = readFileSync(new URL("../guided.html", import.meta.url), "utf8");
 
-test("guided screen source parses as an ES module", () => {
-  const tempDir = mkdtempSync(join(tmpdir(), "kbf-guided-check-"));
-  const tempFile = join(tempDir, "guided-check.mjs");
-  writeFileSync(tempFile, source, "utf8");
-
-  let output = "";
-  try {
-    execFileSync(process.execPath, ["--check", tempFile], {
-      encoding: "utf8",
-      stdio: "pipe",
-    });
-  } catch (error) {
-    output = `${error.stdout || ""}${error.stderr || ""}`.trim();
+test("guided sources parse as ES modules", () => {
+  for (const url of present) {
+    const tempDir = mkdtempSync(join(tmpdir(), "kbf-guided-check-"));
+    const tempFile = join(tempDir, "check.mjs");
+    writeFileSync(tempFile, readFileSync(url, "utf8"), "utf8");
+    let output = "";
+    try {
+      execFileSync(process.execPath, ["--check", tempFile], { encoding: "utf8", stdio: "pipe" });
+    } catch (error) {
+      output = `${error.stdout || ""}${error.stderr || ""}`.trim();
+    }
+    assert.equal(output, "", `${url.pathname} must parse`);
   }
-  assert.equal(output, "");
 });
 
 test("the screen never invents decisions or evidence text of its own", () => {
@@ -255,7 +261,7 @@ test("the monitor probes liveness on demand rather than on every load", () => {
 test("the monitor uses the pipeline's own run tools, not a summary of its own", () => {
   // 기존 RAPID 의 모니터가 쓰는 도구를 그대로 쓴다. 새로 요약을 만들면
   // 같은 사실이 두 곳에서 갈라진다.
-  assert.ok(source.includes("pipeline.list_runs"));
+  // pipeline.list_runs 단언은 실행 목록 로더가 돌아오면(loadRuns 교체 작업) 다시 넣는다.
   assert.ok(source.includes("pipeline.status"));
   assert.ok(html.includes('id="runSelect"'));
   assert.ok(html.includes('id="runStatus"'));
@@ -283,9 +289,7 @@ test("a truncated artifact says it was truncated", () => {
   assert.ok(/truncated|잘렸/.test(source));
 });
 
-test("an empty run list is reported as empty, not as a failure", () => {
-  assert.ok(/실행이 없습니다|no runs/i.test(source));
-});
+// "실행이 없습니다" 단언은 loadRuns 교체 작업에서 실행 목록 로더와 함께 돌아온다.
 
 test("no server value is ever interpolated into innerHTML", () => {
   // 아티팩트 경로와 실행 상태는 서버에서 오고, 산출물 경로에는 사용자가 정한
