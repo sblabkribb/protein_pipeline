@@ -43,6 +43,8 @@ guided 콘솔의 좌측 레일은 실행 목록 + 운영 링크만 있다. Ditto
     models: [{id, endpoint_summary, portal_only}] }
   ```
   - objectives 상태 판정: `measurable_objectives` ⊂ measured, `runnable_but_unvalidated_objectives` ⊂ unvalidated. KNOWN 목적 목록은 응답의 목적 라우팅에서 수집(하드코딩하지 않음 — 레지스트리가 진실).
+  - **구현 확정(승인된 편차)**: 목표(objectives) 어휘는 프런트에 `objective_planner.KNOWN_OBJECTIVES` 미러 8키를 둔다 — `list_models`가 전체 목표 어휘를 노출하지 않아 "평가자 없음" 상태는 페이로드만으로 도달 불가. 페이로드의 알 수 없는 목표도 병합되므로 신규 목표는 정상 표시된다. 후속 과제: `list_models`에 `objective_status`(또는 known_objectives) 노출 → 페이로드 기반으로 전환.
+  - **와이어 필드**: `ModelEntry.to_dict()`는 `extra`를 최상위로 평탄화하므로 포털 전용 판정은 `item.access`를 읽는다.
 - 순수: 렌더는 `renderModels(host, {state: "idle"|"loading"|"done"|"error", model, message})`.
 - DOM 블록 3개: (1) 설계 목적 경로 카드(목적명 + 실행가능/검증됨 칩), (2) 목표별 평가자 상태(상태 칩 3색: 측정됨 okchip / 미검증 warnchip / 평가자 없음 chip), (3) 모델 카탈로그(모델명 + 엔드포인트 요약 + 포털 전용 칩).
 - API: `requestModels()` → `callTool("pipeline.list_models", {})`, `out.error` → throw.
