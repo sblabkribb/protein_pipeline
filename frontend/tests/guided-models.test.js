@@ -25,7 +25,9 @@ const PAYLOAD = {
   models: {
     mpnn_soluble: { endpoint: "bop:proteinmpnn", display_name: "ProteinMPNN soluble" },
     thermomp_ddg: { endpoint: "http://x:18114", display_name: "ThermoMPNN ddG",
-                    extra: { access: { portal_mcp: true } } },
+                    access: { portal_mcp: true } },
+    binder_ab: { endpoint: "http://y:18114", display_name: "BinderAB",
+                 access: { portal_mcp: true, direct_client: true } },
   },
   measurable_objectives: ["solubility", "structural_preservation", "diversity"],
   runnable_but_unvalidated_objectives: ["stability", "developability"],
@@ -38,7 +40,10 @@ test("modelsTabModels classifies objectives into three states", () => {
   assert.equal(byKey.stability, "unvalidated");
   assert.equal(byKey.activity, "none");
   assert.ok(model.purposes[0].validated);
+  // 접근 정보는 평탄화된 item.access 로 온다 (ModelEntry.to_dict). 포털 전용만
+  // 포털 칩이 붙고, direct_client 도 열려 있으면 칩이 없다.
   assert.equal(model.models[1].portalOnly, true);
+  assert.equal(model.models[2].portalOnly, false);
   assert.equal(model.models[0].portalOnly, false);
 });
 
@@ -71,5 +76,7 @@ test("renderModels paints loading and error with retry", () => {
 test("the facade loads the models tab on first entry", () => {
   const src = readFileSync(new URL("../guided.js", import.meta.url), "utf8");
   assert.ok(src.includes("__modelsTabLoad"), "shell hook must be filled");
+  assert.ok(src.indexOf("__modelsTabLoad = ") < src.indexOf("initSideTabs();"),
+            "the hook must exist before init restores the last tab");
   assert.ok(src.includes('from "./guided/models.js"'));
 });

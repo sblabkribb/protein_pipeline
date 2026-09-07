@@ -37,7 +37,9 @@ export function modelsTabModels(payload) {
     })),
     models: Object.entries(data.models || {}).map(([id, m]) => {
       const item = m && typeof m === "object" ? m : {};
-      const access = (item.extra && item.extra.access) || {};
+      // ModelEntry.to_dict() 는 extra 를 상위로 평탄화해 보낸다 (model_routing.py).
+      // 그래서 접근 정보는 item.extra.access 가 아니라 item.access 다.
+      const access = item.access || {};
       return {
         id: String(id),
         name: String(item.display_name || id),

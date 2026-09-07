@@ -608,10 +608,11 @@ if (typeof document !== "undefined") {
     });
   }
   initLiteratureSearch();
-  initSideTabs();
 
   // 모델 탭은 정적 레지스트리라 첫 진입에 한 번만 읽는다. showSideTab 이 탭이
   // 열릴 때 부르는 훅이다. force 는 실패 화면의 "다시 시도" 가 쓴다.
+  // initSideTabs 가 마지막 탭을 복원하며 이 훅을 부를 수 있으므로 훅이 먼저
+  // 존재해야 한다 - 순서가 바뀌면 복원된 모델 탭은 토글 전까지 빈 채로 남는다.
   window.__modelsTabLoad = (force = false) => {
     const host = document.getElementById("sideModels");
     if (host.dataset.loaded && !force) return;   // 첫 진입 1회 로드
@@ -627,6 +628,8 @@ if (typeof document !== "undefined") {
       renderModels(host, { state: "error", message: `레지스트리를 불러오지 못했습니다: ${errorText(error)}` });
     });
   };
+
+  initSideTabs();
 
   renderWeights(document.getElementById("weights"));
   renderStages(document.getElementById("stages"), null);
