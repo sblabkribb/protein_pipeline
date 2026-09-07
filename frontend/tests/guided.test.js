@@ -200,9 +200,12 @@ test("template cards show whether a route is executable and validated", () => {
 });
 
 test("the screen shares the product's design tokens instead of its own palette", () => {
-  // 이 화면은 어두운 GitHub 팔레트 복제였다. 같은 제품인데 다른 물건처럼 보였다.
+  // 어두운 GitHub 팔레트 복제였고, 같은 제품인데 다른 물건처럼 보였다.
+  // 2026-09 A안 리프트로 제품 타이포를 Pretendard + JetBrains Mono 로 통일했다.
   const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
-  assert.ok(css.includes("Instrument Sans"), "must use the product's typeface");
+  assert.ok(css.includes("Pretendard"), "must use the product's typeface");
+  assert.ok(css.includes("JetBrains Mono"), "numeric data uses the mono face");
+  assert.ok(!css.includes("Spectral"), "the serif display face is retired");
   assert.ok(css.includes("oklch("), "must use the product's colour space");
   assert.ok(!/#0d1117|#131a24|#3b82f6/.test(css), "the GitHub-clone palette must be gone");
 });

@@ -2,14 +2,20 @@
    이 화면은 원래 어두운 GitHub 팔레트 복제였고, 그래서 같은 제품인데 다른
    물건처럼 보였다. 색은 새로 만들지 않고 본체 토큰을 가져온다.
 
+   2026-09 승인된 A안 리프트 — Pretendard + JetBrains Mono.
+   본문/UI는 Pretendard Variable(셀프호스팅), 숫자/경로/코드는 JetBrains Mono.
+   세리프 제목 폰트는 폐지하고 모든 제목을 Pretendard 700 으로 통일했다.
    위에 얹는 체계는 하나뿐이다: 근거 강도.
      측정        -> --measured
      가정/미검증  -> --assumed
      미측정/차단  -> --absent
    이 셋은 화면 어디서든 각각 한 가지만 뜻한다. 그 외의 색은 쓰지 않는다. */
-@import url(
-  "https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=Spectral:wght@400;600&display=swap"
-);
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap");
+@font-face {
+  font-family: "Pretendard Variable";
+  src: url("./PretendardVariable.woff2") format("woff2-variations");
+  font-weight: 45 920; font-style: normal; font-display: swap;
+}
 
 :root {
   --canvas: oklch(98.5% 0.002 247.839);
@@ -21,6 +27,7 @@
   --rule: rgba(24, 41, 46, 0.12);
   --action: oklch(51.1% 0.096 186.391);
   --action-hover: oklch(43.7% 0.078 188.216);
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* 근거 강도. 본체가 이미 쓰는 값이라 배지의 뜻이 화면 사이에서 갈리지 않는다.
      본체 값(amber 3.06:1, coral 3.46:1)은 흰 배경의 작은 글자에서 AA 4.5 를
@@ -40,12 +47,13 @@ body {
   margin: 0;
   background: var(--canvas);
   color: var(--body);
-  font: 400 14px/1.6 "Instrument Sans", system-ui, sans-serif;
+  font: 400 13.5px/1.6 "Pretendard Variable", Pretendard, system-ui, sans-serif;
+  letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
 }
 
 /* 숫자는 자릿수를 맞춰 비교한다. CI 와 비용을 눈으로 대조하는 화면이다. */
-.chip, .meta, output, pre, .apath, .unit, input[type=number] {
+.meta, output, pre, .apath, .unit, input[type=number] {
   font-variant-numeric: tabular-nums;
 }
 
@@ -58,7 +66,7 @@ body {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 22px; background: var(--panel); border-bottom: 1px solid var(--rule);
 }
-.brand b { font-family: "Spectral", serif; font-size: 17px; color: var(--ink); }
+.brand b { font-weight: 700; font-size: 17px; color: var(--ink); }
 .brand span { color: var(--quiet); font-size: 13px; margin-left: 10px; }
 .badges { display: flex; gap: 8px; align-items: center; }
 .badge {
@@ -72,9 +80,9 @@ body {
   display: grid; grid-template-columns: 264px 6px minmax(0, 1fr) 6px 340px;
   height: calc(100vh - 57px);
 }
-.side { padding: 20px 18px; overflow-y: auto; background: var(--muted); border-right: 1px solid var(--rule); }
+.side { padding: 20px 16px; overflow-y: auto; background: var(--muted); border-right: 1px solid var(--rule); }
 .side.right { border-right: 0; border-left: 1px solid var(--rule); }
-.center { padding: 22px 30px 72px; overflow-y: auto; }
+.center { padding: 20px 26px 64px; overflow-y: auto; }
 
 /* --- 좌측 탭 -------------------------------------------------------------- */
 .sidetabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin-bottom: 14px; }
@@ -89,7 +97,7 @@ body {
 /* 네 좌측 탭(모델/연결/스킬/에이전트)의 카드는 제목과 본문을 세로로 쌓는다.
    .skill 의 전역 flex row 규칙과 섞이면 좁은 레일에서 본문이 제목 옆으로 짜여
    글자가 겹친다 - councilbox/literaturebox 와 같은 이유, 같은 처방. */
-.modelstab .skill { display: block; padding: 8px 10px; }
+.modelstab .skill { display: block; padding: 9px 11px; }
 
 /* 화면이 좁아지면 레일을 접어 세로로 쌓는다. */
 @media (max-width: 1100px) {
@@ -99,7 +107,7 @@ body {
 }
 
 h2 {
-  font-family: "Spectral", serif; font-weight: 600; font-size: 19px;
+  font-weight: 700; font-size: 15px; letter-spacing: -0.01em;
   color: var(--ink); margin: 0 0 6px; display: flex; align-items: baseline; gap: 10px;
   text-wrap: balance;
 }
@@ -108,10 +116,10 @@ h2 {
 .stepno {
   flex: 0 0 auto; width: 21px; height: 21px; border-radius: 999px;
   display: inline-grid; place-items: center; align-self: center;
-  font-family: "Instrument Sans", sans-serif; font-size: 12px; font-weight: 600;
+  font-size: 12px; font-weight: 600;
   color: var(--quiet); background: var(--muted); border: 1px solid var(--rule);
 }
-h3 { font-size: 13px; font-weight: 600; color: var(--ink); margin: 0 0 6px; }
+h3 { margin: 14px 0 6px; font-size: 12px; font-weight: 650; color: var(--ink); }
 .meta { margin-left: auto; font-size: 12px; font-weight: 400; color: var(--quiet); }
 
 /* 한 번에 한 단계만 보여준다. 네 단계를 세로로 이어붙이면 아래로 계속 읽어야
@@ -142,11 +150,19 @@ label { display: flex; align-items: center; justify-content: space-between; gap:
 .fields { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--rule); }
 input[type=number], input[type=text], select {
   padding: 5px 8px; background: var(--panel); color: var(--ink);
-  border: 1px solid var(--rule); border-radius: 6px; font: inherit;
+  border: 1px solid var(--rule); border-radius: 8px; font: inherit;
 }
 input[type=number] { width: 92px; }
 input[type=range] { width: 108px; accent-color: var(--action); }
 output { width: 36px; text-align: right; color: var(--quiet); font-size: 12px; }
+
+/* 숫자·경로·코드는 모노로 읽는다. 텍스트 칩(검증됨 등)은 Pretendard 를 유지한다 -
+   .chip 은 숫자 칩(비용 시간, 파일 크기)과 텍스트 칩이 같이 쓰는 클래스라 여기에
+   넣지 않는다. 모노는 값이 모이는 자리(costvalue)에만 명시한다. */
+pre, .apath, .unit, output, input[type=number], .costvalue {
+  font-family: var(--mono);
+  font-size: 0.95em;
+}
 
 :where(button, select, input, a):focus-visible {
   outline: 2px solid var(--action); outline-offset: 2px;
@@ -155,13 +171,13 @@ button { touch-action: manipulation; }
 
 .primary {
   padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer;
-  color: #fff; background: var(--action); border: 1px solid transparent; border-radius: 7px;
+  color: #fff; background: var(--action); border: 1px solid transparent; border-radius: 8px;
 }
 .primary:hover:not(:disabled) { background: var(--action-hover); }
 .primary:disabled { opacity: .45; cursor: not-allowed; }
 .ghost {
   padding: 5px 11px; font: inherit; font-size: 12px; cursor: pointer;
-  color: var(--body); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px;
+  color: var(--body); background: var(--panel); border: 1px solid var(--rule); border-radius: 8px;
 }
 .ghost:hover:not(:disabled) { border-color: var(--action); color: var(--action); }
 .ghost:disabled { opacity: .5; cursor: not-allowed; }
@@ -174,7 +190,7 @@ button { touch-action: manipulation; }
   display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
   padding: 9px 11px; font: inherit; font-size: 13px; cursor: pointer;
   color: var(--body); background: var(--panel);
-  border: 1px solid var(--rule); border-left: 3px solid var(--rule); border-radius: 7px;
+  border: 1px solid var(--rule); border-left: 3px solid var(--rule); border-radius: 8px;
 }
 .card:hover { border-color: color-mix(in oklch, var(--action) 40%, var(--rule)); }
 .card.is-active {
@@ -201,7 +217,7 @@ button { touch-action: manipulation; }
 .stage > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--measured); flex: 0 0 auto; }
 .dot.off { background: var(--rule); }
-.chip { flex: 0 0 auto; font-size: 12px; color: var(--quiet); }
+.chip { flex: 0 0 auto; font-size: 10.5px; padding: 2px 8px; color: var(--quiet); }
 .stage .chip ~ .chip { margin-left: 8px; }
 .warnchip { color: var(--assumed-ink); border: 1px solid color-mix(in oklch, var(--assumed) 45%, transparent); border-radius: 999px; padding: 0 7px; }
 /* 상단바 실행 상태 칩. 색은 근거 체계를 따른다 - 완료는 측정(measured),
@@ -213,7 +229,7 @@ button { touch-action: manipulation; }
 .status { margin-left: 10px; font-size: 12px; color: var(--quiet); }
 .status.bad { color: var(--absent-ink); }
 .callout, .warn {
-  margin: 10px 0; padding: 9px 12px; font-size: 13px; border-radius: 7px;
+  margin: 10px 0; padding: 9px 12px; font-size: 13px; border-radius: 8px;
   border: 1px solid color-mix(in oklch, var(--assumed) 40%, transparent);
   background: color-mix(in oklch, var(--assumed) 8%, var(--panel));
   color: var(--ink);
@@ -226,7 +242,7 @@ button { touch-action: manipulation; }
 .explainhead { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .genbadge { font-size: 11px; color: var(--quiet); }
 #explainText { margin: 0; max-width: 62ch; }
-.q { margin: 8px 0; padding: 8px 10px; font-size: 13px; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
+.q { margin: 8px 0; padding: 8px 10px; font-size: 13px; background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; }
 .qfield { font-weight: 600; margin-right: 6px; }
 .qwhy { display: block; margin-top: 4px; font-size: 11.5px; color: var(--quiet); }
 
@@ -244,7 +260,7 @@ button { touch-action: manipulation; }
 .evidence { margin-top: 10px; }
 .evidence summary { cursor: pointer; font-size: 12.5px; color: var(--quiet); }
 .evidence summary:hover { color: var(--action); }
-.ev { margin: 8px 0; padding: 8px 10px; font-size: 12.5px; background: var(--muted); border-radius: 6px; }
+.ev { margin: 8px 0; padding: 8px 10px; font-size: 12.5px; background: var(--muted); border-radius: 8px; }
 .kind { display: inline-block; margin-right: 7px; padding: 1px 7px; font-size: 11px; border-radius: 999px; border: 1px solid; }
 .kind-internal_measurement { color: var(--measured-ink); border-color: color-mix(in oklch, var(--measured) 40%, transparent); }
 .kind-literature { color: var(--action); border-color: color-mix(in oklch, var(--action) 40%, transparent); }
@@ -255,20 +271,20 @@ button { touch-action: manipulation; }
 pre {
   margin: 10px 0 0; padding: 11px 13px; max-height: 320px; overflow: auto;
   font-size: 11.5px; line-height: 1.55; white-space: pre-wrap; word-break: break-all;
-  background: var(--muted); border: 1px solid var(--rule); border-radius: 7px; color: var(--body);
+  background: var(--muted); border: 1px solid var(--rule); border-radius: 8px; color: var(--body);
 }
 
 /* --- 우측: 실행 / 결과 / 연결 -------------------------------------------- */
 .monitorhead { display: flex; gap: 6px; margin-bottom: 10px; }
 .monitorhead select { flex: 1; min-width: 0; }
-.skill { display: flex; align-items: center; gap: 9px; margin: 6px 0; font-size: 13px; }
+.skill { display: flex; align-items: center; gap: 9px; margin: 6px 0; padding: 9px 11px; font-size: 13px; }
 .skill > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conns { margin-bottom: 10px; }
 
 .artifact {
   display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
   padding: 6px 9px; margin: 3px 0; font: inherit; font-size: 12px; cursor: pointer;
-  color: var(--body); background: var(--panel); border: 1px solid var(--rule); border-radius: 6px;
+  color: var(--body); background: var(--panel); border: 1px solid var(--rule); border-radius: 8px;
 }
 .artifact:hover { border-color: var(--action); color: var(--action); }
 /* 긴 경로는 끝이 중요하다. 뒤를 자르면 파일명이 사라진다. */
@@ -312,7 +328,7 @@ pre {
   box-shadow: 0 1px 2px rgba(24, 41, 46, .04), 0 12px 32px -12px rgba(24, 41, 46, .16);
 }
 .gatecard h1 {
-  margin: 0; font-family: "Spectral", serif; font-weight: 600;
+  margin: 0; font-weight: 700;
   font-size: 30px; letter-spacing: -.01em; color: var(--ink);
 }
 .gatecard .lede { margin: 8px 0 24px; color: var(--quiet); font-size: 13.5px; text-wrap: pretty; }
@@ -329,7 +345,7 @@ pre {
 .field { display: block; margin: 0 0 14px; font-size: 13px; color: var(--body); }
 textarea {
   display: block; width: 100%; margin-top: 6px; padding: 10px 12px; resize: vertical;
-  font: 400 12.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: .01em;
+  font: 400 12.5px/1.6 var(--mono);
   color: var(--ink); background: var(--canvas);
   border: 1px solid var(--rule); border-radius: 8px;
 }
@@ -341,10 +357,10 @@ textarea:focus { background: var(--panel); }
    몰아주고 나머지는 조용히 둔다. */
 .viewer3d {
   height: 320px; background: oklch(21% 0.02 250);
-  border: 0; border-radius: 10px;
+  border: 0; border-radius: 8px;
   box-shadow: 0 1px 2px rgba(24, 41, 46, .06), 0 18px 40px -20px rgba(24, 41, 46, .35);
 }
-.previewhead { font-family: ui-monospace, Menlo, monospace; }
+.previewhead { font-family: var(--mono); }
 
 /* 상단 바를 조금 더 단단하게 */
 .topbar { position: sticky; top: 0; z-index: 5; }
@@ -415,10 +431,10 @@ body.dragging iframe, body.dragging canvas { pointer-events: none; }
 }
 .stagetitle {
   flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; color: var(--quiet);
+  font-family: var(--mono); font-size: 12.5px; color: var(--quiet);
 }
 .stagebody { flex: 1; min-height: 0; padding: 20px; }
-.viewer3d-lg { height: 100%; border-radius: 12px; }
+.viewer3d-lg { height: 100%; border-radius: 8px; }
 .previewhead { display: flex; align-items: center; gap: 10px; }
 .previewhead > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
@@ -448,11 +464,11 @@ body.dragging iframe, body.dragging canvas { pointer-events: none; }
 
 .proposals { margin: 10px 0; display: grid; gap: 6px; }
 .councilbox { display: grid; gap: 8px; margin-top: 6px; }
-.councilbox .skill { display: block; padding: 10px 12px; }
+.councilbox .skill { display: block; padding: 9px 11px; }
 .proposal {
   display: flex; align-items: center; gap: 10px; padding: 8px 11px; font-size: 13px;
   background: color-mix(in oklch, var(--action) 6%, var(--panel));
-  border: 1px solid color-mix(in oklch, var(--action) 25%, transparent); border-radius: 7px;
+  border: 1px solid color-mix(in oklch, var(--action) 25%, transparent); border-radius: 8px;
 }
 .proposal .name { font-weight: 600; color: var(--ink); }
 .proposal .chip { margin-left: 0; }
@@ -471,14 +487,13 @@ body.dragging iframe, body.dragging canvas { pointer-events: none; }
 .literatureform { display: flex; gap: 8px; margin: 8px 0; }
 .literatureform input { flex: 1; min-width: 0; padding: 8px 11px; }
 .literaturebox { display: grid; gap: 8px; }
-.literaturebox .skill { display: block; padding: 8px 10px; }
+.literaturebox .skill { display: block; padding: 9px 11px; }
 .lit-title { color: var(--ink); }
 
 /* --- B안 단일화면 ------------------------------------------------------- */
 .plan-section { padding: 14px 16px 20px; border-bottom: 1px solid var(--rule); }
 .plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .runheader { display: flex; gap: 8px; align-items: center; flex: 1; }
-.runheader .chip { font-size: 12px; }
 .runlist { display: flex; flex-direction: column; gap: 4px; max-height: 46vh; overflow: auto; }
 .runlist .run-item { display: flex; flex-direction: column; gap: 2px; text-align: left;
   background: transparent; border: 1px solid var(--rule); border-radius: 8px;
