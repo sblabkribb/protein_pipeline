@@ -203,7 +203,14 @@ button { touch-action: manipulation; }
   background: color-mix(in oklch, var(--action) 6%, var(--panel));
   color: var(--ink); font-weight: 500;
 }
-.cardtitle { flex: 1; min-width: 0; }
+/* 사이드 탭 카드 머리. 이름 왼쪽, 상태 칩 오른쪽 — 인라인 흐름에 맡기지 않는다.
+   flex:1 1 auto 는 블록 부모에선 죽은 값이지만, 목적 카드(plan.js)의 .card 처럼
+   flex 부모에서는 cardmarks 를 오른쪽 끝으로 밀어 내는 살아있는 규칙이다. */
+.cardtitle { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.cardtitle .name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 모델 탭의 단계 칩 줄. 긴 칩은 줄을 바꾸되 단어 중간에 끊기지 않게 한다. */
+.stagesline { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.stagesline .chip { font-size: 10px; padding: 1px 7px; }
 .cardmarks { flex: 0 0 auto; }
 
 /* 근거 강도. 세 값만 쓰고, 각각 한 가지만 뜻한다. */
@@ -289,7 +296,7 @@ pre {
 /* Ditto 의 kv 행 — 라벨은 잔잔히, 값은 모노로. 사이드 탭 카드의 상세에 쓴다. */
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 11.5px; margin: 4px 0 0; }
 .kv dt { color: var(--quiet); }
-.kv dd { margin: 0; font-family: var(--mono); font-size: 11px; word-break: break-all; }
+.kv dd { margin: 0; font-family: var(--mono); font-size: 11px; overflow-wrap: anywhere; }
 .sdot { width: 7px; height: 7px; border-radius: 999px; display: inline-block; background: var(--quiet); }
 .sdot.ok { background: var(--measured); }
 .sdot.warn { background: var(--assumed-ink); }

@@ -137,9 +137,31 @@ test("renderModels paints the stages line with warn dots on unvalidated stages",
   const host = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
   renderModels(host, { state: "done", model: modelsTabModels(STATUS_PAYLOAD) });
   const html = JSON.stringify(host.children);
-  assert.ok(html.includes("msa(mmseqs2)"), "stage chips show stage(model)");
-  assert.ok(html.includes("soluprot(soluprot)"));
+  // 칩에는 스테이지 이름만, 모델 id 는 title 로 - 긴 칩이 좁은 레일을 밀지 않게.
+  assert.ok(html.includes('"textContent":"msa"') && html.includes('"title":"mmseqs2"'),
+            "stage chips show the stage name and carry the model id as title");
+  assert.ok(html.includes('"title":"soluprot"'));
   assert.ok(html.includes("sdot warn"), "unvalidated stages carry a warn dot");
+});
+
+test("purpose rows prefer the Korean display name and keep the raw key as a chip", () => {
+  const model = modelsTabModels({ purposes: [
+    { purpose: "monomer_solubility_redesign", display_name_ko: "단일체 용해도 리디자인",
+      executable: true, validated: true },
+    { purpose: "binder_design", executable: true, validated: false },
+  ] });
+  assert.equal(model.purposes[0].name, "단일체 용해도 리디자인");
+  assert.equal(model.purposes[0].key, "monomer_solubility_redesign");
+  // display_name_ko 가 없으면 영어 키가 이름 대신 쓰인다 - 칩은 겹치지 않게.
+  assert.equal(model.purposes[1].name, "binder_design");
+  const host = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
+  renderModels(host, { state: "done", model });
+  const html = JSON.stringify(host.children);
+  assert.ok(html.includes("단일체 용해도 리디자인"));
+  assert.equal(html.split("monomer_solubility_redesign").length - 1, 1,
+               "the raw key appears once as a chip, not as the card name");
+  assert.equal(html.split("binder_design").length - 1, 1,
+               "key === name rows do not repeat the key as a chip");
 });
 
 test("renderModels paints purpose cards, objective chips and model rows", () => {

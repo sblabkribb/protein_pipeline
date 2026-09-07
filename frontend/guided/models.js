@@ -78,7 +78,9 @@ function purposeRows(data) {
   return (Array.isArray(data.purposes) ? data.purposes : [])
     .filter((p) => p && typeof p === "object")
     .map((p) => ({
-      purpose: String(p.purpose || ""),
+      // 화면 이름은 한국어 표기가 진실이고, 영어 키는 이름과 다를 때만 칩으로 남긴다.
+      key: String(p.purpose || ""),
+      name: String(p.display_name_ko || p.purpose || ""),
       executable: Boolean(p.executable),
       validated: Boolean(p.validated),
       // 왜 미검증인지는 스테이지가 말한다. 상한 8 - 경로가 길어도 카드가 좁은
@@ -145,17 +147,22 @@ export function renderModels(host, { state = "idle", model = null, message = "" 
   for (const purpose of data.purposes) {
     const row = el("div", "skill");
     const head = el("div", "cardtitle");
-    head.appendChild(el("span", "name", purpose.purpose));
+    head.appendChild(el("span", "name", purpose.name));
+    if (purpose.key && purpose.key !== purpose.name) {
+      head.appendChild(el("span", "chip", purpose.key));
+    }
     if (purpose.validated) head.appendChild(el("span", "okchip", "검증됨"));
     else if (purpose.executable) head.appendChild(el("span", "warnchip", "실행 가능·미검증"));
     else head.appendChild(el("span", "badchip", "실행 불가"));
     row.appendChild(head);
     if (purpose.stages.length) {
       // 목적이 왜 미검증인지는 스테이지가 안다. 미검증 스테이지에 warn 점.
+      // 칩에는 스테이지 이름만 넣고 모델 id 는 title 로 - 좁은 레일에서
+      // gate0_routing(mpnn_encoder) 같은 긴 칩이 줄을 밀지 않게.
       const line = el("div", "stagesline");
       for (const stage of purpose.stages) {
-        const chip = el("span", "chip", stage.stage
-          ? `${stage.stage}(${stage.modelId})` : stage.modelId);
+        const chip = el("span", "chip", stage.stage || stage.modelId);
+        chip.title = stage.modelId;
         if (!stage.validated) chip.appendChild(el("span", "sdot warn"));
         line.appendChild(chip);
       }
@@ -170,10 +177,11 @@ export function renderModels(host, { state = "idle", model = null, message = "" 
     const head = el("div", "cardtitle");
     head.appendChild(el("span", "name", objective.key));
     head.appendChild(el("span", objective.cls, objective.label));
-    row.appendChild(head);
+    // 평가자 칩도 머리에 넣는다 - 칩이 머리와 노트 사이에 줄서면 흐름이 깨진다.
     for (const evaluator of objective.evaluators) {
-      row.appendChild(el("span", "chip", evaluator));
+      head.appendChild(el("span", "chip", evaluator));
     }
+    row.appendChild(head);
     if (objective.detail) row.appendChild(el("p", "note", objective.detail));
     if (objective.toEnable) {
       row.appendChild(el("p", "note", "활성화하려면: " + objective.toEnable));
