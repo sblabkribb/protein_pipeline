@@ -40,7 +40,7 @@
         </section>
         <section class="block">
           <h3>운영</h3>
-          <nav class="oplinks">
+          <nav class="oplinks" aria-label="운영">
             <a href="./index.html">기존 콘솔(전체 기능)</a>
             <a href="./index.html" data-op="runpod">RunPod Admin</a>
             <a href="./index.html" data-op="mcp">MCP 설정</a>
@@ -169,7 +169,7 @@
 
         <section class="block panel" data-panelfor="run">
           <div id="runStatus" class="empty" role="status" aria-live="polite">실행을 고르면 상태가 표시됩니다.</div>
-          <div id="runProgress" class="progress hidden">
+          <div id="runProgress" class="progress hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="runProgressLabel">
             <div class="progressbar"><i id="runProgressFill"></i></div>
             <span id="runProgressLabel" class="note"></span>
           </div>

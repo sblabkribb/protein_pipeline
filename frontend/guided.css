@@ -463,10 +463,9 @@ body.dragging iframe, body.dragging canvas { pointer-events: none; }
 .newrun { width: 100%; margin-bottom: 8px; }
 .progressbar { height: 6px; border-radius: 6px; background: var(--rule); overflow: hidden; }
 .progressbar i { display: block; height: 100%; width: 0; background: var(--action); transition: width .4s; }
-.progress.hidden, .report.hidden, #runActions.hidden { display: none; }
 .report { border: 1px solid var(--rule); border-radius: 8px; padding: 8px; max-height: 300px; overflow: auto; }
 .funnelbox .funnel { display: flex; align-items: flex-end; gap: 6px; height: 90px; margin: 8px 0; }
-.funnelbox .funnel i { flex: 1; background: linear-gradient(180deg, #38bdf8, #1d4ed8); border-radius: 3px 3px 0 0; }
+.funnelbox .funnel i { flex: 1; background: linear-gradient(180deg, var(--action), var(--action-hover)); border-radius: 3px 3px 0 0; }
 .hitlist table { width: 100%; font-size: 11px; border-collapse: collapse; }
 .hitlist th, .hitlist td { border-bottom: 1px solid var(--rule); padding: 3px 4px; text-align: left; }
 .residuestrip { display: flex; flex-direction: column; gap: 4px; }

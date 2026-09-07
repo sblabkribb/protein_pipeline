@@ -101,8 +101,9 @@ test("stage costs come from the server, never hard-coded in the browser", () => 
 
 test("an unmeasured cost is shown as unmeasured, not as zero", () => {
   assert.ok(source.includes("미측정"), "unmeasured stages must be labelled");
-  assert.ok(source.includes("unknown_stages"), "the total must exclude unmeasured stages");
-  assert.ok(/하한/.test(source), "the total must say it is a lower bound");
+  assert.ok(source.includes("est.breakdown"),
+            "the unmeasured count must come from the same breakdown the bar draws");
+  assert.ok(/미측정이라 하한값/.test(source), "the total must say it is a lower bound");
 });
 
 test("runnable and validated are shown as separate facts", () => {
@@ -418,7 +419,7 @@ test("links to the old console are confined to the ops nav", () => {
   // 그 외의 곳에서 기존 화면에 의존하면 안 된다.
   const code = source.replace(/^\s*\/\/.*$/gm, "");
   assert.ok(!/기존 화면/.test(code), "no dead ends back to index.html");
-  const nav = html.match(/<nav class="oplinks">[\s\S]*?<\/nav>/);
+  const nav = html.match(/<nav class="oplinks"[^>]*>[\s\S]*?<\/nav>/);
   assert.ok(nav, "ops links live in their own nav");
   const rest = html.replace(/<!--[\s\S]*?-->/g, "").replace(nav[0], "");
   assert.ok(!/index\.html/.test(rest), "the page itself must not depend on the old screen");

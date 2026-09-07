@@ -241,9 +241,11 @@ for (const id of ["nDesigns", "lengthAa"]) {
   document.getElementById(id).addEventListener("change", loadRegistry);
 }
 
-// 한 번에 한 단계만 보여주던 마법사는 계획 카드가 쌓이는 단일화면으로 바뀌었다.
-// plan.js 가 아직 showStep 을 부르므로 함수는 남겨 둔다 - 노-op 다.
-export function showStep() {}
+// 마법사 단계 버튼은 사라졌다. 남은 역할은 하나다 - 계획이 생기기 전까지
+// 검토·승인 섹션을 감춰 둔다.
+export function showStep() {
+  document.getElementById("planSection").classList.remove("hidden");
+}
 
 export function showPanel(name) {
   for (const node of document.querySelectorAll(".panel[data-panelfor]")) {
