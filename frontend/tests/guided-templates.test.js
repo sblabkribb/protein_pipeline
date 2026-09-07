@@ -42,7 +42,7 @@ test("renderTemplatesTab paints cards with start buttons and states", () => {
   const host = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
   renderTemplatesTab(host, { state: "done", model: templateCardModels(PAYLOAD) });
   const html = JSON.stringify(host.children);
-  assert.ok(html.includes("이 목적으로 시작"));
+  assert.ok(html.includes("시작 →"));
   assert.ok(html.includes("단일체 용해도 리디자인"));
   assert.ok(html.includes("okchip") && html.includes("warnchip") && html.includes("badchip"));
   assert.ok(html.includes("미검증 단계: af2"));
@@ -70,4 +70,12 @@ test("the shell hosts the templates tab and wires start-from-purpose", () => {
             "hook must be defined before tab restore");
   assert.ok(src.includes("function startFromPurpose"), "facade helper must exist");
   assert.ok(src.includes("__templatesStart"), "cards must trigger the facade start action");
+  const mod = readFileSync(new URL("../guided/templates.js", import.meta.url), "utf8");
+  assert.ok(mod.includes("head.appendChild(start)"), "start action must live in the card head row");
+  assert.ok(!mod.includes("row.appendChild(start)"), "start action must not be a standalone card row");
+});
+
+test("template cards use the quiet cardlink action styled in guided.css", () => {
+  const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
+  assert.ok(css.includes(".cardlink"), "guided.css must style .cardlink");
 });

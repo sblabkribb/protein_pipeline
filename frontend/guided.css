@@ -182,6 +182,10 @@ button { touch-action: manipulation; }
 }
 .ghost:hover:not(:disabled) { border-color: var(--action); color: var(--action); }
 .ghost:disabled { opacity: .5; cursor: not-allowed; }
+.cardlink { margin-left: auto; background: none; border: 0; padding: 2px 4px;
+  color: var(--action); font: 600 11px "Pretendard Variable", Pretendard, system-ui, sans-serif;
+  cursor: pointer; }
+.cardlink:hover { text-decoration: underline; }
 
 /* --- 목적 카드 ------------------------------------------------------------
    상태 배지는 여기 한 번만 붙는다. 예전에는 카드, 안내문, 단계 목록, 경고까지

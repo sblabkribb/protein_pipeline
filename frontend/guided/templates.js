@@ -52,20 +52,20 @@ export function renderTemplatesTab(host, { state = "idle", model = [], message =
     if (card.state === "validated") head.appendChild(el("span", "okchip", "검증됨"));
     else if (card.state === "unvalidated") head.appendChild(el("span", "warnchip", "미검증"));
     else head.appendChild(el("span", "badchip", "실행 불가"));
-    row.appendChild(head);
-    if (card.unvalidatedStages.length) {
-      row.appendChild(el("p", "note", `미검증 단계: ${card.unvalidatedStages.join(", ")}`));
-    }
     const start = document.createElement("button");
     start.type = "button";
-    start.className = "ghost";
-    start.textContent = "이 목적으로 시작";
+    start.className = "cardlink";
+    start.textContent = "시작 →";
     if (typeof start.addEventListener === "function") {
       start.addEventListener("click", () => {
         if (typeof window !== "undefined" && window.__templatesStart) window.__templatesStart(card.purpose);
       });
     }
-    row.appendChild(start);
+    head.appendChild(start);
+    row.appendChild(head);
+    if (card.unvalidatedStages.length) {
+      row.appendChild(el("p", "note", `미검증 단계: ${card.unvalidatedStages.join(", ")}`));
+    }
     host.appendChild(row);
   }
 }
