@@ -50,3 +50,9 @@ test("projects tab comes first in the side tab order", () => {
   assert.ok(src.includes('["projects", "runs", "templates", "models", "connections", "skills", "agents"]'),
             "SIDE_TAB_NAMES must match the button order");
 });
+
+test("the tab strip is a compact wrapping pill grid", () => {
+  const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
+  assert.ok(/\.sidetabs \{[^}]*flex-wrap: wrap/.test(css), "tabs must wrap, not overflow");
+  assert.ok(/\.sidetab \{[^}]*border-radius: 999px/.test(css), "tabs are pills");
+});

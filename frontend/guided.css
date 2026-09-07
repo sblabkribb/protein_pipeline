@@ -85,11 +85,12 @@ body {
 .center { padding: 20px 26px 64px; overflow-y: auto; }
 
 /* --- 좌측 탭 -------------------------------------------------------------- */
-.sidetabs { display: flex; gap: 4px; border-bottom: 1px solid var(--rule); margin-bottom: 14px; }
-.sidetab { font: inherit; font-size: 13px; padding: 7px 10px; cursor: pointer; color: var(--quiet);
-  background: transparent; border: 0; border-bottom: 2px solid transparent; }
-.sidetab:hover { color: var(--ink); }
-.sidetab.active { color: var(--ink); border-bottom-color: var(--action); }
+.sidetabs { display: flex; flex-wrap: wrap; gap: 3px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); margin-bottom: 12px; }
+.sidetab { font: 600 11px "Pretendard Variable", Pretendard, system-ui, sans-serif; padding: 4px 9px;
+  cursor: pointer; color: var(--quiet); background: transparent;
+  border: 1px solid transparent; border-radius: 999px; }
+.sidetab:hover { color: var(--ink); background: var(--muted); }
+.sidetab.active { color: var(--ink); background: var(--panel); border-color: var(--rule); }
 
 /* 모델 탭. 좌 레일 안에서 섹션 사이만 숨을 쉬게 한다. */
 .modelstab { padding-top: 4px; display: grid; gap: 6px; }
