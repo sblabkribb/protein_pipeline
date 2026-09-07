@@ -445,3 +445,34 @@ body.dragging iframe, body.dragging canvas { pointer-events: none; }
 
 .chatform { display: flex; gap: 8px; margin-top: 10px; }
 .chatform input { flex: 1; min-width: 0; padding: 8px 11px; }
+
+/* --- B안 단일화면 ------------------------------------------------------- */
+.plan-section { padding: 14px 16px 20px; border-bottom: 1px solid var(--rule); }
+.plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.runheader { display: flex; gap: 8px; align-items: center; flex: 1; }
+.runheader .chip { font-size: 12px; }
+.runlist { display: flex; flex-direction: column; gap: 4px; max-height: 46vh; overflow: auto; }
+.runlist .run-item { display: flex; flex-direction: column; gap: 2px; text-align: left;
+  background: transparent; border: 1px solid var(--rule); border-radius: 8px;
+  padding: 6px 8px; color: inherit; cursor: pointer; }
+.runlist .run-item.is-active { border-color: var(--action); }
+.run-item .rid { font-weight: 600; font-size: 12px; }
+.run-item .rmeta { color: var(--quiet); font-size: 11px; display: flex; gap: 6px; align-items: center; }
+.oplinks { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.oplinks a { color: var(--action); font-size: 12px; text-decoration: none; }
+.newrun { width: 100%; margin-bottom: 8px; }
+.progressbar { height: 6px; border-radius: 6px; background: var(--rule); overflow: hidden; }
+.progressbar i { display: block; height: 100%; width: 0; background: var(--action); transition: width .4s; }
+.progress.hidden, .report.hidden, #runActions.hidden { display: none; }
+.report { border: 1px solid var(--rule); border-radius: 8px; padding: 8px; max-height: 300px; overflow: auto; }
+.funnelbox .funnel { display: flex; align-items: flex-end; gap: 6px; height: 90px; margin: 8px 0; }
+.funnelbox .funnel i { flex: 1; background: linear-gradient(180deg, #38bdf8, #1d4ed8); border-radius: 3px 3px 0 0; }
+.hitlist table { width: 100%; font-size: 11px; border-collapse: collapse; }
+.hitlist th, .hitlist td { border-bottom: 1px solid var(--rule); padding: 3px 4px; text-align: left; }
+.residuestrip { display: flex; flex-direction: column; gap: 4px; }
+.residuestrip .resrow { display: flex; flex-wrap: wrap; gap: 1px; align-items: center; }
+.residuestrip button { min-width: 18px; font-size: 9px; padding: 1px 2px; border: 1px solid var(--rule);
+  background: transparent; color: inherit; cursor: pointer; border-radius: 3px; }
+.residuestrip button.is-sel { outline: 2px solid var(--action); }
+.residuesel .chip { margin: 2px 2px 0 0; }
+.actions .danger { color: var(--absent-ink); border-color: color-mix(in oklch, var(--absent) 45%, transparent); }

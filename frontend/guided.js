@@ -156,9 +156,8 @@ async function startRun() {
     const runId = String(out.run_id || out.id || "");
     note.textContent = runId ? `실행 ${runId} 를 시작했습니다.` : "실행을 시작했습니다.";
     if (runId) {
-      document.getElementById("runSelect").value = runId;
       await loadRunStatus(runId);
-      showPanel("runs");
+      showPanel("run");
     }
   } catch (error) {
     note.textContent = `실행하지 못했습니다: ${errorText(error)}`;
@@ -242,18 +241,9 @@ for (const id of ["nDesigns", "lengthAa"]) {
   document.getElementById(id).addEventListener("change", loadRegistry);
 }
 
-// 한 번에 한 단계만 보여준다. 네 단계를 세로로 이어붙이면 아래로 계속 읽어야
-// 하고, 지금 어디에 있는지도 알기 어렵다.
-export function showStep(step) {
-  for (const node of document.querySelectorAll(".step")) {
-    node.classList.toggle("hidden", node.dataset.step !== String(step));
-  }
-  for (const button of document.querySelectorAll(".stepbtn")) {
-    const active = button.dataset.step === String(step);
-    button.classList.toggle("is-active", active);
-    button.setAttribute("aria-current", active ? "step" : "false");
-  }
-}
+// 한 번에 한 단계만 보여주던 마법사는 계획 카드가 쌓이는 단일화면으로 바뀌었다.
+// plan.js 가 아직 showStep 을 부르므로 함수는 남겨 둔다 - 노-op 다.
+export function showStep() {}
 
 export function showPanel(name) {
   for (const node of document.querySelectorAll(".panel[data-panelfor]")) {
@@ -266,9 +256,6 @@ export function showPanel(name) {
   }
 }
 
-for (const button of document.querySelectorAll(".stepbtn")) {
-  button.addEventListener("click", () => showStep(button.dataset.step));
-}
 for (const tab of document.querySelectorAll(".tab")) {
   tab.addEventListener("click", () => showPanel(tab.dataset.panel));
 }
@@ -278,9 +265,6 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeStage();
 });
 document.getElementById("probeBtn").addEventListener("click", probeWorkers);
-document.getElementById("runSelect").addEventListener("change", (event) => {
-  loadRunStatus(event.target.value);
-});
 document.getElementById("planBtn").addEventListener("click", generatePlan);
 document.getElementById("approveBtn").addEventListener("click", approve);
 document.getElementById("runBtn").addEventListener("click", startRun);

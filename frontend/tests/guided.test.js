@@ -76,14 +76,6 @@ test("approving and running are separate, deliberate actions", () => {
   assert.ok(/runBtn"\)\.disabled = false/.test(source), "run unlocks only after approval");
 });
 
-test("every step is reachable before a plan exists", () => {
-  // 단계를 감추는 것은 괜찮지만 도달할 수 없으면 안 된다. 로그인 전 사용자에게
-  // 미구현으로 보이면 안 되므로, 네 단계 모두 버튼으로 열려 있어야 한다.
-  const buttons = html.match(/<button class="stepbtn[^"]*" data-step="\d"/g) || [];
-  assert.equal(buttons.length, 4);
-  assert.ok(!/<button class="stepbtn[^>]*disabled/.test(html), "steps must not start disabled");
-});
-
 test("approve stays disabled until a plan is generated", () => {
   assert.ok(/id="approveBtn"[^>]*disabled/.test(html), "approve must start disabled");
   assert.ok(source.includes('getElementById("approveBtn").disabled = !approvable'),
@@ -185,7 +177,8 @@ test("each fact is rendered in exactly one place", () => {
 });
 
 test("the layout is three rails: intent, plan, results", () => {
-  for (const id of ["templates", "weights", "stages", "decisions", "runSelect",
+  // runSelect 는 B안 단일화면에서 실행 사이드바(다음 작업)로 이동했다.
+  for (const id of ["templates", "weights", "stages", "decisions",
                     "artifactList", "connections"]) {
     assert.ok(html.includes(`id="${id}"`), `layout needs #${id}`);
   }
@@ -194,9 +187,8 @@ test("the layout is three rails: intent, plan, results", () => {
 
 test("the plan reads as a numbered sequence because the flow is gated", () => {
   // 번호는 장식이 아니다. 생성 전에 검토할 수 없고 검토 전에 승인할 수 없다.
-  const steps = [...html.matchAll(/data-step="(\d)"><span class="stepno">\d<\/span>([^<]+)/g)];
-  assert.deepEqual(steps.map((m) => m[1]), ["1", "2", "3", "4"]);
-  assert.deepEqual(steps.map((m) => m[2]), ["목표", "경로", "검토", "승인"]);
+  const sections = [...html.matchAll(/<section class="plan-section[^"]*" id="(objectiveSection|planSection)"/g)];
+  assert.deepEqual(sections.map((m) => m[1]), ["objectiveSection", "planSection"]);
 });
 
 test("template cards show whether a route is executable and validated", () => {
@@ -236,7 +228,7 @@ test("keyboard focus stays visible", () => {
 test("every input has a label and reduced motion is respected", () => {
   // 가이드라인은 <label> 또는 aria-label 을 요구한다. purpose 는 카드가 조작하는
   // 숨은 셀렉트라 aria-label 쪽이 맞다.
-  for (const id of ["rmsdMax", "nDesigns", "lengthAa", "af2Budget", "runSelect"]) {
+  for (const id of ["rmsdMax", "nDesigns", "lengthAa", "af2Budget", "compareBaseline"]) {
     assert.ok(new RegExp(`for="${id}"`).test(html), `#${id} needs a label`);
   }
   assert.ok(/id="purpose"[^>]*aria-label=/.test(html), "#purpose needs an accessible name");
@@ -266,8 +258,8 @@ test("the monitor uses the pipeline's own run tools, not a summary of its own", 
   // 기존 RAPID 의 모니터가 쓰는 도구를 그대로 쓴다. 새로 요약을 만들면
   // 같은 사실이 두 곳에서 갈라진다.
   // pipeline.list_runs 단언은 실행 목록 로더가 돌아오면(loadRuns 교체 작업) 다시 넣는다.
+  // runSelect 단언은 실행 사이드바 작업에서 다시 넣는다.
   assert.ok(source.includes("pipeline.status"));
-  assert.ok(html.includes('id="runSelect"'));
   assert.ok(html.includes('id="runStatus"'));
 });
 
@@ -374,13 +366,15 @@ test("artifacts are listed as deep as the main app lists them", () => {
   assert.ok(/max_depth:\s*6/.test(source));
 });
 
-test("the plan reads as clickable steps rather than one long scroll", () => {
-  assert.ok(html.includes('data-step="1"'), "steps must be selectable");
+test("the plan stays review-gated without wizard chrome", () => {
+  // 마법사 단계 버튼은 사라졌지만 plan.js 가 showStep 을 부르므로 함수는 남는다.
   assert.ok(source.includes("showStep"));
+  assert.ok(!/querySelectorAll\("\.step"\)/.test(source),
+            "the wizard .step wiring must be gone with the chrome");
 });
 
 test("the results rail is tabbed rather than stacked", () => {
-  for (const panel of ["runs", "artifacts", "connections"]) {
+  for (const panel of ["run", "results", "structure", "evidence"]) {
     assert.ok(html.includes(`data-panel="${panel}"`), `right rail needs the ${panel} tab`);
   }
 });
@@ -419,12 +413,15 @@ test("the login gate hides the workspace instead of overlaying a broken one", ()
   assert.ok(/id="loginGate"[^>]*class="[^"]*gate/.test(html));
 });
 
-test("the screen never sends the user to the old one", () => {
-  // guided 만으로 쓸 수 있어야 한다. "기존 화면에서 하세요" 는 그 반대다.
+test("links to the old console are confined to the ops nav", () => {
+  // guided 만으로 쓸 수 있어야 한다. 운영 링크(전체 기능 콘솔)는 의도된 출구지만,
+  // 그 외의 곳에서 기존 화면에 의존하면 안 된다.
   const code = source.replace(/^\s*\/\/.*$/gm, "");
   assert.ok(!/기존 화면/.test(code), "no dead ends back to index.html");
-  assert.ok(!/index\.html/.test(html.replace(/<!--[\s\S]*?-->/g, "")),
-            "the page must not link back to the old screen");
+  const nav = html.match(/<nav class="oplinks">[\s\S]*?<\/nav>/);
+  assert.ok(nav, "ops links live in their own nav");
+  const rest = html.replace(/<!--[\s\S]*?-->/g, "").replace(nav[0], "");
+  assert.ok(!/index\.html/.test(rest), "the page itself must not depend on the old screen");
 });
 
 test("a truncated artifact can be read further from here", () => {

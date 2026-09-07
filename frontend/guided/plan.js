@@ -144,20 +144,20 @@ function renderCostBar(host, route) {
   }
   host.appendChild(bar);
 
+  const unknownCount = (est.unknown_stages || []).length;
   const caption = el("p", "costnote",
-    total > 0
+    (total > 0
       ? `측정된 비용 ${formatSeconds(total)}. 빗금 구간은 재지 않아 합계에 들어가지 않았습니다.`
-      : "이 경로에는 측정된 비용이 없습니다.");
+      : "이 경로에는 측정된 비용이 없습니다.")
+    + (unknownCount ? ` ${unknownCount}단계 미측정이라 하한값` : ""));
   host.appendChild(caption);
 }
 
 function renderStages(host, route) {
   if (!host) return;
   host.innerHTML = "";
-  const total = document.getElementById("routeMeta");
   if (!route) {
     host.textContent = "설계 목적을 고르면 단계가 표시됩니다.";
-    if (total) total.textContent = "";
     return;
   }
   const costByStage = {};
@@ -166,17 +166,6 @@ function renderStages(host, route) {
   }
   for (const stage of route.stages || []) {
     host.appendChild(stageRow(stage, registry.models[stage.model_id], costByStage[stage.stage]));
-  }
-  if (total) {
-    const est = route.cost_estimate;
-    if (!est) {
-      total.textContent = "";
-    } else {
-      const unknown = est.unknown_stages || [];
-      total.textContent =
-        `측정된 합계 ${formatSeconds(est.known_seconds)}` +
-        (unknown.length ? ` · ${unknown.length}단계 미측정이라 하한값` : " · 전 단계 측정됨");
-    }
   }
 }
 

@@ -51,7 +51,7 @@ async function loadRunStatus(runId) {
     if (out.found === false) {
       setRunStatus(`${runId}: 상태 파일이 없습니다. 산출물은 아래에서 볼 수 있습니다.`);
       await loadArtifacts(runId);
-      showPanel("artifacts");
+      showPanel("run");
       return;
     }
     // 실제 값은 status 안에 들어 있다. 최상위에서 읽으면 전부 "-" 가 된다.
@@ -76,7 +76,7 @@ async function loadRunStatus(runId) {
       host.appendChild(warn);
     }
     await loadArtifacts(runId);
-    showPanel("artifacts");
+    showPanel("run");
   } catch (error) {
     setRunStatus(`상태를 불러오지 못했습니다: ${errorText(error)}`);
   }

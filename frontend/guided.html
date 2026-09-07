@@ -3,13 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>RAPID — 목표 기반 설계</title>
+    <title>RAPID — 설계 콘솔</title>
     <link rel="stylesheet" href="./guided.css" />
-    <!-- 기존 화면과 같은 뷰어를 쓴다. 다른 라이브러리를 쓰면 같은 구조가 두
-         가지로 보이고, 어느 쪽이 맞는지 판단할 근거가 없어진다.
-         integrity 해시는 jsdelivr 과 unpkg 에서 각각 받아 바이트가 같은 것을
-         확인한 뒤 계산했다. 한 곳에서만 받아 고정하면, 이미 오염된 응답을
-         고정하게 될 수 있다. -->
     <script src="https://cdn.jsdelivr.net/npm/3dmol@2.0.4/build/3Dmol-min.js"
             integrity="sha384-gCVNmzC8IyU7AmfDiNbHLpM9ac5VhQb2mfDURiTqHrnEcI2qp/JsQVeeEd3sLdfq"
             crossorigin="anonymous"
@@ -28,10 +23,9 @@
     </div>
 
     <header class="topbar">
-      <div class="brand"><b>RAPID</b> <span>Objective-first Protein Redesign</span></div>
+      <div class="brand"><b>RAPID</b> <span>단일화면 설계 콘솔</span></div>
+      <div class="runheader" id="topbarChips" aria-live="polite"></div>
       <div class="badges">
-        <span class="badge" id="badgeGate">gate0 target-level</span>
-        <span class="badge" id="badgeAf2">AF2 verification kept</span>
         <span class="badge" id="whoami"></span>
         <button class="badge link" id="logoutBtn" type="button">로그아웃</button>
       </div>
@@ -40,162 +34,175 @@
     <main class="layout hidden" id="workspace">
       <aside class="side">
         <section class="block">
-          <h3>목적</h3>
-          <p class="note">어떤 모델이 도는지는 가중치가 아니라 목적이 정합니다.</p>
-          <div id="templates" class="cards">불러오는 중…</div>
-          <select id="purpose" class="visually-hidden" aria-label="설계 목적"></select>
-          <p id="purposeNote" class="note detail"></p>
+          <h3>실행</h3>
+          <button id="newDesignBtn" class="ghost newrun" type="button">＋ 새 설계</button>
+          <div id="runList" class="runlist empty">실행을 불러오는 중…</div>
         </section>
-
         <section class="block">
-          <h3>목표와 제약</h3>
-          <p class="note">가중치는 상대값이라 정규화됩니다. 제약은 다른 점수로 상쇄되지 않습니다.</p>
-          <div id="weights"></div>
-          <div class="fields">
-            <label for="rmsdMax">RMSD 상한 <span class="unit">Å</span>
-              <input id="rmsdMax" type="number" step="0.1" value="2.0" /></label>
-            <label for="nDesigns">설계 수
-              <input id="nDesigns" type="number" step="8" value="16" /></label>
-            <label for="lengthAa">서열 길이 <span class="unit">aa</span>
-              <input id="lengthAa" type="number" step="10" value="200" /></label>
-            <label for="af2Budget">AF2 예산 <span class="unit">호출</span>
-              <input id="af2Budget" type="number" step="10" value="500" /></label>
-          </div>
+          <h3>운영</h3>
+          <nav class="oplinks">
+            <a href="./index.html">기존 콘솔(전체 기능)</a>
+            <a href="./index.html" data-op="runpod">RunPod Admin</a>
+            <a href="./index.html" data-op="mcp">MCP 설정</a>
+          </nav>
+          <div id="connections" class="conns"></div>
+          <button id="probeBtn" class="ghost">워커 확인</button>
+          <div id="monitorList" class="empty">확인을 누르면 표시됩니다.</div>
         </section>
       </aside>
 
       <div class="splitter" data-splitter="left" role="separator" aria-orientation="vertical" aria-label="왼쪽 폭 조절" tabindex="0"></div>
 
       <section class="center">
-        <nav class="stepnav" aria-label="계획 단계">
-          <button class="stepbtn is-active" data-step="1"><span class="stepno">1</span>목표</button>
-          <button class="stepbtn" data-step="2"><span class="stepno">2</span>경로<span class="stepmeta" id="routeMeta"></span></button>
-          <button class="stepbtn" data-step="3"><span class="stepno">3</span>검토<span class="stepmeta" id="reviewState"></span></button>
-          <button class="stepbtn" data-step="4"><span class="stepno">4</span>승인<span class="stepmeta" id="approveState"></span></button>
-        </nav>
-        <ol class="steps">
-          <li class="step" data-step="1">
-            <h2>목표</h2>
-            <p class="note">좌측에서 목적과 목표를 정하면 RAPID가 모델과 파라미터를 고릅니다.</p>
-            <div class="field">
-              <div class="fieldhead">
-                <label for="targetFasta">타겟 서열</label>
-                <div class="actions">
-                  <input id="targetFile" type="file" class="visually-hidden"
-                         accept=".fasta,.fa,.faa,.seq,.txt,.pdb,.cif" />
-                  <button id="targetFileBtn" class="ghost" type="button">파일 선택</button>
-                  <button id="targetClearBtn" class="ghost" type="button">지우기</button>
-                </div>
-              </div>
-              <textarea id="targetFasta" rows="4" spellcheck="false"
-                        placeholder="MKTAYIAKQRQISFVKSHFSRQ… 붙여넣거나 FASTA·PDB 파일을 고르세요"></textarea>
-              <p id="targetNote" class="note" role="status" aria-live="polite"></p>
+        <section class="plan-section" id="objectiveSection">
+          <h2>설계 목표</h2>
+          <div id="templates" class="cards">불러오는 중…</div>
+          <select id="purpose" class="visually-hidden" aria-label="설계 목적"></select>
+          <p id="purposeNote" class="note detail"></p>
+          <div class="plan-grid">
+            <div>
+              <div id="stages" class="stages">목적을 고르면 단계가 표시됩니다.</div>
+              <div id="costBar" class="costwrap"></div>
             </div>
+            <div>
+              <p class="note">가중치는 상대값이라 정규화됩니다. 제약은 다른 점수로 상쇄되지 않습니다.</p>
+              <div id="weights"></div>
+              <div class="fields">
+                <label for="rmsdMax">RMSD 상한 <span class="unit">Å</span>
+                  <input id="rmsdMax" type="number" step="0.1" value="2.0" /></label>
+                <label for="nDesigns">설계 수
+                  <input id="nDesigns" type="number" step="8" value="16" /></label>
+                <label for="lengthAa">서열 길이 <span class="unit">aa</span>
+                  <input id="lengthAa" type="number" step="10" value="200" /></label>
+                <label for="af2Budget">AF2 예산 <span class="unit">호출</span>
+                  <input id="af2Budget" type="number" step="10" value="500" /></label>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <div class="fieldhead">
+              <label for="targetFasta">타겟 서열</label>
+              <div class="actions">
+                <input id="targetFile" type="file" class="visually-hidden"
+                       accept=".fasta,.fa,.faa,.seq,.txt,.pdb,.cif" />
+                <button id="targetFileBtn" class="ghost" type="button">파일 선택</button>
+                <button id="targetClearBtn" class="ghost" type="button">지우기</button>
+              </div>
+            </div>
+            <textarea id="targetFasta" rows="3" spellcheck="false"
+                      placeholder="MKTAYIAKQRQISFVKSHFSRQ… 붙여넣거나 FASTA·PDB 파일을 고르세요"></textarea>
+            <p id="targetNote" class="note" role="status" aria-live="polite"></p>
+          </div>
+          <div class="actions">
             <button id="planBtn" class="primary">계획 생성</button>
             <span id="planStatus" class="status" role="status" aria-live="polite"></span>
-            <div id="authHint" class="callout coral hidden">세션이 만료되었습니다. 다시 로그인하세요.</div>
-          </li>
+          </div>
+          <div id="authHint" class="callout coral hidden">세션이 만료되었습니다. 다시 로그인하세요.</div>
+        </section>
 
-          <li class="step hidden" data-step="2">
-            <h2>경로</h2>
-            <p class="note">
-              측정한 비용만 숫자로 적습니다. 재지 않은 단계는 <b>미측정</b>이며 0초가 아닙니다.
-            </p>
-            <div id="costBar" class="costwrap"></div>
-            <div id="stages" class="stages">목적을 고르면 단계가 표시됩니다.</div>
-          </li>
-
-          <li class="step hidden" data-step="3">
-            <h2>검토</h2>
-            <div id="warnings"></div>
-            <div id="explainBox" class="explain hidden">
-              <div class="explainhead">
-                <b>설명</b>
-                <span class="genbadge" id="explainSource"></span>
-              </div>
-              <p id="explainText"></p>
-              <div id="questions"></div>
+        <section class="plan-section hidden" id="planSection">
+          <h2>계획 <span id="reviewState" class="stepmeta"></span></h2>
+          <div id="warnings"></div>
+          <div id="explainBox" class="explain hidden">
+            <div class="explainhead">
+              <b>설명</b>
+              <span class="genbadge" id="explainSource"></span>
             </div>
-            <div id="decisions" class="empty">계획을 생성하면 결정과 근거가 여기 표시됩니다.</div>
+            <p id="explainText"></p>
+            <div id="questions"></div>
+          </div>
+          <div id="decisions" class="empty">계획을 생성하면 결정과 근거가 여기 표시됩니다.</div>
+          <div class="actions">
+            <button id="approveBtn" class="primary" disabled>승인하고 요청 만들기</button>
+            <button id="runBtn" class="ghost" disabled>실행 시작</button>
+            <span id="approveState" class="stepmeta"></span>
+          </div>
+          <p id="runNote" class="note" role="status" aria-live="polite"></p>
+          <pre id="requestOut" class="empty">아직 승인하지 않았습니다.</pre>
 
-            <section class="discuss" id="discuss" hidden>
-              <div class="discusshead">
-                <h3>계획에 대해 물어보기</h3>
-                <details class="evidence llmsetup">
-                  <summary id="llmSummary">LLM: 서버 연결</summary>
-                  <label for="llmProvider">제공자
-                    <select id="llmProvider">
-                      <option value="">서버에 연결된 것 사용</option>
-                      <option value="anthropic">Anthropic</option>
-                      <option value="openai">OpenAI</option>
-                      <option value="gemini">Gemini</option>
-                    </select>
-                  </label>
-                  <label for="llmKey">API 키
-                    <input id="llmKey" type="password" autocomplete="off"
-                           placeholder="브라우저에만 보관됩니다" />
-                  </label>
-                  <div class="actions">
-                    <button id="llmLoadBtn" class="ghost" type="button">모델 불러오기</button>
-                  </div>
-                  <label for="llmModel">모델
-                    <select id="llmModel"><option value="">먼저 모델을 불러오세요</option></select>
-                  </label>
-                  <p class="note">키는 이 브라우저에만 있고 서버에 저장되지 않습니다.</p>
-                </details>
-              </div>
-              <div id="chatLog" class="chatlog empty">계획에 대해 궁금한 것을 물어보세요.</div>
-              <div id="proposals" class="proposals"></div>
-              <form id="chatForm" class="chatform">
-                <label class="visually-hidden" for="chatInput">질문</label>
-                <input id="chatInput" placeholder="예: 온도를 0.3으로 올리면 무엇이 달라지나요?" />
-                <button id="chatSend" class="primary" type="submit">보내기</button>
-              </form>
-            </section>
-          </li>
-
-          <li class="step hidden" data-step="4">
-            <h2>승인</h2>
-            <p class="note">
-              승인은 계획을 파이프라인 요청으로 바꿉니다. 실행은 별도 버튼이고,
-              시작 전에 무엇이 도는지 다시 확인합니다.
-            </p>
-            <div class="actions">
-              <button id="approveBtn" class="primary" disabled>승인하고 요청 만들기</button>
-              <button id="runBtn" class="ghost" disabled>실행 시작</button>
+          <section class="discuss" id="discuss" hidden>
+            <div class="discusshead">
+              <h3>계획에 대해 물어보기</h3>
+              <details class="evidence llmsetup">
+                <summary id="llmSummary">LLM: 서버 연결</summary>
+                <label for="llmProvider">제공자
+                  <select id="llmProvider">
+                    <option value="">서버에 연결된 것 사용</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="gemini">Gemini</option>
+                  </select>
+                </label>
+                <label for="llmKey">API 키
+                  <input id="llmKey" type="password" autocomplete="off"
+                         placeholder="브라우저에만 보관됩니다" />
+                </label>
+                <div class="actions">
+                  <button id="llmLoadBtn" class="ghost" type="button">모델 불러오기</button>
+                </div>
+                <label for="llmModel">모델
+                  <select id="llmModel"><option value="">먼저 모델을 불러오세요</option></select>
+                </label>
+                <p class="note">키는 이 브라우저에만 있고 서버에 저장되지 않습니다.</p>
+              </details>
             </div>
-            <p id="runNote" class="note" role="status" aria-live="polite"></p>
-            <pre id="requestOut" class="empty">아직 승인하지 않았습니다.</pre>
-          </li>
-        </ol>
+            <div id="chatLog" class="chatlog empty">계획에 대해 궁금한 것을 물어보세요.</div>
+            <div id="proposals" class="proposals"></div>
+            <form id="chatForm" class="chatform">
+              <label class="visually-hidden" for="chatInput">질문</label>
+              <input id="chatInput" placeholder="예: 온도를 0.3으로 올리면 무엇이 달라지나요?" />
+              <button id="chatSend" class="primary" type="submit">보내기</button>
+            </form>
+          </section>
+        </section>
       </section>
 
       <div class="splitter" data-splitter="right" role="separator" aria-orientation="vertical" aria-label="오른쪽 폭 조절" tabindex="0"></div>
 
       <aside class="side right">
         <nav class="tabs" aria-label="결과 보기">
-          <button class="tab is-active" data-panel="runs">실행</button>
-          <button class="tab" data-panel="artifacts">결과</button>
-          <button class="tab" data-panel="connections">연결</button>
+          <button class="tab is-active" data-panel="run">Run</button>
+          <button class="tab" data-panel="results">Results</button>
+          <button class="tab" data-panel="structure">Structure</button>
+          <button class="tab" data-panel="evidence">Evidence</button>
         </nav>
-        <section class="block panel" data-panelfor="runs">
-          <div class="monitorhead">
-            <label class="visually-hidden" for="runSelect">실행 선택</label>
-            <select id="runSelect"><option value="">실행을 불러오세요</option></select>
-            <button id="runRefreshBtn" class="ghost">새로고침</button>
-          </div>
-          <div id="runStatus" class="empty" role="status" aria-live="polite">실행을 고르면 상태가 표시됩니다.</div>
-        </section>
 
-        <section class="block panel hidden" data-panelfor="artifacts">
+        <section class="block panel" data-panelfor="run">
+          <div id="runStatus" class="empty" role="status" aria-live="polite">실행을 고르면 상태가 표시됩니다.</div>
+          <div id="runProgress" class="progress hidden">
+            <div class="progressbar"><i id="runProgressFill"></i></div>
+            <span id="runProgressLabel" class="note"></span>
+          </div>
+          <div class="actions hidden" id="runActions">
+            <button id="reportGenBtn" class="ghost">리포트 생성</button>
+            <button id="reportLoadBtn" class="ghost">리포트 불러오기</button>
+            <button id="cancelRunBtn" class="ghost danger">실행 취소</button>
+          </div>
+          <div id="reportView" class="report hidden"></div>
           <div id="artifactList" class="empty">실행을 고르면 산출물이 표시됩니다.</div>
           <div id="artifactPreview" class="preview"></div>
         </section>
 
-        <section class="block panel hidden" data-panelfor="connections">
-          <div id="connections" class="conns"></div>
-          <button id="probeBtn" class="ghost">워커 확인</button>
-          <div id="monitorList" class="empty">확인을 누르면 표시됩니다.</div>
+        <section class="block panel hidden" data-panelfor="results">
+          <div class="actions">
+            <label class="visually-hidden" for="compareBaseline">비교 기준</label>
+            <select id="compareBaseline"><option value="">비교 기준 실행 선택…</option></select>
+            <button id="compareBtn" class="ghost">비교</button>
+          </div>
+          <div id="funnelBox" class="funnelbox"><p class="note">실행을 고르면 게이트 퍼널이 표시됩니다.</p></div>
+          <div id="hitList" class="hitlist"><p class="note">실행을 고르면 히트리스트가 표시됩니다.</p></div>
+        </section>
+
+        <section class="block panel hidden" data-panelfor="structure">
+          <div id="structureFiles" class="empty">구조 파일(.pdb/.cif/.sdf)이 여기 나열됩니다.</div>
+          <div id="structureViewer" class="preview"></div>
+          <div id="residueStrip" class="residuestrip"></div>
+          <p class="note">잔기를 누르면 3D 뷰에서 하이라이트됩니다. 선택 목록은 설계 제약으로 쓸 수 있습니다.</p>
+          <div id="residueSelection" class="residuesel"></div>
+        </section>
+
+        <section class="block panel hidden" data-panelfor="evidence">
+          <div id="evidenceView" class="empty">계획을 생성하면 근거가 여기 모입니다.</div>
         </section>
       </aside>
     </main>
