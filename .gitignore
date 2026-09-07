@@ -29,6 +29,9 @@ rfd3-runpod/
 /pytest-cache-files-*/
 /pipeline-mcp/pytest-cache-files-*/
 *.pdb
+# 폴드 모델 좌표는 저장소에 넣지 않는다. 원격 사본은 S3 에 있고
+# 목록과 sha256 은 public_data/benchmark/gate0/fold_artifact_archive.json
+# 에 있다 (28_archive_fold_artifacts.py).
 *.pdb.gz
 *.cif
 *.cif.gz

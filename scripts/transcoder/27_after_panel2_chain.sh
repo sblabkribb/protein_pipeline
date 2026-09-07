@@ -39,9 +39,24 @@ python3 scripts/transcoder/11_temperature_af2_analysis.py \
 echo "패널 1 분석 종료 코드 $?"
 
 echo
+echo "=============== 패널 1/2 산출물 S3 보관 ==============="
+# .gitignore 가 *.pdb.gz 를 막으므로 좌표의 사본은 S3 에만 있다.
+# 멱등이라 이미 올라간 것은 건너뛴다.
+python3 scripts/transcoder/28_archive_fold_artifacts.py \
+  --dir public_data/benchmark/gate0/temperature_sweep \
+  --dir public_data/benchmark/gate0/temperature_panel2
+echo "보관 종료 코드 $?"
+
+echo
 wait_for "$GEN_PID" "백본 생성"
 echo
 echo "=============== 홀드아웃 격자 6 x 24 x 12 ==============="
 python3 scripts/transcoder/26_holdout_grid.py --workers 4
 echo "격자 종료 코드 $?"
+
+echo
+echo "=============== 격자 산출물 S3 보관 ==============="
+python3 scripts/transcoder/28_archive_fold_artifacts.py \
+  --dir public_data/benchmark/gate0/holdout_grid
+echo "보관 종료 코드 $?"
 echo "[$(date +%H:%M)] 체인 완료"

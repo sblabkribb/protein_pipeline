@@ -1,0 +1,3452 @@
+{
+  "purpose": "폴드 산출물의 원격 사본 목록. 지표가 또 바뀌면 여기서 좌표를 찾는다.",
+  "bucket": "proteinpipeline",
+  "prefix": "rapid_sr/gate0_frozen_metric_v1",
+  "local_root": "public_data/benchmark/gate0",
+  "endpoint": "https://kr.object.ncloudstorage.com",
+  "credentials": "환경변수에서만 읽는다. 저장소에 기록하지 않는다.",
+  "n_files": 491,
+  "n_verified": 491,
+  "verification": "올린 뒤 head_object 로 크기를 대조한 것만 verified 다.",
+  "code_sha": "56526aaa63de710865e8bbb60e467eb0972c6262",
+  "updated_utc": "2026-09-07T06:48:41Z",
+  "files": [
+    {
+      "local": "temperature_sweep/af2_analysis.json",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/af2_analysis.json",
+      "size": 21122,
+      "sha256": "9b2b1a9ced22cc4d26ea0ec78001a85bcef047da176cb1e1a7409967f374102f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/af2_analysis_order.json",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/af2_analysis_order.json",
+      "size": 24220,
+      "sha256": "f6564db320eed01039970f1ff92587d83740f7e3755e45583b53097d040558b6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/af2_order_metric.csv",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/af2_order_metric.csv",
+      "size": 163343,
+      "sha256": "b9c3feca024094f5cf9ee31cfda0f400085c19c583501ab7f7950060ac793958",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/af2_rerun_reproducibility.json",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/af2_rerun_reproducibility.json",
+      "size": 5681,
+      "sha256": "b61a78236a87fc38ec7479bcb02ba1774843cb1ce903215a622eaa0c293a39c7",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/af2_stage1.csv",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/af2_stage1.csv",
+      "size": 60380,
+      "sha256": "4dc750cd491a590b58ca24c3e978cbe31e682ef4cd9e5308e2277b60a4938a7f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/af2_stage1.csv.STATUS.json",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/af2_stage1.csv.STATUS.json",
+      "size": 1824,
+      "sha256": "395c40653d0cc55cd823cde71462c42141c12f21e0cbca2baa62aa6832bfaa7a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/af2_stage1_rmsd_fixed.csv",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/af2_stage1_rmsd_fixed.csv",
+      "size": 92970,
+      "sha256": "6b53faa16651c5fd02b5e788ca7d97b31cec95761a65beff272bcd2d0606c5d8",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/af2_stage1_rmsd_fixed.csv.STATUS.json",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/af2_stage1_rmsd_fixed.csv.STATUS.json",
+      "size": 1839,
+      "sha256": "e2626d309cdd6758e00b45df7a900c095c54ae6de058438c3b1189e144aacc55",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/conditions.csv",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/conditions.csv",
+      "size": 16634,
+      "sha256": "c4d03608f147745d9713ce7733be5ece230b03dd4ee47145bba6842877b034a8",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/conditions.csv.STATUS.json",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/conditions.csv.STATUS.json",
+      "size": 1709,
+      "sha256": "cf5932dd6e93b64fc20ea691c6db0627ca6b2a9a8763cf25198ff62eae38d680",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.05_0.pdb.gz",
+      "size": 37950,
+      "sha256": "ba31864b512640c4dd347a0f3e0d786d8e7245d7577d243c6a9a7e070596744b",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.05_1.pdb.gz",
+      "size": 37872,
+      "sha256": "70bb35f2dfb55c91986d0668f8cc9cfa0be7a76a2ecca03506ee6bfa8271fa71",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.05_2.pdb.gz",
+      "size": 38040,
+      "sha256": "5505d2a75ab2b085c9baf6f488e19c7f4a5bea6a7b7e90b318f5148cac46a8d4",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.05_3.pdb.gz",
+      "size": 37700,
+      "sha256": "646eda846363bce7d7e738adcda8e149b453dff0db4ec46c28bf70556efb586f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.05_4.pdb.gz",
+      "size": 37447,
+      "sha256": "0b0fcf0fefb0f55abd1abfa3290ba8c8c05975e51f109689f24ec75f380db86c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.05_5.pdb.gz",
+      "size": 37534,
+      "sha256": "60e4b01f3dc925acb755ec4d56d2e2dd2f08e869ef12914620acc04de0b9ecfc",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.05_6.pdb.gz",
+      "size": 37860,
+      "sha256": "3fba8f1de45d98f486a78b765795b51b9732eb75f2128cf50d203323f2800a42",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.05_7.pdb.gz",
+      "size": 37596,
+      "sha256": "8bc99218dddcf7b09d48b7306a3135f10495c4a4a289fcc1557cc2d8d2304c8e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.1_0.pdb.gz",
+      "size": 37109,
+      "sha256": "93e7e388450a58a6d7280e9ba843cf2bf5c546b760df39db1346bb5c06cda8da",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.1_1.pdb.gz",
+      "size": 37516,
+      "sha256": "7e7c8cfa46b751fdc93a5d9c732d4abea2cd233de073636258080ed713466e30",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.1_2.pdb.gz",
+      "size": 37585,
+      "sha256": "c9d2261a36ae97652e052b79a0844de75dc94e55689610be6293ee6ec678492e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.1_3.pdb.gz",
+      "size": 38065,
+      "sha256": "0ab70b39581269dca2fc8dcbe5468ae9574f2a07db8f8a4a31c25b0c8aeef44e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.1_4.pdb.gz",
+      "size": 37478,
+      "sha256": "99238d40a8a741a17c48bbe972af56ecec51434cc1e45d1f3b29e7249ac064f2",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.1_5.pdb.gz",
+      "size": 36895,
+      "sha256": "751ab77ed67570620ae4407acfc4a3f9ced83a7ff10ebf3e00efbe8da8183fc3",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.1_6.pdb.gz",
+      "size": 37135,
+      "sha256": "894387240a48362eafbbf80ace1c738ef0cfee630797566c2f769edd44888e86",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.1_7.pdb.gz",
+      "size": 37205,
+      "sha256": "5f7766c03f360a4c01614c6f66414b35c7e7b429eca947ab2708fe3fa1800c10",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.2_0.pdb.gz",
+      "size": 37823,
+      "sha256": "70f8d25abe308299f102ca19d99e3d76643618f60d69350e089e9f8dc943fe4c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.2_1.pdb.gz",
+      "size": 37118,
+      "sha256": "9471de0735dd7d512b43cd175c3c8877fd75557a448272a969b310ddb2f4ce48",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.2_2.pdb.gz",
+      "size": 37526,
+      "sha256": "8164a38e2e293d06f7c0168dc587b58a8e0585b50d5159e334e55d65dea9a9e5",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.2_3.pdb.gz",
+      "size": 37201,
+      "sha256": "b20bb5ef7999d227b1ba4c4dde41ac79a4b65fe8c4645a651a3b56ebad466735",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.2_4.pdb.gz",
+      "size": 37143,
+      "sha256": "32d703a0870616003cf68899872b63f1fdfe7ee2758774b8b6f7fe258b0933ac",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.2_5.pdb.gz",
+      "size": 37159,
+      "sha256": "07d14611bb80b530117191dda9de89b99986f5f0aba7522123ca4b89322b3b59",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.2_6.pdb.gz",
+      "size": 37529,
+      "sha256": "4b0c6632ff6660bd3525c624656188496328e7dbaaf5d070f32d6955d87e6a2e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.2_7.pdb.gz",
+      "size": 37420,
+      "sha256": "82ef314adcdfc70405bda62823a21c71c2503da5a3c0cd3609cce30ae15e8984",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.3_0.pdb.gz",
+      "size": 36642,
+      "sha256": "83f227d85a0bf1075c10ea4346b689ceb95b377ca5de3dfd5257e173ff4e3349",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.3_1.pdb.gz",
+      "size": 37312,
+      "sha256": "30b1d9429ca6c29fa056cd5eba699d0d270f1f541f1db2bd157ee97dbd1f23c2",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.3_2.pdb.gz",
+      "size": 37028,
+      "sha256": "4231cff802fba913c2a0666caf1177a9c8dc26ddbf1dfba48cd64c60bd665b90",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.3_3.pdb.gz",
+      "size": 37423,
+      "sha256": "0e6c028b6041bf6cd32dd3d58d41f5be973e8f488eaac70c89a43b8b15bc63bb",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.3_4.pdb.gz",
+      "size": 36968,
+      "sha256": "1210cfa4c8dcdd2e37aa64b648f8acf414f672a05f2a1de5ab52cb6f3cb4a331",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.3_5.pdb.gz",
+      "size": 37575,
+      "sha256": "e5d8e34d4253a933271d8faedd6246ec8961d59cf5a9a9149c763c1527193897",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.3_6.pdb.gz",
+      "size": 37243,
+      "sha256": "c809497758870e995afb16c3b153f9913fc690adce6a99c2c8eae64744e43f1a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1af7A01_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1af7A01_target_target_T0.3_7.pdb.gz",
+      "size": 37568,
+      "sha256": "4e66bbb5e9941691f05df9b9566ca7740f9f88aa288ae6775977311940ad3977",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.05_0.pdb.gz",
+      "size": 13695,
+      "sha256": "43c9014db09997a022d67851d853e0a11690525cb3fda63d630268721a6d9250",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.05_1.pdb.gz",
+      "size": 13728,
+      "sha256": "e29b6d404cec58c62dc4c14949e6451bb31dfab990e0fa7167b84930c1c59055",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.05_2.pdb.gz",
+      "size": 13651,
+      "sha256": "9d42666415817ab4fe105af05e07cb22e5d8ae1cee1498dbecbbc9e89d75b849",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.05_3.pdb.gz",
+      "size": 13682,
+      "sha256": "84826131b229f729c409131b85dd3c6bde712d77d19b9a2c0814fe1656dd4d0c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.05_4.pdb.gz",
+      "size": 13563,
+      "sha256": "728c099385c627aa4c5023d0582687f60d6c1940c0c6ebce58ba9cbe5b3a3093",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.05_5.pdb.gz",
+      "size": 13800,
+      "sha256": "e6cb80eb874c9ca1fb3f437829965de768d2b8f5439e55c8f69b700dd60ac476",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.05_6.pdb.gz",
+      "size": 13795,
+      "sha256": "e47d23531772112e7d55d2b5667eb80646a17653c31e1b4bd613ab9f8cfe2df9",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.05_7.pdb.gz",
+      "size": 13857,
+      "sha256": "1648aefe053b5d61e14db96bc2ddeef1b66a5d218d5d13451bcc053986cb41bf",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.1_0.pdb.gz",
+      "size": 13755,
+      "sha256": "22e514956192144f39b4e4b06dd5d5311974e2a2a7bad3349d49ee748bbb1978",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.1_1.pdb.gz",
+      "size": 13723,
+      "sha256": "2d289a3076c6cca76c04d861d0b12a8bc149b946eeb57aa060044f9f2e1c3600",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.1_2.pdb.gz",
+      "size": 13659,
+      "sha256": "ae53aaba47b09296746185b07b9c39e83aac1b6b6471633bdfe6a4e560bb3d67",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.1_3.pdb.gz",
+      "size": 13698,
+      "sha256": "4302be9cdfcbb278d92b087a2404c03d479c297ba4470356963a87066e45d4ee",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.1_4.pdb.gz",
+      "size": 13638,
+      "sha256": "01182d2a94d1ed01fd88f808d4603abc1ff3cce9545efdba75b72abfbe6225cc",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.1_5.pdb.gz",
+      "size": 13668,
+      "sha256": "406feea30aa0c7a28a95a2223d745057e01810a99cd6b28c0a60f1e9d10a862e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.1_6.pdb.gz",
+      "size": 13852,
+      "sha256": "8cedee5851109ae20805c4986a9939e5541014f0494ebd4e2cd601e85f9a8201",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.1_7.pdb.gz",
+      "size": 13681,
+      "sha256": "02d80d729a88888ec7390929fbacecd5ffb39198fecd509052aa183723fe598c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.2_0.pdb.gz",
+      "size": 13504,
+      "sha256": "5dc697fd7f28a7ccc538af6b53141f34cee22452e04d3c07e6a941f497de41f7",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.2_1.pdb.gz",
+      "size": 13492,
+      "sha256": "e76a31392d23f8b2119a73653537d8e82e84f7f45c49d6fb28a4afb964778911",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.2_2.pdb.gz",
+      "size": 13618,
+      "sha256": "d41a4d297becb406aa69c222fc88d64b5c80724f863ff89ee5df4360f3ce57f9",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.2_3.pdb.gz",
+      "size": 13679,
+      "sha256": "a42a4eef0734cc137a3f31fb53fd2239ae7d8089f94b278b731c8b732e6e4890",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.2_4.pdb.gz",
+      "size": 13589,
+      "sha256": "e35abf0d9df3ca4d7b921d56b2ff3acac9a379692579190d927a40247e7b4936",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.2_5.pdb.gz",
+      "size": 13569,
+      "sha256": "29a75ef91fbf16eaedbc498f18ee19a6cd08747e1c2a0d98a2bc6f5f8eb77ffb",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.2_6.pdb.gz",
+      "size": 13737,
+      "sha256": "f6a3d2003d9adcaf382637b8eda05f59054f69f00e24de9b662498e4eecb425d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.2_7.pdb.gz",
+      "size": 13558,
+      "sha256": "70976ea9f13990ee5938bdbfe6d7ee6a0af558a30b1ebff098e18b81b4b735ea",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.3_0.pdb.gz",
+      "size": 13759,
+      "sha256": "27db62b536177d2947fba2711e9cf66dcdc4b73c1ff6eae73b15c351c16c5b47",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.3_1.pdb.gz",
+      "size": 13802,
+      "sha256": "b7e4b86d1ee511907f320f17e344fb4af8e90219b649f1040f553c2e75b7f551",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.3_2.pdb.gz",
+      "size": 13408,
+      "sha256": "4e0cb48c217d24c0d3cc1bc2ea9c8edd1bad3ed5e0c410c900c55e567cea45d6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.3_3.pdb.gz",
+      "size": 13474,
+      "sha256": "4e27873523d3c6aaf327d1a27e335f3272dd999ebe9486ff5dc115a3513330fe",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.3_4.pdb.gz",
+      "size": 13680,
+      "sha256": "0162a1041866b0381cffd839ab2e018b2910560b16ae262db023904f45ed7d3b",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.3_5.pdb.gz",
+      "size": 13366,
+      "sha256": "c00257dc961c22199e8798c31d2665b37ce76cbc1e3e10abbbb50e707b7761f1",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.3_6.pdb.gz",
+      "size": 13376,
+      "sha256": "ad94b02db2d8f8aafe278f64f3094c5923bd20cd0eaf27ab709ec706a3a96dc3",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1b5aA00_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1b5aA00_target_target_T0.3_7.pdb.gz",
+      "size": 13448,
+      "sha256": "ff931463e6f4ea0a6e2114382631f7d7d592e39a0d5ed6ba7cffc36b9651d349",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.05_0.pdb.gz",
+      "size": 10316,
+      "sha256": "3990a0860a287ad4de1837e8325001358b291d1d2fdaa500a98d4ff2f9394a6a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.05_1.pdb.gz",
+      "size": 10127,
+      "sha256": "fcf4ffbb5ea6d122fdaf6aa52a34a8da0602ab535a2bbabdc7a471bf696212ce",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.05_2.pdb.gz",
+      "size": 10065,
+      "sha256": "5009923a9ff23cd1c3829c2b427947a5acb0a11d53dafd65461b10e035ebc543",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.05_3.pdb.gz",
+      "size": 10235,
+      "sha256": "b3d19fae64abfed927d4445db71946171d0bb889cbaedc676d64abeeb1ed1170",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.05_4.pdb.gz",
+      "size": 7709,
+      "sha256": "2e2d45134a9bbfd6a44ae87b154a491f039f73cbe6b30b5e1d94f928ebef153a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.05_5.pdb.gz",
+      "size": 9553,
+      "sha256": "c24404c0c2476b5b8f1010fd8ccb22b8394edae0145febcfd33b73c711d0a997",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.05_6.pdb.gz",
+      "size": 10398,
+      "sha256": "060c6e53f6cac9e7d96c71c29bd9efca92f65ea954607738fe9e15676f665225",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.05_7.pdb.gz",
+      "size": 9976,
+      "sha256": "806dfc4ca2ea44d01ca4b7b4f9ec03593de3d4413b7df721e0d237685ae49119",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.1_0.pdb.gz",
+      "size": 10790,
+      "sha256": "5fde29f2b2dc256113e84907fb079a0e4201d63b85a4c09504cc73082a06be9e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.1_1.pdb.gz",
+      "size": 10870,
+      "sha256": "a4535947d9c178570267d26b2ba9b865baff3f7a1a6bdfc02d87612355592c52",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.1_2.pdb.gz",
+      "size": 10341,
+      "sha256": "bb074757f6cc3f93254d514d848d7ed7d6e1db470282b018be895ad762475b88",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.1_3.pdb.gz",
+      "size": 10342,
+      "sha256": "f09a878fb3169b8c9c8babd6a2322f9ec51b4bfc04d5a20f7d7d49742dd6cd82",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.1_4.pdb.gz",
+      "size": 10296,
+      "sha256": "f534db25afebafc53ffe95de57a8f64172b6d0d32a0a974cd368b27dae3c0adc",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.1_5.pdb.gz",
+      "size": 10935,
+      "sha256": "9d5de44a88ebcfc2326b6f6d36b64a3d55c1b8bdc7eda97b012eb50e7346a6e5",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.1_6.pdb.gz",
+      "size": 10430,
+      "sha256": "8071aa25d6ce4ec790a31b1727acc3c2830543ab9037218a613a1e233829ce34",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.1_7.pdb.gz",
+      "size": 10427,
+      "sha256": "04dddea02f908d47c3bdc33e7a62452069810229a69f9ef7887dd848a0776144",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.2_0.pdb.gz",
+      "size": 10760,
+      "sha256": "d86025da238066de7e47306a900b2d30efb73477248b14302293725620c4d6b2",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.2_1.pdb.gz",
+      "size": 7064,
+      "sha256": "c353a29a5f30cad9eb6b5e5c55202918aa0f543f932944ffd9d3a9c4ae8f94f6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.2_2.pdb.gz",
+      "size": 9959,
+      "sha256": "8aa840731744bc8b86abc3da3e3963154679e71c97df4187ffdcacc1983182df",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.2_3.pdb.gz",
+      "size": 9411,
+      "sha256": "be0189cc07fe7f693f18bcc7d95be3c23fa1747dc1c23fb1f032f0437c341d03",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.2_4.pdb.gz",
+      "size": 10391,
+      "sha256": "0894d448bf014e5ad5ed4d1fbf63f559de7d1c6408cec252c54d869e9b4aaf5a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.2_5.pdb.gz",
+      "size": 10339,
+      "sha256": "19f9c9071028cff0cb799176c1887ff96b25684e22e386a70211290d3c98e897",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.2_6.pdb.gz",
+      "size": 10278,
+      "sha256": "1758c4232fca9e4113ea640163e680a7d3741ea4b50fe600d47fe666cc186f1e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.2_7.pdb.gz",
+      "size": 9719,
+      "sha256": "0ceb866b842aa0a3dafc2213f39bd4567dc1c0d675458334236ab1fc56f34310",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.3_0.pdb.gz",
+      "size": 10405,
+      "sha256": "2530e96ecbd395097cc9c5695c621566e0d14e38dc5b4845b70713f15fb51687",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.3_1.pdb.gz",
+      "size": 10205,
+      "sha256": "f2689ad2500a320cd0969123722c2dd46730ebad511f89ef769c3e72a8e88958",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.3_2.pdb.gz",
+      "size": 7875,
+      "sha256": "0ad2bb79093080cff5fe170012dcecba4b145f63b9fd024e03846932202a5921",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.3_3.pdb.gz",
+      "size": 10024,
+      "sha256": "da23cb5fc03dc9b4b4b5bd355851937c9058e5f9b2410f9688a065de9169ed81",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.3_4.pdb.gz",
+      "size": 10306,
+      "sha256": "a99c1bedb9fbf94eb8cf1e695e8bc03d451224bf0d9c97c67e91706bb0d328b0",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.3_5.pdb.gz",
+      "size": 10529,
+      "sha256": "5a8cc9341a17f1d27577c7800f2876ee79d08cfa8aa23ec5340a31a0287b24b4",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.3_6.pdb.gz",
+      "size": 10230,
+      "sha256": "a3c62cd0b2469d9797a2d1f3b4d7573f5fd19d5d72871bc78c94a1011a50842f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bctA00_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bctA00_target_target_T0.3_7.pdb.gz",
+      "size": 10079,
+      "sha256": "f30b56ef3ad5ee1ace0ac18963aaeb5e6034f4918906f23a089aaf51947b5ba6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.05_0.pdb.gz",
+      "size": 35222,
+      "sha256": "ba0aa2f49276f8da4701a391934920457a08064e288b7bfc28c1c65b43a3044b",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.05_1.pdb.gz",
+      "size": 35018,
+      "sha256": "5ac2a5d733936c5a5af7e83f7f66a31417b718af4bcb67acd992cd15e26ed37b",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.05_2.pdb.gz",
+      "size": 35134,
+      "sha256": "8751505be49279f2e9389edfffda38923dace51a3b3b59305af261d4401101b8",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.05_3.pdb.gz",
+      "size": 35460,
+      "sha256": "226de5f3eb49488ebc8bf270cb4b640f0b5bfb59583817aacd3ecc47ae1f1215",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.05_4.pdb.gz",
+      "size": 35199,
+      "sha256": "7b42950e835ca4f473e7fccc4a7c105def27f4007cacc7a0467610e32a889580",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.05_5.pdb.gz",
+      "size": 35107,
+      "sha256": "0ebbe1bc17abb4d373c30f576c45046f6fd5a5767c4fd35d34cb95aa2c11ebc4",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.05_6.pdb.gz",
+      "size": 35333,
+      "sha256": "f793a5ce4d469c94ccc01f802d8bba79d372ca5409749dd5f392b00511fe6e4c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.05_7.pdb.gz",
+      "size": 35081,
+      "sha256": "0589cf24bf9bb5812cff641fb9477e857eb5b49f39ad54cb07e14fd0352de130",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.1_0.pdb.gz",
+      "size": 35552,
+      "sha256": "3737510b9925140f365522d901563a666a69c4370c6bf217e0843c534dc8ad5f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.1_1.pdb.gz",
+      "size": 35760,
+      "sha256": "79f437cf3ad2e9d941a3cb52e5ea1efdb53e05e27fd510a68bb8a71d29d79de4",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.1_2.pdb.gz",
+      "size": 35610,
+      "sha256": "73f323836bff4b243c3f129146e81ce288bcf188115ef95f2c2d11dcf714274b",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.1_3.pdb.gz",
+      "size": 35236,
+      "sha256": "c4593d46157eb370e93379d2cf3c9d28099dcd2e43b4f4dc1f1358020d5cacb3",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.1_4.pdb.gz",
+      "size": 35015,
+      "sha256": "24c149018ae6a4815a53a55406ebc3e16cebc0c65c8622b8c303f61ad86ceca4",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.1_5.pdb.gz",
+      "size": 35257,
+      "sha256": "8774d0918fb8a13d1adb02e8a2f3ce0895faa5d84ef8b1e6f95d35e34611ec04",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.1_6.pdb.gz",
+      "size": 34936,
+      "sha256": "b24899bcf20142cdeaba7f100ebe06047357416a0b46d59a9695af1ab8f8e576",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.1_7.pdb.gz",
+      "size": 34990,
+      "sha256": "1fd24eb3809cade716946cb62074866a5dbc9a9f821ef7f2187225db541c0853",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.2_0.pdb.gz",
+      "size": 35325,
+      "sha256": "f6d190dfee150807fa9aa806d5c8e7d4edbcecd3bf075e38fa44313a8c465471",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.2_1.pdb.gz",
+      "size": 34934,
+      "sha256": "9025afe4f72db9961bf8248c6a57d233420f34b90d80d8c87891bd8f5459849d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.2_2.pdb.gz",
+      "size": 34599,
+      "sha256": "413c8afe1ce938cd1ff31875273fca4123b5074495a0898892128f62b554967c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.2_3.pdb.gz",
+      "size": 34115,
+      "sha256": "be9578f88097f66b57360d7f6dec918ae1986940b3c4639857e963c33ae2acd2",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.2_4.pdb.gz",
+      "size": 35138,
+      "sha256": "f23dd59dc9981c4de84a823ab4cf55a2111591dedeb9742b4a7d05d3a66e9684",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.2_5.pdb.gz",
+      "size": 35531,
+      "sha256": "e4a605674f693322ddec1a30f8d567b371a1fc23215a0c3e8c1a162f670fe0ad",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.2_6.pdb.gz",
+      "size": 34883,
+      "sha256": "c708244e64ab22788bcde26a6c0c2a16b10ed01f7dc03ae25985a79053c9e804",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.2_7.pdb.gz",
+      "size": 35109,
+      "sha256": "caa644fff80fa7436a164c3c0d8a36c7e194f98bc36d25e43073e151f604f883",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.3_0.pdb.gz",
+      "size": 35209,
+      "sha256": "af5a4f2ff736f58d74ed21a16b6bfc0e68dced30b7fef0455a618c4bea1b4ee1",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.3_1.pdb.gz",
+      "size": 34118,
+      "sha256": "aa3d5a3c4889d95e743a8c6dec72bb73f440138f1e19b586b08bbf9d37ccf084",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.3_2.pdb.gz",
+      "size": 35515,
+      "sha256": "62c31fde350fc15bd34cc8bb1395669a7f8213914853b8e87ecca68acca8cf52",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.3_3.pdb.gz",
+      "size": 35490,
+      "sha256": "552deacaf08165f8475f1b9a7540686e0b4910148ddd7bbb556fdbcec8d750a8",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.3_4.pdb.gz",
+      "size": 35300,
+      "sha256": "09b0ada56fa08498cf3da028fd01abc2ca66aa0ef1cc296856d94df8dd16f0ac",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.3_5.pdb.gz",
+      "size": 35647,
+      "sha256": "c982338f68220be4de8fc12d4be817e2e39f52063b2d625e8f186ee0ea2cb086",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.3_6.pdb.gz",
+      "size": 35717,
+      "sha256": "3884bcea6dd147f8f1eedf3517c054e4eabc071f9919494120c4f342b5465c1e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bg5A03_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bg5A03_target_target_T0.3_7.pdb.gz",
+      "size": 35092,
+      "sha256": "b00ea501810224d8625098fdeaba80fbd03faaa9c9535f9b31e22e81335c9392",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.05_0.pdb.gz",
+      "size": 13466,
+      "sha256": "5e81e1341fb98ecc9813afaccf4c08c4a20626c7bcf11c2ce39f86fa8b38d2b2",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.05_1.pdb.gz",
+      "size": 13455,
+      "sha256": "5e7b5659d6b7d00f5289c289b7c485f173d6a50381f40bf0e22be6092da030ae",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.05_2.pdb.gz",
+      "size": 13112,
+      "sha256": "775828b40998d8dbe57a39fe120fae804a58a8a8825698e2197cf8ed096e2903",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.05_3.pdb.gz",
+      "size": 12942,
+      "sha256": "27686d27737101cd1d5acc46939da9ea7deaa1a79e09ae308773a55641544653",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.05_4.pdb.gz",
+      "size": 13405,
+      "sha256": "49481e269c0cce2f894607cab1d953bc38937d2db6ec847b34acec4d9ed9988f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.05_5.pdb.gz",
+      "size": 13071,
+      "sha256": "7c9531565cea6d5c143c037464609b5664f1d51f3a548f507f19c03c65a98806",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.05_6.pdb.gz",
+      "size": 12818,
+      "sha256": "ae120cb8c8179b40da3ebe9c03f8f0c966fc914842fa2ed4fceff3fb06874fa2",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.05_7.pdb.gz",
+      "size": 12863,
+      "sha256": "8038d44823977c56d6bc78d4f19a49795f5c204ce495144ae7ce920fd9986384",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.1_0.pdb.gz",
+      "size": 13210,
+      "sha256": "ef8b6d476d9973d5ba085d4c2603598cbb96af52b76b68ef0beda156e8063e2d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.1_1.pdb.gz",
+      "size": 13500,
+      "sha256": "8a36a67018e5ab1a21ef6be1348c760800b4f536ac00d80d63b70a0ff05b46bb",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.1_2.pdb.gz",
+      "size": 13387,
+      "sha256": "481e77a9737a94b3033a1ce4ed6115f8bf30ea5c29003c694f3040aa885eba4a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.1_3.pdb.gz",
+      "size": 13058,
+      "sha256": "e2ea225eea156130f893dd353be75f8013c0b059278df32113cc858b0dbf44c2",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.1_4.pdb.gz",
+      "size": 13504,
+      "sha256": "ff5b04430a8619cb629ebf448b70870306e5bf349c5cc222f7cfc68e6ea6ab6f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.1_5.pdb.gz",
+      "size": 12856,
+      "sha256": "931e96753b5de4c2e00d7f1ef1ac689ecdcf260dcc5a534e0315f8693e0266cf",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.1_6.pdb.gz",
+      "size": 13287,
+      "sha256": "fd32169a88c556c574829939e35d2ae98e232123b04300d35b1be511e7cd793e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.1_7.pdb.gz",
+      "size": 13644,
+      "sha256": "4b0c2ecd82f6700ef801e0e62265b5dc9deb8415f21cd4a29420535c607a5520",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.2_0.pdb.gz",
+      "size": 13232,
+      "sha256": "44730bac538ebac7d4788c4da7399a64cb46b6278f46fc58639fab44e6117706",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.2_1.pdb.gz",
+      "size": 13505,
+      "sha256": "b1eb5fbdd1fe90de6ae6e370d917037a625c44fed6e8b146490384d61b7562b5",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.2_2.pdb.gz",
+      "size": 13253,
+      "sha256": "459c0489fb3c876abf1454b8ae226a20ea769729575d188f8a057013069877d2",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.2_3.pdb.gz",
+      "size": 13310,
+      "sha256": "086ed4ab4c79f1549dcadab634d64ac7f6fdc02c0d90c8d74f4107a9b3625dc2",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.2_4.pdb.gz",
+      "size": 13357,
+      "sha256": "f862222a3c41e0607d3336f8a71983aa2acbbab43aa9e3d2cd29c7b9c99fc196",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.2_5.pdb.gz",
+      "size": 13574,
+      "sha256": "71bf669cad36d33591d7b4d24873fe0caf5ccee4d8ea877bc38a6ad8adc1c8d1",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.2_6.pdb.gz",
+      "size": 13151,
+      "sha256": "6beae04ec12e487e842b5e2c0ff2b24cecc289a46c9865b112df8beeced3b102",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.2_7.pdb.gz",
+      "size": 13179,
+      "sha256": "289f1035e654fc5510d0b108abad133a217a3deda76641bb17e751bee4d0f752",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.3_0.pdb.gz",
+      "size": 13468,
+      "sha256": "0e693c4aae24a5afbad1427f7ef16171e02e838a99eb5e2ccf5f92f7b080418f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.3_1.pdb.gz",
+      "size": 13667,
+      "sha256": "4baedd56b5e38718a039d69f8fc4820819c5810ed4823946264bd8051b404693",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.3_2.pdb.gz",
+      "size": 13661,
+      "sha256": "9de4e55716fb021e2fa3622f2371aed705fbacdd4a050fa8cdc356b706eac672",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.3_3.pdb.gz",
+      "size": 13306,
+      "sha256": "1bfc856921a2d31adb865739f1f797fab42970dd4186f3060e1c29d06bca27ca",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.3_4.pdb.gz",
+      "size": 14042,
+      "sha256": "019160907651c1b6f88c87e68e737064515d3a8ec6a0f192f2bb7b8caf24ab3c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.3_5.pdb.gz",
+      "size": 13147,
+      "sha256": "624f98390371c3f2eaa5d92ef478d44f936f042d94f2b06824bb18a32a9f224a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.3_6.pdb.gz",
+      "size": 13545,
+      "sha256": "0508f54c2860c729fd8d444c527f90b3071d2285591b95b0faaa76e19ffe5c12",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1bxmA00_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1bxmA00_target_target_T0.3_7.pdb.gz",
+      "size": 13317,
+      "sha256": "63b51c915cc5eaa7c66e33aabb35b057c9cb3a890c0f989610aebd1a39f1a975",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.05_0.pdb.gz",
+      "size": 35346,
+      "sha256": "020b8510287a881d51742ef3d6dcc71fa3df450256f36535480ad40c3a81bd5d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.05_1.pdb.gz",
+      "size": 36158,
+      "sha256": "b9a647c1900960c02252267cd1e4e3f0e79c70e0b3cb71d28c880d13f37095c3",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.05_2.pdb.gz",
+      "size": 35657,
+      "sha256": "bf0513e2018137dda5bb20afba49a0e76479d5a210deb163b986559c44fcd6c3",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.05_3.pdb.gz",
+      "size": 35618,
+      "sha256": "9215bb810d23a1ccdaea003825cc4beee1cfa8cd3b4215e0a6dc56391250d3d3",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.05_4.pdb.gz",
+      "size": 35638,
+      "sha256": "712b2bd7d3618cc3b54a29f49fcd5d3cb0f2bd5ac2d88481322605f090b9cba6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.05_5.pdb.gz",
+      "size": 36040,
+      "sha256": "df9bb72de113b8977852826a78d8046af4e9c6545d66f6f5d7f92152be374135",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.05_6.pdb.gz",
+      "size": 35532,
+      "sha256": "b7e9d048dfc03fca60c0bec4e24e2439c8b0f519c4ace3e622399d906cede360",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.05_7.pdb.gz",
+      "size": 35309,
+      "sha256": "13dc114402b4b38d70bdc7de562145353d758dfff8d77e276997a75ce26d37ac",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.1_0.pdb.gz",
+      "size": 35790,
+      "sha256": "c672707c3eba7aaeb0f0d3344c86da82b496711d9112ce819a4a1bdb0d60e4f4",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.1_1.pdb.gz",
+      "size": 35762,
+      "sha256": "64adb8df7cd905c39d0e41f32095dd81038cb57cd6dd9e31f0f5f117db82542d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.1_2.pdb.gz",
+      "size": 35816,
+      "sha256": "dc08f27633793517701035c7bd28464a31ceb16d76b64e5a75831d6156a414a0",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.1_3.pdb.gz",
+      "size": 35895,
+      "sha256": "8958aa804c255e5293617611f6fe7a3a9ffe6f4400fd7ac04f5b091816e34f5b",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.1_4.pdb.gz",
+      "size": 36008,
+      "sha256": "0d0a942a412bd44791fa6f73bb04f39eac289ab566c434e4ffdc8ffe991df2eb",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.1_5.pdb.gz",
+      "size": 36434,
+      "sha256": "5ee0be5e8f92dc64c8b8b10909fd6d01d5a132944722a3cab964be54f307b3d6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.1_6.pdb.gz",
+      "size": 35973,
+      "sha256": "e42e1fcbbecc34a383e1dfc3ceebaaac034a978747e0e24ee4b765ece375444a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.1_7.pdb.gz",
+      "size": 36052,
+      "sha256": "d2d4a441f3389f88d08575923443b37210f0ab4e41b4d016d5b7b94298cea9b7",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.2_0.pdb.gz",
+      "size": 35950,
+      "sha256": "7beffd47a480dbafc8fbf33e431e52a2616c5861ff169d36a343d800cdd546be",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.2_1.pdb.gz",
+      "size": 35640,
+      "sha256": "a8eabc7209c08d4d0bd74e53b8a58e390ed4a3a5434c215b07f4389d9b84bc7c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.2_2.pdb.gz",
+      "size": 35792,
+      "sha256": "f477c1ef778e0c8a72117518519aa9c6b26fce4458a9f8b2f6eb7b3d05ff69ea",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.2_3.pdb.gz",
+      "size": 35745,
+      "sha256": "39cf80fe99026e5c86d68ac2d483cc31d03684d2ace1998b496867765ca97715",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.2_4.pdb.gz",
+      "size": 35355,
+      "sha256": "35760a29e21d88f24f046f52b1772c3803da6b45154b7f329f44650883770575",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.2_5.pdb.gz",
+      "size": 36025,
+      "sha256": "3ea0be7ddb2f27e3be450d5b07d0d4984ce7d040e90e05f6d79743d10180d508",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.2_6.pdb.gz",
+      "size": 36053,
+      "sha256": "0f3658ee701af28f553c3eab28acca0baab64638781a6cb716b7438211dc7402",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.2_7.pdb.gz",
+      "size": 35820,
+      "sha256": "ad6af7aac7940b5d1fd0765371b83966974274fa1dfe5dc0e0eb20f85e5354bf",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.3_0.pdb.gz",
+      "size": 35510,
+      "sha256": "bd3c585a7620e5d81efbe423edf95d381e032ffe18b020a5e981cf82d73b25b5",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.3_1.pdb.gz",
+      "size": 35523,
+      "sha256": "513663cbe83639c10e4d377cc4cc39658a6979abd8b75fa5fb70adc534948566",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.3_2.pdb.gz",
+      "size": 35725,
+      "sha256": "14711cb6648c792e3fccc2619fbb8f846893df0f41a23c46c5daa67953b66da7",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.3_3.pdb.gz",
+      "size": 35166,
+      "sha256": "7dc63e96676c8ce5c4262368abf381ef04a0ea31d8487086a1b7f547f26ddd7e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.3_4.pdb.gz",
+      "size": 36110,
+      "sha256": "b8c78099fecc81c1e6d9a9c8186af976bda93dd3097dc10a520fc09e61907f16",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.3_5.pdb.gz",
+      "size": 36508,
+      "sha256": "a078799b0cd1a45e1bb0df5a82cf5ab9f9531dbc8f45c19d3c551a4820387dec",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.3_6.pdb.gz",
+      "size": 35655,
+      "sha256": "2403c4e511ee7c4399582e0043d7cffc0411ceb7c69788a48a77e6f60962441f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1c8zA00_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1c8zA00_target_target_T0.3_7.pdb.gz",
+      "size": 36158,
+      "sha256": "37f6991428c387af793a23826f93e95370ca02a6257c1caf51d171182d6119a1",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.05_0.pdb.gz",
+      "size": 8114,
+      "sha256": "40a22ba493fd24e46ee4ba16b77f9d958ecfb168b53b12b078dd8b464bedc91c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.05_1.pdb.gz",
+      "size": 7842,
+      "sha256": "af7aa724abc028bec6b7f7a8186ff98a9fd22ee36eaa962694d3856ddeee2f0d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.05_2.pdb.gz",
+      "size": 7983,
+      "sha256": "c419b1cbe9b3d5609848a48f477f3c3e31fb3660e2bad7085e97037280d7c376",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.05_3.pdb.gz",
+      "size": 7331,
+      "sha256": "8ec62986e66a7b25cea4ae91b02053b0e21e333fb39dffa40c36830b530da6d5",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.05_4.pdb.gz",
+      "size": 7609,
+      "sha256": "7f58c336eaa2564c39713d4624946489f807a6a8e0b5f0579d75b267d4cd2090",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.05_5.pdb.gz",
+      "size": 7952,
+      "sha256": "8e88f1df424d421d6bb9bfd4551b69b2d038850a89ca1d3fce005aeaaa85b6fc",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.05_6.pdb.gz",
+      "size": 7347,
+      "sha256": "eda6b2076c74f517d348579e5b59c6ac0ce05c69c60c7f8117d477dfc64fcccf",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.05_7.pdb.gz",
+      "size": 7575,
+      "sha256": "84d32b95a4cb5c3cbcd264e8a6555216fc2737e5dcfd5adc2bc77a757ff8c762",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.1_0.pdb.gz",
+      "size": 7619,
+      "sha256": "45662b136ebe3a9894b606097f7a1bca4b3bb21661e11c508a37a085faa4ee86",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.1_1.pdb.gz",
+      "size": 7487,
+      "sha256": "0735c3aee82c32c47e8ca5a5f538308fe2c214943ee6c2a49f0d5514d2fb3211",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.1_2.pdb.gz",
+      "size": 7673,
+      "sha256": "388831a641e00185b34dc04cc8fab1490d54a69975290a35188c5f4fdc9fb2ad",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.1_3.pdb.gz",
+      "size": 7375,
+      "sha256": "4ef9cab6613496b72ecaefd169918f0bcfd97c5373415d938b951f520e6cc974",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.1_4.pdb.gz",
+      "size": 8062,
+      "sha256": "66cb67e856f6dd21d9426f56ba62161e3d1d121f1b323767b9ffd616a01bae16",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.1_5.pdb.gz",
+      "size": 7510,
+      "sha256": "b4e9ad3b35ce41194049c3ca56204eebdb497e34cd62f26affebd79e6c456940",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.1_6.pdb.gz",
+      "size": 8087,
+      "sha256": "6ebaccdac4fc210f9f57e7fd23fec7b3973283968adfe03ac6e072758ccc21c8",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.1_7.pdb.gz",
+      "size": 7745,
+      "sha256": "3d85ce69c77fa521178a0bcfe93d174bc2c7f4231b8d235c5f3f1b889bb35993",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.2_0.pdb.gz",
+      "size": 7800,
+      "sha256": "d74afd693feb47018f1f85609dc62c72f751baaa8500532f41cc684afb4276b2",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.2_1.pdb.gz",
+      "size": 7553,
+      "sha256": "0381e57058b98d702dbc80e3a82bd7ea12b6ab57f86648bfddb5c073c9bc61b2",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.2_2.pdb.gz",
+      "size": 7712,
+      "sha256": "dca85bf5e88b0f8dc0ea05f497042409ec8b2c71837957540a5bb574ddc9c67c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.2_3.pdb.gz",
+      "size": 7531,
+      "sha256": "d2a229b74e59f5a3e7d1ebcb2623a00a14e4ebc57115063de66bcb6fa51be3d0",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.2_4.pdb.gz",
+      "size": 7370,
+      "sha256": "e62f22b70e33e939a4ed4a90bedd4e95bd7ee75bb3fb219b6906e9d7d57033da",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.2_5.pdb.gz",
+      "size": 8124,
+      "sha256": "00e8922a4be7ecedc1094b87f4d854f471d80d08a6f3ccfe419337264a7e88f7",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.2_6.pdb.gz",
+      "size": 8330,
+      "sha256": "f8ea7293d48ca75dbb1ecd79c81c7262b22db504f88826d68bff54d379e35629",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.2_7.pdb.gz",
+      "size": 8049,
+      "sha256": "2174dd5df2489c9a5abdfc8ef3d88228da7801d3da233d1acabfbf9af07b6fa5",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.3_0.pdb.gz",
+      "size": 7988,
+      "sha256": "91badbaace3b8d8ef16eecd52b5a494255704dbf0cfcf43b0d3183850942e5a4",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.3_1.pdb.gz",
+      "size": 8031,
+      "sha256": "a8f5aee4e206ff8003f0ace24c4bbd3e97d17c446cc12efdada706a59fbbe52f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.3_2.pdb.gz",
+      "size": 7822,
+      "sha256": "3a5cd791f9743a06944599b51e8bc168e8094c124d49f4f94257f88bc8e911c8",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.3_3.pdb.gz",
+      "size": 8345,
+      "sha256": "224e2316ff9f01017a20df0825e01986cc0057f84d37d28b23a6d08e4ae2cf8f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.3_4.pdb.gz",
+      "size": 7380,
+      "sha256": "c45508bfecca7748f0ab530e2f58ea75ac76be44c387f72f590a70470a68e47f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.3_5.pdb.gz",
+      "size": 8124,
+      "sha256": "79ccc26d531e7f3c2afcf382a91577cf10070eb1581cfbe73e264d09c4c1e317",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.3_6.pdb.gz",
+      "size": 7979,
+      "sha256": "970e9206fc91dbd8ea097fb8569613dad21c93989bf756a1eb1205870079125a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1e9tA00_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1e9tA00_target_target_T0.3_7.pdb.gz",
+      "size": 7136,
+      "sha256": "9b2dc6ea08bca724a9787cbd06e084b6fcebc56df5b42f46ba2ebda5b90ebaf9",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.05_0.pdb.gz",
+      "size": 15031,
+      "sha256": "d743edf4603770b394cb9167c0734305290c8def30e543bee54a016ab0d5001d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.05_1.pdb.gz",
+      "size": 14652,
+      "sha256": "0ebc3473835c0f20d7b906581168c8d0ace475b5e2f016420b06bb5ed42495c7",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.05_2.pdb.gz",
+      "size": 14722,
+      "sha256": "d64aaf9b7bfbbff6433f4800d3e7bddf3243bb9ff19f9f50474d6a34113a23c0",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.05_3.pdb.gz",
+      "size": 14771,
+      "sha256": "0ed18b25c551a3a311afc07d39bfb169619eea69d050ccf9020fe9985ab88cac",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.05_4.pdb.gz",
+      "size": 14697,
+      "sha256": "3f80b83b7c93c02cc89a3b17d6ee711777b51caf3aeb5d0fd0e70e403f20b355",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.05_5.pdb.gz",
+      "size": 14743,
+      "sha256": "41d541ae4fe27b48c055a8e98b703503ea1e9b3d063d1f1cc98c8b89e2f751f3",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.05_6.pdb.gz",
+      "size": 14784,
+      "sha256": "a4a021106d48b0608a1430da6fbad69dbe4d54859bf0f3c8967b8e730743b2b1",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.05_7.pdb.gz",
+      "size": 14884,
+      "sha256": "a37eef9360d9f3b1447a16ecd28c7fa1cfcb39177b175d709a81ab4a5fde3a74",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.1_0.pdb.gz",
+      "size": 15079,
+      "sha256": "f5202fcd84f4c28c5e413dfd9dc266a2f03658ecf7b6ed3af79212aea56dfeb9",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.1_1.pdb.gz",
+      "size": 14815,
+      "sha256": "f7acd17090754a12d27204a3c57580f936583396816e2ae6449724f4d9af61b7",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.1_2.pdb.gz",
+      "size": 14750,
+      "sha256": "fdbd4c6b8b876f8f8a41d942ea0bf786aba0f9899016d3b3cee84904fcf0efb0",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.1_3.pdb.gz",
+      "size": 14732,
+      "sha256": "a416ae9467b8a2da5ec88be3df269c3a077edaf9b6b82c33a80bf5c53c5adae8",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.1_4.pdb.gz",
+      "size": 14969,
+      "sha256": "8e2fc4a655e37a4b0bd4cff6e11f8a93e7b3862d8a1cf8de3c73632ea0e62931",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.1_5.pdb.gz",
+      "size": 14661,
+      "sha256": "5589dd2d5308011fbef6687bc0ba233bffd6cd5271639782be8cc578e5476b54",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.1_6.pdb.gz",
+      "size": 14783,
+      "sha256": "2c9ae0732376180facefc04aacdf4216fab3fd7781af8d654bce3a6863185229",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.1_7.pdb.gz",
+      "size": 14621,
+      "sha256": "9b829c2a9b4490dcbe728c5fdaf7a0b56c530bac64c35cfb59554f42d68ab67c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.2_0.pdb.gz",
+      "size": 14749,
+      "sha256": "3cce1e142872da025409690faea487e1219645fd4ac1925b819286061757fe03",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.2_1.pdb.gz",
+      "size": 14852,
+      "sha256": "fb1c8238ef158917545e4c01d47a7b9fe16e894a0c78bf09fb687261d4610463",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.2_2.pdb.gz",
+      "size": 14785,
+      "sha256": "4c02262e0a62c4b40a2eb1c7fa35f609c39dea93a2480dc1df67c9843e5d4ef8",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.2_3.pdb.gz",
+      "size": 14777,
+      "sha256": "bcf662ae4b106315c0c12a127e1c1dcf1d2c14537687f2dcc767de26ffe9c809",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.2_4.pdb.gz",
+      "size": 14838,
+      "sha256": "81a7b254f2a805ccb9e3ab042627fa7c833d6be6c9bfd94ee789a978b360601d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.2_5.pdb.gz",
+      "size": 14753,
+      "sha256": "681d209cc8d82fadb0710ca45b24f11522c942ac0162055a2ddfba9ac61d159c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.2_6.pdb.gz",
+      "size": 14744,
+      "sha256": "9521c6d5e0d350e567e960f1bcfb4b5863ad12ee44fa258b98a66a432925e291",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.2_7.pdb.gz",
+      "size": 14895,
+      "sha256": "47fb1fd5af33f720e0246266aa5497fb07fcbad65dbbd6bea76f923fea27c3c5",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.3_0.pdb.gz",
+      "size": 14894,
+      "sha256": "750210f73ba20201d7e1aa2fb801357e417ed121f95febf3b654846e7270279a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.3_1.pdb.gz",
+      "size": 14855,
+      "sha256": "3e37468206243667611adeea503ffa8e9abe46778c1a07fe4e56293660c9b247",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.3_2.pdb.gz",
+      "size": 14996,
+      "sha256": "e9799e9de4d4f506991a9c2daf1d3e288452cba16b4a47f1d92345a5be53a3f6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.3_3.pdb.gz",
+      "size": 14668,
+      "sha256": "5256ec4e7ca55a4d24112b1d1f3d480ecc766d6ced4273a9a52645ddffc5af96",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.3_4.pdb.gz",
+      "size": 14480,
+      "sha256": "c53d889f950a0a6dac1c7ce53a221a679d68e6ef4599e2ab9824c5f4e7c2dc95",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.3_5.pdb.gz",
+      "size": 14856,
+      "sha256": "505249f0cc73ccef8292414eba4dbc42962d077b1d27ecc23a605e7a79c09811",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.3_6.pdb.gz",
+      "size": 14851,
+      "sha256": "bdf07ae8485d1f0345d2c68755ed54eb4c96001f7de5d1a9826740b38ca89e4c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1eruA00_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1eruA00_target_target_T0.3_7.pdb.gz",
+      "size": 14718,
+      "sha256": "a1872db1d8664fdb4084ff8977ded5f43941fcb6cc11405d4acd01e8153024e6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.05_0.pdb.gz",
+      "size": 16477,
+      "sha256": "77dfabe218e34c2a342e1c5abba06b45bb74bf0d7860bfed1b1ffcfd7f4a7930",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.05_1.pdb.gz",
+      "size": 16670,
+      "sha256": "f5f47093b98239b8fbecacf79ec75870082c9ccf59e58567777a75469c8f033d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.05_2.pdb.gz",
+      "size": 16440,
+      "sha256": "d5ef091b9f5416d9d6e47fdb3e07aa3859cec6ea325b2608a4b0b3c169373346",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.05_3.pdb.gz",
+      "size": 16451,
+      "sha256": "84e4b4ab82d9c5d631b9894826c057c90a77844367a97e4bde19a70a354ba49f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.05_4.pdb.gz",
+      "size": 16660,
+      "sha256": "265e634bf87557107910098e271eedbfdfa10ca73f5981bf67036545d073b1b8",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.05_5.pdb.gz",
+      "size": 16768,
+      "sha256": "def9b4866d20731f02dc114e931d607d9d79a4e8884459b7d8c4f7a55f152b9a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.05_6.pdb.gz",
+      "size": 16743,
+      "sha256": "d7c921106de5bc00a7edd3e5e335acdef519456dfde233a3334bb561f7c92124",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.05_7.pdb.gz",
+      "size": 16423,
+      "sha256": "42f21ca44e4155cda6b67a944dd36ccf157a39b434b01454dea5b3770d1d97ea",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.1_0.pdb.gz",
+      "size": 16361,
+      "sha256": "97a6b4027f048c4a2af45894871a936a6aa4d11826eeaa026028f7ef606c1a0e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.1_1.pdb.gz",
+      "size": 16770,
+      "sha256": "b1c3989698f0426ea1edd32094abf3e799b514377daf334e6b88334ddb276984",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.1_2.pdb.gz",
+      "size": 16682,
+      "sha256": "ee8240c9a33522415688a71fa2f086d37a2e3fe017963bb613899b33100c526f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.1_3.pdb.gz",
+      "size": 16488,
+      "sha256": "44df5a1f244928b624f53c820f40eb0393ec9d54bb0d83c060679bac9387ed03",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.1_4.pdb.gz",
+      "size": 16308,
+      "sha256": "3e95c0277f2fb19c5384b40c1fe0f3adc5f27d664a0fa0e0f9e9f5f92f81a968",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.1_5.pdb.gz",
+      "size": 16743,
+      "sha256": "4698d40cace6150e98577591f398ad446e9f153806e420cc61bc7030bf4983ac",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.1_6.pdb.gz",
+      "size": 16507,
+      "sha256": "560a6def41607721431ee46463b19cda8be46d0621f0916007dfe5284f22cf44",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.1_7.pdb.gz",
+      "size": 16543,
+      "sha256": "f93e070e0cd26ac75e8a22d5c303e776e6eea0f54c6b9ec882fe3e983338e711",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.2_0.pdb.gz",
+      "size": 16113,
+      "sha256": "01c9d45594d98aeadbde617a8dfcf1b44e6f56fad457e58ac6276e8df9f3eebb",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.2_1.pdb.gz",
+      "size": 16781,
+      "sha256": "0ee618df40196bedd5117cd3c903aa6d042274e6e2ad7215e08221ef55c53934",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.2_2.pdb.gz",
+      "size": 16665,
+      "sha256": "13213af3fc4c9f8f94f993354dfaf2055ef2074f09da2b05f61c5e345ce77c82",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.2_3.pdb.gz",
+      "size": 16596,
+      "sha256": "96e4004935e39ffb0ee9348b01ad95f747ed0f37e6b0bf7ff0acdfe73fe93d89",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.2_4.pdb.gz",
+      "size": 16479,
+      "sha256": "6d06761ee4f436f6d07ffaacadb4dc01e730e0121c826f905807fdb07b16f9d0",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.2_5.pdb.gz",
+      "size": 16412,
+      "sha256": "9457b022ec5d7777f9b6b0a64499f055848f1358112f6503126c1d5471bd7e6e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.2_6.pdb.gz",
+      "size": 15736,
+      "sha256": "eef6fd7e3e4954dfa3e478de661ead52ec7fed52987ec71ef8d5cfae37203be1",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.2_7.pdb.gz",
+      "size": 16534,
+      "sha256": "15f17c9e18d911301be0a394978fac8df77b87281bbf65139fbc76790ceb9a8a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.3_0.pdb.gz",
+      "size": 16236,
+      "sha256": "baae221e061b2add0d25f025554741875fe692001a99c7901faf690e5338cfb4",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.3_1.pdb.gz",
+      "size": 16094,
+      "sha256": "0cc82809b736aa055d5a79d60b0d07847e08c4d2c9cf199134d973369578ac19",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.3_2.pdb.gz",
+      "size": 16688,
+      "sha256": "a8562669e440b4c677bb30b411bfaa6ceda4eacf7844e15b9920147b5826925e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.3_3.pdb.gz",
+      "size": 16590,
+      "sha256": "5302300babdffd3c75847ca6cd7fd907c26dcb84e162b910e3f240649a963c1f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.3_4.pdb.gz",
+      "size": 16680,
+      "sha256": "20f1197e92f575282f265009f0be43c74b9cf5be70a1e8c1ee20a9463a275d53",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.3_5.pdb.gz",
+      "size": 16426,
+      "sha256": "d2b33b410bd7f342df9a134acfdecc854fdbf91876f6073b9dfd10eb964e3c0b",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.3_6.pdb.gz",
+      "size": 15654,
+      "sha256": "8dbd141729935aef8606a4fd01982ce28b49f6768f81e9b2eab098361652890f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1hufA00_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1hufA00_target_target_T0.3_7.pdb.gz",
+      "size": 16831,
+      "sha256": "d98be75504886eafa842a74ac07ebfb5c2b188ff978d6ac1158ffadf49eee324",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.05_0.pdb.gz",
+      "size": 9675,
+      "sha256": "1c78a4355605630489d4b9db66f85f1b2b7417c1099a5a1ff81f4b1fba21f836",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.05_1.pdb.gz",
+      "size": 9662,
+      "sha256": "fd3b278c65f2d3877991fb4b785822d2c339cde8856d67d91849ef39bc4ac0be",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.05_2.pdb.gz",
+      "size": 9857,
+      "sha256": "a262c757bf62a0125827f8c5b3e8110fcf8df90ee2949d5bc96adc6d3a5953c6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.05_3.pdb.gz",
+      "size": 9728,
+      "sha256": "5a7ee1b4ca5c7317d143176f6f63532647154c4cf4d5c25197465534a996551d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.05_4.pdb.gz",
+      "size": 9466,
+      "sha256": "1f7d752aa52c2228299f672f12cba531565ba3c31d1dc0e76583250476b1d2a9",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.05_5.pdb.gz",
+      "size": 9585,
+      "sha256": "a89109d9b12c9cbb47ce5782b5b55a129d550827fc6685a4e7055f53742fe126",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.05_6.pdb.gz",
+      "size": 9941,
+      "sha256": "42c73746ccf41f7b82acb5516f92f510054735ac5a7347e6cc58d80b2d5e4859",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.05_7.pdb.gz",
+      "size": 9658,
+      "sha256": "74735091534ed7be51242991cbbe62e623f278b148c956915d05bf7560aa72a5",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.1_0.pdb.gz",
+      "size": 9517,
+      "sha256": "508f88b7f1049d860c3d81a46a521b72e8fa7c8808b97417df2606a9f9b6a82a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.1_1.pdb.gz",
+      "size": 9508,
+      "sha256": "fa7cacf89bd6293f61a648753e5d413014207d2c07697c450dde83e25503e937",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.1_2.pdb.gz",
+      "size": 9743,
+      "sha256": "5eb7656936743d6de1bb83b483c97178dce5a19686a37162714c44b91da7d49b",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.1_3.pdb.gz",
+      "size": 9798,
+      "sha256": "283a7e1d630b224c57bc875b3b94d0d134dd829e27b5c1cce9c3833d7823ff38",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.1_4.pdb.gz",
+      "size": 9764,
+      "sha256": "613b0b417458c8e1aeab4d8bf3957f6ee6bdff6e1c2274d143103f96caf4d279",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.1_5.pdb.gz",
+      "size": 9626,
+      "sha256": "d4786b57db138751141b50de9bcf8940593f05e079bf43e605d92943ff07638e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.1_6.pdb.gz",
+      "size": 9535,
+      "sha256": "2be8d13ca48bde1cd666f26335263baf4262af95466c1e5004b151cd2c8ecd0c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.1_7.pdb.gz",
+      "size": 9825,
+      "sha256": "26ac28481fa602e3c1be544505b5fb3deb14832aa3456de451d50c34dc817668",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.2_0.pdb.gz",
+      "size": 9028,
+      "sha256": "b841d3389f36cb11bee8baed1f13bbd5a5f4872db046adda9f7755a1f5036abf",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.2_1.pdb.gz",
+      "size": 9586,
+      "sha256": "505fe2ca360aee08c0de0f3b07cf8fd3e58fb9b4b51ac7b84af2d01c32bc2c83",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.2_2.pdb.gz",
+      "size": 9595,
+      "sha256": "e68ff4c6437c46d745d181214b040db990a6d3afa317ba224ae5bbbff861c6ac",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.2_3.pdb.gz",
+      "size": 9675,
+      "sha256": "39b0de8396375df49b25699f15e02ca4a9283eadc56d7453bcb728e725eb3839",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.2_4.pdb.gz",
+      "size": 10277,
+      "sha256": "ab60435673bf42e7ba2b755ebd532e99738ce4b2b863c8c214a0c5154fb86d9e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.2_5.pdb.gz",
+      "size": 9193,
+      "sha256": "2fa4902c21e5c88881232c976e55a852943b7fb337858542154bb5fae231f6ab",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.2_6.pdb.gz",
+      "size": 9799,
+      "sha256": "c9e1e99f7d19369395e90dc41d14b66fef2b1413c7ad08700a47935590e5c5f6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.2_7.pdb.gz",
+      "size": 9837,
+      "sha256": "517ed7cdf63989e9ac3e23db1b13b845a27286ba2419445a997aa57f49781760",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.3_0.pdb.gz",
+      "size": 9790,
+      "sha256": "3efc64492c1f154070b0ce7ff809bd2f47c3d2aebe4062e55f4df60066f621e6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.3_1.pdb.gz",
+      "size": 9882,
+      "sha256": "c5c58bfff1e6102d9d731a5186b3c85ea03c2f7356a0d672ac73c6ced7fd40fd",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.3_2.pdb.gz",
+      "size": 9838,
+      "sha256": "b1812737b2b4ba0d1b8a59ed5dc1c170c3d3dd774318f3df209a67ed3eee8480",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.3_3.pdb.gz",
+      "size": 9461,
+      "sha256": "e01e4e024e75a9ca1b0ca89d6a6afe43cb0d840ce0bd78dc03cec7bedf17eafd",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.3_4.pdb.gz",
+      "size": 9485,
+      "sha256": "4c2cba098369a62cf71c3f018bd575a87f26826ded8f26b64304335868fe1ece",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.3_5.pdb.gz",
+      "size": 10142,
+      "sha256": "2bd3a53034a1b9bbb1908ba4a5e5155805eee30a9f722e0935300b826049d1f2",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.3_6.pdb.gz",
+      "size": 9883,
+      "sha256": "0d965ced3620d1be8bedd7e85ca540595e0489f206e1036ac6accb1ff866c45e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1jygA00_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1jygA00_target_target_T0.3_7.pdb.gz",
+      "size": 9672,
+      "sha256": "4105939e7d72fd68ed2abcbbfafd0b2538a372bf9a4f686aad4e9d7ed4692e85",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.05_0.pdb.gz",
+      "size": 17968,
+      "sha256": "7989c0a606482c2043973022c3c11a878c598484421d34c74d1e548e423c0e67",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.05_1.pdb.gz",
+      "size": 17618,
+      "sha256": "6a2457484bc4f7254ce18a09489d9cee888a4fefe13aa6c15f25906193f5b487",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.05_2.pdb.gz",
+      "size": 17697,
+      "sha256": "bba8577166defa87ad623c39c03bda14f69c05a19307a28086b76f5b759f3788",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.05_3.pdb.gz",
+      "size": 17859,
+      "sha256": "b3f0e74f7e8f6f9ad6cbac3c5beb694ab1d1a9fb7d733112b022bacb9b0da52e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.05_4.pdb.gz",
+      "size": 17858,
+      "sha256": "14ca23942b9fb1d3c8a297e190c5d34746a7b0d30a10dc39726caa212d85c76b",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.05_5.pdb.gz",
+      "size": 16657,
+      "sha256": "80d24c377cb600c6226384b91c1a277fc342032baa0c85c6c93b2d30f71340dd",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.05_6.pdb.gz",
+      "size": 18167,
+      "sha256": "ada13d7ecb6df657257be1f8756e9a2fb6988cd049dc060441f26085545a3cbd",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.05_7.pdb.gz",
+      "size": 18025,
+      "sha256": "c98822ccd3b2cf9108e2228e1af09ce0959e15d60872703409ed42f8e90b9811",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.1_0.pdb.gz",
+      "size": 18499,
+      "sha256": "cb358cba62130cda983995ef143b3afb55ea49cc6a48767bb49dee0b173b4b58",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.1_1.pdb.gz",
+      "size": 17696,
+      "sha256": "be3fe528b7b64cfc7c80ecdfe30344908ed4cc9e3dd226e1e877ff5ccd1d412f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.1_2.pdb.gz",
+      "size": 17268,
+      "sha256": "43d245fab19a75596b701160b025a87aefa526eb7638b21a745504861097194d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.1_3.pdb.gz",
+      "size": 18178,
+      "sha256": "c9b4229f51662e131419a3e01e8d1e41e43c9aef495d3ecb9ca0f91127852317",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.1_4.pdb.gz",
+      "size": 17871,
+      "sha256": "f72c4e355cf95b35d26d451a1ad38a78e338fc1b194f974924c753f5976ea6c6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.1_5.pdb.gz",
+      "size": 17763,
+      "sha256": "f16c102d27bb13f84775e29b48fa9ab5ec929097ee81a6fb35faabdeb1fd3472",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.1_6.pdb.gz",
+      "size": 17512,
+      "sha256": "b47ac8b903f27a30ab20319d260308736d594838e6db3573da888f8c85298e54",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.1_7.pdb.gz",
+      "size": 16860,
+      "sha256": "5e33ec9bccf322e1a362b07defd4d4a22bd3b3b688de8aec1fe9c42166331141",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.2_0.pdb.gz",
+      "size": 18067,
+      "sha256": "7654d41afcd51ae84e129529d66f72d0b62f24a39d5f0294be35dd5ac1c32ff5",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.2_1.pdb.gz",
+      "size": 17212,
+      "sha256": "1cbe3259fde1b0a312254d1f542d60c69dab7648d3fed0c9ce8e2a7b1bd0b95d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.2_2.pdb.gz",
+      "size": 17865,
+      "sha256": "1e745c3fed9048c2b1217864e6419ec9b7ae9e571e7d7b39c45a3df410ad28b2",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.2_3.pdb.gz",
+      "size": 17719,
+      "sha256": "abab165d0c6788d3c7d33d5834f27d74ef32ad8eebc65f410ac712eb16237198",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.2_4.pdb.gz",
+      "size": 17878,
+      "sha256": "599abfd9731448d785145bb2c8228d1e11a98a4c5e01764399b419d19fea305c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.2_5.pdb.gz",
+      "size": 16176,
+      "sha256": "3167807e831ea7398d3b03171fb033124ecac0a69b46562fb4fb21d12075e660",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.2_6.pdb.gz",
+      "size": 18394,
+      "sha256": "0cb0dc44eec59830fe8523a7fdf4ccbf426e661711b01612b64a83c365934c98",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.2_7.pdb.gz",
+      "size": 16588,
+      "sha256": "6b3429608166087d75f739abb136d82a0d6113c6d82c3f9dc23c28ddbeaf190e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.3_0.pdb.gz",
+      "size": 18250,
+      "sha256": "2af312b36d8d71a16afd948e893c0b100030cdb51d64dc542591c8820ff1ad0a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.3_1.pdb.gz",
+      "size": 18797,
+      "sha256": "af7a3fb4d398a187b29664fac8c0bd6ef0826ef161f29f80787faf59e7a537df",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.3_2.pdb.gz",
+      "size": 17769,
+      "sha256": "529338d415a5af32d9769ae3940e306807ac9831e2725b194d77e648b24a0d17",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.3_3.pdb.gz",
+      "size": 17190,
+      "sha256": "55b4c75b196c59825e2cae64782a190db1a978811b24d881d8615a60da5ceeb9",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.3_4.pdb.gz",
+      "size": 17204,
+      "sha256": "58e3767a60467f8b05ebb398b782bd08c471b210b7e280aacf9fc6d0668094f8",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.3_5.pdb.gz",
+      "size": 18036,
+      "sha256": "b7b3c0a993a1460459486f6b7f08cab80116b166f891aaed37b8900d89fdca0d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.3_6.pdb.gz",
+      "size": 18271,
+      "sha256": "050e531819a1c4e18ac57335cbf7dbfba3d637eeb16479f0a0eacf11500f4610",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1ktuA00_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1ktuA00_target_target_T0.3_7.pdb.gz",
+      "size": 18328,
+      "sha256": "06edb15bf947d5c0569da610e01f413010c69de9712e25cd8cfb70c53071d3b8",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.05_0.pdb.gz",
+      "size": 9967,
+      "sha256": "e93bb729c357044ba8ecac0996d0206739225a62a0755144e78dae20e7273848",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.05_1.pdb.gz",
+      "size": 10512,
+      "sha256": "dfdc32a68e18f748b1bdf27f200b5f4c1b26efb41d4d4eb77ea615187713a709",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.05_2.pdb.gz",
+      "size": 9954,
+      "sha256": "1dae13d83c331236d4210d5f30373caccd1dc2dc1a2aa3b6208a221b4ee87133",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.05_3.pdb.gz",
+      "size": 9511,
+      "sha256": "a29c915ff73d693157b5e624f3e55e2f8f4109f652709cee5903e30419cc53e7",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.05_4.pdb.gz",
+      "size": 9281,
+      "sha256": "68ceb67d5745acd174c821d43bf8b5e87adff4a764e24b014e525fe4f8d4f22c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.05_5.pdb.gz",
+      "size": 9457,
+      "sha256": "3dabd0750d7320d9ba1ebc1ddd3d879cdedc476e54438a3f9b68c46a97ce88c1",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.05_6.pdb.gz",
+      "size": 10563,
+      "sha256": "1b6a72bb80b2d0c64b06bd26a492bb39b9f59dabe40523e8d7b40b121367c84f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.05_7.pdb.gz",
+      "size": 9675,
+      "sha256": "f1034a9c1b3892a5229e4c9cf922a18cc3ae7e87f1a1faac4f6e44c24305dc06",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.1_0.pdb.gz",
+      "size": 9873,
+      "sha256": "28111e7452e4d86b3641627a66a3753c0dfd9b4d1536e4b670ec29ecd2d26f66",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.1_1.pdb.gz",
+      "size": 10567,
+      "sha256": "95df4f43ba4ef5c7afaf7d4db2182aaf73cc7be1537e48abfe4a4c5c32719b2c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.1_2.pdb.gz",
+      "size": 9522,
+      "sha256": "2054958d3b30ae9be54e39181ad785d5b4afd91cec9c7459d78b91f04ba47acf",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.1_3.pdb.gz",
+      "size": 10066,
+      "sha256": "e6e7ccea2aec31026707e5b5ccafc2f0c81b6fce46409976e28e465997bcf078",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.1_4.pdb.gz",
+      "size": 10171,
+      "sha256": "7bba997c97e0779311e2b2899769dd3f9c45dfa336fb361cc66c9d072c94ac58",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.1_5.pdb.gz",
+      "size": 9638,
+      "sha256": "1c35fae2d07c9f635ff505d54778dcac875c7ebc39a5abadd2b889b9f55b9662",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.1_6.pdb.gz",
+      "size": 9919,
+      "sha256": "5d9f725c6d35793febbe1c67886279c4f44e9624f39d016443aa5b93bdb94e09",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.1_7.pdb.gz",
+      "size": 10447,
+      "sha256": "4465217b9470e19fd1e40034902882178e1b7cdbbcf1b927b83045805f8cb887",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.2_0.pdb.gz",
+      "size": 10925,
+      "sha256": "8de7590d9a4af2a6d7e35c0989861647c2f48bcbc72ebbae42d0ec809e1bb400",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.2_1.pdb.gz",
+      "size": 10428,
+      "sha256": "fa2d4b7cb57dcfef96afdb1b953f56c10d6e3999e464bf645e7e2986aeac2527",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.2_2.pdb.gz",
+      "size": 10005,
+      "sha256": "12845b9c8d127142e2696811e067347b8e9a3ee51da6cd727001f7b63c6b0953",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.2_3.pdb.gz",
+      "size": 9788,
+      "sha256": "b6595543c48b122d31a5cc2b0669c9f09e6a3299bd5a483716932d0f08152af3",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.2_4.pdb.gz",
+      "size": 10369,
+      "sha256": "13478848517457a12c0126133203db751e0af5857a2b6876d16829f4a65355bc",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.2_5.pdb.gz",
+      "size": 9855,
+      "sha256": "914715939247c2b0307adb1aa67d043fd3add4fd4e40c64e6d82a12e5af2dc15",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.2_6.pdb.gz",
+      "size": 9220,
+      "sha256": "07a2ae0ca355fb354ff013dbb3603e944a4df97b2e61ea610058b7adc2b5db45",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.2_7.pdb.gz",
+      "size": 9495,
+      "sha256": "97ff1784e5f28d8789b796e8fb953b0761eeee3f78bf5313358fe78b80ffb078",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.3_0.pdb.gz",
+      "size": 10800,
+      "sha256": "1327d8f6c7e2caf48200f384928832d04317ffcfdc4fb445b55bcfcdbea6a544",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.3_1.pdb.gz",
+      "size": 9386,
+      "sha256": "ec8f73d264704102604d7b75e5642e59e09090750455d67418a59de64b949886",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.3_2.pdb.gz",
+      "size": 11028,
+      "sha256": "0637c19978651ceb7e05c0cebd9fa483b989632b99fefd9f0aa9ac3594bc5274",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.3_3.pdb.gz",
+      "size": 10618,
+      "sha256": "22ea5cfa4e5e76268b365d99bb0303f9820770b576ef602e03796dc476baef9a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.3_4.pdb.gz",
+      "size": 9609,
+      "sha256": "acf53d646f8271966449d60443c0a4221112904420879ef84c484b81192c33b1",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.3_5.pdb.gz",
+      "size": 9935,
+      "sha256": "b824157e4ab8056c64ae25d6c563c5b12fbb094cd4cce440469ceac93e65cdd6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.3_6.pdb.gz",
+      "size": 9237,
+      "sha256": "f149fc7e088ae0053ce5a5540de6a7c98ad50add12f6c838e54cc06e925fcc3c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1l5cA00_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1l5cA00_target_target_T0.3_7.pdb.gz",
+      "size": 10164,
+      "sha256": "d738ef14cbcc2a4d2168eba339f7b7641f3001f074fcd9f5b6aad1075e2bac2e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.05_0.pdb.gz",
+      "size": 17251,
+      "sha256": "a076fb0885faa8835e0e7d9f9f16aad3cac8d7ff1ea11bd4aceec88a3aa08106",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.05_1.pdb.gz",
+      "size": 17514,
+      "sha256": "34e1d1679c8eced0b8c1949e0be0548e13cc2437ab9ebe4440d096b908e57174",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.05_2.pdb.gz",
+      "size": 17318,
+      "sha256": "1d20c6c1845e4141b196c6c9051c020493fa13240a1fbc96e7fbd10f1ad1be2a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.05_3.pdb.gz",
+      "size": 17553,
+      "sha256": "63d50ebac7543a8f144e3a89198e45d6201670b10fafa17edd1aec5859acf957",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.05_4.pdb.gz",
+      "size": 17493,
+      "sha256": "46a0ac96c62672e0e5f676b77ac068baf678ba23f128df668a1856e18339c9bb",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.05_5.pdb.gz",
+      "size": 16578,
+      "sha256": "a7abdb07e72ed9cf738e19e0ec1c34451a80e39bbb4cb284627a49bbc6151890",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.05_6.pdb.gz",
+      "size": 17786,
+      "sha256": "90ccef0411f819855306d259189145d8c8889dd31ce84d1aeca47c5007060018",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.05_7.pdb.gz",
+      "size": 17904,
+      "sha256": "491863b962e932cd8ff70ddce70e5990b19b2d3ff4b32c740b7273464f1dc064",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.1_0.pdb.gz",
+      "size": 17212,
+      "sha256": "311bc2c957a8fa86e5ad8b213d9e777cb847daf279cc17de368b293d6f23e716",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.1_1.pdb.gz",
+      "size": 16639,
+      "sha256": "4f51bf28997858dcb2a02fc4e30a36b42fd914336445ed8f04b859919396241b",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.1_2.pdb.gz",
+      "size": 17221,
+      "sha256": "698248472638e08a4ddaede33a8260c56dd7ec867c4a8d9ab01fadf7bf1b8903",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.1_3.pdb.gz",
+      "size": 17617,
+      "sha256": "a9ac4e74cc6ae6d5953300a3591c976750bae75a0adbfaa284bc5ad6b151ef83",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.1_4.pdb.gz",
+      "size": 17426,
+      "sha256": "c23ecf37a1bd363ecbdf57d2e537778ab410b7d3a01cd3b9d92a5b220ae7dfc1",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.1_5.pdb.gz",
+      "size": 16930,
+      "sha256": "39c6537ea54c1c0aa193b8e4445b3ec64351ebce8e2b19e47a942f2b7b98878d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.1_6.pdb.gz",
+      "size": 17535,
+      "sha256": "f7ac53654a791ddab01c3c696dea80cf1495f3045c8da097648f31e80d336c84",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.1_7.pdb.gz",
+      "size": 17128,
+      "sha256": "eaa6e7ecb056530de25ca9bcbe67f40cab9a419c011cea6ec3425dc875f9921b",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.2_0.pdb.gz",
+      "size": 17286,
+      "sha256": "c9553c5a915e8ca9c360c363f7c0ea0a7a2106d45512430696579cf078311da8",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.2_1.pdb.gz",
+      "size": 16065,
+      "sha256": "d02aabbefde403357d32ca159bf172d590cb1ce354211e285d1eff952b1bbfd7",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.2_2.pdb.gz",
+      "size": 16941,
+      "sha256": "5a02c286e32bfc6266fb490e5c36621bd9f80b3e3f35d63d960aeb2d8aeccfe9",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.2_3.pdb.gz",
+      "size": 15975,
+      "sha256": "c11a9c688f381241e03004140ad7cc9a1eba1242442523a52fdf43bbd7871edf",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.2_4.pdb.gz",
+      "size": 17073,
+      "sha256": "f97a8c2d5d79ef96eb3dea47782442294478a6976cc3e2e9c0284c13197abaea",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.2_5.pdb.gz",
+      "size": 16999,
+      "sha256": "9dbc3ff65aef2dbf75c7cb878be1de994d55554d43caaadfc388924390d96656",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.2_6.pdb.gz",
+      "size": 16928,
+      "sha256": "5a467df19679df75c81bfc04d201bb826b3e1be82d138ca83bae5c1c73e912f4",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.2_7.pdb.gz",
+      "size": 16715,
+      "sha256": "a7921078aadf101ba5d21946e83df7c2029010e530620d2f93b2bb1938319cbb",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.3_0.pdb.gz",
+      "size": 17129,
+      "sha256": "338d4ec8f2d848c5f42c32091c1765eef276944de2a6c9955780de720d0df4ec",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.3_1.pdb.gz",
+      "size": 16786,
+      "sha256": "c7e428b747169e073390b086667b6198dfe7fe660562e361ff843b330d9d6eee",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.3_2.pdb.gz",
+      "size": 16263,
+      "sha256": "89571c83ec8b2fceeb85979b93cf8f6052ac8f6e65341a6efc26fdc57482dc6b",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.3_3.pdb.gz",
+      "size": 17174,
+      "sha256": "cefcb81eb12f5ad4f46f894487033388dee1fc3049a09c234b09991d72adfe9d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.3_4.pdb.gz",
+      "size": 16947,
+      "sha256": "9bfcf03844180f23e6106e67e69f83c0ea1b54bb88ce233b8e896738d7c76ac3",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.3_5.pdb.gz",
+      "size": 17076,
+      "sha256": "77754d665efc6f64332f1a8590ca88a45046e9ad4eb721c04f4806254a0719d3",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.3_6.pdb.gz",
+      "size": 17693,
+      "sha256": "5e463d9d56a2a334cc0d3fb014424bf3cf3a10a9ce8e5441d1902983c05aae2d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1nr3A00_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1nr3A00_target_target_T0.3_7.pdb.gz",
+      "size": 15856,
+      "sha256": "c5e47cd375a79811f32c0baf71f8d6ebe9a8ee12b3f50d641783030d3746d182",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.05_0.pdb.gz",
+      "size": 11716,
+      "sha256": "73b9c62a207e1f07520785e541bed1374a8462d901737b48c57c64c9f57734cf",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.05_1.pdb.gz",
+      "size": 12519,
+      "sha256": "c888436360790c144ee7a786c74a6de04310773bc75f2776d4973c5259c4666e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.05_2.pdb.gz",
+      "size": 11878,
+      "sha256": "425f377e863fa7a3adfcbe63ffd4d8dcee60d4b051c07d99fa3837e95da18e7e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.05_3.pdb.gz",
+      "size": 12410,
+      "sha256": "e0c7515099c306f4185a0fd3b73105aaaae52b87a50f138c240239b92827e55e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.05_4.pdb.gz",
+      "size": 12711,
+      "sha256": "1f6d79887acd2acbb7701894ef3fb7e59d15dbc579e9611ae9856cf586a80421",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.05_5.pdb.gz",
+      "size": 11732,
+      "sha256": "f36bca24ceed5b39a168b9b6da24c32f12700f8aeb94283eaa3420c6dd47264a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.05_6.pdb.gz",
+      "size": 11855,
+      "sha256": "2cccf3dcaba7c5a216526c8dddfe2c2a60123f57cc7444798e8843c95823cd84",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.05_7.pdb.gz",
+      "size": 12287,
+      "sha256": "d19599d651d7fb2ebd6dcdec32f38c5becc7cb194cf16bedfeebc6a757b254ba",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.1_0.pdb.gz",
+      "size": 12075,
+      "sha256": "9bed70819daf4ac6036abc00d1d4d73de7948daae316f7d60154dc5902eac971",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.1_1.pdb.gz",
+      "size": 12641,
+      "sha256": "c1a789acec0760cee8ee26407a3c21829324abe7aca2c64011341e0899875bf4",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.1_2.pdb.gz",
+      "size": 12226,
+      "sha256": "43799f083d3f79d174716817d80cfd07e8b79056267160257a2f683f13f6e84f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.1_3.pdb.gz",
+      "size": 12256,
+      "sha256": "74737a603cee842ea16a327bc2c5f56c3c95f6f5306e7832e768a4bbf557b2f6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.1_4.pdb.gz",
+      "size": 12403,
+      "sha256": "74349c847b2f8cddf3ab0c02705b54d2c51f1c0ce05b5f417f7361488f3e400e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.1_5.pdb.gz",
+      "size": 12069,
+      "sha256": "c247b671993168480fab326915f0c74f569b41504784cf314f8f48acf8724ff9",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.1_6.pdb.gz",
+      "size": 12501,
+      "sha256": "95007c62134823b73ac51c7b7d105b1d2c0129cd1f6534f2d0c672823c5db9c6",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.1_7.pdb.gz",
+      "size": 12045,
+      "sha256": "791e7c29401a025da699adbb158f174d1f3a4f3e6860a8fcc9337d5e4ae22079",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.2_0.pdb.gz",
+      "size": 12385,
+      "sha256": "d75dd009c9a1a6ae5e09cafe9e6ff046756e27eb1688b9b952da057c797ca857",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.2_1.pdb.gz",
+      "size": 11908,
+      "sha256": "847f53382866112e48dc37e364240ab037fe0d6784125299bcf5ef1be0bb3d04",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.2_2.pdb.gz",
+      "size": 12601,
+      "sha256": "da0e43e2407c6a0bd6498868ec0606a47e4d63e53cbc8e2bdcb94aa92f043a19",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.2_3.pdb.gz",
+      "size": 12388,
+      "sha256": "e8b5521ea29346fd298077f2f07a619f4ad6f4e57ae07bd58ee03625ec606ef0",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.2_4.pdb.gz",
+      "size": 12023,
+      "sha256": "0766818175b2fd20dd358fd43259a91face731f122c28093b1fd8038bf812a68",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.2_5.pdb.gz",
+      "size": 12099,
+      "sha256": "3f6609fa20ddd8a0a9ec36cb167bebffeb00a4732ea60bf553a9ca52862401a5",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.2_6.pdb.gz",
+      "size": 12846,
+      "sha256": "3ac0e1db29d9dda7ef5ced5d8be8d52ddce08c6a4fea0f634f9442e52c1bf766",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.2_7.pdb.gz",
+      "size": 12082,
+      "sha256": "57e5d9e668e55abed041f28123869fd1475118ac2b591cfc2f28d7a6a7f23577",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.3_0.pdb.gz",
+      "size": 12283,
+      "sha256": "24e40782d739c02f8dedc1d729d3c9d81b8c8a4df7122207e605b8188982582c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.3_1.pdb.gz",
+      "size": 12383,
+      "sha256": "0b24d835031b97d0a0f46493165d0202949f6b54ab59505fffc2d9689e0f45d7",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.3_2.pdb.gz",
+      "size": 12287,
+      "sha256": "873dc9be01879e53b01c7080ffa7107995ca06687f2b54cc58f95bd899b0769c",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.3_3.pdb.gz",
+      "size": 12529,
+      "sha256": "65135936dedebe2ac80ce04595ca54ca5539644e9392afd1de5825cf27caa225",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.3_4.pdb.gz",
+      "size": 12163,
+      "sha256": "c4af0a6087fc135b435f8931f629f14dc2bf6a575a344e535d9bf514620f7115",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.3_5.pdb.gz",
+      "size": 12526,
+      "sha256": "093242993036b4331d4d64eefc9f783cdddd38c686623666879b65e3ff857de0",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.3_6.pdb.gz",
+      "size": 11879,
+      "sha256": "090efd693d77b8754e648d3e495d8c1bc6dd16d4b6d67c2c1abc00aedae9a397",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/1o8rA00_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/1o8rA00_target_target_T0.3_7.pdb.gz",
+      "size": 11862,
+      "sha256": "833d1304a956cdfbc355f73243138fb3650cac970b16b313f0cbfc5f01fade9a",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.05_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.05_0.pdb.gz",
+      "size": 34834,
+      "sha256": "2787578554103a67f66a7ee45986fb7483c46e7b67e8ec647be6640a17014589",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.05_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.05_1.pdb.gz",
+      "size": 35170,
+      "sha256": "57ab53b0dc653abd7a11dfab029d08da11c93e6433bd25196431fa68cdadf982",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.05_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.05_2.pdb.gz",
+      "size": 34942,
+      "sha256": "171c3215305d56ebbbaa2832ad7e08db40cacea96950ab566be771a58da920fa",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.05_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.05_3.pdb.gz",
+      "size": 34878,
+      "sha256": "bccb1c5dd20d8d6fd73220b68367620913ab691adc61b104e9c9b5311705ff9d",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.05_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.05_4.pdb.gz",
+      "size": 35040,
+      "sha256": "18761234247f2f3ece52343915102c8dfdf1b958c7f32f72a41f1d50e86b5e13",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.05_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.05_5.pdb.gz",
+      "size": 34341,
+      "sha256": "b6f85a88853961740be5a0b1a9f66b1225751f17fd0133f942ec5291a348c267",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.05_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.05_6.pdb.gz",
+      "size": 34674,
+      "sha256": "a33ebd815da5872d80fe1846bc87eebcaa7e3f405a102aeb1838990a2135ed5e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.05_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.05_7.pdb.gz",
+      "size": 34989,
+      "sha256": "543ab38dc15eeaf0e79b7421db1ad07c1de119b3944a192f3e2ff419f9ec8f89",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.1_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.1_0.pdb.gz",
+      "size": 34981,
+      "sha256": "7f56a9aa648089b6429d5842487e7d78daad40b5b18e9653195260f53a6c55e2",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.1_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.1_1.pdb.gz",
+      "size": 34939,
+      "sha256": "31b863a13ba8d4c8723300d041f07ef311317f755820d36334ddbe240f86daf8",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.1_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.1_2.pdb.gz",
+      "size": 34715,
+      "sha256": "59a4953d9da512b0f14bce31d2103a9fd5e43f309d452246d39d1f2816c6e03e",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.1_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.1_3.pdb.gz",
+      "size": 34631,
+      "sha256": "89bf37f10242bb47c52ee10448a6a755c83369d5542bb109ac646281d8b740ac",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.1_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.1_4.pdb.gz",
+      "size": 34801,
+      "sha256": "6a7efae4e98ca107349cd4843ea045f0bace5232b68978c0ecd48f3a505bdc7b",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.1_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.1_5.pdb.gz",
+      "size": 34676,
+      "sha256": "872c2a0d9a7cbc245f1bb9c1eca36df60133218c38932afd88de4441c8447859",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.1_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.1_6.pdb.gz",
+      "size": 34899,
+      "sha256": "4454bd5fc0f26dcbe1f39d28b49990899f9643396381282c9ee330a3c0280bde",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.1_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.1_7.pdb.gz",
+      "size": 34856,
+      "sha256": "e731677de644c2fcb48847335f726c9b4c048b72ae446c2814c4f505d12b6765",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.2_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.2_0.pdb.gz",
+      "size": 35003,
+      "sha256": "fb688f10dfe3dff7d45d5199a0f0f2cfb448147fb296851e5ca1d9bc768431ee",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.2_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.2_1.pdb.gz",
+      "size": 35121,
+      "sha256": "d9c88e7d9e7df2f0841141138a95fc97fd52db951a57615af9b829c55850a5ff",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.2_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.2_2.pdb.gz",
+      "size": 35109,
+      "sha256": "99ebc1e5f9221545a93f13965b077e4fe43eb26fc649e4a0c4b0baf5e806ecb5",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.2_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.2_3.pdb.gz",
+      "size": 34966,
+      "sha256": "5473bf9a7e3278e72c09b7b6e99011d6c29c279791dfdf46014b98f97661ae77",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.2_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.2_4.pdb.gz",
+      "size": 34428,
+      "sha256": "b43e375cf1e44744d62fec912401c6bb5669f604c8ba81edba1a0878dc7ac200",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.2_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.2_5.pdb.gz",
+      "size": 34608,
+      "sha256": "a2b72f8c2405f79fc2a95af77c6648b6000b52b09bdec54e6c9a0378d7a91a87",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.2_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.2_6.pdb.gz",
+      "size": 35051,
+      "sha256": "b1e9dace17bdf5cf66852bed3dd4f4d50288c7df3b200427437d78e87cc2cf16",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.2_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.2_7.pdb.gz",
+      "size": 35092,
+      "sha256": "2fdf8178a9f82b67812f37c0e0de99e236a92859563cef8ae225212dd6ead5c3",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.3_0.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.3_0.pdb.gz",
+      "size": 34675,
+      "sha256": "ae6771cc2e5e1c22ad49f6a054b5cba8e9ed37c1ee727267a5fa6e433edd2536",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.3_1.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.3_1.pdb.gz",
+      "size": 35199,
+      "sha256": "e3672db70358202eb18928afba98185558814bfede38921798d47a2f693692e3",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.3_2.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.3_2.pdb.gz",
+      "size": 34867,
+      "sha256": "b0eb0a182f3099a3c30815ca6f1cc57eb5733a464398154d9a9db3b7132a9eea",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.3_3.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.3_3.pdb.gz",
+      "size": 34514,
+      "sha256": "135af3fa86b752580a109a130458f8b5955dbfd10c960303bd5e7f88aaa0febb",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.3_4.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.3_4.pdb.gz",
+      "size": 35015,
+      "sha256": "40f0fb6ac49877aca253d05846bbd76078479db29e1c3f44964c26fce8f08b61",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.3_5.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.3_5.pdb.gz",
+      "size": 34367,
+      "sha256": "1bf31e318615b3f4989fd9e0157276085c8fc20b361a6dc28e5b9108096e752f",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.3_6.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.3_6.pdb.gz",
+      "size": 35228,
+      "sha256": "f17d36cfbdb0b9a01cb8ab69d3bb5f89e4d78f5ce8db02781e688d2289d9a90b",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/models/2wejA00_target_target_T0.3_7.pdb.gz",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/models/2wejA00_target_target_T0.3_7.pdb.gz",
+      "size": 35085,
+      "sha256": "e966416c9707b449c129ba280b816e05450eedf0d976fdb4353637d308adafab",
+      "verified": true
+    },
+    {
+      "local": "temperature_sweep/sequences.csv",
+      "key": "rapid_sr/gate0_frozen_metric_v1/temperature_sweep/sequences.csv",
+      "size": 243859,
+      "sha256": "eb97fdeb5a8126041fd1f957df2bc44ae6b1fa4130a5c53bf2889f6db160764f",
+      "verified": true
+    }
+  ]
+}
