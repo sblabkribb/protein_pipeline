@@ -53,7 +53,7 @@ body {
 }
 
 /* 숫자는 자릿수를 맞춰 비교한다. CI 와 비용을 눈으로 대조하는 화면이다. */
-.meta, output, pre, .apath, .unit, input[type=number] {
+.chip, .meta, output, pre, .apath, .unit, input[type=number] {
   font-variant-numeric: tabular-nums;
 }
 
