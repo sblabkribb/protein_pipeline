@@ -59,6 +59,7 @@ import {
   paintSkillsTab, requestSkills, saveSkill, resetSkill,
   beginEdit, cancelEdit, currentEdit,
 } from "./guided/skills.js";
+import { renderAgentsTab, requestAgentEvents } from "./guided/agents.js";
 import { el } from "./guided/dom.js";
 import { shouldRestoreStoredSession } from "./lib/auth.js";
 
@@ -308,6 +309,13 @@ async function selectRun(runId) {
     document.getElementById("structureViewer").replaceChildren(
       el("p", "warn", `구조를 불러오지 못했습니다: ${errorText(error)}`));
   });
+  // 에이전트 탭이 열려 있으면 방금 고른 실행 기준으로 강제 다시 읽는다. 이 줄은
+  // 세대 가드(status === "stale" 확인)를 통과한 뒤 별도 await 없이 실행되므로
+  // 낡은 실행으로 이 요청이 나가지 않는다. 탭이 닫혀 있으면 탭을 열 때
+  // __agentsTabLoad 가 선택된 실행을 채운다.
+  if (document.querySelector(".sidetab.active")?.dataset.sidetab === "agents") {
+    window.__agentsTabLoad?.(true);
+  }
   startPolling(runId, {
     onTick: (info) => {
       if (gen !== selectGen) return;
@@ -544,7 +552,7 @@ export function showPanel(name) {
 // 실행 선택·폴링·계획 흐름을 건드리지 않는다.
 
 export const SIDE_TAB_KEY = "kbf.guided.sidetab";
-const SIDE_TAB_NAMES = ["runs", "models", "connections", "skills"];
+const SIDE_TAB_NAMES = ["runs", "models", "connections", "skills", "agents"];
 let sideTabWired = false;
 
 export function showSideTab(name) {
@@ -558,6 +566,7 @@ export function showSideTab(name) {
   document.getElementById("sideModels").classList.toggle("hidden", wanted !== "models");
   document.getElementById("sideConnections").classList.toggle("hidden", wanted !== "connections");
   document.getElementById("sideSkills").classList.toggle("hidden", wanted !== "skills");
+  document.getElementById("sideAgents").classList.toggle("hidden", wanted !== "agents");
   localStorage.setItem(SIDE_TAB_KEY, wanted);
   if (wanted === "models" && typeof window.__modelsTabLoad === "function") {
     window.__modelsTabLoad();
@@ -567,6 +576,9 @@ export function showSideTab(name) {
   }
   if (wanted === "skills" && typeof window.__skillsTabLoad === "function") {
     window.__skillsTabLoad();
+  }
+  if (wanted === "agents" && typeof window.__agentsTabLoad === "function") {
+    window.__agentsTabLoad();
   }
 }
 
@@ -692,7 +704,11 @@ if (typeof document !== "undefined") {
       const skill = (payload.skills || []).find((s) => s.expert_id === id);
       beginEdit(id, skill ? skill.charter : "");
       paintSkillsTab(host, { state: "done", skills: payload.skills || [] });
-    }).catch(() => {});
+    }).catch((error) => {
+      // 조용히 삼키면 사용자는 클릭이 무시된 줄 안다. 같은 원인으로 저장 실패
+      // 와 표시를 맞춘다 - 탭 맨 앞에 warn 노트를 얹는다.
+      host.prepend(el("p", "warn", `편집하지 못했습니다: ${errorText(error)}`));
+    });
   };
   window.__skillsSave = async () => {
     const host = document.getElementById("sideSkills");
@@ -714,11 +730,43 @@ if (typeof document !== "undefined") {
     loadSkills(true);
   };
   window.__skillsReset = async (id) => {
+    const host = document.getElementById("sideSkills");
     try {
       await resetSkill(id);
+    } catch (error) {
+      host.prepend(el("p", "warn", `초기화하지 못했습니다: ${errorText(error)}`));
     } finally {
       await loadSkills(true);
     }
+  };
+
+  // 에이전트 탭은 실행별 판정 기록이므로 모델·연결 탭과 달리 선택된 실행에
+  // 묶인다. loadedFor 에 실행 id 를 남겨 같은 실행이면 다시 읽지 않고, force 는
+  // 실패 화면의 "다시 시도" 와 selectRun 의 재선택이 쓴다. 다른 탭 훅과 마찬가
+  // 지로 initSideTabs 의 탭 복원이 부를 수 있으니 먼저 정의한다.
+  window.__agentsTabLoad = (force = false) => {
+    const host = document.getElementById("sideAgents");
+    const runId = runState.runId;
+    if (!runId) {
+      renderAgentsTab(host, { state: "no-run" });
+      return;
+    }
+    if (host.dataset.loadedFor === runId && !force) return;   // 같은 실행이면 재사용
+    if (host.dataset.loading) return;                         // 중복 요청 억제
+    host.dataset.loading = "1";
+    renderAgentsTab(host, { state: "loading", runId });
+    requestAgentEvents(runId).then((out) => {
+      delete host.dataset.loading;
+      // 기다리는 사이 다른 실행을 골랐으면 버린다 - 낡은 실행의 판정이 새 실행
+      // 화면에 남으면 근거가 섞인다.
+      if (runState.runId !== runId) return;
+      const events = out.events || out.items || [];
+      host.dataset.loadedFor = runId;
+      renderAgentsTab(host, events.length ? { state: "done", events, runId } : { state: "empty", runId });
+    }).catch((error) => {
+      delete host.dataset.loading;
+      renderAgentsTab(host, { state: "error", message: `에이전트 판정을 확인하지 못했습니다: ${errorText(error)}` });
+    });
   };
 
   initSideTabs();

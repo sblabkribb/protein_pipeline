@@ -39,7 +39,8 @@ test("renderSkillsTab paints cards with source chips and charter text", () => {
   const html = JSON.stringify(host.children);
   assert.ok(html.includes("용해도·응집 전문가"));
   assert.ok(html.includes("사용자 헌장"));
-  assert.ok(html.includes("사용자") && html.includes("빌트인") === false || true); // 출처 칩 텍스트는 구현에 맞춤
+  assert.ok(html.includes("사용자 편집"));
+  assert.ok(html.includes("빌트인"));
   assert.ok(html.includes("2026-09-07"));
 });
 
