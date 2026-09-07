@@ -17,7 +17,21 @@ import {
   sendChat,
   loadLlmModels,
 } from "./guided/plan.js";
-import { closeStage, loadRunStatus, probeWorkers } from "./guided/monitor.js";
+import {
+  closeStage,
+  loadRunStatus,
+  loadArtifacts,
+  probeWorkers,
+  runState,
+  setRunStatus,
+  startPolling,
+  stopPolling,
+  cancelRun,
+  generateReport,
+  getReport,
+  renderReport,
+  renderRunProgress,
+} from "./guided/monitor.js";
 import { loadRunList, highlightRun } from "./guided/sidebar.js";
 
 // --- 세션 -----------------------------------------------------------------
@@ -135,8 +149,15 @@ function targetFasta() {
 
 async function selectRun(runId) {
   if (!runId) return;
+  stopPolling();
   await loadRunStatus(runId);
-  // 후속 태스크(진행 폴링·Results·Structure)가 여기에 갈린다.
+  startPolling(runId, {
+    onTick: (info) => {
+      // 상태 재조회 없이도 Run 탭이 살아 움직인다. 아티팩트는 상태가 바뀔 때만.
+      renderRunProgress(info);
+      if (info.state === "done" || info.state === "failed") loadArtifacts(runId);
+    },
+  });
 }
 
 async function startRun() {
@@ -243,12 +264,17 @@ function boot() {
   loadRunList(selectRun);
 }
 
-initSplitters();
-renderWeights(document.getElementById("weights"));
-renderStages(document.getElementById("stages"), null);
-document.getElementById("purpose").addEventListener("change", onPurposeChange);
-for (const id of ["nDesigns", "lengthAa"]) {
-  document.getElementById(id).addEventListener("change", loadRegistry);
+// facade 는 모듈 최상위에서 DOM 을 만진다 (dom.js 머리글의 함정과 같다). 이
+// 모듈은 monitor.js 의 순환 import 를 타고 node 테스트까지 평가되므로, 브라우저
+// 밖에서는 배선을 건너뛴다. 함수 선언과 export 는 그대로 남는다.
+if (typeof document !== "undefined") {
+  initSplitters();
+  renderWeights(document.getElementById("weights"));
+  renderStages(document.getElementById("stages"), null);
+  document.getElementById("purpose").addEventListener("change", onPurposeChange);
+  for (const id of ["nDesigns", "lengthAa"]) {
+    document.getElementById(id).addEventListener("change", loadRegistry);
+  }
 }
 
 // 마법사 단계 버튼은 사라졌다. 남은 역할은 하나다 - 계획이 생기기 전까지
@@ -268,75 +294,115 @@ export function showPanel(name) {
   }
 }
 
-for (const tab of document.querySelectorAll(".tab")) {
-  tab.addEventListener("click", () => showPanel(tab.dataset.panel));
-}
+if (typeof document !== "undefined") {
+  for (const tab of document.querySelectorAll(".tab")) {
+    tab.addEventListener("click", () => showPanel(tab.dataset.panel));
+  }
 
-document.getElementById("stageClose").addEventListener("click", closeStage);
-document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeStage();
-});
-document.getElementById("probeBtn").addEventListener("click", probeWorkers);
-document.getElementById("planBtn").addEventListener("click", generatePlan);
-document.getElementById("approveBtn").addEventListener("click", approve);
-document.getElementById("runBtn").addEventListener("click", startRun);
-document.getElementById("chatForm").addEventListener("submit", (event) => {
-  event.preventDefault();
-  const question = document.getElementById("chatInput").value.trim();
-  if (question) sendChat(question);
-});
-document.getElementById("llmLoadBtn").addEventListener("click", loadLlmModels);
-document.getElementById("llmProvider").addEventListener("change", loadLlmModels);
-document.getElementById("llmModel").addEventListener("change", (event) => {
-  state.llm.model = event.target.value;
-  document.getElementById("llmSummary").textContent =
-    `LLM: ${state.llm.provider} · ${event.target.value}`;
-});
-document.getElementById("targetFileBtn").addEventListener("click", () => {
-  document.getElementById("targetFile").click();
-});
-document.getElementById("targetFile").addEventListener("change", (event) => {
-  const file = event.target.files && event.target.files[0];
-  if (file) loadTargetFile(file).catch((error) => {
-    document.getElementById("targetNote").textContent = `파일을 읽지 못했습니다: ${errorText(error)}`;
+  document.getElementById("stageClose").addEventListener("click", closeStage);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeStage();
   });
+  document.getElementById("probeBtn").addEventListener("click", probeWorkers);
+  document.getElementById("planBtn").addEventListener("click", generatePlan);
+  document.getElementById("approveBtn").addEventListener("click", approve);
+  document.getElementById("runBtn").addEventListener("click", startRun);
+  document.getElementById("chatForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const question = document.getElementById("chatInput").value.trim();
+    if (question) sendChat(question);
+  });
+  document.getElementById("llmLoadBtn").addEventListener("click", loadLlmModels);
+  document.getElementById("llmProvider").addEventListener("change", loadLlmModels);
+  document.getElementById("llmModel").addEventListener("change", (event) => {
+    state.llm.model = event.target.value;
+    document.getElementById("llmSummary").textContent =
+      `LLM: ${state.llm.provider} · ${event.target.value}`;
+  });
+  document.getElementById("targetFileBtn").addEventListener("click", () => {
+    document.getElementById("targetFile").click();
+  });
+  document.getElementById("targetFile").addEventListener("change", (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (file) loadTargetFile(file).catch((error) => {
+      document.getElementById("targetNote").textContent = `파일을 읽지 못했습니다: ${errorText(error)}`;
+    });
+  });
+  document.getElementById("targetClearBtn").addEventListener("click", () => {
+    document.getElementById("targetFasta").value = "";
+    document.getElementById("targetFile").value = "";
+    document.getElementById("targetNote").textContent = "";
+  });
+  document.getElementById("logoutBtn").addEventListener("click", signOut);
+document.getElementById("cancelRunBtn").addEventListener("click", async () => {
+  const runId = runState.runId;
+  if (!runId) return;
+  if (!window.confirm(`${runId} 실행을 취소할까요? 시작된 스테이지는 되돌릴 수 없습니다.`)) return;
+  try {
+    await cancelRun(runId);
+    await loadRunStatus(runId);
+  } catch (error) {
+    setRunStatus(`취소하지 못했습니다: ${errorText(error)}`);
+  }
 });
-document.getElementById("targetClearBtn").addEventListener("click", () => {
-  document.getElementById("targetFasta").value = "";
-  document.getElementById("targetFile").value = "";
-  document.getElementById("targetNote").textContent = "";
-});
-document.getElementById("logoutBtn").addEventListener("click", signOut);
-document.getElementById("newDesignBtn").addEventListener("click", () => {
-  highlightRun("");
-  document.getElementById("objectiveSection").scrollIntoView({ behavior: "smooth" });
-  document.getElementById("targetFasta").focus();
-});
-document.getElementById("loginForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  const button = document.getElementById("loginBtn");
-  const error = document.getElementById("loginError");
-  error.textContent = "";
+document.getElementById("reportGenBtn").addEventListener("click", async () => {
+  const runId = runState.runId;
+  if (!runId) return;
+  const button = document.getElementById("reportGenBtn");
   button.disabled = true;
   try {
-    const user = await signIn(
-      document.getElementById("loginUser").value.trim(),
-      document.getElementById("loginPass").value,
-    );
-    setSignedIn((user && (user.username || user.name)) || storedUserName());
-    boot();
-  } catch (err) {
-    error.textContent = err.message;
+    await generateReport(runId);
+    const out = await getReport(runId);
+    if (out && out.error) throw new Error(out.error);
+    renderReport(document.getElementById("reportView"), out.report || out.markdown || out.text || "");
+  } catch (error) {
+    setRunStatus(`리포트를 만들지 못했습니다: ${errorText(error)}`);
   } finally {
     button.disabled = false;
   }
 });
+document.getElementById("reportLoadBtn").addEventListener("click", async () => {
+  const runId = runState.runId;
+  if (!runId) return;
+  try {
+    const out = await getReport(runId);
+    if (out && out.error) throw new Error(out.error);
+    renderReport(document.getElementById("reportView"), out.report || out.markdown || out.text || "");
+  } catch (error) {
+    setRunStatus(`리포트를 불러오지 못했습니다: ${errorText(error)}`);
+  }
+});
+  document.getElementById("newDesignBtn").addEventListener("click", () => {
+    highlightRun("");
+    document.getElementById("objectiveSection").scrollIntoView({ behavior: "smooth" });
+    document.getElementById("targetFasta").focus();
+  });
+  document.getElementById("loginForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = document.getElementById("loginBtn");
+    const error = document.getElementById("loginError");
+    error.textContent = "";
+    button.disabled = true;
+    try {
+      const user = await signIn(
+        document.getElementById("loginUser").value.trim(),
+        document.getElementById("loginPass").value,
+      );
+      setSignedIn((user && (user.username || user.name)) || storedUserName());
+      boot();
+    } catch (err) {
+      error.textContent = err.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
 
-if (localStorage.getItem("kbf.token")) {
-  setSignedIn(storedUserName());
-  boot();
-} else {
-  setSignedOut("");
+  if (localStorage.getItem("kbf.token")) {
+    setSignedIn(storedUserName());
+    boot();
+  } else {
+    setSignedOut("");
+  }
 }
 
 export { collectObjective, decisionNode, evidenceNode, formatSeconds, stageRow } from "./guided/plan.js";

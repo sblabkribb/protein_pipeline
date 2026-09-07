@@ -1,6 +1,8 @@
 // frontend/guided/monitor.js — 실행 상태·산출물·연결/워커 점검.
 import { callTool, errorText } from "./api.js";
 import { el, dot, renderConnections } from "./plan.js";
+import { progressStepsForRequest } from "../lib/pipeline.js";
+import { renderMarkdown } from "../lib/md.js";
 // 순환 import: facade 와 상호 참조. 함수 선언이라 hoisting 으로 안전하되,
 // 모듈 최상위에서 호출하지 말 것.
 import { showPanel } from "../guided.js";
@@ -75,6 +77,9 @@ async function loadRunStatus(runId) {
       warn.textContent = String(info.error_summary);
       host.appendChild(warn);
     }
+    renderRunProgress(info);
+    const actions = document.getElementById("runActions");
+    if (actions) actions.classList.remove("hidden");
     await loadArtifacts(runId);
     showPanel("run");
   } catch (error) {
@@ -270,4 +275,107 @@ async function probeWorkers() {
   }
 }
 
-export { closeStage, loadRunStatus, probeWorkers };
+// --- Run 탭: 진행·폴링·취소·리포트 -----------------------------------------
+
+const POLL_ACTIVE_MS = 5000;
+const POLL_IDLE_MS = 30000;
+const POLL_MAX_FAILURES = 3;
+
+export function nextPollDelayMs(consecutiveFailures, isActive) {
+  if (consecutiveFailures >= POLL_MAX_FAILURES) return 0;
+  return isActive ? POLL_ACTIVE_MS : POLL_IDLE_MS;
+}
+
+const STAGE_ALIASES = { wt_diff: "wt", init: "msa" };
+
+export function mapStatusStageToStep(stage) {
+  const raw = String(stage || "").trim();
+  if (!raw) return "";
+  if (STAGE_ALIASES[raw]) return STAGE_ALIASES[raw];
+  return raw.replace(/_[0-9]+$/, "");   // design_50 -> design
+}
+
+export function stageProgressPercent(stage, state, steps) {
+  if (!Array.isArray(steps) || !steps.length) return 0;
+  if (String(state) === "done") return 100;
+  const idx = steps.indexOf(mapStatusStageToStep(stage));
+  return idx < 0 ? 0 : Math.round(((idx + 1) / steps.length) * 100);
+}
+
+// 폴링 상태. 실행이 끝나거나 실패가 3회 연속되면 멈춘다 - 조용히 계속 도는
+// 타이머는 사용자가 탭을 닫은 뒤에도 서버를 두드린다.
+const poll = { runId: "", timer: 0, failures: 0, active: false };
+
+export function stopPolling() {
+  if (poll.timer) clearTimeout(poll.timer);
+  poll.timer = 0;
+  poll.runId = "";
+}
+
+export function startPolling(runId, { onTick } = {}) {
+  stopPolling();
+  poll.runId = runId;
+  poll.failures = 0;
+  poll.active = true;
+  const tick = async () => {
+    try {
+      const out = await callTool("pipeline.status", { run_id: poll.runId });
+      if (out && out.error) throw new Error(out.error);
+      poll.failures = 0;
+      const info = (out && typeof out.status === "object" && out.status) || out;
+      const done = ["done", "failed", "cancelled"].includes(String(info.state));
+      poll.active = !done;
+      if (onTick) onTick(info);
+      if (done) { stopPolling(); return; }
+    } catch {
+      poll.failures += 1;
+      if (poll.failures >= POLL_MAX_FAILURES) {
+        poll.active = false;
+        if (onTick) onTick({ poll_stalled: true });
+        stopPolling();
+        return;
+      }
+    }
+    const delay = nextPollDelayMs(poll.failures, poll.active);
+    if (delay > 0) poll.timer = setTimeout(tick, delay);
+  };
+  poll.timer = setTimeout(tick, POLL_ACTIVE_MS);
+}
+
+export function renderRunProgress(info) {
+  const wrap = document.getElementById("runProgress");
+  const fill = document.getElementById("runProgressFill");
+  const label = document.getElementById("runProgressLabel");
+  if (!wrap || !fill || !label) return;
+  if (!info || info.poll_stalled) {
+    wrap.classList.add("hidden");
+    return;
+  }
+  const steps = progressStepsForRequest({ mode: "pipeline", noveltyEnabled: true, wtCompare: true })
+    .filter((step) => step !== "done");
+  const percent = stageProgressPercent(info.stage, info.state, steps);
+  wrap.classList.remove("hidden");
+  fill.style.width = `${percent}%`;
+  wrap.setAttribute("aria-valuenow", String(percent));
+  label.textContent = `${mapStatusStageToStep(info.stage) || info.stage || "-"} · ${info.state || "-"} · ${percent}%`
+    + (info.error_summary ? ` · 오류: ${info.error_summary}` : "");
+}
+
+export async function cancelRun(runId) {
+  return callTool("pipeline.cancel_run", { run_id: runId });
+}
+
+export async function generateReport(runId) {
+  return callTool("pipeline.generate_report", { run_id: runId });
+}
+
+export async function getReport(runId) {
+  return callTool("pipeline.get_report", { run_id: runId });
+}
+
+export function renderReport(host, markdown) {
+  host.classList.remove("hidden");
+  host.innerHTML = renderMarkdown(String(markdown || ""));
+}
+
+export { closeStage, loadRunStatus, loadArtifacts, probeWorkers, runState, setRunStatus };
