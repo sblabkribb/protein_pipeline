@@ -433,7 +433,9 @@ export function clampPanes(panes, layoutWidth) {
     newLeft = PANE_MIN;
     newRight = Math.max(PANE_MIN, budget - PANE_MIN);
   }
-  return { left: Math.round(newLeft), right: Math.round(newRight) };
+  const newLeftRounded = Math.round(newLeft);
+  const newRightRounded = Math.max(PANE_MIN, Math.round(budget - newLeftRounded));
+  return { left: newLeftRounded, right: newRightRounded };
 }
 
 export function choosePaneDefault(width, saved) {
@@ -444,7 +446,8 @@ export function choosePaneDefault(width, saved) {
 
 function initSplitters() {
   const layout = document.querySelector(".layout");
-  let panes = clampPanes(choosePaneDefault(layout.clientWidth, readPanes()), layout.clientWidth);
+  let userPanes = clampPanes(choosePaneDefault(layout.clientWidth, readPanes()), layout.clientWidth);
+  let panes = { ...userPanes };
   applyPanes(panes);
 
   const clamp = (value) => Math.max(PANE_MIN, Math.min(value, layout.clientWidth - PANE_MIN * 2));
@@ -454,14 +457,16 @@ function initSplitters() {
 
     const drag = (event) => {
       const rect = layout.getBoundingClientRect();
-      panes[side] = clamp(side === "left" ? event.clientX - rect.left : rect.right - event.clientX);
+      userPanes[side] = clamp(side === "left" ? event.clientX - rect.left : rect.right - event.clientX);
+      panes = clampPanes(userPanes, layout.clientWidth);
       applyPanes(panes);
     };
     const stop = () => {
       document.removeEventListener("pointermove", drag);
       document.removeEventListener("pointerup", stop);
       document.body.classList.remove("dragging");
-      localStorage.setItem(PANE_KEY, JSON.stringify(panes));
+      userPanes = clampPanes(userPanes, layout.clientWidth);
+      localStorage.setItem(PANE_KEY, JSON.stringify(userPanes));
     };
     handle.addEventListener("pointerdown", (event) => {
       event.preventDefault();
@@ -472,23 +477,27 @@ function initSplitters() {
     // 드래그는 키보드로 못 한다. 방향키로 같은 일을 할 수 있어야 한다.
     handle.addEventListener("keydown", (event) => {
       const step = event.shiftKey ? 40 : 12;
-      if (event.key === "ArrowLeft") panes[side] = clamp(panes[side] + (side === "right" ? step : -step));
-      else if (event.key === "ArrowRight") panes[side] = clamp(panes[side] + (side === "right" ? -step : step));
+      if (event.key === "ArrowLeft") userPanes[side] = clamp(userPanes[side] + (side === "right" ? step : -step));
+      else if (event.key === "ArrowRight") userPanes[side] = clamp(userPanes[side] + (side === "right" ? -step : step));
       else if (event.key !== "Home") return;
-      if (event.key === "Home") panes[side] = PANE_DEFAULT[side];
+      if (event.key === "Home") userPanes[side] = PANE_DEFAULT[side];
       event.preventDefault();
+      // 키 입력 하나가 곧 커밋이다(예전에도 즉시 저장했다). 저장 불변식 -
+      // userPanes 가 창에 맞는 상태로만 저장된다 - 를 지키기 위해 여기서도 접는다.
+      userPanes = clampPanes(userPanes, layout.clientWidth);
+      panes = { ...userPanes };
       applyPanes(panes);
-      localStorage.setItem(PANE_KEY, JSON.stringify(panes));
+      localStorage.setItem(PANE_KEY, JSON.stringify(userPanes));
     });
   }
 
-  // 창 크기가 변하면 저장된 폭을 다시 클램프한다. 저장값은 건드리지 않는다 -
-  // 창을 다시 넓히면 사용자가 정한 폭으로 돌아간다.
+  // 작업 복사본(panes)은 항상 사용자 선호(userPanes)에서 파생한다. 리사이즈가
+  // userPanes 를 되감지 않으므로 창을 다시 넓히면 사용자가 정한 폭으로 돌아간다.
   let resizeTimer = 0;
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => {
-      panes = clampPanes(panes, layout.clientWidth);
+      panes = clampPanes(userPanes, layout.clientWidth);
       applyPanes(panes);
     }, 100);
   });

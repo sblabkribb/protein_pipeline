@@ -39,8 +39,12 @@ test("saved values win; the narrow default only applies between 1101 and 1280", 
 
 test("initSplitters clamps on restore and re-clamps on resize", () => {
   const src = readFileSync(new URL("../guided.js", import.meta.url), "utf8");
-  const section = src.slice(src.indexOf("function initSplitters"));
+  const start = src.indexOf("function initSplitters");
+  const end = src.indexOf("function boot");
+  const section = src.slice(start, end > start ? end : undefined);
   assert.ok(section.includes("clampPanes("), "restore must go through the clamp");
   assert.ok(section.includes('addEventListener("resize"'), "resize must re-clamp");
   assert.ok(section.includes("choosePaneDefault("));
+  assert.ok(section.includes("clampPanes(userPanes"),
+            "resize derives from the stable user preference, not the working copy");
 });
