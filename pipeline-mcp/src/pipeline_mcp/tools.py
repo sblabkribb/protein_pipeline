@@ -9881,6 +9881,10 @@ class ToolDispatcher:
                     - registry.measurable_objectives()
                 ),
             }
+            # 목표별 정직한 상태 — 프런트가 3분류로 추측하지 않게 한다.
+            out["objective_status"] = {
+                name: dict(entry) for name, entry in registry.objective_status.items()
+            }
             # 화면의 '연결' 블록. 설정하지 않은 것과 연결에 실패한 것은 다르다.
             from .clients.portal_mcp import portal_config_from_env
 
