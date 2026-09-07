@@ -49,6 +49,7 @@ test("renderConnectionsTab paints rows with state chips and sections", () => {
   assert.ok(html.includes("okchip") && html.includes("badchip") && html.includes("warnchip"));
   assert.ok(html.includes("모델 불일치"));
   assert.ok(html.includes("alphafold3"));
+  assert.ok(html.includes("다시 실측"), "done state offers a re-probe button");
 });
 
 test("renderConnectionsTab paints loading, error-with-retry and empty states", () => {

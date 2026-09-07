@@ -86,6 +86,10 @@ body {
 /* 모델 탭. 좌 레일 안에서 섹션 사이만 숨을 쉬게 한다. */
 .modelstab { padding-top: 4px; display: grid; gap: 6px; }
 .modelstab h3 { margin-top: 8px; }
+/* 네 좌측 탭(모델/연결/스킬/에이전트)의 카드는 제목과 본문을 세로로 쌓는다.
+   .skill 의 전역 flex row 규칙과 섞이면 좁은 레일에서 본문이 제목 옆으로 짜여
+   글자가 겹친다 - councilbox/literaturebox 와 같은 이유, 같은 처방. */
+.modelstab .skill { display: block; padding: 8px 10px; }
 
 /* 화면이 좁아지면 레일을 접어 세로로 쌓는다. */
 @media (max-width: 1100px) {

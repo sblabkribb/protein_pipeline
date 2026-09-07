@@ -80,3 +80,8 @@ test("the facade loads the models tab on first entry", () => {
             "the hook must exist before init restores the last tab");
   assert.ok(src.includes('from "./guided/models.js"'));
 });
+
+test("side tab cards stack vertically so narrow rails do not overlap text", () => {
+  const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
+  assert.ok(css.includes(".modelstab .skill { display: block"), "cards must not be flex rows");
+});

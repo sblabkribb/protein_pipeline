@@ -48,6 +48,17 @@ export function renderConnectionsTab(host, { state = "idle", data = null, messag
     return;
   }
 
+  const reprobe = document.createElement("button");
+  reprobe.type = "button";
+  reprobe.className = "ghost";
+  reprobe.textContent = "다시 실측";
+  if (typeof reprobe.addEventListener === "function") {
+    reprobe.addEventListener("click", () => {
+      if (typeof window !== "undefined" && window.__connectionsTabLoad) window.__connectionsTabLoad(true);
+    });
+  }
+  host.appendChild(reprobe);
+
   host.appendChild(el("h3", "", "엔드포인트 실측"));
   for (const row of rows) {
     const card = el("div", "skill");
