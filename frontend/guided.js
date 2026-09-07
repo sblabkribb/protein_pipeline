@@ -33,6 +33,15 @@ import {
   renderRunProgress,
 } from "./guided/monitor.js";
 import { loadRunList, highlightRun } from "./guided/sidebar.js";
+import {
+  loadFunnel,
+  renderFunnel,
+  loadHitList,
+  renderHitList,
+  loadCompare,
+  summarizeCompare,
+} from "./guided/results.js";
+import { el } from "./guided/dom.js";
 
 // --- 세션 -----------------------------------------------------------------
 //
@@ -156,6 +165,14 @@ async function selectRun(runId) {
   stopPolling();
   const status = await loadRunStatus(runId, { isStale: () => gen !== selectGen });
   if (status === "stale") return;   // 낡은 응답은 그리지도, 폴링도 시작하지 않는다
+  // Results 탭은 Run 상태 다음에 따로 채운다. 퍼널은 loadRunStatus 가 방금
+  // 채운 아티팩트 목록을, 히트리스트는 전용 도구를 쓴다. 재선택되면 낡은 세대
+  // 아무것도 그리지 않는다 - 재선택 덧그림은 이미 한 번 막았던 것이다.
+  refreshResults(runId, { isStale: () => gen !== selectGen }).catch((error) => {
+    if (gen !== selectGen) return;
+    document.getElementById("hitList").replaceChildren(
+      el("p", "note", `결과를 불러오지 못했습니다: ${errorText(error)}`));
+  });
   startPolling(runId, {
     onTick: (info) => {
       if (gen !== selectGen) return;
@@ -166,6 +183,25 @@ async function selectRun(runId) {
       }
     },
   });
+}
+
+async function refreshResults(runId, { isStale = () => false } = {}) {
+  const rows = await loadFunnel(runId, runState.artifacts || []);
+  if (isStale()) return;
+  renderFunnel(document.getElementById("funnelBox"), rows);
+  const hits = await loadHitList(runId);
+  if (isStale()) return;
+  renderHitList(document.getElementById("hitList"), hits);
+}
+
+// 비교 기준 드롭다운은 실행 목록이 바뀔 때마다 다시 채운다. 사용자가 고른 값을
+// 최대한 지킨다 - 목록이 갱신돼도 선택이 풀리면 비교를 다시 고르게 된다.
+function refreshCompareBaselines(runs) {
+  const select = document.getElementById("compareBaseline");
+  const current = select.value;
+  select.replaceChildren(new Option("비교 기준 실행 선택…", ""));
+  for (const run of runs || []) select.appendChild(new Option(run.run_id, run.run_id));
+  select.value = current;
 }
 
 async function startRun() {
@@ -192,7 +228,7 @@ async function startRun() {
     const runId = String(out.run_id || out.id || "");
     note.textContent = runId ? `실행 ${runId} 를 시작했습니다.` : "실행을 시작했습니다.";
     if (runId) {
-      await loadRunList(selectRun);
+      refreshCompareBaselines(await loadRunList(selectRun));
       highlightRun(runId);
       await selectRun(runId);
       showPanel("run");
@@ -269,7 +305,9 @@ function initSplitters() {
 
 function boot() {
   loadRegistry();
-  loadRunList(selectRun);
+  loadRunList((runId) => { selectRun(runId); }).then((runs) => {
+    refreshCompareBaselines(runs);
+  });
 }
 
 // 마법사 단계 버튼은 사라졌다. 남은 역할은 하나다 - 계획이 생기기 전까지
@@ -380,6 +418,27 @@ if (typeof document !== "undefined") {
         out.report_ko || out.report || out.markdown || out.text || "");
     } catch (error) {
       setRunStatus(`리포트를 불러오지 못했습니다: ${errorText(error)}`);
+    }
+  });
+  document.getElementById("compareBtn").addEventListener("click", async () => {
+    const runId = runState.runId;
+    if (!runId) return;
+    const baseline = document.getElementById("compareBaseline").value;
+    const host = document.getElementById("funnelBox");
+    try {
+      const out = await loadCompare(runId, baseline);
+      if (out && out.error) throw new Error(out.error);
+      const cards = summarizeCompare(out);
+      const box = document.createElement("div");
+      box.className = "compcards";
+      for (const card of cards.slice(0, 24)) {
+        const row = el("div", "skill");
+        row.append(el("span", "", card.label), el("span", "chip", card.value));
+        box.appendChild(row);
+      }
+      host.prepend(el("p", "note", `비교 결과 (최신 ${cards.length}카드)`), box);
+    } catch (error) {
+      host.prepend(el("p", "warn", `비교하지 못했습니다: ${errorText(error)}`));
     }
   });
   document.getElementById("newDesignBtn").addEventListener("click", () => {
