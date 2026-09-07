@@ -576,7 +576,9 @@ function startFromPurpose(purpose) {
 // 실행 선택·폴링·계획 흐름을 건드리지 않는다.
 
 export const SIDE_TAB_KEY = "kbf.guided.sidetab";
-const SIDE_TAB_NAMES = ["runs", "templates", "models", "connections", "skills", "agents", "projects"];
+// 버튼 순서(guided.html 의 .sidetab)와 같은 순서다. 기본 탭은 실행 목록 -
+// 이 화면의 주 흐름이 실행 선택이므로 프로젝트를 앞으로 옮겨도 기본값은 그대로 둔다.
+const SIDE_TAB_NAMES = ["projects", "runs", "templates", "models", "connections", "skills", "agents"];
 let sideTabWired = false;
 
 export function showSideTab(name) {

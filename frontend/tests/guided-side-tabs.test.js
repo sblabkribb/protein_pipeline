@@ -35,3 +35,18 @@ test("an unknown stored tab falls back to runs", () => {
   assert.ok(src.includes('"runs"') && src.includes('"models"'),
             "only two tab names are accepted");
 });
+
+test("projects tab comes first in the side tab order", () => {
+  const html = readFileSync(new URL("../guided.html", import.meta.url), "utf8");
+  const strip = html.slice(html.indexOf('class="sidetabs"'), html.indexOf("</nav>"));
+  const order = ["projects", "runs", "templates", "models", "connections", "skills", "agents"];
+  let prev = -1;
+  for (const name of order) {
+    const at = strip.indexOf(`data-sidetab="${name}"`);
+    assert.ok(at > prev, `${name} must follow the previous tab`);
+    prev = at;
+  }
+  const src = readFileSync(new URL("../guided.js", import.meta.url), "utf8");
+  assert.ok(src.includes('["projects", "runs", "templates", "models", "connections", "skills", "agents"]'),
+            "SIDE_TAB_NAMES must match the button order");
+});

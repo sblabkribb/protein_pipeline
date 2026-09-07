@@ -4,6 +4,9 @@
 // error 와 consensus.decision("proceed"|"monitor"|"recover")으로 온다.
 import { callTool } from "./api.js";
 import { el } from "./dom.js";
+// 순환 import: monitor 는 facade(guided.js)를 다시 참조한다. 함수 선언 hoisting
+// 과 facade 의 브라우저 가드로 안전하고, 모듈 최상위에서 호출하지 않는다.
+import { currentRunStatus } from "./monitor.js";
 
 export function agentEventModels(events) {
   const rows = Array.isArray(events) ? events : [];
@@ -36,7 +39,33 @@ function decisionChip(model) {
   return { cls: "chip", label: model.decision || "-" };
 }
 
-export function renderAgentsTab(host, { state = "idle", events = [], runId = "", message = "" } = {}) {
+// 실행 상태 칩. 모르는 상태는 받은 값 그대로 보인다 - 프런트가 상태를 새로
+// 해석하면 Run 탭과 말이 갈라진다.
+function runStateChip(state) {
+  const key = String(state || "").trim().toLowerCase();
+  if (key === "done" || key === "completed") return { cls: "okchip", label: "완료" };
+  if (key === "running") return { cls: "warnchip", label: "진행 중" };
+  if (key === "failed" || key === "error") return { cls: "badchip", label: "실패" };
+  return { cls: "chip", label: key || "-" };
+}
+
+// 지금 어디를 돌고 있는지 - 판정 목록 위에 현재 상태를 고정 표시한다. 상태는
+// monitor runState 가 기억한 마지막 조회값이다 (status 인자로 겹쳐 쓸 수 있다).
+function statusHeader(status) {
+  const card = el("div", "skill");
+  card.appendChild(el("span", "", "현재"));
+  if (!status) {
+    card.appendChild(el("span", "chip", "상태 없음"));
+    return card;
+  }
+  if (status.stage) card.appendChild(el("span", "chip", String(status.stage)));
+  const chip = runStateChip(status.state);
+  card.appendChild(el("span", chip.cls, chip.label));
+  return card;
+}
+
+export function renderAgentsTab(host, { state = "idle", events = [], runId = "", message = "", status = null } = {}) {
+  const live = status ?? currentRunStatus();
   host.replaceChildren();
   if (state === "loading") {
     host.appendChild(el("p", "note", "에이전트 판정을 확인하는 중…"));
@@ -61,12 +90,14 @@ export function renderAgentsTab(host, { state = "idle", events = [], runId = "",
     return;
   }
   if (state === "empty") {
+    if (runId) host.appendChild(statusHeader(live));
     host.appendChild(el("p", "note",
       `이 실행에는 에이전트 판정 기록이 없습니다. (${runId})`));
     return;
   }
 
   const models = agentEventModels(events);
+  if (runId) host.appendChild(statusHeader(live));
   host.appendChild(el("h3", "", "에이전트 판정"));
   host.appendChild(el("p", "note",
     "스테이지마다 규칙 기반 전문가(구조·단백질·리간드·실험)가 산 출한 합의 판정입니다. 최근 20건."));

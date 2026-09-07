@@ -26,6 +26,7 @@ const PROJECTS = [
 const ROUNDS = [
   { round_id: "r1", created_at: "2026-09-02", title: "1차", notes: "메모", linked_run_ids: ["run_x"] },
   { round_id: "r2" },
+  { round_id: "r3", created_at: "2026-09-03", title: "보관 라운드", status: "archived" },
 ];
 
 test("projectCardModels absorbs records", () => {
@@ -47,7 +48,26 @@ test("roundRowModels absorbs rounds", () => {
   assert.equal(rows[0].title, "1차");
   assert.deepEqual(rows[0].runIds, ["run_x"]);
   assert.deepEqual(rows[1].runIds, []);
+  assert.equal(rows[2].status, "archived", "round status must be captured for the chip");
   assert.equal(roundRowModels(null).length, 0);
+});
+
+test("an archived round renders the 보관됨 chip, an active round does not", () => {
+  const make = () => ({ children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } });
+  // 보관되지 않은 프로젝트만 쓴다 - 카드의 보관됨 칩과 라운드 칩을 구별하기 위해.
+  const active = projectCardModels([PROJECTS[0]]);
+  const host = make();
+  renderProjectsTab(host, { state: "done", projects: active, expandedId: "p1",
+                            rounds: roundRowModels([{ round_id: "r9", status: "archived" }]) });
+  const html = JSON.stringify(host.children);
+  assert.ok(html.includes("r9"), "the round row is rendered");
+  assert.ok(html.includes("보관됨"), "archived round carries the 보관됨 chip");
+
+  const plain = make();
+  renderProjectsTab(plain, { state: "done", projects: active, expandedId: "p1",
+                             rounds: roundRowModels([{ round_id: "r9" }]) });
+  assert.ok(!JSON.stringify(plain.children).includes("보관됨"),
+            "active rounds must not carry the chip");
 });
 
 test("renderProjectsTab paints projects and the expanded project's rounds", () => {

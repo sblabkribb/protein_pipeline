@@ -12,7 +12,14 @@ import { showPanel } from "../guided.js";
 // 기존 RAPID 화면이 쓰는 도구를 그대로 쓴다. 여기서 별도의 요약을 만들면 같은
 // 사실이 두 곳에서 갈라지고, 어느 쪽이 맞는지 판단할 근거가 없어진다.
 
-const runState = { runId: "", artifacts: [] };
+const runState = { runId: "", artifacts: [], status: null };
+
+// 지금 선택된 실행의 마지막 상태 ({ stage, state }). loadRunStatus 와 폴링 tick 이
+// 성공 응답마다 갱신하고, 실행을 바꾸면 null 로 지운다 - 낡은 실행의 상태가 새
+// 실행의 것처럼 보이지 않게 한다. 에이전트 탭 같은 다른 모듈은 이 읽기 함수로만 본다.
+export function currentRunStatus() {
+  return runState.status;
+}
 
 //: 3D 로 그릴 수 있는 형식. 그 외에는 텍스트로 보여준다 - 뷰어에 아무 파일이나
 //: 넣으면 빈 캔버스가 나오고, 사용자는 파일이 비었다고 생각한다.
@@ -42,6 +49,7 @@ function setRunStatus(text) {
 export async function loadRunStatus(runId, { isStale = () => false } = {}) {
   const host = document.getElementById("runStatus");
   runState.runId = runId;
+  runState.status = null;   // 새 실행을 읽는 동안 지난 실행의 상태를 비운다
   if (!runId) {
     setRunStatus("실행을 고르면 상태가 표시됩니다.");
     return;
@@ -63,6 +71,7 @@ export async function loadRunStatus(runId, { isStale = () => false } = {}) {
     }
     // 실제 값은 status 안에 들어 있다. 최상위에서 읽으면 전부 "-" 가 된다.
     const info = (out && typeof out.status === "object" && out.status) || out;
+    runState.status = { stage: String(info.stage || ""), state: String(info.state || "") };
     host.classList.remove("empty");
     host.replaceChildren();
     const rows = [
@@ -353,6 +362,7 @@ export function startPolling(runId, { onTick } = {}) {
       if (out && out.error) throw new Error(out.error);
       poll.failures = 0;
       const info = (out && typeof out.status === "object" && out.status) || out;
+      runState.status = { stage: String(info.stage || ""), state: String(info.state || "") };
       const done = ["done", "failed", "cancelled"].includes(String(info.state));
       poll.active = !done;
       if (onTick) onTick(info);

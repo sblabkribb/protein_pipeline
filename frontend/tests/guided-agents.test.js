@@ -2,6 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+// agents.js 는 monitor.js 를 경유해 facade(guided.js)까지 import 한다. facade 는
+// document 가 있으면 모듈 최상위에서 배선을 시작하므로, 스텁을 만들기 전에 모듈을
+// 먼저 적재해야 한다 - 가드가 브라우저 밖 배선을 건너뛴다. 스텁은 렌더 시점의
+// document.createElement 를 위해 그 뒤에 둔다.
+const { agentEventModels, renderAgentsTab } = await import("../guided/agents.js");
+
 globalThis.document ??= {
   createElement(tag) {
     return {
@@ -13,8 +19,6 @@ globalThis.document ??= {
     };
   },
 };
-
-const { agentEventModels, renderAgentsTab } = await import("../guided/agents.js");
 
 // agent_panel.jsonl 의 실제 행 모양(build_agent_panel_event). state 필드는 없고
 // 실패는 error + consensus.decision("proceed"|"monitor"|"recover")로 온다.
@@ -68,7 +72,8 @@ test("renderAgentsTab paints no-run, loading, error and empty states", () => {
   const h2 = make(); renderAgentsTab(h2, { state: "error", message: "실패" });
   assert.match(h2.children[0].textContent, /실패/);
   const h3 = make(); renderAgentsTab(h3, { state: "empty", runId: "run_x" });
-  assert.ok(h3.children[0].textContent.length > 0);
+  // 빈 상태는 현재 상태 헤더 카드에 이어 안내 노드를 그린다.
+  assert.ok(h3.children.some((c) => c.textContent.length > 0));
 });
 
 test("the shell hosts the agents tab wired to the selected run", () => {
@@ -82,4 +87,33 @@ test("the shell hosts the agents tab wired to the selected run", () => {
   assert.ok(src.includes("runState.runId"), "hook reads the selected run");
   const mod = readFileSync(new URL("../guided/agents.js", import.meta.url), "utf8");
   assert.ok(mod.includes("pipeline.list_agent_events"));
+});
+
+test("renderAgentsTab paints a current-status header from the live run state", () => {
+  const mod = readFileSync(new URL("../guided/agents.js", import.meta.url), "utf8");
+  assert.ok(mod.includes("currentRunStatus"), "header reads the live run status");
+  assert.ok(mod.includes("현재") || mod.includes("current-status"), "header is painted");
+
+  const make = () => ({ children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } });
+  const host = make();
+  renderAgentsTab(host, { state: "done", events: EVENTS, runId: "run_x",
+                          status: { stage: "af2_50", state: "running" } });
+  const html = JSON.stringify(host.children);
+  assert.ok(html.includes("af2_50"), "stage chip shows the running stage");
+  assert.ok(html.includes("진행 중"), "running state renders as 진행 중");
+
+  const failed = make();
+  renderAgentsTab(failed, { state: "done", events: EVENTS, runId: "run_x",
+                            status: { stage: "af2_50", state: "failed" } });
+  assert.ok(JSON.stringify(failed.children).includes("실패"), "failed state renders as 실패");
+});
+
+test("agents header falls back to 상태 없음 when the run has no status yet", () => {
+  // status 인자를 넘기지 않으면 monitor runState 의 live 값을 읽는다. 이 테스트
+  // 프로세스는 상태를 조회한 적이 없으므로 null 이고, 칩은 상태 없음이어야 한다.
+  const host = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
+  renderAgentsTab(host, { state: "empty", runId: "run_x" });
+  const html = JSON.stringify(host.children);
+  assert.ok(html.includes("상태 없음"), "missing status renders 상태 없음");
+  assert.ok(html.includes("run_x"), "empty note still names the run");
 });
