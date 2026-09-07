@@ -355,6 +355,47 @@ function collectObjective() {
   };
 }
 
+// 인테이크 대화가 모은 목표를 폼에 반영한다. 폼의 소유자는 plan.js 이므로 DOM
+// 변경은 여기서만 한다. 서버의 objective_ready 게이트를 통과한 objective 만
+// 들어온다는 전제로 받는다 — 여기서 다시 판정하지 않는다.
+function applyObjectiveForm(objective) {
+  const data = objective && typeof objective === "object" ? objective : {};
+
+  const purpose = String(data.purpose || "").trim();
+  if (purpose) {
+    const select = document.getElementById("purpose");
+    const known = [...(select?.options || [])].some((option) => option.value === purpose);
+    if (select && known) {
+      select.value = purpose;
+      onPurposeChange();
+      renderTemplates();
+    }
+  }
+
+  // 슬라이더의 렌더 근원은 OBJECTIVES 배열이다. 배열을 고치고 다시 그리면 활성/
+  // 접힘 분류와 output 표시가 같이 맞춰진다 — 슬라이더만 만지면 output 이 낡는다.
+  const weights = data.weights && typeof data.weights === "object" ? data.weights : {};
+  let weightsTouched = false;
+  for (const item of OBJECTIVES) {
+    const value = Number(weights[item.key]);
+    if (Number.isFinite(value) && value >= 0 && value <= 1) {
+      item.value = value;
+      weightsTouched = true;
+    }
+  }
+  if (weightsTouched) renderWeights(document.getElementById("weights"));
+
+  const budget = data.budget && typeof data.budget === "object" ? data.budget : {};
+  const designs = Number(budget.designs);
+  if (Number.isFinite(designs) && designs > 0) {
+    document.getElementById("nDesigns").value = String(designs);
+  }
+  const length = Number(budget.length_aa);
+  if (Number.isFinite(length) && length > 0) {
+    document.getElementById("lengthAa").value = String(length);
+  }
+}
+
 function evidenceNode(ev) {
   const node = document.createElement("div");
   node.className = "ev";
@@ -714,4 +755,4 @@ async function approve() {
   }
 }
 
-export { currentRoute, loadRegistry, onPurposeChange, renderTemplates, renderWeights, renderStages, state, generatePlan, approve, sendChat, loadLlmModels, collectObjective, decisionNode, evidenceNode, formatSeconds, stageRow, el, dot, renderConnections };
+export { currentRoute, loadRegistry, onPurposeChange, renderTemplates, renderWeights, renderStages, state, generatePlan, approve, sendChat, loadLlmModels, collectObjective, applyObjectiveForm, decisionNode, evidenceNode, formatSeconds, stageRow, el, dot, renderConnections };

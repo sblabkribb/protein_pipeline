@@ -17,7 +17,14 @@ import {
   approve,
   sendChat,
   loadLlmModels,
+  applyObjectiveForm,
 } from "./guided/plan.js";
+import {
+  renderIntake,
+  requestIntake,
+  intakeThread,
+  pushIntakeMessage,
+} from "./guided/intake.js";
 import {
   closeStage,
   loadRunStatus,
@@ -891,6 +898,62 @@ if (typeof document !== "undefined") {
   for (const id of ["nDesigns", "lengthAa"]) {
     document.getElementById(id).addEventListener("change", loadRegistry);
   }
+
+  // --- 대화형 목표 인테이크 ---------------------------------------------------
+  //
+  // 대화가 목표 폼을 채울 뿐 실행 경로는 열지 않는다. objective_ready 가 참이면
+  // plan.js 의 applyObjectiveForm 이 폼을 채우고 목표 섹션으로 데려간다 — 실행은
+  // 언제나 계획 생성 → 계획 카드 승인을 지난다.
+  let intakeBusy = false;
+  function paintIntake(extra = {}) {
+    renderIntake(document.getElementById("intakeBox"), {
+      state: extra.state || (intakeBusy ? "busy" : intakeThread().length ? "chat" : "idle"),
+      messages: intakeThread(),
+      reply: extra.reply || "",
+      missing: extra.missing || [],
+      objectiveReady: Boolean(extra.objectiveReady),
+      note: extra.note || "",
+    });
+  }
+
+  async function sendIntake(text) {
+    const message = String(text || "").trim();
+    if (!message || intakeBusy) return;   // 두 번 누르면 같은 답변이 두 번 얹힌다.
+    intakeBusy = true;
+    pushIntakeMessage("user", message);
+    paintIntake({ state: "busy" });
+    try {
+      const out = await requestIntake(intakeThread(), {
+        fasta: targetFasta(),
+        pdb: "",
+      });
+      pushIntakeMessage("assistant", out.reply || "");
+      if (out.objective_ready && out.objective) {
+        applyObjectiveForm(out.objective);
+      }
+      paintIntake({
+        state: out.llm_unavailable ? "unavailable"
+          : out.objective_ready ? "ready" : "chat",
+        reply: out.reply || "",
+        missing: out.missing || [],
+        objectiveReady: Boolean(out.objective_ready),
+      });
+      if (out.objective_ready) {
+        document.getElementById("objectiveSection").scrollIntoView({ behavior: "smooth" });
+      }
+    } catch (error) {
+      pushIntakeMessage("assistant", `목표를 정리하지 못했습니다: ${errorText(error)}`);
+      paintIntake({ state: "chat" });
+    } finally {
+      intakeBusy = false;
+    }
+  }
+
+  // intake.js 의 보내기 버튼이 부르는 훅. 템플릿 탭의 __templatesStart 와 같은
+  // 노출 패턴이다 — 모듈 테스트가 window 에 의존하지 않게 브라우저에서만 만든다.
+  window.__intakeApply = applyObjectiveForm;
+  window.__intakeSend = sendIntake;
+  paintIntake({ state: "idle" });
 
   for (const tab of document.querySelectorAll(".tab")) {
     tab.addEventListener("click", () => showPanel(tab.dataset.panel));
