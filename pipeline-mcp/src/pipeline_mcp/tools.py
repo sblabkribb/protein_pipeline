@@ -8900,6 +8900,23 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.search_literature",
+            "description": (
+                "Read-only Europe PMC literature search. Published sources are "
+                "weaker than internal measurements: results are reference only "
+                "and never replace measured evidence."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "search terms"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 25,
+                              "description": "default 8"},
+                },
+                "required": ["query"],
+            },
+        },
+        {
             "name": "pipeline.approve_plan",
             "description": (
                 "Apply human edits to a plan and convert it into PipelineRequest overrides. "
@@ -9744,6 +9761,14 @@ class ToolDispatcher:
             if not isinstance(plan, dict):
                 return {"error": "plan must be an object"}
             return run_council(plan, getattr(self.runner, "gemini", None))
+
+        if name == "pipeline.search_literature":
+            from .literature import search_literature
+
+            query = str(arguments.get("query") or "").strip()
+            if not query:
+                return {"error": "query is required"}
+            return search_literature(query, int(arguments.get("limit") or 8))
 
         if name == "pipeline.approve_plan":
             from .objective_planner import apply_edits, plan_to_request_overrides

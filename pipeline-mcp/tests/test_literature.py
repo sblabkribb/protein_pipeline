@@ -1,13 +1,18 @@
 import json
+import shutil
+import tempfile
 import unittest
 from unittest import mock
 
+import pipeline_mcp.literature as literature_mod
 from pipeline_mcp.literature import (
     EUROPEPMC_BASE,
     _clamp_limit,
     _row,
     search_literature,
 )
+from pipeline_mcp.pipeline import PipelineRunner
+from pipeline_mcp.tools import ToolDispatcher, tool_definitions
 
 
 class TestRow(unittest.TestCase):
@@ -72,9 +77,36 @@ class TestSearch(unittest.TestCase):
         self.assertEqual(out["query"], "protein")
         request = urlopen.call_args[0][0]
         self.assertTrue(request.full_url.startswith(f"{EUROPEPMC_BASE}/search?"))
+        self.assertIn("format=json", request.full_url)
         self.assertIn("pageSize=5", request.full_url)
         self.assertIn("sort=CITED+desc", request.full_url)
         self.assertIn("resultType=lite", request.full_url)
+
+
+class TestRegistration(unittest.TestCase):
+    def test_tool_is_listed(self) -> None:
+        names = [t["name"] for t in tool_definitions()]
+        self.assertIn("pipeline.search_literature", names)
+
+    def test_dispatch_rejects_blank_query(self) -> None:
+        runner = PipelineRunner(output_root="/tmp/unused-lit", mmseqs=None,
+                                proteinmpnn=None, soluprot=None, af2=None)
+        out = ToolDispatcher(runner).call_tool("pipeline.search_literature", {"query": "  "})
+        self.assertIn("error", out)
+
+    def test_dispatch_delegates(self) -> None:
+        tmp = tempfile.mkdtemp(prefix="lit_")
+        try:
+            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None,
+                                    soluprot=None, af2=None)
+            with mock.patch.object(literature_mod, "search_literature",
+                                   return_value={"items": [{"title": "T"}], "query": "q"}) as fake:
+                out = ToolDispatcher(runner).call_tool(
+                    "pipeline.search_literature", {"query": "q", "limit": 3})
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+        self.assertEqual(out["items"], [{"title": "T"}])
+        fake.assert_called_once_with("q", 3)
 
 
 if __name__ == "__main__":

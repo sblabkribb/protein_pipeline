@@ -66,6 +66,9 @@ def search_literature(query: str, limit: int = 8) -> dict:
             payload = json.loads(response.read().decode("utf-8"))
     except Exception as exc:  # noqa: BLE001
         return {"error": f"Europe PMC 요청 실패: {type(exc).__name__}"}
+    # 응답이 객체가 아니어도 오류 계약으로 돌아간다.
+    if not isinstance(payload, dict):
+        return {"error": f"Europe PMC 응답 형식 오류: {type(payload).__name__}"}
     records = (payload.get("resultList") or {}).get("result") or []
     rows = [record for record in records
             if isinstance(record, dict)
