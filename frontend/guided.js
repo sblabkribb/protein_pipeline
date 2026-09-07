@@ -46,7 +46,11 @@ import {
   loadLiabilities,
   renderEvidence,
 } from "./guided/evidence.js";
-import { initStructureTab, refreshStructure } from "./guided/structure.js";
+import {
+  initStructureTab,
+  onStructurePanelRevealed,
+  refreshStructure,
+} from "./guided/structure.js";
 import { el } from "./guided/dom.js";
 
 // --- 세션 -----------------------------------------------------------------
@@ -360,6 +364,10 @@ export function showPanel(name) {
     tab.classList.toggle("is-active", active);
     tab.setAttribute("aria-selected", String(active));
   }
+  // Structure 탭은 숨은 동안 0×0 로 측정된 캔버스를 갖고 있다. 3Dmol 은 드러난
+  // 뒤 크기를 다시 재지만 렌더는 뷰어가 lost 일 때만 다시 하므로, 첫 방문이 빈
+  // 박스가 되지 않게 드러난 지금 다시 그린다.
+  if (name === "structure") onStructurePanelRevealed();
 }
 
 // facade 는 모듈 최상위에서 DOM 을 만진다 (dom.js 머리글의 함정과 같다). 이

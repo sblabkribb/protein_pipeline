@@ -62,6 +62,8 @@ export function parsePdbChains(pdbText) {
   for (const line of String(pdbText || "").split(/\r?\n/)) {
     if (!line.startsWith("ATOM")) continue;
     const chain = line.slice(21, 22).trim().toUpperCase() || "_";
+    // 삽입 코드(26열)는 무시한다 - 100 과 100A 가 한 잔기로 합쳐진다.
+    // lib/residue-picker.js 의 parseProteinAtoms 도 같은 단순화를 쓴다.
     const resi = Number.parseInt(line.slice(22, 26).trim(), 10);
     if (!Number.isFinite(resi) || resi <= 0) continue;
     const key = `${chain}:${resi}`;
@@ -117,7 +119,7 @@ const structureState = {
 // 그리지 않는다 - 빠르게 옵션을 옮기면 느린 옛 응답이 늦게 도착할 수 있다.
 let renderGen = 0;
 
-export async function loadStructureText(runId, path) {
+async function loadStructureText(runId, path) {
   // read_artifact 는 max_bytes 로 자른 텍스트를 돌려준다(tools.py). 구조 파일
   // 상한은 monitor.js 의 3D 미리보기와 같은 4MB 다.
   const out = await callTool("pipeline.read_artifact", {
@@ -333,8 +335,27 @@ export function initStructureTab() {
   document.getElementById("structureFiles").addEventListener("change", () => {
     const runId = structureState.runId;
     if (!runId) return;
-    renderSelectedStructure(runId).catch(() => { /* 위에서 warn 으로 그렸다 */ });
+    // 읽기 오류(not found 등)는 renderSelectedStructure 안에서 구조 뷰어 자리에
+    // warn 으로 그리고 정상 종료한다. 여기까지 던져지는 것은 렌더 도중의 뜻밖의
+    // 오류뿐이다 - 조용히 삼키면 빈 화면이 이유를 숨기므로 스트립 자리에 남긴다.
+    renderSelectedStructure(runId).catch((error) => {
+      document.getElementById("residueStrip").replaceChildren(el("p", "warn",
+        `구조 화면을 그리지 못했습니다: ${errorText(error)}`));
+    });
   });
+}
+
+// facade 가 Structure 탭을 드러낼 때(showPanel) 부른다. 숨은 패널 안에서 만든
+// 뷰어는 0×0 캔버스로 측정된다 - 3Dmol 은 드러나면 다시 측정하지만, resize 뒤
+// 렌더는 뷰어가 lost 일 때만 다시 하므로 첫 방문이 빈 박스가 된다. 드러난 지금
+// 다시 크기를 재고 그린다.
+export function onStructurePanelRevealed() {
+  const viewer = structureState.viewer;
+  if (!viewer) return;
+  try {
+    viewer.resize();
+    viewer.render();
+  } catch { /* 뷰어 손실 시 다음 상호작용에서 복구한다 */ }
 }
 
 // facade 의 selectRun 이 Results·Evidence 와 같은 자리에서 부른다. 아티팩트

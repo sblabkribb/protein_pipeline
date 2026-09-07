@@ -125,11 +125,17 @@ test("source contract: structure reads pipeline artifacts into 3Dmol, stale-guar
   assert.ok(/isStale\(\) \|\| gen !== renderGen/.test(structure));
   // viewer 이중 초기화 방지: 붙어 있는 컨테이너가 있으면 재사용한다.
   assert.ok(/viewerEl\.isConnected/.test(structure));
+  // 숨은 패널의 캔버스는 0×0 다 - 드러날 때 다시 재고 그리는 훅이 있어야
+  // 첫 방문이 빈 박스가 되지 않는다.
+  assert.ok(/export function onStructurePanelRevealed\(\)/.test(structure));
+  assert.ok(/viewer\.resize\(\);\s*\n\s*viewer\.render\(\);/.test(structure));
 
   const facade = readFileSync(new URL("../guided.js", import.meta.url), "utf8");
   // Results·Evidence 와 같은 자리에서, 같은 isStale 술어로 채운다.
   assert.ok(facade.includes("refreshStructure(runId, {"));
   assert.ok(facade.includes("initStructureTab()"));
+  // showPanel 이 Structure 탭을 드러낼 때 그 훅을 부른다.
+  assert.ok(/name === "structure"\) onStructurePanelRevealed\(\)/.test(facade));
   assert.ok(facade.includes('getElementById("structureViewer")'));
   assert.ok(facade.includes("구조를 불러오지 못했습니다"));
 });
