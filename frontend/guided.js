@@ -64,14 +64,21 @@ function setSignedIn(user) {
   document.getElementById("loginGate").classList.add("hidden");
   document.getElementById("workspace").classList.remove("hidden");
   document.getElementById("whoami").textContent = user || "";
-  updateTopbarChips({ runId: runState.runId });   // 세션 칩을 지금 사용자로 맞춘다
+  // 세션 칩을 지금 사용자로 맞춘다. 실행 상태는 이 실행에서 마지막으로 본 값을 유지한다.
+  updateTopbarChips({
+    runId: runState.runId, state: lastKnown.state, stage: lastKnown.stage,
+  });
 }
 
 export function setSignedOut(message) {
   document.getElementById("loginGate").classList.remove("hidden");
   document.getElementById("workspace").classList.add("hidden");
   if (message) document.getElementById("loginError").textContent = message;
-  updateTopbarChips({ runId: runState.runId });   // 만료·로그아웃도 칩에 그대로 비친다
+  // 만료·로그아웃도 칩에 그대로 비친다. 실행 상태 칩은 지우지 않는다 - 폴링이
+  // 멈춰도 끝난 실행의 완료·실패는 여전히 사실이다.
+  updateTopbarChips({
+    runId: runState.runId, state: lastKnown.state, stage: lastKnown.stage,
+  });
 }
 
 async function signIn(username, password) {
@@ -111,6 +118,11 @@ const RUN_CHIP_STATES = {
   stalled: { label: "폴링 중단", cls: "warnchip" },
 };
 
+// 폴링 tick 과 취소가 마지막으로 본 상태·단계. 로그인·아웃이 칩을 다시 그릴 때
+// 실행 상태를 지우지 않기 위해 따로 둔다 - 실행이 끝난 뒤 세션이 바뀌어도
+// 완료·실패 칩은 그대로 보여야 한다.
+let lastKnown = { state: "", stage: "" };
+
 export function chipLabel(state) {
   const key = String(state || "").trim().toLowerCase();
   return RUN_CHIP_STATES[key] || { label: key || "-", cls: "" };
@@ -136,9 +148,15 @@ export function topbarChipModels({ runId, state, stage, user, signedIn } = {}) {
   return models;
 }
 
+// 같은 내용의 칩이면 DOM 을 다시 만지지 않는다. tick 마다 replaceChildren 하면
+// aria-live 영역이 같은 말을 반복해 알리고 세션 칩도 함께 떨린다.
+let lastPaint = "";
 function paintTopbarChips(models) {
   const host = document.getElementById("topbarChips");
   if (!host) return;
+  const signature = JSON.stringify(models);
+  if (signature === lastPaint) return;
+  lastPaint = signature;
   host.replaceChildren();
   for (const { text, cls, title } of models) {
     const node = document.createElement("span");
@@ -244,7 +262,9 @@ async function selectRun(runId) {
   const gen = ++selectGen;
   stopPolling();
   // 칩은 await 앞에서 먼저 비친다 - 느린 상태 조회를 기다리는 동안에도 어떤
-  // 실행을 보고 있는지는 틀리면 안 된다. 상태는 아직 모르므로 비운다.
+  // 실행을 보고 있는지는 틀리면 안 된다. 상태는 아직 모르므로 비운다. 지난
+  // 실행의 마지막 상태도 여기서 함께 지운다 - 새 실행에 옛 상태를 붙이지 않는다.
+  lastKnown = { state: "", stage: "" };
   updateTopbarChips({ runId });
   const status = await loadRunStatus(runId, { isStale: () => gen !== selectGen });
   if (status === "stale") return;   // 낡은 응답은 그리지도, 폴링도 시작하지 않는다
@@ -280,11 +300,9 @@ async function selectRun(runId) {
       renderRunProgress(info);
       // 칩도 같은 tick 의 정보로 갱신한다. 폴링이 멈췄으면 서버 상태 대신 멈췄다는
       // 사실을 칩으로 말한다 - 마지막 상태를 살아 있는 것처럼 보이면 안 된다.
-      updateTopbarChips({
-        runId,
-        state: info.poll_stalled ? "stalled" : info.state,
-        stage: info.stage,
-      });
+      lastKnown.state = info.poll_stalled ? "stalled" : info.state;
+      if (info.stage) lastKnown.stage = info.stage;
+      updateTopbarChips({ runId, state: lastKnown.state, stage: lastKnown.stage });
       if (info.state === "done" || info.state === "failed" || info.state === "cancelled") {
         loadArtifacts(runId, { isStale: () => gen !== selectGen });
       }
@@ -512,6 +530,7 @@ if (typeof document !== "undefined") {
       await loadRunStatus(runId);
       // 취소가 받아들여졌다. 다음 tick 이 서버 상태를 확인해 주기 전에도 칩은
       // 곧바로 취소됨을 비춘다 - 서버가 달리 말하면 tick 이 되돌린다.
+      lastKnown.state = "cancelled";
       updateTopbarChips({ runId, state: "cancelled" });
     } catch (error) {
       setRunStatus(`취소하지 못했습니다: ${errorText(error)}`);

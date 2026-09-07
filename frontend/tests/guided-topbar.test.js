@@ -73,6 +73,31 @@ test("the polling tick feeds the same status to the chips, behind the existing g
   assert.match(tick, /updateTopbarChips\(/);
   assert.match(tick, /gen !== selectGen/, "onTick must stay behind the staleness guard");
   assert.match(tick, /poll_stalled/, "a stalled poll must say so instead of the last state");
+  assert.match(tick, /lastKnown\.state = /, "the tick records what the chips last showed");
+  assert.match(tick, /if \(info\.stage\) lastKnown\.stage = /,
+               "a stage-less tick must not erase the last known stage");
+});
+
+test("auth-path chip updates keep the last known run state instead of blanking it", () => {
+  // 폴링이 끝난 실행의 칩은 세션이 바뀌어도 사실이다. 로그인·아웃이 state 를
+  // "-" 로 되돌리면 완료·실패가 사라진 것처럼 보인다.
+  assert.match(source, /let lastKnown = \{ state: "", stage: "" \}/);
+  const authCalls = source.match(
+    /updateTopbarChips\(\{\s*\n\s*runId: runState\.runId, state: lastKnown\.state, stage: lastKnown\.stage,?\s*\n\s*\}\);?/g) || [];
+  assert.equal(authCalls.length, 2, "both setSignedIn and setSignedOut pass lastKnown");
+});
+
+test("run selection blanks lastKnown so a new run never wears the old run's state", () => {
+  const fn = source.slice(source.indexOf("async function selectRun("),
+                          source.indexOf("async function refreshResults("));
+  const pre = fn.slice(0, fn.indexOf("updateTopbarChips"));
+  assert.match(pre, /lastKnown = \{ state: "", stage: "" \}/,
+               "the reset happens before the pre-await chip paint");
+  // updateTopbarChips 자체는 기본값을 채우지 않는다 - 미리 비우는 건 선택 쪽 몫이다.
+  const fn2 = source.slice(source.indexOf("function updateTopbarChips("),
+                           source.indexOf("--- 타겟 파일"));
+  assert.ok(!/lastKnown/.test(fn2),
+            "updateTopbarChips must not default to lastKnown on its own");
 });
 
 test("updateTopbarChips does not guard staleness twice", () => {
@@ -86,6 +111,8 @@ test("a successful cancel updates the chip immediately", () => {
   const handler = source.slice(source.indexOf('"cancelRunBtn"'),
                                source.indexOf('"reportGenBtn"'));
   assert.match(handler, /updateTopbarChips\(\{ runId, state: "cancelled" \}\)/);
+  assert.match(handler, /lastKnown\.state = "cancelled"/,
+               "the cancel is recorded for later auth-path repaints");
 });
 
 test("the session chip reuses the session helpers the facade already uses", () => {
@@ -101,6 +128,17 @@ test("chips are painted as text into the topbar host", () => {
   assert.match(paint, /getElementById\("topbarChips"\)/);
   assert.match(paint, /textContent/);
   assert.ok(!paint.includes("innerHTML"), "server-sourced chip text stays text-only");
+});
+
+test("identical chip models skip the repaint", () => {
+  // tick 마다 replaceChildren 하면 aria-live 영역이 같은 말을 반복한다.
+  const paint = source.slice(source.indexOf("function paintTopbarChips("),
+                             source.indexOf("function updateTopbarChips("));
+  assert.match(paint, /JSON\.stringify\(models\)/, "the paint serializes its models");
+  const skip = paint.slice(paint.indexOf("JSON.stringify(models)"));
+  assert.match(skip, /=== lastPaint/, "an unchanged serialization returns early");
+  assert.ok(skip.indexOf("return;") < skip.indexOf("replaceChildren()"),
+            "the early return happens before any DOM work");
 });
 
 // --- 스타일 계약 -----------------------------------------------------------
