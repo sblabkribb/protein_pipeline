@@ -766,6 +766,8 @@ export function renderCouncil(host, council, { pending = false, notes = [] } = {
     }
     if (model.rawExcerpt) {
       // 원문은 LLM 산출물이라 그대로 믿지 않는다 - 접이식으로만 참조를 남긴다.
+      // (구현 확정: details 는 카드 안이 아니라 호스트에 카드 바로 뒤에 붙는다 -
+      //  계약 테스트가 host.children 기준이고, 카드 chrome 을 깨지 않는다.)
       const details = document.createElement("details");
       const summary = document.createElement("summary");
       summary.textContent = "원문 보기";
@@ -774,7 +776,7 @@ export function renderCouncil(host, council, { pending = false, notes = [] } = {
       pre.className = "artifacttext";
       pre.textContent = model.rawExcerpt;
       details.appendChild(pre);
-      card.appendChild(details);
+      host.appendChild(details);
     }
     host.appendChild(card);
   }
