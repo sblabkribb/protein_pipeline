@@ -60,7 +60,7 @@ test("endpoint rows paint kv detail rows and a reachability dot", () => {
   assert.ok(html.includes("엔드포인트") && html.includes("bop:18115"));
   assert.ok(html.includes("선언") && html.includes("always_on"));
   assert.ok(html.includes("오류") && html.includes("timeout"), "errors surface in their own row");
-  assert.ok(html.includes('"className":"sdot ok"') && html.includes('"className":"sdot bad"'),
+  assert.ok(html.includes('"className":"sdot-ok"') && html.includes('"className":"sdot-bad"'),
             "the head dot encodes the measured reachability");
   // 빈 값은 행째로 생략한다 - af3 는 오류가 있고, 준비 칩은 없다.
   const af3 = host.children.find((c) => JSON.stringify(c).includes("timeout"));

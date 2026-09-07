@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>models tab render check</title>
+<link rel="stylesheet" href="../../guided.css" />
+<style>body { margin: 0; } .wrap { width: 264px; padding: 20px 16px; background: var(--muted); min-height: 100vh; }</style>
+</head>
+<body>
+<div class="wrap"><h3>모델</h3><div id="sideModels" class="modelstab"></div></div>
+<script>
+  window.addEventListener("error", (event) => {
+    const pre = document.createElement("pre");
+    pre.textContent = "ERROR: " + (event.message || event.error);
+    document.body.appendChild(pre);
+  });
+</script>
+<script type="module">
+  import { modelsTabModels, renderModels } from "../../guided/models.js";
+
+  const PAYLOAD = {
+    purposes: [
+      { purpose: "monomer_solubility_redesign", display_name_ko: "단일체 용해도 리디자인",
+        executable: true, validated: true, stages: [
+          { stage: "gate0_routing", modelId: "mpnn_encoder", validated: true },
+          { stage: "sequence_design", modelId: "proteinmpnn", validated: true },
+          { stage: "cheap_filter", modelId: "soluprot", validated: true },
+          { stage: "structure_check", modelId: "colabfold", validated: true },
+        ] },
+      { purpose: "binder_design", display_name_ko: "바인더 설계",
+        executable: false, validated: false, stages: [
+          { stage: "gate0_routing", modelId: "mpnn_encoder", validated: true },
+          { stage: "sequence_design", modelId: "proteinmpnn", validated: true },
+          { stage: "interface_check", modelId: "binder_score", validated: false },
+        ] },
+      { purpose: "antibody_design", display_name_ko: "항체 설계",
+        executable: false, validated: false, stages: [
+          { stage: "gate0_routing", modelId: "mpnn_encoder", validated: true },
+          { stage: "cdr_loop_design", modelId: "rfd3", validated: false },
+        ] },
+    ],
+    objective_status: {
+      solubility: { status: "measured", evaluators: ["soluprot"],
+        detail: "SoluProt 이 게이트 1 에서 임계값 0.5 로 돌고 있고, 그 통과율이 게이트 0 라벨의 일부다." },
+      structural_preservation: { status: "measured", evaluators: ["mpnn_encoder", "colabfold"],
+        detail: "ColabFold pLDDT 와 동결 정의의 non-loop RMSD 로 잰다." },
+      diversity: { status: "measured", evaluators: [],
+        detail: "서열 통계로 직접 계산한다 (위치 엔트로피, 쌍별 거리)." },
+      stability: { status: "evaluator_unvalidated", evaluators: ["thermomp_ddg"],
+        detail: "평가자(ThermoMPNN ddG)가 붙어 있고 부를 수 있다. RAPID 가 검증하지 않았을 뿐이다.",
+        to_enable: "실측 62 잔기 프로브 스윕을 붙인다" },
+      activity: { status: "needs_experimental_labels", evaluators: [],
+        detail: "모델을 붙여서 풀리는 문제가 아니다. 실험 라벨이 필요하다." },
+      binding: { status: "evaluator_unvalidated", evaluators: ["binder_score"],
+        detail: "평가자(binder_score)가 있으나 미검증.", to_enable: "벤치 마크 3종 매칭" },
+      aggregation: { status: "measured", evaluators: ["soluprot"], detail: "게이트 1 과 같은 출처." },
+      developability: { status: "evaluator_unvalidated", evaluators: ["sequence_liabilities"],
+        detail: "모티프 리아빌리티 게이트가 임시 임계값으로 돈다.", to_enable: "임계값 캘리브레이션" },
+    },
+    models: {
+      proteinmpnn: { endpoint: "bop:18112", display_name: "ProteinMPNN soluble", access: {} },
+      thermomp_ddg: { endpoint: "bop:18114", display_name: "ThermoMPNN ddG", access: { direct_client: true } },
+      alphafold3: { endpoint: "portal:alphafold3", display_name: "AlphaFold 3", access: { portal_mcp: true } },
+      esmfold: { endpoint: "portal:esmfold", display_name: "ESMFold", access: { portal_mcp: true } },
+    },
+  };
+
+  renderModels(document.getElementById("sideModels"), {
+    state: "done", model: modelsTabModels(PAYLOAD),
+  });
+</script>
+</body>
+</html>

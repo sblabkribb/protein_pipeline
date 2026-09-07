@@ -141,7 +141,7 @@ test("renderModels paints the stages line with warn dots on unvalidated stages",
   assert.ok(html.includes('"textContent":"msa"') && html.includes('"title":"mmseqs2"'),
             "stage chips show the stage name and carry the model id as title");
   assert.ok(html.includes('"title":"soluprot"'));
-  assert.ok(html.includes("sdot warn"), "unvalidated stages carry a warn dot");
+  assert.ok(html.includes("sdot-warn"), "unvalidated stages carry a warn dot");
 });
 
 test("purpose rows prefer the Korean display name and keep the raw key as a chip", () => {

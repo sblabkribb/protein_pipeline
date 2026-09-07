@@ -163,7 +163,7 @@ export function renderModels(host, { state = "idle", model = null, message = "" 
       for (const stage of purpose.stages) {
         const chip = el("span", "chip", stage.stage || stage.modelId);
         chip.title = stage.modelId;
-        if (!stage.validated) chip.appendChild(el("span", "sdot warn"));
+        if (!stage.validated) chip.appendChild(el("span", "sdot-warn"));
         line.appendChild(chip);
       }
       row.appendChild(line);

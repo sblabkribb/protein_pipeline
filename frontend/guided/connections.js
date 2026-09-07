@@ -64,7 +64,7 @@ export function renderConnectionsTab(host, { state = "idle", data = null, messag
     const card = el("div", "skill");
     const head = el("div", "cardtitle");
     // 도달 점. 칩의 글자보다 먼저 읽힌다 - 초록/빨강은 실측, 글자는 근거다.
-    head.appendChild(el("span", "sdot " + (row.reachable ? "ok" : "bad")));
+    head.appendChild(el("span", row.reachable ? "sdot-ok" : "sdot-bad"));
     head.appendChild(el("span", "name", row.id));
     head.appendChild(el("span", row.reachable ? "okchip" : "badchip", row.reachable ? "도달" : "도달 불가"));
     if (row.ready === true) head.appendChild(el("span", "okchip", "준비됨"));
