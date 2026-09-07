@@ -6,7 +6,8 @@
 import { callTool } from "./api.js";
 import { el } from "./dom.js";
 
-export const HIT_COLUMNS = ["id", "score", "soluprot", "plddt", "rmsd", "novelty"];
+// 히트리스트 행의 신원 필드는 id 가 아니라 seq_id 다 (tools.py 의 get_hit_list).
+export const HIT_COLUMNS = ["seq_id", "score", "soluprot", "plddt", "rmsd", "novelty"];
 
 const FUNNEL_COLUMNS = ["tier", "designed", "soluprot", "af2", "af2_selected"];
 
@@ -39,14 +40,26 @@ export function tierArtifactPaths(artifacts) {
 }
 
 export async function loadFunnel(runId, artifacts) {
-  const tiers = tierArtifactPaths(artifacts);
+  let tiers = tierArtifactPaths(artifacts);
+  if (!tiers.size) {
+    // list_artifacts 는 limit 안에서 우선순위로 자른다. 큰 실행에서는 tiers/
+    // 가 먼저 잘려나가 퍼널이 조용히 비어 보인다. 비었으면 tiers 로 다시 묻는다
+    // - 서버는 prefix 로 좁힌 목록을 run 루트 기준 상대경로로 돌려준다.
+    try {
+      const out = await callTool("pipeline.list_artifacts", { run_id: runId, prefix: "tiers", limit: 400 });
+      if (out && !out.error) tiers = tierArtifactPaths(out.artifacts || []);
+    } catch { /* 폴백 실패 시에도 아래 빈 상태 처리로 진행 */ }
+  }
   const rows = [];
   for (const [tier, paths] of [...tiers.entries()].sort()) {
     const fetchJson = async (path) => {
       if (!path) return null;
       try {
         const out = await callTool("pipeline.read_artifact", { run_id: runId, path, max_bytes: 400000 });
-        return out && out.text ? JSON.parse(out.text) : null;
+        // 잘린 JSON 은 파싱에 성공해도 조용히 틀린 숫자를 준다. 못 읽은 것과
+        // 0 인 것을 같은 0 으로 보여주지 않는다 - 잘렸으면 없는 것으로 둔다.
+        if (!out || !out.text || out.truncated) return null;
+        return JSON.parse(out.text);
       } catch {
         return null;   // 티어 하나를 못 읽어도 나머지 퍼널은 그린다.
       }

@@ -466,8 +466,8 @@ body.dragging iframe, body.dragging canvas { pointer-events: none; }
 .report { border: 1px solid var(--rule); border-radius: 8px; padding: 8px; max-height: 300px; overflow: auto; }
 .funnelbox .funnel { display: flex; align-items: flex-end; gap: 6px; height: 90px; margin: 8px 0; }
 .funnelbox .funnel i { flex: 1; background: linear-gradient(180deg, var(--action), var(--action-hover)); border-radius: 3px 3px 0 0; }
-.hitlist table { width: 100%; font-size: 11px; border-collapse: collapse; }
-.hitlist th, .hitlist td { border-bottom: 1px solid var(--rule); padding: 3px 4px; text-align: left; }
+.hitlist table, .funnelbox table { width: 100%; font-size: 11px; border-collapse: collapse; }
+.hitlist th, .hitlist td, .funnelbox th, .funnelbox td { border-bottom: 1px solid var(--rule); padding: 3px 4px; text-align: left; }
 .residuestrip { display: flex; flex-direction: column; gap: 4px; }
 .residuestrip .resrow { display: flex; flex-wrap: wrap; gap: 1px; align-items: center; }
 .residuestrip button { min-width: 18px; font-size: 9px; padding: 1px 2px; border: 1px solid var(--rule);

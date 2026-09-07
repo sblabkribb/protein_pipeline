@@ -423,10 +423,16 @@ if (typeof document !== "undefined") {
   document.getElementById("compareBtn").addEventListener("click", async () => {
     const runId = runState.runId;
     if (!runId) return;
+    // 클릭 시점의 세대. 기다리는 사이 다른 실행을 고르면 어느 쪽에도 그리지
+    // 않는다 - 낡은 비교가 새 실행의 퍼널 위에 얹히면 근거가 섞인다.
+    const gen = selectGen;
     const baseline = document.getElementById("compareBaseline").value;
     const host = document.getElementById("funnelBox");
+    const btn = document.getElementById("compareBtn");
+    btn.disabled = true;   // 두 번 누르면 같은 비교가 두 번 얹힌다.
     try {
       const out = await loadCompare(runId, baseline);
+      if (gen !== selectGen) return;
       if (out && out.error) throw new Error(out.error);
       const cards = summarizeCompare(out);
       const box = document.createElement("div");
@@ -436,9 +442,12 @@ if (typeof document !== "undefined") {
         row.append(el("span", "", card.label), el("span", "chip", card.value));
         box.appendChild(row);
       }
-      host.prepend(el("p", "note", `비교 결과 (최신 ${cards.length}카드)`), box);
+      host.prepend(el("p", "note", `비교 결과 (${cards.length}개 항목)`), box);
     } catch (error) {
+      if (gen !== selectGen) return;
       host.prepend(el("p", "warn", `비교하지 못했습니다: ${errorText(error)}`));
+    } finally {
+      btn.disabled = false;
     }
   });
   document.getElementById("newDesignBtn").addEventListener("click", () => {

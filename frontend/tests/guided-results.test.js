@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildFunnelRow, summarizeCompare, HIT_COLUMNS, renderFunnelRowsTable } from "../guided/results.js";
+import {
+  buildFunnelRow,
+  summarizeCompare,
+  tierArtifactPaths,
+  HIT_COLUMNS,
+  renderFunnelRowsTable,
+} from "../guided/results.js";
 
 // renderFunnelRowsTable 은 진짜 DOM API(insertRow/insertCell)로 테이블을 만든다.
 // node 에는 document 가 없으므로 테스트가 검증하는 최소 형태만 흉내낸다 -
@@ -48,19 +54,46 @@ test("buildFunnelRow tolerates missing halves", () => {
   assert.deepEqual(row, { tier: "30", designed: 0, soluprot: 0, af2: 1, af2_selected: 0 });
 });
 
-test("summarizeCompare flattens top-level scalars into cards and skips nested summary", () => {
-  const cards = summarizeCompare({ run_id: "r1", baseline_run_id: "r0", notes: "x",
-    summary: { soluprot_pass_rate: 0.7, plddt_median: 88 } });
+test("summarizeCompare flattens current/baseline/delta into cards", () => {
+  // _compare_runs 의 실제 계약 (tools.py): {current, baseline, delta, completeness},
+  // 지표는 soluprot_pass_rate / plddt_median 이다.
+  const cards = summarizeCompare({
+    current: { soluprot_pass_rate: 0.7, plddt_median: 88 },
+    baseline: { soluprot_pass_rate: 0.5, plddt_median: 84 },
+    delta: { soluprot_pass_rate: 0.2 },
+    completeness: { current: 1.0 },
+  });
   const labels = cards.map((c) => c.label);
-  assert.ok(labels.includes("run_id"));
-  assert.ok(labels.includes("summary.soluprot_pass_rate"));
-  assert.ok(labels.includes("summary.plddt_median"));
-  assert.ok(!labels.some((l) => l === "summary"));
-  assert.ok(!labels.includes("notes"));
+  assert.ok(labels.includes("current.soluprot_pass_rate"));
+  assert.ok(labels.includes("baseline.plddt_median"));
+  assert.ok(labels.includes("delta.soluprot_pass_rate"));
+  assert.ok(labels.includes("completeness.current"));
+  assert.equal(cards.length, 6);
+});
+
+test("summarizeCompare walks nested objects and never renders prose or arrays", () => {
+  const cards = summarizeCompare({ summary: { af2_pass_rate: 0.4 }, notes: "LLM 산문", hits: ["a"] });
+  assert.deepEqual(cards.map((c) => c.label), ["summary.af2_pass_rate"]);
+});
+
+test("tierArtifactPaths finds tier files and rejects the wt baseline", () => {
+  const tiers = tierArtifactPaths([
+    { type: "file", path: "tiers/50/soluprot.json" },
+    { type: "file", path: "tiers/50/af2_scores.json" },
+    { type: "file", path: "tiers/30/soluprot.json" },
+    { type: "file", path: "wt/soluprot.json" },
+    { type: "file", path: "tiers/50/af2/abc/ranked_0.pdb" },
+    { type: "dir", path: "tiers/50" },
+  ]);
+  assert.deepEqual([...tiers.keys()].sort(), ["30", "50"]);
+  assert.equal(tiers.get("50").soluprot, "tiers/50/soluprot.json");
+  assert.equal(tiers.get("50").af2_scores, "tiers/50/af2_scores.json");
+  assert.equal(tiers.get("30").af2_scores, undefined);
 });
 
 test("HIT_COLUMNS defines the render order", () => {
-  assert.deepEqual([...HIT_COLUMNS], ["id", "score", "soluprot", "plddt", "rmsd", "novelty"]);
+  // 행의 신원은 id 가 아니라 seq_id 다.
+  assert.deepEqual([...HIT_COLUMNS], ["seq_id", "score", "soluprot", "plddt", "rmsd", "novelty"]);
 });
 
 test("renderFunnelRowsTable builds one row per tier with the tier column first", () => {
