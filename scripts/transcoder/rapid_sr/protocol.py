@@ -12,6 +12,49 @@ GATE0_THRESHOLDS = {
     "rmsd_max": 2.0,
 }
 
+# 이 세 임계값이 어디서 왔는가. 셋 다 이 저장소의 측정으로 정해진 값이 아니다.
+#
+# 임계값을 데이터에서 고르고 같은 데이터로 결론을 내면 그 결론은 순환이다.
+# 그래서 값 자체보다 "언제 정해졌는가"가 중요하다. 셋 다 게이트 0 캠페인
+# (2026-09-03)과 온도 패널보다 앞서므로, 폐기된 resnum 매칭 결과에서 역산된
+# 값일 수 없다.
+THRESHOLD_PROVENANCE = {
+    "plddt_min": {
+        "value": 85.0,
+        "first_seen": "dc7cac0 (2026-01-06), 저장소 최초 커밋의 af2_plddt_cutoff 기본값",
+        "changed_since": False,
+        "basis": "convention_without_internal_calibration",
+        "note": (
+            "AF2 자체 신뢰 구간의 경계가 아니다. AF2 는 90 이상을 very high, "
+            "70~90 을 confident 로 나누는데 85 는 그 안쪽이라 외부 근거가 없다. "
+            "rmsd_max=2.0 이 설계 문헌의 관례인 것과 달리 85 는 그런 지지도 없다."
+        ),
+        "sensitivity_panel1": (
+            "70~90 에서 전체 structural yield 는 0.623~0.367 로 크게 움직이지만 "
+            "정보 백본 수는 2~5, 포화 백본은 10~13 으로 거의 그대로다. 패널 1 의 "
+            "expand_backbones 판정은 임계값에 의존하지 않는다."
+        ),
+    },
+    "rmsd_max": {
+        "value": 2.0,
+        "first_seen": "af2_rmsd_cutoff 기본값 (2026-01-28)",
+        "changed_since": False,
+        "basis": "convention_without_internal_calibration",
+        "note": "설계 문헌에서 널리 쓰이는 값이다. 다만 이 저장소가 보정한 값은 아니다.",
+    },
+    "soluprot_min": {
+        "value": 0.5,
+        "first_seen": "dc7cac0 (2026-01-06), soluprot_cutoff 기본값",
+        "changed_since": False,
+        "basis": "convention_without_internal_calibration",
+        "note": "SoluProt 이 확률로 보고하는 값의 중점이다.",
+    },
+    "how_to_change": (
+        "온도 패널이나 게이트 0 결과로 이 값들을 다시 고르지 않는다. 바꾸려면 "
+        "결론을 내는 데 쓰지 않는 별도 보정 세트가 필요하다."
+    ),
+}
+
 # 구조 판정 지표의 동결 정의.
 #
 # 같은 임계값을 서로 다른 정의에 적용하면 결과가 조용히 뒤집힌다. 게이트 0

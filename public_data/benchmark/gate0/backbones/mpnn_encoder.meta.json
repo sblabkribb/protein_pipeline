@@ -3,5 +3,10 @@
   "n_ok": 77,
   "dim": 384,
   "failed": [],
-  "ckpt": "/home/pipeline/models/src/ProteinMPNN/soluble_model_weights/v_48_020.pt"
+  "ckpt": "/home/pipeline/models/src/ProteinMPNN/soluble_model_weights/v_48_020.pt",
+  "stale_note": "이 메타는 77 백본 시점의 추출을 설명한다. 옆의 mpnn_encoder.npy 는 현재 (157, 384) 이므로 백본이 157 개로 늘어난 뒤 재추출됐고 메타가 갱신되지 않았다. dim 384 와 ckpt 는 그대로다. n_backbones 77 은 현재 파일을 설명하지 않는다.",
+  "npy_shape_observed": [
+    157,
+    384
+  ]
 }
