@@ -49,7 +49,14 @@ _ARM_BACKBONE_CONFIG: dict[str, dict[str, int | bool]] = {
 }
 
 
-def build_gate0_request(pdb_text: str, arm: str, *, seed: int) -> PipelineRequest:
+def build_gate0_request(pdb_text: str, arm: str, *, seed: int,
+                        stop_after: str = "af2") -> PipelineRequest:
+    """게이트 0 의 고정 요청을 만든다.
+
+    `stop_after` 기본값은 캠페인이 쓴 "af2" 다. 백본만 만들고 멈추려면 "rfd3" 을
+    준다 - 홀드아웃 백본 생성이 그 경로를 쓴다. 기본값을 바꾸지 않으므로 62 타겟
+    캠페인의 요청은 그대로다.
+    """
     if arm not in GATE0_ARMS:
         raise ValueError(f"unknown gate0 arm: {arm!r}; expected one of {GATE0_ARMS}")
     cfg = _ARM_BACKBONE_CONFIG[arm]
@@ -90,7 +97,7 @@ def build_gate0_request(pdb_text: str, arm: str, *, seed: int) -> PipelineReques
         novelty_enabled=False,
         wt_compare=False,
         agent_panel_enabled=False,
-        stop_after="af2",
+        stop_after=stop_after,
         force=False,
         auto_recover=True,
     )
