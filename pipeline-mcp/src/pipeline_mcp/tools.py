@@ -8884,6 +8884,22 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.plan_council",
+            "description": (
+                "Have five domain experts (solubility, stability, structure, design "
+                "space/budget, experimental developability) review a generated plan in "
+                "parallel. Each returns a verdict (ok/warn/block), reasons, and edit "
+                "suggestions limited to its own editable decision fields. Suggestions "
+                "are proposals only: applying them still goes through "
+                "pipeline.approve_plan. Returns skip notes when no LLM is configured."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {"plan": {"type": "object"}},
+                "required": ["plan"],
+            },
+        },
+        {
             "name": "pipeline.approve_plan",
             "description": (
                 "Apply human edits to a plan and convert it into PipelineRequest overrides. "
@@ -9720,6 +9736,14 @@ class ToolDispatcher:
                     "고정 필드는 다시 한 번 거부된다."
                 ),
             }
+
+        if name == "pipeline.plan_council":
+            from .plan_council import run_council
+
+            plan = arguments.get("plan")
+            if not isinstance(plan, dict):
+                return {"error": "plan must be an object"}
+            return run_council(plan, getattr(self.runner, "gemini", None))
 
         if name == "pipeline.approve_plan":
             from .objective_planner import apply_edits, plan_to_request_overrides

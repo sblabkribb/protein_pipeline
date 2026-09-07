@@ -1,3 +1,4 @@
+import dataclasses
 import shutil
 import tempfile
 import unittest
@@ -5,6 +6,7 @@ import unittest
 from pipeline_mcp.pipeline import PipelineRunner
 from pipeline_mcp.plan_council import (
     EXPERTS,
+    GEMINI_ERROR_PREFIX,
     Expert,
     build_expert_prompt,
     parse_expert_reply,
@@ -31,7 +33,7 @@ class FakeGemini:
                 raise RuntimeError("boom")
         for expert_id in self.error_for:
             if f"전문가 ID: {expert_id}" in user:
-                return "Error communicating with Gemini: quota"
+                return f"{GEMINI_ERROR_PREFIX}: quota"
         for expert_id, reply in self.replies.items():
             if f"전문가 ID: {expert_id}" in user:
                 return reply
@@ -74,6 +76,11 @@ class TestExperts(unittest.TestCase):
         self.assertIn("전문가 ID: solubility", prompt)
         self.assertIn("당신이 제안할 수 있는 필드: ['use_soluble_model', 'soluprot_cutoff']", prompt)
         self.assertIn("고정 필드", prompt)
+
+    def test_prompt_renders_warnings(self) -> None:
+        plan = dict(PLAN, warnings=["'activity': 평가자 없음"])
+        prompt = build_expert_prompt(plan, EXPERTS[0])
+        self.assertIn("경고: 'activity': 평가자 없음", prompt)
 
 
 class TestParse(unittest.TestCase):
@@ -199,11 +206,13 @@ class TestRegistration(unittest.TestCase):
     def test_dispatch_uses_runner_gemini(self) -> None:
         tmp = tempfile.mkdtemp(prefix="council_")
         try:
-            runner = PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None,
-                                    soluprot=None, af2=None)
-            runner.gemini = FakeGemini(replies={e.id: (
-                "```json\n{\"verdict\": \"ok\", \"reasons\": [], \"suggestions\": []}\n```"
-            ) for e in EXPERTS})
+            runner = dataclasses.replace(
+                PipelineRunner(output_root=tmp, mmseqs=None, proteinmpnn=None,
+                               soluprot=None, af2=None),
+                gemini=FakeGemini(replies={e.id: (
+                    "```json\n{\"verdict\": \"ok\", \"reasons\": [], \"suggestions\": []}\n```"
+                ) for e in EXPERTS}),
+            )
             out = ToolDispatcher(runner).call_tool("pipeline.plan_council", {"plan": PLAN})
         finally:
             shutil.rmtree(tmp, ignore_errors=True)

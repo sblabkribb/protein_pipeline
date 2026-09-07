@@ -15,10 +15,13 @@ LLM 호출은 discuss_plan 과 같은 runner.gemini(GeminiClient) 를 쓴다. ch
 from __future__ import annotations
 
 import json
+import logging
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .objective_planner import Evidence
+
+logger = logging.getLogger(__name__)
 
 EXPERT_TIMEOUT_SECONDS = 30.0
 GEMINI_ERROR_PREFIX = "Error communicating with Gemini"
@@ -212,6 +215,7 @@ def review_suggestions(plan: dict, expert: Expert, suggestions) -> tuple[dict, d
 
 
 def _ask_expert(gemini, plan: dict, expert: Expert) -> dict:
+    # 헌장이 출력 계약을 포함해야 한다는 스펙 B2 — 계약 텍스트는 모듈 상수로 관리한다.
     system = expert.charter + "\n\n" + COUNCIL_OUTPUT_CONTRACT
     raw = str(gemini.chat(system, build_expert_prompt(plan, expert)))
     base = {"expert_id": expert.id, "name": expert.name, "verdict": "", "reasons": [],
@@ -248,6 +252,7 @@ def run_council(plan: dict, gemini, *, timeout: float = EXPERT_TIMEOUT_SECONDS) 
             try:
                 result = future.result()
             except Exception as exc:  # noqa: BLE001
+                logger.warning("전문가 %s 검토 실패: %s", expert.id, exc)
                 council.append({"expert_id": expert.id, "name": expert.name, "verdict": "",
                                 "reasons": [], "suggestions_count": 0, "status": "error",
                                 "raw_excerpt": f"{type(exc).__name__}: {exc}"})

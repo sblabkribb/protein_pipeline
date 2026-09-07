@@ -44,7 +44,11 @@ class GeminiClient:
             # For simplicity, we use a single turn chat with system instruction prepended
             # In a more advanced version, we could use start_chat()
             full_prompt = f"SYSTEM: {system_instruction}\n\nUSER: {user_prompt}"
-            response = self.model.generate_content(full_prompt)
+            # 협의회 타임아웃(30초)보다 살짝 길게 — hung 호출이 스레드를 오래 점유하지 않게 한다.
+            response = self.model.generate_content(
+                full_prompt,
+                request_options={"timeout": 40},
+            )
             return response.text
         except Exception as e:
             logger.error(f"Gemini chat error: {e}")
