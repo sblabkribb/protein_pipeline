@@ -8848,6 +8848,36 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.intake_chat",
+            "description": (
+                "Conversational objective intake: the user describes the goal in free "
+                "text and this tool collects an objective (weights, budget, purpose). "
+                "Rules first; the LLM only fills blanks. The returned objective still "
+                "goes through plan_from_objective and approve_plan - this tool never "
+                "runs anything. Returns llm_unavailable + a skip note when no LLM is "
+                "configured."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "messages": {
+                        "type": "array",
+                        "description": "conversation so far, [{role, content}]",
+                        "items": {"type": "object"},
+                    },
+                    "attached_fasta": {
+                        "type": "string",
+                        "description": "Target FASTA already attached (counts toward required target input).",
+                    },
+                    "attached_pdb": {
+                        "type": "string",
+                        "description": "Target PDB already attached (counts toward required target input).",
+                    },
+                },
+                "required": ["messages"],
+            },
+        },
+        {
             "name": "pipeline.explain_plan",
             "description": (
                 "Explain a plan in plain language and ask what the user wants to change. "
@@ -9792,6 +9822,17 @@ class ToolDispatcher:
                     "고정 필드는 다시 한 번 거부된다."
                 ),
             }
+
+        if name == "pipeline.intake_chat":
+            from .intake import intake_chat
+
+            messages = [m for m in (arguments.get("messages") or []) if isinstance(m, dict)]
+            return intake_chat(
+                messages,
+                getattr(self.runner, "gemini", None),
+                attached_fasta=_as_text(arguments.get("attached_fasta")),
+                attached_pdb=_as_text(arguments.get("attached_pdb")),
+            )
 
         if name == "pipeline.plan_council":
             from .plan_council import run_council
