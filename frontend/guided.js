@@ -18,6 +18,7 @@ import {
   loadLlmModels,
 } from "./guided/plan.js";
 import { closeStage, loadRunStatus, probeWorkers } from "./guided/monitor.js";
+import { loadRunList, highlightRun } from "./guided/sidebar.js";
 
 // --- 세션 -----------------------------------------------------------------
 //
@@ -132,6 +133,12 @@ function targetFasta() {
   return document.getElementById("targetFasta").value.trim();
 }
 
+async function selectRun(runId) {
+  if (!runId) return;
+  await loadRunStatus(runId);
+  // 후속 태스크(진행 폴링·Results·Structure)가 여기에 갈린다.
+}
+
 async function startRun() {
   const note = document.getElementById("runNote");
   const button = document.getElementById("runBtn");
@@ -156,7 +163,9 @@ async function startRun() {
     const runId = String(out.run_id || out.id || "");
     note.textContent = runId ? `실행 ${runId} 를 시작했습니다.` : "실행을 시작했습니다.";
     if (runId) {
-      await loadRunStatus(runId);
+      await loadRunList(selectRun);
+      highlightRun(runId);
+      await selectRun(runId);
       showPanel("run");
     }
   } catch (error) {
@@ -231,6 +240,7 @@ function initSplitters() {
 
 function boot() {
   loadRegistry();
+  loadRunList(selectRun);
 }
 
 initSplitters();
@@ -297,6 +307,11 @@ document.getElementById("targetClearBtn").addEventListener("click", () => {
   document.getElementById("targetNote").textContent = "";
 });
 document.getElementById("logoutBtn").addEventListener("click", signOut);
+document.getElementById("newDesignBtn").addEventListener("click", () => {
+  highlightRun("");
+  document.getElementById("objectiveSection").scrollIntoView({ behavior: "smooth" });
+  document.getElementById("targetFasta").focus();
+});
 document.getElementById("loginForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   const button = document.getElementById("loginBtn");

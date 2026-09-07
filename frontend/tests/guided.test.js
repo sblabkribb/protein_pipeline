@@ -258,8 +258,6 @@ test("the monitor probes liveness on demand rather than on every load", () => {
 test("the monitor uses the pipeline's own run tools, not a summary of its own", () => {
   // 기존 RAPID 의 모니터가 쓰는 도구를 그대로 쓴다. 새로 요약을 만들면
   // 같은 사실이 두 곳에서 갈라진다.
-  // pipeline.list_runs 단언은 실행 목록 로더가 돌아오면(loadRuns 교체 작업) 다시 넣는다.
-  // runSelect 단언은 실행 사이드바 작업에서 다시 넣는다.
   assert.ok(source.includes("pipeline.status"));
   assert.ok(html.includes('id="runStatus"'));
 });
@@ -286,7 +284,10 @@ test("a truncated artifact says it was truncated", () => {
   assert.ok(/truncated|잘렸/.test(source));
 });
 
-// "실행이 없습니다" 단언은 loadRuns 교체 작업에서 실행 목록 로더와 함께 돌아온다.
+test("the runs sidebar lists runs through the documented tool", () => {
+  assert.ok(source.includes("pipeline.list_runs"), "sidebar must call pipeline.list_runs");
+  assert.ok(source.includes("실행이 없습니다"), "empty state must be explicit");
+});
 
 test("no server value is ever interpolated into innerHTML", () => {
   // 아티팩트 경로와 실행 상태는 서버에서 오고, 산출물 경로에는 사용자가 정한
