@@ -288,7 +288,7 @@ button { touch-action: manipulation; }
 .cardmarks { flex: 0 0 auto; }
 
 /* 근거 강도. 세 값만 쓰고, 각각 한 가지만 뜻한다. */
-.mark { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+.mark { font-size: 10.5px; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
 .mark-ok   { color: var(--measured-ink); border-color: color-mix(in oklch, var(--measured) 40%, transparent); }
 .mark-warn { color: var(--assumed-ink); border-color: color-mix(in oklch, var(--assumed) 45%, transparent); }
 .mark-bad  { color: var(--absent-ink); border-color: color-mix(in oklch, var(--absent) 45%, transparent); }
@@ -312,11 +312,26 @@ button.chip {
   font-family: inherit; font-weight: inherit;
 }
 button.chip:hover { border-color: var(--action); color: var(--action); }
-.warnchip { color: var(--assumed-ink); border: 1px solid color-mix(in oklch, var(--assumed) 45%, transparent); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
-/* 상단바 실행 상태 칩. 색은 근거 체계를 따른다 - 완료는 측정(measured),
-   실패는 차단(absent), 폴링 중단은 미검증(assumed)이다. */
-.okchip { color: var(--measured-ink); border: 1px solid color-mix(in oklch, var(--measured) 40%, transparent); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
-.badchip { color: var(--absent-ink); border: 1px solid color-mix(in oklch, var(--absent) 45%, transparent); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
+/* 상태 알약(okchip/badchip/warnchip)은 .chip 기반 없이도 스스로 알약 모양을
+   갖는다 - 템플릿·연결·에이전트 카드는 okchip 하나만 달고 렌더된다. 기본
+   글자 크기(13.5px)를 상속하면 .chip(10.5px)들 옆에서 한 덩치 큰 알약으로
+   튀어나와 어긋나 보였다. 모양은 공용 규칙이, 뜻(색)은 각자 규칙이 담당한다. */
+.okchip, .badchip, .warnchip {
+  flex: 0 0 auto;
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.6;
+  padding: 1px 8px;
+  border: 1px solid;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.warnchip { color: var(--assumed-ink); border-color: color-mix(in oklch, var(--assumed) 45%, transparent); }
+/* 상태 칩의 색은 근거 체계를 따른다 - 완료는 측정(measured), 실패는 차단
+   (absent), 폴링 중단·미준비는 미검증(assumed)이다. */
+.okchip { color: var(--measured-ink); border-color: color-mix(in oklch, var(--measured) 40%, transparent); }
+.badchip { color: var(--absent-ink); border-color: color-mix(in oklch, var(--absent) 45%, transparent); }
 
 /* --- 검토 ---------------------------------------------------------------- */
 .status { margin-left: 10px; font-size: 12px; color: var(--quiet); }
