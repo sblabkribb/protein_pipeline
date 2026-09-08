@@ -200,6 +200,7 @@ class Handler(BaseHTTPRequestHandler):
         *,
         extra_headers: list[tuple[str, str]] | None = None,
     ) -> None:
+        self._drain_request_body()
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(code)
         self._set_cors_headers()
@@ -218,6 +219,7 @@ class Handler(BaseHTTPRequestHandler):
         *,
         extra_headers: list[tuple[str, str]] | None = None,
     ) -> None:
+        self._drain_request_body()
         self.send_response(code)
         self._set_cors_headers()
         self.send_header("Content-Type", content_type)
@@ -235,6 +237,7 @@ class Handler(BaseHTTPRequestHandler):
         filename: str,
         extra_headers: list[tuple[str, str]] | None = None,
     ) -> None:
+        self._drain_request_body()
         size = path.stat().st_size
         self.send_response(200)
         self._set_cors_headers()
@@ -283,23 +286,68 @@ class Handler(BaseHTTPRequestHandler):
 
         return bytes(body)
 
-    def _read_body(self) -> bytes:
-        transfer_encoding = str(self.headers.get("Transfer-Encoding") or "").lower()
-        if "chunked" in transfer_encoding:
-            return self._read_chunked()
+    def handle_one_request(self) -> None:
+        # 연결 하나를 처리하는 동안 이 인스턴스가 요청마다 재사용된다. 본문 소비
+        # 표시를 여기서 되돌리지 않으면 두 번째 요청부터 _drain_request_body 가
+        # "이미 읽었다"고 판단해 건너뛰고, 남은 본문이 세 번째 요청을 깨뜨린다.
+        self._body_consumed = False
+        super().handle_one_request()
 
-        length_raw = self.headers.get("Content-Length")
-        if not length_raw:
-            return b""
+    def _drain_request_body(self) -> None:
+        """응답을 쓰기 전에 아직 읽지 않은 요청 본문을 버린다.
+
+        protocol_version 이 HTTP/1.1 이라 연결이 유지된다. 본문을 소켓에 남긴 채
+        응답하면 같은 연결로 오는 다음 요청의 요청 라인을 그 본문 바이트부터
+        읽게 되어 501 Unsupported method 로 깨진다. 세션이 만료돼 탭 하나가
+        401 을 받은 순간 같은 연결의 나머지 요청까지 줄줄이 무너진 원인이
+        이것이었다 - 인증 실패 경로는 본문을 읽지 않고 곧장 응답한다.
+        """
+        if getattr(self, "_body_consumed", False):
+            return
+        self._body_consumed = True
+        stream = getattr(self, "rfile", None)
+        if stream is None:
+            return
+        if "chunked" in str(self.headers.get("Transfer-Encoding") or "").lower():
+            # 청크 본문은 남은 길이를 헤더만 보고 알 수 없다. 버리려 애쓰는 대신 닫는다.
+            self.close_connection = True
+            return
         try:
-            length = int(length_raw)
-        except ValueError as exc:
-            raise ValueError("Invalid Content-Length header") from exc
-        if length < 0:
-            raise ValueError("Invalid Content-Length header")
-        if length > self._MAX_BODY_BYTES:
-            raise ValueError("Request body too large")
-        return self.rfile.read(length) if length else b""
+            remaining = int(self.headers.get("Content-Length") or 0)
+        except (TypeError, ValueError):
+            self.close_connection = True
+            return
+        while remaining > 0:
+            chunk = stream.read(min(remaining, 65536))
+            if not chunk:
+                self.close_connection = True
+                return
+            remaining -= len(chunk)
+
+    def _read_body(self) -> bytes:
+        # 아래에서 예외가 나면 본문이 일부만 읽힌 채 남는다. 그 상태로 연결을
+        # 유지하면 다음 요청이 남은 바이트부터 파싱되므로 연결을 닫는다.
+        self._body_consumed = True
+        try:
+            transfer_encoding = str(self.headers.get("Transfer-Encoding") or "").lower()
+            if "chunked" in transfer_encoding:
+                return self._read_chunked()
+
+            length_raw = self.headers.get("Content-Length")
+            if not length_raw:
+                return b""
+            try:
+                length = int(length_raw)
+            except ValueError as exc:
+                raise ValueError("Invalid Content-Length header") from exc
+            if length < 0:
+                raise ValueError("Invalid Content-Length header")
+            if length > self._MAX_BODY_BYTES:
+                raise ValueError("Request body too large")
+            return self.rfile.read(length) if length else b""
+        except Exception:
+            self.close_connection = True
+            raise
 
     def _read_json(self) -> dict[str, Any]:
         raw = self._read_body() or b"{}"
@@ -974,6 +1022,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._mcp_error(request_id, -32000, "Internal server error", data={"detail": str(exc)})
 
     def do_OPTIONS(self) -> None:  # noqa: N802
+        self._drain_request_body()
         self.send_response(204)
         self._set_cors_headers()
         self.end_headers()

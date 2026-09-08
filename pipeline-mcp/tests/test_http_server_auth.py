@@ -645,3 +645,55 @@ def test_mcp_full_tool_list_env_shows_everything(monkeypatch):
     h = Handler.__new__(Handler)
     names = [t["name"] for t in h._list_tools_for_user({"username": "a", "role": "admin"})["tools"]]
     assert names == ["pipeline.run", "pipeline.save_project", "pipeline.cath_list_jobs"]
+
+
+def test_unauthorized_post_leaves_keep_alive_connection_usable(monkeypatch):
+    """인증에 실패한 POST 도 응답 전에 요청 본문을 비워야 한다.
+
+    protocol_version 이 HTTP/1.1 이라 연결이 유지된다. 401 을 돌려주면서 본문을
+    소켓에 남기면, 같은 연결로 오는 다음 요청의 요청 라인이 그 본문 바이트부터
+    시작해 501 Unsupported method 로 깨진다. 세션이 만료된 순간 탭 하나가 받은
+    401 이 같은 연결의 나머지 요청까지 무너뜨린 원인이 이것이다.
+    """
+    import http.client
+    import json as _json
+    import threading
+    from http.server import ThreadingHTTPServer
+
+    class _AuthAlwaysRejects:
+        enabled = True
+
+        def verify_token(self, token):  # noqa: ARG002
+            return None
+
+    monkeypatch.setattr(http_server, "_AUTH", _AuthAlwaysRejects(), raising=False)
+    monkeypatch.setattr(http_server, "_OIDC", None, raising=False)
+    monkeypatch.setattr(http_server, "_SESSIONS", None, raising=False)
+    monkeypatch.setattr(http_server, "_PAT_KEYS", None, raising=False)
+    monkeypatch.delenv("PIPELINE_REQUIRE_ADMIN", raising=False)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        conn = http.client.HTTPConnection(*server.server_address, timeout=5)
+        body = _json.dumps({"name": "pipeline.list_models", "arguments": {}})
+        headers = {"Content-Type": "application/json"}
+
+        # 세 번은 보내야 한다. 연결 하나에 Handler 인스턴스가 재사용되므로,
+        # 본문 소비 표시를 요청마다 초기화하지 않으면 두 번째 요청에서 다시
+        # 본문이 남고 그 여파는 세 번째 요청에서야 드러난다.
+        statuses = []
+        for _ in range(3):
+            conn.request("POST", "/tools/call", body=body, headers=headers)
+            response = conn.getresponse()
+            response.read()
+            statuses.append(response.status)
+        conn.close()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    # 전부 401 이어야 한다. 400/501 이 섞이면 앞 요청의 본문이 남아 연결이 오염된 것이다.
+    assert statuses == [401, 401, 401]
