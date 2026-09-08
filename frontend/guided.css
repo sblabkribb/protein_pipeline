@@ -511,8 +511,9 @@ body.dragging iframe, body.dragging canvas { pointer-events: none; }
 .chatform { display: flex; gap: 8px; margin-top: 10px; }
 .chatform input { flex: 1; min-width: 0; padding: 8px 11px; }
 
-/* Evidence 탭 문헌 검색. 실행과 무관한 참조 결과라 런 전환에 지워지지 않는다. */
+/* Evidence 탭 참조 검색. 실행과 무관한 참조 결과라 런 전환에 지워지지 않는다. */
 .literatureform { display: flex; gap: 8px; margin: 8px 0; }
+.literatureform select { flex: 0 0 auto; padding: 8px 8px; }
 .literatureform input { flex: 1; min-width: 0; padding: 8px 11px; }
 .literaturebox { display: grid; gap: 8px; }
 .literaturebox .skill { display: block; padding: 9px 11px; }

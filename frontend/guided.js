@@ -60,7 +60,7 @@ import {
   onStructurePanelRevealed,
   refreshStructure,
 } from "./guided/structure.js";
-import { renderLiterature, requestLiterature } from "./guided/literature.js";
+import { renderReference, requestReference } from "./guided/literature.js";
 import { renderTemplatesTab, requestTemplates, templateCardModels } from "./guided/templates.js";
 import { renderModels, requestModels, modelsTabModels } from "./guided/models.js";
 import { renderConnectionsTab, requestConnections } from "./guided/connections.js";
@@ -668,39 +668,41 @@ if (typeof document !== "undefined") {
   initSplitters();
   initStructureTab();
 
-  // 문헌 검색은 실행과 무관하다 - 런 전환 리셋 대상이 아니므로 Evidence 패널의
-  // evidenceView 형제로 두고 여기서 한 번만 연결한다.
-  let literatureGen = 0;
-  async function runLiteratureSearch() {
+  // 참조 검색은 실행과 무관하다 - 런 전환 리셋 대상이 아니므로 Evidence 패널의
+  // evidenceView 형제로 두고 여기서 한 번만 연결한다. 소스마다 성격 라벨이
+  // 붙는다(구조/주석/군집/문헌) - 어느 것도 측정 근거를 대체하지 않는다.
+  let referenceGen = 0;
+  async function runReferenceSearch() {
     const host = document.getElementById("literatureBox");
     const query = document.getElementById("literatureInput").value.trim();
-    const gen = ++literatureGen;
+    const source = (document.getElementById("referenceSource") || {}).value || "literature";
+    const gen = ++referenceGen;
     if (!query) {
-      renderLiterature(host, { state: "idle" });
+      renderReference(host, { state: "idle" });
       return;
     }
-    renderLiterature(host, { state: "loading" });
+    renderReference(host, { state: "loading" });
     try {
-      const out = await requestLiterature(query);
-      if (gen !== literatureGen) return;   // 재검색됨 - 늦게 도착한 결과는 버린다
+      const out = await requestReference(source, query);
+      if (gen !== referenceGen) return;   // 재검색됨 - 늦게 도착한 결과는 버린다
       const items = Array.isArray(out.items) ? out.items : [];
-      renderLiterature(host, items.length ? { state: "done", items } : { state: "empty" });
+      renderReference(host, items.length ? { state: "done", items } : { state: "empty" });
     } catch (error) {
-      if (gen !== literatureGen) return;
-      renderLiterature(host, { state: "error", message: `문헌을 찾지 못했습니다: ${errorText(error)}` });
+      if (gen !== referenceGen) return;
+      renderReference(host, { state: "error", message: `참조를 찾지 못했습니다: ${errorText(error)}` });
     }
   }
 
-  function initLiteratureSearch() {
+  function initReferenceSearch() {
     const form = document.getElementById("literatureForm");
     if (!form || form.dataset.wired) return;
     form.dataset.wired = "1";
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      runLiteratureSearch();
+      runReferenceSearch();
     });
   }
-  initLiteratureSearch();
+  initReferenceSearch();
 
   // 템플릿 탭은 모델 탭과 같은 list_models 를 쓰지만 카드의 행동("이 목적으로
   // 시작")이 다르다. 첫 진입 1회 로드·중복 억제·force 재시도 규칙은 모델 탭과

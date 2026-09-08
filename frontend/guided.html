@@ -229,10 +229,18 @@
 
         <section class="block panel hidden" data-panelfor="evidence">
           <div id="evidenceView" class="empty">계획을 생성하면 근거가 여기 모입니다.</div>
-          <h3>문헌 검색</h3>
+          <h3>참조 검색</h3>
           <p class="note">이 검색은 실행과 무관합니다 — 런을 바꿔도 결과가 유지됩니다.</p>
           <form id="literatureForm" class="literatureform">
-            <label class="visually-hidden" for="literatureInput">문헌 검색어</label>
+            <label class="visually-hidden" for="referenceSource">참조 소스</label>
+            <select id="referenceSource">
+              <option value="literature">문헌/Europe PMC</option>
+              <option value="pdb">구조/PDB</option>
+              <option value="uniprot">주석/UniProt</option>
+              <option value="interpro">주석/InterPro</option>
+              <option value="uniref">군집/UniRef</option>
+            </select>
+            <label class="visually-hidden" for="literatureInput">참조 검색어</label>
             <input id="literatureInput" placeholder="예: de novo enzyme design solubility" />
             <button id="literatureSearch" class="primary" type="submit">검색</button>
           </form>
