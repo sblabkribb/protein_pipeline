@@ -18,6 +18,7 @@ export function agentEventModels(events) {
     const actions = Array.isArray(consensus.actions)
       ? consensus.actions.map(String).filter(Boolean).slice(0, 3) : [];
     return {
+      id: String(item.id || ""),
       stage: String(item.stage || ""),
       decision: String(consensus.decision || ""),
       detail: String(item.detail || ""),
@@ -42,6 +43,31 @@ export function rememberAgentEvents(runId, events) {
 
 export function currentAgentEvents(runId) {
   return String(runId || "") === lastRunId ? lastEvents : [];
+}
+
+// 온디맨드 LLM 해석 캐시. 이벤트 id 기준이고 재렌더(폴링 tick)에도 유지된다.
+// 생성된 산문일 뿐 측정 근거가 아니므로, 판정 칩이나 kv 행과 같은 칸에 섞지 않고
+// genbadge 라벨로 따로 표시한다.
+const interpretations = new Map();
+
+export function rememberInterpretation(eventId, reply) {
+  interpretations.set(String(eventId || ""), { reply: String(reply || ""), state: "done" });
+}
+
+export function interpretationFor(eventId) {
+  return interpretations.get(String(eventId || "")) || null;
+}
+
+export function setInterpretationPending(eventId) {
+  interpretations.set(String(eventId || ""), { reply: "", state: "loading" });
+}
+
+export function setInterpretationFailed(eventId, message) {
+  interpretations.set(String(eventId || ""), {
+    reply: "",
+    state: "failed",
+    error: String(message || "해석하지 못했습니다."),
+  });
 }
 
 // 판정 칩. 서버의 decision 이 유일한 근거다 - 프런트가 성공·실패를 재해석하지
@@ -142,6 +168,30 @@ export function renderAgentsTab(host, { state = "idle", events = [], runId = "",
     }
     if (kv.children.length) card.appendChild(kv);
     if (model.error) card.appendChild(el("p", "warn", model.error));
+    // LLM 해석은 생성된 산문이다. 측정 근거(kv 행·판정 칩)와 같은 눈높이에 두지
+    // 않고 genbadge 라벨로 출처를 밝힌다.
+    const interp = interpretationFor(model.id);
+    if (interp && interp.state === "loading") {
+      card.appendChild(el("p", "note", "해석하는 중…"));
+    } else if (interp && interp.state === "failed") {
+      card.appendChild(el("p", "warn", interp.error));
+    } else if (interp && interp.state === "done" && interp.reply) {
+      card.appendChild(el("p", "genbadge", "LLM 해석"));
+      card.appendChild(el("p", "note", interp.reply));
+    }
+    // 온디맨드 버튼 — 실행 경로가 아니라 클릭했을 때만 해석을 물어본다.
+    const explain = document.createElement("button");
+    explain.type = "button";
+    explain.className = "ghost";
+    explain.textContent = "LLM 해석";
+    if (typeof explain.addEventListener === "function") {
+      explain.addEventListener("click", () => {
+        if (typeof window !== "undefined" && window.__agentsExplain) {
+          window.__agentsExplain(runId, model.id, explain);
+        }
+      });
+    }
+    card.appendChild(explain);
     host.appendChild(card);
   }
 }
@@ -149,5 +199,14 @@ export function renderAgentsTab(host, { state = "idle", events = [], runId = "",
 export async function requestAgentEvents(runId) {
   const out = await callTool("pipeline.list_agent_events", { run_id: runId, limit: 20 });
   if (out && out.error) throw new Error(out.error);
+  return out;
+}
+
+// 해석 도구. 계약 응답(out.error, llm_unavailable)은 throw 로 통일한다 - facade 가
+// 실패 문구를 한 곳에서 그리게. llm_unavailable 은 서버 문구보다 화면 말이 짧게 낫다.
+export async function requestExplanation(runId, eventId) {
+  const out = await callTool("pipeline.explain_agent_event", { run_id: runId, event_id: eventId });
+  if (out && out.error) throw new Error(out.error);
+  if (out && out.llm_unavailable) throw new Error("LLM 연결 없음");
   return out;
 }

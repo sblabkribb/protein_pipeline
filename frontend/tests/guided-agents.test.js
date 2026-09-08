@@ -6,7 +6,9 @@ import { readFileSync } from "node:fs";
 // document 가 있으면 모듈 최상위에서 배선을 시작하므로, 스텁을 만들기 전에 모듈을
 // 먼저 적재해야 한다 - 가드가 브라우저 밖 배선을 건너뛴다. 스텁은 렌더 시점의
 // document.createElement 를 위해 그 뒤에 둔다.
-const { agentEventModels, renderAgentsTab, rememberAgentEvents, currentAgentEvents } = await import("../guided/agents.js");
+const { agentEventModels, renderAgentsTab, rememberAgentEvents, currentAgentEvents,
+        rememberInterpretation, interpretationFor, setInterpretationPending,
+        setInterpretationFailed } = await import("../guided/agents.js");
 
 globalThis.document ??= {
   createElement(tag) {
@@ -148,4 +150,48 @@ test("agents header falls back to 상태 없음 when the run has no status yet",
   const html = JSON.stringify(host.children);
   assert.ok(html.includes("상태 없음"), "missing status renders 상태 없음");
   assert.ok(html.includes("run_x"), "empty note still names the run");
+});
+
+test("event cards carry the event id and an on-demand LLM 해석 button", () => {
+  const models = agentEventModels(EVENTS);
+  assert.equal(models[0].id, "e1", "model keeps the event id for the explain call");
+  const host = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
+  renderAgentsTab(host, { state: "done", events: EVENTS, runId: "run_x" });
+  const html = JSON.stringify(host.children);
+  assert.ok(html.includes("LLM 해석"), "each card has the on-demand button");
+  assert.ok(html.includes('"className":"ghost"'), "the button is a ghost button");
+  // 해석이 없는 카드에는 산문 블록이 없다 - 버튼만 있다.
+  assert.ok(!html.includes("genbadge"), "no generated-prose label without an interpretation");
+});
+
+test("cached interpretation renders as a marked generated-prose block", () => {
+  rememberInterpretation("e1", "af2 경고를 풀어 쓴 문장입니다.");
+  const host = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
+  renderAgentsTab(host, { state: "done", events: EVENTS, runId: "run_x" });
+  const html = JSON.stringify(host.children);
+  assert.ok(html.includes("genbadge"), "prose is labeled with the genbadge source marker");
+  assert.ok(html.includes("af2 경고를 풀어 쓴 문장입니다."), "the interpretation text is painted");
+  assert.ok(interpretationFor("e1").state === "done", "cache round-trips");
+});
+
+test("pending and failed interpretations render as notes, not evidence", () => {
+  setInterpretationPending("e2");
+  setInterpretationFailed("e3", "LLM 연결 없음");
+  const host = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
+  renderAgentsTab(host, { state: "done", events: EVENTS, runId: "run_x" });
+  const html = JSON.stringify(host.children);
+  assert.ok(html.includes("해석하는 중…"), "pending state shows a progress note");
+  assert.ok(html.includes("LLM 연결 없음"), "failure shows the error text as a warn note");
+});
+
+test("the explain flow is wired through the facade and the explain tool", () => {
+  const src = readFileSync(new URL("../guided.js", import.meta.url), "utf8");
+  assert.ok(src.includes("__agentsExplain"), "facade hosts the explain hook");
+  assert.ok(src.includes("requestExplanation"), "facade calls the module's explain request");
+  assert.ok(src.includes("rememberInterpretation"), "facade remembers generated replies");
+  const mod = readFileSync(new URL("../guided/agents.js", import.meta.url), "utf8");
+  assert.ok(mod.includes("pipeline.explain_agent_event"), "module calls the explain tool");
+  assert.ok(mod.includes('"genbadge"', ), "generated prose carries the genbadge label");
+  assert.ok(mod.includes("LLM 해석"), "the generated-prose label and button are labeled");
+  assert.ok(mod.includes("llm_unavailable"), "unavailable contracts are handled in the module");
 });

@@ -68,7 +68,11 @@ import {
   paintSkillsTab, requestSkills, saveSkill, resetSkill,
   beginEdit, cancelEdit, currentEdit,
 } from "./guided/skills.js";
-import { renderAgentsTab, requestAgentEvents, rememberAgentEvents, currentAgentEvents } from "./guided/agents.js";
+import {
+  renderAgentsTab, requestAgentEvents, requestExplanation, rememberAgentEvents,
+  currentAgentEvents, rememberInterpretation, setInterpretationPending,
+  setInterpretationFailed,
+} from "./guided/agents.js";
 import {
   renderProjectsTab, requestProjects, requestRounds,
   projectCardModels, roundRowModels,
@@ -861,6 +865,32 @@ if (typeof document !== "undefined") {
       delete host.dataset.loading;
       renderAgentsTab(host, { state: "error", message: `에이전트 판정을 확인하지 못했습니다: ${errorText(error)}` });
     });
+  };
+
+  // "LLM 해석" 버튼의 배선. 판정 자체는 규칙 기반이고, 이 요청은 클릭했을 때만
+  // 나간다 — 실행 경로에 LLM 호출이 없다. 결과는 생성된 산문이므로 캐시에 넣고
+  // 탭을 다시 그려 genbadge 라벨과 함께 따로 그린다.
+  window.__agentsExplain = async (runId, eventId) => {
+    const agentsHost = document.getElementById("sideAgents");
+    const repaintFromCache = () => {
+      if (!agentsHost || agentsHost.dataset.loading) return;
+      const cached = currentAgentEvents(runId);
+      renderAgentsTab(agentsHost, cached.length
+        ? { state: "done", events: cached, runId }
+        : { state: "empty", runId });
+    };
+    setInterpretationPending(eventId);
+    repaintFromCache();
+    try {
+      const out = await requestExplanation(runId, eventId);
+      // 기다리는 사이 다른 실행을 골랐으면 버린다 - 해석도 판정과 마찬가지로
+      // 실행에 묶인다.
+      if (runState.runId !== runId) return;
+      rememberInterpretation(eventId, out.reply, out.reply_is_generated);
+    } catch (error) {
+      setInterpretationFailed(eventId, errorText(error));
+    }
+    repaintFromCache();
   };
 
   // 프로젝트 탭은 읽기 전용 탐색이다. 다른 탭 훅과 같은 첫 진입 1회 로드·중복
