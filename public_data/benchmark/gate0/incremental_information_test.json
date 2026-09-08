@@ -1,0 +1,166 @@
+{
+  "question": "응집 지표가 SoluProt 위에 AF2 구조 성공 예측 정보를 더하는가",
+  "label": "plddt >= 85 AND rmsd_nonloop_order <= 2.0 (SoluProt 미포함)",
+  "why_label_excludes_soluprot": "joint yield 를 쓰면 SoluProt 이 라벨 안에 들어가 M0 가 자기 자신을 예측한다",
+  "split": "GroupKFold by target_id. 서열 무작위 분할 금지.",
+  "model": "StandardScaler + LogisticRegression. 용량 차이가 아니라 특징 차이를 재려면 단순 모형이어야 한다. 스케일러는 폴드 안에서만 적합.",
+  "M0": [
+    "soluprot"
+  ],
+  "M1": [
+    "soluprot",
+    "aggregation_prone_fraction",
+    "max_hydrophobic_patch",
+    "net_charge"
+  ],
+  "n_designs": 1299,
+  "n_targets": 20,
+  "n_positive": 551,
+  "base_rate": 0.4242,
+  "primary": "타겟 내 AUROC. cheap filter 는 한 타겟 안에서 어느 서열을 접을지 고르므로, 타겟 난이도를 맞히는 능력은 이 일에 쓸모가 없다.",
+  "within_target": {
+    "M0": {
+      "n_informative_targets": 11,
+      "median": 0.4596,
+      "mean": 0.3973,
+      "per_target": [
+        0.0435,
+        0.582,
+        0.069,
+        0.4852,
+        0.2907,
+        0.5153,
+        0.3475,
+        0.4596,
+        0.683,
+        0.4615,
+        0.4333
+      ]
+    },
+    "M1": {
+      "n_informative_targets": 11,
+      "median": 0.4368,
+      "mean": 0.4112,
+      "per_target": [
+        0.2065,
+        0.3981,
+        0.4368,
+        0.2379,
+        0.4675,
+        0.2847,
+        0.5105,
+        0.5802,
+        0.375,
+        0.4769,
+        0.549
+      ]
+    },
+    "bootstrap": {
+      "n_targets": 11,
+      "mean_diff": 0.0139,
+      "ci95": [
+        -0.1104,
+        0.1336
+      ],
+      "excludes_zero": false
+    }
+  },
+  "pooled": {
+    "M0": {
+      "auroc": 0.26075463183128395,
+      "auprc": 0.30385190484314606,
+      "brier": 0.2874116449506081,
+      "n": 1299,
+      "positives": 551,
+      "top5_yield": 0.18461538461538463,
+      "top10_yield": 0.18461538461538463,
+      "top20_yield": 0.23461538461538461
+    },
+    "M1": {
+      "auroc": 0.4282126808816251,
+      "auprc": 0.3921289480863522,
+      "brier": 0.27635439282830365,
+      "n": 1299,
+      "positives": 551,
+      "top5_yield": 0.5538461538461539,
+      "top10_yield": 0.4230769230769231,
+      "top20_yield": 0.36538461538461536
+    }
+  },
+  "pooled_warning": "pooled 지표는 타겟 간 차이와 타겟 내 차이를 섞는다. 이 데이터에서 둘은 반대 방향이라 pooled 만 보면 결론이 뒤집힌다.",
+  "raw_feature_pooled_auroc": {
+    "soluprot": 0.3691,
+    "aggregation_prone_fraction": 0.6636,
+    "max_hydrophobic_patch": 0.6051,
+    "net_charge": 0.4919
+  },
+  "clustered_bootstrap": {
+    "auroc": {
+      "mean_diff": 0.1628,
+      "ci95": [
+        0.0061,
+        0.3025
+      ],
+      "excludes_zero": true,
+      "n_boot": 2000
+    },
+    "auprc": {
+      "mean_diff": 0.0844,
+      "ci95": [
+        -0.0077,
+        0.1778
+      ],
+      "excludes_zero": false,
+      "n_boot": 2000
+    },
+    "brier": {
+      "mean_diff": -0.0122,
+      "ci95": [
+        -0.0481,
+        0.0185
+      ],
+      "excludes_zero": false,
+      "n_boot": 2000
+    },
+    "top5_yield": {
+      "mean_diff": 0.313,
+      "ci95": [
+        -0.1379,
+        0.7059
+      ],
+      "excludes_zero": false,
+      "n_boot": 2000
+    },
+    "top10_yield": {
+      "mean_diff": 0.2302,
+      "ci95": [
+        -0.1111,
+        0.6042
+      ],
+      "excludes_zero": false,
+      "n_boot": 2000
+    },
+    "top20_yield": {
+      "mean_diff": 0.1316,
+      "ci95": [
+        -0.1145,
+        0.4031
+      ],
+      "excludes_zero": false,
+      "n_boot": 2000
+    }
+  },
+  "verdict": {
+    "adds_information": false,
+    "basis": "타겟 내 AUROC 차이 (pooled 아님)",
+    "reading": "타겟 안에서는 이득이 없다. pooled 지표의 이득은 타겟 난이도를 더 잘 맞힌 것이고, cheap filter 가 하는 일이 아니다. AggreProt/CamSol 은 같은 축이므로 같은 결과가 나올 가능성이 크다 - 다만 이 검정은 그 두 모형이 아니라 우리 서열 휴리스틱을 잰 것이다."
+  },
+  "limits": [
+    "선형 모형이다. 비선형 상호작용이 있으면 놓친다.",
+    "타겟 25 개다. clustered bootstrap 이 그만큼만 안다.",
+    "여기서 잰 것은 우리 서열 휴리스틱이지 AggreProt/CamSol 이 아니다.",
+    "포화된 타겟(성공률 0 또는 1)은 타겟 내 순위를 매길 수 없어 빠진다."
+  ],
+  "code_sha": "32e016b8a3478881852841efbf40a8f84d3b4c67",
+  "utc": "2026-09-08T04:13:59Z"
+}
