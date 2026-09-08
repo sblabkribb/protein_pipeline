@@ -16,7 +16,7 @@
     "max_hydrophobic_patch": "음",
     "net_charge": "부호 예측 없음 - 절댓값이 클수록 용해도가 높다는 보고가 있으나 단량체에서는 확인된 바 없다"
   },
-  "code_sha": "75467991425e44107ad986bee9ad0b2da5565544",
+  "code_sha": "367b7fc1d7b11f3f599a16ef1a31eb6fc18b083e",
   "utc": "2026-09-08T00:57:28Z",
   "metrics": {
     "aggregation_prone_fraction": {
@@ -51,5 +51,57 @@
     "calibrated": false,
     "gate_ready": false,
     "what_would_change_this": "응집이 실제로 측정된 코호트. 그 전까지는 기록 전용이다."
-  }
+  },
+  "decision": {
+    "verdict": "NO-GO for Gate 1B promotion",
+    "allowed_role": "Gate 1A developability annotation",
+    "scope": "구조 성공 랭킹에만 적용된다. 응집 예측기가 실험적 developability, 발현, 응집 결과에 값어치가 없다는 뜻이 아니다.",
+    "applies_to": [
+      "기존 서열 휴리스틱",
+      "AggreProt",
+      "CamSol"
+    ],
+    "why_named_models_are_covered": "같은 축(서열 기반 소수성·전하)이므로 같은 결과가 나올 가능성이 크다. 다만 이 검정이 잰 것은 우리 휴리스틱이지 그 두 모형이 아니다."
+  },
+  "provenance": {
+    "cohort": "1,299 designs / 20 targets / 37 backbones",
+    "label": "pLDDT >= 85 AND rmsd_nonloop_order <= 2.0 A",
+    "soluprot_excluded_from_label": true,
+    "why_excluded": "joint yield 를 라벨로 쓰면 SoluProt 이 라벨 안에 들어가 M0 가 자기 자신을 예측한다",
+    "split": "GroupKFold by target_id. 서열 무작위 분할 금지.",
+    "primary_interpretation": "within-target",
+    "informative_targets": "11/20",
+    "M0": {
+      "features": [
+        "soluprot"
+      ],
+      "within_target_median_auroc": 0.46
+    },
+    "M1": {
+      "features": [
+        "soluprot",
+        "aggregation_prone_fraction",
+        "max_hydrophobic_patch",
+        "net_charge"
+      ],
+      "within_target_median_auroc": 0.437
+    },
+    "incremental_effect": {
+      "mean_diff": 0.014,
+      "ci95": [
+        -0.11,
+        0.134
+      ],
+      "excludes_zero": false
+    },
+    "pooled_result_role": "Simpson/confounding diagnostic. policy decision 에 사용하지 않는다.",
+    "pooled_numbers_for_reference": {
+      "auroc_M0": 0.261,
+      "auroc_M1": 0.428,
+      "note": "이 차이는 타겟 난이도를 더 잘 맞힌 것이다"
+    },
+    "source": "public_data/benchmark/gate0/incremental_information_test.json"
+  },
+  "supersedes_earlier_reading": "이 파일의 수렴 타당도 결과(rho -0.489)만 보면 '부호가 맞으니 쓸 만하다' 로 읽힌다. 증분 정보 검정이 그 읽기를 막는다 - 방향이 맞는 것과 SoluProt 위에 정보를 더하는 것은 다르다.",
+  "updated_utc": "2026-09-08T04:48:46Z"
 }

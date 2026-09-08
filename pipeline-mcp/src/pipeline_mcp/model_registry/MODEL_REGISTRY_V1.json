@@ -486,7 +486,11 @@
       "evaluators": [
         "soluprot"
       ],
-      "detail": "SoluProt 이 게이트 1 에서 임계값 0.5 로 돌고 있고, 그 통과율이 게이트 0 라벨의 일부다."
+      "role": "objective_constraint",
+      "detail": "SoluProt 이 게이트 1 에서 임계값 0.5 로 돌고 있고, 그 통과율이 게이트 0 라벨의 일부다.",
+      "not_a_structural_ranker": "SoluProt 은 대장균 가용 발현을 예측하는 모델이지 AF2 의 pLDDT/RMSD 를 예측하는 모델이 아니다. 같은 타겟 안에서 어느 서열이 구조를 유지할지 가리는 능력은 거의 없다 - 타겟 내 AUROC 중앙값 0.540 (설계 1,299, 타겟 20 중 정보 있는 11). 따라서 \"SoluProt 0.5 를 넘었으니 좋은 후보\" 로 읽으면 안 되고, 설계 목적에 대한 직교 제약으로 읽어야 한다.",
+      "threshold_note": "0.5 는 구조 성공 라벨로 다시 고르지 않는다. 목적이 다르다 - 그 라벨로 최적화하면 용해도 제약이 아니라 구조 예측기가 된다. THRESHOLD_PROVENANCE 참조.",
+      "evidence": "public_data/benchmark/gate0/incremental_information_test.json"
     },
     "structural_preservation": {
       "status": "measured",
@@ -525,8 +529,19 @@
       "evaluators": [
         "sequence_liabilities"
       ],
-      "detail": "소수성 패치와 저전하 창 계산을 antigen 파이프라인에서 이식해 파이프라인에 배선했다 (pipeline_mcp/sequence_liabilities.py). soluprot 통과 직후 설계마다 값을 기록하고, 운영 판단으로 임시 게이트를 돌린다 - 상한 (patch 2.5, fraction 0.10) 은 측정에 맞춘 것이 아니라 항체 문맥 상속값에서 정한 초기값이고 환경변수로 조정하거나 PIPELINE_LIABILITY_GATE=0 으로 끌 수 있다. calibrated 는 false 다.",
-      "to_enable": "응집이 측정된 코호트에서 aggregation_prone_fraction 이 그 측정과 같은 방향인지 확인하고, 단량체용 임계값을 다시 정해 calibrated 를 true 로 바꾼다."
+      "role": "objective_constraint",
+      "calibrated": false,
+      "detail": "소수성 패치와 저전하 창 계산을 antigen 파이프라인에서 이식해 배선했다 (pipeline_mcp/sequence_liabilities.py). soluprot 통과 직후 설계마다 값을 기록한다. 임계값은 항체 문맥에서 정해진 것이라 단량체에 그대로 옮기면 근거가 따라오지 않는다 - calibrated 는 false 로 둔다.",
+      "measured": "두 가지를 쟀다. (1) 수렴 타당도: aggregation_prone_fraction 은 측정된 SoluProt 과 예상한 방향으로 움직인다 (rho -0.489 CI[-0.629, -0.248], 설계 2,624, 타겟 단위 재표집). 다만 SoluProt 이 소수성 계열 특징을 쓴다면 부분적으로 구성상 예견된 값이다. (2) 증분 정보: SoluProt 위에 이 지표들을 더해도 같은 타겟 안에서 AF2 구조 성공을 더 잘 가리지 못한다 (타겟 내 AUROC 차이 +0.014 CI[-0.110, +0.134], 정보 있는 타겟 11).",
+      "do_not_misread": "같은 검정의 pooled 지표는 AUROC 를 0.261 -> 0.428 로 올린 것처럼 보이고 top-5% yield 도 +0.37 이다. 그것은 타겟 난이도를 더 잘 맞힌 것이지 서열을 고른 것이 아니다 - SoluProt 은 타겟 평균이 높을수록 성공률이 낮고 (1bctA00 은 0.914 인데 성공률 0.000) 타겟 안에서는 반대 방향이다. 평가 단위를 타겟 내부로 잡지 않으면 결론이 뒤집힌다.",
+      "role_decision": "Aggregation-related sequence liabilities are retained as developability annotations but are not promoted to structural-success ranking gates. In 1,299 designs from 20 targets with corrected AF2 structural labels, adding aggregation_prone_fraction, max_hydrophobic_patch and net_charge to SoluProt did not improve within-target structural-success ranking (median incremental AUROC +0.014; 95% CI -0.110 to +0.134). Apparent pooled improvements were attributable primarily to between-target difficulty differences rather than sequence-level discrimination. The current evidence therefore does not justify adding or promoting aggregation-based filters such as the existing heuristics, AggreProt or CamSol for Gate 1B structural prioritization. Aggregation metrics remain available for Gate 1A developability assessment and annotation. This decision applies to structural-success ranking only. It does not establish that aggregation predictors lack value for experimental developability, expression or aggregation outcomes.",
+      "decision": "NO-GO for Gate 1B promotion",
+      "allowed_role": "Gate 1A developability annotation",
+      "to_enable": "응집이 실제로 측정된 코호트. 그 전까지는 기록 전용이다. 구조 성공 라벨로 이 지표의 임계값을 정하지 않는다 - 위 결과가 그 방향으로는 정보가 없다고 말한다.",
+      "evidence": [
+        "public_data/benchmark/gate0/aggregation_validation.json",
+        "public_data/benchmark/gate0/incremental_information_test.json"
+      ]
     },
     "developability": {
       "status": "evaluator_unvalidated",

@@ -1,0 +1,43 @@
+{
+  "purpose": "RAPID 이 서열 랭킹에만 의존하지 않고 백본·생성조건 수준에서 먼저 계산을 배분하는 이유의 정량 근거",
+  "label": "pLDDT >= 85.0 AND rmsd_nonloop_order <= 2.0",
+  "how_to_state_this": {
+    "correct": "이 코호트의 분산 분해에서 64.2% 가 타겟 및 백본 수준 차이에 귀속되었다",
+    "incorrect": "구조 성공의 64% 가 백본 수준에서 결정된다",
+    "why": "분산 분해는 관측된 코호트의 귀속이지 인과적 결정이 아니다"
+  },
+  "n_designs": 1299,
+  "n_targets": 20,
+  "n_backbones": 37,
+  "overall_success_rate": 0.4242,
+  "components": {
+    "target_level": 0.4949,
+    "backbone_within_target": 0.1472,
+    "sequence_within_backbone": 0.3579
+  },
+  "attributed_to_target_and_backbone": 0.6421,
+  "saturated_backbones": {
+    "n": 15,
+    "of": 37,
+    "fraction": 0.4054,
+    "designs": 477,
+    "designs_fraction": 0.3672,
+    "reading": "관측된 후보군에서 이 백본들은 서열 랭킹으로 구분할 수 있는 변이를 보이지 않았다. 서열을 더 생성하면 달라질 가능성을 배제하는 것은 아니다."
+  },
+  "varying_backbones": {
+    "n": 22,
+    "designs": 822,
+    "median_success_rate": 0.4688,
+    "range": [
+      0.0625,
+      0.9841
+    ]
+  },
+  "limits": [
+    "타겟 20 개, 백본 37 개의 한 코호트다.",
+    "서열은 ProteinMPNN 이 T=0.05~0.3 에서 만든 것이다. 다른 생성기나 더 넓은 온도 범위에서는 서열 수준 성분이 달라질 수 있다.",
+    "이진 결과의 제곱합 분해다. 혼합모형 분산성분과 정확히 같지 않다."
+  ],
+  "code_sha": "367b7fc1d7b11f3f599a16ef1a31eb6fc18b083e",
+  "utc": "2026-09-08T04:49:25Z"
+}
