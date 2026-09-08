@@ -12,8 +12,8 @@
   "n_run_tiers": 20,
   "mutation_median_over_designs": 74.0,
   "spurs": "자동 설치하지 않는다. 이 결과를 보고 사람이 결정한다.",
-  "code_sha": "736a9fe7f0ac0b1a5a802f248b8907c3fb6e00cc",
-  "utc": "2026-09-08T07:55:08Z",
+  "code_sha": "419c06ca3e7ec5e4e18d94daee5161715a37e42d",
+  "utc": "2026-09-08T21:28:18Z",
   "within_backbone_correlation": {
     "relax_vs_plddt": {
       "n_groups": 44,
@@ -27,12 +27,40 @@
     }
   },
   "thermomp": {
-    "status": "no_results",
-    "n_scored": 0,
-    "n_attempted": 8,
-    "skipped": {
-      "호출 실패: RuntimeError": 8
+    "status": "ok",
+    "n_scored": 300,
+    "n_attempted": 300,
+    "skipped": {},
+    "note": "additive_ddg_kcal_mol 은 단일 변이 예측의 합이다. 설계당 변이가 중앙값 74 개이므로 에피스테이시스를 무시한 근사이고, 절대값을 안정성 추정으로 읽으면 안 된다.",
+    "pooled_spearman": {
+      "thermomp_vs_relax": -0.0593,
+      "thermomp_vs_plddt": 0.2143,
+      "thermomp_vs_nmut": -0.0325
     },
-    "note": "additive_ddg_kcal_mol 은 단일 변이 예측의 합이다. 설계당 변이가 중앙값 74 개이므로 에피스테이시스를 무시한 근사이고, 절대값을 안정성 추정으로 읽으면 안 된다."
+    "within_backbone_spearman": {
+      "thermomp_vs_relax": {
+        "n_groups": 8,
+        "median_rho": -0.0079,
+        "frac_negative": 0.5
+      },
+      "thermomp_vs_plddt": {
+        "n_groups": 8,
+        "median_rho": -0.1677,
+        "frac_negative": 0.875
+      }
+    },
+    "ddg_distribution": {
+      "median": 8.22,
+      "p10": 1.3,
+      "p90": 13.38,
+      "min": -2.884,
+      "max": 19.314
+    },
+    "n_mutations_distribution": {
+      "median": 79,
+      "min": 57,
+      "max": 114
+    },
+    "anomaly_check": "변이 수와 ddG 의 상관이 매우 높으면(rho > 0.9) 그 점수는 안정성이 아니라 변이 개수를 재고 있을 가능성이 크다. 관측값 rho = -0.0325"
   }
 }

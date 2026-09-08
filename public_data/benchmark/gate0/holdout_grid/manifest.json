@@ -1,0 +1,51 @@
+{
+  "phase": "2_grid_fold",
+  "grid_depth": 24,
+  "condition": {
+    "temperature": 0.1,
+    "mpnn": {
+      "use_soluble_model": true,
+      "model_name": "v_48_020",
+      "sampling_temp": 0.1,
+      "seed": 0,
+      "batch_size": 1
+    }
+  },
+  "n_backbones": 72,
+  "incomplete_targets": [],
+  "protocol_fingerprint": {
+    "thresholds": {
+      "soluprot_min": 0.5,
+      "plddt_min": 85.0,
+      "rmsd_max": 2.0
+    },
+    "mpnn_settings": {
+      "use_soluble_model": true,
+      "model_name": "v_48_020",
+      "sampling_temp": 0.1,
+      "seed": 0,
+      "batch_size": 1
+    },
+    "sequences_per_backbone": 16,
+    "topup_sequences": 16,
+    "topup_yield_range": [
+      0.25,
+      0.75
+    ],
+    "tiers": [
+      0.5
+    ],
+    "backbones_per_run": 5,
+    "af2_calls_per_run": 80,
+    "af2_extra_flags": null
+  },
+  "metric": "rmsd_nonloop_order (22_refold_with_artifacts.fold_one 재사용)",
+  "reference": "각 백본 자신의 PDB (게이트 0 규약)",
+  "code_sha": "95c034a6371409ca9e0044f531f67afa89b9ac05",
+  "finished_utc": "2026-09-08T22:48:20Z",
+  "result": {
+    "n": 1728,
+    "ok": 1728,
+    "csv": "public_data/benchmark/gate0/holdout_grid/af2_order_metric.csv"
+  }
+}
