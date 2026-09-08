@@ -1,0 +1,3525 @@
+{
+  "purpose": "전향 홀드아웃에서 적응 배분을 같은 예산의 정적 배분과 비교",
+  "cohort": "rfd3_only",
+  "grid": "public_data/benchmark/gate0/holdout_grid/af2_order_metric.csv",
+  "endpoint_label": "joint",
+  "label": "pLDDT >= 85.0 and rmsd_nonloop_order <= 2.0 and soluprot >= 0.5",
+  "label_role": "동결 spec 의 primary endpoint",
+  "frozen_spec": "public_data/benchmark/gate0/holdout_experiment_spec.json",
+  "informative_rule": "모든 arm 이 yield 0 이거나 모든 arm 이 yield 1 인 타겟만 정보가 없다 (동결 spec 의 규칙)",
+  "uninformative_targets": {
+    "1sh6A02": "모든 arm yield 1"
+  },
+  "n_targets": 12,
+  "n_informative_targets": 11,
+  "min_informative_clusters": 8,
+  "dropped": {
+    "native 제외": 277,
+    "fold 실패": 51
+  },
+  "replicates": 200,
+  "bootstrap_iters": 2000,
+  "seed": 20260909,
+  "endpoint": "예산 안에서 찾은 구조 성공 설계 수 (많을수록 좋다)",
+  "results_by_budget": {
+    "1": {
+      "adaptive": {
+        "mean_found": 0.637,
+        "ci95": [
+          0.431,
+          0.836
+        ]
+      },
+      "static_k1": {
+        "mean_found": 0.628,
+        "ci95": [
+          0.428,
+          0.795
+        ]
+      },
+      "static_k2": {
+        "mean_found": 0.622,
+        "ci95": [
+          0.425,
+          0.791
+        ]
+      },
+      "static_k3": {
+        "mean_found": 0.635,
+        "ci95": [
+          0.443,
+          0.798
+        ]
+      },
+      "static_k4": {
+        "mean_found": 0.633,
+        "ci95": [
+          0.437,
+          0.799
+        ]
+      },
+      "static_k5": {
+        "mean_found": 0.626,
+        "ci95": [
+          0.427,
+          0.794
+        ]
+      },
+      "oracle": {
+        "mean_found": 0.863,
+        "ci95": [
+          0.707,
+          0.993
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.009,
+        "ci95": [
+          -0.11,
+          0.13
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.015,
+        "ci95": [
+          -0.099,
+          0.124
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.001,
+        "ci95": [
+          -0.115,
+          0.117
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.004,
+        "ci95": [
+          -0.105,
+          0.115
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.01,
+        "ci95": [
+          -0.104,
+          0.123
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 1,
+      "adaptive_concentration_mean": 1.0,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 3,
+      "primary_comparison": {
+        "mean": 0.001,
+        "ci95": [
+          -0.115,
+          0.117
+        ],
+        "excludes_zero": false
+      }
+    },
+    "2": {
+      "adaptive": {
+        "mean_found": 1.308,
+        "ci95": [
+          0.892,
+          1.708
+        ]
+      },
+      "static_k1": {
+        "mean_found": 1.262,
+        "ci95": [
+          0.865,
+          1.6
+        ]
+      },
+      "static_k2": {
+        "mean_found": 1.269,
+        "ci95": [
+          0.875,
+          1.596
+        ]
+      },
+      "static_k3": {
+        "mean_found": 1.259,
+        "ci95": [
+          0.861,
+          1.593
+        ]
+      },
+      "static_k4": {
+        "mean_found": 1.26,
+        "ci95": [
+          0.853,
+          1.601
+        ]
+      },
+      "static_k5": {
+        "mean_found": 1.255,
+        "ci95": [
+          0.867,
+          1.588
+        ]
+      },
+      "oracle": {
+        "mean_found": 1.72,
+        "ci95": [
+          1.408,
+          1.98
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.046,
+        "ci95": [
+          -0.169,
+          0.253
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.039,
+        "ci95": [
+          -0.182,
+          0.253
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.05,
+        "ci95": [
+          -0.159,
+          0.257
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.048,
+        "ci95": [
+          -0.164,
+          0.261
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.053,
+        "ci95": [
+          -0.155,
+          0.263
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 2,
+      "adaptive_concentration_mean": 1.0,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 2,
+      "primary_comparison": {
+        "mean": 0.039,
+        "ci95": [
+          -0.182,
+          0.253
+        ],
+        "excludes_zero": false
+      }
+    },
+    "3": {
+      "adaptive": {
+        "mean_found": 1.955,
+        "ci95": [
+          1.339,
+          2.54
+        ]
+      },
+      "static_k1": {
+        "mean_found": 1.871,
+        "ci95": [
+          1.287,
+          2.366
+        ]
+      },
+      "static_k2": {
+        "mean_found": 1.915,
+        "ci95": [
+          1.325,
+          2.405
+        ]
+      },
+      "static_k3": {
+        "mean_found": 1.885,
+        "ci95": [
+          1.29,
+          2.392
+        ]
+      },
+      "static_k4": {
+        "mean_found": 1.896,
+        "ci95": [
+          1.301,
+          2.405
+        ]
+      },
+      "static_k5": {
+        "mean_found": 1.891,
+        "ci95": [
+          1.297,
+          2.392
+        ]
+      },
+      "oracle": {
+        "mean_found": 2.567,
+        "ci95": [
+          2.077,
+          2.978
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.084,
+        "ci95": [
+          -0.215,
+          0.387
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.04,
+        "ci95": [
+          -0.277,
+          0.359
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.07,
+        "ci95": [
+          -0.214,
+          0.367
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.059,
+        "ci95": [
+          -0.227,
+          0.355
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.064,
+        "ci95": [
+          -0.232,
+          0.37
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 3,
+      "adaptive_concentration_mean": 1.0,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 2,
+      "primary_comparison": {
+        "mean": 0.04,
+        "ci95": [
+          -0.277,
+          0.359
+        ],
+        "excludes_zero": false
+      }
+    },
+    "4": {
+      "adaptive": {
+        "mean_found": 2.602,
+        "ci95": [
+          1.78,
+          3.395
+        ]
+      },
+      "static_k1": {
+        "mean_found": 2.519,
+        "ci95": [
+          1.73,
+          3.184
+        ]
+      },
+      "static_k2": {
+        "mean_found": 2.514,
+        "ci95": [
+          1.714,
+          3.181
+        ]
+      },
+      "static_k3": {
+        "mean_found": 2.508,
+        "ci95": [
+          1.71,
+          3.172
+        ]
+      },
+      "static_k4": {
+        "mean_found": 2.518,
+        "ci95": [
+          1.73,
+          3.19
+        ]
+      },
+      "static_k5": {
+        "mean_found": 2.506,
+        "ci95": [
+          1.714,
+          3.172
+        ]
+      },
+      "oracle": {
+        "mean_found": 3.44,
+        "ci95": [
+          2.796,
+          3.965
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.083,
+        "ci95": [
+          -0.317,
+          0.49
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.088,
+        "ci95": [
+          -0.315,
+          0.487
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.094,
+        "ci95": [
+          -0.339,
+          0.522
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.084,
+        "ci95": [
+          -0.32,
+          0.482
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.096,
+        "ci95": [
+          -0.319,
+          0.513
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 4,
+      "adaptive_concentration_mean": 1.0,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 1,
+      "primary_comparison": {
+        "mean": 0.083,
+        "ci95": [
+          -0.317,
+          0.49
+        ],
+        "excludes_zero": false
+      }
+    },
+    "5": {
+      "adaptive": {
+        "mean_found": 3.319,
+        "ci95": [
+          2.319,
+          4.265
+        ]
+      },
+      "static_k1": {
+        "mean_found": 3.161,
+        "ci95": [
+          2.177,
+          3.989
+        ]
+      },
+      "static_k2": {
+        "mean_found": 3.148,
+        "ci95": [
+          2.153,
+          3.99
+        ]
+      },
+      "static_k3": {
+        "mean_found": 3.127,
+        "ci95": [
+          2.16,
+          3.955
+        ]
+      },
+      "static_k4": {
+        "mean_found": 3.133,
+        "ci95": [
+          2.156,
+          3.956
+        ]
+      },
+      "static_k5": {
+        "mean_found": 3.139,
+        "ci95": [
+          2.148,
+          3.983
+        ]
+      },
+      "oracle": {
+        "mean_found": 4.316,
+        "ci95": [
+          3.512,
+          4.975
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.158,
+        "ci95": [
+          -0.235,
+          0.557
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.171,
+        "ci95": [
+          -0.21,
+          0.562
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.192,
+        "ci95": [
+          -0.169,
+          0.557
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.186,
+        "ci95": [
+          -0.192,
+          0.575
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.18,
+        "ci95": [
+          -0.205,
+          0.563
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 5,
+      "adaptive_concentration_mean": 0.8,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 1,
+      "primary_comparison": {
+        "mean": 0.158,
+        "ci95": [
+          -0.235,
+          0.557
+        ],
+        "excludes_zero": false
+      }
+    },
+    "6": {
+      "adaptive": {
+        "mean_found": 4.003,
+        "ci95": [
+          2.772,
+          5.132
+        ]
+      },
+      "static_k1": {
+        "mean_found": 3.826,
+        "ci95": [
+          2.64,
+          4.821
+        ]
+      },
+      "static_k2": {
+        "mean_found": 3.78,
+        "ci95": [
+          2.6,
+          4.786
+        ]
+      },
+      "static_k3": {
+        "mean_found": 3.78,
+        "ci95": [
+          2.599,
+          4.786
+        ]
+      },
+      "static_k4": {
+        "mean_found": 3.792,
+        "ci95": [
+          2.611,
+          4.79
+        ]
+      },
+      "static_k5": {
+        "mean_found": 3.775,
+        "ci95": [
+          2.61,
+          4.762
+        ]
+      },
+      "oracle": {
+        "mean_found": 5.167,
+        "ci95": [
+          4.235,
+          5.955
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.177,
+        "ci95": [
+          -0.241,
+          0.567
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.223,
+        "ci95": [
+          -0.207,
+          0.634
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.223,
+        "ci95": [
+          -0.188,
+          0.609
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.211,
+        "ci95": [
+          -0.235,
+          0.633
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.228,
+        "ci95": [
+          -0.189,
+          0.617
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 6,
+      "adaptive_concentration_mean": 0.667,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 1,
+      "primary_comparison": {
+        "mean": 0.177,
+        "ci95": [
+          -0.241,
+          0.567
+        ],
+        "excludes_zero": false
+      }
+    },
+    "7": {
+      "adaptive": {
+        "mean_found": 4.707,
+        "ci95": [
+          3.255,
+          6.047
+        ]
+      },
+      "static_k1": {
+        "mean_found": 4.432,
+        "ci95": [
+          3.091,
+          5.575
+        ]
+      },
+      "static_k2": {
+        "mean_found": 4.428,
+        "ci95": [
+          3.047,
+          5.59
+        ]
+      },
+      "static_k3": {
+        "mean_found": 4.42,
+        "ci95": [
+          3.024,
+          5.58
+        ]
+      },
+      "static_k4": {
+        "mean_found": 4.411,
+        "ci95": [
+          3.035,
+          5.59
+        ]
+      },
+      "static_k5": {
+        "mean_found": 4.41,
+        "ci95": [
+          3.026,
+          5.565
+        ]
+      },
+      "oracle": {
+        "mean_found": 5.98,
+        "ci95": [
+          4.841,
+          6.945
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.275,
+        "ci95": [
+          -0.246,
+          0.73
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.279,
+        "ci95": [
+          -0.244,
+          0.748
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.287,
+        "ci95": [
+          -0.212,
+          0.73
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.296,
+        "ci95": [
+          -0.205,
+          0.747
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.298,
+        "ci95": [
+          -0.204,
+          0.753
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 7,
+      "adaptive_concentration_mean": 0.571,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 1,
+      "primary_comparison": {
+        "mean": 0.275,
+        "ci95": [
+          -0.246,
+          0.73
+        ],
+        "excludes_zero": false
+      }
+    },
+    "8": {
+      "adaptive": {
+        "mean_found": 5.388,
+        "ci95": [
+          3.714,
+          6.912
+        ]
+      },
+      "static_k1": {
+        "mean_found": 5.072,
+        "ci95": [
+          3.492,
+          6.4
+        ]
+      },
+      "static_k2": {
+        "mean_found": 5.064,
+        "ci95": [
+          3.498,
+          6.378
+        ]
+      },
+      "static_k3": {
+        "mean_found": 5.039,
+        "ci95": [
+          3.467,
+          6.351
+        ]
+      },
+      "static_k4": {
+        "mean_found": 4.999,
+        "ci95": [
+          3.436,
+          6.334
+        ]
+      },
+      "static_k5": {
+        "mean_found": 5.027,
+        "ci95": [
+          3.465,
+          6.349
+        ]
+      },
+      "oracle": {
+        "mean_found": 6.893,
+        "ci95": [
+          5.62,
+          7.941
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.316,
+        "ci95": [
+          -0.284,
+          0.837
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.325,
+        "ci95": [
+          -0.246,
+          0.815
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.349,
+        "ci95": [
+          -0.228,
+          0.847
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.389,
+        "ci95": [
+          -0.161,
+          0.865
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.361,
+        "ci95": [
+          -0.211,
+          0.854
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 8,
+      "adaptive_concentration_mean": 0.5,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 1,
+      "primary_comparison": {
+        "mean": 0.316,
+        "ci95": [
+          -0.284,
+          0.837
+        ],
+        "excludes_zero": false
+      }
+    },
+    "9": {
+      "adaptive": {
+        "mean_found": 5.932,
+        "ci95": [
+          4.097,
+          7.61
+        ]
+      },
+      "static_k1": {
+        "mean_found": 5.703,
+        "ci95": [
+          3.94,
+          7.191
+        ]
+      },
+      "static_k2": {
+        "mean_found": 5.633,
+        "ci95": [
+          3.848,
+          7.144
+        ]
+      },
+      "static_k3": {
+        "mean_found": 5.679,
+        "ci95": [
+          3.911,
+          7.175
+        ]
+      },
+      "static_k4": {
+        "mean_found": 5.648,
+        "ci95": [
+          3.85,
+          7.159
+        ]
+      },
+      "static_k5": {
+        "mean_found": 5.645,
+        "ci95": [
+          3.877,
+          7.135
+        ]
+      },
+      "oracle": {
+        "mean_found": 7.758,
+        "ci95": [
+          6.326,
+          8.935
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.23,
+        "ci95": [
+          -0.353,
+          0.676
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.299,
+        "ci95": [
+          -0.338,
+          0.768
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.254,
+        "ci95": [
+          -0.308,
+          0.682
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.284,
+        "ci95": [
+          -0.307,
+          0.728
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.288,
+        "ci95": [
+          -0.271,
+          0.711
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 9,
+      "adaptive_concentration_mean": 0.444,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 1,
+      "primary_comparison": {
+        "mean": 0.23,
+        "ci95": [
+          -0.353,
+          0.676
+        ],
+        "excludes_zero": false
+      }
+    },
+    "10": {
+      "adaptive": {
+        "mean_found": 6.409,
+        "ci95": [
+          4.353,
+          8.313
+        ]
+      },
+      "static_k1": {
+        "mean_found": 6.291,
+        "ci95": [
+          4.286,
+          7.968
+        ]
+      },
+      "static_k2": {
+        "mean_found": 6.324,
+        "ci95": [
+          4.35,
+          7.99
+        ]
+      },
+      "static_k3": {
+        "mean_found": 6.295,
+        "ci95": [
+          4.347,
+          7.95
+        ]
+      },
+      "static_k4": {
+        "mean_found": 6.254,
+        "ci95": [
+          4.264,
+          7.922
+        ]
+      },
+      "static_k5": {
+        "mean_found": 6.292,
+        "ci95": [
+          4.312,
+          7.95
+        ]
+      },
+      "oracle": {
+        "mean_found": 8.587,
+        "ci95": [
+          6.949,
+          9.93
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.117,
+        "ci95": [
+          -0.56,
+          0.584
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.085,
+        "ci95": [
+          -0.511,
+          0.529
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.114,
+        "ci95": [
+          -0.505,
+          0.569
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.155,
+        "ci95": [
+          -0.445,
+          0.603
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.117,
+        "ci95": [
+          -0.484,
+          0.567
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 10,
+      "adaptive_concentration_mean": 0.4,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 2,
+      "primary_comparison": {
+        "mean": 0.085,
+        "ci95": [
+          -0.511,
+          0.529
+        ],
+        "excludes_zero": false
+      }
+    },
+    "11": {
+      "adaptive": {
+        "mean_found": 6.885,
+        "ci95": [
+          4.615,
+          8.978
+        ]
+      },
+      "static_k1": {
+        "mean_found": 6.907,
+        "ci95": [
+          4.753,
+          8.714
+        ]
+      },
+      "static_k2": {
+        "mean_found": 6.964,
+        "ci95": [
+          4.848,
+          8.772
+        ]
+      },
+      "static_k3": {
+        "mean_found": 6.927,
+        "ci95": [
+          4.717,
+          8.794
+        ]
+      },
+      "static_k4": {
+        "mean_found": 6.896,
+        "ci95": [
+          4.735,
+          8.715
+        ]
+      },
+      "static_k5": {
+        "mean_found": 6.916,
+        "ci95": [
+          4.766,
+          8.735
+        ]
+      },
+      "oracle": {
+        "mean_found": 9.435,
+        "ci95": [
+          7.674,
+          10.915
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": -0.022,
+        "ci95": [
+          -0.685,
+          0.507
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": -0.079,
+        "ci95": [
+          -0.741,
+          0.439
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": -0.041,
+        "ci95": [
+          -0.719,
+          0.456
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": -0.011,
+        "ci95": [
+          -0.712,
+          0.53
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": -0.031,
+        "ci95": [
+          -0.745,
+          0.509
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 11,
+      "adaptive_concentration_mean": 0.364,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 2,
+      "primary_comparison": {
+        "mean": -0.079,
+        "ci95": [
+          -0.741,
+          0.439
+        ],
+        "excludes_zero": false
+      }
+    },
+    "12": {
+      "adaptive": {
+        "mean_found": 7.388,
+        "ci95": [
+          4.844,
+          9.673
+        ]
+      },
+      "static_k1": {
+        "mean_found": 7.57,
+        "ci95": [
+          5.147,
+          9.604
+        ]
+      },
+      "static_k2": {
+        "mean_found": 7.56,
+        "ci95": [
+          5.185,
+          9.563
+        ]
+      },
+      "static_k3": {
+        "mean_found": 7.547,
+        "ci95": [
+          5.175,
+          9.553
+        ]
+      },
+      "static_k4": {
+        "mean_found": 7.531,
+        "ci95": [
+          5.18,
+          9.533
+        ]
+      },
+      "static_k5": {
+        "mean_found": 7.545,
+        "ci95": [
+          5.2,
+          9.529
+        ]
+      },
+      "oracle": {
+        "mean_found": 10.328,
+        "ci95": [
+          8.432,
+          11.915
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": -0.181,
+        "ci95": [
+          -1.003,
+          0.438
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": -0.172,
+        "ci95": [
+          -0.904,
+          0.43
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": -0.159,
+        "ci95": [
+          -0.923,
+          0.469
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": -0.143,
+        "ci95": [
+          -0.875,
+          0.462
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": -0.157,
+        "ci95": [
+          -0.933,
+          0.49
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 12,
+      "adaptive_concentration_mean": 0.333,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 1,
+      "primary_comparison": {
+        "mean": -0.181,
+        "ci95": [
+          -1.003,
+          0.438
+        ],
+        "excludes_zero": false
+      }
+    },
+    "13": {
+      "adaptive": {
+        "mean_found": 8.056,
+        "ci95": [
+          5.365,
+          10.468
+        ]
+      },
+      "static_k1": {
+        "mean_found": 8.197,
+        "ci95": [
+          5.701,
+          10.33
+        ]
+      },
+      "static_k2": {
+        "mean_found": 8.21,
+        "ci95": [
+          5.625,
+          10.382
+        ]
+      },
+      "static_k3": {
+        "mean_found": 8.231,
+        "ci95": [
+          5.66,
+          10.402
+        ]
+      },
+      "static_k4": {
+        "mean_found": 8.178,
+        "ci95": [
+          5.59,
+          10.343
+        ]
+      },
+      "static_k5": {
+        "mean_found": 8.165,
+        "ci95": [
+          5.585,
+          10.323
+        ]
+      },
+      "oracle": {
+        "mean_found": 11.167,
+        "ci95": [
+          9.053,
+          12.912
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": -0.141,
+        "ci95": [
+          -0.815,
+          0.472
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": -0.155,
+        "ci95": [
+          -0.863,
+          0.433
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": -0.175,
+        "ci95": [
+          -0.889,
+          0.452
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": -0.122,
+        "ci95": [
+          -0.784,
+          0.445
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": -0.109,
+        "ci95": [
+          -0.791,
+          0.473
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 13,
+      "adaptive_concentration_mean": 0.308,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 3,
+      "primary_comparison": {
+        "mean": -0.175,
+        "ci95": [
+          -0.889,
+          0.452
+        ],
+        "excludes_zero": false
+      }
+    },
+    "14": {
+      "adaptive": {
+        "mean_found": 8.72,
+        "ci95": [
+          5.809,
+          11.278
+        ]
+      },
+      "static_k1": {
+        "mean_found": 8.815,
+        "ci95": [
+          5.979,
+          11.158
+        ]
+      },
+      "static_k2": {
+        "mean_found": 8.815,
+        "ci95": [
+          6.066,
+          11.148
+        ]
+      },
+      "static_k3": {
+        "mean_found": 8.9,
+        "ci95": [
+          6.134,
+          11.213
+        ]
+      },
+      "static_k4": {
+        "mean_found": 8.802,
+        "ci95": [
+          6.034,
+          11.124
+        ]
+      },
+      "static_k5": {
+        "mean_found": 8.82,
+        "ci95": [
+          6.04,
+          11.179
+        ]
+      },
+      "oracle": {
+        "mean_found": 12.036,
+        "ci95": [
+          9.8,
+          13.897
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": -0.095,
+        "ci95": [
+          -0.775,
+          0.5
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": -0.095,
+        "ci95": [
+          -0.722,
+          0.489
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": -0.18,
+        "ci95": [
+          -0.821,
+          0.409
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": -0.082,
+        "ci95": [
+          -0.759,
+          0.538
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": -0.1,
+        "ci95": [
+          -0.705,
+          0.449
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 14,
+      "adaptive_concentration_mean": 0.286,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 3,
+      "primary_comparison": {
+        "mean": -0.18,
+        "ci95": [
+          -0.821,
+          0.409
+        ],
+        "excludes_zero": false
+      }
+    },
+    "15": {
+      "adaptive": {
+        "mean_found": 9.392,
+        "ci95": [
+          6.342,
+          12.035
+        ]
+      },
+      "static_k1": {
+        "mean_found": 9.391,
+        "ci95": [
+          6.449,
+          11.88
+        ]
+      },
+      "static_k2": {
+        "mean_found": 9.479,
+        "ci95": [
+          6.462,
+          11.995
+        ]
+      },
+      "static_k3": {
+        "mean_found": 9.486,
+        "ci95": [
+          6.518,
+          12.008
+        ]
+      },
+      "static_k4": {
+        "mean_found": 9.457,
+        "ci95": [
+          6.535,
+          11.943
+        ]
+      },
+      "static_k5": {
+        "mean_found": 9.47,
+        "ci95": [
+          6.523,
+          11.985
+        ]
+      },
+      "oracle": {
+        "mean_found": 12.874,
+        "ci95": [
+          10.451,
+          14.88
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.001,
+        "ci95": [
+          -0.66,
+          0.59
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": -0.087,
+        "ci95": [
+          -0.72,
+          0.481
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": -0.095,
+        "ci95": [
+          -0.64,
+          0.402
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": -0.065,
+        "ci95": [
+          -0.678,
+          0.495
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": -0.079,
+        "ci95": [
+          -0.666,
+          0.465
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 15,
+      "adaptive_concentration_mean": 0.267,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 3,
+      "primary_comparison": {
+        "mean": -0.095,
+        "ci95": [
+          -0.64,
+          0.402
+        ],
+        "excludes_zero": false
+      }
+    },
+    "16": {
+      "adaptive": {
+        "mean_found": 10.059,
+        "ci95": [
+          6.784,
+          12.883
+        ]
+      },
+      "static_k1": {
+        "mean_found": 10.105,
+        "ci95": [
+          6.926,
+          12.814
+        ]
+      },
+      "static_k2": {
+        "mean_found": 10.05,
+        "ci95": [
+          6.925,
+          12.714
+        ]
+      },
+      "static_k3": {
+        "mean_found": 10.2,
+        "ci95": [
+          7.036,
+          12.854
+        ]
+      },
+      "static_k4": {
+        "mean_found": 10.088,
+        "ci95": [
+          6.96,
+          12.747
+        ]
+      },
+      "static_k5": {
+        "mean_found": 10.072,
+        "ci95": [
+          6.935,
+          12.725
+        ]
+      },
+      "oracle": {
+        "mean_found": 13.758,
+        "ci95": [
+          11.205,
+          15.88
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": -0.047,
+        "ci95": [
+          -0.62,
+          0.476
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.008,
+        "ci95": [
+          -0.59,
+          0.563
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": -0.142,
+        "ci95": [
+          -0.708,
+          0.354
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": -0.029,
+        "ci95": [
+          -0.646,
+          0.52
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": -0.013,
+        "ci95": [
+          -0.642,
+          0.563
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 16,
+      "adaptive_concentration_mean": 0.25,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 3,
+      "primary_comparison": {
+        "mean": -0.142,
+        "ci95": [
+          -0.708,
+          0.354
+        ],
+        "excludes_zero": false
+      }
+    },
+    "17": {
+      "adaptive": {
+        "mean_found": 10.715,
+        "ci95": [
+          7.314,
+          13.652
+        ]
+      },
+      "static_k1": {
+        "mean_found": 10.631,
+        "ci95": [
+          7.148,
+          13.564
+        ]
+      },
+      "static_k2": {
+        "mean_found": 10.715,
+        "ci95": [
+          7.363,
+          13.52
+        ]
+      },
+      "static_k3": {
+        "mean_found": 10.694,
+        "ci95": [
+          7.339,
+          13.524
+        ]
+      },
+      "static_k4": {
+        "mean_found": 10.652,
+        "ci95": [
+          7.291,
+          13.475
+        ]
+      },
+      "static_k5": {
+        "mean_found": 10.694,
+        "ci95": [
+          7.374,
+          13.521
+        ]
+      },
+      "oracle": {
+        "mean_found": 14.615,
+        "ci95": [
+          11.898,
+          16.868
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.084,
+        "ci95": [
+          -0.415,
+          0.531
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0,
+        "ci95": [
+          -0.485,
+          0.48
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.021,
+        "ci95": [
+          -0.415,
+          0.426
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.063,
+        "ci95": [
+          -0.393,
+          0.495
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.021,
+        "ci95": [
+          -0.411,
+          0.437
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 17,
+      "adaptive_concentration_mean": 0.235,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 2,
+      "primary_comparison": {
+        "mean": 0,
+        "ci95": [
+          -0.485,
+          0.48
+        ],
+        "excludes_zero": false
+      }
+    },
+    "18": {
+      "adaptive": {
+        "mean_found": 11.305,
+        "ci95": [
+          7.713,
+          14.4
+        ]
+      },
+      "static_k1": {
+        "mean_found": 11.285,
+        "ci95": [
+          7.644,
+          14.36
+        ]
+      },
+      "static_k2": {
+        "mean_found": 11.269,
+        "ci95": [
+          7.755,
+          14.228
+        ]
+      },
+      "static_k3": {
+        "mean_found": 11.301,
+        "ci95": [
+          7.742,
+          14.29
+        ]
+      },
+      "static_k4": {
+        "mean_found": 11.285,
+        "ci95": [
+          7.792,
+          14.269
+        ]
+      },
+      "static_k5": {
+        "mean_found": 11.308,
+        "ci95": [
+          7.776,
+          14.298
+        ]
+      },
+      "oracle": {
+        "mean_found": 15.481,
+        "ci95": [
+          12.621,
+          17.87
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.019,
+        "ci95": [
+          -0.277,
+          0.282
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.036,
+        "ci95": [
+          -0.28,
+          0.347
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.004,
+        "ci95": [
+          -0.293,
+          0.294
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.02,
+        "ci95": [
+          -0.333,
+          0.339
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": -0.003,
+        "ci95": [
+          -0.324,
+          0.278
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 18,
+      "adaptive_concentration_mean": 0.222,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 5,
+      "primary_comparison": {
+        "mean": -0.003,
+        "ci95": [
+          -0.324,
+          0.278
+        ],
+        "excludes_zero": false
+      }
+    },
+    "19": {
+      "adaptive": {
+        "mean_found": 11.947,
+        "ci95": [
+          8.204,
+          15.119
+        ]
+      },
+      "static_k1": {
+        "mean_found": 11.898,
+        "ci95": [
+          8.204,
+          15.014
+        ]
+      },
+      "static_k2": {
+        "mean_found": 11.864,
+        "ci95": [
+          8.138,
+          15.021
+        ]
+      },
+      "static_k3": {
+        "mean_found": 11.905,
+        "ci95": [
+          8.155,
+          15.059
+        ]
+      },
+      "static_k4": {
+        "mean_found": 11.975,
+        "ci95": [
+          8.238,
+          15.125
+        ]
+      },
+      "static_k5": {
+        "mean_found": 11.99,
+        "ci95": [
+          8.252,
+          15.136
+        ]
+      },
+      "oracle": {
+        "mean_found": 16.352,
+        "ci95": [
+          13.319,
+          18.852
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.049,
+        "ci95": [
+          -0.125,
+          0.205
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.083,
+        "ci95": [
+          -0.126,
+          0.292
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.042,
+        "ci95": [
+          -0.092,
+          0.185
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": -0.028,
+        "ci95": [
+          -0.196,
+          0.142
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": -0.043,
+        "ci95": [
+          -0.159,
+          0.066
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 19,
+      "adaptive_concentration_mean": 0.211,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 5,
+      "primary_comparison": {
+        "mean": -0.043,
+        "ci95": [
+          -0.159,
+          0.066
+        ],
+        "excludes_zero": false
+      }
+    },
+    "20": {
+      "adaptive": {
+        "mean_found": 12.581,
+        "ci95": [
+          8.678,
+          15.873
+        ]
+      },
+      "static_k1": {
+        "mean_found": 12.642,
+        "ci95": [
+          8.663,
+          15.977
+        ]
+      },
+      "static_k2": {
+        "mean_found": 12.566,
+        "ci95": [
+          8.635,
+          15.903
+        ]
+      },
+      "static_k3": {
+        "mean_found": 12.64,
+        "ci95": [
+          8.721,
+          15.972
+        ]
+      },
+      "static_k4": {
+        "mean_found": 12.561,
+        "ci95": [
+          8.613,
+          15.892
+        ]
+      },
+      "static_k5": {
+        "mean_found": 12.596,
+        "ci95": [
+          8.685,
+          15.902
+        ]
+      },
+      "oracle": {
+        "mean_found": 17.193,
+        "ci95": [
+          13.988,
+          19.855
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": -0.061,
+        "ci95": [
+          -0.356,
+          0.245
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.015,
+        "ci95": [
+          -0.108,
+          0.133
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": -0.059,
+        "ci95": [
+          -0.146,
+          0.022
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.02,
+        "ci95": [
+          -0.05,
+          0.09
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": -0.015,
+        "ci95": [
+          -0.073,
+          0.042
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 20,
+      "adaptive_concentration_mean": 0.2,
+      "adaptive_abandoned_mean": 0,
+      "posthoc_best_static_k": 1,
+      "primary_comparison": {
+        "mean": -0.061,
+        "ci95": [
+          -0.356,
+          0.245
+        ],
+        "excludes_zero": false
+      }
+    },
+    "21": {
+      "adaptive": {
+        "mean_found": 13.325,
+        "ci95": [
+          9.229,
+          16.724
+        ]
+      },
+      "static_k1": {
+        "mean_found": 13.365,
+        "ci95": [
+          9.2,
+          16.829
+        ]
+      },
+      "static_k2": {
+        "mean_found": 13.219,
+        "ci95": [
+          9.069,
+          16.782
+        ]
+      },
+      "static_k3": {
+        "mean_found": 13.228,
+        "ci95": [
+          9.122,
+          16.707
+        ]
+      },
+      "static_k4": {
+        "mean_found": 13.192,
+        "ci95": [
+          9.03,
+          16.692
+        ]
+      },
+      "static_k5": {
+        "mean_found": 13.231,
+        "ci95": [
+          9.1,
+          16.721
+        ]
+      },
+      "oracle": {
+        "mean_found": 18.065,
+        "ci95": [
+          14.72,
+          20.836
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": -0.04,
+        "ci95": [
+          -0.243,
+          0.144
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.106,
+        "ci95": [
+          -0.107,
+          0.361
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.097,
+        "ci95": [
+          -0.036,
+          0.26
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.133,
+        "ci95": [
+          -0.005,
+          0.28
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.094,
+        "ci95": [
+          -0.02,
+          0.209
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 20.97,
+      "adaptive_concentration_mean": 0.237,
+      "adaptive_abandoned_mean": 0.429,
+      "posthoc_best_static_k": 1,
+      "primary_comparison": {
+        "mean": -0.04,
+        "ci95": [
+          -0.243,
+          0.144
+        ],
+        "excludes_zero": false
+      }
+    },
+    "22": {
+      "adaptive": {
+        "mean_found": 14.105,
+        "ci95": [
+          9.878,
+          17.674
+        ]
+      },
+      "static_k1": {
+        "mean_found": 13.916,
+        "ci95": [
+          9.541,
+          17.628
+        ]
+      },
+      "static_k2": {
+        "mean_found": 13.887,
+        "ci95": [
+          9.507,
+          17.577
+        ]
+      },
+      "static_k3": {
+        "mean_found": 13.88,
+        "ci95": [
+          9.521,
+          17.52
+        ]
+      },
+      "static_k4": {
+        "mean_found": 13.811,
+        "ci95": [
+          9.465,
+          17.455
+        ]
+      },
+      "static_k5": {
+        "mean_found": 13.866,
+        "ci95": [
+          9.539,
+          17.519
+        ]
+      },
+      "oracle": {
+        "mean_found": 18.933,
+        "ci95": [
+          15.44,
+          21.835
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.189,
+        "ci95": [
+          -0.071,
+          0.51
+        ],
+        "excludes_zero": false
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.218,
+        "ci95": [
+          0.013,
+          0.472
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.225,
+        "ci95": [
+          0.082,
+          0.39
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.294,
+        "ci95": [
+          0.1,
+          0.529
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.239,
+        "ci95": [
+          0.076,
+          0.427
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent_mean": 21.93,
+      "adaptive_concentration_mean": 0.264,
+      "adaptive_abandoned_mean": 0.439,
+      "posthoc_best_static_k": 1,
+      "primary_comparison": {
+        "mean": 0.189,
+        "ci95": [
+          -0.071,
+          0.51
+        ],
+        "excludes_zero": false
+      }
+    },
+    "23": {
+      "adaptive": {
+        "mean_found": 14.938,
+        "ci95": [
+          10.603,
+          18.581
+        ]
+      },
+      "static_k1": {
+        "mean_found": 14.45,
+        "ci95": [
+          10.088,
+          18.205
+        ]
+      },
+      "static_k2": {
+        "mean_found": 14.507,
+        "ci95": [
+          9.944,
+          18.316
+        ]
+      },
+      "static_k3": {
+        "mean_found": 14.558,
+        "ci95": [
+          10.024,
+          18.376
+        ]
+      },
+      "static_k4": {
+        "mean_found": 14.531,
+        "ci95": [
+          10.037,
+          18.335
+        ]
+      },
+      "static_k5": {
+        "mean_found": 14.488,
+        "ci95": [
+          9.975,
+          18.296
+        ]
+      },
+      "oracle": {
+        "mean_found": 19.779,
+        "ci95": [
+          16.119,
+          22.827
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.488,
+        "ci95": [
+          0.247,
+          0.764
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.43,
+        "ci95": [
+          0.198,
+          0.667
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.38,
+        "ci95": [
+          0.176,
+          0.578
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.407,
+        "ci95": [
+          0.178,
+          0.606
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.45,
+        "ci95": [
+          0.216,
+          0.657
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent_mean": 22.93,
+      "adaptive_concentration_mean": 0.289,
+      "adaptive_abandoned_mean": 0.439,
+      "posthoc_best_static_k": 3,
+      "primary_comparison": {
+        "mean": 0.38,
+        "ci95": [
+          0.176,
+          0.578
+        ],
+        "excludes_zero": true
+      }
+    },
+    "24": {
+      "adaptive": {
+        "mean_found": 15.712,
+        "ci95": [
+          11.233,
+          19.497
+        ]
+      },
+      "static_k1": {
+        "mean_found": 15.082,
+        "ci95": [
+          10.485,
+          18.963
+        ]
+      },
+      "static_k2": {
+        "mean_found": 15.152,
+        "ci95": [
+          10.51,
+          19.124
+        ]
+      },
+      "static_k3": {
+        "mean_found": 15.217,
+        "ci95": [
+          10.505,
+          19.173
+        ]
+      },
+      "static_k4": {
+        "mean_found": 15.151,
+        "ci95": [
+          10.427,
+          19.169
+        ]
+      },
+      "static_k5": {
+        "mean_found": 15.127,
+        "ci95": [
+          10.407,
+          19.128
+        ]
+      },
+      "oracle": {
+        "mean_found": 20.636,
+        "ci95": [
+          16.818,
+          23.818
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 0.63,
+        "ci95": [
+          0.359,
+          0.891
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k2": {
+        "mean": 0.56,
+        "ci95": [
+          0.229,
+          0.942
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k3": {
+        "mean": 0.495,
+        "ci95": [
+          0.229,
+          0.768
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k4": {
+        "mean": 0.561,
+        "ci95": [
+          0.266,
+          0.857
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.585,
+        "ci95": [
+          0.267,
+          0.918
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent_mean": 23.9,
+      "adaptive_concentration_mean": 0.312,
+      "adaptive_abandoned_mean": 0.42,
+      "posthoc_best_static_k": 3,
+      "primary_comparison": {
+        "mean": 0.495,
+        "ci95": [
+          0.229,
+          0.768
+        ],
+        "excludes_zero": true
+      }
+    },
+    "30": {
+      "adaptive": {
+        "mean_found": 20.606,
+        "ci95": [
+          15.255,
+          25.105
+        ]
+      },
+      "static_k1": {
+        "mean_found": 14.915,
+        "ci95": [
+          10.212,
+          18.884
+        ]
+      },
+      "static_k2": {
+        "mean_found": 18.75,
+        "ci95": [
+          12.894,
+          23.733
+        ]
+      },
+      "static_k3": {
+        "mean_found": 18.886,
+        "ci95": [
+          12.992,
+          23.87
+        ]
+      },
+      "static_k4": {
+        "mean_found": 18.9,
+        "ci95": [
+          12.995,
+          23.909
+        ]
+      },
+      "static_k5": {
+        "mean_found": 18.882,
+        "ci95": [
+          12.953,
+          23.86
+        ]
+      },
+      "oracle": {
+        "mean_found": 25.213,
+        "ci95": [
+          19.864,
+          29.441
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 5.691,
+        "ci95": [
+          4.877,
+          6.45
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k2": {
+        "mean": 1.856,
+        "ci95": [
+          1.114,
+          2.647
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k3": {
+        "mean": 1.72,
+        "ci95": [
+          1.01,
+          2.497
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k4": {
+        "mean": 1.706,
+        "ci95": [
+          0.983,
+          2.477
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k5": {
+        "mean": 1.724,
+        "ci95": [
+          1.004,
+          2.462
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent_mean": 29.8,
+      "adaptive_concentration_mean": 0.41,
+      "adaptive_abandoned_mean": 0.434,
+      "posthoc_best_static_k": 4,
+      "primary_comparison": {
+        "mean": 1.706,
+        "ci95": [
+          0.983,
+          2.477
+        ],
+        "excludes_zero": true
+      }
+    },
+    "40": {
+      "adaptive": {
+        "mean_found": 28.78,
+        "ci95": [
+          21.747,
+          34.591
+        ]
+      },
+      "static_k1": {
+        "mean_found": 15.051,
+        "ci95": [
+          10.398,
+          19.002
+        ]
+      },
+      "static_k2": {
+        "mean_found": 25.354,
+        "ci95": [
+          17.526,
+          31.981
+        ]
+      },
+      "static_k3": {
+        "mean_found": 25.12,
+        "ci95": [
+          17.202,
+          31.727
+        ]
+      },
+      "static_k4": {
+        "mean_found": 25.224,
+        "ci95": [
+          17.308,
+          31.851
+        ]
+      },
+      "static_k5": {
+        "mean_found": 25.197,
+        "ci95": [
+          17.316,
+          31.838
+        ]
+      },
+      "oracle": {
+        "mean_found": 32.815,
+        "ci95": [
+          25.001,
+          39.048
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 13.73,
+        "ci95": [
+          11.047,
+          15.841
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k2": {
+        "mean": 3.426,
+        "ci95": [
+          2.064,
+          4.859
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k3": {
+        "mean": 3.661,
+        "ci95": [
+          2.276,
+          5.102
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k4": {
+        "mean": 3.556,
+        "ci95": [
+          2.226,
+          4.945
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k5": {
+        "mean": 3.584,
+        "ci95": [
+          2.243,
+          4.955
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent_mean": 39.41,
+      "adaptive_concentration_mean": 0.503,
+      "adaptive_abandoned_mean": 0.43,
+      "posthoc_best_static_k": 2,
+      "primary_comparison": {
+        "mean": 3.426,
+        "ci95": [
+          2.064,
+          4.859
+        ],
+        "excludes_zero": true
+      }
+    },
+    "50": {
+      "adaptive": {
+        "mean_found": 36.52,
+        "ci95": [
+          27.107,
+          44.215
+        ]
+      },
+      "static_k1": {
+        "mean_found": 15.083,
+        "ci95": [
+          10.338,
+          19.092
+        ]
+      },
+      "static_k2": {
+        "mean_found": 29.925,
+        "ci95": [
+          20.527,
+          37.854
+        ]
+      },
+      "static_k3": {
+        "mean_found": 31.623,
+        "ci95": [
+          21.827,
+          39.916
+        ]
+      },
+      "static_k4": {
+        "mean_found": 31.395,
+        "ci95": [
+          21.497,
+          39.685
+        ]
+      },
+      "static_k5": {
+        "mean_found": 31.509,
+        "ci95": [
+          21.704,
+          39.811
+        ]
+      },
+      "oracle": {
+        "mean_found": 40.186,
+        "ci95": [
+          29.963,
+          48.365
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 21.437,
+        "ci95": [
+          16.381,
+          25.407
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k2": {
+        "mean": 6.595,
+        "ci95": [
+          4.776,
+          8.553
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k3": {
+        "mean": 4.897,
+        "ci95": [
+          3.077,
+          6.855
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k4": {
+        "mean": 5.125,
+        "ci95": [
+          3.19,
+          7.273
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k5": {
+        "mean": 5.011,
+        "ci95": [
+          3.113,
+          7.153
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent_mean": 48.47,
+      "adaptive_concentration_mean": 0.457,
+      "adaptive_abandoned_mean": 0.449,
+      "posthoc_best_static_k": 3,
+      "primary_comparison": {
+        "mean": 4.897,
+        "ci95": [
+          3.077,
+          6.855
+        ],
+        "excludes_zero": true
+      }
+    },
+    "60": {
+      "adaptive": {
+        "mean_found": 44.017,
+        "ci95": [
+          32.13,
+          53.643
+        ]
+      },
+      "static_k1": {
+        "mean_found": 15.048,
+        "ci95": [
+          10.39,
+          18.955
+        ]
+      },
+      "static_k2": {
+        "mean_found": 29.887,
+        "ci95": [
+          20.59,
+          37.836
+        ]
+      },
+      "static_k3": {
+        "mean_found": 37.83,
+        "ci95": [
+          26.021,
+          47.817
+        ]
+      },
+      "static_k4": {
+        "mean_found": 37.808,
+        "ci95": [
+          25.915,
+          47.785
+        ]
+      },
+      "static_k5": {
+        "mean_found": 37.814,
+        "ci95": [
+          25.97,
+          47.815
+        ]
+      },
+      "oracle": {
+        "mean_found": 46.694,
+        "ci95": [
+          34.144,
+          56.775
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 28.969,
+        "ci95": [
+          21.284,
+          35.011
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k2": {
+        "mean": 14.13,
+        "ci95": [
+          10.789,
+          17.36
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k3": {
+        "mean": 6.188,
+        "ci95": [
+          3.664,
+          9.143
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k4": {
+        "mean": 6.21,
+        "ci95": [
+          3.603,
+          9.082
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k5": {
+        "mean": 6.204,
+        "ci95": [
+          3.572,
+          9.119
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent_mean": 57.09,
+      "adaptive_concentration_mean": 0.4,
+      "adaptive_abandoned_mean": 0.715,
+      "posthoc_best_static_k": 3,
+      "primary_comparison": {
+        "mean": 6.188,
+        "ci95": [
+          3.664,
+          9.143
+        ],
+        "excludes_zero": true
+      }
+    },
+    "80": {
+      "adaptive": {
+        "mean_found": 56.727,
+        "ci95": [
+          40.366,
+          70.339
+        ]
+      },
+      "static_k1": {
+        "mean_found": 14.9,
+        "ci95": [
+          10.294,
+          18.876
+        ]
+      },
+      "static_k2": {
+        "mean_found": 30.111,
+        "ci95": [
+          20.62,
+          38.142
+        ]
+      },
+      "static_k3": {
+        "mean_found": 45.146,
+        "ci95": [
+          31.149,
+          57.023
+        ]
+      },
+      "static_k4": {
+        "mean_found": 50.31,
+        "ci95": [
+          34.56,
+          63.658
+        ]
+      },
+      "static_k5": {
+        "mean_found": 50.31,
+        "ci95": [
+          34.526,
+          63.592
+        ]
+      },
+      "oracle": {
+        "mean_found": 58.615,
+        "ci95": [
+          42.13,
+          72.409
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 41.827,
+        "ci95": [
+          30.001,
+          51.8
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k2": {
+        "mean": 26.616,
+        "ci95": [
+          19.196,
+          32.719
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k3": {
+        "mean": 11.581,
+        "ci95": [
+          8.035,
+          14.954
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k4": {
+        "mean": 6.417,
+        "ci95": [
+          3.452,
+          9.387
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k5": {
+        "mean": 6.416,
+        "ci95": [
+          3.513,
+          9.251
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent_mean": 73.58,
+      "adaptive_concentration_mean": 0.324,
+      "adaptive_abandoned_mean": 0.756,
+      "posthoc_best_static_k": 5,
+      "primary_comparison": {
+        "mean": 6.416,
+        "ci95": [
+          3.513,
+          9.251
+        ],
+        "excludes_zero": true
+      }
+    },
+    "100": {
+      "adaptive": {
+        "mean_found": 67.575,
+        "ci95": [
+          47.09,
+          84.556
+        ]
+      },
+      "static_k1": {
+        "mean_found": 14.988,
+        "ci95": [
+          10.291,
+          18.914
+        ]
+      },
+      "static_k2": {
+        "mean_found": 30.107,
+        "ci95": [
+          20.625,
+          38.07
+        ]
+      },
+      "static_k3": {
+        "mean_found": 45.16,
+        "ci95": [
+          31.043,
+          57.168
+        ]
+      },
+      "static_k4": {
+        "mean_found": 60.114,
+        "ci95": [
+          41.348,
+          75.993
+        ]
+      },
+      "static_k5": {
+        "mean_found": 62.829,
+        "ci95": [
+          43.044,
+          79.506
+        ]
+      },
+      "oracle": {
+        "mean_found": 68.465,
+        "ci95": [
+          47.903,
+          85.435
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 52.587,
+        "ci95": [
+          36.735,
+          65.842
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k2": {
+        "mean": 37.468,
+        "ci95": [
+          26.186,
+          46.833
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k3": {
+        "mean": 22.415,
+        "ci95": [
+          15.68,
+          28.199
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k4": {
+        "mean": 7.461,
+        "ci95": [
+          4.877,
+          10.102
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k5": {
+        "mean": 4.746,
+        "ci95": [
+          2.475,
+          7.356
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent_mean": 90.05,
+      "adaptive_concentration_mean": 0.282,
+      "adaptive_abandoned_mean": 0.749,
+      "posthoc_best_static_k": 5,
+      "primary_comparison": {
+        "mean": 4.746,
+        "ci95": [
+          2.475,
+          7.356
+        ],
+        "excludes_zero": true
+      }
+    },
+    "120": {
+      "adaptive": {
+        "mean_found": 74.945,
+        "ci95": [
+          51.095,
+          94.909
+        ]
+      },
+      "static_k1": {
+        "mean_found": 15.008,
+        "ci95": [
+          10.349,
+          18.916
+        ]
+      },
+      "static_k2": {
+        "mean_found": 30.301,
+        "ci95": [
+          20.869,
+          38.282
+        ]
+      },
+      "static_k3": {
+        "mean_found": 45.193,
+        "ci95": [
+          31.175,
+          56.95
+        ]
+      },
+      "static_k4": {
+        "mean_found": 59.947,
+        "ci95": [
+          41.08,
+          75.902
+        ]
+      },
+      "static_k5": {
+        "mean_found": 74.683,
+        "ci95": [
+          51.273,
+          94.563
+        ]
+      },
+      "oracle": {
+        "mean_found": 75.182,
+        "ci95": [
+          51.636,
+          94.909
+        ]
+      },
+      "delta_vs_static_k1": {
+        "mean": 59.936,
+        "ci95": [
+          40.832,
+          76.135
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k2": {
+        "mean": 44.644,
+        "ci95": [
+          30.271,
+          56.749
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k3": {
+        "mean": 29.752,
+        "ci95": [
+          19.995,
+          37.968
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k4": {
+        "mean": 14.998,
+        "ci95": [
+          10.078,
+          19.069
+        ],
+        "excludes_zero": true
+      },
+      "delta_vs_static_k5": {
+        "mean": 0.262,
+        "ci95": [
+          -0.153,
+          0.671
+        ],
+        "excludes_zero": false
+      },
+      "adaptive_spent_mean": 105.98,
+      "adaptive_concentration_mean": 0.246,
+      "adaptive_abandoned_mean": 0.755,
+      "posthoc_best_static_k": 5,
+      "primary_comparison": {
+        "mean": 0.262,
+        "ci95": [
+          -0.153,
+          0.671
+        ],
+        "excludes_zero": false
+      }
+    }
+  },
+  "secondary_endpoint": "구조 성공 N 개를 채우는 데 든 AF2 호출 수 (적을수록 좋다)",
+  "cost_to_n_successes": {
+    "5": {
+      "adaptive": {
+        "reach_rate": 0.9718
+      },
+      "static_k1": {
+        "reach_rate": 0.8068
+      },
+      "static_k2": {
+        "reach_rate": 0.8964
+      },
+      "static_k3": {
+        "reach_rate": 0.9264
+      },
+      "static_k4": {
+        "reach_rate": 0.9664
+      },
+      "static_k5": {
+        "reach_rate": 0.9841
+      },
+      "oracle": {
+        "reach_rate": 1.0
+      },
+      "delta_calls_vs_static_k1": {
+        "mean": 0.357,
+        "ci95": [
+          -0.65,
+          2.132
+        ],
+        "excludes_zero": false,
+        "n_pairs": 1766,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k2": {
+        "mean": -0.195,
+        "ci95": [
+          -1.241,
+          1.02
+        ],
+        "excludes_zero": false,
+        "n_pairs": 1947,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k3": {
+        "mean": -0.933,
+        "ci95": [
+          -2.595,
+          0.408
+        ],
+        "excludes_zero": false,
+        "n_pairs": 2004,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k4": {
+        "mean": -2.571,
+        "ci95": [
+          -7.19,
+          0.519
+        ],
+        "excludes_zero": false,
+        "n_pairs": 2073,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k5": {
+        "mean": -4.557,
+        "ci95": [
+          -12.201,
+          0.48
+        ],
+        "excludes_zero": false,
+        "n_pairs": 2111,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      }
+    },
+    "10": {
+      "adaptive": {
+        "reach_rate": 0.8182
+      },
+      "static_k1": {
+        "reach_rate": 0.675
+      },
+      "static_k2": {
+        "reach_rate": 0.7973
+      },
+      "static_k3": {
+        "reach_rate": 0.8182
+      },
+      "static_k4": {
+        "reach_rate": 0.8182
+      },
+      "static_k5": {
+        "reach_rate": 0.8182
+      },
+      "oracle": {
+        "reach_rate": 0.8182
+      },
+      "delta_calls_vs_static_k1": {
+        "mean": 0.709,
+        "ci95": [
+          -0.668,
+          2.887
+        ],
+        "excludes_zero": false,
+        "n_pairs": 1485,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k2": {
+        "mean": -0.643,
+        "ci95": [
+          -1.065,
+          -0.21
+        ],
+        "excludes_zero": true,
+        "n_pairs": 1754,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k3": {
+        "mean": -0.771,
+        "ci95": [
+          -1.768,
+          0.06
+        ],
+        "excludes_zero": false,
+        "n_pairs": 1800,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k4": {
+        "mean": -0.477,
+        "ci95": [
+          -1.273,
+          0.333
+        ],
+        "excludes_zero": false,
+        "n_pairs": 1800,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k5": {
+        "mean": -0.331,
+        "ci95": [
+          -1.066,
+          0.454
+        ],
+        "excludes_zero": false,
+        "n_pairs": 1800,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      }
+    },
+    "15": {
+      "adaptive": {
+        "reach_rate": 0.8182
+      },
+      "static_k1": {
+        "reach_rate": 0.6123
+      },
+      "static_k2": {
+        "reach_rate": 0.7759
+      },
+      "static_k3": {
+        "reach_rate": 0.8091
+      },
+      "static_k4": {
+        "reach_rate": 0.8182
+      },
+      "static_k5": {
+        "reach_rate": 0.8182
+      },
+      "oracle": {
+        "reach_rate": 0.8182
+      },
+      "delta_calls_vs_static_k1": {
+        "mean": 1.873,
+        "ci95": [
+          0.442,
+          4.078
+        ],
+        "excludes_zero": true,
+        "n_pairs": 1347,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k2": {
+        "mean": -0.767,
+        "ci95": [
+          -1.173,
+          -0.357
+        ],
+        "excludes_zero": true,
+        "n_pairs": 1707,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k3": {
+        "mean": -1.281,
+        "ci95": [
+          -2.496,
+          -0.408
+        ],
+        "excludes_zero": true,
+        "n_pairs": 1780,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k4": {
+        "mean": -1.478,
+        "ci95": [
+          -3.354,
+          -0.333
+        ],
+        "excludes_zero": true,
+        "n_pairs": 1800,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k5": {
+        "mean": -1.278,
+        "ci95": [
+          -3.079,
+          -0.214
+        ],
+        "excludes_zero": true,
+        "n_pairs": 1800,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      }
+    },
+    "20": {
+      "adaptive": {
+        "reach_rate": 0.8182
+      },
+      "static_k1": {
+        "reach_rate": 0.4332
+      },
+      "static_k2": {
+        "reach_rate": 0.7605
+      },
+      "static_k3": {
+        "reach_rate": 0.8091
+      },
+      "static_k4": {
+        "reach_rate": 0.8182
+      },
+      "static_k5": {
+        "reach_rate": 0.8182
+      },
+      "oracle": {
+        "reach_rate": 0.8182
+      },
+      "delta_calls_vs_static_k1": {
+        "mean": 3.015,
+        "ci95": [
+          1.545,
+          4.87
+        ],
+        "excludes_zero": true,
+        "n_pairs": 953,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k2": {
+        "mean": -1.356,
+        "ci95": [
+          -2.167,
+          -0.693
+        ],
+        "excludes_zero": true,
+        "n_pairs": 1673,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k3": {
+        "mean": -2.525,
+        "ci95": [
+          -4.902,
+          -0.809
+        ],
+        "excludes_zero": true,
+        "n_pairs": 1780,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k4": {
+        "mean": -2.831,
+        "ci95": [
+          -6.121,
+          -0.685
+        ],
+        "excludes_zero": true,
+        "n_pairs": 1800,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      },
+      "delta_calls_vs_static_k5": {
+        "mean": -2.585,
+        "ci95": [
+          -5.676,
+          -0.613
+        ],
+        "excludes_zero": true,
+        "n_pairs": 1800,
+        "sign": "음수면 적응이 더 적은 호출로 N 개를 채웠다"
+      }
+    }
+  },
+  "validates": "Gate 1B 의 백본 배분 축 (어느 백본에 다음 계산을 쓸 것인가)",
+  "does_not_validate": [
+    "생성 조건 탐색 축 - 격자는 단일 조건(T=0.1)이므로 조건-탐색 항과 다양성 항이 비활성이다. 그 축은 패널 2 온도 스윕이 담당한다.",
+    "정책이 실시간으로 새 서열을 만드는 온라인 실행 - 이것은 전향으로 생성된 격자를 비복원 재생한 것이다. 관측 밖으로 나가지 않는다."
+  ],
+  "policy_information": "Gate 0 사전분포와 자기 probe 관측만. 참 yield 주입 없음.",
+  "bias_direction": [
+    "적응 정책만 백본별 최소 probe 비용을 예산에서 지불한다. 정적 배분에는 그 비용이 없으므로 비교는 적응에 불리하다.",
+    "정적 대조군의 k 를 사후 최적값으로 고른다 (동결 spec). 실제 사용자는 그 k 를 미리 알 수 없으므로, 이것도 대조군에 유리한 쪽이다."
+  ],
+  "replay_limit": "각 백본에 관측이 24 개뿐이다. 적응 정책이 한 백본에 집중해 24 개를 다 쓰면 실제 제품에서는 서열을 더 생성할 수 있지만 재생에서는 다른 백본으로 옮겨야 한다. 이는 적응 정책의 이점을 과대평가하지 않고 축소하는 방향이다."
+}
