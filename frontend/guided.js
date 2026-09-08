@@ -355,7 +355,20 @@ async function selectRun(runId) {
         }
       }
       if (info.state === "done" || info.state === "failed" || info.state === "cancelled") {
-        loadArtifacts(runId, { isStale: () => gen !== selectGen });
+        const isStale = () => gen !== selectGen;
+        // 실행이 끝나면 산출물 목록뿐 아니라 Results·Evidence·Structure 탭도
+        // 다시 채운다 - 그냥 두면 실행을 다시 고르기 전까지 낡은 탭이 남는다.
+        // 세 탭은 목록을 다시 읽은 뒤의 runState.artifacts 를 근거로 채운다.
+        // 방금 끝난 실행의 PDB 가 옛 목록에는 없을 수 있기 때문이다. 이 새로고침
+        // 함수들은 오류를 그리지 않고 던지므로 조용히 거른다 - 말단 tick 에서의
+        // 실패는 이미 그려진 탭을 그대로 둔다(선택 시점의 .catch 가 그리는
+        // 경고문과 같은 낌새는 여기 없다).
+        loadArtifacts(runId, { isStale }).then(() => {
+          if (isStale()) return;
+          refreshResults(runId, { isStale }).catch(() => {});
+          refreshEvidence(runId, { isStale }).catch(() => {});
+          refreshStructure(runId, { isStale, artifacts: runState.artifacts || [] }).catch(() => {});
+        });
       }
     },
   });
@@ -888,6 +901,14 @@ if (typeof document !== "undefined") {
       setRoundsLoading(false);
       host.prepend(el("p", "warn", `라운드를 불러오지 못했습니다: ${errorText(error)}`));
     });
+  };
+  // 프로젝트 라운드의 run_id 칩은 그 실행을 여는 버튼이다. 실행 탭으로 옮겨
+  // 놓고 골라 주고, 목록에서 해당 행을 밝힌다.
+  window.__projectsOpenRun = (runId) => {
+    if (!runId) return;
+    showSideTab("runs");
+    selectRun(String(runId));
+    highlightRun(String(runId));
   };
 
   initSideTabs();

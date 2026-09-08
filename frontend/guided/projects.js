@@ -139,7 +139,20 @@ export function renderProjectsTab(host, { state = "idle", projects = null, messa
       if (String(row.status || "").trim().toLowerCase() === "archived") {
         item.appendChild(el("span", "warnchip", "보관됨"));
       }
-      for (const runId of row.runIds) item.appendChild(el("span", "chip", runId));
+      // run_id 칩은 눌러서 그 실행을 여는 버튼이다. 이 모듈은 실행 화면을
+      // 모르므로 다른 버튼들과 같이 window 훅(__projectsOpenRun)으로만 배선한다.
+      for (const runId of row.runIds) {
+        const chip = document.createElement("button");
+        chip.type = "button";
+        chip.className = "chip runc-link";
+        chip.textContent = runId;
+        if (typeof chip.addEventListener === "function") {
+          chip.addEventListener("click", () => {
+            if (typeof window !== "undefined" && window.__projectsOpenRun) window.__projectsOpenRun(runId);
+          });
+        }
+        item.appendChild(chip);
+      }
       host.appendChild(item);
     }
   }

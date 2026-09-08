@@ -453,6 +453,22 @@ test("a run without a status file still shows its artifacts", () => {
             "the missing-status branch must not return early");
 });
 
+test("a terminal tick re-fires the Results·Evidence·Structure refreshers", () => {
+  // 폴링이 끝을 말하면 아티팩트 목록만 다시 읽었었다 - Results·Evidence·Structure
+  // 탭은 실행을 다시 고르기 전까지 낡은 채로 남았다. 같은 말단 분기에서 세 탭도
+  // 다시 채운다. 산출물 목록을 다시 읽은 뒤 그 목록으로 채운다 - 방금 끝난 실행의
+  // PDB 가 목록에 없으면 구조 탭은 빈 채로 남으니까.
+  const term = source.slice(source.indexOf('if (info.state === "done"'),
+                            source.indexOf("async function refreshResults("));
+  assert.match(term, /const isStale = \(\) => gen !== selectGen/,
+               "the refreshers must use the run's staleness predicate");
+  assert.match(term, /loadArtifacts\(runId, \{ isStale \}\)/);
+  assert.match(term, /refreshResults\(runId, \{ isStale \}\)/);
+  assert.match(term, /refreshEvidence\(runId, \{ isStale \}\)/);
+  assert.match(term, /refreshStructure\(runId, \{ isStale, artifacts: runState\.artifacts \|\| \[\] \}\)/,
+               "structure needs the artifact list it refreshes");
+});
+
 test("panes can be resized, by pointer and by keyboard", () => {
   // 3D 를 볼 때와 계획을 읽을 때 필요한 폭이 다르다. 고정 폭이면 둘 중 하나는
   // 늘 좁다. 드래그만 지원하면 키보드 사용자는 폭을 바꿀 수 없다.

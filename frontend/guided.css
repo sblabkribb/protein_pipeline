@@ -231,6 +231,13 @@ button { touch-action: manipulation; }
 .dot.off { background: var(--rule); }
 .chip { flex: 0 0 auto; font-size: 10.5px; padding: 2px 8px; color: var(--quiet); }
 .stage .chip ~ .chip { margin-left: 8px; }
+/* 프로젝트 라운드의 run_id 칩은 버튼이다 - 눌러서 그 실행을 연다. 칩 모양을
+   유지하되 누를 수 있음을 말한다. span 칩은 비대칭 표시라 그대로 둔다. */
+button.chip {
+  cursor: pointer; background: transparent; border: 1px solid transparent;
+  font-family: inherit; font-weight: inherit;
+}
+button.chip:hover { border-color: var(--action); color: var(--action); }
 .warnchip { color: var(--assumed-ink); border: 1px solid color-mix(in oklch, var(--assumed) 45%, transparent); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
 /* 상단바 실행 상태 칩. 색은 근거 체계를 따른다 - 완료는 측정(measured),
    실패는 차단(absent), 폴링 중단은 미검증(assumed)이다. */

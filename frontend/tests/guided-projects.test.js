@@ -84,6 +84,34 @@ test("renderProjectsTab paints projects and the expanded project's rounds", () =
   assert.ok(html.includes("라운드 보기") || html.includes("접기"));
 });
 
+test("a round's run id renders as a button that opens the run", () => {
+  const make = () => ({ children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } });
+  const host = make();
+  renderProjectsTab(host, { state: "done", projects: projectCardModels([PROJECTS[0]]),
+                            expandedId: "p1",
+                            rounds: roundRowModels([{ round_id: "r1", linked_run_ids: ["run_x"] }]) });
+  // 라운드 행(item div)의 자식 중 run id 를 텍스트로 갖는 노드를 찾는다. 칩이
+  // 아니라 버튼이어야 한다 - 눌러서 그 실행을 열 수 있어야 하니까.
+  const row = host.children.find((node) => JSON.stringify(node).includes("run_x"));
+  assert.ok(row, "the round row is rendered");
+  const chips = row.children.filter((c) => c.tagName === "BUTTON" && c.textContent === "run_x");
+  assert.equal(chips.length, 1, "the run id must render as a BUTTON");
+  assert.ok(chips[0].className.includes("chip"), "the button keeps the chip look");
+  // 배선 계약 - 칩은 파사드의 __projectsOpenRun 로만 실행을 연다.
+  const mod = readFileSync(new URL("../guided/projects.js", import.meta.url), "utf8");
+  assert.ok(mod.includes("__projectsOpenRun"), "the chip must call the facade opener");
+});
+
+test("the facade opens a run from a project round chip", () => {
+  const src = readFileSync(new URL("../guided.js", import.meta.url), "utf8");
+  assert.ok(src.includes("__projectsOpenRun"), "the facade must expose the run opener");
+  const fn = src.slice(src.indexOf("__projectsOpenRun"),
+                       src.indexOf("__projectsOpenRun") + 400);
+  assert.match(fn, /showSideTab\("runs"\)/, "opening must land on the runs tab");
+  assert.match(fn, /selectRun\(String\(runId\)\)/, "opening must select the run");
+  assert.match(fn, /highlightRun\(String\(runId\)\)/, "opening must mark the run in the list");
+});
+
 test("renderProjectsTab paints loading, error, empty states", () => {
   const make = () => ({ children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } });
   const h0 = make(); renderProjectsTab(h0, { state: "loading" });
