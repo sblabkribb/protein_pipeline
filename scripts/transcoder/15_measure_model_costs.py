@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import json
 import statistics
 import sys
@@ -172,7 +173,7 @@ def _fit(points: list[dict], key: str) -> dict:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--host", default="211.188.35.221")
+    parser.add_argument("--host", default=os.environ.get("RAPID_GPU_HOST", ""))
     parser.add_argument("--mpnn-port", type=int, default=18101)
     parser.add_argument("--esm-port", type=int, default=18170)
     parser.add_argument("--counts", default="1,4,16")

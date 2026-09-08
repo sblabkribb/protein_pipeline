@@ -6,6 +6,15 @@
 # 무작위 결측이라는 근거만으로 넘기지 않고 채워서 확인한다.
 set -uo pipefail
 cd /opt/protein_pipeline-work
+
+# 워커 호스트는 저장소에 적지 않는다. 릴리스 체크리스트가 내부 주소 공개를
+# 금지하므로 스크립트 기본값을 비웠고, 여기서 환경변수로 넣는다.
+# .env 를 통째로 source 하면 셸이 그 내용을 명령으로 실행한다. 실제로 이 파일에는
+# 주석 표시 없는 줄이 있어 "command not found" 가 났다. 필요한 변수만 뽑는다.
+RAPID_GPU_HOST="$(sed -n 's/^RAPID_GPU_HOST=//p' \
+  /opt/protein_pipeline/pipeline-mcp/.env | tail -1)"
+export RAPID_GPU_HOST
+: "${RAPID_GPU_HOST:?RAPID_GPU_HOST 가 필요하다 (.env 확인)}"
 GRID_PID="${1:?격자 체인 PID}"
 B=public_data/benchmark/gate0
 

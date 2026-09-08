@@ -12,6 +12,7 @@ paired 설계: **같은 백본 PDB** 에 온도만 바꿔 생성한다. 파이�
 from __future__ import annotations
 
 import argparse
+import os
 import csv
 import json
 from pathlib import Path
@@ -19,6 +20,15 @@ import sys
 import time
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _worker_url(port: int) -> str:
+    """RAPID_GPU_HOST 가 없으면 빈 문자열. 호출자가 --url 로 주어야 한다.
+
+    내부 호스트를 기본값으로 박아두면 공개 저장소에 나간다.
+    """
+    host = os.environ.get("RAPID_GPU_HOST", "").strip()
+    return f"http://{host}:{port}" if host else ""
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(PROJECT_ROOT / "pipeline-mcp" / "src"))
 
@@ -66,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--panel-manifest", default="",
                         help="동결된 panel manifest 의 backbone_key 목록만 사용한다. "
                              "주면 --targets-file/--source 보다 우선한다.")
-    parser.add_argument("--mpnn-url", default="http://211.188.35.221:18101")
+    parser.add_argument("--mpnn-url", default=_worker_url(18101))
     parser.add_argument("--mpnn-timeout", type=float, default=900.0,
                         help="클라이언트 기본값 60 초는 긴 백본에서 터진다. "
                              "폴링 간격은 timeout/200 이므로 900 이면 4.5 초다.")

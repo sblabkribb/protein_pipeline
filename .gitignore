@@ -117,3 +117,17 @@ manuscript (5).md
 # CATH 원본 분류 파일(43MB)은 추적하지 않는다.
 # 재현에 필요한 것은 sha256 과 파생 매핑(rapid_target_superfamily.json)이다.
 /public_data/cath/cath-domain-list.txt
+
+# 내부 초안·탐색 산출물. 논문 자산이 아니고 재현에도 필요 없다.
+# 원고 그림(figures/submission, figures/benchmark/figure1_orchestration.*,
+# table*.tex)과 실험 데이터(public_data/benchmark/gate0/**)는 계속 추적한다.
+/docs/figures/email_draft*.md
+/docs/figures/*_bundle/
+/docs/figures/expl_*
+/figures/benchmark/*_v[0-9]*_[0-9]*.png
+/figures/benchmark/*_email.png
+/AGENTS.md
+
+# 파생 산출물 - 스크립트로 다시 만들 수 있다.
+/frontend/.pytest_cache/
+/frontend/dist/

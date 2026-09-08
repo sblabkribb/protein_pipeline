@@ -29,6 +29,7 @@ RDKit 이 없어 대칭 보정 RMSD 를 계산할 수 없다. 대칭이 있는 �
 from __future__ import annotations
 
 import argparse
+import os
 import csv
 import json
 import math
@@ -39,6 +40,15 @@ import urllib.request
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _worker_url(port: int) -> str:
+    """RAPID_GPU_HOST 가 없으면 빈 문자열. 호출자가 --url 로 주어야 한다.
+
+    내부 호스트를 기본값으로 박아두면 공개 저장소에 나간다.
+    """
+    host = os.environ.get("RAPID_GPU_HOST", "").strip()
+    return f"http://{host}:{port}" if host else ""
 sys.path.insert(0, str(PROJECT_ROOT / "pipeline-mcp" / "src"))
 
 BASE = PROJECT_ROOT / "public_data" / "benchmark" / "gate0"
@@ -135,7 +145,7 @@ def score_pose(pose_coords, crystal_coords) -> dict:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--stage", choices=["self", "redesign", "both"], default="both")
-    parser.add_argument("--diffdock-url", default="http://211.188.35.221:18105")
+    parser.add_argument("--diffdock-url", default=_worker_url(18105))
     parser.add_argument("--designs-per-target", type=int, default=4)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--dry-run", action="store_true")

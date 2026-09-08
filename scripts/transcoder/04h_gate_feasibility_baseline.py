@@ -11,11 +11,21 @@
 from __future__ import annotations
 
 import argparse
+import os
 import json
 from pathlib import Path
 import sys
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _worker_url(port: int) -> str:
+    """RAPID_GPU_HOST 가 없으면 빈 문자열. 호출자가 --url 로 주어야 한다.
+
+    내부 호스트를 기본값으로 박아두면 공개 저장소에 나간다.
+    """
+    host = os.environ.get("RAPID_GPU_HOST", "").strip()
+    return f"http://{host}:{port}" if host else ""
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from rapid_sr.cath_source import load_cath_run  # noqa: E402
@@ -185,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--metrics", default="soluprot,plddt_af2")
     parser.add_argument("--features", default="composition",
                         help=",".join(FEATURE_SETS))
-    parser.add_argument("--esm-url", default="http://211.188.35.221:18170")
+    parser.add_argument("--esm-url", default=_worker_url(18170))
     parser.add_argument("--model", default="ridge", choices=["ridge", "rf"])
     parser.add_argument(
         "--out",

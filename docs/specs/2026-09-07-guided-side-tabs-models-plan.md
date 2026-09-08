@@ -454,7 +454,7 @@ gh run watch --exit-status $(gh run list --branch develop --limit 1 --json datab
 
 ```bash
 curl -sS http://127.0.0.1:18087/healthz
-curl -sSI https://rapid-dev.kbiofoundry.kr/guided.html | head -1
+curl -sSI https://rapid.example.internal/guided.html | head -1
 ```
 
 브라우저: guided.html → 좌측 상단 탭 스트립 확인 → 모델 탭 클릭 → 목적 경로(칩 3색)·목표별 평가자 상태·모델 카탈로그 표시 → 실행 목록 탭 복귀 → 기존 실행 목록/운영 블록 그대로인지 확인 → 새로고침 후 탭 유지 확인.

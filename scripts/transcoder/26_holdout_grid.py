@@ -23,6 +23,7 @@ sequence-order 대응을 두 곳에 구현하지 않기 위해서다. 기준 구
 from __future__ import annotations
 
 import argparse
+import os
 import csv
 import importlib.util
 import json
@@ -34,6 +35,15 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _worker_url(port: int) -> str:
+    """RAPID_GPU_HOST 가 없으면 빈 문자열. 호출자가 --url 로 주어야 한다.
+
+    내부 호스트를 기본값으로 박아두면 공개 저장소에 나간다.
+    """
+    host = os.environ.get("RAPID_GPU_HOST", "").strip()
+    return f"http://{host}:{port}" if host else ""
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(PROJECT_ROOT / "pipeline-mcp" / "src"))
 
@@ -201,8 +211,8 @@ def main(argv=None) -> int:
     parser.add_argument("--generation", default=str(BASE / "holdout_generation.json"))
     parser.add_argument("--spec", default=str(BASE / "holdout_experiment_spec.json"))
     parser.add_argument("--output-root", default="/opt/protein_pipeline/outputs")
-    parser.add_argument("--colabfold-url", default="http://211.188.35.221:18160")
-    parser.add_argument("--mpnn-url", default="http://211.188.35.221:18101")
+    parser.add_argument("--colabfold-url", default=_worker_url(18160))
+    parser.add_argument("--mpnn-url", default=_worker_url(18101))
     parser.add_argument("--soluprot-url", default="http://127.0.0.1:18081/score")
     parser.add_argument("--mpnn-timeout", type=float, default=1800.0)
     parser.add_argument("--workers", type=int, default=4)

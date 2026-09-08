@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
@@ -420,7 +422,7 @@ class ModelRegistry:
         *,
         probe: Callable[[str, float], dict] | None = None,
         timeout: float = 6.0,
-        host: str = "211.188.35.221",
+        host: str = "",   # RAPID_GPU_HOST 로 주입한다. 내부 호스트를 저장소에 적지 않는다.
     ) -> dict[str, dict]:
         """워커가 지금 응답하는지 확인한다. 레지스트리는 바꾸지 않는다."""
         call = probe or _default_probe

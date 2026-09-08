@@ -56,7 +56,7 @@ curl -sS http://127.0.0.1:18101/healthz
 Validate from the current pipeline server:
 
 ```bash
-curl -sS http://211.188.35.221:18101/healthz
+curl -sS http://gpu.example.internal:18101/healthz
 ```
 
 ## Configure Pipeline Server
@@ -66,7 +66,7 @@ matching dev/staging `.env` file.
 
 ```env
 PROTEINMPNN_PROVIDER=gpu_http
-PROTEINMPNN_GPU_URL=http://211.188.35.221:18101
+PROTEINMPNN_GPU_URL=http://gpu.example.internal:18101
 PROTEINMPNN_GPU_TOKEN=<shared-worker-token>
 PROTEINMPNN_GPU_TIMEOUT_S=21600
 ```

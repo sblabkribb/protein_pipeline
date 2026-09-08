@@ -1069,7 +1069,7 @@ Expected: CI green
 
 ```bash
 curl -sS http://127.0.0.1:18087/healthz    # {"ok": true}
-curl -sSI https://rapid-dev.kbiofoundry.kr/guided.html | head -3   # HTTP/2 200
+curl -sSI https://rapid.example.internal/guided.html | head -3   # HTTP/2 200
 ```
 
 브라우저 확인 목록:

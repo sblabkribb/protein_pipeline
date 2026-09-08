@@ -63,9 +63,9 @@ test("renderMcpGuideMarkup uses the given endpoint URL everywhere (no stale prod
   return import("../lib/mcp-guide.js").then((mcpGuide) => {
     const html = mcpGuide.renderMcpGuideMarkup({
       lang: "en",
-      endpointUrl: "https://rapid-staging.kbiofoundry.kr/mcp",
+      endpointUrl: "https://rapid.example.internal/mcp",
     });
-    assert.equal(html.includes("https://rapid-staging.kbiofoundry.kr/mcp"), true);
+    assert.equal(html.includes("https://rapid.example.internal/mcp"), true);
     // Must not leak the old hardcoded prod redirecting host when another env is given.
     assert.equal(html.includes("pipeline.k-biofoundrycopilot.duckdns.org/mcp"), false);
   });

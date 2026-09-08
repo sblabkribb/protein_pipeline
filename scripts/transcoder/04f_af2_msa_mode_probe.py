@@ -11,12 +11,22 @@ ProteinMPNN 설계 서열에는 MSA 가 무의미하지만(설계 6.1b) MSA 단�
 from __future__ import annotations
 
 import argparse
+import os
 import json
 from pathlib import Path
 import sys
 import time
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _worker_url(port: int) -> str:
+    """RAPID_GPU_HOST 가 없으면 빈 문자열. 호출자가 --url 로 주어야 한다.
+
+    내부 호스트를 기본값으로 박아두면 공개 저장소에 나간다.
+    """
+    host = os.environ.get("RAPID_GPU_HOST", "").strip()
+    return f"http://{host}:{port}" if host else ""
 sys.path.insert(0, str(PROJECT_ROOT / "pipeline-mcp" / "src"))
 
 from pipeline_mcp.clients.local_http import LocalHTTPAlphaFold2Client  # noqa: E402
@@ -89,7 +99,7 @@ def aggregate(replicates: list[dict]) -> dict[str, object]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--colabfold-url", default="http://211.188.35.221:18160")
+    parser.add_argument("--colabfold-url", default=_worker_url(18160))
     parser.add_argument("--fasta", required=True, help="설계 FASTA (첫 서열만 사용)")
     parser.add_argument("--timeout-s", type=float, default=7200.0)
     parser.add_argument("--n-sequences", type=int, default=1)

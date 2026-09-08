@@ -577,7 +577,7 @@ gh run watch --exit-status $(gh run list --branch develop --limit 1 --json datab
 
 ```bash
 curl -sS http://127.0.0.1:18087/healthz
-curl -sSI https://rapid-dev.kbiofoundry.kr/guided.html | head -1
+curl -sSI https://rapid.example.internal/guided.html | head -1
 ```
 
 브라우저: guided.html → Evidence 탭 → "문헌 검색" 섹션에서 검색 → 결과 행(제목 링크·인용수·OA 칩) 확인. 런을 바꿔도 결과 유지 확인. 빈 검색어 → 안내 노트.

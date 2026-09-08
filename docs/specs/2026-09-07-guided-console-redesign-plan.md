@@ -1218,7 +1218,7 @@ Expected: `✓ built` (vite input에 guided.html 이미 등록)
 
 - [ ] **Step 3: 수동 스모크 체크리스트 (dev 배포 후)**
 
-1. `https://rapid-dev.kbiofoundry.kr/guided.html` 로그인 → 좌측 실행 목록 표시
+1. `https://rapid.example.internal/guided.html` 로그인 → 좌측 실행 목록 표시
 2. 목적 카드 선택 → 중앙에 단계/비용바
 3. 목표 슬라이더 → 계획 생성 → 결정/근거/경고 표시 → Evidence 탭 동기화
 4. 대화로 수정 제안 → 적용 → 승인 → 실행 → Run 탭 진행바 상승

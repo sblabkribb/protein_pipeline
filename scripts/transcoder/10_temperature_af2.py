@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import csv
 import json
 from collections import defaultdict
@@ -23,6 +24,15 @@ import time
 import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def _worker_url(port: int) -> str:
+    """RAPID_GPU_HOST 가 없으면 빈 문자열. 호출자가 --url 로 주어야 한다.
+
+    내부 호스트를 기본값으로 박아두면 공개 저장소에 나간다.
+    """
+    host = os.environ.get("RAPID_GPU_HOST", "").strip()
+    return f"http://{host}:{port}" if host else ""
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(PROJECT_ROOT / "pipeline-mcp" / "src"))
 
@@ -116,7 +126,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--sequences", default=str(base / "temperature_sweep" / "sequences.csv"))
     parser.add_argument("--pdb-dir", default=str(base / "backbones" / "pdb"))
     parser.add_argument("--labels", default=str(base / "backbones" / "backbone_labels.csv"))
-    parser.add_argument("--colabfold-url", default="http://211.188.35.221:18160")
+    parser.add_argument("--colabfold-url", default=_worker_url(18160))
     parser.add_argument("--n-per-condition", type=int, default=8)
     parser.add_argument("--offset", type=int, default=0, help="2단계에서는 8 로 준다")
     parser.add_argument("--out", default=str(base / "temperature_sweep" / "af2_stage1.csv"))
