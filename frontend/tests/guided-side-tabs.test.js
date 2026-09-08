@@ -51,8 +51,16 @@ test("projects tab comes first in the side tab order", () => {
             "SIDE_TAB_NAMES must match the button order");
 });
 
-test("the tab strip is a compact wrapping pill grid", () => {
+test("the tab strip lays out without overflowing and reads as tabs", () => {
   const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
-  assert.ok(/\.sidetabs \{[^}]*flex-wrap: wrap/.test(css), "tabs must wrap, not overflow");
-  assert.ok(/\.sidetab \{[^}]*border-radius: 999px/.test(css), "tabs are pills");
+  // 좁은 레일에서는 균등 격자로 깔아 어느 줄이든 폭을 꽉 채운다. 예전에는
+  // flex-wrap 으로 흘려보내서 둘째 줄에 탭 하나만 남았다.
+  assert.ok(/\.sidetabs \{[^}]*display: grid/.test(css), "narrow rails lay the tabs out on a grid");
+  assert.ok(/@container \(min-width: \d+px\) \{\s*\.sidetabs \{[^}]*display: flex/.test(css),
+    "a rail wide enough for one row drops the grid and packs the tabs left");
+  // 표시는 우측 탭(.tabs)과 같은 밑줄이다. 활성 탭에만 알약 배경을 달면
+  // 나머지가 탭으로 읽히지 않는다.
+  assert.ok(/\.sidetab \{[^}]*border-bottom: 2px solid transparent/.test(css), "tabs are underlined, not pills");
+  assert.ok(/\.sidetab\.active \{[^}]*border-bottom-color/.test(css), "the active tab is marked by its underline");
+  assert.ok(!/\.sidetab \{[^}]*border-radius: 999px/.test(css), "the old pill treatment is gone");
 });

@@ -85,12 +85,50 @@ body {
 .center { padding: 20px 26px 64px; overflow-y: auto; }
 
 /* --- 좌측 탭 -------------------------------------------------------------- */
-.sidetabs { display: flex; flex-wrap: wrap; gap: 3px; padding-bottom: 10px; border-bottom: 1px solid var(--rule); margin-bottom: 12px; }
-.sidetab { font: 600 11px "Pretendard Variable", Pretendard, system-ui, sans-serif; padding: 4px 9px;
+/* 좌 레일은 264px 에서 시작하고 스플리터로 바뀐다. 한국어 탭 일곱 개의 자연
+   폭 합계는 약 360px 이라 그 폭에 한 줄로 담기지 않는다. 예전에는 flex-wrap
+   으로 흘려보내서 둘째 줄에 "에이전트" 하나만 남았고, 활성 탭에만 알약 배경을
+   달아 나머지 여섯 개가 탭으로 읽히지 않았다. 그래서 두 가지를 고쳤다.
+     1. 표시는 우측 탭(.tabs)과 같은 밑줄로 통일한다. 한 화면에서 탭을 가리키는
+        방법은 하나면 된다.
+     2. 배치는 균등 격자로 깔아 어느 줄이든 레일 폭을 꽉 채우게 한다.
+   열 수는 레일 폭에 따라 3 / 4 / 7 로만 바뀐다. 그 사이 값을 허용하면 5+2,
+   6+1 처럼 아귀가 맞지 않는 줄이 다시 생긴다. 임계값은 셀 하나가 가장 긴
+   라벨("실행 목록" 47px)을 여유 있게 담는 50px 를 기준으로 잡았다. */
+.side:not(.right) { container-type: inline-size; }
+.sidetabs {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 2px;
+  border-bottom: 1px solid var(--rule); margin-bottom: 12px;
+}
+.sidetab {
+  font: 600 11px "Pretendard Variable", Pretendard, system-ui, sans-serif;
+  padding: 6px 2px; margin-bottom: -1px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   cursor: pointer; color: var(--quiet); background: transparent;
-  border: 1px solid transparent; border-radius: 999px; }
-.sidetab:hover { color: var(--ink); background: var(--muted); }
-.sidetab.active { color: var(--ink); background: var(--panel); border-color: var(--rule); }
+  border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+}
+.sidetab:hover { color: var(--ink); }
+.sidetab.active { color: var(--ink); border-bottom-color: var(--action); }
+/* 전역 초점 링은 테두리 바깥 2px 에 네모로 그려진다. 알약 탭에서는 자연스러웠지만
+   밑줄 탭에서는 글자를 감싸는 네모가 되어 밑줄과 따로 논다. 네모를 걷고 탭이
+   원래 쓰는 언어 - 배경과 밑줄 - 로 초점을 표시한다. 초점 표시를 없애는 것이
+   아니다. 키보드로 탭을 옮기는 사람에게는 이 표시가 유일한 단서이므로, 활성
+   탭의 2px 밑줄보다 굵은 3px 로 그려 활성 상태와도 구분되게 한다. */
+.sidetab:focus-visible {
+  outline: none; color: var(--ink);
+  background: color-mix(in oklch, var(--action) 12%, transparent);
+  box-shadow: inset 0 -3px 0 var(--action);
+  border-radius: 4px 4px 0 0;
+}
+/* 컨테이너 질의의 기준은 .side 의 콘텐츠 폭(레일 폭에서 좌우 여백 32px 을 뺀 값)이다. */
+@container (max-width: 205px) { .sidetabs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* 한 줄에 다 들어가는 폭부터는 격자를 걷는다. 일곱 칸을 균등 분할하면 "모델"
+   같은 두 글자 탭까지 넓은 칸을 차지해 글자 사이가 허해진다. 이때는 글자 폭
+   그대로 왼쪽에 모으는 편이 낫다 - 줄바꿈 걱정이 없어야 쓸 수 있는 배치다. */
+@container (min-width: 356px) {
+  .sidetabs { display: flex; flex-wrap: nowrap; gap: 2px; }
+  .sidetab { padding: 6px 8px; }
+}
 
 /* 모델 탭. 좌 레일 안에서 섹션 사이만 숨을 쉬게 한다. */
 .modelstab { padding-top: 4px; display: grid; gap: 6px; }
@@ -105,6 +143,8 @@ body {
   .layout { grid-template-columns: 1fr !important; height: auto; }
   .side, .side.right { border: 0; border-bottom: 1px solid var(--rule); }
   .splitter { display: none; }
+  /* 손가락으로 누르는 화면에서는 11px 글자에 6px 여백이 너무 얕다. */
+  .sidetab { min-height: 34px; }
 }
 
 h2 {

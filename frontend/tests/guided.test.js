@@ -226,7 +226,20 @@ test("numbers line up for comparison", () => {
 test("keyboard focus stays visible", () => {
   const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
   assert.ok(css.includes(":focus-visible"));
-  assert.ok(!/outline:\s*none/.test(css), "focus must never be removed without a replacement");
+  // 예전에는 outline: none 을 아예 금지했다. 밑줄 탭에서는 바깥 네모 링이 밑줄과
+  // 따로 놀아서, 링을 걷고 배경·밑줄로 초점을 그리는 편이 낫다. 그래서 금지 대신
+  // "지웠으면 그 자리에 대체 표시가 있어야 한다"를 검사한다 - 원래 이 테스트가
+  // 지키려던 것이 그것이다.
+  const rules = css.match(/[^{}]+\{[^}]*\}/g) || [];
+  for (const rule of rules) {
+    if (!/outline:\s*none/.test(rule)) continue;
+    const selector = rule.split("{")[0].trim();
+    assert.ok(
+      /box-shadow:|background:|border-bottom-color:|text-decoration:/.test(rule),
+      `${selector} removes the focus ring without drawing a replacement`,
+    );
+    assert.ok(/:focus/.test(selector), `${selector} must only drop the ring on a focus rule`);
+  }
 });
 
 test("every input has a label and reduced motion is respected", () => {
