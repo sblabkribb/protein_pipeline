@@ -573,9 +573,45 @@
           "measured_here": "백본 안에서 score_per_residue 가 pLDDT 를 따라간다 (중앙값 rho -0.356, 117 백본 중 90.6% 같은 방향). 신호는 실재하지만 백본 내 중앙값 컷은 pLDDT 상위 10% 설계의 32.6% 를 버린다 (무작위 게이트 50%). 게이트가 아니라 shortlist tie-break 다."
         }
       ],
-      "comparison_before_adoption": "SPURS·ThermoMPNN·Rosetta relax 를 같은 RAPID 후보에서 계산해 상관과 불일치를 먼저 본다. 그 전에 SPURS 를 설치하면 다른 둘이 하지 않는 말을 하는지 모르는 채로 세 번째 미보정 안정성 신호를 더하는 것이 된다.",
+      "comparison_before_adoption": {
+        "plan": [
+          "1. 기존 RAPID 설계에 ThermoMPNN 을 실행한다 (native-백본 설계에 한해).",
+          "2. 같은 후보에서 ThermoMPNN / Rosetta / pLDDT / RMSD / 변이수를 조인한다.",
+          "3. pooled 상관뿐 아니라 within-target · within-backbone 상관을 본다.",
+          "4. 변이 수가 늘 때 ThermoMPNN 점수 분포가 비정상적으로 변하는지 본다.",
+          "5. 두 모델이 거의 같은 정보를 주고 이상도 없으면 Rosetta + ThermoMPNN annotation 으로 충분하다.",
+          "6. 서로 다른 정보를 주거나 고차 다중 변이에서 불안정하면 그때 SPURS 를 세 번째 sensitivity 모델로 검토한다."
+        ],
+        "logic_correction": "'비슷하면 SPURS 불필요, 다르면 SPURS 필요' 로 결정하지 않는다. 두 모델이 비슷하다는 것은 중복 신호일 가능성을 보여줄 뿐이고 둘 다 틀릴 수 있다. 서로 다르다고 해서 SPURS 가 어느 쪽이 맞는지 판정하는 ground truth 가 되지도 않는다.",
+        "what_can_be_checked_without_ground_truth": [
+          "중복성 (두 신호가 같은 것을 재는가)",
+          "적용 가능성 (우리 변이 규모에서 값이 의미를 갖는가)",
+          "불일치 (어디서 갈리는가)",
+          "이상 동작 (분포가 무너지는 구간이 있는가)"
+        ],
+        "what_cannot": "누가 맞는지. de novo 다중 변이 설계의 wet-lab 안정성 라벨이 없다.",
+        "spurs_install": "자동 설치하지 않는다. 위 6 단계 결과를 보고 사람이 결정한다."
+      },
       "hard_gate": false,
-      "gate1b_ranker": false
+      "gate1b_ranker": false,
+      "applicability_measured": {
+        "checked_utc": "2026-09-08",
+        "designs_per_run_mutation_count": {
+          "source": "outputs/*/tiers/*/mutation_report.json · mutation_counts.per_sample",
+          "n_run_tiers": 279,
+          "median_of_medians": 77,
+          "range_of_medians": [
+            0,
+            535
+          ],
+          "runs_at_or_below_20": "31/279 (11%)",
+          "runs_above_50": "193/279 (69%)"
+        },
+        "why_this_matters": "ThermoMPNN 은 단일 점변이로, SPURS 는 단일+이중 변이로 학습됐다. RAPID 설계는 중앙값 77 치환이다. 77 개 치환은 변이체가 아니라 같은 백본 위의 다른 단백질이고, 단일 효과를 77 번 더하는 것이나 이중 epistasis 를 얹는 것이나 그 규모에서는 적용 범위를 벗어난다. 변이가 10~20 이었다면 SPURS 의 이중 변이 학습이 의미 있는 개선이었겠지만, 77 에서는 둘 다 같은 벽에 부딪힌다 - 정도의 차이지 종류의 차이가 아니다.",
+        "generated_backbones_undefined": "RFD3·BioEmu 백본은 새로 생성된 구조라 native 대비 변이가 정의되지 않는다. 홀드아웃 격자 72 백본 중 60 개가 여기 해당한다. ΔΔG 예측기는 RAPID 후보의 다수에 적용 자체가 불가능하다.",
+        "consequence": "physics 기반 Rosetta relax 가 주 annotation 이 된다 - 구조 하나를 받아 에너지를 내므로 변이 수와 무관하고, delta_reu_vs_wt 는 같은 백본 안 상대 비교라 생성 백본에서도 성립한다. ΔΔG 는 적용 가능한 native-백본 설계에 한해 기록한다."
+      },
+      "role_in_current_paper": "annotation / shortlist tie-break"
     },
     "aggregation": {
       "status": "evaluator_unvalidated",

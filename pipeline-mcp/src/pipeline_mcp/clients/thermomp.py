@@ -38,7 +38,12 @@ class LocalHTTPThermoMPNNClient:
     ) -> dict[str, Any]:
         """설계 구조의 ΔΔG 예측.
 
-        mutations 예: ["A123W", "T45G"] (chain + 1-based resseq + mutant AA).
+        mutations 예: ["A123W", "T45G"] - **wildtype AA + 1-based resseq +
+        mutant AA** 다. chain 은 토큰이 아니라 `chain` 인자로 넘긴다.
+
+        이 줄은 전에 "chain + 1-based resseq + mutant AA" 라고 적혀 있었다.
+        그대로 만들면 워커가 chain 문자를 wildtype 으로 읽고
+        "wildtype mismatch at A9: PDB says N, token says A" 로 거부한다.
         비우면 워커가 구조의 전체 단일-변이 스캔을 돌린다 (top_n 으로 상한).
         """
         if not str(pdb_text or "").strip():

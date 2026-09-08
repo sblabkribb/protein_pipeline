@@ -1,0 +1,38 @@
+{
+  "purpose": "ThermoMPNN·Rosetta·pLDDT·RMSD·변이수를 같은 후보에서 비교",
+  "what_cannot_be_checked": "누가 맞는지. de novo 다중 변이 설계의 wet-lab 안정성 라벨이 없다.",
+  "what_is_checked": [
+    "중복성",
+    "적용 가능성",
+    "불일치",
+    "이상 동작"
+  ],
+  "scope": "native-백본 설계만. RFD3·BioEmu 백본은 native 대비 변이가 정의되지 않는다.",
+  "n_designs": 1785,
+  "n_run_tiers": 20,
+  "mutation_median_over_designs": 74.0,
+  "spurs": "자동 설치하지 않는다. 이 결과를 보고 사람이 결정한다.",
+  "code_sha": "736a9fe7f0ac0b1a5a802f248b8907c3fb6e00cc",
+  "utc": "2026-09-08T07:55:08Z",
+  "within_backbone_correlation": {
+    "relax_vs_plddt": {
+      "n_groups": 44,
+      "median_rho": -0.1578,
+      "frac_negative": 0.773
+    },
+    "relax_vs_rmsd": {
+      "n_groups": 38,
+      "median_rho": 0.1427,
+      "frac_negative": 0.237
+    }
+  },
+  "thermomp": {
+    "status": "no_results",
+    "n_scored": 0,
+    "n_attempted": 8,
+    "skipped": {
+      "호출 실패: RuntimeError": 8
+    },
+    "note": "additive_ddg_kcal_mol 은 단일 변이 예측의 합이다. 설계당 변이가 중앙값 74 개이므로 에피스테이시스를 무시한 근사이고, 절대값을 안정성 추정으로 읽으면 안 된다."
+  }
+}

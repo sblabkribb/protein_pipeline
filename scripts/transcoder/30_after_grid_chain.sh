@@ -50,4 +50,13 @@ echo "=============== 리간드 결합 부위 1 단계 (자기도킹, 배선 점
 # DiffDock 은 GPU0 이고 격자는 CPU 에 묶여 있다. 격자가 끝난 뒤라 경합이 없다.
 python3 scripts/transcoder/33_ligand_pocket_preservation.py --stage self
 echo "자기도킹 종료 코드 $?"
+
+echo
+echo "=============== 안정성 annotation 비교 ==============="
+# ThermoMPNN 을 native-백본 설계에 돌리고 Rosetta·pLDDT·RMSD·변이수와 비교한다.
+# SPURS 는 자동 설치하지 않는다 - 이 결과를 보고 사람이 결정한다.
+# 확인 가능한 것: 중복성·적용 가능성·불일치·이상 동작.
+# 확인 불가능한 것: 누가 맞는지 (wet-lab 안정성 라벨이 없다).
+python3 scripts/transcoder/37_stability_annotation_comparison.py --limit 300
+echo "안정성 비교 종료 코드 $?"
 echo "[$(date +%H:%M)] 완료"
