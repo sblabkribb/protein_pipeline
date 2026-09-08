@@ -81,6 +81,57 @@ Before a production URL is advertised, configure:
 - log retention that does not expose sequences, credentials, or tokens;
 - health checks for backend, frontend, and provider connectivity.
 
+## Pre-Deploy Checklist
+
+Run before every `deploy_from_github.sh`, on each target you are about to
+deploy.
+
+### 1. Check the target for local drift
+
+```bash
+for d in /opt/protein_pipeline /opt/protein_pipeline-staging /opt/protein_pipeline-dev; do
+  echo "== $d ($(git -C "$d" rev-parse --short HEAD))"
+  git -C "$d" status --porcelain --untracked-files=no
+done
+```
+
+Every target should print nothing under its header. A line here means a
+tracked file was edited on the server and never committed, and the change
+exists in exactly one place.
+
+Recover it before deploying — `git checkout --force` will overwrite it, and
+the deploy will refuse to start in the meantime (`Refusing to deploy over
+tracked local modifications`, exit 3). This is the only place the drift is
+detected, so it is only caught when someone deploys.
+
+This has happened. On 2026-09-02 `pipeline_mcp/s3.py` gained `list_runs`,
+`pull_outputs` and `pull_summary` directly on production, and
+`scripts/11_train_reward_model.py` was written there the same day. Neither
+was committed. The drift sat for nine days because nobody deployed, and both
+were found only while dry-running a deploy. The script was in no branch at
+all, and `git clean -fd` would have deleted it.
+
+### 2. Check what `git clean -fd` would remove
+
+```bash
+git -C "$TARGET" clean -nd
+```
+
+Anything listed is untracked and will be deleted. `frontend/pipeline_skill.zip`
+is expected — the deploy regenerates it. Anything else needs a decision: commit
+it, back it up, or confirm it is disposable.
+
+Do not add `-x`. Without it, ignored files survive; with it, `cath_train/`,
+`cath_val/` and `cath_test/` are deleted. Those directories hold 1,472 CATH
+domain PDBs and are not reported as untracked only because `.gitignore`'s
+`*.pdb` rule covers every file inside them.
+
+### 3. Confirm large untracked data is archived elsewhere
+
+Files too big for the tree belong in object storage with a manifest recording
+bucket, key and sha256, and `.gitignore` should name them. See
+`public_data/benchmark/reward_embeddings_archive.json` for the shape.
+
 ## Release Checklist
 
 Before publishing a release package, run:
