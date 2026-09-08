@@ -165,11 +165,19 @@ def fold_grid(rows: list[dict], backbones: list[dict], *, client, workers: int,
         text = Path(pdb_by_key[key]).read_text(encoding="utf-8", errors="replace")
         refs[key] = (text, dssp_non_loop_positions_by_chain(text), sha256_text(text))
 
-    done = {}
+    # status 를 보지 않고 sequence_id 만 세면 실패 행도 "완료" 가 되어 영영
+    # 재시도되지 않는다. ok 만 완료로 치고 나머지는 다시 접는다 - 실패 행은
+    # 결과에서 빼므로 CSV 에도 남지 않는다.
+    done, retrying = {}, 0
     if out_csv.exists():
-        done = {r["sequence_id"]: r for r in csv.DictReader(out_csv.open(encoding="utf-8"))}
+        for r in csv.DictReader(out_csv.open(encoding="utf-8")):
+            if r.get("status") == "ok":
+                done[r["sequence_id"]] = r
+            else:
+                retrying += 1
     pending = [r for r in rows if r["sequence_id"] not in done]
-    print(f"[격자] 전체 {len(rows)} · 완료 {len(done)} · 남은 {len(pending)}", flush=True)
+    print(f"[격자] 전체 {len(rows)} · 완료 {len(done)} · 남은 {len(pending)}"
+          + (f" (이전 실패 {retrying} 건 재시도 포함)" if retrying else ""), flush=True)
 
     model_dir.mkdir(parents=True, exist_ok=True)
     results = list(done.values())

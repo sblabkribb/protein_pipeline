@@ -148,11 +148,18 @@ def run_panel(name, sequences_csv, out_csv, model_dir, *, n_per_condition, offse
     spec.loader.exec_module(module)
     picked = module.select_paired(rows, n_per_condition=n_per_condition, offset=offset)
 
-    done = {}
+    # ok 만 완료로 친다. status 를 무시하면 실패 행이 "완료" 로 남아 재시도되지
+    # 않고, 그 폴드는 영영 비어 있게 된다.
+    done, retrying = {}, 0
     if out_csv.exists():
-        done = {r["sequence_id"]: r for r in csv.DictReader(out_csv.open(encoding="utf-8"))}
+        for r in csv.DictReader(out_csv.open(encoding="utf-8")):
+            if r.get("status") == "ok":
+                done[r["sequence_id"]] = r
+            else:
+                retrying += 1
     pending = [r for r in picked if r["sequence_id"] not in done]
-    print(f"[{name}] 전체 {len(picked)} · 완료 {len(done)} · 남은 {len(pending)}", flush=True)
+    print(f"[{name}] 전체 {len(picked)} · 완료 {len(done)} · 남은 {len(pending)}"
+          + (f" (이전 실패 {retrying} 건 재시도 포함)" if retrying else ""), flush=True)
 
     refs = {}
     for key in {r["backbone_key"] for r in picked}:

@@ -23,23 +23,8 @@ echo "[$(date +%H:%M)] 격자 체인 종료 (pid $GRID_PID)"
 
 echo
 echo "=============== 실패 13 건 재시도 ==============="
-# 22_refold 는 out_csv 에 있는 sequence_id 를 건너뛴다. 실패 행은 status=failed
-# 로 남아 있으므로 먼저 빼내야 재시도된다.
-python3 - <<'PY'
-import csv, pathlib, shutil
-p = pathlib.Path("public_data/benchmark/gate0/temperature_panel2/af2_order_metric.csv")
-rows = list(csv.DictReader(p.open(encoding="utf-8")))
-bad = [r for r in rows if r.get("status") != "ok"]
-if not bad:
-    print("재시도할 실패가 없다")
-else:
-    shutil.copy(p, p.with_suffix(".csv.before_retry"))
-    keep = [r for r in rows if r.get("status") == "ok"]
-    with p.open("w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(rows[0]))
-        w.writeheader(); w.writerows(keep)
-    print(f"실패 {len(bad)} 행 제거, {len(keep)} 행 유지 (사본: {p.name}.before_retry)")
-PY
+# 22_refold 가 이제 ok 만 완료로 세고 실패 행은 스스로 재시도한다. 예전에는
+# 여기서 CSV 를 미리 손봐야 했는데, 그 우회는 근원을 고치면서 없앴다.
 python3 scripts/transcoder/22_refold_with_artifacts.py --only panel2 --workers 4
 echo "재시도 종료 코드 $?"
 
