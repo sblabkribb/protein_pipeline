@@ -106,7 +106,7 @@ class AllocationObservationModel(Protocol):
     def update(self, observation: EvaluationResult) -> None: ...
     def expected_utility(self) -> float: ...
     def uncertainty(self) -> float: ...
-    def information_value(self) -> float: ...
+    def allocation_signal(self) -> float: ...
 ```
 
 **allocator 는 관측이 이진인지 연속인지 몰라도 된다.** 이것이 실제로
@@ -119,14 +119,30 @@ v1 대응은 그대로 매핑된다.
 | `update` | `BetaPosterior.update(successes, trials)` |
 | `expected_utility` | `posterior.mean` (부분 풀링 적용) |
 | `uncertainty` | `posterior.sd` |
-| `information_value` | `movability = 4p(1-p)` |
+| `allocation_signal` | `movability = 4p(1-p)` |
 
-`movability` 가 `information_value` 의 v1 구현이라는 것이 이 매핑의 핵심이다.
-연속 objective 에서는 다른 함수가 되지만 역할은 같다 — "여기서 더 관측하면
-배울 것이 있는가".
+### 왜 이 슬롯을 `allocation_signal` 로 부르는가
 
-`uncertainty` 와 `information_value` 는 **끝까지 분리된 채로 둔다.** 관측이
-많아도 p 가 0.5 면 information_value 는 크고 uncertainty 는 작다.
+**`movability` 는 expected information gain 이 아니다.** 이름을 그렇게 붙이면
+틀린 해석을 굳힌다.
+
+`4p(1-p)` 는 사후평균 하나만 보고 계산한다. 관측이 4 개든 400 개든 p 가 0.5 면
+값은 1 이다. 반면 추가 관측 한 번의 정보 이득은 n 이 커지면 줄어든다 — 400 개
+관측 뒤의 한 번은 4 개 뒤의 한 번보다 훨씬 덜 가르쳐준다. 두 양은 같지 않고,
+`movability` 는 후자를 재지 않는다.
+
+`movability` 가 실제로 재는 것은 **상태가 움직일 여지**다. p 가 0.5 근처면
+조건을 바꿨을 때 결과가 움직일 수 있고, 0 이나 1 에 붙어 있으면 무엇을 바꿔도
+같은 값에 붙어 있다. 그것이 배분에 쓸모 있는 신호인 이유이고, 정보 이득이라는
+주장과는 별개다.
+
+그래서 인터페이스 이름은 중립적으로 `allocation_signal` 로 둔다. v2 의 연속
+objective 에서는 EI·PI·expected information gain 같은 다른 신호를 쓸 수 있지만,
+**그것들이 movability 와 같은 통계량이라고 가정하지 않는다.** 같은 슬롯에
+들어가는 다른 함수다.
+
+`uncertainty` 와 `allocation_signal` 은 **끝까지 분리된 채로 둔다.** 관측이
+많아도 p 가 0.5 면 allocation_signal 은 크고 uncertainty 는 작다.
 
 연속 objective 의 첫 구현은 세 후보 중 **하나를 명시적으로 고른다**:
 probability of improvement · expected improvement · normalized objective
@@ -235,12 +251,12 @@ acquisition 은 evaluator-independent 하게 쓴다.
 
 ```
 v1  A = p̂ + β·U − λ·C − γ·D + η·(movability × 조건 불확실성)
-v2  A = expected_utility + β·uncertainty + η·information_value − λ·cost − γ·redundancy
+v2  A = expected_utility + β·uncertainty + η·allocation_signal − λ·cost − γ·redundancy
 ```
 
 **v1 식을 근거 없이 폐기하지 않는다.** v1 은 전향 검증을 받는 대상이므로
 `rapid_structural_v1` 프로파일로 재현 가능하게 남는다. v2 식이 v1 식으로
-환원되는지(binary objective + movability = information_value 일 때) 테스트로
+환원되는지(binary objective 이고 allocation_signal 이 movability 일 때) 테스트로
 고정한다.
 
 ---
@@ -364,6 +380,9 @@ plugin 이 `Evaluator` contract 와 `EvaluationResult` 를 구현하고, registr
    registry 인가 evaluator 인가
 2. 연속 objective 의 부분 풀링. Beta 의 `pooling_strength` 에 해당하는 것이
    Gaussian 계열에서 무엇인가
+2b. 연속 objective 의 `allocation_signal` 을 무엇으로 할 것인가. EI·PI·expected
+   information gain 중 하나를 고르고, 그것이 movability 와 다른 통계량임을
+   명시한다. 이진에서 잘 작동한 신호가 연속에서도 작동한다고 가정하지 않는다.
 3. multi-fidelity 에서 낮은 fidelity 관측을 높은 fidelity 사후분포에 어떻게
    반영할 것인가 — 별도 arm 인가 같은 arm 의 다른 노이즈 수준인가
 4. Pareto 비교의 tie-break 순서. 현재 권고는 hard constraints → primary →
