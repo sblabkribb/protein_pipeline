@@ -9118,6 +9118,56 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.allocation_next_action",
+            "description": (
+                "Adaptive compute allocation. Given a target's Gate 0 prior and "
+                "the probes observed so far, returns per-backbone p_hat, "
+                "uncertainty, movability = 4p(1-p), and the next compute action "
+                "(probe_more_sequences | explore_generation_condition | "
+                "verify_with_af2 | abandon_backbone). It reads only the prior "
+                "and observations you pass in - there is no path to inject a "
+                "backbone's true yield, because that is not available on a new "
+                "target."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "target_id": {"type": "string"},
+                    "backbones": {
+                        "type": "array",
+                        "description": "backbone ids under this target",
+                        "items": {"type": "string"},
+                    },
+                    "prior_mean": {
+                        "type": "number",
+                        "description": "Gate 0 target-level prior (0-1). Omit for 0.5.",
+                    },
+                    "prior_strength": {"type": "number", "description": "default 2.0"},
+                    "observations": {
+                        "type": "array",
+                        "description": "probe results so far",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "backbone_id": {"type": "string"},
+                                "condition": {"type": "string",
+                                              "description": "default T0.1"},
+                                "trials": {"type": "integer", "minimum": 0},
+                                "successes": {"type": "integer", "minimum": 0},
+                            },
+                            "required": ["backbone_id", "trials", "successes"],
+                        },
+                    },
+                    "conditions": {
+                        "type": "array",
+                        "description": "generation conditions to consider; default [T0.1]",
+                        "items": {"type": "string"},
+                    },
+                },
+                "required": ["target_id", "backbones"],
+            },
+        },
+        {
             "name": "pipeline.search_literature",
             "description": (
                 "Read-only Europe PMC literature search. Published sources are "
@@ -10031,6 +10081,11 @@ class ToolDispatcher:
             from .plan_council import reset_council_skill
             return reset_council_skill(str(arguments.get("expert_id") or ""),
                                        self.runner.output_root)
+
+        if name == "pipeline.allocation_next_action":
+            from .allocation import allocation_next_action
+
+            return allocation_next_action(arguments)
 
         if name == "pipeline.search_literature":
             from .literature import search_literature
