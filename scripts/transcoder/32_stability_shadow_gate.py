@@ -110,6 +110,11 @@ def main(argv=None) -> int:
     rho_plddt, rho_rmsd = [], []
     kept = lost = passed_structure = 0
     lost_examples = []
+    # 전체 손실률은 분위수가 정하므로(중앙값 컷이면 50%) 그 자체로는 정보가 없다.
+    # 게이트가 '좋은 설계' 를 버리는지가 결정적이므로 백본 내 pLDDT 상위
+    # 10%/25% 가 얼마나 걸리는지 따로 센다.
+    top_lost = {10: 0, 25: 0}
+    top_total = {10: 0, 25: 0}
     for group in groups:
         ds = group["designs"]
         r = spearman([d["relax"] for d in ds], [d["plddt"] for d in ds])
@@ -126,6 +131,13 @@ def main(argv=None) -> int:
         ordered = sorted(ds, key=lambda d: d["relax"])
         cut = max(1, int(round(len(ordered) * args.quantile)))
         allowed = {d["id"] for d in ordered[:cut]}
+
+        if len(ds) >= 8:
+            by_plddt = sorted(ds, key=lambda d: -d["plddt"])
+            for pct, divisor in ((10, 10), (25, 4)):
+                top = {d["id"] for d in by_plddt[: max(1, len(by_plddt) // divisor)]}
+                top_total[pct] += len(top)
+                top_lost[pct] += sum(1 for i in top if i not in allowed)
         for d in ds:
             if d["plddt"] < PLDDT_MIN:
                 continue
@@ -167,6 +179,18 @@ def main(argv=None) -> int:
             "kept_by_stability_gate": kept,
             "lost_to_stability_gate": lost,
             "loss_fraction": round(lost / passed_structure, 4) if passed_structure else None,
+            "loss_fraction_note": ("분위수가 정하는 값이라 그 자체로는 정보가 없다. "
+                                   "아래 top_plddt_lost 가 결정적이다."),
+            "top_plddt_lost": {
+                f"top{pct}pct": {
+                    "n": top_total[pct],
+                    "lost": top_lost[pct],
+                    "fraction": (round(top_lost[pct] / top_total[pct], 4)
+                                 if top_total[pct] else None),
+                    "random_gate_would_lose": round(1.0 - args.quantile, 4),
+                }
+                for pct in (10, 25)
+            },
             "examples_lost": lost_examples,
         },
         "code_sha": subprocess.run(["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT,
@@ -187,6 +211,11 @@ def main(argv=None) -> int:
     print(f"  구조 게이트 통과 {c['passed_structure_gate']} → "
           f"유지 {c['kept_by_stability_gate']} · 잃음 {c['lost_to_stability_gate']} "
           f"({c['loss_fraction']:.1%})")
+    for pct in (10, 25):
+        t = c["top_plddt_lost"][f"top{pct}pct"]
+        if t["fraction"] is not None:
+            print(f"  pLDDT 상위 {pct}% 중 버려짐 {t['fraction']:.1%} "
+                  f"(무작위 게이트라면 {t['random_gate_would_lose']:.0%}) · n={t['n']}")
 
     Path(args.out).write_text(json.dumps(report, indent=2, ensure_ascii=False),
                               encoding="utf-8")

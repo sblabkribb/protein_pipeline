@@ -24,6 +24,21 @@
     "kept_by_stability_gate": 2077,
     "lost_to_stability_gate": 2038,
     "loss_fraction": 0.4953,
+    "loss_fraction_note": "분위수가 정하는 값이라 그 자체로는 정보가 없다. 아래 top_plddt_lost 가 결정적이다.",
+    "top_plddt_lost": {
+      "top10pct": {
+        "n": 392,
+        "lost": 128,
+        "fraction": 0.3265,
+        "random_gate_would_lose": 0.5
+      },
+      "top25pct": {
+        "n": 1028,
+        "lost": 334,
+        "fraction": 0.3249,
+        "random_gate_would_lose": 0.5
+      }
+    },
     "examples_lost": [
       {
         "run": "admin_0605_candid-1_1atj_rmsd4",
@@ -75,6 +90,6 @@
       }
     ]
   },
-  "code_sha": "a76388614f050a96e30e72e5d02b2452e27f3533",
-  "utc": "2026-09-08T01:04:09Z"
+  "code_sha": "e9e6742c6518ebd92157d138472e5e2883d4f46e",
+  "utc": "2026-09-08T05:07:10Z"
 }
