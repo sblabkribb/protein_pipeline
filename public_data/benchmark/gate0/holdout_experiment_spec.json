@@ -81,5 +81,52 @@
     "AF2 설정/seed/워커 버전",
     "code SHA",
     "정책이 각 시점에 본 상태와 고른 행동 (결정 재생용)"
-  ]
+  ],
+  "variance_decomposition_plan": {
+    "frozen_utc": "2026-09-08T06:52:27Z",
+    "code_sha_at_freeze": "7c261dac111cd50c52e6ca394b305047faa58322",
+    "why_frozen_now": "격자가 끝난 뒤 결과를 보고 분해 방식을 고르면 그 분해는 확증이 아니다. 1,728 개가 다 끝나기 전에 못 박는다.",
+    "disclosure": "검정력 위험을 답하기 위해 부분 결과를 이미 한 번 열었다 - 24 개가 끝난 백본 30 개의 포화율(15/30)과 완료 타겟 6 개의 정보 여부(5/6). 정책은 그 전에 커밋으로 동결되어 있었고 그 이후 바뀌지 않았다. 그래도 분석 계획 동결 전에 결과를 본 것은 사실이므로 기록한다.",
+    "primary": {
+      "cohort": "RFD3-only · 12 targets × 5 RFD3 backbones × 24 sequences = 1,440",
+      "why_rfd3_only": "타겟당 native 1 + RFD3 5 이므로 전체 1,728 을 쓰면 backbone 분산 안에 native vs RFD3 source 차이가 섞인다. RFD3 만 쓰면 target -> backbone -> sequence 가 완전 균형이고 source 가 상수다.",
+      "model_binary": "structural_pass ~ length_stratum + (1|target) + (1|target:backbone)",
+      "model_continuous": [
+        "plddt ~ length_stratum + (1|target) + (1|target:backbone)",
+        "rmsd_nonloop_order ~ length_stratum + (1|target) + (1|target:backbone)"
+      ],
+      "why_continuous_too": "온도 분석에서 연속 endpoint 가 이진보다 정보량이 높았다 - 패널 1 은 이진으로 판정 불가였으나 연속 pLDDT 가 T=0.2 열세를 CI 0 제외로 잡았다. 이진 pass 만 보면 pLDDT 96 과 86 이 같아진다.",
+      "report": [
+        "target-level variance %",
+        "backbone-within-target %",
+        "sequence/residual %"
+      ]
+    },
+    "sensitivity": [
+      {
+        "name": "native 포함",
+        "cohort": "전체 1,728 (native 1 + RFD3 5)",
+        "purpose": "주 분석과 비슷하면 결과가 훨씬 강해진다. 다르면 그 차이가 source 효과의 크기를 시사한다."
+      },
+      {
+        "name": "length_stratum 고정효과",
+        "purpose": "길이 층을 고정효과로 넣고도 target 분산이 남는지 확인한다. 'target 차이라고 했지만 사실 길이 차이 아니냐' 에 답한다."
+      },
+      {
+        "name": "제곱합 분해",
+        "purpose": "현재 방식(35_variance_decomposition_structural.py)과 대조. GLMM 분산성분과 정확히 같지 않으므로 두 값을 함께 보고한다."
+      }
+    ],
+    "cohort_description": {
+      "correct": "yield-unselected, QC-eligible balanced cohort",
+      "incorrect": "선별 없는 코호트",
+      "why": "yield 를 보고 고르지는 않았다 - 이 타겟들은 게이트 0 을 통과한 적이 없어 볼 yield 가 존재하지 않았다. 다만 RFD3 백본은 2.0 A target-RMSD 수용 게이트와 구조 적격성(단일 사슬, 50-400 잔기)을 통과해야 했다. 이것은 결함이 아니라 RAPID 이 실제로 쓸 수 있는 operational backbone 집합을 분석한다는 뜻이다."
+    },
+    "limits_to_state": [
+      "타겟 12 개다. 랜덤효과 분산성분 추정이 그만큼만 정밀하다.",
+      "생성 조건은 T=0.1 하나로 고정이다. 조건 수준 변이는 이 분해에 없다.",
+      "RFD3 백본은 수용 게이트를 통과한 것들이다 - 기각된 백본의 변이는 관측되지 않는다."
+    ],
+    "supersedes": "현재 초록의 49.5 / 14.7 / 35.8 은 온도 패널 코호트(20 타겟)에서 나온 값이고 패널 2 가 중간 yield 백본을 선별해 구성됐다. 격자 완료 후 이 계획의 값으로 교체한다. 기존 값은 부록에 선별된 코호트와의 비교로 남긴다."
+  }
 }
