@@ -64,8 +64,15 @@ POCKET_RADIUS = 4.0
 RCSB_SDF = "https://files.rcsb.org/ligands/download/{code}_ideal.sdf"
 
 
-def het_groups(pdb_text: str) -> dict[str, list[tuple[float, float, float]]]:
-    groups: dict[str, list] = {}
+def het_instances(pdb_text: str) -> dict[str, list[list[tuple[float, float, float]]]]:
+    """리간드 코드 -> 사본 목록. 사본은 (chain, resseq, icode) 로 가른다.
+
+    예전에는 코드로만 묶어서 한 코드의 모든 사본을 한 덩어리로 합쳤다. NAG 처럼
+    당사슬로 여러 자리에 붙는 리간드에서는 그 덩어리의 중심이 어느 결합 자리도
+    아니게 되고, 4 A 겹침은 아무 사본에나 걸리면 인정돼 후해진다. 그래서 중심
+    이동 23 A 와 포켓 겹침 1.0 이 한 줄에 같이 적히는 모순이 나왔다.
+    """
+    inst: dict[tuple, list] = {}
     for line in pdb_text.splitlines():
         if not line.startswith("HETATM"):
             continue
@@ -76,8 +83,12 @@ def het_groups(pdb_text: str) -> dict[str, list[tuple[float, float, float]]]:
             xyz = (float(line[30:38]), float(line[38:46]), float(line[46:54]))
         except ValueError:
             continue
-        groups.setdefault(code, []).append(xyz)
-    return {k: v for k, v in groups.items() if len(v) >= MIN_LIGAND_ATOMS}
+        inst.setdefault((code, line[21], line[22:26].strip(), line[26]), []).append(xyz)
+    out: dict[str, list[list]] = {}
+    for (code, *_), atoms in inst.items():
+        if len(atoms) >= MIN_LIGAND_ATOMS:
+            out.setdefault(code, []).append(atoms)
+    return out
 
 
 def protein_only(pdb_text: str) -> str:
@@ -132,14 +143,24 @@ def fetch_ideal_sdf(code: str, cache: Path) -> str | None:
     return text
 
 
-def score_pose(pose_coords, crystal_coords) -> dict:
-    if not pose_coords or not crystal_coords:
-        return {"centroid_shift": None, "pocket_overlap": None}
-    shift = dist(centroid(pose_coords), centroid(crystal_coords))
+def score_pose(pose_coords, copies) -> dict:
+    """가장 가까운 **한 사본**에 대해 두 지표를 낸다.
+
+    두 지표가 같은 사본을 가리켜야 서로 모순되지 않는다. 사본을 합쳐놓고 재면
+    "중심은 23 A 떨어졌는데 겹침은 100%" 같은 값이 나오고, 그건 자세가 좋다는
+    뜻도 나쁘다는 뜻도 아니다.
+    """
+    if not pose_coords or not copies:
+        return {"centroid_shift": None, "pocket_overlap": None, "n_crystal_copies": 0}
+    pose_c = centroid(pose_coords)
+    best = min(copies, key=lambda atoms: dist(pose_c, centroid(atoms)))
+    shift = dist(pose_c, centroid(best))
     inside = sum(1 for p in pose_coords
-                 if min(dist(p, c) for c in crystal_coords) <= POCKET_RADIUS)
+                 if min(dist(p, c) for c in best) <= POCKET_RADIUS)
     return {"centroid_shift": round(shift, 3),
-            "pocket_overlap": round(inside / len(pose_coords), 4)}
+            "pocket_overlap": round(inside / len(pose_coords), 4),
+            "n_crystal_copies": len(copies),
+            "matched_copy_atoms": len(best)}
 
 
 def main(argv=None) -> int:
@@ -166,12 +187,16 @@ def main(argv=None) -> int:
         if source is None:
             continue
         text = source.read_text(errors="replace")
-        groups = het_groups(text)
+        groups = het_instances(text)
         if not groups:
             continue
-        code, crystal = max(groups.items(), key=lambda kv: len(kv[1]))
+        # 가장 큰 사본을 가진 코드를 고른다. 사본 전체를 비교 대상으로 넘겨서
+        # 점수는 그중 가장 가까운 하나에 대해 매긴다.
+        code, copies = max(groups.items(),
+                           key=lambda kv: max(len(a) for a in kv[1]))
         jobs.append({"target_id": target, "ligand_code": code,
-                     "n_ligand_atoms": len(crystal), "crystal": crystal,
+                     "n_ligand_atoms": max(len(a) for a in copies),
+                     "n_copies": len(copies), "crystal": copies,
                      "pdb_path": str(source), "protein_pdb": protein_only(text)})
     if args.limit:
         jobs = jobs[: args.limit]
@@ -194,7 +219,7 @@ def main(argv=None) -> int:
         if sdf is None:
             continue
         record = {k: job[k] for k in
-                  ("target_id", "ligand_code", "n_ligand_atoms", "pdb_path")}
+                  ("target_id", "ligand_code", "n_ligand_atoms", "n_copies", "pdb_path")}
         print(f"[{index}/{len(jobs)}] {job['target_id']} + {job['ligand_code']}",
               flush=True)
         started = time.time()
@@ -208,11 +233,23 @@ def main(argv=None) -> int:
             pose = sdf_coords(str(body.get("sdf_text") or body.get("sdf") or ""))
             if not pose:
                 # 무엇이 왔는지 남긴다. 키 이름이 또 바뀌면 여기서 드러난다.
+                # 워커 로그에 이유가 있으면 같이 남긴다 - "자세 없음" 만으로는
+                # 배선 문제인지 입력 문제인지 구분할 수 없다. 실제로 여기서
+                # 갈렸다: DiffDock 은 멀쩡했고 RDKit 이 우리가 넘긴 ideal SDF 를
+                # 읽지 못한 것이었다.
+                reason = ""
+                for line in str(body.get("output", "")).replace("\\n", "\n").splitlines():
+                    if "Failed to read molecule" in line or "could not read" in line:
+                        reason = line.strip()[:200]
+                        break
                 record.update({"status": "no_pose",
                                "response_keys": sorted(body),
+                               "sdf_text_len": len(str(body.get("sdf_text") or "")),
+                               "worker_reason": reason or "워커 로그에 이유 없음",
                                "n_pose_atoms": 0,
                                "centroid_shift": None, "pocket_overlap": None})
-                print(f"    자세 없음 · 응답 키 {sorted(body)}", flush=True)
+                print(f"    자세 없음 · sdf_text {record['sdf_text_len']}자 · "
+                      f"{record['worker_reason'][:110]}", flush=True)
             else:
                 record.update({"status": "ok", **score_pose(pose, job["crystal"]),
                                "n_pose_atoms": len(pose)})
