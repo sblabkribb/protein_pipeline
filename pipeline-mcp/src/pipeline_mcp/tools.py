@@ -8986,6 +8986,28 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.search_reference",
+            "description": (
+                "Read-only reference search across five sources: PDB, UniProt, "
+                "InterPro, UniRef, Europe PMC. Each row carries a provenance "
+                "label - structural(구조)/curated(주석)/clusters(군집)/"
+                "published(문헌) - and none of them replaces measured evidence "
+                "for a plan. Results are reference only."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string",
+                               "enum": ["pdb", "uniprot", "interpro", "uniref", "literature"],
+                               "description": "provenance label: 구조/주석/군집/문헌"},
+                    "query": {"type": "string", "description": "search terms"},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 25,
+                              "description": "default 8"},
+                },
+                "required": ["source", "query"],
+            },
+        },
+        {
             "name": "pipeline.approve_plan",
             "description": (
                 "Apply human edits to a plan and convert it into PipelineRequest overrides. "
@@ -9865,6 +9887,15 @@ class ToolDispatcher:
             if not query:
                 return {"error": "query is required"}
             return search_literature(query, int(arguments.get("limit") or 8))
+
+        if name == "pipeline.search_reference":
+            from .reference import search_reference
+
+            query = str(arguments.get("query") or "").strip()
+            if not query:
+                return {"error": "query is required"}
+            return search_reference(str(arguments.get("source") or ""),
+                                    query, int(arguments.get("limit") or 8))
 
         if name == "pipeline.approve_plan":
             from .objective_planner import apply_edits, plan_to_request_overrides
