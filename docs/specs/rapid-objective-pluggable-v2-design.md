@@ -144,9 +144,9 @@ objective 에서는 EI·PI·expected information gain 같은 다른 신호를 �
 `uncertainty` 와 `allocation_signal` 은 **끝까지 분리된 채로 둔다.** 관측이
 많아도 p 가 0.5 면 allocation_signal 은 크고 uncertainty 는 작다.
 
-연속 objective 의 첫 구현은 세 후보 중 **하나를 명시적으로 고른다**:
-probability of improvement · expected improvement · normalized objective
-improvement. 근거 없이 Beta posterior 를 연속 점수에 재사용하지 않는다.
+연속 objective 의 첫 구현은 §10.3 으로 확정됐다 - reference 또는 threshold 가
+있을 때 `q = P(improvement)` 를 계산하고 `allocation_signal = 4q(1-q)` 를 먼저
+검토한다. 근거 없이 Beta posterior 를 연속 점수에 재사용하지 않는다.
 
 ---
 
@@ -219,14 +219,17 @@ class EvaluationResult:
     direction: str                      # maximize | minimize
     valid: bool
     provenance: dict                    # 아래 필수 키
+    score_transform: str | None = None  # 적용된 ScoreTransform 의 버전. 미변환이면 None
 ```
 
 `provenance` 필수 키: `model` · `version` · `config` · `input_artifact` ·
 `output_artifact` · `runtime_s` · `failure_status` · `calibration_status`.
 
-**`normalized_score` 를 evaluator 가 만들 수 없으면 `None` 을 낸다.** 정규화
-규칙을 짐작해서 채우지 않는다 — 방향을 모르는 점수로 순위를 매기면 반대로
-정렬될 수 있다.
+**`normalized_score` 는 evaluator 가 채우지 않는다** (§10.1). evaluator 는
+`raw_score` 와 semantics 만 낸다. utility scale 변환은 versioned
+`ScoreTransform` 이 하고, registry 가 `(evaluator × objective) -> ScoreTransform`
+을 연결한다. 방향을 모르는 점수로 순위를 매기면 반대로 정렬되므로, 변환 규칙을
+evaluator 가 짐작하는 경로를 아예 두지 않는다.
 
 adapter 는 클라이언트마다 얇게 둔다 (`clients/*.py` 옆). 5~6 개.
 
@@ -256,8 +259,8 @@ v2  A = expected_utility + β·uncertainty + η·allocation_signal − λ·cost 
 
 **v1 식을 근거 없이 폐기하지 않는다.** v1 은 전향 검증을 받는 대상이므로
 `rapid_structural_v1` 프로파일로 재현 가능하게 남는다. v2 식이 v1 식으로
-환원되는지(binary objective 이고 allocation_signal 이 movability 일 때) 테스트로
-고정한다.
+환원되는지 테스트로 고정한다. §10.3 에서 그 환원이 등식임이 나온다 - 이진
+objective 에서 `q = p̂` 이므로 `4q(1-q) = movability` 다.
 
 ---
 
@@ -320,9 +323,14 @@ objective 마다 별도의 evaluator validation 이 필요하고, 기능 주장�
 
 격자 완료
   prospective 분석 → v1 결과 freeze
-  rapid_objective_v2 구현 착수
-     Objective v2 → EvaluationResult adapters → BetaBernoulliState adapter
-     → generic action names → continuous objective
+  v2.0 구현 착수 (single-fidelity)
+     Objective v2 → EvaluationResult + ScoreTransform → Registry capability
+     → BetaBernoulliState adapter → generic action names
+     → continuous objective (단일 채널)
+
+이후 (데이터 확보 후)
+  v2.1  ESMFold-AF2 paired calibration → CrossFidelityLink
+        → multi-fidelity allocation
 ```
 
 1 번이 먼저인 이유: golden test 가 통과하는 동안만 리팩터링한다. 그것이
@@ -374,17 +382,120 @@ primary: {name: user_defined, evaluator: plugin_name}
 plugin 이 `Evaluator` contract 와 `EvaluationResult` 를 구현하고, registry 에
 허가가 기록돼야 실행된다.
 
-## 10. 열린 질문
+## 10. 확정된 결정
 
-1. `normalized_score` 정규화 규칙을 objective 별로 어디에 둘 것인가 —
-   registry 인가 evaluator 인가
-2. 연속 objective 의 부분 풀링. Beta 의 `pooling_strength` 에 해당하는 것이
-   Gaussian 계열에서 무엇인가
-2b. 연속 objective 의 `allocation_signal` 을 무엇으로 할 것인가. EI·PI·expected
-   information gain 중 하나를 고르고, 그것이 movability 와 다른 통계량임을
-   명시한다. 이진에서 잘 작동한 신호가 연속에서도 작동한다고 가정하지 않는다.
-3. multi-fidelity 에서 낮은 fidelity 관측을 높은 fidelity 사후분포에 어떻게
-   반영할 것인가 — 별도 arm 인가 같은 arm 의 다른 노이즈 수준인가
-4. Pareto 비교의 tie-break 순서. 현재 권고는 hard constraints → primary →
-   secondary Pareto → diversity 이고, 임의 가중합은 명시 요청 또는 검증된
-   경우에만
+§10 은 열린 질문이었고 아래로 확정됐다.
+
+### 10.1 정규화는 evaluator 안에서 하지 않는다
+
+evaluator 는 **raw score 와 score semantics** 를 돌려준다. utility scale 변환은
+별도의 **versioned `ScoreTransform`** 이 objective 방향·reference·calibration
+cohort 를 반영해서 한다.
+
+```
+Evaluator      raw_score + semantics(단위, 방향, 정의 범위)
+ScoreTransform (versioned) raw -> utility. objective 방향·reference·보정 코호트 반영
+Registry       (evaluator × objective) -> ScoreTransform 연결과 허가
+```
+
+`EvaluationResult.normalized_score` 는 **evaluator 가 채우지 않는다.** 같은
+evaluator 가 objective 마다 다른 변환을 받아야 하고(예: Rosetta 절대 에너지는
+백본 간 비교 불가, 백본 내 delta 는 가능), 그 규칙은 evaluator 가 알 수 없다.
+변환에 버전이 붙는 이유는 보정 코호트가 바뀌면 과거 점수와 섞이면 안 되기
+때문이다.
+
+### 10.2 연속 objective 의 부분 풀링 — 전역 상수를 만들지 않는다
+
+`pooling_strength` 같은 전역 값을 두지 않는다. 첫 후보는 target -> arm 의
+**hierarchical Normal 계열**이고, shrinkage 를 **within-arm 분산과 between-arm
+분산**으로 정한다.
+
+구체 파라미터는 objective/evaluator 별 historical data 로 추정한 뒤 **freeze**
+한다. 지금은 **ObservationModel contract 만 고정**하고 파라미터는 정하지
+않는다 — 데이터 없이 고른 값은 그 뒤로 근거 없이 굳는다.
+
+v1 의 `DEFAULT_POOLING_STRENGTH = 4.0` 은 이진 profile 에 남고 연속으로
+옮기지 않는다.
+
+### 10.3 `allocation_signal` — 전역 표준을 정하지 않는다
+
+EI·PI·information gain 중 하나를 표준으로 정하지 않는다. v2 첫 continuous
+profile 은 reference 또는 threshold 가 있을 때:
+
+```
+q = P(improvement over reference/threshold)
+allocation_signal = 4q(1-q)
+```
+
+를 **먼저 검토한다.** v1 movability 와 같은 성격의 decision-boundary 신호이고,
+"얼마나 배울 수 있는가" 가 아니라 "이 arm 이 판정 경계에 있는가" 를 잰다 —
+`allocation_signal` 이라는 이름을 고른 이유와 일치한다.
+
+`expected_utility` 와 `uncertainty` 는 계속 **별도로** 유지한다.
+
+EI 는 pure optimization profile, information gain 은 exploration 중심 profile
+에서 추후 비교한다. 같은 슬롯에 들어가는 다른 함수다.
+
+**따라오는 성질: v2 신호가 이진에서 v1 로 정확히 환원된다.** objective 가 이진
+성공이고 improvement 를 "성공한다" 로 두면 `q = p̂` 이므로
+
+```
+4q(1-q) = 4p̂(1-p̂) = movability
+```
+
+가 된다. §5 의 "v2 식이 v1 식으로 환원되는지" 테스트가 이 등식으로 구체화된다.
+근사가 아니라 등식이므로 부동소수점 오차 안에서 고정할 수 있다.
+
+### 10.4 fidelity 는 arm 정의에 넣지 않는다
+
+arm 은 계속 `backbone × generation_condition` 이다. ESMFold 와 AF2 는 **같은
+arm 을 서로 다른 fidelity 로 관측하는 별도 observation channel** 이다.
+
+fidelity 를 arm 에 넣으면 arm 수가 fidelity 배로 늘고, 같은 백본의 두 fidelity
+관측이 서로 정보를 주지 않는 별개 arm 이 된다. 둘 다 원하는 동작이 아니다.
+
+**low-fidelity 관측을 high-fidelity 사후분포에 직접 넣지 않는다.**
+`(low evaluator -> high evaluator)` 관계를 **paired data 로 calibration 한
+`CrossFidelityLink`(= `PromotionModel`) 가 있을 때만** low-fidelity 결과가
+`evaluate_at_higher_fidelity` 결정에 영향을 줄 수 있다. calibration 전에는
+**annotation 으로만** 쓴다.
+
+```
+arm  ->  observations_by_fidelity  ->  CrossFidelityLink  ->  allocator
+```
+
+ESMFold pLDDT 를 AF2 pLDDT 사후분포에 그냥 더하면 두 모형의 신뢰도를 같은
+척도로 취급하는 것이 된다. 그것이 무엇을 뜻하는지 아직 재본 적이 없다.
+
+## 11. 버전 분리
+
+```
+v2.0   objective-pluggable · single-fidelity
+       Objective v2 · EvaluationResult · ScoreTransform
+       Registry capability · BetaBernoulliState adapter
+       generic action names · continuous objective (single channel)
+
+v2.1   multi-fidelity
+       ESMFold-AF2 paired calibration
+       CrossFidelityLink / PromotionModel
+       multi-fidelity allocation
+```
+
+v2.0 은 fidelity 를 다루지 않는다. `evaluate_at_higher_fidelity` 행동 이름은
+v2.0 에 들어가지만, 그 시점에는 objective 의 단일 채널 안에서 "더 많이 관측한다"
+는 뜻이고 채널 간 승격은 v2.1 이다.
+
+**둘 다 v1 frozen profile 에 영향을 주지 않는다.** `rapid_structural_v1` 은
+golden test 가 고정하고 있고, v2.0·v2.1 결과는 프로파일 이름을 달고 별도로
+보고한다.
+
+## 12. 남은 미정 — 데이터가 필요한 것
+
+설계 결정이 아니라 측정이 필요해서 남는 것들이다. 지금 고르지 않는다.
+
+1. 10.2 의 hierarchical Normal 파라미터 — objective/evaluator 별 historical
+   data 추정 후 freeze
+2. 10.3 의 profile 별 신호 선택 — EI 와 information gain 을 비교할 profile 이
+   정의된 뒤
+3. 10.4 의 `CrossFidelityLink` 형태 — ESMFold-AF2 paired 데이터를 얻은 뒤.
+   현재 ESMFold 는 `wired_unvalidated` 이고 비용도 미측정이다
