@@ -59,7 +59,9 @@ export function renderConnectionsTab(host, { state = "idle", data = null, messag
   }
   host.appendChild(reprobe);
 
-  host.appendChild(el("h3", "", "엔드포인트 실측"));
+  const sectionHead = el("h3", "", "엔드포인트 실측");
+  sectionHead.appendChild(el("span", "meta", String(rows.length)));
+  host.appendChild(sectionHead);
   for (const row of rows) {
     const card = el("div", "skill");
     const head = el("div", "cardtitle");

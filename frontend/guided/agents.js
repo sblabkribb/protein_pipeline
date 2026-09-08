@@ -148,13 +148,16 @@ export function renderAgentsTab(host, { state = "idle", events = [], runId = "",
 
   const models = agentEventModels(events);
   if (runId) host.appendChild(statusHeader(live));
-  host.appendChild(el("h3", "", "에이전트 판정"));
+  const head = el("h3", "", "에이전트 판정");
+  head.appendChild(el("span", "meta", String(models.length)));
+  host.appendChild(head);
   host.appendChild(el("p", "note",
     "스테이지마다 규칙 기반 전문가(구조·단백질·리간드·실험)가 산 출한 합의 판정입니다. 최근 20건."));
   for (const model of models) {
     const card = el("div", "skill");
     const head = el("div", "cardtitle");
-    head.appendChild(el("span", "name", model.stage || "-"));
+    // 스테이지는 파이프라인 내부 키라 모노로 읽는다 - 결정 카드의 필드 키와 같은 규칙.
+    head.appendChild(el("span", "name mono", model.stage || "-"));
     const chip = decisionChip(model);
     head.appendChild(el("span", chip.cls, chip.label));
     card.appendChild(head);

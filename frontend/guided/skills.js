@@ -63,7 +63,9 @@ export function renderSkillsTab(host, { state = "idle", skills = [], message = "
   }
 
   const models = skillCardModels(skills);
-  host.appendChild(el("h3", "", "협의회 전문가 헌장"));
+  const head = el("h3", "", "협의회 전문가 헌장");
+  head.appendChild(el("span", "meta", String(models.length)));
+  host.appendChild(head);
   host.appendChild(el("p", "note", "헌장은 계획 협의회 전문가의 관점을 정의합니다. 저장 시 다음 협의회부터 반영됩니다."));
   for (const model of models) {
     const card = el("div", "skill");

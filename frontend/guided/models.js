@@ -143,18 +143,26 @@ export function renderModels(host, { state = "idle", model = null, message = "" 
   }
   const data = model || { purposes: [], objectives: [], models: [] };
 
-  host.appendChild(el("h3", "", "설계 목적 경로"));
+  // 섹션마다 개수를 붙인다 - 좁은 레일에서 "지금 몇 개를 보고 있는지"가 목록
+  // 훑기의 첫 단서다.
+  const head = (label, count) => {
+    const h = el("h3", "", label);
+    if (count != null) h.appendChild(el("span", "meta", String(count)));
+    return h;
+  };
+
+  host.appendChild(head("설계 목적 경로", data.purposes.length));
   for (const purpose of data.purposes) {
     const row = el("div", "skill");
-    const head = el("div", "cardtitle");
-    head.appendChild(el("span", "name", purpose.name));
+    const cardHead = el("div", "cardtitle");
+    cardHead.appendChild(el("span", "name", purpose.name));
     if (purpose.key && purpose.key !== purpose.name) {
-      head.appendChild(el("span", "chip", purpose.key));
+      cardHead.appendChild(el("span", "chip mono", purpose.key));
     }
-    if (purpose.validated) head.appendChild(el("span", "okchip", "검증됨"));
-    else if (purpose.executable) head.appendChild(el("span", "warnchip", "실행 가능·미검증"));
-    else head.appendChild(el("span", "badchip", "실행 불가"));
-    row.appendChild(head);
+    if (purpose.validated) cardHead.appendChild(el("span", "okchip", "검증됨"));
+    else if (purpose.executable) cardHead.appendChild(el("span", "warnchip", "실행 가능·미검증"));
+    else cardHead.appendChild(el("span", "badchip", "실행 불가"));
+    row.appendChild(cardHead);
     if (purpose.stages.length) {
       // 목적이 왜 미검증인지는 스테이지가 안다. 미검증 스테이지에 warn 점.
       // 칩에는 스테이지 이름만 넣고 모델 id 는 title 로 - 좁은 레일에서
@@ -163,7 +171,7 @@ export function renderModels(host, { state = "idle", model = null, message = "" 
       for (const stage of purpose.stages) {
         const chip = el("span", "chip", stage.stage || stage.modelId);
         chip.title = stage.modelId;
-        if (!stage.validated) chip.appendChild(el("span", "sdot-warn"));
+        if (!stage.validated) chip.appendChild(el("span", "sdot sdot-warn"));
         line.appendChild(chip);
       }
       row.appendChild(line);
@@ -171,17 +179,17 @@ export function renderModels(host, { state = "idle", model = null, message = "" 
     host.appendChild(row);
   }
 
-  host.appendChild(el("h3", "", "목표별 평가자 상태"));
+  host.appendChild(head("목표별 평가자 상태", data.objectives.length));
   for (const objective of data.objectives) {
     const row = el("div", "skill");
-    const head = el("div", "cardtitle");
-    head.appendChild(el("span", "name", objective.key));
-    head.appendChild(el("span", objective.cls, objective.label));
+    const cardHead = el("div", "cardtitle");
+    cardHead.appendChild(el("span", "name mono", objective.key));
+    cardHead.appendChild(el("span", objective.cls, objective.label));
     // 평가자 칩도 머리에 넣는다 - 칩이 머리와 노트 사이에 줄서면 흐름이 깨진다.
     for (const evaluator of objective.evaluators) {
-      head.appendChild(el("span", "chip", evaluator));
+      cardHead.appendChild(el("span", "chip mono", evaluator));
     }
-    row.appendChild(head);
+    row.appendChild(cardHead);
     if (objective.detail) row.appendChild(el("p", "note", objective.detail));
     if (objective.toEnable) {
       row.appendChild(el("p", "note", "활성화하려면: " + objective.toEnable));
@@ -189,14 +197,14 @@ export function renderModels(host, { state = "idle", model = null, message = "" 
     host.appendChild(row);
   }
 
-  host.appendChild(el("h3", "", "모델 카탈로그"));
+  host.appendChild(head("모델 카탈로그", data.models.length));
   for (const item of data.models) {
     const row = el("div", "skill");
-    const head = el("div", "cardtitle");
-    head.appendChild(el("span", "name", item.name));
-    if (item.portalOnly) head.appendChild(el("span", "chip", "포털 경유"));
-    row.appendChild(head);
-    if (item.endpoint) row.appendChild(el("p", "note", item.endpoint));
+    const cardHead = el("div", "cardtitle");
+    cardHead.appendChild(el("span", "name", item.name));
+    if (item.portalOnly) cardHead.appendChild(el("span", "chip", "포털 경유"));
+    row.appendChild(cardHead);
+    if (item.endpoint) row.appendChild(el("p", "note mono", item.endpoint));
     host.appendChild(row);
   }
 }
