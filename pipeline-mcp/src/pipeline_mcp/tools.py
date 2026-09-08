@@ -1592,6 +1592,121 @@ def _agent_chat_tool(
     return {"run_id": run_id, "reply": final_reply, "status": state, "stage": stage}
 
 
+# 규칙 판정 해석용 시스템 지시. objective_planner.EXPLAIN_SYSTEM_INSTRUCTION 과 같은
+# 철학 — 입력 데이터 밖의 사실 창작을 막는다. 온디맨드 도구에서만 쓴다.
+AGENT_EXPLAIN_SYSTEM_INSTRUCTION = (
+    "You restate an already-made rule-based agent panel verdict for a scientist, in Korean.\n"
+    "Rules you must follow:\n"
+    "1. Explain ONLY the verdict data given to you. 입력 데이터 밖의 사실 창작은 금지다 — "
+    "do not invent facts, numbers, citations, or mechanisms that are not in the input.\n"
+    "2. Distinguish measured evidence from assumptions. If the verdict rests on an "
+    "assumption rather than a measurement, say so plainly.\n"
+    "3. Suggest at most one next action, drawn from the event's recovery actions when present.\n"
+    "4. Be concise: at most 4 sentences.\n"
+    "5. Do not invent PubMed IDs, DOIs, or dataset names."
+)
+
+# intake.py · plan_council.py 와 같은 접두사 — gemini 클라이언트의 에러 문자열 판별.
+_AGENT_EXPLAIN_GEMINI_ERROR_PREFIX = "Error communicating with Gemini"
+
+
+def _agent_event_context(event: dict[str, Any]) -> str:
+    """이벤트 하나를 LLM 프롬프트용 JSON 으로 좁힌다. 계약 필드만 남긴다."""
+    agents_raw = event.get("agents") if isinstance(event.get("agents"), list) else []
+    agents = []
+    for agent in agents_raw:
+        if not isinstance(agent, dict):
+            continue
+        agents.append(
+            {
+                "name": agent.get("name"),
+                "status": agent.get("status"),
+                "summary": agent.get("summary"),
+                "metrics": agent.get("metrics"),
+                "interpretation": agent.get("interpretation"),
+            }
+        )
+    consensus = event.get("consensus") if isinstance(event.get("consensus"), dict) else {}
+    context = {
+        "stage": event.get("stage"),
+        "detail": event.get("detail"),
+        "error": event.get("error"),
+        "recovery": event.get("recovery"),
+        "agents": agents,
+        "consensus": {
+            "decision": consensus.get("decision"),
+            "confidence": consensus.get("confidence"),
+            "rationale": consensus.get("rationale"),
+            "interpretations": consensus.get("interpretations"),
+        },
+    }
+    serialized = json.dumps(context, ensure_ascii=False, default=str)
+    if len(serialized) > 4000:
+        # 너무 크면 metrics 를 잘라 요약만 남긴다 — 판정의 본질은 status/summary 다.
+        for agent in agents:
+            agent["metrics"] = None
+        serialized = json.dumps(context, ensure_ascii=False, default=str)
+    return serialized
+
+
+def _explain_agent_event(
+    runner: PipelineRunner, arguments: dict[str, Any]
+) -> dict[str, Any]:
+    """규칙 기반 판정 하나를 LLM 이 풀어 쓴다. 온디맨드 — 실행 경로에 없다."""
+    run_id = str(arguments.get("run_id") or "").strip()
+    event_id = str(arguments.get("event_id") or "").strip()
+    if not run_id:
+        raise ValueError("run_id is required")
+    if not event_id:
+        raise ValueError("event_id is required")
+
+    # 1) 이벤트 찾기. 스테이지당 1건 수준이라 200 이면 충분하다. run 이 없어도
+    #    예외 대신 계약 응답 — 이벤트가 없다는 것과 같은 말이다.
+    try:
+        events = list_run_events(
+            runner.output_root, run_id, filename="agent_panel.jsonl", limit=200
+        )
+    except ValueError:
+        events = []
+    event = next(
+        (e for e in events if str(e.get("id") or "") == event_id), None
+    )
+    if event is None:
+        return {"error": "event not found"}
+
+    # 2) LLM 없으면 해석 대신 계약 응답. 규칙 판정 자체는 이미 측정 근거라 그대로 둔다.
+    unavailable = {
+        "reply": "LLM 연결 없음 — 규칙 기반 판정 원문을 참고해 주세요.",
+        "reply_is_generated": False,
+        "llm_unavailable": True,
+        "run_id": run_id,
+        "event_id": event_id,
+    }
+    gemini = getattr(runner, "gemini", None)
+    if gemini is None or not getattr(gemini, "is_available", lambda: False)():
+        return unavailable
+    prompt = (
+        "다음은 파이프라인 실행 중 한 스테이지의 규칙 기반 에이전트 판정 이벤트입니다.\n"
+        "이 데이터만 근거로 과학자에게 풀어 쓰세요.\n\n"
+        + _agent_event_context(event)
+    )
+    try:
+        reply = str(gemini.chat(AGENT_EXPLAIN_SYSTEM_INSTRUCTION, prompt))
+    except Exception as exc:  # noqa: BLE001 — LLM 실패는 계약 응답으로 돌려준다
+        return {
+            **unavailable,
+            "reply": f"{_AGENT_EXPLAIN_GEMINI_ERROR_PREFIX}: {type(exc).__name__}: {exc}"[:200],
+        }
+    if reply.startswith(_AGENT_EXPLAIN_GEMINI_ERROR_PREFIX):
+        return {**unavailable, "reply": reply[:200]}
+    return {
+        "reply": reply,
+        "reply_is_generated": True,
+        "run_id": run_id,
+        "event_id": event_id,
+    }
+
+
 def _workspace_root(output_root: str) -> Path:
     return ensure_dir(Path(output_root).resolve() / "_workspace")
 
@@ -8583,6 +8698,23 @@ def tool_definitions() -> list[dict[str, Any]]:
             },
         },
         {
+            "name": "pipeline.explain_agent_event",
+            "description": (
+                "On-demand LLM interpretation of one rule-based agent panel verdict. "
+                "Generated prose — advisory only, never measured evidence, and never "
+                "part of the pipeline run path."
+            ),
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "run_id": {"type": "string"},
+                    "event_id": {"type": "string"},
+                    "lang": {"type": "string"},
+                },
+                "required": ["run_id", "event_id"],
+            },
+        },
+        {
             "name": "pipeline.generate_report",
             "description": "Generate a markdown report for a run from artifacts, feedback, and experiments.",
             "inputSchema": {
@@ -9736,6 +9868,9 @@ class ToolDispatcher:
 
         if name == "pipeline.list_agent_events":
             return _list_agent_events(self.runner, arguments)
+
+        if name == "pipeline.explain_agent_event":
+            return _explain_agent_event(self.runner, arguments)
 
         if name == "pipeline.generate_report":
             return _generate_report(self.runner, arguments)
