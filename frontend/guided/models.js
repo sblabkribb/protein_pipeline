@@ -83,6 +83,21 @@ function purposeRows(data) {
       name: String(p.display_name_ko || p.purpose || ""),
       executable: Boolean(p.executable),
       validated: Boolean(p.validated),
+      coverage: (() => {
+        const c = p.validation_coverage;
+        if (!c || typeof c !== "object") return null;
+        const imp = c.improved && typeof c.improved === "object" ? c.improved : null;
+        return {
+          stage: String(c.stage || ""),
+          attempted: Number(c.targets_attempted || 0),
+          withOutput: Number(c.targets_with_output || 0),
+          fraction: Number(c.fraction || 0),
+          note: String(c.note || ""),
+          improvedAttempted: imp ? Number(imp.targets_attempted || 0) : null,
+          improvedWithOutput: imp ? Number(imp.targets_with_output || 0) : null,
+          improvedFraction: imp ? Number(imp.fraction || 0) : null,
+        };
+      })(),
       // 왜 미검증인지는 스테이지가 말한다. 상한 8 - 경로가 길어도 카드가 좁은
       // 레일을 먹지 않게. 모양은 route dict 의 stages[]. 그대로 온다.
       stages: (Array.isArray(p.stages) ? p.stages : [])
@@ -151,10 +166,32 @@ export function renderModels(host, { state = "idle", model = null, message = "" 
     if (purpose.key && purpose.key !== purpose.name) {
       head.appendChild(el("span", "chip", purpose.key));
     }
-    if (purpose.validated) head.appendChild(el("span", "okchip", "검증됨"));
-    else if (purpose.executable) head.appendChild(el("span", "warnchip", "실행 가능·미검증"));
-    else head.appendChild(el("span", "badchip", "실행 불가"));
+    // "검증됨" 은 "이 저장소가 이 경로를 측정했다" 는 뜻인데 "잘 된다" 로 읽힌다.
+    // BioEmu 경로는 62 개 중 4 개에서만 백본이 나왔고, 같은 n=4 로 온도 결론은
+    // 탐색적이라고 표시했다. 비율이 표시와 함께 다녀야 두 진술이 양립한다.
+    const cov = purpose.coverage;
+    if (purpose.validated) {
+      const label = cov
+        ? `측정됨 ${cov.withOutput}/${cov.attempted}`
+        : "측정됨";
+      const chip = el("span", cov && cov.fraction < 0.3 ? "warnchip" : "okchip", label);
+      if (cov && cov.note) chip.title = cov.note;
+      head.appendChild(chip);
+    } else if (purpose.executable) {
+      head.appendChild(el("span", "warnchip", "실행 가능·미측정"));
+    } else {
+      head.appendChild(el("span", "badchip", "실행 불가"));
+    }
     row.appendChild(head);
+    if (cov) {
+      const line = el("div", "muted");
+      line.textContent =
+        `${cov.stage} 단계가 ${cov.attempted}개 표적 중 ${cov.withOutput}개에서 산출` +
+        (cov.improvedFraction != null
+          ? ` · 전처리 수정 후 ${cov.improvedWithOutput}/${cov.improvedAttempted}`
+          : "");
+      row.appendChild(line);
+    }
     if (purpose.stages.length) {
       // 목적이 왜 미검증인지는 스테이지가 안다. 미검증 스테이지에 warn 점.
       // 칩에는 스테이지 이름만 넣고 모델 id 는 title 로 - 좁은 레일에서

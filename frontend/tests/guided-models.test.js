@@ -195,3 +195,53 @@ test("side tab cards stack vertically so narrow rails do not overlap text", () =
   const css = readFileSync(new URL("../guided.css", import.meta.url), "utf8");
   assert.ok(css.includes(".modelstab .skill { display: block"), "cards must not be flex rows");
 });
+
+test("modelsTabModels carries measured coverage so 'validated' cannot read as 'works'", () => {
+  const out = modelsTabModels({
+      purposes: [
+        {
+          key: "conformational_ensemble_redesign",
+          name: "구조 앙상블 기반 재설계",
+          executable: true,
+          validated: true,
+          stages: [],
+          validation_coverage: {
+            stage: "backbone_generate",
+            targets_attempted: 62,
+            targets_with_output: 4,
+            fraction: 0.06,
+            note: "BioEmu produced backbones for 4 of 62 targets.",
+          },
+        },
+        {
+          key: "de_novo_backbone_design",
+          name: "신규 백본 설계",
+          executable: true,
+          validated: true,
+          stages: [],
+          validation_coverage: {
+            stage: "backbone_generate",
+            targets_attempted: 62,
+            targets_with_output: 16,
+            fraction: 0.26,
+            improved: { targets_attempted: 18, targets_with_output: 13, fraction: 0.72 },
+          },
+        },
+        { key: "protein_binder_design", name: "바인더", executable: true, validated: false, stages: [] },
+      ],
+      objectives: [],
+  });
+
+  const bioemu = out.purposes[0];
+  assert.equal(bioemu.validated, true);
+  assert.equal(bioemu.coverage.attempted, 62);
+  assert.equal(bioemu.coverage.withOutput, 4);
+  assert.ok(bioemu.coverage.fraction < 0.3, "6% must stay below the warn threshold");
+
+  const rfd3 = out.purposes[1];
+  assert.equal(rfd3.coverage.improvedWithOutput, 13);
+  assert.equal(rfd3.coverage.improvedAttempted, 18);
+
+  // 커버리지가 없는 목적은 null 이어야 하고, 0/0 으로 꾸며내면 안 된다.
+  assert.equal(out.purposes[2].coverage, null);
+});

@@ -215,6 +215,19 @@ class Route:
     extra: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
     @property
+    def validation_coverage(self) -> dict | None:
+        """이 경로가 실제로 몇 개 타겟에서 산출됐는가.
+
+        `validated` 는 "이 저장소가 이 경로를 측정했다" 는 뜻이지 "잘 된다" 가
+        아니다. 그런데 UI 의 "검증됨" 과 논문의 "validated purpose" 는 후자로
+        읽힌다. BioEmu 경로는 62 개 중 4 개에서만 백본이 나왔고, 같은 n=4 를
+        근거로 온도 결론은 탐색적이라고 표시했다. 두 진술이 양립하려면 비율이
+        표시와 함께 다녀야 한다.
+        """
+        raw = self.extra.get("validation_coverage")
+        return dict(raw) if isinstance(raw, dict) else None
+
+    @property
     def unvalidated_stages(self) -> tuple[RouteStage, ...]:
         return tuple(s for s in self.stages if not s.validated)
 
@@ -324,6 +337,7 @@ class Route:
             "stages": [s.to_dict() for s in self.stages],
             "executable": self.executable,
             "validated": self.validated,
+            "validation_coverage": self.validation_coverage,
             "blocked_reason": self.blocked_reason,
             "blockers": {k: list(v) for k, v in self.blockers.items()},
             "unvalidated_stages": [s.stage for s in self.unvalidated_stages],

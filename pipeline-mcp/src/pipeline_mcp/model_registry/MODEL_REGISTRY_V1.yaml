@@ -673,6 +673,17 @@ purposes:
       - {stage: cheap_filter,       model_id: soluprot,     gate: gate1, required: true,  validated: true}
       - {stage: structure_verify,   model_id: colabfold,    gate: gate2, required: true,  validated: true}
     cost_driver: colabfold
+    validation_coverage:
+      stage: backbone_generate
+      description_ko: 원본 backbone 사용
+      targets_attempted: 62
+      targets_with_output: 57
+      fraction: 0.92
+      source: public_data/benchmark/gate0/backbones/backbone_labels.csv
+      note: >-
+        Gate 0 campaign, 62 CATH targets. 57 carry a native-backbone entry. The
+        5 that do not are targets where the native route produced no usable
+        backbone. This is stage coverage, not design success.
 
   de_novo_backbone_design:
     display_name_en: De novo backbone design
@@ -699,6 +710,31 @@ purposes:
         PIPELINE_AF2_MAX_WORKERS=4 changes this number and it has not been
         re-measured under that setting.
       source: public_data/benchmark/gate0/wave_02_results.json
+    validation_coverage:
+      stage: backbone_generate
+      description_ko: RFD3 백본 생성
+      targets_attempted: 62
+      targets_with_output: 16
+      fraction: 0.26
+      source: public_data/benchmark/gate0/backbones/backbone_labels.csv
+      improved:
+        targets_attempted: 18
+        targets_with_output: 13
+        fraction: 0.72
+        source: public_data/benchmark/gate0/holdout_generation.json
+        change: >-
+          Target preprocessing added 2026-09-08 (first model only for NMR
+          ensembles, drop CA-less residues and HETATM, drop records that
+          reference atom serials, renumber from 1). Before it, RFD3 died on
+          contig validation for targets whose numbering had gaps, and on
+          UnindexFlaggedTokens for multi-model files.
+      note: >-
+        RFD3 produced backbones for 16 of 62 targets in the campaign. Reporting
+        this route as validated without the fraction overstates it: most
+        failures were the 2.0 A target-RMSD acceptance gate and input handling,
+        not the design step. The holdout rate is measured after the
+        preprocessing fix on targets pre-filtered to single chain, 50-400
+        residues, so the two numbers are not directly comparable.
 
   conformational_ensemble_redesign:
     display_name_en: Ensemble-based redesign
@@ -714,6 +750,20 @@ purposes:
       - {stage: cheap_filter,       model_id: soluprot,     gate: gate1, required: true,  validated: true}
       - {stage: structure_verify,   model_id: colabfold,    gate: gate2, required: true,  validated: true}
     cost_driver: colabfold
+    validation_coverage:
+      stage: backbone_generate
+      description_ko: BioEmu 앙상블 생성
+      targets_attempted: 62
+      targets_with_output: 4
+      fraction: 0.06
+      source: public_data/benchmark/gate0/backbones/backbone_labels.csv
+      note: >-
+        BioEmu produced backbones for 4 of 62 targets. The same n=4 is why
+        BioEmu source-specific temperature conclusions are reported as
+        exploratory only. Calling this a validated purpose while calling the
+        same four targets too few to conclude from is not consistent; the
+        fraction has to travel with the label. Wave 3 also had 4 of 8 runs miss
+        the 2.0 A acceptance cutoff.
     observed_run_cost:
       provenance: measured
       value: 8952.0
