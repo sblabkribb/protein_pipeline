@@ -201,9 +201,21 @@ def main(argv=None) -> int:
         try:
             out = client.dock(protein_pdb=job["protein_pdb"], ligand_sdf=sdf,
                               complex_name=f"{job['target_id']}_{job['ligand_code']}")
-            pose = sdf_coords(str((out or {}).get("sdf") or ""))
-            record.update({"status": "ok", **score_pose(pose, job["crystal"]),
-                           "n_pose_atoms": len(pose)})
+            # 워커가 돌려주는 키는 sdf_text 다. 예전에는 "sdf" 를 읽었는데 그런
+            # 키가 없어서 항상 빈 문자열이 나왔고, 좌표 0 개짜리 결과를 22/22
+            # "ok" 로 적었다. 예외가 없다는 것과 결과가 있다는 것은 다르다.
+            body = out or {}
+            pose = sdf_coords(str(body.get("sdf_text") or body.get("sdf") or ""))
+            if not pose:
+                # 무엇이 왔는지 남긴다. 키 이름이 또 바뀌면 여기서 드러난다.
+                record.update({"status": "no_pose",
+                               "response_keys": sorted(body),
+                               "n_pose_atoms": 0,
+                               "centroid_shift": None, "pocket_overlap": None})
+                print(f"    자세 없음 · 응답 키 {sorted(body)}", flush=True)
+            else:
+                record.update({"status": "ok", **score_pose(pose, job["crystal"]),
+                               "n_pose_atoms": len(pose)})
         except Exception as exc:
             record.update({"status": "failed",
                            "error": f"{type(exc).__name__}: {exc}"[:200]})
