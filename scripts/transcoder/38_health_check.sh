@@ -64,10 +64,23 @@ if [ "$n_grid" -eq 0 ]; then
 fi
 
 # 3. 정체. 모델 파일이 30 분간 늘지 않으면 실제로 멈춘 것이다.
+# 격자는 두 단계다: 먼저 백본 72 개의 서열을 만들고(모델이 안 나온다), 그 다음
+# 접는다. 생성 단계에서 "모델 0 개" 는 정상인데 예전 판정은 그것을 정체로 불렀다
+# (재시도 실행에서 실제로 오경보가 났다). 이 실행에서 접기가 시작됐는지를 먼저
+# 본다 - 프로세스 시작보다 새로운 모델이 하나라도 있으면 접는 중이다.
 if [ "$n_grid" -ge 1 ] && [ -d "$GRID_MODELS" ]; then
-  recent=$(recent_files "$GRID_MODELS" '*.pdb.gz' 30)
-  if [ "$recent" -eq 0 ]; then
-    echo "PROBLEM 격자가 돌고 있는데 최근 30분간 새 모델 0개 (정체)"
+  grid_age=$(ps -eo etimes,ppid,cmd --no-headers \
+             | awk '$2==1 && /26_holdout_grid/ {print $1; exit}')
+  if [ -n "$grid_age" ]; then
+    since_start=$(recent_files "$GRID_MODELS" '*.pdb.gz' "$((grid_age / 60 + 1))")
+    if [ "$since_start" -eq 0 ]; then
+      # 아직 접기 전이다. 다만 한 시간이 넘도록 시작을 못 했으면 그건 문제다.
+      if [ "$grid_age" -gt 3600 ]; then
+        echo "PROBLEM 격자가 ${grid_age}초째 도는데 이번 실행의 모델이 0개 (서열 생성에서 멈춤?)"
+      fi
+    elif [ "$(recent_files "$GRID_MODELS" '*.pdb.gz' 30)" -eq 0 ]; then
+      echo "PROBLEM 격자가 접는 중인데 최근 30분간 새 모델 0개 (정체)"
+    fi
   fi
 fi
 
