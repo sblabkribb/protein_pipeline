@@ -1,0 +1,12 @@
+{
+  "purpose": "저장소에 넣기엔 큰 캐시의 원격 사본 (79MB)",
+  "bucket": "proteinpipeline",
+  "key": "rapid_sr/caches/reward_embeddings_esm2_t33_650M_UR50D.npz",
+  "local_path_at_upload": "/opt/protein_pipeline/meta_surrogate_prototype/reward_embeddings_esm2_t33_650M_UR50D.npz",
+  "size_bytes": 79468604,
+  "sha256": "c821d536e87d1390bcf231c26cc93f1ed41c75e6e511b2c0e0e2256bbf7d88c2",
+  "verified": true,
+  "verification": "올린 뒤 head_object 로 크기를 대조했다.",
+  "regenerable": "11_train_reward_model.py 가 cache_key 로 다시 만든다. 다만 ESM-2 650M 을 CATH 데이터셋 전체에 다시 돌려야 한다.",
+  "utc": "2026-09-08T02:25:34Z"
+}

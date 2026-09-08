@@ -131,3 +131,7 @@ manuscript (5).md
 # 파생 산출물 - 스크립트로 다시 만들 수 있다.
 /frontend/.pytest_cache/
 /frontend/dist/
+
+# ESM-2 650M 임베딩 캐시 (79MB). 11_train_reward_model.py 가 다시 만들 수 있고,
+# 원격 사본은 S3 에 있다 (public_data/benchmark/reward_embeddings_archive.json).
+/meta_surrogate_prototype/*.npz

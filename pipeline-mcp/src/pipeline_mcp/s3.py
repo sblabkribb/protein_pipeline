@@ -71,6 +71,59 @@ class NCPStorage:
                 relative_path = file_path.relative_to(Path(local_root).parent)
                 self.upload_file(file_path, str(relative_path))
 
+    def list_runs(self, prefix="outputs/"):
+        """Lists run directory names under a remote prefix"""
+        self._ensure_initialized()
+        if not self._client: return []
+        runs = []
+        try:
+            paginator = self._client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix, Delimiter="/"):
+                for cp in page.get("CommonPrefixes", []):
+                    runs.append(cp["Prefix"][len(prefix):].rstrip("/"))
+        except Exception as e:
+            print(f"S3 List Failed: {e}")
+        return runs
+
+    def pull_outputs(self, run_id, local_root="outputs"):
+        """Downloads an entire run directory from S3 (mirror of sync_outputs)"""
+        self._ensure_initialized()
+        if not self._client: return False
+        remote_prefix = f"outputs/{run_id}/"
+        try:
+            paginator = self._client.get_paginator("list_objects_v2")
+            keys = [obj["Key"] for page in paginator.paginate(Bucket=self.bucket_name, Prefix=remote_prefix) for obj in page.get("Contents", [])]
+        except Exception as e:
+            print(f"S3 List Failed: {e}")
+            return False
+        if not keys:
+            print(f"No remote files for run {run_id}")
+            return False
+        local_dir = Path(local_root) / run_id
+        for key in keys:
+            relative = key[len("outputs/"):]
+            dest_path = local_dir / relative[len(run_id) + 1:]
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                self._client.download_file(self.bucket_name, key, str(dest_path))
+            except Exception as e:
+                print(f"S3 Download Failed ({key}): {e}")
+        print(f"Pulled run {run_id} ({len(keys)} files) to {local_dir}")
+        return True
+
+    def pull_summary(self, run_id, local_root="outputs"):
+        """Downloads only summary.json for a run"""
+        self._ensure_initialized()
+        if not self._client: return False
+        local_dir = Path(local_root) / run_id
+        local_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self._client.download_file(self.bucket_name, f"outputs/{run_id}/summary.json", str(local_dir / "summary.json"))
+            return True
+        except Exception as e:
+            print(f"S3 Download Failed (summary {run_id}): {e}")
+            return False
+
     def download_model(self, model_name, local_dest="pipeline-mcp/models"):
         """Downloads latest model weights from S3"""
         self._ensure_initialized()
