@@ -7964,6 +7964,8 @@ def pipeline_request_from_args(
         soluprot_cutoff=_as_float(args.get("soluprot_cutoff"), 0.5),
         pi_min=pi_min,
         pi_max=pi_max,
+        thermomp_gate=_as_bool(args.get("thermomp_gate"), False),
+        thermomp_ddg_cutoff=_as_float(args.get("thermomp_ddg_cutoff"), 2.0),
         af2_model_preset=str(args.get("af2_model_preset") or "auto"),
         af2_db_preset=str(args.get("af2_db_preset") or "full_dbs"),
         af2_max_template_date=str(args.get("af2_max_template_date") or "2020-05-14"),
@@ -8139,6 +8141,20 @@ def _pipeline_run_schema() -> dict[str, Any]:
             "soluprot_cutoff": {"type": "number"},
             "pi_min": {"type": "number"},
             "pi_max": {"type": "number"},
+            "thermomp_gate": {
+                "type": "boolean",
+                "description": (
+                    "ThermoMPNN ΔΔG gate before AF2 (default off). Off runs are "
+                    "byte-identical to previous behavior."
+                ),
+            },
+            "thermomp_ddg_cutoff": {
+                "type": "number",
+                "description": (
+                    "kcal/mol; designs above the cutoff are filtered (default 2.0). "
+                    "Pass if additive ΔΔG <= cutoff."
+                ),
+            },
             "af2_model_preset": {"type": "string"},
             "af2_db_preset": {"type": "string"},
             "af2_max_template_date": {"type": "string"},

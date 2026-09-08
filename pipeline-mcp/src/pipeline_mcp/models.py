@@ -129,6 +129,10 @@ class PipelineRequest:
     pi_min: float | None = None
     pi_max: float | None = None
 
+    # 선택적 안정성 게이트 (ThermoMPNN ΔΔG). 기본 off — 켜야만 동작한다.
+    thermomp_gate: bool = False
+    thermomp_ddg_cutoff: float = 2.0
+
     af2_model_preset: str = "auto"  # auto | monomer | multimer (and variants)
     af2_db_preset: str = "full_dbs"
     af2_max_template_date: str = "2020-05-14"
