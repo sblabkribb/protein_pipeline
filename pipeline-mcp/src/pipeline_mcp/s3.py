@@ -1,7 +1,32 @@
 import os
+import re
 import boto3
 from pathlib import Path
 from botocore.client import Config
+
+#: run_id 는 MCP 인자에서 온다. 경로 조각으로 쓰기 전에 좁힌다 - "../" 하나면
+#: 다운로드가 outputs/ 밖으로 나간다.
+_SAFE_RUN_ID = re.compile(r"\A[A-Za-z0-9_.-]{1,128}\Z")
+
+
+def _safe_run_id(run_id) -> str | None:
+    """경로 조각으로 써도 되는 run_id 만 통과시킨다."""
+    text = str(run_id or "")
+    if not _SAFE_RUN_ID.fullmatch(text) or text in {".", ".."}:
+        return None
+    return text
+
+
+def _inside(base: Path, candidate: Path) -> bool:
+    """candidate 가 base 아래로 풀리는가. 심볼릭 링크까지 따져 본다.
+
+    run_id 를 좁히는 것만으로는 부족하다. 원격 key 의 꼬리도 경로 조각이라
+    거기에 "../" 가 들어가면 같은 문제가 난다.
+    """
+    try:
+        return candidate.resolve().is_relative_to(base.resolve())
+    except (OSError, ValueError):
+        return False
 
 class NCPStorage:
     def __init__(self):
@@ -89,6 +114,10 @@ class NCPStorage:
         """Downloads an entire run directory from S3 (mirror of sync_outputs)"""
         self._ensure_initialized()
         if not self._client: return False
+        run_id = _safe_run_id(run_id)
+        if run_id is None:
+            print("S3 Pull Refused: run_id 가 경로로 쓰기에 안전하지 않다")
+            return False
         remote_prefix = f"outputs/{run_id}/"
         try:
             paginator = self._client.get_paginator("list_objects_v2")
@@ -100,22 +129,39 @@ class NCPStorage:
             print(f"No remote files for run {run_id}")
             return False
         local_dir = Path(local_root) / run_id
+        local_dir.mkdir(parents=True, exist_ok=True)
+        written = 0
         for key in keys:
             relative = key[len("outputs/"):]
             dest_path = local_dir / relative[len(run_id) + 1:]
+            # key 는 원격이 준 문자열이다. 그 꼬리가 밖을 가리키면 건너뛴다.
+            if not _inside(local_dir, dest_path.parent):
+                print(f"S3 Download Skipped (경로가 {local_dir} 밖이다): {key}")
+                continue
             dest_path.parent.mkdir(parents=True, exist_ok=True)
+            if not _inside(local_dir, dest_path):
+                print(f"S3 Download Skipped (경로가 {local_dir} 밖이다): {key}")
+                continue
             try:
                 self._client.download_file(self.bucket_name, key, str(dest_path))
+                written += 1
             except Exception as e:
                 print(f"S3 Download Failed ({key}): {e}")
-        print(f"Pulled run {run_id} ({len(keys)} files) to {local_dir}")
+        print(f"Pulled run {run_id} ({written}/{len(keys)} files) to {local_dir}")
         return True
 
     def pull_summary(self, run_id, local_root="outputs"):
         """Downloads only summary.json for a run"""
         self._ensure_initialized()
         if not self._client: return False
+        run_id = _safe_run_id(run_id)
+        if run_id is None:
+            print("S3 Pull Refused: run_id 가 경로로 쓰기에 안전하지 않다")
+            return False
         local_dir = Path(local_root) / run_id
+        if not _inside(Path(local_root), local_dir):
+            print("S3 Pull Refused: 대상 경로가 local_root 밖이다")
+            return False
         local_dir.mkdir(parents=True, exist_ok=True)
         try:
             self._client.download_file(self.bucket_name, f"outputs/{run_id}/summary.json", str(local_dir / "summary.json"))
