@@ -210,10 +210,21 @@ def run_thermomp(rows, *, url: str, limit: int) -> dict:
         if not muts:
             skipped["변이 없음"] += 1
             continue
-        try:
-            out = client.predict(pdb_text=text, mutations=muts, chain="A")
-        except Exception as exc:
-            skipped[f"호출 실패: {type(exc).__name__}"] += 1
+        # 워커 호출은 일시적으로 실패한다. 격자가 GPU0 을 쥐고 있던 동안 8/8 이
+        # 죽었고, 격자가 끝난 뒤 같은 입력이 그대로 성공했다. 그래서 재시도한다.
+        # 예외 타입만 세면 진단이 안 된다 - 그때 남은 것은 "RuntimeError" 뿐이었고
+        # 그것만으로는 경합인지 입력 오류인지 구분할 수 없었다. 메시지를 남긴다.
+        out, last_error = None, ""
+        for attempt in range(3):
+            try:
+                out = client.predict(pdb_text=text, mutations=muts, chain="A")
+                break
+            except Exception as exc:
+                last_error = f"{type(exc).__name__}: {exc}"
+                if attempt < 2:
+                    time.sleep(2.0 * (attempt + 1))
+        if out is None:
+            skipped[f"호출 실패: {last_error[:160]}"] += 1
             continue
         ddg = out.get("additive_ddg_kcal_mol") if isinstance(out, dict) else None
         if ddg is None:
