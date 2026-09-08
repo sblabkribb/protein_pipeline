@@ -70,8 +70,8 @@ import {
 } from "./guided/skills.js";
 import {
   renderAgentsTab, requestAgentEvents, requestExplanation, rememberAgentEvents,
-  currentAgentEvents, rememberInterpretation, setInterpretationPending,
-  setInterpretationFailed,
+  currentAgentEvents, rememberInterpretation, interpretationFor,
+  setInterpretationPending, setInterpretationFailed,
 } from "./guided/agents.js";
 import {
   renderProjectsTab, requestProjects, requestRounds,
@@ -871,6 +871,9 @@ if (typeof document !== "undefined") {
   // 나간다 — 실행 경로에 LLM 호출이 없다. 결과는 생성된 산문이므로 캐시에 넣고
   // 탭을 다시 그려 genbadge 라벨과 함께 따로 그린다.
   window.__agentsExplain = async (runId, eventId) => {
+    // 두 번 클릭해도 한 번만 묻는다 - 같은 이벤트 해석이 이미 진행 중이면 무시한다.
+    const current = interpretationFor(eventId);
+    if (current && current.state === "loading") return;
     const agentsHost = document.getElementById("sideAgents");
     const repaintFromCache = () => {
       if (!agentsHost || agentsHost.dataset.loading) return;
@@ -886,9 +889,11 @@ if (typeof document !== "undefined") {
       // 기다리는 사이 다른 실행을 골랐으면 버린다 - 해석도 판정과 마찬가지로
       // 실행에 묶인다.
       if (runState.runId !== runId) return;
-      rememberInterpretation(eventId, out.reply, out.reply_is_generated);
+      // 생성 플래그가 거짓이면(계약상 가능은 하다) genbadge 없는 보통 노트로
+      // 캐시한다 - 산문에 생성 출처 라벨을 붙이지 않으면 꾸밈도 붙이지 않는다.
+      rememberInterpretation(eventId, out.reply, out.reply_is_generated !== false);
     } catch (error) {
-      setInterpretationFailed(eventId, errorText(error));
+      setInterpretationFailed(eventId, `해석하지 못했습니다: ${errorText(error)}`);
     }
     repaintFromCache();
   };

@@ -50,8 +50,14 @@ export function currentAgentEvents(runId) {
 // genbadge 라벨로 따로 표시한다.
 const interpretations = new Map();
 
-export function rememberInterpretation(eventId, reply) {
-  interpretations.set(String(eventId || ""), { reply: String(reply || ""), state: "done" });
+// isGenerated 이 거짓이면(계약상 가능은 하다) 산문이지만 genbadge 라벨 없이
+// 보통 노트로 그린다 - 생성된 것을 측정 근처처럼 꾸미지 않는다.
+export function rememberInterpretation(eventId, reply, isGenerated = true) {
+  interpretations.set(String(eventId || ""), {
+    reply: String(reply || ""),
+    state: "done",
+    isGenerated: isGenerated !== false,
+  });
 }
 
 export function interpretationFor(eventId) {
@@ -176,7 +182,9 @@ export function renderAgentsTab(host, { state = "idle", events = [], runId = "",
     } else if (interp && interp.state === "failed") {
       card.appendChild(el("p", "warn", interp.error));
     } else if (interp && interp.state === "done" && interp.reply) {
-      card.appendChild(el("p", "genbadge", "LLM 해석"));
+      if (interp.isGenerated) {
+        card.appendChild(el("p", "genbadge", "LLM 해석"));
+      }
       card.appendChild(el("p", "note", interp.reply));
     }
     // 온디맨드 버튼 — 실행 경로가 아니라 클릭했을 때만 해석을 물어본다.

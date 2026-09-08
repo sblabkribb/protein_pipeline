@@ -184,6 +184,34 @@ test("pending and failed interpretations render as notes, not evidence", () => {
   assert.ok(html.includes("LLM 연결 없음"), "failure shows the error text as a warn note");
 });
 
+test("reply_is_generated=false caches plain prose without the genbadge label", () => {
+  rememberInterpretation("e1", "플래그가 거짓으로 온 문장입니다.", false);
+  const host = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
+  renderAgentsTab(host, { state: "done", events: EVENTS, runId: "run_x" });
+  const html = JSON.stringify(host.children);
+  assert.ok(html.includes("플래그가 거짓으로 온 문장입니다."), "the text is still painted");
+  assert.ok(!html.includes("genbadge"), "no generated-prose label when the flag is false");
+  // 같은 캐시에 생성 플래그가 참이면 genbadge 가 붙는다.
+  rememberInterpretation("e1", "생성된 문장입니다.", true);
+  const host2 = { children: [], replaceChildren() { this.children = []; }, appendChild(c) { this.children.push(c); } };
+  renderAgentsTab(host2, { state: "done", events: EVENTS, runId: "run_x" });
+  assert.ok(JSON.stringify(host2.children).includes("genbadge"), "flag true keeps the label");
+});
+
+test("the facade guards duplicate explain calls with the loading state", () => {
+  const src = readFileSync(new URL("../guided.js", import.meta.url), "utf8");
+  assert.ok(/interpretationFor\(eventId\)/.test(src),
+            "facade reads the current cache entry first");
+  assert.ok(/state === "loading"\)?\s*return/.test(src),
+            "in-flight interpretations early-return instead of re-fetching");
+});
+
+test("facade failure text is korean-prefixed and passes through the failed setter", () => {
+  const src = readFileSync(new URL("../guided.js", import.meta.url), "utf8");
+  assert.ok(src.includes('setInterpretationFailed(eventId, `해석하지 못했습니다: ${errorText(error)}`)'),
+            "failure paints the Korean prefix with errorText");
+});
+
 test("the explain flow is wired through the facade and the explain tool", () => {
   const src = readFileSync(new URL("../guided.js", import.meta.url), "utf8");
   assert.ok(src.includes("__agentsExplain"), "facade hosts the explain hook");

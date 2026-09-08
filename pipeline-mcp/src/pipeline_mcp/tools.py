@@ -1601,9 +1601,10 @@ AGENT_EXPLAIN_SYSTEM_INSTRUCTION = (
     "do not invent facts, numbers, citations, or mechanisms that are not in the input.\n"
     "2. Distinguish measured evidence from assumptions. If the verdict rests on an "
     "assumption rather than a measurement, say so plainly.\n"
-    "3. Suggest at most one next action, drawn from the event's recovery actions when present.\n"
-    "4. Be concise: at most 4 sentences.\n"
-    "5. Do not invent PubMed IDs, DOIs, or dataset names."
+    "3. 근거가 가정(assumption)이면 검증된 것처럼 말하지 않는다.\n"
+    "4. Suggest at most one next action, drawn from the event's recovery actions when present.\n"
+    "5. Be concise: at most 4 sentences.\n"
+    "6. Do not invent PubMed IDs, DOIs, or dataset names."
 )
 
 # intake.py · plan_council.py 와 같은 접두사 — gemini 클라이언트의 에러 문자열 판별.
