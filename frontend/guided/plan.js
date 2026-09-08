@@ -673,6 +673,9 @@ async function generatePlan() {
       : "이 경로는 여기서 실행할 수 없어 승인할 수 없습니다";
     document.getElementById("approveBtn").disabled = !approvable;
     showStep(3);
+    // 계획은 목표 섹션 아래에 펼쳐진다. 생성이 성공했는데 화면이 그대로면
+    // 사용자는 눈에 보이는 변화가 없다고 읽는다 - 검토 대상으로 데려간다.
+    document.getElementById("planSection").scrollIntoView({ behavior: "smooth", block: "start" });
     document.getElementById("discuss").hidden = false;
     state.chat = [];
     state.chatGen += 1;

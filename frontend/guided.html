@@ -76,7 +76,7 @@
         </section>
 
         <section class="plan-section" id="objectiveSection">
-          <h2>설계 목표</h2>
+          <h2><span class="stepno">1</span>설계 목표</h2>
           <div id="templates" class="cards">불러오는 중…</div>
           <select id="purpose" class="visually-hidden" aria-label="설계 목적"></select>
           <p id="purposeNote" class="note detail"></p>
@@ -89,13 +89,13 @@
               <p class="note">가중치는 상대값이라 정규화됩니다. 제약은 다른 점수로 상쇄되지 않습니다.</p>
               <div id="weights"></div>
               <div class="fields">
-                <label for="rmsdMax">RMSD 상한 <span class="unit">Å</span>
+                <label for="rmsdMax"><span>RMSD 상한 <span class="unit">Å</span></span>
                   <input id="rmsdMax" type="number" step="0.1" value="2.0" /></label>
-                <label for="nDesigns">설계 수
+                <label for="nDesigns"><span>설계 수</span>
                   <input id="nDesigns" type="number" step="8" value="16" /></label>
-                <label for="lengthAa">서열 길이 <span class="unit">aa</span>
+                <label for="lengthAa"><span>서열 길이 <span class="unit">aa</span></span>
                   <input id="lengthAa" type="number" step="10" value="200" /></label>
-                <label for="af2Budget">AF2 예산 <span class="unit">호출</span>
+                <label for="af2Budget"><span>AF2 예산 <span class="unit">호출</span></span>
                   <input id="af2Budget" type="number" step="10" value="500" /></label>
               </div>
             </div>
@@ -122,7 +122,7 @@
         </section>
 
         <section class="plan-section hidden" id="planSection">
-          <h2>계획 <span id="reviewState" class="stepmeta"></span></h2>
+          <h2><span class="stepno">2</span>계획 <span id="reviewState" class="stepmeta"></span></h2>
           <div id="warnings"></div>
           <div id="explainBox" class="explain hidden">
             <div class="explainhead">
@@ -191,7 +191,7 @@
         </nav>
 
         <section class="block panel" data-panelfor="run">
-          <div id="runStatus" class="empty" role="status" aria-live="polite">실행을 고르면 상태가 표시됩니다.</div>
+          <div id="runStatus" class="empty" role="status" aria-live="polite">왼쪽 목록에서 실행을 고르면 상태가 표시됩니다.</div>
           <div id="runProgress" class="progress hidden" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="runProgressLabel">
             <div class="progressbar"><i id="runProgressFill"></i></div>
             <span id="runProgressLabel" class="note"></span>
@@ -202,7 +202,7 @@
             <button id="cancelRunBtn" class="ghost danger">실행 취소</button>
           </div>
           <div id="reportView" class="report hidden"></div>
-          <div id="artifactList" class="empty">실행을 고르면 산출물이 표시됩니다.</div>
+          <div id="artifactList" class="empty">왼쪽 목록에서 실행을 고르면 산출물이 표시됩니다.</div>
           <div id="artifactPreview" class="preview"></div>
         </section>
 
