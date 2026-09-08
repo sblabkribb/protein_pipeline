@@ -1,0 +1,80 @@
+{
+  "purpose": "안정성을 게이트로 올렸을 때의 대가를 실제로 버리기 전에 잰다",
+  "why_not_promote_directly": "게이트는 자기확증적이다. 안정성으로 버리기 시작하면 버려진 설계가 실제로 나빴는지 확인할 데이터가 더 생기지 않는다.",
+  "comparability": "Rosetta 절대 점수는 백본 간 비교 불가. 모든 비교와 게이트를 백본 안에서만 한다.",
+  "n_backbones": 117,
+  "n_designs": 4214,
+  "shadow_gate_quantile": 0.5,
+  "structure_gate": "plddt >= 85.0",
+  "rank_agreement": {
+    "relax_vs_plddt": {
+      "n_backbones": 117,
+      "median_rho": -0.3558,
+      "mean_rho": -0.3455,
+      "frac_negative": 0.906
+    },
+    "relax_vs_rmsd": {
+      "n_backbones": 111,
+      "median_rho": 0.1987,
+      "frac_negative": 0.189
+    }
+  },
+  "cost": {
+    "passed_structure_gate": 4115,
+    "kept_by_stability_gate": 2077,
+    "lost_to_stability_gate": 2038,
+    "loss_fraction": 0.4953,
+    "examples_lost": [
+      {
+        "run": "admin_0605_candid-1_1atj_rmsd4",
+        "id": "rfd3_inputs_spec-1_0_model_0:sample_1",
+        "plddt": 96.73,
+        "relax": -2.9485
+      },
+      {
+        "run": "admin_0605_candid-1_1atj_rmsd4",
+        "id": "rfd3_inputs_spec-1_0_model_0:sample_2",
+        "plddt": 97.04,
+        "relax": -2.8996
+      },
+      {
+        "run": "admin_0605_candid-1_1atj_rmsd4",
+        "id": "rfd3_inputs_spec-1_0_model_1:sample_1",
+        "plddt": 96.09,
+        "relax": -2.9573
+      },
+      {
+        "run": "admin_0605_candid-1_1atj_rmsd4",
+        "id": "rfd3_inputs_spec-1_0_model_1:sample_2",
+        "plddt": 96.41,
+        "relax": -2.932
+      },
+      {
+        "run": "admin_0605_candid-1_1atj_rmsd4",
+        "id": "rfd3_inputs_spec-1_0_model_2:sample_1",
+        "plddt": 96.47,
+        "relax": -2.9813
+      },
+      {
+        "run": "admin_0605_candid-1_1atj_rmsd4",
+        "id": "rfd3_inputs_spec-1_0_model_2:sample_2",
+        "plddt": 96.72,
+        "relax": -2.9969
+      },
+      {
+        "run": "admin_0605_candid-1_1atj_rmsd4",
+        "id": "rfd3_inputs_spec-1_0_model_3:sample_1",
+        "plddt": 96.33,
+        "relax": -2.9428
+      },
+      {
+        "run": "admin_0605_candid-1_1atj_rmsd4",
+        "id": "rfd3_inputs_spec-1_0_model_3:sample_2",
+        "plddt": 96.33,
+        "relax": -2.9314
+      }
+    ]
+  },
+  "code_sha": "a76388614f050a96e30e72e5d02b2452e27f3533",
+  "utc": "2026-09-08T01:04:09Z"
+}

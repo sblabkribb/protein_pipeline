@@ -1,0 +1,55 @@
+{
+  "purpose": "응집 휴리스틱이 측정된 용해도와 같은 방향인지 본다",
+  "claim_limits": [
+    "보정이 아니다. 임계값을 정하지 않고 calibrated 를 바꾸지 않는다.",
+    "SoluProt 은 응집 측정이 아니라 또 하나의 예측기다. 두 예측기가 같은 방향이면 필요조건이지 충분조건이 아니다.",
+    "응집이 측정된 코호트를 얻기 전까지 이 지표는 게이트가 아니다.",
+    "SoluProt 은 서열 특징 기반 예측기이고 소수성 계열 특징을 쓸 가능성이 높다. 그렇다면 Kyte-Doolittle 소수성 창으로 만든 이 휴리스틱과의 상관은 부분적으로 구성상 예견된 것이고, 독립적인 확인이 아니다. SoluProt 의 특징 목록을 확인하지 않았으므로 이 상관을 독립 증거로 읽으면 안 된다."
+  ],
+  "n_designs": 2624,
+  "n_targets": 20,
+  "cluster_unit": "target_id",
+  "repeats": 2000,
+  "seed": 20260908,
+  "expected_sign": {
+    "aggregation_prone_fraction": "음 (응집 성향이 높을수록 용해도 낮음)",
+    "max_hydrophobic_patch": "음",
+    "net_charge": "부호 예측 없음 - 절댓값이 클수록 용해도가 높다는 보고가 있으나 단량체에서는 확인된 바 없다"
+  },
+  "code_sha": "75467991425e44107ad986bee9ad0b2da5565544",
+  "utc": "2026-09-08T00:57:28Z",
+  "metrics": {
+    "aggregation_prone_fraction": {
+      "spearman": -0.4893,
+      "ci95": [
+        -0.629,
+        -0.2477
+      ],
+      "p_negative": 1.0
+    },
+    "max_hydrophobic_patch": {
+      "spearman": -0.3759,
+      "ci95": [
+        -0.5855,
+        -0.0789
+      ],
+      "p_negative": 0.9915
+    },
+    "net_charge": {
+      "spearman": 0.0071,
+      "ci95": [
+        -0.287,
+        0.3402
+      ],
+      "p_negative": 0.493
+    }
+  },
+  "verdict": {
+    "aggregation_prone_fraction": "예상 부호 확인 (rho -0.489, CI 0 제외). 다만 위 한계 적용.",
+    "max_hydrophobic_patch": "예상 부호 확인 (rho -0.376, CI 0 제외). 다만 위 한계 적용.",
+    "net_charge": "관계 없음 (rho +0.007, CI 0 포함). 부호를 예측하지 않았으므로 실패가 아니라 정보 없음.",
+    "calibrated": false,
+    "gate_ready": false,
+    "what_would_change_this": "응집이 실제로 측정된 코호트. 그 전까지는 기록 전용이다."
+  }
+}
