@@ -262,6 +262,11 @@
       "role": "structure_validator",
       "endpoint": "bop:18110",
       "availability": "not_wired",
+      "reachability": {
+        "worker_alive": true,
+        "checked_utc": "2026-09-08",
+        "note": "Worker answers /healthz and reports docker_image_ready. No client here. not_wired means RAPID does not call it, not that it is missing from the host."
+      },
       "access": {
         "direct_client": false,
         "portal_mcp": true
@@ -279,29 +284,38 @@
       "metric_note": "For a complex, never use global ipTM: it is inflated by native intra-chain pairing. Use the chain-pair block and ipSAE as the interface metric."
     },
     "esmfold": {
-      "display_name": "ESMFold",
-      "role": "structure_validator",
-      "endpoint": "bop:18162",
-      "availability": "not_wired",
+      "availability": "wired_unvalidated",
       "access": {
-        "direct_client": false,
-        "portal_mcp": true
+        "direct_client": true,
+        "portal_mcp": false
       },
-      "client": "",
+      "client": "clients/esmfold.py",
+      "endpoint": "bop:18162",
       "measures": [
         "structural_preservation"
       ],
+      "worker_concurrency": 4,
+      "role": "structure_validator",
+      "fidelity_tier": "medium",
       "cost": {
         "provenance": "unmeasured",
-        "unit": "s/fold"
+        "unit": "s/fold",
+        "note": "Worker reports admitted_total 0 - never called. MSA-free so it should be far cheaper than ColabFold, but nothing here has timed it. Measure per length before putting it in a cost ladder."
       },
-      "blocked_note": "Reachable on BOP (facebook/esmfold_v1) but no client exists here."
+      "why_wired": "Every cheap signal tried so far scores sequences, and none separates AF2 structural success within a backbone: SoluProt within-target median AUROC 0.540, aggregation heuristics +0.014 [-0.110, +0.134] incremental, MPNN global_score to structural_pass rho 0.041. ESMFold predicts a structure instead of scoring a sequence, so it is a different information source and it makes the cost ladder three tiers instead of two.",
+      "not_yet": "Client exists; nothing calls it. Not a gate and not a ranker. Validation is the same incremental-information test used for aggregation - does ESMFold pLDDT separate AF2 structural success WITHIN a target - and it is a separate analysis from the running holdout, whose variance-decomposition and policy plans are frozen.",
+      "do_not_mix": "ESMFold pLDDT is its own model's confidence. Do not pool it with AF2 pLDDT or apply the 85 threshold to it."
     },
     "boltz2": {
       "display_name": "Boltz-2",
       "role": "structure_validator",
       "endpoint": "bop:18112",
       "availability": "not_wired",
+      "reachability": {
+        "worker_alive": true,
+        "checked_utc": "2026-09-08",
+        "note": "Worker answers /healthz, admitted_total 0. No client here. not_wired means RAPID does not call it, not that it is missing from the host."
+      },
       "access": {
         "direct_client": false,
         "portal_mcp": true
@@ -365,6 +379,11 @@
       "role": "sequence_designer",
       "endpoint": "bop:18111",
       "availability": "not_wired",
+      "reachability": {
+        "worker_alive": true,
+        "checked_utc": "2026-09-08",
+        "note": "Worker answers /healthz, concurrency 4. No client here. not_wired means RAPID does not call it, not that it is missing from the host."
+      },
       "access": {
         "direct_client": false,
         "portal_mcp": true
@@ -382,6 +401,11 @@
       "role": "antibody_numbering",
       "endpoint": "bop:18109",
       "availability": "not_wired",
+      "reachability": {
+        "worker_alive": true,
+        "checked_utc": "2026-09-08",
+        "note": "Worker answers /healthz in CPU mode, loaded true. No client here. not_wired means RAPID does not call it, not that it is missing from the host."
+      },
       "access": {
         "direct_client": false,
         "portal_mcp": true
@@ -522,7 +546,36 @@
         "thermomp_ddg"
       ],
       "detail": "두 평가자가 배선되어 있다. Rosetta relax 는 bop:18102 에서 돌고 설계마다 total_score (REU) 를 기록하며, WT relax 가 같은 실행에서 먼저 끝났으면 같은 백본 안의 delta_reu_vs_wt 를 함께 기록한다. ThermoMPNN 은 bop:18114 에서 단일-변이 ΔΔG (kcal/mol) 를 내고 다중 변이는 가법 합으로 기록한다. 다만 둘 다 RAPID 가 어떤 안정성 라벨에도 맞춰본 적이 없어 검증되지 않았고, 절대 REU 는 잔기 수에 비례해서 단백질 사이 비교가 되지 않는다.",
-      "to_enable": "같은 백본에서 나온 설계들의 REU 차이와 ThermoMPNN ΔΔG 가 알려진 안정성 순위와 맞는지 코호트에서 확인한다. 확인 전까지 이 값들은 기록 전용이고 게이트로 쓰지 않는다."
+      "to_enable": "같은 백본에서 나온 설계들의 REU 차이와 ThermoMPNN ΔΔG 가 알려진 안정성 순위와 맞는지 코호트에서 확인한다. 확인 전까지 이 값들은 기록 전용이고 게이트로 쓰지 않는다.",
+      "candidates": [
+        {
+          "id": "thermomp_ddg",
+          "role": "stability_annotation_candidate",
+          "wired": true,
+          "validated_for_rapid": false,
+          "limit": "FireProtDB/MegaScale 단일 점변이로 학습. 다중 변이는 에피스테이시스를 무시한 가법 합이고, RAPID 의 ProteinMPNN 재설계는 10~20 개가 동시에 바뀐다."
+        },
+        {
+          "id": "spurs",
+          "role": "stability_annotation_candidate",
+          "wired": false,
+          "validated_for_rapid": false,
+          "hard_gate": false,
+          "gate1b_ranker": false,
+          "what_it_is": "ESM 서열 표현과 ProteinMPNN 구조 표현을 결합해 변이 ddG 를 예측한다. 기본 모델은 MegaScale 단일 변이(약 27 만 측정, 약 300 단백질)로 학습하고, 다중 변이 확장은 단일 효과의 합에 epistasis decoder 를 얹어 약 12 만 개 이중 변이로 학습한다.",
+          "why_candidate_not_fix": "ThermoMPNN 에 없는 epistasis 모듈이 있고 발표된 벤치마크에서 단일/이중 변이 ddG 가 더 좋다. 다만 학습이 단일·이중 변이라 10~20 치환 de novo 설계는 여전히 외삽이다. ThermoMPNN 의 핵심 한계가 줄어든 것이지 없어진 것이 아니다."
+        },
+        {
+          "id": "rosetta_relax",
+          "role": "physics_based_energy_annotation",
+          "wired": true,
+          "validated_for_rapid": false,
+          "measured_here": "백본 안에서 score_per_residue 가 pLDDT 를 따라간다 (중앙값 rho -0.356, 117 백본 중 90.6% 같은 방향). 신호는 실재하지만 백본 내 중앙값 컷은 pLDDT 상위 10% 설계의 32.6% 를 버린다 (무작위 게이트 50%). 게이트가 아니라 shortlist tie-break 다."
+        }
+      ],
+      "comparison_before_adoption": "SPURS·ThermoMPNN·Rosetta relax 를 같은 RAPID 후보에서 계산해 상관과 불일치를 먼저 본다. 그 전에 SPURS 를 설치하면 다른 둘이 하지 않는 말을 하는지 모르는 채로 세 번째 미보정 안정성 신호를 더하는 것이 된다.",
+      "hard_gate": false,
+      "gate1b_ranker": false
     },
     "aggregation": {
       "status": "evaluator_unvalidated",
@@ -541,6 +594,25 @@
       "evidence": [
         "public_data/benchmark/gate0/aggregation_validation.json",
         "public_data/benchmark/gate0/incremental_information_test.json"
+      ],
+      "candidates": [
+        {
+          "id": "sequence_liabilities",
+          "role": "developability_annotation",
+          "wired": true,
+          "calibrated": false,
+          "note": "현재 배선된 휴리스틱. Gate 1B 증분 정보 없음 (위 measured 참조)."
+        },
+        {
+          "id": "aggreprot",
+          "role": "developability_annotation",
+          "wired": false,
+          "calibrated": false,
+          "hard_gate": false,
+          "gate1b_ranker": false,
+          "scope": "구조 평가를 이미 통과한 후보들 사이의 soft priority. Gate 1B NO-GO 와 충돌하지 않는다 - 그 결정은 어느 서열을 AF2 로 보낼지에 대한 것이었다.",
+          "comparison_before_adoption": "같은 후보에서 배선된 휴리스틱과의 상관·증분을 먼저 본다. 거의 일치하면 같은 축에 워커를 둘 유지할 이유가 적다."
+        }
       ]
     },
     "developability": {
@@ -893,5 +965,20 @@
       "cost_driver": "diffdock",
       "caveat": "Docking scores are not affinities and RAPID has never calibrated them against any measurement. Use this route to generate poses, not to rank candidates."
     }
+  },
+  "fidelity_ladder": {
+    "note": "RAPID 의 문제가 '어느 서열에 AF2 를 쓸 것인가' 에서 '어느 후보를 어느 fidelity 평가자에 보낼 것인가' 로 넓어지는 축. medium 단이 비어 있었다.",
+    "cheap": [
+      "soluprot",
+      "mpnn_encoder",
+      "sequence_liabilities"
+    ],
+    "medium": [
+      "esmfold"
+    ],
+    "expensive": [
+      "colabfold"
+    ],
+    "medium_status": "wired_unvalidated · 비용 미측정 · 호출하는 곳 없음"
   }
 }

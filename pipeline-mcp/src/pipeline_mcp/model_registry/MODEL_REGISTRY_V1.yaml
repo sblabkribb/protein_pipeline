@@ -1,88 +1,33 @@
-# RAPID model registry, version V1.
-#
-# This file is the SOURCE OF TRUTH for which model answers which design purpose.
-# Routing code reads it; it does not hard-code model names. Lookup is
-# deterministic: a purpose maps to a fixed, ordered stage list. There is no
-# scoring and no adaptive selection here -- that belongs to the allocation
-# policy, which runs INSIDE a route after this file has decided what the route is.
-#
-# WHY THIS FILE EXISTS
-#
-# RAPID's guided screen used to hard-code five stages and print a cost chip next
-# to each one. Two of those chips were wrong in a way nobody could catch by
-# reading the screen: "91 s / fold" came from a 62-residue probe, while the
-# backbones actually being folded were 59-274 residues and cost ~3x that. A
-# number with no scope attached is not a measurement, it is a rumour. So every
-# cost in this file carries provenance, scope and a source path, and a cost that
-# was never measured carries NO number at all.
-#
-# TWO AXES, KEPT APART
-#
-#   availability  - can this repository actually call the model right now?
-#   validated     - has this repository measured the route it sits in?
-#
-# They are different facts and the paper needs both. A binder route that runs
-# end to end but has never been benchmarked is `executable: true,
-# validated: false`. Collapsing the two would let "we can run it" be read as
-# "we showed it works".
-#
-# NOT a superiority claim. Nothing here ranks one model above another. A purpose
-# names the model the corresponding pipeline path was actually built around; if
-# that model is unavailable the route reports itself blocked and names the
-# missing model. It is never quietly served by a different one.
-
 schema: rapid.model_registry/1
 policy_version: MODEL_REGISTRY_V1
 version: V1
-created_utc: "2026-09-05"
+created_utc: '2026-09-05'
 freeze:
   state: draft
-  change_requires: >-
-    A cost or performance number may only be edited together with the artifact
-    path that produced it. Adding a model requires its availability to be
-    justified by a client that exists in THIS repository, not by the worker
-    being reachable.
-
-# availability values.
-#   production        - a client exists here, the stage is wired into pipeline.py,
-#                       and this repository has run it at scale.
-#   wired_unvalidated - a client exists here and the stage can run, but this
-#                       repository has not benchmarked it. Runnable, not proven.
-#   not_wired         - the worker is reachable on BOP but no client exists here.
-#                       Reported as blocked, never substituted.
-#   not_deployed      - no worker anywhere we can reach.
-availability_values: [production, wired_unvalidated, not_wired, not_deployed]
-
-# 모델에 닿는 경로. availability 와는 다른 축이다.
-#
-#   direct_client - 이 저장소에 클라이언트가 있다.
-#   portal_mcp    - bio model portal 의 MCP 가 그 모델을 노출한다. 클라이언트를
-#                   따로 쓰지 않고 run_model / run_chain 으로 부를 수 있다.
-#
-# 포털이 모델을 노출한다는 사실과 RAPID 가 그것을 호출할 수 있다는 것은 다르다.
-# 후자는 아직 만들지 않았으므로 not_built 로 적는다 - 있는 척하면 계획이
-# 실행되지 않는데도 승인 버튼이 열린다.
+  change_requires: A cost or performance number may only be edited together with the artifact path that
+    produced it. Adding a model requires its availability to be justified by a client that exists in THIS
+    repository, not by the worker being reachable.
+availability_values:
+- production
+- wired_unvalidated
+- not_wired
+- not_deployed
 registry_access:
   portal_mcp_integration: client_built
   portal_mcp_client: clients/portal_mcp.py
-  portal_mcp_configuration: >-
-    RAPID_PORTAL_MCP_URL 과 RAPID_PORTAL_MCP_TOKEN 을 .env 로 준다. 기본 URL 을
-    두지 않는 이유는, 잘못된 기본값이 있으면 "설정하지 않았다" 가 "연결에
-    실패했다" 로 둔갑하기 때문이다.
-  portal_mcp_note: >-
-    포털 MCP 는 list_models / run_model / run_chain / job_status / job_result 를
-    제공하고 antifold, anarcii, alphafold3 를 포함한다. 그 경로를 붙이면 세 모델에
-    대한 전송 문제는 사라진다. 사라지지 않는 것은 설계 정책이다 - 포털은 AntiFold 의
-    region 토큰을 검증할 뿐 어느 영역을 열지 결정하지 않으며, regions 를 비우면
-    IMGT 영역 전체가 샘플링되어 아무도 승인하지 않은 framework 위치가 바뀐다.
-
+  portal_mcp_configuration: RAPID_PORTAL_MCP_URL 과 RAPID_PORTAL_MCP_TOKEN 을 .env 로 준다. 기본 URL 을 두지 않는
+    이유는, 잘못된 기본값이 있으면 "설정하지 않았다" 가 "연결에 실패했다" 로 둔갑하기 때문이다.
+  portal_mcp_note: 포털 MCP 는 list_models / run_model / run_chain / job_status / job_result 를 제공하고 antifold,
+    anarcii, alphafold3 를 포함한다. 그 경로를 붙이면 세 모델에 대한 전송 문제는 사라진다. 사라지지 않는 것은 설계 정책이다 - 포털은 AntiFold 의 region
+    토큰을 검증할 뿐 어느 영역을 열지 결정하지 않으며, regions 를 비우면 IMGT 영역 전체가 샘플링되어 아무도 승인하지 않은 framework 위치가 바뀐다.
 models:
-
   mmseqs2:
     display_name: MMseqs2
     role: msa
     endpoint: bop:18106
-    replicas: [bop:18106, bop:18107]
+    replicas:
+    - bop:18106
+    - bop:18107
     availability: production
     access:
       direct_client: true
@@ -92,11 +37,8 @@ models:
     cost:
       provenance: unmeasured
       unit: s/target
-      note: >-
-        Not timed in this repository. The GPU replica (18107) and the CPU replica
-        (18106) have different profiles and were never separated in a measurement,
-        so no single number would be honest.
-
+      note: Not timed in this repository. The GPU replica (18107) and the CPU replica (18106) have different
+        profiles and were never separated in a measurement, so no single number would be honest.
   rfd3:
     display_name: RFdiffusion / RFD3
     role: backbone_generator
@@ -106,21 +48,18 @@ models:
       direct_client: true
       portal_mcp: true
     client: clients/local_http.py, clients/rfd3_runpod.py
-    measures: [diversity]
+    measures:
+    - diversity
     worker_concurrency: 2
     cost:
       provenance: unmeasured
       unit: s/backbone
-      note: >-
-        Not isolated. The Gate 0 wave-2 artifact records a WHOLE-RUN wall clock
-        (median 4720 s over 14 successful runs, range 872-12514 s) that also covers
-        MSA, ProteinMPNN, SoluProt and a serially-executed AF2 stage, so it cannot
-        be attributed to RFD3. The route-level number is recorded on the purpose,
+      note: Not isolated. The Gate 0 wave-2 artifact records a WHOLE-RUN wall clock (median 4720 s over
+        14 successful runs, range 872-12514 s) that also covers MSA, ProteinMPNN, SoluProt and a serially-executed
+        AF2 stage, so it cannot be attributed to RFD3. The route-level number is recorded on the purpose,
         not here.
-    notes: >-
-      Gate 0 measured RFD3 backbones at target level; see the gate0 ladder for the
-      yield it produced relative to native and BioEmu backbones.
-
+    notes: Gate 0 measured RFD3 backbones at target level; see the gate0 ladder for the yield it produced
+      relative to native and BioEmu backbones.
   bioemu:
     display_name: BioEmu
     role: conformational_ensemble
@@ -130,20 +69,17 @@ models:
       direct_client: true
       portal_mcp: true
     client: clients/local_http.py, clients/bioemu_runpod.py
-    measures: [diversity]
+    measures:
+    - diversity
     worker_concurrency: 2
     cost:
       provenance: unmeasured
       unit: s/backbone
-      note: >-
-        Not isolated, same reason as RFD3. Wave-3 whole-run wall clock was a median
-        8952 s over 4 successful runs, with 4 of 8 runs failing the 2.0 A
-        acceptance cutoff.
-    known_limitation: >-
-      bioemu_target_rmsd_cutoff = 2.0 A rejected 4 of 8 Gate 0 BioEmu runs, one of
-      which accepted 0 of 25 samples. The cutoff needs relaxing before BioEmu is
-      used as a Gate 0 backbone source at scale.
-
+      note: Not isolated, same reason as RFD3. Wave-3 whole-run wall clock was a median 8952 s over 4
+        successful runs, with 4 of 8 runs failing the 2.0 A acceptance cutoff.
+    known_limitation: bioemu_target_rmsd_cutoff = 2.0 A rejected 4 of 8 Gate 0 BioEmu runs, one of which
+      accepted 0 of 25 samples. The cutoff needs relaxing before BioEmu is used as a Gate 0 backbone source
+      at scale.
   proteinmpnn:
     display_name: ProteinMPNN
     role: sequence_designer
@@ -159,21 +95,17 @@ models:
       model_name: v_48_020
       use_soluble_model: true
       sampling_temp: 0.1
-      pinned_at: >-
-        rapid_sr/protocol.py GATE0_MPNN_SETTINGS; the Gate 0 protocol fixes these
-        so backbones are compared under identical generation conditions.
+      pinned_at: rapid_sr/protocol.py GATE0_MPNN_SETTINGS; the Gate 0 protocol fixes these so backbones
+        are compared under identical generation conditions.
     cost:
       provenance: measured
       value: 0.5602
       unit: s/design
-      scope: >-
-        Marginal cost per designed sequence on a 311-residue backbone
-        (16vpA00), soluble v_48_020, T=0.1, batch_size 1, GPU 1. Fitted on
-        medians of 3 repeats at n = 1, 4, 16 (2.88 s, 4.52 s, 11.27 s), giving
-        2.298 s of fixed per-CALL cost plus this per-sequence slope. The two are
-        reported separately because dividing a single call by its sequence count
-        folds the fixed cost into the marginal one. Length dependence was NOT
-        measured: one backbone only.
+      scope: 'Marginal cost per designed sequence on a 311-residue backbone (16vpA00), soluble v_48_020,
+        T=0.1, batch_size 1, GPU 1. Fitted on medians of 3 repeats at n = 1, 4, 16 (2.88 s, 4.52 s, 11.27
+        s), giving 2.298 s of fixed per-CALL cost plus this per-sequence slope. The two are reported separately
+        because dividing a single call by its sequence count folds the fixed cost into the marginal one.
+        Length dependence was NOT measured: one backbone only.'
       source: public_data/benchmark/gate0/model_cost_probe.json
       model:
         kind: affine
@@ -184,60 +116,49 @@ models:
       provenance: measured
       value: 9.0
       unit: s/call
-      scope: >-
-        LocalHttpRunClient computes its status-poll interval as
-        min(15, max(2, timeout_s/200)), which is 9.0 s at the 1800 s timeout the
-        pipeline uses. A call that finishes in 2.9 s is therefore observed as
-        9.0 s, and a 11.3 s call as 18.0 s. This is the client's cost, not the
-        model's; the measurement above polls at 0.2 s to separate them.
+      scope: LocalHttpRunClient computes its status-poll interval as min(15, max(2, timeout_s/200)), which
+        is 9.0 s at the 1800 s timeout the pipeline uses. A call that finishes in 2.9 s is therefore observed
+        as 9.0 s, and a 11.3 s call as 18.0 s. This is the client's cost, not the model's; the measurement
+        above polls at 0.2 s to separate them.
       source: public_data/benchmark/gate0/model_cost_probe.json
-      implication: >-
-        On the Gate 0 protocol (16 sequences per backbone, one call per backbone)
-        the floor adds ~6.7 s per backbone, ~40% on top of the worker's 11.3 s.
-        Reducing the poll interval is a cheaper throughput win than any model
-        change, and it was invisible until worker time and client time were
-        measured apart.
-    notes: >-
-      The ProteinMPNN ENCODER is sequence-independent - h_V starts at zeros and is
-      updated only by geometric edges - so its representation is computable once
-      per backbone and reused across all sequences from that backbone. That is what
-      makes it usable as a Gate 0 feature at target-routing cost.
-
+      implication: On the Gate 0 protocol (16 sequences per backbone, one call per backbone) the floor
+        adds ~6.7 s per backbone, ~40% on top of the worker's 11.3 s. Reducing the poll interval is a
+        cheaper throughput win than any model change, and it was invisible until worker time and client
+        time were measured apart.
+    notes: The ProteinMPNN ENCODER is sequence-independent - h_V starts at zeros and is updated only by
+      geometric edges - so its representation is computable once per backbone and reused across all sequences
+      from that backbone. That is what makes it usable as a Gate 0 feature at target-routing cost.
   mpnn_encoder:
     display_name: ProteinMPNN encoder representation (Gate 0 feature)
     role: representation
-    endpoint: ""
+    endpoint: ''
     availability: production
     access:
       direct_client: true
       portal_mcp: false
     client: scripts/transcoder/rapid_sr/
-    measures: [structural_preservation]
+    measures:
+    - structural_preservation
     cost:
       provenance: measured
       value: 0.0
       unit: s/design
-      scope: >-
-        Amortised to zero per design: one encoder pass per BACKBONE is reused by
-        every sequence designed from it, and the pass is already paid by the
-        ProteinMPNN call that generates those sequences.
+      scope: 'Amortised to zero per design: one encoder pass per BACKBONE is reused by every sequence
+        designed from it, and the pass is already paid by the ProteinMPNN call that generates those sequences.'
       source: scripts/transcoder/rapid_sr/protocol.py
     performance:
       metric: target_level_auc
       value: 0.7247
-      ci95: [0.7088, 0.7397]
+      ci95:
+      - 0.7088
+      - 0.7397
       n_targets: 62
       n_backbones: 157
-      comparator: >-
-        +0.0725 AUC (95% CI 0.0499-0.0957, paired over the same splits) above the
-        10-dimensional structural-descriptor baseline; +0.3202 (0.2866-0.3523)
-        above the per-source mean.
+      comparator: +0.0725 AUC (95% CI 0.0499-0.0957, paired over the same splits) above the 10-dimensional
+        structural-descriptor baseline; +0.3202 (0.2866-0.3523) above the per-source mean.
       source: public_data/benchmark/gate0/gate0_target_level.json
-      caveat: >-
-        This is TARGET-level routing. Within-target ranking of individual designs
-        from the same backbone was measured and did not work; do not read this AUC
-        as a per-design score.
-
+      caveat: This is TARGET-level routing. Within-target ranking of individual designs from the same
+        backbone was measured and did not work; do not read this AUC as a per-design score.
   esm2_embedding:
     display_name: ESM2-8M embedding
     role: representation
@@ -255,25 +176,20 @@ models:
       provenance: measured
       value: 0.0007
       unit: s/sequence
-      scope: >-
-        77-residue sequence, batches of 1/4/16, 3 repeats each; whole-batch wall
-        clock was 0.01-0.03 s, so the per-sequence slope is at the edge of what
-        this probe can resolve. Read it as "below 1 ms/sequence at this length",
-        not as a precise value. Longer sequences were not measured.
+      scope: 77-residue sequence, batches of 1/4/16, 3 repeats each; whole-batch wall clock was 0.01-0.03
+        s, so the per-sequence slope is at the edge of what this probe can resolve. Read it as "below
+        1 ms/sequence at this length", not as a precise value. Longer sequences were not measured.
       source: public_data/benchmark/gate0/model_cost_probe.json
       model:
         kind: affine
         variable: n_designs
         intercept: 0.008
         slope: 0.0007
-    negative_result: >-
-      Five arms of sequence-only surrogates over ESM2 representations (raw
-      embedding, pooled sparse dictionary, pretrained CLT and PLT latents, and a
-      trained head) all produced paired differences whose CIs include zero on the
-      task of ranking ProteinMPNN designs from a FIXED backbone by AF2 pLDDT. The
-      sequence axis is closed for that task. This does not say ESM representations
-      carry no structural information in general.
-
+    negative_result: Five arms of sequence-only surrogates over ESM2 representations (raw embedding, pooled
+      sparse dictionary, pretrained CLT and PLT latents, and a trained head) all produced paired differences
+      whose CIs include zero on the task of ranking ProteinMPNN designs from a FIXED backbone by AF2 pLDDT.
+      The sequence axis is closed for that task. This does not say ESM representations carry no structural
+      information in general.
   soluprot:
     display_name: SoluProt
     role: cheap_filter
@@ -283,7 +199,8 @@ models:
       direct_client: true
       portal_mcp: false
     client: clients/soluprot.py
-    measures: [solubility]
+    measures:
+    - solubility
     threshold:
       pass_at: 0.5
       pinned_at: rapid_sr/protocol.py GATE0_THRESHOLDS.soluprot_min
@@ -291,18 +208,22 @@ models:
       provenance: unmeasured
       unit: s/sequence
       note: Runs in-process and is cheap relative to folding, but was never timed.
-
   colabfold:
     display_name: ColabFold / AlphaFold2
     role: structure_validator
     endpoint: bop:18160
-    replicas: [bop:18161, bop:18163, bop:18164, bop:18165]
+    replicas:
+    - bop:18161
+    - bop:18163
+    - bop:18164
+    - bop:18165
     availability: production
     access:
       direct_client: true
       portal_mcp: true
     client: clients/alphafold2.py, clients/alphafold2_runpod.py
-    measures: [structural_preservation]
+    measures:
+    - structural_preservation
     worker_concurrency: 4
     thresholds:
       plddt_min: 85.0
@@ -312,12 +233,10 @@ models:
       provenance: measured
       value: 181.9
       unit: s/fold
-      scope: >-
-        Reference length 254 aa, one worker. Fitted on 4 folds spanning 60-351 aa
-        (60 aa -> 62.7 s, 154 aa -> 142.8 s, 252 aa -> 121.3 s, 351 aa -> 299.2 s).
-        With the 4-worker pool the observed EFFECTIVE rate over the 480-fold
-        temperature sweep was ~46.6 s/fold. Do not quote the 62.7 s figure as a
-        general per-fold cost: it is the 60-residue end of this fit.
+      scope: 'Reference length 254 aa, one worker. Fitted on 4 folds spanning 60-351 aa (60 aa -> 62.7
+        s, 154 aa -> 142.8 s, 252 aa -> 121.3 s, 351 aa -> 299.2 s). With the 4-worker pool the observed
+        EFFECTIVE rate over the 480-fold temperature sweep was ~46.6 s/fold. Do not quote the 62.7 s figure
+        as a general per-fold cost: it is the 60-residue end of this fit.'
       source: public_data/benchmark/gate0/af2_length_scaling.json
       model:
         kind: power_law
@@ -327,70 +246,86 @@ models:
         n_points: 4
     rejected_option:
       name: single-sequence mode (no MSA)
-      result: >-
-        1.41x faster but mean pLDDT fell 87.02 -> 65.75, which would zero out every
-        yield at the >=85 threshold. Measured and rejected, not assumed.
+      result: 1.41x faster but mean pLDDT fell 87.02 -> 65.75, which would zero out every yield at the
+        >=85 threshold. Measured and rejected, not assumed.
       source: public_data/benchmark/gate0/af2_msa_mode_probe.json
-    caveat: >-
-      AF2 pLDDT is a model confidence, not ground truth. It is used here as a
-      consistent, expensive verification signal, never described as a measurement
-      of the designed protein.
-
+    caveat: AF2 pLDDT is a model confidence, not ground truth. It is used here as a consistent, expensive
+      verification signal, never described as a measurement of the designed protein.
   alphafold3:
     display_name: AlphaFold3
     role: structure_validator
     endpoint: bop:18110
     availability: not_wired
+    reachability:
+      worker_alive: true
+      checked_utc: '2026-09-08'
+      note: Worker answers /healthz and reports docker_image_ready. No client here. not_wired means RAPID
+        does not call it, not that it is missing from the host.
     access:
       direct_client: false
       portal_mcp: true
-    client: ""
-    measures: [structural_preservation, binding]
+    client: ''
+    measures:
+    - structural_preservation
+    - binding
     cost:
       provenance: unmeasured
       unit: s/fold
-    blocked_note: >-
-      The worker is reachable and reports its weights and databases ready, but this
-      repository has no AF3 client. A route that needs AF3 is reported as blocked
-      here rather than silently downgraded to ColabFold, which cannot fold a
-      complex the same way.
-    metric_note: >-
-      For a complex, never use global ipTM: it is inflated by native intra-chain
-      pairing. Use the chain-pair block and ipSAE as the interface metric.
-
+    blocked_note: The worker is reachable and reports its weights and databases ready, but this repository
+      has no AF3 client. A route that needs AF3 is reported as blocked here rather than silently downgraded
+      to ColabFold, which cannot fold a complex the same way.
+    metric_note: 'For a complex, never use global ipTM: it is inflated by native intra-chain pairing.
+      Use the chain-pair block and ipSAE as the interface metric.'
   esmfold:
-    display_name: ESMFold
-    role: structure_validator
-    endpoint: bop:18162
-    availability: not_wired
+    availability: wired_unvalidated
     access:
-      direct_client: false
-      portal_mcp: true
-    client: ""
-    measures: [structural_preservation]
+      direct_client: true
+      portal_mcp: false
+    client: clients/esmfold.py
+    endpoint: bop:18162
+    measures:
+    - structural_preservation
+    worker_concurrency: 4
+    role: structure_validator
+    fidelity_tier: medium
     cost:
       provenance: unmeasured
       unit: s/fold
-    blocked_note: >-
-      Reachable on BOP (facebook/esmfold_v1) but no client exists here.
-
+      note: Worker reports admitted_total 0 - never called. MSA-free so it should be far cheaper than
+        ColabFold, but nothing here has timed it. Measure per length before putting it in a cost ladder.
+    why_wired: 'Every cheap signal tried so far scores sequences, and none separates AF2 structural success
+      within a backbone: SoluProt within-target median AUROC 0.540, aggregation heuristics +0.014 [-0.110,
+      +0.134] incremental, MPNN global_score to structural_pass rho 0.041. ESMFold predicts a structure
+      instead of scoring a sequence, so it is a different information source and it makes the cost ladder
+      three tiers instead of two.'
+    not_yet: Client exists; nothing calls it. Not a gate and not a ranker. Validation is the same incremental-information
+      test used for aggregation - does ESMFold pLDDT separate AF2 structural success WITHIN a target -
+      and it is a separate analysis from the running holdout, whose variance-decomposition and policy
+      plans are frozen.
+    do_not_mix: ESMFold pLDDT is its own model's confidence. Do not pool it with AF2 pLDDT or apply the
+      85 threshold to it.
   boltz2:
     display_name: Boltz-2
     role: structure_validator
     endpoint: bop:18112
     availability: not_wired
+    reachability:
+      worker_alive: true
+      checked_utc: '2026-09-08'
+      note: Worker answers /healthz, admitted_total 0. No client here. not_wired means RAPID does not
+        call it, not that it is missing from the host.
     access:
       direct_client: false
       portal_mcp: true
-    client: ""
-    measures: [structural_preservation, binding]
+    client: ''
+    measures:
+    - structural_preservation
+    - binding
     cost:
       provenance: unmeasured
       unit: s/fold
-    blocked_note: >-
-      Reachable on BOP; folds ':'-joined complexes and returns pair_chains_iptm, so
-      it could give an interface confidence without an AF3 call. No client here.
-
+    blocked_note: Reachable on BOP; folds ':'-joined complexes and returns pair_chains_iptm, so it could
+      give an interface confidence without an AF3 call. No client here.
   ppiformer_ddg:
     display_name: PPIformer ddG
     role: interface_scorer
@@ -400,23 +335,18 @@ models:
       direct_client: true
       portal_mcp: false
     client: clients/affinity.py
-    measures: [binding]
+    measures:
+    - binding
     worker_concurrency: 1
     cost:
       provenance: unmeasured
       unit: s/candidate
-      note: >-
-        The worker serialises predictions behind a process-wide lock, so throughput
-        comes from running several worker processes, not from client threads. Not
-        timed here.
-    validation_status: >-
-      Never benchmarked inside RAPID. It is a pre-fold interface scorer: it runs on
-      every candidate before the expensive validator, and it predicts no structure.
-    provenance_requirement: >-
-      The client fails closed unless the worker returns model, version and
-      checkpoint_hashes, so the running checkpoint is recorded per run rather than
-      asserted in this file.
-
+      note: The worker serialises predictions behind a process-wide lock, so throughput comes from running
+        several worker processes, not from client threads. Not timed here.
+    validation_status: 'Never benchmarked inside RAPID. It is a pre-fold interface scorer: it runs on
+      every candidate before the expensive validator, and it predicts no structure.'
+    provenance_requirement: The client fails closed unless the worker returns model, version and checkpoint_hashes,
+      so the running checkpoint is recorded per run rather than asserted in this file.
   binder_score:
     display_name: ipSAE binder score
     role: interface_scorer
@@ -426,48 +356,54 @@ models:
       direct_client: true
       portal_mcp: false
     client: clients/binder_score.py
-    measures: [binding]
+    measures:
+    - binding
     worker_concurrency: 8
     default_metric: ipsae
     cost:
       provenance: unmeasured
       unit: s/complex
-    validation_status: >-
-      Post-fold: it scores a complex that a validator already produced, so it does
-      not compete with the pre-fold stages. Never benchmarked inside RAPID.
-
+    validation_status: 'Post-fold: it scores a complex that a validator already produced, so it does not
+      compete with the pre-fold stages. Never benchmarked inside RAPID.'
   antifold:
     display_name: AntiFold
     role: sequence_designer
     endpoint: bop:18111
     availability: not_wired
+    reachability:
+      worker_alive: true
+      checked_utc: '2026-09-08'
+      note: Worker answers /healthz, concurrency 4. No client here. not_wired means RAPID does not call
+        it, not that it is missing from the host.
     access:
       direct_client: false
       portal_mcp: true
-    client: ""
+    client: ''
     measures: []
     cost:
       provenance: unmeasured
       unit: s/design
-    blocked_note: >-
-      Antibody-specific inverse folder, reachable on BOP. Not wired here. The
-      antibody design arms, their masks and their mutation caps live in the antigen
-      pipeline's ROUTER_POLICY_V1.1; this registry does not restate that policy.
-
+    blocked_note: Antibody-specific inverse folder, reachable on BOP. Not wired here. The antibody design
+      arms, their masks and their mutation caps live in the antigen pipeline's ROUTER_POLICY_V1.1; this
+      registry does not restate that policy.
   anarcii:
     display_name: ANARCII
     role: antibody_numbering
     endpoint: bop:18109
     availability: not_wired
+    reachability:
+      worker_alive: true
+      checked_utc: '2026-09-08'
+      note: Worker answers /healthz in CPU mode, loaded true. No client here. not_wired means RAPID does
+        not call it, not that it is missing from the host.
     access:
       direct_client: false
       portal_mcp: true
-    client: ""
+    client: ''
     measures: []
     cost:
       provenance: unmeasured
       unit: s/sequence
-
   diffdock:
     display_name: DiffDock
     role: ligand_docking
@@ -477,45 +413,38 @@ models:
       direct_client: true
       portal_mcp: true
     client: clients/diffdock_runpod.py
-    measures: [binding]
+    measures:
+    - binding
     cost:
       provenance: unmeasured
       unit: s/pose
-    validation_status: >-
-      A RunPod client exists; the BOP worker at 18105 is reachable. Neither has
-      been exercised from a RAPID route.
-
+    validation_status: A RunPod client exists; the BOP worker at 18105 is reachable. Neither has been
+      exercised from a RAPID route.
   sequence_liabilities:
     display_name: Sequence liabilities (aggregation / developability)
     role: cheap_filter
-    endpoint: ""
+    endpoint: ''
     availability: wired_unvalidated
     access:
       direct_client: true
       portal_mcp: false
     client: pipeline_mcp/sequence_liabilities.py
-    measures: [aggregation, developability]
+    measures:
+    - aggregation
+    - developability
     cost:
       provenance: measured
       value: 0.0
       unit: s/sequence
-      scope: >-
-        서열만 읽는 창 통계라 폴딩이나 워커 호출이 없다. 측정 가능한 시간이
-        나오지 않을 만큼 싸다.
+      scope: 서열만 읽는 창 통계라 폴딩이나 워커 호출이 없다. 측정 가능한 시간이 나오지 않을 만큼 싸다.
       source: pipeline-mcp/src/pipeline_mcp/sequence_liabilities.py
-    metric_caveat: >-
-      휴리스틱이다. Kyte-Doolittle 소수성과 전하로 만든 5 잔기 창 통계이고, 어떤
-      응집 측정에도 맞춰본 적이 없다. 창 통계의 임계값(창 5, 소수성 2.0, 전하
-      1.0)은 항체 문맥에서 정해졌다.
-    gate_note: >-
-      파이프라인이 soluprot 통과 직후 설계마다 값을 기록하고, 운영 판단으로
-      임시 게이트를 돌린다. 게이트 상한(max_hydrophobic_patch 2.5,
-      aggregation_prone_fraction 0.10, free_cysteine 0, NG+DG 모티프 2)은 측정
-      코호트 없이 정한 초기값이고 PIPELINE_AGGREGATION_GATE_* /
-      PIPELINE_DEVELOPABILITY_GATE_* 환경변수와 PIPELINE_LIABILITY_GATE=0 로
-      조정/해제할 수 있다. calibrated 는 false 다.
+    metric_caveat: 휴리스틱이다. Kyte-Doolittle 소수성과 전하로 만든 5 잔기 창 통계이고, 어떤 응집 측정에도 맞춰본 적이 없다. 창 통계의 임계값(창 5,
+      소수성 2.0, 전하 1.0)은 항체 문맥에서 정해졌다.
+    gate_note: 파이프라인이 soluprot 통과 직후 설계마다 값을 기록하고, 운영 판단으로 임시 게이트를 돌린다. 게이트 상한(max_hydrophobic_patch 2.5,
+      aggregation_prone_fraction 0.10, free_cysteine 0, NG+DG 모티프 2)은 측정 코호트 없이 정한 초기값이고 PIPELINE_AGGREGATION_GATE_*
+      / PIPELINE_DEVELOPABILITY_GATE_* 환경변수와 PIPELINE_LIABILITY_GATE=0 로 조정/해제할 수 있다. calibrated 는 false
+      다.
     ported_from: antigen_pipeline antibody_developability.py
-
   rosetta_relax:
     display_name: Rosetta relax
     role: refinement
@@ -525,21 +454,16 @@ models:
       direct_client: true
       portal_mcp: false
     client: clients/rosetta_relax.py
-    measures: [stability]
-    metric_caveat: >-
-      total_score (REU) 는 접힘 에너지의 대용이지 ddG 가 아니다. 절대 REU 는 서로
-      다른 단백질 사이에서 비교되지 않는다 - 잔기 수에 대략 비례하기 때문이다.
-      같은 백본의 설계들 사이에서 상대 비교로만 뜻이 있고, 그 비교조차 RAPID 가
-      아직 어떤 라벨에도 맞춰본 적이 없다.
-    wiring_note: >-
-      relax_enabled 실행에서 설계마다 total_score 를 기록하고, WT relax 가 먼저
-      끝났으면 같은 백본 안의 delta_reu_vs_wt 를 함께 기록한다
-      (comparability: same_backbone_only). 이 delta 는 게이트로 쓰지 않는다.
+    measures:
+    - stability
+    metric_caveat: total_score (REU) 는 접힘 에너지의 대용이지 ddG 가 아니다. 절대 REU 는 서로 다른 단백질 사이에서 비교되지 않는다 - 잔기 수에
+      대략 비례하기 때문이다. 같은 백본의 설계들 사이에서 상대 비교로만 뜻이 있고, 그 비교조차 RAPID 가 아직 어떤 라벨에도 맞춰본 적이 없다.
+    wiring_note: 'relax_enabled 실행에서 설계마다 total_score 를 기록하고, WT relax 가 먼저 끝났으면 같은 백본 안의 delta_reu_vs_wt
+      를 함께 기록한다 (comparability: same_backbone_only). 이 delta 는 게이트로 쓰지 않는다.'
     worker_concurrency: 8
     cost:
       provenance: unmeasured
       unit: s/structure
-
   thermomp_ddg:
     display_name: ThermoMPNN ddG
     role: stability_evaluator
@@ -549,179 +473,176 @@ models:
       direct_client: true
       portal_mcp: true
     client: clients/thermomp.py
-    measures: [stability]
-    metric_caveat: >-
-      ThermoMPNN (Kuhlman-Lab, MIT) 은 구조에서 단일 점변이의 ΔΔG (kcal/mol,
-      양수 = 불안정화) 를 예측한다. FireProtDB/MegaScale 코호트로 학습됐고,
-      de-novo 백본이나 다중 변이 설계에는 맞춰본 적이 없다. 다중 변이에는
-      단일-변이 예측의 가법 합을 기록하는데 에피스테이시스를 무시한다.
-    wiring_note: >-
-      relax_enabled 실행에서 AF2 구조가 있는 설계에 대해 native 대비 변이 목록을
-      만들어 워커(bop:18114, deploy/gpu/thermomp_ddg_http_worker.py)로 돌리고
-      per-mutation ΔΔG 와 가법 합을 relax 아티팩트에 기록한다. 게이트로 쓰지
-      않는다.
+    measures:
+    - stability
+    metric_caveat: ThermoMPNN (Kuhlman-Lab, MIT) 은 구조에서 단일 점변이의 ΔΔG (kcal/mol, 양수 = 불안정화) 를 예측한다. FireProtDB/MegaScale
+      코호트로 학습됐고, de-novo 백본이나 다중 변이 설계에는 맞춰본 적이 없다. 다중 변이에는 단일-변이 예측의 가법 합을 기록하는데 에피스테이시스를 무시한다.
+    wiring_note: relax_enabled 실행에서 AF2 구조가 있는 설계에 대해 native 대비 변이 목록을 만들어 워커(bop:18114, deploy/gpu/thermomp_ddg_http_worker.py)로
+      돌리고 per-mutation ΔΔG 와 가법 합을 relax 아티팩트에 기록한다. 게이트로 쓰지 않는다.
     worker_concurrency: 4
     cost:
       provenance: unmeasured
       unit: s/structure
-
-# 목표마다 "왜 못 재는가" 가 다르다. 하나로 뭉뚱그려 "RAPID 가 평가하지 못한다"
-# 고만 말하면, 모델을 붙이면 되는 것과 그렇지 않은 것이 같아 보인다.
-#
-#   measured                  검증된 평가자가 있다
-#   evaluator_unvalidated     평가자를 부를 수 있지만 RAPID 가 맞춰본 적이 없다
-#   evaluator_not_wired       모델은 있는데 여기서 부를 수 없다
-#   no_evaluator_available    쓸 만한 평가자를 아직 못 찾았다
-#   needs_experimental_labels 모델 문제가 아니다. 설치로 풀리지 않는다
 objective_status:
   solubility:
     status: measured
-    evaluators: [soluprot]
+    evaluators:
+    - soluprot
     role: objective_constraint
-    detail: >-
-      SoluProt 이 게이트 1 에서 임계값 0.5 로 돌고 있고, 그 통과율이 게이트 0
-      라벨의 일부다.
-    not_a_structural_ranker: >-
-      SoluProt 은 대장균 가용 발현을 예측하는 모델이지 AF2 의 pLDDT/RMSD 를
-      예측하는 모델이 아니다. 같은 타겟 안에서 어느 서열이 구조를 유지할지
-      가리는 능력은 거의 없다 - 타겟 내 AUROC 중앙값 0.540 (설계 1,299,
-      타겟 20 중 정보 있는 11). 따라서 "SoluProt 0.5 를 넘었으니 좋은 후보" 로
-      읽으면 안 되고, 설계 목적에 대한 직교 제약으로 읽어야 한다.
-    threshold_note: >-
-      0.5 는 구조 성공 라벨로 다시 고르지 않는다. 목적이 다르다 - 그 라벨로
-      최적화하면 용해도 제약이 아니라 구조 예측기가 된다.
-      THRESHOLD_PROVENANCE 참조.
+    detail: SoluProt 이 게이트 1 에서 임계값 0.5 로 돌고 있고, 그 통과율이 게이트 0 라벨의 일부다.
+    not_a_structural_ranker: SoluProt 은 대장균 가용 발현을 예측하는 모델이지 AF2 의 pLDDT/RMSD 를 예측하는 모델이 아니다. 같은 타겟 안에서
+      어느 서열이 구조를 유지할지 가리는 능력은 거의 없다 - 타겟 내 AUROC 중앙값 0.540 (설계 1,299, 타겟 20 중 정보 있는 11). 따라서 "SoluProt
+      0.5 를 넘었으니 좋은 후보" 로 읽으면 안 되고, 설계 목적에 대한 직교 제약으로 읽어야 한다.
+    threshold_note: 0.5 는 구조 성공 라벨로 다시 고르지 않는다. 목적이 다르다 - 그 라벨로 최적화하면 용해도 제약이 아니라 구조 예측기가 된다. THRESHOLD_PROVENANCE
+      참조.
     evidence: public_data/benchmark/gate0/incremental_information_test.json
   structural_preservation:
     status: measured
-    evaluators: [mpnn_encoder, colabfold]
-    detail: >-
-      ColabFold pLDDT 와 동결 정의의 non-loop RMSD 로 잰다. AF2 신뢰도는 측정이
-      아니라 모델 신뢰도라는 단서는 colabfold 항목에 적혀 있다.
+    evaluators:
+    - mpnn_encoder
+    - colabfold
+    detail: ColabFold pLDDT 와 동결 정의의 non-loop RMSD 로 잰다. AF2 신뢰도는 측정이 아니라 모델 신뢰도라는 단서는 colabfold 항목에 적혀
+      있다.
   diversity:
     status: measured
     evaluators: []
-    detail: >-
-      서열 통계로 직접 계산한다 (위치 엔트로피, 쌍별 거리). 모델 평가자가 필요
-      없어서 evaluators 가 비어 있다.
+    detail: 서열 통계로 직접 계산한다 (위치 엔트로피, 쌍별 거리). 모델 평가자가 필요 없어서 evaluators 가 비어 있다.
   binding:
     status: evaluator_unvalidated
-    evaluators: [ppiformer_ddg, binder_score, diffdock]
-    detail: >-
-      PPIformer ddG 와 ipSAE 클라이언트가 붙어 있고 워커도 살아 있다. RAPID 가
-      어떤 결합 라벨에도 맞춰본 적이 없어서 검증되지 않았다.
-    to_enable: >-
-      결합 라벨이 있는 코호트에서 두 지표를 맞춰보고, 게이트로 쓸 임계값을 정한다.
+    evaluators:
+    - ppiformer_ddg
+    - binder_score
+    - diffdock
+    detail: PPIformer ddG 와 ipSAE 클라이언트가 붙어 있고 워커도 살아 있다. RAPID 가 어떤 결합 라벨에도 맞춰본 적이 없어서 검증되지 않았다.
+    to_enable: 결합 라벨이 있는 코호트에서 두 지표를 맞춰보고, 게이트로 쓸 임계값을 정한다.
   stability:
     status: evaluator_unvalidated
-    evaluators: [rosetta_relax, thermomp_ddg]
-    detail: >-
-      두 평가자가 배선되어 있다. Rosetta relax 는 bop:18102 에서 돌고 설계마다
-      total_score (REU) 를 기록하며, WT relax 가 같은 실행에서 먼저 끝났으면
-      같은 백본 안의 delta_reu_vs_wt 를 함께 기록한다. ThermoMPNN 은 bop:18114
-      에서 단일-변이 ΔΔG (kcal/mol) 를 내고 다중 변이는 가법 합으로 기록한다.
-      다만 둘 다 RAPID 가 어떤 안정성 라벨에도 맞춰본 적이 없어 검증되지
-      않았고, 절대 REU 는 잔기 수에 비례해서 단백질 사이 비교가 되지 않는다.
-    to_enable: >-
-      같은 백본에서 나온 설계들의 REU 차이와 ThermoMPNN ΔΔG 가 알려진 안정성
-      순위와 맞는지 코호트에서 확인한다. 확인 전까지 이 값들은 기록 전용이고
+    evaluators:
+    - rosetta_relax
+    - thermomp_ddg
+    detail: 두 평가자가 배선되어 있다. Rosetta relax 는 bop:18102 에서 돌고 설계마다 total_score (REU) 를 기록하며, WT relax 가
+      같은 실행에서 먼저 끝났으면 같은 백본 안의 delta_reu_vs_wt 를 함께 기록한다. ThermoMPNN 은 bop:18114 에서 단일-변이 ΔΔG (kcal/mol)
+      를 내고 다중 변이는 가법 합으로 기록한다. 다만 둘 다 RAPID 가 어떤 안정성 라벨에도 맞춰본 적이 없어 검증되지 않았고, 절대 REU 는 잔기 수에 비례해서 단백질
+      사이 비교가 되지 않는다.
+    to_enable: 같은 백본에서 나온 설계들의 REU 차이와 ThermoMPNN ΔΔG 가 알려진 안정성 순위와 맞는지 코호트에서 확인한다. 확인 전까지 이 값들은 기록 전용이고
       게이트로 쓰지 않는다.
-
+    candidates:
+    - id: thermomp_ddg
+      role: stability_annotation_candidate
+      wired: true
+      validated_for_rapid: false
+      limit: FireProtDB/MegaScale 단일 점변이로 학습. 다중 변이는 에피스테이시스를 무시한 가법 합이고, RAPID 의 ProteinMPNN 재설계는 10~20
+        개가 동시에 바뀐다.
+    - id: spurs
+      role: stability_annotation_candidate
+      wired: false
+      validated_for_rapid: false
+      hard_gate: false
+      gate1b_ranker: false
+      what_it_is: ESM 서열 표현과 ProteinMPNN 구조 표현을 결합해 변이 ddG 를 예측한다. 기본 모델은 MegaScale 단일 변이(약 27 만 측정, 약
+        300 단백질)로 학습하고, 다중 변이 확장은 단일 효과의 합에 epistasis decoder 를 얹어 약 12 만 개 이중 변이로 학습한다.
+      why_candidate_not_fix: ThermoMPNN 에 없는 epistasis 모듈이 있고 발표된 벤치마크에서 단일/이중 변이 ddG 가 더 좋다. 다만 학습이 단일·이중
+        변이라 10~20 치환 de novo 설계는 여전히 외삽이다. ThermoMPNN 의 핵심 한계가 줄어든 것이지 없어진 것이 아니다.
+    - id: rosetta_relax
+      role: physics_based_energy_annotation
+      wired: true
+      validated_for_rapid: false
+      measured_here: 백본 안에서 score_per_residue 가 pLDDT 를 따라간다 (중앙값 rho -0.356, 117 백본 중 90.6% 같은 방향). 신호는
+        실재하지만 백본 내 중앙값 컷은 pLDDT 상위 10% 설계의 32.6% 를 버린다 (무작위 게이트 50%). 게이트가 아니라 shortlist tie-break 다.
+    comparison_before_adoption: SPURS·ThermoMPNN·Rosetta relax 를 같은 RAPID 후보에서 계산해 상관과 불일치를 먼저 본다. 그 전에
+      SPURS 를 설치하면 다른 둘이 하지 않는 말을 하는지 모르는 채로 세 번째 미보정 안정성 신호를 더하는 것이 된다.
+    hard_gate: false
+    gate1b_ranker: false
   aggregation:
-    # evaluator_unvalidated 그대로다. 값을 계산한다는 것과 목표가 측정됐다는
-    # 것은 다르다 - 응집 측정 코호트에 맞춰본 적이 없고 calibrated 도 false 다.
-    # 이번 검정이 답한 것은 "구조 랭킹에 쓸모가 있는가" 이지 "응집을 잘 재는가"
-    # 가 아니므로 이 상태를 올릴 근거가 되지 않는다.
     status: evaluator_unvalidated
-    evaluators: [sequence_liabilities]
+    evaluators:
+    - sequence_liabilities
     role: objective_constraint
     calibrated: false
-    detail: >-
-      소수성 패치와 저전하 창 계산을 antigen 파이프라인에서 이식해 배선했다
-      (pipeline_mcp/sequence_liabilities.py). soluprot 통과 직후 설계마다 값을
-      기록한다. 임계값은 항체 문맥에서 정해진 것이라 단량체에 그대로 옮기면
-      근거가 따라오지 않는다 - calibrated 는 false 로 둔다.
-    measured: >-
-      두 가지를 쟀다. (1) 수렴 타당도: aggregation_prone_fraction 은 측정된
-      SoluProt 과 예상한 방향으로 움직인다 (rho -0.489 CI[-0.629, -0.248],
-      설계 2,624, 타겟 단위 재표집). 다만 SoluProt 이 소수성 계열 특징을 쓴다면
-      부분적으로 구성상 예견된 값이다. (2) 증분 정보: SoluProt 위에 이 지표들을
-      더해도 같은 타겟 안에서 AF2 구조 성공을 더 잘 가리지 못한다
-      (타겟 내 AUROC 차이 +0.014 CI[-0.110, +0.134], 정보 있는 타겟 11).
-    do_not_misread: >-
-      같은 검정의 pooled 지표는 AUROC 를 0.261 -> 0.428 로 올린 것처럼 보이고
-      top-5% yield 도 +0.37 이다. 그것은 타겟 난이도를 더 잘 맞힌 것이지 서열을
-      고른 것이 아니다 - SoluProt 은 타겟 평균이 높을수록 성공률이 낮고
-      (1bctA00 은 0.914 인데 성공률 0.000) 타겟 안에서는 반대 방향이다.
-      평가 단위를 타겟 내부로 잡지 않으면 결론이 뒤집힌다.
-    role_decision: >-
-      Aggregation-related sequence liabilities are retained as developability
-      annotations but are not promoted to structural-success ranking gates.
-      In 1,299 designs from 20 targets with corrected AF2 structural labels,
-      adding aggregation_prone_fraction, max_hydrophobic_patch and net_charge
-      to SoluProt did not improve within-target structural-success ranking
-      (median incremental AUROC +0.014; 95% CI -0.110 to +0.134). Apparent
-      pooled improvements were attributable primarily to between-target
-      difficulty differences rather than sequence-level discrimination.
-      The current evidence therefore does not justify adding or promoting
-      aggregation-based filters such as the existing heuristics, AggreProt or
-      CamSol for Gate 1B structural prioritization. Aggregation metrics remain
-      available for Gate 1A developability assessment and annotation.
-      This decision applies to structural-success ranking only. It does not
-      establish that aggregation predictors lack value for experimental
-      developability, expression or aggregation outcomes.
+    detail: 소수성 패치와 저전하 창 계산을 antigen 파이프라인에서 이식해 배선했다 (pipeline_mcp/sequence_liabilities.py). soluprot
+      통과 직후 설계마다 값을 기록한다. 임계값은 항체 문맥에서 정해진 것이라 단량체에 그대로 옮기면 근거가 따라오지 않는다 - calibrated 는 false 로 둔다.
+    measured: '두 가지를 쟀다. (1) 수렴 타당도: aggregation_prone_fraction 은 측정된 SoluProt 과 예상한 방향으로 움직인다 (rho -0.489
+      CI[-0.629, -0.248], 설계 2,624, 타겟 단위 재표집). 다만 SoluProt 이 소수성 계열 특징을 쓴다면 부분적으로 구성상 예견된 값이다. (2) 증분
+      정보: SoluProt 위에 이 지표들을 더해도 같은 타겟 안에서 AF2 구조 성공을 더 잘 가리지 못한다 (타겟 내 AUROC 차이 +0.014 CI[-0.110, +0.134],
+      정보 있는 타겟 11).'
+    do_not_misread: 같은 검정의 pooled 지표는 AUROC 를 0.261 -> 0.428 로 올린 것처럼 보이고 top-5% yield 도 +0.37 이다. 그것은
+      타겟 난이도를 더 잘 맞힌 것이지 서열을 고른 것이 아니다 - SoluProt 은 타겟 평균이 높을수록 성공률이 낮고 (1bctA00 은 0.914 인데 성공률 0.000)
+      타겟 안에서는 반대 방향이다. 평가 단위를 타겟 내부로 잡지 않으면 결론이 뒤집힌다.
+    role_decision: Aggregation-related sequence liabilities are retained as developability annotations
+      but are not promoted to structural-success ranking gates. In 1,299 designs from 20 targets with
+      corrected AF2 structural labels, adding aggregation_prone_fraction, max_hydrophobic_patch and net_charge
+      to SoluProt did not improve within-target structural-success ranking (median incremental AUROC +0.014;
+      95% CI -0.110 to +0.134). Apparent pooled improvements were attributable primarily to between-target
+      difficulty differences rather than sequence-level discrimination. The current evidence therefore
+      does not justify adding or promoting aggregation-based filters such as the existing heuristics,
+      AggreProt or CamSol for Gate 1B structural prioritization. Aggregation metrics remain available
+      for Gate 1A developability assessment and annotation. This decision applies to structural-success
+      ranking only. It does not establish that aggregation predictors lack value for experimental developability,
+      expression or aggregation outcomes.
     decision: NO-GO for Gate 1B promotion
     allowed_role: Gate 1A developability annotation
-    to_enable: >-
-      응집이 실제로 측정된 코호트. 그 전까지는 기록 전용이다. 구조 성공 라벨로
-      이 지표의 임계값을 정하지 않는다 - 위 결과가 그 방향으로는 정보가 없다고
-      말한다.
+    to_enable: 응집이 실제로 측정된 코호트. 그 전까지는 기록 전용이다. 구조 성공 라벨로 이 지표의 임계값을 정하지 않는다 - 위 결과가 그 방향으로는 정보가 없다고 말한다.
     evidence:
-      - public_data/benchmark/gate0/aggregation_validation.json
-      - public_data/benchmark/gate0/incremental_information_test.json
-
+    - public_data/benchmark/gate0/aggregation_validation.json
+    - public_data/benchmark/gate0/incremental_information_test.json
+    candidates:
+    - id: sequence_liabilities
+      role: developability_annotation
+      wired: true
+      calibrated: false
+      note: 현재 배선된 휴리스틱. Gate 1B 증분 정보 없음 (위 measured 참조).
+    - id: aggreprot
+      role: developability_annotation
+      wired: false
+      calibrated: false
+      hard_gate: false
+      gate1b_ranker: false
+      scope: 구조 평가를 이미 통과한 후보들 사이의 soft priority. Gate 1B NO-GO 와 충돌하지 않는다 - 그 결정은 어느 서열을 AF2 로 보낼지에 대한
+        것이었다.
+      comparison_before_adoption: 같은 후보에서 배선된 휴리스틱과의 상관·증분을 먼저 본다. 거의 일치하면 같은 축에 워커를 둘 유지할 이유가 적다.
   developability:
     status: evaluator_unvalidated
-    evaluators: [sequence_liabilities]
-    detail: >-
-      순전하와 isomerisation / oxidation / free cysteine 모티프를 이식해 같은
-      게이트에 넣었다. free_cysteine 과 NG+DG 모티프 상한은 임시값이다. 다만
-      이 지표들은 항체를 염두에 두고 정의된 것이라, 단량체 재설계에서 무엇을
-      developability 라 부를지는 아직 정하지 않았다.
-    to_enable: >-
-      항체 경로에서는 이식만으로 쓸 수 있다. 단량체에서는 어떤 성질을
-      developability 로 셀지 먼저 정의하고, 그 정의에 맞춰 임계값을 다시 정한다.
+    evaluators:
+    - sequence_liabilities
+    detail: 순전하와 isomerisation / oxidation / free cysteine 모티프를 이식해 같은 게이트에 넣었다. free_cysteine 과 NG+DG
+      모티프 상한은 임시값이다. 다만 이 지표들은 항체를 염두에 두고 정의된 것이라, 단량체 재설계에서 무엇을 developability 라 부를지는 아직 정하지 않았다.
+    to_enable: 항체 경로에서는 이식만으로 쓸 수 있다. 단량체에서는 어떤 성질을 developability 로 셀지 먼저 정의하고, 그 정의에 맞춰 임계값을 다시 정한다.
   activity:
     status: needs_experimental_labels
     evaluators: []
-    detail: >-
-      활성은 타겟마다 다른 실험으로 정의된다 - 효소 회전수, 결합 저해, 형광. 어떤
-      모델을 붙여도 그 타겟의 assay 라벨 없이는 맞춰볼 대상이 없다. 이것은 배선이
+    detail: 활성은 타겟마다 다른 실험으로 정의된다 - 효소 회전수, 결합 저해, 형광. 어떤 모델을 붙여도 그 타겟의 assay 라벨 없이는 맞춰볼 대상이 없다. 이것은 배선이
       아니라 데이터의 문제이고, 사양에도 활성 라벨을 지어내지 않는다고 적혀 있다.
-
-# ---------------------------------------------------------------------------
-# Purposes. A purpose is the user's DESIGN INTENT, and it is the routing unit.
-#
-# Gate semantics, fixed across every purpose:
-#   gate0 - decide which backbones/targets are worth spending anything on.
-#           Cheap, runs before generation at scale.
-#   gate1 - cheap per-sequence filter after generation.
-#   gate2 - expensive verification. This is the budget that matters.
-# ---------------------------------------------------------------------------
 purposes:
-
   monomer_solubility_redesign:
     display_name_en: Soluble monomer redesign
     display_name_ko: 가용성 단량체 재설계
-    description: >-
-      Redesign an existing monomer for solubility while preserving its fold. This
-      is the path Gate 0, Gate 1 and Gate 2 were measured on.
-    objectives: [solubility, structural_preservation, diversity]
+    description: Redesign an existing monomer for solubility while preserving its fold. This is the path
+      Gate 0, Gate 1 and Gate 2 were measured on.
+    objectives:
+    - solubility
+    - structural_preservation
+    - diversity
     stages:
-      - {stage: gate0_routing,      model_id: mpnn_encoder, gate: gate0, required: true,  validated: true}
-      - {stage: sequence_design,    model_id: proteinmpnn,  gate: null,  required: true,  validated: true}
-      - {stage: cheap_filter,       model_id: soluprot,     gate: gate1, required: true,  validated: true}
-      - {stage: structure_verify,   model_id: colabfold,    gate: gate2, required: true,  validated: true}
+    - stage: gate0_routing
+      model_id: mpnn_encoder
+      gate: gate0
+      required: true
+      validated: true
+    - stage: sequence_design
+      model_id: proteinmpnn
+      gate: null
+      required: true
+      validated: true
+    - stage: cheap_filter
+      model_id: soluprot
+      gate: gate1
+      required: true
+      validated: true
+    - stage: structure_verify
+      model_id: colabfold
+      gate: gate2
+      required: true
+      validated: true
     cost_driver: colabfold
     validation_coverage:
       stage: backbone_generate
@@ -730,35 +651,53 @@ purposes:
       targets_with_output: 57
       fraction: 0.92
       source: public_data/benchmark/gate0/backbones/backbone_labels.csv
-      note: >-
-        Gate 0 campaign, 62 CATH targets. 57 carry a native-backbone entry. The
-        5 that do not are targets where the native route produced no usable
-        backbone. This is stage coverage, not design success.
-
+      note: Gate 0 campaign, 62 CATH targets. 57 carry a native-backbone entry. The 5 that do not are
+        targets where the native route produced no usable backbone. This is stage coverage, not design
+        success.
   de_novo_backbone_design:
     display_name_en: De novo backbone design
     display_name_ko: 신규 백본 설계
-    description: >-
-      Generate new backbones with RFD3, then design and verify sequences on them.
-    objectives: [solubility, structural_preservation, diversity]
+    description: Generate new backbones with RFD3, then design and verify sequences on them.
+    objectives:
+    - solubility
+    - structural_preservation
+    - diversity
     stages:
-      - {stage: backbone_generate,  model_id: rfd3,         gate: null,  required: true,  validated: true}
-      - {stage: gate0_routing,      model_id: mpnn_encoder, gate: gate0, required: true,  validated: true}
-      - {stage: sequence_design,    model_id: proteinmpnn,  gate: null,  required: true,  validated: true}
-      - {stage: cheap_filter,       model_id: soluprot,     gate: gate1, required: true,  validated: true}
-      - {stage: structure_verify,   model_id: colabfold,    gate: gate2, required: true,  validated: true}
+    - stage: backbone_generate
+      model_id: rfd3
+      gate: null
+      required: true
+      validated: true
+    - stage: gate0_routing
+      model_id: mpnn_encoder
+      gate: gate0
+      required: true
+      validated: true
+    - stage: sequence_design
+      model_id: proteinmpnn
+      gate: null
+      required: true
+      validated: true
+    - stage: cheap_filter
+      model_id: soluprot
+      gate: gate1
+      required: true
+      validated: true
+    - stage: structure_verify
+      model_id: colabfold
+      gate: gate2
+      required: true
+      validated: true
     cost_driver: colabfold
     observed_run_cost:
       provenance: measured
       value: 4720.4
       unit: s/run
       statistic: median
-      scope: >-
-        Gate 0 wave 2: 14 successful whole-pipeline runs (MSA + RFD3 + ProteinMPNN
-        + SoluProt + AF2), range 872-12514 s, 1 failure. AF2 ran SERIALLY because
-        pipeline.py defaults DEFAULT_AF2_MAX_WORKERS to 1; setting
-        PIPELINE_AF2_MAX_WORKERS=4 changes this number and it has not been
-        re-measured under that setting.
+      scope: 'Gate 0 wave 2: 14 successful whole-pipeline runs (MSA + RFD3 + ProteinMPNN + SoluProt +
+        AF2), range 872-12514 s, 1 failure. AF2 ran SERIALLY because pipeline.py defaults DEFAULT_AF2_MAX_WORKERS
+        to 1; setting PIPELINE_AF2_MAX_WORKERS=4 changes this number and it has not been re-measured under
+        that setting.'
       source: public_data/benchmark/gate0/wave_02_results.json
     validation_coverage:
       stage: backbone_generate
@@ -772,33 +711,50 @@ purposes:
         targets_with_output: 13
         fraction: 0.72
         source: public_data/benchmark/gate0/holdout_generation.json
-        change: >-
-          Target preprocessing added 2026-09-08 (first model only for NMR
-          ensembles, drop CA-less residues and HETATM, drop records that
-          reference atom serials, renumber from 1). Before it, RFD3 died on
-          contig validation for targets whose numbering had gaps, and on
-          UnindexFlaggedTokens for multi-model files.
-      note: >-
-        RFD3 produced backbones for 16 of 62 targets in the campaign. Reporting
-        this route as validated without the fraction overstates it: most
-        failures were the 2.0 A target-RMSD acceptance gate and input handling,
-        not the design step. The holdout rate is measured after the
-        preprocessing fix on targets pre-filtered to single chain, 50-400
-        residues, so the two numbers are not directly comparable.
-
+        change: Target preprocessing added 2026-09-08 (first model only for NMR ensembles, drop CA-less
+          residues and HETATM, drop records that reference atom serials, renumber from 1). Before it,
+          RFD3 died on contig validation for targets whose numbering had gaps, and on UnindexFlaggedTokens
+          for multi-model files.
+      note: 'RFD3 produced backbones for 16 of 62 targets in the campaign. Reporting this route as validated
+        without the fraction overstates it: most failures were the 2.0 A target-RMSD acceptance gate and
+        input handling, not the design step. The holdout rate is measured after the preprocessing fix
+        on targets pre-filtered to single chain, 50-400 residues, so the two numbers are not directly
+        comparable.'
   conformational_ensemble_redesign:
     display_name_en: Ensemble-based redesign
     display_name_ko: 구조 앙상블 기반 재설계
-    description: >-
-      Sample conformations with BioEmu and design against the ensemble rather than
-      a single static backbone.
-    objectives: [solubility, structural_preservation, diversity]
+    description: Sample conformations with BioEmu and design against the ensemble rather than a single
+      static backbone.
+    objectives:
+    - solubility
+    - structural_preservation
+    - diversity
     stages:
-      - {stage: backbone_generate,  model_id: bioemu,       gate: null,  required: true,  validated: true}
-      - {stage: gate0_routing,      model_id: mpnn_encoder, gate: gate0, required: true,  validated: true}
-      - {stage: sequence_design,    model_id: proteinmpnn,  gate: null,  required: true,  validated: true}
-      - {stage: cheap_filter,       model_id: soluprot,     gate: gate1, required: true,  validated: true}
-      - {stage: structure_verify,   model_id: colabfold,    gate: gate2, required: true,  validated: true}
+    - stage: backbone_generate
+      model_id: bioemu
+      gate: null
+      required: true
+      validated: true
+    - stage: gate0_routing
+      model_id: mpnn_encoder
+      gate: gate0
+      required: true
+      validated: true
+    - stage: sequence_design
+      model_id: proteinmpnn
+      gate: null
+      required: true
+      validated: true
+    - stage: cheap_filter
+      model_id: soluprot
+      gate: gate1
+      required: true
+      validated: true
+    - stage: structure_verify
+      model_id: colabfold
+      gate: gate2
+      required: true
+      validated: true
     cost_driver: colabfold
     validation_coverage:
       stage: backbone_generate
@@ -807,87 +763,147 @@ purposes:
       targets_with_output: 4
       fraction: 0.06
       source: public_data/benchmark/gate0/backbones/backbone_labels.csv
-      note: >-
-        BioEmu produced backbones for 4 of 62 targets. The same n=4 is why
-        BioEmu source-specific temperature conclusions are reported as
-        exploratory only. Calling this a validated purpose while calling the
-        same four targets too few to conclude from is not consistent; the
-        fraction has to travel with the label. Wave 3 also had 4 of 8 runs miss
-        the 2.0 A acceptance cutoff.
+      note: BioEmu produced backbones for 4 of 62 targets. The same n=4 is why BioEmu source-specific
+        temperature conclusions are reported as exploratory only. Calling this a validated purpose while
+        calling the same four targets too few to conclude from is not consistent; the fraction has to
+        travel with the label. Wave 3 also had 4 of 8 runs miss the 2.0 A acceptance cutoff.
     observed_run_cost:
       provenance: measured
       value: 8952.0
       unit: s/run
       statistic: median
-      scope: >-
-        Gate 0 wave 3: 4 successful whole-pipeline runs, range 5907-13031 s. Four
-        further runs failed, so this median describes the runs that survived the
-        acceptance cutoff and understates the cost of obtaining a usable backbone.
+      scope: 'Gate 0 wave 3: 4 successful whole-pipeline runs, range 5907-13031 s. Four further runs failed,
+        so this median describes the runs that survived the acceptance cutoff and understates the cost
+        of obtaining a usable backbone.'
       source: public_data/benchmark/gate0/wave_03_results.json
-    caveat: >-
-      The 2.0 A BioEmu acceptance cutoff currently rejects half the runs. Treat this
-      route's backbone yield as cutoff-limited until that is re-tuned.
-
+    caveat: The 2.0 A BioEmu acceptance cutoff currently rejects half the runs. Treat this route's backbone
+      yield as cutoff-limited until that is re-tuned.
   protein_binder_design:
     display_name_en: Protein binder design
     display_name_ko: 단백질 바인더 설계
-    description: >-
-      Design a binder against a protein target. Adds two interface stages the
-      monomer route does not have: a pre-fold ddG screen and a post-fold interface
-      confidence score.
-    objectives: [binding, solubility, structural_preservation]
+    description: 'Design a binder against a protein target. Adds two interface stages the monomer route
+      does not have: a pre-fold ddG screen and a post-fold interface confidence score.'
+    objectives:
+    - binding
+    - solubility
+    - structural_preservation
     stages:
-      - {stage: backbone_generate,  model_id: rfd3,          gate: null,  required: true,  validated: true}
-      - {stage: gate0_routing,      model_id: mpnn_encoder,  gate: gate0, required: true,  validated: false}
-      - {stage: sequence_design,    model_id: proteinmpnn,   gate: null,  required: true,  validated: true}
-      - {stage: cheap_filter,       model_id: soluprot,      gate: gate1, required: true,  validated: true}
-      - {stage: interface_screen,   model_id: ppiformer_ddg, gate: gate1, required: true,  validated: false}
-      - {stage: structure_verify,   model_id: colabfold,     gate: gate2, required: true,  validated: true}
-      - {stage: interface_score,    model_id: binder_score,  gate: gate2, required: true,  validated: false}
+    - stage: backbone_generate
+      model_id: rfd3
+      gate: null
+      required: true
+      validated: true
+    - stage: gate0_routing
+      model_id: mpnn_encoder
+      gate: gate0
+      required: true
+      validated: false
+    - stage: sequence_design
+      model_id: proteinmpnn
+      gate: null
+      required: true
+      validated: true
+    - stage: cheap_filter
+      model_id: soluprot
+      gate: gate1
+      required: true
+      validated: true
+    - stage: interface_screen
+      model_id: ppiformer_ddg
+      gate: gate1
+      required: true
+      validated: false
+    - stage: structure_verify
+      model_id: colabfold
+      gate: gate2
+      required: true
+      validated: true
+    - stage: interface_score
+      model_id: binder_score
+      gate: gate2
+      required: true
+      validated: false
     cost_driver: colabfold
-    caveat: >-
-      Gate 0's AUC was measured on MONOMER structural yield. Whether the same
-      encoder representation routes binder targets is untested, which is why that
-      stage is marked unvalidated on this route and not on the monomer route.
-    preferred_validator_note: >-
-      AF3 or Boltz-2 would fold the complex directly and give a chain-pair
-      interface confidence. Neither has a client here, so this route verifies with
-      ColabFold and scores the interface separately. That is a real limitation, not
-      a design choice.
-
+    caveat: Gate 0's AUC was measured on MONOMER structural yield. Whether the same encoder representation
+      routes binder targets is untested, which is why that stage is marked unvalidated on this route and
+      not on the monomer route.
+    preferred_validator_note: AF3 or Boltz-2 would fold the complex directly and give a chain-pair interface
+      confidence. Neither has a client here, so this route verifies with ColabFold and scores the interface
+      separately. That is a real limitation, not a design choice.
   antibody_design:
     display_name_en: Antibody design
     display_name_ko: 항체 설계
-    description: >-
-      Epitope-conditioned antibody design. Declared so a request for it gets an
-      honest answer instead of being served by the monomer route.
-    objectives: [binding, developability]
+    description: Epitope-conditioned antibody design. Declared so a request for it gets an honest answer
+      instead of being served by the monomer route.
+    objectives:
+    - binding
+    - developability
     stages:
-      - {stage: numbering,          model_id: anarcii,       gate: gate0, required: true,  validated: false}
-      - {stage: backbone_generate,  model_id: rfd3,          gate: null,  required: true,  validated: false,
-         requires_design_policy: "백본이 움직여도 되는 잔기 범위. CDR only 와 interface contact FR 은 다른 arm 이다."}
-      - {stage: sequence_design,    model_id: antifold,      gate: null,  required: true,  validated: false,
-         requires_design_policy: "CDR/framework 마스크와 변이 상한. 비우면 IMGT 영역 전체가 바뀐다."}
-      - {stage: interface_screen,   model_id: ppiformer_ddg, gate: gate1, required: true,  validated: false}
-      - {stage: structure_verify,   model_id: alphafold3,    gate: gate2, required: true,  validated: false}
-      - {stage: interface_score,    model_id: binder_score,  gate: gate2, required: true,  validated: false}
+    - stage: numbering
+      model_id: anarcii
+      gate: gate0
+      required: true
+      validated: false
+    - stage: backbone_generate
+      model_id: rfd3
+      gate: null
+      required: true
+      validated: false
+      requires_design_policy: 백본이 움직여도 되는 잔기 범위. CDR only 와 interface contact FR 은 다른 arm 이다.
+    - stage: sequence_design
+      model_id: antifold
+      gate: null
+      required: true
+      validated: false
+      requires_design_policy: CDR/framework 마스크와 변이 상한. 비우면 IMGT 영역 전체가 바뀐다.
+    - stage: interface_screen
+      model_id: ppiformer_ddg
+      gate: gate1
+      required: true
+      validated: false
+    - stage: structure_verify
+      model_id: alphafold3
+      gate: gate2
+      required: true
+      validated: false
+    - stage: interface_score
+      model_id: binder_score
+      gate: gate2
+      required: true
+      validated: false
     cost_driver: alphafold3
-    referral: >-
-      This route is not runnable here. The antibody design arms, the CDR/framework
-      masks and the mutation caps are defined and exercised in the antigen
-      pipeline's ROUTER_POLICY_V1.1. Route an antibody request there rather than
-      approximating it with RAPID's monomer path, which has no concept of a
+    referral: This route is not runnable here. The antibody design arms, the CDR/framework masks and the
+      mutation caps are defined and exercised in the antigen pipeline's ROUTER_POLICY_V1.1. Route an antibody
+      request there rather than approximating it with RAPID's monomer path, which has no concept of a
       framework position.
-
   small_molecule_binding:
     display_name_en: Small-molecule binding
     display_name_ko: 저분자 결합
     description: Dock a small molecule against a designed or native structure.
-    objectives: [binding]
+    objectives:
+    - binding
     stages:
-      - {stage: structure_verify,   model_id: colabfold, gate: gate2, required: true,  validated: true}
-      - {stage: docking,            model_id: diffdock,  gate: gate2, required: true,  validated: false}
+    - stage: structure_verify
+      model_id: colabfold
+      gate: gate2
+      required: true
+      validated: true
+    - stage: docking
+      model_id: diffdock
+      gate: gate2
+      required: true
+      validated: false
     cost_driver: diffdock
-    caveat: >-
-      Docking scores are not affinities and RAPID has never calibrated them against
-      any measurement. Use this route to generate poses, not to rank candidates.
+    caveat: Docking scores are not affinities and RAPID has never calibrated them against any measurement.
+      Use this route to generate poses, not to rank candidates.
+fidelity_ladder:
+  note: RAPID 의 문제가 '어느 서열에 AF2 를 쓸 것인가' 에서 '어느 후보를 어느 fidelity 평가자에 보낼 것인가' 로 넓어지는 축. medium 단이 비어 있었다.
+  cheap:
+  - soluprot
+  - mpnn_encoder
+  - sequence_liabilities
+  medium:
+  - esmfold
+  expensive:
+  - colabfold
+  medium_status: wired_unvalidated · 비용 미측정 · 호출하는 곳 없음
