@@ -208,6 +208,11 @@ _PARTIAL_RERUN_AF2_FIELDS = {
     "relax_score_per_residue_cutoff",
     "relax_nstruct",
     "relax_extra_flags",
+    # 안정성 게이트는 soluprot 통과 뒤 AF2 앞에서 필터링한다. 티어 흐름은
+    # 부분 재실행에도 게이트 코드 경로를 다시 지나가므로 AF2 단계부터
+    # 재실행하면 새 컷오프가 다시 적용된다.
+    "thermomp_gate",
+    "thermomp_ddg_cutoff",
 }
 _PARTIAL_RERUN_NOVELTY_FIELDS = {"novelty_enabled", "novelty_target_db", "wt_compare"}
 
@@ -2988,6 +2993,202 @@ def _monomerize_records(
             )
         )
     return out
+
+
+def _thermomp_additive_ddg(output: object) -> float | None:
+    """ThermoMPNN 워커 출력에서 서열 단위 가법 ΔΔG (kcal/mol) 를 뽑는다.
+
+    워커가 additive_ddg_kcal_mol 을 주면 그대로 쓰고, 없으면 단일-변이
+    ddG_kcal_mol 값을 더한다. evolution 서로게이트와 같은 가법 근사이고
+    에피스테시스를 무시한다.
+    """
+    if not isinstance(output, dict):
+        return None
+    value = output.get("additive_ddg_kcal_mol")
+    if isinstance(value, (int, float)):
+        return float(value)
+    per_mutation = output.get("mutations")
+    if not isinstance(per_mutation, list):
+        return None
+    total = 0.0
+    seen = False
+    for item in per_mutation:
+        if (
+            isinstance(item, dict)
+            and isinstance(item.get("ddG_kcal_mol"), (int, float))
+        ):
+            total += float(item["ddG_kcal_mol"])
+            seen = True
+    return total if seen else None
+
+
+def _run_thermomp_gate(
+    *,
+    passed: list[SequenceRecord],
+    passed_ids: list[str] | None,
+    backbone_pdb_text: str,
+    wt_sequence: str | None,
+    tier_dir: Path,
+    request: PipelineRequest,
+    thermomp_client: Any,
+    cache: dict[tuple[str, str, tuple[str, ...]], dict[str, object]],
+) -> tuple[list[SequenceRecord], list[str] | None, dict[str, object] | None]:
+    """AF2 앞 선택 안정성 게이트. ThermoMPNN ΔΔG 합이 컷오프를 넘는 설계를 걸러낸다.
+
+    미검증 평가자다 — 요청이 켜야만 동작하고, 게이트가 꺼진 실행은 파일도
+    상태도 바꾸지 않는다 (기존 실행과 100% 동일). 백본 PDB (WT 구조) 와 티어
+    서열의 차이를 evolution 서로게이트의 `_design_mutations_vs_native` 와 같은
+    표기("W123A" = (WT AA)(PDB resseq)(변이 AA))로 만들어 예측한다. 도구
+    실패는 설계 실패가 아니라 보류(통과)로 기록한다.
+
+    반환: (통과 서열, 통과 id 목록, 아티팩트). 게이트 off 면 아티팩트는 None.
+    """
+    if not bool(getattr(request, "thermomp_gate", False)):
+        return passed, passed_ids, None
+
+    cutoff = float(getattr(request, "thermomp_ddg_cutoff", 2.0) or 2.0)
+    artifact_path = Path(tier_dir) / "thermomp.json"
+    fallback_ids = (
+        [str(sid) for sid in passed_ids]
+        if isinstance(passed_ids, list)
+        else [s.id for s in passed]
+    )
+
+    def _skipped(reason: str) -> tuple[list[SequenceRecord], list[str] | None, dict[str, object]]:
+        artifact: dict[str, object] = {
+            "skipped": reason,
+            "cutoff": cutoff,
+            "passed_ids": fallback_ids,
+        }
+        write_json(artifact_path, artifact)
+        return passed, passed_ids, artifact
+
+    if bool(getattr(request, "dry_run", False)):
+        return _skipped("dry_run")
+    if thermomp_client is None:
+        return _skipped("thermomp_unavailable")
+    if not str(backbone_pdb_text or "").strip():
+        return _skipped("backbone_unavailable")
+    if not passed:
+        return _skipped("no_sequences_to_score")
+
+    try:
+        backbone_residues = residues_by_chain(str(backbone_pdb_text))
+    except Exception as exc:
+        return _skipped(f"backbone_parse_error: {exc}")
+    if len(backbone_residues) != 1:
+        # ThermoMPNN 은 한 사슬만 본다 (evolution 서로게이트와 같은 제약).
+        return _skipped("skipped_multi_chain")
+    chain_id, residue_list = next(iter(backbone_residues.items()))
+    backbone_seq = "".join(
+        _AA3_TO_AA1.get(r.resname.upper(), "X") for r in residue_list
+    )
+    if "X" in backbone_seq:
+        return _skipped("unknown_residue_in_alignment")
+
+    # WT 기준은 백본 PDB 서열이다. native 레코드가 같은 길이의 단일사슬이면
+    # evolution 서로게이트와 같은 근거로 native 서열을 쓴다.
+    wt_chain_seq = backbone_seq
+    wt_parts = _split_multichain_sequence(wt_sequence or "")
+    if len(wt_parts) == 1 and len(wt_parts[0]) == len(backbone_seq):
+        wt_chain_seq = wt_parts[0]
+
+    notes: list[str] = []
+    scores: dict[str, float | None] = {}
+    cache_prefix = _sha256_text(str(backbone_pdb_text))
+    scorable = 0
+    per_seq_skip_reasons: list[str] = []
+    for seq in passed:
+        seq_id = str(seq.id)
+        design_parts = _split_multichain_sequence(str(seq.sequence or ""))
+        if len(design_parts) != 1:
+            per_seq_skip_reasons.append("skipped_multi_chain")
+            scores[seq_id] = None
+            notes.append(f"{seq_id}: skipped (skipped_multi_chain); treated as pass")
+            continue
+        design_seq = design_parts[0]
+        if len(design_seq) != len(wt_chain_seq):
+            per_seq_skip_reasons.append("length_mismatch")
+            scores[seq_id] = None
+            notes.append(f"{seq_id}: skipped (length_mismatch); treated as pass")
+            continue
+        if "X" in design_seq:
+            per_seq_skip_reasons.append("unknown_residue_in_alignment")
+            scores[seq_id] = None
+            notes.append(
+                f"{seq_id}: skipped (unknown_residue_in_alignment); treated as pass"
+            )
+            continue
+        mutations = [
+            f"{wt_chain_seq[idx]}{residue_list[idx].resseq}{design_seq[idx]}"
+            for idx in range(len(wt_chain_seq))
+            if design_seq[idx] != wt_chain_seq[idx]
+        ]
+        if not mutations:
+            # 변이가 없으면 ΔΔG 합은 정의상 0. 빈 mutations 로 predict 를
+            # 부르면 워커가 전체 단일-변이 스캔을 돌려버리므로 호출하지 않는다.
+            scores[seq_id] = 0.0
+            scorable += 1
+            continue
+        scorable += 1
+        cache_key = (cache_prefix, str(chain_id), tuple(mutations))
+        cached = cache.get(cache_key) if isinstance(cache, dict) else None
+        if isinstance(cached, dict) and isinstance(cached.get("ddg"), (int, float)):
+            scores[seq_id] = float(cached["ddg"])
+            continue
+        if isinstance(cached, dict) and cached.get("error"):
+            scores[seq_id] = None
+            notes.append(
+                f"{seq_id}: predict failed ({cached.get('error')}); treated as pass"
+            )
+            continue
+        try:
+            output = thermomp_client.predict(
+                pdb_text=str(backbone_pdb_text),
+                target_id=seq_id,
+                chain=str(chain_id) or None,
+                mutations=list(mutations),
+                wt_sequence=wt_chain_seq,
+            )
+            ddg = _thermomp_additive_ddg(output)
+            if ddg is None:
+                raise ValueError("predict output carries no additive ddG")
+        except Exception as exc:
+            if isinstance(cache, dict):
+                cache[cache_key] = {"error": str(exc)}
+            scores[seq_id] = None
+            notes.append(f"{seq_id}: predict failed ({exc}); treated as pass")
+            continue
+        if isinstance(cache, dict):
+            cache[cache_key] = {"ddg": ddg}
+        scores[seq_id] = ddg
+
+    if scorable == 0:
+        reason = (
+            per_seq_skip_reasons[0] if per_seq_skip_reasons else "no_mutations_computable"
+        )
+        return _skipped(reason)
+
+    kept = [
+        s
+        for s in passed
+        if scores.get(str(s.id)) is None or float(scores[str(s.id)]) <= cutoff
+    ]
+    kept_id_set = {s.id for s in kept}
+    kept_ids = (
+        [sid for sid in fallback_ids if sid in kept_id_set]
+        if isinstance(passed_ids, list)
+        else [s.id for s in kept]
+    )
+    artifact = {
+        "scores": scores,
+        "cutoff": cutoff,
+        "passed_ids": kept_ids,
+    }
+    if notes:
+        artifact["notes"] = notes
+    write_json(artifact_path, artifact)
+    return kept, kept_ids, artifact
 
 
 def _dummy_backbone_pdb(sequence: str, *, chain_id: str = "A") -> str:
@@ -9173,6 +9374,12 @@ class PipelineRunner:
                     )
                 set_status(paths, stage="af2_pooled_tiers", state="completed")
 
+            # 티어 간 같은 (백본, 변이) 재예측을 막는다 — evolution 의
+            # cached_thermomp 패턴과 같다.
+            thermomp_gate_cache: dict[
+                tuple[str, str, tuple[str, ...]], dict[str, object]
+            ] = {}
+
             for tier in active_tiers:
                 tier_str = _tier_key(tier)
                 _ensure_not_cancelled(stage=f"proteinmpnn_{tier_str}")
@@ -9185,6 +9392,7 @@ class PipelineRunner:
                 backbone_meta: list[dict[str, Any]] = []
                 primary_fixed: dict[str, list[int]] | None = None
                 primary_native: SequenceRecord | None = None
+                primary_backbone_pdb_text: str | None = None
                 mutation_report_path = None
                 mutations_by_position_tsv = None
                 mutations_by_position_svg = None
@@ -9429,6 +9637,7 @@ class PipelineRunner:
                     if idx == 0:
                         primary_fixed = fixed_positions_by_chain
                         primary_native = native
+                        primary_backbone_pdb_text = proteinmpnn_pdb_text
 
                 set_status(paths, stage=f"proteinmpnn_{tier_str}", state="completed")
                 _emit_panel(
@@ -9773,6 +9982,70 @@ class PipelineRunner:
                         tier_dir / "liabilities.json",
                         {"summary": liability_summary, "sequences": []},
                     )
+
+                # 안정성 게이트(선택). 백본 구조 + 변이 목록으로 ΔΔG를 예측해 임계값
+                # 초과 설계를 AF2 앞에서 걸러낸다. 미검증 평가자다 — 켜야만 동작하고,
+                # 도구 실패는 설계 실패가 아니라 보류(통과)로 기록한다.
+                thermomp_gate_artifact: dict[str, object] | None = None
+                if request.thermomp_gate:
+                    set_status(
+                        paths, stage=f"thermomp_gate_{tier_str}", state="running"
+                    )
+                    try:
+                        passed, passed_ids, thermomp_gate_artifact = _run_thermomp_gate(
+                            passed=passed,
+                            passed_ids=passed_ids,
+                            backbone_pdb_text=(primary_backbone_pdb_text or ""),
+                            wt_sequence=(
+                                native.sequence if native is not None else None
+                            ),
+                            tier_dir=tier_dir,
+                            request=request,
+                            thermomp_client=self.thermomp,
+                            cache=thermomp_gate_cache,
+                        )
+                    except Exception as exc:
+                        # 게이트 자체가 실패해도 설계를 잃지 않는다 (보수적 통과).
+                        errors.append(f"thermomp_gate_{tier_str}: {exc}")
+                        thermomp_gate_artifact = None
+                    if thermomp_gate_artifact is not None:
+                        set_status(
+                            paths,
+                            stage=f"thermomp_gate_{tier_str}",
+                            state="completed",
+                        )
+                        skipped_reason = thermomp_gate_artifact.get("skipped")
+                        if skipped_reason:
+                            _emit_panel(
+                                f"thermomp_gate_{tier_str}",
+                                detail=f"skipped: {skipped_reason}",
+                            )
+                        else:
+                            gate_scores = thermomp_gate_artifact.get("scores")
+                            gate_total = (
+                                len(gate_scores)
+                                if isinstance(gate_scores, dict)
+                                else 0
+                            )
+                            gate_failed = (
+                                sum(
+                                    1
+                                    for v in gate_scores.values()
+                                    if isinstance(v, (int, float))
+                                    and float(v)
+                                    > float(request.thermomp_ddg_cutoff)
+                                )
+                                if isinstance(gate_scores, dict)
+                                else 0
+                            )
+                            _emit_panel(
+                                f"thermomp_gate_{tier_str}",
+                                detail=(
+                                    f"ddG <= {float(request.thermomp_ddg_cutoff):g} "
+                                    f"kcal/mol: {gate_total - gate_failed}"
+                                    f"/{gate_total} passed"
+                                ),
+                            )
 
                 passed = _monomerize_records(passed, af2_model_preset)
                 if samples:

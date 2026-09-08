@@ -228,6 +228,23 @@ def build_plan(objective: Objective) -> dict:
             ),
         ),
         Decision(
+            field_name="thermomp_gate", value=False,
+            rationale="미검증 평가자를 참고 필터로 쓴다 — 켜야만 동작한다.",
+            evidence=(Evidence(
+                kind="assumption",
+                statement="evolution 서로게이트 관측이 유일한 근거다. "
+                          "RAPID 가 안정성 라벨에 맞춰본 적 없다.",
+            ),),
+        ),
+        Decision(
+            field_name="thermomp_ddg_cutoff", value=2.0,
+            rationale="ΔΔG 합이 이 값(kcal/mol)을 넘으면 AF2 앞에서 걸러낸다.",
+            evidence=(Evidence(
+                kind="assumption",
+                statement="임시 기본값 — calibrated: false.",
+            ),),
+        ),
+        Decision(
             field_name="sequences_per_backbone", value=16,
             rationale="yield 추정 정밀도와 AF2 비용의 절충. 애매한 백본만 32개로 올린다.",
             evidence=(
@@ -332,6 +349,8 @@ def build_plan(objective: Objective) -> dict:
 DECISION_TO_REQUEST_FIELD = {
     "use_soluble_model": "use_soluble_model",
     "soluprot_cutoff": "soluprot_cutoff",
+    "thermomp_gate": "thermomp_gate",
+    "thermomp_ddg_cutoff": "thermomp_ddg_cutoff",
     "sequences_per_backbone": "num_seq_per_tier",
     "sampling_temp": "sampling_temp",
 }
