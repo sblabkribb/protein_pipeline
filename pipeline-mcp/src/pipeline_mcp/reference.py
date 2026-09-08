@@ -208,7 +208,7 @@ def search_uniref(query: str, limit: int = 8) -> dict:
             continue
         try:
             # 최신 UniRef REST 응답은 memberCount 다 - proteinCount 는 구/문서 계열 폴백.
-            protein_count = int(record.get("proteinCount") or record.get("memberCount") or 0)
+            protein_count = int(record.get("memberCount") or record.get("proteinCount") or 0)
         except (TypeError, ValueError):
             protein_count = 0
         items.append(_row(uniref_id, f"{protein_count} members", uniref_id,
