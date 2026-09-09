@@ -1,0 +1,413 @@
+{
+  "cohort": "masked_holdout",
+  "purpose": "masked protocol 의 새 confirmatory holdout. calibration 결과를 보기 전에 동결한다.",
+  "freeze_doc": "docs/specs/rapid-v2-sequence-constraint-protocol-freeze.md",
+  "frozen_utc": "2026-09-09T08:07:56Z",
+  "seed": 20260910,
+  "design": {
+    "n_targets": 12,
+    "backbones_per_target": 5,
+    "sequences_per_backbone": 24,
+    "total_folds": 1440,
+    "temperature": 0.1
+  },
+  "eligibility": {
+    "chains": 1,
+    "min_length": 50,
+    "max_length": 400
+  },
+  "strata": [
+    {
+      "label": "50-150",
+      "low": 50,
+      "high": 150
+    },
+    {
+      "label": "150-250",
+      "low": 150,
+      "high": 250
+    },
+    {
+      "label": "250-400",
+      "low": 250,
+      "high": 401
+    }
+  ],
+  "selection_inputs": [
+    "적격성",
+    "길이"
+  ],
+  "selection_excluded_inputs": [
+    "과거 yield",
+    "SoluProt 결과",
+    "structural-success 결과",
+    "joint-pass 결과",
+    "Gate 0 사전분포 점수",
+    "MSA 심도/품질",
+    "RFD3 성공률",
+    "legacy rapid_target_manifest.csv 의 eligible 열"
+  ],
+  "exclusions": {
+    "used_targets": [
+      "1af7A01",
+      "1b5aA00",
+      "1b7eA01",
+      "1b8xA03",
+      "1bctA00",
+      "1bg5A03",
+      "1bxmA00",
+      "1c8zA00",
+      "1e9tA00",
+      "1eruA00",
+      "1evsA00",
+      "1hufA00",
+      "1j0tA00",
+      "1ji8A01",
+      "1jygA00",
+      "1koyA00",
+      "1ktuA00",
+      "1l5cA00",
+      "1lpvA00",
+      "1nr3A00",
+      "1o8rA00",
+      "1q5zA00",
+      "1sh6A02",
+      "1sp0A00",
+      "1tm9A00",
+      "1ux6A01",
+      "1vprA02",
+      "1vsrA00",
+      "1y8aA02",
+      "2iayA00",
+      "2je2A00",
+      "2jneA00",
+      "2jo7A00",
+      "2jokA01",
+      "2kjfA00",
+      "2kqrA01",
+      "2m3cA01",
+      "2mq6A00",
+      "2pgsA03",
+      "2psbA00",
+      "2r01A02",
+      "2wejA00",
+      "2yruA01",
+      "3bqwA01",
+      "3es1A01",
+      "3f2pA01",
+      "3h7eA02",
+      "3ps3A02",
+      "4nt8A00",
+      "4poaA02",
+      "4y07A01",
+      "5fwaA02",
+      "5nazA00",
+      "5pc8A00",
+      "5xpdA02",
+      "7o1zA01"
+    ],
+    "used_target_sources": {
+      "holdout_resolved": [
+        "1sh6A02",
+        "1sp0A00",
+        "1tm9A00",
+        "1vsrA00",
+        "2jokA01",
+        "3bqwA01",
+        "3es1A01",
+        "3f2pA01",
+        "3h7eA02",
+        "5fwaA02",
+        "5pc8A00",
+        "5xpdA02"
+      ],
+      "holdout_selected": [
+        "1sp0A00",
+        "1tm9A00",
+        "1vprA02",
+        "1vsrA00",
+        "2iayA00",
+        "2jo7A00",
+        "2jokA01",
+        "2pgsA03",
+        "3bqwA01",
+        "3es1A01",
+        "3h7eA02",
+        "5fwaA02"
+      ],
+      "holdout_reserve": [
+        "1sh6A02",
+        "2je2A00",
+        "2yruA01",
+        "3f2pA01",
+        "5pc8A00",
+        "5xpdA02"
+      ],
+      "temperature_sweep": [
+        "1af7A01",
+        "1b5aA00",
+        "1bctA00",
+        "1bg5A03",
+        "1bxmA00",
+        "1c8zA00",
+        "1e9tA00",
+        "1eruA00",
+        "1hufA00",
+        "1jygA00",
+        "1ktuA00",
+        "1l5cA00",
+        "1nr3A00",
+        "1o8rA00",
+        "2wejA00"
+      ],
+      "temperature_panel2": [
+        "1af7A01",
+        "1b5aA00",
+        "1b7eA01",
+        "1b8xA03",
+        "1hufA00",
+        "1jygA00",
+        "1koyA00",
+        "2jneA00",
+        "2kjfA00",
+        "2wejA00"
+      ],
+      "calibration_selected": [
+        "1evsA00",
+        "1j0tA00",
+        "1ji8A01",
+        "1q5zA00",
+        "1y8aA02",
+        "2mq6A00",
+        "2r01A02",
+        "3ps3A02",
+        "4poaA02",
+        "4y07A01",
+        "5nazA00",
+        "7o1zA01"
+      ],
+      "calibration_reserve": [
+        "1lpvA00",
+        "1ux6A01",
+        "2kqrA01",
+        "2m3cA01",
+        "2psbA00",
+        "4nt8A00"
+      ]
+    },
+    "n_used_superfamilies": 56,
+    "why_superfamily": "근접 중복이 남으면 독립 코호트가 아니다"
+  },
+  "pool": {
+    "n_eligible": 201,
+    "by_stratum": {
+      "50-150": 86,
+      "150-250": 42,
+      "250-400": 73
+    }
+  },
+  "selected": [
+    {
+      "domain": "1o22A00",
+      "split": "cath_test",
+      "length": 146,
+      "superfamily": "3.90.1000.10",
+      "pdb": "/opt/protein_pipeline/cath_test/1o22A00.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "1x3aA00",
+      "split": "cath_train",
+      "length": 100,
+      "superfamily": "1.10.3970.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1x3aA00.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "1j5uA01",
+      "split": "cath_val",
+      "length": 125,
+      "superfamily": "3.55.10.10",
+      "pdb": "/opt/protein_pipeline/cath_val/1j5uA01.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "1sohA00",
+      "split": "cath_train",
+      "length": 67,
+      "superfamily": "1.10.1440.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1sohA00.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "4wexA00",
+      "split": "cath_train",
+      "length": 213,
+      "superfamily": "3.90.1740.10",
+      "pdb": "/opt/protein_pipeline/cath_train/4wexA00.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "2w2sA00",
+      "split": "cath_train",
+      "length": 163,
+      "superfamily": "3.10.460.20",
+      "pdb": "/opt/protein_pipeline/cath_train/2w2sA00.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "1n81A00",
+      "split": "cath_train",
+      "length": 186,
+      "superfamily": "1.10.3030.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1n81A00.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "1sdiA00",
+      "split": "cath_train",
+      "length": 213,
+      "superfamily": "1.10.3890.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1sdiA00.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "1rdrA01",
+      "split": "cath_val",
+      "length": 316,
+      "superfamily": "4.10.880.10",
+      "pdb": "/opt/protein_pipeline/cath_val/1rdrA01.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    },
+    {
+      "domain": "4ifxA00",
+      "split": "cath_train",
+      "length": 330,
+      "superfamily": "3.10.520.10",
+      "pdb": "/opt/protein_pipeline/cath_train/4ifxA00.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    },
+    {
+      "domain": "6vqfA00",
+      "split": "cath_train",
+      "length": 252,
+      "superfamily": "1.10.565.10",
+      "pdb": "/opt/protein_pipeline/cath_train/6vqfA00.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    },
+    {
+      "domain": "4ai2A02",
+      "split": "cath_train",
+      "length": 258,
+      "superfamily": "6.20.60.20",
+      "pdb": "/opt/protein_pipeline/cath_train/4ai2A02.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    }
+  ],
+  "reserve": [
+    {
+      "domain": "2i4f100",
+      "split": "cath_train",
+      "length": 100,
+      "superfamily": "3.30.2260.10",
+      "pdb": "/opt/protein_pipeline/cath_train/2i4f100.pdb",
+      "stratum": "50-150",
+      "role": "reserve",
+      "reserve_rank": 0
+    },
+    {
+      "domain": "2hg6A00",
+      "split": "cath_train",
+      "length": 106,
+      "superfamily": "3.90.1650.10",
+      "pdb": "/opt/protein_pipeline/cath_train/2hg6A00.pdb",
+      "stratum": "50-150",
+      "role": "reserve",
+      "reserve_rank": 1
+    },
+    {
+      "domain": "2hlyA00",
+      "split": "cath_train",
+      "length": 205,
+      "superfamily": "3.10.550.10",
+      "pdb": "/opt/protein_pipeline/cath_train/2hlyA00.pdb",
+      "stratum": "150-250",
+      "role": "reserve",
+      "reserve_rank": 0
+    },
+    {
+      "domain": "4yikA02",
+      "split": "cath_val",
+      "length": 201,
+      "superfamily": "1.10.40.40",
+      "pdb": "/opt/protein_pipeline/cath_val/4yikA02.pdb",
+      "stratum": "150-250",
+      "role": "reserve",
+      "reserve_rank": 1
+    },
+    {
+      "domain": "6qd5A00",
+      "split": "cath_train",
+      "length": 356,
+      "superfamily": "1.10.3430.10",
+      "pdb": "/opt/protein_pipeline/cath_train/6qd5A00.pdb",
+      "stratum": "250-400",
+      "role": "reserve",
+      "reserve_rank": 0
+    },
+    {
+      "domain": "1okgA03",
+      "split": "cath_train",
+      "length": 347,
+      "superfamily": "3.30.1670.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1okgA03.pdb",
+      "stratum": "250-400",
+      "role": "reserve",
+      "reserve_rank": 1
+    }
+  ],
+  "substitution_rule": "수용 게이트를 통과해 backbone 5 개를 채우지 못한 타겟은 같은 층의 예비로 reserve_rank 순서대로 교체한다. 결과를 보고 빼지 않는다.",
+  "not_for": [
+    "policy 비교",
+    "EFBC 계산",
+    "coverage 결론",
+    "confirmatory 주장"
+  ],
+  "code_sha": "96a30b02e53c1fbac82dd81e8747d943e6eb87ad",
+  "self_sha256": "16f4ac8f250d68e479e5d9cd55daf4130f2e43ea308188b3ddddc3136b8e81d8",
+  "msa_pilot": {
+    "rule": "층마다 primary 타겟을 도메인 이름 오름차순으로 정렬해 첫 번째. MSA 를 돌리기 전에 결정한다 - 잘 될 것 같은 것을 고르는 여지를 없앤다.",
+    "targets": {
+      "150-250": "1n81A00",
+      "250-400": "1rdrA01",
+      "50-150": "1j5uA01"
+    },
+    "frozen_before_msa": true,
+    "allowed_observations": [
+      "runtime",
+      "endpoint 응답",
+      "hang / empty A3M",
+      "usable_hits",
+      "기존 동결 warning 상태"
+    ],
+    "forbidden_actions": [
+      "MSA threshold 변경",
+      "타겟 선정 규칙 변경",
+      "tier 변경",
+      "filtering rule 변경"
+    ],
+    "on_failure": "이미 동결한 실패 규칙(§3)만 적용한다. 새 규칙을 만들지 않는다."
+  }
+}

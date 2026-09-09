@@ -29,13 +29,28 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 BASE = PROJECT_ROOT / "public_data" / "benchmark" / "gate0"
 OUT = BASE / "calibration_targets.json"
 
-#: 선정 seed. 이 파일과 함께 커밋되고 결과를 보고 바꾸지 않는다.
-SEED = 20260909
-
-PER_STRATUM = 4
-RESERVE_PER_STRATUM = 2
-BACKBONES_PER_TARGET = 5
-SEQUENCES_PER_BACKBONE = 8
+#: 코호트별 동결 설정. 재사용할 때 바뀌는 것은 이 표뿐이어야 한다 -
+#: 제외 목록 · seed · 개수. 선정 경로에 결과 의존 정보가 들어가면 안 된다.
+COHORTS = {
+    "calibration": {
+        "seed": 20260909,
+        "per_stratum": 4, "reserve_per_stratum": 2,
+        "backbones_per_target": 5, "sequences_per_backbone": 8,
+        "exclude_calibration": False,
+        "purpose": "Phase 4B joint-pass posterior calibration 코호트. "
+                   "성능 주장에 쓰지 않는다.",
+        "out": "calibration_targets.json",
+    },
+    "masked_holdout": {
+        "seed": 20260910,
+        "per_stratum": 4, "reserve_per_stratum": 2,
+        "backbones_per_target": 5, "sequences_per_backbone": 24,
+        "exclude_calibration": True,
+        "purpose": "masked protocol 의 새 confirmatory holdout. calibration 결과를 "
+                   "보기 전에 동결한다.",
+        "out": "masked_holdout_targets.json",
+    },
+}
 
 
 def _holdout_module():
@@ -47,8 +62,13 @@ def _holdout_module():
     return mod
 
 
-def used_targets() -> tuple[set[str], dict]:
-    """이미 쓴 타겟. 어디서 왔는지도 남긴다."""
+def used_targets(*, exclude_calibration: bool) -> tuple[set[str], dict]:
+    """이미 쓴 타겟. 어디서 왔는지도 남긴다.
+
+    여기 들어오는 것은 전부 **정체 정보**다 - 어떤 타겟을 이미 썼는가.
+    성능(yield · MSA depth · RFD3 성공률 · SoluProt · AF2 · joint-pass)은
+    선정 경로에 들어오지 않는다.
+    """
     src: dict[str, list[str]] = {}
     d = json.loads((BASE / "holdout_targets.json").read_text(encoding="utf-8"))
     src["holdout_resolved"] = sorted(x["domain"] for x in d["resolved"]["targets"])
@@ -57,19 +77,33 @@ def used_targets() -> tuple[set[str], dict]:
     for name in ("temperature_sweep", "temperature_panel2"):
         path = BASE / name / "af2_order_metric.csv"
         if path.exists():
+            # target_id 만 읽는다. 같은 파일의 결과 열은 읽지 않는다.
             src[name] = sorted({r["target_id"]
                                 for r in csv.DictReader(path.open(encoding="utf-8"))})
+    if exclude_calibration:
+        cal = json.loads((BASE / "calibration_targets.json").read_text(encoding="utf-8"))
+        src["calibration_selected"] = sorted(x["domain"] for x in cal["selected"])
+        src["calibration_reserve"] = sorted(x["domain"] for x in cal["reserve"])
     return {t for v in src.values() for t in v}, src
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--cohort", choices=sorted(COHORTS), default="calibration")
+    ap.add_argument("--out", default=None)
     args = ap.parse_args()
+
+    cfg = COHORTS[args.cohort]
+    SEED = cfg["seed"]
+    PER_STRATUM = cfg["per_stratum"]
+    RESERVE_PER_STRATUM = cfg["reserve_per_stratum"]
+    BACKBONES_PER_TARGET = cfg["backbones_per_target"]
+    SEQUENCES_PER_BACKBONE = cfg["sequences_per_backbone"]
+    out_path = args.out or str(BASE / cfg["out"])
 
     m = _holdout_module()
     sf = m.superfamilies()
-    used, used_src = used_targets()
+    used, used_src = used_targets(exclude_calibration=cfg["exclude_calibration"])
     used_sf = {sf.get(t) for t in used if sf.get(t)}
     print(f"이미 쓴 타겟 {len(used)} · 그 superfamily {len(used_sf)}")
 
@@ -105,9 +139,11 @@ def main() -> int:
               f"{row['superfamily']}")
 
     report = {
-        "purpose": "Phase 4B joint-pass posterior calibration 코호트. "
-                   "성능 주장에 쓰지 않는다.",
-        "freeze_doc": "docs/specs/rapid-v2-phase4b-calibration-freeze.md",
+        "cohort": args.cohort,
+        "purpose": cfg["purpose"],
+        "freeze_doc": ("docs/specs/rapid-v2-sequence-constraint-protocol-freeze.md"
+                       if args.cohort == "masked_holdout"
+                       else "docs/specs/rapid-v2-phase4b-calibration-freeze.md"),
         "frozen_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "seed": SEED,
         "design": {
@@ -123,6 +159,8 @@ def main() -> int:
         "selection_excluded_inputs": [
             "과거 yield", "SoluProt 결과", "structural-success 결과",
             "joint-pass 결과", "Gate 0 사전분포 점수",
+            "MSA 심도/품질", "RFD3 성공률",
+            "legacy rapid_target_manifest.csv 의 eligible 열",
         ],
         "exclusions": {
             "used_targets": sorted(used),
@@ -144,9 +182,9 @@ def main() -> int:
     }
     body = json.dumps(report, ensure_ascii=False, indent=2)
     report["self_sha256"] = hashlib.sha256(body.encode()).hexdigest()
-    Path(args.out).write_text(json.dumps(report, ensure_ascii=False, indent=2),
+    Path(out_path).write_text(json.dumps(report, ensure_ascii=False, indent=2),
                               encoding="utf-8")
-    print(f"\nwrote {args.out}")
+    print(f"\nwrote {out_path}")
     return 0
 
 
