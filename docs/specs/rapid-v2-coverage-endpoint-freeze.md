@@ -1,7 +1,7 @@
 # Coverage-preserving mode — endpoint 동결
 
-**상태: 초안. 사용자 승인 대기.** 승인 전에는 prospective evaluation 을 시작하지
-않는다.
+**상태: 승인됨.** 이 문서가 coverage mode 평가의 사전등록이다. 여기 적힌 값을
+결과를 보고 바꾸지 않는다 - 바꿔야 하면 버전을 올리고 이유를 남긴다.
 
 v1 의 `holdout_experiment_spec.json` 과 같은 역할이다. 결과를 보고 판정 기준을
 고르는 일이 없도록, 평가를 시작하기 전에 여기 못 박는다.
@@ -128,6 +128,28 @@ yield 기준 (v1 규칙 그대로)
 일관성 확인   9 타겟 교집합으로 다시 계산해 방향이 같은지 본다
 최소 클러스터 8 (v1 선례). 10 과 11 둘 다 충족한다.
 ```
+
+> **Endpoint-specific informative sets define endpoint-specific estimands;
+> the 9-target intersection is a sensitivity analysis for direction
+> consistency and is not the primary estimand.**
+
+두 endpoint 에서 "정보가 없는" 이유가 서로 다르기 때문이다. EFBC 에서는
+feasible 가능한 backbone 이 하나뿐이면 어떤 정책도 coverage 를 바꾸지 못하고,
+yield 에서는 모든 arm 이 0 또는 1 이면 어떤 정책도 yield 를 바꾸지 못한다.
+9 개 교집합으로 억지로 맞추면 각 endpoint 에서 실제로 쓸 수 있는 정보를 이유
+없이 버리게 된다.
+
+### 보고 표 — 어느 집합을 썼는지 항상 적는다
+
+| 결과 | 분석 집합 |
+|---|---|
+| ΔEFBC vs static | coverage-informative 10 targets |
+| Yield ratio vs static | yield-informative 11 targets |
+| ΔEFBC sensitivity | common 9 targets |
+| Yield ratio sensitivity | common 9 targets |
+
+**서로 다른 n 을 쓴 결과를 같은 n 인 것처럼 합쳐 말하지 않는다.** 채택 규칙은
+각 조건을 자기 endpoint 집합에서 판정한다 (§6).
 
 1sh6A02 이 coverage 에서는 정보가 있다는 점을 특히 기록한다 - 모든 backbone 이
 yield 1.0 이라 yield 로는 정책을 구별하지 못하지만, 예산을 어디에 쓰든 통과가
