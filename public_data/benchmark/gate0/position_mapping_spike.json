@@ -1,0 +1,848 @@
+{
+  "purpose": "query → original → staged → backbone → fixed position 매핑 검증. 폴딩·MSA 없음.",
+  "hard_fail_conditions": [
+    "staged 가 원본의 연속 부분열이 아님 (중간 결손)",
+    "부분열이 원본에 여러 번 나타남 (모호한 대응)",
+    "backbone 서열/번호가 staged 와 다름",
+    "사슬이 둘 이상",
+    "위치별 아미노산 불일치",
+    "query 위치가 backbone 에 대응되지 않음 (조용한 마스크 축소 금지)",
+    "fixed position 이 backbone 잔기 번호 범위 밖"
+  ],
+  "why_resseq_cannot_be_used": "원본 resseq 범위가 1 부터 시작하지 않는다 (실측 4..187 · 513..657 · -2..310 · 492..865). 전처리가 1 부터 재번호하므로 원본 resseq 를 그대로 쓰면 대부분의 타겟에서 어긋난다.",
+  "why_ca_lines_cannot_be_counted": "altLoc 이 있으면 CA 행 수 != 잔기 수 (실측 1y8aA02 321/310 · 7o1zA01 236/225).",
+  "n_targets_mapped": 11,
+  "n_targets_failed": 1,
+  "targets": {
+    "1evsA00": {
+      "domain": "1evsA00",
+      "n_original_residues": 163,
+      "n_staged_residues": 163,
+      "n_backbone_residues": 163,
+      "leading_residues_dropped": 0,
+      "original_resseq_range": [
+        4,
+        187
+      ],
+      "backbone_resseq_range": [
+        1,
+        163
+      ],
+      "resseq_is_preserved": false,
+      "n_mapped": 163,
+      "mapping_sample": [
+        {
+          "query_pos": 1,
+          "original_chain": "A",
+          "original_resseq": 4,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 1,
+          "aa": "G",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 2,
+          "original_chain": "A",
+          "original_resseq": 5,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 2,
+          "aa": "S",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 3,
+          "original_chain": "A",
+          "original_resseq": 6,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 3,
+          "aa": "C",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 162,
+          "original_chain": "A",
+          "original_resseq": 186,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 162,
+          "aa": "K",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 163,
+          "original_chain": "A",
+          "original_resseq": 187,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 163,
+          "aa": "W",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        }
+      ],
+      "backbone_file": "rfd3_inputs_spec-1_0_model_0.pdb"
+    },
+    "1j0tA00": {
+      "domain": "1j0tA00",
+      "n_original_residues": 78,
+      "n_staged_residues": 77,
+      "n_backbone_residues": 77,
+      "leading_residues_dropped": 1,
+      "original_resseq_range": [
+        0,
+        77
+      ],
+      "backbone_resseq_range": [
+        1,
+        77
+      ],
+      "resseq_is_preserved": true,
+      "n_mapped": 77,
+      "mapping_sample": [
+        {
+          "query_pos": 2,
+          "original_chain": "A",
+          "original_resseq": 1,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 1,
+          "aa": "S",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 3,
+          "original_chain": "A",
+          "original_resseq": 2,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 2,
+          "aa": "F",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 4,
+          "original_chain": "A",
+          "original_resseq": 3,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 3,
+          "aa": "I",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 77,
+          "original_chain": "A",
+          "original_resseq": 76,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 76,
+          "aa": "G",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 78,
+          "original_chain": "A",
+          "original_resseq": 77,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 77,
+          "aa": "Q",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        }
+      ],
+      "backbone_file": "rfd3_inputs_spec-1_0_model_0.pdb"
+    },
+    "1ji8A01": {
+      "domain": "1ji8A01",
+      "n_original_residues": 111,
+      "n_staged_residues": 111,
+      "n_backbone_residues": 111,
+      "leading_residues_dropped": 0,
+      "original_resseq_range": [
+        1,
+        111
+      ],
+      "backbone_resseq_range": [
+        1,
+        111
+      ],
+      "resseq_is_preserved": true,
+      "n_mapped": 111,
+      "mapping_sample": [
+        {
+          "query_pos": 1,
+          "original_chain": "A",
+          "original_resseq": 1,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 1,
+          "aa": "M",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 2,
+          "original_chain": "A",
+          "original_resseq": 2,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 2,
+          "aa": "P",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 3,
+          "original_chain": "A",
+          "original_resseq": 3,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 3,
+          "aa": "V",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 110,
+          "original_chain": "A",
+          "original_resseq": 110,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 110,
+          "aa": "C",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 111,
+          "original_chain": "A",
+          "original_resseq": 111,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 111,
+          "aa": "V",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        }
+      ],
+      "backbone_file": "rfd3_inputs_spec-1_0_model_0_retry_1_1.pdb"
+    },
+    "1q5zA00": {
+      "domain": "1q5zA00",
+      "n_original_residues": 145,
+      "n_staged_residues": 145,
+      "n_backbone_residues": 145,
+      "leading_residues_dropped": 0,
+      "original_resseq_range": [
+        513,
+        657
+      ],
+      "backbone_resseq_range": [
+        1,
+        145
+      ],
+      "resseq_is_preserved": false,
+      "n_mapped": 145,
+      "mapping_sample": [
+        {
+          "query_pos": 1,
+          "original_chain": "A",
+          "original_resseq": 513,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 1,
+          "aa": "P",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 2,
+          "original_chain": "A",
+          "original_resseq": 514,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 2,
+          "aa": "F",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 3,
+          "original_chain": "A",
+          "original_resseq": 515,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 3,
+          "aa": "S",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 144,
+          "original_chain": "A",
+          "original_resseq": 656,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 144,
+          "aa": "R",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 145,
+          "original_chain": "A",
+          "original_resseq": 657,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 145,
+          "aa": "A",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        }
+      ],
+      "backbone_file": "rfd3_inputs_spec-1_0_model_0_retry_3_1.pdb"
+    },
+    "1y8aA02": {
+      "domain": "1y8aA02",
+      "n_original_residues": 313,
+      "n_staged_residues": 310,
+      "n_backbone_residues": 310,
+      "leading_residues_dropped": 3,
+      "original_resseq_range": [
+        -2,
+        310
+      ],
+      "backbone_resseq_range": [
+        1,
+        310
+      ],
+      "resseq_is_preserved": true,
+      "n_mapped": 310,
+      "mapping_sample": [
+        {
+          "query_pos": 4,
+          "original_chain": "A",
+          "original_resseq": 1,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 1,
+          "aa": "M",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 5,
+          "original_chain": "A",
+          "original_resseq": 2,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 2,
+          "aa": "F",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 6,
+          "original_chain": "A",
+          "original_resseq": 3,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 3,
+          "aa": "F",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 312,
+          "original_chain": "A",
+          "original_resseq": 309,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 309,
+          "aa": "G",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 313,
+          "original_chain": "A",
+          "original_resseq": 310,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 310,
+          "aa": "S",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        }
+      ],
+      "backbone_file": "rfd3_inputs_spec-1_0_model_0.pdb"
+    },
+    "2mq6A00": {
+      "domain": "2mq6A00",
+      "n_original_residues": 142,
+      "n_staged_residues": 142,
+      "n_backbone_residues": 142,
+      "leading_residues_dropped": 0,
+      "original_resseq_range": [
+        1,
+        142
+      ],
+      "backbone_resseq_range": [
+        1,
+        142
+      ],
+      "resseq_is_preserved": true,
+      "n_mapped": 142,
+      "mapping_sample": [
+        {
+          "query_pos": 1,
+          "original_chain": "A",
+          "original_resseq": 1,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 1,
+          "aa": "M",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 2,
+          "original_chain": "A",
+          "original_resseq": 2,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 2,
+          "aa": "A",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 3,
+          "original_chain": "A",
+          "original_resseq": 3,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 3,
+          "aa": "D",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 141,
+          "original_chain": "A",
+          "original_resseq": 141,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 141,
+          "aa": "S",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 142,
+          "original_chain": "A",
+          "original_resseq": 142,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 142,
+          "aa": "D",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        }
+      ],
+      "backbone_file": "rfd3_inputs_spec-1_0_model_0_retry_1_1.pdb"
+    },
+    "3ps3A02": {
+      "domain": "3ps3A02",
+      "n_original_residues": 300,
+      "n_staged_residues": 300,
+      "n_backbone_residues": 300,
+      "leading_residues_dropped": 0,
+      "original_resseq_range": [
+        1,
+        300
+      ],
+      "backbone_resseq_range": [
+        1,
+        300
+      ],
+      "resseq_is_preserved": true,
+      "n_mapped": 300,
+      "mapping_sample": [
+        {
+          "query_pos": 1,
+          "original_chain": "A",
+          "original_resseq": 1,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 1,
+          "aa": "M",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 2,
+          "original_chain": "A",
+          "original_resseq": 2,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 2,
+          "aa": "I",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 3,
+          "original_chain": "A",
+          "original_resseq": 3,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 3,
+          "aa": "K",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 299,
+          "original_chain": "A",
+          "original_resseq": 299,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 299,
+          "aa": "A",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 300,
+          "original_chain": "A",
+          "original_resseq": 300,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 300,
+          "aa": "P",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        }
+      ],
+      "backbone_file": "rfd3_inputs_spec-1_0_model_0.pdb"
+    },
+    "4poaA02": {
+      "domain": "4poaA02",
+      "n_original_residues": 309,
+      "n_staged_residues": 309,
+      "n_backbone_residues": 309,
+      "leading_residues_dropped": 0,
+      "original_resseq_range": [
+        4,
+        330
+      ],
+      "backbone_resseq_range": [
+        1,
+        309
+      ],
+      "resseq_is_preserved": false,
+      "n_mapped": 309,
+      "mapping_sample": [
+        {
+          "query_pos": 1,
+          "original_chain": "A",
+          "original_resseq": 4,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 1,
+          "aa": "T",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 2,
+          "original_chain": "A",
+          "original_resseq": 5,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 2,
+          "aa": "P",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 3,
+          "original_chain": "A",
+          "original_resseq": 6,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 3,
+          "aa": "D",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 308,
+          "original_chain": "A",
+          "original_resseq": 329,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 308,
+          "aa": "G",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 309,
+          "original_chain": "A",
+          "original_resseq": 330,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 309,
+          "aa": "I",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        }
+      ],
+      "backbone_file": "rfd3_inputs_spec-1_0_model_0.pdb"
+    },
+    "4y07A01": {
+      "domain": "4y07A01",
+      "n_original_residues": 333,
+      "n_staged_residues": 333,
+      "n_backbone_residues": 333,
+      "leading_residues_dropped": 0,
+      "original_resseq_range": [
+        492,
+        865
+      ],
+      "backbone_resseq_range": [
+        1,
+        333
+      ],
+      "resseq_is_preserved": false,
+      "n_mapped": 333,
+      "mapping_sample": [
+        {
+          "query_pos": 1,
+          "original_chain": "A",
+          "original_resseq": 492,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 1,
+          "aa": "D",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 2,
+          "original_chain": "A",
+          "original_resseq": 493,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 2,
+          "aa": "R",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 3,
+          "original_chain": "A",
+          "original_resseq": 494,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 3,
+          "aa": "S",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 332,
+          "original_chain": "A",
+          "original_resseq": 864,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 332,
+          "aa": "T",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 333,
+          "original_chain": "A",
+          "original_resseq": 865,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 333,
+          "aa": "E",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        }
+      ],
+      "backbone_file": "rfd3_inputs_spec-1_0_model_0_retry_8_1.pdb"
+    },
+    "5nazA00": {
+      "domain": "5nazA00",
+      "n_original_residues": 226,
+      "n_staged_residues": 226,
+      "n_backbone_residues": 226,
+      "leading_residues_dropped": 0,
+      "original_resseq_range": [
+        4,
+        229
+      ],
+      "backbone_resseq_range": [
+        1,
+        226
+      ],
+      "resseq_is_preserved": false,
+      "n_mapped": 226,
+      "mapping_sample": [
+        {
+          "query_pos": 1,
+          "original_chain": "A",
+          "original_resseq": 4,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 1,
+          "aa": "H",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 2,
+          "original_chain": "A",
+          "original_resseq": 5,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 2,
+          "aa": "G",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 3,
+          "original_chain": "A",
+          "original_resseq": 6,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 3,
+          "aa": "F",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 225,
+          "original_chain": "A",
+          "original_resseq": 228,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 225,
+          "aa": "R",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 226,
+          "original_chain": "A",
+          "original_resseq": 229,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 226,
+          "aa": "T",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        }
+      ],
+      "backbone_file": "rfd3_inputs_spec-1_0_model_1.pdb"
+    },
+    "7o1zA01": {
+      "domain": "7o1zA01",
+      "n_original_residues": 225,
+      "n_staged_residues": 225,
+      "n_backbone_residues": 225,
+      "leading_residues_dropped": 0,
+      "original_resseq_range": [
+        25,
+        249
+      ],
+      "backbone_resseq_range": [
+        1,
+        225
+      ],
+      "resseq_is_preserved": false,
+      "n_mapped": 225,
+      "mapping_sample": [
+        {
+          "query_pos": 1,
+          "original_chain": "A",
+          "original_resseq": 25,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 1,
+          "aa": "S",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 2,
+          "original_chain": "A",
+          "original_resseq": 26,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 2,
+          "aa": "G",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 3,
+          "original_chain": "A",
+          "original_resseq": 27,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 3,
+          "aa": "W",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 224,
+          "original_chain": "A",
+          "original_resseq": 248,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 224,
+          "aa": "V",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        },
+        {
+          "query_pos": 225,
+          "original_chain": "A",
+          "original_resseq": 249,
+          "original_icode": "",
+          "backbone_chain": "A",
+          "backbone_resseq": 225,
+          "aa": "E",
+          "mapping_source": "contiguous_subsequence_offset",
+          "identity_ok": true
+        }
+      ],
+      "backbone_file": "rfd3_inputs_spec-1_0_model_0.pdb"
+    }
+  },
+  "failures": {
+    "2r01A02": "2r01A02: backbone 이 없다"
+  },
+  "code_sha": "57149204f26c0898f548546c495dd56522169d31",
+  "utc": "2026-09-09T07:41:23Z"
+}
