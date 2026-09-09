@@ -278,3 +278,40 @@ def test_the_verdict_is_go_only_when_every_target_passes_instrumentation():
     rows.append(dict(broken, **pilot.evaluate_acceptance(broken)))
     assert pilot.print_table(rows) == "BLOCK"
     assert pilot.print_table([]) == "BLOCK", "빈 결과를 GO 로 읽으면 안 된다"
+
+
+# ---- 24 타겟을 무슨 코드로 돌렸는지 남는가 ------------------------------
+
+def test_run_provenance_is_pinned_once_and_names_the_code():
+    """`_write` 마다 HEAD 를 다시 읽으면 17 시간 실행 중 커밋이 생기면 타겟마다
+    다른 SHA 가 박힌다. 그러면 '무슨 코드로 돌렸는가' 에 답할 수 없다."""
+    prov = _full().run_provenance()
+    assert prov["pinned_at_start"] is True
+    assert len(prov["code_sha"]) == 40
+    assert prov["code_sha"].startswith(prov["code_sha_short"])
+    # HEAD 만으로는 부족하다 - 작업 트리가 더러우면 HEAD 가 실행 코드가 아니다
+    assert isinstance(prov["worktree_clean_for_code_paths"], bool)
+    assert "50_full_msa.py" in prov["script_sha256"]
+    assert "48_msa_pilot.py" in prov["script_sha256"]
+    for name, digest in prov["script_sha256"].items():
+        assert len(digest) == 64, name
+        import hashlib
+        f = ROOT / "scripts" / "transcoder" / name
+        assert hashlib.sha256(f.read_bytes()).hexdigest() == digest
+
+
+def test_dirty_paths_are_parsed_without_an_offset_slip():
+    """porcelain 출력을 고정 오프셋으로 자르면 선행 공백 때문에 한 칸 밀린다."""
+    prov = _full().run_provenance()
+    for path in prov["dirty_paths"]:
+        assert (ROOT / path).exists(), f"경로가 어긋났다: {path!r}"
+        assert not path.startswith(("M ", "?", " ")), path
+
+
+def test_the_manifest_carries_the_pinned_provenance():
+    src = FULL.read_text(encoding="utf-8")
+    assert '"run_provenance": prov' in src
+    assert '"code_sha": prov["code_sha"]' in src
+    # _write 안에서 git 을 다시 호출하지 않아야 한다
+    body = src[src.index("def _write("):src.index("def _summary(")]
+    assert "rev-parse" not in body, "_write 가 HEAD 를 다시 읽는다"

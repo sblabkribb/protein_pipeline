@@ -48,6 +48,41 @@ COHORTS = (("calibration_v2", "calibration_v2_targets.json"),
            ("confirmatory", "masked_holdout_targets.json"))
 
 
+def run_provenance() -> dict:
+    """실행 시점에 **한 번** 잡는다.
+
+    `_write` 마다 `git rev-parse HEAD` 를 다시 읽으면, 17 시간 실행 중에 다른
+    커밋이 생기면 타겟마다 다른 SHA 가 박힌다. 그러면 "무슨 코드로 24 개를
+    돌렸는가" 에 답할 수 없다.
+
+    HEAD 만으로는 부족하다 - 작업 트리가 더러우면 HEAD 가 실제 실행 코드가
+    아니다. 그래서 두 스크립트의 내용 해시도 함께 남긴다.
+    """
+    def git(*a):
+        return subprocess.run(["git", *a], cwd=PROJECT_ROOT,
+                              capture_output=True, text=True).stdout.strip()
+
+    here = Path(__file__).resolve().parent
+    scripts = {}
+    for name in ("50_full_msa.py", "48_msa_pilot.py"):
+        f = here / name
+        if f.exists():
+            scripts[name] = hashlib.sha256(f.read_bytes()).hexdigest()
+    dirty = git("status", "--porcelain", "--", "scripts/transcoder", "pipeline-mcp/src")
+    return {
+        "code_sha": git("rev-parse", "HEAD"),
+        "code_sha_short": git("rev-parse", "--short=7", "HEAD"),
+        "pinned_at_start": True,
+        "worktree_clean_for_code_paths": not dirty,
+        # `git()` 이 .strip() 을 하므로 첫 줄의 선행 공백이 사라진다.
+        # 고정 오프셋으로 자르면 한 칸 밀린다 - 공백 기준으로 나눈다.
+        "dirty_paths": [l.split(maxsplit=1)[-1] for l in dirty.splitlines()
+                        if l.split(maxsplit=1)] if dirty else [],
+        "script_sha256": scripts,
+        "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+
+
 def deployment_defaults() -> dict:
     """동결 §1 의 conservation 설정을 배포 기본값에서 읽는다."""
     from pipeline_mcp.models import PipelineRequest
@@ -103,6 +138,7 @@ def main() -> int:
     from pipeline_mcp.bio.a3m import compute_conservation, decode_a3m_gz_b64, msa_quality
     from pipeline_mcp.clients.local_http import LocalHTTPMMseqsClient
 
+    prov = run_provenance()
     cons_cfg = deployment_defaults()
     rows = targets()
     if args.only:
@@ -119,7 +155,9 @@ def main() -> int:
     print(f"타겟 {len(rows)} · target_db={TARGET_DB} max_seqs={MAX_SEQS} "
           f"threads={THREADS} use_gpu={USE_GPU}")
     print(f"conservation {cons_cfg}")
-    print(f"A3M -> {MSA_DIR}  (gitignored)\n")
+    print(f"A3M -> {MSA_DIR}  (gitignored)")
+    print(f"code {prov['code_sha_short']} · 코드 경로 작업트리 "
+          f"{'clean' if prov['worktree_clean_for_code_paths'] else 'DIRTY ' + str(prov['dirty_paths'])}\n")
 
     client = LocalHTTPMMseqsClient(base_url=url, token=None, timeout_s=7200.0)
     results: list[dict] = []
@@ -217,15 +255,16 @@ def main() -> int:
         results.append(entry)
 
         # 매 타겟마다 저장한다. 17 시간짜리 실행에서 마지막에만 쓰면 다 잃는다.
-        _write(out_path, results, rows, cons_cfg)
+        _write(out_path, results, rows, cons_cfg, prov)
 
-    _write(out_path, results, rows, cons_cfg)
+    _write(out_path, results, rows, cons_cfg, prov)
     _summary(results)
     print(f"\nwrote {out_path}")
     return 0
 
 
-def _write(out_path: Path, results: list[dict], rows: list[dict], cons_cfg: dict) -> None:
+def _write(out_path: Path, results: list[dict], rows: list[dict],
+           cons_cfg: dict, prov: dict) -> None:
     by_class: dict[str, int] = {}
     for e in results:
         by_class[e.get("classification", "?")] = by_class.get(e.get("classification", "?"), 0) + 1
@@ -243,8 +282,8 @@ def _write(out_path: Path, results: list[dict], rows: list[dict], cons_cfg: dict
         "n_planned": len(rows), "n_done": len(results),
         "by_classification": by_class,
         "targets": results,
-        "code_sha": subprocess.run(["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT,
-                                   capture_output=True, text=True).stdout.strip(),
+        "run_provenance": prov,
+        "code_sha": prov["code_sha"],
         "updated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
