@@ -1243,8 +1243,60 @@ primary     FDBC@B                        높을수록 좋다
 guardrail   총 joint-pass 후보 수          yield mode 대비 비열등이어야 한다
 ```
 
-guardrail 이 깨지면 coverage 개선을 성공으로 보고하지 않는다. 비열등 마진은
-사전에 정하고 동결한다 (SS4).
+guardrail 이 깨지면 coverage 개선을 성공으로 보고하지 않는다.
+
+### 비열등 마진 — 확정: 10% 상대 마진
+
+```
+structural-yield ratio = (coverage mode 의 총 joint-pass 수)
+                       / (comparator 의 총 joint-pass 수)
+
+guardrail:  yield ratio >= 0.90
+```
+
+**이것은 biological truth 가 아니라 v2.0 의 운영상 사전등록 기준이다.** 어떤
+생물학적 근거로 0.90 이 나온 것이 아니다. 5% 는 coverage 를 위해 일부를
+내주려는 mode 에 지나치게 빡빡하고, 20% 는 구조 성공 후보를 너무 많이 잃어도
+통과시킨다는 판단에서 고른 값이다. 다른 값이 필요하다고 판단되면 **실험 전에**
+버전을 올려 바꾼다. 결과를 보고 바꾸지 않는다.
+
+### 판정 규칙
+
+```
+Primary    Feasible Design-Basin Coverage @ Fixed Budget
+Guardrail  structural-yield ratio >= 0.90
+
+채택 조건
+  FDBC 개선의 타겟 클러스터 bootstrap 95% CI 가 0 을 제외한다
+  AND
+  yield ratio 의 단측 95% 하한이 0.90 이상이다
+```
+
+primary 도 CI 기반으로 둔 것은 v1 선례와 맞추기 위해서다. v1 은 점추정이 아니라
+"타겟 클러스터 bootstrap CI 가 0 을 제외" 로 판정했고, 두 mode 를 같은 코호트에서
+비교하려면 판정 기준의 형태가 같아야 한다.
+
+guardrail 은 단측이다. 물어보는 것이 "yield 가 충분히 안 떨어졌는가" 이지
+"yield 가 달라졌는가" 가 아니기 때문이다.
+
+### Comparator — 실험 전에 고정
+
+```
+primary comparator     같은 예산의 static / equal allocation
+secondary comparator   frozen structural-yield RAPID (rapid_structural_v1)
+```
+
+둘을 함께 보는 이유는 두 질문이 다르기 때문이다.
+
+```
+vs static      "기존 균등 배분보다 coverage 를 늘렸는가"
+vs v1 yield    "그 대가로 yield 를 얼마나 잃었는가"
+```
+
+`vs static` 을 primary 로 두는 것은 그것이 현재 운영 관행이기 때문이고,
+`vs v1` 을 secondary 로 두는 것은 두 mode 가 같은 Core 의 서로 다른 설정이라
+직접 비교가 해석 가능하기 때문이다. **두 comparator 를 하나로 합치지 않는다** -
+합치면 어느 질문에 답한 것인지 알 수 없다.
 
 이 구조는 임상시험의 guardrail endpoint 와 같다 - primary 가 좋아져도
 guardrail 이 무너지면 그 결과를 채택하지 않는다.
@@ -1276,7 +1328,7 @@ informative_basin_rule      어떤 basin 이 정책을 구별할 수 없는가
                             (v1 의 "모든 arm yield 0 또는 모든 arm yield 1" 에 대응)
 min_informative_basins      판정 최소 수 (v1 은 8 이었다)
 feasibility_endpoint        joint-pass 정의
-guardrail_margin            SS2 의 비열등 마진
+guardrail_margin            0.90 (SS2 에서 확정. freeze 문서에 값을 복사한다)
 budget_grid                 어느 B 에서 볼 것인가
 ```
 
@@ -1547,9 +1599,10 @@ v2 와 Antigen integration 은 Discussion / Future Work 또는 후속 연구로
    총 structural success 수의 비열등이다. 남은 것은 SS3 의 basin 동결과
    SS2 의 비열등 마진 값이며, 둘 다 위 2 번과 아래 9 번으로 옮겼다.
 
-9. **guardrail 비열등 마진.** SS2 의 마진을 얼마로 둘 것인가. yield mode 대비
-   총 통과 후보 수가 몇 % 까지 떨어져도 coverage 개선을 채택할 것인가.
-   이것은 통계가 아니라 과학적 판단이므로 사람이 정하고 동결해야 한다.
+9. ~~guardrail 비열등 마진.~~ **확정됨: yield ratio >= 0.90 (§SS2).**
+   운영상 사전등록 기준이며 biological truth 가 아니다. comparator 도 함께
+   고정했다 - primary 는 같은 예산의 static/equal allocation, secondary 는
+   frozen v1.
 
 ---
 

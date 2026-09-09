@@ -98,7 +98,7 @@ JSON 을 먼저 읽는다). YAML 을 고치면 JSON 을 다시 만들어야 하�
 |---|---|
 | 작업 | 1. freeze manifest 에 `rapid_sr/allocation.py` 추가 (§1)<br>2. `test_v1_immutable.py` 신규: 두 allocation.py 가 manifest 해시와 일치<br>3. CI 에서 v2 브랜치가 두 파일을 건드리면 실패하는 검사 |
 | 산출 | `pipeline-mcp/tests/test_v1_immutable.py` |
-| acceptance | 두 파일 중 하나를 한 바이트 고치면 테스트가 실패한다 (실제로 넣었다 되돌려 확인) |
+| acceptance | 두 파일 중 하나를 한 바이트 고치면 테스트가 실패한다 (실제로 넣었다 되돌려 확인)<br>**정규화 경로가 중복되면 manifest 생성이 hard fail** (basename keying 사고 재발 방지)<br>**manifest 에 `schema_version` 이 있고, 읽는 쪽이 모르는 버전이면 실패** |
 | 의존 | 없음 |
 
 ### Phase 1 — contract 만. 동작 없음.
@@ -163,7 +163,7 @@ coverage-aware 라고 부르지 않는다** (설계 §O1).
 | | |
 |---|---|
 | 작업 | `profiles/antigen_adapter.py` — **contract 만**<br>Antigen state → `ArmState` 매핑 정의<br>`WetOutcome` 스키마 (설계 §AG8)<br>`AntigenTaskProfile` 을 registry 에 선언 (executable=False 유지) |
-| acceptance | Antigen 저장소 파일이 하나도 바뀌지 않는다 (`/opt/antigen_pipeline` git status clean)<br>adapter 가 없거나 실패하면 기존 배분으로 돌아간다 (fail-open) 를 테스트로 확인<br>Antigen 의 어떤 evaluator도 `allocation` 허가를 받지 않는다 (Invariant 6·7) |
+| acceptance | Antigen 저장소 파일이 하나도 바뀌지 않는다 (`/opt/antigen_pipeline` git status clean)<br>adapter 가 없거나 실패하면 기존 배분으로 돌아간다 (fail-open) 를 테스트로 확인<br>**PPIformer · AF3 · ipSAE 가 reward 경로에 들어가면 테스트가 실패한다** — 이름으로 막는 것이 아니라 `scientific_permissions.allocation != true` 인 evaluator 의 값이 `ArmState.expected_utility` 에 도달하는 경로 자체를 금지 (Invariant 6)<br>feasibility 로 쓰는 것은 허용 — gate 허가는 있다 (설계 §SS5) |
 | 의존 | Phase 3 (Phase 4 는 아니다 — contract 만이므로) |
 
 ---
@@ -174,12 +174,32 @@ coverage-aware 라고 부르지 않는다** (설계 §O1).
 
 ### M1 — basin 구조 기술 통계 (Phase 4 를 막는다)
 
+M1 은 **basin 정의를 고르는 분석이 아니라, 후보 basin 정의가 얼마나 안정적인지
+확인하는 기술 통계**다. 이 구분이 M1 의 전부다.
+
 ```
 대상   홀드아웃 RFD3 백본 60 개, (가능하면) Antigen ~200 개
-목적   서로 얼마나 다른지 기술한다. 정책 비교는 하지 않는다.
-산출   백본 쌍별 구조 거리 분포, 임계값별 클러스터 수 곡선
-금지   이 단계에서 정책을 비교하거나 basin 정의를 고르는 것
+
+한다
+  백본 쌍별 구조 거리 분포 (전체, 타겟 내, 타겟 간)
+  사전에 정한 임계값 격자에서 클러스터 수와 그 안정성
+  클러스터 크기 분포 · 싱글턴 비율
+  타겟마다 클러스터 수가 얼마나 다른지
+
+하지 않는다
+  정책 비교 (adaptive vs static)
+  FDBC 계산
+  yield / 성공률과의 상관
+  "우리 결과가 잘 나오는 임계값" 고르기
 ```
+
+**임계값 격자는 데이터를 보기 전에 적는다.** 격자를 먼저 커밋하고 그 다음에
+돌린다. 그래야 사후에 격자를 넓히거나 좁히는 일이 기록에 남는다.
+
+안정성 판정의 뜻: 임계값을 조금 움직였을 때 클러스터 수가 급변하면 그
+정의는 basin 축으로 쓰기에 취약하다는 뜻이다. 완만하면 그 구간 어디를 잡아도
+같은 구조를 본다는 뜻이다. **어느 쪽인지를 기록하는 것이 M1 의 산출물이고,
+그것을 보고 사람이 basin 을 고른다.**
 
 끝나면 사람이 basin 정의를 고르고 **별도 freeze 문서**에 설계 §SS3 의 8 개
 항목을 못 박는다. v1 의 `holdout_experiment_spec.json` 과 같은 형식.
@@ -194,10 +214,22 @@ coverage-aware 라고 부르지 않는다** (설계 §O1).
 task 별로 재서 minimum_exploration_policy 에 넣는다.
 ```
 
-### M3 — guardrail 비열등 마진 (사람 결정)
+### M3 — guardrail 비열등 마진 — **확정됨**
 
-설계 §SS2 의 마진. 통계가 아니라 과학적 판단이므로 측정이 아니라 **결정**이고,
-동결 문서에 들어간다.
+```
+yield ratio >= 0.90     (10% 상대 비열등 마진)
+
+판정   FDBC 개선의 클러스터 bootstrap 95% CI 가 0 을 제외
+       AND yield ratio 단측 95% 하한 >= 0.90
+
+comparator
+  primary    같은 예산의 static / equal allocation
+  secondary  frozen structural-yield RAPID
+```
+
+**운영상 사전등록 기준이지 biological truth 가 아니다.** 설계 §SS2 에 근거와
+함께 적혀 있다. 남은 M3 작업은 측정이 아니라 이 값을 basin freeze 문서에
+복사하는 것뿐이다.
 
 ---
 

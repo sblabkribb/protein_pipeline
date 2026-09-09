@@ -36,6 +36,10 @@ BASE = PROJECT_ROOT / "public_data" / "benchmark" / "gate0"
 FREEZE = BASE / "RAPID_STRUCTURAL_V1_FREEZE.json"
 
 PROFILE = "rapid_structural_v1"
+#: 기록 형식의 버전. 읽는 쪽이 모르는 버전이면 조용히 넘기지 말고 실패한다.
+#: 1 = code 를 basename 으로 키잉하던 형식 (두 allocation.py 가 충돌했다)
+#: 2 = code/artifacts 를 저장소 상대 경로로 키잉한다
+SCHEMA_VERSION = 2
 
 #: 고정 대상. (역할, 저장소 상대 경로)
 ARTIFACTS = [
@@ -156,13 +160,39 @@ def git(*args: str) -> str:
                           capture_output=True, text=True).stdout.strip()
 
 
+def _check_unique_paths() -> None:
+    """정규화 경로가 겹치면 만들지 않는다.
+
+    basename 으로 키를 만들던 판본에서 pipeline_mcp/allocation.py 와
+    rapid_sr/allocation.py 가 한 항목으로 덮여 런타임 사본의 해시가 조용히
+    사라졌다. 조용한 덮어쓰기가 문제였으므로 여기서 크게 실패한다.
+    """
+    for name, paths in (("ARTIFACTS", [rel for _, rel in ARTIFACTS]), ("CODE", CODE)):
+        seen: dict[str, str] = {}
+        for rel in paths:
+            key = str(Path(rel).as_posix())
+            if key in seen:
+                raise SystemExit(f"{name}: 경로 중복 {key!r}")
+            seen[key] = rel
+        basenames: dict[str, str] = {}
+        for rel in paths:
+            base = Path(rel).name
+            if base in basenames:
+                # 이름이 겹치는 것 자체는 괜찮다. 경로로 키잉하므로.
+                # 다만 눈에 띄게 남긴다 - 예전 사고가 여기서 났다.
+                print(f"  참고: {name} 에 같은 파일명 둘 - {basenames[base]} / {rel}")
+            basenames[base] = rel
+
+
 def build() -> dict:
     grid_manifest = json.loads(
         (BASE / "holdout_grid" / "manifest.json").read_text(encoding="utf-8"))
     sys.path.insert(0, str(PROJECT_ROOT / "scripts" / "transcoder"))
     from rapid_sr.protocol import GATE0_THRESHOLDS, THRESHOLD_PROVENANCE
 
+    _check_unique_paths()
     return {
+        "schema_version": SCHEMA_VERSION,
         "profile": PROFILE,
         "status": "frozen",
         "what_this_is": "전향 홀드아웃 위에서 확정한 v1 결과의 불변 기록. 원고가 "
@@ -224,6 +254,11 @@ def build() -> dict:
 
 
 def verify(recorded: dict) -> int:
+    got = recorded.get("schema_version")
+    if got != SCHEMA_VERSION:
+        print(f"  기록 형식 버전이 다르다: 기록 {got!r}, 이 스크립트 {SCHEMA_VERSION}. "
+              f"형식이 바뀌었으면 해시 비교가 같은 것을 비교하는지 알 수 없다.")
+        return 1
     bad = []
     for group in ("artifacts", "code"):
         for role, entry in recorded.get(group, {}).items():
