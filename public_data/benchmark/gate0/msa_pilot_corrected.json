@@ -1,0 +1,495 @@
+{
+  "purpose": "MSA operational pilot. 운영 가능성만 본다.",
+  "acceptance_scope": "corrected transport/parser path 의 end-to-end 검증과 MSA quality 4 값의 실제 계측. scientific threshold 재평가가 아니다.",
+  "acceptance_criteria": [
+    "1 endpoint_status = ok",
+    "2 a3m_gz_b64 존재 + decode 성공",
+    "3 decoded A3M non-empty",
+    "4 query_id / query_length 일치",
+    "5 usable_hits · coverage · depth · full_length_fraction 이 실제 숫자로 계산됨",
+    "6 frozen §8 규칙이 그대로 적용됨"
+  ],
+  "acceptance_is_not": "세 타겟이 모두 scientific PASS 일 필요는 없다. usable_hits < 10 은 frozen protocol 에 따른 정상 feasibility 결과다.",
+  "forbidden_after_this_run": [
+    "threshold 변경",
+    "target selection rule 변경",
+    "tier 변경",
+    "candidate count 변경"
+  ],
+  "instrumentation_pass": 3,
+  "instrumentation_total": 3,
+  "full_msa_verdict": "GO",
+  "frozen_targets": {
+    "150-250": "1n81A00",
+    "250-400": "1rdrA01",
+    "50-150": "1j5uA01"
+  },
+  "settings": {
+    "target_db": "uniref90",
+    "max_seqs": 3000,
+    "threads": 4,
+    "use_gpu": false
+  },
+  "allowed_observations": [
+    "runtime",
+    "endpoint 응답",
+    "hang / empty A3M",
+    "usable_hits",
+    "기존 동결 warning 상태"
+  ],
+  "forbidden_actions": [
+    "MSA threshold 변경",
+    "타겟 선정 규칙 변경",
+    "tier 변경",
+    "filtering rule 변경"
+  ],
+  "not_inspected": [
+    "joint-pass",
+    "SoluProt",
+    "AF2",
+    "EFBC",
+    "kappa_pool",
+    "calibration 612"
+  ],
+  "results": [
+    {
+      "stratum": "150-250",
+      "domain": "1n81A00",
+      "length": 186,
+      "endpoint_status": "ok",
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "a3m_key_present": true,
+      "decode_ok": true,
+      "a3m_source_key": "a3m_gz_b64",
+      "a3m_bytes": 7252,
+      "a3m_empty": false,
+      "hit_count": 34,
+      "query_length": 186,
+      "query_id": "1n81A00",
+      "query_consistent": {
+        "sent_id": "1n81A00",
+        "sent_length": 186,
+        "returned_id": "1n81A00",
+        "returned_length": 186,
+        "id_match": true,
+        "length_match": true
+      },
+      "msa_quality": {
+        "usable_hits": 34,
+        "coverage": {
+          "min": 0.5053763440860215,
+          "max": 1.0,
+          "mean": 0.8687539531941809,
+          "p25": 0.8185483870967742,
+          "p50": 0.8924731182795699,
+          "p75": 0.9448924731182796
+        },
+        "depth": {
+          "min": 5.0,
+          "max": 34.0,
+          "mean": 29.537634408602152,
+          "p10": 18.0,
+          "p25": 30.0,
+          "p50": 33.0,
+          "p75": 34.0,
+          "p90": 34.0
+        },
+        "full_length_fraction": 0.9117647058823529,
+        "warnings": [],
+        "query_length": 186
+      },
+      "wall_seconds": 2370.7,
+      "classification": "OK",
+      "acceptance": {
+        "1_endpoint_ok": true,
+        "2_a3m_key_present_and_decoded": true,
+        "3_decoded_non_empty": true,
+        "4_query_consistent": true,
+        "5_quality_metrics_computed": true,
+        "6_frozen_rule_applied": true
+      },
+      "acceptance_pass": true,
+      "acceptance_note": "계측 판정이다. scientific PASS 가 아니다. usable_hits < 10 은 정상적인 feasibility 관측이며 acceptance 실패가 아니다.",
+      "quality_medians": {
+        "usable_hits": 34,
+        "median_coverage": 0.8924731182795699,
+        "median_depth": 33.0,
+        "full_length_fraction": 0.9117647058823529
+      }
+    },
+    {
+      "stratum": "250-400",
+      "domain": "1rdrA01",
+      "length": 316,
+      "endpoint_status": "ok",
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "a3m_key_present": true,
+      "decode_ok": true,
+      "a3m_source_key": "a3m_gz_b64",
+      "a3m_bytes": 375974,
+      "a3m_empty": false,
+      "hit_count": 1117,
+      "query_length": 316,
+      "query_id": "1rdrA01",
+      "query_consistent": {
+        "sent_id": "1rdrA01",
+        "sent_length": 316,
+        "returned_id": "1rdrA01",
+        "returned_length": 316,
+        "id_match": true,
+        "length_match": true
+      },
+      "msa_quality": {
+        "usable_hits": 1117,
+        "coverage": {
+          "min": 0.08227848101265822,
+          "max": 1.0,
+          "mean": 0.7428776220210102,
+          "p25": 0.5981012658227848,
+          "p50": 0.7943037974683544,
+          "p75": 0.9841772151898734
+        },
+        "depth": {
+          "min": 231.0,
+          "max": 1000.0,
+          "mean": 829.7943037974684,
+          "p10": 490.0,
+          "p25": 734.25,
+          "p50": 923.0,
+          "p75": 963.0,
+          "p90": 980.0
+        },
+        "full_length_fraction": 0.7153088630259624,
+        "warnings": [],
+        "query_length": 316
+      },
+      "wall_seconds": 2460.9,
+      "classification": "OK",
+      "acceptance": {
+        "1_endpoint_ok": true,
+        "2_a3m_key_present_and_decoded": true,
+        "3_decoded_non_empty": true,
+        "4_query_consistent": true,
+        "5_quality_metrics_computed": true,
+        "6_frozen_rule_applied": true
+      },
+      "acceptance_pass": true,
+      "acceptance_note": "계측 판정이다. scientific PASS 가 아니다. usable_hits < 10 은 정상적인 feasibility 관측이며 acceptance 실패가 아니다.",
+      "quality_medians": {
+        "usable_hits": 1117,
+        "median_coverage": 0.7943037974683544,
+        "median_depth": 923.0,
+        "full_length_fraction": 0.7153088630259624
+      }
+    },
+    {
+      "stratum": "50-150",
+      "domain": "1j5uA01",
+      "length": 125,
+      "endpoint_status": "ok",
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "a3m_key_present": true,
+      "decode_ok": true,
+      "a3m_source_key": "a3m_gz_b64",
+      "a3m_bytes": 3509,
+      "a3m_empty": false,
+      "hit_count": 23,
+      "query_length": 125,
+      "query_id": "1j5uA01",
+      "query_consistent": {
+        "sent_id": "1j5uA01",
+        "sent_length": 125,
+        "returned_id": "1j5uA01",
+        "returned_length": 125,
+        "id_match": true,
+        "length_match": true
+      },
+      "msa_quality": {
+        "usable_hits": 23,
+        "coverage": {
+          "min": 0.752,
+          "max": 0.976,
+          "mean": 0.9342608695652174,
+          "p25": 0.924,
+          "p50": 0.952,
+          "p75": 0.96
+        },
+        "depth": {
+          "min": 0.0,
+          "max": 23.0,
+          "mean": 21.488,
+          "p10": 21.0,
+          "p25": 22.0,
+          "p50": 23.0,
+          "p75": 23.0,
+          "p90": 23.0
+        },
+        "full_length_fraction": 1.0,
+        "warnings": [],
+        "query_length": 125
+      },
+      "wall_seconds": 2370.8,
+      "classification": "OK",
+      "acceptance": {
+        "1_endpoint_ok": true,
+        "2_a3m_key_present_and_decoded": true,
+        "3_decoded_non_empty": true,
+        "4_query_consistent": true,
+        "5_quality_metrics_computed": true,
+        "6_frozen_rule_applied": true
+      },
+      "acceptance_pass": true,
+      "acceptance_note": "계측 판정이다. scientific PASS 가 아니다. usable_hits < 10 은 정상적인 feasibility 관측이며 acceptance 실패가 아니다.",
+      "quality_medians": {
+        "usable_hits": 23,
+        "median_coverage": 0.952,
+        "median_depth": 23.0,
+        "full_length_fraction": 1.0
+      }
+    }
+  ],
+  "total_wall_seconds": 7202.4,
+  "code_sha": "4382b97f423ef0e3e9142b79e8b07fceb43a58ff",
+  "utc": "2026-09-09T12:52:42Z",
+  "targets": [
+    {
+      "stratum": "150-250",
+      "domain": "1n81A00",
+      "length": 186,
+      "endpoint_status": "ok",
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "a3m_key_present": true,
+      "decode_ok": true,
+      "a3m_source_key": "a3m_gz_b64",
+      "a3m_bytes": 7252,
+      "a3m_empty": false,
+      "hit_count": 34,
+      "query_length": 186,
+      "query_id": "1n81A00",
+      "query_consistent": {
+        "sent_id": "1n81A00",
+        "sent_length": 186,
+        "returned_id": "1n81A00",
+        "returned_length": 186,
+        "id_match": true,
+        "length_match": true
+      },
+      "msa_quality": {
+        "usable_hits": 34,
+        "coverage": {
+          "min": 0.5053763440860215,
+          "max": 1.0,
+          "mean": 0.8687539531941809,
+          "p25": 0.8185483870967742,
+          "p50": 0.8924731182795699,
+          "p75": 0.9448924731182796
+        },
+        "depth": {
+          "min": 5.0,
+          "max": 34.0,
+          "mean": 29.537634408602152,
+          "p10": 18.0,
+          "p25": 30.0,
+          "p50": 33.0,
+          "p75": 34.0,
+          "p90": 34.0
+        },
+        "full_length_fraction": 0.9117647058823529,
+        "warnings": [],
+        "query_length": 186
+      },
+      "wall_seconds": 2370.7,
+      "classification": "OK",
+      "acceptance": {
+        "1_endpoint_ok": true,
+        "2_a3m_key_present_and_decoded": true,
+        "3_decoded_non_empty": true,
+        "4_query_consistent": true,
+        "5_quality_metrics_computed": true,
+        "6_frozen_rule_applied": true
+      },
+      "acceptance_pass": true,
+      "acceptance_note": "계측 판정이다. scientific PASS 가 아니다. usable_hits < 10 은 정상적인 feasibility 관측이며 acceptance 실패가 아니다.",
+      "quality_medians": {
+        "usable_hits": 34,
+        "median_coverage": 0.8924731182795699,
+        "median_depth": 33.0,
+        "full_length_fraction": 0.9117647058823529
+      }
+    },
+    {
+      "stratum": "250-400",
+      "domain": "1rdrA01",
+      "length": 316,
+      "endpoint_status": "ok",
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "a3m_key_present": true,
+      "decode_ok": true,
+      "a3m_source_key": "a3m_gz_b64",
+      "a3m_bytes": 375974,
+      "a3m_empty": false,
+      "hit_count": 1117,
+      "query_length": 316,
+      "query_id": "1rdrA01",
+      "query_consistent": {
+        "sent_id": "1rdrA01",
+        "sent_length": 316,
+        "returned_id": "1rdrA01",
+        "returned_length": 316,
+        "id_match": true,
+        "length_match": true
+      },
+      "msa_quality": {
+        "usable_hits": 1117,
+        "coverage": {
+          "min": 0.08227848101265822,
+          "max": 1.0,
+          "mean": 0.7428776220210102,
+          "p25": 0.5981012658227848,
+          "p50": 0.7943037974683544,
+          "p75": 0.9841772151898734
+        },
+        "depth": {
+          "min": 231.0,
+          "max": 1000.0,
+          "mean": 829.7943037974684,
+          "p10": 490.0,
+          "p25": 734.25,
+          "p50": 923.0,
+          "p75": 963.0,
+          "p90": 980.0
+        },
+        "full_length_fraction": 0.7153088630259624,
+        "warnings": [],
+        "query_length": 316
+      },
+      "wall_seconds": 2460.9,
+      "classification": "OK",
+      "acceptance": {
+        "1_endpoint_ok": true,
+        "2_a3m_key_present_and_decoded": true,
+        "3_decoded_non_empty": true,
+        "4_query_consistent": true,
+        "5_quality_metrics_computed": true,
+        "6_frozen_rule_applied": true
+      },
+      "acceptance_pass": true,
+      "acceptance_note": "계측 판정이다. scientific PASS 가 아니다. usable_hits < 10 은 정상적인 feasibility 관측이며 acceptance 실패가 아니다.",
+      "quality_medians": {
+        "usable_hits": 1117,
+        "median_coverage": 0.7943037974683544,
+        "median_depth": 923.0,
+        "full_length_fraction": 0.7153088630259624
+      }
+    },
+    {
+      "stratum": "50-150",
+      "domain": "1j5uA01",
+      "length": 125,
+      "endpoint_status": "ok",
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "a3m_key_present": true,
+      "decode_ok": true,
+      "a3m_source_key": "a3m_gz_b64",
+      "a3m_bytes": 3509,
+      "a3m_empty": false,
+      "hit_count": 23,
+      "query_length": 125,
+      "query_id": "1j5uA01",
+      "query_consistent": {
+        "sent_id": "1j5uA01",
+        "sent_length": 125,
+        "returned_id": "1j5uA01",
+        "returned_length": 125,
+        "id_match": true,
+        "length_match": true
+      },
+      "msa_quality": {
+        "usable_hits": 23,
+        "coverage": {
+          "min": 0.752,
+          "max": 0.976,
+          "mean": 0.9342608695652174,
+          "p25": 0.924,
+          "p50": 0.952,
+          "p75": 0.96
+        },
+        "depth": {
+          "min": 0.0,
+          "max": 23.0,
+          "mean": 21.488,
+          "p10": 21.0,
+          "p25": 22.0,
+          "p50": 23.0,
+          "p75": 23.0,
+          "p90": 23.0
+        },
+        "full_length_fraction": 1.0,
+        "warnings": [],
+        "query_length": 125
+      },
+      "wall_seconds": 2370.8,
+      "classification": "OK",
+      "acceptance": {
+        "1_endpoint_ok": true,
+        "2_a3m_key_present_and_decoded": true,
+        "3_decoded_non_empty": true,
+        "4_query_consistent": true,
+        "5_quality_metrics_computed": true,
+        "6_frozen_rule_applied": true
+      },
+      "acceptance_pass": true,
+      "acceptance_note": "계측 판정이다. scientific PASS 가 아니다. usable_hits < 10 은 정상적인 feasibility 관측이며 acceptance 실패가 아니다.",
+      "quality_medians": {
+        "usable_hits": 23,
+        "median_coverage": 0.952,
+        "median_depth": 23.0,
+        "full_length_fraction": 1.0
+      }
+    }
+  ],
+  "reevaluated_utc": "2026-09-09T12:53:16Z",
+  "reevaluated_why": "coverage/depth 는 백분위 dict 이므로 p50 을 읽어야 한다. 실행 중 프로세스가 스칼라로 검사해 5 번을 FAIL 로 적었다. MSA 는 다시 돌리지 않았다 - 저장된 msa_quality 에서 재계산했다."
+}
