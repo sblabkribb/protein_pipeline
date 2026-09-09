@@ -1193,6 +1193,156 @@ v1 결과와 v2 결과를 같은 표에 섞지 않는다. 프로파일 이름이
 
 ---
 
+# SS. Coverage-preserving mode 의 endpoint — 확정
+
+§X8 이 열어 두었던 질문에 대한 결정이다. 이 절이 확정되면 coverage mode 도
+v1 처럼 사전등록 가능한 검증 대상이 된다.
+
+## SS1. Primary endpoint family
+
+```
+Feasible Design-Basin Coverage @ Fixed Budget       (FDBC@B)
+```
+
+정의:
+
+```
+basin        arm pool 의 분할. 한 basin 은 하나 이상의 arm 을 담는다.
+             무엇을 basin 으로 볼지는 SS3 에서 별도로 동결한다.
+
+feasible     그 basin 에서 나온 후보 중 적어도 하나가 feasibility 기준을
+covered      통과했다. 기준은 task 의 primary feasibility endpoint 를 쓴다
+             (fixed_backbone_redesign: joint-pass).
+
+FDBC@B       예산 상한 B 안에서 feasible-covered 인 basin 의 수 (또는 비율).
+```
+
+**"feasible" 이 이름에 들어간 것이 핵심이다.** 탐색만 하고 통과 후보가 하나도
+없는 basin 은 이 지표에 기여하지 않는다. 즉 "다양하지만 전부 실패하는 후보" 는
+정의상 좋은 점수를 받지 못한다.
+
+이것이 `explored coverage` 와 다르다는 점을 명시한다.
+
+```
+explored coverage   관측이 하나라도 있는 basin 의 수     ← 진단용
+feasible coverage   통과 후보가 있는 basin 의 수         ← primary
+```
+
+두 값을 같은 막대로 그리거나 같은 이름으로 부르지 않는다. 죽은 basin 을 탐색한
+것은 explored 는 올리지만 feasible 은 올리지 않는다.
+
+## SS2. Guardrail — 절대 수율이 무너지면 실패다
+
+FDBC@B 안에 feasibility 가 들어 있지만 그것만으로는 부족하다. basin 마다
+통과 후보 1 개씩만 얻고 전체 통과 수가 급감하는 배분도 FDBC 는 높게 나온다.
+
+그래서 **총 structural success 수를 guardrail 로 둔다.**
+
+```
+primary     FDBC@B                        높을수록 좋다
+guardrail   총 joint-pass 후보 수          yield mode 대비 비열등이어야 한다
+```
+
+guardrail 이 깨지면 coverage 개선을 성공으로 보고하지 않는다. 비열등 마진은
+사전에 정하고 동결한다 (SS4).
+
+이 구조는 임상시험의 guardrail endpoint 와 같다 - primary 가 좋아져도
+guardrail 이 무너지면 그 결과를 채택하지 않는다.
+
+**추가로 보고할 것** (판정에는 쓰지 않지만 함께 싣는다):
+
+```
+explored coverage        탐색은 했으나 통과가 없던 basin 수를 드러낸다
+basin 당 통과 후보 분포   한 basin 에 몰렸는지
+realized compute         §41 의 2 차 분석과 같은 축
+```
+
+## SS3. basin 정의는 별도로, prospective evaluation 전에 동결한다
+
+```
+후보 A   basin = backbone            (1 backbone = 1 basin)
+후보 B   basin = structural cluster  (구조 유사도로 묶은 backbone 군)
+```
+
+**둘 중 무엇을 쓸지는 이 문서에서 정하지 않는다.** 결과를 보고 고르면 사전등록이
+아니기 때문이다. v1 의 `holdout_experiment_spec.json` 과 같은 방식으로 별도
+freeze 문서를 만들고, 그 안에 다음을 함께 못 박는다.
+
+```
+basin_definition            backbone | structural_cluster
+clustering_method           B 를 고를 경우: 무엇으로 묶는가
+clustering_threshold        B 를 고를 경우: 어디서 자르는가
+informative_basin_rule      어떤 basin 이 정책을 구별할 수 없는가
+                            (v1 의 "모든 arm yield 0 또는 모든 arm yield 1" 에 대응)
+min_informative_basins      판정 최소 수 (v1 은 8 이었다)
+feasibility_endpoint        joint-pass 정의
+guardrail_margin            SS2 의 비열등 마진
+budget_grid                 어느 B 에서 볼 것인가
+```
+
+동결 시점: **prospective evaluation 시작 전.** v1 에서 격자가 끝나기 전에 분산분해
+계획을 동결한 것과 같은 이유다.
+
+### 왜 지금 고르지 않는가
+
+두 후보가 다른 것을 잰다.
+
+- basin = backbone 이면 basin 수가 arm 수와 같고, "coverage" 는 사실상 "몇 개의
+  arm 을 살려 뒀는가" 다. 측정은 쉽지만 서로 거의 같은 backbone 두 개를 서로
+  다른 basin 으로 센다.
+- basin = structural cluster 면 진짜 design basin 에 가깝지만, 클러스터링 방법과
+  임계값이 결과를 바꾼다. 그리고 **현재 그 클러스터 구조를 재본 적이 없다** -
+  홀드아웃의 RFD3 60 개, Antigen 의 ~200 개 모두 서로 얼마나 다른지 모른다.
+
+따라서 순서는: **먼저 클러스터 구조를 기술 통계로 재고 (판정 없이), 그 결과를
+보고 basin 정의를 동결하고, 그 다음에 prospective evaluation 을 시작한다.**
+기술 통계 단계에서는 정책 비교를 하지 않는다.
+
+## SS4. 이 endpoint 가 v1 과 다른 점
+
+```
+v1 primary    예산 안에서 찾은 joint-pass 후보 수        후보 단위
+v2 coverage   예산 안에서 feasible-covered 된 basin 수    basin 단위
+```
+
+같은 데이터에서 둘 다 계산할 수 있고, 그래야 한다. 두 mode 를 같은 코호트에서
+비교할 때 각 mode 를 자기 primary 로만 평가하면 비교가 되지 않는다.
+
+```
+             yield mode        coverage mode
+FDBC@B       (보고)            primary
+joint-pass   primary           guardrail
+```
+
+네 칸을 모두 채워 보고한다.
+
+## SS5. Antigen 의 주장 경계 — 확정
+
+AG4 가 기록한 대로 현재 Antigen 에는 allocation reward 로 쓸 수 있는 evaluator 가
+없다. 따라서:
+
+```
+Antigen v2.0 이 주장하는 것
+  coverage allocation 까지. FDBC@B 계열의 basin coverage 유지.
+
+Antigen v2.0 이 주장하지 않는 것
+  affinity 기반 adaptive allocation
+  yield 기반 adaptive allocation
+  wet hit rate 개선
+```
+
+**wet 결과가 나오기 전에는 위 세 줄을 주장하지 않는다.** Invariant 6 의 구체적
+적용이고, Invariant 7 로 승격한다 (§T).
+
+여기에는 결과가 따라온다: Antigen 의 FDBC@B 에서 feasibility 기준을 무엇으로
+둘 것인가. AF3 preservation gate 와 ipSAE 는 현재 gate 로 쓰이고 있으므로
+feasibility 로는 쓸 수 있다 (gate 허가는 있다). **결합 성능 지표로 쓰는 것이
+금지될 뿐이다.** 즉 Antigen 의 feasible coverage 는 "이 basin 에서 구조적으로
+성립하는 후보가 나왔는가" 이지 "잘 붙는 후보가 나왔는가" 가 아니다. 이 구분을
+보고 문구에 그대로 유지한다.
+
+---
+
 # T. 설계 invariant
 
 구현 시 테스트로 집행할 대상이다.
@@ -1246,6 +1396,14 @@ without prospective experimental evidence.
 집행: `scientific_permissions` 의 `allocation` / `wet_validated` 로 올리는
 변경은 evidence id 를 요구한다. Antigen 의 ROUTER_POLICY 가 이미 이 형태다
 (`evidence_id: P53`, "A revision is never edited in place").
+
+## Invariant 7
+```
+Coverage must be reported as feasible coverage, never as explored coverage,
+and a coverage gain that breaks the structural-yield guardrail is not a result.
+```
+근거: SS1, SS2. 집행: FDBC 계산 경로가 feasibility 판정 없이 basin 을 세면
+실패. coverage mode 보고에 guardrail 값이 없으면 실패.
 
 ---
 
@@ -1364,9 +1522,11 @@ v2 와 Antigen integration 은 Discussion / Future Work 또는 후속 연구로
    probe 바닥 20 = 4×5, Antigen 의 예산 25–35%) 둘 다 다른 pipeline 의 값이다.
    task 별로 재야 한다.
 
-2. **coverage 축.** 개별 backbone 인가 backbone cluster 인가. 클러스터라면
-   무엇으로 묶는가 (구조 유사도? 생성 조건?). Antigen 의 200 backbone 중
-   실제로 서로 다른 basin 이 몇 개인지 재본 적이 없다.
+2. **basin 축 (= coverage 축).** 개별 backbone 인가 structural cluster 인가.
+   **결정 절차는 SS3 에서 확정됐다** - 먼저 클러스터 구조를 판정 없이 기술
+   통계로 재고, 그 결과를 보고 별도 freeze 문서에 못 박은 뒤 prospective
+   evaluation 을 시작한다. 값 자체는 그 측정 전에 정하지 않는다. 홀드아웃
+   RFD3 60 개와 Antigen ~200 개 모두 서로 얼마나 다른지 재본 적이 없다.
 
 3. **coverage 항의 가중.** `δ·portfolio_redundancy` 의 δ. 임의 값을 넣고
    diversity-aware 라고 부르지 않는다 (O1).
@@ -1382,11 +1542,14 @@ v2 와 Antigen integration 은 Discussion / Future Work 또는 후속 연구로
 7. **Antigen evaluator 의 허가 재평가.** wet 결과가 필요하다. 현재 ddG 순위가
    구조 검증 통과를 예측하지 못한다는 부정 결과가 있다 (Q4).
 
-8. **coverage-preserving mode 의 검증 설계.** structural-yield mode 는
-   "예산 안 성공 수" 라는 endpoint 가 있었다. coverage mode 의 primary
-   endpoint 를 무엇으로 할지, 그리고 그것을 v1 처럼 사전등록할 방법을
-   정해야 한다. 후보: 최종 portfolio 의 backbone coverage, cross-backbone
-   novelty, 또는 C4 처럼 coverage 상한을 건 뒤의 품질 지표.
+8. ~~coverage-preserving mode 의 검증 설계.~~ **확정됨 (§SS).**
+   primary 는 `Feasible Design-Basin Coverage @ Fixed Budget`, guardrail 은
+   총 structural success 수의 비열등이다. 남은 것은 SS3 의 basin 동결과
+   SS2 의 비열등 마진 값이며, 둘 다 위 2 번과 아래 9 번으로 옮겼다.
+
+9. **guardrail 비열등 마진.** SS2 의 마진을 얼마로 둘 것인가. yield mode 대비
+   총 통과 후보 수가 몇 % 까지 떨어져도 coverage 개선을 채택할 것인가.
+   이것은 통계가 아니라 과학적 판단이므로 사람이 정하고 동결해야 한다.
 
 ---
 
