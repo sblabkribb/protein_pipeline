@@ -648,6 +648,7 @@ objective_status:
       아니라 데이터의 문제이고, 사양에도 활성 라벨을 지어내지 않는다고 적혀 있다.
 purposes:
   monomer_solubility_redesign:
+    task_profile: fixed_backbone_redesign
     display_name_en: Soluble monomer redesign
     display_name_ko: 가용성 단량체 재설계
     description: Redesign an existing monomer for solubility while preserving its fold. This is the path
@@ -865,6 +866,7 @@ purposes:
       confidence. Neither has a client here, so this route verifies with ColabFold and scores the interface
       separately. That is a real limitation, not a design choice.
   antibody_design:
+    task_profile: antibody_antigen
     display_name_en: Antibody design
     display_name_ko: 항체 설계
     description: Epitope-conditioned antibody design. Declared so a request for it gets an honest answer
@@ -941,3 +943,76 @@ fidelity_ladder:
   expensive:
   - colabfold
   medium_status: wired_unvalidated · 비용 미측정 · 호출하는 곳 없음
+
+task_profiles:
+  _note: TaskProfile 은 scientific domain logic 을 담는다. RAPID Core 는 여기 적힌
+    것을 알지 못하고, coverage_unit 과 arm schema 만 주입받는다. purpose 는 task 에
+    속하며, task_profile 을 선언하지 않은 purpose 는 TaskProfile 해석을 요구받으면
+    실패한다 - 비슷한 것으로 짐작해 배정하지 않는다.
+  fixed_backbone_redesign:
+    display_name_en: Fixed-backbone protein redesign
+    display_name_ko: 고정 백본 단백질 재설계
+    description: Redesign sequences on a pool of fixed backbones derived from one
+      reference structure. This is the task rapid_structural_v1 was validated on.
+    required_inputs:
+    - reference_structure
+    required_capability: fixed_backbone_design
+    executable_here: true
+    design_arm_schema:
+      dimensions:
+      - backbone
+      - generation_condition
+      coverage_key: backbone
+    coverage_semantics:
+      coverage_unit: backbone_id
+      unit_is_operational: true
+      note: 각 backbone 이 서로 다른 생물학적·구조적 basin 에 대응한다고 주장하지
+        않는다. coverage 를 세기 위한 design-context 단위다.
+      frozen_by: docs/specs/rapid-v2-coverage-endpoint-freeze.md
+      evidence: public_data/benchmark/gate0/m1_basin_structure.json
+    available_optimization_modes:
+    - structural_yield
+    - coverage_preserving
+    minimum_exploration_policy:
+      min_probe_per_unit: 4
+      source: rapid_structural_v1 MIN_PROBE_SEQUENCES
+    allowed_actions:
+    - generate_more_sequences
+    - explore_existing_arm
+    - explore_generation_condition
+    - evaluate_at_higher_fidelity
+    - abandon_arm
+    not_yet_allowed_actions:
+    - generate_new_backbone
+    artifact_contract: public_data/benchmark/gate0/holdout_grid
+  antibody_antigen:
+    display_name_en: Antibody-antigen design
+    display_name_ko: 항체-항원 설계
+    description: Antibody design against a defined epitope. Runs in the antigen
+      pipeline, not here.
+    required_inputs:
+    - antibody_structure
+    - antigen_structure
+    required_capability: binder_or_complex_design
+    executable_here: false
+    design_arm_schema:
+      dimensions:
+      - backbone
+      coverage_key: backbone
+      status: contract_only
+    coverage_semantics:
+      coverage_unit: backbone_id
+      unit_is_operational: true
+      status: not_frozen
+      note: Antigen 의 ~200 backbone 이 서로 얼마나 다른지 재본 적이 없다. 이
+        profile 의 coverage_unit 은 그 측정 뒤에 동결한다.
+    available_optimization_modes:
+    - coverage_preserving
+    modes_not_available:
+      structural_yield: allocation 보상으로 쓸 수 있는 evaluator 가 아직 없다.
+        wet 결과 전에는 affinity/yield 기반 배분을 주장하지 않는다.
+    allowed_actions:
+    - generate_more_sequences
+    - explore_existing_arm
+    - abandon_arm
+    artifact_contract: antigen pipeline 소유. RAPID 은 읽기만 한다.

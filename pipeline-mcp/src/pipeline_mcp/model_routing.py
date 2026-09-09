@@ -213,6 +213,9 @@ class Route:
     #: 전자는 배선으로 풀리고 후자는 풀리지 않는다.
     blockers: Mapping[str, list]
     cost_driver: str
+    #: 이 purpose 가 속한 TaskProfile. 선언하지 않은 purpose 는 빈 문자열이고,
+    #: TaskProfile 해석을 요구받으면 실패한다 - 비슷한 것으로 짐작하지 않는다.
+    task_profile: str = ""
     _models: Mapping[str, ModelEntry] = field(repr=False, default_factory=dict)
     extra: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
@@ -344,6 +347,7 @@ class Route:
             "blockers": {k: list(v) for k, v in self.blockers.items()},
             "unvalidated_stages": [s.stage for s in self.unvalidated_stages],
             "cost_driver": self.cost_driver,
+            "task_profile": self.task_profile,
         }
         out.update({k: v for k, v in self.extra.items() if k not in out})
         return out
@@ -364,6 +368,8 @@ class ModelRegistry:
     #: 목표마다 왜 못 재는지. 하나로 뭉뚱그리면 모델을 붙이면 되는 것과
     #: 그렇지 않은 것이 같아 보인다.
     objective_status: Mapping[str, dict] = field(default_factory=dict)
+    #: TaskProfile 선언. scientific domain logic 이 여기 있고 Core 는 모른다.
+    task_profiles: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     _purposes: Mapping[str, Route] = field(repr=False, default_factory=dict)
 
     @property
@@ -488,6 +494,7 @@ _KNOWN_MODEL_KEYS = {
 _KNOWN_PURPOSE_KEYS = {
     "display_name_en", "display_name_ko", "description", "objectives", "stages",
     "cost_driver",
+    "task_profile",
 }
 
 
@@ -522,7 +529,12 @@ def _build_model(model_id: str, raw: Mapping[str, Any]) -> ModelEntry:
     )
 
 
-def _build_route(purpose: str, raw: Mapping[str, Any], models: Mapping[str, ModelEntry]) -> Route:
+def _build_route(purpose: str, raw: Mapping[str, Any], models: Mapping[str, ModelEntry],
+                 task_profiles: Mapping[str, Any] | None = None) -> Route:
+    task_profile = str(raw.get("task_profile", "") or "")
+    if task_profile and task_profiles is not None and task_profile not in task_profiles:
+        raise RegistryError(
+            f"{purpose}: 선언된 task_profile {task_profile!r} 이 task_profiles 에 없다")
     stages: list[RouteStage] = []
     for item in raw.get("stages") or ():
         model_id = str(item["model_id"])
@@ -593,6 +605,7 @@ def _build_route(purpose: str, raw: Mapping[str, Any], models: Mapping[str, Mode
         blocked_reason=reason,
         blockers=blockers,
         cost_driver=str(raw.get("cost_driver", "")),
+        task_profile=task_profile,
         _models=models,
         extra={k: v for k, v in raw.items() if k not in _KNOWN_PURPOSE_KEYS},
     )
@@ -658,13 +671,17 @@ def load_registry(path: str | Path | None = None, *, use_cache: bool = True) -> 
         model_id: _build_model(model_id, spec)
         for model_id, spec in (raw.get("models") or {}).items()
     }
+    # TaskProfile 선언. purpose 보다 먼저 읽어야 purpose 가 참조를 검증할 수 있다.
+    # 앞의 밑줄로 시작하는 키는 문서용 메모이므로 profile 로 세지 않는다.
+    task_profiles = {k: dict(v) for k, v in (raw.get("task_profiles") or {}).items()
+                     if not k.startswith("_") and isinstance(v, dict)}
     allowed = set(raw.get("availability_values") or ())
     for model in models.values():
         if allowed and model.availability not in allowed:
             raise RegistryError(f"{model.model_id}: 알 수 없는 availability {model.availability!r}")
 
     purposes = {
-        purpose: _build_route(purpose, spec, models)
+        purpose: _build_route(purpose, spec, models, task_profiles)
         for purpose, spec in (raw.get("purposes") or {}).items()
     }
     registry = ModelRegistry(
@@ -674,6 +691,7 @@ def load_registry(path: str | Path | None = None, *, use_cache: bool = True) -> 
         models=models,
         registry_access=dict(raw.get("registry_access") or {}),
         objective_status={k: dict(v) for k, v in (raw.get("objective_status") or {}).items()},
+        task_profiles=task_profiles,
         _purposes=purposes,
     )
     if use_cache:
