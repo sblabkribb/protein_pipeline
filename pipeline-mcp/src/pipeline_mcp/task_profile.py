@@ -41,7 +41,15 @@ class TaskRefusal:
     reason: str
     task_profile: str = ""
     requested_objective: str = ""
-    required_capability: str = ""
+    #: 지금 고른 profile 이 가진 capability. **요청을 수행하는 데 필요한 것이
+    #: 아니다.** 두 개를 한 필드에 담았다가 "binding 을 쓰려면
+    #: fixed_backbone_design 이 필요하다" 는 정반대 문장이 나올 뻔했다.
+    current_capability: str = ""
+    #: 요청한 objective 를 실제로 수행할 수 있는 capability. 그 objective 를
+    #: 선언한 purpose 들의 task profile 에서 유도한다. 복수형인 이유는 앞으로
+    #: 여러 task 가 같은 objective 를 지원할 수 있고, 하나로 줄이면 조용히
+    #: 정보를 잃기 때문이다. 유도할 수 없으면 빈 튜플이다.
+    required_capabilities: tuple[str, ...] = ()
     #: 레지스트리가 정한 대안. 이름을 특별 취급해 만든 값이 아니다.
     referral: str = ""
     #: 이 objective 를 선언한 다른 purpose 들. 데이터에서 유도한다.
@@ -53,7 +61,8 @@ class TaskRefusal:
             "status": self.status, "reason_code": self.reason_code.value,
             "reason": self.reason, "task_profile": self.task_profile,
             "requested_objective": self.requested_objective,
-            "required_capability": self.required_capability,
+            "current_capability": self.current_capability,
+            "required_capabilities": list(self.required_capabilities),
             "referral": self.referral, "alternatives": list(self.alternatives),
         }
 
@@ -190,6 +199,19 @@ def _purposes_declaring(registry: ModelRegistry, objective: str) -> tuple[str, .
                         if objective in r.objectives))
 
 
+def _capabilities_for(registry: ModelRegistry, purposes: tuple[str, ...]) -> tuple[str, ...]:
+    """이 purpose 들이 속한 task profile 의 capability. 데이터에서 유도한다."""
+    out: list[str] = []
+    for name in purposes:
+        task_id = registry.route(name).task_profile
+        if not task_id or task_id not in registry.task_profiles:
+            continue
+        cap = str(registry.task_profiles[task_id].get("required_capability", "") or "")
+        if cap and cap not in out:
+            out.append(cap)
+    return tuple(out)
+
+
 def validate_objective(task: TaskProfile, objective: str, *,
                        registry: ModelRegistry | None = None) -> TaskRefusal | None:
     """이 task 에서 그 objective 가 성립하는가. 성립하면 None."""
@@ -212,7 +234,8 @@ def validate_objective(task: TaskProfile, objective: str, *,
                    if alternatives else " 이 objective 를 선언한 경로가 없다.")),
         task_profile=task.task_id,
         requested_objective=objective,
-        required_capability=task.required_capability,
+        current_capability=task.required_capability,
+        required_capabilities=_capabilities_for(registry, alternatives),
         referral=referral,
         alternatives=alternatives,
     )
@@ -235,7 +258,10 @@ def check_executable(task: TaskProfile, *, registry: ModelRegistry | None = None
         reason_code=RefusalCode.TASK_NOT_EXECUTABLE_HERE,
         reason=referral or f"{task.task_id} 는 여기서 실행되지 않는다",
         task_profile=task.task_id,
-        required_capability=task.required_capability,
+        current_capability=task.required_capability,
+        # 이 경우엔 task 자체는 맞다. capability 가 틀린 것이 아니라
+        # 여기서 실행되지 않을 뿐이다.
+        required_capabilities=(task.required_capability,) if task.required_capability else (),
         referral=referral,
         alternatives=task.purposes,
     )
@@ -251,6 +277,6 @@ def validate_optimization_mode(task: TaskProfile, mode: str) -> TaskRefusal | No
                 f"가능한 mode: {list(task.available_optimization_modes)}."
                 + (f" 이유: {why}" if why else "")),
         task_profile=task.task_id,
-        required_capability=task.required_capability,
+        current_capability=task.required_capability,
         alternatives=task.available_optimization_modes,
     )

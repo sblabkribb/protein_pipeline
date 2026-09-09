@@ -75,9 +75,42 @@ def test_binding_is_refused_with_structure():
     assert d["reason_code"] == "objective_not_supported_for_task"
     assert d["task_profile"] == "fixed_backbone_redesign"
     assert d["requested_objective"] == "binding"
-    assert d["required_capability"] == "fixed_backbone_design"
     # 대안은 데이터에서 유도된다 - 이름을 손으로 적어둔 것이 아니다.
     assert "protein_binder_design" in d["alternatives"]
+
+
+def test_current_and_required_capability_are_not_the_same_thing():
+    """거부 사유가 정반대로 읽히지 않아야 한다.
+
+    한 필드에 담았을 때 "binding 을 쓰려면 fixed_backbone_design 이 필요하다" 는
+    문장이 나올 뻔했다. 지금 고른 profile 의 capability 와, 요청을 수행하는 데
+    필요한 capability 는 다른 값이다.
+    """
+    task = tp.resolve_for_purpose("monomer_solubility_redesign")
+    d = tp.validate_objective(task, "binding").to_dict()
+    assert d["current_capability"] == "fixed_backbone_design"
+    assert d["required_capabilities"], "필요한 capability 가 비어 있다"
+    assert d["current_capability"] not in d["required_capabilities"], (
+        "지금 가진 capability 가 '필요한 것' 으로 나왔다 - 두 개념이 섞였다")
+
+
+def test_required_capability_is_derived_from_the_registry():
+    """손으로 적은 값이 아니라 대안 purpose 의 task profile 에서 온다."""
+    registry = _registry()
+    task = tp.resolve_for_purpose("monomer_solubility_redesign", registry=registry)
+    refusal = tp.validate_objective(task, "binding", registry=registry)
+    # antibody_design 이 antibody_antigen 에 속하고, 그 profile 의 capability 다.
+    expected = registry.task_profiles["antibody_antigen"]["required_capability"]
+    assert expected in refusal.required_capabilities
+
+
+def test_capability_is_empty_when_no_mapped_task_supports_it():
+    """유도할 수 없으면 비운다. 그럴듯한 값을 지어내지 않는다."""
+    task = tp.resolve_for_purpose("monomer_solubility_redesign")
+    refusal = tp.validate_objective(task, "activity")
+    assert refusal is not None
+    # activity 를 선언한 purpose 가 없거나, 있어도 task 에 매핑돼 있지 않다.
+    assert refusal.required_capabilities == ()
 
 
 def test_refusal_is_data_driven_not_hardcoded():
@@ -140,7 +173,10 @@ def test_antibody_task_refers_out_using_the_registry_field():
     # referral 문구는 레지스트리에서 온다 - 코드가 만든 문장이 아니다.
     declared = load_registry().route("antibody_design").extra["referral"]
     assert d["referral"] == declared
-    assert d["required_capability"] == "binder_or_complex_design"
+    # 이 경우 task 자체는 맞다 - capability 가 틀린 것이 아니라 여기서
+    # 실행되지 않을 뿐이므로 current 와 required 가 같다.
+    assert d["current_capability"] == "binder_or_complex_design"
+    assert d["required_capabilities"] == ["binder_or_complex_design"]
 
 
 def test_fixed_backbone_task_is_executable_here():
