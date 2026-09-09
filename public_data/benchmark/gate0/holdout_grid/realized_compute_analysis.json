@@ -1,0 +1,1217 @@
+{
+  "purpose": "실제로 쓴 계산량 기준 2 차 분석. 사전 정의된 1 차 endpoint 는 39_prospective_allocation_validation.py 에 그대로 있고 여기서 바꾸지 않는다.",
+  "relationship_to_primary": {
+    "primary_endpoint": "예산 상한 안에서 찾은 설계 수 (동결 spec)",
+    "primary_unchanged": true,
+    "primary_artifact": "holdout_grid/prospective_allocation_validation_joint.json",
+    "why_secondary_exists": "예산은 상한이고 적응 정책은 백본을 버리면 남은 예산을 쓰지 않는다. 같은 상한 비교는 같은 계산량 비교가 아니다.",
+    "how_to_read_budget_120": "1 차 지표에서 상한 120 의 −0.24 개는 그대로 보고한다. 같은 실행에서 적응은 106.4 회만 썼다. 두 값을 함께 읽어야 하고, 한쪽으로 다른 쪽을 지우면 안 된다."
+  },
+  "policy_source": "39_prospective_allocation_validation.py 에서 import (정책 재구현 없음)",
+  "label": "joint",
+  "cohort": "rfd3_only",
+  "n_targets": 12,
+  "n_informative_targets": 11,
+  "replicates": 200,
+  "bootstrap_iters": 2000,
+  "seed": 20260909,
+  "uniform_k": 5,
+  "endpoints": {
+    "successes_vs_budget_cap": "adaptive_found / uniform_found",
+    "actual_calls_used": "adaptive_spent / uniform_spent",
+    "successes_at_matched_actual_calls": "matched_compute_delta (정적에게 적응이 쓴 만큼만 준다)",
+    "calls_required_for_matched_success": "matched_success_delta (음수면 적응이 덜 씀)"
+  },
+  "by_cap": {
+    "4": {
+      "cap": 4,
+      "adaptive_found": {
+        "mean": 2.594,
+        "ci95": [
+          1.768,
+          3.388
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent": {
+        "mean": 4,
+        "ci95": [
+          4.0,
+          4.0
+        ],
+        "excludes_zero": true
+      },
+      "uniform_found": {
+        "mean": 2.54,
+        "ci95": [
+          1.754,
+          3.212
+        ],
+        "excludes_zero": true
+      },
+      "uniform_spent": {
+        "mean": 4,
+        "ci95": [
+          4.0,
+          4.0
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_static_found": {
+        "mean": 2.529,
+        "ci95": [
+          1.73,
+          3.207
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_delta": {
+        "mean": 0.065,
+        "ci95": [
+          -0.375,
+          0.494
+        ],
+        "excludes_zero": false
+      },
+      "matched_success_static_calls": {
+        "mean": 4.602,
+        "ci95": [
+          2.785,
+          7.295
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_delta": {
+        "mean": -0.602,
+        "ci95": [
+          -3.289,
+          1.223
+        ],
+        "excludes_zero": false
+      },
+      "matched_success_reach": {
+        "reached": 2200,
+        "unreached": 0,
+        "rate": 1.0,
+        "note": "정적이 상한 안에 적응의 성공 수를 못 채운 재생은 제외했다. 제외된 쪽이 정적에게 불리한 경우이므로 남은 비교는 정적에 후하다."
+      }
+    },
+    "8": {
+      "cap": 8,
+      "adaptive_found": {
+        "mean": 5.38,
+        "ci95": [
+          3.714,
+          6.905
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent": {
+        "mean": 8,
+        "ci95": [
+          8.0,
+          8.0
+        ],
+        "excludes_zero": true
+      },
+      "uniform_found": {
+        "mean": 5.037,
+        "ci95": [
+          3.45,
+          6.372
+        ],
+        "excludes_zero": true
+      },
+      "uniform_spent": {
+        "mean": 8,
+        "ci95": [
+          8.0,
+          8.0
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_static_found": {
+        "mean": 5.051,
+        "ci95": [
+          3.469,
+          6.386
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_delta": {
+        "mean": 0.329,
+        "ci95": [
+          -0.238,
+          0.809
+        ],
+        "excludes_zero": false
+      },
+      "matched_success_static_calls": {
+        "mean": 8.513,
+        "ci95": [
+          6.181,
+          11.09
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_delta": {
+        "mean": -0.513,
+        "ci95": [
+          -3.085,
+          1.82
+        ],
+        "excludes_zero": false
+      },
+      "matched_success_reach": {
+        "reached": 2200,
+        "unreached": 0,
+        "rate": 1.0,
+        "note": "정적이 상한 안에 적응의 성공 수를 못 채운 재생은 제외했다. 제외된 쪽이 정적에게 불리한 경우이므로 남은 비교는 정적에 후하다."
+      }
+    },
+    "12": {
+      "cap": 12,
+      "adaptive_found": {
+        "mean": 7.381,
+        "ci95": [
+          4.834,
+          9.659
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent": {
+        "mean": 12,
+        "ci95": [
+          12.0,
+          12.0
+        ],
+        "excludes_zero": true
+      },
+      "uniform_found": {
+        "mean": 7.548,
+        "ci95": [
+          5.173,
+          9.545
+        ],
+        "excludes_zero": true
+      },
+      "uniform_spent": {
+        "mean": 12,
+        "ci95": [
+          12.0,
+          12.0
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_static_found": {
+        "mean": 7.545,
+        "ci95": [
+          5.179,
+          9.541
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_delta": {
+        "mean": -0.164,
+        "ci95": [
+          -0.93,
+          0.461
+        ],
+        "excludes_zero": false
+      },
+      "matched_success_static_calls": {
+        "mean": 10.84,
+        "ci95": [
+          8.11,
+          12.967
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_delta": {
+        "mean": 1.16,
+        "ci95": [
+          -0.959,
+          3.893
+        ],
+        "excludes_zero": false
+      },
+      "matched_success_reach": {
+        "reached": 2200,
+        "unreached": 0,
+        "rate": 1.0,
+        "note": "정적이 상한 안에 적응의 성공 수를 못 채운 재생은 제외했다. 제외된 쪽이 정적에게 불리한 경우이므로 남은 비교는 정적에 후하다."
+      }
+    },
+    "16": {
+      "cap": 16,
+      "adaptive_found": {
+        "mean": 10.062,
+        "ci95": [
+          6.788,
+          12.885
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent": {
+        "mean": 16,
+        "ci95": [
+          16.0,
+          16.0
+        ],
+        "excludes_zero": true
+      },
+      "uniform_found": {
+        "mean": 10.086,
+        "ci95": [
+          6.925,
+          12.756
+        ],
+        "excludes_zero": true
+      },
+      "uniform_spent": {
+        "mean": 16,
+        "ci95": [
+          16.0,
+          16.0
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_static_found": {
+        "mean": 10.114,
+        "ci95": [
+          6.928,
+          12.804
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_delta": {
+        "mean": -0.052,
+        "ci95": [
+          -0.619,
+          0.479
+        ],
+        "excludes_zero": false
+      },
+      "matched_success_static_calls": {
+        "mean": 15.697,
+        "ci95": [
+          14.46,
+          16.753
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_delta": {
+        "mean": 0.303,
+        "ci95": [
+          -0.747,
+          1.555
+        ],
+        "excludes_zero": false
+      },
+      "matched_success_reach": {
+        "reached": 2200,
+        "unreached": 0,
+        "rate": 1.0,
+        "note": "정적이 상한 안에 적응의 성공 수를 못 채운 재생은 제외했다. 제외된 쪽이 정적에게 불리한 경우이므로 남은 비교는 정적에 후하다."
+      }
+    },
+    "20": {
+      "cap": 20,
+      "adaptive_found": {
+        "mean": 12.566,
+        "ci95": [
+          8.644,
+          15.869
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent": {
+        "mean": 20,
+        "ci95": [
+          20.0,
+          20.0
+        ],
+        "excludes_zero": true
+      },
+      "uniform_found": {
+        "mean": 12.608,
+        "ci95": [
+          8.71,
+          15.911
+        ],
+        "excludes_zero": true
+      },
+      "uniform_spent": {
+        "mean": 20,
+        "ci95": [
+          20.0,
+          20.0
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_static_found": {
+        "mean": 12.61,
+        "ci95": [
+          8.657,
+          15.942
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_delta": {
+        "mean": -0.044,
+        "ci95": [
+          -0.113,
+          0.034
+        ],
+        "excludes_zero": false
+      },
+      "matched_success_static_calls": {
+        "mean": 19.135,
+        "ci95": [
+          18.018,
+          19.813
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_delta": {
+        "mean": 0.865,
+        "ci95": [
+          0.188,
+          1.983
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_reach": {
+        "reached": 2200,
+        "unreached": 0,
+        "rate": 1.0,
+        "note": "정적이 상한 안에 적응의 성공 수를 못 채운 재생은 제외했다. 제외된 쪽이 정적에게 불리한 경우이므로 남은 비교는 정적에 후하다."
+      }
+    },
+    "24": {
+      "cap": 24,
+      "adaptive_found": {
+        "mean": 15.72,
+        "ci95": [
+          11.221,
+          19.518
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent": {
+        "mean": 23.902,
+        "ci95": [
+          23.755,
+          24.0
+        ],
+        "excludes_zero": true
+      },
+      "uniform_found": {
+        "mean": 15.137,
+        "ci95": [
+          10.393,
+          19.123
+        ],
+        "excludes_zero": true
+      },
+      "uniform_spent": {
+        "mean": 24,
+        "ci95": [
+          24.0,
+          24.0
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_static_found": {
+        "mean": 15.104,
+        "ci95": [
+          10.382,
+          19.104
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_delta": {
+        "mean": 0.616,
+        "ci95": [
+          0.309,
+          0.945
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_static_calls": {
+        "mean": 26.11,
+        "ci95": [
+          24.562,
+          28.133
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_delta": {
+        "mean": -2.208,
+        "ci95": [
+          -4.364,
+          -0.56
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_reach": {
+        "reached": 2200,
+        "unreached": 0,
+        "rate": 1.0,
+        "note": "정적이 상한 안에 적응의 성공 수를 못 채운 재생은 제외했다. 제외된 쪽이 정적에게 불리한 경우이므로 남은 비교는 정적에 후하다."
+      }
+    },
+    "30": {
+      "cap": 30,
+      "adaptive_found": {
+        "mean": 20.58,
+        "ci95": [
+          15.2,
+          25.108
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent": {
+        "mean": 29.741,
+        "ci95": [
+          29.305,
+          30.0
+        ],
+        "excludes_zero": true
+      },
+      "uniform_found": {
+        "mean": 18.875,
+        "ci95": [
+          12.954,
+          23.882
+        ],
+        "excludes_zero": true
+      },
+      "uniform_spent": {
+        "mean": 30,
+        "ci95": [
+          30.0,
+          30.0
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_static_found": {
+        "mean": 18.871,
+        "ci95": [
+          12.916,
+          23.874
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_delta": {
+        "mean": 1.709,
+        "ci95": [
+          1.007,
+          2.442
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_static_calls": {
+        "mean": 36.697,
+        "ci95": [
+          31.87,
+          42.965
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_delta": {
+        "mean": -6.956,
+        "ci95": [
+          -13.625,
+          -1.842
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_reach": {
+        "reached": 2200,
+        "unreached": 0,
+        "rate": 1.0,
+        "note": "정적이 상한 안에 적응의 성공 수를 못 채운 재생은 제외했다. 제외된 쪽이 정적에게 불리한 경우이므로 남은 비교는 정적에 후하다."
+      }
+    },
+    "40": {
+      "cap": 40,
+      "adaptive_found": {
+        "mean": 28.823,
+        "ci95": [
+          21.83,
+          34.599
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent": {
+        "mean": 39.509,
+        "ci95": [
+          38.8,
+          40.0
+        ],
+        "excludes_zero": true
+      },
+      "uniform_found": {
+        "mean": 25.144,
+        "ci95": [
+          17.264,
+          31.779
+        ],
+        "excludes_zero": true
+      },
+      "uniform_spent": {
+        "mean": 40,
+        "ci95": [
+          40.0,
+          40.0
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_static_found": {
+        "mean": 25.198,
+        "ci95": [
+          17.256,
+          31.891
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_delta": {
+        "mean": 3.625,
+        "ci95": [
+          2.285,
+          4.989
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_static_calls": {
+        "mean": 54.617,
+        "ci95": [
+          44.336,
+          67.908
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_delta": {
+        "mean": -15.108,
+        "ci95": [
+          -29.065,
+          -4.304
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_reach": {
+        "reached": 2200,
+        "unreached": 0,
+        "rate": 1.0,
+        "note": "정적이 상한 안에 적응의 성공 수를 못 채운 재생은 제외했다. 제외된 쪽이 정적에게 불리한 경우이므로 남은 비교는 정적에 후하다."
+      }
+    },
+    "50": {
+      "cap": 50,
+      "adaptive_found": {
+        "mean": 36.47,
+        "ci95": [
+          26.974,
+          44.224
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent": {
+        "mean": 48.395,
+        "ci95": [
+          46.123,
+          50.0
+        ],
+        "excludes_zero": true
+      },
+      "uniform_found": {
+        "mean": 31.421,
+        "ci95": [
+          21.588,
+          39.713
+        ],
+        "excludes_zero": true
+      },
+      "uniform_spent": {
+        "mean": 50,
+        "ci95": [
+          50.0,
+          50.0
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_static_found": {
+        "mean": 31.351,
+        "ci95": [
+          21.335,
+          39.767
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_delta": {
+        "mean": 5.119,
+        "ci95": [
+          3.235,
+          7.162
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_static_calls": {
+        "mean": 64.528,
+        "ci95": [
+          56.627,
+          74.185
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_delta": {
+        "mean": -16.132,
+        "ci95": [
+          -27.806,
+          -6.652
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_reach": {
+        "reached": 2200,
+        "unreached": 0,
+        "rate": 1.0,
+        "note": "정적이 상한 안에 적응의 성공 수를 못 채운 재생은 제외했다. 제외된 쪽이 정적에게 불리한 경우이므로 남은 비교는 정적에 후하다."
+      }
+    },
+    "60": {
+      "cap": 60,
+      "adaptive_found": {
+        "mean": 44.06,
+        "ci95": [
+          32.237,
+          53.638
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent": {
+        "mean": 57.371,
+        "ci95": [
+          53.56,
+          60.0
+        ],
+        "excludes_zero": true
+      },
+      "uniform_found": {
+        "mean": 37.806,
+        "ci95": [
+          25.952,
+          47.803
+        ],
+        "excludes_zero": true
+      },
+      "uniform_spent": {
+        "mean": 60,
+        "ci95": [
+          60.0,
+          60.0
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_static_found": {
+        "mean": 37.571,
+        "ci95": [
+          25.548,
+          47.72
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_delta": {
+        "mean": 6.489,
+        "ci95": [
+          4.047,
+          9.345
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_static_calls": {
+        "mean": 75.73,
+        "ci95": [
+          67.879,
+          84.58
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_delta": {
+        "mean": -18.359,
+        "ci95": [
+          -30.211,
+          -8.374
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_reach": {
+        "reached": 2200,
+        "unreached": 0,
+        "rate": 1.0,
+        "note": "정적이 상한 안에 적응의 성공 수를 못 채운 재생은 제외했다. 제외된 쪽이 정적에게 불리한 경우이므로 남은 비교는 정적에 후하다."
+      }
+    },
+    "80": {
+      "cap": 80,
+      "adaptive_found": {
+        "mean": 56.765,
+        "ci95": [
+          40.366,
+          70.405
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent": {
+        "mean": 73.616,
+        "ci95": [
+          64.215,
+          80.0
+        ],
+        "excludes_zero": true
+      },
+      "uniform_found": {
+        "mean": 50.377,
+        "ci95": [
+          34.632,
+          63.669
+        ],
+        "excludes_zero": true
+      },
+      "uniform_spent": {
+        "mean": 80,
+        "ci95": [
+          80.0,
+          80.0
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_static_found": {
+        "mean": 49.935,
+        "ci95": [
+          33.714,
+          63.661
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_delta": {
+        "mean": 6.83,
+        "ci95": [
+          4.19,
+          9.425
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_static_calls": {
+        "mean": 91.574,
+        "ci95": [
+          87.367,
+          96.104
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_delta": {
+        "mean": -17.957,
+        "ci95": [
+          -28.13,
+          -9.09
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_reach": {
+        "reached": 2200,
+        "unreached": 0,
+        "rate": 1.0,
+        "note": "정적이 상한 안에 적응의 성공 수를 못 채운 재생은 제외했다. 제외된 쪽이 정적에게 불리한 경우이므로 남은 비교는 정적에 후하다."
+      }
+    },
+    "100": {
+      "cap": 100,
+      "adaptive_found": {
+        "mean": 67.551,
+        "ci95": [
+          46.916,
+          84.604
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent": {
+        "mean": 89.953,
+        "ci95": [
+          75.124,
+          100.0
+        ],
+        "excludes_zero": true
+      },
+      "uniform_found": {
+        "mean": 62.967,
+        "ci95": [
+          43.263,
+          79.617
+        ],
+        "excludes_zero": true
+      },
+      "uniform_spent": {
+        "mean": 100,
+        "ci95": [
+          100.0,
+          100.0
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_static_found": {
+        "mean": 62.247,
+        "ci95": [
+          41.788,
+          79.561
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_delta": {
+        "mean": 5.304,
+        "ci95": [
+          3.228,
+          7.804
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_static_calls": {
+        "mean": 105.066,
+        "ci95": [
+          100.065,
+          109.874
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_delta": {
+        "mean": -15.114,
+        "ci95": [
+          -25.822,
+          -6.438
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_reach": {
+        "reached": 2200,
+        "unreached": 0,
+        "rate": 1.0,
+        "note": "정적이 상한 안에 적응의 성공 수를 못 채운 재생은 제외했다. 제외된 쪽이 정적에게 불리한 경우이므로 남은 비교는 정적에 후하다."
+      }
+    },
+    "120": {
+      "cap": 120,
+      "adaptive_found": {
+        "mean": 75.308,
+        "ci95": [
+          51.419,
+          95.455
+        ],
+        "excludes_zero": true
+      },
+      "adaptive_spent": {
+        "mean": 106.433,
+        "ci95": [
+          86.338,
+          120.0
+        ],
+        "excludes_zero": true
+      },
+      "uniform_found": {
+        "mean": 75.545,
+        "ci95": [
+          51.909,
+          95.455
+        ],
+        "excludes_zero": true
+      },
+      "uniform_spent": {
+        "mean": 120,
+        "ci95": [
+          120.0,
+          120.0
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_static_found": {
+        "mean": 74.599,
+        "ci95": [
+          49.897,
+          95.455
+        ],
+        "excludes_zero": true
+      },
+      "matched_compute_delta": {
+        "mean": 0.709,
+        "ci95": [
+          0.0,
+          1.746
+        ],
+        "excludes_zero": false
+      },
+      "matched_success_static_calls": {
+        "mean": 114.733,
+        "ci95": [
+          107.642,
+          119.746
+        ],
+        "excludes_zero": true
+      },
+      "matched_success_delta": {
+        "mean": -8.3,
+        "ci95": [
+          -21.246,
+          0.424
+        ],
+        "excludes_zero": false
+      },
+      "matched_success_reach": {
+        "reached": 2200,
+        "unreached": 0,
+        "rate": 1.0,
+        "note": "정적이 상한 안에 적응의 성공 수를 못 채운 재생은 제외했다. 제외된 쪽이 정적에게 불리한 경우이므로 남은 비교는 정적에 후하다."
+      }
+    }
+  },
+  "pareto": [
+    {
+      "cap": 4,
+      "policy": "adaptive",
+      "calls": 4,
+      "successes": 2.594,
+      "dominated_by": [],
+      "on_frontier": true
+    },
+    {
+      "cap": 4,
+      "policy": "uniform_k5",
+      "calls": 4,
+      "successes": 2.54,
+      "dominated_by": [
+        "adaptive@cap4"
+      ],
+      "on_frontier": false
+    },
+    {
+      "cap": 8,
+      "policy": "adaptive",
+      "calls": 8,
+      "successes": 5.38,
+      "dominated_by": [],
+      "on_frontier": true
+    },
+    {
+      "cap": 8,
+      "policy": "uniform_k5",
+      "calls": 8,
+      "successes": 5.037,
+      "dominated_by": [
+        "adaptive@cap8"
+      ],
+      "on_frontier": false
+    },
+    {
+      "cap": 12,
+      "policy": "adaptive",
+      "calls": 12,
+      "successes": 7.381,
+      "dominated_by": [
+        "uniform_k5@cap12"
+      ],
+      "on_frontier": false
+    },
+    {
+      "cap": 12,
+      "policy": "uniform_k5",
+      "calls": 12,
+      "successes": 7.548,
+      "dominated_by": [],
+      "on_frontier": true
+    },
+    {
+      "cap": 16,
+      "policy": "adaptive",
+      "calls": 16,
+      "successes": 10.062,
+      "dominated_by": [
+        "uniform_k5@cap16"
+      ],
+      "on_frontier": false
+    },
+    {
+      "cap": 16,
+      "policy": "uniform_k5",
+      "calls": 16,
+      "successes": 10.086,
+      "dominated_by": [],
+      "on_frontier": true
+    },
+    {
+      "cap": 20,
+      "policy": "adaptive",
+      "calls": 20,
+      "successes": 12.566,
+      "dominated_by": [
+        "uniform_k5@cap20"
+      ],
+      "on_frontier": false
+    },
+    {
+      "cap": 20,
+      "policy": "uniform_k5",
+      "calls": 20,
+      "successes": 12.608,
+      "dominated_by": [],
+      "on_frontier": true
+    },
+    {
+      "cap": 24,
+      "policy": "adaptive",
+      "calls": 23.902,
+      "successes": 15.72,
+      "dominated_by": [],
+      "on_frontier": true
+    },
+    {
+      "cap": 24,
+      "policy": "uniform_k5",
+      "calls": 24,
+      "successes": 15.137,
+      "dominated_by": [
+        "adaptive@cap24"
+      ],
+      "on_frontier": false
+    },
+    {
+      "cap": 30,
+      "policy": "adaptive",
+      "calls": 29.741,
+      "successes": 20.58,
+      "dominated_by": [],
+      "on_frontier": true
+    },
+    {
+      "cap": 30,
+      "policy": "uniform_k5",
+      "calls": 30,
+      "successes": 18.875,
+      "dominated_by": [
+        "adaptive@cap30"
+      ],
+      "on_frontier": false
+    },
+    {
+      "cap": 40,
+      "policy": "adaptive",
+      "calls": 39.509,
+      "successes": 28.823,
+      "dominated_by": [],
+      "on_frontier": true
+    },
+    {
+      "cap": 40,
+      "policy": "uniform_k5",
+      "calls": 40,
+      "successes": 25.144,
+      "dominated_by": [
+        "adaptive@cap40"
+      ],
+      "on_frontier": false
+    },
+    {
+      "cap": 50,
+      "policy": "adaptive",
+      "calls": 48.395,
+      "successes": 36.47,
+      "dominated_by": [],
+      "on_frontier": true
+    },
+    {
+      "cap": 50,
+      "policy": "uniform_k5",
+      "calls": 50,
+      "successes": 31.421,
+      "dominated_by": [
+        "adaptive@cap50"
+      ],
+      "on_frontier": false
+    },
+    {
+      "cap": 60,
+      "policy": "adaptive",
+      "calls": 57.371,
+      "successes": 44.06,
+      "dominated_by": [],
+      "on_frontier": true
+    },
+    {
+      "cap": 60,
+      "policy": "uniform_k5",
+      "calls": 60,
+      "successes": 37.806,
+      "dominated_by": [
+        "adaptive@cap60"
+      ],
+      "on_frontier": false
+    },
+    {
+      "cap": 80,
+      "policy": "adaptive",
+      "calls": 73.616,
+      "successes": 56.765,
+      "dominated_by": [],
+      "on_frontier": true
+    },
+    {
+      "cap": 80,
+      "policy": "uniform_k5",
+      "calls": 80,
+      "successes": 50.377,
+      "dominated_by": [
+        "adaptive@cap80"
+      ],
+      "on_frontier": false
+    },
+    {
+      "cap": 100,
+      "policy": "adaptive",
+      "calls": 89.953,
+      "successes": 67.551,
+      "dominated_by": [],
+      "on_frontier": true
+    },
+    {
+      "cap": 100,
+      "policy": "uniform_k5",
+      "calls": 100,
+      "successes": 62.967,
+      "dominated_by": [
+        "adaptive@cap100"
+      ],
+      "on_frontier": false
+    },
+    {
+      "cap": 120,
+      "policy": "adaptive",
+      "calls": 106.433,
+      "successes": 75.308,
+      "dominated_by": [],
+      "on_frontier": true
+    },
+    {
+      "cap": 120,
+      "policy": "uniform_k5",
+      "calls": 120,
+      "successes": 75.545,
+      "dominated_by": [],
+      "on_frontier": true
+    }
+  ],
+  "limits": [
+    "타겟 12 개다. 클러스터 부트스트랩의 정밀도가 그만큼만 된다.",
+    "재생이므로 백본마다 관측이 24 개뿐이다. 적응이 한 백본을 다 쓰면 실제 제품에서는 서열을 더 만들 수 있지만 여기서는 옮겨야 한다.",
+    "격자는 단일 조건(T=0.1)이다. 조건 탐색 축은 여기에 없다."
+  ],
+  "code_sha": "248bedaf40376760acfe2654bb912245ff42498a",
+  "utc": "2026-09-09T00:43:30Z"
+}
