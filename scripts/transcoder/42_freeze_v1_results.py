@@ -79,6 +79,10 @@ CODE = [
     "scripts/transcoder/43_make_prospective_figures.py",
     "scripts/transcoder/rapid_sr/protocol.py",
     "pipeline-mcp/src/pipeline_mcp/allocation.py",
+    # 논문 재현용 사본. 런타임 정본과 다르고 (simulate·clustered_policy_bootstrap
+    # 이 더 있다) 16_allocation_budget_simulation.py 가 쓴다. 설계가 수정 금지로
+    # 선언했는데 해시가 걸려 있지 않아 드리프트를 잡을 방법이 없었다.
+    "scripts/transcoder/rapid_sr/allocation.py",
 ]
 
 
@@ -185,7 +189,11 @@ def build() -> dict:
         },
         "cohort": cohort_summary(),
         "artifacts": {role: digest(rel) for role, rel in ARTIFACTS},
-        "code": {Path(rel).name: digest(rel) for rel in CODE},
+        # 키는 전체 경로다. 파일 이름으로 키를 만들면 같은 이름의 두 파일이
+        # 충돌한다 - 실제로 pipeline_mcp/allocation.py 와
+        # rapid_sr/allocation.py 가 한 항목으로 덮여서 런타임 사본의 해시가
+        # 조용히 사라졌다.
+        "code": {rel: digest(rel) for rel in CODE},
         "endpoint_roles": {
             "primary": "예산 상한 안에서 찾은 joint-pass 설계 수 "
                        "(prospective_allocation_validation_joint.json). 동결 spec 그대로이며 "
