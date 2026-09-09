@@ -167,7 +167,7 @@
       "reserve_per_stratum": 2,
       "n_reserve": 6,
       "seed": 20260911,
-      "selection_committed": false,
+      "selection_committed": true,
       "selection_artifact": "public_data/benchmark/gate0/calibration_v2_targets.json",
       "pool_check_utc": "2026-09-09T00:00:00Z",
       "pool_eligible_after_all_exclusions": 183,
@@ -204,7 +204,31 @@
         "joint-pass",
         "Gate 0 사전분포 점수",
         "legacy rapid_target_manifest.csv 의 eligible 열"
-      ]
+      ],
+      "selected": [
+        "1ct7A00",
+        "1pp1X02",
+        "2jvfA00",
+        "2m9xA01",
+        "2q5fA02",
+        "3ksnA00",
+        "3vwoA02",
+        "4q68A01",
+        "4yqiA01",
+        "5e10A02",
+        "5u1xA02",
+        "6wvfA01"
+      ],
+      "selected_sha256": "6cdf5ff7dce8eb634da27a5b713e9d9c3548f87c7af200902d691ead506a98dc",
+      "reserve_order": [
+        "3db9A01",
+        "1y0kA00",
+        "2ewjA01",
+        "1l5lA01",
+        "1kx8A00",
+        "1wijA00"
+      ],
+      "selected_utc": "2026-09-09T10:52:52Z"
     },
     "confirmatory": {
       "reused_from": "public_data/benchmark/gate0/masked_holdout_targets.json",

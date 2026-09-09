@@ -101,8 +101,17 @@ def main() -> int:
             # 한다. 이 스크립트는 처음에 `a3m`/`a3m_text` 만 읽어서, 서버가
             # 정상 응답한 3 타겟을 모두 MSA_INFEASIBLE 로 기록했다.
             a3m_b64 = out.get(A3M_RESPONSE_KEY)
+            entry["a3m_key_present"] = bool(a3m_b64)
             if a3m_b64:
-                a3m = decode_a3m_gz_b64(str(a3m_b64))
+                # decode 실패를 endpoint 실패와 섞지 않는다. 전자는 파싱 문제고
+                # 후자는 전송 문제다. 하나로 합치면 다시 추적해야 한다.
+                try:
+                    a3m = decode_a3m_gz_b64(str(a3m_b64))
+                    entry["decode_ok"] = True
+                except Exception as exc:
+                    a3m = ""
+                    entry["decode_ok"] = False
+                    entry["decode_error"] = f"{type(exc).__name__}: {exc}"[:200]
                 entry["a3m_source_key"] = A3M_RESPONSE_KEY
             else:
                 # 평문으로 주는 배포도 있을 수 있으므로 남겨 둔다. 없으면 빈 문자열.
@@ -116,6 +125,16 @@ def main() -> int:
             for k in ("hit_count", "query_length", "query_id"):
                 if k in out:
                     entry[k] = out[k]
+            # 서버가 우리가 보낸 질의를 그대로 다뤘는지. 길이나 id 가 어긋나면
+            # 이후 보존도 마스크가 다른 서열에 붙는다 - 조용히 넘어가면 안 된다.
+            entry["query_consistent"] = {
+                "sent_id": domain, "sent_length": len(seq),
+                "returned_id": out.get("query_id"),
+                "returned_length": out.get("query_length"),
+                "id_match": str(out.get("query_id") or "").strip() in ("", domain),
+                "length_match": (out.get("query_length") is None
+                                 or int(out["query_length"]) == len(seq)),
+            }
             if a3m.strip():
                 q = msa_quality(a3m)
                 entry["msa_quality"] = {
@@ -137,17 +156,53 @@ def main() -> int:
             entry["classification"] = ("MSA_INSUFFICIENT_DEPTH"
                                        if isinstance(hits, int) and hits < 10
                                        else "OK")
+        # ---- acceptance: 코드/계측이 정상인가. 과학 PASS 가 아니다. ----
+        # 어떤 타겟이 실제로 usable_hits < 10 이면 그것은 pilot 실패가 아니라
+        # 진짜 MSA_INSUFFICIENT_DEPTH 관측이다. 5 번은 "값이 계산됐는가" 만 본다.
+        q = entry.get("msa_quality") or {}
+        qc = entry.get("query_consistent") or {}
+        checks = {
+            "1_endpoint_ok": entry.get("endpoint_status") == "ok",
+            "2_a3m_key_present_and_decoded": bool(entry.get("a3m_key_present"))
+                                             and entry.get("decode_ok") is True,
+            "3_decoded_non_empty": entry.get("a3m_bytes", 0) > 0
+                                   and not entry.get("a3m_empty", True),
+            "4_query_consistent": bool(qc.get("id_match")) and bool(qc.get("length_match")),
+            "5_quality_metrics_computed": all(
+                isinstance(q.get(k), (int, float))
+                for k in ("usable_hits", "coverage", "depth", "full_length_fraction")),
+            "6_frozen_rule_applied": entry.get("classification") in {
+                "OK", "MSA_INSUFFICIENT_DEPTH", "MSA_INFEASIBLE"},
+        }
+        entry["acceptance"] = checks
+        entry["acceptance_pass"] = all(checks.values())
+        entry["acceptance_note"] = ("계측 판정이다. scientific PASS 가 아니다. "
+                                    "usable_hits < 10 은 정상적인 feasibility "
+                                    "관측이며 acceptance 실패가 아니다.")
         print(f"    {entry['wall_seconds']}s · {entry['endpoint_status']} · "
-              f"{entry['classification']}", flush=True)
+              f"{entry['classification']} · 계측 "
+              f"{'PASS' if entry['acceptance_pass'] else 'FAIL ' + str([k for k, v in checks.items() if not v])}",
+              flush=True)
         rows.append(entry)
 
-    print(f"\n{'타겟':10s}{'aa':>5}{'wall(s)':>9}{'a3m bytes':>11}"
-          f"{'usable_hits':>12}  판정")
+    def _f(v, fmt="{:.3f}"):
+        return fmt.format(v) if isinstance(v, (int, float)) else "-"
+
+    print(f"\n{'타겟':10s}{'aa':>5}{'wall(s)':>9}{'hits':>7}{'a3m B':>10}"
+          f"{'usable':>8}{'cover':>8}{'depth':>8}{'full_len':>9}  {'판정':<22}계측")
     for e in rows:
         q = e.get("msa_quality") or {}
         print(f"  {e['domain']:8s}{e['length']:>5}{e['wall_seconds']:>9}"
-              f"{e.get('a3m_bytes', 0):>11}{str(q.get('usable_hits', '-')):>12}"
-              f"  {e['classification']}")
+              f"{str(e.get('hit_count', '-')):>7}{e.get('a3m_bytes', 0):>10}"
+              f"{_f(q.get('usable_hits'), '{:.0f}'):>8}{_f(q.get('coverage')):>8}"
+              f"{_f(q.get('depth'), '{:.1f}'):>8}{_f(q.get('full_length_fraction')):>9}"
+              f"  {e['classification']:<22}"
+              f"{'PASS' if e['acceptance_pass'] else 'FAIL'}")
+    n_pass = sum(1 for e in rows if e["acceptance_pass"])
+    print(f"\n계측 acceptance {n_pass}/{len(rows)} · "
+          f"full MSA 24 타겟 = {'GO' if n_pass == len(rows) else 'BLOCK'}")
+    print("  (계측 판정이다. usable_hits < 10 은 정상 feasibility 관측이며 "
+          "acceptance 실패가 아니다.)")
     for e in rows:
         w = (e.get("msa_quality") or {}).get("warnings") or []
         if w:
@@ -155,6 +210,26 @@ def main() -> int:
 
     report = {
         "purpose": "MSA operational pilot. 운영 가능성만 본다.",
+        "acceptance_scope": ("corrected transport/parser path 의 end-to-end 검증과 "
+                             "MSA quality 4 값의 실제 계측. scientific threshold "
+                             "재평가가 아니다."),
+        "acceptance_criteria": [
+            "1 endpoint_status = ok",
+            "2 a3m_gz_b64 존재 + decode 성공",
+            "3 decoded A3M non-empty",
+            "4 query_id / query_length 일치",
+            "5 usable_hits · coverage · depth · full_length_fraction 이 실제 숫자로 계산됨",
+            "6 frozen §8 규칙이 그대로 적용됨",
+        ],
+        "acceptance_is_not": ("세 타겟이 모두 scientific PASS 일 필요는 없다. "
+                              "usable_hits < 10 은 frozen protocol 에 따른 정상 "
+                              "feasibility 결과다."),
+        "forbidden_after_this_run": ["threshold 변경", "target selection rule 변경",
+                                     "tier 변경", "candidate count 변경"],
+        "instrumentation_pass": sum(1 for e in rows if e["acceptance_pass"]),
+        "instrumentation_total": len(rows),
+        "full_msa_verdict": ("GO" if all(e["acceptance_pass"] for e in rows)
+                             else "BLOCK"),
         "frozen_targets": pilot,
         "settings": {"target_db": TARGET_DB, "max_seqs": MAX_SEQS,
                      "threads": THREADS, "use_gpu": USE_GPU},

@@ -1,0 +1,436 @@
+{
+  "cohort": "calibration_v2",
+  "purpose": "v2.0 multi-source calibration 코호트. source 별로 독립 kappa 를 식별한다. 성능 주장에 쓰지 않는다.",
+  "freeze_doc": "docs/specs/rapid-v2-multisource-validation-freeze.md",
+  "frozen_utc": "2026-09-09T10:52:52Z",
+  "seed": 20260911,
+  "design": {
+    "n_targets": 12,
+    "backbone_sources": [
+      "rfd3",
+      "bioemu"
+    ],
+    "backbones_per_target": 10,
+    "sequences_per_backbone": 12,
+    "total_folds_per_source": 1440,
+    "total_folds": 2880,
+    "temperature": 0.1
+  },
+  "eligibility": {
+    "chains": 1,
+    "min_length": 50,
+    "max_length": 400
+  },
+  "strata": [
+    {
+      "label": "50-150",
+      "low": 50,
+      "high": 150
+    },
+    {
+      "label": "150-250",
+      "low": 150,
+      "high": 250
+    },
+    {
+      "label": "250-400",
+      "low": 250,
+      "high": 401
+    }
+  ],
+  "selection_inputs": [
+    "적격성",
+    "길이"
+  ],
+  "selection_excluded_inputs": [
+    "과거 yield",
+    "SoluProt 결과",
+    "structural-success 결과",
+    "joint-pass 결과",
+    "Gate 0 사전분포 점수",
+    "MSA 심도/품질",
+    "RFD3 성공률",
+    "BioEmu 성공률",
+    "legacy rapid_target_manifest.csv 의 eligible 열"
+  ],
+  "exclusions": {
+    "used_targets": [
+      "1af7A01",
+      "1b5aA00",
+      "1b7eA01",
+      "1b8xA03",
+      "1bctA00",
+      "1bg5A03",
+      "1bxmA00",
+      "1c8zA00",
+      "1e9tA00",
+      "1eruA00",
+      "1evsA00",
+      "1hufA00",
+      "1j0tA00",
+      "1j5uA01",
+      "1ji8A01",
+      "1jygA00",
+      "1koyA00",
+      "1ktuA00",
+      "1l5cA00",
+      "1lpvA00",
+      "1n81A00",
+      "1nr3A00",
+      "1o22A00",
+      "1o8rA00",
+      "1okgA03",
+      "1q5zA00",
+      "1rdrA01",
+      "1sdiA00",
+      "1sh6A02",
+      "1sohA00",
+      "1sp0A00",
+      "1tm9A00",
+      "1ux6A01",
+      "1vprA02",
+      "1vsrA00",
+      "1x3aA00",
+      "1y8aA02",
+      "2hg6A00",
+      "2hlyA00",
+      "2i4f100",
+      "2iayA00",
+      "2je2A00",
+      "2jneA00",
+      "2jo7A00",
+      "2jokA01",
+      "2kjfA00",
+      "2kqrA01",
+      "2m3cA01",
+      "2mq6A00",
+      "2pgsA03",
+      "2psbA00",
+      "2r01A02",
+      "2w2sA00",
+      "2wejA00",
+      "2yruA01",
+      "3bqwA01",
+      "3es1A01",
+      "3f2pA01",
+      "3h7eA02",
+      "3ps3A02",
+      "4ai2A02",
+      "4ifxA00",
+      "4nt8A00",
+      "4poaA02",
+      "4wexA00",
+      "4y07A01",
+      "4yikA02",
+      "5fwaA02",
+      "5nazA00",
+      "5pc8A00",
+      "5xpdA02",
+      "6qd5A00",
+      "6vqfA00",
+      "7o1zA01"
+    ],
+    "used_target_sources": {
+      "holdout_resolved": [
+        "1sh6A02",
+        "1sp0A00",
+        "1tm9A00",
+        "1vsrA00",
+        "2jokA01",
+        "3bqwA01",
+        "3es1A01",
+        "3f2pA01",
+        "3h7eA02",
+        "5fwaA02",
+        "5pc8A00",
+        "5xpdA02"
+      ],
+      "holdout_selected": [
+        "1sp0A00",
+        "1tm9A00",
+        "1vprA02",
+        "1vsrA00",
+        "2iayA00",
+        "2jo7A00",
+        "2jokA01",
+        "2pgsA03",
+        "3bqwA01",
+        "3es1A01",
+        "3h7eA02",
+        "5fwaA02"
+      ],
+      "holdout_reserve": [
+        "1sh6A02",
+        "2je2A00",
+        "2yruA01",
+        "3f2pA01",
+        "5pc8A00",
+        "5xpdA02"
+      ],
+      "temperature_sweep": [
+        "1af7A01",
+        "1b5aA00",
+        "1bctA00",
+        "1bg5A03",
+        "1bxmA00",
+        "1c8zA00",
+        "1e9tA00",
+        "1eruA00",
+        "1hufA00",
+        "1jygA00",
+        "1ktuA00",
+        "1l5cA00",
+        "1nr3A00",
+        "1o8rA00",
+        "2wejA00"
+      ],
+      "temperature_panel2": [
+        "1af7A01",
+        "1b5aA00",
+        "1b7eA01",
+        "1b8xA03",
+        "1hufA00",
+        "1jygA00",
+        "1koyA00",
+        "2jneA00",
+        "2kjfA00",
+        "2wejA00"
+      ],
+      "calibration_targets_selected": [
+        "1evsA00",
+        "1j0tA00",
+        "1ji8A01",
+        "1q5zA00",
+        "1y8aA02",
+        "2mq6A00",
+        "2r01A02",
+        "3ps3A02",
+        "4poaA02",
+        "4y07A01",
+        "5nazA00",
+        "7o1zA01"
+      ],
+      "calibration_targets_reserve": [
+        "1lpvA00",
+        "1ux6A01",
+        "2kqrA01",
+        "2m3cA01",
+        "2psbA00",
+        "4nt8A00"
+      ],
+      "masked_holdout_selected": [
+        "1j5uA01",
+        "1n81A00",
+        "1o22A00",
+        "1rdrA01",
+        "1sdiA00",
+        "1sohA00",
+        "1x3aA00",
+        "2w2sA00",
+        "4ai2A02",
+        "4ifxA00",
+        "4wexA00",
+        "6vqfA00"
+      ],
+      "masked_holdout_reserve": [
+        "1okgA03",
+        "2hg6A00",
+        "2hlyA00",
+        "2i4f100",
+        "4yikA02",
+        "6qd5A00"
+      ]
+    },
+    "n_used_superfamilies": 74,
+    "why_superfamily": "근접 중복이 남으면 독립 코호트가 아니다"
+  },
+  "pool": {
+    "n_eligible": 183,
+    "by_stratum": {
+      "50-150": 80,
+      "150-250": 36,
+      "250-400": 67
+    }
+  },
+  "selected": [
+    {
+      "domain": "5e10A02",
+      "split": "cath_train",
+      "length": 133,
+      "superfamily": "3.30.10.20",
+      "pdb": "/opt/protein_pipeline/cath_train/5e10A02.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "2jvfA00",
+      "split": "cath_train",
+      "length": 94,
+      "superfamily": "3.30.1710.10",
+      "pdb": "/opt/protein_pipeline/cath_train/2jvfA00.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "1ct7A00",
+      "split": "cath_train",
+      "length": 50,
+      "superfamily": "2.30.32.30",
+      "pdb": "/opt/protein_pipeline/cath_train/1ct7A00.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "2m9xA01",
+      "split": "cath_train",
+      "length": 112,
+      "superfamily": "1.20.1480.20",
+      "pdb": "/opt/protein_pipeline/cath_train/2m9xA01.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "4yqiA01",
+      "split": "cath_train",
+      "length": 238,
+      "superfamily": "3.40.1280.10",
+      "pdb": "/opt/protein_pipeline/cath_train/4yqiA01.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "3vwoA02",
+      "split": "cath_val",
+      "length": 155,
+      "superfamily": "2.10.70.40",
+      "pdb": "/opt/protein_pipeline/cath_val/3vwoA02.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "3ksnA00",
+      "split": "cath_train",
+      "length": 177,
+      "superfamily": "2.50.20.10",
+      "pdb": "/opt/protein_pipeline/cath_train/3ksnA00.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "4q68A01",
+      "split": "cath_train",
+      "length": 228,
+      "superfamily": "1.10.3670.10",
+      "pdb": "/opt/protein_pipeline/cath_train/4q68A01.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "2q5fA02",
+      "split": "cath_train",
+      "length": 259,
+      "superfamily": "2.60.200.30",
+      "pdb": "/opt/protein_pipeline/cath_train/2q5fA02.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    },
+    {
+      "domain": "6wvfA01",
+      "split": "cath_val",
+      "length": 386,
+      "superfamily": "1.20.1550.10",
+      "pdb": "/opt/protein_pipeline/cath_val/6wvfA01.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    },
+    {
+      "domain": "1pp1X02",
+      "split": "cath_train",
+      "length": 326,
+      "superfamily": "1.10.3050.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1pp1X02.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    },
+    {
+      "domain": "5u1xA02",
+      "split": "cath_train",
+      "length": 321,
+      "superfamily": "2.60.490.10",
+      "pdb": "/opt/protein_pipeline/cath_train/5u1xA02.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    }
+  ],
+  "reserve": [
+    {
+      "domain": "1kx8A00",
+      "split": "cath_train",
+      "length": 100,
+      "superfamily": "1.10.2080.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1kx8A00.pdb",
+      "stratum": "50-150",
+      "role": "reserve",
+      "reserve_rank": 0
+    },
+    {
+      "domain": "1wijA00",
+      "split": "cath_train",
+      "length": 127,
+      "superfamily": "1.10.3180.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1wijA00.pdb",
+      "stratum": "50-150",
+      "role": "reserve",
+      "reserve_rank": 1
+    },
+    {
+      "domain": "3db9A01",
+      "split": "cath_train",
+      "length": 235,
+      "superfamily": "3.40.1640.10",
+      "pdb": "/opt/protein_pipeline/cath_train/3db9A01.pdb",
+      "stratum": "150-250",
+      "role": "reserve",
+      "reserve_rank": 0
+    },
+    {
+      "domain": "1y0kA00",
+      "split": "cath_train",
+      "length": 178,
+      "superfamily": "3.40.1540.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1y0kA00.pdb",
+      "stratum": "150-250",
+      "role": "reserve",
+      "reserve_rank": 1
+    },
+    {
+      "domain": "2ewjA01",
+      "split": "cath_train",
+      "length": 305,
+      "superfamily": "3.50.14.10",
+      "pdb": "/opt/protein_pipeline/cath_train/2ewjA01.pdb",
+      "stratum": "250-400",
+      "role": "reserve",
+      "reserve_rank": 0
+    },
+    {
+      "domain": "1l5lA01",
+      "split": "cath_train",
+      "length": 347,
+      "superfamily": "1.10.1610.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1l5lA01.pdb",
+      "stratum": "250-400",
+      "role": "reserve",
+      "reserve_rank": 1
+    }
+  ],
+  "substitution_rule": "생성 시작 전에 타겟이 준비되지 않은 경우에만 reserve_rank 순서로 쓴다. 수용 게이트로 backbone 10 개를 못 채운 (target, source) 는 SOURCE_GENERATION_INFEASIBLE 로 기록하고 타겟을 바꾸지 않는다.",
+  "not_for": [
+    "policy 비교",
+    "EFBC 계산",
+    "coverage 결론",
+    "confirmatory 주장"
+  ],
+  "code_sha": "434c83f5310fdc93d95694d2da2f4804993415e8",
+  "self_sha256": "499a4ebbb8e5b2ac208bef95034766fb761e92211fc790f227399da4168d5766"
+}
