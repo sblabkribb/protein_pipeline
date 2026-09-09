@@ -18,6 +18,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 DOC = ROOT / "docs" / "results_of_record.md"
+MANUSCRIPT = ROOT / "docs" / "manuscript.md"
 BASE = ROOT / "public_data" / "benchmark" / "gate0"
 
 
@@ -135,3 +136,53 @@ def test_stability_stays_annotation_only():
     doc = _doc()
     assert "annotation 과 tie-break 로만" in doc
     assert "SPURS 를 중재자로 추가하지 않는다" in doc
+
+
+# ---- 원고 ---------------------------------------------------------------
+# 원고가 인용하는 전향 수치도 산출물에 묶는다. 초록에 옛 AUC 0.756 이 들어간 것도
+# 원고였다. 여기서도 세 번째 사본을 만들지 않고 산출물에서 읽어 대조한다.
+
+def _manuscript() -> str:
+    if not MANUSCRIPT.exists():
+        pytest.skip(f"원고 없음: {MANUSCRIPT}")
+    return MANUSCRIPT.read_text(encoding="utf-8")
+
+
+def test_manuscript_variance_matches_artifact():
+    c = _load("holdout_grid/variance_decomposition_grid.json")["cohorts"]["rfd3_only_primary"]
+    ss = c["sum_of_squares"]["structural_pass"]
+    doc = _manuscript()
+    for key in ("target_level", "backbone_within_target", "sequence_within_backbone",
+                "attributed_to_target_and_backbone"):
+        text = f"{ss[key] * 100:.1f}%"
+        assert text in doc, f"원고에 {key}={text} 가 없다"
+
+
+@pytest.mark.parametrize("cap", ["24", "40", "60", "80", "120"])
+def test_manuscript_allocation_matches_artifact(cap):
+    pc = _load("holdout_grid/prospective_allocation_validation_joint.json")[
+        "results_by_budget"][cap]["primary_comparison"]
+    doc = _manuscript()
+    assert f"{abs(pc['mean']):.2f}" in doc, f"상한 {cap} 의 차이가 원고에 없다"
+    assert f"{abs(pc['ci95'][0]):.2f}" in doc, f"상한 {cap} 의 CI 하한이 원고에 없다"
+
+
+def test_manuscript_reports_the_unfavourable_saturation_result():
+    """상한 120 의 1 차 값은 불리해도 원고에 남아 있어야 한다."""
+    doc = _manuscript()
+    assert "-0.24" in doc, "상한 120 의 1 차 결과가 원고에서 빠졌다"
+    rc = _load("holdout_grid/realized_compute_analysis.json")["by_cap"]["120"]
+    assert f"{rc['adaptive_spent']['mean']:.1f}" in doc, (
+        "실제로 쓴 호출 수가 함께 적혀 있지 않다 - 두 값은 같이 읽어야 한다")
+
+
+def test_manuscript_states_the_scope_limits():
+    doc = _manuscript()
+    for phrase, why in (
+        ("twelve targets", "12 타겟 한계"),
+        ("single ProteinMPNN temperature", "단일 조건 한계"),
+        ("exact replay", "재생이지 온라인 실행이 아니라는 것"),
+        ("annotation and tie-break only", "ThermoMPNN 를 랭킹에 쓰지 않는다는 것"),
+        ("not a binding-performance claim", "리간드가 성능 주장이 아니라는 것"),
+    ):
+        assert phrase in doc, f"원고에 {why} 진술이 없다 ({phrase!r})"

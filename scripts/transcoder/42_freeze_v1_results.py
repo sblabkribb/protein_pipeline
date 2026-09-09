@@ -65,6 +65,9 @@ ARTIFACTS = [
      "public_data/benchmark/gate0/stability_annotation_comparison.json"),
     ("ligand_wiring_check",
      "public_data/benchmark/gate0/ligand_pocket/self_docking.json"),
+    ("figure5_prospective", "figures/benchmark/fig5_prospective_allocation.png"),
+    ("results_of_record", "docs/results_of_record.md"),
+    ("manuscript", "docs/manuscript.md"),
 ]
 
 #: 결과를 만든 코드. 바뀌면 결과를 다시 내야 한다.
@@ -73,6 +76,7 @@ CODE = [
     "scripts/transcoder/39_prospective_allocation_validation.py",
     "scripts/transcoder/40_variance_decomposition_grid.py",
     "scripts/transcoder/41_realized_compute_analysis.py",
+    "scripts/transcoder/43_make_prospective_figures.py",
     "scripts/transcoder/rapid_sr/protocol.py",
     "pipeline-mcp/src/pipeline_mcp/allocation.py",
 ]
