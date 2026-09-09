@@ -2,11 +2,11 @@
   "profile": "rapid_structural_v1",
   "status": "frozen",
   "what_this_is": "전향 홀드아웃 위에서 확정한 v1 결과의 불변 기록. 원고가 인용하는 수치는 여기 적힌 해시의 파일에서 나온 것이다.",
-  "frozen_utc": "2026-09-09T00:47:57Z",
+  "frozen_utc": "2026-09-09T00:58:20Z",
   "git": {
-    "commit": "206ad78acd0667926689438ad647de28282a6dbd",
+    "commit": "190836a8e1d99f502f392ed5af89e267d1ea6f41",
     "branch": "rapid/gate0-allocation-holdout",
-    "describe": "v1.0.17-249-g206ad78-dirty",
+    "describe": "v1.0.17-253-g190836a-dirty",
     "dirty_paths": [
       "M figures/benchmark/fig12_backbone_ensemble_ablation.pdf",
       " M figures/benchmark/fig12_backbone_ensemble_ablation.png",
@@ -16,13 +16,11 @@
       " M figures/benchmark/fig2_surrogate_triage_budget.png",
       " M figures/benchmark/fig_solu_monomer_threeway.pdf",
       " M figures/benchmark/fig_solu_monomer_threeway.png",
-      " M public_data/benchmark/gate0/fold_artifact_archive.json",
-      " M public_data/benchmark/gate0/holdout_generation.json",
-      " M public_data/benchmark/gate0/holdout_targets.json",
+      " M public_data/benchmark/gate0/RAPID_STRUCTURAL_V1_FREEZE.json",
       " M scripts/benchmark/18_make_surrogate_triage_budget_figure.py",
       " M scripts/benchmark/backbone_ensemble_ablation.py",
       " M scripts/paper_runs/make_threeway_distribution_figures.py",
-      "?? docs/archive/",
+      " M scripts/transcoder/42_freeze_v1_results.py",
       "?? docs/figures/README.md",
       "?? docs/figures/fig1_fullflow.png",
       "?? docs/figures/fig2E_baseline.png",
@@ -47,8 +45,11 @@
       "?? public_data/benchmark/gate0/holdout_targets_pdb/5pc8A00.pdb",
       "?? public_data/benchmark/gate0/holdout_targets_pdb/5xpdA02.pdb",
       "?? public_data/benchmark/gate0/refold_manifest.json",
-      "?? public_data/benchmark/gate0/temperature_panel2/af2_analysis_order.json"
-    ]
+      "?? public_data/benchmark/results/sequence_space_coverage_sequences.json",
+      "?? public_data/benchmark/results/sequence_space_coverage_summary.json",
+      "?? scripts/benchmark/make_figure1_orchestration.py"
+    ],
+    "commit_meaning": "해시를 계산한 시점의 커밋이다. 이 기록 파일 자체는 그 다음 커밋에 들어가므로, 태그는 여기 적힌 커밋보다 하나 뒤를 가리킨다. 닭과 달걀이라 피할 수 없고, --verify 는 파일 내용을 직접 대조하므로 영향받지 않는다."
   },
   "config": {
     "thresholds": {
@@ -151,6 +152,7 @@
       "present": true,
       "sha256": "b7671558cd4f497b371374e5ac931ec418ff2fb62568767dabfb6e1fac65b6b3",
       "bytes": 662959,
+      "git": "committed",
       "rows": 1728
     },
     "grid_sequences": {
@@ -158,91 +160,127 @@
       "present": true,
       "sha256": "4939890813d2c54cb6786ccfd024f8e56345cbc88ee9634b78f0a6eac9ff15cd",
       "bytes": 583792,
+      "git": "committed",
       "rows": 1728
     },
     "grid_manifest": {
       "path": "public_data/benchmark/gate0/holdout_grid/manifest.json",
       "present": true,
       "sha256": "79b66e1fd6dde1a5037d479a4d8801eee66387aed63017c5544652e9c7c78411",
-      "bytes": 1195
+      "bytes": 1195,
+      "git": "committed"
     },
     "holdout_targets": {
       "path": "public_data/benchmark/gate0/holdout_targets.json",
       "present": true,
       "sha256": "9f932da571d7d547f0fc5371e21e66cf0e51baa2b0f31d9b0c62dc8db278179d",
-      "bytes": 13268
+      "bytes": 13268,
+      "git": "committed"
     },
     "frozen_experiment_spec": {
       "path": "public_data/benchmark/gate0/holdout_experiment_spec.json",
       "present": true,
       "sha256": "0f9737aa38b4e8acba1c3ea5e5382247708023cb8658fee9f419b02b57e45a94",
-      "bytes": 8171
+      "bytes": 8171,
+      "git": "committed"
     },
     "primary_allocation_joint": {
       "path": "public_data/benchmark/gate0/holdout_grid/prospective_allocation_validation_joint.json",
       "present": true,
       "sha256": "509b5dcda40afc1ca9f38fd881357f2b2fc7df8f91cd16c562507c853de7aa6e",
-      "bytes": 69617
+      "bytes": 69617,
+      "git": "committed"
     },
     "secondary_allocation_structural": {
       "path": "public_data/benchmark/gate0/holdout_grid/prospective_allocation_validation_structural.json",
       "present": true,
       "sha256": "a06dc5783ca4b04f16dc833fd18bfd333ab354504018efaa288548d1ddc24516",
-      "bytes": 69628
+      "bytes": 69628,
+      "git": "committed"
     },
     "sensitivity_allocation_native": {
       "path": "public_data/benchmark/gate0/holdout_grid/prospective_allocation_validation_native_sens.json",
       "present": true,
       "sha256": "2a10d24acbc7fa1e65dc57194d8c8d51a9230865067f2f73e56156deaa80c45b",
-      "bytes": 79583
+      "bytes": 79583,
+      "git": "committed"
     },
     "secondary_realized_compute": {
       "path": "public_data/benchmark/gate0/holdout_grid/realized_compute_analysis.json",
       "present": true,
       "sha256": "d04785270c9c86735f0ac24392c56a2da7598b087b21c7804007f108706447fb",
-      "bytes": 27128
+      "bytes": 27128,
+      "git": "committed"
     },
     "variance_decomposition_primary": {
       "path": "public_data/benchmark/gate0/holdout_grid/variance_decomposition_grid.json",
       "present": true,
-      "sha256": "c646b797a5c25faa5fd57946698dfbe314f328d70090dd9dcd832e1b2032ceee",
-      "bytes": 10296
+      "sha256": "8154a556d304040ad627b26107565db23e08fd0c48fe6a0d6c22f18eb53b3fc3",
+      "bytes": 11511,
+      "git": "committed"
     },
     "variance_decomposition_supplementary": {
       "path": "public_data/benchmark/gate0/variance_decomposition_structural.json",
       "present": true,
       "sha256": "82406bf462b198a7d8100dcf6bb3e2cfbf0f911c77a2216e618979dc65c24ff9",
-      "bytes": 1732
+      "bytes": 1732,
+      "git": "committed"
     },
     "gate0_target_level": {
       "path": "public_data/benchmark/gate0/gate0_target_level.json",
       "present": true,
       "sha256": "61410f8e75efea45dfb8e64cbdc275cd224109638b6d847b831bef4e4b3b0bc2",
-      "bytes": 6995
+      "bytes": 6995,
+      "git": "committed"
     },
     "temperature_panel2": {
       "path": "public_data/benchmark/gate0/temperature_panel2/af2_analysis_order_complete.json",
       "present": true,
       "sha256": "b3ee06ac9ed26a43be0bc68f4d39fe63487689b1895743bb4121f09a41c97291",
-      "bytes": 51202
+      "bytes": 51202,
+      "git": "committed"
     },
     "aggregation_no_go": {
       "path": "public_data/benchmark/gate0/incremental_information_test.json",
       "present": true,
       "sha256": "c83a565c437d7364c17ac6a267454831a88d6d3da287273cf4821245f03c76f2",
-      "bytes": 4596
+      "bytes": 4596,
+      "git": "committed"
     },
     "stability_annotation": {
       "path": "public_data/benchmark/gate0/stability_annotation_comparison.json",
       "present": true,
       "sha256": "1af1ed553b67382940a3981a4f79eacef1d3ac1e04bb7ff2b9652fde4f81bf43",
-      "bytes": 2127
+      "bytes": 2127,
+      "git": "committed"
     },
     "ligand_wiring_check": {
       "path": "public_data/benchmark/gate0/ligand_pocket/self_docking.json",
       "present": true,
       "sha256": "9130257e4a8eeb0e8aa4afe1485137a7dae4f984914caddb350c04ceeaa6f9de",
-      "bytes": 10761
+      "bytes": 10761,
+      "git": "committed"
+    },
+    "figure5_prospective": {
+      "path": "figures/benchmark/fig5_prospective_allocation.png",
+      "present": true,
+      "sha256": "bac1721a61d3863d23dc7e175626505288de11ee6a4610bfcd9a5495ab5acfda",
+      "bytes": 571982,
+      "git": "committed"
+    },
+    "results_of_record": {
+      "path": "docs/results_of_record.md",
+      "present": true,
+      "sha256": "8b8345b087089f7cb3f9e18a6d39f9ccc6325dcebc84cdafc378a37f744456ea",
+      "bytes": 13422,
+      "git": "committed"
+    },
+    "manuscript": {
+      "path": "docs/manuscript.md",
+      "present": true,
+      "sha256": "d42fb6eab7ad8b25fa40d6b8923880007895473d750da734d0096e287357916c",
+      "bytes": 66129,
+      "git": "committed"
     }
   },
   "code": {
@@ -250,37 +288,50 @@
       "path": "scripts/transcoder/26_holdout_grid.py",
       "present": true,
       "sha256": "1d05973c38c15c31f6984a248d511db539be639adb9576cab09f4fe9e482c99d",
-      "bytes": 14409
+      "bytes": 14409,
+      "git": "committed"
     },
     "39_prospective_allocation_validation.py": {
       "path": "scripts/transcoder/39_prospective_allocation_validation.py",
       "present": true,
       "sha256": "f2b4a31b60a905bc030746cda4f567705c7baed1b3ef491d3d176476ac63f9de",
-      "bytes": 25050
+      "bytes": 25050,
+      "git": "committed"
     },
     "40_variance_decomposition_grid.py": {
       "path": "scripts/transcoder/40_variance_decomposition_grid.py",
       "present": true,
-      "sha256": "6aac89eb8ad46e7bd7fdd4ffb9ced2e1bf4a58c08537b4fec967e2bd877bba29",
-      "bytes": 13145
+      "sha256": "d23d9708b0143604b3f31623cdd21f6e2382924b882c106df11c8f7ede99d38c",
+      "bytes": 14746,
+      "git": "committed"
     },
     "41_realized_compute_analysis.py": {
       "path": "scripts/transcoder/41_realized_compute_analysis.py",
       "present": true,
       "sha256": "dc730003d1c8b57643568f2ee012bbcc27d16dd982ee8093b53e60511db706c1",
-      "bytes": 13097
+      "bytes": 13097,
+      "git": "committed"
+    },
+    "43_make_prospective_figures.py": {
+      "path": "scripts/transcoder/43_make_prospective_figures.py",
+      "present": true,
+      "sha256": "7285423b3b85431c3383e0aa2090a0c667929912a00ba45cbe18add98bc7f24d",
+      "bytes": 7328,
+      "git": "committed"
     },
     "protocol.py": {
       "path": "scripts/transcoder/rapid_sr/protocol.py",
       "present": true,
       "sha256": "02b021a23eb51ff5e27ec54f43df19b485f3c05a02bc646a7c1590288a189445",
-      "bytes": 9885
+      "bytes": 9885,
+      "git": "committed"
     },
     "allocation.py": {
       "path": "pipeline-mcp/src/pipeline_mcp/allocation.py",
       "present": true,
       "sha256": "989e6ed4c0c5c678c9db951c681ffcff8b3f2a5b9851bd08dcce4a4d4d554d28",
-      "bytes": 21761
+      "bytes": 21761,
+      "git": "committed"
     }
   },
   "endpoint_roles": {

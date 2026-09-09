@@ -90,12 +90,24 @@ def sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+def tracked_state(rel: str) -> str:
+    """동결 대상이 git 에 커밋된 상태인지. 작업트리에만 있는 파일을 해시해두면
+    나중에 그 해시로 돌아갈 방법이 없다."""
+    if subprocess.run(["git", "ls-files", "--error-unmatch", rel], cwd=PROJECT_ROOT,
+                      capture_output=True).returncode != 0:
+        return "untracked"
+    if subprocess.run(["git", "diff", "--quiet", "HEAD", "--", rel],
+                      cwd=PROJECT_ROOT).returncode != 0:
+        return "modified"
+    return "committed"
+
+
 def digest(rel: str) -> dict:
     path = PROJECT_ROOT / rel
     if not path.exists():
         return {"path": rel, "present": False}
     entry = {"path": rel, "present": True, "sha256": sha256(path),
-             "bytes": path.stat().st_size}
+             "bytes": path.stat().st_size, "git": tracked_state(rel)}
     if path.suffix == ".csv":
         with path.open(encoding="utf-8") as fh:
             entry["rows"] = sum(1 for _ in fh) - 1
@@ -157,6 +169,10 @@ def build() -> dict:
             "branch": git("rev-parse", "--abbrev-ref", "HEAD"),
             "describe": git("describe", "--tags", "--always", "--dirty"),
             "dirty_paths": [ln for ln in git("status", "--porcelain").splitlines()][:40],
+            "commit_meaning": "해시를 계산한 시점의 커밋이다. 이 기록 파일 자체는 "
+                              "그 다음 커밋에 들어가므로, 태그는 여기 적힌 커밋보다 "
+                              "하나 뒤를 가리킨다. 닭과 달걀이라 피할 수 없고, "
+                              "--verify 는 파일 내용을 직접 대조하므로 영향받지 않는다.",
         },
         "config": {
             "thresholds": dict(GATE0_THRESHOLDS),
@@ -243,8 +259,18 @@ def main() -> int:
     missing = [r for r, e in report["artifacts"].items() if not e.get("present")]
     print(f"  산출물 {len(report['artifacts']) - len(missing)}/{len(report['artifacts'])} 해시 기록"
           + (f" · 없음 {missing}" if missing else ""))
+    loose = [f"{r} ({e['git']})" for g in ("artifacts", "code")
+             for r, e in report[g].items()
+             if e.get("present") and e.get("git") != "committed"]
+    if loose:
+        # 동결 대상이 커밋돼 있지 않으면 해시가 가리키는 상태로 돌아갈 수 없다.
+        print(f"  경고: 동결 대상 {len(loose)} 개가 커밋 상태가 아니다")
+        for item in loose:
+            print(f"    - {item}")
+    else:
+        print("  동결 대상 전부 커밋 상태")
     if report["git"]["dirty_paths"]:
-        print(f"  주의: 작업트리에 커밋되지 않은 변경 {len(report['git']['dirty_paths'])} 건")
+        print(f"  참고: 동결과 무관한 작업트리 변경 {len(report['git']['dirty_paths'])} 건")
     print(f"\nwrote {FREEZE}")
     return 0
 
