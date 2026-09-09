@@ -63,11 +63,118 @@ def query_sequence(pdb_path: str) -> str:
     return "".join(out)
 
 
+def quality_medians(q: dict | None) -> dict:
+    """동결 8 절이 쓰는 네 값을 꺼낸다.
+
+    `msa_quality()` 의 `coverage` 와 `depth` 는 스칼라가 아니라 백분위 dict
+    (`p25/p50/p75`) 다. 동결 기준이 "median coverage < 0.2" · "median depth < 10"
+    이므로 `p50` 을 읽어야 하고, 코드의 경고 로직도 같은 값을 쓴다. 스칼라로
+    가정하면 값이 정상인데도 "계산 안 됨" 으로 보인다 - 재실행에서 실제로 그랬다.
+    """
+    q = q or {}
+    cov = q.get("coverage") or {}
+    dep = q.get("depth") or {}
+    return {
+        "usable_hits": q.get("usable_hits"),
+        "median_coverage": cov.get("p50") if isinstance(cov, dict) else cov,
+        "median_depth": dep.get("p50") if isinstance(dep, dict) else dep,
+        "full_length_fraction": q.get("full_length_fraction"),
+    }
+
+
+def evaluate_acceptance(entry: dict) -> dict:
+    """계측 acceptance 6 항목. **과학 PASS 가 아니다.**
+
+    어떤 타겟이 실제로 `usable_hits < 10` 이면 pilot 실패가 아니라 진짜
+    `MSA_INSUFFICIENT_DEPTH` 관측이다. 5 번은 "값이 계산됐는가" 만 본다.
+
+    저장된 산출물에서도 다시 계산할 수 있어야 한다 - 실행 중이던 프로세스가 옛
+    코드를 쓰고 있을 때 MSA 재실행 없이 판정을 고치려면 그 경로가 필요하다.
+    """
+    m = quality_medians(entry.get("msa_quality"))
+    qc = entry.get("query_consistent") or {}
+    checks = {
+        "1_endpoint_ok": entry.get("endpoint_status") == "ok",
+        "2_a3m_key_present_and_decoded": bool(entry.get("a3m_key_present"))
+                                         and entry.get("decode_ok") is True,
+        "3_decoded_non_empty": entry.get("a3m_bytes", 0) > 0
+                               and not entry.get("a3m_empty", True),
+        "4_query_consistent": bool(qc.get("id_match")) and bool(qc.get("length_match")),
+        "5_quality_metrics_computed": all(
+            isinstance(v, (int, float)) for v in m.values()),
+        "6_frozen_rule_applied": entry.get("classification") in {
+            "OK", "MSA_INSUFFICIENT_DEPTH", "MSA_INFEASIBLE"},
+    }
+    return {
+        "quality_medians": m, "acceptance": checks,
+        "acceptance_pass": all(checks.values()),
+        "acceptance_note": ("계측 판정이다. scientific PASS 가 아니다. "
+                            "usable_hits < 10 은 정상적인 feasibility 관측이며 "
+                            "acceptance 실패가 아니다."),
+    }
+
+
+def print_table(rows: list[dict]) -> str:
+    """3-target 결과표와 full-MSA 판정. 판정은 계측 기준이다."""
+    def f(v, fmt="{:.3f}"):
+        return fmt.format(v) if isinstance(v, (int, float)) else "-"
+
+    print(f"{'타겟':10s}{'aa':>5}{'wall(s)':>9}{'hits':>7}{'a3m B':>10}"
+          f"{'usable':>8}{'cover':>8}{'depth':>8}{'full_len':>9}  "
+          f"{'판정':<24}계측")
+    for e in rows:
+        m = e.get("quality_medians") or quality_medians(e.get("msa_quality"))
+        print(f"  {e['domain']:8s}{e.get('length', 0):>5}"
+              f"{e.get('wall_seconds', 0):>9}{str(e.get('hit_count', '-')):>7}"
+              f"{e.get('a3m_bytes', 0):>10}{f(m.get('usable_hits'), '{:.0f}'):>8}"
+              f"{f(m.get('median_coverage')):>8}{f(m.get('median_depth'), '{:.1f}'):>8}"
+              f"{f(m.get('full_length_fraction')):>9}  "
+              f"{e.get('classification', '?'):<24}"
+              f"{'PASS' if e.get('acceptance_pass') else 'FAIL'}")
+        if not e.get("acceptance_pass"):
+            bad = [k for k, v in (e.get("acceptance") or {}).items() if not v]
+            print(f"      계측 실패 항목: {bad}")
+        w = (e.get("msa_quality") or {}).get("warnings") or []
+        if w:
+            print(f"      warnings: {w}")
+    n = sum(1 for e in rows if e.get("acceptance_pass"))
+    verdict = "GO" if rows and n == len(rows) else "BLOCK"
+    print(f"\n계측 acceptance {n}/{len(rows)} · full MSA 24 타겟 = {verdict}")
+    print("  (계측 판정이다. usable_hits < 10 은 정상 feasibility 관측이며 "
+          "acceptance 실패가 아니다.)")
+    return verdict
+
+
+def reevaluate(path: Path) -> int:
+    """저장된 산출물에서 acceptance 와 표를 다시 낸다. MSA 를 다시 돌리지 않는다."""
+    d = json.loads(path.read_text(encoding="utf-8"))
+    rows = d.get("targets") or d.get("results") or []
+    for e in rows:
+        e.update(evaluate_acceptance(e))
+    d["targets"] = rows
+    d["instrumentation_pass"] = sum(1 for e in rows if e["acceptance_pass"])
+    d["instrumentation_total"] = len(rows)
+    d["full_msa_verdict"] = print_table(rows)
+    d["reevaluated_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    d["reevaluated_why"] = ("coverage/depth 는 백분위 dict 이므로 p50 을 읽어야 "
+                            "한다. 실행 중 프로세스가 스칼라로 검사해 5 번을 FAIL "
+                            "로 적었다. MSA 는 다시 돌리지 않았다 - 저장된 "
+                            "msa_quality 에서 재계산했다.")
+    path.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\nwrote {path}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default=None)
     ap.add_argument("--out", default=str(OUT))
+    ap.add_argument("--reevaluate", default=None,
+                    help="저장된 산출물에서 acceptance 를 다시 계산한다 (MSA 재실행 없음)")
     args = ap.parse_args()
+
+    if args.reevaluate:
+        return reevaluate(Path(args.reevaluate))
 
     host = os.environ.get("RAPID_GPU_HOST", "")
     url = args.url or f"http://{host}:18106"
@@ -156,57 +263,17 @@ def main() -> int:
             entry["classification"] = ("MSA_INSUFFICIENT_DEPTH"
                                        if isinstance(hits, int) and hits < 10
                                        else "OK")
-        # ---- acceptance: 코드/계측이 정상인가. 과학 PASS 가 아니다. ----
-        # 어떤 타겟이 실제로 usable_hits < 10 이면 그것은 pilot 실패가 아니라
-        # 진짜 MSA_INSUFFICIENT_DEPTH 관측이다. 5 번은 "값이 계산됐는가" 만 본다.
-        q = entry.get("msa_quality") or {}
-        qc = entry.get("query_consistent") or {}
-        checks = {
-            "1_endpoint_ok": entry.get("endpoint_status") == "ok",
-            "2_a3m_key_present_and_decoded": bool(entry.get("a3m_key_present"))
-                                             and entry.get("decode_ok") is True,
-            "3_decoded_non_empty": entry.get("a3m_bytes", 0) > 0
-                                   and not entry.get("a3m_empty", True),
-            "4_query_consistent": bool(qc.get("id_match")) and bool(qc.get("length_match")),
-            "5_quality_metrics_computed": all(
-                isinstance(q.get(k), (int, float))
-                for k in ("usable_hits", "coverage", "depth", "full_length_fraction")),
-            "6_frozen_rule_applied": entry.get("classification") in {
-                "OK", "MSA_INSUFFICIENT_DEPTH", "MSA_INFEASIBLE"},
-        }
-        entry["acceptance"] = checks
-        entry["acceptance_pass"] = all(checks.values())
-        entry["acceptance_note"] = ("계측 판정이다. scientific PASS 가 아니다. "
-                                    "usable_hits < 10 은 정상적인 feasibility "
-                                    "관측이며 acceptance 실패가 아니다.")
+        # 계측 acceptance. 공용 함수를 쓴다 - reevaluate 와 같은 판정이어야 한다.
+        entry.update(evaluate_acceptance(entry))
+        checks = entry["acceptance"]
         print(f"    {entry['wall_seconds']}s · {entry['endpoint_status']} · "
               f"{entry['classification']} · 계측 "
               f"{'PASS' if entry['acceptance_pass'] else 'FAIL ' + str([k for k, v in checks.items() if not v])}",
               flush=True)
         rows.append(entry)
 
-    def _f(v, fmt="{:.3f}"):
-        return fmt.format(v) if isinstance(v, (int, float)) else "-"
-
-    print(f"\n{'타겟':10s}{'aa':>5}{'wall(s)':>9}{'hits':>7}{'a3m B':>10}"
-          f"{'usable':>8}{'cover':>8}{'depth':>8}{'full_len':>9}  {'판정':<22}계측")
-    for e in rows:
-        q = e.get("msa_quality") or {}
-        print(f"  {e['domain']:8s}{e['length']:>5}{e['wall_seconds']:>9}"
-              f"{str(e.get('hit_count', '-')):>7}{e.get('a3m_bytes', 0):>10}"
-              f"{_f(q.get('usable_hits'), '{:.0f}'):>8}{_f(q.get('coverage')):>8}"
-              f"{_f(q.get('depth'), '{:.1f}'):>8}{_f(q.get('full_length_fraction')):>9}"
-              f"  {e['classification']:<22}"
-              f"{'PASS' if e['acceptance_pass'] else 'FAIL'}")
-    n_pass = sum(1 for e in rows if e["acceptance_pass"])
-    print(f"\n계측 acceptance {n_pass}/{len(rows)} · "
-          f"full MSA 24 타겟 = {'GO' if n_pass == len(rows) else 'BLOCK'}")
-    print("  (계측 판정이다. usable_hits < 10 은 정상 feasibility 관측이며 "
-          "acceptance 실패가 아니다.)")
-    for e in rows:
-        w = (e.get("msa_quality") or {}).get("warnings") or []
-        if w:
-            print(f"  {e['domain']} warnings: {w}")
+    print()
+    verdict = print_table(rows)
 
     report = {
         "purpose": "MSA operational pilot. 운영 가능성만 본다.",
@@ -228,8 +295,7 @@ def main() -> int:
                                      "tier 변경", "candidate count 변경"],
         "instrumentation_pass": sum(1 for e in rows if e["acceptance_pass"]),
         "instrumentation_total": len(rows),
-        "full_msa_verdict": ("GO" if all(e["acceptance_pass"] for e in rows)
-                             else "BLOCK"),
+        "full_msa_verdict": verdict,
         "frozen_targets": pilot,
         "settings": {"target_db": TARGET_DB, "max_seqs": MAX_SEQS,
                      "threads": THREADS, "use_gpu": USE_GPU},
