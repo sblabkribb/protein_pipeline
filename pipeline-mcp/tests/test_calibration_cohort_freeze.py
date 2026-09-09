@@ -105,18 +105,152 @@ def _realized():
     return d["realized_cohort"]
 
 
-def test_cohort_was_not_topped_up_or_trimmed():
-    """생성 결과를 보고 코호트를 수선하지 않았다."""
+# 결과의 5/4/2 형태를 고정하지 않는다. 그 수는 정당하게 바뀔 수 있고
+# (프로토콜을 고쳐 전부 재생성하는 경우), 고정하면 오히려 옳은 재생성을 막는다.
+# 대신 campaign provenance 를 고정한다 - 무엇을 어떤 설정으로 몇 번 시도해
+# 무엇을 받았는지.
+
+PROV = ROOT / "public_data" / "benchmark" / "gate0" / "calibration_generation_provenance.json"
+
+
+def _prov() -> dict:
+    if not PROV.exists():
+        pytest.skip("생성 provenance 없음")
+    return json.loads(PROV.read_text(encoding="utf-8"))
+
+
+def test_frozen_target_list_is_unchanged():
+    """생성에 쓴 타겟 목록이 동결된 목록과 같아야 한다."""
+    import hashlib
+    prov = _prov()
+    want = sorted(t["domain"] for t in _cohort()["selected"])
+    assert prov["frozen_target_list"] == want
+    digest = hashlib.sha256(json.dumps(want).encode()).hexdigest()
+    assert prov["frozen_target_list_sha256"] == digest
+
+
+def test_one_protocol_signature_across_every_target():
+    """타겟마다 다른 설정으로 돌렸다면 코호트가 아니라 잡탕이다."""
+    sig = _prov()["protocol_signature"]
+    assert sig["n_distinct"] == 1, (
+        f"생성 프로토콜이 {sig['n_distinct']} 종이다: {sig['by_signature']}")
+
+
+def test_calibration_protocol_matches_the_deployment_cohort():
+    """calibration 과 holdout 의 생성 분포가 같아야 보정이 전이된다."""
+    import hashlib, re
+    root = Path("/opt/protein_pipeline/outputs")
+    hold = [t["domain"] for t in json.loads(
+        (ROOT / "public_data" / "benchmark" / "gate0" / "holdout_targets.json")
+        .read_text(encoding="utf-8"))["resolved"]["targets"]]
+
+    def signature(mode, spec):
+        m = dict(mode)
+        m.pop("target_gate_reference_sha256", None)
+        m.pop("target_gate_design_chains", None)
+        s = dict(spec)
+        s["contig"] = re.sub(r"\d+", "N", str(s.get("contig", "")))
+        s["unindex"] = re.sub(r"\d+", "N", str(s.get("unindex", "")))
+        s["select_fixed_atoms"] = {re.sub(r"\d+", "N", k): v
+                                   for k, v in (s.get("select_fixed_atoms") or {}).items()}
+        return hashlib.sha256(json.dumps({"mode": m, "spec": s},
+                                         sort_keys=True).encode()).hexdigest()
+
+    hsig = set()
+    for t in hold:
+        r = root / f"holdout_{t}_rfd3" / "rfd3"
+        if (r / "mode.json").exists() and (r / "inputs.json").exists():
+            hsig.add(signature(json.loads((r / "mode.json").read_text()),
+                               json.loads((r / "inputs.json").read_text())["spec-1"]))
+    if not hsig:
+        pytest.skip("holdout 생성 산출물 없음")
+    csig = set(_prov()["protocol_signature"]["by_signature"])
+    assert csig == hsig, (
+        f"calibration 서명 {csig} 가 holdout 서명 {hsig} 와 다르다 - "
+        f"생성 분포가 어긋나면 보정이 전이되지 않는다")
+
+
+OUTPUTS = Path("/opt/protein_pipeline/outputs")
+
+
+def test_accepted_backbones_still_match_their_recorded_hashes():
+    """디스크의 파일을 다시 해시해서 대조한다.
+
+    기록된 값끼리 비교하면 기록이 자기 자신과 일치하는지만 본다 - 파일이
+    바뀌어도 통과한다. 실제로 이 테스트의 첫 판이 그랬다.
+    """
+    import hashlib
+    prov = _prov()
+    checked = 0
+    for target, run in prov["runs"].items():
+        if not run.get("present"):
+            continue
+        d = OUTPUTS / run["run_id"] / "rfd3" / "designs"
+        if not d.exists():
+            assert run["n_accepted_backbones"] == 0
+            continue
+        for entry in run["accepted_backbones"]:
+            f = d / entry["file"]
+            assert f.exists(), f"{target}: {entry['file']} 이 사라졌다"
+            got = hashlib.sha256(f.read_bytes()).hexdigest()
+            assert got == entry["sha256"], (
+                f"{target}/{entry['file']} 내용이 바뀌었다")
+            checked += 1
+        on_disk = len(list(d.glob("*.pdb")))
+        assert on_disk == run["n_accepted_backbones"], (
+            f"{target}: 디스크 {on_disk} 개 vs 기록 {run['n_accepted_backbones']} 개 "
+            f"- 추가 생성이나 삭제가 있었다")
+        gate = run.get("gate") or {}
+        if gate:
+            assert gate["accepted"] == run["n_accepted_backbones"]
+    assert checked, "확인한 backbone 이 없다"
+
+
+def test_attempt_log_is_recorded_for_every_target():
+    """몇 번 시도했는지가 남아 있어야 사후 추가 생성을 알아볼 수 있다."""
+    for target, run in _prov()["runs"].items():
+        if not run.get("present"):
+            continue
+        gate = run.get("gate") or {}
+        assert gate.get("attempted"), f"{target}: 시도 횟수 기록이 없다"
+        assert gate["attempted"] >= gate["accepted"]
+
+
+def test_no_unrecorded_backbone_appeared():
+    """기록에 없는 backbone 파일이 생겼다면 사후 추가 생성이다.
+
+    mtime 을 쓰지 않는다. 내용이 같아도 파일을 복사하면 mtime 이 바뀌므로
+    (실제로 변이 테스트를 되돌리다 그렇게 됐다) 거짓 양성이 난다. 내용은
+    해시가 보고, 추가 생성은 "기록에 없는 파일" 로 본다.
+    """
+    prov = _prov()
+    checked = 0
+    for target, run in prov["runs"].items():
+        if not run.get("present"):
+            continue
+        d = OUTPUTS / run["run_id"] / "rfd3" / "designs"
+        if not d.exists():
+            # backbone 0 개인 타겟은 designs 디렉터리가 없다. 기록과 일치하면 정상.
+            assert run["n_accepted_backbones"] == 0, (
+                f"{target}: 기록은 {run['n_accepted_backbones']} 개인데 "
+                f"designs 디렉터리가 없다")
+            continue
+        recorded = {e["file"] for e in run["accepted_backbones"]}
+        on_disk = {f.name for f in d.glob("*.pdb")}
+        extra = on_disk - recorded
+        assert not extra, f"{target}: 기록에 없는 backbone {sorted(extra)}"
+        missing = recorded - on_disk
+        assert not missing, f"{target}: 기록된 backbone 이 사라졌다 {sorted(missing)}"
+        checked += 1
+    assert checked, "확인한 타겟이 없다"
+
+
+def test_partial_sibling_sets_are_kept():
+    """형제가 둘 이상인 타겟은 informative 에 남아야 한다 (complete-case 아님)."""
     r = _realized()
-    counts = r["backbones_per_target"]
-    # 부족한 타겟이 5 로 채워졌다면 추가 생성을 준 것이다.
-    assert min(counts.values()) < 5, (
-        "모든 타겟이 5 개다 - 부족분을 사후에 채운 것은 아닌지 확인이 필요하다")
-    # 형제가 둘 이상인 타겟은 전부 남아 있어야 한다 (complete-case 아님)
-    partial = [t for t, n in counts.items() if 2 <= n < 5]
-    assert partial, "부분 형제 집합이 사라졌다 - complete-case 선택이 의심된다"
-    for t in partial:
-        assert t in r["informative_targets"], f"{t} 가 informative 에서 빠졌다"
+    for t, n in r["backbones_per_target"].items():
+        if n >= 2:
+            assert t in r["informative_targets"], f"{t} ({n} 개) 가 빠졌다"
 
 
 def test_only_zero_backbone_targets_are_excluded():
