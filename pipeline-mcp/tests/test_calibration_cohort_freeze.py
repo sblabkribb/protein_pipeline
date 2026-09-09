@@ -275,3 +275,37 @@ def test_loto_weighting_is_target_equal():
               "rapid-v2-phase4b-calibration-freeze.md").read_text(encoding="utf-8")
     assert "타겟 동일 가중" in freeze
     assert "target-equal estimand" in freeze
+
+
+# ---- v2.0 multi-source 로의 supersede ---------------------------------------
+
+FREEZE_DOC = ROOT / "docs" / "specs" / "rapid-v2-phase4b-calibration-freeze.md"
+PLAN = ROOT / "public_data" / "benchmark" / "gate0" / "multisource_validation_plan.json"
+
+
+def test_the_calibration_freeze_keeps_its_identification_criteria():
+    """§9 는 대체되지 않는다. source 마다 독립으로 적용되는 것뿐이다."""
+    if not FREEZE_DOC.exists():
+        pytest.skip("동결 문서 없음")
+    head = FREEZE_DOC.read_text(encoding="utf-8")[:1400]
+    assert "SUPERSEDED" in head
+    assert "§9 식별 판정" in head
+    assert "유지되는 절" in head
+    # 대체 목록에 §9 가 들어가면 판정 기준이 사후에 바뀔 수 있게 된다
+    superseded = head.split("대체된 절")[1].split("|")[1]
+    assert "§9" not in superseded, "§9 가 대체 목록에 있다"
+    assert "§7" not in superseded, "§7 LOTO 가 대체 목록에 있다"
+
+
+def test_this_cohort_is_no_longer_a_primary_statistical_input():
+    """보존하지만 새 primary calibration 의 input 은 아니다."""
+    if not PLAN.exists():
+        pytest.skip("multi-source plan 없음")
+    plan = json.loads(PLAN.read_text(encoding="utf-8"))
+    joined = " ".join(plan["preserved_not_input"]["items"])
+    assert "51-backbone" in joined
+    allowed = plan["preserved_not_input"]["roles_allowed"]
+    assert "ablation/sensitivity" in allowed
+    assert not any("primary" in r for r in allowed)
+    # 새 코호트가 이 코호트의 타겟을 제외해야 한다
+    assert "calibration_selected" in plan["cohorts"]["calibration_v2"]["excludes_cohorts"]

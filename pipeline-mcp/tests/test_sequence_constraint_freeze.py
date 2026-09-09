@@ -143,3 +143,28 @@ def test_calibration_and_confirmatory_counts_are_consistent():
     assert "51 × 12 = 612" in doc or "51 backbone" in doc
     assert "12 targets × 5 RFD3 backbones × 24 candidates" in doc
     assert "1,440" in doc
+
+
+# ---- v2.0 multi-source 로의 supersede ---------------------------------------
+
+def test_this_freeze_is_marked_partially_superseded():
+    """대체된 절과 유지된 절이 문서 머리에 적혀 있어야 한다.
+
+    §1 deployment protocol 과 §2 mapping contract 는 **유지**된다. 이 문서 전체가
+    폐기됐다고 읽히면 배포와 검증을 일치시킨 결정까지 함께 잃는다.
+    """
+    doc = _doc()
+    head = doc[:1400]
+    assert "SUPERSEDED" in head
+    assert "rapid-v2-multisource-validation-freeze.md" in head
+    assert "96a30b0" in head, "이 문서의 commit 이 적혀 있지 않다"
+    for retained in ("§1 deployment protocol", "§2 position-mapping contract",
+                     "§4 tier 혼합"):
+        assert retained in head, f"유지 절 {retained} 가 적혀 있지 않다"
+
+
+def test_the_superseded_calibration_section_is_not_deleted():
+    """§5 는 대체됐지만 지우지 않는다 - 51-backbone 코호트의 근거다."""
+    doc = _doc()
+    assert "51 × 12 = 612" in doc
+    assert "기존 RFD3 backbone 51 개" in doc

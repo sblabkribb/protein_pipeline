@@ -1,5 +1,19 @@
 # RAPID v2 — sequence-constraint protocol 동결
 
+> **부분 SUPERSEDED — v2.0 multi-source 설계로 대체됨.**
+> 대체 문서: [`rapid-v2-multisource-validation-freeze.md`](rapid-v2-multisource-validation-freeze.md)
+> (이 문서의 commit `96a30b0` 기준)
+>
+> | | |
+> |---|---|
+> | 대체된 절 | §3 MSA 교체 규칙 · §5 Calibration · §6 Confirmatory backbone plan |
+> | 유지되는 절 | **§1 deployment protocol** · **§2 position-mapping contract** · **§4 tier 혼합** · §7 v1 의 지위 · §8 ligand |
+>
+> backbone plan 이 `12 x 5 RFD3` 에서 `RFD3 10 + BioEmu 10` (source 독립) 으로
+> 바뀌었고, calibration 은 기존 51 backbone 재사용에서 fresh 코호트로 바뀌었다.
+> §1 · §2 · §4 는 두 source 에 그대로 적용된다.
+
+
 **상태: 동결. 구현 전.** 이 문서가 커밋된 뒤에 MSA·서열 생성·폴딩을 시작한다.
 여기 적힌 값을 결과를 보고 바꾸지 않는다 - 바꿔야 하면 버전을 올리고 이유를
 남긴다.

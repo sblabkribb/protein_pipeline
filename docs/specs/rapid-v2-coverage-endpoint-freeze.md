@@ -1,5 +1,17 @@
 # Coverage-preserving mode — endpoint 동결
 
+> **§8 만 SUPERSEDED — v2.0 multi-source 설계로 대체됨.**
+> 대체 문서: [`rapid-v2-multisource-validation-freeze.md`](rapid-v2-multisource-validation-freeze.md) §7
+> (이 문서의 commit `c45795d` 기준)
+>
+> budget grid 가 10-backbone candidate ceiling (240 / target / source) 에 맞춰
+> `40 · 60 · 80 · 100 · 120 · 160 · 200 · 240` 으로 다시 동결됐다.
+> **§1-7 과 §9-11 은 전부 유지된다** - coverage_unit · EFBC 정의 · feasibility ·
+> guardrail 0.90 · comparator · 판정 규칙 · endpoint 별 informative 규칙.
+> 단 coverage_unit 의 M1 근거는 RFD3 backbone 에서만 나왔으므로, BioEmu 적용은
+> 대체 문서 §12 의 M1-BioEmu 구조 진단을 거친다.
+
+
 **상태: 승인됨.** 이 문서가 coverage mode 평가의 사전등록이다. 여기 적힌 값을
 결과를 보고 바꾸지 않는다 - 바꿔야 하면 버전을 올리고 이유를 남긴다.
 

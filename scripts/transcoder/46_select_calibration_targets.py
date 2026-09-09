@@ -36,19 +36,49 @@ COHORTS = {
         "seed": 20260909,
         "per_stratum": 4, "reserve_per_stratum": 2,
         "backbones_per_target": 5, "sequences_per_backbone": 8,
-        "exclude_calibration": False,
+        "exclude_cohorts": (),
+        "backbone_sources": ("rfd3",),
+        "freeze_doc": "docs/specs/rapid-v2-phase4b-calibration-freeze.md",
         "purpose": "Phase 4B joint-pass posterior calibration 코호트. "
                    "성능 주장에 쓰지 않는다.",
+        "substitution_rule": "생성 시작 전에 타겟이 준비되지 않은 경우에만 "
+                             "reserve_rank 순서로 쓴다. 생성 결과를 본 뒤에는 "
+                             "쓰지 않는다.",
         "out": "calibration_targets.json",
     },
     "masked_holdout": {
         "seed": 20260910,
         "per_stratum": 4, "reserve_per_stratum": 2,
         "backbones_per_target": 5, "sequences_per_backbone": 24,
-        "exclude_calibration": True,
+        "exclude_cohorts": ("calibration_targets.json",),
+        "backbone_sources": ("rfd3",),
+        "freeze_doc": "docs/specs/rapid-v2-sequence-constraint-protocol-freeze.md",
         "purpose": "masked protocol 의 새 confirmatory holdout. calibration 결과를 "
                    "보기 전에 동결한다.",
+        "substitution_rule": "MSA/매핑 사유가 후보 생성 전에 발생한 경우에만 "
+                             "동결된 reserve_rank 순서로 교체한다. SoluProt · "
+                             "AF2 · joint-pass 를 본 뒤에는 교체하지 않는다.",
         "out": "masked_holdout_targets.json",
+    },
+    #: v2.0 multi-source. 두 source 가 같은 타겟을 쓰고, backbone 과 posterior 만
+    #: source 별로 독립이다. 타겟을 source 별로 다르게 뽑으면 source 효과와
+    #: 타겟 효과가 교락된다.
+    "calibration_v2": {
+        "seed": 20260911,
+        "per_stratum": 4, "reserve_per_stratum": 2,
+        "backbones_per_target": 10, "sequences_per_backbone": 12,
+        "exclude_cohorts": ("calibration_targets.json",
+                            "masked_holdout_targets.json"),
+        "backbone_sources": ("rfd3", "bioemu"),
+        "freeze_doc": "docs/specs/rapid-v2-multisource-validation-freeze.md",
+        "purpose": "v2.0 multi-source calibration 코호트. source 별로 독립 "
+                   "kappa 를 식별한다. 성능 주장에 쓰지 않는다.",
+        "substitution_rule": "생성 시작 전에 타겟이 준비되지 않은 경우에만 "
+                             "reserve_rank 순서로 쓴다. 수용 게이트로 backbone "
+                             "10 개를 못 채운 (target, source) 는 "
+                             "SOURCE_GENERATION_INFEASIBLE 로 기록하고 타겟을 "
+                             "바꾸지 않는다.",
+        "out": "calibration_v2_targets.json",
     },
 }
 
@@ -62,7 +92,7 @@ def _holdout_module():
     return mod
 
 
-def used_targets(*, exclude_calibration: bool) -> tuple[set[str], dict]:
+def used_targets(*, exclude_cohorts: tuple[str, ...] = ()) -> tuple[set[str], dict]:
     """이미 쓴 타겟. 어디서 왔는지도 남긴다.
 
     여기 들어오는 것은 전부 **정체 정보**다 - 어떤 타겟을 이미 썼는가.
@@ -80,10 +110,13 @@ def used_targets(*, exclude_calibration: bool) -> tuple[set[str], dict]:
             # target_id 만 읽는다. 같은 파일의 결과 열은 읽지 않는다.
             src[name] = sorted({r["target_id"]
                                 for r in csv.DictReader(path.open(encoding="utf-8"))})
-    if exclude_calibration:
-        cal = json.loads((BASE / "calibration_targets.json").read_text(encoding="utf-8"))
-        src["calibration_selected"] = sorted(x["domain"] for x in cal["selected"])
-        src["calibration_reserve"] = sorted(x["domain"] for x in cal["reserve"])
+    for name in exclude_cohorts:
+        # 이전 코호트의 선정 결과에서 **타겟 이름만** 읽는다. 같은 파일의
+        # realized/generation 블록은 읽지 않는다 - 그것은 결과다.
+        prev = json.loads((BASE / name).read_text(encoding="utf-8"))
+        tag = prev["cohort"] if "cohort" in prev else Path(name).stem
+        src[f"{tag}_selected"] = sorted(x["domain"] for x in prev["selected"])
+        src[f"{tag}_reserve"] = sorted(x["domain"] for x in prev["reserve"])
     return {t for v in src.values() for t in v}, src
 
 
@@ -103,7 +136,7 @@ def main() -> int:
 
     m = _holdout_module()
     sf = m.superfamilies()
-    used, used_src = used_targets(exclude_calibration=cfg["exclude_calibration"])
+    used, used_src = used_targets(exclude_cohorts=cfg["exclude_cohorts"])
     used_sf = {sf.get(t) for t in used if sf.get(t)}
     print(f"이미 쓴 타겟 {len(used)} · 그 superfamily {len(used_sf)}")
 
@@ -141,16 +174,19 @@ def main() -> int:
     report = {
         "cohort": args.cohort,
         "purpose": cfg["purpose"],
-        "freeze_doc": ("docs/specs/rapid-v2-sequence-constraint-protocol-freeze.md"
-                       if args.cohort == "masked_holdout"
-                       else "docs/specs/rapid-v2-phase4b-calibration-freeze.md"),
+        "freeze_doc": cfg["freeze_doc"],
         "frozen_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "seed": SEED,
         "design": {
             "n_targets": len(selected),
+            "backbone_sources": list(cfg["backbone_sources"]),
             "backbones_per_target": BACKBONES_PER_TARGET,
             "sequences_per_backbone": SEQUENCES_PER_BACKBONE,
-            "total_folds": len(selected) * BACKBONES_PER_TARGET * SEQUENCES_PER_BACKBONE,
+            "total_folds_per_source": (len(selected) * BACKBONES_PER_TARGET
+                                       * SEQUENCES_PER_BACKBONE),
+            "total_folds": (len(selected) * BACKBONES_PER_TARGET
+                            * SEQUENCES_PER_BACKBONE
+                            * len(cfg["backbone_sources"])),
             "temperature": 0.1,
         },
         "eligibility": dict(m.ELIGIBILITY),
@@ -159,7 +195,7 @@ def main() -> int:
         "selection_excluded_inputs": [
             "과거 yield", "SoluProt 결과", "structural-success 결과",
             "joint-pass 결과", "Gate 0 사전분포 점수",
-            "MSA 심도/품질", "RFD3 성공률",
+            "MSA 심도/품질", "RFD3 성공률", "BioEmu 성공률",
             "legacy rapid_target_manifest.csv 의 eligible 열",
         ],
         "exclusions": {
@@ -172,9 +208,7 @@ def main() -> int:
                  "by_stratum": {k: len(v) for k, v in by_stratum.items()}},
         "selected": selected,
         "reserve": reserve,
-        "substitution_rule": "수용 게이트를 통과해 backbone 5 개를 채우지 못한 "
-                             "타겟은 같은 층의 예비로 reserve_rank 순서대로 "
-                             "교체한다. 결과를 보고 빼지 않는다.",
+        "substitution_rule": cfg["substitution_rule"],
         "not_for": ["policy 비교", "EFBC 계산", "coverage 결론",
                     "confirmatory 주장"],
         "code_sha": subprocess.run(["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT,

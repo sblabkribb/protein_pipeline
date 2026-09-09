@@ -1,5 +1,19 @@
 # Phase 4B — joint-pass posterior calibration 동결
 
+> **부분 SUPERSEDED — v2.0 multi-source 설계로 대체됨.**
+> 대체 문서: [`rapid-v2-multisource-validation-freeze.md`](rapid-v2-multisource-validation-freeze.md)
+> (이 문서의 commit `77eca15` 기준)
+>
+> | | |
+> |---|---|
+> | 대체된 절 | §2 코호트 · §3 타겟 선정 · §4 backbone 선정 · §5 생성 설정 · §8 격자 |
+> | 유지되는 절 | §1 · §6 · **§7 LOTO** · **§9 식별 판정** · **§10 미식별 처리** · §11 민감도 · §12 · §13 · §14 |
+>
+> §7 과 §9 는 바뀌지 않았고, 이제 **source(RFD3 / BioEmu) 마다 독립으로** 적용된다.
+> 이 문서의 내용은 지우지 않는다 - 여기서 만든 51-backbone 코호트는 historical
+> single-source calibration sensitivity 로 보존된다.
+
+
 **상태: 폴딩 전 동결.** 이 문서가 커밋된 뒤에 데이터를 만든다. 여기 적힌 값을
 결과를 보고 바꾸지 않는다 - 바꿔야 하면 버전을 올리고 이유를 남긴다.
 

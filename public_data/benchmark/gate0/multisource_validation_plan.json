@@ -1,0 +1,444 @@
+{
+  "plan_id": "rapid_v2_multisource_validation",
+  "version": "2.0",
+  "status": "frozen",
+  "freeze_doc": "docs/specs/rapid-v2-multisource-validation-freeze.md",
+  "written_utc": "2026-09-09T00:00:00Z",
+  "head_commit_at_writing": "898df935a8f8",
+  "purpose": "RFD3 와 BioEmu 를 독립 backbone-source validation cohort 로 두는 v2 검증 계획. 이전 backbone/outcome 데이터는 이 계획의 primary statistical input 이 아니다.",
+  "supersedes": [
+    {
+      "path": "docs/specs/rapid-v2-phase4b-calibration-freeze.md",
+      "commit": "77eca15",
+      "sections": [
+        "2",
+        "3",
+        "4",
+        "5",
+        "8"
+      ],
+      "what": "calibration 코호트를 기존 RFD3 51 backbone 재사용에서 fresh 12-target x 10-backbone x 2-source 로 교체한다. kappa 를 source 별로 독립 식별한다.",
+      "retained": [
+        "7",
+        "9",
+        "10",
+        "11"
+      ],
+      "retained_note": "LOTO 절차 · 식별 판정 3 조건 · 미식별 처리 · 민감도 격자의 용도는 바뀌지 않고 source 마다 독립으로 적용된다."
+    },
+    {
+      "path": "docs/specs/rapid-v2-sequence-constraint-protocol-freeze.md",
+      "commit": "96a30b0",
+      "sections": [
+        "3",
+        "5",
+        "6"
+      ],
+      "what": "calibration 교체 규칙 · calibration 코호트 정의 · confirmatory backbone plan(5 RFD3 -> RFD3 10 + BioEmu 10)을 교체한다.",
+      "retained": [
+        "1",
+        "2",
+        "4",
+        "7",
+        "8"
+      ],
+      "retained_note": "deployment protocol · position-mapping contract · tier 혼합 정의 · v1 의 지위 · ligand 주장 한계는 그대로다."
+    },
+    {
+      "path": "docs/specs/rapid-v2-coverage-endpoint-freeze.md",
+      "commit": "c45795d",
+      "sections": [
+        "8"
+      ],
+      "what": "budget grid 를 10-backbone candidate ceiling 에 맞춰 다시 동결한다.",
+      "retained": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "9",
+        "10",
+        "11"
+      ],
+      "retained_note": "coverage_unit · EFBC 정의 · feasibility · guardrail 0.90 · comparator · 판정 규칙 · endpoint 별 informative 규칙은 바뀌지 않는다."
+    },
+    {
+      "path": "public_data/benchmark/gate0/masked_holdout_targets.json",
+      "commit": "898df93",
+      "sections": [
+        "design"
+      ],
+      "what": "design 블록의 backbones_per_target=5 / total_folds=1440 만 교체한다. selected/reserve 타겟 목록은 교체하지 않는다.",
+      "retained": [
+        "selected",
+        "reserve",
+        "exclusions",
+        "seed",
+        "msa_pilot"
+      ],
+      "retained_note": "타겟을 다시 뽑지 않는다. 이 파일은 수정하지 않고 그대로 둔다."
+    }
+  ],
+  "preserved_not_input": {
+    "why": "삭제하지 않는다. 새 primary calibration/confirmatory 의 training 또는 statistical input 으로 쓰지 않는다.",
+    "roles_allowed": [
+      "historical mechanism evidence",
+      "protocol provenance",
+      "ablation/sensitivity",
+      "target/superfamily exclusion",
+      "manuscript background"
+    ],
+    "items": [
+      "rapid_structural_v1 태그와 freeze manifest 27/27",
+      "prospective allocation validation (1,728 folds: rfd3 1,440 + native 288)",
+      "temperature_sweep · temperature_panel2",
+      "기존 51-backbone calibration 코호트와 그 provenance",
+      "surrogate triage benchmark"
+    ]
+  },
+  "sources": {
+    "independent": true,
+    "no_shared_allocation_pool": true,
+    "no_shared_posterior": true,
+    "no_shared_hyperparameter": true,
+    "ids": [
+      "rfd3",
+      "bioemu"
+    ],
+    "state_per_source": [
+      "q_b",
+      "mu0",
+      "kappa0",
+      "kappa_pool"
+    ]
+  },
+  "per_source_design": {
+    "backbones_per_target": 10,
+    "calibration_candidates_per_backbone": 12,
+    "confirmatory_candidates_per_backbone": 18,
+    "calibration_tier_counts": {
+      "30": 4,
+      "50": 4,
+      "70": 4
+    },
+    "confirmatory_tier_counts": {
+      "30": 6,
+      "50": 6,
+      "70": 6
+    },
+    "tier_prefix_order": [
+      "30",
+      "50",
+      "70"
+    ],
+    "warmup_valid_observations_per_backbone": 4,
+    "warmup_rationale": {
+      "value": 4,
+      "primary_grounds": [
+        "v1 continuity (V1_MIN_PROBE = 4)",
+        "첫 배분 결정 시점의 posterior ESS 가 더 크다"
+      ],
+      "ess_note": "ESS = kappa_pool + n. n=3 은 kappa_pool=4 에서 ESS 7 (−12.5%), kappa_pool=0.5 에서 −22.2% 다.",
+      "prespecified_limitation": "첫 prefix 4 개의 tier 구성이 30/50/70/30 = 2/1/1 이다. q_b 는 30/50/70 균형 혼합 위의 확률로 정의돼 있으므로, 첫 adaptive decision 시점의 관측 혼합은 그 정의와 다르다. backbone x tier interaction 이 있으면 backbone 간 순위에도 영향을 줄 수 있고, 그것을 상쇄된다고 가정하지 않는다.",
+      "not_claimed": "tier imbalance 가 형제 간에 상쇄되어 ranking 에 영향이 없다는 주장은 하지 않는다.",
+      "secondary_sensitivity": {
+        "warmup": 3,
+        "how": "같은 full-grid 를 warmup=3 으로 replay 한다. tier prefix 가 1/1/1 로 정확히 균형이다.",
+        "extra_af2_cost": 0,
+        "extra_af2_why": "full-grid 를 어차피 생성하므로 replay 는 폴딩을 추가하지 않는다.",
+        "not_used_for": [
+          "primary policy 변경",
+          "GO/NO-GO 기준",
+          "kappa 선택",
+          "budget grid 변경"
+        ],
+        "reports": "방향 일관성만 본다.",
+        "prespecified": true
+      }
+    }
+  },
+  "cohorts": {
+    "calibration_v2": {
+      "n_targets": 12,
+      "per_stratum": 4,
+      "reserve_per_stratum": 2,
+      "n_reserve": 6,
+      "seed": 20260911,
+      "selection_committed": false,
+      "selection_artifact": "public_data/benchmark/gate0/calibration_v2_targets.json",
+      "pool_check_utc": "2026-09-09T00:00:00Z",
+      "pool_eligible_after_all_exclusions": 183,
+      "pool_by_stratum": {
+        "50-150": 80,
+        "150-250": 36,
+        "250-400": 67
+      },
+      "pool_required_per_stratum": 6,
+      "excludes_cohorts": [
+        "holdout_resolved",
+        "holdout_selected",
+        "holdout_reserve",
+        "temperature_sweep",
+        "temperature_panel2",
+        "calibration_selected",
+        "calibration_reserve",
+        "masked_holdout_selected",
+        "masked_holdout_reserve"
+      ],
+      "excludes_superfamilies_of_all_above": true,
+      "selection_inputs": [
+        "적격성",
+        "길이",
+        "정체"
+      ],
+      "selection_forbidden_inputs": [
+        "MSA 품질/심도",
+        "RFD3 성공률",
+        "BioEmu 성공률",
+        "pLDDT",
+        "RMSD",
+        "SoluProt",
+        "joint-pass",
+        "Gate 0 사전분포 점수",
+        "legacy rapid_target_manifest.csv 의 eligible 열"
+      ]
+    },
+    "confirmatory": {
+      "reused_from": "public_data/benchmark/gate0/masked_holdout_targets.json",
+      "reused_commit": "898df93",
+      "reselection_forbidden": true,
+      "n_targets": 12,
+      "n_reserve": 6,
+      "seed": 20260910,
+      "selected_sha256": "1e40e0a1022ae09df9df6428c9d164f8342f52eef2656b103b0baa34bb2d7426",
+      "selected": [
+        "1j5uA01",
+        "1n81A00",
+        "1o22A00",
+        "1rdrA01",
+        "1sdiA00",
+        "1sohA00",
+        "1x3aA00",
+        "2w2sA00",
+        "4ai2A02",
+        "4ifxA00",
+        "4wexA00",
+        "6vqfA00"
+      ]
+    }
+  },
+  "totals": {
+    "calibration_per_source": 1440,
+    "calibration_all_sources": 2880,
+    "confirmatory_per_source": 2160,
+    "confirmatory_all_sources": 4320,
+    "grand_total": 7200,
+    "warmup_per_target_per_source": 40,
+    "ceiling_per_target_per_source": 180,
+    "msa_targets": 24,
+    "msa_runs_per_target": 1,
+    "backbones_to_generate": 480
+  },
+  "budget_grid": {
+    "primary": [
+      40,
+      60,
+      80,
+      100,
+      120,
+      140,
+      160,
+      180
+    ],
+    "primary_informative": [
+      60,
+      80,
+      100,
+      120,
+      140,
+      160
+    ],
+    "derived_from": "ceiling 을 먼저 정하고 격자를 파생시켰다. 격자를 먼저 정하고 후보 수를 맞추지 않았다.",
+    "diagnostic_below_primary": "B < 40 은 warm-up/prefix diagnostic 으로만 보고한다",
+    "anchors": {
+      "warmup": 40,
+      "warmup_why": "10 unit x 4 의무 probe = 40. adaptive 결정이 아직 한 번도 일어나지 않았고 static/equal 과 배분이 동일하다.",
+      "ceiling": 180,
+      "ceiling_why": "B = u x N 에서는 unit 당 상한이 N 이므로 모든 unit 에서 N 을 다 써야 한다. 정책은 지출을 포기할 수 있으므로 매치하거나 손실만 가능하다."
+    },
+    "anchors_excluded_from_primary_judgement": true,
+    "anchors_role": "replay 정합성 확인. adaptive-effect 판정점이 아니다.",
+    "superseded_grid": [
+      1,
+      24,
+      30,
+      40,
+      50,
+      60,
+      80,
+      100,
+      120
+    ],
+    "superseded_grid_note": "1-24 전 구간 + 30/40/50/60/80/100/120 (5-backbone ceiling 120 기준)",
+    "revised_in_review": {
+      "from_candidates_per_backbone": 24,
+      "to_candidates_per_backbone": 18,
+      "from_grid": [
+        40,
+        60,
+        80,
+        100,
+        120,
+        160,
+        200,
+        240
+      ],
+      "why": "24 는 5-backbone 설계에서 5x24=120 ceiling 을 맞추려고 정한 값이었다. 10-backbone 에서 그 근거는 무효이므로 후보 수를 과학적으로 다시 정하고 그 ceiling 에서 격자를 파생시켰다.",
+      "never_frozen": true
+    }
+  },
+  "kappa_identification": {
+    "per_source": true,
+    "grid": [
+      0.5,
+      1,
+      2,
+      4,
+      8,
+      16,
+      32
+    ],
+    "mu0_grid_start": 0.05,
+    "mu0_grid_stop": 0.95,
+    "mu0_grid_step": 0.05,
+    "kappa0_grid": [
+      0.5,
+      1,
+      2,
+      4,
+      8,
+      16,
+      32
+    ],
+    "criteria_source": "docs/specs/rapid-v2-phase4b-calibration-freeze.md#9",
+    "criteria_unchanged": true,
+    "borrowing_across_sources_forbidden": true,
+    "on_not_identified": "그 source 의 confirmatory RAPID 은 BLOCKED. 다른 source 의 kappa 를 빌려 쓰지 않는다."
+  },
+  "endpoints": {
+    "per_source_independent": true,
+    "primary": "EFBC@B",
+    "guardrail": "yield ratio >= 0.90, 단측 95% 하한",
+    "comparator_primary": "같은 예산의 static/equal allocation",
+    "comparator_secondary": "frozen structural-yield RAPID (rapid_structural_v1)",
+    "bootstrap": "target-clustered",
+    "pooling_across_sources_forbidden": true,
+    "pooling_note": "RFD3 success 와 BioEmu success 를 합쳐 하나의 p-value/CI 로 만들지 않는다.",
+    "secondary_after_both": [
+      "cross-generator consistency",
+      "effect-size comparison",
+      "source heterogeneity"
+    ]
+  },
+  "generation_rules": {
+    "rfd3": {
+      "mode": "local_diversify",
+      "partial_t": 5.0,
+      "select_fixed_atoms": "{A1: ALL} — 변경하지 않는다",
+      "accept_gate": "target-RMSD <= 2.0 A",
+      "accepted_needed_per_target": 10,
+      "max_attempts_per_target": 40,
+      "order": "동결된 seed 의 생성 순서. 구조 점수나 yield 로 고르지 않는다.",
+      "historical_accept_rate": {
+        "accepted": 51,
+        "attempted": 60,
+        "note": "12 타겟 중 2r01A02 는 0/15"
+      }
+    },
+    "bioemu": {
+      "model_name": "bioemu-v1.1",
+      "input": "native sequence (구조가 아니라 서열을 받는다)",
+      "target_rmsd_cutoff": 2.0,
+      "filter_samples": true,
+      "max_return_structures": 10,
+      "num_samples": 50,
+      "max_attempted_structures": 200,
+      "accepted_needed_per_target": 10,
+      "order": "동결된 base_seed 의 sample 순서. RMSD 순으로 고르지 않는다.",
+      "historical_accept_rate": {
+        "targets_with_backbones": 4,
+        "targets_attempted": 62,
+        "wave3_rejected": 4,
+        "wave3_attempted": 8
+      }
+    },
+    "on_shortfall": "그 target x source 를 SOURCE_GENERATION_INFEASIBLE 로 기록한다. 타겟을 예비로 바꾸지 않는다. 어려운 타겟에만 생성을 더 주지 않는다. 확보된 것을 그대로 쓴다.",
+    "unequal_units": "target x source 의 unit 수 u 가 10 보다 작으면 그 조합의 warm-up 은 4u, ceiling 은 18u 다 (40 와 180 이 아니다). ceiling 을 넘는 격자점에서 그 타겟은 non-evaluable 로 기록하고 그 B 의 informative set 에서 빠진다. 최소 클러스터 8 을 밑도는 B 는 그 source 에서 판정하지 않는다.",
+    "unequal_units_formula": {
+      "warmup_per_unit": 4,
+      "ceiling_per_unit": 18,
+      "warmup": "4u",
+      "ceiling": "18u"
+    }
+  },
+  "msa": {
+    "level": "target",
+    "runs_per_target": 1,
+    "shared_across_sources": true,
+    "thresholds_unchanged": true,
+    "thresholds_source": "pipeline-mcp/src/pipeline_mcp/bio/a3m.py::msa_quality",
+    "pilot_isolation": {
+      "artifact": "operational_only",
+      "may_not_change": [
+        "target 선정",
+        "source 선정",
+        "candidate 수",
+        "threshold",
+        "tier"
+      ]
+    }
+  },
+  "review_required": [],
+  "candidate_depth_rationale": {
+    "grounds": [
+      "12 는 historical v1 에서 정보가 컸던 informative interior k≈16 을 포함하지 못한다.",
+      "18 은 k=16 과 그 이후의 interior point 를 포함한다.",
+      "24 는 historical planning evidence 상 추가 정보 대비 full-grid 비용이 크다."
+    ],
+    "evidence": "public_data/benchmark/gate0/m2b_candidate_depth_diagnostic.json",
+    "evidence_status": "design planning evidence. 새 confirmatory 결과가 아니다.",
+    "axis": "k = backbone 당 관측 수. 균등 배분에서 k = B/u 이므로 unit 수에 불변이다.",
+    "efbc_saturation_k": 12,
+    "efbc_saturation_note": "동결 v1 격자에서 k=12 의 EFBC 가 k=24 값의 99.5% 다. primary endpoint 는 12 에서 이미 포화한다.",
+    "historical_max_difference_k": 16,
+    "historical_max_difference_note": "v1 에서 가장 큰 allocation difference 가 관측된 깊이다. 새 RFD3/BioEmu 에서 16 이 최적이라는 뜻이 아니다.",
+    "forbidden_grounds": [
+      "abandon_backbone 도달 가능성 - v2 CoverageAction 에 abandon 이 없다",
+      "movability signal floor - v1 profile 상수이며 coverage mode 의 양이 아니다",
+      "k=16 을 새 설계의 최적 깊이로 간주하는 것"
+    ]
+  },
+  "af2_cost_estimate": {
+    "fit": "elapsed_s = 2.890344 * length^0.748",
+    "fit_source": "public_data/benchmark/gate0/af2_length_scaling.json",
+    "fit_n_points": 4,
+    "caveat": "4 점 적합이다. 자릿수 비교에만 쓴다.",
+    "confirmatory_hours_both_sources": 177.8,
+    "calibration_hours_both_sources_approx": 118.6,
+    "calibration_approx_why": "calibration 12 타겟은 아직 선정 전이다. 같은 길이 층 구성이므로 confirmatory 평균 길이로 근사했다."
+  },
+  "frozen_utc": "2026-09-09T10:39:18Z",
+  "approved_decisions": [
+    "bioemu 유한 생성 규칙 (num_samples 50 / max_attempted 200 / accepted 10)",
+    "rfd3 max_attempts_per_target 40",
+    "B=40 warm-up anchor 와 B=180 ceiling anchor 를 primary 판정에서 제외하는 것",
+    "unequal unit 수에서의 non-evaluable 규칙",
+    "coverage_unit 을 bioemu 에 적용하기 전 M1-BioEmu 구조 진단 요구",
+    "confirmatory 18/backbone (6/6/6) · warm-up 4 · 격자 40-180 · 총 7,200"
+  ],
+  "approval_note": "6 항목 사용자 승인. candidate-depth 18 의 근거는 frozen historical v1 planning evidence 이며, 새 RFD3/BioEmu 에서 k=16 이 최적이라는 주장으로 확대하지 않는다.",
+  "change_policy": "frozen 이다. 여기 적힌 값을 결과를 보고 바꾸지 않는다. 바꿔야 하면 version 을 올리고 supersedes 에 이 파일의 commit 과 대체되는 키를 기록한다."
+}

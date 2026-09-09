@@ -325,3 +325,78 @@ coverage 개선은 feasible coverage 로만 말하고 guardrail 값을 함께 �
 "backbone diversity 를 확장했다" 는 generate_new_backbone 전에는 쓰지 않는다.
 Antigen 은 coverage allocation 까지만 주장한다.
 ```
+
+---
+
+## 9. v2.0 multi-source 로의 개정 (2026-09-09)
+
+동결 문서: [`rapid-v2-multisource-validation-freeze.md`](rapid-v2-multisource-validation-freeze.md)
+기계 정본: `public_data/benchmark/gate0/multisource_validation_plan.json`
+
+이 절은 §3 Phase 4B 이후의 실행 순서를 대체한다. **§0 의 v1 불변식과 §7 의 위험
+표는 그대로 유효하다.** Core 는 여전히 모델 이름을 모르고, source 는 profile
+수준의 개념이다.
+
+### 바뀐 것
+
+```
+calibration    기존 RFD3 51 backbone 재사용
+               → fresh 12 targets x 10 backbones x 2 sources
+confirmatory   12 x 5 RFD3 x 24 = 1,440
+               → 12 x 10 RFD3 x 18 + 12 x 10 BioEmu x 18 = 4,320 (서로 독립)
+후보 깊이       backbone 당 24 (5-backbone ceiling 기준)
+               → backbone 당 18 = 6/6/6, ceiling 180/source
+posterior      단일 q_b · 단일 kappa_pool
+               → q_b,RFD3 / q_b,BioEmu · kappa_pool,RFD3 / kappa_pool,BioEmu
+판정            1 회
+               → source 마다 1 회, 합치지 않는다
+```
+
+### 왜 Core 를 고치지 않아도 되는가
+
+`ArmSchema` 는 이미 hierarchy 를 profile 이 선언하게 되어 있다. source 별 독립은
+**두 개의 독립 campaign** 으로 표현된다 - 하나의 schema 에 source 축을 더하는
+것이 아니다.
+
+```
+❌ hierarchy = ("target", "source", "backbone")   → 한 pool 이 된다
+✅ campaign(rfd3)   hierarchy = ("target", "backbone")
+   campaign(bioemu) hierarchy = ("target", "backbone")
+   두 campaign 은 state 도 hyperparameter 도 공유하지 않는다
+```
+
+이렇게 두면 Core 에 `bioemu` 라는 문자열이 등장하지 않는다. source 는 campaign
+을 만드는 쪽(profile / 실행 스크립트)에만 나타난다. **금지 식별자 테스트가
+그대로 통과해야 한다.**
+
+### 새로 필요한 구현 작업
+
+```
+i.   47_position_mapping_spike.py 에 source 인자
+     rfd3: staged→backbone 항등 · bioemu: renumbered_from_1
+     알 수 없는 source 는 hard fail (조용한 기본값 금지)
+ii.  BioEmu backbone 생성 스크립트 (유한 규칙 · 동결 seed 순서)
+     num_samples 50 · max_return 10 · max_attempted 200 · cutoff 2.0
+iii. M1-BioEmu 구조 진단 (M1 절차 재사용, outcome 미사용)
+iv.  calibration/confirmatory 실행에 source 차원 기록
+     af2_order_metric.csv 의 backbone_source 열을 그대로 쓴다 (이미 있다)
+v.   kappa 식별을 source 별로 두 번 (§9 기준 불변)
+vi.  EFBC 보고에 unit 수 u 와 EFBC/u 를 함께 남긴다
+vii. warmup=3 replay (사전 등록된 secondary sensitivity, 추가 폴딩 0)
+     primary 는 warmup=4 다. GO/NO-GO 에 쓰지 않는다.
+```
+
+`iv` 가 작은 이유는 `backbone_source` 가 처음부터 열로 있었기 때문이다. 동결된
+1,728 격자도 `rfd3 1,440 + native 288` 로 이미 두 source 를 담고 있다. 이번에
+바뀌는 것은 **그 열이 배분 단위가 아니라 실험 설계 축이 된다**는 것이다.
+
+### 통과 판정
+
+```
+test_multisource_validation_freeze.py     숫자·provenance
+test_bioemu_backbone_provenance.py        매핑·서열 동일성
+test_masked_holdout_freeze.py             타겟 동결이 유지되는가
+test_calibration_cohort_freeze.py         §9 가 대체되지 않았는가
+test_v1_freeze.py                         27/27 그대로
+금지 식별자 테스트                          Core 에 source 이름이 없는가
+```
