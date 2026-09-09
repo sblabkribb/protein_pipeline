@@ -323,3 +323,45 @@ def test_coverage_modules_have_no_domain_literals():
             if word.lower() in text.lower():
                 hits.append(f"{name}: {word}")
     assert not hits, "coverage Core 에 도메인 어휘가 있다:\n  " + "\n  ".join(hits)
+
+
+# ---- terminal precedence --------------------------------------------------
+
+def test_terminal_precedence_warmup_beats_budget_and_stop():
+    """warm-up 을 끝낼 수 없으면 예산이나 이득과 무관하게 EXECUTION_INFEASIBLE."""
+    s = _state(feasible=[9, 9, 9, 9, 0], valid=[4, 4, 4, 4, 0])
+    # 예산은 의무 probe 를 채우기에 충분하다 (5 × 4 = 20). 그런데도 실행이
+    # 막혀 warm-up 이 끝나지 않으므로 예산·이득보다 실행 상태가 앞선다.
+    p = CoveragePolicy(state=s, min_valid_observations=4, evaluable_budget=20,
+                       probability_model=_Stub({u: 0.0 for u in U}))
+    p.mark_execution_unavailable(U[4])
+    assert p.decide().action is CoverageAction.EXECUTION_INFEASIBLE
+
+
+def test_terminal_precedence_budget_beats_stop():
+    """warm-up 이 끝났고 슬롯이 없으면, 이득이 0 이어도 BUDGET_EXHAUSTED 다."""
+    s = _state(feasible=[10, 10, 10, 10, 10], valid=[4] * 5)
+    p = CoveragePolicy(state=s, min_valid_observations=4, evaluable_budget=20,
+                       probability_model=_Stub({u: 0.5 for u in U}))
+    d = p.decide()
+    assert d.action is CoverageAction.BUDGET_EXHAUSTED
+    # 예산이 남아 있으면 같은 상태가 STOP 이다.
+    p2 = CoveragePolicy(state=s, min_valid_observations=4, evaluable_budget=100,
+                        probability_model=_Stub({u: 0.5 for u in U}))
+    assert p2.decide().action is CoverageAction.STOP
+
+
+def test_stop_only_when_warmed_up_budgeted_and_no_gain():
+    s = _state(feasible=[10, 10, 10, 10, 10], valid=[4] * 5)
+    p = CoveragePolicy(state=s, min_valid_observations=4, evaluable_budget=None,
+                       probability_model=_Stub({u: 0.5 for u in U}))
+    assert p.decide().action is CoverageAction.STOP
+
+
+def test_budget_below_warmup_requirement_is_rejected_at_construction():
+    """돌려보고 실패하지 않는다. 설정만 보고 거부한다."""
+    from pipeline_mcp.rapid_core.coverage_policy import InvalidCampaignConfiguration
+    with pytest.raises(InvalidCampaignConfiguration, match="설정 오류"):
+        CoveragePolicy(state=_state(), min_valid_observations=4, evaluable_budget=19)
+    # 정확히 필요한 만큼이면 통과한다 (unit 5 × 4 = 20).
+    CoveragePolicy(state=_state(), min_valid_observations=4, evaluable_budget=20)

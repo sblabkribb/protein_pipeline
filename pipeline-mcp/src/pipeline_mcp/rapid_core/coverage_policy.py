@@ -41,7 +41,11 @@ class CoverageReason(str, Enum):
 
 
 class PosteriorNotFrozenError(RuntimeError):
-    """q_b 사양이 과학적으로 동결되지 않았다."""
+    """확률 모형 사양이 과학적으로 동결되지 않았다."""
+
+
+class InvalidCampaignConfiguration(ValueError):
+    """설정만 보고도 확증 종점을 낼 수 없다고 알 수 있다."""
 
 
 @dataclass
@@ -56,6 +60,20 @@ class CoveragePolicy:
     #: 조용히 진행하지 않는다.
     probability_model: FeasibleProbabilityModel | None = None
     _unavailable: set[tuple[str, ...]] = field(default_factory=set)
+
+    def __post_init__(self) -> None:
+        """의무 probe 를 채울 수 없는 예산이면 시작 전에 거부한다.
+
+        돌려보고 EXECUTION_INFEASIBLE 로 끝내면 실행 실패처럼 보이지만, 이것은
+        실행 문제가 아니라 캠페인 설정 오류다. 두 상태를 구분한다.
+        """
+        need = self.min_valid_observations * len(self.state.units)
+        if self.evaluable_budget is not None and self.evaluable_budget < need:
+            raise InvalidCampaignConfiguration(
+                f"예산 {self.evaluable_budget} 슬롯으로는 의무 probe 를 채울 수 "
+                f"없다 (unit {len(self.state.units)} × {self.min_valid_observations} "
+                f"= {need} 필요). 실행 실패가 아니라 설정 오류이므로 시작하지 "
+                f"않는다.")
 
     # ---- 실행 가용성 --------------------------------------------------------
 
