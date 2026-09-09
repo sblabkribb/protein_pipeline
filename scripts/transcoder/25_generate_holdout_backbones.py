@@ -154,6 +154,9 @@ def main(argv=None) -> int:
     parser.add_argument("--force", action="store_true",
                         help="designs 가 이미 있어도 다시 만든다. 전처리를 바꿨을 때 "
                              "12 개가 같은 경로로 만들어지도록 쓴다.")
+    parser.add_argument("--run-prefix", default="holdout",
+                        help="출력 run_id 접두사. 코호트마다 달라야 나중에 "
+                             "glob 이 두 코호트를 섞지 않는다.")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
@@ -221,12 +224,12 @@ def main(argv=None) -> int:
     output_root = Path(args.output_root)
 
     def designs_for(domain: str) -> int:
-        return len(list((output_root / f"holdout_{domain}_rfd3" / "rfd3"
+        return len(list((output_root / f"{args.run_prefix}_{domain}_rfd3" / "rfd3"
                          / "designs").glob("*.pdb")))
 
     out_path = Path(args.out)
     for index, row in enumerate(targets, start=1):
-        run_id = f"holdout_{row['domain']}_rfd3"
+        run_id = f"{args.run_prefix}_{row['domain']}_rfd3"
         # 이미 다 만든 타겟을 다시 돌리면 성공한 백본을 덮어쓸 위험만 있다.
         have = designs_for(row["domain"])
         if have >= want and not args.force:
