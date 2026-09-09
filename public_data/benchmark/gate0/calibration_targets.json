@@ -342,5 +342,22 @@
     "confirmatory 주장"
   ],
   "code_sha": "07b50d37e392659dc32346b3339fa180bc99defe",
-  "self_sha256": "5b9460a9632ca9c7fe56dfed85dcd54fe43476a4019ec5f45ed9be95d82e7526"
+  "self_sha256": "5b9460a9632ca9c7fe56dfed85dcd54fe43476a4019ec5f45ed9be95d82e7526",
+  "backbone_plan": {
+    "n_per_target": 5,
+    "composition": {
+      "rfd3": 5
+    },
+    "frozen_utc": "2026-09-09T06:17:32Z",
+    "why_rfd3_only": [
+      "kappa_pool 은 형제 backbone 이 서로를 알려주는 세기이므로, 확증 코호트의 주 분석 population 인 RFD3 에서 재야 한다.",
+      "native 는 타겟당 하나뿐이라 형제가 생기지 않는다. panel1 이 그래서 kappa_pool 을 식별하지 못했다.",
+      "holdout 은 native 1 + RFD3 5 였지만, 그 native 는 source 균형을 위한 잡음 인자였고 calibration 에는 필요 없다."
+    ],
+    "ranking_rule": "동결된 seed 의 생성 순서. 생성 후 구조 점수나 yield 로 5 개를 고르지 않는다.",
+    "acceptance": {
+      "rule": "게이트 0 와 같은 2.0 A target-RMSD 수용 기준.",
+      "shortfall": "5 개를 못 채우면 같은 seed 로 생성을 이어간다. 그래도 못 채우면 그 타겟은 calibration generation-infeasible 로 표시하고, 타겟을 바꾸지 않는다."
+    }
+  }
 }
