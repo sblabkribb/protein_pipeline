@@ -153,14 +153,27 @@ full_length_fraction < 0.05    → 경고. 기록하고 진행한다.
 `usable_hits >= 10` 은 새로 만든 값이 아니라 코드가 이미 저심도 경고를 내는
 경계다.
 
-### 교체 규칙
+### 교체 규칙 — calibration 과 confirmatory 가 다르다
+
+두 코호트의 backbone 조달 방식이 다르므로 규칙도 달라야 한다.
 
 ```
-MSA_INFEASIBLE 또는 MAPPING_INFEASIBLE 이
-  **후보 생성 전에** 발생 → 동결된 순서로 예비 타겟 교체 가능
+calibration  (기존 51 backbone 재사용)
+  MSA_INFEASIBLE / MSA_INSUFFICIENT_DEPTH / MAPPING_INFEASIBLE
+    → 그 타겟을 calibration-infeasible 로 기록
+    → **예비 대체 금지**
+    → 남은 타겟으로 §9 를 수행할 수 있는지 확인
+    → 최소 식별 요건에 미달하면 Phase 4B BLOCKED
 
-SoluProt · AF2 · joint-pass 를 본 뒤 → 교체 금지
+confirmatory (새로 생성)
+  같은 사유가 **후보 생성 전에** 발생 → 동결된 순서로 예비 교체 가능
+  SoluProt · AF2 · joint-pass 를 본 뒤 → 교체 금지
 ```
+
+**calibration 에서 예비 대체를 금지하는 이유**는 §5 가 "기존 51 backbone 만
+쓴다" 로 동결돼 있기 때문이다. 예비 타겟에는 backbone 이 없으므로 대체하려면
+새로 생성해야 하고, 그러면 §5 와 충돌한다. 지금은 새 calibration backbone 을
+만들지 않는다.
 
 교체 사유와 순서를 산출물에 남긴다.
 
@@ -169,7 +182,8 @@ SoluProt · AF2 · joint-pass 를 본 뒤 → 교체 금지
 ## 4. Tier mixture
 
 ```
-backbone 당 후보 12 개 = tier30 4 · tier50 4 · tier70 4
+calibration    backbone 당 12 개 = tier30 4 · tier50 4 · tier70 4
+confirmatory   backbone 당 24 개 = tier30 8 · tier50 8 · tier70 8
 ```
 
 `q_b` 는 **이 사전 지정 혼합 위의 단일 확률**이다.
@@ -177,6 +191,28 @@ backbone 당 후보 12 개 = tier30 4 · tier50 4 · tier70 4
 ```
 q_b = P(다음 유효 관측이 joint-pass | backbone b, 균형 tier 혼합)
 ```
+
+### 평가 순서를 동결한다 — prefix 도 균형이어야 한다
+
+RAPID 은 backbone 의 후보를 한 번에 다 평가하지 않는다. 예산에 따라 앞에서
+일부만 본다. 그러면 초반 관측이 우연히 한 tier 에 몰릴 수 있고, 그 순간 실제
+관측 분포가 위 정의와 달라진다.
+
+그래서 backbone 마다 평가 순서를 폴딩 전에 고정한다.
+
+```
+30 → 50 → 70
+30 → 50 → 70
+...
+calibration   이 주기를 4 회  (12 개)
+confirmatory  이 주기를 8 회  (24 개)
+```
+
+**모든 prefix 가 가능한 한 균형을 유지한다** - 3 의 배수 지점에서 정확히
+균형이고, 그 사이에서도 tier 간 차이가 1 을 넘지 않는다.
+
+tier 안의 후보 순서는 생성 seed 와 design index 로 사전 동결한다. 결과를 보고
+재배열하지 않는다.
 
 ### tier 를 allocation arm 으로 올리지 않는다
 
@@ -225,10 +261,21 @@ LOTO          타겟별 예측 개수로 정규화 후 타겟 동일 가중 평�
 
 ```
 새 unseen masked holdout
-12 targets × 5 RFD3 backbones × 12 candidates = 720 evaluations
+12 targets × 5 RFD3 backbones × 24 candidates = 1,440 evaluations
+tier 혼합 8 / 8 / 8 · 평가 순서 §4 대로 동결
 길이 층 4 / 4 / 4  (50-150 · 150-250 · 250-400)
 예비 층당 2
 ```
+
+### 왜 24 인가 — budget grid 와 맞춘다
+
+budget grid 가 120 까지 가는데 backbone 당 12 개면 타겟당 평가 가능한 후보가
+`5 × 12 = 60` 뿐이라 `B = 80·100·120` 이 존재할 수 없다. 24 로 두면
+`5 × 24 = 120` 이 되어 grid 전 구간이 성립하고, v1 홀드아웃의 24 seq/backbone
+규모와도 같아진다.
+
+calibration 은 12 로 둔다. 목적이 확률 모수 식별이므로 같은 사전 지정 혼합에서
+후보 수만 다른 것은 모순이 아니다.
 
 ### 선정 — 적격성과 길이만
 
@@ -329,7 +376,7 @@ v2 masked   실제 배포 후보 분포에서도 작동하는가, 그리고
 6. kappa_pool 식별 판정 (§9)
    미식별이면 여기서 멈춘다
 7. 새 holdout backbone 생성 + checkpoint
-8. 새 holdout 720
+8. 새 holdout 1,440
 9. confirmatory 결과 한 번
 ```
 

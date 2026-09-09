@@ -101,3 +101,45 @@ def test_rfd3_protocol_is_explicitly_unchanged():
     for phrase in ("select_fixed_atoms 변경", "altLoc 전처리 변경",
                    "기존 51 backbone 재생성"):
         assert phrase in doc, f"'{phrase}' 가 금지 목록에 없다"
+
+
+# ---- 검토에서 고친 세 가지 -------------------------------------------------
+
+def test_confirmatory_candidate_count_supports_the_budget_grid():
+    """후보 수가 budget grid 를 감당해야 한다.
+
+    12/backbone 이면 타겟당 5×12=60 이라 B=80/100/120 이 존재할 수 없다.
+    이 불일치가 검토에서 잡혔다.
+    """
+    doc = _doc()
+    assert "24 candidates = 1,440 evaluations" in doc
+    assert "8 / 8 / 8" in doc
+    # grid 최대값과 타겟당 후보 수가 맞는지
+    assert "5 × 24 = 120" in doc, "후보 수와 budget grid 의 관계가 적혀 있지 않다"
+    assert "120" in doc
+
+
+def test_tier_evaluation_order_is_frozen_for_prefix_balance():
+    """예산이 앞에서 자르므로 prefix 도 균형이어야 한다."""
+    doc = _doc()
+    assert "prefix 도 균형" in doc
+    assert "30 → 50 → 70" in doc
+    assert "design index" in doc, "tier 안 후보 순서 동결이 없다"
+
+
+def test_calibration_forbids_reserve_substitution():
+    """예비 타겟에는 backbone 이 없다. §5 와 충돌하면 안 된다."""
+    doc = _doc()
+    assert "calibration-infeasible" in doc
+    assert "예비 대체 금지" in doc
+    assert "기존 51 backbone 만" in doc, "금지 근거가 적혀 있지 않다"
+    # confirmatory 쪽은 반대로 허용돼야 한다
+    assert "동결된 순서로 예비 교체 가능" in doc
+
+
+def test_calibration_and_confirmatory_counts_are_consistent():
+    """문서 안의 숫자가 서로 맞는가."""
+    doc = _doc()
+    assert "51 × 12 = 612" in doc or "51 backbone" in doc
+    assert "12 targets × 5 RFD3 backbones × 24 candidates" in doc
+    assert "1,440" in doc
