@@ -1,0 +1,277 @@
+{
+  "purpose": "M2 - coverage endpoint 의 동적 범위. 정책 비교가 아니다.",
+  "does_not_do": [
+    "adaptive vs static 비교",
+    "정책 성능에 대한 진술",
+    "배분 규칙 사용 (서열은 무작위 추출)"
+  ],
+  "reads_labels": true,
+  "coverage_unit": "backbone_id",
+  "feasibility": "pLDDT >= 85.0 and rmsd <= 2.0 and soluprot >= 0.5",
+  "min_probe_per_unit": 4,
+  "replicates": 2000,
+  "seed": 20260909,
+  "post_probe_binary_coverage": {
+    "1sh6A02": {
+      "n_units": 5,
+      "median": 5.0,
+      "fraction_all_feasible": 1.0,
+      "effective_median": 5.0
+    },
+    "1sp0A00": {
+      "n_units": 5,
+      "median": 5.0,
+      "fraction_all_feasible": 0.5315,
+      "effective_median": 4.014
+    },
+    "1tm9A00": {
+      "n_units": 5,
+      "median": 5.0,
+      "fraction_all_feasible": 0.806,
+      "effective_median": 4.538
+    },
+    "1vsrA00": {
+      "n_units": 5,
+      "median": 5.0,
+      "fraction_all_feasible": 0.988,
+      "effective_median": 4.949
+    },
+    "2jokA01": {
+      "n_units": 5,
+      "median": 4.0,
+      "fraction_all_feasible": 0.1175,
+      "effective_median": 3.299
+    },
+    "3bqwA01": {
+      "n_units": 5,
+      "median": 4.0,
+      "fraction_all_feasible": 0.17,
+      "effective_median": 4.0
+    },
+    "3es1A01": {
+      "n_units": 5,
+      "median": 1.0,
+      "fraction_all_feasible": 0.0,
+      "effective_median": 1.0
+    },
+    "3f2pA01": {
+      "n_units": 5,
+      "median": 5.0,
+      "fraction_all_feasible": 0.823,
+      "effective_median": 4.604
+    },
+    "3h7eA02": {
+      "n_units": 5,
+      "median": 5.0,
+      "fraction_all_feasible": 1.0,
+      "effective_median": 5.0
+    },
+    "5fwaA02": {
+      "n_units": 5,
+      "median": 5.0,
+      "fraction_all_feasible": 0.902,
+      "effective_median": 4.695
+    },
+    "5pc8A00": {
+      "n_units": 5,
+      "median": 5.0,
+      "fraction_all_feasible": 0.9995,
+      "effective_median": 4.953
+    },
+    "5xpdA02": {
+      "n_units": 5,
+      "median": 1.0,
+      "fraction_all_feasible": 0.0,
+      "effective_median": 1.0
+    }
+  },
+  "full_grid_concentration": {
+    "1sh6A02": {
+      "counts": [
+        24,
+        24,
+        24,
+        24,
+        24
+      ],
+      "n_units": 5,
+      "n_feasible_units": 5,
+      "effective": 5.0,
+      "effective_ratio": 1.0
+    },
+    "1sp0A00": {
+      "counts": [
+        24,
+        24,
+        13,
+        7,
+        6
+      ],
+      "n_units": 5,
+      "n_feasible_units": 5,
+      "effective": 4.317,
+      "effective_ratio": 0.863
+    },
+    "1tm9A00": {
+      "counts": [
+        24,
+        22,
+        21,
+        10,
+        9
+      ],
+      "n_units": 5,
+      "n_feasible_units": 5,
+      "effective": 4.644,
+      "effective_ratio": 0.929
+    },
+    "1vsrA00": {
+      "counts": [
+        24,
+        24,
+        23,
+        22,
+        15
+      ],
+      "n_units": 5,
+      "n_feasible_units": 5,
+      "effective": 4.934,
+      "effective_ratio": 0.987
+    },
+    "2jokA01": {
+      "counts": [
+        19,
+        18,
+        7,
+        3,
+        2
+      ],
+      "n_units": 5,
+      "n_feasible_units": 5,
+      "effective": 3.724,
+      "effective_ratio": 0.745
+    },
+    "3bqwA01": {
+      "counts": [
+        24,
+        23,
+        23,
+        23,
+        1
+      ],
+      "n_units": 5,
+      "n_feasible_units": 5,
+      "effective": 4.18,
+      "effective_ratio": 0.836
+    },
+    "3es1A01": {
+      "counts": [
+        9,
+        0,
+        0,
+        0,
+        0
+      ],
+      "n_units": 5,
+      "n_feasible_units": 1,
+      "effective": 1.0,
+      "effective_ratio": 0.2
+    },
+    "3f2pA01": {
+      "counts": [
+        24,
+        24,
+        22,
+        15,
+        8
+      ],
+      "n_units": 5,
+      "n_feasible_units": 5,
+      "effective": 4.69,
+      "effective_ratio": 0.938
+    },
+    "3h7eA02": {
+      "counts": [
+        24,
+        24,
+        24,
+        23,
+        23
+      ],
+      "n_units": 5,
+      "n_feasible_units": 5,
+      "effective": 4.999,
+      "effective_ratio": 1.0
+    },
+    "5fwaA02": {
+      "counts": [
+        23,
+        18,
+        18,
+        16,
+        10
+      ],
+      "n_units": 5,
+      "n_feasible_units": 5,
+      "effective": 4.842,
+      "effective_ratio": 0.968
+    },
+    "5pc8A00": {
+      "counts": [
+        24,
+        24,
+        20,
+        20,
+        19
+      ],
+      "n_units": 5,
+      "n_feasible_units": 5,
+      "effective": 4.975,
+      "effective_ratio": 0.995
+    },
+    "5xpdA02": {
+      "counts": [
+        8,
+        0,
+        0,
+        0,
+        0
+      ],
+      "n_units": 5,
+      "n_feasible_units": 1,
+      "effective": 1.0,
+      "effective_ratio": 0.2
+    }
+  },
+  "random_portfolio_representation": {
+    "5": {
+      "mean_backbones": 2.87,
+      "median": 3.0,
+      "max_possible": 5
+    },
+    "10": {
+      "mean_backbones": 4.27,
+      "median": 4.0,
+      "max_possible": 5
+    },
+    "20": {
+      "mean_backbones": 4.79,
+      "median": 5.0,
+      "max_possible": 5
+    }
+  },
+  "verdict": {
+    "binary_saturates": true,
+    "fraction_all_units_feasible_after_probe": 0.6115,
+    "saturated_targets": [
+      "1sh6A02",
+      "1vsrA00",
+      "3h7eA02",
+      "5fwaA02",
+      "5pc8A00"
+    ],
+    "criterion": "의무 probe 직후 모든 unit 이 feasible 인 재생의 비율이 50% 이상, 또는 타겟의 절반 이상이 90% 이상 5/5 이면 포화로 본다"
+  },
+  "code_sha": "a46d76305ba820225920d3b58c3587db9c64907b",
+  "utc": "2026-09-09T04:20:17Z"
+}

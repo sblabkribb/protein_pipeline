@@ -204,7 +204,33 @@ M1 은 **basin 정의를 고르는 분석이 아니라, 후보 basin 정의가 �
 끝나면 사람이 basin 정의를 고르고 **별도 freeze 문서**에 설계 §SS3 의 8 개
 항목을 못 박는다. v1 의 `holdout_experiment_spec.json` 과 같은 형식.
 
-### M2 — coverage floor 후보값
+### M2 — endpoint 의 동적 범위 (Phase 4 endpoint 동결을 막는다)
+
+M1 이 `coverage_unit = backbone_id` 를 동결시키면서 새 위험이 생겼다.
+**binary feasible-backbone coverage 가 의무 probe 만으로 포화할 수 있다.**
+타겟당 backbone 5 개 × 최소 probe 4 회면 모든 정책이 5/5 를 내고, 그러면 지표가
+정책을 구별하지 못한다. 포화한 지표로 사전등록하면 실험이 답을 낼 수 없다.
+
+```
+한다 (정책 비교 아님)
+  의무 probe 직후 타겟별 "통과 후보 ≥1" backbone 수의 분포
+  통과 후보가 backbone 별로 얼마나 몰려 있는가 (entropy · effective number)
+  고정 크기 portfolio 에서 실제로 대표되는 backbone 수
+
+하지 않는다
+  adaptive vs static 비교
+  어느 정책이 나은지에 대한 어떤 진술
+```
+
+이것은 성능 측정이 아니라 **자를 먼저 재는 것**이다. 라벨을 읽지만 정책은
+돌리지 않는다 - 서열은 무작위로 뽑는다.
+
+```
+포화하지 않으면   Feasible Backbone Coverage @ Fixed Budget (단순 count)
+포화하면          Effective Feasible Backbone Coverage = exp(H)
+```
+
+### M2b — coverage floor 후보값 (Phase 4 를 막지 않는다)
 
 ```
 근거 둘이 이미 있다
@@ -238,9 +264,10 @@ comparator
 ```
 Phase 0 ──┬─→ Phase 1 ─→ Phase 2 ─→ Phase 3 ─┬─→ Phase 4
           │                                   └─→ Phase 5
-          └─→ M1 ─→ basin freeze ─────────────────↗
-                M2 ─→ minimum_exploration_policy ─↗
-                M3 ─→ guardrail margin ──────────↗
+          └─→ M1 (완료) ─→ coverage_unit 동결 ────↗
+                  └─→ M2 ─→ endpoint 형태 동결 ───↗
+                      M2b ─→ minimum_exploration ─↗
+                      M3 (완료) ─→ guardrail 0.90 ↗
 ```
 
 Phase 5 는 Phase 4 를 기다리지 않는다. Antigen 은 contract 만이고, 그 contract

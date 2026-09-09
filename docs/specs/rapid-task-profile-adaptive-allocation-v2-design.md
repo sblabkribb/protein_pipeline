@@ -1201,14 +1201,39 @@ v1 처럼 사전등록 가능한 검증 대상이 된다.
 ## SS1. Primary endpoint family
 
 ```
-Feasible Design-Basin Coverage @ Fixed Budget       (FDBC@B)
+Feasible Coverage @ Fixed Budget       (FC@B)
+```
+
+`coverage_unit` 이 무엇인지는 TaskProfile 이 정한다. fixed_backbone_redesign
+에서는 `backbone_id` 로 동결했다 (SS3).
+
+### 용어 — "basin" 과 "coverage unit" 을 구분한다
+
+M1 이 잰 것은 **backbone 이 하나의 진짜 basin 이다** 가 아니라,
+**이 코호트에서는 여러 backbone 을 더 큰 단위로 묶을 안정적이고 비자명한
+structural scale 을 찾지 못했다** 는 것이다. 이 둘은 다르다.
+
+```
+여러 backbone 을 만드는 목적            서로 다른 design basin 탐색
+                                        (§C2 의 측정이 지지한다)
+
+coverage 를 세는 단위                   coverage_unit = backbone_id
+                                        (운영 정의. basin 과 같다고 주장하지 않는다)
+```
+
+따라서 문서와 보고에서 쓰는 표현:
+
+```
+✅ backbone-level design-space coverage
+✅ design-context coverage
+✅ feasible backbone coverage
+⚠️ design-basin coverage    ← 동기를 말할 때만. 지표 이름으로는 쓰지 않는다.
 ```
 
 정의:
 
 ```
-basin        arm pool 의 분할. 한 basin 은 하나 이상의 arm 을 담는다.
-             무엇을 basin 으로 볼지는 SS3 에서 별도로 동결한다.
+coverage_unit   arm pool 의 분할 단위. TaskProfile 이 정한다.
 
 feasible     그 basin 에서 나온 후보 중 적어도 하나가 feasibility 기준을
 covered      통과했다. 기준은 task 의 primary feasibility endpoint 를 쓴다
@@ -1309,46 +1334,67 @@ basin 당 통과 후보 분포   한 basin 에 몰렸는지
 realized compute         §41 의 2 차 분석과 같은 축
 ```
 
-## SS3. basin 정의는 별도로, prospective evaluation 전에 동결한다
+## SS3. coverage_unit — fixed_backbone_redesign 은 동결됨
 
 ```
-후보 A   basin = backbone            (1 backbone = 1 basin)
-후보 B   basin = structural cluster  (구조 유사도로 묶은 backbone 군)
+coverage_unit = backbone_id
 ```
 
-**둘 중 무엇을 쓸지는 이 문서에서 정하지 않는다.** 결과를 보고 고르면 사전등록이
-아니기 때문이다. v1 의 `holdout_experiment_spec.json` 과 같은 방식으로 별도
-freeze 문서를 만들고, 그 안에 다음을 함께 못 박는다.
+**운영 정의다.** 각 backbone 이 서로 다른 생물학적·구조적 basin 에 대응한다고
+주장하지 않는다. coverage 를 세기 위한 design-context 단위일 뿐이다.
+
+근거는 M1 (`public_data/benchmark/gate0/m1_basin_structure.json`) 이다. 홀드아웃
+RFD3 60 개, 타겟 내 120 쌍:
 
 ```
-basin_definition            backbone | structural_cluster
-clustering_method           B 를 고를 경우: 무엇으로 묶는가
-clustering_threshold        B 를 고를 경우: 어디서 자르는가
-informative_basin_rule      어떤 basin 이 정책을 구별할 수 없는가
-                            (v1 의 "모든 arm yield 0 또는 모든 arm yield 1" 에 대응)
-min_informative_basins      판정 최소 수 (v1 은 8 이었다)
-feasibility_endpoint        joint-pass 정의
-guardrail_margin            0.90 (SS2 에서 확정. freeze 문서에 값을 복사한다)
-budget_grid                 어느 B 에서 볼 것인가
+비자명 AND 안정인 임계값이 사실상 없다
+  complete linkage   1.0 Å 하나. 60 백본 → 59 클러스터 (병합 1 회)
+  single linkage     1.0 Å 과 3.0 Å. 후자는 13 개로 바닥(12)에 붙어 있다
+1.5–2.5 Å 에서 전체 백본의 58% 가 소속을 바꾼다
+2.0 Å 에서 linkage 만으로 42 vs 36
 ```
 
-동결 시점: **prospective evaluation 시작 전.** v1 에서 격자가 끝나기 전에 분산분해
-계획을 동결한 것과 같은 이유다.
+M1 이 말하는 것은 "1 backbone = 1 basin" 이 아니라 **"이 데이터에서는 backbone
+보다 더 적절한 안정적 중간 coverage unit 을 정의할 근거가 없다"** 다. 이 문구를
+그대로 유지한다 - 전자로 쓰면 측정하지 않은 것을 주장하게 된다.
 
-### 왜 지금 고르지 않는가
+### 다른 TaskProfile 은 자기 unit 을 갖는다
 
-두 후보가 다른 것을 잰다.
+```
+FixedBackboneRedesign   coverage_unit = backbone_id            (동결)
+AntigenTaskProfile      coverage_unit = backbone_id
+                        또는 validated structural cluster       (미정)
+Future task             domain-specific unit
+```
 
-- basin = backbone 이면 basin 수가 arm 수와 같고, "coverage" 는 사실상 "몇 개의
-  arm 을 살려 뒀는가" 다. 측정은 쉽지만 서로 거의 같은 backbone 두 개를 서로
-  다른 basin 으로 센다.
-- basin = structural cluster 면 진짜 design basin 에 가깝지만, 클러스터링 방법과
-  임계값이 결과를 바꾼다. 그리고 **현재 그 클러스터 구조를 재본 적이 없다** -
-  홀드아웃의 RFD3 60 개, Antigen 의 ~200 개 모두 서로 얼마나 다른지 모른다.
+**Antigen 을 기다리지 않는다.** Antigen 의 ~200 backbone 에서 나중에 명확한
+클러스터 구조가 나오더라도 그것은 AntigenTaskProfile 의 unit 문제이지 이 profile
+의 문제가 아니다. 서로 다른 task 를 억지로 같은 단위로 묶는 것이 오히려 Core 의
+generic 설계에 어긋난다.
 
-따라서 순서는: **먼저 클러스터 구조를 기술 통계로 재고 (판정 없이), 그 결과를
-보고 basin 정의를 동결하고, 그 다음에 prospective evaluation 을 시작한다.**
-기술 통계 단계에서는 정책 비교를 하지 않는다.
+```
+TaskProfile → coverage_unit 정의 → RAPID Core → 그 unit 들의 coverage 로 배분
+```
+
+Core 는 unit 이 무엇인지 모른다. 그것이 §B1 의 경계다.
+
+### 아직 동결하지 않은 것
+
+`coverage_unit` 은 정해졌지만 **endpoint 의 형태는 M2 뒤에 정한다.**
+
+```
+동결됨      coverage_unit = backbone_id
+            feasibility = joint-pass
+            guardrail = yield ratio >= 0.90
+            comparator = static/equal (primary), frozen v1 (secondary)
+            판정 = FC CI 가 0 제외 AND yield ratio 단측 하한 >= 0.90
+
+M2 뒤 동결   endpoint 가 binary count 인가 effective (exp H) 인가
+            budget_grid
+            informative unit 규칙과 최소 수
+```
+
+동결 문서: `docs/specs/rapid-v2-coverage-endpoint-freeze.md` (M2 뒤 작성).
 
 ## SS4. 이 endpoint 가 v1 과 다른 점
 
