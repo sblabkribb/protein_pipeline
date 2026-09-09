@@ -1,0 +1,487 @@
+{
+  "_measurable_incl_unvalidated": [
+    "aggregation",
+    "binding",
+    "developability",
+    "diversity",
+    "solubility",
+    "stability",
+    "structural_preservation"
+  ],
+  "_measurable_objectives": [
+    "diversity",
+    "solubility",
+    "structural_preservation"
+  ],
+  "antibody_design": {
+    "blocked_reason": "필요한 모델을 여기서 호출할 수 없다 — numbering: anarcii (not_wired), sequence_design: antifold (not_wired), structure_verify: alphafold3 (not_wired). 이 중 anarcii, antifold, alphafold3 은 bio model portal MCP 가 노출하므로 그 경로를 붙이면 전송 문제는 사라진다. 모델에 닿아도 실행할 수 없다. 무엇을 바꿔도 되는지 정하는 설계 정책이 없다 — backbone_generate: 백본이 움직여도 되는 잔기 범위. CDR only 와 interface contact FR 은 다른 arm 이다.; sequence_design: CDR/framework 마스크와 변이 상한. 비우면 IMGT 영역 전체가 바뀐다. 이 정책은 배선으로 풀리지 않는다. 다른 모델로 대체하지 않는다.",
+    "blockers": {
+      "design_policy": [
+        {
+          "model_id": "rfd3",
+          "requirement": "백본이 움직여도 되는 잔기 범위. CDR only 와 interface contact FR 은 다른 arm 이다.",
+          "stage": "backbone_generate"
+        },
+        {
+          "model_id": "antifold",
+          "requirement": "CDR/framework 마스크와 변이 상한. 비우면 IMGT 영역 전체가 바뀐다.",
+          "stage": "sequence_design"
+        }
+      ],
+      "transport": [
+        {
+          "access": {
+            "direct_client": false,
+            "portal_mcp": true
+          },
+          "availability": "not_wired",
+          "model_id": "anarcii",
+          "stage": "numbering"
+        },
+        {
+          "access": {
+            "direct_client": false,
+            "portal_mcp": true
+          },
+          "availability": "not_wired",
+          "model_id": "antifold",
+          "stage": "sequence_design"
+        },
+        {
+          "access": {
+            "direct_client": false,
+            "portal_mcp": true
+          },
+          "availability": "not_wired",
+          "model_id": "alphafold3",
+          "stage": "structure_verify"
+        }
+      ]
+    },
+    "cost_driver": "alphafold3",
+    "description": "Epitope-conditioned antibody design. Declared so a request for it gets an honest answer instead of being served by the monomer route.",
+    "display_name_en": "Antibody design",
+    "display_name_ko": "항체 설계",
+    "executable": false,
+    "objectives": [
+      "binding",
+      "developability"
+    ],
+    "purpose": "antibody_design",
+    "referral": "This route is not runnable here. The antibody design arms, the CDR/framework masks and the mutation caps are defined and exercised in the antigen pipeline's ROUTER_POLICY_V1.1. Route an antibody request there rather than approximating it with RAPID's monomer path, which has no concept of a framework position.",
+    "stages": [
+      {
+        "gate": "gate0",
+        "model_id": "anarcii",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "numbering",
+        "validated": false
+      },
+      {
+        "gate": null,
+        "model_id": "rfd3",
+        "required": true,
+        "requires_design_policy": "백본이 움직여도 되는 잔기 범위. CDR only 와 interface contact FR 은 다른 arm 이다.",
+        "stage": "backbone_generate",
+        "validated": false
+      },
+      {
+        "gate": null,
+        "model_id": "antifold",
+        "required": true,
+        "requires_design_policy": "CDR/framework 마스크와 변이 상한. 비우면 IMGT 영역 전체가 바뀐다.",
+        "stage": "sequence_design",
+        "validated": false
+      },
+      {
+        "gate": "gate1",
+        "model_id": "ppiformer_ddg",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "interface_screen",
+        "validated": false
+      },
+      {
+        "gate": "gate2",
+        "model_id": "alphafold3",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "structure_verify",
+        "validated": false
+      },
+      {
+        "gate": "gate2",
+        "model_id": "binder_score",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "interface_score",
+        "validated": false
+      }
+    ],
+    "unvalidated_stages": [
+      "numbering",
+      "backbone_generate",
+      "sequence_design",
+      "interface_screen",
+      "structure_verify",
+      "interface_score"
+    ],
+    "validated": false,
+    "validation_coverage": null
+  },
+  "conformational_ensemble_redesign": {
+    "blocked_reason": "",
+    "blockers": {
+      "design_policy": [],
+      "transport": []
+    },
+    "caveat": "The 2.0 A BioEmu acceptance cutoff currently rejects half the runs. Treat this route's backbone yield as cutoff-limited until that is re-tuned.",
+    "cost_driver": "colabfold",
+    "description": "Sample conformations with BioEmu and design against the ensemble rather than a single static backbone.",
+    "display_name_en": "Ensemble-based redesign",
+    "display_name_ko": "구조 앙상블 기반 재설계",
+    "executable": true,
+    "objectives": [
+      "solubility",
+      "structural_preservation",
+      "diversity"
+    ],
+    "observed_run_cost": {
+      "provenance": "measured",
+      "scope": "Gate 0 wave 3: 4 successful whole-pipeline runs, range 5907-13031 s. Four further runs failed, so this median describes the runs that survived the acceptance cutoff and understates the cost of obtaining a usable backbone.",
+      "source": "public_data/benchmark/gate0/wave_03_results.json",
+      "statistic": "median",
+      "unit": "s/run",
+      "value": 8952.0
+    },
+    "purpose": "conformational_ensemble_redesign",
+    "stages": [
+      {
+        "gate": null,
+        "model_id": "bioemu",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "backbone_generate",
+        "validated": true
+      },
+      {
+        "gate": "gate0",
+        "model_id": "mpnn_encoder",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "gate0_routing",
+        "validated": true
+      },
+      {
+        "gate": null,
+        "model_id": "proteinmpnn",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "sequence_design",
+        "validated": true
+      },
+      {
+        "gate": "gate1",
+        "model_id": "soluprot",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "cheap_filter",
+        "validated": true
+      },
+      {
+        "gate": "gate2",
+        "model_id": "colabfold",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "structure_verify",
+        "validated": true
+      }
+    ],
+    "unvalidated_stages": [],
+    "validated": true,
+    "validation_coverage": {
+      "description_ko": "BioEmu 앙상블 생성",
+      "fraction": 0.06,
+      "note": "BioEmu produced backbones for 4 of 62 targets. The same n=4 is why BioEmu source-specific temperature conclusions are reported as exploratory only. Calling this a validated purpose while calling the same four targets too few to conclude from is not consistent; the fraction has to travel with the label. Wave 3 also had 4 of 8 runs miss the 2.0 A acceptance cutoff.",
+      "source": "public_data/benchmark/gate0/backbones/backbone_labels.csv",
+      "stage": "backbone_generate",
+      "targets_attempted": 62,
+      "targets_with_output": 4
+    }
+  },
+  "de_novo_backbone_design": {
+    "blocked_reason": "",
+    "blockers": {
+      "design_policy": [],
+      "transport": []
+    },
+    "cost_driver": "colabfold",
+    "description": "Generate new backbones with RFD3, then design and verify sequences on them.",
+    "display_name_en": "De novo backbone design",
+    "display_name_ko": "신규 백본 설계",
+    "executable": true,
+    "objectives": [
+      "solubility",
+      "structural_preservation",
+      "diversity"
+    ],
+    "observed_run_cost": {
+      "provenance": "measured",
+      "scope": "Gate 0 wave 2: 14 successful whole-pipeline runs (MSA + RFD3 + ProteinMPNN + SoluProt + AF2), range 872-12514 s, 1 failure. AF2 ran SERIALLY because pipeline.py defaults DEFAULT_AF2_MAX_WORKERS to 1; setting PIPELINE_AF2_MAX_WORKERS=4 changes this number and it has not been re-measured under that setting.",
+      "source": "public_data/benchmark/gate0/wave_02_results.json",
+      "statistic": "median",
+      "unit": "s/run",
+      "value": 4720.4
+    },
+    "purpose": "de_novo_backbone_design",
+    "stages": [
+      {
+        "gate": null,
+        "model_id": "rfd3",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "backbone_generate",
+        "validated": true
+      },
+      {
+        "gate": "gate0",
+        "model_id": "mpnn_encoder",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "gate0_routing",
+        "validated": true
+      },
+      {
+        "gate": null,
+        "model_id": "proteinmpnn",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "sequence_design",
+        "validated": true
+      },
+      {
+        "gate": "gate1",
+        "model_id": "soluprot",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "cheap_filter",
+        "validated": true
+      },
+      {
+        "gate": "gate2",
+        "model_id": "colabfold",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "structure_verify",
+        "validated": true
+      }
+    ],
+    "unvalidated_stages": [],
+    "validated": true,
+    "validation_coverage": {
+      "description_ko": "RFD3 백본 생성",
+      "fraction": 0.26,
+      "improved": {
+        "change": "Target preprocessing added 2026-09-08 (first model only for NMR ensembles, drop CA-less residues and HETATM, drop records that reference atom serials, renumber from 1). Before it, RFD3 died on contig validation for targets whose numbering had gaps, and on UnindexFlaggedTokens for multi-model files.",
+        "fraction": 0.72,
+        "source": "public_data/benchmark/gate0/holdout_generation.json",
+        "targets_attempted": 18,
+        "targets_with_output": 13
+      },
+      "note": "RFD3 produced backbones for 16 of 62 targets in the campaign. Reporting this route as validated without the fraction overstates it: most failures were the 2.0 A target-RMSD acceptance gate and input handling, not the design step. The holdout rate is measured after the preprocessing fix on targets pre-filtered to single chain, 50-400 residues, so the two numbers are not directly comparable.",
+      "source": "public_data/benchmark/gate0/backbones/backbone_labels.csv",
+      "stage": "backbone_generate",
+      "targets_attempted": 62,
+      "targets_with_output": 16
+    }
+  },
+  "monomer_solubility_redesign": {
+    "blocked_reason": "",
+    "blockers": {
+      "design_policy": [],
+      "transport": []
+    },
+    "cost_driver": "colabfold",
+    "description": "Redesign an existing monomer for solubility while preserving its fold. This is the path Gate 0, Gate 1 and Gate 2 were measured on.",
+    "display_name_en": "Soluble monomer redesign",
+    "display_name_ko": "가용성 단량체 재설계",
+    "executable": true,
+    "objectives": [
+      "solubility",
+      "structural_preservation",
+      "diversity"
+    ],
+    "purpose": "monomer_solubility_redesign",
+    "stages": [
+      {
+        "gate": "gate0",
+        "model_id": "mpnn_encoder",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "gate0_routing",
+        "validated": true
+      },
+      {
+        "gate": null,
+        "model_id": "proteinmpnn",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "sequence_design",
+        "validated": true
+      },
+      {
+        "gate": "gate1",
+        "model_id": "soluprot",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "cheap_filter",
+        "validated": true
+      },
+      {
+        "gate": "gate2",
+        "model_id": "colabfold",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "structure_verify",
+        "validated": true
+      }
+    ],
+    "unvalidated_stages": [],
+    "validated": true,
+    "validation_coverage": {
+      "description_ko": "원본 backbone 사용",
+      "fraction": 0.92,
+      "note": "Gate 0 campaign, 62 CATH targets. 57 carry a native-backbone entry. The 5 that do not are targets where the native route produced no usable backbone. This is stage coverage, not design success.",
+      "source": "public_data/benchmark/gate0/backbones/backbone_labels.csv",
+      "stage": "backbone_generate",
+      "targets_attempted": 62,
+      "targets_with_output": 57
+    }
+  },
+  "protein_binder_design": {
+    "blocked_reason": "",
+    "blockers": {
+      "design_policy": [],
+      "transport": []
+    },
+    "caveat": "Gate 0's AUC was measured on MONOMER structural yield. Whether the same encoder representation routes binder targets is untested, which is why that stage is marked unvalidated on this route and not on the monomer route.",
+    "cost_driver": "colabfold",
+    "description": "Design a binder against a protein target. Adds two interface stages the monomer route does not have: a pre-fold ddG screen and a post-fold interface confidence score.",
+    "display_name_en": "Protein binder design",
+    "display_name_ko": "단백질 바인더 설계",
+    "executable": true,
+    "objectives": [
+      "binding",
+      "solubility",
+      "structural_preservation"
+    ],
+    "preferred_validator_note": "AF3 or Boltz-2 would fold the complex directly and give a chain-pair interface confidence. Neither has a client here, so this route verifies with ColabFold and scores the interface separately. That is a real limitation, not a design choice.",
+    "purpose": "protein_binder_design",
+    "stages": [
+      {
+        "gate": null,
+        "model_id": "rfd3",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "backbone_generate",
+        "validated": true
+      },
+      {
+        "gate": "gate0",
+        "model_id": "mpnn_encoder",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "gate0_routing",
+        "validated": false
+      },
+      {
+        "gate": null,
+        "model_id": "proteinmpnn",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "sequence_design",
+        "validated": true
+      },
+      {
+        "gate": "gate1",
+        "model_id": "soluprot",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "cheap_filter",
+        "validated": true
+      },
+      {
+        "gate": "gate1",
+        "model_id": "ppiformer_ddg",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "interface_screen",
+        "validated": false
+      },
+      {
+        "gate": "gate2",
+        "model_id": "colabfold",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "structure_verify",
+        "validated": true
+      },
+      {
+        "gate": "gate2",
+        "model_id": "binder_score",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "interface_score",
+        "validated": false
+      }
+    ],
+    "unvalidated_stages": [
+      "gate0_routing",
+      "interface_screen",
+      "interface_score"
+    ],
+    "validated": false,
+    "validation_coverage": null
+  },
+  "small_molecule_binding": {
+    "blocked_reason": "",
+    "blockers": {
+      "design_policy": [],
+      "transport": []
+    },
+    "caveat": "Docking scores are not affinities and RAPID has never calibrated them against any measurement. Use this route to generate poses, not to rank candidates.",
+    "cost_driver": "diffdock",
+    "description": "Dock a small molecule against a designed or native structure.",
+    "display_name_en": "Small-molecule binding",
+    "display_name_ko": "저분자 결합",
+    "executable": true,
+    "objectives": [
+      "binding"
+    ],
+    "purpose": "small_molecule_binding",
+    "stages": [
+      {
+        "gate": "gate2",
+        "model_id": "colabfold",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "structure_verify",
+        "validated": true
+      },
+      {
+        "gate": "gate2",
+        "model_id": "diffdock",
+        "required": true,
+        "requires_design_policy": "",
+        "stage": "docking",
+        "validated": false
+      }
+    ],
+    "unvalidated_stages": [
+      "docking"
+    ],
+    "validated": false,
+    "validation_coverage": null
+  }
+}
