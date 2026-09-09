@@ -1,0 +1,303 @@
+{
+  "profile": "rapid_structural_v1",
+  "status": "frozen",
+  "what_this_is": "전향 홀드아웃 위에서 확정한 v1 결과의 불변 기록. 원고가 인용하는 수치는 여기 적힌 해시의 파일에서 나온 것이다.",
+  "frozen_utc": "2026-09-09T00:47:57Z",
+  "git": {
+    "commit": "206ad78acd0667926689438ad647de28282a6dbd",
+    "branch": "rapid/gate0-allocation-holdout",
+    "describe": "v1.0.17-249-g206ad78-dirty",
+    "dirty_paths": [
+      "M figures/benchmark/fig12_backbone_ensemble_ablation.pdf",
+      " M figures/benchmark/fig12_backbone_ensemble_ablation.png",
+      " M figures/benchmark/fig13_structural_context_threeway_N9.pdf",
+      " M figures/benchmark/fig13_structural_context_threeway_N9.png",
+      " M figures/benchmark/fig2_surrogate_triage_budget.pdf",
+      " M figures/benchmark/fig2_surrogate_triage_budget.png",
+      " M figures/benchmark/fig_solu_monomer_threeway.pdf",
+      " M figures/benchmark/fig_solu_monomer_threeway.png",
+      " M public_data/benchmark/gate0/fold_artifact_archive.json",
+      " M public_data/benchmark/gate0/holdout_generation.json",
+      " M public_data/benchmark/gate0/holdout_targets.json",
+      " M scripts/benchmark/18_make_surrogate_triage_budget_figure.py",
+      " M scripts/benchmark/backbone_ensemble_ablation.py",
+      " M scripts/paper_runs/make_threeway_distribution_figures.py",
+      "?? docs/archive/",
+      "?? docs/figures/README.md",
+      "?? docs/figures/fig1_fullflow.png",
+      "?? docs/figures/fig2E_baseline.png",
+      "?? docs/figures/fig4_threeway_matched.png",
+      "?? docs/figures/figS10_monomer_matched.png",
+      "?? docs/figures/supp_figS13_sequence_space_coverage.png",
+      "?? docs/figures/supp_figS14_ensemble_diversity_2p0A.png",
+      "?? figures/benchmark/fig_solu_monomer_ablation.pdf",
+      "?? figures/benchmark/fig_solu_monomer_ablation.png",
+      "?? figures/benchmark/fig_solu_monomer_optA.png",
+      "?? figures/benchmark/figure1_orchestration.pdf",
+      "?? figures/benchmark/figure1_orchestration.png",
+      "?? figures/benchmark/table8_pooled_surrogate_scaling.tex",
+      "?? figures/benchmark/table_solu_monomer_ablation.tex",
+      "?? figures/fig1_simple.png",
+      "?? figures/submission/",
+      "?? public_data/benchmark/gate0/gate0_regularisation_sweep.json",
+      "?? public_data/benchmark/gate0/holdout_targets_pdb/1sh6A02.pdb",
+      "?? public_data/benchmark/gate0/holdout_targets_pdb/2je2A00.pdb",
+      "?? public_data/benchmark/gate0/holdout_targets_pdb/2yruA01.pdb",
+      "?? public_data/benchmark/gate0/holdout_targets_pdb/3f2pA01.pdb",
+      "?? public_data/benchmark/gate0/holdout_targets_pdb/5pc8A00.pdb",
+      "?? public_data/benchmark/gate0/holdout_targets_pdb/5xpdA02.pdb",
+      "?? public_data/benchmark/gate0/refold_manifest.json",
+      "?? public_data/benchmark/gate0/temperature_panel2/af2_analysis_order.json"
+    ]
+  },
+  "config": {
+    "thresholds": {
+      "soluprot_min": 0.5,
+      "plddt_min": 85.0,
+      "rmsd_max": 2.0
+    },
+    "threshold_provenance": {
+      "plddt_min": {
+        "value": 85.0,
+        "first_seen": "dc7cac0 (2026-01-06), 저장소 최초 커밋의 af2_plddt_cutoff 기본값",
+        "changed_since": false,
+        "basis": "convention_without_internal_calibration",
+        "note": "AF2 자체 신뢰 구간의 경계가 아니다. AF2 는 90 이상을 very high, 70~90 을 confident 로 나누는데 85 는 그 안쪽이라 외부 근거가 없다. rmsd_max=2.0 이 설계 문헌의 관례인 것과 달리 85 는 그런 지지도 없다.",
+        "sensitivity_panel1": "70~90 에서 전체 structural yield 는 0.623~0.367 로 크게 움직이지만 정보 백본 수는 2~5, 포화 백본은 10~13 으로 거의 그대로다. 패널 1 의 expand_backbones 판정은 임계값에 의존하지 않는다."
+      },
+      "rmsd_max": {
+        "value": 2.0,
+        "first_seen": "af2_rmsd_cutoff 기본값 (2026-01-28)",
+        "changed_since": false,
+        "basis": "convention_without_internal_calibration",
+        "note": "설계 문헌에서 널리 쓰이는 값이다. 다만 이 저장소가 보정한 값은 아니다."
+      },
+      "soluprot_min": {
+        "value": 0.5,
+        "first_seen": "dc7cac0 (2026-01-06), soluprot_cutoff 기본값",
+        "changed_since": false,
+        "basis": "convention_without_internal_calibration",
+        "note": "SoluProt 이 확률로 보고하는 값의 중점이다."
+      },
+      "how_to_change": "온도 패널이나 게이트 0 결과로 이 값들을 다시 고르지 않는다. 바꾸려면 결론을 내는 데 쓰지 않는 별도 보정 세트가 필요하다."
+    },
+    "metric": "rmsd_nonloop_order (22_refold_with_artifacts.fold_one 재사용)",
+    "metric_reference": "각 백본 자신의 PDB (게이트 0 규약)",
+    "protocol_fingerprint": {
+      "thresholds": {
+        "soluprot_min": 0.5,
+        "plddt_min": 85.0,
+        "rmsd_max": 2.0
+      },
+      "mpnn_settings": {
+        "use_soluble_model": true,
+        "model_name": "v_48_020",
+        "sampling_temp": 0.1,
+        "seed": 0,
+        "batch_size": 1
+      },
+      "sequences_per_backbone": 16,
+      "topup_sequences": 16,
+      "topup_yield_range": [
+        0.25,
+        0.75
+      ],
+      "tiers": [
+        0.5
+      ],
+      "backbones_per_run": 5,
+      "af2_calls_per_run": 80,
+      "af2_extra_flags": null
+    },
+    "generation_condition": {
+      "temperature": 0.1,
+      "mpnn": {
+        "use_soluble_model": true,
+        "model_name": "v_48_020",
+        "sampling_temp": 0.1,
+        "seed": 0,
+        "batch_size": 1
+      }
+    },
+    "grid_depth": 24
+  },
+  "cohort": {
+    "total_folds": 1728,
+    "ok": 1728,
+    "failed": 0,
+    "n_targets": 12,
+    "n_backbones": 72,
+    "rfd3_balanced_cohort": {
+      "n": 1440,
+      "of": 1440,
+      "n_backbones": 60,
+      "role": "primary - target/backbone/sequence 완전 균형, source 상수"
+    },
+    "native_backbones": {
+      "n": 288,
+      "role": "sensitivity only - 타겟당 1 개뿐이라 백본 수준 비교가 불균형해진다"
+    },
+    "metric_refusals": {
+      "n": 48,
+      "by_source": {
+        "target": 48
+      },
+      "why": "동결된 대응 규칙이 서열 길이와 기준 잔기 수가 다른 행의 RMSD 계산을 거부했다. 전부 native 백본이고 RFD3 주 코호트에는 없다."
+    }
+  },
+  "artifacts": {
+    "grid_folds": {
+      "path": "public_data/benchmark/gate0/holdout_grid/af2_order_metric.csv",
+      "present": true,
+      "sha256": "b7671558cd4f497b371374e5ac931ec418ff2fb62568767dabfb6e1fac65b6b3",
+      "bytes": 662959,
+      "rows": 1728
+    },
+    "grid_sequences": {
+      "path": "public_data/benchmark/gate0/holdout_grid/sequences.csv",
+      "present": true,
+      "sha256": "4939890813d2c54cb6786ccfd024f8e56345cbc88ee9634b78f0a6eac9ff15cd",
+      "bytes": 583792,
+      "rows": 1728
+    },
+    "grid_manifest": {
+      "path": "public_data/benchmark/gate0/holdout_grid/manifest.json",
+      "present": true,
+      "sha256": "79b66e1fd6dde1a5037d479a4d8801eee66387aed63017c5544652e9c7c78411",
+      "bytes": 1195
+    },
+    "holdout_targets": {
+      "path": "public_data/benchmark/gate0/holdout_targets.json",
+      "present": true,
+      "sha256": "9f932da571d7d547f0fc5371e21e66cf0e51baa2b0f31d9b0c62dc8db278179d",
+      "bytes": 13268
+    },
+    "frozen_experiment_spec": {
+      "path": "public_data/benchmark/gate0/holdout_experiment_spec.json",
+      "present": true,
+      "sha256": "0f9737aa38b4e8acba1c3ea5e5382247708023cb8658fee9f419b02b57e45a94",
+      "bytes": 8171
+    },
+    "primary_allocation_joint": {
+      "path": "public_data/benchmark/gate0/holdout_grid/prospective_allocation_validation_joint.json",
+      "present": true,
+      "sha256": "509b5dcda40afc1ca9f38fd881357f2b2fc7df8f91cd16c562507c853de7aa6e",
+      "bytes": 69617
+    },
+    "secondary_allocation_structural": {
+      "path": "public_data/benchmark/gate0/holdout_grid/prospective_allocation_validation_structural.json",
+      "present": true,
+      "sha256": "a06dc5783ca4b04f16dc833fd18bfd333ab354504018efaa288548d1ddc24516",
+      "bytes": 69628
+    },
+    "sensitivity_allocation_native": {
+      "path": "public_data/benchmark/gate0/holdout_grid/prospective_allocation_validation_native_sens.json",
+      "present": true,
+      "sha256": "2a10d24acbc7fa1e65dc57194d8c8d51a9230865067f2f73e56156deaa80c45b",
+      "bytes": 79583
+    },
+    "secondary_realized_compute": {
+      "path": "public_data/benchmark/gate0/holdout_grid/realized_compute_analysis.json",
+      "present": true,
+      "sha256": "d04785270c9c86735f0ac24392c56a2da7598b087b21c7804007f108706447fb",
+      "bytes": 27128
+    },
+    "variance_decomposition_primary": {
+      "path": "public_data/benchmark/gate0/holdout_grid/variance_decomposition_grid.json",
+      "present": true,
+      "sha256": "c646b797a5c25faa5fd57946698dfbe314f328d70090dd9dcd832e1b2032ceee",
+      "bytes": 10296
+    },
+    "variance_decomposition_supplementary": {
+      "path": "public_data/benchmark/gate0/variance_decomposition_structural.json",
+      "present": true,
+      "sha256": "82406bf462b198a7d8100dcf6bb3e2cfbf0f911c77a2216e618979dc65c24ff9",
+      "bytes": 1732
+    },
+    "gate0_target_level": {
+      "path": "public_data/benchmark/gate0/gate0_target_level.json",
+      "present": true,
+      "sha256": "61410f8e75efea45dfb8e64cbdc275cd224109638b6d847b831bef4e4b3b0bc2",
+      "bytes": 6995
+    },
+    "temperature_panel2": {
+      "path": "public_data/benchmark/gate0/temperature_panel2/af2_analysis_order_complete.json",
+      "present": true,
+      "sha256": "b3ee06ac9ed26a43be0bc68f4d39fe63487689b1895743bb4121f09a41c97291",
+      "bytes": 51202
+    },
+    "aggregation_no_go": {
+      "path": "public_data/benchmark/gate0/incremental_information_test.json",
+      "present": true,
+      "sha256": "c83a565c437d7364c17ac6a267454831a88d6d3da287273cf4821245f03c76f2",
+      "bytes": 4596
+    },
+    "stability_annotation": {
+      "path": "public_data/benchmark/gate0/stability_annotation_comparison.json",
+      "present": true,
+      "sha256": "1af1ed553b67382940a3981a4f79eacef1d3ac1e04bb7ff2b9652fde4f81bf43",
+      "bytes": 2127
+    },
+    "ligand_wiring_check": {
+      "path": "public_data/benchmark/gate0/ligand_pocket/self_docking.json",
+      "present": true,
+      "sha256": "9130257e4a8eeb0e8aa4afe1485137a7dae4f984914caddb350c04ceeaa6f9de",
+      "bytes": 10761
+    }
+  },
+  "code": {
+    "26_holdout_grid.py": {
+      "path": "scripts/transcoder/26_holdout_grid.py",
+      "present": true,
+      "sha256": "1d05973c38c15c31f6984a248d511db539be639adb9576cab09f4fe9e482c99d",
+      "bytes": 14409
+    },
+    "39_prospective_allocation_validation.py": {
+      "path": "scripts/transcoder/39_prospective_allocation_validation.py",
+      "present": true,
+      "sha256": "f2b4a31b60a905bc030746cda4f567705c7baed1b3ef491d3d176476ac63f9de",
+      "bytes": 25050
+    },
+    "40_variance_decomposition_grid.py": {
+      "path": "scripts/transcoder/40_variance_decomposition_grid.py",
+      "present": true,
+      "sha256": "6aac89eb8ad46e7bd7fdd4ffb9ced2e1bf4a58c08537b4fec967e2bd877bba29",
+      "bytes": 13145
+    },
+    "41_realized_compute_analysis.py": {
+      "path": "scripts/transcoder/41_realized_compute_analysis.py",
+      "present": true,
+      "sha256": "dc730003d1c8b57643568f2ee012bbcc27d16dd982ee8093b53e60511db706c1",
+      "bytes": 13097
+    },
+    "protocol.py": {
+      "path": "scripts/transcoder/rapid_sr/protocol.py",
+      "present": true,
+      "sha256": "02b021a23eb51ff5e27ec54f43df19b485f3c05a02bc646a7c1590288a189445",
+      "bytes": 9885
+    },
+    "allocation.py": {
+      "path": "pipeline-mcp/src/pipeline_mcp/allocation.py",
+      "present": true,
+      "sha256": "989e6ed4c0c5c678c9db951c681ffcff8b3f2a5b9851bd08dcce4a4d4d554d28",
+      "bytes": 21761
+    }
+  },
+  "endpoint_roles": {
+    "primary": "예산 상한 안에서 찾은 joint-pass 설계 수 (prospective_allocation_validation_joint.json). 동결 spec 그대로이며 사후 변경하지 않았다.",
+    "secondary_structural_label": "SoluProt 을 뺀 structural-pass 라벨의 같은 분석.",
+    "secondary_realized_compute": "실제로 쓴 호출 수 기준 분석 (realized_compute_analysis.json). 1 차를 대체하지 않고 병기한다.",
+    "sensitivity_native": "native 백본 포함."
+  },
+  "claims_not_supported": {
+    "ligand_self_docking": "배선 점검이다. DiffDock 은 PDBBind 로 학습했고 이 복합체들이 그 안에 있을 것이므로 성능 검증이 아니다.",
+    "stability_annotation": "annotation 과 tie-break 로만 쓴다. pooled 상관을 랭킹 근거로 쓰지 않는다 - 백본 내에서 부호가 뒤집힌다.",
+    "condition_exploration": "격자는 단일 조건(T=0.1)이다. Gate 1B 의 조건 탐색 축은 이 코호트에서 검증되지 않았다.",
+    "panel2_policy_performance": "패널 2 는 개발 패널이다. 정책 성능 수치를 거기서 인용하지 않는다."
+  },
+  "limits": [
+    "타겟 12 개다. 분산성분과 클러스터 부트스트랩의 정밀도가 그만큼만 된다.",
+    "RFD3 백본은 2.0 A 수용 게이트를 통과한 것들이다 - 기각된 백본의 변이는 관측되지 않았다.",
+    "정책 비교는 완전 관측된 격자의 비복원 재생이다. 온라인 실행이 아니다."
+  ]
+}

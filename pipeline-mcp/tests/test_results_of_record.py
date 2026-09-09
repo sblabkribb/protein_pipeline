@@ -89,9 +89,12 @@ def test_prospective_budget_row_matches(budget, places):
 
 
 def test_supersession_is_marked():
-    """대체된 값이 현행처럼 보이면 안 된다. 그 혼동이 애초의 실패였다."""
+    """보조 결과가 주 결과처럼 보이면 안 된다. 그 혼동이 애초의 실패였다."""
     doc = _doc()
-    assert "~~대체됨~~" in doc, "대체된 분해 값에 대체 표시가 없다"
+    assert "_보조(consistency)_" in doc, "온도 패널 분해 값에 보조 표시가 없다"
+    assert "두 값을 독립 반복으로 제시하면 안 된다" in doc, (
+        "선별된 코호트를 독립 반복으로 읽지 말라는 경고가 없다")
+    assert "타겟 12 개라는 한계는 유지된다" in doc, "12 타겟 한계가 빠졌다"
     # 0.756 은 "왜 이 파일이 있는가" 설명에 나온다. 금지 대상은 인용되는 값,
     # 즉 표 안의 숫자다. 본문 전체를 막으면 그 설명을 지워야 통과하게 된다.
     rows = [ln for ln in doc.splitlines() if ln.lstrip().startswith("|")]
@@ -104,3 +107,31 @@ def test_panel2_not_used_for_policy_claims():
     data = _load("temperature_panel2/af2_analysis_order_complete.json")
     assert data.get("valid_for_policy_performance_claims") is False
     assert "개발 패널" in _doc()
+
+
+def test_primary_endpoint_is_not_redefined():
+    """1 차 endpoint 는 사후에 바뀌지 않는다. 실현 계산량은 2 차로 따로 둔다."""
+    rc = _load("holdout_grid/realized_compute_analysis.json")
+    assert rc["relationship_to_primary"]["primary_unchanged"] is True
+    doc = _doc()
+    assert "### 2 차: 실제로 쓴 계산량" in doc, "2 차 분석이 1 차와 분리돼 있지 않다"
+    # 상한 120 의 1 차 값은 불리하더라도 그대로 실려 있어야 한다.
+    assert "-0.24" in doc, "상한 120 의 1 차 값 -0.24 가 문서에서 빠졌다"
+
+
+def test_ligand_is_not_a_performance_claim():
+    """배선 점검을 성능 검증으로 인용하면 안 된다."""
+    doc = _doc()
+    assert "**성능 검증이 아니다.**" in doc
+    data = _load("ligand_pocket/self_docking.json")
+    # 사본별 채점이 적용돼 있어야 두 지표가 같은 자리를 가리킨다.
+    ok = [x for x in data["results"] if x["status"] == "ok"]
+    assert ok and all("n_crystal_copies" in x or "n_copies" in x for x in ok), (
+        "사본 정보가 없다 - 사본을 합쳐 채점하던 판본일 수 있다")
+
+
+def test_stability_stays_annotation_only():
+    """pooled 상관을 랭킹 근거로 승격하지 않는다."""
+    doc = _doc()
+    assert "annotation 과 tie-break 로만" in doc
+    assert "SPURS 를 중재자로 추가하지 않는다" in doc
