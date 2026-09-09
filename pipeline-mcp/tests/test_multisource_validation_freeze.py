@@ -733,14 +733,23 @@ def test_the_freeze_blocks_full_msa_without_touching_scientific_thresholds():
     head = doc[:doc.index("## 0.")]
     assert "full MSA 24 타겟" in head and "시작 금지" in head
     assert "calibration_v2 타겟 선정      진행 가능" in head
-    assert "transport /" in head or "transport" in head
-    assert "실행 blocker" in head
-    # 추적 순서가 적혀 있어야 실행 계층을 고칠 수 있다
-    for step in ("response_keys", "raw response", "parser expected key",
-                 "파일 write path"):
-        assert step in head, f"추적 순서에 {step} 이 없다"
+    # 원인이 확정됐으면 가설이 아니라 원인과 위치가 적혀 있어야 한다
+    assert "a3m_gz_b64" in head, "확정된 응답 키가 없다"
+    assert "decode_a3m_gz_b64" in head, "배포 경로가 정상이라는 근거가 없다"
+    assert "진단 스크립트의 버그" in head
+    assert "타겟의 성질이 아니므로" in head, "판정을 타겟 성질로 읽지 말라는 문구가 없다"
+    # 무엇을 못 쟀는지, 무엇을 다시 해야 하는지
+    for missing in ("usable_hits", "median coverage", "median depth",
+                    "full_length_fraction"):
+        assert missing in head, f"못 측정한 항목 {missing} 이 없다"
+    assert "다시 돌려" in head, "재실행 조건이 없다"
     # scientific 기준은 건드리지 않는다
     assert "usable_hits < 10" in head
-    assert "고치지 않는다" in head
+    assert "바꾸지 않는다" in head, "scientific 기준 불변 선언이 없다"
+    assert "타겟을 더 늘려 확인하는 것" in head, "확인 방법 금지가 없다"
     p = _plan()
     assert p["msa"]["thresholds_unchanged"] is True
+    # 문서가 §8 의 기준을 다시 적지 않고 참조하는지 - 두 곳에 적으면 갈라진다
+    src = (ROOT / "pipeline-mcp" / "src" / "pipeline_mcp" / "bio" / "a3m.py").read_text(
+        encoding="utf-8")
+    assert "usable_hits < 10" in src, "코드의 경계가 바뀌었다"

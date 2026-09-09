@@ -9,21 +9,44 @@
 ```
 protocol freeze              진행 가능  ← 이 문서
 calibration_v2 타겟 선정      진행 가능
-full MSA 24 타겟              **시작 금지**
+full MSA 24 타겟              **시작 금지** (조건부 - 아래)
 ```
 
-MSA pilot 에서 길이가 다른 두 타겟이 각각 44.0 분 · 41.5 분 뒤에 `endpoint ok +
-빈 A3M` 으로 똑같이 끝났다. biological MSA insufficiency 보다 **transport /
-response parsing 문제**라는 가설이 훨씬 강하다.
-
-이것은 **설계 blocker 가 아니라 실행 blocker** 다. 따라서:
+**원인은 확정됐고 설계와 무관하다.** pilot 이 세 타겟(125 · 186 · 316 aa)에서
+각각 44.0 · 41.5 · 41.3 분 뒤 `endpoint ok + 빈 A3M` 으로 끝났다. 추적 결과:
 
 ```
-고친다        response_keys → raw response → parser expected key → 파일 write path
-              순서로 실행 계층을 추적한다
-고치지 않는다  usable_hits < 10 등 §8 의 scientific MSA 기준
+response_keys   a3m_gz_b64 · hit_count · query_id · query_length · task · tsv
+서버            A3M 을 gzip+base64 로 준다
+배포 경로       out.get("a3m_gz_b64") → bio.a3m.decode_a3m_gz_b64   정상
+pilot 스크립트   "a3m" / "a3m_text" 만 읽었다                        ← 여기
+```
+
+즉 **진단 스크립트의 버그**이고 MMseqs endpoint 나 배포 경로의 결함이 아니다.
+`48_msa_pilot.py` 를 고쳤고 `test_msa_pilot_transport.py` 가 pilot 과 배포가 같은
+키를 읽도록 묶는다.
+
+세 타겟의 `MSA_INFEASIBLE` 판정은 §3 규칙을 버그가 만든 빈 입력에 적용한 결과다.
+**타겟의 성질이 아니므로 타겟 선정에 쓰지 않는다.**
+
+### 그래서 무엇이 남았는가
+
+```
+해결됨    transport / response parsing
+유효함    타겟당 약 42 분 (배포 기본값, 길이 125-316 aa 에서 거의 일정)
+          24 타겟 직렬이면 약 17 시간
+못 쟀음   usable_hits · median coverage · median depth · full_length_fraction
+          payload 를 버렸으므로 이 pilot 은 MSA 품질을 측정하지 못했다
+```
+
+full MSA 를 여는 조건은 하나다 — **고친 스크립트로 pilot 을 다시 돌려 위 네 품질
+값을 실제로 관측하는 것.** 그 전에는 §8 의 feasibility contract 를 적용할 입력이
+없다.
+
+```
+바꾸지 않는다  usable_hits < 10 등 §8 의 scientific MSA 기준
               타겟 선정 · source · 후보 수 · tier
-확인 방법      타겟을 더 늘려 확인하지 않는다
+하지 않는다    타겟을 더 늘려 확인하는 것
 ```
 
 기계가 읽는 정본은 `public_data/benchmark/gate0/multisource_validation_plan.json`
