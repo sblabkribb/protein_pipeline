@@ -159,3 +159,64 @@ def test_prior_manifests_are_all_consulted_for_resume():
     for name in ("full_msa_manifest.json", "msa_probe_concurrency.json"):
         assert name in src, f"{name} 을 재개 후보로 읽지 않는다"
     assert "prev.setdefault" in src, "먼저 읽은 기록을 덮어쓴다"
+
+
+# ---- 동시성은 측정해서 기각했다. 다시 논쟁하지 않는다. ------------------
+
+PROBE = ROOT / "public_data" / "benchmark" / "gate0" / "msa_probe_concurrency.json"
+
+
+def test_the_concurrency_verdict_is_recorded_with_its_evidence():
+    """측정 없이 worker 를 늘리지 않도록 판정과 근거를 남긴다."""
+    if not PROBE.exists():
+        pytest.skip("동시성 probe 없음")
+    f = json.loads(PROBE.read_text(encoding="utf-8"))["concurrency_finding"]
+    assert f["verdict"] == "SERIALIZED"
+    assert len(f["evidence"]) >= 3
+    joined = " ".join(f["evidence"])
+    assert "4171.3" in joined, "probe 실측이 없다"
+    assert "2566.1" in joined, "main 이 느려지지 않았다는 근거가 없다"
+    assert f["consequence"]["parallel_workers"].startswith("이득 없음")
+    assert f["consequence"]["chosen"].startswith("직렬 수용")
+
+
+def test_the_queue_caveat_on_wall_seconds_is_recorded():
+    """큐가 있으면 client wall_seconds 에 대기가 섞인다. 비용으로 읽으면 틀린다."""
+    if not PROBE.exists():
+        pytest.skip("동시성 probe 없음")
+    c = json.loads(PROBE.read_text(encoding="utf-8"))["concurrency_finding"]["consequence"]
+    assert "2jvfA00" in c["wall_seconds_caveat"], "영향받은 타겟이 지목되지 않았다"
+    assert "타겟별 비용으로 읽지 않는다" in c["wall_seconds_caveat"]
+
+
+def test_gpu_and_threads_are_still_ruled_out_for_deployment_match():
+    if not PROBE.exists():
+        pytest.skip("동시성 probe 없음")
+    opts = " ".join(json.loads(PROBE.read_text(encoding="utf-8"))
+                    ["concurrency_finding"]["consequence"]["remaining_options"])
+    assert "배포 불일치이므로 하지 않는다" in opts
+    assert "use_gpu" in opts
+    # 러너 상수가 실제로 배포 기본값과 같은지 다시 확인한다
+    import dataclasses
+    from pipeline_mcp.models import PipelineRequest
+
+    def d(name):
+        fl = PipelineRequest.__dataclass_fields__[name]
+        return fl.default if fl.default is not dataclasses.MISSING else fl.default_factory()
+
+    m = _m()
+    assert m.USE_GPU == d("mmseqs_use_gpu") is False
+    assert m.THREADS == d("mmseqs_threads") == 4
+    assert m.MAX_SEQS == d("mmseqs_max_seqs") == 3000
+    assert m.TARGET_DB == d("mmseqs_target_db") == "uniref90"
+
+
+def test_the_probe_target_is_one_of_the_twenty_four():
+    """probe 가 목록 밖 타겟을 썼다면 40 분을 버린 것이다."""
+    if not PROBE.exists():
+        pytest.skip("동시성 probe 없음")
+    d = json.loads(PROBE.read_text(encoding="utf-8"))
+    probed = {e["domain"] for e in d["targets"]}
+    planned = {r["domain"] for r in _m().targets()}
+    assert probed <= planned, sorted(probed - planned)
+    assert "1ct7A00" in d["concurrency_finding"]["work_not_wasted"]

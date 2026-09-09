@@ -1,0 +1,153 @@
+{
+  "purpose": "동시성 probe. MMseqs 서버가 작업을 동시에 처리하는지 큐잉하는지 측정한다. 과학 결과가 아니다.",
+  "freeze_doc": "docs/specs/rapid-v2-multisource-validation-freeze.md",
+  "settings": {
+    "target_db": "uniref90",
+    "max_seqs": 3000,
+    "threads": 4,
+    "use_gpu": false,
+    "a3m_response_key": "a3m_gz_b64"
+  },
+  "conservation": {
+    "conservation_tiers": [
+      0.3,
+      0.5,
+      0.7
+    ],
+    "conservation_mode": "quantile",
+    "conservation_weighting": "none"
+  },
+  "conservation_note": "weighting=none 이므로 cluster TSV 가 필요하지 않다",
+  "a3m_note": "*.a3m 는 gitignored 다. 해시와 품질 지표만 남긴다.",
+  "not_done": [
+    "threshold 변경",
+    "타겟 선정 변경",
+    "tier 변경",
+    "후보 수 변경",
+    "품질로 타겟 골라내기"
+  ],
+  "n_planned": 1,
+  "n_done": 1,
+  "by_classification": {
+    "OK": 1
+  },
+  "targets": [
+    {
+      "cohort": "calibration_v2",
+      "domain": "1ct7A00",
+      "stratum": "50-150",
+      "length_aa": 50,
+      "pdb": "/opt/protein_pipeline/cath_train/1ct7A00.pdb",
+      "superfamily": "2.30.32.30",
+      "a3m_path": "public_data/benchmark/gate0/msa/1ct7A00/result.a3m",
+      "endpoint_status": "ok",
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "a3m_key_present": true,
+      "decode_ok": true,
+      "hit_count": 319,
+      "query_length": 50,
+      "query_id": "1ct7A00",
+      "query_consistent": {
+        "sent_length": 50,
+        "returned_length": 50,
+        "id_match": true,
+        "length_match": true
+      },
+      "a3m_bytes": 23420,
+      "a3m_sha256": "0af9b14d2967003b033aefdfdf83651b490260d466b0c2d72dc30a3ffca2a625",
+      "msa_quality": {
+        "usable_hits": 319,
+        "coverage": {
+          "min": 0.64,
+          "max": 1.0,
+          "mean": 0.8619435736677116,
+          "p25": 0.84,
+          "p50": 0.88,
+          "p75": 0.92
+        },
+        "depth": {
+          "min": 11.0,
+          "max": 319.0,
+          "mean": 274.96,
+          "p10": 145.10000000000002,
+          "p25": 260.0,
+          "p50": 319.0,
+          "p75": 319.0,
+          "p90": 319.0
+        },
+        "full_length_fraction": 0.9717868338557993,
+        "warnings": [],
+        "query_length": 50
+      },
+      "quality_medians": {
+        "usable_hits": 319,
+        "median_coverage": 0.88,
+        "median_depth": 319.0,
+        "full_length_fraction": 0.9717868338557993
+      },
+      "conservation": {
+        "query_length": 50,
+        "tiers": {
+          "0.3": 15,
+          "0.5": 25,
+          "0.7": 35
+        },
+        "fixed_positions_sha256": {
+          "0.3": "8af63f99af2936babe51dcece77372137230918bc094f65db392c8cbc1a260c5",
+          "0.5": "bda423976ec3af6ec9fa4227ddb5e96664fdd44fec6f6a91ca51259b5e96e4d4",
+          "0.7": "1abe642342d394b1ba52a8ab7223ff3198bbce9f92ba55c5a9c9c40fe6282813"
+        },
+        "query_length_matches_sequence": true
+      },
+      "wall_seconds": 4171.3,
+      "classification": "OK"
+    }
+  ],
+  "run_provenance": {
+    "code_sha": "78391f55100cff7a1833d1126a3480144f534734",
+    "code_sha_short": "78391f5",
+    "pinned_at_start": true,
+    "worktree_clean_for_code_paths": true,
+    "dirty_paths": [],
+    "script_sha256": {
+      "50_full_msa.py": "900728d20daaee79fcb3bf693dc83453dad31046b9c7773b0dfb3b88d0145d0e",
+      "48_msa_pilot.py": "cb7a172d1076590f192dddeb66da411ad51cd646924bb7c4f0acb541a2fbb1c8"
+    },
+    "started_utc": "2026-09-09T13:07:57Z"
+  },
+  "code_sha": "78391f55100cff7a1833d1126a3480144f534734",
+  "updated_utc": "2026-09-09T14:17:28Z",
+  "concurrency_finding": {
+    "verdict": "SERIALIZED",
+    "conclusion": "MMseqs 엔드포인트는 한 번에 한 작업만 처리한다 (job queue, 단일 슬롯). worker 를 늘려도 대기가 클라이언트에서 서버 큐로 이동할 뿐이고 처리량은 늘지 않는다.",
+    "timeline_utc": {
+      "main_target1_submitted": "~12:55",
+      "probe_submitted": "13:07:57",
+      "main_target1_finished": "~13:38",
+      "probe_finished": "14:17:28"
+    },
+    "evidence": [
+      "probe 벽시계 4171.3s (69.5분) - 단독 실행 실측 39.5-41.0분의 약 1.7배",
+      "probe 대기 추정 4171-~2400 = 29.5분 ≈ probe 제출 후 main target1 완료까지 30.9분",
+      "결정적: main target1 이 2566.1s (42.8분) 로 단독과 같다. 동시 실행 + 자원 경합이면 main 도 함께 느려져야 하는데 느려지지 않았다."
+    ],
+    "consequence": {
+      "parallel_workers": "이득 없음. --workers 는 1 로 유지한다.",
+      "wall_seconds_caveat": "큐가 있으면 client 측 wall_seconds 에 대기가 섞인다. probe 뒤에 제출된 main target2 (2jvfA00) 의 wall_seconds 는 약 40 분의 큐 대기를 포함하므로 타겟별 비용으로 읽지 않는다.",
+      "remaining_options": [
+        "GPU / threads 증가 - 배포 불일치이므로 하지 않는다 (배포가 (target_db,max_seqs,threads,use_gpu) 로 MSA 를 캐시한다)",
+        "MMseqs 서버 인스턴스 추가 - 인프라 변경",
+        "직렬 약 16 시간을 수용"
+      ],
+      "chosen": "직렬 수용. per-job 설정과 배포 일치를 건드리지 않는다."
+    },
+    "work_not_wasted": "probe 타겟 1ct7A00 은 24 개 목록의 3 번이다. A3M 이 저장됐으므로 본 실행이 산출물 재개로 건너뛴다."
+  }
+}
