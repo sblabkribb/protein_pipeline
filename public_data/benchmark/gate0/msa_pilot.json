@@ -1,0 +1,117 @@
+{
+  "purpose": "MSA operational pilot. 운영 가능성만 본다.",
+  "frozen_targets": {
+    "150-250": "1n81A00",
+    "250-400": "1rdrA01",
+    "50-150": "1j5uA01"
+  },
+  "settings": {
+    "target_db": "uniref90",
+    "max_seqs": 3000,
+    "threads": 4,
+    "use_gpu": false
+  },
+  "allowed_observations": [
+    "runtime",
+    "endpoint 응답",
+    "hang / empty A3M",
+    "usable_hits",
+    "기존 동결 warning 상태"
+  ],
+  "forbidden_actions": [
+    "MSA threshold 변경",
+    "타겟 선정 규칙 변경",
+    "tier 변경",
+    "filtering rule 변경"
+  ],
+  "not_inspected": [
+    "joint-pass",
+    "SoluProt",
+    "AF2",
+    "EFBC",
+    "kappa_pool",
+    "calibration 612"
+  ],
+  "results": [
+    {
+      "stratum": "150-250",
+      "domain": "1n81A00",
+      "length": 186,
+      "endpoint_status": "ok",
+      "a3m_bytes": 0,
+      "a3m_empty": true,
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "classification": "MSA_INFEASIBLE",
+      "wall_seconds": 2640.9
+    },
+    {
+      "stratum": "250-400",
+      "domain": "1rdrA01",
+      "length": 316,
+      "endpoint_status": "ok",
+      "a3m_bytes": 0,
+      "a3m_empty": true,
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "classification": "MSA_INFEASIBLE",
+      "wall_seconds": 2490.8
+    },
+    {
+      "stratum": "50-150",
+      "domain": "1j5uA01",
+      "length": 125,
+      "endpoint_status": "ok",
+      "a3m_bytes": 0,
+      "a3m_empty": true,
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "classification": "MSA_INFEASIBLE",
+      "wall_seconds": 2475.8
+    }
+  ],
+  "total_wall_seconds": 7607.5,
+  "code_sha": "898df935a8f8c6215b7d896bd43ef8653ddab9ec",
+  "utc": "2026-09-09T10:31:10Z",
+  "root_cause": {
+    "finding": "세 타겟 모두 endpoint_status=ok 이면서 a3m_bytes=0 이었다. response_keys 가 ['a3m_gz_b64','hit_count','query_id','query_length','task','tsv'] 이므로 서버는 A3M 을 gzip+base64 로 반환한다. 이 스크립트가 'a3m'/'a3m_text' 만 읽어서 빈 문자열을 받았다.",
+    "where": "scripts/transcoder/48_msa_pilot.py (진단 스크립트)",
+    "not_where": "pipeline-mcp/src/pipeline_mcp/pipeline.py 는 out.get('a3m_gz_b64') 를 bio.a3m.decode_a3m_gz_b64 로 디코딩한다. 배포 경로에는 이 문제가 없다.",
+    "classification": "diagnostic script bug. MMseqs endpoint 나 배포 경로의 결함이 아니다.",
+    "scientific_thresholds_changed": false,
+    "still_unknown": "usable_hits · median coverage · median depth · full_length_fraction. payload 를 버렸으므로 이 pilot 은 MSA 품질을 측정하지 못했다. 고친 스크립트로 다시 돌려야 한다.",
+    "operational_result_that_stands": {
+      "wall_seconds": [
+        2640.9,
+        2490.8,
+        2475.8
+      ],
+      "lengths_aa": [
+        186,
+        316,
+        125
+      ],
+      "mean_minutes": 42.3,
+      "note": "배포 기본값(target_db=uniref90 · max_seqs=3000 · threads=4 · use_gpu=False)에서 타겟당 약 42 분이고 길이 125-316 aa 에서 거의 일정하다. 24 타겟 직렬이면 약 17 시간이다."
+    }
+  },
+  "classification_note": "각 타겟의 MSA_INFEASIBLE 판정은 §3 규칙을 스크립트 버그가 만든 빈 입력에 적용한 결과다. 타겟의 성질이 아니므로 타겟 선정·threshold 에 쓰지 않는다."
+}
