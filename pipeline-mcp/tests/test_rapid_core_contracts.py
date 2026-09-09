@@ -166,14 +166,53 @@ FORBIDDEN = ("AF2", "AF3", "ESMFold", "SoluProt", "PPIformer", "Rosetta",
              "IMGT", "epitope", "antibody")
 
 
+CORE_DIR = ROOT / "pipeline-mcp" / "src" / "pipeline_mcp" / "rapid_core"
+
+
+def _core_modules():
+    """Core 본체만. profiles/ 는 Core 가 아니다.
+
+    경계가 여기다. profile 은 특정 정책을 표현하는 자리이므로 도메인 어휘를
+    써야 한다 - frozen v1 의 행동 이름 `verify_with_af2` 를 재현하려면 그
+    문자열이 어딘가에는 있어야 하고, 그 자리는 profile 이다. Core 는 그
+    문자열을 만들지 않고 profile 이 준 것을 그대로 쓴다.
+    """
+    return [p for p in sorted(CORE_DIR.rglob("*.py"))
+            if "profiles" not in p.parts]
+
+
 def test_core_package_has_no_model_names():
     """Core 는 무엇으로 쟀는지 몰라야 한다 (설계 §B2, Invariant 5)."""
-    core = ROOT / "pipeline-mcp" / "src" / "pipeline_mcp" / "rapid_core"
     hits = []
-    for path in sorted(core.rglob("*.py")):
+    for path in _core_modules():
         text = path.read_text(encoding="utf-8")
         for name in FORBIDDEN:
-            # 금지 목록을 정의한 이 테스트 자신은 대상이 아니다.
             if name.lower() in text.lower():
                 hits.append(f"{path.relative_to(ROOT)}: {name}")
     assert not hits, "Core 에 모델 이름이 있다:\n  " + "\n  ".join(hits)
+
+
+def test_core_does_not_import_the_frozen_policy_or_the_registry():
+    """Core 가 v1 이나 레지스트리를 부르면 generic 이 아니다."""
+    bad = []
+    for path in _core_modules():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped.startswith(("import ", "from ")):
+                continue
+            if stripped.startswith(("from .", "from __future__")):
+                continue
+            if any(m in stripped for m in
+                   ("allocation", "model_routing", "task_profile", "pipeline_mcp")):
+                bad.append(f"{path.relative_to(ROOT)}: {stripped}")
+    assert not bad, "Core 가 상위 모듈에 의존한다:\n  " + "\n  ".join(bad)
+
+
+def test_the_boundary_is_where_the_domain_words_live():
+    """profile 에는 도메인 어휘가 있어야 정상이다. 없으면 v1 재현이 불가능하다."""
+    profile = (CORE_DIR / "profiles" / "rapid_structural_v1.py")
+    if not profile.exists():
+        pytest.skip("v1 profile 없음")
+    text = profile.read_text(encoding="utf-8")
+    assert "verify_with_af2" in text, (
+        "frozen v1 의 행동 이름이 profile 에 없다 - 그러면 재현할 수 없다")

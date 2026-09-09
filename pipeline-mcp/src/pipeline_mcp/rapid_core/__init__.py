@@ -16,11 +16,20 @@ v1 (`pipeline_mcp.allocation`) 은 동결돼 있고 이 패키지가 그것을 �
 Phase 1 범위: contract 만. 어떤 실행 경로에도 연결하지 않는다.
 """
 
+from .arm import ArmSchema, DesignArm
+from .core import Decision, PolicyProfile, RapidCore
 from .evaluation import EvaluationResult, Validity
+from .observation import (
+    BetaBernoulliModel, BetaPosterior, ObservationModel, scaled_variance_signal,
+)
 from .permission import OperationalStatus, ScientificPermission, PermissionSet
 from .transform import ScoreTransform, TransformKey, TransformRegistry
 
 __all__ = [
+    "ArmSchema", "DesignArm",
+    "Decision", "PolicyProfile", "RapidCore",
+    "BetaBernoulliModel", "BetaPosterior", "ObservationModel",
+    "scaled_variance_signal",
     "EvaluationResult", "Validity",
     "OperationalStatus", "ScientificPermission", "PermissionSet",
     "ScoreTransform", "TransformKey", "TransformRegistry",
