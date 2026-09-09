@@ -1,0 +1,346 @@
+{
+  "purpose": "Phase 4B joint-pass posterior calibration 코호트. 성능 주장에 쓰지 않는다.",
+  "freeze_doc": "docs/specs/rapid-v2-phase4b-calibration-freeze.md",
+  "frozen_utc": "2026-09-09T06:03:59Z",
+  "seed": 20260909,
+  "design": {
+    "n_targets": 12,
+    "backbones_per_target": 5,
+    "sequences_per_backbone": 8,
+    "total_folds": 480,
+    "temperature": 0.1
+  },
+  "eligibility": {
+    "chains": 1,
+    "min_length": 50,
+    "max_length": 400
+  },
+  "strata": [
+    {
+      "label": "50-150",
+      "low": 50,
+      "high": 150
+    },
+    {
+      "label": "150-250",
+      "low": 150,
+      "high": 250
+    },
+    {
+      "label": "250-400",
+      "low": 250,
+      "high": 401
+    }
+  ],
+  "selection_inputs": [
+    "적격성",
+    "길이"
+  ],
+  "selection_excluded_inputs": [
+    "과거 yield",
+    "SoluProt 결과",
+    "structural-success 결과",
+    "joint-pass 결과",
+    "Gate 0 사전분포 점수"
+  ],
+  "exclusions": {
+    "used_targets": [
+      "1af7A01",
+      "1b5aA00",
+      "1b7eA01",
+      "1b8xA03",
+      "1bctA00",
+      "1bg5A03",
+      "1bxmA00",
+      "1c8zA00",
+      "1e9tA00",
+      "1eruA00",
+      "1hufA00",
+      "1jygA00",
+      "1koyA00",
+      "1ktuA00",
+      "1l5cA00",
+      "1nr3A00",
+      "1o8rA00",
+      "1sh6A02",
+      "1sp0A00",
+      "1tm9A00",
+      "1vprA02",
+      "1vsrA00",
+      "2iayA00",
+      "2je2A00",
+      "2jneA00",
+      "2jo7A00",
+      "2jokA01",
+      "2kjfA00",
+      "2pgsA03",
+      "2wejA00",
+      "2yruA01",
+      "3bqwA01",
+      "3es1A01",
+      "3f2pA01",
+      "3h7eA02",
+      "5fwaA02",
+      "5pc8A00",
+      "5xpdA02"
+    ],
+    "used_target_sources": {
+      "holdout_resolved": [
+        "1sh6A02",
+        "1sp0A00",
+        "1tm9A00",
+        "1vsrA00",
+        "2jokA01",
+        "3bqwA01",
+        "3es1A01",
+        "3f2pA01",
+        "3h7eA02",
+        "5fwaA02",
+        "5pc8A00",
+        "5xpdA02"
+      ],
+      "holdout_selected": [
+        "1sp0A00",
+        "1tm9A00",
+        "1vprA02",
+        "1vsrA00",
+        "2iayA00",
+        "2jo7A00",
+        "2jokA01",
+        "2pgsA03",
+        "3bqwA01",
+        "3es1A01",
+        "3h7eA02",
+        "5fwaA02"
+      ],
+      "holdout_reserve": [
+        "1sh6A02",
+        "2je2A00",
+        "2yruA01",
+        "3f2pA01",
+        "5pc8A00",
+        "5xpdA02"
+      ],
+      "temperature_sweep": [
+        "1af7A01",
+        "1b5aA00",
+        "1bctA00",
+        "1bg5A03",
+        "1bxmA00",
+        "1c8zA00",
+        "1e9tA00",
+        "1eruA00",
+        "1hufA00",
+        "1jygA00",
+        "1ktuA00",
+        "1l5cA00",
+        "1nr3A00",
+        "1o8rA00",
+        "2wejA00"
+      ],
+      "temperature_panel2": [
+        "1af7A01",
+        "1b5aA00",
+        "1b7eA01",
+        "1b8xA03",
+        "1hufA00",
+        "1jygA00",
+        "1koyA00",
+        "2jneA00",
+        "2kjfA00",
+        "2wejA00"
+      ]
+    },
+    "n_used_superfamilies": 38,
+    "why_superfamily": "근접 중복이 남으면 독립 코호트가 아니다"
+  },
+  "pool": {
+    "n_eligible": 219,
+    "by_stratum": {
+      "50-150": 92,
+      "150-250": 48,
+      "250-400": 79
+    }
+  },
+  "selected": [
+    {
+      "domain": "1ji8A01",
+      "split": "cath_train",
+      "length": 111,
+      "superfamily": "3.30.1420.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1ji8A01.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "1j0tA00",
+      "split": "cath_train",
+      "length": 78,
+      "superfamily": "1.10.2010.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1j0tA00.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "1q5zA00",
+      "split": "cath_train",
+      "length": 145,
+      "superfamily": "1.10.4110.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1q5zA00.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "2mq6A00",
+      "split": "cath_train",
+      "length": 142,
+      "superfamily": "3.30.960.10",
+      "pdb": "/opt/protein_pipeline/cath_train/2mq6A00.pdb",
+      "stratum": "50-150",
+      "role": "selected"
+    },
+    {
+      "domain": "1evsA00",
+      "split": "cath_train",
+      "length": 163,
+      "superfamily": "1.20.1250.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1evsA00.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "2r01A02",
+      "split": "cath_train",
+      "length": 191,
+      "superfamily": "2.20.180.10",
+      "pdb": "/opt/protein_pipeline/cath_train/2r01A02.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "5nazA00",
+      "split": "cath_train",
+      "length": 226,
+      "superfamily": "2.170.240.10",
+      "pdb": "/opt/protein_pipeline/cath_train/5nazA00.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "7o1zA01",
+      "split": "cath_train",
+      "length": 225,
+      "superfamily": "1.10.489.10",
+      "pdb": "/opt/protein_pipeline/cath_train/7o1zA01.pdb",
+      "stratum": "150-250",
+      "role": "selected"
+    },
+    {
+      "domain": "4y07A01",
+      "split": "cath_train",
+      "length": 333,
+      "superfamily": "3.90.1750.10",
+      "pdb": "/opt/protein_pipeline/cath_train/4y07A01.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    },
+    {
+      "domain": "3ps3A02",
+      "split": "cath_train",
+      "length": 300,
+      "superfamily": "3.30.1700.10",
+      "pdb": "/opt/protein_pipeline/cath_train/3ps3A02.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    },
+    {
+      "domain": "4poaA02",
+      "split": "cath_train",
+      "length": 309,
+      "superfamily": "3.30.250.10",
+      "pdb": "/opt/protein_pipeline/cath_train/4poaA02.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    },
+    {
+      "domain": "1y8aA02",
+      "split": "cath_val",
+      "length": 313,
+      "superfamily": "1.10.3870.10",
+      "pdb": "/opt/protein_pipeline/cath_val/1y8aA02.pdb",
+      "stratum": "250-400",
+      "role": "selected"
+    }
+  ],
+  "reserve": [
+    {
+      "domain": "1lpvA00",
+      "split": "cath_train",
+      "length": 52,
+      "superfamily": "4.10.1040.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1lpvA00.pdb",
+      "stratum": "50-150",
+      "role": "reserve",
+      "reserve_rank": 0
+    },
+    {
+      "domain": "2kqrA01",
+      "split": "cath_train",
+      "length": 113,
+      "superfamily": "3.30.1910.20",
+      "pdb": "/opt/protein_pipeline/cath_train/2kqrA01.pdb",
+      "stratum": "50-150",
+      "role": "reserve",
+      "reserve_rank": 1
+    },
+    {
+      "domain": "2m3cA01",
+      "split": "cath_train",
+      "length": 174,
+      "superfamily": "2.60.20.10",
+      "pdb": "/opt/protein_pipeline/cath_train/2m3cA01.pdb",
+      "stratum": "150-250",
+      "role": "reserve",
+      "reserve_rank": 0
+    },
+    {
+      "domain": "4nt8A00",
+      "split": "cath_train",
+      "length": 167,
+      "superfamily": "3.90.45.10",
+      "pdb": "/opt/protein_pipeline/cath_train/4nt8A00.pdb",
+      "stratum": "150-250",
+      "role": "reserve",
+      "reserve_rank": 1
+    },
+    {
+      "domain": "1ux6A01",
+      "split": "cath_train",
+      "length": 335,
+      "superfamily": "4.10.1080.10",
+      "pdb": "/opt/protein_pipeline/cath_train/1ux6A01.pdb",
+      "stratum": "250-400",
+      "role": "reserve",
+      "reserve_rank": 0
+    },
+    {
+      "domain": "2psbA00",
+      "split": "cath_train",
+      "length": 287,
+      "superfamily": "3.50.90.10",
+      "pdb": "/opt/protein_pipeline/cath_train/2psbA00.pdb",
+      "stratum": "250-400",
+      "role": "reserve",
+      "reserve_rank": 1
+    }
+  ],
+  "substitution_rule": "수용 게이트를 통과해 backbone 5 개를 채우지 못한 타겟은 같은 층의 예비로 reserve_rank 순서대로 교체한다. 결과를 보고 빼지 않는다.",
+  "not_for": [
+    "policy 비교",
+    "EFBC 계산",
+    "coverage 결론",
+    "confirmatory 주장"
+  ],
+  "code_sha": "07b50d37e392659dc32346b3339fa180bc99defe",
+  "self_sha256": "5b9460a9632ca9c7fe56dfed85dcd54fe43476a4019ec5f45ed9be95d82e7526"
+}
