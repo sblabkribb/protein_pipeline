@@ -94,3 +94,50 @@ def test_cohort_is_marked_not_for_performance_claims():
     d = _cohort()
     for claim in ("policy 비교", "EFBC 계산", "confirmatory 주장"):
         assert claim in d["not_for"], f"{claim} 가 금지 목록에 없다"
+
+
+# ---- 생성 후 확정된 코호트 -------------------------------------------------
+
+def _realized():
+    d = _cohort()
+    if "realized_cohort" not in d:
+        pytest.skip("아직 생성 전")
+    return d["realized_cohort"]
+
+
+def test_cohort_was_not_topped_up_or_trimmed():
+    """생성 결과를 보고 코호트를 수선하지 않았다."""
+    r = _realized()
+    counts = r["backbones_per_target"]
+    # 부족한 타겟이 5 로 채워졌다면 추가 생성을 준 것이다.
+    assert min(counts.values()) < 5, (
+        "모든 타겟이 5 개다 - 부족분을 사후에 채운 것은 아닌지 확인이 필요하다")
+    # 형제가 둘 이상인 타겟은 전부 남아 있어야 한다 (complete-case 아님)
+    partial = [t for t, n in counts.items() if 2 <= n < 5]
+    assert partial, "부분 형제 집합이 사라졌다 - complete-case 선택이 의심된다"
+    for t in partial:
+        assert t in r["informative_targets"], f"{t} 가 informative 에서 빠졌다"
+
+
+def test_only_zero_backbone_targets_are_excluded():
+    r = _realized()
+    for t, n in r["backbones_per_target"].items():
+        if n == 0:
+            assert t in r["generation_infeasible"]
+        else:
+            assert t in r["informative_targets"], f"{t} ({n} 개) 가 빠졌다"
+
+
+def test_fold_count_follows_from_the_realized_backbones():
+    r = _realized()
+    assert r["total_folds"] == r["n_backbones"] * r["sequences_per_backbone"]
+
+
+def test_loto_weighting_is_target_equal():
+    """불균형 코호트에서 단순 합산은 5-backbone 타겟을 과대 가중한다."""
+    r = _realized()
+    assert "타겟 동일 가중" in r["loto_weighting"]
+    freeze = (ROOT / "docs" / "specs" /
+              "rapid-v2-phase4b-calibration-freeze.md").read_text(encoding="utf-8")
+    assert "타겟 동일 가중" in freeze
+    assert "target-equal estimand" in freeze

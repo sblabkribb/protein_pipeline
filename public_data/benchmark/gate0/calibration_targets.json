@@ -359,5 +359,47 @@
       "rule": "게이트 0 와 같은 2.0 A target-RMSD 수용 기준.",
       "shortfall": "5 개를 못 채우면 같은 seed 로 생성을 이어간다. 그래도 못 채우면 그 타겟은 calibration generation-infeasible 로 표시하고, 타겟을 바꾸지 않는다."
     }
+  },
+  "realized_cohort": {
+    "frozen_after_generation_utc": "2026-09-09T06:44:46Z",
+    "rule": "생성 결과를 보고 코호트를 수선하지 않는다. 확보된 backbone 을 그대로 쓰고, 하나도 못 얻은 타겟만 generation-infeasible 로 뺀다.",
+    "backbones_per_target": {
+      "1evsA00": 5,
+      "1j0tA00": 5,
+      "1ji8A01": 5,
+      "1q5zA00": 5,
+      "1y8aA02": 5,
+      "2mq6A00": 4,
+      "2r01A02": 0,
+      "3ps3A02": 5,
+      "4poaA02": 5,
+      "4y07A01": 5,
+      "5nazA00": 2,
+      "7o1zA01": 5
+    },
+    "informative_targets": [
+      "1evsA00",
+      "1j0tA00",
+      "1ji8A01",
+      "1q5zA00",
+      "1y8aA02",
+      "2mq6A00",
+      "3ps3A02",
+      "4poaA02",
+      "4y07A01",
+      "5nazA00",
+      "7o1zA01"
+    ],
+    "n_informative_targets": 11,
+    "generation_infeasible": [
+      "2r01A02"
+    ],
+    "n_backbones": 51,
+    "sequences_per_backbone": 8,
+    "total_folds": 408,
+    "why_not_topped_up": "게이트 결과를 본 뒤 어려운 타겟에만 생성을 더 주면 코호트 구성이 관측된 생성 결과에 반응하게 된다.",
+    "why_not_complete_case": "5/5 를 채운 타겟만 쓰면 RFD3 생성이 쉬운 쪽으로 calibration population 이 치우친다.",
+    "loto_weighting": "타겟별 예측 개수로 정규화한 뒤 타겟 동일 가중 평균. 균형 설계에 암묵적이던 target-equal estimand 를 보존한다.",
+    "secondary_sensitivity": "5/5 를 채운 9 타겟만으로 같은 절차 (primary 를 바꾸는 데 쓰지 않는다)"
   }
 }
