@@ -191,8 +191,19 @@ def main() -> int:
                             dist[(a, b)] = kabsch_rmsd(bbs[a], bbs[b])
                 n_single += sum(1 for c in cluster_count(dist, keys, t, linkage) if len(c) == 1)
             singleton[str(t)] = round(n_single / total_bb, 4)
+        # 안정성을 눈대중이 아니라 수로 낸다: 임계값 한 칸당 클러스터 수가
+        # 전체 백본 수 대비 몇 % 움직이는가. 큰 값 = 그 구간에서 정의가 취약하다.
+        steps = {}
+        for a, b in zip(THRESHOLDS, THRESHOLDS[1:]):
+            steps[f"{a}->{b}"] = {
+                "delta_clusters": counts[a] - counts[b],
+                "per_angstrom": round((counts[a] - counts[b]) / (b - a), 1),
+                "fraction_of_backbones": round((counts[a] - counts[b]) / total_bb, 4),
+            }
         stability[linkage] = {
             "total_clusters_by_threshold": {str(t): counts[t] for t in THRESHOLDS},
+            "sensitivity_between_thresholds": steps,
+            "steepest_step": max(steps, key=lambda k: steps[k]["per_angstrom"]),
             "singleton_fraction_by_threshold": singleton,
             "collapses_to_one_at": next(
                 (str(t) for t in THRESHOLDS
@@ -215,11 +226,44 @@ def main() -> int:
             c = st["total_clusters_by_threshold"][str(t)]
             s = st["singleton_fraction_by_threshold"][str(t)]
             print(f"   {t:>4} Å  클러스터 {c:>3}  싱글턴 비율 {s:.2f}")
+        print(f"   가장 급변하는 구간: {st['steepest_step']} Å "
+              f"({st['sensitivity_between_thresholds'][st['steepest_step']]['delta_clusters']} 개 감소)")
         print(f"   전부 개별로 남는 최대 임계값: {st['all_distinct_up_to']}")
         print(f"   모든 타겟이 1 개로 합쳐지는 최소 임계값: {st['collapses_to_one_at']}")
 
+    # 관측된 사실만 계산한다. 어느 정의를 쓸지는 고르지 않는다.
+    # "비자명" = 타겟당 클러스터가 1 개도 아니고 백본 수와 같지도 않은 임계값.
+    # "안정" = 그 임계값 양옆 구간에서 백본의 10% 미만이 소속을 바꾼다.
+    n_bb = sum(per_target[x]["n_backbones"] for x in per_target)
+    n_targets = len(per_target)
+    verdict = {}
+    for linkage in LINKAGES:
+        st = stability[linkage]
+        counts = st["total_clusters_by_threshold"]
+        steps = st["sensitivity_between_thresholds"]
+        rows = []
+        for i, t in enumerate(THRESHOLDS):
+            c = counts[str(t)]
+            nontrivial = n_targets < c < n_bb
+            neighbours = [v["fraction_of_backbones"] for k, v in steps.items()
+                          if k.startswith(f"{t}->") or k.endswith(f"->{t}")]
+            worst = max(neighbours) if neighbours else 0.0
+            rows.append({"threshold": t, "clusters": c, "nontrivial": nontrivial,
+                         "max_neighbour_churn": round(worst, 4),
+                         "stable": worst < 0.10})
+        verdict[linkage] = {
+            "by_threshold": rows,
+            "nontrivial_and_stable": [r["threshold"] for r in rows
+                                      if r["nontrivial"] and r["stable"]],
+            "criterion": "비자명 = 타겟수 < 클러스터수 < 백본수 · "
+                         "안정 = 인접 구간 churn < 백본의 10%",
+        }
+
     out = {
         "purpose": "M1 - basin 구조 기술 통계. basin 정의를 고르지 않는다.",
+        "observed_stability_verdict": verdict,
+        "decision_still_open": "위 verdict 는 관측이지 선택이 아니다. basin 정의는 "
+                               "사람이 별도 freeze 문서에서 정한다.",
         "does_not_do": ["정책 비교", "FDBC 계산", "yield/성공률과의 상관",
                         "임계값 사후 선택"],
         "reads_labels": False,

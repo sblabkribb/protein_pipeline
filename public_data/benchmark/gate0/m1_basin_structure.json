@@ -1,0 +1,676 @@
+{
+  "purpose": "M1 - basin 구조 기술 통계. basin 정의를 고르지 않는다.",
+  "observed_stability_verdict": {
+    "complete": {
+      "by_threshold": [
+        {
+          "threshold": 0.5,
+          "clusters": 60,
+          "nontrivial": false,
+          "max_neighbour_churn": 0.0167,
+          "stable": true
+        },
+        {
+          "threshold": 1.0,
+          "clusters": 59,
+          "nontrivial": true,
+          "max_neighbour_churn": 0.05,
+          "stable": true
+        },
+        {
+          "threshold": 1.5,
+          "clusters": 56,
+          "nontrivial": true,
+          "max_neighbour_churn": 0.2333,
+          "stable": false
+        },
+        {
+          "threshold": 2.0,
+          "clusters": 42,
+          "nontrivial": true,
+          "max_neighbour_churn": 0.35,
+          "stable": false
+        },
+        {
+          "threshold": 2.5,
+          "clusters": 21,
+          "nontrivial": true,
+          "max_neighbour_churn": 0.35,
+          "stable": false
+        },
+        {
+          "threshold": 3.0,
+          "clusters": 15,
+          "nontrivial": true,
+          "max_neighbour_churn": 0.1,
+          "stable": false
+        },
+        {
+          "threshold": 4.0,
+          "clusters": 12,
+          "nontrivial": false,
+          "max_neighbour_churn": 0.05,
+          "stable": true
+        },
+        {
+          "threshold": 5.0,
+          "clusters": 12,
+          "nontrivial": false,
+          "max_neighbour_churn": 0.0,
+          "stable": true
+        }
+      ],
+      "nontrivial_and_stable": [
+        1.0
+      ],
+      "criterion": "비자명 = 타겟수 < 클러스터수 < 백본수 · 안정 = 인접 구간 churn < 백본의 10%"
+    },
+    "single": {
+      "by_threshold": [
+        {
+          "threshold": 0.5,
+          "clusters": 60,
+          "nontrivial": false,
+          "max_neighbour_churn": 0.0167,
+          "stable": true
+        },
+        {
+          "threshold": 1.0,
+          "clusters": 59,
+          "nontrivial": true,
+          "max_neighbour_churn": 0.0833,
+          "stable": true
+        },
+        {
+          "threshold": 1.5,
+          "clusters": 54,
+          "nontrivial": true,
+          "max_neighbour_churn": 0.3,
+          "stable": false
+        },
+        {
+          "threshold": 2.0,
+          "clusters": 36,
+          "nontrivial": true,
+          "max_neighbour_churn": 0.3333,
+          "stable": false
+        },
+        {
+          "threshold": 2.5,
+          "clusters": 16,
+          "nontrivial": true,
+          "max_neighbour_churn": 0.3333,
+          "stable": false
+        },
+        {
+          "threshold": 3.0,
+          "clusters": 13,
+          "nontrivial": true,
+          "max_neighbour_churn": 0.05,
+          "stable": true
+        },
+        {
+          "threshold": 4.0,
+          "clusters": 12,
+          "nontrivial": false,
+          "max_neighbour_churn": 0.0167,
+          "stable": true
+        },
+        {
+          "threshold": 5.0,
+          "clusters": 12,
+          "nontrivial": false,
+          "max_neighbour_churn": 0.0,
+          "stable": true
+        }
+      ],
+      "nontrivial_and_stable": [
+        1.0,
+        3.0
+      ],
+      "criterion": "비자명 = 타겟수 < 클러스터수 < 백본수 · 안정 = 인접 구간 churn < 백본의 10%"
+    }
+  },
+  "decision_still_open": "위 verdict 는 관측이지 선택이 아니다. basin 정의는 사람이 별도 freeze 문서에서 정한다.",
+  "does_not_do": [
+    "정책 비교",
+    "FDBC 계산",
+    "yield/성공률과의 상관",
+    "임계값 사후 선택"
+  ],
+  "reads_labels": false,
+  "scope": "타겟 안의 RFD3 백본끼리만. 다른 타겟의 백본은 다른 단백질이라 basin 질문에 답하지 못한다.",
+  "metric": "CA RMSD, Kabsch 중첩, 같은 길이일 때만",
+  "thresholds_fixed_before_data": [
+    0.5,
+    1.0,
+    1.5,
+    2.0,
+    2.5,
+    3.0,
+    4.0,
+    5.0
+  ],
+  "linkages": [
+    "complete",
+    "single"
+  ],
+  "overall_within_target_rmsd": {
+    "n_pairs": 120,
+    "min": 0.99,
+    "max": 3.512,
+    "median": 2.206,
+    "quartiles": [
+      1.908,
+      2.393
+    ]
+  },
+  "per_target": {
+    "1sh6A02": {
+      "n_backbones": 5,
+      "n_pairs": 10,
+      "rmsd": {
+        "min": 1.827,
+        "median": 2.093,
+        "max": 2.395
+      },
+      "clusters": {
+        "complete": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 4,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        },
+        "single": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 2,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        }
+      }
+    },
+    "1sp0A00": {
+      "n_backbones": 5,
+      "n_pairs": 10,
+      "rmsd": {
+        "min": 1.786,
+        "median": 2.011,
+        "max": 2.243
+      },
+      "clusters": {
+        "complete": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 3,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        },
+        "single": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 2,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        }
+      }
+    },
+    "1tm9A00": {
+      "n_backbones": 5,
+      "n_pairs": 10,
+      "rmsd": {
+        "min": 1.801,
+        "median": 2.3,
+        "max": 2.595
+      },
+      "clusters": {
+        "complete": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 3,
+          "2.5": 2,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        },
+        "single": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 3,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        }
+      }
+    },
+    "1vsrA00": {
+      "n_backbones": 5,
+      "n_pairs": 10,
+      "rmsd": {
+        "min": 1.262,
+        "median": 1.61,
+        "max": 1.808
+      },
+      "clusters": {
+        "complete": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 4,
+          "2.0": 1,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        },
+        "single": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 2,
+          "2.0": 1,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        }
+      }
+    },
+    "2jokA01": {
+      "n_backbones": 5,
+      "n_pairs": 10,
+      "rmsd": {
+        "min": 2.023,
+        "median": 2.3,
+        "max": 2.838
+      },
+      "clusters": {
+        "complete": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 5,
+          "2.5": 2,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        },
+        "single": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 5,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        }
+      }
+    },
+    "3bqwA01": {
+      "n_backbones": 5,
+      "n_pairs": 10,
+      "rmsd": {
+        "min": 1.661,
+        "median": 2.205,
+        "max": 2.424
+      },
+      "clusters": {
+        "complete": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 4,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        },
+        "single": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 3,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        }
+      }
+    },
+    "3es1A01": {
+      "n_backbones": 5,
+      "n_pairs": 10,
+      "rmsd": {
+        "min": 2.003,
+        "median": 2.914,
+        "max": 3.512
+      },
+      "clusters": {
+        "complete": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 5,
+          "2.5": 4,
+          "3.0": 3,
+          "4.0": 1,
+          "5.0": 1
+        },
+        "single": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 5,
+          "2.5": 3,
+          "3.0": 2,
+          "4.0": 1,
+          "5.0": 1
+        }
+      }
+    },
+    "3f2pA01": {
+      "n_backbones": 5,
+      "n_pairs": 10,
+      "rmsd": {
+        "min": 2.351,
+        "median": 2.625,
+        "max": 3.071
+      },
+      "clusters": {
+        "complete": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 5,
+          "2.5": 4,
+          "3.0": 2,
+          "4.0": 1,
+          "5.0": 1
+        },
+        "single": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 5,
+          "2.5": 3,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        }
+      }
+    },
+    "3h7eA02": {
+      "n_backbones": 5,
+      "n_pairs": 10,
+      "rmsd": {
+        "min": 1.851,
+        "median": 2.346,
+        "max": 2.732
+      },
+      "clusters": {
+        "complete": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 4,
+          "2.5": 2,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        },
+        "single": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 4,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        }
+      }
+    },
+    "5fwaA02": {
+      "n_backbones": 5,
+      "n_pairs": 10,
+      "rmsd": {
+        "min": 1.963,
+        "median": 2.276,
+        "max": 2.495
+      },
+      "clusters": {
+        "complete": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 4,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        },
+        "single": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 4,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        }
+      }
+    },
+    "5pc8A00": {
+      "n_backbones": 5,
+      "n_pairs": 10,
+      "rmsd": {
+        "min": 0.99,
+        "median": 1.431,
+        "max": 2.036
+      },
+      "clusters": {
+        "complete": {
+          "0.5": 5,
+          "1.0": 4,
+          "1.5": 2,
+          "2.0": 2,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        },
+        "single": {
+          "0.5": 5,
+          "1.0": 4,
+          "1.5": 2,
+          "2.0": 1,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        }
+      }
+    },
+    "5xpdA02": {
+      "n_backbones": 5,
+      "n_pairs": 10,
+      "rmsd": {
+        "min": 1.831,
+        "median": 1.915,
+        "max": 2.469
+      },
+      "clusters": {
+        "complete": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 2,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        },
+        "single": {
+          "0.5": 5,
+          "1.0": 5,
+          "1.5": 5,
+          "2.0": 1,
+          "2.5": 1,
+          "3.0": 1,
+          "4.0": 1,
+          "5.0": 1
+        }
+      }
+    }
+  },
+  "stability": {
+    "complete": {
+      "total_clusters_by_threshold": {
+        "0.5": 60,
+        "1.0": 59,
+        "1.5": 56,
+        "2.0": 42,
+        "2.5": 21,
+        "3.0": 15,
+        "4.0": 12,
+        "5.0": 12
+      },
+      "sensitivity_between_thresholds": {
+        "0.5->1.0": {
+          "delta_clusters": 1,
+          "per_angstrom": 2.0,
+          "fraction_of_backbones": 0.0167
+        },
+        "1.0->1.5": {
+          "delta_clusters": 3,
+          "per_angstrom": 6.0,
+          "fraction_of_backbones": 0.05
+        },
+        "1.5->2.0": {
+          "delta_clusters": 14,
+          "per_angstrom": 28.0,
+          "fraction_of_backbones": 0.2333
+        },
+        "2.0->2.5": {
+          "delta_clusters": 21,
+          "per_angstrom": 42.0,
+          "fraction_of_backbones": 0.35
+        },
+        "2.5->3.0": {
+          "delta_clusters": 6,
+          "per_angstrom": 12.0,
+          "fraction_of_backbones": 0.1
+        },
+        "3.0->4.0": {
+          "delta_clusters": 3,
+          "per_angstrom": 3.0,
+          "fraction_of_backbones": 0.05
+        },
+        "4.0->5.0": {
+          "delta_clusters": 0,
+          "per_angstrom": 0.0,
+          "fraction_of_backbones": 0.0
+        }
+      },
+      "steepest_step": "2.0->2.5",
+      "singleton_fraction_by_threshold": {
+        "0.5": 1.0,
+        "1.0": 0.9667,
+        "1.5": 0.9,
+        "2.0": 0.5,
+        "2.5": 0.1333,
+        "3.0": 0.0333,
+        "4.0": 0.0,
+        "5.0": 0.0
+      },
+      "collapses_to_one_at": "4.0",
+      "all_distinct_up_to": "0.5"
+    },
+    "single": {
+      "total_clusters_by_threshold": {
+        "0.5": 60,
+        "1.0": 59,
+        "1.5": 54,
+        "2.0": 36,
+        "2.5": 16,
+        "3.0": 13,
+        "4.0": 12,
+        "5.0": 12
+      },
+      "sensitivity_between_thresholds": {
+        "0.5->1.0": {
+          "delta_clusters": 1,
+          "per_angstrom": 2.0,
+          "fraction_of_backbones": 0.0167
+        },
+        "1.0->1.5": {
+          "delta_clusters": 5,
+          "per_angstrom": 10.0,
+          "fraction_of_backbones": 0.0833
+        },
+        "1.5->2.0": {
+          "delta_clusters": 18,
+          "per_angstrom": 36.0,
+          "fraction_of_backbones": 0.3
+        },
+        "2.0->2.5": {
+          "delta_clusters": 20,
+          "per_angstrom": 40.0,
+          "fraction_of_backbones": 0.3333
+        },
+        "2.5->3.0": {
+          "delta_clusters": 3,
+          "per_angstrom": 6.0,
+          "fraction_of_backbones": 0.05
+        },
+        "3.0->4.0": {
+          "delta_clusters": 1,
+          "per_angstrom": 1.0,
+          "fraction_of_backbones": 0.0167
+        },
+        "4.0->5.0": {
+          "delta_clusters": 0,
+          "per_angstrom": 0.0,
+          "fraction_of_backbones": 0.0
+        }
+      },
+      "steepest_step": "2.0->2.5",
+      "singleton_fraction_by_threshold": {
+        "0.5": 1.0,
+        "1.0": 0.9667,
+        "1.5": 0.8667,
+        "2.0": 0.4333,
+        "2.5": 0.0667,
+        "3.0": 0.0167,
+        "4.0": 0.0,
+        "5.0": 0.0
+      },
+      "collapses_to_one_at": "4.0",
+      "all_distinct_up_to": "0.5"
+    }
+  },
+  "length_mismatch_pairs": [],
+  "how_to_read": {
+    "stable": "임계값을 조금 움직여도 클러스터 수가 완만하면, 그 구간 어디를 잡아도 같은 구조를 본다는 뜻이다.",
+    "fragile": "급변하면 그 정의는 basin 축으로 쓰기에 취약하다.",
+    "next_step": "이 결과를 보고 사람이 basin 정의를 고르고 별도 freeze 문서에 못 박는다. 이 스크립트는 고르지 않는다."
+  },
+  "code_sha": "35812cfc6e83e2fc60d1482ba870a9475da8aeb9",
+  "utc": "2026-09-09T02:31:09Z"
+}
