@@ -1,0 +1,394 @@
+{
+  "phase": "1_backbone_generation",
+  "holdout_spec": "public_data/benchmark/gate0/calibration_targets.json",
+  "composition": {
+    "rfd3": 5
+  },
+  "stop_after": "rfd3",
+  "start_from": "rfd3",
+  "target_preprocess": {
+    "steps": [
+      "다중 모델이면 첫 모델만",
+      "CA 없는 잔기의 ATOM 과 HETATM 제거",
+      "strip_nonpositive_resseq",
+      "renumber_resseq_from_1"
+    ],
+    "why": "RFD3 contig 는 잔기번호 범위 하나다. CA 없는 잔기가 번호에 끼면 contig 가 원자 배열에 없는 잔기를 가리켜 검증에서 죽는다. 12 타겟 전부 같은 전처리를 거친다 - 일부만 바꾸면 생성 경로가 섞여 교란이 된다.",
+    "staged_dir": "public_data/benchmark/gate0/holdout_targets_pdb",
+    "metric_note": "동결된 지표는 서열 순서로 대응하므로 기준 구조의 잔기번호가 바뀌어도 RMSD 는 변하지 않는다. native 기준 구조는 staged_pdb 를 쓴다 - 설계가 실제로 올라간 구조다."
+  },
+  "why_skip_msa": "RFD3 는 타겟 구조에 조건을 걸고 MSA 를 읽지 않는다. 첫 시도에서 mmseqs_msa 단계에 50 분 동안 멈춰 있었고 (mmseqs 프로세스는 없었다) MSA 산출물은 비어 있었다. 백본만 만드는 데 MSA 는 낭비다.",
+  "why_stop_after_rfd3": "격자를 따로 채우므로 표준 실행의 16 폴드를 내지 않는다. ColabFold 를 쓰지 않아 다른 폴딩과 경합하지 않는다.",
+  "seed": 20260909,
+  "protocol_fingerprint": {
+    "thresholds": {
+      "soluprot_min": 0.5,
+      "plddt_min": 85.0,
+      "rmsd_max": 2.0
+    },
+    "mpnn_settings": {
+      "use_soluble_model": true,
+      "model_name": "v_48_020",
+      "sampling_temp": 0.1,
+      "seed": 0,
+      "batch_size": 1
+    },
+    "sequences_per_backbone": 16,
+    "topup_sequences": 16,
+    "topup_yield_range": [
+      0.25,
+      0.75
+    ],
+    "tiers": [
+      0.5
+    ],
+    "backbones_per_run": 5,
+    "af2_calls_per_run": 80,
+    "af2_extra_flags": null
+  },
+  "started_utc": "2026-09-09T06:19:59Z",
+  "runs": [
+    {
+      "domain": "1ji8A01",
+      "stratum": "50-150",
+      "length": 111,
+      "run_id": "calib_1ji8A01_rfd3",
+      "preprocess": {
+        "source_pdb": "/opt/protein_pipeline/cath_train/1ji8A01.pdb",
+        "staged_pdb": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/1ji8A01.pdb",
+        "n_models": 20,
+        "took_first_model": true,
+        "before": {
+          "n_residues": 111,
+          "first": 1,
+          "last": 111,
+          "gaps": 0
+        },
+        "after": {
+          "n_residues": 111,
+          "first": 1,
+          "last": 111,
+          "gaps": 0
+        }
+      },
+      "started_at": "2026-09-09T15:20:00+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 60.3
+    },
+    {
+      "domain": "1j0tA00",
+      "stratum": "50-150",
+      "length": 78,
+      "run_id": "calib_1j0tA00_rfd3",
+      "preprocess": {
+        "source_pdb": "/opt/protein_pipeline/cath_train/1j0tA00.pdb",
+        "staged_pdb": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/1j0tA00.pdb",
+        "n_models": 10,
+        "took_first_model": true,
+        "before": {
+          "n_residues": 78,
+          "first": 0,
+          "last": 77,
+          "gaps": 0
+        },
+        "after": {
+          "n_residues": 77,
+          "first": 1,
+          "last": 77,
+          "gaps": 0
+        }
+      },
+      "started_at": "2026-09-09T15:21:00+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 30.1
+    },
+    {
+      "domain": "1q5zA00",
+      "stratum": "50-150",
+      "length": 145,
+      "run_id": "calib_1q5zA00_rfd3",
+      "preprocess": {
+        "source_pdb": "/opt/protein_pipeline/cath_train/1q5zA00.pdb",
+        "staged_pdb": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/1q5zA00.pdb",
+        "n_models": 0,
+        "took_first_model": false,
+        "before": {
+          "n_residues": 145,
+          "first": 513,
+          "last": 657,
+          "gaps": 0
+        },
+        "after": {
+          "n_residues": 145,
+          "first": 1,
+          "last": 145,
+          "gaps": 0
+        }
+      },
+      "started_at": "2026-09-09T15:21:30+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 120.6
+    },
+    {
+      "domain": "2mq6A00",
+      "stratum": "50-150",
+      "length": 142,
+      "run_id": "calib_2mq6A00_rfd3",
+      "preprocess": {
+        "source_pdb": "/opt/protein_pipeline/cath_train/2mq6A00.pdb",
+        "staged_pdb": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/2mq6A00.pdb",
+        "n_models": 10,
+        "took_first_model": true,
+        "before": {
+          "n_residues": 142,
+          "first": 1,
+          "last": 142,
+          "gaps": 0
+        },
+        "after": {
+          "n_residues": 142,
+          "first": 1,
+          "last": 142,
+          "gaps": 0
+        }
+      },
+      "started_at": "2026-09-09T15:23:31+0900",
+      "error": "BackboneContractError: RFD3 target RMSD gate accepted only 4 backbone(s) for requested 5. Rejected 11 backbone(s) above cutoff 2.000A.",
+      "n_designs": 4,
+      "status": "failed",
+      "elapsed_s": 121.0
+    },
+    {
+      "domain": "1evsA00",
+      "stratum": "150-250",
+      "length": 163,
+      "run_id": "calib_1evsA00_rfd3",
+      "preprocess": {
+        "source_pdb": "/opt/protein_pipeline/cath_train/1evsA00.pdb",
+        "staged_pdb": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/1evsA00.pdb",
+        "n_models": 0,
+        "took_first_model": false,
+        "before": {
+          "n_residues": 163,
+          "first": 4,
+          "last": 187,
+          "gaps": 21
+        },
+        "after": {
+          "n_residues": 163,
+          "first": 1,
+          "last": 163,
+          "gaps": 0
+        }
+      },
+      "started_at": "2026-09-09T15:25:32+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 60.4
+    },
+    {
+      "domain": "2r01A02",
+      "stratum": "150-250",
+      "length": 191,
+      "run_id": "calib_2r01A02_rfd3",
+      "preprocess": {
+        "source_pdb": "/opt/protein_pipeline/cath_train/2r01A02.pdb",
+        "staged_pdb": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/2r01A02.pdb",
+        "n_models": 0,
+        "took_first_model": false,
+        "before": {
+          "n_residues": 191,
+          "first": 13,
+          "last": 207,
+          "gaps": 4
+        },
+        "after": {
+          "n_residues": 191,
+          "first": 1,
+          "last": 191,
+          "gaps": 0
+        }
+      },
+      "started_at": "2026-09-09T15:26:32+0900",
+      "n_designs": 0,
+      "status": "failed",
+      "error": "designs 0/5 - runner 는 완료를 보고했다. summary.json 의 errors 를 본다.",
+      "elapsed_s": 90.8
+    },
+    {
+      "domain": "5nazA00",
+      "stratum": "150-250",
+      "length": 226,
+      "run_id": "calib_5nazA00_rfd3",
+      "preprocess": {
+        "source_pdb": "/opt/protein_pipeline/cath_train/5nazA00.pdb",
+        "staged_pdb": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/5nazA00.pdb",
+        "n_models": 0,
+        "took_first_model": false,
+        "before": {
+          "n_residues": 226,
+          "first": 4,
+          "last": 229,
+          "gaps": 0
+        },
+        "after": {
+          "n_residues": 226,
+          "first": 1,
+          "last": 226,
+          "gaps": 0
+        }
+      },
+      "started_at": "2026-09-09T15:28:03+0900",
+      "error": "BackboneContractError: RFD3 target RMSD gate accepted only 2 backbone(s) for requested 5. Rejected 13 backbone(s) above cutoff 2.000A.",
+      "n_designs": 2,
+      "status": "failed",
+      "elapsed_s": 121.4
+    },
+    {
+      "domain": "7o1zA01",
+      "stratum": "150-250",
+      "length": 225,
+      "run_id": "calib_7o1zA01_rfd3",
+      "preprocess": {
+        "source_pdb": "/opt/protein_pipeline/cath_train/7o1zA01.pdb",
+        "staged_pdb": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/7o1zA01.pdb",
+        "n_models": 0,
+        "took_first_model": false,
+        "before": {
+          "n_residues": 225,
+          "first": 25,
+          "last": 249,
+          "gaps": 0
+        },
+        "after": {
+          "n_residues": 225,
+          "first": 1,
+          "last": 225,
+          "gaps": 0
+        }
+      },
+      "started_at": "2026-09-09T15:30:04+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 90.7
+    },
+    {
+      "domain": "4y07A01",
+      "stratum": "250-400",
+      "length": 333,
+      "run_id": "calib_4y07A01_rfd3",
+      "preprocess": {
+        "source_pdb": "/opt/protein_pipeline/cath_train/4y07A01.pdb",
+        "staged_pdb": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/4y07A01.pdb",
+        "n_models": 0,
+        "took_first_model": false,
+        "before": {
+          "n_residues": 333,
+          "first": 492,
+          "last": 865,
+          "gaps": 41
+        },
+        "after": {
+          "n_residues": 333,
+          "first": 1,
+          "last": 333,
+          "gaps": 0
+        }
+      },
+      "started_at": "2026-09-09T15:31:35+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 289.8
+    },
+    {
+      "domain": "3ps3A02",
+      "stratum": "250-400",
+      "length": 300,
+      "run_id": "calib_3ps3A02_rfd3",
+      "preprocess": {
+        "source_pdb": "/opt/protein_pipeline/cath_train/3ps3A02.pdb",
+        "staged_pdb": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/3ps3A02.pdb",
+        "n_models": 0,
+        "took_first_model": false,
+        "before": {
+          "n_residues": 300,
+          "first": 1,
+          "last": 300,
+          "gaps": 0
+        },
+        "after": {
+          "n_residues": 300,
+          "first": 1,
+          "last": 300,
+          "gaps": 0
+        }
+      },
+      "started_at": "2026-09-09T15:36:25+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 60.7
+    },
+    {
+      "domain": "4poaA02",
+      "stratum": "250-400",
+      "length": 309,
+      "run_id": "calib_4poaA02_rfd3",
+      "preprocess": {
+        "source_pdb": "/opt/protein_pipeline/cath_train/4poaA02.pdb",
+        "staged_pdb": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/4poaA02.pdb",
+        "n_models": 0,
+        "took_first_model": false,
+        "before": {
+          "n_residues": 309,
+          "first": 4,
+          "last": 330,
+          "gaps": 18
+        },
+        "after": {
+          "n_residues": 309,
+          "first": 1,
+          "last": 309,
+          "gaps": 0
+        }
+      },
+      "started_at": "2026-09-09T15:37:26+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 30.3
+    },
+    {
+      "domain": "1y8aA02",
+      "stratum": "250-400",
+      "length": 313,
+      "run_id": "calib_1y8aA02_rfd3",
+      "preprocess": {
+        "source_pdb": "/opt/protein_pipeline/cath_val/1y8aA02.pdb",
+        "staged_pdb": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/1y8aA02.pdb",
+        "n_models": 0,
+        "took_first_model": false,
+        "before": {
+          "n_residues": 313,
+          "first": -2,
+          "last": 310,
+          "gaps": 0
+        },
+        "after": {
+          "n_residues": 310,
+          "first": 1,
+          "last": 310,
+          "gaps": 0
+        }
+      },
+      "started_at": "2026-09-09T15:37:56+0900",
+      "n_designs": 5,
+      "status": "ok",
+      "elapsed_s": 45.3
+    }
+  ],
+  "finished_utc": "2026-09-09T06:38:41Z",
+  "n_ok": 9,
+  "n_failed": 3
+}

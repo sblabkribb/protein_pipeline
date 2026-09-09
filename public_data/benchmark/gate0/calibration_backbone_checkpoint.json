@@ -1,0 +1,284 @@
+{
+  "phase": "4B_backbone_checkpoint",
+  "freeze_doc": "docs/specs/rapid-v2-phase4b-calibration-freeze.md",
+  "run_prefix": "calib",
+  "seed": 20260909,
+  "target_backbones": 60,
+  "obtained_backbones": 51,
+  "targets_complete": 9,
+  "targets_short": [
+    "2mq6A00",
+    "2r01A02",
+    "5nazA00"
+  ],
+  "shortfall_cause": "전부 2.0 A target-RMSD 수용 게이트. runner 오류가 아니다.",
+  "reserve_used": 0,
+  "reserve_reason": "없음. 동결 규칙상 생성 결과를 본 뒤에는 타겟을 바꾸지 않는다.",
+  "not_inspected": [
+    "joint-pass",
+    "SoluProt",
+    "pLDDT",
+    "EFBC",
+    "coverage acquisition",
+    "downstream yield"
+  ],
+  "per_target": [
+    {
+      "target": "1evsA00",
+      "run_id": "calib_1evsA00_rfd3",
+      "status": "ok",
+      "n_backbones": 5,
+      "generation_order": [
+        "rfd3_inputs_spec-1_0_model_0.pdb",
+        "rfd3_inputs_spec-1_0_model_0_retry_1_1.pdb",
+        "rfd3_inputs_spec-1_0_model_2.pdb",
+        "rfd3_inputs_spec-1_0_model_3.pdb",
+        "rfd3_inputs_spec-1_0_model_4.pdb"
+      ],
+      "sha256": [
+        "f33428735b3f46c49644a5afc815ae9ffcb6b1ab91cdf52a0076705fc5a9f71a",
+        "a6f6d68e98494fa5937c4147533f76639d3cd4664e790e34e6f8c97927acc12e",
+        "08fad9a531ddb59873cba7b4fac67a2beb8b27120224f65ab1d790a5bb36454a",
+        "e0c7dbdea2647faf52e30f5a38db27311e6dc8efa19da0100f363580b2c8d670",
+        "8eaf03a371f6b127276a84c46afa0869b1fc6001b74e869014c32643e43b1462"
+      ],
+      "gate_accepted": null,
+      "gate_rejected": null,
+      "complete": true
+    },
+    {
+      "target": "1j0tA00",
+      "run_id": "calib_1j0tA00_rfd3",
+      "status": "ok",
+      "n_backbones": 5,
+      "generation_order": [
+        "rfd3_inputs_spec-1_0_model_0.pdb",
+        "rfd3_inputs_spec-1_0_model_1.pdb",
+        "rfd3_inputs_spec-1_0_model_2.pdb",
+        "rfd3_inputs_spec-1_0_model_3.pdb",
+        "rfd3_inputs_spec-1_0_model_4.pdb"
+      ],
+      "sha256": [
+        "49ff71bb0aed385878631cc30d2af1781caf97a0a3206baa73803cce1dee7f16",
+        "fff255c310294f8b293420c28ca5d8bc0d46a9d9071fb53cc808b373ef8c3b82",
+        "e38abcdc78cbd0e667e96556f3e9fc8427fe8fb29e1c1864eb45deaae1645b73",
+        "9ac85532f57439d5679e6e9bec49ee7fadcac50aa54b9184706cf9252556b259",
+        "22066e8b71f16c0293524d0d9823dc2eee57db15c8bc5d42a4c4d4ef196a2e5b"
+      ],
+      "gate_accepted": null,
+      "gate_rejected": null,
+      "complete": true
+    },
+    {
+      "target": "1ji8A01",
+      "run_id": "calib_1ji8A01_rfd3",
+      "status": "ok",
+      "n_backbones": 5,
+      "generation_order": [
+        "rfd3_inputs_spec-1_0_model_0_retry_1_1.pdb",
+        "rfd3_inputs_spec-1_0_model_1.pdb",
+        "rfd3_inputs_spec-1_0_model_1_retry_1_2.pdb",
+        "rfd3_inputs_spec-1_0_model_3.pdb",
+        "rfd3_inputs_spec-1_0_model_4.pdb"
+      ],
+      "sha256": [
+        "57c69dedbe70eb874a0de6ed2c1d32461e0610892553dfc0f773875cac191627",
+        "03f0000898343b5b5033014eca1be782bfd037b1cf4f116bfc2de0e822009083",
+        "c8f9e89f79fdaa68eb2da43ecbde36b8868386190b9efa6aa3f063cfe71cdd77",
+        "cf26b6a070ca1473e515c64c43a7c22cfac48e8164f3b022c0f76baebcc449c2",
+        "bfef56e9828cb9fb37532fa1f4306872c0e495e4a2a962a22b4042d742863150"
+      ],
+      "gate_accepted": null,
+      "gate_rejected": null,
+      "complete": true
+    },
+    {
+      "target": "1q5zA00",
+      "run_id": "calib_1q5zA00_rfd3",
+      "status": "ok",
+      "n_backbones": 5,
+      "generation_order": [
+        "rfd3_inputs_spec-1_0_model_0_retry_3_1.pdb",
+        "rfd3_inputs_spec-1_0_model_1.pdb",
+        "rfd3_inputs_spec-1_0_model_2.pdb",
+        "rfd3_inputs_spec-1_0_model_3.pdb",
+        "rfd3_inputs_spec-1_0_model_4.pdb"
+      ],
+      "sha256": [
+        "50908197f009897d33ae3d022efcb87aa627f5eb8e71a94988175d2a1ae8cf95",
+        "71eea415763bba026f36b5ed70f691c455f039dc79e59f763d85ab53394d35b4",
+        "d43f456b98c492ae080efa5b44cfea28b1de401b18bb1f09cdff6429e99965ac",
+        "e623be9e40d6b400fb747110983b20ecfb3067641ce54fea45c6dda7ee5c448f",
+        "5e87476d68aac953797bf3c4541fe424b3bb5631592fe94dc28f97d6a5fa6f98"
+      ],
+      "gate_accepted": null,
+      "gate_rejected": null,
+      "complete": true
+    },
+    {
+      "target": "1y8aA02",
+      "run_id": "calib_1y8aA02_rfd3",
+      "status": "ok",
+      "n_backbones": 5,
+      "generation_order": [
+        "rfd3_inputs_spec-1_0_model_0.pdb",
+        "rfd3_inputs_spec-1_0_model_1.pdb",
+        "rfd3_inputs_spec-1_0_model_2.pdb",
+        "rfd3_inputs_spec-1_0_model_3.pdb",
+        "rfd3_inputs_spec-1_0_model_4.pdb"
+      ],
+      "sha256": [
+        "33c669c21569140d0cbe195cdf65fd116fd4938fe18a1df82395302ffab239d8",
+        "0f4fae46ce5481c796f0921945b23ff5116df499992647f60eba8ef945a1967e",
+        "5135fc51e422da3265ef7081b36c47fd217601a50f26f295ff19af284894b103",
+        "b00fdf7d34c01b622b2d26c920adce1e956dfe3b48b34f0c6f9d5ea0d87dd0f5",
+        "90d7e4a8ae047d06f3a825cddbb024f7ebf14e30f3bb72f4f90edd6c24b18d99"
+      ],
+      "gate_accepted": null,
+      "gate_rejected": null,
+      "complete": true
+    },
+    {
+      "target": "2mq6A00",
+      "run_id": "calib_2mq6A00_rfd3",
+      "status": "failed",
+      "n_backbones": 4,
+      "generation_order": [
+        "rfd3_inputs_spec-1_0_model_0_retry_1_1.pdb",
+        "rfd3_inputs_spec-1_0_model_1_retry_3_2.pdb",
+        "rfd3_inputs_spec-1_0_model_2_retry_3_3.pdb",
+        "rfd3_inputs_spec-1_0_model_3.pdb"
+      ],
+      "sha256": [
+        "ca87a0035202f00fb7d1c3d22b0475cea2d2a824376241b7e86fba1189f9dbdb",
+        "810c372728eaa5e080ea5d20add99d9ee93471f269f92ddb9ef67f8b1ad69a85",
+        "49b9ec5890bd92656461ec3847e10bfefb1d980f2ee1dc1bf2fe56beb460c370",
+        "91254c3d232cff8aa542b52267263f85b0105a961e7ea4365f549530837ddc94"
+      ],
+      "gate_accepted": 4,
+      "gate_rejected": 11,
+      "complete": false
+    },
+    {
+      "target": "2r01A02",
+      "run_id": "calib_2r01A02_rfd3",
+      "status": "failed",
+      "n_backbones": 0,
+      "generation_order": [],
+      "sha256": [],
+      "gate_accepted": 0,
+      "gate_rejected": 15,
+      "complete": false
+    },
+    {
+      "target": "3ps3A02",
+      "run_id": "calib_3ps3A02_rfd3",
+      "status": "ok",
+      "n_backbones": 5,
+      "generation_order": [
+        "rfd3_inputs_spec-1_0_model_0.pdb",
+        "rfd3_inputs_spec-1_0_model_0_retry_1_1.pdb",
+        "rfd3_inputs_spec-1_0_model_1.pdb",
+        "rfd3_inputs_spec-1_0_model_2.pdb",
+        "rfd3_inputs_spec-1_0_model_3.pdb"
+      ],
+      "sha256": [
+        "b2e9bbb8e5a3b3674b0ddf6f83d3d773e88bc83580794bac5439123bc6f21131",
+        "027835fb016d93db5bb876ef4bc09bb796bdecbb1f5a0b5148801daf0d2190a5",
+        "173d8aeb5a0ba02ade5c4e7996f08dad0cb1e17d781418580a037044de436f41",
+        "204fcb157a8a7bf23e9494e1a1006997456381fb7a5292b9c12083a8ff1e7325",
+        "4ef3077dafce916825e0c9da1cd9107b835b3750b5ad94bc9cbb930266bc445a"
+      ],
+      "gate_accepted": null,
+      "gate_rejected": null,
+      "complete": true
+    },
+    {
+      "target": "4poaA02",
+      "run_id": "calib_4poaA02_rfd3",
+      "status": "ok",
+      "n_backbones": 5,
+      "generation_order": [
+        "rfd3_inputs_spec-1_0_model_0.pdb",
+        "rfd3_inputs_spec-1_0_model_1.pdb",
+        "rfd3_inputs_spec-1_0_model_2.pdb",
+        "rfd3_inputs_spec-1_0_model_3.pdb",
+        "rfd3_inputs_spec-1_0_model_4.pdb"
+      ],
+      "sha256": [
+        "0e94337ebaa80236e953c84c3680694874bbfd614fa6931c7224a9402f3a61c1",
+        "4104de1e96116ec32d031b0deb7a36792f783fc61271bed85d817a5d50d67768",
+        "dbfad0ca7d57bb5caad95925873cda9a85fa3d58e6e87470ea3870ff98204438",
+        "a1e9b35e31e46ed09e47ca72e0dd1675afe6134c1ddf2ea508923b368521c7c4",
+        "bda6e08555aaa82e0b3e75d85e4882a47c28942bf951b259dceb8d6443977907"
+      ],
+      "gate_accepted": null,
+      "gate_rejected": null,
+      "complete": true
+    },
+    {
+      "target": "4y07A01",
+      "run_id": "calib_4y07A01_rfd3",
+      "status": "ok",
+      "n_backbones": 5,
+      "generation_order": [
+        "rfd3_inputs_spec-1_0_model_0_retry_8_1.pdb",
+        "rfd3_inputs_spec-1_0_model_1.pdb",
+        "rfd3_inputs_spec-1_0_model_1_retry_2_2.pdb",
+        "rfd3_inputs_spec-1_0_model_2.pdb",
+        "rfd3_inputs_spec-1_0_model_4.pdb"
+      ],
+      "sha256": [
+        "682cc1af15ca0f8817d1edf7faebd02880e720ceffa9388d3986a6a4f76c1ed2",
+        "c210e3c4f5a0b423258e0cab32e19aa96d18e784723d6954f9fd617b307fd48e",
+        "d37151477b9dbf28abe231e0ec0300ed32f32da0a3ae3bc4a65a29c4af178a74",
+        "6110ecb4b4c3732ae3981161cef2dc74ef60b2f97c7786b987d8d5edfc9041f5",
+        "46fee648b28a0ef3e9b6809c536be3df992032cc57e75feb0f75d4ab46dc5845"
+      ],
+      "gate_accepted": null,
+      "gate_rejected": null,
+      "complete": true
+    },
+    {
+      "target": "5nazA00",
+      "run_id": "calib_5nazA00_rfd3",
+      "status": "failed",
+      "n_backbones": 2,
+      "generation_order": [
+        "rfd3_inputs_spec-1_0_model_1.pdb",
+        "rfd3_inputs_spec-1_0_model_1_retry_3_2.pdb"
+      ],
+      "sha256": [
+        "2eb6ba7d0e2d5ce29043e9881bf30e6daf217e0af609b91f9360639e1cac1d6d",
+        "0a4e9b5d09287af38eeb7c36094e96a23723a64df9e6d44e9cb5b0785e190bd3"
+      ],
+      "gate_accepted": 2,
+      "gate_rejected": 13,
+      "complete": false
+    },
+    {
+      "target": "7o1zA01",
+      "run_id": "calib_7o1zA01_rfd3",
+      "status": "ok",
+      "n_backbones": 5,
+      "generation_order": [
+        "rfd3_inputs_spec-1_0_model_0.pdb",
+        "rfd3_inputs_spec-1_0_model_0_retry_2_1.pdb",
+        "rfd3_inputs_spec-1_0_model_1.pdb",
+        "rfd3_inputs_spec-1_0_model_1_retry_1_2.pdb",
+        "rfd3_inputs_spec-1_0_model_4.pdb"
+      ],
+      "sha256": [
+        "5e07ee883851aad921197d510f3f1171c7b32ebf0cd8f402422ed7010c828849",
+        "dbbeea5181dc2dd9abccb96fbd98fc1329601648e0037c6ffed07df63f6b1637",
+        "bcde0ecdb6e74b8d456243416bdd4201679f6d511141cbde47d784e7c959bab6",
+        "05e10c8de07f45d8d357d4611c0408e9fe3756335137901d5074b349ece03922",
+        "a38a478799b54453756dd945c95795be26e758f02d8b4538f6232d5812fd4e9c"
+      ],
+      "gate_accepted": null,
+      "gate_rejected": null,
+      "complete": true
+    }
+  ],
+  "utc": "2026-09-09T06:44:46Z"
+}
