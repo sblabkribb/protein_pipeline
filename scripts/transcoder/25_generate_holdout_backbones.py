@@ -133,6 +133,14 @@ def stage_target(pdb_path: Path, domain: str) -> tuple[Path, dict]:
                  "before": ca_stats(raw), "after": ca_stats(processed)}
 
 
+def _repo_relative(path: str) -> str:
+    resolved = Path(path).resolve()
+    try:
+        return str(resolved.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(resolved)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--holdout", default=str(BASE / "holdout_targets.json"))
@@ -163,7 +171,9 @@ def main(argv=None) -> int:
 
     report = {
         "phase": "1_backbone_generation",
-        "holdout_spec": str(Path(args.holdout).relative_to(PROJECT_ROOT)),
+        # 상대 경로로 넘어오면 relative_to 가 죽는다. 먼저 resolve 한다 -
+        # 28_ 에서 같은 실수를 했다.
+        "holdout_spec": _repo_relative(args.holdout),
         "composition": dict(plan["composition"]),
         "stop_after": "rfd3",
         "start_from": "rfd3",
@@ -194,8 +204,10 @@ def main(argv=None) -> int:
         "runs": [],
     }
 
-    print(f"홀드아웃 {len(targets)} 타겟 · 타겟당 native 1 + RFD3 "
-          f"{plan['composition']['rfd3']}")
+    # composition 을 그대로 읽는다. "native 1" 을 글자로 박아 두면 RFD3 전용
+    # 코호트에서 없는 백본을 있다고 말한다.
+    comp = ", ".join(f"{k} {v}" for k, v in plan["composition"].items())
+    print(f"{len(targets)} 타겟 · 타겟당 {comp}")
     if args.dry_run:
         for row in targets:
             print(f"  [dry-run] {row['domain']:10s} {row['length']:4d} 잔기 "
