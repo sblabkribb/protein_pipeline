@@ -143,8 +143,15 @@ def test_full_runner_covers_exactly_the_twenty_four_frozen_targets():
 
 
 def test_full_runner_is_resumable_and_does_not_reselect_on_quality():
+    """재개 동작 자체는 test_full_msa_resume.py 가 검증한다.
+
+    여기서는 경로가 존재하는지와, 품질로 타겟을 골라내지 않는다는 선언만 본다.
+    문자열을 고정하면 구현을 고칠 때마다 깨진다 - manifest 기반에서 산출물
+    기반으로 바꿨을 때 실제로 그렇게 됐다.
+    """
     src = FULL.read_text(encoding="utf-8")
-    assert "a3m_sha256" in src and "해시 일치" in src, "재개 경로가 없다"
+    assert "def from_artifact(" in src, "재개 경로가 없다"
+    assert "a3m_sha256" in src
     assert "품질로 타겟 골라내기" in src, "품질 기반 선별 금지가 없다"
     # MSA 는 타겟 수준이므로 실행 경로가 source 로 갈라지지 않아야 한다.
     # docstring 의 설명("두 source 에 동일하게 매핑")은 허용한다.

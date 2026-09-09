@@ -9,8 +9,15 @@ MSA 는 backbone 생성기와 무관하므로 **source 마다 다시 돌리지 �
 설정은 배포 기본값을 `PipelineRequest` 에서 직접 읽는다. 여기 상수를 다시 적으면
 배포와 갈라지고, 그것이 이번 검증 전체가 존재하는 이유였다.
 
-재개 가능하다. 타겟당 약 42 분이고 24 개면 약 17 시간이므로, 중간에 끊겨도
-이미 만든 A3M 은 다시 만들지 않는다 - manifest 의 sha256 과 대조해 건너뛴다.
+재개 가능하다. 타겟당 약 40 분이므로 중간에 끊겨도 이미 만든 A3M 은 다시 만들지
+않는다. 재개 기준은 manifest 가 아니라 **A3M 산출물 자체**다 - 그래야 다른
+manifest(예: 동시성 probe)가 만든 A3M 도 그대로 재사용된다. 품질과 보존도
+마스크는 A3M 의 결정적 함수이므로 다시 계산해도 같은 값이고, 런타임 값
+(hit_count · wall_seconds)만 이전 기록에서 가져온다.
+
+`--workers N` 으로 타겟 간 병렬 실행이 된다. **per-job 파라미터는 하나도 바뀌지
+않는다** - target_db · max_seqs · threads · use_gpu 를 그대로 넘기므로 배포
+일치와 결정성에 영향이 없고, 제약은 서버 메모리뿐이다.
 
 A3M 은 `.gitignore` 에 걸려 있어 저장소에 들어가지 않는다. manifest 에 해시와
 품질 지표만 남긴다 (`fold_artifact_archive.json` 과 같은 방식).
@@ -29,6 +36,8 @@ import json
 import os
 import subprocess
 import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import time
 from pathlib import Path
 
@@ -126,11 +135,81 @@ def targets() -> list[dict]:
     return out
 
 
+def finish(entry: dict) -> dict:
+    """동결된 8 절 규칙만 적용한다. 새 규칙을 만들지 않는다."""
+    if "classification" not in entry:
+        hits = (entry.get("quality_medians") or {}).get("usable_hits")
+        entry["classification"] = ("MSA_INSUFFICIENT_DEPTH"
+                                   if isinstance(hits, int) and hits < 10 else "OK")
+    return entry
+
+def measure(a3m: str, seq_len: int, cons_cfg: dict) -> dict:
+    """A3M 에서 품질과 보존도 마스크를 낸다. 파일만 있으면 재현된다."""
+    from pipeline_mcp.bio.a3m import compute_conservation, msa_quality
+
+    q = msa_quality(a3m)
+    out = {"msa_quality": {k: q.get(k) for k in
+                           ("usable_hits", "coverage", "depth",
+                            "full_length_fraction", "warnings", "query_length")}}
+    out["quality_medians"] = pilot_mod().quality_medians(out["msa_quality"])
+    c = compute_conservation(a3m, tiers=cons_cfg["conservation_tiers"],
+                             mode=cons_cfg["conservation_mode"], weights=None)
+    out["conservation"] = {
+        "query_length": c.query_length,
+        "tiers": {str(t): len(v) for t, v in c.fixed_positions_by_tier.items()},
+        "fixed_positions_sha256": {
+            str(t): hashlib.sha256(json.dumps(v).encode()).hexdigest()
+            for t, v in c.fixed_positions_by_tier.items()},
+        "query_length_matches_sequence": c.query_length == seq_len,
+    }
+    return out
+
+def from_artifact(row: dict, seq_len: int, cons_cfg: dict,
+                  prev: dict, msa_dir: Path | None = None) -> dict | None:
+    """A3M 파일이 이미 있으면 그것으로 재개한다.
+
+    manifest 가 아니라 **산출물**을 기준으로 삼는다. 그래야 probe 가 만든
+    A3M 도, 다른 manifest 에 적힌 A3M 도 그대로 재사용된다. 품질과 보존도는
+    파일의 결정적 함수이므로 다시 계산해도 같은 값이다.
+    """
+    msa_dir = msa_dir or MSA_DIR
+    path = msa_dir / row["domain"] / "result.a3m"
+    if not path.exists():
+        return None
+    raw = path.read_bytes()
+    text = raw.decode("utf-8", errors="replace")
+    if not text.strip():
+        return None
+    entry = dict(row)
+    try:
+        entry["a3m_path"] = str(path.relative_to(PROJECT_ROOT))
+    except ValueError:
+        entry["a3m_path"] = str(path)
+    entry["a3m_bytes"] = len(text)
+    entry["a3m_sha256"] = hashlib.sha256(raw).hexdigest()
+    entry["resumed_from_file"] = True
+    entry.update(measure(text, seq_len, cons_cfg))
+    # 런타임 값은 파일에서 나오지 않는다. 이전 기록이 있으면 가져온다.
+    old = prev.get(row["domain"]) or {}
+    for k in ("hit_count", "wall_seconds", "endpoint_status", "query_consistent",
+              "response_keys", "decode_ok", "a3m_key_present", "query_id",
+              "query_length"):
+        if k in old:
+            entry[k] = old[k]
+    entry.setdefault("endpoint_status", "resumed")
+    if old.get("a3m_sha256") and old["a3m_sha256"] != entry["a3m_sha256"]:
+        entry["sha_changed_since"] = old["a3m_sha256"]
+    return finish(entry)
+
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default=None)
     ap.add_argument("--out", default=str(OUT))
     ap.add_argument("--only", default=None, help="쉼표로 구분한 도메인 (진단용)")
+    ap.add_argument("--workers", type=int, default=1,
+                    help="타겟 간 동시 실행 수. per-job 설정은 바뀌지 않는다.")
     args = ap.parse_args()
 
     host = os.environ.get("RAPID_GPU_HOST", "")
@@ -145,11 +224,16 @@ def main() -> int:
         keep = {x.strip() for x in args.only.split(",")}
         rows = [r for r in rows if r["domain"] in keep]
 
-    prev = {}
+    # 이전 실행 기록을 여러 manifest 에서 모은다. probe 와 본 실행이 서로 다른
+    # 파일에 쓰므로, 하나만 보면 이미 만든 A3M 을 다시 만든다.
     out_path = Path(args.out)
-    if out_path.exists():
-        prev = {e["domain"]: e for e in
-                json.loads(out_path.read_text(encoding="utf-8")).get("targets", [])}
+    prev: dict[str, dict] = {}
+    for cand in (BASE / "full_msa_manifest.json",
+                 BASE / "msa_probe_concurrency.json", out_path):
+        if cand.exists():
+            for e in json.loads(cand.read_text(encoding="utf-8")).get("targets", []):
+                if e.get("domain"):
+                    prev.setdefault(e["domain"], e)
 
     MSA_DIR.mkdir(parents=True, exist_ok=True)
     print(f"타겟 {len(rows)} · target_db={TARGET_DB} max_seqs={MAX_SEQS} "
@@ -161,25 +245,27 @@ def main() -> int:
 
     client = LocalHTTPMMseqsClient(base_url=url, token=None, timeout_s=7200.0)
     results: list[dict] = []
-    for i, row in enumerate(rows, 1):
+    lock = threading.Lock()
+    done = [0]
+
+    def process(row: dict) -> dict:
         domain = row["domain"]
-        a3m_path = MSA_DIR / domain / "result.a3m"
-        entry = dict(row)
-        entry["a3m_path"] = str(a3m_path.relative_to(PROJECT_ROOT))
-
-        # ---- 재개: 이미 만든 것은 다시 만들지 않는다 ----
-        old = prev.get(domain)
-        if a3m_path.exists() and old and old.get("a3m_sha256"):
-            digest = hashlib.sha256(a3m_path.read_bytes()).hexdigest()
-            if digest == old["a3m_sha256"]:
-                print(f"[{i}/{len(rows)}] {domain:9s} 건너뜀 (해시 일치)", flush=True)
-                results.append(old)
-                continue
-            print(f"[{i}/{len(rows)}] {domain:9s} 해시 불일치 - 다시 만든다", flush=True)
-
         seq = query_sequence(row["pdb"])
-        print(f"[{i}/{len(rows)}] {domain:9s} {len(seq):>4} aa · {row['cohort']} · 시작",
-              flush=True)
+
+        resumed = from_artifact(row, len(seq), cons_cfg, prev)
+        if resumed is not None:
+            with lock:
+                done[0] += 1
+                print(f"[{done[0]}/{len(rows)}] {domain:9s} 건너뜀 (A3M 존재, "
+                      f"품질 재계산) · {resumed['classification']}", flush=True)
+            return resumed
+
+        entry = dict(row)
+        a3m_path = MSA_DIR / domain / "result.a3m"
+        entry["a3m_path"] = str(a3m_path.relative_to(PROJECT_ROOT))
+        with lock:
+            print(f"[  ../{len(rows)}] {domain:9s} {len(seq):>4} aa · "
+                  f"{row['cohort']} · 시작", flush=True)
         started = time.time()
         try:
             resp = client.search(query_fasta=f">{domain}\n{seq}\n", target_db=TARGET_DB,
@@ -212,28 +298,7 @@ def main() -> int:
                 a3m_path.parent.mkdir(parents=True, exist_ok=True)
                 a3m_path.write_text(a3m, encoding="utf-8")
                 entry["a3m_sha256"] = hashlib.sha256(a3m_path.read_bytes()).hexdigest()
-                q = msa_quality(a3m)
-                entry["msa_quality"] = {
-                    k: q.get(k) for k in ("usable_hits", "coverage", "depth",
-                                          "full_length_fraction", "warnings",
-                                          "query_length")}
-                # 동결 §8 이 쓰는 네 값. coverage/depth 는 백분위 dict 이므로
-                # p50 을 꺼낸다 - 코드의 경고 로직과 같은 값이다.
-                entry["quality_medians"] = pilot_mod().quality_medians(entry["msa_quality"])
-                # conservation mask 는 이 A3M 의 결정적 함수다. 지금 계산해 두면
-                # Step 8 이 MSA 를 다시 돌리지 않아도 된다.
-                c = compute_conservation(
-                    a3m, tiers=cons_cfg["conservation_tiers"],
-                    mode=cons_cfg["conservation_mode"], weights=None)
-                entry["conservation"] = {
-                    "query_length": c.query_length,
-                    "tiers": {str(t): len(p)
-                              for t, p in c.fixed_positions_by_tier.items()},
-                    "fixed_positions_sha256": {
-                        str(t): hashlib.sha256(json.dumps(p).encode()).hexdigest()
-                        for t, p in c.fixed_positions_by_tier.items()},
-                    "query_length_matches_sequence": c.query_length == len(seq),
-                }
+                entry.update(measure(a3m, len(seq), cons_cfg))
             else:
                 entry["classification"] = "MSA_INFEASIBLE"
         except Exception as exc:
@@ -241,21 +306,30 @@ def main() -> int:
             entry["error"] = f"{type(exc).__name__}: {exc}"[:300]
             entry["classification"] = "MSA_INFEASIBLE"
         entry["wall_seconds"] = round(time.time() - started, 1)
-
-        # ---- 동결된 §8 규칙만 적용한다. 새 규칙을 만들지 않는다. ----
-        if "classification" not in entry:
-            hits = (entry.get("msa_quality") or {}).get("usable_hits")
-            entry["classification"] = ("MSA_INSUFFICIENT_DEPTH"
-                                       if isinstance(hits, int) and hits < 10 else "OK")
+        finish(entry)
         m = entry.get("quality_medians") or {}
-        print(f"    {entry['wall_seconds']}s · hits={entry.get('hit_count', '-')} · "
-              f"usable={m.get('usable_hits', '-')} · "
-              f"cov={m.get('median_coverage', '-')} · {entry['classification']}",
-              flush=True)
-        results.append(entry)
+        with lock:
+            done[0] += 1
+            print(f"[{done[0]}/{len(rows)}] {domain:9s} {entry['wall_seconds']}s · "
+                  f"hits={entry.get('hit_count', '-')} · "
+                  f"usable={m.get('usable_hits', '-')} · "
+                  f"cov={m.get('median_coverage', '-')} · {entry['classification']}",
+                  flush=True)
+        return entry
 
-        # 매 타겟마다 저장한다. 17 시간짜리 실행에서 마지막에만 쓰면 다 잃는다.
-        _write(out_path, results, rows, cons_cfg, prov)
+    if args.workers <= 1:
+        for row in rows:
+            results.append(process(row))
+            _write(out_path, results, rows, cons_cfg, prov)
+    else:
+        # 타겟 간 병렬. per-job 파라미터는 하나도 바뀌지 않는다 - 배포 일치와
+        # 결정성에 영향이 없고, 제약은 서버 메모리뿐이다.
+        print(f"타겟 간 병렬 {args.workers} worker (per-job 설정 불변)\n")
+        with ThreadPoolExecutor(max_workers=args.workers) as pool:
+            for entry in pool.map(process, rows):
+                results.append(entry)
+                with lock:
+                    _write(out_path, results, rows, cons_cfg, prov)
 
     _write(out_path, results, rows, cons_cfg, prov)
     _summary(results)
