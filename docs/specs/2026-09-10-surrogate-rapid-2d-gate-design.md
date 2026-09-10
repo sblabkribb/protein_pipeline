@@ -154,7 +154,8 @@ native 타겟내 순위 : 1/6 이 5 타겟 · 6/6 이 3 타겟 · 5/6 과 2/6 �
 native q_b 평균 0.604 (중앙값 0.958)  vs  RFD3 0.660 (중앙값 0.833)
 ```
 
-그래서 **source 를 나타내는 1 비트가 타겟내 q_b 분산의 24.8% 를 설명한다.** MPNN
+그래서 **타겟내 q_b 분산 분해에서 between-source 성분이 24.8% 였다.** ("source 가
+24.8% 를 설명한다" 로 쓰지 않는다 — 관측된 귀속이지 인과가 아니다.) MPNN
 encoder 는 결정 구조와 생성 구조의 기하학적 차이를 쉽게 본다. Gate 1 이 그 1 비트로
 점수를 벌면 그것은 "백본 예측 가능성" 이 아니고, **RAPID 이 배분하는 대상이 생성
 백본이므로 B 를 지지하지도 않는다.**
@@ -196,6 +197,33 @@ test 에서 native 를 빼도 dev 157 개 전체로 학습하면 **native/refere
 **누수 확인.** dev 타겟은 세 source 전부 홀드아웃 12 타겟과 **겹침 0** 이다
 (rfd3 16 / bioemu 4 / target 57, 교집합 모두 공집합).
 
+### OC 표의 authoritative geometry (2026-09-10 동결)
+
+**Gate 1 primary 의 OC 는 RFD3-only test geometry 에서 계산한 것이 정본이다.**
+"기존 인쇄값과 어느 geometry 가 잘 맞는지" 로 정본을 고르지 않는다 — 낡은 숫자가
+프로토콜을 결정하게 하는 것이고 순서가 거꾸로다.
+
+| 산출물 키 | 지위 |
+|---|---|
+| `OC_primary_rfd3_only` | **정본.** Gate 1 의 GO/NO-GO 해석이 인용한다 |
+| `OC_legacy_all_sources` | **historical reference 전용.** 이 문서의 이전 §3 수치가 어디서 나왔는지(native 포함 70 백본 기하) 재현할 뿐, 어떤 판정에도 쓰지 않는다 |
+
+`rho_min = 0.25` 에서 false-GO 나 검정력이 이전 표와 달라도 **이전 숫자에 맞추지
+않는다.** Gate 1 예측을 아직 하나도 계산하지 않았으므로 지금은 outcome-blind
+프로토콜 정정이 가능한 시점이다. 문턱이 여전히 적절하면 **0.25 를 유지하고 운영특성
+표와 NO-GO 문구만 새 geometry 로 재동결**한다. false-GO 가 명백히 깨지는 경우에만
+문턱을 재검토한다.
+
+**Gate 2 도 같다.** 이 문서에 인쇄된 교정표·작동특성표는 controller 의 임시 실행
+(power 루프 안 부트스트랩 800 회)에서 나왔다. 프로덕션 `one_sided_lcb` 가 자기
+기본 반복수로 재생성한 값이 **정본**이며, 3째 자리 차이는 조정할 불일치가 아니라
+임시 값이 대체되는 것이다.
+
+**재현성 계약은 여섯 개를 한 세트로 묶는다.** production `delta_top4` + production
+`one_sided_lcb` + 고정 시드 + 커밋된 생성기 + 커밋된 산출물 + 회귀 테스트.
+생성기가 primitive 를 재구현하면 부트스트랩이 바뀌어도 표가 깨지지 않으므로 계약이
+성립하지 않는다.
+
 ### 작은 코호트가 이 질문에는 더 맞다
 
 primary 의 표본은 legacy 의 절반이고 feature 는 384 차원이다(n/p = 0.21). 그런데
@@ -221,7 +249,7 @@ primary 가 실패했을 때 sensitivity 로 GO 를 선언하지 않는다.
 
 ### source 분해의 provenance
 
-**24.8% 는 informative 타겟 11 개 기준이다.** native 라벨이 있는 9 개로 한정하면
+**between-source 성분 24.8% 는 informative 타겟 11 개 기준이다.** native 라벨이 있는 9 개로 한정하면
 **25.6%** 다. `3es1A01`·`3h7eA02` 는 native 폴드가 0 이라 source 그룹이 rfd3 하나뿐
 이고, 그러면 group mean == grand mean 이므로 between 항 기여가 0 이 된다 —
 **결측을 0 으로 대입한 것이 아니다.** 따라서 11 타겟 기준 24.8% 는 그 두 타겟이
