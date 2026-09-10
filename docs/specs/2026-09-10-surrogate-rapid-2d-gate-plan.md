@@ -1888,47 +1888,93 @@ SEQ_OF = _load_sequences()
 Run: `/tmp/gate2d-venv/bin/python -m pytest tests/test_gate2d_metrics.py -k build_features -v`
 Expected: PASS
 
-- [ ] **Step 8b: fold 단위 대치를 구현한다**
+- [ ] **Step 8b: fold 단위 대치를 구현한다 — 행 평균이 아니라 타겟 평균이다**
 
-스펙 §4 규칙 3–5 를 코드로 옮긴다. **test 타겟은 어떤 경우에도 빠지지 않는다.**
+### 정정 (2026-09-10): 이 Step 의 초안이 가중치를 틀렸다
 
-```python
-def impute_train_fold(x: np.ndarray, train_idx) -> np.ndarray | None:
-    """NaN 을 train fold 열평균으로 채운다. 지시자 열은 이미 붙어 있다.
+초안은 `impute_train_fold(x, train_idx)` 가 **행 단위 열평균**으로 NaN 을 채우게
+했다. 그것은 틀렸다. MSA feature 는 **타겟 수준 상수**이고 타겟마다 행 수가 다르다:
 
-    train fold 에서 그 열이 전부 NaN 이면 imputation statistic 을 만들 수 없다 ->
-    None(= arm non-evaluable). 타겟을 빼는 것이 아니다 - 스펙 §4 규칙 5.
-    """
-    out = x.copy()
-    train = out[list(train_idx)]
-    for col in range(out.shape[1]):
-        mask = np.isnan(out[:, col])
-        if not mask.any():
-            continue
-        train_col = train[:, col]
-        usable = train_col[~np.isnan(train_col)]
-        if usable.size == 0:
-            return None
-        out[mask, col] = float(usable.mean())
-    return out
+```
+사용가능 행/타겟 : 144 (10 타겟) · 120 (2 타겟: 3es1A01, 3h7eA02)
 ```
 
-`evaluate_arm` 의 fold 루프를 다음으로 바꾼다:
+행 평균을 쓰면 대치값이 타겟을 144:120 으로 가중한다. 이것은 설계 논의에서 이미 한 번
+틀렸던 **백본 등가중 vs 타겟 등가중과 똑같은 오류**다 (§1 의 −0.002 vs −0.001).
+같은 실수를 같은 스펙 안에서 두 번 하지 않는다.
+
+또한 초안은 대치 로직을 **두 번** 구현하게 만들었다 — Task 9 의 dict 수준
+`train_stats`/`impute` 와 여기의 행렬 수준 열평균. 하나만 둔다.
+
+### 채택하는 설계
+
+`23_gate2d_prepare_msa_features.py` 의 `train_stats`/`impute` 가 **유일한 대치
+구현**이다. `msa_features.json` 은 원시값과 `null` 만 담고 아무것도 대치하지 않는다.
+LOTO fold 안에서:
+
+```python
+def impute_msa_block(per_target: dict, row_targets, train_idx, feature_names):
+    """fold 별 MSA 블록. train **타겟** 등가중으로 대치한다.
+
+    행 평균을 쓰지 않는다 - MSA feature 는 타겟 수준 상수이고 타겟마다 행 수가
+    120/144 로 달라서 행 평균은 타겟을 불균등 가중한다.
+
+    대치 통계량은 Task 9 의 train_stats 하나만 쓴다. 두 번째 구현을 만들지 않는다.
+    """
+    import importlib
+    prep = importlib.import_module("23_gate2d_prepare_msa_features")
+
+    train_targets = sorted({row_targets[i] for i in train_idx})
+    stats = prep.train_stats({t: per_target.get(t) for t in train_targets})
+    if stats is None:
+        return None  # arm non-evaluable - 스펙 §4 규칙 5. 타겟을 빼지 않는다.
+
+    imputed = {t: prep.impute(t, per_target.get(t), train_stats=stats)
+               for t in sorted(per_target)}
+    names = [n for n in feature_names if n in stats] + ["msa_undefined"]
+    return np.array([[imputed[t][n] for n in names] for t in row_targets], dtype=float)
+```
+
+`evaluate_arm` 의 fold 루프는 MSA 를 쓰는 arm(S4·S5·S6)에서 이 블록을 fold 마다
+다시 만들고, 나머지 블록(ΔESM·조성·SoluProt)은 fold 와 무관하므로 한 번만 만든다.
 
 ```python
     for train_idx, test_idx, _held in F.loto_splits(targets):
-        x_fold = F.impute_train_fold(x, train_idx)
+        x_fold = F.assemble(arm, all_folds, train_idx)
         if x_fold is None:
             return {"arm": arm, "label": F.ARM_LABELS[arm],
                     "status": "non_evaluable",
-                    "reason": "train fold 에서 대치 통계량을 만들 수 없다"}
+                    "reason": "train fold 에 정의된 MSA feature 가 없어 "
+                              "imputation statistic 을 만들 수 없다"}
         model = Ridge(alpha=100.0)
         model.fit(x_fold[train_idx], y[train_idx])
         pred[test_idx] = model.predict(x_fold[test_idx])
 ```
 
-Run: `/tmp/gate2d-venv/bin/python -m pytest tests/test_gate2d_metrics.py -v`
-Expected: PASS (전체)
+`F.assemble(arm, folds, train_idx)` 가 `build_features` 를 대체한다 — fold 에
+의존하지 않는 블록은 캐시하고, MSA 블록만 `impute_msa_block` 으로 fold 별로 만든다.
+`build_features` 의 테스트(Step 7)는 `train_idx=None` 으로 호출해 MSA 없는 arm
+(S0–S3)의 shape 을 그대로 검증한다.
+
+- [ ] **Step 8c: 가중치 오류를 잡는 테스트를 쓴다**
+
+```python
+def test_msa_imputation_weights_targets_equally_not_rows():
+    import _gate2d_features as F
+    # 타겟 A 는 행 2개, B 는 행 1개. 값은 A=0.0, B=0.9. C 는 정의되지 않음.
+    per_target = {"A": {"cons_mean": 0.0}, "B": {"cons_mean": 0.9}, "C": None}
+    row_targets = ["A", "A", "B", "C"]
+    train_idx = [0, 1, 2]          # A, A, B
+    block = F.impute_msa_block(per_target, row_targets, train_idx, ["cons_mean"])
+    # 타겟 등가중 = (0.0 + 0.9)/2 = 0.45.  행 평균이면 (0+0+0.9)/3 = 0.30.
+    c_row = row_targets.index("C")
+    assert abs(block[c_row][0] - 0.45) < 1e-12, "행 평균으로 대치하고 있다"
+    assert block[c_row][-1] == 1.0            # msa_undefined
+    assert block[0][-1] == 0.0                # A 는 정의됨
+```
+
+Run: `/tmp/gate2d-venv/bin/python -m pytest tests/test_gate2d_metrics.py -k msa_imputation_weights -v`
+Expected: 구현 전 FAIL, 구현 후 PASS
 
 - [ ] **Step 9: Gate 2 스크립트를 쓴다**
 
