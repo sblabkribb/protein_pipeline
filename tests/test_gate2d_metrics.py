@@ -744,3 +744,18 @@ def test_oc_artifact_is_bound_to_the_shipped_bootstrap_and_primitives():
     assert list(rhos.values()) == g1["per_target"]
     assert one_sided_lcb(g1["per_target"], alpha=G.LCB_ONE_SIDED_ALPHA,
                          n_boot=20000, seed=G.BOOTSTRAP_SEED) == g1["lcb"]
+
+
+def test_mutation_sites_against_wt():
+    import importlib
+    prep = importlib.import_module("22_gate2d_prepare_esm")
+    # 길이가 같은 경우: 다른 위치만 돌려준다.
+    assert prep.mutation_sites("AAAA", "ABAA") == [1]
+    assert prep.mutation_sites("AAAA", "AAAA") == []
+    # 길이가 다르면 비교가 성립하지 않는다 - 조용히 자르지 않고 예외를 낸다.
+    try:
+        prep.mutation_sites("AAAA", "AAA")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("길이 불일치에서 ValueError 가 나와야 한다")
