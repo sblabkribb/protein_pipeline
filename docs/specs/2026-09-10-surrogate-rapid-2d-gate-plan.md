@@ -1117,13 +1117,28 @@ git commit -m "feat(sr): ESM embeddings with token-aligned mutation-site deltas"
 `50_full_msa.py` 의 호출 방식을 그대로 쓴다. 엔드포인트가 직렬화되므로 병렬 worker
 는 의미가 없다 (commit `00a6931`). 타겟당 약 2,400 s → 12 타겟 약 8 h.
 
-Run:
-```bash
-/tmp/gate2d-venv/bin/python scripts/transcoder/50_full_msa.py --help
-```
-`--targets` 류의 인자로 홀드아웃 12 타겟을 지정할 수 있는지 확인한다. 없으면
-`holdout_targets.json` 을 입력으로 받는 얇은 래퍼만 추가하고, **MSA 실행 로직은
-복제하지 않는다.**
+**2026-09-10 조사 결과 (실행 전 확인됨).** 래퍼는 정말 얇다. 다만 두 개의 함정이
+있고 둘 다 동결 산출물을 건드린다.
+
+| 사실 | 함의 |
+|---|---|
+| `COHORTS` 는 `calibration_v2` + `confirmatory` 로 하드코딩 (`50_full_msa.py:56`) | 격자 12 타겟은 두 코호트 어디에도 없다. `--only` 는 `targets()` 가 만든 목록을 필터링할 뿐이라 닿지 못한다 |
+| `holdout_targets.json` 의 `selected` 가 정확히 격자 12 타겟이고 `domain`·`stratum`·`length`·`pdb`·`superfamily` 를 모두 갖고 있다 | `targets()` 가 요구하는 스키마와 이미 일치한다. 변환 코드가 필요 없다 |
+| **`--out` 기본값이 `full_msa_manifest.json` (`50_full_msa.py:47,209`)** | **그 파일은 동결된 v2 multisource validation 의 산출물이다. 기본값으로 돌리면 그것을 덮어쓴다** |
+| `MSA_DIR` 은 `BASE/"msa"` 하드코딩, CLI 없음 (`:46,238,264`) | a3m 은 공유 디렉터리에 떨어진다. 격자 12 타겟은 기존 20 타겟과 겹치지 않으므로 충돌은 없고, resume-from-a3m 이 그대로 작동한다 |
+| MMseqs 엔드포인트는 **직렬화**되고 v2 런이 이 엔드포인트를 쓰고 있었다 | v2 런이 끝난 뒤에 착수한다. 동시 실행은 동결 검증과 경합한다 |
+
+따라서 이 Step 의 요구사항은 다음 셋이다.
+
+1. **`COHORTS` 의 기본값을 바꾸지 않는다.** CLI 인자(예: `--cohorts holdout_grid`)로
+   **덮어쓸 수 있게만** 만든다. 인자를 주지 않은 기존 호출은 바이트 단위로 같은
+   동작이어야 한다 — 동결 v2 흐름이 그 기본값에 의존한다.
+2. **`--out` 을 반드시 별도 manifest 로 넘긴다**:
+   `public_data/benchmark/gate0/holdout_grid/holdout_msa_manifest.json`.
+   `full_msa_manifest.json` 은 읽기 전용으로 취급한다.
+3. **MSA 실행 로직을 복제하지 않는다.** 검색 설정(`uniref90`, `max_seqs=3000`,
+   `threads=4`, `use_gpu=False`)을 다시 적으면 배포와 갈라진다 — 그것이 이 스크립트
+   docstring 이 존재하는 이유다.
 
 - [ ] **Step 2: 결측 처리 테스트를 먼저 쓴다**
 
