@@ -1929,23 +1929,41 @@ def impute_msa_block(per_target: dict, row_targets, train_idx, feature_names):
     if stats is None:
         return None  # arm non-evaluable - 스펙 §4 규칙 5. 타겟을 빼지 않는다.
 
-    imputed = {t: prep.impute(t, per_target.get(t), train_stats=stats)
-               for t in sorted(per_target)}
+    imputed, dropped = {}, {}
+    for t in sorted(per_target):
+        row, dropped_measured = prep.impute(t, per_target.get(t), stats=stats)
+        imputed[t] = row
+        if dropped_measured:
+            dropped[t] = dropped_measured
+
+    # 규칙 5 는 per-feature 조건에 **arm 수준** 결과를 붙인다. 측정된 값이 하나라도
+    # 버려졌으면 설계행렬을 조용히 좁히지 않고 arm 을 non-evaluable 로 올린다.
+    if dropped:
+        return None, {"dropped_measured": dropped}
+
     names = [n for n in feature_names if n in stats] + ["msa_undefined"]
-    return np.array([[imputed[t][n] for n in names] for t in row_targets], dtype=float)
+    return np.array([[imputed[t][n] for n in names] for t in row_targets], dtype=float), None
 ```
+
+**`impute` 에 원시 dict 를 그대로 넘기지 않는다.** Step 6 의 undefined 행은
+`{"cons_mean": null, ...}` 이고 이것은 **truthy dict** 다 — 값이 전부 `None` 인데
+"feature 가 있다" 분기를 타서 `float(None)` 으로 죽는다. 죽으면 §4 규칙 4 가
+유지하라고 한 타겟을 잃는다. 정규화는 `impute` 안에서 한다: 값이 `None` 인 이름은
+없는 것으로 세고, 전부 `None` 인 dict 는 `None` 과 같은 경로를 탄다.
 
 `evaluate_arm` 의 fold 루프는 MSA 를 쓰는 arm(S4·S5·S6)에서 이 블록을 fold 마다
 다시 만들고, 나머지 블록(ΔESM·조성·SoluProt)은 fold 와 무관하므로 한 번만 만든다.
 
 ```python
     for train_idx, test_idx, _held in F.loto_splits(targets):
-        x_fold = F.assemble(arm, all_folds, train_idx)
+        x_fold, defect = F.assemble(arm, all_folds, train_idx)
         if x_fold is None:
             return {"arm": arm, "label": F.ARM_LABELS[arm],
                     "status": "non_evaluable",
-                    "reason": "train fold 에 정의된 MSA feature 가 없어 "
-                              "imputation statistic 을 만들 수 없다"}
+                    "reason": ("train fold 에 정의된 MSA feature 가 없어 imputation "
+                               "statistic 을 만들 수 없다" if defect is None
+                               else "측정된 MSA feature 가 버려졌다 - 규칙 2 위반"),
+                    "defect": defect}
         model = Ridge(alpha=100.0)
         model.fit(x_fold[train_idx], y[train_idx])
         pred[test_idx] = model.predict(x_fold[test_idx])
