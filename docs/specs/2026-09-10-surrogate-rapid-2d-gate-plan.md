@@ -1929,21 +1929,24 @@ def impute_msa_block(per_target: dict, row_targets, train_idx, feature_names):
     if stats is None:
         return None  # arm non-evaluable - 스펙 §4 규칙 5. 타겟을 빼지 않는다.
 
-    imputed, dropped = {}, {}
-    for t in sorted(per_target):
-        row, dropped_measured = prep.impute(t, per_target.get(t), stats=stats)
-        imputed[t] = row
-        if dropped_measured:
-            dropped[t] = dropped_measured
+    imputed = {t: prep.impute(t, per_target.get(t), train_stats=stats)
+               for t in sorted(per_target)}
 
-    # 규칙 5 는 per-feature 조건에 **arm 수준** 결과를 붙인다. 측정된 값이 하나라도
-    # 버려졌으면 설계행렬을 조용히 좁히지 않고 arm 을 non-evaluable 로 올린다.
-    if dropped:
-        return None, {"dropped_measured": dropped}
+    # 규칙 5 는 per-feature 조건에 **arm 수준** 결과를 붙인다. 그 판정은
+    # 23_gate2d_prepare_msa_features.arm_verdict() 하나에만 있다 - 여기서 다시
+    # 구현하지 않는다. f7fdc08 이 정리한 것이 바로 이 종류의 이중 구현이다.
+    verdict = prep.arm_verdict(imputed)
+    if not verdict["evaluable"]:
+        return None, verdict
 
     names = [n for n in feature_names if n in stats] + ["msa_undefined"]
     return np.array([[imputed[t][n] for n in names] for t in row_targets], dtype=float), None
 ```
+
+**`impute` 의 시그니처는 dict 반환 + `train_stats=` 키워드다.** 동결된 Step 2
+fixture 가 `impute(..., train_stats=...)` 로 호출하고 `out["msa_undefined"]` 로
+읽으므로 그 형태가 고정돼 있다. 버려진 측정 이름은 `row.get("dropped_measured")`
+로 읽는다 (건강한 행에는 그 키가 없다).
 
 **`impute` 에 원시 dict 를 그대로 넘기지 않는다.** Step 6 의 undefined 행은
 `{"cons_mean": null, ...}` 이고 이것은 **truthy dict** 다 — 값이 전부 `None` 인데
