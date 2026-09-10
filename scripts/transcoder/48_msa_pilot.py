@@ -45,10 +45,24 @@ AA3 = {"ALA": "A", "ARG": "R", "ASN": "N", "ASP": "D", "CYS": "C", "GLN": "Q",
        "TYR": "Y", "VAL": "V"}
 
 
-def query_sequence(pdb_path: str) -> str:
-    """원본 첫 모델의 CA 서열. 매핑 계약이 이것을 query 로 본다."""
+def deployment_staging() -> dict:
+    """배포가 MSA query 를 만들기 전에 적용하는 전처리. 하드코딩하지 않는다."""
+    import dataclasses
+
+    from pipeline_mcp.models import PipelineRequest
+
+    def d(name):
+        f = PipelineRequest.__dataclass_fields__[name]
+        return f.default if f.default is not dataclasses.MISSING else f.default_factory()
+
+    return {"strip_nonpositive_resseq": bool(d("pdb_strip_nonpositive_resseq")),
+            "renumber_resseq_from_1": bool(d("pdb_renumber_resseq_from_1"))}
+
+
+def ca_sequence(pdb_text: str) -> str:
+    """첫 모델의 CA 서열. altLoc 은 첫 conformer 만 - **행이 아니라 잔기를 센다.**"""
     out, seen = [], set()
-    for line in Path(pdb_path).read_text(errors="replace").splitlines():
+    for line in pdb_text.splitlines():
         if line.startswith("ENDMDL"):
             break
         if not line.startswith("ATOM") or line[12:16].strip() != "CA":
@@ -61,6 +75,40 @@ def query_sequence(pdb_path: str) -> str:
         seen.add(key)
         out.append(AA3.get(line[17:20].strip(), "X"))
     return "".join(out)
+
+
+def raw_ca_sequence(pdb_path: str) -> str:
+    """전처리 없는 원본 서열. 진단·대조용이고 MSA query 가 아니다."""
+    return ca_sequence(Path(pdb_path).read_text(errors="replace"))
+
+
+def query_sequence(pdb_path: str) -> str:
+    """**배포가 MMseqs 에 보내는 것과 같은 서열.**
+
+    `pipeline.py` 는 `msa_source_pdb_text` 를
+    `_prepare_pdb_text_for_design_context(..., strip_nonpositive_resseq=
+    effective_strip_nonpositive)` 로 전처리한 뒤 `target_record` 를 만들고,
+    그 record 로 `target_query_fasta` 를 만든다. `effective_strip_nonpositive`
+    는 `request.pdb_strip_nonpositive_resseq` (기본 True) 이고, False 로 떨어지는
+    분기는 요청이 이미 strip=False·renumber=False 일 때만 탄다.
+
+    즉 **배포의 MSA query 는 staged 서열이다.** 전처리를 빼면 resseq <= 0 잔기를
+    가진 타겟에서 query 가 길어지고, 보존도의 quantile 컷 `floor(L*tier)` 과 그
+    아래 인덱스가 전부 밀린다. 실행은 성공하고 마스크만 틀린다.
+
+    실측: v2 24 타겟 중 3 개가 영향을 받았다 - 2jvfA00(-2) · 4yqiA01(-3) ·
+    4q68A01(-1).
+    """
+    from pipeline_mcp.bio.pdb import preprocess_pdb
+
+    text = Path(pdb_path).read_text(errors="replace")
+    cfg = deployment_staging()
+    if cfg["strip_nonpositive_resseq"] or cfg["renumber_resseq_from_1"]:
+        text, _ = preprocess_pdb(
+            text,
+            strip_nonpositive_resseq=cfg["strip_nonpositive_resseq"],
+            renumber_resseq_from_1=cfg["renumber_resseq_from_1"])
+    return ca_sequence(text)
 
 
 def quality_medians(q: dict | None) -> dict:
