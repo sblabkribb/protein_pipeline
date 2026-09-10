@@ -185,3 +185,36 @@ def test_an_all_null_row_is_kept_not_crashed_on():
     assert out2["cons_mean"] == 0.4
     assert out2["cons_p25"] == full["cons_p25"]
     assert out2["msa_undefined"] == 1
+
+
+def test_one_sided_lcb90_positive_and_null():
+    sys.path.insert(0, str(ROOT / "scripts" / "transcoder"))
+    from rapid_sr.clustered import one_sided_lcb
+
+    # 전부 +0.5 인 표본이면 LCB 도 +0.5 여야 한다(재표집해도 값이 같다).
+    out = one_sided_lcb([0.5] * 11, alpha=0.10, seed=20260910)
+    assert abs(out["lcb"] - 0.5) < 1e-9
+    assert out["exceeds_zero"] is True
+    assert out["n"] == 11
+
+    # 0 을 중심으로 대칭인 표본이면 LCB < 0 이어야 한다.
+    sym = [-0.4, -0.3, -0.2, -0.1, 0.0, 0.1, 0.2, 0.3, 0.4, -0.05, 0.05]
+    out2 = one_sided_lcb(sym, alpha=0.10, seed=20260910)
+    assert out2["lcb"] < 0
+    assert out2["exceeds_zero"] is False
+
+
+def test_one_sided_lcb90_is_deterministic_for_a_seed():
+    from rapid_sr.clustered import one_sided_lcb
+    a = one_sided_lcb([0.1, 0.2, 0.05, 0.3, 0.0, 0.15, 0.25, 0.2, 0.1, 0.05, 0.3],
+                      alpha=0.10, seed=20260910)
+    b = one_sided_lcb([0.1, 0.2, 0.05, 0.3, 0.0, 0.15, 0.25, 0.2, 0.1, 0.05, 0.3],
+                      alpha=0.10, seed=20260910)
+    assert a["lcb"] == b["lcb"]
+
+
+def test_one_sided_lcb90_withholds_below_three_units():
+    from rapid_sr.clustered import one_sided_lcb
+    out = one_sided_lcb([0.5, 0.5], alpha=0.10, seed=1)
+    assert out["lcb"] is None
+    assert out["n"] == 2
