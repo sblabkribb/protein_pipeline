@@ -50,9 +50,10 @@ posterior 를 확실히 오염시키지만, 현행 cheap predictor 로는 편향
 
 ## 2. 선행 음성 결과 — 이 실험이 반복이 아닌 이유
 
-`public_data/benchmark/sr/sequence_axis_ablation.json` 과
-`docs/superpowers/specs/2026-09-03-rapid-transcoder-unified-design.md` 에 이미
-서열축 음성 결과가 있다.
+주 근거는 tracked artifact `public_data/benchmark/sr/sequence_axis_ablation.json` 이다.
+(`docs/superpowers/specs/2026-09-03-rapid-transcoder-unified-design.md` 에도 같은 표가
+있으나 그 경로는 `.gitignore:102` 로 무시되는 **local historical design note 이며
+non-authoritative** 다. 재현 시 인용하지 않는다.)
 
 - 프로토콜: Ridge(alpha=100), leave-one-target-out, **82 CATH 타겟 / 9,840 설계**
 - 1차 지표: **타겟 내 AF2 pLDDT Spearman 평균**
@@ -69,10 +70,37 @@ posterior 를 확실히 오염시키지만, 현행 cheap predictor 로는 편향
 
 그래서 이 스펙은 다음을 명시한다.
 
-> **S1(raw ESM mean)과 S2(ΔESM_global)는 사실상 이미 음성으로 시험됐다.** S2 는 unit
-> 내에서 상수 평행이동이므로 S1 과 동일한 예측을 낸다(RF 는 임계값 분할, Ridge 는 절편,
-> KNN/GP 는 유클리드 거리 — 전부 평행이동 불변). 두 arm 은 **신규 가설이 아니라 기지
-> null 참조**로 둔다.
+> **S1(raw ESM mean)은 사실상 이미 음성으로 시험됐다.** 신규 가설이 아니라 기지 null
+> 참조로 둔다. **S2(ΔESM_global)는 여기에 포함되지 않는다.**
+
+**정정 (2026-09-10).** 초기 논의에서 "ΔESM_global 은 unit 내 상수 평행이동이므로 S1 과
+동일 예측" 이라고 적었다. 그 진술은 **unit 내부에서 학습하는 모델**(Supp. Note 5 의
+프로덕션 surrogate)에만 맞고, **Gate 2 의 LOTO cross-target 설정에는 맞지 않는다.**
+LOTO 에서 reference 는 타겟마다 다르다:
+
+```
+x'_ti = x_ti − r_t        (타겟별 translation)
+x'_i  = x_i  − c          (전역 상수 — 이것이 아니다)
+```
+
+train 타겟 A·B·C 가 서로 다른 −r_A·−r_B·−r_C 를 받으므로 Ridge 의 계수, RF 의 split
+위치, KNN/GP 의 **test point ↔ 타 타겟 train point 거리**가 모두 달라진다. 보존되는
+것은 고정된 test 백본 내부의 pairwise distance 뿐이다.
+
+정확히 말하면: **선형 모델에서는** 같은 w 를 주면 test 타겟 내부 순위차가
+w·(x_i − r_t) − w·(x_j − r_t) = w·(x_i − x_j) 로 reference 가 소거되므로, S2 가 S1 과
+달라지는 통로는 **학습 geometry 를 통한 w 의 변화뿐**이다. RF·KNN·GP 는 학습과
+test 시점 거리 양쪽에서 달라진다.
+
+따라서 arm 지위는 다음과 같다.
+
+| | 지위 |
+|---|---|
+| S1 | prior large-cohort negative reference |
+| **S2** | **untested but low-expectation hypothesis** |
+
+S2 가 묻는 것은 합리적인 가설이다 — **reference-relative ESM 이 raw absolute ESM 의
+target identity 성분을 제거해서 cross-target transfer 를 개선하는가.**
 
 Gate 2 가 반복이 아닌 근거는 아래 세 가지뿐이고, 그 이상을 novelty 로 추가하지 않는다.
 
@@ -101,15 +129,48 @@ representations alone will produce a practically useful effect.* 이 게이트�
 | train | 157 백본 / 62 타겟. `backbones/backbone_labels.csv` 의 `joint_pass_yield`, feature `backbones/mpnn_encoder.npy` (157, 384) |
 | test | 70 백본 / 12 타겟. q_b 는 `holdout_grid/af2_order_metric.csv` 에서 계산 |
 | feature | ProteinMPNN encoder 384-D (ckpt `v_48_020`, dev 와 동일) |
-| 1차 지표 | **타겟 내 Spearman(q̂_b, q_b) 의 12 타겟 평균**, target-clustered bootstrap |
+| 1차 지표 | **타겟 내 Spearman(q̂_b, q_b) 의 타겟 등가중 평균** (informative 11 타겟), target-clustered bootstrap |
 | 2차 지표 | top-1 backbone regret = q_b(실제 최선) − q_b(예측 최선). RAPID 이 실제로 소비하는 양 |
 
 **전역 AUC 를 1차 지표로 쓰지 않는다.** 분산의 79~86% 가 타겟 수준이므로
 (`holdout_experiment_spec.json`), 전역 지표는 "타겟 평균 예측" 만으로 부풀려진다.
 
-**검정력 (사전 고정).** 12 타겟 × 약 6 백본. n=6 Spearman 의 SD 약 0.45 →
-평균의 SE 약 0.13 → 참값 ρ ≳ 0.26 부터 2 SE 로 탐지된다. 이보다 작은 참 효과에
-대한 음성은 "효과 없음" 이 아니라 "이 검정력에서 미검출" 로 읽는다.
+**Gate 1 informative 타겟은 11 개다.** 백본 ≥ 3 이고 q_b 가 비상수인 타겟만 센다.
+`1sh6A02` 는 6 백본 전부 q_b = 1.00 이라 타겟 내 Spearman 이 정의되지 않는다.
+(Gate 2 의 제외 타겟과 같으나 제외 사유는 다르다 — Gate 2 는 mixed 백본 0개, Gate 1 은
+q_b 상수.)
+
+### 동결된 Gate 1 GO 규칙
+
+```
+Gate 1 GO  ⟺  타겟 등가중 mean within-target Spearman(q̂_b, q_b) ≥ +0.25
+              AND  타겟-클러스터 부트스트랩 one-sided 90% LCB > 0
+              AND  informative 타겟 ≥ 8
+```
+
+**임계값 +0.25 의 근거는 OC 시뮬레이션이다.** 실제 백본 수와 실제 q_b 를 쓰고
+예측기를 q̂_b = q_b + N(0, σ) 로 만들어 σ 를 훑었다 (600 반복, informative 11).
+`ρ ≳ 0.26 부터 2 SE` 같은 rough detectability 계산을 임계값으로 전용하지 않는다 —
+아래 표가 근거이고, 숫자가 비슷한 것은 우연이다.
+
+| σ | E[mean ρ] | E[top-1 regret] | P(GO) ρ≥0 | ρ≥0.20 | **ρ≥0.25** | ρ≥0.30 |
+|---|---|---|---|---|---|---|
+| null (순수 노이즈) | −0.002 | 0.245 | **0.12** | 0.06 | **0.03** | 0.01 |
+| 1.00 | 0.184 | 0.165 | 0.53 | 0.47 | **0.34** | 0.20 |
+| 0.50 | 0.340 | 0.111 | 0.92 | 0.89 | **0.79** | 0.63 |
+| 0.35 | 0.441 | 0.081 | 0.98 | 0.97 | **0.96** | 0.90 |
+| 0.25 | 0.529 | 0.055 | 1.00 | 1.00 | **1.00** | 0.99 |
+
+**`ρ > 0` 규칙은 쓸 수 없다.** 귀무에서 거짓 GO 가 0.12 로 나온다 — LCB > 0 조항만으로는
+통제되지 않는다. Gate 2 와 같은 구조로, **점추정 조항이 통제를 담당한다.** +0.25 에서
+거짓 GO 는 0.03 이고 참값 ρ ≈ 0.34 에서 검정력 0.79, ρ ≈ 0.44 에서 0.96 이다.
+
+**NO-GO 해석도 같은 방식으로 조건부다.** 사전 지정된 이 시뮬레이션 모형 아래에서,
+Gate 1 NO-GO 는 ρ ≈ 0.44 규모의 효과에 대한 증거이고 ρ ≈ 0.18 규모(검정력 0.34)에
+대해서는 약한 증거일 뿐이다. **결과를 본 뒤 임계값과 이 문구를 바꾸지 않는다.**
+
+top-1 regret 은 2차 지표로 보고만 한다 (귀무 0.245 → σ=0.5 에서 0.111). GO 조건에
+넣지 않는다 — endpoint 를 하나로 유지한다.
 
 **한계 (사전 기록).** dev 코호트에서 백본이 2개 이상인 타겟은 **16/62** 뿐이다
 (백본/타겟 중앙값 1). 모델은 절대 q_b 로 학습하고 **평가만 타겟 내에서** 한다.
@@ -126,6 +187,7 @@ representations alone will produce a practically useful effect.* 이 게이트�
 | 2차 endpoint | structural-pass (pLDDT ∧ RMSD). 37/37 백본이 이 기준으로도 mixed 이므로 SoluProt 순환성 없는 대조가 된다 |
 | **1차 지표** | **타겟 등가중 Δ_Top4** = 백본별 (Top-4 joint-pass rate − q_b) 를 타겟 내 평균 후 11 타겟 평균 |
 | 보조 지표 | 백본 내 AUC. **descriptive only** — GO 판정에 쓰지 않는다 |
+| **판정 arm** | **S6 하나로 동결.** 나머지 arm 은 ablation/descriptive 이며 GO 판정에 쓰지 않는다 |
 
 타겟별 mixed 백본 수가 고르지 않다 (`2jokA01`·`3bqwA01`·`5fwaA02` 5개 … `3es1A01` 1개).
 타겟 등가중이므로 `3es1A01` 의 단일 백본이 1/11 가중치를 그대로 받는다. LCB 조항이
@@ -137,11 +199,11 @@ representations alone will produce a practically useful effect.* 이 게이트�
 |---|---|---|
 | S0 | SoluProt | 측정 완료. Δ_Top4 = **−0.001** |
 | S1 | raw ESM mean | **기지 null** (§2, 82 타겟) |
-| S2 | ΔESM_global | **기지 null.** unit 내 상수 평행이동 → S1 과 동일 예측. 그 null 을 명시적으로 기록하는 arm |
+| S2 | ΔESM_global | **미시험 · 낮은 기대치.** LOTO 에서 타겟별 translation 이므로 S1 과 동치가 아니다 (§2 정정) |
 | S3 | ΔESM_mutation-site | **신규 가설** |
 | S4 | MSA / conservation | **신규 가설** |
 | S5 | S3 + S4 | **신규 가설** (ESM 단독 vs ESM+coevolution 반증) |
-| S6 | S5 + 기존 cheap feature (조성, MPNN score) | 상한 참조 |
+| **S6** | S5 + 기존 cheap feature (조성, MPNN score) | **full-feature arm — Gate 2 PRIMARY** |
 
 ΔESM 의 reference 는 타겟 WT 서열이다. label 이 아니라 입력이므로 LOTO 를 위배하지 않는다.
 
@@ -154,16 +216,20 @@ RAPID 쪽에서 이미 저심도 MSA 가 나왔다 — `msa_pilot_corrected.json
 1. **MSA search 가 완료되고 query 가 유효하면 depth 와 무관하게 S4–S6 feature 계산을
    시도한다.** depth·coverage 임계값으로 타겟을 걸러내지 않는다.
 2. feature 가 계산되면 그대로 쓴다. 얕은 MSA 에서 나온 값도 쓴다.
-3. feature 가 **수학적으로 정의되지 않는 경우**(usable hits 0 등)에만 결측 처리한다.
-   처리 방식도 지금 고정한다: **train fold 평균으로 대치하고 `msa_undefined` 이진
-   지시자를 feature 에 추가**한다. 조용히 버리지 않는다.
-4. 어떤 타겟의 S4 feature 가 **전부** 정의되지 않으면 그 타겟을 **S4–S6 에 대해서만
-   non-evaluable 로 기록**하고 그 수를 보고한다. 이 경우 S4–S6 는 전체 11 타겟과
-   evaluable 부분집합 **양쪽으로 보고**한다. S0–S3 의 코호트는 영향받지 않는다.
-5. **MSA 품질을 보고 타겟을 교체하지 않는다.** `holdout_targets.json` 의 12 타겟은
+3. feature 가 **수학적으로 정의되지 않는 경우**(usable hits 0 등)에만 결측 처리한다:
+   **train fold 평균으로 대치하고 `msa_undefined` 이진 지시자를 feature 에 추가**한다.
+   조용히 버리지 않는다.
+4. **test 타겟의 MSA feature 가 전부 정의되지 않아도 그 타겟을 유지한다** — 3번 규칙
+   그대로 imputation + `msa_undefined = 1` 로 평가한다. S5·S6 는 ΔESM 등 다른 feature 를
+   가지고 있으므로 더욱 그렇다. **MSA 부족 때문에 test 타겟이 코호트에서 빠지는 경로를
+   두지 않는다.** 코호트는 어느 arm 에서도 11 타겟이다.
+5. arm 을 non-evaluable 로 내리는 경우는 **하나뿐**이다: **training fold 자체에서 해당
+   MSA feature 를 정의할 수 없어 imputation statistic 을 만들 수 없을 때.** 이때는
+   그 arm 의 실행을 non-evaluable 로 기록하고 이유를 남긴다. 타겟을 빼지 않는다.
+6. **MSA 품질을 보고 타겟을 교체하지 않는다.** `holdout_targets.json` 의 12 타겟은
    seed 20260907 로 동결됐고 이 실험에서 다시 고르지 않는다. MSA 품질 지표
    (`usable_hits`, coverage/depth 분위)는 **보고 대상이지 선별 기준이 아니다.**
-6. **MSA conservation 은 타겟/reference 로 한 번 계산된 값이다.** candidate 서열의
+7. **MSA conservation 은 타겟/reference 로 한 번 계산된 값이다.** candidate 서열의
    AF2 결과나 Gate 2 label 에 따라 달라지는 항이 S4–S6 에 들어가면 안 된다. candidate
    별로 달라지는 것은 "그 candidate 의 변이가 보존 위치에 있는지" 뿐이며, 그 판정에
    쓰이는 보존 프로파일 자체는 candidate 와 무관하다.
@@ -205,8 +271,12 @@ label-shift 노이즈 모형, 400 반복, 타겟 등가중. **실제 feature 를
 
 두 가지를 사전 등록한다.
 
-1. **거짓 GO 위험은 0 이다.** 신호가 없을 때 GO 확률 0.00. 점추정 조항이 통제를
-   담당하고 LCB 조항은 사실상 non-binding 한 단일타겟 방어 장치다.
+1. **귀무에서 거짓 GO 를 관측하지 못했다 — 확률이 0 이라는 뜻은 아니다.** 동결 문구:
+   *No false GO was observed in 600 null simulations (0/600). This does not establish a
+   zero false-GO probability.* rule-of-three 기준 95% 상한은 약 3/600 = **0.5%** 다.
+   보고 형식은 `observed false-GO rate 0/600; approximate 95% upper bound ≈ 0.5%` 로
+   고정한다. 점추정 조항이 통제를 담당하고 LCB 조항은 사실상 non-binding 한
+   단일타겟 방어 장치다.
 2. **NO-GO 의 해석을 미리 고정한다.** 위 검정력은 **사전 지정된 시뮬레이션 모형에
    조건부**다 — Δ_Top4 와 AUC 의 대응은 그 모형, prevalence, 백본 크기, 점수 분포에
    의존한다. 따라서 "AUC ≥ 0.70 인 예측기는 존재하지 않는다" 로 읽지 않는다. 동결
@@ -223,8 +293,11 @@ label-shift 노이즈 모형, 400 반복, 타겟 등가중. **실제 feature 를
 
 ### 연산 정의 (모호성 제거)
 
-- **q_b 의 분모는 그 백본의 사용가능 설계 전부**(격자에서 24개, status!=ok 제외 후)다.
-  홀드아웃 부분집합이 아니다. Δ_Top4 의 두 항이 같은 분모를 보게 하기 위함이다.
+- **q_b 는 Top-4 를 고르는 것과 같은 candidate universe 위의 base rate 다.**
+  *q_b is the base rate over the same eligible candidate pool from which Top-4 is
+  selected.* 분모는 그 백본의 사용가능 설계 전부(격자에서 24개, status!=ok 제외 후)이고
+  홀드아웃 부분집합이 아니다. Top-4 rate 의 분모는 4 이므로 **두 항의 분모가 같다고
+  쓰지 않는다** — 같아야 하는 것은 후보 모집단이다.
 - **Top-4 동점 처리**: 점수 동점이면 `sequence_id` 오름차순으로 끊는다. 무작위
   동점 처리를 쓰지 않는다 — 재현되지 않는다.
 - **Gate 1 의 타겟 내 Spearman**: 백본이 3개 미만인 타겟은 상관이 불안정하므로
@@ -254,9 +327,15 @@ label-shift 노이즈 모형, 400 반복, 타겟 등가중. **실제 feature 를
 
 ### 실행 순서 (결정됨)
 
-**S0–S3 를 먼저 돌려 Gate 2 1차 판정을 확보하고, MSA 12건을 병행한다.** 도착하면
-S4–S6 arm 을 추가한다. **arm 목록(S0–S6)과 GO 규칙은 이 문서에서 전부 동결됐으므로
-사후 arm 추가가 아니다.** S4–S6 결과는 같은 스펙의 2차 보고로 낸다.
+**S0–S3 를 먼저 돌리고 MSA 12건을 병행한다. 단 그 1차 결과는 interim/descriptive
+only 이며, 공식 Gate 2 판정은 S6 없이는 내리지 않는다.** 판정 arm 이 S6 로 동결됐기
+때문이다 (§4). arm 목록(S0–S6)과 GO 규칙은 이 문서에서 전부 동결됐으므로 사후 arm
+추가가 아니다.
+
+**결과적으로 MSA 12건은 critical path 다.** 처음 "S0–S3 먼저" 를 고른 이유는 판정을
+8시간 앞당기는 것이었으나, S6 를 판정 arm 으로 동결한 지금 그 이유는 사라졌다.
+S0–S3 를 먼저 돌리는 남은 값어치는 **파이프라인·feature 코드를 MSA 도착 전에
+검증해 두는 것**뿐이다. 그 목적으로만 실행하고, 어떤 GO/NO-GO 문장도 내지 않는다.
 
 ## 8. 판정표
 
