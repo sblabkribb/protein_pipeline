@@ -806,7 +806,64 @@ def resolve_backbone_pdbs() -> dict[str, dict]:
 Run: `/tmp/gate2d-venv/bin/python -m pytest tests/test_gate2d_metrics.py -k backbone_pdb -v`
 Expected: PASS
 
-- [ ] **Step 5: dev encoder 를 만든 호출부를 먼저 찾는다 (코드를 쓰기 전에)**
+### 2026-09-10 조사 결과 — 호출부는 존재하지 않는다
+
+Step 5 를 controller 가 미리 수행했다. 결과는 다음이다.
+
+**`mpnn_encoder.npy` 를 만든 스크립트는 커밋된 적이 없다.** 그 파일을 추가한 커밋
+`1c2eeb4` 는 산출물만 담고 있다 (`mpnn_encoder.{npy,meta.json}`, `backbones/pdb/*`
+157개, `gate0_ladder.json`, `gate0_learning_curve.json`) — 코드 파일이 하나도 없다.
+작업 트리와 `rapid_sr/` 전체 grep 에도 추출기가 없다.
+
+재현에 필요한 정보는 산문으로 남아 있다. `1c2eeb4` 커밋 메시지:
+
+> The ProteinMPNN encoder starts from a zero node state and is updated only by
+> geometric edges, so it is sequence-independent and can be computed once per
+> backbone. Extracted 3-layer pooled node features (384 dims) for all 77
+> backbones on CPU in under a minute.
+
+`mpnn_encoder.meta.json` 의 ckpt 는 `/home/pipeline/models/src/ProteinMPNN/soluble_model_weights/v_48_020.pt` 이고 dim 384 다. ProteinMPNN 인코더 hidden dim 이
+128 이므로 384 = 3 layer × 128 의 layer-wise pooled concat 으로 읽힌다.
+
+**그런데 이 호스트에 체크포인트가 없다.** `v_48_020.pt` 를 찾지 못했고
+`/home/pipeline/models/` 경로도 없다. ProteinMPNN 소스는
+`/tmp/opencode/thermomp/protein_mpnn_utils.py` 에 있지만 임시 디렉터리다.
+`workers/` 에는 `esm_embedding` 하나뿐이고 ProteinMPNN worker 는 없다 — 이 리포는
+ProteinMPNN 을 RunPod 서버리스로 호출하며 그 엔드포인트는 서열을 돌려주고
+인코더 특징을 돌려주지 않는다.
+
+**따라서 Step 5 의 "찾지 못하면 멈추고 보고한다" 가 발동했다.** 아래 Step 5a 가
+그 결정을 대신할 수 없다 — 체크포인트 접근은 controller 가 사용자에게 물어야 한다.
+
+- [ ] **Step 5a: 새 추출기를 쓸 경우 반드시 통과해야 하는 재현 검증**
+
+체크포인트가 확보되어 추출기를 새로 쓰게 되면, **홀드아웃에 적용하기 전에
+dev feature 를 재현하는지 먼저 증명한다.** 이것이 "다른 feature 공간" 위험을
+가정에서 검증 가능한 사실로 바꾼다.
+
+dev 백본 157개의 PDB 는 **전부 커밋되어 있다** (`git ls-files
+public_data/benchmark/gate0/backbones/pdb | wc -l` → 157). 따라서:
+
+```bash
+# 새 추출기를 dev 157 백본에 돌린 뒤 기존 산출물과 수치 비교
+/tmp/gate2d-venv/bin/python - <<'EOF'
+import numpy as np
+ref = np.load("public_data/benchmark/gate0/backbones/mpnn_encoder.npy")
+new = np.load("/tmp/dev_encoder_reproduction.npy")
+print("shape", ref.shape, new.shape)
+print("max abs diff", float(np.abs(ref - new).max()))
+print("allclose(atol=1e-4)", bool(np.allclose(ref, new, atol=1e-4)))
+EOF
+```
+
+**통과 기준**: shape 이 (157, 384) 로 같고 `allclose(atol=1e-4)`. 통과하면 같은
+공간이므로 홀드아웃 72 백본에 적용해도 안전하다. **실패하면 Gate 1 을 실행하지
+않는다** — train 과 test 가 다른 공간에 놓인 결과는 해석할 수 없다.
+
+행 정렬도 함께 확인한다: `backbone_labels.csv` 의 행 순서가 `mpnn_encoder.npy` 의
+행 순서와 같다는 것을 Task 10 의 `load_dev` 가 이미 assert 한다.
+
+- [ ] **Step 5: (원문 유지) dev encoder 를 만든 호출부를 먼저 찾는다**
 
 Run:
 ```bash
