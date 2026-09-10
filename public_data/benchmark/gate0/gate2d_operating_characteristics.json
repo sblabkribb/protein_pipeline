@@ -1,0 +1,444 @@
+{
+  "purpose": "동결된 GO 규칙(§3·§5)의 작동특성 - 재현성 계약",
+  "frozen_spec": "docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md",
+  "outcome_blind": "라벨 분포와 실제 q_b 만 사용한다. 실제 feature 는 어느 표에도 들어가지 않는다.",
+  "seed": 20260910,
+  "lcb": {
+    "primitive": "rapid_sr.clustered.one_sided_lcb",
+    "alpha": 0.1,
+    "n_boot": 20000,
+    "seed": 20260910,
+    "note": "게이트가 부르는 것과 같은 인자·같은 시드로 부른다"
+  },
+  "primitives": {
+    "lcb": "rapid_sr.clustered.one_sided_lcb",
+    "delta_top4": "_gate2d.delta_top4",
+    "per_target_means": "_gate2d.per_target_means",
+    "target_equal_mean": "_gate2d.target_equal_mean",
+    "within_target_spearman": "_gate2d.within_target_spearman",
+    "top1_regret": "_gate2d.top1_regret",
+    "cohort": "_gate2d_cohort.load_holdout_grid",
+    "auc": "sklearn.metrics.roc_auc_score"
+  },
+  "go_rules": {
+    "gate2_delta_min": 0.1,
+    "gate1_rho_min": 0.25,
+    "min_informative_targets": 8,
+    "top_k": 4
+  },
+  "cohorts": {
+    "gate2_mixed_all_sources": {
+      "n_backbones": 37,
+      "n_targets": 11,
+      "n_folds": 888
+    },
+    "OC_primary_rfd3_only": {
+      "n_backbones": 60,
+      "n_informative_targets": 11,
+      "n_folds": 1440
+    },
+    "OC_legacy_all_sources": {
+      "n_backbones": 70,
+      "n_informative_targets": 11,
+      "n_folds": 1680
+    }
+  },
+  "gate2_auc_calibration": {
+    "model": "score = N(delta if label else 0, 1); 라벨 분포만 사용",
+    "weighting": "백본내 값 -> 타겟 등가중(G.target_equal_mean) -> 반복 평균",
+    "reps": 400,
+    "rows": [
+      {
+        "delta": 0.0,
+        "mean_auc": 0.4996,
+        "mean_delta_top4": 0.0008
+      },
+      {
+        "delta": 0.25,
+        "mean_auc": 0.5668,
+        "mean_delta_top4": 0.0528
+      },
+      {
+        "delta": 0.5,
+        "mean_auc": 0.6392,
+        "mean_delta_top4": 0.1037
+      },
+      {
+        "delta": 0.6,
+        "mean_auc": 0.6674,
+        "mean_delta_top4": 0.1252
+      },
+      {
+        "delta": 0.75,
+        "mean_auc": 0.703,
+        "mean_delta_top4": 0.1483
+      },
+      {
+        "delta": 1.0,
+        "mean_auc": 0.7613,
+        "mean_delta_top4": 0.1899
+      },
+      {
+        "delta": "oracle",
+        "mean_auc": 1.0,
+        "mean_delta_top4": 0.3255
+      }
+    ]
+  },
+  "gate2_go_operating_characteristics": {
+    "rule": "점추정 Δ_Top4 >= +0.10 AND 단측 90% LCB > 0 AND informative >= 8",
+    "reps": 600,
+    "rows": [
+      {
+        "delta": 0.0,
+        "corresponding_mean_auc": 0.4996,
+        "true_mean_delta_top4": 0.0003,
+        "p_point_ge_0.10": 0.0017,
+        "p_lcb_gt_0": 0.1283,
+        "p_go": 0.0017,
+        "go_count": 1
+      },
+      {
+        "delta": 0.25,
+        "corresponding_mean_auc": 0.5668,
+        "true_mean_delta_top4": 0.0532,
+        "p_point_ge_0.10": 0.0783,
+        "p_lcb_gt_0": 0.6917,
+        "p_go": 0.0783,
+        "go_count": 47
+      },
+      {
+        "delta": 0.5,
+        "corresponding_mean_auc": 0.6392,
+        "true_mean_delta_top4": 0.1026,
+        "p_point_ge_0.10": 0.5483,
+        "p_lcb_gt_0": 0.9617,
+        "p_go": 0.5483,
+        "go_count": 329
+      },
+      {
+        "delta": 0.6,
+        "corresponding_mean_auc": 0.6674,
+        "true_mean_delta_top4": 0.1218,
+        "p_point_ge_0.10": 0.7517,
+        "p_lcb_gt_0": 0.9867,
+        "p_go": 0.7517,
+        "go_count": 451
+      },
+      {
+        "delta": 0.75,
+        "corresponding_mean_auc": 0.703,
+        "true_mean_delta_top4": 0.1469,
+        "p_point_ge_0.10": 0.9283,
+        "p_lcb_gt_0": 1.0,
+        "p_go": 0.9283,
+        "go_count": 557
+      }
+    ],
+    "false_go": {
+      "count": 1,
+      "reps": 600,
+      "rate": 0.00167,
+      "upper_95_one_sided": 0.00788,
+      "upper_95_method": "Clopper-Pearson 단측 95%. count = 0 이면 rule-of-three(3/n) 와 같은 값이다",
+      "frozen_sentence": "observed false-GO rate 1/600 = 0.002; one-sided 95% upper bound 0.008"
+    }
+  },
+  "gate1_operating_characteristics": {
+    "OC_primary_rfd3_only": {
+      "status": "authoritative",
+      "note": "§3 개정된 primary 기하 - RFD3-only test(native 제외). Gate 1 의 GO/NO-GO 해석이 인용하는 표다.",
+      "rule": "타겟 등가중 mean within-target Spearman >= 문턱 AND 단측 90% LCB > 0 AND informative >= 8",
+      "model": "q̂_b = q_b + N(0, sigma); null 은 q_b 와 독립인 N(0,1)",
+      "reps": 600,
+      "n_backbones_in_informative_targets": 55,
+      "n_informative_targets": 11,
+      "rows": [
+        {
+          "sigma": "null",
+          "mean_rho": 0.0055,
+          "mean_top1_regret": 0.2274,
+          "p_lcb_gt_0": 0.1383,
+          "p_go": {
+            "rho>=0.00": 0.1383,
+            "rho>=0.20": 0.0933,
+            "rho>=0.25": 0.05,
+            "rho>=0.30": 0.03
+          },
+          "go_count": {
+            "rho>=0.00": 83,
+            "rho>=0.20": 56,
+            "rho>=0.25": 30,
+            "rho>=0.30": 18
+          },
+          "n_informative_targets": 11
+        },
+        {
+          "sigma": 1.0,
+          "mean_rho": 0.1764,
+          "mean_top1_regret": 0.1634,
+          "p_lcb_gt_0": 0.47,
+          "p_go": {
+            "rho>=0.00": 0.47,
+            "rho>=0.20": 0.42,
+            "rho>=0.25": 0.3133,
+            "rho>=0.30": 0.21
+          },
+          "go_count": {
+            "rho>=0.00": 282,
+            "rho>=0.20": 252,
+            "rho>=0.25": 188,
+            "rho>=0.30": 126
+          },
+          "n_informative_targets": 11
+        },
+        {
+          "sigma": 0.5,
+          "mean_rho": 0.3337,
+          "mean_top1_regret": 0.1149,
+          "p_lcb_gt_0": 0.8533,
+          "p_go": {
+            "rho>=0.00": 0.8533,
+            "rho>=0.20": 0.84,
+            "rho>=0.25": 0.7383,
+            "rho>=0.30": 0.605
+          },
+          "go_count": {
+            "rho>=0.00": 512,
+            "rho>=0.20": 504,
+            "rho>=0.25": 443,
+            "rho>=0.30": 363
+          },
+          "n_informative_targets": 11
+        },
+        {
+          "sigma": 0.35,
+          "mean_rho": 0.4391,
+          "mean_top1_regret": 0.0881,
+          "p_lcb_gt_0": 0.97,
+          "p_go": {
+            "rho>=0.00": 0.97,
+            "rho>=0.20": 0.965,
+            "rho>=0.25": 0.9383,
+            "rho>=0.30": 0.8767
+          },
+          "go_count": {
+            "rho>=0.00": 582,
+            "rho>=0.20": 579,
+            "rho>=0.25": 563,
+            "rho>=0.30": 526
+          },
+          "n_informative_targets": 11
+        },
+        {
+          "sigma": 0.25,
+          "mean_rho": 0.5471,
+          "mean_top1_regret": 0.0595,
+          "p_lcb_gt_0": 0.9967,
+          "p_go": {
+            "rho>=0.00": 0.9967,
+            "rho>=0.20": 0.9967,
+            "rho>=0.25": 0.9967,
+            "rho>=0.30": 0.9817
+          },
+          "go_count": {
+            "rho>=0.00": 598,
+            "rho>=0.20": 598,
+            "rho>=0.25": 598,
+            "rho>=0.30": 589
+          },
+          "n_informative_targets": 11
+        }
+      ],
+      "false_go_at_frozen_threshold": {
+        "count": 30,
+        "reps": 600,
+        "rate": 0.05,
+        "upper_95_one_sided": 0.06721,
+        "upper_95_method": "Clopper-Pearson 단측 95%. count = 0 이면 rule-of-three(3/n) 와 같은 값이다",
+        "frozen_sentence": "observed false-GO rate 30/600 = 0.050; one-sided 95% upper bound 0.067"
+      }
+    },
+    "OC_legacy_all_sources": {
+      "status": "historical reference only",
+      "note": "native 포함 70 백본 기하. 스펙 §3 에 인쇄된 현재 수치가 나온 곳을 재현하기 위해서만 존재하며 어떤 판정에도 쓰지 않는다.",
+      "rule": "타겟 등가중 mean within-target Spearman >= 문턱 AND 단측 90% LCB > 0 AND informative >= 8",
+      "model": "q̂_b = q_b + N(0, sigma); null 은 q_b 와 독립인 N(0,1)",
+      "reps": 600,
+      "n_backbones_in_informative_targets": 64,
+      "n_informative_targets": 11,
+      "rows": [
+        {
+          "sigma": "null",
+          "mean_rho": -0.0007,
+          "mean_top1_regret": 0.2451,
+          "p_lcb_gt_0": 0.11,
+          "p_go": {
+            "rho>=0.00": 0.11,
+            "rho>=0.20": 0.0667,
+            "rho>=0.25": 0.0317,
+            "rho>=0.30": 0.0133
+          },
+          "go_count": {
+            "rho>=0.00": 66,
+            "rho>=0.20": 40,
+            "rho>=0.25": 19,
+            "rho>=0.30": 8
+          },
+          "n_informative_targets": 11
+        },
+        {
+          "sigma": 1.0,
+          "mean_rho": 0.1922,
+          "mean_top1_regret": 0.1679,
+          "p_lcb_gt_0": 0.5683,
+          "p_go": {
+            "rho>=0.00": 0.5683,
+            "rho>=0.20": 0.4733,
+            "rho>=0.25": 0.3417,
+            "rho>=0.30": 0.2117
+          },
+          "go_count": {
+            "rho>=0.00": 341,
+            "rho>=0.20": 284,
+            "rho>=0.25": 205,
+            "rho>=0.30": 127
+          },
+          "n_informative_targets": 11
+        },
+        {
+          "sigma": 0.5,
+          "mean_rho": 0.342,
+          "mean_top1_regret": 0.113,
+          "p_lcb_gt_0": 0.91,
+          "p_go": {
+            "rho>=0.00": 0.91,
+            "rho>=0.20": 0.87,
+            "rho>=0.25": 0.7867,
+            "rho>=0.30": 0.645
+          },
+          "go_count": {
+            "rho>=0.00": 546,
+            "rho>=0.20": 522,
+            "rho>=0.25": 472,
+            "rho>=0.30": 387
+          },
+          "n_informative_targets": 11
+        },
+        {
+          "sigma": 0.35,
+          "mean_rho": 0.435,
+          "mean_top1_regret": 0.0822,
+          "p_lcb_gt_0": 0.9833,
+          "p_go": {
+            "rho>=0.00": 0.9833,
+            "rho>=0.20": 0.9783,
+            "rho>=0.25": 0.9533,
+            "rho>=0.30": 0.89
+          },
+          "go_count": {
+            "rho>=0.00": 590,
+            "rho>=0.20": 587,
+            "rho>=0.25": 572,
+            "rho>=0.30": 534
+          },
+          "n_informative_targets": 11
+        },
+        {
+          "sigma": 0.25,
+          "mean_rho": 0.5257,
+          "mean_top1_regret": 0.0563,
+          "p_lcb_gt_0": 1.0,
+          "p_go": {
+            "rho>=0.00": 1.0,
+            "rho>=0.20": 1.0,
+            "rho>=0.25": 0.9967,
+            "rho>=0.30": 0.9883
+          },
+          "go_count": {
+            "rho>=0.00": 600,
+            "rho>=0.20": 600,
+            "rho>=0.25": 598,
+            "rho>=0.30": 593
+          },
+          "n_informative_targets": 11
+        }
+      ],
+      "false_go_at_frozen_threshold": {
+        "count": 19,
+        "reps": 600,
+        "rate": 0.03167,
+        "upper_95_one_sided": 0.04612,
+        "upper_95_method": "Clopper-Pearson 단측 95%. count = 0 이면 rule-of-three(3/n) 와 같은 값이다",
+        "frozen_sentence": "observed false-GO rate 19/600 = 0.032; one-sided 95% upper bound 0.046"
+      }
+    }
+  },
+  "contracts": {
+    "purpose": "표를 만든 primitive 가 바뀌면 여기서 먼저 깨진다",
+    "gate2_delta_top4": {
+      "generator": "simulate_gate2_rep(mixed, delta=0.5, rep=0) -> per_target_means",
+      "per_target": [
+        0.08333333333333334,
+        -0.02083333333333333,
+        0.16666666666666666,
+        0.2916666666666667,
+        0.03333333333333332,
+        0.125,
+        0.041666666666666685,
+        0.04166666666666663,
+        0.09166666666666666,
+        0.18055555555555555,
+        0.06250000000000001
+      ],
+      "lcb": {
+        "point": 0.099747,
+        "lcb": 0.068182,
+        "exceeds_zero": true,
+        "n": 11,
+        "n_boot": 20000,
+        "alpha": 0.1
+      }
+    },
+    "gate1_spearman": {
+      "generator": "simulate_gate1_rep(OC_primary_rfd3_only, sigma=0.5, rep=0) -> within_target_spearman",
+      "cohort": "OC_primary_rfd3_only",
+      "targets": [
+        "1sp0A00",
+        "1tm9A00",
+        "1vsrA00",
+        "2jokA01",
+        "3bqwA01",
+        "3es1A01",
+        "3f2pA01",
+        "3h7eA02",
+        "5fwaA02",
+        "5pc8A00",
+        "5xpdA02"
+      ],
+      "per_target": [
+        0.8720815992723809,
+        0.39999999999999997,
+        0.30779350562554625,
+        0.09999999999999999,
+        0.44721359549995787,
+        0.7071067811865475,
+        0.8720815992723809,
+        -0.5773502691896257,
+        0.6155870112510925,
+        0.05270462766947298,
+        0.0
+      ],
+      "lcb": {
+        "point": 0.345202,
+        "lcb": 0.183185,
+        "exceeds_zero": true,
+        "n": 11,
+        "n_boot": 20000,
+        "alpha": 0.1
+      }
+    }
+  },
+  "code_sha": "16fd5d86ff9bb55b0bc9f96b0b992fb109a0be42",
+  "utc": "2026-09-10T07:45:37Z"
+}

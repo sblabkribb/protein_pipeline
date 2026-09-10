@@ -458,3 +458,289 @@ def test_delta_top4_still_returns_nan_for_an_uncountable_backbone():
 
     # 그 sentinel 은 타겟 등가중 집계에서 제외된다(예외가 되지 않는다).
     assert G.per_target_means([empty, 0.4], ["A", "A"]) == [0.4]
+
+
+def test_within_target_spearman_excludes_targets_it_cannot_define():
+    """스펙 §5: 백본 3개 미만인 타겟은 제외하고 그 수를 보고한다.
+
+    q_b 가 상수인 타겟도 정의되지 않는다 - `1sh6A02` 가 그 경우다(6 백본 전부
+    q_b = 1.00). 상수 타겟에 0 을 넣으면 존재하지 않는 관측이 평균을 끌어내린다.
+    """
+    # 타겟 A: 완전 일치 -> +1. 타겟 B: 완전 역순 -> -1.
+    predicted = [0.1, 0.2, 0.3, 0.3, 0.2, 0.1]
+    actual = [0.1, 0.2, 0.3, 0.1, 0.2, 0.3]
+    targets = ["A", "A", "A", "B", "B", "B"]
+    rhos = G.within_target_spearman(predicted, actual, targets)
+    assert sorted(rhos) == ["A", "B"]
+    assert abs(rhos["A"] - 1.0) < 1e-12
+    assert abs(rhos["B"] + 1.0) < 1e-12
+    # 타겟 등가중 평균은 기존 primitive 로 낸다 - 별도 평균을 만들지 않는다.
+    assert abs(G.target_equal_mean(list(rhos.values()), list(rhos))) < 1e-12
+
+    # 백본 2개인 타겟은 빠진다(상관이 불안정하다).
+    assert G.within_target_spearman([0.1, 0.2], [0.1, 0.2], ["C", "C"]) == {}
+    # q_b 가 상수인 타겟도 빠진다 - 제외 사유는 다르지만 결과는 미정의다.
+    assert G.within_target_spearman([0.1, 0.2, 0.3], [1.0, 1.0, 1.0],
+                                    ["D"] * 3) == {}
+    # 예측이 상수여도 미정의다(순위 정보가 0 인 것과 -1..+1 은 다르다).
+    assert G.within_target_spearman([0.5, 0.5, 0.5], [0.1, 0.2, 0.3],
+                                    ["E"] * 3) == {}
+
+
+def test_top1_regret_is_the_q_b_a_perfect_picker_would_have_got():
+    """2차 지표. q_b(실제 최선) − q_b(예측 최선). 0 이 최선이다."""
+    # 타겟 A: 예측 최선이 q_b 0.5 인 백본, 실제 최선은 0.9 -> regret 0.4.
+    predicted = [0.9, 0.1, 0.2, 0.1, 0.5, 0.9]
+    actual = [0.5, 0.9, 0.3, 0.2, 0.4, 0.8]
+    targets = ["A", "A", "A", "B", "B", "B"]
+    regret = G.top1_regret(predicted, actual, targets)
+    assert abs(regret["A"] - 0.4) < 1e-12
+    # 타겟 B: 예측 최선(0.9)이 실제 최선(0.8)과 같은 백본 -> regret 0.
+    assert abs(regret["B"]) < 1e-12
+    # 백본 3개 미만인 타겟은 Spearman 과 같은 이유로 빠진다.
+    assert G.top1_regret([0.1, 0.2], [0.5, 0.9], ["C", "C"]) == {}
+
+
+def test_rfd3_only_is_a_cohort_the_loader_can_hand_over():
+    """§3 개정: Gate 1 의 1차 코호트는 RFD3-only 다. native 는 comparator 다.
+
+    source 는 `af2_order_metric.csv` 의 `backbone_source` 열이다 - backbone_key
+    를 문자열로 쪼개 추측하면 파일 형식 지식이 두 곳에 살게 된다.
+    """
+    import _gate2d_cohort as C
+    grid = C.load_holdout_grid()
+
+    rfd3 = C.restrict_to_sources(grid, ("rfd3",))
+    # variance_decomposition_grid.json 의 rfd3_only_primary 와 같은 기하다.
+    assert len(rfd3.backbones) == 60
+    assert len(rfd3.folds) == 1440
+    assert {b.backbone_source for b in rfd3.backbones} == {"rfd3"}
+    # §3: RFD3-only 로도 informative 타겟은 11 개 그대로다(검정력 손실 거의 없음).
+    assert len(C.gate1_informative_targets(rfd3)) == 11
+    # §3: Gate 2 민감도 코호트는 mixed 34 · informative 11.
+    assert len(C.mixed_backbones(rfd3)) == 34
+    assert len({b.target_id for b in C.mixed_backbones(rfd3)}) == 11
+
+    # native 라벨은 10/12 타겟에만 있다 - 3es1A01·3h7eA02 는 대응 거부로 폴드 0.
+    native = C.restrict_to_sources(grid, ("target",))
+    assert len(native.backbones) == 10
+    assert "3es1A01" not in native.targets and "3h7eA02" not in native.targets
+    # 두 코호트를 합치면 전체 70 백본이다 - 조용히 사라지는 백본이 없다.
+    assert len(rfd3.backbones) + len(native.backbones) == len(grid.backbones)
+
+    # 없는 source 를 주면 빈 코호트다(조용히 전체를 돌려주지 않는다).
+    assert C.restrict_to_sources(grid, ("bioemu",)).backbones == []
+
+
+# --------------------------------------------------------------------------
+# OC 표 생성기 (`26_gate2d_operating_characteristics.py`) 의 회귀 가드.
+#
+# 스펙 §3·§5 에 인쇄된 표는 커밋되지 않은 임시 실행이 만들었다. 배포된
+# `one_sided_lcb` 가 그 표를 여전히 재현하는지 확인하는 것이 아무것도 없었다 -
+# 아래가 그 계약이다. **스펙 파일은 고치지 않는다**: 인쇄값을 여기에 적어 두고
+# 산출물과 대조하며, 차이는 controller 가 판단한다.
+# --------------------------------------------------------------------------
+
+OC_ARTIFACT = (ROOT / "public_data" / "benchmark" / "gate0"
+               / "gate2d_operating_characteristics.json")
+
+#: 스펙 §5 교정표 인쇄값. delta -> (mean AUC, Δ_Top4).
+SPEC_GATE2_CALIBRATION = {
+    0.0: (0.502, -0.001), 0.25: (0.568, 0.053), 0.5: (0.640, 0.101),
+    0.6: (0.665, 0.120), 0.75: (0.701, 0.146), 1.0: (0.760, 0.187),
+}
+
+#: 스펙 §5 작동특성표 인쇄값. delta -> (참 Δ_Top4, P(점추정≥.10), P(LCB>0), P(GO)).
+SPEC_GATE2_OC = {
+    0.0: (0.001, 0.00, 0.12, 0.00), 0.25: (0.053, 0.09, 0.65, 0.09),
+    0.5: (0.103, 0.54, 0.96, 0.54), 0.6: (0.122, 0.77, 0.99, 0.77),
+    0.75: (0.148, 0.94, 0.99, 0.94),
+}
+
+#: 스펙 §3 Gate 1 OC 인쇄값. sigma -> (E[mean rho], E[top-1 regret], P(GO) 네 문턱).
+SPEC_GATE1_OC = {
+    "null": (-0.002, 0.245, (0.12, 0.06, 0.03, 0.01)),
+    1.0: (0.184, 0.165, (0.53, 0.47, 0.34, 0.20)),
+    0.5: (0.340, 0.111, (0.92, 0.89, 0.79, 0.63)),
+    0.35: (0.441, 0.081, (0.98, 0.97, 0.96, 0.90)),
+    0.25: (0.529, 0.055, (1.00, 1.00, 1.00, 0.99)),
+}
+
+#: 확률 셀의 허용오차. n=600 이항 SE 는 p=0.5 에서 0.020 이므로 2.5 SE 다.
+#: 인쇄값을 만든 임시 실행은 power 루프 안에서 부트스트랩 800 회를 썼고
+#: 프로덕션 `one_sided_lcb` 는 20,000 회다 - P(LCB>0) 이 그만큼 더 흔들린다.
+PROB_TOL = 0.05
+
+
+def _oc() -> dict:
+    import json
+    assert OC_ARTIFACT.exists(), f"{OC_ARTIFACT} 가 없다 - 생성기를 돌려야 한다"
+    return json.loads(OC_ARTIFACT.read_text(encoding="utf-8"))
+
+
+def test_oc_artifact_records_the_seed_and_the_frozen_cohort_geometry():
+    """산출물이 자기 provenance 를 들고 있어야 재현이 가능하다.
+
+    시드·반복수·부트스트랩 수·코호트 크기·호출한 primitive 이름을 모두 적는다.
+    """
+    art = _oc()
+    assert art["seed"] == G.BOOTSTRAP_SEED
+    assert art["lcb"] == {
+        "primitive": "rapid_sr.clustered.one_sided_lcb",
+        "alpha": G.LCB_ONE_SIDED_ALPHA, "n_boot": 20000,
+        "seed": G.BOOTSTRAP_SEED,
+        "note": "게이트가 부르는 것과 같은 인자·같은 시드로 부른다",
+    }
+    assert art["go_rules"] == {
+        "gate2_delta_min": G.GATE2_DELTA_MIN, "gate1_rho_min": G.GATE1_RHO_MIN,
+        "min_informative_targets": G.MIN_INFORMATIVE_TARGETS, "top_k": G.TOP_K,
+    }
+    # 스펙 §5 의 반복수. 연습 실행 결과가 커밋되면 여기서 걸린다.
+    assert art["gate2_auc_calibration"]["reps"] == 400
+    assert art["gate2_go_operating_characteristics"]["reps"] == 600
+    for table in art["gate1_operating_characteristics"].values():
+        assert table["reps"] == 600
+
+    # 코호트는 로더에서 읽은 실제 기하다 - 합성 격자가 아니다.
+    assert art["cohorts"]["gate2_mixed_all_sources"] == {
+        "n_backbones": 37, "n_targets": 11, "n_folds": 888}
+    assert art["cohorts"]["OC_primary_rfd3_only"] == {
+        "n_backbones": 60, "n_informative_targets": 11, "n_folds": 1440}
+    assert art["cohorts"]["OC_legacy_all_sources"] == {
+        "n_backbones": 70, "n_informative_targets": 11, "n_folds": 1680}
+
+    # 어떤 primitive 를 불렀는지 산출물이 말한다 - 재구현하면 이름이 어긋난다.
+    assert art["primitives"]["lcb"] == "rapid_sr.clustered.one_sided_lcb"
+    assert art["primitives"]["delta_top4"] == "_gate2d.delta_top4"
+    assert art["primitives"]["within_target_spearman"] == "_gate2d.within_target_spearman"
+
+
+def test_oc_artifact_reproduces_the_spec_gate2_calibration_table():
+    """스펙 §5 AUC ↔ Δ_Top4 교정표를 재현한다 (400 반복, 타겟 등가중)."""
+    rows = {r["delta"]: r for r in _oc()["gate2_auc_calibration"]["rows"]}
+    for delta, (auc, delta_top4) in SPEC_GATE2_CALIBRATION.items():
+        got = rows[delta]
+        assert abs(got["mean_auc"] - auc) <= 0.005, (delta, got["mean_auc"], auc)
+        # 400 반복 MC 노이즈. 최대 편차는 delta=0.60 의 0.005 다.
+        assert abs(got["mean_delta_top4"] - delta_top4) <= 0.006, (
+            delta, got["mean_delta_top4"], delta_top4)
+    # oracle 열은 결정적이다 - 노이즈가 없으므로 인쇄된 자릿수에서 정확히 같다.
+    assert round(rows["oracle"]["mean_delta_top4"], 3) == 0.326
+    assert rows["oracle"]["mean_auc"] == 1.0
+
+
+def test_oc_artifact_reproduces_the_spec_gate2_go_operating_characteristics():
+    """스펙 §5 작동특성표 (n=11, 600 반복).
+
+    **한 셀이 인쇄값과 다르다.** 귀무의 거짓 GO 가 0/600 이 아니라 1/600 이다.
+    P(GO) 는 여전히 0.00 으로 인쇄되지만(0.0017), 스펙이 동결한 문장
+    *"No false GO was observed in 600 null simulations (0/600)"* 의 **개수**는
+    프로덕션 부트스트랩에서 재현되지 않는다. 임시 실행은 power 루프 안에서
+    800 회를 썼고 여기는 20,000 회다. 문턱 +0.10 은 움직이지 않는다.
+    스펙 문장을 고칠지는 controller 가 결정한다 - 여기서는 실제 값을 고정한다.
+    """
+    table = _oc()["gate2_go_operating_characteristics"]
+    rows = {r["delta"]: r for r in table["rows"]}
+    for delta, (true_delta, p_point, p_lcb, p_go) in SPEC_GATE2_OC.items():
+        got = rows[delta]
+        assert abs(got["true_mean_delta_top4"] - true_delta) <= 0.002, delta
+        assert abs(got["p_point_ge_0.10"] - p_point) <= PROB_TOL, delta
+        assert abs(got["p_lcb_gt_0"] - p_lcb) <= PROB_TOL, delta
+        assert abs(got["p_go"] - p_go) <= PROB_TOL, delta
+
+    # 세 조항 중 점추정이 통제를 담당한다 - P(GO) 는 P(점추정) 과 같아야 한다.
+    for row in table["rows"]:
+        assert row["p_go"] == row["p_point_ge_0.10"], row["delta"]
+
+    false_go = table["false_go"]
+    assert false_go["reps"] == 600
+    assert false_go["count"] == 1, "인쇄된 0/600 이 아니다 - 보고 대상이다"
+    assert false_go["frozen_sentence"] == (
+        "observed false-GO rate 1/600 = 0.002; one-sided 95% upper bound 0.008")
+    # rule-of-three 는 0 관측에만 유효하다 - 0 이 아닌 관측에 3/n 을 붙이지 않는다.
+    assert false_go["upper_95_one_sided"] > 3.0 / 600
+
+
+def test_oc_artifact_keeps_the_gate1_geometries_apart_by_name():
+    """Gate 1 은 두 기하를 계산하고 이름으로 권위를 구분한다.
+
+    §3 개정이 native 를 배분 풀에서 comparator 로 옮겼으므로 **판정 기하는
+    RFD3-only** 다. 스펙 §3 에 인쇄된 표는 개정 전 70 백본(native 포함) 기하에서
+    계산됐고, 아래가 그 사실을 데이터로 고정한다 - legacy 는 인쇄값을 재현하고
+    primary 는 재현하지 않는다. **인쇄값과 맞는다는 것이 권위의 근거가 아니다.**
+    """
+    tables = _oc()["gate1_operating_characteristics"]
+    assert tables["OC_primary_rfd3_only"]["status"] == "authoritative"
+    assert tables["OC_legacy_all_sources"]["status"] == "historical reference only"
+    # 실제 백본 수가 다르다: RFD3-only 는 타겟당 5, native 포함은 5~6.
+    assert tables["OC_primary_rfd3_only"]["n_backbones_in_informative_targets"] == 55
+    assert tables["OC_legacy_all_sources"]["n_backbones_in_informative_targets"] == 64
+    for table in tables.values():
+        assert table["n_informative_targets"] == 11  # 어느 기하에서도 11 이다
+
+    # legacy 기하가 스펙 §3 인쇄값을 재현한다.
+    rows = {r["sigma"]: r for r in tables["OC_legacy_all_sources"]["rows"]}
+    for sigma, (rho, regret, p_go) in SPEC_GATE1_OC.items():
+        got = rows[sigma]
+        assert abs(got["mean_rho"] - rho) <= 0.01, sigma
+        assert abs(got["mean_top1_regret"] - regret) <= 0.005, sigma
+        for threshold, expected in zip(("0.00", "0.20", "0.25", "0.30"), p_go):
+            assert abs(got["p_go"][f"rho>={threshold}"] - expected) <= PROB_TOL, (
+                sigma, threshold)
+
+
+def test_gate1_primary_geometry_is_frozen_with_its_own_numbers():
+    """판정 기하(RFD3-only)의 재프리즈 대상 값.
+
+    타겟당 백본이 6 -> 5 로 줄면 타겟내 Spearman 이 더 흔들리므로 귀무의 거짓
+    GO 가 올라간다: ρ≥0.25 에서 **30/600 = 0.050** (legacy 인쇄값 0.03). 검정력도
+    같은 이유로 조금 낮다(ρ≈0.33 에서 0.74, ρ≈0.44 에서 0.94). 문턱을 바꿀지는
+    controller 가 결정한다 - 이 테스트는 판정 기하의 실제 값을 고정할 뿐이다.
+    """
+    table = _oc()["gate1_operating_characteristics"]["OC_primary_rfd3_only"]
+    rows = {r["sigma"]: r for r in table["rows"]}
+    frozen = "rho>=0.25"
+    assert rows["null"]["p_go"][frozen] == 0.05
+    assert rows[1.0]["p_go"][frozen] == 0.3133
+    assert rows[0.5]["p_go"][frozen] == 0.7383
+    assert rows[0.35]["p_go"][frozen] == 0.9383
+    assert rows[0.25]["p_go"][frozen] == 0.9967
+    assert [rows[s]["mean_rho"] for s in ("null", 1.0, 0.5, 0.35, 0.25)] == [
+        0.0055, 0.1764, 0.3337, 0.4391, 0.5471]
+    false_go = table["false_go_at_frozen_threshold"]
+    assert (false_go["count"], false_go["reps"]) == (30, 600)
+    assert false_go["frozen_sentence"] == (
+        "observed false-GO rate 30/600 = 0.050; one-sided 95% upper bound 0.067")
+
+
+def test_oc_artifact_is_bound_to_the_shipped_bootstrap_and_primitives():
+    """표를 만든 코드가 바뀌면 여기서 먼저 깨진다.
+
+    표 전체를 다시 돌리면 분 단위이므로, 산출물에 적힌 단일 반복 fixture 를
+    **실제로 다시 계산해** 대조한다. `delta_top4`·`per_target_means`·
+    `within_target_spearman`·`one_sided_lcb` 중 하나라도 동작이 바뀌면 이 두
+    벡터나 두 LCB 가 어긋난다 - 그것이 이 산출물의 존재 이유다.
+    """
+    import importlib
+    from rapid_sr.clustered import one_sided_lcb
+    gen = importlib.import_module("26_gate2d_operating_characteristics")
+    import _gate2d_cohort as C
+
+    contracts = _oc()["contracts"]
+    grid = C.load_holdout_grid()
+
+    g2 = contracts["gate2_delta_top4"]
+    deltas, _aucs, targets = gen.simulate_gate2_rep(
+        C.mixed_backbones(grid), delta=0.50, rep=0)
+    assert G.per_target_means(deltas, targets) == g2["per_target"]
+    assert one_sided_lcb(g2["per_target"], alpha=G.LCB_ONE_SIDED_ALPHA,
+                         n_boot=20000, seed=G.BOOTSTRAP_SEED) == g2["lcb"]
+
+    g1 = contracts["gate1_spearman"]
+    rfd3 = C.restrict_to_sources(grid, ("rfd3",))
+    names, q_b = gen.gate1_units(rfd3)
+    rhos, _regret = gen.simulate_gate1_rep(names, q_b, sigma=0.50, rep=0)
+    assert list(rhos) == g1["targets"]
+    assert list(rhos.values()) == g1["per_target"]
+    assert one_sided_lcb(g1["per_target"], alpha=G.LCB_ONE_SIDED_ALPHA,
+                         n_boot=20000, seed=G.BOOTSTRAP_SEED) == g1["lcb"]

@@ -126,3 +126,61 @@ def target_equal_mean(per_backbone: Sequence[float],
     if not per_target:
         return float("nan")
     return sum(per_target) / len(per_target)
+
+
+#: Gate 1 의 타겟 내 상관을 정의하는 최소 백본 수. 스펙 §5 규칙이다.
+MIN_UNITS_PER_TARGET = 3
+
+
+def _group_by_target(predicted: Sequence[float], actual: Sequence[float],
+                     targets: Sequence[str], min_units: int
+                     ) -> list[tuple[str, list[float], list[float]]]:
+    """타겟별 (예측, 실제) 묶음. 단위가 min_units 미만인 타겟은 제외한다."""
+    grouped: dict[str, tuple[list[float], list[float]]] = defaultdict(lambda: ([], []))
+    for pred, truth, target in zip(predicted, actual, targets):
+        bucket = grouped[str(target)]
+        bucket[0].append(float(pred))
+        bucket[1].append(float(truth))
+    return [(t, p, a) for t, (p, a) in sorted(grouped.items()) if len(p) >= min_units]
+
+
+def within_target_spearman(predicted: Sequence[float], actual: Sequence[float],
+                           targets: Sequence[str], *,
+                           min_units: int = MIN_UNITS_PER_TARGET
+                           ) -> dict[str, float]:
+    """Gate 1 의 1차 지표 원자재 - 타겟 내 Spearman(q̂_b, q_b).
+
+    스펙 §3·§5: 백본이 3개 미만인 타겟은 상관이 불안정하므로 제외하고 그 수를
+    보고한다(제외 수 = 타겟 총수 − len(반환값)). 어느 한쪽이 상수인 타겟도
+    미정의다 - `1sh6A02` 는 6 백본 전부 q_b = 1.00 이라 그 경우다. **미정의를
+    0 으로 대입하지 않는다**: 존재하지 않는 관측이 타겟 등가중 평균을 끌어내린다.
+
+    타겟 등가중 평균은 `target_equal_mean(list(rhos.values()), list(rhos))` 로
+    낸다 - 여기서 두 번째 평균 규칙을 만들지 않는다.
+    """
+    from scipy.stats import spearmanr
+
+    out: dict[str, float] = {}
+    for target, pred, truth in _group_by_target(predicted, actual, targets, min_units):
+        if len(set(pred)) < 2 or len(set(truth)) < 2:
+            continue  # 상수면 순위가 없다 - 미정의이고 0 이 아니다.
+        rho = float(spearmanr(pred, truth).statistic)
+        if rho == rho:
+            out[target] = rho
+    return out
+
+
+def top1_regret(predicted: Sequence[float], actual: Sequence[float],
+                targets: Sequence[str], *,
+                min_units: int = MIN_UNITS_PER_TARGET) -> dict[str, float]:
+    """Gate 1 의 2차 지표 - q_b(실제 최선) − q_b(예측 최선). 0 이 최선이다.
+
+    RAPID 이 실제로 소비하는 양이다. GO 조건에는 넣지 않는다 (스펙 §3).
+    예측 동점은 입력 순서로 끊는다 - 코호트 로더가 백본을 정렬해 주므로
+    재현된다. 연속 예측기에서 동점 확률은 0 이다.
+    """
+    out: dict[str, float] = {}
+    for target, pred, truth in _group_by_target(predicted, actual, targets, min_units):
+        best_predicted = max(range(len(pred)), key=lambda i: pred[i])
+        out[target] = max(truth) - truth[best_predicted]
+    return out
