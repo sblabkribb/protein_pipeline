@@ -1063,7 +1063,102 @@ def wt_sequence_from_pdb(path: Path) -> str:
 Run: `/tmp/gate2d-venv/bin/python -m pytest tests/test_gate2d_metrics.py -k mutation_sites -v`
 Expected: PASS
 
-- [ ] **Step 5: 임베딩 계산을 붙인다**
+### ⚠️ 정정 (2026-09-10) — Step 5 의 정렬 가드는 **작동하지 않는다**
+
+Step 5 블록의 가드는 다음이다.
+
+```python
+if tokens.shape[0] != len(seq):
+    raise SystemExit(...)
+```
+
+**이 조건은 실제 tokenizer 로 발동할 수 없다.** `hidden` 이 배치 최대 길이로
+padding 되므로 `hidden[row, 1:1+len(seq)]` 는 padded 폭이 `1+len(seq)` 이상이면
+**항상 정확히 `len(seq)` 행**을 낸다. ESM char-level tokenizer 는 잔기당 토큰 1개에
+`<cls>`·`<eos>` 를 더하므로(그리고 `truncation=True` 가 없으므로) 그 조건이 항상
+성립한다. stub 모델로 양방향 확인됐다 — **짧은** hidden 축은 가드가 잡지만 **긴**
+축은 slice 가 조용히 잘라내고 통과한다.
+
+즉 가드가 이름 붙인 실패(토큰/잔기 드리프트)를 **잡지 못한다.** 지금 정렬이 맞는
+것은 경험적으로 확인됐지만(78-aa WT 와 33번 점변이에서 토큰 L2 차이 argmax = 33,
+padded-batch 불변성 bit-exact), 그것은 가드가 아니라 tokenizer 의 현재 동작 덕이다.
+
+**견고한 형태로 바꾼다** — 개수가 아니라 mask 와 토큰 자체를 본다.
+
+```python
+        with torch.no_grad():
+            out = model(**batch)
+        hidden = out.last_hidden_state
+        cls_id = tokenizer.cls_token_id
+        # 잔기 수 = attention 길이 − <cls> − <eos>. padding 에 무관하다.
+        residue_counts = (batch["attention_mask"].sum(dim=1) - 2).tolist()
+        for row, seq in enumerate(chunk):
+            if int(batch["input_ids"][row, 0]) != cls_id:
+                raise SystemExit(
+                    "0 번 토큰이 <cls> 가 아니다. BOS 를 1칸 건너뛰는 slice 가 "
+                    "잔기를 한 칸 밀어 ΔESM_mut 이 엉뚱한 위치를 본다. 중단한다."
+                )
+            if int(residue_counts[row]) != len(seq):
+                raise SystemExit(
+                    f"attention 기준 잔기 {int(residue_counts[row])} 개가 서열 "
+                    f"{len(seq)} 개와 다르다. 중단한다."
+                )
+            tokens = hidden[row, 1:1 + len(seq)].float().cpu().numpy()
+```
+
+`input_ids[row, 0] == cls_token_id` 단정이 핵심이다 — **개수를 유지하면서 BOS 를
+빼는 변화**가 원래 가드의 사각지대였고, 그 경우 잔기가 한 칸 밀리면서 개수는 맞는다.
+
+- [ ] **Step 4b: `wt_sequence_from_pdb` 를 테스트한다**
+
+§4 규칙 4 준수를 실제로 결정하는 두 곳 — `wt_sequence_from_pdb` 와 `main` 안의
+`length_mismatch` 유도 — 에 테스트가 없다. PDB 파싱 회귀가 WT 길이를 바꾸면
+**잘못된 `length_mismatch_targets` 목록이 정상 종료 코드와 그럴듯한 출력과 함께**
+나온다. 파싱은 순수 함수이므로 fixture 로 테스트한다.
+
+```python
+def test_wt_sequence_from_pdb_handles_altloc_insertion_and_models(tmp_path):
+    import importlib
+    prep = importlib.import_module("22_gate2d_prepare_esm")
+    pdb = tmp_path / "t.pdb"
+    pdb.write_text(
+        # 잔기 1 (altloc 두 개 - 하나로 세야 한다)
+        "ATOM      1  CA AALA A   1      0.000   0.000   0.000  0.50 0.00           C
+"
+        "ATOM      2  CA BALA A   1      0.000   0.000   0.000  0.50 0.00           C
+"
+        # 삽입코드 - 1 과 1A 는 다른 잔기다
+        "ATOM      3  CA  GLY A   1A     1.000   0.000   0.000  1.00 0.00           C
+"
+        # CA 가 없는 잔기는 서열에 들어가지 않는다
+        "ATOM      4  N   SER A   2      2.000   0.000   0.000  1.00 0.00           N
+"
+        "ATOM      5  CA  VAL A   3      3.000   0.000   0.000  1.00 0.00           C
+"
+        # 표준이 아닌 잔기는 X
+        "ATOM      6  CA  MSE A   4      4.000   0.000   0.000  1.00 0.00           C
+",
+        encoding="utf-8")
+    assert prep.wt_sequence_from_pdb(pdb) == "AGVX"
+
+
+def test_wt_sequence_from_pdb_collapses_nmr_models():
+    """격자에 26 모델(1tm9A00)과 20 모델(2jokA01) NMR 앙상블이 있다.
+
+    모델을 접지 않으면 WT 길이가 26 배가 되어 mutation_sites 가 전부 raise 하고
+    두 타겟이 조용히 S3/S5/S6 에서 사라진다.
+    """
+    import importlib, os
+    from pathlib import Path
+    prep = importlib.import_module("22_gate2d_prepare_esm")
+    root = Path(os.environ.get("PROTEIN_PIPELINE_ROOT", ".")).resolve()
+    d = root / "public_data" / "benchmark" / "gate0" / "holdout_targets_pdb"
+    # 스펙 §3 이 고정한 길이. 26 개 모델을 접은 결과여야 한다.
+    assert len(prep.wt_sequence_from_pdb(d / "1tm9A00.pdb")) == 137
+    assert len(prep.wt_sequence_from_pdb(d / "2jokA01.pdb")) == 184
+```
+
+- [ ] **Step 5: (개정된 가드로) 임베딩 계산을 붙인다**
 
 ```python
 def embed(sequences: list[str], *, device: torch.device,
