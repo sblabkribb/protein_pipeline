@@ -1,0 +1,1351 @@
+{
+  "purpose": "Step 8 - target 쪽 매핑 검증. backbone 이전 구간만.",
+  "chain_validated": "query -> first model -> staged",
+  "chain_deferred": "staged -> backbone -> fixed positions (Step 9 이후, source 별)",
+  "why_shorter": "MSA query 가 staged 서열이 된 뒤로 query 위치와 staged 잔기가 1:1 이다 (commit cb37ae2). '대응되지 않는 query 위치' 실패 양식이 이 구간에서는 구조적으로 사라졌지만 가정하지 않고 확인한다.",
+  "staging": {
+    "strip_nonpositive_resseq": true,
+    "renumber_resseq_from_1": false
+  },
+  "conservation": {
+    "conservation_tiers": [
+      0.3,
+      0.5,
+      0.7
+    ],
+    "conservation_mode": "quantile",
+    "conservation_weighting": "none"
+  },
+  "not_done": [
+    "threshold 변경",
+    "타겟 선정 변경",
+    "tier 변경",
+    "마스크 조용한 축소"
+  ],
+  "n_pass": 24,
+  "n_total": 24,
+  "targets": [
+    {
+      "cohort": "calibration_v2",
+      "domain": "5e10A02",
+      "length_aa": 133,
+      "failures": [],
+      "n_first_model_residues": 133,
+      "n_staged_residues": 133,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 133,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 133,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 39,
+          "n_mapped": 39,
+          "staged_resseq_sha256": "94a6a7b345765ee4872f1934ea457f82a7012dd8798e3134b9362637fad6b935",
+          "staged_resseq_range": [
+            359,
+            491
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 66,
+          "n_mapped": 66,
+          "staged_resseq_sha256": "96794f01881becc701b1fc4283fd46653e9d9bb2aff889ebeb3a214a6c39700b",
+          "staged_resseq_range": [
+            359,
+            491
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 93,
+          "n_mapped": 93,
+          "staged_resseq_sha256": "d9236c9a79977bf40a8fc8a7451278aa4cd674c914c7ec3b57ca4eba6e623707",
+          "staged_resseq_range": [
+            359,
+            491
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/5e10A02.pdb",
+      "staged_sha256": "d01ed61dab7bb3bfda14d9fce5a665f98be7147ad80aca625a35774133011ec9",
+      "passed": true
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "2jvfA00",
+      "length_aa": 94,
+      "failures": [],
+      "n_first_model_residues": 94,
+      "n_staged_residues": 92,
+      "residues_dropped_by_staging": 2,
+      "n_models_in_file": 20,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 92,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 2,
+      "dropped_prefix": "HM",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 92,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 27,
+          "n_mapped": 27,
+          "staged_resseq_sha256": "c8cf151790105945aedded4900f9d5242680f74f261f020c11159d43158e0ae4",
+          "staged_resseq_range": [
+            1,
+            27
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 46,
+          "n_mapped": 46,
+          "staged_resseq_sha256": "f3b5603fcc1a7c728a6a00184dac970c1253bfe0927521125548ebdcef50044c",
+          "staged_resseq_range": [
+            1,
+            46
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 64,
+          "n_mapped": 64,
+          "staged_resseq_sha256": "08785fbb3ec7771d5105558656ccde9c658923d8611a68d3be0ba9ebd8ec1c32",
+          "staged_resseq_range": [
+            1,
+            64
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/2jvfA00.pdb",
+      "staged_sha256": "a52d8c8915506bdeeff2ab0c352765961a85a06bd3d88c6a5a9153c698ade4d7",
+      "passed": true
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "1ct7A00",
+      "length_aa": 50,
+      "failures": [],
+      "n_first_model_residues": 50,
+      "n_staged_residues": 50,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 5,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 50,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 50,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 15,
+          "n_mapped": 15,
+          "staged_resseq_sha256": "08e82de6d25c998a2acbc2c7c431f5a150272fb4aeb9dfae10a9f901671fafc1",
+          "staged_resseq_range": [
+            25,
+            69
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 25,
+          "n_mapped": 25,
+          "staged_resseq_sha256": "36d41a17fbab92c41d04e34a663cf2e0527920e81bb246de8aafa17b1680b205",
+          "staged_resseq_range": [
+            21,
+            69
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 35,
+          "n_mapped": 35,
+          "staged_resseq_sha256": "18e1665f535c978f3a7d759593ba21e030169e013c1acdc13a71fd55e7021711",
+          "staged_resseq_range": [
+            21,
+            69
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/1ct7A00.pdb",
+      "staged_sha256": "6715cdf4475ca0f66301e6393cfaa367ba936012f49e20518cfb636456dc5bb8",
+      "passed": true
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "2m9xA01",
+      "length_aa": 112,
+      "failures": [],
+      "n_first_model_residues": 112,
+      "n_staged_residues": 112,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 20,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 112,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 112,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 33,
+          "n_mapped": 33,
+          "staged_resseq_sha256": "e6966ccebc2948104af294c516710ceb02ee427c4742492aaee395b38b84fea7",
+          "staged_resseq_range": [
+            1,
+            112
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 56,
+          "n_mapped": 56,
+          "staged_resseq_sha256": "3c4c9555bf120ffc20daad090cbcc7bc82b029743edac5c2aa286be7eb651ee9",
+          "staged_resseq_range": [
+            1,
+            112
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 78,
+          "n_mapped": 78,
+          "staged_resseq_sha256": "4b65283fac6bddc484f77998c9b7e8d46a59f8b4423e69744d6c08c0269842c5",
+          "staged_resseq_range": [
+            1,
+            112
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/2m9xA01.pdb",
+      "staged_sha256": "e1c7106a1d649235b3477c3c9e72dcefc09ffda1d2ee6f5c0cb16624ad39a3ec",
+      "passed": true
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "4yqiA01",
+      "length_aa": 238,
+      "failures": [],
+      "n_first_model_residues": 238,
+      "n_staged_residues": 235,
+      "residues_dropped_by_staging": 3,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 235,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 3,
+      "dropped_prefix": "GSH",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 235,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 70,
+          "n_mapped": 70,
+          "staged_resseq_sha256": "e67a869ea97c85c97a13c097d36998f611c287b39959d7393579b331e439f97e",
+          "staged_resseq_range": [
+            1,
+            243
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 117,
+          "n_mapped": 117,
+          "staged_resseq_sha256": "918204b7c5d6e7efaa5efb75feb652a3296537de45cae831f7fd5ae688984dd1",
+          "staged_resseq_range": [
+            1,
+            243
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 164,
+          "n_mapped": 164,
+          "staged_resseq_sha256": "d833c08eded71f4824d5bd20947b433c4e0b3082dd5fc5974473ff37e0c53935",
+          "staged_resseq_range": [
+            1,
+            246
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/4yqiA01.pdb",
+      "staged_sha256": "1290e21532dfa53eea37912f28bb4b34b2e89cf7d092d54c70ff0706ea5e5415",
+      "passed": true
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "3vwoA02",
+      "length_aa": 155,
+      "failures": [],
+      "n_first_model_residues": 155,
+      "n_staged_residues": 155,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 155,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 155,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 46,
+          "n_mapped": 46,
+          "staged_resseq_sha256": "5964717cb3ccd0fc1feb78dbd7c96dc13cd0ca3b1d38ebf9387ae51b30ee78dd",
+          "staged_resseq_range": [
+            153,
+            307
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 77,
+          "n_mapped": 77,
+          "staged_resseq_sha256": "8992f5d10ec8bd995fa364b5c2a61a856061e63eca038f9137bff67b6bebe10e",
+          "staged_resseq_range": [
+            153,
+            307
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 108,
+          "n_mapped": 108,
+          "staged_resseq_sha256": "be09190c15b557c24f29996821af54da7430f354792cbe868f6282ddea63f78d",
+          "staged_resseq_range": [
+            153,
+            307
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/3vwoA02.pdb",
+      "staged_sha256": "b8afcbcef05652eeb8ac6ac794083e425dbc8384ffb7883a4939cdd12f9d853c",
+      "passed": true
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "3ksnA00",
+      "length_aa": 177,
+      "failures": [],
+      "n_first_model_residues": 177,
+      "n_staged_residues": 177,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 177,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 177,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 53,
+          "n_mapped": 53,
+          "staged_resseq_sha256": "53ddb27d0db9c937f33f4d6e6f0a61019a3c3ebde209d5d4ab415ede9fa4f373",
+          "staged_resseq_range": [
+            1,
+            181
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 88,
+          "n_mapped": 88,
+          "staged_resseq_sha256": "ed641ccb406926a213b0b758677deeae57389377ff4ea8c1b396a5d731f2547b",
+          "staged_resseq_range": [
+            1,
+            182
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 123,
+          "n_mapped": 123,
+          "staged_resseq_sha256": "eff4a32e0e2dd8cb398cef0583181a630ae62f907f5b2271c72379b1d384a371",
+          "staged_resseq_range": [
+            1,
+            182
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/3ksnA00.pdb",
+      "staged_sha256": "638d86a851dd1e905a9a830f40bdb29a0b9ed865d952f33855266ab0b5131df8",
+      "passed": true
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "4q68A01",
+      "length_aa": 228,
+      "failures": [],
+      "n_first_model_residues": 228,
+      "n_staged_residues": 227,
+      "residues_dropped_by_staging": 1,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 227,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 1,
+      "dropped_prefix": "G",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 227,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 68,
+          "n_mapped": 68,
+          "staged_resseq_sha256": "5aad120ab83055d3d6cf514d0c5de2dc7c404e2ab8a5a1b3bd95de95cc6ec3ca",
+          "staged_resseq_range": [
+            24,
+            262
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 113,
+          "n_mapped": 113,
+          "staged_resseq_sha256": "acffef0c5e7a819911472b2a35e2313a0baa21a13041f732d0cdc502d2a88516",
+          "staged_resseq_range": [
+            24,
+            262
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 158,
+          "n_mapped": 158,
+          "staged_resseq_sha256": "183549cbb7c149f8429dae724d1a3c041346929b8d2dff604e1cc975e83766e2",
+          "staged_resseq_range": [
+            24,
+            262
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/4q68A01.pdb",
+      "staged_sha256": "17a4fd5bed9fd1bf6a01c43de9a2425ee9545107b137bafa8d5f70619981f13a",
+      "passed": true
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "2q5fA02",
+      "length_aa": 259,
+      "failures": [],
+      "n_first_model_residues": 259,
+      "n_staged_residues": 259,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 259,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 259,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 77,
+          "n_mapped": 77,
+          "staged_resseq_sha256": "f66341aa3a23c87928e08aef7912713974077c9a4cf5a91ba2ce4fea6ad7a1b6",
+          "staged_resseq_range": [
+            1,
+            264
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 129,
+          "n_mapped": 129,
+          "staged_resseq_sha256": "487e9ba50e351fa3ae65bd8793f3b7481beb61ebd6b033ca6fc22dae35a9deea",
+          "staged_resseq_range": [
+            1,
+            264
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 181,
+          "n_mapped": 181,
+          "staged_resseq_sha256": "440db452cb546b2aacf5d59f28b94d2815f00136f4b0dc16f87e62dd1fb62c07",
+          "staged_resseq_range": [
+            1,
+            264
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/2q5fA02.pdb",
+      "staged_sha256": "458488e9def2338cdb83fcc2afd1ebe728b019999364cf83faa09865f5dda1dc",
+      "passed": true
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "6wvfA01",
+      "length_aa": 386,
+      "failures": [],
+      "n_first_model_residues": 386,
+      "n_staged_residues": 386,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 386,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 386,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 115,
+          "n_mapped": 115,
+          "staged_resseq_sha256": "7daf5fa91aa7f34cb36327d435bf31ed49f46ea93e22dde01e30ac0ffd1a3cb1",
+          "staged_resseq_range": [
+            3,
+            392
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 193,
+          "n_mapped": 193,
+          "staged_resseq_sha256": "7e689d1b5565f65a6bf2c49d14022b3883ec4f5735216b63608602b498cca577",
+          "staged_resseq_range": [
+            3,
+            392
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 270,
+          "n_mapped": 270,
+          "staged_resseq_sha256": "e4e8c2ad61c24ee3e2713c7385e4ac5ff9d61d145b361febb0a3e3c671a4ab34",
+          "staged_resseq_range": [
+            3,
+            392
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/6wvfA01.pdb",
+      "staged_sha256": "2f87af597098edd46fa1fd0b1aa1240eb0bd6b89ac0cd510ccf324400dfc693a",
+      "passed": true
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "1pp1X02",
+      "length_aa": 326,
+      "failures": [],
+      "n_first_model_residues": 326,
+      "n_staged_residues": 326,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "X"
+      ],
+      "a3m_query_length": 326,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 326,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 97,
+          "n_mapped": 97,
+          "staged_resseq_sha256": "34102db6f762fa21090f821f13de7249aa803fb5315bbf9733dbde59ed7ce77a",
+          "staged_resseq_range": [
+            29,
+            370
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 163,
+          "n_mapped": 163,
+          "staged_resseq_sha256": "55f3fef27640caf74c277485ae779b404b2f93bfd68079c414d1298ab847c3d7",
+          "staged_resseq_range": [
+            28,
+            370
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 228,
+          "n_mapped": 228,
+          "staged_resseq_sha256": "4318018a613bcaa723c425e9da5b1e4c9203ada34f9d8da07de3fffc03c635bc",
+          "staged_resseq_range": [
+            28,
+            370
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/1pp1X02.pdb",
+      "staged_sha256": "9f656a529b7c3e11e958bdc228500bc6a13fbc525ff0c785cd49f183abe05088",
+      "passed": true
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "5u1xA02",
+      "length_aa": 321,
+      "failures": [],
+      "n_first_model_residues": 321,
+      "n_staged_residues": 321,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 321,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 321,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 96,
+          "n_mapped": 96,
+          "staged_resseq_sha256": "af39fdca89b797fdb1a76e828dd373f337e074445736138a955e7c099207df35",
+          "staged_resseq_range": [
+            31,
+            351
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 160,
+          "n_mapped": 160,
+          "staged_resseq_sha256": "9e7f992b370c6a43812137e670ef738feb998d7b0d7ff6c1995ca7298763a050",
+          "staged_resseq_range": [
+            31,
+            351
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 224,
+          "n_mapped": 224,
+          "staged_resseq_sha256": "04416dc050792d89a5f0aae902fef41e92fcf9cb2be496da589f9f27b1e3b22b",
+          "staged_resseq_range": [
+            31,
+            351
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/5u1xA02.pdb",
+      "staged_sha256": "54051cd2d7ae0c4de0afd9f589e786002995ed98d2bfeead2614f55227fb6216",
+      "passed": true
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "1o22A00",
+      "length_aa": 146,
+      "failures": [],
+      "n_first_model_residues": 146,
+      "n_staged_residues": 146,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 146,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 146,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 43,
+          "n_mapped": 43,
+          "staged_resseq_sha256": "f65fd3b7e0263eaf98dd53f8bf4f5b5f1ba2e892b00ec0947cca1914efe484b0",
+          "staged_resseq_range": [
+            6,
+            125
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 73,
+          "n_mapped": 73,
+          "staged_resseq_sha256": "43b2ec6ba36d54bde052e097844e5026fe2f5744e132eb8e576576792a8dd2a7",
+          "staged_resseq_range": [
+            6,
+            153
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 102,
+          "n_mapped": 102,
+          "staged_resseq_sha256": "ec4a9cb8022c550718c2421c80060fe45db00d3c8a8b2bf9d1756f37f0583f60",
+          "staged_resseq_range": [
+            6,
+            153
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/1o22A00.pdb",
+      "staged_sha256": "57f981291824bb7e4f8d557dfb0495a585baf68e42d6d835a7bae69231c0a0d0",
+      "passed": true
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "1x3aA00",
+      "length_aa": 100,
+      "failures": [],
+      "n_first_model_residues": 100,
+      "n_staged_residues": 100,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 20,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 100,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 100,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 30,
+          "n_mapped": 30,
+          "staged_resseq_sha256": "52f438399d42e95954e1a985da78e9c338f8d3d8cc4ff7902540c8607d641a9a",
+          "staged_resseq_range": [
+            1,
+            100
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 50,
+          "n_mapped": 50,
+          "staged_resseq_sha256": "6fa9003ccb2ab665b443ed9eda96eeb0420b2dabcf02f35353bc3190071d35b9",
+          "staged_resseq_range": [
+            1,
+            100
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 70,
+          "n_mapped": 70,
+          "staged_resseq_sha256": "a58300505d9ccba7af5c90e65403649077f754db1fee6c6ace446811fd3b565e",
+          "staged_resseq_range": [
+            1,
+            100
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/1x3aA00.pdb",
+      "staged_sha256": "4674733aebf2a3851c73e4afe553b406baced3deedc085e44864b3135845084c",
+      "passed": true
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "1j5uA01",
+      "length_aa": 125,
+      "failures": [],
+      "n_first_model_residues": 125,
+      "n_staged_residues": 125,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 125,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 125,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 37,
+          "n_mapped": 37,
+          "staged_resseq_sha256": "d56f31c472094ec9a1b231cdb1f026bbf0b7cb1b80295d1d8a80386b851361d7",
+          "staged_resseq_range": [
+            8,
+            130
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 62,
+          "n_mapped": 62,
+          "staged_resseq_sha256": "1379a528c1b965e612936ec3249715955867c164bf3056729dce21705c8d8199",
+          "staged_resseq_range": [
+            8,
+            130
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 87,
+          "n_mapped": 87,
+          "staged_resseq_sha256": "b626b792fc3f623bb0f8ebb905226199bb14675618b417c0b1a0ebcbe51afe87",
+          "staged_resseq_range": [
+            8,
+            130
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/1j5uA01.pdb",
+      "staged_sha256": "60f16873391277535a7ff647cf5d66f3f3c47de49450a70d3bb26e2da9f1eb80",
+      "passed": true
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "1sohA00",
+      "length_aa": 67,
+      "failures": [],
+      "n_first_model_residues": 67,
+      "n_staged_residues": 67,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 18,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 67,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 67,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 20,
+          "n_mapped": 20,
+          "staged_resseq_sha256": "c48fe87a4485779316cfe2b0e36d4f3d5b3b30a320a09cd3394c41e5588294a8",
+          "staged_resseq_range": [
+            13,
+            77
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 33,
+          "n_mapped": 33,
+          "staged_resseq_sha256": "02cd4c526da509e4c6a403fbc499602de3a8dbe1d9b833b533a62c3aad3a842f",
+          "staged_resseq_range": [
+            13,
+            77
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 46,
+          "n_mapped": 46,
+          "staged_resseq_sha256": "60a1fb3ebdc1f1298d1e81dbda4cb523b6c41e7f35a4a057741712373142005e",
+          "staged_resseq_range": [
+            13,
+            77
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/1sohA00.pdb",
+      "staged_sha256": "943d831cd7ee3584c2a1ca0eb1132a34e88b4c61d011608a993ddbd99edb35c8",
+      "passed": true
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "4wexA00",
+      "length_aa": 213,
+      "failures": [],
+      "n_first_model_residues": 213,
+      "n_staged_residues": 213,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 213,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 213,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 63,
+          "n_mapped": 63,
+          "staged_resseq_sha256": "7f06a9e85f8526610eda59d4be8d44a98649127cc180f6d4f61a42a4e1b7c482",
+          "staged_resseq_range": [
+            160,
+            378
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 106,
+          "n_mapped": 106,
+          "staged_resseq_sha256": "8cd5154ed40f750e00756a3db46451e7e515e8408e6523858801e23ad7e23c99",
+          "staged_resseq_range": [
+            160,
+            378
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 149,
+          "n_mapped": 149,
+          "staged_resseq_sha256": "60938bea51e83acb55a36c9bece1d2e8d3848d0f01480b6c1e436b902809df24",
+          "staged_resseq_range": [
+            160,
+            378
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/4wexA00.pdb",
+      "staged_sha256": "f46e0fe3485ac38cb54011042fb8cbca6bad511f9e96c270573093421beb343a",
+      "passed": true
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "2w2sA00",
+      "length_aa": 163,
+      "failures": [],
+      "n_first_model_residues": 163,
+      "n_staged_residues": 163,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 163,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 163,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 48,
+          "n_mapped": 48,
+          "staged_resseq_sha256": "a3556685d9963cdb63d33e4680969f5664ab82f47b97e7c86fae439f9fa7a93f",
+          "staged_resseq_range": [
+            30,
+            202
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 81,
+          "n_mapped": 81,
+          "staged_resseq_sha256": "43665dbf571883d24a1a9cf2d96fcf49b34b6b1c65bd961deb6b4512194a410d",
+          "staged_resseq_range": [
+            30,
+            202
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 114,
+          "n_mapped": 114,
+          "staged_resseq_sha256": "e80503df963dc682ac5da6ad11703907c501dea71a3f5275f18eb3f4a900cfb0",
+          "staged_resseq_range": [
+            30,
+            202
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/2w2sA00.pdb",
+      "staged_sha256": "a5d163ed85bc481e26d072457f970e09c3c78165a08ba40d7d0c485daaabee75",
+      "passed": true
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "1n81A00",
+      "length_aa": 186,
+      "failures": [],
+      "n_first_model_residues": 186,
+      "n_staged_residues": 186,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 186,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 186,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 55,
+          "n_mapped": 55,
+          "staged_resseq_sha256": "decdefa9d121b54c599043171a50d9c193f324394f05cbe896ec52a28f4ebcc5",
+          "staged_resseq_range": [
+            21,
+            206
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 93,
+          "n_mapped": 93,
+          "staged_resseq_sha256": "ab40119597ba8707b3466ce28a4048a3b05edf39d04481c63237157214832861",
+          "staged_resseq_range": [
+            21,
+            206
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 130,
+          "n_mapped": 130,
+          "staged_resseq_sha256": "36634d0d1c12bc6947789108234db23422ba55c3b7590df2df1b0cfef5a637ba",
+          "staged_resseq_range": [
+            21,
+            206
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/1n81A00.pdb",
+      "staged_sha256": "8e53aeaf7c4c4b6a1abcbba7af80c9798e2bf97d0944333540e415f715f0fb5b",
+      "passed": true
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "1sdiA00",
+      "length_aa": 213,
+      "failures": [],
+      "n_first_model_residues": 213,
+      "n_staged_residues": 213,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 213,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 213,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 63,
+          "n_mapped": 63,
+          "staged_resseq_sha256": "5414d0d15707eb7f9de3545f80f4daf070cf06794b06c2d60ec5042149ad6a21",
+          "staged_resseq_range": [
+            2,
+            213
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 106,
+          "n_mapped": 106,
+          "staged_resseq_sha256": "209e337859c2e5e54568bf058b7731b870056b4e554186365f940d5558e992c0",
+          "staged_resseq_range": [
+            2,
+            213
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 149,
+          "n_mapped": 149,
+          "staged_resseq_sha256": "7414c75061f166790cf04b97f63c8c17272feb81292d907397e32279f88f46a0",
+          "staged_resseq_range": [
+            2,
+            213
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/1sdiA00.pdb",
+      "staged_sha256": "227ba320f15c66439fcb8957c152f116024430e7c4da7f18cb4b377229190f2a",
+      "passed": true
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "1rdrA01",
+      "length_aa": 316,
+      "failures": [],
+      "n_first_model_residues": 316,
+      "n_staged_residues": 316,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 316,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 316,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 94,
+          "n_mapped": 94,
+          "staged_resseq_sha256": "7578db0159830361974b6452ed8ea8791b4602e381f67b6f2332f524114684e6",
+          "staged_resseq_range": [
+            13,
+            461
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 158,
+          "n_mapped": 158,
+          "staged_resseq_sha256": "c607a466a80ac308cace054ec91dba74e622b8b27aee98e85e364c8ceaf4eaae",
+          "staged_resseq_range": [
+            12,
+            461
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 221,
+          "n_mapped": 221,
+          "staged_resseq_sha256": "48911b654305c03b2a1d54058f993fef130f30855d6e3100a8fc59250fd4361a",
+          "staged_resseq_range": [
+            12,
+            461
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/1rdrA01.pdb",
+      "staged_sha256": "6338b29a2f0d0fbd3ed42b7c7f65c703fc49202bf56e67810a76f4f2c28cc9ac",
+      "passed": true
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "4ifxA00",
+      "length_aa": 330,
+      "failures": [],
+      "n_first_model_residues": 330,
+      "n_staged_residues": 330,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 330,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 330,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 99,
+          "n_mapped": 99,
+          "staged_resseq_sha256": "b473d0fa63564a2b6d309863b697b4a678689447bf1e61e55facbe621f3498cd",
+          "staged_resseq_range": [
+            5,
+            340
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 165,
+          "n_mapped": 165,
+          "staged_resseq_sha256": "787f9b9f40d881337879300297cd4b45e003216c0a51175e1b927689c6e63fcc",
+          "staged_resseq_range": [
+            5,
+            340
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 230,
+          "n_mapped": 230,
+          "staged_resseq_sha256": "19b11f65278d56c813e51be04220831f0c176dc64d083aa7af620aa5682fc2a5",
+          "staged_resseq_range": [
+            5,
+            340
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/4ifxA00.pdb",
+      "staged_sha256": "3cd30caa745815f4bba3b682b37517196e2769f15b9bcd945d01c398098d2ddc",
+      "passed": true
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "6vqfA00",
+      "length_aa": 252,
+      "failures": [],
+      "n_first_model_residues": 252,
+      "n_staged_residues": 252,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 252,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 252,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 75,
+          "n_mapped": 75,
+          "staged_resseq_sha256": "6a8d1bcbc630281ec7a8ea68c26536fd88c2f32c456ce5b22980765242d56ecb",
+          "staged_resseq_range": [
+            266,
+            528
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 126,
+          "n_mapped": 126,
+          "staged_resseq_sha256": "02b7706c0cf5c13647b1fc8894fbb60ef24d6fd9ea54179694c6344658fb99c6",
+          "staged_resseq_range": [
+            266,
+            528
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 176,
+          "n_mapped": 176,
+          "staged_resseq_sha256": "89c3dd6864441453bcb58e34132d77e6438ea8826ea46658fd8ea1c7890dd7f2",
+          "staged_resseq_range": [
+            265,
+            528
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/6vqfA00.pdb",
+      "staged_sha256": "2fc96f96eff861c43315444222e837381a15e324d1f692be9b918baa4b7de552",
+      "passed": true
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "4ai2A02",
+      "length_aa": 258,
+      "failures": [],
+      "n_first_model_residues": 258,
+      "n_staged_residues": 258,
+      "residues_dropped_by_staging": 0,
+      "n_models_in_file": 0,
+      "chains": [
+        "A"
+      ],
+      "a3m_query_length": 258,
+      "query_equals_staged": true,
+      "query_equals_query_sequence": true,
+      "staged_is_contiguous_subsequence": true,
+      "staged_occurrences_in_raw": 1,
+      "staging_offset": 0,
+      "dropped_prefix": "",
+      "n_aa_mismatch": 0,
+      "conservation_query_length": 258,
+      "tiers": {
+        "0.3": {
+          "n_query_positions": 77,
+          "n_mapped": 77,
+          "staged_resseq_sha256": "60bbf2a64c00e89e8b1014c4ee40ae45a1ed6b499fff9bb27ec12d4b78adf6d9",
+          "staged_resseq_range": [
+            14,
+            271
+          ]
+        },
+        "0.5": {
+          "n_query_positions": 129,
+          "n_mapped": 129,
+          "staged_resseq_sha256": "c54aba068f7c9f3ca8bb2335524b351118e6cf43d566fa8638ebaf1b9d15d114",
+          "staged_resseq_range": [
+            14,
+            271
+          ]
+        },
+        "0.7": {
+          "n_query_positions": 180,
+          "n_mapped": 180,
+          "staged_resseq_sha256": "05db47e54926450b31adcb26efb339dd79be7d6bee31232c83388d0321a99814",
+          "staged_resseq_range": [
+            14,
+            271
+          ]
+        }
+      },
+      "all_positions_mapped": true,
+      "staged_pdb": "public_data/benchmark/gate0/staged_pdb/4ai2A02.pdb",
+      "staged_sha256": "2c5542cbd6e314873cbc9996d0077dd964b0d7fbba604fb4c3669d83c59f8064",
+      "passed": true
+    }
+  ],
+  "code_sha": "7bab0cdafae74ff23fa633fbece0c27ae6f666a3",
+  "utc": "2026-09-10T12:21:53Z"
+}

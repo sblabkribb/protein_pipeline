@@ -119,8 +119,8 @@
       "pdb": "/opt/protein_pipeline/cath_train/2jvfA00.pdb",
       "superfamily": "3.30.1710.10",
       "a3m_path": "public_data/benchmark/gate0/msa/2jvfA00/result.a3m",
-      "a3m_bytes": 223,
-      "a3m_sha256": "485027b0302f25d7c2d2fdd6c67c6a72692f0a2a96f8bc157796bce010bfcc7f",
+      "a3m_bytes": 219,
+      "a3m_sha256": "31d15ed50525a414dd846ea26fe017eec232703f212a16aa36761a6733b3c0d9",
       "resumed_from_file": true,
       "msa_quality": {
         "usable_hits": 1,
@@ -147,7 +147,7 @@
           "usable_hits=1 (<10)",
           "median_depth=1.0 (<10)"
         ],
-        "query_length": 94
+        "query_length": 92
       },
       "quality_medians": {
         "usable_hits": 1,
@@ -156,25 +156,25 @@
         "full_length_fraction": 1.0
       },
       "conservation": {
-        "query_length": 94,
+        "query_length": 92,
         "tiers": {
-          "0.3": 28,
-          "0.5": 47,
-          "0.7": 65
+          "0.3": 27,
+          "0.5": 46,
+          "0.7": 64
         },
         "fixed_positions_sha256": {
-          "0.3": "227fe370df0daf7d0a6b38918a41905edc239d3a4452501830d15d72dd7fe023",
-          "0.5": "7192b9dbba98e0b15f139628a094ada35e4439b202b10e7270a3badfadd038c7",
-          "0.7": "90badae4cedb54302d06f5d89a716e4012e88112075ceb45369d34e7869dfd6e"
+          "0.3": "c8cf151790105945aedded4900f9d5242680f74f261f020c11159d43158e0ae4",
+          "0.5": "f3b5603fcc1a7c728a6a00184dac970c1253bfe0927521125548ebdcef50044c",
+          "0.7": "08785fbb3ec7771d5105558656ccde9c658923d8611a68d3be0ba9ebd8ec1c32"
         },
         "query_length_matches_sequence": true
       },
       "hit_count": 1,
-      "wall_seconds": 4786.5,
+      "wall_seconds": 4246.3,
       "endpoint_status": "ok",
       "query_consistent": {
-        "sent_length": 94,
-        "returned_length": 94,
+        "sent_length": 92,
+        "returned_length": 92,
         "id_match": true,
         "length_match": true
       },
@@ -189,7 +189,7 @@
       "decode_ok": true,
       "a3m_key_present": true,
       "query_id": "2jvfA00",
-      "query_length": 94,
+      "query_length": 92,
       "classification": "MSA_INSUFFICIENT_DEPTH"
     },
     {
@@ -356,62 +356,7 @@
       "pdb": "/opt/protein_pipeline/cath_train/4yqiA01.pdb",
       "superfamily": "3.40.1280.10",
       "a3m_path": "public_data/benchmark/gate0/msa/4yqiA01/result.a3m",
-      "a3m_bytes": 782155,
-      "a3m_sha256": "8832085686b135dc82d3cb22f49c3ff9b2162882635636e4cc7c726a200879c5",
-      "resumed_from_file": true,
-      "msa_quality": {
-        "usable_hits": 3000,
-        "coverage": {
-          "min": 0.42436974789915966,
-          "max": 1.0,
-          "mean": 0.9418627450980391,
-          "p25": 0.9327731092436975,
-          "p50": 0.957983193277311,
-          "p75": 0.9747899159663865
-        },
-        "depth": {
-          "min": 25.0,
-          "max": 2999.0,
-          "mean": 2825.5882352941176,
-          "p10": 2428.8,
-          "p25": 2961.0,
-          "p50": 2982.0,
-          "p75": 2994.0,
-          "p90": 2998.3
-        },
-        "full_length_fraction": 0.989,
-        "warnings": [],
-        "query_length": 238
-      },
-      "quality_medians": {
-        "usable_hits": 3000,
-        "median_coverage": 0.957983193277311,
-        "median_depth": 2982.0,
-        "full_length_fraction": 0.989
-      },
-      "conservation": {
-        "query_length": 238,
-        "tiers": {
-          "0.3": 71,
-          "0.5": 119,
-          "0.7": 166
-        },
-        "fixed_positions_sha256": {
-          "0.3": "4b6a1aefbae4a09d62faf11d098ea06753f1d09a66ef91a3cc2971aeade68534",
-          "0.5": "3cdabd1964ad44b14ef2ee78ccce249a5272f8ba806d33120de1c264c2af4b41",
-          "0.7": "b9b78b3f6e280e2bbf23aaa022b6a3917cb17be6ad78c295910f168f2daf3ebd"
-        },
-        "query_length_matches_sequence": true
-      },
-      "hit_count": 3534,
-      "wall_seconds": 2506.2,
       "endpoint_status": "ok",
-      "query_consistent": {
-        "sent_length": 238,
-        "returned_length": 238,
-        "id_match": true,
-        "length_match": true
-      },
       "response_keys": [
         "a3m_gz_b64",
         "hit_count",
@@ -420,10 +365,64 @@
         "task",
         "tsv"
       ],
-      "decode_ok": true,
       "a3m_key_present": true,
+      "decode_ok": true,
+      "hit_count": 3534,
+      "query_length": 235,
       "query_id": "4yqiA01",
-      "query_length": 238,
+      "query_consistent": {
+        "sent_length": 235,
+        "returned_length": 235,
+        "id_match": true,
+        "length_match": true
+      },
+      "a3m_bytes": 773147,
+      "a3m_sha256": "698e6ab41f2737abc9f07b737f38463322566e6cfd2e23837b6972155859b384",
+      "msa_quality": {
+        "usable_hits": 3000,
+        "coverage": {
+          "min": 0.4297872340425532,
+          "max": 1.0,
+          "mean": 0.9517971631205674,
+          "p25": 0.9404255319148936,
+          "p50": 0.9659574468085106,
+          "p75": 0.9829787234042553
+        },
+        "depth": {
+          "min": 241.0,
+          "max": 2999.0,
+          "mean": 2855.391489361702,
+          "p10": 2474.6000000000004,
+          "p25": 2963.0,
+          "p50": 2982.0,
+          "p75": 2994.0,
+          "p90": 2998.6000000000004
+        },
+        "full_length_fraction": 0.9893333333333333,
+        "warnings": [],
+        "query_length": 235
+      },
+      "quality_medians": {
+        "usable_hits": 3000,
+        "median_coverage": 0.9659574468085106,
+        "median_depth": 2982.0,
+        "full_length_fraction": 0.9893333333333333
+      },
+      "conservation": {
+        "query_length": 235,
+        "tiers": {
+          "0.3": 70,
+          "0.5": 117,
+          "0.7": 164
+        },
+        "fixed_positions_sha256": {
+          "0.3": "93f14ad2ae9222faa3f3bc2f87e877d95a0721bb7f3432c7eb008169b7eb54f0",
+          "0.5": "40e7326e6515a2a27d12d5870de9c6b1b636d4ea235febdca1233235bf0deffd",
+          "0.7": "9ea4a58fa7c94f14ad56c58bc63b0f40f40ef1e679e5286f54d50cc73681205a"
+        },
+        "query_length_matches_sequence": true
+      },
+      "wall_seconds": 6602.7,
       "classification": "OK"
     },
     {
@@ -481,27 +480,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "hit_count": 3534,
-      "wall_seconds": 2536.1,
-      "endpoint_status": "ok",
-      "query_consistent": {
-        "sent_length": 155,
-        "returned_length": 155,
-        "id_match": true,
-        "length_match": true
-      },
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "decode_ok": true,
-      "a3m_key_present": true,
-      "query_id": "3vwoA02",
-      "query_length": 155,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -559,27 +538,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "hit_count": 3474,
-      "wall_seconds": 3001.3,
-      "endpoint_status": "ok",
-      "query_consistent": {
-        "sent_length": 177,
-        "returned_length": 177,
-        "id_match": true,
-        "length_match": true
-      },
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "decode_ok": true,
-      "a3m_key_present": true,
-      "query_id": "3ksnA00",
-      "query_length": 177,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -590,62 +549,7 @@
       "pdb": "/opt/protein_pipeline/cath_train/4q68A01.pdb",
       "superfamily": "1.10.3670.10",
       "a3m_path": "public_data/benchmark/gate0/msa/4q68A01/result.a3m",
-      "a3m_bytes": 348147,
-      "a3m_sha256": "59cf288dbb557ee9c396e6195430bf265f7fffb610ae56870db40149fa9d6e52",
-      "resumed_from_file": true,
-      "msa_quality": {
-        "usable_hits": 1385,
-        "coverage": {
-          "min": 0.25,
-          "max": 0.9956140350877193,
-          "mean": 0.8797548926467793,
-          "p25": 0.8421052631578947,
-          "p50": 0.9298245614035088,
-          "p75": 0.9473684210526315
-        },
-        "depth": {
-          "min": 19.0,
-          "max": 1376.0,
-          "mean": 1218.4605263157894,
-          "p10": 1009.4,
-          "p25": 1233.75,
-          "p50": 1312.0,
-          "p75": 1329.0,
-          "p90": 1370.3
-        },
-        "full_length_fraction": 0.9436823104693141,
-        "warnings": [],
-        "query_length": 228
-      },
-      "quality_medians": {
-        "usable_hits": 1385,
-        "median_coverage": 0.9298245614035088,
-        "median_depth": 1312.0,
-        "full_length_fraction": 0.9436823104693141
-      },
-      "conservation": {
-        "query_length": 228,
-        "tiers": {
-          "0.3": 68,
-          "0.5": 114,
-          "0.7": 159
-        },
-        "fixed_positions_sha256": {
-          "0.3": "20093066200528cba4535d263d31ff2e118bd01a033d5ad418f028d41d2c831a",
-          "0.5": "1084360905d97ef3efadecfeb43be449dc108119378ebd3b04b8b9e0082cc535",
-          "0.7": "d98dad03e5ed16becd0ff924da8a94f387ba79d27387ebc439ac7d21a99f981e"
-        },
-        "query_length_matches_sequence": true
-      },
-      "hit_count": 1385,
-      "wall_seconds": 3346.2,
       "endpoint_status": "ok",
-      "query_consistent": {
-        "sent_length": 228,
-        "returned_length": 228,
-        "id_match": true,
-        "length_match": true
-      },
       "response_keys": [
         "a3m_gz_b64",
         "hit_count",
@@ -654,10 +558,64 @@
         "task",
         "tsv"
       ],
-      "decode_ok": true,
       "a3m_key_present": true,
+      "decode_ok": true,
+      "hit_count": 1385,
+      "query_length": 227,
       "query_id": "4q68A01",
-      "query_length": 228,
+      "query_consistent": {
+        "sent_length": 227,
+        "returned_length": 227,
+        "id_match": true,
+        "length_match": true
+      },
+      "a3m_bytes": 346764,
+      "a3m_sha256": "459d3044b699a6572938d476075cd5052385556ecfc676cb59513ac63de88cb0",
+      "msa_quality": {
+        "usable_hits": 1385,
+        "coverage": {
+          "min": 0.2511013215859031,
+          "max": 1.0,
+          "mean": 0.8857647227214174,
+          "p25": 0.8502202643171806,
+          "p50": 0.9383259911894273,
+          "p75": 0.9559471365638766
+        },
+        "depth": {
+          "min": 51.0,
+          "max": 1376.0,
+          "mean": 1226.784140969163,
+          "p10": 1010.5999999999999,
+          "p25": 1237.5,
+          "p50": 1312.0,
+          "p75": 1328.0,
+          "p90": 1370.4
+        },
+        "full_length_fraction": 0.9422382671480144,
+        "warnings": [],
+        "query_length": 227
+      },
+      "quality_medians": {
+        "usable_hits": 1385,
+        "median_coverage": 0.9383259911894273,
+        "median_depth": 1312.0,
+        "full_length_fraction": 0.9422382671480144
+      },
+      "conservation": {
+        "query_length": 227,
+        "tiers": {
+          "0.3": 68,
+          "0.5": 113,
+          "0.7": 158
+        },
+        "fixed_positions_sha256": {
+          "0.3": "5b26fa99b3934d03e26c9796dd5110f74a4898678f2429b150f4a5924791ab6b",
+          "0.5": "ee004595a92966d4a3a268f6ed366a6d67b0b04bef0c2a85c4d514b4f9702f08",
+          "0.7": "1959dd355c92a13cee7f232a20c237c6fc1b02c4380c671ef538209a0ceb4f03"
+        },
+        "query_length_matches_sequence": true
+      },
+      "wall_seconds": 2431.0,
       "classification": "OK"
     },
     {
@@ -715,27 +673,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "hit_count": 3499,
-      "wall_seconds": 2626.2,
-      "endpoint_status": "ok",
-      "query_consistent": {
-        "sent_length": 259,
-        "returned_length": 259,
-        "id_match": true,
-        "length_match": true
-      },
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "decode_ok": true,
-      "a3m_key_present": true,
-      "query_id": "2q5fA02",
-      "query_length": 259,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -795,27 +733,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "hit_count": 3278,
-      "wall_seconds": 2551.2,
-      "endpoint_status": "ok",
-      "query_consistent": {
-        "sent_length": 386,
-        "returned_length": 386,
-        "id_match": true,
-        "length_match": true
-      },
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "decode_ok": true,
-      "a3m_key_present": true,
-      "query_id": "6wvfA01",
-      "query_length": 386,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -873,27 +791,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "hit_count": 76,
-      "wall_seconds": 2505.8,
-      "endpoint_status": "ok",
-      "query_consistent": {
-        "sent_length": 326,
-        "returned_length": 326,
-        "id_match": true,
-        "length_match": true
-      },
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "decode_ok": true,
-      "a3m_key_present": true,
-      "query_id": "1pp1X02",
-      "query_length": 326,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -951,27 +849,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "hit_count": 3534,
-      "wall_seconds": 2581.3,
-      "endpoint_status": "ok",
-      "query_consistent": {
-        "sent_length": 321,
-        "returned_length": 321,
-        "id_match": true,
-        "length_match": true
-      },
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "decode_ok": true,
-      "a3m_key_present": true,
-      "query_id": "5u1xA02",
-      "query_length": 321,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -1032,27 +910,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "hit_count": 5,
-      "wall_seconds": 2430.8,
-      "endpoint_status": "ok",
-      "query_consistent": {
-        "sent_length": 146,
-        "returned_length": 146,
-        "id_match": true,
-        "length_match": true
-      },
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "decode_ok": true,
-      "a3m_key_present": true,
-      "query_id": "1o22A00",
-      "query_length": 146,
+      "endpoint_status": "resumed",
       "classification": "MSA_INSUFFICIENT_DEPTH"
     },
     {
@@ -1110,27 +968,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "hit_count": 1369,
-      "wall_seconds": 2430.8,
-      "endpoint_status": "ok",
-      "query_consistent": {
-        "sent_length": 100,
-        "returned_length": 100,
-        "id_match": true,
-        "length_match": true
-      },
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "decode_ok": true,
-      "a3m_key_present": true,
-      "query_id": "1x3aA00",
-      "query_length": 100,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -1188,27 +1026,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "hit_count": 23,
-      "wall_seconds": 2700.9,
-      "endpoint_status": "ok",
-      "query_consistent": {
-        "sent_length": 125,
-        "returned_length": 125,
-        "id_match": true,
-        "length_match": true
-      },
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "decode_ok": true,
-      "a3m_key_present": true,
-      "query_id": "1j5uA01",
-      "query_length": 125,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -1266,27 +1084,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "hit_count": 174,
-      "wall_seconds": 2475.8,
-      "endpoint_status": "ok",
-      "query_consistent": {
-        "sent_length": 67,
-        "returned_length": 67,
-        "id_match": true,
-        "length_match": true
-      },
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "decode_ok": true,
-      "a3m_key_present": true,
-      "query_id": "1sohA00",
-      "query_length": 67,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -1344,27 +1142,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "hit_count": 540,
-      "wall_seconds": 2625.9,
-      "endpoint_status": "ok",
-      "query_consistent": {
-        "sent_length": 213,
-        "returned_length": 213,
-        "id_match": true,
-        "length_match": true
-      },
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "decode_ok": true,
-      "a3m_key_present": true,
-      "query_id": "4wexA00",
-      "query_length": 213,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -1422,27 +1200,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "hit_count": 28,
-      "wall_seconds": 2460.8,
-      "endpoint_status": "ok",
-      "query_consistent": {
-        "sent_length": 163,
-        "returned_length": 163,
-        "id_match": true,
-        "length_match": true
-      },
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "decode_ok": true,
-      "a3m_key_present": true,
-      "query_id": "2w2sA00",
-      "query_length": 163,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -1453,28 +1211,9 @@
       "pdb": "/opt/protein_pipeline/cath_train/1n81A00.pdb",
       "superfamily": "1.10.3030.10",
       "a3m_path": "public_data/benchmark/gate0/msa/1n81A00/result.a3m",
-      "endpoint_status": "ok",
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "a3m_key_present": true,
-      "decode_ok": true,
-      "hit_count": 34,
-      "query_length": 186,
-      "query_id": "1n81A00",
-      "query_consistent": {
-        "sent_length": 186,
-        "returned_length": 186,
-        "id_match": true,
-        "length_match": true
-      },
       "a3m_bytes": 7252,
       "a3m_sha256": "8d437308723a26f62e9608abecd02d0f5f727f7f49d8aa3b949c9d11663c6183",
+      "resumed_from_file": true,
       "msa_quality": {
         "usable_hits": 34,
         "coverage": {
@@ -1519,7 +1258,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "wall_seconds": 3931.3,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -1530,28 +1269,9 @@
       "pdb": "/opt/protein_pipeline/cath_train/1sdiA00.pdb",
       "superfamily": "1.10.3890.10",
       "a3m_path": "public_data/benchmark/gate0/msa/1sdiA00/result.a3m",
-      "endpoint_status": "ok",
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "a3m_key_present": true,
-      "decode_ok": true,
-      "hit_count": 2344,
-      "query_length": 213,
-      "query_id": "1sdiA00",
-      "query_consistent": {
-        "sent_length": 213,
-        "returned_length": 213,
-        "id_match": true,
-        "length_match": true
-      },
       "a3m_bytes": 552839,
       "a3m_sha256": "f74ab15f9050450a2af0c749cff944a1959e170a56dbe492b089cd0e88a16edb",
+      "resumed_from_file": true,
       "msa_quality": {
         "usable_hits": 2344,
         "coverage": {
@@ -1596,7 +1316,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "wall_seconds": 2476.1,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -1607,28 +1327,9 @@
       "pdb": "/opt/protein_pipeline/cath_val/1rdrA01.pdb",
       "superfamily": "4.10.880.10",
       "a3m_path": "public_data/benchmark/gate0/msa/1rdrA01/result.a3m",
-      "endpoint_status": "ok",
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "a3m_key_present": true,
-      "decode_ok": true,
-      "hit_count": 1117,
-      "query_length": 316,
-      "query_id": "1rdrA01",
-      "query_consistent": {
-        "sent_length": 316,
-        "returned_length": 316,
-        "id_match": true,
-        "length_match": true
-      },
       "a3m_bytes": 375974,
       "a3m_sha256": "612adf97ebdf6ddb3199065c98e5b750ecbaa03ac10dcdca191d7447f88f912c",
+      "resumed_from_file": true,
       "msa_quality": {
         "usable_hits": 1117,
         "coverage": {
@@ -1673,7 +1374,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "wall_seconds": 2596.0,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -1684,28 +1385,9 @@
       "pdb": "/opt/protein_pipeline/cath_train/4ifxA00.pdb",
       "superfamily": "3.10.520.10",
       "a3m_path": "public_data/benchmark/gate0/msa/4ifxA00/result.a3m",
-      "endpoint_status": "ok",
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "a3m_key_present": true,
-      "decode_ok": true,
-      "hit_count": 3534,
-      "query_length": 330,
-      "query_id": "4ifxA00",
-      "query_consistent": {
-        "sent_length": 330,
-        "returned_length": 330,
-        "id_match": true,
-        "length_match": true
-      },
       "a3m_bytes": 1058915,
       "a3m_sha256": "75583b710a74c8d38b56d07c40040afdc69eb506a9468ed994d75973f2931a3e",
+      "resumed_from_file": true,
       "msa_quality": {
         "usable_hits": 3000,
         "coverage": {
@@ -1750,7 +1432,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "wall_seconds": 2386.3,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -1761,28 +1443,9 @@
       "pdb": "/opt/protein_pipeline/cath_train/6vqfA00.pdb",
       "superfamily": "1.10.565.10",
       "a3m_path": "public_data/benchmark/gate0/msa/6vqfA00/result.a3m",
-      "endpoint_status": "ok",
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "a3m_key_present": true,
-      "decode_ok": true,
-      "hit_count": 3534,
-      "query_length": 252,
-      "query_id": "6vqfA00",
-      "query_consistent": {
-        "sent_length": 252,
-        "returned_length": 252,
-        "id_match": true,
-        "length_match": true
-      },
       "a3m_bytes": 824372,
       "a3m_sha256": "f6acc31f00ac59d98f624d787d00c8bf2263966c554d8fd7f335d4dd40696fd6",
+      "resumed_from_file": true,
       "msa_quality": {
         "usable_hits": 3000,
         "coverage": {
@@ -1827,7 +1490,7 @@
         },
         "query_length_matches_sequence": true
       },
-      "wall_seconds": 2476.2,
+      "endpoint_status": "resumed",
       "classification": "OK"
     },
     {
@@ -1838,28 +1501,9 @@
       "pdb": "/opt/protein_pipeline/cath_train/4ai2A02.pdb",
       "superfamily": "6.20.60.20",
       "a3m_path": "public_data/benchmark/gate0/msa/4ai2A02/result.a3m",
-      "endpoint_status": "ok",
-      "response_keys": [
-        "a3m_gz_b64",
-        "hit_count",
-        "query_id",
-        "query_length",
-        "task",
-        "tsv"
-      ],
-      "a3m_key_present": true,
-      "decode_ok": true,
-      "hit_count": 513,
-      "query_length": 258,
-      "query_id": "4ai2A02",
-      "query_consistent": {
-        "sent_length": 258,
-        "returned_length": 258,
-        "id_match": true,
-        "length_match": true
-      },
       "a3m_bytes": 143697,
       "a3m_sha256": "d046a99e99fbcb093af6d190a57ada6c94992e95c5ed03a8f24c7695bb4d8e17",
+      "resumed_from_file": true,
       "msa_quality": {
         "usable_hits": 513,
         "coverage": {
@@ -1904,22 +1548,22 @@
         },
         "query_length_matches_sequence": true
       },
-      "wall_seconds": 2460.9,
+      "endpoint_status": "resumed",
       "classification": "OK"
     }
   ],
   "run_provenance": {
-    "code_sha": "00a69312cf57bb34261cadd9c0512ea803cd6f6a",
-    "code_sha_short": "00a6931",
+    "code_sha": "324c5f9624753961f5432f1a9f4b76a16088e07b",
+    "code_sha_short": "324c5f9",
     "pinned_at_start": true,
     "worktree_clean_for_code_paths": true,
     "dirty_paths": [],
     "script_sha256": {
-      "50_full_msa.py": "cdc6bc3dc7f6e83fa71cc2ddaac50fa6d8d1a9d41ec3755bbb2316c0df9154cb",
-      "48_msa_pilot.py": "cb7a172d1076590f192dddeb66da411ad51cd646924bb7c4f0acb541a2fbb1c8"
+      "50_full_msa.py": "4c8433416a8de0b98b224862126064f578835963e25bf164af452f02096e8fa4",
+      "48_msa_pilot.py": "00b84a1a7fa7ff4c4c34c140c15c5c99b95eec5f99331d68b2730bb57912f0a9"
     },
-    "started_utc": "2026-09-10T03:41:44Z"
+    "started_utc": "2026-09-10T09:49:15Z"
   },
-  "code_sha": "00a69312cf57bb34261cadd9c0512ea803cd6f6a",
-  "updated_utc": "2026-09-10T08:13:53Z"
+  "code_sha": "324c5f9624753961f5432f1a9f4b76a16088e07b",
+  "updated_utc": "2026-09-10T12:19:52Z"
 }
