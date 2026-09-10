@@ -394,3 +394,47 @@ def test_a_non_default_cohort_cannot_write_the_frozen_v2_manifest():
         m.check_out_path(frozen, m.resolve_cohorts("holdout_grid"))
     # 기본 코호트는 지금까지처럼 그 파일에 쓴다.
     m.check_out_path(frozen, m.COHORTS)
+    # 순서만 바꾼 경우도 거절한다 - 타겟 순서가 바뀌면 동결 산출물과 다른
+    # 바이트가 되므로 그것도 덮어쓰기다. 다만 메시지는 "코호트를 바꿨다" 가
+    # 아니라 무엇이 요청됐고 왜 거절인지를 말해야 한다.
+    with pytest.raises(SystemExit) as exc:
+        m.check_out_path(frozen, m.resolve_cohorts("confirmatory,calibration_v2"))
+    msg = str(exc.value)
+    assert "'confirmatory', 'calibration_v2'" in msg, "요청된 순서를 보여주지 않는다"
+    assert "기본 순서" in msg, "왜 거절인지 말하지 않는다"
+
+
+def test_a_non_default_cohort_does_not_stamp_the_v2_provenance(tmp_path):
+    """격자 실행이 v2 동결 문서를 자기 provenance 로 찍으면 안 된다.
+
+    `_write` 는 재구성하지 않는다 - 기본 경로의 출력 바이트를 지키는 것이
+    그것을 건드리지 않는 이유다. 기본 코호트가 아닐 때만 키가 나온다.
+    """
+    m = _full()
+    rows = m.targets()
+    results = [dict(r, classification="OK") for r in rows[:1]]
+    cons = {"conservation_tiers": [0.3, 0.5, 0.7], "conservation_mode": "quantile",
+            "conservation_weighting": "none"}
+    prov = {"code_sha": "x" * 40, "code_sha_short": "xxxxxxx"}
+
+    a, b = tmp_path / "a.json", tmp_path / "b.json"
+    m._write(a, results, rows, cons, prov)                 # 인자 생략 = 기존 호출
+    m._write(b, results, rows, cons, prov, m.COHORTS)      # 기본 코호트 명시
+    da = json.loads(a.read_text(encoding="utf-8"))
+    db = json.loads(b.read_text(encoding="utf-8"))
+    da.pop("updated_utc"), db.pop("updated_utc")
+    assert da == db
+    assert "cohorts" not in da, "기본 경로에 새 키가 새어 나왔다"
+    assert da["purpose"].startswith("Step 7 - 24 타겟")
+    assert da["freeze_doc"] == "docs/specs/rapid-v2-multisource-validation-freeze.md"
+
+    g = tmp_path / "g.json"
+    m._write(g, results, rows, cons, prov, m.resolve_cohorts("holdout_grid"))
+    dg = json.loads(g.read_text(encoding="utf-8"))
+    dg.pop("updated_utc")
+    assert dg["cohorts"] == ["holdout_grid"]
+    assert "24 타겟" not in dg["purpose"]
+    assert dg["freeze_doc"] != da["freeze_doc"]
+    # 키 집합은 cohorts 하나만 늘어난다 - _write 를 재구성하지 않았다는 증거.
+    assert set(dg) - set(da) == {"cohorts"}
+    assert list(dg)[:len(da)] == list(da), "키 순서가 바뀌었다"

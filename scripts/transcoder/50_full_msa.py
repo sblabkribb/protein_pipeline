@@ -169,9 +169,12 @@ def check_out_path(out_path: Path, cohorts: tuple[tuple[str, str], ...]) -> None
     덮어쓴다 - 되돌릴 수 없으므로 코드에서 막는다.
     """
     if tuple(cohorts) != COHORTS and out_path.resolve() == OUT.resolve():
+        # 순서까지 본다. 코호트 순서가 바뀌면 manifest 의 타겟 순서가 바뀌어
+        # 동결 산출물과 다른 바이트가 되므로 그것도 덮어쓰기다.
         raise SystemExit(
-            f"--cohorts 를 바꿨으면 --out 도 바꿔야 한다. {OUT.name} 은 동결된 "
-            "v2 산출물이라 읽기 전용이다."
+            f"{OUT.name} 은 동결된 v2 산출물이라 읽기 전용이다. 기본 코호트를 "
+            f"기본 순서 {[c for c, _ in COHORTS]} 로 돌릴 때만 그 파일에 쓴다 - "
+            f"요청은 {[c for c, _ in cohorts]} 이므로 --out 을 따로 지정해야 한다."
         )
 
 
@@ -381,7 +384,7 @@ def main() -> int:
     if args.workers <= 1:
         for row in rows:
             results.append(process(row))
-            _write(out_path, results, rows, cons_cfg, prov)
+            _write(out_path, results, rows, cons_cfg, prov, cohorts)
     else:
         # 타겟 간 병렬. per-job 파라미터는 하나도 바뀌지 않는다 - 배포 일치와
         # 결정성에 영향이 없고, 제약은 서버 메모리뿐이다.
@@ -390,19 +393,29 @@ def main() -> int:
             for entry in pool.map(process, rows):
                 results.append(entry)
                 with lock:
-                    _write(out_path, results, rows, cons_cfg, prov)
+                    _write(out_path, results, rows, cons_cfg, prov, cohorts)
 
-    _write(out_path, results, rows, cons_cfg, prov)
+    _write(out_path, results, rows, cons_cfg, prov, cohorts)
     _summary(results)
     print(f"\nwrote {out_path}")
     return 0
 
 
 def _write(out_path: Path, results: list[dict], rows: list[dict],
-           cons_cfg: dict, prov: dict) -> None:
+           cons_cfg: dict, prov: dict,
+           cohorts: tuple[tuple[str, str], ...] = COHORTS) -> None:
     by_class: dict[str, int] = {}
     for e in results:
         by_class[e.get("classification", "?")] = by_class.get(e.get("classification", "?"), 0) + 1
+    # 기본 코호트가 아니면 v2 provenance 를 그대로 찍지 않는다 - 그러면 우리
+    # 산출물이 남의 동결 문서를 가리킨다. 기본 경로에서는 `extra` 가 비어 있어
+    # 출력 바이트가 한 글자도 바뀌지 않는다 (키 순서 포함).
+    extra: dict = {}
+    if tuple(cohorts) != COHORTS:
+        names = [c for c, _ in cohorts]
+        extra = {"purpose": f"{names} 코호트의 target 수준 MSA. --cohorts 로 지정됐다.",
+                 "freeze_doc": "docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md",
+                 "cohorts": names}
     out_path.write_text(json.dumps({
         "purpose": "Step 7 - 24 타겟의 target 수준 MSA. source 마다 다시 돌리지 않는다.",
         "freeze_doc": "docs/specs/rapid-v2-multisource-validation-freeze.md",
@@ -420,6 +433,7 @@ def _write(out_path: Path, results: list[dict], rows: list[dict],
         "run_provenance": prov,
         "code_sha": prov["code_sha"],
         "updated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        **extra,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
