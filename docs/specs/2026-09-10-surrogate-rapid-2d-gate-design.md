@@ -382,10 +382,38 @@ RAPID 쪽에서 이미 저심도 MSA 가 나왔다 — `msa_pilot_corrected.json
 5. arm 을 non-evaluable 로 내리는 경우는 **하나뿐**이다: **training fold 자체에서 해당
    MSA feature 를 정의할 수 없어 imputation statistic 을 만들 수 없을 때.** 이때는
    그 arm 의 실행을 non-evaluable 로 기록하고 이유를 남긴다. 타겟을 빼지 않는다.
-6. **MSA 품질을 보고 타겟을 교체하지 않는다.** `holdout_targets.json` 의 12 타겟은
+6. **얕은 MSA 는 "계산 가능하지만 정보가 없는" 제 3 의 경우다 (2026-09-10 추가).**
+   규칙 1–5 는 두 경우만 다룬다 — feature 가 계산되거나, 수학적으로 정의되지 않거나.
+   peer 세션이 v2 코호트에서 실제 사례를 찾았다: `2jvfA00` 은 uniref90 에서
+   **usable_hits = 1** 이다(truncation·부분쓰기·strip·multi-model 전부 배제 확인).
+
+   **usable_hits 가 1 이면 보존 프로파일이 사실상 query 자신이다.** 그러면 tier
+   30/50/70 이 거의 임의의 근거로 위치를 고정하고, `F_tier` 가 임의가 되므로 그
+   타겟의 `r_tier` 는 **계산은 되지만 잡음을 잰다.** 규칙 3 의 "수학적으로 정의되지
+   않음" 에 걸리지 않으므로 지금 규칙 아래에서는 **진짜 측정처럼 조용히 들어간다.**
+
+   처리는 **제외가 아니라 가시화**다 — depth 로 타겟을 걸러내면 규칙 5 가 막으려는
+   selection 문제가 그대로 돌아온다.
+
+   - `msa_features.json` 의 `per_target` 에 **`usable_hits` 를 그대로 기록**한다.
+   - **`msa_low_depth` 이진 지시자**를 `msa_undefined` 와 나란히 feature 에 넣는다.
+     문턱은 `usable_hits < 10` — 이 값은 `50_full_msa.py` docstring 이 이미 동결한
+     feasibility 기준이며 **여기서 새로 고르지 않는다.**
+   - Gate 2 결과에 **저심도 타겟 목록과 그 수**를 보고한다. 1 차 판정은 informative
+     11 타겟 전체로 내고, **저심도 타겟을 뺀 민감도를 함께** 낸다.
+   - 어느 경우에도 **타겟을 코호트에서 빼지 않는다.**
+
+   지시자를 넣는 이유는 모델이 그 타겟의 보존 feature 를 스스로 할인할 수 있게
+   하려는 것이다. 조용히 포함하는 것과 조용히 제외하는 것 사이의 제 3 의 선택이다.
+
+   **이 규칙은 결과 전에 등록됐다.** 이 글을 쓰는 시점에 격자 12 타겟 중 완료된 것은
+   `3es1A01` 하나이고 `usable = 3000` 으로 건강하다. 나머지 11 개의 depth 는 아직
+   모른다.
+
+7. **MSA 품질을 보고 타겟을 교체하지 않는다.** `holdout_targets.json` 의 12 타겟은
    seed 20260907 로 동결됐고 이 실험에서 다시 고르지 않는다. MSA 품질 지표
    (`usable_hits`, coverage/depth 분위)는 **보고 대상이지 선별 기준이 아니다.**
-7. **MSA conservation 은 타겟/reference 로 한 번 계산된 값이다.** candidate 서열의
+8. **MSA conservation 은 타겟/reference 로 한 번 계산된 값이다.** candidate 서열의
    AF2 결과나 Gate 2 label 에 따라 달라지는 항이 S4–S6 에 들어가면 안 된다. candidate
    별로 달라지는 것은 "그 candidate 의 변이가 보존 위치에 있는지" 뿐이며, 그 판정에
    쓰이는 보존 프로파일 자체는 candidate 와 무관하다.
