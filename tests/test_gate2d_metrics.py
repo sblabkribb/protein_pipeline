@@ -246,3 +246,40 @@ def test_gate1_informative_targets_is_eleven():
     # 백본 >= 3 이고 q_b 비상수. 1sh6A02 는 q_b 가 전부 1.00 이라 Spearman 미정의.
     assert len(inf) == 11
     assert "1sh6A02" not in inf
+
+
+def test_reproduces_spec_reference_deltas():
+    """스펙 §1: SoluProt −0.001, oracle +0.326 (타겟 등가중, mixed 백본 37개)."""
+    import _gate2d_cohort as C
+    grid = C.load_holdout_grid()
+    mixed = C.mixed_backbones(grid)
+    targets = [b.target_id for b in mixed]
+
+    solu, oracle = [], []
+    for b in mixed:
+        labels = [f.joint_pass for f in b.folds]
+        ids = [f.sequence_id for f in b.folds]
+        solu.append(G.delta_top4(labels, [f.soluprot for f in b.folds], ids))
+        oracle.append(G.delta_top4(labels, [1.0 if v else 0.0 for v in labels], ids))
+
+    assert round(G.target_equal_mean(solu, targets), 3) == -0.001
+    assert round(G.target_equal_mean(oracle, targets), 3) == 0.326
+
+
+def test_soluprot_reference_fails_the_gate2_threshold():
+    """현행 cheap predictor 는 GO 문턱에 한참 미달한다 - 그것이 실험의 출발점이다."""
+    import _gate2d_cohort as C
+    from rapid_sr.clustered import one_sided_lcb
+    grid = C.load_holdout_grid()
+    mixed = C.mixed_backbones(grid)
+    per_backbone = [
+        G.delta_top4([f.joint_pass for f in b.folds],
+                     [f.soluprot for f in b.folds],
+                     [f.sequence_id for f in b.folds])
+        for b in mixed
+    ]
+    per_target = G.per_target_means(per_backbone, [b.target_id for b in mixed])
+    point = sum(per_target) / len(per_target)
+    out = one_sided_lcb(per_target, alpha=G.LCB_ONE_SIDED_ALPHA, seed=G.BOOTSTRAP_SEED)
+    assert point < G.GATE2_DELTA_MIN
+    assert out["exceeds_zero"] is False
