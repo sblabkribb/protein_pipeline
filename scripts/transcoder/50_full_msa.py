@@ -61,6 +61,17 @@ COHORTS = (("calibration_v2", "calibration_v2_targets.json"),
 #: 변경 전과 같은 목록·같은 출력이어야 한다.
 OPTIONAL_COHORTS = {"holdout_grid": "holdout_targets.json"}
 
+#: 코호트마다 파일 안의 **어느 목록**을 읽는가. 기본은 `selected` 이고 동결 v2
+#: 두 코호트가 그것을 읽는다.
+#:
+#: `holdout_targets.json` 은 다르다. `selected` 는 동결 전 희망 목록이고, 선정에
+#: 실패한 4 개가 `resolved.rule` 에 따라 같은 stratum 의 reserve 로 교체됐다
+#: (1sh6A02←2jo7A00 · 5xpdA02←1vprA02 · 3f2pA01←2pgsA03 · 5pc8A00←2iayA00).
+#: 실제로 백본이 만들어진 격자는 `resolved.targets` 다. `selected` 를 읽으면 fold
+#: 가 없는 4 개를 가져오고 fold 가 있는 4 개를 놓쳐 코호트의 1/3 이 조용히 빠진다.
+COHORT_TARGET_KEY = {"holdout_grid": ("resolved", "targets")}
+DEFAULT_TARGET_KEY = ("selected",)
+
 
 def run_provenance() -> dict:
     """실행 시점에 **한 번** 잡는다.
@@ -169,7 +180,10 @@ def targets(cohorts: tuple[tuple[str, str], ...] | None = None) -> list[dict]:
     out = []
     for cohort, fname in (cohorts or COHORTS):
         d = json.loads((BASE / fname).read_text(encoding="utf-8"))
-        for t in d["selected"]:
+        node = d
+        for key in COHORT_TARGET_KEY.get(cohort, DEFAULT_TARGET_KEY):
+            node = node[key]
+        for t in node:
             out.append({"cohort": cohort, "domain": t["domain"],
                         "stratum": t["stratum"], "length_aa": t["length"],
                         "pdb": t["pdb"], "superfamily": t["superfamily"]})

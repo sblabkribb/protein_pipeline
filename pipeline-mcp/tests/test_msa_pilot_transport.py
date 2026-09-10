@@ -324,6 +324,37 @@ def test_the_manifest_carries_the_pinned_provenance():
     assert "rev-parse" not in body, "_write 가 HEAD 를 다시 읽는다"
 
 
+def _grid_target_ids() -> set[str]:
+    """격자 코호트의 진짜 타겟 집합. 후보 서열이 존재하는 타겟이 정의다."""
+    import csv
+    f = ROOT / "public_data" / "benchmark" / "gate0" / "holdout_grid" / "sequences.csv"
+    with f.open(newline="", encoding="utf-8") as fh:
+        return {row["target_id"] for row in csv.DictReader(fh)}
+
+
+def test_the_grid_cohort_reads_resolved_targets_not_the_selected_wishlist():
+    """`selected` 는 동결 전 희망 목록이다.
+
+    선정 실패 4 개가 같은 stratum reserve 로 교체됐고(`resolved.rule`), 백본은
+    교체 후 목록으로 만들어졌다. `selected` 로 MSA 를 돌리면 fold 가 없는 4 개를
+    가져오고 fold 가 있는 4 개를 놓쳐 S4-S6 arm 이 코호트의 1/3 을 조용히 잃는다.
+    """
+    m = _full()
+    d = json.loads((ROOT / "public_data" / "benchmark" / "gate0" /
+                    "holdout_targets.json").read_text(encoding="utf-8"))
+    wishlist = {t["domain"] for t in d["selected"]}
+    resolved = {t["domain"] for t in d["resolved"]["targets"]}
+    grid = _grid_target_ids()
+    # 두 목록이 실제로 다르다는 것부터 고정한다. 같아지면 이 테스트는 무의미하다.
+    assert wishlist != resolved, "교체가 없으면 이 회귀는 재현되지 않는다"
+    assert len(wishlist - resolved) == len(resolved - wishlist) == 4
+    assert resolved == grid, "resolved.targets 가 격자와 다르다"
+    assert {r["domain"] for r in m.targets(m.resolve_cohorts("holdout_grid"))} == grid
+    # 기본 두 코호트는 계속 `selected` 를 읽는다.
+    assert m.DEFAULT_TARGET_KEY == ("selected",)
+    assert set(m.COHORT_TARGET_KEY) == {"holdout_grid"}
+
+
 def test_cohort_override_is_opt_in_and_leaves_the_default_untouched():
     """`--cohorts` 는 **덮어쓰기 전용**이다.
 
@@ -342,9 +373,10 @@ def test_cohort_override_is_opt_in_and_leaves_the_default_untouched():
     grid = m.targets(m.resolve_cohorts("holdout_grid"))
     assert len(grid) == 12
     assert {r["cohort"] for r in grid} == {"holdout_grid"}
-    d = json.loads((ROOT / "public_data" / "benchmark" / "gate0" /
-                    "holdout_targets.json").read_text(encoding="utf-8"))
-    assert sorted(r["domain"] for r in grid) == sorted(t["domain"] for t in d["selected"])
+    # 기대 목록을 여기에 적지 않는다. 격자에 **실제로 백본이 있는** 타겟을
+    # sequences.csv 에서 읽는다 - 목록을 손으로 적었기 때문에 `selected` 와
+    # `resolved.targets` 의 4 개 차이를 놓쳤다.
+    assert {r["domain"] for r in grid} == _grid_target_ids()
     # 행 스키마가 기본 코호트와 같아야 process() 가 그대로 돈다.
     assert all(set(r) == set(m.targets()[0]) for r in grid)
     # 두 코호트는 겹치지 않는다 - 공유 MSA_DIR 에서 A3M 이 충돌하지 않는 근거다.
