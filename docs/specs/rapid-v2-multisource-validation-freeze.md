@@ -767,6 +767,26 @@ plan JSON `review_required` 와 같다.
 첫 문장은 이전 동결 (`sequence-constraint-protocol-freeze.md` §7) 이 원고에 넣기로
 한 문장이고, 아직 들어가지 않았다. 두 번째가 이번에 추가되는 것이다.
 
+### Methods 에 추가할 문장 (영문, MSA query 정의)
+
+배포 일치를 근거로 쓰지 않는다. **제거된 잔기가 무엇이었는지**가 더 강한 근거다 -
+"we matched deployment" 는 절차이고, "the stripped residues were cloning
+artifacts" 는 생물학이다.
+
+> Conservation profiles were computed from an MSA whose query was the
+> deployment-staged target sequence: multi-model coordinates were reduced to the
+> first model, and residues with non-positive residue numbers were removed. In
+> the three targets where this changed the query, the removed residues were
+> cloning artifacts -- a His-tag remnant (HM), a GST-cleavage scar (GSH), and a
+> linker glycine -- which carry no evolutionary signal and would otherwise place
+> noise at the N-terminus of the conservation profile.
+
+클로닝 산물에는 진화적 신호가 없으므로, query 에 넣으면 프로파일의 N 말단에
+잡음을 얹는다. 그래서 strip 은 배포를 따라간 결정이 아니라 **독립적으로 옳은**
+결정이다.
+
+근거: `public_data/benchmark/gate0/msa_query_correction.json`
+
 ### results_of_record 에 추가할 기록
 
 `holdout_grid/af2_order_metric.csv` 의 `backbone_source` 열에서 직접 나온다.

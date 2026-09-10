@@ -183,3 +183,40 @@ def test_both_runners_share_one_query_definition():
     src = FULL.read_text(encoding="utf-8")
     assert "pilot_mod().query_sequence" in src
     assert "def ca_sequence(" not in src, "full 러너가 서열 추출을 따로 구현했다"
+
+
+def test_the_methods_sentence_and_the_dependency_are_recorded():
+    """왜 strip 이 옳은지, 되돌리면 무엇이 깨지는지가 남아 있어야 한다.
+
+    "배포와 맞췄다" 는 절차적 근거다. 제거된 잔기가 클로닝 산물(His-tag 잔여물 ·
+    GST 절단 흔적 · 링커)이었다는 것이 생물학적 근거이고 더 강하다.
+    """
+    import json
+    rec = ROOT / "public_data" / "benchmark" / "gate0" / "msa_query_correction.json"
+    if not rec.exists():
+        pytest.skip("교정 기록 없음")
+    d = json.loads(rec.read_text(encoding="utf-8"))
+
+    # 접두 문자열이 기록돼 있어야 그 주장을 검증할 수 있다
+    prefixes = {t["domain"]: t["dropped_prefix"] for t in d["targets"]}
+    assert prefixes == {"2jvfA00": "HM", "4yqiA01": "GSH", "4q68A01": "G"}, prefixes
+    for t in d["targets"]:
+        assert t["raw_query_length"] - t["staged_query_length"] == len(t["dropped_prefix"])
+        # 교체된 산출물이 어떤 판정이었는지 남아야 한다 - OK 는 흔적을 남기지 않는다
+        assert t["superseded_a3m"]["classification"] in {
+            "OK", "MSA_INSUFFICIENT_DEPTH", "MSA_INFEASIBLE"}
+        assert t["superseded_a3m"]["sha256_verified"] is True
+
+    # 되돌릴 때 무엇이 깨지는지
+    dep = d["downstream_dependency"]
+    assert dep["items"], "downstream 의존이 비어 있다"
+    assert any("S4" in i["what"] for i in dep["items"])
+    assert any("아무 예외도 나지 않는다" in i["how"] for i in dep["items"])
+
+    # 원고 문장이 동결 문서에 대기 중인가
+    doc = (ROOT / "docs" / "specs" / "rapid-v2-multisource-validation-freeze.md"
+           ).read_text(encoding="utf-8")
+    assert "Methods 에 추가할 문장" in doc
+    for phrase in ("deployment-staged target sequence", "cloning artifacts",
+                   "His-tag remnant (HM)", "no evolutionary signal"):
+        assert phrase in doc.replace("\n> ", " ").replace("\n", " "), phrase

@@ -106,5 +106,18 @@
         "sha256_verified": true
       }
     }
-  ]
+  ],
+  "downstream_dependency": {
+    "why_recorded": "이 query 정의를 되돌리면 아래가 조용히 깨진다. 되돌리기 전에 이 항목을 읽어야 한다.",
+    "items": [
+      {
+        "owner": "peer session protein-pipeline-work-45",
+        "what": "S4 conservation-burden feature",
+        "how": "후보의 변이 위치 M_i 와 타겟의 보존 위치 집합 F_tier 를 교집합한다. F_tier 는 MSA query (resolved.targets[].pdb, query_sequence 로 읽음)에서, M_i 는 holdout_targets_pdb/<t>.pdb 를 자체 파서로 읽는다. 두 축이 어긋나면 교집합이 좌표 불일치 위에서 계산되고 **아무 예외도 나지 않는다** - 그냥 잡음을 재게 된다.",
+        "verified": "두 축이 모두 배포 staged 서열로 수렴해 12/12 전체 문자열 일치. peer 가 측정으로 확인했다.",
+        "also_verified": "구/신 query_sequence 를 grid 12 타겟에 나란히 실행해 차이 0 - 이 수정이 그 코호트에는 no-op 임을 논증이 아니라 측정으로 확인했다."
+      }
+    ]
+  },
+  "lesson": "검증 대상이 파이프라인일 때 기대값은 **그 파이프라인의 해당 단계 출력**이어야 하고 '무엇을 해야 하는가' 의 재구성이면 안 된다. 재도출한 기대값은 틀린 oracle 과 함께 틀린다 - 1840 vs 92 near-miss 가 그 경우였다."
 }
