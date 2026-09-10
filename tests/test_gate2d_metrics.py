@@ -1147,6 +1147,7 @@ def test_gate2_reports_undecided_without_the_primary_arm(tmp_path, monkeypatch):
     payload = _json.loads(out.read_text(encoding="utf-8"))
     assert payload["verdict"] == "UNDECIDED"
     assert payload["primary_arm"] == "S6"
+    assert payload["interim"] is True
     assert "interim" in payload["verdict_note"]
     assert payload["cohort"]["mixed_backbones"] == 37
     assert payload["cohort"]["informative_targets"] == 11

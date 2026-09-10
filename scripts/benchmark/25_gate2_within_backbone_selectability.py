@@ -134,6 +134,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                        for a in requested}
 
     primary = arms.get(F.PRIMARY_ARM)
+
+    # 판정 arm 이 **돌지 않은** 실행은 interim 이다 - 요청되지 않았거나 코드가 아직
+    # 없거나. 기계가 읽을 수 있게 최상위에 박는다: verdict_note 문장에만 두면 이
+    # 파일을 나중에 Gate 2 결과로 인용하는 것을 막지 못한다.
+    #
+    # 규칙 5 의 `non_evaluable` 은 interim 이 **아니다.** 그것은 판정 arm 을 실제로
+    # 돌려서 얻은 데이터에 대한 결론이고 그대로 기록으로 남아야 한다.
+    interim = primary is None or primary.get("status") == "not_implemented"
     if primary is None or primary.get("status") in ("non_evaluable", "not_implemented"):
         verdict, note = "UNDECIDED", (
             f"판정 arm {F.PRIMARY_ARM} 이 실행되지 않았다. S0-S3 만 돌린 결과는 "
@@ -172,6 +180,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "arms_structural_pass_secondary": arms_structural,
         "verdict": verdict,
         "verdict_note": note,
+        "interim": interim,
         "no_go_reading": NO_GO_READING,
         "code_sha": _code_sha(),
         "utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
