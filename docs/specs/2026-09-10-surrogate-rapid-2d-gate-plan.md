@@ -2214,7 +2214,7 @@ def _block(name: str, folds) -> np.ndarray:
             if dt.shape[0] != wtok.shape[0]:
                 out.append(np.zeros(dt.shape[1])); flag.append(1.0); continue
             diff = dt - wtok
-            sites = np.where(np.abs(diff).sum(axis=1) > 0)[0]
+            sites = np.where(np.abs(diff).sum(axis=1) > 0)[0]   # <== 틀렸다. 아래 정정
             out.append(diff[sites].mean(axis=0) if len(sites) else np.zeros(dt.shape[1]))
             flag.append(0.0)
         return np.hstack([np.vstack(out), np.array(flag).reshape(-1, 1)])
@@ -2242,6 +2242,47 @@ def _block(name: str, folds) -> np.ndarray:
             n = max(len(seq), 1)
             rows.append([seq.count(a) / n for a in alphabet])
         return np.array(rows, dtype=float)
+```
+
+### ⚠️ 정정 (2026-09-10) — 위 `esm_delta_mut` 은 S3 를 S2 로 붕괴시킨다
+
+`sites = np.where(np.abs(diff).sum(axis=1) > 0)[0]` 이 틀렸다. **ESM 토큰 임베딩은
+문맥적(contextual)이다** — 한 잔기가 바뀌면 그 위치만 바뀌는 것이 아니라 서열 전체의
+토큰 표현이 바뀐다. 따라서 그 조건은 **모든 위치**를 선택한다. `3es1A01` 에서
+실측 160/160 위치였다.
+
+그러면 `diff[sites].mean(axis=0)` 은 전 위치 평균이고, 그것은 정의상
+
+```
+mean(ESM_tok(design)) − mean(ESM_tok(WT)) = ΔESM_global
+```
+
+이다. 즉 **S3 가 S2 의 bit-for-bit 복제가 되고 ladder 가 한 칸을 조용히 잃는다.**
+실제 fold 로 두 행렬을 만들어 확인했다:
+
+```
+계획대로의 S3 vs S2   allclose: True   max|diff| = 2.086e-06   (float32 반올림)
+스펙대로의 S3 vs S2   allclose: False  max|diff| = 0.1276
+```
+
+**변이 위치는 토큰 임베딩이 아니라 서열에서 정한다.** 스펙 §4 가 S3 를
+ΔESM_**mutation-site** 로 정의하고, `22_gate2d_prepare_esm.mutation_sites(wt, design)`
+이 그 함수다 — 서열 축 전제조건(`assert_sequence_axis`)이 존재하는 이유가 바로
+이것이다. 구현은 커밋 `5e17308` 이다.
+
+**이 결함의 성격을 기록한다.** 앞선 정정들은 인터페이스·가중치·라벨 오류였다.
+이것은 **개념 오류**다 — 토큰 차이가 희소하다고 가정했고 ESM 이 문맥적이라는 사실을
+놓쳤다. 계획을 읽어서는 드러나지 않고 **실제 행렬을 만들어 비교할 때만** 드러난다.
+S4–S6 에서 같은 종류를 의심할 지점: **"차이가 0 인 곳" 을 마스크로 쓰는 코드가 또
+있는지.**
+
+**S6 미확정.** 스펙 §4 는 cheap 을 "조성, MPNN score" 로 적지만 격자의
+`sequences.csv` 에 MPNN score 열이 없고 `mpnn_score_analysis.json` 은 다른 코호트다
+(88 타겟 / 10,360 설계). 위 블록은 조성 전용이다. S6 구현자는 격자의 per-sequence
+MPNN score 를 찾아 넣거나 **스펙과의 이 차이를 산출물에 기록한다.**
+
+```python
+# (아래는 원문 이어짐)
 
     raise KeyError(f"알 수 없는 feature 블록: {name}")
 
@@ -2412,7 +2453,14 @@ def test_msa_imputation_weights_targets_equally_not_rows():
 Run: `/tmp/gate2d-venv/bin/python -m pytest tests/test_gate2d_metrics.py -k msa_imputation_weights -v`
 Expected: 구현 전 FAIL, 구현 후 PASS
 
-- [ ] **Step 9: Gate 2 스크립트를 쓴다**
+- [ ] **Step 9: Gate 2 스크립트를 쓴다 — ⚠️ 아래 블록의 fold 루프는 폐기됐다**
+
+아래 블록은 `F.build_features(arm, all_folds)` 를 한 번 부르고 fold 루프에서
+`F.impute_train_fold(x, train_idx)` 를 쓴다. **둘 다 위쪽 Step 8b 정정이 명시적으로
+거부한 것이다** ("그것은 틀렸다", "`F.assemble` 가 `build_features` 를 대체한다").
+그리고 `no_go_reading` 의 **"approximately 94%"** 는 스펙 §5 가 프로덕션 primitive
+로 **93%** 로 재동결했다 (`gate2d_operating_characteristics.json` 의 `p_go = 0.9283`
+at AUC 0.703). 스펙 문장을 쓴다. 구현은 `5e17308` 이다.
 
 ```python
 #!/usr/bin/env python3
