@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts" / "benchmark"))
 
@@ -396,3 +398,59 @@ def test_soluprot_reference_fails_the_gate2_threshold():
     out = one_sided_lcb(per_target, alpha=G.LCB_ONE_SIDED_ALPHA, seed=G.BOOTSTRAP_SEED)
     assert point < G.GATE2_DELTA_MIN
     assert out["exceeds_zero"] is False
+
+
+def test_top_k_indices_refuses_a_nan_score():
+    """스펙 §5: **점수 배열**의 NaN 은 fail-closed 다.
+
+    NaN 비교는 전부 False 이므로 정렬은 NaN 을 입력 행 순서가 놓는 자리에 그냥
+    둔다. 전 후보가 NaN 인 최악의 경우 Top-4 가 `sequence_id` 앞 4개가 되어
+    **Δ_Top4 가 고장 대신 잡음처럼 보인다.** 그래서 정렬 전에 거절한다.
+    """
+    ids = [f"g{i}" for i in range(6)]
+    scores = [0.9, 0.8, float("nan"), 0.6, 0.5, 0.4]
+    # 메시지가 몇 개인지와 첫 인덱스를 말한다 - 어느 후보가 고장인지 바로 보인다.
+    with pytest.raises(ValueError, match=r"비유한 점수 1 개.*첫 인덱스 2"):
+        G.top_k_indices(scores, ids)
+
+    # NaN 이 여러 개면 개수도 그대로 센다.
+    with pytest.raises(ValueError, match=r"비유한 점수 3 개.*첫 인덱스 0"):
+        G.top_k_indices([float("nan")] * 3 + [0.1] * 3, ids)
+
+    # 유한한 점수만 있으면 그대로 동작한다 - 가드가 정상 경로를 막지 않는다.
+    assert G.top_k_indices([0.9, 0.8, 0.7, 0.6, 0.5, 0.4], ids) == [0, 1, 2, 3]
+
+
+def test_top_k_indices_refuses_inf_scores():
+    """±Inf 도 같다. usable hits 0 에서 log10 이 -inf 를 내는 경로가 실재한다."""
+    ids = [f"g{i}" for i in range(4)]
+    with pytest.raises(ValueError, match=r"비유한 점수 1 개.*첫 인덱스 1"):
+        G.top_k_indices([0.5, float("inf"), 0.3, 0.2], ids)
+    with pytest.raises(ValueError, match=r"비유한 점수 1 개.*첫 인덱스 3"):
+        G.top_k_indices([0.5, 0.4, 0.3, float("-inf")], ids)
+
+
+def test_delta_top4_inherits_the_score_guard_without_repeating_it():
+    """검사는 metric 경계에서 한 번만 한다.
+
+    `delta_top4` 는 `top_k_indices` 를 통해 보호받는다. 중복 검사를 두면 규칙이
+    두 곳에 살게 되고 한쪽만 고쳐지는 경로가 생긴다.
+    """
+    labels = [True, False, True, False, False, False]
+    ids = [f"g{i}" for i in range(6)]
+    with pytest.raises(ValueError, match=r"비유한 점수 1 개.*첫 인덱스 4"):
+        G.delta_top4(labels, [0.9, 0.8, 0.7, 0.6, float("nan"), 0.4], ids)
+
+
+def test_delta_top4_still_returns_nan_for_an_uncountable_backbone():
+    """반환 NaN 은 금지 대상이 아니다 - 사용가능 설계 0 인 백본의 sentinel 이다.
+
+    스펙 §3 의 `3es1A01`·`3h7eA02` native arm 이 그 2개다. 점수 입력의 NaN 만
+    금지된다. 두 용법을 섞으면 "셀 수 없는 백본" 이 예외가 되어 집계가 죽는다.
+    """
+    empty = G.delta_top4([], [], [])
+    assert empty != empty, "사용가능 설계 0 인 백본은 NaN 이어야 한다"
+    assert G.delta_top4([True], [1.0], ["g0"], k=0) != G.delta_top4([True], [1.0], ["g0"], k=0)
+
+    # 그 sentinel 은 타겟 등가중 집계에서 제외된다(예외가 되지 않는다).
+    assert G.per_target_means([empty, 0.4], ["A", "A"]) == [0.4]

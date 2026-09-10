@@ -41,11 +41,40 @@ def is_structural_pass(plddt: float, rmsd: float) -> bool:
     return (plddt >= PLDDT_MIN) and (rmsd <= RMSD_MAX)
 
 
+import math
+
+
+def _reject_nonfinite_scores(scores: Sequence[float]) -> None:
+    """점수의 NaN·±Inf 를 fail-closed 로 거절한다 (스펙 §5).
+
+    NaN 비교는 전부 False 이므로 정렬은 NaN 을 입력 행 순서가 놓는 자리에 그냥
+    둔다. 전 후보가 NaN 인 최악의 경우 Top-4 가 `sequence_id` 앞 4개가 되고
+    **Δ_Top4 가 고장 대신 잡음처럼 보인다.** surrogate 가 어떤 후보에 점수를
+    못 매기면 그것은 feature 파이프라인의 버그이므로 조용히 뒤로 미루지 않는다.
+    """
+    bad = [i for i, v in enumerate(scores) if not math.isfinite(float(v))]
+    if not bad:
+        return
+    raise ValueError(
+        f"비유한 점수 {len(bad)} 개 (첫 인덱스 {bad[0]}, 값 {float(scores[bad[0]])!r}). "
+        "스펙 §5 는 점수의 NaN·±Inf 를 fail-closed 로 규정한다 - 뒤로 정렬하면 "
+        "Δ_Top4 가 고장 대신 잡음처럼 읽힌다."
+    )
+
+
 def top_k_indices(scores: Sequence[float], seq_ids: Sequence[str], k: int = TOP_K) -> list[int]:
     """점수 내림차순 상위 k. 동점은 sequence_id 오름차순으로 끊는다.
 
     무작위 동점 처리를 쓰지 않는다 - 재현되지 않는다.
+
+    **정렬 전에** 점수를 검사하고 NaN·±Inf 가 하나라도 있으면 `ValueError` 다.
+    검사는 이 metric 경계에서 한 번만 한다 - `delta_top4` 는 여기를 지나므로
+    같은 검사를 되풀이하지 않는다.
+
+    이 금지는 **점수 입력**에만 적용된다. `delta_top4` 가 **돌려주는** NaN 은
+    "이 백본은 셀 수 없다" 는 별개의 sentinel 이며 유지된다.
     """
+    _reject_nonfinite_scores(scores)
     order = sorted(range(len(scores)), key=lambda i: (-float(scores[i]), str(seq_ids[i])))
     return order[:k]
 
@@ -56,6 +85,13 @@ def delta_top4(labels: Sequence[bool], scores: Sequence[float],
 
     q_b 는 Top-k 를 고르는 것과 **같은 candidate universe** 위의 base rate 다.
     분모는 다르다(k vs n) - 같아야 하는 것은 후보 모집단이다.
+
+    NaN 의 두 용법을 섞지 않는다 (스펙 §5).
+      - **점수 입력의 NaN·±Inf 는 금지**다. `top_k_indices` 가 `ValueError` 를
+        내며, 여기서 같은 검사를 되풀이하지 않는다.
+      - **반환값의 NaN 은 유지**한다. 사용가능 설계가 0 인 백본은 셀 수 없다는
+        sentinel 이고 격자에 2개 있다(`3es1A01`·`3h7eA02` 의 native arm).
+        타겟 등가중 집계가 그 백본을 제외한다.
     """
     n = len(labels)
     if n == 0 or k <= 0:
