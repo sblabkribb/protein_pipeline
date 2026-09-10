@@ -120,3 +120,68 @@ def test_impute_never_invents_a_constant_for_an_undefined_feature():
     assert set(undef) == set(prep.TARGET_FEATURES) | {"msa_undefined"}
     assert undef["msa_undefined"] == 1
     assert prep.impute("A", full, train_stats=ts2)["msa_undefined"] == 0
+
+
+def test_dropping_a_measured_feature_is_surfaced_and_fails_the_arm():
+    """통계가 없다고 **측정된 값**을 조용히 버리면 안 된다.
+
+    규칙 2 는 계산된 feature 를 그대로 쓰라고 하고, 규칙 5 는 train fold 에
+    통계가 없는 경우를 arm non-evaluable 로 기록하라고 한다. 좁아진 설계행렬을
+    조용히 평가하면 6 개 중 5 개를 잃은 S4 도 정상 arm 처럼 보인다.
+    """
+    import importlib
+    prep = importlib.import_module("23_gate2d_prepare_msa_features")
+
+    # 측정값 3 개 vs 통계 1 개.
+    row = prep.impute("C", {"cons_mean": 0.71, "cons_p25": 0.52, "coverage_median": 0.89},
+                      train_stats={"cons_mean": 0.7})
+    assert row["cons_mean"] == 0.71
+    # 버려진 측정값이 보고된다 - msa_undefined == 0 만 보고 넘어갈 수 없다.
+    assert row["dropped_measured"] == ["cons_p25", "coverage_median"]
+
+    # arm 판정은 arm 수준에서 한다. 타겟은 그대로 남는다.
+    verdict = prep.arm_verdict({"C": row})
+    assert verdict["evaluable"] is False
+    assert "cons_p25" in verdict["reason"] and "coverage_median" in verdict["reason"]
+    assert verdict["dropped_measured_by_target"] == {"C": ["cons_p25", "coverage_median"]}
+
+    # 아무것도 버리지 않았으면 arm 은 평가 가능하고 행에 그 키가 없다.
+    full = {n: 0.5 for n in prep.TARGET_FEATURES}
+    ok = prep.impute("A", full, train_stats=prep.train_stats({"A": full, "B": full}))
+    assert "dropped_measured" not in ok
+    assert prep.arm_verdict({"A": ok}) == {"evaluable": True}
+
+
+def test_an_all_null_row_is_kept_not_crashed_on():
+    """Step 6 은 정의되지 않은 값을 null 로 쓴다. 그 행은 truthy dict 다.
+
+    규칙 4 는 그런 test 타겟을 **유지**하라고 한다. float(None) 으로 죽으면
+    타겟이 사라지므로 그 자체가 규칙 위반이다.
+    """
+    import importlib
+    prep = importlib.import_module("23_gate2d_prepare_msa_features")
+
+    # Step 6 스키마가 쓰는 모양 그대로.
+    null_row = {"cons_mean": None, "cons_p25": None, "cons_p75": None,
+                "usable_hits_log10": None, "coverage_median": None,
+                "depth_median_log10": None}
+    full = {"cons_mean": 0.71, "cons_p25": 0.52, "cons_p75": 0.9,
+            "usable_hits_log10": 3.39, "coverage_median": 0.89,
+            "depth_median_log10": 3.37}
+
+    # 전부 null 인 train 행은 "정의 안 됨" 으로 센다.
+    assert prep.train_stats({"5xpdA02": null_row}) is None
+    stats = prep.train_stats({"5xpdA02": null_row, "1sp0A00": full})
+    assert stats == full
+
+    out = prep.impute("5xpdA02", null_row, train_stats=stats)
+    assert out["msa_undefined"] == 1
+    assert set(out) == set(prep.TARGET_FEATURES) | {"msa_undefined"}
+    assert out["cons_mean"] == 0.71
+
+    # 일부만 null 이면 정의된 것은 그대로 쓰고 나머지만 대치한다.
+    part = dict(null_row, cons_mean=0.4)
+    out2 = prep.impute("X", part, train_stats=stats)
+    assert out2["cons_mean"] == 0.4
+    assert out2["cons_p25"] == full["cons_p25"]
+    assert out2["msa_undefined"] == 1
