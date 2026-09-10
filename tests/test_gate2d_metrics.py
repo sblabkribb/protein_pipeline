@@ -5,6 +5,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts" / "benchmark"))
+# 리포에 conftest.py 도 pytest 설정도 없다. 이 경로가 테스트 본문 안에 있으면
+# 그 본문을 먼저 실행하지 않는 선택(`pytest <nodeid>`, `-k`, xdist 샤딩,
+# random-order)에서 `rapid_sr` import 가 깨진다 - "리뷰어가 직접 테스트를 다시
+# 돌린다" 가드가 바로 그것들이므로 수집 시점에 한 번 넣는다.
+sys.path.insert(0, str(ROOT / "scripts" / "transcoder"))
 
 import _gate2d as G
 
@@ -303,7 +308,6 @@ def test_an_all_null_row_is_kept_not_crashed_on():
 
 
 def test_one_sided_lcb90_positive_and_null():
-    sys.path.insert(0, str(ROOT / "scripts" / "transcoder"))
     from rapid_sr.clustered import one_sided_lcb
 
     # 전부 +0.5 인 표본이면 LCB 도 +0.5 여야 한다(재표집해도 값이 같다).
