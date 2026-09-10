@@ -1330,8 +1330,32 @@ Expected: PASS
 `coverage.p25/p50/p75`, `depth.p50`). conservation 은 `conservation.tiers` 와 같은
 정의를 쓴다 — 새 보존 정의를 만들지 않는다.
 
-출력 스키마를 고정한다 — Task 11 의 `_block("msa")` 가 이 키를 읽는다. 정의되지
-않는 값은 **`null` 로 쓴다.** 여기서 대치하지 않는다: imputation 은 LOTO train fold
+### 정정 (2026-09-10) — 타겟 수준 요약만으로는 S4 가 성립하지 않는다
+
+초안의 `TARGET_FEATURES` 는 전부 **타겟 수준 상수**였다. 그러면 같은 타겟의 24개
+설계가 동일한 S4 행을 받고, Gate 2 는 백본 **내부** 순위 문제이므로 Ridge 예측이
+전부 같아져 Top-4 가 tie-break 으로 떨어진다. **S4 는 원리상 순위를 만들 수 없었다.**
+S5·S6 도 ESM 계수가 학습 중 간접적으로 달라지는 경로만 남는다.
+
+동결 스펙 §4 규칙 7 은 이미 옳은 것을 요구하고 있었다 — "candidate 별로 달라지는
+것은 그 candidate 의 변이가 보존 위치에 있는지" — 이 계획이 그것을 구현하지 못했다.
+따라서 **사후 가설 추가가 아니라 스펙 구현 수정이다.**
+
+**측정으로 확인한 것 (2026-09-10).** 백본 내부에서 변이 위치 집합은 실제로 다르다:
+24개 설계 전부 distinct 하고 pairwise Jaccard 중앙값 0.85. 무작위 마스크로 잡은
+기하학적 하한에서 `r_tier` 의 백본내 SD 는 약 0.011, 백본간 SD 는 약 0.018 이다
+(between/within ≈ 1.7). **0 이 아니다** — 현재 S4 는 정확히 0 이므로, 이 수정은
+"원리상 불가"를 "가능하지만 변동이 작음"으로 바꾼다.
+
+### P3 가 추가로 내야 하는 것
+
+`full_msa_manifest.json` 은 보존 마스크의 **개수와 sha256 만** 담는다
+(`conservation.tiers` = {"0.3": 39, ...}, `conservation.fixed_positions_sha256`).
+**위치 집합이 없다.** P3 는 tier 별 보존 위치 집합을 0-기반 인덱스로 저장하고,
+`fixed_positions_sha256` 과 대조해 provenance 를 검증한다.
+
+출력 스키마를 고정한다 — Task 11 이 이 키를 읽는다. 정의되지 않는 값은 **`null` 로
+쓴다.** 여기서 대치하지 않는다: imputation 은 LOTO train fold
 평균으로 해야 하므로 fold 안에서만 할 수 있다 (Task 11 Step 8b).
 
 ```json
@@ -1347,10 +1371,45 @@ Expected: PASS
                 "usable_hits_log10": null, "coverage_median": null,
                 "depth_median_log10": null}
   },
+  "conserved_positions": {
+    "1sp0A00": {"0.3": [3, 7, 11], "0.5": [3, 7, 11, 19], "0.7": [3, 7, 11, 19, 24]},
+    "5xpdA02": null
+  },
+  "conserved_positions_sha256_verified": {"1sp0A00": true},
   "undefined_targets": ["5xpdA02"],
-  "note": "undefined 타겟도 코호트에 남는다. 대치는 LOTO fold 안에서 한다."
+  "note": "undefined 타겟도 코호트에 남는다. 대치는 LOTO fold 안에서 한다.",
+  "conserved_positions_note": "0-기반 인덱스. manifest 의 fixed_positions_sha256 과 대조해 검증한다. candidate 와 무관한 타겟 수준 값이다."
 }
 ```
+
+### Task 11 의 S4 블록 (개정)
+
+`M_i` 는 Task 8 의 `mutation_sites(wt, design)` **하나만** 쓴다 — 두 번째 구현을
+만들지 않는다. candidate 별 feature 는 다음이다.
+
+```python
+def conservation_burden(mut_sites, conserved):
+    """바뀐 위치 중 보존 위치의 비율. tier 별로 하나씩.
+
+    "point mutation 이 보존 위치를 건드렸는가" 가 아니다 - 이 코호트의 |M_i| 는
+    중앙값 약 135 로 서열의 절반이 넘는다. 따라서 "바뀐 위치 중 보존 위치의 비율" 이다.
+    """
+    m = set(mut_sites)
+    denom = max(len(m), 1)
+    return [len(m & set(conserved[tier])) / denom for tier in ("0.3", "0.5", "0.7")]
+```
+
+S4 = `[r_0.3, r_0.5, r_0.7, len(M_i)/L]` (candidate 별) + 타겟 수준 품질 지표
+(보조 context) + `msa_undefined` 지시자.
+
+**길이 불일치 백본.** `3es1A01` 의 설계 일부가 163 aa (WT 160), `3h7eA02` 가 229 aa
+(WT 220) 다. `M_i` 가 위치 대응으로 정의되지 않으므로 §4 규칙 3–4 를 적용한다 —
+대치 + `msa_undefined = 1`, **타겟은 유지**한다.
+
+### fold 별 사용 열을 기록한다
+
+`active_feature_names` 를 LOTO fold 마다 결과 JSON 에 남긴다. 어떤 fold 에서 어떤
+MSA 열이 빠졌는지 재현할 수 없으면 narrowing 을 감사할 수 없다.
 
 Run: `/tmp/gate2d-venv/bin/python scripts/benchmark/23_gate2d_prepare_msa_features.py`
 Expected: `wrote .../msa_features.json  targets 12  undefined <N>`
@@ -1976,6 +2035,28 @@ fixture 가 `impute(..., train_stats=...)` 로 호출하고 `out["msa_undefined"
 의존하지 않는 블록은 캐시하고, MSA 블록만 `impute_msa_block` 으로 fold 별로 만든다.
 `build_features` 의 테스트(Step 7)는 `train_idx=None` 으로 호출해 MSA 없는 arm
 (S0–S3)의 shape 을 그대로 검증한다.
+
+- [ ] **Step 8a: S4 가 백본 내부에서 순위를 만들 수 있는지 먼저 테스트한다**
+
+이 테스트가 통과하지 않으면 **S4 를 Gate 2 feature 라고 부를 수 없다.**
+
+```python
+def test_s4_distinguishes_two_designs_that_hit_different_conservation():
+    import _gate2d_features as F
+    conserved = {"0.3": [0, 1, 2, 3], "0.5": [0, 1, 2, 3, 4, 5], "0.7": list(range(8))}
+    # 같은 타겟·같은 백본·변이 수 동일(4개). A 는 tier30 보존 위치만, B 는 비보존만.
+    a = F.conservation_burden([0, 1, 2, 3], conserved)
+    b = F.conservation_burden([20, 21, 22, 23], conserved)
+    assert a == [1.0, 1.0, 1.0]
+    assert b == [0.0, 0.0, 0.0]
+    assert a != b, "S4 가 보존 위치를 건드린 설계를 구분하지 못한다"
+
+    # 변이가 없으면 0으로 나누지 않는다.
+    assert F.conservation_burden([], conserved) == [0.0, 0.0, 0.0]
+```
+
+Run: `/tmp/gate2d-venv/bin/python -m pytest tests/test_gate2d_metrics.py -k s4_distinguishes -v`
+Expected: 구현 전 FAIL, 구현 후 PASS
 
 - [ ] **Step 8c: 가중치 오류를 잡는 테스트를 쓴다**
 
