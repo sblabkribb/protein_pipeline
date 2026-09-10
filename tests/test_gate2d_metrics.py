@@ -218,3 +218,31 @@ def test_one_sided_lcb90_withholds_below_three_units():
     out = one_sided_lcb([0.5, 0.5], alpha=0.10, seed=1)
     assert out["lcb"] is None
     assert out["n"] == 2
+
+
+def test_load_holdout_grid_shapes():
+    import _gate2d_cohort as C
+    grid = C.load_holdout_grid()
+    # 1,728 폴드 중 status ok 이고 지표 결측 아닌 것이 1,680 이다.
+    assert len(grid.folds) == 1680
+    assert len(grid.backbones) == 70
+    assert len(grid.targets) == 12
+
+
+def test_gate2_informative_targets_is_eleven():
+    import _gate2d_cohort as C
+    grid = C.load_holdout_grid()
+    mixed = C.mixed_backbones(grid)
+    assert len(mixed) == 37
+    # mixed 백본이 하나도 없는 타겟은 1sh6A02 뿐이다.
+    assert sorted({b.target_id for b in mixed}) == sorted(set(grid.targets) - {"1sh6A02"})
+    assert len({b.target_id for b in mixed}) == 11
+
+
+def test_gate1_informative_targets_is_eleven():
+    import _gate2d_cohort as C
+    grid = C.load_holdout_grid()
+    inf = C.gate1_informative_targets(grid)
+    # 백본 >= 3 이고 q_b 비상수. 1sh6A02 는 q_b 가 전부 1.00 이라 Spearman 미정의.
+    assert len(inf) == 11
+    assert "1sh6A02" not in inf
