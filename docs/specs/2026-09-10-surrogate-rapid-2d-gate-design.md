@@ -59,25 +59,36 @@ posterior 를 확실히 오염시키지만, 현행 cheap predictor 로는 편향
 - 결과: 조성(0.047) · ESM2-8M mean(0.021) · ESM+조성(0.014) · ProtoMech PLT(0.008) ·
   CLT(−0.030) — **다섯 arm 전부 CI 가 0 을 포함**
 
-이 코호트는 Gate 2 의 평가 대상(11 타겟 / mixed 백본 37개 = 888 폴드)보다
-크고 검정력도 높다. 그래서 이 스펙은
-다음을 명시한다.
+표본은 Gate 2 의 평가 대상(11 타겟 / mixed 백본 37개 = 888 폴드)보다 훨씬 크다.
+다만 **estimand 가 다르므로 "Gate 2 보다 전반적으로 검정력이 높다" 고 쓰지 않는다.**
+정확한 진술은 다음이다.
+
+> The 82-target result provides a higher-powered negative reference for transferable
+> pLDDT-ranking signal under the previously tested representations, but it does not
+> directly test the within-backbone joint-pass estimand of Gate 2.
+
+그래서 이 스펙은 다음을 명시한다.
 
 > **S1(raw ESM mean)과 S2(ΔESM_global)는 사실상 이미 음성으로 시험됐다.** S2 는 unit
 > 내에서 상수 평행이동이므로 S1 과 동일한 예측을 낸다(RF 는 임계값 분할, Ridge 는 절편,
 > KNN/GP 는 유클리드 거리 — 전부 평행이동 불변). 두 arm 은 **신규 가설이 아니라 기지
 > null 참조**로 둔다.
 
-Gate 2 가 반복이 아닌 근거는 두 가지뿐이고, 그 이상을 주장하지 않는다.
+Gate 2 가 반복이 아닌 근거는 아래 세 가지뿐이고, 그 이상을 novelty 로 추가하지 않는다.
 
 1. **endpoint 가 다르다.** 선행은 연속 pLDDT 순위, 여기는 joint-pass Top-4 회수.
-   joint-pass 에는 RMSD ≤ 2.0 이 들어가고 RMSD 의 서열 수준 분산은 47.8% 로 pLDDT
-   31.3% 보다 크다 (`variance_decomposition_grid.json`). mixed 백본 실패의 88% 가
-   구조 단독이라는 관찰과도 방향이 같다.
+   joint-pass 에는 RMSD ≤ 2.0 이 들어가고, RMSD 의 서열 수준 분산은 47.8% 로 pLDDT
+   31.3% 와 다르다 (`variance_decomposition_grid.json`). **이 분산 차이를 새 feature
+   가 성공할 근거로 쓰지 않는다** — 분산이 크다는 것은 exploitable predictability 와
+   다른 진술이다. 여기서 쓰는 결론은 하나뿐이다: joint-pass 에는 pLDDT-only 분석과
+   다른 sequence-level variation 이 있으므로 **endpoint 가 동일하지 않다.**
 2. **unit 이 다르다.** 선행의 "타겟 내" 는 백본을 가로질러 풀링한다. 여기는 백본 내다.
 3. **새 arm 이 있다.** S3(ΔESM_mut) · S4(MSA) · S5 는 선행에서 시험되지 않았다.
 
-**사전 확률은 낮다고 기록한다.** 이 게이트의 기대값은 "새 방법이 될 것" 이 아니라
+**경험적 기대치를 낮게 기록한다.** formal Bayesian prior 가 아니므로 숫자로 쓰지 않는다:
+*prior empirical evidence lowers our expectation that generic sequence-level
+representations alone will produce a practically useful effect.* 이 게이트의 기대값은
+"새 방법이 될 것" 이 아니라
 "세 방향 중 무엇이 존재하는 문제인지 8시간 안에 확정" 이다.
 
 ## 3. Gate 1 — backbone predictability
@@ -134,6 +145,29 @@ Gate 2 가 반복이 아닌 근거는 두 가지뿐이고, 그 이상을 주장�
 
 ΔESM 의 reference 는 타겟 WT 서열이다. label 이 아니라 입력이므로 LOTO 를 위배하지 않는다.
 
+### MSA 결측·저심도 처리 (결과 보기 전 동결)
+
+RAPID 쪽에서 이미 저심도 MSA 가 나왔다 — `msa_pilot_corrected.json` 의 파일럿 타겟
+중 `median_depth` 가 33, 23 인 것이 있다. 따라서 이 규칙을 결과 전에 박아 둔다.
+**나중에 "MSA 가 얕아서 그 타겟을 뺐다" 가 되면 그 자체가 selection 문제가 된다.**
+
+1. **MSA search 가 완료되고 query 가 유효하면 depth 와 무관하게 S4–S6 feature 계산을
+   시도한다.** depth·coverage 임계값으로 타겟을 걸러내지 않는다.
+2. feature 가 계산되면 그대로 쓴다. 얕은 MSA 에서 나온 값도 쓴다.
+3. feature 가 **수학적으로 정의되지 않는 경우**(usable hits 0 등)에만 결측 처리한다.
+   처리 방식도 지금 고정한다: **train fold 평균으로 대치하고 `msa_undefined` 이진
+   지시자를 feature 에 추가**한다. 조용히 버리지 않는다.
+4. 어떤 타겟의 S4 feature 가 **전부** 정의되지 않으면 그 타겟을 **S4–S6 에 대해서만
+   non-evaluable 로 기록**하고 그 수를 보고한다. 이 경우 S4–S6 는 전체 11 타겟과
+   evaluable 부분집합 **양쪽으로 보고**한다. S0–S3 의 코호트는 영향받지 않는다.
+5. **MSA 품질을 보고 타겟을 교체하지 않는다.** `holdout_targets.json` 의 12 타겟은
+   seed 20260907 로 동결됐고 이 실험에서 다시 고르지 않는다. MSA 품질 지표
+   (`usable_hits`, coverage/depth 분위)는 **보고 대상이지 선별 기준이 아니다.**
+6. **MSA conservation 은 타겟/reference 로 한 번 계산된 값이다.** candidate 서열의
+   AF2 결과나 Gate 2 label 에 따라 달라지는 항이 S4–S6 에 들어가면 안 된다. candidate
+   별로 달라지는 것은 "그 candidate 의 변이가 보존 위치에 있는지" 뿐이며, 그 판정에
+   쓰이는 보존 프로파일 자체는 candidate 와 무관하다.
+
 ## 5. 동결된 GO 규칙
 
 ```
@@ -173,9 +207,19 @@ label-shift 노이즈 모형, 400 반복, 타겟 등가중. **실제 feature 를
 
 1. **거짓 GO 위험은 0 이다.** 신호가 없을 때 GO 확률 0.00. 점추정 조항이 통제를
    담당하고 LCB 조항은 사실상 non-binding 한 단일타겟 방어 장치다.
-2. **NO-GO 의 해석을 미리 고정한다.** 임계값과 참값이 같을 때(AUC 0.64) 검정력이
-   0.54 이므로, NO-GO 는 "효과가 없다" 가 아니라 **"AUC ≈ 0.70 이상의 효과는 없다"**
-   로만 읽는다. **결과를 본 뒤 이 문장과 임계값을 바꾸지 않는다.**
+2. **NO-GO 의 해석을 미리 고정한다.** 위 검정력은 **사전 지정된 시뮬레이션 모형에
+   조건부**다 — Δ_Top4 와 AUC 의 대응은 그 모형, prevalence, 백본 크기, 점수 분포에
+   의존한다. 따라서 "AUC ≥ 0.70 인 예측기는 존재하지 않는다" 로 읽지 않는다. 동결
+   문구는 다음이다.
+
+   > Under the prespecified simulation model, the gate has approximately 94%
+   > probability of GO for an effect corresponding to AUC ≈ 0.70. Therefore, NO-GO
+   > would constitute evidence against an effect of approximately this magnitude
+   > under the assumed operating conditions, rather than proving the absence of any
+   > AUC ≥ 0.70 predictor.
+
+   임계값과 참값이 같을 때(AUC ≈ 0.64) 검정력은 0.54 이므로 그 규모에 대한 NO-GO 는
+   약한 증거일 뿐이다. **결과를 본 뒤 이 문구와 임계값을 바꾸지 않는다.**
 
 ### 연산 정의 (모호성 제거)
 
