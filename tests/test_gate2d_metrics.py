@@ -73,3 +73,22 @@ def test_per_target_means_sorts_targets_deterministically():
 def test_target_equal_mean_ignores_nan_backbones():
     per_target = G.per_target_means([float("nan"), 0.4], ["A", "A"])
     assert per_target == [0.4]
+
+
+def test_msa_feature_missing_handling():
+    import importlib
+    prep = importlib.import_module("23_gate2d_prepare_msa_features")
+
+    # test 타겟이 전부 undefined 여도 타겟은 유지되고 지시자가 1 이 된다.
+    train = {"A": {"cons_mean": 0.8}, "B": {"cons_mean": 0.6}}
+    out = prep.impute("C", None, train_stats=prep.train_stats(train))
+    assert out["msa_undefined"] == 1
+    assert abs(out["cons_mean"] - 0.7) < 1e-12
+
+    # 정의된 타겟은 그대로 쓰고 지시자가 0 이다.
+    out2 = prep.impute("A", {"cons_mean": 0.8}, train_stats=prep.train_stats(train))
+    assert out2["msa_undefined"] == 0
+    assert out2["cons_mean"] == 0.8
+
+    # train fold 자체에서 정의 불가면 imputation statistic 이 없다 -> arm non-evaluable.
+    assert prep.train_stats({}) is None
