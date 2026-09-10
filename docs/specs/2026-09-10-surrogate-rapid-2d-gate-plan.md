@@ -1319,6 +1319,26 @@ def impute(target_id: str, features: Mapping[str, float] | None, *,
     return out
 ```
 
+### ⚠️ 정정 (2026-09-10) — 위 코드 블록은 **폐기됐다. 그대로 실행하지 말 것**
+
+위 블록은 이 계획의 최초 초안이며 **거부된 구현**이다. `train_stats.get(name, 0.0)`
+두 곳이 통계량 없는 feature 에 **magic 0.0 을 조용히 채운다** — 모든 타겟에 같은 값이
+들어가 정보가 0 인 열이 측정값처럼 설계행렬에 도달한다. 스펙 §4 규칙 5 는 그 경우를
+허용하지 않는다.
+
+블록을 지우지 않고 남겨 둔다 — 무엇이 계획됐고 왜 거부됐는지가 감사 기록이다.
+**실제 구현은 커밋된 파일이며, 아래 세 커밋이 그 경로다.**
+
+| 커밋 | 무엇을 고쳤나 |
+|---|---|
+| `55f8a07` | `0.0` 채움 제거. train fold 가 정의한 이름만 다룬다 |
+| `39d7fd2` | 버려진 **측정값**을 `dropped_measured` 로 표면화하고, arm 판정을 `arm_verdict()` 로 분리. 그리고 전부 `null` 인 행이 `float(None)` 으로 죽던 것을 `_defined()` 로 정규화 |
+| `bdf6254` | 격자 실행이 자기 provenance 를 남기고, 거부 메시지가 이유를 말한다 |
+
+현재 인터페이스: `impute(target_id, features, train_stats=...) -> dict`. 반환 dict 에
+`dropped_measured` 키는 **비었을 때 생략**된다. arm 수준 판정은 `arm_verdict(rows)` 다.
+Task 11 Step 8b 가 이 형태를 호출한다.
+
 - [ ] **Step 5: 통과를 확인한다**
 
 Run: `/tmp/gate2d-venv/bin/python -m pytest tests/test_gate2d_metrics.py -k msa_feature -v`
