@@ -1,0 +1,1925 @@
+{
+  "purpose": "Step 7 - 24 타겟의 target 수준 MSA. source 마다 다시 돌리지 않는다.",
+  "freeze_doc": "docs/specs/rapid-v2-multisource-validation-freeze.md",
+  "settings": {
+    "target_db": "uniref90",
+    "max_seqs": 3000,
+    "threads": 4,
+    "use_gpu": false,
+    "a3m_response_key": "a3m_gz_b64"
+  },
+  "conservation": {
+    "conservation_tiers": [
+      0.3,
+      0.5,
+      0.7
+    ],
+    "conservation_mode": "quantile",
+    "conservation_weighting": "none"
+  },
+  "conservation_note": "weighting=none 이므로 cluster TSV 가 필요하지 않다",
+  "a3m_note": "*.a3m 는 gitignored 다. 해시와 품질 지표만 남긴다.",
+  "not_done": [
+    "threshold 변경",
+    "타겟 선정 변경",
+    "tier 변경",
+    "후보 수 변경",
+    "품질로 타겟 골라내기"
+  ],
+  "n_planned": 24,
+  "n_done": 24,
+  "by_classification": {
+    "OK": 22,
+    "MSA_INSUFFICIENT_DEPTH": 2
+  },
+  "targets": [
+    {
+      "cohort": "calibration_v2",
+      "domain": "5e10A02",
+      "stratum": "50-150",
+      "length_aa": 133,
+      "pdb": "/opt/protein_pipeline/cath_train/5e10A02.pdb",
+      "superfamily": "3.30.10.20",
+      "a3m_path": "public_data/benchmark/gate0/msa/5e10A02/result.a3m",
+      "a3m_bytes": 380354,
+      "a3m_sha256": "ec2a19cf6cb6aeca60bece2f770b34b3c1b4d9f5fe3dcfd25cab597b38c7a661",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 2433,
+        "coverage": {
+          "min": 0.38345864661654133,
+          "max": 1.0,
+          "mean": 0.8551743106224253,
+          "p25": 0.7218045112781954,
+          "p50": 0.8872180451127819,
+          "p75": 0.9774436090225563
+        },
+        "depth": {
+          "min": 154.0,
+          "max": 2428.0,
+          "mean": 2080.6390977443607,
+          "p10": 1266.0,
+          "p25": 1759.0,
+          "p50": 2371.0,
+          "p75": 2417.0,
+          "p90": 2423.7999999999997
+        },
+        "full_length_fraction": 0.7533908754623921,
+        "warnings": [],
+        "query_length": 133
+      },
+      "quality_medians": {
+        "usable_hits": 2433,
+        "median_coverage": 0.8872180451127819,
+        "median_depth": 2371.0,
+        "full_length_fraction": 0.7533908754623921
+      },
+      "conservation": {
+        "query_length": 133,
+        "tiers": {
+          "0.3": 39,
+          "0.5": 66,
+          "0.7": 93
+        },
+        "fixed_positions_sha256": {
+          "0.3": "54735e3b8558a680edd7a6243961f4912139fc5e6a51663caaefe674c592dba6",
+          "0.5": "d0eddd01ff2816b41f0e9d7061fc9518dd1058b4bb4d8457be46c87e6280fbc7",
+          "0.7": "0cf85771caea80aa89bf9db8bc5a7dad97cbf9b5fbe4ad42308c1f25a2799585"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 2433,
+      "wall_seconds": 2566.1,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 133,
+        "returned_length": 133,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "5e10A02",
+      "query_length": 133,
+      "classification": "OK"
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "2jvfA00",
+      "stratum": "50-150",
+      "length_aa": 94,
+      "pdb": "/opt/protein_pipeline/cath_train/2jvfA00.pdb",
+      "superfamily": "3.30.1710.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/2jvfA00/result.a3m",
+      "a3m_bytes": 223,
+      "a3m_sha256": "485027b0302f25d7c2d2fdd6c67c6a72692f0a2a96f8bc157796bce010bfcc7f",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 1,
+        "coverage": {
+          "min": 1.0,
+          "max": 1.0,
+          "mean": 1.0,
+          "p25": 1.0,
+          "p50": 1.0,
+          "p75": 1.0
+        },
+        "depth": {
+          "min": 1.0,
+          "max": 1.0,
+          "mean": 1.0,
+          "p10": 1.0,
+          "p25": 1.0,
+          "p50": 1.0,
+          "p75": 1.0,
+          "p90": 1.0
+        },
+        "full_length_fraction": 1.0,
+        "warnings": [
+          "usable_hits=1 (<10)",
+          "median_depth=1.0 (<10)"
+        ],
+        "query_length": 94
+      },
+      "quality_medians": {
+        "usable_hits": 1,
+        "median_coverage": 1.0,
+        "median_depth": 1.0,
+        "full_length_fraction": 1.0
+      },
+      "conservation": {
+        "query_length": 94,
+        "tiers": {
+          "0.3": 28,
+          "0.5": 47,
+          "0.7": 65
+        },
+        "fixed_positions_sha256": {
+          "0.3": "227fe370df0daf7d0a6b38918a41905edc239d3a4452501830d15d72dd7fe023",
+          "0.5": "7192b9dbba98e0b15f139628a094ada35e4439b202b10e7270a3badfadd038c7",
+          "0.7": "90badae4cedb54302d06f5d89a716e4012e88112075ceb45369d34e7869dfd6e"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 1,
+      "wall_seconds": 4786.5,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 94,
+        "returned_length": 94,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "2jvfA00",
+      "query_length": 94,
+      "classification": "MSA_INSUFFICIENT_DEPTH"
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "1ct7A00",
+      "stratum": "50-150",
+      "length_aa": 50,
+      "pdb": "/opt/protein_pipeline/cath_train/1ct7A00.pdb",
+      "superfamily": "2.30.32.30",
+      "a3m_path": "public_data/benchmark/gate0/msa/1ct7A00/result.a3m",
+      "a3m_bytes": 23420,
+      "a3m_sha256": "0af9b14d2967003b033aefdfdf83651b490260d466b0c2d72dc30a3ffca2a625",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 319,
+        "coverage": {
+          "min": 0.64,
+          "max": 1.0,
+          "mean": 0.8619435736677116,
+          "p25": 0.84,
+          "p50": 0.88,
+          "p75": 0.92
+        },
+        "depth": {
+          "min": 11.0,
+          "max": 319.0,
+          "mean": 274.96,
+          "p10": 145.10000000000002,
+          "p25": 260.0,
+          "p50": 319.0,
+          "p75": 319.0,
+          "p90": 319.0
+        },
+        "full_length_fraction": 0.9717868338557993,
+        "warnings": [],
+        "query_length": 50
+      },
+      "quality_medians": {
+        "usable_hits": 319,
+        "median_coverage": 0.88,
+        "median_depth": 319.0,
+        "full_length_fraction": 0.9717868338557993
+      },
+      "conservation": {
+        "query_length": 50,
+        "tiers": {
+          "0.3": 15,
+          "0.5": 25,
+          "0.7": 35
+        },
+        "fixed_positions_sha256": {
+          "0.3": "8af63f99af2936babe51dcece77372137230918bc094f65db392c8cbc1a260c5",
+          "0.5": "bda423976ec3af6ec9fa4227ddb5e96664fdd44fec6f6a91ca51259b5e96e4d4",
+          "0.7": "1abe642342d394b1ba52a8ab7223ff3198bbce9f92ba55c5a9c9c40fe6282813"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 319,
+      "wall_seconds": 2790.9,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 50,
+        "returned_length": 50,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "1ct7A00",
+      "query_length": 50,
+      "classification": "OK"
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "2m9xA01",
+      "stratum": "50-150",
+      "length_aa": 112,
+      "pdb": "/opt/protein_pipeline/cath_train/2m9xA01.pdb",
+      "superfamily": "1.20.1480.20",
+      "a3m_path": "public_data/benchmark/gate0/msa/2m9xA01/result.a3m",
+      "a3m_bytes": 405437,
+      "a3m_sha256": "edbcad663a69f66fb183cdaf0f0ca430be58691c38c2f5cd659c40f84020c9c3",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 3000,
+        "coverage": {
+          "min": 0.6785714285714286,
+          "max": 1.0,
+          "mean": 0.9101726190476189,
+          "p25": 0.9107142857142857,
+          "p50": 0.9107142857142857,
+          "p75": 0.9107142857142857
+        },
+        "depth": {
+          "min": 1.0,
+          "max": 3000.0,
+          "mean": 2730.5178571428573,
+          "p10": 2966.1,
+          "p25": 2998.0,
+          "p50": 2999.0,
+          "p75": 3000.0,
+          "p90": 3000.0
+        },
+        "full_length_fraction": 0.9993333333333333,
+        "warnings": [],
+        "query_length": 112
+      },
+      "quality_medians": {
+        "usable_hits": 3000,
+        "median_coverage": 0.9107142857142857,
+        "median_depth": 2999.0,
+        "full_length_fraction": 0.9993333333333333
+      },
+      "conservation": {
+        "query_length": 112,
+        "tiers": {
+          "0.3": 33,
+          "0.5": 56,
+          "0.7": 78
+        },
+        "fixed_positions_sha256": {
+          "0.3": "e6966ccebc2948104af294c516710ceb02ee427c4742492aaee395b38b84fea7",
+          "0.5": "3c4c9555bf120ffc20daad090cbcc7bc82b029743edac5c2aa286be7eb651ee9",
+          "0.7": "4b65283fac6bddc484f77998c9b7e8d46a59f8b4423e69744d6c08c0269842c5"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 3534,
+      "wall_seconds": 2971.2,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 112,
+        "returned_length": 112,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "2m9xA01",
+      "query_length": 112,
+      "classification": "OK"
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "4yqiA01",
+      "stratum": "150-250",
+      "length_aa": 238,
+      "pdb": "/opt/protein_pipeline/cath_train/4yqiA01.pdb",
+      "superfamily": "3.40.1280.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/4yqiA01/result.a3m",
+      "a3m_bytes": 782155,
+      "a3m_sha256": "8832085686b135dc82d3cb22f49c3ff9b2162882635636e4cc7c726a200879c5",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 3000,
+        "coverage": {
+          "min": 0.42436974789915966,
+          "max": 1.0,
+          "mean": 0.9418627450980391,
+          "p25": 0.9327731092436975,
+          "p50": 0.957983193277311,
+          "p75": 0.9747899159663865
+        },
+        "depth": {
+          "min": 25.0,
+          "max": 2999.0,
+          "mean": 2825.5882352941176,
+          "p10": 2428.8,
+          "p25": 2961.0,
+          "p50": 2982.0,
+          "p75": 2994.0,
+          "p90": 2998.3
+        },
+        "full_length_fraction": 0.989,
+        "warnings": [],
+        "query_length": 238
+      },
+      "quality_medians": {
+        "usable_hits": 3000,
+        "median_coverage": 0.957983193277311,
+        "median_depth": 2982.0,
+        "full_length_fraction": 0.989
+      },
+      "conservation": {
+        "query_length": 238,
+        "tiers": {
+          "0.3": 71,
+          "0.5": 119,
+          "0.7": 166
+        },
+        "fixed_positions_sha256": {
+          "0.3": "4b6a1aefbae4a09d62faf11d098ea06753f1d09a66ef91a3cc2971aeade68534",
+          "0.5": "3cdabd1964ad44b14ef2ee78ccce249a5272f8ba806d33120de1c264c2af4b41",
+          "0.7": "b9b78b3f6e280e2bbf23aaa022b6a3917cb17be6ad78c295910f168f2daf3ebd"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 3534,
+      "wall_seconds": 2506.2,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 238,
+        "returned_length": 238,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "4yqiA01",
+      "query_length": 238,
+      "classification": "OK"
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "3vwoA02",
+      "stratum": "150-250",
+      "length_aa": 155,
+      "pdb": "/opt/protein_pipeline/cath_val/3vwoA02.pdb",
+      "superfamily": "2.10.70.40",
+      "a3m_path": "public_data/benchmark/gate0/msa/3vwoA02/result.a3m",
+      "a3m_bytes": 535193,
+      "a3m_sha256": "cd68811eba240314c43dd53088029b60bb9df5100e7ee228eb46510b2328640d",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 3000,
+        "coverage": {
+          "min": 0.7290322580645161,
+          "max": 0.9870967741935484,
+          "mean": 0.9202043010752687,
+          "p25": 0.9032258064516129,
+          "p50": 0.9161290322580645,
+          "p75": 0.9483870967741935
+        },
+        "depth": {
+          "min": 3.0,
+          "max": 3000.0,
+          "mean": 2760.6129032258063,
+          "p10": 2484.0,
+          "p25": 2964.5,
+          "p50": 2999.0,
+          "p75": 3000.0,
+          "p90": 3000.0
+        },
+        "full_length_fraction": 1.0,
+        "warnings": [],
+        "query_length": 155
+      },
+      "quality_medians": {
+        "usable_hits": 3000,
+        "median_coverage": 0.9161290322580645,
+        "median_depth": 2999.0,
+        "full_length_fraction": 1.0
+      },
+      "conservation": {
+        "query_length": 155,
+        "tiers": {
+          "0.3": 46,
+          "0.5": 77,
+          "0.7": 108
+        },
+        "fixed_positions_sha256": {
+          "0.3": "0e94f3c7915423617c1a128a08b8cb72195cc99f149c4ede67b844a66c0d64c9",
+          "0.5": "f4337b51bc35c0563d5856f81a38ed3e313524988228ebb2fa935506323d486c",
+          "0.7": "db5ce32d42169e7efa9809cec6448d7be7d90fd53a84fd2d51fe9af9a4a138b5"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 3534,
+      "wall_seconds": 2536.1,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 155,
+        "returned_length": 155,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "3vwoA02",
+      "query_length": 155,
+      "classification": "OK"
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "3ksnA00",
+      "stratum": "150-250",
+      "length_aa": 177,
+      "pdb": "/opt/protein_pipeline/cath_train/3ksnA00.pdb",
+      "superfamily": "2.50.20.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/3ksnA00/result.a3m",
+      "a3m_bytes": 600107,
+      "a3m_sha256": "77ad6280ef85c23c430a61c62b51c8cf51ab2798e3c4f8055a982392610fc412",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 3000,
+        "coverage": {
+          "min": 0.20903954802259886,
+          "max": 1.0,
+          "mean": 0.9347871939736346,
+          "p25": 0.9265536723163842,
+          "p50": 0.96045197740113,
+          "p75": 0.9774011299435028
+        },
+        "depth": {
+          "min": 342.0,
+          "max": 2987.0,
+          "mean": 2804.361581920904,
+          "p10": 2544.6,
+          "p25": 2841.0,
+          "p50": 2919.0,
+          "p75": 2983.0,
+          "p90": 2985.0
+        },
+        "full_length_fraction": 0.9696666666666667,
+        "warnings": [],
+        "query_length": 177
+      },
+      "quality_medians": {
+        "usable_hits": 3000,
+        "median_coverage": 0.96045197740113,
+        "median_depth": 2919.0,
+        "full_length_fraction": 0.9696666666666667
+      },
+      "conservation": {
+        "query_length": 177,
+        "tiers": {
+          "0.3": 53,
+          "0.5": 88,
+          "0.7": 123
+        },
+        "fixed_positions_sha256": {
+          "0.3": "83632b9b1988c26716f6bb73e96500d5317ffe4f86ae629b4b03f6cf0357a54d",
+          "0.5": "77cf39aa88f90b8f986699de56695f4f5a469a7243a93758ed47d768661b9422",
+          "0.7": "765e5931ea7465cdd3be590b4f6b011364e1cf08ced7dff855711841f5629608"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 3474,
+      "wall_seconds": 3001.3,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 177,
+        "returned_length": 177,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "3ksnA00",
+      "query_length": 177,
+      "classification": "OK"
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "4q68A01",
+      "stratum": "150-250",
+      "length_aa": 228,
+      "pdb": "/opt/protein_pipeline/cath_train/4q68A01.pdb",
+      "superfamily": "1.10.3670.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/4q68A01/result.a3m",
+      "a3m_bytes": 348147,
+      "a3m_sha256": "59cf288dbb557ee9c396e6195430bf265f7fffb610ae56870db40149fa9d6e52",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 1385,
+        "coverage": {
+          "min": 0.25,
+          "max": 0.9956140350877193,
+          "mean": 0.8797548926467793,
+          "p25": 0.8421052631578947,
+          "p50": 0.9298245614035088,
+          "p75": 0.9473684210526315
+        },
+        "depth": {
+          "min": 19.0,
+          "max": 1376.0,
+          "mean": 1218.4605263157894,
+          "p10": 1009.4,
+          "p25": 1233.75,
+          "p50": 1312.0,
+          "p75": 1329.0,
+          "p90": 1370.3
+        },
+        "full_length_fraction": 0.9436823104693141,
+        "warnings": [],
+        "query_length": 228
+      },
+      "quality_medians": {
+        "usable_hits": 1385,
+        "median_coverage": 0.9298245614035088,
+        "median_depth": 1312.0,
+        "full_length_fraction": 0.9436823104693141
+      },
+      "conservation": {
+        "query_length": 228,
+        "tiers": {
+          "0.3": 68,
+          "0.5": 114,
+          "0.7": 159
+        },
+        "fixed_positions_sha256": {
+          "0.3": "20093066200528cba4535d263d31ff2e118bd01a033d5ad418f028d41d2c831a",
+          "0.5": "1084360905d97ef3efadecfeb43be449dc108119378ebd3b04b8b9e0082cc535",
+          "0.7": "d98dad03e5ed16becd0ff924da8a94f387ba79d27387ebc439ac7d21a99f981e"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 1385,
+      "wall_seconds": 3346.2,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 228,
+        "returned_length": 228,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "4q68A01",
+      "query_length": 228,
+      "classification": "OK"
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "2q5fA02",
+      "stratum": "250-400",
+      "length_aa": 259,
+      "pdb": "/opt/protein_pipeline/cath_train/2q5fA02.pdb",
+      "superfamily": "2.60.200.30",
+      "a3m_path": "public_data/benchmark/gate0/msa/2q5fA02/result.a3m",
+      "a3m_bytes": 845024,
+      "a3m_sha256": "61d89ec9e5176f924657c289265f1cf5d6b4f86853e9d948a951422feae1d634",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 3000,
+        "coverage": {
+          "min": 0.18146718146718147,
+          "max": 1.0,
+          "mean": 0.8424890604890605,
+          "p25": 0.7413127413127413,
+          "p50": 0.8725868725868726,
+          "p75": 0.9845559845559846
+        },
+        "depth": {
+          "min": 484.0,
+          "max": 2980.0,
+          "mean": 2527.4671814671815,
+          "p10": 1339.6,
+          "p25": 2253.5,
+          "p50": 2849.0,
+          "p75": 2970.0,
+          "p90": 2973.0
+        },
+        "full_length_fraction": 0.771,
+        "warnings": [],
+        "query_length": 259
+      },
+      "quality_medians": {
+        "usable_hits": 3000,
+        "median_coverage": 0.8725868725868726,
+        "median_depth": 2849.0,
+        "full_length_fraction": 0.771
+      },
+      "conservation": {
+        "query_length": 259,
+        "tiers": {
+          "0.3": 77,
+          "0.5": 129,
+          "0.7": 181
+        },
+        "fixed_positions_sha256": {
+          "0.3": "34fbf079c6dbf2a50f7679a8db81be79c5cee370109b400f94cb7a6fec5908d7",
+          "0.5": "75df5f6ff121ffa7b6342a3e9256f2a0605d9c7261fb23c9de33843e8e067052",
+          "0.7": "b7ec9fe1ccbc8463b5f49a0f7c5a7caf8edad037ef0a16b6e63ea652e545e098"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 3499,
+      "wall_seconds": 2626.2,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 259,
+        "returned_length": 259,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "2q5fA02",
+      "query_length": 259,
+      "classification": "OK"
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "6wvfA01",
+      "stratum": "250-400",
+      "length_aa": 386,
+      "pdb": "/opt/protein_pipeline/cath_val/6wvfA01.pdb",
+      "superfamily": "1.20.1550.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/6wvfA01/result.a3m",
+      "a3m_bytes": 1227452,
+      "a3m_sha256": "631c0ecc04b11fa90c796a6340cabf832420f8bef6f0041fbcd42769cb7ebd5f",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 3000,
+        "coverage": {
+          "min": 0.09067357512953368,
+          "max": 1.0,
+          "mean": 0.3777020725388601,
+          "p25": 0.3471502590673575,
+          "p50": 0.3704663212435233,
+          "p75": 0.4067357512953368
+        },
+        "depth": {
+          "min": 47.0,
+          "max": 2675.0,
+          "mean": 1133.1062176165804,
+          "p10": 135.0,
+          "p25": 266.5,
+          "p50": 297.0,
+          "p75": 2595.5,
+          "p90": 2656.0
+        },
+        "full_length_fraction": 0.0033333333333333335,
+        "warnings": [
+          "full_length_fraction=0.003 (<0.05); consider msa_min_coverage>=0.7"
+        ],
+        "query_length": 386
+      },
+      "quality_medians": {
+        "usable_hits": 3000,
+        "median_coverage": 0.3704663212435233,
+        "median_depth": 297.0,
+        "full_length_fraction": 0.0033333333333333335
+      },
+      "conservation": {
+        "query_length": 386,
+        "tiers": {
+          "0.3": 115,
+          "0.5": 193,
+          "0.7": 270
+        },
+        "fixed_positions_sha256": {
+          "0.3": "92f0336c2f014719ab314cfefd7d09742381617ca5fc811bd752976258dbbf82",
+          "0.5": "e0c1ad91c017a379c084adffb83801312320d4a94f7619d32fb4e654525d017f",
+          "0.7": "388b148923b726638f6ae0b4604c610729b25156841db9d693dbd9b827025466"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 3278,
+      "wall_seconds": 2551.2,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 386,
+        "returned_length": 386,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "6wvfA01",
+      "query_length": 386,
+      "classification": "OK"
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "1pp1X02",
+      "stratum": "250-400",
+      "length_aa": 326,
+      "pdb": "/opt/protein_pipeline/cath_train/1pp1X02.pdb",
+      "superfamily": "1.10.3050.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/1pp1X02/result.a3m",
+      "a3m_bytes": 26800,
+      "a3m_sha256": "1ce3721f77ae694cd002a37268f32b73948af8a7462c18a3504567b1b87ab3a7",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 76,
+        "coverage": {
+          "min": 0.1656441717791411,
+          "max": 1.0,
+          "mean": 0.6186632224733613,
+          "p25": 0.4378834355828221,
+          "p50": 0.5598159509202454,
+          "p75": 0.8489263803680982
+        },
+        "depth": {
+          "min": 1.0,
+          "max": 64.0,
+          "mean": 47.01840490797546,
+          "p10": 25.0,
+          "p25": 43.0,
+          "p50": 50.5,
+          "p75": 55.0,
+          "p90": 57.0
+        },
+        "full_length_fraction": 0.34210526315789475,
+        "warnings": [],
+        "query_length": 326
+      },
+      "quality_medians": {
+        "usable_hits": 76,
+        "median_coverage": 0.5598159509202454,
+        "median_depth": 50.5,
+        "full_length_fraction": 0.34210526315789475
+      },
+      "conservation": {
+        "query_length": 326,
+        "tiers": {
+          "0.3": 97,
+          "0.5": 163,
+          "0.7": 228
+        },
+        "fixed_positions_sha256": {
+          "0.3": "6afb131ebfc852371ae706b3c46f539e829048fab93944343063e53b36c1a50b",
+          "0.5": "43f57fcdd6b5e603d7878e42b67ccafe465f3044c9b10d59dd84f5d78465ac2f",
+          "0.7": "1aad6d19fc601e891d035e891339097bb1ece7ff8c2a6cf44d80ebce0982711c"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 76,
+      "wall_seconds": 2505.8,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 326,
+        "returned_length": 326,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "1pp1X02",
+      "query_length": 326,
+      "classification": "OK"
+    },
+    {
+      "cohort": "calibration_v2",
+      "domain": "5u1xA02",
+      "stratum": "250-400",
+      "length_aa": 321,
+      "pdb": "/opt/protein_pipeline/cath_train/5u1xA02.pdb",
+      "superfamily": "2.60.490.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/5u1xA02/result.a3m",
+      "a3m_bytes": 1031876,
+      "a3m_sha256": "97d11b5a51b308c2a503942039b216c53da6d7b76262862653d91e9d2f9744cf",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 3000,
+        "coverage": {
+          "min": 0.3115264797507788,
+          "max": 1.0,
+          "mean": 0.8986469366562824,
+          "p25": 0.9003115264797508,
+          "p50": 0.9221183800623053,
+          "p75": 0.940809968847352
+        },
+        "depth": {
+          "min": 319.0,
+          "max": 2978.0,
+          "mean": 2695.940809968847,
+          "p10": 2378.0,
+          "p25": 2726.0,
+          "p50": 2878.0,
+          "p75": 2956.0,
+          "p90": 2969.0
+        },
+        "full_length_fraction": 0.9583333333333334,
+        "warnings": [],
+        "query_length": 321
+      },
+      "quality_medians": {
+        "usable_hits": 3000,
+        "median_coverage": 0.9221183800623053,
+        "median_depth": 2878.0,
+        "full_length_fraction": 0.9583333333333334
+      },
+      "conservation": {
+        "query_length": 321,
+        "tiers": {
+          "0.3": 96,
+          "0.5": 160,
+          "0.7": 224
+        },
+        "fixed_positions_sha256": {
+          "0.3": "31bfb6d3529166e99f44fc40c5bc9df7c458617e0b5932545cf6f89a1a71e700",
+          "0.5": "6ebd85531fac1f35f28975e6b5652fde4ec2056308bcbfd7912a2a448e788b7a",
+          "0.7": "461c869dd947a3e60bcf770cd57a5572abe1bef3f669a12edd302e7d6f552a05"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 3534,
+      "wall_seconds": 2581.3,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 321,
+        "returned_length": 321,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "5u1xA02",
+      "query_length": 321,
+      "classification": "OK"
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "1o22A00",
+      "stratum": "50-150",
+      "length_aa": 146,
+      "pdb": "/opt/protein_pipeline/cath_test/1o22A00.pdb",
+      "superfamily": "3.90.1000.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/1o22A00/result.a3m",
+      "a3m_bytes": 997,
+      "a3m_sha256": "53116412ebd588b875be45df9d25fe5b2505d0005ca64c5a8a3a4e68be9de1d0",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 5,
+        "coverage": {
+          "min": 0.9863013698630136,
+          "max": 1.0,
+          "mean": 0.9917808219178081,
+          "p25": 0.9863013698630136,
+          "p50": 0.9931506849315068,
+          "p75": 0.9931506849315068
+        },
+        "depth": {
+          "min": 1.0,
+          "max": 5.0,
+          "mean": 4.958904109589041,
+          "p10": 5.0,
+          "p25": 5.0,
+          "p50": 5.0,
+          "p75": 5.0,
+          "p90": 5.0
+        },
+        "full_length_fraction": 1.0,
+        "warnings": [
+          "usable_hits=5 (<10)",
+          "median_depth=5.0 (<10)"
+        ],
+        "query_length": 146
+      },
+      "quality_medians": {
+        "usable_hits": 5,
+        "median_coverage": 0.9931506849315068,
+        "median_depth": 5.0,
+        "full_length_fraction": 1.0
+      },
+      "conservation": {
+        "query_length": 146,
+        "tiers": {
+          "0.3": 43,
+          "0.5": 73,
+          "0.7": 102
+        },
+        "fixed_positions_sha256": {
+          "0.3": "95646ba07f1b8a0d26b38ed4bdc8e8812a6a7ebeb941d3ae13927f5b8ab7c2fd",
+          "0.5": "16f630ad7daed0da1ca0b49f98388e5839babf77ffd3f8e12b3a36f2463460df",
+          "0.7": "38f6b54458ed52e674b9d5935e970b33c372f03c42453a4bd5412b8c1e20ed07"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 5,
+      "wall_seconds": 2430.8,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 146,
+        "returned_length": 146,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "1o22A00",
+      "query_length": 146,
+      "classification": "MSA_INSUFFICIENT_DEPTH"
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "1x3aA00",
+      "stratum": "50-150",
+      "length_aa": 100,
+      "pdb": "/opt/protein_pipeline/cath_train/1x3aA00.pdb",
+      "superfamily": "1.10.3970.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/1x3aA00/result.a3m",
+      "a3m_bytes": 167833,
+      "a3m_sha256": "187417da28e97c5bf74d46a07e27655534c8f23ec12fbbef6b5f3eabb6aea864",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 1369,
+        "coverage": {
+          "min": 0.25,
+          "max": 1.0,
+          "mean": 0.8475383491599707,
+          "p25": 0.84,
+          "p50": 0.88,
+          "p75": 0.89
+        },
+        "depth": {
+          "min": 1.0,
+          "max": 1358.0,
+          "mean": 1160.28,
+          "p10": 93.8,
+          "p25": 1292.75,
+          "p50": 1327.5,
+          "p75": 1347.0,
+          "p90": 1351.0
+        },
+        "full_length_fraction": 0.9525200876552228,
+        "warnings": [],
+        "query_length": 100
+      },
+      "quality_medians": {
+        "usable_hits": 1369,
+        "median_coverage": 0.88,
+        "median_depth": 1327.5,
+        "full_length_fraction": 0.9525200876552228
+      },
+      "conservation": {
+        "query_length": 100,
+        "tiers": {
+          "0.3": 30,
+          "0.5": 50,
+          "0.7": 70
+        },
+        "fixed_positions_sha256": {
+          "0.3": "52f438399d42e95954e1a985da78e9c338f8d3d8cc4ff7902540c8607d641a9a",
+          "0.5": "6fa9003ccb2ab665b443ed9eda96eeb0420b2dabcf02f35353bc3190071d35b9",
+          "0.7": "a58300505d9ccba7af5c90e65403649077f754db1fee6c6ace446811fd3b565e"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 1369,
+      "wall_seconds": 2430.8,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 100,
+        "returned_length": 100,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "1x3aA00",
+      "query_length": 100,
+      "classification": "OK"
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "1j5uA01",
+      "stratum": "50-150",
+      "length_aa": 125,
+      "pdb": "/opt/protein_pipeline/cath_val/1j5uA01.pdb",
+      "superfamily": "3.55.10.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/1j5uA01/result.a3m",
+      "a3m_bytes": 3509,
+      "a3m_sha256": "99733539bb005caa5b2dbdbb9552be7469069135ec48dd1daf36702037c9a896",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 23,
+        "coverage": {
+          "min": 0.752,
+          "max": 0.976,
+          "mean": 0.9342608695652174,
+          "p25": 0.924,
+          "p50": 0.952,
+          "p75": 0.96
+        },
+        "depth": {
+          "min": 0.0,
+          "max": 23.0,
+          "mean": 21.488,
+          "p10": 21.0,
+          "p25": 22.0,
+          "p50": 23.0,
+          "p75": 23.0,
+          "p90": 23.0
+        },
+        "full_length_fraction": 1.0,
+        "warnings": [],
+        "query_length": 125
+      },
+      "quality_medians": {
+        "usable_hits": 23,
+        "median_coverage": 0.952,
+        "median_depth": 23.0,
+        "full_length_fraction": 1.0
+      },
+      "conservation": {
+        "query_length": 125,
+        "tiers": {
+          "0.3": 37,
+          "0.5": 62,
+          "0.7": 87
+        },
+        "fixed_positions_sha256": {
+          "0.3": "45adc27a258829242f7a5b636fd7f86bd055ea2f7ae57c791c8b90c951b18e23",
+          "0.5": "6a0a34a29f21f3e65fa038531cc56f2b119dbe75d54c5c050b67389e87d13cc2",
+          "0.7": "628ceccd1a2477530cd650bfb02fbec8ffef927b04e697c2aabb4a215cec0672"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 23,
+      "wall_seconds": 2700.9,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 125,
+        "returned_length": 125,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "1j5uA01",
+      "query_length": 125,
+      "classification": "OK"
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "1sohA00",
+      "stratum": "50-150",
+      "length_aa": 67,
+      "pdb": "/opt/protein_pipeline/cath_train/1sohA00.pdb",
+      "superfamily": "1.10.1440.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/1sohA00/result.a3m",
+      "a3m_bytes": 15652,
+      "a3m_sha256": "c171aef92a9d88001529e80d9d9d7c32007679e3ec6fc5960efe611a072913d7",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 174,
+        "coverage": {
+          "min": 0.5074626865671642,
+          "max": 1.0,
+          "mean": 0.9354091610910962,
+          "p25": 0.9402985074626866,
+          "p50": 0.9701492537313433,
+          "p75": 0.9850746268656716
+        },
+        "depth": {
+          "min": 48.0,
+          "max": 174.0,
+          "mean": 162.76119402985074,
+          "p10": 156.0,
+          "p25": 165.0,
+          "p50": 169.0,
+          "p75": 171.0,
+          "p90": 173.0
+        },
+        "full_length_fraction": 0.9482758620689655,
+        "warnings": [],
+        "query_length": 67
+      },
+      "quality_medians": {
+        "usable_hits": 174,
+        "median_coverage": 0.9701492537313433,
+        "median_depth": 169.0,
+        "full_length_fraction": 0.9482758620689655
+      },
+      "conservation": {
+        "query_length": 67,
+        "tiers": {
+          "0.3": 20,
+          "0.5": 33,
+          "0.7": 46
+        },
+        "fixed_positions_sha256": {
+          "0.3": "e96329e04ce1d254c9c4fe1958ccf9e8b2f3d246c40dea261a3a7d1b4f3359e8",
+          "0.5": "993c8a55b2a9abe429235ddb72c8af70155d0f3513c85a65e0924d499578c1e5",
+          "0.7": "adbbf0f509063f318ed763c3881b67805a2e891291c94a7ccf7d4cac02ae4694"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 174,
+      "wall_seconds": 2475.8,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 67,
+        "returned_length": 67,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "1sohA00",
+      "query_length": 67,
+      "classification": "OK"
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "4wexA00",
+      "stratum": "150-250",
+      "length_aa": 213,
+      "pdb": "/opt/protein_pipeline/cath_train/4wexA00.pdb",
+      "superfamily": "3.90.1740.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/4wexA00/result.a3m",
+      "a3m_bytes": 127547,
+      "a3m_sha256": "5a242d1fe4c26209c605a2af3c1d0c0b26d205c3c94ea91b258ca16dc0e41f0d",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 540,
+        "coverage": {
+          "min": 0.1267605633802817,
+          "max": 1.0,
+          "mean": 0.8971744044513997,
+          "p25": 0.9436619718309859,
+          "p50": 0.971830985915493,
+          "p75": 0.9906103286384976
+        },
+        "depth": {
+          "min": 236.0,
+          "max": 526.0,
+          "mean": 484.47417840375584,
+          "p10": 445.0,
+          "p25": 471.0,
+          "p50": 493.0,
+          "p75": 517.0,
+          "p90": 521.0
+        },
+        "full_length_fraction": 0.8629629629629629,
+        "warnings": [],
+        "query_length": 213
+      },
+      "quality_medians": {
+        "usable_hits": 540,
+        "median_coverage": 0.971830985915493,
+        "median_depth": 493.0,
+        "full_length_fraction": 0.8629629629629629
+      },
+      "conservation": {
+        "query_length": 213,
+        "tiers": {
+          "0.3": 63,
+          "0.5": 106,
+          "0.7": 149
+        },
+        "fixed_positions_sha256": {
+          "0.3": "b37bc751e0556ce55e28ebd750e4d1885172fc367e29649869d34e97e3a08a36",
+          "0.5": "8ac5746a15a524059b75cbe68ccfdf6c921f8a3a5d094e30cf2970027de25761",
+          "0.7": "e176b9a93fffb3292864ac496984881b51442f52f295659025d908033e9eec13"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 540,
+      "wall_seconds": 2625.9,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 213,
+        "returned_length": 213,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "4wexA00",
+      "query_length": 213,
+      "classification": "OK"
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "2w2sA00",
+      "stratum": "150-250",
+      "length_aa": 163,
+      "pdb": "/opt/protein_pipeline/cath_train/2w2sA00.pdb",
+      "superfamily": "3.10.460.20",
+      "a3m_path": "public_data/benchmark/gate0/msa/2w2sA00/result.a3m",
+      "a3m_bytes": 5301,
+      "a3m_sha256": "aeeca4951d0b2288dced19604e7f4dc3cd1e19e9d3bde7f530e1bfeeba0ff9c4",
+      "resumed_from_file": true,
+      "msa_quality": {
+        "usable_hits": 28,
+        "coverage": {
+          "min": 0.24539877300613497,
+          "max": 1.0,
+          "mean": 0.9191498685363716,
+          "p25": 0.9033742331288344,
+          "p50": 1.0,
+          "p75": 1.0
+        },
+        "depth": {
+          "min": 21.0,
+          "max": 28.0,
+          "mean": 25.736196319018404,
+          "p10": 22.0,
+          "p25": 25.0,
+          "p50": 26.0,
+          "p75": 27.0,
+          "p90": 28.0
+        },
+        "full_length_fraction": 0.8928571428571429,
+        "warnings": [],
+        "query_length": 163
+      },
+      "quality_medians": {
+        "usable_hits": 28,
+        "median_coverage": 1.0,
+        "median_depth": 26.0,
+        "full_length_fraction": 0.8928571428571429
+      },
+      "conservation": {
+        "query_length": 163,
+        "tiers": {
+          "0.3": 48,
+          "0.5": 81,
+          "0.7": 114
+        },
+        "fixed_positions_sha256": {
+          "0.3": "9701638d7fe86c2190fbf345ed9e80c3fa9ce611bb03e27c1a8b62855989b52c",
+          "0.5": "e3f3e60a0df0cb668d776e73f77a077920222979007e43cf2e83a79c0494a0e8",
+          "0.7": "c21af6f85bcd5b52b3a6d8f8fb4dd55e1f5ca52c78e845d88d7f2ecba7580f2f"
+        },
+        "query_length_matches_sequence": true
+      },
+      "hit_count": 28,
+      "wall_seconds": 2460.8,
+      "endpoint_status": "ok",
+      "query_consistent": {
+        "sent_length": 163,
+        "returned_length": 163,
+        "id_match": true,
+        "length_match": true
+      },
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "decode_ok": true,
+      "a3m_key_present": true,
+      "query_id": "2w2sA00",
+      "query_length": 163,
+      "classification": "OK"
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "1n81A00",
+      "stratum": "150-250",
+      "length_aa": 186,
+      "pdb": "/opt/protein_pipeline/cath_train/1n81A00.pdb",
+      "superfamily": "1.10.3030.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/1n81A00/result.a3m",
+      "endpoint_status": "ok",
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "a3m_key_present": true,
+      "decode_ok": true,
+      "hit_count": 34,
+      "query_length": 186,
+      "query_id": "1n81A00",
+      "query_consistent": {
+        "sent_length": 186,
+        "returned_length": 186,
+        "id_match": true,
+        "length_match": true
+      },
+      "a3m_bytes": 7252,
+      "a3m_sha256": "8d437308723a26f62e9608abecd02d0f5f727f7f49d8aa3b949c9d11663c6183",
+      "msa_quality": {
+        "usable_hits": 34,
+        "coverage": {
+          "min": 0.5053763440860215,
+          "max": 1.0,
+          "mean": 0.8687539531941809,
+          "p25": 0.8185483870967742,
+          "p50": 0.8924731182795699,
+          "p75": 0.9448924731182796
+        },
+        "depth": {
+          "min": 5.0,
+          "max": 34.0,
+          "mean": 29.537634408602152,
+          "p10": 18.0,
+          "p25": 30.0,
+          "p50": 33.0,
+          "p75": 34.0,
+          "p90": 34.0
+        },
+        "full_length_fraction": 0.9117647058823529,
+        "warnings": [],
+        "query_length": 186
+      },
+      "quality_medians": {
+        "usable_hits": 34,
+        "median_coverage": 0.8924731182795699,
+        "median_depth": 33.0,
+        "full_length_fraction": 0.9117647058823529
+      },
+      "conservation": {
+        "query_length": 186,
+        "tiers": {
+          "0.3": 55,
+          "0.5": 93,
+          "0.7": 130
+        },
+        "fixed_positions_sha256": {
+          "0.3": "8f0d0f666385dd022f063280330059038839d6b54865ab9aa52f5163f29abf0d",
+          "0.5": "e13fa48e77be144b9acbd1fce27e2144bc4a7bda8e52f7d81b44464779bf2ac7",
+          "0.7": "198a1a371ed8a1fe0212092f8afb7ec413b1d7e6a54a9f19c19d588aa95a0d36"
+        },
+        "query_length_matches_sequence": true
+      },
+      "wall_seconds": 3931.3,
+      "classification": "OK"
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "1sdiA00",
+      "stratum": "150-250",
+      "length_aa": 213,
+      "pdb": "/opt/protein_pipeline/cath_train/1sdiA00.pdb",
+      "superfamily": "1.10.3890.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/1sdiA00/result.a3m",
+      "endpoint_status": "ok",
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "a3m_key_present": true,
+      "decode_ok": true,
+      "hit_count": 2344,
+      "query_length": 213,
+      "query_id": "1sdiA00",
+      "query_consistent": {
+        "sent_length": 213,
+        "returned_length": 213,
+        "id_match": true,
+        "length_match": true
+      },
+      "a3m_bytes": 552839,
+      "a3m_sha256": "f74ab15f9050450a2af0c749cff944a1959e170a56dbe492b089cd0e88a16edb",
+      "msa_quality": {
+        "usable_hits": 2344,
+        "coverage": {
+          "min": 0.1643192488262911,
+          "max": 0.9953051643192489,
+          "mean": 0.9065599512890768,
+          "p25": 0.9107981220657277,
+          "p50": 0.9248826291079812,
+          "p75": 0.9483568075117371
+        },
+        "depth": {
+          "min": 12.0,
+          "max": 2299.0,
+          "mean": 2124.976525821596,
+          "p10": 1886.6,
+          "p25": 2263.0,
+          "p50": 2285.0,
+          "p75": 2291.0,
+          "p90": 2296.0
+        },
+        "full_length_fraction": 0.96160409556314,
+        "warnings": [],
+        "query_length": 213
+      },
+      "quality_medians": {
+        "usable_hits": 2344,
+        "median_coverage": 0.9248826291079812,
+        "median_depth": 2285.0,
+        "full_length_fraction": 0.96160409556314
+      },
+      "conservation": {
+        "query_length": 213,
+        "tiers": {
+          "0.3": 63,
+          "0.5": 106,
+          "0.7": 149
+        },
+        "fixed_positions_sha256": {
+          "0.3": "5414d0d15707eb7f9de3545f80f4daf070cf06794b06c2d60ec5042149ad6a21",
+          "0.5": "209e337859c2e5e54568bf058b7731b870056b4e554186365f940d5558e992c0",
+          "0.7": "7414c75061f166790cf04b97f63c8c17272feb81292d907397e32279f88f46a0"
+        },
+        "query_length_matches_sequence": true
+      },
+      "wall_seconds": 2476.1,
+      "classification": "OK"
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "1rdrA01",
+      "stratum": "250-400",
+      "length_aa": 316,
+      "pdb": "/opt/protein_pipeline/cath_val/1rdrA01.pdb",
+      "superfamily": "4.10.880.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/1rdrA01/result.a3m",
+      "endpoint_status": "ok",
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "a3m_key_present": true,
+      "decode_ok": true,
+      "hit_count": 1117,
+      "query_length": 316,
+      "query_id": "1rdrA01",
+      "query_consistent": {
+        "sent_length": 316,
+        "returned_length": 316,
+        "id_match": true,
+        "length_match": true
+      },
+      "a3m_bytes": 375974,
+      "a3m_sha256": "612adf97ebdf6ddb3199065c98e5b750ecbaa03ac10dcdca191d7447f88f912c",
+      "msa_quality": {
+        "usable_hits": 1117,
+        "coverage": {
+          "min": 0.08227848101265822,
+          "max": 1.0,
+          "mean": 0.7428776220210102,
+          "p25": 0.5981012658227848,
+          "p50": 0.7943037974683544,
+          "p75": 0.9841772151898734
+        },
+        "depth": {
+          "min": 231.0,
+          "max": 1000.0,
+          "mean": 829.7943037974684,
+          "p10": 490.0,
+          "p25": 734.25,
+          "p50": 923.0,
+          "p75": 963.0,
+          "p90": 980.0
+        },
+        "full_length_fraction": 0.7153088630259624,
+        "warnings": [],
+        "query_length": 316
+      },
+      "quality_medians": {
+        "usable_hits": 1117,
+        "median_coverage": 0.7943037974683544,
+        "median_depth": 923.0,
+        "full_length_fraction": 0.7153088630259624
+      },
+      "conservation": {
+        "query_length": 316,
+        "tiers": {
+          "0.3": 94,
+          "0.5": 158,
+          "0.7": 221
+        },
+        "fixed_positions_sha256": {
+          "0.3": "fb7eb0c2f843942c1578ba70101fa641e271e8a0c5929d6071b0406cfd0dfff1",
+          "0.5": "60894461344fd723e3e738417d9f07daf8bc603fc141b699aac76e43cc0285f5",
+          "0.7": "1a7bf12d34669b18901d246d9227b2a4f42b7c25c7d594e584ee0aa5b9d73d1c"
+        },
+        "query_length_matches_sequence": true
+      },
+      "wall_seconds": 2596.0,
+      "classification": "OK"
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "4ifxA00",
+      "stratum": "250-400",
+      "length_aa": 330,
+      "pdb": "/opt/protein_pipeline/cath_train/4ifxA00.pdb",
+      "superfamily": "3.10.520.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/4ifxA00/result.a3m",
+      "endpoint_status": "ok",
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "a3m_key_present": true,
+      "decode_ok": true,
+      "hit_count": 3534,
+      "query_length": 330,
+      "query_id": "4ifxA00",
+      "query_consistent": {
+        "sent_length": 330,
+        "returned_length": 330,
+        "id_match": true,
+        "length_match": true
+      },
+      "a3m_bytes": 1058915,
+      "a3m_sha256": "75583b710a74c8d38b56d07c40040afdc69eb506a9468ed994d75973f2931a3e",
+      "msa_quality": {
+        "usable_hits": 3000,
+        "coverage": {
+          "min": 0.4909090909090909,
+          "max": 1.0,
+          "mean": 0.8790070707070707,
+          "p25": 0.8454545454545455,
+          "p50": 0.8939393939393939,
+          "p75": 0.9272727272727272
+        },
+        "depth": {
+          "min": 28.0,
+          "max": 3000.0,
+          "mean": 2637.021212121212,
+          "p10": 1631.8,
+          "p25": 2668.5,
+          "p50": 2936.0,
+          "p75": 2995.0,
+          "p90": 2999.0
+        },
+        "full_length_fraction": 0.98,
+        "warnings": [],
+        "query_length": 330
+      },
+      "quality_medians": {
+        "usable_hits": 3000,
+        "median_coverage": 0.8939393939393939,
+        "median_depth": 2936.0,
+        "full_length_fraction": 0.98
+      },
+      "conservation": {
+        "query_length": 330,
+        "tiers": {
+          "0.3": 99,
+          "0.5": 165,
+          "0.7": 230
+        },
+        "fixed_positions_sha256": {
+          "0.3": "d5eb7a27be94bf12f0bd702f43bdc207d7db13c43f8c98dc27bc25f89d89cb4e",
+          "0.5": "da4df1de24111486d7bfdd1a89116b579d3d02b36920fb0203aad0497ba8b821",
+          "0.7": "aea8134d49e5c8f4310b92dd24a7ad3d6cc2ee82236aa06b2ae658f5e96f019f"
+        },
+        "query_length_matches_sequence": true
+      },
+      "wall_seconds": 2386.3,
+      "classification": "OK"
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "6vqfA00",
+      "stratum": "250-400",
+      "length_aa": 252,
+      "pdb": "/opt/protein_pipeline/cath_train/6vqfA00.pdb",
+      "superfamily": "1.10.565.10",
+      "a3m_path": "public_data/benchmark/gate0/msa/6vqfA00/result.a3m",
+      "endpoint_status": "ok",
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "a3m_key_present": true,
+      "decode_ok": true,
+      "hit_count": 3534,
+      "query_length": 252,
+      "query_id": "6vqfA00",
+      "query_consistent": {
+        "sent_length": 252,
+        "returned_length": 252,
+        "id_match": true,
+        "length_match": true
+      },
+      "a3m_bytes": 824372,
+      "a3m_sha256": "f6acc31f00ac59d98f624d787d00c8bf2263966c554d8fd7f335d4dd40696fd6",
+      "msa_quality": {
+        "usable_hits": 3000,
+        "coverage": {
+          "min": 0.2261904761904762,
+          "max": 1.0,
+          "mean": 0.8145820105820106,
+          "p25": 0.7023809523809523,
+          "p50": 0.8134920634920635,
+          "p75": 0.9563492063492064
+        },
+        "depth": {
+          "min": 17.0,
+          "max": 2964.0,
+          "mean": 2443.746031746032,
+          "p10": 1622.3,
+          "p25": 1806.75,
+          "p50": 2819.5,
+          "p75": 2940.0,
+          "p90": 2955.0
+        },
+        "full_length_fraction": 0.7626666666666667,
+        "warnings": [],
+        "query_length": 252
+      },
+      "quality_medians": {
+        "usable_hits": 3000,
+        "median_coverage": 0.8134920634920635,
+        "median_depth": 2819.5,
+        "full_length_fraction": 0.7626666666666667
+      },
+      "conservation": {
+        "query_length": 252,
+        "tiers": {
+          "0.3": 75,
+          "0.5": 126,
+          "0.7": 176
+        },
+        "fixed_positions_sha256": {
+          "0.3": "f62a00adea9f73877eea938863a899417af086c2c61b70d9696f331eb21138c4",
+          "0.5": "35f9aed039336281996284eaca132d69dfcbb97ffc942ca0182aa419ceed7ed3",
+          "0.7": "275877916092887316a1359dfca7c00cfb64d805ef4f3a713457d0f6baa72419"
+        },
+        "query_length_matches_sequence": true
+      },
+      "wall_seconds": 2476.2,
+      "classification": "OK"
+    },
+    {
+      "cohort": "confirmatory",
+      "domain": "4ai2A02",
+      "stratum": "250-400",
+      "length_aa": 258,
+      "pdb": "/opt/protein_pipeline/cath_train/4ai2A02.pdb",
+      "superfamily": "6.20.60.20",
+      "a3m_path": "public_data/benchmark/gate0/msa/4ai2A02/result.a3m",
+      "endpoint_status": "ok",
+      "response_keys": [
+        "a3m_gz_b64",
+        "hit_count",
+        "query_id",
+        "query_length",
+        "task",
+        "tsv"
+      ],
+      "a3m_key_present": true,
+      "decode_ok": true,
+      "hit_count": 513,
+      "query_length": 258,
+      "query_id": "4ai2A02",
+      "query_consistent": {
+        "sent_length": 258,
+        "returned_length": 258,
+        "id_match": true,
+        "length_match": true
+      },
+      "a3m_bytes": 143697,
+      "a3m_sha256": "d046a99e99fbcb093af6d190a57ada6c94992e95c5ed03a8f24c7695bb4d8e17",
+      "msa_quality": {
+        "usable_hits": 513,
+        "coverage": {
+          "min": 0.1744186046511628,
+          "max": 1.0,
+          "mean": 0.669401755897064,
+          "p25": 0.4844961240310077,
+          "p50": 0.689922480620155,
+          "p75": 0.8255813953488372
+        },
+        "depth": {
+          "min": 5.0,
+          "max": 509.0,
+          "mean": 343.4031007751938,
+          "p10": 172.0,
+          "p25": 238.0,
+          "p50": 338.5,
+          "p75": 484.0,
+          "p90": 503.0
+        },
+        "full_length_fraction": 0.48148148148148145,
+        "warnings": [],
+        "query_length": 258
+      },
+      "quality_medians": {
+        "usable_hits": 513,
+        "median_coverage": 0.689922480620155,
+        "median_depth": 338.5,
+        "full_length_fraction": 0.48148148148148145
+      },
+      "conservation": {
+        "query_length": 258,
+        "tiers": {
+          "0.3": 77,
+          "0.5": 129,
+          "0.7": 180
+        },
+        "fixed_positions_sha256": {
+          "0.3": "81b8c9e01638d367536c6ee12f6b4868470dc75c472a5db4ad1897d604d164d8",
+          "0.5": "69410d0fe7259f133dd23a0711c8118053b39c2bcc520de62e29797190408f1a",
+          "0.7": "e577c224bee30af8b1f93f99213c5e95802cc6c93c0c6284ac6875746038445d"
+        },
+        "query_length_matches_sequence": true
+      },
+      "wall_seconds": 2460.9,
+      "classification": "OK"
+    }
+  ],
+  "run_provenance": {
+    "code_sha": "00a69312cf57bb34261cadd9c0512ea803cd6f6a",
+    "code_sha_short": "00a6931",
+    "pinned_at_start": true,
+    "worktree_clean_for_code_paths": true,
+    "dirty_paths": [],
+    "script_sha256": {
+      "50_full_msa.py": "cdc6bc3dc7f6e83fa71cc2ddaac50fa6d8d1a9d41ec3755bbb2316c0df9154cb",
+      "48_msa_pilot.py": "cb7a172d1076590f192dddeb66da411ad51cd646924bb7c4f0acb541a2fbb1c8"
+    },
+    "started_utc": "2026-09-10T03:41:44Z"
+  },
+  "code_sha": "00a69312cf57bb34261cadd9c0512ea803cd6f6a",
+  "updated_utc": "2026-09-10T08:13:53Z"
+}
