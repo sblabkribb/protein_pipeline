@@ -407,10 +407,37 @@ RAPID 쪽에서 이미 저심도 MSA 가 나왔다 — `msa_pilot_corrected.json
    타겟 수준 품질 지표는 **보조 context** 로 남긴다. 이것은 새 가설이 아니라 위
    문장의 구현이다.
 
+   **서열 축은 hard precondition 이다 (2026-09-10).** `F_tier` 는 MSA query 에서,
+   `M_i` 는 WT reference 에서 나오고 **서로 다른 파일·다른 파서**를 거친다. 두
+   서열이 다르면 교집합이 어긋난 좌표에서 계산되고 **아무 오류도 나지 않는다.**
+   12/12 전체 문자열 일치를 확인했고, 그 확인을 계약으로 승격한다 — P3 와 Task 11
+   은 WT 서열 sha256 이 동결값(`_gate2d_cohort.FROZEN_WT`)과 다르면 **fail-closed**
+   한다. **길이만 검사하지 않는다** — 같은 길이의 다른 서열이 통과하면 검사가
+   무의미하다. 동결 해시는 손으로 적으며 production 코드에서 재유도하지 않는다:
+   재유도하면 검사와 대상이 같은 버그를 공유한다.
+
+   **peer 세션의 `query_sequence()` staging 수정은 이 코호트에서 measured no-op
+   이었다.** 수정 전후 코드를 12 타겟에 전체 문자열로 비교해 차이 0 을 확인했다
+   (격자 타겟 중 비양수 resseq 가 0 개). 진행 중이던 A3M 은 수정된 코드와 일관되며
+   재실행하지 않았다. "코드가 바뀌었으나 이 실험의 입력에는 효과가 없었다" 를
+   기록으로 남긴다.
+
    **용어 주의.** 이 코호트의 `M_i` 는 중앙값 약 135 개(서열 길이의 50~65%)다 —
    격자 설계는 보존 마스킹 없이 생성됐으므로 point mutant 가 아니라 사실상 재설계다.
    따라서 `r_tier` 는 "point mutation 이 보존 위치를 건드렸는가" 가 아니라 **"바뀐
    위치 중 보존 위치의 비율"** 이다. 그렇게만 서술한다.
+
+   **MSA query 서술도 보수적으로 쓴다.** peer 세션이 calibration 코호트 3 타겟에서
+   제거한 N-말단 접두사는 `HM` · `GSH` · `G` 이고 His-tag 잔재·GST 절단 흔적·linker
+   와 **일치하는** 형태다. 그러나 construct annotation 을 확인한 것이 아니라 서열
+   접두사만 본 것이므로 단정하지 않는다.
+
+   쓴다: *"N-terminal residues consistent with common cloning/tag remnants were
+   excluded from the evolutionary-query sequence."* 그리고 *"host/construct-derived
+   residues are not part of the native evolutionary sequence of the target domain."*
+
+   쓰지 않는다: "이들은 cloning artifact 다", "진화 신호가 없다". 전자는 construct
+   metadata 확인이 필요하고 후자는 절대명제다.
 
 ## 5. 동결된 GO 규칙
 
