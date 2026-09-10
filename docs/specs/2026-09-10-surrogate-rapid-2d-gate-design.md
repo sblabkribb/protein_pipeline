@@ -140,6 +140,61 @@ representations alone will produce a practically useful effect.* 이 게이트�
 (Gate 2 의 제외 타겟과 같으나 제외 사유는 다르다 — Gate 2 는 mixed 백본 0개, Gate 1 은
 q_b 상수.)
 
+### 개정 (2026-09-10) — native 백본은 배분 풀이 아니라 comparator 다
+
+**Gate 1 의 1차 코호트를 RFD3 백본으로 한정한다.** native 백본은 comparator 로
+분리해 별도 보고한다. 아래는 그 근거이며, **Gate 1 수치는 아직 하나도 계산되지
+않았다** — 결과를 보고 바꾼 것이 아니다.
+
+교란이 실재한다. 홀드아웃 격자는 타겟당 native 1개 + RFD3 5개이고, native 의 q_b 는
+**양극단**이다:
+
+```
+native 타겟내 순위 : 1/6 이 5 타겟 · 6/6 이 3 타겟 · 5/6 과 2/6 각 1
+native q_b 평균 0.604 (중앙값 0.958)  vs  RFD3 0.660 (중앙값 0.833)
+```
+
+그래서 **source 를 나타내는 1 비트가 타겟내 q_b 분산의 24.8% 를 설명한다.** MPNN
+encoder 는 결정 구조와 생성 구조의 기하학적 차이를 쉽게 본다. Gate 1 이 그 1 비트로
+점수를 벌면 그것은 "백본 예측 가능성" 이 아니고, **RAPID 이 배분하는 대상이 생성
+백본이므로 B 를 지지하지도 않는다.**
+
+역할을 분리한다.
+
+| | 역할 |
+|---|---|
+| RFD3 · BioEmu | **allocatable generated backbone source.** RAPID 이 계산을 배분하는 풀 |
+| native | **reference comparator.** 생성기가 아니라 기준 구조다. posterior 를 섞지 않는다 |
+
+**검정력 손실이 거의 없다는 것이 이 결정을 가능하게 한다.** RFD3-only 로도
+informative 타겟은 **11 개 그대로**이고(≥3 백본 ∧ q_b 비상수), 타겟내 q_b spread
+중앙값은 0.58 → 0.54 로만 줄어든다. `min_informative_clusters = 8` 을 통과한다.
+
+**Gate 2 의 1차 코호트는 mixed 백본 37 개를 유지한다.** Δ_Top4 는 **백본 내부**에서
+계산되므로 각 백본이 자기 단위이고 source 는 교란이 아니다. RFD3-only(mixed 34,
+informative 11)를 민감도로 함께 보고한다.
+
+**native 라벨은 10/12 타겟에만 있다.** `3es1A01`·`3h7eA02` 의 native arm 은 설계
+길이가 WT 와 달라(163/160, 229/220) 대응이 거부돼 사용가능 폴드가 0 이다 — 이것이
+1,728 중 48 폴드가 빠지는 이유이고, §5 의 Δ_Top4 NaN sentinel 이 가리키는 그 2개다.
+
+### 부수 분석 (1차 endpoint 아님)
+
+native 가 comparator 로 분리되면 다음을 직접 물을 수 있다.
+
+```
+Δ_generated = Y(생성 백본) − Y(native 백본)
+```
+
+즉 **"복수 백본을 만드는 것이 원본 백본에서 서열만 여러 개 만드는 것보다 실제로
+이득인가"**. 이 연구의 주장 중 하나가 *서열 다양성이 백본 다양성을 대체하지 못한다*
+이므로, `native + 많은 서열` vs `생성 백본 + 같은 총 서열 예산` 비교가 그것을 직접
+시험한다. **부수 분석으로만 보고하고 GO 판정에 넣지 않는다** — endpoint 를 하나로
+유지한다.
+
+**동결된 RAPID v2 검증에는 넣지 않는다.** 그쪽은 source 별 10-백본 설계가 이미
+동결돼 있어 native 를 추가하면 budget grid 와 source 정의가 바뀐다.
+
 ### 동결된 Gate 1 GO 규칙
 
 ```
