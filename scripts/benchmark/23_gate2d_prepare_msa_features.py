@@ -47,17 +47,20 @@ def impute(target_id: str, features: Mapping[str, float] | None, *,
             f"{target_id}: train fold 에 정의된 MSA feature 가 없어 imputation "
             "statistic 을 만들 수 없다. 이 arm 은 non-evaluable 이다."
         )
+    # 대치는 train fold 평균이 **있는** 이름으로만 한다. 통계가 없는 이름을 0.0
+    # 같은 상수로 채우면 모든 타겟이 같은 값을 받아, 정보가 없는데도 측정값인
+    # 것처럼 하류로 흐른다. 스펙 §4 규칙 5 는 그 경우를 arm non-evaluable 로
+    # 규정하지 상수 채우기로 규정하지 않는다. train fold 가 한 번도 정의하지
+    # 못한 열은 LOTO 설계행렬에 있을 수 없으므로 내보내지 않는다.
+    names = [name for name in TARGET_FEATURES if name in train_stats]
     if features:
-        out = {name: float(features[name]) for name in TARGET_FEATURES if name in features}
-        # 지시자는 **대치가 실제로 일어났는가**를 뜻한다. train fold 어디에서도
-        # 정의되지 않은 이름은 imputation statistic 자체가 없어 모든 타겟이 같은
-        # 상수로 채워진다 - 정보가 없으므로 지시자를 켜지 않는다 (스펙 §4 규칙 3).
-        imputed = [n for n in train_stats if n not in out]
-        for name in TARGET_FEATURES:
-            if name not in out:
-                out[name] = train_stats.get(name, 0.0)
+        out = {name: float(features[name]) for name in names if name in features}
+        # 지시자는 **대치가 실제로 일어났는가**를 뜻한다 (스펙 §4 규칙 3).
+        imputed = [name for name in names if name not in out]
+        for name in imputed:
+            out[name] = train_stats[name]
         out["msa_undefined"] = 1 if imputed else 0
         return out
-    out = {name: train_stats.get(name, 0.0) for name in TARGET_FEATURES}
+    out = {name: train_stats[name] for name in names}
     out["msa_undefined"] = 1
     return out

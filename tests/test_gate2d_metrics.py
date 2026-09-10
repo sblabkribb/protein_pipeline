@@ -92,3 +92,31 @@ def test_msa_feature_missing_handling():
 
     # train fold 자체에서 정의 불가면 imputation statistic 이 없다 -> arm non-evaluable.
     assert prep.train_stats({}) is None
+
+
+def test_impute_never_invents_a_constant_for_an_undefined_feature():
+    """train fold 가 정의하지 못한 feature 를 0.0 으로 채우지 않는다.
+
+    상수로 채우면 모든 타겟이 같은 값을 받아, 정보가 없는데도 측정값인 것처럼
+    하류로 흐른다. 스펙 §4 규칙 5 는 그 경우를 arm non-evaluable 로 규정하지
+    상수 채우기로 규정하지 않는다.
+    """
+    import importlib
+    prep = importlib.import_module("23_gate2d_prepare_msa_features")
+
+    # train fold 가 cons_mean 하나만 정의한 경우: 나머지 5 개는 나오지 않는다.
+    ts = prep.train_stats({"A": {"cons_mean": 0.8}})
+    assert set(ts) == {"cons_mean"}
+    for out in (prep.impute("C", None, train_stats=ts),
+                prep.impute("A", {"cons_mean": 0.8}, train_stats=ts)):
+        assert set(out) == {"cons_mean", "msa_undefined"}
+
+    # 실제 Step 6 산출물 모양(타겟 행이 전부 정의되거나 전부 null)에서는
+    # 6 개 feature 가 그대로 나온다 - 스키마는 바뀌지 않는다.
+    full = {n: 0.5 for n in prep.TARGET_FEATURES}
+    ts2 = prep.train_stats({"A": full, "B": full})
+    assert set(ts2) == set(prep.TARGET_FEATURES)
+    undef = prep.impute("C", None, train_stats=ts2)
+    assert set(undef) == set(prep.TARGET_FEATURES) | {"msa_undefined"}
+    assert undef["msa_undefined"] == 1
+    assert prep.impute("A", full, train_stats=ts2)["msa_undefined"] == 0
