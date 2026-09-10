@@ -1391,16 +1391,35 @@ S5·S6 도 ESM 계수가 학습 중 간접적으로 달라지는 경로만 남�
                 "usable_hits_log10": null, "coverage_median": null,
                 "depth_median_log10": null}
   },
-  "conserved_positions": {
+  "conserved_positions_0based": {
     "1sp0A00": {"0.3": [3, 7, 11], "0.5": [3, 7, 11, 19], "0.7": [3, 7, 11, 19, 24]},
     "5xpdA02": null
   },
   "conserved_positions_sha256_verified": {"1sp0A00": true},
   "undefined_targets": ["5xpdA02"],
   "note": "undefined 타겟도 코호트에 남는다. 대치는 LOTO fold 안에서 한다.",
-  "conserved_positions_note": "0-기반 인덱스. manifest 의 fixed_positions_sha256 과 대조해 검증한다. candidate 와 무관한 타겟 수준 값이다."
+  "conserved_positions_note": "0-기반 인덱스. manifest 의 fixed_positions_sha256 은 1-기반 목록으로 계산된 값이므로, 검증할 때만 1-기반으로 되돌려 해시를 맞춘다. candidate 와 무관한 타겟 수준 값이다."
 }
 ```
+
+### ⚠️ index base — 조용히 S4 를 무의미하게 만들 수 있는 지점
+
+**`pipeline_mcp.bio.a3m.fixed_positions` 는 1-기반을 돌려준다**
+(`pos_scores = [(idx + 1, score) ...]`), 그리고 `measure()` 가 그 **1-기반** 목록을
+`fixed_positions_sha256` 에 해시했다. 반면 `M_i`(Task 8 의 `mutation_sites`)는
+`enumerate` 기반이라 **0-기반**이다.
+
+두 base 를 섞으면 보존 마스크가 한 칸씩 밀리고, `|M_i ∩ F_tier|` 는 **아무 오류도
+내지 않으면서 잡음을 측정한다.** S4 가 조용히 무의미해지는 경로다.
+
+규칙을 세 줄로 고정한다.
+
+1. 산출물 키 이름에 base 를 박는다: **`conserved_positions_0based`**. Task 11 은
+   이 키만 읽는다. 이름에 base 가 없으면 섞는 실수를 조용히 할 수 있다.
+2. 해시 검증은 **1-기반으로 되돌려서만** 한다 — `{p + 1 for p in stored}` 를 해시해
+   manifest 값과 비교한다. 저장은 0-기반, 검증은 1-기반이다.
+3. `M_i` 도 0-기반임을 Task 11 의 테스트가 단정한다. `mutation_sites` 가
+   `enumerate` 를 쓰므로 0-기반이고, 그 사실을 주석이 아니라 테스트로 고정한다.
 
 ### Task 11 의 S4 블록 (개정)
 
@@ -1421,6 +1440,18 @@ def conservation_burden(mut_sites, conserved):
 
 S4 = `[r_0.3, r_0.5, r_0.7, len(M_i)/L]` (candidate 별) + 타겟 수준 품질 지표
 (보조 context) + `msa_undefined` 지시자.
+
+`conserved` 는 `msa_features.json` 의 **`conserved_positions_0based`** 에서만 읽는다.
+그리고 base 일치를 테스트로 단정한다 — 주석으로는 부족하다:
+
+```python
+def test_mutation_sites_and_conserved_positions_share_a_zero_base():
+    import importlib
+    esm = importlib.import_module("22_gate2d_prepare_esm")
+    # mutation_sites 는 enumerate 기반이므로 첫 잔기가 다르면 0 을 돌려준다.
+    assert esm.mutation_sites("AAAA", "BAAA") == [0]
+    # 1-기반이라면 이 값이 1 이어야 한다. 0 이 나오는 것이 base 를 고정한다.
+```
 
 **길이 불일치 백본.** `3es1A01` 의 설계 일부가 163 aa (WT 160), `3h7eA02` 가 229 aa
 (WT 220) 다. `M_i` 가 위치 대응으로 정의되지 않으므로 §4 규칙 3–4 를 적용한다 —
@@ -2014,7 +2045,7 @@ def impute_msa_block(per_target: dict, row_targets, train_idx, feature_names):
     # 규칙 5 는 per-feature 조건에 **arm 수준** 결과를 붙인다. 그 판정은
     # 23_gate2d_prepare_msa_features.arm_verdict() 하나에만 있다 - 여기서 다시
     # 구현하지 않는다. f7fdc08 이 정리한 것이 바로 이 종류의 이중 구현이다.
-    verdict = prep.arm_verdict(imputed)
+    verdict = prep.arm_verdict(imputed, stats=stats)
     if not verdict["evaluable"]:
         return None, verdict
 
