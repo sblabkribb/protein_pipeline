@@ -81,15 +81,23 @@ def embed(sequences: list[str], *, device: torch.device,
         batch = tokenizer(chunk, return_tensors="pt", padding=True)
         batch = {k: v.to(device) for k, v in batch.items()}
         with torch.no_grad():
-            hidden = model(**batch).last_hidden_state
+            out = model(**batch)
+        hidden = out.last_hidden_state
+        cls_id = tokenizer.cls_token_id
+        # 잔기 수 = attention 길이 − <cls> − <eos>. padding 에 무관하다.
+        residue_counts = (batch["attention_mask"].sum(dim=1) - 2).tolist()
         for row, seq in enumerate(chunk):
-            # BOS 를 1칸 건너뛰고 잔기 길이만 취한다.
-            tokens = hidden[row, 1:1 + len(seq)].float().cpu().numpy()
-            if tokens.shape[0] != len(seq):
+            if int(batch["input_ids"][row, 0]) != cls_id:
                 raise SystemExit(
-                    f"토큰 {tokens.shape[0]} 개가 잔기 {len(seq)} 개와 다르다. "
-                    "ΔESM_mut 위치가 밀리므로 중단한다."
+                    "0 번 토큰이 <cls> 가 아니다. BOS 를 1칸 건너뛰는 slice 가 "
+                    "잔기를 한 칸 밀어 ΔESM_mut 이 엉뚱한 위치를 본다. 중단한다."
                 )
+            if int(residue_counts[row]) != len(seq):
+                raise SystemExit(
+                    f"attention 기준 잔기 {int(residue_counts[row])} 개가 서열 "
+                    f"{len(seq)} 개와 다르다. 중단한다."
+                )
+            tokens = hidden[row, 1:1 + len(seq)].float().cpu().numpy()
             per_token.append(tokens.astype(np.float32))
             pooled.append(tokens.mean(axis=0).astype(np.float32))
     return np.vstack(pooled), per_token

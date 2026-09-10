@@ -829,3 +829,130 @@ def test_assert_sequence_axis_reports_a_missing_target():
     message = str(excinfo.value)
     for target in C.FROZEN_WT:
         assert f"{target}: WT 서열이 없다" in message
+
+
+# --- Step 5 정렬 가드 -------------------------------------------------------
+# 원래 가드(`tokens.shape[0] != len(seq)`)는 발동할 수 없었다. `hidden` 이 배치
+# 최대 폭으로 padding 되므로 slice 가 항상 정확히 `len(seq)` 행을 낸다. 개정된
+# 가드는 attention 기준 잔기 수와 0 번 토큰의 정체를 본다. 아래 두 테스트가
+# 그 두 조건을 각각 발동시킨다.
+
+class _StubTokenizer:
+    """ESM char-level tokenizer 의 padding 동작을 흉내낸다.
+
+    `drop_bos=True` 는 **개수를 유지하면서 BOS 를 빼는** 변화다 - attention
+    길이는 그대로 `len(seq) + 2` 이므로 잔기 수 검사는 통과하고, 잔기는 한 칸
+    밀린다. 이것이 원래 가드의 사각지대였다.
+    """
+
+    cls_token_id = 0
+    eos_token_id = 2
+    pad_token_id = 1
+
+    def __init__(self, *, drop_bos: bool = False, short_mask: bool = False):
+        self._drop_bos = drop_bos
+        self._short_mask = short_mask
+
+    def __call__(self, chunk, return_tensors=None, padding=None):
+        import torch
+        width = max(len(s) for s in chunk) + 2
+        ids = torch.full((len(chunk), width), self.pad_token_id, dtype=torch.long)
+        mask = torch.zeros((len(chunk), width), dtype=torch.long)
+        for row, seq in enumerate(chunk):
+            n = len(seq)
+            if self._drop_bos:
+                ids[row, :n] = 7                     # <cls> 없이 잔기부터
+                ids[row, n] = self.eos_token_id
+                ids[row, n + 1] = self.eos_token_id  # 폭을 채워 개수를 유지한다
+            else:
+                ids[row, 0] = self.cls_token_id
+                ids[row, 1:1 + n] = 7
+                ids[row, 1 + n] = self.eos_token_id
+            attended = n + 2 - (1 if self._short_mask else 0)
+            mask[row, :attended] = 1
+        return {"input_ids": ids, "attention_mask": mask}
+
+
+def _stub_hidden(input_ids, dim):
+    """hidden[row, pos, :] == pos. 슬라이스가 어디를 읽는지 값으로 보인다."""
+    import torch
+    rows, width = input_ids.shape
+    return (torch.arange(width, dtype=torch.float32)
+            .reshape(1, width, 1).repeat(rows, 1, dim).contiguous())
+
+
+class _StubModel:
+    def __init__(self, dim):
+        self._dim = dim
+
+    def to(self, device):
+        return self
+
+    def eval(self):
+        return self
+
+    def __call__(self, **batch):
+        import types
+        return types.SimpleNamespace(
+            last_hidden_state=_stub_hidden(batch["input_ids"], self._dim))
+
+
+def _patch_embed_backends(monkeypatch, prep, tokenizer):
+    import types
+    monkeypatch.setattr(prep, "AutoTokenizer", types.SimpleNamespace(
+        from_pretrained=lambda name: tokenizer))
+    monkeypatch.setattr(prep, "EsmModel", types.SimpleNamespace(
+        from_pretrained=lambda name: _StubModel(prep.EMB_DIM)))
+
+
+def test_embed_is_aligned_and_the_old_guard_could_not_fire(monkeypatch):
+    """정상 경로: BOS 를 건너뛴 슬라이스가 잔기 1..len(seq) 를 읽는다."""
+    import importlib
+    import torch
+    prep = importlib.import_module("22_gate2d_prepare_esm")
+    chunk = ["ACDEF", "GHI"]
+    tokenizer = _StubTokenizer()
+    _patch_embed_backends(monkeypatch, prep, tokenizer)
+
+    pooled, per_token = prep.embed(chunk, device=torch.device("cpu"), batch_size=8)
+    assert pooled.shape == (2, prep.EMB_DIM)
+    for seq, tokens in zip(chunk, per_token):
+        assert tokens.shape == (len(seq), prep.EMB_DIM)
+        # hidden[row, pos] == pos 이므로 1..len(seq) 가 나와야 정렬이 맞다.
+        assert tokens[:, 0].tolist() == [float(p) for p in range(1, 1 + len(seq))]
+
+
+def test_embed_guard_catches_bos_drop_that_preserves_the_residue_count(monkeypatch):
+    """사각지대: 개수는 맞고 BOS 만 없는 입력. 원래 가드는 통과시켰다."""
+    import importlib
+    import torch
+    prep = importlib.import_module("22_gate2d_prepare_esm")
+    chunk = ["ACDEF", "GHI"]
+    tokenizer = _StubTokenizer(drop_bos=True)
+
+    # 1) 원래 가드가 왜 무력했는지 같은 입력으로 보인다 - 슬라이스 행 수는 맞고,
+    #    attention 기준 잔기 수도 맞다. 다른 것은 0 번 토큰뿐이다.
+    batch = tokenizer(chunk, return_tensors="pt", padding=True)
+    hidden = _stub_hidden(batch["input_ids"], prep.EMB_DIM)
+    for row, seq in enumerate(chunk):
+        assert hidden[row, 1:1 + len(seq)].shape[0] == len(seq)   # 원래 가드: 통과
+        assert int(batch["attention_mask"][row].sum()) - 2 == len(seq)
+        assert int(batch["input_ids"][row, 0]) != tokenizer.cls_token_id
+        # 그리고 실제로 잔기가 한 칸 밀린다 - 0 번 잔기를 읽지 못한다.
+        assert hidden[row, 1:1 + len(seq)][0, 0].item() == 1.0
+
+    # 2) 개정된 가드는 잡는다.
+    _patch_embed_backends(monkeypatch, prep, tokenizer)
+    with pytest.raises(SystemExit, match="<cls>"):
+        prep.embed(chunk, device=torch.device("cpu"), batch_size=8)
+
+
+def test_embed_guard_catches_a_residue_count_that_disagrees(monkeypatch):
+    """두 번째 조건: attention 기준 잔기 수가 서열과 다르면 중단한다."""
+    import importlib
+    import torch
+    prep = importlib.import_module("22_gate2d_prepare_esm")
+    tokenizer = _StubTokenizer(short_mask=True)
+    _patch_embed_backends(monkeypatch, prep, tokenizer)
+    with pytest.raises(SystemExit, match="attention 기준 잔기"):
+        prep.embed(["ACDEF"], device=torch.device("cpu"), batch_size=8)
