@@ -1,0 +1,110 @@
+{
+  "purpose": "MSA query 를 배포와 맞추기 위해 3 타겟의 A3M 을 다시 만들었다. 어느 타겟이 왜 교체됐는지 durable 하게 남긴다 - full_msa_manifest.json 의 해당 항목은 재실행이 덮어쓴다.",
+  "cause": "query_sequence() 가 원본 첫 모델 CA 서열을 그대로 query 로 썼다. 배포는 normalize_structure_text -> strip_nonpositive_resseq 를 거친 staged 서열을 query 로 보낸다. resseq <= 0 잔기가 있는 타겟에서만 차이가 난다.",
+  "fix_commit": "cb37ae2",
+  "consequence_if_unfixed": "보존도의 quantile 컷 floor(L*tier) 과 그 아래 인덱스가 전부 밀린다. 실행은 성공하고 마스크만 틀린다.",
+  "unaffected_axis": "multi-model(NMR) 5 타겟(2jvfA00 20 · 1ct7A00 5 · 2m9xA01 20 · 1x3aA00 20 · 1sohA00 18)은 무증상이다. 배포는 ingest 의 normalize_structure_text 에서, 이쪽은 ca_sequence 의 ENDMDL 중단과 (chain,resseq,icode) 중복 제거로 각각 첫 모델만 남긴다. 24 타겟 전부 배포 query 와 일치 확인.",
+  "not_changed": [
+    "threshold",
+    "타겟 선정",
+    "tier",
+    "후보 수"
+  ],
+  "pilot_unaffected": [
+    "1n81A00",
+    "1rdrA01",
+    "1j5uA01"
+  ],
+  "found_by": "배포 target_query_fasta 출처 추적 (Step 8 준비 중)",
+  "second_axis_flagged_by": "peer session protein-pipeline-work-45 (multi-model)",
+  "recorded_utc": "2026-09-10T08:25:34Z",
+  "targets": [
+    {
+      "domain": "2jvfA00",
+      "cohort": "calibration_v2",
+      "length_aa": 94,
+      "raw_query_length": 94,
+      "staged_query_length": 92,
+      "residues_dropped": 2,
+      "dropped_prefix": "HM",
+      "superseded_a3m": {
+        "path": "public_data/benchmark/gate0/msa_unstaged_query/2jvfA00/result.a3m",
+        "sha256": "485027b0302f25d7c2d2fdd6c67c6a72692f0a2a96f8bc157796bce010bfcc7f",
+        "bytes": 223,
+        "hit_count": 1,
+        "wall_seconds": 4786.5,
+        "quality_medians": {
+          "usable_hits": 1,
+          "median_coverage": 1.0,
+          "median_depth": 1.0,
+          "full_length_fraction": 1.0
+        },
+        "classification": "MSA_INSUFFICIENT_DEPTH",
+        "conservation_tiers": {
+          "0.3": 28,
+          "0.5": 47,
+          "0.7": 65
+        },
+        "sha256_verified": true
+      }
+    },
+    {
+      "domain": "4yqiA01",
+      "cohort": "calibration_v2",
+      "length_aa": 238,
+      "raw_query_length": 238,
+      "staged_query_length": 235,
+      "residues_dropped": 3,
+      "dropped_prefix": "GSH",
+      "superseded_a3m": {
+        "path": "public_data/benchmark/gate0/msa_unstaged_query/4yqiA01/result.a3m",
+        "sha256": "8832085686b135dc82d3cb22f49c3ff9b2162882635636e4cc7c726a200879c5",
+        "bytes": 782155,
+        "hit_count": 3534,
+        "wall_seconds": 2506.2,
+        "quality_medians": {
+          "usable_hits": 3000,
+          "median_coverage": 0.957983193277311,
+          "median_depth": 2982.0,
+          "full_length_fraction": 0.989
+        },
+        "classification": "OK",
+        "conservation_tiers": {
+          "0.3": 71,
+          "0.5": 119,
+          "0.7": 166
+        },
+        "sha256_verified": true
+      }
+    },
+    {
+      "domain": "4q68A01",
+      "cohort": "calibration_v2",
+      "length_aa": 228,
+      "raw_query_length": 228,
+      "staged_query_length": 227,
+      "residues_dropped": 1,
+      "dropped_prefix": "G",
+      "superseded_a3m": {
+        "path": "public_data/benchmark/gate0/msa_unstaged_query/4q68A01/result.a3m",
+        "sha256": "59cf288dbb557ee9c396e6195430bf265f7fffb610ae56870db40149fa9d6e52",
+        "bytes": 348147,
+        "hit_count": 1385,
+        "wall_seconds": 3346.2,
+        "quality_medians": {
+          "usable_hits": 1385,
+          "median_coverage": 0.9298245614035088,
+          "median_depth": 1312.0,
+          "full_length_fraction": 0.9436823104693141
+        },
+        "classification": "OK",
+        "conservation_tiers": {
+          "0.3": 68,
+          "0.5": 114,
+          "0.7": 159
+        },
+        "sha256_verified": true
+      }
+    }
+  ]
+}

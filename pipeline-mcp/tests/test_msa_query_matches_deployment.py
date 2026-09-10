@@ -24,8 +24,35 @@ sys.path.insert(0, str(ROOT / "pipeline-mcp" / "src"))
 PILOT = ROOT / "scripts" / "transcoder" / "48_msa_pilot.py"
 FULL = ROOT / "scripts" / "transcoder" / "50_full_msa.py"
 
-#: 실측된 영향 타겟과 손실 잔기 수. 값이 바뀌면 코호트나 전처리가 바뀐 것이다.
+#: 실측된 strip 영향 타겟과 손실 잔기 수. 값이 바뀌면 코호트나 전처리가 바뀐 것이다.
 AFFECTED = {"2jvfA00": 2, "4yqiA01": 3, "4q68A01": 1}
+
+#: 다중 모델(NMR 앙상블) 타겟과 MODEL 수. 두 번째 축이고 별도로 고정한다.
+MULTI_MODEL = {"2jvfA00": 20, "1ct7A00": 5, "2m9xA01": 20,
+               "1x3aA00": 20, "1sohA00": 18}
+
+
+def deployment_query(pdb_path: str) -> str:
+    """**배포 순서 그대로** query 를 만든다. 이것이 대조 기준이다.
+
+    테스트에서 기대 문자열을 다시 도출하면 같은 버그로 함께 틀릴 수 있다.
+    그래서 배포가 쓰는 함수들을 그 순서로 부른다.
+
+      request.target_pdb
+        -> normalize_structure_text        ingest. 다중 모델이면 첫 모델만.
+        -> _prepare_pdb_text_for_design_context(strip/renumber)
+        -> _target_record_from_pdb(...).sequence
+    """
+    from pipeline_mcp.bio.pdb import normalize_structure_text
+    from pipeline_mcp.pipeline import (_prepare_pdb_text_for_design_context,
+                                       _target_record_from_pdb)
+    cfg = _pilot().deployment_staging()
+    text = normalize_structure_text(Path(pdb_path).read_text(errors="replace"))
+    staged = _prepare_pdb_text_for_design_context(
+        text, chains=None,
+        strip_nonpositive_resseq=cfg["strip_nonpositive_resseq"],
+        renumber_resseq_from_1=cfg["renumber_resseq_from_1"])
+    return _target_record_from_pdb(staged, design_chains=None).sequence
 
 
 def _load(path: Path, name: str):
@@ -71,17 +98,52 @@ def test_deployment_still_preprocesses_before_building_the_msa_query():
     assert "target_query_fasta = to_fasta([target_record])" in src
 
 
-def test_query_sequence_equals_the_staged_ca_sequence():
-    """독립적으로 다시 계산해 대조한다."""
-    from pipeline_mcp.bio.pdb import preprocess_pdb
+def test_the_query_matches_the_deployment_query_builder_on_every_target():
+    """기대값을 다시 도출하지 않고 **배포 함수 출력**과 대조한다.
+
+    재도출한 기대값은 같은 버그로 함께 틀릴 수 있다. 24 타겟 전부에서
+    strip 축과 multi-model 축을 동시에 덮는 검사다.
+    """
     pilot, full = _pilot(), _full()
-    cfg = pilot.deployment_staging()
     for row in full.targets():
-        text = Path(row["pdb"]).read_text(errors="replace")
-        staged, _ = preprocess_pdb(
-            text, strip_nonpositive_resseq=cfg["strip_nonpositive_resseq"],
-            renumber_resseq_from_1=cfg["renumber_resseq_from_1"])
-        assert pilot.query_sequence(row["pdb"]) == pilot.ca_sequence(staged), row["domain"]
+        assert pilot.query_sequence(row["pdb"]) == deployment_query(row["pdb"]), (
+            row["domain"])
+
+
+def test_the_multi_model_targets_are_reduced_to_one_model():
+    """NMR 앙상블을 안 자르면 92 잔기 도메인이 1840 잔기 query 가 된다.
+
+    두 겹의 방어가 있다. 배포는 ingest 의 `normalize_structure_text` 에서 첫
+    모델만 남기고, `ca_sequence` 는 첫 ENDMDL 에서 멈추면서 `(chain, resseq,
+    icode)` 로 중복도 제거한다. 어느 한쪽이 사라져도 다른 쪽이 막아야 한다.
+    """
+    pilot, full = _pilot(), _full()
+    by = {r["domain"]: r["pdb"] for r in full.targets()}
+    seen = {}
+    for domain, path in by.items():
+        n = sum(1 for line in Path(path).read_text(errors="replace").splitlines()
+                if line.startswith("MODEL "))
+        if n:
+            seen[domain] = n
+    assert seen == MULTI_MODEL, seen
+
+    for domain, n in MULTI_MODEL.items():
+        text = Path(by[domain]).read_text(errors="replace")
+        ca_rows = sum(1 for line in text.splitlines()
+                      if line.startswith("ATOM") and line[12:16].strip() == "CA")
+        q = len(pilot.query_sequence(by[domain]))
+        # 파일에는 모델 수만큼의 CA 행이 있는데 query 는 한 모델 분량이어야 한다
+        assert ca_rows >= q * (n - 1), (domain, n, ca_rows, q)
+        assert q < ca_rows / (n - 1), (
+            f"{domain}: query {q} 가 {n} 모델 분량({ca_rows} 행)에 가깝다 - "
+            f"모델이 잘리지 않았다")
+
+    # ENDMDL 방어가 없어도 중복 제거가 막는지 - 두 겹인지 확인한다
+    text = Path(by["2jvfA00"]).read_text(errors="replace")
+    no_endmdl = pilot.ca_sequence(text.replace("ENDMDL", "REMARK"))
+    first_only = pilot.ca_sequence(text)
+    assert len(no_endmdl) - len(first_only) <= 2, (
+        "ENDMDL 을 없애면 길이가 배수로 늘어난다 - 중복 제거 방어가 없다")
 
 
 def test_the_affected_targets_are_exactly_the_measured_ones():
