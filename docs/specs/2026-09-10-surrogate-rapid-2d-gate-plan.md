@@ -1180,12 +1180,40 @@ git commit -m "feat(sr): ESM embeddings with token-aligned mutation-site deltas"
 | 사실 | 함의 |
 |---|---|
 | `COHORTS` 는 `calibration_v2` + `confirmatory` 로 하드코딩 (`50_full_msa.py:56`) | 격자 12 타겟은 두 코호트 어디에도 없다. `--only` 는 `targets()` 가 만든 목록을 필터링할 뿐이라 닿지 못한다 |
-| `holdout_targets.json` 의 `selected` 가 정확히 격자 12 타겟이고 `domain`·`stratum`·`length`·`pdb`·`superfamily` 를 모두 갖고 있다 | `targets()` 가 요구하는 스키마와 이미 일치한다. 변환 코드가 필요 없다 |
+| ~~`holdout_targets.json` 의 `selected` 가 정확히 격자 12 타겟~~ **틀렸다 (아래 정정)** | — |
+| **격자 코호트는 `resolved.targets` 다. `selected` 가 아니다** | `targets()` 는 `d["selected"]` 를 하드코딩해 읽으므로(`:131`) 코호트별 키 경로가 필요하다 |
 | **`--out` 기본값이 `full_msa_manifest.json` (`50_full_msa.py:47,209`)** | **그 파일은 동결된 v2 multisource validation 의 산출물이다. 기본값으로 돌리면 그것을 덮어쓴다** |
 | `MSA_DIR` 은 `BASE/"msa"` 하드코딩, CLI 없음 (`:46,238,264`) | a3m 은 공유 디렉터리에 떨어진다. 격자 12 타겟은 기존 20 타겟과 겹치지 않으므로 충돌은 없고, resume-from-a3m 이 그대로 작동한다 |
 | MMseqs 엔드포인트는 **직렬화**되고 v2 런이 이 엔드포인트를 쓰고 있었다 | v2 런이 끝난 뒤에 착수한다. 동시 실행은 동결 검증과 경합한다 |
 
-따라서 이 Step 의 요구사항은 다음 셋이다.
+### 정정 (2026-09-10) — `selected` 는 격자 코호트가 아니다
+
+controller 가 처음 "`selected` 가 정확히 격자 12 타겟" 이라고 적었다. **틀렸다.**
+`selected` 의 12개 중 4개가 격자에 없고, 격자의 4개가 `selected` 에 없다.
+
+```
+selected - grid : 1vprA02  2iayA00  2jo7A00  2pgsA03
+grid - selected : 1sh6A02  5pc8A00  3f2pA01  5xpdA02
+```
+
+원인은 파일 안에 이미 기록돼 있다. `holdout_targets.json` 의 `resolved.rule`:
+
+> 백본 생성 전에 freeze 한 교체 규칙을 그대로 집행한다 — 실패한 선정 타겟을 같은
+> 층의 예비로 `reserve_rank` 순서대로 교체하고, 목록을 다시 뽑지 않는다.
+
+즉 `selected` 는 **동결 시점의 선정 목록**이고, `resolved.targets` 는 **실제 집행된
+목록**이다. 백본 생성에 실패한 4개가 같은 stratum 의 예비로 교체됐고 그 이력이
+남아 있다: `1sh6A02←2jo7A00`, `5xpdA02←1vprA02`, `3f2pA01←2pgsA03`,
+`5pc8A00←2iayA00`. 격자는 `resolved.targets` 위에 만들어졌다.
+
+검증: `resolved.targets` 는 12개이고 격자 타겟 집합과 **정확히 일치**하며,
+`targets()` 가 읽는 키(`domain`·`stratum`·`length`·`pdb`·`superfamily`)를 모두 갖는다.
+
+**따라서 라벨이 있는 타겟에 MSA 를 돌려야 한다.** `selected` 로 돌리면 라벨 없는
+4개를 받아오고 필요한 4개를 빠뜨린다 — Gate 2 의 S4–S6 가 조용히 4/12 타겟을
+잃는다.
+
+따라서 이 Step 의 요구사항은 다음 **넷**이다.
 
 1. **`COHORTS` 의 기본값을 바꾸지 않는다.** CLI 인자(예: `--cohorts holdout_grid`)로
    **덮어쓸 수 있게만** 만든다. 인자를 주지 않은 기존 호출은 바이트 단위로 같은
@@ -1193,7 +1221,10 @@ git commit -m "feat(sr): ESM embeddings with token-aligned mutation-site deltas"
 2. **`--out` 을 반드시 별도 manifest 로 넘긴다**:
    `public_data/benchmark/gate0/holdout_grid/holdout_msa_manifest.json`.
    `full_msa_manifest.json` 은 읽기 전용으로 취급한다.
-3. **MSA 실행 로직을 복제하지 않는다.** 검색 설정(`uniref90`, `max_seqs=3000`,
+3. **격자 코호트는 `resolved.targets` 에서 읽는다.** `targets()` 의 `d["selected"]`
+   하드코딩(`:131`)을 코호트별 키 경로로 바꾼다. **기본 코호트는 계속 `selected` 를
+   읽어야 한다** — 동결 v2 흐름이 그 동작에 의존한다.
+4. **MSA 실행 로직을 복제하지 않는다.** 검색 설정(`uniref90`, `max_seqs=3000`,
    `threads=4`, `use_gpu=False`)을 다시 적으면 배포와 갈라진다 — 그것이 이 스크립트
    docstring 이 존재하는 이유다.
 
