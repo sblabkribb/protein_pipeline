@@ -438,3 +438,32 @@ def test_a_non_default_cohort_does_not_stamp_the_v2_provenance(tmp_path):
     # 키 집합은 cohorts 하나만 늘어난다 - _write 를 재구성하지 않았다는 증거.
     assert set(dg) - set(da) == {"cohorts"}
     assert list(dg)[:len(da)] == list(da), "키 순서가 바뀌었다"
+
+
+def test_the_frozen_default_run_is_decided_in_one_place():
+    """`--out` 가드와 manifest provenance 가 같은 사실에 걸려 있다.
+
+    두 곳에 따로 적으면 한쪽만 느슨해져도 조용히 갈라진다.
+    """
+    m = _full()
+    src = FULL.read_text(encoding="utf-8")
+    assert src.count("tuple(cohorts) == COHORTS") == 1, "판정이 두 번 적혀 있다"
+    assert "tuple(cohorts) != COHORTS" not in src, "부정형이 따로 적혀 있다"
+    assert src.count("is_default_run(") >= 3, "정의 1 + 사용 2 가 아니다"
+    assert m.is_default_run(m.COHORTS) is True
+    assert m.is_default_run(m.resolve_cohorts(None)) is True
+    assert m.is_default_run(m.resolve_cohorts("holdout_grid")) is False
+    # 순서가 바뀌면 기본 실행이 아니다 - manifest 의 타겟 순서가 바뀐다.
+    assert m.is_default_run(m.resolve_cohorts("confirmatory,calibration_v2")) is False
+
+
+def test_the_module_docstring_carries_the_operating_rules():
+    """이 파일의 운영 규칙은 docstring 에 있다.
+
+    새 하드 규칙(--cohorts 를 바꾸면 --out 도 바꿔야 한다)이 argparse help
+    안에만 있으면, 이 파일을 읽고 운영하는 사람에게는 없는 것과 같다.
+    """
+    doc = _full().__doc__
+    assert "--cohorts" in doc, "옵트인 코호트 모드가 docstring 에 없다"
+    assert "resolved.targets" in doc, "격자가 어느 목록을 읽는지 없다"
+    assert "--out" in doc and "읽기 전용" in doc, "동결 manifest 규칙이 없다"

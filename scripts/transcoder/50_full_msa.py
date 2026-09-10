@@ -25,6 +25,22 @@ A3M 은 `.gitignore` 에 걸려 있어 저장소에 들어가지 않는다. mani
 **하지 않는 것**: threshold 변경 · 타겟 선정 변경 · tier 변경 · 후보 수 변경 ·
 품질이 나쁜 타겟 골라내기. `usable_hits < 10` 은 동결된 feasibility 결과이고
 실패가 아니다.
+
+## 코호트 (`--cohorts`)
+
+기본값은 동결 v2 의 두 코호트(`calibration_v2` + `confirmatory`, 24 타겟)이고
+**인자를 주지 않은 호출은 그 동작 그대로**다. 동결 v2 흐름이 그 기본값에
+의존하므로 기본값을 바꾸지 않는다.
+
+`--cohorts holdout_grid` 로 2축 게이트 격자 12 타겟을 옵트인으로 돌릴 수 있다.
+그 코호트는 `holdout_targets.json` 의 **`resolved.targets`** 를 읽는다 -
+`selected` 는 동결 전 희망 목록이고 실패한 4 개가 예비로 교체됐으므로, 그것을
+읽으면 라벨 없는 4 개를 가져오고 라벨 있는 4 개를 놓친다.
+
+**`--cohorts` 를 바꿨으면 `--out` 도 반드시 바꿔야 한다.** `--out` 기본값인
+`full_msa_manifest.json` 은 동결된 v2 multisource validation 의 산출물이고 이
+스크립트에게 **읽기 전용**이다. 잊으면 `check_out_path` 가 막는다. 격자용
+manifest 는 `holdout_grid/holdout_msa_manifest.json` 이다.
 """
 
 from __future__ import annotations
@@ -37,6 +53,7 @@ import os
 import subprocess
 import sys
 import threading
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 import time
 from pathlib import Path
@@ -161,6 +178,18 @@ def resolve_cohorts(spec: str | None) -> tuple[tuple[str, str], ...]:
     return tuple(picked)
 
 
+def is_default_run(cohorts: Sequence[tuple[str, str]]) -> bool:
+    """동결 v2 기본 실행인가. **이 판정은 여기 한 곳에만 있다.**
+
+    `--out` 가드와 manifest provenance 가 같은 사실에 걸려 있다. 두 곳에서
+    따로 적으면 한쪽만 느슨해져도 조용히 갈라진다.
+
+    순서까지 본다. 코호트 순서가 바뀌면 manifest 의 타겟 순서가 바뀌므로 동결
+    산출물과 다른 바이트가 된다.
+    """
+    return tuple(cohorts) == COHORTS
+
+
 def check_out_path(out_path: Path, cohorts: tuple[tuple[str, str], ...]) -> None:
     """기본 코호트가 아니면 동결 v2 manifest 에 쓰지 못하게 막는다.
 
@@ -168,9 +197,7 @@ def check_out_path(out_path: Path, cohorts: tuple[tuple[str, str], ...]) -> None
     validation 의 산출물이다. `--cohorts` 만 주고 `--out` 을 잊으면 그것을
     덮어쓴다 - 되돌릴 수 없으므로 코드에서 막는다.
     """
-    if tuple(cohorts) != COHORTS and out_path.resolve() == OUT.resolve():
-        # 순서까지 본다. 코호트 순서가 바뀌면 manifest 의 타겟 순서가 바뀌어
-        # 동결 산출물과 다른 바이트가 되므로 그것도 덮어쓰기다.
+    if not is_default_run(cohorts) and out_path.resolve() == OUT.resolve():
         raise SystemExit(
             f"{OUT.name} 은 동결된 v2 산출물이라 읽기 전용이다. 기본 코호트를 "
             f"기본 순서 {[c for c, _ in COHORTS]} 로 돌릴 때만 그 파일에 쓴다 - "
@@ -411,7 +438,7 @@ def _write(out_path: Path, results: list[dict], rows: list[dict],
     # 산출물이 남의 동결 문서를 가리킨다. 기본 경로에서는 `extra` 가 비어 있어
     # 출력 바이트가 한 글자도 바뀌지 않는다 (키 순서 포함).
     extra: dict = {}
-    if tuple(cohorts) != COHORTS:
+    if not is_default_run(cohorts):
         names = [c for c, _ in cohorts]
         extra = {"purpose": f"{names} 코호트의 target 수준 MSA. --cohorts 로 지정됐다.",
                  "freeze_doc": "docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md",
