@@ -1537,7 +1537,36 @@ def test_within_target_spearman_requires_three_backbones():
 Run: `/tmp/gate2d-venv/bin/python -m pytest tests/test_gate2d_metrics.py -k within_target_spearman -v`
 Expected: FAIL — `AttributeError: ... has no attribute 'within_target_spearman'`
 
-- [ ] **Step 3: `_gate2d.py` 에 구현**
+### ⚠️ 정정 (2026-09-10) — Step 3 의 두 함수는 **이미 구현돼 있다**
+
+`within_target_spearman` 과 `top1_regret` 은 OC 생성기 작업(`901ad98`)에서
+`scripts/benchmark/_gate2d.py` 에 먼저 추가됐다. 생성기가 로컬 사본을 만드는 대신
+metric 경계에 둔 것이고, 그래서 Task 10 은 **두 번째 정의를 만들지 않는다.**
+
+**실제 시그니처가 아래 초안과 다르다. 초안대로 호출하면 안 된다.**
+
+```python
+within_target_spearman(predicted, actual, targets, *, min_units=3) -> dict[str, float]
+top1_regret        (predicted, actual, targets, *, min_units=3) -> dict[str, float]
+```
+
+차이가 두 개이고 둘 다 조용히 틀린다.
+
+1. **인자 순서가 `(predicted, actual)` 다.** 초안은 `(q_true, q_pred)` 로 호출한다.
+   Spearman 은 대칭이라 값이 같지만 **`top1_regret` 은 대칭이 아니다** — 뒤집으면
+   argmax 를 실제값에서 잡고 regret 을 예측값에서 재므로 그럴듯한 쓰레기가 나온다.
+2. **반환형이 `dict[target] -> value` 다.** 초안은 list 로 다룬다.
+   `np.mean(dict)` · `one_sided_lcb(dict)` 는 키(문자열)를 순회해 깨진다.
+   docstring 이 올바른 관용구를 적어 뒀다:
+   `target_equal_mean(list(rhos.values()), list(rhos))`.
+
+**부수 기록.** 구현은 **예측값이 상수인 타겟도** 제외한다(스펙 §3 은 q_b 상수만
+말한다). 상수 예측기는 순위가 없어 Spearman 이 미정의이므로 제외가 옳고, 미정의를
+0 으로 대입하지 않는 것도 옳다. 다만 그 경우 informative 타겟이 줄어 8 미만이 되면
+NO-GO 가 아니라 **UNDECIDED** 가 된다 — "평가할 수 없다" 가 정직한 결과다.
+실제 예측기(MPNN encoder)와 OC 시뮬레이션(q_b + 노이즈)에서는 도달하지 않는다.
+
+- [ ] **Step 3: (초안 유지 · 실행하지 말 것) `_gate2d.py` 에 구현**
 
 ```python
 def within_target_spearman(q_true: Sequence[float], q_pred: Sequence[float],
@@ -1678,10 +1707,16 @@ def main() -> int:
 
     q_pred = fit_predict(x_dev, y_dev, w_dev, x_test)
 
-    rhos = G.within_target_spearman(q_true, q_pred, targets)
-    regrets = G.top1_regret(q_true, q_pred, targets)
-    lcb = one_sided_lcb(rhos, alpha=G.LCB_ONE_SIDED_ALPHA, seed=G.BOOTSTRAP_SEED)
-    point = float(np.mean(rhos)) if rhos else float("nan")
+    # 인자 순서는 (predicted, actual, targets) 다. top1_regret 은 대칭이 아니므로
+    # 뒤집으면 조용히 엉뚱한 수를 낸다 - argmax 를 실제값에서 잡고 regret 을
+    # 예측값에서 재게 된다.
+    rhos = G.within_target_spearman(q_pred, q_true, targets)     # dict[target] -> rho
+    regrets = G.top1_regret(q_pred, q_true, targets)             # dict[target] -> regret
+
+    # 반환형이 dict 다. np.mean(dict) 나 one_sided_lcb(dict) 를 쓰면 안 된다.
+    rho_values = [rhos[t] for t in sorted(rhos)]
+    lcb = one_sided_lcb(rho_values, alpha=G.LCB_ONE_SIDED_ALPHA, seed=G.BOOTSTRAP_SEED)
+    point = G.target_equal_mean(rho_values, sorted(rhos)) if rhos else float("nan")
     informative = len(rhos)  # within_target_spearman 이 제외 규칙을 이미 적용했다
 
     go = bool(point >= G.GATE1_RHO_MIN
@@ -1704,11 +1739,12 @@ def main() -> int:
             "point": round(point, 4),
             "one_sided_90_lcb": lcb.get("lcb"),
             "informative_targets": informative,
-            "per_target_spearman": [round(r, 4) for r in rhos],
+            "per_target_spearman": {t: round(rhos[t], 4) for t in sorted(rhos)},
         },
         "secondary": {
-            "top1_backbone_regret_mean": round(float(np.mean(regrets)), 4),
-            "per_target_regret": [round(r, 4) for r in regrets],
+            "top1_backbone_regret_mean": round(
+                G.target_equal_mean([regrets[t] for t in sorted(regrets)], sorted(regrets)), 4),
+            "per_target_regret": {t: round(regrets[t], 4) for t in sorted(regrets)},
         },
         "frozen_go_rule": {
             "rho_min": G.GATE1_RHO_MIN,
