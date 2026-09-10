@@ -16,17 +16,51 @@ feature 조립은 Task 11 이 한다.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import math
+import os
+import sys
 from collections.abc import Mapping, Sequence
+from pathlib import Path
 
 #: 타겟 수준 conservation feature 이름. candidate 와 무관한 값만 둔다.
 TARGET_FEATURES = ("cons_mean", "cons_p25", "cons_p75", "usable_hits_log10",
                    "coverage_median", "depth_median_log10")
 
+#: `per_target` 행에 함께 실리지만 **feature 가 아닌** 이름.
+#: 스펙 §4 규칙 6 이 `usable_hits` 를 `per_target` 에 그대로 기록하라고 하므로
+#: 행에는 들어가지만 설계행렬로는 가지 않는다. `msa_low_depth` 는 지시자 열이고
+#: 대치 대상이 아니다 - 대치하면 "얼마나 얕은가" 가 train 평균으로 번진다.
+PER_TARGET_METADATA = ("usable_hits", "msa_low_depth")
+
 #: 보존 tier. 배포 기본값과 같아야 하고 여기서 고르지 않는다.
 TIERS = (0.3, 0.5, 0.7)
+
+#: 저심도 문턱 (스펙 §4 규칙 6). `50_full_msa.py` 의 feasibility 기준과
+#: `bio/a3m.msa_quality` 의 경고 경계에서 **상속**된 값이며 여기서 고르지 않는다.
+LOW_DEPTH_MIN_USABLE_HITS = 10
+
+PROJECT_ROOT = Path(os.environ.get("PROTEIN_PIPELINE_ROOT")
+                    or Path(__file__).resolve().parents[2]).resolve()
+GRID = PROJECT_ROOT / "public_data" / "benchmark" / "gate0" / "holdout_grid"
+MANIFEST_PATH = GRID / "holdout_msa_manifest.json"
+OUT_PATH = GRID / "msa_features.json"
+
+
+def _a3m():
+    """배포의 a3m primitive 모듈. 보존·품질 정의는 여기 하나뿐이다.
+
+    지연 import 다. `pipeline_mcp` 는 이 venv 에 설치돼 있지 않으므로 소스
+    경로를 한 번 넣는다 - 이 모듈을 import 만 하는 테스트에 그 비용을 지우지
+    않는다.
+    """
+    src = str(PROJECT_ROOT / "pipeline-mcp" / "src")
+    if src not in sys.path:
+        sys.path.insert(0, src)
+    import pipeline_mcp.bio.a3m as a3m_mod
+    return a3m_mod
 
 
 def _defined(features: Mapping[str, float] | None) -> dict[str, float]:
@@ -186,7 +220,7 @@ def conserved_positions(a3m: str, *, tiers: Sequence[float] = TIERS,
 
     `manifest_sha256` 을 주지 않으면 검증 결과는 None 이다.
     """
-    from pipeline_mcp.bio.a3m import compute_conservation
+    compute_conservation = _a3m().compute_conservation
 
     cons = compute_conservation(a3m, tiers=list(tiers), mode=mode, weights=None)
     one_based = {str(t): list(v) for t, v in cons.fixed_positions_by_tier.items()}
@@ -211,3 +245,217 @@ def dump_features(payload: Mapping[str, object]) -> str:
     (스펙 §5, fail-closed).
     """
     return json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False)
+
+
+# ---------------------------------------------------------------------------
+# Step 6 - a3m 를 읽어 12 타겟 feature 를 만든다.
+# ---------------------------------------------------------------------------
+
+
+def feature_view(row: Mapping[str, object] | None) -> dict[str, object] | None:
+    """`per_target` 행에서 **feature 만** 뽑는다. metadata 는 뺀다.
+
+    `PER_TARGET_METADATA` 이름만 제외하고 나머지는 그대로 넘긴다 - 모르는 이름을
+    여기서 걸러내면 `_defined()` 의 오타 가드가 무력해진다. 오타는 계속
+    `impute()` 안에서 터져야 한다.
+    """
+    if row is None:
+        return None
+    return {k: v for k, v in row.items() if k not in PER_TARGET_METADATA}
+
+
+def is_low_depth(usable_hits: object) -> int:
+    """스펙 §4 규칙 6 의 저심도 지시자. 문턱은 상속된 값이다.
+
+    **제외가 아니라 가시화**다 - 이 값으로 타겟을 코호트에서 빼지 않는다.
+    usable_hits 를 알 수 없으면 저심도라고 단정하지 않는다(0).
+    """
+    if usable_hits is None:
+        return 0
+    return 1 if int(usable_hits) < LOW_DEPTH_MIN_USABLE_HITS else 0
+
+
+def _log10(value: object) -> float | None:
+    """log10. 정의되지 않으면 None 이다 - 0 이나 -inf 로 채우지 않는다."""
+    if value is None:
+        return None
+    number = float(value)
+    if not math.isfinite(number) or number <= 0.0:
+        return None
+    return math.log10(number)
+
+
+def target_features(msa_quality: Mapping[str, object],
+                    conservation_scores: Sequence[float]
+                    ) -> dict[str, float | None]:
+    """타겟 수준 MSA feature 6 개. 정의되지 않으면 **None** 이다.
+
+    보존 분위수는 배포의 `_percentiles` 로 낸다 - manifest 의 coverage/depth
+    분위수를 만든 바로 그 함수다. 여기서 두 번째 분위수 규칙을 만들면 같은
+    이름의 값이 파일마다 다른 뜻이 된다.
+
+    대치는 하지 않는다. imputation 은 LOTO train fold 평균이어야 하므로 fold
+    안에서만 할 수 있다 (Task 11 Step 8b).
+    """
+    percentiles = _a3m()._percentiles
+    cons = percentiles([float(s) for s in conservation_scores], [25, 50, 75])
+    coverage = msa_quality.get("coverage") or {}
+    depth = msa_quality.get("depth") or {}
+    return {
+        "cons_mean": None if cons is None else float(cons["mean"]),
+        "cons_p25": None if cons is None else float(cons["p25"]),
+        "cons_p75": None if cons is None else float(cons["p75"]),
+        "usable_hits_log10": _log10(msa_quality.get("usable_hits")),
+        "coverage_median": (None if coverage.get("p50") is None
+                            else float(coverage["p50"])),
+        "depth_median_log10": _log10(depth.get("p50")),
+    }
+
+
+def build_payload(manifest: Mapping[str, object], *,
+                  project_root: Path = PROJECT_ROOT) -> dict[str, object]:
+    """manifest + a3m -> msa_features.json 페이로드.
+
+    세 가지를 fail-closed 로 검사한다. 어느 하나가 어긋나도 **오류는 나지
+    않고** S4 가 조용히 잡음을 재게 되기 때문이다.
+      1. a3m 파일의 sha256 이 manifest 와 같은가 (같은 검색 결과인가).
+      2. tier 별 보존 위치가 manifest 의 `fixed_positions_sha256` 과 같은가.
+         검증은 **1-기반**으로 되돌려서 한다 - manifest 해시가 1-기반이다.
+      3. a3m query 서열이 동결 WT(`_gate2d_cohort.FROZEN_WT`)와 같은가.
+         `F_tier` 는 MSA query 축, `M_i` 는 WT 축이므로 이것이 같아야 교집합이
+         의미를 갖는다 (스펙 §4 규칙 8, hard precondition).
+    """
+    import _gate2d as gate2d
+    import _gate2d_cohort as cohort
+
+    a3m_mod = _a3m()
+    per_target: dict[str, dict[str, object]] = {}
+    positions: dict[str, dict[str, list[int]] | None] = {}
+    verified: dict[str, bool | None] = {}
+    query_sha: dict[str, str] = {}
+    query_seq: dict[str, str] = {}
+    depth_profile: dict[str, dict[str, object]] = {}
+    undefined: list[str] = []
+    low_depth: list[str] = []
+    problems: list[str] = []
+
+    for entry in manifest["targets"]:
+        target = entry["domain"]
+        path = project_root / entry["a3m_path"]
+        raw = path.read_bytes()
+        got_sha = hashlib.sha256(raw).hexdigest()
+        if got_sha != entry.get("a3m_sha256"):
+            problems.append(f"{target}: a3m sha256 {got_sha[:16]} != manifest "
+                            f"{str(entry.get('a3m_sha256'))[:16]}")
+            continue
+        text = raw.decode("utf-8", errors="replace")
+
+        quality = entry.get("msa_quality") or {}
+        cons = a3m_mod.compute_conservation(text, tiers=list(TIERS),
+                                            mode="quantile", weights=None)
+        zero_based, hash_ok = conserved_positions(
+            text, manifest_sha256=(entry.get("conservation") or {}).get(
+                "fixed_positions_sha256"))
+        if hash_ok is not True:
+            problems.append(f"{target}: 보존 위치가 manifest 의 "
+                            "fixed_positions_sha256 과 다르다")
+            continue
+
+        features = target_features(quality, cons.scores)
+        row: dict[str, object] = dict(features)
+        row["usable_hits"] = quality.get("usable_hits")
+        row["msa_low_depth"] = is_low_depth(quality.get("usable_hits"))
+        per_target[target] = row
+        positions[target] = zero_based
+        verified[target] = hash_ok
+        if row["msa_low_depth"]:
+            low_depth.append(target)
+        if not _defined(feature_view(row)):
+            undefined.append(target)
+
+        seq = a3m_mod._normalize_records(text)[0].sequence
+        query_seq[target] = seq
+        query_sha[target] = hashlib.sha256(seq.encode()).hexdigest()
+        depth_profile[target] = {
+            "usable_hits": quality.get("usable_hits"),
+            "median_depth": (quality.get("depth") or {}).get("p50"),
+            "median_coverage": (quality.get("coverage") or {}).get("p50"),
+            "query_length": quality.get("query_length"),
+            "classification": entry.get("classification"),
+        }
+
+    if problems:
+        raise SystemExit("MSA provenance 가 manifest 와 어긋난다. 중단한다:\n  "
+                         + "\n  ".join(problems))
+    # 서열 축. 여기서 죽는 것이 맞다 - 어긋난 좌표에서 계산된 S4 는 오류 없이
+    # 잡음을 잰다.
+    cohort.assert_sequence_axis(query_seq)
+
+    return {
+        "purpose": ("P3 - 타겟 수준 MSA conservation feature. candidate 와 "
+                    "무관하다."),
+        "spec": "docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md",
+        "source_manifest": "public_data/benchmark/gate0/holdout_grid/holdout_msa_manifest.json",
+        "feature_names": list(TARGET_FEATURES),
+        "per_target_metadata_names": list(PER_TARGET_METADATA),
+        "per_target": per_target,
+        "conserved_positions_0based": positions,
+        "conserved_positions_sha256_verified": verified,
+        "query_sequence_sha256": query_sha,
+        "query_sequence_axis": (
+            "12/12 a3m query 서열의 sha256 이 _gate2d_cohort.FROZEN_WT 와 일치한다. "
+            "F_tier(MSA query 축)와 M_i(WT 축)가 같은 서열 위에 있다는 뜻이며, "
+            "다르면 이 스크립트가 fail-closed 한다 (스펙 §4 규칙 8)."
+        ),
+        "undefined_targets": undefined,
+        "low_depth": {
+            "threshold": f"usable_hits < {LOW_DEPTH_MIN_USABLE_HITS}",
+            "threshold_inherited_from": (
+                "50_full_msa.py 의 feasibility 기준 · bio/a3m.msa_quality 의 경고 경계. "
+                "여기서 새로 고르지 않는다 (스펙 §4 규칙 6)."
+            ),
+            "targets": sorted(low_depth),
+            "n": len(low_depth),
+            "depth_profile": depth_profile,
+            "note": ("저심도 타겟도 코호트에 남는다. 지시자 msa_low_depth 로 "
+                     "가시화할 뿐 제외하지 않는다. 분포가 사실상 이봉이므로"
+                     "(3 · 46 · 866 · 3000×9) 문턱을 46 위로 올리지 않는다 - "
+                     "그것은 결과를 본 뒤의 문턱 쇼핑이다."),
+        },
+        "note": ("undefined 타겟도 코호트에 남는다. 대치는 LOTO fold 안에서 "
+                 "한다 (23_gate2d_prepare_msa_features.train_stats/impute)."),
+        "conserved_positions_note": (
+            "0-기반 인덱스. manifest 의 fixed_positions_sha256 은 1-기반 목록으로 "
+            "계산된 값이므로, 검증할 때만 1-기반으로 되돌려 해시를 맞춘다. "
+            "candidate 와 무관한 타겟 수준 값이다."),
+        "conservation_settings": manifest.get("conservation"),
+        "msa_settings": manifest.get("settings"),
+        "msa_run_provenance": manifest.get("run_provenance"),
+        "run_provenance": gate2d.run_provenance(
+            "scripts/benchmark/23_gate2d_prepare_msa_features.py",
+            "scripts/benchmark/_gate2d.py",
+            "scripts/benchmark/_gate2d_cohort.py",
+            "pipeline-mcp/src/pipeline_mcp/bio/a3m.py",
+        ),
+    }
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", default=str(MANIFEST_PATH))
+    parser.add_argument("--out", default=str(OUT_PATH))
+    args = parser.parse_args(argv)
+
+    manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    payload = build_payload(manifest)
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(dump_features(payload), encoding="utf-8")
+    print(f"wrote {out}  targets {len(payload['per_target'])}  "
+          f"undefined {len(payload['undefined_targets'])}  "
+          f"low_depth {payload['low_depth']['n']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -28,6 +28,43 @@ MIN_INFORMATIVE_TARGETS = 8
 BOOTSTRAP_SEED = 20260910
 
 
+import hashlib
+import os
+import subprocess
+from datetime import datetime, timezone
+from pathlib import Path
+
+PROJECT_ROOT = Path(os.environ.get("PROTEIN_PIPELINE_ROOT")
+                    or Path(__file__).resolve().parents[2]).resolve()
+
+
+def run_provenance(*scripts: str) -> dict[str, object]:
+    """산출물이 자기를 만든 코드를 이름으로 가리키게 한다.
+
+    두 산출물(P3 의 msa_features.json, Gate 2 판정)이 같은 형식을 쓰도록 한
+    군데에 둔다 - `git rev-parse` 를 스크립트마다 다시 적으면 형식이 갈라진다.
+
+    `code_sha` 는 **실행 시점의 HEAD** 다. 산출물은 그것을 만든 코드와 같은
+    커밋에 들어가므로 `code_sha` 는 그 부모를 가리킨다 - 그래서 `script_sha256`
+    으로 실제 파일 내용을 함께 박는다 (`50_full_msa.py` 의 run_provenance 와
+    같은 방식). 커밋 순서와 무관하게 재현할 코드를 지목할 수 있어야 한다.
+    """
+    try:
+        sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT,
+                             capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        sha = ""
+    digests = {}
+    for rel in scripts:
+        path = PROJECT_ROOT / rel
+        if path.exists():
+            digests[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return {"code_sha": sha,
+            "code_sha_is_the_parent_of_the_artifact_commit": True,
+            "script_sha256": digests,
+            "utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+
 from collections.abc import Sequence
 
 
@@ -105,18 +142,28 @@ def delta_top4(labels: Sequence[bool], scores: Sequence[float],
 from collections import defaultdict
 
 
-def per_target_means(per_backbone: Sequence[float],
-                     targets: Sequence[str]) -> list[float]:
-    """백본별 값을 타겟 내에서 먼저 평균한다. 타겟 이름 오름차순으로 돌려준다.
+def per_target_mean_map(per_backbone: Sequence[float],
+                        targets: Sequence[str]) -> dict[str, float]:
+    """백본별 값을 타겟 내에서 평균한 **이름 있는** 결과.
 
     NaN 백본은 제외한다. 어떤 타겟의 백본이 전부 NaN 이면 그 타겟도 빠진다.
+
+    이름이 필요한 이유는 스펙 §4 규칙 6 의 민감도다 - 저심도 타겟을 뺀 코호트를
+    만들려면 어느 값이 어느 타겟인지 알아야 한다. `per_target_means` 는 이
+    함수의 값만 꺼내는 얇은 wrapper 이며, 두 번째 집계 규칙이 아니다.
     """
     grouped: dict[str, list[float]] = defaultdict(list)
     for value, target in zip(per_backbone, targets):
         v = float(value)
         if v == v:  # NaN 제외
             grouped[str(target)].append(v)
-    return [sum(vals) / len(vals) for _t, vals in sorted(grouped.items()) if vals]
+    return {t: sum(vals) / len(vals) for t, vals in sorted(grouped.items()) if vals}
+
+
+def per_target_means(per_backbone: Sequence[float],
+                     targets: Sequence[str]) -> list[float]:
+    """백본별 값을 타겟 내에서 먼저 평균한다. 타겟 이름 오름차순으로 돌려준다."""
+    return list(per_target_mean_map(per_backbone, targets).values())
 
 
 def target_equal_mean(per_backbone: Sequence[float],
