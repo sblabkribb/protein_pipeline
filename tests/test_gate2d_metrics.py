@@ -1024,21 +1024,27 @@ def test_build_features_shapes_and_non_evaluable():
         raise AssertionError("정의되지 않은 arm 에서 KeyError 가 나와야 한다")
 
 
-def test_msa_arms_are_an_unstubbed_seam():
-    """S4-S6 는 아직 없다. **가짜 데이터로 채우지 않는다.**
+def test_msa_arms_need_a_train_fold_and_never_fabricate_one():
+    """이 테스트의 이전 판(`..._are_an_unstubbed_seam`)은 S4-S6 가 아직 구현되지
+    않았다는 것을 계약으로 고정하고 있었다. 2026-09-11 에 MSA 12/12 가 도착해
+    구현이 붙었으므로 그 계약은 더 이상 참이 아니다. **계약을 지우는 것이 아니라
+    옮긴다** - 지금 지켜야 하는 것은 "가짜 데이터로 채우지 않는다" 쪽이다.
 
-    `non_evaluable` 로 기록하지 않는 이유: 그 상태는 스펙 §4 규칙 5 의
-    "train fold 에서 imputation statistic 을 만들 수 없다" 라는 **데이터에 대한
-    판정**이다. 코드가 아직 없는 것을 데이터 판정으로 적으면 나중에 진짜
-    non-evaluable 과 구분되지 않는다.
+    MSA 블록의 대치 통계량은 LOTO train fold 의 **타겟 평균**이므로 fold 밖에서는
+    정의되지 않는다. train fold 없이 불렀을 때 코호트 전체를 train 으로 삼아
+    조용히 행렬을 내놓으면 그것이 누수다. 그래서 거절한다.
     """
     import _gate2d_cohort as C
     import _gate2d_features as F
     grid = C.load_holdout_grid()
     for arm in ("S4", "S5", "S6"):
         assert "msa" in F.ARM_BLOCKS[arm]
-        with pytest.raises(NotImplementedError, match="msa_features.json"):
+        with pytest.raises(ValueError, match="train fold"):
             F.build_features(arm, grid.folds[:8])
+        # train fold 를 주면 실제 행렬이 나온다 - seam 이 채워졌다.
+        matrix, defect = F.assemble(arm, grid.folds[:8], train_idx=[0, 1, 2, 3])
+        assert defect is None
+        assert matrix.shape[0] == 8
 
 
 def test_delta_esm_mut_uses_sequence_mutation_sites_not_embedding_difference():
@@ -1154,3 +1160,339 @@ def test_gate2_reports_undecided_without_the_primary_arm(tmp_path, monkeypatch):
     s0 = payload["arms_joint_pass"]["S0"]
     assert s0["informative_targets"] == 11
     assert s0["status"] == "measured_reference"
+
+
+# ---------------------------------------------------------------------------
+# Task 9 Step 6 / Task 11 S4-S6. MSA conservation feature 와 그 대치.
+# 2026-09-11, MSA 12/12 완료 후 추가.
+# ---------------------------------------------------------------------------
+
+
+def test_mutation_sites_and_conserved_positions_share_a_zero_base():
+    """두 인덱스가 같은 base 위에 있음을 **주석이 아니라 테스트로** 고정한다.
+
+    보존 마스크(1-기반 배포 출력)와 변이 위치(0-기반 enumerate)를 섞으면 마스크가
+    한 칸 밀리고 `|M_i ∩ F_tier|` 는 아무 오류도 내지 않으면서 잡음을 잰다.
+    """
+    import importlib
+    import json as _json
+    esm = importlib.import_module("22_gate2d_prepare_esm")
+    # mutation_sites 는 enumerate 기반이므로 첫 잔기가 다르면 0 을 돌려준다.
+    # 1-기반이라면 이 값이 1 이어야 한다. 0 이 나오는 것이 base 를 고정한다.
+    assert esm.mutation_sites("AAAA", "BAAA") == [0]
+
+    # 산출물 쪽도 0-기반이다. 키 이름에 base 가 박혀 있다.
+    path = (ROOT / "public_data" / "benchmark" / "gate0" / "holdout_grid"
+            / "msa_features.json")
+    feats = _json.loads(path.read_text(encoding="utf-8"))
+    assert "conserved_positions_0based" in feats
+    assert "conserved_positions" not in feats, "base 없는 키 이름은 섞는 실수를 부른다"
+    import _gate2d_cohort as C
+    for target, tiers in feats["conserved_positions_0based"].items():
+        length = C.FROZEN_WT[target][1]
+        for _tier, positions in tiers.items():
+            # 0-기반이면 [0, L-1] 안에 있다. 1-기반이면 L 이 나올 수 있다.
+            assert min(positions) >= 0
+            assert max(positions) <= length - 1
+    # 적어도 한 타겟은 0 번 위치를 잡는다 - 전부 1 이상이면 1-기반과 구분되지 않는다.
+    assert any(0 in positions
+               for tiers in feats["conserved_positions_0based"].values()
+               for positions in tiers.values())
+
+
+def test_msa_features_artifact_verified_its_provenance_against_the_manifest():
+    """Step 6 산출물은 manifest 의 `fixed_positions_sha256` 과 대조돼 있어야 한다.
+
+    manifest 는 tier 의 **개수와 해시만** 담는다. 위치 집합은 P3 가 다시 계산하므로
+    provenance 를 확인하지 않으면 다른 a3m 에서 나온 마스크가 조용히 들어올 수 있다.
+    """
+    import json as _json
+    gate0 = ROOT / "public_data" / "benchmark" / "gate0"
+    feats = _json.loads((gate0 / "holdout_grid" / "msa_features.json")
+                        .read_text(encoding="utf-8"))
+    manifest = _json.loads((gate0 / "holdout_grid" / "holdout_msa_manifest.json")
+                           .read_text(encoding="utf-8"))
+
+    assert len(feats["per_target"]) == 12
+    assert set(feats["conserved_positions_sha256_verified"].values()) == {True}
+
+    tiers_by_target = {e["domain"]: e["conservation"]["tiers"] for e in manifest["targets"]}
+    for target, tiers in feats["conserved_positions_0based"].items():
+        assert {t: len(v) for t, v in tiers.items()} == tiers_by_target[target]
+
+    # 서열 축: a3m query 의 sha256 이 동결 WT 와 같다 (스펙 §4 규칙 8).
+    import _gate2d_cohort as C
+    for target, sha in feats["query_sequence_sha256"].items():
+        assert sha == C.FROZEN_WT[target][0]
+
+
+def test_msa_features_records_usable_hits_and_the_low_depth_indicator():
+    """스펙 §4 규칙 6. 저심도는 **제외가 아니라 가시화**다."""
+    import importlib
+    import json as _json
+    prep = importlib.import_module("23_gate2d_prepare_msa_features")
+    feats = _json.loads((ROOT / "public_data" / "benchmark" / "gate0" / "holdout_grid"
+                         / "msa_features.json").read_text(encoding="utf-8"))
+
+    assert prep.LOW_DEPTH_MIN_USABLE_HITS == 10
+    for target, row in feats["per_target"].items():
+        assert "usable_hits" in row, f"{target}: usable_hits 를 그대로 기록해야 한다"
+        assert row["msa_low_depth"] == prep.is_low_depth(row["usable_hits"])
+
+    # 실측: 저심도는 1tm9A00 하나이고 타겟은 12 개 그대로다.
+    assert feats["low_depth"]["targets"] == ["1tm9A00"]
+    assert feats["low_depth"]["n"] == 1
+    assert feats["per_target"]["1tm9A00"]["usable_hits"] == 3
+    # 문턱 위에 있는 borderline 은 저심도가 아니다 - 문턱을 46 위로 올리지 않는다.
+    assert feats["per_target"]["2jokA01"]["usable_hits"] == 46
+    assert feats["per_target"]["2jokA01"]["msa_low_depth"] == 0
+    assert len(feats["per_target"]) == 12, "어떤 경우에도 타겟을 빼지 않는다"
+
+
+def test_usable_hits_is_metadata_not_a_feature():
+    """`usable_hits` 는 `per_target` 에 실리지만 설계행렬로 가지 않는다.
+
+    그대로 `impute()` 에 넘기면 `_defined()` 의 오타 가드가 이름을 모른다고
+    거절한다 - 그 가드를 죽이지 않으면서 규칙 6 을 지키는 경로가 `feature_view` 다.
+    """
+    import importlib
+    import pytest as _pytest
+    prep = importlib.import_module("23_gate2d_prepare_msa_features")
+    row = {"cons_mean": 0.7, "usable_hits": 3, "msa_low_depth": 1}
+    assert prep.feature_view(row) == {"cons_mean": 0.7}
+    assert prep.feature_view(None) is None
+    # 모르는 이름은 여전히 거절된다 - feature_view 가 오타를 삼키지 않는다.
+    with _pytest.raises(ValueError, match="cons_meen"):
+        prep.impute("C", prep.feature_view({"cons_meen": 0.7, "usable_hits": 3}),
+                    train_stats={"cons_mean": 0.7})
+
+
+def test_s4_distinguishes_two_designs_that_hit_different_conservation():
+    """이 테스트가 통과하지 않으면 S4 를 Gate 2 feature 라고 부를 수 없다.
+
+    타겟 수준 상수만 넣으면 같은 백본의 24 설계가 동일한 행을 받고 백본 **내부**
+    순위가 원리상 만들어지지 않는다.
+    """
+    import _gate2d_features as F
+    conserved = {"0.3": [0, 1, 2, 3], "0.5": [0, 1, 2, 3, 4, 5], "0.7": list(range(8))}
+    # 같은 타겟·같은 백본·변이 수 동일(4개). A 는 tier30 보존 위치만, B 는 비보존만.
+    a = F.conservation_burden([0, 1, 2, 3], conserved)
+    b = F.conservation_burden([20, 21, 22, 23], conserved)
+    assert a == [1.0, 1.0, 1.0]
+    assert b == [0.0, 0.0, 0.0]
+    assert a != b, "S4 가 보존 위치를 건드린 설계를 구분하지 못한다"
+
+    # 변이가 없으면 0으로 나누지 않는다.
+    assert F.conservation_burden([], conserved) == [0.0, 0.0, 0.0]
+
+
+def test_s4_actually_varies_within_a_backbone_in_the_real_cohort():
+    """합성 예제가 아니라 실제 격자에서 백본 내부 변동이 0 이 아님을 본다.
+
+    스펙 §4 의 측정: 24 설계의 변이 위치 집합은 전부 distinct 하다. 그러면
+    `r_tier` 도 백본 안에서 달라야 한다 - 정확히 0 이면 S4 는 tie-break 만 남는다.
+    """
+    import numpy as np
+    import _gate2d_cohort as C
+    import _gate2d_features as F
+    grid = C.load_holdout_grid()
+    one_backbone = [f for f in grid.folds
+                    if f.backbone_key == grid.folds[0].backbone_key
+                    and f.target_id == grid.folds[0].target_id]
+    assert len(one_backbone) > 1
+    block = F._msa_candidate_block(one_backbone)
+    burden = block[:, :3]
+    assert (burden.std(axis=0) > 0).all(), "백본 안에서 r_tier 가 상수다"
+    # 채움 지시자는 이 코호트에서 0 이다 (길이 불일치 설계는 사용가능 폴드에 없다).
+    assert np.allclose(block[:, -1], 0.0)
+
+
+def test_conservation_burden_reads_mutation_sites_from_sequences_only():
+    """"차이가 0 인 곳" 을 마스크로 쓰지 않는다.
+
+    S3 이 그 방식으로 무너진 전례가 있다 (ESM 토큰은 문맥 의존이라 전 위치가
+    "변이" 로 뽑혔다). S4 의 변이 위치는 서열 비교 하나에서만 온다.
+    """
+    import importlib
+    import _gate2d_cohort as C
+    import _gate2d_features as F
+    esm = importlib.import_module("22_gate2d_prepare_esm")
+
+    grid = C.load_holdout_grid()
+    fold = grid.folds[0]
+    wt = F.wt_by_target()[fold.target_id]
+    design = F.SEQ_OF[fold.sequence_id]
+    sites = esm.mutation_sites(wt, design)
+    assert 0 < len(sites) < len(wt), "전 위치가 변이면 이 테스트가 무의미하다"
+
+    conserved = F.load_msa_features()["conserved_positions_0based"][fold.target_id]
+    expected = F.conservation_burden(sites, conserved)
+    got = F._msa_candidate_block([fold])[0]
+    assert list(got[:3]) == expected
+    assert abs(got[3] - len(sites) / len(wt)) < 1e-12
+
+
+def test_msa_imputation_weights_targets_equally_not_rows():
+    """타겟마다 행 수가 120/144 로 다르다. 행 평균은 타겟을 불균등 가중한다."""
+    import importlib
+    import _gate2d_features as F
+    prep = importlib.import_module("23_gate2d_prepare_msa_features")
+
+    # 타겟 A 는 행 2개, B 는 행 1개. 값은 A=0.0, B=0.9. C 는 정의되지 않음.
+    names = list(prep.TARGET_FEATURES)
+    per_target = {"A": {n: 0.0 for n in names}, "B": {n: 0.9 for n in names},
+                  "C": None}
+    row_targets = ["A", "A", "B", "C"]
+    train_idx = [0, 1, 2]          # A, A, B
+    block, defect = F.impute_msa_block(per_target, row_targets, train_idx, names)
+    assert defect is None
+    # 타겟 등가중 = (0.0 + 0.9)/2 = 0.45.  행 평균이면 (0+0+0.9)/3 = 0.30.
+    c_row = row_targets.index("C")
+    assert abs(block[c_row][0] - 0.45) < 1e-12, "행 평균으로 대치하고 있다"
+    # 마지막 두 열은 지시자다: msa_undefined, msa_low_depth.
+    assert block[c_row][-2] == 1.0            # msa_undefined
+    assert block[0][-2] == 0.0                # A 는 정의됨
+    assert F._active_target_names({n: 0.0 for n in names}, names)[-2:] == [
+        "msa_undefined", "msa_low_depth"]
+
+
+def test_msa_low_depth_indicator_is_never_imputed_away():
+    """저심도 지시자는 대치 대상이 아니다.
+
+    train 평균으로 번지면 "얼마나 얕은가" 가 다른 타겟으로 새어 나가고, 홀드아웃
+    타겟이 자기 depth 가 아니라 이웃의 depth 를 들고 들어간다.
+    """
+    import importlib
+    import _gate2d_features as F
+    prep = importlib.import_module("23_gate2d_prepare_msa_features")
+    names = list(prep.TARGET_FEATURES)
+    per_target = {
+        "shallow": {**{n: 0.1 for n in names}, "usable_hits": 3},
+        "deep1": {**{n: 0.5 for n in names}, "usable_hits": 3000},
+        "deep2": {**{n: 0.9 for n in names}, "usable_hits": 3000},
+    }
+    row_targets = ["shallow", "deep1", "deep2"]
+    # shallow 를 홀드아웃했다 - train 은 deep 둘뿐이라 평균 지시자는 0 이 된다.
+    block, defect = F.impute_msa_block(per_target, row_targets, [1, 2], names)
+    assert defect is None
+    assert block[0][-1] == 1.0, "홀드아웃 저심도 타겟의 지시자가 사라졌다"
+    assert block[1][-1] == 0.0 and block[2][-1] == 0.0
+
+
+def test_msa_arm_is_non_evaluable_when_the_train_fold_defines_nothing():
+    """스펙 §4 규칙 5 - 유일한 non-evaluable 사유다. **타겟을 빼지 않는다.**"""
+    import importlib
+    import _gate2d_features as F
+    prep = importlib.import_module("23_gate2d_prepare_msa_features")
+    names = list(prep.TARGET_FEATURES)
+    per_target = {"A": None, "B": None, "C": {n: 0.5 for n in names}}
+    block, defect = F.impute_msa_block(per_target, ["A", "B", "C"], [0, 1], names)
+    assert block is None
+    assert defect is None      # train_stats 자체가 None 인 경우
+
+    # 측정값을 버려야 하는 경우는 결함으로 표면화된다 (규칙 2 위반).
+    per_target2 = {"A": {"cons_mean": 0.5}, "B": {"cons_mean": 0.6},
+                   "C": {n: 0.5 for n in names}}
+    block2, defect2 = F.impute_msa_block(per_target2, ["A", "B", "C"], [0, 1], names)
+    assert block2 is None
+    assert defect2["evaluable"] is False
+    assert defect2["dropped_measured_by_target"]["C"]
+
+
+def test_full_ladder_shapes_and_s6_is_wider_than_s5():
+    """동결된 Step 7 계약 - S6 는 S5 보다 열이 많다."""
+    import _gate2d_cohort as C
+    import _gate2d_features as F
+    grid = C.load_holdout_grid()
+    folds = grid.folds
+    train_idx = list(range(len(folds) - 144))
+
+    x4, _ = F.assemble("S4", folds, train_idx)
+    x5, _ = F.assemble("S5", folds, train_idx)
+    x6, _ = F.assemble("S6", folds, train_idx)
+    # S4 = candidate 5 열 + 타겟 6 열 + 지시자 2 열.
+    assert x4.shape == (len(folds), len(F.CANDIDATE_MSA_FEATURES) + 6 + 2)
+    assert x5.shape == (len(folds), 321 + x4.shape[1])       # ΔESM_mut + MSA
+    assert x6.shape == (len(folds), x5.shape[1] + 20)        # + 조성 20
+    assert x6.shape[1] > x5.shape[1]
+    assert len(F.active_msa_feature_names(folds, train_idx)) == x4.shape[1]
+
+
+def test_gate2_official_artifact_is_the_frozen_verdict():
+    """공식 산출물. 판정 arm 은 S6 하나이고 GO 규칙은 스펙 §5 그대로다."""
+    import json as _json
+    payload = _json.loads(
+        (ROOT / "public_data" / "benchmark" / "gate0"
+         / "gate2_within_backbone_selectability.json").read_text(encoding="utf-8"))
+
+    assert payload["primary_arm"] == "S6"
+    assert payload["interim"] is False
+    assert payload["verdict"] in ("GO", "NO-GO")
+    assert payload["cohort"]["mixed_backbones"] == 37
+    assert payload["cohort"]["informative_targets"] == 11
+
+    primary = payload["arms_joint_pass"]["S6"]
+    assert primary["status"] == "primary"
+    assert primary["informative_targets"] == 11
+    go = (primary["meets_threshold"] and primary["lcb_exceeds_zero"]
+          and primary["informative_targets"] >= 8)
+    assert payload["verdict"] == ("GO" if go else "NO-GO")
+
+    # 동결 문구는 93% 다. 최초 동결본의 94% 는 controller 임시 실행값이었다.
+    assert "93%" in payload["no_go_reading"]
+    assert "94%" not in payload["no_go_reading"]
+
+    # 규칙 6: 저심도 목록·수와 민감도가 1 차 판정과 나란히 있어야 한다.
+    report = payload["msa_low_depth_report"]
+    assert report["low_depth_targets"] == ["1tm9A00"]
+    assert report["n_low_depth"] == 1
+    sens = primary["sensitivity_excluding_low_depth"]
+    assert sens["evaluable"] is True
+    assert sens["informative_targets"] == 10        # floor 8 을 넘는다
+    assert sens["excluded_low_depth_targets"] == ["1tm9A00"]
+
+    # fold 별 사용 열이 남아 있어야 narrowing 을 감사할 수 있다.
+    assert len(primary["active_msa_feature_names"]) == 12
+
+    # 스펙과의 차이가 기록돼 있다 (격자에 per-sequence MPNN score 가 없다).
+    assert "MPNN" in payload["s6_cheap_block_deviation"]["implemented"] or \
+           "MPNN" in payload["s6_cheap_block_deviation"]["reason"]
+
+    # 모든 arm 이 두 endpoint 에서 11 타겟을 그대로 쓴다 - 타겟을 빼지 않았다.
+    for key in ("arms_joint_pass", "arms_structural_pass_secondary"):
+        for arm, row in payload[key].items():
+            assert row["informative_targets"] == 11, arm
+
+
+def test_gate2_reference_points_reproduce_the_interim_s0_to_s3():
+    """S4-S6 를 붙이면서 S0-S3 를 건드리지 않았음을 산출물로 고정한다."""
+    import json as _json
+    payload = _json.loads(
+        (ROOT / "public_data" / "benchmark" / "gate0"
+         / "gate2_within_backbone_selectability.json").read_text(encoding="utf-8"))
+    joint = payload["arms_joint_pass"]
+    assert joint["S0"]["delta_top4_target_equal"] == -0.0014
+    assert joint["S1"]["delta_top4_target_equal"] == 0.0384
+    assert joint["S2"]["delta_top4_target_equal"] == -0.0188
+    assert joint["S3"]["delta_top4_target_equal"] == -0.0029
+
+
+def test_low_depth_sensitivity_withholds_itself_below_the_floor():
+    """규칙 6 의 '4 이상' 구간 - 민감도가 floor 미달이면 non-evaluable 이다.
+
+    조용히 확인 없는 판정으로 두지 않는다.
+    """
+    import importlib
+    gate2 = importlib.import_module("25_gate2_within_backbone_selectability")
+    per_target = {f"t{i}": 0.2 for i in range(11)}
+
+    ok = gate2._low_depth_sensitivity(per_target, ["t0"])
+    assert ok["evaluable"] is True and ok["informative_targets"] == 10
+
+    thin = gate2._low_depth_sensitivity(per_target, [f"t{i}" for i in range(4)])
+    assert thin["evaluable"] is False
+    assert "교차 확인" in thin["reason"]
+    assert "delta_top4_target_equal" not in thin
+
+    none = gate2._low_depth_sensitivity(per_target, [])
+    assert none["evaluable"] is None

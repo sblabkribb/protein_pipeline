@@ -18,10 +18,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import sys
 from collections.abc import Sequence
-from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -52,16 +50,55 @@ NO_GO_READING = (
 )
 
 
-def _code_sha() -> str:
-    try:
-        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT,
-                              capture_output=True, text=True, check=True).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
-        return ""
+def _summarise(values: Sequence[float]) -> dict:
+    """타겟 등가중 점추정 + 단측 90% LCB. 두 endpoint·두 코호트가 같은 규칙을 쓴다."""
+    lcb = one_sided_lcb(values, alpha=G.LCB_ONE_SIDED_ALPHA, seed=G.BOOTSTRAP_SEED)
+    point = float(np.mean(values)) if len(values) else float("nan")
+    return {
+        "delta_top4_target_equal": round(point, 4),
+        "one_sided_90_lcb": lcb.get("lcb"),
+        "informative_targets": len(values),
+        "meets_threshold": bool(point >= G.GATE2_DELTA_MIN),
+        "lcb_exceeds_zero": bool(lcb.get("exceeds_zero")),
+    }
+
+
+def _low_depth_sensitivity(per_target: dict[str, float],
+                           low_depth_targets: Sequence[str]) -> dict:
+    """저심도 타겟을 뺀 민감도 (스펙 §4 규칙 6).
+
+    **타겟을 빼는 것이 아니다** - 1 차 판정은 informative 타겟 전체로 내고, 이
+    민감도를 그 옆에 나란히 보고한다. 민감도 코호트가 floor 미만이면 "교차 확인이
+    불가능했다" 를 명시한다. 조용히 확인 없는 판정으로 두지 않는다.
+    """
+    excluded = sorted(set(low_depth_targets) & set(per_target))
+    kept = {t: v for t, v in sorted(per_target.items()) if t not in set(excluded)}
+    out: dict = {
+        "excluded_low_depth_targets": excluded,
+        "n_excluded": len(excluded),
+        "cohort_targets": sorted(kept),
+    }
+    if not excluded:
+        out["evaluable"] = None
+        out["reason"] = "저심도 타겟이 없다 - 민감도가 1 차 판정과 같다 (규칙 6, 구간 0)."
+        return out
+    if len(kept) < G.MIN_INFORMATIVE_TARGETS:
+        out["evaluable"] = False
+        out["informative_targets"] = len(kept)
+        out["reason"] = (
+            f"민감도 코호트 {len(kept)} 이 floor {G.MIN_INFORMATIVE_TARGETS} 미만이라 "
+            "non-evaluable 이다. 1 차 판정은 그대로 내되 교차 확인이 불가능했다 "
+            "(스펙 §4 규칙 6, 구간 '4 이상')."
+        )
+        return out
+    out["evaluable"] = True
+    out.update(_summarise([kept[t] for t in sorted(kept)]))
+    return out
 
 
 def evaluate_arm(arm: str, grid: C.Grid, mixed: list[C.Backbone],
-                 endpoint: str = "joint") -> dict:
+                 endpoint: str = "joint",
+                 low_depth_targets: Sequence[str] = ()) -> dict:
     """한 arm 의 타겟 등가중 Delta_Top4. LOTO 로 낸 예측만 쓴다."""
     from sklearn.linear_model import Ridge
 
@@ -69,16 +106,13 @@ def evaluate_arm(arm: str, grid: C.Grid, mixed: list[C.Backbone],
     targets = [f.target_id for f in all_folds]
     y = np.array([(f.joint_pass if endpoint == "joint" else f.structural_pass)
                   for f in all_folds], dtype=float)
+    uses_msa = "msa" in F.ARM_BLOCKS[arm]
 
     pred = np.zeros(len(all_folds))
-    for train_idx, test_idx, _held in F.loto_splits(targets):
-        try:
-            x_fold, defect = F.assemble(arm, all_folds, train_idx)
-        except NotImplementedError as exc:
-            # 데이터 판정이 아니다. 규칙 5 의 non_evaluable 과 구분해 적는다 -
-            # 섞으면 나중에 진짜 non_evaluable 을 알아볼 수 없다.
-            return {"arm": arm, "label": F.ARM_LABELS[arm], "endpoint": endpoint,
-                    "status": "not_implemented", "reason": str(exc)}
+    active_by_fold: dict[str, list[str]] = {}
+    n_features = 0
+    for train_idx, test_idx, held in F.loto_splits(targets):
+        x_fold, defect = F.assemble(arm, all_folds, train_idx)
         if x_fold is None:
             return {"arm": arm, "label": F.ARM_LABELS[arm], "endpoint": endpoint,
                     "status": "non_evaluable",
@@ -86,6 +120,10 @@ def evaluate_arm(arm: str, grid: C.Grid, mixed: list[C.Backbone],
                                "statistic 을 만들 수 없다" if defect is None
                                else "측정된 MSA feature 가 버려졌다 - 규칙 2 위반"),
                     "defect": defect}
+        n_features = int(x_fold.shape[1])
+        if uses_msa:
+            # fold 별 사용 열을 남긴다. 없으면 narrowing 을 감사할 수 없다.
+            active_by_fold[held] = F.active_msa_feature_names(all_folds, train_idx)
         model = Ridge(alpha=RIDGE_ALPHA)
         model.fit(x_fold[train_idx], y[train_idx])
         pred[test_idx] = model.predict(x_fold[test_idx])
@@ -100,18 +138,17 @@ def evaluate_arm(arm: str, grid: C.Grid, mixed: list[C.Backbone],
             [f.sequence_id for f in b.folds]))
         bb_targets.append(b.target_id)
 
-    per_target = G.per_target_means(per_backbone, bb_targets)
-    lcb = one_sided_lcb(per_target, alpha=G.LCB_ONE_SIDED_ALPHA, seed=G.BOOTSTRAP_SEED)
-    point = float(np.mean(per_target))
-    return {
-        "arm": arm, "label": F.ARM_LABELS[arm], "status": F.ARM_STATUS[arm],
-        "endpoint": endpoint,
-        "delta_top4_target_equal": round(point, 4),
-        "one_sided_90_lcb": lcb.get("lcb"),
-        "informative_targets": len(per_target),
-        "meets_threshold": bool(point >= G.GATE2_DELTA_MIN),
-        "lcb_exceeds_zero": bool(lcb.get("exceeds_zero")),
-    }
+    per_target = G.per_target_mean_map(per_backbone, bb_targets)
+    out = {"arm": arm, "label": F.ARM_LABELS[arm], "status": F.ARM_STATUS[arm],
+           "endpoint": endpoint}
+    out.update(_summarise([per_target[t] for t in sorted(per_target)]))
+    out["per_target_delta_top4"] = {t: round(v, 4) for t, v in sorted(per_target.items())}
+    out["sensitivity_excluding_low_depth"] = _low_depth_sensitivity(
+        per_target, low_depth_targets)
+    out["n_features"] = n_features
+    if uses_msa:
+        out["active_msa_feature_names"] = active_by_fold
+    return out
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -129,8 +166,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     mixed = C.mixed_backbones(grid)
     requested = [a.strip() for a in args.arms.split(",") if a.strip()]
 
-    arms = {a: evaluate_arm(a, grid, mixed) for a in requested}
-    arms_structural = {a: evaluate_arm(a, grid, mixed, endpoint="structural")
+    msa = F.load_msa_features()
+    low_depth = msa["low_depth"]
+    low_depth_targets = list(low_depth["targets"])
+
+    arms = {a: evaluate_arm(a, grid, mixed, low_depth_targets=low_depth_targets)
+            for a in requested}
+    arms_structural = {a: evaluate_arm(a, grid, mixed, endpoint="structural",
+                                       low_depth_targets=low_depth_targets)
                        for a in requested}
 
     primary = arms.get(F.PRIMARY_ARM)
@@ -171,10 +214,49 @@ def main(argv: Sequence[str] | None = None) -> int:
         },
         "reference_points": {"soluprot": -0.001, "oracle": 0.326},
         "msa_low_depth_report": {
-            "status": "pending",
-            "reason": ("스펙 §4 규칙 6 은 저심도 타겟 목록·수와 그 타겟을 뺀 "
-                       "민감도를 요구한다. MSA 실행이 끝나야 낼 수 있다. "
-                       "여기에 자리만 두고 값을 지어내지 않는다."),
+            "status": "reported",
+            "threshold": low_depth["threshold"],
+            "threshold_inherited_from": low_depth["threshold_inherited_from"],
+            "low_depth_targets": low_depth_targets,
+            "n_low_depth": low_depth["n"],
+            "registered_band": (
+                "1-3 : 민감도 코호트 10-8 이므로 계산 가능하고 1 차 판정과 나란히 "
+                "보고한다 (스펙 §4 규칙 6 의 scope 반응표)."),
+            "depth_profile": low_depth["depth_profile"],
+            "borderline_note": (
+                "2jokA01 은 usable 46 · median_depth 24 로 문턱 10 을 넘으므로 규칙상 "
+                "저심도가 아니지만 나머지 아홉이 상한 3000 에 붙어 있는 것에 비하면 "
+                "얇다. 분포는 사실상 이봉이다 (3 · 46 · 866 · 3000×9). **문턱을 46 "
+                "위로 올리지 않는다** - 결과를 본 뒤의 문턱 쇼핑이다."),
+            "never_dropped": (
+                "어느 경우에도 타겟을 코호트에서 빼지 않는다. 저심도 처리는 제외가 "
+                "아니라 가시화이며, msa_low_depth 지시자와 이 민감도가 그 전부다."),
+            "sensitivity_is_reported_per_arm": (
+                "각 arm 의 sensitivity_excluding_low_depth 를 본다."),
+        },
+        "msa_features_provenance": {
+            "artifact": "public_data/benchmark/gate0/holdout_grid/msa_features.json",
+            "conserved_positions_sha256_verified":
+                msa["conserved_positions_sha256_verified"],
+            "index_base": ("보존 위치는 0-기반(conserved_positions_0based), "
+                           "mutation_sites 도 0-기반. manifest 해시 검증만 1-기반으로 "
+                           "되돌려서 한다."),
+            "undefined_targets": msa["undefined_targets"],
+            "msa_run_code_sha": (msa.get("msa_run_provenance") or {}).get("code_sha"),
+        },
+        "s6_cheap_block_deviation": {
+            "spec_says": "S6 = S5 + 기존 cheap feature (조성, MPNN score) [스펙 §4]",
+            "implemented": "조성 20 열만. MPNN score 열은 없다.",
+            "reason": ("격자의 sequences.csv 에 per-sequence MPNN score 열이 없고"
+                       "(열: sequence_id·sequence·backbone_key·target_id·"
+                       "backbone_source·temperature·soluprot), "
+                       "mpnn_score_analysis.json 은 다른 코호트다(88 타겟/10,360 설계). "
+                       "격자 1,728 서열 id 와 score 열을 가진 다른 코호트"
+                       "(temperature_panel2·temperature_sweep) 의 교집합은 0 이다. "
+                       "없는 feature 를 있는 것처럼 쓰지 않는다."),
+            "effect_on_verdict": ("S6 가 스펙보다 좁다. 즉 판정 arm 이 스펙이 허용한 "
+                                  "것보다 적은 정보를 받았고, NO-GO 라면 그만큼 약한 "
+                                  "증거다. 이 차이를 결과에 기록한다."),
         },
         "arms_joint_pass": arms,
         "arms_structural_pass_secondary": arms_structural,
@@ -182,8 +264,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         "verdict_note": note,
         "interim": interim,
         "no_go_reading": NO_GO_READING,
-        "code_sha": _code_sha(),
-        "utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        **G.run_provenance(
+            "scripts/benchmark/25_gate2_within_backbone_selectability.py",
+            "scripts/benchmark/_gate2d.py",
+            "scripts/benchmark/_gate2d_cohort.py",
+            "scripts/benchmark/_gate2d_features.py",
+            "scripts/benchmark/22_gate2d_prepare_esm.py",
+            "scripts/benchmark/23_gate2d_prepare_msa_features.py",
+            "scripts/transcoder/rapid_sr/clustered.py",
+        ),
     }
     Path(args.out).write_text(json.dumps(result, indent=1, ensure_ascii=False),
                               encoding="utf-8")

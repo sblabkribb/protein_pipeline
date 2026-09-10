@@ -3,15 +3,20 @@
 S6 하나가 판정 arm 이다. 나머지는 ablation/descriptive 이며 GO 판정에 쓰지 않는다 -
 endpoint 가 하나여도 arm 을 골라 GO 를 선언하면 model selection multiplicity 다.
 
-**현재 구현 범위는 S0-S3 이다.** S4-S6 는 `msa_features.json` 을 요구하는데 그
-파일이 아직 없다 (MSA 실행이 진행 중이다). 없는 데이터를 가짜로 채우지 않으므로
-MSA 블록은 `NotImplementedError` 를 내는 seam 으로 남긴다 - `non_evaluable` 로
-적지 않는다. `non_evaluable` 은 스펙 §4 규칙 5 의 **데이터에 대한 판정**이고,
-코드가 아직 없는 것을 그렇게 적으면 나중에 진짜 규칙 5 사례와 구분되지 않는다.
+**S0-S6 전부 구현돼 있다** (2026-09-11, MSA 12/12 완료). S4-S6 는
+`holdout_grid/msa_features.json` 을 읽는다.
 
 측정 primitive 는 `_gate2d.py` 에 있고 여기서 다시 만들지 않는다. 서열/코호트
-로딩은 `_gate2d_cohort.py`, WT 서열 파싱과 변이 위치는 `22_gate2d_prepare_esm.py`
-가 유일한 구현이다.
+로딩은 `_gate2d_cohort.py`, WT 서열 파싱과 변이 위치는 `22_gate2d_prepare_esm.py`,
+**MSA 대치는 `23_gate2d_prepare_msa_features.py` 의 `train_stats`/`impute`/
+`arm_verdict` 가 유일한 구현**이다. 여기서 두 번째 대치 규칙을 만들지 않는다.
+
+S4 의 본체는 **candidate 별로 달라지는** conservation burden 이다 (스펙 §4
+규칙 8). 타겟 수준 요약만 넣으면 같은 타겟의 24 설계가 동일한 행을 받고, Gate 2 는
+백본 **내부** 순위 문제이므로 순위가 원리상 만들어지지 않는다.
+
+**변이 위치는 서열 비교에서만 온다.** "차이가 0 이 아닌 곳" 을 마스크로 쓰지
+않는다 - S3 이 그 방식으로 S2 의 복제가 되어 무너진 전례가 있다.
 """
 
 from __future__ import annotations
@@ -68,8 +73,18 @@ ARM_BLOCKS = {
 }
 
 #: LOTO fold 마다 다시 만들어야 하는 블록. 대치 통계량이 train fold 에서 나오므로
-#: fold 에 의존한다. 나머지 블록(ΔESM·조성·SoluProt)은 fold 와 무관하다.
+#: fold 에 의존한다. 나머지 블록(ΔESM·조성·SoluProt·MSA 의 candidate 성분)은
+#: fold 와 무관하다.
 FOLD_DEPENDENT_BLOCKS = frozenset({"msa"})
+
+#: MSA 블록의 **candidate 별** 열. fold 에 의존하지 않는다 - 보존 프로파일은
+#: 타겟/reference 로 한 번 계산되고 (스펙 §4 규칙 8), candidate 별로 달라지는
+#: 것은 "그 candidate 의 변이가 보존 위치에 있는지" 뿐이다.
+CANDIDATE_MSA_FEATURES = ("cons_burden_0.3", "cons_burden_0.5", "cons_burden_0.7",
+                          "mut_fraction", "cons_burden_undefined")
+
+#: 보존 tier. `msa_features.json` 의 키와 같아야 한다.
+BURDEN_TIERS = ("0.3", "0.5", "0.7")
 
 
 def loto_splits(targets: Sequence[str]) -> Iterator[tuple[list[int], list[int], str]]:
@@ -168,6 +183,181 @@ def _delta_mut_block(folds) -> np.ndarray:
                       np.array(flags, dtype=float).reshape(-1, 1)])
 
 
+def _msa_prep():
+    """P3 모듈. `train_stats`/`impute`/`arm_verdict` 의 **유일한** 구현이다.
+
+    대치를 여기서 다시 쓰지 않는다 - 행렬 수준 열평균과 dict 수준 타겟평균이
+    따로 있으면 둘이 갈라지고, 행평균은 타겟을 144:120 으로 가중한다.
+    """
+    return importlib.import_module("23_gate2d_prepare_msa_features")
+
+
+_MSA_FEATURES: dict | None = None
+
+
+def load_msa_features() -> dict:
+    """`msa_features.json`. 한 번만 읽는다.
+
+    없으면 그대로 터진다. `non_evaluable` 로 적지 않는다 - 그 상태는 스펙 §4
+    규칙 5 의 **데이터에 대한 판정**이고, 입력 파일이 없는 것은 파이프라인
+    오류다. 섞으면 나중에 진짜 규칙 5 사례와 구분되지 않는다.
+    """
+    global _MSA_FEATURES
+    if _MSA_FEATURES is None:
+        path = GRID / "msa_features.json"
+        if not path.exists():
+            raise FileNotFoundError(
+                f"{path} 가 없다. 먼저 23_gate2d_prepare_msa_features.py 를 돌린다."
+            )
+        _MSA_FEATURES = json.loads(path.read_text(encoding="utf-8"))
+    return _MSA_FEATURES
+
+
+def conservation_burden(mut_sites: Sequence[int],
+                        conserved: dict[str, Sequence[int]]) -> list[float]:
+    """바뀐 위치 중 보존 위치의 비율. tier 별로 하나씩.
+
+    "point mutation 이 보존 위치를 건드렸는가" 가 아니다 - 이 코호트의 |M_i| 는
+    중앙값 약 135 로 서열의 절반이 넘으므로 격자 설계는 사실상 재설계다. 따라서
+    "바뀐 위치 중 보존 위치의 비율" 이다 (스펙 §4 규칙 8 의 용어 주의).
+
+    **두 인덱스는 모두 0-기반이다.** `mut_sites` 는 `mutation_sites` 의
+    `enumerate` 기반 출력이고, `conserved` 는 `msa_features.json` 의
+    `conserved_positions_0based` 다. 섞으면 마스크가 한 칸 밀리고 교집합은
+    **아무 오류도 내지 않으면서** 잡음을 잰다.
+    """
+    m = set(int(p) for p in mut_sites)
+    denom = max(len(m), 1)
+    return [len(m & {int(p) for p in conserved[tier]}) / denom
+            for tier in BURDEN_TIERS]
+
+
+def _msa_candidate_block(folds) -> np.ndarray:
+    """MSA 블록의 candidate 성분. fold 와 무관하므로 캐시된다.
+
+    열: `CANDIDATE_MSA_FEATURES`.
+
+    변이 위치는 `22_gate2d_prepare_esm.mutation_sites(WT, design)` 하나만 쓴다 -
+    **서열 비교**다. 위치 대응이 불가하거나(길이 불일치) 보존 프로파일이 없는
+    행은 채운 값 + `cons_burden_undefined = 1` 로 들어간다. **타겟을 빼지
+    않는다** (스펙 §4 규칙 3-4).
+    """
+    prep = _esm_prep()
+    conserved_by_target = load_msa_features()["conserved_positions_0based"]
+    wt_seq = wt_by_target()
+
+    rows: list[list[float]] = []
+    for fold in folds:
+        conserved = conserved_by_target.get(fold.target_id)
+        reference = wt_seq[fold.target_id]
+        if not conserved:
+            rows.append([0.0, 0.0, 0.0, 0.0, 1.0])
+            continue
+        try:
+            sites = prep.mutation_sites(reference, SEQ_OF[fold.sequence_id])
+        except ValueError:
+            # 길이 불일치 - 위치 대응이 성립하지 않는다. 규칙 3/4.
+            rows.append([0.0, 0.0, 0.0, 0.0, 1.0])
+            continue
+        rows.append([*conservation_burden(sites, conserved),
+                     len(sites) / max(len(reference), 1), 0.0])
+    return np.array(rows, dtype=float)
+
+
+def _msa_train_stats(per_target: dict, row_targets: Sequence[str],
+                     train_idx: Sequence[int]) -> dict[str, float] | None:
+    """train **타겟** 등가중 대치 통계량. 행 평균이 아니다.
+
+    MSA feature 는 타겟 수준 상수이고 타겟마다 행 수가 120/144 로 다르므로 행
+    평균은 타겟을 불균등 가중한다 - 백본 등가중 vs 타겟 등가중과 같은 오류다.
+    """
+    prep = _msa_prep()
+    train_targets = sorted({row_targets[i] for i in train_idx})
+    return prep.train_stats({t: prep.feature_view(per_target.get(t))
+                             for t in train_targets})
+
+
+def _active_target_names(stats: dict[str, float] | None,
+                         feature_names: Sequence[str]) -> list[str]:
+    """설계행렬에 실제로 들어가는 타겟 수준 열 이름."""
+    if stats is None:
+        return []
+    return [n for n in feature_names if n in stats] + ["msa_undefined",
+                                                       "msa_low_depth"]
+
+
+def impute_msa_block(per_target: dict, row_targets: Sequence[str],
+                     train_idx: Sequence[int], feature_names: Sequence[str]
+                     ) -> tuple[np.ndarray | None, dict | None]:
+    """fold 별 MSA 타겟 블록. train **타겟** 등가중으로 대치한다.
+
+    `(행렬, 결함)` 을 돌려준다 - `assemble` 과 같은 계약이다. 행렬이 None 이면
+    arm 이 non-evaluable 이고, **타겟을 빼는 것이 아니다** (스펙 §4 규칙 5).
+
+    대치 통계량과 arm 판정은 P3 의 `train_stats`/`impute`/`arm_verdict` 하나만
+    쓴다. 여기서 두 번째 구현을 만들지 않는다.
+
+    마지막 두 열은 지시자다.
+      - `msa_undefined` : 대치가 실제로 일어났는가 (규칙 3).
+      - `msa_low_depth` : `usable_hits < 10` (규칙 6). **대치하지 않는다** -
+        depth 는 설계가 존재하기 전에 측정되는 homolog record 의 속성이고,
+        train 평균으로 번지면 "얼마나 얕은가" 가 다른 타겟으로 새어 나간다.
+    """
+    prep = _msa_prep()
+    stats = _msa_train_stats(per_target, row_targets, train_idx)
+    if stats is None:
+        return None, None   # arm non-evaluable - 규칙 5. 타겟을 빼지 않는다.
+
+    rows_by_target = {t: prep.impute(t, prep.feature_view(per_target.get(t)),
+                                     train_stats=stats)
+                      for t in sorted(set(row_targets))}
+
+    # 규칙 5 는 per-feature 조건에 **arm 수준** 결과를 붙인다. 그 판정은
+    # arm_verdict() 하나에만 있다 - 여기서 다시 구현하지 않는다.
+    verdict = prep.arm_verdict(rows_by_target, stats=stats)
+    if not verdict["evaluable"]:
+        return None, verdict
+
+    names = _active_target_names(stats, feature_names)
+    low_depth = {t: prep.is_low_depth((per_target.get(t) or {}).get("usable_hits"))
+                 for t in rows_by_target}
+    values = {t: [float(rows_by_target[t][n]) for n in names[:-1]]
+                 + [float(low_depth[t])]
+              for t in rows_by_target}
+    return np.array([values[t] for t in row_targets], dtype=float), None
+
+
+def active_msa_feature_names(folds, train_idx: Sequence[int]) -> list[str]:
+    """이 fold 의 MSA 설계행렬 열 이름. 결과 JSON 에 fold 마다 남긴다.
+
+    어떤 fold 에서 어떤 MSA 열이 빠졌는지 재현할 수 없으면 narrowing 을 감사할
+    수 없다.
+    """
+    feats = load_msa_features()
+    stats = _msa_train_stats(feats["per_target"],
+                             [f.target_id for f in folds], train_idx)
+    return list(CANDIDATE_MSA_FEATURES) + _active_target_names(
+        stats, feats["feature_names"])
+
+
+def _msa_block(folds, train_idx: Sequence[int] | None
+               ) -> tuple[np.ndarray | None, dict | None]:
+    """MSA 블록 = candidate 성분(캐시) + fold 별 타겟 성분."""
+    if train_idx is None:
+        raise ValueError(
+            "MSA 블록은 train fold 없이 만들 수 없다. 대치 통계량은 LOTO train "
+            "fold 의 타겟 평균이어야 하므로 fold 안에서만 정의된다 (스펙 §4 규칙 3). "
+            "코호트 전체를 train 으로 쓰면 그것이 누수다."
+        )
+    feats = load_msa_features()
+    target_block, defect = impute_msa_block(
+        feats["per_target"], [f.target_id for f in folds], train_idx,
+        feats["feature_names"])
+    if target_block is None:
+        return None, defect
+    return np.hstack([_block("msa_candidate", folds), target_block]), None
+
+
 def _build_block(name: str, folds) -> np.ndarray:
     """이름 하나에 해당하는 feature 블록. 행 순서는 folds 와 같다."""
     if name == "soluprot":
@@ -195,12 +385,13 @@ def _build_block(name: str, folds) -> np.ndarray:
             rows.append([seq.count(a) / n for a in alphabet])
         return np.array(rows, dtype=float)
 
+    if name == "msa_candidate":
+        return _msa_candidate_block(folds)
+
     if name == "msa":
-        raise NotImplementedError(
-            "MSA 블록은 아직 없다. msa_features.json 이 도착하면 Task 11 의 "
-            "S4-S6 구간(impute_msa_block · conservation_burden)이 여기에 붙는다. "
-            "가짜 값으로 채우지 않는다."
-        )
+        # fold 에 의존하므로 이 경로로 오면 안 된다. assemble 이 train_idx 와 함께
+        # `_msa_block` 을 부른다.
+        raise KeyError("MSA 블록은 train fold 없이 만들 수 없다 - assemble 을 쓴다")
 
     raise KeyError(f"알 수 없는 feature 블록: {name}")
 
@@ -227,14 +418,20 @@ def assemble(arm: str, folds, train_idx: Sequence[int] | None = None
     `None` 은 "이 arm 을 non-evaluable 로 기록" 이라는 뜻이며 타겟을 빼는 것이
     아니다 - 스펙 §4 규칙 5.
 
-    fold 에 의존하지 않는 블록(ΔESM·조성·SoluProt)은 한 번만 만들어 캐시하고,
-    MSA 블록만 `train_idx` 로 fold 마다 다시 만든다. 현재 구현 범위(S0-S3)에는
-    MSA 블록이 없으므로 `train_idx` 는 결과에 영향을 주지 않는다.
+    fold 에 의존하지 않는 블록(ΔESM·조성·SoluProt·MSA 의 candidate 성분)은 한 번만
+    만들어 캐시하고, MSA 의 **타겟 성분만** `train_idx` 로 fold 마다 다시 만든다.
+    MSA 없는 arm(S0-S3)에서는 `train_idx` 가 결과에 영향을 주지 않는다.
     """
     if arm not in ARM_BLOCKS:
         raise KeyError(f"동결된 ladder 에 없는 arm: {arm}")
     blocks = []
     for name in ARM_BLOCKS[arm]:
+        if name == "msa":
+            matrix, defect = _msa_block(folds, train_idx)
+            if matrix is None:
+                return None, defect
+            blocks.append(matrix)
+            continue
         blocks.append(_block(name, folds))
     return np.hstack(blocks), None
 
