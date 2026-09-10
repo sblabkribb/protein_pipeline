@@ -759,3 +759,38 @@ def test_mutation_sites_against_wt():
         pass
     else:
         raise AssertionError("길이 불일치에서 ValueError 가 나와야 한다")
+
+
+def test_wt_sequence_from_pdb_handles_altloc_insertion_and_models(tmp_path):
+    import importlib
+    prep = importlib.import_module("22_gate2d_prepare_esm")
+    pdb = tmp_path / "t.pdb"
+    pdb.write_text(
+        # 잔기 1 (altloc 두 개 - 하나로 세야 한다)
+        "ATOM      1  CA AALA A   1      0.000   0.000   0.000  0.50 0.00           C\n"
+        "ATOM      2  CA BALA A   1      0.000   0.000   0.000  0.50 0.00           C\n"
+        # 삽입코드 - 1 과 1A 는 다른 잔기다
+        "ATOM      3  CA  GLY A   1A     1.000   0.000   0.000  1.00 0.00           C\n"
+        # CA 가 없는 잔기는 서열에 들어가지 않는다
+        "ATOM      4  N   SER A   2      2.000   0.000   0.000  1.00 0.00           N\n"
+        "ATOM      5  CA  VAL A   3      3.000   0.000   0.000  1.00 0.00           C\n"
+        # 표준이 아닌 잔기는 X
+        "ATOM      6  CA  MSE A   4      4.000   0.000   0.000  1.00 0.00           C\n",
+        encoding="utf-8")
+    assert prep.wt_sequence_from_pdb(pdb) == "AGVX"
+
+
+def test_wt_sequence_from_pdb_collapses_nmr_models():
+    """격자에 26 모델(1tm9A00)과 20 모델(2jokA01) NMR 앙상블이 있다.
+
+    모델을 접지 않으면 WT 길이가 26 배가 되어 mutation_sites 가 전부 raise 하고
+    두 타겟이 조용히 S3/S5/S6 에서 사라진다.
+    """
+    import importlib, os
+    from pathlib import Path
+    prep = importlib.import_module("22_gate2d_prepare_esm")
+    root = Path(os.environ.get("PROTEIN_PIPELINE_ROOT", ".")).resolve()
+    d = root / "public_data" / "benchmark" / "gate0" / "holdout_targets_pdb"
+    # 스펙 §3 이 고정한 길이. 26 개 모델을 접은 결과여야 한다.
+    assert len(prep.wt_sequence_from_pdb(d / "1tm9A00.pdb")) == 137
+    assert len(prep.wt_sequence_from_pdb(d / "2jokA01.pdb")) == 184
