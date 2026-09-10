@@ -956,3 +956,200 @@ def test_embed_guard_catches_a_residue_count_that_disagrees(monkeypatch):
     _patch_embed_backends(monkeypatch, prep, tokenizer)
     with pytest.raises(SystemExit, match="attention 기준 잔기"):
         prep.embed(["ACDEF"], device=torch.device("cpu"), batch_size=8)
+
+
+# ---------------------------------------------------------------------------
+# Task 11 - Gate 2 feature ladder. S0-S3 구간만 구현돼 있고 S4-S6 는 msa_features.json
+# 이 도착한 뒤에 붙는다. 아래 테스트는 그 경계를 계약으로 고정한다.
+# ---------------------------------------------------------------------------
+
+
+def test_arm_ladder_is_frozen_and_s6_is_primary():
+    import _gate2d_features as F
+    assert list(F.ARMS) == ["S0", "S1", "S2", "S3", "S4", "S5", "S6"]
+    assert F.PRIMARY_ARM == "S6"
+    # S2 는 known null 이 아니다 - LOTO 에서 타겟별 translation 이므로 S1 과 다르다.
+    assert F.ARM_STATUS["S1"] == "known_null"
+    assert F.ARM_STATUS["S2"] == "untested_low_expectation"
+    assert F.ARM_STATUS["S6"] == "primary"
+
+
+def test_loto_splits_never_share_a_target():
+    import _gate2d_features as F
+    targets = ["A", "A", "B", "B", "C"]
+    for train_idx, test_idx, held in F.loto_splits(targets):
+        train_targets = {targets[i] for i in train_idx}
+        test_targets = {targets[i] for i in test_idx}
+        assert test_targets == {held}
+        assert held not in train_targets
+        assert not (train_targets & test_targets)
+    assert len(list(F.loto_splits(targets))) == 3
+
+
+def test_build_features_shapes_and_non_evaluable():
+    """S0-S3 의 shape. S6 > S5 열수 비교는 MSA 블록이 붙은 뒤에 온다.
+
+    스펙 §4 의 ladder 는 7 arm 이지만 `msa_features.json` 이 아직 없다. 없는
+    데이터를 가짜로 채우지 않으므로 여기서는 S0-S3 만 검증하고, S4-S6 는 아래
+    `test_msa_arms_are_an_unstubbed_seam` 이 "아직 구현되지 않았다" 를 계약으로
+    고정한다.
+    """
+    import numpy as np
+    import _gate2d_cohort as C
+    import _gate2d_features as F
+    grid = C.load_holdout_grid()
+
+    # S0 은 SoluProt 한 열이다.
+    x0 = F.build_features("S0", grid.folds)
+    assert x0.shape == (len(grid.folds), 1)
+
+    # S1 은 ESM mean 320 열, S2 도 320 열(값은 다르다).
+    x1 = F.build_features("S1", grid.folds)
+    x2 = F.build_features("S2", grid.folds)
+    assert x1.shape == (len(grid.folds), 320)
+    assert x2.shape == (len(grid.folds), 320)
+    # 같은 shape 이지만 같은 행렬이 아니다 - ΔESM_global 은 타겟별 translation 이다.
+    assert not np.allclose(x1, x2)
+
+    # S3 은 ΔESM_mut 320 열 + 결측 지시자 1 열이다.
+    x3 = F.build_features("S3", grid.folds)
+    assert x3.shape == (len(grid.folds), 321)
+
+    # 알 수 없는 arm 은 조용히 넘어가지 않는다.
+    try:
+        F.build_features("S9", grid.folds)
+    except KeyError:
+        pass
+    else:
+        raise AssertionError("정의되지 않은 arm 에서 KeyError 가 나와야 한다")
+
+
+def test_msa_arms_are_an_unstubbed_seam():
+    """S4-S6 는 아직 없다. **가짜 데이터로 채우지 않는다.**
+
+    `non_evaluable` 로 기록하지 않는 이유: 그 상태는 스펙 §4 규칙 5 의
+    "train fold 에서 imputation statistic 을 만들 수 없다" 라는 **데이터에 대한
+    판정**이다. 코드가 아직 없는 것을 데이터 판정으로 적으면 나중에 진짜
+    non-evaluable 과 구분되지 않는다.
+    """
+    import _gate2d_cohort as C
+    import _gate2d_features as F
+    grid = C.load_holdout_grid()
+    for arm in ("S4", "S5", "S6"):
+        assert "msa" in F.ARM_BLOCKS[arm]
+        with pytest.raises(NotImplementedError, match="msa_features.json"):
+            F.build_features(arm, grid.folds[:8])
+
+
+def test_delta_esm_mut_uses_sequence_mutation_sites_not_embedding_difference():
+    """S3 의 변이 위치는 **서열 비교**에서 온다. 임베딩 차이에서 오지 않는다.
+
+    ESM 토큰은 문맥 의존이므로 한 잔기만 바뀌어도 **모든** 위치의 임베딩이
+    달라진다. `|design_tok - wt_tok|` 이 0 이 아닌 위치를 "변이" 로 삼으면 전
+    위치가 뽑히고, 그 평균은 mean-pool(design) - mean-pool(WT) 즉 **ΔESM_global
+    과 정확히 같아진다.** 그러면 S3 이 S2 의 복제가 되어 ladder 가 한 칸 무너진다.
+    """
+    import importlib
+    import numpy as np
+    import _gate2d_cohort as C
+    import _gate2d_features as F
+
+    grid = C.load_holdout_grid()
+    folds = grid.folds[:24]
+    prep = importlib.import_module("22_gate2d_prepare_esm")
+    wt = F.wt_by_target()
+
+    # 1) 실제 코호트에서 변이 위치는 전 위치가 아니다.
+    n_mut = len(prep.mutation_sites(wt[folds[0].target_id], F.SEQ_OF[folds[0].sequence_id]))
+    seq_len = len(wt[folds[0].target_id])
+    assert 0 < n_mut < seq_len, "이 서열이 전위치 변이면 이 테스트가 무의미하다"
+
+    # 2) 따라서 S3 블록은 S2 블록과 같지 않다.
+    mut = F.build_features("S3", folds)[:, :320]
+    glob = F.build_features("S2", folds)
+    assert not np.allclose(mut, glob), "S3 이 ΔESM_global 로 붕괴했다"
+
+
+def test_s3_keeps_a_length_mismatched_design_with_an_indicator():
+    """스펙 §4 결측 규칙: 위치 대응이 불가하면 대치 + 지시자다. 타겟을 빼지 않는다.
+
+    `3es1A01|target|target` 의 24 설계는 길이가 WT 와 달라 `mutation_sites` 가
+    raise 한다. 그 행이 조용히 사라지거나 예외로 실행을 죽이면 규칙 4 위반이다.
+    """
+    import numpy as np
+    import _gate2d_cohort as C
+    import _gate2d_features as F
+
+    grid = C.load_holdout_grid()
+    healthy = [f for f in grid.folds if f.target_id == "3es1A01"][:3]
+    assert healthy, "3es1A01 이 코호트에 있어야 한다"
+    broken_id = "3es1A01|target|target|g0"
+    assert broken_id in F.SEQ_OF
+    broken = C.Fold(broken_id, "3es1A01|target|target", "3es1A01",
+                    90.0, 1.0, 0.9, "target")
+    folds = [*healthy, broken]
+
+    x = F.build_features("S3", folds)
+    assert x.shape == (4, 321)                     # 행이 사라지지 않았다
+    assert x[:3, -1].tolist() == [0.0, 0.0, 0.0]   # 건강한 행은 지시자 0
+    assert x[3, -1] == 1.0                         # 결측 행은 지시자 1
+    assert np.allclose(x[3, :320], 0.0)            # 결측 행의 ΔESM 은 채워진 값
+    assert not np.allclose(x[0, :320], 0.0)
+
+
+def test_assemble_returns_a_matrix_and_no_defect_for_msa_free_arms():
+    """`assemble` 이 `build_features` 를 대체한다 (Step 8b 정정).
+
+    MSA 없는 arm 은 fold 에 의존하지 않으므로 train_idx 가 무엇이든 같은 행렬이다.
+    """
+    import numpy as np
+    import _gate2d_cohort as C
+    import _gate2d_features as F
+    folds = C.load_holdout_grid().folds[:48]
+    a, defect_a = F.assemble("S3", folds, train_idx=[0, 1, 2])
+    b, defect_b = F.assemble("S3", folds, train_idx=list(range(24)))
+    assert defect_a is None and defect_b is None
+    assert np.array_equal(a, b)
+
+
+def test_gate2_runner_fails_closed_on_a_perturbed_sequence_axis(monkeypatch, tmp_path):
+    """서열 축은 hard precondition 이다 (스펙 §4). 게이트는 그것을 **호출한다.**
+
+    호출하지 않으면 보존 마스크와 변이 인덱스가 어긋난 좌표에서 계산되고
+    아무 오류도 나지 않는다.
+    """
+    import importlib
+    import _gate2d_features as F
+    gate2 = importlib.import_module("25_gate2_within_backbone_selectability")
+
+    good = F.wt_by_target()
+    target = sorted(good)[0]
+    seq = good[target]
+    # 길이는 같고 잔기 두 개만 뒤바뀐 서열. 길이 검사만 하는 가드는 통과시킨다.
+    perturbed = dict(good)
+    perturbed[target] = seq[1] + seq[0] + seq[2:]
+    assert len(perturbed[target]) == len(seq) and perturbed[target] != seq
+
+    monkeypatch.setattr(F, "wt_by_target", lambda: perturbed)
+    with pytest.raises(SystemExit) as excinfo:
+        gate2.main(["--arms", "S0", "--out", str(tmp_path / "x.json")])
+    assert "서열 축" in str(excinfo.value)
+    assert target in str(excinfo.value)
+
+
+def test_gate2_reports_undecided_without_the_primary_arm(tmp_path, monkeypatch):
+    """S6 없이 GO/NO-GO 를 내면 스펙 위반이다. S0-S3 만 돌면 UNDECIDED 다."""
+    import importlib
+    import json as _json
+    gate2 = importlib.import_module("25_gate2_within_backbone_selectability")
+    out = tmp_path / "interim.json"
+    assert gate2.main(["--arms", "S0", "--out", str(out)]) == 0
+    payload = _json.loads(out.read_text(encoding="utf-8"))
+    assert payload["verdict"] == "UNDECIDED"
+    assert payload["primary_arm"] == "S6"
+    assert "interim" in payload["verdict_note"]
+    assert payload["cohort"]["mixed_backbones"] == 37
+    assert payload["cohort"]["informative_targets"] == 11
+    s0 = payload["arms_joint_pass"]["S0"]
+    assert s0["informative_targets"] == 11
+    assert s0["status"] == "measured_reference"
