@@ -140,16 +140,129 @@ def test_dropping_a_measured_feature_is_surfaced_and_fails_the_arm():
     assert row["dropped_measured"] == ["cons_p25", "coverage_median"]
 
     # arm 판정은 arm 수준에서 한다. 타겟은 그대로 남는다.
-    verdict = prep.arm_verdict({"C": row})
+    verdict = prep.arm_verdict({"C": row}, stats={"cons_mean": 0.7})
     assert verdict["evaluable"] is False
     assert "cons_p25" in verdict["reason"] and "coverage_median" in verdict["reason"]
     assert verdict["dropped_measured_by_target"] == {"C": ["cons_p25", "coverage_median"]}
 
     # 아무것도 버리지 않았으면 arm 은 평가 가능하고 행에 그 키가 없다.
     full = {n: 0.5 for n in prep.TARGET_FEATURES}
-    ok = prep.impute("A", full, train_stats=prep.train_stats({"A": full, "B": full}))
+    stats = prep.train_stats({"A": full, "B": full})
+    ok = prep.impute("A", full, train_stats=stats)
     assert "dropped_measured" not in ok
-    assert prep.arm_verdict({"A": ok}) == {"evaluable": True}
+    assert prep.arm_verdict({"A": ok}, stats=stats) == {"evaluable": True}
+
+
+def test_arm_verdict_sees_a_feature_no_one_defined_at_all():
+    """규칙 5 의 조건은 **train fold** 에 관한 것이다.
+
+    train fold 가 feature F 를 정의하지 못했고 test 타겟도 아무도 F 를 측정하지
+    않았으면 `dropped_measured` 는 비어 있다. 행만 보면 정상이고 설계행렬은
+    조용히 F 를 잃는다 - 그래서 판정에 stats 가 들어간다.
+    """
+    import importlib
+    prep = importlib.import_module("23_gate2d_prepare_msa_features")
+
+    stats = prep.train_stats({"A": {"cons_mean": 0.8}, "B": {"cons_mean": 0.6}})
+    row = prep.impute("C", {"cons_mean": 0.5}, train_stats=stats)
+    assert "dropped_measured" not in row          # 버린 측정값은 없다
+    assert row["msa_undefined"] == 0
+
+    verdict = prep.arm_verdict({"C": row}, stats=stats)
+    assert verdict["evaluable"] is False, "설계행렬이 5 개 feature 를 잃었는데 통과했다"
+    assert verdict["undefined_in_train"] == [
+        "cons_p25", "cons_p75", "usable_hits_log10", "coverage_median",
+        "depth_median_log10"]
+    assert "cons_p25" in verdict["reason"]
+
+    # train fold 가 아무것도 정의하지 못하면 stats 자체가 None 이다.
+    assert prep.arm_verdict({}, stats=None)["evaluable"] is False
+
+
+def test_nan_is_undefined_not_a_value():
+    """NaN 하나가 모든 fold 의 모든 타겟을 오염시키지 못하게 한다.
+
+    json.dumps 는 기본값으로 bare NaN 을 쓰고 json.loads 는 그것을 float 로
+    읽으므로 이 경로는 실재한다. 스펙 §5 는 NaN 을 fail-closed 로 규정한다.
+    """
+    import importlib
+    import math
+    prep = importlib.import_module("23_gate2d_prepare_msa_features")
+    nan = float("nan")
+
+    # train 타겟 하나가 NaN 이면 그 타겟만 빠지고 나머지 평균은 온전하다.
+    stats = prep.train_stats({"A": {"cons_mean": nan}, "B": {"cons_mean": 0.6}})
+    assert stats == {"cons_mean": 0.6}
+
+    # 전부 NaN 인 train fold 는 "정의된 값 없음" 과 같다 -> arm non-evaluable.
+    assert prep.train_stats({"A": {"cons_mean": nan}}) is None
+
+    # NaN 을 들고 온 test 타겟은 undefined 로 취급되고 지시자가 1 이 된다.
+    out = prep.impute("C", {"cons_mean": nan}, train_stats=stats)
+    assert out["msa_undefined"] == 1
+    assert out["cons_mean"] == 0.6
+    assert not math.isnan(out["cons_mean"])
+
+    # inf 도 같다 - usable_hits 0 에서 log10 이 -inf 를 낸다.
+    assert prep.train_stats({"A": {"usable_hits_log10": float("-inf")}}) is None
+
+    # 직렬화는 NaN 을 쓰지 않고 거절한다.
+    import pytest
+    with pytest.raises(ValueError):
+        prep.dump_features({"per_target": {"C": {"cons_mean": nan}}})
+    assert '"cons_mean": null' in prep.dump_features(
+        {"per_target": {"C": {"cons_mean": None}}})
+
+
+def test_an_unknown_feature_name_is_refused_not_dropped():
+    """Step 6 의 오타 하나가 msa_undefined == 0 인 채로 사라지면 안 된다."""
+    import importlib
+    import pytest
+    prep = importlib.import_module("23_gate2d_prepare_msa_features")
+    with pytest.raises(ValueError, match="cons_meen"):
+        prep.impute("C", {"cons_meen": 0.7}, train_stats={"cons_mean": 0.7})
+
+
+def test_conserved_positions_are_zero_based_and_hash_verified():
+    """Step 6 은 위치 집합을 0-기반으로 내고 manifest 해시로 검증한다.
+
+    배포는 1-기반을 돌려주고 manifest 해시는 그 1-기반 목록으로 만들어졌다.
+    검증과 출력의 기준을 섞으면 보존 마스크가 한 칸 밀린다.
+    """
+    import hashlib
+    import importlib
+    import json as _json
+    import sys
+    prep = importlib.import_module("23_gate2d_prepare_msa_features")
+    sys.path.insert(0, str(ROOT / "pipeline-mcp" / "src"))
+    from pipeline_mcp.bio.a3m import compute_conservation
+
+    query = "ACDEFGHIKLMNPQRSTVWY" * 3
+    a3m = ">q\n" + query + "\n" + "".join(
+        f">h{i}\n" + query[:55] + "-----\n" for i in range(40))
+
+    # 50_full_msa.py 의 measure() 와 **같은** 방식으로 manifest 해시를 만든다.
+    cons = compute_conservation(a3m, tiers=list(prep.TIERS), mode="quantile",
+                                weights=None)
+    manifest_sha = {str(t): hashlib.sha256(_json.dumps(v).encode()).hexdigest()
+                    for t, v in cons.fixed_positions_by_tier.items()}
+
+    pos, verified = prep.conserved_positions(a3m, manifest_sha256=manifest_sha)
+    assert verified is True
+    assert set(pos) == {"0.3", "0.5", "0.7"}
+    # 0-기반: 최소가 0 이고 최대가 L-1 을 넘지 않는다.
+    assert min(min(v) for v in pos.values()) == 0
+    assert max(max(v) for v in pos.values()) <= len(query) - 1
+    # 1-기반 목록보다 정확히 1 씩 작다.
+    assert pos["0.3"] == [p - 1 for p in cons.fixed_positions_by_tier[0.3]]
+    # tier 는 포개진다 (더 느슨한 tier 가 더 많은 위치를 잡는다).
+    assert set(pos["0.3"]) <= set(pos["0.5"]) <= set(pos["0.7"])
+    # 해시가 다르면 검증이 실패한다 - provenance 가 맞는지 실제로 본다.
+    _, bad = prep.conserved_positions(a3m, manifest_sha256={"0.3": "0" * 64})
+    assert bad is False
+    # manifest 를 주지 않으면 "검증 안 함" 이고 통과가 아니다.
+    _, none = prep.conserved_positions(a3m)
+    assert none is None
 
 
 def test_an_all_null_row_is_kept_not_crashed_on():
