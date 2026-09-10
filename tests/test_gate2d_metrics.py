@@ -794,3 +794,38 @@ def test_wt_sequence_from_pdb_collapses_nmr_models():
     # 스펙 §3 이 고정한 길이. 26 개 모델을 접은 결과여야 한다.
     assert len(prep.wt_sequence_from_pdb(d / "1tm9A00.pdb")) == 137
     assert len(prep.wt_sequence_from_pdb(d / "2jokA01.pdb")) == 184
+
+
+def test_frozen_wt_covers_the_grid_and_matches_the_reader():
+    """층 2: 실제 홀드아웃 회귀. parser·normalization drift 를 잡는다."""
+    import importlib
+    from pathlib import Path
+    import _gate2d_cohort as C
+    prep = importlib.import_module("22_gate2d_prepare_esm")
+    grid = C.load_holdout_grid()
+    assert set(C.FROZEN_WT) == set(grid.targets)          # 12 타겟 전부
+    d = C.GATE0 / "holdout_targets_pdb"
+    wt = {t: prep.wt_sequence_from_pdb(d / f"{t}.pdb") for t in grid.targets}
+    C.assert_sequence_axis(wt)                            # 통과해야 한다
+
+    # 한 글자만 바꿔도 fail-closed 인지 확인한다 - 길이는 그대로다.
+    broken = dict(wt)
+    t0 = sorted(wt)[0]
+    broken[t0] = ("A" if wt[t0][0] != "A" else "C") + wt[t0][1:]
+    assert len(broken[t0]) == len(wt[t0])
+    try:
+        C.assert_sequence_axis(broken)
+    except SystemExit:
+        pass
+    else:
+        raise AssertionError("같은 길이의 다른 서열이 통과했다 - 길이만 보고 있다")
+
+
+def test_assert_sequence_axis_reports_a_missing_target():
+    """서열이 없는 타겟도 fail-closed 다 - 조용히 건너뛰지 않는다."""
+    import _gate2d_cohort as C
+    with pytest.raises(SystemExit) as excinfo:
+        C.assert_sequence_axis({})
+    message = str(excinfo.value)
+    for target in C.FROZEN_WT:
+        assert f"{target}: WT 서열이 없다" in message

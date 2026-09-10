@@ -8,7 +8,7 @@ from __future__ import annotations
 import csv
 import os
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -18,6 +18,25 @@ PROJECT_ROOT = Path(os.environ.get("PROTEIN_PIPELINE_ROOT")
                     or Path(__file__).resolve().parents[2]).resolve()
 GATE0 = PROJECT_ROOT / "public_data" / "benchmark" / "gate0"
 GRID = GATE0 / "holdout_grid"
+
+#: 격자 12 타겟의 WT 서열 동결값. (sha256, length).
+#: 2026-09-10 측정. MSA query 와 전체 문자열이 일치함을 확인한 그 서열이다.
+#: 손으로 적은 값이며 production 코드에서 재유도하지 않는다 - 재유도하면 같은
+#: 버그를 공유해 검사가 무력해진다.
+FROZEN_WT = {
+    "1sh6A02": ("abf7c6204f82b0c7034a70fd878adf9442dd590bd2a4279a1f8ebd3f05aed31c", 230),
+    "1sp0A00": ("58f21f24e9fac2607e4e029e3d657b77febb747f59541ec61d79c0d3e01887ca", 131),
+    "1tm9A00": ("5099d90033bf6c0068e65a7707ee1fcfe596be31c9189e5f3125a8b38cee4224", 137),
+    "1vsrA00": ("8a35c3c4ee024f1f9f0cadbd0e97af3d3ec25447937056491efcc34aee98b5c1", 134),
+    "2jokA01": ("8d2f4fd28efbc44c0ca0fb5ae3fb54784e0a6a03a785051d0c372e50e02aff8f", 184),
+    "3bqwA01": ("82f108d0b59db5bb6f2dd85346a0fd2e71732ebcf4a5e38a6603c2c6120a546c", 347),
+    "3es1A01": ("9e5e66f08e4806562ab98e47494a917e7e539cb692a8e4539bc0e6cbe72d9377", 160),
+    "3f2pA01": ("6c2f5afe1898a8e8aeae320b424ce10220ddd6ccacd82ee560e6f32adea6a79f", 316),
+    "3h7eA02": ("7d3111c347d074c01d18634d91606bb6ba84139fe720ae45f1e464595dfc07ef", 220),
+    "5fwaA02": ("eb440991c6d67301671b011c414b26abcb0646cc1fc6f861954f8c43c530e15a", 339),
+    "5pc8A00": ("657a831019aba488acccb4c4b658451c32964eee4ea626b20a2bd9b41f6cf685", 115),
+    "5xpdA02": ("790302898055f2b9581dc5e4d556ccc0e4cc2b33d530f944bd8d412cb40f36c9", 269),
+}
 
 
 @dataclass(frozen=True)
@@ -140,3 +159,29 @@ def gate1_informative_targets(grid: Grid) -> list[str]:
         by_target[b.target_id].append(b.q_b)
     return sorted(t for t, qs in by_target.items()
                   if len(qs) >= 3 and len(set(qs)) > 1)
+
+
+def assert_sequence_axis(wt_by_target: Mapping[str, str]) -> None:
+    """WT 서열이 동결값과 일치하지 않으면 예외. P3 와 Task 11 의 전제조건.
+
+    보존 마스크와 변이 인덱스가 같은 서열 위에 있어야 한다. 어긋나도 오류가 나지
+    않으므로 여기서 fail-closed 한다.
+    """
+    import hashlib
+
+    problems = []
+    for target, (want_sha, want_len) in sorted(FROZEN_WT.items()):
+        seq = wt_by_target.get(target)
+        if seq is None:
+            problems.append(f"{target}: WT 서열이 없다")
+            continue
+        got = hashlib.sha256(seq.encode()).hexdigest()
+        if got != want_sha:
+            problems.append(
+                f"{target}: sha256 {got[:16]} != {want_sha[:16]} "
+                f"(길이 {len(seq)} vs {want_len})")
+    if problems:
+        raise SystemExit(
+            "서열 축이 동결값과 다르다. 보존 마스크와 변이 인덱스가 어긋난 서열 "
+            "위에서 계산되면 S4 는 조용히 잡음을 잰다. 중단한다:\n  "
+            + "\n  ".join(problems))
