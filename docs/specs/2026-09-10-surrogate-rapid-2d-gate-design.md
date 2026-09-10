@@ -178,6 +178,55 @@ informative 11)를 민감도로 함께 보고한다.
 길이가 WT 와 달라(163/160, 229/220) 대응이 거부돼 사용가능 폴드가 0 이다 — 이것이
 1,728 중 48 폴드가 빠지는 이유이고, §5 의 Δ_Top4 NaN sentinel 이 가리키는 그 2개다.
 
+### 학습 쪽도 정렬한다 (2026-09-10)
+
+test 에서 native 를 빼도 dev 157 개 전체로 학습하면 **native/reference 가 계수를
+형성한다.** 질문이 "RAPID 이 배분할 **생성** 백본의 q_b 를 예측할 수 있는가" 로
+좁혀졌으므로 학습도 맞춘다. 네 arm 을 동결한다.
+
+| arm | train | test | 지위 |
+|---|---|---|---|
+| **primary** | RFD3-only dev (백본 80 · 타겟 16) | RFD3-only holdout | **GO 판정** |
+| sensitivity 1 | RFD3 + BioEmu (백본 100 · 타겟 16) | RFD3-only holdout | 사전 등록 동반 보고 |
+| descriptive / legacy | target + RFD3 + BioEmu (백본 157 · 타겟 62) | RFD3-only holdout | 기존 Gate 0 과의 연속성 |
+| comparator | — | native holdout (10 타겟) | Δ_generated 부수 분석. **GO 제외** |
+
+**BioEmu 에 대한 B 의 일반화는 주장하지 않는다** — 독립 BioEmu test 가 없다.
+
+**누수 확인.** dev 타겟은 세 source 전부 홀드아웃 12 타겟과 **겹침 0** 이다
+(rfd3 16 / bioemu 4 / target 57, 교집합 모두 공집합).
+
+### 작은 코호트가 이 질문에는 더 맞다
+
+primary 의 표본은 legacy 의 절반이고 feature 는 384 차원이다(n/p = 0.21). 그런데
+Gate 1 의 지표는 **타겟내 순위**이고, 그 관점에서 코호트 구조는 이렇다.
+
+```
+전체(legacy)   타겟 62 중 ≥2 백본  16 (26%)
+RFD3-only      타겟 16 중 ≥2 백본  16 (100%)
+RFD3+BioEmu    타겟 16 중 ≥2 백본  16 (100%)
+```
+
+legacy 의 추가 46 타겟은 **백본이 1개씩**이다. 그것은 "어느 타겟이 좋은가" 를
+가르치고 "한 타겟 안에서 어느 백본이 좋은가" 는 가르치지 않는다. 후자가 Gate 1 이
+재는 것이다. 따라서 표본이 작아진 것과 질문에 맞아진 것이 같이 일어난다.
+
+BioEmu 의 4 타겟은 RFD3 의 16 타겟의 **부분집합**이다. 즉 sensitivity 1 은 새 타겟이
+아니라 같은 타겟에 백본 20 개를 더해 타겟내 대조를 늘린다.
+
+**NO-GO 해석에 이 사실을 반영한다.** primary 는 백본 80 개에 384 차원이므로
+primary 의 NO-GO 는 "신호 없음" 이 아니라 **"이 표본에서 미검출"** 로 읽고,
+sensitivity 1 을 **사전 등록된 동반 보고**로 함께 낸다. 사후 대체 arm 이 아니다 —
+primary 가 실패했을 때 sensitivity 로 GO 를 선언하지 않는다.
+
+### source 분해의 provenance
+
+**24.8% 는 informative 타겟 11 개 기준이다.** native 라벨이 있는 9 개로 한정하면
+**25.6%** 다. `3es1A01`·`3h7eA02` 는 native 폴드가 0 이라 source 그룹이 rfd3 하나뿐
+이고, 그러면 group mean == grand mean 이므로 between 항 기여가 0 이 된다 —
+**결측을 0 으로 대입한 것이 아니다.** 따라서 11 타겟 기준 24.8% 는 그 두 타겟이
+희석시킨 보수적 값이다.
+
 ### 부수 분석 (1차 endpoint 아님)
 
 native 가 comparator 로 분리되면 다음을 직접 물을 수 있다.
