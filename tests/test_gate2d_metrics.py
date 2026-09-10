@@ -50,3 +50,26 @@ def test_delta_top4_tie_break_is_sequence_id_ascending():
     ids2 = ["g0", "g1", "g10", "g2", "g3", "g4"]
     labels2 = [False, False, True, False, False, False]
     assert abs(G.delta_top4(labels2, [0.5] * 6, ids2) - (1.0 / 4.0 - 1.0 / 6.0)) < 1e-12
+
+
+def test_target_equal_mean_differs_from_backbone_equal():
+    # 타겟 A 는 백본 3개(전부 0.0), 타겟 B 는 백본 1개(0.8).
+    per_backbone = [0.0, 0.0, 0.0, 0.8]
+    targets = ["A", "A", "A", "B"]
+    # 백본 등가중 = 0.8/4 = 0.2
+    assert abs(sum(per_backbone) / 4 - 0.2) < 1e-12
+    # 타겟 등가중 = (0.0 + 0.8)/2 = 0.4
+    per_target = G.per_target_means(per_backbone, targets)
+    assert per_target == [0.0, 0.8]
+    assert abs(G.target_equal_mean(per_backbone, targets) - 0.4) < 1e-12
+
+
+def test_per_target_means_sorts_targets_deterministically():
+    per_target = G.per_target_means([1.0, 2.0, 3.0], ["b", "a", "b"])
+    # 타겟 정렬 오름차순: a -> 2.0, b -> (1.0+3.0)/2 = 2.0
+    assert per_target == [2.0, 2.0]
+
+
+def test_target_equal_mean_ignores_nan_backbones():
+    per_target = G.per_target_means([float("nan"), 0.4], ["A", "A"])
+    assert per_target == [0.4]

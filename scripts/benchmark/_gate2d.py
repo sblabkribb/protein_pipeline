@@ -64,3 +64,29 @@ def delta_top4(labels: Sequence[bool], scores: Sequence[float],
     picked = top_k_indices(scores, seq_ids, k)
     top_rate = sum(1 for i in picked if labels[i]) / len(picked)
     return top_rate - q_b
+
+
+from collections import defaultdict
+
+
+def per_target_means(per_backbone: Sequence[float],
+                     targets: Sequence[str]) -> list[float]:
+    """백본별 값을 타겟 내에서 먼저 평균한다. 타겟 이름 오름차순으로 돌려준다.
+
+    NaN 백본은 제외한다. 어떤 타겟의 백본이 전부 NaN 이면 그 타겟도 빠진다.
+    """
+    grouped: dict[str, list[float]] = defaultdict(list)
+    for value, target in zip(per_backbone, targets):
+        v = float(value)
+        if v == v:  # NaN 제외
+            grouped[str(target)].append(v)
+    return [sum(vals) / len(vals) for _t, vals in sorted(grouped.items()) if vals]
+
+
+def target_equal_mean(per_backbone: Sequence[float],
+                      targets: Sequence[str]) -> float:
+    """타겟 등가중 평균. 백본 수가 많은 타겟이 과대대표되지 않는다."""
+    per_target = per_target_means(per_backbone, targets)
+    if not per_target:
+        return float("nan")
+    return sum(per_target) / len(per_target)
