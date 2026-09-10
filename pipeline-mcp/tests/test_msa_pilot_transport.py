@@ -322,3 +322,43 @@ def test_the_manifest_carries_the_pinned_provenance():
     # _write 안에서 git 을 다시 호출하지 않아야 한다
     body = src[src.index("def _write("):src.index("def _summary(")]
     assert "rev-parse" not in body, "_write 가 HEAD 를 다시 읽는다"
+
+
+def test_cohort_override_is_opt_in_and_leaves_the_default_untouched():
+    """`--cohorts` 는 **덮어쓰기 전용**이다.
+
+    동결 v2 흐름(24 타겟)이 `COHORTS` 기본값에 걸려 있다. 인자를 주지 않은
+    호출은 이 변경 전과 같은 목록을 내야 한다. 격자 12 타겟은 옵트인으로만
+    닿는다.
+    """
+    m = _full()
+    assert m.COHORTS == (("calibration_v2", "calibration_v2_targets.json"),
+                         ("confirmatory", "masked_holdout_targets.json"))
+    # 인자 없음 == 기본값 명시 == None 해석. 세 경로가 같은 목록이다.
+    assert m.resolve_cohorts(None) == m.COHORTS
+    assert m.targets() == m.targets(m.COHORTS) == m.targets(m.resolve_cohorts(None))
+    assert len(m.targets()) == 24
+
+    grid = m.targets(m.resolve_cohorts("holdout_grid"))
+    assert len(grid) == 12
+    assert {r["cohort"] for r in grid} == {"holdout_grid"}
+    d = json.loads((ROOT / "public_data" / "benchmark" / "gate0" /
+                    "holdout_targets.json").read_text(encoding="utf-8"))
+    assert sorted(r["domain"] for r in grid) == sorted(t["domain"] for t in d["selected"])
+    # 행 스키마가 기본 코호트와 같아야 process() 가 그대로 돈다.
+    assert all(set(r) == set(m.targets()[0]) for r in grid)
+    # 두 코호트는 겹치지 않는다 - 공유 MSA_DIR 에서 A3M 이 충돌하지 않는 근거다.
+    assert not ({r["domain"] for r in grid} & {r["domain"] for r in m.targets()})
+    with pytest.raises(SystemExit):
+        m.resolve_cohorts("없는코호트")
+
+
+def test_a_non_default_cohort_cannot_write_the_frozen_v2_manifest():
+    """`--out` 기본값은 동결된 v2 산출물이다. 다른 코호트로 그것을 덮어쓰지 않는다."""
+    m = _full()
+    frozen = m.BASE / "full_msa_manifest.json"
+    assert m.OUT == frozen, "기본 --out 이 v2 manifest 가 아니다"
+    with pytest.raises(SystemExit):
+        m.check_out_path(frozen, m.resolve_cohorts("holdout_grid"))
+    # 기본 코호트는 지금까지처럼 그 파일에 쓴다.
+    m.check_out_path(frozen, m.COHORTS)

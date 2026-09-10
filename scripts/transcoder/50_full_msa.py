@@ -56,6 +56,11 @@ TARGET_DB, MAX_SEQS, THREADS, USE_GPU = "uniref90", 3000, 4, False
 COHORTS = (("calibration_v2", "calibration_v2_targets.json"),
            ("confirmatory", "masked_holdout_targets.json"))
 
+#: `--cohorts` 로만 닿는 추가 코호트. `COHORTS` 기본값은 건드리지 않는다 - 동결
+#: v2 흐름(24 타겟)이 그 기본값에 걸려 있으므로, 인자를 주지 않은 호출은 이
+#: 변경 전과 같은 목록·같은 출력이어야 한다.
+OPTIONAL_COHORTS = {"holdout_grid": "holdout_targets.json"}
+
 
 def run_provenance() -> dict:
     """실행 시점에 **한 번** 잡는다.
@@ -124,9 +129,45 @@ def query_sequence(pdb_path: str) -> str:
     return pilot_mod().query_sequence(pdb_path)
 
 
-def targets() -> list[dict]:
+def resolve_cohorts(spec: str | None) -> tuple[tuple[str, str], ...]:
+    """`--cohorts` 문자열을 (코호트, 파일) 목록으로 바꾼다.
+
+    타겟 선정을 바꾸는 것이 아니다 - 이미 동결된 **다른** 목록을 옵트인으로
+    가리킬 뿐이다. 인자가 없으면 `COHORTS` 를 그대로 돌려준다.
+    """
+    if not spec:
+        return COHORTS
+    known = {**dict(COHORTS), **OPTIONAL_COHORTS}
+    picked = []
+    for name in (x.strip() for x in spec.split(",")):
+        if not name:
+            continue
+        if name not in known:
+            raise SystemExit(f"알 수 없는 코호트 {name!r} · 가능: {sorted(known)}")
+        picked.append((name, known[name]))
+    if not picked:
+        raise SystemExit("--cohorts 가 비어 있다")
+    return tuple(picked)
+
+
+def check_out_path(out_path: Path, cohorts: tuple[tuple[str, str], ...]) -> None:
+    """기본 코호트가 아니면 동결 v2 manifest 에 쓰지 못하게 막는다.
+
+    `--out` 기본값은 `full_msa_manifest.json` 이고 그것은 동결된 v2 multisource
+    validation 의 산출물이다. `--cohorts` 만 주고 `--out` 을 잊으면 그것을
+    덮어쓴다 - 되돌릴 수 없으므로 코드에서 막는다.
+    """
+    if tuple(cohorts) != COHORTS and out_path.resolve() == OUT.resolve():
+        raise SystemExit(
+            f"--cohorts 를 바꿨으면 --out 도 바꿔야 한다. {OUT.name} 은 동결된 "
+            "v2 산출물이라 읽기 전용이다."
+        )
+
+
+def targets(cohorts: tuple[tuple[str, str], ...] | None = None) -> list[dict]:
+    """인자를 주지 않으면 `COHORTS` 그대로다. 기존 호출의 동작은 바뀌지 않는다."""
     out = []
-    for cohort, fname in COHORTS:
+    for cohort, fname in (cohorts or COHORTS):
         d = json.loads((BASE / fname).read_text(encoding="utf-8"))
         for t in d["selected"]:
             out.append({"cohort": cohort, "domain": t["domain"],
@@ -208,6 +249,10 @@ def main() -> int:
     ap.add_argument("--url", default=None)
     ap.add_argument("--out", default=str(OUT))
     ap.add_argument("--only", default=None, help="쉼표로 구분한 도메인 (진단용)")
+    ap.add_argument("--cohorts", default=None,
+                    help="쉼표로 구분한 코호트. 생략하면 동결 기본값 "
+                         f"{[c for c, _ in COHORTS]} · 추가 가능 "
+                         f"{sorted(OPTIONAL_COHORTS)}. 바꾸면 --out 도 바꿔야 한다.")
     ap.add_argument("--workers", type=int, default=1,
                     help="타겟 간 동시 실행 수. per-job 설정은 바뀌지 않는다.")
     args = ap.parse_args()
@@ -219,7 +264,8 @@ def main() -> int:
 
     prov = run_provenance()
     cons_cfg = deployment_defaults()
-    rows = targets()
+    cohorts = resolve_cohorts(args.cohorts)
+    rows = targets(cohorts)
     if args.only:
         keep = {x.strip() for x in args.only.split(",")}
         rows = [r for r in rows if r["domain"] in keep]
@@ -227,6 +273,7 @@ def main() -> int:
     # 이전 실행 기록을 여러 manifest 에서 모은다. probe 와 본 실행이 서로 다른
     # 파일에 쓰므로, 하나만 보면 이미 만든 A3M 을 다시 만든다.
     out_path = Path(args.out)
+    check_out_path(out_path, cohorts)
     prev: dict[str, dict] = {}
     for cand in (BASE / "full_msa_manifest.json",
                  BASE / "msa_probe_concurrency.json", out_path):
