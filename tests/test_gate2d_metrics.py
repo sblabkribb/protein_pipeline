@@ -1496,3 +1496,72 @@ def test_low_depth_sensitivity_withholds_itself_below_the_floor():
 
     none = gate2._low_depth_sensitivity(per_target, [])
     assert none["evaluable"] is None
+
+
+def test_holdout_backbone_pdb_paths_all_resolve():
+    import importlib
+    prep = importlib.import_module("21_gate2d_prepare_encoder")
+    resolved = prep.resolve_backbone_pdbs()
+    # 72 개 백본 전부 해석돼야 한다. rfd3 60 + native 12.
+    assert len(resolved) == 72
+    assert sum(1 for r in resolved.values() if r["source"] == "rfd3") == 60
+    assert sum(1 for r in resolved.values() if r["source"] == "target") == 12
+    assert all(Path(r["pdb_path"]).exists() for r in resolved.values())
+
+
+def test_encoder_extraction_reproduces_the_committed_dev_features():
+    """추출기를 새로 쓴 것의 유일한 자격 - dev 157 백본 재현 (Task 7 Step 5a).
+
+    dev feature 를 만든 스크립트는 커밋된 적이 없다. 재현이 깨지면 Gate 1 의
+    train(dev)과 test(홀드아웃)가 다른 feature 공간에 놓이고 그 수치는 해석할 수
+    없다. 그래서 이것은 성능 테스트가 아니라 **전제조건**이다.
+
+    두 백본만 확인한다 - 157 개 전부는 CPU 로 100 초가 걸린다. 전수 검증은
+    `21_gate2d_prepare_encoder.py --verify-dev` 이고 홀드아웃 추출 직전에 돈다.
+    """
+    import csv as _csv
+    import importlib
+
+    import numpy as np
+
+    enc = importlib.import_module("_mpnn_encoder")
+    if not enc.MPNN_CKPT.exists():
+        pytest.skip(f"ProteinMPNN ckpt 없음: {enc.MPNN_CKPT}")
+
+    backbones = ROOT / "public_data" / "benchmark" / "gate0" / "backbones"
+    ref = np.load(backbones / "mpnn_encoder.npy")
+    rows = list(_csv.DictReader((backbones / "backbone_labels.csv").open(encoding="utf-8")))
+    assert ref.shape == (157, 384)
+    assert len(rows) == 157
+
+    model = enc.load_model()
+    for i in (0, 50):  # native 한 개, rfd3 한 개.
+        got = enc.encode_backbone_pdb(backbones / "pdb" / rows[i]["pdb_file"], model=model)
+        assert got.shape == (384,)
+        assert np.allclose(ref[i], got, atol=1e-4), rows[i]["backbone_key"]
+
+
+def test_encoder_relative_position_is_the_load_bearing_setting():
+    """dev feature 는 relative positional encoding 을 끈 상태에서 나왔다.
+
+    켜면 값이 전부 달라진다 (max abs diff ~0.49). 기본값이 조용히 바뀌면 Gate 1
+    의 train/test 가 갈라지므로 여기서 고정한다.
+    """
+    import csv as _csv
+    import importlib
+
+    import numpy as np
+
+    enc = importlib.import_module("_mpnn_encoder")
+    if not enc.MPNN_CKPT.exists():
+        pytest.skip(f"ProteinMPNN ckpt 없음: {enc.MPNN_CKPT}")
+
+    backbones = ROOT / "public_data" / "benchmark" / "gate0" / "backbones"
+    ref = np.load(backbones / "mpnn_encoder.npy")
+    rows = list(_csv.DictReader((backbones / "backbone_labels.csv").open(encoding="utf-8")))
+    pdb = backbones / "pdb" / rows[50]["pdb_file"]
+
+    model = enc.load_model()
+    with_pos = enc.encode_backbone_pdb(pdb, model=model, relative_position=True)
+    assert not np.allclose(ref[50], with_pos, atol=1e-4)
+    assert float(np.abs(ref[50] - with_pos).max()) > 0.1
