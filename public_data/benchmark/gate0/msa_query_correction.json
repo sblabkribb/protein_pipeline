@@ -46,6 +46,25 @@
           "0.7": 65
         },
         "sha256_verified": true
+      },
+      "provenance_evidence": {
+        "dbref": "DBREF 2JVF A -3 92 PDB 2JVF",
+        "dbref_reference": "PDB (UniProt 참조 없음)",
+        "seqadv_expression_tag": false,
+        "stripped_residues": [
+          {
+            "resseq": -1,
+            "aa3": "HIS"
+          },
+          {
+            "resseq": 0,
+            "aa3": "MET"
+          }
+        ],
+        "seqres_prefix": "GLY SER HIS MET",
+        "status": "annotation 없음. 흔한 tag 잔여물과 일치하나 확정되지 않았다.",
+        "column_depth_measurable": false,
+        "column_depth_note": "hit 1 개뿐이라 태그 열과 나머지를 구분할 수 없다."
       }
     },
     {
@@ -75,6 +94,35 @@
           "0.7": 166
         },
         "sha256_verified": true
+      },
+      "provenance_evidence": {
+        "dbref": "DBREF 4YQI A 1 246 UNP P43912 TRMD_HAEIN",
+        "dbref_reference": "UniProt P43912, native 범위 1-246",
+        "seqadv_expression_tag": true,
+        "seqadv_range": "-7..0 (GLY LEU VAL PRO ARG GLY SER HIS) 전부 EXPRESSION TAG",
+        "stripped_residues": [
+          {
+            "resseq": -2,
+            "aa3": "GLY"
+          },
+          {
+            "resseq": -1,
+            "aa3": "SER"
+          },
+          {
+            "resseq": 0,
+            "aa3": "HIS"
+          }
+        ],
+        "status": "기탁자가 EXPRESSION TAG 로 명시. 추론이 아니다.",
+        "column_depth_measurable": true,
+        "tag_column_non_gap": [
+          25,
+          73,
+          81
+        ],
+        "n_hits": 3000,
+        "rest_median_non_gap": 2982
       }
     },
     {
@@ -104,6 +152,25 @@
           "0.7": 159
         },
         "sha256_verified": true
+      },
+      "provenance_evidence": {
+        "dbref": "DBREF 4Q68 A 24 262 UNP A7V5T8",
+        "dbref_reference": "UniProt A7V5T8, native 범위 24-262",
+        "seqadv_expression_tag": true,
+        "seqadv_range": "GLY 0 EXPRESSION TAG",
+        "stripped_residues": [
+          {
+            "resseq": 0,
+            "aa3": "GLY"
+          }
+        ],
+        "status": "기탁자가 EXPRESSION TAG 로 명시. 추론이 아니다.",
+        "column_depth_measurable": true,
+        "tag_column_non_gap": [
+          19
+        ],
+        "n_hits": 1385,
+        "rest_median_non_gap": 1313
       }
     }
   ],
@@ -119,5 +186,16 @@
       }
     ]
   },
-  "lesson": "검증 대상이 파이프라인일 때 기대값은 **그 파이프라인의 해당 단계 출력**이어야 하고 '무엇을 해야 하는가' 의 재구성이면 안 된다. 재도출한 기대값은 틀린 oracle 과 함께 틀린다 - 1840 vs 92 near-miss 가 그 경우였다."
+  "lesson": "검증 대상이 파이프라인일 때 기대값은 **그 파이프라인의 해당 단계 출력**이어야 하고 '무엇을 해야 하는가' 의 재구성이면 안 된다. 재도출한 기대값은 틀린 oracle 과 함께 틀린다 - 1840 vs 92 near-miss 가 그 경우였다.",
+  "claim_correction": {
+    "what_was_wrong": "처음 기록에 '이들은 cloning artifact 다' 와 '진화적 신호가 없다' 로 적었다. 근거는 서열 접두(HM/GSH/G) 하나뿐이었다. 전자는 construct metadata 확인이 필요하고 후자는 절대명제다.",
+    "specific_attributions_that_were_wrong": [
+      "4yqiA01 의 GSH 를 'GST-cleavage scar' 라고 적었다. SEQRES 는 GLVPRGSHM 이고 LVPR/GS 는 thrombin 자리다. 기전 추정이 틀렸다.",
+      "2jvfA00 의 HM 을 'His-tag remnant' 라고 단정했다. GSHM 패턴과 일치하지만 annotation 이 없고 M 은 native 개시 Met 일 수 있다."
+    ],
+    "what_the_evidence_actually_supports": "3 중 2 (4yqiA01 · 4q68A01)는 기탁자가 SEQADV 에 EXPRESSION TAG 로 명시했고 DBREF 의 UniProt 참조 범위 밖이다 - 추론이 아니라 기탁 annotation 이다. 1 (2jvfA00)은 annotation 이 없고 흔한 tag 잔여물과 일치할 뿐이다.",
+    "absolute_claim_replaced_by_measurement": "'진화적 신호가 없다' 대신, 보존해 둔 태그 포함 A3M 에서 해당 열의 깊이를 쟀다. 4yqiA01 태그 열 25/73/81 of 3000 (0.8-2.7%) vs 나머지 중앙 2982/3000 (99.4%). 4q68A01 19/1385 (1.4%) vs 1313/1385 (94.8%). 2jvfA00 은 hit 1 개라 측정 불가.",
+    "flagged_by": "peer session protein-pipeline-work-6a",
+    "why_it_mattered": "원고에 대기 중이던 문장이라 발표 전에 고치는 편이 싸다."
+  }
 }

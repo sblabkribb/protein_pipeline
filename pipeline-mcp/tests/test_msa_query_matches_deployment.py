@@ -188,8 +188,10 @@ def test_both_runners_share_one_query_definition():
 def test_the_methods_sentence_and_the_dependency_are_recorded():
     """왜 strip 이 옳은지, 되돌리면 무엇이 깨지는지가 남아 있어야 한다.
 
-    "배포와 맞췄다" 는 절차적 근거다. 제거된 잔기가 클로닝 산물(His-tag 잔여물 ·
-    GST 절단 흔적 · 링커)이었다는 것이 생물학적 근거이고 더 강하다.
+    처음에는 "cloning artifacts" · "no evolutionary signal" 로 적었다. 근거는
+    서열 접두 하나였고, 전자는 construct metadata 가 필요하고 후자는 절대명제다.
+    지금은 기탁 annotation(SEQADV)과 열 깊이 측정으로 바뀌었다. 이 테스트가 옛
+    표현이 되돌아오는 것을 막는다.
     """
     import json
     rec = ROOT / "public_data" / "benchmark" / "gate0" / "msa_query_correction.json"
@@ -197,26 +199,71 @@ def test_the_methods_sentence_and_the_dependency_are_recorded():
         pytest.skip("교정 기록 없음")
     d = json.loads(rec.read_text(encoding="utf-8"))
 
-    # 접두 문자열이 기록돼 있어야 그 주장을 검증할 수 있다
     prefixes = {t["domain"]: t["dropped_prefix"] for t in d["targets"]}
     assert prefixes == {"2jvfA00": "HM", "4yqiA01": "GSH", "4q68A01": "G"}, prefixes
     for t in d["targets"]:
         assert t["raw_query_length"] - t["staged_query_length"] == len(t["dropped_prefix"])
-        # 교체된 산출물이 어떤 판정이었는지 남아야 한다 - OK 는 흔적을 남기지 않는다
         assert t["superseded_a3m"]["classification"] in {
             "OK", "MSA_INSUFFICIENT_DEPTH", "MSA_INFEASIBLE"}
         assert t["superseded_a3m"]["sha256_verified"] is True
 
-    # 되돌릴 때 무엇이 깨지는지
     dep = d["downstream_dependency"]
     assert dep["items"], "downstream 의존이 비어 있다"
     assert any("S4" in i["what"] for i in dep["items"])
     assert any("아무 예외도 나지 않는다" in i["how"] for i in dep["items"])
 
-    # 원고 문장이 동결 문서에 대기 중인가
+
+def test_the_tag_claim_is_sourced_per_target_not_inferred_from_the_prefix():
+    """3 중 2 만 기탁 annotation 이 있다. 셋 다 단정하면 과장이다."""
+    import json
+    rec = ROOT / "public_data" / "benchmark" / "gate0" / "msa_query_correction.json"
+    if not rec.exists():
+        pytest.skip("교정 기록 없음")
+    ev = {t["domain"]: t["provenance_evidence"] for t in
+          json.loads(rec.read_text(encoding="utf-8"))["targets"]}
+    annotated = {k for k, v in ev.items() if v["seqadv_expression_tag"]}
+    assert annotated == {"4yqiA01", "4q68A01"}, annotated
+    assert ev["2jvfA00"]["seqadv_expression_tag"] is False
+    assert "확정되지 않았다" in ev["2jvfA00"]["status"]
+    for k in annotated:
+        assert "UNP" in ev[k]["dbref"], k
+        assert "추론이 아니다" in ev[k]["status"], k
+
+
+def test_the_absolute_claim_was_replaced_by_a_measurement():
+    """'진화적 신호가 없다' 대신 열 깊이를 쟀는지."""
+    import json
+    rec = ROOT / "public_data" / "benchmark" / "gate0" / "msa_query_correction.json"
+    if not rec.exists():
+        pytest.skip("교정 기록 없음")
+    d = json.loads(rec.read_text(encoding="utf-8"))
+    ev = {t["domain"]: t["provenance_evidence"] for t in d["targets"]}
+    for k in ("4yqiA01", "4q68A01"):
+        e = ev[k]
+        assert e["column_depth_measurable"] is True
+        # 태그 열이 나머지보다 훨씬 얕아야 그 주장이 성립한다
+        assert max(e["tag_column_non_gap"]) < e["rest_median_non_gap"] / 10, k
+    assert ev["2jvfA00"]["column_depth_measurable"] is False, (
+        "hit 1 개로는 태그 열과 나머지를 구분할 수 없다")
+    c = d["claim_correction"]
+    assert "절대명제" in c["what_was_wrong"]
+    assert c["specific_attributions_that_were_wrong"], "틀린 귀속을 적지 않았다"
+
+
+def test_the_forbidden_phrasings_are_not_in_the_staged_manuscript_text():
     doc = (ROOT / "docs" / "specs" / "rapid-v2-multisource-validation-freeze.md"
            ).read_text(encoding="utf-8")
-    assert "Methods 에 추가할 문장" in doc
-    for phrase in ("deployment-staged target sequence", "cloning artifacts",
-                   "His-tag remnant (HM)", "no evolutionary signal"):
-        assert phrase in doc.replace("\n> ", " ").replace("\n", " "), phrase
+    flat = doc.replace("\n> ", " ").replace("\n", " ")
+    # 플래튼하면 인용 표시 "> " 가 사라지므로 본문으로 자른다
+    start = flat.index("Conservation profiles were computed")
+    quoted = flat[start:flat.index("쓰지 않는다:", start)]
+    for banned in ("were cloning artifacts", "carry no evolutionary signal",
+                   "GST-cleavage scar"):
+        assert banned not in quoted, f"원고 문장에 과장이 남아 있다: {banned!r}"
+    for needed in ("annotated `EXPRESSION TAG`", "SEQADV", "DBREF",
+                   "without being established as one",
+                   "0.8-2.7% of homologous sequences"):
+        assert needed in quoted, f"근거 {needed!r} 가 원고 문장에 없다"
+    # 금지 목록 자체는 남아 있어야 재발을 막는다
+    assert "construct metadata 확인이 필요하다" in doc
+    assert "절대명제다" in doc

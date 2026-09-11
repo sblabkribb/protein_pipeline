@@ -769,23 +769,50 @@ plan JSON `review_required` 와 같다.
 
 ### Methods 에 추가할 문장 (영문, MSA query 정의)
 
-배포 일치를 근거로 쓰지 않는다. **제거된 잔기가 무엇이었는지**가 더 강한 근거다 -
-"we matched deployment" 는 절차이고, "the stripped residues were cloning
-artifacts" 는 생물학이다.
+**처음 쓴 문장은 과장이었다.** "the removed residues were cloning artifacts" 와
+"carry no evolutionary signal" 을 서열 접두(HM / GSH / G) 하나로 단정했다.
+전자는 construct metadata 확인이 필요하고, 후자는 어떤 접두로도 뒷받침할 수 없는
+절대명제다. peer review 에서 지적돼 아래로 교체한다.
+
+확인해 보니 근거는 접두가 아니라 **기탁 annotation** 에 있었고, 그쪽이 더 강하다.
+
+```
+4yqiA01  SEQADV -7..0 전부 EXPRESSION TAG · DBREF UNP P43912 native 1-246
+4q68A01  SEQADV GLY 0  EXPRESSION TAG · DBREF UNP A7V5T8 native 24-262
+2jvfA00  SEQADV 없음 · DBREF 가 UniProt 이 아니라 PDB 자신을 가리킨다
+```
+
+그리고 "진화적 신호가 없다" 는 절대명제 대신 **측정**을 쓴다. 보존해 둔 태그 포함
+A3M 에서 해당 열의 깊이를 쟀다.
+
+```
+4yqiA01  태그 열 25 / 73 / 81 of 3000 hits  (0.8-2.7%)  vs 나머지 중앙 99.4%
+4q68A01  태그 열 19 of 1385                 (1.4%)      vs 나머지 중앙 94.8%
+2jvfA00  hit 1 개 - 측정 불가
+```
 
 > Conservation profiles were computed from an MSA whose query was the
 > deployment-staged target sequence: multi-model coordinates were reduced to the
-> first model, and residues with non-positive residue numbers were removed. In
-> the three targets where this changed the query, the removed residues were
-> cloning artifacts -- a His-tag remnant (HM), a GST-cleavage scar (GSH), and a
-> linker glycine -- which carry no evolutionary signal and would otherwise place
-> noise at the N-terminus of the conservation profile.
+> first model, and residues with non-positive residue numbers were removed.
+> Three targets were affected. In two (4YQI, 4Q68) the removed residues are
+> annotated `EXPRESSION TAG` in the entry's own `SEQADV` records and fall outside
+> the UniProt reference range given by `DBREF`; in the third (2JVF) the entry
+> carries no such annotation, and the removed residues are consistent with a
+> common tag remnant without being established as one. Where the alignment was
+> deep enough to measure, these positions were covered by 0.8-2.7% of homologous
+> sequences against 95-99% for the remainder, so retaining them would have
+> extended the conservation profile over near-empty columns.
 
-클로닝 산물에는 진화적 신호가 없으므로, query 에 넣으면 프로파일의 N 말단에
-잡음을 얹는다. 그래서 strip 은 배포를 따라간 결정이 아니라 **독립적으로 옳은**
-결정이다.
+쓰지 않는다:
+
+```
+"이들은 cloning artifact 다"      construct metadata 확인이 필요하다
+"진화적 신호가 없다"              절대명제다. 접두로 뒷받침할 수 없다
+"GST-cleavage scar"              4yqiA01 의 GLVPRGSHM 은 thrombin 자리다
+```
 
 근거: `public_data/benchmark/gate0/msa_query_correction.json`
+(`provenance_evidence` · `claim_correction`)
 
 ### results_of_record 에 추가할 기록
 
