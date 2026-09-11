@@ -678,15 +678,75 @@ S0–S3 를 먼저 돌리는 남은 값어치는 **파이프라인·feature 코�
 
 ## 8. 판정표
 
-### 현재 상태 (2026-09-11)
+### 확정 (2026-09-11) — 두 게이트 모두 NO-GO
 
 ```
-Gate 2 realized arm   NO-GO      Δ_Top4 -0.0366 · LCB90 -0.0854 · n_info 11
-Gate 2 공식 판정      UNRESOLVED  사전 등록한 S6 는 MPNN score 를 포함했으나
-                                  realized S6 에는 없다 (PRIMARY DEVIATION)
-Gate 1                PENDING     ProteinMPNN 체크포인트 미확보로 실행 불가
-최종 B / C / STOP     UNDECIDED
+Gate 1  NO-GO [FINAL]   ρ +0.0935 · LCB90 -0.1153 · n_info 11   (문턱 0.25)
+Gate 2  NO-GO [FINAL]   Δ_Top4 -0.0313 · LCB90 -0.0803 · n_info 11  (문턱 +0.10)
+최종    STOP            이 연구축을 접는다. negative result 로 보고하고
+                        RAPID 자체에 집중한다.
 ```
+
+**PRIMARY DEVIATION 이 해소됐다.** planned S6 = `S5 + 조성 + per-sequence MPNN score`
+(355 열)를 실행했다. realized S6(354 열, score 없음)와 **판정이 일치**하고 점추정은
++0.0053 움직였다 (−0.0366 → −0.0313). S0–S5 는 bit-for-bit 불변이다. 따라서 이 문서가
+사전에 정한 확정 조건 — *"full S6 도 NO-GO 면 그때 `Gate 2 = NO-GO [FINAL]`,
+`C = closed`"* — 이 충족됐다.
+
+**Gate 1 arm 별 (판정은 primary 하나로만).**
+
+| arm | train | ρ | LCB90 | top-1 regret |
+|---|---|---|---|---|
+| **primary** RFD3→RFD3 | 80 bb / 16 tgt | **+0.0935** | **−0.1153** | 0.1493 |
+| sensitivity 1 (+BioEmu) | 100 / 16 | +0.0577 | −0.1524 | 0.1667 |
+| descriptive / legacy (전체) | 157 / 62 | −0.0604 | −0.2561 | 0.2604 |
+| comparator (native) | — | **non-evaluable** | — | — |
+
+legacy arm 이 음수인 것은 §3 이 사전에 경고한 것과 일치한다 — native 백본이 계수를
+형성한다. comparator 는 native 가 타겟당 1 백본이라 타겟 내 Spearman 이 정의되지
+않아 non-evaluable 이며, **0 으로 기록하지 않는다.**
+
+부수 분석 `Δ_generated` = **+0.0825** (LCB −0.0475, 10 타겟, native 라벨 있는 것만).
+**GO 판정에서 제외**되며, 생성 백본이 native 보다 낫다는 주장의 근거로 쓰기에는
+LCB 가 0 을 포함한다.
+
+### NO-GO 의 강도 — 사전 등록된 대로만 읽는다
+
+**Gate 1.** 사전 지정된 시뮬레이션 모형 아래에서 GO 확률은 ρ ≈ 0.33 에서 0.74,
+ρ ≈ 0.44 에서 0.94 다. 따라서 대략 그 규모에 대한 증거이고, ρ ≈ 0.18 규모
+(검정력 0.31)에는 약한 증거다. primary 는 백본 80 개에 384 차원(n/p = 0.21)이므로
+**"신호 없음" 이 아니라 "이 표본에서 미검출"** 로 읽는다 (§3 사전 등록).
+
+**Gate 2.** *Under the prespecified simulation model, the gate has approximately 93%
+probability of GO for an effect corresponding to AUC ≈ 0.70. Therefore, NO-GO would
+constitute evidence against an effect of approximately this magnitude under the
+assumed operating conditions, rather than proving the absence of any AUC ≥ 0.70
+predictor.* 문턱 자체(AUC ≈ 0.64)에서는 검정력 0.55 로 약한 증거다.
+
+### encoder 레시피에 붙는 단서
+
+Gate 1 의 feature 는 **복구된 레시피**이지 문서화된 것이 아니다. dev 157 백본을
+`max abs diff 9.06e-06`, `allclose(atol=1e-4) True` 로 재현했고 exact-match variant
+는 시도한 것들 중 유일하게 결정됐다. 결정적 요소는 **`residue_idx` 가 상수**라는
+것이다 — 상대 위치 인코딩이 꺼져 있어 feature 가 순수하게 기하학적이며, 이는
+`1c2eeb4` 의 *"sequence-independent"* 주장과 일치한다. 실제 `residue_idx` 를 주면
+블록별 평균·표준편차는 여전히 맞아 보이면서 재현은 실패한다 — 이 게이트가 막으려던
+조용한 train/test 공간 분리가 바로 그 모습이다.
+
+**원본 스크립트가 없으므로 그것이 의도였는지는 확인할 수 없다.** dev 추출기가
+위치 인코딩을 실수로 껐다면 Gate 1 이 그 선택을 상속한다. 그러나 train 과 test 가
+같은 공간에 있어야 하므로 상속이 옳은 처리다.
+
+### 쓸 수 있는 문장과 쓸 수 없는 문장
+
+**쓸 수 있다.** *"사전 등록된 두 게이트에서 모두 실용적으로 유용한 신호를 찾지
+못했다 — AF2 를 보기 전 백본 수준 예측(ρ +0.09)에서도, 백본 내부 서열 선택
+(Δ_Top4 −0.03)에서도."* *"새 AF2 0 개로 이 판정에 도달했다."*
+
+**쓸 수 없다.** *"백본/서열 수준 신호가 존재하지 않는다"*, *"ProteinMPNN encoder 는
+백본 품질을 예측할 수 없다"*. 둘 다 사전 등록한 검정력이 지지하지 않는 절대명제다.
+
+### 판정표 (변경 없음)
 
 **realized-S6 의 NO-GO 를 공식 Gate 2 판정으로 닫지 않는다.** 판정 arm 을 S6 하나로
 동결한 것은 사후 arm 선택을 막기 위해서였는데, 그 S6 를 사전 등록과 **다른 feature
@@ -708,14 +768,14 @@ full S6 도 NO-GO 면 그때 `Gate 2 = NO-GO [FINAL]`, `C = closed` 로 확정�
 S5·realized-S6 가 음수이며 저심도 민감도도 같은 방향이므로 이 진술은 지지된다.
 쓸 수 없다 — *"Gate 2 가 NO-GO 로 판정됐다"*, *"C 는 닫혔다"*.
 
-### 판정표 (변경 없음)
+### 판정표
 
 | Gate 1 | Gate 2 | 결정 |
 |---|---|---|
 | GO | NO | **B 만.** backbone-specific surrogate prior + calibrated prior strength. C 는 하지 않는다 |
 | GO | GO | **B + C.** hierarchical controller. sentinel/targeted 분리를 검증할 이유가 생긴다 |
 | NO | GO | **C 단독.** B 를 억지로 합치지 않는다 |
-| NO | NO | **이 연구축을 접는다.** negative result 로 보고하고 RAPID 자체에 집중한다 |
+| NO | NO | **◀ 해당.** 이 연구축을 접는다. negative result 로 보고하고 RAPID 자체에 집중한다 |
 
 ## 9. 이 실험이 하지 않는 것
 
