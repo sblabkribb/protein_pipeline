@@ -69,8 +69,15 @@ ARM_BLOCKS = {
     "S3": ("esm_delta_mut",),
     "S4": ("msa",),
     "S5": ("esm_delta_mut", "msa"),
-    "S6": ("esm_delta_mut", "msa", "cheap"),
+    "S6": ("esm_delta_mut", "msa", "cheap", "mpnn_score"),
 }
+
+#: 2026-09-11 이전 실행의 S6. 격자에 per-sequence MPNN score 열이 없어 cheap 이
+#: 조성 전용이었고, 그래서 S6 가 S5 와 bit-for-bit 같아졌다 (Δ_Top4 −0.0366,
+#: LCB −0.0854). 그 실행은 PRIMARY DEVIATION 으로 기록됐다. **arm 이 아니다** -
+#: 동결된 ladder 는 S0-S6 일곱 개이고 여기서 여덟 번째를 만들지 않는다. 같은 arm 의
+#: 구현 결함판이며 planned-S6 와 나란히 보고하기 위해서만 존재한다.
+REALIZED_S6_BLOCKS_2026_09_11 = ("esm_delta_mut", "msa", "cheap")
 
 #: LOTO fold 마다 다시 만들어야 하는 블록. 대치 통계량이 train fold 에서 나오므로
 #: fold 에 의존한다. 나머지 블록(ΔESM·조성·SoluProt·MSA 의 candidate 성분)은
@@ -358,6 +365,39 @@ def _msa_block(folds, train_idx: Sequence[int] | None
     return np.hstack([_block("msa_candidate", folds), target_block]), None
 
 
+def load_mpnn_scores() -> dict[str, float]:
+    """격자 폴드의 per-sequence ProteinMPNN score. 유일한 구현은 P4 스크립트다.
+
+    `27_gate2d_prepare_mpnn_scores.py` 가 만든 산출물을 읽는다. 그 산출물이 없으면
+    **조용히 열을 빼지 않는다** - S6 가 판정 arm 이므로 스펙보다 좁은 S6 가 소리
+    없이 다시 실행되는 것이 정확히 PRIMARY DEVIATION 을 만든 경로다.
+    """
+    path = GRID / "mpnn_scores.json"
+    if not path.exists():
+        raise SystemExit(
+            f"{path} 가 없다. S6 의 cheap 블록은 스펙 §4 에서 '조성, MPNN score' 로 "
+            "동결됐다. 먼저 27_gate2d_prepare_mpnn_scores.py 를 돌린다 - 열을 빼고 "
+            "S6 를 돌리면 판정 arm 이 스펙보다 좁아진다."
+        )
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return {k: float(v) for k, v in payload["scores"].items()}
+
+
+def _mpnn_score_block(folds) -> np.ndarray:
+    """MPNN score 1 열. 잔기당 평균 NLL 이므로 낮을수록 그럴듯하다.
+
+    결측을 대치하지 않는다 - 격자의 모든 폴드에 score 가 있어야 하고, 없으면
+    어느 서열이 빠졌는지 말하고 멈춘다.
+    """
+    scores = load_mpnn_scores()
+    missing = [f.sequence_id for f in folds if f.sequence_id not in scores]
+    if missing:
+        raise SystemExit(
+            f"MPNN score 결측 {len(missing)} 건 (예: {missing[:3]}). 대치하지 않는다."
+        )
+    return np.array([[scores[f.sequence_id]] for f in folds], dtype=float)
+
+
 def _build_block(name: str, folds) -> np.ndarray:
     """이름 하나에 해당하는 feature 블록. 행 순서는 folds 와 같다."""
     if name == "soluprot":
@@ -375,8 +415,8 @@ def _build_block(name: str, folds) -> np.ndarray:
         return _delta_mut_block(folds)
 
     if name == "cheap":
-        # 조성 20 열. MPNN score 는 격자의 sequences.csv 에 없으므로 넣지 않는다 -
-        # 없는 feature 를 있는 것처럼 쓰지 않는다.
+        # 조성 20 열. MPNN score 는 `mpnn_score` 블록이고 S6 가 둘 다 받는다 -
+        # 스펙 §4 의 cheap 은 "조성, MPNN score" 다.
         alphabet = "ACDEFGHIKLMNPQRSTVWY"
         rows = []
         for fold in folds:
@@ -384,6 +424,9 @@ def _build_block(name: str, folds) -> np.ndarray:
             n = max(len(seq), 1)
             rows.append([seq.count(a) / n for a in alphabet])
         return np.array(rows, dtype=float)
+
+    if name == "mpnn_score":
+        return _mpnn_score_block(folds)
 
     if name == "msa_candidate":
         return _msa_candidate_block(folds)
@@ -411,7 +454,8 @@ def _block(name: str, folds) -> np.ndarray:
     return _BLOCK_CACHE[key]
 
 
-def assemble(arm: str, folds, train_idx: Sequence[int] | None = None
+def assemble(arm: str, folds, train_idx: Sequence[int] | None = None,
+             block_names: Sequence[str] | None = None
              ) -> tuple[np.ndarray | None, dict | None]:
     """arm 의 feature 행렬과 결함 기록. `(None, ...)` 이면 non-evaluable.
 
@@ -421,11 +465,16 @@ def assemble(arm: str, folds, train_idx: Sequence[int] | None = None
     fold 에 의존하지 않는 블록(ΔESM·조성·SoluProt·MSA 의 candidate 성분)은 한 번만
     만들어 캐시하고, MSA 의 **타겟 성분만** `train_idx` 로 fold 마다 다시 만든다.
     MSA 없는 arm(S0-S3)에서는 `train_idx` 가 결과에 영향을 주지 않는다.
+
+    `block_names` 는 동결된 `ARM_BLOCKS[arm]` 대신 쓸 블록 목록이다. **arm 을
+    추가하는 수단이 아니다** - `REALIZED_S6_BLOCKS_2026_09_11` 처럼 이미 실행돼
+    기록된 구현 결함판을 planned 판과 나란히 재현하는 데만 쓴다. 기본값은 항상
+    동결 목록이다.
     """
     if arm not in ARM_BLOCKS:
         raise KeyError(f"동결된 ladder 에 없는 arm: {arm}")
     blocks = []
-    for name in ARM_BLOCKS[arm]:
+    for name in (ARM_BLOCKS[arm] if block_names is None else tuple(block_names)):
         if name == "msa":
             matrix, defect = _msa_block(folds, train_idx)
             if matrix is None:
@@ -436,8 +485,8 @@ def assemble(arm: str, folds, train_idx: Sequence[int] | None = None
     return np.hstack(blocks), None
 
 
-def build_features(arm: str, folds, train_idx: Sequence[int] | None = None
-                   ) -> np.ndarray | None:
+def build_features(arm: str, folds, train_idx: Sequence[int] | None = None,
+                   block_names: Sequence[str] | None = None) -> np.ndarray | None:
     """`assemble` 의 행렬만 돌려주는 얇은 wrapper. 두 번째 조립 규칙이 아니다."""
-    matrix, _defect = assemble(arm, folds, train_idx)
+    matrix, _defect = assemble(arm, folds, train_idx, block_names)
     return matrix

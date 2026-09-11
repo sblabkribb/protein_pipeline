@@ -139,6 +139,49 @@ yield 백본만 담고 있으므로 여기서 나온 온도 효과는 전체 백
 아니라 중간-yield 영역에서의 조건부 효과다. 정책 성능 수치는 홀드아웃 격자에서만
 인용한다.
 
+## Gate 1 · 백본 예측 가능성 (2026-09-11)
+
+동결 스펙: `docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md` §3.
+feature = ProteinMPNN encoder 384-D (`v_48_020` soluble). **새 AF2 0 개.**
+판정 arm 은 primary 하나다 — RFD3-only dev(백본 80·타겟 16)로 학습해 RFD3-only
+홀드아웃(백본 60·타겟 12, informative 11)에서 평가한다.
+
+| 값 | 수치 | 출처 |
+|---|---|---|
+| primary 타겟 등가중 mean within-target Spearman | **+0.0935** | `gate1_backbone_predictability.json` → `arms.primary.point` |
+| primary 단측 90% LCB | **−0.1153** | 같은 파일 → `.one_sided_90_lcb` |
+| primary informative 타겟 | 11 | 같은 파일 → `.informative_targets` |
+| primary top-1 백본 regret (2 차) | 0.1493 | 같은 파일 → `.top1_backbone_regret_mean` |
+| 판정 | **NO-GO** (문턱 ρ ≥ 0.25, LCB > 0, informative ≥ 8 중 두 개 미달) | 같은 파일 → `verdict` |
+
+동반 arm (사전 등록, 판정에 쓰지 않는다):
+
+| arm | train | ρ | LCB90 | regret |
+|---|---|---|---|---|
+| sensitivity 1 | RFD3+BioEmu (100·16) | +0.0577 | −0.1524 | 0.1667 |
+| descriptive / legacy | 전체 dev (157·62) | −0.0604 | −0.2561 | 0.2604 |
+| comparator (native 홀드아웃) | — | **non-evaluable** | — | — |
+
+comparator 는 타겟당 native 백본이 1 개라 타겟 내 Spearman 이 정의되지 않는다.
+**0 으로 대입하지 않는다** — 재지 못한 것과 0 은 다르다. 부수 분석
+Δ_generated = q_b(생성) − q_b(native) 는 **+0.0825** (LCB −0.0475, 타겟 10) 이고
+GO 판정에 들어가지 않는다.
+
+**feature 공간 확인.** dev `mpnn_encoder.npy` 를 만든 스크립트는 커밋된 적이 없어
+추출기를 재구현했다. 홀드아웃에 적용하기 전에 dev 157 백본을 다시 뽑아 커밋된
+산출물과 비교했고 `max abs diff 9.06e-06`, `allclose(atol=1e-4) True` 였다
+(`21_gate2d_prepare_encoder.py --verify-dev`). 따라서 train/test 가 같은 공간이라는
+것은 가정이 아니라 확인된 사실이다. 코호트 교차확인: native 평균 q_b 0.6042 ·
+RFD3 0.6604 가 스펙 §3 의 0.604 / 0.660 과 일치한다.
+
+**NO-GO 를 읽는 법.** 사전 지정 OC(`OC_primary_rfd3_only`) 아래에서 ρ ≈ 0.44
+규모에 대한 증거이고(P(GO) 0.94) ρ ≈ 0.18 규모에는 약한 증거다(검정력 0.31).
+백본 80 개에 384 차원이므로 **"신호 없음" 이 아니라 "이 표본에서 미검출"** 이다.
+관측된 top-1 regret 0.1493 은 같은 표의 귀무값 0.2274 보다 낮다 — 약하지만 0 이
+아닌 신호의 모습이다. 선행 시도(`13_gate0_target_level.py` 의 rfd3 타겟내
+ρ −0.257)는 correspondence metric 교체로 라벨이 무효화됐으므로 standing negative
+result 로 인용하지 않되, 시도가 있었다는 사실은 함께 적는다.
+
 ## Gate 2 · 백본 내부 서열 선택성 (2026-09-11)
 
 동결 스펙: `docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md`.
@@ -147,10 +190,10 @@ yield 백본만 담고 있으므로 여기서 나온 온도 효과는 전체 백
 
 | 값 | 수치 | 출처 |
 |---|---|---|
-| S6 (판정 arm) Δ_Top4 | **−0.0366** | `gate2_within_backbone_selectability.json` → `arms_joint_pass.S6.delta_top4_target_equal` |
-| S6 단측 90% LCB | **−0.0854** | 같은 파일 → `.one_sided_90_lcb` |
+| S6 (판정 arm) Δ_Top4 | **−0.0313** | `gate2_within_backbone_selectability.json` → `arms_joint_pass.S6.delta_top4_target_equal` |
+| S6 단측 90% LCB | **−0.0803** | 같은 파일 → `.one_sided_90_lcb` |
 | S6 informative 타겟 | 11 | 같은 파일 → `.informative_targets` |
-| 저심도 제외 민감도 (코호트 10) | Δ **−0.0444**, LCB −0.0982 | 같은 파일 → `low_depth_sensitivity` |
+| 저심도 제외 민감도 (코호트 10) | Δ **−0.0386**, LCB −0.0924 | 같은 파일 → `arms_joint_pass.S6.sensitivity_excluding_low_depth` |
 | oracle 상한 | +0.326 | 같은 파일 → `reference_points.oracle` |
 | SoluProt 기준선 | −0.001 | 같은 파일 → `reference_points.soluprot` |
 
@@ -158,26 +201,40 @@ yield 백본만 담고 있으므로 여기서 나온 온도 효과는 전체 백
 
 | S0 | S1 | S2 | S3 | S4 | S5 | S6 |
 |---|---|---|---|---|---|---|
-| −0.0014 / −0.0367 | +0.0384 / +0.0107 | −0.0188 / −0.0508 | −0.0029 / −0.0316 | +0.0001 / −0.0347 | −0.0366 / −0.0854 | **−0.0366 / −0.0854** |
+| −0.0014 / −0.0367 | +0.0384 / +0.0107 | −0.0188 / −0.0508 | −0.0029 / −0.0316 | +0.0001 / −0.0347 | −0.0366 / −0.0854 | **−0.0313 / −0.0803** |
 
 **S1 을 인용할 때 반드시 붙일 것.** S1(raw ESM mean)은 1 차 endpoint 에서 점추정이
 양수이고 LCB > 0 인 유일한 arm 이지만, **사전 등록된 known-null** 이고(82 타겟에서
 이미 음성) 문턱보다 0.06 낮다. 스펙이 S6 를 유일 판정 arm 으로 동결한 이유가 이런
 사후 arm 선택을 막기 위해서다. **S1 으로 어떤 판정도 내리지 않는다.**
 
-### ⚠️ 이 수치는 사전 등록한 S6 의 결과가 아니다
+### PRIMARY DEVIATION 해소 (2026-09-11) — 이제 사전 등록한 S6 다
 
-동결 스펙의 S6 는 `S5 + 기존 cheap feature(조성 + MPNN score)` 다. **이번 실행의
-S6 에는 MPNN score 가 없다** — 격자의 `sequences.csv` 에 그 열이 없고, score 를
-가진 모든 코호트와 격자 sequence_id 의 교집합이 **0** 이다. 따라서 realized S6 =
-`S5 + 조성` 이고, 실제로 S5 와 S6 의 joint-pass 수치가 동일하다.
+동결 스펙의 S6 는 `S5 + 기존 cheap feature(조성 + MPNN score)` 다. 2026-09-11 의
+첫 실행에는 MPNN score 열이 없었다 — 격자의 `sequences.csv` 에 그 열이 없고, score
+열을 가진 다른 코호트와 격자 sequence_id 의 교집합이 **0** 이었다. 그래서 realized
+S6 = `S5 + 조성` 이 되어 S5 와 bit-for-bit 같았고, 공식 판정이 `UNRESOLVED`
+(PRIMARY DEVIATION) 로 남았다.
 
-출처: 같은 파일 → `s6_cheap_block_deviation`.
+체크포인트 `v_48_020` 이 확보되어 **같은 1,680 폴드의 per-sequence MPNN score 를
+직접 계산했다** (`scripts/benchmark/27_gate2d_prepare_mpnn_scores.py`,
+`holdout_grid/mpnn_scores.json`). **새 AF2 는 0 개다** — 이미 있는 라벨에 열 하나를
+붙였다. 위 표의 수치는 이제 planned-S6 다.
 
-**따라서 위 수치는 realized-S6 의 결과이며, 공식 Gate 2 판정은 아직 닫히지
-않았다.** §8 판정표 상태는 `UNRESOLVED` 다. 인용할 때 "Gate 2 가 NO-GO 로
-판정됐다" 로 쓰지 않는다 — **"현재 시험한 서열 표현들에서 실용적으로 유용한 신호를
-찾지 못했다"** 까지가 이 수치가 지지하는 문장이다.
+| | Δ_Top4 | LCB90 | n_feat | 판정 |
+|---|---|---|---|---|
+| planned S6 (조성 + MPNN score) | **−0.0313** | −0.0803 | 355 | NO-GO |
+| realized S6 (2026-09-11 이전, MPNN score 없음) | −0.0366 | −0.0854 | 354 | NO-GO |
+
+출처: 같은 파일 → `s6_planned_vs_realized`. **두 판정이 일치한다** (`verdicts_agree:
+true`, 점추정 이동 +0.0053). S0–S5 는 bit-for-bit 그대로다 — 바뀐 것은 S6 의 열
+하나뿐이고 realized 판을 같은 실행에서 재현해 그것을 확인한다.
+
+따라서 planned-S6 도 NO-GO 이므로 스펙 §8 이 예고한 확정 경로가 열렸다. **다만 이
+파일은 §8 판정표를 대신 쓰지 않는다** — `docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md`
+§8 은 아직 `Gate 2 공식 판정 UNRESOLVED` · `Gate 1 PENDING` 이라고 적고 있고, 그
+표를 닫는 것(= `Gate 2 = NO-GO [FINAL]`, `C = closed`)은 스펙 소유자의 몫이다. 그때
+까지 §8 을 현재 상태로 인용하지 않는다.
 
 ## 아니라고 판정한 것
 

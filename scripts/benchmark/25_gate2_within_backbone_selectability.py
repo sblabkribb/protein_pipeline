@@ -98,21 +98,28 @@ def _low_depth_sensitivity(per_target: dict[str, float],
 
 def evaluate_arm(arm: str, grid: C.Grid, mixed: list[C.Backbone],
                  endpoint: str = "joint",
-                 low_depth_targets: Sequence[str] = ()) -> dict:
-    """한 arm 의 타겟 등가중 Delta_Top4. LOTO 로 낸 예측만 쓴다."""
+                 low_depth_targets: Sequence[str] = (),
+                 block_names: Sequence[str] | None = None) -> dict:
+    """한 arm 의 타겟 등가중 Delta_Top4. LOTO 로 낸 예측만 쓴다.
+
+    `block_names` 는 동결 블록 목록 대신 쓸 목록이다. arm 을 추가하는 수단이
+    아니고, 이미 실행돼 기록된 realized-S6 를 planned-S6 와 나란히 재현하는
+    데만 쓴다 (`F.REALIZED_S6_BLOCKS_2026_09_11`).
+    """
     from sklearn.linear_model import Ridge
 
     all_folds = grid.folds
     targets = [f.target_id for f in all_folds]
     y = np.array([(f.joint_pass if endpoint == "joint" else f.structural_pass)
                   for f in all_folds], dtype=float)
-    uses_msa = "msa" in F.ARM_BLOCKS[arm]
+    blocks = F.ARM_BLOCKS[arm] if block_names is None else tuple(block_names)
+    uses_msa = "msa" in blocks
 
     pred = np.zeros(len(all_folds))
     active_by_fold: dict[str, list[str]] = {}
     n_features = 0
     for train_idx, test_idx, held in F.loto_splits(targets):
-        x_fold, defect = F.assemble(arm, all_folds, train_idx)
+        x_fold, defect = F.assemble(arm, all_folds, train_idx, blocks)
         if x_fold is None:
             return {"arm": arm, "label": F.ARM_LABELS[arm], "endpoint": endpoint,
                     "status": "non_evaluable",
@@ -146,6 +153,7 @@ def evaluate_arm(arm: str, grid: C.Grid, mixed: list[C.Backbone],
     out["sensitivity_excluding_low_depth"] = _low_depth_sensitivity(
         per_target, low_depth_targets)
     out["n_features"] = n_features
+    out["feature_blocks"] = list(blocks)
     if uses_msa:
         out["active_msa_feature_names"] = active_by_fold
     return out
@@ -177,6 +185,40 @@ def main(argv: Sequence[str] | None = None) -> int:
                        for a in requested}
 
     primary = arms.get(F.PRIMARY_ARM)
+
+    # planned-S6(스펙대로, MPNN score 포함)와 realized-S6(2026-09-11 이전 실행,
+    # MPNN score 없음)를 나란히 낸다. arm 을 하나 더 만든 것이 아니라 같은 arm 의
+    # 구현 두 판이고, 판정은 planned 하나로만 낸다.
+    s6_comparison: dict = {"status": "not_run"}
+    if primary is not None and primary.get("status") == "primary":
+        realized = evaluate_arm(F.PRIMARY_ARM, grid, mixed,
+                                low_depth_targets=low_depth_targets,
+                                block_names=F.REALIZED_S6_BLOCKS_2026_09_11)
+        planned_go = (primary["meets_threshold"] and primary["lcb_exceeds_zero"]
+                      and primary["informative_targets"] >= G.MIN_INFORMATIVE_TARGETS)
+        realized_go = (realized["meets_threshold"] and realized["lcb_exceeds_zero"]
+                       and realized["informative_targets"] >= G.MIN_INFORMATIVE_TARGETS)
+        s6_comparison = {
+            "status": "compared",
+            "planned": {"blocks": list(F.ARM_BLOCKS[F.PRIMARY_ARM]),
+                        "n_features": primary["n_features"],
+                        "delta_top4_target_equal": primary["delta_top4_target_equal"],
+                        "one_sided_90_lcb": primary["one_sided_90_lcb"],
+                        "informative_targets": primary["informative_targets"],
+                        "verdict": "GO" if planned_go else "NO-GO"},
+            "realized_2026_09_11": {
+                "blocks": list(F.REALIZED_S6_BLOCKS_2026_09_11),
+                "n_features": realized["n_features"],
+                "delta_top4_target_equal": realized["delta_top4_target_equal"],
+                "one_sided_90_lcb": realized["one_sided_90_lcb"],
+                "informative_targets": realized["informative_targets"],
+                "verdict": "GO" if realized_go else "NO-GO",
+                "note": "MPNN score 열이 없어 S5 와 같았다. PRIMARY DEVIATION 기록."},
+            "verdicts_agree": bool(planned_go == realized_go),
+            "delta_shift": round(primary["delta_top4_target_equal"]
+                                 - realized["delta_top4_target_equal"], 4),
+            "decided_by": "planned only. realized 는 기록이고 판정에 쓰지 않는다.",
+        }
 
     # 판정 arm 이 **돌지 않은** 실행은 interim 이다 - 요청되지 않았거나 코드가 아직
     # 없거나. 기계가 읽을 수 있게 최상위에 박는다: verdict_note 문장에만 두면 이
@@ -245,19 +287,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             "msa_run_code_sha": (msa.get("msa_run_provenance") or {}).get("code_sha"),
         },
         "s6_cheap_block_deviation": {
+            "status": "resolved 2026-09-11",
             "spec_says": "S6 = S5 + 기존 cheap feature (조성, MPNN score) [스펙 §4]",
-            "implemented": "조성 20 열만. MPNN score 열은 없다.",
-            "reason": ("격자의 sequences.csv 에 per-sequence MPNN score 열이 없고"
-                       "(열: sequence_id·sequence·backbone_key·target_id·"
-                       "backbone_source·temperature·soluprot), "
-                       "mpnn_score_analysis.json 은 다른 코호트다(88 타겟/10,360 설계). "
-                       "격자 1,728 서열 id 와 score 열을 가진 다른 코호트"
-                       "(temperature_panel2·temperature_sweep) 의 교집합은 0 이다. "
-                       "없는 feature 를 있는 것처럼 쓰지 않는다."),
-            "effect_on_verdict": ("S6 가 스펙보다 좁다. 즉 판정 arm 이 스펙이 허용한 "
-                                  "것보다 적은 정보를 받았고, NO-GO 라면 그만큼 약한 "
-                                  "증거다. 이 차이를 결과에 기록한다."),
+            "implemented": ("조성 20 열 + per-sequence MPNN score 1 열. 스펙과 같다."),
+            "history": ("2026-09-11 이전 실행의 S6 에는 MPNN score 열이 없었다 - 격자의 "
+                        "sequences.csv 에 그 열이 없고(열: sequence_id·sequence·"
+                        "backbone_key·target_id·backbone_source·temperature·soluprot), "
+                        "mpnn_score_analysis.json 은 다른 코호트이며(88 타겟/10,360 설계) "
+                        "격자 1,728 서열 id 와의 교집합이 0 이었다. 그 실행의 S6 는 "
+                        "S5 와 bit-for-bit 같았고 Gate 2 판정이 PRIMARY DEVIATION 으로 "
+                        "남았다."),
+            "resolution": ("27_gate2d_prepare_mpnn_scores.py 가 격자 1,680 폴드의 score 를 "
+                           "직접 계산한다(새 AF2 0 개). 이제 S6 가 스펙대로다."),
+            "comparison": "s6_planned_vs_realized 를 본다.",
         },
+        "s6_planned_vs_realized": s6_comparison,
         "arms_joint_pass": arms,
         "arms_structural_pass_secondary": arms_structural,
         "verdict": verdict,

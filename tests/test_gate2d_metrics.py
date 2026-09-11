@@ -1400,7 +1400,12 @@ def test_msa_arm_is_non_evaluable_when_the_train_fold_defines_nothing():
 
 
 def test_full_ladder_shapes_and_s6_is_wider_than_s5():
-    """동결된 Step 7 계약 - S6 는 S5 보다 열이 많다."""
+    """동결된 Step 7 계약 - S6 는 S5 보다 열이 많다.
+
+    2026-09-11: cheap 블록이 스펙 §4 대로 "조성 + MPNN score" 가 되어 S6 의 열이
+    20 에서 21 로 늘었다. 계약(S6 > S5)은 그대로이고 폭만 바뀐다 - 이전 +20 은
+    MPNN score 열이 없던 PRIMARY DEVIATION 을 굳혀 둔 값이었다.
+    """
     import _gate2d_cohort as C
     import _gate2d_features as F
     grid = C.load_holdout_grid()
@@ -1413,7 +1418,7 @@ def test_full_ladder_shapes_and_s6_is_wider_than_s5():
     # S4 = candidate 5 열 + 타겟 6 열 + 지시자 2 열.
     assert x4.shape == (len(folds), len(F.CANDIDATE_MSA_FEATURES) + 6 + 2)
     assert x5.shape == (len(folds), 321 + x4.shape[1])       # ΔESM_mut + MSA
-    assert x6.shape == (len(folds), x5.shape[1] + 20)        # + 조성 20
+    assert x6.shape == (len(folds), x5.shape[1] + 21)        # + 조성 20 + MPNN score 1
     assert x6.shape[1] > x5.shape[1]
     assert len(F.active_msa_feature_names(folds, train_idx)) == x4.shape[1]
 
@@ -1625,3 +1630,74 @@ def test_gate1_committed_verdict_reproduces():
     # train/test 가 같은 feature 공간이라는 것이 산출물에 박혀 있어야 한다.
     assert payload["feature"]["train_test_same_space"] is True
     assert payload["feature"]["dev_reproduction_max_abs_diff"] < 1e-4
+
+
+def test_mpnn_score_block_is_part_of_s6_and_never_fails_open(monkeypatch, tmp_path):
+    """스펙 §4 의 cheap 은 "조성, MPNN score" 다. 없으면 멈춘다.
+
+    이 fail-closed 가 없으면 score 산출물이 사라진 환경에서 S6 가 조용히 다시
+    조성 전용이 되고, 그것이 PRIMARY DEVIATION 을 만든 경로다.
+    """
+    import _gate2d_features as F
+
+    assert F.ARM_BLOCKS["S6"] == ("esm_delta_mut", "msa", "cheap", "mpnn_score")
+    assert "mpnn_score" not in F.ARM_BLOCKS["S5"]
+    # realized 판은 arm 이 아니라 기록이다 - ladder 는 여전히 일곱 개다.
+    assert F.REALIZED_S6_BLOCKS_2026_09_11 == ("esm_delta_mut", "msa", "cheap")
+    assert len(F.ARMS) == 7
+
+    monkeypatch.setattr(F, "GRID", tmp_path)
+    with pytest.raises(SystemExit) as excinfo:
+        F.load_mpnn_scores()
+    assert "mpnn_scores.json" in str(excinfo.value)
+    assert "27_gate2d_prepare_mpnn_scores" in str(excinfo.value)
+
+
+def test_mpnn_scores_vary_within_backbone():
+    """백본 내부 순위 feature 이므로 백본 안에서 변해야 한다.
+
+    백본마다 상수면 Δ_Top4 에 기여할 수 없고, S6 에 열을 하나 더한 것이 아무 일도
+    하지 않는다. 그 경우를 조용히 넘기지 않는다.
+    """
+    import collections
+
+    import numpy as np
+
+    import _gate2d_cohort as C
+    import _gate2d_features as F
+
+    scores = F.load_mpnn_scores()
+    grid = C.load_holdout_grid()
+    assert len(grid.folds) == 1680
+    assert all(f.sequence_id in scores for f in grid.folds)
+
+    by_backbone = collections.defaultdict(list)
+    for fold in grid.folds:
+        by_backbone[fold.backbone_key].append(scores[fold.sequence_id])
+    sds = np.array([np.std(v) for v in by_backbone.values()])
+    assert len(sds) == 70
+    assert (sds > 0).all()          # 상수 백본이 하나도 없어야 한다
+    assert float(sds.mean()) > 0.01
+
+
+def test_gate2_planned_s6_is_compared_with_the_realized_deviation():
+    """PRIMARY DEVIATION 이 해소됐다는 것을 산출물이 스스로 말해야 한다."""
+    import json as _json
+    payload = _json.loads(
+        (ROOT / "public_data" / "benchmark" / "gate0"
+         / "gate2_within_backbone_selectability.json").read_text(encoding="utf-8"))
+
+    s6 = payload["arms_joint_pass"]["S6"]
+    assert s6["feature_blocks"] == ["esm_delta_mut", "msa", "cheap", "mpnn_score"]
+    assert s6["n_features"] == payload["arms_joint_pass"]["S5"]["n_features"] + 21
+
+    cmp_ = payload["s6_planned_vs_realized"]
+    assert cmp_["status"] == "compared"
+    assert cmp_["realized_2026_09_11"]["delta_top4_target_equal"] == -0.0366
+    assert cmp_["realized_2026_09_11"]["one_sided_90_lcb"] == -0.085366
+    assert cmp_["realized_2026_09_11"]["verdict"] == "NO-GO"
+    assert cmp_["planned"]["verdict"] == payload["verdict"]
+    assert payload["s6_cheap_block_deviation"]["status"] == "resolved 2026-09-11"
+
+    # planned 가 판정이고 realized 는 기록이다.
+    assert "planned only" in cmp_["decided_by"]
