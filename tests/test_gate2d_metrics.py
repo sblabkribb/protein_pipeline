@@ -1604,22 +1604,86 @@ def test_gate1_metrics_are_called_in_predicted_actual_order():
             == G.within_target_spearman(actual, pred, targets))
 
 
-def test_gate1_committed_verdict_reproduces():
-    """Gate 1 산출물을 고정한다. 문턱은 동결값이고 수치는 관측값이다."""
+def _gate1_payload():
     import json as _json
-    payload = _json.loads(
+    return _json.loads(
         (ROOT / "public_data" / "benchmark" / "gate0"
          / "gate1_backbone_predictability.json").read_text(encoding="utf-8"))
-    assert payload["go_arm"] == "primary"
-    assert payload["frozen_go_rule"]["rho_min"] == 0.25
+
+
+def _gate1_recompute_inputs():
+    """산출물이 아니라 **입력**에서 판정 arm 을 다시 적합할 재료."""
+    import importlib
+    import json as _json
+
+    import numpy as np
+
+    import _gate2d_cohort as C
+
+    gate1 = importlib.import_module("24_gate1_backbone_predictability")
+    grid = C.load_holdout_grid()
+    index = _json.loads((gate1.GATE0 / "holdout_grid" / "backbone_encoder.index.json")
+                        .read_text(encoding="utf-8"))
+    x_test_all = np.load(gate1.GATE0 / "holdout_grid" / "backbone_encoder.npy")
+    row_of = {k: i for i, k in enumerate(index["backbone_keys"])}
+    return gate1, grid, x_test_all, row_of
+
+
+def test_gate1_committed_verdict_reproduces():
+    """산출물을 **입력에서 다시 계산해** 대조한다. 읽은 값을 되읽지 않는다.
+
+    예전 판은 파일을 읽어 그 파일의 값을 자기에게 다시 단정했다 - 계산이 흘러가도
+    깨질 수 없는 테스트였고(`a63eda9` 의 `passed: True` 상수, `bcfecdb`·`3927b5b`
+    와 같은 결함), 실제로 이 테스트가 전부 통과하는 환경에서 Gate 1 은 기록값이
+    아닌 ρ 를 냈다. 그 결함이 첫 리뷰를 살아남은 이유다.
+
+    판정 arm 을 dev 라벨·홀드아웃 격자·encoder feature 에서 다시 적합한다. 전부
+    재계산해도 1 초 미만이므로 부분 재계산으로 타협하지 않는다. 추가로 `5pc8A00`
+    의 타겟 내 Spearman 을 따로 단정한다 - 솔버 정지 자리가 뒤집던 타겟이고,
+    ρ 가 우연히 같은 평균을 내는 경우까지 잡는다.
+
+    **환경마다 달라지는 진단값은 대조하지 않는다**: `solver.n_iter`,
+    `numerics.package_versions`, sklearn 기본값(tol=1e-4) 안정성 행, 그리고
+    순위 통계가 아닌 `arms.comparator.mean_predicted` (산출물의
+    `numerics.rank_statistics_only` 가 그 이유를 적어 둔다).
+    """
+    payload = _gate1_payload()
+    gate1, grid, x_test_all, row_of = _gate1_recompute_inputs()
+
+    # 동결값 - 결과를 보고 고치지 않는다.
+    assert payload["go_arm"] == gate1.GO_ARM == "primary"
+    assert payload["frozen_go_rule"]["rho_min"] == G.GATE1_RHO_MIN == 0.25
+    assert payload["numerics"]["bootstrap_seed"] == G.BOOTSTRAP_SEED
+    # 산출물의 수와 지금 코드의 솔버 설정이 같은 설정이어야 한다. 다르면 산출물은
+    # 다른 설정에서 나온 수이고, 아래 재계산이 그것을 재현할 이유가 없다.
+    assert payload["numerics"]["solver_tol"] == gate1.SOLVER_TOL
+    assert payload["numerics"]["solver_max_iter"] == gate1.SOLVER_MAX_ITER
+
+    recomputed = gate1.evaluate_arm("primary", grid, x_test_all, row_of)
     primary = payload["arms"]["primary"]
-    assert primary["informative_targets"] == 11
+    for key in ("informative_targets", "point", "one_sided_90_lcb",
+                "lcb_exceeds_zero", "per_target_spearman",
+                "top1_backbone_regret_mean_informative_cohort",
+                "top1_backbone_regret_mean_all_ranked_targets",
+                "top1_backbone_regret_mean", "per_target_regret",
+                "mean_q_b", "arm_meets_frozen_rule"):
+        assert recomputed[key] == primary[key], f"{key}: 재계산 != 기록"
+    assert recomputed["train"] == primary["train"]
+    assert recomputed["test"] == primary["test"]
     assert primary["train"]["n_backbones"] == 80
     assert primary["test"]["n_backbones"] == 60
-    assert primary["point"] == 0.0935
-    assert primary["one_sided_90_lcb"] == -0.115286
-    assert primary["top1_backbone_regret_mean"] == 0.1493
-    assert payload["verdict"] == "NO-GO"
+    assert primary["informative_targets"] == 11
+
+    # 이 테스트가 존재하는 이유인 타겟. 순서가 뒤집히면 여기서 먼저 깨진다.
+    assert recomputed["per_target_spearman"]["5pc8A00"] == \
+        primary["per_target_spearman"]["5pc8A00"]
+
+    # 판정도 다시 낸다 - 기록된 verdict 를 되읽지 않는다.
+    go = bool(recomputed["point"] >= G.GATE1_RHO_MIN
+              and recomputed["lcb_exceeds_zero"]
+              and recomputed["informative_targets"] >= G.MIN_INFORMATIVE_TARGETS)
+    assert go is False
+    assert payload["verdict"] == ("GO" if go else "NO-GO") == "NO-GO"
 
     # comparator 는 타겟당 백본 1개라 타겟 내 순위가 없다. 0 으로 대입하지 않는다.
     comparator = payload["arms"]["comparator"]
@@ -1630,6 +1694,103 @@ def test_gate1_committed_verdict_reproduces():
     # train/test 가 같은 feature 공간이라는 것이 산출물에 박혀 있어야 한다.
     assert payload["feature"]["train_test_same_space"] is True
     assert payload["feature"]["dev_reproduction_max_abs_diff"] < 1e-4
+
+
+def test_gate1_reported_value_is_not_a_solver_stopping_point():
+    """보고값이 tol 에 의존하지 않는다는 것을 **다시 재서** 확인한다.
+
+    blocker 였던 상태: sklearn 기본값 tol=1e-4 에서 lbfgs 가 최적점 전에 서고,
+    어디서 서는지가 판본에 따라 달라 primary ρ 가 +0.0935 / +0.0743 으로 갈렸다.
+    갈림의 전부는 `5pc8A00` 의 백본 두 개 순서 하나였다.
+
+    그래서 tol 을 10 배씩 조인 표를 산출물에 남기고, 여기서 그 표를 다시 계산해
+    **보고 tol 이하의 모든 행이 보고값과 같은지** 본다. 어떤 환경에서 보고값이
+    솔버 정지 자리에 의존하면 그 환경에서 이 테스트가 깨진다 - 환경 사이 일치를
+    주석으로 주장하지 않고 기계가 확인한다.
+
+    기본값 행(1e-4)의 값은 **대조하지 않는다**. 그 행이 판본에 따라 달라지는
+    것이 바로 이 결함의 내용이고, 그 사실은 산출물의 `matches_reported_value`
+    가 기록한다.
+    """
+    payload = _gate1_payload()
+    gate1, grid, x_test_all, row_of = _gate1_recompute_inputs()
+    reported = payload["arms"]["primary"]
+    keys = ("point", "one_sided_90_lcb", "informative_targets",
+            "top1_backbone_regret_mean_informative_cohort",
+            "top1_backbone_regret_mean_all_ranked_targets")
+
+    assert gate1.SOLVER_TOL <= 1e-5, "1e-4 는 안정 구간 밖이다 (기본값 결함)"
+    rows = gate1.solver_tol_stability("primary", grid, x_test_all, row_of)
+    converged = [r for r in rows if r["tol"] <= 1e-5]
+    assert len(converged) >= 3, "적어도 세 decade 를 확인한다"
+    for row in converged:
+        for key in keys:
+            assert row[key] == reported[key], f"tol={row['tol']:g} {key}"
+        assert row["matches_reported_value"] is True
+        assert row["per_target_spearman_5pc8A00"] == \
+            reported["per_target_spearman"]["5pc8A00"]
+        assert row["n_iter"] < gate1.SOLVER_MAX_ITER
+
+    # 표가 산출물에도 그 모습으로 남아 있어야 한다 (기본값 행은 값이 아니라
+    # 존재와 flag 만 본다).
+    stability = payload["numerics"]["solver_tol_stability"]
+    assert {r["tol"] for r in stability} >= {1e-4, 1e-5, 1e-6, 1e-7, 1e-8}
+    assert sum(r["is_reported"] for r in stability) == 1
+    for row in stability:
+        if row["tol"] <= 1e-5:
+            assert row["matches_reported_value"] is True
+            for key in keys:
+                assert row[key] == reported[key], f"기록된 tol={row['tol']:g} {key}"
+
+
+def test_gate1_regret_cohorts_are_named_and_the_oc_comparison_is_like_for_like():
+    """regret 의 두 코호트가 이름을 달고 있고, 귀무 대조가 같은 코호트인가.
+
+    blocker 였던 상태: `G.top1_regret` 은 백본 >= 3 인 타겟 **12** 개를 돌고
+    (`1sh6A02` 는 RFD3 백본 5 개가 전부 q_b = 1.00 이라 regret 이 구조적으로 0),
+    그 값을 informative **11** 개로 계산된 OC 귀무값과 나란히 비교했다. 방향은
+    살아남지만 비교 자체가 like-for-like 가 아니었다.
+    """
+    import json as _json
+
+    import _gate2d_cohort as C
+
+    payload = _gate1_payload()
+    primary = payload["arms"]["primary"]
+    cohorts = primary["regret_cohorts"]
+
+    informative = cohorts["informative_cohort"]
+    ranked = cohorts["all_ranked_targets"]
+    assert informative["n_targets"] == 11
+    assert ranked["n_targets"] == 12
+    assert set(ranked["targets"]) - set(informative["targets"]) == {"1sh6A02"}
+    # 두 값이 이름과 함께 있고, 각 이름이 실제로 그 코호트의 값이다.
+    assert primary["top1_backbone_regret_mean_informative_cohort"] == informative["value"]
+    assert primary["top1_backbone_regret_mean_all_ranked_targets"] == ranked["value"]
+    # 예전 키는 뜻이 바뀌지 않았다 - all_ranked_targets 판이다.
+    assert primary["top1_backbone_regret_mean"] == ranked["value"]
+    assert "all_ranked_targets" in primary["top1_backbone_regret_mean_cohort"]
+    assert primary["per_target_regret_cohort"] == "all_ranked_targets"
+    assert set(primary["per_target_regret"]) == set(ranked["targets"])
+    # 구조적 0 이 들어오므로 12 개 판이 11 개 판보다 작다.
+    assert ranked["value"] < informative["value"]
+
+    # informative 코호트가 OC 의 코호트와 **같은 집합**인가. 두 쪽 정의를 각각
+    # 다시 계산해 비교한다 - 산출물의 이름만 믿지 않는다.
+    grid = C.load_holdout_grid()
+    oc_cohort = C.gate1_informative_targets(C.restrict_to_sources(grid, ("rfd3",)))
+    assert informative["targets"] == oc_cohort
+    assert set(primary["per_target_spearman"]) == set(oc_cohort)
+
+    # OC 귀무값이 그 코호트로 계산돼 있는가.
+    oc = _json.loads(
+        (ROOT / "public_data" / "benchmark" / "gate0"
+         / "gate2d_operating_characteristics.json").read_text(encoding="utf-8"))
+    null_row = oc["gate1_operating_characteristics"]["OC_primary_rfd3_only"]["rows"][0]
+    assert null_row["sigma"] == "null"
+    assert null_row["n_informative_targets"] == informative["n_targets"] == 11
+    # 방향 진술("관측 regret < 귀무 regret")이 같은 코호트에서 성립하는가.
+    assert informative["value"] < null_row["mean_top1_regret"]
 
 
 def test_mpnn_score_block_is_part_of_s6_and_never_fails_open(monkeypatch, tmp_path):

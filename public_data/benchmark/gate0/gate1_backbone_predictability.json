@@ -1,17 +1,131 @@
 {
  "purpose": "Gate 1 - backbone predictability. 정책 비교가 아니다.",
  "spec": "docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md",
+ "numerics": {
+  "why_this_block_exists": "Gate 1 의 점추정이 한때 solver stopping point 로 정해졌다 - sklearn 기본값 tol=1e-4 에서 판본에 따라 ρ 가 +0.0935 / +0.0743 으로 갈렸다. tol 을 조여 데이터로 정해지게 하고, 그 설정을 여기 적는다.",
+  "bootstrap_seed": 20260910,
+  "lcb_primitive": "rapid_sr.clustered.one_sided_lcb (n_boot=20000, PCG64)",
+  "estimator": "sklearn.linear_model.LogisticRegression(solver='lbfgs', penalty='l2', C=1.0)",
+  "solver_tol": 1e-08,
+  "solver_max_iter": 20000,
+  "sklearn_default_tol": 0.0001,
+  "solver_tol_stability": [
+   {
+    "tol": 0.0001,
+    "is_sklearn_default": true,
+    "is_reported": false,
+    "n_iter": 119,
+    "point": 0.0935,
+    "one_sided_90_lcb": -0.115286,
+    "top1_backbone_regret_mean_informative_cohort": 0.1629,
+    "top1_backbone_regret_mean_all_ranked_targets": 0.1493,
+    "informative_targets": 11,
+    "per_target_spearman_5pc8A00": 0.5798,
+    "matches_reported_value": false
+   },
+   {
+    "tol": 1e-05,
+    "is_sklearn_default": false,
+    "is_reported": false,
+    "n_iter": 214,
+    "point": 0.0379,
+    "one_sided_90_lcb": -0.155869,
+    "top1_backbone_regret_mean_informative_cohort": 0.178,
+    "top1_backbone_regret_mean_all_ranked_targets": 0.1632,
+    "informative_targets": 11,
+    "per_target_spearman_5pc8A00": 0.3689,
+    "matches_reported_value": true
+   },
+   {
+    "tol": 1e-06,
+    "is_sklearn_default": false,
+    "is_reported": false,
+    "n_iter": 214,
+    "point": 0.0379,
+    "one_sided_90_lcb": -0.155869,
+    "top1_backbone_regret_mean_informative_cohort": 0.178,
+    "top1_backbone_regret_mean_all_ranked_targets": 0.1632,
+    "informative_targets": 11,
+    "per_target_spearman_5pc8A00": 0.3689,
+    "matches_reported_value": true
+   },
+   {
+    "tol": 1e-07,
+    "is_sklearn_default": false,
+    "is_reported": false,
+    "n_iter": 214,
+    "point": 0.0379,
+    "one_sided_90_lcb": -0.155869,
+    "top1_backbone_regret_mean_informative_cohort": 0.178,
+    "top1_backbone_regret_mean_all_ranked_targets": 0.1632,
+    "informative_targets": 11,
+    "per_target_spearman_5pc8A00": 0.3689,
+    "matches_reported_value": true
+   },
+   {
+    "tol": 1e-08,
+    "is_sklearn_default": false,
+    "is_reported": true,
+    "n_iter": 214,
+    "point": 0.0379,
+    "one_sided_90_lcb": -0.155869,
+    "top1_backbone_regret_mean_informative_cohort": 0.178,
+    "top1_backbone_regret_mean_all_ranked_targets": 0.1632,
+    "informative_targets": 11,
+    "per_target_spearman_5pc8A00": 0.3689,
+    "matches_reported_value": true
+   },
+   {
+    "tol": 1e-09,
+    "is_sklearn_default": false,
+    "is_reported": false,
+    "n_iter": 214,
+    "point": 0.0379,
+    "one_sided_90_lcb": -0.155869,
+    "top1_backbone_regret_mean_informative_cohort": 0.178,
+    "top1_backbone_regret_mean_all_ranked_targets": 0.1632,
+    "informative_targets": 11,
+    "per_target_spearman_5pc8A00": 0.3689,
+    "matches_reported_value": true
+   },
+   {
+    "tol": 1e-10,
+    "is_sklearn_default": false,
+    "is_reported": false,
+    "n_iter": 214,
+    "point": 0.0379,
+    "one_sided_90_lcb": -0.155869,
+    "top1_backbone_regret_mean_informative_cohort": 0.178,
+    "top1_backbone_regret_mean_all_ranked_targets": 0.1632,
+    "informative_targets": 11,
+    "per_target_spearman_5pc8A00": 0.3689,
+    "matches_reported_value": true
+   }
+  ],
+  "solver_tol_stability_arm": "primary",
+  "stability_reading": "tol <= 1e-5 에서 point·LCB·regret·informative 가 모두 같은 값이다(`matches_reported_value`). 기본값 1e-4 행만 다르며, 그 행은 최적점에 닿기 전에 멈춘 적합이다 - **그 행의 값 자체는 sklearn·scipy 판본에 따라 달라지므로** 재현 대조에 쓰지 않는다.",
+  "rank_statistics_only": "보고되는 1 차·2 차 지표는 전부 타겟 내 **순위** 통계다 - 수렴한 tol 에서 두 판본이 같은 순위를 주므로 값이 비트 단위로 같다. 반대로 순위가 아닌 기술값(`arms.comparator.mean_predicted`)은 솔버가 멈춘 자리에 4 번째 소수에서 의존한다. 그 값은 non-evaluable arm 의 기술값이며 어떤 판정에도 들어가지 않는다 - 숨기지 않고 여기 적어 둔다.",
+  "n_iter_is_environment_dependent": "`solver.n_iter` 와 `solver_tol_stability[].n_iter` 는 판본에 따라 다르다. sklearn 1.9 는 목적함수를 sum(sample_weight) 로 나누므로 같은 tol 이 같은 정지 조건이 아니다. 보고값이 아니라 진단값이다.",
+  "cross_environment_check": "환경 사이 일치는 주석으로 주장하지 않는다 - tests/test_gate2d_metrics.py::test_gate1_committed_verdict_reproduces 가 입력에서 다시 계산해 이 산출물과 대조하므로, 보고값이 환경에 의존하면 그 환경에서 테스트가 깨진다.",
+  "package_versions": {
+   "python": "3.12.3",
+   "scikit-learn": "1.9.0",
+   "scipy": "1.18.1",
+   "numpy": "2.5.3"
+  },
+  "feature_dtype": "float32 (backbone_encoder.npy 그대로)"
+ },
  "provenance": {
-  "code_sha": "eab4a3d2a301be50d987a233f70916765953102e",
+  "code_sha": "1576b3c03e7d06ecdc51e6e4000398fd46b2da6e",
   "code_sha_is_the_parent_of_the_artifact_commit": true,
   "script_sha256": {
-   "scripts/benchmark/24_gate1_backbone_predictability.py": "1b7295842f7b33af35e79ce04fbe22c3e455dedc46d9329e384e1331c82972b0",
+   "scripts/benchmark/24_gate1_backbone_predictability.py": "ec472412891343246fc70889df66972600cd833cf66db368ac271d294c0cdd69",
    "scripts/benchmark/21_gate2d_prepare_encoder.py": "89e24c6943d8a0126e7df0fc81dfe7953e783df06fbedea0c2657e4d3d42e2a7",
    "scripts/benchmark/_mpnn_encoder.py": "cf6c610d26a850ef6d512d2f1d7e77922608f530780f867c607978fa11baa351",
    "scripts/benchmark/_gate2d.py": "8d2bac676868a81d21cbfd68f608af36b8e33afac1ada1aebdb541e6bbf8cbb6",
    "scripts/benchmark/_gate2d_cohort.py": "568796052feb003411b0034cc37684a8dfb14bf8f19fa058062624decdfd4695"
   },
-  "utc": "2026-09-11T04:33:00Z"
+  "utc": "2026-09-11T05:44:16Z"
  },
  "does_not_do": [
   "알고리즘 제안",
@@ -51,23 +165,67 @@
    "informative_targets": 11,
    "evaluable": true,
    "metric": "target-equal mean within-target Spearman(q_hat_b, q_b)",
-   "point": 0.0935,
-   "one_sided_90_lcb": -0.115286,
+   "point": 0.0379,
+   "one_sided_90_lcb": -0.155869,
    "lcb_exceeds_zero": false,
    "per_target_spearman": {
     "1sp0A00": -0.2052,
     "1tm9A00": -0.4,
     "1vsrA00": 0.7182,
-    "2jokA01": 0.6,
+    "2jokA01": 0.2,
     "3bqwA01": 0.2236,
     "3es1A01": -0.7071,
     "3f2pA01": -0.6669,
     "3h7eA02": -0.2887,
     "5fwaA02": 0.8208,
-    "5pc8A00": 0.5798,
+    "5pc8A00": 0.3689,
     "5xpdA02": 0.3536
    },
-   "top1_backbone_regret_mean": 0.1493,
+   "top1_backbone_regret_mean_informative_cohort": 0.178,
+   "top1_backbone_regret_mean_all_ranked_targets": 0.1632,
+   "top1_backbone_regret_mean": 0.1632,
+   "top1_backbone_regret_mean_cohort": "all_ranked_targets - 예전 키이며 코호트가 이름에 없다. OC 귀무값과 비교할 때는 top1_backbone_regret_mean_informative_cohort 를 쓴다.",
+   "regret_cohorts": {
+    "informative_cohort": {
+     "n_targets": 11,
+     "targets": [
+      "1sp0A00",
+      "1tm9A00",
+      "1vsrA00",
+      "2jokA01",
+      "3bqwA01",
+      "3es1A01",
+      "3f2pA01",
+      "3h7eA02",
+      "5fwaA02",
+      "5pc8A00",
+      "5xpdA02"
+     ],
+     "value": 0.178,
+     "definition": "1 차 지표가 정의된 타겟 = 백본 >= 3 AND q_b 비상수. _gate2d_cohort.gate1_informative_targets 와 같은 집합이다.",
+     "compare_to": "gate2d_operating_characteristics.json → gate1_operating_characteristics.OC_primary_rfd3_only.rows[sigma=null].mean_top1_regret (0.2274, n_informative_targets 11). 귀무값이 이 코호트로 계산되므로 이 값이 like-for-like 다."
+    },
+    "all_ranked_targets": {
+     "n_targets": 12,
+     "targets": [
+      "1sh6A02",
+      "1sp0A00",
+      "1tm9A00",
+      "1vsrA00",
+      "2jokA01",
+      "3bqwA01",
+      "3es1A01",
+      "3f2pA01",
+      "3h7eA02",
+      "5fwaA02",
+      "5pc8A00",
+      "5xpdA02"
+     ],
+     "value": 0.1632,
+     "definition": "백본 >= 3 인 타겟 전부. `_gate2d.top1_regret` 의 기본 코호트다.",
+     "why_it_differs": "q_b 가 상수인 타겟이 들어온다 - `1sh6A02` 는 RFD3 백본 5 개가 모두 q_b = 1.00 이라 어느 백본을 골라도 regret 이 0 이다. 구조적 0 이므로 평균을 끌어내리고, OC 귀무값은 이 타겟을 빼고 계산된다."
+    }
+   },
    "per_target_regret": {
     "1sh6A02": 0.0,
     "1sp0A00": 0.0,
@@ -79,11 +237,17 @@
     "3f2pA01": 0.375,
     "3h7eA02": 0.0417,
     "5fwaA02": 0.0,
-    "5pc8A00": 0.0,
+    "5pc8A00": 0.1667,
     "5xpdA02": 0.3333
    },
+   "per_target_regret_cohort": "all_ranked_targets",
    "mean_q_b": 0.6604,
-   "arm_meets_frozen_rule": false
+   "arm_meets_frozen_rule": false,
+   "solver": {
+    "tol": 1e-08,
+    "max_iter": 20000,
+    "n_iter": 214
+   }
   },
   "sensitivity_1": {
    "label": "RFD3+BioEmu dev -> RFD3-only holdout",
@@ -122,7 +286,51 @@
     "5pc8A00": 0.7379,
     "5xpdA02": 0.0
    },
+   "top1_backbone_regret_mean_informative_cohort": 0.1818,
+   "top1_backbone_regret_mean_all_ranked_targets": 0.1667,
    "top1_backbone_regret_mean": 0.1667,
+   "top1_backbone_regret_mean_cohort": "all_ranked_targets - 예전 키이며 코호트가 이름에 없다. OC 귀무값과 비교할 때는 top1_backbone_regret_mean_informative_cohort 를 쓴다.",
+   "regret_cohorts": {
+    "informative_cohort": {
+     "n_targets": 11,
+     "targets": [
+      "1sp0A00",
+      "1tm9A00",
+      "1vsrA00",
+      "2jokA01",
+      "3bqwA01",
+      "3es1A01",
+      "3f2pA01",
+      "3h7eA02",
+      "5fwaA02",
+      "5pc8A00",
+      "5xpdA02"
+     ],
+     "value": 0.1818,
+     "definition": "1 차 지표가 정의된 타겟 = 백본 >= 3 AND q_b 비상수. _gate2d_cohort.gate1_informative_targets 와 같은 집합이다.",
+     "compare_to": "gate2d_operating_characteristics.json → gate1_operating_characteristics.OC_primary_rfd3_only.rows[sigma=null].mean_top1_regret (0.2274, n_informative_targets 11). 귀무값이 이 코호트로 계산되므로 이 값이 like-for-like 다."
+    },
+    "all_ranked_targets": {
+     "n_targets": 12,
+     "targets": [
+      "1sh6A02",
+      "1sp0A00",
+      "1tm9A00",
+      "1vsrA00",
+      "2jokA01",
+      "3bqwA01",
+      "3es1A01",
+      "3f2pA01",
+      "3h7eA02",
+      "5fwaA02",
+      "5pc8A00",
+      "5xpdA02"
+     ],
+     "value": 0.1667,
+     "definition": "백본 >= 3 인 타겟 전부. `_gate2d.top1_regret` 의 기본 코호트다.",
+     "why_it_differs": "q_b 가 상수인 타겟이 들어온다 - `1sh6A02` 는 RFD3 백본 5 개가 모두 q_b = 1.00 이라 어느 백본을 골라도 regret 이 0 이다. 구조적 0 이므로 평균을 끌어내리고, OC 귀무값은 이 타겟을 빼고 계산된다."
+    }
+   },
    "per_target_regret": {
     "1sh6A02": 0.0,
     "1sp0A00": 0.0,
@@ -137,8 +345,14 @@
     "5pc8A00": 0.0,
     "5xpdA02": 0.3333
    },
+   "per_target_regret_cohort": "all_ranked_targets",
    "mean_q_b": 0.6604,
-   "arm_meets_frozen_rule": false
+   "arm_meets_frozen_rule": false,
+   "solver": {
+    "tol": 1e-08,
+    "max_iter": 20000,
+    "n_iter": 221
+   }
   },
   "descriptive_legacy": {
    "label": "all-sources dev -> RFD3-only holdout",
@@ -178,7 +392,51 @@
     "5pc8A00": 0.7906,
     "5xpdA02": -0.7071
    },
+   "top1_backbone_regret_mean_informative_cohort": 0.2841,
+   "top1_backbone_regret_mean_all_ranked_targets": 0.2604,
    "top1_backbone_regret_mean": 0.2604,
+   "top1_backbone_regret_mean_cohort": "all_ranked_targets - 예전 키이며 코호트가 이름에 없다. OC 귀무값과 비교할 때는 top1_backbone_regret_mean_informative_cohort 를 쓴다.",
+   "regret_cohorts": {
+    "informative_cohort": {
+     "n_targets": 11,
+     "targets": [
+      "1sp0A00",
+      "1tm9A00",
+      "1vsrA00",
+      "2jokA01",
+      "3bqwA01",
+      "3es1A01",
+      "3f2pA01",
+      "3h7eA02",
+      "5fwaA02",
+      "5pc8A00",
+      "5xpdA02"
+     ],
+     "value": 0.2841,
+     "definition": "1 차 지표가 정의된 타겟 = 백본 >= 3 AND q_b 비상수. _gate2d_cohort.gate1_informative_targets 와 같은 집합이다.",
+     "compare_to": "gate2d_operating_characteristics.json → gate1_operating_characteristics.OC_primary_rfd3_only.rows[sigma=null].mean_top1_regret (0.2274, n_informative_targets 11). 귀무값이 이 코호트로 계산되므로 이 값이 like-for-like 다."
+    },
+    "all_ranked_targets": {
+     "n_targets": 12,
+     "targets": [
+      "1sh6A02",
+      "1sp0A00",
+      "1tm9A00",
+      "1vsrA00",
+      "2jokA01",
+      "3bqwA01",
+      "3es1A01",
+      "3f2pA01",
+      "3h7eA02",
+      "5fwaA02",
+      "5pc8A00",
+      "5xpdA02"
+     ],
+     "value": 0.2604,
+     "definition": "백본 >= 3 인 타겟 전부. `_gate2d.top1_regret` 의 기본 코호트다.",
+     "why_it_differs": "q_b 가 상수인 타겟이 들어온다 - `1sh6A02` 는 RFD3 백본 5 개가 모두 q_b = 1.00 이라 어느 백본을 골라도 regret 이 0 이다. 구조적 0 이므로 평균을 끌어내리고, OC 귀무값은 이 타겟을 빼고 계산된다."
+    }
+   },
    "per_target_regret": {
     "1sh6A02": 0.0,
     "1sp0A00": 0.0,
@@ -193,8 +451,14 @@
     "5pc8A00": 0.0,
     "5xpdA02": 0.3333
    },
+   "per_target_regret_cohort": "all_ranked_targets",
    "mean_q_b": 0.6604,
-   "arm_meets_frozen_rule": false
+   "arm_meets_frozen_rule": false,
+   "solver": {
+    "tol": 1e-08,
+    "max_iter": 20000,
+    "n_iter": 321
+   }
   },
   "comparator": {
    "label": "RFD3-only dev -> native holdout",
@@ -216,8 +480,13 @@
    "informative_targets": 0,
    "evaluable": false,
    "reason": "타겟당 백본이 3개 미만이라 타겟 내 Spearman 이 정의되지 않는다. 미정의를 0 으로 대입하지 않는다.",
-   "mean_predicted": 0.129,
-   "mean_q_b": 0.6042
+   "mean_predicted": 0.1222,
+   "mean_q_b": 0.6042,
+   "solver": {
+    "tol": 1e-08,
+    "max_iter": 20000,
+    "n_iter": 214
+   }
   }
  },
  "delta_generated_side_analysis": {
