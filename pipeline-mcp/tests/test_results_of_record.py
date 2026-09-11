@@ -208,6 +208,12 @@ GATE_CLAIMS = [
     ("Gate 2 planned S6 LCB", "Gate 2 · 백본 내부 서열 선택성",
      "gate2_within_backbone_selectability.json",
      "arms_joint_pass.S6.one_sided_90_lcb", 4),
+    ("Gate 2 RFD3-only sensitivity", "Gate 2 · 백본 내부 서열 선택성",
+     "gate2_within_backbone_selectability.json",
+     "arms_joint_pass.S6.sensitivity_rfd3_only.delta_top4_target_equal", 4),
+    ("Gate 2 RFD3-only sensitivity LCB", "Gate 2 · 백본 내부 서열 선택성",
+     "gate2_within_backbone_selectability.json",
+     "arms_joint_pass.S6.sensitivity_rfd3_only.one_sided_90_lcb", 4),
 ]
 
 

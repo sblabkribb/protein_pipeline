@@ -217,6 +217,7 @@ metric 교체로 라벨이 무효화됐으므로 standing negative result 로 �
 | S6 단측 90% LCB | **−0.0803** | 같은 파일 → `.one_sided_90_lcb` |
 | S6 informative 타겟 | 11 | 같은 파일 → `.informative_targets` |
 | 저심도 제외 민감도 (코호트 10) | Δ **−0.0386**, LCB −0.0924 | 같은 파일 → `arms_joint_pass.S6.sensitivity_excluding_low_depth` |
+| RFD3-only 민감도 (mixed 34 / informative 11) | Δ **−0.0225**, LCB −0.0755 | 같은 파일 → `arms_joint_pass.S6.sensitivity_rfd3_only` |
 | oracle 상한 | +0.326 | 같은 파일 → `reference_points.oracle` |
 | SoluProt 기준선 | −0.001 | 같은 파일 → `reference_points.soluprot` |
 
@@ -225,6 +226,17 @@ metric 교체로 라벨이 무효화됐으므로 standing negative result 로 �
 | S0 | S1 | S2 | S3 | S4 | S5 | S6 |
 |---|---|---|---|---|---|---|
 | −0.0014 / −0.0367 | +0.0384 / +0.0107 | −0.0188 / −0.0508 | −0.0029 / −0.0316 | +0.0001 / −0.0347 | −0.0366 / −0.0854 | **−0.0313 / −0.0803** |
+
+**RFD3-only 민감도는 스펙 §3 이 사전 등록한 것이다.** 1 차 코호트는 mixed 37 로
+유지하고 이것을 나란히 보고한다. **모델을 재적합하지 않는다** — 같은 LOTO 예측을
+RFD3 백본 34 개 위에서 다시 집계할 뿐이다. §3 의 "학습 쪽도 정렬한다" 는 Gate 1
+조항이고, Gate 2 문장은 코호트에 대한 것이며, ladder 는 arm 7 개로 동결돼 있어
+재적합은 여덟 번째 arm 이 된다. (재적합 판이 궁금하다면 +0.0097 / −0.0234 이고
+판정은 역시 NO-GO 다. 산출물에 `model_refit: false` 와 근거를 남겨 다르게 읽는
+사람이 재유도 없이 반박할 수 있게 했다.)
+
+**두 민감도 모두 1 차와 같은 방향이고 어느 문턱도 넘지 못한다.** 즉 NO-GO 는
+저심도 타겟에도, native 백본 포함 여부에도 의존하지 않는다.
 
 **S1 을 인용할 때 반드시 붙일 것.** S1(raw ESM mean)은 1 차 endpoint 에서 점추정이
 양수이고 LCB > 0 인 유일한 arm 이지만, **사전 등록된 known-null** 이고(82 타겟에서

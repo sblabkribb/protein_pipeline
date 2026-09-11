@@ -712,6 +712,37 @@ legacy arm 이 음수인 것은 §3 이 사전에 경고한 것과 일치한다 
 **GO 판정에서 제외**되며, 생성 백본이 native 보다 낫다는 주장의 근거로 쓰기에는
 LCB 가 0 을 포함한다.
 
+### Post-review terminology clarification (2026-09-11)
+
+The native/RFD3 source separation was **prediction-blind but label-structure-informed**,
+not strictly outcome-blind. Source-level `q_b` distributions and between-source variance
+were inspected before Gate 1 predictions were evaluated. All prespecified arms are
+reported. This refinement does not change the scientific verdict: both the RFD3-only
+primary arm (`ρ = 0.0935`) and the descriptive legacy all-source arm (`ρ = −0.0604`)
+remain below the frozen GO threshold (`ρ ≥ 0.25`). No threshold, endpoint, cohort, or
+arm was selected after observing Gate 1 predictive performance.
+
+이 문서 앞부분에서 이 결정을 `outcome-blind` 로 서술한 곳이 있다면 위 문단이
+우선한다. `outcome-blind` 를 `prediction-blind` 로 단순 치환하지 않고 조항을 추가하는
+이유는, 무엇을 보고 결정했는지(source 별 라벨 구조)와 무엇을 보지 않았는지(Gate 1
+예측 성능)를 둘 다 남겨야 하기 때문이다.
+
+### SoluProt 의 지위 (2026-09-11)
+
+**SoluProt 은 measured solubility 가 아니라 computational proxy 다.** 현재 RAPID 에서
+SoluProt 은 **optimization objective 가 아니라 proxy constraint / annotation** 이다.
+`docs/manuscript.md:149` 가 이미 *"pLDDT and SoluProt scores do not establish soluble
+expression … without experimental validation"* 라고 적고 있으며, 이 문서는 그와
+충돌하지 않는다.
+
+**게이트의 작동 강도는 코호트 의존적이다.** `SoluProt ≥ 0.5` 통과율은 홀드아웃
+격자(마스킹 없는 재설계)에서 **97.5%**, 보존 마스킹된 CATH 파일럿에서 **87.5%** 다.
+따라서 "거의 비어 있는 게이트" 라는 서술을 **파이프라인 전체로 일반화하지 않는다.**
+
+`improved solubility` · `optimized solubility` 같은 실험적 개선 주장은 하지 않는다.
+원고의 `solubility-oriented` 표현은 유지하되 Methods/Discussion 에서 SoluProt 의
+지위를 objective 가 아닌 proxy constraint 로 일관되게 기술한다.
+
 ### NO-GO 의 강도 — 사전 등록된 대로만 읽는다
 
 **Gate 1.** 사전 지정된 시뮬레이션 모형 아래에서 GO 확률은 ρ ≈ 0.33 에서 0.74,
