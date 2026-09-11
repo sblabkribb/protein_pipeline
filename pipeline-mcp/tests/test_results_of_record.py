@@ -186,3 +186,97 @@ def test_manuscript_states_the_scope_limits():
         ("not a binding-performance claim", "리간드가 성능 주장이 아니라는 것"),
     ):
         assert phrase in doc, f"원고에 {why} 진술이 없다 ({phrase!r})"
+
+
+# --- 2 축 게이트 (2026-09-11) -------------------------------------------------
+#
+# 아래는 값이 문서 "어딘가" 에 있는지가 아니라 **해당 Gate 절 안에** 있는지를 본다.
+# 전역 검색이면 다른 절의 우연한 같은 숫자가 통과시킨다 - 게이트 두 개가 같은
+# 지표군을 쓰므로 실제로 일어날 수 있다.
+
+#: (설명, 절 제목, 산출물, JSON 경로, 소수 자릿수)
+GATE_CLAIMS = [
+    ("Gate 1 primary rho", "Gate 1 · 백본 예측 가능성",
+     "gate1_backbone_predictability.json", "arms.primary.point", 4),
+    ("Gate 1 primary LCB", "Gate 1 · 백본 예측 가능성",
+     "gate1_backbone_predictability.json", "arms.primary.one_sided_90_lcb", 4),
+    ("Gate 1 top-1 regret", "Gate 1 · 백본 예측 가능성",
+     "gate1_backbone_predictability.json", "arms.primary.top1_backbone_regret_mean", 4),
+    ("Gate 2 planned S6 Delta_Top4", "Gate 2 · 백본 내부 서열 선택성",
+     "gate2_within_backbone_selectability.json",
+     "arms_joint_pass.S6.delta_top4_target_equal", 4),
+    ("Gate 2 planned S6 LCB", "Gate 2 · 백본 내부 서열 선택성",
+     "gate2_within_backbone_selectability.json",
+     "arms_joint_pass.S6.one_sided_90_lcb", 4),
+]
+
+
+def _normalised_doc() -> str:
+    """U+2212 MINUS SIGN 을 ASCII 하이픈으로. 문서는 −, 파이썬은 - 를 쓴다."""
+    return _doc().replace("−", "-")
+
+
+def _section(heading: str) -> str:
+    """`## <heading>` 부터 다음 `## ` 직전까지. 없으면 빈 문자열."""
+    lines = _normalised_doc().splitlines()
+    out, inside = [], False
+    for line in lines:
+        if line.startswith("## "):
+            if inside:
+                break
+            inside = heading in line
+            if inside:
+                continue
+        if inside:
+            out.append(line)
+    return "\n".join(out)
+
+
+@pytest.mark.parametrize("label,heading,artifact,path,places", GATE_CLAIMS)
+def test_gate_number_is_in_its_own_section(label, heading, artifact, path, places):
+    value = _dig(_load(artifact), path)
+    body = _section(heading)
+    assert body, f"{label}: '{heading}' 절을 찾지 못했다"
+    rounded = round(float(value), places)
+    # 문서는 양수에 + 를 붙이고 음수는 − 를 쓴다. 둘 다 허용하되 값은 정확해야 한다.
+    forms = {f"{rounded:+.{places}f}", f"{rounded:.{places}f}"}
+    assert any(f in body for f in forms), (
+        f"{label}: 산출물 값 {sorted(forms)} 중 어느 것도 '{heading}' 절에 없다. "
+        f"재계산으로 값이 바뀌었으면 docs/results_of_record.md 를 고친다.")
+
+
+def test_both_gate_verdicts_are_recorded_as_final():
+    for artifact in ("gate1_backbone_predictability.json",
+                     "gate2_within_backbone_selectability.json"):
+        assert _load(artifact)["verdict"] == "NO-GO", f"{artifact} 판정이 NO-GO 가 아니다"
+    doc = _normalised_doc()
+    assert "NO-GO [FINAL]" in doc, "두 게이트의 최종 판정 표시가 문서에 없다"
+
+
+def test_realized_s6_is_kept_but_marked_superseded():
+    """정본은 planned S6 다. realized 판은 provenance 로만 남는다.
+
+    지우면 왜 -0.0366 이 중간에 있었는지 설명할 수 없고, 정본처럼 두면 이 파일이
+    존재하는 이유였던 그 혼동이 재발한다.
+    """
+    body = _section("Gate 2 · 백본 내부 서열 선택성")
+    assert "-0.0313" in body, "정본 planned S6 값이 없다"
+    assert "-0.0366" in body, "superseded realized S6 값이 지워졌다 - provenance 손실"
+    assert "realized S6" in body and "planned S6" in body, "둘을 구분하는 표기가 없다"
+    assert "MPNN score 없음" in body, "realized 판이 왜 다른지가 적혀 있지 않다"
+
+
+def test_gate1_interpretation_limits_travel_with_the_numbers():
+    """수치만 복사되는 것을 막는다. 금지 문장이 같은 절에 있어야 한다."""
+    body = _section("Gate 1 · 백본 예측 가능성")
+    assert "이 표본에서 미검출" in body, "NO-GO 를 '신호 없음' 으로 읽지 말라는 단서가 없다"
+    assert "n/p = 0.21" in body, "80 백본 / 384 차원 한계가 빠졌다"
+    assert "존재하지 않는다" in body, "금지 문장 목록이 빠졌다"
+
+
+def test_stop_is_scoped_to_the_surrogate_axis_not_rapid():
+    """STOP 이 RAPID 자체를 접는 것으로 읽히면 안 된다."""
+    body = _section("최종 판정 · Surrogate × RAPID 2축 확장")
+    assert body, "최종 판정 절을 찾지 못했다"
+    assert "RAPID 자체를 접는다는 뜻이 아니다" in body, "STOP 의 범위 제한이 없다"
+    assert "RAPID v2" in body and "별개" in body, "v2 전향 검증이 별개라는 표시가 없다"

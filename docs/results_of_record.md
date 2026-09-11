@@ -141,18 +141,20 @@ yield 백본만 담고 있으므로 여기서 나온 온도 효과는 전체 백
 
 ## Gate 1 · 백본 예측 가능성 (2026-09-11)
 
-동결 스펙: `docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md` §3.
+동결 스펙 `docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md` §3. 질문:
+**AF2 를 보기 전 cheap feature 로 어느 백본의 q_b 가 높은지 예측할 수 있는가.**
 feature = ProteinMPNN encoder 384-D (`v_48_020` soluble). **새 AF2 0 개.**
 판정 arm 은 primary 하나다 — RFD3-only dev(백본 80·타겟 16)로 학습해 RFD3-only
 홀드아웃(백본 60·타겟 12, informative 11)에서 평가한다.
 
-| 값 | 수치 | 출처 |
+| 값 | 정본 | 출처 (`gate1_backbone_predictability.json`) |
 |---|---|---|
-| primary 타겟 등가중 mean within-target Spearman | **+0.0935** | `gate1_backbone_predictability.json` → `arms.primary.point` |
-| primary 단측 90% LCB | **−0.1153** | 같은 파일 → `.one_sided_90_lcb` |
-| primary informative 타겟 | 11 | 같은 파일 → `.informative_targets` |
-| primary top-1 백본 regret (2 차) | 0.1493 | 같은 파일 → `.top1_backbone_regret_mean` |
-| 판정 | **NO-GO** (문턱 ρ ≥ 0.25, LCB > 0, informative ≥ 8 중 두 개 미달) | 같은 파일 → `verdict` |
+| primary 타겟 등가중 mean within-target Spearman | **+0.0935** | `arms.primary.point` |
+| primary 단측 90% LCB | **−0.1153** | `arms.primary.one_sided_90_lcb` |
+| primary informative 타겟 | **11** | `arms.primary.informative_targets` |
+| primary top-1 백본 regret (2 차) | **0.1493** | `arms.primary.top1_backbone_regret_mean` |
+| 동결 문턱 | ρ ≥ +0.25 ∧ LCB > 0 ∧ n ≥ 8 | `frozen_go_rule` |
+| **판정** | **NO-GO [FINAL]** (문턱 세 개 중 두 개 미달) | `verdict` |
 
 동반 arm (사전 등록, 판정에 쓰지 않는다):
 
@@ -162,25 +164,42 @@ feature = ProteinMPNN encoder 384-D (`v_48_020` soluble). **새 AF2 0 개.**
 | descriptive / legacy | 전체 dev (157·62) | −0.0604 | −0.2561 | 0.2604 |
 | comparator (native 홀드아웃) | — | **non-evaluable** | — | — |
 
-comparator 는 타겟당 native 백본이 1 개라 타겟 내 Spearman 이 정의되지 않는다.
-**0 으로 대입하지 않는다** — 재지 못한 것과 0 은 다르다. 부수 분석
-Δ_generated = q_b(생성) − q_b(native) 는 **+0.0825** (LCB −0.0475, 타겟 10) 이고
-GO 판정에 들어가지 않는다.
+**해석 제한 — 이 두 줄을 수치와 떼어 인용하지 않는다.**
 
-**feature 공간 확인.** dev `mpnn_encoder.npy` 를 만든 스크립트는 커밋된 적이 없어
-추출기를 재구현했다. 홀드아웃에 적용하기 전에 dev 157 백본을 다시 뽑아 커밋된
-산출물과 비교했고 `max abs diff 9.06e-06`, `allclose(atol=1e-4) True` 였다
-(`21_gate2d_prepare_encoder.py --verify-dev`). 따라서 train/test 가 같은 공간이라는
-것은 가정이 아니라 확인된 사실이다. 코호트 교차확인: native 평균 q_b 0.6042 ·
-RFD3 0.6604 가 스펙 §3 의 0.604 / 0.660 과 일치한다.
+> **허용:** "사전 등록된 RFD3-only primary test 에서 backbone-level cheap
+> predictability 가 GO 기준에 도달하지 못했다."
+>
+> **금지:** "ProteinMPNN encoder 는 backbone quality 를 예측하지 못한다."
+> "backbone-level signal 은 존재하지 않는다."
 
-**NO-GO 를 읽는 법.** 사전 지정 OC(`OC_primary_rfd3_only`) 아래에서 ρ ≈ 0.44
-규모에 대한 증거이고(P(GO) 0.94) ρ ≈ 0.18 규모에는 약한 증거다(검정력 0.31).
-백본 80 개에 384 차원이므로 **"신호 없음" 이 아니라 "이 표본에서 미검출"** 이다.
-관측된 top-1 regret 0.1493 은 같은 표의 귀무값 0.2274 보다 낮다 — 약하지만 0 이
-아닌 신호의 모습이다. 선행 시도(`13_gate0_target_level.py` 의 rfd3 타겟내
-ρ −0.257)는 correspondence metric 교체로 라벨이 무효화됐으므로 standing negative
-result 로 인용하지 않되, 시도가 있었다는 사실은 함께 적는다.
+근거: primary 는 **백본 80 개에 384 차원**(n/p = 0.21)이고, 스펙 §3 이 결과 전에
+이 NO-GO 를 **"신호 없음" 이 아니라 "이 표본에서 미검출"** 로 읽도록 고정했다.
+사전 지정 OC(`OC_primary_rfd3_only`)에서 GO 확률은 ρ ≈ 0.33 에서 0.74, ρ ≈ 0.44
+에서 0.94 다. 관측된 top-1 regret 0.1493 은 같은 표의 귀무값 0.2274 보다 낮다 —
+약하지만 0 이 아닌 신호의 모습이다.
+
+**legacy arm 이 음수인 것은 예고된 것이다.** §3 이 native 백본이 계수를 형성한다고
+사전에 경고했고, 그래서 native 를 배분 풀에서 빼 comparator 로 분리했다. comparator
+는 native 가 타겟당 1 백본이라 타겟 내 Spearman 이 정의되지 않아 non-evaluable 이며
+**0 으로 대입하지 않는다** — 재지 못한 것과 0 은 다르다.
+
+부수 분석 `Δ_generated` = q_b(생성) − q_b(native) = **+0.0825** (LCB −0.0475,
+타겟 10) — GO 판정에서 제외된다. LCB 가 0 을 포함하므로 "생성 백본이 native 보다
+낫다" 의 근거로 쓰지 않는다.
+
+**feature 공간은 가정이 아니라 확인된 사실이다.** dev `mpnn_encoder.npy` 를 만든
+스크립트는 커밋된 적이 없어(`1c2eeb4` 는 산출물만) 추출기를 재구현했다. 홀드아웃에
+적용하기 **전에** dev 157 백본을 다시 뽑아 커밋된 산출물과 비교했고
+`max abs diff 9.06e-06`, `allclose(atol=1e-4) True` 였다
+(`21_gate2d_prepare_encoder.py --verify-dev`). 결정적 요소는 **`residue_idx` 가
+상수**(상대 위치 인코딩 비활성)이며 `1c2eeb4` 의 "sequence-independent" 서술과
+일치한다 — 다만 그것이 원래 의도였는지는 원본 스크립트가 없어 확인할 수 없다.
+코호트 교차확인: native 평균 q_b 0.6042 · RFD3 0.6604 가 스펙 §3 의 0.604 / 0.660
+과 일치한다.
+
+**선행 시도.** `13_gate0_target_level.py` 의 rfd3 타겟내 ρ −0.257 은 correspondence
+metric 교체로 라벨이 무효화됐으므로 standing negative result 로 인용하지 않되,
+시도가 있었다는 사실은 함께 적는다.
 
 ## Gate 2 · 백본 내부 서열 선택성 (2026-09-11)
 
@@ -232,51 +251,6 @@ true`, 점추정 이동 +0.0053). S0–S5 는 bit-for-bit 그대로다 — 바�
 
 따라서 planned-S6 도 NO-GO 이고, 스펙 §8 은 `9f1a1ae` 에서 **`Gate 2 = NO-GO
 [FINAL]`** 로 닫혔다.
-
-## Gate 1 · 백본 예측 가능성 (2026-09-11)
-
-동결 스펙 §3. 질문: **AF2 를 보기 전 cheap feature 로 어느 백본의 q_b 가 높은지
-예측할 수 있는가.** 지표 = 타겟 등가중 mean within-target Spearman. **새 AF2 0 개.**
-
-| 값 | 정본 | 출처 (`gate1_backbone_predictability.json`) |
-|---|---|---|
-| primary arm | RFD3-only dev → RFD3-only holdout | `arms.primary.label` |
-| mean within-target Spearman | **+0.0935** | `arms.primary.point` |
-| 단측 90% LCB | **−0.1153** | `arms.primary.one_sided_90_lcb` |
-| informative 타겟 | **11** | `arms.primary.informative_targets` |
-| top-1 backbone regret | **0.1493** | `arms.primary.top1_backbone_regret_mean` |
-| 동결 문턱 | ρ ≥ +0.25 ∧ LCB > 0 ∧ n ≥ 8 | `frozen_go_rule` |
-| **판정** | **NO-GO [FINAL]** | `verdict` |
-| sensitivity 1 (RFD3+BioEmu) | ρ **+0.0577** (LCB −0.1524) | `arms.sensitivity_1` |
-| descriptive / legacy (전체 source) | ρ **−0.0604** (LCB −0.2561) | `arms.legacy` |
-| comparator (native) | **non-evaluable** | `arms.comparator` |
-
-**해석 제한 — 이 두 줄을 수치와 떼어 인용하지 않는다.**
-
-> **허용:** "사전 등록된 RFD3-only primary test 에서 backbone-level cheap
-> predictability 가 GO 기준에 도달하지 못했다."
->
-> **금지:** "ProteinMPNN encoder 는 backbone quality 를 예측하지 못한다."
-> "backbone-level signal 은 존재하지 않는다."
-
-근거: primary 는 **백본 80 개에 384 차원**(n/p = 0.21)이고, 스펙 §3 이 결과 전에
-이 NO-GO 를 **"신호 없음" 이 아니라 "이 표본에서 미검출"** 로 읽도록 고정했다.
-사전 지정된 모형에서 GO 확률은 ρ ≈ 0.33 에서 0.74, ρ ≈ 0.44 에서 0.94 다.
-
-**legacy arm 이 음수인 것은 예고된 것이다.** §3 이 native 백본이 계수를 형성한다고
-사전에 경고했고, 그래서 native 를 배분 풀에서 빼 comparator 로 분리했다. comparator
-는 native 가 타겟당 1 백본이라 타겟 내 Spearman 이 정의되지 않아 non-evaluable 이며
-**0 으로 기록하지 않는다.**
-
-부수 분석 `Δ_generated` = **+0.0825** (LCB −0.0475, 10 타겟) — GO 판정에서 제외된다.
-LCB 가 0 을 포함하므로 "생성 백본이 native 보다 낫다" 의 근거로 쓰지 않는다.
-
-**encoder feature 에 붙는 단서.** Gate 1 의 feature 는 **복구된 레시피**다 — 원본
-추출 스크립트가 커밋된 적이 없다(`1c2eeb4` 는 산출물만). dev 157 백본을
-`max_abs_diff 9.06e-06`, `allclose(atol=1e-4) True` 로 재현한 뒤에만 홀드아웃에
-적용했다. 결정적 요소는 **`residue_idx` 가 상수**(상대 위치 인코딩 비활성)라는
-것이고, 이는 `1c2eeb4` 의 "sequence-independent" 서술과 일치한다. 그것이 원래
-의도였는지는 원본 스크립트가 없어 확인할 수 없다.
 
 ## 최종 판정 · Surrogate × RAPID 2축 확장 (2026-09-11)
 
