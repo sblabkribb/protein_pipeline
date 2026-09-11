@@ -230,11 +230,74 @@ S6 = `S5 + 조성` 이 되어 S5 와 bit-for-bit 같았고, 공식 판정이 `UN
 true`, 점추정 이동 +0.0053). S0–S5 는 bit-for-bit 그대로다 — 바뀐 것은 S6 의 열
 하나뿐이고 realized 판을 같은 실행에서 재현해 그것을 확인한다.
 
-따라서 planned-S6 도 NO-GO 이므로 스펙 §8 이 예고한 확정 경로가 열렸다. **다만 이
-파일은 §8 판정표를 대신 쓰지 않는다** — `docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md`
-§8 은 아직 `Gate 2 공식 판정 UNRESOLVED` · `Gate 1 PENDING` 이라고 적고 있고, 그
-표를 닫는 것(= `Gate 2 = NO-GO [FINAL]`, `C = closed`)은 스펙 소유자의 몫이다. 그때
-까지 §8 을 현재 상태로 인용하지 않는다.
+따라서 planned-S6 도 NO-GO 이고, 스펙 §8 은 `9f1a1ae` 에서 **`Gate 2 = NO-GO
+[FINAL]`** 로 닫혔다.
+
+## Gate 1 · 백본 예측 가능성 (2026-09-11)
+
+동결 스펙 §3. 질문: **AF2 를 보기 전 cheap feature 로 어느 백본의 q_b 가 높은지
+예측할 수 있는가.** 지표 = 타겟 등가중 mean within-target Spearman. **새 AF2 0 개.**
+
+| 값 | 정본 | 출처 (`gate1_backbone_predictability.json`) |
+|---|---|---|
+| primary arm | RFD3-only dev → RFD3-only holdout | `arms.primary.label` |
+| mean within-target Spearman | **+0.0935** | `arms.primary.point` |
+| 단측 90% LCB | **−0.1153** | `arms.primary.one_sided_90_lcb` |
+| informative 타겟 | **11** | `arms.primary.informative_targets` |
+| top-1 backbone regret | **0.1493** | `arms.primary.top1_backbone_regret_mean` |
+| 동결 문턱 | ρ ≥ +0.25 ∧ LCB > 0 ∧ n ≥ 8 | `frozen_go_rule` |
+| **판정** | **NO-GO [FINAL]** | `verdict` |
+| sensitivity 1 (RFD3+BioEmu) | ρ **+0.0577** (LCB −0.1524) | `arms.sensitivity_1` |
+| descriptive / legacy (전체 source) | ρ **−0.0604** (LCB −0.2561) | `arms.legacy` |
+| comparator (native) | **non-evaluable** | `arms.comparator` |
+
+**해석 제한 — 이 두 줄을 수치와 떼어 인용하지 않는다.**
+
+> **허용:** "사전 등록된 RFD3-only primary test 에서 backbone-level cheap
+> predictability 가 GO 기준에 도달하지 못했다."
+>
+> **금지:** "ProteinMPNN encoder 는 backbone quality 를 예측하지 못한다."
+> "backbone-level signal 은 존재하지 않는다."
+
+근거: primary 는 **백본 80 개에 384 차원**(n/p = 0.21)이고, 스펙 §3 이 결과 전에
+이 NO-GO 를 **"신호 없음" 이 아니라 "이 표본에서 미검출"** 로 읽도록 고정했다.
+사전 지정된 모형에서 GO 확률은 ρ ≈ 0.33 에서 0.74, ρ ≈ 0.44 에서 0.94 다.
+
+**legacy arm 이 음수인 것은 예고된 것이다.** §3 이 native 백본이 계수를 형성한다고
+사전에 경고했고, 그래서 native 를 배분 풀에서 빼 comparator 로 분리했다. comparator
+는 native 가 타겟당 1 백본이라 타겟 내 Spearman 이 정의되지 않아 non-evaluable 이며
+**0 으로 기록하지 않는다.**
+
+부수 분석 `Δ_generated` = **+0.0825** (LCB −0.0475, 10 타겟) — GO 판정에서 제외된다.
+LCB 가 0 을 포함하므로 "생성 백본이 native 보다 낫다" 의 근거로 쓰지 않는다.
+
+**encoder feature 에 붙는 단서.** Gate 1 의 feature 는 **복구된 레시피**다 — 원본
+추출 스크립트가 커밋된 적이 없다(`1c2eeb4` 는 산출물만). dev 157 백본을
+`max_abs_diff 9.06e-06`, `allclose(atol=1e-4) True` 로 재현한 뒤에만 홀드아웃에
+적용했다. 결정적 요소는 **`residue_idx` 가 상수**(상대 위치 인코딩 비활성)라는
+것이고, 이는 `1c2eeb4` 의 "sequence-independent" 서술과 일치한다. 그것이 원래
+의도였는지는 원본 스크립트가 없어 확인할 수 없다.
+
+## 최종 판정 · Surrogate × RAPID 2축 확장 (2026-09-11)
+
+> **STOP.** Gate 1 과 Gate 2 모두 사전 등록된 GO 기준에 도달하지 못했으므로, 현재
+> 시험한 feature family 에 기반한 **B(backbone-specific surrogate prior)** 및
+> **C(sequence-level targeted/sentinel extension)** 개발은 진행하지 않는다.
+
+**STOP 의 범위를 좁게 읽는다.** 이것은 **RAPID 자체를 접는다는 뜻이 아니다.**
+이번 surrogate 결합 연구축을 접는 것이며, **RAPID v2 의 독립적인 전향 검증은
+별개이고 영향받지 않는다.** 이 게이트는 그 검증에 어떤 변경도 넣지 않았다
+(스펙 §9).
+
+판정 근거 두 줄:
+
+| | 정본 | 문턱 | |
+|---|---|---|---|
+| Gate 1 | ρ +0.0935 · LCB −0.1153 · n 11 | ρ ≥ 0.25 | NO-GO |
+| Gate 2 | Δ_Top4 −0.0313 · LCB −0.0803 · n 11 | ≥ +0.10 | NO-GO |
+
+**전 과정에서 새 AF2 는 0 개다.** 기존 1,680 폴드 라벨을 재사용했고, 새로 든 계산은
+MSA 12 타겟 · ESM 임베딩 · 백본 encoder · MPNN score 뿐이다.
 
 ## 아니라고 판정한 것
 
