@@ -455,6 +455,18 @@ GATE_CLAIMS = [
           "RFD3-only 민감도 (mixed 34 / informative 11)",
           "gate2_within_backbone_selectability.json",
           "arms_joint_pass.S6.sensitivity_rfd3_only.one_sided_90_lcb", 4),
+    # 재적합 대안 읽기. 산문에 있으므로 행 주소가 없다(`row=None`) - 그래도
+    # 등재된 수치는 전부 산출물에 묶여 있어야 한다는 규칙은 같다. 이 두 줄이
+    # 없으면 "모든 수치가 산출물 경로를 단다" 를 만족시키려고 새로 적은 값이
+    # 정작 아무 테스트에도 묶이지 않는다.
+    Claim("Gate 2 RFD3-only 재적합 Delta_Top4", "Gate 2 · 백본 내부 서열 선택성",
+          None, "gate2_within_backbone_selectability.json",
+          ("arms_joint_pass", "S6", "sensitivity_rfd3_only",
+           "alternative_reading_model_refit", "delta_top4_target_equal"), 4),
+    Claim("Gate 2 RFD3-only 재적합 LCB", "Gate 2 · 백본 내부 서열 선택성",
+          None, "gate2_within_backbone_selectability.json",
+          ("arms_joint_pass", "S6", "sensitivity_rfd3_only",
+           "alternative_reading_model_refit", "one_sided_90_lcb"), 6),
     # 최종 판정 절의 "판정 근거 두 줄". 같은 수치가 게이트 절에서 옮겨 적힌
     # 곳이므로, 두 사본이 같이 움직이는지 여기서 따로 본다.
     Claim("최종 판정 Gate 1 rho", "최종 판정 · Surrogate × RAPID 2축 확장", "Gate 1",
@@ -640,9 +652,10 @@ def test_the_recorded_registry_digest_matches_the_v1_tag():
         f"manifest 가 재발행됐거나 태그가 움직였다. 둘 다 조용히 일어나서는 안 "
         f"되는 일이다 - 구 digest·신 digest·'v1 수치는 바뀌지 않았다'는 확인을 "
         f"함께 기록해야 한다.")
-    # v1 의 가장 오래된 인용값. 이 파일이 존재하는 이유이기도 하다.
-    assert "0.7247" in blob.decode("utf-8"), (
-        f"태그 {V1_TAG} 의 본문에 v1 정본 AUC 0.7247 이 없다.")
+    # v1 의 가장 오래된 인용값(0.7247)을 여기서 다시 찾지 않는다 - 바로 위
+    # digest 대조가 blob 을 완전히 결정하므로 그 검사는 발화할 수 없다.
+    # 그 값이 **지금 문서에** 살아 있는지는 CLAIMS 와
+    # `test_the_frozen_v1_body_is_still_present_verbatim` 이 본다.
 
 
 def test_the_frozen_v1_body_is_still_present_verbatim():

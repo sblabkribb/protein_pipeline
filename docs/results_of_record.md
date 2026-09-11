@@ -159,7 +159,7 @@ feature = ProteinMPNN encoder 384-D (`v_48_020` soluble). **새 AF2 0 개.**
 
 동반 arm (사전 등록, 판정에 쓰지 않는다):
 
-| arm | train | ρ | LCB90 | regret |
+| arm | train | ρ | LCB90 | top-1 regret (informative 11) |
 |---|---|---|---|---|
 | sensitivity 1 | RFD3+BioEmu (100·16) | +0.0577 | −0.1524 | 0.1818 |
 | descriptive / legacy | 전체 dev (157·62) | −0.0604 | −0.2561 | 0.2841 |
@@ -235,7 +235,6 @@ RFD3 백본 34 개 위에서 다시 집계할 뿐이다. §3 의 "학습 쪽도 
 조항이고, Gate 2 문장은 코호트에 대한 것이며, ladder 는 arm 7 개로 동결돼 있어
 재적합은 여덟 번째 arm 이 된다. (재적합 판은 **+0.0097 / −0.023359** 이고 산출물
 `arms_joint_pass.S6.sensitivity_rfd3_only.alternative_reading_model_refit` 에 기록돼 있다.
-판정은
 판정은 역시 NO-GO 다. 산출물에 `model_refit: false` 와 근거를 남겨 다르게 읽는
 사람이 재유도 없이 반박할 수 있게 했다.)
 

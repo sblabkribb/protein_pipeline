@@ -12,6 +12,9 @@
   "solver_tol_stability": [
    {
     "tol": 0.0001,
+    "input_dtype": "float32",
+    "fit_dtype": "float32",
+    "is_production_dtype": true,
     "is_sklearn_default": true,
     "is_reported": false,
     "n_iter": 119,
@@ -25,6 +28,9 @@
    },
    {
     "tol": 1e-05,
+    "input_dtype": "float32",
+    "fit_dtype": "float32",
+    "is_production_dtype": true,
     "is_sklearn_default": false,
     "is_reported": false,
     "n_iter": 214,
@@ -38,6 +44,9 @@
    },
    {
     "tol": 1e-06,
+    "input_dtype": "float32",
+    "fit_dtype": "float32",
+    "is_production_dtype": true,
     "is_sklearn_default": false,
     "is_reported": false,
     "n_iter": 214,
@@ -51,6 +60,9 @@
    },
    {
     "tol": 1e-07,
+    "input_dtype": "float32",
+    "fit_dtype": "float32",
+    "is_production_dtype": true,
     "is_sklearn_default": false,
     "is_reported": false,
     "n_iter": 214,
@@ -64,6 +76,9 @@
    },
    {
     "tol": 1e-08,
+    "input_dtype": "float32",
+    "fit_dtype": "float32",
+    "is_production_dtype": true,
     "is_sklearn_default": false,
     "is_reported": true,
     "n_iter": 214,
@@ -77,6 +92,9 @@
    },
    {
     "tol": 1e-09,
+    "input_dtype": "float32",
+    "fit_dtype": "float32",
+    "is_production_dtype": true,
     "is_sklearn_default": false,
     "is_reported": false,
     "n_iter": 214,
@@ -90,6 +108,9 @@
    },
    {
     "tol": 1e-10,
+    "input_dtype": "float32",
+    "fit_dtype": "float32",
+    "is_production_dtype": true,
     "is_sklearn_default": false,
     "is_reported": false,
     "n_iter": 214,
@@ -100,12 +121,126 @@
     "informative_targets": 11,
     "per_target_spearman_5pc8A00": 0.3689,
     "matches_reported_value": true
+   },
+   {
+    "tol": 0.0001,
+    "input_dtype": "float64",
+    "fit_dtype": "float64",
+    "is_production_dtype": false,
+    "is_sklearn_default": true,
+    "is_reported": false,
+    "n_iter": 142,
+    "point": 0.0743,
+    "one_sided_90_lcb": -0.128515,
+    "top1_backbone_regret_mean_informative_cohort": 0.178,
+    "top1_backbone_regret_mean_all_ranked_targets": 0.1632,
+    "informative_targets": 11,
+    "per_target_spearman_5pc8A00": 0.3689,
+    "matches_reported_value": false
+   },
+   {
+    "tol": 1e-05,
+    "input_dtype": "float64",
+    "fit_dtype": "float64",
+    "is_production_dtype": false,
+    "is_sklearn_default": false,
+    "is_reported": false,
+    "n_iter": 300,
+    "point": 0.0379,
+    "one_sided_90_lcb": -0.155869,
+    "top1_backbone_regret_mean_informative_cohort": 0.178,
+    "top1_backbone_regret_mean_all_ranked_targets": 0.1632,
+    "informative_targets": 11,
+    "per_target_spearman_5pc8A00": 0.3689,
+    "matches_reported_value": true
+   },
+   {
+    "tol": 1e-06,
+    "input_dtype": "float64",
+    "fit_dtype": "float64",
+    "is_production_dtype": false,
+    "is_sklearn_default": false,
+    "is_reported": false,
+    "n_iter": 382,
+    "point": 0.0379,
+    "one_sided_90_lcb": -0.155869,
+    "top1_backbone_regret_mean_informative_cohort": 0.178,
+    "top1_backbone_regret_mean_all_ranked_targets": 0.1632,
+    "informative_targets": 11,
+    "per_target_spearman_5pc8A00": 0.3689,
+    "matches_reported_value": true
+   },
+   {
+    "tol": 1e-07,
+    "input_dtype": "float64",
+    "fit_dtype": "float64",
+    "is_production_dtype": false,
+    "is_sklearn_default": false,
+    "is_reported": false,
+    "n_iter": 535,
+    "point": 0.0379,
+    "one_sided_90_lcb": -0.155869,
+    "top1_backbone_regret_mean_informative_cohort": 0.178,
+    "top1_backbone_regret_mean_all_ranked_targets": 0.1632,
+    "informative_targets": 11,
+    "per_target_spearman_5pc8A00": 0.3689,
+    "matches_reported_value": true
+   },
+   {
+    "tol": 1e-08,
+    "input_dtype": "float64",
+    "fit_dtype": "float64",
+    "is_production_dtype": false,
+    "is_sklearn_default": false,
+    "is_reported": false,
+    "n_iter": 642,
+    "point": 0.0379,
+    "one_sided_90_lcb": -0.155869,
+    "top1_backbone_regret_mean_informative_cohort": 0.178,
+    "top1_backbone_regret_mean_all_ranked_targets": 0.1632,
+    "informative_targets": 11,
+    "per_target_spearman_5pc8A00": 0.3689,
+    "matches_reported_value": true
+   },
+   {
+    "tol": 1e-09,
+    "input_dtype": "float64",
+    "fit_dtype": "float64",
+    "is_production_dtype": false,
+    "is_sklearn_default": false,
+    "is_reported": false,
+    "n_iter": 642,
+    "point": 0.0379,
+    "one_sided_90_lcb": -0.155869,
+    "top1_backbone_regret_mean_informative_cohort": 0.178,
+    "top1_backbone_regret_mean_all_ranked_targets": 0.1632,
+    "informative_targets": 11,
+    "per_target_spearman_5pc8A00": 0.3689,
+    "matches_reported_value": true
+   },
+   {
+    "tol": 1e-10,
+    "input_dtype": "float64",
+    "fit_dtype": "float64",
+    "is_production_dtype": false,
+    "is_sklearn_default": false,
+    "is_reported": false,
+    "n_iter": 642,
+    "point": 0.0379,
+    "one_sided_90_lcb": -0.155869,
+    "top1_backbone_regret_mean_informative_cohort": 0.178,
+    "top1_backbone_regret_mean_all_ranked_targets": 0.1632,
+    "informative_targets": 11,
+    "per_target_spearman_5pc8A00": 0.3689,
+    "matches_reported_value": true
    }
   ],
   "solver_tol_stability_arm": "primary",
-  "stability_reading": "tol <= 1e-5 에서 point·LCB·regret·informative 가 모두 같은 값이다(`matches_reported_value`). 기본값 1e-4 행만 다르며, 그 행은 최적점에 닿기 전에 멈춘 적합이다 - **그 행의 값 자체는 sklearn·scipy 판본에 따라 달라지므로** 재현 대조에 쓰지 않는다.",
+  "solver_tol_stability_axes": "tol × 입력 dtype. 판본을 바꾸지 않고 판본 차이의 원인(dtype)을 이 환경에서 재현한다.",
+  "reported_fit_dtype": "float32",
+  "stability_reading": "tol <= 1e-5 에서 point·LCB·regret·informative 가 모두 같은 값이다(`matches_reported_value`) - **두 입력 dtype 모두에서** 그렇다. 기본값 1e-4 행만 다르며, 그 행은 최적점에 닿기 전에 멈춘 적합이다 - **그 행의 값 자체는 입력 dtype 과 sklearn·scipy 판본에 따라 달라지므로** 재현 대조에 쓰지 않는다.",
   "rank_statistics_only": "보고되는 1 차·2 차 지표는 전부 타겟 내 **순위** 통계다 - 수렴한 tol 에서 두 판본이 같은 순위를 주므로 값이 비트 단위로 같다. 반대로 순위가 아닌 기술값(`arms.comparator.mean_predicted`)은 솔버가 멈춘 자리에 4 번째 소수에서 의존한다. 그 값은 non-evaluable arm 의 기술값이며 어떤 판정에도 들어가지 않는다 - 숨기지 않고 여기 적어 둔다.",
-  "n_iter_is_environment_dependent": "`solver.n_iter` 와 `solver_tol_stability[].n_iter` 는 판본에 따라 다르다. sklearn 1.9 는 목적함수를 sum(sample_weight) 로 나누므로 같은 tol 이 같은 정지 조건이 아니다. 보고값이 아니라 진단값이다.",
+  "n_iter_is_environment_dependent": "`solver.n_iter` 와 `solver_tol_stability[].n_iter` 는 환경에 따라 다르다. 원인은 목적함수가 아니라 **dtype** 이다 - 두 판본 모두 손실을 sum(sample_weight) 로 나누고(`l2_reg_strength = 1/(C*sw_sum)`), 다른 것은 sklearn 1.9.0 이 float32 입력을 그대로 푸는 반면 1.8.0 은 float64 로 올린다는 점이다. 그래서 이 산출물의 적합은 float32 에서 돌았다(`solver.fit_dtype`). 위 표의 dtype 축이 그것을 매 실행마다 다시 잰다: 한 판본 안에서 입력 dtype 만 바꾸면 tol=1e-4 의 +0.0935(float32) / +0.0743(float64) 가 모두 재현되고, tol <= 1e-5 에서는 두 dtype 이 같은 값을 낸다. n_iter 는 보고값이 아니라 진단값이다.",
   "cross_environment_check": "환경 사이 일치는 주석으로 주장하지 않는다 - tests/test_gate2d_metrics.py::test_gate1_committed_verdict_reproduces 가 입력에서 다시 계산해 이 산출물과 대조하므로, 보고값이 환경에 의존하면 그 환경에서 테스트가 깨진다.",
   "package_versions": {
    "python": "3.12.3",
@@ -116,16 +251,16 @@
   "feature_dtype": "float32 (backbone_encoder.npy 그대로)"
  },
  "provenance": {
-  "code_sha": "1576b3c03e7d06ecdc51e6e4000398fd46b2da6e",
+  "code_sha": "ecdaecf689f753408f5b08ebcfb2b6bd3f28ee54",
   "code_sha_is_the_parent_of_the_artifact_commit": true,
   "script_sha256": {
-   "scripts/benchmark/24_gate1_backbone_predictability.py": "ec472412891343246fc70889df66972600cd833cf66db368ac271d294c0cdd69",
+   "scripts/benchmark/24_gate1_backbone_predictability.py": "2921ac51379b242ffd1a566d9a14de1b4e4df1282e60b960f22dc4e6cc35e7b7",
    "scripts/benchmark/21_gate2d_prepare_encoder.py": "89e24c6943d8a0126e7df0fc81dfe7953e783df06fbedea0c2657e4d3d42e2a7",
    "scripts/benchmark/_mpnn_encoder.py": "cf6c610d26a850ef6d512d2f1d7e77922608f530780f867c607978fa11baa351",
    "scripts/benchmark/_gate2d.py": "8d2bac676868a81d21cbfd68f608af36b8e33afac1ada1aebdb541e6bbf8cbb6",
    "scripts/benchmark/_gate2d_cohort.py": "568796052feb003411b0034cc37684a8dfb14bf8f19fa058062624decdfd4695"
   },
-  "utc": "2026-09-11T05:44:16Z"
+  "utc": "2026-09-11T08:08:29Z"
  },
  "does_not_do": [
   "알고리즘 제안",
@@ -246,7 +381,8 @@
    "solver": {
     "tol": 1e-08,
     "max_iter": 20000,
-    "n_iter": 214
+    "n_iter": 214,
+    "fit_dtype": "float32"
    }
   },
   "sensitivity_1": {
@@ -351,7 +487,8 @@
    "solver": {
     "tol": 1e-08,
     "max_iter": 20000,
-    "n_iter": 221
+    "n_iter": 221,
+    "fit_dtype": "float32"
    }
   },
   "descriptive_legacy": {
@@ -457,7 +594,8 @@
    "solver": {
     "tol": 1e-08,
     "max_iter": 20000,
-    "n_iter": 321
+    "n_iter": 321,
+    "fit_dtype": "float32"
    }
   },
   "comparator": {
@@ -485,7 +623,8 @@
    "solver": {
     "tol": 1e-08,
     "max_iter": 20000,
-    "n_iter": 214
+    "n_iter": 214,
+    "fit_dtype": "float32"
    }
   }
  },

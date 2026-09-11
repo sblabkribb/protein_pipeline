@@ -89,6 +89,17 @@ REPRO_ATOL_MAX = 1e-4
 #: 두 개 순서 하나였고, 그 두 예측확률의 간격은 4.4e-4 였다 - feature 가
 #: float32 이므로 float32 epsilon 아래의 섭동으로도 뒤집히는 자리다.
 #:
+#: **판본이 갈린 원인은 목적함수가 아니라 dtype 이다.** 한때 여기에 "sklearn
+#: 1.9 는 손실을 sum(sample_weight) 로 나누므로 같은 tol 이 같은 정지 조건이
+#: 아니다" 라고 적혀 있었는데 그것은 틀렸다 - 두 판본 다 그렇게 나눈다
+#: (`_logistic.py` 의 `l2_reg_strength = 1/(C*sw_sum)`, `_linear_loss` 의
+#: `sum/sw_sum` 과 `np.average(..., weights=sw)` 는 같은 식이다). 실제로 다른
+#: 것은 1.9.0 이 float32 입력을 그대로 푸는 반면 1.8.0 은 float64 로 올린다는
+#: 점이고, 따라서 **이 산출물의 적합은 float32 에서 돌았다**. 이 문장도 주장으로
+#: 두지 않는다 - `solver_tol_stability` 가 dtype 축을 함께 돌기 때문에, 한 판본
+#: 안에서 입력 dtype 만 바꿔도 tol=1e-4 의 +0.0935(float32) / +0.0743(float64)
+#: 가 그대로 재현되는 것이 매 실행마다 산출물에 남는다.
+#:
 #: tol 을 10 배씩 조이면 두 판본이 tol <= 1e-5 에서 같은 값으로 수렴한다. 그
 #: 값은 이 estimator 의 목적함수(L2 penalised logistic, C=1)의 **정확한 최적점**
 #: 에서 나오는 값과 같다 - 독립 Newton 해(|grad|_inf ~ 1e-13)로 확인했다. 즉
@@ -106,6 +117,11 @@ SKLEARN_DEFAULT_TOL = 1e-4
 #: 안정성을 **주장하지 않고 측정한다** - 판정 arm 에서 이 tol 들을 다 돌려
 #: 보고값이 변하지 않는 구간을 산출물에 남긴다. 첫 항목은 sklearn 기본값이다.
 SOLVER_TOL_DECADES = (1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10)
+
+#: 안정성 표의 두 번째 축. 판본 차이의 원인이 dtype 이므로, 한 판본 안에서 두
+#: dtype 을 다 돌린다 - "다른 판본에서도 같다" 를 주석으로 주장하는 대신, 그
+#: 환경이 실제로 하는 일(float64 upcast)을 여기서 해 보고 결과를 적는다.
+SOLVER_DTYPES = ("float32", "float64")
 
 
 def _reproduction_defect(index: dict) -> str | None:
@@ -158,12 +174,15 @@ def load_dev(sources: tuple[str, ...] | None = None):
 
 def fit_predict(x_train, y_train, w_train, x_test, *,
                 tol: float = SOLVER_TOL,
-                max_iter: int = SOLVER_MAX_ITER) -> tuple[np.ndarray, int]:
+                max_iter: int = SOLVER_MAX_ITER) -> tuple[np.ndarray, int, str]:
     """설계 수로 가중한 이항 로지스틱. 13_gate0_target_level.py 와 같은 형태.
 
-    `(예측확률, 실제 반복수)` 를 돌려준다. 반복수는 산출물에 적는다 - 보고값이
-    솔버의 정지 자리에 의존하지 않는다는 것을 사람이 확인할 수 있어야 한다
-    (`SOLVER_TOL` 주석).
+    `(예측확률, 실제 반복수, 적합 dtype)` 를 돌려준다. 반복수는 산출물에 적는다
+    - 보고값이 솔버의 정지 자리에 의존하지 않는다는 것을 사람이 확인할 수 있어야
+    한다 (`SOLVER_TOL` 주석). 적합 dtype 도 **재서** 적는다: sklearn 판본에 따라
+    float32 입력이 보존되기도 하고 float64 로 올라가기도 하며, 그것이 기본 tol
+    에서 판본이 갈렸던 이유다. 어느 정밀도로 풀렸는지는 독자가 추론할 것이
+    아니라 산출물에 있어야 한다.
 
     **반복이 잘리면 멈춘다.** max_iter 에 걸린 적합은 수렴한 적합이 아니고,
     sklearn 은 그 경우 ConvergenceWarning 하나만 낸다 - 경고는 파이프라인을
@@ -189,7 +208,8 @@ def fit_predict(x_train, y_train, w_train, x_test, *,
             "잘린 적합의 예측은 데이터가 아니라 반복 예산이 정한 값이므로 "
             "Gate 1 을 보고하지 않는다."
         )
-    return model.predict_proba((x_test - mu) / sd)[:, 1], n_iter
+    return (model.predict_proba((x_test - mu) / sd)[:, 1], n_iter,
+            str(model.coef_.dtype))
 
 
 def _test_cohort(grid, sources, row_of):
@@ -245,35 +265,50 @@ def _gate1_metrics(q_pred, q_true, targets) -> dict:
 
 
 def solver_tol_stability(name: str, grid, x_test_all, row_of,
-                         tols=SOLVER_TOL_DECADES) -> list[dict]:
-    """tol 10 배씩에서 보고값이 변하는지 **매 실행마다 다시 잰다**.
+                         tols=SOLVER_TOL_DECADES,
+                         dtypes=SOLVER_DTYPES) -> list[dict]:
+    """tol × 입력 dtype 격자에서 보고값이 변하는지 **매 실행마다 다시 잰다**.
 
     안정성을 주석으로 주장하지 않는다. 표가 산출물에 들어가므로, 어떤 환경에서
     보고값이 tol 에 의존하면 그 사실이 그 환경의 산출물에 남는다.
+
+    dtype 축이 두 번째로 붙은 이유: 기본 tol 에서 판본이 갈렸던 원인이 판본
+    자체가 아니라 입력 dtype 이었다(`SOLVER_TOL` 주석). 한 판본 안에서 두
+    dtype 을 다 돌면 그 갈림을 이 환경에서 재현할 수 있고, 그래서 "다른
+    판본에서도 같은 값" 이 설치본에 대한 신뢰가 아니라 측정이 된다.
     """
     spec, (x_dev, y_dev, w_dev, _tgt), labelled, x_test = _arm_inputs(
         name, grid, x_test_all, row_of)
     q_true = [b.q_b for b in labelled]
     targets = [b.target_id for b in labelled]
+    # 보고값을 낸 dtype 은 손으로 적지 않는다 - 실제로 실린 feature 에서 읽는다.
+    production_dtype = str(x_dev.dtype)
     rows = []
-    for tol in tols:
-        q_pred, n_iter = fit_predict(x_dev, y_dev, w_dev, x_test,
-                                     tol=tol, max_iter=SOLVER_MAX_ITER)
-        m = _gate1_metrics(q_pred, q_true, targets)
-        rows.append({
-            "tol": float(tol),
-            "is_sklearn_default": bool(tol == SKLEARN_DEFAULT_TOL),
-            "is_reported": bool(tol == SOLVER_TOL),
-            "n_iter": n_iter,
-            "point": round(m["point"], 4),
-            "one_sided_90_lcb": m["lcb"].get("lcb"),
-            "top1_backbone_regret_mean_informative_cohort":
-                round(m["regret_informative"], 4),
-            "top1_backbone_regret_mean_all_ranked_targets":
-                round(m["regret_ranked"], 4),
-            "informative_targets": len(m["informative_cohort"]),
-            "per_target_spearman_5pc8A00": round(m["rhos"].get("5pc8A00", float("nan")), 4),
-        })
+    for dtype in dtypes:
+        xd, xt = x_dev.astype(dtype), x_test.astype(dtype)
+        for tol in tols:
+            q_pred, n_iter, fit_dtype = fit_predict(
+                xd, y_dev, w_dev, xt, tol=tol, max_iter=SOLVER_MAX_ITER)
+            m = _gate1_metrics(q_pred, q_true, targets)
+            rows.append({
+                "tol": float(tol),
+                "input_dtype": str(dtype),
+                "fit_dtype": fit_dtype,
+                "is_production_dtype": bool(str(dtype) == production_dtype),
+                "is_sklearn_default": bool(tol == SKLEARN_DEFAULT_TOL),
+                "is_reported": bool(tol == SOLVER_TOL
+                                    and str(dtype) == production_dtype),
+                "n_iter": n_iter,
+                "point": round(m["point"], 4),
+                "one_sided_90_lcb": m["lcb"].get("lcb"),
+                "top1_backbone_regret_mean_informative_cohort":
+                    round(m["regret_informative"], 4),
+                "top1_backbone_regret_mean_all_ranked_targets":
+                    round(m["regret_ranked"], 4),
+                "informative_targets": len(m["informative_cohort"]),
+                "per_target_spearman_5pc8A00":
+                    round(m["rhos"].get("5pc8A00", float("nan")), 4),
+            })
     # "보고값과 같은가" 를 주석이 아니라 측정으로 남긴다. 기본값 행은 여기서
     # false 로 찍히며, 그 행의 값 자체는 판본에 따라 달라진다.
     reported = next(r for r in rows if r["is_reported"])
@@ -291,7 +326,7 @@ def evaluate_arm(name: str, grid, x_test_all, row_of) -> dict:
     q_true = [b.q_b for b in labelled]
     targets = [b.target_id for b in labelled]
 
-    q_pred, n_iter = fit_predict(x_dev, y_dev, w_dev, x_test)
+    q_pred, n_iter, fit_dtype = fit_predict(x_dev, y_dev, w_dev, x_test)
     metrics = _gate1_metrics(q_pred, q_true, targets)
     rhos, regrets = metrics["rhos"], metrics["regrets"]
     informative = len(metrics["informative_cohort"])
@@ -314,7 +349,8 @@ def evaluate_arm(name: str, grid, x_test_all, row_of) -> dict:
                          "않는다. 미정의를 0 으로 대입하지 않는다.")
         row["mean_predicted"] = round(float(np.mean(q_pred)), 4)
         row["mean_q_b"] = round(float(G.target_equal_mean(q_true, targets)), 4)
-        row["solver"] = {"tol": SOLVER_TOL, "max_iter": SOLVER_MAX_ITER, "n_iter": n_iter}
+        row["solver"] = {"tol": SOLVER_TOL, "max_iter": SOLVER_MAX_ITER,
+                         "n_iter": n_iter, "fit_dtype": fit_dtype}
         return row
 
     # informative 코호트가 OC 의 코호트와 **같은 집합인지** 확인한다. 두 쪽이
@@ -380,7 +416,8 @@ def evaluate_arm(name: str, grid, x_test_all, row_of) -> dict:
         "per_target_regret_cohort": "all_ranked_targets",
         "mean_q_b": round(float(G.target_equal_mean(q_true, targets)), 4),
         "arm_meets_frozen_rule": go,
-        "solver": {"tol": SOLVER_TOL, "max_iter": SOLVER_MAX_ITER, "n_iter": n_iter},
+        "solver": {"tol": SOLVER_TOL, "max_iter": SOLVER_MAX_ITER,
+                   "n_iter": n_iter, "fit_dtype": fit_dtype},
     })
     if spec["status"].startswith("comparator"):
         row["arm_meets_frozen_rule"] = None
@@ -443,11 +480,18 @@ def numerics(stability: list[dict]) -> dict:
         "sklearn_default_tol": SKLEARN_DEFAULT_TOL,
         "solver_tol_stability": stability,
         "solver_tol_stability_arm": GO_ARM,
+        "solver_tol_stability_axes": ("tol × 입력 dtype. 판본을 바꾸지 않고 판본 "
+                                      "차이의 원인(dtype)을 이 환경에서 재현한다."),
+        # 보고 적합이 어느 정밀도에서 돌았는지. 손으로 적지 않는다 - 위 표에서
+        # `is_reported` 인 행이 실제로 잰 값을 그대로 옮긴다.
+        "reported_fit_dtype": next(r["fit_dtype"] for r in stability
+                                   if r["is_reported"]),
         "stability_reading": (
             "tol <= 1e-5 에서 point·LCB·regret·informative 가 모두 같은 값이다"
-            "(`matches_reported_value`). 기본값 1e-4 행만 다르며, 그 행은 최적점에 "
-            "닿기 전에 멈춘 적합이다 - **그 행의 값 자체는 sklearn·scipy 판본에 "
-            "따라 달라지므로** 재현 대조에 쓰지 않는다."),
+            "(`matches_reported_value`) - **두 입력 dtype 모두에서** 그렇다. "
+            "기본값 1e-4 행만 다르며, 그 행은 최적점에 닿기 전에 멈춘 적합이다 - "
+            "**그 행의 값 자체는 입력 dtype 과 sklearn·scipy 판본에 따라 "
+            "달라지므로** 재현 대조에 쓰지 않는다."),
         "rank_statistics_only": (
             "보고되는 1 차·2 차 지표는 전부 타겟 내 **순위** 통계다 - 수렴한 tol 에서 "
             "두 판본이 같은 순위를 주므로 값이 비트 단위로 같다. 반대로 순위가 아닌 "
@@ -455,9 +499,16 @@ def numerics(stability: list[dict]) -> dict:
             "소수에서 의존한다. 그 값은 non-evaluable arm 의 기술값이며 어떤 판정에도 "
             "들어가지 않는다 - 숨기지 않고 여기 적어 둔다."),
         "n_iter_is_environment_dependent": (
-            "`solver.n_iter` 와 `solver_tol_stability[].n_iter` 는 판본에 따라 다르다. "
-            "sklearn 1.9 는 목적함수를 sum(sample_weight) 로 나누므로 같은 tol 이 "
-            "같은 정지 조건이 아니다. 보고값이 아니라 진단값이다."),
+            "`solver.n_iter` 와 `solver_tol_stability[].n_iter` 는 환경에 따라 "
+            "다르다. 원인은 목적함수가 아니라 **dtype** 이다 - 두 판본 모두 손실을 "
+            "sum(sample_weight) 로 나누고(`l2_reg_strength = 1/(C*sw_sum)`), 다른 "
+            "것은 sklearn 1.9.0 이 float32 입력을 그대로 푸는 반면 1.8.0 은 "
+            "float64 로 올린다는 점이다. 그래서 이 산출물의 적합은 float32 에서 "
+            "돌았다(`solver.fit_dtype`). 위 표의 dtype 축이 그것을 매 실행마다 "
+            "다시 잰다: 한 판본 안에서 입력 dtype 만 바꾸면 tol=1e-4 의 "
+            "+0.0935(float32) / +0.0743(float64) 가 모두 재현되고, tol <= 1e-5 "
+            "에서는 두 dtype 이 같은 값을 낸다. n_iter 는 보고값이 아니라 "
+            "진단값이다."),
         "cross_environment_check": (
             "환경 사이 일치는 주석으로 주장하지 않는다 - tests/test_gate2d_metrics.py"
             "::test_gate1_committed_verdict_reproduces 가 입력에서 다시 계산해 이 "

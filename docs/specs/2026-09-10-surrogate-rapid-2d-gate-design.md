@@ -292,8 +292,15 @@ Gate 1 GO  ⟺  타겟 등가중 mean within-target Spearman(q̂_b, q_b) ≥ +0.
 환경은 +0.0743 을 냈다. `tol` 을 6 decade(1e-5~1e-10) 조이면 두 환경이 **+0.0379**
 로 일치하고, 같은 목적함수를 독립 Newton solve 로 `|grad|_inf ≈ 7e-14` 까지 풀면
 +0.037927 이 bit-identical 하게 나온다. 즉 +0.0379 는 **정확한 최적해**다.
-원인은 sklearn 1.9.0 이 손실을 `sum(sample_weight)=1380` 으로 정규화해 같은 `tol`
-이 같은 기준이 아니게 된 것이다. 채택: `tol=1e-8`, `max_iter=20000`, 해석된 패키지
+**원인은 판본이 아니라 입력 dtype 이다** (2026-09-11 재리뷰에서 정정). 한때 여기
+"sklearn 1.9.0 이 손실을 `sum(sample_weight)=1380` 으로 정규화해 같은 `tol` 이 같은
+기준이 아니게 됐다" 고 적혀 있었으나 그것은 틀렸다 — 두 판본 다 그렇게 나눈다
+(`_logistic.py` 의 `l2_reg_strength = 1/(C·sw_sum)`). 실제로 다른 것은 1.9.0 이
+float32 입력을 그대로 푸는 반면 1.8.0 은 float64 로 올린다는 점이고, 따라서 커밋된
+적합은 float32 에서 돌았다. 이것은 한 판본 안에서 확인된다 — 같은 환경에서 입력만
+float64 로 올리면 `tol=1e-4` 의 ρ 가 +0.0935 에서 +0.0743 으로 바뀐다. 산출물의
+`numerics.solver_tol_stability` 는 이제 tol × dtype 격자(14 행)를 매 실행마다 다시
+재며, 수렴한 12 행은 두 dtype 에서 같은 값이다. 채택: `tol=1e-8`, `max_iter=20000`, 해석된 패키지
 버전과 함께 산출물 `numerics` 에 기록. 절단된 fit(`n_iter >= max_iter`)은
 fail-closed 다. **문턱·arm·코호트·endpoint·시드는 바꾸지 않았다** — solver 허용오차
 하나이며, 스윕 전체에서 가장 큰 후보값도 +0.0935 로 문턱 0.25 에서 멀다.

@@ -1674,9 +1674,12 @@ def test_gate1_committed_verdict_reproduces():
     assert primary["test"]["n_backbones"] == 60
     assert primary["informative_targets"] == 11
 
-    # 이 테스트가 존재하는 이유인 타겟. 순서가 뒤집히면 여기서 먼저 깨진다.
-    assert recomputed["per_target_spearman"]["5pc8A00"] == \
-        primary["per_target_spearman"]["5pc8A00"]
+    # 이 테스트가 존재하는 이유인 타겟. `5pc8A00` 의 순서가 뒤집히면 위의
+    # `per_target_spearman` 딕셔너리 대조에서 **이미** 깨진다 - 여기서 "먼저
+    # 깨진다" 고 적어 두면 실제로는 덮이지 않는 것을 덮인다고 읽게 한다.
+    # 그래서 값을 한 번 더 비교하지 않고, 그 타겟이 대조 대상 안에 실제로
+    # 들어 있는지만 확인한다.
+    assert "5pc8A00" in recomputed["per_target_spearman"]
 
     # 판정도 다시 낸다 - 기록된 verdict 를 되읽지 않는다.
     go = bool(recomputed["point"] >= G.GATE1_RHO_MIN
@@ -1729,18 +1732,76 @@ def test_gate1_reported_value_is_not_a_solver_stopping_point():
         assert row["matches_reported_value"] is True
         assert row["per_target_spearman_5pc8A00"] == \
             reported["per_target_spearman"]["5pc8A00"]
-        assert row["n_iter"] < gate1.SOLVER_MAX_ITER
+    # `n_iter < max_iter` 는 여기서 **주장하지 않는다** - 잘린 적합은 애초에
+    # `fit_predict` 가 SystemExit 으로 세우므로 이 자리까지 행이 오지 못한다.
+    # 발화할 수 없는 assertion 대신, 그 상류 가드가 실제로 서는지를 아래
+    # `test_gate1_truncated_fit_fails_closed` 가 red/green 으로 확인한다.
+
+    # 수렴 구간이 **두 dtype 모두에서** 같은 값인지. 판본 사이의 갈림이 dtype
+    # 때문이었으므로, 한 판본 안에서 두 dtype 을 다 봐야 그 주장이 측정이 된다.
+    assert {r["input_dtype"] for r in rows} == {"float32", "float64"}
+    for dtype in ("float32", "float64"):
+        got = [r for r in converged if r["input_dtype"] == dtype]
+        assert len(got) >= 3, f"{dtype} 수렴 행이 세 decade 미만이다"
+
+    # 기본값 행이 갈리는 기준은 **입력 dtype 이 아니라 실제 적합 dtype** 이다.
+    # 이 구분이 정정의 내용 전부다: sklearn 1.9 계열은 float32 입력을 보존해 두
+    # 행이 갈리고, 1.8 계열은 둘 다 float64 로 올려 두 행이 같아진다. 어느
+    # 환경에서든 "같은 정밀도로 풀면 같은 값, 다른 정밀도로 풀면 다른 값" 이
+    # 성립해야 하며, 입력 dtype 으로 조건을 걸면 1.8 에서 거짓이 된다.
+    default = {r["input_dtype"]: r for r in rows if r["tol"] == 1e-4}
+    f32, f64 = default["float32"], default["float64"]
+    if f32["fit_dtype"] == f64["fit_dtype"]:
+        assert f32["point"] == f64["point"], (
+            "같은 정밀도로 푼 두 행이 다른 값을 냈다 - dtype 말고 다른 것이 "
+            "기본 tol 의 갈림을 만들고 있다.")
+    else:
+        assert f32["point"] != f64["point"], (
+            "정밀도가 다른데 tol=1e-4 에서 같은 값이 나왔다 - 판본 차이의 "
+            "원인을 dtype 으로 적은 것이 이 환경에서 재현되지 않는다.")
 
     # 표가 산출물에도 그 모습으로 남아 있어야 한다 (기본값 행은 값이 아니라
     # 존재와 flag 만 본다).
     stability = payload["numerics"]["solver_tol_stability"]
     assert {r["tol"] for r in stability} >= {1e-4, 1e-5, 1e-6, 1e-7, 1e-8}
+    assert {r["input_dtype"] for r in stability} == {"float32", "float64"}
     assert sum(r["is_reported"] for r in stability) == 1
     for row in stability:
         if row["tol"] <= 1e-5:
             assert row["matches_reported_value"] is True
             for key in keys:
                 assert row[key] == reported[key], f"기록된 tol={row['tol']:g} {key}"
+
+    # 보고 적합의 정밀도는 손으로 적힌 것이 아니라 그 행이 잰 값이어야 한다.
+    # 여기서는 **산출물 내부의 일관성만** 본다 - dtype 은 n_iter 과 같은 진단값
+    # 이고, 환경에 따라 달라지는 것이 정상이다. 재계산본과 대조하면 float32 를
+    # 올려 버리는 환경에서 정당한 실행이 빨간불이 된다. 보고 *값* 이 환경을
+    # 넘어 같은지는 `test_gate1_committed_verdict_reproduces` 가 본다.
+    reported_row = next(r for r in stability if r["is_reported"])
+    assert reported_row["is_production_dtype"] is True
+    assert payload["numerics"]["reported_fit_dtype"] == reported_row["fit_dtype"]
+    assert reported["solver"]["fit_dtype"] == reported_row["fit_dtype"]
+
+
+def test_gate1_truncated_fit_fails_closed():
+    """반복이 잘린 적합은 예측을 내놓지 못하고 멈춰야 한다.
+
+    `fit_predict` 의 `n_iter >= max_iter` 가드는 실제 산출물 경로에서는 한 번도
+    서지 않는다 - 그래서 "잘리지 않았다" 를 산출물 행에 대고 확인하려던 assertion
+    은 발화할 수 없었다. 가드가 살아 있다는 것은 여기서 강제로 잘라 확인한다.
+    """
+    gate1, grid, x_test_all, row_of = _gate1_recompute_inputs()
+    _spec, (x_dev, y_dev, w_dev, _tgt), _labelled, x_test = gate1._arm_inputs(
+        "primary", grid, x_test_all, row_of)
+
+    # 정상 예산에서는 돈다.
+    _q, n_iter, _dt = gate1.fit_predict(x_dev, y_dev, w_dev, x_test)
+    assert 0 < n_iter < gate1.SOLVER_MAX_ITER
+
+    # 예산을 1 로 줄이면 데이터가 아니라 반복 예산이 예측을 정하게 되므로 선다.
+    with pytest.raises(SystemExit) as excinfo:
+        gate1.fit_predict(x_dev, y_dev, w_dev, x_test, max_iter=1)
+    assert "max_iter=1" in str(excinfo.value)
 
 
 def test_gate1_regret_cohorts_are_named_and_the_oc_comparison_is_like_for_like():
