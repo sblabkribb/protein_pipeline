@@ -280,3 +280,48 @@ def test_stop_is_scoped_to_the_surrogate_axis_not_rapid():
     assert body, "최종 판정 절을 찾지 못했다"
     assert "RAPID 자체를 접는다는 뜻이 아니다" in body, "STOP 의 범위 제한이 없다"
     assert "RAPID v2" in body and "별개" in body, "v2 전향 검증이 별개라는 표시가 없다"
+
+
+# ---- 이 문서에는 가드가 둘이고, 서로를 몰랐다 ------------------------------
+#
+# 이 파일은 "인용된 수치가 산출물과 맞는가" 를 본다. `test_v1_freeze.py` 는 같은
+# 문서의 **전체 해시**를 본다. 문서를 고친 사람이 자연스럽게 돌리는 것은 이
+# 파일이고, 이 파일은 해시 파손을 볼 수 없다. 실제로 다섯 커밋 동안 빨간 상태가
+# 유지됐고 아무도 몰랐다 - 최초 파손은 8ede362 다.
+#
+# 그래서 여기서 교차 확인한다. 중복 검사가 아니라 **가시성**이다.
+
+def test_this_document_still_matches_its_v1_freeze_digest():
+    import hashlib
+    import json as _json
+
+    manifest = (ROOT / "public_data" / "benchmark" / "gate0"
+                / "RAPID_STRUCTURAL_V1_FREEZE.json")
+    if not manifest.exists():
+        pytest.skip("v1 freeze manifest 없음")
+    man = _json.loads(manifest.read_text(encoding="utf-8"))
+
+    recorded, key = None, None
+    def walk(o, path=""):
+        nonlocal recorded, key
+        if isinstance(o, dict):
+            for k, v in o.items():
+                if isinstance(v, str) and len(v) == 64 and "results_of_record" in f"{path}/{k}":
+                    recorded, key = v, f"{path}/{k}"
+                elif isinstance(v, (dict, list)):
+                    walk(v, f"{path}/{k}")
+    walk(man)
+    if recorded is None:
+        pytest.skip("manifest 에 results_of_record 항목이 없다")
+
+    actual = hashlib.sha256(MANUSCRIPT.parent.joinpath("results_of_record.md").read_bytes()).hexdigest()
+    assert actual == recorded, (
+        f"docs/results_of_record.md 가 v1 freeze 해시와 다르다.\n"
+        f"  manifest {key} = {recorded}\n"
+        f"  현재            = {actual}\n"
+        f"이 파일은 v1 freeze manifest 의 27 개 중 하나다. 내용이 옳더라도 "
+        f"편집하면 `42_freeze_v1_results.py --verify` 가 27/27 을 잃는다.\n"
+        f"최초 파손은 8ede362 이고, 정당화할 diff 범위는 00a6931..HEAD 다 "
+        f"(마지막 커밋 하나가 아니다).\n"
+        f"고치는 방법은 둘뿐이다 - 되돌리거나, manifest 를 의도적으로 재발행하고 "
+        f"구 digest·신 digest·'v1 수치는 바뀌지 않았다'는 확인을 함께 기록하는 것.")
