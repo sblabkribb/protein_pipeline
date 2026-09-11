@@ -123,6 +123,26 @@
   "never_dropped": "어느 경우에도 타겟을 코호트에서 빼지 않는다. 저심도 처리는 제외가 아니라 가시화이며, msa_low_depth 지시자와 이 민감도가 그 전부다.",
   "sensitivity_is_reported_per_arm": "각 arm 의 sensitivity_excluding_low_depth 를 본다."
  },
+ "rfd3_only_cohort_report": {
+  "status": "reported",
+  "spec_says": "Gate 2 의 1차 코호트는 mixed 백본 37 개를 유지한다. … RFD3-only(mixed 34, informative 11)를 민감도로 함께 보고한다. [스펙 §3]",
+  "primary_cohort_unchanged": true,
+  "sources": [
+   "rfd3"
+  ],
+  "mixed_backbones": 34,
+  "informative_targets": 11,
+  "excluded_backbones": 3,
+  "spec_geometry": {
+   "mixed_backbones": 34,
+   "informative_targets": 11
+  },
+  "why_primary_keeps_native": "Δ_Top4 는 백본 내부에서 계산되므로 각 백본이 자기 단위이고 source 는 Gate 2 에서 교란이 아니다. Gate 1 과 달리 코호트를 좁힐 이유가 없다.",
+  "why_the_sensitivity_exists": "그럼에도 §3 이 native 를 배분 풀에서 comparator 로 옮겼으므로, RAPID 이 실제로 배분하는 대상만으로 좁힌 값을 1 차 옆에 함께 둔다.",
+  "cohort_slicer": "_gate2d_cohort.restrict_to_sources - 26_gate2d_operating_characteristics.py 의 OC_primary_rfd3_only 와 같은 slicer 다.",
+  "model_is_not_refit": "같은 LOTO 예측을 그대로 쓴다. RFD3 폴드로만 다시 적합하면 코호트 민감도가 아니라 동결되지 않은 여덟 번째 arm 이 된다.",
+  "sensitivity_is_reported_per_arm": "각 arm 의 sensitivity_rfd3_only 를 본다."
+ },
  "msa_features_provenance": {
   "artifact": "public_data/benchmark/gate0/holdout_grid/msa_features.json",
   "conserved_positions_sha256_verified": {
@@ -231,6 +251,60 @@
     "meets_threshold": false,
     "lcb_exceeds_zero": false
    },
+   "sensitivity_rfd3_only": {
+    "status": "pre-registered sensitivity (스펙 §3)",
+    "cohort": "RFD3-only mixed backbones",
+    "sources": [
+     "rfd3"
+    ],
+    "mixed_backbones": 34,
+    "cohort_targets": [
+     "1sp0A00",
+     "1tm9A00",
+     "1vsrA00",
+     "2jokA01",
+     "3bqwA01",
+     "3es1A01",
+     "3f2pA01",
+     "3h7eA02",
+     "5fwaA02",
+     "5pc8A00",
+     "5xpdA02"
+    ],
+    "excluded_backbones": 3,
+    "excluded_backbone_keys": [
+     "1sp0A00|target|target",
+     "3bqwA01|target|target",
+     "5xpdA02|target|target"
+    ],
+    "primary_cohort_unchanged": true,
+    "model_refit": false,
+    "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    "evaluable": true,
+    "delta_top4_target_equal": -0.0032,
+    "one_sided_90_lcb": -0.038889,
+    "informative_targets": 11,
+    "meets_threshold": false,
+    "lcb_exceeds_zero": false,
+    "per_target_delta_top4": {
+     "1sp0A00": -0.0278,
+     "1tm9A00": 0.1667,
+     "1vsrA00": 0.0,
+     "2jokA01": -0.0083,
+     "3bqwA01": 0.0208,
+     "3es1A01": -0.125,
+     "3f2pA01": 0.0417,
+     "3h7eA02": 0.0417,
+     "5fwaA02": -0.1583,
+     "5pc8A00": 0.0972,
+     "5xpdA02": -0.0833
+    },
+    "matches_spec_geometry": true,
+    "spec_geometry": {
+     "mixed_backbones": 34,
+     "informative_targets": 11
+    }
+   },
    "n_features": 1,
    "feature_blocks": [
     "soluprot"
@@ -282,6 +356,60 @@
     "informative_targets": 10,
     "meets_threshold": false,
     "lcb_exceeds_zero": true
+   },
+   "sensitivity_rfd3_only": {
+    "status": "pre-registered sensitivity (스펙 §3)",
+    "cohort": "RFD3-only mixed backbones",
+    "sources": [
+     "rfd3"
+    ],
+    "mixed_backbones": 34,
+    "cohort_targets": [
+     "1sp0A00",
+     "1tm9A00",
+     "1vsrA00",
+     "2jokA01",
+     "3bqwA01",
+     "3es1A01",
+     "3f2pA01",
+     "3h7eA02",
+     "5fwaA02",
+     "5pc8A00",
+     "5xpdA02"
+    ],
+    "excluded_backbones": 3,
+    "excluded_backbone_keys": [
+     "1sp0A00|target|target",
+     "3bqwA01|target|target",
+     "5xpdA02|target|target"
+    ],
+    "primary_cohort_unchanged": true,
+    "model_refit": false,
+    "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    "evaluable": true,
+    "delta_top4_target_equal": 0.0415,
+    "one_sided_90_lcb": 0.006806,
+    "informative_targets": 11,
+    "meets_threshold": false,
+    "lcb_exceeds_zero": true,
+    "per_target_delta_top4": {
+     "1sp0A00": -0.1111,
+     "1tm9A00": -0.0208,
+     "1vsrA00": 0.1667,
+     "2jokA01": 0.0917,
+     "3bqwA01": 0.0833,
+     "3es1A01": 0.125,
+     "3f2pA01": -0.0417,
+     "3h7eA02": 0.0417,
+     "5fwaA02": -0.0583,
+     "5pc8A00": 0.0139,
+     "5xpdA02": 0.1667
+    },
+    "matches_spec_geometry": true,
+    "spec_geometry": {
+     "mixed_backbones": 34,
+     "informative_targets": 11
+    }
    },
    "n_features": 320,
    "feature_blocks": [
@@ -335,6 +463,60 @@
     "meets_threshold": false,
     "lcb_exceeds_zero": false
    },
+   "sensitivity_rfd3_only": {
+    "status": "pre-registered sensitivity (스펙 §3)",
+    "cohort": "RFD3-only mixed backbones",
+    "sources": [
+     "rfd3"
+    ],
+    "mixed_backbones": 34,
+    "cohort_targets": [
+     "1sp0A00",
+     "1tm9A00",
+     "1vsrA00",
+     "2jokA01",
+     "3bqwA01",
+     "3es1A01",
+     "3f2pA01",
+     "3h7eA02",
+     "5fwaA02",
+     "5pc8A00",
+     "5xpdA02"
+    ],
+    "excluded_backbones": 3,
+    "excluded_backbone_keys": [
+     "1sp0A00|target|target",
+     "3bqwA01|target|target",
+     "5xpdA02|target|target"
+    ],
+    "primary_cohort_unchanged": true,
+    "model_refit": false,
+    "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    "evaluable": true,
+    "delta_top4_target_equal": -0.0119,
+    "one_sided_90_lcb": -0.050253,
+    "informative_targets": 11,
+    "meets_threshold": false,
+    "lcb_exceeds_zero": false,
+    "per_target_delta_top4": {
+     "1sp0A00": -0.1944,
+     "1tm9A00": 0.0417,
+     "1vsrA00": 0.0,
+     "2jokA01": -0.0083,
+     "3bqwA01": 0.0833,
+     "3es1A01": -0.125,
+     "3f2pA01": 0.0417,
+     "3h7eA02": 0.0417,
+     "5fwaA02": -0.1083,
+     "5pc8A00": -0.0694,
+     "5xpdA02": 0.1667
+    },
+    "matches_spec_geometry": true,
+    "spec_geometry": {
+     "mixed_backbones": 34,
+     "informative_targets": 11
+    }
+   },
    "n_features": 320,
    "feature_blocks": [
     "esm_delta_global"
@@ -387,6 +569,60 @@
     "meets_threshold": false,
     "lcb_exceeds_zero": false
    },
+   "sensitivity_rfd3_only": {
+    "status": "pre-registered sensitivity (스펙 §3)",
+    "cohort": "RFD3-only mixed backbones",
+    "sources": [
+     "rfd3"
+    ],
+    "mixed_backbones": 34,
+    "cohort_targets": [
+     "1sp0A00",
+     "1tm9A00",
+     "1vsrA00",
+     "2jokA01",
+     "3bqwA01",
+     "3es1A01",
+     "3f2pA01",
+     "3h7eA02",
+     "5fwaA02",
+     "5pc8A00",
+     "5xpdA02"
+    ],
+    "excluded_backbones": 3,
+    "excluded_backbone_keys": [
+     "1sp0A00|target|target",
+     "3bqwA01|target|target",
+     "5xpdA02|target|target"
+    ],
+    "primary_cohort_unchanged": true,
+    "model_refit": false,
+    "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    "evaluable": true,
+    "delta_top4_target_equal": 0.0059,
+    "one_sided_90_lcb": -0.02803,
+    "informative_targets": 11,
+    "meets_threshold": false,
+    "lcb_exceeds_zero": false,
+    "per_target_delta_top4": {
+     "1sp0A00": -0.1111,
+     "1tm9A00": 0.1042,
+     "1vsrA00": 0.0,
+     "2jokA01": -0.0083,
+     "3bqwA01": 0.0833,
+     "3es1A01": -0.125,
+     "3f2pA01": 0.0417,
+     "3h7eA02": 0.0417,
+     "5fwaA02": -0.0583,
+     "5pc8A00": -0.0694,
+     "5xpdA02": 0.1667
+    },
+    "matches_spec_geometry": true,
+    "spec_geometry": {
+     "mixed_backbones": 34,
+     "informative_targets": 11
+    }
+   },
    "n_features": 321,
    "feature_blocks": [
     "esm_delta_mut"
@@ -438,6 +674,60 @@
     "informative_targets": 10,
     "meets_threshold": false,
     "lcb_exceeds_zero": false
+   },
+   "sensitivity_rfd3_only": {
+    "status": "pre-registered sensitivity (스펙 §3)",
+    "cohort": "RFD3-only mixed backbones",
+    "sources": [
+     "rfd3"
+    ],
+    "mixed_backbones": 34,
+    "cohort_targets": [
+     "1sp0A00",
+     "1tm9A00",
+     "1vsrA00",
+     "2jokA01",
+     "3bqwA01",
+     "3es1A01",
+     "3f2pA01",
+     "3h7eA02",
+     "5fwaA02",
+     "5pc8A00",
+     "5xpdA02"
+    ],
+    "excluded_backbones": 3,
+    "excluded_backbone_keys": [
+     "1sp0A00|target|target",
+     "3bqwA01|target|target",
+     "5xpdA02|target|target"
+    ],
+    "primary_cohort_unchanged": true,
+    "model_refit": false,
+    "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    "evaluable": true,
+    "delta_top4_target_equal": -0.0077,
+    "one_sided_90_lcb": -0.043056,
+    "informative_targets": 11,
+    "meets_threshold": false,
+    "lcb_exceeds_zero": false,
+    "per_target_delta_top4": {
+     "1sp0A00": 0.0556,
+     "1tm9A00": -0.0208,
+     "1vsrA00": 0.0833,
+     "2jokA01": -0.0583,
+     "3bqwA01": -0.0417,
+     "3es1A01": -0.125,
+     "3f2pA01": 0.125,
+     "3h7eA02": 0.0417,
+     "5fwaA02": -0.1583,
+     "5pc8A00": 0.0972,
+     "5xpdA02": -0.0833
+    },
+    "matches_spec_geometry": true,
+    "spec_geometry": {
+     "mixed_backbones": 34,
+     "informative_targets": 11
+    }
    },
    "n_features": 13,
    "feature_blocks": [
@@ -673,6 +963,60 @@
     "meets_threshold": false,
     "lcb_exceeds_zero": false
    },
+   "sensitivity_rfd3_only": {
+    "status": "pre-registered sensitivity (스펙 §3)",
+    "cohort": "RFD3-only mixed backbones",
+    "sources": [
+     "rfd3"
+    ],
+    "mixed_backbones": 34,
+    "cohort_targets": [
+     "1sp0A00",
+     "1tm9A00",
+     "1vsrA00",
+     "2jokA01",
+     "3bqwA01",
+     "3es1A01",
+     "3f2pA01",
+     "3h7eA02",
+     "5fwaA02",
+     "5pc8A00",
+     "5xpdA02"
+    ],
+    "excluded_backbones": 3,
+    "excluded_backbone_keys": [
+     "1sp0A00|target|target",
+     "3bqwA01|target|target",
+     "5xpdA02|target|target"
+    ],
+    "primary_cohort_unchanged": true,
+    "model_refit": false,
+    "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    "evaluable": true,
+    "delta_top4_target_equal": -0.0391,
+    "one_sided_90_lcb": -0.088384,
+    "informative_targets": 11,
+    "meets_threshold": false,
+    "lcb_exceeds_zero": false,
+    "per_target_delta_top4": {
+     "1sp0A00": -0.1111,
+     "1tm9A00": 0.0417,
+     "1vsrA00": 0.0,
+     "2jokA01": 0.0917,
+     "3bqwA01": 0.0833,
+     "3es1A01": -0.375,
+     "3f2pA01": -0.0417,
+     "3h7eA02": 0.0417,
+     "5fwaA02": -0.0083,
+     "5pc8A00": -0.0694,
+     "5xpdA02": -0.0833
+    },
+    "matches_spec_geometry": true,
+    "spec_geometry": {
+     "mixed_backbones": 34,
+     "informative_targets": 11
+    }
+   },
    "n_features": 334,
    "feature_blocks": [
     "esm_delta_mut",
@@ -907,6 +1251,60 @@
     "informative_targets": 10,
     "meets_threshold": false,
     "lcb_exceeds_zero": false
+   },
+   "sensitivity_rfd3_only": {
+    "status": "pre-registered sensitivity (스펙 §3)",
+    "cohort": "RFD3-only mixed backbones",
+    "sources": [
+     "rfd3"
+    ],
+    "mixed_backbones": 34,
+    "cohort_targets": [
+     "1sp0A00",
+     "1tm9A00",
+     "1vsrA00",
+     "2jokA01",
+     "3bqwA01",
+     "3es1A01",
+     "3f2pA01",
+     "3h7eA02",
+     "5fwaA02",
+     "5pc8A00",
+     "5xpdA02"
+    ],
+    "excluded_backbones": 3,
+    "excluded_backbone_keys": [
+     "1sp0A00|target|target",
+     "3bqwA01|target|target",
+     "5xpdA02|target|target"
+    ],
+    "primary_cohort_unchanged": true,
+    "model_refit": false,
+    "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    "evaluable": true,
+    "delta_top4_target_equal": -0.0225,
+    "one_sided_90_lcb": -0.075505,
+    "informative_targets": 11,
+    "meets_threshold": false,
+    "lcb_exceeds_zero": false,
+    "per_target_delta_top4": {
+     "1sp0A00": -0.1111,
+     "1tm9A00": 0.0417,
+     "1vsrA00": 0.0,
+     "2jokA01": -0.0083,
+     "3bqwA01": 0.0833,
+     "3es1A01": -0.375,
+     "3f2pA01": 0.0417,
+     "3h7eA02": 0.0417,
+     "5fwaA02": -0.0583,
+     "5pc8A00": -0.0694,
+     "5xpdA02": 0.1667
+    },
+    "matches_spec_geometry": true,
+    "spec_geometry": {
+     "mixed_backbones": 34,
+     "informative_targets": 11
+    }
    },
    "n_features": 355,
    "feature_blocks": [
@@ -1147,6 +1545,60 @@
     "meets_threshold": false,
     "lcb_exceeds_zero": false
    },
+   "sensitivity_rfd3_only": {
+    "status": "pre-registered sensitivity (스펙 §3)",
+    "cohort": "RFD3-only mixed backbones",
+    "sources": [
+     "rfd3"
+    ],
+    "mixed_backbones": 34,
+    "cohort_targets": [
+     "1sp0A00",
+     "1tm9A00",
+     "1vsrA00",
+     "2jokA01",
+     "3bqwA01",
+     "3es1A01",
+     "3f2pA01",
+     "3h7eA02",
+     "5fwaA02",
+     "5pc8A00",
+     "5xpdA02"
+    ],
+    "excluded_backbones": 3,
+    "excluded_backbone_keys": [
+     "1sp0A00|target|target",
+     "3bqwA01|target|target",
+     "5xpdA02|target|target"
+    ],
+    "primary_cohort_unchanged": true,
+    "model_refit": false,
+    "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    "evaluable": true,
+    "delta_top4_target_equal": -0.0052,
+    "one_sided_90_lcb": -0.041919,
+    "informative_targets": 11,
+    "meets_threshold": false,
+    "lcb_exceeds_zero": false,
+    "per_target_delta_top4": {
+     "1sp0A00": 0.125,
+     "1tm9A00": 0.1667,
+     "1vsrA00": 0.0,
+     "2jokA01": -0.0583,
+     "3bqwA01": 0.0208,
+     "3es1A01": -0.125,
+     "3f2pA01": 0.0278,
+     "3h7eA02": 0.0417,
+     "5fwaA02": -0.1583,
+     "5pc8A00": -0.0139,
+     "5xpdA02": -0.0833
+    },
+    "matches_spec_geometry": true,
+    "spec_geometry": {
+     "mixed_backbones": 34,
+     "informative_targets": 11
+    }
+   },
    "n_features": 1,
    "feature_blocks": [
     "soluprot"
@@ -1198,6 +1650,60 @@
     "informative_targets": 10,
     "meets_threshold": false,
     "lcb_exceeds_zero": false
+   },
+   "sensitivity_rfd3_only": {
+    "status": "pre-registered sensitivity (스펙 §3)",
+    "cohort": "RFD3-only mixed backbones",
+    "sources": [
+     "rfd3"
+    ],
+    "mixed_backbones": 34,
+    "cohort_targets": [
+     "1sp0A00",
+     "1tm9A00",
+     "1vsrA00",
+     "2jokA01",
+     "3bqwA01",
+     "3es1A01",
+     "3f2pA01",
+     "3h7eA02",
+     "5fwaA02",
+     "5pc8A00",
+     "5xpdA02"
+    ],
+    "excluded_backbones": 3,
+    "excluded_backbone_keys": [
+     "1sp0A00|target|target",
+     "3bqwA01|target|target",
+     "5xpdA02|target|target"
+    ],
+    "primary_cohort_unchanged": true,
+    "model_refit": false,
+    "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    "evaluable": true,
+    "delta_top4_target_equal": 0.016,
+    "one_sided_90_lcb": -0.020455,
+    "informative_targets": 11,
+    "meets_threshold": false,
+    "lcb_exceeds_zero": false,
+    "per_target_delta_top4": {
+     "1sp0A00": -0.125,
+     "1tm9A00": -0.0833,
+     "1vsrA00": 0.1667,
+     "2jokA01": -0.0083,
+     "3bqwA01": 0.0208,
+     "3es1A01": 0.125,
+     "3f2pA01": -0.0556,
+     "3h7eA02": 0.0417,
+     "5fwaA02": -0.0583,
+     "5pc8A00": -0.0139,
+     "5xpdA02": 0.1667
+    },
+    "matches_spec_geometry": true,
+    "spec_geometry": {
+     "mixed_backbones": 34,
+     "informative_targets": 11
+    }
    },
    "n_features": 320,
    "feature_blocks": [
@@ -1251,6 +1757,60 @@
     "meets_threshold": false,
     "lcb_exceeds_zero": false
    },
+   "sensitivity_rfd3_only": {
+    "status": "pre-registered sensitivity (스펙 §3)",
+    "cohort": "RFD3-only mixed backbones",
+    "sources": [
+     "rfd3"
+    ],
+    "mixed_backbones": 34,
+    "cohort_targets": [
+     "1sp0A00",
+     "1tm9A00",
+     "1vsrA00",
+     "2jokA01",
+     "3bqwA01",
+     "3es1A01",
+     "3f2pA01",
+     "3h7eA02",
+     "5fwaA02",
+     "5pc8A00",
+     "5xpdA02"
+    ],
+    "excluded_backbones": 3,
+    "excluded_backbone_keys": [
+     "1sp0A00|target|target",
+     "3bqwA01|target|target",
+     "5xpdA02|target|target"
+    ],
+    "primary_cohort_unchanged": true,
+    "model_refit": false,
+    "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    "evaluable": true,
+    "delta_top4_target_equal": -0.0264,
+    "one_sided_90_lcb": -0.082071,
+    "informative_targets": 11,
+    "meets_threshold": false,
+    "lcb_exceeds_zero": false,
+    "per_target_delta_top4": {
+     "1sp0A00": -0.125,
+     "1tm9A00": 0.1042,
+     "1vsrA00": 0.0,
+     "2jokA01": -0.0083,
+     "3bqwA01": 0.0833,
+     "3es1A01": -0.375,
+     "3f2pA01": 0.0278,
+     "3h7eA02": 0.0417,
+     "5fwaA02": -0.1083,
+     "5pc8A00": -0.0972,
+     "5xpdA02": 0.1667
+    },
+    "matches_spec_geometry": true,
+    "spec_geometry": {
+     "mixed_backbones": 34,
+     "informative_targets": 11
+    }
+   },
    "n_features": 320,
    "feature_blocks": [
     "esm_delta_global"
@@ -1303,6 +1863,60 @@
     "meets_threshold": false,
     "lcb_exceeds_zero": false
    },
+   "sensitivity_rfd3_only": {
+    "status": "pre-registered sensitivity (스펙 §3)",
+    "cohort": "RFD3-only mixed backbones",
+    "sources": [
+     "rfd3"
+    ],
+    "mixed_backbones": 34,
+    "cohort_targets": [
+     "1sp0A00",
+     "1tm9A00",
+     "1vsrA00",
+     "2jokA01",
+     "3bqwA01",
+     "3es1A01",
+     "3f2pA01",
+     "3h7eA02",
+     "5fwaA02",
+     "5pc8A00",
+     "5xpdA02"
+    ],
+    "excluded_backbones": 3,
+    "excluded_backbone_keys": [
+     "1sp0A00|target|target",
+     "3bqwA01|target|target",
+     "5xpdA02|target|target"
+    ],
+    "primary_cohort_unchanged": true,
+    "model_refit": false,
+    "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    "evaluable": true,
+    "delta_top4_target_equal": -0.0143,
+    "one_sided_90_lcb": -0.068687,
+    "informative_targets": 11,
+    "meets_threshold": false,
+    "lcb_exceeds_zero": false,
+    "per_target_delta_top4": {
+     "1sp0A00": -0.125,
+     "1tm9A00": 0.1042,
+     "1vsrA00": 0.0,
+     "2jokA01": -0.0083,
+     "3bqwA01": 0.0833,
+     "3es1A01": -0.375,
+     "3f2pA01": 0.0278,
+     "3h7eA02": 0.0417,
+     "5fwaA02": -0.0583,
+     "5pc8A00": -0.0139,
+     "5xpdA02": 0.1667
+    },
+    "matches_spec_geometry": true,
+    "spec_geometry": {
+     "mixed_backbones": 34,
+     "informative_targets": 11
+    }
+   },
    "n_features": 321,
    "feature_blocks": [
     "esm_delta_mut"
@@ -1354,6 +1968,60 @@
     "informative_targets": 10,
     "meets_threshold": false,
     "lcb_exceeds_zero": false
+   },
+   "sensitivity_rfd3_only": {
+    "status": "pre-registered sensitivity (스펙 §3)",
+    "cohort": "RFD3-only mixed backbones",
+    "sources": [
+     "rfd3"
+    ],
+    "mixed_backbones": 34,
+    "cohort_targets": [
+     "1sp0A00",
+     "1tm9A00",
+     "1vsrA00",
+     "2jokA01",
+     "3bqwA01",
+     "3es1A01",
+     "3f2pA01",
+     "3h7eA02",
+     "5fwaA02",
+     "5pc8A00",
+     "5xpdA02"
+    ],
+    "excluded_backbones": 3,
+    "excluded_backbone_keys": [
+     "1sp0A00|target|target",
+     "3bqwA01|target|target",
+     "5xpdA02|target|target"
+    ],
+    "primary_cohort_unchanged": true,
+    "model_refit": false,
+    "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    "evaluable": true,
+    "delta_top4_target_equal": -0.0116,
+    "one_sided_90_lcb": -0.046465,
+    "informative_targets": 11,
+    "meets_threshold": false,
+    "lcb_exceeds_zero": false,
+    "per_target_delta_top4": {
+     "1sp0A00": 0.0417,
+     "1tm9A00": -0.0208,
+     "1vsrA00": 0.0833,
+     "2jokA01": -0.1083,
+     "3bqwA01": 0.0208,
+     "3es1A01": -0.125,
+     "3f2pA01": 0.1111,
+     "3h7eA02": 0.0417,
+     "5fwaA02": -0.1583,
+     "5pc8A00": 0.0694,
+     "5xpdA02": -0.0833
+    },
+    "matches_spec_geometry": true,
+    "spec_geometry": {
+     "mixed_backbones": 34,
+     "informative_targets": 11
+    }
    },
    "n_features": 13,
    "feature_blocks": [
@@ -1588,6 +2256,60 @@
     "informative_targets": 10,
     "meets_threshold": false,
     "lcb_exceeds_zero": false
+   },
+   "sensitivity_rfd3_only": {
+    "status": "pre-registered sensitivity (스펙 §3)",
+    "cohort": "RFD3-only mixed backbones",
+    "sources": [
+     "rfd3"
+    ],
+    "mixed_backbones": 34,
+    "cohort_targets": [
+     "1sp0A00",
+     "1tm9A00",
+     "1vsrA00",
+     "2jokA01",
+     "3bqwA01",
+     "3es1A01",
+     "3f2pA01",
+     "3h7eA02",
+     "5fwaA02",
+     "5pc8A00",
+     "5xpdA02"
+    ],
+    "excluded_backbones": 3,
+    "excluded_backbone_keys": [
+     "1sp0A00|target|target",
+     "3bqwA01|target|target",
+     "5xpdA02|target|target"
+    ],
+    "primary_cohort_unchanged": true,
+    "model_refit": false,
+    "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    "evaluable": true,
+    "delta_top4_target_equal": -0.0654,
+    "one_sided_90_lcb": -0.113889,
+    "informative_targets": 11,
+    "meets_threshold": false,
+    "lcb_exceeds_zero": false,
+    "per_target_delta_top4": {
+     "1sp0A00": -0.125,
+     "1tm9A00": 0.0417,
+     "1vsrA00": 0.0,
+     "2jokA01": -0.0083,
+     "3bqwA01": 0.0833,
+     "3es1A01": -0.375,
+     "3f2pA01": -0.0556,
+     "3h7eA02": 0.0417,
+     "5fwaA02": -0.0583,
+     "5pc8A00": -0.1806,
+     "5xpdA02": -0.0833
+    },
+    "matches_spec_geometry": true,
+    "spec_geometry": {
+     "mixed_backbones": 34,
+     "informative_targets": 11
+    }
    },
    "n_features": 334,
    "feature_blocks": [
@@ -1824,6 +2546,60 @@
     "meets_threshold": false,
     "lcb_exceeds_zero": false
    },
+   "sensitivity_rfd3_only": {
+    "status": "pre-registered sensitivity (스펙 §3)",
+    "cohort": "RFD3-only mixed backbones",
+    "sources": [
+     "rfd3"
+    ],
+    "mixed_backbones": 34,
+    "cohort_targets": [
+     "1sp0A00",
+     "1tm9A00",
+     "1vsrA00",
+     "2jokA01",
+     "3bqwA01",
+     "3es1A01",
+     "3f2pA01",
+     "3h7eA02",
+     "5fwaA02",
+     "5pc8A00",
+     "5xpdA02"
+    ],
+    "excluded_backbones": 3,
+    "excluded_backbone_keys": [
+     "1sp0A00|target|target",
+     "3bqwA01|target|target",
+     "5xpdA02|target|target"
+    ],
+    "primary_cohort_unchanged": true,
+    "model_refit": false,
+    "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    "evaluable": true,
+    "delta_top4_target_equal": -0.0396,
+    "one_sided_90_lcb": -0.092677,
+    "informative_targets": 11,
+    "meets_threshold": false,
+    "lcb_exceeds_zero": false,
+    "per_target_delta_top4": {
+     "1sp0A00": -0.125,
+     "1tm9A00": 0.0417,
+     "1vsrA00": 0.0,
+     "2jokA01": -0.0083,
+     "3bqwA01": 0.0833,
+     "3es1A01": -0.375,
+     "3f2pA01": -0.0556,
+     "3h7eA02": 0.0417,
+     "5fwaA02": -0.1083,
+     "5pc8A00": -0.0972,
+     "5xpdA02": 0.1667
+    },
+    "matches_spec_geometry": true,
+    "spec_geometry": {
+     "mixed_backbones": 34,
+     "informative_targets": 11
+    }
+   },
    "n_features": 355,
    "feature_blocks": [
     "esm_delta_mut",
@@ -2019,10 +2795,10 @@
  "verdict_note": "",
  "interim": false,
  "no_go_reading": "Under the prespecified simulation model, the gate has approximately 93% probability of GO for an effect corresponding to AUC ≈ 0.70. Therefore, NO-GO would constitute evidence against an effect of approximately this magnitude under the assumed operating conditions, rather than proving the absence of any AUC ≥ 0.70 predictor.",
- "code_sha": "4b8864804863709da26da22fa2c7968ff67b2204",
+ "code_sha": "eab4a3d2a301be50d987a233f70916765953102e",
  "code_sha_is_the_parent_of_the_artifact_commit": true,
  "script_sha256": {
-  "scripts/benchmark/25_gate2_within_backbone_selectability.py": "3503286c71ecfddaabc2ada9bc2278b2bd4d00d92380afd82b6a4491fa347e65",
+  "scripts/benchmark/25_gate2_within_backbone_selectability.py": "1223a25b9f2f098e427eee379dc59fbc55a7f60775f07ce13697a72bcac65d1d",
   "scripts/benchmark/_gate2d.py": "8d2bac676868a81d21cbfd68f608af36b8e33afac1ada1aebdb541e6bbf8cbb6",
   "scripts/benchmark/_gate2d_cohort.py": "568796052feb003411b0034cc37684a8dfb14bf8f19fa058062624decdfd4695",
   "scripts/benchmark/_gate2d_features.py": "d0bbf04cede89cf7a60e42539068230e130c2cb63019a8c2cd08e87386e7ca9f",
@@ -2030,5 +2806,5 @@
   "scripts/benchmark/23_gate2d_prepare_msa_features.py": "e08fda31ee13831c9f27b994d4d44a051c613815d0617a44c70bc936f820f2e3",
   "scripts/transcoder/rapid_sr/clustered.py": "12b0bf00b066d925aca27b8d63fa7c891298b9adb32f18399042e571e9d837d3"
  },
- "utc": "2026-09-11T02:07:28Z"
+ "utc": "2026-09-11T04:33:15Z"
 }

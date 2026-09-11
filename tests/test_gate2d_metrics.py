@@ -1701,3 +1701,93 @@ def test_gate2_planned_s6_is_compared_with_the_realized_deviation():
 
     # planned 가 판정이고 realized 는 기록이다.
     assert "planned only" in cmp_["decided_by"]
+
+
+# --- I2: 사전 등록된 RFD3-only 민감도 (스펙 §3) --------------------------------
+#
+# 스펙 §3: "Gate 2 의 1차 코호트는 mixed 백본 37 개를 유지한다. … RFD3-only
+# (mixed 34, informative 11)를 민감도로 함께 보고한다." 이 분석은 한동안 어디에도
+# 없었고, **없다는 사실조차 기록돼 있지 않았다.** 보고되지 않은 사전 등록 분석은
+# 숨긴 분석과 구별되지 않는다. 그래서 산출물에 있는지를 여기서 지킨다.
+
+def test_gate2_reports_the_preregistered_rfd3_only_sensitivity():
+    """1 차(mixed 37)는 그대로이고 RFD3-only(mixed 34)가 그 옆에 있어야 한다."""
+    import json as _json
+    payload = _json.loads(
+        (ROOT / "public_data" / "benchmark" / "gate0"
+         / "gate2_within_backbone_selectability.json").read_text(encoding="utf-8"))
+
+    # 1 차 코호트는 건드리지 않았다.
+    assert payload["cohort"]["mixed_backbones"] == 37
+    assert payload["cohort"]["informative_targets"] == 11
+
+    report = payload["rfd3_only_cohort_report"]
+    assert report["status"] == "reported"
+    assert report["primary_cohort_unchanged"] is True
+    assert report["sources"] == ["rfd3"]
+    assert report["mixed_backbones"] == 34          # 스펙 §3 이 인쇄한 값
+    assert report["informative_targets"] == 11      # 스펙 §3 이 인쇄한 값
+    assert report["excluded_backbones"] == 37 - 34
+    # 두 번째 코호트 slicer 를 만들지 않았다 - 26_ 의 OC_primary_rfd3_only 와 같다.
+    assert "restrict_to_sources" in report["cohort_slicer"]
+
+    # 모든 arm 이 두 endpoint 에서 이 민감도를 함께 낸다. S6 만 내면 "판정 arm 에서만
+    # 계산했다" 가 되어 ladder 를 가로질러 읽을 수 없다.
+    for key in ("arms_joint_pass", "arms_structural_pass_secondary"):
+        for arm, row in payload[key].items():
+            sens = row["sensitivity_rfd3_only"]
+            assert sens["evaluable"] is True, arm
+            assert sens["mixed_backbones"] == 34, arm
+            assert sens["informative_targets"] == 11, arm
+            assert sens["model_refit"] is False, arm
+            assert sens["matches_spec_geometry"] is True, arm
+
+    primary = payload["arms_joint_pass"]["S6"]
+    sens = primary["sensitivity_rfd3_only"]
+    # 1 차는 움직이지 않았고 민감도는 그 옆의 별개 수치다.
+    assert primary["delta_top4_target_equal"] == -0.0313
+    assert primary["one_sided_90_lcb"] == -0.080303
+    assert sens["delta_top4_target_equal"] == -0.0225
+    assert sens["one_sided_90_lcb"] == -0.075505
+    # 민감도도 문턱에 닿지 않는다 - 1 차 판정과 같은 방향이다.
+    assert sens["meets_threshold"] is False
+    assert sens["lcb_exceeds_zero"] is False
+
+
+def test_rfd3_only_sensitivity_slices_the_cohort_and_withholds_below_the_floor(monkeypatch):
+    """코호트만 바뀌고 모델은 다시 적합되지 않는다. floor 미달이면 non-evaluable.
+
+    점수는 결정적인 더미다 - 여기서 검사하는 것은 Ridge 가 아니라 **어느 백본이
+    집계에 들어가는가** 이고, 그것이 스펙 §3 이 고정한 부분이다.
+    """
+    import importlib
+
+    import _gate2d_cohort as C
+
+    gate2 = importlib.import_module("25_gate2_within_backbone_selectability")
+    grid = C.load_holdout_grid()
+    mixed = C.mixed_backbones(grid)
+    score_of = {f.sequence_id: float(i) for i, f in enumerate(grid.folds)}
+
+    out = gate2._rfd3_only_sensitivity(grid, mixed, score_of, "joint")
+    assert out["mixed_backbones"] == 34
+    assert out["informative_targets"] == 11
+    assert out["excluded_backbones"] == 3
+    # 빠진 셋은 전부 native 다 - source 로 잘랐지 다른 규칙이 끼어들지 않았다.
+    assert all("|target|" in key for key in out["excluded_backbone_keys"])
+
+    # 같은 slicer 위에서 같은 집계 함수를 쓴다.
+    sub = C.mixed_backbones(C.restrict_to_sources(grid, ("rfd3",)))
+    assert [b.backbone_key for b in sub] == sorted(
+        {b.backbone_key for b in mixed} - set(out["excluded_backbone_keys"]))
+    per_target = gate2._per_target_delta_top4(sub, score_of, "joint")
+    assert out["per_target_delta_top4"] == {
+        t: round(v, 4) for t, v in sorted(per_target.items())}
+
+    # floor 미달이면 숫자를 내지 않고 사유를 남긴다 (규칙 6 과 같은 처리).
+    monkeypatch.setattr(gate2, "RFD3_SOURCES", ("a_source_that_does_not_exist",))
+    thin = gate2._rfd3_only_sensitivity(grid, mixed, score_of, "joint")
+    assert thin["evaluable"] is False
+    assert "교차 확인" in thin["reason"]
+    assert "delta_top4_target_equal" not in thin
+

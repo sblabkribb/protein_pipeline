@@ -9,6 +9,12 @@ GO <=> 점추정 Delta_Top4 >= +0.10 AND 단측 90% LCB > 0 AND informative >= 8
 
 기준점(측정 완료): SoluProt -0.001, oracle +0.326.
 
+사전 등록된 민감도 **두 개**를 1 차 판정 옆에 나란히 낸다. 코호트를 줄이는 것이
+아니라 함께 보고하는 것이다.
+
+  - `sensitivity_rfd3_only`      : RFD3-only(mixed 34 / informative 11) [스펙 §3]
+  - `sensitivity_excluding_low_depth` : 저심도 타겟 제외 [스펙 §4 규칙 6]
+
 **S6 가 없으면 판정하지 않는다.** S0-S3 만 돌린 결과는 interim/descriptive 이며
 그것으로 GO/NO-GO 문장을 쓰면 스펙 위반이다. 그 경우 verdict 는 UNDECIDED 다.
 """
@@ -39,6 +45,12 @@ GATE0 = PROJECT_ROOT / "public_data" / "benchmark" / "gate0"
 #: Ridge 의 정칙화. 결과를 보고 고르지 않는다.
 RIDGE_ALPHA = 100.0
 
+#: §3 이 Gate 2 에 사전 등록한 민감도 코호트의 source 집합. Gate 1 primary 와 같다.
+RFD3_SOURCES = ("rfd3",)
+
+#: §3 이 인쇄한 그 코호트의 기하. 재생성값이 이것과 다르면 산출물이 스스로 말한다.
+RFD3_SPEC_GEOMETRY = {"mixed_backbones": 34, "informative_targets": 11}
+
 #: 스펙 §5 가 동결한 NO-GO 해석 문구. 프로덕션 primitive 재생성값 0.93 이다
 #: (최초 동결본의 0.94 는 controller 임시 실행값이었고 스펙이 이미 정정했다).
 NO_GO_READING = (
@@ -61,6 +73,82 @@ def _summarise(values: Sequence[float]) -> dict:
         "meets_threshold": bool(point >= G.GATE2_DELTA_MIN),
         "lcb_exceeds_zero": bool(lcb.get("exceeds_zero")),
     }
+
+
+def _per_target_delta_top4(mixed: Sequence[C.Backbone],
+                           score_of: dict[str, float],
+                           endpoint: str) -> dict[str, float]:
+    """백본별 Δ_Top4 -> 타겟 등가중 map. **코호트만 바꿔 두 번 부른다.**
+
+    1 차와 RFD3-only 민감도가 같은 함수를 쓴다 - 민감도용 집계를 따로 적으면
+    두 숫자가 같은 규칙으로 나왔다는 보장이 사라진다.
+    """
+    per_backbone, bb_targets = [], []
+    for b in mixed:
+        labels = [(f.joint_pass if endpoint == "joint" else f.structural_pass)
+                  for f in b.folds]
+        per_backbone.append(G.delta_top4(
+            labels, [score_of[f.sequence_id] for f in b.folds],
+            [f.sequence_id for f in b.folds]))
+        bb_targets.append(b.target_id)
+    return G.per_target_mean_map(per_backbone, bb_targets)
+
+
+def _rfd3_only_sensitivity(grid: C.Grid, mixed: Sequence[C.Backbone],
+                           score_of: dict[str, float], endpoint: str) -> dict:
+    """RFD3-only 코호트 민감도 (스펙 §3).
+
+    > "Gate 2 의 1차 코호트는 mixed 백본 37 개를 유지한다. … RFD3-only
+    > (mixed 34, informative 11)를 민감도로 함께 보고한다."
+
+    **1 차 판정은 mixed 37 그대로다.** Δ_Top4 는 백본 **내부**에서 계산되므로 각
+    백본이 자기 단위이고 source 는 Gate 2 에서 교란이 아니다 - 그래서 코호트를
+    줄이는 것이 아니라 나란히 둔다. 바뀌는 것은 평가 단위 집합 하나뿐이고, §3 이
+    native 를 배분 풀에서 comparator 로 옮겼으므로 "배분 대상만" 의 값이 함께
+    있어야 한다.
+
+    **모델을 다시 적합하지 않는다.** 같은 LOTO 예측(`score_of`)을 그대로 쓴다.
+    RFD3 폴드로만 다시 학습하면 그것은 코호트 민감도가 아니라 여덟 번째 arm 이고,
+    동결된 ladder 는 S0-S6 일곱 개다. 학습 쪽 정렬은 Gate 1 에만 있는 조항이다.
+
+    코호트는 `_gate2d_cohort.restrict_to_sources` 로 자른다 -
+    26_gate2d_operating_characteristics.py 의 `OC_primary_rfd3_only` 와 같은
+    slicer 이며 여기서 두 번째를 만들지 않는다.
+    """
+    sub = C.mixed_backbones(C.restrict_to_sources(grid, RFD3_SOURCES))
+    excluded = sorted({b.backbone_key for b in mixed}
+                      - {b.backbone_key for b in sub})
+    per_target = _per_target_delta_top4(sub, score_of, endpoint)
+    out: dict = {
+        "status": "pre-registered sensitivity (스펙 §3)",
+        "cohort": "RFD3-only mixed backbones",
+        "sources": list(RFD3_SOURCES),
+        "mixed_backbones": len(sub),
+        "cohort_targets": sorted(per_target),
+        "excluded_backbones": len(excluded),
+        "excluded_backbone_keys": excluded,
+        "primary_cohort_unchanged": True,
+        "model_refit": False,
+        "cohort_slicer": "_gate2d_cohort.restrict_to_sources",
+    }
+    if len(per_target) < G.MIN_INFORMATIVE_TARGETS:
+        out["evaluable"] = False
+        out["informative_targets"] = len(per_target)
+        out["reason"] = (
+            f"민감도 코호트 {len(per_target)} 이 floor "
+            f"{G.MIN_INFORMATIVE_TARGETS} 미만이라 non-evaluable 이다. 1 차 판정은 "
+            "그대로 내되 교차 확인이 불가능했다."
+        )
+        return out
+    out["evaluable"] = True
+    out.update(_summarise([per_target[t] for t in sorted(per_target)]))
+    out["per_target_delta_top4"] = {t: round(v, 4)
+                                    for t, v in sorted(per_target.items())}
+    out["matches_spec_geometry"] = bool(
+        len(sub) == RFD3_SPEC_GEOMETRY["mixed_backbones"]
+        and len(per_target) == RFD3_SPEC_GEOMETRY["informative_targets"])
+    out["spec_geometry"] = dict(RFD3_SPEC_GEOMETRY)
+    return out
 
 
 def _low_depth_sensitivity(per_target: dict[str, float],
@@ -136,22 +224,17 @@ def evaluate_arm(arm: str, grid: C.Grid, mixed: list[C.Backbone],
         pred[test_idx] = model.predict(x_fold[test_idx])
 
     score_of = {f.sequence_id: float(p) for f, p in zip(all_folds, pred)}
-    per_backbone, bb_targets = [], []
-    for b in mixed:
-        labels = [(f.joint_pass if endpoint == "joint" else f.structural_pass)
-                  for f in b.folds]
-        per_backbone.append(G.delta_top4(
-            labels, [score_of[f.sequence_id] for f in b.folds],
-            [f.sequence_id for f in b.folds]))
-        bb_targets.append(b.target_id)
-
-    per_target = G.per_target_mean_map(per_backbone, bb_targets)
+    per_target = _per_target_delta_top4(mixed, score_of, endpoint)
     out = {"arm": arm, "label": F.ARM_LABELS[arm], "status": F.ARM_STATUS[arm],
            "endpoint": endpoint}
     out.update(_summarise([per_target[t] for t in sorted(per_target)]))
     out["per_target_delta_top4"] = {t: round(v, 4) for t, v in sorted(per_target.items())}
+    # 사전 등록된 민감도 둘. 둘 다 **1 차 판정 옆에** 놓는다 - 보고되지 않은 사전
+    # 등록 분석은 숨긴 것과 구별되지 않는다.
     out["sensitivity_excluding_low_depth"] = _low_depth_sensitivity(
         per_target, low_depth_targets)
+    out["sensitivity_rfd3_only"] = _rfd3_only_sensitivity(
+        grid, mixed, score_of, endpoint)
     out["n_features"] = n_features
     out["feature_blocks"] = list(blocks)
     if uses_msa:
@@ -177,6 +260,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     msa = F.load_msa_features()
     low_depth = msa["low_depth"]
     low_depth_targets = list(low_depth["targets"])
+
+    # §3 의 사전 등록 민감도 코호트. 1 차 코호트(mixed 37)는 그대로 두고 기하만
+    # 미리 읽어 최상위에 적는다 - arm 이 하나도 요청되지 않은 실행에서도 이 분석이
+    # 존재한다는 사실이 산출물에 남아야 한다.
+    rfd3_mixed = C.mixed_backbones(C.restrict_to_sources(grid, RFD3_SOURCES))
+    rfd3_report = {
+        "status": "reported",
+        "spec_says": ("Gate 2 의 1차 코호트는 mixed 백본 37 개를 유지한다. … "
+                      "RFD3-only(mixed 34, informative 11)를 민감도로 함께 "
+                      "보고한다. [스펙 §3]"),
+        "primary_cohort_unchanged": True,
+        "sources": list(RFD3_SOURCES),
+        "mixed_backbones": len(rfd3_mixed),
+        "informative_targets": len({b.target_id for b in rfd3_mixed}),
+        "excluded_backbones": len(mixed) - len(rfd3_mixed),
+        "spec_geometry": dict(RFD3_SPEC_GEOMETRY),
+        "why_primary_keeps_native": (
+            "Δ_Top4 는 백본 내부에서 계산되므로 각 백본이 자기 단위이고 source 는 "
+            "Gate 2 에서 교란이 아니다. Gate 1 과 달리 코호트를 좁힐 이유가 없다."),
+        "why_the_sensitivity_exists": (
+            "그럼에도 §3 이 native 를 배분 풀에서 comparator 로 옮겼으므로, RAPID "
+            "이 실제로 배분하는 대상만으로 좁힌 값을 1 차 옆에 함께 둔다."),
+        "cohort_slicer": ("_gate2d_cohort.restrict_to_sources - "
+                          "26_gate2d_operating_characteristics.py 의 "
+                          "OC_primary_rfd3_only 와 같은 slicer 다."),
+        "model_is_not_refit": (
+            "같은 LOTO 예측을 그대로 쓴다. RFD3 폴드로만 다시 적합하면 코호트 "
+            "민감도가 아니라 동결되지 않은 여덟 번째 arm 이 된다."),
+        "sensitivity_is_reported_per_arm": (
+            "각 arm 의 sensitivity_rfd3_only 를 본다."),
+    }
 
     arms = {a: evaluate_arm(a, grid, mixed, low_depth_targets=low_depth_targets)
             for a in requested}
@@ -276,6 +390,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "sensitivity_is_reported_per_arm": (
                 "각 arm 의 sensitivity_excluding_low_depth 를 본다."),
         },
+        "rfd3_only_cohort_report": rfd3_report,
         "msa_features_provenance": {
             "artifact": "public_data/benchmark/gate0/holdout_grid/msa_features.json",
             "conserved_positions_sha256_verified":
