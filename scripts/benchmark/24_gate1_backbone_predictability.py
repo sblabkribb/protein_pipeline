@@ -76,6 +76,38 @@ ARMS = {
 
 GO_ARM = "primary"
 
+#: 동결된 재현 합격선 (21_gate2d_prepare_encoder.REPRO_ATOL). 여기서 다시 읽는 것은
+#: index 가 합격선 자체를 느슨하게 적고 통과했다고 말하는 경우를 막기 위해서다.
+REPRO_ATOL_MAX = 1e-4
+
+
+def _reproduction_defect(index: dict) -> str | None:
+    """index 가 dev 재현 검증을 **실제로 측정해서** 통과했는가. 아니면 그 이유.
+
+    예전에는 `dev_reproduction.passed` 하나만 봤고, 그 값은
+    21_gate2d_prepare_encoder.py 가 무조건 True 로 적던 상수였다 - 발동할 수 없는
+    가드는 아무것도 지키지 않는다 (`bcfecdb`·`3927b5b` 와 같은 결함). 그래서
+    플래그가 아니라 **측정 기록**을 본다: 그 실행이 검증을 돌렸는지, 잰 숫자가
+    무엇인지, 그 숫자가 동결된 합격선 안인지.
+    """
+    repro = index.get("dev_reproduction") or {}
+    if not repro.get("verified_in_this_invocation"):
+        return ("이 index 를 만든 실행이 dev 재현 검증을 돌리지 않았다 "
+                "(verified_in_this_invocation != true). "
+                + str(repro.get("reason") or ""))
+    diff, atol = repro.get("max_abs_diff"), repro.get("atol")
+    if not isinstance(diff, (int, float)) or isinstance(diff, bool):
+        return "측정된 max_abs_diff 가 없다 - 통과 플래그만으로는 인정하지 않는다."
+    if not isinstance(atol, (int, float)) or isinstance(atol, bool):
+        return "합격선 atol 이 기록돼 있지 않다."
+    if atol > REPRO_ATOL_MAX:
+        return f"atol 이 {atol:g} 다. 동결된 합격선은 {REPRO_ATOL_MAX:g} 이하다."
+    if diff > atol:
+        return f"max abs diff {diff:g} 가 atol {atol:g} 를 넘는다."
+    if not repro.get("passed"):
+        return f"검증이 통과로 기록되지 않았다 (max abs diff {diff:g})."
+    return None
+
 
 def load_dev(sources: tuple[str, ...] | None = None):
     """dev 백본: encoder feature, joint_pass_yield, 설계 수 가중치, source, target."""
@@ -226,10 +258,11 @@ def main() -> int:
                        .read_text(encoding="utf-8"))
     if index["dim"] != 384 or index["ckpt"] != "v_48_020":
         raise SystemExit(f"encoder index 가 dev 공간과 다르다: {index['ckpt']} / {index['dim']}")
-    if not index.get("dev_reproduction", {}).get("passed"):
+    defect = _reproduction_defect(index)
+    if defect:
         raise SystemExit(
-            "홀드아웃 encoder feature 가 dev 재현 검증 없이 만들어졌다. train 과 "
-            "test 가 다른 공간에 놓일 수 있으므로 Gate 1 을 돌리지 않는다."
+            "홀드아웃 encoder feature 가 dev 재현 검증을 통과한 기록이 없다. train 과 "
+            "test 가 다른 공간에 놓일 수 있으므로 Gate 1 을 돌리지 않는다.\n  " + defect
         )
     x_test_all = np.load(GATE0 / "holdout_grid" / "backbone_encoder.npy")
     row_of = {k: i for i, k in enumerate(index["backbone_keys"])}
@@ -266,8 +299,11 @@ def main() -> int:
             "dim": 384,
             "ckpt": "v_48_020 (soluble)",
             "train_test_same_space": True,
-            "dev_reproduction_max_abs_diff": 9.06e-06,
-            "dev_reproduction_atol": 1e-4,
+            # 손으로 적지 않는다 - index 가 실제로 잰 값을 그대로 옮긴다.
+            "dev_reproduction_max_abs_diff": index["dev_reproduction"]["max_abs_diff"],
+            "dev_reproduction_atol": index["dev_reproduction"]["atol"],
+            "dev_reproduction_verified_in_that_invocation":
+                index["dev_reproduction"]["verified_in_this_invocation"],
             "note": ("dev 추출기는 커밋되지 않아 재구현했다. 그 재구현이 커밋된 dev "
                      "산출물을 allclose(atol=1e-4) 로 재현했기 때문에 train/test 가 "
                      "같은 공간이라는 것이 가정이 아니라 확인된 사실이다."),

@@ -2,16 +2,16 @@
  "purpose": "Gate 1 - backbone predictability. 정책 비교가 아니다.",
  "spec": "docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md",
  "provenance": {
-  "code_sha": "3734567d60c6b55078ca6fd8d4128b902babf6c2",
+  "code_sha": "eab4a3d2a301be50d987a233f70916765953102e",
   "code_sha_is_the_parent_of_the_artifact_commit": true,
   "script_sha256": {
-   "scripts/benchmark/24_gate1_backbone_predictability.py": "5f44699328e99a95361f224fb737fc0b29084d787f2d693b3ddd4be824ba0072",
-   "scripts/benchmark/21_gate2d_prepare_encoder.py": "3a4bdc7016ddf8cdf392811af9dc90c278ec86ff83de07ee2d2c5ea7da55b701",
+   "scripts/benchmark/24_gate1_backbone_predictability.py": "1b7295842f7b33af35e79ce04fbe22c3e455dedc46d9329e384e1331c82972b0",
+   "scripts/benchmark/21_gate2d_prepare_encoder.py": "89e24c6943d8a0126e7df0fc81dfe7953e783df06fbedea0c2657e4d3d42e2a7",
    "scripts/benchmark/_mpnn_encoder.py": "cf6c610d26a850ef6d512d2f1d7e77922608f530780f867c607978fa11baa351",
    "scripts/benchmark/_gate2d.py": "8d2bac676868a81d21cbfd68f608af36b8e33afac1ada1aebdb541e6bbf8cbb6",
    "scripts/benchmark/_gate2d_cohort.py": "568796052feb003411b0034cc37684a8dfb14bf8f19fa058062624decdfd4695"
   },
-  "utc": "2026-09-11T01:37:51Z"
+  "utc": "2026-09-11T04:33:00Z"
  },
  "does_not_do": [
   "알고리즘 제안",
@@ -24,8 +24,9 @@
   "dim": 384,
   "ckpt": "v_48_020 (soluble)",
   "train_test_same_space": true,
-  "dev_reproduction_max_abs_diff": 9.06e-06,
+  "dev_reproduction_max_abs_diff": 9.059906005859375e-06,
   "dev_reproduction_atol": 0.0001,
+  "dev_reproduction_verified_in_that_invocation": true,
   "note": "dev 추출기는 커밋되지 않아 재구현했다. 그 재구현이 커밋된 dev 산출물을 allclose(atol=1e-4) 로 재현했기 때문에 train/test 가 같은 공간이라는 것이 가정이 아니라 확인된 사실이다."
  },
  "go_arm": "primary",

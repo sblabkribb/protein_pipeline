@@ -1791,3 +1791,120 @@ def test_rfd3_only_sensitivity_slices_the_cohort_and_withholds_below_the_floor(m
     assert "교차 확인" in thin["reason"]
     assert "delta_top4_target_equal" not in thin
 
+
+# --- I3: encoder 재현 가드가 실제로 발동한다 -----------------------------------
+#
+# `21_gate2d_prepare_encoder.py` 는 `"passed": True` 를 무조건 적었고
+# `24_gate1_backbone_predictability.py` 는 그 플래그 하나로 Gate 1 실행 여부를
+# 정했다. 즉 게이트가 상수를 읽었다 - `bcfecdb`·`3927b5b` 가 고친 것과 같은 결함
+# ("발동할 수 없는 가드는 아무것도 지키지 않는다").
+
+def test_encoder_index_records_a_measurement_not_a_constant():
+    """커밋된 index 의 dev_reproduction 은 측정 기록이어야 한다."""
+    import json as _json
+    index = _json.loads(
+        (ROOT / "public_data" / "benchmark" / "gate0" / "holdout_grid"
+         / "backbone_encoder.index.json").read_text(encoding="utf-8"))
+    repro = index["dev_reproduction"]
+    assert repro["verified_in_this_invocation"] is True
+    assert repro["passed"] is True
+    assert repro["allclose"] is True
+    assert isinstance(repro["max_abs_diff"], float)
+    assert 0.0 < repro["max_abs_diff"] <= repro["atol"] == 1e-4
+    assert repro["n_backbones_verified"] == 157
+
+
+def test_skip_verify_can_no_longer_stamp_a_pass():
+    """`passed` 는 유도값이다. 호출자가 주장해도 측정이 없으면 false 다."""
+    import importlib
+    import inspect
+
+    prep = importlib.import_module("21_gate2d_prepare_encoder")
+
+    # 측정 없이 index 를 쓸 수 있는 호출 형태가 남아 있으면 안 된다.
+    assert inspect.signature(prep.extract).parameters[
+        "verification"].default is inspect.Parameter.empty
+
+    skipped = prep.dev_reproduction_record(prep.skipped_verification())
+    assert skipped["verified_in_this_invocation"] is False
+    assert skipped["passed"] is False
+    assert skipped["max_abs_diff"] is None
+    assert "--skip-verify" in skipped["reason"]
+
+    # 통과를 주장하지만 돌지 않은 기록 - 그래도 false 다.
+    forged = prep.dev_reproduction_record(
+        {"verified_in_this_invocation": False, "allclose": True,
+         "max_abs_diff": 9.06e-06, "atol": 1e-4, "passed": True})
+    assert forged["passed"] is False
+
+    # 돌았지만 합격선을 넘긴 기록.
+    failed = prep.dev_reproduction_record(
+        {"verified_in_this_invocation": True, "allclose": False,
+         "max_abs_diff": 0.49, "atol": 1e-4})
+    assert failed["passed"] is False
+    assert failed["max_abs_diff"] == 0.49
+
+    # 실제로 재고 통과한 기록만 true 다.
+    passed = prep.dev_reproduction_record(
+        {"verified_in_this_invocation": True, "allclose": True,
+         "max_abs_diff": 9.06e-06, "atol": 1e-4, "n_backbones": 157})
+    assert passed["passed"] is True
+    assert passed["max_abs_diff"] == 9.06e-06
+    assert passed["n_backbones_verified"] == 157
+
+
+def test_gate1_reproduction_guard_names_each_defect():
+    """가드가 보는 것은 플래그가 아니라 측정 기록이다."""
+    import importlib
+    gate1 = importlib.import_module("24_gate1_backbone_predictability")
+    good = {"dev_reproduction": {"verified_in_this_invocation": True,
+                                 "max_abs_diff": 9.06e-06, "atol": 1e-4,
+                                 "allclose": True, "passed": True}}
+    assert gate1._reproduction_defect(good) is None
+
+    def defect(**changes):
+        index = {"dev_reproduction": {**good["dev_reproduction"], **changes}}
+        return gate1._reproduction_defect(index)
+
+    assert "돌리지 않았다" in defect(verified_in_this_invocation=False)
+    assert "max_abs_diff" in defect(max_abs_diff=None)
+    # 옛 형식(플래그만 있는 index)도 거절된다 - 그것이 결함의 본체였다.
+    assert gate1._reproduction_defect({"dev_reproduction": {"passed": True}})
+    assert gate1._reproduction_defect({}) is not None
+    # 합격선 자체를 느슨하게 적고 통과했다고 말하는 index.
+    assert "동결된 합격선" in defect(atol=1.0, max_abs_diff=0.5)
+    assert "atol" in defect(max_abs_diff=1e-3)
+    assert "통과로 기록되지 않았다" in defect(passed=False)
+
+
+def test_gate1_refuses_an_index_whose_verification_did_not_pass(tmp_path, monkeypatch):
+    """가드가 실제로 발동한다 - 검증이 통과하지 않은 index 로는 Gate 1 이 안 돈다."""
+    import importlib
+    import json as _json
+
+    gate1 = importlib.import_module("24_gate1_backbone_predictability")
+    real = _json.loads(
+        (ROOT / "public_data" / "benchmark" / "gate0" / "holdout_grid"
+         / "backbone_encoder.index.json").read_text(encoding="utf-8"))
+
+    grid_dir = tmp_path / "holdout_grid"
+    grid_dir.mkdir()
+    bad = dict(real)
+    bad["dev_reproduction"] = {**real["dev_reproduction"],
+                               "verified_in_this_invocation": False,
+                               "max_abs_diff": None,
+                               "allclose": None,
+                               "passed": False,
+                               "reason": "--skip-verify 로 검증을 건너뛰었다"}
+    (grid_dir / "backbone_encoder.index.json").write_text(
+        _json.dumps(bad, ensure_ascii=False), encoding="utf-8")
+
+    monkeypatch.setattr(gate1, "GATE0", tmp_path)
+    monkeypatch.setattr(sys, "argv",
+                        ["24_gate1", "--out", str(tmp_path / "out.json")])
+    with pytest.raises(SystemExit) as excinfo:
+        gate1.main()
+    message = str(excinfo.value)
+    assert "Gate 1 을 돌리지 않는다" in message
+    assert "돌리지 않았다" in message
+    assert not (tmp_path / "out.json").exists()   # 산출물을 쓰지 않는다

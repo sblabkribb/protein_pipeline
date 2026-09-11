@@ -5,8 +5,12 @@
  "dev_reproduction": {
   "reference": "public_data/benchmark/gate0/backbones/mpnn_encoder.npy",
   "atol": 0.0001,
+  "verified_in_this_invocation": true,
+  "max_abs_diff": 9.059906005859375e-06,
+  "allclose": true,
   "passed": true,
-  "note": "--verify-dev 로 확인함. 통과 없이는 이 파일을 만들지 않는다."
+  "note": "이 세 값은 이 index 를 만든 실행에서 잰 것이다. 검증을 돌리지 않은 실행은 passed 를 true 로 적을 수 없다.",
+  "n_backbones_verified": 157
  },
  "backbone_keys": [
   "1sh6A02|rfd3|rfd3_inputs_spec-1_0_model_0",
