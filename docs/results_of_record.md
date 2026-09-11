@@ -139,6 +139,46 @@ yield 백본만 담고 있으므로 여기서 나온 온도 효과는 전체 백
 아니라 중간-yield 영역에서의 조건부 효과다. 정책 성능 수치는 홀드아웃 격자에서만
 인용한다.
 
+## Gate 2 · 백본 내부 서열 선택성 (2026-09-11)
+
+동결 스펙: `docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md`.
+코호트: 홀드아웃 격자 mixed 백본 37 개 / informative 타겟 11 개 / 사용가능 폴드 1,680.
+1 차 endpoint = joint-pass, 지표 = 타겟 등가중 Δ_Top4. **새 AF2 0 개.**
+
+| 값 | 수치 | 출처 |
+|---|---|---|
+| S6 (판정 arm) Δ_Top4 | **−0.0366** | `gate2_within_backbone_selectability.json` → `arms_joint_pass.S6.delta_top4_target_equal` |
+| S6 단측 90% LCB | **−0.0854** | 같은 파일 → `.one_sided_90_lcb` |
+| S6 informative 타겟 | 11 | 같은 파일 → `.informative_targets` |
+| 저심도 제외 민감도 (코호트 10) | Δ **−0.0444**, LCB −0.0982 | 같은 파일 → `low_depth_sensitivity` |
+| oracle 상한 | +0.326 | 같은 파일 → `reference_points.oracle` |
+| SoluProt 기준선 | −0.001 | 같은 파일 → `reference_points.soluprot` |
+
+전체 ladder (joint-pass, Δ_Top4 / LCB90):
+
+| S0 | S1 | S2 | S3 | S4 | S5 | S6 |
+|---|---|---|---|---|---|---|
+| −0.0014 / −0.0367 | +0.0384 / +0.0107 | −0.0188 / −0.0508 | −0.0029 / −0.0316 | +0.0001 / −0.0347 | −0.0366 / −0.0854 | **−0.0366 / −0.0854** |
+
+**S1 을 인용할 때 반드시 붙일 것.** S1(raw ESM mean)은 1 차 endpoint 에서 점추정이
+양수이고 LCB > 0 인 유일한 arm 이지만, **사전 등록된 known-null** 이고(82 타겟에서
+이미 음성) 문턱보다 0.06 낮다. 스펙이 S6 를 유일 판정 arm 으로 동결한 이유가 이런
+사후 arm 선택을 막기 위해서다. **S1 으로 어떤 판정도 내리지 않는다.**
+
+### ⚠️ 이 수치는 사전 등록한 S6 의 결과가 아니다
+
+동결 스펙의 S6 는 `S5 + 기존 cheap feature(조성 + MPNN score)` 다. **이번 실행의
+S6 에는 MPNN score 가 없다** — 격자의 `sequences.csv` 에 그 열이 없고, score 를
+가진 모든 코호트와 격자 sequence_id 의 교집합이 **0** 이다. 따라서 realized S6 =
+`S5 + 조성` 이고, 실제로 S5 와 S6 의 joint-pass 수치가 동일하다.
+
+출처: 같은 파일 → `s6_cheap_block_deviation`.
+
+**따라서 위 수치는 realized-S6 의 결과이며, 공식 Gate 2 판정은 아직 닫히지
+않았다.** §8 판정표 상태는 `UNRESOLVED` 다. 인용할 때 "Gate 2 가 NO-GO 로
+판정됐다" 로 쓰지 않는다 — **"현재 시험한 서열 표현들에서 실용적으로 유용한 신호를
+찾지 못했다"** 까지가 이 수치가 지지하는 문장이다.
+
 ## 아니라고 판정한 것
 
 | 항목 | 판정 | 출처 |

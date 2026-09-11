@@ -678,6 +678,38 @@ S0–S3 를 먼저 돌리는 남은 값어치는 **파이프라인·feature 코�
 
 ## 8. 판정표
 
+### 현재 상태 (2026-09-11)
+
+```
+Gate 2 realized arm   NO-GO      Δ_Top4 -0.0366 · LCB90 -0.0854 · n_info 11
+Gate 2 공식 판정      UNRESOLVED  사전 등록한 S6 는 MPNN score 를 포함했으나
+                                  realized S6 에는 없다 (PRIMARY DEVIATION)
+Gate 1                PENDING     ProteinMPNN 체크포인트 미확보로 실행 불가
+최종 B / C / STOP     UNDECIDED
+```
+
+**realized-S6 의 NO-GO 를 공식 Gate 2 판정으로 닫지 않는다.** 판정 arm 을 S6 하나로
+동결한 것은 사후 arm 선택을 막기 위해서였는데, 그 S6 를 사전 등록과 **다른 feature
+집합**으로 실행했다면 그 동결의 효력이 그대로 유지된다고 말할 수 없다. 여기서
+NO-GO 를 확정하면 "primary feature set 을 사전 등록과 다르게 실행했는데 왜
+confirmatory NO-GO 인가" 라는 물음에 답할 수 없다.
+
+**해소 경로가 있고 새 AF2 가 필요 없다.** 같은 1,680 폴드에 per-sequence
+ProteinMPNN score 만 붙여 S6 를 재실행하면 된다. 그 score 를 만들려면
+`v_48_020.pt` 체크포인트가 필요하고, **Task 7 의 Gate 1 encoder 재현에 필요한 것과
+같은 체크포인트**다. 따라서 체크포인트가 확보되면 **Gate 1 encoder 재현과 Gate 2
+MPNN score 복원을 함께** 수행한다.
+
+full S6 도 NO-GO 면 그때 `Gate 2 = NO-GO [FINAL]`, `C = closed` 로 확정한다.
+
+**지금 쓸 수 있는 문장과 쓸 수 없는 문장.** 쓸 수 있다 — *"현재 시험한 서열
+표현들(SoluProt · raw ESM · ΔESM_global · ΔESM_mut · MSA conservation · 그 결합)에서
+실용적으로 유용한 백본 내부 선택 신호를 찾지 못했다."* S0·S2·S3·S4 가 거의 0 이고
+S5·realized-S6 가 음수이며 저심도 민감도도 같은 방향이므로 이 진술은 지지된다.
+쓸 수 없다 — *"Gate 2 가 NO-GO 로 판정됐다"*, *"C 는 닫혔다"*.
+
+### 판정표 (변경 없음)
+
 | Gate 1 | Gate 2 | 결정 |
 |---|---|---|
 | GO | NO | **B 만.** backbone-specific surrogate prior + calibrated prior strength. C 는 하지 않는다 |
