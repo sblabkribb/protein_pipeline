@@ -285,6 +285,19 @@ Gate 1 GO  ⟺  타겟 등가중 mean within-target Spearman(q̂_b, q_b) ≥ +0.
 `ρ ≳ 0.26 부터 2 SE` 같은 rough detectability 계산을 임계값으로 전용하지 않는다 —
 아래 표가 근거이고, 숫자가 비슷한 것은 우연이다.
 
+**Gate 1 의 ρ 는 2026-09-11 에 +0.0935 → +0.0379 로 정정됐다 (판정 불변).**
+최초 기록값은 데이터가 아니라 **solver 가 멈춘 자리**였다. sklearn 기본 `tol=1e-4`
+에서 타겟 `5pc8A00` 의 두 백본이 예측확률 4.4e-4 차이였고 feature 가 float32 라
+상대 1e-7 교란이 순서를 뒤집었다 — 그래서 sklearn 1.9.0 환경은 +0.0935, 1.8.0
+환경은 +0.0743 을 냈다. `tol` 을 6 decade(1e-5~1e-10) 조이면 두 환경이 **+0.0379**
+로 일치하고, 같은 목적함수를 독립 Newton solve 로 `|grad|_inf ≈ 7e-14` 까지 풀면
++0.037927 이 bit-identical 하게 나온다. 즉 +0.0379 는 **정확한 최적해**다.
+원인은 sklearn 1.9.0 이 손실을 `sum(sample_weight)=1380` 으로 정규화해 같은 `tol`
+이 같은 기준이 아니게 된 것이다. 채택: `tol=1e-8`, `max_iter=20000`, 해석된 패키지
+버전과 함께 산출물 `numerics` 에 기록. 절단된 fit(`n_iter >= max_iter`)은
+fail-closed 다. **문턱·arm·코호트·endpoint·시드는 바꾸지 않았다** — solver 허용오차
+하나이며, 스윕 전체에서 가장 큰 후보값도 +0.0935 로 문턱 0.25 에서 멀다.
+
 **정본 = `OC_primary_rfd3_only`** (백본 60 · 타겟당 5 · informative 11).
 
 | σ | E[mean ρ] | E[top-1 regret] | **P(GO) ρ≥0.25** | (참고) ρ≥0.30 |
@@ -683,7 +696,7 @@ S0–S3 를 먼저 돌리는 남은 값어치는 **파이프라인·feature 코�
 ### 확정 (2026-09-11) — 두 게이트 모두 NO-GO
 
 ```
-Gate 1  NO-GO [FINAL]   ρ +0.0935 · LCB90 -0.1153 · n_info 11   (문턱 0.25)
+Gate 1  NO-GO [FINAL]   ρ +0.0379 · LCB90 -0.1559 · n_info 11   (문턱 0.25)
 Gate 2  NO-GO [FINAL]   Δ_Top4 -0.0313 · LCB90 -0.0803 · n_info 11  (문턱 +0.10)
 최종    STOP            이 연구축을 접는다. negative result 로 보고하고
                         RAPID 자체에 집중한다.
@@ -697,11 +710,11 @@ Gate 2  NO-GO [FINAL]   Δ_Top4 -0.0313 · LCB90 -0.0803 · n_info 11  (문턱 +
 
 **Gate 1 arm 별 (판정은 primary 하나로만).**
 
-| arm | train | ρ | LCB90 | top-1 regret |
+| arm | train | ρ | LCB90 | top-1 regret (informative 11) |
 |---|---|---|---|---|
-| **primary** RFD3→RFD3 | 80 bb / 16 tgt | **+0.0935** | **−0.1153** | 0.1493 |
-| sensitivity 1 (+BioEmu) | 100 / 16 | +0.0577 | −0.1524 | 0.1667 |
-| descriptive / legacy (전체) | 157 / 62 | −0.0604 | −0.2561 | 0.2604 |
+| **primary** RFD3→RFD3 | 80 bb / 16 tgt | **+0.0379** | **−0.1559** | 0.1780 |
+| sensitivity 1 (+BioEmu) | 100 / 16 | +0.0577 | −0.1524 | 0.1818 |
+| descriptive / legacy (전체) | 157 / 62 | −0.0604 | −0.2561 | 0.2841 |
 | comparator (native) | — | **non-evaluable** | — | — |
 
 legacy arm 이 음수인 것은 §3 이 사전에 경고한 것과 일치한다 — native 백본이 계수를
@@ -718,7 +731,7 @@ The native/RFD3 source separation was **prediction-blind but label-structure-inf
 not strictly outcome-blind. Source-level `q_b` distributions and between-source variance
 were inspected before Gate 1 predictions were evaluated. All prespecified arms are
 reported. This refinement does not change the scientific verdict: both the RFD3-only
-primary arm (`ρ = 0.0935`) and the descriptive legacy all-source arm (`ρ = −0.0604`)
+primary arm (`ρ = 0.0379`) and the descriptive legacy all-source arm (`ρ = −0.0604`)
 remain below the frozen GO threshold (`ρ ≥ 0.25`). No threshold, endpoint, cohort, or
 arm was selected after observing Gate 1 predictive performance.
 
@@ -835,12 +848,13 @@ S5·realized-S6 가 음수이며 저심도 민감도도 같은 방향이므로 �
 | `scripts/benchmark/26_gate2d_operating_characteristics.py` | OC 표 생성기 (재현성 계약) |
 | `scripts/benchmark/27_gate2d_prepare_mpnn_scores.py` | S6 의 per-sequence MPNN score |
 | `scripts/benchmark/_mpnn_encoder.py` | 복구된 encoder 추출기 |
+| `public_data/benchmark/gate0/gate1_backbone_predictability.json` | Gate 1 결과 |
+| `public_data/benchmark/gate0/gate2_within_backbone_selectability.json` | Gate 2 결과 |
+| `public_data/benchmark/gate0/gate2d_operating_characteristics.json` | OC 표 (재현성 계약) |
+| `docs/results_of_record.md` | 판정 수치. 인용은 이 파일 경유 |
 
 **번호 정정 (2026-09-11).** 최초 동결본은 게이트 스크립트를 `21_`/`22_` 로 적었으나
 그 번호는 P1/P2 준비 스크립트가 쓰게 되어 게이트는 `24_`/`25_` 다. 그리고
 `gate2d_spec.json` 은 **만들지 않았다** — 동결 상수는 `_gate2d.py` 에 있고
 `test_frozen_constants_match_spec` 이 이 문서와 대조하므로 기계가독 사본을 하나 더
 두면 정본이 둘이 된다. 그 이중화가 이 프로젝트에서 이미 한 번 사고를 냈다.
-| `public_data/benchmark/gate0/gate1_backbone_predictability.json` | Gate 1 결과 |
-| `public_data/benchmark/gate0/gate2_within_backbone_selectability.json` | Gate 2 결과 |
-| `docs/results_of_record.md` | 판정 수치 추가 (인용은 이 파일 경유) |

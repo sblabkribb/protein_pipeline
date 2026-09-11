@@ -149,10 +149,11 @@ feature = ProteinMPNN encoder 384-D (`v_48_020` soluble). **새 AF2 0 개.**
 
 | 값 | 정본 | 출처 (`gate1_backbone_predictability.json`) |
 |---|---|---|
-| primary 타겟 등가중 mean within-target Spearman | **+0.0935** | `arms.primary.point` |
-| primary 단측 90% LCB | **−0.1153** | `arms.primary.one_sided_90_lcb` |
+| primary 타겟 등가중 mean within-target Spearman | **+0.0379** | `arms.primary.point` |
+| primary 단측 90% LCB | **−0.1559** | `arms.primary.one_sided_90_lcb` |
 | primary informative 타겟 | **11** | `arms.primary.informative_targets` |
-| primary top-1 백본 regret (2 차) | **0.1493** | `arms.primary.top1_backbone_regret_mean` |
+| primary top-1 백본 regret (2 차, **informative 11**) | **0.1780** | `arms.primary.top1_backbone_regret_mean_informative_cohort` |
+| 〃 (ranked 12, 참고) | 0.1632 | 같은 파일 → `.top1_backbone_regret_mean_all_ranked_targets` |
 | 동결 문턱 | ρ ≥ +0.25 ∧ LCB > 0 ∧ n ≥ 8 | `frozen_go_rule` |
 | **판정** | **NO-GO [FINAL]** (문턱 세 개 중 두 개 미달) | `verdict` |
 
@@ -160,8 +161,8 @@ feature = ProteinMPNN encoder 384-D (`v_48_020` soluble). **새 AF2 0 개.**
 
 | arm | train | ρ | LCB90 | regret |
 |---|---|---|---|---|
-| sensitivity 1 | RFD3+BioEmu (100·16) | +0.0577 | −0.1524 | 0.1667 |
-| descriptive / legacy | 전체 dev (157·62) | −0.0604 | −0.2561 | 0.2604 |
+| sensitivity 1 | RFD3+BioEmu (100·16) | +0.0577 | −0.1524 | 0.1818 |
+| descriptive / legacy | 전체 dev (157·62) | −0.0604 | −0.2561 | 0.2841 |
 | comparator (native 홀드아웃) | — | **non-evaluable** | — | — |
 
 **해석 제한 — 이 두 줄을 수치와 떼어 인용하지 않는다.**
@@ -175,7 +176,8 @@ feature = ProteinMPNN encoder 384-D (`v_48_020` soluble). **새 AF2 0 개.**
 근거: primary 는 **백본 80 개에 384 차원**(n/p = 0.21)이고, 스펙 §3 이 결과 전에
 이 NO-GO 를 **"신호 없음" 이 아니라 "이 표본에서 미검출"** 로 읽도록 고정했다.
 사전 지정 OC(`OC_primary_rfd3_only`)에서 GO 확률은 ρ ≈ 0.33 에서 0.74, ρ ≈ 0.44
-에서 0.94 다. 관측된 top-1 regret 0.1493 은 같은 표의 귀무값 0.2274 보다 낮다 —
+에서 0.94 다. 관측된 top-1 regret **0.1780** 은 같은 표의 귀무값 0.2274 보다 낮다
+(둘 다 informative 11 타겟 기준 — 코호트가 일치한다) —
 약하지만 0 이 아닌 신호의 모습이다.
 
 **legacy arm 이 음수인 것은 예고된 것이다.** §3 이 native 백본이 계수를 형성한다고
@@ -231,7 +233,9 @@ metric 교체로 라벨이 무효화됐으므로 standing negative result 로 �
 유지하고 이것을 나란히 보고한다. **모델을 재적합하지 않는다** — 같은 LOTO 예측을
 RFD3 백본 34 개 위에서 다시 집계할 뿐이다. §3 의 "학습 쪽도 정렬한다" 는 Gate 1
 조항이고, Gate 2 문장은 코호트에 대한 것이며, ladder 는 arm 7 개로 동결돼 있어
-재적합은 여덟 번째 arm 이 된다. (재적합 판이 궁금하다면 +0.0097 / −0.0234 이고
+재적합은 여덟 번째 arm 이 된다. (재적합 판은 **+0.0097 / −0.023359** 이고 산출물
+`arms_joint_pass.S6.sensitivity_rfd3_only.alternative_reading_model_refit` 에 기록돼 있다.
+판정은
 판정은 역시 NO-GO 다. 산출물에 `model_refit: false` 와 근거를 남겨 다르게 읽는
 사람이 재유도 없이 반박할 수 있게 했다.)
 
@@ -283,7 +287,7 @@ true`, 점추정 이동 +0.0053). S0–S5 는 bit-for-bit 그대로다 — 바�
 
 | | 정본 | 문턱 | |
 |---|---|---|---|
-| Gate 1 | ρ +0.0935 · LCB −0.1153 · n 11 | ρ ≥ 0.25 | NO-GO |
+| Gate 1 | ρ +0.0379 · LCB −0.1559 · n 11 | ρ ≥ 0.25 | NO-GO |
 | Gate 2 | Δ_Top4 −0.0313 · LCB −0.0803 · n 11 | ≥ +0.10 | NO-GO |
 
 **전 과정에서 새 AF2 는 0 개다.** 기존 1,680 폴드 라벨을 재사용했고, 새로 든 계산은
