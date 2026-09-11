@@ -532,38 +532,142 @@ def test_stop_is_scoped_to_the_surrogate_axis_not_rapid():
 # 유지됐고 아무도 몰랐다 - 최초 파손은 8ede362 다.
 #
 # 그래서 여기서 교차 확인한다. 중복 검사가 아니라 **가시성**이다.
+#
+#
+# ---- 동결 경계를 고친다: 해시를 버리는 것이 아니라 읽는 방식을 바꾼다 ------
+#
+# 잘못된 경계였다. 이 문서는 설계상 **결과가 쌓이는 인용 등기부**다 - 문서
+# 첫머리의 규칙이 "이 표에 없는 수치는 원고에 넣지 않는다. 필요하면 먼저 여기에
+# 추가한다" 이다. 그런 파일에 불변 산출물의 전체 파일 SHA256 을 걸면, 옳은
+# 내용을 규칙대로 덧붙이는 것만으로 27/27 이 26/27 이 된다. 실제로 Gate 1/2 절을
+# 등재한 시점부터 그랬다.
+#
+# **그렇다고 해시 검사를 먼저 지우면 보호가 실제로 준다.** 지우기 전에 red/green
+# 을 돌렸고, 그 시점에는 인용 표의 한 칸을 고치는 것을 잡는 것이 digest 하나뿐
+# 이었다 (0.7247 이 문서에 두 번 있었기 때문이다). 그래서 순서가 결론이다 -
+# 위의 좁은 가드를 절·행·부호까지 조이고 (그 red/green 은 모듈 docstring 에
+# 적어 뒀다), **그 다음에** 이 경계를 좁힌다. digest 는 쓸데없이 엄격한 검사가
+# 아니었다. 좁은 가드의 구멍을 우연히 덮고 있었다.
+#
+# 새 경계. 지키는 것은 그대로고, 요구하지 않는 것 하나만 뺀다:
+#
+#   지킨다  · 동결 v1 산출물·manifest·코드의 해시 (test_v1_freeze.py 가 본다)
+#   지킨다  · 등기부의 v1 수치가 그 동결 산출물과 일치할 것 (위의 CLAIMS ·
+#             BUDGET_COLUMNS · GATE_CLAIMS, 절 → 행 → 부호)
+#   지킨다  · v1 시점 본문의 **모든 줄**이 지금도 그대로 있을 것. 수정·삭제·
+#             재해석은 실패한다.
+#   뺀다    · 살아 있는 등기부의 현재 전체 파일 SHA256 이 과거 freeze SHA 와
+#             같을 것. 이것만이 등재를 막던 요구다.
+#
+# manifest 의 digest 는 여전히 필수다. 다만 "현재 파일의 상태" 가 아니라 **v1
+# 본문의 좌표**로 쓴다 - v1 본문을 git 에서 되찾아 그것과 대조한다. manifest 를
+# 재발행하지 않고 기대 digest 를 새 값으로 바꾸지도 않는다. 그래서 이 검사는
+# manifest 를 고칠 권한이 없어도 성립한다.
+#
+# 본문의 정본은 **태그 `rapid_structural_v1`** 이다. manifest 는 사람이 다시
+# 만들 수 있으므로 (`test_v1_immutable.py` 가 정책 코드에 같은 논리를 쓴다)
+# manifest 만 믿으면 재발행으로 아래 검사가 조용히 느슨해진다. 태그는 논문이
+# 검증한 시점을 가리키고 freeze 스크립트가 다시 쓰지 못한다. 지금 둘은
+# 일치하며, 일치 자체를 따로 본다 - 어긋나면 재발행이 있었다는 신호다.
 
-def test_this_document_still_matches_its_v1_freeze_digest():
-    import hashlib
-    import json as _json
+REGISTRY_REL = "docs/results_of_record.md"
+V1_TAG = "rapid_structural_v1"
 
-    manifest = (ROOT / "public_data" / "benchmark" / "gate0"
-                / "RAPID_STRUCTURAL_V1_FREEZE.json")
-    if not manifest.exists():
-        pytest.skip("v1 freeze manifest 없음")
-    man = _json.loads(manifest.read_text(encoding="utf-8"))
 
-    recorded, key = None, None
-    def walk(o, path=""):
-        nonlocal recorded, key
-        if isinstance(o, dict):
-            for k, v in o.items():
-                if isinstance(v, str) and len(v) == 64 and "results_of_record" in f"{path}/{k}":
-                    recorded, key = v, f"{path}/{k}"
-                elif isinstance(v, (dict, list)):
-                    walk(v, f"{path}/{k}")
-    walk(man)
+def _git(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=ROOT, capture_output=True)
+
+
+def _recorded_registry_sha() -> str | None:
+    """freeze manifest 가 등기부에 적어 둔 SHA256."""
+    if not FREEZE.exists():
+        return None
+    man = json.loads(FREEZE.read_text(encoding="utf-8"))
+    for group in ("artifacts", "code"):
+        for entry in man.get(group, {}).values():
+            if isinstance(entry, dict) and entry.get("path") == REGISTRY_REL:
+                return entry.get("sha256")
+    return None
+
+
+def _tagged_registry_blob() -> bytes | None:
+    """태그 시점의 등기부 본문."""
+    if _git("rev-parse", "--verify", V1_TAG).returncode != 0:
+        return None
+    got = _git("show", f"{V1_TAG}:{REGISTRY_REL}")
+    return got.stdout if got.returncode == 0 else None
+
+
+def _frozen_registry_snapshot() -> tuple[str, list[str]] | None:
+    """v1 시점 본문을 (출처, 줄들) 로 돌려준다.
+
+    태그가 있으면 태그가 정본이다. 태그가 없는 체크아웃(얕은 클론 등)에서는
+    기록된 digest 를 좌표로 써서 히스토리에서 찾는다 - 그때도 찾은 blob 을
+    다시 해시해 manifest 값과 같을 때만 인정하므로, manifest 를 신뢰하는 것이
+    아니라 manifest 와 대조하는 것이다.
+    """
+    blob = _tagged_registry_blob()
+    if blob is not None:
+        return V1_TAG, blob.decode("utf-8").splitlines()
+    recorded = _recorded_registry_sha()
+    if recorded is None:
+        return None
+    log = _git("log", "--format=%H", "--all", "--", REGISTRY_REL)
+    for rev in log.stdout.decode().split():
+        got = _git("show", f"{rev}:{REGISTRY_REL}")
+        if got.returncode == 0 and hashlib.sha256(got.stdout).hexdigest() == recorded:
+            return rev, got.stdout.decode("utf-8").splitlines()
+    return None
+
+
+def test_the_recorded_registry_digest_matches_the_v1_tag():
+    """manifest 의 digest 와 태그 시점의 본문이 같은 것을 가리켜야 한다.
+
+    이 검사가 없으면 digest 를 지금 파일로 재발행하는 것만으로 아래의 "v1
+    본문이 그대로 있는가" 가 느슨해질 수 있다. 재발행 자체가 금지는 아니지만
+    조용히 일어나서는 안 된다 - 재발행하면 이 테스트가 먼저 말한다.
+    """
+    recorded = _recorded_registry_sha()
     if recorded is None:
         pytest.skip("manifest 에 results_of_record 항목이 없다")
+    blob = _tagged_registry_blob()
+    if blob is None:
+        pytest.skip(f"태그 {V1_TAG} 에 {REGISTRY_REL} 이 없다")
+    assert hashlib.sha256(blob).hexdigest() == recorded, (
+        f"manifest 의 {REGISTRY_REL} digest 가 태그 {V1_TAG} 의 본문과 다르다.\n"
+        f"  manifest = {recorded}\n"
+        f"  {V1_TAG}  = {hashlib.sha256(blob).hexdigest()}\n"
+        f"manifest 가 재발행됐거나 태그가 움직였다. 둘 다 조용히 일어나서는 안 "
+        f"되는 일이다 - 구 digest·신 digest·'v1 수치는 바뀌지 않았다'는 확인을 "
+        f"함께 기록해야 한다.")
+    # v1 의 가장 오래된 인용값. 이 파일이 존재하는 이유이기도 하다.
+    assert "0.7247" in blob.decode("utf-8"), (
+        f"태그 {V1_TAG} 의 본문에 v1 정본 AUC 0.7247 이 없다.")
 
-    actual = hashlib.sha256(MANUSCRIPT.parent.joinpath("results_of_record.md").read_bytes()).hexdigest()
-    assert actual == recorded, (
-        f"docs/results_of_record.md 가 v1 freeze 해시와 다르다.\n"
-        f"  manifest {key} = {recorded}\n"
-        f"  현재            = {actual}\n"
-        f"이 파일은 v1 freeze manifest 의 27 개 중 하나다. 내용이 옳더라도 "
-        f"편집하면 `42_freeze_v1_results.py --verify` 가 27/27 을 잃는다.\n"
-        f"최초 파손은 8ede362 이고, 정당화할 diff 범위는 00a6931..HEAD 다 "
-        f"(마지막 커밋 하나가 아니다).\n"
-        f"고치는 방법은 둘뿐이다 - 되돌리거나, manifest 를 의도적으로 재발행하고 "
-        f"구 digest·신 digest·'v1 수치는 바뀌지 않았다'는 확인을 함께 기록하는 것.")
+
+def test_the_frozen_v1_body_is_still_present_verbatim():
+    """v1 시점 본문의 모든 줄이 지금도 그대로 있어야 한다. 덧붙이기만 허용한다.
+
+    이것이 전체 파일 digest 를 대신한다. digest 는 "한 바이트도 달라지면 안
+    된다" 였고, 그래서 등재를 막았다. 여기서는 "v1 이었던 줄은 한 줄도 달라지면
+    안 된다" 만 요구한다 - 절을 끼워 넣는 것은 통과하고, v1 수치를 고치거나
+    지우거나 문맥을 바꿔 다시 해석하게 만드는 것은 실패한다.
+    """
+    found = _frozen_registry_snapshot()
+    if found is None:
+        pytest.skip(f"v1 본문을 복원할 수 없다 (태그 {V1_TAG} 도 없고 manifest "
+                    f"digest 를 가진 커밋도 없다)")
+    rev, frozen = found
+    current = _doc().splitlines()
+    ops = difflib.SequenceMatcher(None, frozen, current, autojunk=False).get_opcodes()
+    lost = [(i + 1, frozen[i]) for tag, i1, i2, _, _ in ops
+            if tag in ("replace", "delete") for i in range(i1, i2)]
+    assert not lost, (
+        f"v1 본문의 줄이 {len(lost)} 개 바뀌거나 사라졌다 "
+        f"(v1 스냅샷 = {rev if rev == V1_TAG else rev[:12]}). 처음 다섯 개:\n"
+        + "\n".join(f"  v1 {n}행: {text}" for n, text in lost[:5])
+        + "\n\n덧붙이는 것은 허용된다 - 이 문서는 결과가 쌓이는 등기부다. "
+          "허용되지 않는 것은 이미 인용된 v1 줄을 고치거나 지우는 것이다.\n"
+          "되돌리는 것이 기본 조치다. 값이 정말로 바뀌었다면 그것은 v1 결과의 "
+          "변경이므로 문서 수정이 아니라 동결 재발행 문제다 - "
+          "RAPID_STRUCTURAL_V1_FREEZE.json 소유자와 처리한다.")
