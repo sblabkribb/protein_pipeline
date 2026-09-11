@@ -151,6 +151,53 @@ def _rfd3_only_sensitivity(grid: C.Grid, mixed: Sequence[C.Backbone],
     return out
 
 
+def _rfd3_refit_alternative_reading(grid: C.Grid, arm: str,
+                                    blocks: Sequence[str], endpoint: str) -> dict:
+    """RFD3 폴드로 **다시 적합한** 판. 보고 민감도가 아니라 기록된 대안 독법이다.
+
+    `docs/results_of_record.md` 의 규칙은 모든 수가 산출물 경로를 달고 있어야
+    한다는 것이다. 이 판은 산문에만 있었다 - 다르게 읽는 사람이 재유도 없이
+    반박할 수 있어야 하므로 수를 산출물에 적는다.
+
+    **보고되는 것은 여전히 `sensitivity_rfd3_only`(model_refit: false) 다.**
+    RFD3 폴드로만 다시 학습하면 코호트 민감도가 아니라 동결되지 않은 여덟 번째
+    arm 이 된다 - 동결된 ladder 는 S0-S6 일곱 개이고 "학습 쪽도 정렬한다" 는
+    §3 의 Gate 1 조항이다. 그래서 이 블록은 판정에 들어가지 않는다.
+
+    평가 단위(RFD3 mixed 34)와 집계(`_per_target_delta_top4`·`_summarise`)는
+    부모 민감도와 같은 함수를 쓴다. 바뀌는 것은 학습 폴드 집합 하나다.
+    """
+    sub = C.restrict_to_sources(grid, RFD3_SOURCES)
+    out: dict = {
+        "status": "recorded alternative reading - NOT the reported sensitivity",
+        "reported_sensitivity_is": ("이 블록의 부모인 sensitivity_rfd3_only "
+                                    "(model_refit: false). 판정도 그쪽이다."),
+        "model_refit": True,
+        "cohort": "RFD3-only mixed backbones (평가 단위는 부모와 같다)",
+        "train_folds": len(sub.folds),
+        "train_folds_primary": len(grid.folds),
+        "why_recorded": (
+            "docs/results_of_record.md 는 모든 수가 산출물 경로를 달고 있어야 한다고 "
+            "정한다. 이 판은 산문에만 있었다."),
+        "why_it_is_not_the_sensitivity": (
+            "RFD3 폴드로만 다시 학습하면 코호트 민감도가 아니라 동결되지 않은 여덟 "
+            "번째 arm 이다. 동결된 ladder 는 S0-S6 일곱 개다."),
+    }
+    score_of, _n_features, _active, defect = _loto_scores(sub.folds, arm, blocks, endpoint)
+    if score_of is None:
+        out["evaluable"] = False
+        out["defect"] = defect
+        return out
+    per_target = _per_target_delta_top4(C.mixed_backbones(sub), score_of, endpoint)
+    out["evaluable"] = True
+    out.update(_summarise([per_target[t] for t in sorted(per_target)]))
+    out["per_target_delta_top4"] = {t: round(v, 4) for t, v in sorted(per_target.items())}
+    out["verdict_if_this_were_the_arm"] = (
+        "GO" if (out["meets_threshold"] and out["lcb_exceeds_zero"]
+                 and out["informative_targets"] >= G.MIN_INFORMATIVE_TARGETS) else "NO-GO")
+    return out
+
+
 def _low_depth_sensitivity(per_target: dict[str, float],
                            low_depth_targets: Sequence[str]) -> dict:
     """저심도 타겟을 뺀 민감도 (스펙 §4 규칙 6).
@@ -184,46 +231,65 @@ def _low_depth_sensitivity(per_target: dict[str, float],
     return out
 
 
+def _loto_scores(folds: Sequence[C.Fold], arm: str, blocks: Sequence[str],
+                 endpoint: str) -> tuple[dict[str, float] | None, int, dict, dict | None]:
+    """LOTO 예측. `(score_of, n_features, active_by_fold, defect)`.
+
+    1 차 적합과 RFD3 재적합 대안 독법이 **같은 루프**를 쓴다 - LOTO 규칙을 두 번
+    적으면 두 수가 같은 절차에서 나왔다는 보장이 사라진다. `score_of` 가 None
+    이면 `defect` 가 이유다 (스펙 §4 규칙 5).
+    """
+    from sklearn.linear_model import Ridge
+
+    targets = [f.target_id for f in folds]
+    y = np.array([(f.joint_pass if endpoint == "joint" else f.structural_pass)
+                  for f in folds], dtype=float)
+    uses_msa = "msa" in blocks
+
+    pred = np.zeros(len(folds))
+    active_by_fold: dict[str, list[str]] = {}
+    n_features = 0
+    for train_idx, test_idx, held in F.loto_splits(targets):
+        x_fold, defect = F.assemble(arm, folds, train_idx, blocks)
+        if x_fold is None:
+            return None, 0, {}, defect
+        n_features = int(x_fold.shape[1])
+        if uses_msa:
+            # fold 별 사용 열을 남긴다. 없으면 narrowing 을 감사할 수 없다.
+            active_by_fold[held] = F.active_msa_feature_names(folds, train_idx)
+        model = Ridge(alpha=RIDGE_ALPHA)
+        model.fit(x_fold[train_idx], y[train_idx])
+        pred[test_idx] = model.predict(x_fold[test_idx])
+    return ({f.sequence_id: float(p) for f, p in zip(folds, pred)},
+            n_features, active_by_fold, None)
+
+
 def evaluate_arm(arm: str, grid: C.Grid, mixed: list[C.Backbone],
                  endpoint: str = "joint",
                  low_depth_targets: Sequence[str] = (),
-                 block_names: Sequence[str] | None = None) -> dict:
+                 block_names: Sequence[str] | None = None,
+                 refit_alternative_reading: bool = False) -> dict:
     """한 arm 의 타겟 등가중 Delta_Top4. LOTO 로 낸 예측만 쓴다.
 
     `block_names` 는 동결 블록 목록 대신 쓸 목록이다. arm 을 추가하는 수단이
     아니고, 이미 실행돼 기록된 realized-S6 를 planned-S6 와 나란히 재현하는
     데만 쓴다 (`F.REALIZED_S6_BLOCKS_2026_09_11`).
+
+    `refit_alternative_reading` 은 RFD3 재적합 판을 **기록**할지다 (기본 False).
+    보고되는 민감도와 판정은 그 값과 무관하다 -
+    `_rfd3_refit_alternative_reading` 의 docstring 을 본다.
     """
-    from sklearn.linear_model import Ridge
-
-    all_folds = grid.folds
-    targets = [f.target_id for f in all_folds]
-    y = np.array([(f.joint_pass if endpoint == "joint" else f.structural_pass)
-                  for f in all_folds], dtype=float)
     blocks = F.ARM_BLOCKS[arm] if block_names is None else tuple(block_names)
+    score_of, n_features, active_by_fold, defect = _loto_scores(
+        grid.folds, arm, blocks, endpoint)
+    if score_of is None:
+        return {"arm": arm, "label": F.ARM_LABELS[arm], "endpoint": endpoint,
+                "status": "non_evaluable",
+                "reason": ("train fold 에 정의된 MSA feature 가 없어 imputation "
+                           "statistic 을 만들 수 없다" if defect is None
+                           else "측정된 MSA feature 가 버려졌다 - 규칙 2 위반"),
+                "defect": defect}
     uses_msa = "msa" in blocks
-
-    pred = np.zeros(len(all_folds))
-    active_by_fold: dict[str, list[str]] = {}
-    n_features = 0
-    for train_idx, test_idx, held in F.loto_splits(targets):
-        x_fold, defect = F.assemble(arm, all_folds, train_idx, blocks)
-        if x_fold is None:
-            return {"arm": arm, "label": F.ARM_LABELS[arm], "endpoint": endpoint,
-                    "status": "non_evaluable",
-                    "reason": ("train fold 에 정의된 MSA feature 가 없어 imputation "
-                               "statistic 을 만들 수 없다" if defect is None
-                               else "측정된 MSA feature 가 버려졌다 - 규칙 2 위반"),
-                    "defect": defect}
-        n_features = int(x_fold.shape[1])
-        if uses_msa:
-            # fold 별 사용 열을 남긴다. 없으면 narrowing 을 감사할 수 없다.
-            active_by_fold[held] = F.active_msa_feature_names(all_folds, train_idx)
-        model = Ridge(alpha=RIDGE_ALPHA)
-        model.fit(x_fold[train_idx], y[train_idx])
-        pred[test_idx] = model.predict(x_fold[test_idx])
-
-    score_of = {f.sequence_id: float(p) for f, p in zip(all_folds, pred)}
     per_target = _per_target_delta_top4(mixed, score_of, endpoint)
     out = {"arm": arm, "label": F.ARM_LABELS[arm], "status": F.ARM_STATUS[arm],
            "endpoint": endpoint}
@@ -235,6 +301,9 @@ def evaluate_arm(arm: str, grid: C.Grid, mixed: list[C.Backbone],
         per_target, low_depth_targets)
     out["sensitivity_rfd3_only"] = _rfd3_only_sensitivity(
         grid, mixed, score_of, endpoint)
+    if refit_alternative_reading:
+        out["sensitivity_rfd3_only"]["alternative_reading_model_refit"] = \
+            _rfd3_refit_alternative_reading(grid, arm, blocks, endpoint)
     out["n_features"] = n_features
     out["feature_blocks"] = list(blocks)
     if uses_msa:
@@ -292,7 +361,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             "각 arm 의 sensitivity_rfd3_only 를 본다."),
     }
 
-    arms = {a: evaluate_arm(a, grid, mixed, low_depth_targets=low_depth_targets)
+    # 재적합 대안 독법은 **판정 arm 의 1 차 endpoint 에서만** 기록한다. 산문이
+    # 인용하는 수가 그것 하나이고, 다른 arm 까지 돌리면 보고되지 않는 수를 열두 개
+    # 더 만든다.
+    arms = {a: evaluate_arm(a, grid, mixed, low_depth_targets=low_depth_targets,
+                            refit_alternative_reading=(a == F.PRIMARY_ARM))
             for a in requested}
     arms_structural = {a: evaluate_arm(a, grid, mixed, endpoint="structural",
                                        low_depth_targets=low_depth_targets)

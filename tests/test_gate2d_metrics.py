@@ -1914,6 +1914,61 @@ def test_gate2_reports_the_preregistered_rfd3_only_sensitivity():
     assert sens["meets_threshold"] is False
     assert sens["lcb_exceeds_zero"] is False
 
+    # 재적합 판은 **기록된 대안 독법**으로만 존재한다. 산문에만 있던 수여서
+    # 산출물에 넣었고(모든 수는 산출물 경로를 달아야 한다), 보고되는 민감도가
+    # 바뀌지 않았다는 것을 여기서 지킨다.
+    alt = sens["alternative_reading_model_refit"]
+    assert alt["model_refit"] is True
+    assert sens["model_refit"] is False          # 부모는 그대로 재적합 안 함
+    assert "NOT the reported sensitivity" in alt["status"]
+    assert alt["informative_targets"] == 11
+    assert alt["delta_top4_target_equal"] == 0.0097
+    assert alt["one_sided_90_lcb"] == -0.023359
+    assert alt["verdict_if_this_were_the_arm"] == "NO-GO"
+    assert alt["train_folds"] == 1440 and alt["train_folds_primary"] == 1680
+    # 판정 arm 의 1 차 endpoint 에만 있다 - 다른 arm·endpoint 에 보고되지 않는
+    # 수를 열두 개 더 만들지 않는다.
+    for key in ("arms_joint_pass", "arms_structural_pass_secondary"):
+        for arm, row in payload[key].items():
+            has_alt = "alternative_reading_model_refit" in row["sensitivity_rfd3_only"]
+            assert has_alt == (arm == "S6" and key == "arms_joint_pass"), (key, arm)
+
+
+def test_gate2_rfd3_refit_alternative_reading_recomputes():
+    """기록된 재적합 수를 **다시 계산해** 대조한다. 9 초쯤 걸리고, 그만큼 값어치다.
+
+    이 수는 산문에만 있었다. 산출물에 옮겨 적으면서 "적어 두기만 하고 아무도
+    반증할 수 없는 수" 를 하나 더 만들지 않는다 - 산출물의 값을 되읽는 대신
+    LOTO 를 RFD3 폴드 1,440 개로 다시 돌려 맞춘다.
+
+    같은 이유로 이것이 **보고되는 민감도가 아니라는 사실**도 함께 본다: 부모는
+    `model_refit: false` 이고 판정 arm 의 수(−0.0313)는 그대로다.
+    """
+    import importlib
+    import json as _json
+
+    import _gate2d_cohort as C
+    import _gate2d_features as F
+
+    gate2 = importlib.import_module("25_gate2_within_backbone_selectability")
+    payload = _json.loads(
+        (ROOT / "public_data" / "benchmark" / "gate0"
+         / "gate2_within_backbone_selectability.json").read_text(encoding="utf-8"))
+    recorded = (payload["arms_joint_pass"]["S6"]["sensitivity_rfd3_only"]
+                ["alternative_reading_model_refit"])
+
+    grid = C.load_holdout_grid()
+    recomputed = gate2._rfd3_refit_alternative_reading(
+        grid, F.PRIMARY_ARM, F.ARM_BLOCKS[F.PRIMARY_ARM], "joint")
+    for key in ("delta_top4_target_equal", "one_sided_90_lcb", "informative_targets",
+                "per_target_delta_top4", "meets_threshold", "lcb_exceeds_zero",
+                "verdict_if_this_were_the_arm", "train_folds"):
+        assert recomputed[key] == recorded[key], f"{key}: 재계산 != 기록"
+
+    # 재적합은 판정 arm 의 수를 건드리지 않는다.
+    assert payload["arms_joint_pass"]["S6"]["delta_top4_target_equal"] == -0.0313
+    assert payload["arms_joint_pass"]["S6"]["one_sided_90_lcb"] == -0.080303
+
 
 def test_rfd3_only_sensitivity_slices_the_cohort_and_withholds_below_the_floor(monkeypatch):
     """코호트만 바뀌고 모델은 다시 적합되지 않는다. floor 미달이면 non-evaluable.
