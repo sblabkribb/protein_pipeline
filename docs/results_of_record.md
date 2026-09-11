@@ -194,8 +194,12 @@ feature = ProteinMPNN encoder 384-D (`v_48_020` soluble). **새 AF2 0 개.**
 (`21_gate2d_prepare_encoder.py --verify-dev`). 결정적 요소는 **`residue_idx` 가
 상수**(상대 위치 인코딩 비활성)이며 `1c2eeb4` 의 "sequence-independent" 서술과
 일치한다 — 다만 그것이 원래 의도였는지는 원본 스크립트가 없어 확인할 수 없다.
-코호트 교차확인: native 평균 q_b 0.6042 · RFD3 0.6604 가 스펙 §3 의 0.604 / 0.660
-과 일치한다.
+코호트 교차확인: native 평균 q_b **0.6042** (`delta_generated_side_analysis.mean_q_b_native`,
+native 는 타겟당 백본 1 개이므로 백본평균 = 타겟평균) · RFD3 **0.6604**
+(`arms.primary.mean_q_b`, test 코호트 60 백본) 가 스펙 §3 의 0.604 / 0.660 과
+일치한다. **`delta_generated_side_analysis.mean_q_b_rfd3` 0.6867 과 혼동하지 않는다**
+— 그쪽은 짝지음을 위해 native 라벨이 있는 10 타겟으로 제한한 값이고, 위 두 수와는
+다른 양이다.
 
 **선행 시도.** `13_gate0_target_level.py` 의 rfd3 타겟내 ρ −0.257 은 correspondence
 metric 교체로 라벨이 무효화됐으므로 standing negative result 로 인용하지 않되,

@@ -301,7 +301,9 @@ historical reference (`OC_legacy_all_sources`, 백본 70, native 포함)는 최�
 **0.2466** (인쇄값 0.245) 대 RFD3-only **0.2303** 이다 — 인쇄된 표가 70-백본 기하임이
 확정된다.
 
-**`ρ > 0` 규칙은 쓸 수 없다.** 귀무 거짓 GO 가 0.12 로 나온다 — LCB > 0 조항만으로는
+**`ρ > 0` 규칙은 쓸 수 없다.** 귀무 거짓 GO 가 **0.1383** (정본 기하) · 0.11
+(legacy) 로 나온다 — 최초 인쇄값 0.12 는 임시 실행값이었고
+`gate2d_operating_characteristics.json` 의 재생성값으로 대체한다. 어느 쪽이든 — LCB > 0 조항만으로는
 통제되지 않는다. Gate 2 와 같은 구조로 **점추정 조항이 통제를 담당한다.**
 
 ### 문턱 결정: ρ ≥ 0.25 를 유지한다 (재동결 2026-09-10)
@@ -794,9 +796,20 @@ S5·realized-S6 가 음수이며 저심도 민감도도 같은 방향이므로 �
 
 | 경로 | 내용 |
 |---|---|
-| `scripts/benchmark/21_gate1_backbone_predictability.py` | Gate 1 |
-| `scripts/benchmark/22_gate2_within_backbone_selectability.py` | Gate 2 (S0–S6) |
-| `public_data/benchmark/gate0/gate2d_spec.json` | 이 문서의 기계가독 동결본 (임계값·지표·코호트) |
+| `scripts/benchmark/21_gate2d_prepare_encoder.py` | P1 · 백본 encoder + dev 재현 검증 |
+| `scripts/benchmark/22_gate2d_prepare_esm.py` | P2 · ESM 임베딩 |
+| `scripts/benchmark/23_gate2d_prepare_msa_features.py` | P3 · MSA conservation |
+| `scripts/benchmark/24_gate1_backbone_predictability.py` | Gate 1 |
+| `scripts/benchmark/25_gate2_within_backbone_selectability.py` | Gate 2 (S0–S6) |
+| `scripts/benchmark/26_gate2d_operating_characteristics.py` | OC 표 생성기 (재현성 계약) |
+| `scripts/benchmark/27_gate2d_prepare_mpnn_scores.py` | S6 의 per-sequence MPNN score |
+| `scripts/benchmark/_mpnn_encoder.py` | 복구된 encoder 추출기 |
+
+**번호 정정 (2026-09-11).** 최초 동결본은 게이트 스크립트를 `21_`/`22_` 로 적었으나
+그 번호는 P1/P2 준비 스크립트가 쓰게 되어 게이트는 `24_`/`25_` 다. 그리고
+`gate2d_spec.json` 은 **만들지 않았다** — 동결 상수는 `_gate2d.py` 에 있고
+`test_frozen_constants_match_spec` 이 이 문서와 대조하므로 기계가독 사본을 하나 더
+두면 정본이 둘이 된다. 그 이중화가 이 프로젝트에서 이미 한 번 사고를 냈다.
 | `public_data/benchmark/gate0/gate1_backbone_predictability.json` | Gate 1 결과 |
 | `public_data/benchmark/gate0/gate2_within_backbone_selectability.json` | Gate 2 결과 |
 | `docs/results_of_record.md` | 판정 수치 추가 (인용은 이 파일 경유) |

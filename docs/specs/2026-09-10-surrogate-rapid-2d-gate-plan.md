@@ -1502,7 +1502,7 @@ def test_msa_feature_missing_handling():
 Run: `/tmp/gate2d-venv/bin/python -m pytest tests/test_gate2d_metrics.py -k msa_feature -v`
 Expected: FAIL — `ModuleNotFoundError`
 
-- [ ] **Step 4: 구현**
+- [ ] **Step 4: 구현 — ⚠️ 아래 블록은 폐기됐다 (바로 뒤 정정 참조)**
 
 ```python
 #!/usr/bin/env python3
@@ -2150,7 +2150,15 @@ def test_build_features_shapes_and_non_evaluable():
         raise AssertionError("정의되지 않은 arm 에서 KeyError 가 나와야 한다")
 ```
 
-- [ ] **Step 8: 실패를 확인하고 `build_features` 를 구현한다**
+- [ ] **Step 8: `build_features` 구현 — ⚠️ 아래 블록은 폐기됐다. 그대로 옮기지 말 것**
+
+아래 블록의 `cheap` 하위 블록은 *"MPNN score 는 sequences.csv 에 없으므로 넣지
+않는다"* 로 되어 있다. **그 좁혀진 S6 가 PRIMARY DEVIATION 이 됐고**, `625f206` 에서
+`27_gate2d_prepare_mpnn_scores.py` 로 per-sequence score 를 직접 계산해 해소됐다.
+같은 블록의 `esm_delta_mut` 과 `msa` 하위 블록도 이 Task 의 뒤쪽 정정으로 대체됐다.
+
+실제 구현: `_gate2d_features.py` (`5e17308` → `625f206`).
+이 계획을 그대로 실행하면 Gate 2 판정이 걸렸던 그 편차를 재도입한다.
 
 Run: `/tmp/gate2d-venv/bin/python -m pytest tests/test_gate2d_metrics.py -k build_features -v`
 Expected: FAIL — `AttributeError: ... has no attribute 'build_features'`
