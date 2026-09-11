@@ -1565,3 +1565,63 @@ def test_encoder_relative_position_is_the_load_bearing_setting():
     with_pos = enc.encode_backbone_pdb(pdb, model=model, relative_position=True)
     assert not np.allclose(ref[50], with_pos, atol=1e-4)
     assert float(np.abs(ref[50] - with_pos).max()) > 0.1
+
+
+def test_gate1_arm_ladder_is_frozen_and_only_primary_decides():
+    import importlib
+    gate1 = importlib.import_module("24_gate1_backbone_predictability")
+    assert list(gate1.ARMS) == [
+        "primary", "sensitivity_1", "descriptive_legacy", "comparator"]
+    assert gate1.GO_ARM == "primary"
+    assert gate1.ARMS["primary"]["train_sources"] == ("rfd3",)
+    assert gate1.ARMS["primary"]["test_sources"] == ("rfd3",)
+    assert gate1.ARMS["sensitivity_1"]["train_sources"] == ("rfd3", "bioemu")
+    assert gate1.ARMS["descriptive_legacy"]["train_sources"] == ("rfd3", "bioemu", "target")
+    assert gate1.ARMS["comparator"]["test_sources"] == ("target",)
+
+
+def test_gate1_metrics_are_called_in_predicted_actual_order():
+    """`top1_regret` 은 대칭이 아니다 - 뒤집으면 그럴듯한 쓰레기가 나온다.
+
+    완전 역상관 예측기에서 (predicted, actual) 은 최악 regret 을 내고 뒤집은
+    호출은 0 을 낸다. 두 값이 다르다는 것을 고정해 두면 호출 순서가 조용히
+    뒤집히는 것을 잡는다.
+    """
+    pred = [0.9, 0.8, 0.1]
+    actual = [0.4, 0.5, 1.0]
+    targets = ["T", "T", "T"]
+    # 맞는 호출: 예측 1위(0.9)를 고르면 실제 0.4, 실제 최선은 1.0 -> regret 0.6.
+    assert G.top1_regret(pred, actual, targets)["T"] == pytest.approx(0.6)
+    # 뒤집은 호출: 실제 1위(1.0)를 고르고 regret 을 예측값에서 잰다 -> 0.8.
+    # 예외가 나지 않으므로 조용히 틀린다. Spearman 은 대칭이라 같은 값이다.
+    assert G.top1_regret(actual, pred, targets)["T"] == pytest.approx(0.8)
+    assert (G.within_target_spearman(pred, actual, targets)
+            == G.within_target_spearman(actual, pred, targets))
+
+
+def test_gate1_committed_verdict_reproduces():
+    """Gate 1 산출물을 고정한다. 문턱은 동결값이고 수치는 관측값이다."""
+    import json as _json
+    payload = _json.loads(
+        (ROOT / "public_data" / "benchmark" / "gate0"
+         / "gate1_backbone_predictability.json").read_text(encoding="utf-8"))
+    assert payload["go_arm"] == "primary"
+    assert payload["frozen_go_rule"]["rho_min"] == 0.25
+    primary = payload["arms"]["primary"]
+    assert primary["informative_targets"] == 11
+    assert primary["train"]["n_backbones"] == 80
+    assert primary["test"]["n_backbones"] == 60
+    assert primary["point"] == 0.0935
+    assert primary["one_sided_90_lcb"] == -0.115286
+    assert primary["top1_backbone_regret_mean"] == 0.1493
+    assert payload["verdict"] == "NO-GO"
+
+    # comparator 는 타겟당 백본 1개라 타겟 내 순위가 없다. 0 으로 대입하지 않는다.
+    comparator = payload["arms"]["comparator"]
+    assert comparator["evaluable"] is False
+    assert comparator["informative_targets"] == 0
+    assert "point" not in comparator
+
+    # train/test 가 같은 feature 공간이라는 것이 산출물에 박혀 있어야 한다.
+    assert payload["feature"]["train_test_same_space"] is True
+    assert payload["feature"]["dev_reproduction_max_abs_diff"] < 1e-4
