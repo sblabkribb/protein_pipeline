@@ -455,6 +455,27 @@ GATE_CLAIMS = [
           "RFD3-only 민감도 (mixed 34 / informative 11)",
           "gate2_within_backbone_selectability.json",
           "arms_joint_pass.S6.sensitivity_rfd3_only.one_sided_90_lcb", 4),
+    # 동반 arm 표. 판정에 쓰지 않는 수치지만 등재된 이상 산출물에 묶인다.
+    # 이 여섯 칸이 묶여 있지 않아서, 표 머리글이 그냥 `regret` 인 채로 값만
+    # ranked-12 에서 informative-11 로 옮겨가도 아무 테스트가 깨지지 않았다.
+    Claim("sensitivity_1 rho", "Gate 1 · 백본 예측 가능성",
+          "sensitivity 1", "gate1_backbone_predictability.json",
+          "arms.sensitivity_1.point", 4),
+    Claim("sensitivity_1 LCB", "Gate 1 · 백본 예측 가능성",
+          "sensitivity 1", "gate1_backbone_predictability.json",
+          "arms.sensitivity_1.one_sided_90_lcb", 4),
+    Claim("sensitivity_1 regret", "Gate 1 · 백본 예측 가능성",
+          "sensitivity 1", "gate1_backbone_predictability.json",
+          "arms.sensitivity_1.top1_backbone_regret_mean_informative_cohort", 4),
+    Claim("legacy rho", "Gate 1 · 백본 예측 가능성",
+          "descriptive / legacy", "gate1_backbone_predictability.json",
+          "arms.descriptive_legacy.point", 4),
+    Claim("legacy LCB", "Gate 1 · 백본 예측 가능성",
+          "descriptive / legacy", "gate1_backbone_predictability.json",
+          "arms.descriptive_legacy.one_sided_90_lcb", 4),
+    Claim("legacy regret", "Gate 1 · 백본 예측 가능성",
+          "descriptive / legacy", "gate1_backbone_predictability.json",
+          "arms.descriptive_legacy.top1_backbone_regret_mean_informative_cohort", 4),
     # 재적합 대안 읽기. 산문에 있으므로 행 주소가 없다(`row=None`) - 그래도
     # 등재된 수치는 전부 산출물에 묶여 있어야 한다는 규칙은 같다. 이 두 줄이
     # 없으면 "모든 수치가 산출물 경로를 단다" 를 만족시키려고 새로 적은 값이

@@ -1794,9 +1794,12 @@ def test_gate1_truncated_fit_fails_closed():
     _spec, (x_dev, y_dev, w_dev, _tgt), _labelled, x_test = gate1._arm_inputs(
         "primary", grid, x_test_all, row_of)
 
-    # 정상 예산에서는 돈다.
+    # 정상 예산에서는 **돈다**. 이 호출 자체가 양성 대조다 - 가드가 잘못
+    # 걸리면 여기서 SystemExit 이 난다. 돌아온 `n_iter` 에 대고
+    # `n_iter < SOLVER_MAX_ITER` 를 다시 주장하지는 않는다: 그것은 반환의
+    # 사후조건이라 발화할 수 없고(`max_iter=5` 로 낮추면 이 줄이 아니라 위
+    # 호출에서 깨진다), 같은 표현을 이 커밋이 다른 자리에서 막 제거했다.
     _q, n_iter, _dt = gate1.fit_predict(x_dev, y_dev, w_dev, x_test)
-    assert 0 < n_iter < gate1.SOLVER_MAX_ITER
 
     # 예산을 1 로 줄이면 데이터가 아니라 반복 예산이 예측을 정하게 되므로 선다.
     with pytest.raises(SystemExit) as excinfo:
