@@ -322,3 +322,148 @@ def test_the_manifest_carries_the_pinned_provenance():
     # _write 안에서 git 을 다시 호출하지 않아야 한다
     body = src[src.index("def _write("):src.index("def _summary(")]
     assert "rev-parse" not in body, "_write 가 HEAD 를 다시 읽는다"
+
+
+def _grid_target_ids() -> set[str]:
+    """격자 코호트의 진짜 타겟 집합. 후보 서열이 존재하는 타겟이 정의다."""
+    import csv
+    f = ROOT / "public_data" / "benchmark" / "gate0" / "holdout_grid" / "sequences.csv"
+    with f.open(newline="", encoding="utf-8") as fh:
+        return {row["target_id"] for row in csv.DictReader(fh)}
+
+
+def test_the_grid_cohort_reads_resolved_targets_not_the_selected_wishlist():
+    """`selected` 는 동결 전 희망 목록이다.
+
+    선정 실패 4 개가 같은 stratum reserve 로 교체됐고(`resolved.rule`), 백본은
+    교체 후 목록으로 만들어졌다. `selected` 로 MSA 를 돌리면 fold 가 없는 4 개를
+    가져오고 fold 가 있는 4 개를 놓쳐 S4-S6 arm 이 코호트의 1/3 을 조용히 잃는다.
+    """
+    m = _full()
+    d = json.loads((ROOT / "public_data" / "benchmark" / "gate0" /
+                    "holdout_targets.json").read_text(encoding="utf-8"))
+    wishlist = {t["domain"] for t in d["selected"]}
+    resolved = {t["domain"] for t in d["resolved"]["targets"]}
+    grid = _grid_target_ids()
+    # 두 목록이 실제로 다르다는 것부터 고정한다. 같아지면 이 테스트는 무의미하다.
+    assert wishlist != resolved, "교체가 없으면 이 회귀는 재현되지 않는다"
+    assert len(wishlist - resolved) == len(resolved - wishlist) == 4
+    assert resolved == grid, "resolved.targets 가 격자와 다르다"
+    assert {r["domain"] for r in m.targets(m.resolve_cohorts("holdout_grid"))} == grid
+    # 기본 두 코호트는 계속 `selected` 를 읽는다.
+    assert m.DEFAULT_TARGET_KEY == ("selected",)
+    assert set(m.COHORT_TARGET_KEY) == {"holdout_grid"}
+
+
+def test_cohort_override_is_opt_in_and_leaves_the_default_untouched():
+    """`--cohorts` 는 **덮어쓰기 전용**이다.
+
+    동결 v2 흐름(24 타겟)이 `COHORTS` 기본값에 걸려 있다. 인자를 주지 않은
+    호출은 이 변경 전과 같은 목록을 내야 한다. 격자 12 타겟은 옵트인으로만
+    닿는다.
+    """
+    m = _full()
+    assert m.COHORTS == (("calibration_v2", "calibration_v2_targets.json"),
+                         ("confirmatory", "masked_holdout_targets.json"))
+    # 인자 없음 == 기본값 명시 == None 해석. 세 경로가 같은 목록이다.
+    assert m.resolve_cohorts(None) == m.COHORTS
+    assert m.targets() == m.targets(m.COHORTS) == m.targets(m.resolve_cohorts(None))
+    assert len(m.targets()) == 24
+
+    grid = m.targets(m.resolve_cohorts("holdout_grid"))
+    assert len(grid) == 12
+    assert {r["cohort"] for r in grid} == {"holdout_grid"}
+    # 기대 목록을 여기에 적지 않는다. 격자에 **실제로 백본이 있는** 타겟을
+    # sequences.csv 에서 읽는다 - 목록을 손으로 적었기 때문에 `selected` 와
+    # `resolved.targets` 의 4 개 차이를 놓쳤다.
+    assert {r["domain"] for r in grid} == _grid_target_ids()
+    # 행 스키마가 기본 코호트와 같아야 process() 가 그대로 돈다.
+    assert all(set(r) == set(m.targets()[0]) for r in grid)
+    # 두 코호트는 겹치지 않는다 - 공유 MSA_DIR 에서 A3M 이 충돌하지 않는 근거다.
+    assert not ({r["domain"] for r in grid} & {r["domain"] for r in m.targets()})
+    with pytest.raises(SystemExit):
+        m.resolve_cohorts("없는코호트")
+
+
+def test_a_non_default_cohort_cannot_write_the_frozen_v2_manifest():
+    """`--out` 기본값은 동결된 v2 산출물이다. 다른 코호트로 그것을 덮어쓰지 않는다."""
+    m = _full()
+    frozen = m.BASE / "full_msa_manifest.json"
+    assert m.OUT == frozen, "기본 --out 이 v2 manifest 가 아니다"
+    with pytest.raises(SystemExit):
+        m.check_out_path(frozen, m.resolve_cohorts("holdout_grid"))
+    # 기본 코호트는 지금까지처럼 그 파일에 쓴다.
+    m.check_out_path(frozen, m.COHORTS)
+    # 순서만 바꾼 경우도 거절한다 - 타겟 순서가 바뀌면 동결 산출물과 다른
+    # 바이트가 되므로 그것도 덮어쓰기다. 다만 메시지는 "코호트를 바꿨다" 가
+    # 아니라 무엇이 요청됐고 왜 거절인지를 말해야 한다.
+    with pytest.raises(SystemExit) as exc:
+        m.check_out_path(frozen, m.resolve_cohorts("confirmatory,calibration_v2"))
+    msg = str(exc.value)
+    assert "'confirmatory', 'calibration_v2'" in msg, "요청된 순서를 보여주지 않는다"
+    assert "기본 순서" in msg, "왜 거절인지 말하지 않는다"
+
+
+def test_a_non_default_cohort_does_not_stamp_the_v2_provenance(tmp_path):
+    """격자 실행이 v2 동결 문서를 자기 provenance 로 찍으면 안 된다.
+
+    `_write` 는 재구성하지 않는다 - 기본 경로의 출력 바이트를 지키는 것이
+    그것을 건드리지 않는 이유다. 기본 코호트가 아닐 때만 키가 나온다.
+    """
+    m = _full()
+    rows = m.targets()
+    results = [dict(r, classification="OK") for r in rows[:1]]
+    cons = {"conservation_tiers": [0.3, 0.5, 0.7], "conservation_mode": "quantile",
+            "conservation_weighting": "none"}
+    prov = {"code_sha": "x" * 40, "code_sha_short": "xxxxxxx"}
+
+    a, b = tmp_path / "a.json", tmp_path / "b.json"
+    m._write(a, results, rows, cons, prov)                 # 인자 생략 = 기존 호출
+    m._write(b, results, rows, cons, prov, m.COHORTS)      # 기본 코호트 명시
+    da = json.loads(a.read_text(encoding="utf-8"))
+    db = json.loads(b.read_text(encoding="utf-8"))
+    da.pop("updated_utc"), db.pop("updated_utc")
+    assert da == db
+    assert "cohorts" not in da, "기본 경로에 새 키가 새어 나왔다"
+    assert da["purpose"].startswith("Step 7 - 24 타겟")
+    assert da["freeze_doc"] == "docs/specs/rapid-v2-multisource-validation-freeze.md"
+
+    g = tmp_path / "g.json"
+    m._write(g, results, rows, cons, prov, m.resolve_cohorts("holdout_grid"))
+    dg = json.loads(g.read_text(encoding="utf-8"))
+    dg.pop("updated_utc")
+    assert dg["cohorts"] == ["holdout_grid"]
+    assert "24 타겟" not in dg["purpose"]
+    assert dg["freeze_doc"] != da["freeze_doc"]
+    # 키 집합은 cohorts 하나만 늘어난다 - _write 를 재구성하지 않았다는 증거.
+    assert set(dg) - set(da) == {"cohorts"}
+    assert list(dg)[:len(da)] == list(da), "키 순서가 바뀌었다"
+
+
+def test_the_frozen_default_run_is_decided_in_one_place():
+    """`--out` 가드와 manifest provenance 가 같은 사실에 걸려 있다.
+
+    두 곳에 따로 적으면 한쪽만 느슨해져도 조용히 갈라진다.
+    """
+    m = _full()
+    src = FULL.read_text(encoding="utf-8")
+    assert src.count("tuple(cohorts) == COHORTS") == 1, "판정이 두 번 적혀 있다"
+    assert "tuple(cohorts) != COHORTS" not in src, "부정형이 따로 적혀 있다"
+    assert src.count("is_default_run(") >= 3, "정의 1 + 사용 2 가 아니다"
+    assert m.is_default_run(m.COHORTS) is True
+    assert m.is_default_run(m.resolve_cohorts(None)) is True
+    assert m.is_default_run(m.resolve_cohorts("holdout_grid")) is False
+    # 순서가 바뀌면 기본 실행이 아니다 - manifest 의 타겟 순서가 바뀐다.
+    assert m.is_default_run(m.resolve_cohorts("confirmatory,calibration_v2")) is False
+
+
+def test_the_module_docstring_carries_the_operating_rules():
+    """이 파일의 운영 규칙은 docstring 에 있다.
+
+    새 하드 규칙(--cohorts 를 바꾸면 --out 도 바꿔야 한다)이 argparse help
+    안에만 있으면, 이 파일을 읽고 운영하는 사람에게는 없는 것과 같다.
+    """
+    doc = _full().__doc__
+    assert "--cohorts" in doc, "옵트인 코호트 모드가 docstring 에 없다"
+    assert "resolved.targets" in doc, "격자가 어느 목록을 읽는지 없다"
+    assert "--out" in doc and "읽기 전용" in doc, "동결 manifest 규칙이 없다"

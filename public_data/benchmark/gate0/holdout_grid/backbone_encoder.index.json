@@ -1,0 +1,523 @@
+{
+ "ckpt": "v_48_020",
+ "dim": 384,
+ "n_backbones": 72,
+ "dev_reproduction": {
+  "reference": "public_data/benchmark/gate0/backbones/mpnn_encoder.npy",
+  "atol": 0.0001,
+  "verified_in_this_invocation": true,
+  "max_abs_diff": 9.059906005859375e-06,
+  "allclose": true,
+  "passed": true,
+  "note": "이 세 값은 이 index 를 만든 실행에서 잰 것이다. 검증을 돌리지 않은 실행은 passed 를 true 로 적을 수 없다.",
+  "n_backbones_verified": 157
+ },
+ "backbone_keys": [
+  "1sh6A02|rfd3|rfd3_inputs_spec-1_0_model_0",
+  "1sh6A02|rfd3|rfd3_inputs_spec-1_0_model_1",
+  "1sh6A02|rfd3|rfd3_inputs_spec-1_0_model_2",
+  "1sh6A02|rfd3|rfd3_inputs_spec-1_0_model_3",
+  "1sh6A02|rfd3|rfd3_inputs_spec-1_0_model_4",
+  "1sh6A02|target|target",
+  "1sp0A00|rfd3|rfd3_inputs_spec-1_0_model_0_retry_1_1",
+  "1sp0A00|rfd3|rfd3_inputs_spec-1_0_model_0_retry_2_1",
+  "1sp0A00|rfd3|rfd3_inputs_spec-1_0_model_1_retry_1_2",
+  "1sp0A00|rfd3|rfd3_inputs_spec-1_0_model_2_retry_1_3",
+  "1sp0A00|rfd3|rfd3_inputs_spec-1_0_model_3",
+  "1sp0A00|target|target",
+  "1tm9A00|rfd3|rfd3_inputs_spec-1_0_model_0",
+  "1tm9A00|rfd3|rfd3_inputs_spec-1_0_model_1",
+  "1tm9A00|rfd3|rfd3_inputs_spec-1_0_model_2",
+  "1tm9A00|rfd3|rfd3_inputs_spec-1_0_model_3",
+  "1tm9A00|rfd3|rfd3_inputs_spec-1_0_model_4",
+  "1tm9A00|target|target",
+  "1vsrA00|rfd3|rfd3_inputs_spec-1_0_model_0",
+  "1vsrA00|rfd3|rfd3_inputs_spec-1_0_model_1",
+  "1vsrA00|rfd3|rfd3_inputs_spec-1_0_model_2",
+  "1vsrA00|rfd3|rfd3_inputs_spec-1_0_model_3",
+  "1vsrA00|rfd3|rfd3_inputs_spec-1_0_model_4",
+  "1vsrA00|target|target",
+  "2jokA01|rfd3|rfd3_inputs_spec-1_0_model_0",
+  "2jokA01|rfd3|rfd3_inputs_spec-1_0_model_0_retry_2_1",
+  "2jokA01|rfd3|rfd3_inputs_spec-1_0_model_1_retry_2_2",
+  "2jokA01|rfd3|rfd3_inputs_spec-1_0_model_2",
+  "2jokA01|rfd3|rfd3_inputs_spec-1_0_model_4",
+  "2jokA01|target|target",
+  "3bqwA01|rfd3|rfd3_inputs_spec-1_0_model_0",
+  "3bqwA01|rfd3|rfd3_inputs_spec-1_0_model_1",
+  "3bqwA01|rfd3|rfd3_inputs_spec-1_0_model_2",
+  "3bqwA01|rfd3|rfd3_inputs_spec-1_0_model_3",
+  "3bqwA01|rfd3|rfd3_inputs_spec-1_0_model_4",
+  "3bqwA01|target|target",
+  "3es1A01|rfd3|rfd3_inputs_spec-1_0_model_0",
+  "3es1A01|rfd3|rfd3_inputs_spec-1_0_model_0_retry_2_1",
+  "3es1A01|rfd3|rfd3_inputs_spec-1_0_model_0_retry_4_1",
+  "3es1A01|rfd3|rfd3_inputs_spec-1_0_model_2",
+  "3es1A01|rfd3|rfd3_inputs_spec-1_0_model_4",
+  "3es1A01|target|target",
+  "3f2pA01|rfd3|rfd3_inputs_spec-1_0_model_0",
+  "3f2pA01|rfd3|rfd3_inputs_spec-1_0_model_0_retry_1_1",
+  "3f2pA01|rfd3|rfd3_inputs_spec-1_0_model_1",
+  "3f2pA01|rfd3|rfd3_inputs_spec-1_0_model_2",
+  "3f2pA01|rfd3|rfd3_inputs_spec-1_0_model_4",
+  "3f2pA01|target|target",
+  "3h7eA02|rfd3|rfd3_inputs_spec-1_0_model_0",
+  "3h7eA02|rfd3|rfd3_inputs_spec-1_0_model_0_retry_1_1",
+  "3h7eA02|rfd3|rfd3_inputs_spec-1_0_model_1_retry_1_2",
+  "3h7eA02|rfd3|rfd3_inputs_spec-1_0_model_2",
+  "3h7eA02|rfd3|rfd3_inputs_spec-1_0_model_3",
+  "3h7eA02|target|target",
+  "5fwaA02|rfd3|rfd3_inputs_spec-1_0_model_0",
+  "5fwaA02|rfd3|rfd3_inputs_spec-1_0_model_1",
+  "5fwaA02|rfd3|rfd3_inputs_spec-1_0_model_2",
+  "5fwaA02|rfd3|rfd3_inputs_spec-1_0_model_3",
+  "5fwaA02|rfd3|rfd3_inputs_spec-1_0_model_4",
+  "5fwaA02|target|target",
+  "5pc8A00|rfd3|rfd3_inputs_spec-1_0_model_0",
+  "5pc8A00|rfd3|rfd3_inputs_spec-1_0_model_1",
+  "5pc8A00|rfd3|rfd3_inputs_spec-1_0_model_2",
+  "5pc8A00|rfd3|rfd3_inputs_spec-1_0_model_3",
+  "5pc8A00|rfd3|rfd3_inputs_spec-1_0_model_4",
+  "5pc8A00|target|target",
+  "5xpdA02|rfd3|rfd3_inputs_spec-1_0_model_0",
+  "5xpdA02|rfd3|rfd3_inputs_spec-1_0_model_0_retry_1_1",
+  "5xpdA02|rfd3|rfd3_inputs_spec-1_0_model_1",
+  "5xpdA02|rfd3|rfd3_inputs_spec-1_0_model_3",
+  "5xpdA02|rfd3|rfd3_inputs_spec-1_0_model_4",
+  "5xpdA02|target|target"
+ ],
+ "resolved": {
+  "1sh6A02|rfd3|rfd3_inputs_spec-1_0_model_0": {
+   "source": "rfd3",
+   "target_id": "1sh6A02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1sh6A02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0.pdb"
+  },
+  "1sh6A02|rfd3|rfd3_inputs_spec-1_0_model_1": {
+   "source": "rfd3",
+   "target_id": "1sh6A02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1sh6A02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_1.pdb"
+  },
+  "1sh6A02|rfd3|rfd3_inputs_spec-1_0_model_2": {
+   "source": "rfd3",
+   "target_id": "1sh6A02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_2",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1sh6A02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_2.pdb"
+  },
+  "1sh6A02|rfd3|rfd3_inputs_spec-1_0_model_3": {
+   "source": "rfd3",
+   "target_id": "1sh6A02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_3",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1sh6A02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_3.pdb"
+  },
+  "1sh6A02|rfd3|rfd3_inputs_spec-1_0_model_4": {
+   "source": "rfd3",
+   "target_id": "1sh6A02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_4",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1sh6A02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_4.pdb"
+  },
+  "1sh6A02|target|target": {
+   "source": "target",
+   "target_id": "1sh6A02",
+   "backbone_id": "target",
+   "pdb_path": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/1sh6A02.pdb"
+  },
+  "1sp0A00|rfd3|rfd3_inputs_spec-1_0_model_0_retry_1_1": {
+   "source": "rfd3",
+   "target_id": "1sp0A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0_retry_1_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1sp0A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0_retry_1_1.pdb"
+  },
+  "1sp0A00|rfd3|rfd3_inputs_spec-1_0_model_0_retry_2_1": {
+   "source": "rfd3",
+   "target_id": "1sp0A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0_retry_2_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1sp0A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0_retry_2_1.pdb"
+  },
+  "1sp0A00|rfd3|rfd3_inputs_spec-1_0_model_1_retry_1_2": {
+   "source": "rfd3",
+   "target_id": "1sp0A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_1_retry_1_2",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1sp0A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_1_retry_1_2.pdb"
+  },
+  "1sp0A00|rfd3|rfd3_inputs_spec-1_0_model_2_retry_1_3": {
+   "source": "rfd3",
+   "target_id": "1sp0A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_2_retry_1_3",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1sp0A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_2_retry_1_3.pdb"
+  },
+  "1sp0A00|rfd3|rfd3_inputs_spec-1_0_model_3": {
+   "source": "rfd3",
+   "target_id": "1sp0A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_3",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1sp0A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_3.pdb"
+  },
+  "1sp0A00|target|target": {
+   "source": "target",
+   "target_id": "1sp0A00",
+   "backbone_id": "target",
+   "pdb_path": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/1sp0A00.pdb"
+  },
+  "1tm9A00|rfd3|rfd3_inputs_spec-1_0_model_0": {
+   "source": "rfd3",
+   "target_id": "1tm9A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1tm9A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0.pdb"
+  },
+  "1tm9A00|rfd3|rfd3_inputs_spec-1_0_model_1": {
+   "source": "rfd3",
+   "target_id": "1tm9A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1tm9A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_1.pdb"
+  },
+  "1tm9A00|rfd3|rfd3_inputs_spec-1_0_model_2": {
+   "source": "rfd3",
+   "target_id": "1tm9A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_2",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1tm9A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_2.pdb"
+  },
+  "1tm9A00|rfd3|rfd3_inputs_spec-1_0_model_3": {
+   "source": "rfd3",
+   "target_id": "1tm9A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_3",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1tm9A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_3.pdb"
+  },
+  "1tm9A00|rfd3|rfd3_inputs_spec-1_0_model_4": {
+   "source": "rfd3",
+   "target_id": "1tm9A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_4",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1tm9A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_4.pdb"
+  },
+  "1tm9A00|target|target": {
+   "source": "target",
+   "target_id": "1tm9A00",
+   "backbone_id": "target",
+   "pdb_path": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/1tm9A00.pdb"
+  },
+  "1vsrA00|rfd3|rfd3_inputs_spec-1_0_model_0": {
+   "source": "rfd3",
+   "target_id": "1vsrA00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1vsrA00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0.pdb"
+  },
+  "1vsrA00|rfd3|rfd3_inputs_spec-1_0_model_1": {
+   "source": "rfd3",
+   "target_id": "1vsrA00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1vsrA00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_1.pdb"
+  },
+  "1vsrA00|rfd3|rfd3_inputs_spec-1_0_model_2": {
+   "source": "rfd3",
+   "target_id": "1vsrA00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_2",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1vsrA00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_2.pdb"
+  },
+  "1vsrA00|rfd3|rfd3_inputs_spec-1_0_model_3": {
+   "source": "rfd3",
+   "target_id": "1vsrA00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_3",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1vsrA00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_3.pdb"
+  },
+  "1vsrA00|rfd3|rfd3_inputs_spec-1_0_model_4": {
+   "source": "rfd3",
+   "target_id": "1vsrA00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_4",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_1vsrA00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_4.pdb"
+  },
+  "1vsrA00|target|target": {
+   "source": "target",
+   "target_id": "1vsrA00",
+   "backbone_id": "target",
+   "pdb_path": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/1vsrA00.pdb"
+  },
+  "2jokA01|rfd3|rfd3_inputs_spec-1_0_model_0": {
+   "source": "rfd3",
+   "target_id": "2jokA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_2jokA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0.pdb"
+  },
+  "2jokA01|rfd3|rfd3_inputs_spec-1_0_model_0_retry_2_1": {
+   "source": "rfd3",
+   "target_id": "2jokA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0_retry_2_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_2jokA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0_retry_2_1.pdb"
+  },
+  "2jokA01|rfd3|rfd3_inputs_spec-1_0_model_1_retry_2_2": {
+   "source": "rfd3",
+   "target_id": "2jokA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_1_retry_2_2",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_2jokA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_1_retry_2_2.pdb"
+  },
+  "2jokA01|rfd3|rfd3_inputs_spec-1_0_model_2": {
+   "source": "rfd3",
+   "target_id": "2jokA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_2",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_2jokA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_2.pdb"
+  },
+  "2jokA01|rfd3|rfd3_inputs_spec-1_0_model_4": {
+   "source": "rfd3",
+   "target_id": "2jokA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_4",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_2jokA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_4.pdb"
+  },
+  "2jokA01|target|target": {
+   "source": "target",
+   "target_id": "2jokA01",
+   "backbone_id": "target",
+   "pdb_path": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/2jokA01.pdb"
+  },
+  "3bqwA01|rfd3|rfd3_inputs_spec-1_0_model_0": {
+   "source": "rfd3",
+   "target_id": "3bqwA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3bqwA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0.pdb"
+  },
+  "3bqwA01|rfd3|rfd3_inputs_spec-1_0_model_1": {
+   "source": "rfd3",
+   "target_id": "3bqwA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3bqwA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_1.pdb"
+  },
+  "3bqwA01|rfd3|rfd3_inputs_spec-1_0_model_2": {
+   "source": "rfd3",
+   "target_id": "3bqwA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_2",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3bqwA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_2.pdb"
+  },
+  "3bqwA01|rfd3|rfd3_inputs_spec-1_0_model_3": {
+   "source": "rfd3",
+   "target_id": "3bqwA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_3",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3bqwA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_3.pdb"
+  },
+  "3bqwA01|rfd3|rfd3_inputs_spec-1_0_model_4": {
+   "source": "rfd3",
+   "target_id": "3bqwA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_4",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3bqwA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_4.pdb"
+  },
+  "3bqwA01|target|target": {
+   "source": "target",
+   "target_id": "3bqwA01",
+   "backbone_id": "target",
+   "pdb_path": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/3bqwA01.pdb"
+  },
+  "3es1A01|rfd3|rfd3_inputs_spec-1_0_model_0": {
+   "source": "rfd3",
+   "target_id": "3es1A01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3es1A01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0.pdb"
+  },
+  "3es1A01|rfd3|rfd3_inputs_spec-1_0_model_0_retry_2_1": {
+   "source": "rfd3",
+   "target_id": "3es1A01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0_retry_2_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3es1A01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0_retry_2_1.pdb"
+  },
+  "3es1A01|rfd3|rfd3_inputs_spec-1_0_model_0_retry_4_1": {
+   "source": "rfd3",
+   "target_id": "3es1A01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0_retry_4_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3es1A01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0_retry_4_1.pdb"
+  },
+  "3es1A01|rfd3|rfd3_inputs_spec-1_0_model_2": {
+   "source": "rfd3",
+   "target_id": "3es1A01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_2",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3es1A01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_2.pdb"
+  },
+  "3es1A01|rfd3|rfd3_inputs_spec-1_0_model_4": {
+   "source": "rfd3",
+   "target_id": "3es1A01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_4",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3es1A01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_4.pdb"
+  },
+  "3es1A01|target|target": {
+   "source": "target",
+   "target_id": "3es1A01",
+   "backbone_id": "target",
+   "pdb_path": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/3es1A01.pdb"
+  },
+  "3f2pA01|rfd3|rfd3_inputs_spec-1_0_model_0": {
+   "source": "rfd3",
+   "target_id": "3f2pA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3f2pA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0.pdb"
+  },
+  "3f2pA01|rfd3|rfd3_inputs_spec-1_0_model_0_retry_1_1": {
+   "source": "rfd3",
+   "target_id": "3f2pA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0_retry_1_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3f2pA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0_retry_1_1.pdb"
+  },
+  "3f2pA01|rfd3|rfd3_inputs_spec-1_0_model_1": {
+   "source": "rfd3",
+   "target_id": "3f2pA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3f2pA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_1.pdb"
+  },
+  "3f2pA01|rfd3|rfd3_inputs_spec-1_0_model_2": {
+   "source": "rfd3",
+   "target_id": "3f2pA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_2",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3f2pA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_2.pdb"
+  },
+  "3f2pA01|rfd3|rfd3_inputs_spec-1_0_model_4": {
+   "source": "rfd3",
+   "target_id": "3f2pA01",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_4",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3f2pA01_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_4.pdb"
+  },
+  "3f2pA01|target|target": {
+   "source": "target",
+   "target_id": "3f2pA01",
+   "backbone_id": "target",
+   "pdb_path": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/3f2pA01.pdb"
+  },
+  "3h7eA02|rfd3|rfd3_inputs_spec-1_0_model_0": {
+   "source": "rfd3",
+   "target_id": "3h7eA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3h7eA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0.pdb"
+  },
+  "3h7eA02|rfd3|rfd3_inputs_spec-1_0_model_0_retry_1_1": {
+   "source": "rfd3",
+   "target_id": "3h7eA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0_retry_1_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3h7eA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0_retry_1_1.pdb"
+  },
+  "3h7eA02|rfd3|rfd3_inputs_spec-1_0_model_1_retry_1_2": {
+   "source": "rfd3",
+   "target_id": "3h7eA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_1_retry_1_2",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3h7eA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_1_retry_1_2.pdb"
+  },
+  "3h7eA02|rfd3|rfd3_inputs_spec-1_0_model_2": {
+   "source": "rfd3",
+   "target_id": "3h7eA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_2",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3h7eA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_2.pdb"
+  },
+  "3h7eA02|rfd3|rfd3_inputs_spec-1_0_model_3": {
+   "source": "rfd3",
+   "target_id": "3h7eA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_3",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_3h7eA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_3.pdb"
+  },
+  "3h7eA02|target|target": {
+   "source": "target",
+   "target_id": "3h7eA02",
+   "backbone_id": "target",
+   "pdb_path": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/3h7eA02.pdb"
+  },
+  "5fwaA02|rfd3|rfd3_inputs_spec-1_0_model_0": {
+   "source": "rfd3",
+   "target_id": "5fwaA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5fwaA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0.pdb"
+  },
+  "5fwaA02|rfd3|rfd3_inputs_spec-1_0_model_1": {
+   "source": "rfd3",
+   "target_id": "5fwaA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5fwaA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_1.pdb"
+  },
+  "5fwaA02|rfd3|rfd3_inputs_spec-1_0_model_2": {
+   "source": "rfd3",
+   "target_id": "5fwaA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_2",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5fwaA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_2.pdb"
+  },
+  "5fwaA02|rfd3|rfd3_inputs_spec-1_0_model_3": {
+   "source": "rfd3",
+   "target_id": "5fwaA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_3",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5fwaA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_3.pdb"
+  },
+  "5fwaA02|rfd3|rfd3_inputs_spec-1_0_model_4": {
+   "source": "rfd3",
+   "target_id": "5fwaA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_4",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5fwaA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_4.pdb"
+  },
+  "5fwaA02|target|target": {
+   "source": "target",
+   "target_id": "5fwaA02",
+   "backbone_id": "target",
+   "pdb_path": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/5fwaA02.pdb"
+  },
+  "5pc8A00|rfd3|rfd3_inputs_spec-1_0_model_0": {
+   "source": "rfd3",
+   "target_id": "5pc8A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5pc8A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0.pdb"
+  },
+  "5pc8A00|rfd3|rfd3_inputs_spec-1_0_model_1": {
+   "source": "rfd3",
+   "target_id": "5pc8A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5pc8A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_1.pdb"
+  },
+  "5pc8A00|rfd3|rfd3_inputs_spec-1_0_model_2": {
+   "source": "rfd3",
+   "target_id": "5pc8A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_2",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5pc8A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_2.pdb"
+  },
+  "5pc8A00|rfd3|rfd3_inputs_spec-1_0_model_3": {
+   "source": "rfd3",
+   "target_id": "5pc8A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_3",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5pc8A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_3.pdb"
+  },
+  "5pc8A00|rfd3|rfd3_inputs_spec-1_0_model_4": {
+   "source": "rfd3",
+   "target_id": "5pc8A00",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_4",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5pc8A00_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_4.pdb"
+  },
+  "5pc8A00|target|target": {
+   "source": "target",
+   "target_id": "5pc8A00",
+   "backbone_id": "target",
+   "pdb_path": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/5pc8A00.pdb"
+  },
+  "5xpdA02|rfd3|rfd3_inputs_spec-1_0_model_0": {
+   "source": "rfd3",
+   "target_id": "5xpdA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5xpdA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0.pdb"
+  },
+  "5xpdA02|rfd3|rfd3_inputs_spec-1_0_model_0_retry_1_1": {
+   "source": "rfd3",
+   "target_id": "5xpdA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_0_retry_1_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5xpdA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_0_retry_1_1.pdb"
+  },
+  "5xpdA02|rfd3|rfd3_inputs_spec-1_0_model_1": {
+   "source": "rfd3",
+   "target_id": "5xpdA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_1",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5xpdA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_1.pdb"
+  },
+  "5xpdA02|rfd3|rfd3_inputs_spec-1_0_model_3": {
+   "source": "rfd3",
+   "target_id": "5xpdA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_3",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5xpdA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_3.pdb"
+  },
+  "5xpdA02|rfd3|rfd3_inputs_spec-1_0_model_4": {
+   "source": "rfd3",
+   "target_id": "5xpdA02",
+   "backbone_id": "rfd3_inputs_spec-1_0_model_4",
+   "pdb_path": "/opt/protein_pipeline/outputs/holdout_5xpdA02_rfd3/rfd3/designs/rfd3_inputs_spec-1_0_model_4.pdb"
+  },
+  "5xpdA02|target|target": {
+   "source": "target",
+   "target_id": "5xpdA02",
+   "backbone_id": "target",
+   "pdb_path": "/opt/protein_pipeline-work/public_data/benchmark/gate0/holdout_targets_pdb/5xpdA02.pdb"
+  }
+ }
+}

@@ -139,6 +139,159 @@ yield 백본만 담고 있으므로 여기서 나온 온도 효과는 전체 백
 아니라 중간-yield 영역에서의 조건부 효과다. 정책 성능 수치는 홀드아웃 격자에서만
 인용한다.
 
+## Gate 1 · 백본 예측 가능성 (2026-09-11)
+
+동결 스펙 `docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md` §3. 질문:
+**AF2 를 보기 전 cheap feature 로 어느 백본의 q_b 가 높은지 예측할 수 있는가.**
+feature = ProteinMPNN encoder 384-D (`v_48_020` soluble). **새 AF2 0 개.**
+판정 arm 은 primary 하나다 — RFD3-only dev(백본 80·타겟 16)로 학습해 RFD3-only
+홀드아웃(백본 60·타겟 12, informative 11)에서 평가한다.
+
+| 값 | 정본 | 출처 (`gate1_backbone_predictability.json`) |
+|---|---|---|
+| primary 타겟 등가중 mean within-target Spearman | **+0.0379** | `arms.primary.point` |
+| primary 단측 90% LCB | **−0.1559** | `arms.primary.one_sided_90_lcb` |
+| primary informative 타겟 | **11** | `arms.primary.informative_targets` |
+| primary top-1 백본 regret (2 차, **informative 11**) | **0.1780** | `arms.primary.top1_backbone_regret_mean_informative_cohort` |
+| 〃 (ranked 12, 참고) | 0.1632 | 같은 파일 → `.top1_backbone_regret_mean_all_ranked_targets` |
+| 동결 문턱 | ρ ≥ +0.25 ∧ LCB > 0 ∧ n ≥ 8 | `frozen_go_rule` |
+| **판정** | **NO-GO [FINAL]** (문턱 세 개 중 두 개 미달) | `verdict` |
+
+동반 arm (사전 등록, 판정에 쓰지 않는다):
+
+| arm | train | ρ | LCB90 | top-1 regret (informative 11) |
+|---|---|---|---|---|
+| sensitivity 1 | RFD3+BioEmu (100·16) | +0.0577 | −0.1524 | 0.1818 |
+| descriptive / legacy | 전체 dev (157·62) | −0.0604 | −0.2561 | 0.2841 |
+| comparator (native 홀드아웃) | — | **non-evaluable** | — | — |
+
+**해석 제한 — 이 두 줄을 수치와 떼어 인용하지 않는다.**
+
+> **허용:** "사전 등록된 RFD3-only primary test 에서 backbone-level cheap
+> predictability 가 GO 기준에 도달하지 못했다."
+>
+> **금지:** "ProteinMPNN encoder 는 backbone quality 를 예측하지 못한다."
+> "backbone-level signal 은 존재하지 않는다."
+
+근거: primary 는 **백본 80 개에 384 차원**(n/p = 0.21)이고, 스펙 §3 이 결과 전에
+이 NO-GO 를 **"신호 없음" 이 아니라 "이 표본에서 미검출"** 로 읽도록 고정했다.
+사전 지정 OC(`OC_primary_rfd3_only`)에서 GO 확률은 ρ ≈ 0.33 에서 0.74, ρ ≈ 0.44
+에서 0.94 다. 관측된 top-1 regret **0.1780** 은 같은 표의 귀무값 0.2274 보다 낮다
+(둘 다 informative 11 타겟 기준 — 코호트가 일치한다) —
+약하지만 0 이 아닌 신호의 모습이다.
+
+**legacy arm 이 음수인 것은 예고된 것이다.** §3 이 native 백본이 계수를 형성한다고
+사전에 경고했고, 그래서 native 를 배분 풀에서 빼 comparator 로 분리했다. comparator
+는 native 가 타겟당 1 백본이라 타겟 내 Spearman 이 정의되지 않아 non-evaluable 이며
+**0 으로 대입하지 않는다** — 재지 못한 것과 0 은 다르다.
+
+부수 분석 `Δ_generated` = q_b(생성) − q_b(native) = **+0.0825** (LCB −0.0475,
+타겟 10) — GO 판정에서 제외된다. LCB 가 0 을 포함하므로 "생성 백본이 native 보다
+낫다" 의 근거로 쓰지 않는다.
+
+**feature 공간은 가정이 아니라 확인된 사실이다.** dev `mpnn_encoder.npy` 를 만든
+스크립트는 커밋된 적이 없어(`1c2eeb4` 는 산출물만) 추출기를 재구현했다. 홀드아웃에
+적용하기 **전에** dev 157 백본을 다시 뽑아 커밋된 산출물과 비교했고
+`max abs diff 9.06e-06`, `allclose(atol=1e-4) True` 였다
+(`21_gate2d_prepare_encoder.py --verify-dev`). 결정적 요소는 **`residue_idx` 가
+상수**(상대 위치 인코딩 비활성)이며 `1c2eeb4` 의 "sequence-independent" 서술과
+일치한다 — 다만 그것이 원래 의도였는지는 원본 스크립트가 없어 확인할 수 없다.
+코호트 교차확인: native 평균 q_b **0.6042** (`delta_generated_side_analysis.mean_q_b_native`,
+native 는 타겟당 백본 1 개이므로 백본평균 = 타겟평균) · RFD3 **0.6604**
+(`arms.primary.mean_q_b`, test 코호트 60 백본) 가 스펙 §3 의 0.604 / 0.660 과
+일치한다. **`delta_generated_side_analysis.mean_q_b_rfd3` 0.6867 과 혼동하지 않는다**
+— 그쪽은 짝지음을 위해 native 라벨이 있는 10 타겟으로 제한한 값이고, 위 두 수와는
+다른 양이다.
+
+**선행 시도.** `13_gate0_target_level.py` 의 rfd3 타겟내 ρ −0.257 은 correspondence
+metric 교체로 라벨이 무효화됐으므로 standing negative result 로 인용하지 않되,
+시도가 있었다는 사실은 함께 적는다.
+
+## Gate 2 · 백본 내부 서열 선택성 (2026-09-11)
+
+동결 스펙: `docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md`.
+코호트: 홀드아웃 격자 mixed 백본 37 개 / informative 타겟 11 개 / 사용가능 폴드 1,680.
+1 차 endpoint = joint-pass, 지표 = 타겟 등가중 Δ_Top4. **새 AF2 0 개.**
+
+| 값 | 수치 | 출처 |
+|---|---|---|
+| S6 (판정 arm) Δ_Top4 | **−0.0313** | `gate2_within_backbone_selectability.json` → `arms_joint_pass.S6.delta_top4_target_equal` |
+| S6 단측 90% LCB | **−0.0803** | 같은 파일 → `.one_sided_90_lcb` |
+| S6 informative 타겟 | 11 | 같은 파일 → `.informative_targets` |
+| 저심도 제외 민감도 (코호트 10) | Δ **−0.0386**, LCB −0.0924 | 같은 파일 → `arms_joint_pass.S6.sensitivity_excluding_low_depth` |
+| RFD3-only 민감도 (mixed 34 / informative 11) | Δ **−0.0225**, LCB −0.0755 | 같은 파일 → `arms_joint_pass.S6.sensitivity_rfd3_only` |
+| oracle 상한 | +0.326 | 같은 파일 → `reference_points.oracle` |
+| SoluProt 기준선 | −0.001 | 같은 파일 → `reference_points.soluprot` |
+
+전체 ladder (joint-pass, Δ_Top4 / LCB90):
+
+| S0 | S1 | S2 | S3 | S4 | S5 | S6 |
+|---|---|---|---|---|---|---|
+| −0.0014 / −0.0367 | +0.0384 / +0.0107 | −0.0188 / −0.0508 | −0.0029 / −0.0316 | +0.0001 / −0.0347 | −0.0366 / −0.0854 | **−0.0313 / −0.0803** |
+
+**RFD3-only 민감도는 스펙 §3 이 사전 등록한 것이다.** 1 차 코호트는 mixed 37 로
+유지하고 이것을 나란히 보고한다. **모델을 재적합하지 않는다** — 같은 LOTO 예측을
+RFD3 백본 34 개 위에서 다시 집계할 뿐이다. §3 의 "학습 쪽도 정렬한다" 는 Gate 1
+조항이고, Gate 2 문장은 코호트에 대한 것이며, ladder 는 arm 7 개로 동결돼 있어
+재적합은 여덟 번째 arm 이 된다. (재적합 판은 **+0.0097 / −0.023359** 이고 산출물
+`arms_joint_pass.S6.sensitivity_rfd3_only.alternative_reading_model_refit` 에 기록돼 있다.
+판정은 역시 NO-GO 다. 산출물에 `model_refit: false` 와 근거를 남겨 다르게 읽는
+사람이 재유도 없이 반박할 수 있게 했다.)
+
+**두 민감도 모두 1 차와 같은 방향이고 어느 문턱도 넘지 못한다.** 즉 NO-GO 는
+저심도 타겟에도, native 백본 포함 여부에도 의존하지 않는다.
+
+**S1 을 인용할 때 반드시 붙일 것.** S1(raw ESM mean)은 1 차 endpoint 에서 점추정이
+양수이고 LCB > 0 인 유일한 arm 이지만, **사전 등록된 known-null** 이고(82 타겟에서
+이미 음성) 문턱보다 0.06 낮다. 스펙이 S6 를 유일 판정 arm 으로 동결한 이유가 이런
+사후 arm 선택을 막기 위해서다. **S1 으로 어떤 판정도 내리지 않는다.**
+
+### PRIMARY DEVIATION 해소 (2026-09-11) — 이제 사전 등록한 S6 다
+
+동결 스펙의 S6 는 `S5 + 기존 cheap feature(조성 + MPNN score)` 다. 2026-09-11 의
+첫 실행에는 MPNN score 열이 없었다 — 격자의 `sequences.csv` 에 그 열이 없고, score
+열을 가진 다른 코호트와 격자 sequence_id 의 교집합이 **0** 이었다. 그래서 realized
+S6 = `S5 + 조성` 이 되어 S5 와 bit-for-bit 같았고, 공식 판정이 `UNRESOLVED`
+(PRIMARY DEVIATION) 로 남았다.
+
+체크포인트 `v_48_020` 이 확보되어 **같은 1,680 폴드의 per-sequence MPNN score 를
+직접 계산했다** (`scripts/benchmark/27_gate2d_prepare_mpnn_scores.py`,
+`holdout_grid/mpnn_scores.json`). **새 AF2 는 0 개다** — 이미 있는 라벨에 열 하나를
+붙였다. 위 표의 수치는 이제 planned-S6 다.
+
+| | Δ_Top4 | LCB90 | n_feat | 판정 |
+|---|---|---|---|---|
+| planned S6 (조성 + MPNN score) | **−0.0313** | −0.0803 | 355 | NO-GO |
+| realized S6 (2026-09-11 이전, MPNN score 없음) | −0.0366 | −0.0854 | 354 | NO-GO |
+
+출처: 같은 파일 → `s6_planned_vs_realized`. **두 판정이 일치한다** (`verdicts_agree:
+true`, 점추정 이동 +0.0053). S0–S5 는 bit-for-bit 그대로다 — 바뀐 것은 S6 의 열
+하나뿐이고 realized 판을 같은 실행에서 재현해 그것을 확인한다.
+
+따라서 planned-S6 도 NO-GO 이고, 스펙 §8 은 `9f1a1ae` 에서 **`Gate 2 = NO-GO
+[FINAL]`** 로 닫혔다.
+
+## 최종 판정 · Surrogate × RAPID 2축 확장 (2026-09-11)
+
+> **STOP.** Gate 1 과 Gate 2 모두 사전 등록된 GO 기준에 도달하지 못했으므로, 현재
+> 시험한 feature family 에 기반한 **B(backbone-specific surrogate prior)** 및
+> **C(sequence-level targeted/sentinel extension)** 개발은 진행하지 않는다.
+
+**STOP 의 범위를 좁게 읽는다.** 이것은 **RAPID 자체를 접는다는 뜻이 아니다.**
+이번 surrogate 결합 연구축을 접는 것이며, **RAPID v2 의 독립적인 전향 검증은
+별개이고 영향받지 않는다.** 이 게이트는 그 검증에 어떤 변경도 넣지 않았다
+(스펙 §9).
+
+판정 근거 두 줄:
+
+| | 정본 | 문턱 | |
+|---|---|---|---|
+| Gate 1 | ρ +0.0379 · LCB −0.1559 · n 11 | ρ ≥ 0.25 | NO-GO |
+| Gate 2 | Δ_Top4 −0.0313 · LCB −0.0803 · n 11 | ≥ +0.10 | NO-GO |
+
+**전 과정에서 새 AF2 는 0 개다.** 기존 1,680 폴드 라벨을 재사용했고, 새로 든 계산은
+MSA 12 타겟 · ESM 임베딩 · 백본 encoder · MPNN score 뿐이다.
+
 ## 아니라고 판정한 것
 
 | 항목 | 판정 | 출처 |

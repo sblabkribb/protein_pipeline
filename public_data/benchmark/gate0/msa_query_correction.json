@@ -1,0 +1,201 @@
+{
+  "purpose": "MSA query 를 배포와 맞추기 위해 3 타겟의 A3M 을 다시 만들었다. 어느 타겟이 왜 교체됐는지 durable 하게 남긴다 - full_msa_manifest.json 의 해당 항목은 재실행이 덮어쓴다.",
+  "cause": "query_sequence() 가 원본 첫 모델 CA 서열을 그대로 query 로 썼다. 배포는 normalize_structure_text -> strip_nonpositive_resseq 를 거친 staged 서열을 query 로 보낸다. resseq <= 0 잔기가 있는 타겟에서만 차이가 난다.",
+  "fix_commit": "cb37ae2",
+  "consequence_if_unfixed": "보존도의 quantile 컷 floor(L*tier) 과 그 아래 인덱스가 전부 밀린다. 실행은 성공하고 마스크만 틀린다.",
+  "unaffected_axis": "multi-model(NMR) 5 타겟(2jvfA00 20 · 1ct7A00 5 · 2m9xA01 20 · 1x3aA00 20 · 1sohA00 18)은 무증상이다. 배포는 ingest 의 normalize_structure_text 에서, 이쪽은 ca_sequence 의 ENDMDL 중단과 (chain,resseq,icode) 중복 제거로 각각 첫 모델만 남긴다. 24 타겟 전부 배포 query 와 일치 확인.",
+  "not_changed": [
+    "threshold",
+    "타겟 선정",
+    "tier",
+    "후보 수"
+  ],
+  "pilot_unaffected": [
+    "1n81A00",
+    "1rdrA01",
+    "1j5uA01"
+  ],
+  "found_by": "배포 target_query_fasta 출처 추적 (Step 8 준비 중)",
+  "second_axis_flagged_by": "peer session protein-pipeline-work-45 (multi-model)",
+  "recorded_utc": "2026-09-10T08:25:34Z",
+  "targets": [
+    {
+      "domain": "2jvfA00",
+      "cohort": "calibration_v2",
+      "length_aa": 94,
+      "raw_query_length": 94,
+      "staged_query_length": 92,
+      "residues_dropped": 2,
+      "dropped_prefix": "HM",
+      "superseded_a3m": {
+        "path": "public_data/benchmark/gate0/msa_unstaged_query/2jvfA00/result.a3m",
+        "sha256": "485027b0302f25d7c2d2fdd6c67c6a72692f0a2a96f8bc157796bce010bfcc7f",
+        "bytes": 223,
+        "hit_count": 1,
+        "wall_seconds": 4786.5,
+        "quality_medians": {
+          "usable_hits": 1,
+          "median_coverage": 1.0,
+          "median_depth": 1.0,
+          "full_length_fraction": 1.0
+        },
+        "classification": "MSA_INSUFFICIENT_DEPTH",
+        "conservation_tiers": {
+          "0.3": 28,
+          "0.5": 47,
+          "0.7": 65
+        },
+        "sha256_verified": true
+      },
+      "provenance_evidence": {
+        "dbref": "DBREF 2JVF A -3 92 PDB 2JVF",
+        "dbref_reference": "PDB (UniProt 참조 없음)",
+        "seqadv_expression_tag": false,
+        "stripped_residues": [
+          {
+            "resseq": -1,
+            "aa3": "HIS"
+          },
+          {
+            "resseq": 0,
+            "aa3": "MET"
+          }
+        ],
+        "seqres_prefix": "GLY SER HIS MET",
+        "status": "annotation 없음. 흔한 tag 잔여물과 일치하나 확정되지 않았다.",
+        "column_depth_measurable": false,
+        "column_depth_note": "hit 1 개뿐이라 태그 열과 나머지를 구분할 수 없다."
+      }
+    },
+    {
+      "domain": "4yqiA01",
+      "cohort": "calibration_v2",
+      "length_aa": 238,
+      "raw_query_length": 238,
+      "staged_query_length": 235,
+      "residues_dropped": 3,
+      "dropped_prefix": "GSH",
+      "superseded_a3m": {
+        "path": "public_data/benchmark/gate0/msa_unstaged_query/4yqiA01/result.a3m",
+        "sha256": "8832085686b135dc82d3cb22f49c3ff9b2162882635636e4cc7c726a200879c5",
+        "bytes": 782155,
+        "hit_count": 3534,
+        "wall_seconds": 2506.2,
+        "quality_medians": {
+          "usable_hits": 3000,
+          "median_coverage": 0.957983193277311,
+          "median_depth": 2982.0,
+          "full_length_fraction": 0.989
+        },
+        "classification": "OK",
+        "conservation_tiers": {
+          "0.3": 71,
+          "0.5": 119,
+          "0.7": 166
+        },
+        "sha256_verified": true
+      },
+      "provenance_evidence": {
+        "dbref": "DBREF 4YQI A 1 246 UNP P43912 TRMD_HAEIN",
+        "dbref_reference": "UniProt P43912, native 범위 1-246",
+        "seqadv_expression_tag": true,
+        "seqadv_range": "-7..0 (GLY LEU VAL PRO ARG GLY SER HIS) 전부 EXPRESSION TAG",
+        "stripped_residues": [
+          {
+            "resseq": -2,
+            "aa3": "GLY"
+          },
+          {
+            "resseq": -1,
+            "aa3": "SER"
+          },
+          {
+            "resseq": 0,
+            "aa3": "HIS"
+          }
+        ],
+        "status": "기탁자가 EXPRESSION TAG 로 명시. 추론이 아니다.",
+        "column_depth_measurable": true,
+        "tag_column_non_gap": [
+          25,
+          73,
+          81
+        ],
+        "n_hits": 3000,
+        "rest_median_non_gap": 2982
+      }
+    },
+    {
+      "domain": "4q68A01",
+      "cohort": "calibration_v2",
+      "length_aa": 228,
+      "raw_query_length": 228,
+      "staged_query_length": 227,
+      "residues_dropped": 1,
+      "dropped_prefix": "G",
+      "superseded_a3m": {
+        "path": "public_data/benchmark/gate0/msa_unstaged_query/4q68A01/result.a3m",
+        "sha256": "59cf288dbb557ee9c396e6195430bf265f7fffb610ae56870db40149fa9d6e52",
+        "bytes": 348147,
+        "hit_count": 1385,
+        "wall_seconds": 3346.2,
+        "quality_medians": {
+          "usable_hits": 1385,
+          "median_coverage": 0.9298245614035088,
+          "median_depth": 1312.0,
+          "full_length_fraction": 0.9436823104693141
+        },
+        "classification": "OK",
+        "conservation_tiers": {
+          "0.3": 68,
+          "0.5": 114,
+          "0.7": 159
+        },
+        "sha256_verified": true
+      },
+      "provenance_evidence": {
+        "dbref": "DBREF 4Q68 A 24 262 UNP A7V5T8",
+        "dbref_reference": "UniProt A7V5T8, native 범위 24-262",
+        "seqadv_expression_tag": true,
+        "seqadv_range": "GLY 0 EXPRESSION TAG",
+        "stripped_residues": [
+          {
+            "resseq": 0,
+            "aa3": "GLY"
+          }
+        ],
+        "status": "기탁자가 EXPRESSION TAG 로 명시. 추론이 아니다.",
+        "column_depth_measurable": true,
+        "tag_column_non_gap": [
+          19
+        ],
+        "n_hits": 1385,
+        "rest_median_non_gap": 1313
+      }
+    }
+  ],
+  "downstream_dependency": {
+    "why_recorded": "이 query 정의를 되돌리면 아래가 조용히 깨진다. 되돌리기 전에 이 항목을 읽어야 한다.",
+    "items": [
+      {
+        "owner": "peer session protein-pipeline-work-45",
+        "what": "S4 conservation-burden feature",
+        "how": "후보의 변이 위치 M_i 와 타겟의 보존 위치 집합 F_tier 를 교집합한다. F_tier 는 MSA query (resolved.targets[].pdb, query_sequence 로 읽음)에서, M_i 는 holdout_targets_pdb/<t>.pdb 를 자체 파서로 읽는다. 두 축이 어긋나면 교집합이 좌표 불일치 위에서 계산되고 **아무 예외도 나지 않는다** - 그냥 잡음을 재게 된다.",
+        "verified": "두 축이 모두 배포 staged 서열로 수렴해 12/12 전체 문자열 일치. peer 가 측정으로 확인했다.",
+        "also_verified": "구/신 query_sequence 를 grid 12 타겟에 나란히 실행해 차이 0 - 이 수정이 그 코호트에는 no-op 임을 논증이 아니라 측정으로 확인했다."
+      }
+    ]
+  },
+  "lesson": "검증 대상이 파이프라인일 때 기대값은 **그 파이프라인의 해당 단계 출력**이어야 하고 '무엇을 해야 하는가' 의 재구성이면 안 된다. 재도출한 기대값은 틀린 oracle 과 함께 틀린다 - 1840 vs 92 near-miss 가 그 경우였다.",
+  "claim_correction": {
+    "what_was_wrong": "처음 기록에 '이들은 cloning artifact 다' 와 '진화적 신호가 없다' 로 적었다. 근거는 서열 접두(HM/GSH/G) 하나뿐이었다. 전자는 construct metadata 확인이 필요하고 후자는 절대명제다.",
+    "specific_attributions_that_were_wrong": [
+      "4yqiA01 의 GSH 를 'GST-cleavage scar' 라고 적었다. SEQRES 는 GLVPRGSHM 이고 LVPR/GS 는 thrombin 자리다. 기전 추정이 틀렸다.",
+      "2jvfA00 의 HM 을 'His-tag remnant' 라고 단정했다. GSHM 패턴과 일치하지만 annotation 이 없고 M 은 native 개시 Met 일 수 있다."
+    ],
+    "what_the_evidence_actually_supports": "3 중 2 (4yqiA01 · 4q68A01)는 기탁자가 SEQADV 에 EXPRESSION TAG 로 명시했고 DBREF 의 UniProt 참조 범위 밖이다 - 추론이 아니라 기탁 annotation 이다. 1 (2jvfA00)은 annotation 이 없고 흔한 tag 잔여물과 일치할 뿐이다.",
+    "absolute_claim_replaced_by_measurement": "'진화적 신호가 없다' 대신, 보존해 둔 태그 포함 A3M 에서 해당 열의 깊이를 쟀다. 4yqiA01 태그 열 25/73/81 of 3000 (0.8-2.7%) vs 나머지 중앙 2982/3000 (99.4%). 4q68A01 19/1385 (1.4%) vs 1313/1385 (94.8%). 2jvfA00 은 hit 1 개라 측정 불가.",
+    "flagged_by": "peer session protein-pipeline-work-6a",
+    "why_it_mattered": "원고에 대기 중이던 문장이라 발표 전에 고치는 편이 싸다."
+  }
+}

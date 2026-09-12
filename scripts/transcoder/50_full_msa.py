@@ -25,6 +25,22 @@ A3M 은 `.gitignore` 에 걸려 있어 저장소에 들어가지 않는다. mani
 **하지 않는 것**: threshold 변경 · 타겟 선정 변경 · tier 변경 · 후보 수 변경 ·
 품질이 나쁜 타겟 골라내기. `usable_hits < 10` 은 동결된 feasibility 결과이고
 실패가 아니다.
+
+## 코호트 (`--cohorts`)
+
+기본값은 동결 v2 의 두 코호트(`calibration_v2` + `confirmatory`, 24 타겟)이고
+**인자를 주지 않은 호출은 그 동작 그대로**다. 동결 v2 흐름이 그 기본값에
+의존하므로 기본값을 바꾸지 않는다.
+
+`--cohorts holdout_grid` 로 2축 게이트 격자 12 타겟을 옵트인으로 돌릴 수 있다.
+그 코호트는 `holdout_targets.json` 의 **`resolved.targets`** 를 읽는다 -
+`selected` 는 동결 전 희망 목록이고 실패한 4 개가 예비로 교체됐으므로, 그것을
+읽으면 라벨 없는 4 개를 가져오고 라벨 있는 4 개를 놓친다.
+
+**`--cohorts` 를 바꿨으면 `--out` 도 반드시 바꿔야 한다.** `--out` 기본값인
+`full_msa_manifest.json` 은 동결된 v2 multisource validation 의 산출물이고 이
+스크립트에게 **읽기 전용**이다. 잊으면 `check_out_path` 가 막는다. 격자용
+manifest 는 `holdout_grid/holdout_msa_manifest.json` 이다.
 """
 
 from __future__ import annotations
@@ -37,6 +53,7 @@ import os
 import subprocess
 import sys
 import threading
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 import time
 from pathlib import Path
@@ -55,6 +72,22 @@ TARGET_DB, MAX_SEQS, THREADS, USE_GPU = "uniref90", 3000, 4, False
 
 COHORTS = (("calibration_v2", "calibration_v2_targets.json"),
            ("confirmatory", "masked_holdout_targets.json"))
+
+#: `--cohorts` 로만 닿는 추가 코호트. `COHORTS` 기본값은 건드리지 않는다 - 동결
+#: v2 흐름(24 타겟)이 그 기본값에 걸려 있으므로, 인자를 주지 않은 호출은 이
+#: 변경 전과 같은 목록·같은 출력이어야 한다.
+OPTIONAL_COHORTS = {"holdout_grid": "holdout_targets.json"}
+
+#: 코호트마다 파일 안의 **어느 목록**을 읽는가. 기본은 `selected` 이고 동결 v2
+#: 두 코호트가 그것을 읽는다.
+#:
+#: `holdout_targets.json` 은 다르다. `selected` 는 동결 전 희망 목록이고, 선정에
+#: 실패한 4 개가 `resolved.rule` 에 따라 같은 stratum 의 reserve 로 교체됐다
+#: (1sh6A02←2jo7A00 · 5xpdA02←1vprA02 · 3f2pA01←2pgsA03 · 5pc8A00←2iayA00).
+#: 실제로 백본이 만들어진 격자는 `resolved.targets` 다. `selected` 를 읽으면 fold
+#: 가 없는 4 개를 가져오고 fold 가 있는 4 개를 놓쳐 코호트의 1/3 이 조용히 빠진다.
+COHORT_TARGET_KEY = {"holdout_grid": ("resolved", "targets")}
+DEFAULT_TARGET_KEY = ("selected",)
 
 
 def run_provenance() -> dict:
@@ -124,11 +157,63 @@ def query_sequence(pdb_path: str) -> str:
     return pilot_mod().query_sequence(pdb_path)
 
 
-def targets() -> list[dict]:
+def resolve_cohorts(spec: str | None) -> tuple[tuple[str, str], ...]:
+    """`--cohorts` 문자열을 (코호트, 파일) 목록으로 바꾼다.
+
+    타겟 선정을 바꾸는 것이 아니다 - 이미 동결된 **다른** 목록을 옵트인으로
+    가리킬 뿐이다. 인자가 없으면 `COHORTS` 를 그대로 돌려준다.
+    """
+    if not spec:
+        return COHORTS
+    known = {**dict(COHORTS), **OPTIONAL_COHORTS}
+    picked = []
+    for name in (x.strip() for x in spec.split(",")):
+        if not name:
+            continue
+        if name not in known:
+            raise SystemExit(f"알 수 없는 코호트 {name!r} · 가능: {sorted(known)}")
+        picked.append((name, known[name]))
+    if not picked:
+        raise SystemExit("--cohorts 가 비어 있다")
+    return tuple(picked)
+
+
+def is_default_run(cohorts: Sequence[tuple[str, str]]) -> bool:
+    """동결 v2 기본 실행인가. **이 판정은 여기 한 곳에만 있다.**
+
+    `--out` 가드와 manifest provenance 가 같은 사실에 걸려 있다. 두 곳에서
+    따로 적으면 한쪽만 느슨해져도 조용히 갈라진다.
+
+    순서까지 본다. 코호트 순서가 바뀌면 manifest 의 타겟 순서가 바뀌므로 동결
+    산출물과 다른 바이트가 된다.
+    """
+    return tuple(cohorts) == COHORTS
+
+
+def check_out_path(out_path: Path, cohorts: tuple[tuple[str, str], ...]) -> None:
+    """기본 코호트가 아니면 동결 v2 manifest 에 쓰지 못하게 막는다.
+
+    `--out` 기본값은 `full_msa_manifest.json` 이고 그것은 동결된 v2 multisource
+    validation 의 산출물이다. `--cohorts` 만 주고 `--out` 을 잊으면 그것을
+    덮어쓴다 - 되돌릴 수 없으므로 코드에서 막는다.
+    """
+    if not is_default_run(cohorts) and out_path.resolve() == OUT.resolve():
+        raise SystemExit(
+            f"{OUT.name} 은 동결된 v2 산출물이라 읽기 전용이다. 기본 코호트를 "
+            f"기본 순서 {[c for c, _ in COHORTS]} 로 돌릴 때만 그 파일에 쓴다 - "
+            f"요청은 {[c for c, _ in cohorts]} 이므로 --out 을 따로 지정해야 한다."
+        )
+
+
+def targets(cohorts: tuple[tuple[str, str], ...] | None = None) -> list[dict]:
+    """인자를 주지 않으면 `COHORTS` 그대로다. 기존 호출의 동작은 바뀌지 않는다."""
     out = []
-    for cohort, fname in COHORTS:
+    for cohort, fname in (cohorts or COHORTS):
         d = json.loads((BASE / fname).read_text(encoding="utf-8"))
-        for t in d["selected"]:
+        node = d
+        for key in COHORT_TARGET_KEY.get(cohort, DEFAULT_TARGET_KEY):
+            node = node[key]
+        for t in node:
             out.append({"cohort": cohort, "domain": t["domain"],
                         "stratum": t["stratum"], "length_aa": t["length"],
                         "pdb": t["pdb"], "superfamily": t["superfamily"]})
@@ -208,6 +293,10 @@ def main() -> int:
     ap.add_argument("--url", default=None)
     ap.add_argument("--out", default=str(OUT))
     ap.add_argument("--only", default=None, help="쉼표로 구분한 도메인 (진단용)")
+    ap.add_argument("--cohorts", default=None,
+                    help="쉼표로 구분한 코호트. 생략하면 동결 기본값 "
+                         f"{[c for c, _ in COHORTS]} · 추가 가능 "
+                         f"{sorted(OPTIONAL_COHORTS)}. 바꾸면 --out 도 바꿔야 한다.")
     ap.add_argument("--workers", type=int, default=1,
                     help="타겟 간 동시 실행 수. per-job 설정은 바뀌지 않는다.")
     args = ap.parse_args()
@@ -219,7 +308,8 @@ def main() -> int:
 
     prov = run_provenance()
     cons_cfg = deployment_defaults()
-    rows = targets()
+    cohorts = resolve_cohorts(args.cohorts)
+    rows = targets(cohorts)
     if args.only:
         keep = {x.strip() for x in args.only.split(",")}
         rows = [r for r in rows if r["domain"] in keep]
@@ -227,6 +317,7 @@ def main() -> int:
     # 이전 실행 기록을 여러 manifest 에서 모은다. probe 와 본 실행이 서로 다른
     # 파일에 쓰므로, 하나만 보면 이미 만든 A3M 을 다시 만든다.
     out_path = Path(args.out)
+    check_out_path(out_path, cohorts)
     prev: dict[str, dict] = {}
     for cand in (BASE / "full_msa_manifest.json",
                  BASE / "msa_probe_concurrency.json", out_path):
@@ -320,7 +411,7 @@ def main() -> int:
     if args.workers <= 1:
         for row in rows:
             results.append(process(row))
-            _write(out_path, results, rows, cons_cfg, prov)
+            _write(out_path, results, rows, cons_cfg, prov, cohorts)
     else:
         # 타겟 간 병렬. per-job 파라미터는 하나도 바뀌지 않는다 - 배포 일치와
         # 결정성에 영향이 없고, 제약은 서버 메모리뿐이다.
@@ -329,19 +420,29 @@ def main() -> int:
             for entry in pool.map(process, rows):
                 results.append(entry)
                 with lock:
-                    _write(out_path, results, rows, cons_cfg, prov)
+                    _write(out_path, results, rows, cons_cfg, prov, cohorts)
 
-    _write(out_path, results, rows, cons_cfg, prov)
+    _write(out_path, results, rows, cons_cfg, prov, cohorts)
     _summary(results)
     print(f"\nwrote {out_path}")
     return 0
 
 
 def _write(out_path: Path, results: list[dict], rows: list[dict],
-           cons_cfg: dict, prov: dict) -> None:
+           cons_cfg: dict, prov: dict,
+           cohorts: tuple[tuple[str, str], ...] = COHORTS) -> None:
     by_class: dict[str, int] = {}
     for e in results:
         by_class[e.get("classification", "?")] = by_class.get(e.get("classification", "?"), 0) + 1
+    # 기본 코호트가 아니면 v2 provenance 를 그대로 찍지 않는다 - 그러면 우리
+    # 산출물이 남의 동결 문서를 가리킨다. 기본 경로에서는 `extra` 가 비어 있어
+    # 출력 바이트가 한 글자도 바뀌지 않는다 (키 순서 포함).
+    extra: dict = {}
+    if not is_default_run(cohorts):
+        names = [c for c, _ in cohorts]
+        extra = {"purpose": f"{names} 코호트의 target 수준 MSA. --cohorts 로 지정됐다.",
+                 "freeze_doc": "docs/specs/2026-09-10-surrogate-rapid-2d-gate-design.md",
+                 "cohorts": names}
     out_path.write_text(json.dumps({
         "purpose": "Step 7 - 24 타겟의 target 수준 MSA. source 마다 다시 돌리지 않는다.",
         "freeze_doc": "docs/specs/rapid-v2-multisource-validation-freeze.md",
@@ -359,6 +460,7 @@ def _write(out_path: Path, results: list[dict], rows: list[dict],
         "run_provenance": prov,
         "code_sha": prov["code_sha"],
         "updated_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        **extra,
     }, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
