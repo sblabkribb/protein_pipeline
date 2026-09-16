@@ -62,6 +62,9 @@ def test_claims_to_user_maps_model_manager_role():
 def test_google_issuer_shorthand_is_detected(monkeypatch):
     monkeypatch.setenv("PIPELINE_OIDC_ISSUER", "google")
     monkeypatch.setenv("PIPELINE_OIDC_CLIENT_ID", "client-id.apps.googleusercontent.com")
+    # app.py 가 import 시점에 load_dotenv() 를 부른다. 서버 로컬 .env 가
+    # PIPELINE_OIDC_PROVIDER_NAME 을 넣어두면 이 테스트가 그걸 물려받는다.
+    monkeypatch.delenv("PIPELINE_OIDC_PROVIDER_NAME", raising=False)
     settings = oidc.load_oidc_settings()
 
     assert settings is not None

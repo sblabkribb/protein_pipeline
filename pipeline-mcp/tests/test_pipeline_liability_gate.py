@@ -94,3 +94,31 @@ def test_liability_gate_passes_cysteine_free_designs(tmp_path, monkeypatch):
         ((out / "tiers" / "50") / "af2_scores.json").read_text(encoding="utf-8")
     )
     assert af2_scores["candidate_ids"]
+
+
+def test_liability_gate_default_records_failures_without_dropping_designs(
+    tmp_path, monkeypatch
+):
+    """기본값(미설정)은 기록 전용이다.
+
+    anjv72_kribb.re.kr_mrna10837 회귀: 미보정 항체 임계값이 전 tier 설계를
+    조용히 전멸시키고 AF2 가 통째로 스킵됐다. 판정은 계속 기록하되 설계는
+    살아남아야 한다.
+    """
+    monkeypatch.delenv("PIPELINE_LIABILITY_GATE", raising=False)
+    fasta = ">q1\nACDEFGHIK\n"  # Cys 1개 -> free_cysteine 임시 상한 0 에 걸린다
+    out = _run(str(tmp_path), fasta, _ca_pdb(["ALA"] * 9))
+
+    tier_dir = out / "tiers" / "50"
+    payload = json.loads((tier_dir / "liabilities.json").read_text(encoding="utf-8"))
+    summary = payload["summary"]
+    # 판정과 근거는 그대로 기록된다.
+    assert summary["enabled"] is True
+    assert summary["evaluated"] > 0
+    assert summary["failed"] == summary["evaluated"]
+    # 하지만 강제하지 않는다.
+    assert summary["enforced"] is False
+    assert summary["mode"] == "record"
+
+    af2_scores = json.loads((tier_dir / "af2_scores.json").read_text(encoding="utf-8"))
+    assert af2_scores["candidate_ids"], "record-only gate must not drop designs"

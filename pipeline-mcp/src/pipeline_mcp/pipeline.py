@@ -9939,6 +9939,8 @@ class PipelineRunner:
                 # 응집/개발가능성 게이트. 서열만 읽는 휴리스틱이라 공짜이고,
                 # soluprot 통과 직후에 한 번 돈다. 임계값은 임시값이므로 리포트에
                 # thresholds 와 calibrated: false 가 함께 기록된다.
+                # 기본은 기록 전용이다 - 판정은 남기되 설계를 버리지 않는다.
+                # 차단은 PIPELINE_LIABILITY_GATE=block 으로 명시적으로 켜야 한다.
                 liability_summary: dict[str, object] | None = None
                 liability_error: str | None = None
                 try:
@@ -9959,7 +9961,7 @@ class PipelineRunner:
                             "sequences": liability_reports,
                         },
                     )
-                    if liability_summary.get("enabled") and liability_summary.get("failed"):
+                    if liability_summary.get("enforced") and liability_summary.get("failed"):
                         failed_ids = {
                             r["id"] for r in liability_reports
                             if r.get("gate", {}).get("passed") is False

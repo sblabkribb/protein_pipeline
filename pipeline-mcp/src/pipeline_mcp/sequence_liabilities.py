@@ -14,7 +14,9 @@ scripts/transcoder/rapid_sr/liabilities.py (논문 재현본) 와 같다. 이 �
 - 모든 리포트에 ``calibrated: false`` 와 실제 쓴 임계값이 기록된다.
 - 임계값은 환경변수로 바꿀 수 있다. 응집 측정 코호트가 생기면 그 코호트로
   다시 정하고 ``calibrated`` 를 true 로 바꾼다.
-- ``PIPELINE_LIABILITY_GATE=0`` 으로 게이트를 끌 수 있다 (기록은 계속 된다).
+- 기본값은 **기록 전용**이다. 판정과 근거는 남기지만 설계를 버리지 않는다.
+  차단은 ``PIPELINE_LIABILITY_GATE=block`` 으로 명시적으로 켜야 한다.
+  ``PIPELINE_LIABILITY_GATE=off`` 면 판정 자체를 내지 않는다.
 """
 
 from __future__ import annotations
@@ -45,11 +47,40 @@ DEFAULT_MAX_FREE_CYS = 0         # free cysteine 개수 상한
 DEFAULT_MAX_NG_DG_MOTIFS = 2     # NG(탈아미드) + DG(이성질화) 모티프 상한
 
 
+#: ``PIPELINE_LIABILITY_GATE`` 가 받는 값. 기본(미설정)은 기록 전용이다.
+_GATE_OFF_VALUES = {"0", "false", "no", "off", "none"}
+_GATE_BLOCK_VALUES = {"1", "true", "yes", "on", "block", "enforce"}
+
+
+def gate_mode() -> str:
+    """``PIPELINE_LIABILITY_GATE`` 로 고른 게이트 모드.
+
+    - ``"record"`` (기본, 미설정): 판정을 내고 기록하지만 설계를 버리지 않는다.
+    - ``"block"``: 탈락 설계를 실제로 제외한다. 명시적으로 켜야만 동작한다.
+    - ``"off"``: 판정 자체를 내지 않는다 (지표만 기록).
+
+    임계값이 미보정(``calibrated: false``)인 동안 기본값은 기록 전용이다.
+    상속받은 항체 임계값이 단량체 효소를 통째로 떨어뜨릴 수 있기 때문에,
+    ThermoMPNN ddG 와 같은 규칙을 따른다 - 미검증 평가자는 기록만 한다.
+    """
+    raw = os.environ.get("PIPELINE_LIABILITY_GATE", "").strip().lower()
+    if not raw:
+        return "record"
+    if raw in _GATE_OFF_VALUES:
+        return "off"
+    if raw in _GATE_BLOCK_VALUES:
+        return "block"
+    return "record"
+
+
+def gate_enforced() -> bool:
+    """탈락 설계를 실제로 제외하는가. 기본은 아니다."""
+    return gate_mode() == "block"
+
+
 def gate_enabled() -> bool:
-    """``PIPELINE_LIABILITY_GATE`` 로 게이트 on/off. 기본은 켜짐(운영 판단)."""
-    return os.environ.get("PIPELINE_LIABILITY_GATE", "1").strip().lower() not in {
-        "0", "false", "no", "off",
-    }
+    """판정을 내는가. ``off`` 가 아니면 낸다 (기록 전용도 판정은 낸다)."""
+    return gate_mode() != "off"
 
 
 def gate_thresholds() -> dict[str, float]:
@@ -163,7 +194,8 @@ def liability_gate_report(sequence: str) -> dict:
     """지표 + (임시) 게이트 판정. 임계값과 근거 상태가 함께 기록된다."""
     report = liability_report(sequence)
     thresholds = gate_thresholds()
-    enabled = gate_enabled()
+    mode = gate_mode()
+    enabled = mode != "off"
     reasons: list[str] = []
 
     patch = report["max_hydrophobic_patch"]
@@ -196,7 +228,10 @@ def liability_gate_report(sequence: str) -> dict:
             "metric_id": METRIC_ID,
             "gate": {
                 "gate_id": GATE_ID,
+                "mode": mode,
                 "enabled": enabled,
+                # 판정을 내는 것과 그 판정으로 설계를 버리는 것은 다른 결정이다.
+                "enforced": mode == "block",
                 "passed": (not reasons) if enabled else None,
                 "reasons": reasons,
                 "thresholds": thresholds,
@@ -233,11 +268,14 @@ def summarize_gate(reports: list[dict]) -> dict:
                 objectives.add("developability")
         for key in objectives:
             by_objective[key] += 1
+    first_gate = evaluated[0].get("gate", {}) if evaluated else {}
     return {
         "gate_id": GATE_ID,
         "evaluated": len(evaluated),
         "failed": len(failed),
         "failed_by_objective": by_objective,
-        "enabled": bool(evaluated and evaluated[0].get("gate", {}).get("enabled")),
+        "mode": str(first_gate.get("mode") or gate_mode()),
+        "enabled": bool(evaluated and first_gate.get("enabled")),
+        "enforced": bool(evaluated and first_gate.get("enforced")),
         "calibrated": False,
     }

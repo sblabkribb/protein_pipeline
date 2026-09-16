@@ -55,7 +55,7 @@ def _clean_env(monkeypatch):
     monkeypatch.delenv("PIPELINE_DEVELOPABILITY_GATE_MAX_NG_DG_MOTIFS", raising=False)
 
 
-def test_gate_is_on_by_default_and_reports_calibrated_false():
+def test_gate_judges_by_default_and_reports_calibrated_false():
     report = sl.liability_gate_report("GALVFA")
     gate = report["gate"]
     assert gate["enabled"] is True
@@ -128,3 +128,56 @@ def test_repro_copy_matches_package_computation():
         assert sl.motif_counts(seq) == copy.motif_counts(seq)
         assert sl.liability_report(seq)["calibrated"] is False
         assert copy.liability_report(seq)["calibrated"] is False
+
+
+# --- 강제(enforce) 여부 -------------------------------------------------------
+
+def test_gate_defaults_to_record_only_and_still_judges():
+    """기본값은 기록 전용이다. 판정은 내되 설계를 버리지 않는다."""
+    report = sl.liability_gate_report("GALVFA")
+    gate = report["gate"]
+    assert gate["mode"] == "record"
+    assert gate["enforced"] is False
+    # 기록 전용이어도 판정과 근거는 그대로 남는다.
+    assert gate["enabled"] is True
+    assert gate["passed"] is False
+    assert gate["reasons"]
+
+
+def test_gate_blocks_only_when_explicitly_enabled(monkeypatch):
+    monkeypatch.setenv("PIPELINE_LIABILITY_GATE", "block")
+    gate = sl.liability_gate_report("GALVFA")["gate"]
+    assert gate["mode"] == "block"
+    assert gate["enforced"] is True
+    assert gate["passed"] is False
+
+
+def test_gate_legacy_truthy_value_still_blocks(monkeypatch):
+    """기존 배포가 쓰던 PIPELINE_LIABILITY_GATE=1 은 계속 차단이다."""
+    monkeypatch.setenv("PIPELINE_LIABILITY_GATE", "1")
+    gate = sl.liability_gate_report("GALVFA")["gate"]
+    assert gate["mode"] == "block"
+    assert gate["enforced"] is True
+
+
+def test_gate_off_records_no_verdict():
+    """off 는 판정 자체를 내지 않는다 (기록 전용과 구분된다)."""
+    import os
+    os.environ["PIPELINE_LIABILITY_GATE"] = "off"
+    try:
+        gate = sl.liability_gate_report("GALVFA")["gate"]
+    finally:
+        del os.environ["PIPELINE_LIABILITY_GATE"]
+    assert gate["mode"] == "off"
+    assert gate["enforced"] is False
+    assert gate["enabled"] is False
+    assert gate["passed"] is None
+
+
+def test_summarize_gate_carries_enforcement_mode():
+    reports = [sl.liability_gate_report("GALVFA")]
+    summary = sl.summarize_gate(reports)
+    assert summary["mode"] == "record"
+    assert summary["enforced"] is False
+    # 기록 전용이어도 탈락 집계는 남아야 캘리브레이션에 쓸 수 있다.
+    assert summary["failed"] == 1
