@@ -9985,6 +9985,24 @@ class PipelineRunner:
                         {"summary": liability_summary, "sequences": []},
                     )
 
+                # 게이트가 판정을 내렸으면 그게 패널에 보여야 한다. 기록 전용이라
+                # 설계가 살아남더라도, 무엇이 몇 개 걸렸는지는 눈에 띄어야 한다.
+                if liability_summary is not None:
+                    if liability_error:
+                        liability_detail = "gate error"
+                    else:
+                        liability_detail = (
+                            f"mode={liability_summary.get('mode')} "
+                            f"failed {liability_summary.get('failed')}"
+                            f"/{liability_summary.get('evaluated')} "
+                            f"({'dropped' if liability_summary.get('enforced') else 'recorded only'})"
+                        )
+                    _emit_panel(
+                        f"liabilities_{tier_str}",
+                        detail=liability_detail,
+                        error=liability_error,
+                    )
+
                 # 안정성 게이트(선택). 백본 구조 + 변이 목록으로 ΔΔG를 예측해 임계값
                 # 초과 설계를 AF2 앞에서 걸러낸다. 미검증 평가자다 — 켜야만 동작하고,
                 # 도구 실패는 설계 실패가 아니라 보류(통과)로 기록한다.
@@ -11417,6 +11435,19 @@ class PipelineRunner:
                         detail=("recovered" if af2_recovered else None),
                         error=af2_error,
                         recovery=af2_recovery,
+                    )
+                else:
+                    # 후보가 0이면 AF2/relax/novelty 가 통째로 건너뛰어진다.
+                    # 그걸 조용히 넘기면 run 은 성공처럼 done 으로 끝난다.
+                    # 무엇이 남지 않았는지 errors 와 패널 양쪽에 남긴다.
+                    entered = len(samples or [])
+                    no_candidates = (
+                        f"af2_{tier_str}: no candidates - "
+                        f"0/{entered} designs reached AF2"
+                    )
+                    errors.append(no_candidates)
+                    _emit_panel(
+                        f"af2_{tier_str}", detail=f"skipped: {no_candidates}"
                     )
 
                 relax_gate_ids = {

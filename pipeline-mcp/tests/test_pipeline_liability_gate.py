@@ -16,7 +16,18 @@ def _ca_pdb(resnames: list[str]) -> str:
     return "\n".join(lines + ["END"]) + "\n"
 
 
-def _run(tmp: str, fasta: str, pdb: str) -> Path:
+def _panel_events(out: Path) -> list[dict]:
+    path = out / "agent_panel.jsonl"
+    if not path.exists():
+        return []
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def _run(tmp: str, fasta: str, pdb: str, *, allow_errors: bool = False) -> Path:
     runner = PipelineRunner(
         output_root=tmp, mmseqs=None, proteinmpnn=None, soluprot=None, af2=None
     )
@@ -28,8 +39,14 @@ def _run(tmp: str, fasta: str, pdb: str) -> Path:
         selected_tiers=[0.5],
     )
     result = runner.run(request)
-    assert result.errors == [], result.errors
+    if not allow_errors:
+        assert result.errors == [], result.errors
+    _LAST_ERRORS.clear()
+    _LAST_ERRORS.extend(result.errors)
     return Path(result.output_dir)
+
+
+_LAST_ERRORS: list[str] = []
 
 
 def test_liability_gate_writes_artifacts_and_drops_failing_designs(tmp_path, monkeypatch):
@@ -37,7 +54,9 @@ def test_liability_gate_writes_artifacts_and_drops_failing_designs(tmp_path, mon
     # dry-run 합성 설계는 타겟 서열을 물려받는다. Cys 1개면 free_cysteine
     # 게이트(임시 상한 0)에 걸려 탈락한다.
     fasta = ">q1\nACDEFGHIK\n"
-    out = _run(str(tmp_path), fasta, _ca_pdb(["ALA"] * 9))
+    # 차단 모드에서 전부 탈락하면 AF2 후보가 0이 된다. 그건 이제 errors 에 남는다.
+    out = _run(str(tmp_path), fasta, _ca_pdb(["ALA"] * 9), allow_errors=True)
+    assert any("no candidates" in e for e in _LAST_ERRORS), _LAST_ERRORS
 
     tier_dir = out / "tiers" / "50"
     payload = json.loads((tier_dir / "liabilities.json").read_text(encoding="utf-8"))
@@ -122,3 +141,39 @@ def test_liability_gate_default_records_failures_without_dropping_designs(
 
     af2_scores = json.loads((tier_dir / "af2_scores.json").read_text(encoding="utf-8"))
     assert af2_scores["candidate_ids"], "record-only gate must not drop designs"
+
+
+def test_liability_gate_is_visible_in_the_agent_panel(tmp_path, monkeypatch):
+    """게이트가 판정을 내렸으면 패널에 그 사실이 보여야 한다."""
+    monkeypatch.delenv("PIPELINE_LIABILITY_GATE", raising=False)
+    fasta = ">q1\nACDEFGHIK\n"
+    out = _run(str(tmp_path), fasta, _ca_pdb(["ALA"] * 9))
+
+    stages = [e.get("stage") for e in _panel_events(out)]
+    assert "liabilities_50" in stages, f"gate missing from panel: {stages}"
+
+    entry = next(e for e in _panel_events(out) if e.get("stage") == "liabilities_50")
+    detail = entry.get("detail") or ""
+    assert "record" in detail, detail
+    # 몇 개가 걸렸는지가 detail 에 있어야 눈에 띈다.
+    assert "failed" in detail, detail
+
+
+def test_empty_af2_pool_is_reported_instead_of_silently_done(tmp_path, monkeypatch):
+    """anjv72_kribb.re.kr_mrna10837 회귀: 후보가 0이면 조용히 넘어가면 안 된다.
+
+    AF2 에 넘길 설계가 하나도 없으면 errors 와 패널 양쪽에 남아야 한다.
+    """
+    monkeypatch.setenv("PIPELINE_LIABILITY_GATE", "block")
+    fasta = ">q1\nACDEFGHIK\n"
+    out = _run(str(tmp_path), fasta, _ca_pdb(["ALA"] * 9), allow_errors=True)
+
+    joined = " | ".join(_LAST_ERRORS)
+    assert "af2_50" in joined, f"empty AF2 pool not in errors: {_LAST_ERRORS}"
+    assert "no candidates" in joined, joined
+
+    entry = next(
+        (e for e in _panel_events(out) if e.get("stage") == "af2_50"), None
+    )
+    assert entry is not None, "skipped AF2 stage missing from panel"
+    assert "skipped" in (entry.get("detail") or ""), entry.get("detail")
