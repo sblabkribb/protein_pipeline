@@ -105,6 +105,21 @@ def fixed_positions(
     return out
 
 
+def distinct_score_count(scores: list[float]) -> int:
+    """보존도 값의 서로 다른 개수. 프로필에 정보가 있는지를 세는 것이다."""
+    return len({float(x) for x in scores})
+
+
+def conservation_is_degenerate(scores: list[float]) -> bool:
+    """모든 위치가 같은 점수인가.
+
+    서열 하나뿐인 MSA 는 모든 위치를 100% 보존으로 만든다. 그러면 quantile
+    분할이 동점 처리로 앞에서부터 잘려, tier 가 보존도와 무관한 N-말단 연속
+    구간이 된다. 값이 비어 있으면 판정할 게 없으므로 퇴화로 보지 않는다.
+    """
+    return len(scores) > 0 and distinct_score_count(scores) < 2
+
+
 def compute_conservation(
     a3m_text: str,
     *,

@@ -33,6 +33,8 @@ from .af2_utils import af2_payload_has_missing_pdb_failure
 from .agent_panel import emit_agent_panel_event
 from .agent_panel import write_agent_panel_report
 from .bio.a3m import compute_conservation
+from .bio.a3m import conservation_is_degenerate
+from .bio.a3m import distinct_score_count
 from .bio.a3m import decode_a3m_gz_b64
 from .bio.a3m import filter_a3m
 from .bio.a3m import msa_quality
@@ -4339,6 +4341,21 @@ class PipelineRunner:
                     "request_hash": conservation_request_hash,
                     "filtered_a3m_sha256": _sha256_text(filtered_a3m_text),
                 }
+                # 보존도 프로필에 정보가 없으면 tier 분할이 보존도와 무관해진다.
+                # (동점이라 앞에서부터 잘려 N-말단 연속 구간이 된다.) 조용히
+                # 넘기면 run 은 성공으로 끝나므로 artifact 와 errors 양쪽에 남긴다.
+                _distinct = distinct_score_count(conservation.scores)
+                _degenerate = conservation_is_degenerate(conservation.scores)
+                conservation_payload["distinct_scores"] = _distinct
+                conservation_payload["degenerate"] = _degenerate
+                if _degenerate:
+                    errors.append(
+                        f"conservation: profile is flat "
+                        f"({_distinct} distinct score over "
+                        f"{conservation.query_length} positions) - the tier split "
+                        f"carries no conservation signal and falls back to an "
+                        f"N-terminal block; check msa/quality.json usable_hits"
+                    )
                 conservation_path = str(paths.root / "conservation.json")
                 write_json(Path(conservation_path), conservation_payload)
                 set_status(paths, stage="conservation", state="completed")
@@ -4433,6 +4450,21 @@ class PipelineRunner:
                     "filtered_a3m_sha256": _sha256_text(fallback_a3m),
                     "recovery": {"reason": reason, "fallback": True},
                 }
+                # 보존도 프로필에 정보가 없으면 tier 분할이 보존도와 무관해진다.
+                # (동점이라 앞에서부터 잘려 N-말단 연속 구간이 된다.) 조용히
+                # 넘기면 run 은 성공으로 끝나므로 artifact 와 errors 양쪽에 남긴다.
+                _distinct = distinct_score_count(conservation.scores)
+                _degenerate = conservation_is_degenerate(conservation.scores)
+                conservation_payload["distinct_scores"] = _distinct
+                conservation_payload["degenerate"] = _degenerate
+                if _degenerate:
+                    errors.append(
+                        f"conservation: profile is flat "
+                        f"({_distinct} distinct score over "
+                        f"{conservation.query_length} positions) - the tier split "
+                        f"carries no conservation signal and falls back to an "
+                        f"N-terminal block; check msa/quality.json usable_hits"
+                    )
                 conservation_path = str(paths.root / "conservation.json")
                 write_json(Path(conservation_path), conservation_payload)
                 set_status(

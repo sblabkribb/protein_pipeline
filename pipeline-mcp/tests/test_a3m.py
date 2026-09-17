@@ -82,3 +82,27 @@ ACKE
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# --- 보존도 정보량 --------------------------------------------------------------
+
+def test_distinct_score_count_spots_a_flat_profile():
+    from pipeline_mcp.bio.a3m import distinct_score_count
+
+    assert distinct_score_count([1.0, 1.0, 1.0]) == 1
+    assert distinct_score_count([1.0, 0.5, 1.0]) == 2
+    assert distinct_score_count([]) == 0
+
+
+def test_query_only_msa_gives_a_degenerate_profile():
+    """서열 하나뿐인 MSA 는 모든 위치를 100% 보존으로 만든다.
+
+    그러면 tier 분할이 동점 처리로 앞에서부터 잘려 보존도와 무관한 N-말단
+    구간이 된다. anjv72_kribb.re.kr_mrna10837 에서 실제로 그렇게 됐다.
+    """
+    from pipeline_mcp.bio.a3m import conservation_is_degenerate
+
+    assert conservation_is_degenerate([1.0] * 439) is True
+    assert conservation_is_degenerate([1.0, 0.4, 0.9]) is False
+    # 비어 있으면 판정할 게 없다 - 퇴화로 부르지 않는다.
+    assert conservation_is_degenerate([]) is False
