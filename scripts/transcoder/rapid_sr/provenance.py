@@ -98,7 +98,55 @@ METRIC_STATUS = {
             "기대고 있다. 포화 진단과 expand_backbones 판정도 그 위에서 나왔다."
         ),
         "still_valid": ["soluprot 연속 endpoint", "pLDDT 연속 endpoint"],
-        "replaced_by": "corrected metric 으로 재계산 후 다시 생성",
+        "replaced_by": "temperature_sweep/af2_analysis_order.json",
+    },
+    # --- 유효: 고친 대응으로 다시 잰 것 ----------------------------------
+    "temperature_sweep/af2_order_metric.csv": {
+        "status": "valid",
+        "correspondence": VALID_CORRESPONDENCE,
+        "reason": (
+            "동결된 지표로 480 폴드를 다시 접었다(status ok 480/480, 결측 0, "
+            "correspondence 전부 file_order). 모델 PDB 를 남겼으므로 지표가 또 "
+            "바뀌어도 다시 접지 않는다."
+        ),
+        "still_valid": [
+            "rmsd_nonloop_order", "rmsd_all_ca_order", "plddt", "soluprot",
+        ],
+        "supersedes": [
+            "temperature_sweep/af2_stage1.csv",
+            "temperature_sweep/af2_stage1_rmsd_fixed.csv",
+        ],
+    },
+    "temperature_panel2/af2_order_metric.csv": {
+        "status": "valid",
+        "correspondence": VALID_CORRESPONDENCE,
+        "reason": (
+            "동결된 지표로 832 폴드를 다시 접었다(status ok 832/832, 결측 0). "
+            "백본 26 개, 타겟 10 개, T 4 수준."
+        ),
+        "still_valid": [
+            "rmsd_nonloop_order", "rmsd_all_ca_order", "plddt", "soluprot",
+        ],
+        "supersedes": ["temperature_panel2/af2_stage1.csv"],
+    },
+    "temperature_sweep/af2_analysis_order.json": {
+        "status": "valid",
+        "correspondence": VALID_CORRESPONDENCE,
+        "reason": (
+            "panel1_unfiltered. 정보 클러스터가 4/15 뿐이라 primary 판정은 "
+            "expand_backbones 다. 이 패널 단독으로는 온도 결론을 내리지 않는다."
+        ),
+        "still_valid": ["structural_yield", "joint_yield", "soluprot", "plddt"],
+    },
+    "temperature_panel2/af2_analysis_order.json": {
+        "status": "valid",
+        "correspondence": VALID_CORRESPONDENCE,
+        "reason": (
+            "panel2_informative. 중간-yield 영역의 conditional effect 이며 전체 "
+            "백본 population 의 평균이 아니다. bioemu(백본 4개)는 탐색적이다."
+        ),
+        "still_valid": ["structural_yield", "joint_yield", "soluprot", "plddt"],
+        "scope": "mid-yield backbones only (baseline joint/structural yield 0<y<1)",
     },
     # --- 일부 유효 -----------------------------------------------------
     "temperature_sweep/af2_rerun_reproducibility.json": {

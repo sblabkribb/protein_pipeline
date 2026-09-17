@@ -1,0 +1,58 @@
+{
+  "purpose": "동결된 sequence-order 지표로 온도 패널 재계산",
+  "metric": {
+    "primary": "rmsd_nonloop_order",
+    "correspondence": "folded-sequence order (X placeholders resolved per fold)",
+    "mask": "reference DSSP non-loop, applied by sequence index",
+    "superposition": "kabsch_ca",
+    "cutoff_angstrom": 2.0,
+    "cutoff_provenance": "pipeline 기본값 af2_rmsd_cutoff=2.0 (2026-01-28), 게이트 0 와 온도 패널보다 앞선다. 잘못된 resnum 매칭 결과에서 정한 값이 아니다. 다만 내부 보정 근거가 있는 값도 아닌 관례값이며, 이 패널에서 새로 최적화하지 않는다."
+  },
+  "af2_settings": {
+    "model_preset": "monomer",
+    "db_preset": "full_dbs",
+    "max_template_date": "2020-05-14",
+    "extra_flags": null,
+    "reproducibility_reference": "af2_reproducibility.json: 같은 서열 재실행의 |delta pLDDT| 평균 0.006, 최대 0.011 (n=3). 타겟 내부 SD 0.556 대비 무시할 수준이지만 n 이 작다."
+  },
+  "af2_not_controlled": [
+    "random seed (ColabFold worker owns it)",
+    "num_recycles",
+    "MSA pipeline version and database snapshot"
+  ],
+  "code_sha": "e89bb144c844f72829f8146f008ae3974426b1b6",
+  "started_utc": "2026-09-08T21:00:21Z",
+  "panels": [
+    {
+      "panel": "panel1",
+      "n": 480,
+      "ok": 480,
+      "csv": "public_data/benchmark/gate0/temperature_sweep/af2_order_metric.csv",
+      "record_provenance": "panel1 은 panel2 보다 먼저 별도 실행되었고 두 번째 실행이 이 manifest 를 덮어써서 원래 기록이 남지 않았다. 여기 수치는 CSV 에서 다시 센 것이다. panel1 실행 당시의 code_sha 와 실행 시각은 복구할 수 없다.",
+      "csv_mtime_utc": "2026-09-07T06:26Z (파일 mtime, 실행 종료 시각의 근사)",
+      "csv_sha256": "b9c3feca024094f5cf9ee31cfda0f400085c19c583501ab7f7950060ac793958"
+    },
+    {
+      "panel": "panel2",
+      "n": 832,
+      "ok": 832,
+      "csv": "public_data/benchmark/gate0/temperature_panel2/af2_order_metric.csv",
+      "csv_sha256": "d5e972e87855ca3079e60d1403bd2200709fa83e809bcb6d34178d7fbfda1823"
+    }
+  ],
+  "finished_utc": "2026-09-08T21:08:29Z",
+  "manifest_note": "panels 는 패널마다 한 번씩 실행된 결과를 합친 것이다. code_sha/started_utc/finished_utc 는 마지막 실행(panel2)의 값이다.",
+  "analysis": {
+    "panel1": {
+      "out": "public_data/benchmark/gate0/temperature_sweep/af2_analysis_order.json",
+      "cluster_unit": "backbone_key",
+      "verdict": "expand_backbones"
+    },
+    "panel2": {
+      "out": "public_data/benchmark/gate0/temperature_panel2/af2_analysis_order.json",
+      "cluster_unit": "target_id",
+      "verdict": "add_second_half",
+      "scope": "mid-yield conditional effect, not a population average"
+    }
+  }
+}

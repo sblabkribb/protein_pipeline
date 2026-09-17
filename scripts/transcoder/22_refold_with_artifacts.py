@@ -248,9 +248,34 @@ def main(argv=None) -> int:
             client=client, labels=labels, pdb_dir=pdb_dir, workers=args.workers))
 
     manifest["finished_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    (BASE / "refold_manifest.json").write_text(
+
+    # --only 로 패널마다 따로 돌리면 통째로 덮어쓰게 되어 앞선 패널의 기록이
+    # 사라진다. 한 번 그렇게 잃었으므로, 같은 패널만 갈아끼우고 나머지는 남긴다.
+    manifest_path = BASE / "refold_manifest.json"
+    if manifest_path.exists():
+        try:
+            prior = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            prior = None
+        if isinstance(prior, dict) and isinstance(prior.get("panels"), list):
+            fresh = {p.get("panel") for p in manifest["panels"]}
+            kept = [p for p in prior["panels"] if p.get("panel") not in fresh]
+            if kept:
+                manifest["panels"] = kept + manifest["panels"]
+                manifest["runs"] = (prior.get("runs") or []) + [{
+                    "panels": sorted(fresh),
+                    "code_sha": manifest["code_sha"],
+                    "started_utc": manifest["started_utc"],
+                    "finished_utc": manifest["finished_utc"],
+                }]
+                manifest["manifest_note"] = (
+                    "panels 는 여러 실행을 합친 것이다. 최상위 code_sha 와 시각은 "
+                    "마지막 실행의 값이고, 실행별 값은 runs 에 있다."
+                )
+
+    manifest_path.write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"\nwrote {BASE / 'refold_manifest.json'}")
+    print(f"\nwrote {manifest_path}")
     return 0
 
 
