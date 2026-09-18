@@ -81,6 +81,8 @@ TOP_K = 20
 BUDGET_GRID = [30, 40, 50, 60, 80, 100, 120]
 N_BOOTSTRAP = 2000
 BOOT_SEED = 20260918
+#: 학습 집합 선택 전략. 원본과 같다.
+SELECTION_STRATEGY = "kmeans"
 
 
 # ------------------------------------------------------------------ 입력
@@ -137,14 +139,29 @@ def embeddings_for(rows: list[dict], url: str) -> np.ndarray:
 
 # ------------------------------------------- A. joint-pass 전이 시험
 
-def fit_rank(X, y, tr, te, seed):
-    """원본과 같은 RF 규격. 라벨이 무엇이든 같은 절차를 쓴다."""
-    from sklearn.ensemble import RandomForestRegressor
-    model = RandomForestRegressor(n_estimators=100, random_state=seed, n_jobs=1)
+def fit_rank(X, y, tr, te, seed, *, estimator="RF"):
+    """원본과 같은 규격. 라벨이 무엇이든 같은 절차를 쓴다.
+
+    Ridge 는 `02_model_comparison.needs_scaling` 이 True 로 두는 모델이므로
+    원본과 같게 표준화를 붙인다. RF 는 붙이지 않는다.
+    """
+    Xtr, Xte = X[tr], X[te]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        model.fit(X[tr], y[tr])
-        return model.predict(X[te])
+        if estimator == "Ridge":
+            from sklearn.linear_model import Ridge
+            from sklearn.preprocessing import StandardScaler
+            sc = StandardScaler().fit(Xtr)
+            Xtr, Xte = sc.transform(Xtr), sc.transform(Xte)
+            model = Ridge(alpha=1.0, random_state=seed)
+        elif estimator == "RF":
+            from sklearn.ensemble import RandomForestRegressor
+            model = RandomForestRegressor(n_estimators=100, random_state=seed,
+                                          n_jobs=1)
+        else:
+            raise ValueError(estimator)
+        model.fit(Xtr, y[tr])
+        return model.predict(Xte)
 
 
 def topk_recall(y_true, y_pred, k) -> float:
@@ -174,7 +191,7 @@ def transfer_test(rows, emb, label, *, n_train=N_TRAIN, k=TOP_K) -> dict:
         X = emb[idx]
         sel, rnd, orc, rec = [], [], [], []
         for seed in SEEDS:
-            tr = select_train_indices(X, n_train, seed, "kmeans")
+            tr = select_train_indices(X, n_train, seed, SELECTION_STRATEGY)
             te = np.setdiff1d(np.arange(len(idx)), tr)
             if len(te) < k:
                 continue
@@ -257,7 +274,7 @@ def budget_matched(rows, emb, label, *, budgets=BUDGET_GRID,
                 continue
             tri, ran, orc = [], [], []
             for seed in SEEDS:
-                tr = select_train_indices(X, n_train, seed, "kmeans")
+                tr = select_train_indices(X, n_train, seed, SELECTION_STRATEGY)
                 te = np.setdiff1d(np.arange(len(idx)), tr)
                 extra = B - n_train
                 if extra > len(te):
@@ -312,6 +329,124 @@ def budget_matched(rows, emb, label, *, budgets=BUDGET_GRID,
             "by_budget": out, "per_target": per_target}
 
 
+# ------------------------------------------- C. 실용 기준선 비교
+
+def load_mpnn() -> dict[str, float]:
+    """ProteinMPNN 점수. **라벨이 0 건 필요한 기준선**이다.
+
+    산출물의 `definition` 이 "per-residue mean NLL ... Lower is better" 라고
+    적고 있다. 따라서 선택은 오름차순이다. 내림차순으로 고르면 가장 나쁜 후보를
+    뽑아 기준선이 무작위보다 낮게 나온다 - 실제로 한 번 그렇게 틀렸다.
+    """
+    raw = json.loads((GRID / "mpnn_scores.json").read_text(encoding="utf-8"))
+    src = raw.get("scores", raw)
+    return {k: float(v) for k, v in src.items()
+            if isinstance(v, (int, float))}
+
+
+def baselines_budget(rows, emb, label, mpnn, *, budgets=BUDGET_GRID,
+                     n_train=N_TRAIN) -> dict:
+    """같은 후보 풀·같은 총예산에서 실용 기준선들을 비교한다.
+
+    질문은 "RF 가 최고인가" 가 아니라 **"추가 라벨 비용을 감수할 만한 선별
+    이점이 있는가"** 다. 그래서 비대칭을 그대로 둔다::
+
+        RF / Ridge     probe 30 건을 써야 한다 (라벨 비용 있음)
+        MPNN 점수      라벨 0 건. 총예산 B 를 전부 선택에 쓸 수 있다
+        무작위         라벨 0 건
+
+    같은 B 에서 얻은 통과 후보 수로 비교하면 라벨 비용이 자동으로 회계에 들어
+    간다. MPNN 기준선이 이기면 "싼 라벨 없는 점수로 충분하다" 는 뜻이고, 그것이
+    이 비교의 요점이다.
+    """
+    from _selection import select_train_indices
+
+    idx_by_target = collections.defaultdict(list)
+    for i, r in enumerate(rows):
+        idx_by_target[r["target_id"]].append(i)
+
+    policies = ["rf_probe", "ridge_probe", "mpnn_score", "random", "oracle"]
+    per_target = {}
+    for target, idx in sorted(idx_by_target.items()):
+        idx = np.array(idx)
+        y = np.array([rows[i][label] for i in idx], dtype=float)
+        if y.min() == y.max():
+            per_target[target] = {"informative": False}
+            continue
+        X = emb[idx]
+        m = np.array([mpnn.get(rows[i]["sequence_id"], np.nan) for i in idx])
+        if np.isnan(m).any():
+            per_target[target] = {"informative": False, "reason": "MPNN 점수 결측"}
+            continue
+        by_b = {}
+        for B in budgets:
+            got = {p: [] for p in policies}
+            for seed in SEEDS:
+                # 라벨 없는 정책: 총예산 B 를 전부 선택에 쓴다.
+                # MPNN score 는 per-residue mean NLL 이고 **낮을수록 좋다**
+                # (mpnn_scores.json 의 definition 필드). 오름차순으로 고른다.
+                got["mpnn_score"].append(
+                    float(y[np.argsort(m)[:B]].sum()))
+                rng = np.random.default_rng(seed)
+                got["random"].append(
+                    float(y[rng.choice(len(y), size=B, replace=False)].sum()))
+                got["oracle"].append(float(np.sort(y)[::-1][:B].sum()))
+                # 라벨 쓰는 정책: probe 30 을 먼저 지출한다.
+                if B < n_train:
+                    continue
+                tr = select_train_indices(X, n_train, seed, SELECTION_STRATEGY)
+                te = np.setdiff1d(np.arange(len(idx)), tr)
+                extra = B - n_train
+                if extra > len(te):
+                    continue
+                base = float(y[tr].sum())
+                for pol, est in (("rf_probe", "RF"), ("ridge_probe", "Ridge")):
+                    if extra == 0:
+                        got[pol].append(base)
+                        continue
+                    pred = fit_rank(X, y, tr, te, seed, estimator=est)
+                    top = np.argsort(pred)[::-1][:extra]
+                    got[pol].append(base + float(y[te][top].sum()))
+            by_b[str(B)] = {p: statistics.mean(v) for p, v in got.items() if v}
+        per_target[target] = {"informative": True, "by_budget": by_b}
+
+    info = {t: v for t, v in per_target.items() if v.get("informative")}
+    names = sorted(info)
+    rng = np.random.default_rng(BOOT_SEED ^ 0xBA5E)
+    boots = [[names[int(rng.integers(len(names)))] for _ in names]
+             for _ in range(N_BOOTSTRAP)]
+    out = {}
+    for B in budgets:
+        key = str(B)
+        have = [t for t in names if key in info[t]["by_budget"]
+                and all(p in info[t]["by_budget"][key] for p in policies)]
+        if len(have) < 2:
+            continue
+
+        def agg(ts, p):
+            return statistics.mean(info[t]["by_budget"][key][p] for t in ts)
+
+        entry = {"n_targets": len(have),
+                 "point": {p: agg(have, p) for p in policies},
+                 "paired_vs": {}}
+        # 쌍대 차이. 같은 재표집 표본 안에서 계산한다.
+        for a, b in (("rf_probe", "random"), ("rf_probe", "mpnn_score"),
+                     ("rf_probe", "ridge_probe"), ("mpnn_score", "random"),
+                     ("ridge_probe", "random")):
+            draws = sorted(agg(x, a) - agg(x, b) for x in boots)
+            lo = draws[int(0.025 * len(draws))]
+            hi = draws[min(len(draws) - 1, int(0.975 * len(draws)))]
+            entry["paired_vs"][f"{a}-{b}"] = {
+                "delta": agg(have, a) - agg(have, b), "ci95": [lo, hi],
+                "excludes_zero": bool(lo > 0 or hi < 0)}
+        out[key] = entry
+    return {"label": label, "policies": policies, "n_informative": len(info),
+            "by_budget": out, "per_target": per_target,
+            "asymmetry_note": ("MPNN 점수와 무작위는 라벨이 0 건 필요하고 RF/Ridge 는 "
+                               "probe 30 건을 쓴다. 같은 총예산에서 비교하므로 그 "
+                               "비용이 회계에 들어간다.")}
+
+
 # ---------------------------------------------------------------- main
 
 def main(argv=None) -> int:
@@ -319,6 +454,8 @@ def main(argv=None) -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--esm-url", default="")
     ap.add_argument("--labels", default="joint_pass,structural_pass,plddt")
+    ap.add_argument("--baselines", action="store_true",
+                    help="C. 실용 기준선 비교 (RF/Ridge/MPNN 점수/무작위)")
     ap.add_argument("--out", default=str(OUT_DIR / "fewshot_jointpass_transfer.json"))
     args = ap.parse_args(argv)
 
@@ -378,6 +515,27 @@ def main(argv=None) -> int:
                   f"{v['random_same_budget']:10.2f} {v['oracle_same_budget']:8.2f} "
                   f"{v['difference']:+9.2f}  [{v['ci95'][0]:+.2f}, "
                   f"{v['ci95'][1]:+.2f}] {mark}")
+
+    if args.baselines:
+        mpnn = load_mpnn()
+        lab = "joint_pass"
+        print(f"\n[C] 실용 기준선 비교 · label={lab} (MPNN 점수는 라벨 0 건)",
+              flush=True)
+        out["baselines"] = baselines_budget(rows, emb, lab, mpnn)
+        bb = out["baselines"]["by_budget"]
+        pols = out["baselines"]["policies"]
+        print("  " + f"{'B':>5}" + "".join(f"{p:>13}" for p in pols))
+        for B, v in bb.items():
+            print("  " + f"{B:>5}" + "".join(f"{v['point'][p]:13.2f}" for p in pols))
+        print("\n  쌍대 차이 (같은 재표집 표본)")
+        for B in ("40", "60", "80", "100"):
+            if B not in bb:
+                continue
+            print(f"   B={B}")
+            for k, s in bb[B]["paired_vs"].items():
+                mark = "0 제외" if s["excludes_zero"] else "0 포함 → 구별 안 됨"
+                print(f"     {k:26s} {s['delta']:+7.2f} "
+                      f"[{s['ci95'][0]:+6.2f}, {s['ci95'][1]:+6.2f}]  {mark}")
 
     text = json.dumps(out, ensure_ascii=False, indent=1)
     Path(args.out).write_text(text, encoding="utf-8")

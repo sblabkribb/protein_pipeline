@@ -1,0 +1,30 @@
+{
+ "artifact": "rapid_v2_generation_error_retry_record",
+ "utc": "2026-09-18T04:27:44Z",
+ "rule": "generation_error(실행 실패)인 unit 에만, 그리고 사전등록된 MAX_RUN_ATTEMPTS=2 를 아직 다 쓰지 않은 unit 에만 재실행을 준다. 상한을 올리지 않는다. SOURCE_GENERATION_INFEASIBLE 과 shortfall 은 재실행하지 않는다 - 그것은 동결 게이트의 결과다.",
+ "why_not_selective": "실패한 unit 에만 추가 예산을 주는 것이 아니다. 2 회는 모든 unit 에 동일하게 걸린 상한이고, 이 unit 들은 1 회만 썼다. 상한을 다 쓴 unit (1pp1X02 bioemu, 2/2) 은 재실행하지 않는다.",
+ "retried": [
+  {
+   "cohort": "confirmatory",
+   "target_id": "1o22A00",
+   "source": "bioemu",
+   "run_attempts_used": 1
+  },
+  {
+   "cohort": "confirmatory",
+   "target_id": "2w2sA00",
+   "source": "bioemu",
+   "run_attempts_used": 1
+  }
+ ],
+ "not_retried_exhausted": [
+  {
+   "cohort": "calibration_v2",
+   "target_id": "1pp1X02",
+   "source": "bioemu",
+   "run_attempts_used": 2
+  }
+ ],
+ "kappa_impact": "calibration 코호트를 건드리지 않으므로 bioemu 의 kappa 식별 판정은 재계산 대상이 아니다. confirmatory 평가가능성만 바뀔 수 있다.",
+ "disclosure": "이 재실행은 confirmatory 가 최소 클러스터 8 에 미달한다는 것을 본 뒤에 결정됐다. 그 사실을 기록한다. 규칙은 결과와 무관하게 '실행 실패 + 상한 미소진' 으로만 정의했다."
+}

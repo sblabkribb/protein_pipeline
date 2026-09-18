@@ -11,8 +11,8 @@
   "warmup_per_unit": 4,
   "ceiling_per_unit": 18
  },
- "utc": "2026-09-18T00:01:16Z",
- "code_sha": "5a6397bca697989abee240dad6b685177c6c1ba5",
+ "utc": "2026-09-18T06:32:01Z",
+ "code_sha": "d773cf775c50e9cf7eb3c4c3fbecbd9785303681",
  "kappa_freeze_sha256": "1f38ab3d3fa489792381a1ac16b123d24e088fe4dada6b6d35263f7eeeb7b563",
  "per_source": {
   "rfd3": {

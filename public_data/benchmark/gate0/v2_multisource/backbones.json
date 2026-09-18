@@ -3484,9 +3484,9 @@
     "n_ca_staged": 146,
     "staged_sha256": "ab04a08b5d1c5be45cf1acf659f12b6411b90871749c47378a5b67a899232384"
    },
-   "started_utc": "2026-09-12T15:09:14Z",
+   "started_utc": "2026-09-18T04:28:06Z",
    "run_status": "failed",
-   "error": "TimeoutError: http://211.188.35.221:18103/status?id=99d470086a284402935ea308de94c42b did not complete within 21600.0s",
+   "error": "TimeoutError: http://211.188.35.221:18103/status?id=303c9ec5a996496097df51d976517715 did not complete within 3600.0s",
    "u_accepted": 0,
    "backbone_paths": [],
    "gate": {
@@ -3498,12 +3498,10 @@
    "generation_error": true,
    "warmup_for_this_unit": 0,
    "ceiling_for_this_unit": 0,
-   "elapsed_s": 21600.0,
+   "elapsed_s": 3600.2,
    "done": true,
-   "run_attempts": 1,
-   "run_attempts_exhausted": true,
-   "closure_reason": "worker_stall_not_a_generation_outcome",
-   "closure_note": "BioEmu 워커가 job 을 접수한 뒤 유휴가 되고 클라이언트가 저장된 provider timeout(21600 s)까지 매달리는 stall 이 재현됐다. 생성 결과가 아니라 실행 실패다 - INFEASIBLE 로 적지 않는다. 캠페인 차원에서 재시도를 멈춘 이유는 동일 실패가 반복되기 때문이며, 여기에 더 예산을 주면 어려운 타겟에만 생성을 더 주는 것이 된다."
+   "run_attempts": 2,
+   "run_attempts_exhausted": true
   },
   "v2_confirmatory_1rdrA01_rfd3": {
    "run_id": "v2_confirmatory_1rdrA01_rfd3",
@@ -5032,9 +5030,9 @@
     "n_ca_staged": 163,
     "staged_sha256": "cb3ae4d4493d947ea90f68572342f5e361cd9778270b4266d2476114038d0f54"
    },
-   "started_utc": "2026-09-12T22:32:52Z",
+   "started_utc": "2026-09-18T05:28:06Z",
    "run_status": "failed",
-   "error": "TimeoutError: http://211.188.35.221:18103/status?id=03a6cec7c8484ca5b1c4c2fee6a55f67 did not complete within 21600.0s",
+   "error": "TimeoutError: http://211.188.35.221:18103/status?id=489ddc43e1aa4362a444d6c33a1ec872 did not complete within 3600.0s",
    "u_accepted": 0,
    "backbone_paths": [],
    "gate": {
@@ -5046,12 +5044,10 @@
    "generation_error": true,
    "warmup_for_this_unit": 0,
    "ceiling_for_this_unit": 0,
-   "elapsed_s": 21600.0,
+   "elapsed_s": 3600.0,
    "done": true,
-   "run_attempts": 1,
-   "run_attempts_exhausted": true,
-   "closure_reason": "worker_stall_not_a_generation_outcome",
-   "closure_note": "BioEmu 워커가 job 을 접수한 뒤 유휴가 되고 클라이언트가 저장된 provider timeout(21600 s)까지 매달리는 stall 이 재현됐다. 생성 결과가 아니라 실행 실패다 - INFEASIBLE 로 적지 않는다. 캠페인 차원에서 재시도를 멈춘 이유는 동일 실패가 반복되기 때문이며, 여기에 더 예산을 주면 어려운 타겟에만 생성을 더 주는 것이 된다."
+   "run_attempts": 2,
+   "run_attempts_exhausted": true
   },
   "v2_confirmatory_4ai2A02_rfd3": {
    "run_id": "v2_confirmatory_4ai2A02_rfd3",

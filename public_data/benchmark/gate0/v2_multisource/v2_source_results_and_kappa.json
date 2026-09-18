@@ -8,8 +8,8 @@
   "rmsd_nonloop_order_max": 2.0,
   "soluprot_min": 0.5
  },
- "data_complete": false,
- "n_observations": 5327,
+ "data_complete": true,
+ "n_observations": 5328,
  "n_observations_expected": 5328,
  "cohort_flow": {
   "calibration_v2": {
@@ -481,22 +481,22 @@
     }
    },
    "rfd3": {
-    "n_candidates": 1115,
+    "n_candidates": 1116,
     "n_targets_with_data": 11,
     "n_backbones_with_data": 93,
-    "joint_pass_n": 512,
-    "structural_pass_n": 647,
-    "joint_pass_rate_candidate_equal": 0.4591928251121076,
-    "structural_pass_rate_candidate_equal": 0.5802690582959641,
-    "joint_pass_rate_target_equal": 0.4274764451235039,
-    "structural_pass_rate_target_equal": 0.5297491723962312,
+    "joint_pass_n": 513,
+    "structural_pass_n": 648,
+    "joint_pass_rate_candidate_equal": 0.4596774193548387,
+    "structural_pass_rate_candidate_equal": 0.5806451612903226,
+    "joint_pass_rate_target_equal": 0.42803030303030304,
+    "structural_pass_rate_target_equal": 0.5303030303030303,
     "soluprot_filtered_from_structural": 135,
-    "soluprot_pass_rate_within_structural": 0.7913446676970634,
+    "soluprot_pass_rate_within_structural": 0.7916666666666666,
     "per_target_joint_pass": {
      "1ct7A00": 0.24166666666666667,
      "1pp1X02": 0.0,
      "2jvfA00": 0.39166666666666666,
-     "2m9xA01": 0.2689075630252101,
+     "2m9xA01": 0.275,
      "2q5fA02": 0.9833333333333333,
      "3ksnA00": 1.0,
      "3vwoA02": 0.4583333333333333,
@@ -641,13 +641,13 @@
     "6wvfA01"
    ],
    "profiled_loto_ll_by_kappa": {
-    "0.5": -0.44014737572559337,
-    "1.0": -0.42342429395184694,
-    "2.0": -0.41324828904646677,
-    "4.0": -0.4089243708747683,
-    "8.0": -0.4104700930293933,
-    "16.0": -0.415624685083112,
-    "32.0": -0.4216184312523289
+    "0.5": -0.4410747849479482,
+    "1.0": -0.4243521759402957,
+    "2.0": -0.4141614126033532,
+    "4.0": -0.4098092390814182,
+    "8.0": -0.41130815586025926,
+    "16.0": -0.41639948028046175,
+    "32.0": -0.4223237762740771
    },
    "criteria": {
     "1_predictive_separation": {
@@ -661,22 +661,22 @@
      ],
      "per_kappa": {
       "0.5": {
-       "delta_point": 0.031223004850825076,
-       "lower_90_one_sided": 0.019570452106987657,
+       "delta_point": 0.03126554586653002,
+       "lower_90_one_sided": 0.019608902671323758,
        "passes": true
       },
       "1.0": {
-       "delta_point": 0.014499923077078647,
-       "lower_90_one_sided": 0.0075560330738386194,
+       "delta_point": 0.014542936858877475,
+       "lower_90_one_sided": 0.0075931057174045136,
        "passes": true
       },
       "16.0": {
-       "delta_point": 0.006700314208343716,
-       "lower_90_one_sided": -0.0002830507643908353,
+       "delta_point": 0.006590241199043556,
+       "lower_90_one_sided": -0.0003225109520953451,
        "passes": false
       },
       "32.0": {
-       "delta_point": 0.012694060377560601,
+       "delta_point": 0.012514537192658881,
        "lower_90_one_sided": 0.0025806377641517386,
        "passes": true
       }
@@ -696,11 +696,11 @@
    "mle_triple_if_identified": null,
    "on_not_identified": "이 source 의 confirmatory RAPID 은 BLOCKED. 다른 source 의 kappa 를 빌려 쓰지 않는다. available development evidence is insufficient to identify the between-backbone pooling strength required by the coverage policy.",
    "sensitivity_grid_loto_ll": {
-    "1.0": -0.42342429395184694,
-    "2.0": -0.41324828904646677,
-    "4.0": -0.4089243708747683,
-    "8.0": -0.4104700930293933,
-    "16.0": -0.415624685083112
+    "1.0": -0.4243521759402957,
+    "2.0": -0.4141614126033532,
+    "4.0": -0.4098092390814182,
+    "8.0": -0.41130815586025926,
+    "16.0": -0.41639948028046175
    },
    "sensitivity_note": "§11 - robustness 보고용이다. 선택 도구가 아니다."
   },

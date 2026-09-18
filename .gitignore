@@ -144,3 +144,6 @@ manuscript (5).md
 
 # v2 캠페인의 임시 백업 (candidates.json 이력은 git 에 있다)
 *.pre*.bak
+
+# 재생성 전 로컬 백업 (이력은 git 에 있다)
+*.bak-before-*

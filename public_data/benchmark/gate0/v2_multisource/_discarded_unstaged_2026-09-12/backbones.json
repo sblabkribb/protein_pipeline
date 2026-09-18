@@ -179,7 +179,7 @@
    "select_fixed_atoms_is_frozen_literal": false,
    "started_utc": "2026-09-11T09:51:35Z",
    "run_status": "failed",
-   "error": "TimeoutError: http://211.188.35.221:18103/status?id=c4cc04a5346442f497f84a24140ba36e did not complete within 21600.0s",
+   "error": "TimeoutError: http://<gpu-host>:18103/status?id=c4cc04a5346442f497f84a24140ba36e did not complete within 21600.0s",
    "u_accepted": 0,
    "backbone_paths": [],
    "gate": {
@@ -3698,7 +3698,7 @@
    "select_fixed_atoms_is_frozen_literal": true,
    "started_utc": "2026-09-11T20:06:58Z",
    "run_status": "failed",
-   "error": "TimeoutError: http://211.188.35.221:18103/status?id=066234eabe854846bab865ccf6355f4d did not complete within 21600.0s",
+   "error": "TimeoutError: http://<gpu-host>:18103/status?id=066234eabe854846bab865ccf6355f4d did not complete within 21600.0s",
    "u_accepted": 0,
    "backbone_paths": [],
    "gate": {
