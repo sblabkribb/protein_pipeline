@@ -24,6 +24,21 @@ export PROTEINMPNN_GPU_URL="${PROTEINMPNN_GPU_URL:-http://$RAPID_GPU_HOST:18101}
 export BIOEMU_HTTP_TIMEOUT_S="${BIOEMU_HTTP_TIMEOUT_S:-3600}"
 export RFD3_HTTP_TIMEOUT_S="${RFD3_HTTP_TIMEOUT_S:-3600}"
 
+# 폴딩 동시성. LB 의 `max_active` 와 **같이** 올려야 의미가 있다 - 한쪽만
+# 올리면 다른 쪽이 천장이 된다. 2026-09-13 에 BOP 의 ColabFold 업스트림을
+# 4 -> 8 로 늘렸으므로 여기도 8 이다. LB 가 4 로 돌아가면 초과분은 큐에
+# 쌓이기만 하므로, 되돌릴 때 이 값도 같이 내려야 한다.
+export PIPELINE_AF2_MAX_WORKERS="${PIPELINE_AF2_MAX_WORKERS:-8}"
+
+# 천장이 **세 개** 있다. 셋 다 올려야 의미가 있다 - 하나라도 4 면 거기서 막힌다.
+#   1) LB 의 COLABFOLD_LB_MAX_ACTIVE (BOP systemd)   4 -> 8
+#   2) PIPELINE_AF2_MAX_WORKERS (이 파일)             4 -> 8
+#   3) COLABFOLD_MAX_CONCURRENCY (클라이언트 세마포어)  기본 4 -> 8
+# 3) 을 빠뜨려서 업스트림 8 개에 LB active 가 24 표본 내내 정확히 4.0 이었고,
+# 배속이 1.12x 에 그쳤다. 클라이언트 docstring 이 "default 4 = worker count"
+# 라고 적어 둔 그대로다 - 워커 수가 바뀌면 같이 바꿔야 하는 값이다.
+export COLABFOLD_MAX_CONCURRENCY="${COLABFOLD_MAX_CONCURRENCY:-8}"
+
 PY=/opt/protein_pipeline/venv/bin/python
 RUNNER=scripts/transcoder/52_v2_multisource_campaign.py
 LOG=${V2_LOG_DIR:-/tmp/v2log}

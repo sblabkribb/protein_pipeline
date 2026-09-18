@@ -1,0 +1,23 @@
+{
+ "plan": "public_data/benchmark/gate0/multisource_validation_plan.json",
+ "n_runs": 48,
+ "n_source_generation_infeasible": 7,
+ "n_shortfall": 4,
+ "source_generation_infeasible": [
+  "v2_calibration_v2_4yqiA01_bioemu",
+  "v2_calibration_v2_5u1xA02_rfd3",
+  "v2_calibration_v2_6wvfA01_bioemu",
+  "v2_confirmatory_1rdrA01_bioemu",
+  "v2_confirmatory_1sohA00_rfd3",
+  "v2_confirmatory_1sohA00_bioemu",
+  "v2_confirmatory_6vqfA00_bioemu"
+ ],
+ "shortfall": [
+  "v2_calibration_v2_1pp1X02_rfd3",
+  "v2_calibration_v2_4q68A01_rfd3",
+  "v2_confirmatory_4ai2A02_rfd3",
+  "v2_confirmatory_4ai2A02_bioemu"
+ ],
+ "n_candidates": 5328,
+ "utc": "2026-09-17T11:40:22Z"
+}

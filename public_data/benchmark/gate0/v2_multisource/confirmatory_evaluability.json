@@ -1,0 +1,335 @@
+{
+ "artifact": "rapid_v2_confirmatory_evaluability",
+ "purpose": "confirmatory 종점의 평가가능성. EFBC 계산 전에 동결 규칙으로 결정된다.",
+ "plan_id": "rapid_v2_multisource_validation",
+ "plan_version": "2.0",
+ "rules_applied": {
+  "budget_unit": "target x source (anchors.warmup=40 = 10 unit x 4 probe)",
+  "unequal_units": "target x source 의 unit 수 u 가 10 보다 작으면 그 조합의 warm-up 은 4u, ceiling 은 18u 다 (40 와 180 이 아니다). ceiling 을 넘는 격자점에서 그 타겟은 non-evaluable 로 기록하고 그 B 의 informative set 에서 빠진다. 최소 클러스터 8 을 밑도는 B 는 그 source 에서 판정하지 않는다.",
+  "min_clusters": 8,
+  "anchors_excluded_from_primary_judgement": true,
+  "warmup_per_unit": 4,
+  "ceiling_per_unit": 18
+ },
+ "utc": "2026-09-18T00:01:16Z",
+ "code_sha": "5a6397bca697989abee240dad6b685177c6c1ba5",
+ "kappa_freeze_sha256": "1f38ab3d3fa489792381a1ac16b123d24e088fe4dada6b6d35263f7eeeb7b563",
+ "per_source": {
+  "rfd3": {
+   "kappa_verdict": "NOT_IDENTIFIED",
+   "frozen_hyperparameters": null,
+   "n_targets": 12,
+   "n_targets_with_units": 11,
+   "u_total": 105,
+   "per_target": {
+    "1j5uA01": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "1n81A00": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "1o22A00": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "1rdrA01": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "1sdiA00": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "1sohA00": {
+     "u": 0,
+     "state": "SOURCE_GENERATION_INFEASIBLE",
+     "warmup": 0,
+     "ceiling": 0,
+     "evaluable_at_all": false
+    },
+    "1x3aA00": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "2w2sA00": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "4ai2A02": {
+     "u": 5,
+     "state": "shortfall",
+     "warmup": 20,
+     "ceiling": 90,
+     "evaluable_at_all": true
+    },
+    "4ifxA00": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "4wexA00": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "6vqfA00": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    }
+   },
+   "by_budget": {
+    "40": {
+     "informative_targets": 11,
+     "verdict": "EXCLUDED_ANCHOR",
+     "is_primary_informative": false,
+     "dropped_by_ceiling": []
+    },
+    "60": {
+     "informative_targets": 11,
+     "verdict": "JUDGEABLE",
+     "is_primary_informative": true,
+     "dropped_by_ceiling": []
+    },
+    "80": {
+     "informative_targets": 11,
+     "verdict": "JUDGEABLE",
+     "is_primary_informative": true,
+     "dropped_by_ceiling": []
+    },
+    "100": {
+     "informative_targets": 10,
+     "verdict": "JUDGEABLE",
+     "is_primary_informative": true,
+     "dropped_by_ceiling": [
+      "4ai2A02"
+     ]
+    },
+    "120": {
+     "informative_targets": 10,
+     "verdict": "JUDGEABLE",
+     "is_primary_informative": true,
+     "dropped_by_ceiling": [
+      "4ai2A02"
+     ]
+    },
+    "140": {
+     "informative_targets": 10,
+     "verdict": "JUDGEABLE",
+     "is_primary_informative": true,
+     "dropped_by_ceiling": [
+      "4ai2A02"
+     ]
+    },
+    "160": {
+     "informative_targets": 10,
+     "verdict": "JUDGEABLE",
+     "is_primary_informative": true,
+     "dropped_by_ceiling": [
+      "4ai2A02"
+     ]
+    },
+    "180": {
+     "informative_targets": 10,
+     "verdict": "EXCLUDED_ANCHOR",
+     "is_primary_informative": false,
+     "dropped_by_ceiling": [
+      "4ai2A02"
+     ]
+    }
+   },
+   "judgeable_primary_informative_budgets": [
+    "60",
+    "80",
+    "100",
+    "120",
+    "140",
+    "160"
+   ],
+   "confirmatory_status": "BLOCKED_KAPPA_NOT_IDENTIFIED",
+   "why": "§10 — kappa 가 식별되지 않았으므로 confirmatory RAPID 을 진행하지 않는다. 다른 source 의 kappa 를 빌리지 않는다."
+  },
+  "bioemu": {
+   "kappa_verdict": "IDENTIFIED",
+   "frozen_hyperparameters": {
+    "mu0": 0.75,
+    "kappa0": 2.0,
+    "kappa_pool": 4.0
+   },
+   "n_targets": 12,
+   "n_targets_with_units": 7,
+   "u_total": 69,
+   "per_target": {
+    "1j5uA01": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "1n81A00": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "1o22A00": {
+     "u": 0,
+     "state": "generation_error",
+     "warmup": 0,
+     "ceiling": 0,
+     "evaluable_at_all": false
+    },
+    "1rdrA01": {
+     "u": 0,
+     "state": "SOURCE_GENERATION_INFEASIBLE",
+     "warmup": 0,
+     "ceiling": 0,
+     "evaluable_at_all": false
+    },
+    "1sdiA00": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "1sohA00": {
+     "u": 0,
+     "state": "SOURCE_GENERATION_INFEASIBLE",
+     "warmup": 0,
+     "ceiling": 0,
+     "evaluable_at_all": false
+    },
+    "1x3aA00": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "2w2sA00": {
+     "u": 0,
+     "state": "generation_error",
+     "warmup": 0,
+     "ceiling": 0,
+     "evaluable_at_all": false
+    },
+    "4ai2A02": {
+     "u": 9,
+     "state": "shortfall",
+     "warmup": 36,
+     "ceiling": 162,
+     "evaluable_at_all": true
+    },
+    "4ifxA00": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "4wexA00": {
+     "u": 10,
+     "state": "full",
+     "warmup": 40,
+     "ceiling": 180,
+     "evaluable_at_all": true
+    },
+    "6vqfA00": {
+     "u": 0,
+     "state": "SOURCE_GENERATION_INFEASIBLE",
+     "warmup": 0,
+     "ceiling": 0,
+     "evaluable_at_all": false
+    }
+   },
+   "by_budget": {
+    "40": {
+     "informative_targets": 7,
+     "verdict": "EXCLUDED_ANCHOR",
+     "is_primary_informative": false,
+     "dropped_by_ceiling": []
+    },
+    "60": {
+     "informative_targets": 7,
+     "verdict": "NOT_JUDGED_MIN_CLUSTERS",
+     "is_primary_informative": true,
+     "dropped_by_ceiling": []
+    },
+    "80": {
+     "informative_targets": 7,
+     "verdict": "NOT_JUDGED_MIN_CLUSTERS",
+     "is_primary_informative": true,
+     "dropped_by_ceiling": []
+    },
+    "100": {
+     "informative_targets": 7,
+     "verdict": "NOT_JUDGED_MIN_CLUSTERS",
+     "is_primary_informative": true,
+     "dropped_by_ceiling": []
+    },
+    "120": {
+     "informative_targets": 7,
+     "verdict": "NOT_JUDGED_MIN_CLUSTERS",
+     "is_primary_informative": true,
+     "dropped_by_ceiling": []
+    },
+    "140": {
+     "informative_targets": 7,
+     "verdict": "NOT_JUDGED_MIN_CLUSTERS",
+     "is_primary_informative": true,
+     "dropped_by_ceiling": []
+    },
+    "160": {
+     "informative_targets": 7,
+     "verdict": "NOT_JUDGED_MIN_CLUSTERS",
+     "is_primary_informative": true,
+     "dropped_by_ceiling": []
+    },
+    "180": {
+     "informative_targets": 6,
+     "verdict": "EXCLUDED_ANCHOR",
+     "is_primary_informative": false,
+     "dropped_by_ceiling": [
+      "4ai2A02"
+     ]
+    }
+   },
+   "judgeable_primary_informative_budgets": [],
+   "confirmatory_status": "NOT_EVALUABLE_INSUFFICIENT_CLUSTERS",
+   "why": "kappa 는 식별됐으나 primary informative 격자점 전부에서 informative set 이 최소 클러스터 8 에 미달한다. 동결 규칙상 어떤 B 도 판정하지 않는다."
+  }
+ },
+ "efbc_not_computed_where_unjudgeable": "판정 불가인 B 에 대해 EFBC 를 계산하지 않았다. 계산해 보고하면 동결 규칙이 금지한 판정을 사실상 하게 된다."
+}

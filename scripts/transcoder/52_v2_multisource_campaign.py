@@ -51,6 +51,16 @@ OUT_DIR = BASE / "v2_multisource"
 
 SOURCES = ("rfd3", "bioemu")
 
+#: (target x source) 하나를 **실행** 해 보는 최대 횟수. 생성 예산(cap 40/200)과
+#: 다른 축이다 - 워커가 job 을 잃거나 죽었을 때 한 번 더 걸어 보는 것이고, 매
+#: 시도는 여전히 같은 동결 cap 안에서 돈다.
+#:
+#: 상한이 필요한 이유는 시간이 아니라 **편향** 이다. 처음에는 실패한 unit 을
+#: 무제한 재시도하게 두었는데, 그러면 성공한 unit 은 1 회, 실패한 unit 은 무한이
+#: 되어 동결 규칙을 정면으로 어긴다 - "어려운 타겟에만 생성을 더 주지 않는다".
+#: 모든 unit 에 같은 상한을 주고, 다 쓰면 확보된 것을 그대로 들고 넘어간다.
+MAX_RUN_ATTEMPTS = 2
+
 
 # ---------------------------------------------------------------- 동결값 읽기
 
@@ -387,8 +397,10 @@ def stage_backbones(plan: dict, rows: list[dict], *, output_root: Path,
 
     for index, (row, source) in enumerate(planned, start=1):
         run_id = f"v2_{row['cohort']}_{row['target_id']}_{source}"
-        if run_id in state["runs"] and state["runs"][run_id].get("done"):
+        prior = state["runs"].get(run_id) or {}
+        if prior.get("done"):
             continue
+        attempt_no = int(prior.get("run_attempts") or 0) + 1
         rules = plan["generation_rules"][source]
         cap = int(rules.get("max_attempts_per_target")
                   or rules.get("max_attempted_structures"))
@@ -454,12 +466,29 @@ def stage_backbones(plan: dict, rows: list[dict], *, output_root: Path,
             "elapsed_s": round(time.time() - started, 1),
             "done": True,
         })
-        print(f"      accept {u}/{want}"
-              + ("  [SOURCE_GENERATION_INFEASIBLE]" if infeasible else
-                 "  [생성 오류 - 결과가 아니라 재시도 대상]" if errored else
-                 ("  [shortfall]" if u < want else "")), flush=True)
-        # 생성 오류는 `done` 으로 닫지 않는다 - 다음 실행이 다시 집어야 한다.
-        record["done"] = not errored
+        # 실행 시도를 센다. 생성 예산과 다른 축이며, 모든 unit 에 같은 상한이
+        # 걸린다 - 실패한 unit 만 더 돌리면 코호트가 편향된다.
+        record["run_attempts"] = attempt_no
+        exhausted_attempts = attempt_no >= MAX_RUN_ATTEMPTS
+        record["run_attempts_exhausted"] = bool(errored and exhausted_attempts)
+
+        if infeasible:
+            tail = "  [SOURCE_GENERATION_INFEASIBLE]"
+        elif errored and exhausted_attempts:
+            tail = (f"  [생성 오류 · 실행 {attempt_no}/{MAX_RUN_ATTEMPTS} 소진 "
+                    "- 확보된 것으로 넘어간다]")
+        elif errored:
+            tail = f"  [생성 오류 · 실행 {attempt_no}/{MAX_RUN_ATTEMPTS} 재시도 대상]"
+        elif u < want:
+            tail = "  [shortfall]"
+        else:
+            tail = ""
+        print(f"      accept {u}/{want}{tail}", flush=True)
+
+        # 상한을 다 쓰면 결과가 무엇이든 닫는다. 동결 규칙이 "확보된 것을
+        # 그대로 쓴다" 이고, 여기서 더 돌리는 것은 어려운 타겟에만 예산을
+        # 더 주는 것이 된다.
+        record["done"] = (not errored) or exhausted_attempts
         state["runs"][run_id] = record
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         state_path.write_text(json.dumps(state, ensure_ascii=False, indent=1),
@@ -480,6 +509,24 @@ def _refold_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def backbone_chain_id(pdb_text: str) -> str:
+    """백본 PDB 의 체인 ID. `fixed_positions` 의 키가 되므로 실제 값이어야 한다.
+
+    RFD3 는 입력의 체인 ID 를 그대로 물려준다. 코호트에서 24 개 타겟 중
+    `1pp1X02` 하나만 체인 X 이고, 나머지는 전부 A 다. 여기를 "A" 로 박아 두면
+    그 하나에서 ProteinMPNN 이 존재하지 않는 체인을 고정하라는 요청을 받고
+    exit=1 로 죽는다 - 실제로 2026-09-13 design 패스에서 tier 세 개가 모두
+    그렇게 실패해 그 백본의 후보 12 개가 통째로 비었다. 체인이 하나가 아니면
+    조용히 첫 번째를 고르지 않고 세운다: 어느 체인을 고정했는지가 결과에서
+    보이지 않게 되는 쪽이 더 나쁘다.
+    """
+    chains = {line[21] for line in pdb_text.splitlines()
+              if line.startswith(("ATOM  ", "HETATM"))}
+    if len(chains) != 1:
+        raise ValueError(f"백본 체인이 하나가 아니다: {sorted(chains)}")
+    return chains.pop()
 
 
 def stage_design(plan: dict, rows: list[dict], state: dict, *, mpnn_url: str,
@@ -519,13 +566,14 @@ def stage_design(plan: dict, rows: list[dict], state: dict, *, mpnn_url: str,
             if backbone_key in done_backbones:
                 continue
             pdb_text = Path(pdb_path).read_text(encoding="utf-8", errors="replace")
+            chain_id = backbone_chain_id(pdb_text)
             produced: list[dict] = []
             for tier_key, count in sorted(tier_counts.items()):
                 try:
                     _native, samples, _meta = mpnn.design(
                         pdb_text=pdb_text,
                         pdb_name=backbone_key.replace("|", "_"),
-                        fixed_positions={"A": fixed[tier_key]},
+                        fixed_positions={chain_id: fixed[tier_key]},
                         use_soluble_model=bool(GATE0_MPNN_SETTINGS["use_soluble_model"]),
                         model_name=str(GATE0_MPNN_SETTINGS["model_name"]),
                         num_seq_per_target=count,

@@ -1,0 +1,53 @@
+{
+ "artifact": "rapid_v2_kappa_identification_freeze",
+ "purpose": "§13-3 식별된 hyperparameter 동결. source 마다 독립이며 차용하지 않는다.",
+ "criteria_source": "docs/specs/rapid-v2-phase4b-calibration-freeze.md §9",
+ "plan_id": "rapid_v2_multisource_validation",
+ "plan_version": "2.0",
+ "frozen_utc": "2026-09-17T23:59:09Z",
+ "code_sha": "5a6397bca697989abee240dad6b685177c6c1ba5",
+ "analysis_script": "scripts/transcoder/56_v2_source_results_and_kappa.py",
+ "analysis_script_sha256": "a10bcc171df6955c1e1473d9485e8b1411e882a169b2fc117772830b7d7e253d",
+ "results_json": "public_data/benchmark/gate0/v2_multisource/v2_source_results_and_kappa.json",
+ "results_json_sha256": "5729cd65c42382af5bc9f130213eb0c98211d65c05ae3731906f85259e648385",
+ "per_source": {
+  "rfd3": {
+   "verdict": "NOT_IDENTIFIED",
+   "kappa_star": 4.0,
+   "n_informative_targets": 11,
+   "criteria_passed": {
+    "1_predictive_separation": false,
+    "2_interior_maximum": true,
+    "3_bootstrap_stability": true
+   },
+   "frozen_hyperparameters": null,
+   "phase4b": "BLOCKED (§10) — Phase 4 acquisition 잠금 유지 · Phase 5 NO-GO 유지",
+   "failed_comparison": {
+    "16.0": {
+     "delta_point": 0.006700314208343716,
+     "lower_90_one_sided": -0.0002830507643908353,
+     "passes": false
+    }
+   },
+   "not_claimed": "마진이 작다는 이유로 식별됐다고 재해석하지 않는다 (§10)."
+  },
+  "bioemu": {
+   "verdict": "IDENTIFIED",
+   "kappa_star": 4.0,
+   "n_informative_targets": 9,
+   "criteria_passed": {
+    "1_predictive_separation": true,
+    "2_interior_maximum": true,
+    "3_bootstrap_stability": true
+   },
+   "frozen_hyperparameters": {
+    "mu0": 0.75,
+    "kappa0": 2.0,
+    "kappa_pool": 4.0
+   },
+   "phase4b": "UNBLOCKED — confirmatory replay 1 회 가능 (§13-5)"
+  }
+ },
+ "borrowing_across_sources_forbidden": true,
+ "note": "두 source 의 kappa* 가 모두 4.0 이지만 rfd3 는 §9(1) 을 통과하지 못했다. bioemu 의 값을 rfd3 에 빌려주지 않는다."
+}

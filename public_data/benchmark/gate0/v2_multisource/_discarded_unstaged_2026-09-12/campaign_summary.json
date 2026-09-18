@@ -1,0 +1,10 @@
+{
+ "plan": "public_data/benchmark/gate0/multisource_validation_plan.json",
+ "n_runs": 2,
+ "n_source_generation_infeasible": 0,
+ "n_shortfall": 0,
+ "source_generation_infeasible": [],
+ "shortfall": [],
+ "n_candidates": 120,
+ "utc": "2026-09-11T11:17:05Z"
+}

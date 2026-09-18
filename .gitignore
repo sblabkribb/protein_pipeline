@@ -141,3 +141,6 @@ manuscript (5).md
 
 # 분석용 venv (statsmodels). 시스템 파이썬이 PEP 668 로 막혀 있어 별도로 둔다.
 /.venv-analysis/
+
+# v2 캠페인의 임시 백업 (candidates.json 이력은 git 에 있다)
+*.pre*.bak
