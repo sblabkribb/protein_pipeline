@@ -9,6 +9,10 @@
     후보     CATH pilot 77 표적 중 v2 다중생성원 캠페인과 **코호트 B**
              (11 표적 RFD3 예산 격자) 어느 쪽에도 쓰이지 않은 것
     길이     80 <= L <= 400  (v2 실측 범위 50-386 에 맞춘다. 2,360 aa 는 뺀다)
+    비중복   같은 PDB 엔트리(앞 4 자)에서 두 도메인을 쓰지 않고, 쌍대 서열
+             동일성 30% 이상인 쌍도 쓰지 않는다. 표적 클러스터 부트스트랩이
+             표적을 독립 단위로 다루므로 이 조건이 없으면 클러스터 수가
+             실제보다 부풀려진다. 충돌하면 도메인 ID 사전순 앞을 남긴다.
     층화     길이 사분위로 4 층, 각 층에서 9 개씩
     seed     20260921 (다른 동결 산출물과 같은 값)
 
@@ -37,6 +41,45 @@ COHORT_B = ROOT / "public_data" / "benchmark" / "gate0" / "fewshot_jointpass_tra
 OUT = ROOT / "public_data" / "benchmark" / "gate0" / "hier_confirmatory_targets.json"
 
 N_TARGETS, N_STRATA, LEN_MIN, LEN_MAX, SEED = 36, 4, 80, 400, 20260921
+MAX_IDENTITY = 0.30
+#: MSA 러너가 요구하는 stratum 라벨. v2 동결 계획과 같은 경계를 쓴다.
+STRATA_BOUNDS = ((150, "50-150"), (250, "150-250"), (10**9, "250-400"))
+CATH_DIRS = ("cath_train", "cath_test", "cath_val")
+
+
+def _pdb_path(domain: str) -> str:
+    for d in CATH_DIRS:
+        p = Path("/opt/protein_pipeline") / d / f"{domain}.pdb"
+        if p.exists():
+            return str(p)
+    raise SystemExit(f"{domain} 의 PDB 를 cath_train/test/val 에서 못 찾았다")
+
+
+def _stratum(n: int) -> str:
+    for hi, label in STRATA_BOUNDS:
+        if n <= hi:
+            return label
+    raise AssertionError
+
+
+def _identity(a: str, b: str) -> float:
+    n = min(len(a), len(b))
+    if n == 0:
+        return 0.0
+    return sum(x == y for x, y in zip(a[:n], b[:n])) / max(len(a), len(b))
+
+
+def _non_redundant(names: list[str], seq: dict[str, str]) -> list[str]:
+    """같은 PDB 엔트리와 동일성 30% 이상 쌍을 거른다. 사전순 앞을 남긴다."""
+    kept: list[str] = []
+    for t in sorted(names):
+        if any(t[:4] == k[:4] for k in kept):
+            continue
+        if any(_identity(seq[t], seq[k]) >= MAX_IDENTITY for k in kept
+               if t in seq and k in seq):
+            continue
+        kept.append(t)
+    return kept
 
 
 def _cohort_b() -> set[str]:
@@ -63,9 +106,11 @@ def main() -> int:
         by[r["target"]].append(r)
     used = {c["target_id"] for c in json.loads(V2.read_text(encoding="utf-8"))}
     used |= _cohort_b()
+    seq = {t: v[0]["sequence"] for t, v in by.items()}
     pool = {t: len(v[0]["sequence"]) for t, v in by.items()
             if t not in used and LEN_MIN <= len(v[0]["sequence"]) <= LEN_MAX}
-    names = sorted(pool)
+    names = _non_redundant(sorted(pool), seq)
+    print(f"  비중복 필터: {len(pool)} -> {len(names)}")
     print(f"CATH {len(by)} · v2 사용 {len(used)} · 길이필터 통과 {len(names)}")
     if len(names) < N_TARGETS:
         raise SystemExit(f"후보 {len(names)} < {N_TARGETS}")
@@ -91,8 +136,14 @@ def main() -> int:
                     "len_max": LEN_MAX, "n_strata": N_STRATA, "seed": SEED,
                     "cohort_a_reuse": "허용. 종점과 백본이 다르다."},
            "n_candidates": len(names), "n_targets": len(picked),
-           "targets": picked,
-           "lengths": {t: pool[t] for t in picked}}
+           "max_identity": MAX_IDENTITY,
+           #: MSA 러너(`50_full_msa.py`)가 읽는 항목 형식과 같게 낸다.
+           #: superfamily 는 이 표적들에 대한 CATH 분류가 로컬에 없어 null 이다.
+           #: 러너는 이 필드를 기록만 하고 판단에 쓰지 않는다. 비중복은
+           #: superfamily 가 아니라 PDB 엔트리와 서열 동일성으로 보장한다.
+           "targets": [{"domain": t, "length": pool[t], "pdb": _pdb_path(t),
+                        "stratum": _stratum(pool[t]), "superfamily": None,
+                        "role": "selected"} for t in picked]}
     text = json.dumps(doc, ensure_ascii=False, indent=1)
     OUT.write_text(text, encoding="utf-8")
     ls = sorted(pool[t] for t in picked)

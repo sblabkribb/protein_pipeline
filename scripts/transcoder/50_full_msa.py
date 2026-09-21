@@ -76,7 +76,10 @@ COHORTS = (("calibration_v2", "calibration_v2_targets.json"),
 #: `--cohorts` 로만 닿는 추가 코호트. `COHORTS` 기본값은 건드리지 않는다 - 동결
 #: v2 흐름(24 타겟)이 그 기본값에 걸려 있으므로, 인자를 주지 않은 호출은 이
 #: 변경 전과 같은 목록·같은 출력이어야 한다.
-OPTIONAL_COHORTS = {"holdout_grid": "holdout_targets.json"}
+OPTIONAL_COHORTS = {"holdout_grid": "holdout_targets.json",
+                    #: 계층형 배분 confirmatory (docs/specs/
+                    #: hierarchical-confirmatory-prespec.md). 36 표적.
+                    "hier_confirmatory": "hier_confirmatory_targets.json"}
 
 #: 코호트마다 파일 안의 **어느 목록**을 읽는가. 기본은 `selected` 이고 동결 v2
 #: 두 코호트가 그것을 읽는다.
@@ -86,7 +89,9 @@ OPTIONAL_COHORTS = {"holdout_grid": "holdout_targets.json"}
 #: (1sh6A02←2jo7A00 · 5xpdA02←1vprA02 · 3f2pA01←2pgsA03 · 5pc8A00←2iayA00).
 #: 실제로 백본이 만들어진 격자는 `resolved.targets` 다. `selected` 를 읽으면 fold
 #: 가 없는 4 개를 가져오고 fold 가 있는 4 개를 놓쳐 코호트의 1/3 이 조용히 빠진다.
-COHORT_TARGET_KEY = {"holdout_grid": ("resolved", "targets")}
+COHORT_TARGET_KEY = {"holdout_grid": ("resolved", "targets"),
+                     #: 58_ 가 쓰는 키는 최상위 `targets` 다.
+                     "hier_confirmatory": ("targets",)}
 DEFAULT_TARGET_KEY = ("selected",)
 
 

@@ -9,82 +9,297 @@
   "seed": 20260921,
   "cohort_a_reuse": "허용. 종점과 백본이 다르다."
  },
- "n_candidates": 41,
+ "n_candidates": 40,
  "n_targets": 36,
+ "max_identity": 0.3,
  "targets": [
-  "16vpA00",
-  "1a19A00",
-  "1a6jA00",
-  "1a8rG01",
-  "1advA01",
-  "1advA02",
-  "1af7A01",
-  "1agrE02",
-  "1b12B02",
-  "1b5aA00",
-  "1b7eA01",
-  "1b8xA03",
-  "1bg5A03",
-  "1bt2A00",
-  "1c8zA00",
-  "1eruA00",
-  "1h6wA03",
-  "1jyoE00",
-  "1keeF01",
-  "1ktuA00",
-  "1l5cA00",
-  "1lshB00",
-  "1mjoD00",
-  "1nr3A00",
-  "1o8rA00",
-  "1ohgC01",
-  "1qmbB00",
-  "1r7lA00",
-  "2vvrB00",
-  "2x62B00",
-  "3ab2G02",
-  "3akoB00",
-  "3b5mC01",
-  "3bukC01",
-  "3clqD02",
-  "3gs9A01"
- ],
- "lengths": {
-  "16vpA00": 311,
-  "1a19A00": 89,
-  "1a6jA00": 150,
-  "1a8rG01": 221,
-  "1advA01": 287,
-  "1advA02": 287,
-  "1af7A01": 274,
-  "1agrE02": 128,
-  "1b12B02": 211,
-  "1b5aA00": 94,
-  "1b7eA01": 372,
-  "1b8xA03": 260,
-  "1bg5A03": 254,
-  "1bt2A00": 336,
-  "1c8zA00": 265,
-  "1eruA00": 105,
-  "1h6wA03": 151,
-  "1jyoE00": 102,
-  "1keeF01": 378,
-  "1ktuA00": 143,
-  "1l5cA00": 92,
-  "1lshB00": 174,
-  "1mjoD00": 104,
-  "1nr3A00": 122,
-  "1o8rA00": 94,
-  "1ohgC01": 281,
-  "1qmbB00": 326,
-  "1r7lA00": 96,
-  "2vvrB00": 147,
-  "2x62B00": 251,
-  "3ab2G02": 386,
-  "3akoB00": 151,
-  "3b5mC01": 194,
-  "3bukC01": 111,
-  "3clqD02": 400,
-  "3gs9A01": 300
- }
+  {
+   "domain": "16vpA00",
+   "length": 311,
+   "pdb": "/opt/protein_pipeline/cath_train/16vpA00.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1a19A00",
+   "length": 89,
+   "pdb": "/opt/protein_pipeline/cath_val/1a19A00.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1a6jA00",
+   "length": 150,
+   "pdb": "/opt/protein_pipeline/cath_train/1a6jA00.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1a8rG01",
+   "length": 221,
+   "pdb": "/opt/protein_pipeline/cath_train/1a8rG01.pdb",
+   "stratum": "150-250",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1advA01",
+   "length": 287,
+   "pdb": "/opt/protein_pipeline/cath_train/1advA01.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1af7A01",
+   "length": 274,
+   "pdb": "/opt/protein_pipeline/cath_train/1af7A01.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1agrE02",
+   "length": 128,
+   "pdb": "/opt/protein_pipeline/cath_train/1agrE02.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1b12B02",
+   "length": 211,
+   "pdb": "/opt/protein_pipeline/cath_train/1b12B02.pdb",
+   "stratum": "150-250",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1b5aA00",
+   "length": 94,
+   "pdb": "/opt/protein_pipeline/cath_train/1b5aA00.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1b7eA01",
+   "length": 372,
+   "pdb": "/opt/protein_pipeline/cath_train/1b7eA01.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1b8xA03",
+   "length": 260,
+   "pdb": "/opt/protein_pipeline/cath_train/1b8xA03.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1bt2A00",
+   "length": 336,
+   "pdb": "/opt/protein_pipeline/cath_train/1bt2A00.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1c8zA00",
+   "length": 265,
+   "pdb": "/opt/protein_pipeline/cath_train/1c8zA00.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1eruA00",
+   "length": 105,
+   "pdb": "/opt/protein_pipeline/cath_val/1eruA00.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1h6wA03",
+   "length": 151,
+   "pdb": "/opt/protein_pipeline/cath_val/1h6wA03.pdb",
+   "stratum": "150-250",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1hufA00",
+   "length": 123,
+   "pdb": "/opt/protein_pipeline/cath_val/1hufA00.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1ibvC00",
+   "length": 81,
+   "pdb": "/opt/protein_pipeline/cath_test/1ibvC00.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1jyoE00",
+   "length": 102,
+   "pdb": "/opt/protein_pipeline/cath_val/1jyoE00.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1keeF01",
+   "length": 378,
+   "pdb": "/opt/protein_pipeline/cath_test/1keeF01.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1ktuA00",
+   "length": 143,
+   "pdb": "/opt/protein_pipeline/cath_val/1ktuA00.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1l5cA00",
+   "length": 92,
+   "pdb": "/opt/protein_pipeline/cath_test/1l5cA00.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1lshB00",
+   "length": 174,
+   "pdb": "/opt/protein_pipeline/cath_val/1lshB00.pdb",
+   "stratum": "150-250",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1mjoD00",
+   "length": 104,
+   "pdb": "/opt/protein_pipeline/cath_val/1mjoD00.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1nr3A00",
+   "length": 122,
+   "pdb": "/opt/protein_pipeline/cath_val/1nr3A00.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1o8rA00",
+   "length": 94,
+   "pdb": "/opt/protein_pipeline/cath_val/1o8rA00.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1ohgC01",
+   "length": 281,
+   "pdb": "/opt/protein_pipeline/cath_test/1ohgC01.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1qmbB00",
+   "length": 326,
+   "pdb": "/opt/protein_pipeline/cath_test/1qmbB00.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1r7lA00",
+   "length": 96,
+   "pdb": "/opt/protein_pipeline/cath_val/1r7lA00.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "1szwB02",
+   "length": 330,
+   "pdb": "/opt/protein_pipeline/cath_test/1szwB02.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "2x62B00",
+   "length": 251,
+   "pdb": "/opt/protein_pipeline/cath_test/2x62B00.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "3ab2G02",
+   "length": 386,
+   "pdb": "/opt/protein_pipeline/cath_test/3ab2G02.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "3akoB00",
+   "length": 151,
+   "pdb": "/opt/protein_pipeline/cath_test/3akoB00.pdb",
+   "stratum": "150-250",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "3b5mC01",
+   "length": 194,
+   "pdb": "/opt/protein_pipeline/cath_test/3b5mC01.pdb",
+   "stratum": "150-250",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "3bukC01",
+   "length": 111,
+   "pdb": "/opt/protein_pipeline/cath_test/3bukC01.pdb",
+   "stratum": "50-150",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "3clqD02",
+   "length": 400,
+   "pdb": "/opt/protein_pipeline/cath_test/3clqD02.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  },
+  {
+   "domain": "3gs9A01",
+   "length": 300,
+   "pdb": "/opt/protein_pipeline/cath_test/3gs9A01.pdb",
+   "stratum": "250-400",
+   "superfamily": null,
+   "role": "selected"
+  }
+ ]
 }
