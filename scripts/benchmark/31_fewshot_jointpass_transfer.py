@@ -365,7 +365,8 @@ def baselines_budget(rows, emb, label, mpnn, *, budgets=BUDGET_GRID,
     for i, r in enumerate(rows):
         idx_by_target[r["target_id"]].append(i)
 
-    policies = ["rf_probe", "ridge_probe", "mpnn_score", "random", "oracle"]
+    policies = ["rf_probe", "rf_probe_mpnnsel", "ridge_probe",
+                "mpnn_score", "random", "oracle"]
     per_target = {}
     for target, idx in sorted(idx_by_target.items()):
         idx = np.array(idx)
@@ -394,13 +395,25 @@ def baselines_budget(rows, emb, label, mpnn, *, budgets=BUDGET_GRID,
                 # 라벨 쓰는 정책: probe 30 을 먼저 지출한다.
                 if B < n_train:
                     continue
-                tr = select_train_indices(X, n_train, seed, SELECTION_STRATEGY)
-                te = np.setdiff1d(np.arange(len(idx)), tr)
+                # 초기 표본 선택 전략 두 가지를 나란히 본다.
+                #   kmeans    원 프로토콜. 다양성 확보가 목적이다.
+                #   mpnn_sel  MPNN score 상위 30. B=30 에서 k-means 가 무작위와
+                #             구별되지 않았으므로 여기를 바꾸면 무엇이 달라지는지
+                #             본다. 라벨이 좁은 점수대에 몰려 RF 가 나빠질 수도
+                #             있으므로 **결과를 보기 전에는 개선이라고 가정하지
+                #             않는다.**
+                sel_sets = {"kmeans": select_train_indices(X, n_train, seed,
+                                                           SELECTION_STRATEGY),
+                            "mpnn_sel": np.argsort(m)[:n_train]}
                 extra = B - n_train
-                if extra > len(te):
-                    continue
-                base = float(y[tr].sum())
-                for pol, est in (("rf_probe", "RF"), ("ridge_probe", "Ridge")):
+                for pol, est, selname in (("rf_probe", "RF", "kmeans"),
+                                          ("ridge_probe", "Ridge", "kmeans"),
+                                          ("rf_probe_mpnnsel", "RF", "mpnn_sel")):
+                    tr = sel_sets[selname]
+                    te = np.setdiff1d(np.arange(len(idx)), tr)
+                    if extra > len(te):
+                        continue
+                    base = float(y[tr].sum())
                     if extra == 0:
                         got[pol].append(base)
                         continue
@@ -432,7 +445,10 @@ def baselines_budget(rows, emb, label, mpnn, *, budgets=BUDGET_GRID,
         # 쌍대 차이. 같은 재표집 표본 안에서 계산한다.
         for a, b in (("rf_probe", "random"), ("rf_probe", "mpnn_score"),
                      ("rf_probe", "ridge_probe"), ("mpnn_score", "random"),
-                     ("ridge_probe", "random")):
+                     ("ridge_probe", "random"),
+                     ("rf_probe_mpnnsel", "rf_probe"),
+                     ("rf_probe_mpnnsel", "mpnn_score"),
+                     ("rf_probe_mpnnsel", "random")):
             draws = sorted(agg(x, a) - agg(x, b) for x in boots)
             lo = draws[int(0.025 * len(draws))]
             hi = draws[min(len(draws) - 1, int(0.975 * len(draws)))]

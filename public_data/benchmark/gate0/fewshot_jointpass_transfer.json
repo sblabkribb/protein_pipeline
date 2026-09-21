@@ -736,6 +736,7 @@
   "label": "joint_pass",
   "policies": [
    "rf_probe",
+   "rf_probe_mpnnsel",
    "ridge_probe",
    "mpnn_score",
    "random",
@@ -747,6 +748,7 @@
     "n_targets": 11,
     "point": {
      "rf_probe": 18.78181818181818,
+     "rf_probe_mpnnsel": 21.545454545454547,
      "ridge_probe": 18.78181818181818,
      "mpnn_score": 21.545454545454547,
      "random": 18.490909090909092,
@@ -792,6 +794,30 @@
        0.9454545454545435
       ],
       "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-rf_probe": {
+      "delta": 2.7636363636363654,
+      "ci95": [
+       0.1999999999999993,
+       4.7636363636363654
+      ],
+      "excludes_zero": true
+     },
+     "rf_probe_mpnnsel-mpnn_score": {
+      "delta": 0.0,
+      "ci95": [
+       0.0,
+       0.0
+      ],
+      "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-random": {
+      "delta": 3.0545454545454547,
+      "ci95": [
+       0.7818181818181813,
+       4.781818181818181
+      ],
+      "excludes_zero": true
      }
     }
    },
@@ -799,6 +825,7 @@
     "n_targets": 11,
     "point": {
      "rf_probe": 26.527272727272727,
+     "rf_probe_mpnnsel": 28.763636363636365,
      "ridge_probe": 25.963636363636365,
      "mpnn_score": 28.272727272727273,
      "random": 25.01818181818182,
@@ -844,6 +871,30 @@
        2.1090909090909076
       ],
       "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-rf_probe": {
+      "delta": 2.236363636363638,
+      "ci95": [
+       -0.5272727272727273,
+       4.418181818181818
+      ],
+      "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-mpnn_score": {
+      "delta": 0.49090909090909207,
+      "ci95": [
+       -0.5636363636363662,
+       1.527272727272731
+      ],
+      "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-random": {
+      "delta": 3.745454545454546,
+      "ci95": [
+       1.490909090909092,
+       5.545454545454543
+      ],
+      "excludes_zero": true
      }
     }
    },
@@ -851,6 +902,7 @@
     "n_targets": 11,
     "point": {
      "rf_probe": 33.67272727272727,
+     "rf_probe_mpnnsel": 35.527272727272724,
      "ridge_probe": 33.10909090909091,
      "mpnn_score": 34.27272727272727,
      "random": 31.181818181818183,
@@ -896,6 +948,30 @@
        3.127272727272725
       ],
       "excludes_zero": true
+     },
+     "rf_probe_mpnnsel-rf_probe": {
+      "delta": 1.8545454545454518,
+      "ci95": [
+       -0.8181818181818201,
+       4.236363636363638
+      ],
+      "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-mpnn_score": {
+      "delta": 1.2545454545454504,
+      "ci95": [
+       -0.6363636363636367,
+       3.2909090909090892
+      ],
+      "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-random": {
+      "delta": 4.34545454545454,
+      "ci95": [
+       1.9636363636363647,
+       6.45454545454546
+      ],
+      "excludes_zero": true
      }
     }
    },
@@ -903,6 +979,7 @@
     "n_targets": 11,
     "point": {
      "rf_probe": 40.49090909090909,
+     "rf_probe_mpnnsel": 41.8,
      "ridge_probe": 39.72727272727273,
      "mpnn_score": 40.81818181818182,
      "random": 37.72727272727273,
@@ -948,6 +1025,30 @@
        4.036363636363632
       ],
       "excludes_zero": true
+     },
+     "rf_probe_mpnnsel-rf_probe": {
+      "delta": 1.309090909090905,
+      "ci95": [
+       -1.7999999999999972,
+       3.9272727272727295
+      ],
+      "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-mpnn_score": {
+      "delta": 0.981818181818177,
+      "ci95": [
+       -1.163636363636364,
+       3.2727272727272734
+      ],
+      "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-random": {
+      "delta": 4.0727272727272705,
+      "ci95": [
+       1.0727272727272705,
+       7.054545454545455
+      ],
+      "excludes_zero": true
      }
     }
    },
@@ -955,6 +1056,7 @@
     "n_targets": 11,
     "point": {
      "rf_probe": 53.56363636363636,
+     "rf_probe_mpnnsel": 53.10909090909091,
      "ridge_probe": 53.0,
      "mpnn_score": 53.18181818181818,
      "random": 50.25454545454545,
@@ -1000,6 +1102,30 @@
        5.527272727272731
       ],
       "excludes_zero": true
+     },
+     "rf_probe_mpnnsel-rf_probe": {
+      "delta": -0.45454545454545325,
+      "ci95": [
+       -2.854545454545452,
+       1.8727272727272748
+      ],
+      "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-mpnn_score": {
+      "delta": -0.07272727272727053,
+      "ci95": [
+       -2.0909090909090935,
+       2.018181818181816
+      ],
+      "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-random": {
+      "delta": 2.854545454545459,
+      "ci95": [
+       0.2181818181818116,
+       5.563636363636363
+      ],
+      "excludes_zero": true
      }
     }
    },
@@ -1007,6 +1133,7 @@
     "n_targets": 11,
     "point": {
      "rf_probe": 65.92727272727272,
+     "rf_probe_mpnnsel": 63.67272727272727,
      "ridge_probe": 65.49090909090908,
      "mpnn_score": 63.54545454545455,
      "random": 63.14545454545455,
@@ -1052,6 +1179,30 @@
        4.654545454545442
       ],
       "excludes_zero": true
+     },
+     "rf_probe_mpnnsel-rf_probe": {
+      "delta": -2.2545454545454504,
+      "ci95": [
+       -4.945454545454538,
+       -0.1272727272727252
+      ],
+      "excludes_zero": true
+     },
+     "rf_probe_mpnnsel-mpnn_score": {
+      "delta": 0.1272727272727252,
+      "ci95": [
+       -2.2181818181818045,
+       2.7636363636363512
+      ],
+      "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-random": {
+      "delta": 0.5272727272727238,
+      "ci95": [
+       -1.5454545454545467,
+       2.654545454545456
+      ],
+      "excludes_zero": false
      }
     }
    },
@@ -1059,6 +1210,7 @@
     "n_targets": 11,
     "point": {
      "rf_probe": 75.54545454545455,
+     "rf_probe_mpnnsel": 75.54545454545455,
      "ridge_probe": 75.54545454545455,
      "mpnn_score": 75.54545454545455,
      "random": 75.54545454545455,
@@ -1104,6 +1256,30 @@
        0.0
       ],
       "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-rf_probe": {
+      "delta": 0.0,
+      "ci95": [
+       0.0,
+       0.0
+      ],
+      "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-mpnn_score": {
+      "delta": 0.0,
+      "ci95": [
+       0.0,
+       0.0
+      ],
+      "excludes_zero": false
+     },
+     "rf_probe_mpnnsel-random": {
+      "delta": 0.0,
+      "ci95": [
+       0.0,
+       0.0
+      ],
+      "excludes_zero": false
      }
     }
    }
@@ -1117,6 +1293,7 @@
     "by_budget": {
      "30": {
       "rf_probe": 19.4,
+      "rf_probe_mpnnsel": 23.0,
       "ridge_probe": 19.4,
       "mpnn_score": 23.0,
       "random": 19.0,
@@ -1124,6 +1301,7 @@
      },
      "40": {
       "rf_probe": 28.4,
+      "rf_probe_mpnnsel": 31.6,
       "ridge_probe": 28.2,
       "mpnn_score": 28.0,
       "random": 25.0,
@@ -1131,6 +1309,7 @@
      },
      "50": {
       "rf_probe": 35.8,
+      "rf_probe_mpnnsel": 39.4,
       "ridge_probe": 37.0,
       "mpnn_score": 31.0,
       "random": 31.2,
@@ -1138,6 +1317,7 @@
      },
      "60": {
       "rf_probe": 42.2,
+      "rf_probe_mpnnsel": 46.2,
       "ridge_probe": 44.8,
       "mpnn_score": 38.0,
       "random": 35.8,
@@ -1145,6 +1325,7 @@
      },
      "80": {
       "rf_probe": 55.6,
+      "rf_probe_mpnnsel": 56.2,
       "ridge_probe": 58.6,
       "mpnn_score": 53.0,
       "random": 46.8,
@@ -1152,6 +1333,7 @@
      },
      "100": {
       "rf_probe": 66.2,
+      "rf_probe_mpnnsel": 65.8,
       "ridge_probe": 66.2,
       "mpnn_score": 62.0,
       "random": 62.6,
@@ -1159,6 +1341,7 @@
      },
      "120": {
       "rf_probe": 74.0,
+      "rf_probe_mpnnsel": 74.0,
       "ridge_probe": 74.0,
       "mpnn_score": 74.0,
       "random": 74.0,
@@ -1171,6 +1354,7 @@
     "by_budget": {
      "30": {
       "rf_probe": 20.4,
+      "rf_probe_mpnnsel": 28.0,
       "ridge_probe": 20.4,
       "mpnn_score": 28.0,
       "random": 21.0,
@@ -1178,6 +1362,7 @@
      },
      "40": {
       "rf_probe": 29.4,
+      "rf_probe_mpnnsel": 35.4,
       "ridge_probe": 29.0,
       "mpnn_score": 38.0,
       "random": 29.6,
@@ -1185,6 +1370,7 @@
      },
      "50": {
       "rf_probe": 38.0,
+      "rf_probe_mpnnsel": 43.0,
       "ridge_probe": 37.8,
       "mpnn_score": 47.0,
       "random": 36.4,
@@ -1192,6 +1378,7 @@
      },
      "60": {
       "rf_probe": 45.8,
+      "rf_probe_mpnnsel": 50.6,
       "ridge_probe": 45.4,
       "mpnn_score": 54.0,
       "random": 43.0,
@@ -1199,6 +1386,7 @@
      },
      "80": {
       "rf_probe": 59.8,
+      "rf_probe_mpnnsel": 66.2,
       "ridge_probe": 60.2,
       "mpnn_score": 64.0,
       "random": 58.0,
@@ -1206,6 +1394,7 @@
      },
      "100": {
       "rf_probe": 74.4,
+      "rf_probe_mpnnsel": 76.2,
       "ridge_probe": 73.2,
       "mpnn_score": 75.0,
       "random": 71.0,
@@ -1213,6 +1402,7 @@
      },
      "120": {
       "rf_probe": 86.0,
+      "rf_probe_mpnnsel": 86.0,
       "ridge_probe": 86.0,
       "mpnn_score": 86.0,
       "random": 86.0,
@@ -1225,6 +1415,7 @@
     "by_budget": {
      "30": {
       "rf_probe": 26.8,
+      "rf_probe_mpnnsel": 29.0,
       "ridge_probe": 26.8,
       "mpnn_score": 29.0,
       "random": 26.4,
@@ -1232,6 +1423,7 @@
      },
      "40": {
       "rf_probe": 36.4,
+      "rf_probe_mpnnsel": 37.2,
       "ridge_probe": 36.0,
       "mpnn_score": 38.0,
       "random": 34.4,
@@ -1239,6 +1431,7 @@
      },
      "50": {
       "rf_probe": 45.4,
+      "rf_probe_mpnnsel": 45.8,
       "ridge_probe": 45.2,
       "mpnn_score": 48.0,
       "random": 43.4,
@@ -1246,6 +1439,7 @@
      },
      "60": {
       "rf_probe": 54.4,
+      "rf_probe_mpnnsel": 54.2,
       "ridge_probe": 54.6,
       "mpnn_score": 58.0,
       "random": 54.2,
@@ -1253,6 +1447,7 @@
      },
      "80": {
       "rf_probe": 73.4,
+      "rf_probe_mpnnsel": 71.6,
       "ridge_probe": 72.8,
       "mpnn_score": 75.0,
       "random": 71.6,
@@ -1260,6 +1455,7 @@
      },
      "100": {
       "rf_probe": 90.8,
+      "rf_probe_mpnnsel": 89.4,
       "ridge_probe": 91.0,
       "mpnn_score": 92.0,
       "random": 90.8,
@@ -1267,6 +1463,7 @@
      },
      "120": {
       "rf_probe": 108.0,
+      "rf_probe_mpnnsel": 108.0,
       "ridge_probe": 108.0,
       "mpnn_score": 108.0,
       "random": 108.0,
@@ -1279,6 +1476,7 @@
     "by_budget": {
      "30": {
       "rf_probe": 11.2,
+      "rf_probe_mpnnsel": 4.0,
       "ridge_probe": 11.2,
       "mpnn_score": 4.0,
       "random": 9.8,
@@ -1286,6 +1484,7 @@
      },
      "40": {
       "rf_probe": 18.8,
+      "rf_probe_mpnnsel": 10.6,
       "ridge_probe": 18.0,
       "mpnn_score": 8.0,
       "random": 15.2,
@@ -1293,6 +1492,7 @@
      },
      "50": {
       "rf_probe": 24.6,
+      "rf_probe_mpnnsel": 17.0,
       "ridge_probe": 23.6,
       "mpnn_score": 11.0,
       "random": 21.0,
@@ -1300,6 +1500,7 @@
      },
      "60": {
       "rf_probe": 29.8,
+      "rf_probe_mpnnsel": 20.6,
       "ridge_probe": 27.8,
       "mpnn_score": 17.0,
       "random": 24.8,
@@ -1307,6 +1508,7 @@
      },
      "80": {
       "rf_probe": 37.4,
+      "rf_probe_mpnnsel": 30.0,
       "ridge_probe": 36.0,
       "mpnn_score": 28.0,
       "random": 33.2,
@@ -1314,6 +1516,7 @@
      },
      "100": {
       "rf_probe": 44.8,
+      "rf_probe_mpnnsel": 38.8,
       "ridge_probe": 43.0,
       "mpnn_score": 36.0,
       "random": 41.8,
@@ -1321,6 +1524,7 @@
      },
      "120": {
       "rf_probe": 49.0,
+      "rf_probe_mpnnsel": 49.0,
       "ridge_probe": 49.0,
       "mpnn_score": 49.0,
       "random": 49.0,
@@ -1333,6 +1537,7 @@
     "by_budget": {
      "30": {
       "rf_probe": 23.6,
+      "rf_probe_mpnnsel": 30.0,
       "ridge_probe": 23.6,
       "mpnn_score": 30.0,
       "random": 24.0,
@@ -1340,6 +1545,7 @@
      },
      "40": {
       "rf_probe": 33.6,
+      "rf_probe_mpnnsel": 39.0,
       "ridge_probe": 33.2,
       "mpnn_score": 39.0,
       "random": 31.6,
@@ -1347,6 +1553,7 @@
      },
      "50": {
       "rf_probe": 43.6,
+      "rf_probe_mpnnsel": 49.0,
       "ridge_probe": 42.8,
       "mpnn_score": 48.0,
       "random": 39.8,
@@ -1354,6 +1561,7 @@
      },
      "60": {
       "rf_probe": 53.4,
+      "rf_probe_mpnnsel": 59.0,
       "ridge_probe": 52.6,
       "mpnn_score": 58.0,
       "random": 47.2,
@@ -1361,6 +1569,7 @@
      },
      "80": {
       "rf_probe": 72.2,
+      "rf_probe_mpnnsel": 69.0,
       "ridge_probe": 71.8,
       "mpnn_score": 73.0,
       "random": 61.2,
@@ -1368,6 +1577,7 @@
      },
      "100": {
       "rf_probe": 89.4,
+      "rf_probe_mpnnsel": 76.0,
       "ridge_probe": 89.8,
       "mpnn_score": 80.0,
       "random": 78.2,
@@ -1375,6 +1585,7 @@
      },
      "120": {
       "rf_probe": 94.0,
+      "rf_probe_mpnnsel": 94.0,
       "ridge_probe": 94.0,
       "mpnn_score": 94.0,
       "random": 94.0,
@@ -1387,6 +1598,7 @@
     "by_budget": {
      "30": {
       "rf_probe": 3.6,
+      "rf_probe_mpnnsel": 6.0,
       "ridge_probe": 3.6,
       "mpnn_score": 6.0,
       "random": 1.8,
@@ -1394,6 +1606,7 @@
      },
      "40": {
       "rf_probe": 7.0,
+      "rf_probe_mpnnsel": 9.0,
       "ridge_probe": 6.4,
       "mpnn_score": 8.0,
       "random": 2.8,
@@ -1401,6 +1614,7 @@
      },
      "50": {
       "rf_probe": 7.8,
+      "rf_probe_mpnnsel": 9.0,
       "ridge_probe": 7.2,
       "mpnn_score": 8.0,
       "random": 3.8,
@@ -1408,6 +1622,7 @@
      },
      "60": {
       "rf_probe": 8.6,
+      "rf_probe_mpnnsel": 9.0,
       "ridge_probe": 8.2,
       "mpnn_score": 9.0,
       "random": 4.8,
@@ -1415,6 +1630,7 @@
      },
      "80": {
       "rf_probe": 8.8,
+      "rf_probe_mpnnsel": 9.0,
       "ridge_probe": 8.6,
       "mpnn_score": 9.0,
       "random": 5.6,
@@ -1422,6 +1638,7 @@
      },
      "100": {
       "rf_probe": 8.8,
+      "rf_probe_mpnnsel": 9.0,
       "ridge_probe": 8.8,
       "mpnn_score": 9.0,
       "random": 7.2,
@@ -1429,6 +1646,7 @@
      },
      "120": {
       "rf_probe": 9.0,
+      "rf_probe_mpnnsel": 9.0,
       "ridge_probe": 9.0,
       "mpnn_score": 9.0,
       "random": 9.0,
@@ -1441,6 +1659,7 @@
     "by_budget": {
      "30": {
       "rf_probe": 24.4,
+      "rf_probe_mpnnsel": 29.0,
       "ridge_probe": 24.4,
       "mpnn_score": 29.0,
       "random": 23.2,
@@ -1448,6 +1667,7 @@
      },
      "40": {
       "rf_probe": 34.0,
+      "rf_probe_mpnnsel": 37.6,
       "ridge_probe": 32.4,
       "mpnn_score": 36.0,
       "random": 31.6,
@@ -1455,6 +1675,7 @@
      },
      "50": {
       "rf_probe": 43.4,
+      "rf_probe_mpnnsel": 46.6,
       "ridge_probe": 41.2,
       "mpnn_score": 45.0,
       "random": 39.0,
@@ -1462,6 +1683,7 @@
      },
      "60": {
       "rf_probe": 52.4,
+      "rf_probe_mpnnsel": 55.8,
       "ridge_probe": 48.4,
       "mpnn_score": 49.0,
       "random": 46.4,
@@ -1469,6 +1691,7 @@
      },
      "80": {
       "rf_probe": 69.4,
+      "rf_probe_mpnnsel": 71.4,
       "ridge_probe": 65.2,
       "mpnn_score": 64.0,
       "random": 63.4,
@@ -1476,6 +1699,7 @@
      },
      "100": {
       "rf_probe": 83.0,
+      "rf_probe_mpnnsel": 84.8,
       "ridge_probe": 81.6,
       "mpnn_score": 74.0,
       "random": 77.0,
@@ -1483,6 +1707,7 @@
      },
      "120": {
       "rf_probe": 93.0,
+      "rf_probe_mpnnsel": 93.0,
       "ridge_probe": 93.0,
       "mpnn_score": 93.0,
       "random": 93.0,
@@ -1495,6 +1720,7 @@
     "by_budget": {
      "30": {
       "rf_probe": 29.4,
+      "rf_probe_mpnnsel": 30.0,
       "ridge_probe": 29.4,
       "mpnn_score": 30.0,
       "random": 29.0,
@@ -1502,6 +1728,7 @@
      },
      "40": {
       "rf_probe": 39.4,
+      "rf_probe_mpnnsel": 40.0,
       "ridge_probe": 39.4,
       "mpnn_score": 40.0,
       "random": 39.6,
@@ -1509,6 +1736,7 @@
      },
      "50": {
       "rf_probe": 49.0,
+      "rf_probe_mpnnsel": 49.0,
       "ridge_probe": 49.0,
       "mpnn_score": 50.0,
       "random": 48.6,
@@ -1516,6 +1744,7 @@
      },
      "60": {
       "rf_probe": 58.8,
+      "rf_probe_mpnnsel": 59.0,
       "ridge_probe": 58.6,
       "mpnn_score": 60.0,
       "random": 59.0,
@@ -1523,6 +1752,7 @@
      },
      "80": {
       "rf_probe": 78.4,
+      "rf_probe_mpnnsel": 78.0,
       "ridge_probe": 78.0,
       "mpnn_score": 79.0,
       "random": 79.2,
@@ -1530,6 +1760,7 @@
      },
      "100": {
       "rf_probe": 98.0,
+      "rf_probe_mpnnsel": 98.0,
       "ridge_probe": 98.0,
       "mpnn_score": 99.0,
       "random": 98.6,
@@ -1537,6 +1768,7 @@
      },
      "120": {
       "rf_probe": 118.0,
+      "rf_probe_mpnnsel": 118.0,
       "ridge_probe": 118.0,
       "mpnn_score": 118.0,
       "random": 118.0,
@@ -1549,6 +1781,7 @@
     "by_budget": {
      "30": {
       "rf_probe": 23.2,
+      "rf_probe_mpnnsel": 24.0,
       "ridge_probe": 23.2,
       "mpnn_score": 24.0,
       "random": 21.8,
@@ -1556,6 +1789,7 @@
      },
      "40": {
       "rf_probe": 31.0,
+      "rf_probe_mpnnsel": 30.0,
       "ridge_probe": 29.6,
       "mpnn_score": 32.0,
       "random": 27.8,
@@ -1563,6 +1797,7 @@
      },
      "50": {
       "rf_probe": 39.6,
+      "rf_probe_mpnnsel": 36.2,
       "ridge_probe": 37.2,
       "mpnn_score": 37.0,
       "random": 34.6,
@@ -1570,6 +1805,7 @@
      },
      "60": {
       "rf_probe": 47.0,
+      "rf_probe_mpnnsel": 42.4,
       "ridge_probe": 44.0,
       "mpnn_score": 45.0,
       "random": 42.0,
@@ -1577,6 +1813,7 @@
      },
      "80": {
       "rf_probe": 59.6,
+      "rf_probe_mpnnsel": 53.8,
       "ridge_probe": 57.8,
       "mpnn_score": 60.0,
       "random": 55.8,
@@ -1584,6 +1821,7 @@
      },
      "100": {
       "rf_probe": 71.8,
+      "rf_probe_mpnnsel": 67.4,
       "ridge_probe": 71.6,
       "mpnn_score": 72.0,
       "random": 72.4,
@@ -1591,6 +1829,7 @@
      },
      "120": {
       "rf_probe": 85.0,
+      "rf_probe_mpnnsel": 85.0,
       "ridge_probe": 85.0,
       "mpnn_score": 85.0,
       "random": 85.0,
@@ -1603,6 +1842,7 @@
     "by_budget": {
      "30": {
       "rf_probe": 24.6,
+      "rf_probe_mpnnsel": 30.0,
       "ridge_probe": 24.6,
       "mpnn_score": 30.0,
       "random": 25.0,
@@ -1610,6 +1850,7 @@
      },
      "40": {
       "rf_probe": 33.8,
+      "rf_probe_mpnnsel": 39.0,
       "ridge_probe": 33.4,
       "mpnn_score": 39.0,
       "random": 35.0,
@@ -1617,6 +1858,7 @@
      },
      "50": {
       "rf_probe": 43.2,
+      "rf_probe_mpnnsel": 48.0,
       "ridge_probe": 43.2,
       "mpnn_score": 47.0,
       "random": 42.2,
@@ -1624,6 +1866,7 @@
      },
      "60": {
       "rf_probe": 53.0,
+      "rf_probe_mpnnsel": 55.0,
       "ridge_probe": 52.6,
       "mpnn_score": 55.0,
       "random": 54.2,
@@ -1631,6 +1874,7 @@
      },
      "80": {
       "rf_probe": 71.6,
+      "rf_probe_mpnnsel": 71.0,
       "ridge_probe": 71.0,
       "mpnn_score": 73.0,
       "random": 71.8,
@@ -1638,6 +1882,7 @@
      },
      "100": {
       "rf_probe": 90.0,
+      "rf_probe_mpnnsel": 87.0,
       "ridge_probe": 89.2,
       "mpnn_score": 92.0,
       "random": 88.6,
@@ -1645,6 +1890,7 @@
      },
      "120": {
       "rf_probe": 107.0,
+      "rf_probe_mpnnsel": 107.0,
       "ridge_probe": 107.0,
       "mpnn_score": 107.0,
       "random": 107.0,
@@ -1657,6 +1903,7 @@
     "by_budget": {
      "30": {
       "rf_probe": 0.0,
+      "rf_probe_mpnnsel": 4.0,
       "ridge_probe": 0.0,
       "mpnn_score": 4.0,
       "random": 2.4,
@@ -1664,6 +1911,7 @@
      },
      "40": {
       "rf_probe": 0.0,
+      "rf_probe_mpnnsel": 7.0,
       "ridge_probe": 0.0,
       "mpnn_score": 5.0,
       "random": 2.6,
@@ -1671,6 +1919,7 @@
      },
      "50": {
       "rf_probe": 0.0,
+      "rf_probe_mpnnsel": 7.8,
       "ridge_probe": 0.0,
       "mpnn_score": 5.0,
       "random": 3.0,
@@ -1678,6 +1927,7 @@
      },
      "60": {
       "rf_probe": 0.0,
+      "rf_probe_mpnnsel": 8.0,
       "ridge_probe": 0.0,
       "mpnn_score": 6.0,
       "random": 3.6,
@@ -1685,6 +1935,7 @@
      },
      "80": {
       "rf_probe": 3.0,
+      "rf_probe_mpnnsel": 8.0,
       "ridge_probe": 3.0,
       "mpnn_score": 7.0,
       "random": 6.2,
@@ -1692,6 +1943,7 @@
      },
      "100": {
       "rf_probe": 8.0,
+      "rf_probe_mpnnsel": 8.0,
       "ridge_probe": 8.0,
       "mpnn_score": 8.0,
       "random": 6.4,
@@ -1699,6 +1951,7 @@
      },
      "120": {
       "rf_probe": 8.0,
+      "rf_probe_mpnnsel": 8.0,
       "ridge_probe": 8.0,
       "mpnn_score": 8.0,
       "random": 8.0,
