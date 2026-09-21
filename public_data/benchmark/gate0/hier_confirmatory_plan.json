@@ -1,0 +1,98 @@
+{
+ "plan_id": "rapid_hier_confirmatory",
+ "status": "frozen",
+ "version": "2.0",
+ "schema_note": "52_v2_multisource_campaign.py 가 읽는 스키마와 같다. plan_id 가 다르므로 v2 동결 계획을 덮지 않는다.",
+ "prespec": "docs/specs/hierarchical-confirmatory-prespec.md",
+ "prespec_version": "1.3",
+ "targets_artifact": "public_data/benchmark/gate0/hier_confirmatory_targets.json",
+ "targets_sha256": "ca5eae874fa3d2f428641f3e5a97e8cef66c8c686e99f5563e6ba57fe77c3513",
+ "cohorts": {
+  "hier_confirmatory": {
+   "n_targets": 34,
+   "seed": 20260921,
+   "selected": [
+    "16vpA00",
+    "1a19A00",
+    "1a6jA00",
+    "1a8rG01",
+    "1advA01",
+    "1af7A01",
+    "1agrE02",
+    "1b12B02",
+    "1b5aA00",
+    "1b7eA01",
+    "1b8xA03",
+    "1bg5A03",
+    "1bt2A00",
+    "1bxmA00",
+    "1eruA00",
+    "1h6wA03",
+    "1hufA00",
+    "1ibvC00",
+    "1jyoE00",
+    "1keeF01",
+    "1lshB00",
+    "1mjoD00",
+    "1ohgC01",
+    "1qmbB00",
+    "1r7lA00",
+    "1szwB02",
+    "2vvrB00",
+    "2wejA00",
+    "2x62B00",
+    "3ab2G02",
+    "3akoB00",
+    "3b5mC01",
+    "3bukC01",
+    "3clqD02"
+   ],
+   "selected_sha256": "79635e25a6efb3725b89bebb8934187670ac43c2d73dfc276a7454acd5c526e2",
+   "reselection_forbidden": true,
+   "n_reserve": 0,
+   "reserve_note": "예비가 없다. 생성 실패는 표적 교체 없이 모자란 채로 보고한다 (사전지정 §9)."
+  }
+ },
+ "per_source_design": {
+  "backbones_per_target": 6,
+  "confirmatory_candidates_per_backbone": 42,
+  "confirmatory_tier_counts": {
+   "30": 14,
+   "50": 14,
+   "70": 14
+  },
+  "calibration_candidates_per_backbone": 42,
+  "calibration_tier_counts": {
+   "30": 14,
+   "50": 14,
+   "70": 14
+  },
+  "tier_prefix_order": [
+   "30",
+   "50",
+   "70"
+  ],
+  "warmup_valid_observations_per_backbone": 4
+ },
+ "generation_rules": {
+  "rfd3": {
+   "mode": "local_diversify",
+   "partial_t": 5.0,
+   "select_fixed_atoms": "{A1: ALL} — 변경하지 않는다",
+   "accept_gate": "target-RMSD <= 2.0 A",
+   "accepted_needed_per_target": 6,
+   "max_attempts_per_target": 24,
+   "order": "동결된 seed 의 생성 순서. 구조 점수로 고르지 않는다."
+  },
+  "on_shortfall": "그 target x source 를 SOURCE_GENERATION_INFEASIBLE 로 기록한다. 타겟을 예비로 바꾸지 않는다.",
+  "unequal_units_formula": {
+   "warmup_per_unit": 4,
+   "ceiling_per_unit": 42
+  }
+ },
+ "endpoints": {
+  "pooling_across_sources_forbidden": true,
+  "efbc_forbidden": true,
+  "calibration_cohort_forbidden": true
+ }
+}

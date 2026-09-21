@@ -64,9 +64,13 @@ MAX_RUN_ATTEMPTS = 2
 
 # ---------------------------------------------------------------- 동결값 읽기
 
-def load_plan() -> dict:
-    """동결 계획. `status != frozen` 이면 돌지 않는다."""
-    plan = json.loads(PLAN_PATH.read_text(encoding="utf-8"))
+def load_plan(path: Path | None = None) -> dict:
+    """동결 계획. `status != frozen` 이면 돌지 않는다.
+
+    인자가 없으면 동결 v2 계획이다 - 기존 호출의 동작은 바뀌지 않는다.
+    다른 코호트는 **자기 계획 파일**을 넘긴다. v2 계획을 고쳐 쓰지 않는다.
+    """
+    plan = json.loads((path or PLAN_PATH).read_text(encoding="utf-8"))
     if plan.get("status") != "frozen":
         raise SystemExit(
             f"계획이 frozen 이 아니다 (status={plan.get('status')!r}). "
@@ -113,15 +117,22 @@ def cohort_rows(plan: dict, msa: dict) -> list[dict]:
     return rows
 
 
+#: 코호트 이름 -> `per_source_design` 의 접두사. v2 의 두 이름은 그대로 두고
+#: 새 코호트를 여기 등록한다. 이름을 모르면 선다 - 조용히 기본값을 쓰면
+#: 후보 수가 달라진 것을 아무도 모른 채 캠페인이 돈다.
+COHORT_DESIGN_PREFIX = {"calibration_v2": "calibration",
+                        "confirmatory": "confirmatory",
+                        "hier_confirmatory": "confirmatory"}
+
+
 def candidates_per_backbone(plan: dict, cohort: str) -> tuple[int, dict[str, int]]:
     design = plan["per_source_design"]
-    if cohort == "calibration_v2":
-        return (int(design["calibration_candidates_per_backbone"]),
-                {k: int(v) for k, v in design["calibration_tier_counts"].items()})
-    if cohort == "confirmatory":
-        return (int(design["confirmatory_candidates_per_backbone"]),
-                {k: int(v) for k, v in design["confirmatory_tier_counts"].items()})
-    raise SystemExit(f"알 수 없는 cohort: {cohort!r}")
+    prefix = COHORT_DESIGN_PREFIX.get(cohort)
+    if prefix is None:
+        raise SystemExit(f"알 수 없는 cohort: {cohort!r} · 가능: "
+                         f"{sorted(COHORT_DESIGN_PREFIX)}")
+    return (int(design[f"{prefix}_candidates_per_backbone"]),
+            {k: int(v) for k, v in design[f"{prefix}_tier_counts"].items()})
 
 
 # ------------------------------------------------------------ 보존도 fixed pos
@@ -716,6 +727,12 @@ def main(argv=None) -> int:
     parser.add_argument("--af2-timeout", type=float, default=7200.0)
     parser.add_argument("--fold-workers", type=int, default=0,
                         help="0 이면 PIPELINE_AF2_MAX_WORKERS 를 따른다.")
+    parser.add_argument("--plan", default="",
+                        help="동결 계획 JSON. 생략하면 v2 계획이다.")
+    parser.add_argument("--msa-manifest", default="",
+                        help="MSA 매니페스트. 생략하면 v2 것이다.")
+    parser.add_argument("--out-dir", default="",
+                        help="산출물 디렉터리. 생략하면 v2_multisource 다.")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
@@ -724,8 +741,15 @@ def main(argv=None) -> int:
         from dotenv import load_dotenv
         load_dotenv(str(env_file), override=False)
 
-    plan = load_plan()
-    msa = json.loads(MSA_MANIFEST.read_text(encoding="utf-8"))
+    plan = load_plan(Path(args.plan) if args.plan else None)
+    #: 인자로 받은 경로가 있으면 그것을 쓴다. 없으면 동결 v2 그대로다.
+    #: `OUT_DIR` 은 모듈 전역이라 여기서 갈아끼운다 - 산출물이 다른 코호트의
+    #: 디렉터리에 떨어지면 동결 판정을 덮어쓴다.
+    global OUT_DIR
+    if args.out_dir:
+        OUT_DIR = Path(args.out_dir)
+    manifest = Path(args.msa_manifest) if args.msa_manifest else MSA_MANIFEST
+    msa = json.loads(manifest.read_text(encoding="utf-8"))
     if int(msa.get("n_done", 0)) != int(msa.get("n_planned", -1)):
         raise SystemExit(
             f"MSA 가 끝나지 않았다 ({msa.get('n_done')}/{msa.get('n_planned')}). "
