@@ -5,6 +5,12 @@
 
 작성 2026-09-21. 대상 분석: `scripts/benchmark/35_hierarchical_replay.py`(아직 없음).
 
+**v1.1 개정 (2026-09-21, 실행 전).** §6.1 이 제외했던 순차 갱신판을
+`adaptive_sentinel` 이라는 이름의 **탐색 arm 으로 추가**한다. 주 비교는 바꾸지
+않는다. 개정 이유: 배분을 warm-up 에 고정하면 "되먹임이 조금이라도 이득을
+주는가" 를 아예 물을 수 없는데, 이 질문은 ceiling 안에서도 답할 수 있고 같은
+실행에서 공짜로 얻어진다. 개정 시점에 분석은 아직 실행되지 않았다.
+
 ---
 
 ## 1. 무엇을 묻는가
@@ -137,9 +143,22 @@ posterior     Beta(1,1) + warm-up sentinel 의 joint-pass 성공/실패
               반올림 잔여는 posterior 평균 내림차순으로 배정
 ```
 
-순차 갱신판(`hierarchical_seq`, 탐색 몫을 따로 떼어 무작위 관측을 계속
-만드는 방식)은 **이번 분석에 포함하지 않는다.** 필요하면 별도 사전지정을
-쓴다.
+### 6.2 `adaptive_sentinel` — 탐색 arm (v1.1 추가)
+
+주 비교에 들어가지 않는다. 판정하지 않고 기술만 한다.
+
+```
+탐색 몫        A 의 25% 를 무작위 추출에 쓴다 (4 회마다 1 회, 결정적 간격)
+posterior      sentinel + 탐색 관측으로만 갱신. targeted 관측은 넣지 않는다.
+배분           매 호출마다 Thompson sampling: theta_b ~ Beta(a_b, b_b),
+               ceiling 에 걸리지 않은 백본 중 argmax
+백본 내부      탐색 호출이면 무작위, 아니면 RF 상위
+```
+
+warm-up-informed 와의 차이는 **posterior 가 실제로 갱신되는가** 하나다.
+탐색 몫 25% 는 실행 전에 고른 값이고 결과를 보고 바꾸지 않는다. 이 arm 은
+탐색 호출에 예산을 쓰므로 targeted 호출이 적다 - 불리할 수 있고, 그것도
+결과다.
 
 ## 7. 프로토콜 — 새로 만들지 않는다
 
@@ -186,6 +205,7 @@ hierarchical < rf_only   그대로 보고한다. 백본 제약이 RF 의 선택�
 - B=40 에서 정책을 비교하지 않는다 (warm-up 과 같다).
 - B=100 을 판정하지 않는다 (7 unit < 8).
 - 동결된 kappa 식별·confirmatory 평가가능성 판정을 바꾸지 않는다.
+- 순차 갱신 arm(`adaptive_sentinel`)의 결과로 주 판정을 바꾸지 않는다.
 - 이 결과를 "independent replication" 또는 "prospective validation" 으로
   부르지 않는다. 같은 표적을 RFD3 와 BioEmu 가 12 개 공유한다.
 - ceiling 을 넘는 집중 정책을 시험하지 않는다. 자료가 없다.
