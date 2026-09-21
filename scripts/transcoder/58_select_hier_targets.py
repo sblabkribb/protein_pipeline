@@ -8,6 +8,8 @@
 ------------------------
     후보     CATH pilot 77 표적 중 v2 다중생성원 캠페인과 **코호트 B**
              (11 표적 RFD3 예산 격자) 어느 쪽에도 쓰이지 않은 것
+    사슬     CATH pilot 의 PDB 는 조립체 전체인 경우가 많다. 도메인 길이와
+             맞는 사슬 하나만 뽑아 새 PDB 로 쓴다. 맞는 사슬이 없으면 뺀다.
     길이     80 <= L <= 400  (v2 실측 범위 50-386 에 맞춘다. 2,360 aa 는 뺀다)
     비중복   같은 PDB 엔트리(앞 4 자)에서 두 도메인을 쓰지 않고, 쌍대 서열
              동일성 30% 이상인 쌍도 쓰지 않는다. 표적 클러스터 부트스트랩이
@@ -40,19 +42,64 @@ V2 = ROOT / "public_data" / "benchmark" / "gate0" / "v2_multisource" / "candidat
 COHORT_B = ROOT / "public_data" / "benchmark" / "gate0" / "fewshot_jointpass_transfer.json"
 OUT = ROOT / "public_data" / "benchmark" / "gate0" / "hier_confirmatory_targets.json"
 
-N_TARGETS, N_STRATA, LEN_MIN, LEN_MAX, SEED = 36, 4, 80, 400, 20260921
+N_TARGETS, N_STRATA, LEN_MIN, LEN_MAX, SEED = 34, 4, 80, 400, 20260921
+#: 도메인 사슬을 고를 때 허용하는 길이 오차. CATH pilot 의 설계 서열 길이와
+#: PDB 의 CA 수는 결손 잔기 때문에 몇 개 어긋날 수 있다 (v2 실측 최대 3).
+CHAIN_LEN_TOL = 10
+CHAIN_DIR = ROOT / "public_data" / "benchmark" / "gate0" / "hier_targets_pdb"
 MAX_IDENTITY = 0.30
 #: MSA 러너가 요구하는 stratum 라벨. v2 동결 계획과 같은 경계를 쓴다.
 STRATA_BOUNDS = ((150, "50-150"), (250, "150-250"), (10**9, "250-400"))
 CATH_DIRS = ("cath_train", "cath_test", "cath_val")
 
 
-def _pdb_path(domain: str) -> str:
+def _raw_pdb(domain: str) -> Path:
     for d in CATH_DIRS:
         p = Path("/opt/protein_pipeline") / d / f"{domain}.pdb"
         if p.exists():
-            return str(p)
+            return p
     raise SystemExit(f"{domain} 의 PDB 를 cath_train/test/val 에서 못 찾았다")
+
+
+def _chain_ca(path: Path) -> dict[str, int]:
+    c: dict[str, int] = {}
+    for line in path.read_text(errors="replace").splitlines():
+        if line.startswith("ATOM") and line[12:16] == " CA ":
+            c[line[21]] = c.get(line[21], 0) + 1
+    return c
+
+
+def _domain_chain(domain: str, want: int) -> str | None:
+    """도메인 길이와 맞는 사슬. 없으면 None (그 표적을 쓰지 않는다).
+
+    CATH pilot 의 PDB 는 **분리된 도메인이 아니라 생물학적 조립체**인 경우가
+    많다 - 실측 41 후보 중 25 개가 다사슬이고 그중 18 개는 이종 복합체다
+    (`1keeF01` 은 378 과 1058 잔기 사슬을 함께 갖는다). 캠페인 러너의
+    `design_chain` 은 ATOM 체인이 하나가 아니면 선다. 그래서 도메인에
+    해당하는 사슬 하나만 뽑아 새 PDB 를 만든다.
+    """
+    ca = _chain_ca(_raw_pdb(domain))
+    exact = sorted(k for k, v in ca.items() if v == want)
+    if exact:
+        return exact[0]
+    near = sorted((abs(v - want), k) for k, v in ca.items()
+                  if abs(v - want) <= CHAIN_LEN_TOL)
+    return near[0][1] if near else None
+
+
+def _write_chain(domain: str, chain: str) -> str:
+    """고른 사슬만 남긴 PDB 를 쓴다. 좌표를 바꾸지 않는다."""
+    CHAIN_DIR.mkdir(parents=True, exist_ok=True)
+    out = CHAIN_DIR / f"{domain}.pdb"
+    keep = []
+    for line in _raw_pdb(domain).read_text(errors="replace").splitlines():
+        if line.startswith(("ATOM", "HETATM")):
+            if len(line) > 21 and line[21] == chain:
+                keep.append(line)
+        elif line.startswith("TER"):
+            continue
+    out.write_text("\n".join(keep) + "\nTER\nEND\n", encoding="utf-8")
+    return str(out)
 
 
 def _stratum(n: int) -> str:
@@ -111,6 +158,11 @@ def main() -> int:
             if t not in used and LEN_MIN <= len(v[0]["sequence"]) <= LEN_MAX}
     names = _non_redundant(sorted(pool), seq)
     print(f"  비중복 필터: {len(pool)} -> {len(names)}")
+    chain_of = {t: _domain_chain(t, pool[t]) for t in names}
+    dropped = [t for t in names if chain_of[t] is None]
+    names = [t for t in names if chain_of[t] is not None]
+    print(f"  도메인 사슬 특정: -> {len(names)} (불가 {len(dropped)}: "
+          f"{', '.join(dropped[:6])})")
     print(f"CATH {len(by)} · v2 사용 {len(used)} · 길이필터 통과 {len(names)}")
     if len(names) < N_TARGETS:
         raise SystemExit(f"후보 {len(names)} < {N_TARGETS}")
@@ -141,7 +193,10 @@ def main() -> int:
            #: superfamily 는 이 표적들에 대한 CATH 분류가 로컬에 없어 null 이다.
            #: 러너는 이 필드를 기록만 하고 판단에 쓰지 않는다. 비중복은
            #: superfamily 가 아니라 PDB 엔트리와 서열 동일성으로 보장한다.
-           "targets": [{"domain": t, "length": pool[t], "pdb": _pdb_path(t),
+           "chain_len_tol": CHAIN_LEN_TOL,
+           "targets": [{"domain": t, "length": pool[t],
+                        "pdb": _write_chain(t, chain_of[t]),
+                        "chain": chain_of[t], "raw_pdb": str(_raw_pdb(t)),
                         "stratum": _stratum(pool[t]), "superfamily": None,
                         "role": "selected"} for t in picked]}
     text = json.dumps(doc, ensure_ascii=False, indent=1)
