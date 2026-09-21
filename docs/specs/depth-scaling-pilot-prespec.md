@@ -89,14 +89,41 @@ SoluProt                기존과 같은 클라이언트로 신규 서열에만 
 
 ## 5. 분석 — 주 비교 하나
 
-unit 마다 두 깊이에서 `greedy_frozen` 과 `rf_only` 를 재생한다. 알고리즘은
-`hierarchical-confirmatory-prespec.md` §5 를 **글자 그대로** 쓴다 (posterior
-갱신 없음, 탐색 몫 없음, posterior mean 내림차순으로 백본을 정원까지 채움,
-동점은 사전순). 여기서 알고리즘을 다시 손대지 않는다.
+### 5.0 v1.1 정정 — 두 greedy 가 서로 다른 알고리즘이었다
+
+동결 문서를 대조하다 불일치를 찾았다. **폴딩 전에 적어 둔다.**
+
+```
+36_ 이 측정한 greedy_frozen        고정 posterior 에서 **Thompson 추출**.
+                                   매 호출마다 theta_b ~ Beta 를 뽑아 argmax.
+                                   확률적이고 seed 에 의존한다.
+확증 사전지정 §5 가 동결한 것       posterior **mean 내림차순**으로 정렬해
+                                   한 백본씩 정원까지 채운다. 결정적이다.
+```
+
+캠페인을 정당화한 `+1.55` 는 **Thompson 쪽**에서 나왔는데 확증 코호트는
+결정적 쪽을 동결했다. 둘은 다른 정책이다. 추가 폴딩 없이 둘 다 잴 수 있으므로
+둘 다 낸다.
+
+```
+greedy_fill       결정적. 확증 사전지정 §5 그대로.   <- 파일럿 **주** 대상
+greedy_thompson   Thompson. 36_ 과 같다.            <- 연속성 확인용 보조
+```
+
+주 판정은 `greedy_fill` 로 한다 - 확증 코호트가 실제로 돌릴 알고리즘이기
+때문이다. `greedy_thompson` 은 36_ 의 +1.55 가 재현되는지 보는 용도이며,
+두 arm 의 깊이 반응이 갈리면 그 자체를 보고한다.
+
+### 5.1 재생 절차
+
+unit 마다 두 깊이에서 위 두 greedy 와 `rf_only` 를 재생한다. warm-up·ceiling·
+RF 규격은 `hierarchical-confirmatory-prespec.md` §5 를 그대로 쓴다. 여기서
+알고리즘을 다시 손대지 않는다.
 
 ```
 G(policy, d) = (Y_policy - Y_equal) / (Y_oracle - Y_equal)   깊이 d 에서
-D(d)         = G(greedy_frozen, d) - G(rf_only, d)
+D(d)         = G(greedy_fill, d) - G(rf_only, d)      (주)
+D_th(d)      = G(greedy_thompson, d) - G(rf_only, d)  (보조)
 주 비교      = D(42) - D(18)   의 unit 평균
 ```
 
