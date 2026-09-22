@@ -58,6 +58,15 @@ while pgrep -f "venv/bin/python scripts/transcoder/59_extend_depth_pilot\.py" \
 done
 echo "  파일럿 폴딩 종료 확인 $(date -u +%FT%TZ)"
 
+# 표본 크기를 파일럿 결과로 정한다 (사전지정 §7.0, 공식은 결과 전에 동결).
+# 게이트를 통과하지 못하면 64_ 가 0 이 아닌 코드로 끝나고 여기서 멈춘다 -
+# 표적을 만들기 전에 멈추는 것이 맞다.
+step "[S] 표본 크기 결정"
+if ! $PY scripts/transcoder/64_size_confirmatory.py; then
+  echo "  사이징 불가(게이트 미통과 또는 분석 없음). 확증을 시작하지 않는다."
+  exit 0
+fi
+
 step "[M] MSA"
 # 이미 돌고 있으면 끝나기를 기다린다. 두 프로세스가 같은 A3M 디렉터리를
 # 건드리면 부분 파일이 남는다.
