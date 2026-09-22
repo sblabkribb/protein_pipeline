@@ -38,7 +38,10 @@ step () { echo "=== $1 $(date -u +%FT%TZ)"; }
 step "[M] MSA"
 # 이미 돌고 있으면 끝나기를 기다린다. 두 프로세스가 같은 A3M 디렉터리를
 # 건드리면 부분 파일이 남는다.
-while pgrep -f "50_full_msa.py --cohorts hier_confirmatory" >/dev/null 2>&1; do
+# 패턴을 인터프리터 경로까지 포함해 좁힌다. "50_full_msa.py --cohorts ..."
+# 만으로 잡으면 그 문자열을 명령줄에 담은 **감시용 셸**까지 걸려서 드라이버가
+# 영원히 기다린다 - 2026-09-22 에 실제로 그렇게 멈췄다.
+while pgrep -f "venv/bin/python scripts/transcoder/50_full_msa\.py" >/dev/null 2>&1; do
   sleep 60
 done
 # 파일이 있다는 것만으로 건너뛰지 않는다 - 중간에 죽으면 부분 매니페스트가
