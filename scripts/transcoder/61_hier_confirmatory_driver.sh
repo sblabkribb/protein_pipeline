@@ -27,7 +27,14 @@ export RAPID_GPU_HOST="${RAPID_GPU_HOST:-211.188.35.221}"
 # 바뀌지 않는다 ... 제약은 서버 메모리뿐이다". 동결된 것은 job 당 threads=4
 # 이고, 워커 수는 운영 선택이다. 12 x 4 = 48 스레드를 기본으로 둔다.
 # BOP 의 코어·메모리를 늘려 잡을 수 있으면 MSA_WORKERS 로 올린다.
-MSA_WORKERS="${MSA_WORKERS:-12}"
+MSA_WORKERS="${MSA_WORKERS:-6}"
+
+# MSA 엔드포인트. 50_full_msa.py 의 기본값은 :18106 인데 그 포트는 **유닛이
+# inactive 인 22 일 된 고아 프로세스**가 쥐고 있고, 유닛 파일의
+# MMSEQS_MIN_THREADS=16 은 그 프로세스가 뜬 뒤에 추가돼 적용되지 않는다.
+# 그래서 클라이언트의 threads=4 로만 돌아 표적당 1-2 시간이 걸린다.
+# :18107 이 systemd 가 관리하는 살아 있는 GPU 서비스다.
+MSA_URL="${MSA_URL:-http://$RAPID_GPU_HOST:18107}"
 
 # 백본·설계 단계는 .env 가 필요하다. `.env` 는 공백이 든 값이 있어 `source`
 # 로 읽을 수 없다 - 첫 '=' 로만 자른다 (docs/restart_after_changes.md 정본).
@@ -78,10 +85,13 @@ if ! complete; then
   # 아니었다. 폴딩이 끝난 뒤 CPU 로 먼저 재고, 그때도 느리면 MSA_USE_GPU=1 로
   # 켠다. CPU 로 충분하면 동결 프로토콜을 건드릴 이유가 없고, 파일럿(CPU
   # 마스크)과 확증의 조건도 일치한다.
-  GPU_FLAG=""
-  [ "${MSA_USE_GPU:-0}" = "1" ] && GPU_FLAG="--use-gpu"
+  # :18107 은 GPU 서비스이므로 기본으로 --use-gpu 를 준다. CPU 로 재려면
+  # MSA_USE_GPU=0 MSA_URL=http://$RAPID_GPU_HOST:18106 으로 부른다.
+  GPU_FLAG="--use-gpu"
+  [ "${MSA_USE_GPU:-1}" = "0" ] && GPU_FLAG=""
   $PY scripts/transcoder/50_full_msa.py --cohorts hier_confirmatory $GPU_FLAG \
-      --out "$MANIFEST" --workers "$MSA_WORKERS" >>"$LOG/conf_msa.log" 2>&1
+      --url "$MSA_URL" --out "$MANIFEST" --workers "$MSA_WORKERS" \
+      >>"$LOG/conf_msa.log" 2>&1
 fi
 $PY - "$MANIFEST" <<'PYCHK' || { echo "MSA 가 완결되지 않았다. 멈춘다."; exit 1; }
 import json,sys,collections
