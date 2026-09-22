@@ -69,6 +69,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 A3M_RESPONSE_KEY = "a3m_gz_b64"
 #: pilot 과 동일한 검색 설정. 여기서 고르지 않는다.
 TARGET_DB, MAX_SEQS, THREADS, USE_GPU = "uniref90", 3000, 4, False
+#: `--use-gpu` 로만 바뀐다. 동결 v2 흐름의 기본값은 위의 False 그대로다 -
+#: 인자를 주지 않은 호출은 이 변경 전과 같은 파라미터로 돈다.
+#: CPU 로 uniref90 을 뒤지면 4 worker 동시에 표적당 1-2 시간이고 클라이언트
+#: 상한 7200 s 에 걸려 실패한다 (2026-09-21 실측: 5 개 중 3 개 타임아웃,
+#: 성공한 둘도 4142 s / 6542 s). 새 코호트는 GPU 로 돈다.
+_USE_GPU_OVERRIDE: bool | None = None
+
+
+def use_gpu() -> bool:
+    return USE_GPU if _USE_GPU_OVERRIDE is None else _USE_GPU_OVERRIDE
 
 COHORTS = (("calibration_v2", "calibration_v2_targets.json"),
            ("confirmatory", "masked_holdout_targets.json"))
@@ -315,6 +325,8 @@ def main() -> int:
                     help="쉼표로 구분한 코호트. 생략하면 동결 기본값 "
                          f"{[c for c, _ in COHORTS]} · 추가 가능 "
                          f"{sorted(OPTIONAL_COHORTS)}. 바꾸면 --out 도 바꿔야 한다.")
+    ap.add_argument("--use-gpu", action="store_true",
+                    help="MMseqs 를 GPU 로 돌린다. 동결 v2 기본값은 CPU 다.")
     ap.add_argument("--workers", type=int, default=1,
                     help="타겟 간 동시 실행 수. per-job 설정은 바뀌지 않는다.")
     args = ap.parse_args()
@@ -327,6 +339,9 @@ def main() -> int:
     prov = run_provenance()
     cons_cfg = deployment_defaults()
     cohorts = resolve_cohorts(args.cohorts)
+    global _USE_GPU_OVERRIDE
+    if args.use_gpu:
+        _USE_GPU_OVERRIDE = True
     rows = targets(cohorts)
     if args.only:
         keep = {x.strip() for x in args.only.split(",")}
@@ -346,7 +361,7 @@ def main() -> int:
 
     MSA_DIR.mkdir(parents=True, exist_ok=True)
     print(f"타겟 {len(rows)} · target_db={TARGET_DB} max_seqs={MAX_SEQS} "
-          f"threads={THREADS} use_gpu={USE_GPU}")
+          f"threads={THREADS} use_gpu={use_gpu()}")
     print(f"conservation {cons_cfg}")
     print(f"A3M -> {MSA_DIR}  (gitignored)")
     print(f"code {prov['code_sha_short']} · 코드 경로 작업트리 "
@@ -378,7 +393,7 @@ def main() -> int:
         started = time.time()
         try:
             resp = client.search(query_fasta=f">{domain}\n{seq}\n", target_db=TARGET_DB,
-                                 threads=THREADS, use_gpu=USE_GPU,
+                                 threads=THREADS, use_gpu=use_gpu(),
                                  return_a3m=True, max_seqs=MAX_SEQS)
             entry["endpoint_status"] = "ok"
             entry["response_keys"] = sorted(resp)
@@ -465,7 +480,7 @@ def _write(out_path: Path, results: list[dict], rows: list[dict],
         "purpose": "Step 7 - 24 타겟의 target 수준 MSA. source 마다 다시 돌리지 않는다.",
         "freeze_doc": "docs/specs/rapid-v2-multisource-validation-freeze.md",
         "settings": {"target_db": TARGET_DB, "max_seqs": MAX_SEQS,
-                     "threads": THREADS, "use_gpu": USE_GPU,
+                     "threads": THREADS, "use_gpu": use_gpu(),
                      "a3m_response_key": A3M_RESPONSE_KEY},
         "conservation": cons_cfg,
         "conservation_note": "weighting=none 이므로 cluster TSV 가 필요하지 않다",

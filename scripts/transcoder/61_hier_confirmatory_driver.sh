@@ -54,7 +54,10 @@ sys.exit(0 if int(d.get("n_done",0))==int(d.get("n_planned",-1)) else 1)
 PYC
 }
 if ! complete; then
-  $PY scripts/transcoder/50_full_msa.py --cohorts hier_confirmatory \
+  # --use-gpu 는 이 코호트 전용이다. 동결 v2 흐름의 기본값은 CPU 그대로다.
+  # CPU 로는 4 worker 동시에 표적당 1-2 시간이고 클라이언트 상한 7200 s 에
+  # 걸려 실패한다 (2026-09-21 실측: 5 개 중 3 개 타임아웃).
+  $PY scripts/transcoder/50_full_msa.py --cohorts hier_confirmatory --use-gpu \
       --out "$MANIFEST" --workers 4 >>"$LOG/conf_msa.log" 2>&1
 fi
 $PY - "$MANIFEST" <<'PYCHK' || { echo "MSA 가 완결되지 않았다. 멈춘다."; exit 1; }
