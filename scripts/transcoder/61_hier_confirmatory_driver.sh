@@ -41,7 +41,16 @@ step "[M] MSA"
 while pgrep -f "50_full_msa.py --cohorts hier_confirmatory" >/dev/null 2>&1; do
   sleep 60
 done
-if [ ! -f "$MANIFEST" ]; then
+# 파일이 있다는 것만으로 건너뛰지 않는다 - 중간에 죽으면 부분 매니페스트가
+# 남는다 (2026-09-21 에 n_done=1/34 로 남았다). 완결 여부로 판단한다.
+complete () {
+  [ -f "$MANIFEST" ] && $PY - "$MANIFEST" <<'PYC' >/dev/null 2>&1
+import json,sys
+d=json.loads(open(sys.argv[1]).read())
+sys.exit(0 if int(d.get("n_done",0))==int(d.get("n_planned",-1)) else 1)
+PYC
+}
+if ! complete; then
   $PY scripts/transcoder/50_full_msa.py --cohorts hier_confirmatory \
       --out "$MANIFEST" --workers 4 >>"$LOG/conf_msa.log" 2>&1
 fi

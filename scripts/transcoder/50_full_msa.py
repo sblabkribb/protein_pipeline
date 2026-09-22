@@ -144,17 +144,30 @@ def deployment_defaults() -> dict:
 
 
 _PILOT = None
+_PILOT_LOCK = threading.Lock()
 
 
 def pilot_mod():
-    """48_ 의 구현을 그대로 쓴다. 다시 구현하면 서열과 지표가 갈라진다."""
+    """48_ 의 구현을 그대로 쓴다. 다시 구현하면 서열과 지표가 갈라진다.
+
+    **전역에는 exec 가 끝난 모듈만 넣는다.** 예전 코드는 `module_from_spec`
+    결과를 먼저 전역에 대입하고 그 다음에 `exec_module` 을 불렀다. `--workers`
+    가 1 보다 크면 다른 스레드가 그 사이에 `_PILOT is None` 을 False 로 보고
+    **아직 비어 있는 모듈**을 받아 갔다 - 2026-09-21 에 34 표적 실행이
+    `AttributeError: module 'msa_pilot' has no attribute 'query_sequence'`
+    로 죽은 것이 이것이다. 단일 워커에서는 재현되지 않는다.
+    """
     global _PILOT
-    if _PILOT is None:
-        import importlib.util
-        spec = importlib.util.spec_from_file_location(
-            "msa_pilot", Path(__file__).resolve().parent / "48_msa_pilot.py")
-        _PILOT = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(_PILOT)
+    if _PILOT is not None:
+        return _PILOT
+    with _PILOT_LOCK:
+        if _PILOT is None:
+            import importlib.util
+            spec = importlib.util.spec_from_file_location(
+                "msa_pilot", Path(__file__).resolve().parent / "48_msa_pilot.py")
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)      # 다 채운 뒤에
+            _PILOT = mod                      # 전역에 건다
     return _PILOT
 
 
