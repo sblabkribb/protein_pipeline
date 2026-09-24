@@ -747,7 +747,11 @@ def main(argv=None) -> int:
     #: 디렉터리에 떨어지면 동결 판정을 덮어쓴다.
     global OUT_DIR
     if args.out_dir:
-        OUT_DIR = Path(args.out_dir)
+        #: **절대경로로 만든다.** 상대경로를 넘기면 model_dir 도 상대경로가 되고
+        #: 22_.fold_one 의 `path.relative_to(PROJECT_ROOT)` 가 ValueError 로
+        #: 터진다 - 폴드는 성공했는데 행이 failed 로 기록되어 GPU 를 태우고
+        #: 결과를 버린다. 2026-09-23 에 1,020 건이 이렇게 날아갔다.
+        OUT_DIR = Path(args.out_dir).resolve()
     manifest = Path(args.msa_manifest) if args.msa_manifest else MSA_MANIFEST
     msa = json.loads(manifest.read_text(encoding="utf-8"))
     if int(msa.get("n_done", 0)) != int(msa.get("n_planned", -1)):

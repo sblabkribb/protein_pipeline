@@ -114,7 +114,12 @@ def fold_one(client, row, refs, model_dir) -> dict:
         path = model_dir / f"{safe}.pdb.gz"
         with gzip.open(path, "wt", encoding="utf-8") as handle:
             handle.write(model)
-        entry["model_path"] = str(path.relative_to(PROJECT_ROOT))
+        # 저장소 밖이면 절대경로를 그대로 둔다. 여기서 예외를 내면 위 주석의
+        # 약속("지표 계산이 실패해도 다시 접을 필요는 없어야 한다")이 깨진다.
+        try:
+            entry["model_path"] = str(path.resolve().relative_to(PROJECT_ROOT))
+        except ValueError:
+            entry["model_path"] = str(path.resolve())
 
         keep = non_loop_indices(reference, mask)
         entry["n_non_loop"] = len(keep)
