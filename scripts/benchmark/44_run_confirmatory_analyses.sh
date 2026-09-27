@@ -5,6 +5,7 @@
 #:   39_  분해      selection-gain-decomposition-prespec.md 주 종점 Between-Within
 #:   40_  coverage  coverage-preserving-prespec.md          주 종점 EFBC
 #:   41_  구조      같은 문서 §6                            CA-RMSD dispersion
+#:   45_  진단      docs/notes/stop-rule-diagnosis.md       판정 아님
 #:
 #: 42_ 가 ESM 임베딩 캐시를 만들고 39_ 가 그것을 다시 쓴다. 41_ 은 40_ 의
 #: replay 를 불러 쓰므로 순서를 바꾸지 않는다.
@@ -45,7 +46,8 @@ for step in \
   "42_hierarchical_confirmatory.py|수확 (주 종점 G 차이)" \
   "39_selection_gain_decomposition.py|선택 이득 분해 (Between-Within)" \
   "40_coverage_preserving.py|coverage (EFBC)" \
-  "41_structural_dispersion.py|구조 dispersion"
+  "41_structural_dispersion.py|구조 dispersion" \
+  "45_stop_rule_diagnosis.py|STOP 규칙 진단 (판정 아님)"
 do
   s="${step%%|*}"; d="${step##*|}"
   say "${s} — ${d}"
