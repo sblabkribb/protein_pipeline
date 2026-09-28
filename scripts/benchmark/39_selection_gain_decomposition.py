@@ -198,9 +198,6 @@ def run(rows, emb, label):
                                "n_backbones": int(len(set(bb))), "by_budget": d}
 
     names = sorted(per_target)
-    rng = np.random.default_rng(BOOT_SEED)
-    boots = [[names[int(rng.integers(len(names)))] for _ in names]
-             for _ in range(N_BOOTSTRAP)]
     out = {"label": label, "n_targets": len(names), "targets": names,
            "per_target": per_target, "by_budget": {}}
 
@@ -208,6 +205,12 @@ def run(rows, emb, label):
         have = [t for t in names if str(B) in per_target[t]["by_budget"]]
         if len(have) < 2:
             continue
+        #: 재표집 집합은 **그 예산을 가진 표적**이어야 한다. 전체에서 뽑으면
+        #: 그 예산이 없는 표적(후보 42 개짜리 1 백본 표적)이 섞여 터진다.
+        #: 예산마다 다시 만들되 seed 를 고정해 재현성을 지킨다.
+        rng = np.random.default_rng(BOOT_SEED)
+        boots = [[have[int(rng.integers(len(have)))] for _ in have]
+                 for _ in range(N_BOOTSTRAP)]
 
         def comp(ts, fn):
             return statistics.mean(fn(per_target[t]["by_budget"][str(B)]) for t in ts)
