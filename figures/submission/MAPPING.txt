@@ -1,0 +1,11 @@
+제출용 Figure 매핑 (본문 Figure 번호 → 원본 파일)
+
+Figure 1 = figure1_orchestration.png            (코드 생성: scripts/benchmark/make_figure1_orchestration.py; seed labels·run record 정정 반영)
+Figure 2 = fig2_surrogate_triage_budget.png     (패널 B = Top-20 recall로 갱신됨)
+Figure 3 = fig12_backbone_ensemble_ablation.png (18-표적 구조맥락 비교 A–D)
+Figure 4 = fig13_structural_context_threeway_N9.png (N=9 3-arm 다양성)
+
+주의:
+- fig3_selection_n_curves.png, fig4_selection_comparison.png 는 본문 Figure 3/4가 아님 (Supplementary 선택 그림). 이름만 보고 쓰지 말 것.
+- fig1_pipeline_overview.png 는 옛 artifact-substrate 버전이므로 사용 금지.
+- Figure 1은 이제 코드 생성이라 PNG+PDF 모두 있음. 재생성: python scripts/benchmark/make_figure1_orchestration.py
