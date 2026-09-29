@@ -1,0 +1,336 @@
+{
+ "purpose": "ε-band 선택 규칙의 offline replay. 새 AF2 호출 0 회.",
+ "does_not_change": "동결된 v1/v2 판정. 새 선택 규칙의 별도 평가축이다.",
+ "k": 4,
+ "epsilon": 0.05,
+ "seed": 20260915,
+ "replicates_for_random": 200,
+ "unit_of_inference": "target (백본별 선택을 타겟으로 평균)",
+ "n_candidates": 1440,
+ "n_backbones": 60,
+ "policies": {
+  "random": {
+   "structural_pass_rate": 0.6673958333333333,
+   "delta_soluprot": 0.10234168770214505,
+   "n_targets": 12
+  },
+  "pstruct": {
+   "structural_pass_rate": 0.6583333333333333,
+   "delta_soluprot": 0.10192801395656341,
+   "n_targets": 12
+  },
+  "delta_soluprot": {
+   "structural_pass_rate": 0.6625,
+   "delta_soluprot": 0.1717026577714066,
+   "n_targets": 12
+  },
+  "product": {
+   "structural_pass_rate": 0.6625,
+   "delta_soluprot": 0.16790041616498178,
+   "n_targets": 12
+  },
+  "eps_band": {
+   "structural_pass_rate": 0.6416666666666667,
+   "delta_soluprot": 0.14044017200085512,
+   "n_targets": 12
+  },
+  "oracle": {
+   "structural_pass_rate": 0.8458333333333333,
+   "delta_soluprot": 0.16281163959477787,
+   "n_targets": 12
+  }
+ },
+ "uncertainty": {
+  "n_bootstrap": 2000,
+  "n_targets": 12,
+  "resample_unit": "target",
+  "interval": "percentile 95%",
+  "per_policy": {
+   "random": {
+    "structural_pass_rate": {
+     "point": 0.6673958333333333,
+     "ci95": [
+      0.481,
+      0.8219583333333333
+     ]
+    },
+    "delta_soluprot": {
+     "point": 0.10234168770214505,
+     "ci95": [
+      0.02823030150697066,
+      0.19141138146547618
+     ]
+    }
+   },
+   "pstruct": {
+    "structural_pass_rate": {
+     "point": 0.6583333333333333,
+     "ci95": [
+      0.4708333333333333,
+      0.8208333333333333
+     ]
+    },
+    "delta_soluprot": {
+     "point": 0.10192801395656341,
+     "ci95": [
+      0.026977549836554537,
+      0.1904287725119655
+     ]
+    }
+   },
+   "delta_soluprot": {
+    "structural_pass_rate": {
+     "point": 0.6625,
+     "ci95": [
+      0.4708333333333333,
+      0.8291666666666667
+     ]
+    },
+    "delta_soluprot": {
+     "point": 0.1717026577714066,
+     "ci95": [
+      0.10032246353357732,
+      0.25908674550252614
+     ]
+    }
+   },
+   "product": {
+    "structural_pass_rate": {
+     "point": 0.6625,
+     "ci95": [
+      0.4708333333333333,
+      0.825
+     ]
+    },
+    "delta_soluprot": {
+     "point": 0.16790041616498178,
+     "ci95": [
+      0.09606381152012954,
+      0.25575350885203835
+     ]
+    }
+   },
+   "eps_band": {
+    "structural_pass_rate": {
+     "point": 0.6416666666666667,
+     "ci95": [
+      0.44166666666666665,
+      0.8125
+     ]
+    },
+    "delta_soluprot": {
+     "point": 0.14044017200085512,
+     "ci95": [
+      0.06839998982748643,
+      0.23179186245848302
+     ]
+    }
+   },
+   "oracle": {
+    "structural_pass_rate": {
+     "point": 0.8458333333333333,
+     "ci95": [
+      0.6541666666666667,
+      0.9875
+     ]
+    },
+    "delta_soluprot": {
+     "point": 0.16281163959477787,
+     "ci95": [
+      0.09321466051941443,
+      0.2509099209969241
+     ]
+    }
+   }
+  },
+  "paired_vs": {
+   "random": {
+    "pstruct": {
+     "structural_pass_rate": {
+      "delta": -0.009062499999999973,
+      "ci95": [
+       -0.04352083333333334,
+       0.028312500000000074
+      ],
+      "excludes_zero": false
+     },
+     "delta_soluprot": {
+      "delta": -0.0004136737455816414,
+      "ci95": [
+       -0.005883473598624976,
+       0.004248360440776935
+      ],
+      "excludes_zero": false
+     }
+    },
+    "delta_soluprot": {
+     "structural_pass_rate": {
+      "delta": -0.0048958333333333215,
+      "ci95": [
+       -0.04193749999999996,
+       0.03193750000000006
+      ],
+      "excludes_zero": false
+     },
+     "delta_soluprot": {
+      "delta": 0.06936097006926156,
+      "ci95": [
+       0.052924502642913304,
+       0.09350310364902255
+      ],
+      "excludes_zero": true
+     }
+    },
+    "product": {
+     "structural_pass_rate": {
+      "delta": -0.0048958333333333215,
+      "ci95": [
+       -0.03152083333333333,
+       0.017604166666666643
+      ],
+      "excludes_zero": false
+     },
+     "delta_soluprot": {
+      "delta": 0.06555872846283672,
+      "ci95": [
+       0.04920184834956085,
+       0.09012192209607912
+      ],
+      "excludes_zero": true
+     }
+    },
+    "eps_band": {
+     "structural_pass_rate": {
+      "delta": -0.02572916666666658,
+      "ci95": [
+       -0.0615,
+       0.009645833333333353
+      ],
+      "excludes_zero": false
+     },
+     "delta_soluprot": {
+      "delta": 0.03809848429871007,
+      "ci95": [
+       0.028589566940565067,
+       0.046607042551512504
+      ],
+      "excludes_zero": true
+     }
+    },
+    "oracle": {
+     "structural_pass_rate": {
+      "delta": 0.17843750000000003,
+      "ci95": [
+       0.10704166666666659,
+       0.25512499999999994
+      ],
+      "excludes_zero": true
+     },
+     "delta_soluprot": {
+      "delta": 0.06046995189263282,
+      "ci95": [
+       0.04947952330811055,
+       0.07519762204418627
+      ],
+      "excludes_zero": true
+     }
+    }
+   },
+   "delta_soluprot": {
+    "random": {
+     "structural_pass_rate": {
+      "delta": 0.0048958333333333215,
+      "ci95": [
+       -0.03193750000000006,
+       0.04193749999999996
+      ],
+      "excludes_zero": false
+     },
+     "delta_soluprot": {
+      "delta": -0.06936097006926156,
+      "ci95": [
+       -0.09350310364902255,
+       -0.052924502642913304
+      ],
+      "excludes_zero": true
+     }
+    },
+    "pstruct": {
+     "structural_pass_rate": {
+      "delta": -0.004166666666666652,
+      "ci95": [
+       -0.03749999999999998,
+       0.029166666666666674
+      ],
+      "excludes_zero": false
+     },
+     "delta_soluprot": {
+      "delta": -0.0697746438148432,
+      "ci95": [
+       -0.09814166854069913,
+       -0.05030593572344397
+      ],
+      "excludes_zero": true
+     }
+    },
+    "product": {
+     "structural_pass_rate": {
+      "delta": 0.0,
+      "ci95": [
+       -0.029166666666666674,
+       0.029166666666666674
+      ],
+      "excludes_zero": false
+     },
+     "delta_soluprot": {
+      "delta": -0.0038022416064248388,
+      "ci95": [
+       -0.006281153834753167,
+       -0.0016566756046787479
+      ],
+      "excludes_zero": true
+     }
+    },
+    "eps_band": {
+     "structural_pass_rate": {
+      "delta": -0.02083333333333326,
+      "ci95": [
+       -0.04166666666666663,
+       0.0
+      ],
+      "excludes_zero": false
+     },
+     "delta_soluprot": {
+      "delta": -0.03126248577055149,
+      "ci95": [
+       -0.051336297865441693,
+       -0.013866465608486728
+      ],
+      "excludes_zero": true
+     }
+    },
+    "oracle": {
+     "structural_pass_rate": {
+      "delta": 0.18333333333333335,
+      "ci95": [
+       0.09583333333333333,
+       0.2791666666666667
+      ],
+      "excludes_zero": true
+     },
+     "delta_soluprot": {
+      "delta": -0.00889101817662874,
+      "ci95": [
+       -0.01897660910558513,
+       -0.0024091251719974838
+      ],
+      "excludes_zero": true
+     }
+    }
+   }
+  }
+ },
+ "uncertainty_note": "점추정만으로 정책 순위를 주장하지 않는다. 재표집 단위는 타겟(n=12)이고, 그래서 구간이 넓다. `paired_vs.delta_soluprot` 가 ε-band 도입 여부를 직접 묻는 비교다.",
+ "pstruct_note": "LOTO 로 학습한 싼 특징 기반 예측. Gate 2 가 같은 축에서 NO-GO 였으므로 강한 신호를 기대하지 않는다.",
+ "soluprot_note": "SoluProt 은 예측 대상이 아니라 이미 아는 cheap observable 이다. ΔSoluProt 은 WT 서열 대비 차이이며 측정된 용해도가 아니다 - '용해도를 개선했다' 고 해석하지 않는다."
+}
