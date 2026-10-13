@@ -5810,11 +5810,23 @@ class PipelineRunner:
                         )
                     ),
                 )
-                bioemu_env = (
-                    dict(request.bioemu_env)
-                    if isinstance(request.bioemu_env, dict)
-                    else None
-                )
+                # bioemu.sample runs an inlined ColabFold (JAX) for the
+                # Evoformer embeddings in the same process as the PyTorch
+                # denoiser, and JAX preallocates ~75% of the card on first use.
+                # Measured on this worker for a 447-residue target: 34,563 MiB
+                # with preallocation on against 3,537 MiB with it off, for
+                # byte-identical embeddings. Left on, the denoiser OOMs on a
+                # 196 MiB allocation, and the GPU slot pool is charging the job
+                # gpu_cost=2 (~10GB) while it really holds ~34GB, so every
+                # other tenant of that card is starved as well.
+                bioemu_env = {
+                    "XLA_PYTHON_CLIENT_PREALLOCATE": "false",
+                    "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True",
+                }
+                if isinstance(request.bioemu_env, dict):
+                    bioemu_env.update(
+                        {str(k): str(v) for k, v in request.bioemu_env.items()}
+                    )
 
                 write_json(
                     bioemu_dir / "request.json",
