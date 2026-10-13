@@ -615,6 +615,11 @@ class Handler(BaseHTTPRequestHandler):
         name: str,
         arguments: dict[str, Any],
     ) -> dict[str, Any]:
+        # Identity comes only from the authenticated session. The "user" argument
+        # carries the role the tools use for tenant scoping and global provider
+        # writes, so whatever the caller sent is discarded and, below, replaced
+        # with the server-side context (never setdefault: it keeps a caller value).
+        arguments.pop("user", None)
         if name in _ADMIN_ONLY_TOOLS and user is not None and not self._is_admin(user):
             raise AuthError("admin required")
         if (
@@ -660,7 +665,7 @@ class Handler(BaseHTTPRequestHandler):
             "pipeline.model_provider_update",
             "pipeline.model_provider_health",
         } and user is not None:
-            arguments.setdefault("user", self._user_context(user))
+            arguments["user"] = self._user_context(user)
         out = self._dispatcher_for_tool(user, name).call_tool(name, arguments)
         if name == "pipeline.list_runs" and user is not None and not self._is_admin(user):
             prefix = safe_run_prefix(str(user.get("username") or "user")) + "_"

@@ -697,3 +697,64 @@ def test_unauthorized_post_leaves_keep_alive_connection_usable(monkeypatch):
 
     # 전부 401 이어야 한다. 400/501 이 섞이면 앞 요청의 본문이 남아 연결이 오염된 것이다.
     assert statuses == [401, 401, 401]
+
+
+def _recording_handler(monkeypatch):
+    handler = Handler.__new__(Handler)
+    calls = []
+    monkeypatch.setattr(
+        http_server,
+        "_DISPATCHER",
+        type(
+            "FakeDispatcher",
+            (),
+            {"call_tool": lambda _self, name, arguments: calls.append((name, dict(arguments))) or {"ok": True}},
+        )(),
+        raising=False,
+    )
+    return handler, calls
+
+
+def test_client_supplied_user_cannot_override_server_identity(monkeypatch):
+    # The "user" argument carries the role that the tools use for tenant scoping,
+    # so it must come from the authenticated session and never from the caller.
+    handler, calls = _recording_handler(monkeypatch)
+    plain = {"username": "alice", "role": "user"}
+    forged = {"username": "x", "role": "admin"}
+
+    for forged_value in (forged, None):
+        calls.clear()
+        handler._call_tool_for_user(
+            plain,
+            "pipeline.model_provider_update",
+            {"model_key": "esmfold", "provider": {"provider_type": "disabled"}, "user": forged_value},
+        )
+        sent = calls[0][1]["user"]
+        assert sent["username"] == "alice"
+        assert sent["role"] == "user"
+
+
+def test_client_supplied_user_cannot_widen_project_visibility(monkeypatch):
+    handler, calls = _recording_handler(monkeypatch)
+    handler._call_tool_for_user(
+        {"username": "alice", "role": "user"},
+        "pipeline.list_projects",
+        {"user": None},
+    )
+    assert calls[0][1]["user"]["username"] == "alice"
+
+
+def test_client_supplied_user_is_dropped_for_tools_that_do_not_inject_one(monkeypatch):
+    handler, calls = _recording_handler(monkeypatch)
+    handler._call_tool_for_user(
+        {"username": "alice", "role": "user"},
+        "pipeline.list_runs",
+        {"user": {"username": "x", "role": "admin"}},
+    )
+    assert "user" not in calls[0][1]
+
+
+def test_client_supplied_user_is_dropped_when_auth_is_disabled(monkeypatch):
+    handler, calls = _recording_handler(monkeypatch)
+    handler._call_tool_for_user(None, "pipeline.list_projects", {"user": {"username": "x", "role": "admin"}})
+    assert "user" not in calls[0][1]
