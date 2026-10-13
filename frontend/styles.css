@@ -7728,6 +7728,17 @@ textarea:focus-visible {
 
 .copilot-conversations { display: flex; gap: 6px; align-items: center; padding: 4px 12px; }
 .copilot-conv-select { flex: 1 1 auto; min-width: 0; }
+.external-ai-notice {
+  margin: 0 18px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #7a4b00;
+  background: #fff6e0;
+  border: 1px solid #f0d9a0;
+}
+
 .copilot-run-action { padding: 4px 12px; }
 .copilot-run-action .primary { width: 100%; }
 

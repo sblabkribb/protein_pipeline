@@ -2549,6 +2549,8 @@ const I18N = {
     "copilot.open": "RAPID Assistant",
     "copilot.title": "RAPID Assistant",
     "copilot.desc": "Ask, analyze attached targets, recommend parameters, and navigate — using your own API key.",
+    "externalAi.copilotNotice": "Messages, attachments, and run details you send here go to an external AI service (Google Gemini, or the provider whose API key you entered) outside KRIBB. Do not enter unpublished research data or personal information.",
+    "externalAi.paperConfirm": "This PDF and the target sequence will be sent to an external AI service (Google Gemini) outside KRIBB for analysis. Do not upload unpublished research data or documents containing personal information.\n\nContinue?",
     "copilot.context.title": "Current Context",
     "copilot.context.empty": "Select a run to load context.",
     "copilot.quick.title": "Quick Prompts",
@@ -4281,6 +4283,8 @@ const I18N = {
     "copilot.open": "RAPID 어시스턴트",
     "copilot.title": "RAPID 어시스턴트",
     "copilot.desc": "질문·첨부 타깃 분석·파라미터 추천·페이지 이동까지 — 본인 API 키로 사용합니다.",
+    "externalAi.copilotNotice": "여기서 보내는 메시지·첨부파일·실행 정보는 연구원 밖의 외부 AI 서비스(Google Gemini 또는 API 키를 입력한 업체)로 전송됩니다. 미공개 연구자료나 개인정보는 입력하지 마세요.",
+    "externalAi.paperConfirm": "이 PDF와 타깃 서열이 분석을 위해 연구원 밖의 외부 AI 서비스(Google Gemini)로 전송됩니다. 미공개 연구자료나 개인정보가 담긴 문서는 올리지 마세요.\n\n계속할까요?",
     "copilot.context.title": "현재 컨텍스트",
     "copilot.context.empty": "run을 선택하면 컨텍스트를 표시합니다.",
     "copilot.quick.title": "빠른 질문",
@@ -30576,6 +30580,11 @@ const PAPER_MASK_CONFIGS = [
 function handlePaperMaskUpload(event, config) {
   const file = event.target.files[0];
   if (!file) return;
+  // The PDF and target sequence leave KRIBB for Gemini; make the user say yes first.
+  if (!window.confirm(t("externalAi.paperConfirm"))) {
+    event.target.value = "";
+    return;
+  }
 
   const reader = new FileReader();
   reader.onload = async (e) => {
